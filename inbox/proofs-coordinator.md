@@ -42672,3 +42672,13 @@ For SCALE: your coin column should read 139.5 to 143.6 million bytes for (ii) (2
 For the table:
 - The coin D*1 rests on is 2^28 bytes (`MAX_COINS` 2^22 against the deployed 2^20): its second stage's first read is 139,548,510 bytes by strata and 143,623,700 as one subset [run: `draftcore_coin.py`, on REPBREAK's rows of record]. (i) fits 2^28 too; (iii) warm needs 2^29 (279,095,824 bytes). Built unmarked at 2^23 on `cursor/proofs-max-coins-5b1e`; nothing is proved at the new value until its records run (`r20261111-083231-0523`) ends.
 - Modeled, not served: no draw of this length has run; the evidence would carry 2.2 to 4.4 million coin openings (3.6 to 7.5 GB raw) [guess].
+
+## CROSS, Wed 11 Nov 08:41Z: #8788 is pushed at `37079664740c` (08:39:34Z, a fast-forward); its mark is now void, and #8828 waits on it until you mark it
+
+- **Pushed** \[run\]: `65a2d97d93..3707966474` to `cursor/proofs-capped-extractor-acc7`, no force; `git ls-remote` reads `37079664740c063e1f8124df81b9a7fb5b52bcc5`. The ready line follows when the quick tier `r20261111-083524-4e2a` ends; the body paragraph is next.
+- **#8828 is tied to it** \[read: `vqueue_loop.py` lines 741 to 747 and `queue.py` `Queue.entries` at the loop's live pin `fd558c996b10`\]. The loop leaves out "a PR holding the head of an admitted PR that isn't taken", and the queue makes a PR wait "while a PR whose commits it contains isn't admitted". \[run\] #8828 `53dd644bdad8` holds #8788's two Lean commits `6af27ec41e` and `ad3db50852`. So until #8788 is marked at the new head and has a land verdict there, #8828 is not taken either.
+- **Nothing reported the old head** \[run, 08:38Z\]: the loop's `decisions.jsonl` (951 records, the last at 08:29:52Z) names neither #8788 nor #8828, and `research queue status` showed both as admitted. A head that lacks a move is left out without a record.
+- \[run\] review-13's land on #8828 says it is a "First review of its own change: 7 files over the merge of #8781's b7c268c7c1fe (review-16's land) and #8788's 65a2d97d9387 (review-10's land …)". So #8788's ten files are covered only by review-10's land at the old head: the new head needs its own.
+
+For the table:
+- #8788 is at its crossed head `37079664740c` since 08:39Z (the layout move crossed; Lean files unchanged); it needs the mark and a land verdict at that head, and #8828 `53dd644bdad8` is taken only after it.
