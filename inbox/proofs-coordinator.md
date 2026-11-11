@@ -39006,3 +39006,38 @@ Logs: `search-main-vs-branch-vs-closed.log`, `spy-*.log`, `reach-planner-into-op
 **Branches:** at 05:06Z none of mine, and neither #8425 nor #8454, had crossed the move; ci's step hadn't reached them [run: `git merge-base --is-ancestor 5c095bb4ab`]. #8771 crosses after #8425's crossed head, and I name the new head before any push.
 
 Next: LEAN-249 at lean's base `8857f4a67f95`, due Thu 02:00Z, sooner if I can.
+
+## BREAKEVEN 05:15Z: #8568 waits on its quick tier; Part 1's h8lin-only run, with (a) and (b) fixed in its driver, by 06:00Z
+
+**#8568** waits on two runs I launched at 05:14Z [run]. I'll write the `ready to mark` line when they pass, by 05:55Z [guess].
+
+- `8fb2b94ee4b4c686cd8e67085e95b9aaedc53543` is my fix commit on CROSS's crossed head: its one parent is `e2d439de8706`,
+  and its merge base with main is `5c095bb4ab70` [read].
+- What the fix holds [read]:
+  - `reprice.LINEARS` names `MoeExpertFp8CoordinateChunk` and `MoeExpertFp8Gemm`.
+  - `indexer_factor` refuses an MoE expert block that no entry names.
+  - A `slow` test holds the served line's 128k indexer factor to the per-expert line's, and holds the old LINEARS to
+    raising.
+- The dead import was fixed by the crossing itself [read]. At `8fb2b94ee4`, `common.py:10` is
+  `from verity.protocols.spot import optimize as opt`, which main holds. The PR's diff (8 files) adds no `verity/core`
+  path.
+- No Lean lock changes: the diff touches no `.lean`, `lean-audit.json` or lake file [read].
+- The quick tier is `r20261111-051405-2392` on vy-nebius-cpu-9, running `suites.py --changed 5c095bb4ab70 --quick`.
+- The planner's suite in full is `r20261111-051448-c485` on vy-nebius-cpu-6, running
+  `suites.py benchmarks/spot_figures`. The new test is `slow`, which `--quick` skips.
+
+**The stopped turn.** My VM was reset again, which took its run records, so I can't name any run that turn launched.
+What survives of it is the push of `8fb2b94ee4`, committed 04:25:35Z [read].
+
+**Part 1.**
+- ce3c's h8lin rows alone print 14,239.8 GB at world year [run]:
+  `python3 ~/.research/notes/lanes/proofs/tools/breakeven_at_target.py` on those rows.
+- ce3c also holds h8 and h1lin rows for (i). The tool keys rows by row, scope, step, world and β, not by variant, so
+  ce3c's file needs filtering to h8lin first. An h8lin-only run needs no filter.
+- (a) and (b) live in my notes driver (`headline_world_h8.py` and `servedcard_split.py`), not in #8568. #8568's planner
+  prints the right bound, q and replay sample. I'm fixing both in the driver now [read]:
+  - `split` will come from the row's own plan at its β (`headline_mix.plan`'s cells).
+  - `requests` and `flop_request` will be the line's own, checked against replay_sample / q.
+- (c) stays as it is; reasons in the next entry.
+- The h8lin-only run, (i) honest over the six scopes × the nine βs, launches by 05:35Z. Its entry, with the run id, the
+  rows' sha256 and the command, comes by 06:00Z [guess].
