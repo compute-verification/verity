@@ -31,7 +31,7 @@ OTHER_DEFINITION_MODULES = ("b1", "prims", "ref_prims", "pad_prims", "hopper", "
 EVIDENCE = "verity.definitions.evidence"
 ALLOWED = {f"{REGISTRY}.{m}" for m in FAMILY + OTHER_DEFINITION_MODULES} | {EVIDENCE}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.circuits"
+CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.definitions.ops", "verity.definitions.silicon")
 
 
 def _imports(name: str) -> list[tuple[str, int]]:
@@ -67,7 +67,7 @@ def _core(name: str) -> bool:
 def _allowed(module: str) -> bool:
     top = module.split(".")[0]
     return ((top in sys.stdlib_module_names and top != "__main__") or _core(module) or module in ALLOWED
-            or module == CATALOG or module.startswith(CATALOG + "."))
+            or module in CATALOG or module.startswith(tuple(c + "." for c in CATALOG)))
 
 
 @pytest.mark.parametrize("name", FAMILY)
