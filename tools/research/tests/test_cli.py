@@ -572,7 +572,7 @@ def test_a_lean_records_run_is_sent_the_shipped_trees_lean_bundle_urls(tmp_path,
     monkeypatch.setattr(remote, "launch", launch)
     on = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "verity", "--source", str(src), "--cwd", "source",
           "--no-custody-r2", "--"]
-    records = ["python3", "tools/verity/lean/lean_changed.py", "--records", "Security", "--update"]
+    records = ["python3", "tools/verity/lean/lean_changed.py", "--records", "security", "--update"]
     assert main([*on, *records]) == 0
     [(sent, text)] = sends[-1].items()
     assert sent.name == "lean-deps-urls.json" and json.loads(text)["lean-artifacts/" + "ab" * 32].startswith("https://r2.example/a")
