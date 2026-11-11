@@ -22,7 +22,9 @@ of the scan's statement:
   which the rows form charges to the sampling block (`tiedAudits`). If ``prog`` is an input only at its anchored
   entries, they are an entry's 33 + KO·IDB bits a request (`ingress_scan.entry_layout`);
 * no faulty proof block, every one being drawn;
-* Dj = 1, so the jitter term is 0 (assumed, `NetTiming.JitterBounded`).
+* the jitter, ⌈log2 D_j^T⌉ a sampling block at the jitter bound D_j (assumed, `NetTiming.JitterBounded`). K by links
+  is counted at the term of record's bound (`OF_RECORD`), two release schedules, a bit a bucket, unless a caller
+  names another; at D_j = 1 the jitter is 0, which rests on a set-time card (`SET_TIME`).
 
 A link runs m = s / (T·τ) sampling blocks and certifies rate·s requests over a monitoring period of s seconds
 (`PERIODS`). ε = m·δ_scan is the rows form's `eps`: the union of the scans' δ, what K fails with at most beside the
@@ -120,6 +122,8 @@ PLANNER, PLAN_CASE = "benchmarks/spot_figures/breakeven", "P5+poolwin600"
 MODEL, WORLD, PEAK = "GLM-5.3", "world-h200", "h100-sxm5-80gb/e4m3"
 #: a GB's bits, and FP4's bits a parameter
 GB, FP4 = 8 * 10 ** 9, 4
+#: the jitter bound of the term of record: two release schedules
+OF_RECORD = 2
 
 
 class Weights(NamedTuple):
@@ -192,11 +196,12 @@ def _jitter(dj: int, steps: int) -> int:
     return (dj ** steps - 1).bit_length()
 
 
-def terms(connections: Any, scans: Any, *, cells: int, steps: int, dj: int = 1, entries: Any = 0,
+def terms(connections: Any, scans: Any, *, cells: int, steps: int, dj: int, entries: Any = 0,
           changes: Iterable[str] = (), failures: Any = 0, stop: bool = True) -> Terms:
     """`rowsTerms`'s terms over ``connections`` connections of at most ``cells`` egress cells, each charged
     ⌈log2(cells + 1)⌉ bits for its schedule and again for its fail cell, and ``scans`` scans of ``steps`` buckets
-    each at the jitter bound ``dj`` (⌈log2 dj^steps⌉ a scan), with ``entries`` the tied audits' free inputs. Under
+    each at the jitter bound ``dj`` (⌈log2 dj^steps⌉ a scan), which has no default: every caller names the bound it
+    counts at. ``entries`` are the tied audits' free inputs. Under
     ``changes`` (`CHANGES`): with the lengths held the schedules are 0 and the ``failures`` failed connections are
     charged pooled (`failed`), with the timing taken once the jitter is 0, and with the entries charged through the
     compute audit they are None. ``stop`` is whether a stop block holds a response's output count to its ids, which
@@ -216,12 +221,12 @@ def terms(connections: Any, scans: Any, *, cells: int, steps: int, dj: int = 1, 
                  0 if "timing" in changes else scans * jitter, None if "entries" in changes else entries)
 
 
-def clock_terms(links: Any, phases: Any, *, syncs: int, steps: int, dj: int = 1) -> Terms:
+def clock_terms(links: Any, phases: Any, *, syncs: int, steps: int, dj: int) -> Terms:
     """The clock form's terms (the monitoring-period check's `terms`, beside its `rowsTerms`) over ``links`` links of
     ``phases`` execution phases each: the schedules, ⌈log2 syncs^phases⌉ a link, every assignment of a sync of Σ_sync
     to its execution phases; no fail cell, its parameters listing no connection; and the jitter, ⌈log2 dj^steps⌉ an
-    execution phase, a step a bucket as the scan's. The entries are None: N2 holds counts, and what its link carries
-    is the compute side's."""
+    execution phase, a step a bucket as the scan's, at the bound ``dj`` its caller names. The entries are None: N2
+    holds counts, and what its link carries is the compute side's."""
     if type(syncs) is not int or syncs < 1 or not (links >= 0 and phases >= 0):
         raise ValueError(f"Σ_sync holds a positive integer of syncs, and links and execution phases are at least 0, "
                          f"not {syncs!r}, {links!r} and {phases!r}")
@@ -300,17 +305,19 @@ class LinkLoad:
         """ε = m·δ_scan over ``period``."""
         return self.blocks(period) * self.scan_delta
 
-    def terms(self, period: str | float | Fraction, reading: str) -> Terms:
-        """K's terms over ``period`` in ``reading`` (`terms`, at D_j = 1): a request is a connection, and the
-        entries are the free inputs of its sampling blocks and requests."""
+    def terms(self, period: str | float | Fraction, reading: str, dj: int = OF_RECORD) -> Terms:
+        """K's terms over ``period`` in ``reading`` (`terms`) at the jitter bound ``dj``, the term of record's unless
+        a caller names another: a request is a connection, and the entries are the free inputs of its sampling
+        blocks and requests."""
         blocks, requests, free = self.blocks(period), self.rate * seconds(period), self.free(reading)
-        return terms(requests, blocks, cells=self.egress_cells, steps=self.T,
+        return terms(requests, blocks, cells=self.egress_cells, steps=self.T, dj=dj,
                      entries=blocks * free["block"] + requests * free["request"])
 
-    def bits(self, period: str | float | Fraction, reading: str, delta: float | Fraction | None = None) -> float:
-        """K over ``period`` (a `PERIODS` name, or its seconds) in ``reading``: the per-period form, or with ``delta``
-        the pooled form."""
-        t = self.terms(period, reading)
+    def bits(self, period: str | float | Fraction, reading: str, delta: float | Fraction | None = None,
+             dj: int = OF_RECORD) -> float:
+        """K over ``period`` (a `PERIODS` name, or its seconds) in ``reading`` at the jitter bound ``dj``: the
+        per-period form, or with ``delta`` the pooled form."""
+        t = self.terms(period, reading, dj)
         k = float(t.certifier + t.entries)
         if delta is None:
             return k
@@ -379,19 +386,20 @@ def link(cls: Any, rate: float | Fraction, *, T: int | None = None, tau: float |
 def per_link(cls: Any, rate: float | Fraction, period: str | float | Fraction, reading: str,
              delta: float | Fraction | None = None, *, T: int | None = None, tau: float | Fraction = TAU,
              egress_cells: int | None = None, scan_delta: float | Fraction = SCAN_DELTA,
-             weights: Weights = WEIGHTS) -> Bound:
+             weights: Weights = WEIGHTS, dj: int = OF_RECORD) -> Bound:
     """K over a monitoring period for one link (`link`'s arguments), the count `PeriodLeakAccepted` bounds for one
-    network certifier on one uplink (δ None), or `PooledLeakAccepted`'s pooled at ``delta``."""
+    network certifier on one uplink (δ None), or `PooledLeakAccepted`'s pooled at ``delta``, with the jitter at the
+    bound ``dj``: the term of record's by default, and at ``dj`` = 1 a figure under `SET_TIME`."""
     one = link(cls, rate, T=T, tau=tau, egress_cells=egress_cells, scan_delta=scan_delta)
-    bits = one.bits(period, reading, delta)
+    bits = one.bits(period, reading, delta, dj)
     statement = STATEMENTS["per_period" if delta is None else "pooled"]
     return Bound(bits, bits / weights.bits, delta, one.eps(period), statement, weights.label)
 
 
 def datacenter(links: Sequence[LinkLoad] | Mapping[LinkLoad, int], period: str | float | Fraction, reading: str,
-               delta: float | Fraction | None = None, *, weights: Weights = WEIGHTS) -> Bound:
+               delta: float | Fraction | None = None, *, weights: Weights = WEIGHTS, dj: int = OF_RECORD) -> Bound:
     """K over a monitoring period summed over a datacenter's ``links`` (each a `LinkLoad`, or each with its count),
-    each at δ / links (`STATEMENTS`'s ``datacenter``).
+    each at δ / links (`STATEMENTS`'s ``datacenter``) and at the jitter bound ``dj`` (`per_link`'s).
 
     This is our composition: no Lean statement covers it. `PeriodLeakAccepted` and `PooledLeakAccepted` are each
     about one device on one uplink. Summing their bits takes the secrets a sender moves through every link at once to
@@ -420,19 +428,19 @@ def datacenter(links: Sequence[LinkLoad] | Mapping[LinkLoad, int], period: str |
     if delta is not None:
         fmax(delta)
     each = None if delta is None else delta / counts.total()
-    bits = math.fsum(n * l.bits(period, reading, each) for l, n in counts.items())
+    bits = math.fsum(n * l.bits(period, reading, each, dj) for l, n in counts.items())
     eps = sum(n * l.eps(period) for l, n in counts.items())
     return Bound(bits, bits / weights.bits, delta, eps, STATEMENTS["datacenter"], weights.label)
 
 
 def at_link_rate(one: LinkLoad, links: int, period: str | float | Fraction, reading: str,
-                 delta: float | Fraction | None = None, *, weights: Weights = WEIGHTS) -> Bound:
+                 delta: float | Fraction | None = None, *, weights: Weights = WEIGHTS, dj: int = OF_RECORD) -> Bound:
     """The scaling by links: K over a monitoring period summed over ``links`` links (`datacenter_links`,
     `world_links`), each ``one``, which is `datacenter` over that many of it. Every link certifies ``one``'s rate
     whatever the scope the links stand for serves, and the scope's requests past that rate are uncertified, so K
     counts none of them: it is a run's rate held on every link, and not the scope's K, which `table` counts over
     every request the scope serves."""
-    return datacenter({one: links}, period, reading, delta, weights=weights)
+    return datacenter({one: links}, period, reading, delta, weights=weights, dj=dj)
 
 
 # --- at a scope's load: the network certifier's term, scaled by requests ---------------------------------------------
@@ -444,8 +452,6 @@ _MARK = {"measured": "measured", "modeled": "modeled", "derived": "modeled", "da
          "assumed": "assumed", "ruled": "assumed"}
 #: the jitter bounds each row is counted at: D_j = 1, where the jitter is 0, and D_j = 2, a bit a bucket
 JITTERS = (1, 2)
-#: the jitter bound of the term of record: two release schedules
-OF_RECORD = 2
 #: the label every figure that rests on a set-time card is printed under: a figure at D_j = 1, what a network
 #: certifier whose network card releases at a set time would be charged, and at either D_j a figure of a row whose
 #: release times are taken once (`CHANGES`' timing). No timing test has shown such a card
@@ -795,7 +801,7 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
             "weights": {"value": WEIGHTS.bits / GB, "unit": "GB", "label": WEIGHTS.label},
             "phase": {"seconds": float(cls.phase_s), "buckets": cls.T,
                       "requests": head["requests"] / head["phases"], "connection_bits": cls.cell,
-                      "sync_bits": clock_terms(1, 1, syncs=inp["syncs"].value, steps=cls.T).schedules,
+                      "sync_bits": clock_terms(1, 1, syncs=inp["syncs"].value, steps=cls.T, dj=OF_RECORD).schedules,
                       "entry_bits": cls.entry},
             "failure_rate_at_target": afforded(float(target), connections, cls.cells),
             "entries_rule": "one entry a request, the least the check can charge: it charges every slot's entry, a "

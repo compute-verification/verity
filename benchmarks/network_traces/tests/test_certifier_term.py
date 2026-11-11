@@ -21,6 +21,7 @@ load of a node, the reference datacenter and the world, each check's by its own 
 
 from __future__ import annotations
 
+import inspect
 import itertools
 import json
 import math
@@ -96,11 +97,11 @@ def test_n2s_terms_are_the_clock_forms_on_a_hand_worked_link():
     """One link of 5 execution phases under 128 syncs: ⌈log2 128^5⌉ = 35 bits of schedules, no fail cell, and the
     jitter a step a bucket. The schedules are a ceiling over a link's phases, not a phase's ceiling summed."""
     assert LB.clock_terms(1, 5, syncs=128, steps=32, dj=2) == LB.Terms(35, 0, 160, None)
-    assert LB.clock_terms(3, 5, syncs=128, steps=32).certifier == 105
-    assert LB.clock_terms(1, 5, syncs=1, steps=32) == LB.Terms(0, 0, 0, None)
+    assert LB.clock_terms(3, 5, syncs=128, steps=32, dj=1).certifier == 105
+    assert LB.clock_terms(1, 5, syncs=1, steps=32, dj=1) == LB.Terms(0, 0, 0, None)
     for syncs, phases in ((3, 5), (3, 4_725), (100, 7), (129, 1)):
-        assert LB.clock_terms(1, phases, syncs=syncs, steps=1).schedules == clog2(syncs ** phases)
-    assert LB.clock_terms(1, 5, syncs=3, steps=1).schedules == 8 < 5 * clog2(3)
+        assert LB.clock_terms(1, phases, syncs=syncs, steps=1, dj=2).schedules == clog2(syncs ** phases)
+    assert LB.clock_terms(1, 5, syncs=3, steps=1, dj=2).schedules == 8 < 5 * clog2(3)
     assert LB.clock_terms(2, Fraction(9, 2), syncs=128, steps=32, dj=2) == LB.Terms(2 * 32, 0, 2 * 144, None)
 
 
@@ -119,7 +120,7 @@ def test_the_failed_connections_pooled_charge_bounds_the_count_it_states():
                 assert charged[f] >= math.log2(ways) - 1e-9
     held = LB.terms(8, 1, cells=7, steps=32, dj=2, changes=["lengths"], failures=2)
     assert held == LB.Terms(0, LB.failed(8, 2, 7), 32, 0)
-    assert LB.terms(8, 1, cells=7, steps=32, failures=2) == LB.Terms(24, 24, 0, 0)
+    assert LB.terms(8, 1, cells=7, steps=32, dj=1, failures=2) == LB.Terms(24, 24, 0, 0)
     rate = LB.afforded(1_000.0, 10 ** 9, 4_097)
     assert 0 < rate < 1 and LB.failed(10 ** 9, 10 ** 9 * rate, 4_097) == pytest.approx(1_000.0)
     assert LB.afforded(1e12, 10 ** 9, 4_097) == 1.0 == LB.afforded(1.0, 0, 4_097)
@@ -579,17 +580,29 @@ def test_the_command_prints_the_table_and_its_json(capsys, monkeypatch):
     assert done.value.code == 0 and json.loads(capsys.readouterr().out) == doc
 
 
+def test_every_caller_of_the_checks_terms_names_its_jitter_bound():
+    """`terms` and `clock_terms` have no default jitter bound, so no caller counts at D_j = 1 without saying so: a
+    call that names none is refused, whatever else it gives."""
+    for count in (LB.terms, LB.clock_terms):
+        dj = inspect.signature(count).parameters["dj"]
+        assert dj.default is inspect.Parameter.empty and dj.kind is inspect.Parameter.KEYWORD_ONLY
+    with pytest.raises(TypeError, match="dj"):
+        LB.terms(4, 1, cells=65, steps=32, entries=9_088)
+    with pytest.raises(TypeError, match="dj"):
+        LB.clock_terms(1, 5, syncs=128, steps=32)
+
+
 def test_refusals():
     with pytest.raises(ValueError, match="a change is one of lengths, timing, entries"):
-        LB.terms(1, 1, cells=65, steps=32, changes=["length"])
+        LB.terms(1, 1, cells=65, steps=32, dj=2, changes=["length"])
     with pytest.raises(ValueError, match="D_j = 0"):
         LB.terms(1, 1, cells=65, steps=32, dj=0)
     with pytest.raises(ValueError, match="2 failed"):
-        LB.terms(1, 1, cells=65, steps=32, failures=2)
+        LB.terms(1, 1, cells=65, steps=32, dj=2, failures=2)
     with pytest.raises(ValueError, match="egress cells are an integer from 0"):
-        LB.terms(1, 1, cells=6.5, steps=32)
+        LB.terms(1, 1, cells=6.5, steps=32, dj=2)
     with pytest.raises(ValueError, match="a positive integer of syncs"):
-        LB.clock_terms(1, 1, syncs=0, steps=32)
+        LB.clock_terms(1, 1, syncs=0, steps=32, dj=2)
     with pytest.raises(ValueError, match="IDB = 33"):
         LB.Assumed(KO=1, IDB=33, T=32, tau=4)
     with pytest.raises(ValueError, match="failure rate is in \\[0, 1\\]"):

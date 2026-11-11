@@ -836,8 +836,8 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
 
     def bound(scope: str, period: str, reading: str, delta: Fraction | None = None) -> LB.Bound:
         if scope == "link":
-            return LB.per_link(cls, per_s, period, reading, delta, **at, weights=weights)
-        return LB.at_link_rate(link, links[scope], period, reading, delta, weights=weights)
+            return LB.per_link(cls, per_s, period, reading, delta, **at, weights=weights, dj=1)
+        return LB.at_link_rate(link, links[scope], period, reading, delta, weights=weights, dj=1)
 
     rows = []
     for period, s in LB.PERIODS.items():
@@ -850,7 +850,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                              "requests": rate * lw, "prog": reading, "pooled": {d: b.bits for d, b in pooled.items()},
                              "pooled_share": {d: b.share for d, b in pooled.items()},
                              "per_period": per.bits, "per_period_share": per.share, "eps": str(per.eps),
-                             "per_link_window": link.bits(link.block_s, reading)})
+                             "per_link_window": link.bits(link.block_s, reading, dj=1)})
     free = {reading: {"link_window": f["block"], "request": f["request"]}
             for reading, f in ((r, link.free(r)) for r in LB.READINGS)}
     split = "; ".join(f"the {scope}'s F = {LB.fmax(d / links[scope])} at δ = {float(d):g}"

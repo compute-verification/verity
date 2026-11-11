@@ -17,6 +17,7 @@ class stands in for its scan class and its T, and the calculator refuses what it
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import json
 import math
 import sys
@@ -73,16 +74,16 @@ def test_per_link_and_at_link_rate_are_chain_records_rows(tmp_path):
     link = LB.link(sz.CLASS, per_s, **at)
     for r in doc["rows"]:
         if r["scope"] == "link":
-            got = {d: LB.per_link(sz.CLASS, per_s, r["period"], r["prog"], d, **at) for d in (None, *LB.DELTAS)}
+            got = {d: LB.per_link(sz.CLASS, per_s, r["period"], r["prog"], d, **at, dj=1) for d in (None, *LB.DELTAS)}
         else:
             links = {"datacenter": LB.datacenter_links(), "world": LB.world_links()}[r["scope"]]
-            got = {d: LB.at_link_rate(link, links, r["period"], r["prog"], d) for d in (None, *LB.DELTAS)}
-            assert got[None] == LB.datacenter({link: links}, r["period"], r["prog"])
+            got = {d: LB.at_link_rate(link, links, r["period"], r["prog"], d, dj=1) for d in (None, *LB.DELTAS)}
+            assert got[None] == LB.datacenter({link: links}, r["period"], r["prog"], dj=1)
         assert r["per_period"] == got[None].bits and r["per_period_share"] == got[None].share
         assert Fraction(r["eps"]) == got[None].eps
         assert r["pooled"] == {f"{float(d):g}": got[d].bits for d in LB.DELTAS}
         assert r["pooled_share"] == {f"{float(d):g}": got[d].share for d in LB.DELTAS}
-        assert r["per_link_window"] == LB.per_link(sz.CLASS, per_s, Fraction(32, 10), r["prog"], **at).bits
+        assert r["per_link_window"] == LB.per_link(sz.CLASS, per_s, Fraction(32, 10), r["prog"], **at, dj=1).bits
     rows = {(r["period"], r["scope"], r["prog"]): r for r in doc["rows"]}
     one, many = rows["week", "link", "anchors"], rows["week", "datacenter", "anchors"]
     assert many["per_period"] == pytest.approx(12_500 * one["per_period"], rel=1e-12)
@@ -131,7 +132,33 @@ def test_the_caps_are_charged_twice_at_lean_s_ceilings():
     tau = Fraction(4)
     four = LB.link(W63, Fraction(4) / (32 * tau), T=32, tau=tau, egress_cells=65)
     schedules = cells = clog2(65 + 1) * 4
-    assert four.bits(four.block_s, "registered") == schedules + cells + 9_088 == 9_144
+    assert four.bits(four.block_s, "registered", dj=1) == schedules + cells + 9_088 == 9_144
+
+
+def test_k_by_links_charges_the_jitter_at_two_release_schedules_unless_its_caller_names_another_bound():
+    """A link of 32 buckets a sampling block is charged ⌈log2 2^32⌉ = 32 bits of jitter a sampling block at the term
+    of record's bound, D_j = 2 (`OF_RECORD`), which every count by links takes where its caller names none. At
+    D_j = 1 the jitter is 0 and the rest of K is the same, in either form."""
+    assert LB.OF_RECORD == 2 and clog2(2 ** 32) == 32 and clog2(1 ** 32) == 0
+    for count in (LB.LinkLoad.terms, LB.LinkLoad.bits, LB.per_link, LB.datacenter, LB.at_link_rate):
+        assert inspect.signature(count).parameters["dj"].default == LB.OF_RECORD
+    four = LB.link(W63, Fraction(4) / (32 * 4), T=32, tau=Fraction(4), egress_cells=65)
+    assert four.bits(four.block_s, "registered") == 9_144 + 32 == four.bits(four.block_s, "registered", dj=2)
+    one = LB.link(W63, RATE, T=32)
+    for period, s in LB.PERIODS.items():
+        blocks = Fraction(s) / Fraction(32, 10)
+        for reading in LB.READINGS:
+            card = one.terms(period, reading, dj=1)
+            assert card.jitter == 0 and one.terms(period, reading) == card._replace(jitter=32 * blocks)
+            for delta in (None, *LB.DELTAS):
+                at = {dj: LB.per_link(W63, RATE, period, reading, delta, T=32, dj=dj) for dj in (1, 2)}
+                assert at[2] == LB.per_link(W63, RATE, period, reading, delta, T=32)
+                assert [b.bits for b in at.values()] == [one.bits(period, reading, delta, dj) for dj in at]
+                assert at[2].bits - at[1].bits == pytest.approx(32 * blocks)
+                many = LB.at_link_rate(one, 5, period, reading, delta)
+                assert many == LB.datacenter({one: 5}, period, reading, delta, dj=2)
+                assert many.bits - LB.at_link_rate(one, 5, period, reading, delta, dj=1).bits == pytest.approx(
+                    5 * 32 * blocks)
 
 
 def test_the_census_sets_the_datacenter_and_rhos_fleet_the_world():
@@ -186,8 +213,10 @@ def test_the_pooled_datacenter_pays_its_incorrect_blocks_whatever_it_serves():
     n, one = LB.datacenter_links(), Fraction(1, 100)
     floor = LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors", one)
     assert LB.fmax(one / n) == 15 and floor.share == floor.bits / LB.WEIGHTS.bits
-    assert floor.bits == pytest.approx(n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 64 + 1)))
-    assert LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors").bits == 0
+    jitter = n * 189_000 * 32
+    assert floor.bits == pytest.approx(n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 64 + 1)) + jitter)
+    assert LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors").bits == jitter
+    assert LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors", dj=1).bits == 0
 
 
 def test_a_window_class_and_refusals():
