@@ -47,7 +47,7 @@ from verity_vllm.program.frontend.rules.base import (
     RuleInfo,
     StateRule,
 )
-from verity_vllm.program.frontend.rules.common import refuse_cached_prefix, shape
+from verity_vllm.program.frontend.rules.common import known, refuse_cached_prefix, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _OBSERVED,
     active_target_profile,
@@ -173,7 +173,7 @@ def _table(ctx, a, width: int, positions: list[int], what: str, dt=BF16) -> str 
     r = _value(ctx, a, dt, (None, width), what)
     if r:
         return r
-    n = shape(ctx, a)[0]
+    n = known(shape(ctx, a))[0]
     if any(not 0 <= p < n for p in positions):
         return f"a position outside {what} ({n} rows)"
     return None
@@ -188,7 +188,7 @@ def _f32(x: float) -> float:
 
 
 def _rows(ctx, a, w: int) -> Coll:
-    return ctx.coll(a).reshape(_tensor_type(shape(ctx, a), w))
+    return ctx.coll(a).reshape(_tensor_type(known(shape(ctx, a)), w))
 
 
 def _log(ctx, key, rows: list[Coll]) -> PartLog:
@@ -224,7 +224,7 @@ class CopyIntoAllocRule(InPlaceRule):
         dst, src = node.args[0], node.args[1]
         ctx.rebind(dst, ctx.coll(src).reshape(ctx.val(dst).type), self, what="dst")
         ctx.define(node, ctx.env[dst], view_of=dst)
-        ctx.record(self, node, {"shape": list(shape(ctx, dst)), "dtype": str(ctx.dtype_of(dst))}, emitted="(rows; no gates)")
+        ctx.record(self, node, {"shape": list(known(shape(ctx, dst))), "dtype": str(ctx.dtype_of(dst))}, emitted="(rows; no gates)")
 
 
 _NORM_ROPE = ("positions", "q_c", "q_w", "q_eps", "kv_c", "kv_w", "kv_eps", "k_pe", "cos_sin", "index_k", "index_k_w", "index_k_b",
@@ -264,7 +264,7 @@ class DsaNormRopeRule(InPlaceRule):
                   _value(ctx, a["k_pe"], BF16, (T, None), "k_pe")):
             if r:
                 return r
-        for r in (_value(ctx, a["q_w"], BF16, (qs[1],), "q_w"), _value(ctx, a["kv_w"], BF16, (ks[1],), "kv_w"),
+        for r in (_value(ctx, a["q_w"], BF16, (known(qs)[1],), "q_w"), _value(ctx, a["kv_w"], BF16, (known(ks)[1],), "kv_w"),
                   _table(ctx, a["cos_sin"], R, pos, "cos_sin"), _alloc(ctx, a["kv_c_out"], ks, BF16, "kv_c_out"),
                   _alloc(ctx, a["k_pe_out"], (T, R), BF16, "k_pe_out")):
             if r:
@@ -299,7 +299,7 @@ class DsaNormRopeRule(InPlaceRule):
         pos = ctx.static_index(a["positions"]).flat()
         T, h = len(pos), ctx.hint_name(node)
         qc, kvc, kpe = _rows(ctx, a["q_c"], 16), _rows(ctx, a["kv_c"], 16), _rows(ctx, a["k_pe"], 16)
-        Nq, L, R = shape(ctx, a["q_c"])[1], shape(ctx, a["kv_c"])[1], shape(ctx, a["k_pe"])[1]
+        Nq, L, R = known(shape(ctx, a["q_c"]))[1], known(shape(ctx, a["kv_c"]))[1], known(shape(ctx, a["k_pe"]))[1]
         cs = ctx.coll(a["cos_sin"])
         qn = ctx.kind("dsa_rmsnorm", node, N=Nq, EPS=float(a["q_eps"]))
         qw, kvw = ctx.coll(a["q_w"]), ctx.coll(a["kv_w"])
@@ -323,7 +323,7 @@ class DsaNormRopeRule(InPlaceRule):
         pre = {"T": T, "positions": [pos[0], pos[-1]], "Nq": Nq, "L": L, "R": R, "q_eps": float(a["q_eps"]), "kv_eps": float(a["kv_eps"]),
                "indexer": has}
         if has:
-            D, ROPE, EPS = shape(ctx, a["index_k"])[1], shape(ctx, a["index_cos_sin"])[1], float(a["index_k_eps"])
+            D, ROPE, EPS = known(shape(ctx, a["index_k"]))[1], known(shape(ctx, a["index_cos_sin"]))[1], float(a["index_k_eps"])
             fn = ctx.kind("dsa_indexer_k_row", node, D=D, ROPE=ROPE, EPS=EPS)
             k, w, b, ics = _rows(ctx, a["index_k"], 16), ctx.coll(a["index_k_w"]), ctx.coll(a["index_k_b"]), ctx.coll(a["index_cos_sin"])
             slots = [ctx.call(fn, k[i], w, b, ics[pos[i]], node=node, rule=self, name=f"{h}/index_k[{i}]") for i in range(T)]
@@ -368,7 +368,7 @@ class DsaQRule(OpRule):
         T = len(pos)
         if (r := _value(ctx, a["q_pe"], BF16, (T, None, None), "q_pe")):
             return r
-        if (r := _table(ctx, a["cos_sin"], shape(ctx, a["q_pe"])[2], pos, "cos_sin")):
+        if (r := _table(ctx, a["cos_sin"], known(shape(ctx, a["q_pe"]))[2], pos, "cos_sin")):
             return r
         ix = [a.get(k) for k in ("index_q", "index_cos_sin", "index_weights")]
         if any(x is None for x in ix) != (not has):
@@ -398,7 +398,7 @@ class DsaQRule(OpRule):
         has = a.get("index_q") is not None
         pos = ctx.static_index(a["positions"]).flat()
         T, h = len(pos), ctx.hint_name(node)
-        _, NH, R = shape(ctx, a["q_pe"])
+        _, NH, R = known(shape(ctx, a["q_pe"]))
         qpe, cs = _rows(ctx, a["q_pe"], 16), ctx.coll(a["cos_sin"])
         qr = ctx.kind("dsa_q_rope", node, D=R)
         q_out = array_of([array_of([ctx.call(qr, qpe[i][j], cs[pos[i]], node=node, rule=self, name=f"{h}/q_pe[{i},{j}]")
@@ -406,8 +406,8 @@ class DsaQRule(OpRule):
         ids, iq, iw = [qr.id], None, None
         pre = {"T": T, "positions": [pos[0], pos[-1]], "NH": NH, "R": R, "indexer": has}
         if has:
-            _, H, D = shape(ctx, a["index_q"])
-            ROPE = shape(ctx, a["index_cos_sin"])[1]
+            _, H, D = known(shape(ctx, a["index_q"]))
+            ROPE = known(shape(ctx, a["index_cos_sin"]))[1]
             fn = ctx.kind("dsa_indexer_q", node, H=H, D=D, ROPE=ROPE)
             q, w, ics = _rows(ctx, a["index_q"], 16), _rows(ctx, a["index_weights"], 16), ctx.coll(a["index_cos_sin"])
             outs = [ctx.call(fn, q[i], ics[pos[i]], w[i], node=node, rule=self, name=f"{h}/index_q[{i}]") for i in range(T)]
@@ -488,7 +488,7 @@ def _open_history(ctx, node, layer: str, pos: list[int], has: bool) -> tuple[dic
 def _append_rows(ctx, hist: dict, a: dict, has: bool) -> None:
     """Append the call's cache rows to the layer's history: [kv_c | k_pe] per row, and on an indexer layer its index-K slot and scale."""
     kvc, kpe = _rows(ctx, a["kv_c"], 16), _rows(ctx, a["k_pe"], 16)
-    T, L, R = kvc.type.n, shape(ctx, a["kv_c"])[1], shape(ctx, a["k_pe"])[1]
+    T, L, R = kvc.type.n, known(shape(ctx, a["kv_c"]))[1], known(shape(ctx, a["k_pe"]))[1]
     for i in range(T):
         hist["latent"].append(Coll(Array(L + R, Value(16)), concat([kvc[i].refs, kpe[i].refs])))
     if has:
@@ -593,8 +593,8 @@ class DsaIndexerAttnRule(StateRule):
         mp, h = ctx.module_path(node), ctx.hint_name(node)
         pos = ctx.static_index(a["positions"]).flat()
         T = len(pos)
-        _, NH, L = shape(ctx, a["ql_nope"])
-        R = shape(ctx, a["k_pe"])[1]
+        _, NH, L = known(shape(ctx, a["ql_nope"]))
+        R = known(shape(ctx, a["k_pe"]))[1]
         hist, P0 = _open_history(ctx, node, layer, pos, has)
         keys = [P0 + i + 1 for i in range(T)]
         _append_rows(ctx, hist, a, has)
@@ -622,7 +622,7 @@ class DsaIndexerAttnRule(StateRule):
 
         blocks = long_row_blocks(keys, TOPK) if batched_form() else []
         if has:
-            H, D = shape(ctx, a["index_q"])[1:3]
+            H, D = known(shape(ctx, a["index_q"]))[1:3]
             iq, iw = _rows(ctx, a["index_q"], 8), _rows(ctx, a["index_weights"], 32)
             klog, slog = _log(ctx, (layer, "ik"), hist["ik"]), _log(ctx, (layer, "iks"), hist["iks"])
             sel_fn = ctx.kind("dsa_topk_short_row", node, TOPK=TOPK)

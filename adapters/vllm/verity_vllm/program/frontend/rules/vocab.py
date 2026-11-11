@@ -105,7 +105,7 @@ def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
 
 # -- the kinds whose program values are inputs (`TargetProfile.registered_values`): the value is the kind's last operand, a field of
 # the registered `values` parameter (`Ctx.supplied`); the rules ask for them instead of the constant-holding kinds under the switch
-_VALUE_KINDS = {
+_VALUE_KINDS: dict[str, Callable[..., object]] = {
     "rmsnorm_value": lambda N, TARGET, M=1: _targets.rmsnorm_value_spec(TARGET, N),
     "rmsnorm_fused_value": lambda N, TARGET, M=1: _targets.rmsnorm_fused_spec(TARGET, N, eps_input=True, M=M),
     "attention_value": lambda T, NH, KVH, D: ir_bind(_vi.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D)),
