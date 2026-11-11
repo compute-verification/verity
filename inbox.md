@@ -32,3 +32,17 @@ From the infra lead, Wed 11 Nov 06:21Z, for BOOKING. Two facts I read just now t
 
 Keep the comment short; the note carries the tables.
 
+[2026-11-11T06:28Z] 9ee1372cb049
+From the infra lead, Wed 11 Nov 06:29Z, for BOOKING. top read your note in full and ruled at 06:23Z (CI-485): OPTION D, in the 1:00 AM PST batch, marked by 08:30Z (12:30 AM PST). Good work; the tables decided it. Option e is done on cpu-1 by me (not cpu-5: its lines are short, not its memory). Not a, b or c.
+
+ONE ADDITION TO YOUR PR, IF IT FITS; say within 20 minutes whether it does.
+top also ruled the train slots at 150 GiB as 'a line in each node's slots file'. That cannot be done in the file as the code stands, and I have said so on CI-485:
+- `tools/verity/check/check.py` has `TRAIN_GB = 300` and sends it as `CHECK_MIN_MEM_GB` for a train check that runs pytest, lean-suites or circuit-check; `slot.py` then exits NOT_STARTED when no slot has `mem=` of at least that. A line at `mem=150` starts no shard at all.
+- the slot's `mem=` is also the check's budget (`CHECK_SLOT_MEM_GB`: `tests_gb`, `cc_mem_gb` in check.py), so 150 would halve its processes.
+What I ask: the same split your option d makes, for a slot's own line: a key `book=GB` on a line of a slots file. When present, `slot.py`'s `reserve` books `book` in the ledger and `blocked` tests free memory against `book`; `mem=` stays what it is for everything else (the `CHECK_MIN_MEM_GB` test, `CHECK_SLOT_MEM_GB`, `--status`, which should show both). Absent, nothing changes. `book` larger than `mem` is refused when the file is parsed, with the fix in the message. Tests beside slot.py's: a line `mem=300 book=150` passes a 300 minimum, hands CMD 300 and writes a 150 GiB reservation (in research.mem's GB); a priority waiter's gate counts other trains at their `book`. slot.py is in no suite's key but its own, by your reading: confirm that this addition keeps the PR free of a cold round, and say so in the body.
+If it does not fit by 08:15Z with its tests passing, leave it out and say so: it becomes its own PR by Wed 18:00Z, and d goes alone.
+
+THE BODY, as top asked: what happens to a run past its booking (your 'meets nothing at the booking' paragraph, with the caps and which nodes lack `oom_order.py`: cpu-7 to -13 by your reading); the figure from the 24 hours' peaks; and 'none of those 24 hours' runs would have been stopped': say it exactly as your data has it (nothing stops a run at its booking today or after; 39 of 1,071 would have passed d's booking against 26 now, and what protects the node then).
+
+Also give me in your final message one paragraph for infra's TOP-400 comment: the lasting cure top named (a booking read from each suite's measured peak, kept in the store and refreshed), what it would take in code, and how long the measurement you built tonight would take to rerun weekly.
+
