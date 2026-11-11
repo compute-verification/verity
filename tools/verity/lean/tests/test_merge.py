@@ -1297,6 +1297,9 @@ def test_a_comment_in_a_list_s_conflict_is_one_side_s_or_the_conflict_stays_gits
     text, left = _pyproject(tmp_path, base, end("# new", circuit, a + "]"), end("# old", circuit, b + "]"))
     assert left == 0 and "# old" not in text and text.count("# new") == 1, "a comment one side rewrote is that side's"
     assert tomllib.loads(text)["tool"]["verity"]["tests"]["inputs"][-3:] == [circuit[1:-2], "verity/b.py", "verity/a.py"]
+    text, left = _pyproject(tmp_path, PYPROJECT, end(circuit, "# why", a + ",", '"verity/c.py"]'), end(circuit, "# why", a + ",", b + "]"))
+    assert left == 0 and text.count("# why") == 1, "a comment both sides wrote above one item is written once"
+    assert text.splitlines()[-4:-1] == ["          " + r for r in (circuit, "# why", a + ", " + b + ', "verity/c.py"]')]
     stays = {
         "a comment no item follows in its side": (PYPROJECT, end(circuit, a + ",", "# why a"), end(circuit, b + "]")),
         "a comment above an item the other side removed": (end(circuit, a + "]"), end(circuit, "# why a", a + ",", '"verity/c.py"]'),
