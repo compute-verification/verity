@@ -4042,12 +4042,12 @@ PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
 #: lints the preflight runs on the merged tree only when the change reaches what they judge (`reaches`): they take about 20 s
 #: and 40 s, and a train that fails one of them loses its hour-long check
 PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("adapters/vllm/tests/lint", ("adapters/vllm/",)))
-#: the vLLM integration's ratchet gate, which the preflight runs after its other checks of the merged tree, as a lint of
-#: `PREFLIGHT_LINTS` is, when the change reaches what it judges: the integration (its lints, lists, ruff config and noqa comments),
-#: the repository's lints and lists, the root ruff.toml, and the root pyproject.toml's ruff pin.  It runs as check's
-#: `ratchet-gate` step does, as the merge's base has it, on the merge, keeping no verdict (no merge is judged twice); it takes
-#: seconds on a change to the integration's code and over a minute on one to a lint or a list, which can outlast the budget.
-#: What it finds is a warning (`Preflight._merged`)
+#: the vLLM integration's ratchet gate, which the preflight runs after its other checks of the merged tree and their run at
+#: `next`, as a lint of `PREFLIGHT_LINTS` is, when the change reaches what it judges: the integration (its lints, lists, ruff
+#: config and noqa comments), the repository's lints and lists, the root ruff.toml, and the root pyproject.toml's ruff pin.
+#: It runs as check's `ratchet-gate` step does, as the merge's base has it, on the merge, keeping no verdict (no merge is
+#: judged twice); it takes seconds on a change to the integration's code and over a minute on one to a lint or a list, which
+#: can outlast the budget.  What it finds is a warning (`Preflight._merged`)
 PREFLIGHT_RATCHET = ("adapters/vllm/tools/ratchet_gate.py", ("adapters/vllm/", "tests/lint/", "ruff.toml", "pyproject.toml"))
 #: suites whose collection is no cheap check, each with why; the preflight names them and leaves them to the train's check
 PREFLIGHT_UNCOLLECTED: dict[str, str] = {}
@@ -4701,9 +4701,10 @@ class Preflight:
 
     The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
     first, within `lean_s`, while the tree is clean (a `research run` ships it), then (b) with its own environment (`sync`;
-    ``python`` stands in for its interpreter), under `budget_s` together, and the worktree is removed whatever happens.  Last in
-    (b), on a change that reaches what it judges, runs the vLLM integration's ratchet gate (`PREFLIGHT_RATCHET`, `_ratchet`):
-    what it fails is logged as a warning, refuses nothing and isn't run again at `next`.  Before
+    ``python`` stands in for its interpreter), under `budget_s` together, and the worktree is removed whatever happens.  Last,
+    after the run at `next` below, with what is left of the budget, the vLLM integration's ratchet gate judges the merge when
+    the change reaches what it judges (`PREFLIGHT_RATCHET`, `_ratchet`): what it fails is logged as a warning and refuses
+    nothing, so the time it takes never costs a refusing check its comparison.  Before
     (b), the fetched fixtures under the collected suites' inputs come into it (``fetch``, by default `_fetch_fixtures`: through
     ``store``, within `PREFLIGHT_FETCH_S` of the budget); a suite whose fixtures can't be fetched (no credentials, no source) is
     named once and not judged.  A failure that `next` has too (a pin already stale there, a module two PRs on `next` already
@@ -4924,18 +4925,21 @@ class Preflight:
             graph, lean_failed, lean_deadline = self._lean(wt, base, tree, notes, out)
             deadline = self.clock() + self.budget_s
             failed = self._checks(wt, base, tree, None, notes, deadline, fixtures)
+            again: dict[str, dict[str, str]] = {}
+            lean_again: dict[str, str] | str = {}
+            if any(failed.values()) or lean_failed:
+                _git(wt, "checkout", "-q", "--detach", "--force", base)
+                _git(wt, "clean", "-qffdx", "-e", "/.venv")
+                again = (self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline, fixtures)
+                         if any(failed.values()) else {})
+                lean_again = self._lean_at_base(wt, lean_failed, lean_deadline) if lean_failed else {}
             # warn only: the gate compares violation texts across two trees, so a moved line, or an import of a module the PR adds (on the base, of its package: a cycle), reads as new
-            if ratchet := failed.pop(RATCHET_STEP, None):
+            if ratchet := self._ratchet(wt, base, commit, tree, notes, deadline):
                 self.log(f"research queue: preflight: warning: #{pr.number} at {pr.head[:12]}: the ratchet gate "
-                         f"({PREFLIGHT_RATCHET[0]} as {onto} has it) fails the merge: " + "\n    ".join(ratchet.values())
+                         f"({PREFLIGHT_RATCHET[0]} as {onto} has it) fails the merge: " + "\n    ".join(ratchet)
                          + f"\n  {RATCHET_SAYS}")
-            if not any(failed.values()) and not lean_failed:
-                return out
-            _git(wt, "checkout", "-q", "--detach", "--force", base)
-            _git(wt, "clean", "-qffdx", "-e", "/.venv")
-            again = (self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline, fixtures)
-                     if any(failed.values()) else {})
-            lean_again = self._lean_at_base(wt, lean_failed, lean_deadline) if lean_failed else {}
+        if not any(failed.values()) and not lean_failed:
+            return out
         for name, fails in failed.items():
             if fails and name not in again:
                 notes.append(f"{name} failed on the merged tree and couldn't run on {onto} to compare: {'; '.join(fails.values())}")
@@ -5097,9 +5101,7 @@ class Preflight:
             if want(f"tests:{d}") and (present := [f for f in files if (wt / d / f).is_file()]):
                 got(f"tests:{d}", pytest_failures(run, py, wt / d, present))
         lints = [(path, reach) for path, reach in PREFLIGHT_LINTS if want(f"tests:{path}") and (wt / path).exists()]
-        gate = want(RATCHET_STEP) and not _git(self.repo, "cat-file", "-e", f"{base}:{PREFLIGHT_RATCHET[0]}",
-                                               check=False).returncode
-        changed = _out(self.repo, "diff", "--name-only", base, tree).split() if lints or gate else []
+        changed = _out(self.repo, "diff", "--name-only", base, tree).split() if lints else []
         for path, reach in lints:
             if reaches(changed, reach):
                 d, _, rest = path.rpartition("tests/")
@@ -5113,26 +5115,30 @@ class Preflight:
         failed = {row["suite"]: dict(zip(row["failed_tests"], row["summary"])) for row in res.failed}
         for s in res.suites:
             out[f"collect:{s}"] = failed.get(s, {})
-        if gate and reaches(changed, PREFLIGHT_RATCHET[1]):
-            got(RATCHET_STEP, self._ratchet(wt, base, py, deadline))
         return out
 
-    def _ratchet(self, wt: Path, base: str, py: str, deadline: float) -> dict[str, str] | str:
-        """`PREFLIGHT_RATCHET`'s gate as ``base`` has it, run on ``py`` as check's `ratchet-gate` step runs it, on the merge
-        checked out in ``wt`` (`ratchet_gate.py BASE HEAD --json`): {each line of what it fails: itself}, empty when it passed,
-        or why it didn't judge.  It keeps no verdict, and its scratch (its worktrees) goes in the worktree's temporary
-        directory, which `merged_worktree` removes, also when the budget's end kills the gate before it cleans up."""
-        script = wt.parent / Path(PREFLIGHT_RATCHET[0]).name
-        script.write_text(_git(self.repo, "show", f"{base}:{PREFLIGHT_RATCHET[0]}").stdout, errors="surrogateescape")
-        r, why = self._run([py, str(script), base, "HEAD", "--json"], wt, deadline,
-                           {"RATCHET_GATE_CACHE": "", "TMPDIR": str(wt.parent)})
-        if r is None:
-            return why
-        with contextlib.suppress(ValueError, TypeError, KeyError, AttributeError):
-            found = [str(x) for f in json.loads(r.stdout)["failures"] for x in (f["why"], *(f.get("fix") or []))]
-            if r.returncode in (0, 1) and bool(found) == (r.returncode == 1):
-                return {x: x for x in found}
-        return f"exited {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}"
+    def _ratchet(self, wt: Path, base: str, commit: str, tree: str, notes: list[str], deadline: float) -> list[str]:
+        """What `PREFLIGHT_RATCHET`'s gate, as ``base`` has it, fails on the merge ``commit`` (of ``tree``) when the change
+        reaches what it judges, run in ``wt`` as check's `ratchet-gate` step runs it (`ratchet_gate.py BASE COMMIT --json`)
+        with what the other checks of (b) left of their ``deadline``: each line it fails, none when it passed or didn't judge,
+        and then why in ``notes``.  It keeps no verdict, and its scratch (its worktrees) goes in ``wt``'s temporary directory,
+        which `merged_worktree` removes, also when the budget's end kills the gate before it cleans up."""
+        path, reach = PREFLIGHT_RATCHET
+        if (_git(self.repo, "cat-file", "-e", f"{base}:{path}", check=False).returncode
+                or not reaches(_out(self.repo, "diff", "--name-only", base, tree).split(), reach)):
+            return []
+        script = wt.parent / Path(path).name
+        script.write_text(_git(self.repo, "show", f"{base}:{path}").stdout, errors="surrogateescape")
+        r, why = self._run([self.python or str(wt / ".venv" / "bin" / "python"), str(script), base, commit, "--json"], wt,
+                           deadline, {"RATCHET_GATE_CACHE": "", "TMPDIR": str(wt.parent)})
+        if r is not None:
+            with contextlib.suppress(ValueError, TypeError, KeyError, AttributeError):
+                found = [str(x) for f in json.loads(r.stdout)["failures"] for x in (f["why"], *(f.get("fix") or []))]
+                if r.returncode in (0, 1) and bool(found) == (r.returncode == 1):
+                    return list(dict.fromkeys(found))
+            why = f"exited {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}"
+        notes.append(f"{RATCHET_STEP} not checked: {why}")
+        return []
 
 
 class MarkOnly:
