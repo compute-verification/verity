@@ -55,3 +55,21 @@ CROSSB to coordinator, Tue 10 Nov 9:59 PM PST. #8742's run at the UNMENDED cross
 2. [run] What it had shown: 8 of 10 parts passed: `verity/commitments` 492, `verity-network-e2e` 66, `verity-bench` 164, `verity-graph` 181, `repository` 280, `verity/protocols/pouw/verifier` 1844, `verity-pouw-benchmarks` 1216 (21 skipped), `verity-vllm` 13953 (479 skipped). The other two are the cancel's: `failed  research  no tests in 606 s on 3 workers`, "killed by SIGTERM" with its log at 94% and no failure printed; `failed  verity-flock  no tests in 0 s`, never started. No last `N suites:` line.
 3. So "the crossing itself is sound" (your 8:58 PM item 4) is shown for 8 of its 10 suites, the root suite among them, and not for `research` and `verity-flock`; both passed at the mended head (`2b26`), which differs from the crossing in the README alone.
 
+[2026-11-11T06:00Z] 02d17bd45c2c
+CROSSB to coordinator, Tue 10 Nov 10:00 PM PST. FINAL: all six crossed `clean`, two carry one mend commit each on your word, every run has ended and its verdict is sent. No run is out. I pushed only to my own branches, never forced.
+
+| PR | old head | crossed result | head on my branch | my branch | runs and verdicts |
+|---|---|---|---|---|---|
+| #8537 | `6b793802ff2460306306ad92a40b440126a20477` | `74145a920b7f0dfa47dfd54a608aabddc9b56b41` | the same | `cursor/net-crossb-8537-c2dd` | suites `r20261111-042523-5024`: 8 of 8 passed; Lean try `r20261111-042609-5626`: exit 0, 10 files |
+| #8547 | `c3e183dfab4725900cba93327a9e1bf6d40178a7` | `0acbff2fa638574bff0509f441ae7375dcb7896b` | the same | `cursor/net-crossb-8547-6331` | suites `r20261111-043110-ab12`: 57 of 57 passed; Lean try `r20261111-043137-b4c6`: exit 0, 2 files |
+| #8557 | `8c0e58114cb047f0046716e1b43f8cf24d49cea7` | `936546820145a55d0cf3460deea649803c2e0d7b` | the same | `cursor/net-crossb-8557-3990` | suites `r20261111-043401-eaf8`: 58 of 58 passed; Lean try `r20261111-043428-3e59`: exit 0, 3 files; records `r20261111-044706-cd4a`: AUDIT PASS, `regenerated` (same JSON as the lock, three of main's entries in another order) |
+| #8040 | `802daf1f777a4e32f62536f784028fd9bc199cc8` | `358315a487e1c7d65aee4e4b7d262c8eee83478e` | the same | `cursor/net-crossb-8040-535a` | suites `r20261111-043658-08c0`: 54 of 54 passed |
+| #8709 | `6edfa25c4401d0aef6305418ed51984b34e40667` | `1862e5084f05002ad08cfe546fff3d0fd2f09ac7` | `0a9297404cf269aa78d2663c3829631bc16d0db6` (mend) | `cursor/net-crossb-8709-6c8b` | at the crossing `r20261111-044035-f92f`: FAILED, 6 of 7 (read guard); at the mend `r20261111-051737-5947`: 7 of 7 passed, 6 run and 1 reused |
+| #8742 | `52acd2232478dcd7175b9baca4cb458816fe6828` | `ffaebafd3db9ac1da85db376f19b8ecfa8201ec1` | `0a37b4f1e445274fe34b2e92713f825d4def97fc` (mend) | `cursor/net-crossb-8742-7556` | at the mend `r20261111-050855-2b26`: 10 of 10 passed; at the crossing `r20261111-044417-5e03`: cancelled by the lane at 8 of 10 passed |
+
+1. [run: `git ls-remote`, 9:52 PM PST] Each PR's branch was at the head of my branch for it, the two mends included.
+2. Open with you: #8557's regenerated record (my 9:41 PM entry, items 3 and 4), and the two by-path additions in #8742's README that are not the move's (my 9:15 PM entry, item 4).
+3. NOT checked: the slow tier; circuit-check; the kernel replay and Lean tests (`cd4a` is `lean-fast/v1`, the Lean runs are `try`); your records runs `02b9` and `dd12`; ci's dry results (not in my clone); whether #8709's old head passed the read guard on the old tree; `verity-netsim-workload` at #8709's mended head (reused, not run); `research` and `verity-flock` at #8742's unmended crossing; `compile_slice_zk.sh` itself for #8040; in #8742's README, anything outside the PR's own lines and what each executable does beyond the names I searched.
+4. State note: `lanes/network-accounting/20261111T0454Z-state-net311-crossb.md`, synced 9:59 PM PST.
+TIMER: none
+
