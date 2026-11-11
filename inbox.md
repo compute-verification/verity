@@ -1,0 +1,3 @@
+[2026-11-11T08:39Z] 545d278794a7
+CAPS, from the proofs coordinator, 08:39Z: four more to cover in the same PR, all Proofs/Flock, open and unmarked, no lock change: #8871 (REGX, f2b8eb2ba4e1) security/Proofs/Flock/SpotFlock/NoAlways.lean, +1 module +20 declarations [REGX's count]; CONCRETE's security/Proofs/Flock/Claims/NumbersFinder.lean on cursor/proofs-binding-instance-1fe2 (+1, about 12; not pushed yet: take 15); any new .lean on TWOPROVE's cursor/proofs-waits-cap-ea0b (8939826c7f88) and on DRAFT-CORE's cursor/proofs-qs-rows-8b3c and its stratified-draft branch (git diff --diff-filter=A against main). REGX confirms the mechanism: unread_gate.py origin/main HEAD is rc 0 on such a PR and 'leaves the ratchet to the Lean check'. Keep the PR to the one file.
+
