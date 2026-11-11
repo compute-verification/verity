@@ -93,11 +93,8 @@ theorem m35_of_shapeOk {st : Stmt} (h : Flock.Zk.shapeOk st = .ok ()) : st.m ≤
 
 /-- `Zk.schedule` accepts every `m` from 25 to 35. -/
 theorem zkSchedule_ok {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) : ∃ p, Flock.Zk.schedule wideLeaf m = .ok p := by
-  have h := (Claims.Flock.zkShape_table ⟨m - 25, by omega⟩).1
-  have hi : Claims.Flock.ZkIdx.m ⟨m - 25, by omega⟩ = m := by
-    simp only [Claims.Flock.ZkIdx.m]
-    omega
-  rw [hi] at h
+  have h := (Claims.Flock.zkShape_table (Claims.Flock.ZkIdx.of wideLeaf m)).1
+  rw [(Claims.Flock.ZkIdx.of_at wideLeaf h25 h35).schedule] at h
   cases hs : Flock.Zk.schedule wideLeaf m with
   | ok p => exact ⟨p, rfl⟩
   | error e => rw [hs] at h; simp [Except.toBool] at h

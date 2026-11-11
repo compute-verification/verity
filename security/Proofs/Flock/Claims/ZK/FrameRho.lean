@@ -320,9 +320,9 @@ theorem spw_getThe_bind {β : Type} {R : β × Flock.Transcript × Got → Hist 
     {t : Flock.Transcript} {got : Got} {hs : Hist} (h : SPW (fun r => R (r.1.1, r.1.2, r.2)) (((f got).run t).run got) hs) :
     SPW (fun r => R (r.1.1, r.1.2, r.2)) (((getThe Got >>= f).run t).run got) hs := h
 
-open _root_.Flock.Firewall.Finish (sendMsg powP) in
-
 variable {wideLeaf : Bool}
+
+open _root_.Flock.Firewall.Finish (sendMsg powP) in
 /-- **Where the masked Ligerito ends, its `ρ₀, ρ₁` answers are independent**: after `z`'s, `β₀`'s and the `k₀` lanes'
 asks from the answers' position `m`, the prover stops at `ρ₀, ρ₁` dependent. -/
 theorem ligeritoPZk_rho (coins : Got) (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule) (T : F128)

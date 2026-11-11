@@ -160,7 +160,7 @@ def Sessions.maskOf (R : Sessions) (L0 : Level0.Slots) (name : String) (j m : Na
   return (← Drive.maskSlot st, st.c.kLog)
 
 /-- Whether table `j` of the session named `name` is a wide-leaf statement's (`Stmt.wideLeaf`), as the loop set it up:
-which `--zk` schedule its level 0 is drawn at. `false` wherever `maskOf` refuses. -/
+which `--zk` schedule its level 0 is sampled at. `false` wherever `maskOf` refuses. -/
 def Sessions.wideOf (R : Sessions) (L0 : Level0.Slots) (name : String) (j : Nat) : Bool :=
   match R.named L0 "level-0 request" name with
   | .ok s => (s.sts[j]?.map (·.wideLeaf)).getD false

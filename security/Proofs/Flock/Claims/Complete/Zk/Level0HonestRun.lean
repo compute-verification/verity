@@ -116,9 +116,9 @@ theorem HRuns.ends {p : LigeritoProof} {L : ℕ} {β : Type} {y : LP PS β} {c c
 
 -- one proof of a few hundred lines running `ligeritoPZk` against the masked model's `FinalZ`, `rw` and `omega` on the
 -- round indices at each step
-set_option maxHeartbeats 4000000 in
-
 variable {wideLeaf : Bool}
+
+set_option maxHeartbeats 4000000 in
 /-- **The honest masked Ligerito meets the masked model's final identity**: at a `--zk` schedule, as rep `rep < 2`, on
 a table `tb` and weights `b` of `2^n` entries whose level-0 commitment has `tb`'s padded rows (`encodeRowsZk`), with a
 basis whose value at every original point `q ‖ bits(y)` is the multilinear extension of `b` there, the masked prover's

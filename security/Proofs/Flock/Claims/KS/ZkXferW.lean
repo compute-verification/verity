@@ -68,8 +68,8 @@ variable {wideLeaf : Bool}
 
 /-- **Flock ZK's level 0 is M1's**: at `m ∈ [25, 35]`, level 0's `d` is M1's level-0 `logLen`. -/
 theorem zkLevel0_d_eq : ∀ m : Fin 11, (Claims.Flock.zkLevel0 wideLeaf (m.val + 25)).d =
-    ((Accounting.m1Schedule (m.val + 25)).levels.headD default).logLen := by
-  decide +kernel
+    ((Accounting.m1Schedule wideLeaf (m.val + 25)).levels.headD default).logLen := by
+  cases wideLeaf <;> decide +kernel
 
 namespace Gen
 
@@ -95,7 +95,7 @@ theorem wordLenJ_zkTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
   obtain ⟨h25, h35, -⟩ := zk_scopeJ hs hin hset hj
   rw [zkTabs_of_lt h0 L hz hk hlay hj, (zkTab_m1 (L j hj) (hz j hj) (hk j hj) spec (hlay j hj)).1,
     Claims.Flock.lvOf_zero]
-  have he := zkLevel0_d_eq ⟨sts[j].m - 25, by omega⟩
+  have he := zkLevel0_d_eq (wideLeaf := sts[j].wideLeaf) ⟨sts[j].m - 25, by omega⟩
   simp only [Nat.sub_add_cancel h25] at he
   unfold wordLenJ
   rw [ht]

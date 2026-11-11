@@ -1297,7 +1297,7 @@ theorem zk_sch_m1 {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (j : ℕ) (hj : j < (tables true x).length) :
-    (zkTabs h0 L hz hk hlay j).sch = Accounting.m1Schedule (stJ h0 j).m := by
+    (zkTabs h0 L hz hk hlay j).sch = Accounting.m1Schedule (stJ h0 j).wideLeaf (stJ h0 j).m := by
   have hj' : j < sts.size := by rw [← zk_tables_length hset]; exact hj
   rw [zkTabs_of_lt h0 L hz hk hlay hj']
   simp only [stJ, dite_eq_left hj']
@@ -1312,7 +1312,7 @@ theorem zk_sch_m1 {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (j : ℕ) (hj : j < (tables true x).length) :
-    (zkTabs h0 L hz hk hlay j).sch = Accounting.m1Schedule (stJ h0 j).m :=
+    (zkTabs h0 L hz hk hlay j).sch = Accounting.m1Schedule (stJ h0 j).wideLeaf (stJ h0 j).m :=
   Gen.zk_sch_m1 (S := S₀) (x := x) (ins := ins) (spec := spec) (sts := sts) (hset := hset) (h0 := h0) (L := L)
     (hz := hz) (hk := hk) (hlay := hlay) (j := j) (hj := hj)
 

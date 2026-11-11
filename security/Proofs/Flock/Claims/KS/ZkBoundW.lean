@@ -126,8 +126,8 @@ theorem mean_epsSZ_le_rawJ {F K : Type} [Field F] [Fintype F] [DecidableEq F] [F
     (cap₀ : Model.Cap D) {τ : Type} [Fintype τ] [Nonempty τ]
     (σ : τ → Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀)))
     {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : Stmt} (h : (tables true x)[j]? = some (spec, st))
-    (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hsch : T.sch = Accounting.m1Schedule st.m)
-    (ht : T.t = Accounting.m1Pad st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st)
+    (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hsch : T.sch = Accounting.m1Schedule st.wideLeaf st.m)
+    (ht : T.t = Accounting.m1Pad st.wideLeaf st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st)
     (hN : T.N ≤ 2 ^ 13) (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ) (b : Claims.Flock.IZ T.sch.levels.length → ℝ) (b₁ : ℝ)
     (hadv : ∀ r ℓ, (∑ t, advRSZ A Hs T pre post cap₀ r.val (ℓ.val + 1) (σ t)) / Fintype.card τ ≤ b (.inl (r, ℓ)))
     (hP : ∀ r : Fin 2, (∑ t, advPadsSZ A Hs T pre post cap₀ r.val (σ t)) / Fintype.card τ ≤ b (.inr (.inl r)))
@@ -166,8 +166,8 @@ theorem mean_epsSZ_le_rawJ {F K : Type} [Field F] [Fintype F] [DecidableEq F] [F
     (cap₀ : Model.Cap D) {τ : Type} [Fintype τ] [Nonempty τ]
     (σ : τ → Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀)))
     {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : Stmt} (h : (tables true x)[j]? = some (spec, st))
-    (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hsch : T.sch = Accounting.m1Schedule st.m)
-    (ht : T.t = Accounting.m1Pad st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st)
+    (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hsch : T.sch = Accounting.m1Schedule st.wideLeaf st.m)
+    (ht : T.t = Accounting.m1Pad st.wideLeaf st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st)
     (hN : T.N ≤ 2 ^ 13) (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ) (b : Claims.Flock.IZ T.sch.levels.length → ℝ) (b₁ : ℝ)
     (hadv : ∀ r ℓ, (∑ t, advRSZ A Hs T pre post cap₀ r.val (ℓ.val + 1) (σ t)) / Fintype.card τ ≤ b (.inl (r, ℓ)))
     (hP : ∀ r : Fin 2, (∑ t, advPadsSZ A Hs T pre post cap₀ r.val (σ t)) / Fintype.card τ ≤ b (.inr (.inl r)))
@@ -201,7 +201,7 @@ theorem zk_le_sessionsJW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
     (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
-      (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
+      (T j).sch = Accounting.m1Schedule (st j).wideLeaf (st j).m ∧ (T j).t = Accounting.m1Pad (st j).wideLeaf (st j).m ∧ (T j).e = 2 ∧
       (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
       (T j).N ≤ Claims.Flock.Numbers.padDomain
         (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
@@ -355,7 +355,7 @@ theorem zk_le_sessionsJW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
     (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
-      (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
+      (T j).sch = Accounting.m1Schedule (st j).wideLeaf (st j).m ∧ (T j).t = Accounting.m1Pad (st j).wideLeaf (st j).m ∧ (T j).e = 2 ∧
       (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
       (T j).N ≤ Claims.Flock.Numbers.padDomain
         (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
@@ -545,7 +545,7 @@ theorem zk_tableBoundJAccAtR_of_sessionsW {K D Sl : Type} [Field K] [Fintype K] 
     (hn : Claims.Flock.nTab (deployZk rel) x = (tables true x).length) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j)) (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
-      (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
+      (T j).sch = Accounting.m1Schedule (st j).wideLeaf (st j).m ∧ (T j).t = Accounting.m1Pad (st j).wideLeaf (st j).m ∧ (T j).e = 2 ∧
       (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
       (T j).N ≤ Claims.Flock.Numbers.padDomain
         (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
@@ -582,7 +582,7 @@ theorem zk_tableBoundJAccAtR_of_sessionsW {K D Sl : Type} [Field K] [Fintype K] 
     (hn : Claims.Flock.nTab (deployZk rel) x = (tables true x).length) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j)) (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
-      (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
+      (T j).sch = Accounting.m1Schedule (st j).wideLeaf (st j).m ∧ (T j).t = Accounting.m1Pad (st j).wideLeaf (st j).m ∧ (T j).e = 2 ∧
       (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
       (T j).N ≤ Claims.Flock.Numbers.padDomain
         (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))

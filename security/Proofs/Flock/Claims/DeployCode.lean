@@ -180,7 +180,7 @@ theorem plainRunCols_length_lt_plainNMinD {agree : ℝ} (ha0 : 0 < agree) (ha1 :
 
 /-! ## The masked code's threshold and query bound -/
 
-/-- The masked level-0 rate is largest at `m = 25`: `(2^cols + t)/2^d ≤ (2^12 + 554)/2^13` at every `m` served. -/
+/-- The masked level-0 rate is largest at `m = 25`: `(2^cols + t)/2^d ≤ (2^12 + 554)/2^13` at every table served. -/
 theorem zkRate_le : ∀ i : ZkIdx, (2 ^ zkCols i + zkPad i) * 2 ^ zkLen 0 ≤ (2 ^ zkCols 0 + zkPad 0) * 2 ^ zkLen i := by
   decide +kernel
 
@@ -207,16 +207,16 @@ theorem zkAgree_le_one : zkAgree ≤ 1 := by
     norm_num
   linarith
 
-/-- The masked level-0 code's dimension is at least `4650` at every `m` served. -/
+/-- The masked level-0 code's dimension is at least `4650` at every table served. -/
 theorem zkDim_ge : ∀ i : ZkIdx, 4650 ≤ 2 ^ zkCols i + zkPad i := by
   decide +kernel
 
 /-- The masked level 0 makes at most `277` queries at every `m` (none where `Zk.schedule` refuses `m`). -/
 theorem zkLevel0_q_le (m : ℕ) : (zkLevel0 wideLeaf m).q ≤ 277 := by
   by_cases hm : 25 ≤ m ∧ m ≤ 35
-  · obtain ⟨i, rfl⟩ : ∃ i : ZkIdx, i.m = m := ⟨⟨m - 25, by omega⟩, by simp only [ZkIdx.m]; omega⟩
-    have h : ∀ i : ZkIdx, (zkLevel0 i.wideLeaf i.m).q ≤ 277 := by decide +kernel
-    exact h i
+  · have h : ∀ i : ZkIdx, (zkLevel0 i.wideLeaf i.m).q ≤ 277 := by decide +kernel
+    rw [← (ZkIdx.of_at wideLeaf hm.1 hm.2).level0]
+    exact h _
   · have hq : ∃ e, _root_.Flock.Zk.queries0 wideLeaf m = .error e := by
       unfold _root_.Flock.Zk.queries0
       split_ifs <;> first | exact ⟨_, rfl⟩ | (exfalso; simp only [beq_iff_eq] at *; omega)
@@ -492,8 +492,8 @@ def acct (spec : SessionSpec) (st : Stmt) : Accounting.Stmt := ⟨st.c.kLog, st.
 at its parameters bounded by `Numbers.innerUp`. -/
 noncomputable def tableErr (zk : Bool) (spec : SessionSpec) (st : Stmt) : ℝ :=
   if zk then
-    Accounting.padLinkError (Accounting.m1Schedule st.m) (acct spec st) (Accounting.m1Pad st.m) +
-      (Accounting.padRepError (Accounting.m1Schedule st.m) (acct spec st) (Accounting.m1Pad st.m) 2 +
+    Accounting.padLinkError (Accounting.m1Schedule st.wideLeaf st.m) (acct spec st) (Accounting.m1Pad st.wideLeaf st.m) +
+      (Accounting.padRepError (Accounting.m1Schedule st.wideLeaf st.m) (acct spec st) (Accounting.m1Pad st.wideLeaf st.m) 2 +
         (Claims.Flock.Numbers.innerUp : ℝ)) ^ 2
   else Accounting.tableError ((Accounting.fast100 st.m).getD default) (acct spec st)
 
@@ -530,7 +530,7 @@ end KS.Gen
 /-- A table's weight: `Numbers.weightOf` at its schedule, and under `--zk` at its pads' domain. -/
 noncomputable def tableWeight (zk : Bool) (st : Stmt) : ℝ :=
   if zk then
-    Claims.Flock.Numbers.weightOf (Accounting.m1Schedule st.m)
+    Claims.Flock.Numbers.weightOf (Accounting.m1Schedule st.wideLeaf st.m)
       (Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0))
   else Claims.Flock.Numbers.weightOf ((Accounting.fast100 st.m).getD default) 0
 

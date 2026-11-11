@@ -118,9 +118,9 @@ theorem wS_foldKs (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (b : Arr
     rw [List.foldl_append]
     rfl
 
-set_option maxHeartbeats 4000000 in
-
 variable {wideLeaf : Bool}
+
+set_option maxHeartbeats 4000000 in
 /-- **A deployed rep's level-0 restart is `Σ y₁'·bFold`**: where `repFwC` on table `j`'s rep `r`, answered by the opened
 coins from the rep's base at the packed table of the witness's trace (`hg`) and extra lanes that are the tape's below
 `2^cols` (`hext`),

@@ -76,14 +76,11 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {wideLeaf : Bool}
 
-/-- **`Zk.schedule` accepts every `m` from 25 to 35**, at `zkSched m`. -/
+/-- **`Zk.schedule` accepts every `m` from 25 to 35** at either statement version, at `zkSched`. -/
 theorem zk_schedule_ok {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) :
     Zk.schedule wideLeaf m = .ok (Claims.Flock.zkSched wideLeaf m) := by
-  have h := (Claims.Flock.zkShape_table ⟨m - 25, by omega⟩).1
-  have hi : Claims.Flock.ZkIdx.m ⟨m - 25, by omega⟩ = m := by
-    simp only [Claims.Flock.ZkIdx.m]
-    omega
-  rw [hi] at h
+  have h := (Claims.Flock.zkShape_table (Claims.Flock.ZkIdx.of wideLeaf m)).1
+  rw [(Claims.Flock.ZkIdx.of_at wideLeaf h25 h35).schedule] at h
   unfold Claims.Flock.zkSched
   cases hs : Zk.schedule wideLeaf m with
   | ok p => rfl
@@ -172,7 +169,7 @@ at most `2^13` inner columns, 168 queries, a radius of at least `7/16`, and the 
 theorem zkTab_m1 {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ}
     (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27) (spec : SessionSpec)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) :
-    (zkTab L hz hk hlay).sch = Accounting.m1Schedule st.m ∧ (zkTab L hz hk hlay).t = Accounting.m1Pad st.m ∧
+    (zkTab L hz hk hlay).sch = Accounting.m1Schedule st.wideLeaf st.m ∧ (zkTab L hz hk hlay).t = Accounting.m1Pad st.wideLeaf st.m ∧
       (zkTab L hz hk hlay).e = 2 ∧ (zkTab L hz hk hlay).S.shape spec.mPts = acct spec st ∧
       (zkTab L hz hk hlay).N ≤ 2 ^ 13 ∧ (zkTab L hz hk hlay).q = 168 ∧ 7 / 16 ≤ (zkTab L hz hk hlay).δ ∧
       (zkTab L hz hk hlay).N ≤
