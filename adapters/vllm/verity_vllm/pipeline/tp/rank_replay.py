@@ -154,8 +154,9 @@ def xrank_facts(st: dict[str, Any], p: Loaded) -> None:
 
 
 def seed_of(cfg: dict[str, Any], run_root: bytes) -> tuple[int, str]:
-    """[O6] seed from the rank's run root AFTER commitment unless the driver targets one; under a
-    VERIFIER-ISSUED post-commitment challenge the seed is sha256(challenge | this rank's run root)[:8] (no grind by recommitting)."""
+    """[O6] the seed and its source text: the driver's targeted one, else sha256(`--replay-challenge` | this rank's run root)[:8], else the
+    rank's run root's first 8 bytes.  That last form has no coin (a prover steers the sample by committing again, in about the lesser of 1/p
+    and 2^64 tries): a measurement.  The rank replays before the pair's coins exist, so a challenger gate's coin does not reach this seed."""
     from verity_vllm.check.replay import driver as SR
 
     if cfg.get("seed") is not None:
