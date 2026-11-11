@@ -217,7 +217,6 @@ KNOWN = frozenset({
     "verity_vllm.program.frontend.derive_examples",
     "verity_vllm.program.frontend.kernel_readback",
     "verity_vllm.program.frontend.rules.family",
-    "verity_vllm.program.frontend.rules.vocab",
     "verity_vllm.program.frontend.targets",
     "verity_vllm.program.model",
     "verity_vllm.program.predict.batch",
