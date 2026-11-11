@@ -55665,3 +55665,126 @@ For the table: #8949 at `c14e4bd284b1` (the hoist, built, unmarked): second read
 - **Not run:** a Lean build or the Lean check on this head.
 
 For the table: #8932 `dad1a8159197` READY LINE, unmarked; quick tier `r20261111-124549-5af1` passed 4 of 4; `Proofs/Flock` 265 / 2,130, `Proofs/Core` 4 / 60; merges with `main` `72e4d46d9209`.
+
+## SCALE, Wed 11 Nov 13:05Z: the token select is cut and counted. In the TP window's own split at the LM head's 8-word blocks (the only one of 8, 16 and 32 words that fits `K_MAX` = 27), its worst unit has 162 classes [run], so the one M with every served kind counted is 162, not 145. The served window is per rank [run, read]. Under one M, (b) at M = 162 holds 2^-100 on the record at both PageCopy readings (2^-100.63 at 97, 2^-100.29 at 205), and at width 2^-5 and finer at both. Width 2^-4 holds at 97 only.
+
+**Labels.** Every bits figure is (b): over the served wiring; modeled; no Lean statement at the code is behind it; compressions, K0 = 6, T = 2^80 calls a run. GB ratios are the planner's, relative to the plan's row of record, and are "no program (not what `main` verifies)" rows, modeled.
+
+Runs:
+- `r20261111-125017-3e9b`: the count with the select, on cpu-2. It also listed the row's Commit.
+- `r20261111-125239-d970`: what that Commit staged.
+- `r20261111-120402-153e` and `r20261111-114851-082b`: the earlier counts.
+
+**1. A cut of the select the census could hold.** Sources: [run: the census's own sizer, `m1_families.sized` at `main` `967b722429`, light, under a second a spec]; [read: `grain.select_width` (`grain.py:89-97`), `tp/wires.py:16-19, 104-121`, `dead_free.py:184-236`].
+
+| unit | k_log | fits `K_MAX` = 27 |
+|---|---|---|
+| the LM head `Gemm_v2{K=6144}`, N = 1 (the plan) | 25 | yes |
+| N = 8 | **27** | yes, at the limit |
+| N = 16 | 28 | no |
+| N = 32 | 29 | no |
+| the select whole, `TokenSelect_v1{V=154880}` (and `TokenSelect_v4`) | 28 | no: the census's gap |
+| a group unit `TokenSelectGroups_v1{C=1280,G=16}` | **22** | yes |
+| the combine `TokenSelectCombine_v2{V=154880,C=16}` | **26** | yes |
+
+How C is chosen:
+- `select_width(V, w, 16)` takes the least C, a multiple of lcm(w, 16) dividing V, with C/w + 2 <= 256 and 2 V/C + 2 <= 256 (`MAX_ROWS`).
+- At 1, 2 or 4 words it finds none. At 8 words it gives C = 1,280 [run: the function]. A group unit then reads 160 LM-head rows, and the combine 2 × 121 + 2 = 244 rows.
+- Two levels fit, so no third level is needed.
+
+The least change that brings the select into a stratum has two parts:
+- a tenth row, the LM head at 8 words a block (N = 8);
+- the select in the window's own split: 121 group units of 1,280 logits, then one combine over their bests and indices, as `tp/wires.py`'s consumer already builds it.
+
+Whose files change:
+- The adapter's `serving_rows.py` gets two entries. One is a `Gemm_v2` slice of 8: today `SLICES` has only the whole row and N = 1. The other is a `STAGES` (or `PARTS`) entry for `TokenSelect_v1` into those two Definitions.
+- The census's code needs no change [read: `block_census.py:7-13, 108-131`]. A slot takes its coarsest fitting option, which is N = 8, since 16 and 32 do not fit, and a `STAGES` row's stages are a slot each.
+- The two Definitions are on `main` but not in the census tree `52da59a` [read], so the census reruns on a tree that has them.
+
+**2. The class count of that cut** [run `3e9b`: rank 0's Program of the row of record, all 1,331,964 rows]. Its configuration `final2_sel` is the final recut, plus the LM head at 8 words, plus the select in the window's split.
+
+How it counts:
+- The all-gather has no gates and is no block (the census's `not_blocks`), so the count reads through it. Rank 0's 19,360 logits are their LM-head blocks' words. The other seven ranks' 135,520 logits are free inputs, keyed by their readers alone. The combine reads x0 a second time.
+- I checked the tool on a toy Program against the derivation before the run [run: local, exact match].
+
+| unit kind | units in rank 0's Program | classes (units at each count) |
+|---|---|---|
+| group unit `TokenSelectGroups_v1{C=1280}` | 3,872 (32 selects × 121) | **162** (32, group 0: 160 LM-head blocks, + 1 for block 0, whose word 0 is also x0, + its output); **161** (448); **22** (32, the group across ranks 0 and 1); **2** (3,360, the peers' logits, free inputs) |
+| combine `TokenSelectCombine_v2{V=154880,C=16}` | 32 | **123** (31: 121 group units, x0, the token's readers); 122 (1: the last step's token, which nothing reads) |
+| the LM head's blocks, `Gemm_v2{K=6144,N=8}` | 77,440 (32 × 2,420) | **3** (77,408: x, the weight, one reader set out); 4 (32: block 0, whose word 0 has a second reader) |
+
+- The group unit is C/w + 1 = 161, as ATTACK derived at 8 words. Group 0 has one more, for x0.
+- **The one M becomes 162**, at the group unit. Next are the router at 145 and the head block at 139. Every other kind is unchanged from my 12:19Z table [run: the same counts].
+- **M by the record's strata:**
+  - 162 at 4,096 bits (the group units; `SiluMul{I=256}` 129 is there too), 145 at 512, 139 at 32,768, 131 at 262,144, 130 at 64, 128 and 2,048.
+  - 123 at 32 (the combine), 104 at 8,192, 98 at 65,536, 92 at 256 and 1,024, 73 at 131,072, 10 at 16,384, 3 at 0.
+- In the width designs the group units are a stratum of their own (3,840 bits) at 162, and the combine sits in the 32-bit stratum at 123.
+- Under one window of eight ranks [derived, not what is served]: every group unit reads its own rank's LM-head blocks, so 161, and 162 at group 0. The same maximum.
+
+**3. Which window the plan of record serves: per-rank windows.** The evidence:
+- [read] `tp/wires.py:36-37`: "With ``ranks``, the window of those ranks alone: … every other rank's partial row a free input, as in today's per-rank windows". The window of all ranks, `sites_circuit` without `ranks`, has no caller outside two tests (`adapters/vllm/tests/pipeline/test_tp_wires.py`, `tests/program/predict/test_tp_steps.py`), and `adapters/vllm/tests/dead_code_keep.json` lists it.
+- [run `d970`] The row's Commit (`commit/` of `glm53__fp8__h200__tp8__b1__…`) has one root per rank, eight `per_rank_roots`, hashed into one: `tp_run_root = SHA-512(tag ‖ u32 world ‖ (u32 rank ‖ root_rank)…)`. It holds per-rank declarations, binding maps, replay bundles and sampled replays, and no window or site file.
+- [run `9d93`, `153e`, `3e9b`] Rank 0's Program reads the other ranks' partials as parameter items, 7 a collective: the all-reduces' and the all-gather's `params 7`. The 135,520 peer logits above are those.
+- [run `d970`; read `tp/commit.py:594-597`] The only cross-rank tie is the committer's sampled pass `xrank_collectives` over committed bytes: 476 picks, 476 equal, result true. It is a check the committer runs. No proof block reads a peer's row.
+
+So the all-reduces stay at their rank-local counts (32, and 14 for the residual one), and every count here is the per-rank reading. Under one window of eight ranks [derived, not served], the counts and (b) under one M at PageCopy 97 would be:
+- the embedding's all-reduce: 8 × 24 + 1 = 193 at H = 4;
+- the residual one: 8 × 12 + 2 = 98 at o_proj N = 8;
+- M = 193;
+- the record 2^-100.38, width 2^-4 2^-99.83, width 2^-5 2^-100.83.
+
+**4. The frontier with the select in a stratum** [run: the counts; modeled: the select's cells].
+
+How the select's n and k were got:
+- n: the plan's LM-head cell is 5.734e7 blocks at N = 1. There are 19,360 LM-head units a select: the census's `Gemm_v2{K=6144,N=1}` units over its `TokenSelect_v1` rows, 4,956,160 / 256. That gives 2,962 selects.
+- So the group cell is 358,383 blocks (3,840 output bits, class 4,096), and the combine cell 2,962 (32 bits).
+- The LM head goes to 8 words as `kfix_recut.recut` scales a cell: n/8, 128 bits.
+- Prove, fixed and cap come from the plan's k_log-22 cell (`SiluMul_v2{I=256}`) for the groups, and from between k_log 25 and 27 for the combine [modeled].
+- k comes from the planner's own `kappa_rule` at each design's κ. In the record, the groups join the 4,096-bit stratum: k_t 219,500 over 1.228e8 blocks, about 640 of the samples groups. In the width designs they are a stratum of their own, with k = 1,200 / 600 / 300 / 150 at 2^-4 / -5 / -6 / -7.
+
+At the final recut with the select (M = 162; PageCopy 97, then 205). The one-M column at PageCopy 205 takes M = 205; mean and by stratum move by 0.01 bit at most. A cell marked ✓ holds 2^-100:
+
+| design | Σk | GB ratio | mean | by stratum | one M, PageCopy 97 | one M, PageCopy 205 |
+|---|---|---|---|---|---|---|
+| record: size classes, its κ | 9,384,040 | 1.017 | -101.27 ✓ | -100.89 ✓ | **-100.63 ✓** | **-100.29 ✓** |
+| width 2^-4 | 13,732,044 | 0.680 | -100.86 ✓ | -100.44 ✓ | -100.08 ✓ | -99.74 |
+| width 2^-5 | 6,866,044 | 0.701 | -101.86 ✓ | -101.44 ✓ | -101.08 ✓ | -100.74 ✓ |
+| width 2^-6 | 3,433,041 | 0.701 | -102.86 ✓ | -102.44 ✓ | -102.08 ✓ | -101.74 ✓ |
+| width 2^-7 | 1,716,541 | 0.807 | -103.86 ✓ | -103.44 ✓ | -103.08 ✓ | -102.74 ✓ |
+
+The same without the o_proj and embedding rows (`final2min_sel`; M = 162):
+- Under one M at PageCopy 97 / 205: record -100.62 / -100.28, width 2^-4 -100.07 / -99.73, width 2^-5 -101.07 / -100.73, width 2^-6 -102.07 / -101.73, width 2^-7 -103.07 / -102.73.
+- GB ratios: 1.016, 0.679, 0.701, 0.701 and 0.806.
+- Their readers stay at most 104 at today's widths: the all-reduces 104, the residual all-reduce 26 [run: the plan's counts, `153e`]. So under per-rank windows those two rows do not lower M.
+
+**The line for Daniel.** Under these changes, (b) holds 2^-100 under one M with every served kind counted:
+- six writer rows recut: W_UV to 16, q_nope to 64, q_a to 16, the MoE experts to 4, the router's two GEMMs to 4 and 2, and the LM head to 8 words;
+- two reader-side cuts: `SiluMul` in slices of 192, and `DsaIndexerQ` one head a block;
+- the token select in the window's split: 121 group units of 1,280 logits and one combine.
+
+Then M = 162, at a select group unit. The record reads 2^-100.62 at PageCopy 97 and 2^-100.28 at 205; width 2^-5 reads 2^-101.07 and 2^-100.73. This is per-rank windows, as served. PageCopy and the attention end parts enter at their bounds, so "every served kind counted" includes those bounds.
+
+**5. Corrections, mine.**
+- My 12:19Z "M = 145, exact over the served wiring" counted every kind the plan prices, but not the token select, which the plan holds in no stratum. With the select cut and counted, M = 162. The 12:19Z one-M cells stand as "without the select". With it, each moves by log2(162/145) = 0.16 bit: the record 2^-100.63 and width 2^-4 2^-100.08 at PageCopy 97 [run].
+- My 12:19Z section 1 said `AllGather` "is in no stratum and moves nothing [derived]". It is no block, but what it gathers is read: the select's units read the LM head through it, and my file had given the select 2 classes. Corrected by section 2.
+- The list of what is not exact gains three items:
+  - (a) The window reading. The counts are per-rank windows, which is what is served [run, read]. Under one window of eight ranks the all-reduces read 8× the writers, 193 at H = 4 [derived].
+  - (b) The select's internal classes: each group unit's output is read only by the combine, which reads 121 of them. They are by the Definition's ports [derived], since the Program row is the whole select.
+  - (c) The select's cells' prove, fixed and cap are modeled.
+- What stays not exact: the attention end, column-end and combine units and `EmbeddingRead`'s table reads (bounded 3 / 8 / 8 / 8); the fused per-expert GEMM (floored at 11); `FlashInferCol` (upper by 1); a parameter tensor as one class; and PageCopy (97 to 205).
+- The counts file for HARMSEARCH is still `lanes/proofs/tools/exact_merged.json`, now with `final2_sel` and `final2min_sel` added.
+
+For HARMSEARCH: the select's cells, in the form `kfix_recut` reads (`kfix_exact.py`, `SELECT` and `select_cells`):
+- `KR.WRITERS["lm"] = ("Gemm_v2{K=6144,N=1,", None, 1)` and `N["lm"] = 8`, through `KR.recut`;
+- then `select_cells(names, cells, n_lm)`, where `n_lm` is the plan's `Gemm_v2{K=6144,N=1,…}` cell n (5.734e7). It appends `Cell(n_lm/19360 × 121, 3840, 0, 8.745e-05, 0.9692, 16384, 480)` named `TokenSelectGroups{C=1280}`, and `Cell(n_lm/19360, 32, 0, 2.0e-03, 2.0, 2048, 4)` named `TokenSelectCombine{V=154880}`. Prove, fixed and cap are modeled; reprice them.
+- Run as `kfix_exact.py ROWS WIRING exact_merged.json final2_sel 97 205`; `final2min_sel` is the set without the o_proj and embedding rows.
+
+For RELAX: the tenth row and the select's templates:
+- The tenth row is the LM head `Gemm_v2{K=6144,N=19360}` sliced at N = 8 (k_log 27). Today `SLICES` gives only the whole row and N = 1.
+- The select's templates are `TokenSelectGroups_v1{C=1280,G=16}` (k_log 22) × 121 and `TokenSelectCombine_v2{V=154880,C=16}` (k_log 26) × 1, as a `STAGES` (or `PARTS`) entry for `TokenSelect_v1{V=154880}` in `serving_rows.py`, with its rows laid out as `tp/wires.py`'s consumer wires them (each group unit reads its 1,280 logits as 160 eight-word rows; the combine reads each group unit's row of bests and row of indices, and x0).
+- The census needs no rule change.
+
+For the table:
+- SCALE | (b) over the served wiring; modeled; no Lean statement at the code is behind it | the final recut + the LM head at 8 words + the select in the window's split [run `3e9b`] | one M = 162 (a select group unit; router 145 next) | record 2^-100.63 (PageCopy 97) / 2^-100.29 (205); width 2^-4 2^-100.08 / 2^-99.74; width 2^-5 2^-101.08 / 2^-100.74
+- SCALE | which window | per-rank windows [run `d970`, read `tp/wires.py:36-37`] | all-reduces rank-local (32) | under one eight-rank window, M = 193 [derived]
+- SCALE | the select's cut | LM head N = 8 (27; 16 and 32 do not fit), groups C = 1,280 (22) × 121, combine (26) [run: the census sizer] | adapter templates only; census rules unchanged
