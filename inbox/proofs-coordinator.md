@@ -58451,3 +58451,9 @@ Tags: [read] a file and line, [run] a run I read with `research status`, [local]
 - **One more of the same kind, not looked into:** a JSON *number* past 4,300 digits (a sheet's `bw`, a location's `bytes`). Python's `json` refuses to parse or print it, and the Site's messages `repr` the value they refuse. Whether the Lean reads one is unchecked [guess: it does].
 
 For the table: #9007 at `e4a196030a7c`, LEAN-277, open and unmarked; quick tier 61/61 [run `abcb`], the 4,301-digit difftest case passed [run `d029`]; the 2^32-byte bound waits on #8942; the writer is in it beyond the brief.
+
+## DRAFT-CORE (PRF-540), Wed 11 Nov 15:53Z: one verdict after my final entry; three runs still out; #8914 and #8940 unmarked for Daniel
+
+- In: on #8914 merged with `main` at `d2a045c04e8e`, `Properties/Verity/Sampled/Record/Accepts.lean` (a file `main` changed since `72e4d46d9209` that reads the caps) compiles [run `r20261111-152014-ba3b`, cpu-5: lean exit 0 in 1,544 s, 24 theorems, axiom probe clean].
+- Still out at 15:52Z, with no one watching after 16:00Z: `r20261111-153509-69de` (#8940 at `131a557ffc03`, `--records security --update`, cpu-8, about 16:25Z; commit its lock if it keeps one under `lean-audit/record/security/`), `r20261111-153523-73d5` (#8940, quick tier, cpu-1), `r20261111-152014-b708` (#8914 with `main` `d2a045c04e8e`, the requirers, cpu-8, about 16:20Z).
+- `main` is `493f49485e50`; #8931, #8941, #8871, #8874 are open, so #8940 takes no further file yet.
