@@ -90,7 +90,8 @@
 #      build,commit, in a config run, CONFIG_RUN default 1: the Build, the word check and one instrumented Commit,
 #      the run the session audits; BUILD_GPU=1 leaves the Build to the lease) in SWEEP_DIR (default: scratch removed
 #      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; the row's records under 1 MiB are kept in
-#      out/row). ROW_ARGS go to every `row run` (such as --norm-tap-so PATH);
+#      out/row). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
+#      holds no vLLM), CUDA_HOME/bin (--cuda-bin) and ROW_ARGS (such as --norm-tap-so PATH);
 #   3. ROLE=both: builds the Lean verifier (LEAN_EXE: that executable instead), starts the verifier on VERIFIER_CPUS
 #      and goes on once it listens;
 #   4. takes the lease and runs the prover on PROVER_CPUS, with OMP_NUM_THREADS and MKL_NUM_THREADS their count
@@ -362,7 +363,8 @@ if [ -n "$SERVED" ]; then
     read -r CK REPO REV _ < <("$VV" epoch resolve "$ROW")
     [ -n "${REV:-}" ] || refuse "verity-vllm epoch resolve $ROW names no checkpoint, repository and revision"
     # shellcheck disable=SC2086
-    ROWRUN=("$VV" row run "$ROW" "$CK" "$REPO" "$REV" --sweep-dir "$SWEEP" --cuda-bin "$CUDA_HOME/bin" ${ROW_ARGS:-})
+    ROWRUN=("$VV" row run "$ROW" "$CK" "$REPO" "$REV" --py "$VPY" --sweep-dir "$SWEEP" --cuda-bin "$CUDA_HOME/bin"
+      ${ROW_ARGS:-})
     KV=()
     case ${KV_LIB:-build} in
       cpu) ;;

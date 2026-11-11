@@ -416,8 +416,9 @@ def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     assert build["env"]["CUDA_VISIBLE_DEVICES"] == "" and commit["env"]["CUDA_VISIBLE_DEVICES"] is None
     sweep = build["argv"][build["argv"].index("--sweep-dir") + 1]
     assert sweep.startswith(str(node.tmp / "scratch")) and node.scratch() == []      # scratch, gone with the run
-    head = ["row", "run", ROW, "CHECKPOINT", "org/model", "0123abcd", "--sweep-dir", sweep, "--cuda-bin",
-            str(node.tmp / "cuda/cuda-12.9/bin"), "--norm-tap-so", "/taps/norm.so", "--stages"]
+    head = ["row", "run", ROW, "CHECKPOINT", "org/model", "0123abcd", "--py", str(node.ws / "venv312/bin/python"),
+            "--sweep-dir", sweep, "--cuda-bin", str(node.tmp / "cuda/cuda-12.9/bin"), "--norm-tap-so", "/taps/norm.so",
+            "--stages"]
     assert build["argv"] == [*head, "build"] and commit["argv"] == [*head, "commit"]
     assert lease.endswith(" ".join([str(node.ws / "venv312/bin/verity-vllm"), *head, "commit"]))
     assert build["env"]["REMOTE_VERIFIER"] is None           # the session is the Commit's: its Build sees no verifier
