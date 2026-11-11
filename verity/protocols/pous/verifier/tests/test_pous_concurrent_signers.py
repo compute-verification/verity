@@ -113,10 +113,10 @@ def test_windows_that_start_at_once_make_the_challengers_key_once(tmp_path, monk
     monkeypatch.setattr(lms, "keygen", lambda *a, **k: made.append(a) or keygen(*a, **k))
     device = tmp_path / "pous-challenger"
     device.mkdir()
-    lock = open(device / "device.lock", "a")
-    fcntl.flock(lock, fcntl.LOCK_EX)
-    said = _waiting(monkeypatch)
-    first, signers = _at_once(said, lock.close, [lambda: period.challenger(device, workers=1)] * 3)
+    with open(device / "device.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        said = _waiting(monkeypatch)
+        first, signers = _at_once(said, lock.close, [lambda: period.challenger(device, workers=1)] * 3)
     assert first == ["waiting"] * 3, signers
     assert len(made) == 1 and len({s.public_key for s in signers}) == 1
     assert period.challenger(device, workers=1).public_key == signers[0].public_key and len(made) == 1

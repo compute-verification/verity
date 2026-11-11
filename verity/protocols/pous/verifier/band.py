@@ -24,7 +24,7 @@ Feistel-SHAKE256 `Π₂` a prover answers without completing a call (`primitives
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 
 from . import dense
 from .codec import Codec
@@ -126,7 +126,7 @@ def _checked(d: int, fn):
     return call
 
 
-@lru_cache(maxsize=None)
+@cache
 def codec_for(d: int) -> Codec:
     """The band codec for in-degree `d`: the dense chain's encoder and decoder, with the band's parents."""
     if type(d) is not int or d < 1:

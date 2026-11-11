@@ -43,10 +43,7 @@ def toy_h(n: int, wc: int):
         a = mix(mix(bits_mix(7, q.tag, 256), q.layer), q.node)
         present = dict(q.parents)
         for u in range(n):
-            if u in present:
-                a = bits_mix(mix(a, 3), present[u], n * wc)
-            else:
-                a = mix(a, 2)
+            a = bits_mix(mix(a, 3), present[u], n * wc) if u in present else mix(a, 2)
         out = 0
         for c in range(n):
             for j in range(wc):
