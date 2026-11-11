@@ -182,7 +182,7 @@ the registry reads its file under `data/` by path. Either way its suite names wh
 this lists every loader:
 
 ~~~sh
-git grep -n verity/protocols/inference_only/rho -- 'benchmarks/*/pyproject.toml'
+git grep -n verity/protocols/inference_only/rho -- '*pyproject.toml'
 ~~~
 
 Among them, `verity/protocols/inference_only/nci` calls `theorem.multiple_bound` for its slowdown `D`, and `benchmarks/circuit_properties`
