@@ -652,7 +652,7 @@ theorem rho_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live 
   obtain ⟨hts', ⟨tp, htp⟩, hxs⟩ := Count.placeholder_tab hph
   rw [hz, Except.ok.injEq, Prod.mk.injEq] at htp
   obtain ⟨htsch, -⟩ := htp
-  obtain ⟨hm36, hk0, hn, hq⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule wideLeaf _ = .ok (t.sch, y.tPad))
+  obtain ⟨hm36, hk0, hn, hq⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule _ _ = .ok (t.sch, y.tPad))
   obtain ⟨⟨hmp, hmp0, hpc⟩, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨-, -, -, -, hdm, -⟩ := placeholder_ok hph
   have hls : (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0).size =

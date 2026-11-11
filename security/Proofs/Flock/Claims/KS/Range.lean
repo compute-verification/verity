@@ -110,11 +110,12 @@ theorem fast100_range {m : ℕ} {s : Flock.Schedule} (h : Flock.fast100 m = some
     unfold Flock.fast100 at h
     simp [hb] at h⟩
 
-theorem queries0_range {m q : ℕ} (h : Zk.queries0 wideLeaf m = .ok q) : 25 ≤ m ∧ m ≤ 35 := by
+theorem queries0_range {wideLeaf : Bool} {m q : ℕ} (h : Zk.queries0 wideLeaf m = .ok q) : 25 ≤ m ∧ m ≤ 35 := by
   unfold Zk.queries0 at h
   split_ifs at h <;> first | (cases h; done) | (simp only [beq_iff_eq] at *; omega)
 
-theorem schedule_range {m : ℕ} {p : Flock.Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok p) : 25 ≤ m ∧ m ≤ 35 := by
+theorem schedule_range {wideLeaf : Bool} {m : ℕ} {p : Flock.Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok p) :
+    25 ≤ m ∧ m ≤ 35 := by
   unfold Zk.schedule at h
   obtain ⟨q, hq, -⟩ := FlockSoundness.Refine.ebind_ok h
   exact queries0_range hq
