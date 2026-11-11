@@ -489,12 +489,11 @@ def periods(gamma: float, gpus: int, window_s: float, world_flop_per_year: float
     return {"share": share, "window": at(window_s / 3600)} | {name: at(hours) for name, hours in PERIODS_H.items()}
 
 
-def __getattr__(name: str):
-    """`paired` by this module's name: serving cost's `benchmarks/serve_tax` calls `overhead.paired`, and it goes once
-    that calls `kit.paired`. Loaded on use, so this file still loads alone by its path."""
 
-    if name == "paired":
-        from verity_bench.kit import paired
+def paired(scheme: Sequence[float], stock: Sequence[float], confidence: float = 0.95) -> dict:
+    """`kit.paired` by this module's name, which serving cost's `benchmarks/serve_tax` calls and checks until it calls
+    `kit.paired`. The kit is imported on the call, so this file still loads alone by its path."""
 
-        return paired
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from verity_bench import kit
+
+    return kit.paired(scheme, stock, confidence)
