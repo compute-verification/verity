@@ -209,9 +209,9 @@ theorem sum_runExtAt_runs_le (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (
 
 variable {H : Msg → Msg} {L : Compiled Coin A}
 
-/-- **Slot `i`'s expected reruns, weighted by the sample**: `slot_exp_le_un` with a weight `w` of the sample on both
-sides. Resampling the slot's session's rounds keeps the sample (`RunsFixed.fixed`), so the weight is the same at
-every resampled run and stays outside the session's expectation, which is at most `e_s`. -/
+/-- **Slot `i`'s expected reruns, weighted by the sample**: `slot_exp_le` with a weight `w` of the sample, on both
+sides, in place of acceptance. Resampling the slot's session's rounds keeps the sample (`RunsFixed.fixed`), so the
+weight is the same at every resampled run and stays outside the session's expectation, which is at most `e_s`. -/
 theorem slot_exp_le_weighted (hS : L.CostContract H) {x : Msg} (s : AuditStatement) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (i : Fin (L.nPU x)) (w : List ℕ → ℝ) (hw : ∀ l, 0 ≤ w l) (r : Fin (L.V.k x) → Coin) :
     Ex (fun d : Fin (L.V.k x) → Coin => w (L.checked x (forkOn (L.stage2 x) r d)) *
@@ -293,8 +293,8 @@ theorem slot_exp_le_weighted (hS : L.CostContract H) {x : Msg} (s : AuditStateme
 
 /-- **Expected reruns of a run's extractions, each slot weighted by the sample**: over the run's coins and the
 extractor's, at most `e_s` times the expected weight of the sample's first slots (`slot_exp_le_weighted`, the second
-stage's coins fresh at uniform coins, `Ex_forkOn`). At the weight `1` this is `runExt_runs_exp` before it counts the
-first slots, of which a sample has at most `n_sess`. -/
+stage's coins fresh at uniform coins, `Ex_forkOn`). At the weight `1` it bounds a run's expected reruns by `e_s`
+times the expected number of its sample's sessions. -/
 theorem ex_weighted_runs_le (hS : L.CostContract H) {x : Msg} {Ω : Type} (P : Prover Ω) (ω : Ω) (s : AuditStatement)
     (w : Fin (L.nPU x) → List ℕ → ℝ) (hw : ∀ i l, 0 ≤ w i l) :
     Ex (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
@@ -489,7 +489,7 @@ theorem eventTwoX_le_at_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.K
   have hc := Compiled.ex_calls_le_at hS.toCostContract hopen hs P needs T hT hNs hKs hKm
   have hdiv := div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left hc (by norm_num : (0 : ℝ) ≤ 4))
     (by positivity : (0 : ℝ) ≤ 2 ^ (256 : ℝ))
-  exact h.trans (add_le_add_right (add_le_add_left hdiv _) _)
+  exact h.trans (add_le_add (add_le_add (le_refl _) hdiv) (le_refl _))
 
 /-- **The event of `KSRegTwoX` at a budget `T` a run, with one closed right-hand side.** On a statement in scope,
 where a reveal for proof block `u` opens only gates of `needs u` and each run calls `H` at most `T` times, both
@@ -520,7 +520,7 @@ theorem eventTwoX_le_at {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
   have hc := Compiled.ex_calls_le_at hS.toCostContract hopen hs P needs T hT hNs hKs hKm
   have hdiv := div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left hc (by norm_num : (0 : ℝ) ≤ 4))
     (by positivity : (0 : ℝ) ≤ 2 ^ (256 : ℝ))
-  exact h.trans (add_le_add_left hdiv _)
+  exact h.trans (add_le_add (le_refl _) hdiv)
 
 end CompiledTwo
 
