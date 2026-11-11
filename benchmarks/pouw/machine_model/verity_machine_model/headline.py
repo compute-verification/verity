@@ -28,6 +28,8 @@ from pathlib import Path
 from verity_machine_model.eps import Design, design, eps, machine, setup, threshold, uniform_issue_charged
 from verity_machine_model.model import DATA, device, model
 
+__all__ = ["CREDIT", "OPERANDS", "READINGS", "Row", "TERMS", "record", "row", "rows", "skip_at", "spec", "text"]
+
 TERMS = {"skip": "ε_skip", "mand": "ε_mand", "machine": "ε_machine", "luck": "ε_luck", "core": "ε", "gamma": "γ",
          "threshold": "q*₀"}
 READINGS = ("sheet", "measured")

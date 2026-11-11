@@ -75,6 +75,12 @@ from scipy.optimize import linprog
 
 from verity_machine_model.model import DATA, census, model, vector
 
+__all__ = ["Adapt", "CREDITS", "Design", "Eps", "Filler", "Form", "Honest", "LANES", "MMA", "Machine", "Mix", "NOISE",
+           "OPERANDS", "PINNED", "PRODUCTS", "Part", "QS", "ROUTES", "SUMS", "Setup", "Table", "UNI", "adapt", "adapts",
+           "aliases", "binding", "budget", "deficit", "design", "designs", "eps", "forms", "honest", "lane_fill",
+           "machine", "profiles", "setup", "table", "threshold", "undominated", "uniform_issue_charged",
+           "uniform_on_issue"]
+
 LANES = 32
 UNI = "UNI"
 MMA = "MMA"

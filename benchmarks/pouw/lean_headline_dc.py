@@ -744,7 +744,7 @@ def render_sheet(fam: Family, r: Reading) -> str:
         f"`classes`: the {nk} instruction classes of the {fam.sheet} census, in the order `Fin {nk}` indexes them."
         + (f" `{CATCH_ALL[fam.key]}` is A2's catch-all: every warp instruction no other class names counts there, at its "
            f"issue slot alone." if fam.key in CATCH_ALL else ""),
-        f"`{sv}`, `sheet`: the {fam.gpu}'s data sheet ({fam.sheet}), `{S._rel(fam.sh)}` as "
+        f"`{sv}`, `sheet`: the {fam.gpu}'s data sheet ({fam.sheet}), `{S.relative_path(fam.sh)}` as "
         f"`{_as_written(fam.sh.lean)}` states it: f_max {fam.fmax} MHz ({fam.fmax_src}); each tensor class's dense MACs a warp "
         f"instruction ({SHAPES[fam.ns]}) and its operand type's dense MACs an SM clock; the Nsight Compute pipes "
         f"{', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()}, each at its width (the Programming "
@@ -774,7 +774,7 @@ def render_sheet(fam: Family, r: Reading) -> str:
     pipes = [f"some .{p}" if p else "none" for p in x.sheet["pipe"]]
     fold_lines = ",\n".join(f"    {_sparse(x, f)}" for f in x.folds)
     pipe_ctors = "\n".join(f"  | {p}" for p in lane)
-    width_lines = "\n".join(f"  | .{p} => {S._num(w)}" for p, w in fam.pipes.values())
+    width_lines = "\n".join(f"  | .{p} => {S.literal(w)}" for p, w in fam.pipes.values())
     return _header(fam, f"headline instance: {fam.sheet} and `{fam.design}`", "Definitions.Accounting.HeadlineDc.Encoding",
                    f"{fam.ns}SheetHeadline") + f'''
 {_bullets(bullets)}

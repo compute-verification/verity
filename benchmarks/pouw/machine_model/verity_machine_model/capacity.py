@@ -29,7 +29,11 @@ from pathlib import Path
 
 from scipy.optimize import linprog
 
-from verity_machine_model.eps import DATA, LANES, MMA, Machine, honest, profiles
+from verity_machine_model.eps import LANES, MMA, Machine, honest, profiles
+from verity_machine_model.model import DATA
+
+__all__ = ["Cell", "Hidden", "TENSOR_CYCLES", "USEFUL", "Work", "cell", "hidden", "lane_filler", "parse", "served",
+           "tensor_filler", "useful_of"]
 
 TENSOR_CYCLES = 16.0  # every MMA kind holds the tensor pipe 16 SMSP-cycles (row M)
 

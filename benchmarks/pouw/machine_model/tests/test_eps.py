@@ -252,7 +252,7 @@ def test_two_bit_entries_on_the_indexed_operand(tmp_path):
     two = E.eps(b2, pi, 8, operands="floor", credit="floor", table=t)
     assert one.core() > closed.core() + 0.01 and two.core() == pytest.approx(closed.core(), abs=1e-9)
     data = tmp_path / "data"
-    shutil.copytree(E.DATA, data)
+    shutil.copytree(DATA, data)
     f = data / "designs" / "dither-c.toml"
     f.write_text(f.read_text() + "\n[table]\nbits = 2\n")
     assert E.design("dither-c", data).index_bits == 2 and E.design("dither-c-peel", data).index_bits == 2
@@ -754,7 +754,7 @@ DESIGNS = ("dither-duo", "dither-two-sided", "dither-two-sided-pv", "co-dither",
 
 def test_the_form_table():
     """data/forms.toml: tensor_kinds' 19 native forms as the census's 14 per-form kinds, each with its word yield."""
-    t = tomllib.loads((E.DATA / "forms.toml").read_text())
+    t = tomllib.loads((DATA / "forms.toml").read_text())
     assert sum(len(v["ptx"]) for v in t.values() if isinstance(v, dict)) == 19
     c = census(model(), vector(QPIN).epoch)
     assert {f.kind for f in FORMS} == {k for k in c if k != "MMA" and "MMA" in k}
