@@ -66340,3 +66340,37 @@ Every design at a datacenter's size is past one coin, and every one but one tabl
 1. Run `0a76` → `research data put` of its `mix.json` and `counts.json` → the artifact's id to you. Its meta says the verifier's second stage refuses several sessions a template, and holds all the designs of section 3 with their sessions and largest session.
 2. Suites `e8ed` at this head, then the pull request (`Goal proofs/spot-bind-term`) with a ready line by 04:00Z. Its tables are sections 2 to 5 at a datacenter's 600 s with the 1,536-machine and whole-year rows.
 3. Two things I print both ways unless you say: which N the binding column uses (section 4), and whether the J = 200 row quoted is the design of least bound or the plan's sample regrouped (section 3).
+
+## 22:18Z KEPT: `d744` is read: the peak at a change of circuit file is NOT back near 9.26 GB (10.52 GB, as before), and a member with another program waits 61 to 67 s against 53 to 54 s alone (was 101 s); the two runs under `MIMALLOC_PURGE_DELAY=-1` have their slots (about 22:50Z and 22:55Z); one more run launched to say what the 10.52 GB is made of
+
+Tags: [measured: run id], [run: id], [read: file], [derived], [guess]. Every figure: on a branch, not on `main`; stand-in values, not the served engine; one core of a loaded node; one run. Until the scan of the order of members in the challenger's log is on `main`, a kept process's verdicts are per member only, and a window of more than one member gets no counted verdict.
+
+### 1. `r20261111-212613-d744` (second pull request's head `5e87ff2c83`, cpu-8, ended 22:12Z, exit 0, the guard held in all three blocks)
+
+Members handed in the order small, small, large, small (circuit files 542.7 MB and 1.79 GB; the kept program is the small one's, and the large member brings its own program). Two rounds.
+
+| | before (`ee5b`, at `16a0a485ff`) | now (`d744`, at `5e87ff2c83`) | `verify` alone (`d744`) |
+|---|---|---|---|
+| peak of the kept process | 10.52 GB | **10.52 GB** (both rounds) | 9.11 GB for the large member |
+| the large member (circuit file and program both change): seconds before its first check | 101.1 to 101.4 | **61.2 to 67.4** | 53.1 to 53.8 |
+| of which `inputs` / `setup` | 37.6 to 37.9 / 63.1 to 63.8 | 40.0 to 42.7 / 21.3 to 24.7 | 33.3 to 33.9 / 19.9 |
+| the small member after it (kept program, circuit file changes back) | 7.7 to 8.0 | 7.5 to 10.2 | 37.3 to 37.8 |
+| held when the large member's `MEMBER` line arrives | 5.04 GB | 5.67 to 5.68 GB | nothing |
+
+- **The peak: no.** It did not move. So either the earlier circuit file's parse is still held while the next is parsed, or it was never what raised the peak [derived]. The second reading is possible: in this order the member that changes circuit file also brings another program, so the kept program's two readings sit beside that member's own two, which no `verify` alone holds. This measurement cannot tell the two apart.
+- **The seconds: mostly.** The program is read once now: `setup` is 21 to 25 s against 20 s alone, where it was 63 s. What is left is 6 to 9 s more in `inputs` than alone, which I cannot attribute yet [guess: freeing the earlier circuit file's parse, and a heap that has been used].
+- **Same circuit file, at this head** (the second pull request's own figures; they agree with `ee5b`): a later member waits 0.97 s (542.7 MB file) and 2.18 s (1.79 GB file) before its first check, against 37.7 s and 54.4 s alone; the process holds 3.08 GB and 5.26 GB between members [measured: `d744`].
+- **Neither case is the driver's.** Members of one window share one registered program, so no member there brings another program; a window whose members have several circuit files does change file. That is the case the next run times.
+
+### 2. The run that tells them apart: `r20261111-221249-a532` (same head, cpu-6's research pool, one run ahead of it at 22:17Z)
+
+Order large, small, large, with the kept program the large one's. The last member keeps the program and changes circuit file, so nothing but the earlier circuit file can raise its peak above 9.26 GB. If the peak is about 9.3 GB the earlier file is freed in time and the 10.52 GB above is the two programs side by side; if it is well above, the change at `5e87ff2c83` does not do what it says and I take it out or fix it. About 35 min once it has a slot; about 23:20Z [guess].
+- The records run and the quick tier of the second pull request wait on this, since it decides whether `5e87ff2c83` is the head that stands.
+
+### 3. Under `MIMALLOC_PURGE_DELAY=-1`: both runs have slots on cpu-6
+
+- `r20261111-215201-4d4e` (second pull request's head): slot at 22:07Z; about 22:55Z.
+- `r20261111-215159-3112` (first pull request's head): slot at 22:13Z; about 22:50Z.
+- **First rows, 542.7 MB circuit file, second pull request, one round** [measured: `4d4e`, not ended]: the kept process holds **6.92 GB** at every `MEMBER` line, which is its peak; `verify` alone peaks at 6.74 GB under the same setting (6.62 GB under the default). So under this setting the process does hold its peak between members, as derived at 21:37Z. The 1.79 GB rows and the first pull request's follow; both tables by 23:00Z if the runs keep their pace, inside your 00:30Z.
+
+**Not done:** the two tables under the setting; `a532`'s reading and what follows for `5e87ff2c83`; the second pull request's records run, quick tier and body; the first pull request, which waits on #8789, #8949 and #9042.
