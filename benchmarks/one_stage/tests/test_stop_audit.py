@@ -143,6 +143,7 @@ def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path,
     stage1 = _stage1(tmp_path, monkeypatch, "refusals")
     _, summary = _audit(stage1, accepted=False, why="the proof does not verify")
     assert summary["accepted"] is False and summary["verdicts"][SA.LEAN] is False and summary["verdicts"][SA.ORDER] is True
+    assert summary["failed"] == ["registered", "roots"]
 
     refused = SMALL.unaccepted(stage1)
     got, summary = _audit(stage1, refused)
@@ -164,7 +165,7 @@ def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path,
     file = SA.reads(r)
     wrong = {**file["ports"], SA.OUT: {**file["ports"][SA.OUT], "root": "00" * 64}}
     _, summary = _audit(stage1, registered={p: {"value": e["value"], "root": e["root"]} for p, e in wrong.items()})
-    assert summary["accepted"] is False and summary["verdicts"][SA.READS] is False
+    assert summary["accepted"] is False and summary["verdicts"][SA.READS] is False and summary["failed"] == ["roots"]
 
     s = stage1["stop"]
     log = [x for x in s["evidence"]["session"]["log"] if s["registration"] not in x]

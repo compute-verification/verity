@@ -353,13 +353,19 @@ def verdicts_of(r: Resumed, stage1: Mapping[str, Any], file: Mapping[str, Any], 
 def decide(r: Resumed, stage1: Mapping[str, Any], file: Mapping[str, Any], proved: Mapping[str, Any],
            outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The stop stream's outcome of its sample: the sessions delivered (`Stream.deliver`), then `Stream.outcome` on the
-    verdicts (`verdicts_of`) with the stop sample's coin evidence. -> ``accepted``, the outcome's record and symbol and
-    the audit record; or ``refused``, with no audit record, when the stream refuses the delivery or the outcome."""
+    verdicts (`verdicts_of`) with the stop sample's coin evidence. The audit record's own checks hold the roots Lean's
+    accepting verdict opened the session's rows under to the stop registration's: the two parameters as its registered
+    values, and the output row as the session's root of `b.stop` (none when the verdict did not accept, which fails
+    ``roots``). -> ``accepted``, the outcome's record and symbol and the audit record; or ``refused``, with no audit
+    record, when the stream refuses the delivery or the outcome."""
     verdicts = verdicts_of(r, stage1, file, proved, outcome)
+    lean = proved["verdicts"][LEAN]
+    opened = (lean.get("registered") or {}).get(OUT) if lean.get("accepted") is True else None
     try:
         o = r.stream.deliver(r.sample, proved["sessions"]) or r.stream.outcome(
             r.sample, verdicts, proved["statement"], coins=stage1["stop"].get("evidence"),
-            proved_units=proved["proved_units"], instances=proved["instances"], served=proved["served"])
+            proved_units=proved["proved_units"], instances=proved["instances"], served=proved["served"],
+            session_roots={BR.STOP: (opened or {}).get("root")})
     except (S.Refused, S.Pending) as e:
         return {"accepted": False, "refused": e.verdict.to_json() if isinstance(e, S.Refused) else str(e)}
     body = r.stream.records[-1]
