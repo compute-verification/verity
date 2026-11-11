@@ -30,7 +30,8 @@ commitment, and encodes every segment of C* on the node's GPUs (`libp2v1.so` thr
 `--p2-lib`) or by the scheme's CPU codec, each segment checked by the device's decode of all of it and by
 `reference.decode` of two of its blocks before it is written. The store (`--store`, scratch outside the run directory):
 
-- `setup.json`: the manifest, the generator's stream, the layout's digest, the commitment, the source and the salt;
+- `setup.json`: the manifest, the generator's stream and its name of the weights (`program`, the generator's
+  `model_id`), the layout's digest, the commitment, the source and the salt;
 - `seg/<s>.c`: segment s, its blocks of 2,056 bytes in order;
 - `rows/<s>.rows`: their `sha512/row/v2` digests, 64 bytes each (the memory challenger's table,
   `VerifierKey.from_row_digests`);
@@ -393,8 +394,9 @@ def git_blob(path: str) -> str | None:
 
 class Generated:
     """`W` from a seeded weights generator (`benchmarks.torch_gpu.p2_stage.served_weights`: `tensors`, `tensor_bytes`, `stream_bytes`,
-    `program`) at a shape and seed, laid out by `build`: each of the layout's tensors is its `generator_parts`' bytes
-    back to back, each part an s8 tensor of the layout tensor's `K` columns."""
+    `model_id`) at a shape and seed, laid out by `build`: each of the layout's tensors is its `generator_parts`' bytes
+    back to back, each part an s8 tensor of the layout tensor's `K` columns. `program` is the generator's name of the
+    weights (its `model_id`, its manifest's `"model"`), named as `setup.json` and the tie hold it."""
 
     def __init__(self, generator: str, shape: str, seed: bytes, point: tuple[int, int, int] = POINT) -> None:
         self.generator, self.shape_name, self.seed = generator, shape, seed
@@ -410,7 +412,7 @@ class Generated:
                 raise ValueError(f"{t.name} [{t.n}, {t.k}] is not the generator's s8 {generator_parts(t.name)} at {g.name}")
             self.parts[t.name] = [(p.name, p.nbytes) for p in ps]
         self.size = self.mod.stream_bytes(g)
-        self.program = self.mod.program(g, seed)
+        self.program = self.mod.model_id(g, seed)
 
     def tensor(self, name: str, a: int, b: int) -> bytes:
         """Bytes `[a, b)` of the layout's tensor `name`."""
@@ -428,8 +430,8 @@ class Generated:
     def pieces(self, manifest: dict) -> list[tuple[str, int, int, str]]:
         """Each of the generator's s8 tensors in `W`, in `W`'s order: its name, `W` offset, bytes and the SHA-256 that
         `manifest` (the generator's at this shape and seed) gives it. Every s8 tensor the manifest lists is one."""
-        if (manifest.get("program"), manifest.get("stream_bytes")) != (self.program, self.size):
-            raise ValueError("the manifest is another shape's or seed's: its program or stream_bytes differs")
+        if (manifest.get("model"), manifest.get("stream_bytes")) != (self.program, self.size):
+            raise ValueError("the manifest is another shape's or seed's: its model or stream_bytes differs")
         rows = {r["name"]: r for r in manifest["tensors"]}
         out = []
         for t in self.store.tensors:

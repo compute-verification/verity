@@ -71,6 +71,8 @@ ACTIONS = ("HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "Lis
 # custody's in <root>/requests/<run-id>/store-read/; unlike custody's it is put in the workload's environment
 READ_DIR_NAME = "store-read"
 READ_ACTIONS = ("HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "ListObjectsV2")
+#: the variables a minted key travels in: cred.json's keys, which the store.toml staged beside it names
+KEY_ENV = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
 PUSH_TRIES = 3
 PUSH_RETRY_S = 20.0
 TRIAGE_STATES = ("fetched", "r2", "forced-unverified", "attempt-no-record", "attempt-unpreserved", "conflict", "no-custody", "running",
@@ -176,8 +178,9 @@ def stage(run_dir: Path, into: Path, rels: list[str] | None = None) -> list[str]
     return rels
 
 
-#: What a run may be sent that grants access until it expires, as globs relative to its run dir and its request dir: check's presigned
-#: URLs of the Lean dependency bundles (`tools/verity/check/check.py` LEAN_DEPS_URLS), which a run of anything else never takes out of inputs/,
+#: What a run may be sent that grants access until it expires, as globs relative to its run dir and its request dir: the presigned URLs
+#: of the Lean bundles a check or a Lean records run is sent (`tools/verity/check/check.py` LEAN_DEPS_URLS, `research.cli.lean_records_urls`),
+#: which a run of anything else never takes out of inputs/,
 #: and the temporary name a shipped tree's preflight writes that file under before replacing it; and those of the recorded checks'
 #: verdict packs (VERDICT_URLS) and of the agreement's pinned upstream build and inputs (AGREEMENT_URLS)
 CREDENTIALS = ("inputs/lean-deps-urls.json", "inputs/.lean-deps-urls.json.*", "inputs/verdicts-urls.json", "inputs/agreement-urls.json")
@@ -392,10 +395,10 @@ def _mint(ttl: str | int, actions: tuple[str, ...], dir_name: str, flag: str,
 
 
 def reader_env(read_dir: Path) -> dict[str, str]:
-    """The workload's environment for its staged `--store-read` key: RESEARCH_STORE_CONFIG and the three AWS_* variables."""
+    """The workload's environment for its staged `--store-read` key: RESEARCH_STORE_CONFIG and the KEY_ENV variables."""
     d = Path(read_dir)
     cred = json.loads((d / CRED_FILE).read_text())
-    return {"RESEARCH_STORE_CONFIG": str(d / STORE_TOML), **{k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")}}
+    return {"RESEARCH_STORE_CONFIG": str(d / STORE_TOML), **{k: cred[k] for k in KEY_ENV}}
 
 
 @contextlib.contextmanager
@@ -403,7 +406,7 @@ def custody_env(custody_dir: Path) -> Iterator[None]:
     """The store's remote for the duration: RESEARCH_STORE_CONFIG -> the staged store.toml, AWS_* from cred.json; restored after."""
     d = Path(custody_dir)
     cred = json.loads((d / CRED_FILE).read_text())
-    want = {"RESEARCH_STORE_CONFIG": str(d / STORE_TOML), **{k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")}}
+    want = {"RESEARCH_STORE_CONFIG": str(d / STORE_TOML), **{k: cred[k] for k in KEY_ENV}}
     saved = {k: os.environ.get(k) for k in want}
     os.environ.update(want)
     try:
