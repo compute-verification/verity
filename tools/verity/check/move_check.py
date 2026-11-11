@@ -38,8 +38,10 @@ Every path git sees changed must be one of:
   split shares out and the Lean check holds to the build), and changes any other field only by moved paths and module
   names, a moved path there too left where it is a word (a reason that calls a conclusion `security`, when the directory
   of that name moves); a `runs` entry may move to another lock the range touches (a proofs package's new one), its runner module
-  renamed, its package-relative paths following the move and its `why` changed only by moved paths from the root, and
-  must end up in exactly one, otherwise unchanged (`runs_moved`);
+  renamed, its package-relative paths following the move and its `why` changed only by moved paths from the root and
+  the dotted names of moved Python modules (`rules`'s `why` in the `--json` report lists the locks whose `why` a dotted
+  name changed; a string of it may also change as a line may by the map's rows, below), and must end up in exactly
+  one, otherwise unchanged (`runs_moved`);
 - a new `lakefile.toml`, `lakefile.lean`, `lake-manifest.json`, `lean-audit.json` or `lean-toolchain` at the root of a new
   Lake package that the range moved `.lean` files into from one source package, which is a copy of the source package's
   file (`copy_change`): a lakefile may differ only in package and library names, `roots`, `globs`, `defaultTargets`,
@@ -56,6 +58,19 @@ Every path git sees changed must be one of:
 - a new, empty `__init__.py` in a directory at or above a `.py` file the range moved there out of a package (its old
   directory had an `__init__.py`), and no higher than the root of that file's package after the move (`[roots] new` of a
   path map under `tools/move/` at BASE): the package level `tools/move/layout.py` writes so the module imports by its new name;
+- on a line none of these explains, what the move's own path map says beyond the renames (`Rows`): the map each commit of
+  the range names (`Layout-move: tools/move/NAME.toml`, `tools/move/stage.py`'s line), read as BASE has it. A reference to
+  a directory the map splits may go where its `[tokens]` row sends it, or stay, when the range bears the row out (part of
+  the directory is now below the row's): the directory itself (`verity/protocols/flock/prover/`, also as a pathlib chain or a quoted
+  relative path), a pattern below it, and a path below it that names nothing at BASE; a path below it that BASE has
+  follows only its own move. On such a line a moved path, or such a reference, is also read after each prefix
+  `tools/move/layout.py` reads as the root (its `ROOT_PREFIX`: `<tree>/`, `{r}/`, `$T/wt-$c/`, `~/verity/`, a pod's
+  `/workspace/`; and as a shell variable's default, `${TESTS:-verity/x.py}`), one pattern for both. A file the map lists
+  under `[drop] paths` may be deleted. And a path the line names from its file's directory, or else from its package's
+  root (the directory of the nearest `pyproject.toml` above the file), may be based again: written from where that
+  directory went (the file's new directory, the directory the `pyproject.toml` moved to) to where the path went
+  (`ops/README.md` to `../definitions/ops/README.md`); a plain path the root also has is a path from the root. `--json`
+  lists under `rules` the paths each of these took (`tokens`, `prefixes`, `drop`, `relative`);
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
   where the range moved it, or a Lean module likewise; or a Lean declaration of a `.lean` file the range edits, to a name
@@ -153,6 +168,16 @@ LAKE_LINE = re.compile(r"""^\s*(
     | (roots|globs|defaultTargets|name) \s*:=.*
     )\s*$""", re.X)
 REQUIRE_PATH = re.compile(r"^\s*(path\s*=|require\s)")
+#: a layout move's line naming its path map, as `tools/move/stage.py` writes it
+LAYOUT_LINE = re.compile(r"^Layout-move: (tools/move/[\w.-]+\.toml)(?: --no-lock)?$", re.M)
+#: what a line goes on to name below a directory: `/tests/test_x.py`
+BELOW = re.compile(r"(?:/[\w.\-]+)*")
+#: the one prefix `_paths_pattern` reads as the root: a variable holding the checkout
+CHECKOUT = re.compile(r"(?<![\w.\-/$])\$\{?\w+\}?/")
+#: a path a line may name from its file's directory or its package's root, as `tools/move/layout.py` reads one: after a
+#: variable holding a directory (`$PWD/../../x`), from a dot (`../x`, `./x`) or plain (`x/y`)
+REBASED = re.compile(r"(?P<v>\$\{?\w+\}?/)(?P<p>(?:\.\./)+[\w.\-]+(?:/[\w.\-]+)*/?)"
+                     r"|(?<![\w.\-/$}])(?P<q>(?:\.\.?/)+[\w.\-]+(?:/[\w.\-]+)*/?|[\w\-][\w.\-]*(?:/[\w.\-]+)+/?)")
 MANIFEST_PATH_KEYS = {"type", "scope", "name", "manifestFile", "inherited", "dir", "configFile"}
 HUNK_LINES = 8
 
@@ -313,16 +338,25 @@ def substitute(text: str, pmap: dict[str, str]) -> str:
                                                                           text)
 
 
+def either(old: str, new: str, refs: list[tuple]) -> list[tuple] | None:
+    """The ``refs`` ((start, end, what it becomes[, the rules that read it, whether it must change])) that `new` rewrites,
+    when it is `old` with each either rewritten or, unless it must change, left as it was; else None."""
+    parts, at = [], 0
+    for s, e, to, *more in refs:
+        was = [] if more[1:] and more[1] else [re.escape(old[s:e])]
+        parts += [re.escape(old[at:s]), f"({'|'.join([*was, *map(re.escape, (to,) if isinstance(to, str) else to)])})"]
+        at = e
+    m = re.fullmatch("".join(parts) + re.escape(old[at:]), new) if parts else None
+    return m and [r for r, got in zip(refs, m.groups()) if got != old[r[0]:r[1]]]
+
+
 def partly(old: str, new: str, pmap: dict[str, str]) -> bool:
     """Whether the line `new` is `old` with each moved path in it either rewritten to where it is now or left as it was: a
     top-level directory's name is also a word (`examples` in prose, a JSON key, a function's name) that the move leaves."""
     if not pmap:
         return False
-    parts, at = [], 0
-    for m in _paths_pattern(tuple(sorted(pmap, key=len, reverse=True))).finditer(old):
-        parts += [re.escape(old[at:m.start()]), f"(?:{re.escape(m[0])}|{re.escape((m[1] or '') + pmap[m[2]])})"]
-        at = m.end()
-    return bool(parts) and re.fullmatch("".join(parts) + re.escape(old[at:]), new) is not None
+    return either(old, new, [(m.start(2), m.end(2), pmap[m[2]])
+                             for m in _paths_pattern(tuple(sorted(pmap, key=len, reverse=True))).finditer(old)]) is not None
 
 
 def short_forms(pmap: dict[str, str], base: Tree) -> dict[str, str]:
@@ -983,6 +1017,152 @@ def package_roots(base: Tree) -> set[str]:
     return out
 
 
+def layout_maps(base: Tree, head: str, cwd: str | None) -> list[dict]:
+    """The path maps the range's layout moves ran by (each commit's `Layout-move: tools/move/NAME.toml` line), as BASE has
+    them: what a map says beyond the renames is read from the map BASE holds, never from the range's own files."""
+    log = git("log", "--format=%B", f"{base.rev}..{head}", cwd=cwd).decode(errors="replace")
+    out = []
+    for path in dict.fromkeys(LAYOUT_LINE.findall(log)):
+        try:
+            out.append(tomllib.loads(base.text(path) or ""))
+        except tomllib.TOMLDecodeError as e:
+            raise SystemExit(f"move-check: the move's path map {path} doesn't parse at BASE: {e}") from e
+    return out
+
+
+class Rows:
+    """What the move's maps (`layout_maps`) say beyond the renames, read for a line nothing else explains and never added to
+    the path map, so no rename is paired and no anchor recounted by it; and for such a line, a moved path after each
+    prefix the mover reads as the root (`pattern`).
+
+    `[tokens]`: where a reference to a directory the map splits goes. A row counts only where the range bears it out: a
+    directory of BASE that didn't move whole, part of it now below the row's directory; two maps that disagree on a
+    directory name it nowhere. It reads the directory itself (`verity/protocols/flock/prover/`, `verity/protocols/flock/prover/*.patch`) and a path
+    below it that names nothing at BASE (a file a test makes up); a path below it that BASE has follows only its own move.
+
+    `[drop] paths`: the files the move deletes.
+
+    A relative path based again (`relative`): a path the line names from its file's directory, else from its package's
+    root (the nearest `pyproject.toml` above the file at BASE), written from where that directory went (the file's new
+    directory; where the package's `pyproject.toml` moved) to where the path went. A plain path the root also has is a
+    path from the root, and a directory the range splits with no row went nowhere one path names."""
+
+    def __init__(self, maps: list[dict], pmap: dict[str, str], base: Tree, head: Tree):
+        self.pmap, self.base, self.head, self.tokens, self._went = pmap, base, head, {}, {}
+        self.drop = {p for data in maps if isinstance(d := data.get("drop"), dict) and isinstance(ps := d.get("paths"), list)
+                     for p in ps if isinstance(p, str)}
+        bad = set()
+        for data in maps:
+            rows = data.get("tokens")
+            for d, n in rows.items() if isinstance(rows, dict) else ():
+                d, n = d.rstrip("/"), str(n).rstrip("/")
+                lo, hi = bisect.bisect_left(base.files, d + "/"), bisect.bisect_left(base.files, d + "0")
+                if d not in pmap and any(map_path(f, pmap).startswith(n + "/") for f in base.files[lo:hi]) \
+                        and self.tokens.setdefault(d, n) != n:
+                    bad.add(d)
+        for d in bad:
+            del self.tokens[d]
+
+    @functools.cached_property
+    def pattern(self) -> re.Pattern:
+        """`_paths_pattern` over the moved paths and the split directories, after whatever `tools/move/layout.py` reads as
+        the root (its `ROOT_PREFIX`, the `<root>/` of a relative path `resolve_relative` read among them, and a shell
+        variable's default, `${DEFS:-verity/x.json}`)."""
+        L = _rename().L
+        root = "|".join((L.ROOT_PREFIX, L.SH_DEFAULT.pattern.removesuffix(r"\Z")))
+        keys = sorted({*self.pmap, *self.tokens}, key=len, reverse=True)
+        return re.compile(rf"(?:(?<![\w.\-/])|(?<=^/)|({root}))(" + "|".join(map(re.escape, keys)) + r")(?![\w.\-])", re.M)
+
+    def references(self, text: str, resolved: bool = False) -> list[tuple[int, int, str, tuple[str, ...], bool]]:
+        """Each moved path and each reference to a split directory in ``text``: (start, end, what it becomes, the rules
+        that read it beyond `_paths_pattern`'s moved path, whether it must change: in ``resolved`` text, a relative path
+        `resolve_relative` read, which names its place)."""
+        out = []
+        for m in self.pattern.finditer(text):
+            key, must = m[2], resolved and text.endswith("<root>/", 0, m.start(2))
+            plain = m[1] is None or must or ((c := CHECKOUT.match(text, m.start(1))) is not None and c.end() == m.end(1))
+            rules = () if plain else ("prefixes",)
+            if key in self.pmap:
+                out.append((m.start(2), m.end(2), self.pmap[key], rules, must))
+                continue
+            below = key + BELOW.match(text, m.end(2))[0].rstrip(".")
+            if below == key or not (below in self.base.set or self.base.has_dir(below)):
+                out.append((m.start(2), m.end(2), self.tokens[key], ("tokens", *rules), must))
+        return out
+
+    def went(self, p: str) -> tuple[str | None, bool]:
+        """Where the BASE path ``p`` went and whether a `[tokens]` row says so; None for a directory the range splits
+        with no row, and for a place HEAD doesn't have."""
+        if p not in self._went:
+            q, row = map_path(p, self.pmap), False
+            if q == p and p not in self.base.set:
+                lo, hi = bisect.bisect_left(self.base.files, p + "/"), bisect.bisect_left(self.base.files, p + "0")
+                if p in self.tokens:
+                    q, row = self.tokens[p], True
+                elif any(map_path(f, self.pmap) != f for f in self.base.files[lo:hi]):
+                    q = None
+            self._went[p] = (q, row) if q is not None and (q in self.head.set or self.head.has_dir(q)) else (None, False)
+        return self._went[p]
+
+    def relative(self, text: str, old: str, new: str, resolved: bool = False) -> list[tuple]:
+        """Each path ``text`` (a line of the file at ``old``, now at ``new``) names from the file's directory or its
+        package's root, where based again it is written otherwise: as `references` gives one, what it becomes also as
+        `resolve_relative` reads it in ``resolved`` text."""
+        def named(p: str) -> bool:
+            return p != "." and not p.startswith("..") and (p in self.base.set or self.base.has_dir(p))
+        out, here = [], posixpath.dirname(old)
+        for m in REBASED.finditer(text):
+            g = "p" if m["v"] is not None else "q"
+            t = m[g]
+            while t.endswith(("/", ".")) and not t.endswith(".."):
+                t = t[:-1]
+            if not t or not t.startswith(".") and named(t):
+                continue
+            at = None
+            if g == "q" and named(p := posixpath.normpath(posixpath.join(here, t))):
+                at = posixpath.dirname(new)
+            else:
+                d = here
+                while d and f"{d}/pyproject.toml" not in self.base.set:
+                    d = posixpath.dirname(d)
+                if d and named(p := posixpath.normpath(posixpath.join(d, t))):
+                    at = posixpath.dirname(map_path(f"{d}/pyproject.toml", self.pmap))
+            q, row = self.went(p) if at is not None else (None, False)
+            if q is None:
+                continue
+            to = posixpath.relpath(q, at or ".")
+            if t.startswith("./") and not to.startswith("."):
+                to = "./" + to
+            if to != t:
+                rooted = (f"<root>/{q}",) if resolved and to.startswith(".") else ()
+                out.append((m.start(g), m.start(g) + len(t), (to, *rooted), ("relative", *(("tokens",) if row else ())), False))
+        return out
+
+    def reads(self, old: str, new: str, pair=None, resolved: bool = False, at: tuple[str, str] | None = None) -> set[str]:
+        """The rules of the references ``new`` rewrites, when it is ``old`` with each reference rewritten or left, or
+        (``pair``) what `pair` takes ``old`` with every one rewritten to; empty when a moved path alone would do, which is
+        not these rows' to say. ``at``: the line's file at BASE and at HEAD, for a relative path based again, which is
+        read only where the line is not explained without it."""
+        refs = self.references(old, resolved) if self.pmap or self.tokens else []
+        more = [r for r in self.relative(old, *at, resolved) if not any(r[0] < e and s < r[1] for s, e, *_ in refs)] if at else []
+        for each in (refs, sorted(refs + more))[:2 if more else 1]:
+            took = either(old, new, each)
+            if took is None and pair and each and pair(rewritten(old, each), new):
+                took = each
+            if took:
+                return {r for _, _, _, rs, _ in took for r in rs}
+        return set()
+
+
+def rewritten(text: str, refs: list[tuple]) -> str:
+    """``text`` with each of ``refs`` ((start, end, what it becomes or the forms it may take, ...), in order) rewritten."""
+    out, at = [], 0
+    for s, e, to, *_ in refs:
+        out += [text[at:s], to if isinstance(to, str) else to[0]]
+        at = e
+    return "".join(out) + text[at:]
+
+
 def landings(entries: list[dict], base: Tree, head: Tree) -> list[dict]:
     """``entries`` with each in-place edit of a path that a word map at BASE moves to a path new at HEAD split into its
     delete and an add: its file moved out and another moved in (`Area.lean` to `Area/Check.lean` while `Area/Check.lean`
@@ -1361,6 +1541,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             d.update(status="R", score=100 if d["shas"][0] == a["shas"][1] else 0, new=new,
                      modes=(d["modes"][0], a["modes"][1]), shas=(d["shas"][0], a["shas"][1]))
     short = short_forms(pmap, B)
+    rows = Rows(layout_maps(B, head, cwd), pmap, B, H)
     renamed = [(e["old"], e["new"]) for e in entries if e["status"] == "R"]
     modules = Modules(renamed, dotted)
     lmods, dests = {}, {}
@@ -1381,7 +1562,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             if bp is not None and hp is not None and bp != hp:
                 moves.update(dict.fromkeys(filter(None, (B.module(o), H.module(n))), (bp, hp)))
     report = {"base": base, "head": head, "map": dict(sorted(pmap.items())), "lean_modules": dict(sorted(lmods.items())),
-              "renames": [], "edits": [], "refusals": []}
+              "renames": [], "edits": [], "refusals": [], "rules": {}}
     scoped = scoped_map(B, head, cwd, words)
     terms = Terms(B, *scoped, pmap, lmods) if scoped else None
     if scoped:
@@ -1452,6 +1633,11 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
     for e in entries:
         st, old, new = e["status"], e["old"], e["new"]
         name = posixpath.basename(new)
+        took: set[str] = set()                              # the maps' rows this path's edit needed (`Rows`)
+
+        def by_rows(x: str, y: str, pair=None, resolved: bool = False, old=old, new=new) -> bool:
+            took.update(r := rows.reads(x, y, pair, resolved, (old, new)))
+            return bool(r)
         if st == "A" and name in LAKE_COPIES:
             d = posixpath.dirname(new)
             srcs = dests.get(d, set())
@@ -1473,6 +1659,10 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             continue
         if st == "A" and name == "__init__.py" and text(e, 1) == "" and package_level(posixpath.dirname(new)):
             report["edits"].append({"path": new, "kind": "package level"})
+            continue
+        if st == "D" and old in rows.drop:
+            report["edits"].append({"path": old, "kind": "dropped"})
+            report["rules"].setdefault("drop", []).append(old)
             continue
         if st not in "RM":
             refuse(e, {"A": "added", "D": "deleted", "C": "copied", "T": "type changed"}.get(st, f"status {st}"))
@@ -1514,7 +1704,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             why = None if same else moves_change(a, b, pmap, B)
         elif k == "lean":
             h = first_unexplained(al, bl, substitute(a, pmap).splitlines(), bl,
-                                  pair=lambda x, y: lean_import_rewrite(x, y, lmods, dotted), left=lambda i, y: partly(al[i], y, pmap))
+                                  pair=lambda x, y: lean_import_rewrite(x, y, lmods, dotted),
+                                  left=lambda i, y: partly(al[i], y, pmap) or by_rows(al[i], y))
             why = h and ("edit beyond import lines that name a module renamed in the range and moved paths", h)
         else:
             rel, py = name in RELATIVE_NAMES or new.endswith(".md"), new.endswith(".py")
@@ -1542,7 +1733,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
 
             def left(i: int, y: str) -> bool:
                 return (partly(n0[i], y, pmap) or placed(n0[i], y, old, new, pmap, B, binds)
-                        or (under is not None and manifest_pin(at_base[i], y, under, B, H, pmap)))
+                        or (under is not None and manifest_pin(at_base[i], y, under, B, H, pmap))
+                        or by_rows(resolve_relative(al[i], old, {}) if rel else n0[i], y, pair, rel))
             h = first_unexplained(al, bl, na, nb, pair=pair, added=lambda y: registered(new, y), block=block, left=left)
             why = h and ("relative path now resolves elsewhere" if same else "edit beyond moved paths and module names", h)
             if why and not same and old == new and name == "lakefile.toml":
@@ -1555,9 +1747,17 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             report["renames"].append({"old": old, "new": new})
         else:
             report["edits"].append({"path": new, **({"old": old} if old != new else {}), "kind": k})
+            for rule in sorted(took):
+                report["rules"].setdefault(rule, []).append(new)
     for path, why in terms.conflicts() if terms else ():
         report["refusals"].append({"path": path, "status": "M", "reason": why, "hunk": None})
-    runs_moved(entries, B, H, pmap, lmods, report["refusals"])
+
+    def run_string(field: str, w: str, g: str) -> set[str]:
+        """The rules by which a string of a `runs` entry may change beyond its package-relative paths: its `why` is prose,
+        where each moved path is rewritten and each dotted name follows its moved Python module; any string is read as a
+        line is (`Rows`: a generator's `{repo}/verity/x.py`)."""
+        return {"why"} if field == "why" and dotted_rewrite(substitute(w, pmap), g, modules) else rows.reads(w, g)
+    runs_moved(entries, B, H, pmap, lmods, report["refusals"], run_string, report["rules"])
     report["certified"] = not report["refusals"]
     return report
 
@@ -1593,10 +1793,23 @@ def move_run(entry, old_dir: str, new_dir: str, pmap: dict[str, str], base: Tree
     return entry
 
 
-def runs_moved(entries: list[dict], B: Tree, H: Tree, pmap: dict[str, str], lmods: dict[str, str], refusals: list) -> None:
+def but_strings(want, got, take, field: str = "") -> bool:
+    """Whether ``got`` is ``want`` but for strings `take(the top-level field they are in, old, new)` takes."""
+    if isinstance(want, str) and isinstance(got, str):
+        return want == got or take(field, want, got)
+    if isinstance(want, list) and isinstance(got, list):
+        return len(want) == len(got) and all(but_strings(w, g, take, field) for w, g in zip(want, got))
+    if isinstance(want, dict) and isinstance(got, dict):
+        return want.keys() == got.keys() and all(but_strings(want[k], got[k], take, field or k) for k in want)
+    return want == got
+
+
+def runs_moved(entries: list[dict], B: Tree, H: Tree, pmap: dict[str, str], lmods: dict[str, str], refusals: list,
+               string=None, rules: dict | None = None) -> None:
     """Each `runs` entry of a lock the range touches must be in exactly one touched lock at HEAD, under its runner module's
     new name, with nothing changed but the paths the move rewrites: a run may move to the proofs package's lock, never vanish,
-    be duplicated or change its data."""
+    be duplicated or change its data. A string that still differs is ``string``'s to take (the top-level field it is in,
+    old, new, to the rules that take it), and each lock a rule took goes under the rule's name in ``rules``."""
     olds = [e["old"] for e in entries if e["status"] in "RMD" and posixpath.basename(e["old"]) == "lean-audit.json"]
     news = [e["new"] for e in entries if e["status"] in "RMA" and posixpath.basename(e["new"]) == "lean-audit.json"]
     head = {p: lock_runs(H, p) for p in news}
@@ -1619,9 +1832,18 @@ def runs_moved(entries: list[dict], B: Tree, H: Tree, pmap: dict[str, str], lmod
                 if (isinstance(want, dict) and isinstance(got, dict) and isinstance(w := want.get("why"), str)
                         and isinstance(g := got.get("why"), str) and partly(w, g, pmap)):
                     want = {**want, "why": g}           # its prose's moved paths from the root, rewritten or left
-                if want != got:
+                took: set[str] = set()
+
+                def take(field: str, w: str, g: str, took=took) -> bool:
+                    took.update(r := string(field, w, g) if string else ())
+                    return bool(r)
+                if not but_strings(want, got, take):
                     refuse(hits[0], f"`runs` entry {name} changed beyond moved paths and its module's name",
                            field_hunk("runs", json.dumps({new_name: want}), json.dumps({new_name: got})))
+                    took.clear()
+                for rule in sorted(took) if rules is not None else ():
+                    if hits[0] not in rules.setdefault(rule, []):
+                        rules[rule].append(hits[0])
     for p, runs in head.items():
         for name in runs:
             if (p, name) not in claimed:
