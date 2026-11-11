@@ -47149,3 +47149,117 @@ For the table:
 
 For the table:
 - #8890 | `3abd6b5bc8e2da7779a007481a13e5beef2ff001` | ready to mark | quick tier `r20261111-092621-35f9` passed 4 of 4 | merges with `main` `0a722c6ec984` and 19 marked Lean heads | after #8877
+
+## HARMSEARCH, Wed 11 Nov 10:06Z: THE TABLE. At measured prices and today's blocks the plan built and Lean-checked reads 2,430 GB at modeled 0.4 (87 to 94 GB at the measured engine rate, a floor) against the record's 4,042, and no plan of this family goes under 2,199; the by-gates fallback is cheaper than the κ 2^-7 row, because the planner's own K0 is 4 at κ 2^-6 (2,791 GB against 3,228); #8904 (open, unmarked) makes the planner return either row; no ready line yet
+
+**Status** [run: `research fetch` of each, `gh pr view`, 10:06Z].
+- **No ready line yet.** The quick tier at #8878's head, `r20261111-085923-9a1e`, was stopped by its check slot's 60-minute limit at 10:02Z with 49 of 56 suites passed and none failed: the seven it left read "no tests in 0 s" after the SIGTERM. It is not a verdict. Its replacement at the same head, `r20261111-094044-fc55` (a 150-minute limit), has 40 suites passed and none failed; [guess] it ends about 10:40Z.
+- #8893's quick tier `r20261111-092309-515d` (a 90-minute limit, ends by 11:13Z): 49 passed, none failed.
+- **#8904 is new: open, unmarked**, at `f1e9d625dd778c6b965134a6a0f54b9b90f034b5`, on #8893 (https://github.com/compute-verification/verity/pull/8904). `two_stage_design(…, kappas=(2**-7,))` holds the planner to the κ a caller names, some of `KAPPAS`; None is the planner as it was. It is a code change (the search, not what a bound says): 8 lines of `optimize.py` and one test; the planner's 53 tests pass locally [run]; `git merge-tree` is clean with `origin/main` `0a722c6ec984`, #8841, #8708, #8568 and #8853 [run]. Its quick tier `r20261111-095843-5ee4` waits for a slot. I built it because the bits side's fallback rows are κ 2^-7 and 2^-6 by width and the planner, which minimizes GB, returns neither. Lean's check of those rows is out: `r20261111-100140-a112` (has its slot).
+- Both earlier heads still merge with `main` as it moved (`0a722c6ec984`) [run: `git merge-tree`].
+- Order read through its 09:42Z update; my mailbox has nothing after 04:29Z [read].
+
+**Changed since 09:36Z.**
+- The head block's cut is priced as HEADCIRC built it (section B, first row): scores at 2^27 and four quarters at 2^26 read 0.4340 of the record under the planner as on `main`, 0.4163 by width and **0.3929 by width with the margin: 1,588 GB at 0.4, 57 to 61 at the measured rate**; the family's floor with that cut is 0.3299 (1,334 GB) [run: local, modeled prices]. My 09:36Z "three-unit cut" rows (0.4311 / 0.4133) priced a half at 2^26, which does not fit; the as-built cut reads the same to under 1%, because four quarters at half a block's price carry the same bits a unit of proving as two halves would have.
+- K0 by row (For SCALE, below): the fallback by gates can be κ 2^-6.
+
+The measured-rate column is the modeled one times 0.0143/0.4 to 0.0154/0.4, from row (iii) [by proportion; BENCHCROSS 09:32Z and 09:37Z, relayed: linear to 0.17% with the replay held, stops holding at 370 tokens a GPU-second for (ii) and 464 for the lever row]. The rate is not measured at the headline's mix. Which column is the headline is Daniel's.
+
+**A. Plans.** GB at the 10% point, world year, row (iii), ×1.05; the first GB column is at utilization 0.4 (modeled), the second at the measured engine rate on node A, MFU 0.0143 to 0.0154 (a floor), by proportion.
+
+| plan | of the record | GB, modeled 0.4 | GB, measured engine rate on node A (a floor) | label |
+|---|---|---|---|---|
+| the plan of record (size classes, κ 2^-5); also its family's optimum | 1.0000 | 4,042 | 145 to 156 | measured prices, run `r20261111-080601-3db1` = `e0bd`; family: run `r20261111-083048-1624` |
+| strata by width, #8878 (built, unmarked): planner's bound | 0.6556 | 2,650 | 95 to 102 | modeled, run `r20261111-092227-d1e7` |
+| the same, Lean's certified bits | 0.6617 | 2,675 | 96 to 103 | Lean-checked design, run `r20261111-085529-dfd9`; GB by ratio |
+| width + margin 1/8, #8893 on #8878 (built, unmarked): planner's bound | 0.6050 | 2,446 | 87 to 94 | modeled, run `r20261111-092227-d1e7` |
+| the same, Lean's certified bits | 0.6011 | 2,430 | 87 to 94 | Lean-checked design, run `r20261111-092227-d1e7`; GB by ratio |
+| margin 1/8 under size classes (no width) | 0.9560 | 3,865 | 138 to 149 | modeled, the same run |
+| width, each stratum's k tuned (not built): planner's bound | 0.5889 | 2,380 | 85 to 92 | modeled, run `r20261111-083048-1624` |
+| the same, Lean's certified bits | 0.5878 | 2,376 | 85 to 91 | Lean-checked design, run `r20261111-085529-dfd9` |
+| the floor of the family at these prices | 0.5440 | 2,199 | 79 to 85 | modeled: my formula on run 1's call |
+| width, κ 2^-6 (K 2^-1.72 of the record's, k of the head's stratum 1,621,483) | 0.6903 | 2,791 | 100 to 107 | modeled: the planner's bound, local |
+| width, κ 2^-6.5 (K 2^-2.22 of the record's, k of the head's stratum 1,146,562) | 0.7345 | 2,969 | 106 to 114 | modeled: the planner's bound, local |
+| width, κ 2^-7 (K 2^-2.72 of the record's, k of the head's stratum 810,742) | 0.7985 | 3,228 | 115 to 124 | modeled: the planner's bound, local |
+| size classes, κ 2^-7 (K 2^-2.00) | 1.1373 | 4,597 | 164 to 177 | modeled: the planner's bound, local |
+
+**B. The head block cut in units** [modeled]. A unit's price follows its block's size [relayed: HEADCIRC 09:27Z]: the scores unit (1,216 bits) sits in a 2^27 block and costs a head block's proving, and a values quarter (4,096 bits) in a 2^26 block costs half of it, so the cut as built proves three head blocks' worth a block. The first row is that cut [run: local, #8893's planner on run 1's call; the same and the lever row by run `r20261111-094955-a24d`, waiting for a slot]. The rows under it price a values piece in proportion to its size, which holds only if the keys reach a values unit as rows of its own columns (HEADCIRC's question to circuits) [run `r20261111-093840-b00b`]. Of the record; GB at 0.4 and at the measured engine rate.
+
+| shape | planner as on `main` | width (#8878) | width + margin (#8893) | the family's floor | GB: width + margin at 0.4 | at the measured floor |
+|---|---|---|---|---|---|---|
+| no cut | 1.0000 | 0.6556 | 0.6050 | 0.5440 | 2,446 | 87 to 94 |
+| **scores at 2^27 + 4 quarters at 2^26 (as built)** | 0.4340 | 0.4163 | 0.3929 | 0.3299 | 1,588 | 57 to 61 |
+| scores + 2 halves at 2^26 (a half does not fit 2^26) | 0.4311 | 0.4133 | 0.3921 | 0.3299 | 1,585 | 57 to 61 |
+| scores + 4 quarters at 2^25 (keys as column rows) | 0.2944 | 0.2733 | 0.2651 | 0.2071 | 1,072 | 38 to 41 |
+| scores + 8 at 2^24 (keys as column rows) | 0.2305 | 0.2034 | 0.2027 | 0.1457 | 819 | 29 to 32 |
+| scores + 16 at 2^23 (keys as column rows) | 0.1911 | 0.1685 | 0.1685 | 0.1150 | 681 | 24 to 26 |
+| scores + 64 at 2^21 (keys as column rows) | 0.1654 | 0.1424 | 0.1424 | 0.0919 | 576 | 21 to 22 |
+
+**C. Elasticities** [run `r20261111-080601-3db1` under the plan of record; the width columns from run `r20261111-090133-cfda`; GB at 0.4]
+
+| reading | plan of record | of 4,042 | width (#8878) | three-unit cut, width |
+|---|---|---|---|---|
+| served bits a request 14,000 | 2,128 | 0.526 | 2,128 | 1,605 |
+| 20,000 | 2,941 | 0.727 | 2,608 | 1,633 |
+| 32,832 | 4,743 | 1.173 | 2,675 | 1,695 |
+| 144,000 | 5,274 | 1.305 | 3,030 | 2,021 |
+| δ 0.5 (today 0.01) | 608 | 0.151 | 399 | 251 |
+| δ 0.2 | 1,413 | 0.349 |  |  |
+| δ 0.1 | 2,021 | 0.500 | 1,325 | 835 |
+| δ 0.05 | 2,630 | 0.651 |  |  |
+| δ 0.001 | 6,064 | 1.500 |  |  |
+| δ 1e-6 | 12,127 | 3.000 |  |  |
+| utilization 0.2 (today 0.4) | 2,022 | 0.500 |  |  |
+| 0.3 | 3,032 | 0.750 |  |  |
+| 0.5 | 5,053 | 1.250 |  |  |
+| 0.6 | 6,063 | 1.500 |  |  |
+| 0.8 | 8,083 | 1.999 |  |  |
+| 1.0 | 10,102 | 2.499 |  |  |
+| price halved: `SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn"` | 2,338 | 0.578 | | |
+| price halved: `SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={"fn":` | 3,957 | 0.979 | | |
+| price halved: `Fused[EmbeddingRead_v1{V=256,H=4096} + MoeExpertFp8BlockGemmW_v4{K=256` | 3,991 | 0.987 | | |
+| price halved: `Fused[EmbeddingRead_v1{V=256,H=3072} + MoeExpertFp8BlockGemm_v4{K=6144` | 4,019 | 0.994 | | |
+| price halved: `Fp8GroupQuantUe8m0_v1{K=6144,G=128}` | 4,024 | 0.996 | | |
+| price halved: `RMSNormFusedCudaVector8_v1{N=6144,EPS={"f64":"0x1.4f8b588e368f1p-17"},` | 4,030 | 0.997 | | |
+| price halved: `DsaMqaLogits_v3{N=1,H=32,D=128}` | 4,033 | 0.998 | | |
+| price halved: `ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}` | 4,036 | 0.998 | | |
+| price halved: `every one of the 193 block types` | 2,086 | 0.516 | | |
+
+**D. Loose constants in the leak formula and the planner, each sized** (GB at 0.4, world year)
+
+| constant | size | status |
+|---|---|---|
+| a size class's stratum is sampled at its widest block's rate | −1,392 GB (4,042 → 2,650; by Lean's bits −1,367) | a code fix: #8878, built, Lean-checked |
+| every stratum is sampled at the rate its bits ask, the ones that cost nothing too | −205 GB (2,650 → 2,446; by Lean's bits 2,675 → 2,430) | a code fix: #8893, built, Lean-checked |
+| the rest of the way to each stratum's best k | −65 GB (2,446 → 2,380) | not built: 2,148 bound evaluations a design call for 2.7% |
+| the distance from there to the family's floor | −181 GB (2,380 → 2,199) | the bound's own slack (the concavity of h, the chords); no plan of this family removes it |
+| the chords' 11 breakpoints (`CHORDS`, Lean's `Spot.FactorUpper.chords`) | −97 GB at the record with 27 breakpoints; +13% at the tuned design; by width the rule at κ 2^-5.5 reads 0.706 against 0.690 at 2^-6, a chord artifact | not built: a two-file change with a Lean build; finer is not tighter everywhere |
+| the location term ℓ_t = log2(e·R·n_t) in the rule | −21 GB by width | folded into the margin's gain; not built on its own |
+| the planner's κ grid, octaves (`KAPPAS`) | −4 GB at the optimum; 259 GB under a cap on K (κ 2^-6.5 against 2^-7) | a caller sets `optimize.KAPPAS`; no PR |
+| Lean's certified bits against the planner's own bound | +25 GB on the width design (+0.93%), −16 GB with the margin (−0.64%), +0.0002% on the record | the figure should carry Lean's bits; BREAKEVEN's driver |
+| the served cap S on a replay block's charge | at S = 144,000 the record reads 5,274 GB (×1.305); with width, S from 20,000 to 32,832 moves GB by 2.5% | [read: `two_stage_rankin`'s docstring] "a cap lemma in progress": whether the capped form is proved is not mine to say |
+| the ×1.05 | −192 GB if it were 1 | BREAKEVEN's λ |
+| `ceil` and `max(1, …)` in k | none (the least k of the record is 309) | |
+| charged twice | none found in the plan | |
+| the bits a wrong block can carry | the bound charges a wrong block min(its output bits, S): 16,544 for a head block. With the head block in 16-bit units at a proportional price the family's floor is 195 GB, and with every block so, 20 GB [modeled: my formula; no circuit does this] | a change of circuits (HEADCIRC's cut is its first step, section B), not a constant |
+
+**E. Nulls** [run 2, entry of 08:47Z]: one stage (committing every proof block) costs 6.45 times the compute; the sets' form reads 23,600 times the bits; there is no split of δ in this family (GB is linear in ln(1/δ), 878 GB a nat).
+
+**What the table says.** At fixed prices and today's blocks the plan gives 4,042 → 2,430 GB built and Lean-checked, and no plan of this family goes under 2,199. The rest of the distance to 300 GB at utilization 0.4 (a factor 7.3 from the floor) is the head block: its units (section B) and its price (0.578 of the GB for each halving). At the measured engine rate on node A every row of section A is under 180 GB, the record included.
+
+For BREAKEVEN:
+- #8878's row: `two_stage_design(…, widths=True)`: `merged` None, κ 2^-2, q 7.7476e-8, K_first 1.3778e9, Σk 60,606,452, k of the 16,544-bit stratum 25,943,716; 2.01668e13 bits by the planner, 2.03546e13 by Lean.
+- #8893's row: `widths=True, margin=0.125`: `merged` None, κ 2^-3, q 1.5098e-7, K_first 2.6851e9, Σk 32,469,700, k of the 16,544-bit stratum 12,971,858; 1.86083e13 bits by the planner, 1.84895e13 by Lean. On the lever row as run 1 has it: 2,025 GB against 3,229 (0.627).
+- The by-gates rows: with #8904, `widths=True, kappas=(2**-7,)` returns the row "width, κ 2^-7" (q 1.8160e-6, Σk 1,893,988, K0 5, replay 25.9% of the audit, 0.7985) and `kappas=(2**-6,)` the row at κ 2^-6 (q 1.0548e-6, Σk 3,787,940, K0 4, replay 15.0%, 0.6903; with `margin=0.125` 0.6830, Σk 4,058,782) [run: local, #8904's head]. Without #8904, set `optimize.KAPPAS` around the call.
+- Neither `total_cost.py:462` nor `figure1.py:407` passes `widths`, `margin` or `kappas` [read: #8904's head]: the figure moves only when the driver's call does. That call is yours; say if you want it from me.
+- The head block's cut does not multiply with the width (section B).
+
+For SCALE and PARAMS:
+- [run: local, the planner's own rows at #8904's head and at run 1's] K0 is the planner's `registration_cap` (the least K0 with P(K > K0) ≤ 2^-40 at Q = q·7,219 replay blocks a registration): it is 4 at the record at the 10% point on every row and scope of run 1 (5 or 6 only at β = 0.4), 3 at #8878's row and at #8893's, **4 by width at κ 2^-6** (Q = 0.0076; K0 = 5 starts at Q = 0.0102) and **5 at κ 2^-7** (Q = 0.0131). κ 2^-6.5 is 4 with 0.9% of room, too little to rest on.
+- So, if your K0 is this cap: your κ 2^-6 row ("holds at K0 ≤ 5", 2^-100.6 at K0 = 4 [relayed: SCALE 09:23Z]) holds at the planner's own K0, and your κ 2^-7 row is at K0 = 5, not 4 to 6. The fallback by gates is then κ 2^-6 at 2,791 GB, 437 GB under κ 2^-7's 3,228. Yours to confirm; the margin on top (0.6830) raises Σk by 7%.
+- k of every row: section A, and the 09:36Z entry's section 3 (Σk, k of the head's stratum, q).
+
+For the table:
+- GB, the plan built and Lean-checked (#8878 + #8893, unmarked): 2,430 GB at modeled 0.4, 87 to 94 GB at the measured engine rate on node A (a floor) [Lean-checked design, run `r20261111-092227-d1e7`; GB modeled by ratio and by proportion]. With #8878 alone: 2,675 GB, 96 to 103.
+- GB, the by-gates fallback by width: κ 2^-6 2,791 GB at 0.4 (100 to 107 at the floor) at the planner's K0 = 4; κ 2^-7 3,228 GB (115 to 124) at K0 = 5 [modeled: the planner's bound; #8904 unmarked returns both rows].
+- GB, the family's floor at measured prices and today's blocks: 2,199 GB at 0.4 (79 to 85) [modeled: my formula].
