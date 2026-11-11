@@ -554,7 +554,7 @@ def test_a_move_that_left_a_file_over_its_limit_as_it_was_is_not_crossed(tmp_pat
     r = _limited(tmp_path, **{"docs/big.md": "`app.util` is the module\n" * 20})
     assert "app.core.util" not in show(r, "move", "docs/big.md")
     on(r, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
-    with pytest.raises(SystemExit, match="isn't what tools/move/layout.py writes .* over the script's own limit"):
+    with pytest.raises(SystemExit, match=r"isn't what tools/move/layout.py writes .* the script's own limit.*\n  docs/big\.md$"):
         RS.restack("pr", "move", cwd=str(r))
 
 

@@ -421,11 +421,13 @@ def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
                 raise SystemExit(f"{SCRIPT} fails on the move's base {base[:12]}: {e}") from None
             if full and _GENERATED[key] == want:
                 keep_generated(full, want)
-    if _GENERATED[key] != tree_of(move, cwd):
+    if _GENERATED[key] != (want := tree_of(move, cwd)):
+        differ = out("diff", "--name-only", "--no-renames", want, _GENERATED[key], cwd=cwd).splitlines()
         raise SystemExit(f"--move-commit {move[:12]} isn't what {SCRIPT} writes on {base[:12]}: pass the commit the script "
                          "generated, and a later commit on the move's branch as --onto (the script runs here with no limit "
                          f"on the text it reads: a text file of {base[:12]} over the script's own limit, which the move left "
-                         "as it was, is one more cause)")
+                         f"as it was, is one more cause). The {len(differ)} paths that differ"
+                         + (", the first 20" if len(differ) > 20 else "") + ":\n  " + "\n  ".join(differ[:20]))
 
 
 def based_after(head: str, base: str, refs: list[str], cwd: str | None) -> str | None:
