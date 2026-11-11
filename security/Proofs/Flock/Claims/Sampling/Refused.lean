@@ -70,7 +70,7 @@ theorem RegTwo.sum_checked_le (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray)
   have hc : g.checked N src₁ src₂ = (List.range N).filter fun v =>
       g.always v || (Spot.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v := by
     unfold RegTwo.checked
-    rw [hsel] <;> rfl
+    rw [hsel]
   rw [hc]
   refine (sum_filter_or_le _ _ _ w).trans (Nat.add_le_add_left ?_ _)
   have hs := List.sum_le_length_nsmul (((List.range N).filter fun v =>
@@ -113,7 +113,7 @@ theorem RegTwo.ex_checked_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (g : RegTwo)
     (fun ω hR => by
       cases hs : Spot.Select.selectSecond (g.sample (src₁ ω)) g.ns g.ks (src₂ ω) with
       | ok p => exact hok ω p.1 p.2 hs
-      | error e => exact absurd (by rw [hs] <;> rfl) hR)
+      | error e => exact absurd (by rw [hs]; rfl) hR)
     (fun ω hR => le_of_eq (by rw [g.checked_of_refused N _ _ hR]))
 
 /-- **The checked blocks' weights, in expectation**: for a weight at most `M`, with the second stage proving at most `C`
