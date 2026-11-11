@@ -391,7 +391,7 @@ def test_start_and_judge_write_nothing_of_drives(world, monkeypatch, tmp_path):
 # -- the check that gates
 
 #: lean-audit's log of a package that failed its build, in the scratch tree ``n``, and one more failure it may print
-AUDIT = ("AUDIT /w/lean-audit-scratch-{n}-x/Security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
+AUDIT = ("AUDIT /w/lean-audit-scratch-{n}-x/security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
          "    error: ../Proofs/A.lean:100:2: Tactic `rfl` failed\n  closure: {n} modules checked, 2 reused\n"
          "  trust gap: 2 premises outside their trust\n    G: 2 (a, b)\n")
 RECORD = "  record: the statement of G changed\n"
@@ -689,8 +689,8 @@ def test_a_check_killed_on_what_only_the_candidates_own_allowance_covers_is_infr
 
 def test_lean_audit_s_failures_are_what_it_prints_under_each_failed_package_but_its_run_s_counts():
     log = ("lean-audit: verity/hardware/world: PASS reused\n" + AUDIT.format(n=1)
-           + "  tamper: /w/lean-audit-scratch-1-x/Security/Proofs/A.olean changed\n"
-           "AUDIT /w/lean-audit-scratch-1-x/Security: PASS  12 declarations\n  note: fine\n"
+           + "  tamper: /w/lean-audit-scratch-1-x/security/Proofs/A.olean changed\n"
+           "AUDIT /w/lean-audit-scratch-1-x/security: PASS  12 declarations\n  note: fine\n"
            "AUDIT /w/lean-audit-scratch-1-x/Flock: FAIL\nAUDIT: FAIL (security/Proofs, Flock); reports in /out\n"
            "lean-audit: FAIL: unread: Core grew\n")
     named = {"security/Proofs::build: exit 1", "security/Proofs::error: ../Proofs/A.lean:100:2: Tactic `rfl` failed",

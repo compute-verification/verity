@@ -2940,7 +2940,7 @@ OFF_TREE = {"tools/verity/check/policy.toml": 'schema = "policy/v0"\noff_gate = 
             "verity/protocols/certifier/verifier/head_check.circuit-check.json": json.dumps({HEAD: {"digest": "sha512:h"}}) + "\n",
             "fixtures/head.json": json.dumps({HEAD: "no pin"}) + "\n"}
 #: a change meeting circuit-check's inputs (`queue.forces_cold`), and one that doesn't
-CIRCUITS, OTHER = {"verity/ml/circuits/rope.py": "# rope\n"}, {"a.txt": "1\n"}
+CIRCUITS, OTHER = {"verity/circuits/rope.py": "# rope\n"}, {"a.txt": "1\n"}
 
 
 def _circuit(*failed: str) -> str:
@@ -3019,10 +3019,10 @@ def test_under_gate_check_a_circuit_check_target_its_base_passed_rings_its_pins_
     too); one no pins file pins, or only one the registry gives no owner, rings the lane of each member whose change meets
     circuit-check's inputs (#2's, not #1's), and the step's owner in ci.toml (circuits) where one such member has no lane in
     the registry (#3) or none meets them."""
-    second = {"own pins": {"verity/core/protocols/certifier/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
-              "unowned pins": {"verity/ml/circuits/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
+    second = {"own pins": {"verity/protocols/certifier/verifier/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
+              "unowned pins": {"verity/circuits/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
               "job": {"b.txt": "2\n"}}.get(who, CIRCUITS)
-    prs = [OTHER, second, *([{"verity/ml/circuits/x.py": "# x\n"}] * (who == "stranger"))]
+    prs = [OTHER, second, *([{"verity/circuits/x.py": "# x\n"}] * (who == "stranger"))]
     loop, runs, main, sha = _off(env, monkeypatch, *prs)
     target = HEAD if who == "pins" else ROPE
     runs.end(main, also={"circuit-check": _circuit(f"lowering/pin-mismatch {HEAD if who != 'pins' else ROPE}")})
