@@ -19,7 +19,7 @@ DRY = """#$ _NVVM_BRANCH_=nvvm
 #$ CICC_PATH={kit}/nvvm/bin
 #$ NVVMIR_LIBRARY_DIR={kit}/nvvm/libdevice
 #$ LD_LIBRARY_PATH={kit}/lib:
-#$ PATH={kit}/nvvm/bin:{kit}/bin:{path}
+#$ PATH={kit}/nvvm/bin:{kit}/bin:/usr/bin:/bin
 #$ INCLUDES="-I{kit}/include"{s}{s}
 #$ gcc -std=c++17 -E -x c++ "-I{kit}/include" -m64 "{src}" -o "{ii}"{s}
 #$ "$CICC_PATH/cicc" --c++17 --orig_src_path_name "{src}" -arch compute_90a {more}"{ii}" -o "{tmp}/{temp}-6_t.ptx"
@@ -71,8 +71,8 @@ def run(tmp: Path, place: str, inc: str, more: str = "", dry: str = DRY) -> subp
     src.parent.mkdir(parents=True, exist_ok=True)
     src.write_text(TEXT.format(src=src, inc=inc))
     (kit / "bin/dry.txt").write_text(dry.format(kit=kit, tmp=tmp / "tmp", temp=TEMP, ii=tmp / "tmp" / f"{TEMP}-5_t.cpp1.ii",
-                                                src=src, out=tmp / "out.cubin", path=os.environ["PATH"], more=more, s=" "))
-    env = {"PATH": os.environ["PATH"], "CUDA": str(kit), "TMPDIR": str(tmp / "tmp"), "NOT_CICCS": "1"}
+                                                src=src, out=tmp / "out.cubin", more=more, s=" "))
+    env = dict(os.environ, CUDA=str(kit), TMPDIR=str(tmp / "tmp"), NOT_CICCS="1")
     return subprocess.run(["bash", str(SHIP_NVCC), "-cubin", "-o", str(tmp / "out.cubin"), str(src)], env=env,
                           capture_output=True, text=True, check=False)
 
