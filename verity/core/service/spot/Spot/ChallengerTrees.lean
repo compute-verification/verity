@@ -27,6 +27,15 @@ come from. `sampleLinkFirst` holds the log's order (`sample_link_first`): the sa
 rounds; no coin of the sample released after a round is opened, and the first round opened a tree's `session` stream,
 the link points.
 
+A member's session, one of several in a window, ends with a closing round: one more round of its tree's `session`
+stream (`CLOSING_ROUND`), of no coins, opened after the SHA-512 of the session's evidence, so the log holds a member's
+evidence before the next member's coins. `memberTreeReason` holds a member's session's record to the trees so: the
+last round the log shows opened of its tree is that one (`TreeOpening.closes`, `NO_CLOSING`), and the tree without it
+is the session's as `sessionTreeReason` holds one, so the closing round is the one opening beyond the record's that
+passes. `membersTreeReason` holds the members' sessions to them: each so, one tree a session, every tree a session's,
+and the log opening the sessions' trees one after another in the sessions' order, no round of a tree before the
+closing round of the tree before it or after its own (`membersOrder`, `MEMBERS_ORDER`).
+
 The difftest's pieces: `challenger_coin_trees` (`coin_trees_of`), `challenger_session_trees` (`sessions_tree_reason`
 over the log's trees and the request's records, each with its tables), each `{"refused": why}` where Python refuses,
 and `challenger_sample_link_first` (`sample_link_first`).
@@ -338,6 +347,129 @@ private def treeT : String := "{\"event\":\"coin-tree\",\"key\":\"02\",\"nonce\"
 #guard !sampleLinkFirst "draw" ⟨#[0xab]⟩ [rootT, releaseT, openT "circuit/rep0", openT TREE_SESSION]
 #guard sampleLinkFirst "other" ⟨#[0xab]⟩ [openT TREE_SESSION, rootT, releaseT]
 #guard sampleLinkFirst "draw" ⟨#[0xcd]⟩ [openT TREE_SESSION, rootT, releaseT]
+
+/-! A member's session: its closing round, and the members' sessions one after another. -/
+
+/-- The round of a coin tree's `session` stream that closes a member's session: the stream's second, after the link
+points. -/
+def CLOSING_ROUND : Nat := 1
+
+/-- The refusal of a member's session whose coin tree's last opening is not its closing round
+(`TreeOpening.closes`). -/
+def NO_CLOSING : String :=
+  "its coin tree's last opening is not its " ++ TREE_SESSION ++ " round " ++ toString CLOSING_ROUND ++
+  " of no coins, opened after the SHA-512 of the session's evidence: a member's session ends with that round"
+
+/-- The refusal of members' sessions the release log doesn't show one after another, in the sessions' order
+(`membersOrder`). -/
+def MEMBERS_ORDER : String :=
+  "the challenger's release log does not open the sessions' coin trees one after another, in the sessions' order: " ++
+  "a round of a tree is opened before the closing round of the tree opened before it, or after its own"
+
+/-- Whether `o` closes a member's session whose evidence has the SHA-512 `evidence` (lowercase hex): round
+`CLOSING_ROUND` of the stream `TREE_SESSION`, of no coins, opened after `evidence`. -/
+def TreeOpening.closes (o : TreeOpening) (evidence : String) : Bool :=
+  o.stream == TREE_SESSION && o.round == CLOSING_ROUND && o.n == 0 && o.after == evidence &&
+    o.coins == sha512Hex ByteArray.empty
+
+/-- `t` without the last round the release log shows opened of it. -/
+def LoggedTree.unclosed (t : LoggedTree) : LoggedTree := { t with opened := t.opened.pop }
+
+/-- **A member's session's coins and its closing round**: why `record`, the record of a member's `--zk` session on
+the tables `tables` (`sessionTreeReason`'s), whose evidence has the SHA-512 `evidence` (lowercase hex), doesn't show
+its coins to be ones the release log shows the challenger released (`trees`) and its session closed after that
+evidence; `none` when it does. Its `coin_tree` is a logged tree (`NO_TREE`), the last round the log shows opened of
+that tree closes the session after `evidence` (`TreeOpening.closes`, `NO_CLOSING`), and the tree without that round
+is the session's as `sessionTreeReason` holds one: so the closing round is the one opening the record doesn't give
+its stream that `EXTRA_OPENING` lets pass. -/
+def memberTreeReason (trees : Array LoggedTree) (tables : Array (String × Option Nat)) (record : Json)
+    (evidence : String) : Option String :=
+  match trees.find? (fun (t : LoggedTree) => jsonStrIs (getD (getD record "coin_tree") "root") t.root) with
+  | none => some NO_TREE
+  | some t =>
+    match t.opened.back? with
+    | some o => if o.closes evidence then sessionTreeReason #[t.unclosed] tables record else some NO_CLOSING
+    | none => some NO_CLOSING
+
+/-- The tree a release log line opens a round of (its root) and whether the round is of the stream `TREE_SESSION`;
+`none` of a line that opens no round. -/
+def openOf (l : String) : Option (String × Bool) :=
+  match event l with
+  | .ok j =>
+    if jsonStrIs (getD j "event") OPEN_EVENT then
+      match getD j "tree" with
+      | .str root => some (root, jsonStrIs (getD j "stream") TREE_SESSION)
+      | _ => none
+    else none
+  | .error _ => none
+
+/-- `membersOrder`'s scan: `roots` the trees opened so far, each when a round of it follows another tree's, and
+`closed` whether the last of them has had a second round of its stream `TREE_SESSION` opened. -/
+def membersOrderFrom : Array String → Bool → List String → Option (Array String)
+  | roots, _, [] => some roots
+  | roots, closed, l :: ls =>
+    match openOf l with
+    | none => membersOrderFrom roots closed ls
+    | some (root, session) =>
+      if roots.back? == some root then
+        if closed then none else membersOrderFrom roots session ls
+      else if closed || roots.isEmpty then membersOrderFrom (roots.push root) false ls
+      else none
+
+/-- **The members' sessions one after another**, in the release log's lines `log`: the trees it opens rounds of, in
+the order it first opens each, where every round it opens is of the tree opened last, before that tree's second
+round of its stream `TREE_SESSION` (its closing round), or the first of the next tree, after it; `none` where a round
+of a tree is opened before the closing round of the tree opened before it, or after its own. A tree opened again
+after another is listed again, so a list without a tree twice shows each tree's rounds together. O(the log's lines). -/
+def membersOrder (log : List String) : Option (Array String) := membersOrderFrom #[] false log
+
+/-- **The members' sessions' coins, each session closed before the next begins**: why the members' `--zk` sessions
+`records`, each its name, its tables with their `root_B` lengths, its record and its evidence's SHA-512, don't show
+their coins to be the ones the release log `log` shows sampled and opened (`trees`, `coinTreesOf`'s of it), one tree a
+session, the sessions one after another in the order given; `none` when they do. In order, each session's coins its
+tree's and its closing round after its evidence (`memberTreeReason`), a tree no earlier session's (`SHARED_TREE`);
+then every tree a session's (`UNUSED_TREE`); then the log opens the sessions' trees one after another in the
+sessions' order, each tree's closing round before the next tree's first round (`membersOrder`, `MEMBERS_ORDER`). -/
+def membersTreeReason (trees : Array LoggedTree) (log : List String)
+    (records : Array (String × Array (String × Option Nat) × Json × String)) : Option String := Id.run do
+  let mut used : Array String := #[]
+  for (name, tables, record, evidence) in records do
+    let root := strOf (getD (getD record "coin_tree") "root")
+    let why := memberTreeReason trees tables record evidence <|> if used.contains root then some SHARED_TREE else none
+    if let some w := why then
+      return some s!"session {name}'s coins are not the challenger's: {w}"
+    used := used.push root
+  unless used.size == trees.size do
+    return some s!"the challenger's release log shows {trees.size} coin trees and the sessions use {used.size}: {UNUSED_TREE}"
+  unless membersOrder log == some used do return some MEMBERS_ORDER
+  return none
+
+private def openAtT (tree stream : String) : String :=
+  "{\"after\":\"cd\",\"coins\":\"ef\",\"event\":\"tree-open\",\"n\":1,\"round\":0,\"stream\":\"" ++ stream ++
+    "\",\"tree\":\"" ++ tree ++ "\"}"
+private def closingT (after : String) : TreeOpening :=
+  ⟨TREE_SESSION, CLOSING_ROUND, 0, after, sha512Hex ByteArray.empty⟩
+private def loggedT (opened : Array TreeOpening) : LoggedTree :=
+  { key := "02", nonce := "03", root := "01", spec := Json.null, opened }
+private def recordT : Json := Json.mkObj [("coin_tree", Json.mkObj [("root", Json.str "01")])]
+
+#guard (closingT "ab").closes "ab" && !(closingT "ab").closes "cd"
+#guard !({ closingT "ab" with n := 1 } : TreeOpening).closes "ab"
+#guard !({ closingT "ab" with round := 0 } : TreeOpening).closes "ab"
+#guard !({ closingT "ab" with stream := "circuit/rep0" } : TreeOpening).closes "ab"
+#guard memberTreeReason #[loggedT #[]] #[] recordT "ab" == some NO_CLOSING
+#guard memberTreeReason #[loggedT #[closingT "cd"]] #[] recordT "ab" == some NO_CLOSING
+#guard memberTreeReason #[loggedT #[closingT "ab", ⟨"circuit/rep0", 0, 1, "cd", "ef"⟩]] #[] recordT "ab" == some NO_CLOSING
+#guard memberTreeReason #[] #[] recordT "ab" == some NO_TREE
+#guard (memberTreeReason #[loggedT #[closingT "ab"]] #[] recordT "ab").all (· != NO_CLOSING)
+#guard membersOrder [treeT, rootT, releaseT] == some #[]
+#guard membersOrder [openAtT "01" TREE_SESSION, openAtT "01" "circuit/rep0", openAtT "01" TREE_SESSION,
+  openAtT "02" TREE_SESSION, openAtT "02" TREE_SESSION] == some #["01", "02"]
+#guard membersOrder [openAtT "01" TREE_SESSION, openAtT "02" TREE_SESSION] == none
+#guard membersOrder [openAtT "01" TREE_SESSION, openAtT "01" "circuit/rep0", openAtT "02" TREE_SESSION] == none
+#guard membersOrder [openAtT "01" TREE_SESSION, openAtT "01" TREE_SESSION, openAtT "01" "circuit/rep0"] == none
+#guard membersOrder [openAtT "01" TREE_SESSION, openAtT "01" TREE_SESSION, openAtT "02" TREE_SESSION,
+  openAtT "02" TREE_SESSION, openAtT "01" TREE_SESSION] == some #["01", "02", "01"]
 
 /-! The difftest's pieces. -/
 
