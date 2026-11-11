@@ -37,7 +37,7 @@ theorem sksLTwo_iopensAt {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
   have hp : (sksLTwo Coin).parse x = some toyStmt := rfl
   have hc : (sksLTwo Coin).commit = rejCm := rfl
   simp only [CompiledTwo.iopensAt, hp]
-  simp [Claims.Sampling.Wit.val, Claims.Sampling.CommitmentScheme.Opens, hc, rejCm, OC.eval]
+  simp [Claims.Sampling.CommitmentScheme.Opens, hc, rejCm, OC.eval]
 
 /-- No run of `sksLTwo` is off the boundary trace read at the statement: its extractions open nothing. -/
 theorem sksLTwo_offRegX {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) {Ω : Type}
