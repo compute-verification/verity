@@ -7,13 +7,16 @@
 # (training_slowdown/sandbox.py), as a user other than root, who holds no capability to undo them; on a node that
 # refuses the namespaces, or as root, the job fails before it trains, with the reason.
 #
-# A job's time: a config that states `budget.minutes` asks for its own (--max-min, from the budget); max_wall_min is
-# the time of a job whose config states none. A job told to stop (SIGTERM: evicted, or out of its time) writes
-# $RESEARCH_RUN_DIR/out/run.json saying so and leaves what continuing needs in $RESEARCH_RUN_DIR/out/state; both go to
-# the store with the run's output. The command reads the stop from that record and never from the run's exit status:
-# out of its time a job is ended by the lease's `timeout`, whose status is 124 whatever the job's own. The queue
-# starts nothing again: the command's next run does, and the job continues from that state on whichever machine it
-# gets.
+# A job's time: the kind caps none. What ends a run is its own --max-min, through the lease. A config that states
+# `budget.minutes` asks for its own (from the budget), and where that passes max_wall_min the queue warns and refuses
+# nothing, as for every rule on a kind (infra/cluster/src/cluster/kinds.py); max_wall_min is the time of a job whose
+# config states none.
+#
+# A job told to stop (SIGTERM: evicted, or out of its time) writes $RESEARCH_RUN_DIR/out/run.json saying so and
+# leaves what continuing needs in $RESEARCH_RUN_DIR/out/state; both go to the store with the run's output. The
+# command reads the stop from that record and never from the run's exit status: out of its time a job is ended by
+# the lease's `timeout`, whose status is 124 whatever the job's own. The queue starts nothing again: the command's
+# next run does, and the job continues from that state on whichever machine it gets.
 #
 # A job's disk: the command asks for each job's own (--disk-gb, from its start's size: the copies of a kept state a
 # run holds at once), so the kind states no disk_gb. A job writes nothing into the tree it runs from, which every run

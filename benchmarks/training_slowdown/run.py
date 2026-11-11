@@ -138,7 +138,8 @@ def job_args(job: config.Job, config_path: str, a: argparse.Namespace) -> list[s
 def run_minutes(cfg: config.Config) -> int | None:
     """The longest a job of `cfg` runs, in minutes, from its budget: the minutes past which the job stops itself
     (`BUDGET_SLACK` times `budget.minutes`, counted over every run it continues in) and `OUTSIDE_MIN`. None where
-    the budget states no minutes: the kind's time, or the machine's."""
+    the budget states no minutes: the kind's time, or the machine's. Nothing caps it at the kind's: a run that asks
+    for more than its kind's `max_wall_min` is warned about by the queue and never refused."""
     minutes = cfg.budget.get("minutes")
     return math.ceil(BUDGET_SLACK * minutes) + OUTSIDE_MIN if minutes else None
 
