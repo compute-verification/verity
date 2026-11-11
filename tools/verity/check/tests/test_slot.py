@@ -717,7 +717,7 @@ def test_agreement_sends_the_upstream_build_whatever_the_commit_changes(monkeypa
 
     monkeypatch.setattr(check.subprocess, "run", run)
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d, **k: None)
     monkeypatch.setattr(check, "agreement_url_file", url_file)
     assert check.record(["--on", "vy-nebius-1", "--base", "HEAD"]) == 0
     assert "--input" not in calls[-1] and not signed

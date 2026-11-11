@@ -502,7 +502,7 @@ def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch
     monkeypatch.setattr(CHECK, "agreement_url_file", agreement_url_file)
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", url_file)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     monkeypatch.setattr(subprocess, "run", run)
     sent = {}
     for args in (["--shard", "3/5"], ["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):

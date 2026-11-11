@@ -1008,8 +1008,8 @@ def test_a_fresh_run_builds_the_verifier_and_runs_the_suites_with_lakes_artifact
     root = tmp_path / "tree"
     _env_workspace(root, {"verity-flock": "import os\n\ndef test_env():\n"
                                           "    assert os.environ.get('LAKE_ARTIFACT_CACHE') == os.environ['WANT']\n"})
-    (root / "verity" / "core" / "service" / "flock").mkdir(parents=True)
-    (root / "verity" / "core" / "service" / "flock" / "lakefile.toml").write_text('name = "f"\n')
+    (root / "verity" / "protocols" / "flock" / "verifier").mkdir(parents=True)
+    (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").write_text('name = "f"\n')
     (root / ".gitignore").write_text(".lake/\n")
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
