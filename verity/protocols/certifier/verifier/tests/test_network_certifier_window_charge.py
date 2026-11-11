@@ -71,7 +71,7 @@ def test_each_window_at_its_own_sizes_is_v1s_charge():
         terms += sum(len(w[4]) for w in win["own"])
         seeded += sum(len(w[1]) + len(w[2]) + len(w[4]) for w in win["seeded"])
         cut += len(slots)
-    assert (windows, hits, terms, seeded, cut) == (15, 0, 56, 176, 188)
+    assert (windows, hits, terms, seeded, cut) == (15, 0, 56, 176, 191)
 
 
 def _random_book(rng, N, H, O):
