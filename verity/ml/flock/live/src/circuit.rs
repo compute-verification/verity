@@ -2639,7 +2639,11 @@ pub fn unit_ab_into_at(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>],
             let dst = dst.next().expect("out holds 64 slots a group");
             let tw = Instant::now();
             let used = u64::MAX >> (64 - grp.len());
-            let ok = zz.iter().zip(&aa).zip(&bq).all(|((z, a), b)| (z ^ (a & b)) & used == 0);
+            let ok = if one_pass {
+                net.one_pass_z_is_ab(&zz, used)
+            } else {
+                zz.iter().zip(&aa).zip(&bq).all(|((z, a), b)| (z ^ (a & b)) & used == 0)
+            };
             if ok {
                 lanes_into(&aa, grp.len(), dst, 4 * uw, 0, 2 * uw);
                 lanes_into(&bq, grp.len(), dst, 4 * uw, 2 * uw, 2 * uw);

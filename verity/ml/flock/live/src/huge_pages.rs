@@ -27,6 +27,15 @@ pub fn set(on: bool) {
     ON.store(on, Ordering::Relaxed);
 }
 
+/// The advice on one allocation of [`MIN_BYTES`] or more, whatever [`set`] says: for memory that outlives the statement
+/// that mapped it, which is faulted in once and read ever after.
+pub fn advise_huge(p: *mut u8, size: usize) {
+    if !p.is_null() && size >= MIN_BYTES {
+        let (a, e) = (p as usize / PAGE * PAGE, (p as usize + size).next_multiple_of(PAGE));
+        unsafe { madvise(a as *mut c_void, e - a, MADV_HUGEPAGE) };
+    }
+}
+
 fn advise(p: *mut u8, size: usize) -> *mut u8 {
     if !p.is_null() && size >= MIN_BYTES && ON.load(Ordering::Relaxed) {
         let (a, e) = (p as usize / PAGE * PAGE, (p as usize + size).next_multiple_of(PAGE));
