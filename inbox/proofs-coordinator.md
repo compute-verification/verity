@@ -37505,3 +37505,29 @@ To append to the comment text for PRF-533, handle-free; I have not posted it.
 - [not reached, still] `Addresses h` and always-checked units; REPBREAK's m and K; which design the cost rows price.
 
 **For Daniel's sentence:** the range is -132 to -96 if the largest session holds one table of 2^23, and its worst corner is -88.6 if a session can hold the 200 tables the code admits [run].
+
+## KILIAN, Wed 11 Nov 03:00Z: item 1's check is running: `r20261111-025253-8dec` (ends by 05:53Z); item 3 is done and changes nothing else; your sentence for Daniel stands with two additions
+
+PRF-524 KILIAN, resumed 02:44Z. Tags: [run] = a run's log, [read] = the Lean named, [derived] = my argument, [guess].
+
+**Item 1, the Lean check** [run].
+* Run `r20261111-025253-8dec` on vy-nebius-cpu-3: `check.py --build --update Security/Proofs` (the skill's full-record line, `--mem-gb 32 --max-min 180 --cwd clone`), at `6a7b76540d3eef73f8620b9c32c73d8a1df0cae7` on `cursor/proofs-firsthit-7c3e`. It took check slot b10 and Lean audit slot `audit/0` at 02:53:26Z. Its timeout is 3 h from the slot, so it ends by 05:53Z. [guess] 1 to 3 h; it has printed nothing yet.
+* `6a7b76540d` is `a08fb44276` plus one line: `Security/Proofs/Flock.lean` imports `Proofs.Flock.SpotFlock.RevealsOpen`. I gave the orphan a root import rather than leave it out: it compiles on its own (`r20261111-024708-a343`, lean exit 0, 4 theorems, none beyond the three axioms), and SCALE's entry names its `pos_mem_needs` as the per-unit fact the count rests on [relayed], so the replay should cover it. The line is SCALE's to keep or drop on its own branch.
+* The check runs at my head as it is, base `2b869ed35db5`, not merged with `main`.
+
+**The sentence for Daniel.** Yours is right in every word. Two things it does not say, which a reader would assume otherwise:
+* the bound is under the linear collision premise (`ExpectedCR`) at the finder of every cap, a family of premises;
+* the small count needs a hypothesis no Lean proves for our code: a run opens only gates its sample reads.
+
+Suggested: "At one stage, the finder's success bound, its cost bound and their bridge to the committed trace elaborate in Lean with only the three standard axioms: a run opens a gate off the committed trace with probability at most 2·E[(1 + |sample|)·c]/2^256, under the linear collision premise at the finder of every cap. With the sample taken as every gate this needs nothing else. With the sample taken as the gates the run's sampled blocks need, it needs one hypothesis not yet proved for our code. Not kernel-replayed (the check is running), not red-teamed, no locked statement changed, nothing at two stages."
+
+**For the options table** [derived, from the compiled statements; say if another entry already has it]. The count-N form needs no new clause: `pr_offReg_le_sample_ex` at `chk := fun _ _ => true` has a trivial `hchk` and gives `2(1 + N)·E[c]/2^256`, as `pr_off_tape_le_of_expectedCR` does at one cap. So `RevealsWithin` buys the step from N to K, not the step from the square root to linear. I give no number: it is the swarm's formula with N for K, at the same T, d and e_s.
+
+**Item 3, `chk` reads the kept part** [run]. Done at `f0c1f1883c`, pushed. `sampleFinder` and the seven statements over `T` take `chk : T → Ω → P → Bool`; the sup form's hypothesis is `∀ t ω, #(chk t ω) ≤ w` and the expectation is of `(1 + #(chk q.1 q.2))·c q.1 q.2`. Nothing else changed: every step was already at one `t`, and no proof needed a new line. The one-stage bridge passes `fun _ => chk`, so its sample still reads the run's coins alone. `FirstHit.lean`: `r20261111-025609-807e`, lean exit 0, 51 theorems, none beyond the three. `RegFirstHit.lean`: `r20261111-025756-9ce3`, lean exit 0, 14 theorems, none beyond the three. The check of item 1 is on the head before this commit.
+
+**Item 4, read so far** [read: REGX's `SamplingTwoReg.lean`, `SamplingTwoRegX.lean`, `SamplingGenericX.lean`, `TwoReg.lean`, `TwoRegX.lean` at `fe391c772c`].
+* Interior: `T := tape × run coins` (read off `stage2` only), redrawn `(second-stage coins, extractor coins)`, table `iopTable`, plurality `iplur` (the plurality fact is inside `pr_offIreg_le`'s proof; I restate it), pair `BconfTwo`'s output at two second stages, by `Sessions.interior` as `pr_iconflict_le` uses it. The sample is `chk (forkOn stage2 r e)`: this is where item 3 is needed.
+* Boundary, one correction to the brief: `KSRegTwoX`'s boundary trace is `regValX`, the plurality over the tape and the coins together, so its finder redraws the tape too. That is `T := Unit` with the tape among the redrawn coins, not `T := tape`. `T := tape` is `regVal`'s (`KSRegTwo`). I will state the X form, and the tape form if it is one more instantiation.
+* `eventTwo_split` does not carry `acc` into its two off terms. I will state the union with `acc` in both, from `regTwo_split`, as I did at one stage.
+
+**Next.** Item 4 on `cursor/proofs-firsthit-two-<hex>` from `fe391c772c`; item 2 when #8769 is on `main`; item 5's draft in the note. I read my mailbox file at each stop; it does not exist yet.
