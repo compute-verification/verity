@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Every environment variable `check` reads, declared once: the template is ``integrations/vllm/verity_vllm/settings.py``.
+"""Every environment variable `check` reads, declared once: the template is ``adapters/vllm/verity_vllm/settings.py``.
 
 A `Setting` has a name, a type (the parser of the variable's string), a default, a role, a doc and, for a ``where`` setting, the
 reason it can't change a verdict.  The role says what the setting can change:
@@ -105,7 +105,7 @@ SETTINGS: dict[str, Setting] = _declare(
     # ---- what check hands its steps (`check.env`), and the suites' runner (suites.py)
     S("VERITY_STORE_REQUIRED", str, None, VALUE, "1: a store-backed test fails where the store is unreachable instead of "
       "skipping; check sets it in a recorded run"),
-    S("VERITY_REGRESSION", str, None, VALUE, "1: integrations/vllm's reference regression runs; check sets it in a recorded run"),
+    S("VERITY_REGRESSION", str, None, VALUE, "1: adapters/vllm's reference regression runs; check sets it in a recorded run"),
     S("VERITY_SKIP_STORE", str, None, DEBUG, "1: the store-backed tests skip, for a hand run without the store"),
     S("VERITY_TEST_CACHE", str, None, WHERE, "the suites' kept passes; unset, $XDG_CACHE_HOME/verity/tests",
       "a kept pass is reused only under its inputs' hash"),

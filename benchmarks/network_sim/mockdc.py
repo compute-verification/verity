@@ -19,7 +19,7 @@ own namespace as the invoking user (`sudo ip netns exec NS setpriv ...`), on the
 `benchmarks/network_traces/active_replay.py`'s server, proxy and peer, on the namespaces' addresses, with the
 certifier's own proxy unmodified:
 - **the server** (`active_replay.Server`) inside the block, on its uplink's address at `SERVER_PORT`;
-- **the proxy** (`verity.core.protocols.certifier.active.Proxy`) in the block's certifier namespace, its link on the
+- **the proxy** (`verity.protocols.certifier.verifier.active.Proxy`) in the block's certifier namespace, its link on the
   certifier's fabric address at `LINK_PORT` and its upstream the block's server;
 - **the peer** (`active_replay.Peer`) on the outside host, across the fabric.
 
@@ -101,10 +101,10 @@ import records  # noqa: E402
 from datacenter import (Carried, Datacenter, Fleet, Interval, Maintenance, Plan, Profile, Refused,  # noqa: E402
                         account, check_records)
 from datacenter.examples import leaf_spine, two_sites  # noqa: E402
-from verity.core.protocols.certifier import active, calibration  # noqa: E402
-from verity.core.protocols.certifier.audit import Audit  # noqa: E402
-from verity.core.protocols.certifier.grid import GridParams  # noqa: E402
-from verity.ml.crypto import aead  # noqa: E402
+from verity.protocols.certifier.verifier import active, calibration  # noqa: E402
+from verity.protocols.certifier.verifier.audit import Audit  # noqa: E402
+from verity.protocols.certifier.verifier.grid import GridParams  # noqa: E402
+from verity.commitments.crypto import aead  # noqa: E402
 
 T = 60
 SERVER_PORT, LINK_PORT = 8000, 9000
