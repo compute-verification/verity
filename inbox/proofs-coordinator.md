@@ -39126,3 +39126,21 @@ crossed; if it pushed its own ids instead, the push would not be a fast-forward 
 
 I re-read the mailbox, CI-524 and each branch, then push the six as fast-forwards and say so here. Then a records run at
 #8139 and #8406 and a quick tier at all six. The unmarked heads' dry table follows when the last of them ends.
+
+## DRAFT-CORE, Wed 11 Nov 05:15Z: the line on the hypothesis at the priced designs (it holds at one coin up to k_d = 43,688 to 52,425 and fails at 5.5 to 44 million); Part 2 and the two answers still wait on the brief's text (my 05:10Z entry); the PR waits on the records run `777f`
+
+**Part 2's verdict and the two answers: none yet.** I do not have their text (05:10Z entry above). Nothing about them is in this entry.
+
+**The line for the table** [read: the four definitions; run: the arithmetic, `python3` on my VM, nothing on a node]. The hypothesis `2·k_d·width n + 64 ≤ Lb 0` holds at one coin's 2^20 bytes (`SpotFlock.L`) for `k_d` up to 52,425, 47,659 and 43,688 at widths 10, 11 and 12, and at the challenger's cap of 2^26 bytes (`MAX_COINS·COIN_BYTES`) for `k_d` up to 3,355,440, 3,050,400 and 2,796,200; it fails at both lengths for the priced rows' 5.5 to 44 million blocks a sampled request, which as one subset draw need 110 MB to 1.06 GB.
+
+What that line rests on:
+- [read] `width n = (log2 n + 72)/8` rounded down (`verity/protocols/flock/verifier/Flock/Draw.lean:26`): 9 for `n < 2^8`, 10 for `n < 2^16`, 11 for `n < 2^24`, 12 for `n < 2^32`.
+- [read] One coin is `Fin 65536 → F128` (`security/Proofs/Flock/Claims/Deploy.lean:86`), read as `L = 65536·16` bytes (`security/Proofs/Flock/SpotFlock/Code.lean:366`). `MAX_COINS = 2^20` and `COIN_BYTES = 64` (`verity/protocols/spot/verifier/lean/Spot/Challenger.lean:48-50`).
+- [run] The largest `k_d` is `(Lb 0 − 64)/(2·width)` rounded down.
+- [run] Sizes named so far, all holding at one coin: `k_d` = 1, 167, 512 and 16,384 at `n` = 16,384 need 84, 3,404, 10,304 and 327,744 bytes; `k_d` = 27,713 needs 554,324 bytes at width 10 and 609,750 at width 11.
+- [run] 5.5 million blocks need 110, 121 and 132 MB at widths 10, 11 and 12; 44 million need 880, 968 and 1,056 MB. REPBREAK's 99 to 795 MB is 18 bytes a block, which is width 9, a population under 256.
+- **Two limits on reading it.** [read] The priced rows are stratified draws: each stratum reads `2·k_t·width(size_t) + 64` bytes on its own stream (`Stratum.need`, `Draw.lean:172, 423-430`). My lemma is for `.subset` on one stream; nothing on my branch bounds a stratified draw's run-out. And V3's `Lb` is its own bound variable for the verifier's operating-system bytes; the 2^20 is the two-stage code's coin (`SpotFlock`), a different statement. The line puts my inequality beside those lengths; it does not say V3's source is a coin.
+
+**The PR's state.** Not open. [run] At `9a8a32c7c85b`: the try of `QsRows.lean` passed (`r20261111-035339-da0a`); the quick tier passed (`r20261111-041319-b167`, 4 suites); the lock is `main`'s byte for byte, 4,175,579 bytes, `Security/` on 6 lines, old paths on none. The records run `r20261111-041354-777f` (cpu-9) is running since 04:15Z; ETA 05:35 to 06:15Z [guess: TWOPROVE's guess for a run launched a minute later; 06:15Z is its cap]. The full check `r20261111-041222-0324` (cpu-9) runs until 07:15Z at the latest. The PR's body is drafted in the lane's notes, `drafts/qs-rows-pr-body-9a8a32c7.md`, with the records' and the check's lines left open.
+
+**Next.** When `777f` ends: its printout; if it regenerated the lock, one commit of exactly that file, the three lock checks and the quick tier again there; then `research queue open` unmarked and `ready to mark #N at <full sha>` here. If the cap cuts `777f` at 06:15Z I come to you before launching a second one.
