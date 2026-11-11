@@ -28,8 +28,9 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   Match, then a deferred config-run Commit under rows-sha512 whose `--serving-rows` window
   (`llama32_1b_rope_d64_l0.json`: layer 0's RoPE d64 heads at steps 1-7) its C2 site commits before the bundle is sealed,
   a `served` window under the 64-byte run root. Then the Commit's CPU replay, and `a5.sh` with `WINDOW=served` on the bundle
-  and that window, whose private bodies stay on the node with the row dir: the run's record holds no file of the row's
-  `commit/`, whose records, bundle and slim keep hold values.
+  and that window, whose private bodies stay on the node with the row dir: of the row's files the run's record holds only
+  the ones `demos/vllm/published.sh` lists, each with the reason it holds nothing of a request, and no file of the row's
+  `commit/` or `match/`, whose records, bundle, slim keep and request spec hold values.
 - `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`a5.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
   the sample): GLM-5.3's TP8 Commit with
@@ -87,8 +88,8 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   REGISTRATION` is printed and every weight read counts free. On the window holding the most requests, none carried, it runs
   sampled proofs: the window's advice under that registration (`--weights-of-record`) and its request Programs, V3b's window
   circuit at each class of `CLASSES` (V2's 4,32,4 by default), with its weight reads counted registered at the registration's
-  pins. The run needs every one of those counts. The class of record's count follows them as a measurement under its own
-  `WC_RECORD_TIMEOUT` (default 20m), after the record: a timeout or refusal there is reported and never fails the run. Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is Flock `--zk` on the sampled proof blocks
+  pins. The run needs every one of those counts; the class of record is counted only where `CLASSES` names `record`.
+  Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is Flock `--zk` on the sampled proof blocks
   and the Lean verifier. Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
   `POUW_CMD`, `POUS_CMD`, `BANDWIDTH_CMD` or `CERTIFIER_CMD` names one, within its own limit; otherwise its `MISSING` line
   names the command it lacks and its owner, and it gets no verdict. The script sets each owner's command by default where
@@ -132,7 +133,9 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   proof blocks' proof outcomes.
 - `v2_case.py`: sampled proofs v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
   partition, public file, sessions and circuit file), with its own Lean answer with `--exe`. A circuit file the run didn't
-  keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin.
+  keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin. The case names the public
+  file by the digest the audit staged, where the window keeps it (`case-v2.json`), and refuses a kept file with another;
+  a window keeping none gets the kept file's own digest, so its case shows only that the kept files verify.
 - `kept_composite.sh SRC [K]`: remote's and onsite's Lean verdicts on a served run's kept records (`served_verdicts.sh`'s
   `out/`, or a tarball of it) on a CPU node: it builds the products and the pieces' checks, writes PoUW's pieces
   (`pouw_piece.py`; the period from the kept `pieces/pouw/`, `main.txt`, `H1_KEY_SHA512` and the sampled and live runs'
@@ -175,7 +178,8 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   source, so M3's reserved window doesn't spend time on the build.
 - `server_rate.py`: SPOT's proof server's steady rate on one GPU, run inside a one-GPU `gpu-lease` with the GPU build of
   `flock-circuit`. Each staged type (`served_units/stage.py TYPE full`, every unit drawn) is proved by
-  `ProofServer(provers=K)` at each K of `--provers`, K streaming provers on the one device, each with a K-th of the job's
+  `ProofServer(provers=K)` at each K of `--provers` (a templated one, a table read, with its unit placed by
+  `--tmpl-unit-bin`'s `flock-tmpl-unit`, and verified under `verity/flock-circuit/tmpl`), K streaming provers on the one device, each with a K-th of the job's
   threads (the proof server splits them). Every prover finishes its
   warm sessions before any timed one starts. Each K's row (`rate.json`) gives the statements a second over the steady
   window, timed by each session's filing by its verifier, since a prover reports a session only once it collects its
@@ -238,6 +242,9 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   `benchmarks/sampling_plan/glm53.py`).
   `m1_unit.py` builds one family's unit through Flock's circuit prover's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
+  `m1_forms.sh` runs it on one Definition per form, side by side, with the Lean call's seconds and peak memory beside each
+  circuit file's bytes: by default an attention head's first key block and its end as their word Definitions, whose table
+  reads are inline, and as their Boolean versions, flat and structural.
 - `served_stock.sh` (with `served_overhead.py`): `served_verdicts.sh`'s stock control, the same endpoint, engine and load
   served with `serve-openai --no-commit` and no protocol, once per fresh endpoint for `REPS` endpoints. `served_overhead.py
   table` compares the composed run with it on two clocks, each the same code in both runs: the client's

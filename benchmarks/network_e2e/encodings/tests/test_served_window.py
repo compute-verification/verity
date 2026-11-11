@@ -161,7 +161,7 @@ at each power of two to 2^32 − 1."""
     low = V7.case(S, sl, book, charge=honest.length - 1, **kw)
     assert V7.evaluate(st, [honest, low]) == [V7.ACCEPT, V7.ACCEPT & ~(1 << 3)]
     assert V7.CompileSlice.id == "CompileSlice_v7"
-    around = {m for k in range(WC.MW + 1) for m in ((1 << k) - 1, 1 << k) if m <= WC.MT_CAP}
+    around = {m for k in range(WC.MW + 1) for m in ((1 << k) - 1, 1 << k) if m < 1 << WC.MW}
     assert all(width(m + 1) + 1 == WC.length_bits(m) for m in sorted(around | set(range(4097))))
 
 

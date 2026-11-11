@@ -310,6 +310,11 @@ def test_a_slot_fits_a_job_as_slot_py_admits_it_whatever_its_own_mem():
         "a job is not sent to wait on memory beside idle slots while another pool runs"
     assert auto._pool(idle["research"], 4, 0)[:2] == (4, 4), "a job that asks no memory reserves none in a slot without mem="
     assert auto._pool(idle["research"], 4, 12)[:2] == (4, 4), "12 GB is 12 GiB rounded up: inside the 13 free"
+    booked = pool({**slot("r0"), "book": 15}, slot("r1"), free_gb=20)        # r0: `mem=40 book=15`, as slot.py --status gives it
+    fit, free, _waiting, why = auto._pool(booked["research"], 12, 16)
+    assert (fit, free) == (1, 1) and "r1 blocked" in why, "r0 reserves its book=, 15, inside the 20 free; r1 its mem=, 40"
+    with pytest.raises(auto.Stalled, match="20 GB of memory free, under the 30 GB this job would reserve there"):
+        auto._pool(pool({**slot("r0"), "book": 15}, free_gb=20)["research"], 12, 32)   # an ask over book= is what it reserves
 
 
 def test_a_pool_every_fitting_slot_of_which_a_window_closes_never_takes_the_job():
@@ -523,6 +528,51 @@ def test_on_auto_spilled_to_a_pool_keeps_its_mem_gb_for_the_slot(tmp_path, monke
     (kw,) = launched
     assert kw["mem_gb"] is None and kw["env"]["CHECK_RUN_MEM_GB"] == "150"
     assert "--mem-gb 150 goes to the slot" in capsys.readouterr().err
+
+
+def test_on_auto_spilled_to_a_pool_reserves_a_share_of_what_a_run_of_many_suites_plans_on(tmp_path, monkeypatch, capsys):
+    """A pool's slot holds a run's reservation against the node for as long as the run holds the slot. A sized run of many
+    suites (research.suite_size) asks the slot for its `reserve_gb` and hands slot.py the whole figure as `--budget-gb`, which
+    its suites.py counts its test processes on; it is placed by what it reserves. Its own --mem-gb is reserved as given, and on
+    the queue the whole figure is the job's cap."""
+    launched, placed = [], []
+    monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: share(waiters=56), CPU1: pool(slot("r8", mem=40))})
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
+    repo = _auto_repo(tmp_path)
+    for path, body in {".": '[project]\nname = "verity"\n[tool.pytest.ini_options]\n',
+                       "a": '[project]\nname = "a"\n[tool.pytest.ini_options]\n[tool.verity.tests]\nworker_gb = 16\n'}.items():
+        (repo / path).mkdir(exist_ok=True)
+        (repo / path / "pyproject.toml").write_text(body)
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    (repo / auto.SLOT_PY).parent.mkdir(parents=True)
+    (repo / auto.SLOT_PY).write_text((REPO / auto.SLOT_PY).read_text())
+    monkeypatch.chdir(repo)
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+    suites = ["uv", "run", "tools/verity/check/suites.py"]
+    assert main([*runs, "--", *suites]) == 3
+    (kw,) = launched
+    cmd = kw["command"]
+    assert kw["mem_gb"] is None and kw["env"]["CHECK_RUN_MEM_GB"] == "32", "half of 4 processes at a's 16 GB"
+    assert cmd[cmd.index("--budget-gb"):cmd.index("--") + 1] == ["--budget-gb", "64", "--"], "slot.py's option, before CMD"
+    assert cmd[-6:] == ["nice", "-n", "19", *suites]
+    err = capsys.readouterr().err
+    assert "64 GB (32 of it reserved in a pool's slot)" in err
+    assert "--mem-gb 32 goes to the slot" in err and "gives the run 64 GB to plan its processes on" in err
+
+    launched.clear()
+    assert main([*runs, "--mem-gb", "64", "--", *suites]) == 3
+    (kw,) = launched
+    assert kw["env"]["CHECK_RUN_MEM_GB"] == "64" and "--budget-gb" not in kw["command"], "a --mem-gb given is reserved as given"
+
+    launched.clear()
+    assert main([*runs, "--cpus", "16", "--", *suites]) == 3, "no slot here gives 16 CPUs: the queue's"
+    assert launched == [] and [spec["mem-gb"] for spec in placed] == [256], "the queue's job is capped at the whole figure"
+
+    (repo / auto.SLOT_PY).write_text("")
+    assert main([*runs, "--", *suites]) == 3
+    (kw,) = launched
+    assert kw["env"]["CHECK_RUN_MEM_GB"] == "64" and "--budget-gb" not in kw["command"], "a tree from before slot.py's option"
 
 
 def test_on_auto_keeps_a_gpu_job_or_one_too_big_for_any_slot_on_node_2(tmp_path, monkeypatch, capsys):

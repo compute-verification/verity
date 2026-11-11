@@ -197,7 +197,6 @@
         "adapters/vllm/verity_vllm/pipeline/build.py",
         "adapters/vllm/verity_vllm/pipeline/match.py",
         "adapters/vllm/verity_vllm/pipeline/commit.py",
-        "adapters/vllm/verity_vllm/pipeline/commit_group.py",
         "adapters/vllm/verity_vllm/pipeline/commit_plan.py",
         "adapters/vllm/workloads/",
         "adapters/vllm/manifests/",
@@ -298,7 +297,8 @@
         "security/Proofs/Accounting/TS.lean",
         "security/Proofs/Accounting/TS/",
         "archive/examples/h200/",
-        "demos/dither_full_util/"
+        "archive/examples/dither_full_util/",
+        "archive/benchmarks/pouw/"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -452,10 +452,12 @@
         "security/Definitions/NetworkCertifier/",
         "security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
+        "benchmarks/certifier_term/",
         "benchmarks/network_e2e/",
         "benchmarks/datacenter/",
         "benchmarks/network_sim/",
-        "benchmarks/prove_path/"
+        "benchmarks/prove_path/",
+        "benchmarks/certifier_timing/"
       ],
       "branch_suffixes": [
         "728f",
@@ -511,9 +513,7 @@
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
-        "tools/research/src/research/merge.py",
-        "tools/research/src/research/drive.py",
-        "tools/research/tests/test_queue_drive.py"
+        "tools/research/src/research/merge.py"
       ],
       "branch_suffixes": [
         "4292",
