@@ -1295,7 +1295,7 @@ def test_a_run_that_added_more_than_one_bundle_holds_writes_as_many_as_that_take
 
 
 def test_one_run_takes_the_newest_bundles_up_to_a_quarter_of_the_cache_s_cap_and_a_later_run_the_rest(tmp_path):
-    """Every build bundles what it compiled, up to `BUNDLE_CAP` a bundle, and the launcher lists dozens: together more
+    """Every build bundles what it compiled, up to `BUNDLE_BYTES` a bundle, and the launcher lists dozens: together more
     than the cache may hold. One run takes them in the launcher's order, newest first, and stops at its budget, a quarter
     of the cap; the bundle it stopped in is not marked, and a later run takes what is left of it. Downloads run ahead of
     the unpacking: a bundle fetched and not reached is dropped, unmarked."""

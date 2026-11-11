@@ -1037,7 +1037,7 @@ ARTIFACT = MK.ARTIFACT
 MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|" + MK.INDEX + r"/[0-9a-f]{128}\.json")
 #: what one bundle (`LakeArtifacts.bundle`) holds at most, uncompressed: a run's files over 4 GiB upload without resume. A
 #: run that added more writes as many bundles as that takes (`LakeArtifacts.bundle_into`)
-BUNDLE_CAP = 3 << 30
+BUNDLE_BYTES = 3 << 30
 #: a key of `lean-deps-urls.json` naming a bundle of one of `PUBLISHERS`' runs by its sha256 (`shared_bundles`)
 SHARED = "lean-artifacts/"
 #: a bundle's name in the directory its audit writes it in (`LakeArtifacts.bundle_into`)
@@ -1277,7 +1277,7 @@ class LakeArtifacts:
             tmp.write_text(json.dumps({"key": key}))
             os.replace(tmp, f)
 
-    def bundle(self, dest: Path, cap: int = BUNDLE_CAP, start: int = 0) -> tuple[int, int]:
+    def bundle(self, dest: Path, cap: int = BUNDLE_BYTES, start: int = 0) -> tuple[int, int]:
         """Write the entries `added` from its index ``start`` on as a gzipped tar at ``dest``, each with every artifact it
         names, the entries before the artifacts, up to ``cap`` bytes uncompressed: (the number of entries written (none: no
         file), the index in `added` of the first entry this bundle had no room for, where the next one starts). A bundle
@@ -1311,15 +1311,15 @@ class LakeArtifacts:
             os.replace(tmp, dest)
         return len(todo), stop
 
-    def bundle_into(self, out: Path, cap: int = BUNDLE_CAP) -> tuple[list[Path], int]:
-        """Every entry `added` in bundles of at most ``cap`` bytes each (`bundle`), as many as that takes, at the free
+    def bundle_into(self, out: Path, limit: int = BUNDLE_BYTES) -> tuple[list[Path], int]:
+        """Every entry `added` in bundles of at most ``limit`` bytes each (`bundle`), as many as that takes, at the free
         names `shared_bundles` lists in ``out`` in their order (`lean-artifacts.tar.gz`, then `-2`, ...), the entries
         added first in the first: (those paths, the number of entries written)."""
         free = (d for i in itertools.count(1)
                 if not (d := out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz").exists())
         dests, n, at = [], 0, 0
         while at < len(self.added):
-            wrote, at = self.bundle(dest := next(free), cap, at)
+            wrote, at = self.bundle(dest := next(free), limit, at)
             if wrote:
                 dests.append(dest)
                 n += wrote
@@ -1335,7 +1335,7 @@ class LakeArtifacts:
 
         The bundles are unpacked one at a time in the order ``urls`` names them, which is the launcher's, newest first
         (`shared_bundles`), until the bytes written to the cache reach ``budget``: a quarter of the cap unless given. A
-        bundle holds up to `BUNDLE_CAP` and the launcher lists dozens, more than the cache's cap together; a quarter is
+        bundle holds up to `BUNDLE_BYTES` and the launcher lists dozens, more than the cache's cap together; a quarter is
         what the prune that follows can make room for (it stops at three quarters, least recently used first) and still
         leave half the cap to what the node itself used last. The bundle the budget stops in, and those after it, are not
         marked: a later run takes what is left of them, when the launcher still lists them.
