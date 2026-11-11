@@ -189,7 +189,9 @@ def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
     field names are informational (the descriptor carries types only) and, as every decoder's (`predict.dsa`, `predict.dsv4`), the
     vLLM model's own (`model.layers.0.…`, `lm_head.weight`), never the prefix of the module a trace wraps it in.  Under `world`
     ranks each is one rank's shard (`rank_shape`)."""
-    bf = lambda *s: _arr(s, 16)  # noqa: E731
+    def bf(*s: int) -> Type:
+        return _arr(s, 16)
+
     V = C.V // world
     C = rank_shape(C, world)
 
