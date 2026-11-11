@@ -2513,6 +2513,17 @@ def every_row_accepting(tmp_path: Path, **kw) -> Path:
     return with_memory(accepted(tmp_path, **kw), MEMORY_ACCEPTING)
 
 
+def elsewhere(key: str, verdict: str, src: str | None = None) -> str:
+    """Why the row ``key`` (the window report's unless ``src``), answering ``verdict`` about `OTHER`, is missing."""
+    src = src or f"record/verdicts.json protocols.{key}"
+    return OR.ELSEWHERE.format(key=key, src=src, verdict=verdict, server=OTHER)
+
+
+def unserved(key: str, src: str | None = None) -> str:
+    """Why the accepting row ``key`` (the window report's unless ``src``) no server is named for is missing."""
+    return OR.UNSERVED.format(key=key, src=src or f"record/verdicts.json protocols.{key}")
+
+
 def off_node(base: dict, name: str, why: str) -> dict:
     """The verdict ``name`` reads where its row is no answer about the node: missing with ``why``, from its row, with
     what the record says of it whatever it reads (``listed``, ``not_claimed``), as ``base``, its read about the node."""
@@ -2538,10 +2549,10 @@ def test_a_verdict_read_from_a_row_is_accept_only_where_the_report_says_its_answ
     assert main([str(about(out, {key: WHERE[where]}))]) == 0
     v = json.loads((out / "record" / "onsite.json").read_text())["verdicts"]
     expect = {"the node": base[name],
-              "another server": off_node(base, name, OR.ELSEWHERE.format(key=key, verdict="accept", server=OTHER)),
-              "no server": off_node(base, name, OR.UNSERVED.format(key=key))}[where]
+              "another server": off_node(base, name, elsewhere(key, "accept")),
+              "no server": off_node(base, name, unserved(key))}[where]
     assert v == base | {name: expect}
-    assert OTHER in OR.ELSEWHERE.format(key=key, verdict="accept", server=OTHER)
+    assert OTHER in elsewhere(key, "accept")
     line = json.loads(capsys.readouterr().out.strip()[7:])
     assert line["verdicts"][name] == ("accept" if where == "the node" else "missing")
 
@@ -2557,8 +2568,7 @@ def test_a_row_that_doesnt_accept_is_missing_about_another_server_and_reads_as_i
     here = record(out)["verdicts"]
     assert (here[name]["verdict"], here[name]["reason"]) == (answer, f"toy: {key} answered {answer}")
     v = record(about(out, {key: WHERE[where]}))["verdicts"]
-    assert v[name] == (here[name] if where == "no server" else off_node(
-        here, name, OR.ELSEWHERE.format(key=key, verdict=answer, server=OTHER)))
+    assert v[name] == (here[name] if where == "no server" else off_node(here, name, elsewhere(key, answer)))
     assert {k: v[k] for k in ROW_READ if k != name} == {k: here[k] for k in ROW_READ if k != name}
 
 
@@ -2605,8 +2615,7 @@ def test_a_report_stating_no_servers_reads_accept_from_none_of_its_rows(tmp_path
     report.pop("servers")
     f.write_text(json.dumps(report | ({} if servers is None else {"servers": servers})))
     v = record(out)["verdicts"]
-    assert {k: v[k] for k in ROW_READ} == {k: off_node(base, k, OR.UNSERVED.format(key=key))
-                                           for k, key in ROW_READ.items()}
+    assert {k: v[k] for k in ROW_READ} == {k: off_node(base, k, unserved(key)) for k, key in ROW_READ.items()}
 
 
 @pytest.mark.parametrize("run", ["of record", "of record without PoUW"])
@@ -2768,7 +2777,7 @@ def test_padding_out_of_free_open_leaves_the_conservative_figure_of_record_and_n
 def test_a_remote_run_whose_report_drops_the_certifier_takes_its_period_checks_answer_and_else_the_drop(tmp_path):
     """Remote's report drops the network certifier whatever its pieces hold; with the split certifier behind the front
     its period check's answer, beside its case under OUT/pieces/certifier, is the verdict and the bound, as onsite's
-    report composes it."""
+    report composes it, where its piece names the report's node as the server it is about."""
     out = accepted(tmp_path)
     report = json.loads((out / "record" / "verdicts.json").read_text())
     report["protocols"]["communication"] = SV.dropped_row("communication", "remote")
@@ -2780,11 +2789,70 @@ def test_a_remote_run_whose_report_drops_the_certifier_takes_its_period_checks_a
         "from": "record/verdicts.json protocols.communication"}
     assert "missing" in rec["bound"]
     (out / OR.CASE.parent / "answer.json").write_text(json.dumps(answer(PUBLIC)))
+    (out / OR.CASE.parent / SV.SERVED).write_text(json.dumps({"server": NODE}))
     rec = record(out)
     assert rec["verdicts"]["the network certifier"] == {"protocol": OR.NETWORK, "verdict": "accept",
                                                         "from": "pieces/certifier/answer.json"}
     assert rec["bound"]["K"] == K and rec["placement"] == {"trusted-host": "the certifier on the gate's host"}
     assert rec == record(accepted(tmp_path / "onsite")) | {"verdicts": rec["verdicts"]}
+
+
+#: what the period check's piece under OUT/pieces/certifier states of the server its answer is about, as
+#: `served_verdicts.piece_server` reads it: its `SERVED` record's server, else the node `pieces` ran it on (`RAN`)
+PIECE_NAMES = {
+    "the node": {SV.SERVED: NODE},
+    "the node, run on another": {SV.SERVED: NODE, SV.RAN: OTHER},
+    "the node it ran on": {SV.RAN: NODE},
+    "another server": {SV.SERVED: OTHER, SV.RAN: NODE},
+    "another server it ran on": {SV.RAN: OTHER},
+    "no server": {},
+}
+
+
+REFUSAL = "toy: the period check refused"
+
+
+def remote_dropped(tmp_path: Path, verdict: str, names: dict[str, str]) -> Path:
+    """A run of record under remote's product: its window report drops the network certifier, naming no server for it,
+    and its period check's answer under OUT/pieces/certifier is ``verdict``, its piece's records naming ``names``."""
+    out = accepted(tmp_path)
+    f = out / "record" / "verdicts.json"
+    report = json.loads(f.read_text())
+    report["protocols"]["communication"] = SV.dropped_row("communication", "remote")
+    report["servers"]["communication"] = None
+    f.write_text(json.dumps(report))
+    refusal = {"protocol": OR.NETWORK, "verdict": "reject", "reason": REFUSAL, "commitment": "ab" * 64, "public": None,
+               "profile": None}
+    (out / OR.CASE.parent / "answer.json").write_text(json.dumps(answer(PUBLIC) if verdict == "accept" else refusal))
+    for name, server in names.items():
+        (out / OR.CASE.parent / name).write_text(json.dumps({"server": server}))
+    return out
+
+
+@pytest.mark.parametrize("names", list(PIECE_NAMES))
+@pytest.mark.parametrize("verdict", ["accept", "reject"])
+def test_the_period_checks_answer_a_remote_run_takes_is_held_to_the_server_its_piece_names(
+        tmp_path, capsys, verdict, names):
+    """The row the record takes from the period check's answer where remote's report drops the network certifier is
+    held to the same rule as a row of the report, by the server its piece names (`served_verdicts.piece_server`: its
+    `SERVED` record's, else the node it ran on): about the report's node it reads as it answers, and an accept makes the
+    run of record with its bound; about another server it is missing, naming the server and the answer; an accept naming
+    no server is missing, and a reject naming none reads as it states. Only the accept about the node is of record."""
+    out = remote_dropped(tmp_path, verdict, PIECE_NAMES[names])
+    assert main([str(out)]) == 0
+    rec = json.loads((out / "record" / "onsite.json").read_text())
+    src = "pieces/certifier/answer.json"
+    here = {"protocol": OR.NETWORK, "verdict": verdict, "from": src, **({"reason": REFUSAL} if verdict == "reject" else {})}
+    off = {"verdict": "missing", "from": src}
+    expect = (here if names.startswith("the node") or (names, verdict) == ("no server", "reject") else
+              off | {"why": unserved("communication", src) if names == "no server" else
+                     elsewhere("communication", verdict, src)})
+    assert rec["verdicts"]["the network certifier"] == expect
+    holds = expect == here and verdict == "accept"
+    assert rec["of_record"]["holds"] is holds and ("K" in rec["bound"]) is holds
+    assert rec["of_record"]["missing"] == ["the network certifier"] * (expect["verdict"] == "missing")
+    assert rec["of_record"]["not_accepting"] == ["the network certifier"] * (expect["verdict"] == "reject")
+    assert json.loads(capsys.readouterr().out.strip()[7:])["of_record"] is holds
 
 
 def test_a_run_with_no_window_report_writes_no_record(tmp_path, capsys):

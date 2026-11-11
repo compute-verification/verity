@@ -233,9 +233,10 @@ negatives.
   the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
   with its why where the run has no answer. Beside them it lists memory's three (PoUS, the bandwidth audit and the
   wipe: the window report's `space`, `bandwidth` and `wipe` rows) as their rows state them, missing where the run has
-  no such row; whether the run is of record reads none of them. A verdict read from a row of the window report is
-  `accept` only where the report says that row's answer is about its node (its `servers`): an answer about another
-  server, or an accept naming none, is missing and says which.
+  no such row; whether the run is of record reads none of them. A verdict read from a row is `accept` only where a
+  server is named for the row's answer (the report's `servers`, or its piece's records for the period check's answer
+  a remote run takes) and it is the report's node: an answer about another server, or an accept naming none, is
+  missing and says which.
   Sampled proofs' verdict is its leg in the composite of record, the outcome
   of remote's sampled proofs case there (one-stage v2), never the window report's integrity row, the records audit's
   one-stage v1 answer, which is no verdict: where the composite of record has no such case, it is not established, the
