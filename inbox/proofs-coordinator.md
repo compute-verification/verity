@@ -65489,3 +65489,78 @@ Tags: [run] a command I ran now or a run of mine (id given), [read] a file read 
 - **My date: ten hours after the hour their comment arrives** (Thu 12 Nov 08:00Z, midnight PST, if it comes in the 22:00Z hour). What I deliver by then: the check in Lean and in the mirror with its difftest cases, built from a branch off `main` (`cursor/proofs-return-<4 hex>`, so it can be its own pull request) and merged into `cursor/proofs-stops-1340`, the head the vLLM lane merges; the Spot verifier's Lean built and its suite passed in a `research run` I name. Not in that date: `security/`'s proofs rebuilt and the pull request opened, which I date once the first build shows which proofs move [guess]. If their comment says `second` hands the verifier a salt for the ids, I say so at once: by the above it should not.
 
 Order from here: Job A (the counts for each template), first entry by Thu 00:30Z; then this check's build.
+
+## FINDER, Wed 11 Nov 21:50Z: #8915's three bounds, as three theorems at SPOT[Flock]'s code from the linear expected-time bound on SHA-512 read at three finders, statements whole below; written and pushed, their one-file try `r20261111-212528-8582` has no verdict yet (about 22:05Z). The restated guarantee's record would name `Claims.ExpectedCR` once and no new entry, if it takes the budget and the counts as terms and not as hypotheses. Item 1 (the one-wait bound) is compiled at every level. Next entry Thu 12 Nov 02:00Z, and a line at the try's verdict
+
+**1. The three bounds `SpotFirstHitTwo` takes (#8915's hold).** They need not be premises of their own. Each is a theorem at SPOT[Flock]'s compiled two-stage verifier under the two facts of the frame the guarantee already takes, with `c_R` and `c_F` closed expressions, where one machine meets `Claims.ExpectedCR` at SHA-512 [read: `security/Proofs/Flock/SpotFlock/OffClassAt.lean` at `1f6d588440` on `cursor/proofs-finder-7c1e`]. `Claims.ExpectedCR` is in the lock's `trust.base` ("SHA-512 collision resistance: the linear expected-time bound at one finder") [read: `security/lean-audit.json` on `main` at `75ef75838f`]. So what is trusted does not grow; the same bound is read at three more finders. This narrows the three to the trust base; it does not prove them outright, and nothing can: each says a machine finds no SHA-512 collision [derived].
+
+All three share these hypotheses, as `code_eventTwoX_le_cls_at_budget` on `main` states them [read: `SpotFlock/FirstHitClassAt.lean:56`]:
+
+```lean
+(hB : Built h) (hS : Addresses h)
+{L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
+  (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation))}
+(hL : L = SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots
+  (two h) (rs h) (cap h))
+{x : Msg} {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hx : parse h x = some s)
+(hP : partition h s = some Pt) (hd : two h s = some d) (hin : InScopeTwo Pt d s)
+{Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+{needs : ℕ → Finset ℕ} (hneeds : needs = fun u => (Reveal.needs (partition h) s u).toFinset)
+{cls : Fin (L.nG x) → Fin (L.nG x)}
+(hcls : cls = Verity.FirstHit.clsOf fun g : Fin (L.nG x) => gateKey h s Pt d g.val)
+(T : ℕ) (hT : ∀ ω r, (run FlockDeploy.sha512 P L.V x ω r).pLog.length +
+  (run FlockDeploy.sha512 P L.V x ω r).vLog.length ≤ T) {Ns Ks Km : ℝ}
+(hNs : Ex (fun r : Fin (L.V.k x) → FlockDeploy.Coin =>
+  ((L.toCompiled.firstSlots x (L.checked x r)).card : ℝ)) ≤ Ns)
+(hKs : Ex (fun r : Fin (L.V.k x) → FlockDeploy.Coin =>
+  (((L.toCompiled.sampleNeeds x needs (L.checked x r)).image cls).card : ℝ)) ≤ Ks)
+(hKm : Ex (fun r : Fin (L.V.k x) → FlockDeploy.Coin =>
+  (L.toCompiled.sessCountIn x needs (fun l => (L.toCompiled.sampleNeeds x needs l).image cls)
+    (L.checked x r) : ℝ)) ≤ Km)
+```
+
+(`code_bconfX_le_at` takes only `hB`, `hS`, `hL`, `x`, `P`, `T`, `hT` and `hNs` of these.) Then, each with its one further hypothesis and its conclusion whole:
+
+```lean
+theorem code_bconfX_le_at …
+    (hBc : ExpectedCR FlockDeploy.sha512
+      (Claims.SamplingGeneric.Compiled.BconfX FlockDeploy.sha512 L.toCompiled Ω P x)) :
+    (Claims.SamplingGeneric.Compiled.BconfX FlockDeploy.sha512 L.toCompiled Ω P x).Pr FlockDeploy.sha512 ≤
+      2 * L.toCompiled.runCost x T Ns / 2 ^ (256 : ℝ)
+
+theorem code_offRegX_le_cls_at …
+    (hX : ∀ K : ℕ, ExpectedCR FlockDeploy.sha512 (L.toCompiled.finderXCls FlockDeploy.sha512 P x s needs cls K)) :
+    Pr (fun q : Ω × ((Fin (L.V.k x) → FlockDeploy.Coin) × L.SlotEC x) =>
+        (run FlockDeploy.sha512 P L.V x q.1 q.2.1).out = .acc ∧
+          L.OffRegX FlockDeploy.sha512 P x q.1 q.2.1 q.2.2) ≤
+      2 * L.toCompiled.firstHitCost x T Ns Ks Km / 2 ^ (256 : ℝ)
+
+theorem code_offIreg_le_cls_at …
+    (hI : ∀ K : ℕ, ExpectedCR FlockDeploy.sha512 (L.finderICls FlockDeploy.sha512 P x s d.part needs cls K)) :
+    Pr (fun q : Ω × ((Fin (L.V.k x) → FlockDeploy.Coin) × L.SlotEC x) =>
+        (run FlockDeploy.sha512 P L.V x q.1 q.2.1).out = .acc ∧
+          L.OffIreg FlockDeploy.sha512 P x q.1 d.part q.2.1 q.2.2) ≤
+      2 * L.toCompiled.firstHitCost x T Ns Ks Km / 2 ^ (256 : ℝ)
+```
+
+- The three conclusions are, symbol for symbol, #8915's `L.BconfXLe FlockDeploy.sha512 x P c_R`, `L.OffRegXLe FlockDeploy.sha512 x P c_F` and `L.OffIregLe FlockDeploy.sha512 x P d.part c_F` unfolded, at `c_R = L.toCompiled.runCost x T Ns` and `c_F = L.toCompiled.firstHitCost x T Ns Ks Km` [read: `TwoFirstHitKS.lean:55-73` at `3468c54852`; I did not build against that branch, so "symbol for symbol" is by reading]. The two costs are `runCost = T·(1 + e_s·N_s) + n_PU·openCalls` and `firstHitCost = T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls` [read: `SamplingGeneric/TwoFirstHitAt.lean:135`, `:142` on `main`].
+- What each still takes, none of it trust in our code: `T`, the most SHA-512 calls a run of the prover makes, both parties' counted (the prover's resource, a parameter of the bound); three expectations over the verifier's coins, which `main` has in closed form at the code (`code_eventTwoX_le_cls_at_caps`) [read: `SpotFlock/FirstHitClassCaps.lean:42`]; and the expected-time bound at its one machine: `B_conf,X`; the by-class finder under the statement's roots, at every number `K` of tries it stops at; the by-class finder under the interior roots, at every `K`.
+- Where they come from: the first is `Compiled.bconfX_le_at`, already on `main` [read: `TwoFirstHitAt.lean:521`]. The other two are new and short: `main`'s by-class bound at a finder that stops at `K` (`pr_offRegX_le_cls_cap`, `pr_offIreg_le_cls_cap`) holds with `n_G/(K+1)` to spare at every `K`, so it holds with nothing to spare (`Verity.FirstHit.le_of_forall_cap`), and the finder's expected calls are at most `firstHitCost` (`Compiled.ex_calls_le_at_cls`) [read: `SamplingGeneric/TwoOffClassAt.lean` on my branch: `Compiled.pr_offRegX_le_cls_at`, `CompiledTwo.pr_offIreg_le_cls_at`, and the two forms with "the run accepted" in the event].
+- **What the lock's record of the restated guarantee will name** (your 21:26Z item 3) [read: `tools/verity/lean/check.py`, `inline_failures` and `listed_premises`; `Facts.lean`, `premiseHead`; the lock on `main` at `75ef75838f`; no records run has said so yet]. A record lists premises by name, so `Claims.ExpectedCR` appears once, however many machines and whatever `K` it is read at: `∀ K : ℕ, ExpectedCR …` has the head `Claims.ExpectedCR` past its leading `∀` over data. It is already listed twice in the lock, in `trust.base` and under `open` (owner @proofs, LEAN-186, due 30 Nov), and `compilerKSRegAt`'s record names it today. So the record would name `SpotFlock.Built` (domain), `SpotFlock.Addresses` (open, PRF-460), `CompiledTwo.Scope` (open, LEAN-186) and `Claims.ExpectedCR`: no new entry, and the three entries #8915 adds under `open` (`BconfXLe`, `OffRegXLe`, `OffIregLe`, PRF-524) go away.
+- **One condition, which LAND2 needs before restating**: the budget `hT` and the three counts must not be hypotheses of the guarantee. The check takes a `Prop` binder of a listed guarantee only if it is a named listed premise, another listed guarantee, or a plain range between bound variables or numerals; `∀ ω r, (run …).pLog.length + (run …).vLog.length ≤ T` and `Ex … ≤ N_s` are neither, and fail `guarantees.inline-hypothesis` unless each gets a name and an entry, which would be a new entry [read: the same docstring]. The way out needs no entry: state the guarantee at `T :=` the most calls a run of this prover makes and at the three expectations themselves, so `c_R` and `c_F` are terms of `L`, `x` and `P`. I add that `T` to the lemmas' pull request as `Compiled.runCalls H L x P` (a `Finset.sup` over the prover's tapes and the coins) with `runCalls_le : ∀ ω r, … ≤ L.runCalls H x P`, so the three theorems apply with `(fun ω r => L.toCompiled.runCalls_le …) le_rfl le_rfl le_rfl` [written, not compiled]. The restated statement would read: `… → ExpectedCR sha512 (BconfX …) → (∀ K, ExpectedCR sha512 (finderXCls … K)) → (∀ K, ExpectedCR sha512 (finderICls … K)) → L.FirstHitTwoXAt sha512 x s Pt d P (runCost x (runCalls …) (Ex firstSlots…)) (firstHitCost x (runCalls …) (Ex …) (Ex …) (Ex …))`, with `needs` and `cls` the two functions of `hneeds` and `hcls` above; its proof is #8915's present one applied to the three theorems [derived, not built]. That restatement is LAND2's to make.
+- Checked: not yet. The one-file try of `SpotFlock/OffClassAt.lean`, which builds `SamplingGeneric/TwoOffClassAt.lean` as an import, is run `r20261111-212528-8582` on vy-nebius-cpu-6: it took its Lean slot at 21:31Z, and its log has `✔ Built Proofs.Flock.SamplingGeneric.TwoOffClassAt`, the module with the four theorems for any compiled two-stage verifier [run: its log]; `OffClassAt` itself and the axiom probe have no verdict at this entry's time. I append one line when it ends.
+
+**2. Item 1 is compiled at every level** [run `r20261111-211437-57e7`: exit 0, 624 s; the axiom probe: none of the five theorems of `SpotFlock/OneWaitClassAt.lean` uses an axiom beyond `propext`, `Classical.choice`, `Quot.sound`]. That run built, as imports, every file of the chain as it stands after the merge of `main` (`75ef75838f`), the renamed numbers file and the `OpensWhole.lean` split included. The two things the Thu 02:00Z checkpoint asks for are therefore in hand now:
+- (1) the premise at the deployed masked proof system, with no hypothesis: `SpotFlock.oneWaitFinds_zk : (Arg.ofFlock (FlockDeploy.deployZk Flock.Readable.relation)).OneWaitFinds FlockDeploy.sha512`;
+- (2) the bound at SPOT's code: `SpotFlock.code_eventTwoX_oneWait_le_cls_at_budget` (an accepted run samples a proof block wrong at the one-wait trace with probability at most `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·runCost + 4·firstHitCost)/2^256`, costs at the one-wait extraction's `e_s = 1 + k`), and `code_eventTwoX_oneWait_le_cls_513`: at most `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2^-102` at `T ≤ 513·2^80`, `k ≤ 12,343,986`, `N_s ≤ 2^26`, `K_s, K_m ≤ 2^38`. That figure is modeled from the Lean's bound, on a branch, at the goal's covering sizes; it has not run on the served engine and no guarantee lists it yet.
+
+**3. Where the work is, and the lemmas' pull request.** `cursor/proofs-finder-7c1e` at `1f6d588440`, pushed [run: `git ls-remote`]: item 1's chain and the three lemmas. My VM was replaced at the billing stop; the eight commits that were never pushed are back from my transcript, and I push after each commit.
+- The lemmas go in a pull request of their own, as your 21:26Z section says: two modules (`SamplingGeneric/TwoOffClassAt.lean`, `SpotFlock/OffClassAt.lean`) and their two import lines, on a branch of their own from `main`, since a pull request of their own needs its own head. I name it `cursor/proofs-finder-b3a4`; it is mine, I push only to it and to `7c1e`. Say so if you want it elsewhere. Unmarked until you read the ready line.
+- It raises `Proofs/Flock` in `tools/verity/lean/unread-caps.json` in its own diff by its two modules and their declarations, to the check's count, and its body lists each module, the guarantee that will read it (#8915's `SpotFirstHitTwo`, restated) and its date [read: PRF-517, the 20:32Z section].
+
+**4. The second guarantee, early** (the rest comes with the Thu 02:00Z entry). Name: `Flock.Guarantees.SpotOneWaitTwo`, proved as `Flock.SecurityProofs.SpotOneWaitTwo`; written to its last line with a nontrivial witness, not compiled, not pushed yet [read: my working tree]. It takes `Built`, `Addresses`, `Scope` and `Claims.ExpectedCR` at the one-wait compiled verifier's three finders, and nothing else: no budget, no count, no bound on a mass, by the device of section 1. It concludes the threshold form and the headline at the one-wait trace by `threshold_of_event` and `headline_of_event`, as the second reader said, since `A.KS` is not available there. `SpotFirstHitTwo` is untouched.
+
+**5. Next, with dates.**
+- At the try's verdict (about 22:05Z): one line here, and a fix if it names one.
+- Then the lemmas' branch with `runCalls`, its one-file try, one records run and the quick tier at its head, and the ready line to you. [guess] The ready line by Thu 12 Nov 01:00Z.
+- Thu 12 Nov 02:00Z: the entry you asked for: the second guarantee's premises one line each with where each is met, its sentence in plain words, and the square-root term at `main`'s numbers.
