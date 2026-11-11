@@ -232,8 +232,10 @@ class TritonGemmRule(InPlaceRule):
     info = RuleInfo("TritonGemm[vllm-bi]", 3, "in-place-binding",
                     applies_to="verity_cba::triton_launch of batch_invariant.matmul_kernel_persistent (kernel name + constexprs pinned)",
                     preconditions=("kernel qualified name is the profile's `matmul_kernel_persistent`; source sha256 pinned",
-                                   ("the active TargetProfile's capability has a REGISTERED GEMM specialization (verity_vllm.program.frontend.gemm_targets: ada cc 8.9 with "
-                                   "vLLM's tuned sm_89 table, ampere cc 8.0 default tiling only; anything else -> numerics_unregistered)"),
+                                   (
+                                       "the active TargetProfile's capability has a REGISTERED GEMM specialization (verity_vllm.program.frontend.gemm_targets: ada cc 8.9 with "
+                                       "vLLM's tuned sm_89 table, ampere cc 8.0 default tiling only; anything else -> numerics_unregistered)"
+                                   ),
                                    ("tiling = that target's launch geometry for (M, N, K) (GemmTarget.launch_config: the default 128/128/64, 8 warps, 3 stages, or the "
                                    "M-bucket row of the target's pinned tuned table); GROUP_SIZE_M 8, *_LARGE False, HAS_BIAS False, "
                                    "NUM_SMS = the active TargetProfile's num_sms (default 128)"),
