@@ -177,9 +177,9 @@ CC=""; log "cpu mode: native taps (fa2_tap, fa3_tap, row taps) skipped"
 fi
 
 # ---- 5. readiness: prove the environment mechanically and record the identities --------------------------------------------------
-$PY - "$ROOT" "$CORE" "$OUT/readiness.json" "$CC" "$RESEARCH" "$MODE" "$CORE/verity/core" <<'EOF' || fail READINESS "see $OUT/readiness.json"
+$PY - "$ROOT" "$CORE" "$OUT/readiness.json" "$CC" "$RESEARCH" "$MODE" <<'EOF' || fail READINESS "see $OUT/readiness.json"
 import hashlib, importlib, json, os, platform, subprocess, sys
-root, core, out, cc, research, mode, verifiers = sys.argv[1:8]
+root, core, out, cc, research, mode = sys.argv[1:7]
 gpu = mode == "gpu"
 r = {"schema": "verity-vllm/readiness/v1", "checks": {}, "identities": {}}
 if not gpu:
@@ -207,7 +207,8 @@ check("vllm_commit_d9105ea80", lambda: ("d9105ea80" in __import__("vllm").__vers
 check("verity_from_tree", lambda: under("verity.ml.circuits", core))
 check("verity_vllm_from_tree", lambda: under("verity_vllm.program", root))
 check("research_telemetry_from_tree", lambda: under("research.telemetry", research))
-check("spot_from_tree", lambda: under("verity.core.protocols.spot.one_stage.partition", verifiers))   # the program tests import it
+SPOT = "verity.core.protocols.spot.one_stage.partition"   # the program tests import it; held to the directory its name gives
+check("spot_from_tree", lambda: under(SPOT, os.path.join(core, *SPOT.split(".")[:-1])))
 def distributions_from_tree():
     # the catalog and the kernels, distributions of their own before the platform layout, and the verifiers, now in verity
     mods = {"catalog": "verity.ml.circuits.ops", "kernels": "verity.ml.kernels", "core": "verity.core"}

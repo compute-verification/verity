@@ -22,6 +22,7 @@ from test_rec_outer import BIN
 from verity_flock import rec_live as RL
 
 HERE = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[4]
 C3 = HERE / "fixtures" / "rec-c3-inner"
 PLAIN = HERE / "fixtures" / "rec-coins" / "16-16-8-n64" / "inner-honest"
 
@@ -32,7 +33,7 @@ ROUND_KEYS = ["stream", "k", "tops", "level0", "commits", "n", "coins"]
 
 def _record(d: Path) -> dict:
     p = d / "public.json"
-    assert p.is_file(), f"{d} is not fetched: `uv run research data fetch-fixtures {d.relative_to(HERE.parents[3])}`"
+    assert p.is_file(), f"{d} is not fetched: `uv run research data fetch-fixtures {d.relative_to(ROOT)}`"
     return json.loads(p.read_text())
 
 
