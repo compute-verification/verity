@@ -36,9 +36,6 @@ class RuntimeTree:
     def has_module(self, path: str) -> bool:
         return path in self.modules
 
-    def classes(self, path: str) -> set[str]:
-        return set(self.modules.get(path) or ())
-
     def to_json(self) -> dict[str, Any]:
         return {"schema": RUNTIME_TREE_SCHEMA, "source": self.source, "runner": dict(self.runner), "modules": {k: list(v) for k, v in sorted(self.modules.items())},
                 "buffers": sorted(self.buffers)}
