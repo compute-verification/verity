@@ -27,11 +27,10 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 
 ## Agents, today
 
-- **Changed at 00:20Z Wed (top's announcement, 00:10Z). Daniel: the cap is 150 agents until the move is on `main`,
-  and the hold on new workers is off. After the move it is 100 again.** So a worker resumed tonight has work that
-  ends tonight, or leaves a note it can be restarted from. As before: when your work has ended, or you only wait (on
-  a run, on the move, on an owner's answer), end your turn at once, note written and pushed, saying what you wait
-  on. Runs you queued keep running without you.
+- **Changed at 03:37Z Wed: the move is on `main`, so the agent cap is 100 again** (top, TOP-398 03:34Z; 66 were
+  running). When your work has ended, or you only wait (on a run, on an owner's answer), end your turn at once,
+  note written and pushed, saying what you wait on. Runs you queued keep running without you. One worker (KMOVE)
+  crosses kernels' branches; nobody asks for a worker per branch.
 - **Daniel, 00:10Z: `archive/` is deleted.** top's worker deletes it by a pull request on the moved tree. So kernels
   archives nothing: a file of kernels' that nothing loads is deleted (git keeps it), in kernels' own pull request
   (HASH-104, KSLICE). Write no path under `archive/` into any file, and no load from it.
@@ -47,13 +46,28 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 - **Daniel's top set (TOP-394, 17:36Z):** the repository's organization and continuous integration first, and
   standard benchmarks with them (goals 3, 1, 4 and 5). Every kernels worker today serves one of those.
 
-## The queue, today (Tue 10 Nov)
+## The queue and the move (Wed 11 Nov)
 
-- **Changed at 23:00Z (top, TOP-398 and its goal `top/tree-in-signed-layout`): the move is on again, tonight.**
-  Daniel signed the architecture at 21:01Z. The files move in one change, due on `main` at about 03:45Z Wed (05:15Z
-  if top says "not yet" at 00:15Z). The staged tree is `cursor/top-layout-staged-e15c` (`50f940c4f285` at 23:00Z).
-  Until top posts the move's commit, work on `main` as it is. After it: `git merge BASE` into an open branch first,
-  then `tools/move/restack.py`, only when your inbox file says so.
+- **The move is on `main` since 03:26Z: `5c095bb4ab7012ba359e0a85f4ecf19892b99629`** (one pull request, #8769).
+  Every path in your orders written before 03:37Z is the old one where the move renamed it: `verity/ml/flock/` is
+  `verity/protocols/flock/prover/`, `integrations/vllm/` is `adapters/vllm/`, `verity/ml/kernels/` is
+  `verity/definitions/kernels/`, `examples/h200/` is `archive/examples/h200/` until top deletes `archive/`.
+- **A branch cut before the move crosses it once; a plain `git merge origin/main` is not a crossing** (top,
+  TOP-398 03:34Z: read that comment before you cross). From a checkout of the moved `main`:
+  `git fetch origin main B`, then `python3 tools/move/restack.py origin/B --move-commit 6581bcf197 --move-commit
+  c1ca25a247 --onto origin/main --kept --no-pins`. It prints `clean` and a commit id: `git push origin
+  ID:refs/heads/B`, no force. `conflicted` at the first step: merge the last `main` before the move
+  (`a930252c4993`) into the branch on the old paths, then cross. A file your branch adds under a retired path:
+  `git mv` it to its moved place in one commit first. About two minutes a branch; never on a branch you are in the
+  middle of a run from.
+- **Cross your own unmarked branch when your orders say so** (KHSHARE: `cursor/kernels-witness-card-43ee`; KP2:
+  #8662's; KSLICE's sits on the final staging, an ancestor of `main`, and needs only `main` merged). **ci crosses
+  the marked heads itself: push nothing to them.**
+- **Once on your VM, after you have the moved `main`:** `uv sync --all-packages --extra torch-cpu` (four editable
+  packages moved; infra, 03:34Z), and `git config merge.vllm-allowlist.driver 'python3
+  adapters/vllm/tests/lint/merge_allowlist.py %O %A %B %P'` before any merge that touches the lint allowlists.
+- **GPU nodes 1 and 2 are still installed from before the move:** send them only work at a commit before it,
+  until infra says otherwise on INF-683. Node A takes a run's own tree, as before.
 - **Hand-row files in the notes stay exactly as they are** (`lanes/kernels/layout/hand-lines.toml`,
   `kmove-jobs/hash105/units-replay-rows.toml`): do not delete or rewrite them.
 - **ci lands pull requests as usual again.** Open pull requests freely on a branch cut from `origin/main`
