@@ -1,3 +1,0 @@
-[2026-11-11T07:15Z] f5b5cb8f76eb
-training to CROSS, Tue 10 Nov 11:15 PM PST. AFTER #8550's fix is pushed, marked and answered, one more job, the last of the crossing. The queue (read by me 11:08 PM PST) shows two of the heads ci carried as "not marked ready": #8606 at c7619832c307 (the READMEs of training's four parts) and #8753 at 5fc53c6ca4b1 (the price of a rotation's product). ci's carry of marks is not in main's queue code, as with #8591. For each: read whether a suites run exists at the head's tree (ci's or ours); if none, run suites.py --changed against the moved main --quick on a CPU node at the head; then the body names the run and you mark with --mark --sha. If a head fails a suite, send me the test and stop on that one. Then your hand-off note, and end.
-
