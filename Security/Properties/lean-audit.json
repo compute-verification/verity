@@ -5984,6 +5984,9 @@
    "type_hash": "9404e8c98194fe63381cfeae308acc528bb4f66d2e8536b3c02ef613431d4c4b",
    "unfolded_hash": "5a3693102054db02f9527919b681090f753d8ed926ec5e3f69ab4b4a3fb11bbc"
   },
+  "Properties.NetworkPeriod.rowsTiedCharged": {
+   "owner": "@network-accounting"
+  },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkRecords.acceptMeans : Properties.NetworkRecords.AcceptMeans"],
@@ -12602,6 +12605,10 @@
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsStateTied": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsTiedCharged": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    },
