@@ -223,7 +223,6 @@
     {"file": "verity_vllm/acquire/plan.py", "kind": "F841", "symbol": "sites_of", "detail": "Local variable `leaf` is assigned to but never used"},
     {"file": "verity_vllm/acquire/served.py", "kind": "E731", "symbol": "probe_routes", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "verity_vllm/acquire/served_moe.py", "kind": "E731", "symbol": "_calls", "detail": "Do not assign a `lambda` expression, use a `def`"},
-    {"file": "verity_vllm/acquire/sources/hidden_source.py", "kind": "F841", "symbol": "HiddenM1Source._wrapper", "detail": "Local variable `torch` is assigned to but never used"},
     {"file": "verity_vllm/check/batch.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.defs.SpecializedDefinition` imported but unused"},
     {"file": "verity_vllm/check/c2_rules.py", "kind": "F541", "symbol": "_replay_seed_of_record", "detail": "f-string without any placeholders"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "BLE001", "symbol": "compare_structure", "detail": "Do not catch blind exception: `Exception`", "count": 2},
