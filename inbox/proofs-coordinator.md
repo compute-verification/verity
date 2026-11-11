@@ -45881,3 +45881,43 @@ For the table:
 For the table:
 - The nine marked result PRs build together and their merged lock needs no repair: `r20261111-083411-3dd5`, exit 0, `security`, `security/Proofs` (193,914 declarations in 3,838 modules) and `security/Properties` each pass, axioms the three, no record regenerated; a build, the axioms scan and the records, no kernel replay [run].
 - The build of all 18 marked Lean heads of ours with #8877 first is out: `r20261111-094021-2b3b`, ETA 10:15Z to 10:45Z [guess].
+
+## FUSED, Wed 11 Nov 09:44Z: today's cut on measured prices is 4,569.0 GB by the planner (`r20261111-092121-7fbe`), one figure where 4,566 / 4,591 / 4,762 stood. And the templated check is MEASURED on a fused block: Lean accepts it and it costs the SAME as the flat (109 to 126 core-s a block, median 117.0, against 111 to 117, median 115.7), so the lever row's 10x on the fused blocks is 1x
+
+Tags: [run] I ran it, [read] I read it in the named file, [relayed] another's entry, [guess]. Times are `date -u`.
+
+**1. Today's cut, (i) honest, with every heavy MoE cell measured** [run: `r20261111-092121-7fbe`, cpu-9, done rc 0, 36 rows, no error; tree `a5e4e56a11`].
+- It is BENCHCROSS's `r20261111-082248-abe7` again: the same command, tree, census card and inputs, and one file changed, the price file, in which exactly two cells differ: the two `MoeExpertFp8BlockGemm_v3` kinds at their measured steady rows (0.00095095 and 0.00101070 s a block, `54d6` and `8ece` of my 09:27Z entry).
+
+| (i) honest, today's cut | modeled 0.4: world year | datacenter year | measured engine rate on node A, a floor (by the order's proportion, not repriced) |
+|---|---:|---:|---:|
+| `BlockGemm_v3` at the steady rate, BENCHCROSS's `abe7` | 4,566.0 GB | 4,516.3 | 163 to 176 |
+| **`BlockGemm_v3` measured, `7fbe`** | **4,569.0 GB** | **4,518.9** | **163 to 176** |
+
+- The decode row's clean 72 sessions (0.00094012) instead of its whole window give the same 4,569.0, and both rows at node A's speed by the control's ratio give 4,567.0 [run: my VM, the same planner over six betas; its control reproduces `abe7`'s 4,566.0].
+- The last column is 0.0143/0.4 to 0.0154/0.4 of the first, as your 09:23Z update reads it; BREAKEVEN's reprice is the figure.
+
+**2. The templated check on the fused block** [run: `r20261111-085245-a3e0` (templated, cpu-12) and `r20261111-085313-7268` (flat, cpu-10, done rc 0); source `8201dacff26e`; VERIFYFAST-B's `ty_pins.sh` with its three paths moved to today's layout: one block staged by `m1_unit.py` with its reads inline, proved on CPU, verified by Lean's `flock-verify` `--zk` under `/usr/bin/time`, core-s are user plus system].
+
+| Block, one block a statement | Form | Lean `verify --zk`, core-s | Peak | Circuit file | Verdict |
+|---|---|---|---:|---:|---|
+| `MoeExpertFp8ReadGemm_v1{READ=EmbeddingRead_v1{V=256,H=3072},K=6144,N=1,…MmaV2Dot32_v2}` | flat | 111.0, 116.6, 115.7 | 9.1 GB | 1,791 MB | accepted, 3 of 3 |
+| the same | templated (`--structural iv/hybrid/4`) | 126.2, 117.0, 109.1 | 8.6 GB | 846 MB | accepted, 3 of 3 |
+| `MoeExpertFp8ReadGemmW_v1{READ=EmbeddingRead_v1{V=256,H=4096},K=256,N=32,…QgmmaDot32_v2}` | flat | 115.5, 115.5, 115.0 | 9.4 GB | | accepted, 3 of 3 |
+| the same | templated | staging now | | | |
+
+- **So the template gains nothing on the fused block: the medians are 117.0 and 115.7 core-s, 1.01 times.** Reading the inputs is shorter (22 s against 30 to 34 s) and the rest is longer. The reason is in the template: 31 defs, 6,399,122 rows and 107,179,532 references for a unit of 9,272,008 rows, where FlashInfer K2048's is 844,863 rows for 5,116,415 and gains 15x [read: `a3e0`'s and `d5cf`'s logs].
+- The planner's lever takes the fused blocks from 38.9 and 42.6 core-s a 1,024-block statement to 4.0 and 4.4. With that factor at 1 the lever row is 3,250.9 GB, not 3,228.7, and with the head block also flat and uncut 3,710.4 [run: `r20261111-084510-5ce0`, rows "lever row, fused MoE blocks flat" and "lever row, head and fused MoE blocks flat"].
+- **So of the two verifier changes of the lever row, what is left after the replay (3,731.7) is 21 GB, 0.6%**, all of it on assumed ratios for the other types.
+- **A second thing these seconds say, for FLOCKPKG to confirm on the served staging** (`fd98`, `593c`): one block of a fused kind costs Lean 115 core-s flat in this form, and the planner prices a whole 1,024-block statement of it at 38.9 and 42.6 [read: the strata of `5ce0`]. FLOCKPKG found the seconds barely grow with blocks [relayed, 08:58Z], so a statement would be near 115 too. On (iii) the fused blocks' Lean seconds are worth 0.63 GB a core-second a statement [run: `5ce0`, 4,042.4 against 4,019.3 for 34.9 and 38.2 core-s less], so 115 would add about 48 GB [guess: the form here has the reads inline at k_log 25; the served one is `stage.py`'s].
+
+**3. Still out** [run, 09:43Z]: `9c37`, the head block `_v2` templated: 41 minutes in `struct_lower`, no template yet, no error. `a3e0`'s second kind. Nothing of mine is on `vy-dc-h200-3`.
+
+For BREAKEVEN:
+- **(i), today's cut on measured prices: 4,569.0 GB over a world year, 4,518.9 over a datacenter year, measured rows, by the planner** (`r20261111-092121-7fbe`; second reader: it differs from BENCHCROSS's `abe7` in two cells of one file, `inputs/bench_prices.own_m_measured.json`, sha256 `eda3356218d7e4b5`). It replaces 4,566 / 4,591 / 4,762.
+- **Corrected: the templated check on the fused blocks is 1.0x, measured, not 10x** (`a3e0` against `7268`). In `reprice.py` that is `MoeExpertFp8` and `Fused[` among the families the goal does not take (`TMPL_GOAL_EXCLUDES`), beside the head block. The lever row then reads 3,710.4 GB.
+- Flat Lean seconds of one fused block in the card's form: 115.7 and 115.5 core-s (`7268`), against 48.2 and 52.7 in the fast column at a full statement.
+
+For the table:
+- Today's cut on measured prices: 4,569 GB over a world year at the modeled 0.4 (measured rows, the planner's run `r20261111-092121-7fbe`); the range 4,566 to 4,762 is closed.
+- Templated check: measured on a fused MoE block, Lean accepts it and it costs what the flat costs (median 117.0 against 115.7 core-s a block; `r20261111-085245-a3e0`, `r20261111-085313-7268`). With the head block having no template, the lever row's two verifier changes are worth 21 GB, not 503.
