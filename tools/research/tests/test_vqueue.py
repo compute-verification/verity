@@ -48,8 +48,8 @@ def by_tests(name: str, tests: set[str], base_tests: set[str] | None, *inputs: s
                   None if base_tests is None else frozenset(base_tests))
 
 
-def snap(*cands: Candidate, ready=(), history=(), main: str = MAIN, **kw) -> Snapshot:
-    return Snapshot(main, tuple(ready), cands, tuple(history), **kw)
+def snap(*cands: Candidate, ready=(), history=(), main: str = MAIN, wide=(), **kw) -> Snapshot:
+    return Snapshot(main, tuple(ready), cands, tuple(history), wide=frozenset(wide), **kw)
 
 
 def heads(*ns: int) -> tuple[str, ...]:
@@ -111,12 +111,48 @@ def test_meets(files, inputs, want):
 
 # ---- 1. the chain --------------------------------------------------------------------------------------------------------------
 
-def test_the_chain_is_ordered_from_main_and_only_its_lowest_verdict_is_read():
+def test_the_chain_is_ordered_from_main_and_only_its_lowest_verdict_is_read_whole():
     ready = prs(1, 2, 3, 4)
     assert decide(snap(cand("c2", "c1", 3, state=PASS), cand("c1", MAIN, 1, 2), ready=ready)) == []
     assert decide(snap(cand("c2", "c1", 3, state=FAIL), cand("c1", MAIN, 1, 2), ready=ready)) == []
     assert decide(snap(cand("c2", "c1", 3), cand("c1", MAIN, 1, 2, state=PASS), ready=ready)) == [
         Advance("c1"), Drop("c1", "on main", Outcome((1, 2), heads(1, 2), PASS)), Build((4,), "c2", 1)]
+
+
+@pytest.mark.parametrize("lowest", [PENDING, PASS])
+def test_a_fail_above_the_lowest_candidate_is_decided_at_once_and_nothing_is_built_on_it(lowest):
+    """A candidate above the lowest whose check failed, still running or not, on tests its base passed, is decided as the
+    lowest's fail is: its lone suspect ejected, the candidates above it dropped as a base failure, and the next batch built
+    on the candidate below it (`main`, once the lowest passed), never on it.  While its base hasn't said, it waits, and
+    nothing is built above it."""
+    ready = [pr(1), pr(2, None, "pkg/x.py"), pr(3), pr(4)]
+    t = by_tests("step pytest", {"pkg::t"}, set(), "pkg/x.py")
+    s = snap(cand("c1", MAIN, 1, state=lowest), cand("c2", "c1", 2, state=FAIL, failed=(t,), ended=False),
+             cand("c3", "c2", 3), ready=ready, depth=3)
+    passed = [Advance("c1"), Drop("c1", "on main", Outcome((1,), heads(1), PASS))] if lowest == PASS else []
+    assert decide(s) == [*passed, Eject(2, "h2", "step pytest failed, and its changed files meet their inputs, no other "
+                                                "member's", (t,)),
+                         Drop("c2", "failed: step pytest", Outcome((2,), heads(2), FAIL, (2,), "c1")),
+                         Drop("c3", "its base failed"), Build((3, 4), "c1", 3 if lowest == PASS else 2)]
+    unsaid = by_tests("step pytest", {"pkg::t"}, None, "pkg/x.py")
+    s = snap(cand("c1", MAIN, 1, state=lowest), cand("c2", "c1", 2, state=FAIL, failed=(unsaid,), ended=False),
+             ready=ready, depth=3)
+    assert decide(s) == passed
+
+
+def test_a_fail_above_the_lowest_candidate_bisects_its_suspects_reruns_a_lone_one_and_waits_on_what_is_inherited():
+    """Its suspects are bisected; a lone member whose failures meet none of its files is rerun afresh first; one its base
+    fails too waits for its check's end."""
+    ready = [pr(1), pr(2, None, "pkg/x.py"), pr(3, None, "pkg/y.py"), pr(4)]
+    t = by_tests("step pytest", {"pkg::t"}, set(), "pkg/")
+    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, 3, state=FAIL, failed=(t,), ended=False), ready=ready, depth=3)
+    assert decide(s) == [Drop("c2", "failed: step pytest", Outcome((2, 3), heads(2, 3), FAIL, (2, 3), "c1")),
+                         Build((2,), "c1", 2)]
+    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 4, state=FAIL, failed=(t,), ended=False), ready=ready, depth=3)
+    assert decide(s) == [Rerun("c2", (t.key,)), Build((2, 3), "c2", 1)]
+    red = by_tests("step pytest", {"pkg::t"}, {"pkg::t"}, "pkg/")
+    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, 3, state=FAIL, failed=(red,), ended=False), ready=ready, depth=3)
+    assert decide(s) == [Build((4,), "c2", 1)]
 
 
 def test_a_candidate_off_the_chain_is_dropped_with_every_candidate_above_it():
@@ -132,21 +168,39 @@ def test_of_two_candidates_on_one_base_the_one_whose_members_come_first_in_rank_
                          Drop("a2", "its base was dropped"), Build((3, 5), "b", 1)]
 
 
-@pytest.mark.parametrize(("ready", "left", "why"), [
-    ([pr(1, "h1b"), pr(2), pr(3)], (), "#1's head moved from h1 to h1b"),
-    ([pr(1, "h1b", conflict=True), pr(2), pr(3)], (), "#1's head moved from h1 to h1b, which doesn't merge onto `main`"),
-    ([pr(2), pr(3)], ((1, "h1b", "it isn't marked ready"),), "#1's head moved from h1 to h1b, which isn't taken: it isn't marked ready"),
-    ([pr(2), pr(3)], ((1, "h1", "held by top (no reason)"), (4, "h4", "no land verdict")),
-     "#1 isn't taken now: held by top (no reason)"),
-    ([pr(2), pr(3)], ((1, "h1", "its ready mark was withdrawn by lane-1"),), "#1 isn't taken now: its ready mark was withdrawn by lane-1"),
-    ([pr(2), pr(3)], (), "#1 isn't an open PR into `main` now"),
+@pytest.mark.parametrize(("left", "why"), [
+    (((1, "h1", "held by top (no reason)"), (4, "h4", "no land verdict")), "#1 isn't taken now: held by top (no reason)"),
+    (((1, "h1", "its ready mark was withdrawn by ci"),), "#1 isn't taken now: its ready mark was withdrawn by ci"),
 ])
-def test_a_chain_candidate_whose_member_moved_or_isnt_taken_is_dropped_with_everything_above_saying_why(ready, left, why):
+def test_a_chain_candidate_holding_a_member_others_took_from_the_queue_is_dropped_with_everything_above_saying_why(left, why):
+    ready = prs(2, 3)
+    s = snap(cand("c1", MAIN, 1, 2, state=PASS), cand("c2", "c1", 3), ready=ready, left=left, pulled=frozenset({1}))
+    assert decide(s) == [Drop("c1", why), Drop("c2", "its base was dropped"), Build((2, 3), MAIN, 2)]
+    s = snap(cand("c1", MAIN, 3), cand("c2", "c1", 1, 2), ready=ready, left=left, pulled=frozenset({1}))
+    assert decide(s) == [Drop("c2", why), Build((2,), "c1", 1)]
+
+
+@pytest.mark.parametrize(("ready", "left"), [
+    ([pr(1, "h1b"), pr(2), pr(3)], ()),
+    ([pr(1, "h1b", conflict=True), pr(2), pr(3)], ()),
+    ([pr(2), pr(3)], ((1, "h1b", "it isn't marked ready"),)),
+    ([pr(2), pr(3)], ((1, "h1", "its ready mark was withdrawn by lane-1"),)),
+    ([pr(2), pr(3)], ()),
+])
+def test_a_chain_candidate_whose_member_its_owner_pushed_unmarked_or_closed_lands_as_built(ready, left):
+    """Its new head, if any, waits for the next batch."""
     s = snap(cand("c1", MAIN, 1, 2, state=PASS), cand("c2", "c1", 3), ready=ready, left=left)
-    rebuilt = tuple(r.number for r in ready if not r.conflict)
-    assert decide(s) == [Drop("c1", why), Drop("c2", "its base was dropped"), Build(rebuilt, MAIN, 2)]
+    assert decide(s) == [Advance("c1"), Drop("c1", "on main", Outcome((1, 2), heads(1, 2), PASS))]
     s = snap(cand("c1", MAIN, 3), cand("c2", "c1", 1, 2), ready=ready, left=left)
-    assert decide(s) == [Drop("c2", why), Build(tuple(n for n in rebuilt if n != 3), "c1", 1)]
+    assert decide(s) == []
+
+
+def test_a_fail_blames_a_member_its_owner_took_out_by_its_files_as_built_and_ejects_nobody():
+    t = task("suite:pkg1", "pkg1/")
+    s = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), ready=prs(2, 3), flying=(pr(1),))
+    assert decide(s) == [Drop("c1", "failed: suite:pkg1", Outcome((1, 2), heads(1, 2), FAIL, (1,), MAIN)), Build((2, 3), MAIN, 2)]
+    s = snap(cand("c1", MAIN, 1, state=FAIL, failed=(t,)), ready=prs(2, 3), flying=(pr(1),))
+    assert decide(s) == [Drop("c1", "failed: suite:pkg1", Outcome((1,), heads(1), FAIL, (1,), MAIN)), Build((2, 3), MAIN, 2)]
 
 
 def test_a_pr_in_a_candidate_below_makes_the_one_above_stale():
@@ -309,7 +363,8 @@ def test_infra_that_persists_is_retried_at_every_reading_and_rings_in_the_same_w
 def test_a_lone_member_whose_check_errs_again_after_a_retry_is_rung_to_its_owner_and_waits_never_ejected(state):
     """Without `tree_ejects`, a lone member whose check errs again is never ejected: its owner is rung beside infra.  It is
     set aside behind the PRs waiting (an `infra` outcome, which batches it last and alone, and after which setting it aside
-    again at that head rings nobody), and retried when none waits.  With `tree_ejects` it is retried and infra alone is rung."""
+    again at that head rings nobody), and retried when none waits, unless it isn't marked at the head it was built at: then
+    it is set aside, and a new head is built.  With `tree_ejects` it is retried and infra alone is rung."""
     err = (task("test-file:t/test_hang.py", "t/test_hang.py"),) if state == INFRA else ()
     c = Candidate("c1", MAIN, (3,), heads(3), Verdict(state, (), err), tries=2)
     infra = Ring("c1", "c1's check failed to list" if state == LIST_FAILED else
@@ -326,6 +381,9 @@ def test_a_lone_member_whose_check_errs_again_after_a_retry_is_rung_to_its_owner
     assert decide(snap(c, ready=prs(3), history=(aside,))) == [Retry("c1"), infra]
     assert decide(snap(c, ready=prs(3, 4), history=(aside,))) == [Drop("c1", why, aside), Build((4,), MAIN, 2)]
     assert decide(snap(c, ready=prs(3, 4), tree_ejects=True)) == [Retry("c1"), infra, Build((4,), "c1", 1)]
+    moved = why.replace("merged:", "merged, which isn't marked at h3 now:")     # its owner pushed: the new head is built
+    assert decide(snap(c, ready=[pr(3, "h3b")])) == [infra, owner, Drop("c1", moved, aside), Build((3,), MAIN, 2)]
+    assert decide(snap(c, ready=())) == [infra, owner, Drop("c1", moved, aside)]
 
 
 def test_a_launch_that_outran_its_wait_is_retried_until_launch_tries_then_handled_as_any_other_infra():
@@ -702,11 +760,54 @@ def test_the_pool_leaves_out_chain_members_conflicts_and_the_ejected():
     assert decide(snap(cand("c1", MAIN, 1), ready=ready)) == [Build((2, 4), "c1", 1)]
 
 
+@pytest.mark.parametrize("wide", [frozenset(), frozenset({3, 5, 99})])
 @pytest.mark.parametrize(("lean", "first", "then"), [(1, (1, 3, 5), (2,)), (3, (1, 2, 3, 4, 5), (6,))])
-def test_a_batch_holds_at_most_lean_lean_prs_and_the_next_waits_for_a_later_batch(lean, first, then):
+def test_a_batch_holds_at_most_lean_lean_prs_and_the_next_waits_for_a_later_batch(lean, first, then, wide):
+    """With no wide PR (`Snapshot.wide` empty, as a missing or empty `--wide-file` reads, or naming only PRs the cap doesn't
+    count or that aren't ready) the cap alone makes every batch."""
     ready = [pr(1, lean=True), pr(2, lean=True), pr(3), pr(4, lean=True), pr(5), pr(6, lean=True)]
-    assert decide(snap(ready=ready, lean=lean, batch=5)) == [Build(first, MAIN, 2)]
-    assert decide(snap(cand("q1", MAIN, *first), ready=ready, lean=lean, batch=5)) == [Build(then, "q1", 1)]
+    assert decide(snap(ready=ready, lean=lean, batch=5, wide=wide)) == [Build(first, MAIN, 2)]
+    assert decide(snap(cand("q1", MAIN, *first), ready=ready, lean=lean, batch=5, wide=wide)) == [Build(then, "q1", 1)]
+
+
+def test_a_batch_taking_a_wide_pr_takes_no_other_lean_pr_and_prs_with_no_lean_change_still_go_with_it():
+    """A: a wide PR (`Snapshot.wide`, one the `lean` cap counts) fills that cap.  A batch taking it takes no other PR the cap
+    counts, and one that took such a PR first leaves the wide one for a later batch; PRs with no Lean change go either way."""
+    ready = [pr(1, lean=True), pr(2), pr(3, lean=True), pr(4), pr(5, lean=True)]
+    assert decide(snap(ready=ready, lean=3, batch=5, wide={1})) == [Build((1, 2, 4), MAIN, 2)]
+    assert decide(snap(ready=ready, lean=3, batch=5, wide={3})) == [Build((1, 2, 4, 5), MAIN, 2)]
+    assert decide(snap(cand("q1", MAIN, 1, 2, 4, 5), ready=ready, lean=3, batch=5, wide={3})) == [Build((3,), "q1", 1)]
+
+
+def test_a_batch_on_a_candidate_holding_a_wide_pr_takes_no_lean_pr_and_prs_with_no_lean_change_still_go():
+    """B: while a candidate on main's chain holds a wide PR, a batch built on it, or on a candidate above it, takes no PR the
+    `lean` cap counts, wide or not, and takes those with no Lean change as ever; with only Lean PRs waiting, none is built.
+    A candidate holding Lean PRs none of which is wide keeps nothing out: a wide PR goes on it, filling its batch's cap."""
+    ready = [pr(1, lean=True), pr(2, lean=True), pr(3), pr(4, lean=True), pr(5), pr(6)]
+    assert decide(snap(cand("q1", MAIN, 1), ready=ready, lean=3, depth=3, wide={1, 4})) == [Build((3, 5, 6), "q1", 2)]
+    assert decide(snap(cand("q1", MAIN, 1), cand("q2", "q1", 3), ready=ready, lean=3, depth=3, wide={1})) == [
+        Build((5, 6), "q2", 1)]
+    assert decide(snap(cand("q1", MAIN, 1, 3, 5, 6), ready=ready, lean=3, wide={1})) == []
+    assert decide(snap(cand("q1", MAIN, 2), ready=ready, lean=3, depth=3, wide={1})) == [Build((1, 3, 5, 6), "q1", 2)]
+
+
+def test_once_the_wide_pr_is_on_main_a_batch_takes_lean_prs_again():
+    """B lifts once the wide PR is on `main`: in the tick that advances `main` to its candidate, the batch built on the chain's
+    top takes Lean PRs again, as it does once `main` holds that candidate."""
+    ready = [pr(1, lean=True), pr(2, lean=True), pr(3), pr(4, lean=True)]
+    on = Drop("q1", "on main", Outcome((1,), heads(1), PASS))
+    chain = (cand("q1", MAIN, 1, state=PASS), cand("q2", "q1", 3))
+    assert decide(snap(*chain, ready=ready, lean=3, depth=3, wide={1})) == [Advance("q1"), on, Build((2, 4), "q2", 2)]
+    assert decide(snap(*chain, main="q1", ready=ready, lean=3, depth=3, wide={1})) == [on, Build((2, 4), "q2", 2)]
+
+
+def test_a_lean_pr_b_keeps_out_still_waits_behind_the_wide_pr_so_a_wide_lone_member_that_keeps_erring_is_set_aside():
+    """B keeps Lean PRs out of a batch on the wide PR's candidate, not out of the queue: they still wait behind it, so a wide
+    lone member whose check keeps erring goes behind them, as behind any PR waiting, and they are built on `main`."""
+    err = (Failed("node", "key:node", frozenset({"tools/runner.py"})),)
+    acts = decide(snap(cand("q1", MAIN, 1, state=INFRA, infra=err, tries=2), ready=[pr(1, lean=True), pr(2, lean=True)],
+                       lean=3, wide={1}))
+    assert kinds(acts) == [Ring, Ring, Drop, Build] and acts[2].outcome.state == INFRA and acts[3] == Build((2,), MAIN, 2)
 
 
 def test_a_failed_batch_of_six_with_no_culprit_comes_back_as_threes_then_ones():
@@ -1071,14 +1172,15 @@ class World:
     `tree` too, as graph2 marks them.  In a
     red world `main` fails one or two red tasks in every tree without their fix, a good PR, at a key each PR touching their inputs
     changes (some good PRs touch them, the same tests failing); a red task whose failing tests graph2 doesn't report is
-    inherited at its key alone, and no good PR but its fix touches it.  PRs arrive, push, conflict and are unmarked for a while;
+    inherited at its key alone, and no good PR but its fix touches it.  PRs arrive, push, conflict, are unmarked by their
+    owners for a while (a candidate in flight lands them as built) and are held by a reviewer for a while (`Snapshot.pulled`);
     graph2 answers late, sends the cached inherited failures before the rest, flakes on a first run, errs on a first
     enqueue, errs or fails to list at every enqueue until infra, rung, reruns the check, or wedges until retried; someone
     else moves `main`, the loop stops a tick early, and a merged PR stays marked for a while; `step` checks every invariant
     on the way."""
 
     def __init__(self, seed: int, red: bool | None = None, bad: bool = True,
-                 policy: Callable[[Snapshot], list] = decide):
+                 policy: Callable[[Snapshot], list] = decide, wide: bool = False):
         self.seed, self.policy, self.tree_ejects = seed, policy, seed % 2 == 0
         rng = self.rng = random.Random(seed)
         numbers = sorted(rng.sample(range(10, 90), rng.randint(3, 12)))
@@ -1104,6 +1206,8 @@ class World:
                     files[m].add(f"red{i}/break{m}.py")
         self.marks = {m: Ready(m, f"h{m}", frozenset(files[m]), rng.random() < 0.25, rng.randint(0, 4), rng.random() < 0.1)
                       for m in numbers}
+        # the wide file: about half the Lean PRs, and now and then a PR with no Lean change, which isn't wide
+        self.wide = frozenset(m for m in numbers if rng.random() < (0.5 if self.marks[m].lean else 0.05)) if wide else frozenset()
         self.arrive = {m: rng.randint(0, 6) for m in numbers}
         self.lag = rng.choice((0, 1, None))           # ticks a merged PR stays marked; None: for good
         self.pushes: dict[int, list[int]] = {}
@@ -1115,6 +1219,7 @@ class World:
         self.unmarks = {rng.randint(1, 30): (rng.choice(numbers), rng.randint(1, 6)) for _ in range(rng.randint(0, 2))}
         self.elsewhere = set() if self.lag is None else {rng.randint(2, 40) for _ in range(rng.randint(0, 2))}
         self.crashes = rng.randint(0, 4)
+        self.holds = {rng.randint(1, 30): (rng.choice(numbers), rng.randint(1, 6)) for _ in range(rng.randint(0, 2))}
         self.main, self.tick, self.made = MAIN, 0, 0
         self.cands: dict[str, Candidate] = {}
         self.tree: dict[str, frozenset[int]] = {MAIN: frozenset()}
@@ -1125,6 +1230,8 @@ class World:
         self.merged: dict[int, int] = {}              # number -> the tick it reached main
         self.ejected: set[int] = set()
         self.unmarked: dict[int, int] = {}            # number -> the tick it is marked again
+        self.held: dict[int, int] = {}                # number -> the tick a reviewer's hold on it is lifted
+        self.landed: set[tuple[int, str]] = set()     # (number, head) that reached main
         self.rung: set[tuple[str, str]] = set()
         self.owned: set[tuple[int, str]] = set()      # (number, head) whose owner was rung
         self.again: set[tuple[str, str]] = set()      # rung by a tick that stopped before its outcome was recorded
@@ -1132,13 +1239,18 @@ class World:
 
     def ready(self) -> tuple[Ready, ...]:
         return tuple(r for m, r in self.marks.items() if self.arrive[m] <= self.tick and m not in self.ejected
-                     and m not in self.unmarked and (m not in self.merged or self.lag is None or self.tick < self.merged[m] + self.lag))
+                     and m not in self.unmarked and m not in self.held
+                     and (m not in self.merged or self.lag is None or self.tick < self.merged[m] + self.lag))
 
     def snapshot(self) -> Snapshot:
         cands = list(self.cands.values())
         self.rng.shuffle(cands)
-        return Snapshot(self.main, self.ready(), tuple(cands), tuple(self.history), self.batch, self.depth, self.rings, self.lean,
-                        self.tick * TICK_S, PENDING_S, self.tree_ejects)
+        ready = self.ready()
+        at = {(r.number, r.head) for r in ready}
+        flying = {(m, h): replace(self.marks[m], head=h) for c in cands for m, h in zip(c.members, c.heads) if (m, h) not in at}
+        return Snapshot(self.main, ready, tuple(cands), tuple(self.history), self.batch, self.depth, self.rings, self.lean,
+                        self.tick * TICK_S, PENDING_S, self.tree_ejects, wide=self.wide, pulled=frozenset(self.held),
+                        flying=tuple(flying.values()))
 
     def done(self) -> bool:
         if self.tree_ejects:
@@ -1228,6 +1340,11 @@ class World:
             if m not in self.merged and m not in self.ejected:
                 self.unmarked[m] = self.tick + back
         self.unmarked = {m: t for m, t in self.unmarked.items() if t > self.tick}
+        if self.tick in self.holds:
+            m, back = self.holds[self.tick]
+            if m not in self.merged and m not in self.ejected:
+                self.held[m] = self.tick + back
+        self.held = {m: t for m, t in self.held.items() if t > self.tick}
         for sha, c in self.cands.items():
             v = c.verdict
             if (v.state == PENDING or v.state == FAIL and not v.ended) and self.due[sha] is not None and self.due[sha] <= self.tick:
@@ -1260,12 +1377,15 @@ class World:
         where = f"seed {self.seed} tick {self.tick}: {acts}"
         by = {c.sha: c for c in s.candidates}
         ready = {r.number: r for r in s.ready}
+        built = {**ready, **{r.number: r for r in s.flying}}
         decided = {a.sha for a in acts if isinstance(a, Drop) and a.outcome is not None}
         for a in acts:
             if isinstance(a, Advance):
                 c = by[a.sha]
                 assert c.base == s.main and reads(c.verdict) == PASS, where
-                assert all(m in ready and ready[m].head == h for m, h in zip(c.members, c.heads)), where
+                assert all(self.marks[m].head.startswith(h) for m, h in zip(c.members, c.heads)), where
+                assert not set(c.members) & s.pulled, f"{where}: a PR a reviewer holds lands"
+                self.seen["landed as built"] += not all(m in ready and ready[m].head == h for m, h in zip(c.members, c.heads))
                 self.seen["advanced on a red main"] += bool(self.reds(s.main))
                 self.seen["inherited by tests"] += any(f.key != f.base_key for f in c.verdict.failed)
                 self.seen["inherited at its key alone"] += any(not f.tests for f in c.verdict.failed)
@@ -1283,8 +1403,18 @@ class World:
             elif isinstance(a, Build):
                 assert 1 <= len(a.members) <= s.batch and sum(ready[m].lean for m in a.members) <= s.lean, where
                 assert not any(ready[m].conflict for m in a.members), where
+                leans, below = [m for m in a.members if ready[m].lean], self.below(s, acts, a.base)
+                wide = [m for m in leans if m in s.wide]
+                assert not wide or len(leans) == 1, f"{where}: a wide PR built with another Lean PR"
+                assert not leans or not [m for m in below if built[m].lean and m in s.wide], (
+                    f"{where}: a Lean PR built on a wide PR in flight")
                 self.seen["a lean PR built"] += any(ready[m].lean for m in a.members)
                 self.seen["two lean PRs built together"] += sum(ready[m].lean for m in a.members) > 1
+                self.seen["a wide PR built"] += bool(wide)
+                self.seen["a wide PR built with a PR with no Lean change"] += bool(wide) and len(a.members) > 1
+                self.seen["built on a wide PR in flight"] += any(built[m].lean and m in s.wide for m in below)
+                self.seen["a PR the wide file names with no Lean change built"] += any(
+                    m in s.wide and not ready[m].lean for m in a.members)
                 self.seen["built on a red main"] += bool(self.reds(s.main))
             elif isinstance(a, Drop) and a.outcome is not None and a.outcome.state == FAIL:
                 c = by[a.sha]
@@ -1312,15 +1442,17 @@ class World:
                 c = by[a.sha]
                 own = [f for f in c.verdict.failed if not inherits(f)]
                 assert len(c.members) == 1 and not c.reruns and own and a.keys == tuple(f.key for f in own), where
-                assert not any(meets(ready[c.members[0]].files, f.inputs) for f in own), where
+                assert not any(meets(self.marks[c.members[0]].files, f.inputs) for f in own), where
                 self.seen["rerun"] += 1
             elif isinstance(a, Ring):
                 assert a.pr is None or (not s.tree_ejects and by[a.sha].members == (a.pr,)), where
                 self.seen["rung late" if "still pending" in a.why else "an owner rung" if a.pr else "rung"] += 1
+            elif isinstance(a, Drop) and a.outcome is None and "isn't taken now" in a.why:
+                assert set(by[a.sha].members) & s.pulled, where
+                self.seen["dropped for a reviewer's hold"] += 1
         for c in by.values():
-            fresh = all(m in ready and ready[m].head == h for m, h in zip(c.members, c.heads))
             stale = any(isinstance(a, Drop) and a.sha == c.sha and a.outcome is None for a in acts)
-            if c.base != s.main or not fresh or stale:
+            if c.base != s.main or set(c.members) & s.pulled or stale:
                 continue
             if reads(c.verdict) == INFRA:
                 tree = s.tree_ejects and any(f.tree for f in c.verdict.infra)
@@ -1331,7 +1463,7 @@ class World:
                 self.seen["a tree error retried"] += not s.tree_ejects and any(f.tree for f in c.verdict.infra) and not persists
                 assert (Retry(c.sha) in acts) == (not bisect and not aside) and (c.sha in decided) == (bisect or aside), where
                 assert (not aside or lone) and Advance(c.sha) not in acts, where
-                assert tree or not any(isinstance(a, Eject) for a in acts), where
+                assert tree or not any(isinstance(a, Eject) and a.number in c.members for a in acts), where
                 told = lone and any(o.state == INFRA and (c.members[0], c.heads[0]) in zip(o.members, o.heads) for o in s.history)
                 rung = any(isinstance(a, Ring) and a.sha == c.sha and a.pr is None for a in acts)
                 assert rung == (not tree and c.tries >= min(s.rings, 2) and not (aside and told)), where
@@ -1350,6 +1482,15 @@ class World:
             pool = [r for r in s.ready if not r.conflict and r.number not in self.merged]
             assert [a.base for a in acts if isinstance(a, Build)] == ([moved] if pool else []), where
 
+    def below(self, s: Snapshot, acts: list, sha: str) -> set[int]:
+        """The members of the candidates a build on ``sha`` sits on that aren't on `main`: down main's chain to `main`, or to
+        the candidate ``acts`` advances it to."""
+        by, advanced, out = {c.sha: c for c in s.candidates}, {a.sha for a in acts if isinstance(a, Advance)}, set()
+        while sha in by and sha != s.main and sha not in advanced:
+            out |= set(by[sha].members)
+            sha = by[sha].base
+        return out
+
     def apply(self, a) -> None:
         where = f"seed {self.seed} tick {self.tick}: {a}"
         rng = self.rng
@@ -1366,12 +1507,13 @@ class World:
         elif isinstance(a, Advance):
             c = self.cands[a.sha]
             assert c.base == self.main and reads(c.verdict) == PASS, where
-            assert not set(c.members) & set(self.merged), f"{where}: a PR reaches main twice"
+            assert not set(zip(c.members, c.heads)) & self.landed, f"{where}: a PR reaches main twice at one head"
             assert not set(c.members) & (set(self.bad) | set(self.erring)), f"{where}: a bad PR reaches main"
             assert self.reds(a.sha) <= self.reds(self.main), f"{where}: main advances to a new failure"
             self.seen["a fix cleared a red"] += self.reds(a.sha) < self.reds(self.main)
             self.main = a.sha
             self.merged |= dict.fromkeys(c.members, self.tick)
+            self.landed |= set(zip(c.members, c.heads))
         elif isinstance(a, Drop):
             del self.cands[a.sha]
             if a.outcome is not None:
@@ -1409,14 +1551,15 @@ def ticks(w: World) -> int:
     """The ticks within which a scenario settles: every good PR on main, every bad PR ejected, no candidate left (without
     `tree_ejects`, only erring PRs left, each with its owner rung).  Seeds 0 to 4999 settled within 88 ticks and 15 per PR,
     none more than 21 past 8 a PR, and with a broken main whose fixes are ranked last and late, within 72 and 10.7 per PR,
-    none more than 8 past 8 a PR."""
+    none more than 8 past 8 a PR, and with wide PRs, within 85 and 13.7 per PR, none more than 19 past 8 a PR."""
     return 40 + 8 * len(w.marks)
 
 
 def test_the_simulated_queue_keeps_every_invariant_and_settles():
     """Over every seed: main advances only to a candidate on it with no new failure (each failure inherited, nothing running,
-    no infra error), at its members' marked heads, so its reds never grow; no PR is in two live candidates or reaches main
-    twice; with `tree_ejects`, an infra error that follows the tree (`tree`) is bisected like a fail at once, and any other
+    no infra error), at heads its members were marked at (one its owner unmarked or pushed in flight lands as built) and
+    holding none a reviewer holds, so its reds never grow; no PR is in two live candidates or reaches main twice at one head;
+    with `tree_ejects`, an infra error that follows the tree (`tree`) is bisected like a fail at once, and any other
     infra or listing error is retried at every reading, rung from `rings` enqueues (2 at most), and blames nobody; without
     it, any infra or listing error, a `tree` one too, is retried, then rung and bisected from `rings` enqueues, ejecting
     nobody, and a lone member's is rung to its owner too and set aside behind the PRs waiting, else retried; a candidate
@@ -1443,7 +1586,8 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
                  "retried", "retried late", "retried while the rest ran", "rerun", "rung", "rung late", "wedged", "a red rung",
                  "infra rung and retried", "rung, and infra reran it",
                  "advanced on a red main", "built on a red main", "inherited by tests", "inherited at its key alone",
-                 "a mixed failure", "waited for the rest of a check", "a fix cleared a red"):
+                 "a mixed failure", "waited for the rest of a check", "a fix cleared a red", "landed as built",
+                 "dropped for a reviewer's hold"):
         assert seen[what], f"no seed exercised: {what}"
 
 
@@ -1465,6 +1609,33 @@ def test_a_red_main_keeps_landing_good_prs_its_reds_never_grow_and_its_fixes_cle
     for what in ("a red rung", "advanced on a red main", "a fix cleared a red", "inherited by tests",
                  "inherited at its key alone", "a PR landed before a fix"):
         assert seen[what], f"no seed exercised: {what}"
+
+
+def _settle(w: World) -> World:
+    while not w.done():
+        assert w.tick < ticks(w), f"seed {w.seed}: not settled after {ticks(w)} ticks"
+        w.step()
+    return w
+
+
+def test_the_simulated_queue_with_wide_prs_builds_none_beside_or_above_another_lean_pr_and_settles():
+    """With about half the Lean PRs wide (`Snapshot.wide`), and the file naming a PR with no Lean change now and then: every
+    invariant holds, among them that a batch taking a wide PR takes no other Lean PR (A) and that one built on a candidate
+    holding a wide PR not on `main` takes no Lean PR (B), and every scenario settles within `ticks`."""
+    seen: Counter[str] = Counter()
+    for seed in SEEDS:
+        seen.update(_settle(World(seed, wide=True)).seen)
+    for what in ("a wide PR built", "a wide PR built with a PR with no Lean change", "built on a wide PR in flight",
+                 "a PR the wide file names with no Lean change built", "two lean PRs built together"):
+        assert seen[what], f"no seed exercised: {what}"
+
+
+def test_decide_reading_no_wide_prs_builds_a_lean_pr_beside_or_above_a_wide_one_in_the_simulated_queue():
+    """The wide invariants hold `decide` to `Snapshot.wide`: handed snapshots naming no wide PR, it builds a Lean PR beside a
+    wide one or above one in flight in some seed."""
+    with pytest.raises(AssertionError, match="a wide PR built with another Lean PR|a Lean PR built on a wide PR in flight"):
+        for seed in SEEDS:
+            _settle(World(seed, wide=True, policy=lambda s: decide(replace(s, wide=frozenset()))))
 
 
 def _candidates(s: Snapshot, f: Callable[[Candidate], Candidate]) -> Snapshot:
@@ -1495,6 +1666,8 @@ MISREADS: dict[str, Callable[[Snapshot], Snapshot]] = {
         s, lambda f: f if f.base_tests is None else replace(f, base_tests=f.base_tests | f.tests)),
     "no history": lambda s: replace(s, history=()),
     "no Lean cap": lambda s: replace(s, lean=s.batch),
+    "nothing pulled": lambda s: replace(s, pulled=frozenset()),
+    "no files as built": lambda s: replace(s, flying=()),
 }
 
 
