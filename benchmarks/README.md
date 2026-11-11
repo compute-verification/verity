@@ -14,7 +14,6 @@ says. These are the directories that have one:
 
 | Command | What it runs |
 | --- | --- |
-| `verity bench bandwidth` | the bandwidth audit's GPU tagger on one GPU: each chunk's tag over the store in device memory, their leaves and root |
 | `verity bench bool_build_cost` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule, timed |
 | `verity bench circuit_properties` | the reference circuits' fan-out, fan-in and s_×, counted exactly, beside `rho`'s shape-derived ones |
 | `verity bench codec_tensor` | the tensor-core wide-word codec's gates and timings on one GPU |
@@ -24,7 +23,6 @@ says. These are the directories that have one:
 | `verity bench flock_s8_block` | Flock `--zk`'s price for proof blocks of adjacent cells of one int8 GEMM output row, on one GPU node |
 | `verity bench int8_class_rate` | one card's sustained int8 rate per operand class at the declared clock, alone and beside SHA-512 |
 | `verity bench kv_filler` | the filler top-up beside vLLM serving on one GPU, and what it costs inference |
-| `verity bench live_challenger` | the proof system's challenger on an auditor host, one session a run, its coins in a signed ledger |
 | `verity bench moe_align` | the canonical `moe_align_block_size` on one GPU: its outputs run to run, the plugin as vLLM loads it, and its cost |
 | `verity bench network_e2e` | network certification end to end on a served model, as one report with its negatives |
 | `verity bench network_sim` | the device graph's demo, and the mock datacenter of network namespaces running the real network certifier |
@@ -38,8 +36,6 @@ says. These are the directories that have one:
 | `verity bench remote_session` | PoUB's sessions: a verifier's and a prover's process over TCP, end to end |
 | `verity bench replay_determinism` | whether a served MoE window's recorded schedule, replayed, gives its served bytes, op by op |
 | `verity bench replay_ladder` | the same replay across a ladder of dense and MoE models, with the per-model status table |
-| `verity bench resource_accounting` | a chain of dependent matmuls on one GPU, natively and under each protocol, with what each run certifies |
-| `verity bench rho` | a lower bound on a training run's slowdown for every scenario, and where it falls below a target |
 | `verity bench route_capture` | what a model served like production executes, step by step, and the routes class G's Definitions don't cover |
 | `verity bench serve_tax` | what each change to serving costs vLLM's own server against stock compiled vLLM, at three loads |
 | `verity bench served_commit` | served vLLM against served vLLM with every value committed, interleaved, through `verity-bench vllm` |
