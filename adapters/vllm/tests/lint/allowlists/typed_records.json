@@ -439,7 +439,6 @@
     {"file": "verity_vllm/query/manifest/verify.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
     {"file": "verity_vllm/query/norm_scales.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/query/program_view.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
-    {"file": "verity_vllm/query/query_artifact.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-ir/query-use/v1"},
     {"file": "verity_vllm/query/required.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 8},
     {"file": "verity_vllm/query/router_softmax.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/query/scale_products.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
