@@ -222,7 +222,7 @@ __global__ void fc_unit_witness(const uint64_t* __restrict__ inputs, int in_word
 // A's row is the row's own column and bit 1 where B's is). A level's rows read only earlier levels', the input rows, the
 // constant's and their own column, so a level is one launch: a thread a row, or a warp a row where the level is narrow
 // (the lanes share the row's columns and fold by shuffles). Then every 32 rows are transposed into the units' slots, as
-// fc_unit_witness leaves them. gpu_circuit.rs `WalkRows::words` is the same walk on the host.
+// fc_unit_witness leaves them. circuit.rs `unit_walk_words` is the same walk on the host.
 #define FC_WALK_G 4
 #define FC_WALK_UNITS (64 * FC_WALK_G)
 // a level of fewer rows than this goes a warp a row
@@ -1107,52 +1107,96 @@ static void fc_zlin_transpose(const F128* df, int k_log, long long n_stripes, ui
     else chunk_zlin_transpose<<<4096, 256>>>(df, k_log, n_stripes, d_zlin);
 }
 
-// The units' slots of z, a and b by the level walk (the kernels above), FC_WALK_UNITS units a pass. Its working arrays come
-// from the session's arena, which holds only z, a and b (and a kept level 0) while the witness is built, and go back before
-// the commitment (arena_bytes.h's witness phase); they are the session's values, as z is. The rows are set 2, which
-// flock_cuda_types_share put on the device: the host's level offsets say where each level's are.
+// n_units units' slots of z, a and b by the level walk (the kernels above), FC_WALK_UNITS units a pass: the input rows and
+// the constant's, a launch a level, the transposition into the slots (unit x's at block x / per_block, slot pos0 + x %
+// per_block). d holds set 2's first four arrays and the three working arrays; own is set 2's fifth; level_off is the host's.
+// `walked` false leaves the levels out (a test's control: the slots then hold whatever the working arrays held).
+static int fc_walk_units(FcWalk d, const uint32_t* own, const uint64_t* d_in, int in_words, long long n_units, uint32_t useful,
+                         uint32_t cpos, int levels, const uint32_t* level_off, int per_block, int pos0, int unit_log, int k_log,
+                         uint32_t* z_out, uint32_t* a_out, uint32_t* b_out, bool walked = true) {
+    const unsigned long long tasks = (unsigned long long)((useful + 31) / 32) * (FC_WALK_UNITS / 32);
+    for (long long u0 = 0; u0 < n_units; u0 += FC_WALK_UNITS) {
+        const int nu = (int)std::min<long long>(FC_WALK_UNITS, n_units - u0);
+        fc_walk_seed<<<(unsigned)(2 * in_words), FC_WALK_UNITS>>>(d_in + (size_t)u0 * 2 * in_words, in_words, nu, own, d, cpos);
+        for (int L = 0; walked && L < levels; L++) {
+            const uint32_t k0 = level_off[L], n = level_off[L + 1] - k0;
+            if (!n) continue;
+            if (n < FC_WALK_WARP) fc_walk_level_warp<<<(n + 7) / 8, 256>>>(d, k0, n);
+            else fc_walk_level<<<(n + 255) / 256, 256>>>(d, k0, n);
+        }
+        fc_walk_slots<<<(unsigned)((tasks + 7) / 8), 256>>>(d, useful, u0, n_units, per_block, pos0, unit_log, k_log, z_out, a_out, b_out);
+        CK(cudaGetLastError());
+    }
+    return 0;
+}
+
+// set 2 of `gen` (the level walk's rows), which flock_cuda_types_share put on the device; false where it isn't there
+static bool fc_walk_rows(unsigned long long gen, uint32_t** wd) {
+    if (!gen || !fc_type_uploads.has(gen, 2)) return false;
+    const uint32_t* h[5] = {};
+    const size_t len[5] = {};
+    if (fc_type_uploads.get(gen, 2, h, len, 5, wd) == cudaSuccess) return true;
+    cudaGetLastError();
+    return false;
+}
+
+// The session's units by the level walk, into the witness. Its working arrays come from the session's arena, which holds
+// only z, a and b (and a kept level 0) while the witness is built, and go back before the commitment (arena_bytes.h's
+// witness phase); they are the session's values, as z is.
 static int fc_unit_walk(const FlockCircuitParams* N, int m, int k_log, F128* df, F128* d_a, F128* d_b) {
     if (N->u_n_late) { printf("FFI circuit: no level walk for a cut template's units\n"); return 213; }
-    if (!N->types_gen || !fc_type_uploads.has(N->types_gen, 2)) {
-        printf("FFI circuit: the unit's level walk without its rows on the device\n");
-        return 213;
-    }
     uint32_t* wd[5];
-    {
-        const uint32_t* h[5] = {};
-        const size_t len[5] = {};
-        CK(fc_type_uploads.get(N->types_gen, 2, h, len, 5, wd));
-    }
+    if (!fc_walk_rows(N->types_gen, wd)) { printf("FFI circuit: the unit's level walk without its rows on the device\n"); return 213; }
     const int ur = N->u_range;
-    const int ul = N->type_log[N->r_type[ur]];
     const int per_block = N->r_count[ur];
     const long long n_units = (1LL << (m - k_log)) * per_block;
-    const uint32_t useful = (uint32_t)N->u_useful;
     const size_t in_bytes = (size_t)n_units * N->u_in_words * 16, row_bytes = fc_walk_bytes(N);
     FcWalk d = {wd[0], wd[1], wd[2], wd[3], nullptr, nullptr, nullptr};
     CK(ffi_malloc(&d.z, row_bytes)); CK(ffi_malloc(&d.a, row_bytes)); CK(ffi_malloc(&d.b, row_bytes));
     uint64_t* d_in;
     CK(cudaMalloc(&d_in, in_bytes));
     CK(cudaMemcpy(d_in, N->u_inputs, in_bytes, cudaMemcpyHostToDevice));
-    const unsigned long long tasks = (unsigned long long)((useful + 31) / 32) * (FC_WALK_UNITS / 32);
-    for (long long u0 = 0; u0 < n_units; u0 += FC_WALK_UNITS) {
-        const int nu = (int)std::min<long long>(FC_WALK_UNITS, n_units - u0);
-        fc_walk_seed<<<(unsigned)(2 * N->u_in_words), FC_WALK_UNITS>>>(d_in + (size_t)u0 * 2 * N->u_in_words, N->u_in_words, nu, wd[4], d,
-                                                                       (uint32_t)N->u_const);
-        for (int L = 0; L < N->u_levels; L++) {
-            const uint32_t k0 = N->u_level_off[L], n = N->u_level_off[L + 1] - k0;
-            if (!n) continue;
-            if (n < FC_WALK_WARP) fc_walk_level_warp<<<(n + 7) / 8, 256>>>(d, k0, n);
-            else fc_walk_level<<<(n + 255) / 256, 256>>>(d, k0, n);
-        }
-        fc_walk_slots<<<(unsigned)((tasks + 7) / 8), 256>>>(d, useful, u0, n_units, per_block, N->r_pos0[ur], ul, k_log, (uint32_t*)df,
-                                                            (uint32_t*)d_a, (uint32_t*)d_b);
-        CK(cudaGetLastError());
-    }
+    if (const int e = fc_walk_units(d, wd[4], d_in, N->u_in_words, n_units, (uint32_t)N->u_useful, (uint32_t)N->u_const, N->u_levels,
+                                    N->u_level_off, per_block, N->r_pos0[ur], N->type_log[N->r_type[ur]], k_log, (uint32_t*)df,
+                                    (uint32_t*)d_a, (uint32_t*)d_b))
+        return e;
     CK(cudaStreamSynchronize(0));
     CK(ffi_free(d.b)); CK(ffi_free(d.a)); CK(ffi_free(d.z));
     CK(fc_wipe_free(d_in, in_bytes));
     return 0;
+}
+
+// The level walk alone (fc_walk_units, as fc_witness runs it) for n units of 2^unit_log rows from their input words (host
+// memory, [n][in_words] F128) into z, a and b (host memory, n << (unit_log - 7) F128 words each), with set 2 of `gen` on the
+// device: a test vector against the host's slots. The working arrays start as 0xA5 bytes, so a row read before it is written
+// shows; `walked` 0 is the control, the slots without the levels.
+extern "C" int flock_cuda_unit_walk(unsigned long long gen, const uint64_t* inputs, int in_words, long long n, int useful, int cpos,
+                                    int levels, const uint32_t* level_off, int unit_log, int walked, uint64_t* z, uint64_t* a, uint64_t* b) {
+    uint32_t* wd[5];
+    if (!fc_walk_rows(gen, wd)) return 213;
+    const size_t in_bytes = (size_t)n * in_words * 16, out_bytes = (size_t)n << (unit_log - 3), row_bytes = (size_t)useful * FC_WALK_G * 8;
+    uint64_t *d_in = nullptr, *d_rows = nullptr;
+    uint32_t* d_zab = nullptr;
+    int e = 0;
+    if (cudaMalloc(&d_in, in_bytes) != cudaSuccess || cudaMalloc(&d_rows, 3 * row_bytes) != cudaSuccess || cudaMalloc(&d_zab, 3 * out_bytes) != cudaSuccess ||
+        cudaMemcpy(d_in, inputs, in_bytes, cudaMemcpyHostToDevice) != cudaSuccess || cudaMemset(d_rows, 0xA5, 3 * row_bytes) != cudaSuccess ||
+        cudaMemset(d_zab, 0, 3 * out_bytes) != cudaSuccess)
+        e = 1;
+    if (!e) {
+        const FcWalk d = {wd[0], wd[1], wd[2], wd[3], d_rows, d_rows + row_bytes / 8, d_rows + 2 * (row_bytes / 8)};
+        e = fc_walk_units(d, wd[4], d_in, in_words, n, (uint32_t)useful, (uint32_t)cpos, levels, level_off, (int)n, 0, unit_log, unit_log,
+                          d_zab, d_zab + out_bytes / 4, d_zab + 2 * (out_bytes / 4), walked != 0);
+    }
+    uint64_t* out[3] = {z, a, b};
+    for (int k = 0; k < 3 && !e; k++)
+        if (cudaMemcpy(out[k], (const char*)d_zab + k * out_bytes, out_bytes, cudaMemcpyDeviceToHost) != cudaSuccess) e = 1;
+    if (e) cudaGetLastError();
+    // the units' values, as a session's scratch is wiped
+    if (d_rows) cudaMemset(d_rows, 0, 3 * row_bytes);
+    if (d_zab) cudaMemset(d_zab, 0, 3 * out_bytes);
+    if (d_in) cudaMemset(d_in, 0, in_bytes);
+    cudaFree(d_in); cudaFree(d_rows); cudaFree(d_zab);
+    return e;
 }
 
 static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N, int m, int k_log, long long len, F128* df, F128* d_a,

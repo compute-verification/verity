@@ -259,6 +259,8 @@ unsafe extern "C" {
     fn flock_cuda_copy(dst: *mut c_void, src: *const c_void, bytes: usize) -> i32;
     fn flock_cuda_dev_zero(p: *mut c_void, bytes: usize) -> i32;
     fn flock_cuda_types_upload(types_gen: u64, set: i32, h: *const *const u32, len: *const usize, n: usize, host: u64, key: *const u8) -> i32;
+    fn flock_cuda_unit_walk(types_gen: u64, inputs: *const u64, in_words: i32, n: i64, useful: i32, cpos: i32, levels: i32,
+                            level_off: *const u32, unit_log: i32, walked: i32, z: *mut u64, a: *mut u64, b: *mut u64) -> i32;
     fn flock_cuda_types_share(types_gen: u64, set: i32, h: *const *const u32, len: *const usize, n: usize, key: *const u8) -> i32;
     fn flock_cuda_types_held(types_gen: u64, set: i32) -> i32;
 }
@@ -406,14 +408,20 @@ pub fn deep_unit(st: &Stmt) -> bool {
 /// ([`arrays_key`]). They are as large as the unit type's CSC, so where they can't be shared no prover takes a copy of its
 /// own: the walk is off for the process, which says so once, and the host builds a deep unit as before.
 pub fn unit_walk(st: &Stmt) -> bool {
-    let unit = st.c.unit();
-    let t = types(st);
+    let levels = types(st).sched.level_off.len() - 1;
     let asked = match std::env::var("FC_UNIT_WALK").as_deref() {
-        Ok("1") => t.sched.level_off.len() - 1 >= HOST_UNIT_LEVELS,
+        Ok("1") => levels >= HOST_UNIT_LEVELS,
         Ok("2") => true,
         _ => false,
     };
-    asked && unit.order.is_none() && *t.walk.get_or_init(|| {
+    asked && walk_rows_shared(st)
+}
+
+/// Whether the device holds the unit's level walk's rows as the GPU's shared copy, put there at the first ask.
+fn walk_rows_shared(st: &Stmt) -> bool {
+    let unit = st.c.unit();
+    let t = types(st);
+    unit.order.is_none() && *t.walk.get_or_init(|| {
         let Some(rows) = WalkRows::of(unit, &t.sched) else {
             eprintln!("the unit's level walk is off: {} has no one-pass form, or is a cut unit", unit.name);
             return false;
@@ -427,6 +435,32 @@ pub fn unit_walk(st: &Stmt) -> bool {
         }
         shared
     })
+}
+
+/// The units' words as the device's level walk builds them (`flock_cuda_unit_walk`, the kernels `fc_witness` runs under
+/// [`unit_walk`]), from their input words: a test vector against the host's (`Stmt::slot_zab`). The walk's working arrays
+/// start as 0xA5 bytes; `walked` false is the control, the same slots without the levels.
+pub fn device_unit_walk(st: &Stmt, ins: &[Vec<F128>], walked: bool) -> Result<Vec<(Vec<F128>, Vec<F128>, Vec<F128>)>, String> {
+    let (unit, t) = (st.c.unit(), types(st));
+    if !walk_rows_shared(st) {
+        return Err("the unit's level walk's rows are not on the device".into());
+    }
+    let uw = 1usize << (unit.unit_log - 7);
+    let flat: Vec<u64> = ins.iter().flat_map(|w| {
+        assert_eq!(w.len(), unit.in_words, "a unit's input words");
+        w.iter().flat_map(|x| [x.lo, x.hi])
+    }).collect();
+    let (mut z, mut a, mut b) = (vec![0u64; 2 * uw * ins.len()], vec![0u64; 2 * uw * ins.len()], vec![0u64; 2 * uw * ins.len()]);
+    let rc = unsafe {
+        flock_cuda_unit_walk(t.types_gen, flat.as_ptr(), unit.in_words as i32, ins.len() as i64, unit.useful as i32, unit.const_pos as i32,
+                             (t.sched.level_off.len() - 1) as i32, t.sched.level_off.as_ptr(), unit.unit_log as i32, walked as i32,
+                             z.as_mut_ptr(), a.as_mut_ptr(), b.as_mut_ptr())
+    };
+    if rc != 0 {
+        return Err(format!("the device's level walk failed ({rc})"));
+    }
+    let slot = |v: &[u64], s: usize| v[2 * uw * s..2 * uw * (s + 1)].chunks_exact(2).map(|p| F128::new(p[0], p[1])).collect::<Vec<F128>>();
+    Ok((0..ins.len()).map(|s| (slot(&z, s), slot(&a, s), slot(&b, s))).collect())
 }
 
 /// The hm96 leaves of the digests `x` (64 bytes each) under the host's `salts` (192 bytes each) as the device finishes a tree's
