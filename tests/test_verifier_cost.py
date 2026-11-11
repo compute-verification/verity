@@ -1,6 +1,6 @@
 """A verifier costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
 
-A scan over the Lean under `verity/core/` (the verifiers and the code they run) and over `Security/`'s verifier code
+A scan over the Lean under `verity/` outside `verity/protocols/flock/prover/` (the verifiers and the code they run) and over `Security/`'s verifier code
 models (each `Security/Proofs/**/Code.lean`, a verifier a guarantee is stated at, with the `Security` modules it imports
 and the `Properties` modules those import) refuses the forms an unrolled walk takes there: locating gates one by one
 through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a range or loop bounded by a Definition's gate count
@@ -194,7 +194,7 @@ def _security_code(tracked: list[str]) -> set[str]:
 
 def _scanned() -> list[str]:
     tracked = _tracked()
-    return sorted({p for p in tracked if p.startswith("verity/core/") and p.endswith(".lean")} | _security_code(tracked))
+    return sorted({p for p in tracked if p.startswith("verity/") and not p.startswith("verity/protocols/flock/prover/") and p.endswith(".lean")} | _security_code(tracked))
 
 
 def test_no_verifier_of_record_walks_the_unrolled_circuit():
