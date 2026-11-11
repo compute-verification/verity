@@ -46,7 +46,9 @@ python tools/verity/lean/merge.py --install              once per clone: git mer
 
 The edit loop is `verity lean try FILE`: `lake env lean FILE` in the nearest Lake package above FILE, against its built
 imports, with its `[leanOptions]` as a build has them, exiting with lean's status, the axiom probe's line last. `--siblings` then imports FILE's build beside each built
-module of its package not importing it, failing on a name two declare (`siblings.py`). With `--on NODE`, through `research
+module of its package not importing it, failing on a name two declare (`siblings.py`); a module whose build, or that of
+anything it imports in a package its own requires by path, is not of its source as it is (by the hash Lake's trace
+states) is left out and counted as unchecked, so no clash it reports is with a build of another text. With `--on NODE`, through `research
 run`, it runs `lean_changed.py --try FILE` on this checkout's working tree: in a node's `build` Lean slot, on the slot tree
 `--records` keeps warm, `lake build +MODULE:deps` and then `lake env lean FILE`. Neither runs this audit or writes a record
 (`lean_changed.py`'s docstring).
