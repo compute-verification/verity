@@ -12700,7 +12700,20 @@
    "type_hash": "1c5778032c7e0e4cc9bb78d1c13a79028113581d86246dfcf2884d271e19adf7"
   },
   "Claims.SamplingGeneric.compilerKSFirstHitTwoX_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSFirstHitTwoX_nontrivial :",
+    "  Not",
+    "    (Claims.SamplingGeneric.CompiledTwo.KSFirstHitTwoX FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a9588dfd62d5d15433fe5deb35f8a5b5227a07ff0443308ce21ab65dd0835c36"
   },
   "Claims.SamplingGeneric.compilerKSReg": {
    "owner": "@proofs",
@@ -16277,7 +16290,16 @@
    "type_hash": "ac7eedcb10306cfde243f580a97a016d9c3e11b405fd8b68666bbbdf3b51cdf6"
   },
   "Flock.SecurityProofs.SpotFirstHitTwo": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SpotFirstHitTwo : Flock.Guarantees.SpotFirstHitTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["SpotFlock.Built"],
+    "open": ["SpotFlock.Addresses"],
+    "reads": []
+   },
+   "type_hash": "542bec717239108d25c9aad4002dae67c607c347ce3ddae3b51c50ae7498324f"
   },
   "Flock.SecurityProofs.SpotKSTwo": {
    "owner": "@proofs",
@@ -51410,6 +51432,18 @@
     "Claims.SamplingGeneric.SessionOpensTwo": "9b1b9bc7b9d5915277d92a99a9543464d7132f21a88708a6c121802fe0a6bda3"
    }
   },
+  "Proofs.Flock.SamplingGeneric.RegX": {
+   "digest": "947c038091ab6b24fe69830f580d1564ade2f96feba6b9e16ae6085e3f77e575",
+   "definitions": {
+    "Claims.SamplingGeneric.Compiled.OffRegX": "92116fc0b2f4fbae0bf4e75c8e07e3cef617ac277c26dde2f1185cbbf6257dba"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.SpotFirstHit": {
+   "digest": "843cdab64f48c6de10cdcdfa2f156d43b9d69a717fce8886ec0227e2711b921e",
+   "definitions": {
+    "Flock.Guarantees.SpotFirstHitTwo": "01b88cbb02a807af0640f279d5999e54e9a2ed7e7b42e50cd08004d4ae09a614"
+   }
+  },
   "Proofs.Flock.SamplingGeneric.TwoAt": {
    "digest": "d7d3fc1292784ba7e1c2b8ace73a48d5a5d278861c1d7448df875fbdf2177494",
    "definitions": {
@@ -51426,6 +51460,12 @@
     "SamplingDeploy.RegMatchesTwo": "010176ca7357f449b882b5e04a73a378932601c3e554eee932bd0096237589b3"
    }
   },
+  "Proofs.Flock.SamplingGeneric.TwoCount": {
+   "digest": "f3bf0569d7933c42b74b437ee7e66f6651116516681c83f7db1020df0dc13d1b",
+   "definitions": {
+    "Claims.Sampling.gateBlock": "385e5c761cba82de37dc1e1f09ec20d3858fe872c23d270772eb630cc6cdfa34"
+   }
+  },
   "Proofs.Flock.SamplingGeneric.TwoDeployed": {
    "digest": "d4c1c5d9a8d222fdac50a702572888bee745faa4170fccb01c3320a77963a5e3",
    "definitions": {
@@ -51433,6 +51473,19 @@
     "SamplingDeploy.Code.ReplayCap": "35191193418830bf3e43b2588c54da4b4ed1cd313c6688a7e6ff3f991b93eec6",
     "SamplingDeploy.Code.footOf": "26c847cb32d9917981de58b2addca7725aa4c51243368427e0105786cf19ced6",
     "SamplingDeploy.compiledTwo": "f769ceaeb1605ddc3667206c2eff548c9b80b07c9267ab95ad9de253a2487e4c"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoFirstHitKS": {
+   "digest": "3c25bbb5729168e53db18445ec7c38ad62b177833b102f271d1de29c1f8bba2c",
+   "definitions": {
+    "Claims.SamplingGeneric.CompiledTwo.KSFirstHitTwoX": "d529b2cf735a1013ba7158bca1e9a633047db00f4a6c4287ebbd97f2c3b01c2c",
+    "Claims.SamplingGeneric.CompiledTwo.εfirstTwoX": "496e9ebacea85bda892ca90f12e0214ecba59403bccc1e54073c82a3adabd5f7"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoReg": {
+   "digest": "3a49d11a4f278b44851269e31b54887c15d3b6f0573fdadda650c699b2b81aaa",
+   "definitions": {
+    "Claims.SamplingGeneric.CompiledTwo.OffIreg": "4f3e0597509e66bba8eba0807ecd76463893e1bdb1dabaa7ace07c6059ffa62a"
    }
   },
   "Proofs.Flock.SessionLoop.Concrete.Delta": {
