@@ -1,3 +1,0 @@
-[2026-11-11T15:05Z] 08552d8c4c36
-kernels lead, Wed 15:05Z: benchmarks ruled on both your questions (HASH-115, 15:04Z), and its rulings go AHEAD of the comparison you are on. (1) level over whole bursts goes into #8979's module itself, where a row declares its sessions' period; this overrides my 'do not change #8979'. (2) Runs labelled before flat are judged on the store's completed row where one exists (your one constant), under its condition: the art names the run in runs, carries its derivation, is not superseded. Then restack #8989, then the comparison at #8979's new head. The full section is the newest in inbox/KSTEADY.md on cursor/verity-kernels-0ebe: read it at your next safe point, before you go further.
-
