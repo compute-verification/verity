@@ -36101,3 +36101,50 @@ The bound is ε ≤ κ_s + √(n_sess·2^48)·2T/2^256.5 + 2·P·2T/2^256.5 + 2T
 **5. Independent of the sample's size** [derived]. The term is at most 2·P·2T/2^256.5 with Q ≤ P, and needs no K. With Q = K it improves to √(P·K)·2T/2^256.5 = −141.4 / −140.7 / −135.6, at SCALE's K ≤ 2^25.6 (m = 150 to 167). There, Q ≤ K holds by the verifier's own check in the clear of which leaves it accepts, so it needs no session clause.
 
 For Daniel: PAD counts each committed bit once, so at the card's sizes it gives 2^-131.6 for the 287-token request, 2^-130.2 for one 4,557-token request and 2^-120.4 for 1,843 of them, about 8 bits less if the 2^80 counts SHA-512 calls rather than compressions. It needs M drawn from at least 128 truly random bytes, and three keys leave the bound unchanged.
+
+## TWOWITNESS, Wed 11 Nov 02:02Z: `setup_X` blocked `oA` and `oB`, which `tabX`'s statement reads, so `fwd` would not unfold `tabX`; fixed in `c2c80aa752`, relaunched as `r20261111-020004-af16` on `vy-nebius-cpu-7`, ETA about 03:00Z
+
+- [run] `8ff5` built `Setup` and `SetupAt`. In `InsSetup`, `outPairs`, `oA_eq`, `oB_eq`, `shapeOk_stX` and `cO_name` passed.
+  The only failure is the `fwd_def` at 138, "fwd: no value for `tabX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello`". The
+  other two errors follow from it.
+- [read] What `fwd` lacked: no definition it may unfold, and no missing hypothesis.
+  - `Ins.setup` destructures `let (spec, sts) ← r.setup`. Rule `hS` gives `.ok (tabX …)`, so the `match` asks `evalVal`
+    for `tabX …`'s value.
+  - `evalVal` unfolds a definition by kernel `whnf` only when nothing it reaches is blocked (`exprTainted`).
+  - `setup_X` copied `setup_stX`'s block list, which blocks `oA` and `oB`. The statement inside `tabX`'s body keeps its Δ
+    arrays folded as `oA (cO …) pin` and `oB …` (`shapeOk_stX`'s `hda` is `rfl`). So `tabX` was tainted, and no step
+    gave it a value.
+  - Concrete's `setup_W` blocks neither `dA` nor `dB`, which is why the same `match` passed there.
+- [run] The fix, `c2c80aa752` on `cursor/proofs-twowitness-0d28`:
+  - `hS` gives the setup as its pair, `.ok ((tabX …).1, (tabX …).2)`. The `match` then reduces without unfolding `tabX`,
+    and `projStep` reads its fields one level down whether or not they are blocked.
+  - The block list is now `setup_W`'s plus the hidden setup's drivers (`HmIn.loadPublic`, `Stmt.setupHidden`).
+  - It no longer blocks `oA`, `oB`, `HmOut.delta`, `HmRow.delta`, `HmNets.sha512x3Net`, `HmNets.hm96Net`, `HmRow.classOf`
+    or `HmOut.parse`. `Zk.shapeOk` stays blocked, so `shapeOk_stX` still decides the shape.
+  - `setupOf_x` is unchanged. It passes `setup_x`'s `.ok (tabAt r)`, which matches the pair by eta [guess].
+- [run] The two `ring` messages are `info:` lines ("Try this: ring_nf"), and both modules built:
+  `Proofs/Flock/Level3/Nodes.lean:330:6` and `Proofs/Flock/Soundness/Soundness.lean:67:2`.
+  - Neither file differs from `origin/main`, and no commit of mine touches them. `bb99`'s log on cpu-3 has the same two
+    lines. They are on the base, not mine.
+- [run] The relaunch is `r20261111-020004-af16`, on `vy-nebius-cpu-7`'s research pool with `--cwd source`.
+  - I named cpu-7 instead of `--on auto`, because `auto` doesn't look at Lean slots, and cpu-7's `build-5` was the one tree
+    warm for this branch.
+  - `lean_slot.py` takes the first free slot, though, and the run got `build-3`, where 659 files changed. At 02:01Z it was
+    at module 9,854 of 11,004.
+- [guess] ETA about 03:00Z, as `8ff5`'s rebuild on cpu-7 took 55 min. Allow until 03:10Z.
+- [run] The branch's head is `c2c80aa752`.
+- [guess] (A) still holds for Thu 12 Nov 18:00Z. A further stop costs about an hour while the trees are cold, and about 39
+  hours remain.
+
+**What is left after this stop:**
+- [read] In `InsSetup`, the rest of the `setup_X` walk through `Ins.setup` is untried. Where it could stop:
+  - `Registered.namesOnce` and `Registered.check` on `cO` and the drawn public (the header's `registered`, the unit
+    indices, each port's rows against its registered root);
+  - `Registered.checkFull` on `drawJ`;
+  - `RecSetup.checks` with no inner shape;
+  - `RecCoins.check` and `RecVStar.checkPubRows`, which return early at `copy16`;
+  - `ProvedScope.drawLaw`.
+- [read] Then `setupOf_x`, and `Scope.lean`'s `scopeCheck_x`, `zkOk_x`, `templateOk_x`, `stmtOf_x` and `sessionOk_x`.
+- [read] The rest of what my 00:31Z entry lists is unchanged: the try's command and the pre-launch scan; after (A), the
+  `trace`, the records run, `--siblings` and the lock entries; (D) by Fri 13 Nov 12:00Z; and the `SpotKSTwo`/`SpotExfilTwo`
+  why and `Ref.scope`.
