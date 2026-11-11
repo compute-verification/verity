@@ -39404,3 +39404,53 @@ the quick tier `5ab4` (#8539) are running; nothing has failed.
 
 **ci's crossed parents are on their branches** `[read]`: #8354 at `5591b15e3b35` and #8523 at `b61bbcfd88aa`. I started the
 dry crossings of #8368 and #8553 over them at 05:22Z. My five heads were not touched by ci's push.
+
+## CROSS, Wed 11 Nov 05:35Z: #8368 and #8553 are crossed over ci's parents and pushed; the unmarked heads' dry table; a second records run for #8512, whose first sits on a cold node
+
+### The stack children, over ci's crossed parents `[run]`
+
+ci's crossed #8354 (`5591b15e3b35`) and #8523 (`b61bbcfd88aa`) were on their branches at 05:21Z. Each child went through
+the two-command recipe with the parent's own `Restack-move:` commits (#8354's `a909bd95d1af` and `e218cd3ac88d`; #8523's
+`b460700593ca` and `1d4f7a0bb2a7`). Both commands printed `clean` for both. Each result is a fast-forward of the old
+child, holds the parent's crossed head and `main`'s tip, and merges with `main` clean. Mailbox and branches re-read before
+each push; no force.
+
+| PR | branch | old head | pushed head | own change over the parent, old to crossed | lock count | records run | quick tier |
+|---|---|---|---|---|---|---|---|
+| #8368 | `cursor/proofs-twoverify-3e16` | `533958045e8e` | `a92cff4f56a646eca94dd2c989a4e68412c59cf0` (05:29Z) | 2 files +240 −0 both; both Lean files byte for byte the old ones | 4,175,579; 6; 0 | `r20261111-052916-1e61` (cpu-11) | `r20261111-052958-cd1f` (cpu-3) |
+| #8553 | `cursor/proofs-hidden-zk-jobsh-vfb` | `191d6f1b76a6` | `650593be39af763bcc46fad70307f80144f8ae6c` (05:33Z) | 1 file +7 −5 both; the same added and removed lines | 4,175,579; 6; 0 | none: no Lean, no lock, against the parent or against `main` | `r20261111-053338-8e00` (cpu-7) |
+
+`pins.py --stale` exits 0 at both.
+
+### #8512's records run `[run]`
+
+`r20261111-041418-c513` landed on cpu-5, which kept no Lean dependencies for this tree: its log has stood at
+`its dependencies are fetched cold, once for this tree` since 04:18Z, and its slot ends it at 06:18Z (`--run-max 7200`).
+The other three records runs finished `security` in 64 to 66 minutes on warm nodes. So I launched a second one at the same
+head, `r20261111-053233-79af`, on cpu-7 (where #8527's is finishing on nearly the same tree), with the usual 180-minute
+limit. Whichever passes first is the one I name; `c513` is left to end by itself.
+
+- `b16d` (#8527) and `57e5` (#8539): `security: check.py exit 0` (3937 s, 3819 s); each is now on `security/Properties`.
+- `5ab4` (#8539's quick tier) passed: `68 suites: 68 passed (0 cached), 0 failed`, `repository 280 passed`.
+
+### Unmarked heads, dry only, nothing pushed `[run]`
+
+Top's recipe at 05:03Z to 05:21Z against `main` `5c095bb4ab70`. These ids are this VM's and replace the ones in my 04:25Z
+and 04:27Z entries.
+
+| PR | branch | head | `restack.py` printed | own change, old to crossed | lock count |
+|---|---|---|---|---|---|
+| #8120 | `cursor/proofs-verifyfast-a-inplace-3d1c` | `b6e0c1dc5de8` | `clean b9b5eb9497b2  [plain merge clean; crossed 2 moves]` | 3 files +467 −2, to 3 files +461 −0 | 4,175,579; 6; 0 |
+| #8177 | `cursor/proofs-popok-ranges-2ce2` | `6dd74f50be00` | `clean 5184bdf6f3be  [plain merge clean; crossed 2 moves]` | 1 file +156 −0 both | 4,175,579; 6; 0 |
+| #8363 | `cursor/proofs-twoinstance-2a66` | `a81a1b11ea1d` | `clean 05901cca22b9  [plain merge conflicted (9); crossed 2 moves]` | 10 files +2709 −0 both | 4,175,579; 6; 0 |
+| #8543 | `cursor/proofs-regpin-3e7a` | `2007687fd9b8` | `clean bd17e76c21b3  [plain merge conflicted (1); crossed 2 moves]` | 10 files +434 −44, to 10 files +456 −66 (the lock's lines in another order, as #8406's) | 4,176,448; 6; 0 |
+| #8563 | `cursor/proofs-seg-supplied-read-7d2e` | `80bc72a80541` | `clean 6eceae8fde9f  [plain merge clean; crossed 2 moves]` | 2 files +82 −8 crossed; the old head holds much that `main` has since landed | 4,175,579; 6; 0 |
+| #8578 | `cursor/proofs-zkhide-c1b8` | `0a713e7caaf6` | `clean d70d0ed7958f  [plain merge clean; crossed 2 moves]` | 3 files +98 −20 both | 4,175,579; 6; 0 |
+| #8767 | `cursor/proofs-composition-test-time-cf05` | `d6cf59bccf21` | `clean 7b5f24150493  [plain merge clean; crossed 2 moves]` | 8 files +145 −31 both | 4,175,579; 6; 0 |
+| #8771 | `cursor/proofs-served-tmpl-dc5f` | `0a0e98be69e1` | `clean 6e0763357ab4  [plain merge clean; crossed 2 moves]` | 13 files +313 −86 both | 4,175,579; 6; 0 |
+| #8438 | `cursor/proofs-slotrows-fbf8` | `e04dd44e6ccd` | `conflicted at base (3)  [plain merge conflicted (4)]`: `benchmarks/one_stage/compose_circuit.py`, `integrations/vllm/tests/pipeline/test_serving_rows_splits.py`, `integrations/vllm/verity_vllm/pipeline/chunk_rows.py` | none: left alone | none |
+| #8462 | `cursor/proofs-accountd-5094` | `6f4ffa9e7a6a` | `conflicted at base (3)  [plain merge conflicted (10)]`: `benchmarks/spot_figures/README.md`, `cards.py`, `tests/test_cards.py` | none: left alone | none |
+
+- None of the eight clean ones changes a `TRUSTED.sha256`, so none needs the pins step `[read]`.
+- A dry result's id lives only on this VM. Whoever pushes one runs the recipe again and pushes that run's id.
+- "Plain merge clean" is not "safe to merge plainly": #8454's and #8568's were clean and kept dead imports.
