@@ -4,7 +4,8 @@
 are CPU ones and the ops are stand-ins set on `torch.ops` (vLLM is not installed where the CPU suites run, and the router's and the
 norm's taps are CUDA builds), so what is held here is the wiring: a launch commits only from inside a manifest site during a committed
 step, a site that raises leaves no site marked, and `uninstall` puts back the op and leaves no hook on a module and no entry in
-`engine.hooks.live()`.  The values themselves are the sources' own tests' and the GPU properties'."""
+`engine.hooks.live()`.  The values themselves are the sources' own tests' and the GPU properties'.  Last, the forward pre-hooks of
+`verity_vllm.acquire.sources.call_boundary_source`, which replaces no op: installed on its bodies' modules, gone when uninstalled."""
 from __future__ import annotations
 
 import hashlib
@@ -21,6 +22,8 @@ from verity_vllm.acquire.norm_tap_src.build_ext import NAME as NORM_TAP_NS
 from verity_vllm.acquire.norm_tap_src.build_ext import TAP_VERSION as NORM_TAP_VERSION
 from verity_vllm.acquire.router_tap_src.build_ext import NAME as TAP_NS
 from verity_vllm.acquire.router_tap_src.build_ext import TAP_VERSION
+from verity_vllm.acquire.sources import call_boundary_plan as CBP
+from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import norm_scale_source as N
 from verity_vllm.acquire.sources import router_softmax_source as R
 from verity_vllm.acquire.sources import scale_products_source as S
@@ -399,3 +402,27 @@ def test_a_source_of_no_fused_norm_loads_no_build(norm):
     src = N.NormScaleSource(Recorder(), _two_modules(_fused_norm, "norm"), {"norm": "RsqrtF32_v1"}, norm.so)
     assert src.kinds == ["aten"] and norm.loaded == [] and src.ns is None
     assert src.stats["so"] == norm.so and src.stats["so_sha256"] is None
+
+
+# --- the call boundaries: forward pre-hooks alone ------------------------------------------------------------------------------------------
+
+def _plan(module: str) -> CBP.Plan:
+    """A plan whose one body is `module`'s at engine step 0; the hooks' wiring reads no more of it."""
+    return CBP.Plan(bodies={(0, module): CBP.Body(module=module, engine_step=0, parts=())})
+
+
+def test_the_call_boundary_source_installed_hooks_its_bodies_modules_and_uninstalled_leaves_none():
+    com, model = Recorder(), _two_modules(lambda *a, **kw: None, "site")
+    src = CB.CallBoundarySource(com, model, _plan("site"))
+    src.install()
+    assert src.active and src.modules == ["site"] and len(model.site._forward_pre_hooks) == 1 and _hooked(model.other) == 0
+    model.site(torch.zeros(1), hidden=torch.zeros(1))           # no committed step: the hook, which takes keywords, leaves the call alone
+    assert com.acquired == [] and com.errors == []
+    src.uninstall()
+    assert not src.active and _hooked(model.site) == 0
+    gone = CB.CallBoundarySource(com, model, _plan("gone"))
+    with pytest.raises(RuntimeError, match=r"not modules of the model: \['gone'\]"):
+        gone.install()
+    assert not gone.active and _hooked(model.site) == 0
+    with pytest.raises(ValueError, match="no module body to evaluate"):
+        CB.CallBoundarySource(com, model, CBP.Plan())
