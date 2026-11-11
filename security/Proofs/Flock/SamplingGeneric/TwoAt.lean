@@ -158,20 +158,9 @@ theorem sessionsTwo_atOrder (iroots : Msg → Seen → ℕ → List Msg) (cap : 
 
 /-! ## A second stage of several rounds -/
 
-/-- **The round order with a second stage of `R` rounds**: the second stage reads the coins of the `R` rounds up to
-`second`, each after the first stage's coin. -/
-structure StageOrder (k R : ℕ) extends Order k where
-  fits : first.val + R ≤ second.val
-
-/-- **A round order is a stage order of one round.** -/
-def Order.stage {k : ℕ} (o : Order k) : StageOrder k 1 := ⟨o, by have := Fin.lt_def.1 o.lt; omega⟩
-
 namespace StageOrder
 
 variable {k R : ℕ} (o : StageOrder k R)
-
-/-- The second stage's `i`-th round, in the run's order; its last is `second`. -/
-def round (i : Fin R) : Fin k := ⟨o.second.val - (R - 1 - i.val), lt_of_le_of_lt (Nat.sub_le _ _) o.second.isLt⟩
 
 theorem round_injective : Function.Injective o.round := by
   intro a b h
@@ -193,10 +182,6 @@ theorem round_le_second (i : Fin R) : o.round i ≤ o.second := by
 
 end StageOrder
 
-/-- A stage order's round order: the first stage's coin and the second stage's last. -/
-abbrev orderOf {c : Code} {R : Msg → ℕ} (j : (x : Msg) → StageOrder (c.V.k x) (R x)) (x : Msg) : Order (c.V.k x) :=
-  (j x).toOrder
-
 /-- **A stage's bytes are uniform** (`UniformRandomBytes`, A3): at every statement `x`, the bytes `b x` returns on the
 `R x` uniform coins of the stage's rounds. -/
 def StageUniform (R L : Msg → ℕ) (b : (x : Msg) → (Fin (R x) → FlockDeploy.Coin) → Fin (L x) → Fin 256) : Prop :=
@@ -212,15 +197,6 @@ section Stage
 
 variable (R : Msg → ℕ) (s : (x : Msg) → StageOrder (c.V.k x) (R x))
   (bs : (x : Msg) → (Fin (R x) → FlockDeploy.Coin) → Fin (L₂ x) → Fin 256)
-
-/-- The second stage's bytes: `bs x` on the coins of the second stage's rounds. -/
-def bytesStage : (x : Msg) → (Fin ((c.atOrder (orderOf s)).V.k x) → FlockDeploy.Coin) → Fin (L₂ x) → Fin 256 :=
-  fun x r => bs x fun i => r ((s x).round i)
-
-/-- **The two-stage sampled verifier's code at a stage order**: `codeTwo` at the stage order's round order, its second
-stage's bytes read off the coins of the second stage's rounds. -/
-abbrev codeTwoStage : Code :=
-  codeTwo (c.atOrder (orderOf s)) reg L₁ L₂ (bytesFirst c L₁ (orderOf s) b₁) (bytesStage c L₂ R s bs)
 
 /-- **The code at its round order is the code at a stage order of one round.** -/
 theorem codeTwoAt_eq_stage :
