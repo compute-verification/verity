@@ -2756,7 +2756,6 @@
     {"file": "security/Properties/Verity/Soundness.lean", "count": 4},
     {"file": "security/Properties/lakefile.toml", "count": 35},
     {"file": "security/README.md", "count": 103},
-    {"file": "benchmarks/README.md", "count": 3},
     {"file": "benchmarks/bandwidth/README.md", "count": 1},
     {"file": "benchmarks/bandwidth/run_chip.sh", "count": 1},
     {"file": "benchmarks/bandwidth/run_write_gpu.sh", "count": 1},

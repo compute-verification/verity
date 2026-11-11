@@ -25,7 +25,7 @@ stages the ``--units`` chunks, or the combine, of a synthetic logits row of V (`
 `TokenSelect_v1{V}` on the whole row and each staged output to its word Definition's.
 
 A structural statement proved with ``--bin`` takes ``--tmpl-unit-bin``: flock-tmpl-unit places its unit's rows for the prover
-(`a11.templated`), and Lean verifies it as the templated statement.  Proved on the default rows, the unit is bound to a
+(`a0.templated`), and Lean verifies it as the templated statement.  Proved on the default rows, the unit is bound to a
 population Program of its one Definition at ``--n`` instances and that Program's partition (`partition.mixed_population_program`,
 as `verifier_cost/flock_served.py` binds a served kind), which Lean's verify reads (``--program``, ``--partition``); without a
 Program it refuses every session once its checks pass.
@@ -563,12 +563,7 @@ def main() -> int:
     if calls is False:
         return 1
     pin = st.pin
-    if a.structural:
-        from a11 import templated
-
-        form = templated(st, d, a.tmpl_unit_bin)
-    else:
-        form = {}
+    form = a0.templated(st, d, a.tmpl_unit_bin) if a.structural else {}
     del st, got
     say("released", rss_now_gb=release())
 
