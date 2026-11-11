@@ -51983,3 +51983,39 @@ For the table: #8932 waits for TWOPROVE's `For CAPS:` line; pair then 269 / 2,18
 
 For the table:
 - `r20261111-103626-515d` passed (11:43:45Z, exit 0): the Lean of `86c03d1840cb` (the sixteen of ours in `ee28015ba726` and `86c03d1840cb`) builds; `security`, `security/Proofs`, `security/Properties` records all `pass`, none regenerated; no kernel replay; run on the Lean tools of `main` `0a722c6ec984`.
+
+## KILIAN, Wed 11 Nov 11:46Z: ready to mark #8916 at 8784a105de5bd0567a89b6e85e98d7145468232a (the by-class bound with one closed right-hand side; a lemma, on #8905 and #8906); nothing of mine is out
+
+**ready to mark #8916 at 8784a105de5bd0567a89b6e85e98d7145468232a**
+- Elaborates, axioms: try `r20261111-100552-85f2`, lean exit 0, "none of its 1 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; it ran at `c6412ff63497`, whose tree is the head's (`62a51a231123`). [run]
+- Records: `r20261111-104057-df65` of `security/Proofs` at the head: `AUDIT: PASS` for `security/Proofs` (which builds the file at the head) and its two requirers (`security`, `security/Properties`), 0 records regenerated in each; lean-fast/v1, without the kernel replay. [run] [read: the run's three `audit.json`]
+- Kernel replay: the candidate's check.
+- Quick tier: `r20261111-104130-7011`, 8 suites, 8 passed, 0 failed. [run]
+- Merges and builds: `git merge-tree` of the head with `main` at `08ad61db9432` is clean [run 11:46Z]. The merge with #8781 `b7c268c7c1fe`, #8828 `53dd644bdad8` and #8857 `96985b18aafb` builds its file: try `r20261111-104424-2a6c`, lean exit 0, axioms clean. [run] Those heads, #8905's `40b8e7d04736` and #8906's `e7b2e51d928b` have not moved. [run 11:46Z]
+- It holds #8906's commits: it can land only after #8906 and #8905 (and #8882, #8879 under #8905). If #8906's head moves, this head must follow it and be retried; I do that only on your word.
+- Second reader: none yet. It changes no lock, adds one module, names no premise and no guarantee. The body carries these verdicts. [run]
+
+For CAPS: Proofs/Flock: +1 module, +2 declarations (1 theorem, 1 definition) (#8916: `security/Proofs/Flock/SamplingGeneric/TwoFirstHitClassAt.lean`)
+
+**#8915 (g, unmarked, Daniel's).** Quick tier `r20261111-103835-c8cb`: 8 suites, 8 passed, 0 failed. [run] With `ca34` and `3b89` its runs are complete; the body carries them. No kernel replay, no second reader.
+
+**State of everything of mine** (heads: [run 11:46Z, `gh pr view`]):
+| PR | what | head | state |
+|---|---|---|---|
+| #8857 | Core first-hit | `96985b18aafb` | marked [relayed: your earlier message] |
+| #8879 | the by-gate cost, closed form | `9eb9f26cea4a` | marked [relayed: your 10:17Z] |
+| #8882 | Pr[B_conf,X] at the budget | `da385b86ccd2` | marked [relayed: your 10:46Z] |
+| #8905 | the cost by class | `40b8e7d04736` | ready line 11:09Z; waits on CAPS [relayed: your 11:16Z] |
+| #8916 | the by-class bound, `εclsAt` | `8784a105de5b` | ready line above |
+| #8915 | g, the new guarantee | `e72d160dda87` | unmarked, Daniel's |
+
+Branches with no PR, compiled, not developed further without your word: `cursor/proofs-firsthit-gate-4a7c` at `12f5fcf3bb96` (g by gate at the code, try `64fa`), `cursor/proofs-firsthit-clsks-8d21` at `818e4e130b5d` (g by class at the code, try `b50a`). Both hold g's head before its lock commit; a PR of either needs `e72d160dda87` merged in and a new try.
+
+**What is left, with sizes** [guess, from reading the files]:
+1. hKm on accepted draws (TWOWITNESS's ask): a lemma that a session's expected reruns are 0 at a rejecting first view, then `ex_weighted_runs_le` with the indicator in the weight; about 80 to 120 lines in `TwoFirstHitAt.lean`'s terms, touching `Efficient.lean`'s `rerunsExp_le` use. Not started (your 10:06Z).
+2. PRs for the two corollaries of g at the code: no new Lean, one merge and one try each; they wait on what Daniel says of #8915.
+3. Nothing discharges `ExpectedCR` at the three finders, the budget `hT` or the counts: they are hypotheses in every statement above, and the by-class ones also take "a run's extractions open a class whole" until REGX's instance lands.
+
+For the table:
+- #8916 (the by-class bound with one closed right-hand side: κ_s + √(k·γ_s·Pr[B]) + (2·runCost + 4·firstHitCost)/2^256, K_s the sample's classes, K_m the (session, class) pairs): ready to mark at `8784a105de5b`, after #8906 and #8905. A lemma, modeled; it rests on the expected-time premise at three finders no guarantee names and on "a class opens whole".
+- g (#8915): runs complete, unmarked, Daniel's; its lock record under-reports what the form takes (Scope and the three cost bounds are inside the form).
