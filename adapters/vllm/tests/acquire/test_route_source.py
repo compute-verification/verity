@@ -1,9 +1,9 @@
 """The route source on CPU against the GLM-5.3 capture map (`manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json`): a stand-in
 model with the map's modules (`tests/acquire/glm53_model.py`), whose attention layers decide their route the way the pinned vLLM's
 `MLAAttention._use_sparse_mha` does and are asked the way `DeepseekV32Attention._sparse_indexer_and_attn` and `forward_impl` ask, on a
-dense prefill, a decode, a mixed and a long prefill step.  Each step's committed names are the ones `capture-map ids --route ... --names`
-prints for its routes, and the committer's identity check passes on them with the source attached and fails without it; a name of the
-other route, a missing one, an unlisted hook name or a layer without a route fails the step."""
+dense prefill, a decode, a mixed and a long prefill step.  Each step's committed names are the ones the map gives its routes
+(`commit.capture_map.committer_names`), and the committer's identity check passes on them with the source attached and fails without
+it; a name of the other route, a missing one, an unlisted hook name or a layer without a route fails the step."""
 from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
@@ -14,23 +14,18 @@ from typing import Any
 import pytest
 import torch
 
-from tests.acquire.glm53_model import CMAP, CONFIG_PATH, DENSE, HOOKED, L, MAP, SPARSE, STEPS, TP, Attention, glm_model, metadata, run_step
+from tests.acquire.glm53_model import CMAP, DENSE, ENV, HOOKED, L, SPARSE, STEPS, TP, Attention, glm_model, metadata, run_step
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.acquire.sources import taps as TAPS
+from verity_vllm.commit import capture_map as CM
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TP_PARTIAL_RE, NativeHostCommitter, TensorMeta
-from verity_vllm.pipeline import cli
 
 
-def map_names(capsys, routes: tuple[str, ...], phase: str, rank: int = 3, binders: tuple[str, ...] = RS.BINDERS,
+def map_names(routes: tuple[str, ...], phase: str, rank: int = 3, binders: tuple[str, ...] = RS.BINDERS,
               off_target: bool = False) -> list[str]:
-    """What `capture-map ids --names` prints for one step's names of `binders` (no rank-tagged partial)."""
-    argv = ["capture-map", "ids", "--map", str(MAP), "--config", str(CONFIG_PATH), "--phase", phase, "--rank", str(rank), "--names"]
-    argv += [a for r in routes for a in ("--route", r)] + [a for b in binders for a in ("--binder", b)]
-    argv += ["--off-target"] if off_target else []
-    capsys.readouterr()
-    assert cli.main(argv) == 0
-    lines = [ln.split(" ", 1) for ln in capsys.readouterr().out.splitlines()]
-    return [n for _cid, n in lines if not TP_PARTIAL_RE.search(n)]
+    """The committer names of one step's taps that `binders` bind (no rank-tagged partial)."""
+    names = CM.committer_names(CMAP, ENV, phase=phase, routes=routes, rank=rank, binders=binders, on_target=not off_target)
+    return [n for n in names if not TP_PARTIAL_RE.search(n)]
 
 
 class Run:
@@ -90,8 +85,8 @@ def test_each_step_records_the_routes_its_layers_took(run):
 
 
 @pytest.mark.slow
-def test_capture_map_ids_and_the_committer_agree_on_every_route(run, capsys):
-    steps = {k: map_names(capsys, routes, phase) for k, (_md, routes, phase) in enumerate(STEPS)}
+def test_capture_map_ids_and_the_committer_agree_on_every_route(run):
+    steps = {k: map_names(routes, phase) for k, (_md, routes, phase) in enumerate(STEPS)}
     for k, (_md, routes, phase) in enumerate(STEPS):
         assert sorted(steps[k]) == sorted(run.src.names_at(tuple(sorted(routes)), phase))
     kv_b = [f"model.layers.{i}.self_attn.kv_b_proj/0" for i in range(L)]
@@ -110,8 +105,8 @@ def test_capture_map_ids_and_the_committer_agree_on_every_route(run, capsys):
 
 
 @pytest.mark.slow
-def test_a_step_off_its_routes_fails(run, capsys):
-    steps = {k: map_names(capsys, routes, phase) for k, (_md, routes, phase) in enumerate(STEPS)}
+def test_a_step_off_its_routes_fails(run):
+    steps = {k: map_names(routes, phase) for k, (_md, routes, phase) in enumerate(STEPS)}
     extra = "model.layers.5.self_attn.kv_b_proj/0"
     dropped = "model.layers.7.self_attn.kv_b_proj/0"
     fused = "model.layers.0.self_attn.q_a_layernorm"
@@ -125,9 +120,9 @@ def test_a_step_off_its_routes_fails(run, capsys):
 
 
 @pytest.mark.slow
-def test_a_step_without_a_route_on_every_layer_fails(run, capsys):
+def test_a_step_without_a_route_on_every_layer_fails(run):
     run.step(9, STEPS[1][0], skip=(3,))
-    steps = {0: map_names(capsys, DENSE, "prefill"), 9: map_names(capsys, SPARSE, "decode")}
+    steps = {0: map_names(DENSE, "prefill"), 9: map_names(SPARSE, "decode")}
     got = run.check(steps)
     assert got["ok"] is False and got["violations"][0]["step"] == 9
     assert got["violations"][0]["routes_bad"] == {f"<1 of {L} layers recorded no route>": (len(steps[9]), 0)}
