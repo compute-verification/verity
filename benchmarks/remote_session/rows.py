@@ -65,9 +65,9 @@ def openings(backend: device.GpuBackend, rows: int, draws: int, rng: np.random.G
 def reference(torch, seed: bytes, rows: int):
     """`receipts(blocks, j0)`: the receipts under pass `seed` at `rows` of the store's blocks j0 … held in `blocks` (a
     uint8 tensor of whole blocks, on any device), 64 bytes each, by the reference's definition and none of the kernels'
-    code. σ is one float32 product of the blocks' bytes as int8 with the signs of `receipts.sign_bits` (exact:
-    `sketching.sketch_torch`), and y is `SketchReceipter.receipt`, SHA-512 on the CPU: no tile, no packed signs, no
-    tensor-core instruction and no device hash."""
+    code. σ is torch's float32 product of the blocks' bytes as int8 with the signs of `receipts.sign_bits` (exact:
+    `sketching.sketch_torch`), and y is `SketchReceipter.receipt`, SHA-512 on the CPU: none of the kernels' tiles,
+    packed signs, int8 tensor-core products or device hashing."""
     bits = np.unpackbits(skr.sign_bits(seed, rows), axis=1, bitorder="little")
     receipt, width = rb.SketchReceipter(seed, rows).receipt, 4 * rows
 

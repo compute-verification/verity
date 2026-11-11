@@ -1258,7 +1258,10 @@ class GpuBackend:
 
     def set_side_priority(self, priority: int) -> None:
         """Each GPU's side stream anew at `priority` from the next pass on (−1, above the main stream's 0, until this
-        is called): an experiment's arm, for what the side stream's priority does to a pass."""
+        is called): an experiment's arm, for what the side stream's priority does to a pass. Nothing changes where
+        it is that priority already."""
+        if priority == self.shape["side_priority"]:
+            return
         self.store.sync()
         for gpu in self.gpus:
             with self.torch.cuda.device(gpu.index):
@@ -1268,6 +1271,8 @@ class GpuBackend:
     def set_side_after(self, on: bool) -> None:
         """From the next pass on, whether a pass whose receipt grid leaves a consumer no room starts its side stream
         when that grid ends (`rs_side_after`), not beside it."""
+        if bool(on) == self.shape["side_after"]:
+            return
         self.store.sync()
         self.lib.so.rs_side_after(int(on))
         self.shape["side_after"] = bool(on)
