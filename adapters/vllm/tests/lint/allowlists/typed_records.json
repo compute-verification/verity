@@ -221,7 +221,6 @@
     {"file": "verity_vllm/pipeline/match.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 10},
     {"file": "verity_vllm/pipeline/memory_map.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/kv-rows/v3"},
     {"file": "verity_vllm/pipeline/neutrality.py", "kind": "schema-literal", "symbol": "main", "detail": "verity-vllm/neutrality/v1"},
-    {"file": "verity_vllm/pipeline/pouw_serve.py", "kind": "schema-literal", "symbol": "main", "detail": "verity-vllm/pouw-serve/v1"},
     {"file": "verity_vllm/pipeline/program_cache.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/program-cache-entry/v1"},
     {"file": "verity_vllm/pipeline/program_cache.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/pipeline/program_graph.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
