@@ -8,8 +8,8 @@
 # $OUT gets table_root.jsonl (one row per phase: calls, ns a call, calls a second, ms, peak RSS) and build.log.
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
-F=$PWD/verity/core/service/flock
-P=$PWD/verity/core/service/spot
+F=$PWD/verity/protocols/flock/verifier
+P=$PWD/verity/protocols/spot/verifier/lean
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 bash tools/verity/lean/setup.sh "$F" > "$O/setup.log" 2>&1 || { tail -40 "$O/setup.log" >&2; exit 1; }

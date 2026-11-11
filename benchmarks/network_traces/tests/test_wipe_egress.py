@@ -15,14 +15,14 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier.certificate import Certificate, Direction, LmsKey, certificate_message
-from verity.core.protocols.certifier.warden import WardenParams
-from verity.core.protocols.pous import streamed_wipe as sw
-from verity.ml.crypto import lms
+from verity.protocols.certifier.verifier.certificate import Certificate, Direction, LmsKey, certificate_message
+from verity.protocols.certifier.verifier.warden import WardenParams
+from verity.protocols.pous.verifier import streamed_wipe as sw
+from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks/live_challenger"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/composite/device/live_challenger"))
 import auditor as G  # noqa: E402
 import certifier_serve as cs  # noqa: E402
 import warden_serve as ws  # noqa: E402

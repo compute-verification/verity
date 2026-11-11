@@ -16,7 +16,7 @@ store, since their bundles and requests hold request values. The docstrings say 
 
 A declared run's audit (`a5.py --tp-commit`) derives each rank's Programs from the workload the record served. Under arbitrary
 usage no workload is declared: serving decides the batches, arrivals and lengths, and the advice (I1,
-`verity.core.protocols.certifier.advice`) records those decisions. The advice is private: it is committed under hiding
+`verity.protocols.certifier.verifier.advice`) records those decisions. The advice is private: it is committed under hiding
 commitments and never published.
 
 1. **Registration binds the compiler and the advice's hiding root, not a workload.** The rank's window provenance (core's
@@ -131,11 +131,11 @@ history would discharge, and doesn't discharge them yet.
   and a partial window, which lacks a writer's template, so the wire from it is not made and its port is free. No figure
   states the leak bound there. Over several windows, c is their sum, and null if any one's is.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
-  `wrong_units` function in `verity/core/protocols/spot/one_stage/audit.py`). Except with probability δ, at most
+  `wrong_units` function in `verity/protocols/spot/verifier/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
   `stratum_bounds`).
 - β_δ is `harm_bound`: the profile's `harm_bound`, each template's units weighted by its committed bits (`_template_bits`
-  in `verity/core/protocols/spot/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
+  in `verity/protocols/spot/verifier/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
   log2 of the at most Σ_{j ≤ bound} C(n, j) incorrect sets. `exfiltration_bound` is β_δ + λ_δ.
 - The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the certifier's term.
 
@@ -185,7 +185,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
 - **Statement.** The unit outputs one bit, and it is 1 exactly when all three hold:
   1. ρ is the root of a's rows:
      - row i is a[32i … 32i + 31], zero-padded;
-     - leaf i is `verity.ml.commitments.advice.leaf(D, 256, i, row_i, y_i)`: the hm96-sha512 commit string of the row's
+     - leaf i is `verity.commitments.advice.leaf(D, 256, i, row_i, y_i)`: the hm96-sha512 commit string of the row's
        sha512/row/v2 digest under y_i, as an `hm96-sha512/row/v2` row leaf at rank i;
      - the tree is the frame-v3-sha512 tree over those leaves, with domain D = CommitmentDomain(`advice_windows.commitment_binding(C)`,
        −1, RangeIndexedDomain(R), sha512).
@@ -227,7 +227,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
     as vllm's registered compiler refuses it), and each request's body as that compiler gives it (`serve_ingress`: the sampling
     fields its ingress record says it brought, with its prompt ids, by its I1 id: its `user`, else its HTTP id). It is named
     as `verity-vllm advice` names it and runs the server's code (`served_identity`: `compile_steps` by module path, its
-    digest over `source_identity.code_identity`, which covers `integrations/vllm` and `verity`), so the audit runs on a tree
+    digest over `source_identity.code_identity`, which covers `adapters/vllm` and `verity`), so the audit runs on a tree
     whose two are the server's. Its digest is the single-GPU one (`I2Compiler.digest`) with that code in place of this
     tree's: it covers φ (`serve.json`'s model and revision, that pin's `config.json`, the target and the execution), the
     default seed, ℓ and the transfer gates, so a `serve.json` whose model, revision, target or execution differs from the
@@ -246,7 +246,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   still to keep, its record, or a counter of its state). Its negatives run beside the audit's. `serve-standin`
   lays a single-GPU Commit of record out as a served run, the stand-in until serve-openai seals its windows.
 - **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served window) reads only
-  what an integration hands Verity (`verity.ml.windows.interface`): the window's `circuit.json`, which its registration binds
+  what an integration hands Verity (`verity.commitments.windows.interface`): the window's `circuit.json`, which its registration binds
   by SHA-512; the registered compiler and the advice's root and length; the registration and the committed values; and the
   advice's opening, the named gap. The verifier's window is the circuit record's, each template's Definition from Verity's
   catalog or the verifier's own input set. The compile check runs the registered compiler as the command the verifier's
@@ -277,5 +277,5 @@ reads after the seal:
 
 ~~~text
 python window_cost.py PROBE.json --target h200 --project 8,1024,64 [--measure-cpu SCRATCH] \
-    [--stream ../../integrations/vllm/tests/pipeline/fixtures/admission/b16.json] [--out FILE]
+    [--stream ../../adapters/vllm/tests/pipeline/fixtures/admission/b16.json] [--out FILE]
 ~~~
