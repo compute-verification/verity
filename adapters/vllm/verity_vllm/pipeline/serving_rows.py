@@ -106,9 +106,10 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
                                    row's output element; packed ports, one index entry per row; chunked (``chunk_cap``), v2
                                    bit rows (`chunk_rows.unit_rows`) -> ``o0``
-  ``BatchedGemm_v1{B=1,N=c,..}``   every slice c wide of the rows of that Definition (``WIDE_SLICES``, c a power of two that
-                                   divides the row's N): as a slice, with elements [jc, (j + 1)c) along the wide axis
-                                   (``x[b]`` whole, ``w[b, jc:(j + 1)c]``) -> the row's c output elements there
+  ``BatchedGemm_v1{B=1,N=c,..}``,  every slice c wide of the rows of that Definition (``WIDE_SLICES``, c a power of two that
+  ``EmbeddingShard_v1{H=c,..}``, .. divides the row's extent along the wide axis): as a slice, with elements [jc, (j + 1)c)
+                                   along the wide axis (``x[b]`` whole, ``w[b, jc:(j + 1)c]``; the shard's columns) -> the
+                                   row's c output elements there
   ``EmbeddingRead_v1{V=2^17,H=..}``  every history read of a ``DsaHistoryReads_v1`` row where the partition file says
                                    ``"histories": true`` (`history_rows`: its ports, and its writer's row-seg ``o0``); always
                                    chunked, v2 bit rows

@@ -6,8 +6,9 @@ shard's embedding into columns (every unit reads the token) and the all-gather i
 row's outputs with nothing left over (one index entry per row, the units' outputs the row's output in order), each reads its
 own elements of the row's operands (an independent gather by index), and the Definition at every axis 1 on each unit's rows is
 the row's Definition's element; in a window the units are chunks of the stager's bit rows, read once.  A ``WIDE_SLICES``
-family's row is also slices c elements wide along its wide axis (torch.bmm's member in blocks of c output words): unit (.., j)
-reads elements [jc, (j + 1)c) there and returns the row's c outputs, held to the same."""
+family's row is also slices c elements wide along its wide axis (torch.bmm's member in blocks of c output words, the router
+GEMMs in c rows of W, the vocabulary shard in c columns): unit (.., j) reads elements [jc, (j + 1)c) there and returns the
+row's c outputs, held to the same."""
 from __future__ import annotations
 
 import math
@@ -31,7 +32,8 @@ from verity.definitions.registry import dsa as DSA
 from verity.definitions.registry import ll_bf16 as LL
 
 H = HopperBF16WgmmaDot16
-#: each family at small statics; the token of the embedding shard inside it (2 <= 4 < 2 + 5)
+#: each family at small statics, no extent a power of two past 1 (such a row of one member is its own widest slice, ``WIDE``);
+#: the token of the embedding shard inside it (2 <= 4 < 2 + 5)
 ROWS = {"LlBf16DotprodGemm_v1": (LL.LlBf16DotprodGemmWord, {"N": 3, "K": 64, "BS": 32, "VEC": 2, "FMA": 1}),
         "Gemm_v2": (G.Gemm, {"K": 32, "N": 3, "DOT": H}),
         "CublasSplitKGemm_v1": (CB.CublasSplitKGemmWord, {"K": 128, "N": 3, "SPLIT_K": 2, "DOT": H}),
@@ -39,10 +41,11 @@ ROWS = {"LlBf16DotprodGemm_v1": (LL.LlBf16DotprodGemmWord, {"N": 3, "K": 64, "BS
         "GemmF32Out_v1": (CB.GemmF32OutWord, {"K": 32, "N": 3, "DOT": H}),
         "BatchedGemm_v1": (CB.BatchedGemmWord, {"B": 2, "K": 32, "N": 3, "DOT": H}),
         "DsaMqaLogits_v3": (DSA.DsaMqaLogitsV3, {"N": 3, "H": 8, "D": 32}),
-        "EmbeddingShard_v1": (T2.EmbeddingShard, {"VS": 5, "H": 4, "START": 2}),
+        "EmbeddingShard_v1": (T2.EmbeddingShard, {"VS": 5, "H": 5, "START": 2}),
         "AllGather_v1": (T2.AllGather, {"WORLD": 4, "N": 3})}
 #: each wide family's row (statics over ``ROWS``') and the widths c > 1 its slices take along its wide axis, coarse to fine
-WIDE = {"BatchedGemm_v1": ({"N": 8}, (8, 4, 2))}
+WIDE = {"BatchedGemm_v1": ({"N": 8}, (8, 4, 2)), "LlBf16DotprodGemm_v1": ({"N": 8}, (4, 2)),
+        "CublasSplitKGemmF32Out_v1": ({"N": 4}, (2,)), "EmbeddingShard_v1": ({"H": 8}, (4, 2))}
 #: every slice a test reads: a family, its row's statics over ``ROWS``' and the slice's width
 CASES = [(f, None, 1) for f in sorted(ROWS)] + [(f, st, c) for f, (st, cs) in sorted(WIDE.items()) for c in (1, *cs)]
 OP = "model.layers.3.mlp.gate"
@@ -134,22 +137,26 @@ def test_a_row_holds_its_definition_at_every_axis_one(family):
 def test_a_wide_family_s_row_also_holds_its_slices_c_wide_listed_after_the_slice_of_one(family):
     """The row's unit templates are the row, its slice of one element, then its slices c wide, coarse to fine: a reader that
     takes the first of a row's units that fits takes the slice of one element where it did before.  A row that is one member
-    along every other axis is itself its widest slice, so it is not listed again."""
+    along every other axis, at a power-of-two extent, is itself its widest slice (the ``slice`` layout, one unit), so it is not
+    listed again; a row of several members is a row."""
     st, widths = WIDE[family]
+    wide = SRW.WIDE_SLICES[family]
+    others = [a for a in SRW.SLICES[family][0] if a != wide]
     spec, n = descriptor_id(defn(family, st=st)), math.prod(extents(family, st))
     units = [(descriptor_id(defn(family, unit=True, st=st, c=c)), n // c) for c in widths]
     assert SRW.unit_templates(spec) == ((spec, 1), (descriptor_id(defn(family, unit=True, st=st)), n), *units)
     for (u, _n), c in zip(units, widths, strict=True):
         t = SRW.template(u)
         assert (t.layout, t.word, SRW.slice_width(u)) == ("slice", u, c)
-    assert SRW.template(spec).layout == "row" and SRW.slice_width(spec) == 0
-    wide = SRW.WIDE_SLICES[family]
-    one = {**st, **{a: 1 for a in SRW.SLICES[family][0] if a != wide}}
-    N = int(statics(family, one)[wide])
-    row1 = descriptor_id(defn(family, st=one))
-    assert row1 == units[0][0] and SRW.template(row1).layout == "slice"
-    assert SRW.unit_templates(row1) == ((row1, 1), (descriptor_id(defn(family, unit=True, st=one)), N),
-                                        *((descriptor_id(defn(family, unit=True, st=one, c=c)), N // c) for c in widths[1:]))
+    N = int(statics(family, st)[wide])
+    whole = all(int(statics(family, st)[a]) == 1 for a in others)
+    assert (SRW.template(spec).layout, SRW.slice_width(spec)) == (("slice", N) if whole else ("row", 0))
+    if not whole:
+        one = {**st, **dict.fromkeys(others, 1)}
+        row1 = descriptor_id(defn(family, st=one))
+        assert row1 == units[0][0] and SRW.template(row1).layout == "slice"
+        assert SRW.unit_templates(row1) == ((row1, 1), (descriptor_id(defn(family, unit=True, st=one)), N),
+                                            *((descriptor_id(defn(family, unit=True, st=one, c=c)), N // c) for c in widths[1:]))
     odd = descriptor_id(defn(family, st={**st, wide: 12}))
     assert [SRW.slice_width(u) for u, _n in SRW.unit_templates(odd)[1:]] == [1, 4, 2]
 
@@ -228,8 +235,8 @@ class TokenIndex:
 
 
 def token_row(tok: int, dt: str = "i64", unit: bool = True):
-    """EmbeddingShard_v1{VS=5,H=4,START=2}'s row reading the sampler's token ``tok`` as its committed u64 word, its table a
-    registered weight, through the real `_slices`: as its four slice units, or (``unit`` false) as the whole row."""
+    """EmbeddingShard_v1{VS=5,H=5,START=2}'s row reading the sampler's token ``tok`` as its committed u64 word, its table a
+    registered weight, through the real `_slices`: as its five slice units, or (``unit`` false) as the whole row."""
     family = "EmbeddingShard_v1"
     _tok, table = operands(family, 3)
     y = np.asarray(evaluate_batch(defn(family), np.array([[4]], np.uint64), table.astype(np.uint64).reshape(1, -1))).reshape(-1)
@@ -241,7 +248,7 @@ def token_row(tok: int, dt: str = "i64", unit: bool = True):
             return (np.array([tok], np.uint64) if member == "sampled_token_ids" else y.astype(np.uint16))[lo:hi], None
 
     x = ("r0", TokenIndex(dt), r, d)
-    (m,) = SRW.members([descriptor_id(defn(family, unit=True))], [[x]], [4]) if unit else SRW.members([r["spec"]], [[x]])
+    (m,) = SRW.members([descriptor_id(defn(family, unit=True))], [[x]], [5]) if unit else SRW.members([r["spec"]], [[x]])
     return m, x, Store(), (lambda _f, lo, hi: table[lo:hi]), y
 
 
@@ -250,7 +257,7 @@ def test_the_samplers_i64_token_is_read_by_value_into_the_vocabulary_shards_32_b
     value, low half first, and computes the row's output column; the whole row, a packed row template, reads it the same way."""
     m, x, store, weights, y = token_row(4)
     data, _entries = SRW.read(m, [x], store, weights)
-    assert data["rows"]["in0"].tolist() == [[4, 0]] * 4
+    assert data["rows"]["in0"].tolist() == [[4, 0]] * 5
     assert data["outs"]["out.out"].reshape(-1).tolist() == y.tolist()
     T = descriptor_id(defn("EmbeddingShard_v1", unit=True))
     bits = SRW.template(T).packed

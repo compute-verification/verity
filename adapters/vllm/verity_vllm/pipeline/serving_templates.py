@@ -47,9 +47,11 @@ SLICES = {"LlBf16DotprodGemm_v1": (("N",), ((None,), (0,))), "Gemm_v2": (("N",),
 #: the ``SLICES`` families whose slices may also be c elements wide along one of their axes, by that axis (`slice_widths`): a
 #: slice is then the family's Definition at that axis c and every other axis 1, unit (.., j) reading elements [jc, (j + 1)c)
 #: along it of each parameter that carries it, and returning the row's output elements there (torch.bmm's member in blocks of
-#: c output words, ``w[b, jc:(j + 1)c]``).  One proof block then writes c words of the row's output, where slices of one word
-#: are c writers of them
-WIDE_SLICES = {"BatchedGemm_v1": "N"}
+#: c output words, ``w[b, jc:(j + 1)c]``; the router GEMMs' c rows of W; the vocabulary shard's c columns).  One proof block
+#: then writes c words of the row's output, where slices of one word are c writers of them.  A row whose own extent along the
+#: wide axis is a power of two, at 1 along every other axis, is its own widest slice (one unit, the ``slice`` layout), as a
+#: ``WIDE_COORDS`` row is its own coordinate
+WIDE_SLICES = {"BatchedGemm_v1": "N", "LlBf16DotprodGemm_v1": "N", "CublasSplitKGemmF32Out_v1": "N", "EmbeddingShard_v1": "H"}
 #: the row Definitions whose Calls are split into parts, each a Definition of its own at the row's statics it names: per part, its
 #: family, what it reads in order (``("arg", g)`` the row's argument group g, ``("out", j)`` the row's committed output member j,
 #: ``("mid", name)`` the row's intermediate) and what it returns (``j`` the row's committed output member j, ``name`` an
