@@ -296,7 +296,7 @@ example : ∃ (C : Prog) (P : Partition) (ω : ℕ → ℕ) (keep : ℕ → Bool
   have hω : ∀ i : ℕ, (if i = 2 then 1 else i) ≠ i → i = 2 := fun i h => by
     by_cases hi : i = 2
     · exact hi
-    · exact (h (if_neg hi)).elim
+    · exact (h (ite_eq_right hi)).elim
   refine Prog.Rewires.of_earlier (mem := fun i => i / 2) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · intro i h
     obtain rfl := hω i h
