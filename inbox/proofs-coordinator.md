@@ -48085,3 +48085,51 @@ For the table:
 - GB, bits and GB together: width + margin at κ 2^-4, 2,455 GB at modeled 0.4, 88 to 95 GB at the measured engine rate on node A (a floor) [Lean-checked design, run `r20261111-101156-415c`; GB modeled by ratio; #8878, #8893 and #8904 open, unmarked].
 - GB, the least this family's built plans reach: width + margin at κ 2^-3 (#8893's own row), 2,430 GB at 0.4, 87 to 94 [Lean-checked design, run `r20261111-092227-d1e7`].
 - GB, the by-gates rows by width: κ 2^-6 2,787 GB (2,761 with the margin), κ 2^-7 3,228 (3,200) [Lean-checked designs, run `r20261111-100140-a112`].
+
+## FLOCKPKG, Wed 11 Nov 10:24Z: the head block's Lean verify, measured: 250 core-seconds a 256-block statement and 108 more once a `verify` call, against the planner's assumed 60.56; the number goes up about fourfold
+
+**Measured** [run: `r20261111-081919-d4ef`, vy-nebius-cpu, one pinned core, cpu 861.0 s = wall 861.1 s, peak 40.9 GiB]. `SparseMlaHeadBlock_v2{…NVIS=64,FIRST=false…}` staged at `c6cadd0e325f` (pin `4b31e7caba011398`, the pin of kernels' profile run; 12,191,652,715 bytes; 30,893,497 ANDs; 1,368,418,074 matrix entries; 256 blocks). The three sessions kernels' run `r20261111-061047-6773` saved (`k1`, `k2`, `k4`, each all 256 blocks), handed to one `flock-verify verify --zk`:
+
+| part | seconds, one core |
+|---|---|
+| read of the statement (`inputs`), once a call | 108.3 |
+| session `k1` (its setup, 2.4 s, included) | 254.7 |
+| session `k2` | 240.8 |
+| session `k4` | 254.5 |
+| a session, mean of the three | 250.0 |
+
+- **Every check passes on all three**: each verdict is the refusal a census statement always ends in, "a session without the verifier's program (--program)", which `verifyCmd` reaches after every other check [run: the verdict lines; read: `verifyCmd`, earlier tonight]. So kernels' saved proofs are good proofs of this circuit to the Lean verifier.
+- **What 60.56 should be compared to.** A statement's Lean seconds are `250.0 + 108.3 / B`, with B the sessions one `verify` call is handed: **250 core-seconds** where the proof server hands a circuit's sessions to one call, **358 core-seconds** where each statement is its own call, which is how `server_rate.py`'s Lean pool calls it today [read: `Lean.__call__`, one `verify` a session]. Both are measured; which B the plan may assume is BREAKEVEN's and the proof server's to say.
+- **It is 4.1 to 5.9 times the assumed 60.56.** By FUSED's 12.0 GB a core-second [relayed, the 09:10Z update], that is about +2,270 GB at 250 s and +3,570 GB at 358 s on the lever row [guess: my arithmetic on a relayed slope, not a planner run]. On the planner's 81.818 cores a GPU the verify is 3.1 to 4.4 GPU-seconds a statement, more than the head block's proving (2.55 to 2.86 GPU-s [relayed, kernels]).
+- **Why my 09:25Z guess (95 to 125 s) was low**: the fold costs 91 ns a matrix entry a repetition here, against 35 and 45 ns on the two `ScaledMm` kinds. The accumulator no longer fits a cache, and a third of the call is system time (277.6 s of 861.0), which is memory being mapped and cleared.
+- **A session does not grow with its blocks** on the two kinds measured (under 0.003 s a block). For the head, the 1-, 2- and 4-block sessions are being proved now; if the same holds, a head statement of any size costs these 250 s, so **fewer blocks a statement makes the verifier's share worse, not better**.
+- **Still to come from this run** (about 11:10Z [guess]): sessions at 1, 2, 4 blocks; one session alone; `main`'s verifier on the same session; the read's phases; a profile. `r20261111-081959-e3ed` (`FIRST=true`) began its verifies at 10:17Z.
+
+**Where the time goes, and what would cut it** (sizes on the head block; [guess] unless tagged):
+
+| cut | what it saves a statement | what it needs |
+|---|---|---|
+| One `verify` call for all of a circuit's sessions | 108 s of 358 (30%) [run: the read is once a call] | no verifier change: the caller passes every session directory after one `--session`. `server_rate.py`'s pool does not, and #8679 and #8771 hold that file |
+| One walk of the matrix for both repetitions | up to 40% of a session's 250 s | a Lean twin of `Stmt.folded` with its proof; records runs of `security` |
+| The fold's accumulator unboxed (`Sparse.foldRow` adds into an `Array F128`, one allocation an entry) | 30 to 45% of a session; allocation and freeing are 29% of a session on `ScaledMm{K=6144}` [run: `5b01`'s profile] | a Lean twin with its proof (a `csimp` pair, as `tensorFast` is) |
+| One walk for all the sessions of a call | most of a session beyond the first: the walk's misses are paid once | `verifyCmd` checks sessions together; the largest change |
+| A binary circuit file | of the read's 108 s, the part that is not hashing; on `ScaledMm{K=6144}` SHA-512 is 39% of the read (the file's pin and the class digest each hash it) [run: `5b01`] | a new registered form and digest: Daniel's |
+| The templated check | nothing: the head block has no template [relayed, FUSED] | |
+| The flat-column cut | nothing more: it is on `main` [relayed, FUSED], and `main`'s verifier measured the same as `c6cadd0e325f`'s on `ScaledMm` [run: `2fd1`, `c61c`] | |
+
+None of the verifier cuts is small enough to build, prove and run through `security`'s records by 12:00Z, so **no cut PR from me tonight**; the first row needs no verifier code and is the caller's.
+
+**PR #8902, the runner, unmarked** [run]: `cursor/proofs-leanver-75d9`, opened at `6d78fcfde689`, now at `308c28aaf2b9694588ffda3751e5b1a11ac7a520`. `benchmarks/verifier_cost/flock_sessions.sh` and `.py`: the measurement above as a command in the tree. At the first head its own run `r20261111-090421-c61c` passed (rc 0, `ScaledMm{K=2048}` at 1, 16, 256 blocks) and the quick tier `r20261111-090515-3b3e` passed (2 suites). **The second commit fixes a mistake `d4ef` showed**: `verify` takes every argument after `--session` as a directory, and my script wrote the flag before each one, so a call of three sessions also "checked" two directories named `--session` (refused in 2.4 s and 0 s; the three real sessions' lines are not affected, and the calls of one session never had it). It also adds one call of two sessions. Its rerun `r20261111-101646-390c` and quick tier `r20261111-101700-be53` are out. It adds no `.lean` file and changes no lock. Opened with `--issue none:` since I know no Linear issue for this job; link one if there is.
+
+**#8789** [run, 10:03Z]: at `5124b2689c75`, 35 of 95 suites passed, 0 failed (B `0866`, D `4383`, G `32ea`, H `17e8` done rc 0; A, C, E, F running). The records run `4233` has begun on a tree that already held this Lean (`verity/circuits/base` in 31 s, 0 files changed). (B) #8814 is merged onto the new head and pushed, `2ff70e1994478474fdaba82e5df21317c839d817`, 5 lock files over the cut, no run yet as ruled.
+
+**Left:** the head's sessions at 1, 2, 4 blocks, `main`'s verifier, phases and profile (`d4ef`); `FIRST=true` (`e3ed`); #8789's ready line when its nine runs end; #8902's ready line when `390c` and `be53` pass; (B)'s records and quick tier after #8789's ready line; M6's crossing.
+
+For the table:
+- Lean verifier, head block (`FIRST=false`, 256 blocks): measured 250.0 core-seconds a session and 108.3 once a `verify` call (`r20261111-081919-d4ef`), against 60.56 assumed. All three of kernels' saved sessions pass every check.
+- #8902 (runner, unmarked) at `308c28aaf2b9`; #8789 at `5124b2689c75`: 35 of 95 suites passed, 0 failed, records run started.
+
+For BREAKEVEN:
+- `SparseMlaHeadBlock_v2{…FIRST=false…}`, Lean verify, measured (`r20261111-081919-d4ef`): **a session 250.0 core-seconds** (254.7, 240.8, 254.5) at 256 blocks; **once a `verify` call 108.3 core-seconds**. Compare 60.56 to `250.0 + 108.3 / B`, B the sessions a call takes: 358.3 at B = 1 (today's pool), 250.0 as B grows.
+- Seconds a block, head: not measured yet (1, 2, 4 blocks in about 45 minutes). On `ScaledMm{K=2048}` and `{K=6144}` it is under 0.003 core-seconds a block (`2fd1`, `31b6`, `5b01`, `c61c`): the verifier's term is fixed a statement, as the planner's shape has it.
+- `FIRST=true`: `e3ed`, in the next entry.
