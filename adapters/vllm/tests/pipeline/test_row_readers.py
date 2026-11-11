@@ -4,7 +4,7 @@
 the workload's (`is_stochastic`, `tp_world`), the run store's job (`verity_vllm.pipeline.research`: `job_input`, `preserve`, and `shed` on a tree with no pod guard), a
 manifest build that fails (`verity_vllm.pipeline.row_build.required_manifest`), the launch contexts a workload's shapes are built
 under (`verity_vllm.pipeline.launch_context`: `main`, `batch_dispatch_of`, `bad_chunks`), the card's line for a stage that is not ok
-(`verity_vllm.pipeline.report.summarize_md`) and its reading of a log's first record (`log_header`), the timeline report's window (`verity_vllm.pipeline.timeline.report`) and the
+(`verity_vllm.pipeline.report.summarize_md`) and its reading of a log's first record (`log_header`), the timeline report's window and its command, which report a file's last attempt (`verity_vllm.pipeline.timeline`: `report`, `main`) and the
 experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`).
 
 Each reads the document a stage wrote and gives a word, a line or a default; a document that is absent or does not parse gives the
@@ -259,6 +259,22 @@ def test_the_timeline_reports_its_window_or_none_without_a_timed_event():
     for events in ([], [{"proc": "row", "pid": 1, "stage": "build", "ev": "mark"}]):
         rep = TL.report(events)
         assert (rep["events"], rep["spans"], rep["elapsed_s"], rep["t_first_utc"], rep["t_last_utc"]) == (len(events), 0, None, None, None)
+
+
+def test_the_timeline_report_command_reports_the_files_last_attempt(tmp_path, capsys):
+    def events(t: float, pid: int) -> list[dict[str, Any]]:
+        row = {"t": t, "proc": "row_pod", "pid": pid, "stage": "row", "ev": "start"}
+        build = {"t": t + 1, "proc": "build", "pid": pid + 1, "stage": "build.derive", "ev": "start"}
+        return [row, build, {**build, "t": t + 4, "ev": "end"}]
+
+    path = tmp_path / "timeline.jsonl"
+    path.write_text("".join(json.dumps(e) + "\n" for e in [*events(100.0, 1), *events(500.0, 7)]))
+    out, md = tmp_path / "report.json", tmp_path / "report.md"
+    assert TL.main(TL.ReportOptions(path=str(path), json=str(out), md=str(md), title="a-row")) == 0
+    rep = json.loads(out.read_text())
+    assert (rep["attempt"], rep["attempts_in_file"], rep["events"], rep["spans"]) == ("last", 2, 3, 1)
+    assert (rep["t_first_utc"], rep["t_last_utc"], rep["elapsed_s"]) == ("1970-01-01T00:08:20Z", "1970-01-01T00:08:24Z", 4.0)
+    assert capsys.readouterr().out == md.read_text() and "a-row" in md.read_text() and "attempt last of 2 in the file" in md.read_text()
 
 
 def test_the_experiment_index_counts_the_captured_values_and_their_steps(tmp_path):
