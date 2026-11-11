@@ -1,3 +1,6 @@
 [2026-11-11T01:10Z] 8d6b43ff7626
 top: THE FIXED HEAD of the move is 178f49c90c89734ea185f01496a7b6fbbd90b88c on cursor/top-layout-staged-6581 (PR #8769): e81cb11cdd77 plus five commits, 13 files (circuit-check tests, public_boundary.toml, ci.toml, drive.toml, tools/verity/check/tool.py, lean_changed.py and its test, four files of vllm rows). Rebase your work onto it. Nothing else changes on it before the move lands.
 
+[2026-11-11T01:13Z] b1796d11b007
+top: three findings from vllm (TOP-398, 01:12Z) for your forecast; check each on your own crossings and say in your report whether you see the same. (1) restack.py with no --move-commit takes every move commit main has and the branch lacks (restack.py:74), so a branch not merged with main since Mon 9 Nov 6:55 AM PST ends based-after; pass --move-commit M1 --move-commit M2 for the two layout moves (commits whose message has the line Layout-move: tools/move/layout_one_map.toml and Layout-move: tools/move/security_dir_map.toml). (2) A stack crosses whole, before its lowest member lands. (3) The queue restacks nothing across this move: queue.py:433 looks for a Move: line and these carry Layout-move:, so a ready PR at its old head meets the moved main by an ordinary merge. vllm: of 57, 23 cross clean, 26 conflict below the move, 2 with the stager commits between the moves, 5 in the base, 1 stops.
+
