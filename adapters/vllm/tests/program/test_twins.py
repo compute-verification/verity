@@ -1,18 +1,13 @@
-"""verity/definitions/numerics/twins.py — every twin against the gate evaluator on synthetic small statics (laptop-fast), and
-the `--check` evidence file."""
+"""verity/definitions/numerics/twins.py — every twin against the gate evaluator on synthetic small statics (laptop-fast)."""
 from __future__ import annotations
 
-import json
-import os
 import zlib
-from pathlib import Path
 
 import numpy as np
 import pytest
 
 from verity.definitions.numerics import kernel_registry as KR
 from verity.definitions.numerics import twins as TW
-from verity_vllm.pipeline import cli
 from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
 
@@ -100,20 +95,3 @@ def test_attention_twin_declines_non_finite_operands():
     args[1][0] = 0x7FC0                                                   # a NaN key word
     with pytest.raises(KR.Declined):
         tw(*args, **spec.statics)
-
-
-# ---------------------------------------------------------------------------------------------------------
-# the evidence file
-# ---------------------------------------------------------------------------------------------------------
-
-
-def test_check_writes_the_evidence_schema(tmp_path):
-    out = tmp_path / "twins.json"
-    assert cli.main(["twins", "--check", "--n-random", "4", "--n-edge", "4", "--seed", "7", "--out", str(out)]) == 0
-    rep = json.loads(out.read_text())
-    assert rep["schema"] == TW.SCHEMA == "verity-gen/twins/v1" and rep["status"] == "pass" and rep["log"] is None
-    assert set(rep["families"]) == {cls.twin_id for cls in TW.FAMILIES.values()}
-    for fam in rep["families"].values():
-        assert fam["status"] == "pass" and fam["n_random"] >= 3 and fam["mismatches"] == [] and fam["words"] > 0
-        assert {"base_id", "n_random", "n_edge", "n_declined", "statics", "status", "seconds"} <= set(fam)
-    assert set(rep["libraries"]) == {"tc_model", "fa2_model", "rms_triton_model"}

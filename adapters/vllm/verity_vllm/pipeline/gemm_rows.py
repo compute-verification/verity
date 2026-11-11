@@ -1,6 +1,6 @@
-"""A ``GemmCoordinate`` template's member (`serving_rows`' ``gemm`` layout) as shared rows: the ``x`` table (every token's input
-row, group by group), the ``w`` table (every weight row ``W[c, :]``, read once per group), ``y`` (every output word,
-instance-major) and the refs of ``verity/one-stage/gemm-grid/v0`` (`grid`)."""
+"""A ``gemm`` template's member (`serving_rows`' ``gemm`` layout) as shared rows: the ``x`` table (every token's input row,
+group by group), the ``w`` table (every weight row ``W[c, :]``, read once per group), ``y`` (every output word,
+instance-major) and the refs of the grid rule (`grid`)."""
 from __future__ import annotations
 
 import re
@@ -33,8 +33,7 @@ def grid(rows: list[Row]) -> list[dict[str, Any]]:
 
 def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable, arrivals: dict[str, int] | None,
          operand: Callable) -> tuple[dict[str, Any], list[list[Any]]]:
-    """Member ``m``'s data (module docstring) and index entries, each argument group read by ``operand``
-    (`serving_rows._operand`)."""
+    """Member ``m`` (module docstring), each argument group read by ``operand`` (`serving_rows._operand`)."""
     K = dict(m.rows)["x"]
     xs, ws, ys, refs, entries = [], [], [], [], []
     lo = m.base
