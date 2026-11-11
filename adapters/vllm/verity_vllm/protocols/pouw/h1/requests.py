@@ -55,7 +55,8 @@ import json
 import struct
 import sys
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 from verity.protocols.pouw.verifier import window as Wd
@@ -388,14 +389,14 @@ def request_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment,
     if not _leaf(requests_binding(salt, r), r, table, rows, opening):
         return f"request {i}'s entry doesn't open under round {r}'s request table"
     if (first.round, first.position) != (r, entry.slot):
-        return f"request {i}'s first slot is slot {entry.slot} of step {r}, and slot {first.position} of step {first.round} " \
-               "is opened"
+        return (f"request {i}'s first slot is slot {entry.slot} of step {r}, and slot {first.position} of step {first.round} "
+                "is opened")
     owner, why = _slot(row, salt, rows, first)
     if why is not None:
         return f"request {i}: {why}"
     if owner != i:
-        return f"slot {entry.slot} of step {r} names {'no request' if owner is None else f'request {owner}'}, not request " \
-               f"{i}, whose entry says it was first served there"
+        return (f"slot {entry.slot} of step {r} names {'no request' if owner is None else f'request {owner}'}, not request "
+                f"{i}, whose entry says it was first served there")
     return None
 
 
@@ -418,8 +419,8 @@ def slot_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment, sa
         return why
     served = next((int(c["served"]) for c in calls if c.get("layer") == 0), 0)
     if p >= served:
-        return None if owner is None else f"slot {p} of step {s} is past the step's {served} served rows and names request " \
-                                          f"{owner}"
+        return None if owner is None else (f"slot {p} of step {s} is past the step's {served} served rows and names request "
+                                           f"{owner}")
     if owner is None:
         return f"slot {p} of step {s} is a served row and names no admitted request: a request served without an entry"
     if entry is None or opening is None or first is None or entry.index != owner:

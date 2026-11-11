@@ -82,7 +82,8 @@ import re
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
+from collections.abc import Callable, Mapping, Sequence
 
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import credit as CR
@@ -307,7 +308,7 @@ class Ledger:
         of it, each its lines, `pins_of`), refused (`CoinError`) as core refuses them, its sessions held to `main`."""
         lines = ledger_head([list(h) for h in heads], key, verify)
         log = pins_of(pins)
-        raw, I = [line.encode() for line in lines], key.public[:16]
+        raw, ident = [line.encode() for line in lines], key.public[:16]
 
         def verifies(message: bytes, signature: bytes) -> bool:
             try:
@@ -315,7 +316,7 @@ class Ledger:
             except ValueError:
                 return False
 
-        return cls(key, tuple(lines), Ch.verify_ledger(raw, I, verifies), Ch.verify_periods(raw, I, verifies),
+        return cls(key, tuple(lines), Ch.verify_ledger(raw, ident, verifies), Ch.verify_periods(raw, ident, verifies),
                    None if log is None else tuple(log), None if main is None else tuple(main))
 
     @classmethod
@@ -525,8 +526,8 @@ def _period_reasons(ledger: Ledger, period: str, p: Mapping[str, Any], accepted:
     out = [f"session {s}, an accepted window, is not one of period {period}'s windows ({p['windows']}, lane {p['lane']}'s "
            "between its period-open and its period-close)" for s in accepted if s not in p["windows"]]
     if p["close"] is None:
-        return out + [f"period {period} has no period-close in the auditor's ledger, so its windows aren't all known: an "
-                      "open period credits nothing"]
+        return out + [(f"period {period} has no period-close in the auditor's ledger, so its windows aren't all known: "
+                       "an open period credits nothing")]
     listed = p["close"]["body"]["windows"]
     if not listed:
         out.append(f"period {period} closed with no window")
@@ -683,8 +684,8 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
         out["window"] = ("coin", f"the window's coins, session or salt can't be read ({e})")
     else:
         why = None if audited.period is not None else (
-            "budget", f"the window is in no period of the auditor's ledger, so no period-open committed the K it is drawn "
-                      f"with ({CR.K_FIELD}): reserve its session inside a period")
+            "budget", (f"the window is in no period of the auditor's ledger, so no period-open committed the K it is "
+                       f"drawn with ({CR.K_FIELD}): reserve its session inside a period"))
         files = rows = None
         if why is None and out["k"] is None:
             out["k"], why = CR.committed_k(lines, audited.period)

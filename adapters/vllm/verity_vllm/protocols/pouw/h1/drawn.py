@@ -70,7 +70,8 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any
+from collections.abc import Callable, Sequence
 
 import numpy as np
 
@@ -615,7 +616,7 @@ def stage(a: Any) -> int:
             tabs = statement_tables(z, st.row_ports, out_ports)
             roots = (bytes.fromhex(reg["ports"][f"a_k{k}_0"]["root"]), bytes.fromhex(reg["ports"][f"b_k{k}_0"]["root"]))
             if a.recompose:
-                st.reference_check = lambda _rows, outs, z=z, roots=roots: reference_check(z, outs, win, k, roots)
+                st.reference_check = lambda _rows, outs, z=z, roots=roots, k=k: reference_check(z, outs, win, k, roots)
             else:
                 st.outs = unit_outputs(z, win, k, roots)
             d = work / f"c{c}"

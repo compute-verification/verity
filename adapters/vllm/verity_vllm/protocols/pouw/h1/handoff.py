@@ -27,6 +27,7 @@ GPU lease ends only when it exits.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import pickle
 import socket
@@ -226,10 +227,8 @@ class Holder:
 
     def take(self) -> int | None:
         """The stream's descriptor, once the sender has exited (or None, with ``error``, when none was handed over)."""
-        try:
+        with contextlib.suppress(OSError):
             self._sock.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
         self._sock.close()
         self._thread.join()
         return self.fd

@@ -63,7 +63,8 @@ import hashlib
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 import numpy as np
 import torch
@@ -131,7 +132,7 @@ class Cubin:
     current stream."""
 
     @classmethod
-    def built(cls, device: Any = None) -> "Cubin":
+    def built(cls, device: Any = None) -> Cubin:
         """`noise_cubin` for ``device``'s compute capability (torch's current device by default), loaded."""
         major, minor = torch.cuda.get_device_capability(device)
         return cls(noise_cubin(f"{major}{minor}"))
@@ -490,12 +491,12 @@ class Receipts:
         self.kept: dict[int, dict[str, Any]] = {}
         self.calls, self.seconds = 0, 0.0
 
-    def bind(self, run: Any) -> "Receipts":
+    def bind(self, run: Any) -> Receipts:
         self.run = run
         return self
 
     @classmethod
-    def serving(cls, served: Any, run: Any, layers: list[Any]) -> "Receipts":
+    def serving(cls, served: Any, run: Any, layers: list[Any]) -> Receipts:
         """serve-openai's producer (``--h1-receipts``) for the window ``served`` of ``run``: on the device the served
         ``layers``' weights are on, each call's B its linear's own weight (no second copy) when every layer holds one, and
         on a CUDA device the noise from `noise.cu` (`loaded`), else hashlib's."""

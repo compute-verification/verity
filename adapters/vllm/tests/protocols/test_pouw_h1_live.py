@@ -126,8 +126,8 @@ def test_rows_past_the_batch_no_capture_size_pads_to_are_a_gap_and_live_refuses_
     run = _window(pad=1, graphs=graphs)
     (call,) = run.calls
     assert (call.m, call.pad) == (4, 0) and run.step_rows() == [4]
-    assert run.request_gaps() == ["step 0: 4 rows served and 3 in the step's batch, so the slot table can't name each "
-                                  "served row's request"]
+    assert run.request_gaps() == [("step 0: 4 rows served and 3 in the step's batch, so the slot table can't name each "
+                                   "served row's request")]
     assert run.credit()["requests"] == run.request_gaps() and {v["reason"] for v in run.gated().values()} == {RQ.UNENTERED}
     (v,) = LV.verdicts(run)
     assert not v["ok"] and v["reason"] == "live@0: live_ok is 0 at m = 4" and v["admitted"] == 3

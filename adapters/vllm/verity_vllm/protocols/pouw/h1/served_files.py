@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 
 from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.spot.verifier.one_stage import partition as P, registration as R

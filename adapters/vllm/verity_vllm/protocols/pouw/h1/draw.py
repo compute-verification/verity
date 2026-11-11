@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 
 from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.spot.device import challenger as Ch

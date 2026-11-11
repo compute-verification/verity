@@ -31,7 +31,8 @@ from __future__ import annotations
 import contextlib
 import json
 import time
-from typing import Any, Callable, Iterable, Iterator, Mapping
+from typing import Any
+from collections.abc import Callable, Iterable, Iterator, Mapping
 
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import salt as PS

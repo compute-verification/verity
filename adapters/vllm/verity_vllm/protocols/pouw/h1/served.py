@@ -92,7 +92,8 @@ import functools
 import hashlib
 import weakref
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
+from collections.abc import Callable, Mapping, Sequence
 
 import numpy as np
 

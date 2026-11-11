@@ -3,7 +3,8 @@ the refusals of a scheme that sets them wrongly (`refusals`), and the ones `veri
 (`fills`, `from_engine`)."""
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from verity.protocols.pouw.verifier import verifier
 from verity.protocols.pouw.verifier import window as Wd

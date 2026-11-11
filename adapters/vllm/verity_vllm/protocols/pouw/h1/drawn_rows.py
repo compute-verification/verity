@@ -5,7 +5,8 @@ read (`split_row`, `split_record`, `receipt_words`) and the check that a rebuilt
 ``--registered`` reads on credit's own file (`leaf_statement`)."""
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any
+from collections.abc import Sequence
 
 import numpy as np
 

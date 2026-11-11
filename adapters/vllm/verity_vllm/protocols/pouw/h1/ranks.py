@@ -36,7 +36,8 @@ from __future__ import annotations
 import importlib
 import os
 from dataclasses import asdict, dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 

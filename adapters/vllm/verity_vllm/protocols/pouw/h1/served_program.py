@@ -10,7 +10,8 @@ import gzip
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
+from collections.abc import Callable, Mapping, Sequence
 
 from verity.protocols.pouw.prover.circuit import h1device as HD
 from verity.protocols.pouw.prover.circuit import h1window as HW
