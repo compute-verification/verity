@@ -50273,3 +50273,17 @@ For the table:
 For HEADPROF: cursor/proofs-witness-9dbc at 88f0665ab6644e3cb511868343230babeb27d792 (unchanged). Your guess is right in part: see above. The follow-up's patch for your tree comes with my next entry (no branch until the coordinator's line).
 For BREAKEVEN: #8891's two cuts: 0.925 of today's GPU-s a head-block statement at one prover (3.160 against 3.416, measured, HEADPROF, `r20261111-101057-af1d`) [relayed]. Host CPU-s of the units' walk against `main`'s own build: 2.60 to 2.12 a statement on the small unit (0.82), measured, `r20261111-103459-3689`; the served unit's is not measured yet. Do not use my 10:37Z "10.91 to 7.83".
 For the table: #8891 (marked): the head block's host walk at 0.82 of `main`'s CPU-s on the small unit (measured, CPU node) and 0.925 of today's GPU-s a statement at one prover (measured, HEADPROF); a follow-up at 0.64 of `main`'s on the small unit is local, unpushed, no card row.
+
+## SERVEDCARD, Wed 11 Nov 11:07Z: on CROSS's 11:04Z "ask ci to pin #8859" line: nothing needs #8859 on `main` by morning; the one row that reads it is Thu night's fused cut, step 5 (`server_rate.py` at up to four provers), so it is needed by Thu 21:00Z, or that run is cut with #8859 merged in
+
+Tags: [run] a command I ran now, [read] a file I read now (place given), [relayed] another lane's statement I did not check, [guess] mine, unchecked. Times from `date -u`.
+
+- **Tonight's rows don't wait on it.** HEADPROF's placement steps run its own port, `cursor/proofs-verifier-cpus-headprof-5d1e` at `5c12d7d4e86a`, whose `proof_server.py` hashes to sha256 `f20d2ab048f1714e…` [run], the same as in HEADPROF's tree `42c158195ccc` [relayed: my own 09:28Z check on vy-dc-h200-3, not redone now].
+- **Thu night's fused cut reads it in one step.** Step 5 of my 05:12Z plan (`b33d6e162b`) is `benchmarks/one_stage/server_rate.py` at K = 1, 2, 4. On `main` that builds a `ProofServer` (`server_rate.py:213`) [read: `main` `08ad61db9432`], which places the verifiers only with #8859.
+  - At four provers the check on the provers' cores is the slow layout: 2.417 against 1.731 GPU-s a statement [relayed: HEADPROF 10:31Z].
+  - By my 10:39Z reading, the deployable layout is the check off the GPU host.
+  - So the run's step 5 wants #8859 in the commit it is cut from: on `main` by Thu 21:00Z, or merged into the cut [run: `git merge-tree` of `563d9b20e91e` onto `main` `08ad61db9432`, no conflict; I recheck it against the cut's `main` in my Thu 18:00Z entry].
+- **The overhead run doesn't read it.** `benchmarks/served_units/window.py` proves through `prove_time.sh`, which already runs its loopback verifier on cores of its own (`taskset -c $VCPU ... serve --zk`, the prover on `taskset -c $PCPU`) [read: `prove_time.sh:9, 127-134` at `08ad61db9432`].
+- **Node A's dependencies at 10:55Z** [run: `/tmp/sc/nodea.sh`, `main` `08ad61db9432`]: #8454, #8520, #8741, #8425 and #8771 are all open, none on `main`. CROSS has #8454 merged with `main` at `f95f042a4411` [relayed: CROSS 11:04Z].
+
+For the table: no change.
