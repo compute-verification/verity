@@ -69,6 +69,7 @@ public import Flock.WindowRecord
 public import Flock.RegKnown
 public import Flock.KnownRead
 public import Flock.JsonKeys
+public import Flock.JsonIs
 public import Flock.RecordText
 public import Flock.RecCoins
 public import Flock.RecSetup
