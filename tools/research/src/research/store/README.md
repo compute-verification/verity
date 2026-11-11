@@ -237,7 +237,7 @@ TC_PROBE = Tool(
 Declarations live next to the tool they describe (`benchmarks/tc_probe/tool.py`; the example above is
 illustrative, the files follow the scripts' argparse) and are found by `research run --tool <dotted.module:NAME>` or
 `--tool <name>` via the registry in `research/store/tools_registry.py` (name -> dotted path; keep it tiny; in a tree from before a
-layout move, at the path `moves.json` gives, a file `tools/move` appends to and never rewrites). A declaration
+layout move, at the path `moves.json` gives). A declaration
 imports nothing but `research.store.tool`: it must load on the control machine and in a shipped source tree alike (`load` falls
 back to executing `<source root>/<module path>.py` by file when the module is not on sys.path).
 
@@ -498,9 +498,7 @@ research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] 
                                               exit 4: WITHDRAWN (§7.4)
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
 research data vocab-check [--json]            what in labels/ is off the vocabulary, read-only (`vocab_check.py`)
-research data evict --target-free-gb N [--runs] [--src-dir DIR] [--dry-run] [--json]
-                                              free local disk of copies PRESERVED on the remote (`evict.py`); a sealed run dir's
-                                              files go through the root helper `vy-seal-runs` (`sealed.py`)
+research data evict --target-free-gb N [--runs] [--dry-run] [--json]   free local disk of copies PRESERVED on the remote (`evict.py`, `sealed.py`)
 research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7)
 research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
@@ -593,11 +591,10 @@ trust-dossier/v1         the computed trust level of one numerical target (`pyth
 1. **A derivation key is a claim of dependency completeness.** Bias to false misses. Exact reuse includes the source tree.
 2. **Immutable objects only.** Blobs, manifests, attempts, labels are write-once, never rewritten; the index is disposable. The
    one deletion is §7.4's: blobs of uncited artifacts past their kind's TTL.
-3. **Labels are assertions, not fields.** Keep every assertion; policy chooses. A label's `by` is whatever its writer says:
-   labels are unsigned.
+3. **Labels are assertions, not fields.** Keep every assertion; policy chooses. A label's `by` is whatever its writer says.
 4. **Verify uploads.** Size + a content check before anything is called PRESERVED, and the record says which check: a single-part
-   ETag is the object's MD5 (`etag-md5`) and a multipart one the MD5 of its parts' MD5s, which the client computes from the local
-   file (`etag-multipart`); the manifest's sha256 stays the identity and read-back (`sha256-readback`) stays available.
+   ETag is the object's MD5 (`etag-md5`) and a multipart one the MD5 of its parts' MD5s (`etag-multipart`); the manifest's
+   sha256 stays the identity and read-back (`sha256-readback`) stays available.
 5. **Producers never carry verifier truth.** A proof artifact may hold proof bytes, the claimed statement, prover metadata;
    the verifier's chain/spec/keys come from its own closure or an explicit trusted input artifact.
 6. **Content, not pathname**, is the identity of every input.
