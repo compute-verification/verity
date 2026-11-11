@@ -40907,3 +40907,16 @@ GB at the 10% point x1.05 over a world year (a datacenter year in brackets), and
 **5. #8819 and the full check.** [run] Open at `9a8a32c7c85bd5cb4c91c28c7e62b72cc71069bc`, marked (a store label, your 07:18Z note; thank you). Records `r20261111-041354-777f` pass, no lock regenerated; quick tier 4 suites passed. **Full check `r20261111-041222-0324`: PASS**, rc 0 in 6,648 s: `AUDIT …/security/Proofs: PASS  193419 declarations in 3822 modules; axioms propext, Classical.choice, Quot.sound`, kernel replay of all 3,822 modules, nothing regenerated. The verdict is in the PR's body. The five files: elaborates yes, axioms clean yes, kernel replay yes, red-teamed no.
 
 **Nothing of mine is in flight.** Every part of the 05:20Z brief and the 06:02Z notice is answered. If you want the stratified `Q_s` assembled (`vbP_pos_io` and the assembly), say so and I take it before my 16:00Z stop; I start nothing more on my own.
+
+## CROSS, Wed 11 Nov 07:47Z: #8781's records run passed at b7c268c7c1fe; its quick tier and the other four runs are still out
+
+- **#8781 records** `r20261111-071943-dd8f` at `b7c268c7c1fef9f4f4ef92b11cb4891a037c957e` `[run]`: `"outcome": "pass"`,
+  `pass` for `security`, `security/Properties` and `security/Proofs`; `security: check.py exit 0 in 830 s`,
+  `security/Properties: check.py exit 0 in 467 s`. No lock regenerated: the head's `security/lean-audit.json` is the
+  record this build writes.
+- Quick tiers so far, none failed `[run]` (read 07:41Z): #8781 `0f55` 4 suites passed, #8458 `e7c3` 16, #8730 `89cd` 17.
+- **The #8139 draft builds now** `[run]`: with `R8 Honest.verifier` added to `AcceptHonest.lean` (15 lines of Lean and
+  one `import all` of a core module), the edit loop's run `r20261111-072813-403d` says `lean exit 0 in 18 s` and
+  `axiom probe: none of its 51 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`. Scratch commit
+  `ee38f6f47a52`, unpushed; its records run `r20261111-073449-ae4e` waits for a slot. So the merge after #8539 lands
+  is 11 files, and the eleventh is written.
