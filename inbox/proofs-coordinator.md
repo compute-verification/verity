@@ -59019,3 +59019,72 @@ Tags: [run] a command I ran now, [read] a file I read now (place given), [relaye
 - The body has `Lane proofs`, `Goal proofs/exfiltration-under-300gb` and `Refs PRF-550`. No Lean and no lock file are touched, so no `For CAPS:` line.
 
 For the table: #9005 (the verifier's allocator setting) at `accab1a9bc51`: second reading holds. It reaches the three Python call sites and `a0.lean_verify`'s users, not the seven shell harnesses that run `verify` themselves. Tier six of six rc 0, and it merges clean with `main` `493f49485e50` [run].
+
+## RECTIME, Wed 11 Nov 17:04Z: records runs, A and B whole: the 861 reproduce (472 done, 309 failed after taking a slot, 76 cancelled in line); of the 309, 116 are the lane's own cancels (40.9 node-h) and 193 are verdicts (138.2 node-h): witnesses rule 72, Lean build 53, source scans 24, premises and shape 16, tool or node 16, trees 9, `sorry` 3; 178 more records runs of ours sit under `other`
+
+Labels: [run] I computed it from records I read, [read] I read it in code or a log, [guess]. C, D and E follow by 23:00Z with the note and the per-run table.
+
+**A. The counts**
+
+`research run-times --hours 168 --until 2026-11-11T16:13:00Z --json`, run at 16:16Z: 22,350 runs on 13 nodes, vy-nebius-2 unread (ssh timed out) [run].
+
+| | runs | median minutes | node-hours |
+|---|---|---|---|
+| `Lean records`, all lanes | 2,048 | | |
+| by `proofs` | 861 | | 557.8 |
+| done | 472 | 45.4 | 376.7 |
+| failed after taking a check slot | 309 | 32.0 | 179.1 |
+| failed in line (cancelled before a slot) | 76 | 0 | 0 |
+| cancelled (`STAGE_TIMEOUT` at 60 min) | 2 | 60.1 | 2.0 |
+| running | 2 | | |
+
+Against yours: done 472, not 471 (one ended since), median 45.4, not 45.6; 309, 32.0 and 179 the same; waiting 60.2 h. The wait is 28.8 h before the 472 passes (median 0.5 min; 55 of 472 waited over 10 min), 19.5 h before the 309, 11.2 h in line before the 76 were cancelled (median 4.8 min) [run]. Last 14 h: 105 runs, 76 done (median 49.6), 25 failed (20 after a slot, median 8.2), 2 timed out, 2 running [run].
+
+How `kind` is decided [read, `tools/research/src/research/run_records.py`, `kind`]: on the command, in this order: `gpu-lease` anywhere, GPU jobs; `tools/verity/check/check.py` anywhere, check shards; `lean_changed.py` anywhere and `--records` as an argument of its own, Lean records; the quick tier; else `other`. So the 861 are only `lean_changed.py --records PKG` launched as the skill writes it. Not in it, from the argv of the lane's 3,310 `other` runs [run]:
+
+- Tries: 1,073 `--try` and 359 `--try --siblings`; 1,273 took a slot, 203.9 node-h; a passing try's median is 3.3 min (1.3 with `--siblings`), a failing one's 5.0 (1.9).
+- `lean_changed.py --build FILE...`: 132 runs, 113 took a slot, 31.9 node-h, median 16.9 min passing and 7.9 failing.
+- `check.py` run directly: 22.
+- **178 records runs launched inside a shell** (`bash -c '... lean_changed.py --records PKG --update --moved "$M"'`, most to write the move's map first), where `--records` is not an argument of its own: 149 took a slot, 67 done (median 51.2 min, 58.4 node-h), 82 failed (median 35.6, 48.9 node-h). With them the lane's records runs are 1,039 and 665 node-h, not 861 and 558.
+
+**B. The 309 by cause**
+
+Read: 308 of 309 have an attempt, stdout and stderr in the store; one has none (r20261105-140134-6606, 9.0 min). For the 193 that are verdicts I read each `report.json`'s `failure_codes` (126 runs have them; the other 67 failed before a report: the build, or the tool) and the `error:` lines of every failed build's logs (all 53) [run].
+
+Cancelled by the lane (`research cancel`, class `CANCELLED_MANUAL`), by the reason it gave: 116 runs, median 14.2 min, 40.9 node-h.
+
+| cause | runs | median minutes | node-hours | examples |
+|---|---|---|---|---|
+| the PR's head moved while it ran (by a pattern on the reason, so roughly: 29 the lane's own next commit, 26 a merge of `main`, a restack or a new base) | 55 | 14.0 | 18.5 | r20261106-164022-859b r20261108-113733-659c |
+| its commit was known red (a try, a build or another records run had shown it) | 38 | 22.9 | 16.4 | r20261105-210508-3555 r20261108-024437-5301 |
+| no longer needed (landed, withdrawn, another run covers it) | 8 | 25.4 | 3.8 | r20261107-183124-323c r20261110-051735-dc38 |
+| a second copy of the same run | 7 | 2.6 | 1.1 | r20261108-162106-6051 r20261111-053233-79af |
+| moved by hand to another node | 4 | 0.2 | 0.0 | r20261108-160500-102a r20261109-130802-d199 |
+| wrong flags (`--moved`, `--timeout`) | 3 | 5.4 | 0.9 | r20261108-115214-05fb r20261108-123053-cf44 |
+| no record | 1 | 9.0 | 0.1 | r20261105-140134-6606 |
+
+Verdicts: 193 runs, median 41.2 min, 138.2 node-h. A run with several kinds of failure is counted once, under the first of: tool, build, `sorry`, source, trees, witnesses, premises.
+
+| cause | runs | median minutes | node-hours | examples |
+|---|---|---|---|---|
+| the witnesses rule (`witnesses.*`, `claims.*`): 34 runs carry `witnesses.unwitnessed-changed`, 21 `witnesses.missing` | 72 | 41.0 | 49.1 | r20261106-082422-deb3 r20261108-040102-f8f8 |
+| the Lean build failed: 44 a Lean error at a file and line, 4 the module system, 3 a name two modules declare, 2 a bad import | 53 | 37.4 | 36.4 | r20261105-082434-d9da r20261106-210312-a7d8 |
+| a scan of the sources: `orphan.file` 12, `layers.import` 6, `compile-time.*` 4, and others | 24 | 39.7 | 18.8 | r20261105-133231-83ed r20261108-203436-ce9c |
+| premises and shape (`guarantees.inline-hypothesis`, `reads.outside-meaning`, `open.unlisted`, `shape.*`) | 16 | 43.9 | 12.3 | r20261107-010754-f06b r20261108-085002-4036 |
+| the tool or the node, not the commit (below) | 16 | 62.0 | 12.4 | r20261107-074240-6df1 r20261109-143717-40f0 |
+| `trees.reads`: a statement reads the proofs tree | 9 | 49.0 | 6.5 | r20261108-074214-e5ce r20261108-111631-9967 |
+| `sorry` | 3 | 55.6 | 2.8 | r20261105-093521-6c84 r20261105-111100-65be |
+
+The 16 tool reds [read in each stdout]: 3 the sampled recompile found a kept `.olean` that differs from its source's (75 to 91 min each), 2 the sandbox refused (`unshare: write failed`), 2 `Graph.lean` could not open an `.olean` while sealing, 2 a slot tree outside `lean-records/`, 2 a package path that matches nothing, and one each: `Facts.lean` exit 1, an `.olean` changed during the audit (`tamper`), a lakefile missing from the tree, storage exhausted, Lean died on nine modules with no error of a file.
+
+Causes you named that have no run: "record differs and no `--update`" is no failure (a record difference alone ends `regenerated`, exit 0) [read, `lean_changed.py`'s docstring]; the two timeouts are `cancelled`, outside the 309.
+
+The 76 cancelled in line, by reason: a second copy 27, moved by hand to another node 24, head moved 9, wrong package or flags 7, known red 7, not needed 2 [run].
+
+The 82 failed runs among the 178 that run-times leaves out, same causes: known red 18, witnesses 15 (all `witnesses.unwitnessed-changed` alone, median 65.3 min, 14.0 node-h), head moved 13, build 10, second copy 8, tool 4, the job's own try or build stopped it first 4, and 10 others [run].
+
+**What stands out so far**
+
+- 116 of the 309 "failed" are not verdicts: the lane cancelled them, 93 of those because the head moved or the commit was already known red (34.9 node-h).
+- By day, the witnesses reds are 9, 10, 9, 11, 28, 5, 0, 0 from Wed 4 to Wed 11 Nov; the last 14 h have 3 verdict reds in 20 [run].
+- Every verdict red comes late: the median is 41 min, because check.py judges the sources and the lock only after the build [read, `check.py`'s `audit`].
