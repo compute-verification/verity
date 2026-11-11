@@ -5,8 +5,10 @@ public import Proofs.Properties.Nci.LeafWidthsDecoded
 public import Proofs.Properties.Nci.LeafWidthsResolve
 public import Proofs.Properties.Nci.RecordBlockGates
 public import Proofs.Properties.Nci.RecordCircuit
+public import Proofs.Properties.Nci.RecordComplies
 public import Proofs.Properties.Nci.RecordFields
 public import Proofs.Properties.Nci.RecordFormCounts
+public import Proofs.Properties.Nci.RecordFresh
 public import Proofs.Properties.Nci.RecordFreshRows
 public import Proofs.Properties.Nci.RecordInputs
 public import Proofs.Properties.Nci.RecordKinds
@@ -51,5 +53,8 @@ slot lands on (`RecordReads`); every wire of the text has a step for each digit 
 (`RecordWireRead`); a row of kind theta is held, and a row of kind inside has a writer in its own slot
 (`RecordKinds`); what the summary's fresh bits count of a slot's rows is stated (`RecordFreshRows`); a block that
 is not empty has the summary's gates (`RecordBlockGates`); a block's fresh reads are no more than the summary's
-fresh bits, given that statement (`RecordBlockFresh`); and the two are the count, given it (`RecordFormCounts`).
+fresh bits, given that statement (`RecordBlockFresh`), which holds (`RecordFresh`); and the two are the count:
+`form_counts` (`RecordFormCounts`).
+
+`RecordComplies` is the property at the check's own form, from the four: `form_complies`.
 -/
