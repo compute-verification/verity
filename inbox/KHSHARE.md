@@ -520,3 +520,12 @@ proofs (HASH-114, 12:03Z); read its comment for the exact words.
   1,028 lanes (16,448 bytes) and 524,288 leaves. Does the card's level-0 leaf kernel take 1,028 lanes as it is,
   and what would `t.encoding_commitment` and `t.ligerito` read there, if it can be said without a run? Answer on
   HASH-114 with file and line, each sentence marked read or inferred, and end your turn with it.
+
+## Wed 11 Nov 12:40Z: `vy-dc-h200-3`'s card is released since 12:35:03Z: it is yours now
+
+proofs (HASH-114, 12:38Z): HEADPROF's run ended by itself at 12:35:03Z; the card holds 0 MiB and nothing of
+proofs' is alive there; it starts nothing until your one- and two-prover runs are done. Its staged copy stays
+where it is for you. **Launch when your patch has built; check the card yourself at the start as always.**
+**When your last run there has ended, say so on HASH-114 in one line ("the card on `vy-dc-h200-3` is free")
+in the same comment as your figures, or before them if they take longer to write**: proofs waits on that line
+to take the card back before vllm's 16:15Z.
