@@ -58514,3 +58514,80 @@ For the table: no cell.
 - **Next, when `9612` ends:** I commit the locks it kept, unedited, list each changed record against my 16:00Z prediction, open the PR unmarked, and write the ready line once `0c1f` is green at… the lock commit changes the head, so the quick tier reruns on it: only the suites whose inputs are the two lock files rerun, the rest are cached [guess].
 
 For the table: no cell.
+
+## AUDITSUM, Wed 11 Nov 16:21Z: 67 error terms in one table; 13 reach 2^-100, 25 miss, 19 nobody has evaluated (10 more are set by design)
+
+The note is `note:proofs/20261111T1620Z-report-security-numbers-audit` (synced). It compiles the ledger extract and the ten audit notes; it evaluates nothing and no Lean was reread. Each row there has its value, budget unit, premise, owner, issue, source and label.
+
+This table has 67 error terms. 13 reach \(2^{-100}\) at the sizes their sources took as served and a budget of \(2^{80}\) (calls or compressions, as each row says), 25 miss, and 10 are set by design (a 1% audit, a \(2^{-40}\) window). 19 have no value from anyone. [derived: counted from the third column of the table below; 13 + 25 + 10 + 19 = 67]
+
+The verdict is at each source's own size points (floor, B, A) and budget unit (calls or compressions, named in each row). Those sizes are disputed (the card at L441, network-accounting at L645), which is item 1 of the 12 things the note's last section could not reconcile.
+
+**The terms that miss by the most**
+
+Lowest figure first, by each row's figure for its own guarantee at the worst size point its source evaluated. [derived: the order is mine, from the table's values]
+
+1. **The two-stage audit's period sum (row 11, proofs)** is above 1 after 100 windows at δ = 1% and \(2^{1.2}\) over a world-year at δ = \(2^{-40}\) (SP S9, HD S2); a pooled period statement that charges δ once would raise it, and a guarantee's statement is Daniel's.
+2. **The communication bridge (row 61, lean, LEAN-267)** is above 1 at δ = 1/100 for every period and \(2^{-6.8}\) a year of hourly windows at δ = \(10^{-6}\) (L721); the pooled bridge lean is writing would raise it, and since it changes the guarantee's statement it is Daniel's.
+3. **vLLM's two root-only legacy sample seeds (row 32, circuits and vllm, CIR-231)** give 0 bits at \(2^{80}\) calls (L501); sampling through `replay_key` (VLLM-306, not scheduled) would raise them, and scheduling it is vllm's lead's.
+4. **PoUB's sketch receipt (row 49, memory-accounting, MEM-248)** is \(2^{-15.1}\) at \(2^{80}\) compressions and \(2^{-14.5}\) a year (RS, L519); 64 sketch rows, a 512-bit sign key, five other changes and a year pooled as one session read \(2^{-101}\) (L646), which is a new PoUB version for Daniel, with the budget ruling owed by proofs first.
+5. **The PoUS demo (row 57, memory-accounting, MEM-248)** is \(2^{-20}\) an audit at 320 rounds and \(2^{-11.5}\) a year of daily audits (RS); about 1,577 rounds an audit, or publishing the week pooled, would raise it (L646), and which of the two the guarantee says is Daniel's.
+6. **β_ext (row 3, proofs, PRF-534)** is \(2^{-22.8}\) an audit at A and \(2^{-80.7}\) at the floor as main states it, at \(2^{80}\) calls (SP); reading `StrictBirthday` through a capped extractor in place of `ExpectedCR` would raise it, and a locked premise is Daniel's.
+7. **PoUW's period binding (row 35, compute-accounting, CMP-395)** is \(2^{-41.8}\) to \(2^{-31.8}\) a year and \(2^{-35.3}\) to \(2^{-25.3}\) at 82,403 windows (L558); a strict cap on the extractor with `cr/sha-512` (\(2^{-139.2}\) to \(2^{-129.2}\) a window), a bound on κ and a deployed list size would raise it, and the premise is Daniel's.
+8. **The binding of `RecursiveAuditC3` (row 17, proofs, PRF-535)** is \(2^{-59.3}\) to \(2^{-36.2}\) at \(2^{80}\) calls and is not deployed (FL); a strict premise in place of the linear `FinderCR` would raise it, and a locked guarantee's premise is Daniel's.
+9. **Flock's zero-knowledge error in its linear form (row 19, proofs, PRF-535)** is \(2^{-82.1}\) a session and \(2^{-47.0}\) an audit at A with as many sessions as units (FL, PD); the proposed quadratic form (\(2^{-160.25}\) by FL) would raise it, and it changes two deployed guarantees' statements, which is Daniel's.
+10. **Pearl-C's and Pearl+'s δ (row 40, compute-research, CMP-397)** is \(2^{-64}\) at the statement's cap and \(2^{-48}\) by its formula at \(2^{80}\) (CR, L558); a 180-bit seed would raise it, and CR says changing it is Daniel's.
+
+Below the bar and not bulleted, in the same order [derived]: the draft's non-interactive sample (\(2^{-48}\) at \(2^{80}\), row 12), PoUB's draw (\(2^{-49.76}\) a session, row 51), the recursion's off-shape branch (\(2^{-55.7}\), row 16), `SquaringFloor` and `ChainSum` (\(2^{-64}\), row 55), AuditRO (\(2^{-67}\) a pass, row 50), the Sm120 fork half (\(2^{-72.4}\), row 38), the logging chip (\(2^{-80}\), row 48), `deltaPub` at A (\(2^{-81.7}\), row 4), completeness at A (\(2^{-85.3}\), row 10), PoUW's grinding premium (\(2^{-88}\), row 34), LMS identifiers (\(2^{-89}\), row 28), the recursion's knowledge soundness (\(2^{-94.95}\), row 15), SPOT's first-hit term (\(2^{-95.87}\), row 1), and the two 256-bit rows (\(2^{-97}\), rows 25 and 26).
+
+**Not evaluated by anyone**
+
+The 19 rows marked "not evaluated", with owner and issue.
+
+- Row 13, the probability that the second stage refuses: proofs, PRF-523.
+- Row 18, the δs of `RecursiveAuditC3`: proofs, PRF-535.
+- Row 21, the PRF advantage of SHA-512 as a function of the budget: proofs (PRF-535, PRF-536); memory-accounting for the wipe and the draw (MEM-248).
+- Row 30, the PRF term η of assumption A4 as a function of the calls: proofs, PRF-536.
+- Row 31, the second term of the keyed leaves' hiding: proofs, PRF-536.
+- Row 36, PoUW's δ_ks at the served size, with the κ of row 35 and a deployed list size: proofs (PRF-523) and compute-accounting (CMP-395).
+- Row 39, the zero-knowledge half of the Sm120 hypothesis: compute-accounting, CMP-395.
+- Row 41, Pearl FP8 v4's concrete security: compute-accounting, CMP-395.
+- Row 43, the NVFP4 statements at the deployed noise: compute-research, CMP-222 and CMP-400.
+- Row 44, ncp's δ: compute-research, CMP-397.
+- Row 45, Dither's κ_S, κ_dmm and κ_dsha: compute-research, CMP-397.
+- Row 52, PoUB's `split_t`: memory-accounting, MEM-248.
+- Row 53, the δ of PoUB's `KeyBinding`: memory-accounting, MEM-248.
+- Row 58, what the PoUS schemes rest on (a claim listed as refuted; a conjecture unchecked above \(2^{25}\) blocks): memory-accounting, MEM-198 and MEM-248.
+- Row 60, the network certifier's pooled period figure at network-accounting's window count: network-accounting, NET-329.
+- Row 62, the joint guarantee's sum: lean (LEAN-267); compute-accounting for `block_record.py`.
+- Row 63, PoUW's leg p in the slowdown: training, TRN-95.
+- Row 64, ks_t at the served size: proofs (PRF-523), read by training (TRN-95).
+- Row 65, the composite's total at the remote demo's parameters: soundness, PRF-544.
+
+Three more have a value only outside Lean: LMS's ε_forge (row 27, a free function in Lean; soundness, PRF-427), Flock's zero-knowledge error as a stated number (row 19, t is free; proofs, PRF-535), and `deltaPub` at the sample's reads (row 4, the lemma stops at \(W \le 2^{40}\); proofs, PRF-534). Whether any served path reads the legacy seeds of row 32 is also open (circuits and vllm, CIR-231 and VLLM-306).
+
+**Figures that were stale on a page or in a doc**
+
+Each with where it is and whose it is.
+
+- "\(2^{-41}\) a pass" for AuditRO, where the code has \(2^{-67}\): PoUB's `PROTOCOL.md:666, 684`, `timing.py:63`, `Bandwidth.lean:41-42`, `RateAuditDeployed.lean:404-406`. memory-accounting (L388, L519).
+- PoUB's "\(2^{-26.04}\) a node's 10 minutes" in its `PROTOCOL.md`, where the line is \(2^{-30.19}\) by CY. memory-accounting (HD S8, CY).
+- PoUB's published session error \(2^{-40}\), which leaves the sketch term out. memory-accounting (L519).
+- SPOT's \(2^{-33.6}\): on soundness's two goal descriptions and PRF-543's brief (removed; L485, L502), and on the goals `proofs/sampled-audits-sound` and `proofs/soundness-nothing-open` (the wrong term; HD S3). soundness and proofs.
+- "\(2^{-90}\) a run" and "\(2^{-45.5}\) a year": PRF-466's text and the Goals page until Tue 10 Nov. proofs (FL, HD).
+- The coordinator's "132 classes, \(2^{-100.83}\)": withdrawn in M §7. proofs.
+- The goal `proofs/recursion-knowledge-sound` (done) quotes \(2^{-92.2}\) a world-year, at \(2^{82.75}\) calls; row 15 has \(2^{-94.95}\) at \(2^{80}\) calls and \(2^{-88.6}\) in compressions on 64 KiB rows. proofs (HD S7).
+- "about 65 bits … below the 100-bit floor" in ten docstrings and in `.agents/skills/friction/SKILL.md:190-192`. proofs (HD).
+- Flock's backend card, `backend.py:126-140` (\(2^{-97.8}\) a repetition, \(2^{-195.5}\), BLAKE3 and SHA-256), and the C3 README's "Bits to cite: 88". proofs (HD).
+- The lock's note "zero-knowledge only" for the committed coins' hiding (`lean-audit.json:3377` against `:3428`) and a docstring naming the pinned key. proofs, LEAN-186 (FL, L388).
+- `ComposeMonitoringPeriod.lean:191-196` (\(2^{-51.7}\) to \(2^{-41.7}\), which overstates by the window count \(2^{16.3}\)) and `Headline.lean:139-141`; and PoUS's 1,577 rounds, which lean reads as 1,578. lean replaces three docstrings (L558, L721).
+- The remote README's 730 and 8,766 phases a month and a year, where the periods are 720 and 8,760. soundness (L721).
+- The draft's Formalism page, "\(\epsilon \le 2^{-39} \delta + (1 + 2^{-39}) \kappa_\Pi + \epsilon_H + 2^{-125}\)": not on main, where \(\alpha^2 - 1 = 2^{-9.53}\). proofs (HD S12).
+- The draft's "All of the math is machine-checked", against its Appendix D and the two or three open premises under `SpotKSTwo` and `SpotExfilTwo`; its "negligible"; and its "does not rest on any property of H", true only on average over keys. proofs (HD S11, S13; L701).
+- The draft's Remark 3.4: its example of \(2^{-128}\) at k ≈ 89/p cannot be reached through Corollary 3.16 while SPOT's ε is above it. proofs (HD, which read it at the superseded \(2^{-33.6}\)).
+- Pearl+'s three wrong quoted numbers: integrity "1 of 164" is 2 of 164; "ε = 0.009983 at δ = 1/100" is the sampling term alone; "0.37% at 8192^3" is not the served point, which is 0.65% at Llama 3.2 1B's worst linear. compute-research (L361).
+- The collaborators' page: ncp "≈0.9% at n ≥ 2048" against the code's 1.005%, and Pearl+ NVFP4 0.61%; the PoUW README lists 0.723% under "Proved" though the statement is vacuous at the deployed noise. compute-research and compute-accounting (CR, L579).
+- Docstrings calling a design point "served": `Advantage.lean:13`, `Dither.lean:265-266, 273`. compute-research (CR).
+- The logging chip spec's "κ \(\le 2^{-80}\) a proof", from an older note and not rederived. compute-research (CR row 22, L399).
+- `block_record.py` writes "proved": True on a sum of published δs that no Lean declaration instantiates. compute-accounting (L721).
+- PRF-456's "\(2^{-61.0}\) a class audit": HD's guess at where it comes from is withdrawn by HD; PRF-517 gives it as network-accounting's \(2^{-53.4}\) an audit over 200 class audits a link window. network-accounting (HD).
