@@ -1388,6 +1388,7 @@ def two_stage_strata(cells: Iterable[Cell], merged: int | None) -> list[Cell]:
 def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *, budget: float, replay: float,
                      widths: bool = False,
                      margin: float = 0.0,
+                     kappas: Sequence[float] | None = None,
                      boundary: float = 0.0, h: float = 0.0, stratify: bool = True, served: float | None = None,
                      union: bool = False, registration: float = 0.0) -> dict | None:
     """The two-stage design with the least `two_stage_exfil` bound at a cost of at most `budget`: width-stratified
@@ -1409,7 +1410,9 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     where that costs less (`two_stage_statements`), q then the most the budget pays for (`_registration_q`).  With
     `margin` m > 0 the family also holds, at each threshold and κ, the design that samples (1 + m) k_t, at most n_t, of
     every stratum but the one whose statements cost the most proving at those k: where one stratum is most of the
-    proving a margin on the rest costs little, and the design is again never worse.  Its row:
+    proving a margin on the rest costs little, and the design is again never worse.  With `kappas`, some of `KAPPAS`,
+    the family holds only the designs at those κ: k_t grows with κ, so a caller that holds down the proof blocks a
+    sampled replay block proves pins it.  Its row:
     `merged` (the widest size class in stratum 0, None where each width is a stratum), `kappa`, `margin` (m where its
     k carry it, else 0), `k`, `q`,
     `registration`, `registration_sample` (Q, the
@@ -1420,6 +1423,8 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     cells = list(cells)
     if not margin >= 0:
         raise ValueError(f"a margin is at least 0, not {margin}")
+    if kappas is not None and not (kappas and set(kappas) <= set(KAPPAS)):
+        raise ValueError(f"a design's κ are some of KAPPAS, not {tuple(kappas)}")
     if not cells or not budget >= boundary:
         return None
     classes = {_size_class(c.bits) for c in cells}
@@ -1439,6 +1444,8 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
             strata[c.stratum] = strata.get(c.stratum, 0.0) + c.n
             widest[c.stratum] = max(widest.get(c.stratum, 0.0), min(c.bits, inf if served is None else served))
         for kappa in KAPPAS:
+            if kappas is not None and kappa not in kappas:
+                continue
             k = {t: min(ceil(n), max(1, ceil(kappa * n * (widest[t] + 1 / _LN2F + log2(replay_blocks * n)) / charge)))
                  if charge > 0 else 1 for t, n in strata.items()}
             if m:
