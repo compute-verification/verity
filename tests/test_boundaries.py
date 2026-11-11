@@ -197,7 +197,7 @@ LEAN_OF_RECORD = ("a verifier imports no verity.ml code (AGENTS.md \"Design rule
 #: Security areas).
 SPOT_PYTHON = ("core.protocols.spot",)
 SPOT_TREES = ("verity/core/protocols/spot", "verity/core/service/spot", "verity/core/service/flock",
-              "verity/ml/flock")
+              "verity/ml/flock", "verity/ml/flock/pod", "verity/ml/flock/verifier", "verity/ml/flock/tool.py")
 SPOT_LEAN = ("verity/core/service/spot", "verity/core/service/flock")
 SPOT_SECURITY = ("Security/*/Flock", "Security/*/Flock.lean", "Security/*/Spot", "Security/*/Spot.lean",
                  "Security/Definitions/Claims/Sampling*")
@@ -522,14 +522,15 @@ def _covered(rel: str, globs: Iterable[str]) -> bool:
 
 
 def _spot_python_offenders() -> list[str]:
-    """Each import of a certifier module (``CERTIFIER_MODULES``) in a Python file of ``SPOT_TREES``, its tests included."""
+    """Each import of a certifier module (``CERTIFIER_MODULES``) in a Python file of ``SPOT_TREES`` (a tree, or one file), its
+    tests included."""
     out = []
-    for tree in SPOT_TREES:
-        for path in sorted((ROOT / tree).rglob("*.py")):
-            if {".lake", "__pycache__"} & set(path.relative_to(ROOT).parts):
-                continue
-            out += [f"{path.relative_to(ROOT)}:{line}: {name}" for name, line, _ in _imports(path)
-                    if any(name == m or name.startswith(m + ".") for m in CERTIFIER_MODULES)]
+    files = {p for tree in SPOT_TREES for p in ([ROOT / tree] if (ROOT / tree).is_file() else (ROOT / tree).rglob("*.py"))}
+    for path in sorted(files):
+        if {".lake", "__pycache__"} & set(path.relative_to(ROOT).parts):
+            continue
+        out += [f"{path.relative_to(ROOT)}:{line}: {name}" for name, line, _ in _imports(path)
+                if any(name == m or name.startswith(m + ".") for m in CERTIFIER_MODULES)]
     return out
 
 

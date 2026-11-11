@@ -1,5 +1,62 @@
 # Network certifier (`verity.core.protocols.certifier`)
 
+## The network bound
+
+The network bound limits what a covert sender in the serving node can tell a client through the network certifier
+beyond what the registered Program computes from its committed values: per execution phase, the probability that an
+accepted audit leaves the certified traffic outside what that Program accepts, and over a monitoring period, the number
+of bits of such a sender's secrets a decoder recovers from the client's view.
+
+The guarantee is `NetTiming.Guarantees.PeriodLeakAccepted`
+(`Security/Definitions/NetworkCertifier/Guarantees/Period.lean`), proved as
+`NetTiming.SecurityProofs.PeriodLeakAccepted` (`Security/Proofs/NetworkCertifier/Period.lean`). Over a monitoring
+period of n execution phases (the Lean's windows), execution phase i audited by the compiled sampled verifier at its
+registered statement, with one network certifier on the server's uplink running its code on schedules in `Ss`:
+
+- per execution phase, at a statement in scope, `Pr[accept ∧ ¬RLeakCertifier(δ)] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`;
+- where the network certifier registers its observations in every execution phase, the secrets whose every execution
+  phase meets its good event (`WindowGood`) number at most
+  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, that is
+  `log2 #Ss + Σ_c log2 (cap_c + 1) + Σ_i (#(freeInputs_i \ reg_i) + log2 #faultySets_i(δ) + β_i + k_i · log2 Dj)` bits.
+
+`RLeakCertifier(δ)` says every observation sequence the network certifier registers is one the registered Program
+accepts at the trace's committed values with some incorrect set the audit allows at δ. ε_ks and ε_bind are the sampled
+verifier's errors (`Compiled.KS`'s) and `B_tap` a collision between the extracted trace's openings and the network
+certifier's. `cap_c` bounds connection c's cells; `freeInputs_i \ reg_i` are execution phase i's free inputs (the
+advice) outside its registered inputs; `faultySets_i(δ)` are its possible incorrect sets at δ and β_i bounds the bits
+any of them commits; k_i is its steps and `Dj` bounds each step's jitter class.
+
+It bounds each execution phase's failure on its own: the union over the monitoring period's live coins is not stated,
+and `WindowGood` adds a condition no proof gives, the registration's values at the prover's registered inputs. It is a
+statement about the network certifier's code (`recordingCode`), not about runs of the network check's Lean
+(`../network/lean`, `NetworkCheck`), which is the verifier's code and states no bound.
+`NetTiming.Guarantees.PooledLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`) is the
+pooled count, with the incorrect proof blocks paid for once over the monitoring period,
+`#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i` at `Fmax ≥ ln(1/δ)/q`
+(N the period's proof blocks, b each one's committed bits, q the per-execution-phase detection probability), failing
+with probability at most `δ + Σ_i e_i + Σ_i e'_i`. It is conditional on two per-execution-phase hypotheses not yet
+discharged (`hesc`, the conditional escape; `hleak`, the leak relation at the witness's incorrect set), so it is not
+yet the deployed system's bound over a monitoring period.
+
+What `PeriodLeakAccepted` takes, as its record in the lock (`Security/lean-audit.json`, `guarantees`) lists it. Named
+assumptions: none. A premise that is part of what it says (`domain`):
+
+- `Claims.Sampling.CommitmentScheme.Binds`: the trace's commitment binds, a break giving an explicit collision.
+
+Open premises (`open`):
+
+- `Verity.Assumptions.TrustedHost` (`trusted-host`): the network certifier, the auditor's device on a host the developer
+  doesn't control, runs its stated code.
+- `Claims.SamplingGeneric.Compiled.KS`: the compiled sampled verifier is knowledge sound at its errors on the
+  statements in scope.
+- `NetTiming.ScopeAcc`: the statement is in the sampling scope and its boundary layout fits its Program over its steps.
+- `NetTiming.CertifierRegisters`: the network certifier's openings pass under the statement's roots, cover every
+  egress and ingress gate, and hold its record's rows there; the antecedent of the period's count.
+
+`PooledLeakAccepted`'s record lists one open premise, `Verity.Assumptions.TrustedHost`.
+
+## What this package holds
+
 A spec-level reference for network accounting's timing channel:
 - the constant-rate, left-packed certifier;
 - the Program's logical schedule, with its clock-sync advice (δ, ρ);
@@ -133,6 +190,10 @@ A spec-level reference for network accounting's timing channel:
   page its source, the window's own write or the previous window's carried port, and a `PageCopy_v1` copy block holds
   the window's carried port to it. `PoolChain_v1` is two windows so chained, and `parts` prices both units at any
   class, which `benchmarks/mempool/cost.py` does at a served load's;
+- the compile slice charging the length terms (`compile_slice_v7`): `CompileSlice_v7`, `CompileSlice_v1` with
+  `ChargeLink_v2{D, 0, 0, K}` in place of `ChargeLink_v1{D}`, a length slot for each certified arrival read from
+  ``cert`` (its output length and its certified max_tokens), so a window's charge covers `code_v1`'s segment and its
+  length tail. It is the served windows' slice (vLLM's `serve_commit.SERVED_SLICE`);
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
   the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceRowGroups_v1`). `leaf_ok`
@@ -313,7 +374,7 @@ AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a paramete
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
 and their evaluator.
 The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
-`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
+`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `compile_slice_v7`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.ml.protocols.certifier`, stated over the ones here.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
