@@ -461,6 +461,7 @@ def test_the_products_term_is_the_theorem_of_records_on_m():
     assert F.bound(stated, 2 * c, k)["terms"]["products"] == pytest.approx(2 * fig["rho"], rel=1e-12)
     one = F.published(stated)
     assert one["products_rests_on"] == F.he_rests_on(fig)
+    assert one["products_rests_on"].startswith(f"theorem of record on M at {F.SHARED_LABEL}, given (H)")
     assert all(x in one["products_rests_on"] for x in ("(H)", "β_w = 16 and β_x = 15.9 bits a word", F.BETA_K_LABEL,
                                                        "the casts of one value count as one word", "(E)",
                                                        "b_y = 16 bits an output", "a single counterexample refutes"))
@@ -546,6 +547,40 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
         assert F.he_products(model, c, at)[:2] == (None, why), at
     with pytest.raises(ValueError, match="past k"):
         F.he_figure(F.he_of_rows(HE_STEP, 9e8), c, C)
+
+
+def test_all_of_m_binds_where_the_count_puts_it_above_the_weight_gradients_and_the_words_say_so():
+    """The subset that binds is the one whose count is largest, and the row's words name it with its F. Here M's
+    forward and input-gradient products give many output wires a MAC, where the statement's second conjunct loses
+    most of the count: by the count all of M binds, at F = 2/√3 and the code's β_w, and by the second conjunct the
+    weight gradients alone would, so a term read from the second conjunct fails here."""
+    k, c, C = policy.CONSOLE[1], 1e14, 1e18
+
+    def group(macs, wires, weight, forward, dw, k_dim):
+        return {"beta": [16.0, 16.0], "width": [16.0, 16.0], "weight": weight, "b_y": 16.0, "forward": forward,
+                "k_dim": k_dim, "dw": dw, "head": False, "macs": macs, "wires": wires}
+
+    groups = [group(1.5e15, 7.5e11, [False, False], False, True, 4096.0),
+              group(1.6e15, 3.3e13, [False, True], True, False, 512.0),
+              group(1.6e15, 3.3e13, [False, True], False, False, 512.0)]
+    he = {"k": k, "groups": groups, "r_step": None, "candidates_macs": sum(g["macs"] for g in groups),
+          "self_macs": 0.0, "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None,
+          "trained_weights": None}
+    fig = F.he_figure(he, c, C, beta_code=8.0)
+    whole = {"N": 4.7e15, "O": 7.5e11 + 2 * 3.3e13, "beta_w": 8.0, "beta_x": 15.9, "b_y": 16.0,
+             "F": calculator.share(3), "C_gates": C}
+    alone = {"N": 1.5e15, "O": 7.5e11, "beta_w": 15.9, "beta_x": 15.9, "b_y": 16.0, "F": 1.0, "C_gates": C}
+    count = {name: calculator.bound(c, k, w)["blocks"] * c / C for name, w in (("M", whole), ("dw", alone))}
+    assert (fig["subset"], fig["F"], fig["beta_w"], fig["N"], fig["O"]) == (
+        "M", calculator.share(3), 8.0, whole["N"], whole["O"])
+    assert fig["rho"] == fig["subsets"]["M"] == count["M"] > count["dw"] == fig["subsets"][F.HE_SUBSETS[2]]
+    words = F.he_rests_on(fig)
+    assert words.startswith(f"theorem of record on M at {F.SHARED_LABEL}, given (H): operands are hard at β_w = 8 "
+                            f"({F.CODE_LABEL}) and β_x = 15.9 bits a word")
+    assert F.HE_SUBSETS[2] not in words
+    second = calculator._min_cut().slowdown_at_least
+    assert second(whole["N"], whole["O"], C, c, k, 8.0 * 15.9, 16.0, whole["F"]) < second(
+        alone["N"], alone["O"], C, c, k, 15.9 * 15.9, 16.0, 1.0) < count["dw"]
 
 
 def test_the_adapter_rule_needs_a_frozen_weight_the_update_reaches_and_a_frozen_head_keeps_its_width():
@@ -662,8 +697,10 @@ def test_no_published_string_names_the_code():
             reasons |= set(b["unmeasured"].values())
             one = F.published(m, c, at)
             strings += [one["label"], one["rests_on"], one["why"] or "", one["products_rests_on"] or ""]
-    strings += [F.he_rests_on({"subset": F.HE_SUBSETS[2], "beta_w": 1.6, "beta_x": 3.2, "b_y": 16.0,
-                               "below_width": True, "code_bound": True}), *F.HE_SUBSETS]
+    alone = F.he_rests_on({"subset": F.HE_SUBSETS[2], "F": 1.0, "beta_w": 1.6, "beta_x": 3.2, "b_y": 16.0,
+                           "below_width": True, "code_bound": True})
+    assert alone.startswith("theorem of record on the weight gradients alone at F = 1, given (H)")
+    strings += [alone, F.SHARED_LABEL, *F.HE_SUBSETS]
     assert {F.PRODUCTS_UNMEASURED, F.HE_RETRACE, F.HE_NO_ROWS} <= reasons
     assert all(any(x in r for r in reasons) for x in ("classified at k", "breaks the premise", "own program"))
     named = {s: CODE_NAME.findall(s) for s in strings if CODE_NAME.search(s)}
@@ -684,8 +721,8 @@ def test_published_above_1_is_the_products_term():
     full = F.published(replace(one_part(), products=STATED), 1e11, policy.CONSOLE[1])
     assert full["binding_kind"] == "products" and full["rho"] == full["terms"]["products"] > 1
     assert not full["partial"] and full["rests_on"] == full["products_rests_on"]
-    assert full["rests_on"].startswith("theorem of record on M, given (H): operands are hard at β_w = 16 and β_x = "
-                                       "15.9 bits a word")
+    assert full["rests_on"].startswith(f"theorem of record on M at {F.SHARED_LABEL}, given (H): operands are hard at "
+                                       "β_w = 16 and β_x = 15.9 bits a word")
 
 
 def test_published_with_the_term_unmeasured_is_null_never_1():

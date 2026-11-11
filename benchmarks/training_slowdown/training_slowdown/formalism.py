@@ -120,8 +120,8 @@ work passes no partial), and the token and decoding forms are targets, so none i
 refuses them. Each result is labelled "training's slowdown code VERSION" (`THE_CODE`). `published` is the console's ρ: Fit's c/(c − d)
 where it holds; else the max of the measured terms where it exceeds 1, partial where a kind is unmeasured; else None
 where a kind is unmeasured; else 1, binding none. Each comes with the kind it binds on and what that rests on, short
-(`RESTS_ON_CELL`; the products term's with its β and b_y, `he_rests_on`, which `products_rests_on` carries wherever
-the term is measured), and the reduction and update sensitivities.
+(`RESTS_ON_CELL`; the products term's with the subset of M that binds, its F, β and b_y, `he_rests_on`, which
+`products_rests_on` carries wherever the term is measured), and the reduction and update sensitivities.
 
 Where the quantities come from (`measure`): a row's `formalism` block, which `of_record` writes from the run record or
 a re-score attaches, else the stubs below from a v2.3 row's own fields. training_slowdown 4.0 measures them on the
@@ -687,6 +687,8 @@ SIDES = (("batch", "m", "k"), ("batch", "k", "n"))
 #: every activation takes them
 BETA_K_LABEL = "β(k) per the red-team of (H)"
 CODE_LABEL = "β_w from the run record's code size"
+#: F as a row's words name it where the subset that binds holds a backward product (`he_figure`)
+SHARED_LABEL = "F = 2/√3, a layer's forward, input-gradient and weight-gradient products sharing arrays"
 #: the k from which the head's input and weight gradients leave M: their operand δ_logits, a token's vocabulary-wide
 #: row, comes from its 512 words and two scalars, and with them in M no β(k) holds there
 HEAD_K = 8e7
@@ -970,18 +972,20 @@ def he_products(m: Measured, c: float, k: float) -> tuple[float | None, str | No
 
 
 def he_rests_on(got: dict) -> str:
-    """What a products term rests on with the subset, β_w, β_x and b_y it took (`he_products`' `got`), short, as a
-    row publishes it: (H) with β(k) and casts of one value as one word, the code-size β_w where it caps a weight;
-    the generic `RESTS_ON_CELL` where M is empty."""
+    """What a products term rests on with the subset, F, β_w, β_x and b_y it took (`he_products`' `got`), short, as a
+    row publishes it: the subset of M that binds and the F it is charged (`SHARED_LABEL` where its products share
+    arrays), (H) with β(k) and casts of one value as one word, the code-size β_w where it caps a weight; the generic
+    `RESTS_ON_CELL` where M is empty."""
     if got.get("beta_w") is None:
         return RESTS_ON_CELL["products"]
     which = ("M charges an operand the update reaches through a low-rank bottleneck at its β_eff"
              if got["below_width"] else "M leaves out every product with operands below that β_w·β_x")
     code = f" ({CODE_LABEL})" if got.get("code_bound") else ""
-    return (f"theorem of record on {got['subset']}, given (H): operands are hard at β_w = {got['beta_w']:.4g}"
-            f"{code} and β_x = {got['beta_x']:.4g} bits a word ({BETA_K_LABEL}; the casts of one value count as one "
-            f"word), and (E): exports are wide at b_y = {got['b_y']:g} bits an output, premises a single "
-            f"counterexample refutes; {which}")
+    shared = SHARED_LABEL if got["F"] > 1 else "F = 1"
+    return (f"theorem of record on {got['subset']} at {shared}, given (H): operands are hard at β_w = "
+            f"{got['beta_w']:.4g}{code} and β_x = {got['beta_x']:.4g} bits a word ({BETA_K_LABEL}; the casts of one "
+            f"value count as one word), and (E): exports are wide at b_y = {got['b_y']:g} bits an output, premises a "
+            f"single counterexample refutes; {which}")
 
 
 def products_per_c(m: Measured) -> dict[str, float | None] | None:
@@ -1123,8 +1127,8 @@ def published(m: Measured, c: float | None = None, k: float | None = None) -> di
     measured terms where it exceeds 1, binding that kind, `partial` where a kind is unmeasured (ρ is then only a lower
     bound); else, where a kind is unmeasured, None (binding `unmeasured`), with `why` saying so, never 1, which would
     read as no slowdown; else 1, binding `none` (every kind computed, none above 1: the floor sets that 1, not any
-    kind). Beside it what it rests on (`RESTS_ON_CELL`; where the products term binds, `he_rests_on`, naming (H) with
-    its β and (E) with its b_y), `products_rests_on`, the products term's own wherever it is measured (None where it
+    kind). Beside it what it rests on (`RESTS_ON_CELL`; where the products term binds, `he_rests_on`, naming the
+    subset of M that binds with its F, (H) with its β and (E) with its b_y), `products_rests_on`, the products term's own wherever it is measured (None where it
     isn't), the terms its max takes (None: no figure), the bound's `CELL_SENSITIVITIES`, and `capture_code`, the
     VERSION of the code that wrote the trace its products came from (None: no trace, or one that records none). This
     is the one place that rule lives: nothing downstream relabels its output."""
