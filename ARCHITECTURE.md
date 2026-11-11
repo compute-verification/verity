@@ -65,7 +65,7 @@ Python and CUDA: the provers, and Python that mirrors the Lean
 
 ### Circuits
 
-`verity.circuits` defines circuits. A program is one circuit, stored compressed as Definitions called from a root body, with a canonical layout that locates any gate without expanding it and a SHA-512 digest that names it. `verity.definitions.ops` holds the primitive circuits for NVIDIA accelerators, `verity.definitions.silicon` their exact hardware semantics, and `verity.circuits.evaluation` evaluates any circuit exactly. A circuit describes logical computation, never a GPU schedule, a proof system, a commitment layout or a sampling policy. Circuits are total: they match the hardware on every input bit pattern, NaN and infinity included. Applications define only their own Definitions, and every new or changed circuit passes `circuit-check`; that a circuit computes what the served model computes is completeness, never proved (`AGENTS.md`).
+`verity.circuits` defines circuits. A program is one circuit, stored compressed as Definitions called from a root body, with a canonical layout that locates any gate without expanding it and a SHA-512 digest that names it. `verity.definitions.ops` holds the primitive circuits for NVIDIA accelerators, `verity.definitions.silicon` their exact hardware semantics, and `verity.circuits.evaluation` evaluates any circuit exactly. A circuit describes logical computation, never a GPU schedule, a proof system, a commitment layout or a sampling policy. Circuits are total: they match the hardware on every input bit pattern, NaN and infinity included. Applications define only their own Definitions.
 
 A partition divides a circuit's computed gates into proof blocks and fixes what the developer commits (Glossary, "Partition").
 
@@ -75,7 +75,7 @@ A partition divides a circuit's computed gates into proof blocks and fixes what 
 
 ### Proofs and protocols
 
-`verity.protocols.spot.verifier.profile` defines the integrity profile, what an accepted audit established. A proof counts only when it verifies against the intended statement and an approved prover identity, not merely some self-consistent statement. Which parts of a circuit are checked, how they are sampled and what is committed before a challenge are protocol questions, and none changes the circuit. Each protocol is a directory of `verity/protocols/` whose Lean is its definition and its verifier (`AGENTS.md`, "Design rules").
+`verity.protocols.spot.verifier.profile` defines the integrity profile, what an accepted audit established. A proof counts only when it verifies against the intended statement and an approved prover identity, not merely some self-consistent statement. Which parts of a circuit are checked, how they are sampled and what is committed before a challenge are protocol questions, and none changes the circuit.
 
 ### The accounting layer
 
@@ -90,7 +90,7 @@ The joint ledger charges each device's time once. Without attribution, it subtra
 
 ### The proof system
 
-Flock (`verity/protocols/flock/prover`) is the proof system's prover: it proves statements over arbitrary Boolean circuits, and its verifier is Lean (`verity/protocols/flock/verifier/`). It consumes circuits and commitments, never branches on a model name or another source-system label, and is testable without an adapter. A plain path (Flock without `--zk`) stays beside the zero-knowledge ones, for a configuration whose values needn't be hidden; its guarantee is soundness alone.
+Flock (`verity/protocols/flock/prover`) is the proof system's prover: it proves statements over arbitrary Boolean circuits, and its verifier is Lean (`verity/protocols/flock/verifier/`). It consumes circuits and commitments, never branches on a model name or another source-system label, and is testable without an adapter.
 
 ### The reference deployment
 
@@ -98,7 +98,7 @@ The workers' GPU servers send only through a data diode, to the ZK server, which
 
 ### Adapters
 
-An adapter makes Verity work end to end with a real system, and hands Verity only what the rule "Integrations are frontends" lists (`AGENTS.md`, under the adapter's older name). Any serving system plugs in without changing `verity/`, and nothing under `verity/` imports an adapter (`tests/test_integration_boundaries.py` lists the sites that still do). The vLLM adapter (`adapters/vllm/`), the only one so far, builds each served workload's circuit, supplies its silicon-specific bindings, and commits the trace while serving.
+An adapter makes Verity work end to end with a real system, and hands Verity only what the rule "Integrations are frontends" lists (`AGENTS.md`, under the adapter's older name). Any serving system plugs in without changing `verity/`. The vLLM adapter (`adapters/vllm/`), the only one so far, builds each served workload's circuit, supplies its silicon-specific bindings, and commits the trace while serving.
 
 ## Documentation
 
