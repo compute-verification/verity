@@ -5,6 +5,7 @@ the same statics with the Boolean ``DOT`` and ``INV`` read as their word views.
     MufuLg2Ftz_v2                  (x: Array<32, Value<1>>) -> Array<32, Value<1>>      word view: MufuLg2Ftz_v1
     F32NeZeroFtz_v2, F32GtZeroFtz_v2  (x: Array<32, Value<1>>) -> Value<1>             word view: their _v1
     SparseMlaSplitEnd_v2{DV,INV,SCALE}                    INV: `boolean_attention.Fa3InvSum_v2`
+    SparseMlaSplitEndCols_v2{DV,G,C,INV,SCALE}            its columns [C G, (C+1) G) and lse
     SparseMlaSplitPart_v2{T,DR,DV,BN,DOT,INV,SCALE}       a split's `boolean_sparse_mla` blocks and SparseMlaSplitEnd_v2
     SparseMlaCombine_v2{NSPLIT,DV,INV}
     SparseMlaHeadSplit_v2{T,NS,DR,DV,BN,DOT,INV,SCALE}    DOT: `gemm.HopperBF16WgmmaDot16_v2`; the blocks and the NS = 1 head are
@@ -175,6 +176,15 @@ SparseMlaSplitEndV2 = flat("SparseMlaSplitEnd", 2, ["DV", "INV", "SCALE"], lambd
                            W.SparseMlaSplitEnd, lifted=("INV",))
 
 
+def _end_cols(B, S, m, l, o):
+    """`SparseMlaSplitEndCols_v1`'s body on bits."""
+    return W.split_end_cols(bit_steps(B), S, S.INV, m, l, o)
+
+
+SparseMlaSplitEndColsV2 = flat("SparseMlaSplitEndCols", 2, ["DV", "G", "C", "INV", "SCALE"], lambda S: W._end_cols_type(S, F32),
+                               _end_cols, W.SparseMlaSplitEndCols, lifted=("INV",))
+
+
 def _part(B, S, q_nope, q_rope, kv):
     """`SparseMlaSplitPart_v1`'s body on bits over `SparseMlaBlock_v2` and `SparseMlaSplitEnd_v2`."""
     return W.part(bit_steps(B), S, W.part_blocks(S, BSM.SparseMlaBlockV2), bind(SparseMlaSplitEndV2, DV=S.DV, INV=S.INV, SCALE=S.SCALE),
@@ -218,5 +228,5 @@ def _split(B, S, q_nope, q_rope, kv):
 SparseMlaSplitV2 = flat("SparseMlaSplit", 2, ["T", "NS", "NH", "DR", "DV", "BN", "DOT", "INV", "SCALE"],
                         lambda S: M._mla_type(S, BF16), _split, W.SparseMlaSplit, lifted=("DOT", "INV"))
 
-BOOLEAN_SPARSE_MLA_SPLIT = [MufuLg2Ftz, F32NeZeroFtz, F32GtZeroFtz, SparseMlaSplitEndV2, SparseMlaSplitPartV2, SparseMlaCombineV2,
-                            SparseMlaHeadSplitV2, SparseMlaSplitV2]
+BOOLEAN_SPARSE_MLA_SPLIT = [MufuLg2Ftz, F32NeZeroFtz, F32GtZeroFtz, SparseMlaSplitEndV2, SparseMlaSplitEndColsV2, SparseMlaSplitPartV2,
+                            SparseMlaCombineV2, SparseMlaHeadSplitV2, SparseMlaSplitV2]

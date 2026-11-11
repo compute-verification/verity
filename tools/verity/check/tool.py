@@ -5,7 +5,7 @@
 No key params and no closure: the attempt's source (a clean commit) is the whole input, and `research merge` reads the attempt by
 that commit.  A merge that changes verity/ml/flock/ or the Lean verifier's package verity/core/service/flock/, other than a
 README.md or PROTOCOL.md (which nothing the agreement runs reads), needs an attempt whose `lean-agreement` step passed
-(`merge_requires`; the step runs when the run has the pinned upstream build, which `check.py --record` sends then).  A merge
+(`merge_requires`; the step runs when the run has the pinned upstream build's URLs, which `check.py --record` sends then).  A merge
 that changes V*'s stager (`rec_vstage`, `rec_outer`, `rec_open`, `rec_residuals`, `rec_cap`, `circuit`, `one_stage.registered`)
 or its Lean mirror (`VStar.In`, `core_vstar`) needs `lean-suites` passed, whose vstar suite holds one to the other.
 `research run --on` refuses a machine that fails `preflight.py` (the pod setup, the Lean dependencies, a store read, AVX-512

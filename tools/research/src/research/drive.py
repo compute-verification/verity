@@ -2739,7 +2739,7 @@ class Driver:
 
     def _postland_args(self, pl: dict, tip: str, base: bool) -> tuple[dict, list[str], str | None, str]:
         """An after-landing run of ``tip``'s (`launch_postland`'s keywords, the steps it skips by name, ratchet-gate's base, its
-        flags as a message gives them), the baseline's when ``base``.  It sends the upstream build when the landings since the
+        flags as a message gives them), the baseline's when ``base``.  It sends the upstream build's URLs when the landings since the
         last verified `main` change what lean-agreement checks (as check.py finds against that base), and skips lean-agreement
         else; lean-changed has no cache to compare with under --no-cache; lean-audit fails on a record difference, since the
         records it checks are the ones the lock run regenerated (`_target`); circuit-check reuses its per-target passes all the same, since a

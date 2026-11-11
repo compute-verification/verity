@@ -49,6 +49,7 @@ from verity.ml.circuits.types import Array
 from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.core.protocols.certifier import arith_encode as AE
+from verity.core.protocols.certifier import replay_chain as RC
 from verity.core.protocols.certifier.arith_encode import Carry, ChargeBook
 from verity.core.protocols.certifier.head_check import BIT, _part
 from verity.core.protocols.spot.one_stage import produced
@@ -252,6 +253,75 @@ def build_link(C, N: int, book: Sequence, row_in: Sequence, row_out: Sequence, e
     return out[0][0], out[1]
 
 
+def ints(bits: Sequence[int], fs: Sequence[tuple[str, int, int]]) -> dict[str, list[int]]:
+    """A row's leading fields (name, elements, width), each element least significant bit first, as integers."""
+    out, at = {}, 0
+    for name, n, w in fs:
+        out[name] = [sum(int(bits[at + e * w + j]) << j for j in range(w)) for e in range(n)]
+        at += n * w
+    return out
+
+
+def book_of(D: int, v: dict[str, list[int]]) -> ChargeBook:
+    """The book `book_fields(D)`' values `v` hold."""
+    return ChargeBook(tuple(v["arrived"]), v["total"][0], tuple(zip(v["zfreq"], v["ztotal"])))
+
+
+#: a length slot's width: its max_tokens and its output length, each a u32 of the certified body (`window_charge.MW`)
+LENGTH_BITS = 32
+
+
+def check_length_slots(st: dict) -> dict:
+    """`st`, a compile slice's statics, as a slice charging the length terms takes them (`compile_slice_v7`): refused
+    where an output length, LW = bitlen(L) bits (`replay_chain.widths`), is wider than a length slot's `LENGTH_BITS`."""
+    if (lw := RC.widths(SimpleNamespace(**st)).LW) > LENGTH_BITS:
+        raise ValueError(f"statics {dict(st)}: an output length of {lw} bits, wider than a length slot's {LENGTH_BITS}")
+    return st
+
+
+class SliceCharge:
+    """The compile slice's charge (`compile_slice.CODE`): `ChargeLink_v1{D}` on ``pub``'s book from ``cin`` to ``cout``
+    over ``adv``'s decisions; `compile_slice_v7`'s adds the length terms. `pub_fields`, ``pub``'s fields past c;
+    `carry_bits`, a carry row's width; `cert_fields`, ``cert``'s past its arrivals and their tokens; `link`, the
+    circuit's (ok, charged) on the unit's rows split into their fields' elements and the decisions' enables;
+    `reference`, its (ok, bits, carry' row) on a unit's rows (bits each); `book`, ``pub``'s values for the registered
+    book (its JSON) and the session's first carry; `charge`, the (ok, bits, carry') of D slots of decisions from a carry
+    with ``cert``'s arrivals; `encode`, a carry's row; `cert`, ``cert``'s bits past its arrivals and their tokens."""
+
+    carry_bits = ROW_BITS
+
+    def pub_fields(self, S) -> list[tuple[str, int, int]]:
+        return book_fields(S.D)
+
+    def cert_fields(self, S) -> list[tuple[str, int, int]]:
+        return []
+
+    def link(self, C, S, rows: dict, en: Sequence) -> tuple:
+        book = [e for name, _n, _w in book_fields(S.D) for e in rows["pub"][name]]
+        return build_link(C, S.D, book, rows["cin"]["carry"][0], rows["cout"]["carry"][0], en,
+                          [e[0] for e in rows["adv"]["dec"]])
+
+    def reference(self, S, rows: dict, count: int, dec: Sequence[int]) -> tuple:
+        cb = book_of(S.D, ints(rows["pub"], [("c", 1, AE.CW)] + book_fields(S.D)))
+        ok, length, nxt = AE.reference_charge(S.D, cb, carry_of([int(b) for b in rows["cin"]]),
+                                              [int(k < count) for k in range(S.D)], dec)
+        return ok, length, encode(nxt)
+
+    def book(self, S, book: dict) -> tuple[dict, Carry]:
+        cb, first = AE.charge_book(book, S.D)
+        return book_values(cb), first
+
+    def charge(self, S, book: dict, carry: Carry, sl, dec: Sequence[int], cert: Sequence) -> tuple:
+        return AE.reference_charge(S.D, AE.charge_book(book, S.D)[0], carry, [int(k < len(dec)) for k in range(S.D)],
+                                   list(dec) + [0] * (S.D - len(dec)))
+
+    def encode(self, carry: Carry) -> tuple[int, ...]:
+        return encode(carry)
+
+    def cert(self, S, sl, cert: Sequence) -> list[int]:
+        return []
+
+
 # --- arguments and evaluation -----------------------------------------------------------------------------------------
 
 def link_arguments(N: int, book: ChargeBook, row_in: Sequence[int], row_out: Sequence[int], en: Sequence[int],
@@ -292,7 +362,7 @@ def size(N: int) -> dict[str, int]:
             "record_bytes_per_window": 2 * produced.BC_BYTES}
 
 
-__all__ = ["ChargeLink", "ROW_BITS", "VALUE", "WORD_BITS", "book_fields", "book_values", "build_link", "carry_of",
-           "check_chain", "check_rows", "commit_rows", "commit_window", "encode", "evaluate_links", "link_arguments",
-           "link_unit", "openings", "reads", "reference_link", "row", "session", "size", "start_opening", "start_salt",
-           "unrow"]
+__all__ = ["ChargeLink", "LENGTH_BITS", "ROW_BITS", "SliceCharge", "VALUE", "WORD_BITS", "book_fields", "book_of", "book_values",
+           "build_link", "carry_of", "check_chain", "check_length_slots", "check_rows", "commit_rows", "commit_window", "encode",
+           "evaluate_links", "ints", "link_arguments", "link_unit", "openings", "reads", "reference_link", "row",
+           "session", "size", "start_opening", "start_salt", "unrow"]

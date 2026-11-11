@@ -342,6 +342,27 @@ def test_ssh_probes_each_machine_with_an_ssh_host_as_research_run_reaches_it(mon
     assert doctor.check_ssh("node-a", m).detail == "research@192.0.2.10:22: unreachable"
 
 
+def test_the_auditor_hosts_are_not_probed_and_one_check_names_them(monkeypatch, tmp_path):
+    """They refuse lanes' keys by design (`remote.restricted`: vy-challenger-1 is deploy.toml's `admin = true`, node-g names its gate),
+    so probing them left a refused login in their auth logs and a finding no lane could fix."""
+    (tmp_path / "machines.toml").write_text(
+        '[machines.node-a]\nprovider = "ssh"\nhost = "192.0.2.10"\nuser = "research"\n'
+        '[machines.vy-challenger-1]\nprovider = "ssh"\nhost = "192.0.2.11"\nuser = "vy-admin"\n'
+        '[machines.node-g]\nprovider = "ssh"\nhost = "192.0.2.12"\nuser = "vy-admin"\nauditor = "its gate"\n')
+    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
+    monkeypatch.setattr(runpod, "SSH_KEY", tmp_path / "key")
+    monkeypatch.setattr(runpod, "KNOWN_HOSTS", tmp_path / "known_hosts")
+    (tmp_path / "key").write_text("dummy\n")
+    assert list(doctor.ssh_machines()) == ["node-a"]
+    runs_ = Runs(monkeypatch, ssh=(0, ""))
+    probes = [p for p in doctor.checks("lane", None) if p[0].startswith("ssh")]
+    assert [n for n, _ in probes] == ["ssh:node-a", "ssh:auditor-hosts"]
+    assert doctor.gather(probes) == [Check("ssh:node-a", OK, "research@192.0.2.10:22 answers"),
+                                     Check("ssh:auditor-hosts", SKIP, "not probed: node-g, vy-challenger-1, which refuse lanes' keys "
+                                                                      "by design")]
+    assert [argv[-2] for argv, _, _ in runs_.calls] == ["research@192.0.2.10"]
+
+
 def test_two_ssh_machines_on_a_fresh_state_dir_both_get_the_whole_key(monkeypatch, tmp_path):
     # the probes resolved the key from RUNPOD_SSH_KEY_B64 in their threads at once: 481 of 500 runs failed, some reading it empty
     key = b"dummy-ssh-key " * 40 + b"\n"

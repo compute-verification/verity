@@ -27,12 +27,17 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 
     glm = sparse_mla_split.M.SPARSE_MLA_GLM53
     head = {k: v for k, v in glm.items() if k != "NH"}
+    G = sparse_mla_split.combine_cols(glm["DV"])
     return [
-        # the split path at the served statics: T = 130 in two splits (two blocks, then the partial one), sixteen splits combined
+        # the split path at the served statics: T = 130 in two splits (two blocks, then the partial one)
         ("SparseMlaSplitEnd_v1", lambda: bind(sparse_mla_split.SparseMlaSplitEnd, DV=glm["DV"], INV=glm["INV"], SCALE=glm["SCALE"])),
+        # units of SparseMlaSplit_v1's cut (`CUTS`) at the served statics: a split's last column block of its end, and the
+        # combine of a column block over the most splits a served token takes
+        ("SparseMlaSplitEndCols_v1", lambda: bind(sparse_mla_split.SparseMlaSplitEndCols, DV=glm["DV"], G=G, C=glm["DV"] // G - 1,
+                                                  INV=glm["INV"], SCALE=glm["SCALE"])),
         # the token's last split at step 16 (T = 272 in five splits of a block): its 16 keys zero-padded to the block
         ("SparseMlaSplitPart_v1", lambda: bind(sparse_mla_split.SparseMlaSplitPart, T=16, **head)),
-        ("SparseMlaCombine_v1", lambda: bind(sparse_mla_split.SparseMlaCombine, NSPLIT=16, DV=glm["DV"], INV=glm["INV"])),
+        ("SparseMlaCombine_v1", lambda: bind(sparse_mla_split.SparseMlaCombine, NSPLIT=28, DV=G, INV=glm["INV"])),
         # with the lse, as the dense-MHA prefill runs it: head 256, the five splits a served row reaches at most
         ("SparseMlaCombineLse_v1", lambda: bind(sparse_mla_split.SparseMlaCombineLse, NSPLIT=5, DV=256, INV=glm["INV"])),
         ("SparseMlaHeadSplit_v1", lambda: bind(sparse_mla_split.SparseMlaHeadSplit, T=130, NS=2, **head)),

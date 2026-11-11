@@ -1026,7 +1026,7 @@ def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
     deploy = (SKY.parent / "deploy.toml").read_text()
     doc = tomllib.loads(deploy)
     files = {f["path"]: f for f in doc["file"]}
-    holds_runs = set(files["/etc/systemd/system/vy-store-evict-research.timer"]["nodes"]) | {m for m, _pool in auto.SPILL if m in doc["nodes"]}
+    holds_runs = set(files["/etc/systemd/system/vy-store-evict-research.timer"]["nodes"]) | {m for m in doc["nodes"] if auto.CPU_NODE.fullmatch(m)}
     for u, path in (("retention_gc.service", "vy-retention-gc.service"), ("retention_gc.timer", "vy-retention-gc.timer")):
         f = files[f"/etc/systemd/system/{path}"]
         assert f["src"] == f"tools/research/src/research/pods/nebius/sky/{u}" and f["run"] == ["systemd:vy-retention-gc.timer"]
