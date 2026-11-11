@@ -15,8 +15,8 @@ The walk of resolution from a leaf of `U`'s return keeps `Record.SecurityProofs.
 down enters a member at a reference of its callee's return, a step up reaches a reference of the argument that fills
 the parameter it left through, and a scan's step to the member before reaches a reference of the callee's return
 again. It rests on two facts of a decoded Program: a body's return and each argument of each node are the sequences
-of their parts (`Seq.ofParts`). `ret_passed_on` takes them as hypotheses and `ret_passed_on_of` has them from
-`decode`.
+of their parts (`Seq.ofParts`). `ret_passed_on` takes them as hypotheses, and `ret_passed_on_of` and
+`param_returned_of` have them from `decode` (`decoded_walk`).
 -/
 
 @[expose] public section
@@ -243,6 +243,40 @@ theorem ret_passed_on (U : Scope) (hU : Good P U) (t : ℕ) (ht : t < (P.defs[U.
 
 end
 
+/-- What resolution takes of a Program read (one that decodes, with no order violation and its bodies laid out):
+its root is a composite, every activation's body is `BodyOk` and laid out, a composite's parameters are its body's,
+and a return and each argument of each node are the sequences of their parts. -/
+theorem decoded_walk (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) :
+    (P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) ∧ (∀ sc, Good P sc → BodyOk P sc.d) ∧
+      (∀ d < P.defs.size, Walk.LaidOut P d) ∧
+      (∀ d < P.defs.size, (P.defs[d]!).prim = false → (P.defs[d]!).body.params = (P.defs[d]!).params) ∧
+      (∀ d < P.defs.size, (P.defs[d]!).prim = false →
+        (P.defs[d]!).body.ret = Seq.ofParts (P.defs[d]!).body.ret.parts) ∧
+      ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ∀ i < ((P.defs[d]!).body.nodes[k]!).args.size,
+        (((P.defs[d]!).body.nodes[k]!).args[i]!).seq =
+          Seq.ofParts (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.parts := by
+  obtain ⟨hr, hrp, -⟩ := BodiesOk.decode_root bytes P hdec
+  obtain ⟨-, hL, -, -⟩ := Walk.bodiesLaidOut_spec P hlay
+  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec
+  obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov
+  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  refine ⟨⟨hr, hrp⟩, fun sc hg => ?_, hL, fun d hd hp => ((hok d hd).1.2 hp).1, fun d hd _ => ?_,
+    fun d hd k hk i hi => ?_⟩
+  · obtain ⟨hSd, hpd⟩ := BodiesOk.good_closed P S hS0 hrp (fun d hd hp => (hS d hd hp).2) sc hg
+    exact BodiesOk.body_ok P hok sc.d (hS sc.d hSd hpd).1
+  · obtain ⟨-, -, -, ps, hps, -⟩ := hok d hd
+    have hparts : (P.defs[d]!).body.ret.parts = ps := by rw [hps]; exact (Walk.ofParts_spec ps).1
+    rw [hparts]
+    exact hps
+  · obtain ⟨-, hnodes, -⟩ := hok d hd
+    obtain ⟨-, -, hargs⟩ := hnodes k hk
+    obtain ⟨⟨ps, hps, -⟩, -⟩ := hargs i hi
+    have hparts : (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.parts = ps := by
+      rw [hps]; exact (Walk.ofParts_spec ps).1
+    rw [hparts]
+    exact hps
+
 /-- **`ret_passed_on`, on a Program read**: one that decodes, with no order violation and its bodies laid out
 (`Desc.bodiesLaidOut`, which `Desc.walkable` holds). -/
 theorem ret_passed_on_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
@@ -251,34 +285,27 @@ theorem ret_passed_on_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.de
     (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
     (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨
       ∃ i j, i ∈ passOf P U.d ∧ resolve P U ⟨true, i, j⟩ = .ok b := by
-  obtain ⟨hr, hrp, -⟩ := BodiesOk.decode_root bytes P hdec
-  obtain ⟨-, hL, -, -⟩ := Walk.bodiesLaidOut_spec P hlay
-  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec
-  obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov
-  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
-  have hB : ∀ sc, Good P sc → BodyOk P sc.d := by
-    intro sc hg
-    obtain ⟨hSd, hpd⟩ := BodiesOk.good_closed P S hS0 hrp (fun d hd hp => (hS d hd hp).2) sc hg
-    exact BodiesOk.body_ok P hok sc.d (hS sc.d hSd hpd).1
-  have hret : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
-      (P.defs[d]!).body.ret = Seq.ofParts (P.defs[d]!).body.ret.parts := by
-    intro d hd _
-    obtain ⟨-, -, -, ps, hps, -⟩ := hok d hd
-    have hparts : (P.defs[d]!).body.ret.parts = ps := by rw [hps]; exact (Walk.ofParts_spec ps).1
-    rw [hparts]
-    exact hps
-  have harg : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size,
-      ∀ i < ((P.defs[d]!).body.nodes[k]!).args.size,
-        (((P.defs[d]!).body.nodes[k]!).args[i]!).seq =
-          Seq.ofParts (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.parts := by
-    intro d hd k hk i hi
-    obtain ⟨-, hnodes, -⟩ := hok d hd
-    obtain ⟨-, -, hargs⟩ := hnodes k hk
-    obtain ⟨⟨ps, hps, -⟩, -⟩ := hargs i hi
-    have hparts : (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.parts = ps := by
-      rw [hps]; exact (Walk.ofParts_spec ps).1
-    rw [hparts]
-    exact hps
-  exact ret_passed_on P ⟨hr, hrp⟩ hB hL hret harg U hU t ht h
+  obtain ⟨hroot, hB, hL, -, hret, harg⟩ := decoded_walk bytes P hdec hov hlay
+  exact ret_passed_on P hroot hB hL hret harg U hU t ht h
+
+/-- **A gate an activation reads through a parameter and returns comes through a parameter `Record.passedOn`
+lists.** A parameter's leaf resolves to a gate before the activation (`resolve_lt`), so the gate is none of the
+activation's own, and `ret_passed_on` names a listed parameter one of whose leaves it is. So where each gate is the
+leaf of one parameter at most, a parameter `passedOn` does not list has no leaf the activation returns. -/
+theorem param_returned_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (U : Scope) (hU : Good P U) (i j : ℕ)
+    (hi : i < (P.defs[U.d]!).params.size) (hj : j < ((P.defs[U.d]!).params[i]!).2.leaves) {b : ℕ}
+    (hb : resolve P U ⟨true, i, j⟩ = .ok b) (t : ℕ) (ht : t < (P.defs[U.d]!).body.ret.count)
+    (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
+    ∃ i' j', i' ∈ passOf P U.d ∧ resolve P U ⟨true, i', j'⟩ = .ok b := by
+  obtain ⟨hroot, hB, hL, hprm, hret, harg⟩ := decoded_walk bytes P hdec hov hlay
+  obtain ⟨hd, hpc⟩ := good_d P hroot hB U hU
+  have hlt : b < U.off :=
+    resolve_lt P hroot hB hL U.off U ⟨true, i, j⟩
+      ⟨hU, ⟨fun _ => by rw [hprm U.d hd hpc]; exact ⟨hi, hj⟩, fun hc => by cases hc⟩, fun _ => Nat.le_refl _,
+        fun hc => by cases hc⟩ hb
+  rcases ret_passed_on P hroot hB hL hret harg U hU t ht h with ⟨hge, -⟩ | hx
+  · omega
+  · exact hx
 
 end NciCheck.Properties.SecurityProofs.Resolve
