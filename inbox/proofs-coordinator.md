@@ -57188,3 +57188,25 @@ Tags: [run] a command I ran now, [read] a file I read now (place given). Times f
   - The merged tree is not built. Neither is the candidate's kernel replay, which no one has run tonight.
 
 For the table: #8949 (the hoist, built, unmarked) at `c14e4bd284b1`: records `260d` pass in four packages, tier six of six, lean-agreement pass [run]. It merges clean with `main` `1a59728741f9`, and the second reading holds.
+
+## FLOCKPKG, Wed 11 Nov 14:16Z: ready to mark #8949 at `c14e4bd284b1641f1ec52d426bfd271de1da34ff` (the hoist: one reading of the program a call); every run at the head is done and passed, no lock record changes, no claim changes
+
+It is a pure addition with equality lemmas: what the verifier accepts and refuses is the same function (`buildSessionBy_read`, `Registered.checkProgramBy_read`, `Registered.checkCoverBy_read`). It changes the verifier of record's code, so it wants your second reader's verdict before a mark, as you said.
+
+| check | run | verdict |
+|---|---|---|
+| elaborates | `r20261111-124216-e4ef` (`FlockVerify.lean --siblings`), `r20261111-124336-69d8` (`Flock/ProgramRead.lean --siblings`) | exit 0, exit 0 |
+| axioms clean | their probes; `260d`'s AUDIT lines | 8 and 8 theorems, the three allowed axioms only |
+| records, the verifier's package and its requirers | `r20261111-124408-260d` | done, rc 0, `"outcome": "pass"`: verifier 21,659 declarations, 11 guarantees; certifier's verifier 1,503, 4; `security` 27,069, 1,106 (with `security/Proofs` 194,332); `security/Properties` 3,089, 463. `"regenerated": {}` in all four: no lock record changes [read: each `audit.json`] |
+| `lean-agreement` | `r20261111-124418-5dd9` | passed |
+| quick tier (`--changed origin/main --quick`, 60 suites, six runs) | `r20261111-124408-f66f` 1/1, `r20261111-124422-0ec1` 8/8, `r20261111-124436-5eaa` 8/8, `r20261111-124450-eb9c` 9/9, `r20261111-124504-2b86` 15/15, `r20261111-124518-af62` 19/19 | 60 passed, 0 failed |
+| kernel replay | the candidate's check | not run by me |
+| second reader | SERVEDCARD 13:01Z at this head; BENCHCROSS 12:44Z at `d302096c54b2` (the same functions before they moved to `Flock/ProgramRead.lean`) | both: holds [read: their entries] |
+
+- **Merges** [run]: with `main` `72e4d46d9209` cleanly (tree `2d5b4a2443f2`); `main` changed no file under the verifier's directory since the `main` this head holds (`967b722429f3`), so the runs above are of the Lean the merge has in that package. With #8789: merged with `dd430aa4cecf` it builds (`r20261111-134516-2f03`, exit 0, tree `f94324000032`); with #8789's head `68e706219129` it merges cleanly (tree `8e8551ab751c`), not built, the difference being four import lines under `security/Proofs` that #8949 does not touch.
+- **Measured at this head** [run: `r20261111-125728-8ab3`, one core, fused MoE block K = 6144, program 152 MB]: setup 42.5, 42.9 s against `main`'s 61.3, 61.9; a call 103.0, 104.1 core-s against 121.2, 121.9. Label as in the order: the hoist as built, one session a call.
+- **The one-parse step's three theorems now have their axiom lines** (your 13:44Z) [run: `r20261111-140716-2a6b`, `verity lean try Flock/ProgramRead.lean --siblings` at `b4ae0d8445a1`, exit 0]: `Flock.ProgramRead.jsonAt_of`, `Flock.ProvedScope.programDigest_eq_of` and `Flock.ProvedScope.programDigestOf_read` each `[propext, Classical.choice, Quot.sound]`; none of the file's 13 theorems uses another. Siblings: no clash among the 5 modules it could import there; 245 not built in that tree, unchecked. No PR until #8789 and #8949 are on `main`.
+- `For CAPS:` #8949 adds one `.lean` file, `verity/protocols/flock/verifier/Flock/ProgramRead.lean` (15 definitions, 1 structure, 8 theorems), in the verifier's package; nothing under `security/`; `FlockVerify.lean` is 1,995 of the 2,000 lines its cap allows; it does not touch `unread-caps.json`.
+- **Left:** #8789's three open runs (`8b4a`'s requirers, `fad7`, the six quick-tier runs); the allocator entry, next; (B) after #8789 lands.
+
+For the table: #8949 ready at `c14e4bd284b1641f1ec52d426bfd271de1da34ff`: records `260d` pass, agreement `5dd9` pass, 60 suites pass; the hoist as built, setup 0.69 to 0.70 of `main`'s [measured, `8ab3`].
