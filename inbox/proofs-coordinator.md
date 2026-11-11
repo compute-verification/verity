@@ -65342,3 +65342,43 @@ I wrote that "the release is the committed trace's outputs" does not hold as wri
 - A fresh worker starts from: branch `cursor/proofs-twoperiod-4e7a` at `7412096d15` (base `61f13c2275fb`; `git diff --stat origin/main` shows the two new files only), the three runs above, my entries of 20:41Z (the statement and its premises), 20:56Z (pieces (2) and (3) sized) and this one, and the checkpoint note `lanes/proofs/20261111T2035Z-report-extform-two-stage-period.md`.
 
 I build nothing further without your word. Next if you say so: the witnesses file, then the instance at the one-wait trace when that branch lands.
+
+## HEADSPLIT, Wed 11 Nov 21:45Z: the failed run's one failure was mine and is fixed; the head is `65ecd910b07a`, the merge with `main` `75ef75838f99`; `repository`, the vLLM suite and the rest of the quick tier are out on it; #8370 is not on `main`
+
+My VM was replaced in the billing stop. [run] `git ls-remote` showed the branch whole at `130a78bf7b9f`; I launched nothing twice. The uncommitted figure edits survive as a patch in the lane notes (`tools/headsplit/figure-configuration.patch`).
+
+**A. The failed run, in one line.** [run] `r20261111-202405-3d77` (quick tier at `130a78bf7b9f`): 57 suites, 56 passed, 1 failed, `repository` (303 passed, 1 failed): `tests/test_vllm_public_api.py` refuses `benchmarks/one_stage/block_census.py:37`, which imports `verity_vllm.pipeline.serving_templates`, not a module outside code may import. [read] It is mine (my commit `d012feea83` added the import).
+
+- [read] Fixed in two commits, by owner. `74e4c199fb`, the vLLM lane's file: `serving_rows` carries `chain_ways` beside the template names it already carries for outside code (one name on line 149; the file is still 800 lines, its limit). `9b20cda2ef`, proofs' files: the census and its test read `ST.chain_ways`.
+- [run] On the VM: `tests/test_vllm_public_api.py` with `benchmarks/one_stage/tests/test_block_census.py`, 30 passed; `adapters/vllm/tests/lint/test_p10_size.py` passed; ruff clean on the three files.
+- [run] In the same failed run the vLLM suite passed (14,013 passed, 424 skipped), `benchmarks/one_stage` passed (516) and `verity/definitions` passed (857), all at `130a78bf7b9f`, before the merge.
+
+**The other three runs, all ended with exit code 0.**
+
+- [run] `r20261111-195004-5ed8`: staging the six served templates gives chunk sizes 256, 1024, 2048, 8192, 8192, 4096, equal to the pins in `benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json`. The pins stand.
+- [run] `r20261111-200948-13d3` (at `5e023a91e0`): the one-stage audit of the scores and values units accepted, to the Lean verifier: 24 of 24 verdicts true (Lean's sample, the Lean verifier and the Python verifier on each of 8 sampled units, one of each of the 8 templates), 19 of 19 tampered windows refused, 9 min 33 s, peak 11.3 GB, on CPUs with the local challenger. It is the stand-in's smallest configuration (16 score columns, 64 output columns, 16 keys a block, values units of 32 columns), not GLM-5.3's sizes.
+- [run] `r20261111-195905-146c` (at `d012feea83`): the planner's card rebuilt: 254 Definitions, no gap; against the tree's card 134 are new, 75 are gone, and none that stays differs. [read] Not committed yet; it goes in a commit of its own.
+
+**B.1 The retired-term site.** [read] The line is gone in `9b20cda2ef`: the test now holds the served partition's templates against the census's, and `serving_rows` itself refuses a chunked template that has no chunk size, so the line added nothing. `main` still names the field `chunk_cap`, so the fix is to not read it in a new place; no exemption added. [run] Counted with the lint's own `sites()` on each of the 35 files that differ from `main` at the merge: `test_block_census.py` is at 2 (allowed 2) and no file gains a site. [run] `tests/lint/test_repo_retired_terms.py` with `tests/test_vllm_public_api.py` on the merge: 9 passed, 1 bookkeeping warning that names other files.
+
+**B.2 #8370.** [run] `gh pr view 8370 --json state,mergedAt` at 21:40Z: `OPEN`, `mergedAt` null, head `d68d9b4af58d`. It is not on `main`. [read] I have not touched `chunk_rows.reads`' docstring since `130a78bf7b9f` and will not until it lands; then I keep its text and add the two clauses.
+
+**B.3 The queries.** [read] `adapters/vllm/verity_vllm/pipeline/chain_rows.py:311` at my head: a whole key block and a scores unit are each given their own rows of `q_nope[h]` and `q_rope[h]`, and no wire reads them from anywhere; `main`'s line 199 does the same for whole key blocks. A values unit reads no query. So a head's five key blocks in a decode row of 272 keys commit five copies of each query row before the change and five after.
+
+The body's new sentences, as they stand in the draft (the ruling's first-screen paragraph on the keys is above them):
+
+> The queries have the same gap, before and after: each scores unit (on `main`, each whole key block) commits its own copy of its head's two query rows, one copy for each key block of the head's chain (five in a decode row of 272 keys), and nothing holds two copies equal. This change adds no copy of a query.
+>
+> No exfiltration figure rests on the split head until one writer of the key rows and of the query rows exists or the gap is priced. The exfiltration bound counts incorrect proof blocks, and a value that no proof block writes and that is not registered information is outside it. Every figure in this pull request for the split head is the cost model's: modeled, key rows not held equal.
+
+[read] The one figure the body quotes (4,183 to 1,528 GB a year, modeled) now carries the same label in its own sentence.
+
+**C. Runs out, all three at the merge `65ecd910b07a`.**
+
+- [run] `r20261111-213824-4de0`: `suites.py repository`, whole, on vy-nebius-cpu-10; running at 21:43Z. [guess] Ends by 22:10Z.
+- [run] `r20261111-213854-729c`: `suites.py verity-vllm`, whole, on vy-nebius-cpu-8; waiting for a slot at 21:43Z. [guess] Ends by 22:40Z (the suite took 1,222 s in the failed run's quick tier).
+- [run] `r20261111-213926-d0d6`: the relaunch of the failed run, `suites.py --changed 75ef75838f99 --quick --skip repository --skip verity-vllm`, on vy-nebius-cpu-5; waiting for a slot at 21:43Z. It leaves out the two suites that run whole above, so nothing runs twice. [guess] Ends by 22:35Z.
+
+**Your 20:38Z ruling, read.** [read] Condition 1 is in the body draft. Condition 3: the body and the partition card's label say "modeled, key rows not held equal". Condition 2, the test, is not written yet; it is the next thing I do. One point for you: the ruling asks for a docstring naming the issue, and AGENTS.md ("Where writing goes") keeps Linear issues out of the tree, docstrings included. I will state the gap as itself in the docstring, say there that the test turns into a refusal when a writer of the key rows exists, and name CIR-242 in the body, unless you say otherwise.
+
+**Next, on your resume.** The ruling's test (a commit to the vLLM lane's test file); the planner's card (a commit of its own); the partition card, the cost model's configuration and the figure from `figures.py --model GLM-5.3`; then the pull request, opened unmarked. [guess] These commits move the head past `65ecd910b07a` by a test, a card and the cost model only; the quick tier is rerun on the final head in any case, after CIR-202's merge. Say if you want the head held at `65ecd910b07a` until the yeses are in.
