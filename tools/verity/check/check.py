@@ -242,7 +242,8 @@ what its steps had passed.  `--record` declares it an output, so custody uploads
 leaves no result.json, and the pack is then in the attempt's run record alone (`attempt_pack` reads either).  Custody misses it only
 where it uploads nothing: `--no-custody-r2` and a run without `--on`, and a run whose runner is killed or whose machine is lost.
 `--record` without `--no-cache` (or with `--circuit-cache` beside it, for circuit-check's entries alone) sends presigned URLs of
-the newest recorded checks' packs, failed and cancelled ones' too, since a pack holds only passes, up to `GATHER_BYTES` of them
+the newest recorded checks' packs, failed and cancelled ones' too, since a pack holds only passes, up to `GATHER_BYTES` of them,
+with the packs the Lean audits of ready marks left (`PACKERS`), those of the marks of the PRs this checkout holds before the newest
 (`verdict_url_file`): the launcher fetches none, and the run fetches and imports each before its steps (`verdicts_fetched`),
 beside a `--verdicts-in` pack, never in its place, so every machine reuses every pass a recorded check earned; each pack imported
 is named in the result's `verdicts`.  The agreement's pinned upstream build and inputs go the same way (`agreement_url_file`):
@@ -1394,7 +1395,8 @@ def record(argv: list[str]) -> int:
         shutil.rmtree(d, ignore_errors=True)
 
 
-#: how many of the newest recorded checks' verdict packs a recorded check imports (`verdict_packs`)
+#: how many of the newest verdict packs of each kind of run (`PACKERS`) a recorded check imports (`verdict_packs`), beside
+#: those of the marks of the PRs its tree holds
 GATHER = 12
 #: the bytes of recorded checks' packs one check imports (`verdict_packs`): a pack that would take them past this is passed over
 #: by name, by the size the store lists, before anything fetches it, so what a run fetches and unpacks before its first step
@@ -1405,21 +1407,24 @@ GATHER_BYTES = 256 << 20
 VERDICT_URL_TTL_S = 6 * 3600
 
 
-def verdict_url_file(d: Path, store=None) -> Path | None:
+def verdict_url_file(d: Path, store=None, heads: list[str] | tuple[str, ...] | None = None) -> Path | None:
     """`VERDICT_URLS` in ``d`` (mode 600): the packs `verdict_packs` selects among those the store's remote holds, each with a GET
     of its blob that the remote signs for `VERDICT_URL_TTL_S`, for the run to fetch and import before its steps
-    (`verdicts_fetched`): the launcher lists and signs, and fetches nothing.  None, with the reason printed, when the store can't
-    be read, no remote here signs URLs or no recorded check published a pack: the run then reuses only its node's own passes and a
-    pack given."""
+    (`verdicts_fetched`): the launcher lists and signs, and fetches nothing.  ``heads`` are `verdict_packs`'; the launcher, which
+    gives neither them nor a ``store``, sends for the PRs this checkout's queue merges hold (`common.merged_heads`).  None, with
+    the reason printed, when the store can't be read, no remote here signs URLs or no recorded check published a pack: the run
+    then reuses only its node's own passes and a pack given."""
     from research.store.local import LocalStore, object_key
 
     try:
+        if heads is None:
+            heads = COMMON.merged_heads(ROOT) if store is None else ()
         store = store or LocalStore()
         if (sign := getattr(store.remote, "presign", None)) is None:
             print("check: verdicts: no store remote here signs URLs, so the run imports no recorded check's pack", flush=True)
             return None
         packs = [{"run": p["run"], "sha256": p["sha256"], "bytes": p["bytes"], "url": sign(object_key(p["sha256"]), VERDICT_URL_TTL_S)}
-                 for p in verdict_packs(store, remote=True)]
+                 for p in verdict_packs(store, remote=True, heads=heads)]
     except Exception as e:  # noqa: BLE001  (no URL: the check reuses only its node's passes and the one given)
         print(f"check: no verdict packs listed from the store ({type(e).__name__}: {e})", flush=True)
         return None
@@ -1456,40 +1461,54 @@ def attempt_pack(store, rid: str, d: Path, name: str = "verdicts.tar.gz") -> Pat
     """The verdict pack the attempt ``rid`` published (`pack_file`), fetched under ``d``, or None."""
     if (got := pack_file(store, rid, name)) is None:
         return None
-    return store.fetch(got[0], d / name.split(".", 1)[0] / rid, paths=[name]) / name
+    return store.fetch(got[0], d / Path(name).name.split(".", 1)[0] / rid, paths=[name]) / name
 
 
-def verdict_packs(store, limit: int = GATHER, remote: bool = False) -> list[dict]:
-    """{run, sha256, bytes} of the pack of each of the ``limit`` recorded checks that ended last and published one, newest first: a
-    failed or cancelled run's too, since its pack holds only the passes its steps stored, each under a key of everything it read.
-    One whose listed size would take them past `GATHER_BYTES` is passed over by name, unfetched, and with ``remote`` so is one the
-    store's remote doesn't hold, which no URL fetches.  When the store has a remote, the attempts started in the last
+#: the pack the Lean audit of a ready mark's merge leaves among its run's files (`tools/verity/lean/warm.py`'s `PACK`)
+MARK_PACK = COMMON.MARK_AUDIT_OUT + "verdicts.tar.gz"
+#: the runs `verdict_packs` lists packs of, each kind as (the store's attempts of it, its pack's path among its files): the
+#: recorded checks, and the audits of ready marks' merges, whose packs hold Lean verdicts alone
+PACKERS = ((COMMON.RECORDED_CHECKS, "verdicts.tar.gz"), (COMMON.MARK_AUDITS, MARK_PACK))
+
+
+def verdict_packs(store, limit: int = GATHER, remote: bool = False, heads: list[str] | tuple[str, ...] = ()) -> list[dict]:
+    """{run, sha256, bytes, path} of the pack of each of the ``limit`` runs of each kind of `PACKERS` that ended last and
+    published one, the recorded checks' first and each kind's newest first: a failed or cancelled run's too, since its pack holds
+    only the passes its steps stored, each under a key of everything it read.  Before the newest mark audits' come those of the
+    marks of ``heads`` (`common.lookups`), however old and beside the ``limit``, as `lean_audit.shared_bundles` lists their
+    bundles.  One whose listed size would take them past `GATHER_BYTES` is passed over by name, unfetched, and with ``remote`` so
+    is one the store's remote doesn't hold, which no URL fetches.  When the store has a remote, the attempts started in the last
     `common.RECENT_S` are refreshed from it first."""
     if store.remote is not None:
         store.refresh(attempts_only=True, since=COMMON.recent(time.time()))
-    rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
-                           "ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?", (4 * limit,))
+    ended = ("state IN ('done', 'failed', 'cancelled') "
+             "ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?")
     packs, room = [], GATHER_BYTES
-    for (rid,) in rows:
-        if (got := pack_file(store, rid)) is None or (remote and not got[1].get("remote")):
-            continue
-        if (size := got[1]["bytes"]) > room:
-            print(f"check: verdicts: skipping {rid}'s pack: its {size / 2**20:.0f} MiB would take this check's packs past "
-                  f"{GATHER_BYTES / 2**20:.0f} MiB (GATHER_BYTES); its verdicts are recomputed", flush=True)
-            continue
-        packs.append({"run": rid, "sha256": got[1]["sha256"], "bytes": size})
-        room -= size
-        if len(packs) == limit:
-            break
+    for runs, name in PACKERS:
+        for which, args, most in COMMON.lookups(runs, limit, heads):
+            found = 0
+            for (rid,) in store.index.sql(f"SELECT id FROM attempts WHERE {which} AND {ended}", args):
+                if any(p["run"] == rid for p in packs):
+                    continue
+                if (got := pack_file(store, rid, name)) is None or (remote and not got[1].get("remote")):
+                    continue
+                if (size := got[1]["bytes"]) > room:
+                    print(f"check: verdicts: skipping {rid}'s pack: its {size / 2**20:.0f} MiB would take this check's packs past "
+                          f"{GATHER_BYTES / 2**20:.0f} MiB (GATHER_BYTES); its verdicts are recomputed", flush=True)
+                    continue
+                packs.append({"run": rid, "sha256": got[1]["sha256"], "bytes": size, "path": name})
+                room -= size
+                if (found := found + 1) == most:
+                    break
     return packs
 
 
 def gathered_packs(d: Path, store, limit: int = GATHER) -> list[tuple[str, Path]]:
-    """(attempt, pack) of the packs `verdict_packs` selects, fetched under ``d``, newest first, for a plan read here (`plan.py`,
-    `measure`); one import refuses is passed over by name."""
+    """(attempt, pack) of the newest packs `verdict_packs` selects (those of no PR's marks beside them), fetched under ``d``,
+    newest first, for a plan read here (`plan.py`, `measure`); one import refuses is passed over by name."""
     packs = []
     for p in verdict_packs(store, limit):
-        if (pack := attempt_pack(store, p["run"], d)) is None:
+        if (pack := attempt_pack(store, p["run"], d, p["path"])) is None:
             continue
         if why := VERDICTS.refusal(pack):
             print(f"check: verdicts: skipping {p['run']}'s pack, which import refuses ({why}); its verdicts are recomputed",

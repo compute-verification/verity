@@ -96,10 +96,6 @@ RUN: dict[str, Kind] = {}
 
 #: what is free today, a Program parameter's name or a `run` declaration (``run.<declared>``) -> its reason, its bound and its fix
 ALLOWED: dict[str, str] = {
-    "splits":
-        "a derived top-p split count, SplitsFor_v1 of the batch's live rows, per sampling event, at most log2 6 bits an event; "
-        "`predict.batch.check_compiled` refuses it (R3) in every compiled session, and serving pins `registered_splits`. Fix: "
-        "delete the derived form",
     "run.survey_hole":
         "a survey's stand-in for a node every rule refuses (`frontend.rules.training_survey.Hole`): `check_identity` refuses "
         "every Program with one, so no registered Program reads it",
