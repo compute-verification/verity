@@ -8,7 +8,8 @@ on timeout writes cancel_intent{actor: timeout} then SIGTERM -> grace -> SIGKILL
 status.json; on a timeout, and on a `research cancel` (D/control/cancel, scope.CONTROL_CANCEL), ends every process of the run's own
 cgroup scopes and the run's processes outside its group the same way, SIGKILL once the grace is over, and records them in status.json
 `scope_end` and a `scope_ended` mark (scope.Sweep: never the runner or its sampler), or, finding no request once the workload has
-exited, claims D/control/cancel as closed (scope.claim: a cancel that comes later ends the run itself), stops the sidecar (SIGTERM, waits <= linger + 5 s), emits span_end{outcome}, runs the classifier, exits with CMD's status
+exited, claims D/control/cancel as closed (scope.claim: a cancel that comes later ends the run itself) and ends what the workload
+left in a check slot's scope whose memory the slot limits (scope.end_slot_scope, a `scope_outlived_leader` mark), stops the sidecar (SIGTERM, waits <= linger + 5 s), emits span_end{outcome}, runs the classifier, exits with CMD's status
 (128+signal when killed).  The sampler is never the reason the workload stops: a sampler start failure is recorded and CMD still runs.
 On a machine that caps each login session's memory, CMD never starts from a cgroup without a cap of its own (cgroup.uncapped): status
 failed, a no_memory_cap mark, exit 75.
@@ -35,7 +36,7 @@ from .classify import classify, write as write_failure
 from .events import Emitter, utc_now_ms
 from .job import build_job, input_ref, sampler_instruments, set_status, sha256_file, write_json_atomic
 from .procs import live_group, stat_fields
-from .scope import CONTROL_CANCEL, Sweep, cancel_request, claim
+from .scope import CONTROL_CANCEL, Sweep, cancel_request, claim, end_slot_scope
 
 
 def _tele_argv() -> list[str]:
@@ -348,6 +349,11 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
             print(f"[tele run] {a.stage}: {len(scope_end['left'])} of the run's process(es) outlived SIGKILL: {', '.join(scope_end['left'])}",
                   file=sys.stderr)
     _end_leftovers(em, a.stage, proc.pid)
+    if (left := end_slot_scope(d, proc.pid, starttime)) is not None:
+        em.mark(a.stage, "scope_outlived_leader", **left)
+        print(f"[tele run] {a.stage}: the workload left process(es) in its check slot's scope, whose memory the slot limits; ended: "
+              f"{', '.join(left.get('SIGTERM', {}).get('pids') or []) or 'none reached'}", file=sys.stderr)
+        scope_end = scope_end or left
     sig = -rc if rc is not None and rc < 0 else None
     status_rc = 128 + sig if sig else rc
     outcome = "ok" if rc == 0 else "fail"

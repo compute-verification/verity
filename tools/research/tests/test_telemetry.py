@@ -1390,6 +1390,122 @@ def test_the_runner_ends_what_a_cancel_left_once_its_grace_is_over_and_records_i
     assert se["empty"] is True and any(x.startswith(f"{pid} ") for x in se["SIGKILL"]["pids"])
 
 
+# ---- a check slot's scope: the run's own, and emptied with the run when the slot limits its memory ---------------------------------------
+
+CHECK = f"{APP}/check-g0-{RID}.scope"
+
+
+def _slot_world(tmp_path, **kw):
+    """A direct run through a check slot that gives it a scope (slot.py): the runner in its ssh login's session scope, the workload
+    (the leader, with one child) in the slot's scope, and there too three tasks that each took a session of their own, lost their
+    parent to systemd --user and have no environment to read; beside them another run's task in its own slot's scope, and a
+    tmux in the login."""
+    rd = str(tmp_path / RID)
+    py = ["python3", "-c", "..."]
+    other = f"{APP}/check-g1-r20261019-010101-aaaa.scope"
+    procs = {B + 2: (1, B + 2, B + 2, "/user.slice/user-1001.slice/user@1001.service/init.scope", None, ["systemd", "--user"]),
+             B + 50: (B + 600, B + 50, B + 600, SESSION, None, ["python3", "-m", "research", "run", "--id", RID]),
+             B + 100: (B + 50, B + 100, B + 100, CHECK, rd, ["sh", "-c", "work"]),
+             B + 101: (B + 100, B + 100, B + 100, CHECK, rd, py),
+             **{B + 300 + k: (B + 2, B + 300 + k, B + 300 + k, CHECK, None, py) for k in range(3)},
+             B + 400: (B + 2, B + 400, B + 400, other, None, py),
+             B + 600: (1, B + 600, B + 600, SESSION, None, ["tmux"])}
+    return _World(tmp_path / "cgroup", procs, **kw), rd
+
+
+def test_a_sweep_takes_the_runs_check_slot_scope_as_its_own(tmp_path, fake_time):
+    """A cancel or a timeout of a run in a scoped check slot ends every process of the scope: the tasks that left the workload's
+    group, session and process tree, whose environment names no run, are found by their cgroup alone. Another run's slot scope,
+    the runner and the login's tmux are left."""
+    from research.telemetry import scope
+    assert scope.OWN_SCOPE_RE.match(f"check-a-b-{RID}.scope")["check"] == RID, "a slot's name may hold a dash"
+    assert scope.OWN_SCOPE_RE.match("check-g0-4242.scope") is None, "a scope named for a pid (no run) is nobody's own"
+    w, rd = _slot_world(tmp_path, ignores_term=[B + 301])
+    rec = w.sweep(B + 100, rd).end(scope.GRACE_S)
+    assert {p for p, s in w.sent if s == "SIGTERM"} == {B + 100, B + 101, B + 300, B + 301, B + 302}
+    assert [p for p, s in w.sent if s == "SIGKILL"] == [B + 301]
+    assert set(w.procs) == {B + 2, B + 50, B + 400, B + 600}
+    assert rec["scopes"] == {CHECK: f"the check slot scope of run {RID}"} and rec["fallback"] is None and rec["empty"] is True
+
+
+def test_a_capped_slots_scope_is_emptied_once_its_workload_has_exited_and_a_scope_only_slots_is_left(tmp_path, fake_time):
+    """The workload is gone (an open run told to quit ends its own group) and its tasks run on in the slot's scope, holding the
+    memory the slot limits: with the slot's cap in the run's slot record they are ended, by SIGTERM then SIGKILL with no grace.
+    Without a cap in the record (a scope=1 slot), with another run's scope in it, or with nothing left, nothing is signalled."""
+    from research.telemetry import scope
+    w, rd = _slot_world(tmp_path, ignores_term=[B + 301])
+    Path(rd).mkdir()
+    for p in (B + 100, B + 101):
+        del w.procs[p]
+    w._write()
+    how = {"stat": w.stat, "pids": w.pids, "cgroup": w.cgroup, "env_of": w.env_of, "cmdline": w.cmdline, "root": w.root, "kill": w.kill}
+    unit = CHECK.rsplit("/", 1)[-1]
+    assert scope.scope_path(w.root, unit) == CHECK and scope.scope_path(w.root, "check-g9-r1.scope") is None
+    assert scope.end_slot_scope(Path(rd), B + 100, 7, **how) is None, "no slot record: the run held no slot"
+    for doc in ({"state": "held", "slot": "g0", "scope": unit}, {"state": "held", "slot": "g0", "cap_gb": 32},
+                {"state": "held", "slot": "g1", "scope": "check-g1-r20261019-010101-aaaa.scope", "cap_gb": 32}, ["held"]):
+        (Path(rd) / scope.RUN_SLOT).write_text(json.dumps(doc))
+        assert scope.end_slot_scope(Path(rd), B + 100, 7, **how) is None and w.sent == [], doc
+    (Path(rd) / scope.RUN_SLOT).write_text(json.dumps({"state": "held", "slot": "g0", "scope": unit, "cap_gb": 32}))
+    rec = scope.end_slot_scope(Path(rd), B + 100, 7, **how)
+    assert w.sent == [(B + 300, "SIGTERM"), (B + 301, "SIGTERM"), (B + 302, "SIGTERM"), (B + 301, "SIGKILL")]
+    assert set(w.procs) == {B + 2, B + 50, B + 400, B + 600}
+    assert rec["scopes"] == {CHECK: f"the check slot scope of run {RID}, named by its slot record"}
+    assert rec["empty"] is True and rec["SIGTERM"]["n"] == 3 and rec["SIGKILL"]["n"] == 1
+    assert scope.end_slot_scope(Path(rd), B + 100, 7, **how) is None, "nothing is left in the scope"
+
+
+#: A made-up open run: its workload starts a task in a session of its own with an empty environment (argv[1] gets its pid; it
+#: blocks on the gate argv[2], and once released writes argv[2].released), records the check slot it holds as slot.py does
+#: (argv[3]: the slot record) and the task as a process of the slot's scope (argv[4]: the scope's cgroup.procs), and exits as
+#: its work does on `quit`.
+LEAVES_A_TASK = """
+import os, subprocess, sys
+pidf, gate, slot, procs = sys.argv[1:5]
+w = subprocess.Popen([sys.executable, "-c", "import sys; open(sys.argv[1], 'rb').read(1); open(sys.argv[1] + '.released', 'w').close()",
+                      gate], start_new_session=True, env={})
+os.makedirs(os.path.dirname(procs), exist_ok=True)
+open(procs, "w").write(f"{w.pid}\\n")
+open(os.path.join(os.environ["RESEARCH_RUN_DIR"], "slot.json"), "w").write(slot)
+open(pidf, "w").write(str(w.pid))
+"""
+
+
+def test_the_runner_ends_the_tasks_a_capped_slots_run_left_behind_and_leaves_a_scope_only_slots(tmp_path, monkeypatch):
+    """A run whose workload exits by itself while a task it started in another session runs on. In a slot that limits the run's
+    memory, the runner ends the task with the run, marks it and records it in status.json; in a slot that only gives the check a
+    scope the task is left, as any process outside the workload's group is."""
+    from research.telemetry import run as trun, scope
+    root = tmp_path / "cgroup"
+    monkeypatch.setattr(scope, "mounts", lambda: {"v2": str(root)})
+
+    def go(rid: str, slot: dict):
+        d, pidf, gate = tmp_path / rid, tmp_path / f"{rid}.pid", Gate(tmp_path / f"{rid}.gate")
+        d.mkdir()
+        procs = root / APP.lstrip("/") / slot["scope"] / "cgroup.procs"
+        rc = trun.main(["--attempt-dir", str(d), "--stage", "t", "--no-sampler", "--no-classify", "--",
+                        sys.executable, "-c", LEAVES_A_TASK, str(pidf), str(gate.path), json.dumps(slot), str(procs)])
+        recs = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines() if l.strip()]
+        marks = [x for x in recs if x.get("kind") == "mark" and x.get("name") == "scope_outlived_leader"]
+        return rc, int(pidf.read_text()), gate, marks, json.loads((d / "status.json").read_text())
+
+    capped, plain = "r20261101-000000-aaaa", "r20261101-000000-bbbb"
+    rc, pid, gate, marks, st = go(capped, {"state": "held", "slot": "g0", "scope": f"check-g0-{capped}.scope", "cap_gb": 32})
+    _gone(pid)                                  # nothing released its gate: it is gone because the runner ended it
+    gate.close()
+    assert rc == 0 and st["state"] == "done" and not (tmp_path / f"{capped}.gate.released").exists()
+    (m,) = marks
+    assert m["empty"] is True and any(x.startswith(f"{pid} ") for x in m["SIGTERM"]["pids"])
+    assert st["scope_end"]["scopes"] == {f"{APP}/check-g0-{capped}.scope": f"the check slot scope of run {capped}, named by its slot record"}
+
+    rc, pid, gate, marks, st = go(plain, {"state": "held", "slot": "t", "scope": f"check-t-{plain}.scope"})
+    assert rc == 0 and marks == [] and "scope_end" not in st
+    gate.release()
+    _gone(pid)
+    gate.close()
+    assert (tmp_path / f"{plain}.gate.released").exists(), "the task was still there to be released: the runner left it"
+
+
 # ---- who ends a cancelled run: control/cancel, claimed once by the cancel (its request) or by the runner (closed) -----------------------
 
 #: The workload: a child that calls setsid itself and ignores SIGTERM, as the vllm.build stages under GNU `timeout` do (each in a
