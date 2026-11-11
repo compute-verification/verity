@@ -48767,3 +48767,39 @@ For FLOCKPKG (through you): is the fold once a repetition as I read your 91 ns, 
 For the table:
 - Largest slack: the second repetition, 100 bits no bound reads: 41% of the card's proving time [run: `r20261111-061047-6773`] and about half of the Lean verifier's 250 core-s a head statement [derived from FLOCKPKG's measured `d4ef`]. Daniel's, unbuilt; with it a session's κ is 2^-104.38.
 - Tables of 2^33 bits: +2.00 bits, about +9,000 GB [guess]. Not a lever.
+
+## SALTS, Wed 11 Nov 10:36Z: at FOUR provers the salts are on the statement's path. In HEADPROF's four-prover row the device's level-0 commitment waits for the salts read-ahead in 18 of 76 sessions, up to 14.7 s, 2.3 s a session on average, where it waits 0.1 s at one prover (read from `db9a`'s record). No salts cut is measured there yet; by CPU share `all` alone would read about 1.9 s for 2.42 (my guess). Still a claim, unmarked, no PR
+
+**1. What the record shows.** [run: `research data fetch` of `r20261111-093701-db9a` and `r20261111-091148-cb57`; every session's `GPUPHASE` and `SALTSAHEAD` lines in the provers' logs; table saved with the run's evidence]
+
+| step | GPU-s a statement | rep 0's level-0 commitment phase on the device: median / p90 / max, s | sessions over 1 s | mean, s a session | the salts read-ahead's wall: median / p90 / max, s | witness phase, s | a session's wall, s |
+|---|---|---|---|---|---|---|---|
+| one prover, today (`cb57` step 3) | 2.530 | 0.068 / 0.113 / 1.40 | 1 of 43 | 0.11 | 2.10 / 2.34 / 3.88 | 2.45 | 3.2 |
+| one prover, `all` (`cb57` step 1) | 2.570 | 0.067 / 0.076 / 2.38 | 1 of 43 | 0.13 | 0.67 / 0.87 / 1.36 | 2.48 | 3.3 |
+| four provers, the check on the ten cores (`db9a` step 1) | 2.417 | 0.103 / **11.0 / 14.7** | **18 of 76** | **2.31** | 8.2 / 21.2 / 24.9 | 7.4 | 12.9 |
+| four provers, the check on cores 8-11 (`db9a` step 2) | 1.731 | 0.094 / 0.25 / 11.4 | 7 of 76 | 0.83 | 6.5 / 9.6 / 18.3 | 5.9 | 8.2 |
+
+- At four provers the device's phases take 4.5 s a session on average against 0.86 at one prover; 2.2 s of that difference is this one phase.
+- No tree read ahead went untaken in any step (0 of 940 and 935), so nothing was read twice.
+
+**2. Why the device waits there.** [read: the branch's tree, which is `main`'s here]
+- The device asks the host for level 0's salts when it builds level 0's tree (`gpu_circuit.rs` l.179-188, `hm96_tree`), inside its commitment phase.
+- That sample takes the read-ahead's lock, which the read-ahead holds for the whole read of a tree: "`drawn` is held while a tree is read, so a sample of a planned tree waits for it" (`zk_hooks.rs` l.117-119, l.128-134, l.319-326).
+- The read-ahead runs at nice 19 on its own ten threads (`flock-circuit.rs` l.1406-1419). At one prover it has room (9.1 of ten cores busy). At four provers the cores are 9.92 busy with work at normal priority [relayed: HEADPROF 10:19Z], so it gets what is left, and the device waits behind it.
+- [guess] So the wait is how the shortage of CPU shows at four provers: the salts are the lowest-priority work, so they come last, and the card idles for them (21.5% busy).
+
+**3. What follows, all of it unmeasured.**
+- Where the cores are full, a CPU-second of salts is time. By share of the host's 25.3 CPU-s a statement [relayed: HEADPROF]: `all` (5.0 less) about 0.80, so about 1.9 s for 2.42; `upper` (2.0 less, no assumption) about 0.92, so about 2.2 s; the level-0 buffer of my 10:04Z entry (0.75 less, no assumption, no code) about 0.97. These are my guesses and I wrote them before any of those rows read.
+- `FC_SALTS_NICE=0` (an existing switch) would end the wait and, I expect, save nothing: the cores are full either way, so the walk would wait instead [guess].
+- HEADPROF's next rows decide: every cut together at four provers (about 10:47Z), then `all` alone at four provers if its lease holds, and `all` alone at two provers on vy-dc-h200-3. I read each record when it reaches the store and report the same two columns.
+- **If `all` alone reads near 0.80 at four provers, the ask for Daniel is worth posting**, with the measured row in it; the draft in the notes then needs only that row. If it reads near 1, it is not.
+
+**Not established:** any salts cut at more than one prover; that the wait is on the salts' lock and not something else in that phase (I read the path and the timings, I did not instrument it); the three ratios above.
+
+For HEADPROF: cursor/proofs-salts-8dd2 at ff48f38adc3abe6ec40ab28e5519e5a7aff2e223 (unchanged). In a four-prover step's logs, rep 0's `t.encoding_commitment` over 1 s (18 of 76 today) and `SALTSAHEAD`'s `s` (median 8.2 s today) are the two things a salts cut should move.
+
+For the table:
+- Salts at four provers a card (the cheapest measured row tonight): not measured with a cut. Today's block there waits on its salts: the device's first phase takes 2.3 s a session on average against 0.1 s at one prover (read from `r20261111-093701-db9a`). By CPU share the keyed salts would give 0.80 (one named premise) or 0.92 (no assumption): a guess until HEADPROF's rows read.
+
+For BREAKEVEN:
+- Nothing to price yet. Unsupported what-if, not for a row of record: four provers on ten cores, `all` alone, 2.42 to about 1.9 s; with the check also off the cores, 1.73 to about 1.3 s.
