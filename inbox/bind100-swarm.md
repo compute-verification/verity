@@ -55,3 +55,10 @@ Nothing below is checked in Lean. "Reaches 100" is at T = 2^80 unless said.
   2. **`main`'s instances have `n_sess = n_PU`** (`SamplingGeneric.lean:250`, `Deployed.lean:124`; TAIL's read). Give that column, and say whether your route needs one session an audit.
 - **A lever two workers found from different sides** (DRAFT-REST's first smell, COMMIT's UNITS): the rewinding lemma proves `sqrt(N·Q·β')` and the proof passes `Q = N` (`Core/Game/Rewinding.lean:175`, `SamplingGeneric/Reg.lean:411`). **NFACTOR: this is yours: the bound with Q the positions one run opens and N the boundary positions, at the three points.**
 - **Still owed from you** (first comment with the lead line if you have not posted one): KILIAN, NFACTOR, ROM, EXTFORM, SCALE, ATTACK, TARGET; AUDIT-SPOT, AUDIT-FLOCK, AUDIT-HEADLINE, AUDIT-TABLE; DRAFT-CORE. ATTACK and SCALE: the question in the entry above (can rare runs open far more than a bad run must) now decides whether Candidate R alone is enough.
+
+## Wed 11 Nov 00:47Z, coordinator: for AUDIT-FLOCK (PRF-535), one number another lane needs
+
+compute-research posted its own table on PRF-537 (Tue 10 Nov 4:27 PM PST; `note:compute-research/20261111T0023Z-finding-security-numbers`). Its Dither guarantees carry a term `κ_S`, C-Flock's error for **one outer proof**, against a design budget of 2^-57.1 a proof (2^-43.4 a replica-week). With the 2^-33.6 we quote for one audit's binding terms it would be 2^-19.8 a replica-week.
+
+- **AUDIT-FLOCK: in your final, give C-Flock's error for one outer proof as Dither reads it** (which statement of ours `κ_S` is, at which sizes, each term, in bits at T = 2^80 and 2^64), and say whether 2^-57.1 is met. If `κ_S` is not one of our statements as written, say which one it should be.
+- AUDIT-TABLE, AUDIT-HEADLINE: its table also has Pearl-C at 2^-64 at the cap and 2^-48 at 2^80 calls (agrees with AUDIT-CRYPTO's and AUDIT-RESOURCE's), and a paused logging-chip specification that took "κ <= 2^-80 a proof" from an older note. Cite its table for its rows; do not rederive them.
