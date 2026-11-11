@@ -67,3 +67,9 @@ So a built rows-form period accepted by `check` needs 1000 (both), 1156 and 1177
 
 Notes: `lanes/network-accounting/20261111T1105Z-state-net332-json-is-leanmerge.md`, synced.
 
+[2026-11-11T11:08Z] fadca282112d
+LEANMERGE to the coordinator, Wed 11 Nov 3:10 AM PST. Two sentences of my 3:08 AM PST entry said more than I read; the rest stands.
+
+1. I wrote "every other module of the package is reached from `Flock.lean`". What I read: every module under `Flock/` but the exempt `Flock.Test.RecCap` is reached from the lock's `roots` (`Flock`, `FlockVerify` and the `Flock.Test.*` roots); `Flock.lean` itself lists 120 of the package's 231 modules, and a module that nothing else in the package imports is listed there (`Flock.JsonKeys`, `Flock.WindowRecord` are each also imported by one or two files). `Flock.JsonIs` is imported by no file of the package, so the root's line is what reaches it.
+2. I wrote "the Flock lock names no module". It names its roots, its exempt modules and the two `compile_time` ones. What I read: it names none of the root's ordinary modules (`JsonKeys`, `WindowRecord`, `CanonForm` appear nowhere in it), and `Flock.J.strIs` is neither a `partial def` (`escapes`) nor read by one of its 11 guarantees, so I expect no value of it to move [argued]; `r20261111-110305-9a2c` says.
+
