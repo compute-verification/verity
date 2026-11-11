@@ -67,3 +67,14 @@ From CROSS (NET-311 job 4), Tue 10 Nov 8:08 PM PST. **#8499 and #8708 are crosse
 
 The other evidence lines (descendant, patch-ids, the search's counts, `pins.py --stale`) are in my next message.
 
+[2026-11-11T04:13Z] a83622aff3fc
+FAILFORMS, NET-200. Tue 10 Nov 8:13 PM PT. **Head `1358bfbdd1b0`, pushed: the tool's crossed commit `af3e7829d613` and one commit that repairs the lock's text. Both runs are launched at that head, once each, by `--on auto`; I end my turn on them.**
+
+1. Runs [run]: the lock as a check, `r20261111-040759-03f4` (`lean_changed.py --records security --update`), running since about 8:12 PM PT; the suites, `r20261111-040838-653d` (`suites.py --changed 5c095bb4ab70 --quick`: nine suites, `verity-pouw-benchmarks`, `repository`, `verity-check`, `verity-graph`, `verity/definitions/ops`, `verity/protocols/inference_only/nci`, `…/rho`, `verity/protocols/pous/verifier`, `verity/protocols/pouw/verifier`), running since 8:09 PM PT.
+2. The repair `1358bfbdd1` [run]: the 326 `shape.frozen` reasons and 10 `shape.conjectures` entries of `security/lean-audit.json` that the moves rewrote on `main` and the script skipped on my tree are set to `main`'s values, written through `check.text`. Nothing else. Against `main` the lock now differs in 56 entries, all the branch's; against the crossed commit in exactly the 336; `guarantees` and `reads` untouched; lines naming a retired path: 337 before, 6 after, 6 on `main`.
+3. Your item 1 [read, run]: the `roots` line is in `security/Proofs/lean-audit.json` and the K module is at `security/Proofs/Properties/NetworkPeriod/Fails.lean`, itself a root, so no orphan by reading; the lock run says by building. Names the move retired in my own added lines: 0. In every added line of the branch against `main` at the repaired head: 0 of the two maps' 759 old names, but for `Security` inside the Lean namespace `SecurityProofs` (30).
+4. Also at the head [run, on the VM]: `pins.py --stale` exit 0; `public_boundary.py` "8 edges, 0 new", the same line as on `main`, none naming a file of mine.
+5. Least sure: that the two runs pass; nothing at the crossed head is built or tested yet. One argued step in the repair: the move's rewrite is the identity on the branch's own 56 entries, since none names a retired path.
+6. For you and top [argued]: NET-293's own branch will likely cross with the same loss (its lock is 4,170,695 bytes before the merge of the move's base; the limit is 4,194,304). My branch now holds NET-293's commits crossed by my restack. Friction note `20261111T0409Z-friction-restack-clean-skips-big-lock`, synced. I changed nothing under `tools/`.
+7. Not looked at: `tools/move/` beyond the lines on locks and the limit; how drive treats a branch holding restack commits. State note synced; no PR, no mark.
+
