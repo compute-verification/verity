@@ -587,9 +587,10 @@ def replay(o: Options) -> bool | None:
         ck = WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision)
         words, wc = open_weights(bdir, tree, (row["commit"].get("weight_registration") or {}).get("root"), ck, threads=o.threads)
         sp.update(equal=wc["equal"], opened=wc["opened"], servable=wc["servable"])
-    print(f"[replay] WEIGHTS (pair {pair}): {'OPENED' if wc['equal'] else 'FAIL'} {wc['opened']}/{wc['servable']} registered tensors against the committed "
-          f"weights root {str(wc['committed_root'])[:16]} ({wc['opened_by_source']}; unopened {wc['unopened_n']}) in {wc['wall_s']} s"
-          + (f" -- {wc['why']}" if wc["why"] else ""), flush=True)
+    (logger.info if wc["equal"] else logger.warning)(
+        "[replay] WEIGHTS (pair %s): %s %s/%s registered tensors against the committed weights root %s (%s; unopened %s) in %s s%s", pair,
+        "OPENED" if wc["equal"] else "FAIL", wc["opened"], wc["servable"], str(wc["committed_root"])[:16], wc["opened_by_source"], wc["unopened_n"],
+        wc["wall_s"], f" -- {wc['why']}" if wc["why"] else "")
     args.replay_worker_peak = worker_peak(o)
     vc = row["commit"]["value_correspondence"]
     consumed: set[str] = set()

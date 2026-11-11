@@ -1,10 +1,12 @@
 """`cpu_replay.replay` and `cpu_replay.main`, the `commit-replay` command, on stand-ins for each step of the replay: the order of
-the steps, what a source that is already a slim keep changes, the lines the command prints and its exit codes.  A row's verdict
-quotes the last line of the command's log, so the text of the line the command ends on is held here."""
+the steps, what a source that is already a slim keep changes, the line it logs for the weights, the line it prints and ends on, and
+its exit codes.  A row's verdict quotes the last line of the command's log, so that line stays a print and its text is held here."""
 from __future__ import annotations
 
 import contextlib
 import json
+import logging
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -20,8 +22,16 @@ ROOT = "ab" * 64
 OPTIONS = CPU.Options(bundle="B", row_dir="R", checkpoint_dir="CK", checkpoints_manifest="checkpoints.json", model="m", revision="r", threads=3)
 OPENED = {"equal": True, "opened": 2, "servable": 2, "committed_root": ROOT, "opened_by_source": {"checkpoint": 2}, "unopened_n": 0,
           "wall_s": 0.5, "why": None}
+Lines = Callable[[], list[tuple[str, str]]]
 ORDER = ["open_source", "of_record", "replay_args", "manifest_of", "CheckpointIndex", "open_weights", "worker_peak", "touched", "run",
          "engine_of_record", "decide", "keep", "record"]
+
+
+@pytest.fixture
+def logged(caplog: pytest.LogCaptureFixture) -> Lines:
+    """What `cpu_replay`'s logger took so far: each record's level and text."""
+    caplog.set_level(logging.INFO, logger=CPU.__name__)
+    return lambda: [(r.levelname, r.getMessage()) for r in caplog.records if r.name == CPU.__name__]
 
 
 class Replay:
@@ -79,7 +89,7 @@ class Replay:
 
 
 def test_the_replay_runs_its_steps_in_order_on_the_record_and_returns_its_verdict(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-                                                                                    capsys: pytest.CaptureFixture[str]) -> None:
+                                                                                    capsys: pytest.CaptureFixture[str], logged: Lines) -> None:
     r = Replay(tmp_path, monkeypatch)
     assert CPU.replay(OPTIONS) is True
     assert r.calls == ORDER
@@ -99,21 +109,21 @@ def test_the_replay_runs_its_steps_in_order_on_the_record_and_returns_its_verdic
         "the keep takes the reads the replay made and the tensors it read"
     out, rows, verdict, b, wall = r.seen["record"][0]
     assert (out, rows, verdict, b) == (r.bdir.parent, [r.row], r.verdict, r.b) and wall >= 0
-    assert capsys.readouterr().out.splitlines() == [
-        (f"[replay] WEIGHTS (pair 3): OPENED 2/2 registered tensors against the committed weights root {ROOT[:16]} "
-         "({'checkpoint': 2}; unopened 0) in 0.5 s"),
-        "[replay] COMMIT PASS (pair 3): every check on the record; verdict commit_pass True"]
+    weights = (f"[replay] WEIGHTS (pair 3): OPENED 2/2 registered tensors against the committed weights root {ROOT[:16]} "
+               "({'checkpoint': 2}; unopened 0) in 0.5 s")
+    assert logged() == [("INFO", weights)]
+    assert capsys.readouterr().out.splitlines() == ["[replay] COMMIT PASS (pair 3): every check on the record; verdict commit_pass True"]
 
 
 def test_a_failed_replay_ends_on_the_reason_and_returns_false(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-                                                              capsys: pytest.CaptureFixture[str]) -> None:
+                                                              capsys: pytest.CaptureFixture[str], logged: Lines) -> None:
     wc = OPENED | {"equal": False, "opened": 1, "unopened_n": 1, "why": "tensor root != the committed tensor root"}
     r = Replay(tmp_path, monkeypatch, passed=False, wc=wc)
     assert CPU.replay(OPTIONS) is False and r.calls == ORDER
-    assert capsys.readouterr().out.splitlines() == [
-        (f"[replay] WEIGHTS (pair 3): FAIL 1/2 registered tensors against the committed weights root {ROOT[:16]} "
-         "({'checkpoint': 2}; unopened 1) in 0.5 s -- tensor root != the committed tensor root"),
-        "[replay] COMMIT FAIL (pair 3): the sampled replay failed; verdict commit_pass False"]
+    weights = (f"[replay] WEIGHTS (pair 3): FAIL 1/2 registered tensors against the committed weights root {ROOT[:16]} "
+               "({'checkpoint': 2}; unopened 1) in 0.5 s -- tensor root != the committed tensor root")
+    assert logged() == [("WARNING", weights)]
+    assert capsys.readouterr().out.splitlines() == ["[replay] COMMIT FAIL (pair 3): the sampled replay failed; verdict commit_pass False"]
 
 
 def test_a_slim_keep_is_held_to_its_draw_and_written_no_second_time(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -136,7 +146,7 @@ def test_the_command_exits_by_the_verdict(monkeypatch: pytest.MonkeyPatch, verdi
 def test_a_refused_replay_ends_on_its_reason_and_exits_2(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
                                                          refusal: Exception) -> None:
     def replay(o: CPU.Options) -> bool:
-        print("[replay] WEIGHTS (pair 3): OPENED", flush=True)
+        print("[replay] a line before the refusal", flush=True)
         raise refusal
 
     monkeypatch.setattr(CPU, "warm_vml", lambda: None)
