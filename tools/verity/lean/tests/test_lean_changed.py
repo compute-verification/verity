@@ -24,6 +24,7 @@ LC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LC)
 
 STORED = LC.stored
+BUILD = LC.build
 
 
 @pytest.fixture(autouse=True)
@@ -965,6 +966,39 @@ def test_try_keeps_dependencies_no_records_run_took_and_leaves_them_out_of_links
     (tree / LC.LINKS).write_text(json.dumps({"Sec": "k"}))
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=lambda _: None) == 0
     assert calls["link"] == [] and LC.read_links(tree) == {"Sec": "k"}, "a later --records run never drops them"
+
+
+def test_try_names_the_records_run_when_lake_wanted_to_write_in_the_read_only_dependencies(trying, tmp_path, monkeypatch):
+    """Lake's read-only error on a path in the tree's fetched dependencies is no verdict on the file: the try says what Lake
+    wanted to write, that a try mounts it read-only, and the run that builds the dependencies writable, and exits 2, as when
+    nothing ran. Lake names the resolved path, and a slot tree is a link."""
+    tree, calls = trying
+    pkg = tree / "Sec" / "Proofs"
+    (pkg / ".lake" / "packages" / "leansqlite").mkdir(parents=True)
+    lake = tmp_path / "lake"
+    lake.write_text('#!/usr/bin/env bash\necho "error: read-only file system (error code: 30)"\n'
+                    'echo "  file: $PWD/.lake/packages/leansqlite/.lake"\nexit 1\n')
+    lake.chmod(0o755)
+    monkeypatch.setattr(LC, "build", BUILD)
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
+    [line] = [s for s in said if "Lake wanted to write" in s]
+    assert f"{pkg.resolve()}/.lake/packages/leansqlite/.lake" in line and "read-only" in line
+    assert "`lean_changed.py --records Sec/Proofs --rebuild`" in line and "says nothing about the file" in line
+    assert any("lake build +Proofs.Flock.X:deps exit 1" in s for s in said), "Lake's own status is still said"
+    assert not (tree / LC.DIRTY).exists()
+
+    slot = tmp_path / "build-0"
+    slot.symlink_to(tree)
+    text = f"error: read-only file system (error code: 30)\n  file: {tree.resolve()}/Sec/.lake/packages/dep/.lake\n"
+    assert LC.refused_write(text, "Sec/Proofs", slot) == f"{tree.resolve()}/Sec/.lake/packages/dep/.lake", \
+        "the dependencies of a package it requires by path are mounted read-only too"
+    for other in (text.replace("/packages/", "/build/"), text.replace(str(tree.resolve()), "/elsewhere"), text.splitlines()[0]):
+        assert LC.refused_write(other, "Sec/Proofs", slot) is None
+    monkeypatch.setattr(LC, "build", lambda *a, **k: (1, text.replace("/packages/", "/build/")))
+    said.clear()
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1
+    assert not any("Lake wanted to write" in s for s in said), "a write refused anywhere else is Lake's to explain"
 
 
 def test_a_tree_s_builds_and_links_follow_a_layout_move_before_the_packages_are_synced(tmp_path, monkeypatch):

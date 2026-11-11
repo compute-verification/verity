@@ -166,6 +166,8 @@ SANDBOX = ROOT / "tools" / "verity" / "lean" / "sandbox.sh"
 #: run inside the sandbox before the build: `ro DIR... -- CMD`, each DIR bind-mounted read-only over itself
 READ_ONLY = ('ro=(); while [ "$1" != -- ]; do ro+=("$1"); shift; done; shift; '
              'for d in "${ro[@]}"; do mount --bind "$d" "$d" && mount -o remount,bind,ro "$d" || exit 97; done; exec "$@"')
+#: Lake's two lines for a write the sandbox's read-only mount refused, the second naming the path
+REFUSED_WRITE = re.compile(r"^error: read-only file system \(error code: \d+\)\n[ \t]+file: (\S.*?)[ \t]*$", re.M)
 #: Lake's line for a Lean error, the file relative to its package: `error: Aa/Two.lean:2:39: Unknown identifier ...`
 ERROR = re.compile(r"^error: (?:\./)*(\S+?\.lean):\d+:\d+: ")
 #: {package: the dependencies' key its links were taken under}, beside the packages in the tree
@@ -377,6 +379,14 @@ def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
     rw = [str((tree / p / ".lake").resolve()) for p in closure(pkg)]
     ro = [str(Path(d) / "packages") for d in rw if (Path(d) / "packages").is_dir()]
     return [*UNSHARE, "--", "bash", str(SANDBOX), *rw, "--", "bash", "-c", READ_ONLY, "ro", *ro, "--", *argv]
+
+
+def refused_write(text: str, pkg: str, tree: Path) -> str | None:
+    """The path Lake's output ``text`` says a read-only file system refused it (`REFUSED_WRITE`), when it lies in the fetched
+    dependencies of ``tree/pkg`` or of a package it requires by path, which `in_sandbox` mounts read-only; else None."""
+    ro = [(tree / p / ".lake" / "packages").resolve() for p in closure(pkg)]
+    return next((m.group(1) for m in REFUSED_WRITE.finditer(text)
+                 if any(d in Path(os.path.realpath(m.group(1))).parents for d in ro)), None)
 
 
 def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, sandbox: bool = True,
@@ -1377,7 +1387,8 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
     Lake rebuilds only what changed) then `lake env lean` with the package's Lean options (`SIBLINGS.options`) on FILE's
     probed copy in that package's directory (`PROBE.probe`, whose line is the last), and with ``siblings`` the sibling check (`siblings.py`) on that copy's build; lean's exit
     status on FILE's own lines (the check's when it runs), or 2 when ``file`` is in no package, no `build` slot is granted,
-    or the tree's dependencies can't be had. Never check.py."""
+    the tree's dependencies can't be had, or Lake wanted to write in them (`refused_write`: its line names the path and the
+    records run that builds them writable). Never check.py."""
     file = file.removeprefix("./")
     base = (LA.COMMON.cache_dir() / RECORDS).resolve()
     if tree is not None and base not in tree.resolve().parents:
@@ -1451,6 +1462,12 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                     log(f"lean-try: {file}: an import clash between {' and '.join(healed)}, which this tree can leave when "
                         "one was built against another version of a module both import: they lose their traces, so the "
                         "next try rebuilds them; a clash that comes back is in the source")
+                if rc and (path := refused_write(text, pkg, tree)):
+                    log(f"lean-try: {file}: not elaborated, and this says nothing about the file: Lake wanted to write "
+                        f"{path}, in the dependencies this tree fetched, which a try mounts read-only so that no try "
+                        f"changes what the next one builds against; `lean_changed.py --records {pkg} --rebuild` here builds "
+                        "them where Lake may write, on the tree it takes")
+                    rc = 2
                 if rc == 0 and checked:
                     def lean(a: list[str]) -> tuple[int, str, float, int]:
                         argv = [lake, "env", "lean", *a]
