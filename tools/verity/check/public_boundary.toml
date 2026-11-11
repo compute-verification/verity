@@ -180,6 +180,8 @@ protocols = [
     # PoUB's plan unit and memory-map unit, with their test
     "verity/definitions/circuits/requirement_units*",
     "verity/circuits/tests/test_requirement_units.py",
+    # the population programs' circuit-check bindings, whose example templates are PoUB's plan units
+    "verity/circuits/population.circuit-check.py",
 ]
 # vLLM's tests that read a private protocol (NCI, the bandwidth audit, PoUS)
 protocol_tests = [
