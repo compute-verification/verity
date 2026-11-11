@@ -58251,3 +58251,38 @@ For the table: #8896 and #8946 landed (the stratified `Q_s` by rows and `Sampled
 
 For BREAKEVEN: the program's digest read in `inputs`: 15.5 s at 152 MB (15.0 to 16.5 by four pairs; 0.102 s a MB) [measured, `r20261111-150802-f068`, one block, one core]; in the planner's term +223 core-s a statement (+216 to +237) in place of +207 (+141 to +272) [derived by proportion]. Fixed seconds of every column that reads the program; "no program" does not change.
 For the table: #8789 at `68e706219129`: quick tier 91 of 91 passed (`fe15` the last). The digest's read: 15.5 s at 152 MB by four pairs (15.0 to 16.5), so "as `main` is" +1,006 (+999 to +1,020) and its share of the row of record +17.4% [measured `f068`; the GB by proportion]. The allocator setting: PR #9005 at `accab1a9bc51`, unmarked; tier 25 of 63 passed, four runs out; head check 0.55 to 0.63 (one run, loaded node), fused call 0.91, +6% to +11% peak memory.
+
+## HEADPROF, Wed 11 Nov 15:44Z: off vy-dc-h200-3 at 15:42Z, nothing dropped; G = 32 with the host's walk is 0.83 s a statement at two provers, and the cut's block is then at par with the head block (2.14 s against 2.14 s for 256 blocks)
+
+**off vy-dc-h200-3 at 15:42Z.** My last run `r20261111-142211-64ca` ended at 15:41:50Z with rc 0, its `CARD` line reads no compute process, 0 MiB used and none of its provers left [run: its `job.log`]. At 15:42:46Z its lease's scope `gpu-lease-243011.scope` was inactive, pid 243011 was gone, no process of mine matched, and the card read 0 % and 0 MiB [run: a look on the node]. `/run/gpu-lease/0.owner` still holds my run's line; it is the file the lease script leaves, with no process behind it [run: the same look]. Nothing of mine is queued or chained there, and I launch nothing more on it. All nine runs of the list ran; nothing was dropped [run]. All nine `.custody` files read `preserved: true` [run: read at 15:42:37Z].
+
+What stays on that machine, under `/workspace/cache/proofs-headprof` only: the staged head-block statement (the `FIRST=false` copy, untouched, and not removed before 16:15Z as you said), the four staged statements of the cut, four builds under `flock-circuit`, and the small `chain`, `lock`, `cuda-root`, `flock-gpu-link` and two `wrap-hp.*` entries; at that look no process of mine ran and the card read 0 % and 0 MiB [run: `ls` and `nvidia-smi` on the node at 15:44:11Z]. I touched nothing of kernels' under `/workspace/cache/kernels-khshare` [run: no command of mine names it].
+
+**The values unit at G = 32 with the walk on the host** (`r20261111-142211-64ca`, vy-dc-h200-3, six cores, 15:35:52Z to 15:41:50Z, every step 0 refused, `compact_stall` 0, throttled 0; other runs' leases 0 at start and end) [run]:
+
+| provers | binary and switches | GPU-s a statement | against the run's default at the same provers | prover CPU-s | check CPU-s | card busy |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | default (the card walks) | 1.3715 | 1 | 11.72 | 1.52 | 64.9% |
+| 1 | today's, `FC_HOST_UNITS=1` | 1.3633 | 0.994 | 14.39 | 1.58 | 27.6% |
+| 1 | follow-up, salts `all`, `FC_HOST_UNITS=1` | 1.0104 | 0.737 | 8.62 | 1.53 | 40.2% |
+| 2 | follow-up, salts `all`, `FC_HOST_UNITS=1` | 0.8306 | 0.700 | 8.07 | 1.59 | 45.8% |
+| 2 | default (the card walks) | 1.1861 | 1 | 11.99 | 1.53 | 79.1% |
+
+At G = 32 the host's walk alone gains nothing with today's binary (0.994); with the follow-up and salts `all` it is 0.74 at one prover and 0.70 at two [run]. `WITNESS.units_pack` is 0.63 s a statement in the profiled step, and 11.5 of the 12 CPUs are busy at two provers [run: the step's stderr medians and its CPU samples].
+
+**The cut's 256 blocks at G = 32** (scores from `r20261111-135055-6f08`, values from `64ca`; sums of two runs' rows, each row good to the 2% to 7% a window's start moves it) [run, the sums are mine]:
+
+| provers | binary | scores + values, s | the head block's 256, s | ratio |
+| --- | --- | --- | --- | --- |
+| 2 | today's, as the code walks | 2.0043 + 1.1861 = 3.1904 | 3.02 to 3.13 | 1.02 to 1.06 |
+| 2 | follow-up, salts `all`, values on the host | 1.3072 + 0.8306 = 2.1378 | 2.1425 (`5832`) | 1.00 |
+| 1 | today's, as the code walks | 2.2423 + 1.3715 = 3.6138 | 3.416 to 3.456 | 1.05 to 1.06 |
+| 1 | follow-up, salts `all`, values on the host | 1.5951 + 1.0104 = 2.6055 | 2.68 to 2.75 (the follow-up without salts `all`) | 0.95 to 0.97 |
+
+So with tonight's cuts and the host walking the values unit, the cut's block costs 1.05 of the head block's seconds at G = 128, 1.03 at G = 64 and 1.00 at G = 32, two provers on six cores [run: `88e7`, `a5fc`, `64ca`, each with `6f08`]. That is within what a window's start moves a row, so I read it as "the cut costs the same seconds, not fewer", on this machine [guess: my reading of the spread]. `FC_HOST_UNITS=1` is the tree's own switch, off by default for a unit under 2,048 levels; whether the values unit should go to the host by default is its owner's decision, and I changed nothing [read: `gpu_circuit.rs`, `deep_unit` and `HOST_UNIT_LEVELS`, in my tree `a5922158dc`].
+
+Not run tonight: cores a prover 20 and all; salts `upper` alone and WITNESS's cuts alone at four provers; the follow-up and the no-walk row at four provers on node A (kernels times `aa23d1312dce` there tonight); `FIRST=true`; the cut at four provers.
+
+For BREAKEVEN: `SparseMlaHeadValues_v2{G=32}`, vy-dc-h200-3, two provers: 1.1861 s a statement today (the card's walk), 0.8306 s with the follow-up, salts `all` and `FC_HOST_UNITS=1`; one prover 1.3715 s and 1.0104 s (measured, `r20261111-142211-64ca`).
+For BREAKEVEN: the cut's 256 blocks at G = 32, two provers: 3.1904 s today, 2.1378 s with the cuts and the host's walk (measured, `6f08` + `64ca`), against the head block's 3.02 to 3.13 s and 2.1425 s (measured, `5832`).
+For the table: the head block cut into scores + values costs the same seconds as the head block with tonight's cuts when the host walks the values unit: 1.05 (G = 128), 1.03 (G = 64), 1.00 (G = 32) of the head block's, two provers, six cores, vy-dc-h200-3 (`6f08`, `88e7`, `a5fc`, `64ca`, `5832`); as the code walks today it is 1.35 to 1.39, 1.09 to 1.12 and 1.02 to 1.06.
