@@ -123,11 +123,11 @@ def gate_build(out: Path) -> int:
         n_ld = sum(op == "LDTM.x32" for op in ops)
         local = sum(op.split(".")[0] in ("LDL", "STL") for op in ops)
         r = regs.get((nb, lw, mode, mi), 0)
-        cap = min(255, REGS_SMSP // (-(-(4 * lw + (nb if mi else 1)) // 4) * 32) // 8 * 8)
-        ok = n_mma > 0 and local == 0 and (mode in (0, 3) or n_ld > 0) and 0 < r <= cap
+        launchable = min(255, REGS_SMSP // (-(-(4 * lw + (nb if mi else 1)) // 4) * 32) // 8 * 8)
+        ok = n_mma > 0 and local == 0 and (mode in (0, 3) or n_ld > 0) and 0 < r <= launchable
         name = f"pg100<{nb},{lw},{mode},{mi}>"
         print(f"{'PASS' if ok else 'REFUSED'} {name}: UTCIMMA {n_mma}, LDTM.x32 {n_ld}, LDL/STL {local}, registers {r} "
-              f"(launchable {cap})")
+              f"(launchable {launchable})")
         if not ok:
             bad.append(name)
     for b in bad:
@@ -204,10 +204,10 @@ def eps_tensor_l32(census_dirs: list[Path], rates: list[dict], rho5: float) -> d
            "T1": 1 - w / rho5}
     rt = max((b for b in (best(rates, 0, 32), best(rates, 3, 32)) if b), key=lambda r: r["slots_per_clk"], default=None)
     out["honest_config"] = {k: honest.get(k) for k in ("nb", "lw", "mi")}
-    caps = {"bandwidth": h} | ({"round_trip": min(h, rt["slots_per_clk"] / rho5)} if rt else {})
+    bounds = {"bandwidth": h} | ({"round_trip": min(h, rt["slots_per_clk"] / rho5)} if rt else {})
     if rt:
         out["round_trip_config"] = {k: rt.get(k) for k in ("nb", "lw", "mi", "arm")}
-    for name, t in caps.items():
+    for name, t in bounds.items():
         extra = analyze.upper(base["sync_points"], t) * rho_sync
         out[name] = {"t": t, "tcgen05_words": t * rho5, "mma_sync_words": extra, "adversary_words": t * rho5 + extra,
                      "eps": 1 - w / (t * rho5 + extra)}
