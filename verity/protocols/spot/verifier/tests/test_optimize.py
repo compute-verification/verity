@@ -14,14 +14,14 @@ from dataclasses import replace
 from fractions import Fraction
 from itertools import combinations, product
 from decimal import Decimal, localcontext
-from math import ceil, comb, fsum, lgamma, log, log1p, log2, prod, ulp
+from math import ceil, comb, fsum, inf, lgamma, log, log1p, log2, prod, ulp
 from pathlib import Path
 
 import pytest
 
 from verity.protocols.spot.verifier.profile import Stratified, Stratum
 from verity.protocols.spot.verifier.one_stage.draw import work_k, work_table
-from verity.protocols.spot.optimize import (HM96_ANDS, PROVING_ONLY, SHA512_ANDS, SHA512_ROWS, Candidate,
+from verity.protocols.spot.optimize import (HM96_ANDS, PROVING_ONLY, SESSIONS, SHA512_ANDS, SHA512_ROWS, Candidate,
                                                            Cell, Commitment, CostModel, Grain, Objective, ReplayGrain,
                                                            MISS_TERMS, TemplateCost, _hit, _log_miss, _miss, certify, density_bound, density_exact,
                                                            for_budget, for_target, frontier,
@@ -837,6 +837,51 @@ def test_a_design_by_template_has_the_counts_the_verifiers_rule_registers():
             two_stage_counts(bad, given)
     with pytest.raises(ValueError, match="width-stratified"):
         two_stage_design(cells, replay_blocks, delta, stratify="type", **kw)
+
+
+def test_a_design_with_one_session_a_template_holds_it_to_one_table_or_says_how_many():
+    """The verifier's second stage reads one session of one table a template of a verification phase.  The cost
+    model's own statements split a template's sample into several sessions.  With one session a template whatever
+    it holds, each template pays its fixed cost once a verification phase and its session is its whole sample, here
+    of several tables, which the row says.  Held to one table, no template samples more than its table holds over
+    the phase, so the design samples fewer proof blocks and bounds more.  Both are a by-template design's over a
+    verification phase, and the second needs each cell's table."""
+    delta, replay_blocks, n = 2.0 ** -20, 10 ** 8, 10 ** 4
+    cells = [Cell(10 ** 5, 16.0, prove=1e-3, fixed=5.0, cap=1024, commit_bytes=2.0, table=1024),
+             Cell(300, 12.0, prove=1e-3, fixed=5.0, cap=1024, commit_bytes=2.0, table=1024),
+             Cell(4, 131072.0, prove=1e-3, fixed=5.0, cap=4, commit_bytes=2.0 ** 14, table=64)]
+    kw = {"budget": 1e7, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "registration": n, "stratify": "template"}
+    rows = {s: two_stage_design(cells, replay_blocks, delta, sessions=s, **kw) for s in SESSIONS}
+    strata = [replace(c, stratum=i) for i, c in enumerate(cells)]
+    for s, row in rows.items():
+        count = row["registration_sample"]
+        st = two_stage_statements(strata, row["k"], count, s)
+        assert row["form"] == s and row["total"] <= kw["budget"] * (1 + 1e-12)
+        assert row["bound"] == pytest.approx(two_stage_exfil(strata, row["k"], replay_blocks, row["q"], delta), rel=1e-6)
+        assert row["largest"] == max(r["largest"] for r in st) and row["tables"] == max(r["tables"] for r in st)
+        assert row["over"] == sum(1 for r in st if r["tables"] > 1)
+        assert row["sessions"] == pytest.approx(count * sum(r["sessions"] for r in st))
+    own, whole, table = (rows[s] for s in SESSIONS)
+    assert own["sessions"] > 3 and own["tables"] <= 1
+    assert whole["sessions"] == pytest.approx(3) and whole["over"] >= 1 and whole["tables"] > 1
+    st = two_stage_statements(strata, whole["k"], whole["registration_sample"], "template")
+    for c, r in zip(strata, st):
+        assert r["largest"] == ceil(whole["registration_sample"] * r["taken"] - 1e-9)
+        assert r["prove"] == pytest.approx((c.fixed + r["largest"] * c.prove) / whole["registration_sample"])
+    assert whole["bound"] <= own["bound"]
+    assert table["sessions"] == pytest.approx(3) and table["over"] == 0 and table["tables"] <= 1
+    assert all(table["registration_sample"] * table["k"][i] <= c.table for i, c in enumerate(cells))
+    assert table["bound"] > whole["bound"] and table["draws"] < whole["draws"]
+    with pytest.raises(ValueError, match="by-template design's"):
+        two_stage_design(cells, replay_blocks, delta, sessions="table", **(kw | {"stratify": True}))
+    with pytest.raises(ValueError, match="by-template design's"):
+        two_stage_design(cells, replay_blocks, delta, sessions="template", **(kw | {"registration": 0.0}))
+    with pytest.raises(ValueError, match="needs each cell's `table`"):
+        two_stage_design([replace(c, table=inf) for c in cells], replay_blocks, delta, sessions="table", **kw)
+    with pytest.raises(ValueError, match="sessions are one of"):
+        two_stage_design(cells, replay_blocks, delta, sessions="tables", **kw)
+    with pytest.raises(ValueError, match="needs the count"):
+        two_stage_statements(strata, own["k"], 0, "template")
 
 
 def test_a_capped_design_charges_what_a_request_serves():

@@ -1081,7 +1081,8 @@ class Cell:
     """A proof-block type's blocks in each replay block, its part of `Claims.Sampling.cell` (ρ, t) for its stratum t:
     `n` of them, each committing `bits` (its summand of `bitsOf`) and `commit_bytes` once a sampled replay block's
     interior is committed, and proved at `prove` a block beside its statement's `fixed` cost, a statement holding at
-    most `cap` of the type's sampled blocks."""
+    most `cap` of the type's sampled blocks.  `table` is the type's proof blocks one table of the proof system holds,
+    where the cell states it: a session of more is a session of several tables."""
 
     n: float
     bits: float
@@ -1090,10 +1091,12 @@ class Cell:
     fixed: float = 0.0
     cap: float = 1.0
     commit_bytes: float = 0.0
+    table: float = inf
 
     def __post_init__(self) -> None:
-        if not self.n > 0 or not self.cap >= 1 or not min(self.bits, self.prove, self.fixed, self.commit_bytes) >= 0:
-            raise ValueError(f"a cell needs n > 0, cap >= 1, and non-negative bits and costs: {self}")
+        if (not self.n > 0 or not self.cap >= 1 or not self.table >= 1
+                or not min(self.bits, self.prove, self.fixed, self.commit_bytes) >= 0):
+            raise ValueError(f"a cell needs n > 0, cap >= 1, table >= 1, and non-negative bits and costs: {self}")
 
 
 def _strata(cells: Sequence[Cell], k: Mapping[int, float]) -> dict[int, float]:
@@ -1304,7 +1307,16 @@ def registration_count(q: float, registration: float) -> int:
     return max(1, round(x) if abs(x - round(x)) <= 4 * ulp(x) else ceil(x))
 
 
-def two_stage_statements(cells: Iterable[Cell], k: Mapping[int, float], sampled: int = 0) -> list[dict]:
+#: how a design's sampled proof blocks are split into sessions: `statements`, the cost model's own (a type's blocks of
+#: one sampled replay block, or of a verification phase's, in as many sessions of at most `cap` blocks as they
+#: need); `template`, one session a template of a verification phase whatever it holds; `table`, one session a
+#: template of at most one table (`Cell.table`), the one form the verifier's second stage reads
+#: (`Spot.SecondStage`: `second-template`, `second-tables`)
+SESSIONS = ("statements", "template", "table")
+
+
+def two_stage_statements(cells: Iterable[Cell], k: Mapping[int, float], sampled: int = 0,
+                         sessions: str = "statements") -> list[dict]:
     """Each cell's statements, a sampled replay block's share of them: its stratum t's share of min(k_t, n_t) proof
     blocks (`taken`), their `marginal` proving, and `prove`, with its statements' fixed costs.  A sampled replay block's
     own statements hold at most `cap` of a type's blocks, a statement's `fixed` cost paid once (below one block, at the
@@ -1313,37 +1325,57 @@ def two_stage_statements(cells: Iterable[Cell], k: Mapping[int, float], sampled:
     of at most `cap` blocks padded to one size.  A type takes the verification phase's where they cost less (`shared`),
     and `padding` is its proving of padding.  With no `sampled`, every statement is a sampled replay block's own.
     `sessions` is the type's sessions, a sampled replay block's share of them: the verifier's second stage reads one
-    session a template of a verification phase (`Spot.SecondStage`, `second-template`), so a type with more than one
-    in a phase is priced in sessions it refuses."""
+    session of one table a template of a verification phase (`Spot.SecondStage`, `second-template` and
+    `second-tables`), so a type with more than one in a phase is priced in sessions it refuses.  `largest` is the
+    type's largest session in proof blocks and `tables` that session in tables of the type (`Cell.table`; 0 where the
+    cell states none).
+
+    Under `sessions` "template" or "table" (`SESSIONS`) each type's blocks of the verification phase's `sampled`
+    replay blocks are one session, its `fixed` cost paid once and every block at `prove`, whatever the session holds:
+    a session of more than one table is priced at the same seconds a block, which nothing measures and no prover
+    builds.  "table" differs only in the designs that take it (`two_stage_design` keeps each session to one table)."""
+    if sessions not in SESSIONS:
+        raise ValueError(f"sessions are one of {SESSIONS}: {sessions!r}")
+    if sessions != "statements" and not sampled >= 1:
+        raise ValueError("one session a template is a verification phase's: it needs the count its first stage samples")
     cells = list(cells)
     strata = _strata(cells, k)
     out = []
     for c in cells:
         taken = c.n * min(1.0, k[c.stratum] / strata[c.stratum])
         marginal = taken * c.prove
+        if sessions != "statements":
+            blocks = ceil(sampled * taken - 1e-9)
+            out.append({"taken": taken, "marginal": marginal, "prove": (c.fixed + blocks * c.prove) / sampled,
+                        "shared": True, "padding": max(0.0, blocks * c.prove / sampled - marginal),
+                        "sessions": 1 / sampled, "largest": blocks, "tables": blocks / c.table})
+            continue
         own = taken / max(1.0, min(c.cap, taken))
+        largest = max(1, ceil(min(c.cap, taken) - 1e-9))
         row = {"taken": taken, "marginal": marginal, "prove": marginal + c.fixed * own, "shared": False,
-               "padding": 0.0, "sessions": own}
+               "padding": 0.0, "sessions": own, "largest": largest, "tables": largest / c.table}
         if sampled and taken > 0:
             blocks = ceil(sampled * taken - 1e-9)
-            sessions = ceil(blocks / c.cap)
-            padded = sessions * ceil(blocks / sessions) * c.prove / sampled
-            if (shared := sessions * c.fixed / sampled + padded) < row["prove"]:
+            count = ceil(blocks / c.cap)
+            padded = count * ceil(blocks / count) * c.prove / sampled
+            if (shared := count * c.fixed / sampled + padded) < row["prove"]:
                 row |= {"prove": shared, "shared": True, "padding": max(0.0, padded - marginal),
-                        "sessions": sessions / sampled}
+                        "sessions": count / sampled, "largest": ceil(blocks / count),
+                        "tables": ceil(blocks / count) / c.table}
         out.append(row)
     return out
 
 
-def two_stage_price(cells: Iterable[Cell], k: Mapping[int, float], sampled: int = 0) -> tuple[float, float, float]:
+def two_stage_price(cells: Iterable[Cell], k: Mapping[int, float], sampled: int = 0,
+                    sessions: str = "statements") -> tuple[float, float, float]:
     """A sampled replay block's proved proof blocks, their marginal proving and its proving with its statements' fixed
     costs and padding (`two_stage_statements`)."""
-    rows = two_stage_statements(cells, k, sampled)
+    rows = two_stage_statements(cells, k, sampled, sessions)
     return fsum(r["taken"] for r in rows), fsum(r["marginal"] for r in rows), fsum(r["prove"] for r in rows)
 
 
 def registration_sample(cells: list[Cell], k: Mapping[int, float], registration: float, replay: float,
-                        left: float) -> int:
+                        left: float, sessions: str = "statements") -> int:
     """The most replay blocks K a verification phase of `registration` of them samples at a cost of at most `left` a
     replay block of it: the largest whole K <= `registration` with K (`replay` + `two_stage_price`'s proving at K) <=
     `left`·`registration`, that cost never falling in K, by bisection; 0 when one sampled replay block is over it.  The
@@ -1353,7 +1385,7 @@ def registration_sample(cells: list[Cell], k: Mapping[int, float], registration:
         raise ValueError(f"a verification phase holds at least one replay block: {registration}")
 
     def fits(x: int) -> bool:
-        return x * (replay + two_stage_price(cells, k, x)[2]) <= left * registration
+        return x * (replay + two_stage_price(cells, k, x, sessions)[2]) <= left * registration
 
     if not fits(1):
         return 0
@@ -1376,7 +1408,8 @@ def _size_class(bits: float) -> int:
 
 def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *, budget: float, replay: float,
                      boundary: float = 0.0, h: float = 0.0, stratify: bool | str = True, served: float | None = None,
-                     union: bool = False, registration: float = 0.0, fanout: int = 1) -> dict | None:
+                     union: bool = False, registration: float = 0.0, fanout: int = 1,
+                     sessions: str = "statements") -> dict | None:
     """The two-stage design with the least `two_stage_exfil` bound at a cost of at most `budget`: width-stratified
     (`stratify`) or uniform (one stratum).  A width-stratified design merges the public size classes (`unit_class`) up
     to a threshold into stratum 0 and gives each wider class a stratum of its own, the threshold chosen with κ: at the
@@ -1398,11 +1431,22 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     replay block's proof blocks of one Definition, or the verification phase's K sampled ones' where that costs less
     (`two_stage_statements`).  A κ at which one sampled replay block a verification phase is over the budget has no
     design.  With no `registration`, one verification phase holds every replay block and every statement is a sampled
-    replay block's own.  Its row:
+    replay block's own.
+
+    `sessions` (`SESSIONS`) is how the sample is split into sessions.  "statements" is the cost model's own, above.
+    "template" and "table" are a by-template design's with a `registration`: each template's sampled proof blocks of
+    a verification phase in one session.  Under "template" the session holds whatever the design samples, and K is
+    again the most the budget pays for.  Under "table" it holds at most one table of the template's proof blocks
+    (`Cell.table`), K k_t <= table_t in every template: the design searches K over the powers of two (and the most
+    the smallest table allows), each count held to its table, and no K above a template's table has a design.  Both
+    are priced at a proof block's seconds and one fixed cost a session (`two_stage_statements`).
+
+    Its row:
     `merged` (the widest size class in stratum 0), `kappa`, `k`, `q`, `registration`, `registration_sample` (K, the
     replay blocks a verification phase samples; 0 with no `registration`), `shared` and `padding` (their shares of
     proving), `sessions` (a verification phase's sessions, `two_stage_statements`'s, over all its sampled replay
-    blocks),
+    blocks), `form` (the `sessions` asked for), `largest` and `tables` (the largest session in proof blocks, and the
+    largest in tables of its type) and `over` (the templates with a session of more than one table),
     `bound` (bits) and the Rankin `theta` it takes, `replay_sample`, `draws` (proved proof blocks), `prove`, `replay`,
     `boundary`, `interior`, `commit` (their sum), `total` and `fill` (proving over its marginal); None when the boundary
     alone is over the budget or no κ has a design.  The bound's Lean takes the first stage through
@@ -1413,6 +1457,13 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
         return None
     if stratify not in (True, False, "template"):
         raise ValueError(f"a design is width-stratified (True), uniform (False) or by template: {stratify!r}")
+    if sessions not in SESSIONS:
+        raise ValueError(f"sessions are one of {SESSIONS}: {sessions!r}")
+    if sessions != "statements" and not (stratify == "template" and registration):
+        raise ValueError("one session a template is a by-template design's, over a verification phase "
+                         "(`stratify` \"template\" and a `registration`)")
+    if sessions == "table" and any(c.table == inf for c in cells):
+        raise ValueError("a session of one table needs each cell's `table`, its type's proof blocks a table holds")
     classes = [_size_class(c.bits) for c in cells]
     by_template = stratify == "template"
     thresholds = [None] if by_template else sorted(set(classes)) if stratify else [max(classes)]
@@ -1420,7 +1471,11 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     if served is not None:
         charge = two_stage_exfil(cells, {c.stratum: 1 for c in cells}, 1, 0.0, 0.5, served, union, fanout=fanout)
     interior = fsum(c.n * c.commit_bytes for c in cells) * h
-    rows, seen = [], set()
+    rows, seen, done = [], set(), set()
+    tables: list[int] = []
+    if sessions == "table":
+        top = floor(min(min(c.table for c in cells), registration))
+        tables = sorted({x for x in [2 ** e for e in range(top.bit_length())] + [top] if 1 <= x <= top})
     for merged in thresholds:
         split = ([replace(c, stratum=i) for i, c in enumerate(cells)] if by_template
                  else [replace(c, stratum=0 if w <= merged else w) for c, w in zip(cells, classes)])
@@ -1436,30 +1491,41 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
                 continue
             seen.add(key)
             left = (budget - boundary) / replay_blocks
-            if registration:
-                count = registration_sample(split, k, registration, replay + interior, left)
+            if sessions == "table":
+                picks = [(x, held) for x in tables for held in [{c.stratum: max(1, min(k[c.stratum], floor(c.table / x)))
+                                                                  for c in split}]
+                         if x * (replay + interior + two_stage_price(split, held, x, sessions)[2])
+                         <= left * registration]
+            elif registration:
+                picks = [(registration_sample(split, k, registration, replay + interior, left, sessions), k)]
             else:
                 per = replay + interior + two_stage_price(split, k)[2]
-                count = floor(min(replay_blocks, left * replay_blocks / per)) if per > 0 else floor(replay_blocks)
-            if not count:
-                continue
-            q = count / (registration or replay_blocks)
-            st = two_stage_statements(split, k, count if registration else 0)
-            blocks, marginal, prove = (fsum(r[x] for r in st) for x in ("taken", "marginal", "prove"))
-            per = replay + interior + prove
-            sampled = q * replay_blocks
-            rows.append({"design": "template" if by_template else "stratified" if stratify else "uniform",
-                         "merged": merged, "kappa": kappa,
-                         "k": k, "q": q, "registration": registration,
-                         "registration_sample": count if registration else 0,
-                         "shared": fsum(r["prove"] for r in st if r["shared"]) / prove if prove > 0 else 0.0,
-                         "padding": fsum(r["padding"] for r in st) / prove if prove > 0 else 0.0,
-                         "sessions": count * fsum(r["sessions"] for r in st), "split": split,
-                         "bound": two_stage_exfil(split, k, replay_blocks, q, delta, served, union, SCREEN, fanout),
-                         "replay_sample": sampled, "draws": sampled * blocks, "prove": sampled * prove,
-                         "replay": sampled * replay, "boundary": boundary, "interior": sampled * interior,
-                         "commit": boundary + sampled * interior, "total": boundary + sampled * per,
-                         "fill": prove / marginal if marginal > 0 else 1.0})
+                picks = [(floor(min(replay_blocks, left * replay_blocks / per)) if per > 0 else floor(replay_blocks),
+                          k)]
+            for count, k in picks:
+                if not count or (key := (merged, count, *sorted(k.items()))) in done:
+                    continue
+                done.add(key)
+                q = count / (registration or replay_blocks)
+                st = two_stage_statements(split, k, count if registration else 0, sessions)
+                blocks, marginal, prove = (fsum(r[x] for r in st) for x in ("taken", "marginal", "prove"))
+                per = replay + interior + prove
+                sampled = q * replay_blocks
+                rows.append({"design": "template" if by_template else "stratified" if stratify else "uniform",
+                             "merged": merged, "kappa": kappa,
+                             "k": k, "q": q, "registration": registration,
+                             "registration_sample": count if registration else 0,
+                             "shared": fsum(r["prove"] for r in st if r["shared"]) / prove if prove > 0 else 0.0,
+                             "padding": fsum(r["padding"] for r in st) / prove if prove > 0 else 0.0,
+                             "sessions": count * fsum(r["sessions"] for r in st), "form": sessions,
+                             "largest": max(r["largest"] for r in st), "tables": max(r["tables"] for r in st),
+                             "over": sum(1 for r in st if r["tables"] > 1), "split": split,
+                             "bound": two_stage_exfil(split, k, replay_blocks, q, delta, served, union, SCREEN,
+                                                      fanout),
+                             "replay_sample": sampled, "draws": sampled * blocks, "prove": sampled * prove,
+                             "replay": sampled * replay, "boundary": boundary, "interior": sampled * interior,
+                             "commit": boundary + sampled * interior, "total": boundary + sampled * per,
+                             "fill": prove / marginal if marginal > 0 else 1.0})
     if not rows:
         return None
     best = min(rows, key=lambda r: (r["bound"], r["total"]))
@@ -1490,7 +1556,7 @@ __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BIT
            "certify", "density_bound", "density_exact", "fill", "for_budget", "for_target",
            "frontier", "grain_costs", "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits",
            "max_harm", "max_harm_check", "met_replay", "needs_benchmark", "overlaps", "perturb", "pinned_ands",
-           "registration_count", "registration_sample", "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost",
+           "registration_count", "registration_sample", "SESSIONS", "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost",
            "touched", "two_stage_counts", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_rankin",
            "two_stage_statements", "weigh",
            "work_draws", "work_law"]
