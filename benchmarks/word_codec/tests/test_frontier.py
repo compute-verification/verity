@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -105,3 +106,16 @@ def test_best_per_config_keeps_the_lowest_y_of_each_configuration():
     best = {(p["lane"], p["k"], p["batch"], p["measured"]): p["y_total"] for p in F.best_per_config(pts)}
     assert best == {("t", 1, 1, True): 1.6, ("t", 2, 1, True): 1.9, ("u", 1, 1, True): 1.8, ("t", 1, 32, True): 2.0,
                     ("t", 1, 1, False): 1.0}
+
+
+def test_a_plot_with_no_point_at_its_batches_is_refused_by_name_and_the_command_exits_on_it(tmp_path, monkeypatch, capsys):
+    pts = F.check([point(batch=8, model="llama-3.1-70b")])
+    with pytest.raises(F.NoPoints):
+        F.plot(pts, tmp_path / "frontier.png", 0.005, None)
+    file = tmp_path / "points.json"
+    file.write_text(json.dumps(pts))
+    monkeypatch.setattr(sys, "argv", ["frontier.py", "--file", str(file), "--out", str(tmp_path / "frontier.png")])
+    with pytest.raises(SystemExit) as stop:
+        F.main()
+    assert stop.value.code == "no points at the plotted batches"
+    assert "none at x ≥ x*" in capsys.readouterr().out and not (tmp_path / "frontier.png").exists()
