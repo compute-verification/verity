@@ -426,10 +426,10 @@ def test_a_response_one_id_shorter_or_longer_than_the_stop_rules_is_refused():
     """For each way the rule ends a response (a stop id, ``max_tokens``, the model's length): the stop block's output on
     the span's committed rows is its `b.stop` word, whose n is the ids it was served. With its `b.egress` row one id
     shorter or one id longer, the block's n is not that row's count, so the word such a response needs, whatever finish
-    it states, is not the block's output on its rows, and a stop block sampled on it fails. The serve commits neither in
-    a stop class (`commit` refuses it, `filed` files it without a stop block), and a response past the cap has no row in
-    one at all. In a class of three, a `b.egress` row forged one id shorter changes the stop population's output at that
-    span alone, to a word that is not the forged count's."""
+    it states, is not the block's output on its rows. The serve commits neither in a stop class (`commit` refuses it,
+    `filed` files it without a stop block), and a response past the cap has no row in one at all. In a class of three,
+    a `b.egress` row forged one id shorter changes the stop population's output at that span alone, to a word that is
+    not the forged count's."""
     n_of = (1 << stop_rule.N_BITS) - 1
     for s in HELD:
         P_ = BR.cap(len(s.prompt))

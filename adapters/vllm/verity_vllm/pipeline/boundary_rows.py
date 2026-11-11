@@ -33,18 +33,17 @@ The first three are the class's boundary record's values (`PARTS`). A span the r
 is in the stop class of its prompt cap, (P, T) whatever n is, which commits `b.stop` too: the output of the span's stop
 block (`egress_stop`: `StopRule16_v1{T, NSTOP}` over the span's `b.request` and `b.egress` rows at the registered stop
 ids and length, with no stop id for a span whose row sets ``ignore_eos``), so n is a function of committed values. The
-stop blocks are a population of their own, one a span, slot
-r its r-th span's (`Layout.stop_program`), registered one-stage in a record of its own that names the class's boundary
-record (`stop_registration`, `stop_record`): its two inputs are that record's ports `b.request` and `b.egress`, taken as
-output values under their roots and domains, and `b.stop` is its one port, under the window domain of the stop
-population's own program, which the serve commits it under as the window closes. What holds `b.request` to the request
-the network certifier took in is the ingress tie's: until it does, its ``max_tokens`` is the engine's word, and a serve
-that writes any length there has a correct stop block. Every other span is filed by its size class with no `b.stop` and
-no stop block (`filed`, ``p<P>-o<O>-nostop``): an abort, an error, a request still running, one the rule runs past T
-(finish 0), an end the rule doesn't read (a body's own stop strings), a ``min_tokens`` other than 0, and, where the
-serve knows its requests' releases, a request the network certifier didn't release. A failure the engine doesn't see
-(the certifier's, after the engine's last step for the request) is not known here: such a span is filed as the engine
-ended it.
+stop blocks are a population of their own, one a span, slot r its r-th span's (`Layout.stop_program`), registered
+one-stage in a record of its own that names the class's boundary record (`stop_registration`, `stop_record`): its two
+inputs are that record's ports `b.request` and `b.egress`, taken as output values under their roots and domains, and
+`b.stop` is its one port, under the window domain of the stop population's own program, which the serve commits it
+under as the window closes. What holds `b.request` to the request the network certifier took in is the ingress tie's:
+until it does, its ``max_tokens`` is the engine's word, and a serve that writes any length there has a correct stop
+block. Every other span is filed by its size class with no `b.stop` and no stop block (`filed`,
+``p<P>-o<O>-nostop``): an abort, an error, a request still running, one the rule runs past T (finish 0), an end the
+rule doesn't read (a body's own stop strings), a ``min_tokens`` other than 0, and, where the serve knows its requests'
+releases, a request the network certifier didn't release. A failure the engine doesn't see (the certifier's, after the
+engine's last step for the request) is not known here: such a span is filed as the engine ended it.
 
 **The replay block** (`Layout.replay`) is a stand-in until the class's request Definition lands: `per_prompt * P +
 per_output * O` instances of one check template (`population`), so a window committed under it is audited with that one
@@ -260,9 +259,10 @@ def egress_stop(outputs: int, stops: Sequence[int], max_model_len: int) -> Speci
 
     def body(B: Any, S: Any, request: Any, ids: Any) -> Any:
         o = X.word_ops(B)
-        none = o.word(SC.NOT_AN_ID)
-        heeds = o.ieq(request[FIELD_AT["ignore_eos"]], o.word(0))
-        words = [o.isel(heeds, o.word(x), none) for x in S.STOP] or [none]
+        words = [none := o.word(SC.NOT_AN_ID)]
+        if S.STOP:
+            heeds = o.ieq(request[FIELD_AT["ignore_eos"]], o.word(0))
+            words = [o.isel(heeds, o.word(x), none) for x in S.STOP]
         return B.call(bind(X.StopRule16, T=S.T, NSTOP=len(words)), ids, request[FIELD_AT["max_tokens"]],
                       Coll(Array(len(words), I32), concat([w.refs for w in words])), request[FIELD_AT["lp"]],
                       o.word(S.MAX_MODEL_LEN))
