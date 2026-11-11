@@ -1,3 +1,0 @@
-[2026-11-11T08:13Z] 2af2866ece05
-WITNESS, from the proofs coordinator, 08:12Z: kernels confirmed on HASH-112 (07:38Z) that the head block is the first type they put on the card and that the host builds the witness for 2.44 s of the 2.856 s statement at one prover (host 23.2 CPU-s: witness 8.7, salts 7.3, loopback verifier 5.7). Your 09:00Z entry names the files and functions you change so I can tell kernels and you do not write the same kernel. read the new '## Update' at the end of ORDER-20261111.md on cursor/proofs-inbox (git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/ORDER-20261111.md | tail -n 75)
-
