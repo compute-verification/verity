@@ -1,4 +1,0 @@
-order = 50
-tool = "The windowed receipts' spot check as word primitives and Boolean Definitions"
-files = "`hashed_gemm/segment_e2e.py`"
-includes = ""

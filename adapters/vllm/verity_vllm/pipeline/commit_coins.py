@@ -29,6 +29,7 @@ and its served C2 replay challenge after each run's root of record.
 from __future__ import annotations
 
 import json
+import re
 import secrets
 import shlex
 import subprocess
@@ -58,6 +59,10 @@ def families(runs: int) -> list[list[Any]]:
 Run = Callable[[list[str]], "tuple[int, str]"]
 
 
+#: what a refusal shows of a gate answer it can't read: no run of hex digits long enough to be a session's secret or a root
+_HEX, HEX_WITHHELD = re.compile(r"[0-9a-fA-F]{32,}"), "(hex withheld)"
+
+
 class ChallengerGate:
     """Infra's challenger gate over `command` (its argv prefix as one string, e.g. ``ssh -i KEY -o IdentitiesOnly=yes
     research@HOST``): each request goes as one shell-quoted word, which the gate's forced command splits. `run` replaces
@@ -67,14 +72,15 @@ class ChallengerGate:
         self.command, self._run = shlex.split(command), run
 
     def call(self, *words: str) -> dict[str, Any]:
-        """The gate's JSON answer to `words`; `CoinError` naming a refusal (exit 3, ``{"refused"}``) or a broken answer."""
+        """The gate's JSON answer to `words`; `CoinError` naming a refusal (exit 3, ``{"refused"}``) or a broken answer,
+        quoted without its long hex runs (`_HEX`): an open's answer holds its session's secret."""
         rc, text = self._answer(words)
         try:
             doc = json.loads(text)
         except ValueError:
             doc = None
         if rc != 0 or not isinstance(doc, dict) or "refused" in doc:
-            why = doc.get("refused") if isinstance(doc, dict) else (text or "").strip()[:300]
+            why = doc.get("refused") if isinstance(doc, dict) else _HEX.sub(HEX_WITHHELD, (text or "").strip())[:300]
             raise CoinError(f"the challenger gate refused {words[0]} (exit {rc}): {why}")
         return doc
 
