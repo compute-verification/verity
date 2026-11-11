@@ -40,7 +40,7 @@ from the result cache (`--no-cache` checks it now). It needs about 24 GB a proce
 decide which targets run side by side, never what a check computes. A new Definition gets a binding in its
 module's sidecar: the suite fails any registered Definition family the catalog doesn't reach.
 
-circuit-check imports `verity` and Flock, and no integration. A package under `integrations/` registers itself by a
+circuit-check imports `verity` and Flock, and no integration. A package under `adapters/` registers itself by a
 sidecar of its own module (`<package>/__init__.circuit-check.py`), and then its sidecars are found like `verity`'s. What
 a check needs of the integration is in that sidecar: the frontend vocabularies' kinds (`_vocabulary_roots`) and the
 reader of a request Program (`request_program`).

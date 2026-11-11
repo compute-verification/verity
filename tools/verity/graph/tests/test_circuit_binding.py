@@ -47,20 +47,20 @@ TOY = {f"{F.CHECKER}/pyproject.toml": '[tool.verity.tests]\ninputs = ["verity", 
        "verity/ml/x.circuit-check.json": "{}\n", "verity/ml/pkg/__init__.py": "",
        "verity/ml/pkg/__init__.circuit-check.py": NEVER_RUN + "def _p_roots(): ...\n",
        "verity/ns/y.circuit-check.py": NEVER_RUN + "def _y_roots(): ...\n",
-       "verity/ml/flock/python/verity_flock/__init__.py": "",
-       "verity/ml/flock/python/verity_flock/rec.circuit-check.py": NEVER_RUN + "def _rec_roots(): ...\n",
+       "verity/protocols/flock/prover/python/verity_flock/__init__.py": "",
+       "verity/protocols/flock/prover/python/verity_flock/rec.circuit-check.py": NEVER_RUN + "def _rec_roots(): ...\n",
        "other/__init__.py": "", "other/z.circuit-check.py": NEVER_RUN + "def _z_roots(): ...\n",
        "stacks/s/pk/__init__.py": "", "stacks/s/pk/__init__.circuit-check.py": NEVER_RUN + "def _q_roots(): ...\n",
        "stacks/s/pk/in/__init__.py": "", "stacks/s/pk/in/w.circuit-check.py": NEVER_RUN + "def _w_roots(): ...\n",
        "stacks/s/un/__init__.py": "", "stacks/s/un/v.circuit-check.py": NEVER_RUN + "def _v_roots(): ...\n",
-       "tools/config/pyproject.toml": "[project]\n", "integrations/vllm/pyproject.toml": "[project]\n",
+       "verity/configuration/config/pyproject.toml": "[project]\n", "adapters/vllm/pyproject.toml": "[project]\n",
        **{f"{F.READS}/{part}": json.dumps({"schema": F.READS_SCHEMA, **doc}) for part, doc in (
            ("registries.json", {"registries": {"files": ["verity/ml/x.py"], "listed": ["other"], "probes": [
-               "tools/config/verity_vllm", "tools/config/verity_vllm.py", "tools/config/verity_vllm/__init__.py"]}}),
-           ("loaded.json", {"loaded": ["integrations/vllm/numpy.py"]}),
+               "verity/configuration/config/verity_vllm", "verity/configuration/config/verity_vllm.py", "verity/configuration/config/verity_vllm/__init__.py"]}}),
+           ("loaded.json", {"loaded": ["adapters/vllm/numpy.py"]}),
            ("bindings.json", {"bindings": {}, "groups": [{"probes": ["verity/ml/y.py"]}]}))},
        **{f"{graph.RUNNERS}/{m}.py": "" for m in ("circuit_binding", "circuit_catalog", "circuit_coverage")}}
-X, FLOCK = "verity/ml/x.circuit-check.py", "verity/ml/flock/python/verity_flock/rec.circuit-check.py"
+X, FLOCK = "verity/ml/x.circuit-check.py", "verity/protocols/flock/prover/python/verity_flock/rec.circuit-check.py"
 BINDINGS = {"<registered>": (F.TARGETS, "_registered"), "TEMPLATE_PARAMS": (F.TARGETS, "TEMPLATE_PARAMS"),
             "_core_roots": (F.TARGETS, "_core_roots"), "_kernel_roots": (F.TARGETS, "_kernel_roots"),
             **{f"verity.ml.x.circuit-check#{e}": (X, e) for e in (
@@ -127,16 +127,16 @@ def _keys(root: Path) -> dict[str, str]:
 
 
 @pytest.mark.parametrize(("change", "moves"), [
-    ({"tools/config/verity_vllm.py": ""}, True),
-    ({"tools/config/verity_vllm/__init__.py": ""}, True),
-    ({"integrations/vllm/numpy.py": ""}, True),
+    ({"verity/configuration/config/verity_vllm.py": ""}, True),
+    ({"verity/configuration/config/verity_vllm/__init__.py": ""}, True),
+    ({"adapters/vllm/numpy.py": ""}, True),
     ({"queue.py": ""}, True),
     ({"pynvml/__init__.py": ""}, True),
     ({"pynvml/README.txt": ""}, True),
     ({"other/notes.txt": ""}, True),
-    ({"tools/config/pyproject.toml": "[project]\nname = 'x'\n"}, False),
+    ({"verity/configuration/config/pyproject.toml": "[project]\nname = 'x'\n"}, False),
     ({"other/__init__.py": "x = 1\n"}, False),
-    ({"tools/config/helper.py": ""}, False),
+    ({"verity/configuration/config/helper.py": ""}, False),
     ({"NOTES.md": "", "setup.cfg": "", ".hidden/m.py": ""}, False)])
 def test_a_module_file_added_where_a_run_looks_moves_every_task_s_key_and_an_edit_moves_none(tmp_path, change, moves):
     """A run looks for modules outside the files that key it: where circuit-check's read sets say its runs probed or listed,
@@ -407,14 +407,14 @@ def test_a_binding_s_output_is_each_failure_of_its_definition_targets_by_check_c
 
 
 #: what ``reads/`` declares of ``B_ROOTS`` in the cases below
-DECLARED = {"files": ["verity/ml/x.py"], "listed": ["other"], "probes": ["tools/config/verity_vllm", "verity/ml/y.py"],
+DECLARED = {"files": ["verity/ml/x.py"], "listed": ["other"], "probes": ["verity/configuration/config/verity_vllm", "verity/ml/y.py"],
             "registry": False}
 
 
 @pytest.mark.parametrize(("read", "beyond"), [
-    ({"files": ["verity/ml/x.py"], "probes": ["verity/ml/y.py", "tools/config/verity_vllm"]}, []),
+    ({"files": ["verity/ml/x.py"], "probes": ["verity/ml/y.py", "verity/configuration/config/verity_vllm"]}, []),
     ({"files": ["verity/ml/x.py"], "listed": ["other"], "probes": ["verity/ml/x.py"]}, []),
-    ({"files": ["verity/ml/x.py"], "probes": ["tools/config/numpy"]}, ["tools/config/numpy"]),
+    ({"files": ["verity/ml/x.py"], "probes": ["verity/configuration/config/numpy"]}, ["verity/configuration/config/numpy"]),
     ({"probes": ["queue.py", "verity/ml/y.py"]}, ["queue.py"]),
     ({"files": ["verity/ml/x.py"], "listed": ["other", "verity/ml"]}, ["verity/ml"]),
     ({"files": ["verity/ml/x.py", "verity/ml/z.py"]}, ["verity/ml/z.py"]),
@@ -436,11 +436,11 @@ def test_the_registries_and_the_loaded_modules_reads_beyond_reads_count_another_
     _machine(tmp_path, monkeypatch)
     drift = CC.undeclared({"files": ["verity/ml/reg.py"], "listed": [], "probes": ["infra/ops/verity_vllm"]},
                           {k: [] for k in CC.DECLARED})
-    mine = {"loaded": ["integrations/vllm/numpy.py"], "registries": drift, "unrecorded": ["A"]}
+    mine = {"loaded": ["adapters/vllm/numpy.py"], "registries": drift, "unrecorded": ["A"]}
     rep = _report(("A", []), undeclared={B_ROOTS: mine, GONE: {"probes": ["elsewhere"]}})
     res, _ = _binding_run(tmp_path, monkeypatch, 0, rep)
     assert res["status"] == "error" and res["detail"]["unrecorded"] == ["A"]
-    assert res["undeclared_reads"] == ["infra/ops/verity_vllm", "integrations/vllm/numpy.py", "verity/ml/reg.py"]
+    assert res["undeclared_reads"] == ["infra/ops/verity_vllm", "adapters/vllm/numpy.py", "verity/ml/reg.py"]
     res, _ = _binding_run(tmp_path, monkeypatch, 0, _report(("A", []), undeclared={GONE: {"probes": ["elsewhere"]}}))
     assert (res["status"], res["undeclared_reads"]) == ("pass", []), "another binding's reads are its own task's"
 
