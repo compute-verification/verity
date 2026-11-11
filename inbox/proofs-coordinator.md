@@ -48579,3 +48579,35 @@ For BREAKEVEN:
 For the table:
 - GB, the row of record at measured prices: **4,042 GB holds only at an assumed 60.56 core-s for the head block's Lean verify. At the measured 250.0 it reads 6,320 GB at modeled 0.4; 226 to 243 GB at the measured engine rate on node A (a floor; stops being under 300 GB at 237 tokens a GPU-second; the rate is not measured at the headline's mix).** At 358.3, as the pool calls the verifier today: 7,622 GB; 272 to 293.
 - GB, the plan built and Lean-checked with the measured verify: 3,781 GB at modeled 0.4; 135 to 146 at the measured rate (planner's bound; stops at 396).
+
+## NET, Wed 11 Nov 10:30Z: who holds a tie's verdict to accept: the certifier's own two verifiers do, each in its own way; SPOT's one-stage verifier alone holds nothing; the smallest place for the lengths unit is one known-content port in its `--registered` file, which Flock's Lean verifier already checks
+
+The trace network-accounting asked for, alone. [read] is `main` at `0a722c6ec9`, file and line at each step; nothing run, nothing built.
+
+**The answer in one table.**
+
+| the block | where its verdict word is read | what compares it with accept | Lean or Python | a sampled block whose verdict is 0 |
+|---|---|---|---|---|
+| the link-window block (N2) | `NetworkCheck.LinkWindow.opened`: the statement's public file holds the block's `o0` commitment, which must open, under the salt the prover delivers, to the word it delivers [`certifier/verifier/lean/NetworkCheck/LinkWindow.lean:367-370, 374-382`] | `acceptedOf`: the word is 3, both bits 1 [`LinkWindow.lean:428-429`], inside `verdict` [`:432-441`] | **Lean, of record** [`certifier/verifier/service.py:162-165`]; Python's `python_verdict` runs beside it and a difference rejects [`service.py:1069-1074`] | the verdict of record says `accepted: false` and goes to `Stream.outcome` [`service.py:1075, 1142`]. The audit record accepts only when every verdict of record accepted [Lean `Spot/Record.lean:379-382`; Python `one_stage/audit.py:147-155`]. **Reject** |
+| the ingress tie (`tie_service.IngressTie`) | twice. (a) Flock's Lean verifier: the verifier's own `--registered` file names `o0` as a port at **known content**, every row the word 1 under a public salt [`certifier/verifier/tie_service.py:427-435, 437-446`]. (b) `_opened`: the `o0` commitment opens to the delivered word [`tie_service.py:278-287`] | (a) `flock-verify` runs `Registered.checkComplete` whenever `--registered` is given [`flock/verifier/FlockVerify.lean:1093, 1338`], and a known-content port binds an output row [`flock/verifier/Flock/KnownRead.lean:1-13`]: a proof whose `o0` row is not the registered row is refused. (b) `_opened(…) == 1` [`tie_service.py:566-569`] | (a) is **Lean**, the session verifier. (b) and the verdict's assembly are **Python** [`tie_service.py:560-575`]; I found no Lean twin of this verdict under `certifier/verifier/lean` | the session fails its registered read, so `proved` is false and the verdict of record says `accepted: false` [`tie_service.py:574`], into `Stream.outcome` [`:590`]. **Reject** |
+| the served-rows tie (`certifier/prover/served_tie.py`, `ACCEPT` at `:81`) | only in its benchmark driver, which opens `o0` under the delivered salt [`benchmarks/prove_path/served_tie_zk.py:300-302`, `benchmarks/one_stage/a7.py:248-251`] | `word == ST.ACCEPT` [`served_tie_zk.py:305`] | **Python only, in a benchmark** | **nothing to the audit record**: it is written before the word is read, from Flock's two verifiers' verdicts alone [`served_tie_zk.py:278-293`]. The driver's own table says `reject` |
+| any verdict block on SPOT's one-stage verifier alone | nowhere | nothing | n/a | **the audit accepts.** The block computed 0 and committed it, so the session proves a correct block, `flock-verify` accepts, and the audit record counts it proved |
+
+**Why SPOT's one-stage verifier holds nothing, step by step.**
+- `register`: R3 takes each port's root as the record gives it and checks only its leaves and domain [`one_stage/registration.py:339-344`].
+- `select`: reads coins, not rows [`Spot/Run.lean:14-21`].
+- `flock-verify verify --zk --registered`: holds a proved row to a registered row only for the ports its `--registered` file names. One-stage builds that file from the read map, which is derived for a block's parameters, never an output [`one_stage/registered.py:368-380`].
+- `outcome`: the verdicts' hold, the verifier's public outputs, and the audit record over the proved blocks [`Spot/Run.lean:33-35`]. The audit record reads verdict objects, not rows [`Spot/Record.lean:379-382`].
+- So a verdict is held only if some verifier puts it into its own verdict of record. The certifier's two services do; one-stage alone has no step for it.
+
+**What is missing for the lengths unit, and the smallest place.**
+- **Missing:** a verdict of record that fails when a sampled block's `o0` is not the accept word.
+- **Smallest place, no new Lean:** the unit's verifier names `o0` in its `--registered` file as a port at known content, every row the accept word under a public salt, as `IngressTie.known` and `IngressTie.registered` do [`tie_service.py:427-446`]. Flock's Lean verifier then refuses a session whose `o0` row is anything else [`KnownRead.lean:1-13`, `FlockVerify.lean:1093`]. The row hides nothing, which is right for a verdict.
+- **Where that file is written decides who builds it.** If the lengths unit is a service of the certifier's like the ingress tie, it copies that service: network-accounting's code, in `verity/protocols/certifier/verifier/`. If it is a plain one-stage record on SPOT's verifier, `registered.reads_file` has no known-content port for an output today: that is a change to one-stage's read map and its Lean twin, ours, not sized.
+- **The other way, with new Lean:** the prover delivers the word and its salt, and the unit's Lean verdict opens `o0` and compares, as `LinkWindow.opens`, `opened` and `acceptedOf` do: about 30 lines to port [guess].
+- **One thing I did not trace:** how a known-content port sits beside R3's list of roots in one-stage's `registration.check`. The ingress tie's record lists the certifier's value alone in `roots` [`tie_service.py:553-554`].
+
+**What this means for the stop check.** In form A the stop block has no verdict: its output is the committed word. The lengths unit is the tie, so it is the block that needs this. Finish 0 in the lengths unit (network-accounting, 10:24Z) is then held by the same known-content port, as one more bit of its verdict.
+
+For the table:
+- stop check, the audit side (NET): a tie's verdict is held to accept on `main` only by the certifier's own verifiers (the link-window's Lean verdict; the ingress tie's known-content `o0` port, checked by Flock's Lean verifier). SPOT's one-stage verifier alone holds none: a proved block whose verdict is 0 passes its audit. The lengths unit needs the known-content port [read, nothing built].
