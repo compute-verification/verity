@@ -1,8 +1,8 @@
 """The long row's units written as Calls (`dsa_topk_reads.DsaPositionsMerge_v2`, `boolean_dsa_topk_mask.DsaRadixTies_v2` and
-the mask units that call it): each has its traced version's signature and is that version and its reference bit for bit; the
-merge has the traced one's ANDs count for count and the ties no more from a few dozen keys on; the pieces are the steps they
-name; at the served statics a description is a few rows of Calls and the unit fits a Flock block; and the pieces lower by
-their builders to the circuit their gates lower to."""
+the mask units that call it, `dsa_topk_mask_cut.DsaTopKDigitPick_v2`): each has its traced version's signature and is that
+version and its reference bit for bit; the merge and the pick have the traced one's ANDs count for count and the ties no more
+from a few dozen keys on; the pieces are the steps they name; at the served statics a description is a few rows of Calls and
+the unit fits a Flock block; and the pieces lower by their builders to the circuit their gates lower to."""
 from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
@@ -24,6 +24,8 @@ from verity.definitions.registry import dsa_topk_reads as R
 SERVED = dict(M=8, K=2048)
 PIECES = (R.DsaPositionsKeep, R.DsaPositionsShift, R.DsaPositionsShiftIn, R.DsaPositionsFirstOffset, R.DsaPositionsOffset)
 TIES_PIECES = (BM.DsaCountSum, BM.DsaCountSplit, BM.DsaRadixTie)
+PICK_PIECES = (X.DsaTopKCountAdd, X.DsaTopKDigitGe, X.DsaTopKDigitEdge, X.DsaTopKDigitTake, X.DsaTopKDigitBits,
+               X.DsaTopKDigitLeft, X.DsaTopKDigitShare)
 
 
 def _bits(words, width: int = 32) -> np.ndarray:
@@ -245,3 +247,102 @@ def test_the_ties_builders_lower_to_their_gates(monkeypatch: pytest.MonkeyPatch)
     for unit, (circuit, _) in zip(units, with_builders, strict=True):
         by_gates, built = _lowered(unit)
         assert not names & set(built) and by_gates == circuit, unit.id
+
+
+def _flat(out, rows: int) -> np.ndarray:
+    """An evaluation's outputs, a row an instance, its fields side by side."""
+    return np.concatenate([np.asarray(f).reshape(rows, -1) for f in (out if isinstance(out, tuple) else (out,))], axis=1)
+
+
+@pytest.mark.parametrize("N,TOPK,block", [(14, 4, 8), *(pytest.param(*c, marks=pytest.mark.slow)
+                                                        for c in ((8, 4, 8), (40, 16, 8), (30, 100, 16)))])
+def test_the_pick_as_calls_is_the_traced_pick(N: int, TOPK: int, block: int) -> None:
+    """`DsaTopKDigitPick_v2` has `_v1`'s signature, its function and the cut's twin's (`values`, the reference: the pick has
+    no word view) at every round, and its ANDs, count for count: on rows of few distinct scores (so the threshold's key
+    repeats across blocks), n from none to past the row, each round reading the counts and the pick before it as the twin
+    has them, with any bits past those a pick reads; and a TOPK past the row, where no digit reaches r."""
+    rng = random.Random(N * 100 + TOPK)
+    pool = [rng.getrandbits(32) for _ in range(5)]
+    rows = [[rng.choice(pool[:2 + t % 4]) if t % 3 else rng.getrandbits(32) for _ in range(N)] for t in range(24)]
+    ns = [(0, 1, TOPK, N, N + 1)[t % 5] if t < 10 else rng.randrange(N + 1) for t in range(len(rows))]
+    twin = [X.values(row, n, TOPK, block) for row, n in zip(rows, ns)]
+    M, RB = len(X.blocks(N, TOPK, block)), TOPK.bit_length()
+    for K in range(X.ROUNDS):
+        calls, traced = (bind(d, M=M, K=K, TOPK=TOPK) for d in (X.DsaTopKDigitPickV2, X.DsaTopKDigitPick))
+        assert calls.signature() == traced.signature()
+        args = [_bits([c for v in twin for c in v[("count", K, b)][0]]).reshape(len(rows), -1) for b in range(M)]
+        if K:
+            for f, read in enumerate((X.DIGIT * K, RB)):
+                past = X.wide(read) - read
+                args.append(_bits([v[("pick", K - 1)][f] | rng.getrandbits(past) << read if past else v[("pick", K - 1)][f]
+                                   for v in twin], X.wide(read)))
+        widths = [X.wide(X.DIGIT * (K + 1)), *[X.wide(RB)] * (M if K == X.ROUNDS - 1 else 1)]
+        ends = np.cumsum(widths)
+        for unit in (calls, traced):
+            got = _flat(BS.evaluate_bits(unit, *args), len(rows))
+            fields = [_words(got[:, e - w:e], w) for w, e in zip(widths, ends)]
+            assert [tuple(f[i][0] for f in fields) for i in range(len(rows))] == [v[("pick", K)] for v in twin], (unit.id, K)
+        assert BS.compile(calls).counts["and"] == BS.compile(traced).counts["and"]
+
+
+def test_the_picks_pieces_are_its_steps() -> None:
+    """A sum of counts, a level's count against r (read, and TOPK), a digit's one-hot bit, a row under it, the digit of the
+    one-hot bits, r past a digit and a block's share of the keys at the threshold, on random operands and at their edges."""
+    rng = random.Random(9)
+    n, TOPK = 64, 100
+    RB = TOPK.bit_length()
+    word = lambda bits=32: [rng.choice((0, 1, (1 << bits) - 1, rng.getrandbits(bits))) for _ in range(n)]  # noqa: E731
+    one = lambda d, *args, width=32: [r[0] for r in _words(BS.evaluate_bits(d, *args), width)]  # noqa: E731
+    a, b, r, s = word(), word(), word(RB), word(1)
+    assert one(bind(X.DsaTopKCountAdd), _bits(a), _bits(b)) == [(x + y) % (1 << 32) for x, y in zip(a, b)]
+    t = [x if i % 2 else y for i, (x, y) in enumerate(zip(a, r))]
+    assert one(bind(X.DsaTopKDigitGe, TOPK=TOPK, READ=1), _bits(t), _bits(r, RB), width=1) == [int(x >= y) for x, y in zip(t, r)]
+    t = [TOPK - 1, TOPK, TOPK + 1, *a[3:]]
+    assert one(bind(X.DsaTopKDigitGe, TOPK=TOPK, READ=0), _bits(t), width=1) == [int(x >= TOPK) for x in t]
+    assert one(bind(X.DsaTopKDigitEdge), _bits(s, 1), _bits(b, 1), width=1) == [x & ~y & 1 for x, y in zip(s, b)]
+    assert one(bind(X.DsaTopKDigitTake, W=32), _bits(s, 1), _bits(a)) == [x if k else 0 for k, x in zip(s, a)]
+    assert one(bind(X.DsaTopKDigitBits), np.eye(X.BINS, dtype=np.uint8), width=X.DIGIT) == list(range(X.BINS))
+    above = word(RB)
+    assert one(bind(X.DsaTopKDigitLeft, TOPK=TOPK, READ=1), _bits(above, RB), _bits(r, RB), width=RB) == [
+        (x - y) % (1 << RB) for x, y in zip(r, above)]
+    assert one(bind(X.DsaTopKDigitLeft, TOPK=TOPK, READ=0), _bits(above, RB), width=RB) == [(TOPK - y) % (1 << RB) for y in above]
+    before = [x if i % 2 else y for i, (x, y) in enumerate(zip(a, word(RB)))]
+    assert one(bind(X.DsaTopKDigitShare, RB=RB), _bits(r, RB), _bits(before), width=RB) == [max(x - y, 0) for x, y in zip(r, before)]
+
+
+@pytest.mark.parametrize("K", range(X.ROUNDS))
+def test_the_pick_as_calls_stays_small_at_the_served_statics(K: int) -> None:
+    """At the long row's served statics (8 blocks' counts, TOPK 2,048) a round's pick written as Calls is a batch a block of
+    the sum, a Call a digit of T, and a batch a step after it: a description under 256 KiB (the traced pick's holds every
+    gate), and a Flock block within the proved range."""
+    from verity_flock import circuit as FC
+
+    unit = bind(X.DsaTopKDigitPickV2, M=8, K=K, TOPK=2048)
+    assert len(canonical_json(encode_program(Program(unit)))) < 1 << 18
+    b = FC.unit_block(unit)
+    assert FC.past_block(b) is None, (unit.id, b["k_log"])
+
+
+@pytest.mark.parametrize("K", [0, pytest.param(1, marks=pytest.mark.slow), 3])
+def test_the_pick_as_calls_has_the_traced_picks_block(K: int) -> None:
+    """The Flock block of a pick written as Calls is the traced one's: the same rows in and out, the same ANDs."""
+    from verity_flock import circuit as FC
+
+    S = dict(M=3, K=K, TOPK=100)
+    assert FC.unit_block(bind(X.DsaTopKDigitPickV2, **S)) == FC.unit_block(bind(X.DsaTopKDigitPick, **S))
+
+
+@pytest.mark.slow
+def test_the_picks_builders_lower_to_their_gates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Each piece of the pick carries a builder, as the merge's do: the circuit Flock's flat lowering makes of a last
+    round's pick over 2 blocks, which reaches every piece, is the one its gates lower to, AND for AND.  Slow by the lowering
+    without builders, an activation at a time over 255 digits; the merge's and the ties' tests are the quick ones of a
+    builder, and this one holds the pick's seven."""
+    unit = bind(X.DsaTopKDigitPickV2, M=2, K=3, TOPK=4)
+    names = {p.name for p in PICK_PIECES}
+    circuit, built = _lowered(unit)
+    assert names <= set(built)
+    for piece in PICK_PIECES:
+        monkeypatch.delattr(piece, "build")
+    by_gates, built = _lowered(unit)
+    assert not names & set(built) and by_gates == circuit
