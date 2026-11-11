@@ -1343,7 +1343,7 @@ def test_this_trees_export_rewrites_every_manifest_it_copies(tmp_path: Path) -> 
     assert [f for f in standing if not PE.imports_alone((ROOT / f).read_text(encoding="utf-8"))] == []
     dest = tmp_path / "export"
     copied = set(subprocess.run(["git", "ls-files"], cwd=dest, capture_output=True, text=True, check=True).stdout.split())
-    assert "Identity.Domains" in report["spare_roots"]["verity/core/primitives/identity"]
+    assert "Identity.Domains" in report["spare_roots"]["verity/commitments/identity"]
     for here in report["spare_roots"]:
         assert _unsealed(lambda f: (dest / f).read_text(encoding="utf-8"), copied, here) == [], here
 
