@@ -49614,3 +49614,32 @@ For BREAKEVEN:
 For the table:
 - #8878, #8893, #8904 (the planner: strata by width, the margin, held to a κ): ready to mark, in that order, each quick tier 56 of 56; opt-in, so GB moves only with the driver's call.
 - GB the planner then returns, Lean-checked, at modeled 0.4 and measured prices: 2,430 GB (width + margin), 2,455 GB held to κ 2^-4; 87 to 94 and 88 to 95 at the measured engine rate on node A (a floor) [Lean-checked designs, runs `d1e7`, `415c`; GB modeled by ratio and by proportion].
+
+## PARAMS, Wed 11 Nov 10:51Z: DANIEL'S AND UNBUILT: on ATTACK's 10:42Z table (643 classes a head block) the wide leaf is 4.00 bits on every row, so the 2,647 GB plan would read 2^-101.66 in compressions by the mean and 2^-100.46 under one M, where today one M needs width κ 2^-7 at 0.798 of the record's GB against 0.655. It cannot be on `main` tonight: the prover's side is unbuilt and unmeasured
+
+Clock: `date -u` read 10:51Z. Order reread (no update since 10:07Z); mailbox unchanged. No run of mine since 10:33Z.
+
+**The rows** [derived: ATTACK's 10:42Z cells at 643, which I relay, plus 4.00; the term is linear in the session's extraction cost to 2^-27, checked on each row]. Modeled; the first-hit term of #8827's lemma; compressions; a run at K0 = 6; T = 2^80 calls in every run. The model's verifier accepts no run at these sizes.
+
+| design | GB ratio | today: mean / by stratum / one M | with the wide leaf: mean / by stratum / one M |
+|---|---|---|---|
+| the record | 1.000 | -99.41 / -99.38 / -98.55 | -103.41 / -103.38 / -102.55 |
+| the 2,647 GB plan, width 2^-2.5 | 0.655 | -97.66 / -97.64 / -96.46 | **-101.66 / -101.64 / -100.46** |
+| width 2^-3 | 0.656 | -98.16 / -98.14 / -96.96 | -102.16 / -102.14 / -100.96 |
+| width 2^-6 | 0.690 | -101.16 / -101.14 / -99.96 | -105.16 / -105.14 / -103.96 |
+| width 2^-7 | 0.798 | -102.16 / -102.14 / -100.96 | -106.16 / -106.14 / -104.96 |
+
+- **What it is worth in GB at equal bits** [derived from the ratios]: 0.690 to 0.655 where the count is the mean (5%), 0.798 to 0.655 under the Lean's one M (18%).
+- **What the wide leaf is:** a 2^35-bit table committed on the tower of a 2^31-bit one: 1,028 lanes a level-0 leaf for 68, a level-0 word of 2^19 for 2^23. Flock's table error is 2^-205.06 for 2^-205.01 [run: the replica; the Lean's own check `≤ 2^-205` passes at the new rows, `r20261111-093644-0d0a`].
+- One more lane doubling is one more bit, and each doubles the level-0 bytes a session opens: +4.00 bits at 7.2 MB, +5.00 at 14.4 MB, +8.00 at 120 MB [run: the replica, where the table error stays under 2^-205 at each; bytes derived]. Only the first has been through Lean.
+- **Why not tonight:**
+  - It changes `Flock.fast100` and `Zk.queries0`, which `security/lean-audit.json` and `security/Properties/lean-audit.json` read: Daniel's.
+  - The Lean builds through the soundness side only (311 of 2,724 files); five unbuilt files state `k0 ≤ 6`.
+  - Whether the card's level-0 leaf kernel takes 1,028 lanes is kernels' to say (asked at 09:32Z; no answer I have read). The prover's schedule table and its Python and Rust mirrors are unwritten, and no session has been proved.
+- It does not multiply the verifier's fixed work, which the small tables did: one statement, one verify.
+
+For BREAKEVEN: no row to price. If a what-if row is kept: the 2,647 GB plan at its own sampling with the first-hit term 4.00 bits lower; the prover's side is the salts at a sixteenth (CPU-seconds, on the statement's path at four provers [relayed: SALTS 10:36Z]; it overlaps SALTS's switch) and 6.7 MB more proof a session.
+
+For the table:
+- By classes at 643, in compressions, nothing under 0.690 of the GB reaches 2^-100 today [relayed: ATTACK 10:42Z]. With the wide leaf the 2,647 GB plan (0.655) would, under every count: 2^-101.66 by the mean, 2^-100.46 under one M [derived; modeled; unbuilt; Daniel's].
+- The proof system's weakest term is unchanged: the binding side's first-hit term. Flock's own is 2^-203.00 a session.
