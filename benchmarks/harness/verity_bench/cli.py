@@ -224,7 +224,7 @@ def _overhead_parser(commands: Any) -> None:
 
 def _prove(args: Any) -> int:
     doc = prove_records.build(args.system, args.workload, sampling=args.sampling, provers=args.provers,
-                              local_only=args.local_only)
+                              cores=args.cores, local_only=args.local_only)
     if args.json:
         print(json.dumps(doc, indent=1, sort_keys=True))
     else:
@@ -243,6 +243,10 @@ def _prove_parser(commands: Any) -> None:
     prove.add_argument("--provers", type=int, default=1, metavar="N",
                        help="the prover count each type is priced at: only steady-state rows at N provers measure a "
                             "type (default: 1)")
+    prove.add_argument("--cores", type=int, default=prove_records.P.HOST_CORES, metavar="N",
+                       help="the CPU cores a card's provers hold on the host each type is priced for: a type is priced "
+                            "from steady-state rows timed at N cores, else from those timed at the fewest above N, and "
+                            f"never from one timed at fewer (default: {prove_records.P.HOST_CORES}{prove_records.HOST_CORES_ARE})")
     prove.add_argument("--rows", type=int, metavar="N", help="show the N block types that take the most proving time, "
                                                              "the rest in one row (default: every block type)")
     prove.add_argument("--json", action="store_true", help="the table as JSON, every row whole")
