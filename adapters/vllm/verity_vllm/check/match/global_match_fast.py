@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import collections
 import functools
-import json
 import os
 from collections.abc import Callable
 
