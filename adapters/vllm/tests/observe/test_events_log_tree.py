@@ -6,10 +6,31 @@ import io
 
 import pytest
 
-from verity_vllm.observe.events import (DTYPE_BYTES, DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
-                                   StorageAlloc, TritonLaunch, ViewDesc, from_json, to_json, views_in)
-from verity_vllm.observe.log import LogWriter, dumps, read_log, read_log_lines, split_steps
+from verity_vllm.observe.events import (
+    DTYPE_BYTES,
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    StorageAlloc,
+    TritonLaunch,
+    ViewDesc,
+    from_json,
+    to_json,
+    views_in,
+)
 from verity_vllm.observe.fold.tree import build_trees, op_histogram, step_events
+from verity_vllm.observe.log import (
+    LogWriter,
+    dumps,
+    read_log,
+    read_log_lines,
+    split_steps,
+)
 
 
 def _view(a=1, off=0, shape=(4, 576), strides=(576, 1), dtype="bfloat16"):

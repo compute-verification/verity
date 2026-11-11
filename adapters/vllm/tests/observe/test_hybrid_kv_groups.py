@@ -7,10 +7,18 @@ import dataclasses
 
 import pytest
 
+from tests.observe.test_patterns_synthetic import BS, by_spec, context, decode_step
 from verity_vllm.observe.events import Note, StepStart, ViewDesc, from_json, to_json
 from verity_vllm.observe.fold.patterns import GeometryError, kv_group_of, kv_slots
-from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Transparent, Unsupported, external_buffers, resolve_step
-from tests.observe.test_patterns_synthetic import BS, by_spec, context, decode_step
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    GatherMany,
+    Transparent,
+    Unsupported,
+    external_buffers,
+    resolve_step,
+)
 from verity_vllm.observe.fold.tree import step_events
 
 LAYER = "model.layers.0.self_attn.attn"

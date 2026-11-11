@@ -6,14 +6,41 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepStart,
-                                   TritonLaunch, ViewDesc)
-from verity_vllm.observe.fold.patterns import (ComputeGroup, GeometryError, TransparentGroup, as_slot_rows, as_weight_view, members,
-                                     schema_param_names, split_heads)
-from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as PROF
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+)
+from verity_vllm.observe.fold.patterns import (
+    ComputeGroup,
+    GeometryError,
+    TransparentGroup,
+    as_slot_rows,
+    as_weight_view,
+    members,
+    schema_param_names,
+    split_heads,
+)
 from verity_vllm.observe.fold.patterns.sampling import TokenSelectGumbelTwoStage
-from verity_vllm.observe.fold.resolver import (Compute, Gather, GatherMany, PerRow, ResolutionError, Shared, StepContext,
-                                     Transparent, Unsupported, resolve_step)
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as PROF
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    GatherMany,
+    PerRow,
+    ResolutionError,
+    Shared,
+    StepContext,
+    Transparent,
+    Unsupported,
+    resolve_step,
+)
 from verity_vllm.observe.fold.tree import step_events
 
 C = PROF.C
@@ -431,8 +458,8 @@ def test_gemm_target_profile_is_the_same_object_the_builder_pins():
     """[X-01 portability] One TargetProfile fact: the eager resolver's pin for a record captured on a 142-SM device equals
     `TargetProfile.from_gpu_document(header.gpu).num_sms`, which is what `TargetProfile.from_device()` yields on that host and what
     Bet A's `gemm_pins_for` pins (`NUM_SMS == active TargetProfile.num_sms`, see tests/program/test_vllm_bindings_pins.py)."""
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.observe.fold.patterns import target_of
+    from verity_vllm.program.frontend.target_profile import TargetProfile
     events, start = decode_step(num_sms=142)
     se = step_events(events)
     ctx = _context_on_host(start, se.sample, 142)
@@ -469,8 +496,8 @@ def test_the_biased_linear_resolves_to_one_gemm_bias_at_the_add():
 def test_on_a_gemm_v2_host_the_biased_linear_resolves_as_the_frontend_binds_it(cc, sms):
     """The same pair on a `Gemm_v2` target (cc 12.0, cc 9.0): one `GemmBias_v2{K,N,DOT}` at the add, the record target's one-Call
     Definition (`frontend.targets.gemm_bias_spec`), the frontend's choice."""
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.frontend import targets as TG
+    from verity_vllm.program.frontend.target_profile import TargetProfile
     events, start = decode_step(qkv_bias="add", num_sms=sms)
     se = step_events(events)
     specs = by_spec(resolve_step(se, _context_on_host(start, se.sample, sms, cc)))
@@ -515,10 +542,10 @@ def test_registered_values_bind_the_norms_and_attention_that_read_them_as_inputs
     import dataclasses
 
     import numpy as np
-
-    from verity_vllm.observe.fold.resolver import Supplied
     from verity.definitions.registry import b1
     from verity.definitions.registry import prims as P
+
+    from verity_vllm.observe.fold.resolver import Supplied
 
     events, start = decode_step()
     se = step_events(events)
@@ -540,8 +567,9 @@ def test_registered_values_on_the_rtx_pro_6000_bind_fa2s_check_inf_chain_with_th
     choice there (`targets.attention_spec(..., scale_input=True)`), with the scale its last `Supplied` operand; the norms as above."""
     import dataclasses
 
-    from verity_vllm.observe.fold.resolver import Supplied
     from verity.definitions.registry import b1
+
+    from verity_vllm.observe.fold.resolver import Supplied
 
     events, start = decode_step(num_sms=188)
     se = step_events(events)

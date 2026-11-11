@@ -5,10 +5,11 @@ from __future__ import annotations
 
 import dataclasses
 
+from verity.circuits.types import Array, Value
+
+from tests.observe import test_fold_synthetic as TFS
 from verity_vllm.observe.events import StepLink, StepStart
 from verity_vllm.observe.fold.fold import fold
-from tests.observe import test_fold_synthetic as TFS
-from verity.circuits.types import Array, Value
 
 memory = TFS.memory  # the fixture (real memory model when importable, else the in-test stub)
 

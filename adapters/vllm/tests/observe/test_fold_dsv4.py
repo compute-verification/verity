@@ -32,13 +32,45 @@ import importlib
 
 import pytest
 
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
-from verity_vllm.observe.fold.patterns.dsv4 import (INDEXER_COMPRESS_KERNEL, INDEXER_COMPRESS_SRC_SHA, INV_ROPE_KERNEL, INV_ROPE_SRC_SHA,
-                                                    SAVE_STATES_KERNEL, SAVE_STATES_SRC_SHA, Fp8Einsum, IndexerCompress, InvRopeQuant, Mhc,
-                                                    QKvRmsNorm, QNormRopeKvInsert, SavePartialStates)
-from verity_vllm.observe.fold.patterns.dsv4_flashmla import SPARSE_DECODE_OP, SPARSE_PREFILL_OP, SparseDecode, SparsePrefill
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+)
+from verity_vllm.observe.fold.patterns.dsv4 import (
+    INDEXER_COMPRESS_KERNEL,
+    INDEXER_COMPRESS_SRC_SHA,
+    INV_ROPE_KERNEL,
+    INV_ROPE_SRC_SHA,
+    SAVE_STATES_KERNEL,
+    SAVE_STATES_SRC_SHA,
+    Fp8Einsum,
+    IndexerCompress,
+    InvRopeQuant,
+    Mhc,
+    QKvRmsNorm,
+    QNormRopeKvInsert,
+    SavePartialStates,
+)
+from verity_vllm.observe.fold.patterns.dsv4_flashmla import (
+    SPARSE_DECODE_OP,
+    SPARSE_PREFILL_OP,
+    SparseDecode,
+    SparsePrefill,
+)
 from verity_vllm.observe.fold.patterns.target import target_of_header
-from verity_vllm.observe.fold.resolver import Group, PerRow, Shared, StepContext, Unsupported, spec_label
+from verity_vllm.observe.fold.resolver import (
+    Group,
+    PerRow,
+    Shared,
+    StepContext,
+    Unsupported,
+    spec_label,
+)
 from verity_vllm.observe.fold.tree import build_trees
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import QKV_RMS_PINS
 

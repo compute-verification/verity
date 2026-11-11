@@ -12,11 +12,11 @@ import itertools
 import random
 
 import pytest
+from verity.circuits.refs import Affine, Explicit, Refs, Strided
 
 from verity_vllm.observe.events import DTYPE_BYTES, StorageAlloc, ViewDesc
 from verity_vllm.observe.fold.memory import MemoryModel, Unresolved
 from verity_vllm.observe.fold.views import row_view
-from verity.circuits.refs import Affine, Explicit, Refs, Strided
 
 DEV = "cuda:0"
 

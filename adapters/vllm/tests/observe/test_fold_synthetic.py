@@ -11,19 +11,40 @@ import itertools
 from dataclasses import dataclass
 
 import pytest
+from verity.circuits.defs import bind
+from verity.circuits.refs import Affine, Explicit, concat
+from verity.circuits.types import Array, RecordType, Value
+from verity.definitions.registry import b1
+from verity.definitions.registry import value_inputs as VI
 
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    StorageAlloc,
+    TritonLaunch,
+    ViewDesc,
+)
 from verity_vllm.observe.fold import fold as fold_mod
-from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
-                                   StorageAlloc, TritonLaunch, ViewDesc)
 from verity_vllm.observe.fold.fold import FoldError, fold
 from verity_vllm.observe.fold.memory import MemoryStats, Unresolved
 from verity_vllm.observe.fold.patterns.norms import eps_input
-from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Supplied, Transparent
-from verity.circuits.defs import bind
-from verity.circuits.refs import Affine, Explicit, concat
-from verity.definitions.registry import b1
-from verity.definitions.registry import value_inputs as VI
-from verity.circuits.types import Array, RecordType, Value
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    GatherMany,
+    Group,
+    PerRow,
+    Profile,
+    Shared,
+    Supplied,
+    Transparent,
+)
 
 # ---------------------------------------------------------------------------------------------------------
 # toy configuration
@@ -486,8 +507,12 @@ def test_registered_values_are_inputs_of_the_program(memory):
     """Under `registered_values` the norms' eps and the attention scale are fields of the registered `values` parameter, read by the
     Definitions that take them as inputs; the Program holds neither as a constant, and each request has a (here empty) run parameter."""
     import numpy as np
-
-    from verity.definitions.circuits.constants import REGISTRATION, RUN, inputs, program_data
+    from verity.definitions.circuits.constants import (
+        REGISTRATION,
+        RUN,
+        inputs,
+        program_data,
+    )
     from verity.definitions.registry import prims as P
 
     r = fold(toy_log(), toy_profile(registered_values=True), strict=True)
