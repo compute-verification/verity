@@ -30,6 +30,7 @@
   another circuit under unchanged digests is refused by name and one whose names make the same circuit is ignored."""
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import shutil
@@ -523,6 +524,19 @@ def test_reader_floors_state_the_verifiers_work_table_in_window_circuits_and_cla
         with pytest.raises(SystemExit):
             PP.main([*cls, "--reader-floors", bad])
         assert "--reader-floors" in capsys.readouterr().err
+
+
+def test_the_audits_delta_is_a_decimal_or_a_ratio_in_0_1_as_the_double_nearest_it(capsys):
+    """``audit --delta`` takes a decimal or NUM/DEN (`delta_arg`), so the floors' DELTA, an exact ratio, is the audit's
+    too; the audit states it as a double, the nearest one. Refused outside (0, 1) or where it is no number."""
+    for text, want in (("0.5", 0.5), ("1/2", 0.5), ("1/100", 0.01), ("0.01", 0.01), ("1e-6", 1e-6), ("1/1048576", 2.0 ** -20)):
+        assert RA.delta_arg(text) == want
+    for bad in ("0", "1", "3/2", "-1/2", "1/0", "1e-400", "nan", "inf", "x", ""):
+        with pytest.raises(argparse.ArgumentTypeError, match="delta is "):
+            RA.delta_arg(bad)
+    with pytest.raises(SystemExit):
+        RA.main(["audit", "--delta", "3/2"])
+    assert "argument --delta: delta is in (0, 1), not '3/2'" in capsys.readouterr().err
 
 
 def test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key(tmp_path, monkeypatch, capsys):
