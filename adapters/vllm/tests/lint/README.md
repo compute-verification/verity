@@ -47,6 +47,11 @@ failure message carries its fix.
  flagged in `verity_vllm/` outside `pipeline/cli.py`: a diagnostic goes to the logger. In the suite, a finding the list
  lacks, or an entry that matches nothing, warns; the gate fails a change that adds a finding, and judges `ruff_vllm.toml`
  as this lint's code. Once both lists are small, one config and one list replace the two.
+- **mypy** (`test_mypy.py`, allowlist `allowlists/mypy.json`): mypy under vLLM's settings (`[tool.mypy]` in
+ `adapters/vllm/pyproject.toml`), the library at `follow_imports = "silent"` and `tests/` on its own at `skip`, an error
+ keyed by file, error code and enclosing symbol, with a count; one the list lacks, or an entry that matches nothing, warns in the suite. `CLEAN` names the directories held to no error. Its findings
+ depend on the installed packages, so the list records the environment it was taken in and the lint refuses any other;
+ the ratchet gate counts the list but doesn't rerun the lint.
 - **The ratchet itself** (`test_ratchet.py`). A new key fails: fix the new code. A moved violation moves its entry in
  the same change. An entry allowing more than is found fails as stale: delete it or lower its count. So an allowlist
  only shrinks, and every failure prints the exact entry lines.
@@ -58,7 +63,9 @@ and a since-landed branch has several), no ratchet holds more entries and no ent
 file, P07's) is held by its total instead: a key may rise, or a new one appear, when the same kind's other keys fall by
 at least as much, so a move from one file to another passes, but the kind's total may not grow. P10's count is a size,
 not a number of findings, so it is never pooled. A change to a lint's own code or thresholds is judged like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
-lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `adapters/vllm/ruff.toml`, the root `ruff.toml` it
+lint to drop entries fails. A lint that keys a counted kind anew (per file where it was per package) is compared in the
+base's form, the base's lint held to the base's entries, when the change keeps that kind's total: re-key in one change and
+lower the counts in another. Ruff's lint code is `test_ruff.py`, `adapters/vllm/ruff.toml`, the root `ruff.toml` it
 extends and the root `dev` group's ruff pin (with vLLM's rules, `test_ruff_vllm.py` and `ruff_vllm.toml`), so the gate reruns
 it with the base's configs at the base's pin. The gate holds
 the repository's ruff lint the same way (`tests/lint/test_repo_ruff.py`, list `tests/lint/allowlists/repo_ruff.json`: every
