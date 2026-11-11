@@ -490,7 +490,7 @@ def test_the_observed_split_count_is_the_pin_on_the_impls_module(monkeypatch):
     attention.Attention, attention.MLAAttention = type("Attention", (nn.Module,), {}), type("MLAAttention", (nn.Module,), {})
     monkeypatch.setitem(sys.modules, attention.__name__, attention)
     backend = types.ModuleType("sparse_backend_standin")
-    backend.Impl = type("Impl", (), {"dcp_world_size": 1, "__module__": backend.__name__})
+    backend.__dict__["Impl"] = type("Impl", (), {"dcp_world_size": 1, "__module__": backend.__name__})
     monkeypatch.setitem(sys.modules, backend.__name__, backend)
     layer = attention.MLAAttention()
     layer.impl, layer.layer_name = backend.Impl(), NAMES[0]
