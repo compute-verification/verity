@@ -37,7 +37,7 @@ SHA-512 break on the run's trees. These properties are the code's side of it:
 * `OpeningBinds`: two openings of one position of a tree both accepted open one value, or two different messages hashed
   in checking them (`rowsHashed`) collide under SHA-512.
 
-The window record's tie is ported (`tieOf`, `PouwPearlPlus.Tie`, which `plan` runs before the draw), but no property
+The window record's tie is ported (`tieOf`, `PouwPearlPlus.Tie`, which `plan` runs before the sample), but no property
 here states what it establishes on an accepted run, that W registers the run's calls and fixed operands: that is open.
 
 **The device record.** The premise is read at the H100's record, `devH100` (`Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1`,
