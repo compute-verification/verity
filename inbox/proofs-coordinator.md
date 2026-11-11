@@ -48369,3 +48369,77 @@ For BREAKEVEN:
 For the table:
 - Templated check, fused blocks: measured on both kinds at 0.93× and 1.01× of the flat, Lean accepts every run (`a3e0`, `7268`). Not a lever.
 - Templated check, head block: one run out (`9c37`), no figure yet; a template smaller than the block's body needs #8432, #8451 and a Lean form change, none tonight.
+
+## BREAKEVEN, Wed 11 Nov 10:26Z: GB is linear in mfu_serve to 0.14% with the replay held, and held is right; on measured prices (iii) reads 4,042.4 GB at the modeled 0.4 and 144.7 to 155.8 at the measured engine rate on node A (a floor), the lever row as FUSED corrected it 3,710.4 and 132.5 to 142.7; width at κ 2^-3, then the four-quarter cut, then WITNESS's 0.880 read 2,650.6, 1,696.3 and 1,571.1 at 0.4 (modeled, none in the plan of record); my 08:51Z 1,026.6 and 276.4 are withdrawn
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [derived] arithmetic of mine on the cited figures. Times from `date -u`. Every GB figure is GLM-5.3's at 10% compute times 1.05, world year, the planner's bound (modeled) on measured prices, on e0bd's path (tree `a5e4e56a11`, `warm-prover+warm-noserver`), fleet held at 4.687e7 machines, only `mfu_serve` changed.
+
+**0. Withdrawn from my 08:51Z entry (say it first).** Its 1,026.6, 1,234.0 and 276.4 GB, and its lever table's rows 1, 2, 3a and 3, PARAMS' one repetition, HEADCIRC's two heads, vDSO and SERVEDCARD's 3,361.6, all rest on one of three things: kernels' rule (withdrawn 09:31Z), a templated check on the head block (it has none), or the fused blocks' 10x (measured at 1.0x) [read: FUSED 09:44Z, SALTS 09:56Z, HEADPROF 09:39Z and 09:48Z]. Each is now a what-if only, labelled 'unsupported at one prover: two bounds hold, the witness walk's wall time and CPU-seconds over ten cores'. HEADCIRC's 1.904 s row is struck. My three-unit cut (1,670.9) is replaced by scores + four quarters (section 2).
+
+**1. Utilization, your 09:13Z job** [run: `r20261111-093911-c994`, `r20261111-100505-3dab`]. Label: 'at the measured engine rate on node A (a floor), not the modeled 0.4'; which reading is the headline is Daniel's; the rate is not measured at the headline's mix.
+
+| mfu_serve (tokens a GPU-second) | (ii) | (iii) | lever row, e0bd's | lever row, head flat | lever row as FUSED corrected (head flat, fused blocks 1.0x) |
+|---|---:|---:|---:|---:|---:|
+| 0.0143 (178.5) | 144.8 | 144.7 | 115.3 | 131.8 | 132.5 |
+| 0.0154 (192.3) | 155.9 | 155.8 | 124.2 | 141.9 | 142.7 |
+| 0.05 (624) | 505.9 | 505.7 | 403.4 | 460.8 | 463.6 |
+| 0.1 (1,249) | 1,011.5 | 1,011.2 | 806.9 | 921.8 | 927.3 |
+| 0.2 (2,497) | 2,022.5 | 2,021.8 | 1,614.1 | 1,843.8 | 1,854.9 |
+| 0.4 (4,994) | 4,043.8 | 4,042.4 | 3,228.7 | 3,688.2 | 3,710.4 |
+| under 300 GB while the engine serves at most | 370 | 370 | 464 | 406 | 404 |
+
+- **Linear:** x1.0014 of linear at 0.0143 for (ii) and (iii), x0.9992 for the lever rows [run]. The 0.4 column equals e0bd's and FUSED's 3,688.2 and 3,710.4 [run]. BENCHCROSS's and vllm's rows equal mine to 0.1 GB (144.8 / 155.9, 115.3 / 124.2) [relayed: BENCHCROSS 10:01Z on vllm's `a974`]. The last line is linear [derived]; tokens a GPU-second are 4,994.1 x mfu / 0.4 [run: the rows' requests a GPU-second times 3,320.6 tokens a request].
+- **What moves with u besides the requests** (`figure1.py:347`, proportional to u) [run: the rows' fields; read: the code at `a5e4e56a11`]:
+  - moves: q, as 1/u (1.043e-5 at 0.0143, 3.724e-7 at 0.4); the registration span, with the requests (`levers.py:106`).
+  - held at every u: the replay a sampled request (5,258.0 GPU-s on (ii) and (iii), 458.0 on the lever rows; the measured cases replace figure 1's grain, `levers.py:104`); the serve tax (4.339% of compute, 4.220% on the lever rows); tokens a request (3,320.6) and FLOP a request (5.263e14); the replay's share of compute (0.00295) and proving's (0.05305).
+- **The replay, held or scaled (your 09:33Z question): held is right**, as BENCHCROSS says. 5,258 and 458 were measured on vllm's served run at the engine's own rate. So they belong to the measured-rate column and are the unsure input of the 0.4 column.
+  - Scaled by 0.4/u, as if they were 0.4 prices (the wrong direction): (ii) reads 176.6 at 0.0143 (x1.22, the replay 147,077 GPU-s), not x28, because the planner lowers q [run: c994 `rs`]. BENCHCROSS has 176.9 [relayed].
+  - The other way, at 0.4 with the replay 28 times smaller (188.0 and 16.4 GPU-s): (iii) 3,790.0 (-252), the lever row 3,207.3 (-21) [run: 3dab `r28`]. So that input moves the 0.4 column by at most 6%.
+- **Two bases at the measured rate:** the price of record on `main`, 14,228.6 at 0.4, reads 501 to 547 GB [relayed: vllm's `06fa` and `4c36`, BENCHCROSS 10:01Z] and is under 300 GB only below about 105 tokens a GPU-second [derived, linear]. Measured prices read 144.7 to 155.8 ((iii)).
+- **The floor caveat:** 0.0143 to 0.0154 is a floor on the engine's rate, and GB rises with it. So GB at the measured rate is a floor on GB, and it can't show that 300 GB is met.
+
+**2. The waterfall: (iii) on measured prices, world year.** Two columns: modeled 0.4, and the measured engine rate on node A (0.0143 to 0.0154, a floor) [run: 3dab; κ 2^-4 and 2^-6 computed from its rows' design dumps; WITNESS from `r20261111-100630-a5a2`].
+
+| step | modeled 0.4 | the floor | label | under 300 GB while at most (tokens a GPU-s) |
+|---|---:|---:|---|---:|
+| (iii) | 4,042.4 | 144.7–155.8 | modeled on measured prices | 370 |
+| 1. strata by width, κ 2^-3 (holds by reader sets in compressions, 2^-100.34 [relayed: SCALE 09:52Z]) | 2,650.6 | 94.7–102.0 | modeled; #8878 built, unmarked (Lean certifies its κ 2^-2 design at 2,675 [relayed: BENCHCROSS]) | 565 |
+| the same, κ 2^-4 | 2,687.3 | 96.1–103.5 | | 557 |
+| the same, κ 2^-6 (591 MB of coin a run [relayed]) | 2,790.6 | 99.6–107.3 | | 537 |
+| the same, κ 2^-7 (by gates; no room at K0 = 6) | 3,227.9 | 115.3–124.1 | | 464 |
+| the same, best κ (2^-2.5; misses by reader sets, 2^-99.84) | 2,646.6 | 94.5–101.8 | not a row to use | |
+| 2. + the head block's cut, scores + four quarters, κ 2^-3 | 1,696.3 | 60.5–65.2 | modeled: unit prices by 2^k_log, unmeasured; HEADCIRC's units built, statements staging | 884 |
+| the same, κ 2^-4 / 2^-6 / 2^-7 | 1,744.5 / 1,942.8 / 2,396.9 | 62.3–67.0 / 69.2–74.6 / 85.5–92.1 | by gates the cut reads 4.84x the input bits: SCALE's row | 859 / 772 / 625 |
+| 3a. + the salts keyed (`all`, `upper`) | no change | | measured inside the scatter [relayed: HEADPROF `cb57`] | |
+| 3b. + the check off the prover's cores | no change | | measured 0.944 mean, 0.961 median, inside the scatter [relayed: HEADPROF `c224`, BENCHCROSS] | |
+| 3c. + WITNESS's two cuts: 0.880 x 2.8555 = 2.513 GPU-s | 1,571.1 (alone, on (iii): 3,708.1) | 56.0–60.3 | modeled: a measured ratio on vy-dc-h200-3 (`17e0` against `5bee`, two runs eight minutes apart) applied to node A's price; the same-run pair is pending | 954 |
+| 4. what is left at 0.4 | x0.191 to reach 300 | | | |
+
+- **The head block's Lean verify is one input, and it moves every row.** Today it is 60.56 core-s a 256-block statement, assumed; FLOCKPKG's `d4ef` is not in. On (ii) at 0.4 [run: c5a4, with the halves cut; the quarters' slope is not run]:
+  - each core-second adds 12.0 GB to the record, 7.8 to the width row and 4.5 to the cut;
+  - at 151 / 303 / 606 core-s the record reads 5,133.9 / 6,950.8 / 10,584.5.
+  - So the first row stays held until FLOCKPKG's number is in.
+- **The head block's price stays at 2.8555 GPU-s,** labelled 'beside a proving NUMA neighbour' (your 09:00Z rule).
+- **On the corrected lever row (3,710.4)** [run: 3dab, a5a2]:
+  - width κ 2^-3: 2,528.7 (floor 90.3–97.3);
+  - with the four-quarter cut: 1,592.7 (56.8–61.2);
+  - with WITNESS's 0.880 too: 1,470.2 (52.4–56.5);
+  - the lever row's best κ is small: at κ 2^-6 it reads 2,340.8, and 1,509.4 with the cut.
+- **What is left for S and δ:** S halved on the new rows is running (`r20261111-101326-89cc`). δ has no knob on this path; 3db1's δ rows carry no cell dump, so the cut isn't priced at another δ yet.
+
+**3. Your 'For vllm:' lines** [read].
+- `figure1.py:240` holds on `main` (it is line 234 in the planner's tree `a5e4e56a11`).
+- `SERVED_BITS` is `headline.py:42` at #8853's head `2e47293cc6`, not 41.
+- The driver's utilization line is `headline.py:337`.
+- `total_cost.py:191` and `figure3.py:72` are not read by the driver's rows [relayed: BENCHCROSS].
+
+**4. The rest.**
+- NET's stop audit: under 0.11 GB at 0.4 and 0.004 at the floor, modeled [relayed]; no row moves.
+- PARAMS' cap of one table a session: 0 GB [relayed].
+- #8568 is still open at `8fb2b94ee4` [run: gh, 10:14Z], so Part 2 waits.
+- #8853 is unchanged at `2e47293cc6`.
+- **Your 10:11Z job, by 12:30Z:** (d) 3,228.7 / 3,074.8 = 1.0500 [derived]: the x1.05 the Goals page reads, and `a974` prints the bound without it. I will check that on `a974`'s rows.
+
+For the table:
+- Utilization, only `mfu_serve` changed, fleet held, measured prices: (iii) 4,042.4 GB at the modeled 0.4 and 144.7 to 155.8 at the measured engine rate on node A (a floor); the lever row as FUSED corrected it 3,710.4 and 132.5 to 142.7. Linear to 0.14% with the replay held, which is right. Under 300 GB only while the engine serves at most 370 / 404 tokens a GPU-second (not measured at the headline's mix). Main's price of record: 14,228.6 at 0.4, 501 to 547 at the floor.
+- The waterfall at 0.4 (modeled on measured prices; nothing built is in the plan of record): width κ 2^-3 2,650.6, then the four-quarter cut 1,696.3, then WITNESS's 0.880 1,571.1; at the floor 102.0, 65.2, 60.3. The head block's Lean verify (60.56 core-s, assumed) moves every row: +12.0 GB a core-second on the record.
