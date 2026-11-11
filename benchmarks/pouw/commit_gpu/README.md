@@ -1,6 +1,6 @@
 # commit_gpu: hm96-sha512 rows in frame-v3-sha512 trees on the GPU
 
-A CUDA committer whose levels, root and openings equal `verity.ml.commitments`' bit for bit: `hm96.SHA512` hiding leaves
+A CUDA committer whose levels, root and openings equal `verity.commitments`' bit for bit: `hm96.SHA512` hiding leaves
 over `sha512/row/v2` or `sha512/row-seg/v1` row digests, framed as `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1` leaves
 of a `CommitmentDomain(..., hash="sha512")` (rank = position), folded by `tree_levels`. The operand it is measured on is
 the e2e slice's o_proj operand A, 8192 x 4096 int8, beside cuBLASLt's int8 GEMM at the same shape. This is a benchmark.
@@ -9,11 +9,11 @@ Files:
 
 - `commit_gpu.cuh`: the committer (device code, constants, `Committer`); its header has the construction. A kernel that
   commits rows it produces includes it (see Tile leaves). The frame's leaf, pad and node, the hm96 leaf's mask, salt
-  digest and value, and the code that builds the constants are the GPU's one row commitment, `verity/ml/kernels/row_commit.cuh`;
+  digest and value, and the code that builds the constants are the GPU's one row commitment, `verity/definitions/kernels/row_commit.cuh`;
   this file keeps the committer's schedule.
 - `commit_gpu.cu`: the command line: `check` (writes every level and every leaf's b || c for `reference.py`), `bench`
   (alone, as a CUDA graph, with the root on the host, and beside the GEMM) and the raw compression rate (`sha`).
-- The SHA-512 compression is `sha::compress` from the GPU's one SHA-512 header, `verity/ml/kernels/sha512.cuh` (build
+- The SHA-512 compression is `sha::compress` from the GPU's one SHA-512 header, `verity/definitions/kernels/sha512.cuh` (build
   flags `SHA_ADD`, `SHA_ROT`, `SHA_ROLL`, kept for the measurements below, and `SHA_SX`).
 - `reference.py`: the parameter file, every check case's inputs and the reference's levels, b || c and leaves, by the
   repository's own functions; `check` compares a build's output with them.
@@ -166,7 +166,7 @@ rows; tile leaves make it hash exactly the tile's bytes, with R times fewer leav
   + 128/R - 1 (`reference.tile_leaves`): 128/R adjacent leaves, exactly the tile's 4096 values for R dividing 128, and an
   aligned subtree when 128/R divides ceil(M/R) (M a multiple of 128). At R = 128 the tile is one leaf.
 - **Statement and code.** `reference.permute(A, M, K, R)` is the layout; the reference commits the permuted operand with
-  `verity.ml.commitments`, unchanged. The GPU reads A in place (`TileGeom`, `TileSrc`: a leaf's 16-byte loads gathered
+  `verity.commitments`, unchanged. The GPU reads A in place (`TileGeom`, `TileSrc`: a leaf's 16-byte loads gathered
   from its R rows, zero past M): `Committer::init(params, n, 32 R, keep_bc, seg, 256 R)`, `salts<…>()` before the operand
   exists, `tiles(A, M, K, R, seg, stream)`, `nodes(stream)`. `commit_gpu check|bench PARAMS tile|tileseg M K R …` and
   `gpu.sh`'s tile sweep (`TILE_M`, `TILE_R`, `TILESEG_R`) run it.
@@ -341,9 +341,9 @@ larger share: the same fixed compressions are paid once a 2 KiB leaf instead of 
 
 ## The vLLM integration
 
-`integrations/vllm/`'s GPU committer (`verity_vllm/commit/committer`) commits this construction by default, `rows-sha512`
+`adapters/vllm/`'s GPU committer (`verity_vllm/commit/committer`) commits this construction by default, `rows-sha512`
 (`verity_vllm/commit/step_rows.py`): its `native_rows.cu` is this directory's leaf, pad and node kernels with each step's
-constants as kernel parameters. The record before it, `vllm-v1` (`verity/ml/commitments/vllm_v1`: SHA-256 position leaves and
+constants as kernel parameters. The record before it, `vllm-v1` (`adapters/vllm/verity_vllm/commitments/vllm_v1`: SHA-256 position leaves and
 node / lift trees, with `hm96-sha256/v1` leaves as an option), is by name. Its opt-in serving rows
 (`verity_vllm/commit/serving_rows.py`) already commit `frame-v3-sha512` trees of `hm96-sha512/row/v1` leaves, on the CPU,
 and this committer could take them over: `sha512/row/v1`'s first block is a 128-byte constant like `sha512/row/v2`'s (a
