@@ -261,7 +261,7 @@ def padded(unregistered: float, g: float, efficiency: float = 1.0, eps_unreg: fl
 
 
 def multiple_bound(mfu: float, s: float, x: float, reference_efficiency: bool = True) -> float:
-    """`ρ = max(1, 1/(s + a x))`: the hardware multiple a developer needs over an unconstrained one at `MFU₀ = mfu`
+    """`max(1, 1/(s + a x))`: the hardware multiple a developer needs over an unconstrained one at `MFU₀ = mfu`
     (`hardwareMultiple`), when the unmonitored share `s` trains like it and the other terms `x`, shares of capacity,
     convert into its work at `a`. Under reference efficiency (`GLOSSARY.md`: no run uses the hardware more efficiently
     than the reference) free compute runs at `MFU₀` too, so `a = 1`; without it `x` counts at peak, `a = 1/MFU₀`, Lean's
