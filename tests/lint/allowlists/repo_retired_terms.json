@@ -436,6 +436,7 @@
     {"file": "security/Proofs/Accounting/JointBridge/BandwidthOfAuditPerRunPeriod.lean", "count": 11},
     {"file": "security/Proofs/Accounting/JointBridge/CommOfPeriodLeakAccepted.lean", "count": 20},
     {"file": "security/Proofs/Accounting/JointBridge/CommOfPooledLeakAccepted.lean", "count": 2},
+    {"file": "security/Proofs/Accounting/JointBridge/CommOfPooledLeakAcceptedHonest.lean", "count": 2},
     {"file": "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean", "count": 24},
     {"file": "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityPeriod.lean", "count": 34},
     {"file": "security/Proofs/Accounting/JointBridge/HonestH200.lean", "count": 41},

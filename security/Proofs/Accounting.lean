@@ -21,6 +21,7 @@ public import Proofs.Accounting.JointBridge.SpaceOfPeriodHeld
 public import Proofs.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
 public import Proofs.Accounting.JointBridge.CommOfPeriodLeakAccepted
 public import Proofs.Accounting.JointBridge.CommOfPooledLeakAccepted
+public import Proofs.Accounting.JointBridge.CommOfPooledLeakAcceptedHonest
 public import Proofs.Accounting.JointLive
 public import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
 public import Proofs.Accounting.JointBridge.HonestH200
