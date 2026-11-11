@@ -29,7 +29,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import logging
 import random
 import subprocess
 import sys
@@ -39,8 +38,6 @@ from pathlib import Path
 from typing import Any
 
 from verity_difftest import Server, build, canonical
-
-log = logging.getLogger(__name__)
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[5]
@@ -291,7 +288,6 @@ def python_verdict(mc, inst: dict) -> str:
     try:
         return canonical(mc.verdict(inst["ready"], inst["leaves"], inst["audit"]))
     except Exception as e:
-        log.exception("the reference raised on %s; its output is the exception", inst.get("name"))
         return canonical({"exception": f"{type(e).__name__}: {e}"})
 
 
@@ -317,24 +313,19 @@ def accepted(text: str) -> bool:
     return json.loads(text).get("accepted") is True
 
 
-def _line(text: str) -> None:
-    """One line of the command's report, on its stdout."""
-    sys.stdout.write(text + "\n")
-
-
 def report(results: list[dict], out: Path | None = None) -> int:
     """Print each difference, each negative control the reference accepts, and the count; write `out`; the exit code."""
     differences = [r for r in results if r["python"] != r["lean"]]
     for r in differences:
-        _line(f"DIFFERENCE {r['id']}\n  python {r['python']}\n  lean   {r['lean']}")
+        print(f"DIFFERENCE {r['id']}\n  python {r['python']}\n  lean   {r['lean']}")
     vacuous = [r for r in results if r["negative"] and accepted(r["python"])]
     for r in vacuous:
-        _line(f"ACCEPTED NEGATIVE CONTROL {r['id']}")
+        print(f"ACCEPTED NEGATIVE CONTROL {r['id']}")
     if out:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text("".join(canonical(r | {"same": r["python"] == r["lean"]}) + "\n" for r in results))
     negatives = sum(r["negative"] for r in results)
-    _line(f"{len(results)} instances, {len(differences)} differences, {negatives} negative controls")
+    print(f"{len(results)} instances, {len(differences)} differences, {negatives} negative controls")
     return 1 if differences or vacuous or not any(accepted(r["python"]) for r in results) else 0
 
 
@@ -349,7 +340,7 @@ def replay(runs: list[Path], out: Path | None = None) -> int:
         bench = run / "bench" if (run / "bench").is_dir() else run
         docs = sorted(bench.glob("audit-p2-*.json"))
         if not docs:
-            _line(f"{run}: no audit-p2-*.json")
+            print(f"{run}: no audit-p2-*.json")
             continue
         for path in docs:
             arm = path.stem.removeprefix("audit-p2-")
@@ -364,7 +355,7 @@ def replay(runs: list[Path], out: Path | None = None) -> int:
             if unblocked := sum("block" not in a for a in answers):
                 lacks.append(f"{unblocked} of {len(answers)} answers do not record their block")
             if lacks:
-                _line(f"{run.name} {arm}: cannot replay, {'; '.join(lacks)}")
+                print(f"{run.name} {arm}: cannot replay, {'; '.join(lacks)}")
                 continue
             leaves = leaves_path.read_bytes()
             py, lean = canonical(mc.verdict(ready, leaves, doc)), canonical(lean_verdict(ready, leaves, doc))
@@ -382,13 +373,13 @@ def replay(runs: list[Path], out: Path | None = None) -> int:
                 agree += row["recorded_same"]
                 note = f"; recorded {' and '.join(sorted(kept))} {'the same' if row['recorded_same'] else 'DIFFERENT'}"
             rows.append(row)
-            _line(f"{run.name} {arm}: {'same' if py == lean else 'DIFFERENT'} {py if py == lean else py + ' / ' + lean}{note}")
+            print(f"{run.name} {arm}: {'same' if py == lean else 'DIFFERENT'} {py if py == lean else py + ' / ' + lean}{note}")
     if out:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text("".join(canonical(r) + "\n" for r in rows))
-    _line(f"{replayed} runs, {same} same verdict, {negatives} negative controls")
+    print(f"{replayed} runs, {same} same verdict, {negatives} negative controls")
     if recorded:
-        _line(f"{recorded} with recorded verdicts, {agree} recorded as replayed")
+        print(f"{recorded} with recorded verdicts, {agree} recorded as replayed")
     return 0 if replayed and same == replayed and agree == recorded else 1
 
 

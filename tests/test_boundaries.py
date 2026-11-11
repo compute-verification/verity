@@ -315,8 +315,10 @@ BENCHMARKS_IMPORTERS = {
     # tests and vector scripts that check against a benchmark's reference
     "verity/protocols/pouw/verifier/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/run.py`)",
-    "verity/protocols/pous/verifier/check/scripts/difftest_vectors.py": "memory-accounting: P2's reference and wire "
-                                                                        "(`benchmarks/pous/p2_v1`)",
+    **dict.fromkeys(("verity/protocols/pous/verifier/check/scripts/difftest_vectors.py",
+                     "verity/protocols/pous/verifier/check/tests/test_timed_audit.py"),
+                    "memory-accounting: P2's reference and wire (`benchmarks/pous/p2_v1`) and the harness's control "
+                    "responder (`benchmarks/pous/band_gpu/harness.py`)"),
     "verity/definitions/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),

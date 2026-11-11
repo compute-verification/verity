@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any
 
 import verity_difftest as D
-
 from verity.protocols.pous.device import memory_challenger as mc
 
 PACKAGE = Path(__file__).resolve().parent

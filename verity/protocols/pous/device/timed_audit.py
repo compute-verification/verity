@@ -42,7 +42,6 @@ import copy
 import gc
 import hashlib
 import json
-import logging
 import os
 import re
 import resource
@@ -53,8 +52,6 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-
-log = logging.getLogger(__name__)
 
 OP_CHALLENGE, OP_PING, OP_CLOSE = 1, 2, 3
 HEADER = 24
@@ -113,16 +110,14 @@ def scheme_of(name: str, params: Any) -> Any:
 
     if name in schemes.REGISTRY:
         return schemes.get(name, params=params)
-    refused = []
     for cls in (schemes.Band, schemes.P2, schemes.P2ChaCha):
         try:
             scheme = cls(params)
-        except (TypeError, ValueError) as e:
-            refused.append(f"{cls.__name__}: {e}")
+        except (TypeError, ValueError):
             continue
         if scheme.name == name:
             return scheme
-    raise KeyError(f"no POUS scheme {name!r} at {params!r}" + (f" ({'; '.join(refused)})" if refused else ""))
+    raise KeyError(f"no POUS scheme {name!r} at {params!r}")
 
 
 class LiveResponder:
@@ -221,10 +216,11 @@ def thread_rusage() -> dict[str, int]:
 
 def cgroup_cpu() -> dict[str, int]:
     """The container's CPU throttling counters (cgroup v2 `cpu.stat`): a throttled period stalls the responder and the verifier."""
-    path = Path("/sys/fs/cgroup/cpu.stat")
-    if not path.is_file():
+    try:
+        with open("/sys/fs/cgroup/cpu.stat") as f:
+            stat = dict(line.split() for line in f if line.strip())
+    except OSError:
         return {}
-    stat = dict(line.split() for line in path.read_text().splitlines() if line.strip())
     return {k: int(stat[k]) for k in ("nr_periods", "nr_throttled", "throttled_usec") if k in stat}
 
 
@@ -370,8 +366,8 @@ def verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
         try:
             params = params_of(ready["scheme"], ready["params"])
             scheme = scheme_of(ready["scheme"], params)
-        except Exception as e:
-            raise RecordFault("ready") from e
+        except Exception:
+            raise RecordFault("ready") from None
         need(type(scheme) is schemes.P2 and scheme.name == ready["scheme"] and hexed(ready.get("salt"))
              and len(ready["salt"]) == 48, "ready")
         need(len(leaves) == params.blocks * DIGEST_BYTES, "leaves")
@@ -385,7 +381,7 @@ def verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
         need(root == vk.root.hex(), "root")
         need(limit == deadline + rtt, "limit")
         cert = scheme.certificate
-        k = doc.get("k", cert.k if cert is not None else pous_audit.CHALLENGES)
+        k = doc["k"] if "k" in doc else cert.k if cert is not None else pous_audit.CHALLENGES
 
         def timed(source: bytes, clock: Callable[[], int]) -> Any:
             return protocol.TimedAudit(scheme, vk, protocol.challenge_key(source, vk), k=k, deadline_ns=deadline,
@@ -474,7 +470,6 @@ def judge(ready: Any, leaves: bytes, doc: dict[str, Any], by: str | None = None)
         try:
             verdicts["lean"] = VERDICTS["lean"](ready, leaves, doc)
         except Exception as e:
-            log.exception("the Lean verdict raised; the record keeps it as failed")
             verdicts["lean"] = {"failed": f"{type(e).__name__}: {e}"}
     by = by or (VERDICT if why is None else "python")
     v = verdicts[by]

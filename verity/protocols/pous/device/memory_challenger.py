@@ -78,18 +78,13 @@ from types import MappingProxyType
 from typing import Any, Protocol
 
 from verity.commitments import hm96
-from verity.commitments.crypto import lms
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.limits import VerificationLimits
-from verity.commitments.merkle import (
-    Commitment,
-    CommitmentDomain,
-    Opening,
-    tree_levels,
-    verify_opening,
-)
-from verity.commitments.randomness import derive
+from verity.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
 from verity.commitments.rowleaf import sha512_row_v2_digest
+from verity.commitments.crypto import lms
+from verity.commitments.randomness import derive
+
 from verity.protocols.pous.verifier.params import SALT_BITS
 from verity.protocols.pous.verifier.protocol import CapacityBound, Scheme
 from verity.protocols.pous.verifier.verifier import DIGEST_BYTES
@@ -654,13 +649,6 @@ class Verdict:
         return {"accepted": self.accepted}
 
 
-def _verifies(verify: Verify, signed: SignedSession) -> bool:
-    try:
-        return bool(verify(signed.public_key, signed.commitment.session, signed.message(), signed.signature))
-    except Exception:  # noqa: BLE001 - a malformed signature verifies nothing
-        return False
-
-
 def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequence[CoinOpening],
             expected: Callable[[int], bytes], *, trusted: frozenset[bytes] | set[bytes],
             schemes: Mapping[str, Verify] = SCHEMES) -> Verdict:
@@ -674,8 +662,13 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
         reasons.append(f"signature scheme {signed.scheme!r} is not accepted")
     elif signed.public_key not in trusted:
         reasons.append("the session is signed by a key that is not a trusted memory challenger's")
-    elif not _verifies(verify, signed):
-        reasons.append("the signature does not verify")
+    else:
+        try:
+            ok = bool(verify(signed.public_key, signed.commitment.session, signed.message(), signed.signature))
+        except Exception:  # noqa: BLE001 - a malformed signature verifies nothing
+            ok = False
+        if not ok:
+            reasons.append("the signature does not verify")
     if signed.commitment != commitment:
         reasons.append("the signed header is not the session's commitment")
     if signed.ended != COMPLETE or len(signed.rounds) != commitment.k:
