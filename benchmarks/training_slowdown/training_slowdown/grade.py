@@ -267,10 +267,10 @@ def checkpoints(run: dict, start: str) -> list[dict]:
     out = []
     exact = gates.exact_under_tf32(run["record"])
     if exact:
-        raise ValueError(f"grade: the record at {where} states torch's TF32 switch on, and its op log names "
-                         f"{len(exact)} GEMM ops float32, the exact product ({', '.join(exact[:4])}"
-                         f"{' and more' if len(exact) > 4 else ''}): under the switch a GPU computes a float32 GEMM "
-                         f"in TF32, at another price. Either {TF32_FIX}")
+        raise ValueError(f"grade: the record at {where} states torch's TF32 switch on, and its op log names GEMM ops "
+                         f"float32, the exact product ({', '.join(exact[:4])}"
+                         f"{f' and {len(exact) - 4} more' if len(exact) > 4 else ''}): under the switch a GPU "
+                         f"computes a float32 GEMM in TF32, at another price. Either {TF32_FIX}")
     try:
         rows = rows_of(run["record"])
     except gates.Unpriced as e:

@@ -613,7 +613,7 @@ def test_a_record_that_states_tf32_on_and_names_a_gemm_float32_is_refused_with_b
     log named no dtype it is one that names none."""
     ref = [stating(named(job([UNDER])))]
     with pytest.raises(ValueError, match=r"^grade: the record at seed 0, final states torch's TF32 switch on, and its "
-                                         r"op log names 1 GEMM ops float32, the exact product \(fwd mm\): ") as e:
+                                         r"op log names GEMM ops float32, the exact product \(fwd mm\): ") as e:
         graded([stating(named(job([UNDER])), **on)], ref)
     assert str(e.value).endswith(f"Either {G.TF32_FIX}") and "name those rows `tf32`" in G.TF32_FIX
     assert "torch.backends.cuda.matmul.allow_tf32 = False" in G.TF32_FIX
