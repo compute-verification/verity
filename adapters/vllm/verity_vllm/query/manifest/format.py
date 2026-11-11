@@ -15,7 +15,7 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
 * Build inputs       -- `load_program`, `program_dirs_for` / `programs_for` (one request Program per declared (prompt_len, cap-1) shape)
 
 Which Values are required is the query's: `verity_vllm.query` (`required.QUERY_OF_RECORD`, Q_word v1 since the re-baseline; TP rank Programs
-too, with its rank policy).  Dependency-free (json/hashlib) but for `load_program`, which reads through `program.instances_file`.
+too, with its rank policy).  Dependency-free (json/hashlib, and `SCHEMA` from `verity_vllm.records`) but for `load_program`, which reads through `program.instances_file`.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ import os
 import re
 from typing import Any, Callable, Iterable
 
-SCHEMA = "verity-sweep/required-manifest/v1"
+from verity_vllm.records.required_manifest import SCHEMA
 
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 
