@@ -74,7 +74,8 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     set +a
     bad=0
     no() { echo "SETTINGS refused: $*"; bad=3; }
-    for want in POUW=pearlplus PEARLPLUS_TIE=1 PRODUCT=remote; do
+    # WC_RECORD=0: the class of record's measurement, which gates nothing and nothing reads, is left out of the serve
+    for want in POUW=pearlplus PEARLPLUS_TIE=1 PRODUCT=remote WC_RECORD=0; do
       v=${want%%=*}
       [ "${!v-}" = "${want#*=}" ] || no "$v is ${!v-unset}, and the rehearsal serves at $want"
     done
