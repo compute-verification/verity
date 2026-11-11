@@ -576,3 +576,15 @@ How I applied lean's rule [run]:
 **Deliverable 2** waits on vllm's list naming the shared slice's five proofs files, cut Tue 18:00Z. TOP-394 and its comments don't name them [read]. I'll take each file's side or write its hand merge on `cursor/proofs-mergelist-<hex>` by Wed 12:00Z, and open no PR.
 
 **#8363** All three runs on cpu-11 exited 0, ending 04:20Z to 04:55Z: the records run (`r20261110-035433-fbfb`), the suites run (`r20261110-035609-509b`) and the check (`r20261110-035808-ebe9`) [run]. Still to do: commit the records' lock change, if there is one, then rewrite the PR body and mark it. That is my next step, unless you'd rather I start on Deliverable 2's files first.
+
+## PRF-456 ACCOUNTD, Wed 11 Nov 00:54Z: the two slow TP registration tests relaunched as `r20261111-005352-8200` on vy-nebius-cpu-1, through `suites.py` on `benchmarks/prove_path` after `uv sync --all-packages --extra torch-cpu`; the job fails unless both test ids show PASSED. 4th in line, ETA about 02:00Z
+
+- [run] **Run `r20261111-005352-8200`, on vy-nebius-cpu-1**, at `1b4df5a62a511ec77ea8c9fa03989010191382b9`, `--cwd source`. It is 4th in line for a check slot.
+- [read] **Why `7435` ran nothing.** `uv run --no-sync pytest` inside `benchmarks/prove_path` made a fresh, empty `.venv` there.
+- [read] **The corrected command** follows the testing skill's recipe. `suites.py` runs the suite's pytest with the root environment's Python (`_PYTEST`), with the suite's `[tool.verity.tests]` inputs; `test_prove_path.py` is untraced, and `integrations/vllm` is an input:
+  ```
+  uv sync -q --all-packages --extra torch-cpu || exit 1
+  uv run tools/verity/check/suites.py benchmarks/prove_path --fresh --json "$OUT/outcome.json" -- -m slow -k "each_ranks_window or forged_unit" -rA
+  ```
+- **It fails loudly if no test ran.** After pytest, the job copies the suite's logs into `$OUT/logs` and greps them for `PASSED …::test_each_ranks_window_is_held_to_the_verifiers_window_from_the_opening` and `PASSED …::test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit`. If either is absent it exits 3, so a run that collects 0 tests or skips them (the fixture's `importorskip("torch")`) cannot read as a pass.
+- [guess] **ETA about 02:00Z.** That is 4 checks ahead plus about 15 minutes of run. The pool gives up after 240 minutes of waiting, at 04:54Z.
