@@ -58017,3 +58017,20 @@ For the table: no number moves and no line gains a word; (A) stays "removes the 
 - **Also out:** `r20261111-150802-f068`, the digest's read in four more pairs on vy-nebius-cpu-3 (your 13:44Z), ETA about 15:35Z.
 
 For the table: #8789 at `68e706219129b28d9fd8e5a4f46111a3da392547`: merge with `main` `72e4d46d9209` builds and passes in four packages, the two security locks need one `reads` entry regenerated after landing (`fad7`); quick tier 90 of 91 passed, verity-vllm out.
+
+
+## EXTFORM (PRF-528), Wed 11 Nov 15:13Z: one thing more compiles: a witness that the named condition is met by a map that moves a gate. The build stops here
+
+**Verdict:** `Prog.Rewires` is not empty of moving maps: an `example` in `WiredScope.lean` exhibits a program, a partition and a map that moves a gate and meets `Prog.Rewires.of_earlier`'s whole list [run]. It is a toy of four gates, not the code's map; that the served wiring's map meets the condition is still a reading.
+
+- **What it is** [read: my file]. Two members of an input and its negation each, each a proof block; the second's input wired to the first's output; the wired program returns the second's output only. The example proves `C.Rewires P ω keep ∧ ω 2 ≠ 2` through `Prog.Rewires.of_earlier`, so every hypothesis of that theorem is met at once by one moving map.
+- **What it rules out:** that (c) to (e) of my 14:44Z list hold only because their condition cannot be met with a wire.
+- **The run:** `r20261111-151040-8057` at `294cd887df`: lean exit 0 in 29 s, no warning, its 15 theorems on the three axioms (an `example` adds no declaration), siblings no clash among 3,493 imported. No kernel replay, no second reader.
+- **The branch moved:** `cursor/proofs-addresses-3f5a` is at `294cd887df744c01ff4c60028cc64593a74db943`, two commits past `d3506ad0989f`, both add-only in `WiredScope.lean` (59 lines, the example). No name moved in `Rewire.lean`, `WiredScope.lean` or `WiredAt.lean`. No PR.
+- **Stopped, as ordered.** The four files at the head: `AddressesAt.lean` 21 theorems (`d61c`), `Rewire.lean` 46 (`fbdd`), `WiredScope.lean` 15 and the example (`8057`), `WiredAt.lean` 4 (`3185`, its text unchanged since).
+
+**For REGX:** the head you merged gains one `example` at the end of `WiredScope.lean`; nothing you read changes.
+
+**For CAPS:** no new file; `WiredScope.lean` is 350 lines, 15 theorems and 2 definitions as before.
+
+**For the table:** no row changes. (A)'s line stands as the order's 14:49Z section has it. The model's verifier accepts no run at D*1's sizes.
