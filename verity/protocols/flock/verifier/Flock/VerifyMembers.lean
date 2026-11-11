@@ -24,7 +24,9 @@ member's line when that member is ready and read its verdicts before it writes t
 which the output is flushed. `E` is the exit status `verify` ends with on those arguments: 0 when every session is
 accepted, 1 when one is refused or an exception stopped it, 2 when it stopped before any session (its usage, an input it
 cannot read). A line that is no argument list gets no verdict and `MEMBER {"error":WHY,"exit":2,"index":I}`. Standard
-error holds what `verify` writes there for each member, in order.
+error holds what `verify` writes there for each member, in order, and is flushed before that member's `MEMBER` line is
+written: a caller that writes a member's line only once the member before it is answered finds there, when a `MEMBER`
+line arrives, the lines of the members answered so far, that member's last, and nothing else.
 
 **Its exit status** is 0 when every member's is 0, else 1; 2, before any member is read, when its own `--program` is not
 given or cannot be read.
@@ -79,10 +81,12 @@ def memberLine (index : Nat) (status : UInt32) (error : Option String := none) :
 
 /-- `verify-members`' loop: `member` on each line of standard input in order, as the module's text above says. `member` is
 handed one member's argument list and nothing else, and the loop keeps of a member only whether its exit status was 0.
-An exception `member` throws ends that member alone, with the line and the status 1 an uncaught one ends `verify` with. -/
+An exception `member` throws ends that member alone, with the line and the status 1 an uncaught one ends `verify` with.
+Standard error is flushed before a member's `MEMBER` line is written. -/
 def run (member : List String → IO UInt32) : IO UInt32 := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
+  let stderr ← IO.getStderr
   let mut index := 0
   let mut all := true
   repeat
@@ -99,6 +103,7 @@ def run (member : List String → IO UInt32) : IO UInt32 := do
       | .error e =>
         IO.eprintln s!"verify-members: member {index}: {e}"
         pure (2, some e)
+    stderr.flush
     stdout.putStrLn (memberLine index done.1 done.2)
     stdout.flush
     all := all && done.1 == 0

@@ -123,7 +123,11 @@ names.
 read once (`Flock.VerifyMembers`, whose module text is its contract). Standard input holds a line a member, the JSON
 array of `verify`'s arguments for it. For each, in order, it prints the lines `verify` prints for that member alone,
 byte for byte, then `MEMBER {"exit", "index"}` with the exit status `verify` ends with on those arguments, and reads the
-next line only then. A member's check is `verify` (`verifyMember_eq`), and nothing crosses from one member to the next
+next line only then. Standard error is flushed before a member's `MEMBER` line is written, so a caller that writes a
+line only once the one before it is answered finds there, at each `MEMBER` line, what `verify` writes for that member
+after what it wrote for the members before.
+
+A member's check is `verify` (`verifyMember_eq`), and nothing crosses from one member to the next
 but the kept program's digest and readings, which a member receives only where its own `--program` holds the kept
 bytes: another program is read anew. It exits 0 iff every member's status is 0, and 2 before any member without a
 program it can read. A caller takes as refused every session of a member with no `MEMBER` line, and every session of
