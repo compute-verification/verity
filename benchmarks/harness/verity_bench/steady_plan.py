@@ -9,7 +9,10 @@ verdict a run wrote of itself is never read. Two kinds of run can be it:
   time depends on), which ran to its end (exit 0 or `steady_spec.NOT_PASSED`) from a clean tree;
 - **a labelled row**: a row of a run of the workload's steady-state record (`prove_records.STEADY`: a labelled run, or a
   run a labelled art names), timed before the harness or outside it, whose `pin`, `provers` and `cores.count` are the
-  point's. `LABELLED_ROW` says which row of such a run is judged against its files.
+  point's. The row judged against the run's files is the run's own, or, where a labelled art holds the run's rows as
+  completed after it (`completed_rows`), the art's: such an art names that one run in its `runs`, carries the rows'
+  derivation from the run's own records (`DERIVATION`) and isn't superseded. So a run from before the timing script
+  wrote a field a check reads counts on its completed row, and one with no such art is "cannot tell" and timed again.
 
 A point with no passing run is launched again by `run`, and `plan` says why each run that could have been it isn't
 (`PlannedPoint.why`): the check it failed, or the one its files can't show.
@@ -31,11 +34,9 @@ from verity_config import sha256
 from verity_bench import jobs, prove_records, served_table, steady, steady_spec
 from verity_bench.steady_spec import SteadyPoint, SteadySpec
 
-OWN, COMPLETED = "own", "completed"
-#: Which row of a labelled run is judged against the run's files. `OWN`: the row in the run's own rate file, so a run
-#: whose own row lacks what a check reads is "cannot tell" and is planned again. `COMPLETED`: where the record is an art
-#: that holds the row as completed or corrected after the run (`prove_records.ART_RATES`), that row.
-LABELLED_ROW = OWN
+#: beside a labelled art's rows of a run (`prove_records.ART_RATES`): how each field the art added to the run's own rows
+#: was derived from the run's own records
+DERIVATION = "derivation.json"
 #: the runs `plan` names in a point's `why`, the newest first
 WHYS = 3
 
@@ -79,36 +80,76 @@ def _superseded(store: Any, target: str) -> bool:
     return bool(store.labels(target, key=served_table.SUPERSEDED_BY))
 
 
-def labelled_rows(store: Any, record: str) -> list[tuple[str, Mapping[str, Any], RunFiles]]:
-    """Each row of the record's runs, with its run and the run's files: a labelled run's own rows; the rows of each run
-    a labelled art names; and for an art that holds one run's rows itself, that run's own rows or the art's
-    (`LABELLED_ROW`). A superseded target, a run that kept no files and a rate file that can't be read give none."""
+def _named(art: str) -> str:
+    return f"{art[:16]}…"
 
-    found: list[tuple[str, Mapping[str, Any], RunFiles]] = []
+
+def completed_rows(store: Any, art: str) -> tuple[list[str], list[Any] | str | None]:
+    """A labelled art as one run's rows, completed after the run: the runs its meta names, and its rows where they are
+    taken as that run's. They are taken when the art names the one run in `runs`, carries the rows' derivation
+    (`DERIVATION`) and isn't superseded. Otherwise, in the rows' place: why they aren't taken, or None for an art that
+    holds no rows (it stands for the runs it names)."""
+
+    manifest = store.get_manifest(art)
+    named = [run for run, _ in served_table.record_runs(store, [art])] if manifest.meta.get("runs") else []
+    path = prove_records.ART_RATES
+    if manifest.payload is None or not store.listing(art, [path]):
+        return named, None
+    if _superseded(store, art):
+        return named, f"{_named(art)} is superseded"
+    if len(named) != 1:
+        return named, f"{_named(art)} holds `{path}` and names {len(named)} runs: an art's rows are one run's"
+    if not store.listing(art, [DERIVATION]):
+        return named, f"{_named(art)} holds its rows without their derivation from the run's records (`{DERIVATION}`)"
+    try:
+        rows = json.loads((Path(store.fetch(art, paths=[path])) / path).read_text())
+    except json.JSONDecodeError as e:
+        return named, f"`{path}` of {_named(art)} isn't JSON ({e.msg})"
+    return named, rows if isinstance(rows, list) else f"`{path}` of {_named(art)} isn't a list of rows"
+
+
+@dataclass(frozen=True)
+class Labelled:
+    """A row of a run of a workload's steady-state record, with the run's files. `held`: for a row that isn't from the
+    run's own rate file, where it is from; for one that is while an art holds rows of the run, why those aren't taken."""
+
+    run: str
+    row: Mapping[str, Any]
+    files: RunFiles
+    held: str | None = None
+
+
+def labelled_rows(store: Any, record: str) -> list[Labelled]:
+    """Each row of the record's runs: the runs labelled into it and the runs its labelled arts name. A run's rows are
+    its own rate file's, or, where a labelled art holds them completed (`completed_rows`), the art's. A superseded run,
+    the runs of a superseded art, a run that kept no files and a rate file that can't be read give none."""
+
+    runs: dict[str, None] = {}
+    completed: dict[str, tuple[str, list[Any]]] = {}
+    untaken: dict[str, str] = {}
     for target in served_table.records(store).get(record, []):
-        if _superseded(store, target):
+        if not target.startswith("art:"):
+            runs[target] = None
             continue
-        completed = None
-        if target.startswith("art:"):
-            manifest = store.get_manifest(target)
-            if not manifest.meta.get("runs"):
-                continue
-            runs = [run for run, _ in served_table.record_runs(store, [target]) if not _superseded(store, run)]
-            if manifest.payload is not None and store.listing(target, [prove_records.ART_RATES]):
-                if len(runs) != 1:
-                    continue
-                if LABELLED_ROW == COMPLETED:
-                    path = prove_records.ART_RATES
-                    completed = json.loads((Path(store.fetch(target, paths=[path])) / path).read_text())
+        named, rows = completed_rows(store, target)
+        if isinstance(rows, list):
+            completed[named[0]] = (target, rows)
+        elif rows is not None:
+            untaken |= dict.fromkeys(named, rows)
+        if not _superseded(store, target) and (rows is None or len(named) == 1):
+            runs |= dict.fromkeys(named)
+    found: list[Labelled] = []
+    for run in runs:
+        files = None if _superseded(store, run) else run_files(store, run)
+        if files is None:
+            continue
+        if run in completed:
+            art, rows = completed[run]
+            held = f"its row as completed in {_named(art)}"
         else:
-            runs = [target]
-        for run in runs:
-            files = run_files(store, run)
-            if files is None:
-                continue
-            rows = steady_spec.rows(files) if completed is None else completed
-            if isinstance(rows, list):
-                found += [(run, row, files) for row in rows if isinstance(row, Mapping)]
+            rows, held = steady_spec.rows(files), (f"its own row: {untaken[run]}" if run in untaken else None)
+        if isinstance(rows, list):
+            found += [Labelled(run, row, files, held) for row in rows if isinstance(row, Mapping)]
     return found
 
 
@@ -122,7 +163,7 @@ class SteadyCompletion:
         self._base = jobs.StoreCompletion(store, root=root, local_only=local_only, log=log)
         self.root, self.local_only, self._since = root, local_only, since
         self._pulled = False
-        self._labelled: dict[str, list[tuple[str, Mapping[str, Any], RunFiles]]] = {}
+        self._labelled: dict[str, list[Labelled]] = {}
 
     @property
     def store(self) -> Any:
@@ -162,13 +203,13 @@ class SteadyCompletion:
         record = prove_records.WORKLOADS[spec.workload].record(prove_records.STEADY)
         if record not in self._labelled:
             self._labelled[record] = labelled_rows(store, record)
-        for run, row, files in sorted(self._labelled[record], key=lambda found: found[0], reverse=True):
-            if row.get("pin") != item.row.pin or row.get("provers") != item.provers:
+        for found in sorted(self._labelled[record], key=lambda found: found.run, reverse=True):
+            if found.row.get("pin") != item.row.pin or found.row.get("provers") != item.provers:
                 continue
-            why = steady_spec.point_why(row, files, spec, item)
+            why = steady_spec.point_why(found.row, found.files, spec, item)
             if why is None:
-                return run, None
-            whys.append(f"{run} (labelled `{record}`): {why}")
+                return found.run, None
+            whys.append(f"{found.run} (labelled `{record}`{f', {found.held}' if found.held else ''}): {why}")
         more = f"; and {len(whys) - WHYS} more" if len(whys) > WHYS else ""
         return None, ("; ".join(whys[:WHYS]) + more) or None
 

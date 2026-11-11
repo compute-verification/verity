@@ -14,8 +14,8 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
    `--inside`): it reads the card, the driver's version and the toolkit's on the node and refuses a card or a version
    that isn't the spec's; records what else is on the node (`steady.card_file`) before and after;
    runs `benchmarks/one_stage/server_rate.py` at the point's load (`steady_spec.timed_sessions`); and keeps the row,
-   with the versions it read (`steady_spec.VERSIONS`) and the bursts its sessions were sized by (`steady_spec.BURSTS`),
-   and the sessions' record under `out/rate/`.
+   with the versions it read (`steady_spec.VERSIONS`) and the period its sessions were sized by (`steady.PERIOD`, which
+   `level` reads), and the sessions' record under `out/rate/`.
 3. **After the lease has ended**, so that its usage line is among the run's files, the verdict: the row is a passed point
    when `steady_spec.point_why` finds nothing against it, from the run's own files. `result.json` passes with it.
 
@@ -215,12 +215,12 @@ def snapshot(path: Path, run_id: str, ask: Asker, now: Callable[[], float]) -> N
 
 def keep(scratch_rate: Path, out_rate: Path, item: steady_spec.SteadyPoint, read: Mapping[str, str]) -> int:
     """The step's records under `out/rate/`: the script's rows, each with the versions this step read on the node and
-    the bursts its timed sessions were sized by, the sessions' record, the device's samples and the end of each log. The verifiers' session files stay in the scratch.
-    How many rows it kept."""
+    the period its timed sessions were sized by (a row that declares one), the sessions' record, the device's samples
+    and the end of each log. The verifiers' session files stay in the scratch. How many rows it kept."""
 
     out_rate.mkdir(parents=True, exist_ok=True)
     rates = scratch_rate / "rate.json"
-    more = {steady_spec.VERSIONS: dict(read), **({steady_spec.BURSTS: item.bursts} if item.bursts else {})}
+    more = {steady_spec.VERSIONS: dict(read), **({steady.PERIOD: item.row.period} if item.row.period else {})}
     rows = [{**row, **more} for row in (json.loads(rates.read_text()) if rates.is_file() else [])]
     _write(out_rate / "rate.json", rows)
     step = scratch_rate / f"{item.row.name}-k{item.provers}"

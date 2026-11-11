@@ -28,8 +28,8 @@ Standard library and `verity_config` only: the node side reads it too.
 times whatever it is told (`FLOOR`), and for a row with a `period` the next count whose rated window holds a whole
 number of bursts, a multiple of three: a burst is `period` sessions a prover, and a
 window or a third of one that cuts a burst reads the burst's phase and not the rate. The period is declared, never read
-off the run's first sessions: the count is then fixed before the run and is the point's. The node side writes what it
-used in the row (`BURSTS`).
+off the run's first sessions: the count is then fixed before the run and is the point's. The node side writes the
+period in the row (`steady.PERIOD`), where `level` reads it and cuts the window at whole bursts.
 
 **A point's identity** (`point_identity`) is a digest of everything its time depends on, and of nothing else: its row's
 `type`, `n`, `pin`, `warm` and `period`, its prover count, the spec's `card`, `cores`, `sessions`, `ahead`, `driver`,
@@ -41,7 +41,7 @@ node whose versions aren't the spec's, and writes them in the row (`VERSIONS`).
 
 **A passed point** (`point_why`): a row whose `pin`, `provers` and `cores.count` are the point's and its spec's, and
 that passes `steady`'s nine checks against the files of the run that measured it. A row of a run of the point itself
-also holds the point's load (its timed and warm sessions, its bursts) and the versions read on the node.
+also holds the point's load (its timed and warm sessions, its period) and the versions read on the node.
 """
 
 from __future__ import annotations
@@ -68,9 +68,6 @@ CLOSURE = ("verity/protocols/flock/prover", "verity/protocols/flock/pod", "bench
 NOT_SOURCE = re.compile(r"(^|/)(tests|__pycache__)/|\.(md|pyc)$")
 #: the row's field for the versions the node side read on the node: the driver's and the toolkit's
 VERSIONS = "versions"
-#: the row's field for the bursts the node side sized the timed sessions by, in a row with a `period`: the period, a
-#: burst's sessions (the period times the provers) and the bursts in the rated window
-BURSTS = "bursts"
 STAGER = "benchmarks/served_units/stage.py"
 TIMER = "benchmarks/one_stage/server_rate.py"
 #: the node side's exit code for a point that was timed and whose row isn't a passed point; 0 is a passed point's
@@ -140,15 +137,6 @@ class SteadyPoint:
     @property
     def id(self) -> str:
         return f"{self.row.name}-k{self.provers}"
-
-    @property
-    def bursts(self) -> dict[str, int] | None:
-        """What a row of the point records of its bursts (`BURSTS`); None for a row without a `period`."""
-
-        if self.row.period is None:
-            return None
-        burst = self.row.period * self.provers
-        return {"period": self.row.period, "sessions": burst, "window": window_gaps(self.sessions, self.provers) // burst}
 
     def to_json(self) -> dict[str, Any]:
         row = self.row
@@ -338,7 +326,7 @@ def point_why(row: Mapping[str, Any], files: steady.Files, spec: SteadySpec, ite
               own: bool = False) -> str | None:
     """Why a row of a run isn't a passed point of the spec, or None when it is one: its `pin`, `provers` and
     `cores.count` are the point's, and it passes the nine checks against the run's `files`. `own`: the row is a run of
-    the point's own identity, so it also holds the point's load (its timed and warm sessions, its bursts) and the
+    the point's own identity, so it also holds the point's load (its timed and warm sessions, its period) and the
     versions the node side read, the spec's."""
 
     if row.get("pin") != item.row.pin:
@@ -355,9 +343,9 @@ def point_why(row: Mapping[str, Any], files: steady.Files, spec: SteadySpec, ite
     if own and (row.get("sessions"), row.get("warm")) != (item.sessions, item.row.warm):
         return (f"{steady.FAIL}: it timed {row.get('sessions')!r} sessions after {row.get('warm')!r} warm ones a prover; "
                 f"the point's are {item.sessions} and {item.row.warm}")
-    if own and row.get(BURSTS) != item.bursts:
-        return (f"{steady.CANNOT_TELL}: its row's `{BURSTS}` ({row.get(BURSTS)!r}) aren't the point's "
-                f"({item.bursts!r}), which size its timed sessions")
+    if own and row.get(steady.PERIOD) != item.row.period:
+        return (f"{steady.CANNOT_TELL}: its row's `{steady.PERIOD}` ({row.get(steady.PERIOD)!r}) isn't the point's "
+                f"({item.row.period!r}), which sizes its timed sessions and cuts its window")
     if own and row.get(VERSIONS) != versions(spec):
         return (f"{steady.CANNOT_TELL}: its row's `{VERSIONS}` ({row.get(VERSIONS)!r}) aren't the spec's driver and "
                 "toolkit, read on the node")

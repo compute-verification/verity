@@ -16,6 +16,7 @@ from test_steady import DROP, END, SESSIONS, START, lease, made
 from verity_config import ConfigError
 
 from verity_bench import jobs, settings
+from verity_bench import prove_records as R
 from verity_bench import steady as S
 from verity_bench import steady_node as N
 from verity_bench import steady_plan as P
@@ -293,26 +294,30 @@ def test_a_declared_period_sizes_the_timed_sessions_so_the_window_and_its_thirds
 
 def test_thirds_that_cut_a_burst_read_uneven_and_the_points_count_reads_whole_bursts(tmp_path):
     """Two provers whose sessions file in bursts of eight. At 16 timed sessions the window is 12 gaps, a burst and a
-    half, and its thirds read the burst's phase; at the count a period of four gives, 28, each third is one burst."""
+    half, and its thirds read the burst's phase; at the count a period of four gives, 28, each third is one burst, and
+    the row, which says its period, reads the same by its thirds and by its whole bursts."""
 
     spec = load(tmp_path, spec={"row0": {"period": 4}})
     item = SP.point(spec, POINT)
-    assert item.sessions == 28 and item.bursts == {"period": 4, "sessions": 8, "window": 3}
-    assert SP.point(spec, "gemm64-k1").bursts == {"period": 4, "sessions": 4, "window": 6}
-    assert SP.point(spec, "head_block-k2").bursts is None
+    assert item.sessions == 28 and item.to_json() | {"period": 4, "sessions": 28} == item.to_json()
 
-    row, files = made(OWN | {SP.BURSTS: item.bursts}, gaps=(BURSTY * 4)[:15])
+    row, files = made(OWN, gaps=(BURSTY * 4)[:15])
     assert row["sessions"] == 16
     cut = S.verdict(row, files)
     assert [check.name for check in cut.checks if not check.ok] == ["level"] and "its window isn't level" in cut.why
     assert SP.point_why(row, files, spec, item, own=True).startswith("fail: it timed 16 sessions after 2 warm ones")
 
-    row, files = made(OWN | {SP.BURSTS: item.bursts}, gaps=(BURSTY * 4)[:27])
+    row, files = made(OWN | {S.PERIOD: 4}, gaps=(BURSTY * 4)[:27])
     assert row["sessions"] == 28 and row["window_sessions"] == 24
     assert S.verdict(row, files).passed and SP.point_why(row, files, spec, item, own=True) is None
+    assert S.verdict(row | {S.PERIOD: None}, files).passed, "its thirds are whole bursts"
     for shifted in range(1, 8):
-        row, files = made(OWN | {SP.BURSTS: item.bursts}, gaps=(BURSTY * 5)[shifted:shifted + 27])
+        row, files = made(OWN | {S.PERIOD: 4}, gaps=(BURSTY * 5)[shifted:shifted + 27])
         assert SP.point_why(row, files, spec, item, own=True) is None, f"whatever the burst's phase ({shifted})"
+    silent = {k: v for k, v in row.items() if k != S.PERIOD}
+    assert SP.point_why(silent, files, spec, item, own=True) == (
+        "cannot tell: its row's `period` (None) isn't the point's (4), which sizes its timed sessions and cuts its window")
+    assert SP.point_why(silent, files, spec, item) is None, "a row timed outside the harness is judged as it declares"
 
 
 # ---- a point's passing run -------------------------------------------------------------------------------------------------
@@ -445,8 +450,8 @@ NOT_IT = [
     ({}, {"changes": {SP.VERSIONS: DROP}}, "cannot tell: its row's `versions` (None) aren't the spec's"),
     ({}, {"changes": {"sessions": 15}}, "fail: it timed 15 sessions after 2 warm ones a prover; the point's are 16 and 2"),
     ({}, {"changes": {"warm": 1}}, "fail: it timed 16 sessions after 1 warm ones a prover; the point's are 16 and 2"),
-    ({}, {"changes": {SP.BURSTS: {"period": 4, "sessions": 8, "window": 1}}},
-     "cannot tell: its row's `bursts` ({'period': 4, 'sessions': 8, 'window': 1}) aren't the point's (None)"),
+    ({}, {"changes": {S.PERIOD: 2}},
+     "cannot tell: its row's `period` (2) isn't the point's (None), which sizes its timed sessions and cuts its window"),
     ({}, {"changes": {"type": "gemm32"}}, "cannot tell: the run's `out/rate/rate.json` holds 0 rows of `gemm64` at 2 provers"),
 ]
 
@@ -504,33 +509,86 @@ def test_a_labelled_row_whose_files_cannot_show_a_check_is_timed_again_and_plan_
     assert found is None and why.startswith(f"{run} (labelled `{RECORD}`): {says}"), why
 
 
-def test_which_row_of_a_labelled_run_is_judged_is_one_constant(planned, monkeypatch):
-    """A run from before the script wrote `flat`, and an art of the record that holds its row completed. By default the
-    run's own row is judged, and it can't show the check; `COMPLETED` judges the art's row against the run's files."""
+def completed(store: Store, run: str, files: Path, changes: dict, *, runs: list[str] | None = None,
+              derivation: bool = True) -> str:
+    """An art of the record that holds a run's rows as completed after it: the run's own rows with `changes`, the run
+    named in the art's `runs` (or `runs`), and, unless `derivation` is False, how the changed fields were derived."""
+
+    rows = [row | changes for row in json.loads((files / S.RATES).read_text())]
+    store._n += 1
+    (directory := store.tmp / f"completed{store._n}").mkdir()
+    (directory / R.ART_RATES).write_text(json.dumps(rows))
+    if derivation:
+        (directory / P.DERIVATION).write_text(json.dumps({"rows": [{"fields": sorted(changes)}]}))
+    art = store.art("evidence/v1", {"runs": [run] if runs is None else runs}, directory)
+    store.label(art, "run_of_record", RECORD)
+    return art
+
+
+def test_a_run_from_before_a_field_counts_on_its_completed_row_in_a_labelled_art(planned):
+    """A run from before the timing script wrote `flat`. Its own row can't show the check. An art of the record that
+    names the run, holds its rows with the field and says how the field was derived gives the row that is judged,
+    against the run's own files; and that row is held to every check as the run's own would be."""
 
     spec, item, identity, store = planned
-    assert P.LABELLED_ROW == P.OWN
     files = store.files({SP.VERSIONS: DROP, "flat": DROP})
     run = store.ran("r20231114-100000-0001", files)
-    completed = json.loads((files / S.RATES).read_text())
-    completed[0]["flat"] = True
-    (rows := store.tmp / "completed").mkdir()
-    (rows / "rate.json").write_text(json.dumps(completed))
-    art = store.art("prove-steady/v1", {"runs": [run]}, rows)
-    store.label(art, "run_of_record", RECORD)
-
+    store.label(run, "run_of_record", RECORD)
     found, why = store.lookup()(spec, item, identity)
     assert found is None and why.startswith(f"{run} (labelled `{RECORD}`): cannot tell: `flat` (cannot tell): "), why
-    monkeypatch.setattr(P, "LABELLED_ROW", P.COMPLETED)
+
+    art = completed(store, run, files, {"flat": True})
     assert store.lookup()(spec, item, identity) == (run, None)
 
-    completed[0]["accepted"] = 19
-    (again := store.tmp / "completed-again").mkdir()
-    (again / "rate.json").write_text(json.dumps(completed))
-    store.label(art, "superseded_by", newer := store.art("prove-steady/v1", {"runs": [run]}, again))
-    store.label(newer, "run_of_record", RECORD)
+    unnamed = store.ran("r20231114-110000-0002", store.files({SP.VERSIONS: DROP, "flat": DROP}))
+    assert store.lookup()(spec, item, identity) == (run, None), "a run no label and no labelled art names"
+
+    store.label(art, "superseded_by", newer := completed(store, run, files, {"flat": True, "accepted": 19}))
     found, why = store.lookup()(spec, item, identity)
-    assert found is None and "fail: `accepted` (fail): 19 of its 20 sessions accepted" in why, "the completed row is checked too"
+    assert found is None and why == (f"{run} (labelled `{RECORD}`, its row as completed in {newer[:16]}…): fail: "
+                                     "`accepted` (fail): 19 of its 20 sessions accepted"), why
+    assert unnamed not in why
+
+
+#: an art that holds a labelled run's rows completed and isn't taken as them, and what `plan` then says of the run
+UNTAKEN = [
+    ({"runs": ["r20231114-100000-0001", "r20231114-090000-0000"]},
+     "holds `rate.json` and names 2 runs: an art's rows are one run's"),
+    ({"derivation": False}, "holds its rows without their derivation from the run's records (`derivation.json`)"),
+    ({"superseded": True}, "is superseded"),
+]
+
+
+@pytest.mark.parametrize("how, says", UNTAKEN, ids=[says[:28] for _, says in UNTAKEN])
+def test_a_completed_row_counts_only_from_an_art_that_names_the_run_carries_its_derivation_and_stands(planned, how, says):
+    """Each condition alone: the art's row would pass, it isn't taken, and the run is judged on its own row, which
+    can't show `flat`: "cannot tell", so the point is timed again, and `plan` says why the art's row wasn't taken."""
+
+    spec, item, identity, store = planned
+    files = store.files({SP.VERSIONS: DROP, "flat": DROP})
+    run = store.ran("r20231114-100000-0001", files)
+    store.label(run, "run_of_record", RECORD)
+    how = dict(how)
+    superseded = how.pop("superseded", False)
+    art = completed(store, run, files, {"flat": True}, **how)
+    if superseded:
+        store.label(art, "superseded_by", "art:" + "9" * 64)
+    found, why = store.lookup()(spec, item, identity)
+    assert found is None and why == (f"{run} (labelled `{RECORD}`, its own row: {art[:16]}… {says}): cannot tell: "
+                                     "`flat` (cannot tell): its row lacks `flat`"), why
+
+
+def test_a_run_is_cannot_tell_where_neither_its_own_row_nor_its_completed_one_holds_the_field(planned):
+    spec, item, identity, store = planned
+    files = store.files({SP.VERSIONS: DROP, "flat": DROP})
+    run = store.ran("r20231114-100000-0001", files)
+    art = completed(store, run, files, {"stage": {"definition": "Gemm_v1{K=64}", "k_log": 20, "blocks": 8, "full": 8}})
+    found, why = store.lookup()(spec, item, identity)
+    assert found is None and why == (f"{run} (labelled `{RECORD}`, its row as completed in {art[:16]}…): cannot tell: "
+                                     "`flat` (cannot tell): its row lacks `flat`"), why
+    # the run is the record's through the art alone, and stops being its when the art is superseded
+    store.label(art, "superseded_by", "art:" + "9" * 64)
+    assert store.lookup()(spec, item, identity) == (None, None)
 
 
 def test_a_run_of_the_point_is_preferred_and_plan_names_only_the_newest_few(planned):
@@ -821,13 +879,13 @@ def test_the_result_lists_every_file_plan_judges_the_run_by(tmp_path, monkeypatc
     assert SP.point_why(SP.own_row(files, item), files, spec, item, own=True) is None
 
 
-def test_the_node_side_times_a_row_with_a_period_at_the_points_count_and_records_its_bursts(tmp_path, monkeypatch):
+def test_the_node_side_times_a_row_with_a_period_at_the_points_count_and_records_the_period(tmp_path, monkeypatch):
     period = {"row0": {"period": 4}}
     node = Node(tmp_path, monkeypatch, spec=period, gaps=(BURSTY * 4)[:27])
     assert node.point() == 0
     assert node.timed[node.timed.index("--sessions") + 1] == "28", "not the spec's 16"
     [row] = node.read(S.RATES)
-    assert row[SP.BURSTS] == {"period": 4, "sessions": 8, "window": 3} and row["sessions"] == 28
+    assert row[S.PERIOD] == 4 and row["sessions"] == 28, "the field `level` reads"
     assert node.read(N.POINT_FILE)["point"] | {"period": 4, "sessions": 28} == node.read(N.POINT_FILE)["point"]
 
     short = Node(tmp_path / "short", monkeypatch, spec=period)
@@ -835,7 +893,7 @@ def test_the_node_side_times_a_row_with_a_period_at_the_points_count_and_records
     assert short.read(N.VERDICT_FILE)["why"].startswith("fail: it timed 16 sessions after 2 warm ones a prover; the "
                                                         "point's are 28 and 2")
     plain = Node(tmp_path / "plain", monkeypatch)
-    assert plain.point() == 0 and SP.BURSTS not in plain.read(S.RATES)[0], "a row without a period records none"
+    assert plain.point() == 0 and S.PERIOD not in plain.read(S.RATES)[0], "a row without a period records none"
 
 
 def test_a_statement_already_on_the_node_is_proved_from_a_copy_checked_against_the_pin(tmp_path, monkeypatch):
@@ -980,7 +1038,7 @@ def test_the_readme_states_a_steady_state_spec_as_the_code_keeps_it():
     readme = (Path(__file__).resolve().parents[1] / "README.md").read_text()
     section = readme[readme.index("## A steady-state spec"):readme.index("## Settings")]
     for name in (SP.SCHEMA, "verity_bench.tool:STEADY_POINT", "VERITY_BENCH_STEADY_BIN", "VERITY_BENCH_STEADY_PY",
-                 "benchmarks/harness/steady_point.sh", SP.STAGER, SP.TIMER, "steady_plan.LABELLED_ROW", SP.VERSIONS,
+                 "benchmarks/harness/steady_point.sh", SP.STAGER, SP.TIMER, "steady_plan.completed_rows", P.DERIVATION, SP.VERSIONS,
                  *SP.CLOSURE[:2], "out/verdict.json", "out/point.json"):
         assert f"`{name}`" in section, name
     assert (N.VERDICT_FILE, N.POINT_FILE) == ("out/verdict.json", "out/point.json")
