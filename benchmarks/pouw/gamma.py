@@ -33,7 +33,7 @@ SHAKE_PER_WORD = 2100
 D = 16                      # NCP's checked depth
 R = 32                      # Pearl's noise rank
 GAMMA0_NCP = Fraction(1, 200)
-WORKLOAD = Path(__file__).with_name("workloads.json")
+WORKLOAD = Path(__file__).resolve().parents[2] / "benchmarks/pouw/workloads.json"
 
 
 @dataclass(frozen=True)
