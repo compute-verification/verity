@@ -18,6 +18,25 @@ program, partition, port, schema, N leaves, run); a u32 is two u16 words, low fi
 The step shapes are no value: they choose the Programs, and the window's advice commits them. Each leaf's salt is fresh
 from the OS (`commit`).
 
+**The stop block**, in a class that registers a stop rule (`Layout.stop`: the registered model's stop ids, none under a
+schedule that ignores them, and its length): each replay block holds one instance of `egress_stop`, a proof block of the
+class's population beside its check's, whose bit is 1 exactly when the span's `b.egress` row ends where
+`StopRule_v1` computes from the row's own ids, so the ids served n is a function of committed values and not a
+number the prover states. Each of its ports is a value of its span, a parameter or an output of the replay block
+under the value's name (`stopped`), so round 2's links hold it to the boundary rows: `b.egress` whole, and three more
+values such a class commits (`STOP_VALUES`), one row a span each:
+
+| value | row |
+|---|---|
+| `b.max_tokens` | the request's own ``max_tokens``, a u32 |
+| `b.prompt_len` | the prompt's length, a u32 |
+| `o1` | the block's bit, a one: the replay block's second output, which the serve writes without a replay |
+
+The first two are `b.ingress`'s first two fields again, as rows a block can read whole; what holds either to the request
+the network certifier took in is the ingress tie's. A span the rule doesn't end as it was served (an abort, an error, a
+request still running, or an end the rule doesn't read: a body's own stop strings, ``min_tokens``, an ``ignore_eos``
+the class's rule doesn't share) is filed in the class without a stop block (`filed`, ``p<P>-o<O>-nostop``).
+
 **The replay block** (`Layout.replay`) is a stand-in until the class's request Definition lands: `per_prompt * P +
 per_output * O` instances of one check template (`population`), so a window committed under it is audited with that one
 template; or, ``inline``, those instances with each one's body in place (`inlined`), audited with the templates that body
@@ -25,7 +44,7 @@ calls, for a check template too large for one proof block whose pieces are. The 
 path stay as they are when the replay block becomes the class's own; its program, and so its domains, name whichever
 replay block it is configured with.
 
-**Files** (`write`), under ``w<window>/p<P>-o<O>/``: ``commit.json`` (public: the layout, each value's root, domain and
+**Files** (`write`), under ``w<window>/p<P>-o<O>[-nostop]/``: ``commit.json`` (public: the layout, each value's root, domain and
 leaves, the index's hiding leaf), and prover-only ``index.json`` (each span's engine id, prompt, sampling inputs, ids
 served and finish), ``index-salt.bin`` and ``salts.bin`` (every leaf's salt, value by value); `reopen` recommits from
 them and checks the roots.
@@ -55,8 +74,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.population import population
 from verity.circuits.program import Program
-from verity.circuits.refs import coll_concat
-from verity.circuits.types import Array
+from verity.circuits.refs import Coll, coll_concat, concat
+from verity.circuits.types import Array, Tuple
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
@@ -66,6 +85,11 @@ from verity_vllm.records.boundary_commit import FILE as COMMIT, SCHEMA as FORMAT
 SCHEMA = CS.SCHEMA_HM96_SHA512_ROW_V2
 INGRESS, EGRESS = "b.ingress", "b.egress"
 PORTS = (INGRESS, EGRESS)
+MAX_TOKENS, PROMPT_LEN = "b.max_tokens", "b.prompt_len"
+#: the stop block's output port, as round 2 names the value a return link reads: the replay block's second output
+STOP_OK = "o1"
+#: the values a class with a stop block commits beside `PORTS`, one row a span each: with `EGRESS`, the block's ports
+STOP_VALUES = (MAX_TOKENS, PROMPT_LEN, STOP_OK)
 MIN_CAP = 2
 #: `b.ingress`'s fields before its ids, each a u32 (``u64``: two, low first) of the request's own sampling inputs
 FIELDS = (("lp", "u32"), ("max_tokens", "u32"), ("min_tokens", "u32"), ("ignore_eos", "u32"), ("temperature", "f32"),
@@ -188,13 +212,121 @@ def inlined(template: SpecializedDefinition, n: int) -> SpecializedDefinition:
     return bind(defn, template=descriptor_id(template), N=n)
 
 
+def _stop_refusal(S: Mapping[str, Any]) -> str | None:
+    t, stop, mml = S.get("T", MIN_CAP), S.get("STOP", ()), S.get("MAX_MODEL_LEN", 1)
+    if not (type(t) is int and 1 <= t < (1 << 31) - 1 and isinstance(stop, tuple) and len(stop) < 1 << 16
+            and all(type(s) is int and 0 <= s < 1 << 32 for s in stop) and list(stop) == sorted(set(stop))
+            and type(mml) is int and 1 <= mml < 1 << 31):
+        return (f"T must be in [1, 2^31 - 1), STOP increasing u32 ids and MAX_MODEL_LEN in [1, 2^31) (got T={t!r}, "
+                f"STOP={stop!r}, MAX_MODEL_LEN={mml!r})")
+    return None
+
+
+def egress_stop(outputs: int, stops: Sequence[int], max_model_len: int) -> SpecializedDefinition:
+    """`EgressStop_v1{T, STOP, MAX_MODEL_LEN}` (egress: Array<2 + T, i32>, max_tokens: i32, prompt_len: i32) -> bit at
+    T = ``outputs``: 1 exactly when ``egress``, a span's `b.egress` row at output cap T, ends where `StopRule_v1{T, NSTOP}`
+    computes from the row's own T ids, ``max_tokens``, the stop ids STOP, ``prompt_len`` and MAX_MODEL_LEN: the row's ids
+    served is the rule's n, and its finish is ``stop`` on the rule's 1 (a stop id) or ``length`` on its 2 or 3
+    (``max_tokens`` or the model's length, which vLLM reports alike). Every other row is 0: a response that ends before
+    or after the rule's n, one the rule runs on past T, an abort, an error, a request still running. With no stop ids
+    the rule reads `stop_check.NOT_AN_ID` alone, as `StopCheck_v1` does, and no row ends on ``stop``. The rule is
+    `StopRule_v1`'s; this compares its two words with the row's."""
+    from verity.definitions.registry import stop_check as SC, stop_rule as X
+    from verity.definitions.registry.prims import BIT, I32
+
+    def signature(S: Any) -> tuple[tuple[tuple[str, Any], ...], Any]:
+        return (("egress", Array(2 + S.T, I32)), ("max_tokens", I32), ("prompt_len", I32)), BIT
+
+    def body(B: Any, S: Any, egress: Any, max_tokens: Any, prompt_len: Any) -> Any:
+        o, ids = X.word_ops(B), S.STOP or (SC.NOT_AN_ID,)
+        words = [o.word(s) for s in ids]
+        r = B.call(bind(X.StopRule, T=S.T, NSTOP=len(ids)), egress[2:2 + S.T], max_tokens,
+                   Coll(Array(len(ids), I32), concat([w.refs for w in words])), prompt_len, o.word(S.MAX_MODEL_LEN))
+        ended = o.band(o.ieq(egress[1], o.word(1 + FINISH.index("length"))), o.bor(o.ieq(r[1], o.word(2)), o.ieq(r[1], o.word(3))))
+        if S.STOP:
+            ended = o.bor(o.band(o.ieq(egress[1], o.word(1 + FINISH.index("stop"))), o.ieq(r[1], o.word(1))), ended)
+        return o.band(o.ieq(egress[0], r[0]), ended)
+
+    defn = CompositeDefinition("EgressStop", 1, ("T", "STOP", "MAX_MODEL_LEN"), signature, body, register=False,
+                               refuse=_stop_refusal, doc="a b.egress row ends where StopRule_v1 computes from its ids",
+                               conformance="model-untested: StopRule_v1's (n, finish) against a served b.egress row's")
+    return bind(defn, T=outputs, STOP=tuple(stops), MAX_MODEL_LEN=max_model_len)
+
+
+def stopped(replay: SpecializedDefinition, stop: SpecializedDefinition) -> SpecializedDefinition:
+    """`ReplayStopped_v1{replay, stop}`: the replay block ``replay``, its body in place, then one instance of ``stop`` (an
+    `egress_stop`) over three parameters of its own, each named for the boundary value it is (`EGRESS`, `MAX_TOKENS`,
+    `PROMPT_LEN`) and read whole. Its result is ``replay``'s, then the stop's bit, a second output port (`STOP_OK`), so
+    round 2 links each of the block's ports to a boundary value's rows (`second_stage.replay_links`)."""
+    params, ret = replay.signature()
+    mine, bit = stop.signature()
+    names = (EGRESS, MAX_TOKENS, PROMPT_LEN)
+    if (getattr(replay.defn, "ports", None) is not None or len(mine) != len(names)
+            or {name for name, _ in params} & set(names)):
+        raise ValueError(f"a stop block of {len(names)} parameters beside a replay block that declares no ports and takes "
+                         f"none of {names}, not {stop.id} beside {replay.id}")
+
+    def signature(S: Any) -> tuple[tuple[tuple[str, Any], ...], Any]:
+        return (*params, *((name, t) for name, (_, t) in zip(names, mine))), Tuple(ret, bit)
+
+    def body(B: Any, S: Any, *args: Any) -> Any:
+        inner = replay.defn.body(B, replay.S(), *args[:len(params)])
+        return coll_concat(Tuple(ret, bit), [inner, B.call(stop, *args[len(params):])])
+
+    defn = CompositeDefinition("ReplayStopped", 1, ("replay", "stop"), signature, body, register=False,
+                               doc=f"{replay.id}, then one {stop.id} over the span's boundary rows")
+    return bind(defn, replay=descriptor_id(replay), stop=descriptor_id(stop))
+
+
+@dataclass(frozen=True)
+class Stop:
+    """A class's stop rule: the registered model's stop ids ``ids`` (none under a schedule that ignores them) and its
+    length ``max_model_len``. Public: a class's ``commit.json`` names it, and its stop block's id holds both."""
+
+    ids: tuple[int, ...]
+    max_model_len: int
+
+    def __post_init__(self) -> None:
+        why = _stop_refusal({"STOP": self.ids, "MAX_MODEL_LEN": self.max_model_len})
+        if why is not None:
+            raise ValueError(f"a stop rule's ids and model length: {why}")
+
+    @classmethod
+    def of(cls, doc: Any) -> Stop | None:
+        """From a serve's configuration or a ``commit.json`` (`to_json`'s object); None for none."""
+        if doc is None:
+            return None
+        if not (isinstance(doc, Mapping) and set(doc) == {"ids", "max_model_len"} and isinstance(doc["ids"], (list, tuple))):
+            raise ValueError(f"a stop rule is {{\"ids\": [...], \"max_model_len\": n}}, not {doc!r}")
+        return cls(tuple(doc["ids"]), doc["max_model_len"])
+
+    def to_json(self) -> dict[str, Any]:
+        return {"ids": list(self.ids), "max_model_len": self.max_model_len}
+
+    def template(self, outputs: int) -> SpecializedDefinition:
+        return egress_stop(outputs, self.ids, self.max_model_len)
+
+    def ends(self, span: Span) -> bool:
+        """Whether the rule ends ``span`` as it was served: `egress_stop`'s bit on its rows at its class's cap, by
+        `StopRule_v1`'s reference."""
+        from verity.definitions.registry import stop_check as SC, stop_rule as X
+
+        if span.finish not in ("stop", "length"):
+            return False
+        ids = [*span.served, *[0] * (cap(len(span.served)) - len(span.served))]
+        n, code = X.reference(ids, int(span.sampling.get("max_tokens") or 0), self.ids or (SC.NOT_AN_ID,), len(span.prompt),
+                              self.max_model_len)
+        return n == len(span.served) and (code in (2, 3) if span.finish == "length" else code == 1 and bool(self.ids))
+
+
 @dataclass(frozen=True)
 class Layout:
     """One class's registration, from public items alone: the check template ``check``, its instances a span
     (``per_prompt`` a prompt row, ``per_output`` an output), the class (``prompt``, ``outputs``), the spans N and the run.
     ``inline``: the replay block holds them `inlined`, and the check's proof blocks are the templates the check template's
-    body calls (`templates`); else they are its instances (`population`). What the prover commits under and the
-    challenger's own copies (`ports`)."""
+    body calls (`templates`); else they are its instances (`population`). ``stop``: each replay block also holds one stop
+    block at the class's output cap (`Stop.template`, `stopped`), and the class commits `STOP_VALUES` too. What the prover
+    commits under and the challenger's own copies (`ports`)."""
 
     check: SpecializedDefinition
     per_prompt: int
@@ -204,6 +336,7 @@ class Layout:
     spans: int
     run: str
     inline: bool = False
+    stop: Stop | None = None
 
     def __post_init__(self) -> None:
         for k in ("prompt", "outputs"):
@@ -227,22 +360,27 @@ class Layout:
         return self.per_prompt * self.prompt + self.per_output * self.outputs
 
     @cached_property
+    def stop_template(self) -> SpecializedDefinition | None:
+        """The class's stop block's template, at its output cap; None for a class that registers no stop rule."""
+        return None if self.stop is None else self.stop.template(self.outputs)
+
+    @cached_property
     def templates(self) -> tuple[SpecializedDefinition, ...]:
-        """The check's proof blocks' templates: the check template, or, inlined, each template its body calls, in the order
-        of its first call."""
-        if not self.inline:
-            return (self.check,)
-        return tuple({P.template_id(n.fn): n.fn for n in self.check.body.nodes}.values())
+        """A replay block's proof blocks' templates: the check template, or, inlined, each template its body calls, in the
+        order of its first call; then the stop block's."""
+        ts = (self.check,) if not self.inline else tuple({P.template_id(n.fn): n.fn for n in self.check.body.nodes}.values())
+        return ts if self.stop_template is None else (*ts, self.stop_template)
 
     @property
     def query(self) -> dict[str, Any]:
-        """The check's proof blocks in a replay block (`service.Check.query`): one template's instances, or each one's."""
+        """The proof blocks in a replay block (`service.Check.query`): one template's instances, or each one's."""
         ts = self.templates
         return P.template_instance_query(ts[0]) if len(ts) == 1 else P.template_instances_query(ts)
 
     @cached_property
     def replay(self) -> SpecializedDefinition:
-        return inlined(self.check, self.n_rho) if self.inline else population(self.check, self.n_rho)
+        inner = inlined(self.check, self.n_rho) if self.inline else population(self.check, self.n_rho)
+        return inner if self.stop_template is None else stopped(inner, self.stop_template)
 
     @cached_property
     def program(self) -> Program:
@@ -256,7 +394,15 @@ class Layout:
     def partition(self) -> dict[str, Any]:
         return P.partition(self.program, self.grain)
 
+    @property
+    def values(self) -> tuple[str, ...]:
+        """The values the serve commits rows of, in the record's order: `PORTS`, then `STOP_VALUES` where the class holds a
+        stop block."""
+        return PORTS if self.stop is None else (*PORTS, *STOP_VALUES)
+
     def words(self, port: str) -> int:
+        if port in STOP_VALUES:
+            return 1 if port == STOP_OK else 2
         return 2 * (HEAD_U32 + self.prompt) if port == INGRESS else 2 * (2 + self.outputs)
 
     def domain(self, port: str) -> CommitmentDomain:
@@ -267,11 +413,24 @@ class Layout:
 
     def ports(self) -> dict[str, dict[str, Any]]:
         """Each value's leaves and domain id, as `Stream.register` takes them."""
-        return {p: {"leaves": self.spans, "domain": self.domain(p).domain_id.hex()} for p in PORTS}
+        return {p: {"leaves": self.spans, "domain": self.domain(p).domain_id.hex()} for p in self.values}
 
     def provenance(self) -> dict[str, Any]:
         return {"prompt": self.prompt, "outputs": self.outputs, "check": P.template_id(self.check),
-                "per_prompt": self.per_prompt, "per_output": self.per_output, "inline": self.inline}
+                "per_prompt": self.per_prompt, "per_output": self.per_output, "inline": self.inline,
+                **({} if self.stop is None else {"stop": self.stop.to_json()})}
+
+
+def stop_rows(spans: Sequence[Span], stop: Stop) -> dict[str, np.ndarray]:
+    """`STOP_VALUES`' rows, span by span: each request's own ``max_tokens``, its prompt's length, and the stop block's
+    bit, a one. ValueError for a span the rule doesn't end as it was served (`Stop.ends`): its block's bit is no one."""
+    bad = next((s for s in spans if not stop.ends(s)), None)
+    if bad is not None:
+        raise ValueError(f"{bad.engine_id}: the stop rule doesn't end this span as it was served ({len(bad.served)} ids, "
+                         f"finish {bad.finish!r}), so no class with a stop block holds it: `filed` files it without one")
+    return {MAX_TOKENS: np.stack([_words(_u32("max_tokens", "u32", s.sampling.get("max_tokens"))) for s in spans]),
+            PROMPT_LEN: np.stack([_words([len(s.prompt)]) for s in spans]),
+            STOP_OK: np.ones((len(spans), 1), dtype=np.uint16)}
 
 
 def port_rows(spans: Sequence[Span], layout: Layout) -> dict[str, np.ndarray]:
@@ -279,7 +438,8 @@ def port_rows(spans: Sequence[Span], layout: Layout) -> dict[str, np.ndarray]:
     if len(spans) != layout.spans or any(s.shape != (layout.prompt, layout.outputs) for s in spans):
         raise ValueError(f"the spans are not {layout.spans} of class ({layout.prompt}, {layout.outputs})")
     return {INGRESS: np.stack([ingress_row(s, layout.prompt) for s in spans]),
-            EGRESS: np.stack([egress_row(s, layout.outputs) for s in spans])}
+            EGRESS: np.stack([egress_row(s, layout.outputs) for s in spans]),
+            **({} if layout.stop is None else stop_rows(spans, layout.stop))}
 
 
 @dataclass
@@ -307,7 +467,7 @@ class Committed:
         return BoundaryCommit(
             window=self.window, run=L.run, **L.provenance(), spans=L.spans, replay=P.template_id(L.replay),
             program=L.partition["program"], partition=P.digest(L.partition), schema=SCHEMA,
-            values={p: {"root": self.roots[p].hex(), "words": L.words(p), **ports[p]} for p in PORTS},
+            values={p: {"root": self.roots[p].hex(), "words": L.words(p), **ports[p]} for p in ports},
             index=self.index_leaf, index_rule=CS.INDEX_RULE, seconds=round(self.seconds, 3)).dump()
 
     def record(self, law: Mapping[str, Any], previous: str | None = None,
@@ -322,7 +482,7 @@ def layout_of(pub: Mapping[str, Any], check: SpecializedDefinition) -> Layout:
     c = BoundaryCommit.of(pub, COMMIT)
     if c.check != P.template_id(check):
         raise ValueError(f"a {FORMAT} commitment of check {c.check}, not {P.template_id(check)}")
-    return Layout(check, c.per_prompt, c.per_output, c.prompt, c.outputs, c.spans, c.run, c.inline)
+    return Layout(check, c.per_prompt, c.per_output, c.prompt, c.outputs, c.spans, c.run, c.inline, Stop.of(c.stop))
 
 
 def record(pub: Mapping[str, Any], check: SpecializedDefinition, law: Mapping[str, Any], previous: str | None = None,
@@ -333,7 +493,9 @@ def record(pub: Mapping[str, Any], check: SpecializedDefinition, law: Mapping[st
     binding)."""
     L, c = layout_of(pub, check), BoundaryCommit.of(pub, COMMIT)
     ports = L.ports()
-    roots = [{"port": p, "root": c.values[p]["root"], **ports[p]} for p in PORTS]
+    if set(c.values) != set(ports):
+        raise ValueError(f"the commitment's values {sorted(c.values)} are not its layout's {sorted(ports)}")
+    roots = [{"port": p, "root": c.values[p]["root"], **ports[p]} for p in ports]
     w = {"kind": "served", "run": L.run, "row": c.window, **L.provenance(), "index": c.index, "boundary": FORMAT,
          **(window or {})}
     return R.record(L.program, L.grain, law, CS.SCHEME, roots, w, previous=previous)
@@ -345,9 +507,9 @@ def commit(spans: Sequence[Span], layout: Layout, window: int, *, salts: Mapping
     unless ``salts`` gives them (`reopen`)."""
     t0 = clock()
     rows = port_rows(spans, layout)
-    domains = {p: layout.domain(p) for p in PORTS}
-    ys = {p: os.urandom(CS.SALT_BYTES * layout.spans) for p in PORTS} if salts is None else dict(salts)
-    roots, _bc = CS.commit_ports(domains, rows, {}, ys, schemas=dict.fromkeys(PORTS, SCHEMA))
+    domains = {p: layout.domain(p) for p in rows}
+    ys = {p: os.urandom(CS.SALT_BYTES * layout.spans) for p in rows} if salts is None else dict(salts)
+    roots, _bc = CS.commit_ports(domains, rows, {}, ys, schemas=dict.fromkeys(rows, SCHEMA))
     return Committed(window, layout, tuple(spans), roots, ys, os.urandom(CS.SALT_BYTES) if index_salt is None else index_salt,
                      clock() - t0)
 
@@ -356,7 +518,8 @@ def write(c: Committed, directory: Path) -> Path:
     """`c`'s files under ``directory`` (module docstring), ``commit.json`` last."""
     d = Path(directory)
     d.mkdir(parents=True, exist_ok=True)
-    for name, data in ((INDEX, c.index), (CS.INDEX_SALT, c.index_salt), (SALTS, b"".join(c.salts[p] for p in PORTS))):
+    for name, data in ((INDEX, c.index), (CS.INDEX_SALT, c.index_salt),
+                       (SALTS, b"".join(c.salts[p] for p in c.layout.values))):
         (d / name).write_bytes(data)
         os.chmod(d / name, 0o600)
     tmp = d / f".{COMMIT}"
@@ -373,9 +536,9 @@ def reopen(directory: Path, check: SpecializedDefinition) -> Committed:
     layout = layout_of(pub.dump(), check)
     spans = [Span.from_json(s) for s in json.loads((d / INDEX).read_bytes())["spans"]]
     raw, n = (d / SALTS).read_bytes(), CS.SALT_BYTES * layout.spans
-    if len(raw) != n * len(PORTS):
-        raise ValueError(f"{d}: {len(raw)} bytes of salts, not {len(PORTS)} values' {n}")
-    c = commit(spans, layout, pub.window, salts={p: raw[k * n:(k + 1) * n] for k, p in enumerate(PORTS)},
+    if len(raw) != n * len(layout.values):
+        raise ValueError(f"{d}: {len(raw)} bytes of salts, not {len(layout.values)} values' {n}")
+    c = commit(spans, layout, pub.window, salts={p: raw[k * n:(k + 1) * n] for k, p in enumerate(layout.values)},
                index_salt=(d / CS.INDEX_SALT).read_bytes())
     got = BoundaryCommit.of(c.public(), str(d))
     for k in ("values", "index", "program", "partition"):
@@ -389,6 +552,19 @@ def classes(spans: Sequence[Span]) -> dict[tuple[int, int], list[Span]]:
     out: dict[tuple[int, int], list[Span]] = {}
     for s in spans:
         out.setdefault(s.shape, []).append(s)
+    return out
+
+
+def filed(spans: Sequence[Span], stop: Stop | None) -> dict[tuple[int, int, bool], list[Span]]:
+    """The spans by class and by whether their class holds a stop block: those rule ``stop`` ends as they were served
+    (`Stop.ends`) apart from the rest of their size class, which hold none; all without one where ``stop`` is None. In
+    `classes`' order, a size class's stopped spans first."""
+    out: dict[tuple[int, int, bool], list[Span]] = {}
+    for shape, mine in classes(spans).items():
+        for held in (True, False):
+            part = [s for s in mine if (stop is not None and stop.ends(s)) is held]
+            if part:
+                out[(*shape, held)] = part
     return out
 
 
@@ -409,14 +585,16 @@ class BoundaryWindows:
     holds a finished one (``drained``), and at `stop`; its finished spans are committed class by class (`commit`, `write`)
     on a thread of their own, under ``out``/w<window>/, before anything can sample them, and each class's
     ``commit.json`` goes to ``sink`` too. ``check`` is the check template, or a callable giving it on that thread, and
-    ``inline`` its `Layout`'s. A failed commit is reported to ``sink`` (``error``) and registers nothing."""
+    ``inline`` its `Layout`'s. ``stop``: the serve's registered stop rule; the spans it ends as they were served are
+    committed in classes that hold a stop block, the rest of each size class without one, under ``p<P>-o<O>-nostop``
+    (`filed`). A failed commit is reported to ``sink`` (``error``) and registers nothing."""
 
     def __init__(self, out: Path, check: SpecializedDefinition | Callable[[], SpecializedDefinition], per_prompt: int,
                  per_output: int, window_s: float, *, drained: bool = True, inline: bool = False,
                  sink: Callable[[dict], None] | None = None, clock: Callable[[], float] = time.monotonic,
-                 serve: str | None = None) -> None:
+                 serve: str | None = None, stop: Stop | None = None) -> None:
         self.out, self.per_prompt, self.per_output = Path(out), int(per_prompt), int(per_output)
-        self.window_s, self.drained, self.inline = float(window_s), drained, inline
+        self.window_s, self.drained, self.inline, self.stop_rule = float(window_s), drained, inline, stop
         self.sink, self.clock = sink, clock
         self.serve = serve or secrets.token_hex(32)
         self._check, self._check_fn = (check, None) if isinstance(check, SpecializedDefinition) else (None, check)
@@ -429,11 +607,12 @@ class BoundaryWindows:
     @classmethod
     def of(cls, cfg: Mapping[str, Any], out: Path, sink: Callable[[dict], None] | None = None) -> BoundaryWindows:
         """From a serve's configuration: ``check``, a serving template's descriptor id (`check_template`), and
-        ``per_prompt``, ``per_output``, ``window_s``, ``drained`` and ``inline``."""
+        ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline`` and ``stop`` (`Stop.of`: the registered
+        model's stop ids and length)."""
         t = str(cfg["check"])
         return cls(out, lambda: check_template(t), int(cfg.get("per_prompt", 0)), int(cfg.get("per_output", 1)),
                    float(cfg.get("window_s", 600)), drained=bool(cfg.get("drained", True)),
-                   inline=bool(cfg.get("inline", False)), sink=sink)
+                   inline=bool(cfg.get("inline", False)), sink=sink, stop=Stop.of(cfg.get("stop")))
 
     @property
     def check(self) -> SpecializedDefinition:
@@ -496,16 +675,17 @@ class BoundaryWindows:
     def _run(self) -> None:
         while (job := self.jobs.get()) is not None:
             window, opened, closed, carried, spans = job
-            for (p, o), mine in classes(spans).items():
+            for (p, o, held), mine in filed(spans, self.stop_rule).items():
+                unheld = self.stop_rule is not None and not held
                 try:
                     layout = Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
-                                    run_root(self.serve, window), self.inline)
+                                    run_root(self.serve, window), self.inline, self.stop_rule if held else None)
                     c = commit(mine, layout, window)
-                    write(c, self.out / f"w{window}" / f"p{p}-o{o}")
+                    write(c, self.out / f"w{window}" / f"p{p}-o{o}{'-nostop' if unheld else ''}")
                     line = {**c.public(), "serve": self.serve, "open_s": opened, "close_s": closed, "carried": carried}
                 except (ValueError, TypeError, OverflowError, struct.error, OSError) as e:  # the sink says why
                     line = {"format": FORMAT, "window": window, "prompt": p, "outputs": o, "spans": len(mine),
-                            "error": f"{type(e).__name__}: {e}"}
+                            **({"stop": self.stop_rule.to_json()} if held else {}), "error": f"{type(e).__name__}: {e}"}
                 if self.sink is not None:
                     self.sink(line)
 
@@ -554,6 +734,7 @@ class BoundaryWindows:
         return self
 
 
-__all__ = ["COMMIT", "EGRESS", "FIELDS", "FINISH", "FORMAT", "INDEX", "INGRESS", "MIN_CAP", "PORTS", "SALTS", "SCHEMA",
-           "BoundaryWindows", "Committed", "Layout", "Span", "cap", "check_template", "classes", "commit", "egress_row",
-           "ingress_row", "inlined", "layout_of", "port_rows", "record", "reopen", "run_root", "sampling_of", "write"]
+__all__ = ["COMMIT", "EGRESS", "FIELDS", "FINISH", "FORMAT", "INDEX", "INGRESS", "MAX_TOKENS", "MIN_CAP", "PORTS",
+           "PROMPT_LEN", "SALTS", "SCHEMA", "STOP_OK", "STOP_VALUES", "BoundaryWindows", "Committed", "Layout", "Span", "Stop",
+           "cap", "check_template", "classes", "commit", "egress_row", "egress_stop", "filed", "ingress_row", "inlined",
+           "layout_of", "port_rows", "record", "reopen", "run_root", "sampling_of", "stop_rows", "stopped", "write"]
