@@ -27,7 +27,7 @@ def _start(tmp_path: Path, script: str, args: list[str], reported: str) -> subpr
         tool.chmod(0o755)
     run_dir = tmp_path / "run"
     (run_dir / "out").mkdir(parents=True)
-    env = {"PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "NVCC": str(bin_ / "nvcc"), "STAND_IN_CC": reported,
+    env = {"PATH": f"{bin_}{os.pathsep}{os.defpath}", "NVCC": str(bin_ / "nvcc"), "STAND_IN_CC": reported,
            "OUT": str(run_dir / "out"), "RESEARCH_RUN_DIR": str(run_dir), "TMPDIR": str(tmp_path)}
     return subprocess.run(["bash", f"{DC}/{script}", *args], cwd=ROOT, env=env, capture_output=True, text=True)
 
