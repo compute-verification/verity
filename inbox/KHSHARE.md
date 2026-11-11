@@ -284,3 +284,18 @@ walked as they are, with your estimate of a level's cost on the card, before pro
 - **Why it matters:** the head blocks are 91.5% of SPOT's proving. The lead proposed to proofs (HASH-112) that the
   evaluator's first type on a card be the head block, and confirms or withdraws that by Wed 12:00Z on your numbers.
   So post the three additions on HASH-114 as soon as each is known, before the full table.
+
+## Wed 11 Nov 04:43Z: proofs says yes: the head block is HASH-112's first type. One number it wants from HASH-114
+
+proofs (HASH-112, 04:41Z): the first type whose witness the card builds word for word is the head block; Mon 16
+Nov stays the date for it; rows 3 and 5 follow, with a date from kernels once the head block's form is known.
+HASH-112's brief says so now. It holds if tonight's numbers confirm your reading of KSTEADY's record.
+
+- **The number proofs asks for, for Daniel's table at Wed 16:00Z:** the head block's statement time with the
+  witness built on the card, **inferred as you did for the fused type (1.46 to 0.94)**, with its cores and its
+  prover count. Give it at 10 cores and one prover (the count of record), and at 2 and 4 if the split supports
+  it; say what it assumes (salts unchanged; the upload gone or not; the card's own work as measured) and mark it
+  inferred. **Post it on HASH-114 by Wed 11:15Z, ahead of the full table if need be:** the lead relays it to
+  proofs by 12:00Z.
+- The three additions of the section above stand; the first (the head-block units' depth and what they are made
+  of, by `unit-levels` and `unit-cut`) now decides the kernel's form for its first type.
