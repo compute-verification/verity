@@ -43146,3 +43146,83 @@ one a window?
 - **Restated, now read:** the line for ATTACK cited `Select.lean:286-292` before I had opened it tonight. Read now (`verity/protocols/spot/verifier/lean/Spot/Select.lean:283-293`, `secondProblem`): the second stage takes a count `1 ≤ k_t ≤ n_t` for each cell and refuses only `ks == ns`, every cell whole [read]. So a cell may be proved whole (`k_t = n_t`) **inside the replay blocks the first stage sampled**, and its blocks are then in `Draw.proved draw`. Nothing in the selection proves a block on every request, outside the first stage's sample: my phrase "a block the design means to prove on every request … is in `Draw.proved draw`" was wrong as written. The question for ATTACK is therefore sharper: a registration with a non-empty `always` names blocks **no run of the verifier opens** (`Draw.checkProvedFull`), so the claim at `h` with `always ≠ ∅` rests on `Addresses h` at units nothing checked, and the claim at `h.noAlways` is the one that says what the verifier checks. Is anything in the bits table read at `h` with `always ≠ ∅`? I found no such reader [run: `rg` for the field (`.always`, `always :=`) over `security/` and `verity/` at `946b7b72f26d`: `Claims/Sampling/Reg.lean` (the field, `checked`), `SamplingGeneric/TwoCode.lean` (`always_mem`, the matching's input-slot clause), `SpotFlock/Cap.lean` (the cap), `SpotFlock/Facts.lean:380` (the clause, proved at every `h`), and nothing under `verity/`].
 
 For the table: unchanged from 08:46Z.
+
+## HARMSEARCH, Wed 11 Nov 08:47Z: the plan of record is the optimum of the planner's own family, but that family samples every block of a size class at its widest block's rate, so the head blocks (16,544 bits, 92% of proving) are sampled 1.69 times too often; a rate a width reads 2,647 GB (0.655 of 4,042), tuned 2,380 GB, and no plan of this family at these prices goes under 2,199 GB (0.544): the plan gives at most 1.84 times, the other 7.3 times to 300 GB are the head block's price and width, S and δ
+
+**Nothing is built in the tree yet; every GB below except run 1's rows is the planner's own bound evaluated outside it, not Lean-checked.** I read the strata change as a code fix, not a change to what the bound says (the verifier's second stage already samples each template as its own stratum, so a rate a width tells nobody anything new); say if you read it otherwise. I build it now as a PR, unmarked.
+
+Runs: `r20261111-080601-3db1` (run 1: BREAKEVEN's path at tree `a5e4e56a11`, the inputs of `r20261111-065519-e0bd` by sha256, each design call dumped, 26 variants, 156 rows, rc 0) and `r20261111-083048-1624` (run 2: the plan space around each of 42 dumped calls, on `optimize.py` at `8201dacff26e`, rc 0). Tools and tables: `~/.research/notes/lanes/proofs/tools/plan/` (synced with this entry). All GB are at the 10% point, world year, ×1.05, row "(iii) honest [fix]" unless said.
+
+**0. Control.** [run 1] The 24 rows run 1 shares with `e0bd` ((ii), (iii), lever; world and datacenter year; four β) agree in `bound_bits`, `total`, `q`, `replay_sample`, `prove`, `replay`, `compile`, `serve`, `pool`, `requests`: 0 differ. 4,042.4 GB and 3,228.7 GB (lever) reproduce.
+
+**1. The plan of record, and is it optimal?**
+- [run 1, the dumped call] δ 0.01, S 28,000, R 1.7784e16 requests, budget 6.5558e14 GPU-s (0.036863 a request), replay 5,258 GPU-s a sampled request, the patterns' form. The design: every size class its own stratum, κ = 2^-5, q = 3.687e-7 (K_first 6.557e9 requests a world year), Σ_t k_t = 1.0046e7 blocks a sampled request, 6.587e16 blocks proved; replay 5.3% of the audit's seconds; 3.0760e13 bits.
+- [run 1] 193 block types. `SparseMlaHeadBlock_v1{…FIRST=false…}` is 87.3% of proving, `…FIRST=true` 4.5%; the 65 head-block cells, all 16,544 bits, are 92.2%. Then the two fused MoE cells (2.7%, 512 bits; 1.2%, 16 bits), `Fp8GroupQuantUe8m0_v1{K=6144,G=128}` 0.95%, `RMSNormFusedCudaVector8_v1{N=6144}` 0.63%, `DsaMqaLogits_v3{N=1,H=32,D=128}` 0.52%, `ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}` 0.36%.
+- **Inside the planner's family it is optimal.** [run 2] Every merge threshold × κ on a quarter-octave grid from 2^-10 to 2^4: the best is the plan of record itself (ratio 1.0000 on rows (ii) and (iii); 0.997 on the lever row, where κ = 2^-5.5 beats 2^-6 by 0.3%).
+- **The family is the loss.** [read: `optimize.two_stage_design`] It gives every block of a size class the rate its widest block needs, capped at S. Class 32,768 holds the 65 head cells (16,544 bits) and four rare types of 16,896, 24,576 and 32,768 bits (`DsaRMSNorm_v1{N=2048}`, 0.06% of proving), so the head blocks are sampled at a 28,000-bit block's rate, 1.69 times what 16,544 bits need. [read: GLOSSARY "Two-stage design" ("k_t of its n_t proof blocks of each template t"), `second_stage.py`'s docstring (a statement's template is "its stratum's name"), ARCHITECTURE "Verification phase" ("stratified by subcircuit")] the verifier's strata are templates, finer than size classes, and [read: `two_stage_rankin`] the bound reads a design only through each (width, rate) group, so a rate a width is a design the code already samples.
+
+| plan [run 2 unless tagged; modeled: the planner's bound, nothing built, not Lean-checked] | GB | of today | K_first | Σ k_t a sampled request | k of the head stratum |
+|---|---|---|---|---|---|
+| plan of record (size classes, κ 2^-5) [measured prices, run 1] | 4,042.4 | 1 | 6.56e9 | 1.00e7 | 5,558,226 |
+| the family's best (all thresholds, fine κ) | 4,042.4 | 1.0000 | | | |
+| each width its own stratum, the planner's κ rule (best κ 2^-2.5) | 2,646.6 | 0.6547 | 1.94e9 | 4.29e7 | 1.83e7 |
+| the same, each stratum's k tuned by coordinate descent (2,148 evaluations) | 2,380.4 | 0.5889 | 2.54e9 | 2.99e7 | 1.41e7 |
+| what-if, planner as it is: the head block's 160 state bits a block of their own, so it fits class 16,384 | 2,549.8 | 0.6308 | | | |
+| what-if, planner as it is: HEADCIRC's two heads a block (33,088 bits, charged S), a block's marginal seconds doubled / unchanged [run: local] | 2,661 / 2,243 | 0.658 / 0.555 | | | |
+| **floor: any plan of this family at these prices** [modeled: my formula on run 1's values] | **2,198.9** | **0.5440** | | | |
+| lever row: record / widths / tuned / floor | 3,228.7 / 2,034.9 / 1,966.0 / 1,860.8 | 1 / 0.630 / 0.609 / 0.576 | | | |
+
+- Week, month and datacenter rows move the same way: widths 0.648 to 0.655, tuned 0.581 to 0.589, floor 0.541 to 0.544 of each row's own record (`r2_table.json`).
+- The strata by width, the two-head block and the 160-bit re-cut are three ways to the same third and do not multiply (a two-head block is over S, so its rate is a 28,000-bit block's whatever the strata).
+- **One stage against two:** [run 2, `grain_costs` on the model's own grain] one stage commits every proof block while serving, 6.45 times the compute at 29.4 bytes a block: out at any budget.
+- **The sets' form against the patterns':** [run 2] 23,600 times the bits. Out.
+- **The split of δ:** there is none in this family. One Rankin bound at Λ = ln(1/δ); GB is exactly linear in Λ (section 3).
+
+**2. The floor.** For a first stage at q and any strata and k, the adversary with one wrong block of type v in each of M requests is accepted with probability (1 − q r_v)^M, so a sound bound is at least Λ·min(b_v, S)/(q r_v) for every v; a block's proving is at least its marginal seconds plus its statement's fixed seconds over its cap. So bits ≥ (Λ/C)(S·c_replay + Σ_v n_v p̃_v min(b_v, S)), C the budget a request. [arithmetic on run 1's values] 1.6732e13 bits = 0.5440 of today's: **2,198.9 GB**. The tuned plan is within 8% of it, so nothing else of size is left in the plan: **the plan gives at most a factor 1.84 (4,042 → 2,199 GB); 300 GB needs another 7.3 times from the terms of that sum.** Its shares: head blocks 91.3% (16,544 bits), the 512-bit fused cell 3.9%, 50,688 bits 1.7%, 196,608 bits 1.05%, replay 0.1%.
+- **So the head block's width is a lever as large as its price** (the sum is price × bits): [run: local, modeled; assumes the price a column holds and a statement holds the same columns] a head block cut in 2 (8,272 bits) reads 0.51 of today's under the planner as it is and 0.37 by width; in 4: 0.36 / 0.23; in 8: 0.23 / 0.16; in 16: 0.15 / 0.12; floors 0.30, 0.17, 0.11, 0.08. HEADCIRC's census says the read of the keys is 37.5% of the block's rows, so a narrower block that reads the keys again loses most of this: the price a column at a narrower cut is the open number.
+
+**3. Elasticities.** [run 1, each a row read at the 10% point; GB and its ratio to 4,042.4]
+
+| lever | GB (ratio) |
+|---|---|
+| served bits a request S: 14,000 / 20,000 / 28,000 / 32,832 / 144,000 | 2,128.2 (0.527) / 2,940.5 (0.727) / 4,042.4 / 4,742.7 (1.173) / 5,274.2 (1.305) |
+| δ: 0.5 / 0.2 / 0.1 / 0.05 / 0.01 / 0.001 / 1e-6 | 608.5 (0.150) / 1,412.8 (0.350) / 2,021.2 (0.500) / 2,629.7 (0.650) / 4,042.4 / 6,063.7 (1.500) / 12,127.3 (3.000) |
+| utilization: 0.2 / 0.3 / 0.4 / 0.5 / 0.6 / 0.8 / 1.0 | 2,021.8 / 3,032.2 / 4,042.4 / 5,052.6 / 6,062.6 / 8,082.5 / 10,102.1 (linear) |
+| price halved, 1: `SparseMlaHeadBlock_v1{…FIRST=false…}` | 2,337.9 (0.578) |
+| 2: `SparseMlaHeadBlock_v1{…FIRST=true…}` | 3,957.0 (0.979) |
+| 3: `Fused[EmbeddingRead_v1{V=256,H=4096} + MoeExpertFp8BlockGemmW_v4{K=256…}]` | 3,990.8 (0.987) |
+| 4: `Fused[EmbeddingRead_v1{V=256,H=3072} + MoeExpertFp8BlockGemm_v4{K=6144…}]` | 4,019.2 (0.994) |
+| 5: `Fp8GroupQuantUe8m0_v1{K=6144,G=128}` | 4,024.3 (0.996) |
+| 6: `RMSNormFusedCudaVector8_v1{N=6144}` | 4,030.5 (0.997) |
+| 7: `DsaMqaLogits_v3{N=1,H=32,D=128}` | 4,032.6 (0.998) |
+| 8: `ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}` | 4,035.5 (0.998) |
+| all 193 halved (replay not) | 2,085.5 (0.516) |
+
+GB is linear in ln(1/δ) (877.8 GB a nat) and in the utilization (the served share of all GPU-seconds), near linear in S up to 32,832 and flat past it (1.305 at 144,000). A type's price moves GB by about its share of proving: only the head block matters.
+
+**4. Loose constants, each sized** [run 2 unless tagged]
+
+| constant | size | what it is |
+|---|---|---|
+| a class's rate is its widest block's | −34.5% (−1,396 GB) | section 1; a code fix, the PR I build |
+| each stratum's k by the κ rule, against tuned | a further −10% (−266 GB) | the rule leaves a chord of h binding (30,839 bits a wrong request against S = 28,000); tuned, the heavy term binds at 28,118 |
+| the chords' breakpoints (`CHORDS`, 11) | −2.4% (−97 GB) at the plan of record with 27, −2.5% with 138; +13% at the tuned plan | the closed forms are loose in a different place under each list, so finer is not always tighter. Python's `CHORDS` and Lean's `Spot.FactorUpper.chords` are one list: a two-file fix with a Lean build, not tonight's first |
+| the location term ℓ_t = log2(e·R·n_t) in the κ rule | −0.8% (−21 GB) by width | the rule charges log2(e·n_t) + 54 bits a block; the best of six constants tried is + 16; only the narrow strata feel it |
+| the ×1.05 | −192 GB if it were 1 | BREAKEVEN's λ, not the plan's |
+| `ceil` and `max(1, …)` in k | none | the least k of the plan of record is 309 |
+| charged twice | none found in the plan; [relayed: the order's 08:12Z update] SERVEDCARD's double count of Flock's check is a price, BREAKEVEN's |
+
+For BREAKEVEN:
+- A change of plan, not built: strata by distinct width (79 of them), the planner's κ rule, κ = 2^-2.5: q 1.0906e-7, K_first 1.9395e9, Σ k_t 4.2855e7, k of the 16,544-bit stratum 1.8345e7 of 4.633e8 (rate 0.0396), 8.31e16 blocks proved, replay 1.6%, 2.0138e13 bits at β 0.05544: 2,646.6 GB [modeled, run 2]. No price changes. It will be `two_stage_design(…, widths=True)` on my PR; your `split_cells(cells, row["merged"])` keeps working (`merged` None).
+- Do not multiply it with HEADCIRC's two heads a block: under the planner as it is that block already reads 0.555 to 0.658 of today's [run: local], because a 33,088-bit block is charged S = 28,000, 14,000 a head.
+- The head block's bits are as good as its seconds: GB ∝ Σ_v n_v p̃_v min(b_v, S), 91% of it the head block.
+
+For SCALE and PARAMS (the bits' side reads k):
+- [run: local, the planner's bound on run 1's call] GB against the head stratum's k a sampled request. Size classes: κ 2^-8 (D*2) 1.34 of today's at k 694,780; 2^-10: 2.65 at 173,700; 2^-14: 28.6 at 10,856; 2^-18: 423 at 679. By width: 2^-8: **1.011 at 405,370**; 2^-7: 0.80 at 810,740; 2^-6: 0.69 at 1,621,500; 2^-10: 2.31 at 101,340; 2^-18: 432 at 396. So D*2 costs a third more GB under today's strata and nothing by width; one 256-block table a template a sampled request costs about 430 to 1,700 times today's GB (k of the head stratum 396 to 99; its largest template is 94% of it).
+
+For the table:
+- GB, the plan's floor at measured prices (`e0bd`'s): 2,198.9 GB at 10%, world year [modeled: HARMSEARCH's formula on `r20261111-080601-3db1`]; the plan of record's 4,042.4 GB is its family's optimum [run `r20261111-083048-1624`].
+- GB, the best plan found: 2,380.4 GB, strata by width with k tuned; 2,646.6 GB by the planner's rule [modeled: the planner's bound, run `r20261111-083048-1624`; nothing built, not Lean-checked].
+- So the plan gives at most 1.84 times; the other 7.3 times to 300 GB are the head block's price and its 16,544 bits, S, δ.
+
+Next: the PR (strata by width in `two_stage_design`, a records-free Python change), Lean's check of the two designs (`plancheck.two`), then the table by 11:00Z.
