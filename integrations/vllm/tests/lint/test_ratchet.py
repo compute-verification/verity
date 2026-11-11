@@ -65,8 +65,11 @@ def test_the_moved_definitions_are_scanned_under_their_repository_paths() -> Non
     p = R.DEFINITIONS / "registry" / "a.py"
     assert R.rel(p) == "verity/ml/definitions/registry/a.py" and R.module_name(p) == "verity.ml.definitions.registry.a"
     assert R.rel(R.PKG / "program" / "b.py") == "verity_vllm/program/b.py"
-    assert not any(p.is_relative_to(R.DEFINITIONS) for p in R.library_files(".py", R.CORE_PKG))
-    assert set(R.library_files()) >= set(R.library_files(".py", R.DEFINITIONS))
+    assert R.in_library(p) and R.in_library(R.DEFINITIONS / "a.py") and R.in_library(R.PKG / "program" / "b.py")
+    assert not R.in_library(R.DEFINITIONS / "another" / "a.py") and not R.in_library(R.CORE_PKG / "a.py")
+    moved = R.library_files(".py", R.DEFINITIONS)
+    assert moved and all(map(R.in_library, moved)) and set(R.library_files()) >= set(moved)
+    assert not any(map(R.in_library, R.library_files(".py", R.CORE_PKG)))
 
 
 @pytest.mark.parametrize("entries", [
