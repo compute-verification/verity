@@ -15,7 +15,7 @@ Two halves, one CLI:
 
   laptop (torch-free):
     verity-vllm census --reconcile DIR/census.json --log data/logs/m1.jsonl.gz \
-        [--profile vllm_d9105ea80_sm89_eager] [--report out/capture/reports/census_m1]
+        --profile vllm_d9105ea80_sm89_eager [--report out/capture/reports/census_m1]
         Resolves the M1 log with `bench/resolve_log.resolve_log` and, per step, collects the kernel names every resolution
         part declares (`Compute.kernels` / `Transparent.kernels` over `resolver.parts_of`) plus the profile's
         `kernel_allowlist`.  Every census kernel of the same step must be matched by at least one declared name
@@ -592,7 +592,8 @@ class Options:
                                    help="GPU half: LLM(**kw) override key=value (JSON value), repeatable")
     reconcile: str | None = option("--reconcile", default=None, help="laptop half: path to census.json")
     log: str = option("--log", default="data/logs/m1.jsonl.gz")
-    profile: str = option("--profile", default="vllm_d9105ea80_sm89_eager")
+    profile: str | None = option("--profile", default=None,
+                                 help="laptop half: the profile the log resolves against, a module of verity_vllm.observe.fold.profiles or a dotted path")
     report: str = option("--report", default="out/capture/reports/census_m1", help="laptop half: report base path (.json/.md)")
     propose_allowlist: str = option("--propose-allowlist", default="",
                                     help="laptop half: comma list of declared names to treat as allowlisted (what-if)")
@@ -600,6 +601,8 @@ class Options:
 
 def main(args: Options) -> int:
     if args.reconcile:
+        if args.profile is None:
+            raise UsageError("--reconcile needs --profile, the profile the log resolves against")
         census = json.loads(Path(args.reconcile).read_text())
         rep = reconcile(census, args.log, args.profile, tuple(x for x in args.propose_allowlist.split(",") if x))
         base = Path(args.report)
