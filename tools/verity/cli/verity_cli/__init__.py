@@ -25,7 +25,8 @@
     verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
                                     holds it, with its Lean options as `lake build` gives them, exiting with lean's
                                     status, and last the axiom probe: each theorem whose
-                                    axioms go beyond the standard three (`sorryAx` too), or none (on a project machine with
+                                    axioms go beyond the standard three (`sorryAx` too), or none, or each that failed, when
+                                    lean has an error on its own lines (on a project machine with
                                     --on auto); --siblings: then fail on a name another module of its package declares too
 """
 from __future__ import annotations
@@ -147,10 +148,11 @@ def _lean_here(file: str, siblings: bool = False) -> int:
         print(f"verity lean try: {rel}: no sibling check: {plan}", flush=True)
         plan = None
 
-    def lean(copy: str, args: list[str]) -> tuple[int, str]:
+    def lean(copy: str, args: list[str], show) -> tuple[int, str]:
         p = subprocess.run([lake, "env", "lean", *args, copy], cwd=pkg, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                            text=True)
-        print(p.stdout, end="", flush=True)
+        for line in p.stdout.splitlines(keepends=True):
+            show(line)
         return p.returncode, p.stdout
 
     with sib.scratch(pkg) if plan else contextlib.nullcontext() as work:
@@ -158,7 +160,7 @@ def _lean_here(file: str, siblings: bool = False) -> int:
         args = opts + (sib.lean_args(pkg, plan, work) if plan else [])
         print(f"verity lean try: lake env lean {''.join(o + ' ' for o in opts)}{probe.COPIES / at}, {rel} with the axiom "
               f"probe after its last line{', then the sibling check' if plan else ''} (in {where})", flush=True)
-        rc, said, _ = probe.probe(pkg, at, path.read_text(), lambda copy: lean(copy, args))
+        rc, said, _ = probe.probe(pkg, at, path.read_text(), lambda copy, show: lean(copy, args, show))
         if rc == 0 and plan:
             rc, output, line = sib.check(plan, work, lambda a: sib.run([lake, "env", "lean", *a], pkg))
             print(output, end="")
@@ -174,7 +176,8 @@ def _lean(args: list[str]) -> int:
                                  "imports (`lake build` there first) and with its `[leanOptions]`, as `lake build` gives "
                                  "them, exiting with lean's status; its last line, the "
                                  "axiom probe's, names each theorem whose axioms go beyond propext, Classical.choice and "
-                                 "Quot.sound (sorryAx too), or says none do.")
+                                 "Quot.sound (sorryAx too), or says none do; where lean has an error on a theorem's own "
+                                 "lines, it names that theorem as failed, and `#print axioms`' answer for it is not shown.")
     ap.add_argument("file", metavar="FILE", help="the .lean file: a path from here, or from the root of "
                     "the checkout you're in, which is the tree it elaborates")
     ap.add_argument("--siblings", action="store_true", help="once it elaborates, import its build beside every built module "

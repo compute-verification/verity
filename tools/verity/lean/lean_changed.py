@@ -15,7 +15,8 @@ cleanly that Lean doesn't) fails the run in minutes rather than when the audit's
 `lake build +MODULE:deps` (FILE's imports; Lake rebuilds only what changed since the slot's last build) and then
 `lake env lean` with the package's `[leanOptions]` (`siblings.options`) in that package's directory on a copy of FILE with
 the axiom probe appended (`axiom_probe.py`: its last line names each theorem whose axioms go beyond the standard three,
-`sorryAx` among them, or says none do), and exits with lean's
+`sorryAx` among them, or says none do; where lean fails on a theorem's own lines it names that theorem as failed, and
+`#print axioms`' answer for it is not shown), and exits with lean's
 status on FILE's own lines (with `--siblings`, that copy's build then goes through the sibling check, `siblings.py`, whose
 status it takes); when that status is an import clash (an
 import declaring what an earlier one did), the two modules it names lose their traces (`clashed`), so the next try rebuilds
@@ -380,10 +381,10 @@ def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
 
 
 def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, sandbox: bool = True,
-          cmd: list[str] | None = None) -> tuple[int, str]:
+          cmd: list[str] | None = None, echo=None) -> tuple[int, str]:
     """`lake build` (of ``targets``, else the default ones; ``cmd``: that `lake` command instead) of ``tree/pkg``, in the
-    sandbox unless ``sandbox`` is False; Lake's output is echoed as it comes. Before the default targets it links the
-    dependencies' compiler plugins alone (`check.py`'s `plugin_targets`)."""
+    sandbox unless ``sandbox`` is False; Lake's output is echoed as it comes, or each line handed to ``echo``. Before the
+    default targets it links the dependencies' compiler plugins alone (`check.py`'s `plugin_targets`)."""
     if cmd is None and targets is None and (plugins := AUDIT.plugin_targets(tree / pkg)):
         rc, text = build(pkg, tree, lake, plugins, sandbox)
         if rc:
@@ -396,7 +397,10 @@ def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, san
                          encoding="utf-8", errors="replace")
     out = []
     for line in p.stdout:
-        print(line, end="", flush=True)
+        if echo:
+            echo(line)
+        else:
+            print(line, end="", flush=True)
         out.append(line)
     return p.wait(), "".join(out)
 
@@ -1445,7 +1449,8 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 if rc == 0:
                     step, (rc, said, text) = "lean", PROBE.probe(
                         tree / pkg, at, (ROOT / file).read_text(),
-                        lambda copy: build(pkg, tree, lake, sandbox=sandbox, cmd=["env", "lean", *args, copy]))
+                        lambda copy, show: build(pkg, tree, lake, sandbox=sandbox, cmd=["env", "lean", *args, copy],
+                                                 echo=show))
                 log(f"lean-try: {file}: {step} exit {rc} in {time.monotonic() - t0:.0f} s")
                 if rc and (healed := clashed(tree, closure(pkg), text)):
                     log(f"lean-try: {file}: an import clash between {' and '.join(healed)}, which this tree can leave when "
