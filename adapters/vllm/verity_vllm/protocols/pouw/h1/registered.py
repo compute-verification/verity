@@ -41,15 +41,19 @@ from functools import cache
 from typing import Any
 
 import numpy as np
-
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.commitments import hm96
+from verity.commitments.crypto import chacha20
 from verity.commitments.hm96 import batch
 from verity.commitments.merkle import merkle_depth
-from verity.commitments.rowleaf import (ROW_SEG_BYTES, sha512_row_seg_prefix, sha512_row_seg_segment_prefix,
-                                           sha512_row_seg_segments, sha512_row_v2_prefix)
-from verity.commitments.crypto import chacha20
+from verity.commitments.rowleaf import (
+    ROW_SEG_BYTES,
+    sha512_row_seg_prefix,
+    sha512_row_seg_segment_prefix,
+    sha512_row_seg_segments,
+    sha512_row_v2_prefix,
+)
+from verity.protocols.pouw.verifier.audit import hm96_salt
+from verity.protocols.spot.verifier.one_stage import registered as G
 
 _INST = hm96.SHA512
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"

@@ -11,6 +11,7 @@ import pytest
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import live_reads as LR
 from verity.protocols.spot.verifier.one_stage import registered as G
+
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import live as LV
@@ -21,8 +22,20 @@ from verity_vllm.protocols.pouw.h1.static import graph_pad
 torch = pytest.importorskip("torch")
 
 from tests.protocols.test_credit_gate import (  # noqa: E402,F401
-    FILES, LAYOUT, PHC, ROWS, ZyArm, _credit, _descriptor, _linear_is_the_stand_in, _period_weights, _record, _serve,
-    _served, periodic)
+    FILES,
+    LAYOUT,
+    PHC,
+    ROWS,
+    ZyArm,
+    _credit,
+    _descriptor,
+    _linear_is_the_stand_in,
+    _period_weights,
+    _record,
+    _serve,
+    _served,
+    periodic,
+)
 from tests.protocols.test_pouw_h1_served import _unit  # noqa: E402
 
 GRAPHS = (1, 2, 4, 8)

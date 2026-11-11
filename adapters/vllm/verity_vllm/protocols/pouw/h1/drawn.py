@@ -69,25 +69,36 @@ import os
 import shlex
 import subprocess
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable, Sequence
 
 import numpy as np
-
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import leaf_lanes as LL
 from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.spot.device import challenger as Ch
 from verity.protocols.spot.verifier.one_stage import produced as PR
 from verity.protocols.spot.verifier.one_stage import registered as G
+
 from verity_vllm.errors import Refused
-from verity_vllm.protocols.pouw.h1.drawn_rows import (LEAF_NAMES, LEAF_OUT_ROWS, LEAF_PROGRAM, held, leaf_rows,
-                                                     leaf_statement, operands, partials, receipt_value,
-                                                     receipt_words, split_record, split_row)
+from verity_vllm.protocols.pouw.h1.drawn_rows import (
+    LEAF_NAMES,
+    LEAF_OUT_ROWS,
+    LEAF_PROGRAM,
+    held,
+    leaf_rows,
+    leaf_statement,
+    operands,
+    partials,
+    receipt_value,
+    receipt_words,
+    split_record,
+    split_row,
+)
 
 NAME = "unit/pouw-h1-tile"
 RECORD = "h1/w{w}/pouw-h1-calls.json"
@@ -404,6 +415,7 @@ class FileStager:
     def __init__(self, path: Path, definition: str, in_rows: Sequence[tuple], out_rows: Sequence[tuple],
                  name: str = NAME) -> None:
         from types import SimpleNamespace
+
         from verity_flock import circuit as FC
         with open(path, "rb") as f:
             first, second = f.readline(), f.readline()
@@ -431,6 +443,7 @@ class FileStager:
     def stage(self, rows: dict, out_dir: Path, salt_key: bytes, salts: dict, indices: Sequence[int], set_name: str,
               tables: dict, refs: dict, registered: dict) -> dict:
         from types import SimpleNamespace
+
         from verity_flock import circuit as FC
         iset = SimpleNamespace(**{**vars(self.iset), "name": set_name})
         n = len(rows[self.row_ports[0]])

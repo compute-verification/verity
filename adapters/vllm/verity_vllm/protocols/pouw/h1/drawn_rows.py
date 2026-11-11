@@ -5,16 +5,16 @@ read (`split_row`, `split_record`, `receipt_words`) and the check that a rebuilt
 ``--registered`` reads on credit's own file (`leaf_statement`)."""
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
-
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import leaf_lanes as LL
 from verity.protocols.spot.verifier.one_stage import produced as PR
 from verity.protocols.spot.verifier.one_stage import registered as G
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+
 from verity_vllm.errors import Refused
 
 M32 = (1 << 32) - 1
@@ -119,6 +119,7 @@ def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, G.Registere
     receipt's u16 words (`receipt_words`), here the word reference's (`h1zy.reference` of the unit's rows, salt, position
     and roots), at ``RECEIPT_NONCE`` + c under the prover's key, bound to the window's root."""
     from verity.protocols.pouw.prover.circuit import h1zy as Z
+
     from verity_vllm.protocols.pouw.h1 import registered as NR
     from verity_vllm.protocols.pouw.h1 import served as SV
     sizes = [size for size, _w in CR.call_work(win["layout"])]

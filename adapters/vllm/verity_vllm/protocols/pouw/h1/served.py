@@ -91,34 +91,62 @@ import contextlib
 import functools
 import hashlib
 import weakref
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import Callable, Mapping, Sequence
 
 import numpy as np
-
+from verity.circuits.codec import canonical_json
+from verity.circuits.program import Program
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import salt as PS
 from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.spot.verifier.one_stage import partition as P, registered as G
-from verity.circuits.codec import canonical_json
-from verity.circuits.program import Program
+from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.spot.verifier.one_stage import registered as G
 
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import live as LV
-from verity_vllm.protocols.pouw.h1.public_rows import PublicRows
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import tables_device as TD
 from verity_vllm.protocols.pouw.h1.model_key import ModelKey, model_key
-from verity_vllm.protocols.pouw.h1.names import B_NONCE, IDS_NONCE, LIVE_NONCE, NONCE, PREFIX, RECEIPT_NONCE, nonce
-from verity_vllm.protocols.pouw.h1.served_files import FILE, WindowCommitmentEntries, file_name, reads_file, register, trees
-from verity_vllm.protocols.pouw.h1.served_program import (card_arch, declared, declared_layout, descriptor, layout,
-                                                          write_program)
-from verity_vllm.protocols.pouw.h1.words import (EMPTY_ID, chunk_words, ids_words, receipt_words, record_words,
-                                                         row_words, zy_words)
+from verity_vllm.protocols.pouw.h1.names import (
+    B_NONCE,
+    IDS_NONCE,
+    LIVE_NONCE,
+    NONCE,
+    PREFIX,
+    RECEIPT_NONCE,
+    nonce,
+)
+from verity_vllm.protocols.pouw.h1.public_rows import PublicRows
+from verity_vllm.protocols.pouw.h1.served_files import (
+    FILE,
+    WindowCommitmentEntries,
+    file_name,
+    reads_file,
+    register,
+    trees,
+)
+from verity_vllm.protocols.pouw.h1.served_program import (
+    card_arch,
+    declared,
+    declared_layout,
+    descriptor,
+    layout,
+    write_program,
+)
+from verity_vllm.protocols.pouw.h1.words import (
+    EMPTY_ID,
+    chunk_words,
+    ids_words,
+    receipt_words,
+    record_words,
+    row_words,
+    zy_words,
+)
 
 #: the rows' format: the tile's port rows
 V2 = G.SCHEMA_V2

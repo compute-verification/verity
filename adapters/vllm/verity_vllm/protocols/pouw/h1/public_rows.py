@@ -2,12 +2,11 @@
 again on read, on the host or on a torch device, rather than held."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Sequence
 
 import numpy as np
-
 from verity.protocols.pouw.verifier import core_check as CC
 
 

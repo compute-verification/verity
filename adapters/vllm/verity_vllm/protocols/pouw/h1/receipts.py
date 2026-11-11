@@ -61,19 +61,18 @@ import ctypes as C
 import functools
 import hashlib
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable
 
 import numpy as np
 import torch
-
-from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.prover.circuit import h1tile as HT
 from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.pouw.prover.circuit import seeds as SD
 from verity.protocols.pouw.prover.circuit import segment as SG
+from verity.protocols.pouw.verifier import credit as CR
 
 M32 = (1 << 32) - 1
 R = C_ = 32

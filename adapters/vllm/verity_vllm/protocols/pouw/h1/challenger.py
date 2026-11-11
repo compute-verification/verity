@@ -79,11 +79,11 @@ import hashlib
 import itertools
 import json
 import re
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable, Mapping, Sequence
 
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import credit as CR
@@ -93,13 +93,26 @@ from verity.protocols.pouw.verifier.audit import salt_of
 from verity.protocols.pouw.verifier.protocol import DomainError
 from verity.protocols.spot.device import challenger as Ch
 from verity.protocols.spot.device import remote
-from verity.protocols.spot.device.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
-                                                             extends, ledger_head, live_reason, pinned_session,
-                                                             session_named)
+from verity.protocols.spot.device.challenger import (
+    ChallengerKey,
+    CoinError,
+    LiveCommitment,
+    LiveOpening,
+    extends,
+    ledger_head,
+    live_reason,
+    pinned_session,
+    session_named,
+)
 
-from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1.draw import NO_DRAW_SESSION, draw_files, draw_reason, draw_session_reason
 from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1.draw import (
+    NO_DRAW_SESSION,
+    draw_files,
+    draw_reason,
+    draw_session_reason,
+)
 
 SCHEME = Wd.LIVE_SCHEME
 #: the pouw setting ``session``: the gate's open answer (``commitment`` from ``status SESSION`` when the answer's is

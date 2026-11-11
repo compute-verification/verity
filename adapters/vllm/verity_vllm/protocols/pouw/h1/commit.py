@@ -41,17 +41,20 @@ input token ids, layer 0's input. Core's credit holds each to the Commit's value
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import Callable, Iterator, Mapping, Sequence
 
 import numpy as np
+from verity.circuits.codec import canonical_json
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.spot.verifier.one_stage import registered as G, registration as REG
-from verity.circuits.codec import canonical_json
+from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.spot.verifier.one_stage import registration as REG
+
 from verity_vllm.commit import step_rows
-from verity_vllm.protocols.pouw.h1 import names as NM, registered as NR
+from verity_vllm.protocols.pouw.h1 import names as NM
+from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1.words import ids_words
 
 #: the scheme H1's own Commit commits under, and its run root's bytes

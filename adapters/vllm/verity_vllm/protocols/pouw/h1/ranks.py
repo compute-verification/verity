@@ -35,12 +35,11 @@ from __future__ import annotations
 
 import importlib
 import os
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
-from collections.abc import Mapping, Sequence
 
 import numpy as np
-
 from verity.protocols.pouw.verifier import verifier
 from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.pouw.verifier.audit import Epoch, Workload, weights_root
