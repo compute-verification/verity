@@ -45,9 +45,11 @@ import collections
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -208,6 +210,13 @@ def sig(x: float, digits: int = DIGITS) -> float:
     return float(f"{x:.{digits}g}")
 
 
+def at(doc, path: str):
+    """The node of `doc` at one of `deep`'s paths."""
+    for part in path.strip("/").split("/"):
+        doc = doc[int(part)] if isinstance(doc, list) else doc[part]
+    return doc
+
+
 def step_of(record: str) -> int:
     return int(str(record).split(";")[0].rsplit("@", 1)[1])
 
@@ -264,10 +273,25 @@ def verdict(OUT: Path, stated: dict | None = None) -> dict:
         checks[f"the control {what} table is the {a} one"] = not off
         lists[f"{what}: {a} against control"] = off
     fit = diff["frontier-fit"]
-    checks["frontier-fit is the last refresh's in every build, and the console's is the served one"] = (
+    checks["frontier-fit: the table is the last refresh's in every build, and the console's is the served one"] = (
         all(v["rows"] and v["columns"] for v in fit["tables"].values()) and all(fit["refused"].values())
-        and all(v["rows"] and v["columns"] if isinstance(v, dict) else v for v in fit["points"].values())
         and fit["console_served_against_rebuilt"]["rows"] and fit["console_served_against_rebuilt"]["columns"])
+    # the frontier's points, which the fit's table is drawn from: a point moves only where its row was rewritten
+    with tarfile.open(OUT / "priced-rows.tar.gz") as t:
+        rewritten = {Path(n).stem for n in t.getnames()}
+    was, now = load("search", "control", TABLES[2]), load("search", "priced", TABLES[2])
+    points = []
+    for x in deep(was, now):
+        point = at(was, x["at"].rsplit("/", 1)[0])
+        source = point.get("source") if isinstance(point, dict) else None
+        row = re.search(r"\(([^()@]+)@\d+\)\s*$", source or "")
+        points.append(x | {"source": source, "rewritten_row": bool(row and row.group(1) in rewritten)})
+    same = fit["points"]["control"]
+    checks["frontier points: the control's are the last refresh's, and one moves only where its row is a rotating run's"] = (
+        (same["rows"] and same["columns"] if isinstance(same, dict) else same)
+        and all(x["rewritten_row"] and x["at"].endswith("/C_gates") for x in points)
+        and load("search", "price", TABLES[2]) == now)
+    lists["frontier points that moved"] = points
     # a run the re-pricing couldn't read has no row in any table
     shown = {k[0] for t in (*search.values(), *over.values()) for k in t}
     named = json.dumps([load("search", n, TABLES[4]) for n in search])

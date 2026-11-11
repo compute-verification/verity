@@ -2,6 +2,7 @@
 compared cell by cell."""
 import json
 import sys
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -174,13 +175,19 @@ def test_a_rotating_rows_move_is_split_into_the_prices_and_the_widths(tmp_path):
     for n, rows in builds.items():
         write(tmp_path / "search" / n / name, rows)
         replot.dump(tmp_path / "search" / n / replot.TABLES[4], {"rows": [["gone@3", "refused"]]})
+        replot.dump(tmp_path / "search" / n / replot.TABLES[2], {"v": [
+            {"C_gates": 5.0, "source": "start s"},
+            {"C_gates": 7.0 if n == "control" else 7.5, "source": "m from s (row-1@40)"}]})
         write(tmp_path / ("overlay" if n == "priced" else f"overlays/{n}") / "tables" / name, rows)
+    (tmp_path / "row-1.json").write_text("{}")
+    with tarfile.open(tmp_path / "priced-rows.tar.gz", "w:gz") as tar:
+        tar.add(tmp_path / "row-1.json", arcname="records/island/row-1.json")
     tabs = {n: json.loads((tmp_path / "search" / n / name).read_text()) for n in builds}
     last = {"last": tabs["control"], "served": tabs["control"]}
     replot.dump(tmp_path / "diff" / "search.json", replot.compare({"last": last["last"], **tabs}, {"rot"}, base="control"))
     replot.dump(tmp_path / "diff" / "overlay.json", replot.compare({"served": last["served"], **tabs}, {"rot"}, base="control"))
     same = {"rows": True, "columns": True}
-    replot.dump(tmp_path / "diff" / "frontier-fit.json", {"tables": {"priced": same}, "points": {"priced": True},
+    replot.dump(tmp_path / "diff" / "frontier-fit.json", {"tables": {"priced": same}, "points": {"control": True},
                                                          "refused": {"priced": True}, "console_served_against_rebuilt": same})
     replot.dump(tmp_path / "diff" / "finals-table.json", {"differ": []})
     replot.dump(tmp_path / "diff" / "console.json", {"served_rows": 3, "rebuilt_rows": 3, "bytes": {}, "note": "",
@@ -194,6 +201,10 @@ def test_a_rotating_rows_move_is_split_into_the_prices_and_the_widths(tmp_path):
     assert v["lists"]["runs not re-priced that have a row in a table"] == {"unread": [], "no_record": ["gone"],
                                                                            "no_arguments": [], "unknown_program": []}
     assert v["checks"]["search: each rotating row's |C| rose by its rotations' added gates"]
+    assert v["checks"]["frontier points: the control's are the last refresh's, and one moves only where its row is a "
+                       "rotating run's"]
+    [point] = v["lists"]["frontier points that moved"]
+    assert point["at"] == "/v/1/C_gates" and point["rewritten_row"] and point["source"] == "m from s (row-1@40)"
     assert v["checks"]["overlay: no run without a rotation moves but in p over an H that moved"]
     [moved] = v["lists"]["overlay: rows without a rotation whose p moved"]
     assert moved["run"] == "h" and moved["change"] == pytest.approx(1 / 1.01 - 1)
