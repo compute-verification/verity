@@ -41,7 +41,8 @@ Two kinds of committed run:
     prove_path.py advice --workload F --out FILE
     prove_path.py commit (--tp-commit DIR --build-root DIR | --bundle DIR --row-dir DIR --workload F [--hf-config F] \\
         | --serve-run DIR --window K --row-dir DIR [--hf-config F] [--target F]) [--advice FILE] [--opening FILE] --partition F \\
-        --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...]
+        --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...] \\
+        [--serving-rows-tables REGISTRATION --serving-rows-tables-key KEY]
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall --out DIR [--cap-bits L] \\
         [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] --challenger local|gate:USER@HOST --main FILE
@@ -67,6 +68,8 @@ Two kinds of committed run:
   ``--opening``, the prover's private file, never under the run's out/; then each window from its bundle over the compiler's
   Programs for it, ``WINDOWS/rank<r>/``. ``--forge MEMBER:UNIT`` commits that unit with bit 0 of its first output word flipped
   (`forging`): its rows, commit strings and roots all agree with the flipped word, so only the proof can refuse it.
+  ``--serving-rows-tables`` (with its key) gives each window the committer's registration of the per-expert cut's tables
+  (`tables_of`), without which a partition of table reads or fused blocks is refused.
 * **audit** (the verifier): each window from the record, the opened advice and its own compiler (`open_advice`, `window_of`;
   a single-GPU or served window's Programs from its own Builds, written into ``--builds``, default ``OUT/builds``),
   audited by a5 on the verifier's coins with the advice negatives beside it (`more_negatives`), then `advice_before_draw` on the
@@ -873,16 +876,25 @@ def window_of(a: argparse.Namespace, r: int, compiler: Capped, requests: list[di
     return AW.window_of_advice(a.tp_commit, r, a.partition, compiler, requests, bound)
 
 
+def tables_of(a: argparse.Namespace) -> dict[str, str] | None:
+    """The per-expert cut's tables as a serving-rows request names them (`expert_rows.of_request`): the committer's registration
+    ``--serving-rows-tables`` (``{rank}`` in its path its rank's) and the key file it is read under; None without one."""
+    return {"key": a.serving_rows_tables_key, "registration": a.serving_rows_tables} if a.serving_rows_tables else None
+
+
 def commit1(a: argparse.Namespace, compiler: Capped, requests: list[dict], bound: Mapping[str, Any], out: Path) -> dict:
     """A single-GPU Commit's stand-in window into ``out`` (`serving_rows.after_commit`, as `deferred_rows.from_bundle` writes one)
     over ``compiler``'s Programs for the advice's ``requests``, ``bound`` in its provenance: every value read through an opening
     verified against the record's run root, the weights (none for an activation template) each opened on its first read
-    against the committed weights root (`cpu_replay.OnRead`)."""
+    against the committed weights root (`cpu_replay.OnRead`), and the per-expert cut's tables committed under the committer's
+    key and registration (`tables_of`), read before the bundle is opened."""
     from verity_vllm.check.oracle_compare import OpenedReader
     from verity_vllm.check.replay.index import ProgramIndex
     from verity_vllm.pipeline import cpu_replay as CPU
+    from verity_vllm.pipeline import expert_rows as EX
     from verity_vllm.pipeline import serving_rows as SRW
 
+    tables = EX.of_request(tables_of(a))
     r = record1(str(a.bundle), str(a.row_dir))
     if r.store.commit_scheme != SRT.ROWS_SCHEME:
         raise ValueError(f"the Commit's store commits under {r.store.commit_scheme}, not {SRT.ROWS_SCHEME}: no stand-in names a SHA-512 root")
@@ -896,7 +908,7 @@ def commit1(a: argparse.Namespace, compiler: Capped, requests: list[dict], bound
                            manifest=r.manifest if isinstance(r.manifest, dict) else None, run_root=r.run.run_root,
                            row=r.row.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": r.pair, "source": r.ctx.get("code")}, workers=a.workers,
-                           stand_in=stand_in1(r), binding=dict(bound), transfer_gates=compiler.transfer_gates)
+                           stand_in=stand_in1(r), binding=dict(bound), transfer_gates=compiler.transfer_gates, tables=tables)
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
@@ -980,7 +992,7 @@ def commit_rank(job: tuple[argparse.Namespace, int, list[dict], dict]) -> dict:
         if single(a):
             got = commit1(a, compiler, requests, bound, out)
         else:
-            got = AW.commit_window(a.tp_commit, r, a.partition, out, compiler, requests, bound, workers=a.workers)
+            got = AW.commit_window(a.tp_commit, r, a.partition, out, compiler, requests, bound, workers=a.workers, tables=tables_of(a))
     return {**got, "forged": {"member": forge[0], "unit": forge[1]} if forge else None}
 
 
@@ -1752,6 +1764,9 @@ def main(argv: list[str] | None = None) -> int:
                    "server's (advice/w<K>/private/advice.bin)")
     p.add_argument("--forge", help="MEMBER:UNIT: commit that unit with bit 0 of its first output word flipped")
     p.add_argument("--workers", type=int, default=None, help="commit workers per rank (default min(16, CPUs))")
+    p.add_argument("--serving-rows-tables", metavar="REGISTRATION_JSON", help="the per-expert cut's tables registration (verity-vllm "
+                   "tp-register-tables --out; {rank} in its path its rank's): each window commits the tables its reads read under it")
+    p.add_argument("--serving-rows-tables-key", metavar="KEY", help="the committer's key file --serving-rows-tables is registered under")
     p = sub.choices["audit"]
     p.add_argument("--windows", required=True, help="the prover's windows, rank<r>/ each (prove_path.py commit --out)")
     p.add_argument("--template-sets", required=True, help="one input set per member template, for the lowering")
