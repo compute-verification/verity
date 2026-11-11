@@ -46268,3 +46268,63 @@ For CAPS (when the PR opens; the number follows): Proofs/Core: +1 modules, +19 d
 
 For the table:
 - BITS, by classes: the Lean now derives the bound from one hypothesis on what the extracted witnesses reveal (`hwit`), for the classes of any key under which gates are needed by the same blocks and lie in one replay block; compiled through `eventTwoX_le_firstHit_kept` (try `af42`), the two corollaries above it in line. At the code it is unproved (REGX). Modeled; no new number.
+
+## CONCRETE, Wed 11 Nov 09:51Z: ready to mark #8867 at 65788418c6e8275077e3bb727d76bf80d456e2bd (the evaluator, four columns at SCALE's bounds; quick tier 3 of 3). By the tree's code the priced design reads 2^-100.91 a sampled replay block and 2^-98.91 to 2^-98.33 a run by gates, 2^-114.48 to 2^-113.90 by classes in calls and 2^-105.48 to 2^-104.90 in compressions: your 09:23Z table reproduces. #8873's records run is still out; no claim changes anywhere
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [guess] mine. No PR of mine changes a lock or what a guarantee says.
+
+**ready to mark #8867 at 65788418c6e8275077e3bb727d76bf80d456e2bd**
+
+- [run] Quick tier `r20261111-093215-3ef2` (vy-nebius-cpu-10) at that head: `suites.py --changed 8201dacff26e --quick` (the branch's base on `main`), 3 suites (`benchmarks/spot_figures`, `repository`, `verity-graph`), 3 passed, 0 failed.
+- [run] `git merge-tree`: it merges with `main` at `0a722c6ec984` and with five of the six open PRs that touch `benchmarks/spot_figures/README.md`, the one file it shares with any open PR: #8784, #8779, #8777, #8568, #8517. The sixth, #8462, conflicts with `main` on its own in 14 files, that README among them.
+- [run] No Lean, no lock, nothing under `verity/` or `security/`: three files in `benchmarks/spot_figures`. 55 tests, ruff clean. Body rewritten in your 08:37Z order.
+- What changed since the 09:02Z head, on your 09:10Z and 09:23Z messages: a run at K0 is the design at K0 times the sessions and the gates (it was K0 times the bound); `--classes K_cls` prints four columns (by gates and by classes, each in calls and in compressions); the waits' term is printed per run at both caps, in no sum; T is said to be the calls in every run, the prover's and the verifier's, where it gets its value.
+
+**The four columns** [run: `binding.py --K 2^41.81 --classes 2^26.24 --sessions 15694 --symbols 2^23 --first-stage 4` and `6`, at `65788418c6e8`; the inputs are SCALE's 09:20Z bounds, relayed]. The first-hit term of #8827's lemma, T = 2^80 calls of SHA-512 in every run, one 2^35-bit table a session:
+
+| | by gates, calls | by gates, compressions | by classes, calls | by classes, compressions |
+|---|---|---|---|---|
+| per sampled replay block | 2^-100.91 | 2^-91.91 | 2^-116.48 | 2^-107.48 |
+| per run at K0 = 4 | 2^-98.91 | 2^-89.91 | 2^-114.48 | 2^-105.48 |
+| per run at K0 = 6 | 2^-98.33 | 2^-89.33 | 2^-113.90 | 2^-104.90 |
+| a year of runs at K0 = 4 (52,560, one machine) | 2^-83.23 | 2^-74.23 | 2^-98.80 | 2^-89.80 |
+| a year of runs at K0 = 6 | 2^-82.65 | 2^-73.64 | 2^-98.22 | 2^-89.21 |
+| width, κ 2^-7 (K_mean ≤ 2^39.15, K_cls ≤ 2^23.83): per run at K0 = 4 / 6 | 2^-101.57 / 2^-100.99 | 2^-92.57 / 2^-91.99 | 2^-116.89 / 2^-116.31 | 2^-107.89 / 2^-107.30 |
+| the same, a year of runs at K0 = 4 / 6 | 2^-85.89 / 2^-85.31 | 2^-76.89 / 2^-76.30 | 2^-101.21 / 2^-100.62 | 2^-92.21 / 2^-91.62 |
+
+- [run] Every cell of your 09:23Z table at the record reproduces to its tenth. By width at κ 2^-7 the per-block cell is 2^-103.57 by gates; the run cells match your "2^-101.6 to 2^-101.0".
+- [run] The other terms, per sampled replay block at N_s = 15,694, the same in all four columns but for the conversion: rewinding 2^-48.97 under `ExpectedCR` at B (2^-44.47 in compressions) and 2^-136.97 under `StrictBirthday` at B (2^-127.97); conflict 2^-129.79 (2^-120.78), its cost taken as `2·T·(1 + N_s·e_s)`, which nobody has proved. Under `ExpectedCR` at B the sum is the rewinding term: 2^-47.68 a run at K0 = 6.
+- [run] The most K of one sampled replay block (gates or classes alike) at which the first-hit term stays at 2^-100: in calls 2^42.72 for the block alone, 2^40.14 for a run at K0 = 6, 2^24.46 for a year of such runs; in compressions 2^33.72, 2^31.14, 2^14.84.
+
+**The waits' term** [run, TWOPROVE's formula relayed]: per run, k = 2^10 at both waits: 2^-125.99 at the cap 2^128·k (`main`), 2^-183.64 at 2^192·k (#8885, unmarked, Daniel's). The code prints ⌊−log₂⌋ in hundredths, so 2^-183.64 is TWOPROVE's 2^-183.65 rounded the safe way. Over a year of runs on one machine: 2^-110.31 and 2^-167.96, so it keeps 2^-100 over that year under either cap.
+
+**The year** (15.68 bits: 52,560 runs of 600 s on one machine), if 2^80 is each run's budget [run]:
+
+- Keeps 2^-100: only by classes with the strata by width at κ 2^-7, in calls: 2^-101.21 at K0 = 4, 2^-100.62 at K0 = 6.
+- The record by classes misses by 1.2 to 1.8 bits in calls (2^-98.80, 2^-98.22). Nothing keeps it in compressions (best 2^-92.21) and nothing by gates.
+- If 2^80 is the year's budget the per-run rows stand as they are; which it is, is Daniel's wording. Over a world year at the 43.4 bits others use [relayed: TWOPROVE 09:10Z], no row holds: by classes in calls a run at K0 = 6 reads 2^-70.5 [derived].
+
+**#8873 (the Lean instance), unchanged at 3b134fb248723b05ce8ab90b9ae4cd7e23e30863: not ready yet, one run out**
+
+- [run] Quick tier `r20261111-091933-c374` (vy-nebius-cpu-3): 4 suites, 4 passed, 0 failed.
+- [run] Records run `r20261111-091929-9ebc` (vy-nebius-cpu-3): took its slot 09:29Z, still running. The ready line follows it.
+- [run] **The merged tree composes.** My head merged with #8879's `9eb9f26cea4a` (which holds #8827's `946b7b72f26d`): a scratch module importing `TwoFirstHitAt` and `NumbersFinder` elaborates, axioms clean, `r20261111-094723-6cb6` (vy-nebius-cpu-10; the 09:20Z try sat 26 min on cpu-7 without a slot and I cancelled it). It proves `4 * L.firstHitCost x T Ns Ks Km / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ))` from `real_table1_le`, and KILIAN's `CompiledTwo.eventTwoX_le_at` with its fourth term replaced by `2 ^ (-(100 : ℝ))`. The scratch module is in no branch.
+- [run] With #8764 it shares only `Claims.lean` (one import line each); `git merge-tree` clean; not built together.
+- **What its numerals cover at SCALE's bounds** (`K_s, K_m ≤ 2^42`, `N_s ≤ 2^24`, `T ≤ 2^80` calls) [run for the arithmetic]: by gates per sampled replay block (2^41.81, 0.19 bits inside); by classes per run (at most 2^28.83). **Not** by gates per run (2^43.81 to 2^44.39 gates, and the term there is above 2^-100), and nothing in compressions. The body says so in a table.
+
+**#8900, new, unmarked, at 1c041bac78f5a4e4bae41d15cba950ae177793ae: the same instance in compressions, stacked on #8873**
+
+- [run] Two theorems added to `NumbersFinder.lean`: `firstHitBound_table1_513` and `real_table1_513_le`: the expression at `T, c ≤ 513·2^80`, `N_s ≤ 2^24`, `K_s, K_m ≤ 2^33` is at most 2^-100 (value 2^-100.72). Try `r20261111-093917-ba55` (vy-nebius-cpu-8): `lean exit 0`, none of the module's 9 theorems beyond the three axioms.
+- It covers the route's cell: by classes, per run at K0 = 4 to 6, in compressions (2^-105.48 to 2^-104.90 by the evaluator). It builds no weighted cost: no premise counts compressions, and its docstring and body say these are the expression's values at numbers 513 times larger.
+- I opened it because the route to 100 bits in compressions had no checked instance and #8873's head should not move under its records run and CAPS's count. Mark it or not as you see fit; it lands only after #8873. Records `r20261111-094906-6b33` and quick tier `r20261111-094910-a0cf` (vy-nebius-cpu-8) are waiting for slots.
+
+**Still not given to me:** `n_PU·openCalls` at the code. The evaluator prints c and counts it (0 unless given); the Lean instances take `c ≤ 2^80` (calls) and `c ≤ 513·2^80`.
+
+For KILIAN: nothing to change. `real_table1_le`'s left side is `4 * (T * (1 + e * Ns + Ks + e * Km) + (1 + Ks) * c) / 2 ^ (256 : ℝ)`, which is `4 * firstHitCost … / 2 ^ (256 : ℝ)` after `unfold firstHitCost`, with `(T : ℝ)` a cast of ℕ and `c = (L.nPU x : ℝ) * L.openCalls x`; try `6cb6` checks it against your head `9eb9f26cea4a`. If `firstHitCost`'s body changes shape, tell me.
+
+For CAPS: Proofs/Flock: +1 modules, +9 declarations (#8873: security/Proofs/Flock/Claims/NumbersFinder.lean), as in #8890. If #8900 is marked: +0 modules, +2 declarations more (#8900: the same file, 11 in all).
+
+For the table:
+- CONCRETE: #8867 ready at `65788418c6e8` (quick tier `3ef2` 3 of 3). Computed by the tree's code at that commit from SCALE's bounds (modeled; the first-hit term of #8827's lemma; T = 2^80 calls in every run): by gates 2^-100.91 a sampled replay block, 2^-98.91 to 2^-98.33 a run at K0 = 4 to 6 (2^-89.91 to 2^-89.33 in compressions); by classes 2^-114.48 to 2^-113.90 a run in calls, 2^-105.48 to 2^-104.90 in compressions.
+- Lean: #8873 at `3b134fb24872` (quick tier passed, records run out) is the checked number by gates per sampled replay block and by classes per run, in calls; it composes with #8879's `eventTwoX_le_at` in the merged tree (try `6cb6`). #8900 at `1c041bac78f5`, unmarked, adds by classes per run in compressions.
+- A year of runs on one machine (if 2^80 is each run's): only by classes at width, κ 2^-7 keeps 2^-100 in calls (2^-101.21 to 2^-100.62); the record by classes reads 2^-98.80 to 2^-98.22; nothing holds in compressions. The waits' term holds under either cap (2^-110.31, 2^-167.96).
