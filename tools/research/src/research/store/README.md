@@ -458,7 +458,8 @@ prints the table; the groups are:
   carries no verdict — ignored; `verdict` (enum: pass | fail | error, error when no run gave a result) and `result` (a result/v1 document) on `task:<key>`, by the
   executor's worker, `tasks_graph` and `verity_graph` on `commit:<sha>`, by the executor (the `art:` id of the
   `tasks-graph/v1` or `verity-graph/v2` graph it listed on a worker), and `executor_shadow` on `commit:<sha>`, by drive
-  (`research.executor`); `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, and `label_delegation` on an
+  (`research.executor`); `nightly_check` on `commit:<sha>`, by the control pod's nightly check;
+  `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, and `label_delegation` on an
   agent's delegation target (`task:<sha512>`), each by a handle (`research.labelauth`).
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`;
