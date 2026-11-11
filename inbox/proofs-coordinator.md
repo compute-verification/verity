@@ -50894,3 +50894,26 @@ For BREAKEVEN:
 For the table:
 - Lean's setup: 0.35 to 0.37 s a MB of the program, once a drawn session as `main` is; second reading holds on five runs. With it the row of record reads 15,670 to 16,698 GB at modeled 0.4 (560 to 643 at the measured engine rate on node A, a floor) and the built plan 9,301 to 9,914 (333 to 382), modeled: a sum of two measurements, no head block was verified with its program.
 - If the setup moves to once a call: 250 + 1,086/k core-s a statement at k sessions a call; k = 16 reads 7,136 and 4,260. Which program a session is handed, and k, are not decided by anything in the tree I read.
+
+## CROSS, Wed 11 Nov 11:23Z: #8905 `40b8e7d04736` merges with `main` and with all 47 marked heads of ours; its build on the merge of every marked Lean head is out (`8342`, waiting for a slot), and covers #8896 and #8873 too
+
+**The merge test for KILIAN's 11:09Z ready line** [run 11:14Z, `git merge-tree --write-tree` in a scratch worktree]:
+- #8905 `40b8e7d04736dc84ab8ad215e9afd75cb684d3c2` with `main` `08ad61db94326fa7ddab8e9071da7c0d29155633`: clean. With each of the 47 heads `research queue status` shows marked at 11:12Z: clean, 47 of 47.
+- It is one commit over #8882's `da385b86ccd2`, which holds #8879's `9eb9f26cea4a` [run: `git log`, `git merge-base --is-ancestor`]. Over #8882 it changes one file, `security/Proofs/Flock/SamplingGeneric/TwoFirstHitAt.lean` (+178 lines), no lock and no `unread-caps.json` [run: `git diff --stat`]. It lands after #8882 and #8879.
+
+**The build with the marked Lean heads** [run]:
+- Scratch `c3c69c056f96c980892deff39478ff89bfb82025` (no branch, never pushed) = `allm` `3d55ddde270a` (`86c03d1840cb` and every Lean head marked at 10:45Z, the tree `53eb` is building) + #8896 `6128ce8267e3` + #8873 `676a777193e2` + #8905 `40b8e7d04736`. Three merges, each exit 0; `pins.py --stale` exit 0; the locks and `unread-caps.json` are `allm`'s bytes.
+- `r20261111-111743-8342` (vy-nebius-cpu-6): `lean_changed.py --build` of the six modules the three heads change over `allm`: `Proofs/Flock/Bridge/V5.lean` and `V5/QsRows.lean` (#8896), `Proofs/Flock/Claims.lean` and `Claims/NumbersFinder.lean` (#8873), `Proofs/Flock/SamplingGeneric/TwoFirstHitAt.lean` and `SamplingGeneric.lean`, which imports it (#8905). Launched 11:17:43Z; at 11:23Z it waits for a slot, 3 checks ahead. I post its last line when it ends. ETA [guess] 12:00Z.
+- It is a build of those modules and what they import, not a records run: it does not show that the modules importing them still build, nor the locks' records. `53eb` (the records run on `allm`) shows those for everything under the three heads. KILIAN's own try `r20261111-101601-85f9` built the file on the merge with #8781, #8828 and #8857 [relayed, KILIAN 11:09Z].
+- #8896 and #8873 were the two marked Lean heads in no build of mine at table 4. This build is the first that holds them with the others.
+
+**Since table 4** [run: `research queue status` and the label store, 11:12Z; `gh pr view` on all 88 open PRs of ours, 11:19Z]:
+- #8873 `676a777193e2` has review-14's land (11:01:33Z) and is in the line, place 135 of 163. #8878 `816e2396bdf7` has review-18's land (11:11:48Z), place 108.
+- #8893 `6f65951e0eb8` is marked, has no verdict and is not low-risk, so it is not in the line.
+- No GitHub comment or review on any of the 88.
+- `r20261111-105239-8b6f`, the first of #8454's two identical quick tiers, never got a slot; I withdrew it at 11:15Z. `r20261111-105855-387c` has run since about 11:12Z (22 suites passed at 11:22Z); #8454's ready line follows it.
+- `515d` and `53eb` are still running.
+
+For the table:
+- #8905 `40b8e7d04736`: merges with `main` `08ad61db9432` and all 47 marked heads of ours [run 11:14Z]; one Lean file over #8882; its build with every marked Lean head is `r20261111-111743-8342`, out.
+- `ask ci for a verdict on #8893` (marked at `6f65951e0eb8`, no verdict, not low-risk).
