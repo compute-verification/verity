@@ -42721,3 +42721,123 @@ For HEADPROF: cursor/proofs-salts-8dd2 at ff48f38adc3abe6ec40ab28e5519e5a7aff2e2
 For the table: salts 7.3 → 1.2 to 1.3 host CPU-s a head-block statement with every tree's salts expanded on the host from a 32-byte OS key a tree (statement 2.86 → 2.11 s, or 1.78 → 1.04 s with the witness on the card; salts measured on a CPU node, statement modeled); built as a switch on a branch, no PR; a claim (the 9 Oct ruling), no new Lean Prop.
 For the table: the part with no change to what hiding rests on (the trees above level 0 only): 7.3 → 4.9 host CPU-s (2.86 → 2.56 s; 1.78 → 1.49 s), same branch, `upper`; it needs a new statement version before it can land.
 For BREAKEVEN: salts' host CPU-s a head-block statement, before 7.30 (measured, `r20261111-061047-6773`); after, `all` on the host 1.15 to 1.33, `upper` on the host 4.84 to 4.91 (modeled: rates measured in `r20261111-083117-ea63` on vy-nebius-cpu-9, applied to node A's bytes); `all` on the card about 0 (modeled, not built). Statement seconds on your split: 2.10 to 2.12 (`all`, host), 2.55 to 2.56 (`upper`, host), 1.96 (`all`, card); with the witness on the card 1.03 to 1.05, 1.48 to 1.49, 0.89. All "evaluator's time not counted". These replace my 08:00Z rows "seed a tree, scalar ChaCha20 on host" (5.6) and "AVX-512 on host" (0.4): the built code is between them at 1.15 to 1.33.
+
+## KILIAN, Wed 11 Nov 08:41Z: job 2's theorem is written and pushed, not yet compiled (two tries wait in the slot line); I prove step 1 of (b), the cost; the count is three hypotheses on the coins, for TWOWITNESS; no new premise, no lock change
+
+**Which step, which file.** I prove the first step of (b) tonight, in the one new file
+`security/Proofs/Flock/SamplingGeneric/TwoFirstHitAt.lean`, on #8827's head `946b7b72f26d` alone (no #8836, no
+#8781), branch `cursor/proofs-firsthit-one-4b7e` at `23fdb651916a4c7734d22c7505db4f63a27be0ae` [run: `git push`,
+08:40Z]. It is not compiled: tries `r20261111-083347-b159` (the first commit) and `r20261111-083705-e86e` (the head)
+are both `waiting`, three checks ahead of each in the slot line [run: `research status`, 08:40Z]. The count, step 2,
+I do not prove: it enters as the three hypotheses below, and TWOWITNESS discharges them at the code.
+
+**The step as I prove it is in expectation, not a gate at a time.** `callsBy g ≤ T(1 + Σ_{s∋g} e_s) + openCalls`
+is false on a single tape (the reruns are random; only their mean is at most `e_s`), so the file proves the sum's
+expectation directly [read: the file]:
+
+1. on every tape, `callsBy g ≤ T + own + T·reruns(g)` (`Claims.Sampling.calls_le_own` at the budget; own calls at
+   most `n_PU·openCalls` by `runExt_own_le`);
+2. on every tape, `Σ_{g ∈ sample's gates} reruns(g) ≤ Σ_i |gates session i needs|·slotRuns_i` (a double count:
+   `sum_runExtAt_runs_le`);
+3. a session's expected reruns are at most `e_s` over its own rounds, on which the sample does not depend
+   (`RunsFixed.fixed`, already in `L.Sessions H`), so a weight of the sample stays outside the expectation
+   (`slot_exp_le_weighted`, `ex_weighted_runs_le`; a weighted copy of #8827's `slot_exp_le_un`).
+
+**The statement, as Lean text** [read: the file at `23fdb651916a`]:
+
+```lean
+def sampleNeeds (L : Compiled Coin A) (x : Msg) (needs : ℕ → Finset ℕ) (l : List ℕ) : Finset (Fin (L.nG x)) :=
+  Finset.univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ l, g.val ∈ needs u)
+def sessNeeds (L : Compiled Coin A) (x : Msg) (needs : ℕ → Finset ℕ) (l : List ℕ) (i : ℕ) : Finset (Fin (L.nG x)) :=
+  Finset.univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.sessBlocks x l i, g.val ∈ needs u)
+def firstSlots (L : Compiled Coin A) (x : Msg) (l : List ℕ) : Finset (Fin (L.nPU x)) :=
+  Finset.univ.filter fun i : Fin (L.nPU x) => (L.sessSlots x l i.val).head? = some i.val
+def sessCount (L : Compiled Coin A) (x : Msg) (needs : ℕ → Finset ℕ) (l : List ℕ) : ℕ :=
+  ∑ i ∈ L.firstSlots x l, (L.sessNeeds x needs l i.val).card
+noncomputable def firstHitCost (L : Compiled Coin A) (x : Msg) (T : ℕ) (Ns Ks Km : ℝ) : ℝ :=
+  T * (1 + L.es x * Ns + Ks + L.es x * Km) + (1 + Ks) * ((L.nPU x : ℝ) * L.openCalls x)
+
+theorem CompiledTwo.eventTwoX_le_at {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
+    (hbind : L.commit.Binds H) (hS : L.Sessions H) (hopen : L.toCompiled.OpenCallsLe H) {x : Msg}
+    {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
+    (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω]
+    [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (T : ℕ)
+    (hT : ∀ ω r, (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length ≤ T) {Ns Ks Km : ℝ}
+    (hNs : Ex (fun r : Fin (L.V.k x) → Coin => ((L.toCompiled.firstSlots x (L.checked x r)).card : ℝ)) ≤ Ns)
+    (hKs : Ex (fun r : Fin (L.V.k x) → Coin =>
+      ((L.toCompiled.sampleNeeds x needs (L.checked x r)).card : ℝ)) ≤ Ks)
+    (hKm : Ex (fun r : Fin (L.V.k x) → Coin => (L.toCompiled.sessCount x needs (L.checked x r) : ℝ)) ≤ Km)
+    (hX : ∀ K : ℕ, ExpectedCR H (L.toCompiled.finderXAt H P x s needs K))
+    (hI : ∀ K : ℕ, ExpectedCR H (L.finderIAt H P x s d.part needs K)) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregTwoX H P x p.1 p.2) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + (Compiled.BconfX H L.toCompiled Ω P x).Pr H +
+        4 * L.toCompiled.firstHitCost x T Ns Ks Km / 2 ^ (256 : ℝ)
+```
+
+`eventTwoX_le_at_cap` is the same at two caps `KX`, `KI` on the finders' waits, with `ExpectedCR` at those two
+finders only and `+ N/(KX+1) + N/(KI+1)`, `N = L.nG x`. `Compiled.ex_calls_le_at` is the cost alone:
+`E[callsAt + Σ_{g ∈ sample's gates} callsBy g] ≤ firstHitCost x T Ns Ks Km`. `ex_firstSlots_le` gives
+`Ns := L.nSess x` from the contract with no further hypothesis.
+
+**Hypotheses.** The ones #8827's `eventTwoX_le_firstHit_at` already takes (`A.KS H`, `L.commit.Binds H`,
+`L.Sessions H`, the statement in scope, `hpos`, and `ExpectedCR` at #8827's two counted by-position finders at every
+cap), plus four that are not premises [read: the file; #8827's `TwoRegFirstHit.lean`]:
+- `hopen : L.toCompiled.OpenCallsLe H`, which the deployed code has as a lemma (`openCallsLe_compiled`,
+  `Deployed.lean:376`) [read];
+- `hT`: every run calls `H` at most `T` times, **both parties' calls** (the prover's log and the verifier's). So `T`
+  is the prover's 2^80 plus the verifier's own calls in one run, on every tape, not in expectation;
+- `hNs`, `hKs`, `hKm`: the three counts, statements about the coins alone.
+
+`T` enters only through `hT`. I did not use #8781's declared-cost pattern: it would put `ExpectedCR` at a finder
+whose declared cost is not its counted cost, which is a new premise.
+
+**What it composes.** #8827's `eventTwoX_le_firstHit_at` and `_cap` (the bound linear in `E[c + Σ_g c_g]`);
+`Claims.Sampling.calls_le_own`; `runExt_own_le`; `runExt_runs_eq`; `card_first_le`; and the proof of
+`slot_exp_le_un`, copied with a weight [read: the tree at `946b7b72f26d`]. It does not read my Core file (#8857).
+
+**What is missing, with sizes** [guess, for each size]:
+1. The file compiling: about 440 lines, first try not yet run. I expect two or three rounds of repairs.
+2. The count at the code (TWOWITNESS): `hKs` and `hKm` at the deployed `needs`, about one lemma each (below).
+3. `hpos` at the code: #8836's `reveal_needs_spot`, once SCALE has restated `RegCanon.lean` on #8820. One line then.
+4. `Pr[B_conf,X]` stays a term of the right-hand side: it is not closed at `T` in this file. Under `ExpectedCR` at
+   `BconfX` (the lock on `main` reads `BconfX` as a definition, `security/lean-audit.json:33439` [read]; whether
+   `ExpectedCR` at it is a listed premise I have not checked) and `hT` it would be at most
+   `2·(T(1 + e_s·N_s) + n_PU·openCalls)/2^256`; about 60 lines; I do it after the PR if there is time.
+5. `κ_s` and `√(k·γ_s·Pr[B])` are #8827's, unchanged.
+
+**The constant the Lean has, against SCALE's form.** SCALE's fourth term is
+`4·T·(1 + n_sess·e_max + (1 + e_max)·K_mean)/2^256`. The Lean's is
+`4·(T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls)/2^256`: the same at `N_s = n_sess`,
+`K_s = K_m = K_mean`, plus the extractions' own calls `4·(1 + K_s)·n_PU·openCalls/2^256`, which SCALE's form
+leaves out. `e_s` is `L.es x`, the maximum over the run's slots' shapes of `1 + waits·k`; no `d`, no maximum of K.
+
+For CONCRETE: the right-hand side is
+`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·(T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls)/2^256`
+(capped form: `+ nG/(KX+1) + nG/(KI+1)`), the fourth term being `4 * firstHitCost x T Ns Ks Km / 2^256` with
+`firstHitCost` as defined above: mirror that one definition. Inputs: `T` (both parties' calls a run), `e_s = L.es x`,
+`N_s` ≥ the mean number of sessions in a sample, `K_s` ≥ the mean number of distinct gates the sample needs, `K_m` ≥
+the mean of the sessions' gate counts summed (a gate two sessions need counts twice), `n_PU = L.nPU x` (the run's
+slots), `openCalls = L.openCalls x`. At `T = 2^80`, `e_s = 2,592,237,061`, `N_s = 5,523,986`,
+`K_s = K_m = 2^37.69`, the fourth term without the own calls is `2^-105.04` [run: python, 08:38Z; modeled: SCALE's
+inputs, relayed; the three counts are hypotheses]. The own-call term needs `n_PU·openCalls` at the code, which I do
+not have: at `n_PU·openCalls ≤ 2^60` it is below `2^-156` [guess for the 2^60].
+
+For TWOWITNESS: the split is: you prove, at the code's `L` and `needs`, for every sample `l = L.checked x r`,
+`(L.toCompiled.sampleNeeds x needs l).card ≤ Σ_{u ∈ l} (needs u).card` and
+`L.toCompiled.sessCount x needs l ≤ Σ_{u ∈ l} (needs u).card` (the second needs that the sessions' `sessBlocks`, taken
+at their first slots, split the sample), and the mean of `Σ_{u ∈ l} (needs u).card` as `K_mean`. Then `hKs` and `hKm`
+hold at `Ks = Km = K_mean`. I prove nothing about the counts beyond `ex_firstSlots_le`. The definitions are on my
+branch now; they may change name only if the try forces it, and I will say so.
+
+For ATTACK2: the places to attack are (i) `hT` is on every tape and counts the verifier's calls too; (ii) `needs` is
+free, tied to the code only by `hpos`; (iii) step 3 above rests on `RunsFixed.fixed` (a session's own rounds do not
+move the sample); (iv) the own-call term charges every extraction the whole run's openings.
+
+For the table:
+- BITS, the by-position bound as one Lean theorem at a budget T a run: written, pushed
+  (`cursor/proofs-firsthit-one-4b7e` at `23fdb651916a`), not yet compiled; no new premise, no lock change.
+- Its fourth term is `4·(T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls)/2^256`: `2^-105.04` at SCALE's
+  inputs without the own calls (modeled); the counts `N_s`, `K_s`, `K_m` are hypotheses until TWOWITNESS's lemma, and
+  `Pr[B_conf,X]`, `κ_s`, `√(k·γ_s·Pr[B])` stay as #8827 has them.
