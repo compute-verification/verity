@@ -2937,7 +2937,6 @@
     {"file": "verity_vllm/query/scale_products.py", "kind": "UP033", "symbol": "<module>", "detail": "Use `@functools.cache` instead of `@functools.lru_cache(maxsize=None)`"},
     {"file": "verity_vllm/query/scale_products.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`, `Mapping`"},
     {"file": "verity_vllm/query/type_repr.py", "kind": "I001", "symbol": "parse_type_repr", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/query/units.py", "kind": "UP037", "symbol": "Policy.none", "detail": "Remove quotes from type annotation"},
     {"file": "verity_vllm/query/vocab_range.py", "kind": "UP033", "symbol": "<module>", "detail": "Use `@functools.cache` instead of `@functools.lru_cache(maxsize=None)`"},
     {"file": "verity_vllm/query/vocab_range.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`, `Mapping`"},
     {"file": "verity_vllm/settings.py", "kind": "SIM905", "symbol": "<module>", "detail": "Consider using a list literal instead of `str.split`", "count": 2},
