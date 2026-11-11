@@ -9,17 +9,19 @@
 #      sampling all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
 #      controls, sampled the same way, and the Lean
 #      verifier on all of them:
-#        honest-own     the honest session, the verifier's own anchors file                         ACCEPT
+#        honest-own     the honest session, the verifier's own anchors file                REFUSED (below)
 #        honest-wrong   the honest session, one bit of one anchor wrong in the verifier's file      REJECT
 #        honest-chosen  the honest session, the same anchor bit chosen by the prover (public file)  REJECT
 #        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection, a statement flock-verify
-#                       refuses once every check has passed (`ProvedScope.servedForm`): honest passes every check;
-#                       output_row_committed_false (a tampered output row), output_claim_false, unit_internal_bit_flipped
-#                       and public_input_claim_false (a false anchor claim, the verifier's file agreeing with it) REJECT
+#                       refuses once every check has passed (`ProvedScope.servedForm`): honest gets through every check
+#                       before its config's refusal (below); output_row_committed_false (a tampered output row),
+#                       output_claim_false, unit_internal_bit_flipped and public_input_claim_false (a false anchor
+#                       claim, the verifier's file agreeing with it) REJECT
 #      until T4 the verifier refuses --public-inputs, so summarize.py expects each row-unit check REFUSED; once every
 #      check has passed it refuses a plain tile's output row of two output ports, so a plain tile's honest checks are
 #      REFUSED, and so are a hiding tile's, whose rows (row-seg/v1, row/v2) are covered, for the tile's want of a Program
-#      (no --program, NO_PROGRAM)
+#      (no --program, NO_PROGRAM): summarize.py holds an honest check as expected only with its config's refusal, and
+#      counts a NO_PROGRAM refusal in lean_refused_no_program, never in lean_accepted
 #      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
