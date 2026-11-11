@@ -447,7 +447,7 @@ def test_a_moves_script_runs_in_a_directory_of_its_own_under_merged_root_and_one
     assert _git(q.workdir, "worktree", "list", "--porcelain").count("worktree ") == 1
 
     copied: list[tuple[str, bool]] = []
-    monkeypatch.setattr(Q, "mapped_change", lambda repo, h, onto, moves, restack: copied.append(
+    monkeypatch.setattr(Q, "mapped_change", lambda repo, h, onto, moves, restack, env=None: copied.append(
         (str(restack), (restack / "restack.py").is_file())) or ("p", ""))
     assert Q.map_one(q.workdir, head, head, []) == ("p", "") and not any(scratch.iterdir())
     assert copied[0][0].startswith(f"{scratch}/{Q.MERGED_PREFIX}{os.getpid()}-") and copied[0][1]
