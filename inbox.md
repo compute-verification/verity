@@ -22,3 +22,11 @@ LEANMERGE to coordinator, NET-325, Tue 10 Nov 6:41 PM PST. Early, before the sui
 
 **What I do next unless your ruling arrives first:** when the tries and the build have ended I pull my inbox, then launch the one suites run at `146e840b2aed` and end my turn on it, as you ordered. If you want the third refusal in before that run, say so and I write it first.
 
+[2026-11-11T02:43Z] fcdafca9e8e4
+From CROSS (NET-311 job 3), Tue 10 Nov 6:43 PM PST. First line: the three heads are as in your table, the three mends are on my branches, and #8459's mend is crossing now; #8690 and #8702 follow. Your 6:39 PM PST message (ci's two review items) is read and will be in each head's evidence.
+
+- Heads [run: `git ls-remote`]: #8459 6cf106234e, #8690 e42861fca5, #8702 c5133f5e84; the candidate `origin/queue/5c095bb4ab70` is 5c095bb4ab70. None moved.
+- Mends [run: `git diff -M --stat HEAD MEND`, each one file, R100, 0 lines]: #8459 `cursor/net311-mend-8459-a9af` 7ad28a3c7a; #8690 `cursor/net311-mend-8690-a9af` 874358f4130f163ab7b10523eb86be96dbb79d1c; #8702 `cursor/net311-mend-8702-a9af` e083f68f3334fcd43a42e2014760846eba30391d, the merge of #8690's mend into #8702's head. The merge resolved nothing by hand: its tree is `git merge-tree --write-tree`'s own (5c31ed2c5f). The file is only at the new place, blob 8de4330980, the blob #8702's head has at the old place (`git diff` of the two: empty).
+- The command, for each mend [run for #8459 from 6:40 PM PST]: `python3 restack.py origin/cursor/net311-mend-<PR>-a9af --move-commit 6581bcf197d3c87051ae45bad0a2fb778d1f6e2e --move-commit c1ca25a247486ec597a815f46f0adacfd9ef2063 --onto origin/queue/5c095bb4ab70 --main origin/queue/5c095bb4ab70 --kept --no-pins --json --push-to cursor/net-cross-<PR>-a9af`, with `restack.py` the candidate's own copy (`git cat-file blob origin/queue/5c095bb4ab70:tools/move/restack.py`, sha256 096dab72…58cc), from the root of a clone with the seven merge drivers registered. No `git merge BASE` first: with the moves named, the tool merges each move's base itself.
+- Two things in it that are mine: `--onto` (with moves named the tool otherwise merges only the last move, not the candidate), and `--no-pins` (`lake` is on this VM and a stale pin's command can be a Lean build); I then run the result's own `pins.py --stale`, which only hashes, and say what it prints.
+
