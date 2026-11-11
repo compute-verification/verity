@@ -11,8 +11,9 @@ hands it), the checked proof blocks are every block below `N` (`RegTwo.checked_o
 the always-checked blocks and each proved unit's block, so a weight at most `M` sums over them to at most the
 always-checked blocks' weights plus `M` for each proved unit (`RegTwo.sum_checked_le`). A function of the checked blocks
 at most `B ≥ 0` wherever the second stage accepts then averages, over any finite space of coins, at most `B` plus the
-refusal's probability times its value at every block below `N` (`RegTwo.ex_checked_le`): with the blocks' needs summed,
-`Pr[refused]·Σ_{u<N} |needs u|` added to what the accepted draws give.
+refusal's probability times its value at every block below `N` (`RegTwo.ex_checked_le`). With the blocks' needs as the
+weight and the second stage's count, that is `Σ_always |needs| + C·M + Pr[refused]·Σ_{u<N} |needs u|`
+(`RegTwo.ex_sum_checked_le`).
 -/
 
 @[expose] public section
@@ -114,5 +115,20 @@ theorem RegTwo.ex_checked_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (g : RegTwo)
       | ok p => exact hok ω p.1 p.2 hs
       | error e => exact absurd (by rw [hs] <;> rfl) hR)
     (fun ω hR => le_of_eq (by rw [g.checked_of_refused N _ _ hR]))
+
+/-- **The checked blocks' weights, in expectation**: for a weight at most `M`, with the second stage proving at most `C`
+units wherever it accepts, the checked blocks' weights average at most the always-checked blocks' weights below `N`
+plus `C·M`, plus the refusal's probability times every block's weight below `N`. -/
+theorem RegTwo.ex_sum_checked_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (g : RegTwo) (N : ℕ)
+    (src₁ src₂ : Ω → ByteArray) (w : ℕ → ℕ) (M C : ℕ) (hM : ∀ u, w u ≤ M)
+    (hC : ∀ ω draw n, Spot.Select.selectSecond (g.sample (src₁ ω)) g.ns g.ks (src₂ ω) = .ok (draw, n) →
+      (Spot.Draw.proved draw).size ≤ C) :
+    Ex (fun ω => (((g.checked N (src₁ ω) (src₂ ω)).map w).sum : ℝ)) ≤
+      ((((List.range N).filter fun v => g.always v).map w).sum + C * M : ℕ) +
+        Pr (fun ω => Except.toBool (Spot.Select.selectSecond (g.sample (src₁ ω)) g.ns g.ks (src₂ ω)) = false) *
+          (((List.range N).map w).sum : ℝ) :=
+  g.ex_checked_le N src₁ src₂ (fun l => ((l.map w).sum : ℝ)) (Nat.cast_nonneg _) fun ω draw n hsel => by
+    exact_mod_cast (g.sum_checked_le N _ _ hsel w M hM).trans
+      (Nat.add_le_add_left (Nat.mul_le_mul_right M (hC ω draw n hsel)) _)
 
 end SamplingDeploy
