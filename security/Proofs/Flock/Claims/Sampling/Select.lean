@@ -13,7 +13,6 @@ public import Proofs.Flock.Claims.Sampling.Select.Refusals
 public import Proofs.Flock.Claims.Sampling.Select.Code
 public import Proofs.Flock.Claims.Sampling.Select.OS
 public import Proofs.Flock.Claims.Sampling.Select.Second
-public import Proofs.Flock.Claims.Sampling.Select.SecondCount
 public import Proofs.Flock.Claims.Sampling.Select.SecondWitness
 
 /-! The deployed sampled verifier's sample (`Spot.Slots.select`) against the claims' `P_a`: a sequential sample's
@@ -25,8 +24,7 @@ verifier's partition as the claims' slots (`Select.Layout`); `Select.select`'s s
 (`Select.DrawLaw`); `designWellFormed`, which proves `Properties.Spot.DesignWellFormed` (`Select.Design`); and
 `ScopeMatches` and `Refuses` from it, where the scope check is the readable scope's program part (`Select.Scope`); and that
 program part as five refusals of the verifier's evaluation, each needed (`Select.Refusals`); and `secondMisses`, which
-proves `Properties.Spot.SecondMisses`, the two-stage rule's second stage (`Select.Second`), how many proof blocks
-it proves, `|sample| · Σ_t k_t` (`Select.SecondCount`), and its honest and nontrivial lemmas
-(`Select.SecondWitness`). -/
+proves `Properties.Spot.SecondMisses`, the two-stage rule's second stage (`Select.Second`), with its honest
+and nontrivial lemmas (`Select.SecondWitness`). -/
 
 @[expose] public section
