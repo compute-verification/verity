@@ -4,12 +4,12 @@ public import Definitions.Accounting.Device
 public import Definitions.Pouw.PearlC.W1
 
 /-!
-# The device model's price at W1's prices, and the H200's with INT8 (trusted)
+# The device model's price at W1's prices (trusted)
 
 `Accounting.Price` prices the device model's three op classes; W1 (`Pouw.PearlC.W1.W1Prices`) prices each tensor-core
 format's multiply-add and each CUDA-core instruction, in one dense E4M3 multiply-add. `w1Price pr f` reads the first
-off the second for a run whose tensor-core multiply-adds are of format `f`, and `h200S8Price` is the H200's with INT8,
-the format of an H1 + fx1 tile's products (`GemmAccumulatorS8_v2`).
+off the second for a run whose tensor-core multiply-adds are of format `f`. A card's price is it at that card's W1
+prices and a format, stated beside the proof that reads it.
 -/
 
 @[expose] public section
@@ -26,10 +26,5 @@ def w1Price (pr : W1Prices) (f : Fmt) : Price := fun o =>
   | .tc => ⌈pr.mac f⌉₊
   | .cuda => ⌈min pr.fp32 pr.int32⌉₊
   | .oracle => ⌈pr.sha512⌉₊
-
-/-- **The H200's price with INT8**: `W1Device.s8H100`'s prices (`W1Prices.h100`, the H100's and the H200's, one GH100)
-for S8 multiply-adds: an INT8 tensor-core multiply-add at W1's S8 price, `1`; a CUDA-core op at FP32's `32` (INT32's
-is `64`); an oracle query at `sha` rounded up. -/
-def h200S8Price (sha fetch : ℚ) : Price := w1Price (W1Device.s8H100 sha fetch).prices .s8
 
 end Accounting
