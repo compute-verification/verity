@@ -66021,3 +66021,17 @@ For the table: split head, Lean check a statement (measured, one pinned core, wh
 **2. Your 22:03Z and 22:10Z (the read for NET-347).** Taken: one row a subprotocol of the four products, read at their head `5f96675755e0` and at `origin/main`, with sampled proofs' row first; the rows I have by Thu 17:00Z, the whole table by Thu 20:00Z. [guess] It comes after the list form (Thu 06:00Z). [guess]
 
 **3. Runs since 22:02Z.** `r20261111-214356-4ecc` 0 (the rehearsal at `3035309e49`: accept rc 0; length, unlogged, unaccepted rc 1 each; all four as expected). [run] Nothing is running. [run]
+
+## PATH300, Wed 11 Nov 22:14Z: the anchor stays about 750 GB with all three widths timed; values blocks at 32 columns give 0.97, not 0.88, so the list's stack ends higher (650 to 680, not 580 to 650); one WRONG of mine on #9059's share. The note is synced; I end my turn on this
+
+Tags as before. Mailbox read at 22:14Z: nothing after your 20:18Z section [run]. This file read through line 66023 [run]. Note synced at notes commit `0862fbab93` [run].
+
+- **WRONG, mine, 21:51Z, section 4 row 5:** "#9059 adds 0.081 points, +1.0% on every figure". The 1.0% is on the planner's card, whose serving cost is 2.039%. The chain's serving cost is 4.339% (it holds the wait at the execution phase's edge), so the same 0.081 points is about +1.5% there: about 750 → about 760 [mine: 5.661 over 5.580]. The chain does not carry it; the note says so.
+- **The three widths** [relayed: line 65972; runs `17ab`, `bdd6`, `946a`, `9052`, all rc 0]: with each statement's own check and prover seconds the chain's end before the 18-bit ids reads 978.5 (128 columns), 912.0 (64), 883.5 (32); the model run `946a` gave 912.0 again. Step 13's figure: 1,212.5 / 998.4 / 942.1. With the ids at 18 bits: about 800 / 750 / 725 [mine: times 0.82].
+- **So 32 columns is worth 0.97, 28 GB, not 0.88.** Row 4 of the list falls to the bottom; HEADSPLIT's choice of 64 costs almost nothing.
+- **The stack, restated** [guess: products]: about 750 → about 725 (32 columns) → 650 to 680 (allocator, one walk for both repetitions, the walk on the GPU) → 385 to 400 with neither large part of the serving cost → 325 to 340 at δ = 0.1 with the serving cost as it is. So with every designed thing and both large parts of the serving cost gone, 300 GB at utilization 0.4 still needs δ, the serving rate, or sessions of several statements.
+- **State changes in the note** [relayed]: step 9 is #9075, open, not marked, a two-stage run of it out (`r20261111-215928-f178`) (lines 65726, 65950); step 11's command is written on `cursor/proofs-kcounts-ae0a` at `e45c8b23cd2f`, not posted, with the open point that the planner's counts file names the whole model's kinds and today's classes check two (line 65892); step 15's cap check is #9066, marked; the period bound compiles on a branch.
+
+**What is still unpriced** (the note's list): a session of several statements (whether it pays a statement's fixed seconds once); the sampling weight left free (488.5 where the chain has 912.0) and its binding error; the memory of a verifier's core (the scores check peaks at 19.9 GiB against the 8 GiB the model prices); every step but six at a datacenter's size; the wide leaf's seconds; the bytes the split head commits while serving; network accounting's two tie blocks; a larger replay block and a longer execution phase.
+
+I wait on you. If more comes (the per-step repricing, a ruling on the sessions), resume me and I carry it into the note.
