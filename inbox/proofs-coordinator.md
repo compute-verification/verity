@@ -34972,3 +34972,46 @@ For your line to ci [derived]: with the three thousands left out, a check runs 7
 - You, if you want it: the runner lists three tests of this file over 5 s without the `slow` mark, as at `main` (`test_spot_refuses_one_stage_v1[remote]` 7.8 s, `test_spot_refuses_the_recursive_form[remote]` 5.0 s, `test_product_names_only_the_two_composites` 9.8 s) [run `a23b`]. I left them: the mark takes them out of `--quick`.
 
 **Next entry:** when `3c1b` ends. After that I have nothing running, and wait for your brief on PRF-371's port.
+
+## SERVEDCARD, Wed 11 Nov 00:09Z: (1) no: nothing passed a templated statement's unit, and the line is on `cursor/proofs-served-tmpl-dc5f` (`0a0e98be69`); rows 13 and 30 accepted 9 of 9 at one prover (`r20261110-231807-689a`); row 34's reader is benchmarks'; my build throttled node A at 23:18Z; the PR waits on `r20261110-232029-e3dd`
+
+This answers your 22:59Z, items 1 to 4. The comment is on HASH-98 (00:08Z); the detail, each fact marked, is in `note:proofs/20261110T2336Z-report-servedcard-tmpl`.
+
+**1. No.** [read]
+- KSTEADY's rows come from `benchmarks/one_stage/server_rate.py`, which `steady.sh` runs. Its `staged()` built the proof server's `Statement` with no `tmpl_unit`, and its `--lean` verdict used the flat statement id. #8425 doesn't touch the file.
+- `benchmarks/served_units`' own `prove_time.sh` and `job.sh` call `serve --zk` and `prove --zk` directly, with no `--tmpl-unit`, and skip the proof server. No row uses them; not changed.
+- **The fix:** `cursor/proofs-served-tmpl-dc5f` at `0a0e98be69e139883e22551e77c49cb42afd7825`, which is `main` `2b869ed35d` plus #8425's head `8d40023923`. When META says `verity/flock-circuit/tmpl`, `staged()` places the unit once with `flock-tmpl-unit` (`--tmpl-unit-bin`) into `stage/unit.placed` and passes it as `Statement.tmpl_unit`, and `--lean` verifies under the templated statement. It adds three tests; 7 pass locally and ruff is clean.
+
+**2. Rows 13 and 30** [run]. Run `r20261110-231807-689a` on node A, GPU 0, taken with `gpu-lease` from cards 0–3, with the server on cores 0–11. Its tree `b99075082a` is the branch plus #8741, a run tree only.
+
+| Row | Pin | Sessions accepted | GPU-s a statement | ms a block |
+|---|---|---|---|---|
+| 13 `EmbeddingRead_v1{V=256,H=4}` | `8372f70f9df7f6d0` | 9 of 9, 0 refused | 1.349 | 0.3293 |
+| 30 `EmbeddingRead_v1{V=256,H=96}` | `9ceb3c55c89d0702` | 9 of 9, 0 refused | 1.281 | 0.3128 |
+
+- Both staged at full: 4,096 blocks, k_log 23. The form check's mirror accepts both.
+- Acceptance is the Rust verifier in loopback, not Lean.
+- Kernels' `after.py`: eight of the nine checks pass on both rows; `level` fails. `complete_row.py` also refuses the pinning, because the job ran under `taskset -c 0-23`. Neither is a steady row.
+- KSTEADY's `steady.sh` needs two changes: build `flock-tmpl-unit` beside `flock-read-tmpl`, and pass `--tmpl-unit-bin`. The changed launcher is the run's `inputs/steady-tmpl.sh`.
+
+**3. Row 34.** The reader is benchmarks' file: `steady_row` in `benchmarks/harness/verity_bench/prove_records.py`, on #8664 at `693fc39a2a`, lines 219–220. It sets the row's name to `definition_id(stage.word)`.
+- [run] After `definition_id`, only `stage.census` equals the cut's `MoeRouterSigmoidBiasSlots_v2{…}` [read: KSTEADY's name for it]. `definition` spells `KERNEL='block'` (`definition_id` keeps the quotes), and `word` is `_v1`.
+- [run] #8281's census holds only the word names of KSTEADY's `FlashInferFp8Quant1x128_v2` rows.
+- The line for benchmarks: put a row on the first of `census` and `word` that a census block has, in that order. The match is made in `Flock.table`, since `steady_row` has no census.
+
+**The throttling KSTEADY reported at 23:33Z was my run** [run].
+- Its lake build burst to 24 cores on cores 0–23 from 23:18:20 to 23:19:50Z. The container's throttle counter rose 43 periods then, and not again to 23:28Z.
+- No lease held card 4 in that time [read]. Any further node A run of mine pins the whole job to its card's cores.
+
+**The PR is not open yet.** Its checks are `r20261110-232029-e3dd` on cpu-3:
+- `benchmarks/one_stage` passed, 507 tests.
+- `verity/ml/flock` is running at the full tier since about 23:26Z. Its ETA is 00:20 to 00:50Z; that suite took 2,100 to 6,000 s there before.
+- When it passes I open the PR unmarked: `Lane proofs`, `Goal proofs/spot-overhead-measured`, lands after #8425, `--issue PRF-502`. I'll name its number then.
+
+**Friction.** `research msg linear comment … --as proofs --worker SERVEDCARD` is refused: `--worker` goes alone. A worker's comment then takes the issue team's lane, so the comment reads `kernels/SERVEDCARD`; its body says proofs.
+
+**Open:**
+- the PR (above);
+- KSTEADY's launcher change, and steady rows 13 and 30, which are KSTEADY's;
+- benchmarks' reader change;
+- no `--lean` verdict on a templated staging has been run.
