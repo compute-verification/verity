@@ -751,8 +751,12 @@ def test_a_table_of_planned_requests_is_checked_and_sent_as_its_requests_arrive(
     assert S.pass_prompts(load, S.ARRIVING, lines[1:], 1.0) == 1
     assert [S.pass_prompts(x, c, None, w) for x, c, w in ((load, 1, None), (load, 1, 20.0), (S.LOADS["chat"], 8, None),
                                                           (S.LOADS["chat"], 8, 20.0))] == [4, 2, 200, 16]
-    # the client then sends each at its arrival: nothing holds a concurrency, and nothing turns the file's times off
+    # the client then sends each at its arrival: nothing holds a concurrency, and nothing turns the file's times off;
+    # the file it reads is the one the arm wrote from the table, never the table
     trace = S.write_trace(tmp_path / "prefix.trace.jsonl", lines)
+    assert [json.loads(x) for x in Path(trace).read_text().splitlines()] == lines
+    assert S.client_files({"chat": "chat.json", **files}, {"prefix": trace}) == {"chat": "chat.json", "prefix": trace}
+    assert S.client_files({"chat": "chat.json"}, {}) == {"chat": "chat.json"}
     argv = S.bench_argv(S.MODELS["glm53"], Path("/ck"), 1, load, S.ARRIVING, tmp_path, "prefix@0-r1", dataset=trace, prompts=4)
     at = argv.index("--dataset-name")
     assert argv[at:at + 11] == ["--dataset-name", "timed_trace", "--timed-trace-chunk-hash-size", "64",

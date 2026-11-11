@@ -945,6 +945,13 @@ def parse_datasets(given: list[str] | None, loads: dict[str, tuple[int, ...]], f
     return out
 
 
+def client_files(datasets: dict[str, str], traces: dict[str, str]) -> dict[str, str]:
+    """The file vLLM's client reads for each load: a planned load's own, written from its plan or from its given table
+    (``traces``, `write_trace`), and never that table, which is not in the client's format; else the load's dataset
+    file (``datasets``, `parse_datasets`)."""
+    return {**datasets, **traces}
+
+
 def passes_of(loads: dict[str, tuple[int, ...]],
               datasets: dict[str, str]) -> tuple[dict[str, tuple[int, ...]], dict[str, list[dict]]]:
     """``loads`` with the rungs their passes are sent at, and each planned load's lines (`trace_lines`): a planned
@@ -1214,13 +1221,14 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
         datasets = parse_datasets(a.dataset, loads)
         loads, lines = passes_of(loads, datasets)
         traces = {n: write_trace(out / f"{n}.trace.jsonl", x) for n, x in lines.items()}
+        sent = client_files(datasets, traces)
         context = context_of(loads, a.max_model_len)
         passes = {pass_name(n, c): (n, c) for n, rungs in loads.items() for c in rungs}
         rates, plan = {}, []
     else:
         if not a.rates or not a.c4:
             raise SystemExit(f"--client {CORPUS} serves --rates NAME=REQ_PER_S,... of the --c4 shard's plan")
-        passes, context, traces, lines = {}, a.max_model_len, {}, {}
+        passes, context, traces, lines, sent = {}, a.max_model_len, {}, {}, {}
         rates = parse_rates(a.rates)
         t = time.monotonic()
         plan = plan_of(Path(a.plan) if a.plan else out / "plan.jsonl", Path(a.c4), checkpoint,
@@ -1279,7 +1287,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
                                   a.warm_s if warm else a.span_s, tag, d, a.drain_s, tick,
                                   None if warm else a.requests, arm.sampling, busy)
             n, c = passes[name]
-            return drive_bench(port, model, checkpoint, LOADS[n], c, tag, d, datasets.get(n) or traces.get(n), a.seed, busy,
+            return drive_bench(port, model, checkpoint, LOADS[n], c, tag, d, sent.get(n), a.seed, busy,
                                pass_prompts(LOADS[n], c, lines.get(n), a.warm_s if warm else None))
 
         if a.warm_s > 0:
