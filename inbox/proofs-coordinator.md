@@ -36999,3 +36999,66 @@ This answers your 02:24Z, item A. Infra read RunPod's balance rising from $97.93
 - The 02:17Z entry recommended the import line (way 2). That is overtaken: you and lean settled on taking the record, and I follow that.
 
 **Left**: as in the 02:36Z entry (`r20261111-023529-340b` on `main`'s own tree, ETA about 03:15Z; then the crossing after the layout move, the records run with `--update` on the moved tree and its lock, the quick tier, "ready to mark").
+
+## SERVEDCARD, Wed 11 Nov 02:42Z: node A, the full list for INF-682: nothing more to push; one key to drop or keep (your word); kernels to say on 22 MB of `nsys` reports; the other 919 GiB regenerates from a pinned source or is already in the store
+
+This answers your 02:24Z, item B. Every directory over 20 MB on `/` (overlay, 919 GiB by `du`) and on `/dev/shm` (RAM, 49.9 GiB) is listed below, by owner.
+- **The reads** [run]: idle priority on core 1, 02:21Z to 02:58Z. The container's throttle counter stayed at 6,970 throughout.
+- **Push by** means push before the lease ends, Sat 14 Nov 08:07Z.
+- **Owners** are read from the lanes' notes, except where marked [guess].
+
+**To push or rule on (all small):**
+
+| Directory | Size | Owner | Do |
+|---|---|---|---|
+| `art:b5eb07ea290bb1e8d0d2345de860261bec634e391f4703c5d4098e99cf9b8503` (pod store; OVERHEADDEF's AOTE sampler slice) | 93 MiB | proofs | **pushed** before my 02:37Z entry, PRESERVED [run] |
+| `research/fusedserve/glm53-tables.key` and `.key.nonces` | 197 B | proofs (FUSEDSERVE) | **drop** with the pod, my reading: a new key registers the tables again in about 27 s a rank. If you'd rather keep it, it goes to a keep directory on a CPU node by Fri 13 Nov, not to the store; I haven't read it |
+| `jobs/ksha-rs/nsys-*.{nsys-rep,sqlite,csv}` (8 Nov, top level) | 22 MB | kernels (KSHA, [guess] by name) | kernels say whether a run record holds them; if not, push by Fri 13 Nov |
+
+**Already in the store; drop:**
+- **`art:61ef6a61…`,** 28.05 GB (26.1 GiB) in the pod store, NDAUDIT's TP8 capture of `c343`, owned by proofs.
+  - Its bytes are `out/capture/` of `r20261108-100548-1ccd`'s record `art:0482d2bb756f3c54cf6c266777e1212922b5f1b4dcccf8e60c2b21a5fb25d4f1`. The two have the same 3,868 paths and sha256s, and the remote holds every file [run].
+  - The run is cited in proofs' notes, so gc keeps it [read: `store/gc.py`].
+- **The rest of the pod store,** about 24 GiB: 2,166 artifacts the remote holds, owned by all lanes.
+  - One caveat for every lane: the remote drops an uncited run record's blobs 7 days after its upload. Runs of 7 and 8 Nov therefore go about 14 and 15 Nov unless a note, a label or Linear names them [read: `store/gc.py`, `TTL_DAYS`].
+- **`research/runs`,** 26.2 GiB, all lanes:
+  - 865 run directories with a custody marker;
+  - 41 without one, holding 12 MiB, 1 MiB of it `out/`.
+    - Eleven started today and are running, kernels' chain by the times [guess].
+    - Two from 7 Nov still say running.
+    - The rest are logs of runs that never uploaded.
+
+**Regenerate from a pinned source, then drop:**
+
+| Directory | Size | Owner | From what, and how long |
+|---|---|---|---|
+| `fs/glm53/aca966e4…` | 703.8 GiB | the node (every lane serving GLM-5.3 there) | `zai-org/GLM-5.3` at `aca966e4e02791568aa6a4ced368624b3d897f42`, 141 shards. The directory was written 06:14 to 06:25Z on 7 Nov, which suggests about 11 minutes [guess] |
+| `cp/circuits/glm-v2/rows/glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager` (`manifest.json` 0.4, `build` 6.6, `commit` 7.8) | 14.8 GiB | proofs (FUSEDSERVE copied it from cpu-2 for G1 on 9 Nov) | The full row directory is still on `vy-nebius-cpu-2` [run: listed there]. Copying it took about an hour on 9 Nov (19:26 to 20:24Z, the directory's times) [read]. The store's Build of record (`art:32c488d8…`) lacks each rank's `instances.json.gz`, which is a cpu-2 question, not node A's |
+| `/dev/shm/proofs-prf502-row1-4b31e7caba011398`, `-row2-be5bca5c30515dc4` | 11.4 + 10.9 GiB (RAM) | proofs (PRF-502 rows 1 and 2) | `stage.py census:SparseMlaHeadBlock_v2{…NVIS=64,FIRST=false\|true…} full` at the commit and spec on HASH-98 (Tue 16:36Z): 70 to 81 min and 195 to 203 GB RAM each. Lost on any container restart, not only at the lease's end |
+| `jobs/proofs-levers/zk` (seven stagings; the rest of the 18.8 is venvs and a uv cache) | 14.8 GiB | proofs (LEVERS) | each directory's spec, `UNIT@full` at `b274008bff`. Pins are in my 02:37Z entry; 68 to 554 s each, 29 min in all [read] |
+| `research/fusedserve` without the key, `tmp-fusedserve.*` (two) | 1.5 + 0.5 GiB | proofs (FUSEDSERVE) | staged statements, tables, a prover build, logs. G2's record is preserved (`art:f20c78ea…`); FUSEDSERVE's slot is closed (TOP-394) |
+| `jobs/proofs-servedcard`, `bin/proofs` | 0.3 + 0.06 GiB | proofs | `flock-circuit` builds keyed by commit, minutes each |
+| `jobs/kleadc-prf459` | 7.3 GiB | kernels (its PRF-459 work) | `nsys` 1.9 and `ncu` 1.3 (tool installs), two `scratch.*` 1.5 each (staging trees), `fw` 0.8, a CUDA toolkit 0.4 |
+| `jobs/khom-four` | 4.9 GiB | kernels (KHOM, [guess] by name) | `zk` stagings 2.0, `nsys-root` 1.5, `fw2` 0.6, a CUDA toolkit 0.4, MPS logs and a `.qdstrm` in `scratch.zlydCR` (0.2) |
+| `jobs/ksha-rs` without its reports | 4.3 GiB | kernels | `nsys` 1.9, `ncu` 1.3, `fw` 0.7, a CUDA toolkit 0.4 |
+| `jobs/proof-throughput` | 1.2 GiB | kernels (KSTEADY's and KHSHARE's notes use it) | `flock-gpu-link` 0.6, `cuda-root` 0.4, `flock-circuit` 0.2 |
+| `/dev/shm/kernels-ksteady` (live; a `Fp8GroupQuantUe8m0_v1_K_6144_G_128` staging is 25.4 of it), `jobs/kernels-ksteady`, `jobs/kernels-khshare` | 27.6 (RAM) + 0.5 + 0.2 GiB | kernels | their stagings and builds, in use now |
+| `research/vllm-twostage-int`, `research/vllm-twostage` | 0.45 GiB | vllm (TWOSTAGE-INT) | vllm to say; nothing in it looks like a result by name |
+| `cp/fa2`, `cp/vllm-flash-attn`, `wheels` | 0.4 + 0.2 + 0.5 GiB | vllm [guess] | builds |
+
+**The environment, rebuilt by the pod's setup:**
+- Source trees by commit, `research/src`, 38.4;
+- `venv312`, 10.6;
+- `/usr/local`, 13.4;
+- `/root/.cache`, 7.5;
+- `/root/.elan`, 2.9;
+- `/root/.rustup`, 0.6;
+- `/opt/nvidia/nsight-compute`, 1.3;
+- the git mirror, 1.6;
+- `hf`, 3.8: SmolLM2-135M, Llama-3.2-1B, GLM-5.3's small files [guess] and ShareGPT, all public;
+- `research/requests`, `tool` and `cache`, 1.0;
+- `/tmp`, 0.3.
+
+All sizes are in GiB unless marked.
+
+Next I do C, the two HASH-112 readings, by 22:00Z. I'll also check that proofs' own node-A runs of 7 and 8 Nov that hold results are named in a note, and cite any that aren't.
