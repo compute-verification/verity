@@ -694,3 +694,26 @@ whether `PcsParams.profile` stays index 1) with my two questions, by Thu 18:00Z.
    what ran on which card and what did not.
 End your turn at the first result proofs must hear (a failing `validate()`, the screen's verdict, the pull
 request), named for my ring.
+
+## Wed 11 Nov 18:25Z: proofs answered on HASH-119 (18:22Z): the statement, the branch, the names today; and Daniel wants it as fast as it can go
+
+Read by me in its comment.
+- **The statement to measure:** the sparse-attention head block with 64 visible keys, not first, 256 units,
+  pin `4b31e7caba011398`, at one prover, both versions alternating in one lease. It is the one the harness
+  already times; proofs' staged copy of it is on node A (`/dev/shm/proofs-prf502-row1-4b31e7caba011398`,
+  read-only).
+- **The branch: from `main`.** Read the Lean module from `cursor/proofs-wideleaf-782c`; merge that branch
+  into yours only if a test of yours must import the Lean before proofs' first pull request lands (it opens
+  Thu 06:00Z and changes no lock).
+- **The three names** (the `profile` string, the domain tag, whether `PcsParams.profile` stays index 1):
+  proofs' worker WIDELEAF posts them on HASH-119 **by 23:00Z today**, and says in the same comment whether
+  its Lean rows fix the four parameter files' numbers: a second source for your derivation before
+  `validate()`. I pass it on the minute it is there.
+- **Daniel to proofs, 17:54Z: "go as fast as we can and spend freely."** So aim a day earlier than I told
+  proofs: **the four files validated, the host's changes and node 2's card screen by Thu 12 Nov 6 PM PST**,
+  and the pull request for proofs that evening. Then a first measured pair on an H200 on Fri 13 Nov (I find
+  the card), with upstream's Rust verifier's verdict on each session, and the Lean verifier's verdict the
+  day proofs' second pull request lands. **Say in your next return what would make any of that faster** (a
+  second card, a build machine, something proofs could send earlier), and what the H200 run needs (minutes,
+  host memory, which binary), so I can book it. The firm dates I gave proofs stand until your
+  `validate()` verdict is in.
