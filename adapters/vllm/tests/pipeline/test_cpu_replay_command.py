@@ -48,7 +48,8 @@ class Replay:
         self.ctx = {"pair": 3, "requests": [{"request_id": "a"}], "sampling": {"temperature": 0.0}, "tokens": {"a": [1]}, "stop_of_record": {},
                     "ids_full": None, "code": "c0de", "vc_result": True}
         self.b: dict[str, Any] = {"context": self.ctx, "path": str(self.bdir)} | ({"keep": {"picks": []}} if kept else {})
-        self.store, self.run, self.words = object(), object(), {"w": np.arange(4, dtype=np.uint16)}
+        self.store, self.run = object(), object()
+        self.words: dict[str, np.ndarray] = {"w": np.arange(4, dtype=np.uint16)}
 
         def step(name: str, result: Any = None) -> Any:
             def call(*args: Any, **kw: Any) -> Any:
