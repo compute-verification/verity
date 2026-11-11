@@ -84,12 +84,12 @@ theorem Ex_coins {Ω R C : Type} [Fintype Ω] [Nonempty Ω] [Fintype R] [Fintype
 
 /-- Two independent draws: the average of a function at the first plus the function at the second is twice the
 function's average. -/
-theorem Ex_two {X : Type} [Fintype X] [Nonempty X] (F : X → ℝ) :
-    Ex (fun q : X × X => F q.1 + F q.2) = 2 * Ex F := by
-  have h1 : Ex (fun q : X × X => F q.1) = Ex F :=
-    (Ex_prod fun q : X × X => F q.1).trans (congrArg Ex (funext fun a => Ex_const (α := X) (F a)))
-  have h2 : Ex (fun q : X × X => F q.2) = Ex F :=
-    (Ex_prod fun q : X × X => F q.2).trans (Ex_const (α := X) (Ex F))
+theorem Ex_two {β : Type} [Fintype β] [Nonempty β] (F : β → ℝ) :
+    Ex (fun q : β × β => F q.1 + F q.2) = 2 * Ex F := by
+  have h1 : Ex (fun q : β × β => F q.1) = Ex F :=
+    (Ex_prod fun q : β × β => F q.1).trans (congrArg Ex (funext fun a => Ex_const (α := β) (F a)))
+  have h2 : Ex (fun q : β × β => F q.2) = Ex F :=
+    (Ex_prod fun q : β × β => F q.2).trans (Ex_const (α := β) (Ex F))
   rw [Ex_add, h1, h2, two_mul]
 
 namespace Compiled
