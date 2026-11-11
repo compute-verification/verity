@@ -171,7 +171,7 @@ def plan (i : Input) : Except Refusal Plan := do
   tryCatch (afterTie i passes tie) fun r => throw { r with tie := r.tie <|> tie }
 
 /-- The verdict of every tile of `pl.todo`, in order, replayed in parallel: the fixed operand's noise once per pass and
-weight, then each tile on it. -/
+fixed operand, then each tile on it. -/
 def replay (pl : Plan) (opener : Nat → Nat → Except String TileOpening) : List TileVerdict := Id.run do
   let mut noise : List ((Nat × Nat) × Task (Except String FixedNoise)) := []
   let mut tasks : Array (Task TileVerdict) := #[]

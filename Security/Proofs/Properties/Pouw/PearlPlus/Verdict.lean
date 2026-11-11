@@ -434,11 +434,11 @@ theorem forIn_tasks {α σ τ : Type} (V : α → τ) (I : σ → Prop)
     rw [forIn_tasks V I f hf l n' _ hn']
     simp
 
-/-- The units of one weight have one k. -/
+/-- The units of one fixed operand have one k. -/
 def KConsistent (p : Pass) : Prop :=
   ∀ r ∈ p.records, ∀ r' ∈ p.records, r.matmul.weight = r'.matmul.weight → r.matmul.k = r'.matmul.k
 
-/-- One tile's verdict as `replay` computes it, on the fixed operand's noise of its weight. -/
+/-- One tile's verdict as `replay` computes it, on its fixed operand's noise. -/
 def verdictOf (pl : Plan) (opener : Nat → Nat → Except String TileOpening) (x : Nat × Nat) : TileVerdict :=
   let p := pl.passes[x.1]!
   match p.tile? x.2 with
@@ -482,7 +482,7 @@ theorem tile?_pos {p : Pass} {tid pos : Nat} {rows cols : List Nat} (h : p.tile?
     exact (List.getElem?_eq_some_iff.1 (List.mem_zipIdx_iff_getElem?.1 hm)).1
   · cases h
 
-/-- What the replay's noise cache holds: each pass and weight's noise at a unit of that weight. -/
+/-- What the replay's noise cache holds: each pass and fixed operand's noise at a unit of that fixed operand. -/
 def NoiseHeld (pl : Plan) (noise : List ((Nat × Nat) × Task (Except String FixedNoise))) : Prop :=
   ∀ e ∈ noise, ∃ r ∈ (pl.passes[e.1.1]!).records, r.matmul.weight = e.1.2 ∧
     e.2.get = fixedNoise (pl.passes[e.1.1]!).salt (((pl.passes[e.1.1]!).weightRoots.lookup e.1.2).getD .empty) r.matmul.k
@@ -721,7 +721,7 @@ theorem tileKeepsTheCap : TileKeepsTheCap := by
 
 /-! ## The run's acceptance -/
 
-/-- A loaded pass's units of one weight have one k: its split's `k_unit` (`checkRecords`). -/
+/-- A loaded pass's units of one fixed operand have one k: its split's `k_unit` (`checkRecords`). -/
 theorem load_kconsistent {coins : EpochCoins} {man : Lean.Json} {p : Pass} (h : load coins man = .ok p) :
     KConsistent p := by
   obtain ⟨-, splits, hc, -⟩ := load_facts h
@@ -748,7 +748,7 @@ theorem verdictOf_key (pl : Plan) (opener : Nat → Nat → Except String TileOp
 
 theorem default_tile? (tid : Nat) : (default : Pass).tile? tid = none := rfl
 
-/-- A tile whose verdict is ok under `m` is a pass's, opened, and passed `checkTile` on its weight's noise, or was over its
+/-- A tile whose verdict is ok under `m` is a pass's, opened, and passed `checkTile` on its fixed operand's noise, or was over its
 inert-work bound with `m` crediting it nothing. -/
 theorem verdictOf_ok {pl : Plan} {opener : Nat → Nat → Except String TileOpening} {m : OverCap} {pi tid : Nat}
     (h : (verdictOf pl opener (pi, tid)).ok m = true) :

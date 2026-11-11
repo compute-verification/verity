@@ -6,7 +6,7 @@ public import PouwPearlPlus.Records
 # The run: its commitment, the verifier's coin record, and the tiles it opens (`verify_passes`)
 
 * **A pass** (`Pass`) is what the verifier holds once a retained pass's manifest is read and held to what it published
-  (`Load`): its epoch's salt and weights' roots, its records, and the roots it published (activations, transcript, records,
+  (`Load`): its epoch's salt and fixed operands' roots, its records, and the roots it published (activations, transcript, records,
   each call's y).
 * **The run's commitment** (`runCommitment`) binds the retained passes and their records, before the coin:
   `tagged("verity/pouw/pearl-plus/run/v1", per pass: transcript root, records root, salt, each call's y root or empty)`.
@@ -19,7 +19,7 @@ public import PouwPearlPlus.Records
   cells' share of `wref` at |K| (`clear_work.ticket_cell`, the scheme's own `wref` on the H100), scaled to integers by the
   lcm of the denominators.
 * **The exclusion tiles**: each pass opens one tile per excluded row, an A row's in its first column block and a B row's in
-  the first row block of its weight's first unit (`clear_work.exclusion_tiles`).
+  the first row block of its fixed operand's first unit (`clear_work.exclusion_tiles`).
 -/
 
 @[expose] public section
