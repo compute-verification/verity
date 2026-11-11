@@ -192,34 +192,34 @@ theorem perLiveTile_stages {live : Fin 1 → Bool} {P : Kind → ReceiptGame Boo
     PerLiveTile scheme circuit live stages P :=
   ⟨fun t _ _ k _ _ => h k t, fun _ => trivial⟩
 
-theorem period_every {P : (Fin 1 → Bool) → SplitStages Bool (Fin 1) 1 → Prop} (h : P (fun _ => true) stages) :
-    ∀ n, (period n).EveryWindow P
+theorem monitoringPeriod_every {P : (Fin 1 → Bool) → SplitStages Bool (Fin 1) 1 → Prop} (h : P (fun _ => true) stages) :
+    ∀ n, (period n).EveryExecutionPhase P
   | 0 => trivial
-  | n + 1 => ⟨h, fun _ => period_every h n⟩
+  | n + 1 => ⟨h, fun _ => monitoringPeriod_every h n⟩
 
 theorem every_perLiveTile {P : Kind → ReceiptGame Bool 1 → ReceiptGame Bool 1 → Prop}
     (h : ∀ k (t : Fin 1), P k (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .folded t)
       (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .whole t)) (n : ℕ) :
-    (period n).EveryWindow (fun live W => PerLiveTile scheme circuit live W P) :=
-  period_every (P := fun live W => PerLiveTile scheme circuit live W P) (perLiveTile_stages h) n
+    (period n).EveryExecutionPhase (fun live W => PerLiveTile scheme circuit live W P) :=
+  monitoringPeriod_every (P := fun live W => PerLiveTile scheme circuit live W P) (perLiveTile_stages h) n
 
-theorem liveAt_period : ∀ (n : ℕ) (x : Paths (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit)) n) (w : Fin n),
+theorem liveAt_monitoringPeriod : ∀ (n : ℕ) (x : Paths (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit)) n) (w : Fin n),
     (period n).liveAt x w = fun _ => true
   | 0, _, w => w.elim0
   | n + 1, x, w => by
     refine Fin.cases ?_ (fun w' => ?_) w
     · rfl
-    · exact liveAt_period n x.2 w'
+    · exact liveAt_monitoringPeriod n x.2 w'
 
 /-- **The honest period passes every prefix of its game**, at any weights and costs: every window's checked values
 are honest. -/
-theorem acceptsUpTo_period (wt : (Fin 1 → Bool) → Fin 1 → ℝ) (a b : ℝ) :
+theorem acceptsUpTo_monitoringPeriod (wt : (Fin 1 → Bool) → Fin 1 → ℝ) (a b : ℝ) :
     ∀ (n j : ℕ) (x : Paths (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit)) n),
       RoundGame.acceptsUpTo (monitoringPeriodGame (tileStage circuit 1) wt a b 1 (period n)) j x
   | 0, _, _ => trivial
   | _ + 1, 0, _ => trivial
   | n + 1, j + 1, x =>
-    ⟨fun v _ => by simp [stages, SplitStages.joint, SplitStages.sameAt], acceptsUpTo_period wt a b n j x.2⟩
+    ⟨fun v _ => by simp [stages, SplitStages.joint, SplitStages.sameAt], acceptsUpTo_monitoringPeriod wt a b n j x.2⟩
 
 theorem sum_div_le_one {n : ℕ} (hn : 0 < n) (f : Fin n → Fin 1 → ℝ) (hf : ∀ w j, f w j ≤ 1) :
     (∑ w, ∑ j, f w j) / n ≤ 1 := by
@@ -241,13 +241,13 @@ theorem honest_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
       tileLuck scheme circuit 1 t ≤ 1 / 2 ∧ tileLuck0 scheme circuit 1 t ≤ 1 / 2) ∧
     SplitRate 1 1 (1 / 2) (1 / 2) 1 1 1 4 ∧
     (play n).game = monitoringPeriodGame (tileStage circuit 1) (liveCone scheme circuit 1) 1 1 1 (period n) ∧
-    (period n).EveryWindow (fun live _ => DeadConeDead scheme circuit 1 live) ∧
+    (period n).EveryExecutionPhase (fun live _ => DeadConeDead scheme circuit 1 live) ∧
     PrefixOf (layer n) (play n).game ∧
     (∀ w, prob (fun x => (layer n).MovedIn x w) ≤ 0) ∧ (layer n).JointSound 0 ∧ (layer n).Pins ∧
-    (period n).EveryWindow (fun live W => PerLiveTile scheme circuit live W (fun k G _ => OperandHMu (scheme.mu k) G)) ∧
-    (period n).EveryWindow
+    (period n).EveryExecutionPhase (fun live W => PerLiveTile scheme circuit live W (fun k G _ => OperandHMu (scheme.mu k) G)) ∧
+    (period n).EveryExecutionPhase
       (fun live W => PerLiveTile scheme circuit live W (fun k G _ => ReceiptLuckAt (scheme.rB k) G)) ∧
-    (period n).EveryWindow
+    (period n).EveryExecutionPhase
       (fun live W => PerLiveTile scheme circuit live W (fun k _ G0 => GuessLuckAt (scheme.guess k) G0)) ∧
     UnitFixed (play n) (layer n) (monitoringPeriodMode circuit (period n) (run n)) (fun _ t => (tileWords scheme circuit 1 t : ℝ))
       (fun _ => 1) ∧
@@ -255,8 +255,8 @@ theorem honest_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     ∀ x, creditedLive scheme circuit (period n) (run n) x = n := by
   have hc : ∀ x w, (run n).Credited x w := fun _ _ _ _ _ => trivial
   refine ⟨le_rfl, scope hδs, fun t => by rw [shareCone_eq]; norm_num, fun j => ?_, fun t _ => ?_, splitRate, rfl,
-    period_every (P := fun live _ => DeadConeDead scheme circuit 1 live) (fun t _ ht _ => by simp at ht) n,
-    fun x j _ => acceptsUpTo_period _ _ _ n j x, fun w => ?_, fun w => ?_, fun _ _ _ _ _ => trivial,
+    monitoringPeriod_every (P := fun live _ => DeadConeDead scheme circuit 1 live) (fun t _ ht _ => by simp at ht) n,
+    fun x j _ => acceptsUpTo_monitoringPeriod _ _ _ n j x, fun w => ?_, fun w => ?_, fun _ _ _ _ _ => trivial,
     every_perLiveTile (P := fun k G _ => OperandHMu (scheme.mu k) G)
       (fun k t => operandHMu_of_zero _ _ _ _ _ (paid_share .folded (by decide) t)) n,
     every_perLiveTile (P := fun k G _ => ReceiptLuckAt (scheme.rB k) G)
@@ -289,7 +289,7 @@ theorem honest_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     rw [Finset.filter_true_of_mem fun w _ => hc x w, Finset.card_univ, Fintype.card_fin]
   · classical
     have hx : ∀ w, (run n).Credited x w := hc x
-    have hl : ∀ w, (period n).liveAt x w = fun _ => true := liveAt_period n x
+    have hl : ∀ w, (period n).liveAt x w = fun _ => true := liveAt_monitoringPeriod n x
     show (∑ w : Fin n, if (run n).Credited x w then
       ∑ t : Fin 1, (liveWords scheme circuit 1 ((period n).liveAt x w) t : ℝ) else 0) = n
     simp [hx, hl, liveWords, tileWords_eq]
@@ -367,13 +367,13 @@ theorem credited_const_true (n : ℕ) (w : Fin n) : (runR n).Credited (constPath
   rfl
 
 theorem monitoringPeriodR_every {P : (Fin 1 → Bool) → SplitStages Bool (Fin 1) 1 → Prop} (h0 : P (fun _ => false) stages)
-    (h : P (fun _ => true) stages) (n : ℕ) : (monitoringPeriodR n).EveryWindow P :=
-  ⟨h0, fun _ => period_every h n⟩
+    (h : P (fun _ => true) stages) (n : ℕ) : (monitoringPeriodR n).EveryExecutionPhase P :=
+  ⟨h0, fun _ => monitoringPeriod_every h n⟩
 
 theorem monitoringPeriodR_perLiveTile {P : Kind → ReceiptGame Bool 1 → ReceiptGame Bool 1 → Prop}
     (h : ∀ k (t : Fin 1), P k (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .folded t)
       (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .whole t)) (n : ℕ) :
-    (monitoringPeriodR n).EveryWindow (fun live W => PerLiveTile scheme circuit live W P) :=
+    (monitoringPeriodR n).EveryExecutionPhase (fun live W => PerLiveTile scheme circuit live W P) :=
   monitoringPeriodR_every (P := fun live W => PerLiveTile scheme circuit live W P) (perLiveTile_stages h) (perLiveTile_stages h) n
 
 theorem acceptsUpTo_monitoringPeriodR (wt : (Fin 1 → Bool) → Fin 1 → ℝ) (a b : ℝ) (n : ℕ) :
@@ -381,7 +381,7 @@ theorem acceptsUpTo_monitoringPeriodR (wt : (Fin 1 → Bool) → Fin 1 → ℝ) 
       RoundGame.acceptsUpTo (monitoringPeriodGame (tileStage circuit 1) wt a b 1 (monitoringPeriodR n)) j x
   | 0, _ => trivial
   | j + 1, x =>
-    ⟨fun v _ => by simp [stages, SplitStages.joint, SplitStages.sameAt], acceptsUpTo_period wt a b n j x.2⟩
+    ⟨fun v _ => by simp [stages, SplitStages.joint, SplitStages.sameAt], acceptsUpTo_monitoringPeriod wt a b n j x.2⟩
 
 /-- **No window is credited** when the first window's proof is refused. -/
 theorem prefixLen_false (n : ℕ) : (runR (n + 1)).prefixLen (constPath false (n + 1)) = 0 := by
@@ -420,7 +420,7 @@ theorem creditedLive_true (n : ℕ) :
   classical
   have hc := credited_const_true (n + 1)
   have hs : ∀ w : Fin n, (monitoringPeriodR n).liveAt (constPath true (n + 1)) w.succ = fun _ => true :=
-    fun w => liveAt_period n (constPath true n) w
+    fun w => liveAt_monitoringPeriod n (constPath true n) w
   show (∑ w : Fin (n + 1), if (runR (n + 1)).Credited (constPath true (n + 1)) w then
     ∑ t : Fin 1, (liveWords scheme circuit 1 ((monitoringPeriodR n).liveAt (constPath true (n + 1)) w) t : ℝ) else 0) = n
   rw [Fin.sum_univ_succ]
@@ -439,14 +439,14 @@ theorem real_meets (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
       tileLuck scheme circuit 1 t ≤ 1 / 2 ∧ tileLuck0 scheme circuit 1 t ≤ 1 / 2) ∧
     SplitRate 1 1 (1 / 2) (1 / 2) 1 1 1 4 ∧
     (playR n).game = monitoringPeriodGame (tileStage circuit 1) (liveCone scheme circuit 1) 1 1 1 (monitoringPeriodR n) ∧
-    (monitoringPeriodR n).EveryWindow (fun live _ => DeadConeDead scheme circuit 1 live) ∧
+    (monitoringPeriodR n).EveryExecutionPhase (fun live _ => DeadConeDead scheme circuit 1 live) ∧
     PrefixOf (layerR n) (playR n).game ∧
     (∀ w, prob (fun x => (layerR n).MovedIn x w) ≤ 0) ∧ (layerR n).JointSound 0 ∧ (layerR n).Pins ∧
-    (monitoringPeriodR n).EveryWindow
+    (monitoringPeriodR n).EveryExecutionPhase
       (fun live W => PerLiveTile scheme circuit live W (fun k G _ => OperandHMu (scheme.mu k) G)) ∧
-    (monitoringPeriodR n).EveryWindow
+    (monitoringPeriodR n).EveryExecutionPhase
       (fun live W => PerLiveTile scheme circuit live W (fun k G _ => ReceiptLuckAt (scheme.rB k) G)) ∧
-    (monitoringPeriodR n).EveryWindow
+    (monitoringPeriodR n).EveryExecutionPhase
       (fun live W => PerLiveTile scheme circuit live W (fun k _ G0 => GuessLuckAt (scheme.guess k) G0)) ∧
     UnitFixed (playR n) (layerR n) (monitoringPeriodMode circuit (monitoringPeriodR n) (runR (n + 1)))
       (fun _ t => (tileWords scheme circuit 1 t : ℝ)) (fun _ => 1) ∧

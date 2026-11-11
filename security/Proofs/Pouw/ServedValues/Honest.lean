@@ -169,7 +169,7 @@ theorem liveAt_skipPeriod {Ω : Type} {N : ℕ} :
     · exact liveAt_skipPeriod n x.2 w'
 
 theorem stages_skipPeriod {Ω : Type} {N : ℕ} :
-    ∀ (n : ℕ) (x : Paths Ω n) (w : Fin n), (skipPeriod Ω N n).windowAt x w = skipStages N
+    ∀ (n : ℕ) (x : Paths Ω n) (w : Fin n), (skipPeriod Ω N n).executionPhaseAt x w = skipStages N
   | 0, _, w => w.elim0
   | n + 1, x, w => by
     refine Fin.cases ?_ (fun w' => ?_) w
