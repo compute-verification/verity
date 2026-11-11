@@ -211,7 +211,6 @@ class Options:
     workload: str | None = option("--workload", type=workload_arg, default=None)
     tp2_match: str | None = option("--tp2-match", default=None,
                                    help="tp2_match.json of the same run (its `provenance` = the stored-step value check); REQUIRED for PASS")
-    coll_dir: str | None = option("--coll-dir", default=None, help="dir of coll.rank<r>.jsonl (default: --capture)")
     out: str = option("--out")
     python: str = option("--python", default=sys.executable,
                          help="interpreter for the fold / compare subprocesses (row_pod's PY312)")
@@ -268,7 +267,6 @@ def _rank_legs(a: Options, r: int, rd: Path, build: Path, derived: list[str], gp
 def main(a: Options) -> int:
     cap, out = Path(a.capture), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    coll_dir = Path(a.coll_dir) if a.coll_dir else cap
     derived: dict[int, list[str]]
     if a.build_rank:
         if a.build_rank0 or a.build_rank1:
@@ -354,7 +352,7 @@ def main(a: Options) -> int:
             colls[rank] = list((fs.get("fold") or {}).get("collectives") or [])
             producers[rank] = RM.own_producers_from_record(rd / "instances.jsonl")
             ferr[rank] = int(fs.get("errors") or 0)
-            p = coll_dir / f"coll.rank{rank}.jsonl"
+            p = cap / f"coll.rank{rank}.jsonl"
             if p.exists():
                 rec[rank] = RM.load_recorder(p)
                 rec_sha[rank] = hashlib.sha256(p.read_bytes()).hexdigest()      # binds the provenance record to THESE rows
