@@ -156,6 +156,10 @@ def test_the_command_compares_two_dumps_and_exits_0_with_the_rows_it_cant_read_s
         "1 finished, 1.0 days earlier less 0.5 later (net +0.5). Landing not read; agents not read; machines not read; asks not "
         "read.\n")
     assert V.main(["--since", "yesterday"], now=NOW) == 2
+    assert V.main(["--from", "sweep:goals.json; true", "--to", str(B)], now=NOW) == 0     # not a dump's name: nothing is run
+    assert "the sweep's dumps are named goals-YYYYMMDDTHHMMZ.json.gz" in capsys.readouterr().out
+    assert V.main(["--since", "2026-11-09T12:00-08:00", "--until", "2026-11-09T18:00-08:00", "--json"], now=NOW) == 0
+    assert [n for n in json.loads(capsys.readouterr().out)["notes"] if "sweep" in n] == ["the sweep's dumps not read: a test has no pod"]
 
 
 def test_a_reading_now_saves_the_page_and_starts_from_the_newest_known_dump_at_the_windows_start(offline, monkeypatch, tmp_path, capsys):

@@ -201,7 +201,9 @@ def load(spec: str) -> dict:
                 "source": spec}
     if spec.startswith("sweep:"):
         name = spec.removeprefix("sweep:")
-        return {"goals": parse(pod(f"zcat {SWEEP_GOALS}/{name}"), spec), "taken": when(DUMP_NAME.search(name)[1]),
+        if not (named := DUMP_NAME.fullmatch(name)):
+            raise Unread(f"{spec}: the sweep's dumps are named goals-YYYYMMDDTHHMMZ.json.gz")
+        return {"goals": parse(pod(f"zcat {SWEEP_GOALS}/{name}"), spec), "taken": when(named[1]),
                 "source": f"{CONTROL}:{SWEEP_GOALS}/{name}"}
     path = Path(spec)
     goals = parse(gzip.decompress(path.read_bytes()) if path.suffix == ".gz" else path.read_bytes(), spec)
@@ -323,10 +325,12 @@ def asks(rows: list[dict], now: float) -> dict:
 
 def read(ns: argparse.Namespace, since: datetime | None, until: datetime | None, now: datetime) -> dict:
     notes: list[str] = []
-    known: dict[datetime, str] = {}
+    known: dict[datetime, str] | None = None
 
     def pick(t: datetime) -> str:
-        known.update(known or known_dumps(notes))
+        nonlocal known
+        if known is None:
+            known = known_dumps(notes)
         at = max((k for k in known if k <= t + timedelta(seconds=SLACK_S)), default=None)
         if at is None:
             raise Unread(f"no dump of the Goals page is known at or before {pst(t)}: name one with --from or --to")
