@@ -61,13 +61,13 @@ class Net:
         from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY
         hf, ff = phi.hf_config, FF.facts_for(phi.hf_config)
         self.world, self.rank = int(phi.tp["world"]), int(phi.tp.get("rank", 0))
-        qc = hf.get("quantization_config")
+        qc = hf.get("quantization_config") or {}
         try:
             rc = rank_hf_config(hf, self.world)
             C, _ = FF.resolve_facts(rc, {})
             C.update(H=int(hf["hidden_size"]), EPS=float(hf["rms_norm_eps"]), NL=int(hf["num_hidden_layers"]), NH=int(rc["num_attention_heads"]),
                      V=int(rc["vocab_size"]), VOCAB=int(hf["vocab_size"]), I=int(rc["intermediate_size"]),
-                     MAX_POS=int(hf["max_position_embeddings"]), FP8_BLOCK=int((qc.get("weight_block_size") or [0])[0]) if qc else 0)
+                     MAX_POS=int(hf["max_position_embeddings"]), FP8_BLOCK=int((qc.get("weight_block_size") or [0])[0]))
             self.ratios = [max(1, int(r)) for r in C["COMPRESS_RATIOS"][:C["NL"]]]
             H, D, DR, QL, NH, NHP = (int(C[k]) for k in ("H", "HEAD_DIM", "QK_ROPE", "Q_LORA", "NH", "PADDED_HEADS"))
             OG = int(C["O_GROUPS"]) // self.world
@@ -117,7 +117,7 @@ class Net:
                 facts.append(str(e))
         if facts:
             _refuse("; ".join(facts))
-        self.settings = settings_of(bool(phi.engine.get("disable_custom_all_reduce")), phi.engine["env"] if "env" in phi.engine else {})
+        self.settings = settings_of(bool(phi.engine.get("disable_custom_all_reduce")), phi.engine.get("env") or {})
         self.mhc = {"HC": int(C["HC_MULT"]), "H": H, "TN": MHC_GEOMETRY[H]["TN"], "REPEAT": int(C["HC_REPEAT"]), "EPS": C["EPS"],
                     "HC_EPS": float(C["HC_EPS"])}
         self.model_class = served_class(ff["vllm_class"])

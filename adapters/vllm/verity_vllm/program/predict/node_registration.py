@@ -80,9 +80,10 @@ def root_inputs(desc: dict[str, Any]) -> list[tuple[int, int, int]]:
     """(root node, width, members) of each input node of the descriptor's root, in order, read off its JSON (no decode)."""
     from verity.circuits.program import input_id
 
+    callees = desc.get("callees") or []
     out = []
     for k, n in enumerate(desc["definitions"][desc["root"]]["body"]["nodes"]):
-        got = input_id(desc["callees"][n["fn"]] if "callees" in desc else n["fn"])
+        got = input_id(callees[n["fn"]] if isinstance(n["fn"], int) else n["fn"])
         if got is not None:
             out.append((k, got[1], int(n["n"]) if n["form"] in ("batch", "scan") else 1))
     return out

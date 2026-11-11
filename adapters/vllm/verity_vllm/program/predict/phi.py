@@ -46,20 +46,19 @@ class Phi:
         if d.get("schema") != PHI_SCHEMA:
             raise ValueError(f"phi schema {d.get('schema')!r} != {PHI_SCHEMA!r}")
         return cls(model=dict(d["model"]), target=dict(d["target"]), tp=dict(d.get("tp") or {"world": 1, "rank": 0}),
-                   sampling=dict(d.get("sampling") or {"kind": "greedy"}), engine=dict(d["engine"]),
-                   workload=dict(d["workload"]), execution=d.get("execution", "bi-eager"), profile=d.get("profile", "b1-eager-v3"))
+                   sampling=dict(d.get("sampling") or {"kind": "greedy"}), engine=dict(d.get("engine") or {}),
+                   workload=dict(d.get("workload") or {}), execution=d.get("execution", "bi-eager"), profile=d.get("profile", "b1-eager-v3"))
 
     def digest(self) -> str:
         return hashlib.sha256(json.dumps(self.to_json(), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
     @property
     def hf_config(self) -> dict:
-        return dict(self.model["hf_config"])
+        return dict(self.model.get("hf_config") or {})
 
     @property
     def requests(self) -> list[dict]:
-        """The declared requests; a φ with no workload (a registered one: `steps.Registered.of`) declares none."""
-        return list(self.workload["requests"]) if "requests" in self.workload else []
+        return list(self.workload.get("requests") or [])
 
     def target_profile(self):
         """The declared `TargetProfile`; where the target block does not declare `batch_invariant`, the one the execution label names
@@ -92,4 +91,4 @@ def _prompt_len(r: dict) -> int:
 
 
 def _cap(r: dict) -> int:
-    return int(r.get("max_tokens") or 0)
+    return int(r.get("max_tokens") or (r.get("sampling_params") or {}).get("max_tokens") or 0)
