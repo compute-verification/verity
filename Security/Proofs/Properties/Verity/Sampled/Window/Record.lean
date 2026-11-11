@@ -658,13 +658,12 @@ theorem session_reps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
       have h2 := hR.full τ s _ hτ hs0 hnT
       rw [hrr] at h1 h2
       omega
-    refine (session_stream_rounds
-      (fun a : Pos (V.game θ F c) σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)) => a.2.1.tab)
-      (fun a : Pos (V.game θ F c) σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)) => a.2.1.rep)
-      (fun a : Pos (V.game θ F c) σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)) =>
-        roundOf dg a.2.1.bytes a.2.1.n a.2.2)
-      (by simp) per (sessionReveal #[tb])
-      record₀ recordDigest hτ hF' hpw hcov hL₀ hS hnd hfirst ⟨0, htv⟩ ρ hs hcovL (fun k => st.rounds[k]!) hf).trans ?_
+    have key := session_stream_rounds
+      (γ := Pos (V.game θ F c) σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽))) (J := J)
+      (fun a => a.2.1.tab) (fun a => a.2.1.rep) (fun a => roundOf dg a.2.1.bytes a.2.1.n a.2.2)
+      (tables := #[tb]) (by simp) per (sessionReveal #[tb]) record₀ recordDigest hτ hF' hpw hcov hL₀ hS hnd hfirst
+      ⟨0, htv⟩ ρ hs hcovL (fun k => st.rounds[k]!) hf
+    refine key.trans ?_
     rw [hlen, map_range_getElem!, hRR]
   · have hzero : st.rounds.size = 0 := by omega
     have hnone : ∀ a ∈ as, ¬ (a.2.1.tab = (⟨0, htv⟩ : Fin J) ∧ a.2.1.rep = ρ) := by
