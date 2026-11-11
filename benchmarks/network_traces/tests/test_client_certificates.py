@@ -28,7 +28,9 @@ SESSION = bytes(range(32))
 
 def _load():
     sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_certifier_serve", HERE / "certifier_serve.py")
+    spec = importlib.util.spec_from_file_location(
+        "network_traces_certifier_serve",
+        Path(__file__).resolve().parents[3] / "benchmarks/network_traces/certifier_serve.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

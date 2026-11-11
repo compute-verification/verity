@@ -71,6 +71,7 @@ sys.setrecursionlimit(100000)
 
 NP = {"torch.bfloat16": np.uint16, "torch.float16": np.uint16, "torch.float32": np.uint32, "torch.float8_e4m3fn": np.uint8,
       "torch.uint8": np.uint8, "torch.int8": np.int8, "torch.int32": np.int32, "torch.int64": np.int64, "torch.bool": np.uint8}
+CK_BITS = {"F8_E4M3": 8, "BF16": 16, "F32": 32}
 NUM_SM = 132  # the H200's SMs, FA3's split count reads it
 #: labels of one family that differ only in a size: one is staged, the census's type when the step has it, else the
 #: smallest (SplitPart past T=64 needs more than Flock's 2^27-bit block)
@@ -248,7 +249,13 @@ class Capture:
             self._ck = CheckpointIndex(self.checkpoint, verify_shards=False)
         ck, P, world = self._ck, self.params[r], len(self.ranks)
         dims = {n: (x["shape"], 8 * np.dtype(NP[x["dtype"]]).itemsize) for n, x in P.items()}
-        rw = fp8_ue8m0.Rewrites(list(dims), load_roles(P), lambda f: compose(f, *dims[f], ck, world=world, rank=r), ck.config)
+
+        def raw(f: str):
+            # MLA's absorbed W_UK_T / W_UV are composed from kv_b_proj, which a decode-only step never reads, so it isn't among
+            # the step's parameters: it is then the rank's dim-0 slice of the checkpoint tensor, at the checkpoint's width
+            shape, bits = dims[f] if f in dims else ([ck.tensors[f][2][0] // world, *ck.tensors[f][2][1:]], CK_BITS[ck.dtype(f)])
+            return compose(f, shape, bits, ck, world=world, rank=r)
+        rw = fp8_ue8m0.Rewrites(list(dims), load_roles(P), raw, ck.config)
         return lambda n: (rw.compose(n, dims[n][0]) if rw.covers(n) else compose(n, *dims[n], ck, world=world, rank=r))[0]
 
     def param_view(self, r: int, ref: dict) -> np.ndarray:
