@@ -10,6 +10,7 @@ public import Proofs.Flock.SamplingGeneric.Count
 public import Proofs.Flock.SamplingGeneric.Bits
 public import Proofs.Flock.SamplingGeneric.KSAt
 public import Proofs.Flock.SamplingGeneric.Reg
+public import Proofs.Flock.SamplingGeneric.RegCanon
 public import Proofs.Flock.SamplingGeneric.RegFirstHit
 public import Proofs.Flock.SamplingGeneric.RunExtAt
 public import Proofs.Flock.SamplingGeneric.Efficient
