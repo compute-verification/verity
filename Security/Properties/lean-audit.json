@@ -83,7 +83,8 @@
   "Properties.Core.Site",
   "Properties.Verity.Subprotocols",
   "Properties.Verity.Coupling",
-  "Properties.Flock.Nets"
+  "Properties.Flock.Nets",
+  "Properties.Verity.WindowFiles"
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": "Definitions.Assumptions",
