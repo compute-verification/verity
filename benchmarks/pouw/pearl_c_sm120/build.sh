@@ -10,25 +10,29 @@
 #                        form
 #   sass.json            registers and tensor-core, copy and local-memory instruction counts per kernel
 #   check/               fixture.py's inputs and expected buffers (needs verity and numpy)
-#   run.py, toolchain.txt (nvcc --version and the full nvcc command line), source.txt (the verity commit), MANIFEST.sha256
+#   run.py, toolchain.txt (nvcc --version and the full compile command line), source.txt (the verity commit), MANIFEST.sha256
 # Usage: bash benchmarks/pouw/pearl_c_sm120/build.sh [OUT]   (default /tmp/pearl-c-sm120-ship; CUDA names the toolkit, default
 #        /usr/local/cuda-13.0; CUBIN_ONLY=1 stops after the SASS gate, with the cubin, ptxas.txt and sass.json, and needs no uv)
+# It builds in benchmarks/torch_gpu/ship.sh's frame, from a copy of its sources and with its ship_nvcc.sh: a rebuild at the
+# same commit with the same toolkit gives the same cubin, and so does one after a source or a header only moved. The frame
+# needs gcc and a kernel that lets a process turn address randomization off (setarch -R), and refuses to build without.
 set -euo pipefail
-HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
-CUDA=${CUDA:-/usr/local/cuda-13.0}; OUT=${1:-/tmp/pearl-c-sm120-ship}
-[ -x "$CUDA/bin/nvcc" ] || { echo "no nvcc at $CUDA" >&2; exit 1; }
-"$CUDA/bin/nvcc" --version | grep -Eq "release 12\.(8|9)|release 1[3-9]\." || { echo "$CUDA's nvcc is older than 12.8" >&2; exit 1; }
-rm -rf "$OUT"; mkdir -p "$OUT"
-FLAGS=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -fmad=false -Xptxas -v -cubin)
+HERE=$(cd "$(dirname "$0")" && pwd)
+. "$HERE/../../torch_gpu/ship.sh"
+ship_cuda /usr/local/cuda-13.0
+OUT=${1:-/tmp/pearl-c-sm120-ship}
+ship_fresh
+ship_cubin_flags sm_120a
 case " ${FLAGS[*]} " in *ftz*|*fast-math*|*fast_math*) echo "an FTZ or fast-math flag: ${FLAGS[*]}" >&2; exit 1;; esac
-"$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$OUT/pearl_c_sm120.cubin" "$HERE/pearl_c_sm120.cu" 2> "$OUT/ptxas.txt"
+ship_stage benchmarks/pouw/pearl_c_sm120 benchmarks/pouw/pearl_c verity/definitions/kernels
+"$SHIP_NVCC" "${FLAGS[@]}" -o "$OUT/pearl_c_sm120.cubin" "$SRC/benchmarks/pouw/pearl_c_sm120/pearl_c_sm120.cu" 2> "$OUT/ptxas.txt"
 PATH="$CUDA/bin:$PATH" "$CUDA/bin/cuobjdump" -sass "$OUT/pearl_c_sm120.cubin" > "$OUT/pearl_c_sm120.sass"
 python3 "$HERE/sass_gate.py" "$OUT/ptxas.txt" "$OUT/pearl_c_sm120.sass" "$OUT/sass.json"
 rm "$OUT/pearl_c_sm120.sass"
 [ -n "${CUBIN_ONLY:-}" ] && exit 0
 (cd "$ROOT" && uv run python benchmarks/pouw/pearl_c_sm120/fixture.py "$OUT/check")
 cp "$HERE/run.py" "$OUT/"
-{ "$CUDA/bin/nvcc" --version; echo "nvcc ${FLAGS[*]} -o pearl_c_sm120.cubin pearl_c_sm120.cu"; } > "$OUT/toolchain.txt"
+{ "$CUDA/bin/nvcc" --version; echo "ship_nvcc ${FLAGS[*]} -o pearl_c_sm120.cubin pearl_c_sm120.cu"; } > "$OUT/toolchain.txt"
 { git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c_sm120 benchmarks/pouw/pearl_c verity/protocols/pouw/verifier verity; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 du -sh "$OUT" | cut -f1 | xargs echo "tree:"
