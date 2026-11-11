@@ -14,6 +14,7 @@ import json
 import random
 from fractions import Fraction
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
@@ -68,6 +69,12 @@ class Int8Arm:
 
 
 class Linear:
+    #: a router's, as vLLM's linear holds them
+    quant_config: object
+    output_size: int
+    #: the layer's method: the int8 arm, or what a test puts in its place
+    quant_method: Any
+
     def __init__(self, n, seed):
         g = torch.Generator().manual_seed(seed)
         self.weight = torch.randint(-127, 128, (n, K), generator=g, dtype=torch.int8)
@@ -314,7 +321,7 @@ def test_z_is_the_exact_product_on_each_units_cells():
     w = rng.integers(-127, 128, (40, K), dtype=np.int8)
     y = xq.astype(np.int64) @ w.astype(np.int64).T
     call = PH.Call(0, 0, 0, "q", 33, K, 40, 0, 64)
-    full = np.zeros((64, 64), np.int64)
+    full: np.ndarray = np.zeros((64, 64), np.int64)
     full[:33, :40] = y
     for n, u in enumerate(call.compiled().units):
         z = call.z(y.astype(np.int32), n)
@@ -465,7 +472,7 @@ def engine(monkeypatch):
     from verity_vllm.engine import vllm_adapter as va
     rng = random.Random(1)
     monkeypatch.setattr(verifier, "coins", rng.randbytes)
-    got = {"runner": Runner(), "model": Model(Linear(32, 1), Linear(40, 2)), "builds": 0}
+    got: dict[str, Any] = {"runner": Runner(), "model": Model(Linear(32, 1), Linear(40, 2)), "builds": 0}
 
     def build_engine(checkpoints, **kw):
         got["builds"] += 1

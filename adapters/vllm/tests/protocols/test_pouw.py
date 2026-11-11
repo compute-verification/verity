@@ -36,6 +36,9 @@ class Apply:
 
 
 class Linear:
+    #: a scaled layer's per-row scales; a layer made plain has none
+    weight_scale: np.ndarray
+
     def __init__(self, weight):
         self.weight = weight
         self.quant_method = Apply()
@@ -267,7 +270,7 @@ def test_weight_operands_formed_in_blocks_equal_one_block(monkeypatch):
 def _fake_pous(monkeypatch):
     """A POUS stand-in outside PoUW: it stores W + 100 and hands the inner apply a layer holding the decoded weight."""
     mod = types.ModuleType("verity_vllm.protocols.fake_pous")
-    mod.NAME, mod.schemes, mod.refusals = "pous", lambda: ("band-chain/d12/v1",), lambda scheme, ctx: ()
+    vars(mod).update(NAME="pous", schemes=lambda: ("band-chain/d12/v1",), refusals=lambda scheme, ctx: ())
 
     def install(scheme, target):
         h = target.hooks(f"pous:{scheme}")
@@ -276,7 +279,7 @@ def _fake_pous(monkeypatch):
             h.wrap(m.quant_method, "apply",
                    lambda orig, m=m: (lambda layer, x, bias=None: orig(types.SimpleNamespace(weight=m.stored - 100), x, bias)))
         return PO.Option(name=f"pous:{scheme}", hooks=h)
-    mod.install = install
+    vars(mod)["install"] = install
     monkeypatch.setitem(sys.modules, mod.__name__, mod)
     monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
 
@@ -353,9 +356,15 @@ def test_served_fp8_claims_registered_weights_only_under_the_shared_rule(monkeyp
     registered-weights rule Pearl-C4 reads too; refused, the claim says it is about nothing and names why."""
     from verity.protocols.pouw.verifier import registration
     from verity.protocols.pouw.prover.schemes import pearl_c
-    s, seen = PPD.scheme_of("pearl-c-sm120-v1-h3"), []
+    s = PPD.scheme_of("pearl-c-sm120-v1-h3")
+    seen: list[tuple] = []
     assert pouw.SERVED_TRANSFORMS == () and pearl_c.check_registration is registration.check_registration
-    monkeypatch.setattr(pearl_c, "check_registration", lambda *a: seen.append(a) or registration.check_registration(*a))
+
+    def check_registration(*a):
+        seen.append(a)
+        return registration.check_registration(*a)
+
+    monkeypatch.setattr(pearl_c, "check_registration", check_registration)
     claim = pouw.weights_claim(s)
     assert seen == [((), False, False)]
     assert claim == {"transforms": [], "curated": False, "registered": False, "claims": pouw.UNREGISTERED,

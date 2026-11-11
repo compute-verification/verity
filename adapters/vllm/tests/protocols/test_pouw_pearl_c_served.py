@@ -24,6 +24,7 @@ import shutil
 import socket
 import threading
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
@@ -170,8 +171,13 @@ def test_each_install_is_an_epoch_of_its_own_under_a_fresh_hm96_key_and_over_one
     """Each install's `commit_weights` samples its own hm96 key, so a reinstall's weights' root W is its own. A reinstall
     committing a W this process already had an epoch over (the stand-in's fixed roots: the same key over the same weights)
     is that W's next epoch: k = 1, its challenge phase opened on its own epoch root, never epoch 0's."""
-    keys = []
-    monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: keys.append(salt_key) or ROOTS)
+    keys: list[bytes] = []
+
+    def weight_roots(kernel, weights, scheme, salt_key=None):
+        keys.append(salt_key)
+        return ROOTS
+
+    monkeypatch.setattr(PPD, "weight_roots", weight_roots)
     w, model, cs, hosts = weights_root(ROOTS), _model(), [], []
     for k in range(2):
         (tmp_path / str(k)).mkdir()
@@ -296,7 +302,7 @@ def _kinds(gate):
     return [json.loads(line)["kind"] for line in gate.lines]
 
 
-H1_OPEN = {"cap": 4, "circuit": "c1" * 64, "draw_k": 27, "rows": 64}
+H1_OPEN: dict[str, Any] = {"cap": 4, "circuit": "c1" * 64, "draw_k": 27, "rows": 64}
 H1_REFUSED = ("the lane's open period p-h1 is H1's (its open commits draw_k, rows): a salt-only session is a window "
               "H1's checks refuse (window.live_epoch_reason)")
 
@@ -361,7 +367,9 @@ class _GateSession:
         self.gate, self.challenger, self.monkeypatch = gate, challenger, monkeypatch
         self.tree = tmp_path / "session"
         self.directory = self.tree / "out"
-        self.reason = self.client = self._thread = None
+        self.reason: str | None = None
+        self.client: Any = None
+        self._thread: threading.Thread | None = None
         gate.reserve(SID, families)
 
     def open(self, sid, root):
@@ -383,6 +391,7 @@ class _GateSession:
             self.reason = R.serve(sock, session, itertools.count().__next__)
 
     def end(self):
+        assert self._thread is not None, "end before open"
         self._thread.join()
         self.gate.end(SID, self.directory, self.reason is None)
         return self.reason

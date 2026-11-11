@@ -104,7 +104,7 @@ def test_a_row_seg_value_is_what_core_commits(n, w):
 def test_given_salts_are_the_rows_salts_and_one_reused_is_refused():
     """With ``row_salts`` (a public table's, `pouw_h1_served.Served._pubs`) the value is core's commit under those salts,
     not the key's; a salt short or reused is refused."""
-    words = np.arange(15, dtype=np.uint16).reshape(3, 5)
+    words: np.ndarray = np.arange(15, dtype=np.uint16).reshape(3, 5)
     ys = b"".join(bytes([j + 1]) * 192 for j in range(3))
     got = NR.commit(PROGRAM, "h1/pub@0", words, KEY, 0, True, ys, window=WINDOW)
     ref = G.Registered.commit(PROGRAM, "h1/pub@0", words.tolist(), [ys[192 * j:192 * (j + 1)] for j in range(3)],
@@ -118,7 +118,7 @@ def test_given_salts_are_the_rows_salts_and_one_reused_is_refused():
 
 def test_a_windows_rows_arent_kept_unless_asked():
     """Without ``keep_rows`` the tree is the same and a read of a row is refused; the salts are still sampled on read."""
-    words = np.arange(12, dtype=np.uint16).reshape(3, 4)
+    words: np.ndarray = np.arange(12, dtype=np.uint16).reshape(3, 4)
     got, ref = NR.commit(PROGRAM, "v", words, KEY, 9, window=WINDOW), _core(PROGRAM, "v", words, KEY, 9, window=WINDOW)
     assert got.entry() == ref.entry() and got.levels == ref.levels and len(got.rows) == 3
     with pytest.raises(LookupError, match="rebuilds"):

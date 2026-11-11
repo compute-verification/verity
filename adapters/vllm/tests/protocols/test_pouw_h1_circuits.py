@@ -38,6 +38,7 @@ def _sha(b: bytes) -> str:
 def _auditor(monkeypatch):
     """Infra's gate, ``auditor.py``, as a module of its own (its dataclasses read it from `sys.modules`)."""
     spec = importlib.util.spec_from_file_location("live_challenger_auditor", AUDITOR)
+    assert spec is not None and spec.loader is not None, f"{AUDITOR} is no module"
     module = importlib.util.module_from_spec(spec)
     monkeypatch.setitem(sys.modules, spec.name, module)
     spec.loader.exec_module(module)
@@ -202,8 +203,12 @@ def test_a_j10r_program_builds_its_live_file_and_lowers_its_strata_as_j10r(tmp_p
     (d / RH.PROGRAM_META).write_text(json.dumps({"program_digest": _sha(raw),
                                                  "layout": SV.declared_layout(SHAPES, MODULES, ROWS, STEPS)}))
     out = tmp_path / "circuits"
+
+    def lower_live(T: int, part: dict, path: Path) -> None:
+        path.write_text(f"the live template at T = {T}\n")
+
     doc = PC.build(d, out, lower=lambda *_a: pytest.fail("lowered a J10-R stratum"), live=(ROWS, STEPS),
-                   lower_live=lambda T, part, path: path.write_text(f"the live template at T = {T}\n"), only=())
+                   lower_live=lower_live, only=())
     assert doc["templates"] == {f"k{k}": PO.template_id(HW.template(k, j10r(k))) for k in (64, 128)}
     assert sorted(doc["files"]) == [CR.LIVE] and doc["program"] == _sha(raw)
     lowered = []

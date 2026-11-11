@@ -19,34 +19,38 @@ import hashlib
 import io
 import pickle
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
-from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
-from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
-from verity.protocols.pouw.verifier import weights as Wt  # noqa: E402
-from verity.protocols.pouw.verifier.audit import hm96_salt  # noqa: E402
-from verity.protocols.pouw.prover.circuit import h1tile as HT  # noqa: E402
-from verity.protocols.pouw.prover.circuit import h1window as HW  # noqa: E402
-from verity.protocols.pouw.prover.circuit import h1zy as Z  # noqa: E402
-from verity.protocols.pouw.prover.circuit import seeds as SD  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import partition as P, registered as G  # noqa: E402
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
-from verity.circuits.ports import In, Out, Ports  # noqa: E402
-from verity.circuits.refs import Coll, coll_concat  # noqa: E402
-from verity.circuits.types import Array, RecordType, Value  # noqa: E402
-from verity.commitments import hm96  # noqa: E402
-from verity.commitments.merkle import tree_levels  # noqa: E402
-from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
-from verity_vllm.engine import int8_ops as OPS  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import registered as NR  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import weights as Wt
+from verity.protocols.pouw.verifier.audit import hm96_salt
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.protocols.pouw.prover.circuit import h1zy as Z
+from verity.protocols.pouw.prover.circuit import seeds as SD
+from verity.protocols.spot.verifier.one_stage import partition as P, registered as G
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.ports import In, Out, Ports
+from verity.circuits.refs import Coll, coll_concat
+from verity.circuits.types import Array, RecordType, Value
+from verity.commitments import hm96
+from verity.commitments.merkle import tree_levels
+from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
+from verity_vllm.engine import int8_ops as OPS
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import registered as NR
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import served as SV
 
 TILE = PH.TILE
 T, STEPS, SERVED = 64, 2, 5
@@ -145,7 +149,7 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
     held, moved = [(on(c), on(s)) for c, s in ws], None if changed is None else on(changed)
     got = {}
     for s in range(served):
-        xs = {}
+        xs: dict = {}
         for b, (_n, k) in zip(blocks, shapes):
             xs[b] = xs[b] if b in xs else _codes(rng, SERVED, k)
         inputs = [xs[b] for b in blocks]
@@ -190,7 +194,7 @@ def _records(z, y, m, n, tile=TILE):
     return out
 
 
-def _served_call(got, c, n, k):
+def _served_call(got, c, n, k) -> tuple[Any, Any, Any, Any]:
     """Call c's served (a, s_a, z, y), zeros for an empty call."""
     return got.get(c) or (torch.zeros(0, k, dtype=torch.int8), torch.zeros(0), torch.zeros(0, n), torch.zeros(0, n).bfloat16())
 
@@ -653,7 +657,7 @@ def test_a_weight_is_copied_to_the_host_and_held_to_its_periods_rows_once_a_proc
     assert all(a is b for a, b in zip(SV.host_weight(*ws[1]), got[1]))
     assert not (w.flags.writeable or s.flags.writeable) and not np.shares_memory(w, ws[1][0].numpy())
     assert (s.dtype, s.shape) == (np.dtype("<f4"), (32,)) and np.array_equal(s, ws[1][1].numpy().reshape(-1))
-    a = np.zeros((2, 2), np.int8)
+    a: np.ndarray = np.zeros((2, 2), np.int8)
     assert SV.host_weight(a, np.ones(2))[0] is not SV.host_weight(a, np.ones(2))[0] and a.flags.writeable
     gone = torch.zeros(2, 2, dtype=torch.int8)
     SV.host_weight(gone, torch.ones(2))
@@ -663,8 +667,14 @@ def test_a_weight_is_copied_to_the_host_and_held_to_its_periods_rows_once_a_proc
 
     period, fresh = SV.register_weights(_period(ws).circuit, SHAPES, got, WKEY), _period(ws)
     assert (period.root(), period.entries()) == (fresh.root(), fresh.entries()) and sorted(period.held) == [0, 1, 2]
-    compared, real = [], SV.chunk_words
-    monkeypatch.setattr(SV, "chunk_words", lambda codes, *x: (compared.append(codes), real(codes, *x))[1])
+    compared: list = []
+    real = SV.chunk_words
+
+    def chunk_words(codes, *x):
+        compared.append(codes)
+        return real(codes, *x)
+
+    monkeypatch.setattr(SV, "chunk_words", chunk_words)
     windows, checked = [], []
     for weights in (period, period, fresh, fresh):
         compared.clear()
@@ -788,7 +798,7 @@ def test_each_calls_public_table_and_the_ok_rows_are_the_ones_credit_builds_and_
     raw = SV.descriptor(served.program)
     (lay, why), program, shape = CR.layout_of(raw), hashlib.sha512(raw).hexdigest(), CR.shape_of(raw)
     assert why is None and program == served.program_digest
-    roots = {}
+    roots: dict = {}
     for e in served.entries():
         roots.setdefault(e["value"], []).append(e["root"])
     files = SV.register(run).files
@@ -989,7 +999,7 @@ def test_receipts_off_the_units_receipt_width_are_refused():
 
 #: Llama-3.1-8B's two contractions on a small slice of it: up_proj's K = 4096, one leaf a row, and down_proj's
 #: K = 14336, 4 chunk leaves a row (SPLITK)
-LLAMA = {"shapes": [(64, 4096), (32, 14336)], "modules": {0: "up_proj", 1: "down_proj"}, "blocks": (0, 1)}
+LLAMA: dict[str, Any] = {"shapes": [(64, 4096), (32, 14336)], "modules": {0: "up_proj", 1: "down_proj"}, "blocks": (0, 1)}
 
 
 def _chunk_rows(rows: list[bytes], k: int) -> list[bytes]:
@@ -1027,7 +1037,8 @@ def test_a_step_tables_words_are_each_calls_rows_padded_to_m_in_call_order(k):
     rows = [(rng.integers(-128, 128, (r, k), dtype=np.int8), (rng.random(r) + 0.5).astype("<f4")) for r in (3, 0, 5)]
 
     def padded(codes, scales):
-        full, sc = np.zeros((m, k), np.int8), np.zeros(m, "<f4")
+        full = np.zeros((m, k), np.int8)
+        sc: np.ndarray = np.zeros(m, "<f4")
         full[:len(codes)], sc[:len(codes)] = codes, scales
         return SV.row_words(full.reshape(n * m, k // n), np.repeat(sc, n))
 
@@ -1087,7 +1098,7 @@ def _shake(part: bytes, n: int) -> bytes:
 def _vector_rows(case: str, k: int, rows: int) -> tuple[np.ndarray, np.ndarray]:
     """A vector case's int8 codes (rows, K) and f32 scales: row r the r-th K + 4 bytes of SHAKE256(label, NUL, case),
     its scale's bits set into [2^-7, 2^-6)."""
-    b = np.frombuffer(_shake(case.encode(), rows * (k + 4)), np.uint8).reshape(rows, k + 4)
+    b: np.ndarray = np.frombuffer(_shake(case.encode(), rows * (k + 4)), np.uint8).reshape(rows, k + 4)
     bits = 0x3C000000 | (np.ascontiguousarray(b[:, k:]).view("<u4").reshape(rows) & 0x007FFFFF)
     return np.ascontiguousarray(b[:, :k]).view(np.int8), bits.astype("<u4").view("<f4")
 
@@ -1216,7 +1227,7 @@ def test_a_j10r_llama_window_at_k_14336_is_credited_at_its_whole_k_and_core_ties
     (layout, why), program, shape = CR.layout_of(raw), hashlib.sha512(raw).hexdigest(), CR.shape_of(raw)
     assert why is None and program == served.program_digest
     assert {k: (t["j10r"], t["n"]) for k, t in shape["tiles"].items()} == {4096: (True, 1), 14336: (True, 4)}
-    roots = {}
+    roots: dict = {}
     for e in served.entries():
         roots.setdefault(e["value"], []).append(e["root"])
     files = SV.register(run).files

@@ -60,7 +60,7 @@ def _window(j10r: bool = False):
     ws = [(torch.from_numpy(rng.integers(-127, 128, (n, k), dtype=np.int8)), torch.rand(n, 1, generator=g) + 0.5)
           for n, k in shapes]
     for m in (20, 0):
-        xs = {}
+        xs: dict = {}
         for w, ((n, k), (wt, sw)) in enumerate(zip(shapes, ws)):
             x = xs.setdefault(blocks[w], torch.from_numpy(rng.integers(-127, 128, (m, k), dtype=np.int8)))
             s_a = torch.rand(m, generator=g) + 0.5

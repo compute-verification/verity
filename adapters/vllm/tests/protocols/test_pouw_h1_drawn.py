@@ -172,7 +172,7 @@ def served(tmp_path, monkeypatch):
     srv.src.uninstall()
     assert out["tied"] and out["refused"] == [], out
     PC.build(d / "h1", tmp_path / "circuits", only=(K,),
-             lower=lambda k, tile, bind, path, j10r=False: PC._lower(k, *tile, bind, path, j10r))
+             lower=lambda k, tile, bind, path, j10r=False: PC._lower(k, tile[0], tile[1], bind, path, j10r))
     _inputs(arm, tmp_path)
     DR = DRAWN
     if not REAL:
@@ -319,7 +319,7 @@ def test_staging_on_the_committed_file_writes_the_recomposed_statements_bytes(se
     """`FileStager`, which reads K's committed circuit file and never composes it, writes the inst.bin and pub.bin the
     recomposed `UnitStager` does on the same rows, salts and outputs (here the stand-in's lowered outputs)."""
     DR, d, tmp = served
-    outs = {}
+    outs: dict[int, object] = {}
     monkeypatch.setattr(DR, "reference_check", lambda z, o, *_a: outs.__setitem__(int(z["call"]), o))
     monkeypatch.setattr(DR, "_random", _seeded())
     assert _stage(DR, d, tmp, weights_key=tmp / "wkey", recompose=True) == 0, capsys.readouterr().err

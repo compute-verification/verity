@@ -12,12 +12,15 @@ import itertools
 import json
 import random
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
-# ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import credit as CR
@@ -799,7 +802,8 @@ def test_the_gpu_harness_holds_an_in_process_window_to_cores_roots1_steps(edit):
     assert v["manifest"] is None and v["a_link"] is None and v["commit_values"] == 2, v
     assert v["tied"] if edit is None else (v["arow"][0] == "arow" and "is not the Commit's" in v["arow"][1]), v
     off = {**record["commitment"], "calls_root": "00" * 64}
-    assert "calls_root is not over" in G.record_reason({**record, "commitment": off})
+    reason = G.record_reason({**record, "commitment": off})
+    assert reason is not None and "calls_root is not over" in reason
 
 
 def _bare_table(monkeypatch):
@@ -969,7 +973,8 @@ def test_a_drawn_session_that_opened_no_weights_is_refused(periodic, tmp_path):
     assert auditor.ended() is None
     rec = _record(run)
     drawn = _credit(auditor, rec)["drawn"]
-    st, seen = [_statement(tmp_path / "c0", 0, len(drawn))], []
+    st = [_statement(tmp_path / "c0", 0, len(drawn))]
+    seen: list[dict] = []
     assert _credit(auditor, rec, st, run=_verifier(drawn, seen=seen), live=_live(tmp_path, rec))["credit"] == [0]
     ports = seen[0]["registered"]["ports"]
     b = {p: e for p, e in ports.items() if p.startswith(f"b_k{K}_")}
@@ -1003,7 +1008,8 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     out = _credit(auditor, rec)
     assert out["window"][0] == "missing" and out["credit"] is None, out
     drawn = out["drawn"]
-    st, seen, live = [_statement(tmp_path / "c0", 0, len(drawn))], [], _live(tmp_path, rec)
+    st, live = [_statement(tmp_path / "c0", 0, len(drawn))], _live(tmp_path, rec)
+    seen: list[dict] = []
     assert _credit(auditor, rec, st, run=_verifier(drawn))["window"] == ("live", CR.LIVE_STATEMENTS_FORM)
     out = _credit(auditor, rec, st, run=_verifier(drawn, seen=seen), live=live)
     assert out["manifest"] is None and out["window"] is None, out

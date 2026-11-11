@@ -492,14 +492,19 @@ def _reusing(window, edit):
                  "previous": REG.digest(window)})
 
 
-def _named(previous=None, edit=lambda rec: rec, window=lambda w: w):
+class _Named:
     """The pouw setting ``commit_record``: the window's registration chained after ``previous`` (as ``window`` makes it
     of the window's own) and `_reusing`'s record of it, kept in its ``got``."""
-    def commit_record(run):
-        w = CT.registration(run, previous)
-        commit_record.got = (w, _reusing(w, edit))
-        return window(w), commit_record.got[1]
-    return commit_record
+
+    got: tuple[dict, dict]
+
+    def __init__(self, previous=None, edit=lambda rec: rec, window=lambda w: w):
+        self.previous, self.edit, self.window = previous, edit, window
+
+    def __call__(self, run):
+        w = CT.registration(run, self.previous)
+        self.got = (w, _reusing(w, self.edit))
+        return self.window(w), self.got[1]
 
 
 def test_a_named_record_reusing_the_windows_tables_is_its_commit_record_before_the_draw_coin(tmp_path, monkeypatch):
@@ -510,7 +515,7 @@ def test_a_named_record_reusing_the_windows_tables_is_its_commit_record_before_t
     input-ids table under the Commit's name with W's entry of it: R is the window's Commit record, one digest for every
     reader (`registration.digest`, credit's `commit_of`), bound into calls_root before the draw coin opens, and core's
     ROOTS1 steps pass on it."""
-    previous, named = "12" * 64, _named("12" * 64)
+    previous, named = "12" * 64, _Named("12" * 64)
     record, run, _tap = _window(tmp_path, monkeypatch, commit_record=named)
     window, rec = named.got
     c = record["commitment"]
@@ -537,14 +542,14 @@ def _fails(run):
 
 
 @pytest.mark.parametrize("named,why", [
-    (_named(edit=_registered(lambda r: [r[0], {**r[1], "root": "00" * 64}, *r[2:]])),
+    (_Named(edit=_registered(lambda r: [r[0], {**r[1], "root": "00" * 64}, *r[2:]])),
      f"registers {CR.commit_rows(0, K)} at another root, domain or leaf count"),
-    (_named(edit=_registered(lambda r: [e for e in r if e["value"] != CR.commit_ids(1)])),
+    (_Named(edit=_registered(lambda r: [e for e in r if e["value"] != CR.commit_ids(1)])),
      f"registers {CR.commit_ids(1)} not"),
-    (_named(edit=_registered(lambda r: [*r, r[1]])), f"registers {CR.commit_rows(0, K)} twice"),
-    (_named(edit=lambda rec: {**rec, "previous": None}), "previous is not the window registration's digest"),
-    (_named(edit=lambda rec: {**rec, "format": REG.FORMAT}), "is not a Commit record credit reads"),
-    (_named(window=lambda w: {**w, "registered": w["registered"][1:]}), "the window's registration is not its own"),
+    (_Named(edit=_registered(lambda r: [*r, r[1]])), f"registers {CR.commit_rows(0, K)} twice"),
+    (_Named(edit=lambda rec: {**rec, "previous": None}), "previous is not the window registration's digest"),
+    (_Named(edit=lambda rec: {**rec, "format": REG.FORMAT}), "is not a Commit record credit reads"),
+    (_Named(window=lambda w: {**w, "registered": w["registered"][1:]}), "the window's registration is not its own"),
     (_fails, "ValueError: window-commit refused the window"),
 ], ids=["a-table-root-off", "ids-table-missing", "a-table-twice", "not-chained-after-w", "v1", "not-its-registration",
         "hook-fails"])
@@ -922,11 +927,18 @@ class _Gate:
     is in the ledger."""
 
     def __init__(self, tmp_path, monkeypatch):
-        self.dir, self.leaves, self.hosts, self.opened = tmp_path / "gate", itertools.count(), {}, None
+        self.dir, self.leaves, self.hosts = tmp_path / "gate", itertools.count(), {}
+        self.opened: CH.Host | None = None
         self.dir.mkdir()
         self.ledger = CH.Ledger(self.dir / "auditor.jsonl", 1, self.leaves)
-        monkeypatch.setattr(R.RemoteChallenger, "connect",
-                            classmethod(lambda cls, at, secret=None: self.opened.client if at == AUDITOR else None))
+
+        def connect(cls, at, secret=None):
+            if at != AUDITOR:
+                return None
+            assert self.opened is not None, "no session is open"
+            return self.opened.client
+
+        monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(connect))
 
     def reserve(self, peer, steps):
         n = len(self.hosts) + 1
@@ -995,7 +1007,8 @@ def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path,
     from tests.protocols import pouw_h1_gpu as G
     gate = _Gate(tmp_path, monkeypatch)
     sessions = G.window_sessions(gate, "vy-nebius-1", STEPS)
-    doc, runs = {"negatives": {}}, {}
+    doc: dict[str, dict] = {"negatives": {}}
+    runs: dict = {}
     for name, edit in (("commit", None), ("commit-a-zero", _zero)):
         (tmp_path / name).mkdir()
         record, run, _tap = _window(tmp_path / name, monkeypatch, edit, coins=_live(gate, sessions, name), key=None)

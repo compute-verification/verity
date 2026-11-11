@@ -2,9 +2,14 @@
 keywords, and ``--no-batch-invariant`` as the target's ``batch_invariant``."""
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
-pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
 from verity_vllm.engine import build as B
 from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -18,7 +23,7 @@ class _Built(Exception):
 
 @pytest.fixture
 def built(monkeypatch):
-    got = {}
+    got: dict = {}
 
     def build_engine(path, *, case, target, max_num_seqs, engine_args):
         got.update(target=target, max_num_seqs=max_num_seqs, engine_args=engine_args)
@@ -70,7 +75,6 @@ def test_the_period_program_under_ks_declares_the_linears_at_those_ks_alone(monk
     import json
     from types import SimpleNamespace
 
-    torch = G.torch
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.pouw.h1 import served as SV
 
@@ -101,8 +105,12 @@ def test_the_period_program_under_ks_declares_the_linears_at_those_ks_alone(monk
 
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
     monkeypatch.setattr(G.subprocess, "Popen", Popen)
-    monkeypatch.setattr(SV, "declared", lambda shapes, modules, rows, steps, unit=None, arch=None: declared.append(
-        (shapes, modules, unit)) or "program")
+
+    def declare(shapes, modules, rows, steps, unit=None, arch=None):
+        declared.append((shapes, modules, unit))
+        return "program"
+
+    monkeypatch.setattr(SV, "declared", declare)
     program, digest, got = G.period_program(llama, 32, 4, j10r=True, arch="sm_90", ks=(2048,))
     assert (program, digest) == ("program", "d" * 128)
     shapes, modules, unit = declared[0]
