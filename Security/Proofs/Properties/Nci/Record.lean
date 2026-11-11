@@ -28,8 +28,8 @@ namespace NciCheck.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog)
-open NciCheck.Baseline (getD)
 open NciCheck.DefinitionDigest (closureDigest)
+open NciCheck.RecordText (Row wiresOf valueAt)
 
 theorem complies_of {F : Form} (hown : Owns F) (hlaid : LaidOut F) (hcount : Counts F) (hrate : Rates F) :
     Complies F := by
@@ -136,7 +136,7 @@ private theorem wiresOf_cuts (doc : Json) :
     (wiresOf doc).getObjVal? "cuts" = .ok ((doc.getObjVal? "cuts").toOption.getD (Json.mkObj [])) :=
   getObjVal?_mkObj (by simp) (by simp)
 
-private theorem wiresOf_wires (doc : Json) : (wiresOf doc).getObjVal? "wires" = .ok (getD doc "wires") :=
+private theorem wiresOf_wires (doc : Json) : (wiresOf doc).getObjVal? "wires" = .ok (valueAt doc "wires") :=
   getObjVal?_mkObj (by simp) (by simp)
 
 private theorem wiresOf_order (doc : Json) : ∃ e, (wiresOf doc).getObjVal? "order" = .error e :=
@@ -148,7 +148,7 @@ accepts the text `j`, and `j`'s `cuts` and `wires` are the ones `wiresOf` gives 
 `Served` holds a wiring to, for a check whose wiring is the reader's of such a text. -/
 theorem ofJson_wiresOf {j doc : Json} {W : Spot.Wires.Wiring} (h : Spot.Wires.Wiring.ofJson j = .ok W)
     (hc : j.getObjVal? "cuts" = .ok ((doc.getObjVal? "cuts").toOption.getD (Json.mkObj [])))
-    (hw : j.getObjVal? "wires" = .ok (getD doc "wires")) :
+    (hw : j.getObjVal? "wires" = .ok (valueAt doc "wires")) :
     ∃ W', Spot.Wires.Wiring.ofJson (wiresOf doc) = .ok W' ∧ W'.cuts = W.cuts ∧ W'.wires = W.wires := by
   obtain ⟨e, ho⟩ := wiresOf_order doc
   unfold Spot.Wires.Wiring.ofJson at h
