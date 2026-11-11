@@ -300,9 +300,10 @@ def test_boundary_rows_installs_the_integrations_boundary_windows_from_the_confi
     assert json.loads(lines.read_text()) == {"window": 0, "spans": 2}
     done[-1].uninstall()
     # a class's directory holds its requests' tokens and salts: with a private directory named it goes there, and
-    # out keeps only the classes' public lines
+    # out keeps only the classes' public lines and stays the directory the history tables are refused under
     out, private = tmp_path / "out", tmp_path / "kept"
     out.mkdir()
     done = P.install(Scheduler(), {"out": str(out), "private": str(private), "boundary_rows": cfg})
-    assert got["out"] == private / "boundary" and [f.name.split(".")[0] for f in out.iterdir()] == ["boundary"]
+    assert got["out"] == private / "boundary" and got["public"] == (out,)
+    assert [f.name.split(".")[0] for f in out.iterdir()] == ["boundary"]
     done[-1].uninstall()
