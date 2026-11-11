@@ -14,6 +14,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 |---|---|
 | `run.py` | one job of an attack config: `Harness`, what a route's code is counted inside, the route loop (`train`) and the record's trace (`trace_step`, `retrace`); `block_c`, a start's c |
 | `config.py` | an attack config: its schema, its digest and its jobs (`Job.label`), each refusal by name |
+| `screen.py` | the screen of a route's source: the names a route may not contain (`FORBIDDEN`), read before the route is imported |
 | `sandbox.py` | the training job's sandbox: namespaces with no network and an empty directory over each final set (`enter`), and what a process can still reach of either (`refusals`) |
 | `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with AdamW or Muon, E the tensors in full or their deltas in codes |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
@@ -73,9 +74,9 @@ owns the loop, the batches, the checkpoints and each checkpoint's E, the weights
 route's plan. A checkpoint's output model, the one scored, is what E rebuilds from θ: the trained weights under a
 plan that keeps them whole, and the model the kept bits give under one that keeps less. Everything a route computes
 through torch is counted; the harness's own work (loading, evaluating, encoding) isn't. A route that names anything of `training_slowdown` but the codecs and the model,
-or a route around the dispatcher (`run.FORBIDDEN`), is refused, and one that uses an op the counter can't price, reads
+or a route around the dispatcher (`screen.FORBIDDEN`), is refused, and one that uses an op the counter can't price, reads
 token data out of torch, starts a thread or a process, or imports a module the screen refuses makes its run invalid
-(`run.py`'s docstring has the screen).
+(`screen.py` has the screen).
 
 A route's code runs in a process of its own, inside the job's sandbox (`sandbox.py`): no network interface is up and
 each registered final set's directory, and the job's state directory, is empty there. That process stops before it imports the route if it finds

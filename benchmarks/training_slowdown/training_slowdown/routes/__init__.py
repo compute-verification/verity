@@ -12,7 +12,7 @@ A route module states:
 
 The harness owns the loop around `step` (`training_slowdown.run`): the counter, the data, the checkpoints, their
 evaluation and E, which it encodes itself from the weights that differ from θ, so no route code runs uncounted. A
-route is screened like any code the counter runs (`run.screen`): it reaches the harness only through these
+route is screened like any code the counter runs (`training_slowdown.screen`): it reaches the harness only through these
 functions' arguments, and imports from `training_slowdown` only `codecs` and `model`.
 
 A job may stop after any checkpoint and continue in another process, which calls `build` again and then gets back

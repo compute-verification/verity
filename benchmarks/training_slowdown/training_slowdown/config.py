@@ -31,6 +31,7 @@ from types import ModuleType
 
 from . import starts
 from .data import SPLITS
+from .screen import screen
 
 ROUTES = Path(__file__).with_name("routes")
 #: the calculator's registry, whose [policy.*] tables are the fixed policies a config may name
@@ -55,9 +56,7 @@ def policies() -> list[str]:
 
 
 def route(name: str) -> ModuleType:
-    """The route module `name`, its source screened before it is imported (`run.screen`)."""
-    from .run import screen
-
+    """The route module `name`, its source screened before it is imported (`screen.screen`)."""
     path = ROUTES / f"{name}.py"
     if not path.is_file() or name.startswith("_"):
         have = sorted(p.stem for p in ROUTES.glob("*.py") if not p.stem.startswith("_"))
