@@ -59,7 +59,7 @@ def test_the_8b_composition_is_the_census_programs():
 
 
 #: published total parameters (the model cards; MTP layers left out; GLM-5.3: its block-FP8 checkpoint's bytes, about one a
-#: parameter, integrations/vllm/manifests/checkpoints.json) and the layers' kinds
+#: parameter, adapters/vllm/manifests/checkpoints.json) and the layers' kinds
 PUBLISHED = {"Llama-3.1-8B": 8.03e9, "Llama-3.1-70B": 70.6e9, "Qwen3-0.6B": 0.6e9, "Qwen3-8B": 8.2e9,
              "DeepSeek-V3/R1/V3.1": 671e9, "DeepSeek-V3.2-Exp": 671e9, "Kimi-K2": 1.04e12, "Qwen3-235B-A22B": 235e9,
              "Qwen3-Next-80B-A3B": 80e9, "GLM-4.5/4.6": 355e9, "GLM-5.3": 755.7e9, "MiniMax-M1": 456e9, "MiniMax-M2": 230e9}
