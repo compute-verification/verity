@@ -19,10 +19,10 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# verity/ml/circuits/silicon/discrepancy_log.json: trust.py's dossiers cite the discrepancy log's entries, and tests/test_trust.py reads it.
-# tools/config/verity_config: the probes read the run's id and lane through its SHARED settings.
-inputs = ["benchmarks/census", "fixtures/bench-instances", "verity/ml/circuits/silicon/discrepancy_log.json",
-          "tools/config/verity_config"]
+# verity/definitions/silicon/discrepancy_log.json: trust.py's dossiers cite the discrepancy log's entries, and tests/test_trust.py reads it.
+# verity/configuration/config/verity_config: the probes read the run's id and lane through its SHARED settings.
+inputs = ["benchmarks/census", "fixtures/bench-instances", "verity/definitions/silicon/discrepancy_log.json",
+          "verity/configuration/config/verity_config"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
