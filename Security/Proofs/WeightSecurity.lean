@@ -1,6 +1,8 @@
 module
 
+public import Proofs.WeightSecurity.Cut
 public import Proofs.WeightSecurity.Deployed
+public import Proofs.WeightSecurity.Faulted
 public import Proofs.WeightSecurity.Pressure
 public import Proofs.WeightSecurity.Served
 public import Proofs.WeightSecurity.Stop
@@ -27,4 +29,9 @@ statement `PeriodTwoReg` in `period_undetected`'s form. `TwoRegPeriod`: `PeriodT
 form and miss bound (`periodTwoReg_of`), so **`CompilerPeriodTwoReg` is proved** (`compilerPeriodTwoReg`).
 `TwoRegWitnesses`: its premises hold together at `twoLTwo` (`periodTwoReg_honest`), and `PeriodTwoReg` fails at
 `sksLTwo` (`periodTwoReg_nontrivial`).
+`Faulted`: the leakage lemma with the audit's incorrect proof blocks as inputs
+to a faulted circuit rather than overwrites of releases, `WeightSecurity.Guarantees.TheftFaulted`, with its witnesses at
+the toy deployment, the releases' faithfulness from a checked dataflow, and the range clamp. `Cut`: `Theft` at an honest
+cut's channel (`theft_cut`), faulted use's hardness from honest use's (`faultedUseHard_of_cut`), and the cuts of
+autoregressive decoding: the token gate for position-local blocks, a one-token request's token, and the release.
 -/
