@@ -23,13 +23,14 @@ session behind the ZK server (``--firewall``) or not.
   Before the first check is the member's own ``archive-put`` and ``verify`` less the check. The audit's one
   ``archive-put`` of the window's files before its sessions is the window's (`window`), counted once. A member the
   window's kept verifier checked (`a0.VerifyMembers`) has no ``verify`` process: its seconds are from its line to its
-  answer, on its log's first lines, and the kept process's life is the window's. Where the audit also ran ``verify`` on
-  the member's session alone (A5_VERIFY_ALONE=1), that process's seconds are beside the kept ones (``verify_alone``).
+  answer, on its log's first lines, and the kept process's life is the window's.
 * **Each reader alone** (`alone`, unless ``--no-alone``), from the member's stamped commands on the member's files, the
   median of ``--reps``: the verifier's and the prover's load (`flock-circuit statement` on the public file and on the
   prover's file), the Lean loop's start to ``LISTENING`` with and without the window's partition and program, its setup at
   the member's sample (``session --schedule``, which a session runs inside the clock), and ``archive-put`` of each file
-  alone and of none (a Lean process's start). A reader that fails is its error, never a figure.
+  alone and of none (a Lean process's start), and ``verify`` on the member's session, a process of its own. A reader
+  that fails is its error, never a figure. ``verify`` alone is also the guard of the audit's verdicts: it must print the
+  verdict line the audit has for the member, byte for byte, whichever way the audit verified it, or ``measure`` exits 1.
 
 It reads no value: the logs, the records' times, file sizes and the stamps. Seconds are rounded to a millisecond.
 """
@@ -138,6 +139,18 @@ def lean_lines(log: str, session: str | None) -> dict:
     return {"inputs_s": got.get("inputs"), "setup_s": setup, "session_s": whole, "check_s": less(whole, setup)}
 
 
+def kept_member(log: str) -> dict | None:
+    """A verify log the window's kept verifier wrote (`a0.VerifyMembers.verify`): the member's place, the `verify` command
+    its line stood for (``argv``, from ``verify`` on, as a stamp's) and its seconds; None for a `verify` process's log."""
+    head = log.split("--- stdout", 1)[0]
+    member, took = KEPT_MEMBER.search(head), TOOK.search(head)
+    if member is None:
+        return None
+    argv = head.splitlines()[0].split(" ")
+    return {"member": int(member.group(1)), "argv": argv[argv.index("verify"):] if "verify" in argv else [],
+            "s": took and float(took.group(1))}
+
+
 def found(audit: Path, k: int, all_stamps: list[dict]) -> dict:
     """Member ``k``'s honest processes among the stamps: the ones its logs record."""
     m, s = audit / f"m{k}", audit / f"session-m{k}"
@@ -148,7 +161,6 @@ def found(audit: Path, k: int, all_stamps: list[dict]) -> dict:
     child = [x for x in all_stamps if x["program"] == "flock-firewall" and prove is not None and x["ppid"] == prove["pid"]
              and x["ns"] >= prove["ns"]]
     verify = [x for x in all_stamps if x["program"] == "flock-verify" and len(x["argv"]) > 1]
-    alone = [x for x in verify if x["argv"][0] == "verify" and under(flag(x["argv"], "--session"), s)]
     return {"serve": serve, "prove": prove,
             "tap": last([x for x in child if x["argv"][0] == "tap"], exited),
             "loop": last([x for x in child if x["argv"][0] == "session"], exited),
@@ -156,7 +168,8 @@ def found(audit: Path, k: int, all_stamps: list[dict]) -> dict:
                               ended(s / "u1-u3.lean.log")),
             "archive-put": last([x for x in verify if x["argv"][0] == "archive-put" and under(x["argv"][1], s)],
                                 ended(s / "archive-put.log")),
-            "verify": last(alone, ended(s / "lean-verify.log")), "verify-alone": last(alone, ended(s / "lean-verify-alone.log"))}
+            "verify": last([x for x in verify if x["argv"][0] == "verify" and under(flag(x["argv"], "--session"), s)],
+                           ended(s / "lean-verify.log"))}
 
 
 def session(audit: Path, k: int, at: dict) -> dict:
@@ -183,22 +196,16 @@ def lean(audit: Path, k: int, at: dict) -> dict:
     # a member whose files the window archived (`window`) puts nothing, and has no log of a put
     own = 0.0 if not (s / "archive-put.log").exists() else put
     log = text(s / "lean-verify.log")
-    head = log.split("--- stdout", 1)[0]
-    kept, session = KEPT_MEMBER.search(head), at["verify"] and flag(at["verify"]["argv"], "--session")
-    if kept:    # no process of its own: the command line its line stands for, and its seconds from the line to the answer
-        took = TOOK.search(head)
-        whole, session = took and float(took.group(1)), flag(head.splitlines()[0].split(" "), "--session")
-    lines = lean_lines(log, session)
-    got = {"waited_s": sub(ns["draw-test"], ended(s / "prove.log")),
-           "draw_test_s": sub(ended(s / "u1-u3.lean.log"), ns["draw-test"]), "archive_put_s": put, "verify_s": whole, **lines,
-           "verify_rest_s": less(whole, lines["inputs_s"], lines["session_s"]),
-           "before_first_check_s": less(None if own is None or whole is None else own + whole, lines["check_s"]),
-           "kept_member": kept and int(kept.group(1))}
-    if at["verify-alone"] is not None:
-        whole = sub(ended(s / "lean-verify-alone.log"), ns["verify-alone"])
-        lines = lean_lines(text(s / "lean-verify-alone.log"), flag(at["verify-alone"]["argv"], "--session"))
-        got["verify_alone"] = {"verify_s": whole, **lines, "verify_rest_s": less(whole, lines["inputs_s"], lines["session_s"])}
-    return got
+    kept = kept_member(log)
+    verify = kept or at["verify"]
+    if kept:    # no process of its own: its seconds are from its line to its answer
+        whole = kept["s"]
+    lines = lean_lines(log, verify and flag(verify["argv"], "--session"))
+    return {"waited_s": sub(ns["draw-test"], ended(s / "prove.log")),
+            "draw_test_s": sub(ended(s / "u1-u3.lean.log"), ns["draw-test"]), "archive_put_s": put, "verify_s": whole, **lines,
+            "verify_rest_s": less(whole, lines["inputs_s"], lines["session_s"]),
+            "before_first_check_s": less(None if own is None or whole is None else own + whole, lines["check_s"]),
+            "kept_member": kept and kept["member"]}
 
 
 def window(audit: Path, all_stamps: list[dict]) -> dict:
@@ -320,6 +327,22 @@ def alone(audit: Path, k: int, at: dict, real: dict, reps: int) -> dict:
         circuit = str(m / "circuit.txt")
         out["archive_put"] = {"none": median(put([]), reps),
                               **{Path(f).name: median(put([f]), reps) for f in ([] if circuit in files else [circuit]) + files}}
+    log = text(s / "lean-verify.log")
+    verify = kept_member(log) or at["verify"]
+    if verify is not None:
+        want, split = [x for x in log.splitlines() if x.startswith("VERDICT ")], []
+
+        def alone_verify() -> float:
+            sec, p = timed([real["flock-verify"], *verify["argv"]])
+            if [x for x in p.stdout.splitlines() if x.startswith("VERDICT ")] != want:
+                raise RuntimeError(f"verify alone (exit {p.returncode}) printed another verdict than the audit has for this "
+                                   f"member: {p.stdout[:300]} {p.stderr[-300:]}")
+            split.append(lean_lines("--- stderr\n" + p.stderr, flag(verify["argv"], "--session")))
+            return sec
+        out["verify"] = median(alone_verify, reps)
+        if "error" not in out["verify"]:
+            out["verify"].update({x: statistics.median(r[x] for r in split) if all(r[x] is not None for r in split) else None
+                                  for x in ("inputs_s", "setup_s", "check_s")})
     return out
 
 
@@ -332,8 +355,7 @@ def audits(root: Path) -> list[Path]:
 
 
 #: the logs whose modification times are their processes' ends
-LOGS = {"prove": "prove.log", "draw-test": "u1-u3.lean.log", "archive-put": "archive-put.log", "verify": "lean-verify.log",
-        "verify-alone": "lean-verify-alone.log"}
+LOGS = {"prove": "prove.log", "draw-test": "u1-u3.lean.log", "archive-put": "archive-put.log", "verify": "lean-verify.log"}
 
 
 def measure(audit: Path, all_stamps: list[dict]) -> dict:
@@ -357,11 +379,13 @@ def measure(audit: Path, all_stamps: list[dict]) -> dict:
 
 
 def readers(audit: Path, got: dict, all_stamps: list[dict], real: dict, reps: int) -> bool:
-    """Adds each member's readers run alone (`alone`) to `measure`'s ``got``; False when one could not be run at all."""
+    """Adds each member's readers run alone (`alone`) to `measure`'s ``got``; False when one could not be run at all, or
+    `verify` alone did not print the audit's verdict of a member."""
     ok = True
     for rec in got["members"]:
         try:
             rec["alone"] = alone(audit, rec["k"], found(audit, rec["k"], all_stamps), real, reps)
+            ok = ok and "error" not in rec["alone"].get("verify", {})
         except Exception as e:  # noqa: BLE001  (the audit's own seconds are kept whatever a reader's command does)
             rec["alone"], ok = {"error": repr(e)[-400:]}, False
     return ok
@@ -402,10 +426,11 @@ def main(argv=None) -> int:
             {"k": r["k"], "template": r["template"], "before_clock_s": r["session"]["before_clock_s"],
              "verifier_ahead_s": r["session"]["verifier_ahead_s"], "e2e_s": r["session"]["e2e_s"],
              "before_first_check_s": r["lean"]["before_first_check_s"], "check_s": r["lean"]["check_s"],
-             "verify_s": r["lean"]["verify_s"], "verify_alone_s": r["lean"].get("verify_alone", {}).get("verify_s")}
+             "verify_s": r["lean"]["verify_s"], "verify_alone": r.get("alone", {}).get("verify")}
             for r in got["members"]]}))
     if not ok:
-        print("member_seconds: a member's readers could not be run alone (its `alone` is the error)", file=sys.stderr)
+        print("member_seconds: a member's readers could not be run alone, or `verify` alone printed another verdict than "
+              "the audit's (its `alone` is the error)", file=sys.stderr)
     return 0 if ok else 1
 
 

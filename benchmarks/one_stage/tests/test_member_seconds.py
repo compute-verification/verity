@@ -3,8 +3,8 @@ before its prover's clock and before Lean's first check come out exactly, a nega
 are not the member's, a member with no Lean loop or no setup line has those parts absent rather than zero, the window's
 one put before its sessions is the window's and no member's, a member the window's kept verifier checked has its seconds
 from its own log and the kept process's life is the window's, a wrapper stamps its start and execs its binary under its
-own pid, and each reader run alone is the member's own command on the member's files (on stand-in binaries, under an
-injected clock)."""
+own pid, each reader run alone is the member's own command on the member's files (on stand-in binaries, under an
+injected clock), and `verify` alone must print the audit's verdict line of the member."""
 from __future__ import annotations
 
 import json
@@ -110,10 +110,9 @@ def test_a_members_seconds_are_its_own_processes(tmp_path):
     assert (m0["k"], m0["template"], m0["n"], m0["to_next_member_s"]) == (0, "T0", 8, 1.0) and "alone" not in m0
     ns = T * 10**9
     assert m0["starts_ns"] == {"serve": ns, "prove": ns + 3 * 10**9, "tap": ns + 61 * 10**8, "loop": ns + 62 * 10**8,
-                               "draw-test": ns + 205 * 10**8, "archive-put": ns + 207 * 10**8, "verify": ns + 2175 * 10**7,
-                               "verify-alone": None}
+                               "draw-test": ns + 205 * 10**8, "archive-put": ns + 207 * 10**8, "verify": ns + 2175 * 10**7}
     assert m0["ends_ns"] == {"prove": ns + 20 * 10**9, "draw-test": ns + 207 * 10**8, "archive-put": ns + 217 * 10**8,
-                             "verify": ns + 2475 * 10**7, "verify-alone": None}
+                             "verify": ns + 2475 * 10**7}
     assert m0["bytes"] == {"circuit": 100, "partition": 11, "program": 13, "registered": 7, "public:pub-8.bin": 20,
                            "prover:inst-8.bin": 300, "table:t.u32": 16}
     assert m0["session"] == {"verifier_ahead_s": 3.0, "verifier_built_s": 2.5, "prover_s": 17.0, "prover_built_s": 3.0,
@@ -151,36 +150,37 @@ def test_an_audit_that_archived_its_window_once_counts_the_put_once(tmp_path):
     assert (m1["lean"]["archive_put_s"], m1["lean"]["before_first_check_s"]) == (None, None)
 
 
-def test_a_member_the_kept_verifier_checked_has_its_seconds_on_its_own_log(tmp_path):
-    """Behind the ZK server one `verify-members` process checks the window's members (`a0.VerifyMembers`): a member has no
-    `verify` process, so its seconds are the ones its log gives, from its line to its answer, split by `verify`'s own lines
-    as a process's are; the kept process's life is the window's. Where the audit also ran `verify` on the member's session
-    alone, after the kept verdict, that process's seconds are beside them, and a negative's later `verify` is neither."""
-    audit, d = plant(tmp_path)
+def kept(audit: Path, d: Path) -> str:
+    """Member 0 as the window's kept verifier checked it: no `verify` process of its own, and a log `a0.VerifyMembers` wrote.
+    Returns the stamps."""
     s = audit / "session-m0"
     (s / "archive-put.log").unlink()
     (audit / "lean-verify").mkdir()
-    kept = f"/x/flock-verify verify-members --archive {audit / 'lean-verify' / 'archive'} --program k9"
+    members = f"/x/flock-verify verify-members --archive {audit / 'lean-verify' / 'archive'} --program k9"
     verify = f"--statement verity/flock-circuit --archive {s / 'archive'} --circuit  --public k1 --zk --session {s / 'sessions' / 'abc'}"
-    lines = f"inputs: 1500 ms\nsetup (drawn): 250 ms\n{s / 'sessions' / 'abc'}: 1000 ms\n"
-    (s / "lean-verify.log").write_text(f"$ /x/flock-verify verify {verify}\n# rc 0 in 2.625 s\n# run as member 0 of: {kept}\n"
-                                       f"--- stdout\nVERDICT {{}}\n\n--- stderr\n{lines}")
+    (s / "lean-verify.log").write_text(
+        f"$ /x/flock-verify verify {verify}\n# rc 0 in 2.625 s\n# run as member 0 of: {members}\n--- stdout\nVERDICT {{}}\n\n"
+        f"--- stderr\ninputs: 1500 ms\nsetup (drawn): 250 ms\n{s / 'sessions' / 'abc'}: 1000 ms\n")
     at(s / "lean-verify.log", 23.5)
-    run_log(s / "lean-verify-alone.log", 27, "VERDICT {}", lines.replace("1500", "1750"))
     run_log(audit / "lean-verify" / "verify-members.log", 33)
     stamps = [x for x in (d / MS.STAMPS).read_text().splitlines(keepends=True) if " 302 " not in x]
-    stamps += [stamp("flock-verify", 95, 1, -0.5, *kept.split(" ")[1:]), stamp("flock-verify", 303, 1, 23.75, "verify", *verify.split(" "))]
-    got = MS.measure(audit, MS.stamps("".join(stamps)))
+    return "".join(stamps + [stamp("flock-verify", 95, 1, -0.5, *members.split(" ")[1:])])
+
+
+def test_a_member_the_kept_verifier_checked_has_its_seconds_on_its_own_log(tmp_path):
+    """Behind the ZK server one `verify-members` process checks the window's members (`a0.VerifyMembers`): a member has no
+    `verify` process, so its seconds are the ones its log gives, from its line to its answer, split by `verify`'s own lines
+    as a process's are; the kept process's life is the window's, and a negative's later `verify` is not the member's."""
+    audit, d = plant(tmp_path)
+    got = MS.measure(audit, MS.stamps(kept(audit, d)))
     assert got["window"] == {"archive_put_s": None, "files": None, "verify_members_s": 33.5}
     m0, m1 = got["members"]
-    assert (m0["starts_ns"]["verify"], m0["starts_ns"]["verify-alone"]) == (None, T * 10**9 + 2375 * 10**7)
+    assert m0["starts_ns"]["verify"] is None
     assert m0["lean"] == {"waited_s": 0.5, "draw_test_s": 0.2, "archive_put_s": None, "verify_s": 2.625, "inputs_s": 1.5,
                           "setup_s": 0.25, "session_s": 1.0, "check_s": 0.75, "verify_rest_s": 0.125, "before_first_check_s": 1.875,
-                          "kept_member": 0,
-                          "verify_alone": {"verify_s": 3.25, "inputs_s": 1.75, "setup_s": 0.25, "session_s": 1.0, "check_s": 0.75,
-                                           "verify_rest_s": 0.5}}
-    # member 1 had a `verify` of its own: no kept place, and nothing alone
-    assert m1["lean"]["kept_member"] is None and "verify_alone" not in m1["lean"] and m1["lean"]["verify_s"] == 1.0
+                          "kept_member": 0}
+    # member 1 had a `verify` of its own: no kept place
+    assert m1["lean"]["kept_member"] is None and m1["lean"]["verify_s"] == 1.0
 
 
 def test_measure_writes_each_audit_under_the_root(tmp_path, capsys):
@@ -189,9 +189,9 @@ def test_measure_writes_each_audit_under_the_root(tmp_path, capsys):
     line = json.loads(capsys.readouterr().out.removeprefix("MEMBER-SECONDS "))
     assert line == {"audit": "rank0", "window_archive_put_s": None, "members": [
         {"k": 0, "template": "T0", "before_clock_s": 6.5, "verifier_ahead_s": 3.0, "e2e_s": 10.0, "before_first_check_s": 3.25,
-         "check_s": 0.75, "verify_s": 3.0, "verify_alone_s": None},
+         "check_s": 0.75, "verify_s": 3.0, "verify_alone": None},
         {"k": 1, "template": "T1", "before_clock_s": 2.0, "verifier_ahead_s": 1.0, "e2e_s": 6.0, "before_first_check_s": None,
-         "check_s": None, "verify_s": 1.0, "verify_alone_s": None}]}
+         "check_s": None, "verify_s": 1.0, "verify_alone": None}]}
     assert [m["k"] for m in json.loads((audit / "member-seconds.json").read_text())["members"]] == [0, 1]
     assert MS.main(["measure", str(tmp_path / "stamped"), "--stamped", str(d), "--no-alone"]) == 1
     assert "no audit under" in capsys.readouterr().err
@@ -229,6 +229,7 @@ def test_a_wrapper_stamps_its_start_and_execs_its_binary(tmp_path):
 STAND_IN = r"""#!/bin/bash
 echo "{name} $*" >> {log}
 case "$1" in
+  verify) if [[ " $* " == *" --zk "* ]]; then echo "VERDICT {verdict}"; echo "inputs: 500 ms" >&2; fi;;
   statement) echo "statement unit/t instances=8 vus_per_block=1 blocks=8 k_log=10 nbl=1 m=3 regions=1 delta=1 built in 0.25s" >&2;;
   session)
     if [[ " $* " == *" --schedule "* ]]; then cat > /dev/null; echo "ok 3"
@@ -238,17 +239,24 @@ esac
 """
 
 
-def test_each_reader_alone_is_the_members_command_on_its_files(tmp_path, monkeypatch):
-    audit, d = plant(tmp_path)
+def stand_ins(tmp_path: Path, monkeypatch, verdict: str = "{}") -> tuple[Path, dict]:
+    """A stand-in of each program, which logs its command; `verify` prints ``verdict`` for a `--zk` session and nothing for
+    another. The readers' clock ticks half a second a reading."""
     log, real = tmp_path / "ran.txt", {}
     for name in MS.PROGRAMS:
         f = tmp_path / "bin" / name
         f.parent.mkdir(exist_ok=True)
-        f.write_text(STAND_IN.format(name=name, log=log))
+        f.write_text(STAND_IN.replace("{name}", name).replace("{log}", str(log)).replace("{verdict}", verdict))
         f.chmod(0o755)
         real[name] = str(f)
     ticks = iter(range(10**6))
     monkeypatch.setattr(MS, "clock", lambda: next(ticks) * 0.5)
+    return log, real
+
+
+def test_each_reader_alone_is_the_members_command_on_its_files(tmp_path, monkeypatch):
+    audit, d = plant(tmp_path)
+    log, real = stand_ins(tmp_path, monkeypatch)
     all_stamps = MS.stamps((d / MS.STAMPS).read_text())
     got = MS.measure(audit, all_stamps)
     assert MS.readers(audit, got, all_stamps, real, 2)
@@ -260,8 +268,12 @@ def test_each_reader_alone_is_the_members_command_on_its_files(tmp_path, monkeyp
     assert list(m0["loop_start_no_window"]) == ["error"] and "refused: no program" in m0["loop_start_no_window"]["error"]
     assert m0["archive_put"] == {x: half for x in ("none", "circuit.txt", "pub-8.bin", "t.u32", "partition.json", "program.json",
                                                    "registered.json")}
-    # member 1 ran no Lean loop, and linked its circuit rather than put it: the circuit is still put alone
-    assert sorted(m1) == ["archive_put", "prover_load", "verifier_load"] and sorted(m1["archive_put"]) == ["circuit.txt", "none", "pub-4.bin"]
+    # `verify` alone printed the verdict line the audit has for the member, and its own lines split its seconds
+    assert m0["verify"] == {**half, "inputs_s": 0.5, "setup_s": None, "check_s": None}
+    # member 1 ran no Lean loop, and linked its circuit rather than put it: the circuit is still put alone; its verify
+    # printed no verdict in the audit, and prints none alone
+    assert sorted(m1) == ["archive_put", "prover_load", "verifier_load", "verify"] and sorted(m1["archive_put"]) == ["circuit.txt", "none", "pub-4.bin"]
+    assert m1["verify"] == {**half, "inputs_s": None, "setup_s": None, "check_s": None}
     m = audit / "m0"
     ran = log.read_text().splitlines()
     state = f"--circuit {m / 'circuit.txt'} --tables {m / 'tables'}"
@@ -276,6 +288,30 @@ def test_each_reader_alone_is_the_members_command_on_its_files(tmp_path, monkeyp
     assert [x[3:] for x in puts] == [y for f in ([], [str(m / "circuit.txt")], [str(m / "pub-8.bin")], [str(m / "tables" / "t.u32")],
                                                  [str(audit / "partition.json")], [str(audit / "program.json")],
                                                  [str(m / "registered.json")]) for y in (f, f)]
+    s = audit / "session-m0"
+    assert ran[23:25] == [f"flock-verify verify --statement verity/flock-circuit --archive {s / 'archive'} --circuit  --public k1 "
+                          f"--zk --session {s / 'sessions' / 'abc'}"] * 2
     # a reader whose command can't be run at all is the member's error, and the audit's own seconds stay
     assert not MS.readers(audit, got, all_stamps, {}, 1)
     assert [list(m["alone"]) for m in got["members"]] == [["error"], ["error"]] and got["members"][0]["session"]["before_clock_s"] == 6.5
+
+
+def test_verify_alone_is_run_on_a_kept_members_own_arguments_and_must_print_the_audits_verdict(tmp_path, monkeypatch):
+    """A member the kept verifier checked has no `verify` process to copy: `verify` alone runs on the arguments its log
+    opens with. Where it prints another verdict line than the audit has for the member, that reader is its error and the
+    measurement fails; the audit's own seconds stay."""
+    audit, d = plant(tmp_path)
+    all_stamps = MS.stamps(kept(audit, d))
+    log, real = stand_ins(tmp_path, monkeypatch)
+    got = MS.measure(audit, all_stamps)
+    assert MS.readers(audit, got, all_stamps, real, 1)
+    s = audit / "session-m0"
+    assert got["members"][0]["alone"]["verify"] == {"s": 0.5, "each": [0.5], "inputs_s": 0.5, "setup_s": None, "check_s": None}
+    assert (f"flock-verify verify --statement verity/flock-circuit --archive {s / 'archive'} --circuit  --public k1 --zk "
+            f"--session {s / 'sessions' / 'abc'}") in log.read_text().splitlines()
+    assert "archive_put" not in got["members"][0]["alone"]
+    _, real = stand_ins(tmp_path, monkeypatch, verdict='{"accepted":false}')
+    assert not MS.readers(audit, got, all_stamps, real, 1)
+    m0, m1 = (m["alone"] for m in got["members"])
+    assert list(m0["verify"]) == ["error"] and "printed another verdict than the audit has" in m0["verify"]["error"]
+    assert "error" not in m1["verify"] and "error" not in m0["verifier_load"] and got["members"][0]["lean"]["verify_s"] == 2.625

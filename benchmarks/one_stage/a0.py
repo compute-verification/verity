@@ -362,8 +362,9 @@ def archive_put(lean: str, archive: Path, files: Sequence[Path], log: Path, held
 
 
 #: `VerifyMembers` waits this long for a member's answer, as `run` waits for a `verify` process, and this long for the
-#: process to exit once its standard input is closed or its output has ended (seconds)
+#: process to exit once its standard input is closed or its output has ended (seconds), by this clock
 MEMBER_WAIT, EXIT_WAIT = 3600.0, 60.0
+monotonic = time.monotonic
 
 
 class VerifyMembers:
@@ -374,16 +375,16 @@ class VerifyMembers:
 
     `verify` hands it the next member and writes that member's log as `run` writes a `verify` process's, with one more
     line saying how it was run, so the log's readers read either. A member is handed in once, in the members' order. A
-    member the process does not answer (it ended, it wrote nothing for ``timeout`` seconds, or it answered another place)
+    member the process does not answer (it ended, it wrote nothing for `MEMBER_WAIT` seconds, or it answered another place)
     has no verdict, and neither has any member after it: the process is ended, by its PID, and never started again.
     `close` ends it and writes its own log (``log``); until then its standard error is the ``.stderr`` file beside it."""
 
-    def __init__(self, lean: str, archive: Path, program: str, log: Path, timeout: float = MEMBER_WAIT):
+    def __init__(self, lean: str, archive: Path, program: str, log: Path):
         self.cmd = [lean, "verify-members", "--archive", str(archive), "--program", program]
-        self.log, self.stderr, self.timeout, self.started = log, log.with_suffix(".stderr"), timeout, time.time()
-        # appended to, so this side's reads of the file move nothing the process writes; unbuffered pipes, read and
-        # written through their descriptors
-        with self.stderr.open("ab") as err:
+        self.log, self.stderr, self.started = log, log.with_suffix(".stderr"), time.time()
+        # its standard error is a file of this run's alone, which `_stderr` reads through an opening of its own; the pipes
+        # are unbuffered, read and written through their descriptors
+        with self.stderr.open("wb") as err:
             self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err, bufsize=0,
                                          env=environ(None))
         self.members, self.ended = 0, None
@@ -404,9 +405,9 @@ class VerifyMembers:
     def _line(self, wait: float) -> bytes | str:
         """The process's next line of standard output; or, a str, why there is none: its output ended, or it wrote
         nothing for ``wait`` seconds."""
-        late = time.monotonic() + wait
+        late = monotonic() + wait
         while b"\n" not in self._buf:
-            left = late - time.monotonic()
+            left = late - monotonic()
             if left <= 0 or not select.select([self.proc.stdout], [], [], left)[0]:
                 return f"wrote nothing for {wait:.0f} s"
             got = os.read(self.proc.stdout.fileno(), 1 << 16)
@@ -439,7 +440,7 @@ class VerifyMembers:
             except OSError as e:
                 self._stop(f"the kept verifier could not be handed member {i} ({e})")
         while self.ended is None and status is None:
-            line = self._line(self.timeout)
+            line = self._line(MEMBER_WAIT)
             if isinstance(line, str):
                 self._stop(f"the kept verifier {line} before member {i}'s MEMBER line", kill=line != "ended")
             elif not line.startswith(b"MEMBER "):
@@ -520,16 +521,6 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
             "partition": v.get("partition"), **({"registered": v["registered"]} if "registered" in v else {}),
             **{k: v[k] for k in ("public_header_sha512", "registered_sha512", "unit_draw", "session_tables") if k in v},
             "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
-
-
-def held_to_alone(kept: dict, alone: dict) -> dict:
-    """The kept verifier's verdict of a session (`lean_verify` with ``members``), held to `verify`'s own of the same session
-    (`lean_verify` without): ``kept`` where the two are equal but for their seconds, else a refusal naming what differs."""
-    differ = sorted(x for x in kept.keys() | alone.keys() if x != "verify_s" and kept.get(x) != alone.get(x))
-    if not differ:
-        return kept
-    return {"accepted": False, "of_record": True, "verify_s": kept.get("verify_s"), "partition": None, "digest": None,
-            "why": f"the kept verifier's verdict is not verify's alone: they differ in {', '.join(differ)}"}
 
 
 def lean_refused(v: dict, names: str | None = None) -> bool:

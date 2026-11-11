@@ -95,9 +95,8 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   set up on the statement's partition and program. Lean `verify --zk` holds each session with `--partition` and `--program`
   (units derived). Under ``--firewall`` the window's members are verified by one kept process, `flock-verify verify-members`
   (`a0.VerifyMembers`), which reads the window's program once and is handed each member as its session ends; a member it
-  gives no verdict is refused, and so is every member after it, with no second try. A5_VERIFY_ALONE=1 also runs `verify`
-  on each session as a process of its own (``lean-verify-alone.log``) and refuses a member whose two verdicts differ in
-  anything but their seconds (`a0.held_to_alone`).
+  gives no verdict is refused, and so is every member after it, with no second try. `member_seconds.py` holds each
+  member's verdict to the one `verify` prints for its session as a process of its own.
 * **Plain sessions** (``--plain``; `--zk` is the default): Flock's unmasked protocol, which Lean's soundness covers at one
   table under a stratified sample, hidden outputs included (`SoundExecH`), until proofs' multi-table coverage (`PLAIN_SCOPE`).
   So a plain audit takes only a stream's sample (``--challenger``) by a stratified law, over a window of one member with no
@@ -925,8 +924,6 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                         "tool": f"flock-verify verify {' '.join(flags)} --archive"}
         else:
             lv = s["lean_verify"] if "handle" in s else a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True, members=kept)
-            if kept is not None and os.environ.get("A5_VERIFY_ALONE") == "1":
-                lv = a0.held_to_alone(lv, a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True, log="lean-verify-alone"))
             got[f"lean-verify/m{k}"] = {**lv, "tool": "flock-verify verify --zk --archive"}
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,

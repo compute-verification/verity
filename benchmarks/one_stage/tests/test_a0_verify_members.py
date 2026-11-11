@@ -1,8 +1,7 @@
 """a0 hands a run's members to one kept verifier (`a0.VerifyMembers`, `a0.lean_verify`'s ``members``), on a stand-in for
 `flock-verify`: each member gets the verdict `verify` gives its session as a process of its own, equal but for the
 seconds, and its log reads as that process's does; a member the kept process gives no verdict is refused, and so is every
-member after it, with no second process and no second try; and a kept verdict that is not `verify`'s own is refused
-(`a0.held_to_alone`)."""
+member after it, with no second process and no second try."""
 from __future__ import annotations
 
 import re
@@ -19,14 +18,13 @@ import a0  # noqa: E402
 from test_a0_archive_once import window  # noqa: E402
 
 
-def kept_window(tmp_path: Path, **kw) -> tuple[str, list[tuple[dict, Path]], a0.VerifyMembers]:
+def kept_window(tmp_path: Path) -> tuple[str, list[tuple[dict, Path]], a0.VerifyMembers]:
     """`window`'s three members, their files put once, and a kept verifier on their program."""
     lean, _, members, archived = window(tmp_path)
     archive = tmp_path / "lean-verify" / "archive"
     keys = a0.archive_put(str(lean), archive, [f for st, _ in members for f in a0.archive_files(st, 8)],
                           tmp_path / "lean-verify" / "archive-put.log", archived)
-    kept = a0.VerifyMembers(str(lean), archive, keys[members[0][0]["program_file"]], tmp_path / "lean-verify" / "verify-members.log",
-                            **kw)
+    kept = a0.VerifyMembers(str(lean), archive, keys[members[0][0]["program_file"]], tmp_path / "lean-verify" / "verify-members.log")
     return str(lean), members, kept
 
 
@@ -46,7 +44,7 @@ def test_each_member_gets_the_verdict_verify_gives_its_session_alone(tmp_path):
         got = a0.lean_verify(lean, st, 8, out, zk=True, members=kept)
         alone = a0.lean_verify(lean, st, 8, out, zk=True, log="lean-verify-alone")
         assert got["accepted"] and got["digest"] is not None
-        assert {**got, "verify_s": None} == {**alone, "verify_s": None} and a0.held_to_alone(got, alone) is got
+        assert {**got, "verify_s": None} == {**alone, "verify_s": None}
         log, own = out / "lean-verify.log", out / "lean-verify-alone.log"
         # the member's log is a `verify` process's: its command line, its seconds, its verdict and its standard error
         assert verify_line(log) == verify_line(own) and "--zk" in verify_line(log)
@@ -115,17 +113,13 @@ def test_a_kept_process_that_cannot_read_its_program_gives_no_member_a_verdict(t
     assert kept.close() == 2
 
 
-def test_a_kept_process_that_writes_nothing_in_its_wait_is_ended_and_answers_no_member(tmp_path):
-    lean, members, kept = kept_window(tmp_path, timeout=0)
+def test_a_kept_process_that_writes_nothing_in_its_wait_is_ended_and_answers_no_member(tmp_path, monkeypatch):
+    """The wait is read on a0's clock, which here passes an hour and more at every reading: the process is ended, by its
+    PID, before its first line is read."""
+    ticks = iter(range(10**6))
+    monkeypatch.setattr(a0, "monotonic", lambda: next(ticks) * 2 * a0.MEMBER_WAIT)
+    lean, members, kept = kept_window(tmp_path)
     got = [a0.lean_verify(lean, st, 8, out, zk=True, members=kept) for st, out in members]
     assert [v["accepted"] for v in got] == [False] * 3
-    assert kept.ended == "the kept verifier wrote nothing for 0 s before member 0's MEMBER line (it exited -9)"
+    assert kept.ended == "the kept verifier wrote nothing for 3600 s before member 0's MEMBER line (it exited -9)"
     assert kept.close() == -9
-
-
-def test_a_kept_verdict_that_is_not_verifys_own_is_refused():
-    kept = {"accepted": True, "why": None, "of_record": True, "verify_s": 1.0, "partition": None, "digest": "a"}
-    assert a0.held_to_alone(kept, {**kept, "verify_s": 9.9}) is kept
-    got = a0.held_to_alone(kept, {**kept, "digest": "b", "unit_draw": {"k": 1}})
-    assert got == {"accepted": False, "of_record": True, "verify_s": 1.0, "partition": None, "digest": None,
-                   "why": "the kept verifier's verdict is not verify's alone: they differ in digest, unit_draw"}
