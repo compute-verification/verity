@@ -174,7 +174,7 @@ def test_the_clamp_rows_reach_the_limits(rows):
     for path, d in zip(S.PATHS[2:], S.WIDTHS):
         gu = rows[path]["gu"]
         assert gu.shape[1] == 2 * d
-        g, u = gu[:, :d], gu[:, d:]
+        u = gu[:, d:]
         f = S.MC.f32(S.DR.bf16_to_f32_words(gu))
         nan = S.MC.is_nan(S.DR.bf16_to_f32_words(gu))
         lim = U32(S.LIMIT_BF16)

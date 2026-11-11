@@ -1367,7 +1367,6 @@
     {"file": "tests/properties/test_glm53_tp8_allreduce_capture.py", "kind": "assignment", "symbol": "test_covered_takes_the_stated_node_tree", "detail": ""},
     {"file": "tests/properties/test_glm53_tp8_allreduce_capture.py", "kind": "attr-defined", "symbol": "test_the_served_setting_follows_the_workload", "detail": ""},
     {"file": "tests/properties/test_glm53_tp8_allreduce_capture.py", "kind": "dict-item", "symbol": "test_a_spawn_takes_its_own_pinned_trees", "detail": ""},
-    {"file": "tests/properties/test_norm_tap_exactness.py", "kind": "attr-defined", "symbol": "test_ir_scale_is_the_twins_scale", "detail": ""},
     {"file": "tests/properties/test_router_tap_exactness.py", "kind": "arg-type", "symbol": "test_the_verify_cli", "detail": ""},
     {"file": "tests/properties/test_router_tap_exactness.py", "kind": "union-attr", "symbol": "test_the_verify_cli", "detail": "", "count": 2},
     {"file": "tests/properties/test_sigmoid_router_capture.py", "kind": "arg-type", "symbol": "test_check_finds_a_changed_output", "detail": "", "count": 2},
