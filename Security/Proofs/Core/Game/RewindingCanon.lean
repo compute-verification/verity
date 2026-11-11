@@ -12,8 +12,8 @@ is off the plurality instead (`canon`). A run off at `p` conflicts at `p` with a
 
   `#bad ² ≤ N · #conflict`   (`bad_sq_le_canon`),
 
-and `Pr[bad] ≤ √(N · Pr[conflict])` (`prBad_le_canon`), where `N` may be any position type covering the positions some
-run opens.
+and `Pr[bad] ≤ √(N · Pr[conflict])` (`prBad_le_canon`). Positions no run opens don't count: at any `S` holding every
+position some run opens, `N` reads `#S` (`bad_sq_le_canon_on`, `prBad_le_canon_on`).
 -/
 
 @[expose] public section
@@ -113,6 +113,35 @@ theorem prBad_le_canon [Nonempty Ω] (vstar : P → V) (hv : IsPlurality op vsta
       Real.sqrt (Fintype.card P * ((#(conflict op) : ℝ) / (Fintype.card Ω) ^ 2)) := by
   have hc : ((#(bad op vstar) : ℕ) : ℝ) ^ 2 ≤ Fintype.card P * (#(conflict op) : ℝ) := by
     exact_mod_cast bad_sq_le_canon vstar hv
+  apply Real.le_sqrt_of_sq_le
+  rw [div_pow, mul_div_assoc']
+  exact div_le_div_of_nonneg_right hc (by positivity)
+
+/-- **Positions no run opens don't count.** At any `S` holding every position some run opens,
+`#bad ² ≤ #S · #conflict`. -/
+theorem bad_sq_le_canon_on (vstar : P → V) (hv : IsPlurality op vstar) (S : Finset P)
+    (hS : ∀ ω p, (op ω p).isSome → p ∈ S) :
+    #(bad op vstar) ^ 2 ≤ #S * #(conflict op) := by
+  have hsub : bad op vstar ⊆ S.biUnion (canon op vstar) := fun ω hω => by
+    obtain ⟨p, -, hp⟩ := mem_biUnion.mp (bad_subset_canon vstar hω)
+    exact mem_biUnion.mpr ⟨p, hS ω p (canon_off hp).1, hp⟩
+  calc #(bad op vstar) ^ 2
+      ≤ (∑ p ∈ S, #(canon op vstar p)) ^ 2 :=
+        Nat.pow_le_pow_left ((card_le_card hsub).trans card_biUnion_le) 2
+    _ ≤ #S * ∑ p ∈ S, #(canon op vstar p) ^ 2 := sq_sum_le_card_mul_sum_sq
+    _ ≤ #S * ∑ p ∈ S, ∑ ω₁ ∈ canon op vstar p, #(univ.filter fun ω₂ => ConflictAt op (ω₁, ω₂) p) :=
+        Nat.mul_le_mul_left _ (sum_le_sum fun p _ => canon_sq_le vstar hv p)
+    _ ≤ #S * ∑ p, ∑ ω₁ ∈ canon op vstar p, #(univ.filter fun ω₂ => ConflictAt op (ω₁, ω₂) p) :=
+        Nat.mul_le_mul_left _ (sum_le_sum_of_subset (subset_univ S))
+    _ ≤ #S * #(conflict op) := Nat.mul_le_mul_left _ (sum_canon_le vstar)
+
+/-- `prBad_le_canon` at the positions some run opens: `Pr[bad] ≤ √(#S · Pr[conflict])`. -/
+theorem prBad_le_canon_on [Nonempty Ω] (vstar : P → V) (hv : IsPlurality op vstar) (S : Finset P)
+    (hS : ∀ ω p, (op ω p).isSome → p ∈ S) :
+    (#(bad op vstar) : ℝ) / Fintype.card Ω ≤
+      Real.sqrt ((#S : ℝ) * ((#(conflict op) : ℝ) / (Fintype.card Ω) ^ 2)) := by
+  have hc : ((#(bad op vstar) : ℕ) : ℝ) ^ 2 ≤ (#S : ℝ) * (#(conflict op) : ℝ) := by
+    exact_mod_cast bad_sq_le_canon_on vstar hv S hS
   apply Real.le_sqrt_of_sq_le
   rw [div_pow, mul_div_assoc']
   exact div_le_div_of_nonneg_right hc (by positivity)
