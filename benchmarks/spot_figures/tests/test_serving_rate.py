@@ -136,8 +136,11 @@ def test_a_row_at_the_measured_reading_names_the_rate_and_the_rate_at_the_goal()
     world = out["scopes"]["world year"]
     assert world["requests"] == world["gpu_seconds"] * rate / c["tokens_per_request"].value
     note = f.reading_note(out["serving"])
-    assert f"{rate:,.5g} computed tokens a GPU-second (a lower bound" in note
+    assert f"{rate:,.5g} computed tokens a GPU-second (" in note
     assert all(note in caption for caption in world["captions"].values())
+    floor, most = (f.reading_note(out["serving"] | {"saturated": s}) for s in (False, True))
+    assert "(a lower bound: no rate above it was served)" in floor
+    assert "(above which the engine computed no more)" in most and note == (most if card["value"]["saturated"] else floor)
     rows = [r for r in f.at_overhead(out) if r["panel"] == "exfiltration"]
     assert rows
     for r in rows:
