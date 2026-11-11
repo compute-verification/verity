@@ -2,7 +2,8 @@
 computes through torch is counted (flops.py).
 
     python -m training_slowdown.run --config attacks/NAME.toml --seed 0 --split search|final --out OUT \\
-        [--state DIR] [--starts starts.toml] [--starts-root DIR] [--device cuda] [--tier 0] [--keep-weights]
+        [--state DIR [--continues SHA256|nothing]] [--starts starts.toml] [--starts-root DIR] [--device cuda] \\
+        [--tier 0] [--keep-weights]
     python -m training_slowdown.run --retrace RUN_JSON --out OUT [--starts starts.toml] [--device cpu]
 
 A job is two processes. Its own (`outside`) runs no route's code: it reads the job's held-out split, starts the
