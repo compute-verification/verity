@@ -65888,3 +65888,61 @@ No statement changed in these three commits. The statements changed beyond the a
 **9. Runs.** `r20261111-202956-b7ce` 0 (the rehearsal, at `be201dbfec`); `r20261111-210242-eee3` 0 (the rehearsal, at `52fc58aaed`); `r20261111-210206-e5b0` 0 (17 passed, at `52fc58aaed`); `r20261111-211123-c35c` 0, `r20261111-211707-a271` 0, `r20261111-213314-cdff` 0 (Lean, one file each); `r20261111-213454-2367` 0 (18 passed, at `3035309e49`); `r20261111-214356-4ecc` waiting (the rehearsal, at `3035309e49`). [run]
 
 **Asks.** (a) The issue key for the pull request, if there is one. (b) Whether `acrossAll` as item 3 states it is the list network accounting means. Neither stops me. [guess]
+
+## STOPS, Wed 11 Nov 22:08Z: the count for each template is on `cursor/proofs-kcounts-ae0a` at `e45c8b23cd2f` (139 lines added, 14 removed); its test waits for a slot; the lines of `two_stage.py` it touches are below. I pushed it at 22:05Z, before I read your 22:03Z note
+
+In plain words:
+
+- **What it does.** `first` takes `--k 3` as before, or `--k counts.json`, a file that gives each of the check's templates its own count. A file that names a template twice, leaves one out, or names one the check does not have is refused before the challenger session opens, and the message names the template.
+- **It reads COUNT's file as COUNT writes it.** COUNT's file is a record whose `k` is the map; `--k` takes the map alone or that record, so neither side has to change.
+- **One thing to settle before Friday, and it is not mine.** A counts file has to name exactly the templates of the check the command is run with. COUNT's file names the block types of the whole model's partition; the classes the command runs today check a token select, two templates. For such a class COUNT's file is refused, by the rule you gave.
+- **The push.** My last mailbox read before the push was 21:45Z. It is my own branch, with no pull request; the lines are listed here so you can post them.
+- **`second-return`'s date** is in my 21:50Z entry: ten hours after the hour the vLLM worker's comment arrives.
+
+The branch:
+
+- `cursor/proofs-kcounts-ae0a`, from #8875's head `092004fadea9`, one commit, head `e45c8b23cd2f752cb89a657950975570d151f7c3` [run: `git ls-remote`]. Two files: `benchmarks/one_stage/two_stage.py` +70 −10, `benchmarks/one_stage/tests/test_two_stage_driver.py` +69 −4 [run: `git diff --numstat 092004fadea9`].
+- #8875 is OPEN at `092004fadea9`, not on `main`; #8448 and #8720 are OPEN; `main` is `118003ab7aca` [run: `gh pr view`, 22:06Z].
+- Your five lines are as you read them: `:133`, `:150`, `:177`, `:844`, `:895` [read at `092004fadea9`]. `:177` is unchanged: `S.TwoStage` takes either form already.
+
+The lines of `two_stage.py` it touches, in `092004fadea9`'s numbering [run: `git diff -U0`]:
+
+| Lines | What |
+|---|---|
+| 62-63, 69 | the module docstring: the usage line and the files paragraph |
+| after 111 | a constant, `COUNTS`, the schema's name of a counts record (2 lines) |
+| 126-127, 133 | `Rule`'s docstring and `k`'s type |
+| 144, 150 | `Rule.to_json` and `Rule.from_json` |
+| after 157 | two new functions between `_span_values` and `spec_of`: `counts` (reads `--k`) and `counts_refused` (40 lines) |
+| 357 | `rule_of`'s signature: `k`'s type only |
+| 844 | `--k`: no `type=int`, and its help |
+| after 893 | in `main`, 11 lines before `rule = ...`: read `--k`, hold it to each class's templates |
+
+Not touched: `spec_of`, `stream_of`, `first`, `resume`, `design`, `references`, `prove`, `_first_all`, `_second` and `second`'s arguments.
+
+Where each refusal is:
+
+- A template named twice, a count that is no whole number of at least one, a record of another schema, a file that is no map: `counts`, on reading the file [run on the VM].
+- A template of the check the file misses, a name that is no template of the check: `counts_refused`, in `main` for each class, before `_first_all` opens the challenger session (`a5_coins.start`). The command exits 2 with `--k: class p4-o4: the counts name each of the check's templates once: missing <id>` [run on the VM].
+- A `Rule` built in Python with such a map: `service.Stream` refuses it before it registers, in its own words (`second_counts`), as on `main` [run on the VM].
+
+The test, `test_a_class_of_two_check_templates_samples_each_at_its_own_count`:
+
+- A class whose inlined check calls two templates, eight proof blocks of one and four of the other in a replay block, sampled at 3 and 1: `first`, `stage1.json`, `resume`, the interior registration, the second stage's sample; then the refusals above, through `counts`, `counts_refused` and `main`.
+- Its result so far: every part that needs no Lean verifier passed on the VM, run as a script of the test's own lines, not through pytest: both file forms, the rule's round trip, the stream's cells (8, 4) and counts (3, 1), five file refusals, two name refusals, `main`'s exit 2 with the template's name [run]. Ruff passes on both files [run].
+- The test itself registers on a stream, which calls the Lean verifier of record, so it is not one for the VM. It is in run `r20261111-220553-b3a3` (`vy-nebius-cpu-1`, commit `e45c8b23cd2f`, the whole test file without its slow tests), which waits for a slot: about 18 minutes by the launcher's estimate at 22:06Z. No result yet [run: launched].
+
+COUNT's format, at `cursor/proofs-count-71ac`'s head `bfc3da111b74` (it moved from `1f64540734c2` at 22:03Z):
+
+- `total_cost.py counts --out F` writes `{"schema": "spot-two-stage-counts/v1", "model", "line", "scope", "beta", "verification_phase", "sampled", "k": {name: k_t}, "sessions", "largest", "bound_bits"}` [read: `total_cost.py:905-937`, `optimize.two_stage_counts`]. `--k F` reads its `k`. If you want one form only, drop the map alone from mine and keep COUNT's record: the record says which design the counts belong to.
+- Its names are the partition card's `block` strings with `per_token > 0`, written as descriptor ids: seven in `cards/partition.glm-5.3.503a55396a39.json`, among them `EmbeddingRead_v1{V=256,H=3072}` [read]. A class's check templates are `Layout.templates`: the `--check` template, or, inlined, the templates its body calls; at the small class `TokenSelectChunk_v2{C=64}` and `TokenSelectCombine_v2{V=128,C=64}` [run on the VM]. So that file is refused by that class [derived, not run].
+- I did not check which check template Friday's pass runs, or whether its body calls the partition's block types: that is COUNT's and the vLLM lane's to say. `sampled` is a whole count a verification phase, and `--replay` takes a rate law, so the file's first-stage count has no reader in the command [read].
+
+Every two-stage run of mine today is a development run: its parameters were built after the sample (`references`), and on `cursor/proofs-stops-1340` the form's switch is on ahead of its proof.
+
+Two slips on the VM, both over:
+
+- I ran the driver's test file on the VM under a limit of 170 seconds, then one test under 20 seconds. Its first test registers on a stream, which starts `lake build sampled-proofs-verifier`. Both builds ended with their limits and left 219 MB of `.lake` in my worktree, nothing more [run: no `lake` or `lean` process remains].
+- A `ps` of mine listed command lines, and the exec daemon's line on this VM holds its token. It went to my own tool output and to no file, branch, store or message. I list processes by name only from here.
+
+Next: the run's result, appended here; then `second-return`'s build once the vLLM worker's comment is in my mailbox.
