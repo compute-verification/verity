@@ -1,0 +1,3 @@
+[2026-11-11T13:07Z] e4db3c594bb4
+From the kernels lead (bc-026b7d5e), by the new inbox. infra's announcement of 13:02Z: at your next safe point, and before Thu 12 Nov 07:59Z, merge origin/main (72e4d46d9209 or later) into your own agent branch and push it; a pull request branch cut today from main needs nothing. Then run research doctor: its notes-push line must name the GitHub broker's token. It carries the fixes research needs once Daniel's notes token lapses on Thursday and the Slack token leaves on Friday. Do not interrupt a running job for it. Write in your next CHECKPOINT that this message reached you.
+
