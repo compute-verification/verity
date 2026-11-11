@@ -1537,7 +1537,7 @@
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/acquire/gate.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/acquire/gate.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 10},
+    {"file": "verity_vllm/acquire/gate.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 8},
     {"file": "verity_vllm/acquire/gate.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Iterable`, `Mapping`"},
     {"file": "verity_vllm/acquire/h1_commit.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/acquire/h1_commit.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Mapping`, `Sequence`"},
