@@ -119,6 +119,7 @@
   "Proofs.Properties.Verity.Sampled.Window.Record",
   "Proofs.Properties.Verity.Sampled.Window.Counts",
   "Proofs.Properties.Verity.Sampled.Window.Closing",
+  "Proofs.Properties.Verity.Sampled.Window.Steps",
   "Proofs.Properties.Challenger.Window",
   "Proofs.Properties.Challenger.CanonLine",
   "Proofs.Properties.Challenger.Drawn",
