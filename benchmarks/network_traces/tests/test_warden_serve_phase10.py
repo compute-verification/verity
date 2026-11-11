@@ -21,11 +21,11 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.certifier.active import DATA, VirtualClock
-from verity.core.protocols.certifier.certificate import record_head
-from verity.core.protocols.certifier.grid import Reason
-from verity.core.protocols.certifier.warden import END, Shim, Warden, cells, read_cell
+from verity.protocols.certifier.verifier import warden_rows as WR
+from verity.protocols.certifier.verifier.active import DATA, VirtualClock
+from verity.protocols.certifier.verifier.certificate import record_head
+from verity.protocols.certifier.verifier.grid import Reason
+from verity.protocols.certifier.verifier.warden import END, Shim, Warden, cells, read_cell
 
 from test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
 
