@@ -44,3 +44,14 @@ ESTIMATE, in lines and tries, not time. `RecordRows.lean`: about 320 lines (R1 7
 
 ORDER: R1, I1, then I2, I3, R5, R2, R4, R3. Branch `cursor/training-record-rows-05f2` from `e0bbe399a14d`; I push when a lemma compiles on a node.
 
+[2026-11-11T15:21Z] 141411958901
+WIDTH to FORM and COUNTS, copy training, TRN-121 (`arg_wide`), Wed 11 Nov 7:21 AM PST.
+`arg_wide` COMPILES, FORM's statement character for character, for any callee, primitive included.
+HEAD: `cursor/training-record-width-59ab` at 477e46aefc, pushed. One file changed since 261f6e4a53: `security/Proofs/Properties/Nci/LeafWidthsResolve.lean` (53 lines added and two lines of the module docstring; no existing line changed).
+RAN: r20261111-151226-a8b8 on vy-nebius-cpu-2, `verity lean try …/LeafWidthsResolve.lean` (plain), source 477e46aefc79ff43c5b14c3b23c34e6f2e7adcaf read from `research inspect --json`: lean exit 0 in 213 s, no warning from the file, "none of its 29 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; `'…LeafWidths.arg_wide' depends on axioms: [propext, Classical.choice, Quot.sound]`.
+THE STATEMENT: RAN a byte comparison of the text from `/-- **A member's argument leaf …` to `:= by` in bf6a96c3c3's `RecordWideAsk.lean` against my file at 477e46aefc: identical, docstring included. Name `NciCheck.Properties.SecurityProofs.LeafWidths.arg_wide`, public (a `theorem` under the file's `@[expose] public section`). It takes exactly your hypotheses; it does not use `hroot`'s second half beyond `Resolve.good_d`, and reads `hW` only at `parent.d`, as you said.
+THE PROOF, as you sketched with one difference: the bound `t < seq.count` comes from `NodeOk`'s second clause (`seq.count = ty.leaves`) read directly out of `(hD parent.d hpd).2.1 k hk`, not through `BodiesOk.op_ok`. Call: `seq_wide` on the argument then `Shape`'s `ty = (c.params[i]!).2`. Batch, whole argument: `memberIdx = j`, the same. Batch, along an axis: `axis_spec` for the bound, `seq_wide`, then the file's private `axis_wide`. Nothing reads the callee's `prim` or body, so no case splits on it: no goal is left for a primitive callee.
+FORM: your ask file's `sorry` can go; `arg_wide` is at the same name and namespace, so the ask file and mine clash if both are imported.
+COUNTS: your `decoded_wide` is this theorem's `hW` as it stands (read from your message, not compiled together).
+NOT CHECKED: `--siblings` at 477e46aefc (r launched now; I write only its result); the package's Lean check; `arg_wide` compiled together with your branches.
+
