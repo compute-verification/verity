@@ -18,42 +18,42 @@ Pearl+ are `Properties.Pouw.PearlPlus`'s, read by name and restated nowhere here
   Lean, so the tied circuit is a parameter held to one property (`Tying.AtW`): at each y gate's cell, a credited cell of
   the run whose call and weight W registers, its gates compute `yCell` under the pass's salt and the root W registers
   for the weight.
-* **The composite step** (`Period.YIsTheGates`, `Period.FleetYIsTheGates`). Over a monitoring period's execution
+* **The composite step** (`Phases.YIsTheGates`, `Phases.FleetYIsTheGates`). Over a monitoring period's execution
   phases, each remote's play, on the period's coins: the phases of a sequence up to some phase are accepted by remote's
   compiled verifier on a W that registers the weights while the claim fails on them, with probability at most the
-  error. The claim (`Period.TiedUpTo`) is, at each of those phases, on the transcript sampled proofs' extractor reads
+  error. The claim (`Phases.TiedUpTo`) is, at each of those phases, on the transcript SPOT's extractor reads
   off the prover (`Commit.TiedBy`): every served y of a tile that the run's table ties at W's entries, bound in that
   transcript with its A row, holds the tied gates' output; and the policy's verdict on the tied circuit bounds each
   block's fresh input with the other y's counted as fresh input (`Tying.CompliesBut`). And over those phases
   ∏ (1 − wrong share) is at least 1 − ε, the wrong share (`Properties.Pouw.PearlPlus.Run.wrongShare`) the ticket weight
-  of the tiles the table does not tie. `Period.FleetYIsTheGates` is the same claim pooled across sequences, at
+  of the tiles the table does not tie. `Phases.FleetYIsTheGates` is the same claim pooled across sequences, at
   `FleetYAtWIsTheCall`'s threshold.
 * **The error** (`tieError`), a sum of named terms: PoUW's δ, wherever (1 − ε)^t ≤ δ at `t` samples a phase, once for
   the sequence however many phases it has; two SHA-512 collision terms, each a finder's budget over 2^256 where the
-  finder meets `ecr/sha-512` (`Claims.ExpectedCR`, the form of `Verity.Vocab.finderPr_le_crBound`): the adaptive opener's
-  (`Properties.Pouw.PearlPlus.Runs.finder`, PoUW's own) and the tie's (`Period.finder`); and SPOT's term
-  (`Period.spotMiss`), the probability that a counted phase holds a served y that sampled proofs bind and that is not
+  finder meets `ecr/sha-512` (`Claims.ExpectedCR`, the form of `Verity.Vocab.finderPr_le_crBound`): the adaptive
+  opener's (`Properties.Pouw.PearlPlus.Runs.finder`, PoUW's own) and the tie's (`Phases.finder`); and SPOT's term
+  (`Phases.spotMiss`), the probability that a counted phase holds a served y that SPOT binds and that is not
   shown at W's entries, which SPOT's binding error bounds, once a phase.
 * **The premises**: `AcceptedIsHeldToW` and `OpeningBinds` (`Shared`), PoUW's period statement
   (`PeriodYAtWIsTheCall`, or `FleetYAtWIsTheCall`) with its two conditions on the runs (`Runs.CommittedBeforeCoin`,
-  `Runs.DrawIsTickets`), `ecr/sha-512` at the two finders, and what makes the period one (`Period.WellFormed`). Uniform
+  `Runs.DrawIsTickets`), `ecr/sha-512` at the two finders, and what makes the period one (`Phases.WellFormed`). Uniform
   coins are the probability's own, and the challenger's log and its signature enter through `Runs.DrawIsTickets`.
 
-**Two commitments, one value.** A served y is under sampled proofs' commitment, which the extractor's transcript is
+**Two commitments, one value.** A served y is under SPOT's commitment, which the extractor's transcript is
 read from, and under Pearl+'s, whose values the run's table holds (`Properties.Pouw.PearlPlus.Run.table`). The claim is
-on the first and PoUW's statement on the second. They meet at W: `Period.shown` is the rows of W's trees that sampled
+on the first and PoUW's statement on the second. They meet at W: `Phases.shown` is the rows of W's trees that sampled
 proofs' openings show, a fixed construction applied to the prover as the extractor is. A y is shown at W's entries
 (`Tying.ShownAt`) when those rows open W's entries for its cell to its served value, its served A row and the weight's
 row. Where a shown row and the table's row of one position differ, two openings of one of W's roots are accepted and
-SHA-512 collides on the messages checking them (`OpeningBinds`): the tie's finder (`Period.finder`) outputs the first
-such collision. That a y sampled proofs bind is shown at W's entries is sampled proofs' to establish, by the
+SHA-512 collides on the messages checking them (`OpeningBinds`): the tie's finder (`Phases.finder`) outputs the first
+such collision. That a y SPOT binds is shown at W's entries is SPOT's to establish, by the
 extractor's openings and the public layout that puts a y gate's registered position at W's entry for its cell;
-`Period.spotMiss` is the probability that it fails, and no premise here.
+`Phases.spotMiss` is the probability that it fails, and no premise here.
 
 **One sequence, or pooled.** The period's phases, their sequences and their order are the runs'
 (`Properties.Pouw.PearlPlus.Runs`): a node's runs of record in time order are one sequence, and phases that overlap in
-time are sequences of their own, pooled and never multiplied. `Period.YIsTheGates` counts one sequence's accepted
-prefix to any end; `Period.FleetYIsTheGates` pools the prefixes to ends fixed before the coins.
+time are sequences of their own, pooled and never multiplied. `Phases.YIsTheGates` counts one sequence's accepted
+prefix to any end; `Phases.FleetYIsTheGates` pools the prefixes to ends fixed before the coins.
 
 **What is not tied**, and counts as fresh input:
 
@@ -63,7 +63,7 @@ prefix to any end; `Period.FleetYIsTheGates` pools the prefixes to ends fixed be
   an input gate that is not registered. A phase accepted on a version-1 W is not counted, and ends its sequence's
   prefix as a refusal does;
 * a y that no unit bound in the extractor's transcript reads, or whose A row holds a gate no such unit reads or writes
-  (`Commit.BoundAt`): sampled proofs' own claim (`Verity.Vocab.SpotSound`) bounds the unbound units' share.
+  (`Commit.BoundAt`): SPOT's own claim (`Verity.Vocab.SpotSound`) bounds the unbound units' share.
 
 The statement does not say the A rows are the model's activations: the tied gates read the served gates the layout
 names. The wrong share is of ticket weight, the work a tile is credited, not of y bits.
@@ -157,13 +157,13 @@ noncomputable def untied (X' : T.tied.D.Trace) : Finset (Fin C.N) :=
   T.y.filter fun g => ¬ T.IsGates X' g
 
 /-- The bits of the served y's `B` that the gates `R` of the tied circuit hold or read. -/
-def wrongBits (B : Finset (Fin C.N)) (R : Finset (Fin T.tied.D.N)) : ℕ :=
+def untiedBits (B : Finset (Fin C.N)) (R : Finset (Fin T.tied.D.N)) : ℕ :=
   T.tied.D.width (B.map ⟨T.emb, T.emb_inj⟩ ∩ (R ∪ T.tied.D.into R))
 
 /-- **The fresh input the gates `R` of the tied circuit read, the served y's `B` counted as fresh input**, in bits:
 `R`'s novel reads in the tied circuit (`Nci.novelReads`), and the y's of `B` that `R` holds or reads. -/
 def freshInput (B : Finset (Fin C.N)) (R : Finset (Fin T.tied.D.N)) : ℕ :=
-  Nci.novelReads T.tied R + T.wrongBits B R
+  Nci.novelReads T.tied R + T.untiedBits B R
 
 /-- **The inference-only policy on the tied circuit, the served y's `B` counted as fresh input**: the tied circuit
 divides into blocks of at most `Γ` gates, each reading at most `a` bits of fresh input a gate and the y's of `B` it
@@ -172,7 +172,7 @@ beyond the policy's verdict is which y's are in `B`. -/
 def CompliesBut (Γ : ℕ) (a : ℝ) (B : Finset (Fin C.N)) : Prop :=
   ∃ (n : ℕ) (P : Verity.Partition T.tied.D n), ∀ u,
     T.tied.D.size (P.gates u) ≤ Γ ∧
-      (T.freshInput B (P.gates u) : ℝ) ≤ a * T.tied.D.size (P.gates u) + T.wrongBits B (P.gates u)
+      (T.freshInput B (P.gates u) : ℝ) ≤ a * T.tied.D.size (P.gates u) + T.untiedBits B (P.gates u)
 
 /-- **The served y gate `g` holds a credited cell of the run `R`, at W's entries.** Its cell is a credited cell of the
 tile `(T.cell g).tile` of the pass `p`, the call's record `r`, and W registers the call's A rows, the weight's B rows
@@ -263,7 +263,7 @@ namespace Commit
 
 variable {V : Vocab dev α} (c : Commit V)
 
-/-- **The served transcript**: the one sampled proofs' extractor reads off the phase's strategy (`Vocab.extract`). -/
+/-- **The served transcript**: the one SPOT's extractor reads off the phase's strategy (`Vocab.extract`). -/
 noncomputable def served : (V.circuitOf c.params c.files).Trace :=
   V.extract c.params c.files c.commitment c.strategy
 
@@ -334,19 +334,19 @@ noncomputable def tieError (δ : ℝ) (q q' : ℕ) (miss : ℝ) : ℝ :=
 
 /-- **A monitoring period of `n` execution phases at remote on its coins**, one coin a phase, each field any function
 of the coins: phase `k`'s play as the vocabulary reads it (`commit`) and how it ended (`out`); the phases' Pearl+ runs
-with their tables, samples and openings, in their sequences (`runs`); and the rows of W's trees that sampled proofs'
-openings show (`shown`), a fixed construction applied to the prover as `Verity.Vocab.extract` is. -/
-structure Period (V : Vocab dev α) (Ω : Type) (n : ℕ) where
+with their tables, samples and openings, in their sequences (`runs`); and the rows of W's trees that SPOT's openings
+show (`shown`), a fixed construction applied to the prover as `Verity.Vocab.extract` is. -/
+structure Phases (V : Vocab dev α) (Ω : Type) (n : ℕ) where
   commit : (Fin n → Ω) → Fin n → Commit V
   out : (Fin n → Ω) → Fin n → Exchange
   /-- the phases' Pearl+ runs, the ones PoUW's period statement is about -/
   runs : Properties.Pouw.PearlPlus.Runs Ω n
-  /-- the rows of W's trees that sampled proofs' openings show in each phase -/
+  /-- the rows of W's trees that SPOT's openings show in each phase -/
   shown : (Fin n → Ω) → Fin n → List Properties.Pouw.PearlPlus.RowAtW
 
-namespace Period
+namespace Phases
 
-variable {V : Vocab dev α} {Ω : Type} {n : ℕ} (P : Period V Ω n)
+variable {V : Vocab dev α} {Ω : Type} {n : ℕ} (P : Phases V Ω n)
 
 /-- **Phase `k` is accepted at remote** on the period's coins `x`: remote's compiled verifier accepts what the prover
 sent, for files that passed the commit phase's check. -/
@@ -385,7 +385,7 @@ circuit is its run's calls at W's entries. -/
 def WellFormed : Prop := P.Plays ∧ P.RunsAreThePlays ∧ P.TiedAtW
 
 /-- **The messages SHA-512 hashes in checking the shown rows against the tables'**: for each phase and each row of W's
-trees that sampled proofs' openings show there, where the phase's table holds an opening of the row's position, the
+trees that SPOT's openings show there, where the phase's table holds an opening of the row's position, the
 messages checking the two hash (`Properties.Pouw.PearlPlus.rowsHashed`). -/
 def hashed (x : Fin n → Ω) : List ByteArray :=
   (List.finRange n).flatMap fun k =>
@@ -397,7 +397,7 @@ def hashed (x : Fin n → Ω) : List ByteArray :=
 
 /-- **The tie's finder**: on the period's coins, the first SHA-512 collision (`Properties.Challenger.collisionIn`)
 among the messages checking the shown rows and the tables' hash (`hashed`), its cost declared at the budget `q` for the
-period's whole SHA-512 work, sampled proofs' openings included, as `Properties.Pouw.PearlPlus.Runs.finder`'s is. -/
+period's whole SHA-512 work, SPOT's openings included, as `Properties.Pouw.PearlPlus.Runs.finder`'s is. -/
 noncomputable def finder [Fintype Ω] [Nonempty Ω] (q : ℕ) : _root_.Claims.Finder where
   S := Fin n → Ω
   out x := (_root_.Properties.Challenger.collisionIn (P.hashed x)).map Properties.Pouw.PearlPlus.msgPair
@@ -455,6 +455,6 @@ def FleetYIsTheGates [Fintype Ω] [Nonempty Ω] (ends : Finset (Fin n)) (t q q' 
             ((K.card : ℝ) * δ / (ends.card : ℝ)) ^ K.card ≤ (∏ k ∈ K, P.runs.tiedUpTo x k) ^ t)) ≤
       tieError δ q q' (P.spotMiss Finset.univ)
 
-end Period
+end Phases
 
 end Verity.ValueTie
