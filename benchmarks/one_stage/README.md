@@ -28,8 +28,9 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   Match, then a deferred config-run Commit under rows-sha512 whose `--serving-rows` window
   (`llama32_1b_rope_d64_l0.json`: layer 0's RoPE d64 heads at steps 1-7) its C2 site commits before the bundle is sealed,
   a `served` window under the 64-byte run root. Then the Commit's CPU replay, and `a5.sh` with `WINDOW=served` on the bundle
-  and that window, whose private bodies stay on the node with the row dir: the run's record holds no file of the row's
-  `commit/`, whose records, bundle and slim keep hold values.
+  and that window, whose private bodies stay on the node with the row dir: of the row's files the run's record holds only
+  the ones `demos/vllm/published.sh` lists, each with the reason it holds nothing of a request, and no file of the row's
+  `commit/` or `match/`, whose records, bundle, slim keep and request spec hold values.
 - `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`a5.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
   the sample): GLM-5.3's TP8 Commit with
@@ -250,6 +251,9 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   `benchmarks/sampling_plan/glm53.py`).
   `m1_unit.py` builds one family's unit through Flock's circuit prover's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
+  `m1_forms.sh` runs it on one Definition per form, side by side, with the Lean call's seconds and peak memory beside each
+  circuit file's bytes: by default an attention head's first key block and its end as their word Definitions, whose table
+  reads are inline, and as their Boolean versions, flat and structural.
 - `served_stock.sh` (with `served_overhead.py`): `served_verdicts.sh`'s stock control, the same endpoint, engine and load
   served with `serve-openai --no-commit` and no protocol, once per fresh endpoint for `REPS` endpoints. `served_overhead.py
   table` compares the composed run with it on two clocks, each the same code in both runs: the client's
