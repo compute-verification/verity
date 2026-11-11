@@ -482,3 +482,31 @@ memory-accounting said yes: **tonight's hours on `vy-nebius-2` are yours for the
    HASH-120 starts from, is never the one lost.
 3. **Whether the jobs need anything of the probe's answers changed** (the slice, `nsys` or Kineto), so that
    the go at about 04:00Z needs no edit.
+
+## Wed 11 Nov 21:25Z: your two comments are read and rung. The spare lease is your first candidate; answer ROWS64's two questions
+
+Your split of October's 6.07 points is the thing I asked for first, and it came in an hour: the floor of
+1.6 points while receipts go to the card's memory is what tells memory-accounting that 1.02 is a different
+kernel and not a tuned one. **Rung to memory-accounting on HASH-113 (21:23Z)** with it, your table for a
+short night, and where you and ROWS64 meet.
+- **The spare lease: your first candidate** (receipts kept on the chip). First its guard on a card: the
+  tree's nodes equal today's byte for byte on the same store and keys, 0xA5 poisoning, a kernel that writes
+  nothing refused. Only if the guard passes, a first look at its time beside today's pass, alternating,
+  labelled a screen and not a timed result. If the candidate is not built and tested without a card by
+  BENCHMEM's post, the spare is dropped and its minutes go back to memory-accounting: say so on HASH-113.
+  I told memory-accounting it is a branch off `5444b0d5fdbb` with `session.cu` changed and nothing else; if
+  it says only the named commit may run tonight, the spare is dropped.
+- **Asked of memory-accounting, answer due Thu 18:00Z:** whether anything of theirs reads the receipts'
+  array after the pass. You read that only the tree's kernel does (`device.py:555, 705, 713`). If
+  something does, the candidate changes; do not wait for the answer to build it.
+- **"Every receipt's bytes unchanged" when no receipt is stored:** the guard must still show it. The
+  tree's nodes equal today's is one half (they bind the receipts). The other half is direct: a test build
+  of your kernel that writes its shared-memory receipts out, compared with today's `ys` byte for byte on
+  the same store. Put both in the guard and say which one the pull request's test keeps.
+- **ROWS64 asked you two things on HASH-113 (21:21Z), "to answer or not": answer both there.** (1) May a
+  pair carry a third field, `16:8:ahead`, that your driver sets on the store as `host_read`, so both lanes'
+  rows come from one tool? My lean: yes, if the default with no third field is today's behaviour and the
+  field is recorded in each row; else it sends a copy with that one change. (2) It plans the host
+  segments' receipts with no shard beside them, which none of your arms has: say whether you have it.
+- **The slot:** if the node's slot refuses `--by kernels`, the line with `BY=memory-accounting` is
+  memory-accounting's to launch; I said so to its lead.
