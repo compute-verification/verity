@@ -15,8 +15,9 @@ What code outside this directory may use. Everything else here is internal.
 | `benchmarks/remote_session/gate_run.sh [--dry-run] PERIOD` | A gate run in one command: the developer's whole node serving a model, the verifier on the verifier's host through its gate, the coins from the challenger's host, then the line of record (`auditor.sh`, which runs `auditor_line.py`) and the what-if beside it (`gate_whatif.sh`). Each step is a recorded job, and their ids go to `~/.research/gate-runs/PERIOD.env`. |
 | `verifier_process.py`, with `verifier.py`'s arguments | The verifier's process. It writes `verifier.json` under `--out`. |
 
-Read from outside `benchmarks/`: `verifier_process.py`, run by its path; `prover.py`, loaded from its file; and
-`session.cu`'s build.
+Read from outside `benchmarks/`: `store_layout.py`, `auditor_line.py` and `tests/test_session.py`, loaded by their paths
+by the live verifier's tests. The prover's process and its kernel (`prover.py`, `device.py`, `session.cu`) are PoUB's
+prover's (`verity/protocols/poub/prover/remote_session/`).
 
 **Status: active.** The vLLM integration imports it (`adapters/vllm/verity_vllm/protocols/remote_bandwidth/remote.py`,
 which `tests/test_boundaries.py` lists), the audit's Lean verifier names `auditor_line.py` as its line of record, and

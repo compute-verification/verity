@@ -18,10 +18,8 @@ What code outside this directory may use. Everything else here is internal.
 | `bash benchmarks/pous/served_case.sh PIECES` | PoUS's and the wipe's cases for the composite, built after a served run from what it kept (`served_case.py`). `PIECES` is the run's public pieces directory, and each piece's `case.json` and `answer.json` go to its private directory. |
 | `onsite_pieces.sh`, sourced | Two shell functions: `onsite_piece_commands` sets the two pieces above as a served run's defaults, each kept where its variable is already set, and `onsite_cases` runs `served_case.sh` and writes each case's protocol and verdict to the run's `verdicts.txt`. |
 
-Read from outside `benchmarks/`: P2's reference, wire and store layout (`p2_v1/reference.py`, `p2_v1/wire.py`,
-`p2_v1/store.py`), imported with this directory on `sys.path`; `band_gpu/harness.py`, imported by a test; and
-`served_piece.sh`, `streamed_wipe/served_wipe.sh` and `onsite_pieces.sh`, named by their paths where a served run is
-configured.
+Read from outside `benchmarks/`: `band_gpu/harness.py`, imported by a test; and `served_piece.sh`,
+`streamed_wipe/served_wipe.sh` and `onsite_pieces.sh`, named by their paths where a served run is configured.
 
 - `weight_sets.json` (`pous-weight-sets/v1`) is the dataset. It holds the weight sets as the serving engine holds them,
   with their checkpoint pins:
