@@ -1898,7 +1898,6 @@
     {"file": "verity_vllm/commit/committer/window_views.py", "kind": "union-attr", "symbol": "WindowViews._absorb_job", "detail": ""},
     {"file": "verity_vllm/commit/executed_prefix.py", "kind": "union-attr", "symbol": "executed_prefix_facts", "detail": "", "count": 9},
     {"file": "verity_vllm/commit/hidden_stream.py", "kind": "operator", "symbol": "StreamLayout.word_index", "detail": "", "count": 2},
-    {"file": "verity_vllm/commit/identity.py", "kind": "arg-type", "symbol": "weight_id", "detail": ""},
     {"file": "verity_vllm/commit/memory_map.py", "kind": "arg-type", "symbol": "_history", "detail": ""},
     {"file": "verity_vllm/commit/memory_map.py", "kind": "arg-type", "symbol": "rows", "detail": "", "count": 2},
     {"file": "verity_vllm/commit/memory_map.py", "kind": "assignment", "symbol": "tables", "detail": ""},
