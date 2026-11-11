@@ -162,7 +162,7 @@ def main(argv: list[str]) -> int:
     _path()
     import warden_serve
 
-    from verity.core.protocols.certifier import warden
+    from verity.protocols.certifier.verifier import warden
 
     probe = Probe(out=out)
     gc.callbacks.append(probe.collections)
