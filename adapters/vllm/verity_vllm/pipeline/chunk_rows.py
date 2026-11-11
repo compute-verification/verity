@@ -36,13 +36,13 @@ def reads(tp: Any) -> str:
     """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: flat for a ``STAGES`` stage on bits (its Boolean
     version, `boolean_topp_stages`: its MUFU operations are gates, so it reads no table and its unit returns its own outputs,
     the one form `verify --zk` takes, `one_stage.proofs.ks_form_why`); else in lookup slots (`read_slots`, each table folded
-    once per statement) for a ``CHAINS`` key block of a whole block (NVIS = BN: inline, step 16's 64-key split part's EX2 reads
+    once per statement) for a ``CHAINS`` key block or scores unit of a whole block (NVIS = BN: inline, step 16's 64-key split part's EX2 reads
     were 4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots) and for a whole attention row (``SLOT_ROWS``:
     inline, the 1B decode row ``Attention_v5{T=1,NH=32,KVH=8,D=64,..}``'s 64 reads make 6.35e9 nonzeros for its 10.2M ANDs,
     622 an AND, and its ``--zk`` prover ran out of memory at 600 GiB; in slots, 314M nonzeros for 8,473,952 ANDs, 37 an AND,
     k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives refused) and for its heads' per-key-block Calls, else inline, as step 16's 16-key part and
     five-split combine were proved, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros
-    an AND inline) at their served shapes; a ``CHAINS`` end, column end and combine inline as that combine. A ``STAGES`` stage
+    an AND inline) at their served shapes; a ``CHAINS`` values unit, end, column end and combine inline as that combine. A ``STAGES`` stage
     reads in slots: a stats part or a probabilities block reads EX2 a lane, thousands of them. A Boolean template's reads are
     inline whatever its layout, a key block's Boolean body (``SparseMlaHeadBlock_v2``) at every key count among them: a body
     whose MUFU is gates has no table to read, and one that still read a table would keep it in its own rows, so its unit
@@ -56,7 +56,7 @@ def reads(tp: Any) -> str:
         return "slots" if spec_base(tp.id) in SLOT_ROWS else "inline"
     if tp.layout == "stage":
         return "slots"
-    if tp.layout != "chain" or CH.kind(tp) not in ("first", "block"):
+    if tp.layout != "chain" or CH.kind(tp) not in ("first", "block", "scores"):
         return "inline"
     S = spec_statics(tp.word)
     return "slots" if int(S["NVIS"]) >= int(S["BN"]) else "inline"

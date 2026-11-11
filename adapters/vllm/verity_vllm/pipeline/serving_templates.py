@@ -148,14 +148,18 @@ KCHUNKS = {"MoeExpertFp8Gemm_v1": "MoeExpertFp8CoordinateChunk_v1"}
 #: the row Definitions whose heads are cut along their keys into chains (the ``chain`` layout, `chain_rows`), by the row family,
 #: the families of its units in their roles (`CHAIN_ROLES`): its block family, one key block carrying the online softmax's state
 #: to the next in FA3's visit order (a chain's first visited block FIRST at its key count, every later one at BN), its end family,
-#: a head's epilogue on its last block's lanes and O, and a split row's (`sparse_mla_split.SparseMlaSplit_v1`, FA3's split
-#: kernel and its combine) split end in column blocks and its combine of each column block of the splits; the units are the cut
-#: the row's module names (`sparse_mla.CUTS`, `sparse_mla_split.CUTS`), which circuit-check holds to the Flock block in the row's
-#: place
-CHAINS = {"SparseMla_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1"),
-          "SparseMlaSplit_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1", "SparseMlaSplitEndCols_v1", "SparseMlaCombine_v1")}
+#: a head's epilogue on its last block's lanes and O, the two families a key block is served as instead where the partition
+#: names them, its scores family (the block's running max, lanes and bf16 probabilities) and its values family (the block's O on
+#: one column block of `values_widths`, off the scores unit's probabilities), and a split row's
+#: (`sparse_mla_split.SparseMlaSplit_v1`, FA3's split kernel and its combine) split end in column blocks, its combine of each
+#: column block of the splits, and its split end on one column block of values units; the units are the cut the row's module
+#: names (`sparse_mla.CUTS`, `sparse_mla_split.CUTS`: in whole key blocks, which circuit-check holds to the Flock block in the
+#: row's place, and at each of `values_widths` in scores and values units)
+CHAINS = {"SparseMla_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1", "SparseMlaHeadScores_v1", "SparseMlaHeadValues_v1"),
+          "SparseMlaSplit_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1", "SparseMlaHeadScores_v1", "SparseMlaHeadValues_v1",
+                                "SparseMlaSplitEndCols_v1", "SparseMlaCombine_v1", "SparseMlaSplitEnd_v1")}
 #: a ``CHAINS`` unit's role by its index in its row family's entry
-CHAIN_ROLES = ("block", "end", "cols", "combine")
+CHAIN_ROLES = ("block", "end", "scores", "values", "cols", "combine", "split")
 CHAIN_OF = {f: CHAIN_ROLES[i] for fs in CHAINS.values() for i, f in enumerate(fs)}
 #: the row Definitions cut into stages (the ``stage`` layout, `stage_rows`), by the row family: its stage families, every split
 #: count's top-p pipeline (stats blocks and their parts, probabilities, each round's step blocks and combines) and the select's
@@ -343,6 +347,12 @@ def part(word: str, spec: str) -> tuple | None:
     return PART_OF.get(spec_base(word), {}).get(spec_base(spec))
 
 
+def values_widths(DV: int) -> list[int]:
+    """The column widths of a ``CHAINS`` row's values units, coarse to fine: each G = DV / 2^j of at least 16 columns below the
+    row's DV output columns, a values unit's O on G columns then at least 64 bytes."""
+    return [DV >> j for j in range(1, DV.bit_length()) if DV % (1 << j) == 0 and DV >> j >= 16]
+
+
 def chunk_widths(K: int, G: int, KB: int) -> list[int]:
     """The K-chunk widths of a ``KCHUNKS`` coordinate of K weights: each k < K that cuts it into whole scale blocks and tiles."""
     return [K // c for c in range(2, K // G + 1) if K % c == 0 and (K // c) % G == 0 and (K // c) % KB == 0]
@@ -363,7 +373,9 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     each chunk width k (`chunk_widths`), its first, middle and last chunks (N, N (K / k - 2) and N of them), for a ``CHAINS``
     row family, its cut (`sparse_mla.head_chain`: per head the first visited block at its key count, the later blocks at BN and
     the end; `sparse_mla_split.split_chain`: a split row's at NS = 1, else per head and split its blocks so and its end in
-    column blocks, and per head the combine of each column block), for a ``STAGES`` row family, its cut (`topp_stages.cut`:
+    column blocks, and per head the combine of each column block) and then, at each width G of `values_widths`, the units the
+    cut holds with each key block its scores unit and DV / G values units (a Definition two of them hold is listed once: a
+    key block's scores unit, the combine of a column block), for a ``STAGES`` row family, its cut (`topp_stages.cut`:
     each stage Definition and its units in `topp_stages.plan`), for an ``EXPERTS`` row family, at each block of n rows
     (`block_rows`), its
     block family at N = n, the read of a block's rows, ``EmbeddingRead_v1{V=E, H=n K / 2}``, and its ``FUSED`` block reading
@@ -422,7 +434,9 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
         if spec_base(spec) in CHAINS:
             from verity.definitions.registry import sparse_mla, sparse_mla_split
 
-            hit += tuple((descriptor_id(c), n) for c, n in {**sparse_mla.CUTS, **sparse_mla_split.CUTS}[spec_base(spec)](sp))
+            chain = {**sparse_mla.CUTS, **sparse_mla_split.CUTS}[spec_base(spec)]
+            cuts = [chain(sp), *(chain(sp, cols=g) for g in values_widths(int(spec_statics(spec)["DV"])))]
+            hit += tuple({descriptor_id(c): n for cut in cuts for c, n in cut}.items())
         if spec_base(spec) in STAGES:
             from verity.definitions.registry.topp_stages import cut
 
