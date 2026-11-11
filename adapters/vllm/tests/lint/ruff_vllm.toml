@@ -1,0 +1,22 @@
+# vLLM's ruff rules (its pyproject.toml's [tool.ruff.lint] at d9105ea80) on the integration, less the ones ../../ruff.toml
+# already selects, so test_ruff.py and test_ruff_vllm.py never count one finding twice, and less E501: line length is
+# formatting, which nothing here enforces. T201 (`print`) is on for the library alone, where output goes through the logger
+# and pipeline/cli.py writes what a command prints; the tests and the tools print freely.
+# test_ruff_vllm.py runs it from adapters/vllm with --config, so its paths are relative to there; it extends nothing.
+target-version = "py312"
+respect-gitignore = false
+extend-exclude = ["fixtures"]
+
+[lint]
+select = ["E", "UP", "B", "ISC", "SIM", "I", "G", "T201"]
+ignore = [
+    # vLLM's ignores (F405 and F403 too, but F is ruff.toml's)
+    "E731", "B905", "B007", "UP032",
+    # ruff.toml's
+    "B006", "B008", "B015", "B018", "E402", "UP017",
+    "E501",
+]
+
+[lint.per-file-ignores]
+"!verity_vllm/**" = ["T201"]
+"verity_vllm/pipeline/cli.py" = ["T201"]

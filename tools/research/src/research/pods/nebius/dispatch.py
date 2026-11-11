@@ -621,7 +621,7 @@ def packable(item: dict, key: str, idx: int) -> str | None:
         return f"batch {batch} (packing takes <= {PACK_MAX_BATCH})"
     if task_resources(item, tasks[idx], idx, len(tasks))[2] != 1:
         return "not a 1-GPU task"
-    tools = Path(item["tree"]) / "integrations/vllm/verity_vllm/pipeline/research_tools.py"
+    tools = Path(item["tree"]) / "adapters/vllm/verity_vllm/pipeline/research_tools.py"
     try:
         if "VLLM_REPLAY" not in tools.read_text():
             return "the tree has no deferred replay"
