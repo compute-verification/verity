@@ -20,8 +20,8 @@ from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.spot.verifier.one_stage import partition as P
 
 ROOT = Path(__file__).resolve().parents[5]
-SHEET_90_LEAN = ROOT / "Security" / "Definitions" / "Accounting" / "Sheets" / "H200.lean"
-SM120_LEAN = ROOT / "Security" / "Definitions" / "Accounting" / "Headline" / "Sm120.lean"
+SHEET_90_LEAN = ROOT / "security" / "Definitions" / "Accounting" / "Sheets" / "H200.lean"
+SM120_LEAN = ROOT / "security" / "Definitions" / "Accounting" / "Headline" / "Sm120.lean"
 
 #: sha512 of the template descriptor of `HW.template(K, HW.tile_unit(K, (32, 32), definition))`, recorded before `h1_tile`
 #: took an architecture: (PouwH1Tile v1's, v3's) at each K
