@@ -52,7 +52,28 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   file no blob holds is that session's reject, as a file `flock-verify` can't read is. So does a length a session's
   statement can't hold, since it writes each in an 8-byte word: the circuit or public file, the lookup tables, the
   program, the partition object, the registered reads or a session's draw at `2^64` bytes or more (`fitsWhy`,
-  `drawFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them).
+  `drawFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them);
+* **per member** (`checkMembersAt`): the form for a population of several members, a statement a drawn member. It
+  accepts nothing (`MULTI_REFUSED`, `checkMembersAt_refuses`) until the guarantee for a sample over several members'
+  statements under one draw is in the lock, and `protocol` does not read it: `paramsOfJson` and `evidenceOf` refuse
+  `proofs` of other keys than the one statement's. Its parameters' `proofs` is exactly `{"members"}` (`membersOf`), an
+  object from each member's name to exactly `{"circuit", "public", "registered", "units", "vus_per_block"}`: its
+  statement's files, as the one statement's, its units as `[lo, hi)` ranges, ascending, no unit in two members', and
+  its circuit's units a proof block. Its evidence's `proofs` is exactly `{"statements"}` (`statementsOf`), a list of
+  exactly `{"member", "sessions"}`, the statements' sessions in order being v1's `sessions`. The statements are held as
+  public structure before any session is read (`membersHeld`): each names a member of the parameters that no earlier
+  statement named, in the members' order (by first unit), with exactly one session, on live coins and never retried;
+  an undrawn member has no statement. Each session's coins are one tree's, as the one statement's are, and its tree's
+  last opening is its closing round (`Challenger.memberTreeReason`): one more `session` round, of no coins, opened after
+  the SHA-512 of the session's evidence (`sessionEvidence`: its record's bytes, then each rep file's name and bytes,
+  each under an 8-byte length, `evidenceBytes`, which `evidenceParts` decodes), so the files the verdict reads are
+  fixed before the next member's coins; and the log opens the trees one after another in the sessions' order, no round
+  of a tree before the closing round of the one before it or after its own (`Challenger.membersOrder`). Then each
+  statement's session is verified as the one statement's is, on its member's own files (`Member.statement`,
+  `runMembers`), after the statements before it, so no coin tree serves two statements: its circuit's units a proof
+  block must be the ones the parameters name, and its verdict holds only where its public file's units are exactly
+  its member's, in order (`Member.population`), so every unit its session proves is its member's; the units the
+  statements proved must be the evidence's `proved_units`.
 
 Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file.
 -/
@@ -713,6 +734,323 @@ def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.
     Core.Outcome OneStage.Public Core.Integrity :=
   Core.atCoins (coinsOf p c e) (fun ξ => checkBlobsAt p c ξ e bs)
 
+/-! ## The per-member form (module docstring, **per member**) -/
+
+/-- The refusal of the per-member form's acceptance: no guarantee in the lock yet covers a sample over several members'
+statements under one draw. -/
+def MULTI_REFUSED : String :=
+  "the per-member form (proofs.members) is refused until the guarantee for a sample over several members' " ++
+    "statements under one draw is in the lock: verify one statement (proofs {circuit, public, registered})"
+
+/-- A member of the per-member form: its name, its units as `[lo, hi)` ranges, ascending, its circuit's units a proof
+block (META `vus_per_block`) and its statement's own inputs. -/
+structure Member where
+  name : String
+  units : Array (Nat × Nat)
+  g : Nat
+  own : Own
+
+/-- One statement of the per-member form's evidence: the member it proves and its sessions. -/
+structure StatementFiles where
+  member : Option String
+  sessions : Array RunFiles
+
+/-- The ranges ascend from `at_`: each `[lo, hi)` holds a unit and starts at or after the end of the one before. -/
+def ascending : Nat → List (Nat × Nat) → Bool
+  | _, [] => true
+  | at_, (lo, hi) :: rs => decide (at_ ≤ lo) && decide (lo < hi) && ascending hi rs
+
+/-- The per-member form's `members`, on the program and the partition `shared` every member's statement reads: each a
+nonempty name with exactly its keys, its circuit and public files' digests and registered file as the one statement's
+(`committedOf`), its units `Draw.ranges?` of naturals, ascending (`ascending`), its circuit's units a proof block
+positive, and no unit in two members' ranges. -/
+def membersOf (shared : Own) (j : Json) : V (Array Member) := do
+  let .obj _ := j
+    | throw "proofs: members is not an object from a member's name to its files, its units and its vus_per_block"
+  let ms ← (entries j).mapM fun (name, m) => do
+    if name.isEmpty then throw "proofs: a member's name is empty"
+    exactly m #["circuit", "public", "registered", "units", "vus_per_block"] s!"member {name}"
+    let (circuit, pub, registered) ← committedOf m
+    let some units := (Draw.ranges? (getD m "units")).bind fun rs =>
+        rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
+      | throw s!"proofs: member {name}'s units are not a nonempty list of [lo, hi] with 0 <= lo < hi"
+    if !ascending 0 units.toList then
+      throw s!"proofs: member {name}'s units are not ascending, each range after the one before"
+    let some g := (nat? (getD m "vus_per_block")).filter (0 < ·)
+      | throw s!"proofs: member {name}'s vus_per_block is not a positive natural number"
+    pure ({ name, units, g, own := { shared with circuit := circuit, pub := pub, registered := registered } } : Member)
+  if ms.isEmpty then throw "proofs: members names no member"
+  let rs := (ms.foldl (fun acc m => acc ++ m.units) #[]).qsort (·.1 < ·.1)
+  for i in [1:rs.size] do
+    if rs[i]!.1 < rs[i - 1]!.2 then
+      throw s!"proofs: unit {rs[i]!.1} is in two members' units: a unit is one member's"
+  pure ms
+
+/-- The per-member form's evidence `proofs`: exactly `{"statements"}`, a list of exactly `{"member", "sessions"}`, a
+member's nonempty name and its sessions (`sessionOf`). -/
+def statementsOf (pr : Json) : V (Array StatementFiles) := do
+  exactly pr #["statements"] "the evidence's proofs"
+  let .arr ss := getD pr "statements" | throw "proofs: statements is not a list"
+  ss.mapM fun s => do
+    exactly s #["member", "sessions"] "a statement of the proofs"
+    let .str member := getD s "member" | throw "proofs: a statement's member is not a member's name"
+    if member.isEmpty then throw "proofs: a statement's member is not a member's name"
+    let .arr rs := getD s "sessions" | throw "proofs: a statement's sessions is not a list"
+    pure { member := some member, sessions := ← rs.mapM sessionOf }
+
+/-- A member's first unit, its lowest. Members' units are disjoint, so it orders them, in the registration's order. -/
+def Member.first (m : Member) : Nat := m.units.foldl (fun a x => min a x.1) ((m.units[0]?.map (·.1)).getD 0)
+
+/-- A member's units, each range's in order. -/
+def Member.indices (m : Member) : Array Nat := m.units.flatMap fun x => (Array.range (x.2 - x.1)).map (x.1 + ·)
+
+/-- Whether the member `m`'s statement may follow the members `held`'s: its first unit is not before the last one's. -/
+def follows (held : Array Member) (m : Member) : Bool :=
+  match held.back? with
+  | some prev => !decide (m.first < prev.first)
+  | none => true
+
+/-- One statement held, after the members `held` of the statements before it: it names a member of the parameters
+`ms` that no earlier statement named, in the members' order (`follows`: by first unit, the registration's, one order
+so one statement), and has exactly one session (one pass on live coins, never retried; none would prove nothing, and
+an undrawn member has no statement). The members so far, with its own. -/
+def heldStep (ms : Array Member) (held : Array Member) (st : StatementFiles) : V (Array Member) :=
+  match st.member with
+  | none => throw "a statement of the proofs names no member, and the parameters' proofs are per member"
+  | some name =>
+    match ms.find? (·.name == name) with
+    | none => throw s!"member {name}: the parameters name no such member"
+    | some m =>
+      match held.any (·.name == name) with
+      | true => throw s!"member {name}: a second statement: a member's units are one statement's"
+      | false =>
+        match follows held m with
+        | false =>
+          throw (s!"member {name}: its statement follows a member's whose units start after its own: the " ++
+            "statements are in the members' order (by first unit, the registration's)")
+        | true =>
+          match st.sessions.size != 1 with
+          | true =>
+            throw (s!"member {name}: its statement has {st.sessions.size} sessions: a statement is exactly one " ++
+              "session on live coins, never retried, and an undrawn member has no statement")
+          | false => pure (held.push m)
+
+/-- **The per-member form's statements as public structure**, before any session is read (`heldStep` on each, in
+order): their members, statement by statement. -/
+def membersHeld (ms : Array Member) (sts : Array StatementFiles) : V (Array Member) :=
+  sts.foldlM (heldStep ms) #[]
+
+/-- The header `h`'s `units.indices` are exactly the units `us`, in order: `indicesHeld` at a member's units in place
+of the population's. -/
+def unitsHeld (us : Array Nat) (h : Json) : Bool :=
+  match getD (getD h "units") "indices" with
+  | .arr is => is.size == us.size && (List.range us.size).all fun i => (is[i]? >>= nat?) == us[i]?
+  | _ => false
+
+/-- The refusal of a member's public file of other units than the member's (`Member.population`). -/
+def MEMBER_UNITS : String :=
+  "units: the public file's units.indices are not exactly the member's units, in order: slot i of its table is the " ++
+    "member's i-th unit"
+
+/-- **A member's population check**, in the place of the one statement's `FilePart.check`: its public file `pubB`
+holds exactly the member's units, in order, so slot `i` of its session's table is the member's `i`-th unit and the
+units a session proves (`provedUnits`, read off this file) are the member's. -/
+def Member.population (m : Member) (pubB : ByteArray) : V Unit := do
+  if !unitsHeld m.indices (← FilePart.header pubB) then throw MEMBER_UNITS
+
+/-- A member's circuit held to the parameters' units a proof block: a circuit file that parses with another
+`vus_per_block` refuses. One that does not parse is its session's reject. -/
+def Member.blockHeld (m : Member) (parsed : V Flock.Circuit) : V Unit :=
+  match parsed with
+  | .ok c =>
+    if c.g != m.g then
+      throw s!"vus_per_block: the member's circuit has {c.g} units a proof block, not the {m.g} the parameters name"
+    else pure ()
+  | .error _ => pure ()
+
+/-- The scope check a session's verdict runs at the inputs `I` and the registered reads `rd`, as `run` builds it. -/
+def scopeOf (I : Flock.Witness.Inputs) (rd : Reads) : V Unit := do
+  let tags := Flock.Witness.zkTags I
+  Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags true I.publicFile I.count
+    false rd.registered.isSome
+  templateOk (← Flock.ProvedScope.circuitOf tags I.circuitFile I.tables)
+
+/-- **What `step` reads of one statement**: its inputs, the verifier's registered reads, the scope, files and
+population checks its sessions' verdicts run, and its program's digest against the partition object's program. Nothing
+of it reads a session's record, coins or sample. -/
+structure Statement where
+  I : Flock.Witness.Inputs
+  rd : Reads
+  scope : V Unit
+  ksFiles : V Unit
+  population : V Unit
+  programSha : Option String
+  want : Json
+
+/-- One session's `step` at the statement `a`, on the blobs `bs`, after the run `r`. -/
+def Statement.step (a : Statement) (bs : Core.Blobs) (r : Run) (s : RunFiles) : V Run :=
+  step a.I a.rd bs a.scope a.ksFiles a.population a.programSha a.want r s
+
+/-- The statement at the verifier's own inputs `p`, the tags `tags0`, the circuit and public files, the blobs' lookup
+tables and the registered reads `rd`, as `run` builds its own, with `population` its population check. -/
+def Statement.ofOwn (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (bs : Core.Blobs) (rd : Reads)
+    (population : V Unit) : Statement :=
+  let I := inputsOf tags0 p circuitB pubB bs
+  { I, rd, scope := scopeOf I rd
+    ksFiles := Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables)
+      (Flock.Witness.zkTags I) pubB
+    population
+    programSha := programDigest p.program
+    want := getD p.partition "program" }
+
+/-- **The statement the sessions at the inputs `p` are held to, read off the blobs before any session**: `run`'s own
+checks in `run`'s order (the blobs' lookup tables the circuit's, the statement's tags with hiding leaves, registered
+values read only with the verifier's registered file, the circuit and public files, each length within a statement's
+word, the registered reads), then `Statement.ofOwn` with the population check `population` on the public file. A
+refusal where `run` refuses. -/
+def statementOf (p : Own) (population : ByteArray → V Unit) (bs : Core.Blobs) : V Statement :=
+  tablesHeld p bs >>= fun _ =>
+  match Flock.Tags.find? STATEMENT with
+  | none => throw s!"the statement {STATEMENT} is not known"
+  | some tags0 =>
+    match tags0.plainLeaves with
+    | true => throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
+    | false =>
+      match p.registered.isNone && readsRegistered p.programJ with
+      | true =>
+        throw ("registered: the program reads registered values (a RegisteredInput among its definitions) and the " ++
+          "verifier holds no registered reads: verify with its own registered file")
+      | false =>
+        bs.get p.circuit "circuit" >>= fun circuitB =>
+        bs.get p.pub "public file" >>= fun pubB =>
+        match fitsWhy WORD circuitB pubB (tablesOf bs) (some p.program) (some p.partition) p.registered with
+        | some what => throw s!"{what}: {FITS}"
+        | none =>
+          readsOf p.registered >>= fun rd => pure (Statement.ofOwn p tags0 circuitB pubB bs rd (population pubB))
+
+/-- **The statement a member's session is held to**: `statementOf` at the member's own inputs, its population check the
+member's (`Member.population`), and its circuit's units a proof block the parameters' (`Member.blockHeld`). -/
+def Member.statement (m : Member) (bs : Core.Blobs) : V Statement :=
+  statementOf m.own m.population bs >>= fun a =>
+  m.blockHeld (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags a.I) a.I.circuitFile a.I.tables) >>= fun _ => pure a
+
+/-- **One statement's sessions, after the sessions the run `r` holds**: the statement `st`, read before any session,
+then `step` on each session in order. -/
+def runFrom (st : V Statement) (sessions : Array RunFiles) (bs : Core.Blobs) (r : Run) : V Run :=
+  st >>= fun a => sessions.foldlM (fun r s => a.step bs r s) r
+
+/-- One statement's run after the run `r`: its sessions at its member's statement (`runFrom`), a refusal naming the
+member. -/
+def stepMember (bs : Core.Blobs) (r : Run) (z : StatementFiles × Member) : V Run :=
+  (runFrom (z.2.statement bs) z.1.sessions bs r).mapError (s!"member {z.2.name}: {·}")
+
+/-- **The per-member form's run**: the statements' structure held (`membersHeld`), then each statement at its member's
+statement after the statements before it (`stepMember`), so `step`'s coin-tree keys are fresh across statements;
+then, where every session accepted, the union of the statements' proved units held to the evidence's `want`
+(`provedHeld`). Each drawn member's files are read once; a member no statement names is never read. -/
+def runMembers (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat) (bs : Core.Blobs) : V Run :=
+  membersHeld ms sts >>= fun held =>
+  (sts.zip held).foldlM (stepMember bs) ⟨#[], #[], #[], true⟩ >>= fun r =>
+  (match r.all with
+    | true => provedHeld r.proved want
+    | false => pure ()) >>= fun _ => pure r
+
+/-- **The bytes a closing round's digest is of**: the number of `parts` in an 8-byte little-endian word, then each
+part's length in such a word and its bytes. `evidenceParts` reads the parts back, so the digest fixes each part's
+bytes, not a digest of them. -/
+def evidenceBytes (parts : Array ByteArray) : ByteArray :=
+  parts.foldl (fun acc p => acc ++ Flock.le64 p.size.toUInt64 ++ p) (Flock.le64 parts.size.toUInt64)
+
+/-- `n` parts of `b` from offset `o` to its end, each an 8-byte length and its bytes; none where `b` is not that. -/
+def partsFrom (b : ByteArray) : Nat → Nat → Option (List ByteArray)
+  | 0, o => if o == b.size then some [] else none
+  | n + 1, o =>
+    if o + 8 ≤ b.size then
+      let stop := o + 8 + (Flock.u64OfLE b o).toNat
+      if stop ≤ b.size then (partsFrom b n stop).map (b.extract (o + 8) stop :: ·) else none
+    else none
+
+/-- **The decoder of `evidenceBytes`**: the parts `b` holds, none where `b` is not some parts' bytes. -/
+def evidenceParts (b : ByteArray) : Option (Array ByteArray) :=
+  if 8 ≤ b.size then (partsFrom b (Flock.u64OfLE b 0).toNat 8).map (·.toArray) else none
+
+/-- The refusal of a session's evidence `evidenceBytes` can't hold. -/
+def EVIDENCE_FITS : String :=
+  "its evidence holds a file of 2^64 bytes or more, or as many files, past the 8-byte word its closing round's " ++
+    "digest holds each length in"
+
+/-- **A session's evidence, the bytes its closing round is opened after the SHA-512 of** (`evidenceBytes`): its
+record's bytes, then, for each rep file it names, in the order it names them, the file's name in UTF-8 and its bytes,
+each the blob the verdict reads it from (`step`, `filesOf`). A refusal where no blob holds one, as `step` refuses a
+record, or where a length is past a word (`EVIDENCE_FITS`). -/
+def sessionEvidence (bs : Core.Blobs) (s : RunFiles) : V ByteArray := do
+  let record ← bs.get s.record s!"session {s.name}'s record"
+  let reps ← s.reps.mapM fun (f, d) => do
+    let b ← bs.get d s!"session {s.name}'s files: {f}"
+    pure #[f.toUTF8, b]
+  let parts := #[record] ++ reps.flatten
+  if decide (WORD ≤ parts.size) || parts.any (fun part => decide (WORD ≤ part.size)) then
+    throw s!"session {s.name}: {EVIDENCE_FITS}"
+  pure (evidenceBytes parts)
+
+/-- The statements' sessions held to the challenger's trees `ts` and its release log's lines `log`, each statement
+with its member: each session's record on the blobs, refused as `treesHeld` refuses it, at its tables with the
+`root_B` lengths its statement fixes on its member's own files (`rootBTables`) and the SHA-512 of its evidence
+(`sessionEvidence`), then `Challenger.membersTreeReason`: each session's coins one tree's, the tree closed after that
+digest, and the trees opened one after another in the sessions' order. -/
+def membersTreesHeld (ts : Array Challenger.LoggedTree) (log : List String) (sts : Array (StatementFiles × Member))
+    (bs : Core.Blobs) : V Unit := do
+  let mut named : Array (String × Array (String × Option Nat) × Json × String) := #[]
+  for (st, m) in sts do
+    for s in st.sessions do
+      let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
+        | throw s!"session {s.name}'s record is not UTF-8"
+      let evidence ← sessionEvidence bs s
+      named := named.push (s.name, rootBTables m.own bs record,
+        (Flock.JsonParse.parse record).toOption.getD Json.null, sha512Hex evidence)
+  if let some why := Challenger.membersTreeReason ts log named then throw why
+
+/-- **The per-member form's sessions' verdicts** on the parameters `p`, its members `ms`, the registration `c`, the
+evidence `e` and its statements `sts`: the statements' structure (`membersHeld`), their sessions v1's in order, the
+sessions' coins held to the trees the challenger logged in the order it must release them, each tree closed after its
+session's evidence before the next is opened (`treesOf`, `orderHeld`, `membersTreesHeld`), the registration's
+population held to the program (`popHeld`), then each statement's session on the blobs (`runMembers`). -/
+def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence) (sts : Array StatementFiles)
+    (bs : Core.Blobs) : V Run := do
+  let held ← membersHeld ms sts
+  if (sts.flatMap (·.sessions)).map (·.name) != e.base.sessions then
+    throw "the statements' sessions are not the evidence's sessions, in order"
+  let ts ← treesOf p.base e.base
+  orderHeld p c e
+  membersTreesHeld ts (← linesOf e).tail (sts.zip held) bs
+  popHeld p.base.verifier c.record
+  runMembers ms sts e.base.provedUnits bs
+
+/-- **The per-member form's check at the coins `ξ`** (module docstring, **per member**): the statements' sessions'
+verdicts (`membersRun`), then v1's `checkAt` at `ξ` on them, as the one statement's check; and what would accept is
+refused (`MULTI_REFUSED`). -/
+def checkMembersAt (p : Params) (ms : Array Member) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence)
+    (sts : Array StatementFiles) (bs : Core.Blobs) : Core.Outcome OneStage.Public Core.Integrity :=
+  match membersRun p ms c e sts bs with
+  | .error err => .reject s!"proofs: {err}"
+  | .ok r =>
+    match OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } with
+    | .accept _ _ =>
+      .reject (if r.all then s!"proofs: {MULTI_REFUSED}" else "proofs: a session's verifier did not accept")
+    | .reject why => .reject why
+    | .undecided why => .undecided why
+
+/-- **The per-member form accepts nothing**: whatever the parameters, the registration, the coins, the evidence and
+the blobs. -/
+theorem checkMembersAt_refuses (p : Params) (ms : Array Member) (c : OneStage.Commitment) (ξ : ByteArray)
+    (e : Evidence) (sts : Array StatementFiles) (bs : Core.Blobs) (pub : OneStage.Public) (prof : Core.Integrity) :
+    checkMembersAt p ms c ξ e sts bs ≠ .accept pub prof := by
+  intro h
+  unfold checkMembersAt at h
+  split at h
+  · cases h
+  · split at h <;> cases h
+
 def protocol : Core.BlobProtocol where
   id := PROTOCOL
   Params := Params
@@ -844,5 +1182,93 @@ private def held (lookups tables : List String) : String :=
 
 #guard (rootBLen { (default : Flock.Setup) with m := 25, merkle := Flock.MerkleScheme.hm96Sha512 }).toOption == some 16384
 #guard (rootBLen { (default : Flock.Setup) with m := 26, merkle := Flock.MerkleScheme.hm96Sha512 }).toOption == some 8192
+
+/-- The program and the partition the members' statements share, naming no file. -/
+private def sharedT : Own :=
+  { programJ := Json.null, program := .empty, partition := Json.null, circuit := "", pub := "", registered := none }
+
+private def memberJ (units : List (Nat × Nat)) : Json :=
+  Json.mkObj [("circuit", Json.str ("".pushn 'c' 128)), ("public", Json.str ("".pushn 'd' 128)),
+    ("registered", Json.null),
+    ("units", Json.arr (units.toArray.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])),
+    ("vus_per_block", Lean.toJson (1 : Nat))]
+
+#guard ((membersOf sharedT (Json.mkObj [("a", memberJ [(0, 4)]), ("b", memberJ [(4, 6), (8, 9)])])).toOption.map
+  (·.map fun m => (m.name, m.units, m.g, m.own.circuit.length, m.own.pub.length))) ==
+  some #[("a", #[(0, 4)], 1, 128, 128), ("b", #[(4, 6), (8, 9)], 1, 128, 128)]
+#guard (membersOf sharedT (Json.mkObj [("a", memberJ [(0, 4)]), ("b", memberJ [(3, 6)])])).toOption.isNone
+#guard (membersOf sharedT (Json.mkObj [("a", memberJ [(0, 4), (2, 3)])])).toOption.isNone
+#guard (membersOf sharedT (Json.mkObj [("a", memberJ [(5, 6), (0, 1)])])).toOption.isNone
+#guard (membersOf sharedT (Json.mkObj [("a", memberJ [])])).toOption.isNone
+#guard (membersOf sharedT (Json.mkObj [("", memberJ [(0, 4)])])).toOption.isNone
+#guard (membersOf sharedT (Json.mkObj [])).toOption.isNone
+#guard (membersOf sharedT (Json.mkObj [("a", (memberJ [(0, 4)]).setObjVal! "vus_per_block"
+  (Lean.toJson (0 : Nat)))])).toOption.isNone
+#guard (membersOf sharedT (Json.mkObj [("a", (memberJ [(0, 4)]).setObjVal! "interface" Json.null)])).toOption.isNone
+#guard (statementsOf (Json.mkObj [("statements", Json.arr #[Json.mkObj [("member", Json.str "a"),
+  ("sessions", Json.arr #[])]])])).toOption.map (·.map (·.member)) == some #[some "a"]
+#guard (statementsOf (Json.mkObj [("statements", Json.arr #[Json.mkObj [("member", Json.str ""),
+  ("sessions", Json.arr #[])]])])).toOption.isNone
+#guard (statementsOf (Json.mkObj [("sessions", Json.arr #[])])).toOption.isNone
+
+private def memberT (name : String) (units : Array (Nat × Nat)) : Member := { name, units, g := 1, own := sharedT }
+
+private def statementT (member : String) (sessions : Nat := 1) : StatementFiles :=
+  { member := some member, sessions := (List.replicate sessions { name := "s", record := "r", reps := #[] }).toArray }
+
+private def membersT : Array Member :=
+  #[memberT "m2" #[(2, 3)], memberT "m10" #[(10, 11)], memberT "m0" #[(0, 1), (5, 6)]]
+
+private def whyT {α : Type} : V α → String
+  | .error e => e
+  | .ok _ => ""
+
+#guard (memberT "m0" #[(0, 1), (5, 6)]).first == 0
+#guard (memberT "m" #[(2, 4), (7, 8)]).indices == #[2, 3, 7]
+#guard ascending 0 [(0, 1), (1, 3), (7, 8)]
+#guard !ascending 0 [(0, 2), (1, 3)]
+#guard !ascending 0 [(2, 2)]
+#guard ((membersHeld membersT #[statementT "m0", statementT "m2", statementT "m10"]).toOption.map (·.map (·.name))) ==
+  some #["m0", "m2", "m10"]
+#guard ((membersHeld membersT #[statementT "m2", statementT "m10"]).toOption.map (·.map (·.name))) ==
+  some #["m2", "m10"]
+#guard ((membersHeld membersT #[]).toOption.map (·.size)) == some 0
+#guard (whyT (membersHeld membersT #[statementT "m2" 0, statementT "m10"])).startsWith
+  "member m2: its statement has 0 sessions"
+#guard (whyT (membersHeld membersT #[statementT "m2", statementT "m0"])).startsWith
+  "member m0: its statement follows a member's whose units start after its own"
+#guard (whyT (membersHeld membersT #[statementT "m0", statementT "m10", statementT "m2"])).startsWith
+  "member m2: its statement follows a member's"
+#guard whyT (membersHeld membersT #[statementT "m0", statementT "m0"]) ==
+  "member m0: a second statement: a member's units are one statement's"
+#guard (whyT (membersHeld membersT #[statementT "m0" 2])).startsWith "member m0: its statement has 2 sessions"
+#guard whyT (membersHeld membersT #[statementT "m3"]) == "member m3: the parameters name no such member"
+#guard (whyT (membersHeld membersT #[{ member := none, sessions := #[] }])).startsWith "a statement of the proofs names"
+
+private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [("indices", natsJson us)])]
+
+#guard unitsHeld #[2, 3, 7] (unitsJ #[2, 3, 7])
+#guard !unitsHeld #[2, 3, 7] (unitsJ #[2, 3])
+#guard !unitsHeld #[2, 3] (unitsJ #[2, 3, 7])
+#guard !unitsHeld #[2, 3] (unitsJ #[3, 2])
+#guard !unitsHeld #[] Json.null
+#guard refusal ((memberT "m" #[(2, 4), (7, 8)]).population "{\"units\":{\"indices\":[2,3,7]}}\nrest".toUTF8) == ""
+#guard refusal ((memberT "m" #[(2, 4), (7, 8)]).population "{\"units\":{\"indices\":[0,1,2]}}\nrest".toUTF8) ==
+  MEMBER_UNITS
+#guard (runMembers membersT #[] #[] ⟨#[]⟩).toOption.map (·.all) == some true
+#guard whyT (runMembers membersT #[] #[1] ⟨#[]⟩) ==
+  "the units the sessions proved are not the evidence's proved_units"
+#guard (whyT (runMembers membersT #[statementT "m2"] #[] ⟨#[]⟩)).startsWith "member m2: circuit: "
+
+#guard Flock.hexOf (evidenceBytes #["ab".toUTF8]) == "0100000000000000" ++ "0200000000000000" ++ "6162"
+#guard (evidenceParts (evidenceBytes #["ab".toUTF8, .empty, "c".toUTF8])).map (·.map Flock.hexOf) ==
+  some #["6162", "", "63"]
+#guard (evidenceParts (evidenceBytes #[])).map (·.size) == some 0
+#guard Flock.hexOf (evidenceBytes #["a".toUTF8, "b".toUTF8]) != Flock.hexOf (evidenceBytes #["ab".toUTF8])
+#guard (evidenceParts ((evidenceBytes #["ab".toUTF8]).push 0)).isNone
+#guard (evidenceParts ((evidenceBytes #["ab".toUTF8]).extract 0 17)).isNone
+#guard (evidenceParts .empty).isNone
+#guard (whyT (sessionEvidence ⟨#[]⟩ { name := "s", record := "".pushn 'a' 128, reps := #[] })).startsWith
+  "session s's record: "
 
 end Spot.OneStageZk
