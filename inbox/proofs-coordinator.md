@@ -50135,3 +50135,39 @@ No lock changes in any of the three.
 For the table:
 - A reveal holds a class whole at the code: PRs #8912 and #8922 open, unmarked, both compiled on the three axioms (tries `e625`, `99d2`); quick tiers and records runs running. The class has the writer in it.
 - The by-class bound at a budget at the code (`code_eventTwoX_le_cls_at_budget`, PR #8924 over #8916, unmarked): compiled on the three axioms (try `b35a`). It leaves the budget, the three counts and the three expected-time premises as hypotheses; nothing counts classes in Lean, and no guarantee reads it. A bits line that reads it is at a registration with no always-checked block.
+
+## BREAKEVEN, Wed 11 Nov 11:05Z: Part 2 done: main's plan of record is put as `art:3a2991b6…02ca6` (q 1.424447584734859e-07, bound 10,927,021,455,811.7 bits), equal to `181d`'s in every field but the planner; #8853 merged `main` cleanly and is pushed at `9c9da7466a`, quick tier out; the registered replay pair checks from both serves' own records
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [guess] mine. Times from `date -u`.
+
+**Part 2 (#8568 landed)** [run]
+- Run: `r20261111-105949-3bbf`, `plan_of_record_run.sh` on `main`'s tip `08ad61db94326fa7ddab8e9071da7c0d29155633` (vy-nebius-cpu-1). Row (ii) honest at β 0.05544106123672309, world year; 150 cells, one left out (`PageCopy`, 0.001% of proving).
+- Its `mix.json` equals `181d`'s (`r20261111-052405-181d`, #8568's head `8fb2b94ee4`) in every field but `planner`.
+- Put: `art:3a2991b62c130f761b6e8803000126d08a1d14d4a0d9eb0a0b331da25ad02ca6` (evidence/v1, `--preserve`, ref `types=art:f12d8f2d…a906`, meta: runs `3bbf`, source `main@08ad61db9432`, supersedes `art:2ea6f506…3c65`).
+- q 1.424447584734859e-07 and the bound 10,927,021,455,811.719 bits (1,365.9 GB at λ 1; 1,434 GB at 1.05). `art:2ea6f506…` reads q 1.4123959861219053e-07 and 11,020,257,489,826.24 bits (1,377.5 GB; 1,446). So q is 0.85% higher and the bound 0.85% lower, as at `181d`. The one cell that differs is `main`'s card's `FlashInferFp8Linear_v1{K=6144,N=1}`, as my 05:36Z entry said [read].
+- The put script refused at first. It checked the new plan against `art:2ea6f506…`'s, which `main`'s card no longer reproduces. I gave it `--like RUN`, which checks against another run's `mix.json` (here `181d`) and prints what differs from the old art. It also restates the meta's bound sentence from the new plan (1,365.9 GB, not 1,377.5). That is `lanes/proofs/tools/plan_of_record_put.py` in the notes.
+- I labelled nothing. The two commands it prints, for you:
+  - `research data label art:3a2991b62c130f761b6e8803000126d08a1d14d4a0d9eb0a0b331da25ad02ca6 run_of_record prove-glm53-spot-sampling --by proofs`
+  - `research data label art:2ea6f506e79536372ddf0b9c0741dcb68888b3c74c60efd7739450023bcb3c65 superseded_by art:3a2991b62c130f761b6e8803000126d08a1d14d4a0d9eb0a0b331da25ad02ca6 --by proofs`
+
+**#8853** [run]
+- I merged `origin/main` (`08ad61db9432`) into `cursor/proofs-headline-driver-c41e`: a merge, not a rebase, with no conflicts. The new head is `9c9da7466aeace878e7c45bb8d5a1d32e615b6f5` (parents `2e47293cc6` and `08ad61db94`), pushed with no force. `main` changed nothing under `benchmarks/spot_figures/breakeven/`, which already held #8568.
+- Quick tier at the new head: `r20261111-105901-de7c` (`suites.py --changed 08ad61db94… --quick`, as `0181` ran it), waiting for a slot on cpu-9. The ready line follows when it passes.
+- It is open, unmarked and unlabelled; GitHub already shows its base as `main`. #8779 is untouched.
+
+**The second job (10:11Z): (a), (c) and (d) are done; (b) is in the 12:30Z entry at the measured head verify**
+- **(a) Both pairs check, from each serve's own schedule record** [run: `lifetime_hold.py` with `bf8a`'s flags on each serve's own step trace and edges file, run of record `r20261111-103349-49c2`; I ran the same here first and it agrees on every number].
+  - c343 (`r20261107-213820-c343`): 457.96 GPU-s over a request's lifetime and 5,257.96 a 600 s block, compute-weighted. Its trace's header is vLLM's defaults (8,192 tokens a step, no long-prefill cap). Its step trace and edges file are byte for byte `bf8a`'s inputs (sha256 `801d260b…`, `9a3602d5…`), so `reprice.py`'s 458 / 5,258 are this serve's.
+  - b00b (`r20261108-195819-b00b`): 1,159.58 and 5,959.58. Its header is the registered settings (2,048 tokens a step, a long prompt 256 a step).
+  - vllm's 1,160 / 5,960 and 458 / 5,258 [relayed] are what these records give.
+- **(c) The row of record should read b00b's pair** (1,160 / 5,960), because the audited engine is the registered one. c343 ran vLLM's defaults, and its eight prompts over 98,304 tokens end at 59.4 s on average (median 61.5 s, p90 63.9 s). That is the client's cut-off, which vllm reports for seven of eight [relayed]. b00b's same eight run 203.5 s on average, up to 298 s [run]. Both serves carry about the same GPU time (11,435 against 11,363 GPU-s), so c343's shorter replay is cut-off requests, not less work [run].
+- **(d) The factor is the ×1.05.** On `a974`'s own rows my reader (gb10 ×1.05) reads the lever row at 3,228.7 GB at 0.4 [run], (iii) at 4,042.4 and (ii) at 4,043.8. 3,228.7 / 1.05 = 3,074.95, so `a974`'s 3,074.8 is the same bound without the Goals page's ×1.05. The last 0.15 GB is the two readers' fits [derived]. BENCHCROSS said the same at 10:25Z [relayed].
+- **(b) so far, at the assumed 60.56 core-s head verify** [run]:
+  - At measured prices (`r20261111-102954-5b3c`), the registered pair moves (iii) by +0.70%: 4,042.4 to 4,070.8 GB at modeled 0.4, and 144.7 to 155.8 becomes 145.7 to 156.9 at the measured engine rate on node A (a floor). It moves the lever row as FUSED corrected it by +1.47%: 3,710.4 to 3,764.8 (134.5 to 144.8 at the floor). The same run's plan-pair rows equal `3dab` to 0.1 GB, so the control holds.
+  - On main's price of record (row (i), `06fa`'s own path and environment on `8fb2b94ee4`, `r20261111-104143-3713`) it moves +0.41%: 14,228.6 to 14,287.0 GB at 0.4, and 500.7 to 539.4 becomes 502.8 to 541.6 at the floor. The plan-pair control reproduces `06fa`'s 14,228.6 exactly.
+  - The "501 to 547" quoted for main's basis mixes two readings. Fleet held, both ends read 500.7 and 539.4; the 547 is `4c36`'s requests-held reading [read: BENCHCROSS 10:01Z].
+  - Every row at the measured head verify (250.0 and 358.3 core-s) on both pairs, the κ ladder labelled from the 643-class table and HEADPROF's every-cut row (1.357 GPU-s) are running now (`r20261111-105144-1293`, `-105159-e26d`, `-105622-e1b3`). They come in the 12:30Z entry.
+
+For the table:
+- Plan of record on `main`: `art:3a2991b6…02ca6` (run `3bbf`), q 1.4244e-07, 1,365.9 GB at λ 1; supersedes `art:2ea6f506…` once you label it.
+- Replay a sampled request at 128k: 458 / 5,258 GPU-s at vLLM's defaults (c343) and 1,160 / 5,960 at the registered settings (b00b). Both are measured from each serve's own trace; the row of record should read the registered pair.
