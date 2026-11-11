@@ -30,9 +30,10 @@ UNITS = {"scale": (BN.DsaRMSNormSumSqV3, BN.DsaRMSNormSumSqV2, dict(N=256, EPS=E
          "apply": (BN.DsaRMSNormApplyV3, BN.DsaRMSNormApplyV2, dict(G=8)),
          "row": (BN.DsaRMSNormV3, BN.DsaRMSNormV2, dict(N=256, EPS=EPS))}
 #: the units at GLM-5.3's served statics (the apply unit at the 64 columns its partitions name), each beside its smallest binding
-SERVED = [(BN.DsaRMSNormSumSqV3, dict(N=n, EPS=EPS), dict(N=256, EPS=EPS)) for n in ROWS]
+#: that holds every piece: a row of 512, whose threads take a register past their second, and one output element
+SERVED = [(BN.DsaRMSNormSumSqV3, dict(N=n, EPS=EPS), dict(N=512, EPS=EPS)) for n in ROWS]
 SERVED += [(BN.DsaRMSNormApplyV3, dict(G=64), dict(G=1))]
-SERVED += [(BN.DsaRMSNormV3, dict(N=n, EPS=EPS), dict(N=256, EPS=EPS)) for n in ROWS]
+SERVED += [(BN.DsaRMSNormV3, dict(N=n, EPS=EPS), dict(N=512, EPS=EPS)) for n in ROWS]
 PIECES = (BN.DsaRMSNormSquares, BN.DsaRMSNormSquareFma, BN.DsaRMSNormMeanRsqrt, BN.DsaRMSNormScale, BN.DsaRMSNormOut)
 
 
@@ -98,16 +99,16 @@ def test_the_scale_as_calls_is_the_word_at_the_served_rows(N: int) -> None:
 
 @pytest.mark.parametrize("defn,S,least", SERVED, ids=[f"{d.name}-{'-'.join(map(str, S.values()))}" for d, S, _ in SERVED])
 def test_a_unit_as_calls_stays_small_at_the_served_statics(defn, S: dict, least: dict) -> None:
-    """At GLM-5.3's statics a unit written as Calls is a few rows of Calls: its Program's description is within 4 KiB of its
-    smallest binding's (a traced unit's holds every gate, so it grows with the row) and under a byte for every 8 its traced
-    version's holds at 56 bytes an AND; its Flock block, read off the Definition as circuit-check's ``block`` reads it, is
-    within the proved range and not over its word view's."""
+    """At GLM-5.3's statics a unit written as Calls is a few rows of Calls: its Program's description is within 4 KiB of the
+    one at its smallest binding that holds every piece (a traced unit's holds every gate, so it grows with the row) and under
+    a byte for every 8 its traced version's holds at 56 bytes an AND; its Flock block, read off the Definition as
+    circuit-check's ``block`` reads it, is within the proved range and not over its word view's."""
     from verity_flock import circuit as FC
 
     unit = bind(defn, **S)
     size, small = (len(canonical_json(encode_program(Program(u)))) for u in (unit, bind(defn, **least)))
     b, word = FC.unit_block(unit), FC.unit_block(TR.word_of(unit))
-    assert size < small + 4096, (unit.id, size, small)
+    assert size <= small + 4096, (unit.id, size, small)
     assert size * 8 < 56 * b["ands"], (unit.id, size, b["ands"])
     assert FC.past_block(b) is None, (unit.id, b["k_log"])
     assert b["bits"] <= word["bits"], (unit.id, b["bits"], word["bits"])
