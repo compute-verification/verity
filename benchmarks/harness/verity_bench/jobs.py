@@ -54,6 +54,8 @@ class Plan:
 
 CompletionLookup = Callable[[str, str], str | None]
 Executor = Callable[[Sequence[str], Path], int]
+#: a direct point's launch: the plan, the spec's source, the point, the root and the node to its `research run` argv
+DirectCommand = Callable[[Plan, str | Path, PlannedPoint, Path, str], list[str]]
 
 
 def repository_root(start: str | Path | None = None) -> Path:
@@ -341,33 +343,43 @@ def direct_minutes(spec: ResolvedSpec | SteadySpec, node: str) -> float:
     return spec.admission.max_minutes
 
 
-def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path, node: str) -> list[str]:
-    """The point as a `research run --on NODE` through one of the node's GPU slots, its GPUs from the node's gpu-lease:
-    the queued point's tool, identity and environment, for a node whose launcher takes only slot runs."""
+def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign: str, tool: str,
+             env: Sequence[str], job: Sequence[str]) -> list[str]:
+    """`job` as a recorded `research run --on NODE` through one of the node's GPU slots, for a node whose launcher takes
+    only slot runs: the one form of a direct point's launch, whatever the point's spec. The spec's admission
+    `max_minutes` bounds the run and its slot; `tool` records it; `env` is its `--env` flags."""
 
-    spec = plan.spec
     minutes = direct_minutes(spec, node)
     return [
         "research", "run",
         "--on", node,
         "--project", "verity",
-        "--campaign", "vllm-bench",
+        "--campaign", campaign,
         "--source", str(root),
         "--cwd", "source",
         "--timeout", f"{minutes:g}m",
         "--require-result",
-        "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
-        *_env_flags(spec),
+        "--tool", tool,
+        *env,
         "--",
         "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
         "--run-max", f"{minutes * 60:g}",
         "--",
-        # Without --max-min a lease has no end, which gpu-lease refuses while a booked period lies ahead; a guest's GPU
-        # job is preemptible, as the queued point's is.
-        "gpu-lease", str(spec.preset.gpu_count), "--wait", "--max-min", f"{minutes:g}", "--preemptible",
-        "--",
-        *_point_command(source, item, root),
+        *job,
     ]
+
+
+def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path, node: str) -> list[str]:
+    """The point as a `research run --on NODE` through one of the node's GPU slots (`slot_run`), its GPUs from the node's
+    gpu-lease: the queued point's tool, identity and environment."""
+
+    spec = plan.spec
+    minutes = direct_minutes(spec, node)
+    # Without --max-min a lease has no end, which gpu-lease refuses while a booked period lies ahead; a guest's GPU job is
+    # preemptible, as the queued point's is.
+    lease = ["gpu-lease", str(spec.preset.gpu_count), "--wait", "--max-min", f"{minutes:g}", "--preemptible", "--"]
+    return slot_run(spec, root, node, campaign="vllm-bench", tool="verity_bench.tool:VLLM_BENCH_POINT",
+                    env=_env_flags(spec), job=[*lease, *_point_command(source, item, root)])
 
 
 def _execute(command: Sequence[str], root: Path) -> int:
@@ -375,8 +387,11 @@ def _execute(command: Sequence[str], root: Path) -> int:
 
 
 def dispatch(plan: Plan, source: str | Path, *, root: Path | None = None, execute: Executor = _execute,
-             direct: str | None = None) -> int:
-    """Launch one recorded research run for each incomplete point: queued, or with `direct` on that node's GPU slots."""
+             direct: str | None = None, command: DirectCommand = direct_command) -> int:
+    """Launch one recorded research run for each incomplete point, in the spec's order: queued, or with `direct` on that
+    node's GPU slots, each as `command` gives it (a vLLM point's `direct_command`; a steady-state point's is
+    `steady_plan.direct_command`). Each launch returns once its run has started on the node, where the runs take the
+    slots in turn. The first launch that fails stops the rest; its exit code, or 0."""
 
     root = root or repository_root()
     if direct is not None:
@@ -384,9 +399,8 @@ def dispatch(plan: Plan, source: str | Path, *, root: Path | None = None, execut
     for item in plan.points:
         if item.passing_run is not None:
             continue
-        command = (research_command(plan, source, item, root) if direct is None
-                   else direct_command(plan, source, item, root, direct))
-        rc = execute(command, root)
+        argv = research_command(plan, source, item, root) if direct is None else command(plan, source, item, root, direct)
+        rc = execute(argv, root)
         if rc:
             return rc
     return 0
