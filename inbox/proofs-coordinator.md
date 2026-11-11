@@ -48328,3 +48328,44 @@ For REGX: my 10:19Z "no run" was wrong; `9a98` passed. The key as you state it a
 For the table:
 - By classes, the count is the Lean's hypothesis, not a choice: gates needed by the same proof blocks, the writer among them, on the same side. 132 a head block [relayed: SCALE, derived; the served count `cf31` is running].
 - At toy sizes the by-class bound is met exactly at those classes and fails with the writer dropped or with reveals that do not pass whole [run]. So no further factor is hiding in K by classes, and the line still needs `hwit` (REGX, due 11:15Z) and a count of classes at the code (nobody).
+
+## FUSED, Wed 11 Nov 10:26Z: the templated check gains nothing on the second fused kind either (median 107.9 core-s a block against 115.5 flat, 0.93×; `a3e0` done rc 0), so both fused kinds read 0.93× to 1.01×, not 0.06×. The head block `_v2` templated (`9c37`) is still building its template (bound 09:36Z, no error); it ends or is cut at 12:00:52Z
+
+**1. The second fused kind** [run: `r20261111-085245-a3e0` (templated, cpu-12, done 10:06:29Z rc 0, `preserved=yes`) against `r20261111-085313-7268` (flat, cpu-10, done rc 0); source `8201dacff26e`; the same `flock-verify` in both, sha256 `12732e2b150b549c`; both EPYC-Genoa; one block, reads inline, proved on CPU, Lean `flock-verify --zk` three times under `/usr/bin/time`, core-s = user + sys].
+
+| block | form | Lean core-s, three runs | median | peak | circuit file | verdict |
+|---|---|---|---|---|---|---|
+| `MoeExpertFp8ReadGemm_v1{H=3072,K=6144,N=1}` (09:44Z entry) | flat | 111.0, 116.6, 115.7 | 115.7 | 9.1 GB | 1,791 MB | accepted 3 of 3 |
+| the same | templated (`--structural iv/hybrid/4`) | 126.2, 117.0, 109.1 | 117.0 | 8.6 GB | 846 MB | accepted 3 of 3 |
+| `MoeExpertFp8ReadGemmW_v1{H=4096,K=256,N=32,SWAP=true}` | flat | 115.5, 115.5, 115.0 | 115.5 | 9.4 GB | 1,934 MB | accepted 3 of 3 |
+| the same | templated | 114.3, 105.3, 107.9 | 107.9 | 8.7 GB | 855 MB | accepted 3 of 3 |
+
+- The second kind's template [run]: 32 Definitions, 6,460,164 rows, 108,314,817 references, for a unit of 10,779,375 rows and 10,704,415 ANDs (flat: 10,680,491 ANDs), k_log 25. So the template is 0.60 of the unit's rows: these blocks are traced bodies with their reads inline, and there is little for a template to share.
+- **Ratio templated to flat, by medians: 1.01 and 0.93** [run]. The lever row's goal takes 125/2,100 = 0.06 (`reprice.py`'s `VERIFY_TEMPLATED`). The second kind's 7% is inside the first kind's own scatter (109 to 126).
+- In GB [derived from `5ce0`'s slope, 0.63 GB a core-second a statement on the fused strata; guess: that a one-block ratio carries to a 1,024-block statement]: 0.93× on either kind (38.92 or 42.55 core-s a statement) is under 2 GB. The lever row with the head block and the fused blocks flat stays 3,710.4.
+
+**2. The head block templated: `r20261111-085259-9c37`, not in yet** [run, 10:25:12Z; cpu-11, slot r3, cores 117-151, a 200 GB reservation].
+- `SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64}`: bound at 09:36:01Z (96,641,015 word gates, 155 GB at the bind, 167 GB peak), wrote 2.35 GB by 09:44Z (its `program.json`, by the code's order), and has been in `UnitStager`'s structural lowering since: 41 minutes, one core, 67.7 GB and flat, no error, no template line yet. The two fused kinds took 434 and 560 s there for 36.3M and 42.9M word gates.
+- Its slot ends at 12:00:52Z. After the template come staging, the CPU proof and three Lean runs. If one Lean run of it costs what #8520 measured for the 64-key first block read flat (982 s at 79 GB [read: #8520's body]), three fit only if the template is built by about 10:50Z, one if by about 11:25Z [guess]. I take whatever verify lines it leaves.
+- **What I expect, and why it is still worth its slot** [read; guess]: `chunk_rows.reads` on `main` says "A `_v2` body reads no table (its EX2 is gates), so it lowers flat either way", and #8520 says the `_v2` body "is one traced circuit, so its description is as long as its gates". So a template of it has nothing to share and the check should cost what the flat costs, as on the fused blocks. It is the one run that can say so by measurement for the block that carries 460 of the lever row's 503 GB of verifier levers; if it showed a gain, that part of the lever row would come back.
+- **Where a real template of the head block is** [read: #8432's and #8451's bodies, both open]: the word body (`_v1`), whose template is 704,574 rows for 39.7M unrolled (#8432), with its EX2 and RCP reads in lookup slots (#8451: 1,782,361 rows). #8451 says "No staging writes a split into a statement yet, and Lean admits none: `scopeOkT` requires one templated net". So the lever's factor on the head block needs #8432, #8451, a staging of the split statement and a change to the Lean verifier's form check, and serving the `_v1` body (RELAX 09:48Z: 15% more ANDs in the same blocks). None of that is tonight's.
+- **A correction to my own wording** (09:05Z, 09:44Z: "the head block has no template"): on `main` the served `_v2` block can be lowered structurally, and `9c37` does it; what does not exist is a template smaller than its body [guess until `9c37` prints its template line].
+
+**3. GB, both columns** [derived; base: measured prices. The second column is by proportion, × 178/4,994 to × 192/4,994, vllm's floor; the rate is not measured at the headline's mix. The price-of-record base (14,228.6 GB) for these two rows is BREAKEVEN's to print, I have no planner row on it].
+
+| row | modeled 0.4 | measured engine rate on node A (a floor) | under 300 GB only while the engine serves at most |
+|---|---|---|---|
+| today's cut, measured prices (`7fbe`) | 4,569.0 | 162.9 to 175.7 | 328 tokens a GPU-second |
+| lever row, head block flat and uncut, fused blocks flat (`5ce0`) | 3,710.4 | 132.2 to 142.7 | 404 tokens a GPU-second |
+
+**4. Nothing of mine is on `vy-dc-h200-3` or node A** [run]. Runs out: `9c37` only. No tree file changed; no PR.
+
+**Left:** `9c37`'s verify lines (or its cut at 12:00:52Z), then the ratio for the head block in one entry. Next entry 11:30Z, sooner if it lands.
+
+For BREAKEVEN:
+- Measured, second kind: the templated check on `MoeExpertFp8ReadGemmW_v1{H=4096,K=256,N=32,SWAP=true}` costs 0.93× the flat (median 107.9 against 115.5 core-s a block; `r20261111-085245-a3e0`, `r20261111-085313-7268`). With the 09:44Z kind (1.01×), both fused kinds are measured: keep `MoeExpertFp8` and `Fused[` out of the templated goal. Worth under 2 GB either way.
+- Not measured yet: the head block's templated seconds (`r20261111-085259-9c37`, running). Until it reads, the head block stays flat in the lever row (3,710.4 GB modeled 0.4; 132.2 to 142.7 at the measured floor, by proportion).
+
+For the table:
+- Templated check, fused blocks: measured on both kinds at 0.93× and 1.01× of the flat, Lean accepts every run (`a3e0`, `7268`). Not a lever.
+- Templated check, head block: one run out (`9c37`), no figure yet; a template smaller than the block's body needs #8432, #8451 and a Lean form change, none tonight.
