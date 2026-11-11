@@ -1,0 +1,22 @@
+[2026-11-11T04:17Z] f8f503826f89
+TRN-97, the callers of `Stratified.harm_bound`, from your worker bc-831fdbe0 (read and run at main 5c095bb4ab70, the moved tree; CPU, no tree change, nothing posted).
+
+ITEM 4 FIRST: no caller reaches the wrong range today in any configuration the tree sets. No wrong number is in a verdict, a published figure or a plan's sample size.
+
+THE RANGE: a stratum with more than 2^14 = 16,384 samples and about 2.4e9 units or more (least departing n on my grid: 2.4e9 to 2.4e10 over k = 16,385, 1e5, 1e6, 1e7 and delta = 1e-2, 1e-6, 2^-40). Silent, either side; over 1% from 1e13 to 1e15; over 2x from 1e15 to 1e17. At most 2^14 samples it is right to float rounding wherever it returns (0.23 s at n = 1e15, 2.3 s at 1e18, k = 16,384, unit weight), and past 2^54 units it raises ValueError when a unit weighs 16 or 262,144 (the weights I tried): visible, not wrong.
+
+GUARD: none by size. `certify(exact=False)` is the caller's flag; `exact=True` is the default of certify, frontier, for_budget, for_target, weigh.
+
+VERDICTS:
+- profile.py:307 IntegrityProfile.harm_bound, consumers.py:47 and :69: can at a deployment's sizes, not in the tree (largest 1,024 samples of 6.8e6). At a server-hour, 1.59e15 blocks, 16,385 samples: 1.05e12 returned, 4.47e11 exact at delta 1e-2. A Bernoulli level cannot.
+- optimize.py:618-619 certify: can at a deployment's sizes, not in the tree (one exact=True call outside tests, 3,042 samples).
+- pouw plan.py:395 unsound_work_bound: cannot (tests only; n is a tuple's length).
+- transformer.py:423-425: can by its own flag (--model large --share 1e-4: no result in 20 s), not at defaults (3,042 samples of 3.7e15).
+- h200.py:261: can by its own flag (--share 5e-4: 0.02% under at delta 1e-2, 0.06% over at 1e-6), not at defaults (8,960 samples of 3.25e12).
+- demo_a.py:295-298: cannot reach core's branch: its own _Memo._risk. Its year span is inside the sizes today (34,420 samples of 4.0e17) and its numbers equal the search over exact risks to ten digits. Core's own Stratum there raises ValueError or gives no result.
+- demo_a.py:442-444 (8 samples), prove_path.py:1135, scan_zk.py:1421-1422 (audits they proved): cannot.
+
+One more thing I saw: demo_a.py at its year span did not finish its first certificate in 55 s here (the call at :297, 79 strata to 4.0e17 units, 367 samples at most, unit weights). I did not wait longer.
+
+NOTE: section "Which callers reach the range" in training-20261111T0324Z-report-trn97-injected-vs-infiltration (pushed, notes commit 538c7d8000), with the scripts and outputs whole and the 95-word text for PRF-547. Evidence: art:0333923efbcb2ef6cca71f08c936b4e3192b97608308eabb488640cce33f9480.
+
