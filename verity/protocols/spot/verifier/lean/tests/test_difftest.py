@@ -2491,7 +2491,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
             "reject", f"proofs: session s's coins are not the challenger's: {CH.LINK_TABLES}"), keys
 
 
-def _v2_audit(s: Setup, seed: str, server) -> tuple:
+def _audit_v1_accepts(s: Setup, seed: str, server) -> tuple:
     """An audit of `s` that v1 accepts on the verdict its evidence hands in and its challenger's coins, sampled under
     `seed`: the registration record, the challenger's session, v1's evidence without its ``sessions`` and
     ``verdicts``, and v1's parameters, which v2 reads with ``proofs``."""
@@ -2523,7 +2523,7 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
     circuit = STAND_IN_CIRCUIT
     for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (SETUPS[3], True)):
         assert P.in_order(s.program, s.query, s.population) is ok, s.templates
-        rec, ch, base, params = _v2_audit(s, f"v2-order-{s.templates}", server)
+        rec, ch, base, params = _audit_v1_accepts(s, f"v2-order-{s.templates}", server)
         public, record = _public_of(rec), D.canonical(ch.trees[0].record).encode()
         v2 = base | {"proofs": {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}, "sessions": ["s"]}
         case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec), "evidence": _hex(v2),
@@ -2542,7 +2542,7 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_p
     for its keys, so no check of the form is reached. What the parsers refuse the command refuses with their reason:
     statements out of the members' order, a statement of two sessions or of a member the parameters don't name, v1's
     ``sessions`` other than the statements', and either file in the one statement's form."""
-    rec, _, base, params = _v2_audit(SETUPS[3], "v2-members", server)
+    rec, _, base, params = _audit_v1_accepts(SETUPS[3], "v2-members", server)
 
     def member(k: int, name: str, lo: int, hi: int, *sessions: str) -> PF.Member:
         at = tmp_path / f"m{k}"
