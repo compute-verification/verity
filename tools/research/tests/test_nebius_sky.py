@@ -1014,16 +1014,23 @@ def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_tre
 def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
     """The retention policy is applied on a schedule, so a node never sits at 80% with terabytes collectable while the fill
     runner holds every queued run (the merge gates among them) for a `research retention gc` by hand. It reads the node's
-    store, whose catalog records what custody verified on the remote: without it gc keeps every preserved path."""
+    store, whose catalog records what custody verified on the remote: without it gc keeps every preserved path. It is installed
+    wherever research runs are: the nodes whose runs the store eviction trims, and those `--on auto` places runs on."""
     import subprocess
+    import tomllib
+
+    from research import auto
     unit, timer = (SKY / "retention_gc.service").read_text(), (SKY / "retention_gc.timer").read_text()
     assert "User=research\n" in unit and "python3 -m research retention gc --apply'" in unit and "OnUnitActiveSec=1h\n" in timer
     assert "Environment=RESEARCH_STORE=/workspace/research/store\n" in unit
     deploy = (SKY.parent / "deploy.toml").read_text()
-    nodes = '["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]'
+    doc = tomllib.loads(deploy)
+    files = {f["path"]: f for f in doc["file"]}
+    holds_runs = set(files["/etc/systemd/system/vy-store-evict-research.timer"]["nodes"]) | {m for m in doc["nodes"] if auto.CPU_NODE.fullmatch(m)}
     for u, path in (("retention_gc.service", "vy-retention-gc.service"), ("retention_gc.timer", "vy-retention-gc.timer")):
-        assert (f'path = "/etc/systemd/system/{path}"\nsrc = "tools/research/src/research/pods/nebius/sky/{u}"\n'
-                f'nodes = {nodes}\nrun = ["systemd:vy-retention-gc.timer"]') in deploy
+        f = files[f"/etc/systemd/system/{path}"]
+        assert f["src"] == f"tools/research/src/research/pods/nebius/sky/{u}" and f["run"] == ["systemd:vy-retention-gc.timer"]
+        assert set(f["nodes"]) == holds_runs, "the collector runs on every node of deploy.toml that holds research runs"
     cond = re.search(r"^ExecCondition=/bin/sh -c '(.*)'$", unit, re.M)[1]
     status = tmp_path / "status.txt"
     gate = lambda: subprocess.run(["sh", "-c", cond.replace("/workspace/pouw/fill/status.txt", str(status))]).returncode
