@@ -4,17 +4,11 @@ compute what they claim. The costs are the round-4 result against `EncodeChainHa
 from __future__ import annotations
 
 import random
-import sys
-from pathlib import Path
 
+import free_codec as FC
+import gates as G
 import pytest
-
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-
-import free_codec as FC  # noqa: E402
-import gates as G  # noqa: E402
-import squaring as S  # noqa: E402
+import squaring as S
 
 # security/Proofs/Accounting/Gates.lean's `codecRows` (6b, at d6df95f24a): (n, c, cs, K, τ, i, m, encodeWord).
 CODEC_ROWS = [
