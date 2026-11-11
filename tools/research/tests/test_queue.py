@@ -515,7 +515,7 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
 
 POUS = "verity/core/protocols/pous/lean"
 TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/core/protocols/spot/tests/fixtures/exfiltration_lean.json"
-UP = "../../../../../Security/Proofs/lakefile.toml"
+UP = posixpath.relpath("Security/Proofs/lakefile.toml", POUS)
 #: what `_pin_main`'s pins record: PoUS's, relative to its directory, and the JSON pin's
 MAIN_TRUSTED, MAIN_EXFIL = ["lean-toolchain", "lakefile.toml", "Old.lean", UP], ["Security/Proofs/lakefile.toml", "x.lean"]
 VECTORS = ('{"a": 1}', '{"b": 2}')
@@ -1886,7 +1886,7 @@ def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypa
     assert research_main(argv) == 0
     got = {e["pr"]: (e["state"], e["why"]) for e in json.loads(capsys.readouterr().out)}
     assert got[1][0] == "waiting" and got[1][1].startswith("ignored: marked before cutoff") and "2026-10-05T09:00:00Z" in got[1][1]
-    assert got[2][0] == "ready" and "the next sync merges it onto `next`" in got[2][1]
+    assert got[2][0] == "ready" and "the verified queue builds it into a batch onto `main`" in got[2][1]
     assert research_main([*argv, "--marked-after", "2026-10-01T00:00:00Z"]) == 0
     assert {e["pr"]: e["state"] for e in json.loads(capsys.readouterr().out)} == {1: "ready", 2: "ready"}
 
@@ -1949,6 +1949,35 @@ def test_status_and_the_review_listing_free_the_queue_lock_before_they_read_labe
     assert research_main(["queue", "status", "--json", *common]) == 0 and free == [True]
     assert research_main(["queue", "review", *common]) == 0 and free == [True, True]
     capsys.readouterr()
+
+
+def test_the_review_listing_names_the_marked_prs_onto_main_not_on_it_lacking_a_land_verdict_oldest_mark_first(world, capsys):
+    """The verified queue builds from the marked PRs, not from `next`'s members, so the listing reviewers work from is those:
+    each open PR onto `main` marked at its head, not on `main` yet, with no land verdict there by a non-owner, oldest mark first."""
+    from research.queue import StoreLabels
+
+    world.with_store_remote()
+    world.gh.put(1, world.change({"1.txt": "x\n"}))
+    world.gh.put(2, world.change({"2.txt": "x\n"}))
+    world.gh.put(3, world.change({"3.txt": "x\n"}), ready=False)
+    world.gh.put(4, on := world.change({"4.txt": "x\n"}))
+    world.gh.put(5, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(6, world.change({"6.txt": "x\n"}))
+    world.gh.prs[6] = dataclasses.replace(world.gh.prs[6], base="checked")
+    _git(world.origin, "update-ref", "refs/heads/main", on)
+    world.store.add_label(label_target(2, world.gh.prs[2].head), vocab.REVIEWED, "land", "reviewer", ts="2026-11-09T12:00:00Z")
+    world.store.add_label(label_target(1, world.gh.prs[1].head), vocab.REVIEWED, "land", "lane-1", ts="2026-11-09T12:00:00Z")
+    marks = {n: f"2026-11-09T{h:02d}:00:00Z" for n, h in {1: 10, 2: 8, 4: 7, 5: 9, 6: 6}.items()}
+    q = world.queue(marked_at=lambda n, h: marks.get(n))
+    labels = StoreLabels(world.store, log=lambda s: None)
+    assert Q.review(q, world.store, labels, None, None, None, None, as_json=True) == 0
+    rows = json.loads(capsys.readouterr().out)
+    assert [(r["pr"], r["marked"], r["why"]) for r in rows] == [
+        (5, marks[5], "no land verdict"), (1, marks[1], "no land verdict but its owner's own (lane-1), which doesn't count")]
+    assert (rows[0]["lean"], rows[0]["files"], rows[1]["lean"], rows[1]["files"]) == (True, ["pkg/lean-audit.json"], False, ["1.txt"])
+    assert Q.review(q, world.store, labels, None, None, None, None) == 0
+    out = capsys.readouterr().out
+    assert out.index("#5 ") < out.index("#1 ") and "2 marked PR(s) not on `main` lack a land verdict" in out, out
 
 
 def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
@@ -2734,6 +2763,20 @@ def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_
     assert "`--no-preflight` skips the preflight" in err
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=None) == 0         # --no-preflight: the lander's
+
+
+def test_the_preflight_merges_onto_the_landing_tip_when_next_no_longer_holds_it(world, capsys):
+    """A `next` the landing branch has moved past is no queue above it, so the head merges onto the landing branch's tip, and a
+    conflict with a PR only that `next` holds refuses nothing."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world)
+    main = _move_main(world, {"pkg/other.py": "X = 1\n"})
+    world.gh.put(2, h2 := world.change({"pkg/rows.json": '{"r9": 1}\n'}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight" in s)
+    assert f"merged onto `main` at {main[:12]} (`next` at" in said and "doesn't hold it)" in said, said
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
 def test_the_preflight_finds_a_prs_merge_on_next_past_a_lock_commit_on_checked_when_it_walks_from_main(world, capsys):
