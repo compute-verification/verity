@@ -46,7 +46,9 @@ into one leaf and into a closed row alike; and an output of 31 bits (`odd_output
 up: refused into a row of two words, which holds a bit it lacks, and a record that wires it into a row of one
 word refused by the wires' own check. Then a root that
 hands a unit a row that is not input gates of its own: the served shape with one input run handed to two rows, with
-a row every unit shares, and with a row of computed gates.
+a row every unit shares, and with a row of computed gates. Then a text the form reads nothing of: the served shape's
+record as one that lists its members, which states no wires, refused by the wires' reader; and the text of no wire
+and nothing else, which names no Program, refused with its templates.
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -113,6 +115,9 @@ BROKEN = {
 }
 #: each way with its stage: the broken cases take the ways in turn, in seed order (`_turns`)
 WAYS = [(stage, how) for stage, hows in BROKEN.items() for how in hows]
+#: the stages that refuse a case before SPOT reads its wires: such a case carries no wires for SPOT's reader
+EARLY = ("instance", "params", "program", "not-topological", "record", "trusted", "run-program", "run-circuit",
+         "templates", "own-rows")
 #: the circuits a broken case tries for one that has what its way breaks
 TRIES = 40
 
@@ -761,7 +766,10 @@ def shaped() -> list[dict]:
     `short_output`, into one leaf and into a closed row (`leaf-widths`, both); `odd_output`, its 31 bits two words:
     into a row of two words (`leaf-widths`), and a record that wires it into a row of one (`wires`). Then the
     accepted case with its Program's root edited (`own-rows`): `Norm`'s weights' row handed the input gates its `x`
-    has, `Feed`'s selection not mapped, and `Select`'s row handed `Norm`'s output."""
+    has, `Feed`'s selection not mapped, and `Select`'s row handed `Norm`'s output.
+
+    Then the accepted case with its record's text another: one that lists its members and so states no wires
+    (`listed`, refused `wires`), and the text of no wire and nothing else, which names no Program (`templates`)."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -787,6 +795,7 @@ def shaped() -> list[dict]:
                 _rewrite(made, edit)
             if reroot is not None:
                 _reroot(made, reroot)
+            if broken in EARLY:
                 made["case"]["spot"] = None
             if pinned is not None:
                 made["case"]["instance"]["pins"] = pinned
@@ -880,7 +889,26 @@ def shaped() -> list[dict]:
     first("2x3 one input run handed to two rows", lowered(2, 3), 27, reroot=twice, broken="own-rows")
     first("2x3 a row every unit shares", lowered(2, 3), 28, reroot=shared, broken="own-rows")
     first("2x3 a row of computed gates", lowered(2, 3), 29, reroot=computed, broken="own-rows")
+    c = lowered(2, 3)
+    first("2x3 a record that lists its members", c, 45, edit=listed(c), broken="wires")
+    first("2x3 a text of no wire that names no Program", lowered(2, 3), 46,
+          edit=lambda d: (d.clear(), d.update(wires=[])), broken="templates")
     return out
+
+
+def listed(c: Circuit):
+    """The edit that makes `c`'s record one that lists its members, as `verity.ml.windows.interface` writes one
+    (`_listed`): a member a template, in the templates' order, beside the registered reads, with no wires, cuts,
+    order, ingress or blocks."""
+    def edit(d: dict) -> None:
+        for k in ("wires", "cuts", "order", "ingress", "blocks"):
+            d.pop(k, None)
+        d["members"], base = [], 0
+        for fn, n in c.templates:
+            lay = IF.layout(fn)
+            d["members"].append(IF._member_doc(IF.CS.Member(codec.descriptor_id(fn), lay.rows, lay.outs, n, base)))
+            base += n
+    return edit
 
 
 # Cases
@@ -1014,8 +1042,7 @@ def case(seed: int) -> dict:
         rng.choice([lambda: limits.pop(rng.choice(ref.LIMITS)), lambda: limits.update(table=[]),
                     lambda: limits.update(c=rng.choice([-1, "3", 1.5, None])), lambda: limits.update(n=[1]),
                     lambda: limits["table"].update(RecNope_v1=rng.choice([-1, 1.5, "2"]))])()
-    if stage in ("instance", "params", "program", "not-topological", "record", "trusted", "run-program", "run-circuit",
-                 "templates", "own-rows"):
+    if stage in EARLY:
         made["case"]["spot"] = None
     return made | {"shape": "random", "broken": stage, "how": how}
 
@@ -1422,7 +1449,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 48
+    return COUNT + 50
 
 
 def results(case: dict) -> dict:
