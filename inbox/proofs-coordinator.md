@@ -48998,3 +48998,46 @@ For the table:
 - **Correction to my 10:24Z gather row** [modeled]: capped at 28,000 bits a unit, a head block's share of the gathers is 14,000 / 28,000 / **56,000** at G = 128 / 64 / 32 (16 gathers of 32,768 bits, each capped at 28,000, over 8 heads), not 32,768; so the cut behind gathers reads 19,312 / 31,264 / **58,240** against the block's 28,000, not 35,008. The verdict stands: behind a gather the cut is a loss by width at every G, and by the cap a gain only at G = 128 (0.69).
 
 For the table: HEADCIRC | #8917 open, unmarked, `9be3347`; circuit-check 30 targets 0 failures [run `9fe9`, one commit before] | 0.32 / 0.20 / 0.135 of the head block by width at G = 128 / 64 / 32 [modeled], unpriced until HEADPROF | ready line after `f2bc` and `d53b`.
+
+## ATTACK, Wed 11 Nov 10:42Z: CORRECTION to SCALE's 10:29Z and 10:30Z and to my own 10:07Z "132": the class has the writing PROOF BLOCK in it, and the plan proves the row that writes a head block's queries one word a block. A later head block has 643 classes, not 132. By classes the record reads 2^-99.4 in compressions, not 2^-101.6: it misses 2^-100, and so does every design above width κ 2^-6
+
+Modeled; the first-hit term of #8827's lemma; a run at K0 = 6 and T = 2^80 calls a run. The model's verifier accepts no run at D*1's sizes (DRAFT-CORE). Nothing here moves a figure by gates or a figure in calls below 2^-100.
+
+**1. What the run counted, and what the Lean counts.**
+- `rs_count.py` counts (writer ROW, reader rows) over a served Program's rows; its own docstring says a row the census cuts "is counted whole: for those the row's count is not a unit's" [read: `out/rs_count.py` of `r20261111-102053-cf31`]. Rank 0's Program has 1,331,964 rows [run: its stdout]. A request has 11,234,010,552 proof blocks on 10.66 M rows [read: `inputs/census.json` of the plan run `3db1`, `per_request.blocks` and `totals.*.rows`]: about 1,000 proof blocks a row.
+- The Lean's class is by the proof blocks that need the gate [read: `hneeds` of `eventTwoX_le_firstHit_key` at `e7b2e51d928b`; REGX 10:32Z, `gateKey`: "the proof blocks below N whose `Reveal.needs` holds g"], and a proof block needs its own boundary outputs [read: `ProgReads.lean:237-239`]. So two words written by two proof blocks are two classes, whoever reads them. That was my 10:07Z point. I applied it to the keys and not to the queries.
+- A head block's first port, `q_nope[h]`, is 8,192 bits: 512 words [run on my VM: `serving_rows._bind(spec).signature()`]. It is `ql_nope [T, NH, L]`, the output of the absorption bmm, per token `BatchedGemm_v1{B=8,K=192,N=512}` [read: `vllm_dsa_absorb.py:2` and `:22-24`, `vllm_dsa.py:512`, `chain_rows.py:18`; the row is in the served Program, 22,386 times in rank 0, run `cf31`]. **The plan proves that row as `BatchedGemm_v1{B=1,K=192,N=1}`: x 3,072 bits, w 3,072 bits, 16 bits out, one output word a block** [read: the blocks of the plan row "(iii) honest [base]" in `3db1`'s `rows.jsonl`; run on my VM: its signature; `serving_rows.py:103-106`]. It is 377,696 of the record's 10,046,500 checked blocks a sampled replay block.
+- So each of the 512 words has its own writing block: 512 classes where SCALE's script ("two writers") and my 10:07Z count have 1. A later full head block has 512 + 1 (`q_rope[h]`, one `RoPEHeadGptJ_v2{D=64}` block) + 128 (64 keys, two writers each) + 1 + 1 = **643**; a first one 642 [derived].
+- The run does not contradict this. At rows it finds 9 pairs for the queries of a row's 8 heads: one bmm row and eight RoPE rows.
+
+**2. The table with it** [run: `tools/attack_unit_classes.py` in the lane's notes, 0.4 s on my VM, on `3db1`'s `rows.jsonl` with SCALE's `scale_kfix.counts`, `PAGECOPY_ROWS=2,58`; its first column reproduces SCALE's 10:29Z table to the digit]. Compressions; mean / by stratum / one M.
+
+| design | Σ_t k_t | at 132 (SCALE 10:29Z) | **at 643** | also the other ports I could derive |
+|---|---|---|---|---|
+| record, size classes 2^-5 | 10,046,500 | -101.63 / -101.57 / -100.83 | **-99.41 / -99.38 / -98.55** | -99.39 / -99.01 / -98.29 |
+| the 2,647 GB plan, width 2^-2.5 | 42,855,252 | -99.85 / -99.78 / -98.73 | -97.66 / -97.64 / -96.46 | -97.62 / -97.47 / -96.20 |
+| width 2^-3 | 30,303,243 | -100.35 / -100.28 / -99.23 | -98.16 / -98.14 / -96.96 | -98.12 / -97.97 / -96.70 |
+| width 2^-4 | 15,151,640 | -101.35 / -101.28 / -100.23 | -99.16 / -99.14 / -97.96 | -99.12 / -98.97 / -97.70 |
+| width 2^-6 | 3,787,940 | -103.35 / -103.28 / -102.23 | **-101.16 / -101.14 / -99.96** | -101.12 / -100.97 / -99.70 |
+| width 2^-7 | 1,893,988 | -104.35 / -104.28 / -103.23 | -102.16 / -102.14 / -100.96 | -102.12 / -101.97 / -100.70 |
+
+- K a run by the mean [run, the same]: the record 2^34.31 (was 2^32.07), width 2^-6 2^32.56, width 2^-7 2^31.56. The head blocks hold 97% of the record's classes, so the other ports move the mean by 0.02 bit.
+- The last column [derived, each from the reader's port width over the writing block's N, not from a Program]: `SiluMul_v2{I=256}` reads 512 words from N = 1 blocks (513 classes), `SiluMul_v2{I=1536}` 3,072 words from N = 4 blocks (769, the largest), `DsaRMSNorm_v1{N=2048}` 514 and `{N=512}` 130, `BatchedGemm_v1{B=1,K=192,N=1}` 50, `RMSNormFusedCudaVector8_v1` 83, `MoeSum_v1{TOPK=8,H=96}` 25, `RoPEHeadGptJ_v2` 18, the router's slots 272. These are less sure than the 643 and matter only for one M and for a stratum's largest.
+- In calls every cell is 9.00 better: the record reads 2^-108.4 by the mean.
+
+**3. What it does to the lines posted.**
+- SCALE 10:29Z "the table of record (132) stands" and the ORDER's 10:07Z title: 132 is a count by rows. By proof blocks it is 643, and the by-class column is 2.2 bits too good in every row.
+- SCALE 10:30Z "the cheapest design under 2^-100 in compressions is width 2^-4": at 643 width 2^-4 reads 2^-99.16. The first design that clears is width 2^-6 by the mean and by stratum (2^-101.16, 2^-101.14; GB ratio 0.690); with the Lean's one M it misses by 0.04 bit, and width 2^-7 clears under every count (GB ratio 0.798).
+- #8873's `K ≤ 2^33` [read at `676a777193e2`]: it fits while the largest block has at most 142 classes at the record, 377 at width 2^-6, 755 at width 2^-7 [derived]. With 643 it covers width 2^-7 alone under one M, and width 2^-6 under a count by the mean (2^32.56), which no lemma gives yet.
+- "By readers alone, 67" is not a count the Lean can take at all (my 10:25Z item 2 and toy); BREAKEVEN should not price by it.
+- REGX's `code_hwit`, EXTFORM's #8906 and KILIAN's #8905 are untouched: they hold for any key. Only the count moves.
+
+**4. A lever, which is the plan's and not the Lean's** [guess: nobody has priced it]. The count is set by how the WRITER is cut. The same bmm proved a head, `BatchedGemm_v1{B=1,K=192,N=512}`, is one writing block for the 512 words (1,575,936 input bits, 8,192 out [run: its signature]) and gives 132 back; in blocks of 64 words (199,680 bits in) a later head block has 139 classes, of 32 words 147. That is 0.07 and 0.16 bit off the 132 column, against 2.28.
+
+For SCALE: count by writing proof block: a port's classes are its width over the writing block's N wherever the plan cuts the writer by coordinates. The head block's `q_nope[h]` is the one that decides (97% of the record's classes); `rs_count.py` cannot see it. Then price the bmm at N = 64 and N = 512.
+For BREAKEVEN and HARMSEARCH: by classes, as the plan cuts the bmm today, 2^-100 in compressions needs width κ ≤ 2^-6 (GB ratio 0.690), not 2^-4 or 2^-3.
+For TWOWITNESS: by classes the M of `code_card_biUnion_noAlways_le_mul` is at least 643 at the plan's cut, 769 if my derived ports are right.
+
+For the table:
+- By classes, a later head block has 643 classes at the plan's cut, not 132 (512 of them the query words, each written by its own proof block). The record reads 2^-99.4 in compressions by the mean and 2^-98.6 under the Lean's one M; 2^-108.4 and 2^-107.6 in calls. Modeled; the first-hit term alone; a run at K0 = 6.
+- The table may say: by classes the record clears 2^-100 in calls and not in compressions; width κ 2^-6 clears in compressions by the mean (2^-101.2), width κ 2^-7 under every count. It may not say 2^-101.6 or 2^-100.8 for the record, nor that width 2^-4 or 2^-3 clears.
