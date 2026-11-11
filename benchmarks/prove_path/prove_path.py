@@ -1732,9 +1732,11 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
         low = WC.lower(registered, cls, tables=tables)
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
-    law, table = DR.parse_design(a.law), reader_table_of(a, low.circuit)
-    if table is not None and law["law"] != "work":
-        raise ValueError(f"--reader-floors: a floor is the work sampling design's (--law work:K), not {a.law}'s")
+    law, table = DR.parse_design(a.law), None
+    if a.reader_floors is not None:
+        if law["law"] != "work":
+            raise ValueError(f"--reader-floors: a floor is the work sampling design's (--law work:K), not {a.law}'s")
+        table = reader_table_of(a, low.circuit)
     lap("lower")
     r = record1(str(a.bundle), str(a.row_dir))
     run = bytes(r.run.run_root).hex()
