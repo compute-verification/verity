@@ -612,7 +612,7 @@ noncomputable def Bconf (H : Msg → Msg) (L : Compiled Coin A) : FinderFamily :
 /-- **`B_conf` declared at `T` a run**: `Bconf`'s tape, runs, extractor's coins and outcome, its cost `T` for each of
 its two runs and for each rerun of the prover their extractions make, plus the extractions' own SHA-512 calls (the
 openings they check, `A`'s own), as `Sampling.BextAt` declares `B_ext`'s. `T` is the budget for one run's whole SHA-512
-work, which the reader computes from the prover's time: it caps both parties' calls in every run the finder makes,
+work, which the reader computes from the prover's time: it bounds both parties' calls in every run the finder makes,
 `pLog.length + vLog.length ≤ T`, the prover's hashing outside the oracle included, where `Bconf` counts those calls as
 the runs log them. -/
 noncomputable def BconfAt (H : Msg → Msg) (L : Compiled Coin A) (T : ℕ) : FinderFamily := fun Ω _ _ P x =>
@@ -681,6 +681,32 @@ def KSRegAt (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
       ∀ s, L.parse x = some s → ∀ δ : ℝ, 0 ≤ δ →
         Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
           L.Freg H P x p.1 ∉ s.design.M (L.part s) δ) ≤ δ + L.εregAt H x P T
+
+/-- **`B_conf`'s cost on every coin at the budget `T`**: `q_T = 2T·(1 + n_sess·ρ_s) + 2·n_PU·openCalls`, as `c_T`
+(`bconfCost`) with each session's reruns at their most, `ρ_s`, rather than their expectation (`BconfAt`). -/
+noncomputable def bconfCostStrict (L : Compiled Coin A) (x : Msg) (T : ℕ) : ℝ :=
+  2 * T * (1 + (L.nSess x : ℝ) * L.ρs x) + 2 * ((L.nPU x : ℝ) * L.openCalls x)
+
+/-- **The committed form's error at the budget `T`, at the strict birthday bound**: `ε_reg` with `Pr[B_conf]` read at
+`q_T²/2^513`, `q_T` the cost of `B_conf` declared at `T` on every coin (`bconfCostStrict`):
+`κ_s + √(k(x)·γ_s·Pr[B]) + N·√(q_T²/2^513) + q_T²/2^513`. -/
+noncomputable def εregSB (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (T : ℕ) : ℝ :=
+  L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) +
+    L.nG x * Real.sqrt (L.bconfCostStrict x T ^ 2 / 2 ^ (513 : ℝ)) + L.bconfCostStrict x T ^ 2 / 2 ^ (513 : ℝ)
+
+/-- **KS, the committed form, read at a time budget and the strict birthday bound**: `KSRegAt` with `StrictBirthday`
+in place of `ExpectedCR` at `B_conf` declared at `T` (`BconfAt`), and `Pr[B_conf]` read at that finder's cost on every
+coin, `q_T` (`εregSB`). Its binding terms are finite only where every session's `E^rep` is truncated well below
+`2^256` (`ρ_s`). -/
+def KSRegAtSB (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
+  ∀ x, L.Scope x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (T : ℕ),
+    StrictBirthday H (BconfAt H L T Ω P x) →
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.Freg H P x p.1) ≤ L.εregSB H x P T ∧
+      ∀ s, L.parse x = some s → ∀ δ : ℝ, 0 ≤ δ →
+        Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+          L.Freg H P x p.1 ∉ s.design.M (L.part s) δ) ≤ δ + L.εregSB H x P T
 
 /-! ### Completeness -/
 
@@ -918,6 +944,13 @@ corollary of `CompilerKSReg` and `B_conf`'s expected cost at the contract). -/
 def CompilerKSRegAt : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
     (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.OpenCallsLe H → L.KSRegAt H
+
+/-- **The committed form read at a time budget and the strict birthday bound**: as `CompilerKSRegAt`, `KSRegAtSB`,
+its binding terms at `B_conf`'s cost on every coin rather than its expectation (a corollary of `CompilerKSReg` and that
+cost at the contract). -/
+def CompilerKSRegAtSB : Prop :=
+  ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
+    (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.OpenCallsLe H → L.KSRegAtSB H
 
 /-- **Efficiency**: the compiled extractor's reruns and own calls, at the contract, from the opening checks' count. -/
 def CompilerEfficient : Prop :=

@@ -13,7 +13,9 @@ extraction's own calls, at most `n_PU·openCalls` (`runExt_own_le`), and `T` for
 `n_sess·e_s` expected over the run's coins and the extractor's (`runExt_runs_exp`). On every coin it is at most
 `2T·(1 + n_sess·ρ_s) + 2·n_PU·openCalls` (`BconfAt_cost_strict`, `runExt_runs_le`). So where `ExpectedCR` holds at
 `B_conf` declared at `T`, `Pr[B_conf] ≤ c_T/2^256`, and `KSReg`'s two bounds hold at `ε_reg` read at `c_T`
-(`Compiled.ksRegAt_of_ksReg`): `CompilerKSReg` gives `CompilerKSRegAt` (`compilerKSRegAt_of`).
+(`Compiled.ksRegAt_of_ksReg`): `CompilerKSReg` gives `CompilerKSRegAt` (`compilerKSRegAt_of`). Where `StrictBirthday`
+holds there instead, `Pr[B_conf] ≤ q_T²/2^513` at that cost on every coin, `q_T`, and `KSReg`'s two bounds hold at
+`ε_reg` read at `q_T` (`Compiled.ksRegAtSB_of_ksReg`, `compilerKSRegAtSB_of`).
 -/
 
 @[expose] public section
@@ -130,6 +132,25 @@ theorem ksRegAt_of_ksReg {H : Msg → Msg} {L : Compiled Coin A} (hS : L.CostCon
   obtain ⟨h₁, h₂⟩ := h x hx Ω P
   exact ⟨h₁.trans hε, fun s hs δ hδ => (h₂ s hs δ hδ).trans (by linarith)⟩
 
+/-- **`KSReg` read at a budget and the strict birthday bound**: where `StrictBirthday` holds at `B_conf` declared at
+`T`, `Pr[B_conf] ≤ q_T²/2^513`, `q_T` that finder's cost on every coin (`BconfAt_pr`, `BconfAt_cost_strict`), so
+`ε_reg` is at most its reading there and `KSReg`'s two bounds hold. -/
+theorem ksRegAtSB_of_ksReg {H : Msg → Msg} {L : Compiled Coin A} (hS : L.CostContract H) (hopen : L.OpenCallsLe H)
+    (h : L.KSReg H) : L.KSRegAtSB H := by
+  intro x hx Ω _ _ P T hB
+  have hq : ∀ q, ((BconfAt H L T Ω P x).cost q : ℝ) ≤ L.bconfCostStrict x T := fun q => by
+    unfold Compiled.bconfCostStrict
+    exact_mod_cast BconfAt_cost_strict hS hopen T Ω P x q
+  have hpr : (Bconf H L Ω P x).Pr H ≤ L.bconfCostStrict x T ^ 2 / 2 ^ (513 : ℝ) := by
+    rw [← BconfAt_pr H L T Ω P x]
+    exact hB _ hq
+  have hε : L.εreg H x P ≤ L.εregSB H x P T := by
+    unfold Compiled.εreg Compiled.εregSB
+    have := mul_le_mul_of_nonneg_left (Real.sqrt_le_sqrt hpr) (Nat.cast_nonneg (α := ℝ) (L.nG x))
+    linarith
+  obtain ⟨h₁, h₂⟩ := h x hx Ω P
+  exact ⟨h₁.trans hε, fun s hs δ hδ => (h₂ s hs δ hδ).trans (by linarith)⟩
+
 end Compiled
 
 /-- **`CompilerKSRegAt` from `CompilerKSReg`**: `B_conf`'s expected cost at each budget is bounded at the contract's
@@ -137,5 +158,11 @@ cost facts and the opening checks' count (`Compiled.ksRegAt_of_ksReg`). -/
 theorem compilerKSRegAt_of (h : CompilerKSReg) : CompilerKSRegAt := by
   intro Coin _ _ _ A L H hA hB hS hopen
   exact Compiled.ksRegAt_of_ksReg hS.toCostContract hopen (h Coin A L H hA hB hS)
+
+/-- **`CompilerKSRegAtSB` from `CompilerKSReg`**: `B_conf`'s cost on every coin at each budget is bounded at the
+contract's cost facts and the opening checks' count (`Compiled.ksRegAtSB_of_ksReg`). -/
+theorem compilerKSRegAtSB_of (h : CompilerKSReg) : CompilerKSRegAtSB := by
+  intro Coin _ _ _ A L H hA hB hS hopen
+  exact Compiled.ksRegAtSB_of_ksReg hS.toCostContract hopen (h Coin A L H hA hB hS)
 
 end Claims.SamplingGeneric

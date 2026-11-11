@@ -50,6 +50,7 @@ public import Proofs.Flock.Claims
 public import Proofs.Flock.SamplingClaims
 public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Masked
+public import Proofs.Flock.SamplingGeneric.MaskedTrunc
 public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.SamplingGeneric.Guarantees

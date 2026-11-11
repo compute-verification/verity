@@ -68,7 +68,9 @@ oracle logs: `KS` gives it at every budget, and `CompilerEfficient`'s expected r
 finder's cost (`SamplingGeneric/KSAt.lean`), so **`CompilerKSAt` is proved** (`compilerKSAt`). The committed form's
 binding terms read at a budget too: `B_conf` declared at `T` a run costs at most
 `2T·(1 + n_sess·e_s) + 2·n_PU·openCalls` in expectation at the contract (`SamplingGeneric/RegAt.lean`), so
-**`CompilerKSRegAt` is proved** (`compilerKSRegAt`). At two stages the
+**`CompilerKSRegAt` is proved** (`compilerKSRegAt`); on every coin it costs at most
+`2T·(1 + n_sess·ρ_s) + 2·n_PU·openCalls`, so **`CompilerKSRegAtSB` is proved** too (`compilerKSRegAtSB`), at
+`StrictBirthday` in place of `ExpectedCR`. At two stages the
 extractor is `Compiled.E` at the two-stage verifier's own waits' counts, and the two-stage contract gives the facts
 its cost reads, so **`CompilerEfficientTwo` and `CompilerKSAtTwo` are proved** (`compilerEfficientTwo`,
 `compilerKSAtTwo`, `SamplingGeneric/TwoKSAt.lean`).
@@ -158,6 +160,10 @@ theorem compilerKSAt : CompilerKSAt := compilerKSAt_of compilerKS compilerEffici
 /-- **The committed form read at a time budget**: `CompilerKSReg` and `B_conf`'s expected cost
 (`compilerKSRegAt_of`). -/
 theorem compilerKSRegAt : CompilerKSRegAt := compilerKSRegAt_of compilerKSReg
+
+/-- **The committed form read at a time budget and the strict birthday bound**: `CompilerKSReg` and `B_conf`'s cost on
+every coin (`compilerKSRegAtSB_of`). -/
+theorem compilerKSRegAtSB : CompilerKSRegAtSB := compilerKSRegAtSB_of compilerKSReg
 
 end Claims.SamplingGeneric
 
