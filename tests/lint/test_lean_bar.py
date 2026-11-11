@@ -338,11 +338,11 @@ def test_an_unlisted_finding_is_reported_a_listed_one_passes_and_a_stale_entry_o
     exact = Counter({(a, "module-doc"): 1, (a, "heartbeats-unlimited"): 1, (a, "heartbeats-uncommented"): 1, (b, "long-file"): 1})
     assert found(tmp_path) == exact
     # a tree whose Lean moved away is reported, with where the list's entries for it now lie
-    old = ("security", "verity/core")
-    assert unread(tmp_path) == [] and unread(tmp_path, old) == ["verity/core"]
-    why = lost(["verity/core"], exact + Counter({(c, "module-doc"): 1, (c, "long-file"): 1}), old)
-    assert "no Lean under verity/core:" in why and "Name in `TREES`" in why and why.endswith(": verity/protocols (2)."), why
-    assert lost(["verity/core"], exact, old).endswith(": none.")
+    old = ("security", "verity/gone")
+    assert unread(tmp_path) == [] and unread(tmp_path, old) == ["verity/gone"]
+    why = lost(["verity/gone"], exact + Counter({(c, "module-doc"): 1, (c, "long-file"): 1}), old)
+    assert "no Lean under verity/gone:" in why and "Name in `TREES`" in why and why.endswith(": verity/protocols (2)."), why
+    assert lost(["verity/gone"], exact, old).endswith(": none.")
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         held(scan(tmp_path), exact)
