@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SamplingGeneric.SpotFirstHit
 public import Proofs.Flock.SamplingGeneric.TwoFirstHitAt
 public import Proofs.Flock.SpotFlock.RevealsOpen
+public import Proofs.Flock.SpotFlock.RevealsLe
 import Proofs.Flock.Claims.Prob
 
 /-!
