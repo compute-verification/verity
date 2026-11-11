@@ -4,7 +4,7 @@
 (lib `Evaluate`, exe `verity-evaluate`). It decodes a descriptor v1 Program ([format](../../circuits/PROTOCOL.md)),
 binds the run inputs, evaluates every gate in canonical order and returns the root's outputs, or refuses. The Program is read
 through Flock's verifier (`Flock.Program`, required by path from `verity/protocols/flock/verifier`), which evaluates no primitive;
-this package adds the primitives. It is code, so it requires nothing of `Security/`.
+this package adds the primitives. It is code, so it requires nothing of `security/`.
 
 - `Evaluate/Prims.lean`: the primitives implemented, each with the signature the registry holds for it. E0 is the Boolean
   profile (§9: `And<n>_v1`, `Xor<n>_v1`, `Not_v1`), `Input<w>_v1` and `RegisteredInput<w>_v1`; E1 the constant family
@@ -14,22 +14,22 @@ this package adds the primitives. It is code, so it requires nothing of `Securit
   is refused by name.
 - `Evaluate/Scalar.lean`: the scalar primitives (`verity.definitions.ops.scalar`, and the vLLM integration's `I32Sub`,
   `I64ToI32`, `U32And`, `U32Xor`, `BitXor`, `SelectBit`), transcribed branch for branch from the Python. Each names the
-  definition of `Security/Definitions/Core/Scalar.lean` it must equal, or that Security has none yet; the equalities are
-  proved in `Security/Proofs`, as the certifier's are, since code never requires `Security/`.
+  definition of `security/Definitions/Core/Scalar.lean` it must equal, or that Security has none yet; the equalities are
+  proved in `security/Proofs`, as the certifier's are, since code never requires `security/`.
 - `Evaluate/Fp32.lean`, `Evaluate/Casts.lean`: the FP32 and BF16 arithmetic (`verity.definitions.ops.fp32`,
   `mufu.DivFullScaleA_v1`, and the vLLM integration's `F32Sub`, `F32Sqrt`, `F32MaxRef`, `F32GtStrict`, `F32FmaRm`,
   `F32CeilFtz`, `I32ToF32` and `DivFullScaleA_v2`) and the casts of `verity.definitions.ops.prims`: copies of
-  `Security/Definitions/Core/{Fp32,Prims}.lean` where Security defines the primitive, transcriptions of the Python where it
+  `security/Definitions/Core/{Fp32,Prims}.lean` where Security defines the primitive, transcriptions of the Python where it
   does not, each naming which. The `_v1` add, sub, mul and div return numpy's NaN on x86-64 (`Evaluate.Fp32.hostNan`),
   which Security does not state.
 - `Evaluate/TC/`: the seven tensor-core dot steps of `verity.definitions.ops.prims` (`Dots.lean`: Ampere's and Hopper's BF16,
   Hopper's and sm_120's E4M3, sm_120's E5M2, NVFP4 and MXFP4), on copies of Security's step semantics: `Spec.lean` of
-  `Security/Definitions/Core/TC/{Pipeline,Spec}.lean` (`tc_dot_total`), `Fp8Atom.lean` of `Pouw/Fp8Atom/{E4M3,Atom}.lean` and
+  `security/Definitions/Core/TC/{Pipeline,Spec}.lean` (`tc_dot_total`), `Fp8Atom.lean` of `Pouw/Fp8Atom/{E4M3,Atom}.lean` and
   `Pouw/PearlC/Sm120.lean` (`tc_dot_total_e4m3`), `Fp4.lean` of `Pouw/PearlC/Fp4.lean` (`BlockScaledAlignAdd`). The E5M2 step
   and the FP4 primitives' rules outside the scale-group model (NaN scales, non-finite accumulators, MXFP4's overflow to
   `±inf`) are transcribed from the Python; Security has none yet.
 - `Evaluate/Words.lean`: PoUW's `Pouw*` word primitives and the three `Ncp*` (six copied from
-  `Security/Definitions/Pouw/PearlC/RowPrims.lean`, the rest transcribed). `Evaluate/Libdevice.lean`: the sampler's
+  `security/Definitions/Pouw/PearlC/RowPrims.lean`, the rest transcribed). `Evaluate/Libdevice.lean`: the sampler's
   `NvLogf`, Gumbel and `TopPNumkeep`, libdevice's FTZ steps as the host's doubles compute them, and Philox.
   `Evaluate/Mufu.lean` (with `MufuFits.lean`): the eight MUFU primitives, each a bit rule around its table held as the
   unit's interpolant. `Evaluate/Decimal.lean`: `F32ExpRn`, `F32LogRn`, `F32ErfRn` and `F32TanhRn`, decimal arithmetic at
