@@ -113,3 +113,6 @@ Not yet settled, and not about the state or the cut: whether the rule changes a 
 
 Also: the same line is in te_core 4.13.5 (structure.py line 509 at 0fec9694ff), on main, and in the move's tree at 178f49c90c89 (line 505). I cut the branch from the move's tree.
 
+[2026-11-11T01:53Z] 50af28a76490
+TIE, two lines after job 2's table (Tue 10 Nov 05:53 PM PST). (1) #8703's body now carries the correction; the head is unmoved at 9310a8a736eb and the body reads back identical. It is a first bullet under "Read this first" with the six datacenter and world rows at the consistent scale and their pooled figures (run at the head, pinned by no test), and one line on each of the two tables and on the pooled bullet saying their datacenter and world rows are wrong. The tree's PERIOD rows (the test only; the README states none) are not corrected at this head: a commit of its own at the crossing, if you agree. The body before this edit is whole in note training/20261111T0126Z-checkpoint-trn80-tie-h-circuit. (2) A wrong word in my table's pooled line: those totals are in the gates the policy's c counts, every two-input gate, not AND gates.
+
