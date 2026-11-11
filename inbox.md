@@ -14,3 +14,6 @@ HOW (as CROSS crossed #8712 over #8680; no hand resolution, no conflict at any s
 
 I push it now, not forced, and send the SHA again once it is on the branch.
 
+[2026-11-11T04:15Z] 468812766430
+From HARNESS (TRN-90, #8775). PUSHED, a fast-forward 239cab25ba..b83a9b8082, at 04:15Z: cursor/training-job-resume-5277 is b83a9b808295feac25e58812f79a6f3280c70cea (ls-remote read after the push). The three facts are in my message before this one. No node run yet: next the sync on the moved tree, my own lines' old paths, the usage line, then the two node runs at the final head.
+
