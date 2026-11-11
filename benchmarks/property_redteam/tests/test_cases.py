@@ -13,6 +13,7 @@ sys.path.insert(0, str(HERE.parent))
 
 import cases as C  # noqa: E402
 import run as R  # noqa: E402
+
 from verity.circuits.evaluation.reference import evaluate  # noqa: E402
 from verity.definitions.silicon.integer import S32_MAX, S32_MIN  # noqa: E402
 
@@ -116,7 +117,8 @@ def _oracle(table):
         try:
             by_fn[c.program().fn.name] = c
         except (TypeError, ValueError):
-            continue
+            if c.kind == "honest":
+                raise
 
     def check(program):
         return table(by_fn[program.fn.name])

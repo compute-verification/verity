@@ -24,8 +24,8 @@ import importlib
 import json
 import sys
 from collections import Counter
-from collections.abc import Mapping
-from typing import Any, Callable
+from collections.abc import Callable, Mapping
+from typing import Any
 
 PASSING = ("ok", "sound")
 OUTCOMES = ("ok", "sound", "misclassed", "unsound", "over-strict", "over-budget", "error")
