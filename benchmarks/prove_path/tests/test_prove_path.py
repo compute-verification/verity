@@ -1567,6 +1567,27 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
     assert not list(Path(s.a.row_dir).glob("build_request*"))
 
 
+@pytest.mark.parametrize("law", [(), ("--law", "stratified:1"), ("--law", "subset:4")])
+def test_window_commit_refuses_reader_floors_under_a_design_other_than_work(tmp_path, monkeypatch, capsys, law):
+    """``--reader-floors`` sets the floors of the work sampling design's work table, so window-commit refuses it under
+    another design, its default's too, once its circuit is lowered and before it reads the run or a Build."""
+    from verity_vllm.program.predict import window_circuit as WC
+
+    monkeypatch.setitem(sys.modules, "vllm", None)
+    s = _tiny_served(tmp_path, monkeypatch)
+    monkeypatch.setattr(WC, "takes", lambda *a, **k: None)
+    monkeypatch.setattr(WC, "lower", lambda *a, **k: None)
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    capsys.readouterr()
+    assert PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
+                    str(tmp_path / "advice.bin"), "--key", str(tmp_path / "private" / "key"), "--registration", "unread",
+                    "--checkpoint-dir", "unread", "--out", str(tmp_path / "v3c-w0" / "window"), *law,
+                    "--reader-floors", "1/4,1/10"]) == PP.REFUSED
+    assert "prove_path.py window-commit: --reader-floors: a floor is the work sampling design's (--law work:K), not " \
+        f"{law[1] if law else 'subset:1'}'s" in capsys.readouterr().err
+    assert not (tmp_path / "v3c-w0" / "window").exists()
+
+
 def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure_is_the_advices_charge(tmp_path, monkeypatch,
                                                                                                       capsys):
     """TINY's served window over layer 0's ``SiluMul_v2{I=128}`` (`LAYER0`), as the registered compiler's ``circuit`` command
