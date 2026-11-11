@@ -21,7 +21,7 @@ Remote's check is `Core.Composition.holdTies` of its tie over `Core.Composition.
 caller's blobs (`remote_check`), so an acceptance is `checkSame`'s with the tie held (`Properties.Composition.acceptTied`),
 and `checkSame`'s is `Core.Composition.check`'s (`checkSame_accept`), which `Properties.Composition.acceptMeans` reduces
 to each component accepting its own case, with sampled proofs' record the policy's (`strays_two`) and every
-Commit record the period's windows name the policy's record too (`windows_tied`). The policy's
+Commit record the period's windows name the policy's record too (`executionPhases_tied`). The policy's
 acceptance is `NciCheck.Baseline.evaluate`'s with the record naming the circuit (`policy_accept`), which is
 `NciCheck.Desc.evaluate`'s and θ's provenance (`BaselineSteps.evaluate_ok`), whose verdict `DescReports`,
 `DescWitnesses` and `BaselineProvenance` read; `Nci.SecurityProofs.constInputs_isCK` and `constInputs_expand_isCK`
@@ -158,7 +158,7 @@ theorem remote_check (blobs : Array ByteArray) (ps : List Named) (c : ByteArray)
           VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)] ps c ev) := rfl
 
 theorem id_policy : NciCheck.Protocol.protocol.id = "verity/inference-only/v0" := rfl
-theorem id_period : PouwCheck.Period.protocol.id = "verity/pouw/period/v1" := rfl
+theorem id_monitoringPeriod : PouwCheck.Period.protocol.id = "verity/pouw/period/v1" := rfl
 theorem id_sampled (bs : Blobs) : (VStar.Recursive.Sampled.protocol.onBlobs bs).id = "verity/sampled-proofs/v1" := rfl
 
 /-- Sampled proofs' commitment and digest are the one-stage registration record's, on any blobs. -/
@@ -422,33 +422,33 @@ theorem ne_policy_stage (bs : Blobs) :
     (NciCheck.Protocol.protocol.id == (VStar.Recursive.Sampled.protocol.onBlobs bs).id) = false := by
   rw [id_policy, id_sampled]; decide
 
-theorem ne_period_stage (bs : Blobs) :
+theorem ne_monitoringPeriod_stage (bs : Blobs) :
     (PouwCheck.Period.protocol.id == (VStar.Recursive.Sampled.protocol.onBlobs bs).id) = false := by
-  rw [id_period, id_sampled]; decide
+  rw [id_monitoringPeriod, id_sampled]; decide
 
 /-- What remote's tie gives once the policy's commitment decodes: every Commit record the period's windows name, when
 they decode, has the policy's record's digest. -/
-theorem windows_tied {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment}
+theorem executionPhases_tied {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment}
     (hI : kI.id = NciCheck.Protocol.protocol.id) (hW : kW.id = PouwCheck.Period.protocol.id)
     (hcI : NciCheck.Protocol.protocol.commitment kI.commitment = .ok cI)
     (ht : Properties.Composition.Tied Core.Remote.windows [kI, kW, kS]) :
-    ∀ ds, Core.Remote.windowRecords kW = some ds → ∀ d ∈ ds, d = NciCheck.Protocol.protocol.digest cI := by
+    ∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = NciCheck.Protocol.protocol.digest cI := by
   intro ds hds d hd
   rw [id_policy] at hI
-  rw [id_period] at hW
+  rw [id_monitoringPeriod] at hW
   have nI : Properties.Composition.named [kI, kW, kS] (NciCheck.Protocol.protocolId, Core.Remote.policyRecord) =
       some [NciCheck.Protocol.protocol.digest cI] := by
     have hid : (kI.id == NciCheck.Protocol.protocolId) = true := by rw [hI]; decide
     simp [Properties.Composition.named, List.find?, hid, Core.Remote.policyRecord, hcI, Except.toOption]
     exact ⟨cI, rfl, rfl⟩
-  have nW : Properties.Composition.named [kI, kW, kS] (PouwCheck.Period.protocolId, Core.Remote.windowRecords) =
+  have nW : Properties.Composition.named [kI, kW, kS] (PouwCheck.Period.protocolId, Core.Remote.executionPhaseRecords) =
       some ds := by
     have hI' : (kI.id == PouwCheck.Period.protocolId) = false := by rw [hI]; decide
     have hW' : (kW.id == PouwCheck.Period.protocolId) = true := by rw [hW]; decide
     simp [Properties.Composition.named, List.find?, hI', hW', hds]
   have mI : (NciCheck.Protocol.protocolId, Core.Remote.policyRecord) ∈ Core.Remote.windows.names := by
     simp [Core.Remote.windows]
-  have mW : (PouwCheck.Period.protocolId, Core.Remote.windowRecords) ∈ Core.Remote.windows.names := by
+  have mW : (PouwCheck.Period.protocolId, Core.Remote.executionPhaseRecords) ∈ Core.Remote.windows.names := by
     simp [Core.Remote.windows]
   rcases ht with ⟨n, hn, e⟩ | ⟨r, hr⟩
   · simp only [Core.Remote.windows, List.mem_cons, List.not_mem_nil, or_false] at hn
@@ -490,7 +490,7 @@ theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray
     ∃ (kI kW kS : Case) (pI : NciCheck.Protocol.Params) (cI : NciCheck.Protocol.Commitment)
       (eI : NciCheck.Protocol.Evidence), ev = [kI, kW, kS] ∧
       Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some (NciCheck.Protocol.protocol.digest cI) ∧
-      (∀ ds, Core.Remote.windowRecords kW = some ds → ∀ d ∈ ds, d = NciCheck.Protocol.protocol.digest cI) ∧
+      (∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = NciCheck.Protocol.protocol.digest cI) ∧
       Properties.Composition.digestOf Spot.OneStage.protocol kS.commitment = some (NciCheck.Protocol.protocol.digest cI) ∧
       (canonicalJson kI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok pI ∧
       NciCheck.Protocol.commitmentOf kI.commitment = .ok cI ∧ NciCheck.Protocol.evidenceOf kI.evidence = .ok eI ∧
@@ -503,11 +503,11 @@ theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray
   have hS₀ := hS
   obtain ⟨pS, cS, eS, -, hcS, -, -⟩ := hS₀
   have hdS := strays_two (P₁ := NciCheck.Protocol.protocol) (P₂ := PouwCheck.Period.protocol)
-    (P₃ := VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)) (ne_policy_stage _) (ne_period_stage _)
+    (P₃ := VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)) (ne_policy_stage _) (ne_monitoringPeriod_stage _)
     hcI hcS hstrays
   have hp : (canonicalJson kI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok pI := by rw [hpI]; exact hpI'
   refine ⟨kI, kW, kS, pI, cI, eI, rfl, digestOf_ok hcI,
-    windows_tied hidI hidW hcI (hties _ (List.mem_singleton_self _)),
+    executionPhases_tied hidI hidW hcI (hties _ (List.mem_singleton_self _)),
     (digestOf_sampled _ _).symm.trans ((digestOf_ok hcS).trans (congrArg some hdS)), hp, hcI, heI, hchkI,
     stage_held hpS hS⟩
 

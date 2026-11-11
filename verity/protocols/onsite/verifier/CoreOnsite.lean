@@ -153,7 +153,7 @@ private def committed (policy audit : ByteArray) : Answer :=
 /-- A registration record every record reader decodes, a window's Commit record among them. -/
 private def registration (n : Nat) : String := s!"\{\"format\":\"verity/registration/v2\",\"n\":{n},\"registered\":[]}"
 
-private def windowOn (r : String) : String := s!"\{\"commit\":\"{Flock.hexOf r.toUTF8}\"}"
+private def executionPhaseOn (r : String) : String := s!"\{\"commit\":\"{Flock.hexOf r.toUTF8}\"}"
 
 /-- Onsite's cases, each refused, with the policy's committing to `policy` and the period's windows on the records
 `rs`. -/
@@ -161,7 +161,7 @@ private def executionPhasesOn (policy : String) (rs : List String) : List Case :
   components.map fun P =>
     if P.id == NciCheck.Protocol.protocolId then { refused P with commitment := policy.toUTF8 }
     else if P.id == PouwCheck.Period.protocolId then
-      { refused P with evidence := ("{\"pins\":[],\"windows\":[" ++ ",".intercalate (rs.map windowOn) ++ "]}").toUTF8 }
+      { refused P with evidence := ("{\"pins\":[],\"windows\":[" ++ ",".intercalate (rs.map executionPhaseOn) ++ "]}").toUTF8 }
     else refused P
 
 /-- Why onsite's ties reject the outcome `o` its subprotocols reached on `executionPhasesOn policy rs`; `none` when they hold

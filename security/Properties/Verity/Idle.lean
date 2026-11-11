@@ -118,7 +118,7 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   world _ _ _ _ _ := world
   window _ := ⟨0, 0⟩
   capacity _ := ()
-  world_window _ _ _ _ _ := rfl
+  world_period _ _ _ _ _ := rfl
   world_capacity _ _ _ _ _ := rfl
   theta _ _ := ∅
   theta_input _ _ _ h := absurd h (Finset.notMem_empty _)

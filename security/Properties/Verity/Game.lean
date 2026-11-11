@@ -691,7 +691,7 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   /-- the account PoUS's claim charges device memory to, fixed by the parameters before any coin -/
   capacity : ByteArray → α
   /-- every play's world is read over the parameters' window, never one PoUS's own coins chose -/
-  world_window : ∀ θ F c σ o, (world θ F c σ o).win = window θ
+  world_period : ∀ θ F c σ o, (world θ F c σ o).win = window θ
   /-- every play's world charges device memory to the parameters' account, never one PoUS's own coins chose -/
   world_capacity : ∀ θ F c σ o, (world θ F c σ o).acct Accounting.Resource.capacity = capacity θ
   /-- the declaration's registered inputs `θ`, input gates of the committed files' circuit -/
@@ -795,7 +795,7 @@ noncomputable def live (k : Verity.Registration.Composite) (θ : ByteArray) (F :
 transcript at `σ` (at most an `ε` share of the units unbound in it under the commitment's openings), PoUW's in gates (at
 least `W` gates of the committed circuit computed after their window's coin), and the others' on the world the play
 realized (at least `S` bits of device memory held on average, at least `Q` bits read, at most `K` bits through the
-network certifiers), whose window and capacity account are the parameters' (`world_window`, `world_capacity`), so PoUS's
+network certifiers), whose window and capacity account are the parameters' (`world_period`, `world_capacity`), so PoUS's
 own coins choose neither. The inference-only policy's: the declaration complies with `Nci.CompliesRate` at the published `Γ` and
 `α`. The wipe's: the play, read at the wipe's boundary as the wipe's game, doesn't keep foreign content past the
 published survivor threshold (`Verity.Wipe.OfRun.Kept`). -/
