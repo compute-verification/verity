@@ -1,6 +1,6 @@
 {
  "model": "GLM-5.3 as served: vLLM eager, H200, TP8, block FP8, greedy",
- "source": "art:4bb214110ad9bc7f64d35ee82e700930073e51d3b0d14f2c568935e818b8c391",
+ "source": "art:7a9ace01f21bb6aee9875d32e98e819f2eda1d2389e7e10c7830386a88c1652a",
  "build": "art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35",
  "prompt_len": 256,
  "decode_steps": 31,
@@ -485,23 +485,6 @@
     "SparseMlaSplit_v1"
    ]
   },
-  "RmsNormMnnvl_v1{N=6144,SHOT=1,CLUSTER=8,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},FMA=true}": {
-   "family": "RmsNormMnnvl_v1",
-   "prefill": 0,
-   "decode": 38688,
-   "out_bits": 98304,
-   "ands": 48307434,
-   "macs": 0,
-   "rows": [
-    12288,
-    12288,
-    12288
-   ],
-   "k_log": 27,
-   "of": [
-    "AllReduceRmsNormMnnvl_v1"
-   ]
-  },
   "Fp8GroupQuantUe8m0_v1{K=256,G=128}": {
    "family": "Fp8GroupQuantUe8m0_v1",
    "prefill": 1382400,
@@ -554,6 +537,24 @@
    "k_log": 26,
    "of": [
     "DsaIndexerQ_v1"
+   ]
+  },
+  "RmsNormMnnvlApply_v1{G=192,SHOT=1}": {
+   "family": "RmsNormMnnvlApply_v1",
+   "prefill": 0,
+   "decode": 1238016,
+   "out_bits": 3072,
+   "ands": 1148544,
+   "macs": 0,
+   "rows": [
+    384,
+    384,
+    4,
+    384
+   ],
+   "k_log": 22,
+   "of": [
+    "AllReduceRmsNormMnnvl_v1"
    ]
   },
   "DsaRMSNorm_v1{N=512,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}": {
@@ -1377,6 +1378,22 @@
    "k_log": 26,
    "of": [
     "SparseMlaSplit_v1"
+   ]
+  },
+  "RmsNormMnnvlSumSq_v1{N=6144,SHOT=1,CLUSTER=8,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},FMA=true}": {
+   "family": "RmsNormMnnvlSumSq_v1",
+   "prefill": 0,
+   "decode": 38688,
+   "out_bits": 32,
+   "ands": 11554026,
+   "macs": 0,
+   "rows": [
+    12288,
+    4
+   ],
+   "k_log": 25,
+   "of": [
+    "AllReduceRmsNormMnnvl_v1"
    ]
   },
   "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=31,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
@@ -3206,23 +3223,6 @@
     "DsaMqaLogits_v3"
    ]
   },
-  "GreedyChunk_v1{N=16384,FIRST=false}": {
-   "family": "GreedyChunk_v1",
-   "prefill": 64,
-   "decode": 1984,
-   "out_bits": 32,
-   "ands": 2080752,
-   "macs": 0,
-   "rows": [
-    32768,
-    2,
-    2
-   ],
-   "k_log": 25,
-   "of": [
-    "TokenSelect_v1"
-   ]
-  },
   "DsaMqaLogits_v3{N=23,H=32,D=128}": {
    "family": "DsaMqaLogits_v3",
    "prefill": 168,
@@ -3639,23 +3639,6 @@
     "DsaMqaLogits_v3"
    ]
   },
-  "GreedyChunk_v1{N=16384,FIRST=true}": {
-   "family": "GreedyChunk_v1",
-   "prefill": 8,
-   "decode": 248,
-   "out_bits": 32,
-   "ands": 2080641,
-   "macs": 0,
-   "rows": [
-    32768,
-    2,
-    2
-   ],
-   "k_log": 25,
-   "of": [
-    "TokenSelect_v1"
-   ]
-  },
   "DsaMqaLogits_v3{N=2,H=32,D=128}": {
    "family": "DsaMqaLogits_v3",
    "prefill": 168,
@@ -3675,37 +3658,341 @@
     "DsaMqaLogits_v3"
    ]
   },
-  "GreedyCombine_v1{V=154880,N=16384}": {
-   "family": "GreedyCombine_v1",
+  "GreedyCombine_v2{V=154880,N=7744}": {
+   "family": "GreedyCombine_v2",
    "prefill": 8,
    "decode": 248,
    "out_bits": 32,
-   "ands": 944208,
+   "ands": 986188,
    "macs": 0,
    "rows": [
-    14848,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2
+    15488,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    4
    ],
    "k_log": 25,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=61952}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983598,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=123904}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983598,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=7744}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=15488}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=23232}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=30976}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=38720}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=46464}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=54208}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=69696}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=77440}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=85184}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=92928}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=100672}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=108416}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=116160}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=131648}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=139392}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983487,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
+  "GreedyChunk_v2{N=7744,OFF=0}": {
+   "family": "GreedyChunk_v2",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 48,
+   "ands": 983361,
+   "macs": 0,
+   "rows": [
+    15488,
+    6
+   ],
+   "k_log": 24,
    "of": [
     "TokenSelect_v1"
    ]
