@@ -140,15 +140,21 @@ def archive(rev: str, dest: Path, sub: str = "", strip: int = 0, exclude: str = 
 
 
 def starts_dir(dest: Path, names: set[str], rev: str = PIN_REV) -> None:
-    """NAME.start.json (what te_core.capture.script's --starts reads) for each start in `names`, from the evidence store
-    by its start.json's sha256 in starts_store.json at `rev`."""
-    import scorer as S
-
-    r, starts = S.store_remote(), at_pin("starts_store.json", rev)["starts"]
+    """NAME.start.json (what te_core.capture.script's --starts reads) for each start in `names`, by its start.json's
+    sha256 in starts_store.json at `rev`: the scorer's copy where it holds one, else from the evidence store, which
+    takes the scorer (it imports only beside the te_core its refresh pins)."""
+    starts = at_pin("starts_store.json", rev)["starts"]
     dest.mkdir(parents=True)
     for n in sorted(names):
         sha = starts[n]["files"]["start.json"]
-        shutil.copy(S.blob(r, sha, STATE / "starts-store" / f"{sha}.json"), dest / f"{n}.start.json")
+        held = STATE / "starts-store" / f"{sha}.json"
+        if not held.exists():
+            import scorer as S
+
+            S.blob(S.store_remote(), sha, held)
+        if hashlib.sha256(held.read_bytes()).hexdigest() != sha:
+            raise SystemExit(f"{held} is not the start {n}'s start.json ({sha})")
+        shutil.copy(held, dest / f"{n}.start.json")
 
 
 def pack(out: Path, te: Path, everything: bool, only: set[str] | None = None, skip: set[str] = frozenset()) -> list[dict]:
