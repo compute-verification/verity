@@ -1,4 +1,4 @@
-"""The continuation rule (`verity.core.protocols.certifier.continuation`) on a recorded varied-plan run: the token
+"""The continuation rule (`verity.protocols.certifier.verifier.continuation`) on a recorded varied-plan run: the token
 run's ingress and egress records (`tests/data/token`: 16 execution phases of 60 buckets, 40 id requests of a varied
 plan through the certifying proxy), read through the rehearsal's certified I/O (`certifier_serve.certified_io`), each
 request's stream its ordinal and its place among the released streams its release number. The run is the token
@@ -24,7 +24,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.core.protocols.certifier import continuation as C
+from verity.protocols.certifier.verifier import continuation as C
 
 HERE = Path(__file__).resolve().parents[1]
 TOKEN = HERE / "tests" / "data" / "token"

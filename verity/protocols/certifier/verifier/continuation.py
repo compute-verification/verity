@@ -55,10 +55,10 @@ from __future__ import annotations
 import json
 from typing import Collection, NamedTuple, Sequence
 
-from verity.core.protocols.certifier import warden as W
-from verity.core.protocols.certifier.active import DATA, PAD, id_request
-from verity.core.protocols.certifier.grid import Record, row_count
-from verity.core.protocols.certifier.io_tie import parse_cell
+from verity.protocols.certifier.verifier import warden as W
+from verity.protocols.certifier.verifier.active import DATA, PAD, id_request
+from verity.protocols.certifier.verifier.grid import Record, row_count
+from verity.protocols.certifier.verifier.io_tie import parse_cell
 
 #: why the rule refuses: what `check` names in a record's stamps, then what the records themselves show
 REFUSALS = ("extra", "missing", "duplicate", "release", "count", "order", "over", "records")
