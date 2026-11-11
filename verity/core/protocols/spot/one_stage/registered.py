@@ -52,8 +52,12 @@ verifier's binding, `{"stream", "prover"}`, and the window's canonical JSON: a s
 takes one record a window and the window names the binding, so a tile seeded in one stream is no other's). A row's bytes
 are read as the parameter's leaves of `w` bits
 (`bytes_leaves`: each big-endian 32-bit half, its `32 / w` leaves least significant first, so a digest is 16 leaves of 32
-bits or 512 of one). Its rows are
-committed as any registered value's, under public salts (`supplied_salts`, row i's from the program's digest, the value's
+bits or 512 of one), except where the parameter's leaves are whole `Digest`s (`digests`: `DIGEST` or an array of them),
+read as a circuit's `Digest` holds them (`digest_leaves`: each big-endian 64-bit word's 64 bits least significant
+first). Its rows are
+committed as any registered value's, in the row format the verifier names for it (`schema`, as the port that reads it:
+under a bit-row format each row's parameter leaves packed into its `word_bits`-bit leaves, `bit_words`, so a `Digest`
+row of `row/v2` is 32 u16 words), under public salts (`supplied_salts`, row i's from the program's digest, the value's
 name and i alone), so its root is a function of the record and the verifier's bytes: R7 recomputes it
 (`supplied_root`) and refuses a record whose entry names another (`R7-supplied`). PoUW's seed inputs are such values: a
 proof block's seed then reads the roots its operands are committed under, which the prover can't choose.
@@ -76,7 +80,7 @@ from verity.ml.circuits.codec import canonical_json, jcs_domain_error
 from verity.ml.circuits.partition_object import TemplatePartition
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import runs as ref_runs
-from verity.ml.circuits.types import Array
+from verity.ml.circuits.types import Array, Value
 
 from . import partition as P
 
@@ -96,6 +100,8 @@ SCHEMA_KEY = "row_schema"
 #: the default leaf width, which the domain and the entry name only by leaving `word_bits` out
 WORD_BITS = 16
 WIDTHS = (16, 32)
+#: a SHA-512 digest as a circuit's `Digest` holds it: eight words of 64 one-bit leaves (`digest_leaves`)
+DIGEST = Array(8, Array(64, Value(1)))
 #: u16 words per SHA-512 block: a statement's row port is whole blocks
 BLOCK = 64
 OWNER = -2
@@ -476,6 +482,34 @@ def bytes_leaves(data: bytes, bits: int) -> list[int]:
             for j in range(32 // bits)]
 
 
+def digests(t: Any) -> bool:
+    """A parameter whose leaves are whole `Digest`s, eight SHA-512 words of 64 one-bit leaves each (`DIGEST`), or an array
+    of them."""
+    return t == DIGEST or (isinstance(t, Array) and t.elem == DIGEST)
+
+
+def digest_leaves(data: bytes) -> list[int]:
+    """`data` as whole `Digest`s' leaves: each big-endian 64-bit word's 64 bits, least significant first
+    (`gates.rowleaf.digest_bits`)."""
+    if len(data) % 64:
+        raise ValueError(f"{len(data)} bytes are no whole digests")
+    return [(h >> j) & 1 for i in range(0, len(data), 8) for h in (int.from_bytes(data[i:i + 8], "big"),)
+            for j in range(64)]
+
+
+def bit_words(row: Sequence[int], bits: int, word_bits: int) -> list[int]:
+    """A row of `bits`-bit leaves as a bit row's `word_bits`-bit leaves: its bits in order, each leaf's least significant
+    first (`row_leaves`' packing), so a `Digest`'s 512 leaves are 32 u16 words."""
+    if len(row) * bits % word_bits:
+        raise ValueError(f"{len(row)} leaves of {bits} bits are no whole {word_bits}-bit words")
+    acc = 0
+    for i, v in enumerate(row):
+        if not 0 <= int(v) < 1 << bits:
+            raise ValueError(f"leaf {v} does not fit {bits} bits")
+        acc |= int(v) << (bits * i)
+    return [(acc >> (word_bits * j)) & ((1 << word_bits) - 1) for j in range(len(row) * bits // word_bits)]
+
+
 def log_base(log: Sequence[Any]) -> int:
     """The first position after the log's records: the sum of their populations, every proof block of each one position."""
     base = 0
@@ -539,39 +573,54 @@ def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[st
                   binding: Mapping[str, str] | None = None) -> list[list[int]]:
     """The rows the verifier fills a supplied value with, from `rec`, the log of this prover's earlier records, its
     binding (`window_salt`) and its own bytes: each row its sources' bytes, read as the parameter's leaves (`bytes_leaves`
-    at its leaf width). `supplied`: every supplied value's name, whose roots no row reads. ValueError where a source names
-    nothing the record or the verifier holds, or the leaves are not one width dividing 32."""
+    at its leaf width, or `digest_leaves` where its leaves are whole digests, `digests`). `supplied`: every supplied
+    value's name, whose roots no row reads. ValueError where a source names nothing the record or the verifier holds, or
+    the leaves are not one width dividing 32."""
     t = dict(program.fn.signature()[0]).get(value)
     w = None if t is None else t.homogeneous_width()
     if w is None:
         raise ValueError(f"{value!r} is not a parameter of the program whose leaves are one width")
-    return [bytes_leaves(b"".join(_source_bytes(rec, value, k, n, supplied, log, binding) for k, n in row), w)
-            for row in rows]
+    leaves = digest_leaves if digests(t) else (lambda data: bytes_leaves(data, w))
+    return [leaves(b"".join(_source_bytes(rec, value, k, n, supplied, log, binding) for k, n in row)) for row in rows]
+
+
+def _in_format(program: Program, value: str, got: list[list[int]], word_bits: int, schema: str) -> list[list[int]]:
+    """Supplied rows of the parameter's leaves as rows of `schema`: themselves under `SCHEMA`, else each packed into
+    `word_bits`-bit leaves (`bit_words`)."""
+    if _schema(schema) == SCHEMA:
+        return got
+    w = dict(program.fn.signature()[0])[value].homogeneous_width()
+    return [bit_words(r, w, word_bits) for r in got]
 
 
 def supplied_root(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
                   want: Mapping[str, Any], supplied: Sequence[str] = (), log: Sequence[Any] = (),
-                  prog: str | None = None, binding: Mapping[str, str] | None = None) -> str:
+                  prog: str | None = None, binding: Mapping[str, str] | None = None, schema: str = SCHEMA) -> str:
     """The root R7 holds a supplied value's entry to: its rows (`supplied_rows`), as many as the verifier's own entry's
-    `leaves` (`registered_entries`), each of its `words` leaves, committed under `supplied_salts` at its `word_bits`.
-    `prog`: `program`'s digest (`P.program_digest`), when the caller holds it."""
+    `leaves` (`registered_entries`), each the parameter's leaves of one row of its `words` leaves in `schema`
+    (`row_leaves`), committed in `schema` under `supplied_salts` at its `word_bits`. `prog`: `program`'s digest
+    (`P.program_digest`), when the caller holds it."""
     got = supplied_rows(program, value, rows, rec, supplied, log, binding)
-    if len(got) != want["leaves"] or any(len(r) != want["words"] for r in got):
+    k = row_leaves(program, value, want["words"], schema)
+    if len(got) != want["leaves"] or any(len(r) != k for r in got):
         raise ValueError(f"supplied value {value!r}: rows of {[len(r) for r in got]} leaves, not {want['leaves']} of "
-                         f"{want['words']}")
+                         f"{k}")
     prog = prog or P.program_digest(program)
-    return Registered.commit(prog, value, got, supplied_salts(prog, value, len(got)), want["word_bits"]).root.hex()
+    return Registered.commit(prog, value, _in_format(program, value, got, want["word_bits"], schema),
+                             supplied_salts(prog, value, len(got)), want["word_bits"], schema).root.hex()
 
 
 def supplied_value(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
                    supplied: Sequence[str] = (), log: Sequence[Any] = (), prog: str | None = None,
-                   binding: Mapping[str, str] | None = None) -> Registered:
+                   binding: Mapping[str, str] | None = None, schema: str = SCHEMA) -> Registered:
     """The prover's side of a supplied value: the rows the verifier fills from `rec` (a record without this value's own
-    entry will do: no row reads it), the log and the binding under the public salts, whose `entry()` the record
-    registers and whose `statement` opens a proof block's reads like any registered value's."""
+    entry will do: no row reads it), the log and the binding under the public salts, in `schema` (the row format the
+    verifier names for it), whose `entry()` the record registers and whose `statement` opens a proof block's reads like
+    any registered value's."""
     got = supplied_rows(program, value, rows, rec, supplied, log, binding)
-    prog = prog or P.program_digest(program)
-    return Registered.commit(prog, value, got, supplied_salts(prog, value, len(got)), width(program, value))
+    prog, b = prog or P.program_digest(program), width(program, value)
+    return Registered.commit(prog, value, _in_format(program, value, got, b, schema),
+                             supplied_salts(prog, value, len(got)), b, schema)
 
 
 def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, int], roots: Mapping[str, str],
@@ -608,10 +657,10 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
     return {"format": READS, "ports": out}
 
 
-__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
+__all__ = ["BLOCK", "DIGEST", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SCHEMA_SEG", "SCHEMA_V2", "SESSION_KEY", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WINDOW_SALT",
            "WORD_BITS",
-           "bytes_leaves", "domain", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
+           "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
            "row_digest", "row_leaves", "row_words", "schema_entry", "shape", "sources",
            "supplied_root", "supplied_rows", "supplied_salts", "supplied_value", "table", "verify_read", "width",
            "width_entry", "window_root", "window_salt"]
