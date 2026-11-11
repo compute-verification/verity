@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 settings = of(__file__)
 ROOT = Path(__file__).resolve().parents[3]
-VLLM_DIR = ROOT / "integrations" / "vllm"
+VLLM_DIR = ROOT / "adapters" / "vllm"
 ROLE = "LLAMA31_8B_INT8"
 SEQS, MODEL_LEN, BATCHED = 256, 2048, 8192
 
