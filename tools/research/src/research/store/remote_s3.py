@@ -716,6 +716,27 @@ class S3Remote:
                 self.conditional_put = False
                 res["fallback"] = self.conditional_put_error
 
+    def create(self, key: str, path: Path) -> dict:
+        """Create `key` without reading the bucket, for a key that may write but not read (the public export's): one `PUT
+        If-None-Match: *`.  2xx -> `created`; 412 -> `exists` (the service checks the key before the precondition, so a 412 also
+        proves the key may write); anything else raises.  Nothing compares the bytes already there with this file: the caller's keys
+        are content addresses, and a reader checks every byte against its id.  Above `single_put_max` it refuses, since a multipart
+        upload's completion takes no precondition on R2."""
+        path = Path(path)
+        sha, md5, size = hash_file(path)
+        if size > self.single_put_max:
+            raise ValueError(f"{key}: {size} bytes is above the {self.single_put_max}-byte single PUT, and a multipart create "
+                             "can't be conditional without reading the bucket")
+        res: dict = {"action": "created", "bytes": size, "etag": None, "md5": md5, "sha256": sha, "conditional": True, "fallback": None}
+        try:
+            with self._request("PUT", key, body=path, headers={"if-none-match": "*"}, payload_hash=sha) as r:
+                res["etag"] = etag_value(r.headers.get("ETag"))
+        except urllib.error.HTTPError as e:
+            if e.code != 412:
+                raise
+            res["action"] = "exists"
+        return res
+
     def presign(self, key: str, expires_s: int, method: str = "GET") -> str:
         """A URL for one `method` request on `key`, valid `expires_s` seconds (`presign`): read access to one object for a machine
         that holds no key."""
