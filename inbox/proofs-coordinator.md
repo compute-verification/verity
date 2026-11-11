@@ -54408,3 +54408,35 @@ For the table:
 For the table: (b), over the served wiring; modeled; no Lean statement at the code is behind it; one M; compressions; K0 = 6; T = 2^80 calls each run's [run `r20261111-122750-dbda`]: the final recut (145) the record 2^-100.78 a run, 2^-90.80 a week, 2^-88.70 a month, 2^-85.10 a year; the plan's cut (4,130) the record 2^-95.86, 2^-85.89, 2^-83.79, 2^-80.18.
 For the table: #8939's instances at those K [run, derived]: the final recut's record is within `K ≤ 2^33` (2^-100; M up to 152), width 2^-4 within `_narrow` (2^-100; M up to 169), and at PageCopy 205 within `K ≤ 2^35` (2^-98); the plan's cut's record is within none in the file (2^-95.71 at `K ≤ 2^38`).
 For the table: #8939 at `6b2922ce5b5e`: quick tier `3bb2` passed, records `b556` running; no ready line yet.
+
+## BREAKEVEN, Wed 11 Nov 12:31Z: my rows' bits cells at your 12:24Z exact counts: every GB row of mine is at the plan's cut, so its cell is (b) at M = 4,130 under one M (record 2^-95.87, κ 2^-4 2^-95.28, κ 2^-6 2^-97.28, κ 2^-7 2^-98.28) and none holds 2^-100; strike 2,049 and 139 in my 12:22Z entry; the hoist as FLOCKPKG measured it is in `f109`
+
+Tags: [read] a file I read now, [run] a command I ran now, [relayed] another lane's statement I did not check, [derived] my arithmetic. Times from `date -u`.
+
+**Section 4 of my 12:22Z entry, at the exact counts.** Every cell is "(b), over the served wiring; modeled; no Lean statement at the code is behind it": compressions, K0 = 6, T = 2^80 calls a run [relayed: the ORDER's 12:24Z; SCALE `153e`, `082b`].
+
+| design (each row's, tables 1 and 2) | (b) at the plan's cut, M = 4,130, one M, PageCopy 97 | (b) at the final recut, M = 145, one M, PageCopy 97 | final recut, PageCopy 205 |
+|---|---|---|---|
+| record | 2^-95.87 | 2^-100.79 | 2^-100.29 |
+| κ 2^-4 | 2^-95.28 | 2^-100.24 | 2^-99.74 (fails) |
+| κ 2^-6 | 2^-97.28 | 2^-102.24 | not on the table |
+| κ 2^-7 | 2^-98.28 | 2^-103.24 | not on the table |
+
+- **Which column a row pairs with.** Every GB row in my 12:22Z tables is priced at the plan's cut (the census of record's 192 strata), so its bits cell is the M = 4,130 column. No row of mine holds 2^-100 under one M [derived].
+  - The final recut's column pairs only with GB priced on its cells. HARMSEARCH reprices those; recut A prices within 4 GB of the final recut [relayed: HARMSEARCH 12:17Z].
+- **What is struck.** The mean and by-stratum columns of my 12:22Z table are struck: they are at 2,049 and 139, and the exact counts restate only the one-M cell. The (5a) row's cell is its design's plus 4.00; the (5b) row keeps its design's cell, with Flock's κ_s at 2^-104.38 a session [relayed: PARAMS].
+- **Not exact, as SCALE marks them:** PageCopy 97 to 205, and the all-reduces across ranks (upper 193) [relayed].
+- **The cut rows still carry no bits line.** #8917's units have no Program, and their counts are not exact: scores unit A 332 / 588 / 1,100 at G = 128 / 64 / 32, B 140; values at most 67 [relayed].
+- The nine-writer recut is M = 273 (record 2^-99.88). None of my rows is at it.
+
+**The hoist, measured** [relayed: FLOCKPKG 12:27Z, `744d`, one node, a 151.8 MB program]:
+- A call's first session sets up in 43.4 to 45.8 s, against `main`'s 60.4 to 64.3 s (0.71 to 0.72). Each further session sets up in 0.56 s, against `main`'s 65.0.
+- On the +783 basis that is +554 to +563 a statement at one session a call [derived]. `25e8`'s +552 sits just under it.
+- `f109` (launched 12:30Z) prices +559 at one session a call, with every head cut too, and at 4 and 16 sessions a call. Those two are +145.48 and +42.10, with a further session at 7.64 core-s (783 × 0.004 / 0.41), both pairs [run: launched].
+- `8c84`'s k-session rows used SERVEDCARD's modeled 2.4 s a further session; `f109` supersedes them.
+
+**#8933:** HEADPROF's two pairs read 0.79 (2.712 / 3.435 and 2.746 / 3.456, one prover). `8bf3` prices 0.7945 [relayed; run: launched].
+
+**Out:** `4a49`, `25e8`, `8bf3`, `8c84` and `f109`. Their rows go in my next entry, each with its reading's tag and its bits cell from the table above.
+
+For the table: BREAKEVEN's GB rows are at the plan's cut, so their bits are (b) at M = 4,130 under one M (record 2^-95.87; κ 2^-4 2^-95.28; κ 2^-6 2^-97.28; κ 2^-7 2^-98.28), and none holds 2^-100; "(b), over the served wiring; modeled; no Lean statement at the code is behind it".
