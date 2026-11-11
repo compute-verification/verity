@@ -75,6 +75,7 @@ def test_two_passes_time_the_compose_and_then_find_it_kept(tmp_path: Path) -> No
     assert first["rows"][0] == {"template": "T_v1", "seconds": 0.5, "kept": False, "k_log": 3}
     assert first["cache"] == second["cache"] == r["cache"]["at_removal"] and first["cache"]["circuits"] == 1
     assert first["cache"]["bytes"] == 4096 + 3 and first["warm"]["verifier_window_s"] == 0.1
+    assert first["progress"][-1][:3] == [first["wall_s"], 1, first["cache"]["disk_bytes"]]
     assert set(r["free_bytes"]) == {"at_start", "before_pass1", "after_pass1", "after_pass2", "after_removal"}
     assert r["cache"]["removed"] is True and all(p["exit"] == 0 and "wall_s" in p for p in r["passes"])
     assert Path(r["cache"]["dir"]).parent.parent == tmp_path / "parent"
@@ -90,6 +91,8 @@ def test_a_low_free_space_reading_in_mid_pass_ends_the_pass_and_removes_the_cach
     assert rc == 71 and r["exit"] == 71 and lines[-1].startswith("CACHE REMOVED (in ")
     assert any(ln.startswith("LOW DISK in pass 1: ") for ln in lines)
     assert r["passes"][0]["exit"] == "ended by this job" and r["passes"][0]["cache"]["bytes"] == 4096
+    progress = r["passes"][0]["progress"]  # at the pass's end: no circuit composed yet, the bytes of the one begun
+    assert progress[-1][1:3] == [0, r["passes"][0]["cache"]["disk_bytes"]] and all(row[1] == 0 for row in progress)
     assert nobody_reads(hold)
 
 

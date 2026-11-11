@@ -20,7 +20,8 @@ GB is 10^9 bytes throughout; the lines it prints give GiB beside it.
 
 Under ``$OUT`` (``$RESEARCH_RUN_DIR/out``), all small: ``result.json`` (rewritten after every step, so a killed job leaves
 what it had: the commit, the command lines, each pass's wall time and its templates' seconds and whether the cache held them,
-the cache's size, peak memory, the free space before pass 1, after each pass and after the removal), each pass's output
+the cache's size, and every half minute of a pass and at its end the circuits composed so far, the bytes the cache holds
+and the free space, peak memory, the free space before pass 1, after each pass and after the removal), each pass's output
 (``passN.log``, ``passN.err``) and ``sync.log``. Nothing it writes names the machine.
 
 Peak memory is read three ways, since a pass forks one process a template and they share the window's pages: the sum of
@@ -51,7 +52,7 @@ from pathlib import Path
 
 GB, GIB = 10**9, 2**30
 EXIT_ARG, EXIT_SYNC, EXIT_START, EXIT_FLOOR, EXIT_DEADLINE, EXIT_PASS, EXIT_LEFT, EXIT_SIGNAL = 64, 66, 70, 71, 72, 73, 76, 77
-RSS_EVERY_S, PSS_EVERY_S, END_WAIT_S = 5.0, 60.0, 60.0
+RSS_EVERY_S, PSS_EVERY_S, PROGRESS_EVERY_S, END_WAIT_S = 5.0, 60.0, 30.0, 60.0
 SYNC = "uv sync -q --all-packages --extra torch-cpu"
 
 # The guardian: started in a transient user unit (else detached), with no environment of the job's, so nothing that ends the
@@ -263,7 +264,7 @@ class Job:
 
     def run_pass(self, n: int, argv: list[str], env: dict[str, str]) -> None:
         a, cache = self.a, self.root / "cache"  # type: ignore[operator]
-        rec: dict = {"pass": n, "command": shlex.join(argv), "state": "running", "peak": {}}
+        rec: dict = {"pass": n, "command": shlex.join(argv), "state": "running", "peak": {}, "progress": []}
         self.r["passes"].append(rec)
         self.r["state"] = f"pass {n}"
         say(f"PASS {n}: {rec['command']}")
@@ -272,7 +273,7 @@ class Job:
             self.child = p = subprocess.Popen(argv, stdout=so, stderr=se, stdin=subprocess.DEVNULL, env=env, start_new_session=True)
         (self.root / "pass.sid").write_text(f"{p.pid}\n")  # type: ignore[operator]
         self.write()
-        next_free = next_rss = next_pss = 0.0
+        next_free = next_rss = next_pss = next_progress = 0.0
         tick = min(1.0, a.watch_every)
         stopped = None
         try:
@@ -299,6 +300,10 @@ class Job:
                             stopped = f"{ts['circuits']} template(s) composed (--stop-at-templates {a.stop_at_templates})"
                         if stopped:
                             break
+                if now >= next_progress:  # `warm` prints its templates' lines only at its end: what a pass ended early leaves
+                    next_progress, ts = now + PROGRESS_EVERY_S, tree_size(cache)
+                    rec["progress"].append([round(now - t0, 1), ts["circuits"], ts["disk_bytes"], self.free()])
+                    self.write()
                 if now >= next_rss:
                     pss, next_rss = now >= next_pss, now + RSS_EVERY_S
                     if pss:
@@ -312,6 +317,7 @@ class Job:
             if rec["exit"] is None:
                 rec["exit"] = "ended by this job"
             rec["cache"] = tree_size(cache)
+            rec["progress"].append([rec["wall_s"], rec["cache"]["circuits"], rec["cache"]["disk_bytes"], self.free()])
             self.read_log(n, rec)
             rec["state"] = "stopped early" if stopped else "done" if rec["exit"] == 0 else "ended"
             self.write()
