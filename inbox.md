@@ -56,3 +56,35 @@ Shape B, the charge removed too: the same 11 files, more lines, and not a clean 
 
 Job 3 next, on `f63a7b76334d`.
 
+[2026-11-11T01:13Z] aa8946baa1eb
+ONSITEMAIN, NET-327, step 2's table (Tue 10 Nov 5:13 PM PST). Branch `cursor/net-onsite-port-eebd`, cut at the base `f63a7b76334d`; nothing merged yet. Merge-base with staging `00d79b22e4d2`: `700a981f5d90`. [run: `git merge-tree`, lock driver off; each file's declarations compared at the three commits by my script, comments and strings left out, renames seen through]
+
+**(c), yours** (files in the note):
+1. Period check (g3: `Period.lean`, `period_case.py`). Base: the side's check plus main's definition digest and egress-form gate; in 26 declarations (`scanOf`, `check`, `auditCheck`…) it is the side's, not main's. Staging: changes `check`, `chargedOf`, `auditCheck`, `scanOf`; adds the record form, `held`, `anchored`, `tiedDelta`. No declaration is changed by both.
+2. a5 and the v2 case (g2, g9; g10 reads them). Base: main's one statement, several sampled members make no v2 case, a member's other ports registered as its own rows (`own_entries`). Staging: per-member, every file completed before the draw (`complete_members`, pins).
+3. `spot/service.py` (g4). Base: main's two-stage `Stream`. Staging: `Stream(program=…)`, which `scan_service.py` reads. Both change `__init__` and `_program`.
+4. The ingress tie (g4, g5). Staging deletes `tie_service.py`, `n2_tie_zk`, their tests and negatives, for the scan's tie. The base keeps them; your rule keeps `tie_service.py`.
+5. Drivers (g5: `chain_record.py`, `scan_zk.py`, `scan_period.py`). Base: main's free-input terms (`input_terms`, `registered_bits`). Staging: kind scan, rows audit, run class.
+6. Composites (g6). Base: main's; it names `RemoteNetwork` nowhere. Staging: remote-network(-no-pouw), four new Lean files.
+7. Security (g7, g8: 26 files). Base: main's statements (`SampledLeakCarried`, `PooledLeakCarried`, `Compiled.KS`). Staging: the wired form and `PeriodLeakRegistered`, which no file of the base names. 51 same-named declarations differ.
+
+group: files = clean + (a) + (b) + (c) + locks and pin
+- 2: 14 = 4 + 0 + 2 + 8 + 0
+- 3: 15 = 10 + 0 + 2 + 2 + 1
+- 4: 43 = 34 + 0 + 1 + 7 + 1
+- 5: 78 = 55 + 1 + 7 + 15 + 0
+- 6: 24 = 13 + 2 + 2 + 6 + 1
+- 7: 27 = 7 + 4 + 5 + 9 + 2
+- 8: 44 = 20 + 2 + 3 + 17 + 2
+- 9: 12 = 9 + 1 + 0 + 2 + 0
+- 10: 4 = 4 clean
+- all: 261 = 156 + 10 + 22 + 66 + 7
+
+(a): staging changed prose only, or its blob is in the base's history. (b): the base's side is a wording or rename pass.
+
+**A clean file is not a coherent one.** Staging's text is from before main's moves (`sampled_proofs` to `spot`, the terms, the Lean names, the module system). The network package's `lakefile.toml` merges clean and then requires `../../../service/sampled_proofs`, which the base has not. [read]
+
+**Next, unless you say otherwise:** the merge carries only what I can show independent of (c) and of the old names: the rows audit (`NetworkCertifier/Rows.lean`, `NetworkCheck/RowsAudit.lean`, `network-rows`), put on the module system. The rest goes to the base's side, each with its reason. Then `g34p.sh`.
+
+Least sure: (b) against (c) where a deletion of staging's belongs to the tie's removal. Not looked at: the 156 clean files' content, beyond the imports in groups 3 and 4.
+
