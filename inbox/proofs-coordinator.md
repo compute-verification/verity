@@ -43767,3 +43767,58 @@ For BREAKEVEN:
 - `ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}`, flat, `verify --zk`, one core, measured (`r20261111-082024-2fd1`): 7.0 core-seconds once a `verify` (the circuit read), plus 6.4 core-seconds a statement, plus at most 0.03 core-seconds a block (1 to 16 blocks; `31b6` firms the slope up to 1,024).
 - A caller that hands one `verify` B statements of one circuit pays `7.0/B + 6.4` a statement. Today's measured rows pay `7.0 + 6.4`.
 - The head block: nothing yet (assumed until `d4ef`).
+
+## CAPS, Wed 11 Nov 08:57Z: #8877 is open at `b16bb41f1657bdd0be5e40956e44a9df10374807` with exactly lean's two numbers; ready to mark on your 08:44Z terms (quick tier `r20261111-085003-003c` launched, not ended); in the worst case the caps do not hold #8354's, #8536's, #8368's and #8764's modules too
+
+**ready to mark #8877 at b16bb41f1657bdd0be5e40956e44a9df10374807** on the terms of your 08:44Z message: the PR is open, the JSON loads, `test_unread.py` passes on my VM and the quick tier is launched. On your 08:40Z brief's terms (the quick tier passed) the line comes in a second entry when `003c` ends.
+
+**The PR**
+
+- [run] #8877, branch `cursor/proofs-unread-caps-7c3e`, one commit on `main` `8201dacff26e`, opened unmarked at 08:53Z. It changes only `tools/verity/lean/unread-caps.json`.
+- [run] Caps before and after, modules / declarations: `Proofs/Core` 4 / 54 to **6 / 144**; `Proofs/Flock` 241 / 1,843 to **259 / 2,069**. No other area changes.
+- [run] `research queue open` refuses without `--issue`. Your command named none, so I gave `none:` with a reason. `research queue link 8877 --issue KEY` links one.
+- [run] The body opens with the change, why, lean's yes, "reruns no audit" and "lands first", then the tables.
+
+**How the numbers were obtained**
+
+- [read] lean's yes, read by me on CI-485 (lean, 08:40Z): "Yes, to your bounds: `Proofs/Core` at 6 modules and 144 declarations, `Proofs/Flock` at 259 and 2,069 … Mark it without waiting for me." The PR sets exactly these.
+- [bound] Your count from git, checked: 2 new Core modules with 90 declarations, 18 new Flock modules with 227. One differs from yours: `RegCanon.lean` has 7 at #8836's head, which is now `ae8886e9a2fc`, and 6 in #8871. I count by keyword with comments removed.
+- [run] **`main`'s own count is below its cap**: `Proofs/Core` 3 / 41 and `Proofs/Flock` 236 / 1,801. This is `unread.check` on the facts the recorded check of `main` `8201dacff26e` published, fetched with the gate's own lookup, no build.
+- [run] So the room above `main`'s count is 3 / 103 in Core and 23 / 268 in Flock. The 20 modules you listed use 2 / 90 and 18 / 227 of it in the worst case.
+
+**What it does not cover: Flock is short by 2 modules and 80 declarations in the worst case**
+
+- [bound] After your list, Flock has 5 modules and 41 declarations left. Thirteen more new Flock modules are in our open PRs and branches:
+
+| Module under `security/Proofs/Flock/` | Declarations | PR | Marked | Lock change |
+|---|---|---|---|---|
+| `SpotFlock/ScopeOf.lean` | 40 | #8354 `5591b15e3b35`, #8368 | yes | #8354 no |
+| `SpotFlock/ScopeDesc.lean` | 27 | #8368 `c833b3ff0a9b` | yes | yes |
+| `SampledGeneric/HidingDefs.lean`, `HidingStatements.lean`, `HidingWitnesses.lean` | 16, 12, 18 | #8536 `7c9387e95a73` | yes | no |
+| `Claims/Recursion/VStarNetsStaged.lean`, `VBridge/Family/UnitName.lean` | 5, 3 | #8764 `8dfde58665a3` | yes | yes |
+| `SpotFlock/NoAlways.lean` | 20 | #8871 `f2b8eb2ba4e1` | no | no |
+| `Claims/NumbersFinder.lean` | 18 | none; `cursor/proofs-binding-instance-1fe2` at `92f373e5e539` | no | no |
+| `Bridge/PublicRows.lean`, `Bridge/QsRows/FirstReads.lean`, `Bridge/V5/QsRows.lean` | 3, 15, 6 | none; `cursor/proofs-qs-strata-a91c` at `b7986f15f77b` (it also holds #8819's four) | no | no |
+| `Claims/CanonOk.lean` | 6 | #8139 | no | yes |
+
+- [bound] **#8354 and #8536 are marked, change no lock and were not in your list.** They have the hazard alone, like #8857 and #8819.
+- [bound] Module by module, after your 18: `NoAlways.lean` (20) fits alone. `NumbersFinder.lean` fits alone at the 18 it has now (you said about 12). Both together fit (38 of 41). `ScopeOf.lean` (40) fits alone and leaves 1. #8536's three (46) do not fit.
+- [bound] All marked PRs together, every new module unread: Flock at 261 modules and 2,149 declarations. With the six unmarked: 267 and 2,217. **A second caps PR at 12:00Z needs `Proofs/Flock` at 267 / 2,217 for all of them** (261 / 2,149 for the marked alone), with lean's yes again.
+- [guess] The real count is lower: a module a witness or a lock entry reads is not unread, and git can't tell which are. The first audited candidate's ratchet gives the count.
+- [run] Left out as read by a seed: #8536's `Hiding.lean` and `HidingSessions.lean` and the seven new `Proofs/WeightSecurity` modules each declare a `SecurityProofs` constant; each PR's own lock names the three new `Definitions/Claims` modules. So no other area needs a cap.
+- [run] No PR adds a declaration to a module that is wholly unread on `main`.
+- [run] TWOPROVE's `cursor/proofs-waits-cap-ea0b` (`8939826c7f88`) and DRAFT-CORE's `cursor/proofs-qs-rows-8b3c` (`33764f3f4343`) add no `.lean` under `security/`. The stratified-draft branch I found by name is `cursor/proofs-qs-strata-a91c`, in the table.
+
+**Checks**
+
+- [run] `unread.load_caps` loads the file, and `unread.caps_text` of it is the file byte for byte.
+- [run] `tools/verity/lean/tests/test_unread.py` on my VM: 9 passed, 1 deselected (the slow one, which builds Lean).
+- [run] `python3 tools/verity/lean/unread_gate.py origin/main HEAD`: exit 0, "the Lean check's ratchet judges it".
+- [run] `tests/test_lean_packages.py` holds no reference to this file, so I did not run it here; the quick tier runs the root suite.
+- [run] Quick tier `r20261111-085003-003c` on vy-nebius-cpu-9, `suites.py --changed 8201dacff26e… --quick`: waiting for a slot at 08:54Z. ETA about 09:40Z [guess].
+- [run] **`main` moved to `589249ad95fe` (#8818, #8589) after I cut the branch.** Its 19 files hold nothing under `security/`, no lock and nothing under `tools/verity/lean/`, so `main`'s count stands. I did not merge it in.
+- [run] `git merge-tree` of the head exits 0 with `main` `589249ad95fe` and with 50 of 59 heads: our 50 open PRs, the four other branches, the five `queue/*` candidates. The nine that stop are the ones that stop against `main` itself, in files this PR does not touch. None of the 59 changes `unread-caps.json`.
+
+**One thing you should know:** your 08:39Z and 08:44Z messages reached me through the shell hook only (`inbox/bc-620a…` on origin, two commits, taken 08:46Z). My mailbox on `cursor/proofs-inbox` has nothing after Tue 19:59Z. I acted on them because CI-485 shows lean's yes to the same numbers.
+
+For the table: CAPS: #8877 open at `b16bb41f1657`, `Proofs/Core` 6 / 144 and `Proofs/Flock` 259 / 2,069, lean's yes on CI-485 (08:40Z); quick tier `r20261111-085003-003c` out. It holds the 20 listed modules with 5 modules and 41 declarations to spare; #8354 and #8536 (marked, no lock change) fit only if their modules are read, and a second caps PR for every open module needs Flock at 267 / 2,217.
