@@ -49456,3 +49456,45 @@ For FLOCKPKG: in your head block rows, print Lean's own three timers (`inputs`, 
 For the table:
 - Templated check on the head block: its template is about 2% of the block (measured at small statics), but on traced blocks Lean's time is the per-session setup over the program, not the statement; the served 16-key block in both forms is out (`0163`; `cd4c` waits for a slot).
 - `9c37` cancelled (could not finish inside its slot); no head block figure from it.
+
+## ATTACK, Wed 11 Nov 10:48Z: five closing lemmas read. REGX's `code_hwit` and its by-class bound at the code, TWOWITNESS's by-stratum count (#8919) and KILIAN's two corollaries at the code say what their entries say. The key is by PROOF BLOCKS, in REGX's own definition. For a by-class number at the code four things are still not Lean: the two counts by class, the class count of a block (a hypothesis on the registration), the refusal's probability, and the composition
+
+Modeled; the first-hit term of #8827's lemma; per sampled replay block at T = 2^80 calls a run. The model's verifier accepts no run at D*1's sizes. No number here is new. Run verdicts are from `research inspect`, by me, 10:45Z.
+
+**1. REGX: `OpensWhole.lean` at `62eb1fdc64de` (try `e625`, rc 0), `OpensClass.lean` at `5b37c49d6a5c` (try `99d2`, rc 0)** [read: both files whole; run: the two verdicts].
+- `gateKey h s Pt d g` is a triple. Its first part is the proof blocks `v` below `Pt.blocks.length` with `g ∈ Reveal.needs (partition h) s v`; the docstring says "its readers, and the block that writes it where it leaves that block". So the class is by the proof blocks of the statement's partition, the writer among them: my 10:42Z count (643) is a count of this key, and a count by served rows is not.
+- `sessWit_reveal_key` says more than `ClassWhole` asks: every opening of what an extracted witness reveals at a checked block passes (`sessWit_reveal_passes`), and each gate of the same key is opened in the same reveal under the same roots. `code_hwit` is EXTFORM's `hwit` with the session's blocks `[iu.2]`, which holds because `skey` is the default; the shared-session code is outside it, as REGX says.
+- The branch moved to `79dea74e2d99` after REGX's entry: `code_hpos` and **`code_eventTwoX_le_firstHit_key`, the by-class bound at SPOT[Flock]'s compiled two-stage verifier** [read; I know of no run at that head]. In plain words: under `Built h` and `Addresses h`, on a statement in the two-stage scope, for every prover, if the two by-class finders of every cap meet the linear expected-time bound, then Pr[accept and the sample holds a block of `FregTwoX`] ≤ κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[calls]/2^256. Flock's knowledge soundness is taken from the proved `Flock.SecurityProofs.MaskedKS`, binding and the sessions' contract from the code. It evaluates nothing: the expectation, Pr[B_conf,X] and Pr[B] stay as they are, and of the classes its own docstring says "nothing here counts them".
+
+**2. TWOWITNESS: #8919 at `b216b2242341` (try `3998`, rc 0), `Counts.lean` at `5e1baad461` (not tried)** [read: `SecondStrata.lean:186-200, 262-326`; `Counts.lean` whole].
+- `RegTwo.sum_checked_le_strata` is a count on an accepted second stage, for ANY weight `w` on blocks: Σ over the checked blocks ≤ the always-checked blocks' weight + K0·Σ_t k_t·M_t, with `w ≤ M t` on stratum t's blocks. It is SCALE's "by stratum" column, as TWOWITNESS says.
+- `code_hNs`, `code_hKs`, `code_hKm` are by GATES (`(needs u).card`). They need `firstK h.reg.first = some K` (the first stage a uniform K-subset). Their right-hand sides carry a third term, **Pr[`selectSecond` refuses] × the weight of every block below N**: where the second stage is refused the model checks every block (`RegTwo.checked_of_refused`). Nothing in Lean bounds that probability at `selectSecond` (DRAFT-CORE's `units_error_le` is at `drawUnits`), and at the model's 2^20-byte stage it is 1 at D*1's sizes. With k_d·2^-64 in its place it is nothing: 2^-38.2 of 2^49.2 blocks is the weight of 2^11 blocks [derived; n_PU relayed].
+- By classes there is no `code_hKs` or `code_hKm` yet. `code_ex_le_strata` would take them (it is stated for any `G l ≤ Σ w`), but no lemma says the two by-class integrands of #8905 (`(sampleNeeds …).image cls` and `sessCountIn`) are at most a sum over the checked blocks of each block's classes. And `hM` by class is then the count itself, a hypothesis on the registered program: at least 643 for a head block's stratum at the plan's cut.
+
+**3. KILIAN: `firstHitTwo_at` at `12f5fcf3bb96` (try `64fa`, rc 0), `firstHitTwo_cls_at` at `818e4e130b5d` (try `b50a`, rc 0)** [read: `SpotFirstHitAt.lean`, `SpotFirstHitClassAt.lean` whole].
+- Both are at `twoZk h`, the same compiled verifier as REGX's `L`. Both conclude `TwoXWithin`: the event, its threshold form and its headline at ε = κ_s + √(k·γ_s·Pr[B]) + (2·runCost + 4·firstHitCost)/2^256. ε still depends on the prover through Pr[B].
+- **Gap f is closed inside them**: the opening checks' calls are the code's (`openCallsLe_compiled`, `revealsLe`), not a hypothesis.
+- Hypotheses left: `Scope x`, the budget `hT` (every run, both parties' calls), the three counts, `ExpectedCR` at three finders. By class also `cls`, `hrep`, `hallX`, `hallI`: REGX's `code_hwit` gives them through EXTFORM's `opensAt_isSome_cls` and `iopTable_isSome_cls`, and nobody has written that step.
+- Both stand on `Flock.SecurityProofs.SpotFirstHitTwo` (#8915, unmarked, Daniel's). **KILIAN's smell on its lock record is right** [read: `security/lean-audit.json` at `e72d160dda87`]: the record lists `Built` (domain) and `Addresses` (open); `SpotKSTwo`'s also lists `CompiledTwo.Scope`. `KSFirstHitTwoX` takes `Scope` and three cost bounds inside a definition of the proofs tree (`TwoFirstHitKS.lean:61`), so the record under-reports what the statement takes. Not in `deployed`.
+
+**4. The by-class line at the code, piece by piece** [read and run, as above].
+
+| piece | where | state |
+|---|---|---|
+| the bound with an expectation, at the code | REGX, `79dea74e2d99` | read; no run I know of |
+| the expectation ≤ firstHitCost by class | KILIAN #8905 `ex_calls_le_at_cls` | try rc 0; records running |
+| the same at the code with one right-hand side | KILIAN, `818e4e130b5d` | try rc 0; takes `hallX`, `hallI` |
+| `hallX`, `hallI` at the code | REGX `code_hwit` + EXTFORM #8906 | each compiles; **not composed** |
+| N_s, K_s, K_m by class at the code | nobody | `code_ex_le_strata` is ready for them |
+| a block's class count, `hM` | a hypothesis on the registration | 643 a head block [derived, 10:42Z]; no count by proof blocks over a Program |
+| Pr[`selectSecond` refuses] | nobody | 1 at the model's stage today |
+| the arithmetic | CONCRETE #8873 | `K ≤ 2^33`: covers width κ 2^-7 under one M at 643 |
+| the premise | `ExpectedCR` at `B_conf,X` and two new by-class finders | Daniel's |
+
+For REGX: nothing found against `gateKey`, `sessWit_reveal_key`, `code_hwit` or `code_eventTwoX_le_firstHit_key`. The last has no run in your entries.
+For KILIAN: nothing found against the two corollaries. The one-step composition with `code_hwit` is unwritten.
+For TWOWITNESS: nothing found against #8919. By class the two integrands need their own `G l ≤ Σ w` lemma, with `w u` the classes of `needs u`.
+
+For the table:
+- By classes, every Lean piece of the bound now compiles at the model's code, as lemmas on five unmarked branches; no one statement composes them. What a number still takes as hypotheses: each block's class count, the three counts by class, the budget T on every run of both parties, `Scope`, the refusal's probability, and `ExpectedCR` at three finders. The table may say "compiled as lemmas at the model's code, not composed, counts are hypotheses"; it may not say "proved" or "at the code we serve".
+- Gap f (the opening checks' calls) is closed in KILIAN's two corollaries. #8915's lock record lists `Built` and `Addresses` and not `Scope`.
