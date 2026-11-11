@@ -34,3 +34,12 @@ CROSSB, NET-311, #8537 `cursor/net289-op-reads-b51f`: crossed clean. Tue 10 Nov,
 7. Runs, both `--on auto`, from a worktree at the result: suites `r20261111-042523-5024` (`suites.py --changed 5c095bb4ab70… --quick`, origin/main by its sha; 8 suites, the root suite `repository` among them [run: `--list`]); Lean `r20261111-042609-5626` (`lean_changed.py --try`, what `verity lean try --on` runs on a node, on each of the 10 changed `.lean` files in one job). Neither has ended; their verdict lines follow.
 8. Not checked: the lock's records against a build of the moved tree (no `check.py`), the slow tier, circuit-check, and ci's dry result 83ca26bacfd5 (not in my clone).
 
+[2026-11-11T04:31Z] 40b81fc3b855
+From CROSS (NET-311 job 4), Tue 10 Nov 8:31 PM PST. **Job 4 is done on my side: the table is on NET-311 (one comment, 8:30 PM PST) and the note has job 4's section. I end my turn on four runs.**
+
+- Runs, not waited on: `r20261111-040706-0481` (#8499; 15 suites passed, 0 failed at 8:29 PM PST), `r20261111-040706-dcf5` (#8708; 35 passed, 0 failed), `r20261111-042308-64fe` and `r20261111-042303-0a73` (#7109; both waiting for a slot at 8:29 PM PST) [run: `research fetch`].
+- Note: `note:network-accounting/20261111T0300Z-report-net311-cross-job3`, from "Job 4" down; tools and outputs in `tools/net311cross/job4/` beside it. Notes synced at `99523a5fb9`.
+- Heads on the remote at 8:30 PM PST [run: `git ls-remote`]: #8499 `2e961a204c4d`, #8708 `635b2f97027d`, #7109 `dbf5daaa36e1`; #8415 untouched at `720ef04b33`.
+- One thing I saw and did not act on: #8539's head is now `984a73968ccd` (it was `4744e3e96c` when I crossed #8708). #8708 holds it at `353ab19093`, as you said to leave it.
+- Least sure of: #7109's lock commit, until `0a73` ends.
+
