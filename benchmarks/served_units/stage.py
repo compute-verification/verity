@@ -105,20 +105,20 @@ from typing import Callable
 import numpy as np
 
 from circuit_check import targets as TG
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.types import Array
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import gemm as OG
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import program_digest
+from verity.circuits.types import Array
+from verity.circuits.defs import bind
+from verity.definitions.ops import gemm as OG
+from verity.definitions.ops.boolean import gemm as BG
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
-from verity.ml.definitions.numerics import derived_rows as DR
-from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32
-from verity.ml.definitions.registry import act, b1, dsa, dsa_topk_reads, fp8_moe, fp8_moe_experts, moe, ref_prims, sparse_mla
-from verity.ml.definitions.registry import boolean_fp8 as BF
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.ops.prims import HopperE4m3QgmmaDot32
+from verity.definitions.registry import act, b1, dsa, dsa_topk_reads, fp8_moe, fp8_moe_experts, moe, ref_prims, sparse_mla
+from verity.definitions.registry import boolean_fp8 as BF
 
 
 #: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): `class_statement.stage` cuts a PARTS type's
@@ -434,11 +434,11 @@ def stage_read(name: str, S: dict, tag: str, n: int, out: Path, t0: float) -> di
     """``n`` honest reads of one table, a proof block each, on the verifier's read template, as stage.json's record. The
     table has V ranks of H words: its first L rows filled at random under random salts, every later rank the zero row under the
     zero salt (the history table's placeholder), its tokens random below L; each read's row and verdict are held to the table's."""
-    from verity.ml.commitments import row_table
-    from verity.ml.commitments.gates import embedding as E
-    from verity.ml.commitments.indexed import RangeIndexedDomain
-    from verity.ml.commitments.merkle import CommitmentDomain
-    from verity.ml.windows import interface as IF
+    from verity.commitments import row_table
+    from verity.commitments.gates import embedding as E
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain
+    from verity.commitments.windows import interface as IF
     from verity_vllm.pipeline.chunk_rows import READ_LAYOUT
 
     V, H, L = S["V"], S["H"], S["L"]
