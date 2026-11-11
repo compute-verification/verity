@@ -56,12 +56,14 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **per member** (`checkMembersAt`): the form for a population of several members, a statement a sampled member. It
   accepts nothing (`MULTI_REFUSED`, `checkMembersAt_refuses`) until the guarantee for one sample over several
   members' statements is in the lock, and `protocol` does not read it: `paramsOfJson` and `evidenceOf` refuse
-  `proofs` of other keys than the one statement's, so their parameters name no members, their evidence no statements,
-  and the check at the coins (`checkBlobsAt`) is the one statement's (`checkOneAt`). The form's own parsers read it
-  (`membersParamsOfJson`, `membersEvidenceOf`; `paramsEitherOfJson` and `evidenceEitherOf` read either form), and on
-  parameters that name members with evidence that names statements `checkBlobsAt` is `checkMembersAt`; parameters of
-  one form with evidence of the other reject. Its parameters' `proofs` is exactly `{"members"}` (`membersOf`), an
-  object from each member's name to exactly `{"circuit", "public", "registered", "units", "vus_per_block"}`: its
+  `proofs` of other keys than the one statement's, so their parameters name no members (`paramsOfJson_members`),
+  their evidence no statements (`evidenceOf_statements`), and the check at the coins (`checkBlobsAt`, which `live`
+  runs) is the one statement's (`checkOneAt`: `checkBlobsAt_parsed`, `live_checkAt_parsed`). The form's own parsers
+  read it (`membersParamsOfJson`, `membersEvidenceOf`; `paramsEitherOfJson` and `evidenceEitherOf` read either
+  form), and on parameters that name members with evidence that names statements `checkBlobsAt` is
+  `checkMembersAt`; parameters of one form with evidence of the other reject. Its parameters' `proofs` is exactly
+  `{"members"}` (`membersOf`), an object from each member's name to exactly
+  `{"circuit", "public", "registered", "units", "vus_per_block"}`: its
   statement's files, as the one statement's, its units as `[lo, hi)` ranges, ascending, no unit in two members', and
   its circuit's units a proof block. Its evidence's `proofs` is exactly `{"statements"}` (`statementsOf`), a list of
   exactly `{"member", "sessions"}`, the statements' sessions in order being v1's `sessions`. The statements are held as
@@ -1327,6 +1329,43 @@ def live (bs : Array ByteArray) : Core.Live (protocol.on bs) where
   coins := coinsOf
   checkAt p c ξ e := checkBlobsAt p c ξ e (Core.Blobs.ofArray bs)
   factors _ _ _ := rfl
+
+/-- **Parsed parameters name no members**: whatever `paramsOfJson` returns is of the one statement's form. -/
+theorem paramsOfJson_members {j : Json} {p : Params} (h : paramsOfJson j = .ok p) : p.members = none := by
+  unfold paramsOfJson at h
+  simp only [bind, Except.bind] at h
+  repeat' split at h
+  all_goals try contradiction
+  all_goals try (rename_i ht _ _ _ _; simp [throw, throwThe, MonadExceptOf.throw] at ht; done)
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  subst h
+  rfl
+
+/-- **Parsed evidence names no statements**: whatever `evidenceOf` returns is of the one statement's form. -/
+theorem evidenceOf_statements {b : ByteArray} {e : Evidence} (h : evidenceOf b = .ok e) : e.statements = none := by
+  unfold evidenceOf at h
+  simp only [bind, Except.bind] at h
+  repeat' split at h
+  all_goals try contradiction
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  subst h
+  rfl
+
+/-- **On what `protocol` parses, the check at the coins is the one statement's**: `protocol` reads its parameters by
+`paramsOfJson` and its evidence by `evidenceOf`, which return the one statement's form alone (`paramsOfJson_members`,
+`evidenceOf_statements`), where `checkBlobsAt` is `checkOneAt` (`checkBlobsAt_one`). So `checkMembersAt` runs on no
+input `protocol` parses. -/
+theorem checkBlobsAt_parsed {j : Json} {b : ByteArray} {p : Params} {e : Evidence} (hp : paramsOfJson j = .ok p)
+    (he : evidenceOf b = .ok e) (c : OneStage.Commitment) (ξ : ByteArray) (bs : Core.Blobs) :
+    checkBlobsAt p c ξ e bs = checkOneAt p c ξ e bs :=
+  checkBlobsAt_one (paramsOfJson_members hp) (evidenceOf_statements he)
+
+/-- **`live`'s check at the coins is the one statement's on what `protocol` parses** (`checkBlobsAt_parsed`), on any
+blobs. -/
+theorem live_checkAt_parsed (bs : Array ByteArray) {j : Json} {b : ByteArray} {p : Params} {e : Evidence}
+    (hp : paramsOfJson j = .ok p) (he : evidenceOf b = .ok e) (c : OneStage.Commitment) (ξ : ByteArray) :
+    (live bs).checkAt p c ξ e = checkOneAt p c ξ e (Core.Blobs.ofArray bs) :=
+  checkBlobsAt_parsed hp he c ξ (Core.Blobs.ofArray bs)
 
 /-- `protocol.main`'s commands, and `verdicts OWN PROOFS [BLOB ...]`: the sessions' verdicts alone (`verdicts`, with no
 proved units to bind), from the verifier's own inputs (`ownOfJson`) and the evidence's `proofs` (`proofsOf`), each file
