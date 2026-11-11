@@ -6,7 +6,8 @@
 
 At the root of a `research run --cwd clone` clone. For each head of `restackall/heads.json` in the shard: fetch it
 (`refs/pull/N/head`), merge `--main` into it as `git merge` would (the clone's merge drivers), then the day's command,
-`tools/move/restack.py MERGED --main STAGED --kept --dry-run --json`, loaded as a module so that each merge it makes and
+`tools/move/restack.py MERGED --main STAGED --kept --dry-run --json` (with `--no-pins` unless `--pins`: the pins step
+may build Lean, so by default the result's stale pins are only listed, `pins.py --stale`), loaded as a module so that each merge it makes and
 each run of the move's script is recorded beside its result. Nothing here decides an outcome: the status, the step and
 the files are restack.py's. Added beside them: each conflicted file's kind (`git merge-tree`'s own message), whether
 every merge is also clean where no merge driver is registered, the script's notes, the branch's files left in a
@@ -111,6 +112,8 @@ def notes_of(text: str) -> dict:
         elif (m := NOTE.match(line)):
             cur = m.group(1)
             notes[cur] = [int(m.group(2)), []]
+        elif cur and notes[cur][1] and not line.startswith("  ") and len(notes[cur][1]) < 14:
+            notes[cur][1].append(line.strip()[:400])
         else:
             cur = None
     return {k: v for k, v in notes.items() if v[1]}
@@ -120,6 +123,20 @@ def emptied_dirs(main: str, staged: str) -> set[str]:
     def dirs(c: str) -> set[str]:
         return {x for x in git("ls-tree", "-r", "-d", "--name-only", "-z", c).stdout.decode().split("\0") if x}
     return dirs(main) - dirs(staged)
+
+
+def stale_pins(RS, commit: str) -> dict:
+    """`pins.py --stale` at the root of a scratch worktree of `commit`: which pins are stale, with no command of theirs run."""
+    with tempfile.TemporaryDirectory(prefix="restackall-pins-", ignore_cleanup_errors=True) as tmp:
+        wt = os.path.join(tmp, os.path.basename(tmp))
+        RS.add_worktree(wt, commit, None)
+        try:
+            p = subprocess.run([sys.executable, RS.PINS, "--stale"], cwd=wt, capture_output=True, text=True, timeout=900)
+            return {"exit": p.returncode, "report": (p.stderr or p.stdout).strip().splitlines()[-40:]}
+        except subprocess.TimeoutExpired:
+            return {"error": "over 900 s"}
+        finally:
+            RS.drop_worktree(wt, None)
 
 
 def one(a: argparse.Namespace) -> dict:
@@ -183,7 +200,7 @@ def one(a: argparse.Namespace) -> dict:
     buf, err = io.StringIO(), io.StringIO()
     try:
         with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
-            rc = RS.main([merged, "--main", staged, "--kept", "--dry-run", "--json"])
+            rc = RS.main([merged, "--main", staged, "--kept", "--dry-run", "--json", *([] if a.pins else ["--no-pins"])])
     except SystemExit as e:
         return done("refused", error=str(e), stderr=err.getvalue()[-3000:], crossings=crossings, scripts=scripts, calls=calls)
     except Exception as e:  # noqa: BLE001
@@ -218,6 +235,9 @@ def one(a: argparse.Namespace) -> dict:
             if not c["files"] and (f := without(c["ours"], c["theirs"], c["base"])):
                 lost[f"{'base' if c['base'] is None else 'moved'} of {c['theirs'][:12]}"] = f
         extra["without_drivers"] = lost
+        if result and not a.pins:
+            with contextlib.suppress(Exception):
+                extra["stale_pins"] = stale_pins(RS, result)
         if result:
             gone = set(json.load(open(a.emptied)))
             added = [x for x in git("diff", "--name-only", "--no-renames", "--diff-filter=A", "-z", staged, result)
@@ -236,10 +256,13 @@ def pool(a: argparse.Namespace) -> int:
     i, n = (int(x) for x in a.shard.split("/"))
     rows = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "heads.json")))
     rows = [r for k, r in enumerate(rows) if k % n == i]
+    control = {"n": 0, "head": a.main, "owner": "control"}
     if a.only:
         want = {int(x) for x in a.only.split(",")}
         rows = [r for r in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "heads.json")))
                 if r["n"] in want]
+        if 0 in want:
+            rows = [control, *rows]
     here = os.getcwd()
     up = os.path.dirname(here)
     scratch = tempfile.mkdtemp(prefix="restackall-", dir=up if os.path.basename(up) == os.environ.get("RESEARCH_RUN_ID") else None)
@@ -290,8 +313,11 @@ def pool(a: argparse.Namespace) -> int:
                                 a.staged, f"^{a.main}").splitlines() if len(x.split()) > 1]
         summary["moves"] = moves
         if i == 0 and not a.only:
-            rows = [{"n": 0, "head": a.staged_base or a.main, "branch": "(control: main itself)", "owner": "control", "draft": False,
-                     "title": "control"}, *rows]
+            rows = [control, *rows]
+        sys.path.insert(0, os.path.join(os.getcwd(), "tools", "move"))
+        import restack as RS
+        with contextlib.suppress(Exception):
+            summary["staged_stale_pins"] = stale_pins(RS, a.staged)
         save(os.path.join(OUT, f"summary-{i}.json"), summary)
 
         def work(r: dict) -> dict:
@@ -299,7 +325,7 @@ def pool(a: argparse.Namespace) -> int:
                 return {**r, "status": "not-fetched"}
             t = time.time()
             cmd = [sys.executable, os.path.abspath(__file__), "--one", str(r["n"]), "--head", r["head"], "--main", a.main,
-                   "--staged", a.staged, "--nodrv", nodrv, "--emptied", emptied]
+                   "--staged", a.staged, "--nodrv", nodrv, "--emptied", emptied, *(["--pins"] if a.pins else [])]
             p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
             try:
                 so, se = p.communicate(timeout=a.head_timeout)
@@ -347,7 +373,7 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--staged", required=True)
     ap.add_argument("--main", required=True)
-    ap.add_argument("--staged-base")
+    ap.add_argument("--pins", action="store_true", help="run restack.py's pins step too (it may build Lean)")
     ap.add_argument("--shard", default="0/1")
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--only")
