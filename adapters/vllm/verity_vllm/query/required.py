@@ -2,7 +2,7 @@
 
 What this module DECIDES (structure + correspondence, no by-name table):
 
-* WHICH Values are required: `verity_vllm.query.units.required_values(P, Q_module_body_v1, policy)` -- every Value that crosses a
+* WHICH Values are required: `verity_vllm.query.units.required_values(P, module_body_partition(P, corr), policy)` -- every Value that crosses a
   module-body boundary in the Program's own dataflow, plus the policy below.  v1's "promotion" of interior rows whose output another
   module reads is not a pass here: such a Value crosses the boundary and is required by definition.  A literal (a Call
   that reads no Value, `module_body.literal_calls`) is the descriptor's: never a boundary Value, never protocol-required.
@@ -67,7 +67,7 @@ from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, runtime_rows
 from verity.definitions import word as word_query
 from verity_vllm.query.collective_names import NORM_SITE_MEMBER, collective_sites, norm_sites
-from verity_vllm.query.module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, boundary_without_literals, literal_calls
+from verity_vllm.query.module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, boundary_without_literals, literal_calls, module_body_partition
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
 
 __all__ = ["SAMPLING_EVENTS", "collective_kind",
@@ -289,12 +289,12 @@ class Population:
         self.literals = literals = literal_calls(P)
         # a check is an output, not a required Value: nothing commits it, and the replay evaluates it from the Values that are required
         returned = replace(P, outputs=tuple(v for v in P.outputs if v not in frozenset(P.checks))) if P.checks else P
-        self.B_module = B_module = boundary_without_literals(returned, Q_module_body_v1(P, corr), literals)
+        self.B_module = B_module = boundary_without_literals(returned, module_body_partition(P, corr), literals)
         if query == Q_WORD_ID:
             self.Q = partition_by(lambda c: c.id)
             self.B = B = boundary_without_literals(returned, self.Q, literals)
         else:
-            self.Q = Q_module_body_v1(P, corr)
+            self.Q = module_body_partition(P, corr)
             self.B = B = B_module
         step_of = self.step_of
         #: UNRETURNED: Calls whose Values no Call reads, the Program does not return and no policy below requires: nothing depends on

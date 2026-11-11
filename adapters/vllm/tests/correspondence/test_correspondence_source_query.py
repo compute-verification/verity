@@ -18,7 +18,7 @@ from verity_vllm.correspondence.reader_for_query import (
     recorded_names,
 )
 from verity_vllm.query.compose import merge_ranks
-from verity_vllm.query.module_body import Q_module_body_v1
+from verity_vllm.query.module_body import module_body_partition
 from verity_vllm.query.program_view import InputView, Port, ProgramView
 from verity_vllm.query.required import request_manifest
 from verity_vllm.query.units import ValueRef, boundary
@@ -56,7 +56,7 @@ def test_record_and_fallback_agree_call_for_call_and_the_source_is_recorded():
     for c in P.calls:
         assert canon.module_of(c.id) == fallback.module_of(c.id), c.name
         assert canon.name(c.id) == fallback.name(c.id), c.name
-    Qa, Qb = Q_module_body_v1(P, canon), Q_module_body_v1(P, fallback)
+    Qa, Qb = module_body_partition(P, canon), module_body_partition(P, fallback)
     assert {u.id: u.calls for u in Qa(P)} == {u.id: u.calls for u in Qb(P)}
     assert boundary(P, Qa).values == boundary(P, Qb).values
     res = result_json()

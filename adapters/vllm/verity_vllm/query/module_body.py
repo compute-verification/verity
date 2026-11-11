@@ -35,7 +35,7 @@ from verity_vllm.query.units import (
 
 from .program_view import ProgramView
 
-__all__ = ["Q_MODULE_BODY_ID", "Q_MODULE_BODY_TEXT", "Q_module_body_v1", "literal_calls", "without_literals", "boundary_without_literals",
+__all__ = ["Q_MODULE_BODY_ID", "Q_MODULE_BODY_TEXT", "module_body_partition", "literal_calls", "without_literals", "boundary_without_literals",
            "module_body_boundary"]
 
 Q_MODULE_BODY_ID = "Q_module_body_v1"
@@ -45,7 +45,7 @@ Q_MODULE_BODY_TEXT = ("Q_module_body_v1: unit = module body = the maximal set of
                       "the Program's literals (the Values of Calls that read no Value: written in the descriptor, never acquired)")
 
 
-def Q_module_body_v1(P: ProgramView, correspondence: Correspondence) -> Partition:
+def module_body_partition(P: ProgramView, correspondence: Correspondence) -> Partition:
     """The partition of `P`'s Calls by owning module path (unit id = the Program module path; "" for the root body)."""
     if correspondence.P is not P:
         raise ValueError("Q_module_body_v1: the correspondence was read off another Program")
@@ -147,5 +147,5 @@ def boundary_without_literals(P: ProgramView, Q: Partition, literals: frozenset[
 
 
 def module_body_boundary(P: ProgramView, correspondence: Correspondence, literals: frozenset[int] | None = None) -> Boundary:
-    """The boundary of `Q_module_body_v1(P, correspondence)`: the crossing Values of the module-body partition minus the literals."""
-    return boundary_without_literals(P, Q_module_body_v1(P, correspondence), literal_calls(P) if literals is None else literals)
+    """The boundary of `module_body_partition(P, correspondence)`: the crossing Values of the module-body partition minus the literals."""
+    return boundary_without_literals(P, module_body_partition(P, correspondence), literal_calls(P) if literals is None else literals)

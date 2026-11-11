@@ -19,9 +19,9 @@ import pytest
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query import program_view as pv
 from verity_vllm.query.module_body import (
-    Q_module_body_v1,
     literal_calls,
     module_body_boundary,
+    module_body_partition,
 )
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import request_manifest
@@ -103,7 +103,7 @@ def test_literals_cross_a_body_boundary_but_are_not_boundary_values():
     P = sampler_program()
     corr = Correspondence(P)
     assert corr.source == "v1_annotations" and corr.module_of(2) == "gumbel_topp_token_select" and corr.module_of(6) == ""
-    raw = boundary(P, Q_module_body_v1(P, corr))
+    raw = boundary(P, module_body_partition(P, corr))
     lit = {R(k, "out") for k in LITERALS}
     assert lit <= raw.values, "the mechanism: the literals' body is not the select's, so the plain boundary carries them"
     B = module_body_boundary(P, corr)
