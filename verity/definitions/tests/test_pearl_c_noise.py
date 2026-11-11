@@ -23,6 +23,7 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.bits import compile as compile_bits
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.commitments.gates import sha512 as SHA
+from verity.commitments.gates.sha512 import compress_ref, pad_tail, words_be
 from verity.definitions.boolean import boolean_version, sigma_lift
 from verity.definitions.registry import pearl_c_noise as N
 from verity.protocols.pouw.prover.schemes import pearl_c as C
@@ -137,16 +138,27 @@ def lean_seeds() -> tuple[bytes, bytes]:
     return C.S512Seed(C.row_seed(SALT, C.row_digest(ROW), ROOT, UNIT, ROW_INDEX)), C.seed_b(SALT, ROOT)
 
 
+def from_midstate(role: str, message: bytes) -> bytes:
+    """`s512` as the Boolean versions compute it, on words: from the label's midstate, one compression a block of the padded
+    message."""
+    data = message + pad_tail(128 + len(message))
+    cv = list(N._midstate(role))
+    for i in range(0, len(data), 128):
+        cv = compress_ref(cv, words_be(data[i:i + 128]))
+    return b"".join(w.to_bytes(8, "big") for w in cv[:4])
+
+
 def test_the_labels_and_the_labelled_hash_are_the_references():
-    """Each role's label block is `pearl_c.S512_LABELS`', and `s512` from the label's midstate is hashlib's at every padding
-    case: an empty message, each hash's length, and the lengths around a block's end."""
+    """Each role's label block is `pearl_c.S512_LABELS`', and `s512` is the reference's and the hash from the label's
+    midstate, which the Boolean versions build on, at every padding case: an empty message, each hash's length, and the
+    lengths around a block's end."""
     assert all(N.label(r) == C.S512_LABELS[r] for r in N.ROLES)
     with pytest.raises(ValueError, match="not 'jackpot2'"):
         N.label("jackpot2")
     rng = random.Random(7)
     for n in (0, 32, 38, 96, 111, 112, 127, 128, 168, 300):
         m = bytes(rng.randrange(256) for _ in range(n))
-        assert all(N.s512(r, m) == C.s512(r, m) for r in N.ROLES)
+        assert all(N.s512(r, m) == C.s512(r, m) == from_midstate(r, m) for r in N.ROLES)
 
 
 def test_each_word_definition_has_its_boolean_version():

@@ -29,10 +29,11 @@ tests hold a line to it.
 A byte string is an ``Array<n, Value<8>>`` in byte order, an index a ``Value<32>``. Each Definition has a word form (``_v1``)
 and a Boolean version (``_v2``) whose word view it is; on bits a byte is 8 bits, least significant first.
 
-Each hash is one compression of its message from its label's midstate, a constant, written with
-`verity.commitments.gates.sha512`: `compress_gadget` on bits, `compress_ref` on words. A word gate returns one value, so a
-compression's word form is one gate a byte of one primitive, byte ``at`` of its value (``PearlCSeedBByte_v1`` and its like),
-each fed its index as a constant; no Boolean version computes one byte alone.
+On bits each hash is one compression of its message from its label's midstate, a constant, written with
+`verity.commitments.gates.sha512`'s `compress_gadget`. A word gate returns one value, so a compression's word form is one
+gate a byte of one primitive, byte ``at`` of its value (``PearlCSeedBByte_v1`` and its like), each fed its index as a
+constant; no Boolean version computes one byte alone. A labelled hash's evaluator is `hashlib`'s SHA-512 of the label's
+block and the message; a compression from a given state is `compress_ref`.
 
 A Boolean Definition is a proof unit only up to 65,536 ANDs, the size circuit-check lowers one whole at, and a compression is
 about 56,000. So a Definition of more than one compression is a composition of units under that size, each lowered and pinned
@@ -44,6 +45,7 @@ midstate; and a row's line, `PearlCRowLine`, is the digest, the seed, the key an
 """
 from __future__ import annotations
 
+import hashlib
 import math
 from functools import lru_cache
 from typing import Callable
@@ -102,14 +104,9 @@ def _midstate(role: str) -> tuple[int, ...]:
     return tuple(midstate(label(role)))
 
 
-@lru_cache(maxsize=4096)
 def s512(role: str, message: bytes) -> bytes:
-    """-h3's labelled hash: the first 32 bytes of SHA-512(``label(role)`` ‖ ``message``), from the label's midstate."""
-    data = message + pad_tail(128 + len(message))
-    cv = list(_midstate(role))
-    for i in range(0, len(data), 128):
-        cv = compress_ref(cv, words_be(data[i:i + 128]))
-    return b"".join(w.to_bytes(8, "big") for w in cv[:4])
+    """-h3's labelled hash: the first 32 bytes of SHA-512(``label(role)`` ‖ ``message``)."""
+    return hashlib.sha512(label(role) + message).digest()[:32]
 
 
 def _words(data: list[list]) -> list[list]:
@@ -123,7 +120,7 @@ def _word_bytes(words: list[list]) -> list[list]:
 
 
 def _s512_bits(C, role: str, message: list[list]) -> list[list]:
-    """`s512` over bytes of circuit bits: its 32 bytes."""
+    """`s512` over bytes of circuit bits, from the label's midstate: its 32 bytes."""
     data = list(message) + [const_bits(b, 8) for b in pad_tail(128 + len(message))]
     cv = [const_bits(v, 64) for v in _midstate(role)]
     for i in range(0, len(data), 128):
