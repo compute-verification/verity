@@ -61,9 +61,10 @@ rule, and never by requests what a check counts by capacity:
 * the scan under each of `CHANGES`, the three changes to its check, and under all three: a response's length held to
   its Program's output count, and that count to its ids by a stop block, a proof block that checks where a response's
   ids stop, sampled on a served audit, so that the schedules are 0 and the connections that fail are charged pooled
-  over the period (`failed`); the release times taken once, by the compute side's tick, so that the jitter is 0,
-  which rests on the set-time card no timing test has shown; and the entries charged through the compute audit, whose
-  own bound then stands in their place and is not counted here;
+  over the period (`failed`); the release times taken once, by the compute side's tick, so that the jitter is 0 at
+  either D_j, which rests on the set-time card no timing test has shown, so a row under this change carries the
+  label at either D_j, in the document and in its printed name; and the entries charged through the compute audit,
+  whose own bound then stands in their place and is not counted here;
 * the design, which no run has behind it: head checks, a lengths unit on the network certifier's records, and a stop
   block sampled on a served audit. The lengths unit holds a response's length to its Program's output count and the
   stop block holds that count to the ids, so the lengths are held; the entries are the compute audit's; and its term
@@ -445,8 +446,9 @@ _MARK = {"measured": "measured", "modeled": "modeled", "derived": "modeled", "da
 JITTERS = (1, 2)
 #: the jitter bound of the term of record: two release schedules
 OF_RECORD = 2
-#: the label every figure at D_j = 1 is printed under: what a network certifier whose network card releases at a set
-#: time would be charged, which no timing test has shown
+#: the label every figure that rests on a set-time card is printed under: a figure at D_j = 1, what a network
+#: certifier whose network card releases at a set time would be charged, and at either D_j a figure of a row whose
+#: release times are taken once (`CHANGES`' timing). No timing test has shown such a card
 SET_TIME = "with a set-time card (not yet tested)"
 SCOPES = ("node", "datacenter", "world")
 #: the assumed class's defaults: the most ids a response holds, an id's bits and an execution phase's buckets
@@ -756,9 +758,11 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
     and where it stands (`ROWS`); the inputs; and at the top the term of record, the term over the world's year as
     the scan's check charges it today at two release schedules (D_j = `OF_RECORD`), as ``value`` in ``unit``, with
     the ``commit`` and the ``run`` that computed it. Beside it ``with_set_time_card`` holds the same term at D_j = 1,
-    its unit and the label it is printed under (`SET_TIME`). ``only`` and ``periods`` keep the rows of those scopes
-    and monitoring periods; ``covers`` is the share of its scope's compute a row counts, and ``request_count`` which
-    of `COUNTS` its requests are, the document's one."""
+    its unit and the label it is printed under (`SET_TIME`). A row's own ``with_set_time_card`` is that label where
+    its changes include the timing's, so that its jitter is 0 at either D_j and every figure of it rests on the
+    card, and None on every other row. ``only`` and ``periods`` keep the rows of those scopes and monitoring periods;
+    ``covers`` is the share of its scope's compute a row counts, and ``request_count`` which of `COUNTS` its requests
+    are, the document's one."""
     only, periods, target = set(only) or set(SCOPES), set(periods) or set(PERIODS), Fraction(target_gb) * GB
     if not target > 0 or only - set(SCOPES) or periods - set(PERIODS):
         raise ValueError(f"the target is positive, a scope one of {', '.join(SCOPES)} and a monitoring period one of "
@@ -771,6 +775,7 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
                 "bits_a_phase": float(t / r.phases), "bits_a_request": float(t / r.requests) if r.requests else None}
 
     rows = [{"scope": r.scope.name, "period": r.period, "row": r.name, "standing": ROWS[r.name].standing,
+             "with_set_time_card": SET_TIME if "timing" in (ROWS[r.name].changes or ()) else None,
              "machines": r.scope.machines, "gpu_seconds": r.scope.gpus * PERIODS[r.period],
              "request_count": counted, "requests": float(r.requests), "phases": float(r.phases), "covers": 1.0,
              "eps": float(r.eps), "schedules": _size(r.terms[1].schedules), "cells": _size(r.terms[1].cells),
@@ -840,9 +845,18 @@ def render(doc: dict) -> str:
     def entries(r: dict, unit: str) -> str:
         return _n(r["entries"] and r["entries"][unit], theirs)
 
+    def short(label: str | None) -> str:
+        """A label's short form after a comma, as a header and a row's name carry it, and nothing for no label."""
+        return f", {label.removeprefix('with a ')}" if label else ""
+
     def head(what: str, dj: str) -> str:
         """A column's header at a jitter bound: at D_j = 1 it carries the label's short form."""
-        return f"{what}, D_j = {dj}" + ("" if int(dj) == OF_RECORD else f", {card['label'].removeprefix('with a ')}")
+        return f"{what}, D_j = {dj}" + short(None if int(dj) == OF_RECORD else card["label"])
+
+    def name(r: dict) -> str:
+        """A row's name in the tables: a row that rests on the set-time card at either D_j carries the label's short
+        form, as a header does."""
+        return r["row"] + short(r["with_set_time_card"])
 
     lines = [
         f"# {doc['name'][0].upper()}{doc['name'][1:].split(' over ')[0]}, at a scope's load", "",
@@ -852,6 +866,8 @@ def render(doc: dict) -> str:
         f"The term of record is the one at D_j = {OF_RECORD}, two release schedules. The term at D_j = 1 is what a "
         "network certifier whose network card releases at a set time would be charged; no timing test has shown "
         f"one, so it is printed as \"{card['label']}\".",
+        "A row whose release times are taken once has a jitter of 0 at either D_j, which rests on the same card, so "
+        "its name carries the label.",
         f"Request count {counted}: {COUNTS[counted]}. Every row names its request count, and rows of two request "
         "counts don't compare.",
         "The rows of a scope and a monitoring period:",
@@ -881,7 +897,7 @@ def render(doc: dict) -> str:
                  *(head("jitter", dj) for dj in at),
                  *(head(c, dj) for dj in at for c in ("term", "x target", "x weights")),
                  "entries, the compute side's"),
-                [(r["scope"], r["period"], r["row"], r["request_count"], _n(r["schedules"]["GB"]),
+                [(r["scope"], r["period"], name(r), r["request_count"], _n(r["schedules"]["GB"]),
                   _n(r["cells"]["GB"]), *(_n(r["jitter"][dj]["GB"]) for dj in at),
                   *(_n(r["term"][dj][k]) for dj in at for k in ("GB", "of_target", "of_weights")),
                   entries(r, "GB")) for r in doc["rows"]], 4), "",
@@ -890,7 +906,7 @@ def render(doc: dict) -> str:
                  *(head("jitter", dj) for dj in at),
                  *(head("term", dj) for dj in at), "entries, the compute side's",
                  *(head("a link's phase", dj) for dj in at), *(head("a request", dj) for dj in at)),
-                [(r["scope"], r["period"], r["row"], r["request_count"], _n(r["schedules"]["bits"]),
+                [(r["scope"], r["period"], name(r), r["request_count"], _n(r["schedules"]["bits"]),
                   _n(r["cells"]["bits"]), *(_n(r["jitter"][dj]["bits"]) for dj in at),
                   *(_n(r["term"][dj]["bits"]) for dj in at),
                   entries(r, "bits"), *(_n(r["term"][dj]["bits_a_phase"]) for dj in at),

@@ -22,7 +22,10 @@ The document's `value` is the term of record: the scan's term over the world's y
 schedules (D_j = 2), in GB. The term at D_j = 1 is what a network certifier with a set-time card, a network card
 that releases at a set time, would be charged. No timing test has shown one, so a figure at D_j = 1 is never the
 term of record and is printed only under the label "with a set-time card (not yet tested)": the document's
-`with_set_time_card` holds the scan's term over the world's year at D_j = 1, its unit and that label.
+`with_set_time_card` holds the scan's term over the world's year at D_j = 1, its unit and that label. A row whose
+release times are taken once (`timing`, `all three`) has a jitter of 0 at either D_j, which rests on the same card,
+so every figure of it is under the label: the row's own `with_set_time_card` is the label, where every other row's
+is null, and the tables print the row's name with the label.
 
 ## The rows
 
@@ -67,7 +70,8 @@ cells, and nothing else.
 - **jitter**: ⌈log2 D_j^T⌉ bits for each execution phase of T buckets on each link. At D_j = 2, two release
   schedules, it is a bit a bucket, and that is the jitter of record. At D_j = 1 it is 0, which is what a network
   certifier with a set-time card would be charged: it is printed as "with a set-time card (not yet tested)". Where
-  the timing is taken once it is 0 at either D_j, and that 0 rests on the same card.
+  the timing is taken once it is 0 at either D_j, and that 0 rests on the same card, so those rows carry the label
+  in their name.
 - **term**: the three summed, the network certifier's own term, at each D_j. The term of record is the one at
   D_j = 2. The one at D_j = 1 is printed beside it only as "with a set-time card (not yet tested)", never as the
   term.
@@ -91,16 +95,19 @@ cells, and nothing else.
   rows of two don't compare.
 - **The terms in GB**: schedules, cells, the jitter at each D_j, and the term at each D_j with its multiple of the
   target (`x target`, `--target-gb`) and of one copy of the weights in FP4 (`x weights`); then the entries. Every
-  column at D_j = 1, the multiples too, has the label in its header, as `set-time card (not yet tested)`.
+  column at D_j = 1, the multiples too, has the label in its header, as `set-time card (not yet tested)`, and so has
+  the name of a row whose release times are taken once, in the `row` column:
+  `timing, set-time card (not yet tested)`.
 - **The terms in bits**: the same pooled totals in bits, beside the term for one execution phase of one link
   (`a link's phase`) and for one request (`a request`), the term as a share of the compute it covers.
 
-The lines above the tables give the rule for the term of record, each row's rule, one link's execution phase (its
-requests, a connection's bits, N2's schedules, a slot entry's bits), the target as bits a link's execution phase and
-a request over the world's year, and the largest failure rate at which, with the lengths held by a stop block and
-the release times taken once by a network certifier whose network card releases at a set time (not yet tested), the
-world's year meets the target. Then they give what the jitter alone is without that card, at D_j = 2 over the
-world's year, in GB and as a multiple of the target.
+The lines above the tables give the rule for the term of record and for the rows that carry the label, each row's
+rule, one link's execution phase (its requests, a connection's bits, N2's schedules, the jitter at each D_j, a slot
+entry's bits), the target as bits a link's execution phase and a request over the world's year, and the largest
+failure rate at which, with the lengths held by a stop block and the release times taken once by a network
+certifier whose network card releases at a set time (not yet tested), the world's year meets the target. Then they
+give what the jitter alone is without that card, at D_j = 2 over the world's year, in GB and as a multiple of the
+target.
 
 ## Where the scale comes from
 

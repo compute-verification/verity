@@ -13,6 +13,8 @@ load of a node, the reference datacenter and the world, each check's by its own 
   asked; a given count in place of either; and every row names which;
 - the term of record is the one at D_j = 2: the document's value is the scan's over the world's year at D_j = 2, and
   a figure at D_j = 1 is beside it only under its label, in the document and in every header of the tables;
+- a row that rests on the set-time card at either D_j carries the label, in the document and in its printed name,
+  and no other row prints a jitter of 0 at D_j = 2;
 - the command prints the table and its JSON (value, unit, commit, run), through `verity bench`'s runner too."""
 
 from __future__ import annotations
@@ -39,11 +41,27 @@ PHASES = {"week": 4_725, "month": 20_250, "year": 246_375}
 #: the design before its stop block has been sampled, the one row with no stop block
 NO_STOP = "design, no stop block"
 NAMES = ("scan", "N2", "lengths", "timing", "entries", "all three", NO_STOP, "design")
+#: the label's short form, as a column's header at D_j = 1 and a row's printed name carry it
+CARD = "set-time card (not yet tested)"
 
 
 def clog2(x: int) -> int:
     """The Lean's `clog2`: if x ≤ 1 then 0 else Nat.log2 (x - 1) + 1."""
     return 0 if x <= 1 else (x - 1).bit_length()
+
+
+def tables(text: str) -> list[list[dict]]:
+    """The printed tables of the scopes, the terms in GB and the terms in bits: each one's body rows, a row its
+    cells by header, in the header's order."""
+    def cells(line: str) -> list[str]:
+        return [c.strip() for c in line.strip("|").split("|")]
+
+    out, lines = [], text.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("| scope "):
+            body = itertools.takewhile(lambda x: x.startswith("|"), lines[i + 2:])
+            out.append([dict(zip(cells(line), cells(x), strict=True)) for x in body])
+    return out
 
 
 def small(**given) -> dict:
@@ -405,12 +423,12 @@ def test_the_document_names_its_value_unit_commit_and_run(capsys):
     assert few["value"] == doc["value"]
     text = LB.render(doc)
     assert "commit c0ffee, run r1" in text and "## The terms in GB" in text and "## The terms in bits" in text
-    assert "the compute side's" in text and "| world      | year   | all three " in text
-    assert f"| world      | year   | {NO_STOP} |" in text
+    assert "the compute side's" in text and f"| world      | year   | all three, {CARD} |" in text
+    assert f"| world      | year   | {NO_STOP} " in text and f"| world      | year   | timing, {CARD} " in text
     assert "- design (a design with no run behind it): " in text and "- N2 (on main): " in text
     assert f"- {NO_STOP} (a design with no run behind it): " in text
     assert "| lanes " in text and "| none " in text
-    assert "| world | year   | all three " in LB.render(few) and "| node" not in LB.render(few)
+    assert f"| world | year   | all three, {CARD} |" in LB.render(few) and "| node" not in LB.render(few)
     assert LB.render(LB.document(small())).splitlines()[2] == "commit unknown, run none"
     slots = LB.document(small(lanes=4))
     assert "4 lanes x 2 strides" in slots["entries_rule"] and "by capacity" in slots["entries_rule"]
@@ -446,9 +464,9 @@ def test_the_headline_is_the_scans_world_year_term_at_two_release_schedules_and_
     heads = [[c.strip() for c in line.strip("|").split("|")] for line in text if line.startswith("| scope")]
     assert [sum("D_j = 1" in c for c in head) for head in heads] == [0, 4, 4]
     assert [c for c in heads[1] if c.startswith("x ")] == [
-        f"{c}, D_j = {dj}" for dj in ("1, set-time card (not yet tested)", "2") for c in ("x target", "x weights")]
+        f"{c}, D_j = {dj}" for dj in (f"1, {CARD}", "2") for c in ("x target", "x weights")]
     for head in heads:
-        assert all(c.endswith(", D_j = 1, set-time card (not yet tested)") for c in head if "D_j = 1" in c)
+        assert all(c.endswith(f", D_j = 1, {CARD}") for c in head if "D_j = 1" in c)
         assert sum("D_j = 2" in c for c in head) == sum("D_j = 1" in c for c in head)
         assert not any("set-time card" in c for c in head if "D_j = 1" not in c)
     few = LB.render(LB.document(small(), only=["node"], periods=["week"]))
@@ -456,6 +474,34 @@ def test_the_headline_is_the_scans_world_year_term_at_two_release_schedules_and_
     zeroed = {name for name, kind in LB.ROWS.items() if "timing" in (kind.changes or ())}
     assert zeroed == {"timing", "all three"} == {name for name, k in LB.ROWS.items() if "set-time card" in k.counts}
     assert "no timing test has shown one" in LB.CHANGES["timing"]
+
+
+def test_a_row_that_rests_on_the_set_time_card_carries_the_label():
+    """A row whose release times are taken once has a jitter of 0 at D_j = 2 too, a zero that rests on the set-time
+    card. So the row carries the label: in the document as its own ``with_set_time_card``, which is null on every
+    other row, and in both tables in its name, beside every cell of it. The rows that carry it are exactly those
+    whose changes include the timing's, and no other row prints a jitter of 0 at D_j = 2. A row's name in the
+    document is as it was, since readers take rows by name."""
+    carries = {name for name, kind in LB.ROWS.items() if "timing" in (kind.changes or ())}
+    assert carries == {"timing", "all three"}
+    rate = Fraction(1, 10 ** 6)
+    for inp in (small(), small(failure_rate=Fraction(1, 100), lanes=4), LB.inputs(), LB.inputs(failure_rate=rate),
+                LB.inputs(requests="census"), LB.inputs(world_requests=1.778e16, response_ids=1_024)):
+        doc = LB.document(inp)
+        assert len(doc["rows"]) == 72 and [r["row"] for r in doc["rows"][:8]] == list(NAMES)
+        for r in doc["rows"]:
+            assert r["row"] in NAMES and r["with_set_time_card"] == (LB.SET_TIME if r["row"] in carries else None)
+            assert (r["jitter"]["2"]["bits"] == 0) == (r["row"] in carries) and r["jitter"]["1"]["bits"] == 0
+        _, gb, bits = tables(LB.render(doc))
+        for table in (gb, bits):
+            for r, printed in zip(doc["rows"], table, strict=True):
+                labelled = printed["row"].endswith(f", {CARD}")
+                assert printed["row"] == r["row"] + (f", {CARD}" if labelled else "")
+                assert labelled == (r["row"] in carries) == (printed["jitter, D_j = 2"] == "0")
+    text = LB.render(doc).splitlines()
+    assert ("A row whose release times are taken once has a jitter of 0 at either D_j, which rests on the same card, "
+            "so its name carries the label.") in text
+    assert LB.SET_TIME == f"with a {CARD}"
 
 
 def test_the_command_prints_the_table_and_its_json(capsys, monkeypatch):
