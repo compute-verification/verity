@@ -32,9 +32,10 @@
 # node's / is nearly full), never in the run dir.
 # The card's start check is gpu_lease.sh's, taken without --wait: a card whose lock is held, or with another's compute
 # process on it, ends the run (exit 75) instead of waiting. The container's CPU throttle count is written at each round's
-# start and end (rounds.txt), since another lane's timed row on this node is void when it moves.
+# start and end (served_ab.txt), since another lane's timed row on this node is void when it moves. With NOT_AFTER (a UTC
+# time, `date -d` syntax) no round starts after it, so the run stays inside its booked hours.
 #   research run --on vy-spot-glm53 --project verity --source TREE --cwd clone --timeout 240m -- \
-#     env CARD=1 CORES=0-11 bash benchmarks/one_stage/served_ab.sh
+#     env CARD=1 CORES=0-11 NOT_AFTER=2026-11-11T07:05Z bash benchmarks/one_stage/served_ab.sh
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=$PWD
@@ -200,6 +201,9 @@ say "prep done; throttle count $(throttled), $t0 at the start"
 export OUT
 k=0 bad=0
 for name in $(seq -f 'warm-%g' 1 "$WARM") $(seq -f 'rep-%g' 1 "$REPS"); do
+  if [ -n "${NOT_AFTER:-}" ] && [ "$(date -u +%s)" -gt "$(date -u -d "$NOT_AFTER" +%s)" ]; then
+    say "$name: not started, past NOT_AFTER $NOT_AFTER"; bad=11; break
+  fi
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-compute-accounting-served-ab} bash "$LEASE" 1 --on "$CARD" --max-min "$LEASE_MIN" \
     --mem-gb "$LEASE_MEM_GB" -- bash "$TREE/benchmarks/one_stage/served_ab.sh" round "$name" "$k"
   rc=$?
