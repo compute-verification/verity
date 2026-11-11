@@ -65807,3 +65807,37 @@ Tags: [read: file], [run: id], [derived], [guess].
 - **A thing for the merge with `main`, not done now:** once #9005 and #9057 are on `main`, my measurement's Python starts the verifier under whatever its job's environment holds, not through `proofs.verifier_env` as the other Python callers will. I change it at the merge so its default is the callers' setting; until then a figure of mine says which setting it ran under.
 
 **Not done:** `d744`'s reading; the two runs above; the second pull request's records run, quick tier and body; the first pull request, which waits on #8789, #8949 and #9042.
+
+## WIDEZK, Wed 11 Nov 21:57Z: the count, from a run. On a scratch tree all 237 files build: 217 as they were (45 of the 65 the script changed, and the 172 it did not), 17 with a change by hand, 3 once one outside lemma was fixed, which WIDELEAF has now done. None of this is the axiom check, which waits on the base. WRONG, mine, in my 20:45Z entry: the script did change `RelayLoopFirst.lean`
+
+**Branch.** `cursor/proofs-widezk-3e4d` at `d94a00f733`, pushed 21:54Z, with WIDELEAF's `874ca17ac6` merged in; my branch differs from it in 17 files, all in my two directories [read: `git diff --name-only`]. Mailbox read 21:52Z: nothing after the 20:32Z rule.
+
+**WRONG, mine, 20:45Z.** I wrote that the script did not touch `ZkAny/RelayLoopFirst.lean`. It changed two lines of it [read: `git diff 0bfe402a6c 5fa334aa31`]. Every file I have changed by hand is among the 65 the script changed.
+
+**What ran** [run `r20261111-202155-2c63`, vy-nebius-cpu-8, exit 0 at 21:49Z, 77 min]. The tree: my branch at `fdbf31a0d8`, the two outside changes of my 20:45Z entry, and 40,437 proofs outside my two directories replaced by `sorry` (my own proofs untouched). A loop built my 237 files; where a declaration failed it replaced the proof by `sorry`, or removed the declaration if its statement failed, and built again. After 17 rounds everything built. What it had to touch:
+
+- **In my files: 14 proofs in 12 files.** Ten had an error of their own, in eight files; four only called an outside lemma whose statement did not elaborate (`Sched.tabOfLevel0_alike`, `Claims/ZK/FrameSched.lean:1255`).
+- **Outside: 24 declarations in 12 files** of `Claims/ZK/**` and `Claims/Complete/**`, each a statement that named the version out of scope or could not infer it. WIDELEAF's 21:48Z entry lists the same files as fixed in `51afc321e2` [relayed]; I do not repeat them.
+
+**The count.** On that tree, so with the base's proofs absent:
+
+- 172 files the script did not change: all build as they are.
+- 65 files the script changed: 45 build as the script left them; 17 needed a hand (nine found by reading before the run: what I changed in them built, and one of the nine, `RelayFreshStart.lean`, also held a proof that waited on the outside lemma; eight found by the run); 3 are as the script left them and waited only on the outside lemma.
+
+**The ten proofs the run found, all fixed and pushed, none built yet.** Three kinds, each a place where a proof moved a fact by `m` alone and the schedule now also reads the version:
+
+- `Finish.tabOfLevel0` has one more refusal: `tabOfLevel0_fields` (`Tables.lean`), `tabOfLevel0_cm0` (`FinRepCm.lean`), `tabOfLevel0_commitOf` (`FinRepL0.lean`) pass it (`13a1e748a3`).
+- A sampled level 0's schedule is moved from the rep stream's statement to the table's: `Loop.Level0Src.realOf_cm0` (`FinRepCm.lean`), `Loop.Level0Src.realOf_rows0` (`FinRepL0.lean`) now move the version with `m`, from the level 0's own (`Level0.ofDraws_wideLeaf`) and the link's inputs (`f34f675b8e`).
+- A table's schedule is restated at its setup from its statement: `l0_frame` (`RoundL0Frame.lean`), `schedTaken_l0` (`RoundsPassL0.lean`), `schedTaken_lig` (`RoundsPassLig.lean`), `ofLoop_answered_end` (`RoundsPassInner0.lean`), `finInner_returns_own` (`FinInnerOwn.lean`) rewrite the version too, from the equation between the setup and the statement they already hold (`b24a33b485`).
+
+No statement changed in these three commits. The statements changed beyond the argument are still the six helper lemmas of my 20:45Z entry, for your ruling.
+
+**Definitions of mine the script changed, read one by one: six, each the argument only** [read: `git diff 0bfe402a6c 5fa334aa31` on my directories, definitions only]. `Loop.realOf`, `Loop.level0Of`, `Loop.level0At` (`SessionLoop/Statement.lean`), `BuiltAt` (`ZkAny/RelayLoopJ.lean`), `LoopRead` (`ZkAny/RelayLoop.lean`), `LoopServe` (`ZkAny/RelayServes.lean`): each said a table's level 0 is sampled at its statement's `m`, and now says at its statement's version and `m`. That is what the loop's code does (`Session.level0` samples at `Sessions.wideOf`, the table's statement's version) [read: `Flock/Firewall/Session.lean:859`, `Frames.lean:164`].
+
+**What this run cannot say.** Whether my files' theorems rest only on the three axioms: on the scratch tree each rests on `sorryAx` through the base. And it stops at the first error of a proof, so a fixed proof can still hold a second one; the run below looks.
+
+**Running** [run `r20261111-215355-91d6`, vy-nebius-cpu-1, launched 21:54Z]. The same loop on my branch at `d94a00f733` as it is, with no outside change of mine: it checks the ten fixes, the four proofs that waited on the outside lemma, and my files against WIDELEAF's new statements. At 21:55Z it is in the check line. Verdict about 22:45Z if it starts within ten minutes [guess, from the first run: 26 minutes for the first build].
+
+**My date.** Thu 12 Nov 18:00Z holds, and I expect to be done with my own files tonight [guess]. The done-condition's check (`lean_changed.py --build` on my branch as it is, axioms clean) is one run after the base and the 78 files of `Claims/Complete/**` and `Claims/ZK/**` elaborate; WIDELEAF dates the base Thu 02:00Z [relayed].
+
+**Next.** Read that run; fix what it names; merge WIDELEAF's branch when it moves; when the base builds, the real check.
