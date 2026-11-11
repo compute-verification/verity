@@ -143,8 +143,6 @@ FAMILIES: tuple[tuple[str, str], ...] = (
     (r"^TopPMaskWordx[1-9][0-9]*_v1$", "compare_select"),  # the top-p keep mask of V lanes
     (r"^L(?:Select[1-9][0-9]*|FixedSelect[1-9][0-9]*x[1-9][0-9]*|IsActive[1-9][0-9]*|IsEOS[1-9][0-9]*|StepLive[1-9][0-9]*"
      r"|Enable|EmitNext\[H=[1-9][0-9]*\])_v1$", "compare_select"),  # the lifting's tag tests and selects
-    (r"^L?SplitsForSMS[1-9][0-9]*_v1$", "roundings"),  # an integer division of a live count
-    (r"^LiveCount[1-9][0-9]*_v1$", "roundings"),  # the sum of R bits
     (r"^LBot[1-9][0-9]*_v1$", "const"),  # the ⊥ encoding
 )
 #: the lifts of a primitive P, by id: P's class with a tag test
