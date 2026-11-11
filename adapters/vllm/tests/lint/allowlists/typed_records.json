@@ -18,7 +18,7 @@
     {"file": "verity_vllm/acquire/install.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/acquire/plan.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
     {"file": "verity_vllm/acquire/served.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/served-required-manifest/v1"},
-    {"file": "verity_vllm/acquire/served.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
+    {"file": "verity_vllm/acquire/served.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/acquire/served_artifact.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/acquire/served_moe.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/acquire/sources/attention_source.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
