@@ -140,7 +140,7 @@ def mla_compress(node: TreeNode, ctx: StepContext, sl: SparseLayer) -> list[Comp
     if isinstance(dst := _entry_slots(node, ctx, sl.layer, req, [p // R for _, p in ends], kc.shape[1] if kc.rank > 1 else 0, ratio=R),
                   Unsupported):
         return dst
-    src, n, parts = dict(zip(need, src)), kc.shape[1], []
+    slot_of, n, parts = dict(zip(need, src)), kc.shape[1], []
     for (b, rows_n), lo, hi in runs([(d // n, len(taken[p])) for d, (_, p) in zip(dst, ends)]):
         try:
             nope, scale, rope = swa_block(block_bytes(kc), b, n, D - QB, QB, QB)
@@ -149,7 +149,7 @@ def mla_compress(node: TreeNode, ctx: StepContext, sl: SparseLayer) -> list[Comp
         ps = [p for _, p in ends[lo:hi]]
         spec = (vocab_kind(ctx, COMPRESSORS[4], ROWS=rows_n, D=D, QB=QB, EPS=eps) if R == 4 else
                 vocab_kind(ctx, COMPRESSORS[128], W=C.DSV4_COMPRESSOR["W"], R=R // C.DSV4_COMPRESSOR["W"], D=D, QB=QB, EPS=eps))
-        kv, score = (Pieces(tuple(tuple(state_row(state, src[s], k, W, r // R * D, D) for r, s in taken[p]) for p in ps)) for k in (0, 1))
+        kv, score = (Pieces(tuple(tuple(state_row(state, slot_of[s], k, W, r // R * D, D) for r, s in taken[p]) for p in ps)) for k in (0, 1))
         idx = tuple(d % n for d in dst[lo:hi])
         parts.append(Compute(spec, hi - lo, (kv, score, ws[0], Gather(cs, tuple(p - R + 1 for p in ps))),
                              (Gather(nope, idx), Gather(rope, idx), Gather(scale, idx)), (), hint=f"{sl.layer}.compressor/compress",
@@ -262,10 +262,10 @@ class SparsePrefill:
                 return unsupported(node, str(e))
         if isinstance(made := mla_compress(node, ctx, sl) if sl.R > 1 else [], Unsupported):
             return made
-        src = (src[1] if N else []) + src[0]
+        rows_src = (src[1] if N else []) + src[0]
         ws = ViewDesc(wsv.alloc, wsv.offset, (N + gather, D), (wsv.strides[0], 1), wsv.dtype, wsv.device)
-        made.append(Compute(vocab_kind(ctx, "flashmla_gather_row", DN=DN, DR=sl.DR, QT=sl.QT), len(src),
-                            tuple(Pieces(tuple((r[k],) for r in src)) for k in range(3)), (PerRow(ws),), (), hint=f"{sl.layer}/gather",
+        made.append(Compute(vocab_kind(ctx, "flashmla_gather_row", DN=DN, DR=sl.DR, QT=sl.QT), len(rows_src),
+                            tuple(Pieces(tuple((r[k],) for r in rows_src)) for k in range(3)), (PerRow(ws),), (), hint=f"{sl.layer}/gather",
                             attribution=tuple((req, (j + 1) * sl.R - 1) for j in range(N)) + tuple((req, s) for s in range(seq - gather, seq)),
                             pattern=self.name))
         toks = []

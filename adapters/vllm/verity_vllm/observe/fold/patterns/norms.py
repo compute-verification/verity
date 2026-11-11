@@ -32,6 +32,7 @@ from verity_vllm.observe.fold.patterns.resolutions import (
 from verity_vllm.observe.fold.patterns.target import _targets, target_of
 from verity_vllm.observe.fold.resolver import (
     Compute,
+    Operand,
     PerRow,
     Resolution,
     Shared,
@@ -88,6 +89,7 @@ class RMSNormTritonLaunch:
         if node.enter.grid and node.enter.grid[0] != M:
             return unsupported(node, "grid does not launch one program per row", grid=node.enter.grid, M=M)
         roots = ctx.roots_of(w)
+        operands: tuple[Operand, ...]
         spec, operands = bind(b1.RMSNormTriton, N=n_cols, EPS=self.eps if self.eps is not None else eps), (PerRow(x), Shared(w))
         if getattr(ctx.profile, "registered_values", False):
             spec, operands = bind(VI.RMSNormTritonV3, N=n_cols), operands + (eps_input(self.eps if self.eps is not None else eps),)

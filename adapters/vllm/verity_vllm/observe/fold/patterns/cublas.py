@@ -146,10 +146,10 @@ def _holds(r: ViewDesc, v: ViewDesc) -> bool:
     for n, st in zip(v.shape, v.strides):
         if n == 1:
             continue
-        d = next((d for d in axes if d not in used and r.strides[d] == st), None)
-        if d is None or coord[d] + n > r.shape[d]:
+        ax = next((d for d in axes if d not in used and r.strides[d] == st), None)
+        if ax is None or coord[ax] + n > r.shape[ax]:
             return False
-        used.add(d)
+        used.add(ax)
     return True
 
 

@@ -211,9 +211,9 @@ class AttentionScope:
                                                  scale_input=registered)
             except _targets().UnregisteredTarget as e:
                 return unsupported(node, f"target has no registered attention binding: {e}")
-            scale = (Supplied("registration", f"scale_log2_d{D}", 32, b1.scale_log2_bits(D)),) if registered else ()
+            scale_op = (Supplied("registration", f"scale_log2_d{D}", 32, b1.scale_log2_bits(D)),) if registered else ()
             computes.append(Compute(spec, len(rows),
-                                    (rows_operand(q, rows), GatherMany(kcs, slots), GatherMany(vcs, slots)) + scale,
+                                    (rows_operand(q, rows), GatherMany(kcs, slots), GatherMany(vcs, slots)) + scale_op,
                                     (rows_operand(out, rows),), (), hint=hint_of(node, str(layer) if isinstance(layer, str) else "attn"),
                                     kernels=(kernel_name,), attribution=tuple(ctx.start.rows[i] for i in rows),
                                     pattern=pattern_name))

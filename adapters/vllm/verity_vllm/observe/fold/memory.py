@@ -551,12 +551,12 @@ class MemoryModel:
             for n, st in zip(view.shape, view.strides):
                 if n == 1:
                     continue
-                d = next((d for d in axes if d not in used and rv.strides[d] == st), None)
-                if d is None or coord[d] + n > rv.shape[d]:
+                ax = next((d for d in axes if d not in used and rv.strides[d] == st), None)
+                if ax is None or coord[ax] + n > rv.shape[ax]:
                     break
-                used.add(d)
+                used.add(ax)
                 shape.append(n)
-                strides.append(leaf[d])
+                strides.append(leaf[ax])
             else:
                 return geometry_refs(space, idx, base + sum(c * s for c, s in zip(coord, leaf)), tuple(shape), tuple(strides))
         return None

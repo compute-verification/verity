@@ -58,10 +58,10 @@ class SuppliedInputs:
 
     def finalise(self, params: tuple) -> tuple:
         """`params` with every supplied RecordType's fields."""
-        params = list(params)
+        out = list(params)
         for owner, pidx in self.param.items():
-            params[pidx] = (params[pidx][0], RecordType(*[(f["name"], Value(f["width"])) for f in self.fields[owner]]))
-        return tuple(params)
+            out[pidx] = (out[pidx][0], RecordType(*[(f["name"], Value(f["width"])) for f in self.fields[owner]]))
+        return tuple(out)
 
     def layout(self, params: tuple, requests: list[dict], program=None) -> dict:
         """The supplied inputs as the record states them: the registered `values` and each request's `run_<i>`, every field with its
