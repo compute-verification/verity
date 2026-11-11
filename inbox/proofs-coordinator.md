@@ -39041,3 +39041,88 @@ What survives of it is the push of `8fb2b94ee4`, committed 04:25:35Z [read].
 - (c) stays as it is; reasons in the next entry.
 - The h8lin-only run, (i) honest over the six scopes × the nine βs, launches by 05:35Z. Its entry, with the run id, the
   rows' sha256 and the command, comes by 06:00Z [guess].
+
+## CROSS, Wed 11 Nov 05:15Z: the second list's six heads all cross `clean` again, #8454 is mine, and #8139 needs the pins step; four of the ten runs at the five pushed heads have passed, no head has both yet
+
+Times are UTC from `date -u`. Tags: `[run]` a command I ran, `[read]` a file or a ref at a commit, `[derived]` from those.
+
+**The VM was replaced between my turns** [run]. My worktrees and the dry results of the 04:25Z and 04:27Z entries are gone;
+none was pushed, and `restack.py` commits at the current time, so the ids below are new and replace those. The pushed heads
+and the runs on the nodes are untouched.
+
+### The ten runs at the five pushed heads, read 05:05Z [run]
+
+| PR | head | records run | quick tier |
+|---|---|---|---|
+| #8512 | `815b893acd230433178477f0feb12c295983c509` | `r20261111-041418-c513` running (cpu-5) | `r20261111-041947-fb67` passed: `8 suites: 8 passed (0 cached), 0 failed` |
+| #8527 | `33452276ad203bde9290a23a3bd8d7a435786418` | `r20261111-041459-b16d` running (cpu-7) | `r20261111-042025-0550` passed: `8 suites: 8 passed (0 cached), 0 failed` |
+| #8785 | `e7b741b17e53c48f6e964169a6b4d606867ab79f` | `r20261111-041534-8439` passed: `"outcome": "pass"`, `security`, `security/Properties` and `security/Proofs` each `pass`; `security: check.py exit 0 in 2399 s` | `r20261111-042041-3741` running (cpu-9) |
+| #8226 | `354f604cfdd1c782d3c55c77e0aa9e3255c325b4` | `r20261111-041602-67ce` running (cpu-11) | `r20261111-042123-14c5` passed: `4 suites: 4 passed (0 cached), 0 failed` |
+| #8539 | `984a73968ccdd00ccbcbee982fbe2a11aa8048ef` | `r20261111-042342-57e5` running (cpu-3) | `r20261111-042416-5ab4` running (cpu-3) |
+
+- Each run's own record names the head in the table as its commit (`result.json`'s `commit`, the job's `source_sha`).
+- The root suite is in each quick tier: `passed  repository  280 passed` in all three that ended.
+- No record regenerated so far, no failure. A `ready to mark` line follows for each head when its second run ends.
+  #8785's records run took 47 minutes, so the other four should end by about 05:30Z [guess].
+- `tools/verity/check/pins.py --stale` exits 0 at all five heads, at #8568's `8fb2b94ee4b4` and on `main`.
+
+### Second list, dry: top's recipe at 05:03Z against `main` `5c095bb4ab70` [run]
+
+Every row printed `clean ... crossed 2 moves: 6581bcf197, c1ca25a247`. Every crossed head is a fast-forward of the old
+head, holds `main`'s tip, and `git merge-tree --write-tree origin/main HEAD` exits 0. The branch heads were re-read at 05:14Z
+and none had moved. Lock count: bytes of `security/lean-audit.json` (limit 4,194,304), lines naming `Security/`, lines
+naming the four other old places.
+
+| PR | old head | crossed head, to push | plain merge | own change, old to crossed | what the base merge changed in its own change | lock count |
+|---|---|---|---|---|---|---|
+| #8139 | `bec1e5cdaa18` | `c274cac9c13241109a8a8946e00b619429077f8c` (restack's `b75b7b8e5782` plus the pins step) | conflicted (3) | 40 files +1819 −595, to 40 files +1819 −594 | move 1's base: the lock's hunks only, +42 −37 both, the same JSON change (21 leaves of `reads`) | 4,176,098; 6; 0 |
+| #8339 | `3aae525e59ee` | `9fd291257ffc0a84cec5d62f1ae3c6401f20e8ed` | clean | 1 file +1 −1, to 1 file +2 −2 | move 2's base: the merge of `fixtures/artifacts.json` moves one of `main`'s lines six lines down; as JSON the change is the one entry | 4,175,579; 6; 0 |
+| #8406 | `fe32fa055d40` | `3d8e9aa8c0af063b57680303f8faaa620dcbb74a` | conflicted (1) | 9 files +256 −44, to 9 files +278 −66 | move 1's base: the lock +15 −6 becomes +36 −27, the same JSON change (15 leaves of `reads`), 21 lines in another order; move 2's base: the same moved line of `fixtures/artifacts.json` | 4,176,448; 6; 0 |
+| #8414 | `4975a307d3f7` | `359724056748523f6a4e999332f3007042d87f39` | conflicted (1) | 19 files +569 −51, to 8 files +177 −24 | move 1's base: `main` already holds 11 of its 19 files with the branch's content (the step schedule, Python and Lean) and three of its README lines, so they leave the change | 4,175,579; 6; 0 |
+| #8454 | `0e694dd53ec6` | `4d87c7899a6d6f814f0fca8ca153e6ea7f3a78f6` | clean, and wrong | 14 files +362 −27, the same files and counts | move 1's base: the lines around its hunk in `benchmarks/served_units/README.md`; its added and removed lines are the same | 4,175,579; 6; 0 |
+| #8517 | `2e8a4eab4b65` | `620badf319583c1915523cf2f7710b45baa4b2a1` | clean | 6 files +492 −0, the same files and counts | move 1's base: the lines around its hunk in `benchmarks/spot_figures/README.md`; its added lines are the same | 4,175,579; 6; 0 |
+
+What "the same" rests on: `git diff --numstat` of the old head against its merge base with `a930252c4993`, paired by moved
+path with the crossed head's against `main`; each base merge's own change compared with the one before it file by file by
+`git patch-id --stable`, as the carry check does; locks compared as JSON. No added line of any crossed change names an old
+path.
+
+- **#8139 needs the pins step, which `--no-pins` skips** [run]. It changes `security/Proofs/lakefile.toml` and repins it in
+  `verity/protocols/pous/lean/TRUSTED.sha256`. That file conflicts at the last merge, `restack.py` takes `main`'s side there
+  and leaves it to its step 4. At `b75b7b8e5782` `pins.py --stale` names that one pin. I ran step 4's own command there
+  (`python3 tools/verity/check/pins.py --regen`, one `sha256sum`) and committed what it wrote under step 4's message:
+  one line of that file, `c274cac9c132`, where `--stale` exits 0. The other five results have no stale pin.
+- **#8139's two other differences are the move's** [read]: `test_a5_memo.py` removes 6 lines, not 7, because the script
+  splits an import line the change edits (`coins` and `service` are now in two packages); the pin above is one line both
+  before and after.
+- **#8414 against #8539** [run]: #8414's old head is inside #8539's. Its crossed tree differs from #8539's crossed head
+  `984a73968ccd` in 5 of its 8 files, by exactly what old #8539 has over old #8414 there (the same counts in each file).
+  Two of #8414's README lines reword what `main` landed from its parent, as the branch has them.
+- **#8339 and #8406 change the same entry** [read]: each gives `benchmarks/two_stage/tests/fixtures/guard.tar.xz` a new
+  `art:` id in `fixtures/artifacts.json`, and the two ids differ. The second to land conflicts with the first.
+- **No records run for #8339, #8414, #8454, #8517** [derived]: their crossed changes hold no Lean file and no lock.
+  #8139 (19 such files) and #8406 (6) get one each.
+
+### #8454 is mine [run]
+
+ci's dry run `r20261111-035048-0337` has ended (`crossed 72, refused 52, skipped 180`). It refuses #8454 at the carry check:
+`crossed it clean as 0f53cdddfea8, but its own change there ... isn't its old one mapped across the moves (its merge with
+b5354b9c2344 ... changes its own change)`. So ci pushes nothing for it and I push it. The same run refuses the other five
+of this list the same way, and skips #8368 and #8553 as stacks for their owners.
+
+**Its plain merge is clean and wrong, like #8568's** [run]: merged with `main` as it is, it keeps six imports of packages
+that no longer exist (`verity.ml.circuits.codec`, `verity.ml.commitments.gates.embedding`, `verity.ml.definitions.call_scope`
+three times, `verity.ml.windows`) in `benchmarks/one_stage/glm53_fused_tp8.py` and `benchmarks/served_units/stage_window.py`.
+The crossed head has them rewritten. #8517's plain merge gives the crossed tree exactly; #8339's differs from it in the
+order of two lines.
+
+### One thing in ci's dry run for you to pass on [read]
+
+It lists #8226 and #8527 as its own crossings (`169beb6a834e -> 5824a2f3fa66`, `8731755ddfcc -> 9bf905477c24`), made from
+the heads it read at 03:50Z. Both branches have held my crossed heads since 04:12Z. Its push should skip them as already
+crossed; if it pushed its own ids instead, the push would not be a fast-forward of mine.
+
+### Next
+
+I re-read the mailbox, CI-524 and each branch, then push the six as fast-forwards and say so here. Then a records run at
+#8139 and #8406 and a quick tier at all six. The unmarked heads' dry table follows when the last of them ends.
