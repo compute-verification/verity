@@ -555,6 +555,14 @@ def test_broker_failures_are_clear_exit_2_and_never_show_the_identity(broker, re
     assert waits == ([30.0] * slack.RATE_RETRIES if getattr(fail, "code", None) == 429 else [])
 
 
+def test_a_guarded_calls_refusal_says_who_may_make_it():
+    assert set(slack.GUARDED_WHO) == set(slack.BROKER_GUARDED)
+    says = slack.broker_error("chat.update", http_error(403, {"error": "forbidden_caller"}))
+    assert says.endswith("(HTTP 403 forbidden_caller): only an edit to a post made as a name this agent holds or posts as "
+                         "(its route's holder or posters)")
+    assert "@top's and @console's" in slack.broker_error("conversations.create", http_error(403, {"error": "forbidden_caller"}))
+
+
 def test_a_long_thread_is_paged_by_oldest_so_no_reply_at_a_page_boundary_is_lost():
     """Slack's cursor for conversations.replies skips the message at each page boundary, so paging by cursor would lose a
     doorbell in a long inbox read."""
@@ -655,13 +663,15 @@ def test_the_client_refuses_what_the_broker_would(broker, registry, capsys):
     assert not broker.requests
 
 
-def test_broker_methods_are_the_methods_this_module_calls_but_the_user_group_writes():
+def test_broker_methods_are_every_method_this_module_calls_with_the_guarded_writes_among_them():
+    """No agent needs the bot token: every call goes through the broker, which allows the guarded writes only by who asks."""
     src = Path(slack.__file__).read_text()
     called = set(re.findall(r"\.(?:call|paged)\(\s*\"([a-z]+\.[A-Za-z]+)\"", src))
-    assert set(slack.DIRECT_ONLY) == {"chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable", "usergroups.update",
-                                      *slack.CHAT_METHODS}
-    assert called == set(slack.BROKER_METHODS) | set(slack.DIRECT_ONLY) and not set(slack.BROKER_METHODS) & set(slack.DIRECT_ONLY)
+    assert set(slack.BROKER_GUARDED) == {"chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable",
+                                         "usergroups.update", *slack.CHAT_METHODS}
+    assert called == set(slack.BROKER_METHODS) and set(slack.BROKER_GUARDED) <= set(slack.BROKER_METHODS)
     assert len(slack.BROKER_METHODS) == len(set(slack.BROKER_METHODS))
+    assert not hasattr(slack, "DIRECT_ONLY")
 
 
 REAL_MANIFEST = REAL_REGISTRY.with_name("slack-app.json")
@@ -862,13 +872,14 @@ def test_a_manifest_slack_rejects_names_where_and_is_not_applied(app_config, cap
     assert "apps.manifest.update" not in app_config.methods()
 
 
-def test_groups_sync_plans_through_the_broker_but_applies_only_with_the_token(broker, registry, capsys):
+def test_groups_sync_plans_and_applies_through_the_broker_with_no_token(broker, registry, capsys):
     rc, out, _ = run(capsys, "groups", "sync")
     assert rc == 0 and "plan only" in out and [r[1]["method"] for r in broker.requests] == ["auth.test", "usergroups.list"]
     broker.requests.clear()
     rc, _, err = run(capsys, "groups", "sync", "--apply")
-    assert rc == 2 and "groups sync --apply needs SLACK_BOT_TOKEN" in err and "a VM that has the token" in err
-    assert not broker.requests and not broker.state.groups
+    assert rc == 0, err
+    sent = [r[1]["method"] for r in broker.requests]
+    assert "usergroups.create" in sent and broker.state.groups                # the user-group writes go to the broker
 
 
 @pytest.fixture

@@ -27,7 +27,7 @@ Notes are records, never messages.
   research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
   research msg traffic --latency [--hours H] [--json]              # per lane: asks, answered (by record), median and p90 minutes
   research msg pickup --thread TS                                  # 👀 on an ask you own
-  research msg retract --as NAME --ts TS [--thread ROOT] [--why W] # blank a post NAME sent (needs SLACK_BOT_TOKEN)
+  research msg retract --as NAME --ts TS [--thread ROOT] [--why W] # blank a post NAME sent
   research msg roster --thread TS [--json]                         # an announcement's status lines; exit 0 when all are done
   research msg handles [--json] | subscriptions --as HANDLE        # the registry, holders from routes; the subscribe calls a holder makes
   research msg owners [PATH...]                                    # who owns each path (stdin: `git diff --name-only main... |`)
@@ -74,7 +74,8 @@ and it runs as a single file (`python3 slack.py ...`) from any checkout.
 
 Without $SLACK_BOT_TOKEN (or with RESEARCH_SLACK_VIA=broker) every call goes through Verity's Slack broker instead: a POST of
 `{"method", "args"}` to BROKER with this agent's Cursor OIDC token, answered with Slack's response unchanged. The broker holds the
-bot token and allows only BROKER_METHODS; RESEARCH_SLACK_VIA=direct insists on the token.
+bot token and allows only BROKER_METHODS, the BROKER_GUARDED among them only by who asks; RESEARCH_SLACK_VIA=direct
+insists on the token.
 
 The sender rings the doorbells right after posting. A person's typed post in #ask-the-team or a chat channel is rung by the
 Slack events service (`infra/slack-events/`), which imports this file and calls `deliver`; `deliver --channel KEY --event -`
@@ -137,15 +138,21 @@ LINEAR_LINK_RE = re.compile(r"\nLinear: <https://linear\.app/[^|>]+\|([A-Z][A-Z0
 LINEAR_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,6}$")
 DEFAULT_API = "https://slack.com/api/"
 BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also the OIDC token's audience
-#: exactly what the broker's route allows: every Web API method this module calls but DIRECT_ONLY (the tests check the split)
-BROKER_METHODS = ("auth.test", "chat.getPermalink", "chat.postMessage", "conversations.history", "conversations.replies",
-                  "reactions.add", "usergroups.list")
-#: `chat`: a collaborator's channel, its invites, pin and bookmark, which the broker doesn't relay
+#: `chat`: a collaborator's channel, its invites, pin and bookmark
 CHAT_METHODS = ("bookmarks.add", "conversations.archive", "conversations.create", "conversations.info", "conversations.invite",
                 "conversations.inviteShared", "conversations.list", "conversations.unarchive", "pins.add", "users.list",
                 "users.lookupByEmail")
-DIRECT_ONLY = ("chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable", "usergroups.update",
-               *CHAT_METHODS)                             # `retract`, `groups sync --apply`, `chat`: the token itself
+#: the calls the broker allows only by who asks: `retract`'s edit to a post a name the caller holds or posts as sent,
+#: `groups sync --apply`'s user-group writes (@comms' and @top's holders), and `chat`'s channel calls (@top's and @console's)
+BROKER_GUARDED = ("chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable", "usergroups.update",
+                  *CHAT_METHODS)
+#: exactly what the broker's route allows: every Web API method this module calls (the tests check it)
+#: who the broker lets make each guarded call, for its refusal
+GUARDED_WHO = {"chat.update": "only an edit to a post made as a name this agent holds or posts as (its route's holder or posters)",
+               **{m: "only @comms' and @top's holders sync the user groups" for m in BROKER_GUARDED if m.startswith("usergroups.")},
+               **{m: "only @top's and @console's holders open and close people's chats" for m in CHAT_METHODS}}
+BROKER_METHODS = ("auth.test", "chat.getPermalink", "chat.postMessage", "conversations.history", "conversations.replies",
+                  "reactions.add", "usergroups.list", *BROKER_GUARDED)
 BROKER_MAX_BODY = 65536                                                   # bytes of request JSON; the route refuses more (413)
 ERROR_CODE_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 SCOPES_RE = re.compile(r"^[a-z0-9_.:]{1,64}(,[a-z0-9_.:]{1,64}){0,15}$")      # a not-ok answer's `needed`: chat:write,users:read
@@ -764,6 +771,8 @@ def broker_error(method: str, e: urllib.error.HTTPError) -> str:
     why = f"HTTP {e.code}{_code(e)}"
     if e.code == 401:
         return f"{method}: the Slack broker rejected this agent's Cursor identity ({why}); set SLACK_BOT_TOKEN or ask @infra"
+    if e.code == 403 and method in BROKER_GUARDED:
+        return f"{method}: the Slack broker refused the call ({why}): {GUARDED_WHO[method]}"
     if e.code == 403:
         return f"{method}: the Slack broker refused the call ({why}): it serves compute-verification/verity's agents and BROKER_METHODS only"
     if e.code == 413:
@@ -3219,9 +3228,6 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
     the registry, which the caller commits. Existing groups keep their members."""
     api = client(ns)
     write = ns.apply and not ns.dry_run
-    if write and api.via == "broker":
-        raise SlackError("groups sync --apply needs SLACK_BOT_TOKEN itself (the broker doesn't relay user-group writes): "
-                         "run it on a VM that has the token")
     changed = False
     bot = api.call("auth.test").get("bot_id")
     if bot and reg.get("bot_id") != bot:
@@ -3434,9 +3440,6 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
     if ns.verb == "expect":
         return chat_expect(ns, reg, book)
     api = client(ns)
-    if api.via == "broker" and not api.dry_run:
-        raise SlackError("chat needs SLACK_BOT_TOKEN itself (the broker relays no channel or invite calls): run it where the "
-                         "token is")
     prev = book.get_person(ns.name, fresh=True)
     plan = "plan: " if api.dry_run else ""
     if ns.verb == "close":
@@ -4473,7 +4476,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--now", default=None, metavar="EPOCH", help="the window's end, in seconds since the epoch (default: now)")
     p.add_argument("--json", action="store_true")
     cmd("pickup", "\U0001f440 on an ask or alert you own", thread=True)
-    p = cmd("retract", "blank a post your name sent (needs SLACK_BOT_TOKEN: the broker allows no edits)", as_=True)
+    p = cmd("retract", "blank a post your name sent", as_=True)
     p.add_argument("--ts", required=True, help="the post's ts")
     p.add_argument("--thread", default=None, metavar="ROOT", help="its thread's root ts, when it is a reply")
     p.add_argument("--why", default=None, help="one line the blanked post keeps")
