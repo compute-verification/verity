@@ -370,7 +370,6 @@
     {"file": "tests/engine/test_step_end.py", "kind": "attr-defined", "symbol": "test_it_wraps_vllms_scheduler_when_given_none", "detail": ""},
     {"file": "tests/engine/test_stock.py", "kind": "attr-defined", "symbol": "fake_vllm", "detail": "", "count": 4},
     {"file": "tests/engine/test_stock_kernels.py", "kind": "attr-defined", "symbol": "stand_ins", "detail": "", "count": 2},
-    {"file": "tests/engine/test_topp_pin.py", "kind": "attr-defined", "symbol": "_vllm_module", "detail": ""},
     {"file": "tests/engine/test_tp2_attribution.py", "kind": "assignment", "symbol": "<module>", "detail": ""},
     {"file": "tests/engine/test_tp2_attribution.py", "kind": "attr-defined", "symbol": "_Stub", "detail": ""},
     {"file": "tests/engine/test_tp2_attribution.py", "kind": "attr-defined", "symbol": "_make", "detail": "", "count": 4},
