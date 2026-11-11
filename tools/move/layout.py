@@ -85,8 +85,6 @@ MOVES = "tools/research/src/research/store/moves.json"   # each layout move's [p
 FILE_SUFFIXES = {"py", "json", "toml", "md", "txt", "lean", "sh", "rs", "cu", "cuh", "yaml", "yml", "gz", "jsonl", "npy", "html"}
 #: file types whose plain relative paths (`fixtures/x.json`, with no `./`) are resolved against the file's directory
 RELATIVE_TYPES = {".py", ".toml", ".json", ".sh", ".md", ".rs", ".cu", ".cuh", ".yaml", ".yml", ".txt", ".cfg", ".lean"}
-#: directories whose Python is run by path and is no module of the package around it
-BY_PATH = {"tests", "lean"}
 #: a shell script's own directory and the path joined to it (`$(dirname "$0")/../..`); `ref` is what `dirname` takes
 _SH_DIRNAME = r'\$\(dirname\s+"(?P<ref>\$(?:\{[A-Za-z_0-9]\w*(?:\[0\])?\}|[A-Za-z_0-9]\w*))"\)'
 _SH_REL = r"(?P<rel>(?:/[\w.\-]+)+)"
@@ -127,6 +125,8 @@ SH_LIST = re.compile(r"(?<![\w.\-/])(?P<cmd>git\s+rev-parse|tar)(?=[ \t])(?P<arg
 GONE = "\ue002"
 #: a pyproject's `members`: the workspace's distributions, each the directory its `pyproject.toml` is in
 MEMBERS = re.compile(r"(^\s*members\s*=\s*\[)(?P<body>[^\]]*)(\])", re.M)
+#: directories whose Python is run by path and is no module of the package around it
+BY_PATH = {"tests", "lean"}
 
 
 def is_shell(path: str, text: str) -> bool:
