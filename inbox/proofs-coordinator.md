@@ -36267,3 +36267,191 @@ Mailbox read at 02:08Z: no file for me. The base is `eb56c217f831`. `main` is `a
 **Open, named.** The two-stage finder and its trace (2b); the always-checked blocks' bits and a public cap on K (3); a gate's fan-out at GLM-5.3, for d (4); Q over all streams and the cross-audit trace (5); the fused-cut n_PU and network-accounting's N (7); the premise's unit (6), which is Daniel's to rule on and which I only price [not done].
 
 For Daniel: I tried seven ways to build a cheating prover that the new binding bound misses and found none: `4*K*T*(1 + d*e_s)/2^256` holds for one audit, where K is the number of bits one audit's sampled blocks open, a number set by the registered design and the number of requests in the run and not by the model's size [derived]. The quoted 130 bits is its best case (GLM-5.3's design, one audit, one inner session a bit): with the claim's own 30 sessions it is 125 bits, over a year of 10-minute runs on one stream, with 2^80 hash calls allowed in every run, 109 to 114 bits, and at the worst corner SCALE names 108 bits an audit and 92 bits a year (99 and 83 if each of those hash calls is on a 64 KiB row) [run]. It is a derivation on paper and not yet a Lean theorem, and for the two-stage design that B and A use the finder must rerun only the second stage for values committed after the first coins, which nobody has written down [read, derived].
+
+## REPBREAK, Wed 11 Nov 02:13Z: SCALE's K finder: FAILS AT 5 (nothing fixes the sample at 167 blocks for B and A)
+
+**Verdict.** The targeted finder and its bound `4K*T(1 + d*e_s)/2^256` hold with two repairs, but no registered design fixes `K <= 2^25.6` for B and A, and there `main`'s own second-stage rule under the served-output cap samples enough blocks (up to 1,144,826) that the bound misses 100 bits at the worst corners [derived].
+
+The details, item by item below:
+- The two repairs are that refused passes stay in the rerun (item 1) and that the reveal's positions are stated per unit (item 4) [derived].
+- On GLM-5.3's card, the rule's sets form samples 1,158 to 1,331 proof blocks (`K` up to 2^30.3 bits) [run]. Its patterns form, at the kappa where `optimize.py:1058-1059` puts its best designs, samples 124,289 to 1,144,826 (`K` = 2^36.8 to 2^40.1 bits) [run].
+- In the patterns form the largest-k corners miss 100 at `d = 167` (-98.5 to -95.3) [run]. They also miss at `d = 30` above about 245,000 blocks (`K` > 2^37.8; -98.0 at 994,252) [derived], and at every `d` once `T` is counted in 64 KiB compressions (-96.9 to -86.3) [run].
+- Those patterns designs also overflow the challenger's coin. Lean reads 2^20 bytes of it (`Security/Proofs/Flock/SpotFlock/Code.lean:366-367`) [read], which ATTACK puts at about 58,254 drawn blocks [read: ATTACK's 02:09Z row 3]. So as the model stands every coin refuses them [derived].
+- A design at that cap still has `K` up to 58,254 * 2^20.05 = 2^35.9 at GLM-5.3's largest block, which misses the worst corner by 0.5 bits (-99.5) [derived].
+- Every number below names its sample size `m` [derived].
+
+**1. Success probability: HOLDS at `Pr[acc and OffReg]/(2K)`, provided refused passes stay in the rerun.**
+
+Deciding line [read]: `OffReg` (`Security/Proofs/Flock/SamplingGeneric/Reg.lean:172-174`: "a run's extractions open a gate of the program off the committed trace") is what `pr_offReg_le` bounds (`:387`). `ksReg_of_sessionKS` then adds it at `:509-512`.
+
+The finder [derived]:
+- (a) Draw the tape and run 1's coins uniformly, and run the prover. Stop if run 1's second stage is refused.
+- (b) Let `S(r)` be the gates the sample needs, the union of `needs s u` over `u` in `checked x r`; off refusal `|S(r)| <= K`. Draw a slot uniformly from `K` slots; stop if it is past `|S(r)|`, else it names the target `g`.
+- (c) Extract only the `d` sessions whose sampled blocks need `g`, at run 1's slot coins. Stop unless an opening of `g` passes; call its value `v`.
+- (d) Draw fresh coins until the sample needs `g`, keeping refused coins, where `checked` is every unit. Run the prover there and extract the sessions that need `g`. Repeat until an opening of `g` passes, with value `v'`; whether that pass is accepted plays no part.
+- (e) Output the collision if `v' != v`, or a collision inside one run.
+
+Why it succeeds [derived]:
+- A passing opening of `g` occurs only at coins whose sample needs `g` (`pos_mem_needs` at the code, item 4). So `v'` has exactly the law of `opensAt` at `g` given that it passes, and conditioning the coins on "the sample needs `g`" changes nothing.
+- `regVal` is that law's plurality (`SamplingGeneric.lean:575-580`, ties to `true`). So `v' != v` with probability at least 1/2 whenever `v != regVal g`.
+- That is `LinkFinder.plurality_le` (`Security/Proofs/Flock/Soundness/LinkFinder.lean:208`) at one gate [read]. Drawing the target from an accepted run's opened gates rather than from all `N` costs only step (b)'s `1/K`; the plurality step loses nothing more [derived].
+- A run in `acc and OffReg` has an off-plurality gate in `S(r)`, picked with probability at least `1/K`. So `Pr[conflict] >= Pr[acc and OffReg]/(2K)` [derived].
+- I checked it exactly on 3,000 random finite instances (PRF-542, 00:44Z) [run].
+
+What 'bad' is [read]:
+- `KSReg` (`Security/Definitions/Claims/SamplingGeneric.lean:629-637`) bounds `Pr[acc and a sampled block in Freg]`.
+- Its proof splits that event three ways: the selected session is not found, `InConf`, or `OffReg`. It bounds `Pr[OffReg]` over all coins (`pr_offReg_le`, `Reg.lean:387`, at `L : Compiled Coin A`).
+- The K finder bounds only `Pr[acc and OffReg]`, because on refused coins `S(r)` is every gate (`Security/Proofs/Flock/Claims/Sampling/Reg.lean:94`) [derived].
+- The split has `acc` in hand, so the union at `Reg.lean:509-512` must carry `acc` into the `OffReg` term. That changes how `KSReg` is proved, not what it bounds [derived].
+
+Two corrections to SCALE's statement [derived]:
+- **Keep refused passes in the rerun.** SCALE's "skip refused runs" (its card) is sound for run 1 only. Refused passes extract every unit, because `runExt` runs over `checked` and never reads the verdict (`SamplingGeneric.lean:363-373`) [read]. So their openings count in `regVal`.
+  - A prover that answers every unit to `b` at refused coins sets `regVal` to `b` at every gate whose chance of being opened by an unrefused pass is below `p_ref`. That chance is about `k_t/n_t`: 2^-36.5 for an MoE chunk's weight bit at `k_t = 1` and B's `n_t` = 2^36.5. Then honest accepted runs are off `regVal`, and a rerun that skips refused passes never sees `b`.
+  - The attack needs `p_ref` above a gate's chance of being sampled. ATTACK bounds `p_ref` below 2^-300 at any design whose streams fit the coin (row 2c), so the attack is a fault in the definitions, not a cheaper prover [derived].
+  - ATTACK's fix, taking the trace over non-refused coins, works as well as mine [derived]. Mine changes no definition; ATTACK's changes `regVal` [derived].
+- **The constant.** At `p_ref = 0` the same count, run with both runs' roles, gives `Pr[OffReg]/K` (`plurality_le` summed over values), so the term is `2K*T(1 + d*e_s)/2^256`. With ATTACK's fix, both runs have the same law, so it is 2 there too. Only with refused passes kept and `p_ref > 0` does the term stay at 4.
+
+**2. Expected cost: HOLDS: the coordinator's derivation is right, SCALE's finder can condition, and both stages are functions of the coins and the registration.**
+
+Deciding line [read]: `RegTwo.checked` is `selectSecond (sample src1) ns ks src2` (`Security/Proofs/Flock/Claims/Sampling/Reg.lean:90-94`). It reads the registration and the coin bytes only.
+
+Cost [derived], in the coordinator's notation (`p_g` = Pr[a pass opens `g` and the opening passes], `pi_g` = Pr[the sample needs `g`], both over uniform coins):
+- The target is `g` with probability `q_g <= p_g/K`. Among coins whose sample needs `g`, an opening of `g` passes with probability `p_g/pi_g`, so the finder waits `pi_g/p_g` passes. Then `E[passes] = sum_g q_g*pi_g/p_g <= sum_g pi_g/K = E|S(r)|/K <= 1`, so `E[cost] <= 2*c'_run` with `c'_run = T(1 + d*e_s) + d*openCalls`.
+- Drawing coins blind, it is `sum_g q_g/p_g`: up to the gates any pass can open, over `K`.
+- Keeping refused coins (item 1) adds `p_ref*|opensSet|/K` passes. That is at most one more while `p_ref <= K/|opensSet|`, i.e. `2^-32` at B with `m <= 167` (`K = 2^25.6`, and `|opensSet| <= W = 2^57.6`, SCALE's `W`).
+
+Can the finder condition? Yes [read]:
+- The deployed second stage is `Select.selectSecond sample ns ks it.source` (`verity/core/service/spot/Spot/Run.lean:200`), on coins read after the interior registration's digest.
+- `ns` are the template counts of the challenger's own replay-block program (`:191`, `Select.replayCells`, `Spot/Select.lean:252`). `ks` are the rule's counts over them (`:192`, `Counts.over`, `Select.lean:137`).
+- The first stage samples the registration's replay blocks at its rate (`verity/core/protocols/spot/one_stage/draw.py:111-115`). That population is "the registration's, which the prover sizes" (`Select.lean:9-12`), fixed before any coin.
+- The interior registration is the one prover message after a coin. It can only refuse the run (`interior-population`, `Run.lean:194`); it does not move the sample.
+- The audit record is written after the verdicts.
+
+So no part of the sample depends on what the prover sends after the coins, and `K` stays the count over the unrefused samples [derived]. The finder draws coins and skips, unrun, those whose sample misses `g` [derived]. That costs no prover call and no logged SHA-512 call (`checked` takes no `H`): about `|opensSet|/K = 2^32` draws a target at B [derived].
+
+Refusal [read]:
+- `selectSecond` errors on `secondProblem`, a static check of `(sample, ns, ks)` (`Select.lean:282-292`), on coins that don't end the draw, or on a draw that `checkDraw` rejects (`:294-305`). Then `checked` is every unit (`Reg.lean:94`).
+- That is a function of the coins and of the registration, which the prover fixes before the coins.
+- I did not price `p_ref` myself [read]. ATTACK puts it below 2^-300 at any design whose streams fit the coin, and at 1 (nothing accepts) at one that doesn't (rows 2c and 3) [read]. Either way, keeping refused passes costs nothing [derived].
+
+The 01:52Z question, whether this is EXTFORM's finder:
+- No [read: EXTFORM's note, section 1 and `wtable.py`]. Both skip by the coins, which is the conditioning above. But EXTFORM's finder waits on every gate pass 0 opened and catches half of `Bad` with no `1/K`. It pays `W + W'*e_s`, where its `W` is `sum_g pi_g` (the gates one sample needs in expectation, not `ioSum`) and `W'` is the (session, gate) pairs.
+- Both constants are right for their own finders [derived]: SCALE's `4` (any `p_ref`; `2` at `p_ref = 0`), and EXTFORM's `2*T*[(1 + sbar*e_s) + W + W'*e_s]`.
+- At one sample, EXTFORM's is the smaller, by about `2*(K/W)*(d/dbar)`, so at least 1 bit [derived].
+- Both need the same two facts: the sample is a function of the coins, and `RevealsWithin` (item 4) [derived].
+- ATTACK reaches the same answer: two finders with one comparison, and 2 is the right constant at the leading term [read: ATTACK's 02:09Z].
+
+**3. Conditioning the coins in the live-coin model: HOLDS, but the Lean SCALE cites does not cover it.**
+
+Deciding line [read]: `prBad_le_canon_on` is stated over uniform coins for both runs (`Security/Proofs/Core/Game/RewindingCanon.lean:109, 139` at `db65e96678`).
+- SCALE's three files prove `#bad^2 <= |S|*#conflict` for two independent uniform runs, which gives `sqrt(|S|*Pr[Bconf])` [read]. They contain no non-uniform rerun and no linear bound, and SCALE's note lists "the targeted finder itself" as not done [read].
+- Item 1's identity replaces the forking inequality [derived]:
+  - Run 1 is the honest verifier's run, on uniform coins: the event `KSReg` measures.
+  - Only the rerun's coins are the finder's. Conditioning them on an event that every passing opening of `g` implies leaves the law of that opening unchanged.
+  - So `plurality_le` applies as it stands.
+- `ExpectedCR` is a premise about one finder, whatever coins it draws (`Security/Definitions/Core/Interaction.lean:287`; `ecrBound`'s docstring, "asked of this finder only") [read]. So the reduction may draw them as it likes [derived].
+- Two stages [derived]:
+  - At an interior gate of #8512's form, the plurality is over stage-2 coins with stage 1 fixed, so the rerun redraws stage 2 only. At a boundary gate it redraws both.
+  - `main`'s `Compiled` form, the one `pr_offReg_le` is stated at, takes its plurality over all of a run's coins, so its rerun redraws both.
+
+**4. Positions fixed before the run: HOLDS in substance, but the lemma cited states less than the note says.**
+
+Deciding line [read]: `code_reveal_pos` (`Security/Proofs/Flock/SpotFlock/RevealsOpen.lean:65-66` at `db65e96678`) concludes `p.2.pos ∈ Reveal.opensSet (partition h) s`: the union of every block's needs, not its own block's.
+
+What `K` needs, and what is on the branch:
+- `opensSet` is every gate that some block of the partition needs (`:25-26`) [read]. So `code_reveal_pos` bounds what a run opens by `|opensSet| <= W`, which is the boundary card, not `K` [derived].
+- The per-unit fact `K` needs is `pos_mem_needs` (`:28-32`: `p.2.pos ∈ needs part s u`), proved for the generic reveal [read].
+- The deployed code's reveal is that same reveal at `(partition h) (two h) (iroots []) (frameAt h.frame)`, as `code_reveal_pos`'s own proof shows [read]. So the statement at the code is one line, but it is not on the branch [read].
+- With it, `S(r)`, the union of `needs s u` over `u` in `checked x r`, is a function of the statement and the coins [derived].
+
+The sessions add no positions:
+- `opensAt` reads only `runExt` [read]. At each session's first slot, `runExt` runs `sessExt` and keeps what the witness reveals at the session's sampled blocks (`SamplingGeneric.lean:363-373`) [read].
+- Every such opening is `reveal s u v w`, at `needs s u` [read].
+- The `e_s` reruns rebuild the witness; they don't change the positions. So `d*e_s` is cost only [derived].
+
+Two further points:
+- SCALE's guess that `needs` lies within `io` holds by definition [read]. `Prog.Needs` is the block's committed boundary gates plus the non-constant wires it reads from outside (`Security/Proofs/Flock/Claims/Sampling/ProgReads.lean:237-239, 273-276`).
+- Two things are not in Lean [read]:
+  - That the union of `needs s u` over `u` in `checked x r` has at most `K` gates for every unrefused `r` at the registered design. SCALE lists this as its "kills it (2)".
+  - `RevealsWithin` as a clause of the generic contract.
+
+**5. K, recounted: FAILS AT the claim that the registered design fixes `K <= 2^25.6` at B and A.**
+
+Deciding line [read]: `verity/core/protocols/spot/optimize.py:1416`:
+`k_t = min(n_t, max(1, ceil(kappa*n_t*(b_t + 1/ln2 + log2(R*n_t))/charge)))`.
+Under a served-output cap, `charge` is "a replay block's capped charge" (`:1403-1405`; docstring `:1384-1387`) [read].
+
+What is counted, and why [derived]:
+- The finder draws its target from `K` slots, so `K` must bound `|S(r)|` for every unrefused sample.
+- `S(r)` is the sampled blocks' `needs`, i.e. their committed inputs and outputs. So the count is the sampled blocks' `in_bits + out_bits`, never every wire: uncommitted wires are never opened.
+- The sum counts a gate that two sampled blocks share twice, so it is an upper bound.
+
+At one block a stratum [run]:
+- Over the 154 strata of `workload.glm-5.3.json`, `sum(in_bits + out_bits)` is 2^24.70 bits (`m = 154`).
+- The largest block is 2^20.050 bits (a `MoeExpertFp8CoordinateChunk_v1`, kind `MoeExpertFp8Gemm_v1`: 1,085,632 bits in, 32 out), so 167 of it is 2^27.43: SCALE's bound.
+- The deployed second stage samples 1 to `n_t` of each template's blocks in a sampled replay block (`Select.lean:289`) [read]. So about 2^24.7 is the floor at one replay block, if a template is one of the card's block types [guess].
+
+At the registered `k_t` [read]: there is none.
+- No two-stage rule for GLM-5.3 is registered on `main`. The files naming `"two-stage"` are the service, the figures, a toy and tests.
+- The one-stage run of record is `subset:1` (`benchmarks/one_stage/served_verdicts.sh:92, 371, 406`).
+
+So I evaluated `main`'s own rule [run], and the table follows:
+- I loaded `optimize.py` as it stands, with cells `Cell(per_token*4557, out_bits)` built as `benchmarks/spot_figures/figure1.py:387` builds them.
+- `R` is 1 at B and 1,843 at A. The served cap is 144,000 bits, the planner rows' `served_bits`.
+- The table gives `m = sum_t k_t` and `K <= sum_t k_t*(the stratum's largest in+out)`.
+- The capped forms are `figure1.py:105-107`'s `two-stage-capped` (sets) and `two-stage-patterns`.
+
+| design, at B (A where it differs) | charge | m | K |
+|---|---|---|---|
+| uncapped, size-class strata, kappa <= 16 | 2^43.28 | 15 to 49 (A 55) | 2^22.1 to 2^25.2 (A 2^25.5) |
+| capped sets, size-class strata, kappa <= 16 | 2^38.31 | 15 to 1,158 (A 1,331) | up to 2^30.1 (A 2^30.3) |
+| capped patterns, size-class strata, kappa 2^-9 to 2^-6 (where `optimize.py:1058-1059` puts the best designs) | 2^18.55 | 124,289 to 994,252 (A 143,112 to 1,144,826) | 2^36.8 to 2^39.8 (A 2^37.1 to 2^40.1) |
+
+Where SCALE's 167 comes from:
+- SCALE's `sum_t k_t <= 150 + kappa + 1` counts the planner rows' 150 pricing strata as sampling strata [read: its count table, and the rows' `split.families`, 30 families with 150 `strata`]. The rule's strata are size classes, of which GLM-5.3 has 15 [run].
+- It also takes `b_t << B`, which holds only for the uncapped charge [derived].
+
+Cross-check [derived from row `r20261110-033213-4d4e`, `world = ours`, `(ii)`, beta 0.055]:
+- The row pays proving at 5.23% at `q = 3.9e-6`, which is 8,911 GPU-s for each sampled replay block.
+- At the row's own 0.85 ms a block (`X` over its blocks a token), that is about 2^23.3 proof blocks, so `K` is about 2^42.6. That assumes the share is all second-stage proving [guess].
+
+`d` [derived]:
+- SCALE's `d <= 167` is `d <= m` at `m <= 167`.
+- In general `d <= min(m, 1 + the gate's sampled readers)` at `main`'s instance, and at most the number of templates at one session a template.
+- `e_s` grows with a session's tables (SCALE's own smell). So a sample of 10^5 blocks in 30 sessions may need a `k` past the context's largest [guess].
+
+**6. The numbers: SCALE's arithmetic reproduces; at `main`'s capped designs its worst corners fail.**
+
+How each cell is computed [run]: `log2(4K*T*(1 + d*e_s)/2^256)` at `T = 2^80`. `log2(1 + e_s)` is 18.272 at k = 1,507 and 31.272 at k = 12,343,986 [run]. Compressions of 64 KiB rows (513 a row) add 9.003 bits [run].
+
+SCALE's four figures at its own `K` all match [run]:
+- -130.13 at B and A (`K` 2^25.6, `m <= 167`, k 1,507, d 1).
+- -107.94 at the worst corner (`K` 2^27.4, largest k, d 167).
+- -98.94 at that corner with `T` in 64 KiB compressions.
+- -135.68 at the run of record (`K` 2^20.05, `m = 1`).
+
+At my `K` [run]:
+
+| K (m) | k 1,507, d 1 | largest k, d 1 | largest k, d 30 | largest k, d 167 | d 167, 64 KiB compressions |
+|---|---|---|---|---|---|
+| 2^24.70, one block a stratum (m 154) | -131.0 | -118.0 | -113.1 | -110.7 | -101.7 |
+| 2^25.6, SCALE's (m <= 167) | -130.1 | -117.1 | -112.2 | -109.7 | -100.7 |
+| 2^30.1, capped sets, kappa 16 (B, m 1,158) | -125.7 | -112.7 | -107.7 | -105.3 | -96.3 |
+| 2^34.8, the README's m 27,713 at the largest block | -120.9 | -107.9 | -103.0 | -100.5 | -91.5 |
+| 2^36.8, capped patterns, kappa 2^-9 (B, m 124,289) | -118.9 | -105.9 | -101.0 | -98.5 | -89.5 |
+| 2^39.8, capped patterns, kappa 2^-6 (B, m 994,252) | -115.9 | -102.9 | -98.0 | -95.5 | -86.5 |
+| 2^40.1, the same at A (m 1,144,826) | -115.7 | -102.7 | -97.8 | -95.3 | -86.3 |
+
+Reaching 100 bits needs `K <= 2^55.73` (k 1,507, d 1), `2^42.73` (largest k, d 1), `2^35.34` (largest k, d 167), or `2^26.34` (that corner with 64 KiB compressions) [run]. SCALE's thresholds are confirmed [run].
+
+Per monitoring period [derived]:
+- Every figure above is one audit's. If the prover gets `T = 2^80` in every run, a period's miss is `Q` times it. For one stream of 600 s runs, `Q` is 1,008 a week, 4,320 a month and 52,560 a year [read: ATTACK's row 5], which adds 9.98, 12.08 and 15.68 bits [run].
+- At one block a stratum (m 154; k 1,507, d 1), the miss is -121.05, -118.95 and -115.35 for a week, a month and a year [run].
+- At SCALE's worst corner (m 167 of the largest block, `K` 2^27.43; largest k, d 167) it is -98.0, -95.9 and -92.3 [run].
+- At the coin's cap (m about 58,254; `K` 2^35.88; largest k, d 167) it is -89.5, -87.4 and -83.8 [run].
+- If `2^80` is the prover's work for the whole period, the one-audit figures stand [read: ATTACK's row 5].
+- Over all compute, `Q` also multiplies by the streams a datacenter runs at once. Neither ATTACK nor I counted that [read].
+
+**Sources** [read]: `origin/main` `a930252c49`; SCALE's branch at `db65e96678`; SCALE's note `20261111T0120Z-finding-bind100-scale` (its section 1 is the PRF-533 final); EXTFORM's note `20261111T0131Z-finding-extform-w-count`; the mailbox's entries to 01:52Z; ATTACK's 02:09Z entry above this one, read after my answers were drafted, which agrees on items 1 to 4 and adds the coin's cap, `p_ref` and the period. SCALE has no entry in `inbox/proofs-coordinator.md` at `af71ac0c26`. My two scripts, `kt.py` (`main`'s rule on the card) and `figures.py` (the cells), and their outputs are in this run's artifacts, and item 5 says enough to rerun them [derived]. Nothing here needed Lean, so no run was launched [derived].
+
+**For Daniel** [derived; quotable as it stands]: The targeted-rerun argument holds, though neither it nor its count is in Lean yet: SPOT's binding miss in one audit is at most `4K*T*(1 + d*e_s)/2^256`, where `K` is the committed bits that audit's sample opens, provided the reruns keep refused second stages. At `T = 2^80` this reaches `2^-100` whenever one sample opens at most `2^35.3` bits, which holds for the one-block run of record (`2^20` bits) and for a 154- to 167-block GLM-5.3 sample (`2^24.7` to `2^25.6`), but not for the 10^5 to 10^6 blocks that `main`'s own design rule gives B and A under the served-output cap (`2^37` to `2^40` bits), which also overflow the challenger's `2^20`-byte coin. Even at that coin's limit of about 58,000 blocks the worst corner misses by half a bit an audit, and if `2^80` is allowed in every run, a week to a year of 10-minute runs costs 10 to 16 bits more, so the design must fix the sample size and every number must name it.
