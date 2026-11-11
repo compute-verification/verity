@@ -1,0 +1,120 @@
+# The retired word "warden" in prose: what `tools/move/rename.py --map tools/move/warden_term_map.toml` renames, the
+# network certifier's older name (GLOSSARY.md, "Older names") to "network certifier". The code's names (`warden.py`,
+# `WardenParams`, the `warden_*` modules) are `warden_map.toml`'s, whose move runs after this one: a word this map leaves
+# in prose is a name there, and takes the name's form.
+#
+# This move renames prose only (`scope = "prose"`): a word in a comment, a docstring or Markdown's text, never in code, a
+# string, backticks or a data file, so it moves no path, renames no declaration and leaves every lock and pin as it is.
+#
+# Every entry is a phrase: the word with its article, its possessive, or the word beside it. The word alone has no entry,
+# since `warden_map.toml` renames it as a name and one word has one name across maps. Phrases come before the words they
+# hold.
+#
+# Kept: a hyphenated name (`warden-rehearse`, `--warden-run`, `warden-serve`, `warden-form`), which is a verb, a flag
+# or a label that code and kept runs spell, and keeps one spelling in prose and code; the word as a value a command takes
+# (`CR_PATH=warden`, `--class warden`); and network steganography's "active warden" and "passive warden", that field's
+# term, which the architecture and two Lean docstrings cite as such.
+scope = "prose"
+
+[words]
+# --- possessives
+"warden's" = "network certifier's"
+"wardens'" = "network certifiers'"
+
+# --- the word with its article
+"the wardens" = "the network certifiers"
+"the warden" = "the network certifier"
+"The warden" = "The network certifier"
+"a warden" = "a network certifier"
+"A warden" = "A network certifier"
+
+# --- the word after the word that places it
+"active warden" = "active network certifier"
+"auditor's warden" = "auditor's network certifier"
+"byte-cell warden" = "byte-cell network certifier"
+"chain's warden" = "chain's network certifier"
+"each warden" = "each network certifier"
+"gate's warden" = "gate's network certifier"
+"honest warden" = "honest network certifier"
+"its warden" = "its network certifier"
+"kept warden" = "kept network certifier"
+"member's warden" = "member's network certifier"
+"no warden" = "no network certifier"
+"request's warden" = "request's network certifier"
+"same warden" = "same network certifier"
+"suite's warden" = "suite's network certifier"
+"synthetic warden" = "synthetic network certifier"
+"that warden" = "that network certifier"
+"this warden" = "this network certifier"
+"trace's warden" = "trace's network certifier"
+"v3's warden" = "v3's network certifier"
+"whose warden" = "whose network certifier"
+"▶ warden" = "▶ network certifier"
+
+# --- the word before the noun it modifies
+"warden link-windows" = "network certifier link-windows"
+"warden link-window" = "network certifier link-window"
+"warden rehearsal" = "network certifier rehearsal"
+"warden ordinal" = "network certifier ordinal"
+"warden profile" = "network certifier profile"
+"warden traces" = "network certifier traces"
+"warden trace" = "network certifier trace"
+"warden tests" = "network certifier tests"
+"warden ports" = "network certifier ports"
+"warden port" = "network certifier port"
+"warden rows" = "network certifier rows"
+"warden row" = "network certifier row"
+"warden runs" = "network certifier runs"
+"warden run" = "network certifier run"
+"warden path" = "network certifier path"
+"warden link" = "network certifier link"
+"warden view" = "network certifier view"
+"warden window" = "network certifier window"
+"warden cells" = "network certifier cells"
+"warden cell" = "network certifier cell"
+
+# The tap's Lean sets the relay beside the certifier's record of it, one device, so the word there is "relay". Each
+# phrase holds the word after the word, so it is none that `warden_tokens_map.toml` names "the network certifier".
+# `Security/Definitions/NetworkCertifier/Tap.lean`'s module docstring has the word once before a name in backticks,
+# where no phrase is prose: it must read "The relay" when this move runs, or [words] makes it "The network certifier".
+[[words_in]]
+files = ["Security/Definitions/NetworkCertifier/Tap.lean", "Security/Proofs/NetworkCertifier/Tap.lean"]
+
+[words_in.words]
+"the warden and" = "the relay and"
+"the warden sent" = "the relay sent"
+"its warden sent" = "its relay sent"
+"the warden's cells" = "the relay's cells"
+"the warden's code" = "the relay's code"
+
+[[words_in]]                              # a sentence that wraps inside a shell comment, past the phrases' reach
+files = ["benchmarks/one_stage/a5_tp.sh"]
+
+[words_in.words]
+"warden)" = "network certifier)"
+
+[rewrite]
+# Never rewritten: what `warden_map.toml` leaves as it is, for its reasons.
+exclude = [
+    "tools/move/**",
+    "tools/research/**",
+    "tests/test_retired_terms.py",
+    "archive/**",
+    "**/fixtures/**",
+    "**/CHANGELOG.md",
+]
+
+[keep]
+patterns = [
+    '(?m)^\| "warden", "network warden".*$',          # the Glossary's row of older names
+    'warden(?=-\w)',                                  # a hyphenated name
+    '(?<=-)warden',
+    'CR_PATH=warden',                                 # the word as a command's value
+    'N2_CLASS=warden',
+    '--class warden',
+]
+strings = [
+    "functions as an active warden",
+    "an *active warden*",
+    "a passive warden",
+]

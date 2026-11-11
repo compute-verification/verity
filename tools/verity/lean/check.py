@@ -1039,6 +1039,24 @@ def facts_config(policy: dict, moved: dict[str, str] | None = None) -> dict:
             "honest": honest_witnesses(policy)}
 
 
+#: the lock sections a lock run rewrites (`regenerated`, `repaired`), of which everything before the judge reads only what
+#: `facts_config` takes (the names they list, `shape`'s premises and the names its inline texts print, the honest
+#: witnesses); and `format`, which `dump` writes and only the merge driver reads
+JUDGED = frozenset({"guarantees", "reads", "assumptions", "domain", "open", "open_seed", "shape", "trust_gap", "unwitnessed",
+                    "witnesses", "witnesses_assumed", "format"})
+
+
+def build_inputs(policy: dict) -> dict:
+    """What of the lock every step before the judge reads: `Facts.lean`'s slice (`facts_config`, a prover's too: `proved`
+    passes it this lock's) and every section outside `JUDGED` whole, among them the ones the build and the seal (`roots`,
+    `exempt`), the tests (`runs`), the provers' facts (`proved_in`) and the stored findings (`FINDINGS_SECTIONS`) read.  Two
+    locks of one tree that agree on it give an audit the same build, seal, facts document, kernel replay and tests, and
+    differ only in what the judge reads of the live lock (`audit_from_facts`); they differ on it when one lists a
+    guarantee, a premise or an inline name the other doesn't, since `Facts.lean` walks what is listed.  KeyError for a lock
+    without `roots`."""
+    return {"facts": facts_config(policy), "sections": {k: v for k, v in policy.items() if k not in JUDGED}}
+
+
 def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None, keep: bool = True,
              sealed: "Sealed | None" = None) -> dict:
     """Run `Facts.lean` on the package (its `.olean` files as data: no initializer, attribute handler or other package code
@@ -1793,7 +1811,8 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
     parameters), its guarantee is listed under `guarantees` and states `C` itself (its pin's `body.head`, or its lift's),
     `witnesses` holds that guarantee to its honest and nontrivial lemmas with no `unwitnessed` entry, and its statement
     reads only `claims.modules`, Core and what no package of this repository builds (`generic_reads`). Its guarantee is then exempt from `inline_failures` and `shape`
-    (`generic_claims`), and held to every other rule."""
+    (`generic_claims`), and held to every other rule. `claims.not` excuses no closed statement (`claims.not-closed`): a
+    helper or a domain takes parameters, and a closed one is either a claim or `claims.generic`'s."""
     rule = policy.get("claims")
     if not rule:
         return []
@@ -1826,6 +1845,11 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
             fails.append(Failure("claims.both", c, f"claims: {c} is under both `claims.witnesses` and `claims.not`; keep one"))
         elif not str(why).strip():
             fails.append(Failure("claims.no-reason", c, f"claims: claims.not[{c}] gives no reason"))
+        elif c in found and c not in gen and specs[c].get("statement"):
+            fails.append(Failure("claims.not-closed", c, f"claims: {c} ({found[c]}) is a closed statement (`def {c} : "
+                                 f"Prop`) that `claims.not` excuses, so nothing holds it to witnesses: move it to "
+                                 f"`claims.generic` with the guarantee that states it (`theorem …: {c}`, under "
+                                 f"`guarantees`) and its `witnesses`, {GENERIC_WITNESSES}"))
     for c, g in sorted(gen.items()):
         if c in preds:
             fails += generic_failures(c, g, policy, facts, specs[c], in_ws=c in ws, in_not=c in nots)
