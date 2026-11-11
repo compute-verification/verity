@@ -78,7 +78,6 @@ theorem stepWith_pad (c : ℕ → Msg) (n : ℕ) (ok : List Msg → Bool) (a₀ 
       (stepWith H P x ω vn f hist (a₀ :: a₁ :: List.replicate k []) t).out = .acc →
       t.msgs = (a₀, .msg (c 0)) :: (a₁, .msg (c 1)) ::
         (List.range k).map (fun i => (([] : Msg), Out.msg (c (i + 2)))) →
-      t.out = .rej →
       ∃ m₂ rest, (stepWith H P x ω vn f hist (a₀ :: a₁ :: List.replicate k []) t).msgs =
           (a₀, .msg (c 0)) :: (a₁, .msg (c 1)) ::
             ((List.range n).map (fun i => (([] : Msg), Out.msg (c (i + 2)))) ++ (m₂, .msg []) :: rest) ∧
@@ -86,13 +85,11 @@ theorem stepWith_pad (c : ℕ → Msg) (n : ℕ) (ok : List Msg → Bool) (a₀ 
   intro d
   induction d with
   | zero =>
-    intro k hk f hist t hacc hmsgs hout
+    intro k hk f hist t hacc hmsgs
     have hkn : n = k := by omega
     subst hkn
     cases f with
-    | zero =>
-      rw [show stepWith H P x ω vn 0 hist (a₀ :: a₁ :: List.replicate n []) t = t from rfl, hout] at hacc
-      cases hacc
+    | zero => simp [stepWith] at hacc
     | succ g =>
       have hl : ((a₀ :: a₁ :: List.replicate n ([] : Msg)) ++ [((P.next x hist ω).eval H).1]).length = n + 3 := by
         simp
@@ -109,11 +106,9 @@ theorem stepWith_pad (c : ℕ → Msg) (n : ℕ) (ok : List Msg → Bool) (a₀ 
         rw [hr, hmsgs]
         simp
   | succ d ih =>
-    intro k hk f hist t hacc hmsgs hout
+    intro k hk f hist t hacc hmsgs
     cases f with
-    | zero =>
-      rw [show stepWith H P x ω vn 0 hist (a₀ :: a₁ :: List.replicate k []) t = t from rfl, hout] at hacc
-      cases hacc
+    | zero => simp [stepWith] at hacc
     | succ g =>
       have hl : (a₀ :: a₁ :: List.replicate k ([] : Msg)).length = k + 2 := by simp
       rcases hpad (a₀ :: a₁ :: List.replicate k []) ((P.next x hist ω).eval H).1 (by rw [hl]; omega)
@@ -125,7 +120,7 @@ theorem stepWith_pad (c : ℕ → Msg) (n : ℕ) (ok : List Msg → Bool) (a₀ 
           rw [ha]
           exact (congrArg (fun l => a₀ :: a₁ :: l) List.replicate_succ').symm
         rw [has] at hacc ⊢
-        refine ih (k + 1) (by omega) g _ _ hacc ?_ hout
+        refine ih (k + 1) (by omega) g _ _ hacc ?_
         simp [hmsgs, List.range_succ, ha]
       · have e : (vn ((a₀ :: a₁ :: List.replicate k []) ++ [((P.next x hist ω).eval H).1])).eval H = (.rej, []) := by
           rw [hv]; rfl
@@ -153,7 +148,7 @@ theorem stepWith_stage (c : ℕ → Msg) (n : ℕ) (ok : List Msg → Bool) (hv1
     rw [stepWith_succ_msg H P x ω vn (m := c 1) (lo := []) (by rw [List.singleton_append, hv2]; rfl)] at hacc ⊢
     simp only [List.cons_append, List.nil_append] at hacc ⊢
     obtain ⟨m₂, rest, hm, hok⟩ :=
-      stepWith_pad H P x ω vn c n ok _ _ hpad hstmt n 0 (Nat.zero_add n) g _ _ hacc rfl rfl
+      stepWith_pad H P x ω vn c n ok _ _ hpad hstmt n 0 (Nat.zero_add n) g _ _ hacc rfl
     exact ⟨_, _, m₂, rest, hm, hok⟩
 
 end Steps
@@ -212,11 +207,23 @@ theorem run_seenAt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω :
     intro as hlen
     have hlen' : as.length = h.stage + 2 := hlen
     rw [next_stmt h x (by simp) hlen', hlen', getD_map_range (coinSeq r) (show 0 < h.stage + 2 by omega), e0, hst]
+  have hv1 : ∀ a : Msg, next h x [a] ((List.range [a].length).map (coinSeq r)) = .ret (.msg (coinSeq r 0).bytes) := by
+    intro a
+    have e := next_two h x (as := [a]) (cs := (List.range [a].length).map (coinSeq r)) (List.cons_ne_nil a [])
+      (by simp) (by simp)
+    rw [getD_map_range (coinSeq r) (show [a].length - 1 < [a].length by simp) default] at e
+    exact e
+  have hv2 : ∀ a b : Msg, next h x [a, b] ((List.range [a, b].length).map (coinSeq r)) =
+      .ret (.msg (coinSeq r 1).bytes) := by
+    intro a b
+    have e := next_two h x (as := [a, b]) (cs := (List.range [a, b].length).map (coinSeq r)) (List.cons_ne_nil a [b])
+      (by simp) (by simp)
+    rw [getD_map_range (coinSeq r) (show [a, b].length - 1 < [a, b].length by simp) default] at e
+    exact e
   obtain ⟨m₀, m₁, m₂, rest, hm, hok⟩ := stepWith_stage H P x ω
     (fun as => (V h).next x as ((List.range as.length).map (coinSeq r))) (fun j => (coinSeq r j).bytes) h.more
     (fun as => stmtOk h x (as.getD 1 []) (as.getD (h.stage + 1) []) (r ⟨0, k_pos h x⟩) (stageCoins h x r))
-    (fun a => next_two h x (List.cons_ne_nil _ _) rfl (Nat.le_succ 1))
-    (fun a b => next_two h x (List.cons_ne_nil _ _) rfl (Nat.le_refl 2)) hpad hstmt ((V h).k x) hacc
+    hv1 hv2 hpad hstmt ((V h).k x) hacc
   have hg2 : ((m₀ :: m₁ :: List.replicate h.more ([] : Msg)) ++ [m₂]).getD (h.stage + 1) [] = m₂ := by
     have hl : (m₀ :: m₁ :: List.replicate h.more ([] : Msg)).length = h.stage + 1 := by simp [hs]
     rw [← hl]
