@@ -5,8 +5,8 @@ parameters, so ``alpha = K / Gamma`` bits per gate. A row (one training method i
 in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
 
 * ``lower``: the thread theorem, ``Nci.SecurityProofs.ThreadedTraining`` (``security/Definitions/Nci/Guarantees/Threads.lean``):
-  ``rho >= kappa * b_a / (2 alpha Lambda)`` with ``Lambda = max(e, c K / (4 d b_w))``, and ``rho >= 1`` since a
-  containing circuit is no smaller. The weight rate is capped at ``U_bits / n_updated``: a block that uses ``p`` updated
+  ``slowdown >= kappa * b_a / (2 alpha Lambda)`` with ``Lambda = max(e, c K / (4 d b_w))``, and ``slowdown >= 1``
+  since a containing circuit is no smaller. The weight rate is capped at ``U_bits / n_updated``: a block that uses ``p`` updated
   weights can always read the whole update instead, so no larger rate is a valid charge. A seed-described update
   therefore gets a lower bound near 1, which is the truth about it, not an artifact.
 * ``upper``: the cost of the cheapest construction ``search`` finds, compliant by construction under its own
@@ -18,7 +18,7 @@ in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
 * ``theta_cap``: a calibration without a cap on the committed parameters' size lets a row decode from a committed table
   (its ``decode_flops_table``) instead of regenerating it, as a seed-based method's noise.
 * ``chain``: the partial-sum rule, ``Nci.SecurityProofs.IncompressibleContainedTraining``
-  (``security/Definitions/Nci/Guarantees/Training.lean``): ``rho >= kappa_chain * f(K) / (2 alpha)``, with ``f`` the read
+  (``security/Definitions/Nci/Guarantees/Training.lean``): ``slowdown >= kappa_chain * f(K) / (2 alpha)``, with ``f`` the read
   factor of ``b_w``, ``b_a`` and the chain's smallest inner dimension. Its assumption is training's incompressibility
   (``TrainingIncompressible``) of one chain of the reference circuit at ``b_w`` and ``b_a``, and nothing structural. A chain charges
   each weight once per layer of it, so it is one forward path: ``kappa_chain`` (a row's optional ``chain``) is that
@@ -190,7 +190,7 @@ RECIPES = [("bf16", 16, 16, None), ("fp8", 8.25, 8.25, "train.compute_multiplier
 
 
 def efficiency(row: dict, calibration: dict, parameters: list[dict]) -> list[dict]:
-    """Pretraining efficiency under the policy, ``m / rho``, for each recipe: ``ceiling`` with the proven chain bound
+    """Pretraining efficiency under the policy, ``m / slowdown``, for each recipe: ``ceiling`` with the proven chain bound
     (a ceiling when the recipe's chain is incompressible at its own rates) and ``attack`` with the construction's cost.
     The best recipe is the attacker's choice."""
     ests = catalog.estimates(parameters)
@@ -224,7 +224,7 @@ def main(argv: list[str] | None = None) -> int:
             for r in rows:
                 if r["model"] != c["model"] or "chain" not in r:
                     continue
-                print(f"{r['id']} under {c['id']}: efficiency m / rho")
+                print(f"{r['id']} under {c['id']}: efficiency m / slowdown")
                 print(f"{'recipe':16} {'b_w':>5} {'b_a':>5} {'m (low-high)':>18} {'chain':>9} {'upper':>9} "
                       f"{'ceiling':>9} {'attack':>9}")
                 for x in efficiency(r, c, parameters):

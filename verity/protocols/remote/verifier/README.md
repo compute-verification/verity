@@ -308,7 +308,7 @@ takes per-period guarantees as hypotheses; no theorem yet instantiates it with p
 
 **Establishes, conditionally.** The slowdown bound: under the protocols, training a new frontier model takes at least
 
-$$ \rho(\mathcal G, \eta) \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]} $$
+$$ \mathrm{slowdown}(\mathcal G, \mathcal A, \eta) \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]} $$
 
 times the fleet-time the reference training algorithm takes with no protocol (fleet-time: elapsed time times the whole
 fleet's capacity, registered and unregistered hardware). It holds except with the total failure probability below,
@@ -391,7 +391,7 @@ Sampled proofs' accept rule and theorems, the Lean slowdown bounds, and the comp
 | The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
 | The composed soundness of remote | `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` (`security/Properties/Verity/Soundness.lean`) | **proved**, from three open targets (the open gap, above) | — |
 
-`DampenerRemote` is the slowdown bound ρ = max(1, 1/(s + x/MFU₀)) (`Nci.Dampener.remoteDampener`; MFU₀ divides only
+`DampenerRemote` is the slowdown bound max(1, 1/(s + x/MFU₀)) (`Nci.Dampener.remoteDampener`; MFU₀ divides only
 x), not the bound displayed above: arithmetic over inline hypotheses (`Nci.Assumptions.PouwSound` among them), with
 the declared work bounded by `CountHE`.
 
