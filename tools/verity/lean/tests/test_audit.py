@@ -1469,8 +1469,8 @@ def test_build_inputs_holds_what_the_lock_gives_every_step_before_the_judge():
     """`build_inputs`, which a lock run compares before it keeps a pass for the commit of its regenerated locks
     (`lean_audit.keep_regenerated`).  A record's value is not in it (a statement's hash, an assumption's digest, a `reads`
     group, an owner), nor is a section only the judge reads; what `Facts.lean` walks is (a listed guarantee, a listed
-    premise, a name an inline text prints, an honest witness, `shape.premises`), and so is every other section, one this
-    file doesn't know included."""
+    premise, a name an inline text prints, an honest witness, a first nontrivial one, `shape.premises`), and so is every
+    other section, one this file doesn't know included."""
     pol = recorded()
     base = A.build_inputs(pol)
     stale = json.loads(json.dumps(pol))
@@ -1485,7 +1485,7 @@ def test_build_inputs_holds_what_the_lock_gives_every_step_before_the_judge():
                    {"assumptions": {}}, {"open": {"P.Open": {"owner": "@lean"}}}, {"domain": {"P.Dom": {}}},
                    {"shape": {"inline": {"P.t": {"P.Small 3": "why"}}}},                 # a name an inline text prints
                    {"shape": {"premises": ["P.Premises"]}},
-                   {"witnesses": {"P.t": {"honest": ["P.w"]}}},
+                   {"witnesses": {"P.t": {"honest": ["P.w"]}}}, {"witnesses": {"P.t": {"nontrivial": ["P.n", "P.m"]}}},
                    {"roots": ["P", "Q"]}, {"exempt": {"Scratch": "why"}}, {"runs": {"T": {}}}, {"proved_in": ["../q"]},
                    {"compile_time": {"P.Gen": "why"}}, {"dependency_unchecked": {"D": "why"}}, {"upstream": {}},
                    {"axioms": []}, {"meaning": ["P.Defs"]}, {"layers": {}}, {"trees": {}}, {"claims": {}},
@@ -2311,6 +2311,64 @@ def test_an_honest_witness_concludes_a_premise_at_a_defeq_argument_and_not_at_an
     assert cover("Control.fixed_same") == ("Control.Fixed", True, True)
     assert cover("Control.fixed_all") == ("Control.Fixed", True, True)
     assert cover("Control.fixed_other") == ("Control.Fixed", False, False)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_first_nontrivial_witness_states_a_fixed_premise_at_its_term_and_tied_to_what_it_negates(tmp_path):
+    """`Facts.lean`'s `fixes`, `bound` and `linked` on a real build, and `scope_failures` on them. `on_card` takes
+    `OnCard cardA g`, which fixes a term, and `Typed Unit g`, whose one closed argument is a type and fixes none. A
+    first nontrivial lemma that binds `OnCard cardA g` beside `¬ Bound g` is at its instance, also where `g` reaches
+    the hypothesis through another conjunct (`g' = g`); one at `cardB`, one that binds it on a variable the negation
+    doesn't share, one that binds it under a hypothesis of its own (`g = 5 → …`, which says nothing where that
+    fails), one that binds nothing and one with every term closed are not. The exclusion form asks only the term, of
+    a conjunct of the conclusion."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Scope.lean").write_text(
+        "namespace Control\nstructure Card where n : Nat\ndef cardA : Card := ⟨1⟩\ndef cardB : Card := ⟨2⟩\n"
+        "def OnCard (c : Card) (g : Nat) : Prop := c.n ≤ c.n + g\ndef Typed (α : Type) (g : Nat) : Prop := g = g\n"
+        "def Bound (g : Nat) : Prop := g = 0\n"
+        "theorem on_card (g : Nat) (h : OnCard cardA g) (t : Typed Unit g) : Bound g ∨ True := Or.inr trivial\n"
+        "theorem at_card : ∃ g, ∃ _ : OnCard cardA g, ¬ Bound g := ⟨1, Nat.le_add_right _ _, by unfold Bound; omega⟩\n"
+        "theorem at_other : ∃ g, ∃ _ : OnCard cardB g, ¬ Bound g := ⟨1, Nat.le_add_right _ _, by unfold Bound; omega⟩\n"
+        "theorem apart : ∃ g g', ∃ _ : OnCard cardA g', ¬ Bound g :=\n"
+        "  ⟨1, 0, Nat.le_add_right _ _, by unfold Bound; omega⟩\n"
+        "theorem through : ∃ g g', ∃ _ : OnCard cardA g' ∧ g' = g, ¬ Bound g :=\n"
+        "  ⟨1, 1, ⟨Nat.le_add_right _ _, rfl⟩, by unfold Bound; omega⟩\n"
+        "theorem under : ∃ g, ∃ _ : g = 5 → OnCard cardA g, ¬ Bound g :=\n"
+        "  ⟨1, fun _ => Nat.le_add_right _ _, by unfold Bound; omega⟩\n"
+        "theorem bare : ¬ Bound 1 := by unfold Bound; omega\n"
+        "theorem closed : ∃ _ : OnCard cardA 1, ¬ Bound 1 := ⟨Nat.le_add_right _ _, by unfold Bound; omega⟩\n"
+        "theorem concluded : OnCard cardA 1 ∧ ¬ Bound 1 := ⟨Nat.le_add_right _ _, by unfold Bound; omega⟩\n"
+        "theorem elsewhere : OnCard cardB 1 ∧ ¬ Bound 1 := ⟨Nat.le_add_right _ _, by unfold Bound; omega⟩\n"
+        "end Control\n")
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Scope\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    lemmas = ("at_card", "at_other", "apart", "through", "under", "bare", "closed", "concluded", "elsewhere")
+    names = ["Control.on_card", *(f"Control.{n}" for n in lemmas)]
+    domain = {"domain": {"Control.OnCard": {}, "Control.Typed": {}}}
+
+    def scope(lemma: str, kind: str = "acceptance") -> tuple:
+        first = {"Control.on_card": {"nontrivial": [f"Control.{lemma}", "Control.bare"]}}
+        config = {"roots": ["Control"], "guarantees": dict.fromkeys(names, {}), "witnesses": first}
+        pin = A.facts_of(pkg, config, tmp_path)["pins"]["Control.on_card"]
+        on, typed = pin["premises"]
+        assert (on["head"], on["fixes"], on["type"]) == ("Control.OnCard", True, "Control.OnCard Control.cardA g")
+        assert (typed["head"], typed["fixes"]) == ("Control.Typed", False) and "type" not in typed
+        assert [p["head"] for p in A.fixed_premises(pin, domain)] == ["Control.OnCard"]
+        assert A.fixed_premises(pin, {}) == [], "the lock's `domain` section decides"
+        return on.get("bound"), on.get("linked"), [
+            x.code for x in A.scope_failures(f"Control.{lemma}", "Control.on_card", pin, domain, kind, set())]
+
+    refused = ["witnesses.nontrivial-scope"]
+    assert scope("at_card") == (True, True, [])
+    assert scope("through") == (True, True, [])
+    assert scope("at_other") == (False, False, refused)
+    assert scope("apart") == (True, None, refused)
+    assert scope("under") == scope("bare") == (None, None, refused)
+    assert scope("closed") == (True, None, refused)
+    assert scope("concluded", "exclusion") == (True, None, [])
+    assert scope("elsewhere", "exclusion") == (False, None, refused)
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -3913,7 +3971,7 @@ def witness_codes(pol, f):
 
 def test_a_guarantee_of_what_an_acceptance_means_has_an_honest_and_a_nontrivial_witness():
     """A guarantee whose statement reads a claim names, under `witnesses`, `honest` theorems concluding its premises
-    at the deployed instance and a `nontrivial` theorem that its conclusion fails at the verifier that accepts everything,
+    at the deployed instance and a `nontrivial` theorem that its conclusion fails at an instance it builds,
     each a guarantee; without them it fails, naming both and their statements' shapes. The witnesses are no guarantees the
     rule holds to witnesses of their own, and a guarantee that reads no claim needs none."""
     pol, f = witnessed()
@@ -3924,8 +3982,8 @@ def test_a_guarantee_of_what_an_acceptance_means_has_an_honest_and_a_nontrivial_
         "P.Holds): prove `P.sound_honest : P.Compiled d …` (its hypotheses hold at the honest deployed instance d, at the "
         "deployed verifier, taking only named assumptions of an `Assumptions` or `shape.premises` module or "
         "`witnesses_assumed`) and "
-        "`P.sound_nontrivial : ¬ P.Holds at acceptAll …` (its conclusion is false for a verifier that accepts "
-        "everything). Each takes no binder over its instance and no hypothesis beyond named assumptions the lock lists: "
+        "`P.sound_nontrivial : ¬ P.Holds …` (its conclusion is false at an instance the lemma builds). "
+        "Each takes no binder over its instance and no hypothesis beyond named assumptions the lock lists: "
         "it builds the instance at the model level (a small hand-built descriptor, not a parsed file), with any one field "
         "that can't be built a named assumption. List both under `guarantees`, and write \"P.sound\": {\"honest\": "
         "[\"P.sound_honest\"], \"nontrivial\": \"P.sound_nontrivial\"} under `witnesses`: a guarantee carries an honest and "
@@ -3961,7 +4019,7 @@ def test_the_three_vacuous_guarantees_of_26_october_fail_the_witnesses_rule():
         "witnesses: P.sound_nontrivial negates P.Holds under 0 `∀` after its last `∃`, and P.sound's conclusion has 1 `∃`: "
         "each is a `∀` before the `¬` (`∀ X, ¬ C … X`), since `∃ X, ¬ C … X` holds whenever the prover can pick a bad X"]
     assert witness_codes(*witnessed(some_x, nontrivial={"body": wbody("P.Holds", negated=True, binders=["∀"])})) == []
-    assert "∀ X…, ¬ P.Holds at acceptAll" in A.witness_shapes("P.sound", witnessed(some_x)[1]["pins"]["P.sound"], {}, WOWN)
+    assert "∀ X…, ¬ P.Holds …`" in A.witness_shapes("P.sound", witnessed(some_x)[1]["pins"]["P.sound"], {}, WOWN)
 
     never = {"premises": [COMPILED], "body": wbody("P.Compiled", conclusion=[wk("P.Compiled", assumed=True)])}
     assert witness_codes(*witnessed(honest={"body": wbody("P.Other")})) == ["witnesses.honest-uncovered"]
@@ -3982,11 +4040,11 @@ def test_the_three_vacuous_guarantees_of_26_october_fail_the_witnesses_rule():
 
     broken = {"body": wbody("Or", binders=["∀", "→", "→"], conclusion=[wk("Or", ["P.Holds", "P.Break"])])}
     assert A.witness_failures(*witnessed(broken), WOWN) == [
-        "witnesses: P.sound_nontrivial does not state that P.sound's conclusion fails at the verifier that accepts "
-        "everything: past its ∀ and ∃ binders its statement must be `¬ C …` with C one of Or or a definition unfolding to one, and "
+        "witnesses: P.sound_nontrivial does not state that P.sound's conclusion fails at an instance it builds: "
+        "past its ∀ and ∃ binders its statement must be `¬ C …` with C one of Or or a definition unfolding to one, and "
         "it is ¬ P.Holds … (for a bound with a break, `¬ (C … ∨ Break …)`: the break fails too)"]
     assert witness_codes(*witnessed(broken, nontrivial={"body": wbody("Or", negated=True)})) == []
-    assert "¬ (… ∨ …) at acceptAll …` (its conclusion is false for a verifier that accepts everything, the break included" in \
+    assert "¬ (… ∨ …) …` (its conclusion is false at an instance the lemma builds, the break included" in \
         A.witness_shapes("P.sound", witnessed(broken)[1]["pins"]["P.sound"], {}, WOWN)
     assert witness_codes(*witnessed(nontrivial={"body": wbody("P.Holds")})) == ["witnesses.nontrivial-form"]
     assert witness_codes(*witnessed(nontrivial={"body": wbody("P.Holds", negated=True, absurd=True)})) == \
@@ -4024,7 +4082,7 @@ def test_a_property_of_an_acceptance_has_an_honest_witness_that_the_deployment_i
         "witnesses: P.sound lists no witnesses that it says something, and the rule holds it to them (a property of "
         "P.verify accepting): prove `P.sound_honest : P.Compiled d … ∧ P.verify accepts d …`")
     both = witnessed({"body": wbody("And", conclusion=[wk("P.Holds"), wk("P.Bound")])})[1]["pins"]["P.sound"]
-    assert "`P.sound_nontrivial : ¬ (one of P.Holds, P.Bound) at acceptAll …`" in A.witness_shapes("P.sound", both, {}, WOWN)
+    assert "`P.sound_nontrivial : ¬ (one of P.Holds, P.Bound) …`" in A.witness_shapes("P.sound", both, {}, WOWN)
     rejects = {"properties": {"P.sound": {"function": "P.verify", "outcome": "reject"}}}
     assert witness_codes({**pol, "witnesses": {}, "shape": rejects}, f) == []
 
@@ -4277,6 +4335,70 @@ def test_an_honest_witness_concludes_a_premise_it_states_applied_at_the_argument
     for agree in (False, None):
         assert at(["CP.circA \nR0"], agree) == (["domain.uncovered"], ["witnesses.honest-uncovered"]), agree
     assert A.honest_witnesses(pol) == {"P.sound": ["P.sound_honest"]}
+
+
+def test_the_first_nontrivial_witness_is_at_its_guarantee_s_instance_where_a_domain_hypothesis_fixes_a_term():
+    """A guarantee that takes a domain hypothesis at a term it fixes (`P.Compiled P.circA d`, `Facts.lean`'s `fixes`) is
+    not witnessed by a lemma that negates its conclusion at any instance. Its first `nontrivial` lemma states that
+    hypothesis at that term (`bound`) and, of the acceptance kind, on a variable the application it negates shares
+    (`linked`): another statement's lemma, which states nothing headed by it, one at another term and one beside an
+    unrelated negation fail, each saying which. Not held: a hypothesis the lock doesn't list under `domain`, one that
+    fixes no term, an antecedent, and a further lemma. An exclusion's first lemma states it at that term among its
+    conjuncts, unless it is the premise dropped. `witness_shapes` names the hypothesis to bind, and `Facts.lean` is told
+    each guarantee's first nontrivial lemma (`facts_config`)."""
+    domain = {"domain": {"P.Compiled": {"owner": "@lean", "why": "the compiled circuits the bound is stated over"}}}
+    fixed = COMPILED | {"args": ["CP.circA \nR0", None], "fixes": True, "type": "P.Compiled P.circA\n  d",
+                        "agree": True}
+
+    def at(premise=fixed, **held):
+        return A.witness_failures(*witnessed({"premises": [premise | held]}, **domain), WOWN)
+
+    def refusal(how):
+        return [f"witnesses: P.sound_nontrivial, P.sound's first `nontrivial` witness, is not at P.sound's instance: "
+                f"P.sound takes the domain hypothesis P.Compiled at a term it fixes (`P.Compiled P.circA d`), and "
+                f"P.sound_nontrivial {how}. Past its binders, state P.sound_nontrivial as "
+                f"`∃ …, ∃ _ : P.Compiled … ∧ …, ¬ C …`, with P.Compiled at that term and on a variable the negated "
+                f"application shares, so that the instance where the conclusion fails is one P.sound speaks of; if "
+                f"P.sound_nontrivial is another statement's lemma, list P.sound's own under "
+                f"witnesses[P.sound].nontrivial"]
+
+    assert at(bound=True, linked=True) == []
+    assert at() == refusal("states nothing headed by it") and [x.code for x in at()] == ["witnesses.nontrivial-scope"]
+    assert at(bound=False) == at(bound=False, linked=False) == refusal("states it at another term")
+    assert at(bound=True) == at(bound=True, linked=False) == refusal(
+        "states it there on variables that the application it negates does not share")
+    assert A.witness_failures(*witnessed({"premises": [fixed]}), WOWN) == [], "no `domain` entry lists it"
+    assert at(fixed | {"fixes": False}) == at(COMPILED) == at(fixed | {"antecedent": True}) == []
+    pol, f = witnessed({"premises": [fixed]}, **domain)
+    assert A.facts_config(pol)["nontrivial"] == A.first_nontrivials(pol) == {"P.sound": "P.sound_nontrivial"}
+    assert A.first_nontrivials({"witnesses": {"P.a": {"nontrivial": ["P.n", "P.m"]}, "P.b": {"honest": ["P.h"]}}}) == {
+        "P.a": "P.n"}
+    twice = {**pol, "witnesses": {"P.sound": {**pol["witnesses"]["P.sound"], "nontrivial": ["P.sound_nontrivial"] * 2}}}
+    assert witness_codes(twice, f).count("witnesses.nontrivial-scope") == 1, "the rule reads the first lemma alone"
+    shape = A.witness_shapes("P.sound", f["pins"]["P.sound"], pol, WOWN)
+    assert ("`P.sound_nontrivial : ∃ …, ∃ _ : P.Compiled …, ¬ P.Holds …` (its conclusion is false at an instance the "
+            "lemma builds, which binds P.Compiled, the domain hypotheses that fix a term, at that term and on a "
+            "variable the negated application shares).") in shape
+
+    cover = {"name": "P.Covering.load", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
+    covers = {"binder": "hc", "head": "P.Covers", "module": "P.Assumptions"}
+    g = {"reads": [cover], "hypotheses": [covers | {"type": "P.Covers", "closed": True, "named": "P.Covers"}],
+         "body": wbody("LE.le", binders=["∀", "→", "→"], conclusion=[wk("LE.le", ["P.Covering.load"])])}
+
+    def neg(inner):
+        return {"head": "Not", "defs": [], "refl": False, "assumed": False, "negated": True, "inner": inner}
+
+    def excluded(premise, drops="P.Covers"):
+        nt = {"body": wbody("And", conclusion=[wk("P.Other" if drops == "P.Compiled" else "P.Compiled"), neg(drops),
+                                               neg("LE.le")])}
+        pol, f = witnessed(g | {"premises": [premise, covers]}, nontrivial=nt, **domain)
+        pol["assumptions"] = {**pol["assumptions"], "P.Covers": {"owner": "@network-accounting"}}
+        assert A.witness_scope("P.sound", pol, f["pins"]["P.sound"])[0] == "exclusion"
+        return [x.code for x in A.witness_failures(pol, f, WOWN)]
+
+    assert excluded(fixed | {"bound": True}) == [] and excluded(fixed | {"fixes": False}) == []
+    assert excluded(fixed) == excluded(fixed | {"bound": False}) == ["witnesses.nontrivial-scope"]
+    assert "witnesses.nontrivial-scope" not in excluded(fixed, drops="P.Compiled"), "the premise it drops"
 
 
 def test_another_listed_guarantee_s_statement_is_a_domain_hypothesis_citing_it():

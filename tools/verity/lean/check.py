@@ -70,7 +70,7 @@ FACTS = "facts.json.gz"
 #: position-free facts and the source and dependency findings, gzipped with no timestamp, with its own schema so an old
 #: document is never read against new logic
 FACTS_DOC = "facts-doc.json.gz"
-FACTS_SCHEMA = "lean-facts/v1"
+FACTS_SCHEMA = "lean-facts/v2"
 STANDARD = ["Classical.choice", "Quot.sound", "propext"]
 #: compiler trust: `native_decide` declares an axiom `<decl>._native.native_decide.ax_<i>` (older toolchains used these two)
 NATIVE = {"Lean.ofReduceBool", "Lean.trustCompiler"}
@@ -1023,7 +1023,8 @@ def record_scope(policy: dict) -> list[str]:
 def facts_config(policy: dict, moved: dict[str, str] | None = None) -> dict:
     """The lock slice `Facts.lean` reads (`facts_of`'s config, less the scratch paths it writes to): the roots, the record's
     scope, the allowed axioms, the guarantee names, the spec, the premises and listed assumptions, the verifier's entries,
-    the moves and the honest witnesses. The facts are a function of this and the `.olean` files, so `facts_key` hashes it."""
+    the moves, the honest witnesses and each guarantee's first nontrivial one. The facts are a function of this and the
+    `.olean` files, so `facts_key` hashes it."""
     premises = (policy.get("shape") or {}).get("premises")
     inline = (policy.get("shape") or {}).get("inline")
     texts = [t for es in inline.values() if isinstance(es, dict) for t in es] if isinstance(inline, dict) else []
@@ -1036,12 +1037,12 @@ def facts_config(policy: dict, moved: dict[str, str] | None = None) -> dict:
             "assumptions": sorted(a for a in listed_premises(policy) if isinstance(a, str)),
             "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
             "moved": sorted([new, old] for old, new in (moved or {}).items()), "names": asked,
-            "honest": honest_witnesses(policy)}
+            "honest": honest_witnesses(policy), "nontrivial": first_nontrivials(policy)}
 
 
 #: the lock sections a lock run rewrites (`regenerated`, `repaired`), of which everything before the judge reads only what
 #: `facts_config` takes (the names they list, `shape`'s premises and the names its inline texts print, the honest
-#: witnesses); and `format`, which `dump` writes and only the merge driver reads
+#: witnesses and the first nontrivial ones); and `format`, which `dump` writes and only the merge driver reads
 JUDGED = frozenset({"guarantees", "reads", "assumptions", "domain", "open", "open_seed", "shape", "trust_gap", "unwitnessed",
                     "witnesses", "witnesses_assumed", "format"})
 
@@ -2113,6 +2114,13 @@ def honest_witnesses(policy: dict) -> dict[str, list[str]]:
             if isinstance(w, dict) and isinstance(w.get("honest"), list)}
 
 
+def first_nontrivials(policy: dict) -> dict[str, str]:
+    """{guarantee: the first `nontrivial` witness its `witnesses` entry lists}: `Facts.lean` reads what that lemma
+    states of its instance against the guarantee's premises (`bound`, `linked`)."""
+    ws = policy.get("witnesses")
+    return {g: ns[0] for g, w in sorted((ws if isinstance(ws, dict) else {}).items()) if (ns := nontrivials(w))}
+
+
 def honest_concludes(pin: dict, witnesses: list[dict]) -> set[str]:
     """What the honest witnesses ``witnesses`` (their facts) conclude of the guarantee whose facts are ``pin``: each
     conjunct's head and the definitions it applies (`concluded_constants`), of each witness's statement as written and
@@ -2146,6 +2154,16 @@ def stated_premises(pin: dict) -> list[dict]:
     the antecedents a conclusion takes whose head the package defines (`antecedent`), which its record names, with an
     owner and a digest, and nothing concludes."""
     return [p for p in pin.get("premises") or [] if not p.get("antecedent")]
+
+
+def fixed_premises(pin: dict, policy: dict) -> list[dict]:
+    """The premises of a guarantee (`stated_premises`) that the lock lists under `domain` and that fix a term
+    (`Facts.lean`'s `fixes`: the hypothesis is its head applied, and a closed argument is no type, instance or proof):
+    those its first `nontrivial` witness states at that term (`scope_failures`). The lock's section decides, not the
+    record's `premises.domain`, which lags a hand edit until the next update."""
+    domain = policy.get("domain")
+    return [p for p in stated_premises(pin) if p.get("fixes") is True and p.get("head") in (
+        domain if isinstance(domain, dict) else {})]
 
 
 def honest_premises(pin: dict, policy: dict, own: set[str]) -> list[str]:
@@ -2246,13 +2264,17 @@ def witness_shapes(name: str, pin: dict, policy: dict, own: set[str]) -> str:
                 f"`{name}_nontrivial : {nontrivial}.{construct} List both under `guarantees`, and write "
                 f"{json.dumps(entry, ensure_ascii=False)[1:-1]} under `witnesses`: a guarantee carries an honest and a "
                 f"nontrivial witness")
-    nontrivial = f"{'∀ X…, ' if exists else ''}¬ {shown} at acceptAll …"
+    fixed = list(dict.fromkeys(p["head"] for p in fixed_premises(pin, policy)))
+    binds = f"∃ …, ∃ _ : {' ∧ '.join(f'{h} …' for h in fixed)}, " if fixed else ""
+    nontrivial = f"{binds}{'∀ X…, ' if exists else ''}¬ {shown} …"
     why = (", the break included, so a break that always holds can't make the bound say nothing" if head == "Or" else "") + (
         f", each of the {exists} `∃` of its conclusion a `∀` before the `¬`, since a value the prover picks fits anything "
-        f"there" if exists else "")
+        f"there" if exists else "") + (
+        f", which binds {' and '.join(fixed)}, the domain hypotheses that fix a term, at that term and on a variable "
+        f"the negated application shares" if fixed else "")
     return (f"prove `{name}_honest : {honest}` (its hypotheses hold at the honest deployed instance d, at the deployed "
             f"verifier, taking only named assumptions of an `Assumptions` or `shape.premises` module or `witnesses_assumed`) and "
-            f"`{name}_nontrivial : {nontrivial}` (its conclusion is false for a verifier that accepts everything{why})."
+            f"`{name}_nontrivial : {nontrivial}` (its conclusion is false at an instance the lemma builds{why})."
             f"{construct} List both under `guarantees`, and write {json.dumps(entry, ensure_ascii=False)[1:-1]} under "
             f"`witnesses`: a guarantee carries an honest and a nontrivial witness")
 
@@ -2264,17 +2286,21 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     binder before its conclusion (`instance_binders`; a `nontrivial` one, a `∀` for each `∃` of the conclusion) and no
     hypothesis beyond the named assumptions the lock lists (`assumes`). Read as `statement_read` reads them:
 
-    - `honest`: together their conclusions conclude, at the honest deployed instance, each premise of the guarantee outside
-      a named assumption's module and `witnesses_assumed` (`honest_premises`) and, for a property, its function's
-      acceptance (`accepted`): a
+    - `honest`: together their conclusions conclude, at an instance they build, which is the guarantee's own wherever a
+      premise fixes an argument, each premise of the guarantee outside a named assumption's module and
+      `witnesses_assumed` (`honest_premises`) and, for a property, its function's acceptance (`accepted`): a
       conjunct headed by or applying each, a premise's head read as written too and at the arguments the guarantee
-      fixes (`honest_concludes`). Each says something (`vacuous_meets`), and none applies a verifier that accepts
-      everything (`accept_all`: that is the nontrivial lemma's object). A premise that can never hold fails here;
+      fixes (`honest_concludes`). That the instance is the deployed one is the reviewer's to read: the check does not
+      hold it. Each says something (`vacuous_meets`), and none applies a verifier that accepts everything
+      (`accept_all`). A premise that can never hold fails here;
     - `nontrivial`: past its binders, `¬ C …` with `C` a head of the guarantee's conclusion, or one it unfolds through
-      (`concluded`). For the `acceptance` kind, at the verifier that accepts everything, with a `∀` before the `¬` for each
-      `∃` of the conclusion: a conclusion with an `∃` the prover picks, and a bound whose break (`C ∨ Break`) always
-      holds, fail here. For the `exclusion` kind, a conjunction at an explicit circuit: (each other premise holds) ∧
-      ¬ (a named premise) ∧ ¬ (the bound) (`exclusion_failures`), so a bare `¬ bound` fails; of a guarantee that takes
+      (`concluded`). For the `acceptance` kind, at an instance the lemma builds, where the conclusion fails, with a `∀`
+      before the `¬` for each `∃` of the conclusion: a conclusion with an `∃` the prover picks, and a bound whose break
+      (`C ∨ Break`) always holds, fail here. The check holds the form and, where a domain hypothesis fixes a term, that
+      the instance is the guarantee's there (`scope_failures`): another statement's lemma with the same conclusion
+      head fails. It does not ask that the instance's verifier accepts everything. For the `exclusion` kind, a
+      conjunction at an explicit circuit: (each other premise holds, a domain hypothesis that fixes a term at that term)
+      ∧ ¬ (a named premise) ∧ ¬ (the bound) (`exclusion_failures`), so a bare `¬ bound` fails; of a guarantee that takes
       no premise (`premise_free`), the bare `¬ bound` at an explicit circuit, where a tighter bound fails;
     - further `nontrivial` lemmas, when it is a list: the first is held as above, and each after it is in the exclusion
       form whatever the guarantee's kind, dropping a premise that no earlier one drops (`dropped_premises`; a repeat is
@@ -2408,15 +2434,15 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                 continue
             read = statement_read(np_)
             got = f"{'¬ ' if read.get('negated') else ''}{read.get('head') or 'no application'} …"
-            where = "the verifier that accepts everything" if kind == "acceptance" else "an explicit circuit"
             if i:
                 fails += exclusion_failures(n, g, read, np_, pin, heads, "each further nontrivial lemma", further=True)
             elif kind == "exclusion":
                 fails += exclusion_failures(n, g, read, np_, pin, heads)
             elif not (read.get("negated") and {read.get("head"), *(read.get("chain") or [])} & set(heads)):
                 fails.append(Failure("witnesses.nontrivial-form", n, f"witnesses: {n} does not state that {g}'s "
-                                     f"conclusion fails at {where}: past its ∀ and ∃ binders its statement must be "
-                                     f"`¬ C …` with C one of {', '.join(heads) or 'its heads (none reported)'} or a "
+                                     f"conclusion fails at an instance it builds: past its ∀ and ∃ binders its "
+                                     f"statement must be `¬ C …` with C one of "
+                                     f"{', '.join(heads) or 'its heads (none reported)'} or a "
                                      f"definition unfolding to one, and it is {got}"
                                      + (" (for a bound with a break, `¬ (C … ∨ Break …)`: the break fails too)"
                                         if "Or" in heads else "")))
@@ -2426,6 +2452,8 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                                      f"is a `∀` before the `¬` (`∀ X, ¬ C … X`), since `∃ X, ¬ C … X` holds whenever "
                                      f"the prover can pick a bad X"))
             drops = dropped_premises(read, pin)
+            if not i:
+                fails += scope_failures(n, g, pin, policy, kind, drops)
             if i and drops and drops <= set(dropped):
                 left = sorted(premise_names(pin) - set(dropped))
                 fix = (f"drop one of {', '.join(left)} in {n} instead, or remove it" if left else
@@ -2446,6 +2474,42 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     return fails
 
 
+def scope_failures(n: str, g: str, pin: dict, policy: dict, kind: str, dropped: set[str]) -> list[Failure]:
+    """How ``n``, the first `nontrivial` witness of the guarantee ``g`` (its facts ``pin``), is not at ``g``'s instance.
+    Each domain hypothesis of ``g`` that fixes a term (`fixed_premises`) is one ``n`` states at that term
+    (`Facts.lean`'s `bound`): a conjunct, headed by it, of a hypothesis ``n`` binds under `∃` or of its conclusion, with
+    at each closed argument of the premise a definitionally equal term or a variable of ``n``'s own `∀`s, as `agree`
+    holds the honest witnesses. Without it another statement's lemma, at another instance, passes for ``g`` by its
+    conclusion's head.
+
+    For the `acceptance` kind, whose lemma is `¬ C …` past its binders, that is a hypothesis it binds
+    (`∃ …, ∃ _ : P a … ∧ …, ¬ C …`), and the conjunct shares a variable ``n`` binds under `∃` with the application it
+    negates, directly or through other conjuncts it states (`linked`): a hypothesis bound beside an unrelated negation
+    says only that the premise can hold, which the honest witness shows. For the `exclusion` kind it is a conjunct of
+    the conclusion, of each premise but the ones ``n`` drops (``dropped``); its explicit circuit binds no variable, so
+    nothing is asked to be shared.
+
+    Not held: a premise with no closed term (it ranges with ``g``'s binders), one under its own `∀` or packed in a
+    conjunction (`Facts.lean` reports no `args` of it), and an antecedent (`stated_premises`)."""
+    out = []
+    for p in fixed_premises(pin, policy):
+        held = p.get("linked" if kind == "acceptance" else "bound") is True
+        if held or (kind == "exclusion" and p["head"] in dropped):
+            continue
+        how = ("states it there on variables that the application it negates does not share" if p.get("bound") is True
+               else "states it at another term" if p.get("bound") is False else "states nothing headed by it")
+        form = (f"`∃ …, ∃ _ : {p['head']} … ∧ …, ¬ C …`, with {p['head']} at that term and on a variable the negated "
+                f"application shares" if kind == "acceptance" else
+                f"a conjunction with `{p['head']} …` at that term among its conjuncts")
+        taken = " ".join(str(p.get("type")).split())
+        out.append(Failure("witnesses.nontrivial-scope", n, f"witnesses: {n}, {g}'s first `nontrivial` witness, is not "
+                           f"at {g}'s instance: {g} takes the domain hypothesis {p['head']} at a term it fixes "
+                           f"(`{taken}`), and {n} {how}. Past its binders, state {n} as {form}, so that the "
+                           f"instance where the conclusion fails is one {g} speaks of; if {n} is another statement's "
+                           f"lemma, list {g}'s own under witnesses[{g}].nontrivial"))
+    return out
+
+
 def dropped_premises(read: dict, pin: dict) -> set[str]:
     """The premises of the guarantee ``pin`` (`premise_names`) that a `nontrivial` lemma's statement ``read`` drops:
     each P of a `¬ P …` conjunct of its conclusion."""
@@ -2460,7 +2524,8 @@ def exclusion_failures(n: str, g: str, read: dict, np_: dict, pin: dict, heads: 
     at an explicit circuit, (each other premise of ``g`` holds) ∧ ¬ (a named premise of ``g``) ∧ ¬ (``g``'s bound). Among
     the conjuncts of its conclusion (`Facts.lean`'s `conclusion`, in any order), one is `¬ C …` with C a head of ``g``'s
     conclusion, one is `¬ P …` with P one of ``g``'s premises (under its own `∀` binders if it has them), and the others,
-    with the named assumptions ``n`` takes, conclude each other premise of ``g``. A bare `¬ bound` reads no premise, and
+    with the named assumptions ``n`` takes, conclude each other premise of ``g``, by its head here; the first lemma also
+    at the term a domain hypothesis fixes (`scope_failures`). A bare `¬ bound` reads no premise, and
     is the form only where ``g`` takes none (`premise_free`): there it states that a tighter bound fails at an explicit
     circuit, and no premise is dropped or concluded. A further lemma drops a premise all the same, so a premise-free
     guarantee lists none."""

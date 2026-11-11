@@ -44,6 +44,10 @@ judgement; `check.py` holds the policy.
 - each pin's `premises` (`premisesOf`), an applied one's with its arguments (`args`) and, when a witness `honest` lists
   for the pin concludes, as written or lifted, a conjunct with its head, whether one is it at the arguments it fixes
   (`agree`, `agrees`): each closed one definitionally equal (`sameArg`, `isDefEq`), or a variable of the conjunct's `∀`s.
+  Also whether it fixes a term (`fixes`, `fixesTerm`: a closed argument that is no type, instance or proof), then as
+  printed too (`type`); and, read the same way against what the lemma `nontrivial` names for the pin states of its
+  instance (`statedOf`: the hypotheses it binds under `∃`, and its conclusion), `bound`, and `linked` for those of them
+  that share a variable it binds under `∃` with the application it negates (`linkedTo`).
 - each pin's `inline`: the `Prop` binders of its statement, with a definition under `meaning` it applies unfolded once
   (`liftOf`), in each conjunct, instance binders aside, each split past its leading `∀` over data and at `∧`
   (`inlineParts`): as printed with those `∀`s, its head as written and past reducible unfolding (`premiseHead`), whether
@@ -281,6 +285,70 @@ def agrees (env : Environment) (cover : Array (Name × Array Arg)) (h : Name) (e
       unless ok do break
     if ok then return some true
   return some false
+
+/-- Whether the application `e` fixes a term: one of its closed arguments is no type, instance or proof. A type picks no
+instance of what `e` is stated over (`@Binds Bool H c`), and an instance or a proof is found, not chosen. -/
+def fixesTerm (e : Expr) : MetaM Bool :=
+  e.getAppArgs.anyM fun a => do
+    let a := a.consumeMData
+    if a.hasFVar || a.hasMVar then return false
+    let t ← inferType a
+    return !(← isProp t) && !(← whnfR t).isSort && (← isClass? t).isNone
+
+/-- What a `nontrivial` lemma states of its instance, past its `∀` and `∃` binders: the conjuncts (as `conjunctArgs`
+splits them) of each hypothesis it binds under `∃` (`∃ _ : P a ∧ Q b, …`) and of its conclusion, each with the variables
+it binds under `∃` (`exs`) that the conjunct mentions; and those that the applications it negates (`¬ C …`) mention.
+Below the lemma's own hypotheses (`top`), what stands under a hypothesis (`A → P a`) is not stated: it holds wherever
+`A` fails. -/
+partial def statedOf (t : Expr) (alls exs : Array Expr := #[]) (top : Bool := true) :
+    MetaM (Array (Name × Array Arg × Array Expr) × Array Expr) :=
+  forallTelescope t fun xs b => do
+    let mut alls := alls
+    for x in xs do
+      if ← isProp (← inferType x) then
+        unless top do return (#[], #[])
+      else alls := alls.push x
+    let b := b.consumeMData
+    if b.isAppOfArity ``And 2 then
+      let (l, n) ← statedOf b.appFn!.appArg! alls exs false
+      let (r, n') ← statedOf b.appArg! alls exs false
+      return (l ++ r, n ++ n')
+    if b.isAppOfArity ``Exists 2 then
+      if let .lam n ty body bi := b.appArg!.consumeMData then
+        return ← withLocalDecl n bi ty fun x => do
+          unless ← isProp ty do return ← statedOf (body.instantiate1 x) alls (exs.push x) false
+          let (hs, _) ← statedOf ty alls exs false
+          let (cs, neg) ← statedOf (body.instantiate1 x) alls exs false
+          return (hs ++ cs, neg)
+    let vars := exs.filter fun x => b.containsFVar x.fvarId!
+    if b.isAppOfArity ``Not 1 then return (#[], vars)
+    let some h := b.getAppFn.constName? | return (#[], #[])
+    let args := b.getAppArgs.map fun a =>
+      let a := a.consumeMData
+      if !a.hasFVar && !a.hasMVar then Arg.closed a else if alls.contains a then Arg.all else Arg.other
+    return (#[(h, args, vars)], #[])
+
+/-- The conjuncts of `cs` (`statedOf`) that share a variable with `vs`, directly or through other conjuncts of `cs`. -/
+def linkedTo (cs : Array (Name × Array Arg × Array Expr)) (vs : Array Expr) : Array (Name × Array Arg) := Id.run do
+  let mut vs := vs
+  let mut rest := cs
+  let mut out : Array (Name × Array Arg) := #[]
+  let mut grew := true
+  while grew do
+    let (inside, outside) := rest.partition fun c => c.2.2.any fun x => vs.contains x
+    grew := !inside.isEmpty
+    vs := inside.foldl (fun acc c => acc ++ c.2.2) vs
+    out := out ++ inside.map fun c => (c.1, c.2.1)
+    rest := outside
+  return out
+
+/-- What a guarantee's witnesses state, each as `conjunctArgs` splits it: its honest lemmas' conclusions (`honest`), and
+what its first `nontrivial` lemma states of its instance (`stated`, `statedOf`), with those of them tied to the
+application it negates (`linked`, `linkedTo`). -/
+structure Witnessed where
+  honest : Array (Name × Array Arg) := #[]
+  stated : Array (Name × Array Arg) := #[]
+  linked : Array (Name × Array Arg) := #[]
 
 /-- What a read definition contributes to what a statement means: its type, and a definition's value, each by
 `helperCanon`. -/
@@ -835,10 +903,12 @@ own name (`antecedent`: the record names it, and no witness is held to it), whil
 means. A predicate that constant takes as data, an event it measures (`Likely (fun o => A o → bad o)` with `Likely E`
 holding when `prob E ≤ ε`), is what the conclusion means too: `A` there is part of the event, not something the
 statement rests on. A premise whose hypothesis is its head applied has its arguments (`args`, `argsOf`: none for one that
-mentions the statement's binders) and, where a conjunct of `cover` (what the guarantee's honest witnesses conclude,
-`conjunctArgs`) has its head, whether one is it at the arguments it fixes (`agree`, `agrees`). -/
+mentions the statement's binders), whether it fixes a term (`fixes`, `fixesTerm`; then as printed too, `type`) and,
+where a conjunct of what the guarantee's witnesses state (`cover`) has its head, whether one is it at the arguments it
+fixes (`agrees`): of its honest witnesses' conclusions (`agree`), of what its first `nontrivial` lemma states (`bound`),
+and of that lemma's conjuncts tied to the application it negates (`linked`). -/
 partial def premisesOf (env : Environment) (meaning premises : Array Name) (built : NameSet) (moduleOf : Name → Option Name)
-    (only : Bool) (e : Expr) (cover : Array (Name × Array Arg) := #[]) : MetaM (Array Json) := do
+    (only : Bool) (e : Expr) (cover : Witnessed := {}) : MetaM (Array Json) := do
   let mine (h : Name) : Bool := !assumption moduleOf h && ((moduleOf h).map built.contains).getD false
   let mut out := #[]
   for c in conjuncts e do
@@ -855,9 +925,14 @@ partial def premisesOf (env : Environment) (meaning premises : Array Name) (buil
           if s.contains h then (s, out) else (s.insert h, out.push (h, a))).2
         let applies := if ← isProp t then t.consumeMData.getAppFn.constName? else none
         for (h, a) in hs do
-          let taken ← if applies == some h then
-              pure ([("args", toJson (argsOf env t.consumeMData))] ++
-                ((← agrees env cover h t.consumeMData).map fun b => [("agree", toJson b)]).getD [])
+          let taken ← if applies == some h then do
+              let prem := t.consumeMData
+              let fixes ← fixesTerm prem
+              let shown ← if fixes then do pure [("type", toJson (toString (← ppExpr prem)))] else pure []
+              let held (k : String) (cs : Array (Name × Array Arg)) : MetaM (List (String × Json)) := do
+                return ((← agrees env cs h prem).map fun b => [(k, toJson b)]).getD []
+              pure ([("args", toJson (argsOf env prem)), ("fixes", toJson fixes)] ++ shown ++
+                (← held "agree" cover.honest) ++ (← held "bound" cover.stated) ++ (← held "linked" cover.linked))
             else pure []
           ps := ps.push <| Json.mkObj ([("binder", toJson (← x.fvarId!.getDecl).userName.toString),
             ("head", toJson h.toString), ("module", toJson ((moduleOf h).map toString))] ++
@@ -1078,7 +1153,7 @@ def inlineOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Opt
 def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning recorded bounds premises : Array Name)
     (listed built : NameSet) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name)
-    (honest : Array Name := #[]) : MetaM Json := do
+    (honest : Array Name := #[]) (nontrivial : Option Name := none) : MetaM Json := do
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
   let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => moduleName env i
   let cover ← honest.foldlM (init := #[]) fun acc w => do
@@ -1087,6 +1162,15 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
       | some (_, t) => (do conjunctArgs (← plain t)) <|> pure #[]
       | none => pure #[]
     return acc ++ (← conjunctArgs wi.type <|> pure #[]) ++ lifted
+  -- read as `check.py`'s `statement_read` reads a witness: lifted when its statement is a definition under `meaning`
+  let stated : Array (Name × Array Arg) × Array (Name × Array Arg) ← match nontrivial.bind fun w => env.find? w with
+    | some wi => (do
+        let t ← match liftOf env meaning wi.type with
+          | some (_, t) => plain t
+          | none => pure wi.type
+        let (cs, neg) ← statedOf t
+        return (cs.map fun c => (c.1, c.2.1), linkedTo cs neg)) <|> pure (#[], #[])
+    | none => pure (#[], #[])
   let signature := toString (← PrettyPrinter.ppSignature n).fmt
   let hypotheses ← forallTelescope (← plain ci.type) fun xs _ => do
     let mut out := #[]
@@ -1111,7 +1195,8 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
     ("hypotheses", toJson hypotheses), ("shape", ← shapeInfo env table meaning moduleOf ci.type),
     ("premises", ← (do
-      let ps ← premisesOf env meaning premises built moduleOf false (← plain ci.type) cover
+      let ps ← premisesOf env meaning premises built moduleOf false (← plain ci.type)
+        { honest := cover, stated := stated.1, linked := stated.2 }
       return toJson (← ps.mapM fun p => do
         let some h := (p.getObjValAs? String "head").toOption | return p
         return p.setObjVal! "unfolds" (← unfoldsOf env meaning premises listed built moduleOf h.toName))) <|> pure Json.null),
@@ -1322,10 +1407,12 @@ unsafe def main (args : List String) : IO UInt32 := do
     if (o.splitOn "/.lake/build/").length > 1 && (o.splitOn "/.lake/packages/").length == 1 then s.insert mnames[i]! else s
   -- each pin's facts are a function of the environment and the maps above, so each pin is a task, joined in order
   let honest (p : Name) : Array Name := names (cfg.getObjValD "honest") p.toString
+  let nontrivial (p : Name) : Option Name :=
+    ((cfg.getObjValD "nontrivial").getObjValD p.toString).getStr?.toOption.map String.toName
   let tasks ← pins.mapM fun p => IO.asTask do
     let (out, _) ← (MetaM.run' do
       return (p.toString, ← pinInfo env table meaning recorded bounds premises listed built axioms ranges
-        (readsOf.getD p (#[], #[])) p (honest p))).toIO
+        (readsOf.getD p (#[], #[])) p (honest p) (nontrivial p))).toIO
         ctx { env }
     return out
   let pinned ← tasks.mapM fun t => IO.ofExcept t.get
