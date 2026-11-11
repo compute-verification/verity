@@ -75,6 +75,20 @@ def test_fetch_reports_a_running_run_whose_machine_rebooted_or_whose_runner_is_g
     assert "runner_gone" not in at(os.getpid()) and R.summarize(local)["state"] == "running"
 
 
+def test_fetch_of_a_file_named_twice_fetches_it_and_every_file_after_it(tmp_path, monkeypatch):
+    """`research status RUN --also steps.jsonl` names steps.jsonl twice, once itself and once in `checkview.CHECK_FILES`: tar
+    stores a second copy of a name as a hard link, which a stream can't extract, and every file after it (suites.failed.json,
+    a running check's failures so far) never arrived."""
+    local = _machine_run(tmp_path, monkeypatch, launcher_log="")
+    d = tmp_path / "machine" / "r-x"
+    (d / "status.json").write_text(json.dumps({"state": "running"}))
+    for name in ("spans.jsonl", "steps.jsonl", "suites.failed.json"):
+        (d / name).write_text(f"{name}\n")
+    rec = remote.fetch(local, also=("steps.jsonl", "suites.failed.json", "spans.jsonl", "steps.jsonl"))
+    assert "last_fetch_error" not in rec, rec
+    assert (local / "suites.failed.json").read_text() == "suites.failed.json\n"
+
+
 def test_push_refusal_names_the_bind_for_a_worktree_on_another_branch(tmp_path, monkeypatch):
     repo = tmp_path / "wt"
     subprocess.run(["git", "init", "-q", "-b", "feature", str(repo)], check=True)
