@@ -41,6 +41,10 @@ alone (`cutBlock`).
   `Partition.nodup_gates_cut`, `Partition.shape_cut`, `Partition.cut_union`: the cut partition has the partition's
   proof blocks, each cut, at their slots, no gate twice where the partition has none, and the partition's shape; a
   replay block that is proof blocks together is, cut, the same proof blocks cut together.
+* `le_of_earlier`, `off_of_earlier`, `idem_of_not_input`, `stays_of_not_input`: where each gate is one member's, the
+  members laid one after another, and `ω` sends every gate it moves into an earlier member, `ω` sends no wire to a
+  later gate and no proof block of one member reads its own gates through it; where `ω` moves only input gates, each
+  to a gate that is no input, it moves no gate it sends a wire to, and a block with a gate that is no input keeps it.
 -/
 
 @[expose] public section
@@ -577,5 +581,43 @@ theorem Prog.topological_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Boo
     (hω : ∀ i, ω i ≤ i) : (C.wired ω keep).Topological := by
   unfold Prog.wired
   exact Prog.topological_rewire htop hω fun o ho => (List.mem_filter.1 ho).1
+
+/-! ## A map into earlier members
+
+`mem` names each gate's member, the members laid one after another. A map that sends every gate it moves into an
+earlier member sends no wire to a later gate, and no proof block of one member reads its own gates through it. -/
+
+/-- **No wire goes to a later gate** where `ω` sends each gate it moves into an earlier member (`mem`), a member's
+gates before every later member's. -/
+theorem le_of_earlier {ω mem : ℕ → ℕ} (hmem : ∀ i j, mem i < mem j → i < j)
+    (hω : ∀ i, ω i ≠ i → mem (ω i) < mem i) (i : ℕ) : ω i ≤ i := by
+  by_cases h : ω i = i
+  · exact Nat.le_of_eq h
+  · exact Nat.le_of_lt (hmem _ _ (hω i h))
+
+/-- **`ω` moves no gate it sends a wire to** where it moves only input gates and sends each to a gate that is no
+input. -/
+theorem idem_of_not_input {C : Prog} {ω : ℕ → ℕ} (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input)
+    (hni : ∀ i, ω i ≠ i → C.gates[ω i]? ≠ some .input) (i : ℕ) : ω (ω i) = ω i := by
+  by_cases h : ω i = i
+  · exact congrArg ω h
+  · exact Classical.byContradiction fun h2 => hni i h (hin (ω i) h2)
+
+/-- **A proof block reads none of its own gates through `ω`** where its gates and the gates they read are one
+member's (`mem`) and `ω` sends each gate it moves into an earlier member. -/
+theorem off_of_earlier {C : Prog} {ω mem : ℕ → ℕ} {u : List ℕ} {t : ℕ} (hu : ∀ g ∈ u, mem g = t)
+    (hr : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, mem i = t)
+    (hω : ∀ i, ω i ≠ i → mem (ω i) < mem i) :
+    ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, ω i ≠ i → ω i ∉ u := by
+  intro g hg x hx i hi hne hmem
+  have h1 : mem (ω i) < mem i := hω i hne
+  rw [hu _ hmem, hr g hg x hx i hi] at h1
+  exact Nat.lt_irrefl t h1
+
+/-- **A proof block keeps a gate under `ω`** where it has a gate that is no input and `ω` moves only input gates. -/
+theorem stays_of_not_input {C : Prog} {ω : ℕ → ℕ} {u : List ℕ} (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input)
+    (hu : ∃ g ∈ u, C.gates[g]? ≠ some .input) : ∃ g ∈ u, ω g = g := by
+  obtain ⟨g, hg, hne⟩ := hu
+  exact ⟨g, hg, Classical.byContradiction fun h => hne (hin g h)⟩
 
 end Claims.Sampling
