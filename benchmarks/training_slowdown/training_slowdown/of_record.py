@@ -23,11 +23,12 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   the config takes on the start's θ and data whenever that step is one fixed graph. The capture decides that: the
   step is traced (`run.trace_step`), and an entry whose trace the capture refuses, or whose step reads a value back
   that decides what it computes, is refused here. No route says of itself that it branches on values.
-- **Expected differences.** A CPU count differs from a CUDA record in ways that are the device's (`width`,
-  `attention`, `norm`) and in AdamW's kernel, the fused one that the record's program asks torch for where a route
-  takes torch's default (`adamw`). Each is named by a rule that fires only on its own exact case (`width`, `RULES`);
-  the output names each one that fired with the MACs on both sides. Anything else is printed as a difference, and
-  the command exits 1.
+- **Expected differences.** A route's CPU count differs from a program's CUDA record in ways that are the device's
+  (`width`, `attention`, `norm`) and in ways that are the program's own arrangement of a computation the route
+  takes too: AdamW's kernel, the fused one that the record's program asks torch for where a route takes torch's
+  default (`adamw`), and the loss as the rows' means over the rows kept where a route means over the tokens
+  (`loss`). Each is named by a rule that fires only on its own exact case (`width`, `RULES`); the output names each
+  one that fired with the MACs on both sides. Anything else is printed as a difference, and the command exits 1.
 - **The position tables.** One expected difference is the harness's (`HARNESS`): the records' harness checked the
   model's buffers that θ doesn't hold, the position tables, like θ's weights, so a product with one is θ's, where
   `run.Harness` takes such a buffer for a weight the route made. `tables` counts the step again as the records'
@@ -73,8 +74,8 @@ FAIR = ("Each config's step was counted at the model's own initialisation on ran
         "CPU: the count reads operand shapes and which weights have left the start, never a value, and the capture "
         "traced the step as one fixed graph that reads no value back, so it is the step a job of the config takes on "
         "the start's weights and data. An expected difference is named by a rule that fires on its exact case "
-        "alone: the device's, the harness's, and the fused AdamW kernel that the record's program asks torch for. "
-        "Not held: the weights, E's bytes and the loss, which only a run has.")
+        "alone: the device's, the harness's, and the record's program's own arrangement of a computation the route "
+        "takes too. Not held: the weights, E's bytes and the loss, which only a run has.")
 #: CUDA's attention kernels beside the CPU's, which the counter prices alike (`flops.FLOP_FORMULAS`)
 ATTENTION = {"_scaled_dot_product_flash_attention": "_scaled_dot_product_flash_attention_for_cpu",
              "_scaled_dot_product_flash_attention_backward": "_scaled_dot_product_flash_attention_for_cpu_backward"}
@@ -82,6 +83,9 @@ ATTENTION = {"_scaled_dot_product_flash_attention": "_scaled_dot_product_flash_a
 CUDA_ONLY_OPERANDS = [[2], []]
 #: the products of torch's unfused AdamW step on one parameter with no weight decay, each with its tensor operands
 UNFUSED_ADAMW = (("lerp_", 2), ("mul_", 1), ("addcmul_", 3), ("div", 1), ("addcdiv_", 3))
+#: the argument by which the records' programs drop rows from a step's loss: that share of a forward's rows, the ones
+#: of the highest loss, get no gradient
+DROPS_ROWS = "--trunc"
 
 
 def held(path: Path = HELD) -> dict:
@@ -145,7 +149,8 @@ def per_row(struct: dict, ctx: int) -> dict:
     return {"rows": r, "updated": sorted((u[0], u[1], u[4]) for u in struct["updated"]), "log": log}
 
 
-# -- the expected differences: each rule takes what it covers out of the two sides' unequal entries
+# -- the expected differences: each rule takes what it covers out of the two sides' unequal entries, `cfg` and `rec`,
+# given the start's `shape` and the record's program's arguments `args`
 
 
 def width(mine: list, theirs: list) -> tuple[dict | None, list[str]]:
@@ -169,7 +174,7 @@ def width(mine: list, theirs: list) -> tuple[dict | None, list[str]]:
         for who, only in (("config", wide), ("record", narrow)))]
 
 
-def attention(cfg: dict, rec: dict, shape: dict) -> dict | None:
+def attention(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     """Attention's kernel: a CPU runs `ATTENTION`'s second names where CUDA runs its first. Fires on an entry of the
     record's under CUDA's name beside one of the config's under the CPU's with its phase, kind, count, MACs and
     operand shapes (`CUDA_ONLY_OPERANDS` aside)."""
@@ -192,7 +197,7 @@ def attention(cfg: dict, rec: dict, shape: dict) -> dict | None:
                     "phase, kind, count, shapes and MACs"}
 
 
-def norm(cfg: dict, rec: dict, shape: dict) -> dict | None:
+def norm(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     """The norm: CUDA runs it as one fused kernel, which the counter has no price for and counts only where its gain
     is an updated weight, one MAC an element; a CPU runs it as elementwise ops, each counted. Fires on the record's
     `fwd/updated _fused_rms_norm` over a row's residual stream and a gain beside the config's `fwd/updated mul` over
@@ -228,7 +233,7 @@ def norm(cfg: dict, rec: dict, shape: dict) -> dict | None:
     return found
 
 
-def adamw(cfg: dict, rec: dict, shape: dict) -> dict | None:
+def adamw(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     """AdamW's kernel: the record's program asks torch for its fused kernel, one op over every parameter, which the
     counter prices at eight multiplications a parameter element; a route takes torch's default, which is never the
     fused kernel and on a CPU is the unfused step, whose five in-place products a parameter the counter counts as
@@ -261,7 +266,54 @@ def adamw(cfg: dict, rec: dict, shape: dict) -> dict | None:
     return found
 
 
-RULES = (attention, norm, adamw)
+def stated(args: list, flag: str) -> str | None:
+    """What a program's arguments state for `flag`: the argument after it or after its `=`, None where they have no
+    such flag."""
+    for i, a in enumerate(args):
+        if a == flag:
+            return args[i + 1] if i + 1 < len(args) else ""
+        if a.startswith(flag + "="):
+            return a.split("=", 1)[1]
+    return None
+
+
+def loss(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
+    """The loss's arrangement: a record's program may mean each row's loss over its tokens, sum the rows and divide
+    by the rows the step keeps, where a route means over a forward's tokens and scales by the forward's share of the
+    batch. Where the step drops no row the two are one value and one gradient, so this is the program's choice and
+    no other loss. Fires on the record's backward quotient over a row's tokens with its scalar quotient, forward and
+    backward, beside the config's scalar product, forward and backward: all five of one count, and neither side with
+    a line of the other's. What is checked for a dropped row: the record's program's arguments (`script_args`),
+    where the record keeps them, state no `DROPS_ROWS` but 0; with one the rule does not fire, and of a record that
+    keeps none the output says that nothing was checked."""
+    scalar, a_row = "[[]]", json.dumps([[1, shape["ctx"]]])
+    theirs = (("bwd", "grad", "div", a_row), ("fwd", "theta", "div", scalar), ("bwd", "grad", "div", scalar))
+    mine = (("fwd", "theta", "mul", scalar), ("bwd", "grad", "mul", scalar))
+    n = rec.get(theirs[0], [0])[0]
+    if (not n or [rec.get(k) for k in theirs] != [[n, n * shape["ctx"]], [n, n], [n, n]]
+            or [cfg.get(k) for k in mine] != [[n, n]] * 2 or any(k in cfg for k in theirs)
+            or any(k in rec for k in mine)):
+        return None
+    drops = stated(args, DROPS_ROWS)
+    try:
+        if drops is not None and float(drops) != 0:
+            return None
+    except ValueError:
+        return None
+    checked = (f"the record's program's arguments state no {DROPS_ROWS}" if args else
+               "the record keeps no arguments of its program, so that was not checked")
+    found = {"rule": "loss", "record_macs": sum(rec[k][1] for k in theirs), "config_macs": sum(cfg[k][1] for k in mine),
+             "what": "the loss as the route's mean over a forward's tokens times the forward's share of the batch for "
+                     "the record's program's mean of each row, the rows' sum over the rows kept, "
+                     f"{_plural(n, 'time')} a step: one value and one gradient where the run drops no row ({checked})"}
+    for k in theirs:
+        del rec[k]
+    for k in mine:
+        del cfg[k]
+    return found
+
+
+RULES = (attention, norm, loss, adamw)
 
 
 def _plural(n: int, one: str, many: str = "") -> str:
@@ -305,18 +357,19 @@ def named(lines: list[dict], cfg: dict, rec: dict) -> tuple[list[dict], list[str
     return found, differences
 
 
-def compare(mine: dict, theirs: dict, shape: dict, lines=()) -> dict:
+def compare(mine: dict, theirs: dict, shape: dict, lines=(), args=()) -> dict:
     """The config's step (`mine`) beside the record's (`theirs`), each `per_row`'s: how many `uses` of an updated
     weight and `products` of the log are equal, the `expected` differences (`width`, `RULES`: each with what it
     covers and the MACs on each side), the `named` lines of the record's own program (`lines`: the entry's
-    `record_only`) and the `differences`, everything else."""
+    `record_only`) and the `differences`, everything else. `args` are the record's program's arguments, where the
+    record keeps them."""
     wide, differences = width(mine["updated"], theirs["updated"])
     cfg, rec = dict(mine["log"]), dict(theirs["log"])
     same = [k for k in cfg if rec.get(k) == cfg[k]]
     for k in same:
         del cfg[k], rec[k]
     expected = [wide] if wide else []
-    expected += [found for rule in RULES if (found := rule(cfg, rec, shape))]
+    expected += [found for rule in RULES if (found := rule(cfg, rec, shape, list(args)))]
     only, unnamed = named(lines, cfg, rec)
     differences += unnamed
     for k in sorted(set(cfg) | set(rec)):
@@ -465,7 +518,7 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
     if len(rec["steps"]) != cfg.budget["steps"]:
         r["differences"].append(f"the steps: the config's {cfg.budget['steps']}, the record's {len(rec['steps'])}")
     found = compare(per_row(mine["structures"][mine["steps"][STEPS - 1]["struct"]], shape["ctx"]), theirs, shape,
-                    h.get("record_only", []))
+                    h.get("record_only", []), rec.get("script_args") or [])
     kinds = sorted({c.kind for _, c in route.plan(cfg.dials).rules})
     found["differences"] += e_kind(kinds, last["format"])
     r["expected"] += found["expected"]

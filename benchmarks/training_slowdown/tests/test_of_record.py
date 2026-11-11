@@ -150,6 +150,37 @@ def test_the_unfused_adamw_is_expected_for_cudas_fused_kernel_over_the_same_para
         assert got["expected"] == [] and any("_fused_adamw_" in d for d in got["differences"])
 
 
+def losses(n: int) -> tuple[tuple, tuple]:
+    """The loss's products `n` times a step: as a program arranges it that means each row, then as a route does."""
+    return ((("bwd", "grad", "div", [[1, CTX]], n, n * CTX), ("fwd", "theta", "div", [[]], n, n),
+             ("bwd", "grad", "div", [[]], n, n)),
+            (("fwd", "theta", "mul", [[]], n, n), ("bwd", "grad", "mul", [[]], n, n)))
+
+
+def test_the_routes_loss_is_expected_for_a_programs_mean_of_each_row_where_no_row_is_dropped():
+    program, route = losses(3)
+
+    def compared(cpu=route, record=program, args=("--batch", "96")):
+        return of_record.compare(step(log(*BOTH, *cpu)), step(log(*BOTH, *record)), SHAPE, args=args)
+
+    got = compared()
+    assert got["differences"] == []
+    assert [(e["rule"], e["record_macs"], e["config_macs"]) for e in got["expected"]] == [("loss", 3 * CTX + 6, 6)]
+    assert "3 times a step" in got["expected"][0]["what"] and "state no --trunc" in got["expected"][0]["what"]
+    # no truncation stated as 0 is none; a record that keeps no arguments is not checked, and the output says so
+    assert [e["rule"] for e in compared(args=("--trunc", "0.0"))["expected"]] == ["loss"]
+    assert "keeps no arguments of its program, so that was not checked" in compared(args=())["expected"][0]["what"]
+    # a run that drops rows: its loss is another one
+    for args in (("--trunc", "0.1"), ("--batch", "96", "--trunc=0.1"), ("--trunc",)):
+        got = compared(args=args)
+        assert got["expected"] == [] and len(got["differences"]) == 5
+    # another count on one side, the route's product in the record too, a line missing: none is the exact case
+    for cpu, record in ((losses(2)[1], program), (route, (*program, route[0])), (route, program[:2]),
+                        (route[:1], program), ((*route, program[2]), program)):
+        got = compared(cpu, record)
+        assert got["expected"] == [] and got["differences"]
+
+
 def test_32_bits_for_the_records_16_is_expected_and_any_other_use_differs():
     record = [(D * D, D, 16), (D * D, D, 16), (D, 0, 32)]
     same = log(*BOTH)
