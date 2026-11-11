@@ -1,4 +1,4 @@
-"""The package file holds nothing: importing ``verity.hardware`` runs no card-loading code."""
+"""The package file holds nothing: importing the record, the registration log or the Site runs no card-loading code."""
 
 from __future__ import annotations
 
@@ -19,12 +19,14 @@ def test_the_package_file_is_a_docstring_alone() -> None:
         "(the cards' loader is verity/hardware/cards/__init__.py) and import it from there")
 
 
-def test_the_package_imports_no_cards() -> None:
-    """In an interpreter of its own, since this process's other tests import the cards: after the package is imported,
-    the loader is not among the modules, so neither the package file nor anything it brings in imports it."""
+def test_the_record_the_registration_and_the_site_import_no_cards() -> None:
+    """In an interpreter of its own, since this process's other tests import the cards: after the three are imported,
+    the loader is not among the modules, so none of them, nor the package file, imports it."""
     done = subprocess.run(
-        [sys.executable, "-c", "import sys, verity.hardware; sys.exit('verity.hardware.cards' in sys.modules)"],
+        [sys.executable, "-c",
+         "import sys, verity.hardware.record, verity.hardware.registration, verity.hardware.site; "
+         "sys.exit('verity.hardware.cards' in sys.modules)"],
         capture_output=True, text=True)
     assert done.returncode == 0, (
-        "importing verity.hardware imported verity.hardware.cards (or failed): "
+        "importing verity.hardware.record, .registration and .site imported verity.hardware.cards (or failed): "
         f"import the cards only where a card is read\n{done.stderr}")
