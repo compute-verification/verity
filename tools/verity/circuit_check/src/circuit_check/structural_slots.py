@@ -178,7 +178,7 @@ def check(target: Any, path: Path, *, exhaustive_bits: int = ST.EXHAUSTIVE_BITS,
     `structural.check` holds a template."""
     from verity_flock import struct_slots as SS
 
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.evaluation.reference import resolve
 
     t = resolve(target)
 
