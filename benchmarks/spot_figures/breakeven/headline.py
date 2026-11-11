@@ -372,7 +372,7 @@ def evaluate(spec: dict, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
                "target_bits": (1 - spec["share"]) * w, "delta_seen": model.delta, "S_seen": float(spec["S"]),
                "served_bits": L[1]["served_bits"].value, "requests": s.requests, "flop_request": s.flop_request,
                "gpu_seconds": gs, "case": spec["case"], "scale": spec["scale"], "volume": spec["volume"],
-               "plan": spec["plan"], "kappa": p["kappa"],
+               "plan": spec["plan"], "kappa": p["kappa"], "k_sum": sum(p["k"].values()),
                "census_scope": {k: getattr(sweep.SCOPES[scope], k) for k in ("requests", "flop_request")}}
         verify = [c for c in trace.calls if c[0]]
         reads = {"design": trace.designs[-1], "case": case, "strata": strata, "calls": list(trace.calls),

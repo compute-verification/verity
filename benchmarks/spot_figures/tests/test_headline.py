@@ -144,8 +144,9 @@ def test_a_row_is_a_case_under_a_plan():
 @pytest.mark.slow
 def test_a_row_s_design_is_held_to_its_plan():
     """Three rows on the planner (about 20 s): a by-width row's design gives each width a stratum, is never worse than
-    its case's own, and its plan block by block is over those strata; a held κ is the design's. Catches a driver that
-    names a plan and designs by another, which the plain dicts above can't."""
+    its case's own, and its plan block by block is over those strata; a held κ is the design's, and it proves fewer
+    proof blocks a sampled replay block. Catches a driver that names a plan and designs by another, which the plain
+    dicts above can't."""
     P = H.planner()
     own, _ = H.run(H.spec_of("(i) honest", "world year", 0.4), P=P)
     spec = H.spec_of("(i) honest, by width", "world year", 0.4)
@@ -154,8 +155,11 @@ def test_a_row_s_design_is_held_to_its_plan():
     assert design["row"]["merged"] is None and design["kw"]["widths"] and design["kw"]["margin"] == H.MARGIN
     p = H.plan(spec, row, reads, {}, P)
     wide = H.assemble(row, p, reads["calls"], reads["strata"], reads["pricing"])
-    held, _ = H.run(H.spec_of("(i) honest, by width, kappa 2^-6", "world year", 0.4), P=P)
-    assert (own["plan"], wide["plan"], held["plan"]["kappas"]) == ({}, H.PLANS[", by width"], (2.0 ** -6,))
+    e = -8 if wide["kappa"] > 2.0 ** -8 else -4
+    held, _ = H.run(H.spec_of(f"(i) honest, by width, kappa 2^{e}", "world year", 0.4), P=P)
+    assert (own["plan"], wide["plan"], held["plan"]["kappas"]) == ({}, H.PLANS[", by width"], (2.0 ** e,))
     assert wide["bound_bits"] <= own["bound_bits"]
-    assert held["kappa"] == 2.0 ** -6 and held["bound_bits"] >= wide["bound_bits"]
+    assert held["kappa"] == 2.0 ** e != wide["kappa"] and held["bound_bits"] >= wide["bound_bits"]
+    assert isclose(wide["k_sum"], sum(design["row"]["k"].values()))
+    assert (held["k_sum"] < wide["k_sum"]) == (held["kappa"] < wide["kappa"])
     assert isclose(wide["requests"], p["replay_sample"] / p["q"], rel_tol=1e-9)
