@@ -53,6 +53,7 @@ ALLOWLIST = "50-vy-research"
 FALLBACK = "59-vy-research-fallback"
 ADMIN = "10-vy-admin"
 CLOUD_INIT = "90-cloud-init-users"
+JOB_GROUP = "vy-job"                                       # vy-sudo's JOB_GROUP: a job's unit runs only as an account listed in it
 BACKUP = Path("/root/vy-lockout")
 UNITS = Path("/etc/systemd/system")
 ENVS = Path("/etc/vy/env")
@@ -728,7 +729,10 @@ def plan_text(node: str) -> str:
     rows = [
         ("deploy", f"from an agent VM: `research deploy install {node} --by WHO --apply` (stages /usr/local/lib/vy-lockout"
                    + (", the tools and node 1's /etc/vy/env/root.env" if cluster else " and the tools") + "; installs nothing into "
-                   "sudoers.d or a unit's .d, and starts nothing)", "research deploy attic"),
+                   "sudoers.d or a unit's .d, and starts nothing). From this deploy on, `research run --job-user USER` here asks "
+                   f"vy-sudo for its unit, and vy-sudo starts one only as an account listed in group {JOB_GROUP}: before it, on the "
+                   f"node, `sudo groupadd -f --system {JOB_GROUP}`, and `sudo usermod -aG {JOB_GROUP} USER` for each account made for "
+                   "jobs and nothing else (after the lock-out only vy-admin can)", "research deploy attic"),
         ("vy-admin", "copy the public keys to the node, then `sudo vy-admin-setup KEYS`; "
                      + ("" if cluster else f"`sudo sshd -t && sudo systemctl reload ssh` ({SSHD_ADMIN}, which deploy staged: the node's "
                                            "sshd lets only research log in until then); ")
