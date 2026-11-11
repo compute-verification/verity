@@ -809,6 +809,26 @@ def test_a_renamed_premise_merges_to_one_entry_and_a_text_a_restated_statement_s
     assert merged["shape"]["inline"] == {g: {old: why, new: why}} and candidate == [f"shape[inline][{g}][{new}] (kept)"]
 
 
+def test_a_guarantee_a_side_brings_to_unwitnessed_or_shape_inline_lands_in_update_s_order():
+    """`check.py --update` writes `unwitnessed` and `shape.inline` sorted by guarantee (`unwitnessed_kept`,
+    `inline_failures`), so a guarantee either side brings to one lands where `--update` puts it, not after ours' entries:
+    the merged tree's `--update` then rewrites neither section.  A guarantee's inline premises, which `--update` writes in
+    its statement's order, keep ours' order with theirs' new one after it."""
+    def lock(*gs: str, **premises: str) -> dict:
+        return {"unwitnessed": {f"P.{g}": f"hash of {g}" for g in gs},
+                "shape": {"inline": {f"P.{g}": {"z": "why z", "a": "why a"} | (premises if g == "b" else {}) for g in gs}}}
+    base, a, c = lock("b", "d"), lock("b", "d", "a", m="why m"), lock("b", "c", "d", k="why k")
+    for ours, theirs, premises in ((a, c, ["z", "a", "m", "k"]), (c, a, ["z", "a", "k", "m"])):
+        merged, why = M.merge(base, ours, theirs, candidate := [])
+        assert why == [] and candidate == []
+        assert list(merged["unwitnessed"]) == list(merged["shape"]["inline"]) == ["P.a", "P.b", "P.c", "P.d"]
+        assert list(merged["shape"]["inline"]["P.b"]) == premises
+        facts = {"pins": {}, "own_modules": []}
+        assert list(A.unwitnessed_kept(merged, facts, {})) == list(merged["unwitnessed"])
+        listed = merged | {"guarantees": dict.fromkeys(merged["shape"]["inline"], {})}
+        assert list(A.inline_failures(listed, facts)[1]) == list(merged["shape"]["inline"])
+
+
 def shaped(n: int, *more: int) -> dict:
     """A lock shaped like main's, with ``n`` `reads` groups and those ``more`` names, one definition each."""
     def group(i: int) -> dict:
