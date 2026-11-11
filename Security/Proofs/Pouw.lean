@@ -169,6 +169,7 @@ public import Proofs.Pouw.PearlC.PeelExists
 public import Proofs.Pouw.PearlC.PeelExists4
 public import Proofs.Pouw.PearlC.TileCheckWords
 public import Proofs.Pouw.PearlC.TileCheckWordsRev1
+public import Proofs.Pouw.PearlPlus
 public import Proofs.Pouw.Pool
 public import Proofs.Pouw.PoolWitness
 public import Proofs.Pouw.Prob
