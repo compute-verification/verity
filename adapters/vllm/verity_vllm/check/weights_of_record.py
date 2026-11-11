@@ -53,6 +53,9 @@ from verity_vllm.check.checkpoint_index import CheckpointIndex, sha256_file  # n
 from verity_vllm.check.component_programs import component_program_dirs, load_program_head
 from verity_vllm.config import UsageError, option
 from verity_vllm.check.tp_shards import kv_heads_replicated, replicated_qkv, rows_of, shard_dim as _shard_dim, shard_dim0 as _shard_dim0
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 SCHEMA = "verity/commit/weights-of-record/v2"       # v2: host-independent root (analytic entries keyed by their exact inputs)
 SCHEMA_V1 = "verity/commit/weights-of-record/v1"    # v1 roots differ per deriving host for models with a rotary table; verdict unaffected
@@ -756,7 +759,8 @@ def record_shard_pin(checkpoint_dir: str, *, checkpoints_manifest: str | None = 
     from verity_vllm.check.checkpoint_index import shard_pin
     try:
         return shard_pin(checkpoint_dir, checkpoints_manifest=checkpoints_manifest or _default_manifest(), model=model, revision=revision)
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        logger.warning("no shard pin of %s was taken, so each rank takes its own: %s: %s", checkpoint_dir, type(e).__name__, e)
         return None
 
 

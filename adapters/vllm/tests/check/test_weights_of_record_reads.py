@@ -232,13 +232,15 @@ def test_parallel_shard_hashing_is_the_serial_pin(ckpt):
     assert list(serial["shards"]) == sorted(serial["shards"])
 
 
-def test_built_record_reads_the_program_header_and_is_the_full_load_record(ckpt, tmp_path):
+def test_built_record_reads_the_program_header_and_is_the_full_load_record(ckpt, tmp_path, caplog):
     d, man = ckpt
     for w, r in WORLDS:
         assert canonical(WR.build_record(write_program_dir(tmp_path, w, r), d, checkpoints_manifest=man)) == GOLDEN_BUILT[(w, r)]
     assert WR.record_shard_pin(d, checkpoints_manifest=man) == WR.CheckpointIndex(d, checkpoints_manifest=man).pin
-    # a driver that can't read the checkpoint hands the ranks no pin: each takes it itself, and its own failure is the named one
+    assert "no shard pin" not in caplog.text
+    # a driver that can't read the checkpoint hands the ranks no pin and says why: each takes it itself, and its own failure is the named one
     assert WR.record_shard_pin(str(tmp_path / "absent"), checkpoints_manifest=man) is None
+    assert f"no shard pin of {tmp_path / 'absent'} was taken" in caplog.text and "FileNotFoundError" in caplog.text
     with pytest.raises(FileNotFoundError):
         WR.build_record(write_program_dir(tmp_path, 1, 0), str(tmp_path / "absent"), checkpoints_manifest=man, shard_pin=None)
 

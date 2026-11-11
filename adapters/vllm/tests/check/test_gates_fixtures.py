@@ -701,6 +701,15 @@ def test_G8_malformed_is_error_not_skipped(tmp_path):
     assert G.gate_G8(G.RunArtifacts(tmp_path)).status == "error"
 
 
+def test_reference_integrity_names_error_classes_it_cannot_sum():
+    counts = {"errors": 0, "unresolved": 0, "unsupported": 0}
+    status, problems, detail = G.fold_integrity({**counts, "error_classes": {"TokenWiring": "one"}})
+    assert (status, problems, detail["unverified"]) == ("unverified", [], ["fold_summary.error_classes has non-integer counts"])
+    status, problems, detail = G.fold_integrity({**counts, "error_classes": {"TokenWiring": 1}})
+    assert (status, problems, detail["unverified"]) == ("unverified", [], ["fold_summary.error_classes sums to 1, errors = 0"])
+    assert G.fold_integrity({**counts, "error_classes": {"TokenWiring": 0}})[0] == "pass"
+
+
 def test_G8_never_changes_G1_G7_or_their_frozen_set():
     assert G.GATES == ("G1", "G2", "G3", "G4", "G5", "G6", "G7") and "G8" not in G.GATES and "G8" not in G.HOLDOUT_GATES
     assert G.STRUCTURAL_GATES == ("G8",) and G.INTEGRITY_GATES == ("R1",) and G.ALL_GATES == G.GATES + ("G8", "R1")
