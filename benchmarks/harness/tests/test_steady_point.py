@@ -88,6 +88,14 @@ def tree(tmp_path: Path, spec: dict | None = None, files: dict | None = None, na
     return root, "benchmarks/specs/steady.toml"
 
 
+def git(root: Path) -> None:
+    import subprocess
+
+    subprocess.run("git init -q && git add . && GIT_AUTHOR_DATE='@1700000000 +0000' GIT_COMMITTER_DATE='@1700000000 +0000' "
+                   "git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -qm spec",
+                   shell=True, cwd=root, check=True)
+
+
 def load(tmp_path: Path, **changes) -> SP.SteadySpec:
     root, spec = tree(tmp_path, **changes)
     return SP.load_spec(root / spec, root=root)
@@ -226,6 +234,27 @@ def test_the_identity_names_no_commit_and_each_point_has_its_own(tmp_path):
     assert plan.toolchain == P.Sources(plan.toolchain.files_sha256, 5)
     assert jobs.plan_json(plan)["points"][0] == {"point": plan.points[0].point.to_json(), "identity": found["gemm64-k1"],
                                                  "passing_run": None}
+
+
+def test_in_a_checkout_only_tracked_files_count_so_a_shipped_tree_gives_the_same_identity(tmp_path):
+    """A run ships `git archive HEAD`: what a build or an editor left in the launching checkout isn't on the node."""
+
+    import subprocess
+
+    shipped = identities(tmp_path, "shipped")
+    root, spec = tree(tmp_path, name="checkout")
+    git(root)
+    assert identities(tmp_path, "checkout") == shipped
+    for left in ("verity/protocols/flock/prover/target/release/flock-circuit", "verity/protocols/flock/prover/src/draft.rs",
+                 "verity/protocols/flock/pod/notes.sh"):
+        (root / left).parent.mkdir(parents=True, exist_ok=True)
+        (root / left).write_text("left by a build\n")
+    assert identities(tmp_path, "checkout") == shipped, "untracked"
+    assert identities(tmp_path, "checkout", files={"verity/protocols/flock/prover/src/main.rs": "fn main() { loop {} }\n"}
+                      )[POINT] != shipped[POINT], "a tracked file as the working tree has it"
+    subprocess.run(["git", "add", "verity/protocols/flock/prover/src/draft.rs"], cwd=root, check=True)
+    assert identities(tmp_path, "checkout", files={"verity/protocols/flock/prover/src/main.rs": FILES[
+        "verity/protocols/flock/prover/src/main.rs"]})[POINT] != shipped[POINT], "a newly tracked source"
 
 
 @pytest.mark.parametrize("gone", ["benchmarks/one_stage/server_rate.py", "verity/protocols/flock/pod/70-class-sweep.sh"])
@@ -473,14 +502,6 @@ def test_a_run_of_the_point_is_preferred_and_plan_names_only_the_newest_few(plan
 # ---- plan, check and run ---------------------------------------------------------------------------------------------------
 
 
-def git(root: Path) -> None:
-    import subprocess
-
-    subprocess.run("git init -q && git add . && GIT_AUTHOR_DATE='@1700000000 +0000' GIT_COMMITTER_DATE='@1700000000 +0000' "
-                   "git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -qm spec",
-                   shell=True, cwd=root, check=True)
-
-
 def test_plan_and_check_take_a_steady_spec_and_say_why_a_point_has_no_passing_run(tmp_path, monkeypatch, capsys):
     root, path = tree(tmp_path)
     git(root)
@@ -554,26 +575,17 @@ def test_run_launches_each_point_without_a_passing_run_through_a_gpu_slot_of_the
         assert STEADY_POINT.parse(command) == {"spec": path, "point": item.point.id, "identity": item.identity}
 
 
-def test_a_point_timed_and_not_passed_does_not_stop_the_points_after_it_and_a_refusal_does(tmp_path):
+def test_a_launch_that_fails_stops_the_launches_after_it(tmp_path):
     root, path = tree(tmp_path)
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
+    ran = []
 
-    def exits(codes):
-        ran = []
+    def execute(command, cwd):
+        ran.append(command[command.index("--point") + 1])
+        return 0 if len(ran) < 2 else 75
 
-        def execute(command, cwd):
-            ran.append(command[command.index("--point") + 1])
-            return codes[len(ran) - 1]
-
-        return ran, execute
-
-    ran, execute = exits([SP.NOT_PASSED, 0, 0])
-    assert P.dispatch(plan, root / path, root=root, direct="vy-dc-h200", execute=execute) == SP.NOT_PASSED
-    assert ran == ["gemm64-k1", "gemm64-k2", "head_block-k2"]
-    for stops in (N.REFUSED, 2, 124):
-        ran, execute = exits([0, stops, 0])
-        assert P.dispatch(plan, root / path, root=root, direct="vy-dc-h200", execute=execute) == stops
-        assert ran == ["gemm64-k1", "gemm64-k2"]
+    assert P.dispatch(plan, root / path, root=root, direct="vy-dc-h200", execute=execute) == 75
+    assert ran == ["gemm64-k1", "gemm64-k2"]
 
 
 def test_run_refuses_a_steady_spec_without_a_node_a_node_without_slots_and_a_spec_without_a_bound(tmp_path):
@@ -884,8 +896,8 @@ def test_the_readme_states_a_steady_state_spec_as_the_code_keeps_it():
                  *SP.CLOSURE[:2], "out/verdict.json", "out/point.json"):
         assert f"`{name}`" in section, name
     assert (N.VERDICT_FILE, N.POINT_FILE) == ("out/verdict.json", "out/point.json")
-    assert f"exits 0 for a passed point, {SP.NOT_PASSED} for a point that was timed and didn't pass" in section
-    assert f"and\n{N.REFUSED} where nothing was timed" in section
+    assert (f"exits 0 for a passed point, {SP.NOT_PASSED} for a point that was timed and didn't pass, and {N.REFUSED} where "
+            "nothing was timed") in section
     spec_keys = {"workload", "card", "cores", "sessions", "ahead", "driver", "cuda", "setup", "[env]", "[admission]",
                  "max_minutes", "mem_gb", "[[row]]", "type", "n", "pin", "provers", "warm", "staged"}
     assert all(f"`{key}`" in section for key in spec_keys), [key for key in spec_keys if f"`{key}`" not in section]

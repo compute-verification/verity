@@ -40,6 +40,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
@@ -208,17 +209,35 @@ def point(spec: SteadySpec, point_id: str) -> SteadyPoint:
     return found[0]
 
 
+def _tracked(root: Path, entries: tuple[str, ...]) -> set[str] | None:
+    """The files git tracks under `entries` where `root` is a checkout, else None: a shipped tree (`git archive`) holds
+    the tracked files and nothing else."""
+
+    if not (root / ".git").exists():
+        return None
+    process = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--", *entries], capture_output=True, text=True,
+                             check=False)
+    if process.returncode != 0:
+        raise ValueError(f"git can't list {root}'s files ({process.stderr.strip()[:200]}), which a steady-state point's "
+                         "identity covers")
+    return set(process.stdout.split("\0")) - {""}
+
+
 def closure(root: Path, spec: SteadySpec) -> dict[str, str]:
     """The SHA-256 of each file a point's time depends on, by its path in the tree: `CLOSURE`'s files and every source
-    file under its directories, and the spec's setup. A path of `CLOSURE` the tree lacks is refused: the identity would
-    cover less than it says."""
+    file under its directories, and the spec's setup. In a checkout only the files git tracks count, as they are in
+    the working tree: what a build or an editor left beside them is no source, and isn't in the tree a run ships. A path
+    of `CLOSURE` the tree lacks is refused: the identity would cover less than it says."""
 
+    entries = (*CLOSURE, spec.setup)
+    tracked = _tracked(root, entries)
     files: dict[str, str] = {}
-    for entry in (*CLOSURE, spec.setup):
+    for entry in entries:
         path = root / entry
         found = sorted(p for p in path.rglob("*") if p.is_file()) if path.is_dir() else [path] if path.is_file() else []
         kept = {p.relative_to(root).as_posix(): p for p in found}
-        kept = {name: p for name, p in kept.items() if not (path.is_dir() and NOT_SOURCE.search(name))}
+        kept = {name: p for name, p in kept.items() if not (path.is_dir() and NOT_SOURCE.search(name))
+                and (tracked is None or name in tracked)}
         if not kept:
             raise ValueError(f"{root} holds no {entry}, which a steady-state point's identity covers")
         files |= {name: hashlib.sha256(p.read_bytes()).hexdigest() for name, p in kept.items()}

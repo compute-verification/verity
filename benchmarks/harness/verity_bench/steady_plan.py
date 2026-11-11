@@ -15,8 +15,7 @@ A point with no passing run is launched again by `run`, and `plan` says why each
 (`PlannedPoint.why`): the check it failed, or the one its files can't show.
 
 **`run SPEC --direct NODE`** (`dispatch`) launches each point without a passing run as one recorded run on a GPU slot
-of the node (`direct_command`), in the spec's order. A point that was timed and didn't pass doesn't stop the points
-after it; a run that couldn't be launched, or that the node refused, does.
+of the node (`direct_command`), in the spec's order.
 """
 
 from __future__ import annotations
@@ -237,21 +236,19 @@ def direct_command(plan: jobs.Plan, source: str | Path, item: jobs.PlannedPoint,
 
 def dispatch(plan: jobs.Plan, source: str | Path, *, root: Path | None = None, execute: jobs.Executor = jobs._execute,
              direct: str | None = None) -> int:
-    """Launch one recorded run for each point without a passing run, on `direct`'s GPU slots, in the spec's order. A
-    point timed and not passed goes on to the next; any other failure stops there. The first nonzero exit, or 0."""
+    """Launch one recorded run for each point without a passing run, on `direct`'s GPU slots, in the spec's order, as
+    `jobs.dispatch` launches a vLLM spec's direct points: each launch returns once its run has started on the node, where
+    the runs take the slots in turn. The first launch that fails stops the rest; its exit code, or 0."""
 
     root = root or jobs.repository_root()
     if direct is None:
         raise ValueError(f"spec {plan.spec.id!r} is a steady-state spec: its points run on a node's own card, through a "
                          "GPU slot of it: `verity-bench run SPEC --direct NODE`")
     jobs.direct_minutes(plan.spec, direct)
-    first = 0
     for item in plan.points:
         if item.passing_run is not None:
             continue
         rc = execute(direct_command(plan, source, item, root, direct), root)
-        first = first or rc
-        if rc not in (0, steady_spec.NOT_PASSED):
-            break
-    return first
-
+        if rc:
+            return rc
+    return 0

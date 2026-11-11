@@ -256,9 +256,9 @@ harness run under), with the CUDA toolkit the prover was built with first on `PA
 3. after the lease has ended, so that its usage line is among the run's files, computes the verdict from the run's own
    files and writes `out/verdict.json`, `out/point.json` and `result.json`, whose validation passes with it.
 
-It exits 0 for a passed point, 3 for a point that was timed and didn't pass, which doesn't stop the points after it, and
-4 where nothing was timed, which does. Either is a run without a passed point, so the next `run` launches the point
-again.
+It exits 0 for a passed point, 3 for a point that was timed and didn't pass, and 4 where nothing was timed. Either is a
+run without a passed point, as is one that was preempted or that waited for a slot past its bound, so the next `run`
+launches the point again.
 
 ## Settings
 
