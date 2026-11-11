@@ -1,0 +1,394 @@
+{
+ "('lemma/unparsed',)": [
+  "h1tGap",
+  "pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
+  "pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
+  "pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
+  "pearlCSampledH100v1RowSeedCodeRowCap100_6144x256",
+  "pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol",
+  "pearlCSampledH100v1RowSeedRowCap100_6144x256",
+  "pearlCSampledH100v1RowSeedRowCap100_6144x256Tol",
+  "pearlCSampledSm120v1RowSeed_8192",
+  "pearlCSampledSm120v2RowSeedCap1000_8192"
+ ],
+ "(('GGap',), ('pearlCProtocolFp4',), ('TTOutFp4Sm120W1',))": [
+  [
+   "GapFp4Sm120_16384",
+   "5473473967 / 895794400000"
+  ],
+  [
+   "GapFp4Sm120_8192",
+   "9875013901 / 1376663200000"
+  ]
+ ],
+ "(('GGap',), ('pearlCProtocolDevRev1',), ('TTOutPearlCH100Rev1W1',))": [
+  [
+   "GapH100Rev1_16384",
+   "89359 / 17230000"
+  ],
+  [
+   "GapH100Rev1_8192",
+   "140237 / 26090000"
+  ]
+ ],
+ "(('GGap',), ('pearlCProtocolDevRev1K',), ('TTOutPearlCDevRev1W1',))": [
+  [
+   "GapSm120v1Cast16Rev1_8192",
+   "133561 / 22262500"
+  ],
+  [
+   "GapSm120v1Cast32p06Rev1_8192",
+   "173711 / 22302650"
+  ],
+  [
+   "GapSm120v1Cast8p72Rev1Cap1000_16384",
+   "5273 / 1466810"
+  ],
+  [
+   "GapSm120v1Cast8p72Rev1Cap1000_8192",
+   "205211 / 55610750"
+  ],
+  [
+   "GapSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+   "106307 / 27386000"
+  ],
+  [
+   "GapSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+   "928813 / 261481000"
+  ],
+  [
+   "GapSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+   "106307 / 27386000"
+  ],
+  [
+   "GapSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+   "1359 / 350750"
+  ],
+  [
+   "GapSm120v1Cast8p72Rev1Cap1000_n6144k4096",
+   "508661 / 135634400"
+  ],
+  [
+   "GapSm120v1Cast8p72Rev1_16384",
+   "2987 / 586724"
+  ],
+  [
+   "GapSm120v1Cast8p72Rev1_8192",
+   "115361 / 22244300"
+  ],
+  [
+   "GapSm120v1LoopCast16Rev1_8192",
+   "3277657 / 546100000"
+  ],
+  [
+   "GapSm120v1LoopCast32p06Rev1_8192",
+   "1392993839 / 178895900000"
+  ],
+  [
+   "GapSm120v1LoopCast8Rev1_8192",
+   "911793839 / 178414700000"
+  ],
+  [
+   "GapSm120v1LoopCast8p72Rev1Cap1000_16384",
+   "1058166877 / 294158650000"
+  ],
+  [
+   "GapSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400",
+   "1058166877 / 294158650000"
+  ],
+  [
+   "GapSm120v1LoopCast8p72Rev1Cap1000_8192",
+   "1648180439 / 446072750000"
+  ],
+  [
+   "GapSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400",
+   "1648180439 / 446072750000"
+  ],
+  [
+   "GapSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+   "3045273083 / 782596025000"
+  ],
+  [
+   "GapSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+   "1863165467 / 524322650000"
+  ],
+  [
+   "GapSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+   "3045273083 / 782596025000"
+  ],
+  [
+   "GapSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+   "295006781 / 75957050000"
+  ],
+  [
+   "GapSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
+   "851373343 / 226641700000"
+  ],
+  [
+   "GapSm120v1LoopCast8p72Rev1_16384",
+   "599303077 / 117663460000"
+  ],
+  [
+   "GapSm120v1LoopCast8p72Rev1_8192",
+   "926193839 / 178429100000"
+  ]
+ ],
+ "(('GGap',), ('pearlCProtocolDevRev1K',), ('TTOutPearlCDevRev1ChainOnlyW1',))": [
+  [
+   "GapSm120v1Cast32p06ChainOnlyRev1_8192",
+   "273461 / 22302650"
+  ],
+  [
+   "GapSm120v1Cast8p72ChainOnlyRev1_8192",
+   "16547 / 1711100"
+  ],
+  [
+   "GapSm120v1LoopCast32p06ChainOnlyRev1_8192",
+   "2190993839 / 178895900000"
+  ],
+  [
+   "GapSm120v1LoopCast8p72ChainOnlyRev1_8192",
+   "1724193839 / 178429100000"
+  ]
+ ],
+ "(('GGap',), ('pearlCProtocolDevRev1',), ('TTOutPearlCDevRev1W1',))": [
+  [
+   "GapSm120v1Rev1_16384",
+   "2963 / 586700"
+  ],
+  [
+   "GapSm120v1Rev1_8192",
+   "16223 / 3177500"
+  ]
+ ],
+ "(('GGap',), ('pearlCProtocolDev',), ('TTOutPearlCDevW1',))": [
+  [
+   "GapSm120v2Cap1000_16384",
+   "2950127 / 829250000"
+  ],
+  [
+   "GapSm120v2Cap1000_8192",
+   "216793 / 59950000"
+  ],
+  [
+   "GapUnpromotedCap1000_8192",
+   "216793 / 59950000"
+  ]
+ ],
+ "(('GGap',), ('pearlCProtocolDevK',), ('TTOutPearlCDevW1',))": [
+  [
+   "GapSm120v2Cast16Cap1000_8192",
+   "1917551 / 420050000"
+  ],
+  [
+   "GapSm120v2Cast8p72Cap1000_8192",
+   "1553551 / 419686000"
+  ],
+  [
+   "GapSm120v2LoopCast16Cap1000_8192",
+   "639967 / 140017450"
+  ],
+  [
+   "GapSm120v2LoopCast8Cap1000_8192",
+   "1519901 / 419652350"
+  ],
+  [
+   "GapSm120v2LoopCast8p72Cap1000_8192",
+   "1555901 / 419688350"
+  ]
+ ],
+ "(('GGap',), ('pearlCProtocolDevK',), ('TTOutPearlCDevChainOnlyW1',))": [
+  [
+   "GapSm120v2Cast8p72ChainOnlyCap1000_8192",
+   "3548551 / 419686000"
+  ],
+  [
+   "GapSm120v2LoopCast8p72ChainOnlyCap1000_8192",
+   "3550901 / 419688350"
+  ]
+ ],
+ "(('GGap',), ('pearlCProtocolDevChainCap',), ('TTOutPearlCDevChainCapW1',))": [
+  [
+   "GapSm120v2ChainCap1000_16384",
+   "367519 / 103656250"
+  ],
+  [
+   "GapSm120v2ChainCap1000_8192",
+   "26921 / 7493750"
+  ],
+  [
+   "GapUnpromotedChainCap1000_8192",
+   "26921 / 7493750"
+  ]
+ ],
+ "(('GGapU',), ('pearlCProtocolDevRev1',), ('TTOutPearlCDevUOnlyW1',))": [
+  [
+   "GapUOnlySm120Rev1_8192",
+   "16223 / 3177500"
+  ],
+  [
+   "GapUOnlyUnpromotedCap1000_8192",
+   "216793 / 59950000"
+  ]
+ ],
+ "((), ('pearlCProtocolDevRev1K', 'pearlCTilesDevRev1K'), ('TTOutTilePearlCDevRev1W1',))": [
+  [
+   "HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
+   "1648180439 / 446072750000"
+  ]
+ ],
+ "(('GGapSampled',), ('pearlCProtocolFp4', 'pearlCTilesFp4'), ('TTOutTileFp4Sm120W1',))": [
+  [
+   "SampledFp4Sm120_16384",
+   "5473473967 / 895794400000"
+  ],
+  [
+   "SampledFp4Sm120_8192",
+   "9875013901 / 1376663200000"
+  ]
+ ],
+ "(('GGapSampled',), ('pearlCProtocolDevRev1', 'pearlCTilesDevRev1'), ('TTOutTilePearlCH100Rev1W1',))": [
+  [
+   "SampledH100Rev1_16384",
+   "89359 / 17230000"
+  ],
+  [
+   "SampledH100Rev1_8192",
+   "140237 / 26090000"
+  ]
+ ],
+ "(('GGapSampled',), ('pearlCProtocolDevRev1K', 'pearlCTilesDevRev1K'), ('TTOutTilePearlCDevRev1W1',))": [
+  [
+   "SampledSm120v1Cast8p72Rev1Cap1000_16384",
+   "5273 / 1466810"
+  ],
+  [
+   "SampledSm120v1Cast8p72Rev1Cap1000_8192",
+   "205211 / 55610750"
+  ],
+  [
+   "SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+   "106307 / 27386000"
+  ],
+  [
+   "SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+   "928813 / 261481000"
+  ],
+  [
+   "SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+   "106307 / 27386000"
+  ],
+  [
+   "SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+   "1359 / 350750"
+  ],
+  [
+   "SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096",
+   "508661 / 135634400"
+  ],
+  [
+   "SampledSm120v1Cast8p72Rev1_16384",
+   "2987 / 586724"
+  ],
+  [
+   "SampledSm120v1Cast8p72Rev1_8192",
+   "115361 / 22244300"
+  ],
+  [
+   "SampledSm120v1LoopCast8p72Rev1Cap1000_16384",
+   "1058166877 / 294158650000"
+  ],
+  [
+   "SampledSm120v1LoopCast8p72Rev1Cap1000_8192",
+   "1648180439 / 446072750000"
+  ],
+  [
+   "SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+   "3045273083 / 782596025000"
+  ],
+  [
+   "SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+   "1863165467 / 524322650000"
+  ],
+  [
+   "SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+   "3045273083 / 782596025000"
+  ],
+  [
+   "SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+   "295006781 / 75957050000"
+  ],
+  [
+   "SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
+   "851373343 / 226641700000"
+  ],
+  [
+   "SampledSm120v1LoopCast8p72Rev1_16384",
+   "599303077 / 117663460000"
+  ],
+  [
+   "SampledSm120v1LoopCast8p72Rev1_8192",
+   "926193839 / 178429100000"
+  ]
+ ],
+ "(('GGapSampled',), ('pearlCProtocolDevRev1', 'pearlCTilesDevRev1'), ('TTOutTilePearlCDevRev1W1',))": [
+  [
+   "SampledSm120v1Rev1_16384",
+   "2963 / 586700"
+  ],
+  [
+   "SampledSm120v1Rev1_8192",
+   "16223 / 3177500"
+  ]
+ ],
+ "(('GGapSampled',), ('pearlCProtocolDev', 'pearlCTilesDev'), ('TTOutTilePearlCDevW1',))": [
+  [
+   "SampledSm120v2Cap1000_16384",
+   "2950127 / 829250000"
+  ],
+  [
+   "SampledSm120v2Cap1000_8192",
+   "216793 / 59950000"
+  ]
+ ],
+ "(('GGapSampled',), ('pearlCProtocolDevChainCap', 'pearlCTilesDevChainCap'), ('TTOutTilePearlCDevChainCapW1',))": [
+  [
+   "SampledSm120v2ChainCap1000_16384",
+   "2950127 / 829250000"
+  ],
+  [
+   "SampledSm120v2ChainCap1000_8192",
+   "216793 / 59950000"
+  ]
+ ],
+ "(('TileWordsGood',), ('pearlCProtocolFp4', 'pearlCTilesFp4'), ())": [
+  [
+   "TileCheck4WordsCore",
+   ""
+  ]
+ ],
+ "(('TileWordsGood',), ('pearlCProtocolDev', 'pearlCTiles'), ())": [
+  [
+   "TileCheck8WordsCore",
+   ""
+  ]
+ ],
+ "(('AcceptsBy',), ('pearlCProtocolDevRev1K', 'pearlCTilesDevRev1K'), ('TTOutTilePearlCDevRev1W1',))": [
+  [
+   "PearlCSm120Rev1Cap1000ByDeadline_16384",
+   "1058166877 / 294158650000"
+  ],
+  [
+   "PearlCSm120Rev1Cap1000ByDeadline_8192",
+   "1648180439 / 446072750000"
+  ],
+  [
+   "PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
+   "3045273083 / 782596025000"
+  ],
+  [
+   "PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b",
+   "74663501 / 19190030000"
+  ]
+ ]
+}
