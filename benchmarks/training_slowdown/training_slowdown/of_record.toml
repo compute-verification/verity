@@ -57,3 +57,51 @@ run = "r20261104-001944-1b6b"
 art = "art:aa227b76ec6b95d26d8a608375aec0014bb1a1e3da7b1251d86d363904316c42"
 path = "out/run/run.json"
 sha256 = "ee3a333586d25cd7a60585071efd97a9d7a83e39b4863d5c7852741cb42f643f"
+
+[held."s-t20-1.1x-fullmuon-fe-wsd"]
+run = "r20261103-173044-3b5c"
+art = "art:e7c51bba9778c4e0689e2eb9aa065969caeb032c01b6e8369b3f18faa82b70b4"
+path = "out/run/run.json"
+sha256 = "7bcaffb75d34309f3c5e6c743a8efb9c18464d2f514c847c3a1369e72638bba2"
+
+[held."s-t20-1.1x-fullmuon-fe-wsd-ema"]
+run = "r20261103-173044-3b5c"
+art = "art:e7c51bba9778c4e0689e2eb9aa065969caeb032c01b6e8369b3f18faa82b70b4"
+path = "out/run/run.json"
+sha256 = "7bcaffb75d34309f3c5e6c743a8efb9c18464d2f514c847c3a1369e72638bba2"
+
+[held."m-t20-1.1x-fullmuon-wsd"]
+run = "r20261104-001641-5b4f"
+art = "art:49bce2b062a6b2081d765ad096e7e9f4de6837f34d189461edf5ca61a02421d0"
+path = "out/run/run.json"
+sha256 = "f68622dc3d458f2998d710ed6bc87ab7e70d1da778ea62a4252e0e6d4efb0d9f"
+
+[held."m-t20-1.1x-fullmuon-wsd-ema"]
+run = "r20261104-001641-5b4f"
+art = "art:49bce2b062a6b2081d765ad096e7e9f4de6837f34d189461edf5ca61a02421d0"
+path = "out/run/run.json"
+sha256 = "f68622dc3d458f2998d710ed6bc87ab7e70d1da778ea62a4252e0e6d4efb0d9f"
+
+[held."l16-t20-1.1x-fullmuon-fe-wsd"]
+run = "r20261104-021052-b5a7"
+art = "art:ad35f4e57ce1be5604bfd8a5d997bc107b72b3629127f2f17e7b3f16f9f83967"
+path = "out/run/run.json"
+sha256 = "dfbeab2256f1fd0b94b620dc9a301f04e476c86d5efd36310473437fbbd77291"
+
+[held."l16-t20-1.1x-fullmuon-fe-wsd-ema"]
+run = "r20261104-021052-b5a7"
+art = "art:ad35f4e57ce1be5604bfd8a5d997bc107b72b3629127f2f17e7b3f16f9f83967"
+path = "out/run/run.json"
+sha256 = "dfbeab2256f1fd0b94b620dc9a301f04e476c86d5efd36310473437fbbd77291"
+
+[held."s-t20-1.1x-fullmuon"]
+run = "r20261103-093153-fdcf"
+art = "art:0ef194ec05f3fd07574f8db047eee2f0d5d769b255f32327e2aec81d06b7dcf3"
+path = "out/run/run.json"
+sha256 = "7e94847e3cd7163a8913669e064f605eee4030cb0a8477f3f68b412f699df649"
+
+[held."s-t20-1.1x-fullmuon-ema"]
+run = "r20261103-093153-fdcf"
+art = "art:0ef194ec05f3fd07574f8db047eee2f0d5d769b255f32327e2aec81d06b7dcf3"
+path = "out/run/run.json"
+sha256 = "7e94847e3cd7163a8913669e064f605eee4030cb0a8477f3f68b412f699df649"
