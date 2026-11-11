@@ -14,7 +14,8 @@
 #   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:LAW (its SiluMul_v2{I}
 #     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
 #     The STANDIN entry sparse-mla is a5_sparse_mla.py: test_serving_rows_splits' window (one SparseMlaSplit row's key blocks,
-#     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is.
+#     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is; the entry
+#     sparse-mla:units is its --units, each key block served as its scores unit and its values units.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
 #     The STANDIN entries warden and warden:KIND are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
@@ -229,14 +230,15 @@ if [ -n "${A5_TP:-}" ]; then
   audit $N $A5_TP/commit ${A5_BUILD:-$A5_TP/build} "$WL" $WIN $PART "${ADV[@]}" || rc=1
 else
   for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a sample of all leaves no negative
-    if [ "$e" = row-tables ] || [ "$e" = sparse-mla ]; then
+    if [ "$e" = row-tables ] || [ "$e" = sparse-mla ] || [ "$e" = sparse-mla:units ]; then
       [ -n "$MAIN" ] || { echo "STANDIN $e draws from a challenger's coins: set A5_CHALLENGER=local"; exit 3; }
-      mkdir -p $O/$e
-      $TIME $PY benchmarks/one_stage/a5_${e//-/_}.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" --main $MAIN \
+      n=${e//:/-}; s=${e%%:*}; UNITS=(); [ "$e" = "$s" ] || UNITS=(--units)
+      mkdir -p $O/$n
+      $TIME $PY benchmarks/one_stage/a5_${s//-/_}.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" --main $MAIN \
         ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_COMPOSE_CACHE:+--compose-cache $A5_COMPOSE_CACHE} \
-        --out $W/$e > $O/$e/a5.log 2> $O/$e/a5.err || rc=1
-      grep '^A5' $O/$e/a5.log | cut -c1-4000; tail -25 $O/$e/a5.err
-      keep $e
+        "${UNITS[@]}" --out $W/$n > $O/$n/a5.log 2> $O/$n/a5.err || rc=1
+      grep '^A5' $O/$n/a5.log | cut -c1-4000; tail -25 $O/$n/a5.err
+      keep $n
       continue
     fi
     if [ "${e%%:*}" = warden ]; then

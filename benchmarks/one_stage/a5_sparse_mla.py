@@ -2,7 +2,7 @@
 window (one ``SparseMlaSplit_v1{T=40,NS=2,NH=2,DR=16,DV=32,BN=16}`` row in its heads' split chains: per head, split 0's 16-key
 first block and the full block after it, split 1's 8-key first block, each split's end in one column block and the two-split
 combine, each read row wired to the output row of the unit that wrote it; each key block its Boolean body,
-``SparseMlaHeadBlock_v2``, the fixture's ``BITS``), its run ``<ROOT>/rank0``, committed as serving
+``SparseMlaHeadBlock_v2``, the fixture's ``BITS``), its run ``<root>/rank0``, committed as serving
 commits it (`pipeline.serving_rows.read_all` on the fixture's served values, each block's state and split end by the twin,
 `ml.windows.rows.commit`) and audited by `a5.audit` as rank 0 of a one-rank step on a local challenger's coins under
 ``stratified-rate:1/64``, a 64th of each template's units and at least one: the wiring check on the public bodies before the
@@ -14,9 +14,14 @@ sampled proof block (behind the ZK server under ``--firewall``), the Lean verifi
 is accepted and every negative refused. ``--out`` holds the window serving wrote (``window/``, its private files too) and a5's
 records (``rank0/``, ``challenger/``, ``summary.json``).
 
+``--units`` audits the row at DV = 64 (the fixture's ``HALF``) with each key block served as its scores unit and its values
+units on 32 columns, the fixture's ``UNITS_BITS``: per head and key block the Boolean ``SparseMlaHeadScores_v2`` and two
+``SparseMlaHeadValues_v2``, each values unit's probabilities (and past a split's first block its rescale and the O before)
+wired to the unit that wrote them, each split's end on a column block and the two-split combine of one.
+
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5_sparse_mla.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
-        [--firewall flock-firewall] --main FILE --out DIR
+        [--firewall flock-firewall] [--units] --main FILE --out DIR
 """
 from __future__ import annotations
 
@@ -38,19 +43,27 @@ from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: 
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.commitments.windows import rows as CS  # noqa: E402
 
-#: the stand-in's session root, as a TP Commit's run root is its ranks' session root
-ROOT = hashlib.sha512(b"verity/a5/sparse-mla-split-stand-in/v1").hexdigest()
 RULE = "stratified-rate:1/64"
-OF = {"fixture": "adapters/vllm/tests/pipeline/test_serving_rows_splits.py", "row": TS.row()}
+FIXTURE = "adapters/vllm/tests/pipeline/test_serving_rows_splits.py"
 
 
-def commit(out: Path) -> CS.Binding:
-    """The fixture's window of one row under ``<ROOT>/rank0`` committed into ``out`` as serving commits it, its salts fresh."""
-    s = TS.Served()
-    w = a5.rated(replace(TS.window(s, TS.BITS, TS.BITS_CAPS), run=f"{ROOT}/rank0"), RULE)
-    got = TS.read(s, w.members, TS.BITS)
+def stand_in(units: bool) -> tuple[str, dict, list[str], dict[str, int]]:
+    """The stand-in's session root (as a TP Commit's run root is its ranks' session root), what it stands in for, its
+    templates and each one's chunk size: the fixture's row in whole key blocks, or with ``units`` its row at DV = 64 in scores
+    and values units."""
+    tag, row, tmpls, chunk = ((b"verity/a5/sparse-mla-split-stand-in/units/v1", TS.row(TS.HALF), TS.UNITS_BITS, TS.UNITS_BITS_CHUNK)
+                              if units else (b"verity/a5/sparse-mla-split-stand-in/v1", TS.row(), TS.BITS, TS.BITS_CAPS))
+    return hashlib.sha512(tag).hexdigest(), {"fixture": FIXTURE, "row": row}, tmpls, chunk
+
+
+def commit(out: Path, units: bool = False) -> CS.Binding:
+    """The fixture's window of one row under ``<root>/rank0`` committed into ``out`` as serving commits it, its salts fresh."""
+    root, of, tmpls, chunk = stand_in(units)
+    s = TS.Served(of["row"])
+    w = a5.rated(replace(TS.window(s, tmpls, chunk), run=f"{root}/rank0"), RULE)
+    got = TS.read(s, w.members, tmpls)
     c = CS.commit(w, [g for g, _e in got])
-    CS.write(c, out, {"of": OF, "committer": {"module": "a5_sparse_mla.py"}}, IX.index_doc(w.members, [e for _g, e in got], w.run),
+    CS.write(c, out, {"of": of, "committer": {"module": "a5_sparse_mla.py"}}, IX.index_doc(w.members, [e for _g, e in got], w.run),
              kind="stand-in", registrar=R)
     return w
 
@@ -62,6 +75,7 @@ def main() -> int:
     ap.add_argument("--lean", required=True)
     ap.add_argument("--firewall", help="a5.py's --firewall: the core protocols' path, every session behind the ZK server; "
                     "without it each runs prove --zk itself, as SPOT[Flock]'s proof server does")
+    ap.add_argument("--units", action="store_true", help="each key block as its scores unit and its values units")
     ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
@@ -70,22 +84,23 @@ def main() -> int:
     ap.add_argument("--compose-cache", help="a5.py's: this machine's composed circuits (`compose_circuit.py --cache`)")
     a = ap.parse_args()
     out = Path(a.out)
-    mine = commit(out / "window")
+    root, of, _tmpls, _chunk = stand_in(a.units)
+    mine = commit(out / "window", a.units)
 
     def source(w: dict) -> dict:
-        ok = {"kind": w.get("kind") == "stand-in", "run": w.get("run") == mine.run, "of": w.get("of") == OF}
+        ok = {"kind": w.get("kind") == "stand-in", "run": w.get("run") == mine.run, "of": w.get("of") == of}
         return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {"kind": w.get("kind"), "run": w.get("run")}}
 
-    a.rule, a.window_root = RULE, ROOT
-    manager, a.coins, finisher = AC.start("local", ROOT, [0], out / "challenger", a.main)
+    a.rule, a.window_root = RULE, root
+    manager, a.coins, finisher = AC.start("local", root, [0], out / "challenger", a.main)
     try:
-        s, ok = a5.audit(a, {}, out / "rank0", mine, out / "window", source, a.port, {"rank": 0, "standin": OF}, rank=0)
+        s, ok = a5.audit(a, {}, out / "rank0", mine, out / "window", source, a.port, {"rank": 0, "standin": of}, rank=0)
     finally:
         a.coins.skip(0)
         finisher.join()
         published = a.coins.evidence()
         manager.shutdown()
-    summary = {"root": ROOT, "session": (published.get("plan") or {}).get("session"),
+    summary = {"root": root, "session": (published.get("plan") or {}).get("session"),
                "window": {"population": mine.population, "members": [[m.key, m.n] for m in mine.members],
                           "wired": {m.key: [[p, o, list(ws)] for p, o, ws in m.wired] for m in mine.members if m.wired}},
                "challenger": {x: published.get(x) for x in ("trusted", "error")},
