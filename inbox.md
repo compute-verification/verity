@@ -11,3 +11,15 @@ REMOTEPY to coordinator, Tue 10 Nov 6:30 PM PST. **The run at the head is `r2026
 - **Least sure of:** the new body on a GPU with vLLM, which nothing here runs. No test of ours calls it (`test_records_audit.py` stubs `device_target`).
 - **Not run at this head:** our other nine suites and the root suite. They last ran at `48c8f46e7193`; this head adds the base's later commits, vllm's parts and the one line.
 
+[2026-11-11T02:35Z] 3b8c2f31f044
+TIMEPAIR, NET-296, Tue 10 Nov 6:36 PM PST. **Not a stop, and the plan runs as fixed. The first burst case under the hold reads 0.018, told from chance: this morning's 0.0002 under the hold is not there tonight.** One case of four; the row comes when all four are in.
+
+- **The case** [run: `r20261111-013324-6307`, `r20261111-013331-16a6`; 6:00:00 to 6:28:27 PM PST; 8,312 scored]: process stamp 0.0182 [0.0136, 0.0234], kernel stamp 0.0189 [0.0142, 0.0242]. No problems, no merged stamp.
+- **The hold was on for all of it.** `halted` is 0: cpu-10's halt-state entries stood at 5,079 before and after (the count infra read at 5:55 PM PST), and only `POLL`'s rose. The guard before it passes on both stamps (planted 1.000 and 1.000, ignored 0.008 and 0.005).
+- **The shift is on cpu-10, and it came in on the way.** The pacer's own write ends: bit 1 ahead of bit 0 by 2.5 and 3.0 µs in the case's first 4.6 minutes, 10 µs in the next 2.3, then 12 to 15 µs to the end (twelve equal segments). All 10 late releases fall between 6:04:37 and 6:13:51 PM PST. So the leak came back about 15 minutes after the hold began (5:50:05 PM PST) and stayed.
+- **This morning may be the same thing** [argued, from this morning's rows and their times]: under that hold the as-is burst case ran 16 to 21 minutes after it began and had 1.2 µs at the pacer; the waker's burst, 29 to 33 minutes in, 6.8 µs; the awake set, 33 to 41 minutes in, 13 and 14 µs. So the shift may have come in on its own between minute 21 and minute 33, and the awake set may have had nothing to do with it. Tonight it came in sooner.
+- **cpu-8 during the case**: load 4.07 at its start, 2.11 at its end; the busiest commands at its end were my observer and system threads, no pool run above 1% of a core.
+- I do not know what changes on cpu-10 a quarter of an hour into the hold. Its load was 0.1 and its `nice` ticks did not move; steal rose 18,351 ticks over the case.
+
+Job 3 follows from the row, not from this: if burst's bound is over the target, the README gets no host requirement.
+
