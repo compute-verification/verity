@@ -41,6 +41,11 @@ run wrote no answer, ``missing`` and ``why``:
 * PoUS, the bandwidth audit and the wipe (`MEMORY`): ``record/verdicts.json``'s ``space``, ``bandwidth`` and ``wipe``
   rows, each listed as its row states it and missing where the run has no such row or its product drops it (`LISTED`).
 
+A verdict read from a row of the window report is ``accept`` only where the report says that row's answer is about its
+node (its ``servers`` against its ``node``, `off_node`): an answer about another server is missing, naming that server
+(`ELSEWHERE`), and so is an accept the report names no server for (`UNSERVED`), while the row the network certifier's
+period check's answer gives where the report drops it, for which the report names no server, reads as it states.
+
 While `certifier-key` is open (`PREMISES`, `KEY_OPEN`), an accepted network certifier's verdict is ``not
 established``, its Lean answer's accept beside it (``answer``), and its bound conditional on it by name; so is it
 where `auditor-listing` doesn't hold (`LISTING_UNMET`, `FILES_UNMET`) or `scan-state-pinned` doesn't
@@ -241,6 +246,12 @@ MEMORY = ("PoUS", "the bandwidth audit", "the wipe")
 LISTED = ("listed as its row of the window report states it (`row_verdict`), beside the verdicts the run of record "
           "needs: whether the run is of record doesn't read it, ``of_record`` names it in none of its lists, and no "
           "figure of its row reaches the record")
+#: why a row of the window report the report doesn't say is about its node is missing (`off_node`), in the report's
+#: terms (`served_verdicts.said`): an answer about another server, and an accept the report names no server for
+ELSEWHERE = ("the run has no answer about this node: the window report's {key} row's answer, {verdict}, is about "
+             "{server}, another server than the report's node (its ``servers``)")
+UNSERVED = ("the run has no answer about this node: the window report's {key} row accepts and the report names no "
+            "server its answer is about (its ``servers``)")
 #: where the certifier piece leaves its period's case (`certifier_piece.CASE`), whose params carry the schedule and caps
 CASE = Path("pieces") / "certifier" / "case.json"
 #: the run's advice registration as it publishes it (`served_verdicts.py public-registration`), its compiler's cap ℓ_a
@@ -971,15 +982,33 @@ def network_row(out: Path, rows: Mapping[str, Any], run: str | None) -> tuple[An
     return SV.piece_row(key, out / "pieces", run), str(answer)
 
 
-def row_verdict(rows: Mapping[str, Any], key: str, src: str | None = None) -> dict[str, Any]:
+def off_node(report: Mapping[str, Any], key: str, verdict: Any) -> str | None:
+    """Why the window report's row ``key``, answering ``verdict``, is no answer about the record's node, None where the
+    report says it is one: its ``servers`` names another server than its ``node`` for the row (`ELSEWHERE`), or names
+    none and the row accepts (`UNSERVED`). A row that doesn't accept and names no server reads as it states, as the
+    report composes it."""
+    servers = report.get("servers")
+    server = servers.get(key) if isinstance(servers, Mapping) else None
+    if server is None:
+        return UNSERVED.format(key=key) if verdict == "accept" else None
+    return None if server == report.get("node") else ELSEWHERE.format(key=key, verdict=verdict, server=server)
+
+
+def row_verdict(report: Mapping[str, Any] | None, rows: Mapping[str, Any], key: str,
+                src: str | None = None) -> dict[str, Any]:
     """A verdict from the window report's row ``key`` (from ``src``, default the report's): a missing, dropped or
-    development row is missing, with its why, and a development row says so (``development``)."""
+    development row is missing, with its why, and a development row says so (``development``); so is a row of
+    ``report``'s that is no answer about its node, with why (`off_node`). ``report`` is None for a row that isn't the
+    report's own (`network_row`'s, from the period check's answer), which reads as it states."""
     src = src or f"record/verdicts.json protocols.{key}"
     r = rows.get(key)
     if not isinstance(r, Mapping):
         return missing(f"the window report has no {key} row", src)
     if r.get("verdict") in ("missing", "dropped"):
         return missing(str(r.get("why")), src) | ({"development": True} if "development" in r else {})
+    off = off_node(report, key, r.get("verdict")) if report is not None else None
+    if off:
+        return missing(off, src)
     out = {"protocol": r.get("protocol"), "verdict": r.get("verdict"), "from": src}
     return out | ({"reason": r["reason"]} if r.get("reason") else {})
 
@@ -1040,12 +1069,12 @@ def case_verdict(found: Mapping[str, tuple[str, dict[str, Any]]], product: str, 
 
 
 def sampled_verdict(found: Mapping[str, tuple[str, dict[str, Any]]], composite: str,
-                    rows: Mapping[str, Any]) -> dict[str, Any]:
+                    report: Mapping[str, Any], rows: Mapping[str, Any]) -> dict[str, Any]:
     """Sampled proofs' verdict (`V1_UNREAD`): the outcome of `SAMPLED_ID`'s case in the composite of record
     ``composite``; where it has none, not established, the window report's row's answer beside it (``answer``), or
-    missing where that row is missing too."""
+    missing where that row is missing too, as one that is no answer about ``report``'s node is (`row_verdict`)."""
     v = case_verdict(found, composite, SAMPLED_ID)
-    v1 = row_verdict(rows, ROWS["sampled proofs"])
+    v1 = row_verdict(report, rows, ROWS["sampled proofs"])
     if v["verdict"] != "missing" or v1["verdict"] == "missing":
         return v
     return {"protocol": SAMPLED_ID, "verdict": NOT_ESTABLISHED, "answer": v1["verdict"], "from": v1["from"],
@@ -1945,18 +1974,21 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
               "measured": measured(advice_charge)}
     rows = report.get("protocols") or {}
     net, net_src = network_row(out, rows, report.get("run"))
+    # None where `network_row` gave the period check's answer's row, which the report names no server for
+    net_report = report if net is rows.get(ROWS["the network certifier"]) else None
     if net is not None:
         rows = {**rows, ROWS["the network certifier"]: net}
     found = composites(out)
     composite, with_pouw = of_record_composite(found)
     unread = NOT_CLAIMED if with_pouw else NOT_CLAIMED_WITHOUT_POUW
-    v = {"sampled proofs": sampled_verdict(found, composite, rows), "PoUW": row_verdict(rows, ROWS["PoUW"])}
+    v = {"sampled proofs": sampled_verdict(found, composite, report, rows),
+         "PoUW": row_verdict(report, rows, ROWS["PoUW"])}
     v["inference-only"] = case_verdict(found, REMOTE if with_pouw else composite, INFERENCE_ONLY)
     v["remote"] = composite_verdict(found, REMOTE, "remote's composite didn't run: the run has no "
                                                    "composite/remote/composite.json")
-    v["the network certifier"] = nv = row_verdict(rows, ROWS["the network certifier"], net_src)
+    v["the network certifier"] = nv = row_verdict(net_report, rows, ROWS["the network certifier"], net_src)
     v["onsite"] = composite_verdict(found, composite, f"the run has no composite of {composite}")
-    v |= {k: row_verdict(rows, ROWS[k]) | {"listed": LISTED} for k in MEMORY}
+    v |= {k: row_verdict(report, rows, ROWS[k]) | {"listed": LISTED} for k in MEMORY}
     v = {k: v[k] for k in VERDICTS}
     v["inference-only"]["alpha_gamma"] = alpha_gamma(case_policy)
     for k in unread:

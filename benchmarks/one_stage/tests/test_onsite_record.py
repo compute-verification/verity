@@ -341,6 +341,12 @@ CREDITED = {"credited": [MEMBER], "not_credited": {}, "from": str(OR.AUDIT), "is
 UNESTABLISHED = {"credited": [], "missing": OR.UNESTABLISHED_CREDIT, "is": OR.CREDIT}
 
 
+def served(row: dict | None) -> str | None:
+    """The server the toy window report names for ``row``, as `served_verdicts.record` does for a run whose every answer
+    is about `NODE`: `NODE` for an answer, none for a row that is missing, dropped or absent."""
+    return NODE if row is not None and row["verdict"] not in ("missing", "dropped") else None
+
+
 def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None = None, case: dict | None = None,
                composites: dict[str, dict] | None = None, coins: str | None = GATE,
                audit: dict | None = AUDITED, draw: dict = SUBSET1, bound: int = N - 1) -> Path:
@@ -358,7 +364,8 @@ def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None
                                                 "endpoint"}}
     (out / "record").mkdir(parents=True)
     (out / "record" / "verdicts.json").write_text(json.dumps(
-        {"format": OR.EXTENDS, "window": 3, "node": NODE, "run": "toy-run", "protocols": rows}))
+        {"format": OR.EXTENDS, "window": 3, "node": NODE, "run": "toy-run", "protocols": rows,
+         "servers": {key: served(row) for key, row in rows.items()}}))
     for name, doc in (composites or {}).items():
         (out / "composite" / name).mkdir(parents=True)
         (out / "composite" / name / "composite.json").write_text(json.dumps(doc))
@@ -2345,13 +2352,15 @@ def memory_row(key: str, verdict: str) -> dict:
 
 
 def with_memory(out: Path, rows: dict[str, dict | None]) -> Path:
-    """``out`` with its window report's memory rows ``rows``, by row name: each the row given, none where None."""
+    """``out`` with its window report's memory rows ``rows``, by row name: each the row given, about `NODE` where it
+    answers (`served`), none where None."""
     f = out / "record" / "verdicts.json"
     report = json.loads(f.read_text())
     for key, row in rows.items():
         report["protocols"].pop(key, None)
+        report["servers"].pop(key, None)
         if row is not None:
-            report["protocols"][key] = row
+            report["protocols"][key], report["servers"][key] = row, served(row)
     f.write_text(json.dumps(report))
     return out
 
@@ -2470,6 +2479,154 @@ def test_whether_the_run_is_of_record_reads_none_of_memorys_three_verdicts(tmp_p
     assert {k: rec["verdicts"][k]["verdict"] for k in OR.MEMORY} == states
     line = json.loads(capsys.readouterr().out.strip()[7:])
     assert (line["of_record"], {k: line["verdicts"][k] for k in OR.MEMORY}) == (today["holds"], states)
+
+
+#: a server that isn't `NODE`, and what a window report can name for a row
+OTHER = "toy-other-server"
+WHERE = {"the node": NODE, "another server": OTHER, "no server": None}
+#: the verdicts that are a row of the window report's, by their row; sampled proofs' is its composite leg
+ROW_READ = {name: key for name, key in OR.ROWS.items() if name != "sampled proofs"}
+#: the verdicts read from a composite, which the window report names no server for
+COMPOSITE_READ = ("inference-only", "remote", "onsite")
+
+
+def about(out: Path, servers: dict[str, str | None]) -> Path:
+    """``out`` with its window report naming ``servers``' server for each of those rows, none where None."""
+    f = out / "record" / "verdicts.json"
+    report = json.loads(f.read_text())
+    report["servers"] |= servers
+    f.write_text(json.dumps(report))
+    return out
+
+
+def answering(out: Path, key: str, verdict: str) -> Path:
+    """``out`` with its window report's row ``key`` answering ``verdict``, with a reason."""
+    f = out / "record" / "verdicts.json"
+    report = json.loads(f.read_text())
+    report["protocols"][key] |= {"verdict": verdict, "reason": f"toy: {key} answered {verdict}"}
+    f.write_text(json.dumps(report))
+    return out
+
+
+def every_row_accepting(tmp_path: Path, **kw) -> Path:
+    """A run of record (`accepted`) whose window report has all six rows, each accepting about `NODE`."""
+    return with_memory(accepted(tmp_path, **kw), MEMORY_ACCEPTING)
+
+
+def off_node(base: dict, name: str, why: str) -> dict:
+    """The verdict ``name`` reads where its row is no answer about the node: missing with ``why``, from its row, with
+    what the record says of it whatever it reads (``listed``, ``not_claimed``), as ``base``, its read about the node."""
+    return {"verdict": "missing", "why": why, "from": f"record/verdicts.json protocols.{OR.ROWS[name]}",
+            **{k: base[name][k] for k in ("listed", "not_claimed") if k in base[name]}}
+
+
+def test_the_nine_verdicts_are_the_six_read_from_the_window_reports_rows_and_the_three_read_from_composites():
+    assert set(OR.VERDICTS) == set(ROW_READ) | {"sampled proofs"} | set(COMPOSITE_READ)
+    assert set(OR.ROWS.values()) == set(SV.NAMES) and {SV.NAMES[key]: key for key in SV.NAMES} == OR.ROWS
+
+
+@pytest.mark.parametrize("name, key", list(ROW_READ.items()))
+@pytest.mark.parametrize("where", list(WHERE))
+def test_a_verdict_read_from_a_row_is_accept_only_where_the_report_says_its_answer_is_about_its_node(
+        tmp_path, capsys, name, key, where):
+    """Each verdict read from a row of the window report, its row accepting: accept where the report's ``servers``
+    names its node for the row; missing where it names another server, naming it, and where it names none, each said in
+    its why; every other verdict reads as it did, and the run's line says the same."""
+    out = every_row_accepting(tmp_path)
+    base = record(out)["verdicts"]
+    assert {k: base[k]["verdict"] for k in ROW_READ} == dict.fromkeys(ROW_READ, "accept")
+    assert main([str(about(out, {key: WHERE[where]}))]) == 0
+    v = json.loads((out / "record" / "onsite.json").read_text())["verdicts"]
+    expect = {"the node": base[name],
+              "another server": off_node(base, name, OR.ELSEWHERE.format(key=key, verdict="accept", server=OTHER)),
+              "no server": off_node(base, name, OR.UNSERVED.format(key=key))}[where]
+    assert v == base | {name: expect}
+    assert OTHER in OR.ELSEWHERE.format(key=key, verdict="accept", server=OTHER)
+    line = json.loads(capsys.readouterr().out.strip()[7:])
+    assert line["verdicts"][name] == ("accept" if where == "the node" else "missing")
+
+
+@pytest.mark.parametrize("name, key", list(ROW_READ.items()))
+@pytest.mark.parametrize("answer", ["reject", "error"])
+@pytest.mark.parametrize("where", ["another server", "no server"])
+def test_a_row_that_doesnt_accept_is_missing_about_another_server_and_reads_as_it_states_naming_none(
+        tmp_path, name, key, answer, where):
+    """A row that rejects or errs: about another server it is no answer about this node, so its verdict is missing,
+    naming the server and the answer; naming no server it reads as it states, as the window report composes it."""
+    out = answering(every_row_accepting(tmp_path), key, answer)
+    here = record(out)["verdicts"]
+    assert (here[name]["verdict"], here[name]["reason"]) == (answer, f"toy: {key} answered {answer}")
+    v = record(about(out, {key: WHERE[where]}))["verdicts"]
+    assert v[name] == (here[name] if where == "no server" else off_node(
+        here, name, OR.ELSEWHERE.format(key=key, verdict=answer, server=OTHER)))
+    assert {k: v[k] for k in ROW_READ if k != name} == {k: here[k] for k in ROW_READ if k != name}
+
+
+@pytest.mark.parametrize("where", list(WHERE))
+@pytest.mark.parametrize("leg", ["accept", None])
+def test_sampled_proofs_verdict_is_its_composite_leg_whatever_server_the_integrity_row_is_about(tmp_path, leg, where):
+    """Sampled proofs' verdict is its leg in the composite of record, which the window report names no server for: with
+    that leg accepting it reads the same whatever server the report names for the integrity row. Where the composite of
+    record has no such leg, the row's answer is beside a verdict not established only where it is about the node, and
+    the verdict is missing where the row is about another server or none."""
+    out = every_row_accepting(tmp_path, onsite=leg is not None)
+    base = record(out)["verdicts"]["sampled proofs"]
+    assert base["verdict"] == ("accept" if leg else OR.NOT_ESTABLISHED) and (leg or base["answer"] == "accept")
+    v = record(about(out, {"integrity": WHERE[where]}))["verdicts"]["sampled proofs"]
+    if leg or where == "the node":
+        assert v == base
+    else:
+        none = f"its case is read from {OR.ONSITE}'s composite, and the run has none"
+        assert (v["verdict"], v["why"]) == ("missing", none)
+        assert "answer" not in v
+
+
+@pytest.mark.parametrize("name", COMPOSITE_READ)
+@pytest.mark.parametrize("where", list(WHERE))
+def test_a_verdict_read_from_a_composite_reads_the_same_whatever_server_the_report_names_for_its_rows(
+        tmp_path, name, where):
+    """Inference-only's, remote's and onsite's verdicts are read from the run's composites, never from a row of the
+    window report, whose ``servers`` has no entry for them: each reads the same with every row about the node, about
+    another server and about none."""
+    out = every_row_accepting(tmp_path)
+    base = record(out)["verdicts"][name]
+    assert base["verdict"] == "accept" and "record/verdicts.json" not in base["from"]
+    report = json.loads((out / "record" / "verdicts.json").read_text())
+    assert not set(report["servers"]) & set(COMPOSITE_READ) and set(report["servers"]) == set(OR.ROWS.values())
+    assert record(about(out, dict.fromkeys(report["servers"], WHERE[where])))["verdicts"][name] == base
+
+
+@pytest.mark.parametrize("servers", [None, [], "toy"])
+def test_a_report_stating_no_servers_reads_accept_from_none_of_its_rows(tmp_path, servers):
+    out = every_row_accepting(tmp_path)
+    base = record(out)["verdicts"]
+    f = out / "record" / "verdicts.json"
+    report = json.loads(f.read_text())
+    report.pop("servers")
+    f.write_text(json.dumps(report | ({} if servers is None else {"servers": servers})))
+    v = record(out)["verdicts"]
+    assert {k: v[k] for k in ROW_READ} == {k: off_node(base, k, OR.UNSERVED.format(key=key))
+                                           for k, key in ROW_READ.items()}
+
+
+@pytest.mark.parametrize("run", ["of record", "of record without PoUW"])
+@pytest.mark.parametrize("key", list(OR.ROWS.values()))
+@pytest.mark.parametrize("where", ["another server", "no server"])
+def test_a_run_of_record_with_a_needed_verdicts_row_off_its_node_is_not_of_record(tmp_path, capsys, run, key, where):
+    """``of_record`` is computed from the verdicts: a run of record whose network certifier's row, the one row a verdict
+    it reads is read from, is about another server or names none is not of record, that verdict among its missing ones.
+    Moving any other row leaves it of record: PoUW's verdict, which it doesn't read, is named missing and nothing else
+    of it changes; memory's three it neither reads nor names; and sampled proofs' verdict is its leg in the composite
+    of record, never the integrity row."""
+    out, today = of_record_today(tmp_path, run)
+    assert today["holds"] and record(with_memory(out, MEMORY_ACCEPTING))["of_record"] == today
+    assert main([str(about(out, {key: WHERE[where]}))]) == 0
+    rec = json.loads((out / "record" / "onsite.json").read_text())
+    needed = key == OR.ROWS["the network certifier"]
+    assert rec["of_record"] == today | {"communication": {"holds": False, "missing": ["the network certifier"]},
+                                        "work": {"missing": ["PoUW"]}}.get(key, {})
+    assert ("missing" in rec["bound"]) is needed
+    assert json.loads(capsys.readouterr().out.strip()[7:])["of_record"] is not needed
 
 
 def test_sampled_proofs_guarantee_is_its_windows_epsilon_at_delta_beside_its_pooled_count_over_each_period(
@@ -2615,6 +2772,7 @@ def test_a_remote_run_whose_report_drops_the_certifier_takes_its_period_checks_a
     out = accepted(tmp_path)
     report = json.loads((out / "record" / "verdicts.json").read_text())
     report["protocols"]["communication"] = SV.dropped_row("communication", "remote")
+    report["servers"]["communication"] = None
     (out / "record" / "verdicts.json").write_text(json.dumps(report))
     rec = record(out)
     assert rec["verdicts"]["the network certifier"] == {
