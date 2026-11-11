@@ -339,13 +339,21 @@ namespace Gen
 
 variable [S : ZkSetup]
 
+/-- **The deployed masked verifier: one wait's bound**, at SHA-512 at the deployed relation, at every number of tables,
+from the live sessions' bound at the deployed decoders off the table on a witness lane at the statements some run
+accepts (`ZkXferWJ`) and `ExtendJ` at full-width columns (`zk_oneWait_of_liveAccWJ`, `zkLiveAccWJ_of_xferWJ`). -/
+theorem zk_oneWait_of_xferWJ (hx : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkXferWJ x)
+    (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
+    Claims.Flock.OneWait sha512 (deployZk Readable.relation) :=
+  zk_oneWait_of_liveAccWJ (fun x hno => zkLiveAccWJ_of_xferWJ hno (hx x hno)) hext
+
 /-- **The deployed masked verifier: KS**, at SHA-512 at the deployed relation, at every number of tables, from the
 live sessions' bound at the deployed decoders off the table on a witness lane at the statements some run accepts
-(`ZkXferWJ`) and `ExtendJ` at full-width columns (`zk_KS_of_liveAccWJ`, `zkLiveAccWJ_of_xferWJ`). -/
+(`ZkXferWJ`) and `ExtendJ` at full-width columns (`zk_oneWait_of_xferWJ`). -/
 theorem zk_KS_of_xferWJ (hx : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkXferWJ x)
     (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
     Claims.Flock.KS sha512 (deployZk Readable.relation) :=
-  zk_KS_of_liveAccWJ (fun x hno => zkLiveAccWJ_of_xferWJ hno (hx x hno)) hext
+  zk_of_oneWait_sha512 Readable.relation zk_splits (zk_oneWait_of_xferWJ hx hext)
 
 end Gen
 
