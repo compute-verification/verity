@@ -24,7 +24,8 @@ its tests ran (under `"*"` when neither: a session fixture, a conftest). It dese
 whose passes `suites.py` reuses, and in an xdist worker it moves the longest tests (`VERITY_SUITE_HEAVY`) to the heads of the
 workers' shares: an order only, which parallel suites declare their outcomes don't depend on. Under `suites.py --files` it
 collects only the test files of the run's part (`VERITY_SUITE_PART`, `in_part`), or of a part by test id deselects the tests
-whose node id hashes to another part (`id_part`), and reports how many it left out (`part_out`). It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
+whose node id hashes to another part (`id_part`), and reports how many it left out (`part_out`). Under `suites.py --changed
+--quick` it marks the tests of the files `--verity-whole` names `verity_whole`, so that run's `-m` keeps them whole. It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
 trace their own reads (`child/`), and in a child this process forks it writes each such read at once to `VERITY_SUITE_READS`
 (`child/verity_suite_reads.py`): a fork's memory never comes back, and one that ends through `os._exit` flushes nothing.
 
@@ -223,6 +224,28 @@ def _host_isolated(monkeypatch, tmp_path_factory):
         monkeypatch.setenv(k, v)
     for k in HOST_SLOT:
         monkeypatch.delenv(k, raising=False)
+
+
+#: under `suites.py --changed --quick`, the tests of each test file `WHOLE_OPT` names (from the suite's directory) carry
+#: `WHOLE_MARK`, which that run's `-m` keeps beside the tests not marked slow (`suites.whole_args`)
+WHOLE_MARK, WHOLE_OPT = "verity_whole", "--verity-whole"
+_whole: frozenset = frozenset()
+
+
+def pytest_addoption(parser) -> None:
+    parser.addoption(WHOLE_OPT, action="append", default=[], metavar="FILE",
+                     help=f"mark this test file's tests {WHOLE_MARK} (suites.py --changed --quick runs them whole)")
+
+
+def pytest_configure(config) -> None:
+    global _whole
+    _whole = frozenset(config.getoption(WHOLE_OPT))
+    config.addinivalue_line("markers", f"{WHOLE_MARK}: a test of a file the change reaches, run with its slow tests")
+
+
+def pytest_itemcollected(item) -> None:
+    if _whole and os.path.relpath(os.path.realpath(item.path), _suite).replace(os.sep, "/") in _whole:
+        item.add_marker(WHOLE_MARK)
 
 
 @pytest.hookimpl(hookwrapper=True)
