@@ -35686,3 +35686,74 @@ Neither changes Wednesday: the form is refused whatever they are. If PRF-490's f
 - The runs behind the notes' figures (#8052's 99.0 GB at 24.2 GB, the audit's 45.79 hours).
 - Whether the scan of `tests/test_verifier_cost.py` passes on these two files: I read its patterns against the source and ran nothing.
 - `Flock.ProvedScope.circuitOf`'s parser, for what it allocates a row.
+
+## HOUSEKEEP, Wed 11 Nov 00:50Z: the audit's 29: 21 cleared (2 closed, 6 re-dated, 9 placed, 11 comments); 8 are left for you: PRF-269, 367 (twice), 462, 503, 514 and the two slip drafts below; the audit now prints 27
+
+Your 00:24Z task. Every write below was made between 00:42Z and 00:44Z with `research msg linear` as `proofs/HOUSEKEEP` [run]. Marks: [run] I ran it, [read] I read it, [guess] neither.
+
+**The audit after the writes** (00:44Z) [run]: 27 findings, down from the 38 it printed for me at 00:26Z. Lapsed 20, overdue 4 (PRF-269, 367, 462, 503), quiet 1 (PRF-466), stale 1 (PRF-367), stray 1 (PRF-463). The audit as I run it prints no orphan or slipped kind, so I can't show from it that the placements cleared the orphans; each `place` printed its project and milestone.
+
+### What I changed
+
+**Closed, 2** (each done-condition read against `main`):
+- **PRF-451 → Done.** Its condition: Figure 1's one-stage and two-stage points produced or checked by the Lean checker. On `main`, `figure1.py` takes a one-stage point from `lean_check` and a two-stage point from `lean_two` (line 553), and `total_cost.py` calls the same `lean_two` (line 464) [read]. #8346 and #8360 are on `main` [run]. That was the one piece your comment of 9 Nov left. Outside it: the infiltration curve (`write_form`) is Python, and its caption is under `proofs/spot-figures`.
+- **PRF-465 → Done.** Its work: add each window's trace to `Served`, restate `TheftServed` and its witnesses, rerun records. `TheftServedTied` is on `main` (#8311) and in the lock with `TheftServedTiedHonest` and `TheftServedTiedNontrivial`; its bound ends `+ δ + ηe + ηa` [read]. Its premises are still open in the lock, each with its own issue (PRF-462, PRF-511, PRF-512).
+
+**Kept open with the piece named, 1:**
+- **PRF-475** stays In Progress. Both halves of its condition were measured on `checked` with #8279 alone (r20261109-055317-2799). The piece left is the one your comment of Tue 12:19Z names: kernels' gq run at K = 3 and 4 on one H200 at `main` with #8320 and #8399, by Fri 13 Nov. I found no such run in the log.
+
+**Re-dated, 6** (each with a one-line comment):
+- **PRF-464 → Fri 13 Nov**, the date its comment of 9 Nov gave for the next PR. This comment also clears its quiet finding.
+- **PRF-502 → Wed 11 Nov**: SERVEDCARD's PR was promised for when r20261110-232029-e3dd passed. It opened as #8771 at 00:44Z, unmarked [run], a minute after my comment, which says "not open at 00:41Z". The PR is attached to the issue, so I posted no second comment.
+- **PRF-505, 506, 507, 508 → Wed 11 Nov**: the layout is #8769, open and unmarked [run 00:41Z], dated tonight 7:45 PM PST on the Goals page, and PRF-505 dates the crossing within two hours of it on `main`.
+
+**Placed, 9:**
+- **PRF-505, 506, 507, 508 →** Repository cleanup / C5. Their siblings TRN-82, NET-311, HASH-107 and CIR-223 are there.
+- **PRF-503, PRF-513 →** Repository cleanup / C5. One sibling shows it, CIR-224; LEAN-249, CIR-228, MEM-232 and MEM-228 have no project.
+- **PRF-502 →** Full proofs / SPOT. HASH-98, which it serves, is there, as are PRF-456, 464 and 492.
+- **PRF-516, PRF-517 →** Full proofs / SPOT. Both came from PRF-456, which is there.
+
+**Commented only, 2** (quiet):
+- **PRF-361**: #7716 closed unmerged on Tue; RENAME has no entry since; the Goals page says the renames have not run and nobody at proofs is on them until the SPOT post is out. The date stays Thu 12 Nov.
+- **PRF-397**: on `main` `2b869ed35d` the boundary check prints 0 edges over 8,114 public files, 0 new, and 30 listed edges no tree has [run on my VM, 11 s, a scan]. It also prints 19 that the export's rewrite cuts, one in our files (Flock's extra `verity-numerical`).
+
+### Left for you
+
+No date is written anywhere for these four, so I set none:
+1. **PRF-269** (Todo, due 10 Nov, overdue). Last comment 5 Nov. #5664, #5687 and #5864 closed unmerged; #6902 merged 5 Nov. No worker, and no log entry names it.
+2. **PRF-367** (Todo, due 10 Nov, overdue and stale). No comment ever, untouched since 4 Nov, no worker. Plan or cancel is yours.
+3. **PRF-462** (In Progress, due 10 Nov, overdue). Two dates are written and they differ: Fri 13 Nov (its goal and milestone) and Tue 17 Nov (the lock's entry for `EgressTied`, in your comment of Tue 16:57Z). Item 5, the Lean step, has no worker.
+4. **PRF-503** (In Progress, due 10 Nov, overdue). TWOINSTANCE's last entry is Tue 16:18Z: 13 of our Lean rows closed, 10 waiting on your four questions. Your text on PRF-513 calls it done for our Lean. I found no entry saying lean merged the branch [not checked past LEAN-249's last five comments]. If it is done, the close is yours.
+
+One orphan I did not place:
+5. **PRF-514** (FLOCKPKG). Its two relatives disagree: PRF-454 is in Full proofs / F-DONE (Tue 17 Nov), and its stated goal is the repository's organization, whose layout issues are in Repository cleanup / C5.
+
+Things I did that you may want to change:
+- **PRF-475** could close on run 2799 if `checked` with #8279 is enough for you.
+- **PRF-397** reads as done by its own condition, "lists none of these edges". What is left is `--prune` of the 30 stale lines and your call on the one rewrite-cut line. PRF-463, the stray, is about the same allowed list.
+- **PRF-361** has no worker; Todo may be its honest state.
+- **PRF-502**'s own condition is the four items for every type in benchmarks' ranked order, which has no end date; and #8771 lands after #8425, which has no date either. So Wed 11 Nov is the PR's opening, not the issue's end.
+- **PRF-516 and PRF-517** are due 17 and 18 Nov, past their milestone's 13 Nov. The other milestone is F-NEXT (Tue 1 Dec).
+- **PRF-505 to 508** are overdue again tomorrow if #8769 does not land tonight.
+- **`proofs/spot-numbers-lean-checked`** is still open on the page with PRF-451 closed; marking it is yours.
+
+Not in your list and not touched: the 20 lapsed (F2: 14 issues; F3: PRF-210; C2: PRF-339, PRF-499; O4: PRF-384, 386, 404), the stray PRF-463, and **PRF-466**, a quiet finding that appeared after your count (last touched Tue 04:20Z).
+
+### Slip drafts (not posted)
+
+**PRF-199** (due 30 Nov):
+
+> slip: F2 has missed four dates. 28 Oct and 3 Nov: the legs' PRs were not all marked. 6 Nov: ONE-3p and ONE-3t had no worker while the SPOT post took the lane. 13 Nov was given up before it came: two legs are still open, PRF-460 and ONE-3t (PRF-209). What holds 30 Nov: PRF-460 is being worked (TWOWITNESS; its chain's try r20261111-002925-8ff5 is out, verdict about 01:30Z), and ONE-3t gets a worker once the layout (#8769) is on `main`, which lifts Daniel's order of Mon 9 Nov. ONE-3p (PRF-206) is done.
+
+**PRF-282** (due 13 Nov; your comment of Tue 12:19Z promised a new date by Wed 6 PM PST):
+
+> slip: item 3, zero knowledge, will miss Fri 13 Nov; items 1, 2 and 4 hold. Earlier dates: 29 and 30 Oct went to the KS refits, 2 Nov passed while `main` did not move, and 6 and 7 Nov passed with step 11 waiting on `main`. Item 3 waits on three things outside proofs: B1 (NET-170 to NET-173, all Todo, due 13 Nov), the stop leak (NET-169, In Progress, due 13 Nov) and LEAN-186 (In Progress, due 30 Nov). New date: DATE.
+
+DATE is yours. Two are written: `proofs/zero-knowledge` says Fri 20 Nov 6 PM PST, and LEAN-186, which it waits on, says 30 Nov. The sentence in the PRF-199 draft about ONE-3t's worker is from my reading of PRF-209 earlier tonight; check it before you post.
+
+### The two you asked about
+
+- **TOP-396, the goal descriptions: delivered and applied; nothing is owed by me.** I delivered them Tue 19:30Z (24 written; my entry here). Your entry in my mailbox of Tue 19:59Z says all 26 are on the page and read back equal [read]. Later asks on TOP-396 are answered on the page [run, `research goals show --json` at 00:45Z]: 14 of our 45 goals were updated after top's 22:59Z call for steps with hours, and `proofs/spot-two-stage-e2e` holds the three waits vllm asked for at 23:42Z, with its date now Fri 13 Nov 6 PM PST, after vllm's Fri noon.
+- **TOP-389's "also for proofs": not answered, and nobody holds it that I can find.** Top's comment of Tue 21:49Z says the network cost has two steps in r20261109-201233-0467 (92.8% to 97.1%, and 65.4% to 68.3% as served) and that "9.8% as designed" does not agree with "427 GB after every planned change" on whether the design meets the target. The newest comment on TOP-389 is memory-accounting's of 22:01Z; none is ours after top's [read 00:45Z]. No log entry after Tue 19:00Z names TOP-389, and it was not given to me, so I did not work on it. An answer would start from our rows comment of Tue 03:34Z (row 1) and BREAKEVEN's entries on 427 GB.
+
+Nothing of mine is running. No repository file changed; I posted nothing on Slack.
