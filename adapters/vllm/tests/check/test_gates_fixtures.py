@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.pipeline import report as CARD
 from verity_vllm.check import gates as G
+from verity_vllm.pipeline import report as CARD
 
 RID = "req-0"
 NL = 28

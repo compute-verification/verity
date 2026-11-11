@@ -20,8 +20,8 @@ from typing import Callable
 import numpy as np
 import pytest
 
-from verity_vllm.check import weights_of_record as WR
 from tests.check.test_weights_of_record import live_digests, write_safetensors
+from verity_vllm.check import weights_of_record as WR
 
 G, I, H, E = 128, 1536, 256, 2
 CONTAINER = "model.layers.0.mlp.experts"

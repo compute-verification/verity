@@ -9,8 +9,14 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from verity_vllm.check.codes import VerificationCode as VC
-
-from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, PASS, CheckResult, code_of
+from verity_vllm.check.result import (
+    FAIL,
+    INSUFFICIENT,
+    NOT_RUN,
+    PASS,
+    CheckResult,
+    code_of,
+)
 from verity_vllm.records.commit_binding import CommitBinding
 from verity_vllm.records.fields import RecordError
 

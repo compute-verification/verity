@@ -8,7 +8,6 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import numpy as np
-
 from verity.circuits.types import Array, RecordType, Type
 
 

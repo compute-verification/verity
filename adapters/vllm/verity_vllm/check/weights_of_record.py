@@ -42,17 +42,22 @@ import re
 import sys
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from dataclasses import dataclass
 
 from verity_vllm.check import derived_weights, fp8_moe_scales, fp8_ue8m0
 from verity_vllm.check.checkpoint_index import CheckpointIndex, sha256_file  # noqa: F401  (sha256_file: the record's shard hash)
-from verity_vllm.check.component_programs import component_program_dirs, load_program_head
+from verity_vllm.check.component_programs import (
+    component_program_dirs,
+    load_program_head,
+)
+from verity_vllm.check.tp_shards import kv_heads_replicated, replicated_qkv, rows_of
+from verity_vllm.check.tp_shards import shard_dim as _shard_dim
+from verity_vllm.check.tp_shards import shard_dim0 as _shard_dim0
 from verity_vllm.config import UsageError, option
-from verity_vllm.check.tp_shards import kv_heads_replicated, replicated_qkv, rows_of, shard_dim as _shard_dim, shard_dim0 as _shard_dim0
 from verity_vllm.log import init_logger
 
 logger = init_logger(__name__)

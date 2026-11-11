@@ -10,10 +10,9 @@ import re
 import numpy as np
 import pytest
 
-from verity_vllm.check import weights_of_record as WR
-
 from tests.check.test_weights_of_record import live_digests, write_safetensors
 from tests.check.test_weights_of_record_routed_experts import _program
+from verity_vllm.check import weights_of_record as WR
 
 torch = pytest.importorskip("torch")
 

@@ -17,10 +17,10 @@ import json
 
 import numpy as np
 
-from verity_vllm.program import model as analytic
+from tests.check.test_weights_of_record import PREFIX, _program, checkpoint  # noqa: F401  (fixture)
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import cli
-from tests.check.test_weights_of_record import PREFIX, _program, checkpoint  # noqa: F401  (fixture)
+from verity_vllm.program import model as analytic
 
 FIELD = "model.model.layers.0.self_attn.rotary_emb.cos_sin_cache"
 

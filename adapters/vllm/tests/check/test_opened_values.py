@@ -15,7 +15,8 @@ import pytest
 from tests.check import test_oracle_compare as TOC
 from tests.check.opened import commit_host_steps, commit_steps, meta, retained_block
 from verity_vllm.check import oracle_compare as OC
-from verity_vllm.check.replay import evaluate as EV, linkage as LK
+from verity_vllm.check.replay import evaluate as EV
+from verity_vllm.check.replay import linkage as LK
 
 QKV = (0, "model.layers.0.self_attn.qkv_proj/0")
 IDS = (0, "model.embed_tokens/in")

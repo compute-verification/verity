@@ -50,17 +50,33 @@ from typing import Any, Mapping, Sequence
 
 from verity_vllm.check import c2_rules as C2
 from verity_vllm.check import commit_rules as CR
-from verity_vllm.check.commit_rules import _d, _int
-from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, OUTCOMES, PASS, CheckResult, worst
+
+# Imported from here by modules open PRs edit (pipeline/commit.py, cpu_replay.py, replay_bundle.py, tp/commit.py and three tests); they
+# move to commit_pass after those land.
+from verity_vllm.check.commit_pass import (  # noqa: F401
+    _after_release_verdict,
+    _c1_verdict,
+    commit_verdict,
+)
+from verity_vllm.check.commit_rules import (
+    REQUIRED_CLASSES_DEFAULT,  # noqa: F401
+    _d,
+    _int,
+)
+from verity_vllm.check.result import (
+    FAIL,
+    INSUFFICIENT,
+    NOT_RUN,
+    OUTCOMES,
+    PASS,
+    CheckResult,
+    worst,
+)
 from verity_vllm.check.verdict_names import GROUPS
 from verity_vllm.properties.record import citations
 from verity_vllm.records.build_summary import BuildSummary
 from verity_vllm.records.commit_run import CommitRun
 from verity_vllm.records.fields import RecordError
-# Imported from here by modules open PRs edit (pipeline/commit.py, cpu_replay.py, replay_bundle.py, tp/commit.py and three tests); they
-# move to commit_pass after those land.
-from verity_vllm.check.commit_pass import _after_release_verdict, _c1_verdict, commit_verdict  # noqa: F401
-from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT  # noqa: F401
 
 SCHEMA = "vllm-verdict/v1"
 

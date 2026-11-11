@@ -11,7 +11,11 @@ import json
 import numpy as np
 import pytest
 
-from verity_vllm.check.replay import compare as CMP, driver as SR, evaluate as EV, index as IX, opening as OP
+from verity_vllm.check.replay import compare as CMP
+from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay import evaluate as EV
+from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import opening as OP
 from verity_vllm.query.required import Q_MODULE_BODY_ID
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'

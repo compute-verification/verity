@@ -17,10 +17,10 @@ import os
 import numpy as np
 import pytest
 
-from verity_vllm import config
-from verity_vllm.check import weights_of_record as WR
-from verity_vllm.check import checkpoint_index as CI
 from tests.check.test_weights_of_record import write_safetensors
+from verity_vllm import config
+from verity_vllm.check import checkpoint_index as CI
+from verity_vllm.check import weights_of_record as WR
 
 H, I, HQ, HKV, D, V, E, G = 128, 128, 4, 2, 16, 16, 2, 64
 WORLDS = ((1, 0), (2, 0), (2, 1), (4, 0), (4, 1), (4, 2), (4, 3))

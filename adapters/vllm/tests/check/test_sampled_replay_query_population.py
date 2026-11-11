@@ -18,13 +18,16 @@ import copy
 import json
 
 import pytest
-
-from verity_vllm.check.c2_rules import _query_population_scope
 from verity.definitions.registry import bf16_gemm_check as BC
-from verity_vllm.check.commit_pass import commit_verdict
-from verity_vllm.check.replay import coverage as COV, driver as SR, index as IX, population as POP
+
 from tests.check import test_sampled_replay as T
 from tests.check.test_sampled_replay import moe_world, world  # noqa: F401  -- fixtures
+from verity_vllm.check.c2_rules import _query_population_scope
+from verity_vllm.check.commit_pass import commit_verdict
+from verity_vllm.check.replay import coverage as COV
+from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import population as POP
 
 
 def _programs(w):

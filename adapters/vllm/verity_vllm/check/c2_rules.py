@@ -9,7 +9,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity_vllm.check.commit_rules import _binding_of, _d, _first, _is_row_procedure, _leak, _linkage_of, _mk, _oracle_of, _replay_of
+from verity_vllm.check.commit_rules import (
+    _binding_of,
+    _d,
+    _first,
+    _is_row_procedure,
+    _leak,
+    _linkage_of,
+    _mk,
+    _oracle_of,
+    _replay_of,
+)
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, PASS, CheckResult
 from verity_vllm.query.manifest.format import is_token_select

@@ -18,8 +18,17 @@ import os
 
 import numpy as np
 
+from tests.check.test_oracle_compare import (
+    ROWS,
+    U0,
+    U1,
+    H,
+    _bf16,
+    make_bmap,
+    make_match,
+    reader,
+)
 from verity_vllm.check import oracle_compare as OC
-from tests.check.test_oracle_compare import H, ROWS, U0, U1, _bf16, make_bmap, make_match, reader
 
 PRODUCER_OP = "top"                                   # the Program row's module (the manifest identity's op_path)
 PRODUCER_HINT = "top.scale/top.scale.k"              # the fold's hint: the producing Call's own site -- prefix `top.scale`, never `top`

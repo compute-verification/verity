@@ -7,12 +7,12 @@ import json
 
 import pytest
 
+from tests.observe.test_fold_synthetic import memory, toy_log, toy_profile  # noqa: F401 - fixture
 from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.pipeline.match import persist_program
-from tests.observe.test_fold_synthetic import memory, toy_log, toy_profile  # noqa: F401 - fixture
 
 
 def _oracle(tmp_path, name, registered):

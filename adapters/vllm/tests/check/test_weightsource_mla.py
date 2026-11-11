@@ -6,12 +6,12 @@ import struct
 
 import numpy as np
 import pytest
-
 from verity.circuits.types import Array, RecordType
+from verity.definitions.registry.prims import BF16, F32
+
 from verity_vllm.check.checkpoint_words import mla_moe_sources
 from verity_vllm.check.fold_compare import WeightSource
 from verity_vllm.program.frontend.rules.family import _field_intervals
-from verity.definitions.registry.prims import BF16, F32
 
 H, V, NL, FD, NH, QL, L, DN, DR, DV, I, ID, E, MAX_POS = 4, 8, 3, 1, 2, 2, 2, 1, 2, 1, 2, 3, 2, 4
 

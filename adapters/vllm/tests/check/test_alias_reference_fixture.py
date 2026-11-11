@@ -29,9 +29,9 @@ import numpy as np
 import pytest
 
 from tests.check.opened import commit_steps
-from verity_vllm.commit import binding as B
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check.replay import opening as OP
+from verity_vllm.commit import binding as B
 
 CANON = "model.layers.0.self_attn.rotary_emb"
 MEMBERS = ("query", "key")                              # the shared RotaryEmbedding's two outputs (q, k)
