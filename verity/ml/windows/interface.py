@@ -67,8 +67,9 @@ read takes a supplied value (`supplied`), one row the verifier fills from its pi
 the domain id, under public salts; an opening's verdict reads the table's supplied 1, so a verdict of 0 opens no root,
 and the opening's row, salt and path are its units' own values, which the verdict holds to the pinned root inside the
 proof at the hidden key. A history table (`History`) is read the same way, but its rows are a writer template's outputs
-in the order its runs give, each committed under the table's salt at its position, so the verifier pins its root itself
-from the writers' public strings and holds the window's registered root to it (`verity.ml.windows.history`). Cut
+in the order its runs give, each committed under the table's salt at its position, so the verifier of record computes its
+root itself from the writers' public strings and holds the window's registered root to it, at which the verifier pins
+the table (`verity.ml.windows.history`). Cut
 registered reads and ingress are refused by the committer until it commits them. A `Read`
 may also name an output row ``o<j>``: that row's words are the parameter's leaves at the pattern's positions (a value a
 server sends out, its response or a wire to another server). It fills no input row, and wires may read the row too.
@@ -1987,8 +1988,8 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     ingress, and its window's ingress apart
     (``window_ingress``, `listed_ingress`), which ``free`` still holds: only the link checks
     bind those rows, so a count that subtracts them names that premise. ``pins`` are the verifier's own, never the record's: the roots it fixed before the run, by the
-    names the record gives the registered parameters (``{param: root}``), a history table's the root it computed from its
-    writers' public strings (`verity.ml.windows.history`); ``roots`` the window's, as its registration
+    names the record gives the registered parameters (``{param: root}``), a history table's the root the verifier of record
+    held to the one over its writers' public strings (`verity.ml.windows.history`); ``roots`` the window's, as its registration
     records them (`Window.write`). A parameter is held where the window's root for it is the verifier's pin of it
     (`held_params`), and a pin names its parameter alone: a pin ``P`` holds no ``P/…`` (one of a registration of several
     parameters, a model's weights one a weight and row width), whose committed root nothing ties to ``P``'s. A read of

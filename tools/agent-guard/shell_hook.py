@@ -12,7 +12,21 @@ multi-line key's lines too).
 (`ps aux`, `ps -ef`, `ps -eo args`, `ps -o cmd --ppid N`, `ps -f -u USER`, `/proc/*/cmdline`), where a daemon's or a git child's
 token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into a `grep`/`rg` that keeps only matching
 lines (an inverted one, `grep -v`, prints the rest, so `ps -ef | grep -v grep` is refused and `ps -ef | grep -v grep | grep
-NAME` passes), and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
+NAME` passes), and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin, `beforeShellExecution`'s (`command`, `cwd`) or a
+`preToolUse` event's for the Shell tool (`tool_input.command`), and prints its verdict as JSON on stdout; each event's key
+names go to $AGENT_GUARD_EVENT_LOG (`settings.record_event`).
+
+A secret file is refused the same way: a reading command (`cat`, `head`, `tail`, `less`, `more`, `tac`, `nl`, `sed`, `awk`,
+`cut`, `xxd`, `od`, `strings`, `base64`, and a `grep`/`rg` that prints lines, one without `-l`, `-L`, `-c` or `-q`) applied to a
+private key (`*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`, `id_ecdsa*`), an env or credentials file (`*.env`, `.netrc`,
+`credentials`, `credentials.*`) or anything in a secrets directory (`.ssh/`, `.config/verity/`, a `secrets/`), named as an
+argument, a glob, its input (`< FILE`) or a `for` loop's variable, wherever the command sits: over ssh, after `research pods ssh
+POD --`, in a quoted string handed to a wrapper script. A glob over a secrets directory matches the key files beside the env
+files, and a filter that cuts each line at its `=` prints every line of a key. `envnames.py FILE...` lists an env file's
+variable names instead and prints nothing of a file that isn't one. What shows no contents passes (`ls`, `stat`, `wc`,
+`sha256sum`, `cp`, writing or sourcing the file, `sed -i`, `openssl pkey -pubout`, `ssh-keygen -l`), as do public halves
+(`*.pub`, `*-pub.pem`, `authorized_keys`, `known_hosts`, `.ssh/config`), `*.example` and `*.template` files, a module or a doc
+(`credentials.py`) and the fixtures under a `tests/` directory. `AGENT_GUARD_LOCAL_OK=1` does not lift it.
 
 Builds and tests run on our nodes, not on agent VMs: on a shared VM one OOM kill takes down every worker on it. So it refuses,
 always, a local pytest that names no test file or `-k` selection, `lake build|exe`, `cargo build|test|run|check`, nvcc and
@@ -36,7 +50,8 @@ allowed command is refused once, with the message as the refusal's text, which i
 `agent_message` on an allowed command reaches no one). The agent then re-runs the command. A refused secret-printing command
 keeps the message queued, and the delivered text is appended to `<conversation_id>.delivered`. Messages pushed from other
 VMs reach the inbox through `inbox.py pull`, which the hook starts in the background, detached, at most every
-$AGENT_INBOX_POLL_S seconds per agent (default 30; `off` stops it), so the hook itself never waits on the network.
+$AGENT_INBOX_POLL_S seconds per agent (default 30; `off` stops it), so the hook itself never waits on the network. A message
+still queued when the agent's turn ends is delivered by the stop hook (`stop_hook.py`) instead.
 
 Before an allowed `git merge` or `git merge-tree`, it sets the repository's merge drivers (`.gitattributes` names them; git keeps
 them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, each whose value differs, as boot.sh and
@@ -45,6 +60,7 @@ cloud worker's) otherwise merges each lean-audit.json line by line and shows con
 merge of a PR onto `next`; and one that kept an older command runs the merged-into branch's own merge.py, which collapsed
 Security's lock to one `reads` group when an old branch merged main.
 """
+import fnmatch
 import json
 import math
 import os
@@ -55,7 +71,7 @@ import sys
 import time
 from pathlib import Path
 
-from settings import INBOX, INBOX_POLL_S
+from settings import INBOX, INBOX_POLL_S, record_event
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
@@ -100,14 +116,15 @@ def words_of(text: str) -> list[tuple[list[str], str]]:
     return [c for c in commands if c[0]]
 
 
-def strip_redirections(words: list[str]) -> list[str]:
-    """`words` without redirection operators and their targets (`> f`, `>& 1`, `<<< s`)."""
+def strip_redirections(words: list[str], inputs: bool = False) -> list[str]:
+    """`words` without redirection operators and their targets (`> f`, `>& 1`, `<<< s`); with `inputs`, the file a command
+    reads as its input (`< f`) stays, as an argument."""
     out, skip = [], False
     for w in words:
         if skip:
             skip = False
         elif w and set(w) <= set("&;<>|") and set(w) & set("<>"):
-            skip = True
+            skip = not (inputs and w == "<")
         else:
             out.append(w)
     return out
@@ -276,12 +293,114 @@ def refused_text(text: str) -> bool:
         return bool(FALLBACK.search(text))
 
 
+#: commands that write what they read to their output
+READERS = {"cat", "head", "tail", "less", "more", "tac", "nl", "sed", "awk", "cut", "xxd", "od", "strings", "base64"} | FILTERS
+#: readers whose first argument is a pattern or a script, not a file, unless one of SCRIPT_OPTIONS gives it
+SCRIPTED = {"sed", "awk"} | FILTERS
+SCRIPT_OPTIONS = ("-e", "-f", "--regexp", "--file", "--expression")
+QUIET_GREP = {"--files-with-matches", "--files-without-match", "--count", "--count-matches", "--quiet", "--silent", "--files"}
+#: what a file's name, written out or as a glob, says it holds
+SECRET_FILES = {"a private key": ("*.pem", "*.key", "id_rsa*", "id_ed25519*", "id_ecdsa*"),
+                "an env or credentials file": ("*.env", ".netrc", "credentials", "credentials.*")}
+#: names that hold no secret: a key's public half, ssh's public files, a template, a module or a doc (`credentials.py`)
+PUBLIC_FILES = ("*.pub", "*-pub.pem", "authorized_keys*", "known_hosts*", "*.example", "*.template", "*.py", "*.md")
+#: directories where every file counts, so a glob over one does (`/root/.config/verity/*` matches the key beside the env files)
+SECRET_DIRS = re.compile(r"(^|/)(\.ssh|\.config/verity|secrets)(/|$)")
+#: what a reader's line names when the parse itself fails: cruder, and it errs toward refusing
+SECRET_FALLBACK = re.compile(r"\b(%s)\b[^|;&\n]*?([^\s'\"]*(\.pem|\.key|\.env|\.netrc|credentials|id_rsa|id_ed25519|id_ecdsa|"
+                             r"\.ssh/|\.config/verity/|secrets/)[^\s'\"]*)" % "|".join(sorted(READERS)))
+ENVNAMES = "tools/agent-guard/envnames.py"
+
+
+def secret_file(path: str) -> str | None:
+    """What the file name or glob `path` says it holds, when that is secret: a private key, an env or credentials file, or a
+    file of a secrets directory (`.ssh/`, `.config/verity/` under any home, a `secrets/`). None for PUBLIC_FILES, `.ssh/config`
+    and the fixtures under a `tests/` directory."""
+    parts = path.rstrip("/").split("/")
+    if any(fnmatch.fnmatchcase(parts[-1], p) for p in PUBLIC_FILES) or "tests" in parts[:-1] or parts[-2:] == [".ssh", "config"]:
+        return None
+    for kind, patterns in SECRET_FILES.items():
+        if any(fnmatch.fnmatchcase(parts[-1], p) for p in patterns):
+            return kind
+    return "a file of a secrets directory" if SECRET_DIRS.search(path) else None
+
+
+def prints_no_line(reader: str, args: list[str]) -> bool:
+    """Whether `reader ARGS` shows no line of what it reads: a grep that lists files, counts or only tests (`-l`, `-L`, `-c`,
+    `-q`, alone or in a cluster such as `-rl`), or a sed that edits in place (`-i`)."""
+    if reader == "sed":
+        return any(a.startswith(("-i", "--in-place")) for a in args)
+    short = "lcq" if reader == "rg" else "lcqL"          # rg's -L follows symlinks
+    return reader in FILTERS and any(a in QUIET_GREP or re.fullmatch(rf"-[a-dg-zA-Z]*[{short}][a-zA-Z]*", a) for a in args)
+
+
+def files_read(reader: str, args: list[str]) -> list[str]:
+    """The files `reader ARGS` names: its arguments that are not options, less a grep's, sed's or awk's pattern or script (the
+    word after each of SCRIPT_OPTIONS, else the first)."""
+    if reader not in SCRIPTED:
+        return [a for a in args if not a.startswith("-")]
+    files = [a for i, a in enumerate(args) if not a.startswith("-") and not (i and args[i - 1] in SCRIPT_OPTIONS)]
+    return files if any(a.startswith(SCRIPT_OPTIONS) for a in args) else files[1:]
+
+
+def secret_read(text: str) -> tuple[str, str, str] | None:
+    """(reader, file, what the file holds) of the first command in `text` that would print a secret file, or None. In each simple
+    command the first of READERS, wherever it stands (after `sudo`, as ssh's remote command, after `research pods ssh POD --`,
+    as `find`'s `-exec`), is judged on the files it names, its input (`< FILE`) and the variable of a `for` loop over such
+    files; the quoted strings before it are read as commands in turn, which is how a wrapper script's argument and `bash -c`'s
+    are seen. `git`'s arguments and those of a `research` command that runs nothing (no `--`) are prose and are not read."""
+    try:
+        commands = [words for words, _ in words_of(text)]
+    except ValueError:                                   # unbalanced quotes: the words between the shell's operators, unquoted
+        commands = [re.findall(r"[<>]+|[^\s'\"<>]+", part) for part in re.split(r"[|;&()`\n]", text)]
+    loops = {m[1]: next((w for w in re.split(r"[\s'\"`$()]+", m[2]) if secret_file(w)), "")
+             for m in re.finditer(r"\bfor\s+(\w+)\s+in\s([^;\n]*)", text)}
+    for words in commands:
+        words = strip_redirections(words, inputs=True)
+        run = unwrap(words)
+        prog = os.path.basename(run[0]) if run else ""
+        if prog == "git" or (prog == "research" and "--" not in run):
+            continue
+        at = next((i for i, w in enumerate(words) if os.path.basename(w) in READERS), len(words))
+        reader, args = os.path.basename(words[at]) if at < len(words) else "", words[at + 1:]
+        if reader and not prints_no_line(reader, args):
+            for a in files_read(reader, args) + (words[:at] if "{}" in args else []):
+                var = re.fullmatch(r"\$\{?(\w+)\}?", a)
+                a = loops.get(var[1], "") if var else a
+                if kind := secret_file(a):
+                    return reader, a, kind
+        for w in words[:at]:
+            if re.search(r"\s", w) and (found := secret_read(w)):
+                return found
+    return None
+
+
+def secret_file_reason(command: str) -> str | None:
+    """Why this command may not run (it would print a key, an env or credentials file, or a file of a secrets directory), or
+    None. AGENT_GUARD_LOCAL_OK=1 does not lift it: that opt-in is the local-work gate's alone."""
+    try:
+        found = secret_read(command)
+    except (ValueError, IndexError, KeyError, TypeError, AttributeError, RecursionError):   # a bug here must not allow what the text shows
+        m = SECRET_FALLBACK.search(command)
+        found = (m[1], m[2], "a secret file") if m else None
+    if found is None:
+        return None
+    reader, path, kind = found
+    return (f"this command would print {kind}: `{reader}` reads `{path}`. A filter after it (`cut -d= -f1`, `sed 's/=.*//'`) "
+            "still prints a key file's lines and a multi-line value's later ones, which hold no `=`. List an env file's variable "
+            f"names with `python3 {ENVNAMES} FILE...` (on another machine: `ssh HOST python3 - FILE... < {ENVNAMES}`), which "
+            "prints nothing of a file that isn't one; look at a key with `stat`, `sha256sum` or `openssl pkey -in FILE -pubout`. "
+            "A command that needs the contents takes the file itself (`. FILE`, `CMD < FILE`, `cp`). "
+            f"{LOCAL_OK} does not lift this.")
+
+
 ALWAYS, PRESSURE = 2, 1
 #: program -> {first argument: weight} (None: any): ALWAYS is refused locally, PRESSURE only while memory is short
 HEAVY_PROGRAMS = {"nvcc": {None: ALWAYS}, "suites.py": {None: PRESSURE}, "check.py": {None: PRESSURE},
                   "lake": {"build": ALWAYS, "exe": ALWAYS, "env": PRESSURE}, "verity": {"check": PRESSURE},
                   "cargo": {"build": ALWAYS, "test": ALWAYS, "run": ALWAYS, "check": ALWAYS}}
 UV_RUN_VALUED = {"--extra", "--with", "--package", "-p", "--python", "--directory", "--project", "--group", "--env-file", "--index"}
+#: the opt-in of the local-work gate, and of nothing else: no refusal of a command that prints secrets reads it
 LOCAL_OK = "AGENT_GUARD_LOCAL_OK=1"
 
 
@@ -351,10 +470,15 @@ def available() -> tuple[float, float] | None:
     return avail, total
 
 
+#: a command this hook would read past its first part: on a node it runs whole only inside one `bash -lc`
+COMPOUND = re.compile(r"&&|\|\||;|\|")
+
+
 def local_work_reason(command: str) -> str | None:
     """Why this command may not run on this VM, or None."""
     w = 0 if LOCAL_OK in command else weight(command)
-    remote = (f"Run it on a node: `research run --on auto -- CMD` (placed in a CPU node's research pool from this checkout: 4 CPUs, 16 GB "
+    cmd = f"bash -lc {shlex.quote(command)}" if COMPOUND.search(command) else "CMD"
+    remote = (f"Run it on a node: `research run --on auto -- {cmd}` (placed in a CPU node's research pool from this checkout: 4 CPUs, 16 GB "
               f"and 60 min unless --cpus, --mem-gb or --timeout say otherwise; add --wait to block until it ends, for at most 20 "
               f"minutes). For a small local run "
               f"you know fits, put {LOCAL_OK} in the command.")
@@ -466,6 +590,15 @@ def delivery(conversation: str) -> str | None:
     return text if text.strip() else None
 
 
+def checkout(root: str, cwd: str) -> str:
+    """The checkout an inbox pull runs from: the workspace root, or when the root isn't one (a Task-launched cloud agent's
+    `/agent`), the first checkout under its `repos/`, else the command's directory."""
+    if root and not os.path.exists(os.path.join(root, ".git")):
+        found = sorted(Path(root).glob("repos/*/.git"))
+        root = str(found[0].parent) if found else ""
+    return root or cwd
+
+
 def poll(conversation: str, repo: str) -> bool:
     """Start `inbox.py pull` for agent `conversation` from checkout `repo`, detached, unless one started within the poll
     interval; whether it started one."""
@@ -526,11 +659,14 @@ def main() -> int:
     raw = sys.stdin.read()
     try:
         event = json.loads(raw)
-        command = event.get("command") or ""
+        shell = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+        command = event.get("command") or shell.get("command") or ""
         conversation = str(event.get("conversation_id") or "")
         root = next(iter(event.get("workspace_roots") or []), "")
-        cwd = event.get("cwd") or root or os.getcwd()
+        cwd = event.get("cwd") or shell.get("cwd") or root or os.getcwd()
+        record_event("shell_hook.py", event)
     except (ValueError, AttributeError):
+        record_event("shell_hook.py", raw)
         command, conversation, cwd, root = raw, "", os.getcwd(), ""
     try:
         deny = refused_text(command)
@@ -549,6 +685,7 @@ def main() -> int:
                       else checkout_reason(command, conversation, cwd))
     except Exception:                                   # nor one in the checkout guard
         pass
+    low = secret_file_reason(command) or low            # ahead of the gates' reasons: the one about a secret is the one to act on
     if deny or low:
         reason = REASON if deny else low
         print(json.dumps({"permission": "deny",
@@ -556,7 +693,7 @@ def main() -> int:
                           "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + reason}))
     else:
         try:
-            poll(conversation, root or cwd)
+            poll(conversation, checkout(root, cwd))
         except (OSError, ValueError) as e:              # nor a failed poll: the next command's hook tries again
             print(f"shell_hook: inbox poll failed: {e}", file=sys.stderr)
         try:
