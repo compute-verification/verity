@@ -38811,3 +38811,67 @@ The quick tier started before the pins commit so that what the moved tree breaks
 - Then I open the PR unmarked with `--by proofs` and write "ready to mark #N at SHA".
 - 07:00Z holds if `9bb6` ends by 06:00Z [derived: `da28` took about 25 min of wall time].
 - I wrote nothing through the Linear connector today.
+
+## TWOWITNESS, Wed 11 Nov 05:07Z: `da65` and `6351` elaborated whole; my branch crossed the move clean at `c22bb31932c1`; the try on the moved tree, `r20261111-050055-b652`, waits for a slot
+
+**What `da65` and `6351` proved.**
+- `r20261111-032635-da65`, at `a26a76a029` on the old paths [run]: a full pass, not a skip.
+  - The build: `InsSetup` built in 1,572 s (`✔ [11003/11004] Built Proofs.Flock.SpotFlock.InstanceStmt.InsSetup`), then `Build completed successfully (11004 jobs)`. So `setup_X` and `setupOf_x` elaborated.
+  - `Scope.lean` whole: `lean exit 0 in 4600 s`, `TRY Security/Proofs/Flock/SpotFlock/InstanceStmt/Scope.lean exit 0`.
+  - Its axiom line: `none of its 27 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`. The 27 are all of `Scope.lean`'s theorems, `scopeCheck_x`, `zkOk_x`, `shape_x`, `templateOk_x` and `sessionOk_x` among them. `setup_X` and `setupOf_x` are in `InsSetup.lean`, which the probe doesn't list, but `zkOk_x` and `shape_x` read `setupOf_x`, so those two lines bound its axioms.
+  - The log's one "skip" is the name of the theorem `claim_eval_skip`, in a warning. `failure.json`: class `SUCCESS`.
+- `r20261111-032952-6351`, the probe [run]: `InsSetupProbe` built in 19 s, then `ScopeProbe` gave `lean exit 0 in 3417 s` and `TRY ScopeProbe exit 0`. Axiom line: `none of its 23 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`. It shows the same proofs pass on a warm build; `da65` supersedes it.
+- So all of (A)'s facts elaborated at the instance on the old paths [run]: `setupOf true` (`setupOf_x`), `zkOk` (`zkOk_x`), `templateOk` (`templateOk_x`), `scopeCheck` (`scopeCheck_x`) and `hiddenOf` (`hiddenOf_x`, in `Inputs.lean`, part of the 11,004 jobs).
+
+**The crossing** [run].
+- The dry run printed `clean 7c83557e8545`.
+- The real run printed `origin/cursor/proofs-twowitness-0d28: clean c22bb31932c1  [plain merge clean; crossed 2 moves: 6581bcf197, c1ca25a247]`. I pushed it as a fast-forward, with no force.
+- Checks at `c22bb31932c1`:
+  - `git cat-file -s HEAD:security/lean-audit.json` prints **4175579**;
+  - the `Security/` count is **6** (`main`'s is 6);
+  - the old-path count is **0**;
+  - `git diff --stat origin/main` shows 18 files, all under `security/`, none under `Security/`;
+  - `git diff --name-status -M --diff-filter=RD origin/main` prints nothing.
+- On top is `ec022ecf7c`, 8 of my InstanceStmt files, which changes no statement. It clears da65's warnings: the deprecated `if_pos` and `if_neg` become `ite_eq_left` and `ite_eq_right`, and four unused `simp` arguments are dropped. It also wraps every line at 120 columns, except two 128-digit hex literals in `Bytes.lean`. The same three numbers at `ec022ecf7c`: 4175579, 6, 0 [run].
+
+**In flight.**
+- `r20261111-050055-b652` [run]: `lean_changed.py --try` on `security/Proofs/Flock/SpotFlock/InstanceStmt/Scope.lean`, then `Round2.lean` (which `Scope`'s chain doesn't build), at `ec022ecf7c`.
+  - It runs on vy-nebius-cpu-7's research pool with `--mem-gb 48`, and was waiting for a slot at 05:04Z.
+  - `lean_changed.py`'s `carry_builds` moves a slot's old `.lake` to the package's new path, so this is not a cold build [read]. But `Bytes.lean` changed, so every InstanceStmt module rebuilds, `InsSetup`'s 1,572 s among them.
+  - ETA [guess]: about 2 h after it takes a slot (about 30 min of builds, `Scope`'s 77 min, then `Round2`).
+- **The records run's memory, before I launch it.**
+  - da65's anonymous memory peaked at **46.5 GiB at 03:52Z, during the build** (`InsSetup` and its neighbours compiling in parallel), not during `Scope`'s elaboration [run: its `resources.jsonl`]. The records run builds the same modules.
+  - `research run`'s help [read]: `--on auto` queues onto vy-nebius-2, where `--mem-gb` is the job's `MemoryMax=`, or spills to a CPU node's research slot, where it is only a reservation.
+  - So `--mem-gb 32` could kill it on vy-nebius-2. Unless you say otherwise in my mailbox, I will launch your command with `--mem-gb 64` in place of 32, once `b652` passes. That is one run.
+
+**Linear.** I wrote nothing to Linear today, through the connector or otherwise.
+
+**(A), Thu 12 Nov 18:00Z: holds** [guess]. Its facts are proved [run]; left are the moved tree's try (`b652`), one records run, one commit of exactly its lock, the quick tier, `--try --siblings`, and the lock entries. Each step is at most two hours of runs plus slot waits, and none needs a new proof.
+
+**(D), read so far** [read].
+- `HonestSession` (`a81a1b11ea`, `InstanceRun.lean`) has ten fields: `x`, `m₁`, `xS`, `wF`, `small`, `rounds`, `sess`, `reads`, `check` and `setup`.
+- At `xS = x r` I have, or nearly have, these:
+  - `setup` from `setupOf_x`;
+  - `sess` from `sessionOk_x`;
+  - `small` from `Sizes`;
+  - `rounds` by `rfl` where `R.x` is `x r`.
+- `reads` (`readsOk (held R …) 0 x m₁ xS coin0 coin0`) reads the run's `x` and `m₁` under TWOINSTANCE's `Ref`. I had not listed it. Is it mine, or TWOINSTANCE's, with `decode_x` and `readOf_x`? Say which in my mailbox.
+- `check`: `Claims.Flock.check parse x w` is `decide (RelS s w)` at `parse x = some s`, so it follows from `Claims.Flock.R`, which Concrete proves for its statement in `Live.lean`'s `rel_concreteStmt` from four pieces:
+  1. `parseBytes`, which I have as `parse_rX`;
+  2. `relS_relation`, over one table;
+  3. a `Layout` from the setup (`setupH_layout`);
+  4. `Trace.satisfies_regions_stW`, the trace satisfying the table's model with its regions.
+- My table is not Concrete's: two v2 rows (`i0` of 1,024 bits, `o0` of 16), `per_vu` `hm96: 2`, and ranges `hm96 18/0/2`, `sha512x3 18/2/1`, `unit 9/1536/1` and `mask 14/64/1`. Concrete's has one v1 row (prefix, midstate, pad), one `hm96` slot, and `sha512x3` at `pos0` 1.
+  - So the fourth piece needs a new trace for `stX` and its row and region proofs.
+  - The row lemmas Concrete states over any `st` (`copyRow_holds`, `zeroRow_holds`, `netRow_holds`, `holds_shaNet` and `holds_hmNet` over `UnitFacts` and `RowRanges`) carry over.
+  - The layout facts (`deltaL`, `ranges`, `pin` and the trace's values) are new.
+  - Concrete's are 1,412 lines (`Trace.lean`) and 521 (`Regions.lean`).
+- **(D)'s Fri 13 Nov 12:00Z is at risk** [guess]. I will know after the first try of the trace's layout facts.
+
+**Left after this stop, for whoever continues.**
+1. Read `b652`'s log: a skip is not a pass; check for errors and its axiom lines.
+2. One records run at the head `b652` passed: `research run --on auto --mem-gb 64 --project verity --source . --cwd clone --declared-output 'lean-audit/*' --as proofs -- python3 tools/verity/lean/lean_changed.py --records security --update`.
+3. One commit of exactly its lock, then the quick tier at that commit on a node: `uv run tools/verity/check/suites.py --changed 5c095bb4ab70 --quick`.
+4. `--try --siblings`.
+5. The lock entries. Before any change to an existing guarantee's statement or premises, or to `SpotKSTwo`'s or `SpotExfilTwo`'s `why`, write the coordinator old and new.
+6. (D): the trace for `stX`, its rows and regions, then `check`, then the `HonestSession` fields.
