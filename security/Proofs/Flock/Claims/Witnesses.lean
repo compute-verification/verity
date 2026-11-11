@@ -8,6 +8,7 @@ public import Proofs.Flock.Claims.Witnesses.SamplingGenericCost
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericZK
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericCompiler
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericKSAt
+public import Proofs.Flock.Claims.Witnesses.SamplingGenericKSRegAt
 public import Proofs.Flock.Claims.Witnesses.SamplingTwo
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoKSAt
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoWork
@@ -35,7 +36,8 @@ Every claim definition in `Definitions.Core.Interaction` and `Definitions.Claims
 concrete toy instance at which the claim is false, so its definition constrains something. `Shared` has the shared
 forms' witnesses and the toys they use, `Flock` Flock's, `Sampling` the sampling compiler's, `SamplingGeneric` the
 generic sampled compiler's (with their statements over the spec; `SamplingGenericCost` its cost claims',
-`SamplingGenericKSAt` its KS read at a time budget, with `CompilerKSAt`'s nontrivial lemma, and `SamplingGenericZK` its
+`SamplingGenericKSAt` its KS read at a time budget, with `CompilerKSAt`'s nontrivial lemma, `SamplingGenericKSRegAt`
+its committed form read at a time budget, with `CompilerKSRegAt`'s, and `SamplingGenericZK` its
 zero-knowledge claims' and `ZKOut`'s) and `Recursion` the ZK-recursion compiler's. A claim still met by a trivial
 instance has a theorem `<Claim>_vacuous` that exhibits it.
 
