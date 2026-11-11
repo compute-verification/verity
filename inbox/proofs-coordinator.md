@@ -62252,3 +62252,42 @@ theorem rewires_wireMap (hfit : ∀ ci ∈ h.ms, Flock.Bridge.Members.MemberFits
 **5. Your 19:10Z section is read.** The Thu 02:00Z entry carries the two restated statements in the form they have now and, if it fits in about an hour, the committed-trace statement with your three points; if it does not, the entry says so and gives it a time.
 
 **6. Next.** Fix what the try of pull request 2 reports; mark #9043 when its two runs pass; then the two restated statements, read against FRAME's file at `b66d9cd53c4b`.
+
+## 19:18Z KEPT: ready line for the first branch, `cursor/proofs-keptverify-604f` at `3bd4e3e017`: every check I owe passed remotely; the router is refused at the base, at main and at my head, since `e1c20593a9` (26 Oct), on purpose: the benchmark is stale; the second pull request's Lean is written and being tried
+
+**Ready, for you to read and mark when its three bases are on main** (on a branch, not on main): `cursor/proofs-keptverify-604f` at `3bd4e3e017`, 8 commits over `b4ae0d8445a1`.
+- The command `flock-verify verify-members [--archive DIR] --program F`, the members' argument lists on standard input; the per-member check is `verifyCmd`'s body taking the program's readers (`verifyCmdBy`), not a copy [read: `FlockVerify.lean:930`, `:1203`, `:1210`].
+- The equation `verifyMember_eq : verifyMember (ProgramRead.of kept) = fun args => verifyCmd args` [read: `FlockVerify.lean:1214`]; the three axioms only, no `sorry`, no `native_decide` [run: `r20261111-173232-6a80`, and `-6a68`, `-cc43`, `-3ae7` for the other changed files].
+- Lean records, fast [run: `r20261111-174821-ade7`, cpu-7, done, exit 0]: the verifier package PASS (21,722 declarations, 11 guarantees, no `--update`), and its requirers PASS: the certifier's verifier, `security`, `security/Properties`, `security/Proofs` (194,332 declarations). `lean-fast/v1`: no kernel replay, which the queue's check does. No Lean file changed after the commit it ran on [derived: `git diff --stat e1e4c33e68 3bd4e3e017 -- '*.lean'` is empty].
+- Quick tier of the 60 touched suites at the head [run: `r20261111-183113-502f`, cpu-1, done, exit 0]: 60 passed, 0 failed.
+- The test [run: `r20261111-173620-5514`]: 3 passed; three members (accepted, refused, one whose program bytes differ), each member's `VERDICT` bytes equal to `verify`'s alone. It also ran inside the tier's `verity-flock` suite.
+- No definition a lock reads changed and no file under `security/` changed. `lean-agreement` is the queue's step; I did not run it.
+- Still running, and not something the ready line waits on: the whole flock suite with its slow tests [run: `r20261111-182547-6614`, cpu-3, ends by 20:56Z].
+
+**The measurement of record** [measured: `r20261111-182303-e9e4`, cpu-7, one core, one run on a loaded node (load 35 to 84), medians over 2 rounds of 3 members, the guard held; on a branch, not on main]. Seconds a member waits before its first check:
+
+| block | one process a member | kept process, first member | kept process, later members |
+|---|---|---|---|
+| expert GEMM K=768 (circuit 542.7 MB, program 141.2 MB) | **39.41** | 38.97 | **6.93** |
+| expert GEMM K=6144 (circuit 1.79 GB, program 151.8 MB) | **54.01** | 53.70 | **20.68** |
+
+What it is not: one member handed in three times, stand-in values, not the served engine, not the 299 MB program. Posted on PRF-548 at 19:00Z as you asked; **the tool says a worker's comment rings no one, so @vllm has not heard of it: please ring them.**
+
+**The router's refusal: the verifier dropped the form on purpose, and the benchmark is stale.**
+- The same member (the router with its reads in lookup slots, `m1_reads.sh`'s default) through `verify` alone is refused with the same line, "a circuit outside the unit's form under --zk (scopeOkH: …)", at all three trees: my base `b4ae0d8445a1` [run: `r20261111-183612-d44a`, cpu-6], main `cc6ee7446278` [run: `r20261111-183638-9d0b`, cpu-2], my head [run: `r20261111-183706-a5db`, cpu-8]. I launched three runs, not one, to have them side by side; I cancelled the first two once their verdict was written.
+- Since `e1c20593a9` (26 Oct, "Flock.KsScope: verify --zk refuses SampledKSLiveV3's six file and draw preconditions…"): it holds a flat circuit under `--zk` to `scopeOkH`, where the check before it held it only to `scopeOkI` [read: `Flock/KsScope.lean:7-10`, `:90-95`; `git log -S scopeOkH`]. That is the rule that the verifier takes no form ahead of its proof.
+- `m1_reads.sh` landed two days earlier (`0a95b40402`, 24 Oct) and has only been moved since: its default still says "proved under --zk and verified by the Lean verifier" and exits 1 on the refusal. The rest of the tree already expects the refusal: `form_refusals.py`'s `tail` case and `test_form_refusals.py` hold it [read], and main's serving rows refuse a slots-form template for `--zk` sessions by name, since `5375bd5c2a` (#8516, today) [read: `chunk_rows.py` `zk_refusal`].
+- So: nothing served is lost that main does not already refuse by name; the stale thing is `benchmarks/one_stage/m1_reads.sh`'s default and its text. It is not my file; I have not changed it. The control, the same router with its reads inline at my head, is still building in `a5db` (ends by 21:07Z); I report its verdict when it ends.
+
+**The base moved.** `cursor/proofs-progjson-89e3` is now `00963f0109` (it merged #8789's head and main; pull request #9042 is open). #8789, #8949, #9005 are open (19:16Z). A trial merge of `00963f0109` into my head, local and discarded: one conflict, a comment in `verifyCmdBy`, which resolves to mine. Decided: the checked head stays as it is, and I merge when the three are on main, as the brief says, then run the records once and the tier at the merged head. Say so if you want the merge now instead.
+
+**The second pull request** (keep the circuit file's parse): branch `cursor/proofs-keptcircuit-7c1e`, new, on top of `3bd4e3e017`; it needs a branch of its own to be a pull request of its own. Local at `9e1de687f5`, not pushed until its files compile. Decided:
+- What is kept: the SHA-512 and the parse of the circuit file of the member before. A member receives them only where its own statement name, the flags that set its tags, the SHA-512 the parse takes, the lookup tables and the file's bytes are all equal, compared in full. Nothing of any session.
+- Which files members share byte for byte [read: `a0.py:285-333`]: the circuit file, yes (the members' files are links of one). The public file, no: each member has its own, so it is not kept. The partition is shared but a few hundred bytes, so keeping it gains nothing and it is not kept.
+- One circuit file is kept at a time, the last member's. Any order of members gives the same bytes; members of one stratum handed in one after another gain. The interface does not change.
+- The equation: for every kept program and every kept circuit file, the member's check, what it keeps set aside, is `verifyCmd`. A kept value carries the proof that it is the function's value at its input, so the proof is again by congruence over the readers.
+- Not covered: a session of several tables parses per table as before.
+- To measure, beside the seconds: peak memory when the circuit file changes between members.
+- Tries in flight: `r20261111-191358-aa37`, `-191425-970a`, `-191453-2aab`. A second worker would not bring Friday's date in.
+
+**Not done**: the pull request for the first branch (waits on #8789, #8949, #9042); the second pull request's tries, test, measurement, records; `6614`; the inline control in `a5db`.
