@@ -109,7 +109,9 @@ in a recorded run, into its `result.json`, the Attempt's result. `check` fails i
 one without the replay (`check.lean_fast`), and `research merge` refuses an attempt whose result is of that kind
 (`research.merge.REFUSED_KINDS`), whatever `--tool` recorded it. The compiled modules it leaves are not a verdict either: in a
 run they go into its `lean-audit/` as a bundle (`lean_audit.LakeArtifacts.bundle_into`), and a node that restores one still
-replays every declaration through the kernel.
+replays every declaration through the kernel. `research run` sends a records run the URLs of the newest such bundles and of
+the checks' (`research.cli.lean_records_urls`, `lean_audit.shared_bundles`), and where builds are sandboxed the run takes
+them into the node's artifact cache before its first build (`sent_urls`), so it restores what another node compiled.
 
 The step tree holds the tracked files of each package whose audit misses, and those of the packages it requires by path or
 names under `proved_in`, at their paths in this repository, with each package's own `.lake`: Lake rebuilds only the modules that changed since its last build there and
@@ -253,6 +255,13 @@ def requirers(pkg: str, pkgs: list[str]) -> list[str]:
     """The other packages among ``pkgs`` whose guarantees' records read ``pkg``'s build (``pkg`` is in their `closure`), each
     after those it requires, as `missed` orders them."""
     return sorted((q for q in pkgs if q != pkg and pkg in closure(q) and lists_guarantees(q)), key=lambda p: (rank(p), p))
+
+
+def audits(todo: list[str]) -> str:
+    """The packages a `--records` run of ``todo`` audits, in its order, as its line at launch names them: each of ``todo``,
+    and with it those its `proved_in` names (`provers`), which its check.py audits beside it, once more for each package
+    of ``todo`` that names them."""
+    return ", then ".join(f"{p} (with {', '.join(qs)})" if (qs := provers(p)) else p for p in todo)
 
 
 def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
@@ -1274,12 +1283,16 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     exits 0 on `PASS` and on `REGENERATED`, check.py's first failing status on `FAILED`, and 2 on `REFUSED`, when ``tree`` is
     not under `RECORDS`, ``name`` matches no single package, the memory refusal stops it or another run holds the tree past
     `TREE_WAIT_S`. A package whose records need no run (`reused`) is skipped, and with none left nothing runs and no slot is
-    taken; ``rebuild`` and ``moved`` run them all. Each package whose records passed or were regenerated is kept (`passed`).
+    taken; ``rebuild`` and ``moved`` run them all. Before it takes a slot, one line names the packages it audits, in
+    order (`audits`). Each package whose records passed or were regenerated is kept (`passed`).
     What each check.py's builds compiled goes into the node's artifact cache when it ends, whatever its exit (`put_built`: the
     package's, and those of the provers it audits), and what a run that was killed left goes in when the next run takes
     the tree (`put_left`). In a run, the module versions it added go into ``out``
-    as one bundle for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do."""
+    as one bundle for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do, and on a node whose builds are
+    sandboxed the bundles other nodes' runs left, whose URLs `research run` sent it (`sent_urls`), go into that cache first
+    (`LakeArtifacts.take`), so its builds restore what they compiled."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    urls = sent_urls(run_dir, log)
     out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
 
     def refused(why: str | None, pkg: str = name) -> int:
@@ -1307,6 +1320,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     audited = [here, *(q for _, q in AUDIT.provers(here, AUDIT.load(here)))] if (here / AUDIT.POLICY).is_file() else [here]
     if why := AUDIT.memory_refusal(audited, AUDIT.memory_gib()):
         return refused(why, pkg)
+    log(f"lean-records: this run audits {audits(todo)}: a `--records` run for any of them beside this one audits it again")
     if dev_cache:
         return dev_records(pkg, todo, update, moved, out, "--dev-cache asks for it", log, files, skip)
     os.environ.pop(LEAN_SLOT.HELD, None)
@@ -1315,6 +1329,11 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     except LEAN_SLOT.Refused as e:
         return dev_records(pkg, todo, update, moved, out, str(e), log, files, skip)
     artifacts = LA.LakeArtifacts((deps.parent / "lean-artifacts").resolve())
+    if urls and sandboxed():
+        try:
+            log(f"lean-records: {artifacts.take(urls, log)} module version(s) taken from other nodes' bundles")
+        except OSError as e:
+            log(f"lean-records: no artifact bundle taken: {e}")
     try:
         tree = tree or records_tree()
         log(f"lean-records: taking the slot path: check.py on {tree}, which keeps its build between runs")
@@ -1399,6 +1418,21 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
         if slot is not None:
             os.close(slot)
             os.environ.pop(LEAN_SLOT.HELD, None)
+
+
+def sent_urls(run_dir: str | None, log=print) -> dict[str, str]:
+    """The presigned URLs `research run` sent this run (`inputs/lean-deps-urls.json`, `lean_audit.url_file`), read and deleted
+    before anything else runs: each grants a read until it expires. {} outside a run, or without them."""
+    sent = Path(run_dir) / "inputs" / LA.URLS if run_dir else None
+    if sent is None or not sent.is_file():
+        return {}
+    try:
+        urls = json.loads(sent.read_text())
+    except (OSError, ValueError) as e:
+        log(f"lean-records: the bundle URLs research run sent can't be read ({type(e).__name__}): none taken")
+        urls = {}
+    sent.unlink(missing_ok=True)
+    return urls if isinstance(urls, dict) else {}
 
 
 def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out: Path, why: str, log=print,
