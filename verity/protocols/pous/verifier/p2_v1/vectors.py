@@ -1,6 +1,6 @@
 """P2 v4's conformance vectors, all of them, from one command:
 
-    cd benchmarks/pous && uv run python -m verity.protocols.pous.verifier.p2_v1.vectors
+    uv run python -m verity.protocols.pous.verifier.p2_v1.vectors
 
 writes `vectors.json` (the maps and keys), `audit-vectors.json` (a complete two-round w = 64 setup and audit, and
 one full-width response), `audit-negative-vectors.json` (31 failing or boundary transcripts, each self-checked against
