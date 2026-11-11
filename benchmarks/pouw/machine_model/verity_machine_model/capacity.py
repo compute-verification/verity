@@ -7,12 +7,13 @@ certifies is the GPU's capacity: the useful work that any program could still ha
     hidden(n) = max Σ_k μ_k h_k   subject to   Σ_k c_kr (n_k + h_k) ≤ 1 on every row r of Π,  h ≥ 0,
 
 with μ_k the useful work one warp instruction of class k does, in tensor slots (an MMA's 4096 int8 MACs = 1; IDP4A's
-128 = 1/32; HFMA2's 64 = 1/64; FFMA's 32 = 1/128), operands free. ε_cap = hidden(n) / hidden(0) is the share of the
-empty GPU's useful capacity that the certificate leaves open, and σ = 1 − ε_cap is the verified share. A cell (`Cell`,
-one node over one block's span) is a set of groups (a share of the cell's SMSP-time and that share's certified load). A
-receipt says neither where nor when in its cell its work ran, and hidden is concave in n, so the prover's best placement spreads the certified
-work evenly: σ is read on the pooled load Σ w_g n_g, never as Σ w_g hidden(n_g), which is smaller and would credit a
-placement nobody attests. Each group's own σ is reported beside it as that placement-attested reading.
+128 = 1/32; HFMA2's 64 = 1/64; FFMA's 32 = 1/128), operands free. ε_capacity = hidden(n) / hidden(0) is the share of
+the empty GPU's useful capacity that the certificate leaves open, and σ = 1 − ε_capacity is the verified share. A cell
+(`Cell`, one node over one block's span) is a set of groups (a share of the cell's SMSP-time and that share's
+certified load). A receipt says neither where nor when in its cell its work ran, and hidden is concave in n, so the
+prover's best placement spreads the certified work evenly: σ is read on the pooled load Σ w_g n_g, never as Σ w_g
+hidden(n_g), which is smaller and would credit a placement nobody attests. Each group's own σ is reported beside it as
+that placement-attested reading.
 
 Beside σ it reports the time-credit reading B(n) = max_r load_r (the share of the cell the floor program needs, the
 floor credit's reading of decision 74), which is never below σ: B credits a saturated facet whole, while σ asks what a
@@ -187,11 +188,11 @@ class Cell:
     pooled: Hidden | None = None
     parts: tuple[Hidden, ...] = field(default=())
 
-    def eps_cap(self) -> float:
+    def eps_capacity(self) -> float:
         return self.pooled.hidden / self.empty
 
     def sigma(self) -> float:
-        return 1.0 - self.eps_cap()
+        return 1.0 - self.eps_capacity()
 
     def sigma_placed(self) -> float:
         """σ if each group's placement were attested (Σ w_g hidden(n_g)): an upper reading, not a certificate."""
@@ -204,8 +205,8 @@ class Cell:
         return min(1.0, self.pooled.work.tensor_share())
 
     def record(self) -> dict:
-        return {"vector": self.vector, "sigma": self.sigma(), "eps_cap": self.eps_cap(), "credit": self.credit(),
-                "tensor": self.tensor(), "sigma_placed": self.sigma_placed(),
+        return {"vector": self.vector, "sigma": self.sigma(), "eps_capacity": self.eps_capacity(),
+                "credit": self.credit(), "tensor": self.tensor(), "sigma_placed": self.sigma_placed(),
                 "empty_slots_per_smsp_cycle": self.empty, "n": self.pooled.work.n, "load": self.pooled.load,
                 "mix": self.pooled.mix, "binding": list(self.pooled.binding), "over": list(self.pooled.over),
                 "groups": [{"weight": w, "work": g.name, "n": g.n, "source": g.source, "hidden": h.hidden,
