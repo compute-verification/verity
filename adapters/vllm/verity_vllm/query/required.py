@@ -55,20 +55,47 @@ import functools
 import hashlib
 import re
 from collections import Counter, defaultdict
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from functools import reduce
 from typing import Any
-from collections.abc import Mapping, Sequence
 
 from verity.circuits import partition_object as PO
-from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by
-from verity_vllm.query.manifest import format as fmt
-from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
-from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, runtime_rows
 from verity.definitions import word as word_query
-from verity_vllm.query.collective_names import NORM_SITE_MEMBER, collective_sites, norm_sites
-from verity_vllm.query.module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, boundary_without_literals, literal_calls, module_body_partition
-from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
+
+from verity_vllm.correspondence.reader_for_query import (
+    CallName,
+    Correspondence,
+    runtime_rows,
+)
+from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
+from verity_vllm.query.collective_names import (
+    NORM_SITE_MEMBER,
+    collective_sites,
+    norm_sites,
+)
+from verity_vllm.query.manifest import format as fmt
+from verity_vllm.query.module_body import (
+    Q_MODULE_BODY_ID,
+    Q_MODULE_BODY_TEXT,
+    boundary_without_literals,
+    literal_calls,
+    module_body_partition,
+)
+from verity_vllm.query.program_view import (
+    CallView,
+    InputView,
+    Port,
+    ProgramView,
+    param_reads,
+    reads_any_of,
+)
+from verity_vllm.query.request_families import (
+    header_families,
+    moe_plane_rows,
+    run_value_rows,
+)
+from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by
 
 __all__ = ["SAMPLING_EVENTS", "collective_kind",
            "member_name", "shared_instances", "collective_sites", "request_manifest", "BridgeResult", "under",
@@ -712,38 +739,8 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     for (step, mod), rows in sorted(ids_rows.items()):
         add("input_token_ids", step, 0, impl(mod), "in", 0, rows, rows=rows, width=1, dtype="i32")
 
-    # --- the values the served run decides (`fmt.RUN_PARAM`): one request-owned identity per `<op_path>/<member>` field, at its readers' step
-    run = {ValueRef(p.id, port.name): port for p in P.params if p.name == fmt.RUN_PARAM for port in p.port_table if "/" in port.name}
-    if run:
-        read_at: dict[ValueRef, set[int]] = defaultdict(set)
-        reader: dict[ValueRef, CallView] = {}
-        for c in P.calls:
-            for r in param_reads(c):
-                if r in run:
-                    read_at[r].add(step_of(c.id))
-                    reader.setdefault(r, c)
-        for v, port in run.items():
-            steps = sorted(read_at.get(v, ()))
-            if len(steps) != 1:
-                unmodelled[f"run value {port.name}: read at steps {steps} (one step's forward reads it)"] += 1
-                continue
-            op, member = port.name.rsplit("/", 1)
-            add(fmt.RUN_FAMILY, steps[0], 0, impl(op), member, 0, port.elems, dtype="u8", spec=reader[v].family, leaves=[port.lo, port.hi],
-                attention_module=impl(corr.module_of(reader[v].id)), statics=dict(reader[v].statics))
-
-    # --- MoE block planes (kernel geometry, v1's): per (MoE body, step) ----------------------------------------------------------------
-    moe_layers: set[int] = set()
-    lo = 0
-    for step, ev in enumerate(events):                     # the step's Calls are the body slice up to and including its sampling event
-        seg = P.calls[lo: ev + 1]
-        lo = ev + 1
-        for mod, g in fmt.moe_geometry({"spec": c.definition, "name": c.name} for c in seg).items():
-            layer = fmt.layer_of(mod)
-            if g["M"] <= 0 or g["TOPK"] <= 0:
-                continue
-            moe_layers.add(layer)
-            for plane, nw, dtype in fmt.moe_identities(g):
-                add("moe_block_stream", step, 0, f"moe/L{layer}", plane, 0, nw, dtype=dtype, rows=g["M"], topk=g["TOPK"], moe_module=impl(mod))
+    run_value_rows(P, corr, step_of, add, unmodelled)       # the values the served run decides (`fmt.RUN_PARAM`)
+    moe_layers = moe_plane_rows(P, events, impl, add)       # the MoE block planes (kernel geometry, v1's)
 
     for f in alias_faults + pop.tp_faults:
         unmodelled[f] += 1
@@ -751,23 +748,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     tapped = [(t, t.kernel_rows(pop, add, impl, aliases)) for t in taps]                   # the other taps' rows: interior to their Calls
     identities.sort(key=fmt.row_key)
     q = query_header(profile, return_slots=return_slots, query=query, partition=partition_of(program_digest) if program_digest and query == Q_WORD_ID else None, call_boundaries=bool(fam_counts.get("call_boundaries")))
-    if prog_world > 1:
-        q["required_families"].append("tp_rank_partials")
-        q["policy"]["protocol_required"].append(f"TP-04 (world {prog_world}): every collective output and its rank-local partial, with every "
-                                                "port of the partial's producer")
-        q["tp"] = {"world": prog_world, "collectives": len(pop.collectives), "peer_inputs": len(pop.peer_inputs)}
-        if pop.witness:
-            q["tp"]["witness_inputs"] = {fmt.SCHEDULE_PARAM: {"readers": len(pop.witness_readers),
-                                                              "binding": "each reader's own committed rank (port 0)"}}
-    if moe_layers:
-        q["required_families"].append("moe_block_stream")
-        q["moe_layers"] = sorted(moe_layers)
-    if any(f[:8] == "sampler_" for f in fam_counts):
-        q["required_families"] += sorted(f for f in fam_counts if f[:8] == "sampler_")
-    if fam_counts.get(fmt.RUN_FAMILY):
-        q["required_families"].append(fmt.RUN_FAMILY)
-        q["policy"]["protocol_required"].append(f"every `{fmt.RUN_PARAM}` field `<op_path>/<member>`: the request's value of the step "
-                                                f"whose forward reads it (leaves = its leaf range in `{fmt.RUN_PARAM}`)")
+    header_families(q, pop, prog_world, moe_layers, fam_counts)
     alias_out = {impl(m): [impl(canon), k] for m, (canon, k) in aliases.items() if m != canon}
     man = {"schema": fmt.SCHEMA, "identity_key": list(fmt.IDENTITY_KEY), "program_digest": pdig,
            "program": {"dir": program_dir, "function": res["program"].get("function"), "wrapper": res.get("wrapper"), "LP": res.get("LP"), "T": res.get("T"),

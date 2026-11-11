@@ -2913,7 +2913,6 @@
     {"file": "verity_vllm/protocols/spot.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/protocols/spot.py", "kind": "ISC004", "symbol": "refusals", "detail": "Unparenthesized implicit string concatenation in collection", "count": 2},
     {"file": "verity_vllm/query/query_artifact.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/query/required.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/settings.py", "kind": "SIM905", "symbol": "<module>", "detail": "Consider using a list literal instead of `str.split`", "count": 2},
     {"file": "verity_vllm/target_family.py", "kind": "ISC002", "symbol": "summary_line", "detail": "Implicitly concatenated string literals over multiple lines"},
     {"file": "verity_vllm/target_family.py", "kind": "SIM115", "symbol": "main", "detail": "Use a context manager for opening files", "count": 2},
