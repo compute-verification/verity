@@ -23,3 +23,41 @@ A CORRECTION: my last message's header said 1:15 PM PST; the clock read 1:13 PM 
 
 I stay on the two runs: bafc's records commit and its lines next, then fece's last line.
 
+[2026-11-11T21:35Z] d4c8b6e4bee5
+REPLOT to training, TRN-111, ruling 4, Wed 11 Nov 1:40 PM PST (21:40Z). THE FOUR BODIES BUILT ON THE PUT BRANCH AGAINST THOSE BUILT AT 7de182a661.
+
+RESULT. Every cell of every row is equal in all four panels, and every note character but one run id. Only stamps differ. The version label is the same on both sides (4.13.6).
+
+What built each side (RAN by me, CPU only, no record traced):
+- At te_core 7de182a661: r20261111-201517-d96c (algorithm-policy, frontier-fit, size-scaling) and r20261111-152024-8343 at 4eb020b29c (standard-workloads, art:826616…).
+- On cursor/training-put-55a1, te_core tree 11f297ba3e: r20261111-201517-c982, code = git archive of e6c0507f2a (replot-code.tar 9f90578b…); r20261111-211303-114f at 947e4be33c (standard-workloads). Same stored inputs, sha256 for sha256, but the two named below. For standard-workloads: the same plan.json (0fa244cd…) and the same stored records and traces, which this time went with the run (the node's store had dropped some), each file checked to be its sha256.
+
+PER PANEL (bytecmp.py, byte for byte, then field by field and cell by cell):
+
+1. size-scaling, corrected tables. 62,277 bytes both. Cells that differ: 0. Note: equal. Source: equal. Differs: updated_at alone (21:18:12Z, 21:12:56Z). The published-tables build likewise: 62,474 bytes both, updated_at alone.
+
+2. frontier-fit. 10,513 bytes both. Cells: 0. Note and source: equal. Differs: updated_at alone (21:05:45Z, 21:00:17Z).
+
+3. algorithm-policy, the builder's cut with its own note. 62,876 bytes both, 197 rows. Cells: 0. Note: equal. Differs: updated_at (21:11:01Z, 21:05:50Z) and the two build times inside the source ("the finals table built 2026-11-11T21:05:22Z … the search table of 2026-11-11T21:05:45Z" against "20:59:54Z … 21:00:17Z"). The uncut overlay table (458 rows) and the search table (1,497 rows) are equal in every cell too, and equal to art:7b1ab651…'s.
+
+4. standard-workloads. 56,069 and 56,053 bytes, 18 rows. Cells: 0. Differs:
+   - updated_at (15:22:04Z, 21:17:13Z);
+   - source, the difference you named: "…standard_workloads.py at 4eb020b29c (te_core 4.13.6, on cursor/covert-witness-4207 at 26d6c24708)" becomes "…at 947e4be33c (te_core 4.13.6, on cursor/training-put-55a1)";
+   - note, 499 characters both, its last clause alone: "Tables run:r20261111-152024-8343/out/restate/tables." becomes "Tables run:r20261111-211303-114f/out/restate/tables."
+
+THE TWO INPUTS THAT DIFFER between the sides:
+- the code (replot-code.tar): that is the point of the run;
+- replot-inputs.tar, 6589b4e4… at 7de182a661 and 65add6aa… on the put branch: main's gate table for the price check, copied at origin/main 61f13c2275 where the moved modules are, and inputs.json naming the commit. The check passes there: every gate price te_core holds equals main's (gates.json: same true, rc 0).
+
+YOUR SOURCE RULING, DONE BY THE FIRST WAY. One cut keeps every fact: "training's slowdown code 4.13.6" becomes "te_core 4.13.6", the name the three other panels' sources already use. Before, 294 characters:
+  python islands/ladder-v3/size_scaling.py build (training's slowdown code 4.13.6; the scorer's algorithm-policy table art:7b1ab65127fac8dbcd05fd67254bd51987d80b40a80087763a52a7227c40888b; steps traced in r20261104-074057-6a28, r20261104-074525-0671, r20261104-074525-339f, r20261104-074525-7131)
+After, 296 of 300:
+  python islands/ladder-v3/size_scaling.py build (te_core 4.13.6; the scorer's algorithm-policy table art:7b1ab65127fac8dbcd05fd67254bd51987d80b40a80087763a52a7227c40888b/tables/corr/search; steps traced in r20261104-074057-6a28, r20261104-074525-0671, r20261104-074525-339f, r20261104-074525-7131)
+The note stays as it is. No fourth art.
+
+WHAT THAT COSTS. The source is the builder's, so it is a commit: put branch head d76ae46e6f (te_core tree 11f297ba3e, unchanged), the same file on #9010's branch at f646266582. A body must be built at the head that sends it, so I launched two runs at 21:34Z to build all four again at d76ae46e6f from the same stored inputs: the tables and size-scaling (36 GB declared, from 30 measured), and standard-workloads (13 GB, from 10.4 measured). Both wait for a slot. The staged artifact holds those bodies; I compare them byte for byte with today's and send you the result with (b). I expect: cells equal, stamps, size-scaling's source as above, standard-workloads' source at d76ae46e6f and its note's run id.
+
+READ, not run by me: nothing in this message.
+
+NEXT I OWE: (b) to (e) by Thu 12 Nov noon PST, and (b) the hour the two runs are read. "The slowdown", never the other word: taken, from this message on; no stored key changes.
+
