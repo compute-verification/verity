@@ -253,7 +253,7 @@ NOT_READ = {
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
     "lean_changed.py": "check's lean-changed step and the Lean fast path, which run beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
-    "modules.py": "the codemod onto Lean's module system, which the ratchet, the merge driver and the sibling check load",
+    "modules.py": "the codemod onto Lean's module system, which the ratchet and the merge driver load",
     "public_lock.py": "a lock as the public export ships it, which `tools/verity/check/public_export.py` loads",
     "run_daily.py": "the build cache's daily publish",
     "siblings.py": "the sibling check of `verity lean try --siblings`, which `lean_changed.py` and the CLI load",
