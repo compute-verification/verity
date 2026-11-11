@@ -25,6 +25,7 @@ from verity_vllm.acquire.sources.hidden_source import fa2_kblock_n, fa2_swapped 
 
 def _oracle():
     spec = importlib.util.spec_from_file_location("fa2_attn_oracle", os.path.join(os.path.dirname(__file__), "fa2_attn_oracle.py"))
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
