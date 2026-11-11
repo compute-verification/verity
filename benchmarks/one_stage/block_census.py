@@ -6,7 +6,7 @@ A row's cut is its own Definition, or else a unit template for each slot of its 
 a ``CUT`` row's batched members, a ``PARTS`` row's parts and a ``STAGES`` row's stages are a slot each; a
 ``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, a ``KCHUNKS`` row's slot is its
 coordinate or its K-chunks of one width, and a ``CHAINS`` row's one slot is a way its key blocks are served
-(`serving_templates.chain_ways`): each key block its scores unit and values units of `CHAIN_COLS` columns, the way the
+(`serving_rows.chain_ways`): each key block its scores unit and values units of `CHAIN_COLS` columns, the way the
 served partition names, before whole key blocks. A unit template fits when it binds, Flock has a piece for every leaf, its block
 (`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.unit_class`). The
 row itself is taken when it fits, else each slot's coarsest fitting option. A ``COLS`` or ``WIDE_COORDS`` row, and a
@@ -34,7 +34,6 @@ from verity.protocols.spot.optimize import row_ands, unit_class
 from verity.definitions.call_scope import spec_base, spec_statics
 from verity_flock import ir_lower as IL
 from verity_vllm.pipeline import serving_rows as ST
-from verity_vllm.pipeline.serving_templates import chain_ways
 
 PHASES = ("prefill", "decode")
 #: the bits a sampled block's position adds to what its outputs reveal: the planner's location bits, log2(e R n) for R replay
@@ -77,7 +76,7 @@ def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
             if all(got):
                 return got
     if base in ST.CHAINS:
-        by, ways = {u["spec"]: u for u in units}, dict(chain_ways(spec))
+        by, ways = {u["spec"]: u for u in units}, dict(ST.chain_ways(spec))
         return [[[by[u] for u, _n in ways[g]] for g in (CHAIN_COLS, None) if g in ways and all(u in by for u, _n in ways[g])]]
     if base in ST.CUT or base in ST.STAGES:
         return [[[u]] for u in units]
