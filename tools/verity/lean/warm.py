@@ -10,7 +10,8 @@ change from MAIN reaches (`reached`) and no other, as `check`'s lean-audit step 
 `lean_audit.py --bundle --package PKG ...`, in one of the node's Lean audit slots of pool `POOL` when a package's pass isn't
 kept here already. It leaves in DIR what another node takes before its own audit, and what it found:
 
-    lean-artifacts.tar.gz   the module versions the audit added to this node's artifact cache (`lean_audit.LakeArtifacts`)
+    lean-artifacts.tar.gz   the module versions the audit added to this node's artifact cache (`lean_audit.LakeArtifacts`),
+                            with `lean-artifacts-2.tar.gz` and so on when one bundle can't hold them
     verdicts.tar.gz         the Lean passes and replay entries stored here while it ran (`PACK`, `LEAN_VERDICTS`)
     warm.json               the packages reached and audited, the change's module count and whether it is wide (`FACTS`)
 
@@ -192,7 +193,7 @@ def survey(tree: Path, base: str) -> tuple[object, object, list[str], list[str],
 
 def audit_merge(tree: Path, base: str, out: Path, run=subprocess.run, log=print) -> str | None:
     """Audit, in the checkout ``tree``, the packages the change from ``base`` reaches, leaving in ``out`` the audit's reports,
-    the bundle of the module versions it built, the pack of the Lean verdicts it stored and `FACTS` (the module's docstring).
+    the bundles of the module versions it built, the pack of the Lean verdicts it stored and `FACTS` (the module's docstring).
     None when every one passed or none is reached; else why not, in one line."""
     tree = tree.resolve()
     if isinstance(got := survey(tree, base), str):

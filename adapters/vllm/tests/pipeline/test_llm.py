@@ -148,6 +148,8 @@ def test_prefix_caching_stays_off_unless_the_caller_turns_it_on(built, monkeypat
     from verity_vllm.engine import engine_profile as prof
     monkeypatch.setattr(prof, "apply_env", lambda: {})
     monkeypatch.setattr(B.served, "apply", lambda execution: {})
+    # unloaded for the test: one imported before the engine's pin, by another test in the same worker, is refused (`require_inductor`)
+    monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
     cps = tmp_path / "checkpoints.json"
     cps.write_text(json.dumps({"checkpoints": [{"repo": "r/m", "role": "M", "downloaded": True, "local_path": str(tmp_path)}]}))
     assert B.engine_kwargs_for(cps, case="M")[0]["enable_prefix_caching"] is False
@@ -377,7 +379,9 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
     """The real `build_engine` at class G's settings: they reach ``vllm.LLM(**kw)`` (which makes its ``EngineArgs`` of them), and
     the read-back takes them from the configs the pinned vLLM makes of those args (``EngineArgs.create_engine_config``: the
     scheduler config's ``long_prefill_token_threshold`` is the arg's), here stood in.  At TP8 no in-process model runner is read.
-    The class's environment is set over an operator's export, so every rank vLLM spawns inherits it, and recorded."""
+    The class's environment is set over an operator's export, so every rank vLLM spawns inherits it, and recorded.  Inductor's
+    config is unloaded for the test: another test in the same worker may have imported it before the engine's pin, which
+    `engine.env.require_inductor` refuses."""
     import os
 
     from verity_vllm.engine import build as B
@@ -405,6 +409,7 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
     vllm.LLM, vllm.envs, envs.VLLM_BATCH_INVARIANT = _VllmLLM, envs, False
     monkeypatch.setitem(sys.modules, "vllm", vllm)
     monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+    monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
     cps = tmp_path / "checkpoints.json"
     cps.write_text(json.dumps({"checkpoints": [{"repo": "r/m", "role": "M", "downloaded": True, "local_path": str(tmp_path)}]}))
     args = {k: v for k, v in L.class_options({"engine_class": "G"}).items() if k in (*L.ENGINE_ARGS, "tensor_parallel_size")}
