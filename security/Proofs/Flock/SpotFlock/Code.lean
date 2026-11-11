@@ -488,7 +488,7 @@ def readsOk (t : ℕ) (x m₁ xS : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage 
     Spot.SecondStage.interiorOrderOk own && ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinOk h t w
   | _, _, _, _ => false
 
-/-- **The round-2 message's session statements**, one per template in template order, each a byte string; kept only
+/-- **The session statements a message states**, one per template in template order, each a byte string; kept only
 where they encode back to the message. -/
 def stmtsOf (m : Msg) : Option (List Msg) :=
   match (FlockDeploy.rdList FlockDeploy.rdBytes).run m with
@@ -498,7 +498,8 @@ def stmtsOf (m : Msg) : Option (List Msg) :=
     else none
   | _ => none
 
-/-- **Template `t`'s session statement** as the round-2 message `m₂` states it; `xS₀ t` where it states none. -/
+/-- **Template `t`'s session statement** as the session statements' message `m₂` states it; `xS₀ t` where it
+states none. -/
 def stmtAt (m₂ : Msg) (t : ℕ) : Msg :=
   match stmtsOf m₂ with
   | some xs => xs.getD t (h.xS₀ t)
@@ -518,7 +519,7 @@ def stmtOk (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) : Bool
           readsOk h t x m₁ (xs.getD t (h.xS₀ t)) c₀ c₁
   | _, _ => false
 
-/-- **What the round-2 check establishes of template `t`'s session statement `xS`**: the run's statement decodes and
+/-- **What the statement check establishes of template `t`'s session statement `xS`**: the run's statement decodes and
 its partition and design evaluate, and `xS` has `k₀ t` rounds, is in scope (`sessionOk`) and reads the run's
 (`readsOk`). -/
 def stmtOkAt (x m₁ xS : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (t : ℕ) : Bool :=
@@ -548,8 +549,8 @@ def sessStep (t : ℕ) (xS : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) :
   then .ret (.msg [])
   else (FlockDeploy.next true xS (as.drop (off h t)) (cs.drop (off h t))).bind fun o => .ret (markOut [] o)
 
-/-- **The verdict**, at the round-2 message `m₂` and the run's messages and coins: every template's session's messages
-have a prefix Flock decides. -/
+/-- **The verdict**, at the session statements' message `m₂` and the run's messages and coins: every template's
+session's messages have a prefix Flock decides. -/
 def verdict (m₂ : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) : Bool :=
   (List.range h.ms.length).all fun t =>
     (List.range (k₀ h t + 1)).any fun j =>
