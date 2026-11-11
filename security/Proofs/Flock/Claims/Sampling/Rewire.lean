@@ -29,9 +29,14 @@ alone (`cutBlock`).
 * `Prog.correct_wired`: so a proof block correct in `C` on the values read through `ω` is correct, cut, at the wired
   program, where `ω` moves only input gates, to returned gates that are no constants and are outside the blocks that
   read them.
+* `Prog.needs_rewire`, `Prog.needs_wired`: a gate a cut proof block's correctness reads at the wired program is the
+  image, under `ω`, of a gate the block's correctness reads in `C`.
+* `Prog.topological_rewire`, `Prog.topological_wired`: the wired program is topologically ordered where `C` is and
+  `ω` sends no wire to a later gate.
 * `Partition.blocks_cut`, `Partition.cut_getElem?`, `Partition.length_blocks_cut`, `Partition.gates_cut`,
-  `Partition.nodup_gates_cut`: the cut partition has the partition's proof blocks, each cut, at their slots, and no
-  gate twice where the partition has none.
+  `Partition.nodup_gates_cut`, `Partition.shape_cut`, `Partition.cut_union`: the cut partition has the partition's
+  proof blocks, each cut, at their slots, no gate twice where the partition has none, and the partition's shape; a
+  replay block that is proof blocks together is, cut, the same proof blocks cut together.
 -/
 
 @[expose] public section
@@ -57,6 +62,9 @@ def cutBlock (ω : ℕ → ℕ) (u : List ℕ) : List ℕ := u.filter fun g => d
 
 /-- **The cut partition**: `P`, each proof block cut to the gates `ω` leaves alone. -/
 def Partition.cut (P : Partition) (ω : ℕ → ℕ) : Partition := ⟨P.classes.map (List.map (List.map (cutBlock ω)))⟩
+
+theorem mem_cutBlock {ω : ℕ → ℕ} {u : List ℕ} {g : ℕ} : g ∈ cutBlock ω u ↔ g ∈ u ∧ ω g = g := by
+  simp [cutBlock]
 
 theorem BGate.reads_rewire (ω : ℕ → ℕ) (x : BGate) : (x.rewire ω).reads = x.reads.map ω := by
   cases x <;> simp [BGate.rewire, BGate.reads]
@@ -362,10 +370,52 @@ theorem Prog.boundary_of_boundary_rewire {C : Prog} {ω : ℕ → ℕ} {outs u u
     · rw [← hig]
       exact Prog.boundary_of_out u (hw i hωi)
 
-/-! ## The wired program and the cut partition -/
+/-- **What a cut set needs at the rewired program is the image of what the set needs in `C`**: a gate the rewired
+program's correctness reads for `u` cut is `ω i` for a gate `i` that `C`'s correctness reads for `u`. `ω` moves only
+input gates, each to a gate `C` returns, and the rewired program returns only gates `C` returns. -/
+theorem Prog.needs_rewire {C : Prog} {ω : ℕ → ℕ} {outs u : List ℕ} {g : ℕ}
+    (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input) (hw : ∀ i, ω i ≠ i → ω i ∈ C.outs)
+    (ho : ∀ o ∈ outs, o ∈ C.outs) (hn : (C.rewire ω outs).Needs (cutBlock ω u) g) :
+    ∃ i, C.Needs u i ∧ ω i = g := by
+  unfold Prog.Needs at hn
+  rcases hn with ⟨hgu, hb⟩ | ⟨⟨g', hg', y, hy, hgy⟩, hgu, hnc⟩
+  · have hg := mem_cutBlock.1 hgu
+    refine ⟨g, ?_, hg.2⟩
+    unfold Prog.Needs
+    exact Or.inl ⟨hg.1, Prog.boundary_of_boundary_rewire ho hw
+      (fun g' hg'u hg'u' => hin g' fun h => hg'u' (mem_cutBlock.2 ⟨hg'u, h⟩)) hb⟩
+  · obtain ⟨x, hx, rfl, -⟩ := Prog.gate_rewire hy
+    rw [BGate.reads_rewire] at hgy
+    obtain ⟨i, hi, rfl⟩ := List.mem_map.1 hgy
+    have hg'u : g' ∈ u := (mem_cutBlock.1 hg').1
+    refine ⟨i, ?_, rfl⟩
+    unfold Prog.Needs
+    by_cases hiu : i ∈ u
+    · have hωi : ω i ≠ i := fun h => hgu (by rw [h]; exact mem_cutBlock.2 ⟨hiu, h⟩)
+      exact Or.inl ⟨hiu, Prog.boundary_of_input u (hin i hωi)⟩
+    · refine Or.inr ⟨⟨g', hg'u, x, hx, hi⟩, hiu, fun c hc => ?_⟩
+      have hωi : ω i = i := by
+        by_contra hne
+        have hinp := hin i hne
+        rw [hc] at hinp
+        cases hinp
+      exact hnc c (by rw [hωi]; exact Prog.rewire_const.2 hc)
 
-theorem mem_cutBlock {ω : ℕ → ℕ} {u : List ℕ} {g : ℕ} : g ∈ cutBlock ω u ↔ g ∈ u ∧ ω g = g := by
-  simp [cutBlock]
+/-- **The rewired program is topologically ordered** where `C` is, `ω` sends no wire to a later gate and the rewired
+program returns only gates `C` returns. -/
+theorem Prog.topological_rewire {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ} (htop : C.Topological)
+    (hω : ∀ i, ω i ≤ i) (ho : ∀ o ∈ outs, o ∈ C.outs) : (C.rewire ω outs).Topological := by
+  unfold Prog.Topological at htop ⊢
+  refine ⟨fun g y hy j hj => ?_, fun o ho' => ?_⟩
+  · obtain ⟨x, hx, rfl, -⟩ := Prog.gate_rewire hy
+    rw [BGate.reads_rewire] at hj
+    obtain ⟨i, hi, rfl⟩ := List.mem_map.1 hj
+    exact lt_of_le_of_lt (hω i) (htop.1 g x hx i hi)
+  · have hlen : (C.rewire ω outs).gates.length = C.gates.length := by simp [Prog.rewire]
+    rw [hlen]
+    exact htop.2 o (ho o ho')
+
+/-! ## The wired program and the cut partition -/
 
 theorem Partition.blocks_cut (P : Partition) (ω : ℕ → ℕ) : (P.cut ω).blocks = P.blocks.map (cutBlock ω) := by
   unfold Partition.cut Partition.blocks
@@ -395,6 +445,42 @@ theorem Partition.nodup_gates_cut {P : Partition} (ω : ℕ → ℕ) (h : P.gate
   rw [Partition.gates_cut]
   unfold cutBlock
   exact h.filter _
+
+theorem getD_blocks_cut (P : Partition) (ω : ℕ → ℕ) (w : ℕ) :
+    (P.cut ω).blocks.getD w [] = cutBlock ω (P.blocks.getD w []) := by
+  rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, Partition.cut_getElem?]
+  cases P.blocks[w]? with
+  | none => rfl
+  | some u => rfl
+
+theorem cutBlock_flatMap (ω : ℕ → ℕ) (f : ℕ → List ℕ) :
+    ∀ l : List ℕ, cutBlock ω (l.flatMap f) = l.flatMap fun w => cutBlock ω (f w)
+  | [] => rfl
+  | a :: l => by
+    rw [List.flatMap_cons, List.flatMap_cons, ← cutBlock_flatMap ω f l]
+    unfold cutBlock
+    rw [List.filter_append]
+
+/-- **A replay block that is proof blocks together stays one, cut**: where block `ρ` of `Pρ` is the proof blocks of
+`Pt` at the indices `I ρ` together, block `ρ` of `Pρ` cut is the proof blocks of `Pt` cut at the same indices. -/
+theorem Partition.cut_union {Pt Pρ : Partition} (ω : ℕ → ℕ) {I : ℕ → List ℕ} {ρ : ℕ}
+    (hρ : Pρ.blocks[ρ]? = some ((I ρ).flatMap fun w => Pt.blocks.getD w [])) :
+    (Pρ.cut ω).blocks[ρ]? = some ((I ρ).flatMap fun w => (Pt.cut ω).blocks.getD w []) := by
+  rw [Partition.cut_getElem?, hρ, Option.map_some, cutBlock_flatMap]
+  simp only [getD_blocks_cut]
+
+theorem strataSizes_map_cut (ω : ℕ → ℕ) (c : List (List (List ℕ))) :
+    strataSizes (c.map (List.map (cutBlock ω))) = strataSizes c := by
+  unfold strataSizes
+  rw [List.map_map]
+  exact List.map_congr_left fun s _ => by simp
+
+/-- **The cut partition has the partition's shape**: its classes' strata sizes. -/
+theorem Partition.shape_cut (P : Partition) (ω : ℕ → ℕ) :
+    (P.cut ω).classes.map strataSizes = P.classes.map strataSizes := by
+  show (P.classes.map (List.map (List.map (cutBlock ω)))).map strataSizes = P.classes.map strataSizes
+  rw [List.map_map]
+  exact List.map_congr_left fun c _ => strataSizes_map_cut ω c
 
 /-- **The bridge**: a proof block `u` correct in `C` on the values `ref` read through `ω` is correct, cut, at the
 wired program on `ref`. `ω` moves only input gates, each to a gate `C` returns that is no constant, and no gate of `u`
@@ -426,5 +512,19 @@ theorem Prog.correct_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {
         fun b hb => h2.trans (h1.symm.trans hb)⟩
   · exact Prog.boundary_of_boundary_rewire (fun o ho => (List.mem_filter.1 ho).1) hw
       (fun g' hg'u hg'u' => hin g' fun h => hg'u' (mem_cutBlock.2 ⟨hg'u, h⟩)) hb
+
+/-- **What a cut proof block needs at the wired program** is the image of what the block needs in `C`
+(`Prog.needs_rewire`). -/
+theorem Prog.needs_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {u : List ℕ} {g : ℕ}
+    (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input) (hw : ∀ i, ω i ≠ i → ω i ∈ C.outs)
+    (hn : (C.wired ω keep).Needs (cutBlock ω u) g) : ∃ i, C.Needs u i ∧ ω i = g := by
+  unfold Prog.wired at hn
+  exact Prog.needs_rewire hin hw (fun o ho => (List.mem_filter.1 ho).1) hn
+
+/-- **The wired program is topologically ordered** where `C` is and `ω` sends no wire to a later gate. -/
+theorem Prog.topological_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} (htop : C.Topological)
+    (hω : ∀ i, ω i ≤ i) : (C.wired ω keep).Topological := by
+  unfold Prog.wired
+  exact Prog.topological_rewire htop hω fun o ho => (List.mem_filter.1 ho).1
 
 end Claims.Sampling
