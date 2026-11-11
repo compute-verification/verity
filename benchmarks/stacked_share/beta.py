@@ -65,7 +65,7 @@ from typing import Any, Callable, Hashable, Iterable, Mapping, Sequence
 #: |c|: the bits of one encoded word
 WORD_BITS = 1024
 #: E, the nonlinear units one encode of a 1024-bit word costs under SquaringFloor and ChainSum at p1024, k = 3, at ε = 2^-40
-#: and at the carrier threshold 2^-20: `share.E_WORD`'s conjectured rows. No E is proved: counting caps a squaring's bound
+#: and at the carrier threshold 2^-20: `share.E_WORD`'s conjectured rows. No E is proved: counting holds a squaring's bound
 #: near its output bits (`FoolingCap`).
 E_WORD = {"2^-40": 1_145_562, "2^-20": 1_151_688}
 #: `products_pass.py`'s directory: data products on property/v1's pass
@@ -136,17 +136,17 @@ def max_flow(n: int, edges: Sequence[tuple[int, int, int]], s: int, t: int,
     """The max flow from `s` to `t` over `edges` (u, v, capacity, an int >= 0) on nodes 0..n-1 (Dinic's), and which nodes the
     residual graph reaches from `s`: the min cut's source side. ``progress(phase, flow)`` is called after each phase."""
     to: list[int] = []
-    cap: list[int] = []
+    residual: list[int] = []
     adj: list[list[int]] = [[] for _ in range(n)]
     for u, v, c in edges:
         if c < 0:
             raise ValueError(f"a capacity is an int >= 0, not {c!r}")
         adj[u].append(len(to))
         to.append(v)
-        cap.append(c)
+        residual.append(c)
         adj[v].append(len(to))
         to.append(u)
-        cap.append(0)
+        residual.append(0)
     flow = phase = 0
     while True:
         if progress is not None and phase:
@@ -158,7 +158,7 @@ def max_flow(n: int, edges: Sequence[tuple[int, int, int]], s: int, t: int,
         while q:
             u = q.popleft()
             for e in adj[u]:
-                if cap[e] > 0 and level[to[e]] < 0:
+                if residual[e] > 0 and level[to[e]] < 0:
                     level[to[e]] = level[u] + 1
                     q.append(to[e])
         if level[t] < 0:
@@ -168,19 +168,19 @@ def max_flow(n: int, edges: Sequence[tuple[int, int, int]], s: int, t: int,
         u = s
         while True:
             if u == t:
-                f = min(cap[e] for e in path)
+                f = min(residual[e] for e in path)
                 for e in path:
-                    cap[e] -= f
-                    cap[e ^ 1] += f
+                    residual[e] -= f
+                    residual[e ^ 1] += f
                 flow += f
-                cut = next(i for i, e in enumerate(path) if cap[e] == 0)
+                cut = next(i for i, e in enumerate(path) if residual[e] == 0)
                 u = to[path[cut] ^ 1]
                 del path[cut:]
                 continue
             lst = adj[u]
             while it[u] < len(lst):
                 e = lst[it[u]]
-                if cap[e] > 0 and level[to[e]] == level[u] + 1:
+                if residual[e] > 0 and level[to[e]] == level[u] + 1:
                     break
                 it[u] += 1
             if it[u] < len(lst):
@@ -200,7 +200,7 @@ def max_flow(n: int, edges: Sequence[tuple[int, int, int]], s: int, t: int,
     while q:
         u = q.popleft()
         for e in adj[u]:
-            if cap[e] > 0 and not seen[to[e]]:
+            if residual[e] > 0 and not seen[to[e]]:
                 seen[to[e]] = True
                 q.append(to[e])
     return flow, seen
@@ -260,11 +260,11 @@ def bound(g: Graph, *, E: Any = E_WORD["2^-40"], c: int = WORD_BITS, R_in: Any =
     n = len(g.work)
     held = set(g.fixed) | (set(g.inputs) if inputs == "window" else set())
     S, T = n, n + 1
-    work_cap: dict[int, Fraction] = {}
+    work_capacity: dict[int, Fraction] = {}
     for v, w in enumerate(g.work):
         if v not in held and w is not None and w:
-            work_cap[v] = c * Fraction(w) / Eq
-    den = lcm(1, *(f.denominator for f in work_cap.values()))
+            work_capacity[v] = c * Fraction(w) / Eq
+    den = lcm(1, *(f.denominator for f in work_capacity.values()))
     edges: list[tuple[int, int, int]] = []
     infinite: list[int] = []
     nxt = n + 2
@@ -291,7 +291,7 @@ def bound(g: Graph, *, E: Any = E_WORD["2^-40"], c: int = WORD_BITS, R_in: Any =
                 infinite.append(len(edges))
                 edges.append((nxt, r, 0))
             nxt += 1
-    for v, f in work_cap.items():
+    for v, f in work_capacity.items():
         edges.append((S, v, int(f * den)))
     for v in sorted(held) + [v for v, w in enumerate(g.work) if w is None and v not in held]:
         infinite.append(len(edges))
@@ -648,7 +648,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         source = {"decoder": str(a.decoder), "spec": spec}
     else:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from units import load  # noqa: E402
+        from units import load
 
         from verity.definitions.circuits.census import census, step_ends
 

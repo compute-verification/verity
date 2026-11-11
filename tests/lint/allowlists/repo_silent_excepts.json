@@ -129,7 +129,6 @@
     {"file": "verity/protocols/poub/verifier/session/verifier.py", "count": 1},
     {"file": "benchmarks/served_commit/prof_arm.py", "count": 1},
     {"file": "benchmarks/served_units/summarize.py", "count": 2},
-    {"file": "benchmarks/stacked_share/frontier.py", "count": 1},
     {"file": "benchmarks/tc_probe/canary.py", "count": 2},
     {"file": "benchmarks/tc_probe/tc_probe.py", "count": 4},
     {"file": "benchmarks/tc_probe/tests/test_instances_hw.py", "count": 1},

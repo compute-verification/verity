@@ -56,7 +56,7 @@ from typing import Any, Mapping, Sequence
 
 #: E, the nonlinear units (the gate model's: budgeted units plus data products) an encode of one 1024-bit word costs over 3
 #: rounds of 1,021 squarings: SquaringFloor and ChainSum at ε = 2^-40 and at the carrier threshold 2^-20, and the
-#: cheapest construction found, the seam square at 16,544 a squaring, which no E exceeds. No E is proved: counting caps a
+#: cheapest construction found, the seam square at 16,544 a squaring, which no E exceeds. No E is proved: counting holds a
 #: squaring's bound near its output bits (`FoolingCap`).
 E_WORD = {"2^-40": 1_145_562, "2^-20": 1_151_688, "best found": 16_544 * 3 * 1021}
 LIFETIMES = {"10 min": 600, "1 h": 3600}
@@ -147,7 +147,7 @@ def trace_requests(mix: Mapping[str, Any]) -> list[dict]:
     """The trace mix.json served: `serve.trace` again from its arguments (seeded, so the same requests)."""
     here = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(here / "kv_filler"))
-    from serve import trace  # noqa: E402
+    from serve import trace
 
     a = mix["args"]
     reqs = trace(a["seed"], a["seconds"], a["burst_gap_s"], a["burst_mean"], a["prompts"], a["outputs"])
