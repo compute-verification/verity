@@ -159,33 +159,45 @@ def in_process(window: int) -> dict[str, Any]:
     return {"coins": Challenger(window, verifier.coins)}
 
 
-def live(gate: str, peer: str, lane: str, run: Any = None) -> Callable[[int], dict[str, Any]]:
-    """Each window's coins from a live salt-only session of its own on the auditor host's challenger, through infra's gate
-    ``gate`` (its command as one string, holding lane ``lane``'s gate key) as peer ``peer``: window k's reserved when it
-    opens (``reserve --peer PEER``, Pearl-C's salt coin alone, epoch k: `pouw_h1_window.reserve_salt`, joining the lane's
-    open period, refused before reserving while that period is H1's), which the install opens on its salt epoch's root and
-    draws the salt coin from (`pouw_h1_window.salt_session`), through the settings ``challenger`` (`AT`), ``session`` (the
-    reserve answer), ``gate`` and ``period``. ``run`` replaces the gate's subprocess (tests). A refusal is `CoinError`
-    (a ValueError), the window's failure.  Its ``ahead`` gives a window's coins for an epoch made ahead of the window
-    (`PearlWindows.make_ahead`), or None while the lane has no open period: a session reserved then would join none,
-    where the one its window's open reserves joins the period opened meanwhile."""
-    from verity_vllm.pipeline.commit_coins import ChallengerGate
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+@dataclasses.dataclass(frozen=True)
+class Live:
+    """Each window's coins from a live salt-only session of its own on the auditor host's challenger, through infra's
+    ``gate`` (holding lane ``lane``'s gate key) as peer ``peer``: window k's reserved when it is called (``reserve
+    --peer PEER``, Pearl-C's salt coin alone, epoch k: `pouw_h1_window.reserve_salt`, joining the lane's open period,
+    refused before reserving while that period is H1's), which the install opens on its salt epoch's root and draws the
+    salt coin from (`pouw_h1_window.salt_session`), through the settings ``challenger`` (`AT`), ``session`` (the reserve
+    answer), ``gate`` and ``period``. A refusal is `CoinError` (a ValueError), the window's failure."""
 
-    g = ChallengerGate(gate, run)
+    gate: Any
+    peer: str
+    lane: str
 
-    def coins(window: int, ledger: list[str] | None = None) -> dict[str, Any]:
-        reserved, period = PHW.reserve_salt(g.call, g.ledger if ledger is None else lambda: ledger, lane, peer, window)
-        print(f"[serve-pearl] window {window}: reserved salt-only session {reserved.get('session')} on {peer} "
-              f"(lane {lane}, period {(period or {}).get('period')})", flush=True)
+    def __call__(self, window: int, ledger: list[str] | None = None) -> dict[str, Any]:
+        from verity_vllm.protocols.pouw.h1 import window as PHW
+
+        g = self.gate
+        reserved, period = PHW.reserve_salt(g.call, g.ledger if ledger is None else lambda: ledger, self.lane, self.peer,
+                                            window)
+        logger.info("window %d: reserved salt-only session %s on %s (lane %s, period %s)", window, reserved.get("session"),
+                    self.peer, self.lane, None if period is None else period.get("period"))
         return {"challenger": AT, "session": reserved, "gate": PHW.gate_of(g.call), "period": period}
 
-    def ahead(window: int) -> dict[str, Any] | None:
-        ledger = g.ledger()
-        return None if PHW.open_period(ledger, lane) is None else coins(window, ledger)
+    def ahead(self, window: int) -> dict[str, Any] | None:
+        """Window ``window``'s coins for an epoch made ahead of the window (`PearlWindows.make_ahead`), or None while
+        the lane has no open period: a session reserved then would join none, where the one its window's open reserves
+        joins the period opened meanwhile.  The reserve is held to the ledger read here."""
+        from verity_vllm.protocols.pouw.h1 import window as PHW
 
-    coins.ahead = ahead
-    return coins
+        ledger = self.gate.ledger()
+        return None if PHW.open_period(ledger, self.lane) is None else self(window, ledger)
+
+
+def live(gate: str, peer: str, lane: str, run: Any = None) -> Live:
+    """`Live` coins through infra's gate ``gate``, its command as one string; ``run`` replaces the gate's subprocess
+    (tests)."""
+    from verity_vllm.pipeline.commit_coins import ChallengerGate
+
+    return Live(ChallengerGate(gate, run), peer, lane)
 
 
 @dataclasses.dataclass
@@ -295,7 +307,7 @@ class PearlWindows:
         """Window ``window``'s epoch made, the model untouched (`pouw.prepare`): its coins (``coins``: a live session
         reserved, or the in-process challenger), then the weights committed under its key, the salt coin after their
         root and the device run under that salt, with each part's seconds.  None, with nothing made, where it is asked
-        for ``ahead`` of the window and its coins are not to be had ahead yet (`live`'s ``ahead``)."""
+        for ``ahead`` of the window and its coins are not to be had ahead yet (`Live.ahead`)."""
         from verity_vllm import protocols as PO
         from verity_vllm.protocols import pouw
 

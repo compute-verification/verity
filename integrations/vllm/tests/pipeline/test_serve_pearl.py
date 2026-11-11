@@ -475,6 +475,11 @@ def _salt_session(asked):
     return salt_session
 
 
+def _said(caplog):
+    """The arm's log lines about a window's epoch, in order."""
+    return [m for m in (r.getMessage() for r in caplog.records if r.name == SPL.logger.name) if "its epoch" in m]
+
+
 def _calls(asked):
     return [a[:2] if a[0] in ("open", "close") else [a[0], *a[-2:]] if a[0] == "reserve" else a for a in asked]
 
@@ -516,7 +521,7 @@ def test_a_live_session_is_made_ahead_only_when_asked_and_the_window_then_opens_
             assert ready == [["ledger"]] and "ahead" not in line["seconds"]
             assert served[:5] == [*ready, ["ledger"], reserve(0), ["open", "s-0"], ["close", "s-0"]]
             assert arm.summary()["ahead"] == {"made": 1, "taken": 0, "unused": 1, "failed": []}
-            said = [r.getMessage() for r in caplog.records if r.name == SPL.logger.name]
+            said = _said(caplog)
             assert said[0] == ("window 0: its epoch is left to its open: its lane has no open period for a session "
                                "reserved now to join")
         elif not ahead:
@@ -530,7 +535,7 @@ def test_a_live_session_is_made_ahead_only_when_asked_and_the_window_then_opens_
             assert _calls(asked) == [*served, ["close", "s-1"]] and [r.finished for r in RUNS] == [True, True]
             assert arm.summary()["ahead"] == {"made": 2, "taken": 1, "unused": 1, "failed": []}
             assert {"ahead", "next"} <= set(line["seconds"])
-            said = [r.getMessage() for r in caplog.records if r.name == SPL.logger.name]
+            said = _said(caplog)
             assert [x.split(": its epoch made ahead ")[0] for x in said] == [f"window {k}" for k in (0, 1, 1)]
             assert "live session s-1" in said[2] and "closed unused" in said[2] and "refuses its lane's open period" in said[2]
             assert "live session s-0" in said[0] and "closed unused" not in said[0] + said[1]
