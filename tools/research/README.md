@@ -49,8 +49,7 @@ secrets) the environment stands in:
 | `~/.runpod/ssh/runpodctl-ssh-key` | `RUNPOD_SSH_KEY_B64` | decoded once to a mode-600 file under `$XDG_STATE_HOME/research/runpod/` (default `~/.local/state`), known_hosts beside it; public key via `ssh-keygen -y` |
 | `~/.research/store.toml` | `R2_ENDPOINT`, `R2_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` [, `AWS_SESSION_TOKEN`] | only when `$RESEARCH_STORE_CONFIG` is unset; `R2_BUCKET` must be the store's bucket (the one `tools/research/store.pod.toml` names) |
 
-No value is ever printed. `research data mint-credential` already read the
-same variables.
+No value is ever printed.
 
 On a cloud VM a long-lived shell can lose the injected secrets that a fresh
 tmux login shell still has. Every `research` command first sets each secret
@@ -368,8 +367,7 @@ keeps them all (`store/evict.py`).
 
 `src/research/store/` is the evidence store; its `README.md` is the contract
 (four objects: Tool, Derivation, Attempt, Artifact; two relations: Replica,
-Label). Artifacts are immutable, typed, content-addressed manifests with an
-optional file or tree payload; the id is the sha256 of the canonical manifest.
+Label).
 Local root `~/.research/store` (or `$RESEARCH_STORE`); an optional remote in
 `~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`: `fs` directory or
 `s3`/R2 via stdlib SigV4). The sqlite catalog is disposable (`reindex`).
@@ -424,9 +422,6 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   errors` with one line per error class). A configured-but-unusable remote
   (credential env vars unset here) does not stop a local publish: the attempt
   is written, `preserve_error` records why nothing was pushed.
-- The r20 campaign's numbers live in the store: the frozen ledger was imported
-  once (labels on the attempt when the run is in the store, else on a
-  `ledger-row/v1` artifact; red-team verdicts as separate assertions).
 - Repo replicas: `fixtures/artifacts.json` maps `art:` ids to tracked files
   registered with `research data put --kind fixture/v1 --file PATH`; `where`
   lists the `repo` replica when the file still hashes to its id.
@@ -535,8 +530,9 @@ SYNC-REFUSED lanes/x/20260928T0700Z-report-x.md: stamp 20260928T0700Z is 18 min 
 ~~~
 
 Once pushed, it looks up the `art:` ids and run ids the pushed lines cite on the store's remote, which is what every reader
-resolves, and warns (a `SYNC-WARN` line with the fix), never refuses, for each note citing one the remote lacks. A run counts
-once its attempt, or a label on it (`custody waived`), is there. `RESEARCH_NOTES_CITE_CHECK=0` turns it off.
+resolves, and warns, never refuses, for each note citing one the remote lacks. A run counts once its attempt, or a label on it
+(`custody waived`), is there: each `SYNC-WARN` line names the command that puts it there. `RESEARCH_NOTES_CITE_CHECK=0`
+turns it off.
 
 ### The steward off the laptop
 
