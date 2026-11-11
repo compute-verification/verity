@@ -248,7 +248,7 @@ class GraphCalls(_RunState):
         if not self.graphs or self.cur is None or self.schedule.side or self.schedule.main_priority == "greatest":
             return None
         retained = self.cur.retain is not None if retained is None else retained
-        key = (self.hashing, self.omit, self.schedule.name, self.hashing and retained, self._defers())
+        key: tuple = (self.hashing, self.omit, self.schedule.name, self.hashing and retained, self._defers())
         key = (*key, "a_tree") if self._defers_a() else key
         key = (*key, "tree_sm") if self._defers_a() and self.whole_tree_sm else key
         key = (*key, "stats") if self._forks_stats() else key
@@ -363,7 +363,7 @@ class GraphCalls(_RunState):
             return False
         at, s = (len(cur.matmuls), cur.tiles, cur.flag_rows), self._next
         staged = s is not None and s.calls is calls and s.at == at and s.base == cur.base
-        if not staged:
+        if s is None or not staged:
             s = self._slots(calls, at)
         if s.after[1] > self.capacity or self.nb * s.after[0] > len(self.roots_buf) or s.after[2] > len(self.flag_buf):
             raise RuntimeError(f"{self.entry}: the pass is over its capacity; end it and begin another")

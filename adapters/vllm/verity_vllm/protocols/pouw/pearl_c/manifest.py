@@ -34,7 +34,7 @@ def manifest_schema(man: dict, recorded: bool = False) -> str:
     if schema == CC.MANIFEST_RECORDED and not recorded:
         raise DomainError(f"the pass's manifest is {schema}, recorded before epoch coins: only a replay of a recorded pass "
                           "reads it")
-    if schema not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
+    if not isinstance(schema, str) or schema not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
         raise DomainError(f"schema {schema!r}, not {CC.MANIFEST_SCHEMA}" + (f" or {CC.MANIFEST_RECORDED}" if recorded else ""))
     return schema
 

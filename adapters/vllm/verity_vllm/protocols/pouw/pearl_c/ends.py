@@ -210,10 +210,16 @@ class PassEnds(_RunState):
         for w in sorted(self.weights):
             wt = self.weights[w]
             size = self.kernel.run.Pipeline.sizes(self.kernel.run.BM, wt.n, wt.k, self.kernel.run.BM)["tree_b"]
+
+            def rows(wt: Any = wt) -> bytes:
+                return _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8))
+
+            def tree_b(wt: Any = wt, size: int = size) -> bytes:
+                return _bytes(wt.b["tree_b"][:size])
+
             weights[str(w)] = {"n": wt.n, "k": wt.k, "root": wt.root.hex(), "excluded_b": list(wt.excluded),
-                               "rows": _linked(wd / f"{w}.rows.bf16", self._weight_files, digest=False,
-                                               data=lambda wt=wt: _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8))),
-                               "tree": _linked(wd / f"{w}.tree", self._weight_files, data=lambda wt=wt, size=size: _bytes(wt.b["tree_b"][:size]))}
+                               "rows": _linked(wd / f"{w}.rows.bf16", self._weight_files, digest=False, data=rows),
+                               "tree": _linked(wd / f"{w}.tree", self._weight_files, data=tree_b)}
         matmuls = [{"index": u.index, "m": u.shape.m, "k": u.shape.k, "n": u.shape.n, "weight": u.weight,
                     "real_rows": r.real_rows, "k_kept": r.k_kept, "excluded_a": list(r.excluded_a),
                     "root_a": roots_a[self.nb * p:self.nb * (p + 1)].hex(), **f}

@@ -207,6 +207,7 @@ class _Lane:
     recording device's log.  ``priority`` is the one the device gave it.  Its events hand work over to it: from the lane
     before it (``event``; for A's tree, the main lane's per-row keying) and, on a side lane, from the other side lane
     where that ran the call's A tree, at its end (``tree_event``)."""
+    stream: Any                 # torch's stream on the GPU; None off it
 
     def __init__(self, device: Any, priority: str, standin: int):
         import torch

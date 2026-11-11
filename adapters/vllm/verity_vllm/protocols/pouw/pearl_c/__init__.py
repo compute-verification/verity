@@ -286,6 +286,11 @@ def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
     return [by[x] for x in names if x in by]
 
 
+def _leading(names: list[str], group: str) -> int:
+    """How many of ``names``, from the first, are steps of ``group`` (`STEP_GROUPS`)."""
+    return len(list(itertools.takewhile(lambda x: STEP_GROUPS[x] == group, names)))
+
+
 def _run(kernel: Kernel, pipe: Any, names: tuple[str, ...], stream: int) -> None:
     kernel.dev.stream = stream
     try:
@@ -323,7 +328,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         self.lag_ends, self.aside_ends, self._lagged, self._end_side = lag_ends, aside_ends, None, None
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
-        self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
+        self.time_gemm, self.omit = time_gemm, frozenset()
+        self.events: list[tuple[Any, Any]] = []      # each timed GEMM's start and end events (`_timed`)
         self.torch_stream = _TorchStream()
         self.roots, self.coins, self.opening = dict(roots), coins, opening
         self.epoch = epoch_of(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
@@ -363,7 +369,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             self._slots_copied: Any = None     # the event after the last whole-forward slot upload
             self._predicted: dict[int, tuple] = {}
         self.shapes: dict[tuple[int, int, int], _Shape] = {}
-        self.pipes: dict[tuple[int, int, frozenset, bool], tuple[Any, list[Any]]] = {}
+        self.pipes: dict[tuple, tuple[Any, list[Any], list[Any]]] = {}
         self.stream = lambda: _stream(self.device)
         self.commits: dict[str, Any] = {"scheme": scheme.name, "salt": salt.hex(), "weights_root": self.epoch.weights_root.hex(),
                                         "coins": coins.to_json(), "salt_opening": opening.to_json(),
@@ -405,9 +411,10 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             self.main = _Lane(self.device, "greatest", 2)
         while schedule.side and len(self.sides) < schedule.ring:    # stand-ins 1, then 3, 4, … past the main lane's 2
             self.sides.append(_Lane(self.device, schedule.side_priority, 1 if not self.sides else 2 + len(self.sides)))
+        main = self.main if schedule.main_priority == "greatest" else None
         self.details["schedule"] = {
             "name": schedule.name, "side": sorted(schedule.side), "ring": schedule.ring,
-            "main": self.main.priority if schedule.main_priority == "greatest" else "the caller's",
+            "main": main.priority if main is not None else "the caller's",
             "side_lane": self.sides[0].priority if schedule.side else None}
 
     def join_sides(self, stream: Any = None) -> None:
@@ -540,12 +547,11 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
                 steps[at] = self._timed(steps[at])
             lane = {x: "side" if STEP_GROUPS[x] in side_groups else "main" for x in present}
             main = [f for x, f in zip(present, steps, strict=True) if lane[x] == "main"]
-            aside = [f for x, f in zip(present, steps, strict=True) if lane[x] == "side"]
-            pipe.lane_cuts = tuple(len(list(itertools.takewhile(lambda x, g=g: STEP_GROUPS[x] == g, [x for x in present
-                                                                                                     if lane[x] == ln])))
+            side = [f for x, f in zip(present, steps, strict=True) if lane[x] == "side"]
+            pipe.lane_cuts = tuple(_leading([x for x in present if lane[x] == ln], g)
                                    for ln, g in (("main", "row_seeds"), ("side", "a_tree")))
             pipe.main_names = tuple(x for x in present if lane[x] == "main")
-            self.pipes[key] = (pipe, main, aside)
+            self.pipes[key] = (pipe, main, side)
         return self.pipes[key]
 
     def _timed(self, f):

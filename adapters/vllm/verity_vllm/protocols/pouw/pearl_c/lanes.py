@@ -273,7 +273,8 @@ class LaneCalls(_RunState):
         cuda = self.device.type == "cuda"
         main = self.main if self.schedule.main_priority == "greatest" else None
         lane_raw, lane = (main.raw, main.stream) if main is not None else (raw, caller)
-        j, rot, to, tl = 0, (), None, None
+        j, to, tl = 0, None, None
+        rot: tuple[str, ...] = ()
         if side:
             j, rot = sh.turn % len(sh.sets), rotated(self.schedule)
             sh.turn += 1
