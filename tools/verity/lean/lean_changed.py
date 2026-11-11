@@ -65,7 +65,7 @@ It audits with it, the same way, every package whose guarantees' records read PK
 a package that proves the guarantees of several of them is built, sampled and sealed once, and each of them is judged
 against that one build: one check.py for the whole run, except with `--update` alone, where PKG has its own and the
 requirers the next, on the record PKG's regenerated. Each package still has its own verdict and exit status, read from its
-own report and its provers' (`own_reports`, `own_exit`), and its own `audit.json`, a requirer's under `requirer-<path>/`
+own report and its provers' (`own_reports`), and its own `audit.json`, a requirer's under `requirer-<path>/`
 beside PKG's; the reports check.py writes for each package (`audit-*/`) are under the first package's directory. Of the
 facts documents, only PKG's own stays beside its reports (`check_argv`: `check.py --facts named`, which
 `trusted_size.py --run` reads); its provers' and the requirers' are not kept. A change to what another package's pinned
@@ -1276,6 +1276,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                         log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
                     write_links(tree, links)
                 all_out, since = reports(out, pkg, batch[0]), time.time()
+                (all_out / "audit.json").unlink(missing_ok=True)
                 mark(tree, package=batch[0], packages=batch, phase="check", since=since, out=str(all_out))
                 all_got = subprocess.run(check_argv([tree / p for p in batch], all_out, first, moved, pkg in batch,
                                                     artifacts=artifacts.store, facts_cache=facts_dir()),
@@ -1284,11 +1285,9 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 log(f"lean-records: {who}: check.py exit {all_got} in {time.monotonic() - t0:.0f} s on {tree} ({n} files "
                     f"changed there), without the kernel replay or the tests: a {FAST_KIND} result, which check and research "
                     f"merge refuse; reports in {all_out}")
-                if len(batch) > 1:
-                    own_reports(batch, pkg, out, tree, log)
+                own = own_reports(batch, pkg, out, tree, all_got, log) if len(batch) > 1 else {batch[0]: all_got}
                 for p in batch:
-                    mine_out, up = reports(out, pkg, p), first
-                    got = own_exit(all_got, mine_out) if len(batch) > 1 else all_got
+                    mine_out, up, got = reports(out, pkg, p), first, own[p]
                     if not up and regenerates(p, pkg, got, update, mine_out, tree / p, log):
                         t1, since = time.monotonic(), time.time()
                         mark(tree, package=p, phase="check", since=since, out=str(mine_out))
@@ -1357,15 +1356,14 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
     rc, ok, passes = 0, [], {}
     for first, batch in batches(todo, pkg, update, moved, log):
         t0, who, all_out = time.monotonic(), "+".join(batch), reports(out, pkg, batch[0])
+        (all_out / "audit.json").unlink(missing_ok=True)
         all_got = subprocess.run(check_argv([ROOT / p for p in batch], all_out, first, moved, pkg in batch, dev=True,
                                             facts_cache=facts_dir()), cwd=ROOT).returncode
         log(f"lean-records: {who}: check.py --dev-cache exit {all_got} in {time.monotonic() - t0:.0f} s on {ROOT}, without the "
             f"kernel replay or the tests: a {FAST_KIND} result, which check and research merge refuse; reports in {all_out}")
-        if len(batch) > 1:
-            own_reports(batch, pkg, out, ROOT, log)
+        own = own_reports(batch, pkg, out, ROOT, all_got, log) if len(batch) > 1 else {batch[0]: all_got}
         for p in batch:
-            mine_out, up = reports(out, pkg, p), first
-            got = own_exit(all_got, mine_out) if len(batch) > 1 else all_got
+            mine_out, up, got = reports(out, pkg, p), first, own[p]
             if not up and regenerates(p, pkg, got, update, mine_out, ROOT / p, log):
                 t1 = time.monotonic()
                 up, got = True, subprocess.run(check_argv([ROOT / p], mine_out, True, moved, p == pkg, dev=True,
@@ -1693,11 +1691,12 @@ def batches(todo: list[str], pkg: str, update: bool, moved: Path | None, log=pri
     each. So a run without `--update`, and one with `--moved`, is one check.py; with `--update` alone PKG has its own, since
     check.py gives `--update` to every package it is named. A package also starts another check.py when one already in
     this one, or a package proving one's guarantees, has its directory's name without being it: check.py names a
-    package's reports by that name where the package is outside its checkout, as a slot tree's is."""
+    package's reports by that name (`audit-<name>`) where the package is outside its checkout, as a slot tree's is."""
     out: list[tuple[bool, list[str]]] = []
     names: dict[str, str] = {}
     for p in todo:
-        up, mine = first_update(p, pkg, update, moved, log), {Path(q).name: q for q in (p, *provers(p))}
+        up = first_update(p, pkg, update, moved, log)
+        mine = {re.sub(r"[^A-Za-z0-9]+", "_", Path(q).name): q for q in (p, *provers(p))}
         if out and out[-1][0] == up and all(names.get(n, q) == q for n, q in mine.items()):
             out[-1][1].append(p)
         else:
@@ -1707,48 +1706,52 @@ def batches(todo: list[str], pkg: str, update: bool, moved: Path | None, log=pri
     return out
 
 
-def own_reports(batch: list[str], pkg: str, out: Path, base: Path, log=print) -> None:
-    """After one check.py audited the several packages of ``batch`` (under ``base``; its reports under the first one's
-    directory, `reports`): each package's own `audit.json` under its own directory, as a check.py on it alone leaves it,
-    which is all the rest of the run reads of a package (`settled`, `regenerates`, `verdicts`): its report and those of the
-    packages proving its guarantees, with `failed` and `passed` of those alone; a package check.py left no report of is
-    `failed` there. The facts document check.py kept of each package but PKG is dropped (`check_argv`). Nothing where
-    check.py left no `audit.json` (it was killed, or refused): a package then has no `audit.json` of its own, or the
-    first one has one that lists no failure though check.py failed, and `settled` fails it either way."""
-    gout = reports(out, pkg, batch[0])
+def own_reports(batch: list[str], pkg: str, out: Path, base: Path, got: int, log=print) -> dict[str, int]:
+    """After one check.py audited the several packages of ``batch`` (under ``base``) and exited ``got``, its reports under
+    the first one's directory (`reports`): {package: the exit status of a check.py on it alone}, with each package's own
+    `audit.json` under its own directory as that check.py leaves it, which is all the rest of the run reads of a package
+    (`settled`, `regenerates`, `verdicts`): its report and those of the packages proving its guarantees, with `failed` and
+    `passed` of those alone.
+
+    check.py exits 1 when any package it audited fails. A package's status is 0 there only when its own reports list no
+    failure and the reports explain that exit whole: every failure check.py lists (`failed`) is a report's that some
+    package of ``batch`` takes as its own, and none is a `tamper` (a file the process had sealed changed, which is the
+    process's failure, whichever package's report holds it). A package check.py left no report of fails. Every package
+    keeps ``got`` when it is neither 0 nor 1 (check.py was killed, or refused) and when its `audit.json` can't be read;
+    nothing is written then. The facts document check.py kept of each package but PKG is dropped (`check_argv`)."""
+    all_out = reports(out, pkg, batch[0])
     try:
-        doc = json.loads((gout / "audit.json").read_text())
+        doc = json.loads((all_out / "audit.json").read_text())
         reps = {Path(str(r["package"])).resolve(): r for r in doc["packages"]}
+        listed = [Path(str(f)).resolve() for f in doc["failed"]]
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
         log(f"lean-records: check.py left no reports of {', '.join(batch)} that can be read ({e!r})")
-        return
+        return dict.fromkeys(batch, got)
+    if got not in (0, 1):
+        return dict.fromkeys(batch, got)
     others = {(base / p).resolve() for p in batch if p != pkg}
-    for kept in gout.glob(f"audit-*/{AUDIT.FACTS}"):
+    for kept in all_out.glob(f"audit-*/{AUDIT.FACTS}"):
         try:
             whose = Path(str(json.loads((kept.parent / "report.json").read_text()).get("package"))).resolve()
         except (OSError, ValueError, AttributeError):
             continue
         if whose in others:
             kept.unlink()
-    for p in batch:
-        ats = list(dict.fromkeys((base / q).resolve() for q in (p, *provers(p))))
+    own = {p: list(dict.fromkeys((base / q).resolve() for q in (p, *provers(p)))) for p in batch}
+    explained = (got == 1) == bool(listed) and set(listed) <= {at for ats in own.values() for at in ats if at in reps} \
+        and not any("tamper" in (r.get("failure_codes") or ()) for r in reps.values())
+    status = {}
+    for p, ats in own.items():
         mine = [reps[at] for at in ats if at in reps]
         failed = [str(r["package"]) for r in mine if r.get("failures")] + [str(at) for at in ats[:1] if at not in reps]
+        status[p] = 1 if failed or not explained else 0
         (d := reports(out, pkg, p)).mkdir(parents=True, exist_ok=True)
         (d / "audit.json").write_text(json.dumps(doc | {"packages": mine, "failed": failed, "passed": not failed},
                                                  indent=1, ensure_ascii=False) + "\n")
-
-
-def own_exit(got: int, mine_out: Path) -> int:
-    """The exit status of a check.py on one package alone, for one that audited it among others and exited ``got``: 0 when
-    that is 1 and the package's own `audit.json` under ``mine_out`` (`own_reports`) lists no failure, since check.py exits
-    1 when any package it audited fails; ``got`` otherwise, and when that file can't be read."""
-    if got != 1:
-        return got
-    try:
-        return 1 if json.loads((mine_out / "audit.json").read_text())["failed"] else 0
-    except (OSError, ValueError, KeyError, TypeError):
-        return got
+    if not explained and got:
+        log(f"lean-records: check.py exit {got} is not only its packages' own failures (it lists {doc['failed']}), so it "
+            f"fails each of {', '.join(batch)}")
+    return status
 
 
 def settles(out: Path, at: Path) -> bool:
