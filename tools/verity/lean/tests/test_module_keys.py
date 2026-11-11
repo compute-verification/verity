@@ -406,7 +406,7 @@ def test_the_keys_of_a_root_s_own_modules_name_every_pin_of_the_root(tmp_path):
             (tmp_path / "d" / "lake-manifest.json").write_text(unread)
         again = MK.keys(root)
         assert {m: (k.task, k.env) for m, k in again.items() if m != "D.X"} == {m: (k.task, k.env) for m, k in own.items()}
-        assert MK.fetches(tmp_path / "d") is None and again["D.X"].parts == whole, \
+        assert isinstance(MK.fetches(tmp_path / "d"), str) and again["D.X"].parts == whole, \
             f"a package whose manifest doesn't say what it fetches ({unread}): every pin of the root"
 
 

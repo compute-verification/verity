@@ -325,16 +325,23 @@ def pins(manifest: dict) -> dict | str:
             "fetched": sorted(fetched, key=lambda e: json.dumps(e, sort_keys=True))}
 
 
-def fetches(d: Path) -> set[str] | None:
+def fetches(d: Path) -> set[str] | str:
     """The names of the packages the package at ``d`` fetches, those its path dependencies fetch among them: the entries
-    of its own manifest, which is what Lake resolved for it as a root, that aren't packages required by path. None when it
-    has no manifest that says so: its modules' keys then name every package their root fetches."""
+    of its own manifest, which is what Lake resolved for it as a root, that aren't packages required by path. Or why it
+    has no manifest that says so (none, one that isn't JSON, or one of another shape): its modules' keys then name every
+    package their root fetches."""
+    m = d / MANIFEST
+    if not m.is_file():
+        return f"{d} has no {MANIFEST}"
     try:
-        entries = json.loads((d / MANIFEST).read_text())["packages"]
-        names = [e["name"] for e in entries if e.get("type") != "path"]
-    except (OSError, ValueError, LookupError, TypeError, AttributeError):
-        return None
-    return set(names) if all(isinstance(n, str) for n in names) else None
+        manifest = json.loads(m.read_text())
+    except ValueError as e:
+        return f"{m}: {e}"
+    entries = manifest.get("packages") if isinstance(manifest, dict) else None
+    if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
+        return f"{m}: its packages are not a list of entries"
+    names = [e.get("name") for e in entries if e.get("type") != "path"]
+    return set(names) if all(isinstance(n, str) for n in names) else f"{m}: a package it fetches has no name"
 
 
 def env_parts(root: Path, of: Path | None = None) -> dict[str, str] | str:
@@ -355,7 +362,7 @@ def env_parts(root: Path, of: Path | None = None) -> dict[str, str] | str:
     pinned = pins(manifest) if isinstance(manifest, dict) else "it is not an object"
     if isinstance(pinned, str):
         return f"{m}: {pinned}"
-    if of is not None and (names := fetches(of)) is not None:
+    if of is not None and not isinstance(names := fetches(of), str):
         mine = [e for e in pinned["fetched"] if isinstance(e.get("name"), str) and e["name"] in names]
         if unpinned := sorted(names - {e["name"] for e in mine}):
             return f"{m} pins no {unpinned[0]}, which {of} fetches"
@@ -634,9 +641,10 @@ def _fetches(root: Path, of: Path | None = None) -> tuple[str, dict[str, dict]] 
     if isinstance(env_parts(root, of), str):
         return None
     names = fetches(of) if of is not None else None
+    every = names is None or isinstance(names, str)       # the root's own modules, or a package that doesn't say: every pin
     pinned = pins(json.loads((root / MANIFEST).read_text()))["fetched"]
     return digest(root / TOOLCHAIN), {str(e.get("name")).replace("«", "").replace("»", ""): e for e in pinned
-                                      if names is None or isinstance(e.get("name"), str) and e["name"] in names}
+                                      if every or isinstance(e.get("name"), str) and e["name"] in names}
 
 
 def pinned_as(root: Path, of: Path, here: Path) -> str | None:

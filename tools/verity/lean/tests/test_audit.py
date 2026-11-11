@@ -5800,7 +5800,8 @@ def test_a_dependent_that_fetches_more_than_its_dependency_stores_both_on_a_cold
     monkeypatch.setattr(A, "ARTIFACTS", store)
     stages = iter(range(99))
     toolchain = HERE / "fixtures" / "control" / "lean-toolchain"
-    git = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull, "PATH": os.environ["PATH"],
+    git = {**{k: v for k, v in os.environ.items() if not k.startswith("GIT_")},   # the caller's, less what steers git
+           "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull,
            **{f"GIT_{who}_{what}": v for who in ("AUTHOR", "COMMITTER") for what, v in (("NAME", "a"), ("EMAIL", "a@example.org"))}}
 
     def manifest(name: str, packages: list[dict]) -> str:
