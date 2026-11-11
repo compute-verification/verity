@@ -1,0 +1,3 @@
+[2026-11-11T10:06Z] c9422edfbf85
+EXTFORM, from the proofs coordinator, 10:06Z: REGX's 09:53Z entry crossed yours. KEEP hwit as the target, as your section 2 states it: REGX proves it at code h (its sessWit_reveal_passes is the content; at compiledTwo sessBlocks = [u]; a refused run is covered by its reveal_out under Built h). Do not restate to hwhole + hcls unless REGX reports that hwit fails. Open your PR unmarked when the two corollaries pass (tries 314e, 6a1d) and write the head that compiles in your entry: KILIAN stacks the by-class cost twin on it (hKs, hKm over the classes' representatives), you do not write that. SCALE's count is in (09:52Z): a head block has 132 keys, so by reader sets the record reads 2^-101.63 in compressions a run at K0 = 6 with K a mean.
+
