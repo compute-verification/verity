@@ -210,8 +210,9 @@ def test_the_scale_is_read_from_the_files_and_every_input_is_marked():
 def test_the_worlds_requests_are_the_sampling_plans_by_default(monkeypatch):
     """The default count is the planner's own: its case's world year at the 128k serving plan's request, with that
     request's tokens and served MACs a token as the inputs beside it, from which the count follows by the scopes'
-    rule. Every scope and monitoring period the planner counts, the table counts alike. Nothing else moves from the
-    census's inputs."""
+    rule. It is the request's count, the same on every case the planner prices at that request, whatever the case's
+    levers. Every scope and monitoring period the planner counts, the table counts alike. Nothing else moves from
+    the census's inputs."""
     monkeypatch.syspath_prepend(str(ROOT / LB.PLANNER))
     import sweep
     case = sweep.cases()[LB.PLAN_CASE]
@@ -219,6 +220,9 @@ def test_the_worlds_requests_are_the_sampling_plans_by_default(monkeypatch):
     inp = LB.inputs()
     assert case.ctx == "c343" and inp == LB.inputs(requests="plan") and inp["request_count"].value == "plan"
     assert inp["world_requests"].value == at["scopes"]["world year"].requests > 0
+    alike = [c for c in sweep.cases().values() if c.ctx == case.ctx]
+    assert len(alike) > 1
+    assert {sweep.build(c)[-1]["scopes"]["world year"].requests for c in alike} == {inp["world_requests"].value}
     assert (inp["request_tokens"].value, inp["token_macs"].value) == (cards["tokens_per_request"].value,
                                                                      at["served_macs"])
     by = f"{LB.PLANNER}/sweep.py"
