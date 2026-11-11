@@ -50491,3 +50491,106 @@ Unmarked, for Daniel: both change what a locked guarantee says or reads (`Sample
 For CAPS: Proofs/Flock: +0 modules, +23 declarations (the layer, no PR yet: `Claims/Sampling/Reg.lean`, `SamplingGeneric/TwoAt.lean`, `SpotFlock/Coins.lean`)
 For CAPS: Proofs/Flock: +0 modules, +26 declarations (the half, no PR yet: 30 new names and 4 gone, by a count of declaration lines in its diff [derived])
 For the table: built and unmarked for Daniel, no PR yet: SPOT[Flock]'s modeled verifier with a second stage of several rounds (`SpotFlock.Held.more`), its 25 proof files compiling on the three axioms [run: tries above], and REGX's by-class bound at the code compiling on it [run `r20261111-110923-ab51`]. It rests on #8827 and on restating `SampledKSTwo` at a stage order. It does not prove that the model's verifier accepts an honest run of the priced design, and it ties `more` to nothing on the device.
+
+## HARMSEARCH, Wed 11 Nov 11:15Z: the recut is nearly free in GB. The head's query writer at N=64 is a 2^25 block (16 of today's blocks for 64 words) and moves the planner's figure by under 3 GB; with it, width + margin held to κ 2^-4 reads 3,822 GB at modeled 0.4 (137 to 147 at the measured rate, a floor) and 2^-100.12 in compressions under one M of 139. N=512 does not fit a block (2^28, K_MAX is 2^27); N=256 does. Planner's figures; Lean's check of these designs is running
+
+Tags: [run] a command I ran now, [read] a file I read now (place given), [relayed], [guess]. Times from `date -u`. All GB: row (iii), world year, measured prover prices, **the head block's Lean verify at 250.0 core-s a statement** (FLOCKPKG's, relayed), δ 0.01, S 28,000. Bits: ATTACK's `attack_unit_classes.py` on my designs (modeled; the first-hit term alone; a run at K0 = 6 and 2^80 calls; compressions). It reproduces ATTACK's 10:42Z record row on my VM to the digit [run].
+
+**First: what the recut needs in the tree, and whose.**
+- **The adapter has no such cut.** `serving_templates.SLICES` cuts `BatchedGemm_v1` only to every axis 1: `unit_templates` offers one option, `_bind(spec, B=1, N=1)` [read: `adapters/vllm/verity_vllm/pipeline/serving_templates.py:42-46` and `:304-307`]. A slice c words wide along N needs: `unit_templates` to offer the Definition at B = 1, N = c (as `coord_widths`, `:241-248`, does for the `WIDE_COORDS` family); `slice_rows.py`'s layout to read `w[jc:(j+1)c]` and return words [jc, (j+1)c) (`weight_rows.py:54` reads the same table); the unit's circuit-check row at N = c. Whose: the vLLM adapter's pipeline, the lane that made the head block's cut (HEADCIRC's, [guess]).
+- **The census would not pick it.** `benchmarks/one_stage/block_census.py` takes a `SLICES` row's one option; where a family has widths it picks the least `leak_cost` = Σ n (size class + 80) 2^est_log (`:82-100`). By that rule the query row would go to N = 4 (259 classes a head block), not 64 [run: from the sizes below, a head: N=1 1.03e11, N=4 7.7e10, N=16 9.0e10, N=64 2.96e11]. It needs a cap on a reader's writing blocks, or this row's width pinned. Then the 192-stratum workload card is regenerated: `BatchedGemm_v1{B=1,K=192,N=64}`, 39,936 a token, 1,024 bits out, 199,680 in, k_log 25, in place of `{N=1}` at 2,555,904 a token. Whose: whoever regenerates the card BREAKEVEN reads; I don't know the name.
+- **The price needs no new measurement to enter the figure:** benchmarks' reader prices a type of a measured Definition and K as `family`, 2^Δk its steady-state seconds a block [read: `benchmarks/harness/verity_bench/prove.py:292-304`]. A steady-state row at N = 64 is the prove side's, and would replace the model below.
+- **Nothing in the planner or in #8878, #8893, #8904 changes.** The planner reads the card.
+
+**The writer's block at each width** [run: `m1_families.sized`, the census's own sizer, 0.1 s on my VM; at N = 1 it gives the card's 98,873 ANDs and k_log 21].
+
+| N | ANDs | block | fits K_MAX = 27 | a later head block's classes | proving a word, by 2^k_log |
+|---:|---:|---|---|---:|---|
+| 1 (today) | 98,873 | 2^21 | yes | 643 | 1 |
+| 4 | 395,492 | 2^22 | yes | 259 | 1/2 |
+| 16 | 1,581,968 | 2^23 | yes | 163 | 1/4 |
+| 32 | 3,163,936 | 2^24 | yes | 147 | 1/4 |
+| 64 | 6,327,872 | 2^25 | yes | 139 | 1/4 |
+| 256 | 25,311,488 | 2^27 | yes | 133 | 1/4 |
+| 512 | 50,622,976 | 2^28 | **no** | 132 | 1/4 |
+
+- Today's one-word block is mostly the hashing of its two rows; a wider block reads x once. So by 2^k_log a word gets cheaper, and the GB moves only by the wider blocks' bits.
+- **N = 512 ("gives 132 back") cannot be one block today.** N = 256 fits and gives 133.
+
+**GB and bits** [run: `two_stage_design` on `3db1`'s dumped call with the stratum recut: n/m blocks, m times the bits, 2^Δk the seconds, 2^-Δk the blocks a statement; planner's bound × 4,042.4 GB / the record's bound. The writer's price at N > 1 is modeled by 2^k_log, unmeasured. The measured-rate column is by proportion; the rate is not measured at the headline's mix].
+
+| the writers | the plan | GB, modeled 0.4 | GB, measured engine rate on node A (a floor) | under 300 GB from, tokens a GPU-s | Σ_t k_t | bits, head's queries by writing block: mean / by stratum / one M (M) | bits, every port ATTACK derives: mean / by stratum / one M (M) |
+|---|---|---:|---:|---:|---:|---|---|
+| today | size classes (κ 2^-5) | 6,320 | 226 to 243 | 237 | 10,046,500 | -99.41 / -99.38 / **-98.55** (643) | -99.39 / -99.01 / **-98.29** (769) |
+| today | width + margin (κ 2^-3) | 3,781 | 135 to 146 | 396 | 32,469,700 | -98.15 / -98.14 / **-96.86** (643) | -98.11 / -97.94 / **-96.60** (769) |
+| today | width + margin, kappa 2^-4 | 3,819 | 137 to 147 | 392 | 16,234,886 | -99.15 / -99.14 / **-97.86** (643) | -99.11 / -98.94 / **-97.60** (769) |
+| today | width + margin, kappa 2^-5 | 3,897 | 139 to 150 | 384 | 8,117,485 | -100.15 / -100.14 / **-98.86** (643) | -100.11 / -99.94 / **-98.60** (769) |
+| today | width + margin, kappa 2^-6 | 4,069 | 145 to 157 | 368 | 4,058,782 | -101.15 / -101.14 / **-99.86** (643) | -101.11 / -100.94 / **-99.60** (769) |
+| q N=32 (2^24) | size classes (κ 2^-5) | 6,321 | 226 to 243 | 237 | 9,782,651 | -101.48 / -101.42 / **-100.71** (147) | -101.42 / -99.01 / **-98.33** (769) |
+| q N=32 (2^24) | width + margin (κ 2^-3) | 3,781 | 135 to 146 | 396 | 31,215,926 | -100.19 / -100.13 / **-99.04** (147) | -100.07 / -99.50 / **-96.66** (769) |
+| q N=32 (2^24) | width + margin, kappa 2^-4 | 3,819 | 137 to 147 | 392 | 15,608,002 | -101.19 / -101.13 / **-100.04** (147) | -101.07 / -100.50 / **-97.66** (769) |
+| q N=32 (2^24) | width + margin, kappa 2^-5 | 3,896 | 139 to 150 | 384 | 7,804,039 | -102.19 / -102.13 / **-101.04** (147) | -102.07 / -101.50 / **-98.66** (769) |
+| q N=32 (2^24) | width + margin, kappa 2^-6 | 4,067 | 145 to 157 | 368 | 3,902,061 | -103.19 / -103.13 / **-102.04** (147) | -103.07 / -102.50 / **-99.66** (769) |
+| q N=64 (2^25) | size classes (κ 2^-5) | 6,322 | 226 to 243 | 237 | 9,778,300 | -101.56 / -101.50 / **-100.79** (139) | -101.49 / -99.01 / **-98.33** (769) |
+| q N=64 (2^25) | width + margin (κ 2^-3) | 3,784 | 135 to 146 | 396 | 31,195,152 | -100.26 / -100.20 / **-99.12** (139) | -100.14 / -99.58 / **-96.66** (769) |
+| q N=64 (2^25) | width + margin, kappa 2^-4 | 3,821 | 137 to 147 | 392 | 15,597,615 | -101.26 / -101.20 / **-100.12** (139) | -101.14 / -100.58 / **-97.66** (769) |
+| q N=64 (2^25) | width + margin, kappa 2^-5 | 3,899 | 139 to 150 | 384 | 7,798,849 | -102.26 / -102.20 / **-101.12** (139) | -102.14 / -101.58 / **-98.66** (769) |
+| q N=64 (2^25) | width + margin, kappa 2^-6 | 4,069 | 145 to 157 | 368 | 3,899,463 | -103.26 / -103.20 / **-102.12** (139) | -103.14 / -102.58 / **-99.66** (769) |
+| q N=256 (2^27) | size classes (κ 2^-5) | 6,336 | 227 to 244 | 236 | 9,775,461 | -101.62 / -101.56 / **-100.85** (133) | -101.55 / -99.00 / **-98.33** (769) |
+| q N=256 (2^27) | width + margin (κ 2^-3) | 3,798 | 136 to 146 | 394 | 31,181,404 | -100.32 / -100.26 / **-99.18** (133) | -100.20 / -99.56 / **-96.66** (769) |
+| q N=256 (2^27) | width + margin, kappa 2^-4 | 3,836 | 137 to 148 | 391 | 15,590,740 | -101.32 / -101.26 / **-100.18** (133) | -101.20 / -100.56 / **-97.66** (769) |
+| q N=256 (2^27) | width + margin, kappa 2^-5 | 3,913 | 140 to 151 | 383 | 7,795,409 | -102.32 / -102.26 / **-101.18** (133) | -102.20 / -101.56 / **-98.66** (769) |
+| q N=256 (2^27) | width + margin, kappa 2^-6 | 4,083 | 146 to 157 | 367 | 3,897,744 | -103.32 / -103.26 / **-102.18** (133) | -103.20 / -102.56 / **-99.66** (769) |
+| q N=512 (2^28, no fit) | size classes (κ 2^-5) | 6,353 | 227 to 245 | 236 | 9,774,975 | -101.63 / -101.57 / **-100.86** (132) | -101.56 / -99.01 / **-98.33** (769) |
+| q N=512 (2^28, no fit) | width + margin (κ 2^-3) | 3,816 | 136 to 147 | 392 | 31,179,162 | -100.33 / -100.27 / **-99.19** (132) | -100.20 / -99.62 / **-96.66** (769) |
+| q N=512 (2^28, no fit) | width + margin, kappa 2^-4 | 3,854 | 138 to 148 | 389 | 15,589,620 | -101.33 / -101.27 / **-100.19** (132) | -101.20 / -100.62 / **-97.66** (769) |
+| q N=512 (2^28, no fit) | width + margin, kappa 2^-5 | 3,931 | 141 to 151 | 381 | 7,794,848 | -102.33 / -102.27 / **-101.19** (132) | -102.20 / -101.62 / **-98.66** (769) |
+| q N=512 (2^28, no fit) | width + margin, kappa 2^-6 | 4,102 | 147 to 158 | 365 | 3,897,463 | -103.33 / -103.27 / **-102.19** (132) | -103.20 / -102.62 / **-99.66** (769) |
+
+- **The recut costs 1 to 3 GB at N = 32 or 64** (6,320 → 6,321 or 6,322 under size classes; 3,781 → 3,781 or 3,784 under width + margin), 16 GB at N = 256.
+- **The row wanted, counting the head's queries by writing block: width + margin held to κ 2^-4 with the writer at N = 64: 3,822 GB at modeled 0.4, 137 to 147 at the measured rate; 2^-100.12 under one M (139), 2^-101.26 by the mean.** At N = 32 it is 3,819 GB and 2^-100.04. Both clear by a hair: 0.12 and 0.04 bit. One κ step down (2^-5, 3,899 GB, 2^-101.12) buys a bit of room for 77 GB.
+- **Today's cut reaches 2^-100 under one M only at κ 2^-7:** 4,523 GB with width + margin (2^-100.86), 6,830 GB under size classes (2^-100.55). So at that line the recut is worth about 700 GB.
+- **Under size classes the recut alone restores the record's own plan:** κ 2^-5 at N = 64 reads 2^-100.79 under one M at 6,322 GB. That needs none of my PRs.
+- **The last column is the catch.** With every port ATTACK derives, one M is 769 (`SiluMul_v2{I=1536}`) whatever the head's writer is, and no row at κ ≥ 2^-6 clears. Those writers are below.
+
+**The other ports** [guess: which stratum writes which port is mine, from ATTACK's list and the strata's K and N; SCALE's recut, due 11:45Z, replaces it]. Sizes [run: the same sizer]: `ScaledMmFp8BlockSharedScale_v1{K=6144}` is 2^25 at N = 4 (today), 2^27 at N = 16, 2^28 at N = 32: **so `SiluMul_v2{I=1536}`'s 3,072 words come from at least 192 blocks, and it stays at 193 classes unless it is itself cut in columns.** `CublasSplitKGemmF32Out_v1{K=6144}` (the router's logits) is 2^26 at N = 4. The expert GEMM `MoeExpertFp8BlockGemm_v4{K=6144}` unfused is 2^24 at N = 1 and 2^26 at N = 4; the card's fused form is one more today.
+
+| the writers | the plan | GB, modeled 0.4 | measured rate (a floor) | every port: mean / by stratum / one M (M) |
+|---|---|---:|---:|---|
+| q N=64, expert GEMM N=4, K=6144 block GEMM N=16, router N=4 | size classes (κ 2^-5) | 6,360 | 227 to 245 | -101.53 / -100.94 / **-100.36** (193) |
+| q N=64, expert GEMM N=4, K=6144 block GEMM N=16, router N=4 | width + margin, kappa 2^-4 | 3,863 | 138 to 149 | -101.22 / -101.00 / **-99.70** (193) |
+| q N=64, expert GEMM N=4, K=6144 block GEMM N=16, router N=4 | width + margin, kappa 2^-5 | 3,939 | 141 to 152 | -102.22 / -102.00 / **-100.70** (193) |
+| q N=64, expert GEMM N=4, K=6144 block GEMM N=16, router N=4; SiluMul{I=1536} in two column blocks | size classes (κ 2^-5) | 6,360 | 227 to 245 | -101.53 / -101.34 / **-100.83** (139) |
+| q N=64, expert GEMM N=4, K=6144 block GEMM N=16, router N=4; SiluMul{I=1536} in two column blocks | width + margin, kappa 2^-4 | 3,863 | 138 to 149 | -101.22 / -101.00 / **-100.17** (139) |
+| q N=64, expert GEMM N=4, K=6144 block GEMM N=16, router N=4; SiluMul{I=1536} in two column blocks | width + margin, kappa 2^-5 | 3,939 | 141 to 152 | -102.22 / -102.00 / **-101.17** (139) |
+
+- **With every writer recut as far as a 2^27 block allows, the least GB under one M is 3,939 GB (width + margin, κ 2^-5, M = 193, 2^-100.70), or 3,863 GB (κ 2^-4, 2^-100.17) if `SiluMul_v2{I=1536}` is also cut in two.** Under size classes the record's κ 2^-5 clears at 6,360 GB (2^-100.36 at M = 193). These recuts together cost about 40 GB.
+
+**The plan's rows at 250.0, Lean-checked** [run: `r20261111-105614-5017`, rc 0, tree `f1e9d625dd`; `plancheck.two` on each design; its control at 60.56 returns the record's 30,759,686,598,086 bits]. Today's cut, no recut.
+
+| plan | Lean's bits, of the 60.56 record | GB, modeled 0.4 | measured rate (a floor) | under 300 GB from |
+|---|---:|---:|---:|---:|
+| record, size classes κ 2^-5 | 1.5633 | 6,320 | 226 to 243 | 237 |
+| width, κ 2^-3 | 1.0191 | 4,120 | 147 to 159 | 364 |
+| width, κ 2^-6 (the planner's pick) | 1.0204 | 4,125 | 147 to 159 | 363 |
+| width + margin, κ 2^-3 (the planner's pick) | 0.9293 | **3,757** | 134 to 145 | 399 |
+| width + margin, κ 2^-4 | 0.9318 | 3,767 | 135 to 145 | 398 |
+| width + margin, κ 2^-5 | 0.9534 | 3,854 | 138 to 148 | 389 |
+| width + margin, κ 2^-6 | 1.0066 | 4,069 | 145 to 157 | 368 |
+| record at 358.3 (one session a `verify` call) | 1.8854 | 7,622 | 272 to 293 | 197 |
+| width + margin at 358.3, κ 2^-3 / κ 2^-4 | 1.1170 / 1.1173 | 4,515 / 4,517 | 161 to 174 | 332 |
+
+- **By Lean, κ 2^-4 costs 10 GB over the planner's pick at 250.0**, not the 38 the planner's own bound says, at half the checked blocks.
+- The family's floor at 250.0 is 3,493 GB [run: the floor's formula on the same cells]: the built plan is 8% over it. At 250.0 the head block is 94% of what the floor sums. Halving its whole price reads 0.55 of the GB under width + margin (0.54 under size classes); the next type, the fused expert read-GEMM, halved moves it 2.2%, every other under 1% [run: my VM, `elast250.py`].
+- The head block's cut as built, at 250.0 with each unit's verify in proportion to its proving: 2,642 / 2,545 / 2,373 GB (main's planner / width / width + margin), floor 2,069 [run: my VM; BENCHCROSS's 10:30Z row reads 2,374.6].
+
+**Not done yet:** Lean's check of the recut designs (`r20261111-111143-39e8`, waiting for a slot); SCALE's recut rows priced in place of my guess; the recut on the price-of-record base (no dumped call there: BREAKEVEN's).
+
+For BREAKEVEN:
+- The recut's stratum for the card: `BatchedGemm_v1{B=1,K=192,N=64}`, per token 39,936, out 1,024 bits, in 199,680, k_log 25, 1,024 blocks a statement, seconds a block 16 times the N = 1 row's (modeled by 2^k_log). Plan: `{"widths": True, "margin": 0.125, "kappas": (2 ** -4,)}`.
+- At 250.0 the plan's Lean-checked figures are the table above; κ 2^-4 and κ 2^-3 differ by 10 GB.
+
+For the table:
+- GB with the writers recut so a head block has 139 classes (N = 64; not built: the adapter has no such cut): width + margin held to κ 2^-4: **3,822 GB at modeled 0.4; 137 to 147 at the measured engine rate on node A (a floor; under 300 GB from 392 tokens a GPU-second; the rate is not measured at the headline's mix)**, 2^-100.12 in compressions under one M counting the head's queries; planner's figure, the writer's price modeled by 2^k_log.
+- Counting every port ATTACK derives: 3,939 GB (κ 2^-5, 2^-100.70), every writer recut as far as a 2^27 block allows; my guess at the wiring, SCALE's to replace.
+- The plan built, Lean-checked, at the head verify of 250.0: 3,757 GB at modeled 0.4 (134 to 145 at the measured rate); the record 6,320.
