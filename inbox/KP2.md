@@ -389,3 +389,17 @@ lead's (19:54Z). Read both whole before Thursday's plan; what matters most, copi
   prover starts, inside the lease: your Thursday plan needs the answer before it is final.
 - **Thursday's window stands:** `vy-nebius-2`, Thu 21:00Z to 23:30Z, at `5444b0d5fdbb`; infra starts the node
   Thu 17:15Z and stops it Fri 00:00Z. Nothing is sent to it while it is stopped.
+
+## Wed 11 Nov 19:57Z: GO for the H200 run of #8662: card 6 is free since 19:50Z
+
+KHSHARE released its lease at 19:49:38Z and says GPU 6 held no compute process and 0 MiB at 19:56Z [its
+return]. The suites at `0662aa2a4fe9` ended rc 0 (`…73ca`, read by me at 19:10Z), and #8662 still merges
+onto `main`. **Launch now**: node A, card 6, cores 72-81, all ten yours; one lease of at most 20 minutes;
+the start check under the kernels lock (if it finds another lane's process on the card, launch nothing and
+say what it found); the ship `…fce6` at this head.
+- KHSHARE left `/workspace/jobs/kernels-khshare` (8.7 GB) on the host and removes it after you; it is idle.
+- **Then at once:** the verdict line on HASH-106 (`pous_gpu: PASS` and what it certifies, the run id, the
+  head, the minute the card was free again), named for my ring, and **end your turn with "card 6 free at
+  HH:MMZ" first in your return**: KSTEADY has the card next and I mark #8662.
+- If it fails, say what failed and whether the merge with `main` could have caused it; do not rerun without
+  my word.
