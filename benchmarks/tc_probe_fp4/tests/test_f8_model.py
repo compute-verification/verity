@@ -25,7 +25,8 @@ from verity.ml.circuits.silicon import models as M  # noqa: E402
 PER_FAMILY = 48
 
 
-def _sample(kind: str, fam: str, seed: int):
+def _sample(kind: str, fam: str,
+            seed: int) -> tuple[int, str, str, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     kk, fa, fb = S.KINDS[kind]
     fn, _, _ = S.FAMILIES[fam] if fam != "bulk" else (S.fam_bulk, 1, False)
     t = fn(np.random.default_rng(seed), 2, fa, fb, kk == 1)
@@ -41,7 +42,7 @@ def _families(kind: str) -> list[str]:
 
 
 @pytest.mark.parametrize("kind", list(S.KINDS))
-def test_step_matches_scalar_reference(kind):
+def test_step_matches_scalar_reference(kind: str) -> None:
     for fi, fam in enumerate(_families(kind)):
         kk, fa, fb, c, a, b, sa, sb = _sample(kind, fam, 1000 + fi)
         for cand in list(FM.candidates(fa, fb, kk == 1).values())[::3]:
@@ -66,13 +67,13 @@ def test_step_matches_scalar_reference(kind):
 class FakeLib:
     """A device that computes ``truth`` (a candidate name; sm_120's step where a kind has no such candidate) on every kind."""
 
-    def __init__(self, truth: str, misrouted: frozenset[str] = frozenset()):
+    def __init__(self, truth: str, misrouted: frozenset[str] = frozenset()) -> None:
         self.truth, self.misrouted = truth, misrouted
 
     def identity(self) -> dict:
         return {"rc": 0, "cc": "10.0", "name": "fake"}
 
-    def run(self, kind: str, t) -> np.ndarray:
+    def run(self, kind: str, t: dict[str, np.ndarray]) -> np.ndarray:
         kk, fa, fb = S.KINDS[kind]
         n = t["A"].shape[0]
         c, a, b, sa, sb, _ = S.expand(t, 0, n)
@@ -83,7 +84,7 @@ class FakeLib:
         return D[:, ::-1] if kind in self.misrouted else D
 
 
-def test_dry_run_names_the_floor(tmp_path):
+def test_dry_run_names_the_floor(tmp_path: Path) -> None:
     scratch, out = tmp_path / "scratch", tmp_path / "out"
     S.gen(Namespace(scratch=str(scratch), seed=5, tiles=1, bulk_scale=0.0))
     keep = {("mx_e4m3", "scale_floor_probe"), ("mx_e5m2", "acc_walk"), ("f8_e4m3_e5m2", "cancellation")}
@@ -108,7 +109,7 @@ def test_dry_run_names_the_floor(tmp_path):
     assert totals["f8_e4m3_e5m2"]["gs32_w26_f149"]["mismatches"] == 0
 
 
-def test_a_misrouted_kind_fails_its_gate_and_the_others_are_still_captured(tmp_path):
+def test_a_misrouted_kind_fails_its_gate_and_the_others_are_still_captured(tmp_path: Path) -> None:
     scratch, out = tmp_path / "scratch", tmp_path / "out"
     S.gen(Namespace(scratch=str(scratch), seed=6, tiles=1, bulk_scale=0.0))
     plan = json.loads((scratch / "plan.json").read_text())
@@ -128,7 +129,7 @@ B200_CAPTURE = HERE / "tests" / "fixtures" / "tc-sm100-f8-2026-10-19.json"
 
 
 @pytest.mark.parametrize("kind", list(S.KINDS))
-def test_b200_capture_records_are_sm120s_step_and_refute_every_other_candidate(kind):
+def test_b200_capture_records_are_sm120s_step_and_refute_every_other_candidate(kind: str) -> None:
     """The B200's captured words of every kind (``f8_sm100.py pin``): sm_120's QMMA step reproduces
     each, and every other candidate misses one, except the floors a plain kind can't see (any floor <= -126 is its words)."""
     kk, fa, fb = S.KINDS[kind]
