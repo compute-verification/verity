@@ -10,8 +10,10 @@ public import Definitions.Pouw.Guarantees.PearlC
 
 Each is a gap guarantee restated at the adversary's advantage `ε = g/(1 − g)` (`Pouw.Gε`, `Pouw.PearlC.Gε`,
 `Pouw.AuditGε`), with the hypotheses of its gap form: the game's end to end (`EndToEnd`), route U's game instance at
-ncp-v1 (`GapFromTTNCP_U_v1`), Pearl-C's served point (`GapSm120v1LoopCast8p72Rev1Cap1000_8192`) and Pearl-C4's
-headline at 8192³ (`GapFp4Sm120_8192`). Its proof is the theorem `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G`.
+ncp-v1 (`GapFromTTNCP_U_v1`), Pearl-C's design point at 8192³ on the RTX PRO 6000
+(`GapSm120v1LoopCast8p72Rev1Cap1000_8192`; not the served point, which is Llama 3.2 1B's linears under the H100 record)
+and Pearl-C4's headline at 8192³ (`GapFp4Sm120_8192`). Its proof is the theorem
+`Pouw.SecurityProofs.….G : Pouw.Guarantees.….G`.
 -/
 
 @[expose] public section
