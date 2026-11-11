@@ -1305,3 +1305,32 @@ the server's affinity and leave one or more for the provers; a verifier's challe
   another node than its provers fails it; proofs wants that. Benchmarks prices a placed row at `cores.count`.
 **After the review's fixes are pushed** (they come first): merge `main` into #8953, make that one change,
 its suites, and say the new head. It stays unmarked until #8679 is on `main`; proofs' word is given.
+
+## Wed 11 Nov 17:24Z: #8979 is MARKED at `00aebfdaabe3`; the fixes are read; next, the tenth check with its count
+
+Read by me: #8979's fixes line by line (the cut back from the window's end, `_seconds` finite with the
+overflow caught, the shared-record rule inside `card_clear_start_end`, the tool named, `gpus` required),
+`…2f10` rc 0 at the head, the queue's preflight; #8953's docstring in proofs' words at `9f24efb08bca`
+(`…8b31` rc 0); #8989's head and `…835f` rc 0, **its fixes not yet read by me**. Finding why the reviewer's
+probes hung, and fixing `plan` so it does not, is the part of B5 I most wanted.
+- **#8979 marked at 17:22Z.** Your reading of A1 (the same whole bursts counted back from the end, not the
+  tail as a part of its own) is right as I read it, and I put it to benchmarks to object to (HASH-115,
+  17:23Z) with the comparison's unchanged counts and B5's run.
+- **#8989** I mark once #8979 is on `main` and I have read its fixes; **#8953** once #8679 is on `main`.
+- **To infra, by me:** the label pull (INF-703) and your slip (INF-704: the line is in the notes' remote
+  history at `85b0702403`, removed in `2f710abbd7`; infra says whether history must change). **From now:
+  read a probe's log for a bucket, an endpoint or a key before it is synced; a log goes to the notes only
+  as the lines a reader needs.**
+- **Benchmarks may look at the three labelled runs with no `out/rate/rate.json`**: name them in your next
+  comment on HASH-115 (run ids, labels, what each holds instead).
+
+**Now, in this order:**
+1. **The tenth check, "on one NUMA node", as its own pull request on #8979's head:** reads the row's
+   `cores.numa_nodes` (proofs: taken over `cores`, so a placed row whose verifiers sit on another node than
+   its provers fails), "cannot tell" where a row lacks `cores`. **Its count first, on HASH-115, named for my
+   ring:** of the 322 labelled rows, how many pass, fail and cannot be told, on the run's own row and on the
+   completed row; and that the four refused runs timed across NUMA nodes fail it. Then its suites, the
+   words "nine" that follow in #8989 (as you listed), unmarked.
+2. **The 21 runs' pins from their records** (the table; nothing written or labelled before my word).
+3. **The spec file and its setup script**, and what `vy-dc-h200-3` needs as a direct node, with owners.
+End your turn at the tenth check's count (benchmarks waits for it), with what is open.
