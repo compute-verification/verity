@@ -4,9 +4,9 @@ the training formalism counts |C|, c and w in.
     python -m training_slowdown.gates           # the table
     python -m training_slowdown.gates --check   # recompute it from the Definitions (needs verity), exit 1 on a difference
 
-Each price is one of the circuits' own Definitions (`verity.ml.circuits.ops.boolean`, and the TF32 step's in
-`verity.ml.definitions.registry.boolean_mhc`), at its whole gate count: AND + XOR + NOT as
-`verity.ml.circuits.evaluation.bits.compile(D).counts` gives them, the AND count being the one its
+Each price is one of the circuits' own Definitions (`verity.definitions.ops.boolean`, and the TF32 step's in
+`verity.definitions.registry.boolean_mhc`), at its whole gate count: AND + XOR + NOT as
+`verity.circuits.evaluation.bits.compile(D).counts` gives them, the AND count being the one its
 `<module>.circuit-check.json` pins (`test_gates` holds both). A counted MAC is one multiply and one accumulate:
 
 - a GEMM MAC is a tensor-core dot product's gates over its K: bf16 (and f16, which has no Definition) at
@@ -170,7 +170,7 @@ def recompute() -> dict[str, tuple[int, int, int]]:
     """Each Definition's (AND, XOR, NOT) from verity's circuits."""
     import importlib
 
-    from verity.ml.circuits.evaluation.bits import compile as compile_bits
+    from verity.circuits.evaluation.bits import compile as compile_bits
 
     out = {}
     for name, (module, *_) in DEFINITIONS.items():

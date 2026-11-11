@@ -16,7 +16,7 @@ def test_each_and_count_is_circuit_checks_pin():
 
 
 def test_each_count_is_the_definitions():
-    pytest.importorskip("verity.ml.circuits.evaluation.bits")
+    pytest.importorskip("verity.circuits.evaluation.bits")
     assert gates.recompute() == {n: tuple(v[1:]) for n, v in gates.DEFINITIONS.items()}
 
 
