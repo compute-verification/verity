@@ -923,8 +923,11 @@ outputs (at hidden outputs with `hm96-sha512/v1` leaves) at up to `Tags.MAX_TABL
 verifier's own `--program` the one META's `program_sha512` names (`ProvedScope.programP`), which `flock_verify_sound`'s
 plain multi-table claims cover; the check is the one without `--registered F` (`FailClosed.ScopeP`), so a shared-row
 public file is refused. Without it a plain session has at most one table. Not with `--zk`.
-With `upstream` (`agree`, below) it prints `agree`'s lines in place of verdicts. -/
-def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UInt32 := do
+With `upstream` (`agree`, below) it prints `agree`'s lines in place of verdicts.
+`readers` gives the program's digest and readings from the bytes `--program` names (`ProgramRead.Readers`), and is all the
+call takes besides its arguments: `verify` reads its own program once (`verifyCmd`). -/
+def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (args : List String) (upstream : Option Lean.Json := none) :
+    IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins tree | --zk [--ks-form]] [--session-tables J] [--plain-tables] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   -- a session's line: the checks' outcome, then that of the refusals after them. `verify` prints its verdict; `agree`
@@ -1065,20 +1068,20 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
   -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
   let scope := if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
-  -- the program parsed once, for its digest, every setup and every reader in one: each is what it is with the program read
-  -- anew (`ProvedScope.programDigestOf_read`, `Registered.checkProgramBy_read`, `buildSessionBy_read`, `…checkCoverBy_read`)
-  let read := ProgramRead.of (program.getD ByteArray.empty)
+  -- the program's digest and readings as `readers` gives them, for the verdict, every setup and every reader in one: each
+  -- is what it is with the program read anew (`ProgramRead.readers_of`, `buildSessionBy_read`, `…checkProgramBy_read`)
+  let read := readers (program.getD ByteArray.empty)
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
-        Registered.checkProgramBy read.descAt program registered.isSome
+        Registered.checkProgramBy read.desc program registered.isSome
         RecSetup.checkInner recInner recCoins recBound
         RecLinkPart.checkShape recInner recLinks
         RecBudget.regs recInner registered
         RecBudget.statements recInner
-        let r ← buildSessionBy read.descAt read.progAt parsed tags circuitB pubB compB coins tables count draw partition
+        let r ← buildSessionBy read.desc read.prog parsed tags circuitB pubB compB coins tables count draw partition
           program work stratified closure registered publicInputs (identifier.map Prod.snd)
         if let some own := registered then r.2.forM fun (st : Stmt) => Registered.checkComplete st.c own
-        r.2.forM fun (st : Stmt) => Registered.checkCoverBy read.progAt st.c program partition registered params
+        r.2.forM fun (st : Stmt) => Registered.checkCoverBy read.prog st.c program partition registered params
         r.2.forM fun (st : Stmt) => KnownRead.check st.c known
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows
@@ -1097,7 +1100,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk tags plainTables draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
-  let programSha := program.bind fun b => ProvedScope.programDigestOf (read.jsonAt b)
+  let programSha := program.bind read.digest
   let header := (publicHeader pubB).bind headerDigest
   let ksParsed := if tags.hiddenOutputs then parsed else HmOut.parse tags circuitB tables
   let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()
@@ -1194,6 +1197,10 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     all := all && ok
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
+
+/-- `verify`: `verifyCmdBy` reading its own program, once a call (`ProgramRead.of`). -/
+def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UInt32 :=
+  verifyCmdBy (fun program => (ProgramRead.of program).readers) args upstream
 
 /-- `agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...`: the agreement check's entry
 (`verity/ml/flock/verifier/agree.py`, `check`'s `lean-agreement` job), and never a verdict. It runs `verify`'s checks and
