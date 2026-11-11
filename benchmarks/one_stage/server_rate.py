@@ -2,10 +2,12 @@
 (`verity_flock.proof_server.ProofServer`'s ``provers``), its sessions back to back, each K in turn.
 
     python benchmarks/one_stage/server_rate.py --bin flock-circuit --staged Z --types frw13,frw2 --provers 1,2,4 --out DIR \\
-        --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean flock-verify [--lean-sessions 2]]
+        --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean flock-verify [--lean-sessions 2]] [--tmpl-unit-bin B]
 
 * **Statements**: ``Z/<type>/c<n>/stage`` (`stationary_gpu.sh`'s layout), the type's largest n, every unit drawn: a
-  sampled replay block at the full statement.
+  sampled replay block at the full statement. A templated one (``verity/flock-circuit/tmpl`` in its circuit's META, as
+  `served_units/stage.py` stages a table read) is proved and verified with its unit's rows at their positions, which
+  ``--tmpl-unit-bin`` (`flock-tmpl-unit`) places once into ``stage/unit.placed`` from the circuit's template section.
 * **Load**: ``--warm`` sessions a prover, all finished before any timed one is submitted (a prover and its verifier load
   the circuit on their first session; ``ready_s``), then ``--sessions`` timed ones (at least 8 K) with K (ahead + 2)
   outstanding.
@@ -45,7 +47,9 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/protocols/flock/prover/python"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from verity_flock import circuit as FC
 from verity_flock.proof_server import ProofServer, Statement
 
 STATEMENT_ID = "verity/flock-circuit"
@@ -67,11 +71,39 @@ def cpu_s(pids) -> tuple[float, list[int]]:
     return s / os.sysconf("SC_CLK_TCK"), gone
 
 
-def staged(z: Path, t: str) -> tuple[Statement, int, Path]:
+def tmpl_unit(d: Path, binary: str | None) -> Path | None:
+    """A templated statement's unit rows at their positions (``d/unit.placed``), as `a0.templated` places a stager's:
+    `flock-tmpl-unit` from the circuit file's template section and META's layout, read off the file's head. None for a
+    flat statement."""
+    with open(d / "circuit.txt") as f:
+        head = [f.readline() for _ in range(3)]
+        tag = head[2].split()
+        if len(tag) == 2 and tag[0] == FC.TMPL_SECTION and tag[1].isdigit():
+            head += [f.readline() for _ in range(int(tag[1]))]
+    text = "".join(head)
+    meta = FC.meta_of(text)
+    if meta.get("statement") != FC.TMPL_STATEMENT:
+        return None
+    if not binary:
+        raise RuntimeError(f"{d}: a templated statement is proved with its unit placed by flock-tmpl-unit: give --tmpl-unit-bin")
+    placed = d / "unit.placed"
+    if not placed.exists():
+        (d / "unit.tmpl").write_text(FC.template_of(text))
+        part = d / "unit.placed.part"
+        p = subprocess.run([binary, str(d / "unit.tmpl"), "--layout", meta["layout"], "--out", str(part)],
+                           capture_output=True, text=True)
+        (d / "tmpl-unit.log").write_text(p.stdout + p.stderr)
+        if p.returncode:
+            raise RuntimeError(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
+        part.rename(placed)
+    return placed
+
+
+def staged(z: Path, t: str, tmpl_unit_bin: str | None = None) -> tuple[Statement, int, Path]:
     d = max((z / t).glob("c*/stage"), key=lambda p: int(p.parent.name[1:]))
     n = json.loads((d / "stage.json").read_text())["n"]
     return Statement(pin=(d / "pin.txt").read_text().strip(), circuit=d / "circuit.txt", tables=d / "tables",
-                     instances=d / "inst.bin", public=d / "pub.bin"), n, d
+                     instances=d / "inst.bin", public=d / "pub.bin", tmpl_unit=tmpl_unit(d, tmpl_unit_bin)), n, d
 
 
 class Device:
@@ -162,10 +194,11 @@ def throttled() -> dict:
 
 class Lean:
     """Lean `flock-verify verify --zk` on a session's record, with its own CPU seconds and peak RSS; the circuit, public
-    file and tables archived once, in scratch outside ``out`` (`close` removes it)."""
+    file and tables archived once, in scratch outside ``out`` (`close` removes it); ``statement``, the one `verify` sets
+    up."""
 
-    def __init__(self, lean: str, d: Path, out: Path) -> None:
-        self.lean, self.out = lean, out
+    def __init__(self, lean: str, d: Path, out: Path, statement: str = STATEMENT_ID) -> None:
+        self.lean, self.out, self.statement = lean, out, statement
         self.archive = Path(tempfile.mkdtemp(prefix="server-rate-archive-"))
         tables = sorted(str(f) for f in (d / "tables").glob("*") if f.is_file()) if (d / "tables").is_dir() else []
         p = subprocess.run([lean, "archive-put", str(self.archive), str(d / "circuit.txt"), str(d / "pub.bin"), *tables],
@@ -178,7 +211,7 @@ class Lean:
         shutil.rmtree(self.archive, ignore_errors=True)
 
     def __call__(self, s) -> dict:
-        cmd = [self.lean, "verify", "--statement", STATEMENT_ID, "--archive", str(self.archive),
+        cmd = [self.lean, "verify", "--statement", self.statement, "--archive", str(self.archive),
                "--circuit", self.keys.get("circuit.txt", ""), "--public", self.keys.get("pub.bin", ""), "--zk",
                "--session", str(s.dir)]
         log = self.out / f"lean-{s.label.replace('/', '-')}.log"
@@ -198,10 +231,11 @@ class Lean:
 
 
 def one(a, dev: str, t: str, K: int) -> dict:
-    st, n, d = staged(Path(a.staged), t)
+    st, n, d = staged(Path(a.staged), t, a.tmpl_unit_bin)
     out = Path(a.out) / f"{t}-k{K}"
     out.mkdir(parents=True, exist_ok=True)
-    lean = Lean(a.lean, d, out) if a.lean and K == 1 and a.lean_sessions else None
+    statement = STATEMENT_ID if st.tmpl_unit is None else FC.TMPL_STATEMENT
+    lean = Lean(a.lean, d, out, statement) if a.lean and K == 1 and a.lean_sessions else None
     draw = {"law": "subset", "population": n, "k": n, "units": list(range(n))}
     timed_n = max(a.sessions, 8 * K)
     total, window = K * a.warm + timed_n, K * (a.ahead + 2)
@@ -323,6 +357,7 @@ def main() -> int:
     ap.add_argument("--ahead", type=int, default=2)
     ap.add_argument("--lean", default=None)
     ap.add_argument("--lean-sessions", type=int, default=2)
+    ap.add_argument("--tmpl-unit-bin", default=None, help="flock-tmpl-unit: places a templated statement's unit")
     ap.add_argument("--deadline", type=float, default=0, help="UTC epoch seconds after which no type and K starts")
     a = ap.parse_args()
     out = Path(a.out)
