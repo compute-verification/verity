@@ -131,7 +131,7 @@ def test_a_late_read_is_rejected() -> None:
 
     w = _run(clock=clock, prover=Late, egress_bits=0)
     assert w.verdict == "reject" and w.report == {"ended": sw.LATE, "host": "n0", "reads": 6,
-                                                  "key_sha512": w.report["key_sha512"]}
+                                                  "key_sha512": w.report["key_sha512"], "key_pinned": False}
     assert "batch 5 is past its deadline of 1000 ns" in w.answer["reason"]
 
 
