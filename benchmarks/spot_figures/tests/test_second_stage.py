@@ -20,10 +20,10 @@ def test_the_first_read_is_the_bytes_the_second_stage_takes():
         asked.append(n)
         return hashlib.shake_256(len(asked).to_bytes(4, "big")).digest(n)
 
-    drawn = service.select_second(sample, ns, ks, coins)
+    got = service.select_second(sample, ns, ks, coins)
     assert asked == [2 * k * s2.width(n) + 64 for n, k in zip(ns, ks) for _ in sample]
     assert sum(asked) == s2.first_read(len(sample), ns, ks)
-    assert len(drawn["units"]) == len(sample) * sum(ks)
+    assert len(got["units"]) == len(sample) * sum(ks)
 
 
 def test_a_word_is_the_population_s_bits_and_64_more():

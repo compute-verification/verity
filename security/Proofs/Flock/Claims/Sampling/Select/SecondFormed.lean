@@ -10,14 +10,14 @@ import Proofs.Flock.Claims.Sampling.Select.Take
 import Proofs.Flock.Claims.Sampling.Select.Steps
 
 /-!
-# The second stage's law is well formed wherever `secondProblem` passes
+# The second stage's sampling design is well formed wherever `secondProblem` passes
 
-`Select.selectSecond` reads its law twice before it reads a coin: `Draw.flockLaw` parses it (`Draw.strataProblem`,
-`Flock.Draw.workProblem`), and `Draw.checkDraw` holds the sample object's strata to `Draw.strataMessage`. Both walk the
-strata in loops. This file runs those loops on `secondLaw`'s cells: where `secondProblem` passes, the cells have
-distinct templates, each is one nonempty range sampling `1 ≤ k_t ≤ n_t` of it, and their ranges follow each other
-from `0` to `|sample| · Σ_t n_t`, so neither finds a fault. The second stage then refuses an honest run only where
-its coins sample no units, with probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴`.
+`Select.selectSecond` reads its sampling design (`secondLaw`) twice before it reads a coin: `Draw.flockLaw` parses it
+(`Draw.strataProblem`, `Flock.Draw.workProblem`), and `Draw.checkDraw` holds the sample object's strata to
+`Draw.strataMessage`. Both walk the strata in loops. This file runs those loops on `secondLaw`'s cells: where
+`secondProblem` passes, the cells have distinct templates, each is one nonempty range sampling `1 ≤ k_t ≤ n_t` of it,
+and their ranges follow each other from `0` to `|sample| · Σ_t n_t`, so neither finds a fault. The second stage then
+refuses an honest run only where its coins sample no units, with probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴`.
 
 * `forIn_yield_foldl`, `forIn_chain`, `forIn_all_yield`: a loop that never stops early is a fold, a loop over ranges
   that follow each other carries the last range's end, and a loop whose steps keep the state returns it.
@@ -25,8 +25,8 @@ its coins sample no units, with probability at most `|sample| · Σ_t k_t · 2�
 * `workProblem_cells`, `strataProblem_cells`, `flockLaw_cells`, `strataMessage_cells`: such cells, with distinct
   templates and ranges that follow each other from `0` to the population, pass each check.
 * `chain_cells`, `templates_nodup`: `secondLaw`'s cells are such a list.
-* `flockLaw_second_ok`, `strataMessage_second`, `secondFormed`: the law parses to its cells' strata, and its strata are
-  well formed.
+* `flockLaw_second_ok`, `strataMessage_second`, `secondFormed`: the sampling design parses to its cells' strata, and
+  its strata are well formed.
 * `selectSecond_refused_le`: on a uniform stream of at least `secondRead` bytes, `selectSecond` refuses with
   probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴`.
 -/
@@ -321,7 +321,7 @@ theorem mapM_cells {φ : γ → Json} {tpl : γ → String} {lo hi kk : γ → �
   rw [List.mapM_toArray, list_mapM_map_some _ φ (cellW tpl lo hi kk) zs fun z hz => stratum_ok (hc z hz)]
   rfl
 
-/-- **`Draw.strataProblem` passes a work law at `k = 1` over such cells.** -/
+/-- **`Draw.strataProblem` passes a work sampling design at `k = 1` over such cells.** -/
 theorem strataProblem_cells (φ : γ → Json) (tpl : γ → String) (lo hi kk : γ → ℕ) (zs : List γ) (m : ℕ)
     (law : Json) (hw : jeq (getD law "law") (Json.str "work") = true)
     (hss : getD law "strata" = Json.arr (zs.map φ).toArray) (hk : int? (getD law "k") = some 1)
@@ -346,7 +346,7 @@ theorem strataProblem_cells (φ : γ → Json) (tpl : γ → String) (lo hi kk :
   simp only [Bool.false_eq_true, ↓reduceIte, h1, Int.toNat_natCast, hwp]
   rfl
 
-/-- **`Draw.flockLaw` reads a work law at `k = 1` over such cells** as the work law on their strata. -/
+/-- **`Draw.flockLaw` reads a work sampling design at `k = 1` over such cells** as the one on their strata. -/
 theorem flockLaw_cells (φ : γ → Json) (tpl : γ → String) (lo hi kk : γ → ℕ) (zs : List γ) (m : ℕ)
     (law : Json) (hl : getD law "law" = Json.str "work") (hw : jeq (getD law "law") (Json.str "work") = true)
     (hkeys : keys? law = some (sortStrings #["law", "k", "strata"]))
@@ -427,7 +427,7 @@ theorem qsort_chainI {l : List (ℕ × ℕ)} {a c : ℕ} (h : Chain a c l) (hlt 
       have h3 : ¬ i < j := by omega
       simp [h1, h2, h3]
 
-/-- **`Draw.strataMessage` finds nothing at fault in a work law at `k = 1` over such cells.** -/
+/-- **`Draw.strataMessage` finds nothing at fault in a work sampling design at `k = 1` over such cells.** -/
 theorem strataMessage_cells (φ : γ → Json) (tpl : γ → String) (lo hi kk : γ → ℕ) (zs : List γ) (m : ℕ)
     (law : Json) (hw : jeq (getD law "law") (Json.str "work") = true)
     (hss : getD law "strata" = Json.arr (zs.map φ).toArray) (hk : int? (getD law "k") = some 1)
@@ -641,9 +641,9 @@ theorem templates_nodup (sample : Array ℕ) (T : ℕ)
   have hi := ascending_getD_inj sample hs (cellPairs_mem hx).2 (cellPairs_mem hy).2 h1
   exact Prod.ext h2 hi
 
-/-! ## The second stage's law is well formed -/
+/-! ## The second stage's sampling design is well formed -/
 
-/-- The law's strata are its cells' objects, in the cells' order. -/
+/-- The sampling design's strata are its cells' objects, in the cells' order. -/
 theorem getD_secondLaw_cells (sample ns ks : Array ℕ) :
     getD (Select.secondLaw sample ns ks) "strata" = Json.arr ((cellPairs sample.size ns.size).map fun z =>
       Select.cellObj (cellOff sample.size ns z.1) (ns.getD z.1 0) (ks.getD z.1 0) z.2 (sample.getD z.2 0)
@@ -684,7 +684,7 @@ theorem keys_secondLaw (sample ns ks : Array ℕ) :
   unfold Select.secondLaw
   exact keys_mkObj_perm (ks := ["law", "k", "strata"]) (List.Perm.refl _) (by decide)
 
-/-- **The second stage's law parses, and its strata are well formed**, wherever `secondProblem` passes. -/
+/-- **The second stage's sampling design parses, and its strata are well formed**, wherever `secondProblem` passes. -/
 theorem second_parses {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) :
     Draw.flockLaw (Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) =
         .ok (.work 1 ((cellPairs sample.size ns.size).map (cellStratum sample ns ks)).toArray) ∧
@@ -729,7 +729,7 @@ theorem second_parses {sample ns ks : Array ℕ} (hp : Select.secondProblem samp
       (getD_secondLaw_cells sample ns ks) hk hc hne hz hnd hch,
     strataMessage_cells φ tpl lo hi kk _ _ _ hw (getD_secondLaw_cells sample ns ks) hk hc hne hz hnd hch⟩
 
-/-- **The second stage's law parses to its cells' strata** wherever `secondProblem` passes. -/
+/-- **The second stage's sampling design parses to its cells' strata** wherever `secondProblem` passes. -/
 theorem flockLaw_second_ok {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) :
     Draw.flockLaw (Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) =
       .ok (.work 1 ((cellPairs sample.size ns.size).map (cellStratum sample ns ks)).toArray) :=
@@ -741,7 +741,7 @@ theorem strataMessage_second {sample ns ks : Array ℕ} (hp : Select.secondProbl
     Draw.strataMessage (Select.secondLaw sample ns ks) ((sample.size * ns.toList.sum : ℕ) : Int) = none :=
   (second_parses hp).2
 
-/-- **The second stage's law is well formed** (`SecondFormed`) wherever `secondProblem` passes. -/
+/-- **The second stage's sampling design is well formed** (`SecondFormed`) wherever `secondProblem` passes. -/
 theorem secondFormed {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) :
     SecondFormed sample ns ks :=
   ⟨⟨_, flockLaw_second_ok hp⟩, strataMessage_second hp⟩

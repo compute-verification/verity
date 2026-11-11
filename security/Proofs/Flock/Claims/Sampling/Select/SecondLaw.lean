@@ -9,14 +9,14 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 /-!
 # The second stage's sampling design on its cells, and the bytes its strata read first
 
-`secondLaw` is a work law at `k = 1` over one stratum per cell, each of unit work and floor `k_t`. Where `secondProblem`
-passes, each cell samples `1 ≤ k_t ≤ n_t` of its `n_t` proof blocks, and the work rule gives each cell exactly its
-floor, so the law `Draw.flockLaw` reads from it is a sampling design on the cells (`Flock.Bridge.LawOn`) that samples
-`|sample| · Σ_t k_t` proof blocks.
+`secondLaw` is a work sampling design at `k = 1` over one stratum per cell, each of unit work and floor `k_t`. Where
+`secondProblem` passes, each cell samples `1 ≤ k_t ≤ n_t` of its `n_t` proof blocks, and the work rule gives each cell
+exactly its floor, so what `Draw.flockLaw` reads from it is a sampling design on the cells (`Flock.Bridge.LawOn`) that
+samples `|sample| · Σ_t k_t` proof blocks.
 
 * `secondProblem_counts`: `secondProblem` passing gives `1 ≤ k_t ≤ n_t` for each template.
 * `cellSizes`, `cellSizes_sum`: the cells' sizes in the strata's order, `|sample| · Σ_t n_t` in all.
-* `lawOn_second`: the parsed law is `LawOn` the cells, sampling `|sample| · Σ_t k_t`.
+* `lawOn_second`: the parsed sampling design is `LawOn` the cells, sampling `|sample| · Σ_t k_t`.
 * `secondRead`, `firstRead_second`: the bytes the strata read first, `|sample| · Σ_t (2·k_t·width n_t + 64)`.
 * `drawUnits_second_error_le`: on a uniform stream that holds those bytes, the second stage's units are not sampled
   with probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴` (`Flock.Bridge.units_error_le`).
@@ -96,7 +96,7 @@ theorem cellPairs_fst {q T : ℕ} {z : ℕ × ℕ} (hz : z ∈ cellPairs q T) : 
   exact List.mem_range.1 ht
 
 /-- **`secondLaw` is a sampling design on its cells that samples `|sample| · Σ_t k_t` proof blocks**: where
-`secondProblem` passes, the law `Draw.flockLaw` reads from it has the cells as its strata, in order and tiling the
+`secondProblem` passes, what `Draw.flockLaw` reads from it has the cells as its strata, in order and tiling the
 interior, each stratum's count the work rule's. -/
 theorem lawOn_second {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) {m : ℕ}
     {parsed : Flock.Draw.Law} (h : Draw.flockLaw (Select.secondLaw sample ns ks) m = .ok parsed) :
@@ -158,7 +158,7 @@ theorem stages_need (St : Array Flock.Draw.Stratum) :
   rw [List.map_map, ← range_map_need]
   rfl
 
-/-- A work law's stages read its strata's `need`s first. -/
+/-- A work sampling design's stages read its strata's `need`s first. -/
 theorem firstRead_work (K n : ℕ) (ws : Array Flock.Draw.WorkStratum) :
     Flock.Bridge.firstRead (.work K ws) n = ((ws.toList.map (·.toStratum)).map (·.need)).sum := by
   have h := stages_need (ws.map (·.toStratum))
@@ -183,8 +183,8 @@ theorem firstRead_second {sample ns ks : Array ℕ} {m : ℕ} {parsed : Flock.Dr
   rfl
 
 /-- **The second stage's units are not sampled with probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴`**, on a uniform
-stream of at least `secondRead` bytes: where `secondProblem` passes, `Draw.drawUnits` under the law `Draw.flockLaw`
-reads from `secondLaw` returns no sample only where some cell's first read samples nothing. -/
+stream of at least `secondRead` bytes: where `secondProblem` passes, `Draw.drawUnits` under what `Draw.flockLaw` reads
+from `secondLaw` returns no sample only where some cell's first read samples nothing. -/
 theorem drawUnits_second_error_le {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none)
     {parsed : Flock.Draw.Law}
     (h : Draw.flockLaw (Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) = .ok parsed) (len : ℕ)

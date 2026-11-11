@@ -17,20 +17,20 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 /-!
 # The second stage accepts the sample its coins give
 
-`Select.selectSecond` refuses a replay sample and cells `secondProblem` refuses, a law `Draw.flockLaw` doesn't read, a
-sample the coins don't end (`Draw.drawUnits`), and a sample object `Draw.checkDraw` finds at fault. This file shows the
-last never happens on its own: where the second stage's law is well formed (`SecondFormed`: `Draw.flockLaw` reads it and
-`Draw.strataMessage` finds nothing), every sample `Draw.drawUnits` returns under it passes `Draw.checkDraw`, so
-`selectSecond` returns it. The second stage therefore refuses only where its units are not sampled, which
-`drawUnits_second_error_le` bounds.
+`Select.selectSecond` refuses a replay sample and cells `secondProblem` refuses, a sampling design `Draw.flockLaw`
+doesn't read, a sample the coins don't end (`Draw.drawUnits`), and a sample object `Draw.checkDraw` finds at fault. This
+file shows the last never happens on its own: where the second stage's sampling design is well formed (`SecondFormed`:
+`Draw.flockLaw` reads it and `Draw.strataMessage` finds nothing), every sample `Draw.drawUnits` returns under it passes
+`Draw.checkDraw`, so `selectSecond` returns it. The second stage therefore refuses only where its units are not
+sampled, which `drawUnits_second_error_le` bounds.
 
 * `entries_mkObj_perm`, `keys_mkObj_perm`: an object built from members with distinct keys has those keys.
-* `secondObj`: the sample object `selectSecond` builds from the units, with its fields, keys and law.
+* `secondObj`: the sample object `selectSecond` builds from the units, with its fields, keys and sampling design.
 * `countIn_cell`: `checkDraw`'s count of the units in a cell, as the list's.
-* `SecondFormed`: the law's well-formedness, which `Select.SecondFormed` shows wherever `secondProblem` passes.
+* `SecondFormed`: the sampling design is well formed, which `Select.SecondFormed` shows wherever `secondProblem` passes.
 * `drawn_secondObj`, `checkDraw_secondObj`: the sample object is `Properties.Spot.Drawn`, so `checkDraw` passes.
 * `selectSecond_of_units`: `selectSecond` returns the sample `Draw.drawUnits` gives.
-* `selectSecond_refused_le_of`: under a well-formed law, on a uniform stream of at least `secondRead` bytes,
+* `selectSecond_refused_le_of`: under a well-formed sampling design, on a uniform stream of at least `secondRead` bytes,
   `selectSecond` refuses with probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴`.
 -/
 
@@ -138,7 +138,7 @@ theorem lawOf_secondObj (sample ns ks units : Array ℕ) :
   simp only [hw, Bool.or_true, ↓reduceIte]
   rfl
 
-/-- `Draw.strataMessage` reads the sample object's law, `k` and strata, which are `secondLaw`'s. -/
+/-- `Draw.strataMessage` reads the sample object's `law`, `k` and strata, which are `secondLaw`'s. -/
 theorem strataMessage_secondObj (sample ns ks units : Array ℕ) (n : Int) :
     Draw.strataMessage (secondObj sample ns ks units) n = Draw.strataMessage (Select.secondLaw sample ns ks) n := by
   unfold Draw.strataMessage
@@ -227,10 +227,10 @@ theorem countIn_cell (units : Array ℕ) (lo hi : ℕ) (s : Json)
     omega
   rw [hiff]
 
-/-! ## The law's well-formedness, and the sample object under it -/
+/-! ## A well-formed sampling design, and the sample object under it -/
 
-/-- **The second stage's law is well formed** over the interior's `|sample| · Σ_t n_t` proof blocks: `Draw.flockLaw`
-reads it, and `Draw.strataMessage` finds nothing at fault. Neither reads the coins. -/
+/-- **The second stage's sampling design is well formed** over the interior's `|sample| · Σ_t n_t` proof blocks:
+`Draw.flockLaw` reads it, and `Draw.strataMessage` finds nothing at fault. Neither reads the coins. -/
 def SecondFormed (sample ns ks : Array ℕ) : Prop :=
   (∃ parsed, Draw.flockLaw (Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) = .ok parsed) ∧
     Draw.strataMessage (Select.secondLaw sample ns ks) ((sample.size * ns.toList.sum : ℕ) : Int) = none
@@ -243,8 +243,9 @@ theorem cell_lt {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns 
   rw [Nat.succ_mul]
   omega
 
-/-- **The sample object is a sample of `secondLaw` over the interior** (`Properties.Spot.Drawn`), where the law is
-well formed and the units are strictly ascending, in the interior, and `k_t` of them in each cell of template `t`. -/
+/-- **The sample object is a sample of `secondLaw` over the interior** (`Properties.Spot.Drawn`), where the sampling
+design is well formed and the units are strictly ascending, in the interior, and `k_t` of them in each cell of template
+`t`. -/
 theorem drawn_secondObj {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none)
     (hf : SecondFormed sample ns ks) {units : Array ℕ} (hasc : units.toList.Pairwise (· < ·))
     (hlt : ∀ u ∈ units.toList, u < sample.size * ns.toList.sum)
@@ -295,7 +296,7 @@ theorem drawn_secondObj {sample ns ks : Array ℕ} (hp : Select.secondProblem sa
         (by rw [getD_cellObj_units]; exact ranges_pair_ok (cell_lt hp hz))]
       exact congrArg some (congrArg (fun n : ℕ => (n : Int)) (hcnt z hz).symm)
 
-/-- **`checkDraw` passes the sample object** under a well-formed law, at units as `drawn_secondObj` asks. -/
+/-- **`checkDraw` passes the sample object** under a well-formed sampling design, at units as `drawn_secondObj` asks. -/
 theorem checkDraw_secondObj {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none)
     (hf : SecondFormed sample ns ks) {units : Array ℕ} (hasc : units.toList.Pairwise (· < ·))
     (hlt : ∀ u ∈ units.toList, u < sample.size * ns.toList.sum)
@@ -306,9 +307,9 @@ theorem checkDraw_secondObj {sample ns ks : Array ℕ} (hp : Select.secondProble
       (Select.secondLaw sample ns ks) = #[] :=
   (checkDraw_nil _ _ _).2 (drawn_secondObj hp hf hasc hlt hcnt)
 
-/-- **`selectSecond` returns the sample its coins give**: where `secondProblem` passes and the law is well formed, a
-sample `Draw.drawUnits` returns under the law `Draw.flockLaw` reads is the one `selectSecond` returns, with the bytes
-it read. -/
+/-- **`selectSecond` returns the sample its coins give**: where `secondProblem` passes and the sampling design is well
+formed, a sample `Draw.drawUnits` returns under the sampling design `Draw.flockLaw` reads is the one `selectSecond`
+returns, with the bytes it read. -/
 theorem selectSecond_of_units {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none)
     (hf : SecondFormed sample ns ks) {parsed : Flock.Draw.Law}
     (hl : Draw.flockLaw (Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) = .ok parsed)
@@ -337,8 +338,8 @@ theorem selectSecond_of_units {sample ns ks : Array ℕ} (hp : Select.secondProb
   rfl
 
 /-- **The second stage refuses with probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴`**, where `secondProblem` passes and
-the law is well formed, on a uniform stream of at least `secondRead` bytes: it refuses only where some cell's first read
-samples nothing. -/
+the sampling design is well formed, on a uniform stream of at least `secondRead` bytes: it refuses only where some
+cell's first read samples nothing. -/
 theorem selectSecond_refused_le_of {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none)
     (hf : SecondFormed sample ns ks) (len : ℕ) (hlen : secondRead sample.size ns ks ≤ len) :
     prCoin (fun f : Fin len → Fin 256 => ¬ ∃ draw read,

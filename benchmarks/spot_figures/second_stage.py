@@ -101,8 +101,8 @@ def at_design(cells: Sequence[Cell], row: Mapping[str, Any]) -> dict[str, Any]:
 
     - `cells`, `sampled` and `read`: a sampled replay block's cells, the proof blocks the second stage samples of them
       (Σ_t k_t) and the bytes they read first;
-    - `sample`: the replay blocks K a verification phase samples at most, the row's public cap (`registration_cap`),
-      and 1 for a design whose statements each hold one sampled replay block's proof blocks;
+    - `sample`: the most replay blocks K a verification phase samples, which the row makes public
+      (`registration_cap`), and 1 for a design whose statements each hold one sampled replay block's proof blocks;
     - `stages` and `coins`: the rounds and the challenger's coins that hold K replay blocks' first read;
     - `refusal`: Lean's bound on the chance a verification phase's second stage refuses an honest run, at a first-stage
       coin the first stage accepts and on coins that hold the first read, K·Σ_t k_t·2^-64;

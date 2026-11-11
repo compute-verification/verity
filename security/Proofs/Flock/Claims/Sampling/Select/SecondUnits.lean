@@ -19,11 +19,11 @@ returns is therefore strictly ascending, lies in the strata's slots, and holds e
 stratum's slots: what `Draw.checkDraw` asks of a sample's units.
 
 * `subset_nodup`: a `subset` sample that succeeds holds each index once, each below `n`.
-* `pieces_count`: lists drawn one from each stratum's slots, each without repeats, are together without repeats, and
+* `pieces_count`: lists taken one from each stratum's slots, each without repeats, are together without repeats, and
   the ones in a stratum's slots are that stratum's list.
 * `stratifiedWith_parts`: a stratified sample that ends is the strata's `subset` samples, as units, sorted.
 * `stratifiedWith_units`, `drawUnits_work_units`: the three facts above, of `stratifiedWith` and of `Draw.drawUnits`
-  under a work law.
+  under a work sampling design.
 -/
 
 @[expose] public section
@@ -75,7 +75,7 @@ theorem forall₂_zipWith {α β γ : Type} {R : α → β → Prop} {R' : α �
   | _, _, .nil => .nil
   | _, _, .cons h hs => .cons (hR _ _ h) (forall₂_zipWith g hR hs)
 
-/-- **Lists drawn one from each stratum's slots**: over strata whose slots `E s` hold each unit once, lists `P`, one
+/-- **Lists taken one from each stratum's slots**: over strata whose slots `E s` hold each unit once, lists `P`, one
 from each stratum's slots and each without repeats, are together without repeats and in the strata's slots, and after
 any units outside the strata's slots, the ones in a stratum's slots are as many as that stratum's list. -/
 theorem pieces_count {α : Type} (E : α → List ℕ) {St : List α} {Ps : List (List ℕ)}
@@ -251,7 +251,7 @@ theorem stratifiedWith_units (src : ByteArray) (strata : Array Flock.Draw.Stratu
     rw [← hc]
     exact (hperm.filter _).length_eq
 
-/-- A work law's sample that ends is its strata's stratified sample. -/
+/-- A work sampling design's sample that ends is its strata's stratified sample. -/
 theorem drawUnits_work_run {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} {src : ByteArray} {units : Array ℕ}
     (h : Draw.drawUnits (.work K ws) n src = .ok (units, read)) :
     (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) (ws.map (·.toStratum))).run 0 =
@@ -286,8 +286,8 @@ theorem drawUnits_work_run {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} 
         subst h2
         rfl
 
-/-- **A work law's sample over strata whose slots are the units `[0, m)` in order**: the units it returns are strictly
-ascending, below `m`, and each stratum's `k` of them in that stratum's slots. -/
+/-- **A work sampling design's sample over strata whose slots are the units `[0, m)` in order**: the units it returns
+are strictly ascending, below `m`, and each stratum's `k` of them in that stratum's slots. -/
 theorem drawUnits_work_units {K n m read : ℕ} {ws : Array Flock.Draw.WorkStratum} {src : ByteArray}
     {units : Array ℕ} (h : Draw.drawUnits (.work K ws) n src = .ok (units, read))
     (hon : (ws.map (·.toStratum)).toList.flatMap (fun s => expand s.units.toList) = List.range m) :
