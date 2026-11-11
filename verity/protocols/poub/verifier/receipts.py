@@ -582,3 +582,10 @@ def verify_leaf(seed: bytes, plan: Plan, root: bytes, p: int, leaf: bytes, salt:
     root is `root`."""
     d = domain(seed, plan)
     return verify_opening(d, Commitment(root, d.count), Opening(p // PER_LEAF, hidden(leaf, salt), path), SCHEMA, LIMITS)
+
+
+__all__ = ["CHALLENGE_BYTES", "DEFAULT", "DIGEST_BYTES", "HM96", "KEY", "KINDS", "LAYOUT", "LIMITS", "OWNER",
+           "PER_LEAF", "PLAN_DOMAIN", "Plan", "ROWS", "Receipter", "SALT_BYTES", "SCHEMA", "SIGN_DOMAIN", "SKETCH_ROWS",
+           "SKETCH_SHA512", "SketchReceipter", "TREE_DOMAIN", "domain", "hidden", "hidden_digest", "leaf_receipt",
+           "leaves", "prefix", "receipt_kind", "receipter", "seed", "sign_bits", "sketch_prefix", "sketch_rows",
+           "spread", "tree", "verify_leaf"]

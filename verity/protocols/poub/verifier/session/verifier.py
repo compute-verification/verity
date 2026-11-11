@@ -1786,3 +1786,10 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
     (a.out / "verifier.json").write_text(json.dumps(out, indent=1))
     print(f"verifier: cpu {json.dumps(out['cpu'])}", flush=True)
     return 0
+
+
+__all__ = ["AVERAGE", "GPU_HBM_BYTES", "HBM_BYTES", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier",
+           "WORST_PASS", "ingress_bursts", "lean_record", "load_registry", "main", "memory", "memory_error",
+           "node_line", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
+           "recorded_paced", "recorded_rates", "recorded_windows", "regions_of", "save_registry", "sketch_at",
+           "timing_parts"]

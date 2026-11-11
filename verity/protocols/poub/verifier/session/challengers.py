@@ -287,3 +287,6 @@ def of(kind: str, out: Path, key: Path | None, params: str | None, *, verify: Ch
         return ChallengerGate(out, ssh_gate(shlex.split(ssh)), peer, pin, period, first_parent, verify,
                               minutes=minutes)
     raise ValueError(f"--challenger is one of {KINDS}")
+
+
+__all__ = ["ChallengerGate", "GATE_PORTS", "Local", "Serve", "of"]

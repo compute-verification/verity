@@ -807,10 +807,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["Books", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "Twin", "answer", "core_answer", "held_json",
-           "hold", "main", "message", "opening_json", "opening_of", "params_of", "plan_of", "pous_record", "prove",
-           "registration_json", "registration_of", "registration_of_setup", "released_of", "request_of", "session",
-           "verdict_json"]
+__all__ = ["Books", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "SESSION", "Twin", "answer", "core_answer",
+           "held_json", "hold", "main", "message", "opening_json", "opening_of", "params_of", "plan_of", "pous_record",
+           "prove", "registration_json", "registration_of", "registration_of_setup", "released_of", "request_of",
+           "session", "verdict_json"]
 
 if __name__ == "__main__":
     sys.exit(main())
