@@ -212,25 +212,26 @@ module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), w
 There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/check.py`) is the one check: every suite,
 `circuit-check --all`, Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
 `lean-agreement` (against upstream's Rust verifier) when Flock or its Lean verifier changes. The runners report facts: each
-suite, test, target and step's real verdict. What gates and what may stay red is `tools/verity/check/policy.toml`, read at
-the commit it judges: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
-which a failure is not red until it expires. `circuit-check` is off the merge gate until `circuit-check --all`
-fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it out, and it runs with
-each candidate's check.
+suite, test, target and step's real verdict. What gates and what may stay red is the landing policy,
+`tools/verity/check/policy.toml`: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
+which the verified queue takes a failure as not red until it expires. `circuit-check` is off the merge gate until
+`circuit-check --all` fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it
+out; a candidate's check still runs it, and its red there holds nothing.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.
 
-A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a docs-only
-change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` moves only to
-a checked candidate with no new failure: the verified queue (`research queue vqueue`) stacks the marked PRs that are
-reviewed or low-risk on `main`'s tip or on the candidate below, checks that tree, and fast-forwards `main` to it once
-every task on the merge gate passed or fails on its base too, so `main`'s reds only shrink. A candidate that fails never
-reaches `main`, and nothing is reverted: the member whose changed files meet a failed task's inputs loses its ready mark
-and its owner is told which tasks failed (several such members are bisected), and the candidates built on it are dropped.
-A step off the gate (policy.toml's `off_gate`, drive.toml's `warn_steps`) holds and ejects nothing: what a candidate fails
-there and its base doesn't is rung to its owner, to fix forward. How a PR gets its mark and its verdict: the team skill's
-Landing; the queue's rule for each case: `tools/research/src/research/vqueue.py`'s docstring.
+A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
+docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
+only fully checked commits: the verified queue's loop (`research queue vqueue`, ci's) merges the marked PRs that have a land
+verdict, or are low-risk, onto `main` as a candidate, checks it with `check.py --record` in shards, and fast-forwards `main`
+only to a candidate that passed every step on the merge gate. A failure the candidate's base shares blames none of its PRs;
+any other's suspects are the PRs whose change touches what it names (its files, the files declaring a Lean declaration it
+names), every PR when none does: a lone suspect is ejected, several are bisected, and the candidate is rebuilt without
+them. A candidate holding a Lean, lock or spec change runs lean-audit alone first (its records run) and is checked on the
+commit of the lock records it regenerated, so `main` moves only to regenerated records. What drive.toml lets warn (its
+`warn_gates` and `warn_steps`), a step off the gate and a lock's bookkeeping hold nothing: the owner is told, and fixes it in
+their next PR. How a PR lands, from its ready mark to `main`, and the loop's rule for each case: the team skill's Landing.
 
 ## Lean
 
@@ -273,7 +274,7 @@ Landing; the queue's rule for each case: `tools/research/src/research/vqueue.py`
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
   statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
   A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails
-  after a landing. A PR's own check still fails on it. Drive's lock run repairs it in its lock commit and
+  in a candidate's records run. A PR's own check still fails on it. The records run repairs it in its records commit and
   warns, naming each entry's owner, and the next PR fixes it. Bookkeeping is an unlisted or misfiled premise, a guarantee
   the witnesses rule holds to missing witnesses, a stale entry, a premise a `trust_gap` entry lists that its guarantee
   no longer rests on, a missing owner, or a cap of `unread-caps.json` or

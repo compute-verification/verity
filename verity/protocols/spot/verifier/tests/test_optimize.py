@@ -13,7 +13,8 @@ import random
 from dataclasses import replace
 from fractions import Fraction
 from itertools import combinations, product
-from math import ceil, comb, exp, fsum, lgamma, log, log1p, log2, ulp
+from decimal import Decimal, localcontext
+from math import ceil, comb, exp, fsum, lgamma, log, log1p, log2, prod, ulp
 from pathlib import Path
 
 import pytest
@@ -22,7 +23,7 @@ from verity.protocols.spot.verifier.profile import Stratified, Stratum
 from verity.protocols.spot.verifier.one_stage.draw import work_k, work_table
 from verity.protocols.spot.optimize import (HM96_ANDS, PROVING_ONLY, SHA512_ANDS, SHA512_ROWS, Candidate,
                                                            Cell, Commitment, CostModel, Grain, Objective, ReplayGrain,
-                                                           TemplateCost, _hit, _miss, certify, density_bound, density_exact,
+                                                           MISS_TERMS, TemplateCost, _hit, _log_miss, _miss, certify, density_bound, density_exact,
                                                            for_budget, for_target, frontier,
                                                            grain_costs, grain_optimum, leak_count, leak_draws, ln_bound,
                                                            ln_upper, loc_bits, max_harm, max_harm_check, met_replay,
@@ -480,6 +481,21 @@ def test_leak_count_is_certified_and_the_leak_law_draws_n_lambda_over_k_plus_one
         grain_costs([Grain("g", 4, 1.0, 1, 0.0, 1.0)], 0.5, h=0.0)
 
 
+def test_leak_count_is_certified_at_any_population():
+    """A world year's proof blocks, and targets that allow so few incorrect ones that the float 1 - K / n is 1: the
+    count meets the target, and one more block does not, under the entropy in 50-digit decimals."""
+    for n, b, ell in ((3348 * 10 ** 18, 16, 1e7), (10 ** 18, 64, 1e6), (10 ** 17, 1, 500.0), (10 ** 21, 4096, 1e9)):
+        k = leak_count(Grain("g", n, 1.0, b, 0.0, 1.0), ell)
+        with localcontext() as context:
+            context.prec = 50
+
+            def exact(count: int) -> Decimal:
+                entropy = count * (Decimal(n) / count).ln() + (n - count) * (Decimal(n) / (n - count)).ln()
+                return b * count + entropy / Decimal(2).ln()
+
+            assert 0 < k and exact(k) <= Decimal(ell) * (1 + Decimal(2) ** -45) < exact(k + 1) * (1 + Decimal(2) ** -44)
+
+
 def test_leak_costs_keep_the_refinement_rule():
     """`RefinementRule`: splitting each proof block into r of width b' with b + log2(K+2)/(K+1) <= b' + log2 r costs at least
     (1 - K/n)(1 - Λ/(2(K+1))) of the unsplit partition's c(s) n Λ/(K+1); a split that cuts the width by much more than
@@ -793,6 +809,32 @@ def test_a_capped_design_charges_what_a_request_serves():
             assert row["total"] <= budget * (1 + 1e-12)
 
 
+def test_a_replay_block_others_read_is_charged_its_groups_served_bits():
+    """A replay grain of fan-out F (`partition.fanout`), some replay block reading values another computed, is charged as
+    if each replay block served F S bits, the capped form at N = F: more than at F = 1 where the served bound binds, and a
+    design's bound is the capped `two_stage_exfil` at F.  At F = 1, every replay block closed, the charge is the served
+    bound's alone.  The sets' form without a served bound doesn't read F, and the patterns' form, each request read in one
+    replay block, refuses it."""
+    delta, replay_blocks, budget, served = 2.0 ** -20, 10 ** 8, 1e7, 4096.0
+    cells = [Cell(10 ** 5, 16.0, prove=1e-3, commit_bytes=2.0), Cell(4, 131072.0, prove=1e-3, commit_bytes=2.0 ** 14)]
+    k, q = {0: 995}, 0.0438
+    one = two_stage_exfil(cells, k, replay_blocks, q, delta, served)
+    assert two_stage_exfil(cells, k, replay_blocks, q, delta, served, fanout=1) == one
+    for f in (2, 8):
+        shared = two_stage_exfil(cells, k, replay_blocks, q, delta, served, fanout=f)
+        assert shared == two_stage_exfil(cells, k, replay_blocks, q, delta, f * served) > one
+    assert two_stage_exfil(cells, k, 10, .5, delta, fanout=8) == two_stage_exfil(cells, k, 10, .5, delta)
+    kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "served": served}
+    closed, read = (two_stage_design(cells, replay_blocks, delta, fanout=f, **kw) for f in (1, 4))
+    assert closed == two_stage_design(cells, replay_blocks, delta, **kw) and read["bound"] > closed["bound"]
+    strata = [replace(c, stratum=0 if c.bits <= read["merged"] else 131072) for c in cells]
+    assert read["bound"] == two_stage_exfil(strata, read["k"], replay_blocks, read["q"], delta, served, fanout=4)
+    with pytest.raises(ValueError, match="needs fan-out 1, not 2"):
+        two_stage_exfil(cells, k, 10, .5, delta, served, union=True, fanout=2)
+    with pytest.raises(ValueError, match="fan-out is at least 1"):
+        two_stage_exfil(cells, k, 10, .5, delta, served, fanout=0)
+
+
 def test_a_one_stage_sample_replays_the_replay_blocks_it_meets():
     """`met_replay`: d proof blocks sampled uniformly over R replay blocks meet R (1 - (1 - 1/R)^d) of them, each
     replayed once; and `grain_costs` adds it to a one-stage total, which is otherwise unchanged."""
@@ -862,12 +904,26 @@ def test_sensitivity_and_benchmarks_flag_what_moves_the_plan():
     assert needs_benchmark(_noised(), _noised_costs(0.25), objective, 2000.0, grid=31) == []
 
 
-def test_miss_holds_its_digits_on_huge_populations():
-    """A week of served proof blocks is about 10^16: the miss probability against the product it denotes, summed exactly."""
-    for n in (2 ** 25 - 3, 2 ** 25 + 3, 10 ** 12, 10 ** 16):
-        for m, k in ((1, 1), (4096, 27_713), (10 ** 6, 100), (64, 10 ** 6)):
+def test_miss_holds_its_digits_at_any_population():
+    """A week of served proof blocks is about 10^16: the log of the miss probability against the product it denotes, in
+    exact integers.  Past `MISS_TERMS` terms it is over the exact log by less than the closed form's stated looseness,
+    1 / (100 n) of it where the miss is at least 2^-40.  (A sparse sample's hit is 1 - miss: an error of 1e-7 in a log of
+    1e-4 is a tenth of a percent of what the sample costs.)"""
+    for n in (130, 5000, 10 ** 6, 2 ** 25 - 3, 2 ** 25 + 3, 10 ** 12, 10 ** 16, 10 ** 19):
+        for m, k in ((1, 1), (65, 65), (4096, 27_713), (10 ** 6, 100), (64, 10 ** 6), (300, 2000), (1500, 70)):
+            if m + k > n:
+                assert _miss(n, m, k) == 0.0
+                continue
             t, s = min(m, k), max(m, k)
-            assert _miss(n, m, k) == pytest.approx(exp(fsum(log1p(-s / (n - i)) for i in range(t))), rel=1e-6)
+            with localcontext() as context:
+                context.prec = 50
+                exact = (Decimal(prod(n - s - i for i in range(t))) / Decimal(prod(n - i for i in range(t)))).ln()
+                rounding = -exact * Decimal(2) ** -38
+                loose = Decimal(s) / (8 * (n - t + 1) * (n - s - t + 1)) if t > MISS_TERMS else Decimal(0)
+                if exact >= -28:
+                    assert loose <= -exact / (100 * n)
+                assert exact - rounding <= Decimal(_log_miss(n, m, k)) <= exact + loose + rounding
+                assert Decimal(_miss(n, m, k)) == pytest.approx(exact.exp(), rel=Decimal("1e-9") + loose)
 
 
 def test_shared_statements_hold_only_the_drawn_units():

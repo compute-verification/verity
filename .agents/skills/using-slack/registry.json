@@ -179,7 +179,6 @@
         "benchmarks/served_units/",
         "benchmarks/unit_block/",
         "benchmarks/served_commit/",
-        "benchmarks/g2/",
         "benchmarks/compile_cost/",
         "tools/verity/circuit_check/",
         "benchmarks/native_peak/",
@@ -456,7 +455,8 @@
         "benchmarks/network_e2e/",
         "benchmarks/datacenter/",
         "benchmarks/network_sim/",
-        "benchmarks/prove_path/"
+        "benchmarks/prove_path/",
+        "benchmarks/certifier_timing/"
       ],
       "branch_suffixes": [
         "728f",
@@ -512,9 +512,7 @@
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
-        "tools/research/src/research/merge.py",
-        "tools/research/src/research/drive.py",
-        "tools/research/tests/test_queue_drive.py"
+        "tools/research/src/research/merge.py"
       ],
       "branch_suffixes": [
         "4292",
