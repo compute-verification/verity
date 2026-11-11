@@ -37,7 +37,8 @@ untraced = [
 ]
 # The Lean verifier and the ZK server's Lean, which `test_audit_two_members` runs and skips without: check's lean-build step
 # builds them before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/protocols/flock/prover/check_build.sh bin`'s,
-# from the live crate and the patches under `verity`.
+# from the live crate and the patches under `verity`, on the Flock checkout check's flock-circuit-build step leaves on a
+# machine: the test skips on a machine without one, since its build fetches nothing.
 artifacts = ["verity/protocols/flock/verifier/.lake/build/bin/flock-verify",
              "verity/protocols/flock/verifier/.lake/build/bin/flock-firewall"]
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
