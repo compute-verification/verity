@@ -4,7 +4,8 @@ reads from the same bytes: the root, the program's SHA-512, and at every definit
 member count, callee) and gates, which are the gates the decoder counted; and a template query's units with their gates, or
 its refusal. Each program lists its callees in another order than the decoder numbers its definitions: `pops`, two
 `TQPair_v0` and three `TQTriple_v0` instances over `Input8_v1` gates (the codec's `mixed_population_program`), and
-`Flock.Test.RegProgram`'s `plain` and `reg`, whose roots a template query refuses.
+`Flock.Test.RegProgram`'s `plain` and `reg`, whose roots a template query refuses. Both readers refuse, in the same words, a
+composite keyed with an input id, a root `call` node of an input primitive and a root node whose callee has no definition.
 -/
 module
 
@@ -65,5 +66,25 @@ def reordered (b : ByteArray) : Bool :=
 -- a root node that is a batch or a scan of a template the query doesn't list is refused alike
 #guard agree plain #["TPair_v1"] && agree reg #["TPair_v1"]
 #guard agree plain #["TStep_v1"] && agree reg #["TStep_v1"]
+
+/-- `b` with every `old` written `new`. -/
+def rewritten (b : ByteArray) (old new : String) : ByteArray := ((String.fromUTF8! b).replace old new).toUTF8
+
+/-- The words `Desc.parse` refuses `b` in, when `Program.decode` refuses it in the same. -/
+def refusedAlike (b : ByteArray) : Option String :=
+  match TemplateQuery.Desc.parse b, Program.decode b with
+  | .error e, .error f => if e == f then some e else none
+  | _, _ => none
+
+-- a composite keyed with an input id (`plain`'s `TPair_v1`, which its root calls) is refused by both
+#guard refusedAlike (rewritten plain "TPair_v1" "Input8_v1") ==
+  some "definition 'Input8_v1': an input id keys only the input primitive"
+#guard refusedAlike (rewritten plain "TPair_v1" "RegisteredInput8_v1") ==
+  some "definition 'RegisteredInput8_v1': an input id keys only the input primitive"
+-- and so is a root `call` node of an input primitive, and a root node whose callee has no definition
+#guard refusedAlike (rewritten plain "\"fn\":3,\"form\":\"call\"" "\"fn\":1,\"form\":\"call\"") ==
+  some "definition 'Root[TProg_v1]_v1' node 3: a call node does not call a primitive (Input32_v1)"
+#guard refusedAlike (rewritten plain "\"Input16_v1\",\"TPair_v1\"" "\"Input16_v1\",\"TGone_v1\"") ==
+  some "KeyError: no definition TGone_v1"
 
 end Flock.Test.DescOfProg

@@ -829,6 +829,7 @@ private def getDef (fuel : Nat) (desc : Desc) (fid : String) : D Nat := do
         if !(params.isEmpty && w == iw) then throw s!"primitive {fid} signature differs from the registry"
       pure ({ key := fid, id, prim := true, params, ret, binding := input.map (·.1), gates := 1,
               paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := 1 } : Defn)
+    else if isInputId fid then throw s!"definition '{fid}': an input id keys only the input primitive"
     else composite n desc fid d form id
   let s ← get
   set { s with defs := s.defs.push defn, index := s.index.insert fid s.defs.size, busy := s.busy.erase fid }

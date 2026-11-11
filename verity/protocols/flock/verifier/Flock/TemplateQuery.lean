@@ -42,8 +42,9 @@ structure Desc where
 
 def Desc.def? (d : Desc) (id : String) : Option DDef := (d.defs.find? (·.1 == id)).map (·.2)
 
-/-- An input id, `Input<w>_v1` or `RegisteredInput<w>_v1` (`Program.inputId?`). The id alone names no input: a composite
-may carry it, so a node is read as an input by `Desc.isInputNode`. -/
+/-- An input id, `Input<w>_v1` or `RegisteredInput<w>_v1` (`Program.inputId?`). `Desc.parse` and `Program.decode` refuse
+a composite keyed with one; a `Desc` read another way may hold one, so a node is read as an input by `Desc.isInputNode`,
+never by its callee's id alone. -/
 def isInput (id : String) : Bool := Program.isInputId id
 
 /-- Whether `x` is an input node (`program.is_input` of its callee): its callee is a primitive whose id is an input id.
@@ -54,7 +55,22 @@ def Desc.isInputNode (d : Desc) (x : DNode) : Bool :=
   let id := d.callees.getD x.fn ""
   isInput id && (d.def? id).any (·.prim)
 
-/-- `Desc.parse` in a verdict monad `M`, the program's SHA-512 by `sha512` (`Flock.With.Setup` runs it on the hash oracle). -/
+/-- The root's nodes as `Program.decode` holds every node, in its words: the root is a definition, each of its nodes'
+callees has one, a `primitive` node calls a primitive, and a `call` or `scan` node calls a composite. -/
+def rootNodesOk (callees : Array String) (defs : Array (String × DDef)) (root : String) : V Unit := do
+  let some (_, rd) := defs.find? (·.1 == root) | throw "program: the root is not a definition"
+  for k in [0:rd.nodes.size] do
+    let x := rd.nodes[k]!
+    let id := callees.getD x.fn ""
+    let some (_, c) := defs.find? (·.1 == id) | throw s!"KeyError: no definition {id}"
+    if x.form == "primitive" && !c.prim then
+      throw s!"definition '{root}' node {k}: a primitive node does not call a composite ({id})"
+    if (x.form == "call" || x.form == "scan") && c.prim then
+      throw s!"definition '{root}' node {k}: a {x.form} node does not call a primitive ({id})"
+
+/-- `Desc.parse` in a verdict monad `M`, the program's SHA-512 by `sha512` (`Flock.With.Setup` runs it on the hash oracle).
+It refuses, as `Program.decode` does, a definition keyed with an input id that is no primitive, and a root node
+`rootNodesOk` refuses. -/
 def Desc.parseWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (sha512 : ByteArray → M ByteArray)
     (bytes : ByteArray) : M Desc := do
   let some text := String.fromUTF8? bytes | throw "program: not UTF-8"
@@ -73,6 +89,7 @@ def Desc.parseWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [Monad
     | .ok (.obj kvs) => kvs.toArray.mapM fun (id, dj) => do
       let form := (dj.getObjValAs? String "form").toOption.getD ""
       if form == "primitive" then pure (id, ({ prim := true, nodes := #[] } : DDef))
+      else if isInput id then throw s!"definition '{id}': an input id keys only the input primitive"
       else if form == "composite" then
         let nodes ← match (dj.getObjVal? "body").toOption.bind (fun b => (b.getObjVal? "nodes").toOption) with
           | some (.arr ns) => ns.mapM fun nj => do
@@ -85,7 +102,7 @@ def Desc.parseWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [Monad
       else throw s!"program: {id}: an unknown definition form {form}"
     | _ => throw "program: definitions"
   let some root := (j.getObjValAs? String "root").toOption | throw "program: root"
-  if (defs.find? (·.1 == root)).isNone then throw "program: the root is not a definition"
+  (rootNodesOk callees defs root : V Unit)
   return { callees, defs, root, sha512 := ← sha512 (← canon bare).toUTF8 }
 
 def Desc.parse (bytes : ByteArray) : V Desc := Desc.parseWith (fun b => pure (Sha512.hash b)) bytes
