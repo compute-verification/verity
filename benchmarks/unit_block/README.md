@@ -21,3 +21,9 @@ research run --on vy-nebius-cpu-6 --cwd source --mem-gb 64 --timeout 60m -- bash
 It writes `unit-block-WORD.json`: the model `circuit.unit_witness` reads off the Definition, the select's slot, the block's
 `k_log`, ranges and rows with their compressions, each as a share of 2^27, the build's time and peak memory, and the staged
 instances' outputs.
+
+## Interface
+
+- **Provides:** `run.py`, a command, and the result file it writes.
+- **Loaded by:** nothing.
+- **Loads:** `verity.definitions`, `verity.circuits`, `verity.commitments.rowleaf` and Flock (`verity_flock`).

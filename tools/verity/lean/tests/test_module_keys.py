@@ -903,6 +903,40 @@ def test_a_build_takes_no_trace_in_the_build_of_a_package_it_requires_by_path(tm
     assert took() == {} and held() == was, "a trace of d's that isn't JSON is d's build's to remove"
 
 
+def test_a_build_settles_the_build_of_a_path_dependency_its_run_does_not_audit(tmp_path):
+    """`d` is in the tree only as `r`'s path dependency, and its build there is a copy of a kept build that no build of
+    `d`'s own will settle. Left as it is, `D.X`, which the cache lacks, is never indexed, and every module of `r` that
+    loads it is recorded as one the cache could not index, in each build that takes such a copy. Named to the stage
+    step, `d`'s build is settled with `r`'s: `D.X` loses its trace where the cache lacks it or holds another version,
+    and keeps it where the cache holds what the tree does. The first build of a run that reaches a module there settles
+    it; a later one of the same run leaves it, since an earlier build has compiled it and the cache holds it only when
+    the run ends."""
+    root = _workspace(tmp_path / "ws")
+    d, store = (tmp_path / "ws" / "d").resolve(), tmp_path / "store"
+    keyed = MK.keys(root, ["R.B"])
+    held = {m: files for m, files in (("D.X", X), ("R.A", A), ("R", R), ("R.B", B))}
+    traces = {m: _held(keyed, m, files) for m, files in held.items()}
+    caches = iter(range(99))
+
+    def took(seen: set, also=(d,)) -> dict:
+        why: dict = {}
+        MK.stage(store, root, ["R.B"], tmp_path / "cache" / str(next(caches)), report=why, settled=True, also=also, seen=seen)
+        return why["took"]
+
+    run: set = set()
+    assert took(run) == {MK.ABSENT: 4} and not any(t.exists() for t in traces.values()), "D.X goes with r's three"
+    assert run == {(d, "D.X")}
+    traces = {m: _held(keyed, m, files) for m, files in held.items()}     # the run's first build compiled all four
+    assert took(run) == {MK.ABSENT: 3} and traces["D.X"].exists(), "a second build of the run leaves what the first settled"
+    _stock(store, keyed, {"D.X": ("1" * 16, X), "R.A": ("2" * 16, A), "R": ("3" * 16, R)})
+    traces = {m: _held(keyed, m, files) for m, files in held.items()}
+    assert took(set()) == {MK.ABSENT: 1} and traces["D.X"].exists(), "the cache holds D.X as the tree does; R.B it lacks"
+    traces["D.X"] = _held(keyed, "D.X", {"9" * 16 + ".olean": b"another X", "b" * 16 + ".ilean": b"x"})
+    assert took(set(), also=()) == {} and traces["D.X"].exists(), "not named: d's build stays whole"
+    assert took(set(), also=(root,)) == {} and traces["D.X"].exists(), "the root named is no path dependency"
+    assert took(set()) == {MK.REPLACED: 1} and not traces["D.X"].exists(), "another version than the cache's: Lake restores it"
+
+
 def test_a_module_above_one_that_is_compiled_keeps_its_trace_when_the_cache_holds_it_as_the_tree_does(tmp_path):
     """A module above one that isn't staged has no key until that one is compiled. It is keyed on what the tree holds
     of it, its key if the compile gives those bytes again: indexed under that key with the artifacts its trace names,
