@@ -32,7 +32,6 @@
     {"file": "verity_vllm/pipeline/research_outputs.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "research-outputs"},
     {"file": "verity_vllm/pipeline/serving_view.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "serving-view"},
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "topp-split-probe"},
-    {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "descriptor-equivalence"},
     {"file": "verity_vllm/program/frontend/conformance.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "conformance"},
     {"file": "verity_vllm/program/gemm_target_correspondence.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "gemm-correspondence"},
     {"file": "verity_vllm/program/mla_capture.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "mla-capture"},

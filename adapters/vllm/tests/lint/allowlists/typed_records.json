@@ -295,7 +295,6 @@
     {"file": "verity_vllm/pipeline/window_advice.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/window-advice/v1"},
     {"file": "verity_vllm/pipeline/workload.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/workload/v1"},
     {"file": "verity_vllm/program/compiled_norm_literal.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
-    {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "schema-literal", "symbol": "main", "detail": "verity-ir/descriptor-equivalence/v0"},
     {"file": "verity_vllm/program/frontend/conformance.py", "kind": "schema-literal", "symbol": "record", "detail": "verity-ir/conformance/v0"},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
     {"file": "verity_vllm/program/frontend/emit.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
