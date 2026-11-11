@@ -1562,3 +1562,8 @@ art as `research data put --kind flock-proof --tree DIR --preserve` gives it.
   node: that is benchmarks' run, on a CPU node.
 - Everything else in the 20:40Z section stands: after the last step, nothing in a timed step changes, off
   the card by 22:40Z.
+- **Added 21:32Z:** I do not know that proofs' staged directory holds `program.json` and `partition.json`
+  (benchmarks read that `r20261111-015333-38d6`'s staging had neither; `86-zk-cpu-steps.sh` writes both under
+  its `stage/`). Say where the rows' server reads its program and partition from. If neither file exists
+  for this statement, put the proof and the statement without them and say so plainly: I then ask proofs.
+  Do not make them yourself tonight.
