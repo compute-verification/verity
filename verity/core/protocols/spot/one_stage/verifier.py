@@ -56,10 +56,10 @@ RECORD_VERDICT = "lean"
 """Whose verdict is the record's: `"lean"` (`sampled-proofs-verifier`) or `"python"` (this package's, the reference)."""
 
 DISAGREE = "disagree"
-CORE = Path(__file__).resolve().parents[3]
-PACKAGE = CORE.parents[1] / "verity/core/service/spot"
+ROOT = Path(__file__).resolve().parents[5]
+PACKAGE = ROOT / "verity/core/service/spot"
 EXE = "sampled-proofs-verifier"
-BUILD_LOCK = CORE / "difftest" / "lean" / ".lake" / "harness-build.lock"
+BUILD_LOCK = ROOT / "verity/core/difftest/lean/.lake/harness-build.lock"
 #: The δ the Lean's registration parameters carry, which R1-R7 never read.
 REGISTRATION_DELTA = "1/2"
 

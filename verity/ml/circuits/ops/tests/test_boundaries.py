@@ -9,8 +9,14 @@ import ast
 import sys
 from pathlib import Path
 
-CATALOG = Path(__file__).resolve().parents[2]
-SILICON = CATALOG / "silicon"
+ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
+SILICON = ROOT / "verity/ml/circuits/silicon"
+#: The directories the checker's rule covers, the circuit language's and the catalog's. Each is a path from the root that
+#: names the directory, or a module in it, so that `tools/move/layout.py` rewrites it to where that goes: the language's
+#: own directory is named by two modules, the language's and the library's, which a move may put in two directories.
+CIRCUITS = ((ROOT / "verity/ml/circuits/__init__.py").parent, (ROOT / "verity/ml/circuits/library.py").parent,
+            ROOT / "verity/ml/circuits/evaluation", ROOT / "verity/ml/circuits/ops", SILICON,
+            ROOT / "verity/ml/circuits/targets", ROOT / "verity/ml/circuits/tests")
 FROM_VERITY = ("verity.errors", "verity.ml.circuits.boolean.forms")
 #: the checker, which the catalog's modules import no more than core's do (`tests/test_boundaries.py`); its
 #: ``*.circuit-check.py`` sidecars, circuit-check's bindings of its Definitions, may (`circuit_check.sidecars`)
@@ -38,8 +44,8 @@ def test_silicon_is_stdlib_only() -> None:
 
 
 def test_only_a_sidecar_imports_the_checker() -> None:
-    offenders = [f"{path.relative_to(CATALOG)}:{line}: {name}"
-                 for path in sorted(CATALOG.rglob("*.py"))
+    offenders = [f"{path.relative_to(ROOT)}:{line}: {name}"
+                 for path in sorted({path for directory in CIRCUITS for path in directory.rglob("*.py")})
                  if not path.name.endswith(".circuit-check.py") and "__pycache__" not in path.parts
                  for name, line in _imports(path)
                  if name.split(".")[0] == CHECKER]

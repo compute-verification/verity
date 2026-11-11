@@ -14,6 +14,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     dot, inv = BX.SPARSE_MLA_GLM53["DOT"], BX.SPARSE_MLA_GLM53["INV"]
     return [
         ("SparseMlaSplitEnd_v2", lambda: bind(BX.SparseMlaSplitEndV2, DV=16, INV=inv, SCALE=0.0625)),
+        ("SparseMlaSplitEndCols_v2", lambda: bind(BX.SparseMlaSplitEndColsV2, DV=16, G=8, C=1, INV=inv, SCALE=0.0625)),
         # a split of two blocks (T = 17 at BN = 16: the partial block visited first, then the full one)
         ("SparseMlaSplitPart_v2", lambda: bind(BX.SparseMlaSplitPartV2, T=17, DR=16, DV=16, BN=16, DOT=dot, INV=inv, SCALE=0.0625)),
         ("SparseMlaCombine_v2", lambda: bind(BX.SparseMlaCombineV2, NSPLIT=3, DV=16, INV=inv)),

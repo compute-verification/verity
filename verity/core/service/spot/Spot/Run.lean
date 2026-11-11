@@ -230,6 +230,7 @@ private def interiorAudit (i : Input) (sample : Array Nat) :
         wires := SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn,
         rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn }
     let rec_ := SecondStage.attach rec_ (SecondStage.check SecondStage.FORM own it.statements)
+      (SecondStage.interiorReads own ((it.statements.getD #[]).toList))
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
       ("read", Lean.toJson read), ("audit", Json.str (← PyJson.canonical rec_))])])
 

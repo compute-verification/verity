@@ -164,6 +164,10 @@ noncomputable def alpha {ι : Type} [Fintype ι] [DecidableEq ι] (d : Registere
 /-- `α` under (H) and (E): `½ √(k³ / (q b))`, at `q = β_w β_x` and (E)'s floor `b`. -/
 noncomputable def alphaHE (k : ℕ) (q b : ℝ) : ℝ := √(k ^ 3 / (q * b)) / 2
 
+/-- The work bound under (H) and (E) at `m` blocks, each reading at most `k` gates outside `θ`:
+`m (k + α) + (k/2) √(m O / q)` at `α = alphaHE k q b`, for work of `O` output wires at `q = β_w β_x`. -/
+noncomputable def workHE (m k : ℕ) (q b O : ℝ) : ℝ := m * (k + alphaHE k q b) + k / 2 * √(m * O / q)
+
 /-- `F = √(2 (1 - 1/ω))`, what shared arrays with no `ω + 1` of them pairwise read together put on both terms of the
 bound: `1` at `ω = 2`, `2/√3` at `ω = 3`. -/
 noncomputable def shareF (ω : ℕ) : ℝ := √(2 * (1 - 1 / ω))

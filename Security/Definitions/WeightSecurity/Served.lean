@@ -25,7 +25,7 @@ outputs the trace commits, at its bucket, and nothing else.
 * `Served.Local C E Ou L θ r l`: each window that releases changes at most `E` of its slots per incorrect proof block,
   against the served function's honest answer to the outsider's query at the window's advice. It is what the layers
   below the composition give: the network certifier ties the release to the trace's outputs, and the trace differs
-  from the honest run only in its incorrect proof blocks' egress cones (`Population.Dataflow.card_changed_le`);
+  from the honest run only in its incorrect proof blocks' reach (`Population.Dataflow.card_changed_le`);
 * `Served.Isolated C F Ou L θ r l`: through each window accepted before the first rejection, the releases change at
   most `F` outputs per incorrect proof block of the windows so far, so a block's changes may fall in later windows,
   through state they read;
@@ -105,8 +105,8 @@ noncomputable def changed [Fintype O] (C : Θ → Q × Adv → O → V) (Ou : Ou
 
 /-- **The releases are local**: each window that releases changes at most `E` of its slots per incorrect proof block of
 its own. The network certifier gives that the release is the trace's outputs, and the dataflow that the trace differs
-from the honest run at the window's query and advice only within its incorrect proof blocks' egress cones, each at most
-`E` slots. -/
+from the honest run at the window's query and advice only within its incorrect proof blocks' reaches, each at most `E`
+slots. -/
 def Local [Fintype O] (C : Θ → Q × Adv → O → V) (E : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
     (L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) : Prop :=
   ∀ n < count L l, ∀ w, l[n]? = some w → (changed C Ou L θ r l n).card ≤ E * w.incorrect

@@ -749,7 +749,8 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
     member's circuit and public file: what the verifier refuses, not the prover. Then that public file with one
     bit flipped (``public-bit-*``) under the honest proof."""
     import a0
-    sys.path.insert(0, str(HERE.parents[1] / "verity" / "ml" / "flock" / "verifier"))
+    # the directory of `zk_mutants.py` and the modules it imports beside it
+    sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/ml/flock/verifier/zk_mutants.py").parent))
     import zk_mutants as ZM
 
     k, honest = next(((k, s.parent) for k in range(len(members))

@@ -303,7 +303,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 HERE = Path(__file__).resolve().parent
-TREE = HERE.parents[1]
+TREE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TREE))
 
 from verity.core.protocols.spot.challenger import (DECLARATION, LEDGER_ROLE as ROLE,  # noqa: E402
@@ -1539,7 +1539,7 @@ def _after_load(spent: int) -> str:
 
 def _load_relay():
     """`benchmarks/network_traces/load_relay.py`, the load's store, relay and commit, imported when a verb needs it."""
-    if (here := str(TREE / "benchmarks" / "network_traces")) not in sys.path:
+    if (here := str((TREE / "benchmarks/network_traces/load_relay.py").parent)) not in sys.path:
         sys.path.insert(0, here)
     import load_relay
     return load_relay
@@ -2307,7 +2307,7 @@ def certifier_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list
     prompts = ["--prompts-file", str(out.parent / WITNESS / PROMPTS)] if varied and req.get("prompts") else []
     traffic = ["--traffic", "varied", "--name", req["run"]] if varied else \
         ["--profile", req.get("profile", CERTIFIER_PROFILES[0])]
-    return [sys.executable, str(tree / "benchmarks" / "network_traces" / "certifier_serve.py"), "rehearse",
+    return [sys.executable, str(tree / "benchmarks/network_traces/certifier_serve.py"), "rehearse",
             "--upstream", url, "--out", str(out), *height_argv(req), "--requests", str(req["requests"]), *given,
             *prompts, *sampling_argv(req), *traffic, "--strategies", req["tamper"] or "honest"]
 

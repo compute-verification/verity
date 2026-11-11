@@ -1,10 +1,13 @@
 """`periods.py`: the slowdown per monitoring period, over one datacenter and over the world's compute.
 
-For each scenario (by default the measured H200 ones, `reference-onsite-h200` and `reference-remote-h200`, and today's
-operating point, `reference-onsite-h200-today`) on each fleet (`FLEETS`: one 100k-GPU datacenter, and the world's
-compute, the census's world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rho.params`), with
-the scenario's own `fleet` and `horizon` choices overridden (`scenario.<name>.fleet`, `scenario.<name>.horizon`):
+For each scenario (by default the measured H200 ones, `reference-onsite-h200` and `reference-remote-h200`, the remote
+one with its proofs sampled beside it, `reference-remote-h200-sampled`, and today's operating point,
+`reference-onsite-h200-today`) on each fleet (`FLEETS`: one 100k-GPU datacenter, and the world's compute, the census's
+world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rho.params`), with the scenario's own
+`fleet` and `horizon` choices overridden (`scenario.<name>.fleet`, `scenario.<name>.horizon`):
 
+* **what it assumes about proofs** (`proofs`): every unit proved, or proofs sampled at the regime's compute share
+  (`proof_share`), where each accepted incorrect proof block injects the widest public size class of output bits;
 * **the slowdown's lower bound** and its range: each ranged parameter alone at either end of its plausible range, the
   rest at reference (`analysis.tornado`), and the corner, all of them at their worse ends at once (`analysis.corner`);
   and the padded size ratio `|A| / T_0` it comes from;
@@ -19,13 +22,18 @@ the scenario's own `fleet` and `horizon` choices overridden (`scenario.<name>.fl
   each server's capacity, neither a per-window bound;
 * **what sets it** (`analysis.attribution`);
 * **the premises ranked** by how far each alone moves the lower bound: each ranged parameter over its range, each
-  assumption of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary cap).
+  assumption of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary cap). A proof
+  block's output bits are ranked over the public size classes as the size class's limit (`LIMITS`), not as a premise.
 
 `--measured CIRCUIT` evaluates them with a measured step's design in place of the FLOP model (`circuits.in_place`: its
 structure's `s_×` and its gates per FLOP), and sets the step beside the FLOP model first (`circuits.compare`).
+`--bounds CLASS` (repeatable) bounds each scenario by that class alone (`only`), and the header then says what such a
+row's figure covers (`alone_md`).
 
     uv run python benchmarks/rho/periods.py                # Markdown on stdout
     uv run python benchmarks/rho/periods.py --measured smollm2-135m-step
+    uv run python benchmarks/rho/periods.py --bounds min-cut --scenario reference-onsite-h200 \
+        --scenario reference-remote-h200                     # the min-cut bound alone, onsite and remote
     uv run python benchmarks/rho/periods.py --out DIR        # and periods.md and periods.json in DIR
 """
 
@@ -34,17 +42,19 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict
 from pathlib import Path
 
 import run
 from rho import analysis, circuits, lean, operating, params
-from rho.classes import premise_status, premises
+from rho.classes import CLASSES, premise_status, premises
 from rho.envelopes import ROUTES
-from rho.params import Registry
+from rho.params import Param, Registry
 from rho.scenario import Result, _binding_k
 
-SCENARIOS = ("reference-onsite-h200", "reference-remote-h200", "reference-onsite-h200-today")
+SCENARIOS = ("reference-onsite-h200", "reference-remote-h200", "reference-remote-h200-sampled",
+             "reference-onsite-h200-today")
 #: (fleet, label): one datacenter, and the world's compute
 FLEETS = (("reference-h200", "one datacenter"), ("world-h200", "the world"))
 #: core's monitoring periods, by name (`params.PERIODS`)
@@ -53,10 +63,32 @@ PERIODS = tuple(params.PERIODS)
 KINDS = {"proved": "proved in Lean", "assumption": "assumption", "draft": "paper", "absent": "stated, in no lock"}
 #: parameter statuses that are a choice or a measurement rather than an open premise
 FIXED = ("datasheet", "measured", "declared", "ruled")
+#: the parameters whose range is a limit `verity` sets, not a premise, by the kind their row shows: a proof block's
+#: output bits, the widest public size class (the limit, provisional) down to the smallest, the 16-bit limit
+LIMITS = dict.fromkeys(params.BLOCK_OUTPUT_BITS, "the size class's limit (provisional)")
 
 
 def choices(name: str, fleet: str, period: str) -> dict[str, str]:
     return {f"scenario.{name}.fleet": fleet, f"scenario.{name}.horizon": period}
+
+
+def only(reg: Registry, names: Iterable[str], bounds: Sequence[str]) -> Registry:
+    """`reg` with each scenario of `names` bounded by the classes `bounds` alone: `scenario.<name>.bounds`, the key a
+    scenario's table leaves out to take every class."""
+    unknown = [b for b in bounds if b not in CLASSES]
+    if unknown:
+        raise ValueError(f"{unknown} are not classes of rho.classes.CLASSES: {', '.join(CLASSES)}")
+    keys = {f"scenario.{n}.bounds": list(bounds) for n in names}
+    return Registry({p.key: p for p in reg.params()} | {k: Param(k, v) for k, v in keys.items()})
+
+
+def proofs(r: Result) -> str:
+    """What a row assumes about proofs: every unit is proved (`Detection` unsampled, `q = 1`), or proofs are sampled at
+    the regime's compute share (`proof_share`); no proofs where the regime detects nothing."""
+    d = getattr(operating._inner(r.scenario.regime), "detection", None)
+    if d is None:
+        return "no proofs"
+    return f"proofs sampled at {100 * d.proof_share:.3g}% of compute" if d.sampled else "every unit proved"
 
 
 def without_hosts(reg: Registry) -> dict[str, float]:
@@ -108,10 +140,11 @@ def scaled(r: Result) -> dict:
 
 def ranking(reg: Registry, name: str, swings: list[analysis.Swing]) -> list[dict]:
     """Every ranged parameter over its range, every assumption refuted, `draft:no-straddle` dropped, by how many
-    decades each alone moves the lower bound."""
+    decades each alone moves the lower bound. A limit of `LIMITS` is ranked over its range as the limit it is, never
+    open: its range shows what the limit costs."""
     base = analysis.at(reg, name)
-    out = [{"what": s.key, "kind": f"parameter ({reg.param(s.key).status})",
-            "open": reg.param(s.key).status not in FIXED, "range": [s.low, s.high],
+    out = [{"what": s.key, "kind": LIMITS.get(s.key, f"parameter ({reg.param(s.key).status})"),
+            "open": s.key not in LIMITS and reg.param(s.key).status not in FIXED, "range": [s.low, s.high],
             "at": [s.at_low, s.at_high], "decades": s.size} for s in swings]
     for p in reg.names("premise"):
         cited = reg[f"premise.{p}.lean"]
@@ -144,7 +177,7 @@ def evaluate(reg: Registry, names=SCENARIOS, fleets=FLEETS, periods=PERIODS) -> 
                 ends = [r.lo] + [v for s in swings for v in (s.at_low, s.at_high)]
                 f = run.picked(r)
                 rows.append({
-                    "scenario": name, "fleet": fleet, "where": label, "period": period,
+                    "scenario": name, "proofs": proofs(r), "fleet": fleet, "where": label, "period": period,
                     "servers": r.scenario.context.fleet.count, "period_s": r.scenario.context.period.seconds,
                     "slowdown": r.lo, **sensitivities(at, name), "padded": run.padded(r), "mfu": r.scenario.mfu,
                     "range": [min(ends), max(ends)], "corner": corner.rho, "seconds": r.scenario.seconds(r.lo),
@@ -188,7 +221,20 @@ def measured_md(reg: Registry, m: circuits.Comparison) -> list[str]:
              f"{fmt(m.s_x_unsplit)}) | — |"), ""]
 
 
-def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.Comparison | None = None) -> str:
+def alone_md(rows: list[dict], bounds: Sequence[str]) -> list[str]:
+    """What rows bounded by the classes `bounds` alone cover (`only`): a figure is those classes' on the blocks they
+    bound and no class's on the rest, so the share on the blocks stands beside it."""
+    shares = [x["scaled"]["per_window_share"] for x in rows]
+    names = ", ".join(f"`{b}`" for b in bounds)
+    return [(f"Each row is bounded by {names} alone (`--bounds`), every other class left out. A class bounds the "
+             f"blocks its premises hold at, which hold {min(shares):.2g} to {max(shares):.2g} of a row's rate here; "
+             "the rest is the uncertified routes and the unregistered pool at `q_U`, which no class sets, and a block "
+             "no class bounds counts at its capacity. So a figure in these rows is a class's only on that share: "
+             "\"what sets it\" and \"Its parts\" name the rest."), ""]
+
+
+def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.Comparison | None = None,
+             bounds: Sequence[str] = ()) -> str:
     fmt = run.fmt
     out = ["# The slowdown per monitoring period", "",
            ("The slowdown's lower bound at the measured H200 inputs, for each monitoring period, over "
@@ -198,16 +244,19 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
             "slowdown is the hardware multiple over the reference training algorithm at its MFU, MFU₀ (Lean's "
             "`hardwareMultiple`, at least 1, so no protocol gives 1); the padded size ratio `|A| / T_0` is the "
             "intermediate it comes from. The time to the target is wall-clock, at least the slowdown times "
-            "`T_0 / (MFU₀ Φ_total)`."), "",
+            "`T_0 / (MFU₀ Φ_total)`. Each row says what it assumes about proofs: every unit proved, or proofs "
+            "sampled at the regime's compute share (`regime.<name>.proof_share`), where each accepted incorrect proof "
+            "block injects the widest public size class of output bits (`step_bits`)."), "",
+           *(alone_md(rows, bounds) if bounds else ()),
            *(measured_md(reg, measured) if measured else ()),
            "## The lower bound", "",
-           ("| scenario | over | period | slowdown ≥ | range | corner | padded size ratio | status, premises | set by | "
-           "what sets it | time to the target ≥ |"), "|---|---|---|---|---|---|---|---|---|---|---|"]
+           ("| scenario | proofs | over | period | slowdown ≥ | range | corner | padded size ratio | status, premises | "
+            "set by | what sets it | time to the target ≥ |"), "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for x in rows:
         p = x["parts"]
         sets = ", ".join(f"{t['name']} {t['share']:.0%}" for t in x["attribution"][:2])
         beyond = " (beyond the period)" if x["seconds"] > x["period_s"] else ""
-        out.append(f"| {x['scenario']} | {x['where']} | {x['period']} | **{fmt(x['slowdown'])}**"
+        out.append(f"| {x['scenario']} | {x['proofs']} | {x['where']} | {x['period']} | **{fmt(x['slowdown'])}**"
                    f" | {fmt(x['range'][0])} to {fmt(x['range'][1])} | {fmt(x['corner'])} | {fmt(x['padded'])}"
                    f" | {p.get('status', '—')}, {p.get('premise') or '—'} | {p.get('setter') or '—'} | {sets} | "
                    f"{operating.human(x['seconds'])}{beyond} |")
@@ -217,10 +266,11 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
              "more efficiently than the reference, so free compute counts at MFU₀). Sensitivities, not headlines: "
              "without the first, each regime's host CPUs count at their INT8 datasheet peak (`regime.<name>.host` = 1); "
              "without the second, free compute counts at peak (`task.reference_efficiency` = false)."), "",
-            ("| scenario | over | period | slowdown ≥ | without the hosts assumption | without the reference-efficiency "
-             "assumption | without both |"), "|---|---|---|---|---|---|---|"]
-    out += [f"| {x['scenario']} | {x['where']} | {x['period']} | {fmt(x['slowdown'])} | {fmt(x['without_hosts'])} | "
-            f"{fmt(x['without_reference_efficiency'])} | {fmt(x['without_both'])} |" for x in rows]
+            ("| scenario | proofs | over | period | slowdown ≥ | without the hosts assumption | without the "
+             "reference-efficiency assumption | without both |"), "|---|---|---|---|---|---|---|---|"]
+    out += [f"| {x['scenario']} | {x['proofs']} | {x['where']} | {x['period']} | {fmt(x['slowdown'])} | "
+            f"{fmt(x['without_hosts'])} | {fmt(x['without_reference_efficiency'])} | {fmt(x['without_both'])} |"
+            for x in rows]
     out += ["", "## Its parts", ""]
     seen: dict[str, list[dict]] = {}
     for x in rows:
@@ -252,7 +302,9 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
              "over its plausible range, each assumption of `data/premises.toml` refuted (a bound citing it then "
              "bounds no block), and `draft:no-straddle` dropped (`s_×` = 1). **Open** is an assumption or a "
              "parameter that is assumed, conjectured or derived; ruled, measured, declared and datasheet inputs "
-             "are ranked beside them for scale."), ""]
+             "are ranked beside them for scale. A proof block's output bits (`step_bits`) are neither: their range "
+             "is the size class's limit, from the widest public size class (the limit, provisional) down to the "
+             "smallest (the 16-bit limit), and shows what the limit costs."), ""]
     for name in dict.fromkeys(x["scenario"] for x in rows):
         own = [x for x in rows if x["scenario"] == name]
         x = next((y for y in own if y["fleet"] == fleets[-1][0] and y["period"] == "year"), own[-1])
@@ -292,24 +344,29 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scenario", action="append", help=f"scenario names (default: {', '.join(SCENARIOS)})")
     ap.add_argument("--set", action="append", default=[], help="KEY=VALUE registry overrides")
+    ap.add_argument("--bounds", action="append", default=[], metavar="CLASS",
+                    help="bound every scenario by this class alone (repeatable: by these; default: every class)")
     ap.add_argument("--measured", metavar="CIRCUIT",
                     help="a circuit of data/circuits.toml whose design replaces the FLOP model (circuits.in_place)")
     ap.add_argument("--out", metavar="DIR", help="write periods.md and periods.json to DIR")
     args = ap.parse_args()
+    names = tuple(args.scenario or SCENARIOS)
     reg = Registry.load()
     if args.set:
         reg = reg.override({k: json.loads(v) for k, v in (a.split("=", 1) for a in args.set)})
+    if args.bounds:
+        reg = only(reg, names, args.bounds)
     measured = circuits.compare(reg, args.measured) if args.measured else None
     if args.measured:
         reg = circuits.in_place(reg, args.measured)
-    rows = evaluate(reg, tuple(args.scenario or SCENARIOS))
-    text = markdown(reg, rows, measured=measured)
+    rows = evaluate(reg, names)
+    text = markdown(reg, rows, measured=measured, bounds=args.bounds)
     print(text)
     if args.out:
         out = Path(args.out)
         out.mkdir(parents=True, exist_ok=True)
-        doc = {"rows": rows} | ({"measured": asdict(measured) | {"u_over_w": measured.u_over_w(measured.s_x)}}
-                               if measured else {})
+        doc = {"rows": rows} | ({"bounds": args.bounds} if args.bounds else {}) | (
+            {"measured": asdict(measured) | {"u_over_w": measured.u_over_w(measured.s_x)}} if measured else {})
         (out / "periods.md").write_text(text + "\n")
         (out / "periods.json").write_text(json.dumps(_finite(doc), indent=1, allow_nan=False))
 

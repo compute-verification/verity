@@ -5,6 +5,7 @@ debit, the work sampling design through `pearl_c_work`, and the pinned vectors."
 from __future__ import annotations
 
 import copy
+import functools
 import hashlib
 import itertools
 import json
@@ -1146,27 +1147,56 @@ def test_v_ex_past_its_count_cap_fails_the_audit():
         W.UnitRecord(u, 20, K, (3,), (), (3,))
 
 
+#: A salt key under which `lifecycle`'s A row 15 passes the per-row rules but its F1′ passes R1's bound (about 0.8% of
+#: keys put an honest row there).
+R1_ROW_15_KEY = bytes.fromhex("d9e961187e3be9353349a07b9a22359e0586881919c91ee714ad84f07c92a8e6")
+
+
+def failures(s, epoch, prover, tr, splits, records) -> set[str]:
+    return {v.reason for v in CW.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8).audit.verdicts if not v.ok}
+
+
 def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_cap():
-    """`volunteer`, the honest prover's remedy: on a scheme whose debit puts tile position 7 at 20 units per word against a
-    cap of 1 per credited word, it gives up A row 7 (not a column, which leaves the tile over), and the audit then
-    accepts; without it the tile fails."""
+    """`volunteer`, the honest prover's remedy for a tile over the cap, on a scheme whose debit puts tile position 7 at 20
+    units per word against a cap of 1 per credited word, at a salt key where R1 also excludes A row 15.  R1's rows are
+    `declare`'s on the transcript, excluded, so `volunteer` gives up only A row 7 (not a column, which leaves the tile
+    over), and the audit accepts; without it the tile fails.  Declared without the transcript, row 15 is credited and
+    fails R1 whatever `volunteer` gives up, and giving up both rows passes V-EX's count cap, one A row at m = 32."""
 
     class Heavy(F.PearlC4):
         def tile_cap(self, record, ops, rows, cols):
             return Fraction(20 * len(cols) * (7 in rows)), Fraction(len(rows) * len(cols))
 
     s = Heavy("nvfp4", k_min=128, tile=(16, 16), n_min=16)
-    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
-    splits = {9: W.Split(K)}
-    records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s, salt_key=R1_ROW_15_KEY)
+    splits, u = {9: W.Split(K)}, epoch.workload.matmuls[0]
+    declare = functools.partial(CW.declare, s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
+    records = declare(transcript=tr)
+    assert records == [W.UnitRecord(u, 20, K, (3, 15), ())]
     va, vb = CW.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b})
     assert (va, vb) == ({3: [7]}, {})
-    fixed = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, voluntary_a=va, voluntary_b=vb)
-    assert CW.audit(s, epoch, prover, tr, splits, fixed, E.challenger(), 8).audit.accepted
-    tile = s.tiles(epoch.workload.matmuls[0].shape)[0]
-    ctx = Context(epoch.salt, epoch.workload.matmuls[0], tr.activation_roots[0], epoch.weight_roots[9])
+    assert failures(s, epoch, prover, tr, splits, declare(transcript=tr, voluntary_a=va, voluntary_b=vb)) == set()
+    tile = s.tiles(u.shape)[0]
+    ctx = Context(epoch.salt, u, tr.activation_roots[0], epoch.weight_roots[9])
     ops = s.encode(ctx, s.noise(ctx), rows_a[:16], rows_b, tile)
-    assert "exceeds the cap" in CW.check_opened(s, records[0], tile, rows_a[:16], rows_b, ops)
+    assert CW.check_opened(s, records[0], tile, rows_a[:16], rows_b, ops) == \
+        "the replayed debit 320 exceeds the cap 224 (ρ·the credited cells' credit)"
+    assert CW.check_opened(s, declare(voluntary_a=va)[0], tile, rows_a[:16], rows_b, ops) == \
+        "A row 15 is credited but its own debit passes R1's bound (ρ·its cell credit)"
+    assert CW.check_records(epoch, splits, declare(voluntary_a={3: [7, 15]})) == \
+        "matmul 3: more voluntary rows than V-EX allows (⌈m/64⌉ = 1 of A, ⌈n/64⌉ = 1 of B)"
+
+
+def test_volunteer_leaves_r1s_rows_to_the_declaration():
+    """At the same salt key on the plain scheme, R1 excludes A row 15, no tile is over the cap, and `volunteer` gives
+    up nothing."""
+    s = F.PearlC4("nvfp4", k_min=128, tile=(16, 16), n_min=16)
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s, salt_key=R1_ROW_15_KEY)
+    splits = {9: W.Split(K)}
+    records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, transcript=tr)
+    assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3, 15), ())]
+    assert CW.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b}) == ({}, {})
+    assert failures(s, epoch, prover, tr, splits, records) == set()
 
 
 def stale_b(s: F.PearlC4, salt: bytes) -> F.PearlC4:

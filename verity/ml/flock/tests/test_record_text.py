@@ -9,8 +9,8 @@ import pytest
 from verity_flock import record_text as RT
 from verity_flock import rec_live as RL
 
-FLOCK = Path(__file__).resolve().parents[1]
-VECTORS = json.loads((FLOCK / "live" / "src" / "record_text_vectors.json").read_text(encoding="utf-8"))["cases"]
+ROOT = Path(__file__).resolve().parents[4]
+VECTORS = json.loads((ROOT / "verity/ml/flock/live/src/record_text_vectors.json").read_text(encoding="utf-8"))["cases"]
 
 
 @pytest.mark.parametrize("case", VECTORS, ids=[c["name"] for c in VECTORS])
@@ -31,7 +31,8 @@ def test_refuses_what_is_not_json():
 
 
 def test_the_harness_copy_is_the_same_file():
-    assert (FLOCK / "verifier" / "record_text.py").read_bytes() == (FLOCK / "python" / "verity_flock" / "record_text.py").read_bytes()
+    harness = ROOT / "verity/ml/flock/verifier/record_text.py"
+    assert harness.read_bytes() == (ROOT / "verity/ml/flock/python/verity_flock/record_text.py").read_bytes()
 
 
 def test_a_record_in_it():

@@ -29,6 +29,7 @@ from verity.core.protocols.spot.one_stage import proofs as PF
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "form-refusals"
 VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
+ROOT = Path(__file__).resolve().parents[5]
 N = 4
 WRONG_TAGS = ("verity/flock-circuit/types", "verity/flock-circuit@eb90718f", "verity/flock-circuit+plain-leaves",
               "verity/flock-circuit/tmpl")
@@ -40,7 +41,7 @@ pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None,
 @pytest.fixture(scope="module")
 def fx(tmp_path_factory) -> Path:
     assert (FIXTURE / "cases.json").is_file(), (
-        f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures {FIXTURE.relative_to(FIXTURE.parents[6])}`")
+        f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures {FIXTURE.relative_to(ROOT)}`")
     sys.path.insert(0, str(VERIFIER))
     import ci
 

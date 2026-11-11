@@ -1,12 +1,17 @@
 """A verifier costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
 
-A scan over the Lean under `verity/core/` (the verifiers and the code they run) refuses the forms an unrolled
-walk takes there: locating gates one by one through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a
-range or loop bounded by a Definition's gate count (`List.range (P.defs[P.root]!).gates`, `[0:defn.gates]`), and an
-array or loop bounded by a name bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`), a range or
+A scan over the Lean under `verity/core/` (the verifiers and the code they run) and over `Security/`'s verifier code
+models (each `Security/Proofs/**/Code.lean`, a verifier a guarantee is stated at, with the `Security` modules it imports
+and the `Properties` modules those import) refuses the forms an unrolled walk takes there: locating gates one by one
+through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a range or loop bounded by a Definition's gate count
+(`List.range (P.defs[P.root]!).gates`, `[0:defn.gates]`, `List.range C.gates.length`), an array or loop bounded by a name
+bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`; `let gs := C.gates.toArray` … `List.range
+gs.size`), a range or loop over a key program's gates, inputs or units (`List.range kp.size`, `List.range kp.units`: a
+`Spot.Bits.KeyProg` lays a member's units out side by side), a range or
 loop over a node's members (`for m in [0:node.members]`, `List.range node.members`: every batch member or scan iteration),
 and outside the tests a templated unit unrolled (`Tmpl.unroll`, `Tmpl.unrollAt`, `Tmpl.unitFull`, `Tmpl.posMap`, `Tmpl.foldRef`):
-a templated unit is read from its description (`Tmpl.unrollOk`, `Tmpl.unitNet`, `Tmpl.foldUnit`). Outside the tests it
+a templated unit is read from its description (`Tmpl.unrollOk`, `Tmpl.unitNet`, `Tmpl.foldUnit`), or a member's key
+program built (`Spot.Bits.keyProg c n`, every one of its `n` units laid out). Outside the tests it
 also refuses a template query's units' gates asked one by one under a map over the units (`(Array.range pop).mapM fun u
 => … TemplateQuery.gates d rs u`), each of which walks every earlier root node: they are read a range at a time
 (`TemplateQuery.unitGates`). Outside the tests it
@@ -83,6 +88,23 @@ ALLOWED: dict[str, str] = {
     "verity/core/service/flock/Flock/Gate.lean":
         "Prog.gateAt, one gate's location as Flock.Program.Gate: verity-evaluate's `gate` serves it so the difftest holds "
         "layout.Gate to it; no verifier calls it",
+    "Security/Proofs/Flock/SpotFlock/Code.lean":
+        "open: the two-stage verifier's stmtOk decides the registration (parse, partition, two) over the members' "
+        "side-by-side program, every unit of every member laid out, and topoOk and partitionsOk range over its gates; "
+        "until two decides the members' descriptors (each member's units, B and R, and filesOk) and stmtOk is compiled "
+        "(@[csimp]) as a check that never builds bitsProgs, membersPart or filesReplay",
+    "Security/Proofs/Flock/SpotFlock/ScopeFast.lean":
+        "open: topoFast, coverFast and partitionsFast, what SpotFlock.code compiles topoOk, partitionsOk and scopeOk as "
+        "(@[csimp]), read every gate of the unrolled program once (linear where the checks as stated are quadratic or "
+        "cubic), and their equalities restate those checks; replaced as SpotFlock/Code.lean's entry says",
+    "Security/Properties/Spot/Members.lean":
+        "open: bitsProgs, membersPart and filesReplay build each member's key program (Bits.keyProg, every unit laid "
+        "out) and lower it, and its blocks, unit by unit: what SpotFlock.code's parse and partition evaluate; replaced as "
+        "SpotFlock/Code.lean's entry says",
+    "verity/core/service/spot/Spot/Bits.lean":
+        "open: keyProg lays a member's every unit out (2 + n·B inputs and n·R rows), and its layout (prog, off, offs, "
+        "unitGates, owner, owners, insOf, blockOf) walks that program gate by gate, which Properties.Spot.Members reads "
+        "for SpotFlock.code; replaced as Security/Proofs/Flock/SpotFlock/Code.lean's entry says",
 }
 
 FIX = ("a verifier of record does work proportional to the description, never to the unrolled circuit (AGENTS.md "
@@ -97,10 +119,18 @@ LOCATOR = re.compile(r"(?<![\w.'])(?:[a-z]\w*|P)\.gate\b(?![s'])")
 _ARG = r"(?:\((?:[^()\n]|\([^()\n]*\))*\.gates\)|(?:\([^()\n]*\))?[\w.\[\]!]*\.gates\b)"
 #: a range or loop bounded by a gate count
 RANGE = re.compile(rf"\b(?:List|Array)\.range\s*{_ARG}|\[\s*\w*\s*:\s*[^\]\n]*\.gates\s*\]")
-#: `let n := … .gates` at the end of a line: a name bound to a gate count
-BOUND = re.compile(r"\blet\s+(?:mut\s+)?(\w+)\s*(?::\s*\w+\s*)?:=[^\n]*\.gates\s*$", re.M)
+#: `let n := … .gates` at the end of a line: a name bound to a gate count, or (`… .gates.toArray`) to the gates
+BOUND = re.compile(r"\blet\s+(?:mut\s+)?(\w+)\s*(?::\s*\w+\s*)?:=[^\n]*\.gates(\.toArray)?\s*$", re.M)
 #: a range or loop over a node's members: every batch member or scan iteration
 MEMBERS = re.compile(r"\b(?:List|Array)\.range\s*\(?[\w.!\[\]()]*\.members\b|\[\s*\w*\s*:\s*[\w.!\[\]]*\.members\s*\]")
+#: a name bound to a key program (`Spot.Bits.KeyProg`, a member's units side by side), by a binder or a `let`
+KEYPROG = re.compile(r"[({]\s*((?:[\w']+\s+)*[\w']+)\s*:\s*(?:[\w.]*\.)?KeyProg\b|\blet\s+(\w+)\s*:=\s*(?:[\w.]*\.)?keyProg\b")
+#: a range over a key program built in place (`List.range (keyProg c n).inputs`)
+KEYPROG_RANGE = re.compile(r"\b(?:List|Array)\.range\s*\(\s*(?:[\w.]*\.)?keyProg\b[^\n]*?\)\.(?:size|units|inputs)\b")
+#: a member's key program built, every unit laid out (`Spot.Bits.keyProg c n`)
+KEYPROG_BUILT = re.compile(r"(?<![\w'.])(?:(?:Spot\.)?Bits\.)?keyProg\s+(?![:=|])\S")
+#: a module a Lean file imports from `Security/`'s proofs or properties
+IMPORT = re.compile(r"^(?:\w+\s+)*import\s+(?:all\s+)?((?:Proofs|Properties)(?:\.[\w']+)+)\s*$", re.M)
 #: a templated unit unrolled: its rows, every column's position, or the fold over its rows
 UNROLLED = re.compile(r"(?<![\w'])(?:unrollAt|unitFull|posMap|foldRef)\b(?!')|(?<![\w'])Tmpl\.unroll\b(?![\w'])")
 #: the recursive inner statement set up from its flat file, which carries no template
@@ -129,18 +159,42 @@ def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
         hits += [(m.start(), "V*'s unrolled circuit text regenerated") for m in EMIT.finditer(src)]
         hits += [(m.start(), "a template query's units' gates asked one by one (TemplateQuery.unitGates reads them a "
                   "range at a time)") for m in UNIT_MAP.finditer(src) if _unit_gates(m.group(1)).search(m.group(2))]
+        hits += [(m.start(), "a member's key program built, every unit laid out") for m in KEYPROG_BUILT.finditer(src)]
     hits += [(m.start(), "a range over a gate count") for m in RANGE.finditer(src)]
     hits += [(m.start(), "a range over a node's members") for m in MEMBERS.finditer(src)]
     for b in BOUND.finditer(src):
-        n = re.escape(b.group(1))
+        name = b.group(1) + (".size" if b.group(2) else "")
+        n = re.escape(name)
         use = re.compile(rf"\b(?:List|Array)\.range\s*\(?\s*{n}\b(?!\.)|\[\s*\w*\s*:\s*{n}\s*\]|"
                          rf"\b(?:mkEmpty|replicate)\s+{n}\b(?!\.)")
-        hits += [(m.start(), f"an array or loop of `{b.group(1)}`, a gate count") for m in use.finditer(src)]
+        hits += [(m.start(), f"an array or loop of `{name}`, a gate count") for m in use.finditer(src)]
+    hits += [(m.start(), "a range over a key program's gates") for m in KEYPROG_RANGE.finditer(src)]
+    for name in {x for k in KEYPROG.finditer(src) for x in (k.group(1) or k.group(2)).split()}:
+        n = rf"{re.escape(name)}\.(?:size|units|inputs)"
+        use = re.compile(rf"\b(?:List|Array)\.range\s*\(?\s*{n}\b|\[\s*\w*\s*:\s*{n}\s*\]|\b(?:mkEmpty|replicate)\s+{n}\b")
+        hits += [(m.start(), f"a range over key program `{name}`'s gates or units") for m in use.finditer(src)]
     return sorted({(src.count("\n", 0, at) + 1, what) for at, what in hits})
 
 
+def _security_code(tracked: list[str]) -> set[str]:
+    """`Security/`'s verifier code models: each `Security/Proofs/**/Code.lean`, the `Security` modules it imports, and the
+    `Properties` modules those import in turn."""
+    have = set(tracked)
+    code = {p for p in have if p.startswith("Security/Proofs/") and p.endswith("/Code.lean")}
+    seen, todo = set(code), list(code)
+    while todo:
+        p = todo.pop()
+        for mod in IMPORT.findall((ROOT / p).read_text()):
+            q = f"Security/{mod.replace('.', '/')}.lean"
+            if q in have and q not in seen and (p in code or mod.startswith("Properties.")):
+                seen.add(q)
+                todo.append(q)
+    return seen
+
+
 def _scanned() -> list[str]:
-    return sorted(p for p in _tracked() if p.startswith("verity/core/") and p.endswith(".lean"))
+    tracked = _tracked()
+    return sorted({p for p in tracked if p.startswith("verity/core/") and p.endswith(".lean")} | _security_code(tracked))
 
 
 def test_no_verifier_of_record_walks_the_unrolled_circuit():
@@ -173,9 +227,15 @@ def test_the_scan_sees_each_form():
       (Setup.ofCircuit sts[0]!).fold.folded a b lw rho ts
     def o (s : VStar.Stmt) := VStar.emitCircuitOf holo put u l s.sub b
     def p (t : Tmpl) := Tmpl.foldUnit t lays sl a lw rho rr
+    def q (C : Prog) :=
+      let gs := C.gates.toArray
+      (List.range gs.size).all fun g => g < gs.size
+    def r (kp : Spot.Bits.KeyProg) (u : Nat) := (List.range kp.size).filter (· < u) ++ List.range kp.units
+    def s (c : Circuit) (n : Nat) := (List.range (keyProg c n).inputs).map id
+    def t (ci : Circuit × Array Nat) := Bits.blockOf (Bits.keyProg ci.1 ci.2.size) κ 0
     """
-    assert [line for line, _ in offenses(src)] == [3, 4, 7, 8, 11, 12, 13, 15, 16, 19, 20]
-    assert [line for line, _ in offenses(src, test=True)] == [3, 4, 7, 8, 15, 16]
+    assert [line for line, _ in offenses(src)] == [3, 4, 7, 8, 11, 12, 13, 15, 16, 19, 20, 24, 25, 26, 26, 27]
+    assert [line for line, _ in offenses(src, test=True)] == [3, 4, 7, 8, 15, 16, 24, 25, 26]
     plain = """
     def lincheck (c : CircuitFold) := c.folded alpha beta lw rho ts
     def stage := emitCircuitOf holo put u l sub b
@@ -184,5 +244,9 @@ def test_the_scan_sees_each_form():
       | some l, some g => (l, g)
       | _, _ => none
     def other := (Array.range pop).mapM fun u => gates d rs v
+    def sized (a : Array Nat) := List.range a.size
+    def counted (kp : KeyProg) := kp.size + kp.units
+    def placed (c : Circuit) := Placed.keyProg c n
+    def held (C : Prog) := let gs := C.gates.toArray; gs.size
     """
     assert offenses(plain) == []

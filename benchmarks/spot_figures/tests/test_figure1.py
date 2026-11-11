@@ -367,6 +367,35 @@ def test_a_two_stage_series_carries_lean_and_no_lean_plans_without_it(monkeypatc
         assert not {"lean", "planner", "theta"} & set(s), s["design"]
 
 
+def lean_any(designs: list[dict]) -> list:
+    """A stub of Lean's checker whose answer is a function of the design alone: a leak design's count and a third, a
+    work design passing, a two-stage point seven times its θ, at its θ."""
+    return [Fraction(3 * int(d["count"]) + 1, 3) if d["kind"] == "leak" else True if d["kind"] == "work"
+            else (7 * Fraction(d["theta"]), Fraction(d["theta"])) for d in designs]
+
+
+def test_points_checked_on_processes_are_byte_for_byte_one_processs(monkeypatch):
+    """With Lean on, Figure 1's JSON on processes is byte for byte its JSON on one: each point is one job
+    (`checked_point`) that reads only its own inputs.  The checker and the two-stage planner are stubbed, each answer
+    a function of its point's proof overhead, so a point out of place would show, and the forked processes inherit
+    the stubs (`processes`)."""
+    monkeypatch.setattr(f.plancheck, "executable", lambda exe: None)
+    monkeypatch.setattr(f.plancheck, "check", lean_any)
+    monkeypatch.setattr(f, "two_stage", lambda m, design, budget: {
+        "merged": 1 << 18, "k": {0: 1}, "q": .5, "theta": m.dot.prove, "bound": 1 / m.dot.prove})
+
+    def run(workers: int) -> str:
+        out = f.run("GLM-5.3", 2, ("world year",), designs=("two-stage", "one-stage"), workers=workers)
+        return json.dumps(out, indent=1, allow_nan=False)
+
+    one = run(1)
+    assert run(3) == one
+    series = [s for p in ("exfiltration", "skipped_work") for s in json.loads(one)["panels"][p]["series"]]
+    assert {s["design"] for s in series} == {"two-stage", "one-stage"}
+    assert all(True in s["lean"] and len(set(s["y"])) > 1 for s in series if s["design"] == "two-stage")
+    assert any(True in s["lean"] for s in series if s["design"] == "one-stage")
+
+
 def test_an_incorrect_block_leaks_the_widest_blocks_output(world):
     """Proof blocks are sampled uniformly, so the adversary makes the widest incorrect first (`harm_bound`'s order):
     the leak grain is as wide as the widest stratum, not the mean, and a sampled block costs the count-weighted MACs."""

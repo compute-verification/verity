@@ -1215,6 +1215,9 @@ class Driver:
         self.warn_steps = warn_steps
         #: drive.toml's `verdict_carry` (`_carry_verdicts`): "off", "shadow" (logged only) or "on" (written as `CI`'s verdict)
         self.verdict_carry = verdict_carry
+        #: `carry.delta` of a new head over an older one, trusting the landed tips and the heads given (`_carried_from`)
+        self.delta: Callable[[str, str, list[str], set[str]], carry.Delta] = (
+            lambda old, new, landed, trusted: carry.delta(self.repo, old, new, carry.trust(self.repo, landed, trusted)))
         #: drive.toml's `executor`: "off", "shadow" (beside the after-landing run: `_follow_shadow`) or "on" (in its place, but
         #: for `SLIM_STEPS`, a run of them alone beside it: `_follow_tasks`, `_follow_slim`); ``tasks``, the executor (default:
         #: the task executor's queue, `QueueTransport` running ``executor_enqueue``)
@@ -2736,7 +2739,7 @@ class Driver:
 
     def _postland_args(self, pl: dict, tip: str, base: bool) -> tuple[dict, list[str], str | None, str]:
         """An after-landing run of ``tip``'s (`launch_postland`'s keywords, the steps it skips by name, ratchet-gate's base, its
-        flags as a message gives them), the baseline's when ``base``.  It sends the upstream build when the landings since the
+        flags as a message gives them), the baseline's when ``base``.  It sends the upstream build's URLs when the landings since the
         last verified `main` change what lean-agreement checks (as check.py finds against that base), and skips lean-agreement
         else; lean-changed has no cache to compare with under --no-cache; lean-audit fails on a record difference, since the
         records it checks are the ones the lock run regenerated (`_target`); circuit-check reuses its per-target passes all the same, since a
@@ -4193,7 +4196,7 @@ class Driver:
             return old, f"{held} at {old[:12]}", False
         if _who(CI) in {_who(o) for o in owners if o}:
             return old, f"{CI} is among its owners, so its verdict wouldn't count", False
-        d = carry.delta(self.repo, old, m.head, carry.trust(self.repo, landed, trusted))
+        d = self.delta(old, m.head, landed, trusted)
         return old, d.why if d.carries else f"{d.kind}: {d.why}", d.carries
 
     def _write_carried(self, m: Member, old: str, why: str) -> str:

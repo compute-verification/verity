@@ -85,8 +85,8 @@ UV_VALUED = {"--extra", "--package", "--with", "--group", "--directory", "--proj
 SH_STARTS = {";", "&", "&&", "||", "|", "(", "`", "if", "while", "until", "then", "do", "else", "exec", "time", "env", "sudo",
              "xargs", "!", "{"}
 #: a path from the root, as a shell script names one
-SH_PATH = re.compile(r"(?<![\w./$-])(?:\./)?((?:verity|tools|infra|benchmarks|integrations|examples|tests|Security|fixtures|"
-                     r"archive|\.agents|\.cursor)/[\w./@+-]*)")
+SH_PATH = re.compile(r"(?<![\w./$-])(?:\./)?((?:verity|tools|infra|benchmarks|integrations|examples|tests|Security|security|"
+                     r"fixtures|archive|\.agents|\.cursor)/[\w./@+-]*)")
 FIX = ("A public file needs one the export doesn't copy (tools/verity/check/public_boundary.toml). Cut the edge: import "
        "from a public module instead, move the lemma or definition to the public side, or state an interface the public "
        "side owns; or move the needed file to the public side in public_boundary.toml, a boundary decision. Never add a "

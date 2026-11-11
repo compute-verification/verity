@@ -31,22 +31,24 @@ open Properties.NetworkCertifier.Bytes (bs)
 open Lean (Json)
 
 /-- **Whether round 2 reads a registered read's value `v` at template `t`'s port `port` off the interior record**
-(`SecondStage.readOk`): at a port no link names, where the interior record has a port named `v`, or where neither
-record has and the boundary record registers no value `v`. -/
+(`SecondStage.readOk`): at a port a link names, where the interior registration registers a value `v`; at a port no
+link names, where the interior record has a port named `v`, or where neither record has and the boundary record
+registers no value `v`. -/
 def readsInterior (own : Spot.SecondStage.Own) (t port v : String) : Bool :=
   match Spot.SecondStage.linkOf own t port with
-  | some _ => false
+  | some _ => (Spot.SecondStage.registeredEntry own.interior v).isSome
   | none => ((Spot.Record.byPort own.interior).find? (·.1 == v)).isSome ||
       (((Spot.Record.byPort own.boundary).find? (·.1 == v)).isNone &&
         (Spot.SecondStage.registeredEntry own.boundary v).isNone)
 
 /-- **The entry round 2 reads a registered read's value `v` at template `t`'s port `port` off**
-(`SecondStage.readOk`): the boundary port a link names; else the interior record's port named `v`, where it has one
-(at a port a wire names, its writer's output port); else the registered value `v`. The entry is the value's, not the
-reading port's, so every session that reads one value names one entry. -/
+(`SecondStage.readOk`): at a port a link names, the registered value `v` where the interior registration registers
+one, else the boundary port the link names; else the interior record's port named `v`, where it has one (at a port a
+wire names, its writer's output port); else the registered value `v`. The entry is the value's, not the reading
+port's, so every session that reads one value names one entry. -/
 def readKey (own : Spot.SecondStage.Own) (t port v : String) : SlotKey :=
   match Spot.SecondStage.linkOf own t port with
-  | some l => .port l.value
+  | some l => if (Spot.SecondStage.registeredEntry own.interior v).isSome then .reg v else .port l.value
   | none => if ((Spot.Record.byPort own.interior).find? (·.1 == v)).isSome then .port v else .reg v
 
 variable (h : Held)

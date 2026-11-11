@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Nci.Lemmas
 public import Proofs.Properties.Nci.Desc
+public import Proofs.Properties.Nci.Count
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Init.Data.Ord.String
@@ -11,7 +12,8 @@ import all Init.Data.Ord.String
 
 Each statement of `Properties.Nci`, proved of `NciCheck.evaluate` from the lemmas about its steps
 (`Proofs.Properties.Nci.Lemmas`), and the description-sized check's summaries against it (`sizes_eq_tally`, with
-`Proofs.Properties.Nci.Desc`).
+`Proofs.Properties.Nci.Desc`); and the day's bound a published count gives once `DescCountsCK` holds
+(`Proofs.Properties.Nci.Count`).
 -/
 
 @[expose] public section

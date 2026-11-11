@@ -31,7 +31,7 @@ TUNNEL = [sys.executable, "-c", "import signal; signal.pause()"]
 LOAD = ["load-relay", "--peer", "vy-nebius-1", "--port", "8011", "--sink-port", "8021", "--program", PROGRAM,
         "--shape", "tiny", "--minutes", "40"]
 LR = A._load_relay()
-UNIT = HERE.parents[2] / "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service"
+UNIT = Path(__file__).resolve().parents[3] / "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service"
 
 
 @pytest.fixture

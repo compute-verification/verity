@@ -43,6 +43,7 @@
   "Properties.Spot.Members",
   "Properties.Spot.PlanCheck",
   "Properties.Spot.Wires",
+  "Properties.Spot.Tables",
   "Properties.Spot.HistoryTable",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
@@ -84,10 +85,12 @@
   "Properties.Core.Site",
   "Properties.Verity.Subprotocols",
   "Properties.Verity.Coupling",
-  "Properties.Flock.Nets"
+  "Properties.Flock.Nets",
+  "Properties.Flock.ReadNet",
+  "Properties.Assumptions"
  ],
  "proved_in": ["../Proofs"],
- "assumptions_module": "Definitions.Assumptions",
+ "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
  "assumptions": {},
  "domain": {
   "Claims.Sampling.InScopeTwo": {
@@ -816,7 +819,9 @@
    "FlockSoundness.Assumptions.UniformRandomBytesTest": "the verifier server's uniform randomness: the bytes read from the operating system pass a test as uniform bytes do, up to its advantage (A3 at one test)",
    "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
    "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
-   "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order"
+   "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order",
+   "Verity.Assumptions.TrustedHost": "the honest verifier server's auditor-trusted devices (trusted-host): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling",
+   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "the honest verifier server's record custody: the record `flock-verify --zk` reads is the one its challenger wrote, and the draw file the one `flock-verify draw` printed; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling"
   },
   "extra": {
    "Verity.remote_soundness_of_subprotocols": {
@@ -1176,6 +1181,10 @@
   "Properties.Spot.SecurityProofs.historyRootIsModel": {
    "honest": ["Properties.Spot.SecurityProofs.historyRootIsModel_honest"],
    "nontrivial": "Properties.Spot.SecurityProofs.historyRootIsModel_nontrivial"
+  },
+  "Properties.Spot.SecurityProofs.tablesRegistered": {
+   "honest": ["Properties.Spot.SecurityProofs.tablesRegistered_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.tablesRegistered_nontrivial"
   }
  },
  "unwitnessed": {
@@ -8656,6 +8665,49 @@
    },
    "type_hash": "e78a406fd43371a0b9b40868521e379c60220b3a9f3b5cf5ab3a9a9f93974e86"
   },
+  "Properties.Spot.SecurityProofs.tablesRegistered": {
+   "owner": "@soundness",
+   "signature": ["Properties.Spot.SecurityProofs.tablesRegistered : Properties.Spot.TablesRegistered"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d89dfaa9fb4585e06a1be4a2f55a76528c71ecfbed8da42f979c2d201cf6a51f",
+   "unfolded_hash": "9ee635bcdf3edff6861c05c657be9900c522050f78dc424faa620e49b4e057f7"
+  },
+  "Properties.Spot.SecurityProofs.tablesRegistered_honest": {
+   "owner": "@soundness",
+   "signature": [
+    "Properties.Spot.SecurityProofs.tablesRegistered_honest :",
+    "  Eq (Spot.OneStageZk.tablesHeld Properties.Spot.witnessOwn Properties.Spot.honestBlobs) (Except.ok Unit.unit)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "b4c11386cd1194ba0ead00976716a7304975626924d0a2177c6fc8a0ab7a892c"
+  },
+  "Properties.Spot.SecurityProofs.tablesRegistered_nontrivial": {
+   "owner": "@soundness",
+   "signature": [
+    "Properties.Spot.SecurityProofs.tablesRegistered_nontrivial :",
+    "  Not (Properties.Spot.HoldsRegisteredTables Properties.Spot.witnessOwn Properties.Spot.tableBlobs)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "60c70f5d0fb35f2fa9c7c3195d049bb1c9788778d558e72eb117952a1e22c681"
+  },
   "Properties.Spot.SecurityProofs.twoStageCheckPatternsSound": {
    "owner": "@proofs",
    "signature": ["Properties.Spot.SecurityProofs.twoStageCheckPatternsSound : Properties.Spot.TwoStageCheckPatternsSound"],
@@ -11156,6 +11208,18 @@
    "Properties.Spot.SecurityProofs.historyRootIsModel": {
     "function": "Spot.HistoryTable.checkAt",
     "outcome": "accept"
+   },
+   "Properties.Spot.SecurityProofs.tablesRegistered": {
+    "conjuncts": [
+     {
+      "function": "Spot.OneStageZk.tablesHeld",
+      "outcome": "accept"
+     },
+     {
+      "function": "Spot.OneStageZk.checkBlobsAt",
+      "outcome": "accept"
+     }
+    ]
    }
   },
   "frozen": {
@@ -11217,7 +11281,8 @@
    "Verity.wipe_target": "frozen (premise): the wipe's target at a verdict in the causal game (Verity.WipeTarget: Verity.Vocab.TargetFor) from the wipe's survivor bound over its own draw (Verity.Wipe.SurvivorBound) and its coupling to the play (Verity.Vocab.WipeCoupling: Verity.Wipe.OfRun.Preserves, which reads the foreign content as uniform on the play, the wipe's verdict refining the verdict, and the survivor error within the wipe's); both are hypotheses until the wipe's piece proves them",
    "Verity.soundness_of_upFront": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfUpFront: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component, over the coins drawn up front, or as its target (Verity.Vocab.SubprotocolBound: Verity.Vocab.ComponentBound, Verity.Vocab.UpFrontBound or Verity.Vocab.Target); each bound is a hypothesis until its subprotocol's piece proves it",
    "Properties.Served.SampleMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.sampleMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check."
+   "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
+   "Accounting.ReadUnit.ExpertReadAccepted": "unstated: what `flock-read-tmpl 256 3072` checks before it exits 0 (render `readTmpl 256 3072`, parse the text back, run `ReadNet.check` on the parsed template); `TableReadBinding`'s honest lemma in the Security lock takes it as an open premise, and no theorem here proves it yet"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -20073,7 +20138,7 @@
    }
   },
   "PouwCheck.Credit": {
-   "digest": "9b0d530987ee9a7ebfef4d997bfe166d030352330a9baa9cefa00c5d8a81b3a7",
+   "digest": "a4f0c2cf6cdfad41fe4d9e1e0e33d4379b680dcd18127094f6ac3535dd7a9e70",
    "definitions": {
     "PouwCheck.Credit.BODY": "071fefb97f3971bcd352e1c3b07d11024a6f9c774c6fb6c3b46931a10dfb376c",
     "PouwCheck.Credit.CALLS_FORM": "d6bf6cb3768f79c8900ee97cb118d0b475d4456410e4d0a86afbe35047c0da92",
@@ -20147,7 +20212,7 @@
     "PouwCheck.Credit.OTHER_WEIGHTS": "a30230fb307ac8e627a9995cbd6565e1be7889dd360687a12242f800140ee74e",
     "PouwCheck.Credit.PERIOD_KEYS": "8d390339adfa6b7dc69581142642ced8463a246eac176543a23bddddcb450b09",
     "PouwCheck.Credit.PERIOD_PIN_FIELD": "184d1f33f416b8f4b3ce581d4f6ee2467ec2d09068d5ef9108cfa338baeb237a",
-    "PouwCheck.Credit.PINNED_MODELS": "fdd22de85540790146f622e64fbdee134473bb4cc07295e6f43bb85131cb3163",
+    "PouwCheck.Credit.PINNED_MODELS": "da23deb5aae861dde822f7a580b666df048c7392b629c450849f5f76f16820f7",
     "PouwCheck.Credit.PROOFS_FORM": "a34c3d753408e12158333176c2b653925193f364e9db1ec632e5c020fdffdb95",
     "PouwCheck.Credit.PROOF_KEYS": "3b4668e1aed14a578d01d42565b991e0578fdf218d009bc7c54498faa3920569",
     "PouwCheck.Credit.PeriodCredit": "5a4e13fded73d44a26bddce9e57cf7c8ed82ba483d749db640d0be8a71395583",
@@ -22326,6 +22391,20 @@
     "Properties.Spot.secondOf": "65b0e80dc292257c9a1ad7438a268ca57478a989ea25ccc8ec3ae7603895048d"
    }
   },
+  "Properties.Spot.Tables": {
+   "digest": "8e3db73597e1490546ac44af69bf93f6ffbfd6fe2a3a268e40432d6f15b8620f",
+   "definitions": {
+    "Properties.Spot.HoldsRegisteredTables": "6a9c6e8370865ce4b38e94c77c77eca90c2b5147799b9c3ca079a84df5e09e5c",
+    "Properties.Spot.TablesRegistered": "fb07323944991d702752b2b28580734483dbb0baaff8e4efe20600da01a63522",
+    "Properties.Spot.circuitDigest": "3ecc958a130941c298bb8f0fb24a501e5aba97598374f12a25e0027a193af5a9",
+    "Properties.Spot.honestBlobs": "f24aecf03afb4102e16165e10e0912036c80359ea858bf6deff8d7c015fbb117",
+    "Properties.Spot.honestCircuit": "cf59f338a16df0bcc217029c98804eaf030a93437da6bea16d0ab13859215a85",
+    "Properties.Spot.rcpDigest": "c98713e029c6ea29382e68ad1d82838daa64bd073dc3697e8c6f69fcb9d7464d",
+    "Properties.Spot.tableBlobs": "de9ce053799375bc81d4d32259ce7d215a5152d6a35aadcc7048e2c542932fb3",
+    "Properties.Spot.tableCircuit": "d4d7d87685d340642dd35b15c7f75712643696b2c74953c3af0014057c0612c4",
+    "Properties.Spot.witnessOwn": "c023a632dcb2eb7bf21e66a5d13447351c7dcd5d21494b84a811af1b2a642af0"
+   }
+  },
   "Properties.Spot.TwoStageCheck": {
    "digest": "eaac374477385b0965fe7c43e1cc3a28b256249c7e25537e3f64a633ec65f3e0",
    "definitions": {
@@ -23947,7 +24026,7 @@
    }
   },
   "Spot.OneStageZk": {
-   "digest": "b8d6ba79d024bb2faa49bfa12ddd40a7877031fa97cb95f6809237afb47cbf84",
+   "digest": "0322dec5ade726f4c007797182d274ff0522b491abb1f0017c167094efe52ad5",
    "definitions": {
     "Spot.OneStageZk.Evidence": "865231d981aefbe5cf442067b2f194a6c63c152496f0f7e20e25ce3245baa7f4",
     "Spot.OneStageZk.Evidence.base": "085d5ef75a033dd6cc8c769bc2f2f773ee79eeb5bda98797a04f5ef6dc215b93",
@@ -23957,6 +24036,7 @@
     "Spot.OneStageZk.KEY_PARAMS": "6528629901d377f3e67f18b8717bd7944ccabefb1ae78f87bfb1dcc503fbd407",
     "Spot.OneStageZk.NO_CHALLENGER": "e162a96e930d08f9754dac695c52dafc52cfd3daf4b4792302f54b06244b1df8",
     "Spot.OneStageZk.NO_ROW_WHY": "bdb3c1dcd200ed424ffe254184c9b7cfd1e66da41f66c6808dfba2643fd103e6",
+    "Spot.OneStageZk.NO_TABLES": "89a604bf3f3fab6ba56c515638fc1c6011ccaeb7feeab9bfa86e992a1c058ad0",
     "Spot.OneStageZk.Own": "6a54577405b943278fb5048cdb5cc554d2b0102b82277aa7167bf1af5c4a33f2",
     "Spot.OneStageZk.Own.circuit": "b28ae5dd63f1dcaf1c90334322baf69c38d4c65397f9431080a3222fb8738c41",
     "Spot.OneStageZk.Own.partition": "d94bdb4da3add57b3a6263395799e3cb17117d70d3ff1c1355710f26fa2e6f37",
@@ -24001,6 +24081,7 @@
     "Spot.OneStageZk.indicesHeld": "e9746ee698ca819e30d0d5cd63b4517294296935fae4ed58514a77972cd26b41",
     "Spot.OneStageZk.inputsOf": "222d59018519d209ecf764ecb2bf0a3ccff5ccbdd9ccd7d9676bee0acb75466e",
     "Spot.OneStageZk.linesOf": "ea58ef2214221f1a7075a8c0461ce4a6a8eb9a06da64fcf96eb7b0bc64f6a5c0",
+    "Spot.OneStageZk.lookupsOf": "c6c15967aa40752c7b9f4adc4608e3732149b0d018a70ca9f1bb497ef44e1793",
     "Spot.OneStageZk.oneSession": "3b5bc4ea098e1bcb9df88afa7689c9c6acaaf3fd29e1c6297447b1ce3a7ecf15",
     "Spot.OneStageZk.orderHeld": "dc4a26c43f92f5ac3e26f531238cf4bbaafb16dce2a97cb2859661952f44e482",
     "Spot.OneStageZk.paramsOfJson": "c02c15ac68119249f4a102d11c43401f38185ed7f22c722388739218776cc766",
@@ -24019,12 +24100,13 @@
     "Spot.OneStageZk.returnedBits": "526678a1f372ad9a8c1a8ab31a6f4abda9941e3417acc4670186ca4ae5b341cb",
     "Spot.OneStageZk.rootBLen": "425858b488c3fe79dd324884372fca0eb1d11ad0ca6c5e4953b128e2b2c5d9a0",
     "Spot.OneStageZk.rootBTables": "6b297e93074460ce370b991a3670df0c454272aa6b118dd5666bf54af1475493",
-    "Spot.OneStageZk.run": "b74b0032104134378dba47f7a75c26e61d19c27f88c132a1e63299b970df40dd",
+    "Spot.OneStageZk.run": "417702f7ff36f19de4c4154b15cb9e47bd97c3b635e68ed7446afe853918c8cc",
     "Spot.OneStageZk.sessionAt": "c8faeafb847a3afda29031af35b25bfe70134280834f8c045d22797c7c2420a6",
     "Spot.OneStageZk.sessionTables": "8f4045ee0fa5ce8fe15e1640748b4d03e51adf18c0c8dbcc0bbd560fad0b2097",
     "Spot.OneStageZk.setupAt": "44c14b10235a468a54be584c7e667b789d472b63cacc8ed6cc84fe55f72f216d",
     "Spot.OneStageZk.setupChecks": "6e7eea147c0b79a1391bc6d73f978f1745ccde6056349dfc4a9008ed2c2257d9",
     "Spot.OneStageZk.step": "3b03721d6ced6798eddc70854cb60612be4c38b1ec6167f44f123f4f83aa40d3",
+    "Spot.OneStageZk.tablesHeld": "000574eb0376f78d18d1f42de1622518420348bb5ed5667796faa54c6b7b20c4",
     "Spot.OneStageZk.tablesOf": "5d14cb4d8454567b99bad8463df6f9d6fe7503bb6809976e46259cec2c5d008b",
     "Spot.OneStageZk.templateOk": "a5e4e652dc1d4c9f51482b0b140519c4aaa029fbe83144a590e35a907e5d1348",
     "Spot.OneStageZk.treesHeld": "ceb3e31246a635beb0beffb8e7c2db3c5a23fb50a610abc780ed02952b5cce5f",

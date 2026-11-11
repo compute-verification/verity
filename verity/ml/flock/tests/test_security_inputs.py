@@ -10,7 +10,7 @@ from pathlib import Path
 
 TESTS = Path(__file__).resolve().parent
 SUITE = TESTS.parent
-ROOT = SUITE.parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 SECURITY = ROOT / "Security"
 #: the package `lake build` runs in (test_lean_verifier.py's `PROOFS`)
 PROOFS = SECURITY / "Proofs"

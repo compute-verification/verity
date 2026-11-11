@@ -28,7 +28,9 @@ D = CHECK.DECLARATION
 LA = _module("repo_lean_audit_for_shards", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
 PACKAGES = LA.packages(CHECK.tracked_files(ROOT))
 #: the packages that build Security/Proofs: it, and the specs whose `proved_in` names it
-SECURITY = ("lean-audit:Security", "lean-audit:Security/Proofs", "lean-audit:Security/Properties")
+SECURITY = tuple(f"lean-audit:{p}" for p in ("Security", "Security/Proofs", "Security/Properties"))
+#: those the hand-written plans name: the spec goes with its provers (`declaration.resolve`), so no plan spells its path
+NAMED = SECURITY[1:]
 #: lean-suites' parts: its suites, the composition suite in the three parts by test id its pyproject declares
 SUITES = CHECK._parts_of()["lean-suites"]
 COMPOSITION = tuple(f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2, 3))
@@ -50,13 +52,13 @@ def _resolved(n: int, packages=PACKAGES) -> list[list[str]]:
 def test_the_plans_are_the_documented_ones():
     c1, c2, c3 = COMPOSITION
     assert D.plans() == {
-        3: ((*SECURITY, "pytest", c3),
+        3: ((*NAMED, "pytest", c3),
             ("lean-build", "lean-unit-cut", "lean-audit:*", c1, "lean-suites:*", "lean-agreement", "lean-changed"),
             ("flock-circuit-build", "circuit-check", "flock-rust-tests", c2)),
-        4: ((*SECURITY, "circuit-check:1/4", c3),
+        4: ((*NAMED, "circuit-check:1/4", c3),
             ("lean-build", "lean-unit-cut", "lean-audit:*", c1, "lean-suites:*", "lean-agreement", "lean-changed", "circuit-check:2/4"),
             ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", c2)),
-        5: ((*SECURITY, c3), ("lean-audit:*", "lean-changed"), ("lean-build", "lean-unit-cut", c1, "lean-suites:*", "lean-agreement"),
+        5: ((*NAMED, c3), ("lean-audit:*", "lean-changed"), ("lean-build", "lean-unit-cut", c1, "lean-suites:*", "lean-agreement"),
             ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests", c2))}
 
 
@@ -480,9 +482,7 @@ def test_the_combine_joins_a_split_suites_parts_across_shards_into_its_verdict(t
 
 
 def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch):
-    import research.store.local
-
-    real, launched, urls = subprocess.run, [], []
+    real, launched, urls, signed = subprocess.run, [], [], []
 
     def run(cmd, *a, **k):
         if cmd[:4] == [sys.executable, "-m", "research", "run"]:
@@ -490,28 +490,28 @@ def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch
             return subprocess.CompletedProcess(cmd, 0)
         return real(cmd, *a, **k)
 
-    class Store:
-        def fetch(self, art):
-            (tmp_path / art[4:]).write_text("")
-            return tmp_path / art[4:]
-
     def url_file(d):
         urls.append(d)
         return None
 
-    (tmp_path / "upstream.json").write_text(json.dumps({"upstream": {"art": "art:u"}, "inputs": {"art": "art:i"}}))
-    monkeypatch.setattr(CHECK, "UPSTREAM_PIN", tmp_path / "upstream.json")
-    monkeypatch.setattr(research.store.local, "LocalStore", Store)
+    def agreement_url_file(d):
+        signed.append(d)
+        (p := d / CHECK.AGREEMENT_URLS).write_text(json.dumps({k: {"art": f"art:{k[0]}", "bytes": 1} for k in ("upstream", "inputs")}))
+        return p
+
+    monkeypatch.setattr(CHECK, "agreement_url_file", agreement_url_file)
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", url_file)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
     monkeypatch.setattr(subprocess, "run", run)
     sent = {}
     for args in (["--shard", "3/5"], ["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):
-        launched.clear(), urls.clear()
+        launched.clear(), urls.clear(), signed.clear()
         assert CHECK.record(["--base", "HEAD", "--agreement", *args]) == 0
         [cmd] = launched
         assert cmd[-len(args):] == args if args else True
-        sent[" ".join(args)] = ("flock_upstream=art:u" in cmd, bool(urls))
+        assert ("flock_upstream=art:u" in cmd) == bool(signed), "the run's inputs name the pinned files it was sent URLs of"
+        sent[" ".join(args)] = (bool(signed), bool(urls))
     assert sent == {"--shard 3/5": (True, False), "--shard 1/5": (False, True), "--shard 4/5": (False, False),
                     "--combine r1 r2": (False, False), "": (True, True)}
     assert CHECK.record(["--base", "HEAD", "--shard", "9/5"]) == 2

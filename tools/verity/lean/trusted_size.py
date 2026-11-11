@@ -156,7 +156,7 @@ def table(m: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("pkg", nargs="?", default="Security", help="the Lake package (default Security)")
+    ap.add_argument("pkg", nargs="?", default="Security", help="the Lake package (default %(default)s)")
     ap.add_argument("--prefix", default="Definitions", help="the trusted modules' prefix (default Definitions)")
     src = ap.add_mutually_exclusive_group()
     src.add_argument("--facts", type=Path, help="a Lean check's facts.json.gz (or an older one's facts.json) for PKG")

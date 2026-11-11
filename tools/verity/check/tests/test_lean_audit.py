@@ -1133,7 +1133,7 @@ def test_the_ratchet_joins_the_facts_of_this_run_s_audits_or_of_the_passes_it_re
 
     keys = {p: LA.key(p, LA.COMMON.tracked_files(), LA.FLAGS) for p in ("Security", "Security/Proofs", "pkg/a")}
     rc, ran, doc, seen = run(1)
-    assert rc == 0 and ran == ["Security", "Security/Proofs", "pkg/a", "pkg/b"] and seen == ["Security", "Security/Proofs"]
+    assert rc == 0 and ran == sorted(["Security", "Security/Proofs", "pkg/a", "pkg/b"]) and seen == ["Security", "Security/Proofs"]
     assert doc["unread"]["failures"] == [] and sorted(p.stem for p in (cache / "unread").glob("*.json")) == sorted(
         [keys["Security"], keys["Security/Proofs"]])
     published = sorted(f"{keys[p]}.jsonl.gz" for p in LA.UNREAD_FACTS)

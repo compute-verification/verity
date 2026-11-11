@@ -28,7 +28,7 @@ import pytest
 from verity_flock import rec_links as RL
 
 HERE = Path(__file__).resolve().parent
-BIN = HERE.parents[3] / "verity/core/service/flock/.lake/build/bin/flock-verify"
+BIN = Path(__file__).resolve().parents[4] / "verity/core/service/flock/.lake/build/bin/flock-verify"
 SET = HERE / "fixtures" / "rec-links" / "k64-n4"
 #: the fixture's files stored gzipped (`SET / f"{rel}.gz"`), which `plain` gives decompressed
 GZ = ("link/circuit.txt", "link/program.json", "inner/circuit.txt")

@@ -20,12 +20,15 @@ import pytest
 from verity.core.protocols.spot import service as S
 from verity.core.protocols.spot.one_stage import partition as P, registration as R
 from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.evaluation.reference import evaluate
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array
 from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
+from verity.ml.definitions.registry import dead_free as DF
 from verity.ml.windows import rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, index_of
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.engine import sampler_capture as SC
 from verity_vllm.pipeline import interior_rows as IR, serving_rows as SRW
 
 ROPE = "RoPEHead_v1{D=64}"
@@ -100,6 +103,22 @@ def test_a_replay_names_what_it_cannot_give(world):
     assert w is None and "nothing gives it" in why
     w, why = replay.words("r0", 0, replay.embed, "in", 0, 3)
     assert w is None and "prompt ids [0, 3)" in why
+
+
+def test_a_port_map_says_which_committed_word_each_units_word_is(world):
+    """`port_map` reads off `read_all`, before any value, which committed element or registered weight each RoPE head's
+    port word is; gathered from what serving committed, it is each request's span word for word, from its committed
+    members and the rotary cache. A template whose read computes its words (a GEMM's shared rows) is refused by name."""
+    bmap, committed = world.bmap_and_reader(order=tuple(PROMPTS))
+    store = CommittedStore(bmap, committed)
+    for rid in PROMPTS:
+        pm = IR.port_map(world.inst, ROPE, rid)
+        data, _entries = _served(world, rid)
+        got, = IR.gather(pm, store, _weights(world))
+        assert {p: a.tolist() for p, a in got.items()} == {p: a.tolist() for k in ("rows", "outs") for p, a in data[k].items()}
+        assert {s[0] for s in pm["sources"]} == {"store", "weights"} and all(s[1] == rid for s in pm["sources"] if s[0] == "store")
+    with pytest.raises(ValueError, match="computed by its read, not moved"):
+        IR.port_map(world.inst, "GemmCoordinate_v1{K=64}", "r0")
 
 
 def test_a_span_pads_to_its_size_class_with_its_last_unit(world):
@@ -229,6 +248,29 @@ def test_the_interior_is_one_shared_row_member_of_its_word_rows_roots(spans):
     assert plain.public_body(0) != it.committed.public_body(0)
 
 
+def test_a_commitment_made_on_the_rows_device_registers_as_the_hosts_would(world, spans):
+    """A GPU commit hands `interior` each port's root, every row's b || c and the salts it drew: from spans that hold no
+    rows, it registers the record, ports and leaf layer the host's commitment of the rows makes under the same salts, and
+    the stream accepts it. A commitment missing a port, or with a short root, b || c or salts, is refused by name."""
+    stream, reg, first = _first(world, spans)
+    host = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, row=ROW, salt_key=SALT)
+    c = host.committed
+    device = IR.DeviceCommit(c.roots, c.bc, c.salts)
+    bare = [replace(spans[r], data={}) for r in ("r0", "r2")]
+    gpu = IR.interior(bare, N_RHO, reg.digest, first.units, row=ROW, device=device)
+    assert (gpu.record, gpu.ports, gpu.leaf_layer) == (host.record, host.ports, host.leaf_layer)
+    assert not gpu.committed.rows and IR.register(stream, first, gpu).record == host.record
+    q = next(iter(c.roots))
+    for bad, why in (({k: v for k, v in c.roots.items() if k != q}, "not the window's"),
+                     ({**c.roots, q: c.roots[q][:32]}, "a 32-byte root")):
+        with pytest.raises(ValueError, match=why):
+            IR.interior(bare, N_RHO, reg.digest, first.units, row=ROW, device=replace(device, roots=bad))
+    with pytest.raises(ValueError, match="bytes of b \\|\\| c, for its"):
+        IR.committed(c.window, replace(device, bc={**c.bc, q: c.bc[q][:-1]}))
+    with pytest.raises(ValueError, match="bytes of salts, for its"):
+        IR.committed(c.window, replace(device, salts={**c.salts, q: c.salts[q] + b"\0"}))
+
+
 def test_an_interior_registration_is_refused_by_name(world, spans):
     """Against the challenger's copies: a leaf forged after the replay (`R4-leaf-layer`, the record's leaf layer not
     the one of the bodies it released), a record not chained after the boundary (`R6-previous`), spans committed at
@@ -268,7 +310,7 @@ def test_a_sampler_capture_is_the_token_select_span_and_registers_as_its_interio
     ones served, or whose rows changed after it was written, is refused before any commitment."""
     replayed = {rid: IR.span(world.inst, _replay(world, rid), TSEL) for rid in PROMPTS}
     served = _tokens(world)
-    IR.write_capture(tmp_path, TSEL, {rid: {"logits": s.data["rows"]["in0"], "tokens": served[rid], "steps": [e[3] for e in s.entries],
+    SC.write(tmp_path, TSEL, {rid: {"logits": s.data["rows"]["in0"], "tokens": served[rid], "steps": [e[3] for e in s.entries],
                                             "program": s.program} for rid, s in replayed.items()})
     got = {rid: IR.captured(tmp_path, rid, served[rid]) for rid in PROMPTS}
     for rid, s in replayed.items():
@@ -286,8 +328,146 @@ def test_a_sampler_capture_is_the_token_select_span_and_registers_as_its_interio
     (tmp_path / "1.u16").write_bytes(bytes(raw))
     with pytest.raises(ValueError, match="is not the capture's"):
         IR.captured(tmp_path, "r1")
-    doc = json.loads((tmp_path / IR.CAPTURE).read_text())
+    doc = json.loads((tmp_path / SC.CAPTURE).read_text())
     doc["spans"]["r1"]["steps"] = doc["spans"]["r1"]["steps"][:-1]
-    (tmp_path / IR.CAPTURE).write_text(json.dumps(doc))
+    (tmp_path / SC.CAPTURE).write_text(json.dumps(doc))
     with pytest.raises(ValueError, match="for 3 tokens at 2 steps"):
         IR.captured(tmp_path, "r1")
+
+
+# --- a token select as the units Flock proves it by ----------------------------------------------------------------------
+
+NAN, NEG_NAN, NEG_ZERO, NEG_INF, INF, ONE, NEG_ONE = 0x7FC0, 0xFFC0, 0x8000, 0xFF80, 0x7F80, 0x3F80, 0xBF80
+
+
+def _select_rows(V: int) -> np.ndarray:
+    """Logits rows of random words, then of edge cases: none above -inf, a NaN logits[0], a tie across chunks, -0 before
+    +0, +inf last, and NaNs but one number in the last chunk."""
+    edge = np.full((6, V), NEG_INF, dtype=np.uint16)
+    edge[1, :], edge[1, 0] = ONE, NAN
+    edge[2, [5, V // 2 + 5]] = ONE
+    edge[3, 3], edge[3, 4] = NEG_ZERO, 0
+    edge[4, -1] = INF
+    edge[5, :], edge[5, -2] = NEG_NAN, NEG_ONE
+    return np.concatenate([np.random.default_rng(20261108).integers(0, 1 << 16, (4, V), dtype=np.uint16), edge])
+
+
+def _selects(tmp_path, V: int) -> dict[str, IR.Span]:
+    """Two requests' captured `TokenSelect_v4{V}` spans of five tokens each, each token its Definition's on its row."""
+    t, rows = f"TokenSelect_v4{{V={V}}}", _select_rows(V)
+    fn = SRW.template(t).fn
+    SC.write(tmp_path, t, {rid: {"logits": part, "tokens": [int(evaluate(fn, r.tolist())[0]) for r in part],
+                                 "steps": list(range(len(part))), "program": "p" * 64}
+                           for rid, part in (("a", rows[:5]), ("b", rows[5:]))})
+    return {rid: IR.captured(tmp_path, rid) for rid in ("a", "b")}
+
+
+@pytest.mark.parametrize("V,c", [(128, None), (64, 16)])
+def test_a_token_selects_pieces_are_its_chunks_and_combine_by_their_definitions(tmp_path, V, c):
+    """`pieces` lays a captured token select out as `TokenSelect_v4` calls it: each token's V / C chunk units, each its
+    Definition's (best, idx) of its logits, then its combine unit over logits[0] and those partials, which its Definition
+    takes to the span's token, on random words and on NaN, ±0, ±inf and ties across chunks; each piece's member is its
+    template's bit rows as Flock stages a unit, each row of exactly its words (Flock refuses the whole select at a served
+    vocabulary). Pieces that don't select the span's token, and chunks that don't tile the row, are refused."""
+    C, out = c or min(DF.CHUNK, V), f"out.{SAMPLED_MEMBER}"
+    k = V // C
+    for s in _selects(tmp_path, V).values():
+        chunks, comb = IR.pieces(s, c)
+        assert (chunks.member, comb.member) == (IR.named(SRW.unit_member(f"TokenSelectChunk_v2{{C={C}}}", s.n * k)),
+                                                IR.named(SRW.unit_member(f"TokenSelectCombine_v2{{V={V},C={C}}}", s.n)))
+        assert [p for p, _w in chunks.member.rows + comb.member.rows] == ["x", "x0", "best", "idx"]
+        assert [w for _p, w in comb.member.rows] == [1, k, 2 * k]
+        best, idx = chunks.data["outs"]["o0"][:, 0].tolist(), chunks.data["outs"]["o1"].view("<u4")[:, 0].tolist()
+        for j, row in enumerate(s.data["rows"]["in0"].tolist()):
+            parts = [evaluate(bind(DF.TokenSelectChunkV2, C=C), row[a:a + C]) for a in range(0, V, C)]
+            assert list(zip(best[j * k:(j + 1) * k], idx[j * k:(j + 1) * k])) == [tuple(p) for p in parts]
+            token = evaluate(bind(DF.TokenSelectCombineV2, V=V, C=C), row[0], [p[0] for p in parts], [p[1] for p in parts])
+            assert token == (int(s.data["outs"][out].view("<u4")[j, 0]),)
+        assert comb.data["rows"]["best"].reshape(-1).tolist() == best and comb.data["rows"]["x0"][:, 0].tolist() == [
+            r[0] for r in s.data["rows"]["in0"].tolist()]
+    wrong = s.data["outs"][out].copy()
+    wrong[0, 0] ^= 1
+    with pytest.raises(ValueError, match="its chunks and combine select"):
+        IR.pieces(replace(s, data={**s.data, "outs": {out: wrong}}), c)
+    with pytest.raises(ValueError, match="are not whole chunks"):
+        IR.pieces(s, 3)
+
+
+@pytest.mark.parametrize("V,c", [(128, None), (64, 16)])
+def test_a_token_selects_pieces_on_the_logits_device_are_its_pieces_on_the_host(tmp_path, V, c):
+    """`sampler_capture.piece_rows`, on the device the sampler's logits are on (CPU torch here), lays every piece's rows out
+    word for word as `pieces` does from the captured span, NaN, ±0, ±inf and ties across chunks included, and padded to a
+    size class as `Span.padded` pads each piece by whole tokens; ids the combine doesn't select are refused."""
+    import torch
+    for s in _selects(tmp_path, V).values():
+        ids = s.data["outs"][f"out.{SAMPLED_MEMBER}"].view("<u4")[:, 0].astype(np.int64)
+        logits = torch.from_numpy(s.data["rows"]["in0"].view(np.int16).copy()).view(torch.bfloat16)
+        got, padded = SC.piece_rows(logits, torch.from_numpy(ids), c), SC.piece_rows(logits, ids, c, pad=s.n + 3)
+        for piece in IR.pieces(s, c):
+            want = {p: a.tolist() for kind in ("rows", "outs") for p, a in piece.data[kind].items()}
+            assert {p: a.numpy().view(np.uint16).tolist() for p, a in got[piece.member.template].items()} == want
+            whole = piece.padded(piece.n // s.n * (s.n + 3))
+            want = {p: a.tolist() for kind in ("rows", "outs") for p, a in whole[kind].items()}
+            assert {p: a.numpy().view(np.uint16).tolist() for p, a in padded[piece.member.template].items()} == want
+        with pytest.raises(ValueError, match="the chunks and combine select"):
+            SC.piece_rows(logits, torch.from_numpy(ids ^ 1), c)
+        with pytest.raises(ValueError, match="don't pad to a size class of 4"):
+            SC.piece_rows(logits, ids, c, pad=4)
+
+
+def test_a_token_selects_pieces_stage_as_the_second_stage_stages_an_interior_member():
+    """`named` gives each piece's member the rows the second stage stages it on (`class_statement.member_stager`: row r
+    its Definition's input r), at a vocabulary whose combine rows hold a whole SHA-512 block, while `serving_rows.
+    unit_member`'s positional ``in<g>`` rows are refused there."""
+    from verity_flock import class_statement as CST
+    for t in ("TokenSelectChunk_v2{C=64}", "TokenSelectCombine_v2{V=4096,C=64}"):
+        fn, m = SRW.template(t).fn, SRW.unit_member(t, 2)
+        CST.member_stager(fn, IR.named(m), None)
+        with pytest.raises(ValueError, match="are not the parameters"):
+            CST.member_stager(fn, m, None)
+
+
+def test_a_token_selects_interior_is_template_major_one_shared_row_member_a_piece(tmp_path):
+    """The interior of two spans' pieces, each padded to its cell (12 chunk units, 6 combines): the chunks' Q·12 units,
+    then the combines' Q·6, each template one shared-row member whose ports are tables of its own rows and unit off_t + k
+    reads row k, over the verifier's mixed population program; spans of other templates or cells of another count are
+    refused before any commitment."""
+    per = [IR.pieces(s) for s in _selects(tmp_path, 128).values()]
+    it = IR.interior(per, (12, 6), "aa" * 64, [0, 2], row=ROW, salt_key=SALT)
+    w = it.committed.window
+    assert [(m.template, m.base, m.n) for m in w.members] == [(per[0][0].member.template, 0, Q * 12),
+                                                               (per[0][1].member.template, Q * 12, Q * 6)]
+    assert all(dict(m.tables) == {p: m.n for p, _ in m.rows} for m in w.members)
+    assert all(np.array_equal(it.committed.refs[j], np.tile(np.arange(m.n)[:, None], (1, len(m.all_rows))))
+               for j, m in enumerate(w.members))
+    mixed = P.mixed_population_program([(SRW.template(m.template).fn, m.n) for m in w.members])
+    assert w.program.root.id == mixed.root.id
+    assert it.ports == IR.interior_ports([s.member for s in per[0]], (12, 6), "aa" * 64, [0, 2])
+    with pytest.raises(ValueError, match="not the same templates'"):
+        IR.interior([per[0], per[1][:1]], (12, 6), "aa" * 64, [0, 2], row=ROW)
+    with pytest.raises(ValueError, match=r"2 templates and cells \[12\]"):
+        IR.interior(per, 12, "aa" * 64, [0, 2], row=ROW)
+
+
+def test_a_token_selects_pieces_pad_by_whole_tokens_as_its_inlined_replay_blocks_instances(tmp_path):
+    """A replay block inlining `TokenSelect_v4` holds one instance a served token, each its V / C chunks then its combine,
+    so the pieces are the templates its body calls in the order of their first call and a span of fewer tokens than its
+    class pads by its last token: the chunk cell repeats that token's V / C chunks, not its last chunk, and the interior is
+    the interior of the span padded to its class by its last row. Cells that aren't whole tokens are refused by name."""
+    t, rows = "TokenSelect_v4{V=128}", _select_rows(128)[5:]
+    s = _selects(tmp_path, 128)["b"]
+    chunks, comb = IR.pieces(s)
+    calls = SRW.template(t).fn.body.nodes
+    assert tuple({P.template_id(n.fn): None for n in calls}) == (chunks.member.template, comb.member.template)
+    assert (chunks.group, comb.group) == (2, 1)
+    pad = chunks.padded(14)["rows"]["x"]
+    assert np.array_equal(pad[10:], np.tile(pad[8:10], (2, 1))) and not np.array_equal(pad[10], pad[11])
+    whole = np.concatenate([rows, rows[-1:], rows[-1:]])
+    fn = SRW.template(t).fn
+    SC.write(tmp_path / "whole", t, {"b": {"logits": whole, "tokens": [int(evaluate(fn, r.tolist())[0]) for r in whole],
+                                          "steps": list(range(len(whole))), "program": "p" * 64}})
+    got, want = (IR.interior([IR.pieces(x)], (14, 7), "aa" * 64, [0], row=ROW, salt_key=SALT)
+                 for x in (s, IR.captured(tmp_path / "whole", "b")))
+    assert (got.record, got.leaf_layer) == (want.record, want.leaf_layer)
+    with pytest.raises(ValueError, match="in whole instances of 2 units"):
+        IR.interior([(chunks, comb)], (13, 7), "aa" * 64, [0], row=ROW)

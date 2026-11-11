@@ -25,10 +25,10 @@ from verity_flock import firewall as FW
 
 HERE = Path(__file__).resolve().parent
 PKG = HERE.parent
-ROOT = PKG.parents[3]
+ROOT = Path(__file__).resolve().parents[5]
 FLOCK = ROOT / "verity" / "ml" / "flock"
 LEAN_FLOCK = ROOT / "verity" / "core" / "service" / "flock"
-VECTORS = FLOCK / "live" / "src" / "firewall_record_vectors.json"
+VECTORS = ROOT / "verity/ml/flock/live/src/firewall_record_vectors.json"
 FIXTURES = HERE / "fixtures"
 REFUSED = "FIREWALL-REFUSED: "
 
@@ -93,7 +93,7 @@ def e2e_record() -> list[str]:
 @functools.cache
 def firewall_agree():
     """`verity/ml/flock/verifier/firewall_agree.py`, the contract check's sessions."""
-    spec = importlib.util.spec_from_file_location("firewall_agree", FLOCK / "verifier" / "firewall_agree.py")
+    spec = importlib.util.spec_from_file_location("firewall_agree", ROOT / "verity/ml/flock/verifier/firewall_agree.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

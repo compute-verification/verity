@@ -25,7 +25,7 @@ from verity.core import site as S
 from verity.core.protocols import registration as G
 from verity_difftest import protocol as P
 
-INTERFACE = Path(__file__).resolve().parents[2] / "interface"
+INTERFACE = Path(__file__).resolve().parents[5] / "verity/core/protocols/interface"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 SHEET = S.Sheet(S.DeviceFigures("sim-a", 2_000_000_000, (10**15, 2 * 10**15, 2 * 10**15, 15 * 10**14, 4 * 10**15)), 3200,

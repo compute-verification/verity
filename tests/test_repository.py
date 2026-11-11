@@ -215,8 +215,9 @@ def test_markdown_size_caps() -> None:
     assert not offenders, "maintained documents are small:\n" + "\n".join(offenders)
 
 
-#: Test files that need torch, a GPU or cargo, and were never part of `check`.
-UNSUITED_TEST_DIRS = ("verity/ml/kernels/",)
+#: Test files that need torch, a GPU or cargo, and were never part of `check`; and the tests of archived code, which go to
+#: `archive/` with it and which no suite runs.
+UNSUITED_TEST_DIRS = ("verity/ml/kernels/", "archive/")
 #: what pytest collects from a module: a function or a class of its own named as a test
 _DEFINES_A_TEST = re.compile(r"^(?:async\s+)?def\s+test|^class\s+Test", re.M)
 

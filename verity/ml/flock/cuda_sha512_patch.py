@@ -13,15 +13,17 @@ import pathlib
 import re
 import shutil
 
-here = pathlib.Path(__file__).resolve().parent
 g = pathlib.Path("cuda-ghash")
 if "FLOCK_HB" in (g / "merkle_open.hpp").read_text():
     raise SystemExit("cuda_sha512_patch: already applied")
-KERNELS_SHA = '#include "../../kernels/sha512.cuh"\n'
-shutil.copy(here.parent / "kernels" / "sha512.cuh", g / "kernels_sha512.cuh")
-s = (here / "cuda" / "sha512.cuh").read_text()
-assert s.count(KERNELS_SHA) == 1, f"cuda/sha512.cuh: {KERNELS_SHA!r} occurs {s.count(KERNELS_SHA)} times, expected 1"
-(g / "sha512.cuh").write_text(s.replace(KERNELS_SHA, '#include "kernels_sha512.cuh"\n'))
+# The GPU's one SHA-512 and the header that includes it, each by its path from the repository's root, and that header's
+# include line, whatever its way there: this runs under a bare python3, which can't import verity for the paths.
+KERNELS_SHA = re.compile(r'#include "\.\./[\w./-]*/sha512\.cuh"\n')
+shutil.copy(pathlib.Path(__file__).resolve().parents[3] / "verity/ml/kernels/sha512.cuh", g / "kernels_sha512.cuh")
+s = (pathlib.Path(__file__).resolve().parents[3] / "verity/ml/flock/cuda/sha512.cuh").read_text()
+found = KERNELS_SHA.findall(s)
+assert len(found) == 1, f"cuda/sha512.cuh: {KERNELS_SHA.pattern!r} occurs {len(found)} times, expected 1"
+(g / "sha512.cuh").write_text(s.replace(found[0], '#include "kernels_sha512.cuh"\n'))
 
 GUARD = "#ifndef FLOCK_HB\n#define FLOCK_HB 64   // Merkle node bytes: SHA-512 (verity's cuda_sha512_patch.py)\n#endif\n"
 
