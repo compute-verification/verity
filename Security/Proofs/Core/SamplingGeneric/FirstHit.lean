@@ -48,7 +48,14 @@ of the first further tape that opens the node (`firstHit`), and it finds a pair 
   its sample. The finder makes a further run only when its sample holds a node still waited for (`loopCostOn`), and
   `w` is then a bound on the size of one run's sample, over the kept part and all coins (`ex_costOn_le`): for each
   node, the wait's runs are the coins whose sample holds it. With no bound on the sample, the count is an
-  expectation, `E[(1 + |sample|)·c]` (`ex_costOn_le_ex`, `pr_off_sample_le_ex`).
+  expectation, `E[(1 + |sample|)·c]`: at one cap with the cap's term (`ex_costOn_le_ex`,
+  `pr_off_sample_le_ex_cap_of_coll`), and at every cap without it (`pr_off_sample_le_ex`). The expectation is joint
+  in the sample's size and the run's calls: a bound on a run's mean calls at each coins bounds it, a bound on the
+  mean over all coins does not.
+
+**What a further run costs.** Every finder here charges a further run all of `c`, the calls of a whole run, whichever
+nodes it still waits for. A finder whose further run costs less when it waits for fewer nodes (one that reads only the
+part of a run that opens them) is not stated here.
 
 `finder`, `tapeFinder` and `sampleFinder` take their output `out` as a function of the whole seed and charge the runs
 the loop makes. The statements under `ExpectedCR` say what they read when `out` reads only those runs, as `outOf`
@@ -1212,14 +1219,33 @@ theorem pr_off_sample_le_ex_cap {T : Type} [Fintype T] [Nonempty T] [Fintype Ω]
   rw [mul_div_assoc]
   linarith
 
+/-- **The off-plurality mass at the sample's expected size, under `ExpectedCR` at the finder of one cap**:
+`2·E[(1 + |sample|)·c]/2^256 + N/(K + 1)`, the expectation over the tape and a run's coins of the run's calls times
+one more than the size of its coins' sample, `N` the number of nodes and `K` the finder's cap. The finder's output is
+`outOf`; a run opens only nodes of its sample (`hchk`, which the proof doesn't read and which makes the cost the calls
+of every run the output reads, `le_loopCostOn`). -/
+theorem pr_off_sample_le_ex_cap_of_coll {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    [DecidableEq V] (H : Msg → Msg) (op : T → Ω → P → Option V) {vstar : T → P → V}
+    (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : T → Ω → P → Bool)
+    (_hchk : ∀ (t : T) (ω : Ω) (p : P), (op t ω p).isSome → chk t ω p = true) (c : T → Ω → ℕ) (K : ℕ)
+    (coll : T → Ω → Ω → Option (Msg × Msg))
+    (hc : ∀ (t : T) (ω ω' : Ω) (p : P), ConflictAt (op t) (ω, ω') p → (coll t ω ω').isSome)
+    (hs : ∀ (t : T) (ω ω' : Ω) (u v : Msg), coll t ω ω' = some (u, v) → Collision H u v)
+    (hCR : ExpectedCR H
+      (sampleFinder op chk c K fun q : T × (Ω × (Fin K → Ω)) => outOf (op q.1) (coll q.1) K q.2.1 q.2.2)) :
+    Pr (fun q : T × Ω => ∃ p, Off (op q.1) (vstar q.1) q.2 p) ≤
+      2 * Ex (fun q : T × Ω => (((1 + #(univ.filter fun p : P => chk q.1 q.2 p)) * c q.1 q.2 : ℕ) : ℝ)) /
+          2 ^ (256 : ℝ) +
+        (Fintype.card P : ℝ) / ((K : ℝ) + 1) :=
+  pr_off_sample_le_ex_cap H op hv chk c K _
+    (fun q h => outOf_collision H (op q.1) (coll q.1) (hc q.1) (hs q.1) h) hCR
+
 /-- **The off-plurality mass at the sample's expected size, under `ExpectedCR` at the finder of every cap**:
-`2·E[(1 + |sample|)·c]/2^256`, the expectation over the tape and a run's coins of the run's calls times one more than
-the size of its coins' sample. The finder's output is `outOf`; a run opens only nodes of its sample (`hchk`, which
-the proof doesn't read and which makes the cost the calls of every run the output reads, `le_loopCostOn`). -/
+`2·E[(1 + |sample|)·c]/2^256`, `pr_off_sample_le_ex_cap_of_coll` with nothing left of the cap's term. -/
 theorem pr_off_sample_le_ex {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
     [DecidableEq V] (H : Msg → Msg) (op : T → Ω → P → Option V) {vstar : T → P → V}
     (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : T → Ω → P → Bool)
-    (_hchk : ∀ (t : T) (ω : Ω) (p : P), (op t ω p).isSome → chk t ω p = true) (c : T → Ω → ℕ)
+    (hchk : ∀ (t : T) (ω : Ω) (p : P), (op t ω p).isSome → chk t ω p = true) (c : T → Ω → ℕ)
     (coll : T → Ω → Ω → Option (Msg × Msg))
     (hc : ∀ (t : T) (ω ω' : Ω) (p : P), ConflictAt (op t) (ω, ω') p → (coll t ω ω').isSome)
     (hs : ∀ (t : T) (ω ω' : Ω) (u v : Msg), coll t ω ω' = some (u, v) → Collision H u v)
@@ -1228,7 +1254,6 @@ theorem pr_off_sample_le_ex {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [No
     Pr (fun q : T × Ω => ∃ p, Off (op q.1) (vstar q.1) q.2 p) ≤
       2 * Ex (fun q : T × Ω => (((1 + #(univ.filter fun p : P => chk q.1 q.2 p)) * c q.1 q.2 : ℕ) : ℝ)) /
         2 ^ (256 : ℝ) :=
-  le_of_forall_cap fun K => pr_off_sample_le_ex_cap H op hv chk c K _
-    (fun q h => outOf_collision H (op q.1) (coll q.1) (hc q.1) (hs q.1) h) (hCR K)
+  le_of_forall_cap fun K => pr_off_sample_le_ex_cap_of_coll H op hv chk hchk c K coll hc hs (hCR K)
 
 end Verity.FirstHit
