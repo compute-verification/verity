@@ -19,17 +19,13 @@ fold dir by the record's producer and read by the fast loader after checking the
 authenticated the sidecar's content, and a forged sidecar with the true source hashes was accepted.  Withdrawn; no reader of a
 sidecar exists.  The compact form here is the file of record itself.
 
-    verity-vllm instances-form convert --form progressions|runs SRC DST
-    verity-vllm instances-form form FILE...
+`convert_instances` rewrites a file of either form in the other, which the tests hold `persist_program`'s writers to.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import os
-from dataclasses import dataclass, field
-
-from verity_vllm.config import option
 
 INSTANCES_FORMS = ("runs", "progressions")
 SCHEMA_V1 = "verity-gen/instances/v1"
@@ -51,7 +47,7 @@ def convert_instances(src: str, dst: str, form: str) -> dict:
     "progressions"; rows: every operand's items through compact.file_items_from_runs (-> progressions) or compact.runs_from_file_items
     (-> runs).  Lossless both ways (the greedy progression rule is a function of the run list); everything else on the row is copied
     verbatim.  Returns counts (rows, items in / out, bytes)."""
-    from .compact import file_items_from_runs, runs_from_file_items
+    from verity_vllm.program.compact import file_items_from_runs, runs_from_file_items
     if form not in INSTANCES_FORMS:
         raise ValueError(f"form {form!r}: expected one of {INSTANCES_FORMS}")
     n_rows = n_in = n_out = 0
@@ -93,37 +89,3 @@ def instances_form_of(path: str) -> str:
                 o = json.loads(t)
                 return o.get("operand_refs_form") or "runs"
     return "runs"
-
-
-@dataclass(frozen=True, kw_only=True)
-class ConvertOptions:
-    "rewrite SRC instances.jsonl as DST in --form runs|progressions (lossless)"
-
-    form: str = option("--form", choices=INSTANCES_FORMS)
-    src: str = option("src")
-    dst: str = option("dst")
-    cmd: str = field(default="convert", init=False)
-
-
-@dataclass(frozen=True, kw_only=True)
-class FormOptions:
-    "print the stored form each FILE's header declares"
-
-    file: list[str] = option("file", nargs="+")
-    cmd: str = field(default="form", init=False)
-
-
-COMMANDS = {"convert": ConvertOptions, "form": FormOptions}
-
-
-def main(a: ConvertOptions | FormOptions) -> int:
-    import time
-    if a.cmd == "convert":
-        t0 = time.time()
-        res = convert_instances(a.src, a.dst, a.form)
-        res["seconds"] = round(time.time() - t0, 1)
-        print(json.dumps(res))
-        return 0
-    for p in a.file:
-        print(json.dumps({"file": p, "operand_refs_form": instances_form_of(p), "bytes": os.path.getsize(p)}))
-    return 0
