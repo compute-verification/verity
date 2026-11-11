@@ -11,7 +11,8 @@
 #     alone.
 # So a source that moved, or whose header did, compiles to the cubin it compiled to before. The steps are nvcc's own,
 # taken from its dry run and run in its order; everything but those three is as nvcc would have run it. Refuses a dry
-# run it can't follow (no cicc step). Needs CUDA (the toolkit) and TMPDIR, which ship.sh's frame sets.
+# run it can't follow: one with no cicc step, or whose cicc step names a variable other than CICC_PATH. Needs CUDA (the
+# toolkit) and TMPDIR, which ship.sh's frame sets.
 set -euo pipefail
 : "${CUDA:?the toolkit, which ship_cuda sets}" "${TMPDIR:?which the frame of ship.sh sets}"
 dry=$("$CUDA/bin/nvcc" "$@" -dryrun 2>&1) || { echo "$dry" >&2; exit 1; }
@@ -32,10 +33,19 @@ while IFS= read -r line; do
   line=$(sed -E 's|--orig_src_path_name "[^"]*/([^"/]*)"|--orig_src_path_name "/k/\1"|' <<< "$line")
   case $line in
     *'/cicc" '*)
+      # cicc's environment is emptied, so the one variable of nvcc's its step names is written in; a step that names
+      # another is refused rather than run with it empty
+      line=${line//\$CICC_PATH/$CICC_PATH}
+      case $line in
+        *[\$\`]*)
+          echo "ship_nvcc.sh: cicc's step names a variable besides CICC_PATH ($(grep -o '[$`][{(]*[A-Za-z_0-9]*' <<< "$line" |
+            sort -u | tr '\n' ' ')), and it runs with none of nvcc's: write that one into the step as CICC_PATH is" >&2
+          exit 1 ;;
+      esac
       ii=$(grep -o '"[^"]*\.ii"' <<< "$line" | tr -d '"')
       sed -E -i 's|^# ([0-9]+) "[^"<]*/([^"/]*)"|# \1 "\2"|' "$ii"
       (cd "$TMPDIR" && env -i PATH="$PATH" LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" LD_PRELOAD="${LD_PRELOAD:-}" \
-        TMPDIR="$TMPDIR" "$BASH" -c "${line//\$CICC_PATH/$CICC_PATH}") ;;
+        TMPDIR="$TMPDIR" "$BASH" -c "$line") ;;
     'rm '*) eval "rm -f ${line#rm }" ;;   # nvcc's own rm doesn't mind a file it never wrote
     *) eval "$line" ;;
   esac
