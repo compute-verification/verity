@@ -82,3 +82,6 @@ def reader_table(counts: Mapping[str, int], readers: Iterable[str], eps: Fractio
                          f"{list(counts)}")
     floors = reader_floors({t: int(counts[t]) for t in readers}, eps, delta)
     return {t: {"work": 1, "floor": floors.get(t, 1)} for t in counts}
+
+
+__all__ = ["law_of", "reader_floors", "reader_table", "work_table_of"]
