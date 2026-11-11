@@ -3,6 +3,7 @@ module
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Fails
 public import Proofs.Flock.SamplingGeneric.Split
+public import Proofs.Flock.SamplingGeneric.SessCount
 public import Proofs.Flock.SamplingGeneric.Assemble
 public import Proofs.Flock.SamplingGeneric.Coins
 public import Proofs.Flock.SamplingGeneric.Session
@@ -29,7 +30,8 @@ public import Proofs.Flock.SamplingGeneric.TwoRankin
 # The sampled compiler in the claims core, at Flock
 
 The compiled extractor's failure event, its probability and `Compiled.KS` from the split are in
-`SamplingGeneric/Fails.lean`.
+`SamplingGeneric/Fails.lean`; the sessions' weights at the gates their blocks need, counted by block
+(`Compiled.sum_sessions_le`), in `SamplingGeneric/SessCount.lean`.
 
 `Arg.ofFlock` is Flock's `E^rep` at the deployed decoder with Flock's errors, so its knowledge soundness is `Flock.KS`'s
 at that decoder (`flockArgKS`, by unfolding: its coins, extractor, `κ` and `γ` are `Flock.E D D.decode`'s, `Flock.κ`'s
