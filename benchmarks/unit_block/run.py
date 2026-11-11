@@ -5,7 +5,7 @@ in 2^`k_log` bits, each against Flock's proved range of 2^`circuit.K_MAX` (27).
     uv run benchmarks/unit_block/run.py WORD [--first V,V,...] [--stage N] --scratch DIR --out DIR
 
 WORD is a word primitive's id, a lazy family's member included (`GatherF32x50304_v1`). The unit is its Boolean version
-(`verity.ml.definitions.boolean.boolean_version`) with each parameter one ``hm96-sha512/row/v2`` bit row and its return one
+(`verity.definitions.boolean.boolean_version`) with each parameter one ``hm96-sha512/row/v2`` bit row and its return one
 more. `circuit.compose` refuses a block past 2^`K_MAX`; this lifts that bound while it builds, so such a block is measured, not
 refused, and its record says by how much it is over. ``--stage N`` stages N instances on the built circuit into ``--scratch``,
 each checked against the word primitive (`UnitStager.stage`): the first parameter's value in each is ``--first``'s (an index
@@ -45,10 +45,10 @@ def _rows(definition, firsts: list[int], n: int, seed: int) -> dict:
 
 
 def build(word_id: str, firsts: list[int], stage: int, scratch: Path) -> dict:
-    from verity.ml.circuits.codec import descriptor_id, lookup_primitive
-    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-    from verity.ml.definitions import boolean as BB
+    from verity.circuits.codec import descriptor_id, lookup_primitive
+    from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.definitions import boolean as BB
     from verity_flock import circuit as FC
     from verity_flock import class_statement as CS
 
