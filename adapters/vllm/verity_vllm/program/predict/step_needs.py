@@ -224,6 +224,7 @@ class StepNeeds:
                    if kernel else (Need("sigmoid-router", _id("grouped-topk", E=E, M=M), "no capture", "at other statics"), n))
         out.append((self.kind("fp8_group_quant_ue8m0", K=H, G=G), n))
         cfg = fused_moe_config(E, INTER, self.net.device, "fp8_w8a8", (G, G), M)
+        why: str | None
         if cfg is None:
             why = f"no tuned fused-MoE config at M={M}"
         else:

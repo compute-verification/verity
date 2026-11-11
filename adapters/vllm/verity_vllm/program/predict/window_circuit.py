@@ -538,6 +538,7 @@ class _Program:
             for (port, _), a in zip(IF.layout(n.fn).rows, n.args):
                 (space, idx, lo, hi), *more = runs(a.refs)
                 name = params[idx] if space == "p" else None
+                src: tuple[str, tuple] | None
                 if more or n.form != "call":
                     src = None
                 elif name == "q" and (lo, hi) == (0, D):

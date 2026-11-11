@@ -335,6 +335,8 @@ class _Specs:
             self.q_norm, self.k_norm = (
                 self.kind("rmsnorm", N=n * C.D * world, EPS=C.EPS, TARGET=target, M=M) for n in (C.NH, C.KVH)
             )
+            self.q_gather: Any
+            self.k_gather: Any
             self.q_gather, self.k_gather = (self.kind("all_gather2", N=n * C.D) for n in (C.NH, C.KVH)) if world > 1 else (None, None)
         self.gate_up, self.down, self.logits = self.linear(C.H, 2 * C.I), self.linear(C.I, C.H), self.gemm(C.H, VS)
         if C.E:
@@ -473,6 +475,7 @@ class _Model:
         n += 1 if C.embed_scale else 0
         self.cos_sin = W[n]
         self.hist: list[tuple[list, list]] = [([], []) for _ in range(C.NL)]
+        self.ctx: dict | None
         self.cached, self.ctx = 0, None
         self.lp_of: dict[int, int] = {}
         self.plus_one: dict[int, Coll] = {}

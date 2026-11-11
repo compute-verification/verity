@@ -282,6 +282,7 @@ class _Model(dsa._Model):
         qn, kn = (self.k("triton_block_rmsnorm", N=N, **net.norm) for N in (QL, D))
         q = [self.call(qn, a.slice(0, QL), w("attn.q_norm.weight")).refs for a in qkv]
         kv = [self.call(kn, a.slice(QL, QL + D), w("attn.kv_norm.weight")).refs for a in qkv]
+        scores: list
         score, ape, scores = self.k("dsv4_compressor_score", W=CW), w("attn.compressor.ape"), []
 
         def state() -> None:

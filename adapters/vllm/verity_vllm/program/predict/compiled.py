@@ -312,6 +312,7 @@ def pin_of(build: dict[str, Any], inductor_dir: str, moe: dict[str, Any] | None,
     """A row's served pin from its traced Build and the Inductor dir that Build read (its piece wrappers): each piece kind's kernels by
     name and source digest (every middle piece's the same), the Build's artifact, its dispatch, and the fused-MoE configs of `moe`."""
     prog = build["program"]
+    kernels: dict[str, dict[str, str]]
     wrappers, kernels = prog["piece_wrappers"], {k: {} for k in KINDS}
     for p, rel in enumerate(wrappers):
         kind = KINDS[0] if p == 0 else KINDS[2] if p == len(wrappers) - 1 else KINDS[1]
@@ -358,7 +359,7 @@ COMMANDS = {"compiled": Options, "compiled-pin": PinOptions}
 
 
 def main(a: Options | PinOptions) -> int:
-    if a.cmd == "compiled-pin":
+    if isinstance(a, PinOptions):
         build = json.loads(Path(a.build).read_text())
         device = json.loads(Path(os.path.dirname(a.build), "routes.json").read_text())["device"]
         pin = pin_of(build, a.inductor_dir, json.loads(Path(a.moe).read_text()) if a.moe else None, role=a.role, device=device, evidence=a.evidence)

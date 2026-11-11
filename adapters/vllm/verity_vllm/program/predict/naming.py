@@ -68,7 +68,7 @@ class Named:
     fields of a trace's `attention_impls_observed` the audit reads), and its checks as `derive`'s provenance states them
     (`BuildResult.checks`, None without any), which its instances header carries for the replay."""
 
-    names: dict[int, str]
+    names: dict[int, Any]
     params: list[list[str]]
     correspondence: dict
     prefix: dict | None
@@ -129,7 +129,7 @@ class _Walk:
     @staticmethod
     def slots(views: list[dict], r: int, in_place: bool, ports: range | None = None) -> list[dict]:
         """Row r of each view as a return slot: port p in view p, an fx output or the p-th written argument."""
-        out = []
+        out: list[dict] = []
         for p in ports or range(len(views)):
             w = 1
             for s in views[p]["shape"][1:]:
@@ -147,6 +147,16 @@ class _Walk:
 
 def _family(fn: Any) -> str:
     return str(getattr(fn, "base_id", fn.id)).split("{")[0].split("[")[0].rsplit("_v", 1)[0]
+
+
+def _is(fn: Any) -> Callable[[Any], bool]:
+    """The test a Call's Definition passes when it is ``fn`` itself."""
+    return lambda f: f is fn
+
+
+def _of(family: str) -> Callable[[Any], bool]:
+    """The test a Call's Definition passes when its family (`_family`) is ``family``."""
+    return lambda f: _family(f) == family
 
 
 def refuse(net: Any) -> None:
@@ -193,7 +203,7 @@ def _forward(w: _Walk, S: Any, C: Any, M: int, p0: int) -> None:
         for half, fn, port in (("query", S.rope_q, 0), ("key", S.rope_k, 1)):
             for r in range(M):
                 hint = f"{module}/{node}/{half}[{r}]"
-                w.call(lambda f, fn=fn: f is fn, f"RoPE {half}", occ, hint, w.slots(views, r, True, range(port, port + 1)), hint=hint)
+                w.call(_is(fn), f"RoPE {half}", occ, hint, w.slots(views, r, True, range(port, port + 1)), hint=hint)
         module = p + "self_attn.attn"
         views = [_view((M, C.NH, C.D), bf)]
         occ, node = w.site("unified_attention_with_output", module, views, ((3, "call"),))
@@ -221,7 +231,7 @@ def _sample(w: _Walk, S: Any, C: Any, sampling: dict) -> None:
     occ, node = w.site("gumbel_topp_token_select", "", [_view((1,), "int32")])
     for member, W in (("top_p", 32), ("pos", 64), ("temperature", 32), ("splits", 32)):
         const = _family(kind("const", W=W, BITS=0))
-        w.call(lambda f, c=const: _family(f) == c, f"{W}-bit constant", occ, f"{node}/{member}",
+        w.call(_of(const), f"{W}-bit constant", occ, f"{node}/{member}",
                [{"port": 0, "output": None, "leaves": None}], member=member)
     w.call(lambda f: _family(f) == select, "token select", occ, f"{node}[0]", w.slots([_view((1,), "int32")], 0, False), row=0)
 

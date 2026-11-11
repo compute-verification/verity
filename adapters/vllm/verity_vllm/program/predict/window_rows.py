@@ -450,8 +450,9 @@ class Rows:
                 ins["salt"][r.unit] = _be_words(table.salts[t])
                 ins["path"][r.unit] = _be_words(table.path(t))
             if feed is not None:
-                self._put(*feed, "o0", _i32([t]), EVALUATED)
-                self._put(*feed, "o1", _i32(S.carried[p]), EVALUATED)
+                tid, unit = feed
+                self._put(tid, unit, "o0", _i32([t]), EVALUATED)
+                self._put(tid, unit, "o1", _i32(S.carried[p]), EVALUATED)
         picks = []
         for j, (groups, x0) in P.selects.items():
             logits = S.operand(nodes[j].args[0])
@@ -466,7 +467,8 @@ class Rows:
                 lo += C
             if lo != len(logits):
                 raise ValueError(f"node {j}: group units of {lo} logits, not its {len(logits)}")
-            self._put(*x0, "o0", logits[:1].astype(np.uint16).reshape(1, 1), EVALUATED)
+            xt, xu = x0
+            self._put(xt, xu, "o0", logits[:1].astype(np.uint16).reshape(1, 1), EVALUATED)
             picks.append(int(S.values[j][0][0]))
         self._scan(P, S, picks)
         for j, (plan, calls) in P.heads.items():
@@ -490,10 +492,12 @@ class Rows:
         for p, tok in enumerate(picks):
             a = IO.collect_reference(a, tok, KO, p == 0)
             if p < len(P.collects):
-                self._put(*P.collects[p], "o1", _i32(a), EVALUATED)
+                ct, cu = P.collects[p]
+                self._put(ct, cu, "o1", _i32(a), EVALUATED)
         e = P.entry.bindings
         entry = IO.entry_reference(S.row[0], a, KO, e["IDB"], e["NP"], e["STOP"])
-        self._put(*P.entry_unit, "o0", np.array([entry], dtype=np.uint16), EVALUATED)
+        et, eu = P.entry_unit
+        self._put(et, eu, "o0", np.array([entry], dtype=np.uint16), EVALUATED)
 
     def _heads(self, node: Any, plan: Any, calls: Sequence[tuple[str, int]], S: Slot) -> None:
         """An attention cut by key block: every Call but its last (whose output is the node's) its Definition on the node's
@@ -537,18 +541,18 @@ class Rows:
         """Registered value ``param``'s ``rows`` rows as u16 words as the circuit's proof blocks make them: each row a read of
         an output row ties (`interface.Read`), its unit's output row, and every other row ``empty`` (a row's words). Refused
         where a read of ``param`` fills an input or reads past its rows, or two units make one row two ways."""
-        empty = np.asarray(empty, dtype=np.uint16)
-        out, made = np.tile(empty, (rows, 1)), np.zeros(rows, dtype=bool)
+        blank = np.asarray(empty, dtype=np.uint16)
+        out, made = np.tile(blank, (rows, 1)), np.zeros(rows, dtype=bool)
         for r in self.circuit.registered.reads if self.circuit.registered else ():
             if r.param != param:
                 continue
             outs = [p for p, _ in self.lays[r.reader].outs]
-            if r.port not in outs or self.lays[r.reader].outs[outs.index(r.port)][1] != len(empty):
-                raise ValueError(f"{r.reader} {r.port} reads {param!r} other than as an output row of {len(empty)} words")
+            if r.port not in outs or self.lays[r.reader].outs[outs.index(r.port)][1] != len(blank):
+                raise ValueError(f"{r.reader} {r.port} reads {param!r} other than as an output row of {len(blank)} words")
             leaf = r.source(np.arange(r.units))
-            at, got = leaf // len(empty), self.outs[r.reader][outs.index(r.port)][r.at:r.at + r.units]
-            if (leaf % len(empty)).any() or (at >= rows).any():
-                raise ValueError(f"{r.reader} {r.port} reads {param!r} off its {rows} rows of {len(empty)} words")
+            at, got = leaf // len(blank), self.outs[r.reader][outs.index(r.port)][r.at:r.at + r.units]
+            if (leaf % len(blank)).any() or (at >= rows).any():
+                raise ValueError(f"{r.reader} {r.port} reads {param!r} off its {rows} rows of {len(blank)} words")
             fresh = ~made[at]
             out[at[fresh]], made[at] = got[fresh], True
             if not np.array_equal(out[at], got):

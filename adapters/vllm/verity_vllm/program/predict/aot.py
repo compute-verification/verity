@@ -201,7 +201,8 @@ def compare(row_dir: str, row: str, config: str, workers: int = 0, predicted: st
         ranks[r] = {n: {"traced": t, "predicted": q, "equal": bool(t) and t == q} for n, (t, q) in parts.items()}
         ranks[r].update({k: got[r][k] for k in ("errors", "secs") if got[r][k]})
     equal = all(v["equal"] for p in ranks.values() for n, v in p.items() if n not in ("errors", "secs"))
-    doc = {"schema": SCHEMA, "row": row, "build": str(Path(row_dir).resolve()), "code_version": S.code_version(), "equal": equal, "ranks": ranks}
+    doc: dict[str, Any] = {"schema": SCHEMA, "row": row, "build": str(Path(row_dir).resolve()), "code_version": S.code_version(), "equal": equal,
+                           "ranks": ranks}
     if predicted is not None:
         doc["predicted"] = compare_row(row_dir, predicted, traced)
         doc["equal"] = equal and doc["predicted"]["equal"]
@@ -338,13 +339,13 @@ class RowOptions:
 
 
 def main(a: EmitOptions | CompareOptions | RowOptions) -> int:
-    if a.cmd == "emit":
+    if isinstance(a, EmitOptions):
         if a.wrapper == "request" and (a.LP is None or a.T is None):
             raise UsageError("--wrapper request needs --LP and --T")
         block = emit(phi_at(a.row, a.rank, a.config), a.wrapper, a.trace, a.out, M=a.M, pos0=a.pos0, LP=a.LP, T=a.T, aot=json.loads(a.aot))
         print(json.dumps({"out": a.out, "digest": block["predicted_digest"], "timings": block["timings"]}))
         return 0
-    if a.cmd == "row":
+    if isinstance(a, RowOptions):
         rec = write_row(a.row, a.out, config=a.config, jobs=a.jobs, log=lambda s: print(s, file=sys.stderr, flush=True))
         print(json.dumps({k: getattr(rec, k) for k in ("row", "workload_digest", "manifest_digest", "program_digest", "identities", "secs")}))
         return 0
