@@ -48,7 +48,7 @@ def dry_run(tmp_path: Path, **given: str) -> tuple[subprocess.CompletedProcess, 
                              'echo "run r20200101-000000-abcd"\n')
     (bin_ / "uv").chmod(0o755)
     env = {k: v for k, v in GIT.items() if k not in SET}
-    env |= {"PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "HOME": str(home), "TMPDIR": str(tmp_path),
+    env |= {"PATH": f"{bin_}{os.pathsep}{env['PATH']}", "HOME": str(home), "TMPDIR": str(tmp_path),
             "CHECKPOINT": "0", "ROLE": "TINY", **given}
     p = subprocess.run(["bash", str(r / "benchmarks/remote_session/gate_run.sh"), "--dry-run", "ma-remote-coins-9"],
                        cwd=r, env=env, capture_output=True, text=True)
