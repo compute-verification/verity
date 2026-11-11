@@ -7,6 +7,7 @@ hook on a module and no entry in `engine.hooks.live()`.  The values themselves a
 from __future__ import annotations
 
 import hashlib
+import logging
 import types
 from typing import Any
 
@@ -279,12 +280,20 @@ def test_the_router_softmax_source_refuses_another_tap_version_and_a_layer_that_
         R.RouterSoftmaxSource(Recorder(), model, {}, router.so)
 
 
-def test_attach_gives_the_committer_the_router_softmax_source_and_its_required_class(router):
+def test_attach_gives_the_committer_the_router_softmax_source_and_its_required_class(router, caplog):
     com, model = Recorder(), _moe_model()
     manifest = {"identities": [{"family": RS.FAMILY, "op_path": "moe/L1", "moe_module": "model.layers.1.mlp", "experts": E, "topk": K,
                                 "renormalize": True, "width": RS.words(E, K, True)}]}
+    caplog.set_level(logging.INFO, logger=R.logger.name)
+    with pytest.raises(SystemExit) as refused:
+        R.attach(com, router.so, {"identities": []}, ("a",), model=model)
+    assert refused.value.code == 3 and com.sources == [] and router.loaded == []
     classes, src = R.attach(com, router.so, manifest, ("a",), model=model)
     assert src is not None
+    refusal = ("[delta] REFUSE: --router-tap-so but the required-value manifest names no router_softmax identity (manifest build "
+               "--router-softmax)")
+    attached = f"[delta] router-softmax source attached: 1 MoE layers, {RS.words(E, K, True)} words per token, tap {router.so} -> committer rec"
+    assert [(r.levelname, r.getMessage()) for r in caplog.records] == [("ERROR", refusal), ("INFO", attached)]
     assert classes == ("a", RS.FAMILY) and com.sources == [src] and src.layers == {1: _geometry(True)}
     assert src.words_per_token == RS.words(E, K, True)
     assert src.extra_step_bytes({}, None) == {"per_token_bytes": 4 * RS.words(E, K, True), "per_seq_bytes": 0, "tensors_per_step": 1}
