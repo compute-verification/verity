@@ -37955,3 +37955,27 @@ Your message of this hour is read and done as far as the runs. I pushed nothing 
   2. Once `Scope.lean` elaborates: cross the layout move with `tools/move/restack.py`, then a records run after that last merge, then `--try --siblings`, then the lock's entries, including the stale unwitnessed why of `SpotKSTwo` and `SpotExfilTwo`.
   3. (D): the witness `wF` with `Claims.Flock.check … xS wF = true`, by `relS_relation` along Concrete's Live/Trace/Regions route. Then the `HonestSession` fields: `small` from Sizes, `rounds` by `rfl`, `sess` from `sessionOk_x` and `setup` from `setupOf_x`.
   4. `Ref.scope` with TWOINSTANCE.
+
+## CONCRETE, Wed 11 Nov 03:34Z: NOT ready to mark as you planned it: the layout move landed on `main` at 03:26Z, seven minutes after I pushed the lock commit; #8764's head is `f1d6c2686e56f5526430a4b74cfce851fa023435`, a plain merge of it with the moved `main` conflicts in the two files it adds, and I have merged nothing
+
+**What changed under your plan** [read]
+- #8769 merged at 03:26:13Z (GitHub's `mergedAt`), not about 05:00Z. `main` is `5c095bb4ab7012ba359e0a85f4ecf19892b99629`; `Security/` is `security/` there.
+- At 03:17Z `main` was still `a930252c4993` and `git merge-tree` of the head with it was clean [run]. Against the moved `main` it exits 1 with two `CONFLICT (file location)`: `Security/Proofs/Flock/Claims/Recursion/VStarNetsStaged.lean` and `Security/Proofs/Flock/VBridge/Family/UnitName.lean`, the two files the branch adds, in a directory the move renamed [run]. It names no conflict in a lock.
+
+**Your steps 1 to 3, done before I saw the move**
+- 1. `340b` [run]: `main`'s own tree prints `sparse9`'s term as my old head did, byte for byte. Against the head the only difference is the power's instance: `@instPowNat Nat instNatPowNat` at the head, `@NPow.toPow Nat (@Monoid.toNPow Nat Nat.instMonoid)` on `main`. Both terms and the sentence are in the PR's body since 03:14Z [run].
+- 2. The head was exactly `05c89e29e099ea9caf397bbc2be1fc498af72792`, the commit `2fc1` ran at (its `source_sha`) [read]. `2fc1` kept a record for one package, `Security` (`Security/Proofs` and `Security/Properties`: `pass`) [read: its `result.json`].
+- The commit `f1d6c2686e56` holds one file, `Security/lean-audit.json`, which is that record byte for byte: sha256 `3baa8cf9f909ae7f63f929fa9b34010b8be65c35890946b7064ece435cbe43a1`, the run's `record_sha256` [run]. Read as JSON, two values differ from the lock below it: `sparse9`'s hash and its group's digest [run]. Pushed 03:19Z; the PR is open and unmarked [read].
+- 3. Nothing is merged after it [run: the branch is `05c89e29e099` plus that one commit].
+
+**The quick tier at that head** [run]
+- `r20261111-032348-c174`, cpu-9, in a slot since 03:24Z, on the tree before the move: `suites.py --changed 2b869ed35db5 --quick` (the head's merge base with `main` then), 8 suites: benchmarks/nci, verity-pouw-benchmarks, benchmarks/rho, repository, verity-graph, verity/core/protocols/pous, verity/core/protocols/pouw, verity/ml/circuits/ops. No verdict line yet. ETA about 04:10Z [guess: four of the eight took 10.7 min of test time at my old head, on more workers].
+- `r20261111-032036-3af6` is not a verdict: `--on auto` put it on cpu-1, where every slot waited on memory with 5 ahead, and I cancelled it before it started.
+
+**The two ways I see; the pick is yours** 
+- (a) Mark `f1d6c2686e56` as it is, once `c174` passes. `main`'s `queue.py` says the sync restacks each PR "merged above a move ... whose head lacks it" with `restack.py` "when ... its plain merge conflicts", and that the preflight "notes rather than refuses a conflict only in files a move changed" [read, not run; whether that holds for a head marked after the move is ci's to say].
+- (b) By hand, as you said for an unmarked head: `restack.py`, the records with `--update` on the moved tree, its lock as a commit, the quick tier there. That moves the head past the commit the gate reads `2fc1` for.
+
+**What I do meanwhile**: prepare (b) without touching the PR's head: `restack.py --dry-run` on a node (its script runs `uv lock`, so not on my VM), nothing pushed. I move the head only on your word.
+
+**Left**: `c174`'s verdict lines; your pick; then either nothing more from me before the mark (a), or the crossing's result, its records run and quick tier, and "ready to mark" (b).
