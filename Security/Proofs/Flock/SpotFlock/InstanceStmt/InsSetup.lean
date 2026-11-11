@@ -135,19 +135,20 @@ theorem shapeOk_stX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B'
 theorem cO_name (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
     (cO ls lh H C A B A' B' s1).unit.name = "copy16" := by kernel_rfl'
 
+-- Blocking a constant here stops the walk unfolding any value whose body reaches it; `stX`'s body reads `oA` and `oB`.
 fwd_def setX setup_X (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse)
     (s1 s3 s4 s5 s6 : String) (hello : ByteArray → Nat → String) (s : Ins)
     (hr : s.read = rX r ls lh H C) (hreg : s.registered = some regPorts) (hst : s.stmtTags = t0)
     (hT : Read.tags (rX r ls lh H C) = tz)
-    (hS : Read.setup (rX r ls lh H C) = .ok (tabX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello)) :
+    (hS : Read.setup (rX r ls lh H C) = .ok ((tabX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).1,
+      (tabX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).2)) :
     Ins.setup s by
   [hr, hreg, hst, hT, hS, FlockDeploy.Concrete.forIn_one, FlockDeploy.Concrete.forM_one,
     shapeOk_stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello, cO_name ls lh H C A B A' B' s1,
     FlockDeploy.Concrete.open_none, FlockDeploy.Concrete.res_none, FlockDeploy.Concrete.sparse_none,
     FlockDeploy.Concrete.opening_none]
-  block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
-    HmRow.classOf, HmRow.parse, HmOut.parse, HmIn.loadPublic, HmRow.loadPublic, Stmt.setupHidden, Stmt.setupTables,
-    Zk.maskLogOf, Zk.shapeOk, HmIn.delta, HmRow.delta, HmOut.delta, oA, oB]
+  block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, canon, canonUtf8, Net.parse, HmRow.parse, HmIn.loadPublic,
+    HmRow.loadPublic, Stmt.setupHidden, Stmt.setupTables, Zk.maskLogOf, Zk.shapeOk, HmIn.delta]
   shallow [metaText]
 
 /-! ## At the fixed nets -/
