@@ -40556,3 +40556,54 @@ Still out: #8406's records `7aba` (on `security/Properties`) and its guard `6e01
   proof blocks. That is the two inputs `qs_le_split` takes, for the one-stream stratified and work samples. It does
   **not** assemble `Q_s` at V5's `vbP` (that needs the positions lemma there, not in this file).
 - Next entry when the try ends (COMPILES or FAILS AT, with the goal), and at 08:00Z in the brief's order.
+
+## SCALE, Wed 11 Nov 06:46Z: ready to mark #8836 at 1fab3dfa6a3562ba9ff3e678793a32083ecf262e; 13 of 13 merges clean
+
+**ready to mark #8836 at `1fab3dfa6a3562ba9ff3e678793a32083ecf262e`** `[run]`
+
+- **Records** `r20261111-041442-564f` at `1fab3dfa6a`: rc 0; `"outcome": "pass"` for `security/Proofs`, `security`
+  and `security/Properties`; each `lean-audit/**/audit.json` reads `passed: true, regenerated: {}` (`lean-fast/v1`:
+  no kernel replay). So step 1 commits nothing. The lock at the head is 4,175,579 bytes, `grep -c 'Security/'` = 6,
+  and the old-path grep = 0; neither it nor `unread-caps.json` differs from `main` `[run]`.
+- **Quick tier** `r20261111-041704-92f3` at `1fab3dfa6a` (`--changed 5c095bb4ab --quick`): `4 suites: 4 passed (0
+  cached), 0 failed` `[run]`. The head has not moved since, so step 2 runs nothing `[run]`.
+- **Try** `r20261111-035025-93ff` at `1fab3dfa6a` (vy-nebius-cpu-3): rc 0; 17 theorems, axioms only `propext`,
+  `Classical.choice`, `Quot.sound` `[run]`.
+- **Merges** (`git merge-tree --write-tree`, rerun at 06:47Z; #8827's and #8828's heads re-read at 06:45Z): the head merges
+  clean with `main` at `5c8c343f19f0` and with #8568 `8fb2b94ee4b4`, #8539 `984a73968ccd`, #8517 `620badf31958`,
+  #8819 `9a8a32c7c85b`, #8764 `8dfde58665a3`, #8785 `e7b741b17e53`, #8820 `f1a8ef0141ff`, #8226 `f8a3b83aa0f0`,
+  #8454 `4d87c7899a6d`, #8553 `650593be39af`, #8827 `946b7b72f26d` and #8828 `53dd644bdad8`: 13 of 13. None of those
+  heads holds my files or any of my 11 new names `[run]`.
+- **#8836**, opened 06:44Z with `research queue open … --issue PRF-533 --by proofs`, unmarked, not a draft. Its body
+  starts `Lane proofs` / `Goal proofs/spot-bind-term`; the tool appended `Refs PRF-533` and linked the issue `[run]`.
+  It warned twice: PRF-533 has no label naming a live goal (its one label is `from:proofs`), and the body's `Goal`
+  line names a goal no label of PRF-533 names. Labelling the issue is a Linear write, so I left it to you `[run]`.
+- **Retired terms in `RevealsOpen.lean`** (the lint's own `sites()`, which warns, not fails): 35 sites. 10 are names
+  `main` already has (the `Cap` import, `Spot.Draw.proved`, `cap h`); 25 are mine (the bound variable `draw`, 17,
+  and "draw/drawn/draws" in 8 docstring lines) `[run]`. `main`'s own files there are already over their allowance
+  (`Cap.lean` 72 of 0, `KS.lean` 14 of 0, `Code.lean` 28 of 13) `[run]`. My docstrings also say "unit" for a proof
+  block, which the lint can't see `[read]`. A rename-only commit fixes my part but moves the head, so the try, the
+  records run and the quick tier rerun before a new ready line: your word `[guess: about 2 h with slot waits]`.
+  The PR's title and body name no retired term (the same `sites()`, 0 hits) `[run]`.
+- I wrote nothing to Linear today, through the connector or otherwise `[read]`.
+
+**For Daniel's table** (six lines):
+1. The two-stage finder holds on paper at SPOT[Flock]'s deployed code with constant 2: an accepted run opens a value
+   off the committed trace with probability at most `2K·(T(1 + d·e_s) + d·openCalls)/2^256 + p_ref·|opensSet|`, in
+   place of `N·√Pr[conflict]` per stage `[read: my 02:34Z derivation]`; ATTACK tried seven points and broke none
+   `[relayed]`, and capping the finder's waits at M adds `|opensSet|/(M+1)` `[relayed]`.
+2. In Lean at `1fab3dfa6a` (#8836, unmarked), at the deployed code: every opening lies at a gate its proof block
+   needs (`hpos_spot`, `reveal_needs_spot`), which roots it lies under (`code_reveal_roots`, `code_reveal_iroots`), and
+   K as the always-checked blocks' gates plus each sampled block's (`code_card_biUnion_le`) `[run: try 93ff, records
+   564f, quick tier 92f3]`; the finder itself and the count `Kfirst·Σ_t k_t` of sampled blocks are paper only `[read]`.
+3. At one audit with T = 2^80: k = 1,507, d = 1 gives -116.5 to -113.5 bits, but k = 12,343,986, d = 167 gives -96.1
+   to -93.1, and the largest k the code admits adds 7.64 more `[relayed: your 03:01Z cells]`.
+4. It misses at those corners because the cost rows price capped patterns, where K is 2^40.23 to 2^43.23
+   `[relayed: REPBREAK]`, and the bound grows linearly in K·T·d `[read: the formula in line 1]`.
+5. Those designs need 99 to 795 MB of coin for the second stage `[relayed: REPBREAK]`, while the model's coin is 2^20
+   bytes a round and the deployed challenger stops at 2^26 bytes `[read: Code.lean:366, Challenger.lean:48-50]`, so no
+   theorem at this code covers the priced design `[read]`.
+6. `RegTwo.always` is a free field (`h.reg.always`) nothing in Lean empties, so K carries the always-checked term
+   `[read]`.
+
+Waiting on: your mark of #8836, or your word on the rename. Nothing of mine is in flight.
