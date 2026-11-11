@@ -144,7 +144,7 @@ from verity.definitions.registry import io_shell as IO
 from verity.definitions.registry.dead_free import AttentionV19, AttnBlockFirstV2, TokenSelectGroupsV1
 from verity.definitions.registry.fa3_check_inf import AttentionV20
 from verity.commitments.windows import interface as IF
-from verity_vllm.pipeline.tp.grain import GROUP
+from verity_vllm.pipeline.serving_templates import SELECT_GROUP as GROUP
 
 from . import scan_state as SS
 from .build import Unexpressible
