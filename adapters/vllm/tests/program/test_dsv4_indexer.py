@@ -73,10 +73,6 @@ def fma(a: int, b: int, c: int) -> int:
     return c if _inf(c) else G._ffma(a, b, c)
 
 
-def fma_ftz(a: int, b: int, c: int) -> int:
-    return G._ftz(fma(G._ftz(a), G._ftz(b), G._ftz(c)))
-
-
 def ex2(x: int) -> int:
     return P.MufuEx2Ftz.evaluate(x)
 

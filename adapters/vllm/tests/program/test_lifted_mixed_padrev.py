@@ -29,7 +29,6 @@ from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs
 from verity.circuits.types import Array, Value
 
 I32 = Value(32)
-NEVER = 0x7FFFFFFF  # an EOS id no TINY event emits: the cap decides
 
 
 @composite("PadrevServe2", 1, ["C", "LP", "D_MAX", "EOS"],

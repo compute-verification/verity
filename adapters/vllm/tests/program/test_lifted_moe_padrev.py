@@ -140,10 +140,6 @@ def test_r5_a_nan_router_row_still_matches_the_unlifted_route_bit_for_bit(data):
 # ---------------------------------------------------------------------------------------------------------
 
 
-def _call_range(prog, name):
-    return next(c for c in prog.circuit.root_calls() if (c.node.name or "") == name)
-
-
 def test_a19_the_active_tokens_whole_call_is_bit_equal_to_its_single_token_run_whatever_its_batch_mate_is(data):
     """`test_lifted_moe`'s TWO test: token 0 ⊥, token 1 Active.  This runs every composition — (⊥, A), (A, ⊥), (A, A'), (⊥, ⊥) — and compares
     the Active token's ENTIRE call (every gate under `tok0`/`tok1`, not the outputs alone) with its single-token unlifted run; a per-expert

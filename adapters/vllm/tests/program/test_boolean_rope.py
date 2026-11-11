@@ -47,7 +47,6 @@ SERVED = {
 }
 ROPES = sorted({bind(R.RoPE, NHEADS=n, D=d) for shapes in SERVED.values() for n, d in shapes}, key=lambda t: t.id)
 HEADS = {d: bind(R.RoPEHead, D=d) for d in sorted({t.bindings["D"] for t in ROPES})}
-HEAD = HEADS[64]
 K = bind(R.RoPE, NHEADS=3, D=64)
 #: one served binding per head width, run on 16k heads: SmolLM2's q and k, Phi-3's, Qwen3's q, Gemma-2's q
 LARGE = [bind(R.RoPE, NHEADS=n, D=d) for n, d in ((9, 64), (3, 64), (32, 96), (32, 128), (8, 256))]

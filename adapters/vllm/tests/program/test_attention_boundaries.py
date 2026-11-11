@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pytest
 
-VLLM = Path(__file__).resolve().parents[2]
 PKG = "verity.definitions.registry"
 REGISTRY = Path(importlib.util.find_spec(PKG).origin).parent
 DEFINITION_MODULES = ["fa2_check_inf", "fa3_check_inf", "fa2_softcap", "boolean_attention", "boolean_softcap", "mla", "dsa",

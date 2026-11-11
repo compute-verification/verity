@@ -33,8 +33,6 @@ D = DL + DR
 H = 20
 SCALE = 0.0625  # GLM-4.7-Flash: (qk_nope 192 + qk_rope 64) ** -0.5, no yarn
 
-_M = np.uint64(0xFFFFFFFFFFFFFFFF)
-
 
 def _splitmix(x: np.ndarray) -> np.ndarray:
     with np.errstate(over="ignore"):

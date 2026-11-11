@@ -749,8 +749,6 @@
     {"file": "tests/program/beyond_gemm.py", "kind": "var-annotated", "symbol": "ulp_offsets", "detail": ""},
     {"file": "tests/program/fixtures_query.py", "kind": "misc", "symbol": "<module>", "detail": ""},
     {"file": "tests/program/inductor_models.py", "kind": "arg-type", "symbol": "rms_norm_compiled", "detail": ""},
-    {"file": "tests/program/inductor_models.py", "kind": "var-annotated", "symbol": "silu_mul_compiled", "detail": ""},
-    {"file": "tests/program/inductor_models.py", "kind": "var-annotated", "symbol": "silu_mul_eager", "detail": ""},
     {"file": "tests/program/predict/test_aot.py", "kind": "dict-item", "symbol": "test_compare_names_each_program_and_is_equal_only_when_every_one_is", "detail": ""},
     {"file": "tests/program/predict/test_block_counts.py", "kind": "arg-type", "symbol": "_reference", "detail": ""},
     {"file": "tests/program/predict/test_block_counts.py", "kind": "union-attr", "symbol": "_reference", "detail": "", "count": 2},

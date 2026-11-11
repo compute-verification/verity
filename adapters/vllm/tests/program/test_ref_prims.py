@@ -42,7 +42,6 @@ from verity.definitions.numerics import ref_prims_twins
 torch = pytest.importorskip("torch")
 F = torch.nn.functional
 
-REPO = Path(__file__).resolve().parents[2]
 RECORD_DIR = Path(os.environ.get("REF_PRIMS_RECORD_DIR") or tempfile.mkdtemp(prefix="ref-prims-"))
 SEED = 20260909
 LABEL = "conformance over tested domain, not universal correctness"
