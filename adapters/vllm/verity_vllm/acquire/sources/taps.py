@@ -22,7 +22,8 @@ import json
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 
 from verity_vllm.acquire.sources import (attention_source, call_boundary_source, dsv4_attention_source, int8_source,
                                          linear_quant_source, moe_align_source, narrowed_source, norm_scale_source,

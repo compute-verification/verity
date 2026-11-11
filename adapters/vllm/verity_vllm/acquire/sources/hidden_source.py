@@ -22,7 +22,8 @@ launch (`verity_set_tap_v8`); the kernel arms only if its compile-time tile equa
 from __future__ import annotations
 
 import time
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.engine import hooks
 

@@ -22,7 +22,8 @@ import hashlib
 import inspect
 import math
 import time
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.acquire.norm_tap_src.build_ext import NAME as TAP_NS
 from verity_vllm.acquire.norm_tap_src.build_ext import TAP_VERSION

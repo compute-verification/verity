@@ -12,7 +12,8 @@ a second inside one call is a collector error.
 """
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from verity_vllm.acquire.sources.allreduce_norm import _flush
 from verity_vllm.query.manifest.bind import Port

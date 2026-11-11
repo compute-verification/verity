@@ -30,7 +30,8 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import inspect
 import sys
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import torch
 

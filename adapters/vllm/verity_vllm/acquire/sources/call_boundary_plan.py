@@ -31,8 +31,9 @@ import glob
 import json
 import os
 from collections import defaultdict
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 

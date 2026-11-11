@@ -13,7 +13,8 @@ range is not the manifest's, or on a padded or added-vocabulary shard (which `Em
 from __future__ import annotations
 
 import time
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.engine import hooks
 from verity_vllm.query import vocab_range as VR

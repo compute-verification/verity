@@ -18,7 +18,8 @@ and acquire their results on their device.
 from __future__ import annotations
 
 import time
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.acquire.sources.call_boundary_plan import FAMILY
 from verity_vllm.query.manifest.bind import Port

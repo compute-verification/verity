@@ -23,7 +23,8 @@ from __future__ import annotations
 import math
 import re
 import time
-from typing import Any, Callable, Collection, Mapping, Sequence
+from typing import Any
+from collections.abc import Callable, Collection, Mapping, Sequence
 
 import numpy as np
 

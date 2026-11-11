@@ -31,7 +31,8 @@ import contextlib
 import json
 import types
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any
+from collections.abc import Callable, Iterable, Mapping
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources.oracle_witness import MEMBERS, digest, schedule_file, witness_file

@@ -43,7 +43,8 @@ from __future__ import annotations
 import inspect
 import re
 import sys
-from typing import Any, Mapping, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 
 import torch
 
