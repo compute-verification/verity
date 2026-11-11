@@ -50719,3 +50719,49 @@ No claim: no premise, no guarantee, no lock record, nothing under `Definitions/`
 - I can write that composition next if you want it.
 
 For CAPS: Proofs/Flock: +2 modules, +11 declarations (#8931: `SamplingGeneric/TwoFirstHitClassCount.lean` 9 (EXTFORM's: 1 def, 8 theorems), `SpotFlock/ClassCounts.lean` 2)
+
+## HEADPROF, Wed 11 Nov 11:20Z: the LOADED pair at four provers: today's block 2.382 GPU-s a statement, every cut together 1.402 (measured, `r20261111-102210-ee70` steps 4 and 3, a neighbour proving the head block on card 2); quiet 2.430 and 1.357; a neighbour costs nothing that shows at four provers
+
+**The two pairs** [run: `r20261111-102210-ee70`, node A card 3 (H200), prover cores 34-43; four provers and four
+verifiers, 64 timed sessions, 76 accepted and 0 refused in every step; today's tree `a5922158dc64`. "Every cut" is
+WITNESS's build with `FC_SALTS_KEYED=all FC_UNIT_AHEAD=64 FC_UNIT_KEEP=1` and the check on cores 8-11; **`all` is
+Daniel's claim: built, unmarked**. The neighbour is `r20261111-105613-14ac`: one prover of the same block (kernels'
+binary) on card 2, cores 24-33, card 3's NUMA node; its ten cores were 7.4 to 9.1 busy in every half minute from
+11:01:30Z to 11:17:30Z [run: its `cpu-load.tsv`]; I stopped it at 11:18:04Z, after step 4 had ended at 11:17:49Z.]
+
+| step | host | GPU-s a statement | statements an hour a card | card busy | prover CPU-s | check CPU-s | others' cores busy | `compact_stall` in the window |
+|---|---|---|---|---|---|---|---|---|
+| 1, every cut (10:35:28Z to 10:45:11Z) | quiet | **1.3574** | 2,652 | 38.2% | 12.68 | 5.35 on 8-11 | 4.7 | 0 |
+| 2, today's block (10:45:11Z to 10:56:11Z) | quiet | **2.4302** | 1,481 | 22.5% | 18.80 | 6.36 | 1.6 | +38,348 (24 of 27 samples) |
+| 3, every cut (10:56:11Z to 11:06:12Z) | LOADED | **1.4023** | 2,567 | 37.2% | 13.80 | 5.35 on 8-11 | 14.1 | 0 |
+| 4, today's block (11:06:12Z to 11:17:49Z) | LOADED | **2.3824** | 1,511 | 20.6% | 19.39 | 6.45 | 9.4 | +43,496 (26 of 27) |
+
+- **Every cut is 0.559 of today's block quiet and 0.589 loaded, at four provers.** Against today's block at ONE
+  prover (2.512 quiet in this run's own step; 2.8555 loaded, kernels' row of record [relayed]) it is 0.54 and 0.49.
+- **The neighbour does not show at four provers:** the cut block is 3.3% slower beside it and today's block 2.0%
+  faster, both inside the spread of two equal steps. (At one prover kernels read 2.86 against 2.57.) [guess] Four
+  provers fill their ten cores, so what a neighbour takes is not cores but memory traffic, and that is small here.
+- **`compact_stall` is not an episode from outside: it comes with the check on the prover's cores.** It grew in all
+  three four-prover steps whose check ran on cores 34-43 (+39,219 in `db9a` step 1, +38,348 and +43,496 here) and in
+  none of the three whose check ran on cores 8-11. [read: `lscpu`, the node's `meminfo`] Node A has four NUMA nodes
+  of 24 cores; cores 8-11 are node 0 and 24-47 node 1, which has 528 GB, of it 246 GB file pages and 275 GB free at
+  10:56:50Z. Four provers and four verifiers hold 272 GiB. [guess] With the verifiers on node 1 that node runs out of
+  free memory and compacts for huge pages; with them on node 0 it does not. So I do NOT void steps 2 and 4 under
+  your 08:15Z rule: a repeat gives the same, it is what four provers with their verifiers cost on this host. And
+  part of the gain of moving the check is memory on another NUMA node, not only cores: a host with free memory on
+  the card's node may gain less. The proofs that stalled took 117 s and 76 s of the two windows (5 s and 10 s in the
+  cut steps).
+- The container's throttle count is 6,970 [run, 11:18:22Z].
+
+**Two provers on vy-dc-h200-3** [run: `r20261111-101057-af1d`, today's binary, six cores for the provers (CPUs
+0-11), the check on them or on CPUs 12-15; 48 timed sessions, 54 accepted, 0 refused; no compaction; 12.9% slower
+machine]: the check on the prover's cores 3.1277 and 3.0234; off them 2.6099 and 2.5515. **Ratio 0.839** (mean of
+two against mean of two); one prover there reads 3.416.
+
+**Left on node A** [run]: salts `all` alone at four provers, the check on the prover's cores (your 10:06Z), step
+from 11:17:49Z, its row at about 11:29Z. After it I hold nothing on node A and release card 3 and cores 34-43, 8-11,
+card 2 and cores 24-33.
+
+For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, FOUR provers on one H200, LOADED (a neighbour proving the same block on card 2, same NUMA node): today's block 2.382 GPU-s a statement, every cut built tonight together 1.402, both measured, `r20261111-102210-ee70` steps 4 and 3; the cut row uses 14 cores a card and `all` is unmarked.
+For BREAKEVEN: the same QUIET: today's block 2.430, every cut 1.357, measured, `r20261111-102210-ee70` steps 2 and 1.
+For the table: head block's seconds a statement at four provers a card, measured on node A: today 2.43 quiet and 2.38 loaded; with every cut built tonight 1.36 quiet and 1.40 loaded (14 cores a card; `all` unmarked).
