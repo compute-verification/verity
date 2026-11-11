@@ -224,10 +224,13 @@ theorem pr_off_cls_le_finder {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [N
 /-- **The off-plurality mass by class, under `ExpectedCR` at the finder of one cap**:
 `2·E[c + Σ_{q ∈ classes of the sample} cq(·, q)]/2^256 + N/(K + 1)`, the expectation over the kept part and a run's
 coins of the run's calls and, for each class that holds a node of its coins' sample, what that class costs there; `N`
-the number of nodes and `K` the finder's cap. A run opens a class whole or not at all (`hall`). -/
+the number of nodes and `K` the finder's cap. A run opens a class whole or not at all (`hall`), and only nodes of its
+sample (`hchk`, which the proof doesn't read and under which the loop charges what the output reads,
+`le_loopCostAt_cls`). -/
 theorem pr_off_cls_le_ex_cap {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P] [Fintype Q]
     [DecidableEq Q] [DecidableEq V] (H : Msg → Msg) (cls : P → Q) (op : T → Ω → P → Option V) {vstar : T → P → V}
     (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : T → Ω → P → Bool)
+    (_hchk : ∀ (t : T) (ω : Ω) (p : P), (op t ω p).isSome → chk t ω p = true)
     (hall : ∀ t ω p p', cls p = cls p' → (op t ω p).isSome → (op t ω p').isSome) (c : T → Ω → ℕ)
     (cq : T → Ω → Q → ℕ) (K : ℕ) (coll : T → Ω → Ω → P → Option (Msg × Msg))
     (hc : ∀ (t : T) (ω ω' : Ω) (p : P), ConflictAt (op t) (ω, ω') p → (coll t ω ω' p).isSome)
@@ -258,6 +261,7 @@ term. -/
 theorem pr_off_cls_le_ex {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P] [Fintype Q]
     [DecidableEq Q] [DecidableEq V] (H : Msg → Msg) (cls : P → Q) (op : T → Ω → P → Option V) {vstar : T → P → V}
     (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : T → Ω → P → Bool)
+    (hchk : ∀ (t : T) (ω : Ω) (p : P), (op t ω p).isSome → chk t ω p = true)
     (hall : ∀ t ω p p', cls p = cls p' → (op t ω p).isSome → (op t ω p').isSome) (c : T → Ω → ℕ)
     (cq : T → Ω → Q → ℕ) (coll : T → Ω → Ω → P → Option (Msg × Msg))
     (hc : ∀ (t : T) (ω ω' : Ω) (p : P), ConflictAt (op t) (ω, ω') p → (coll t ω ω' p).isSome)
@@ -268,6 +272,6 @@ theorem pr_off_cls_le_ex {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonem
       2 * Ex (fun a : T × Ω =>
           ((c a.1 a.2 + ∑ q ∈ (univ.filter fun p : P => chk a.1 a.2 p).image cls, cq a.1 a.2 q : ℕ) : ℝ)) /
         2 ^ (256 : ℝ) :=
-  le_of_forall_cap fun K => pr_off_cls_le_ex_cap H cls op hv chk hall c cq K coll hc hs (hCR K)
+  le_of_forall_cap fun K => pr_off_cls_le_ex_cap H cls op hv chk hchk hall c cq K coll hc hs (hCR K)
 
 end Verity.FirstHit
