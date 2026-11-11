@@ -612,7 +612,7 @@ noncomputable def Bconf (H : Msg → Msg) (L : Compiled Coin A) : FinderFamily :
 /-- **`B_conf` declared at `T` a run**: `Bconf`'s tape, runs, extractor's coins and outcome, its cost `T` for each of
 its two runs and for each rerun of the prover their extractions make, plus the extractions' own SHA-512 calls (the
 openings they check, `A`'s own), as `Sampling.BextAt` declares `B_ext`'s. `T` is the budget for one run's whole SHA-512
-work, which the reader computes from the prover's time: it caps both parties' calls in every run the finder makes,
+work, which the reader computes from the prover's time: it bounds both parties' calls in every run the finder makes,
 `pLog.length + vLog.length ≤ T`, the prover's hashing outside the oracle included, where `Bconf` counts those calls as
 the runs log them. -/
 noncomputable def BconfAt (H : Msg → Msg) (L : Compiled Coin A) (T : ℕ) : FinderFamily := fun Ω _ _ P x =>
