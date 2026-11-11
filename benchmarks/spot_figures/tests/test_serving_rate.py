@@ -164,3 +164,30 @@ def test_figure_4_counts_tokens_at_the_reading_figure_1_was_planned_at(monkeypat
         with pytest.raises(LookupError):
             figure4.run("GLM-5.3", one)
     assert seen == [{"serving": "assumed"}, {"serving": "measured"}]
+
+
+def test_figure_3_and_the_break_even_name_the_measured_reading_and_the_default_names_none():
+    c = f.cards()
+    said = f.reading(f.slot_cards("GLM-5.3", "measured"), c, parts(c)[0])
+    three = figure3.run("GLM-5.3", "measured")
+    assert three["serving"] == said and three["cards"]["serving_rate"] == kept()
+    assert "serving" not in figure3.run("GLM-5.3") and "serving_rate" not in figure3.run("GLM-5.3")["cards"]
+    be = t.breakeven(scope_names=(), lean=False, serving="measured")
+    assert be["serving"] == said and t.breakeven_table(be).startswith(f.reading_note(said) + "\n\n")
+    default = t.breakeven(scope_names=(), lean=False)
+    assert "serving" not in default and t.breakeven_table(default).startswith("line | ")
+
+
+def test_figure_4_carries_the_reading_figure_1_was_planned_at():
+    one = {"served_bits_request": 144000, "taxes": {n: {"tax": 0.02} for n in figure4.LINES},
+           "configurations": {n: {"label": n, "overhead": 0.03} for n in figure4.LINES}}
+    c = f.cards()
+    said = f.reading(f.slot_cards("GLM-5.3", "measured"), c, parts(c)[0])
+    assumed, measured = figure4.run("GLM-5.3", one), figure4.run("GLM-5.3", one | {"serving": said})
+    assert "serving" not in assumed and measured["serving"] == said
+    assert measured["tokens"] != assumed["tokens"]
+
+
+def test_a_measured_reading_is_written_beside_the_default_never_over_it(tmp_path):
+    assert f.outdir(tmp_path, "assumed") == tmp_path
+    assert f.outdir(tmp_path, "measured") == tmp_path / "measured"

@@ -439,6 +439,12 @@ def reading(sc: dict, c: dict[str, InputCard], part: TokenBlocks) -> dict:
             "assumed_tokens_per_gpu_second": c["mfu_serve"].value * c["peak_flops"].value / (2 * part.served_macs)}
 
 
+def outdir(out: Path, serving: str) -> Path:
+    """Where a reading's files go: `out` at the assumed reading and `out/measured` at the measured one, so no file at
+    the measured reading has the path the default writes."""
+    return out if serving == SERVING[0] else out / serving
+
+
 def reading_note(serving: dict) -> str:
     """The sentence every caption at the measured reading carries: the rate the figure was planned at, whether it is
     a floor, and what it stands in place of."""

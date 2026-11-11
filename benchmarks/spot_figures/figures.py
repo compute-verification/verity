@@ -8,8 +8,9 @@ points and run Lean's checks of their designs, each point one job, so the JSON i
     uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR [--points N] [--request workload]
         [--workers N] [--no-lean] [--serving measured]
 
-`--serving measured` reads serving's rate from the model's `serving_rate` card (`figure1.SERVING`); without it every
-figure is planned at rho's fleet utilization, whatever cards exist.
+`--serving measured` reads serving's rate from the model's `serving_rate` card (`figure1.SERVING`) and writes into
+DIR/measured, each JSON that read the rate naming it under `serving`; without it every figure is planned at rho's
+fleet utilization, whatever cards exist.
 """
 from __future__ import annotations
 
@@ -44,6 +45,7 @@ def main(argv=None) -> None:
                     help="plan Figure 1 without Lean's check of its designs and without the break-even's certificate")
     ap.add_argument("--serving", choices=figure1.SERVING, default=figure1.SERVING[0], help=total_cost.SERVING_HELP)
     args = ap.parse_args(argv)
+    args.out = figure1.outdir(args.out, args.serving)
     args.out.mkdir(parents=True, exist_ok=True)
     from render import render, render_appendix
 

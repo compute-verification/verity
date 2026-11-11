@@ -89,7 +89,8 @@ def run(model: str, one: dict) -> dict:
                        "largest_bits": {s: largest(rate, tokens[s], per_token, t) for s in scopes},
                        "leeway": {s: {k: rate / q for k, q in need[s].items()} for s in scopes},
                        "h_for_smallest": {s: (GOAL - tax) / need[s][marks[0]["label"]] for s in scopes}})
-    return {"schema": SCHEMA, "model": model, "delta": DELTA, "goal": GOAL,
+    return ({"serving": one["serving"]} if "serving" in one else {}) | {
+            "schema": SCHEMA, "model": model, "delta": DELTA, "goal": GOAL,
             "target": {"label": target["label"], "bits": t}, "bits_per_token": per_token, "tokens": tokens,
             "bits": list(BITS), "simple": [simple(b, t) for b in BITS],
             "exact": {s: [exact(b, tokens[s], per_token, t) for b in BITS] for s in scopes},

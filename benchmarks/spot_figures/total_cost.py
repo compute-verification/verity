@@ -844,7 +844,7 @@ def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None =
     bits it certifies there and which of them and the served bits binds, so its β is an upper bound on the β at which
     the line's bound reaches the weights, and its overhead a lower bound on the overhead at which it does.  `serving`
     is where serving's rate comes from (`figure1.SERVING`)."""
-    _, c, _, confs, inputs, lines, computed = _lines(model_name, request, serving=serving)
+    sc, c, _, confs, inputs, lines, computed = _lines(model_name, request, serving=serving)
     targets = weights(c)
     chosen = [s for s in f1.scopes(c, lines["tokens"][0]) if scope_names is None or s.name in scope_names]
     keys = [(n, s) for s in chosen for n, conf in confs.items() if conf.form == "patterns"]
@@ -867,7 +867,8 @@ def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None =
                 if cert and cert["at"] is not None:
                     cert["at"] *= oh
         rows.append(row)
-    return {"beta": f1.RATIO_BUDGET, "targets": targets, "rel": rel, "spans": SPANS, "rows": rows,
+    return ({"serving": f1.reading(sc, c, lines["tokens"][0])} if serving == "measured" else {}) | {
+            "beta": f1.RATIO_BUDGET, "targets": targets, "rel": rel, "spans": SPANS, "rows": rows,
             "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
                      "precision": plancheck.TWO_P, "steps": STEPS} if lean else None}
 
@@ -898,7 +899,8 @@ def breakeven_table(be: dict) -> str:
              _size(r["lean"]["floor"]["y"] if lean else r["floor"])]
             + [cell(r, "h", n, be["spans"]["h"][1] * r["overhead"]) for n in names]
             + [cell(r, "beta", n, be["spans"]["beta"][1]) for n in names] for r in be["rows"]]
-    return "\n".join(" | ".join(x) for x in [head] + rows) + "\n"
+    note = f1.reading_note(be["serving"]) + "\n\n" if "serving" in be else ""
+    return note + "\n".join(" | ".join(x) for x in [head] + rows) + "\n"
 
 
 def at_budgets(out: dict) -> list[dict]:
@@ -1104,6 +1106,7 @@ def main(argv=None) -> None:
     if args.cmd == "breakeven":
         out = breakeven(args.model, tuple(args.scope) if args.scope else None, workers=args.workers,
                         lean=not args.no_lean, serving=args.serving)
+        args.out = f1.outdir(args.out, args.serving)
         args.out.mkdir(parents=True, exist_ok=True)
         (args.out / "breakeven.json").write_text(json.dumps(out, indent=1, allow_nan=False) + "\n")
         (args.out / "breakeven.txt").write_text(breakeven_table(out))

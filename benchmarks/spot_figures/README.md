@@ -64,8 +64,11 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   figure reads it by its presence. `--serving measured` plans every scope at it: a scope's requests are its
   GPU-seconds times the rate over a request's tokens, a replay takes its request's tokens over the rate, the scope's
   GPUs stay rho's, and each exfiltration row names the rate and the rate at which its bound would reach 300 GB, by
-  proportion. Without it every figure is planned at rho's fleet utilization, as before the card. The `serve_tax` card
-  stays as priced; `total_cost.py priced-card --serving measured` prices one at the card's rate.
+  proportion. Every JSON that read the rate names it under `serving` (Figure 1's two forms, Figure 3, Figure 4 and
+  the break-even, whose table starts with the same sentence), and `figures.py` and `total_cost.py breakeven` write a
+  measured reading into `measured/` under `--out`, never over the default's files. Without it every figure is planned
+  at rho's fleet utilization, as before the card. The `serve_tax` card stays as priced; `total_cost.py priced-card
+  --serving measured` prices one at the card's rate.
 
   A `partition` card is another cut of the model's circuit: its strata take the place of the `workload` card's strata
   of the kinds it `replaces`, each with the k_log it is staged at, and its `label` says how far it has got.
