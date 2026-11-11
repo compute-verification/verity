@@ -12,9 +12,10 @@ What the members' steps (`MemberSteps`) read at a stop of a member's session, be
 
 * **A stop's frame, on any tape through it** (`run_ret_through`, `Pos.Past.through`, `stop_frame_through`): at a
   position that keeps the invariant and where `StopOf` says, the play on a tape through the position ends there with
-  the log walked so far, or has next the opening frame the rounds fixed there pick, the cuts at the bytes it answers
-  and every description of the opening asking for the frame's count. It is `RoundsReach.stop_frame` with no trace
-  after the stop, so it reads the stop after a session's last round too, its closing round's.
+  the log walked so far, or has next the opening frame the rounds fixed there pick, the cuts at the bytes it answers,
+  every description of the opening asking for the frame's count, and the walk from the stop, consumed, stopping
+  where `StopOf` says. It is `RoundsReach.stop_frame` with no trace after the stop, so it reads the stop after a
+  session's last round too, its closing round's.
 * **A trace off another hold** (`RoundsEnd.weaken`, `MemberReach.weaken`): a member's trace off `BL` and `B` is one
   off `BL'` and `B'` wherever its first stop and each stop it answers are off them.
 * **A session's rounds but its closing one** (`session_card`, `covers_of_card`): at `per` rounds a session they are at
@@ -72,22 +73,28 @@ position `q` that keeps the invariant at the cuts `Ks₀` and where `StopOf` say
 `a`, where each round's reading picks only openings the device serves, the play on a tape `z` through `q` has after
 `pre₀` a log `L` none of the live rounds picks in, and then either ends, every cut of `q` past; or has an opening
 frame `.opening i s n` that some live round whose cut `q` fixes picks, the rounds whose cuts `q` fixes being the
-live ones that pick it, with the cuts `q` fixes at the bytes it answers (`CutsAt`) and every description of `q`'s
-opening asking for its `n` coins. -/
+live ones that pick it, with the cuts `q` fixes at the bytes it answers (`CutsAt`), every description of `q`'s
+opening asking for its `n` coins, and the walk from `q`, consumed, on any rewriting of the tape there stopping where
+`StopOf` says from the log before that frame, at the live rounds that don't pick it (`stopOf_next`). -/
 theorem stop_frame_through {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
     {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
+    (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
     (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {Ks₀ : Fin R → DigestCut Claims.Msg g}
     {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀) {pre₀ : List Release} {f : List Release → Game Exchange}
     {a : Fin R → Prop} (hf : ∀ log, f log = finish sg θ F c rq (pre₀ ++ log)) (hS : StopOf P rv pre₀ f a q)
     {z : CoinTape g σ} (hz : ∃ w, z = q.back w) :
     ∃ L, NoPick P a pre₀ L ∧
       (((∀ j, q.Ks j = .skip) ∧ (CoinTape.run g σ z).log = pre₀ ++ L) ∨
-        ∃ (i s n : ℕ) (b : ByteArray) (bits : List Bool) (L' : List Release),
+        ∃ (i s n : ℕ) (b : ByteArray) (bits : List Bool) (L' : List Release) (f' : List Release → Game Exchange),
           (∃ j, a j ∧ (q.Ks j).isHere = true ∧ P j (pre₀ ++ L) (.opening i s n)) ∧
           (∀ j, (q.Ks j).isHere = true ↔ a j ∧ P j (pre₀ ++ L) (.opening i s n)) ∧
           (CoinTape.run g σ z).log = (pre₀ ++ L) ++ ⟨.opening i s n, b, bits⟩ :: L' ∧
           CutsAt rv q (pre₀ ++ L) (CoinTape.run g σ z).log ∧
-          ∀ o' : OpeningAt (finish sg θ F c rq) q.g', o'.n = n) := by
+          (∀ o' : OpeningAt (finish sg θ F c rq) q.g', o'.n = n) ∧
+          (∀ log, f' log = finish sg θ F c rq ((pre₀ ++ L) ++ log)) ∧
+          ∀ φ : CoinTape q.g' q.s' → CoinTape q.g' q.s',
+            StopOf P rv (pre₀ ++ L) f' (fun j => a j ∧ ¬ P j (pre₀ ++ L) (.opening i s n))
+              (q.rewrite φ).consume.toStop) := by
   obtain ⟨L, hNP, h⟩ := hS
   obtain ⟨w, rfl⟩ := hz
   refine ⟨L, hNP, ?_⟩
@@ -114,8 +121,9 @@ theorem stop_frame_through {P : Fin R → List Release → Frame → Prop} {rv :
     have hX : CoinTape.run g σ (back'' w) = CoinTape.run (optOpenK k fs ts f' i s n b ts[i]?) s'' w := hi.run w
     obtain ⟨L', hL'⟩ := log_of_opening hf'' hc hTi hp s'' w
     rw [← hX] at hL'
-    exact ⟨i, s, n, b, _, L', ⟨j, haj, hjK, hj⟩, hall, hL', cutsAt_openCuts rfl hKs hL', fun o' =>
-      OpeningAt.n_eq (finish_recordsLog sg θ F c rq) o' (OpeningAt.ofNext (k := k) (b := b) hf'' hc hTi hp)⟩
+    exact ⟨i, s, n, b, _, L', f', ⟨j, haj, hjK, hj⟩, hall, hL', cutsAt_openCuts rfl hKs hL', fun o' =>
+      OpeningAt.n_eq (finish_recordsLog sg θ F c rq) o' (OpeningAt.ofNext (k := k) (b := b) hf'' hc hTi hp), hf'',
+      fun φ => stopOf_next hP s'' Ks x'' back'' rfl hT hKs φ⟩
 
 end Through
 
