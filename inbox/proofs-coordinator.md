@@ -44537,3 +44537,18 @@ For the table:
 - The largest slack: the second repetition (41% of the card's time a head-block statement [read: run `6773`]); one repetition with 8% more queries reads 2^-106.4 a table [modeled, probe `1852` out]. A second lever with no error cost: m = 35 on m = 31's tower with 1,024 lanes, 4 bits on the first-hit term and the salts ÷16 [modeled, probe `8186` out]. Both are Daniel's; neither is built.
 
 For SCALE and CONCRETE: `e_s` at m = 35 on m = 31's tower would be 1 + 210·771,500 = 162,015,001 = 2^27.27, on m = 30's tower 81,007,501 = 2^26.27 [derived; unbuilt, Daniel's]. Do not put either in a row of record.
+
+## HEADPROF, Wed 11 Nov 09:11Z: BLOCKED on vy-dc-h200-3 by kernels: `r20261111-090001-54d6` (who `kernels-ksteady`) holds its card from 09:05:07Z to 10:35:07Z, so my run there was refused by its own start check. Node A is on plan; the verifier cut's first pair reads 2.59 against 2.53 s
+
+**vy-dc-h200-3** [run]
+- At 08:54Z it was idle (no compute process, load 0.04). I built the prover there (`r20261111-085942-4a34`, 08:59:42Z to about 09:04:10Z, 16 threads at nice 10; `BUILD rc=0 in 266 s`) and copied row 1's statement to its `/dev/shm` (11.4 GiB, pin `4b31e7caba011398` checked on the copy at 09:07:08Z).
+- My first run, `r20261111-090803-3d33`, woke at 09:09:03Z and exited at 09:09:04Z: "REFUSED, nothing staged: another run's lease holds a card of GPU 0: … run=r20261111-090001-54d6 who=kernels-ksteady … since=2026-11-11T09:05:07Z until=2026-11-11T10:35:07Z mem=120G". It took no lease and staged nothing. The card read 74% busy, 29.8 GB.
+- **For kernels:** my build and the copy's unpacking ran on that machine from 08:59:42Z to 09:07:08Z, beside the start of their run (launched 09:00:01Z). A row of theirs timed in those minutes had my 16 threads beside it.
+- I start nothing there while their lease holds. If the machine is ours, say so to kernels; else I queue the run for 10:36Z. What waits for it: every cut at one prover on a host with no co-tenant, the cores-a-prover curve (4, 8, 12, 16 threads), and HEADCIRC's row.
+
+**Node A** [run; every step so far ran beside kernels' four stagings]
+- `r20261111-082337-c224`, first pair: baseline 2.588 s a statement (the run's own step, by its row), verifier on cores 8-11 **2.5315 s** (38 sessions; verifier 5.38 CPU-s a statement there, `verify_s` 1.96 s; the prover's ten cores 6.9 busy against 8.8). No throttle (`nr_throttled` 6,970 still), `compact_stall` 0. Two more cut steps and one baseline follow; the entry with all of them comes at about 09:25Z.
+- Kernels' yes [read: HASH-114, 09:04Z comment, read at 09:10Z]: the four stagings end at 09:25Z, and card 2 with cores 24-33 is mine from then to 11:40Z. The loaded pair (today's block and the block with every cut, a plain head-block prover on card 2 beside both) goes after the quiet rows, about 10:50Z; one neighbour run on card 2, 30 minutes, nothing else there.
+- The statement's copy left node A on cores 8-11 only (09:04:25Z to 09:05:58Z, inside a baseline step's loading, the ssh session's process pinned too); `nr_throttled` did not move.
+
+For the table: nothing new to price: the verifier cut's first pair is 2.59 → 2.53 GPU-s a statement at one prover, measured, beside kernels' stagings (`r20261111-082337-c224`, two more steps to come).
