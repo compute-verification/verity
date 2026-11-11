@@ -39583,3 +39583,20 @@ vouches for its own commit.
 
 Still out, read 05:35Z `[run]`: records `79af` and `c513` (#8512), `67ce` (#8226), `57e5` (#8539, on its second package);
 the second list's and the stack children's runs, launched 05:17Z to 05:34Z.
+
+## PRF-516 REGX, Wed 11 Nov 05:44Z: part 2's crossed head is PUSHED: branch `cursor/proofs-regx-part2-crossed-57da`, head `f1a8ef0141ff5fa5242c0dcc71ee5a7650438391`; KILIAN can cross over it; gate (i) to (iii) hold on the pushed head; runs and PR next
+
+**For KILIAN:** cross over `f1a8ef0141ff5fa5242c0dcc71ee5a7650438391` on `cursor/proofs-regx-part2-crossed-57da`. [run]
+
+- **The ids differ from your ruling's, the trees do not.** [run] My VM was reset after the 05:20Z entry and the unpushed objects went with it. I rebuilt with the three commands of that entry; `restack.py` stamps the time into its commits, so the ids are new. Tool's result: `b61549ad6319277f3abf3a343e6e39deda7f7a83`, tree `315d58d6bf40` (the tree `b07a99b8a5fb` had). Lock-only commit on top: `f1a8ef0141ff`, tree `57da46054ac9` (the tree `c9a79532fe72` had), one file changed. The three lines the tool printed: `clean 2b4fa116b3f0 [plain merge clean]`, `clean b94f03776769 [plain merge conflicted (5)]`, `clean b61549ad6319 [plain merge clean]`.
+- **The lock** is what `python3 tools/verity/lean/merge.py BASE OURS THEIRS security/lean-audit.json` wrote (rc 0) from #8512's old lock (`75bdbe8965e1`), #8512's crossed lock (`815b893acd23`) and my old lock (`840c899e7eb2`). [run]
+- **Gate on the pushed head** (fetched, then read): [run]
+  - (i) `grep -c 'Security/' security/lean-audit.json`: 6.
+  - (ii) `grep -c -E 'verity/core/|verity/ml/|benchmarks/nci/|integrations/vllm' security/lean-audit.json`: 0.
+  - (iii) as JSON against the lock at `815b893acd230433178477f0feb12c295983c509`: 26 entries added (12 `guarantees`, 4 `claims.generic`, 4 `claims.witnesses`, 4 `witnesses`, 2 `reads`), 0 removed, 0 changed. None of the 26 holds a slash. Its `guarantees`, `reads`, `claims` and `witnesses` equal my old lock's.
+  - (iv) the records run: not launched yet; next.
+  - Size 4,198,676 bytes, over the script's limit, as you ruled.
+- **The head holds** `840c899e7eb2` (my old head), `815b893acd23` (#8512 crossed), `e7b741b17e53` (#8785 crossed) and `main` at `5c095bb4ab70`. No file under `Security/`. Against `815b893acd23` it changes 14 files; the 13 Lean files are byte for byte my old head's. [run]
+- **`main` moved** to `c4290f5b74e2` since (8 landings). I did not merge it: the records gate wants nothing merged after the records run, and your suites command names `5c095bb4ab70`. [read]
+- **Not folded in:** LEAN-186's `SwOk` move. [run]
+- **Next:** the records run and the quick tier at this head, detached; then the PR, unmarked.
