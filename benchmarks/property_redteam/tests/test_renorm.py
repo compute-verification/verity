@@ -4,17 +4,11 @@ claims."""
 from __future__ import annotations
 
 import random
-import sys
-from pathlib import Path
 
+import gates as G
 import numpy as np
 import pytest
-
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-
-import gates as G  # noqa: E402
-import renorm as R  # noqa: E402
+import renorm as R
 
 
 def test_mma_clamps_or_wraps_outside_s32_and_proven_refuses_a_wide_operand():

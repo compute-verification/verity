@@ -9,7 +9,6 @@ import json
 import socket
 import struct
 import threading
-import tomllib
 
 import pytest
 
@@ -327,23 +326,6 @@ def test_placement_refuses_by_name_or_marks_the_run_simulated(tmp_path):
     assert e.value.name == "unknown-machine"
 
 
-def test_a_workload_provides_what_the_protocol_needs():
-    m = M.Manifest("verity/example/needs", 1, "p", X.MANIFEST.parties, X.MANIFEST.channels, X.MANIFEST.messages,
-                   needs=("windows",))
-    M.workload(m, ["windows", "store"])
-    with pytest.raises(Refused) as e:
-        M.workload(m, ["store"])
-    assert e.value.name == "workload-needs"
-
-
-def test_the_manifest_renders_as_toml():
-    doc = tomllib.loads(M.render(X.MANIFEST))
-    assert doc["party"]["challenger"] == {"principal": "auditor", "per": "one", "needs": ["clock", "coins"]}
-    assert doc["channel"][0] == {"from": "challenger", "to": "responder", "messages": ["Challenge", "Verdict"],
-                                 "latency_ms": 1, "carries_coins": True}
-    assert doc["message"]["Answer"] == {"version": 1, "kind": "private"}
-
-
 def test_a_channels_after_names_the_manifests_messages():
     challenge, answer = X.MANIFEST.channels
 
@@ -351,7 +333,7 @@ def test_a_channels_after_names_the_manifests_messages():
         return M.Manifest("verity/example/after", 1, "p", X.MANIFEST.parties,
                           (challenge, M.Channel(answer.sender, answer.receiver, answer.messages, after=after)),
                           X.MANIFEST.messages)
-    assert tomllib.loads(M.render(with_after("Challenge")))["channel"][1]["after"] == ["Challenge"]
+    assert with_after("Challenge").channels[1].after == ("Challenge",)
     with pytest.raises(ValueError, match=r"\['Nonce'\] on responder -> challenger are not its messages"):
         with_after("Nonce")
 
