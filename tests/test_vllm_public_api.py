@@ -44,8 +44,6 @@ PUBLIC = {
     "verity_vllm.engine.stock": "I1: a stock engine at the pin, with no protocol on: an in-process LLMEngine, vLLM's "
                                 "SamplingParams and its version",
     "verity_vllm.engine.served_seed": "I1: the served engine's public default seed, which a served registration fixes",
-    "verity_vllm.engine.collectives.all_reduce": "I2: the CUDA communicator's one seam for its all-reduce (AllReduceSeam): "
-                                                 "one replacement of the routes vLLM picks, which reaches them for the rest",
     "verity_vllm.engine.moe_align": "I1: the served Marlin MoE path's moe_align_block_size, each expert's pairs in pair-index "
                                     "order: its reference, kernels and install, which benchmarks/moe_align checks and times",
     "verity_vllm.engine.plugins": "I1: the distribution's vLLM general plugins (PLUGINS), which pyproject.toml declares, and "

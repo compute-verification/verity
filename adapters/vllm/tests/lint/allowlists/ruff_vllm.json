@@ -1887,7 +1887,6 @@
     {"file": "verity_vllm/engine/code_identity.py", "kind": "SIM105", "symbol": "_triton_cache_files", "detail": "Use `contextlib.suppress(ValueError)` instead of `try`-`except`-`pass`"},
     {"file": "verity_vllm/engine/code_identity.py", "kind": "SIM115", "symbol": "_triton_cache_files", "detail": "Use a context manager for opening files", "count": 3},
     {"file": "verity_vllm/engine/code_identity.py", "kind": "UP037", "symbol": "_split_path_strings._sub", "detail": "Remove quotes from type annotation"},
-    {"file": "verity_vllm/engine/collectives/all_reduce.py", "kind": "I001", "symbol": "AllReduceSeam._install", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/engine/collectives/fused_norm.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`, `Iterator`"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "I001", "symbol": "_tuned_gemm_arch_family", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/engine/fp8_checkpoint.py", "kind": "SIM115", "symbol": "_Sink.__init__", "detail": "Use a context manager for opening files"},

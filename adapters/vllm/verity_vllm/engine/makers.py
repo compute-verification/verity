@@ -1,5 +1,5 @@
 """The parts plugins add to one seam (`Makers`): functions added by name, each making its plugin's part for one vLLM
-object (a scheduler, a communicator), made once per object in the order the seam declares.
+object (a scheduler), made once per object in the order the seam declares.
 
 A seam declares its parts' names in the order they run, and refuses a name it doesn't declare, a name added twice, and a
 part added once some object has made its parts, which would leave that object without it: plugins add theirs from their
