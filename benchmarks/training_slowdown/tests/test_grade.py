@@ -464,6 +464,133 @@ def test_a_records_provenance_is_passed_on_and_never_read():
     assert "provenance" not in G.text(a)
 
 
+def named(run: dict, dtype: str = "float32") -> dict:
+    """`run` (a `job` or a `traced` one) as this version's counter writes it: every row of its op log names `dtype`."""
+    rec = copy.deepcopy(run["record"])
+    for st in rec["structures"].values():
+        st["log"] = [[*row, dtype] for row in st["log"]]
+    return run | {"record": rec}
+
+
+def test_records_priced_two_ways_give_no_p_and_no_s_and_the_reason_names_both_ways_out():
+    """A record whose op log names each op's dtype is counted in it, here float32, and one that names none by the
+    assumed dtypes, here bf16: C over H between them would be the ratio of the two prices and no slowdown. So where
+    the records read are of both kinds, whichever config's they are, there is no p, no least H over the configs, no
+    S and no period, and the reason says which records are which and names the two ways out. Records of one kind
+    grade, and each record's line says how it is counted and on which device."""
+    f32, bf16 = gates.per_mac("gemm/f32"), PER_MAC
+    attack, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])]
+    plain, both = graded(attack, ref), graded([named(r) for r in attack], [named(r) for r in ref])
+    assert both["p"] == plain["p"] and plain["S"]["why"] is None and both["S"]["why"] is None
+    assert both["H"]["honest"]["C"]["mean"] == pytest.approx(STEP_GATES * f32 / bf16)
+    assert {x["priced"] for x in plain["records"]} == {"by the assumed dtypes (its op log names none)"}
+    assert {x["priced"] for x in both["records"]} == {"in the dtype its op log names for each op"}
+    for runs, honest, which in (
+            ([named(r) for r in attack], ref,
+             "Counted in the dtype its op log names for each op: attack 0/final, attack 1/final, attack 0/search (3 "
+             "in all). Counted by the assumed dtypes (its op log names none): reference 0/final (1 in all). Either"),
+            (attack, [named(r) for r in ref],
+             "each op: reference 0/final (1 in all). Counted by the assumed dtypes (its op log names none): attack "
+             "0/final, attack 1/final, attack 0/search (3 in all)."),
+            ([*attack[:2], named(attack[2])], ref,
+             "each op: attack 0/search (1 in all). Counted by the assumed dtypes (its op log names none): attack "
+             "0/final, attack 1/final, reference 0/final (3 in all).")):
+        s = graded(runs, honest)
+        assert s["p"] == {"honest": None, "any": None} and s["per_period"] is None and s["schema"] == "slowdown/v1"
+        assert (s["S"]["honest"], s["S"]["any"]) == (None, None) and s["rho"]["rho"] is not None
+        assert s["S"]["why"].startswith("the records read are priced two ways") and which in s["S"]["why"]
+        assert s["S"]["why"].endswith(f". Either {G.MIXED}") and "--as-if-assumed" in G.MIXED
+        assert "again with a job of this version" in G.MIXED
+        assert (s["H"]["any"]["config"], s["H"]["any"]["C"]) == (None, None) and s["H"]["honest"]["C"]
+        block = G.text(s)
+        assert f"  {'S = p x rho':<17} none: the records read are priced two ways" in block
+        assert "against any route none; against the honest route none" in block and "none: no S" in block
+        assert "any route, over 2 configs (attack, reference), no config: none (the configs' records are priced" in block
+    lines = G.text(graded([named(r | {"record": r["record"] | {"device": "cpu"}}) for r in attack], [named(ref[0])]))
+    assert "attack 0/final: version 0, on cpu, counted in the dtype its op log names for each op, 2 of 2" in lines
+    assert "reference 0/final: version 0, counted in the dtype its op log names for each op, 1 of 1" in lines
+    assert "attack 0/final: version 0, counted by the assumed dtypes (its op log names none), 2 of 2" in G.text(plain)
+
+
+def test_as_if_assumed_counts_every_record_by_the_assumed_dtypes_and_says_so_on_every_line(tmp_path, capsys):
+    """`--as-if-assumed` on records of both kinds: every figure is the one the same records give with no dtype in
+    their op logs, rows of one op and shapes in two dtypes one row. The result is under its own schema, says what it
+    is, and says of each record that names dtypes that it was counted as if it named none; the block's first two
+    lines say so and every other line begins with `as-if`; the command writes `slowdown.as-if.json` and no
+    `slowdown.json`."""
+    search = traced([OVER, UNDER])
+    keys = [tuple(row[:4]) for row in search["record"]["structures"]["a"]["log"]]
+    assert len(set(keys)) < len(keys)
+    # a job's log has one row a key (`flops.Counter.record`): the fixture's rows of one op and shapes are summed
+    search["record"] = G.without_dtypes(search["record"])
+    attack, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1), search], [job([UNDER])]
+    two = named(attack[0])
+    log = two["record"]["structures"]["a"]["log"]
+    two["record"]["structures"]["a"]["log"] = [[*log[0][:4], 3, 60, "float32"], [*log[0][:4], 2, 20, "bfloat16"]]
+    assert G.without_dtypes(two["record"])["structures"]["a"] == {"updated": [["w", 0, 80]],
+                                                                   "log": [[*log[0][:4], 5, 80]]}
+    assert G.without_dtypes(attack[0]["record"]) == attack[0]["record"]
+    assert (G.names_dtypes(two["record"]), G.names_dtypes(attack[0]["record"])) == (True, False)
+    assert G.names_dtypes(attack[0]["record"] | {"structures": {"a": {"log": []}}}) is None
+    mixed = [two, attack[1], named(attack[2])]
+    assert graded(mixed, ref)["S"]["any"] is None
+    s, plain = graded(mixed, ref, as_if_assumed=True), graded(attack, ref)
+    assert s["schema"] == "slowdown-as-if/v1" != plain["schema"] and plain["as_if"] is None
+    assert s["as_if"] == G.AS_IF and "gemm bf16, elementwise bf16, optimizer f32, linalg f32" in G.AS_IF
+    assert s["S"]["any"] == plain["S"]["any"] > 1 and s["rests_on"]["p"] == plain["rests_on"]["p"] + (
+        ", every record counted by the assumed dtypes (as-if)")
+    assert [x["priced"] for x in s["records"]] == [
+        "as if its op log named no dtype", "by the assumed dtypes (its op log names none)",
+        "as if its op log named no dtype", "by the assumed dtypes (its op log names none)"]
+    differ = {"schema": None, "as_if": None, "records": None}
+    assert {**s, **differ, "rests_on": s["rests_on"] | {"p": None}} == {
+        **plain, **differ, "rests_on": plain["rests_on"] | {"p": None}}
+    head, what, *rest = G.text(s).split("\n")
+    assert head.startswith("AS-IF SLOWDOWN attack ") and what == f"  as-if: {G.AS_IF}"
+    assert rest and all(line.startswith("  as-if ") for line in rest)
+
+    def same(lines: list[str]) -> list[str]:
+        """The lines that don't say how a record is counted: not the two records that name dtypes, nor what p rests on."""
+        return [line for line in lines if "attack 0/" not in line and "p: counted |C|" not in line]
+
+    assert [line.replace("  as-if ", "  ", 1) for line in same(rest)] == same(G.text(plain).split("\n")[1:])
+    assert len(same(rest)) == len(rest) - 3 and "as-if" not in G.text(plain) and "AS-IF" not in G.text(plain)
+
+    def put(root: str, seed: int, split: str, rec: dict) -> None:
+        d = tmp_path / root / str(seed) / split
+        d.mkdir(parents=True)
+        (d / "run.json").write_text(json.dumps(rec))
+
+    for r in mixed:
+        put("attack", r["seed"], r["split"], r["record"])
+    put("reference", 0, "final", ref[0]["record"])
+    (tmp_path / "starts.toml").write_text("".join(
+        f'[starts.{n}]\ndata = "{e["data"]}"\nc0_macs = {e["c0_macs"]!r}\nl0_bpb = {e["l0_bpb"]!r}\n'
+        + "shape = { " + ", ".join(f"{k} = {v}" for k, v in e["shape"].items()) + " }\n"
+        for n, e in registry()["starts"].items()))
+    (tmp_path / "attack.toml").write_text('start = "s"\ntarget = { gain = 1.1 }\npolicy = "console"\n'
+                                          'honest = "reference"\nseeds = { search = [0], final = [0, 1] }\n')
+    argv = ["--config", tmp_path / "attack.toml", "--starts", tmp_path / "starts.toml", "--records",
+            tmp_path / "attack", "--honest", tmp_path / "reference", "--out", tmp_path / "out"]
+    assert G.main([*map(str, argv), "--as-if-assumed"]) == 0
+    assert capsys.readouterr().out.startswith("AS-IF SLOWDOWN attack ")
+    assert [p.name for p in (tmp_path / "out").iterdir()] == ["slowdown.as-if.json"]
+    wrote = json.loads((tmp_path / "out" / "slowdown.as-if.json").read_text())
+    assert wrote["schema"] == "slowdown-as-if/v1" and wrote["S"]["any"] == pytest.approx(s["S"]["any"])
+    assert G.main([*map(str, argv)]) == 0
+    assert "none: the records read are priced two ways" in capsys.readouterr().out
+    assert json.loads((tmp_path / "out" / "slowdown.json").read_text())["S"]["any"] is None
+
+
+def test_a_record_with_an_op_in_a_dtype_no_definition_prices_is_refused_with_its_place():
+    """A record whose op log names an op in a dtype no Definition prices has no count in gates: the grade stops, and
+    says which record, which op and which dtype. Counted as if it named none, it is priced as one that names none."""
+    with pytest.raises(ValueError, match=r"^grade: the record at seed 0, final has no count in gates: mm in float64: "
+                                         r"no Definition prices a GEMM MAC in float64"):
+        graded([named(job([UNDER]), "float64")], [named(job([UNDER]))])
+    assert graded([named(job([UNDER]), "float64")], [named(job([UNDER]))], as_if_assumed=True)["p"]["any"]["p"] == 1
+
+
 @pytest.fixture(scope="module")
 def ran(tmp_path_factory):
     """One search job of the tiny start, run as a node runs it, through the sandbox."""

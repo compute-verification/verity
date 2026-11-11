@@ -8,7 +8,8 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 from conftest import D, PER_TOKEN, VOCAB, loss_of
 from training_slowdown import flops, gates, opnames
 from training_slowdown.annotate import annotate
-from training_slowdown.flops import Counter, flags, forward_macs_per_token, gather_selects, guard_exits, leaked, mux_tree
+from training_slowdown.flops import (CAST_RESULTS, Counter, dtype_of, flags, forward_macs_per_token, gather_selects,
+                                     guard_exits, leaked, mux_tree)
 
 IDX = torch.randint(0, VOCAB, (3, 8), generator=torch.Generator().manual_seed(3))  # 24 tokens: no activation is weight-shaped
 TOKENS = IDX.numel()
@@ -267,18 +268,31 @@ def logged(body) -> list:
 
 def test_an_ops_row_names_the_dtype_it_computed_in():
     """Each row of the op log names its op's dtype, its result's, and rows of one op and shape in two dtypes stay
-    apart: a product's own; the wider one where its operands differ, whichever comes first; the written operand's
-    for an in-place `_foreach_` form and a fused optimizer step, which return nothing; the floating one of a
-    decomposition's results, beside its integer flags. Results in two dtypes are named together, which no price
-    reads."""
+    apart: a product's own; the wider one where its operands differ, whichever comes first; the floating one of a
+    decomposition's results, beside its integer flags. An integer product is named as one, and no Definition prices
+    it."""
     a, b = torch.randn(4, 5), torch.randn(5, 3)
     assert logged(lambda: (a @ b, a.bfloat16() @ b.bfloat16())) == [["mm", 60, "bfloat16"], ["mm", 60, "float32"]]
     assert logged(lambda: a.bfloat16() * a) == logged(lambda: a * a.bfloat16()) == [["mul", 20, "float32"]]
-    assert logged(lambda: torch._foreach_mul_([a.clone(), b.clone()], 2.0)) == [["_foreach_mul_", 35, "float32"]]
     spd = a @ a.T + torch.eye(4)
     for solve, op in ((torch.linalg.eigh, "_linalg_eigh"), (torch.linalg.cholesky, "linalg_cholesky_ex"),
                       (torch.linalg.inv, "linalg_inv_ex")):
         assert logged(lambda: solve(spd)) == [[op, 64, "float32"]]
+    ids = torch.arange(6)
+    assert logged(lambda: ids * ids) == [["mul", 6, "int64"]]
+    with pytest.raises(gates.Unpriced, match=r"^mul in int64: no Definition prices an elementwise MAC in int64"):
+        gates.of_log({"ops": {"other param mul [[6], [6]] int64": [1, 6]}})
+
+
+def test_an_op_that_returns_nothing_is_in_the_dtype_of_the_operand_it_writes():
+    """The first named exception to "its result's dtype": an in-place `_foreach_` form and a fused optimizer step
+    return nothing and write their first operand, so their row names its dtype, bf16 where the tensors are bf16.
+    Over tensors of two dtypes the row names both, which no price reads: the trace holds such an op as one node at
+    one price, so the count has no split to equal."""
+    a, b = torch.randn(4, 5), torch.randn(5, 3)
+    assert logged(lambda: torch._foreach_mul_([a.clone(), b.clone()], 2.0)) == [["_foreach_mul_", 35, "float32"]]
+    assert logged(lambda: torch._foreach_mul_([a.bfloat16(), b.bfloat16()], 2.0)) == [["_foreach_mul_", 35, "bfloat16"]]
+    assert dtype_of("_foreach_mul_", [], [a.bfloat16(), b.bfloat16()]) == "bfloat16"
     w = torch.nn.Parameter(torch.randn(8))
     w.grad = torch.randn(8)
     assert logged(torch.optim.AdamW([w], fused=True).step) == [["_fused_adamw_", 64, "float32"]]
@@ -286,6 +300,18 @@ def test_an_ops_row_names_the_dtype_it_computed_in():
     assert mixed == [["_foreach_mul_", 35, "bfloat16+float32"]]
     with pytest.raises(gates.Unpriced, match=r"^_foreach_mul_ in bfloat16\+float32: no Definition"):
         gates.of_log({"ops": {f"other param {op} [[4, 5], [5, 3]] {dtype}": [1, macs] for op, macs, dtype in mixed}})
+
+
+def test_a_kernel_that_casts_its_result_is_in_its_first_operands_dtype():
+    """The second named exception: `_scaled_mm` computes in its FP8 operands' dtype and casts its result out of it,
+    so its row names its first operand's dtype and is priced at the FP8 GEMM. By its result's dtype it would be
+    priced as a bf16 GEMM, and no row would reach the FP8 price."""
+    a, out = torch.zeros(4, 5, dtype=torch.float8_e4m3fn), torch.zeros(4, 3, dtype=torch.bfloat16)
+    assert "_scaled_mm" in CAST_RESULTS and dtype_of("_scaled_mm", [out], [a]) == "float8_e4m3fn"
+    assert dtype_of("mm", [out], [a]) == "bfloat16"
+    assert gates.kind_of("fwd", "theta", "_scaled_mm", "float8_e4m3fn") == ("gemm/e4m3", "")
+    assert gates.kind_of("fwd", "theta", "_scaled_mm", "bfloat16") == ("gemm/bf16", "")
+    assert gates.per_mac("gemm/e4m3") < gates.per_mac("gemm/bf16")
 
 
 def test_a_fused_kernels_rows_are_in_its_operands_dtype():

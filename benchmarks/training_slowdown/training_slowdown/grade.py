@@ -1,7 +1,7 @@
 """The grade: a config's slowdown S = p·ρ, from its jobs' records and its honest config's.
 
     python -m training_slowdown.grade --config attacks/NAME.toml --starts starts.toml --records DIR --honest DIR \\
-        [--also NAME=DIR ...] [--out OUT]
+        [--also NAME=DIR ...] [--out OUT] [--as-if-assumed]
 
 A config (an attack's TOML file) names its `start`, its `target.gain`, its `policy`, its `honest` config and its
 `seeds` (`search` and `final`). DIR holds one config's records as its jobs wrote them, `DIR/<seed>/<split>/run.json`
@@ -23,6 +23,12 @@ no job writes): the grade never reads it and passes it on, beside each record it
 - **p** = C/H against each, with its range over the seeds (C's least over H's greatest, to C's greatest over H's
   least). C and H are read on one split (`basis`): the final set where the attack and the honest config each have a
   final record, else the search split, and the block says which;
+- **one pricing** (`pricing`): a record whose op log names each op's dtype is counted in those dtypes, and one whose
+  log names none by the assumed ones (`gates.ASSUMED`), which the block says of each record. Records of both kinds
+  give no p and no S, since C over H would then compare counts priced two ways; the reason names the two ways out
+  (`MIXED`): the records without dtypes counted again by a job of this version, or `--as-if-assumed`, which counts
+  every record by the assumed dtypes whatever its log names (`without_dtypes`), labels every line it prints as-if
+  and writes `OUT/slowdown.as-if.json` (`SCHEMA_AS_IF`), never `slowdown.json`;
 - **ρ**, the attack's own cost at the config's policy (`policy.named`): `formalism.published` at (c, k) on the search
   record, at its first checkpoint reaching the gain on the search split, else at its last, which the block says. It
   reads the record's `trace`, the step the job traced itself, and prices its product rows here (`traced`,
@@ -60,6 +66,20 @@ from . import VERSION, calculator, gates, policy, work
 from . import formalism as F
 
 SCHEMA = "slowdown/v1"
+#: what `--as-if-assumed` writes, under another schema and file name than a slowdown's, so that nothing reads it as one
+SCHEMA_AS_IF, AS_IF_FILE = "slowdown-as-if/v1", "slowdown.as-if.json"
+#: how a record is counted, by whether its op log names each op's dtype (`names_dtypes`)
+PRICED = {True: "in the dtype its op log names for each op",
+          False: "by the assumed dtypes (its op log names none)",
+          None: "with no op row to price"}
+#: what `--as-if-assumed` does, which every block it prints says first
+AS_IF = ("every record's ops are counted by the assumed dtypes (`gates.ASSUMED`: "
+         + ", ".join(f"{cls} {dtype}" for cls, dtype in gates.ASSUMED.items())
+         + "), whatever dtype its op log names: no figure here is the config's slowdown")
+#: the two ways out of records priced two ways, which the reason for no S names
+MIXED = ("count the configs whose records name no dtype again with a job of this version, whose op log names each "
+         "op's dtype; or grade with --as-if-assumed, which counts every record by the assumed dtypes and labels "
+         "every figure as-if")
 SPLITS = {"search": "the search split", "final": "the final set"}
 FORM = "L(C) = E + A*C^-gamma"
 #: the fit: its points per decade of C, the fewest it takes and the least factor in C they span, the count under which
@@ -173,6 +193,28 @@ def macs_log(record: dict, through: int | None) -> dict:
             n, m = ops.get(key := gates.op_key(row), (0, 0))
             ops[key] = [n + row[4], m + row[5]]
     return {"by": by, "ops": ops}
+
+
+def names_dtypes(record: dict) -> bool | None:
+    """Whether the record's op log names each op's dtype, so its count is priced in them: True where every row
+    does, False where one doesn't (`gates.of_log` then prices that row by the assumed dtype), None for a record
+    with no row."""
+    rows = [row for s in record["structures"].values() for row in s.get("log", [])]
+    return all(len(row) > 6 for row in rows) if rows else None
+
+
+def without_dtypes(record: dict) -> dict:
+    """The record as one whose op log names no dtype, which is then priced by the assumed dtypes: each structure's
+    rows of one phase, kind, op and shapes are one row of their counts and MACs, whatever dtype each names."""
+    def plain(log: list) -> list:
+        rows: dict[tuple, list] = {}
+        for row in log:
+            n = rows.setdefault(tuple(row[:4]), [0, 0])
+            n[0], n[1] = n[0] + row[4], n[1] + row[5]
+        return sorted([*key, *n] for key, n in rows.items())
+
+    return record | {"structures": {name: s | {"log": plain(s["log"])} if "log" in s else s
+                                    for name, s in record["structures"].items()}}
 
 
 def prefix(record: dict, step: int) -> int | None:
@@ -455,11 +497,28 @@ def per_period(run_gates: float, rho: dict) -> dict:
 
 # ---- the grade ---------------------------------------------------------------------------------------------------------
 
+def two_pricings(jobs: dict[str, list[dict]]) -> str | None:
+    """Why the jobs' records give no p: some name each op's dtype and some name none (`names_dtypes`), with which and
+    the two ways out (`MIXED`). None where every record read is priced one way."""
+    named, unnamed = ([f"{n} {r['seed']}/{r['split']}" for n, rs in jobs.items() for r in rs if r["dtypes"] is want]
+                      for want in (True, False))
+    if not (named and unnamed):
+        return None
+
+    def some(xs: list[str]) -> str:
+        return ", ".join(xs[:3]) + (f" and {len(xs) - 3} more" if len(xs) > 3 else "") + f" ({len(xs)} in all)"
+
+    return (f"the records read are priced two ways, and C over H would compare a count in one with a count in the "
+            f"other. Counted {PRICED[True]}: {some(named)}. Counted {PRICED[False]}: {some(unnamed)}. Either {MIXED}")
+
+
 def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
-          others: dict[str, list[dict]] | None = None) -> dict:
+          others: dict[str, list[dict]] | None = None, as_if_assumed: bool = False) -> dict:
     """The slowdown of `config` (its `name`, `start`, `target.gain`, `policy`, `honest` and `seeds`) from its jobs
     `runs`, its honest config's (`honest`) and other configs' at the same start and gain (`others`, by name), each job
-    its `seed`, its `split` and its `record`; `starts` is the starts registry (module docstring)."""
+    its `seed`, its `split` and its `record`; `starts` is the starts registry (module docstring). With
+    `as_if_assumed` every record is counted by the assumed dtypes (`without_dtypes`), and the result says so
+    (`as_if`, under `SCHEMA_AS_IF`): it is no config's slowdown."""
     starts = starts.get("starts", starts)
     if config["start"] not in starts:
         raise ValueError(f"grade: no start {config['start']!r} in the starts registry ({', '.join(starts)})")
@@ -471,25 +530,34 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
         raise ValueError(f"grade: the {len(data)} starts on data {entry.get('data')!r} give no fit: it takes "
                          f"{FIT_MIN} frontier points spanning a factor {FIT_SPAN:g} in C0")
     me, hon = config["name"], config["honest"]
-    jobs = {n: [r | {"checkpoints": checkpoints(r, config["start"])} for r in rs]
-            for n, rs in ({me: runs, hon: honest} | (others or {})).items()}
+
+    def job(r: dict) -> dict:
+        counted_as = r | {"record": without_dtypes(r["record"])} if as_if_assumed else r
+        return counted_as | {"checkpoints": checkpoints(counted_as, config["start"]),
+                             "dtypes": names_dtypes(r["record"]), "as_if": as_if_assumed}
+
+    jobs = {n: [job(r) for r in rs] for n, rs in ({me: runs, hon: honest} | (others or {})).items()}
+    two = None if as_if_assumed else two_pricings(jobs)
     sides = {n: side(n, rs, f, g, config.get("seeds") if n == me else None) for n, rs in jobs.items()}
     lacking = [n for n in (me, hon) if not any(r["split"] == "final" for r in jobs[n])]
     basis = "search" if lacking else "final"
     C, at = sides[me]["splits"][basis]["C"], {n: s["splits"][basis] for n, s in sides.items()}
-    best = min((n for n in at if at[n]["C"]), key=lambda n: at[n]["C"]["mean"], default=None)
+    best = None if two else min((n for n in at if at[n]["C"]), key=lambda n: at[n]["C"]["mean"], default=None)
     H = {"honest": {"config": hon} | {k: at[hon][k] for k in ("C", "reached", "of")},
-         "any": {"config": best, "over": list(at)} | {k: at[best][k] if best else None for k in ("C", "reached", "of")}}
-    p = {k: ratio(C, h["C"]) for k, h in H.items()}
+         "any": {"config": best, "over": list(at)} | {k: at[best][k] if best else None for k in ("C", "reached", "of")}
+         | ({"why": "the configs' records are priced two ways, and the least of their C is of no one pricing"}
+            if two else {})}
+    p = {k: None if two else ratio(C, h["C"]) for k, h in H.items()}
     wanted = (config.get("seeds") or {}).get("search") or [None]
     search = next((r for r in jobs[me] if r["split"] == "search" and wanted[0] in (None, r["seed"])), None)
     rho, of_record = rho_of(search, f, g, pol, entry["shape"])
-    why = (rho.get("why") or "ρ is unmeasured") if rho["rho"] is None else \
-        None if C else f"no seed of the config reaches {g:g}x on {SPLITS[basis]}"
+    why = two or ((rho.get("why") or "ρ is unmeasured") if rho["rho"] is None else
+                  None if C else f"no seed of the config reaches {g:g}x on {SPLITS[basis]}")
     S = {k: None if why or not p[k] else p[k]["p"] * rho["rho"] for k in H} | {
         "why": why, "lower_bound": bool(rho.get("partial"))}
     return {
-        "schema": SCHEMA, "training_slowdown": VERSION, "config": me, "start": config["start"], "gain": g,
+        "schema": SCHEMA_AS_IF if as_if_assumed else SCHEMA, "as_if": AS_IF if as_if_assumed else None,
+        "training_slowdown": VERSION, "config": me, "start": config["start"], "gain": g,
         "policy": pol, "basis": {"split": basis, "why": (f"no final record of {' or '.join(lacking)}" if lacking else
                                                          "the attack and the honest config each have a final record")},
         "fit": f | {"data": entry.get("data"), "starts": data,
@@ -499,22 +567,25 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
         "bound_of_record": of_record,
         "rests_on": {
             "p": f"counted |C| ({gates.UNIT}) at each seed's first checkpoint at or below its target on "
-                 f"{SPLITS[basis]}, the mean over the seeds that reach, over the same for H",
+                 f"{SPLITS[basis]}, the mean over the seeds that reach, over the same for H"
+                 + (", every record counted by the assumed dtypes (as-if)" if as_if_assumed else ""),
             "rho": rho.get("rests_on"), "capture": rho.get("capture"), "capture_code": rho.get("capture_code"),
             "provenance": rho.get("provenance"),
             "gain": f"the fit {FORM} on {f['points']} of the {len(data)} starts on data {entry.get('data')}"
                     + (f", provisional under {FIT_TARGET}" if f["provisional"] else "")},
-        "per_period": per_period(C["mean"] * rho["rho"], rho) if C and rho["rho"] is not None else None,
+        "per_period": per_period(C["mean"] * rho["rho"], rho) if C and rho["rho"] is not None and not two else None,
         "records": [_read(n, r) for n, rs in jobs.items() for r in rs]}
 
 
 def _read(name: str, run: dict) -> dict:
-    """What the grade read of one job: its place, the label and the version of the code that wrote its record, how
+    """What the grade read of one job: its place, the label and the version of the code that wrote its record, the
+    device it ran on, how its count is priced (`PRICED`; under `--as-if-assumed`, as if its log named no dtype), how
     many of its checkpoints are scored, and the record's `provenance` where it has one, passed on as it is."""
     wrote = run["record"]
+    priced = "as if its op log named no dtype" if run["as_if"] and run["dtypes"] else PRICED[run["dtypes"]]
     return {"config": name, "seed": run["seed"], "split": run["split"], "source": run.get("source"),
             "label": wrote.get("label"), "version": wrote.get("training_slowdown") or wrote.get("te_core"),
-            "checkpoints": len(run["checkpoints"]),
+            "device": wrote.get("device"), "priced": priced, "checkpoints": len(run["checkpoints"]),
             "scored": sum(c["gates"] is not None for c in run["checkpoints"])} | (
         {"provenance": wrote["provenance"]} if "provenance" in wrote else {})
 
@@ -530,7 +601,8 @@ def _seed(split: str, seed: str, s: dict) -> str:
 
 def _h(h: dict) -> str:
     if not h["C"]:
-        return f"{h['config'] or 'no config'}: none ({h['reached'] or 0} of {h['of'] or 0} seeds reach)"
+        why = h.get("why") or f"{h['reached'] or 0} of {h['of'] or 0} seeds reach"
+        return f"{h['config'] or 'no config'}: none ({why})"
     return f"{h['config']}: {h['C']['mean']:.4g} gates ({h['reached']} of {h['of']} seeds reach)"
 
 
@@ -543,14 +615,18 @@ def _said(provenance) -> str:
 
 
 def text(s: dict) -> str:
-    """The block the grade prints (module docstring)."""
+    """The block the grade prints (module docstring). An as-if grade's block says so in its first line and its
+    second, and every line after them begins with `as-if`, so a line read apart from the block still says it."""
     pol, f, rho, S, basis = s["policy"], s["fit"], s["rho"], s["S"], s["basis"]["split"]
     mine, per, bound = s["attack"]["splits"], s["per_period"], s["bound_of_record"]
-    lines = [f"SLOWDOWN {s['config']}   start {s['start']}, gain {s['gain']:g}x, policy {pol['name']} ({pol['kind']}: "
-             f"c = {pol['c_gates']:.4g} gates, k = {pol['k_bits']:,.0f} bits; {pol['why']})"]
+    tag = "as-if " if s["as_if"] else ""
+    lines = [f"{tag.upper()}SLOWDOWN {s['config']}   start {s['start']}, gain {s['gain']:g}x, policy {pol['name']} "
+             f"({pol['kind']}: c = {pol['c_gates']:.4g} gates, k = {pol['k_bits']:,.0f} bits; {pol['why']})"]
+    if s["as_if"]:
+        lines.append(f"  as-if: {s['as_if']}")
 
     def add(head: str, *body: str) -> None:
-        lines.extend(f"  {h:<17} {b}" for h, b in zip((head, *[""] * len(body)), body))
+        lines.extend(f"  {tag}{h:<17} {b}" for h, b in zip((head, *[""] * len(body)), body))
 
     if S["why"]:
         add("S = p x rho", f"none: {S['why']}")
@@ -605,6 +681,7 @@ def text(s: dict) -> str:
             f"(the window is {per['window']}'s; each fleet at its peak rate)",
             *(f"{k}: {v}" for k, v in per["parts"].items()))
     add("records", *(f"{x['config']} {x['seed']}/{x['split']}: version {x['version']}, "
+                     + (f"on {x['device']}, " if x["device"] else "") + f"counted {x['priced']}, "
                      f"{x['scored']} of {x['checkpoints']} checkpoints scored" + (f", {x['label']}" if x["label"] else "")
                      + (f", provenance: {_said(x['provenance'])}" if "provenance" in x else "")
                      for x in s["records"]))
@@ -635,15 +712,19 @@ def main(argv=None) -> int:
     ap.add_argument("--honest", type=Path, required=True, help="its honest config's records")
     ap.add_argument("--also", action="append", default=[], metavar="NAME=DIR",
                     help="another config's records at the same start and gain")
-    ap.add_argument("--out", type=Path, default=None, help="where slowdown.json goes")
+    ap.add_argument("--out", type=Path, default=None,
+                    help=f"where slowdown.json goes ({AS_IF_FILE} under --as-if-assumed)")
+    ap.add_argument("--as-if-assumed", action="store_true",
+                    help="count every record by the assumed dtypes, whatever dtype its op log names, and label "
+                         "every line as-if: for records that name dtypes beside records that name none")
     a = ap.parse_args(argv)
     config = tomllib.loads(a.config.read_text()) | {"name": a.config.stem}
     others = {n: read(Path(d)) for n, _, d in (x.partition("=") for x in a.also)}
-    s = grade(config, tomllib.loads(a.starts.read_text()), read(a.records), read(a.honest), others)
+    s = grade(config, tomllib.loads(a.starts.read_text()), read(a.records), read(a.honest), others, a.as_if_assumed)
     print(text(s))
     if a.out:
         a.out.mkdir(parents=True, exist_ok=True)
-        (a.out / "slowdown.json").write_text(json.dumps(_plain(s), indent=1) + "\n")
+        (a.out / (AS_IF_FILE if a.as_if_assumed else "slowdown.json")).write_text(json.dumps(_plain(s), indent=1) + "\n")
     return 0
 
 

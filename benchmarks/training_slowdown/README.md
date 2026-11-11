@@ -18,7 +18,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`), E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
-| `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions |
+| `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions, in the dtype its record names for it (`kind_of`); a dtype no Definition prices is refused (`Unpriced`), and a record that names none is priced by `ASSUMED` |
 | `annotate.py` | a record's maximal annotation: per step U and D_t, the depth profile and the cut |
 | `capture/` | one training step traced on fake tensors (`capture_step` traces any PyTorch step, `capture_steps` a step among the steps before and after it, with its step circuit): |C|, the update's dependence and the cuts (`capture.circuit`) and the step's matrix products as rows (`capture.products`) |
 | `work.py` | the work a step's record states for the theorem of record: M, the products whose two operands both depend on the update, from a trace's product rows (`priced`, `products_of_trace`, `he_of_rows`), and each reason a record states none. It computes no slowdown |
@@ -113,8 +113,15 @@ through torch is counted; the harness's own work (loading, evaluating, encoding)
 trace of the step holds: each product by its shape and each elementwise multiplication at one MAC an element
 (`flops.py`), and a fused attention kernel as the ops the math kernel computes attention by, which are the ones a
 trace runs: the forward's two scalings and two products, and in the backward the products and scalings of the
-gradients the step asks for. A job's record is the same under either kernel, and its counted step is its trace's
-(`tests/test_run.py`). A fused optimizer kernel is one op, priced at a constant per parameter
+gradients the step asks for. A job's record is the same under either kernel, and its counted step is its trace's,
+in MACs and in gates (`tests/test_run.py`). Each row of a record's op log names the dtype its op computed in, its
+result's (`flops.dtype_of`): its first operand's for an op that returns nothing (an in-place list form, a fused
+optimizer step) and for `_scaled_mm`, whose result is cast out of the FP8 it computes in. The op's gates are priced
+in that dtype, never by its phase or its class (`gates.kind_of`), and the trace's circuit prices each node by the
+same rule. A dtype no Definition prices has no price and none is assumed for it: float64, an integer product, a list
+op over tensors of two dtypes. The grade refuses a record that holds such an op and the capture a step that does
+(`unpriced_dtype`), each naming the op and the dtype. A fused optimizer kernel is one op, priced at a constant per
+parameter
 (`opnames.FUSED_OPTIMIZER_MACS`, which the counter and the trace both read). Choosing a fused kernel never lowers a
 step's count, at any setting of the optimizer's options (`tests/test_flops.py`): AdamW counts 8 multiplications a
 parameter and Adam 7, where their unfused steps make 6 at most, and SGD and Adagrad count 4, their unfused steps'
@@ -154,7 +161,7 @@ start, and `--starts-root` points at it.
 
 ~~~text
 python -m training_slowdown.grade --config attacks/NAME.toml --starts starts.toml --records DIR --honest DIR \
-    [--also NAME=DIR ...] [--out OUT]
+    [--also NAME=DIR ...] [--out OUT] [--as-if-assumed]
 ~~~
 
 A config names its `start`, its `target.gain`, its `policy`, its `honest` config and its `seeds`; each DIR holds one
@@ -190,6 +197,15 @@ refused, or with one of a capture version the tree's `priced` doesn't read has n
 reason names the job that takes the trace again at the record's commit and `config.text` (`--retrace`, above, which
 takes it with the capture of the tree it runs in), or says the record has no config to re-trace from. A record's
 `provenance`, where it has one (no job writes it), is passed on unread, beside the record and in what S rests on.
+
+A record is counted in the dtypes its op log names. One whose log names none is counted by the assumed dtypes
+(`gates.ASSUMED`: products and forward or backward elementwise ops in bf16, optimizer and decomposition ops in
+float32), and the block says of each record which it was and the device it ran on. Records of both kinds give no p
+and no S, since C over H would compare a count in one pricing with a count in the other; the reason names the
+records and the two ways out. One is to count the configs whose records name no dtype again, with a job of this
+version. The other is `--as-if-assumed`, which counts every record by the assumed dtypes whatever its log names: its
+block says so in its first two lines and begins every other line with `as-if`, and it writes
+`OUT/slowdown.as-if.json` (`slowdown-as-if/v1`), never `slowdown.json`. An as-if figure is no config's slowdown.
 
 ## Limits of the count
 

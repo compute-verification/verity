@@ -242,7 +242,8 @@ def dtype_of(name: str, results: list, first: list) -> str:
     kernel's dtype) or casts its result (`CAST_RESULTS`). It is the name of their floating-point dtype (a
     decomposition's pivots and flags beside it are not its work), or of the dtype they have where none is floating
     (a comparison, an integer op). Tensors in more than one are named together ("bfloat16+float32"), which no price
-    reads."""
+    reads: a trace holds a list op as one node at one price (`capture.structure`), so a row split by dtype would
+    have nothing to equal there."""
     names = {str(t.dtype).removeprefix("torch."): t.is_floating_point()
              for t in (first if name in CAST_RESULTS or not results else results)}
     return "+".join(sorted(n for n, floating in names.items() if floating or not any(names.values())))
