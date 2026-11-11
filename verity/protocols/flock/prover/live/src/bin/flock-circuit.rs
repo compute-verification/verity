@@ -88,24 +88,19 @@ fn fast100() -> LigeritoProfile {
     if wide_mode() { wide_leaf::LIGERITO } else { LigeritoProfile::Fast100 }
 }
 
-/// The statement's domain tag in the session's version.
-fn domain_tag(c: &Composite) -> String {
-    wide_leaf::domain(c.tags().domain, wide_mode())
+/// The statement's domain tag in the session's version. A statement the version does not have (the typed statement under
+/// `--wide-leaf`) is refused: [`identity`] asks first, so that is when the statement is built, before any session.
+fn domain_tag(c: &Composite) -> &'static str {
+    wide_leaf::domain(c.tags().domain, wide_mode()).unwrap_or_else(|e| refuse(e))
 }
 
 fn domain(c: &Composite, rep: usize) -> Vec<u8> {
-    format!("{}{rep}", domain_tag(c)).into_bytes()
+    rep_domain(domain_tag(c), 1, "", rep)
 }
 
-/// A rep stream's transcript domain in a session of `tables` tables: [`domain`] for one; for several, the table's name and a
-/// `/` before the domain tag's final `rep` (`flock-circuit/fast100x2/circuit-00/rep0`).
+/// A rep stream's transcript domain in a session of `tables` tables (`rep_domain` under the statement's [`domain_tag`]).
 fn domain_of(c: &Composite, tables: usize, table: &str, rep: usize) -> Vec<u8> {
-    if tables <= 1 {
-        return domain(c, rep);
-    }
-    let tag = domain_tag(c);
-    let base = tag.strip_suffix("rep").expect("a statement's domain tag ends in `rep`");
-    format!("{base}{table}/rep{rep}").into_bytes()
+    rep_domain(domain_tag(c), tables, table, rep)
 }
 
 /// The Merkle hash of every Ligerito level: hm96-sha512/v1 leaves under SHA-512 nodes in a production build (feature `sha512`,
@@ -407,6 +402,7 @@ fn zk_identity(c: &Composite) -> Value {
 
 /// The backend identity the statement digest pins (so a NON_ZK and a ZK cell never share one).
 fn identity(c: &Composite) -> Value {
+    domain_tag(c);
     let hooks = if zk_mode() { zk_identity(c) } else { NoMask::new(ProverSeed::from_os()).identity() };
     let mut id = json!({"statement": c.statement(), "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": wide_leaf::profile(wide_mode()), "reps": 2,
            "commitments": "one root, both reps (R1)", "flavor": "rs", "leaf_scheme": c.leaf_scheme,

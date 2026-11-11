@@ -14,7 +14,8 @@ Code:
   one matrix may hold more than 2^32 nonzeros. The GPU prover's are 32-bit: `--gpu` refuses a circuit past them
   (`circuit::GPU_NNZ_MAX`).
 - `../flock-wide-b684b12.patch` and `src/wide_leaf.rs`: the wide level-0 leaf (`--wide-leaf`), a statement version of its own
-  with its own `profile` and domain tags. A table of 2^32 to 2^35 bits commits level 0 as `2^(m − 25)` lanes, 2^19 leaves at
+  with its own `profile` and domain tags. It has two statements, the circuit statement and the templated one; the typed
+  statement has no wide form, and `--wide-leaf` refuses it. A table of 2^32 to 2^35 bits commits level 0 as `2^(m − 25)` lanes, 2^19 leaves at
   every size, and the levels after it are `m = 31`'s; a smaller table keeps fast100's parameters. The patch adds the four
   Ligerito configs to upstream, Fast100's own derivation at that `initial_k`, selected by `log_batch_size`.
 

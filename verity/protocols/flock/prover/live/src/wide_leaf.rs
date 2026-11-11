@@ -5,16 +5,21 @@
 //! `log_batch_size`.
 //!
 //! A statement names one version: the wide one has its own `profile` in the identity and the Hello and its own domain
-//! tag, so no session of one version reads as the other's. Its three names are the constants below, one line each.
+//! tag, so no session of one version reads as the other's. The version has two statements, the circuit statement and the
+//! templated one, each with a domain tag the Lean verifier holds as a literal ([`DOMAINS`]): no rule derives a tag, and a
+//! statement without one, the typed statement, has no wide form and is refused.
 use flock_core::pcs::ligerito::{LigeritoProfile, embedded_initial_k_or_default, wide_initial_k};
 
 /// fast100's `profile`, in a statement's identity and a session's Hello.
 pub const FAST100_PROFILE: &str = "fast100";
 /// The wide version's `profile` there.
 pub const PROFILE: &str = "fast100-wide-leaf";
-/// The part of a statement's domain tag (`circuit::Tags::domain`) that names fast100's version, and the wide version's.
-const FAST100_DOMAIN: &str = "/fast100x2/";
-pub const DOMAIN: &str = "/fast100-wide-leafx2/";
+/// The wide version's statements: fast100's domain tag (`circuit::Tags::domain`) of each, and the wide version's own. A
+/// rep's index follows the tag; in a session of several tables the table's name and a `/` go before the tag's final `rep`.
+pub const DOMAINS: [(&str, &str); 2] = [
+    ("flock-circuit/fast100x2/rep", "flock-circuit/fast100-wide-leafx2/rep"),
+    ("flock-circuit-tmpl/fast100x2/rep", "flock-circuit-tmpl/fast100-wide-leafx2/rep"),
+];
 /// `PcsParams.profile` of the wide version's proofs: fast100's own, the wide config being the one at its `log_batch_size`.
 pub const LIGERITO: LigeritoProfile = LigeritoProfile::Fast100;
 
@@ -33,13 +38,17 @@ pub fn level0_queries(text: &str, wide: bool) -> String {
     if wide { format!("{text}{LEVEL0_QUERIES}") } else { text.to_string() }
 }
 
-/// A statement's domain tag in a version: `tag`, fast100's, as it is, or with the wide version's name in fast100's place.
-pub fn domain(tag: &str, wide: bool) -> String {
+/// A statement's domain tag in a version: `tag`, fast100's, as it is, or the wide version's tag of the same statement
+/// ([`DOMAINS`]). A statement the wide version does not have is an error that names the two it has.
+pub fn domain(tag: &'static str, wide: bool) -> Result<&'static str, String> {
     if !wide {
-        return tag.to_string();
+        return Ok(tag);
     }
-    assert_eq!(tag.matches(FAST100_DOMAIN).count(), 1, "the domain tag {tag} names fast100's version once");
-    tag.replacen(FAST100_DOMAIN, DOMAIN, 1)
+    DOMAINS.iter().find(|(own, _)| *own == tag).map(|(_, wide)| *wide).ok_or_else(|| {
+        format!("--wide-leaf: the wide level-0 leaf has no statement whose domain tag is fast100's `{tag}`. It has two, `{}` (the \
+                 circuit statement) and `{}` (the templated one): prove this statement without --wide-leaf",
+                DOMAINS[0].1, DOMAINS[1].1)
+    })
 }
 
 /// Level 0's `log_batch_size` for a table of `2^m` bits: the wide version's `m − 25` where it has one (32 ≤ m ≤ 35, under
@@ -56,7 +65,7 @@ mod tests {
     use flock_core::{merkle::HashKind, pcs::PcsParams};
 
     use super::*;
-    use crate::circuit::{TAGS, TMPL_TAGS, TYPED_TAGS};
+    use crate::circuit::{TAGS, TMPL_TAGS, TYPED_TAGS, rep_domain};
 
     fn params(m: usize, lig: LigeritoProfile, wide: bool) -> PcsParams {
         PcsParams { m, log_inv_rate: 1, log_batch_size: log_batch_size(m, lig, wide), profile: lig, num_lanes: None, merkle_hash: HashKind::Hm96Sha512 }
@@ -86,7 +95,7 @@ mod tests {
         }
         assert_eq!(profile(false), "fast100");
         for tags in [&TAGS, &TYPED_TAGS, &TMPL_TAGS] {
-            assert_eq!(domain(tags.domain, false), tags.domain);
+            assert_eq!(domain(tags.domain, false), Ok(tags.domain));
         }
     }
 
@@ -114,23 +123,31 @@ mod tests {
         assert_eq!(((1usize << 10) + flock_core::pcs::ligerito::zk::EXTRA_LANES) * 16, 16448);
     }
 
-    /// The wide version's names are its own: neither is fast100's, and its domain tags keep the form a rep's index follows.
+    /// The wide version's names are the Lean verifier's literals, byte for byte: the profile, the circuit statement's
+    /// rep domain with a rep's index and with a table's name before it (as a session builds them, `rep_domain`), the
+    /// templated statement's, and `--zk`'s level-0 text. `PcsParams.profile` stays fast100's index.
     #[test]
-    fn the_wide_versions_names_are_its_own() {
+    fn the_wide_versions_names_are_the_verifiers_literals() {
         assert_eq!((profile(true), profile(false)), ("fast100-wide-leaf", "fast100"));
-        assert_eq!(domain(TAGS.domain, true), "flock-circuit/fast100-wide-leafx2/rep");
-        assert_eq!(domain(TMPL_TAGS.domain, true), "flock-circuit-tmpl/fast100-wide-leafx2/rep");
+        let (flat, tmpl) = (domain(TAGS.domain, true).unwrap(), domain(TMPL_TAGS.domain, true).unwrap());
+        assert_eq!((flat, tmpl), ("flock-circuit/fast100-wide-leafx2/rep", "flock-circuit-tmpl/fast100-wide-leafx2/rep"));
+        assert_eq!(rep_domain(flat, 1, "", 1), b"flock-circuit/fast100-wide-leafx2/rep1");
+        assert_eq!(rep_domain(tmpl, 1, "", 0), b"flock-circuit-tmpl/fast100-wide-leafx2/rep0");
+        assert_eq!(rep_domain(flat, 2, "circuit-00", 1), b"flock-circuit/fast100-wide-leafx2/circuit-00/rep1");
+        assert_eq!(rep_domain(TAGS.domain, 2, "circuit-00", 0), b"flock-circuit/fast100x2/circuit-00/rep0");
+        assert_eq!(DOMAINS.map(|(own, _)| own), [TAGS.domain, TMPL_TAGS.domain]);
         assert_eq!(bincode::serialize(&LIGERITO).unwrap(), bincode::serialize(&1u32).unwrap());
         assert_eq!(level0_queries("q_0", false), "q_0");
         assert_eq!(level0_queries("q_0", true), "q_0; wide leaf: level 0 of 2^19 symbols at m = 32..35 (k_0 = m - 25, L = 2^18), where q_0 = 219");
-        let mut seen = std::collections::BTreeSet::new();
-        for tags in [&TAGS, &TYPED_TAGS, &TMPL_TAGS] {
-            let wide = domain(tags.domain, true);
-            assert!(wide != tags.domain && wide.ends_with("/rep") && !wide.contains(FAST100_DOMAIN), "{wide}");
-            assert_eq!(wide.replacen(DOMAIN, FAST100_DOMAIN, 1), tags.domain);
-            seen.insert(wide);
-            seen.insert(tags.domain.to_string());
-        }
-        assert_eq!(seen.len(), 6);
+    }
+
+    /// The typed statement has no wide form: the version refuses it, naming the two statements it has, and derives no tag.
+    #[test]
+    fn the_typed_statement_has_no_wide_form() {
+        let why = domain(TYPED_TAGS.domain, true).unwrap_err();
+        assert!(why.starts_with("--wide-leaf: the wide level-0 leaf has no statement whose domain tag is fast100's `flock-circuit-types/fast100x2/rep`"), "{why}");
+        assert!(why.contains("`flock-circuit/fast100-wide-leafx2/rep`") && why.contains("`flock-circuit-tmpl/fast100-wide-leafx2/rep`"), "{why}");
+        assert!(!why.contains("flock-circuit-types/fast100-wide-leaf"), "{why}");
+        assert_eq!(domain("flock-circuit/stacked/fast100/rep0", true).ok(), None);
     }
 }
