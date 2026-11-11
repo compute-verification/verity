@@ -62,12 +62,14 @@ never reads that package's `.lake` (`check.proved`), which an earlier or interru
 
 It audits with it, the same way, every package whose guarantees' records read PKG's build (`requirers`: PKG is in its
 `closure`, by path or by `proved_in`). Packages whose first audit takes the same flags share one check.py (`batches`), so
-a package that proves the guarantees of several of them is built, sampled and sealed once, and each of them is judged
-against that one build: one check.py for the whole run, except with `--update` alone, where PKG has its own and the
-requirers the next, on the record PKG's regenerated. Each package still has its own verdict and exit status, read from its
-own report and its provers' (`own_reports`), and its own `audit.json`, a requirer's under `requirer-<path>/`
-beside PKG's; the reports check.py writes for each package (`audit-*/`) are under the first package's directory. Of the
-facts documents, only PKG's own stays beside its reports (`check_argv`: `check.py --facts named`, which
+a package that proves the guarantees of several of them is built, sampled and sealed once, by the process that judges
+each of them against that seal: one check.py for the whole run, except with `--update` alone, where PKG has its own and
+the requirers the next, on the record PKG's regenerated. The packages of one check.py are judged on the locks it found,
+not on a record regenerated beside them: of another package's lock an audit reads no section a lock run rewrites
+(`check.JUDGED`) but that a package proving its guarantees lists none. Each package still has its own verdict and exit
+status, read from its own report and its provers' (`own_reports`), and its own `audit.json`, a requirer's under
+`requirer-<path>/` beside PKG's; the reports check.py writes for each package (`audit-*/`) are under the first package's
+directory. Of the facts documents, only PKG's own stays beside its reports (`check_argv`: `check.py --facts named`, which
 `trusted_size.py --run` reads); its provers' and the requirers' are not kept. A change to what another package's pinned
 guarantees read
 (`security/Properties`' when `security` changes) fails here, not at the Lean check of `next`. With `--update`, a requirer whose every
@@ -1197,8 +1199,8 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     not under `RECORDS`, ``name`` matches no single package, the memory refusal stops it or another run holds the tree past
     `TREE_WAIT_S`. A package whose records need no run (`reused`) is skipped, and with none left nothing runs and no slot is
     taken; ``rebuild`` and ``moved`` run them all. Each package whose records passed or were regenerated is kept (`passed`).
-    What each check.py's builds compiled goes into the node's artifact cache when it ends, whatever its exit (`put_built`: the
-    package's, and those of the provers it audits), and what a run that was killed left goes in when the next run takes
+    What each check.py's builds compiled goes into the node's artifact cache when it ends, whatever its exit (`put_built`: its
+    packages', and those of the provers it audits), and what a run that was killed left goes in when the next run takes
     the tree (`put_left`). In a run, the module versions it added go into ``out``
     as one bundle for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
@@ -1340,8 +1342,9 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
 def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out: Path, why: str, log=print,
                 files: list[str] | None = None, skip: dict[str, tuple[str, dict | None]] | None = None) -> int:
     """`--records` where the node's Lean slots grant no `build` slot (``why``): `check.py --dev-cache --build --no-replay
-    --no-runs` on this checkout's ``todo`` (PKG, then its requirers; ``skip`` those `reused` left out), each build restored
-    from the published cache, with the same reports, record keep, outcome, exit status and result kind as the slot path;
+    --no-runs` on this checkout's ``todo`` (PKG, then its requirers; ``skip`` those `reused` left out), one check.py for
+    the packages `batches` puts together, each build restored from the published cache, with the same reports, record
+    keep, outcome, exit status and result kind as the slot path;
     `REFUSED` (exit 2) in a tree `research run` shipped (`READY.json`), which every run of its commit shares and check.py
     would build in."""
     if (ROOT / "READY.json").is_file():
@@ -1655,7 +1658,8 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
 
 
 def reports(out: Path, pkg: str, p: str) -> Path:
-    """Where check.py's reports on ``p`` go: ``out`` for PKG, `requirer-<path>/` under it for a requirer."""
+    """Where ``p``'s `audit.json` goes, and the reports of a check.py whose first package it is: ``out`` for PKG,
+    `requirer-<path>/` under it for a requirer."""
     return out if p == pkg else out / f"requirer-{re.sub(r'[^A-Za-z0-9]+', '_', p)}"
 
 
