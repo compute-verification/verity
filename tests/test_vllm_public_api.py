@@ -71,10 +71,18 @@ PUBLIC = {
                                               "refusal counted in its place, which benchmarks/route_capture's gap reads",
     "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
                                           "own Build without a trace",
+    "verity_vllm.program.predict.block_counts": "I7: a circuit record's inference blocks counted as the Lean count counts "
+                                                "them (the session Definition, its Boolean gates by the gate table, a "
+                                                "block's fresh bits), which benchmarks/inference_only prices",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
                                                   "verifier's pins of it (VLLM-113)",
     "verity_vllm.pipeline.expert_tables": "I7: the per-expert cut's tables, their layout and record, the committer's "
                                           "registration of a TP rank's and the verifier's pin of it (tp-register-tables)",
+    "verity_vllm.commit.history_tables": "I7: the committer's history tables of DSA's long rows by table reads, one a "
+                                         "(request, layer), their switch, retention and roots (Histories), which "
+                                         "benchmarks/commitments times",
+    "verity_vllm.commit.history_tables_device": "I7: a history table on the GPU and its CPU twin (Table), which "
+                                                "benchmarks/commitments times",
     "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
                                                "values (VLLM-125)",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "

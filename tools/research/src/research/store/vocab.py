@@ -411,10 +411,12 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head; a record only, which no merge waits on",
        GRANT_ROLES),
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
-       "again unless its own change is the same (`StoreLabels`); a train member needs none (Q14)"),
+       "again unless its own change is the same, or, in the verified queue's loop, an older head's carried across the moves "
+       "`main` landed since (`StoreLabels`); a train member needs none (Q14)"),
     _k(REVIEWED, GROUP_VERIFICATION, ENUM, "a reviewer's verdict on pr:<n>@<head> (`research queue review`): land, or hold with the "
        "reason as its ref; drive's review landing counts one only by a reviewer who isn't the PR's owner, and at a new head "
-       "whose own change is the same",
+       "whose own change is the same (in the verified queue's loop, or an older head's carried across the moves `main` landed "
+       "since)",
        REVIEW_VERDICTS),
     _k(LABEL_AUTH, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>, beside a `ready = true` or `reviewed = land` by the same author: "
        "{for, token, delegation?}, a Cursor OIDC token whose nonce is the label's (`research.labelauth`); drive.toml's "
