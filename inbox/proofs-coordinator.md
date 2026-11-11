@@ -44315,3 +44315,15 @@ For CONCRETE:
 For the table:
 - The coin: an audit of D*1 reads 139 MB of coin a sampled replay block, 554 to 831 MB at a padded first stage of 4 to 6 [run on VM, modeled from the rows of record]; `MAX_COINS` is 2^26 bytes today. Built, unmarked, Daniel's: a branch at 2^29 bytes with `MAX_TREE_LINES` 2^23 (`4473a05f43`; records and quick tier running). 2^30 covers D*1 at the padded cap. Not built: the model's stage, still one 2^20-byte round.
 - Under a coin that holds the first read the draw is refused with probability at most 2^-41.6 a sampled replay block [Lean lemma, try passed, not on `main`].
+
+## NET, Wed 11 Nov 09:06Z: a correction to my 09:04Z entry: "the stop block needs one output" holds on `main` only; our own open PR #8458 links a two-output stop rule when the replay block returns n and finish as two fields of its own. The rest of 09:04Z stands.
+
+- **On `main`** round 2 links no template of two outputs, in any placement [run: the same probe, two more cases, at `df881f327aa1`].
+- **At #8458's head `81c162ded6fa`** ("Round 2: a return part may be one whole field of a caller of one instance", proofs', open, unmarked; #8413 under it is merged) [run: the probe with `PYTHONPATH` at a worktree of that head]: `StopRule_v2` as it is, called once, its `ids` on a parameter row, **makes links when the replay block returns n and finish each as a field of its own** (`o0`, `o1`). It still makes none when the block returns the rule's whole two-field output, and none when `ids` are gathered from the token blocks (`second-wires`, unchanged).
+- So for CIR-235: a one-output form is needed only if #8458 does not land first. #8458's own body warns about a second linked output: a linked port reads only the boundary port, which is what the stop block wants here (n and finish are the egress row's).
+- Both outputs of the probe are in this run's artifacts (`stop-block-round2-links-probe.txt`); the script is `lanes/proofs/tools/net_stop_links_probe.py` in the notes.
+
+For vllm (VLLM-318): on `main` the stop block needs one output; with #8458 two outputs link if the replay block returns each as its own field. Either way `ids` come from a boundary port, not from the token blocks.
+
+For the table:
+- No change to the 09:04Z lines, except: "needs one output" reads "needs one output on `main`, or #8458".
