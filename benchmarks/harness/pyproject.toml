@@ -109,7 +109,7 @@ inputs = [
     "benchmarks/census/hardware.json",
     "verity/protocols/inference_only/rho/data/hardware.toml",
     "benchmarks/overhead/run.py",
-]
+          "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/engine/__init__.py", "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
