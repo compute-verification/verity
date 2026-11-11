@@ -9,6 +9,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = [
     "tests/test_pous_harness.py",
     "tests/test_pous_p2_bandwidth.py",
+    "tests/test_pous_p2_encode_sq.py",
     "tests/test_pous_p2v1.py",
     "tests/test_pous_served_case.py",
     "tests/test_pous_served_wipe.py",
