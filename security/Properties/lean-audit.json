@@ -71,6 +71,7 @@
   "Properties.Accounting.Remote.Subprotocol",
   "Properties.Composition",
   "Properties.Nci.Protocol",
+  "Properties.Nci.Record",
   "Properties.Verity.Soundness",
   "Properties.Verity.Game",
   "Properties.Verity.Sha512",
@@ -102,6 +103,26 @@
    "owner": "@lean",
    "digest": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
    "why": "The protocol accepts: the event the statement conditions on."
+  },
+  "NciCheck.Properties.Record.Accepts": {
+   "owner": "@lean",
+   "why": "The check accepts: the event the statement conditions on."
+  },
+  "NciCheck.Properties.Record.RowLeaf": {
+   "owner": "@lean",
+   "why": "The gates a clause of the record's circuit speaks of: each leaf of a reader row."
+  },
+  "NciCheck.Properties.Record.Served": {
+   "owner": "@lean",
+   "why": "The circuits the rate rule speaks of: each one the record the check read lays out."
+  },
+  "NciCheck.Properties.Record.UnitAt": {
+   "owner": "@lean",
+   "why": "The units a clause of the record's circuit speaks of: each activation the Program's root gives a template."
+  },
+  "NciCheck.Properties.Record.WriterLeaf": {
+   "owner": "@lean",
+   "why": "The gates a clause of the record's circuit speaks of: each leaf of the output row a reader row is wired to."
   },
   "Properties.Spot.ClassesCover": {
    "owner": "@proofs",
@@ -476,6 +497,26 @@
    "owner": "@network-accounting",
    "digest": "f6fe84b4bff51d558f3006c5d20538d2a713b6945e6058074230053dc34a8018",
    "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "NciCheck.Properties.Record.Counts": {
+   "owner": "@training",
+   "issue": "TRN-103",
+   "due": "2026-11-30"
+  },
+  "NciCheck.Properties.Record.LaidOut": {
+   "owner": "@training",
+   "issue": "TRN-103",
+   "due": "2026-11-30"
+  },
+  "NciCheck.Properties.Record.Owns": {
+   "owner": "@training",
+   "issue": "TRN-103",
+   "due": "2026-11-30"
+  },
+  "NciCheck.Properties.Record.Rates": {
+   "owner": "@training",
+   "issue": "TRN-103",
    "due": "2026-11-30"
   },
   "NetTiming.DeviceIntact": {
@@ -936,6 +977,7 @@
   "NciCheck.Desc",
   "NciCheck.Protocol",
   "NciCheck.DefinitionDigest",
+  "NciCheck.RecordText",
   "Flock",
   "Properties.NetworkCertifier.Device",
   "CertifierDevice",
@@ -1944,6 +1986,20 @@
    ],
    "except": [],
    "why": "the description-sized check's properties are stated over the code they are about (NciCheck.Desc, and NciCheck.Baseline, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Definitions.Nci.Assumptions), never over a proof",
+   "sealed": true
+  },
+  "Properties.Nci.Record": {
+   "imports": [
+    "NciCheck.DefinitionDigest",
+    "NciCheck.RecordText",
+    "Flock.TemplateQuery",
+    "Spot.Wires",
+    "Spot.Bits",
+    "Properties.Nci",
+    "Properties.Nci.Record"
+   ],
+   "except": [],
+   "why": "the circuit record's properties are stated over the code they are about (the record's text as NciCheck.RecordText reads it, the closure digest, Flock's template query, and SPOT's wiring check and bit counts) and the NCI properties they conclude, never over a proof",
    "sealed": true
   },
   "Properties.NetworkCertifier.Device": {
@@ -3194,6 +3250,9 @@
    },
    "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29",
    "unfolded_hash": "789029c92ae51811219cc41abd1420df24aafe57b2a34c546264be9a91c23f07"
+  },
+  "NciCheck.SecurityProofs.ServedComplies": {
+   "owner": "@lean"
   },
   "Pous.Component.SecurityProofs.runAccepts": {
    "owner": "@memory-accounting",
@@ -11221,6 +11280,10 @@
       "outcome": "accept"
      }
     ]
+   },
+   "NciCheck.SecurityProofs.ServedComplies": {
+    "function": ["NciCheck.Properties.Record.Form.read", "NciCheck.Properties.Record.Form.rate"],
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -11283,7 +11346,8 @@
    "Verity.soundness_of_upFront": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfUpFront: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component, over the coins drawn up front, or as its target (Verity.Vocab.SubprotocolBound: Verity.Vocab.ComponentBound, Verity.Vocab.UpFrontBound or Verity.Vocab.Target); each bound is a hypothesis until its subprotocol's piece proves it",
    "Properties.Served.SampleMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.sampleMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
-   "Accounting.ReadUnit.ExpertReadAccepted": "unstated: what `flock-read-tmpl 256 3072` checks before it exits 0 (render `readTmpl 256 3072`, parse the text back, run `ReadNet.check` on the parsed template); `TableReadBinding`'s honest lemma in the Security lock takes it as an open premise, and no theorem here proves it yet"
+   "Accounting.ReadUnit.ExpertReadAccepted": "unstated: what `flock-read-tmpl 256 3072` checks before it exits 0 (render `readTmpl 256 3072`, parse the text back, run `ReadNet.check` on the parsed template); `TableReadBinding`'s honest lemma in the Security lock takes it as an open premise, and no theorem here proves it yet",
+   "NciCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
