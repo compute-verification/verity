@@ -150,3 +150,9 @@ answer one-stage's Lean verifier computes is left out.
 
 Next: read the three runs, then the full report, the note and the comment on NET-304.
 
+[2026-11-11T21:54Z] 2e3b1d3138b6
+ONSITEMAIN, NET-344 job 2 done (Wed 11 Nov, 1:55 PM Pacific Time). Note: lanes/network-accounting/20261111T2152Z-job-net344-second.md. Head 5f96675755e06cd810c7ea927a152f2e538b4bc2 on cursor/net-onsite-memory-reads-84f9, pushed, three commits on 0a1d5255995e, no pull request, nothing marked, nothing posted on Linear.
+Changed: network_row returns the server and source beside its row and the identity test is gone; the rows are made once (on_node) so a row that is no answer about the node gives no verdict and no figure; the report states sources and an accept whose source isn't real reads missing.
+Controls: 5 of 12, 14 of 27, 11 of 42 new cases fail with each check removed; 439 in the record's file, 771 over the five files; Monday's record byte-identical.
+Not done: a fixture's reject still reads as stated; Read B covers this VM only (one kept report, it states servers); Read A: nothing in a composite names the run or node.
+
