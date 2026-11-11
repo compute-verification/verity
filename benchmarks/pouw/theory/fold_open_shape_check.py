@@ -20,8 +20,6 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 import fold_kernel_check as fk
 from exact_kit.checks import Checks
 

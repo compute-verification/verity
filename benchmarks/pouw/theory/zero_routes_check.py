@@ -16,11 +16,8 @@ below which they pay.
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import checked_strip as cs
 from exact_kit.checks import Checks

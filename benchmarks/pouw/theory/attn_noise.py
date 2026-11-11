@@ -31,13 +31,10 @@ import hashlib
 import json
 import math
 import sys
-from pathlib import Path
 
 import numpy as np
 
 from verity.protocols.pouw.verifier.credit import DELTA
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from checked_strip import W_RE, CellGrid, cross_ranks
 from exact_kit.checks import Checks

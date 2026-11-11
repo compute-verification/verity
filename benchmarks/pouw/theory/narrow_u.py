@@ -31,11 +31,8 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
 
 import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from checked_strip import (TS_SHAPES, CellGrid, co32c_words, cross_ranks, instance, n_digits, o_routes, s32,
                            ts_best)
