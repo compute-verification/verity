@@ -29,6 +29,7 @@ that open one gate two ways, the event `Conflict` reads at a pair of runs. `pr_o
 namespace Claims.SamplingGeneric
 
 open Claims Finset
+open Claims.Sampling (AuditStatement ownLog)
 
 namespace Compiled
 
