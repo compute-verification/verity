@@ -63972,3 +63972,34 @@ Tags as before. Mailbox read at 20:20Z: nothing after its 18:59Z section [run].
 - Checkpoint: `20261111T2020Z-report-path300` (synced `824f74da6f`) [run].
 
 **Next.** I wait on the cost-model worker's 21:30Z entry for job 3 and read this file and my mailbox until then.
+
+## FLOCKPKG, Wed 11 Nov 20:21Z: ready to mark #9057 at `ae1470567661dc89e34217d5a95d7cf683f9030c` (shell jobs start the Lean verifier under its allocator setting; holds #9005); #9042's records run ended `pass` for all six packages with nothing regenerated (`r20261111-185607-2e4b`), and its quick tier is out, three of its six runs still in line for a slot
+
+**ready to mark #9057 at `ae1470567661dc89e34217d5a95d7cf683f9030c`** (https://github.com/compute-verification/verity/pull/9057, branch `cursor/proofs-verifyenv-3b6e`, opened 20:21Z, not marked; `Refs PRF-548`).
+
+- **What it is** [run]: #9005's head `accab1a9bc51`, two commits (19 files, +160, −28), and `main` `0bfe402a6cf2` merged. It holds #9005 and lands after it; #9005 is not on `main` at 20:20Z.
+  - One sourced file, `verity/protocols/spot/verifier/one_stage/verifier_env.sh`, prints `env MIMALLOC_PURGE_DELAY=-1`, or the job's own value. Eleven scripts put those words before the verifier's path, in fourteen commands: the seven named, and `hidden_zk/job.sh`, `verifier_cost/flock_served.sh`, `flock_s8_block/run.sh` and Flock's agreement check, which a search of every tracked shell script found.
+  - `tests/test_shell_verifier_env.py` (root suite) fails on a shell command that starts the verifier without the words, and on a script that uses the words without sourcing the file (there the words expand to nothing and the verifier runs under the default with no error). It also holds the file's output to Python's `verifier_env`.
+  - Not covered, and said in the body: Flock's nine pod jobs (eleven commands), which I can run none of; they are the test's `ALLOWED` list, which only shrinks.
+  - The six retired-name sites of #9005 are all gone, and it adds none (the lint's counts: 37 to 35, 30 to 29, 3 to 0).
+- **Decided, not asked:**
+  - The three prose sites say "the Lean verifier's `verify`", not `verity verify proof`: that command does not exist yet.
+  - The three test stand-ins take the executable's name from `proofs.EXE` rather than staying as strings, so none of the six remains.
+  - The setting goes on the verifier's command only, not by `export`, which would also change the ZK server's Lean process and `lake`.
+- **Quick tier** [run], `suites.py --changed 0bfe402a6cf2 --quick`, 63 suites: 63 passed, 0 failed. `r20261111-191932-7a18` 13, `r20261111-191944-5ae0` 13, `r20261111-191956-6f3a` 13, `r20261111-192008-831c` 13, `r20261111-192020-6c8f` 10, `r20261111-191932-15c2` verity-vllm (13,977 passed).
+- **No Lean, no lock:** no records run applies.
+- **It merges** [run: `git merge-tree`] with `main` `61f13c2275fb` and with each of the 123 heads marked ready. #8789 edits six of the same scripts: on the two heads merged the six parse and the new test passes (17 passed). On the head merged with `main` the test's rules hold over all 422 tracked shell scripts.
+- **Not run** [so labelled in the body]: none of the eleven scripts end to end. The composed shell forms were run against a stand-in verifier: same process id through `exec env`, `-1` by default, the job's own value when it sets one.
+- **What a figure means after it:** a verifier time or peak memory from one of the eleven scripts is under the setting unless the job sets its own value. The body quotes no number.
+
+**#9042** (`00963f010905e7c1f321d18efcb65b4f5df32056`, not marked yet):
+
+- **Records** [run]: `r20261111-185607-2e4b` at the head, outcome `pass`; `pass` for `verity/circuits/lean`, `verity/protocols/flock/verifier`, `verity/protocols/certifier/verifier/lean`, `security`, `security/Properties` and `security/Proofs`; nothing regenerated. **No lock record moves and no file under `security/` changes.**
+- **Quick tier** [run]: 95 suites in six runs, launched 20:03Z. `f357`, `2171` and `604f` (verity-vllm) are running on cpu-3; `cf2b` (cpu-9), `aee1` and `a1b5` (cpu-7) wait in line. Every CPU node has all its slots held and a line behind them at 20:14Z, so I leave them where they are. ETA 21:30Z [guess], later if the lines do not move.
+- **Beside it** [run]: `lean-agreement` at the head, `r20261111-200755-6da4`, my own addition; I do not hold the mark for it.
+- **Then** the body with the tier's verdicts, and I mark it.
+- **A correction to my 19:51Z entry:** `main`'s Lean since `cc6ee7446278` is fourteen files under `security/Proofs`, not fifteen.
+
+For the table:
+- #9057 (shell jobs take the verifier's allocator setting; holds #9005), ready to mark at `ae1470567661`: tier 63 of 63 passed; merges with `main` `61f13c2275fb` and the 123 ready heads.
+- #9042 `00963f010905`: records `pass`, six of six packages, nothing regenerated (`r20261111-185607-2e4b`); tier of 95 suites out since 20:03Z, three of six runs in line.
