@@ -5,9 +5,8 @@ during development. One installable package, one CLI (`research`), stdlib
 only. It runs commands and records what happened; it imports nothing from
 Verity's packages (enforced by `tests/test_cli.py::test_no_packages_import`).
 
-The user-facing procedure (when to record a run, how to find one, how to hand
-off) will be a repo-level skill, once it exists. This file is for people changing
-the tool.
+This file is for people changing the tool; its users read the `team` and
+`writing-runs` skills.
 
 ## Layout and provenance
 
@@ -21,12 +20,14 @@ src/research/
 ├── disk.py         --disk-gb admission (--queue): held on the machine while the disk would pass 80%, released at 75%
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
 ├── auto.py         --on auto: a CPU node's research pool or node 2's queue, and when the run should start there
-├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit
+├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit; it makes no namespace but those
+│                   --job-namespaces lists (of user, mnt, net), where the workload holds capabilities
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── store/          the evidence store (`research data`; README.md there is the contract): tool, tools_registry, derivation, attempt,
 │                   cli_prov (provenance) + canon, ids, model, local, index, remote, remote_s3, kinds, cli (storage)
 ├── telemetry/      the recorded-attempt harness: job.json, status.json, events.jsonl, resources.jsonl, failure.json
-└── pods/           RunPod lifecycle (runpod.py), leases (lease.py), budgets.toml and its guard (budgets.py, guard.py), pod-side sh/
+└── pods/           RunPod lifecycle (runpod.py), leases (lease.py), budgets.toml and its guard (budgets.py, guard.py), the control
+                    pod's door (door.py), pod-side sh/
 tests/              pure-Python; the machine side of --on is exercised locally (launch_request is a plain function)
 tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_v0.2/: a finished run dir with a `store` section (state.json -> status.json at test time)
 ~~~
@@ -93,14 +94,13 @@ research pods register|unregister|registry ...                    # the pod regi
 research pods ssh TARGET [--print] [-- CMD...]                    # TARGET = machines.toml name | pod id | pod name (pods/connect.py)
 research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree's git-visible files -> DIR (default /workspace/src)
 research tele SUBCOMMAND ...             # the harness's own surface
-research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
 research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a train
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research merge --mirror [SHA]                                           # main or SHA to node 1's bare repo
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
-research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
+research queue vqueue|status|ready|review|eject|open|edit|link  # the verified queue onto `main` (vqueue_loop.py, queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research queue stats [--json] [--short]  # the queue's numbers (queue_table.py); --log FILE: queue_stats.py
 research lean-times ...  # Lean tasks' p95
@@ -150,25 +150,26 @@ step needs. It may also name what runs after a landing (`Tool.after_land`, an ar
 in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
 regression's manifest rebuilds, which label the landing's check attempt.
 
-`research queue` is the merge queue: `next` is the landed branch (drive.toml's `land_into`: `checked`) plus every admitted PR,
-one `--no-ff` merge commit each, and drive fast-forwards `checked` to the reviewed prefix and `main` only to a commit of
-`checked` whose after-landing run passed every step on the merge gate (`research.drive`); its alarms ring the owner of a slow step, a
-stuck ready PR or a red, and the lander handles only what drive refuses. A PR is admitted when it's open (drafts too),
-names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and is marked ready at its head by that
-owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
-`pr:{n}@{head}`); `ready` and `open` only warn of a body with neither a `Goal <id>` line naming a live goal, which `open --issue KEY` writes
-from KEY's goal label, nor `Issue: none: REASON`. No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
-merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and one post per
-root cause names each PR it leaves out. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
-
-The mark and sync refuse a lock merge dropping an entry `next` needs (`lock_drops`).
+`research queue` is the merge queue. Its loop, the verified queue (`research queue vqueue`, ci's: `vqueue_loop.py`, whose
+policy is `vqueue.py`), merges the PRs ready to land onto `main` as candidates (`queue/<sha12>`, one `Queue: #N` merge each),
+checks each (`check.py --record`, in shards), and fast-forwards `main` only to a candidate that passed every step on the
+merge gate; a failure its base doesn't share ejects its lone suspect or bisects several, and the candidate is built again
+without them. A PR is ready to land when it's open against `main` (drafts too), names its owner (a `Lane {name}` line, else
+its Cursor agent id), has no hold label, is marked ready at its head by that owner (`research queue ready PR --mark --by
+LANE`, or `--on auto` to run the quick tier first, or a `ready` label on `pr:{n}@{head}`), and has a reviewer's land verdict
+there (`research queue review`) or changes nothing drive.toml's `lowrisk_excludes` names. `ready` and `open` only warn of a
+body with neither a `Goal <id>` line naming a live goal, which `open --issue KEY` writes from KEY's goal label, nor `Issue:
+none: REASON`. The mark's preflight refuses a lock merge dropping an entry the merged tree's statements need
+(`lock_drops`). `research queue status` says what each PR waits for.
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
 workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory, `clone` = a clone of it), so a relative
 `result.json` lands there and never in the checkout; `--env K=V` is set for the
 workload only and recorded as the attempt's `params.env` (values of
-secret-named keys redacted). Four facts
+secret-named keys redacted). Every job also starts with `ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16`
+(`result.env_defaults`, in `params.env` too) unless its `--env`, its command or the runner's environment names it:
+oneDNN's AMX kernel returns a preempted bf16 product wrong now and then. Four facts
 stay separate in `inspect`: exited, result well-formed, validation reported
 passed, preserved. `--require-result` makes exit 0 without a valid result
 exit 65.
