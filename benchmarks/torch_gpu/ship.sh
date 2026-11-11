@@ -11,8 +11,9 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 # ship_clock.c's clock inside cicc (LD_PRELOAD), all inherited by its compilers, and compiles its sources from a copy at a
 # path of one length (ship_stage) with SHIP_NVCC, nvcc with what cicc reads freed of each file's place in the tree; it
 # refuses where the kernel won't turn randomization off. A rebuild at the same commit, with the same toolkit at the same
-# path and the same host compiler, then reproduces every cubin, and so does a rebuild after a commit that only moves a
-# source or a file it includes
+# path and the same host compiler, then reproduces every cubin; after a commit that only moves a source or a file it
+# includes, cicc is handed what it was handed before, and so does that rebuild (ship_nvcc.sh's header says what that
+# leaves out)
 if [ -z "${SHIP_FRAME:-}" ] || [ ! -e "$SHIP_FRAME/ship_clock.so" ] \
     || [ $(( 0x$(cat /proc/self/personality) & 0x40000 )) -eq 0 ]; then
   setarch "$(uname -m)" -R true 2> /dev/null || {

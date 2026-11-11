@@ -13,7 +13,7 @@
 #   MANIFEST.sha256                        every file above
 # CUDA names a toolkit (nvcc >= 12.8); else the node's /usr/local/cuda-13.0 or /usr/local/cuda. It builds in ship.sh's
 # frame from its loaded sources, with ship.sh's SHIP_NVCC as the Makefile's NVCC, so a rebuild at the same commit and
-# toolkit path reproduces the cubins, and so does one after a source or a header only moved.
+# toolkit path reproduces the cubins, and so does one after a source or a header only moved (ship_nvcc.sh's header).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../ship.sh"

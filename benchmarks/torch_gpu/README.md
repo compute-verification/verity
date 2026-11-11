@@ -27,8 +27,11 @@ off, from a copy of their sources and with TMPDIR at paths of one length, and wi
 with the same toolkit at the same path and the same host compiler (a `research run --cwd source` on a node with
 `/usr/local/cuda-13.0`), reproduces every cubin byte for byte, on a busy machine too. They compile with `ship_nvcc.sh`,
 nvcc with the three things its device compiler reads that follow a file's place in the tree fixed (the file names in the
-preprocessed text's line markers, the source's path, and its directory and environment), so a commit that only moves a
-source or a header it includes leaves every cubin as it was.
+preprocessed text's line markers, the source's path, and its directory and environment): wherever a source or a header
+it includes sits, the device compiler is handed the same text and the same arguments, in the same directory, so a commit
+that only moves one leaves each cubin they compile with it as it was. Two things that leaves out: a file name the
+program's own text holds (`__FILE__` expands to the name as its `#include` spells it, and the program is compiled as
+written), and the row tables' cubins in `s8_linear`'s ship, which the adapter's own build compiles.
 
 - `commit_slots/`: the serve-time commit call, a step's proof-block outputs as hm96-sha512 rows under hiding leaves in
   frame-v3-sha512 trees, one subtree per sequence slot. `gpu.sh` holds the GPU's roots to the CPU reference's.

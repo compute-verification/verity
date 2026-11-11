@@ -9,10 +9,12 @@
 #     internal-linkage symbol: here the base name under /k, a directory nothing opens;
 #   - the directory and the environment cicc runs in: here TMPDIR, with PATH, LD_LIBRARY_PATH, LD_PRELOAD and TMPDIR
 #     alone.
-# So a source that moved, or whose header did, compiles to the cubin it compiled to before. The steps are nvcc's own,
-# taken from its dry run and run in its order; everything but those three is as nvcc would have run it. Refuses a dry
-# run it can't follow: one with no cicc step, or whose cicc step names a variable other than CICC_PATH. Needs CUDA (the
-# toolkit) and TMPDIR, which ship.sh's frame sets.
+# So after a source moved, or a header it includes did, cicc is handed the text, the arguments and the directory it was
+# handed before, and gives the cubin it gave before. What the program's own text says is left as written: __FILE__
+# expands to a file's name as its #include spells it, so where the compiled text uses it, a move that changes that
+# spelling changes the program. The steps are nvcc's own, taken from its dry run and run in its order; everything but
+# those three is as nvcc would have run it. Refuses a dry run it can't follow: one with no cicc step, or whose cicc step
+# names a variable other than CICC_PATH. Needs CUDA (the toolkit) and TMPDIR, which ship.sh's frame sets.
 set -euo pipefail
 : "${CUDA:?the toolkit, which ship_cuda sets}" "${TMPDIR:?which the frame of ship.sh sets}"
 dry=$("$CUDA/bin/nvcc" "$@" -dryrun 2>&1) || { echo "$dry" >&2; exit 1; }
