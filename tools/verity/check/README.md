@@ -14,14 +14,16 @@ commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner,
 
 The runners (`suites.py`, `circuit-check`, `check.py`'s steps) report real verdicts and nothing else: a test, target or step
 that failed is failed, whoever is fixing it. What gates and what may stay red is the landing policy, `policy.toml`
-(`research.policy`), which the verified queue reads at the commit it judges. An allowance there (`[[allow]]`: an id, its
+(`research.policy`), whose allowances the verified queue reads at a candidate's base, so no candidate's own allowance covers
+its own failure. An allowance there (`[[allow]]`: an id, its
 owner, when it expires in UTC, and why) covers one suite, one test or one circuit-check failure: the verified queue takes
 such a failure as not red (no suspect, no ejection, no hold on `main`) until it expires. The quick tier applies `main`'s
 allowances the same way.
 
 A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
 merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each still runs in a candidate's check,
-and its red holds nothing: the verified queue rings its owners. Under the loop's `--gate graph2`, `ratchet-gate` runs with
+and its red holds nothing; under the loop's `--gate check`, a red that the run beside the candidate's base didn't have rings
+its owners. Under the loop's `--gate graph2`, `ratchet-gate` runs with
 `lean-agreement` in a run of their own beside the executor's check of the candidate (`research.vqueue_slim`), which waits
 for that run's preflights and `lean-agreement`, not its `ratchet-gate`. A red `ratchet-gate` (drive.toml's `warn_steps`
 too) names the merges its log fails, whose lanes fix it forward in their next PR; a candidate's `ratchet-gate` judges only
