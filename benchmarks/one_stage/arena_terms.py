@@ -14,7 +14,7 @@ import tempfile
 from dataclasses import replace
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "ml" / "flock" / "tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "protocols" / "flock" / "prover" / "tests"))
 from arena_layout import HB, Shape
 
 MIB = 1 << 20
