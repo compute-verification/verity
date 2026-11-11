@@ -66,13 +66,13 @@ untraced = [
 # site and wire) and PoUB's block size (its codec.py); its census imports the Boolean versions' lookup
 # (verity/definitions' boolean.py), which loads no registry module for a Program already Boolean.
 inputs_only = true
-inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", 
           "verity/claims/__init__.py",
           "verity/hardware/record.py",
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/pouw/verifier", "verity/protocols/spot",
-          "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover", "verity/protocols/certifier/prover",
+          "verity/protocols/pouw/prover", "verity/protocols/certifier/prover",
           "verity/protocols/certifier",
-          "verity/difftest", "verity/ml/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+          "verity/difftest", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/definitions/kernels", "verity/commitments/randomness", "verity/protocols/flock/prover/python", "verity/commitments/windows",
           "verity/hardware",
           "verity/configuration/config/verity_config",
