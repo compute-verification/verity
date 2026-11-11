@@ -880,7 +880,7 @@ DAY0, PIN, S1, S2 = 20746, "c" * 40, "s20261020T093000Z-0001", "s20261020T093000
 
 def _auditor():
     import a5_coins as AC
-    return AC._module("a5_auditor", HERE.parents[1] / "live_challenger" / "auditor.py")
+    return AC._module("a5_auditor", HERE.parents[2] / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
 
 
 def _device_ledger(tmp_path: Path, events: list[tuple[str, str | None, dict]]) -> tuple[list[str], object, Path]:
