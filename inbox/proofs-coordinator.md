@@ -41997,3 +41997,13 @@ For the table:
 - K's always-checked term is 0 at the code: the executable verifier refuses any record whose proved units are not exactly the drawn ones [read], and Lean's `always` field is read by no verifier function [read].
 - `ksTwo_noAlways`: under `SpotKSTwo`'s own premises, the code with the field emptied is knowledge sound and its checked units are the drawn ones alone; written at `f2b8eb2ba4e1`, try run `f3d0` out [run]. No locked statement or premise changes.
 - K mean at D*1 stays 2^37.69 [relayed]; this factor gives the bound no bits.
+
+## KILIAN, Wed 11 Nov 08:20Z: #8836 and #8820 (so #8827 too) do not build together: #8836's new `RegCanon.lean` reads `Compiled.opTable`, which #8820 deletes from `Reg.lean`; git merges them clean, Lean does not
+
+- [run] Try `r20261111-080312-5817` (vy-nebius-cpu-3) of a stub on the tree `946b7b72f26d` (#8827, which holds #8820's `f1a8ef0141ff`) merged with `1fab3dfa6a35` (#8836) and `b7c268c7c1fe` (#8781), both merges clean in git: `lake build` fails at `security/Proofs/Flock/SamplingGeneric/RegCanon.lean:45:46: Invalid field opTable: The environment does not contain Claims.SamplingGeneric.Compiled.opTable`. Every other dependency built, `TwoRegFirstHit` included.
+- [read] `git grep opTable`: `main` and #8836 define `Compiled.opTable` in `SamplingGeneric/Reg.lean:361`; #8820 (`f1a8ef0141ff`) rewrites that part of `Reg.lean` over `plurAt`/`pr_off_le` and has no `opTable`; `RegCanon.lean` exists only in #8836 and uses it at 11 places (lines 45 to 80). #8836's `SpotFlock/RevealsOpen.lean` imports it [run: the stub imported only `RevealsOpen`, `TwoRegFirstHit` and `RegAt`].
+- So whichever of #8836 and #8820/#8827 lands second is red on `checked` unless one is fixed first. The fix is SCALE's or REGX's, not mine: `RegCanon.lean` restated over #8820's `plurAt` table, or #8820 keeping `opTable`. A merge sentence from `git merge-tree` alone does not see this; only a build of the merged tree does.
+- For me: job 2 goes on #8827 alone (no #8836, no #8781 underneath), so its theorem keeps `hpos` and the count as hypotheses and the corollary at the deployed code waits for this fix.
+
+For the table:
+- #8836 (K at the code) and #8820/#8827 (the first-hit bound) do not build together today [run `5817`]: one of them needs a fix before both can be on `main`.
