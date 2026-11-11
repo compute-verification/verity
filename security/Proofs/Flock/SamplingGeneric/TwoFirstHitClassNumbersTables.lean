@@ -3,17 +3,20 @@ module
 public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassNumbers
 
 /-!
-# The by-class first-hit bound's sum at `2^39` classes, at sessions of one table and of several
+# The by-class first-hit bound's sum from `2^39` classes, at sessions of one table and of several
 
 `hashBound` (`TwoFirstHitClassNumbers`) is the part over `2^256` of `CompiledTwo.εclsAt`, and
 `CompiledTwo.eventTwoX_le_cls_of_hashBound` takes any bound of it at rational numbers. This file holds instances at
-`2^39` in place of `K_s` and of `K_m`, past that file's largest (`2^37`). Each is at `N_s ≤ 2^30` sessions with every
-call charged as `513` (`513·2^80` in place of a run's `2^80` calls and of its own opening checks'), and each is the
-smallest power of two the sum is within (`hashBound_513_k39_gt`: the sum is above half of it):
+`2^39`, `2^41` and `2^45` in place of `K_s` and of `K_m`, past that file's largest (`2^37`). Each is at `N_s ≤ 2^30`
+sessions with every call charged as `513` (`513·2^80` in place of a run's `2^80` calls and of its own opening
+checks'), and each is the smallest power of two the sum is within (`hashBound_513_k39_gt`,
+`hashBound_table1_513_k41_k45_gt`: the sum is above half of it):
 
 * `hashBound_table1_513_k39`, at sessions of one table (`e_s ≤ 2592237061 = 1 + 210·12343986`): at most `2^-94`;
 * `hashBound_tables2_513_k39`, `hashBound_tables16_513_k39` and `hashBound_tables200_513_k39`, at sessions of `2`, `16`
-  and `200` tables: at most `2^-93`, `2^-90` and `2^-87`.
+  and `200` tables: at most `2^-93`, `2^-90` and `2^-87`;
+* `hashBound_table1_513_k41` and `hashBound_table1_513_k45`, at sessions of one table and `2^41` and `2^45`: at most
+  `2^-92` and `2^-88`.
 
 **The sessions' expected reruns at `n` tables.** `Compiled.es` is the largest of `E^rep`'s `1 + m′·k` at the proof
 blocks' shapes, with `m′ = 210` (`waits`) and `k = ⌈4N₀/e⌉` at the level-0 symbols `N₀` of the block's session, summed
@@ -75,7 +78,7 @@ theorem reruns_tables_eq :
       1 + waits * 2468797139 = 518447399191 := by
   norm_num [waits]
 
-/-! ## The sum at `2^39` classes -/
+/-! ## The sum at `2^39` classes, and at `2^41` and `2^45` at sessions of one table -/
 
 /-- **At most `2^-94` with every call charged as `513`, at `2^39`** in place of `K_s` and of `K_m`, at sessions of one
 table: `e = 1 + 210·12343986` and `2^30` sessions. -/
@@ -106,5 +109,23 @@ theorem hashBound_513_k39_gt :
       1 / 2 ^ 91 < hashBound (513 * 2 ^ 80) 41475792121 (2 ^ 30) (2 ^ 39) (2 ^ 39) (513 * 2 ^ 80) ∧
       1 / 2 ^ 88 < hashBound (513 * 2 ^ 80) 518447399191 (2 ^ 30) (2 ^ 39) (2 ^ 39) (513 * 2 ^ 80) := by
   refine ⟨?_, ?_, ?_, ?_⟩ <;> norm_num [hashBound, firstHitCalls]
+
+/-- **At most `2^-92` at `2^41`** in place of `K_s` and of `K_m`, at sessions of one table: `hashBound_table1_513_k39`'s
+sum with four times the classes. -/
+theorem hashBound_table1_513_k41 :
+    hashBound (513 * 2 ^ 80) 2592237061 (2 ^ 30) (2 ^ 41) (2 ^ 41) (513 * 2 ^ 80) ≤ 1 / 2 ^ 92 := by
+  norm_num [hashBound, firstHitCalls]
+
+/-- **At most `2^-88` at `2^45`** in place of `K_s` and of `K_m`, at sessions of one table. -/
+theorem hashBound_table1_513_k45 :
+    hashBound (513 * 2 ^ 80) 2592237061 (2 ^ 30) (2 ^ 45) (2 ^ 45) (513 * 2 ^ 80) ≤ 1 / 2 ^ 88 := by
+  norm_num [hashBound, firstHitCalls]
+
+/-- **Those two are the smallest powers of two as well**: the sum is above `2^-93` at `2^41` and above `2^-89` at
+`2^45`. -/
+theorem hashBound_table1_513_k41_k45_gt :
+    1 / 2 ^ 93 < hashBound (513 * 2 ^ 80) 2592237061 (2 ^ 30) (2 ^ 41) (2 ^ 41) (513 * 2 ^ 80) ∧
+      1 / 2 ^ 89 < hashBound (513 * 2 ^ 80) 2592237061 (2 ^ 30) (2 ^ 45) (2 ^ 45) (513 * 2 ^ 80) := by
+  refine ⟨?_, ?_⟩ <;> norm_num [hashBound, firstHitCalls]
 
 end Claims.Flock.Numbers
