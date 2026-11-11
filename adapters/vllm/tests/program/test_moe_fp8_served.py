@@ -5,6 +5,7 @@ can't tell the SWAP variants apart on a one-word block, so the tile rule is what
 reaches without its binding, or a binding it never reaches, fails here by id."""
 from __future__ import annotations
 
+import functools
 import importlib.util
 from pathlib import Path
 
@@ -33,11 +34,16 @@ def _served(module) -> set[str]:
 def _compiled(M: int) -> tuple[str, str, str, tuple]:
     """The ids `predict.dsa`'s MoE block binds at an M-token launch (its statics as it writes them), and the tile."""
     cfg = fused_moe_config(E, I, "NVIDIA H200", "fp8_w8a8", (G, G), M)
-    BM, BN, KB, warps = cfg["BLOCK_SIZE_M"], cfg["BLOCK_SIZE_N"], min(cfg["BLOCK_SIZE_K"], G), cfg["num_warps"]
+    return _bound(cfg["BLOCK_SIZE_M"], cfg["BLOCK_SIZE_N"], min(cfg["BLOCK_SIZE_K"], G), cfg["num_warps"], moe.router_kernel(E, M, TOPK))
+
+
+@functools.cache
+def _bound(BM: int, BN: int, KB: int, warps: int, kernel: str) -> tuple[str, str, str, tuple]:
+    """`_compiled` at a launch's tile and router kernel, which are all of the launch it reads: bound once for the launches that share them."""
     swap = BM < 64 and BN >= 64
     assert TG.moe_fp8_tuned_tile_refusal(H200, BM, BN, KB, warps, swap) is None
     st = {"E": E, "G": G, "KB": KB, "SWAP": swap, "DOT": TG.moe_expert_fp8_launch_dot(H200, BM, BN, warps, swap)}
-    router = kind("moe_router_sigmoid_bias", E=E, TOPK=TOPK, RSF=SCALE, KERNEL=moe.router_kernel(E, M, TOPK))
+    router = kind("moe_router_sigmoid_bias", E=E, TOPK=TOPK, RSF=SCALE, KERNEL=kernel)
     return (kind("moe_expert_gemm_dot", K=H, N=2 * I, **st).id, kind("moe_expert_gemm_w_dot", K=I, N=H, **st).id, router.id,
             (BM, BN, swap, st["DOT"].id))
 
