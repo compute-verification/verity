@@ -92,14 +92,15 @@ shared = [
 # the repository's structure the public tests and the Lean check read
 structure = ["ruff.toml", "Security/lean-audit.json", "Security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
 # the benchmarks the demonstration runs: of `one_stage`, the files the remote demo's launch runs, but the served window's
-# launcher (`served_verdicts.sh`), which runs the private served window and `benchmarks/prove_path`
+# launcher (`served_verdicts.sh`), which runs the private served window and `benchmarks/prove_path`, and the four that read
+# other private parts (`benchmarks/prove_path`, `benchmarks/harness`, Pearl's kernels, the remote verifier's executable and
+# the inference-only policy): `served_pearlplus.sh`, `served_composite.sh`, `inference_only.py` and `served_compare.py`
 benchmarks = [
     "benchmarks/{flock_s8_block,recursion_e2e}",
-    "benchmarks/one_stage/{served_pearlplus,served_composite}.sh",
-    "benchmarks/one_stage/{served_verdicts,composite,served_cases,inference_only,served_integrity,served_shares}.py",
+    "benchmarks/one_stage/{served_verdicts,composite,served_cases,served_integrity,served_shares}.py",
     # the block record the served verdicts write, which `served_verdicts.py` loads from `examples/h200/interfaces`
     "examples/h200/interfaces/verity_e2e_demo/block_record.py",
-    "benchmarks/one_stage/{served_overhead,served_compare}.py",
+    "benchmarks/one_stage/served_overhead.py",
     "benchmarks/one_stage/{pyproject.toml,README.md}",
     # the CPU reference of the int8 attention's gate, which vLLM's int8 attention tests hold the served kernels to
     "benchmarks/pouw/edited_gemm/{fattn_ref.py,pyproject.toml}",

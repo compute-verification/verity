@@ -50,6 +50,8 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
 
   Both composites name the policy among their subprotocols (`Core.Remote.components`, `Core.Onsite.components`), and
   compose its v0, which publishes the division and its blocks' profiles, as a stated exception (`composite.EXCEPTIONS`).
+  The policy's Lean package and the Python its check is held to are named by the module `POLICY`, loaded when this
+  case is asked for; on a tree that leaves the policy out (the public release) the case is refused saying so.
 * **PoUW's period case** (`period_case`, `PERIOD`: `verity/pouw/period/v1`, both composites' work subprotocol):
   `pouw_piece.py period`'s case and answer as it wrote them (``--period``; with ``--serve-dir``, `served_pouw.sh`'s
   ``D/private/pouw/period`` when it holds a case), taken once every window of the period names R as its Commit record
@@ -96,7 +98,7 @@ import argparse
 import fcntl
 import functools
 import hashlib
-import importlib.util
+import importlib
 import json
 import os
 import subprocess
@@ -105,6 +107,7 @@ import tempfile
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 from verity.core.protocols.pouw import credit as Cr
@@ -125,8 +128,10 @@ SAMPLED_CMD = ("sampled",)
 ONE_STAGE = "one-stage"
 V2 = PF.V2
 INFERENCE_ONLY = "verity/inference-only/v0"
-INFERENCE_ONLY_LEAN = (ROOT / "verity/core/protocols/network/nci/lean", "inference-only")
-NCI_REFERENCE = INFERENCE_ONLY_LEAN[0] / "scripts" / "nci_reference.py"
+#: the module beside this file that says where the tree holds the policy's check: its Lean package and executable
+#: (``LEAN``) and the Python that check is held to (``reference``). The public release leaves the policy out, and that
+#: module with it, so `policy` loads it by name
+POLICY = "inference_only_lean"
 PERIOD = PC.ID
 PEARL_PLUS = "verity/pouw/pearl-plus/v1"
 #: what Pearl+'s commitment's digest hashes ahead of a zero byte and the commitment (`PouwCheck.PearlPlus.Protocol`)
@@ -279,12 +284,29 @@ def pearlplus_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
     return case, json.dumps(answer, sort_keys=True), answer["verdict"]
 
 
+def policy() -> ModuleType:
+    """`POLICY`, loaded by name when the inference-only case is asked for, so nothing needs it at import time. Where the
+    tree leaves it out, the case is refused by name (`Refused`), never skipped; a module missing from inside it is a
+    broken environment and raises as itself."""
+    try:
+        return importlib.import_module(POLICY)
+    except ModuleNotFoundError as e:
+        if e.name != POLICY:
+            raise
+        raise Refused(f"the inference-only policy's check is not on this tree: {POLICY}.py, which names its Lean package "
+                      "and the Python that check is held to, is left out with the policy") from e
+
+
+def __getattr__(name: str) -> Any:
+    """``INFERENCE_ONLY_LEAN``, the policy's Lean package and executable for a caller that builds it: `policy`'s."""
+    if name == "INFERENCE_ONLY_LEAN":
+        return policy().LEAN
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 def _reference():
     """`nci_reference`, the Python the policy's Lean check is held to, for the Program's root nodes."""
-    spec = importlib.util.spec_from_file_location("nci_reference", NCI_REFERENCE)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return policy().reference()
 
 
 def _ratio(x: Fraction | int | str) -> list[int]:
@@ -533,7 +555,7 @@ def produce(a: argparse.Namespace) -> int:
 
     one(V1, lambda: v1, functools.cache(lambda: a.v1_exe or build(*V1_LEAN)))
     one(SAMPLED, lambda: sampled_case(audit), functools.cache(lambda: a.sampled_exe or build(*SAMPLED_LEAN)), SAMPLED_CMD)
-    inference_only_exe = functools.cache(lambda: a.inference_only_exe or build(*INFERENCE_ONLY_LEAN))
+    inference_only_exe = functools.cache(lambda: a.inference_only_exe or build(*policy().LEAN))
 
     def inference_only() -> dict[str, Any]:
         if a.log is not None:
@@ -592,7 +614,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--v1-exe", help=f"{V1_LEAN[1]} (default: built here)")
     ap.add_argument("--sampled-exe", help=f"{SAMPLED_LEAN[1]}, sampled proofs' as its {SAMPLED_CMD[0]} command "
                     "(default: built here)")
-    ap.add_argument("--inference-only-exe", help=f"{INFERENCE_ONLY_LEAN[1]} (default: built here)")
+    ap.add_argument("--inference-only-exe", help="the policy's inference-only (default: built here)")
     ap.add_argument("--v2", action="store_true", help="one-stage v2's case too (v2_case), in sampled-proofs-v2/")
     ap.add_argument("--v2-exe", help=f"{PF.V2_EXE}, with --v2 (default: built here)")
     a = ap.parse_args(argv)

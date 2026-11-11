@@ -1361,12 +1361,10 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
 def device_target(async_scheduling: bool = False) -> dict[str, Any]:
     """This device's target profile (`verity_vllm.TargetProfile.from_device`, declaring ``async_scheduling`` only under
     it) and execution, bi-eager where vLLM runs batch-invariant (``VLLM_BATCH_INVARIANT``), with no int8 scope: what
-    serve-openai's ``serve.json`` records of them for a model it reads none of (serve_seal's ``target_of``)."""
-    import vllm.envs as envs
-    from verity_vllm import TargetProfile
+    serve-openai's ``serve.json`` records of them for a model it reads none of (`verity_vllm.target_of` given no model)."""
+    from verity_vllm import target_of
 
-    target = TargetProfile.from_device().with_overrides(**({"async_scheduling": True} if async_scheduling else {}))
-    return {"target": target.to_json(), "execution": "bi-eager" if envs.VLLM_BATCH_INVARIANT else "eager"}
+    return target_of(async_scheduling=async_scheduling)
 
 
 def serve_phi(a: argparse.Namespace) -> dict[str, Any]:
