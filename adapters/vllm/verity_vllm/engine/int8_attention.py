@@ -188,8 +188,8 @@ def paged_windows(key_cache: torch.Tensor, value_cache: torch.Tensor, block_tabl
 
 
 def packed_windows(keys: torch.Tensor, values: torch.Tensor, starts: list[int], lens: list[int]) -> tuple[torch.Tensor, torch.Tensor]:
-    """k, v [B, s_max, G, d] of request r's window at rows starts[r] .. starts[r] + lens[r] - 1 of keys and values [rows, G, d] (a
-    credited read's step buffers, `engine.int8_window`), zero past each window."""
+    """k, v [B, s_max, G, d] of request r's window at rows starts[r] .. starts[r] + lens[r] - 1 of keys and values [rows, G, d],
+    zero past each window."""
     s_max, dev = max(lens, default=0), keys.device
     pos = torch.arange(s_max, device=dev)
     live = pos[None, :] < torch.tensor(lens, dtype=torch.int64).to(dev, non_blocking=True)[:, None]
