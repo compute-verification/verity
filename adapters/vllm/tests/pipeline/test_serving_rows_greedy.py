@@ -1,5 +1,5 @@
 """A greedy select row cut into its stages (`pipeline.serving_rows`' ``stage`` layout, `stage_rows`): a ``TokenSelect_v1{V}`` row
-holds the units `greedy_stages.plan` lists (at GLM-5.3's V = 154,880, 10 of 3 Definitions; at V = 200, 4 of 3), and a window of
+holds the units `greedy_stages.plan` lists (at GLM-5.3's V = 154,880 and at V = 200, 20 of 3 Definitions), and a window of
 a V = 200 row's every stage template:
 
 * reads each unit's logits lanes off the row (the combine's, the last chunk's) and the combine's pairs off the twin, whose token
@@ -103,25 +103,27 @@ def places(ms, tmpls, rows: int = 1, v: int = V) -> dict[int, tuple[int, tuple]]
 
 def test_a_greedy_row_holds_its_stages():
     """The units `greedy_stages.cut` cuts the row into, each a ``stage`` template of 16-bit ports, and at GLM-5.3's vocabulary
-    10 of 3; the combine reads the last chunk's 8 lanes as one row and each other chunk's best and index as rows of their own."""
+    20 of 3; the combine reads the last chunk's 10 lanes as one row and each other chunk's best and index as rows of their
+    own, and its one output row is the token's two words."""
     cut = [(descriptor_id(d), n) for d, n in G.cut(bind(b1.TokenSelect, V=V))]
-    assert SRW.unit_templates(ROW) == ((ROW, 1), *cut) and len(cut) == 3 and sum(n for _t, n in cut) == len(G.plan(V)) == 4
+    assert SRW.unit_templates(ROW) == ((ROW, 1), *cut) and len(cut) == 3 and sum(n for _t, n in cut) == len(G.plan(V)) == 20
     assert {(SRW.template(t).layout, SRW.template(t).word == t, SRW.template(t).packed, CR.reads(SRW.template(t)))
             for t in TMPLS} == {("stage", True, None, "slots")}
     served = SRW.unit_templates(descriptor_id(bind(b1.TokenSelect, V=SERVED_V)))[1:]
-    assert len(served) == 3 and sum(n for _t, n in served) == 10
+    assert len(served) == 3 and sum(n for _t, n in served) == 20
     combine = descriptor_id(G.plan(V)[-1].defn)
-    pairs = [(f"in{1 + 2 * c + j}", V2, 16, [f"{'bi'[j]}{c}"]) for c in range(3) for j in (0, 1)]
-    assert CR.unit_rows(SRW.template(combine)) == ([("in0", V2, 128, ["logits"]), *pairs], [(V2, (0,)), (V2, (1,))])
+    pairs = [(f"in{1 + 2 * c + j}", V2, 16, [f"{'bi'[j]}{c}"]) for c in range(19) for j in (0, 1)]
+    assert CR.unit_rows(SRW.template(combine)) == ([("in0", V2, 160, ["logits"]), *pairs], [(V2, (0,))])
+    assert [w for _q, w in SRW.members(TMPLS, [Served().rows] * 3, None, PER_CHUNK)[-1].outs] == [2]
 
 
 def test_every_served_unit_s_proof_block_composes():
     """At GLM-5.3's vocabulary every unit of the cut is a proof block Flock's composer takes (`interface.check_proof_block`):
-    a chunk's logits are a row past 111 bytes, and so are the combine's, the last chunk's 7,424 lanes, beside its chunks'
-    2-byte pairs, which alone it would refuse; each unit's rows fit 2^25 bits."""
+    a chunk's logits are a row past 111 bytes, and so are the combine's, the last chunk's 7,744 lanes, beside its chunks'
+    2-byte pairs, which alone it would refuse; a chunk's rows fit 2^24 bits and the combine's 2^25."""
     got = {descriptor_id(d): IF.check_proof_block(d) for d, _n in G.cut(bind(b1.TokenSelect, V=SERVED_V))}
-    assert got == {"GreedyChunk_v1{N=16384,FIRST=true}": 25, "GreedyChunk_v1{N=16384,FIRST=false}": 25,
-                   "GreedyCombine_v1{V=154880,N=16384}": 25}
+    assert got == {"GreedyChunk_v1{N=7744,FIRST=true}": 24, "GreedyChunk_v1{N=7744,FIRST=false}": 24,
+                   "GreedyCombine_v2{V=154880,N=7744}": 25}
 
 
 def test_verify_zk_takes_every_served_unit():
@@ -134,7 +136,7 @@ def test_verify_zk_takes_every_served_unit():
 def test_each_combine_parameter_is_wired_to_the_chunk_that_wrote_it():
     s = Served(n=2)
     ms = members(s)
-    assert sum(m.n for m in ms) == 2 * 4
+    assert sum(m.n for m in ms) == 2 * 20
     WI.validate(ms)
     at = places(ms, TMPLS, rows=2)
     unit = {key: u for u, key in at.items()}
@@ -166,7 +168,7 @@ def test_the_units_read_the_twin_s_words_whose_token_is_the_served_row():
             p, key = at[m.base + i]
             assert g["rows"]["in0"][i].tolist() == s.ops[p][plan[key].lanes[0]:plan[key].lanes[1]].tolist()
             if key[0] == "combine":
-                assert [int(g["outs"][o][i][0]) for o in ("o0", "o1")] == [int(s.tok[p]) & 0xFFFF, int(s.tok[p]) >> 16]
+                assert g["outs"]["o0"][i].tolist() == [int(s.tok[p]) & 0xFFFF, int(s.tok[p]) >> 16]
     t = TMPLS[0]
     g = next(g for m, (g, _e) in zip(ms, got) if m.template == t)
     with pytest.raises(AssertionError, match="outputs are not the IR reference's"):     # an output its unit does not compute
@@ -202,18 +204,18 @@ def _flat(N: int) -> tuple[int, int, int]:
 def test_a_chunk_lowers_linearly_in_its_width():
     """Each lane's ANDs read the running (best, index) as forms of a few bits at every width (each select keeps it as the
     branch under its AND), so lanes 130 .. 249 each add the same ANDs and nonzeros and no operand widens: a served chunk of
-    16,384 lanes holds about 19M nonzeros in its AND rows, under 1/200 of the GPU prover's 2^32 a net."""
+    7,744 lanes holds about 9M nonzeros in its AND rows, under 1/400 of the GPU prover's 2^32 a net."""
     (a1, z1, w1), (a2, z2, w2), (a3, z3, w3) = _flat(130), _flat(190), _flat(250)
     assert w1 == w2 == w3
     assert a3 - a2 == a2 - a1 > 0 and z3 - z2 == z2 - z1 > 0
-    assert z3 + (G.CHUNK - 250) * (z3 - z2) // 60 < 2**32 // 200
+    assert z3 + (G.width(SERVED_V) - 250) * (z3 - z2) // 60 < 2**32 // 400
 
 
 @pytest.mark.slow
-def test_a_row_at_the_served_statics_reads_and_wires_its_10_units():
-    """One row of GLM-5.3's vocabulary: its 10 units wired and read, each Definition computing its committed outputs, and the
-    combine the served token's two words.  It catches what V = 200 can't reach: chunks of 16,384 lanes, the combine's last chunk
-    of 7,424, and a token whose high word is not 0; its seconds are the evaluator's on the row and its units."""
+def test_a_row_at_the_served_statics_reads_and_wires_its_20_units():
+    """One row of GLM-5.3's vocabulary: its 20 units wired and read, each Definition computing its committed outputs, and the
+    combine the served token's two words.  It catches what V = 200 can't reach: chunks of 7,744 lanes, and a token whose high
+    word is not 0; its seconds are the evaluator's on the row and its units."""
     spec = descriptor_id(bind(b1.TokenSelect, V=SERVED_V))
     s = Served(spec, n=1, seed=16)
     s.ops[0][150000] = 0x7F00
@@ -221,9 +223,9 @@ def test_a_row_at_the_served_statics_reads_and_wires_its_10_units():
     tmpls = [t for t, _n in SRW.unit_templates(spec)[1:]]
     ms = members(s, tmpls, dict.fromkeys(tmpls, 16))
     WI.validate(ms)
-    assert sum(m.n for m in ms) == 10
+    assert sum(m.n for m in ms) == 20
     got = read(s, ms, tmpls)
     for m, (g, _e) in zip(ms, got):
         stager(m.template).reference_check(g["rows"], g["outs"])
     (m, (g, _e)), = [(m, x) for m, x in zip(ms, got) if m.template == descriptor_id(G.plan(SERVED_V)[-1].defn)]
-    assert [int(g["outs"][o][0][0]) for o in ("o0", "o1")] == [150000 & 0xFFFF, 2]
+    assert g["outs"]["o0"][0].tolist() == [150000 & 0xFFFF, 2]
