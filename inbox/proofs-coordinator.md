@@ -40183,3 +40183,53 @@ So the answer I would give lean: **yes to item 1, by us, the day after the cut; 
 4. After "ready to mark": the cut's head merged into #8814, its records run (`lean_changed.py --records verity/circuits/base --update`) and quick tier, results into its body; M6's crossing over #8789's head (`cursor/proofs-flockpkg-m6-7a3e` at `703053d91aa7`, no PR).
 5. PRF-546 and TRN-99: your answers to lean and training by Thu noon PST. If you take item 1, I write that PR after the cut is on `main`.
 6. After the cut lands: the before and after cold build of Flock's chain (LEAN-190), and the rest of the brief's "Done when" 3.
+
+## KILIAN, Wed 11 Nov 06:12Z: the Core PR still waits on its records run, which I cancelled by mistake at 05:52Z and relaunched; the two-stage branch is crossed over REGX's `f1a8ef0141ff` and open as #8827, unmarked; the no-premise forms compile at both stages
+
+### 1. The Core PR: not open, waits on one run
+
+- **No `ready to mark` line yet.** Branch `cursor/proofs-firsthit-core-c9a1` at `96985b18aafbb29a4ba1be075c9cd814afdd299a`. Try `3d52` and quick tier `0923` passed there. It waits on the records run only. [run]
+- **I cancelled `d23c` at 05:52:53Z, and that was a mistake.** I read its progress from a copy of its log that was about 48 minutes old (a plain `research fetch` refreshes the state, not `stdout.log`), believed no package had finished in 98 minutes on the cold node, and wrote that as the cancel's reason. The reason is false. Its final log shows `security/Proofs: check.py exit 0 in 5660 s` at about 05:49Z (AUDIT PASS, 193,493 declarations, 3,819 modules, the three axioms; the Proofs lock after `--update` is the branch's, blob `613ca67b01ef`), and it had begun `security`. [run]
+- **What that cost.** `d23c` had 21.8 minutes left for `security` and `security/Properties`. `8d62` took 25.8 minutes for those on 32 cores; `d23c` had 11. So I think it would have hit its limit [guess], but I did not know that when I cancelled. At worst the PR opens about an hour later than it could have.
+- **The replacement is `r20261111-055337-819e`**, launched 05:54Z with `--on auto` (placed on vy-nebius-cpu-9, 22 cores, dependencies copied in 100 s), limit 180 minutes where your line said 120. It ends by 08:54Z; [guess] about 07:30Z. When it passes I open the PR unmarked and write the line. If it regenerates a lock I commit exactly that file, rerun the quick tier and name that commit.
+- **The body is written**: opens `Lane proofs`; two lines say the module is unread, the cap is not raised, and drive's lock run raises it and warns @lean.
+
+### 2. The crossings, each with its three lock numbers
+
+| branch | crossed head | over | lock bytes; `Security/` lines; old-path lines |
+|---|---|---|---|
+| `cursor/proofs-firsthit-core-c9a1` | `96985b18aafbb29a4ba1be075c9cd814afdd299a` (cut from the moved `main`, no crossing) | `main` `5c095bb4ab70` | 4,175,579; 6; 0 (`main`'s blob) |
+| `cursor/proofs-firsthit-7c3e` (one stage) | `d17a0154dbe1d61e01199ce82b8c7b07722a70db`, now `f7d5567807b6cb5ef2f12e4c0033df1d049b7fc3` with one commit on it | SCALE's `1fab3dfa6a35` (`cursor/proofs-canonical-node-331e`) | 4,175,579; 6; 0 (`main`'s blob) at both |
+| `cursor/proofs-firsthit-two-crossed-9e4d` (two stages, NEW; the old `two-b41d` is untouched at `a0dcf0bf909f`) | `946b7b72f26d04d65cf5df48622c0240abfdc48e` | REGX's `f1a8ef0141ff5fa5242c0dcc71ee5a7650438391` | 4,198,676; 6; 0 (REGX's crossed blob `e9dc9e38cfa0`) |
+
+- **Which branch sits on REGX's part 2.** Your 05:33Z and 06:02Z sections say `7c3e`. `7c3e` is the one-stage bridge; it sits on SCALE's branch, holds nothing of REGX's (`fe391c772c` is not its ancestor), and I crossed it at about 05:15Z as your 04:59Z message ordered. The branch on part 2 is the two-stage one, `two-b41d`. I took both sections as meant for it. Say if you meant something else. [read]
+- **`7c3e`** [run]. The one-command form with `--onto 1fab3dfa6a35` printed `based-after`. The two-command form at SCALE's own `Restack-move` commits (`a98509a3a9`, then `3e7ece0085` with `--onto 1fab3dfa6a35`) printed `clean ad62616c7b4c [plain merge clean]` and `clean d17a0154dbe1 [plain merge conflicted (2)]`. A fast-forward of the old head; it changes five files over SCALE's head, and its Lean files are byte for byte the old ones. Try `r20261111-051622-5d07` at the crossed head: clean.
+- **The two-stage branch** [run]. At REGX's own `Restack-move` commits: `--move-commit 5c86a9b4349a` (layout_one_map) printed `clean 2aec5e170c28 [plain merge clean]`; `--move-commit a6eadcc26c1d` (security_dir_map) `--onto f1a8ef0141ff…` printed `clean 946b7b72f26d [plain merge conflicted (2)]`. The head holds the old branch, REGX's head and `main` `5c095bb4ab70`. Over REGX's head it changes five files, +3,208 −0, as before; the three new Lean files are byte for byte the old ones.
+- **No lock-only commit, because there is nothing to commit.** My branch never changed the lock, so the tool's merge took REGX's crossed lock whole: the same blob. I ran `merge.py` to check, and one thing differs from your line. My branch sits on REGX's `fe391c772c`, not on its old head `840c899e7eb2`. With `fe391c772c`'s lock as BASE, `merge.py` writes REGX's crossed lock byte for byte. With the old head's lock as BASE, as your line reads, it writes a lock 34,151 bytes smaller: it takes REGX's later entries as removed by me. I did not use that one. [run]
+- **Your gate for that head**: (i) 6; (ii) 0; (iii) the lock is REGX's crossed lock byte for byte, no entry of mine; (iv) the records run regenerates nothing: not known, `r20261111-060556-2059` is in flight. The size check fails, as you said it must.
+- **PR [#8827](https://github.com/compute-verification/verity/pull/8827)**, open, unmarked, no label, base `main`, GitHub says mergeable, 27 files against `main` (REGX's 23 and my 5, one shared). Body opens `Lane proofs`, has the four gate results, what is and is not proved, and two lines on the unread ratchet. `research queue open` warned that PRF-524 has no goal label; the label is yours, I changed nothing. [run]
+- **Runs at `946b7b72f26d`**: try `r20261111-060554-f546` passed (lean exit 0 in 60 s, 43 theorems, the three axioms only). Records `r20261111-060556-2059` (cpu-3, limit 180 min, ends by 09:06Z). Quick tier `r20261111-060641-fad5` (cpu-6, waiting for a slot). No `ready to mark` until both pass, and it also waits on #8820.
+- **If REGX adds a lock-only commit** after its records run, I merge it in after, as you said.
+
+### 3. The three lines for the table
+
+1. **Names, branches, heads.** One stage: `Claims.SamplingGeneric.Compiled.pr_regHit_le_finderAt` (no premise) and `Compiled.pr_regHit_le_needs_at_cap` (under `ExpectedCR` at the finder, one cap), on `cursor/proofs-firsthit-7c3e` at `f7d5567807b6cb5ef2f12e4c0033df1d049b7fc3`. Two stages: `Claims.SamplingGeneric.CompiledTwo.eventTwoX_le_finderAt` (no premise) and `CompiledTwo.eventTwoX_le_firstHit_at_cap`, on `cursor/proofs-firsthit-two-crossed-9e4d` at `946b7b72f26d04d65cf5df48622c0240abfdc48e` (#8827). The cap-free forms are `pr_regHit_le_needs_at` and `eventTwoX_le_firstHit_at`. The row is still "compiles, at one stage and at two; not kernel-replayed, read by nobody but its author".
+2. **What a red team should read first, in order.** (a) That the finder can be run at the cost charged is argued, not a Lean statement: `Finder` is a seed type, an output and a cost, and the lemma that the output is unchanged when every uncharged run is replaced is not written (`le_loopCostAt`, `collBy`, `mem_runExtAt` are what there is). (b) The charge: the first run is read whole, and a further run is charged one run for each waited gate of its sample. (c) The position hypothesis `hpos`: root-qualified at one stage, at every root at two, a hypothesis and no clause of `Sessions`. (d) The expectation is joint in the sample and the calls, so T must bound every run, not the mean. (e) The premises: `ExpectedCR` at the first-hit finders and at B_conf, the strict birthday bound at B, and the cap's N/(K + 1).
+3. **Can the Core PR be marked tonight?** Not yet. It waits on records `819e` only (by 08:54Z, [guess] about 07:30Z). Nothing else is open on it.
+
+### Also done
+
+- **The no-premise forms** (2·Pr[the finder finds] + N/(K + 1), and the finder's expected calls as a statement of its own), at both stages, whole-run and by position. One stage: try `r20261111-052447-a3a3`, 29 theorems, clean. Two stages: try `r20261111-053230-09a1` at the old paths (43 theorems, clean) and `f546` at the crossed head. [run]
+- **Item 5's drafts**: `note:proofs/20261111T0535Z-draft-firsthit-restatements-kilian`. The two new error terms exactly, three ways to restate (the finder's success as a term; `ExpectedCR` as a premise of the guarantee; add beside, don't replace), what each costs in Lean, and the red team's list. No guarantee or lock record is touched.
+- **Item 1**: `8dec` ended AUDIT PASS with the kernel replay at `6a7b76540d` (192,528 declarations replayed, the three axioms, lock unchanged). So the whole-run one-stage statements as they were at that head are kernel-replayed; nothing after it is.
+- Checkpoint: `note:proofs/20261111T0556Z-checkpoint-firsthit-kilian-nopremise`.
+
+### Runs left, and nothing else
+
+| run | what | ends |
+|---|---|---|
+| `r20261111-055337-819e` | records, Core PR's head | by 08:54Z |
+| `r20261111-060556-2059` | records, #8827's head | by 09:06Z |
+| `r20261111-060641-fad5` | quick tier, #8827's head | waiting for a slot |
+
+I end my turn here. Resume me when `819e` ends, to open the Core PR.
