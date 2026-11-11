@@ -1298,20 +1298,6 @@ def test_a_step_is_hung_only_once_its_outputs_have_been_quiet_for_idle_s_and_ove
                                                             CHECK.STEP_BUDGET_S)
 
 
-def test_a_halting_step_s_failure_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
-    """`halting` (a step ci.toml marks `halts`) exits only once `slow` is running (the FIFO): under --keep-going its failure
-    still stops `slow`."""
-    monkeypatch.setattr(CHECK, "HALTS", frozenset({"halting"}))
-    gate = _gate(tmp_path, monkeypatch)
-    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
-    halting = _py("import sys\nopen(sys.argv[1]).read(1)\nsys.exit(1)", gate)
-    _fake_run(monkeypatch, [[("slow", slow, tmp_path)], [("halting", halting, tmp_path)]])
-    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
-    by = {s["step"]: s for s in done}
-    assert not passed and by["halting"]["status"] == "failed"
-    assert by["slow"]["status"] == "stopped" and by["slow"]["detail"] == "stopped: halting failed"
-
-
 def test_a_rust_crate_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
     """flock-circuit-build fails, with cargo's line, only once `slow` is running (the FIFO): under --keep-going `slow` stops."""
     gate = _gate(tmp_path, monkeypatch)
@@ -1451,14 +1437,13 @@ def test_a_runs_reused_pack_holds_what_its_own_plan_found_here_before_its_steps_
         assert tar.getnames() == ["check/circuit-check/v1/aa/e1.json", "check/circuit-check/v1/bb/l1.json"]
 
 
-def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_path, monkeypatch):
-    monkeypatch.setattr(CHECK, "HALTS", frozenset({"halting"}))
+def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_path):
     steps = CHECK.Steps(tmp_path, keep_going=True)
     steps.end({"step": "pytest", "status": "failed"})
     steps.end({"step": "flock-circuit-build", "status": "failed"})
     assert not steps.stopping
-    steps.end({"step": "halting", "status": "failed"})
-    assert steps.stopping and steps.halted == "halting"
+    steps.end({"step": "flock-circuit-build", "status": "failed", "halts": True})
+    assert steps.stopping and steps.halted == "flock-circuit-build"
     steps = CHECK.Steps(tmp_path)
     steps.end({"step": "pytest", "status": "failed"})
     assert steps.stopping and steps.halted == "pytest"

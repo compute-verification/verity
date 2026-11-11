@@ -605,11 +605,11 @@ def test_abandon_gives_up_a_plan_still_being_made_and_keeps_one_its_launching_sh
     abandon({"ids": ["r-1"], "tip": sha})
 
 
-@pytest.mark.parametrize("red, state", [("circuit-check", PASS), ("ratchet-gate", PASS), ("lean-changed", PASS),
+@pytest.mark.parametrize("red, state", [("circuit-check", PASS), ("ratchet-gate", PASS),
                                         ("flock-rust-tests", FAIL), ("preflight-lock", FAIL)])
 def test_the_check_that_gates_is_judged_on_the_steps_main_waits_for_at_its_base(world, monkeypatch, tmp_path, red, state):
     """Every step `main` waits for at the base gates, the preflights among them: not one policy.toml takes off the gate there
-    (circuit-check), drive.toml's warn step (ratchet-gate) or one a run may skip by name (lean-changed).  The candidate's
+    (circuit-check) or drive.toml's warn step (ratchet-gate).  The candidate's
     own policy.toml takes flock-rust-tests off the gate, and it fails on it all the same."""
     h, base, sha, _ = _harness(world, monkeypatch, off_gate=("circuit-check",), change={
         "tools/verity/check/policy.toml": _policy(off_gate=("circuit-check", "flock-rust-tests"))})
@@ -618,7 +618,7 @@ def test_the_check_that_gates_is_judged_on_the_steps_main_waits_for_at_its_base(
     _slim(h, tmp_path, **{red.replace("-", "_"): "error: it failed\n"})
     got = judge(h.d, rec)
     assert got.state == state and [f.task for f in got.failed] == [f"step {red}"] * (state == FAIL)
-    gates = [s for s in (*PREFLIGHTS, *AFTER_LANDING) if s not in ("lean-changed", "lean-agreement", "circuit-check", "ratchet-gate")]
+    gates = [s for s in (*PREFLIGHTS, *AFTER_LANDING) if s not in ("lean-agreement", "circuit-check", "ratchet-gate")]
     if red not in PREFLIGHTS:
         assert sorted(rec["verdict"]["passed"]) == sorted(s for s in gates if s != red or state == PASS)
 
