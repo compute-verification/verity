@@ -211,7 +211,9 @@ class TokenSampleGumbel:
         if not isinstance(x, ViewDesc):
             return None
         st = ctx.scratch.get(SCRATCH_OV)
-        s1 = None if st is None else st["stage1"].get(x.alloc)
+        if st is None:
+            return None
+        s1 = st["stage1"].get(x.alloc)
         if s1 is None or x.shape != s1["local_max"].shape:
             return None
         dim = a.get("dim", a.get("arg1"))

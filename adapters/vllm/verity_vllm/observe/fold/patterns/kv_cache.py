@@ -101,9 +101,8 @@ def _kv_moves(rc: TreeNode, ctx: StepContext, pattern: str, consumed: tuple[int,
     if group is None:
         public_slots = ctx.start.slot_mapping
     else:
-        public_slots = group.get("slot_mapping")
-        if not public_slots:
-            public_slots = []
+        slots = group.get("slot_mapping")
+        public_slots = slots if slots else []
     key, value = a.get("key", a.get("arg0")), a.get("value", a.get("arg1"))
     kc, vc = a.get("key_cache", a.get("arg2")), a.get("value_cache", a.get("arg3"))
     sm = a.get("slot_mapping", a.get("arg4"))

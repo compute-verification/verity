@@ -140,7 +140,9 @@ class TokenSelectGumbelTwoStage:
         if not isinstance(x, ViewDesc):
             return None
         st = ctx.scratch.get(SCRATCH_TOKEN_SELECT)
-        s1 = None if st is None else st["stage1"].get(x.alloc)
+        if st is None:
+            return None
+        s1 = st["stage1"].get(x.alloc)
         if s1 is None or x.shape != s1["local_max"].shape:
             return None  # not the two-stage sampler's argmax; TokenSelectArgmax may claim it
         dim = a.get("dim", a.get("arg1"))
@@ -516,7 +518,9 @@ class TokenSelectGumbelTopP:
         if not isinstance(x, ViewDesc):
             return None
         st = ctx.scratch.get(SCRATCH_TOPP_SELECT)
-        s1 = None if st is None else st["stage1"].get(x.alloc)
+        if st is None:
+            return None
+        s1 = st["stage1"].get(x.alloc)
         if s1 is None or x.shape != s1["local_max"].shape:
             return None
         dim = a.get("dim", a.get("arg1"))

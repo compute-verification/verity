@@ -145,7 +145,9 @@ def allreduce_settings(header) -> dict | None:
         return dict(notes["allreduce_settings"])
     tp2 = notes.get("tp2")
     facts = tp2.get("facts") if tp2 else None
-    pc = facts.get("parallel_config") if facts else None
+    if not facts:
+        return None
+    pc = facts.get("parallel_config")
     if not pc or not isinstance(pc.get("disable_custom_all_reduce"), bool):
         return None
     env: dict = {}
