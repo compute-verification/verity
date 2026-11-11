@@ -215,7 +215,7 @@ def test_the_logs_outside_their_domain_are_one_pinned_nan_on_every_path():
     """`__nv_logf` of a negative word and `__nv_log1pf` of a word below -1 (-inf included) are libdevice's invalid -inf + inf:
     `sampling.LOG_INVALID_NAN` on the scalar lane, the rows twin and the float32 transcription alike, whatever the host's default
     NaN. -0 and the negative subnormals (flushed to -0) keep logf's -inf, and log1pf keeps -0 at -0 and -inf at -1."""
-    from verity_vllm.program import libdevice_sampling as L
+    from verity.definitions.numerics import libdevice as L
 
     rng = np.random.default_rng(5)
     edges = [0x80000000, 0x80000001, 0x807FFFFF, 0x80800000, 0xBF7FFFFF, 0xBF800000, 0xBF800001, 0xFF7FFFFF, 0xFF800000]
