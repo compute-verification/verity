@@ -6,10 +6,9 @@ subprotocols into one verdict over one commitment: sampled proofs (the committed
 except on few proof blocks), PoUW (the hardware's time went to the registered circuit) and the inference-only policy (the
 registered circuit is inference, not training).
 
-**The open gap.** Remote's composed soundness theorem, `Verity.Soundness`, is not in Lean yet. It is due after the Lean
-dedupe (one vocabulary). Today the pieces below compose by hand: each is proved on its own,
-and no Lean theorem states remote's guarantee from them. Nothing yet ties the deployed verifier's verdicts to those
-theorems either.
+**The open gap.** Remote's composed guarantee, `Verity.remote_soundness_of_subprotocols`, is proved at its compiled
+verifier from its three subprotocols' targets (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`), each an open
+premise until proved at remote.
 
 This file is an outline with signposts. The Lean is the definition. The vocabulary is the Glossary's: `ARCHITECTURE.md`'s
 Glossary, and `GLOSSARY.md` for the notation and the older names. The lifecycle's terms (the reported advice, the
@@ -119,8 +118,8 @@ fleet-time than it would without the protocol, by the slowdown bound (part 6). T
 endpoint, and part 6 gives its total failure probability over a monitoring period.
 
 The argument has seven parts. **Each part is proved, stated or open on its own: no Lean theorem yet chains one part's
-conclusion into the next part's hypothesis.** The one partial link is `Accounting.Guarantees.TS.SessionSoundAt`, which
-consumes part 1's theorem for PoUW's proofs. The links that are missing are listed under What's open. Each part gives
+conclusion into the next part's hypothesis**, apart from the composition, whose targets are premises. The one partial
+link is `Accounting.Guarantees.TS.SessionSoundAt`, which consumes part 1's theorem for PoUW's proofs. The links that are missing are listed under What's open. Each part gives
 what it establishes, what it assumes, its Lean and that Lean's status:
 
 - **proved**: its proof is in a lock (`<Area>.SecurityProofs.G : <Area>.Guarantees.G` in
@@ -394,7 +393,7 @@ Sampled proofs' accept rule and theorems, the Lean slowdown bounds, and the comp
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
 | The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
-| The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee (the open gap, above) | **open** | — |
+| The composed soundness of remote | `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` (`security/Properties/Verity/Soundness.lean`) | **proved**, from three open targets (the open gap, above) | — |
 
 `DampenerRemote` is the slowdown bound ρ = max(1, 1/(s + x/MFU₀)) (`Nci.Dampener.remoteDampener`; MFU₀ divides only
 x), not the bound displayed above: arithmetic over inline hypotheses (`Nci.Assumptions.PouwSound` among them), with
@@ -410,11 +409,10 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 ### What's open
 
 - **Chaining the parts in Lean.**
-  - `Verity.Soundness`, the one theorem over everything the compiled verifier accepts, isn't in Lean.
+  - `Vocab.SpotSound`, `Vocab.PouwSound` and `Vocab.InferenceOnlySound` aren't proved at remote.
   - `SampledKSLiveV3` doesn't read part 1's theorem.
-  - `ServiceSound` and `PouwSound` are undischarged premises.
+  - `ServiceSound` and `Nci.Assumptions.PouwSound` are undischarged premises.
   - `JointPooledLive` isn't instantiated with parts 2 and 3.
-  - Today the parts compose by hand.
 - **The verifier's verdicts.** SPOT's one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
   the proof check (`verity verify proof`, today's `flock-verify --zk`) itself; v1, which takes the verdicts as
   evidence, and the recursive form, which SPOT's soundness doesn't cover, are refused. Where v2 accepts, its session
