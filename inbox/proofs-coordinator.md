@@ -46550,3 +46550,21 @@ For the table:
 - #8862: ready to mark at `23e96bd37477a08445bfe1551e2898d75aaa4a16`; quick tier 67/67 (`r20261111-080306-3938`, measured), records pass (`r20261111-080302-a139`, measured), merged tree with our fifteen marked Lean heads builds (`r20261111-090307-f4bd`, measured); no kernel replay, no second reader; changes five definitions two security locks read, no guarantee's record.
 - #8898 (the parse-only `members` command, stacked on #8862): open, unmarked, at `9d9adf6fe723`; try and records pass (`r20261111-090901-3704`, `r20261111-090947-bb86`), quick tier and merged build running.
 - The per-member form stays refused on every branch; the writer's Python is not open yet.
+
+## WITNESS, Wed 11 Nov 10:01Z: ready to mark #8891 at 88f0665ab6644e3cb511868343230babeb27d792: the quick tier passed (49 suites, 0 failed); the served block's own CPU-seconds are still to come (about 10:15Z)
+
+**ready to mark #8891 at 88f0665ab6644e3cb511868343230babeb27d792**
+- Quick tier at that head: `r20261111-090638-e406` (cpu-9), `uv run tools/verity/check/suites.py --changed origin/main --quick`: **49 suites: 49 passed (1 cached), 0 failed**, rc 0 [run; the run's `tree_sha` is the head].
+- It merges with `main` at `0a722c6ec984ad93e9f32cfb82dbf601ec9f0ae8` and with every open PR that touches a file of its: #8901, #8875, #8854, #8840, #8830 (all only through `benchmarks/README.md`): `git merge-tree --write-tree` rc 0 each [run, 09:59Z]. No open PR touches `ir_block.rs`, `circuit.rs`, `flock-circuit.rs`, `huge_pages.rs` or `benchmarks/unit_walk/`.
+- No Lean, no lock, no circuit, no CUDA: three host-side Rust files of the prover, `benchmarks/unit_walk/run.sh` and one README row. No `.lean` file, so no `For CAPS:` line.
+- Also at the head [run]: `check_build.sh test` rc 0 (`r20261111-090713-24f4`); flock-live's unit tests 162 + 169 passed, 0 failed (`r20261111-085724-1414`); the two pins are main's (`r20261111-083459-fc1a`).
+- The body has the change in its first paragraph, then the tests and run ids; I add the served block's numbers to it when they are in (a body edit, no new head).
+- Claim: none. It changes no statement and no guarantee; the witness words are pinned.
+
+**HEADPROF's answer** [relayed, its 09:48Z]: node A's huge-page mode is `madvise`, defrag `madvise`, as on the CPU nodes; so the third lever (the kept vectors on huge pages) applies there too.
+
+**The third lever is built and tested, locally only** [run `r20261111-094623-5ee8`, cpu-9, my scratch tree `468c027962`: 163 + 170 passed, 0 failed, both pins hold]: on top of #8891's head, (a) the kept vectors ask for huge pages when they are mapped (`FC_UNIT_KEEP=small` turns it off), (b) the rows' own-column bits are decided once a net with `one_pass` and read from a bitmap, not tested at every index, (c) "z is a & b" is read from z at the rows that read their own column, not from all of z, a and b (768 MB a group at the served block), (d) the distance is 256. Its walk on the 9-million-row block is `r20261111-094713-5d50` (about 10:20Z). **I have not pushed it: it would move #8891's head.** For you: may I push it as a second branch `cursor/proofs-witness-b-<4 hex>` stacked on #8891 (a second small PR, unmarked), or do you want it as a patch in the notes? Until you say, it stays local and I write its numbers here.
+
+For HEADPROF: cursor/proofs-witness-9dbc at 88f0665ab6644e3cb511868343230babeb27d792 (unchanged).
+For BREAKEVEN: unchanged from 09:33Z: measured on the 9-million-row instance on a CPU node (`r20261111-085753-8868`), the walk's CPU-seconds fall 25% to 37%; the served block's number follows from `r20261111-082933-6294`; HEADPROF's rows on the card are the ones to price.
+For the table: head block, host witness (8.7 CPU-s): #8891 **ready to mark** at `88f0665ab6` (quick tier `e406` 49/49); −25% to −37% of the walk's CPU-s measured on a 9M-row instance; served-block and card rows pending.
