@@ -15,8 +15,8 @@ makes in one process.
 `python -m verity.protocols.poub.verifier.verifier_party [--listen HOST:PORT]` is the verifier's side (`main`):
 it reads the request `{"deadline_ns", "node", "passes", "samples", "window_ns", "windows"}` as one JSON line on stdin,
 prints `{"listening": PORT}`, serves one prover and prints `{"answer", "case", "host"}`. `side_of(period, node)` is
-where `period.json` puts that side (`stream.Side`), and `period_with(side, request, store)` is the leg's: it starts the
-side, connects to it and plays the prover (`prove`).
+where `period.json` puts that side (`stream.Side`), and `period_with(side, request, store)` starts the side, connects
+to it and plays the prover (`prove`).
 """
 
 from __future__ import annotations

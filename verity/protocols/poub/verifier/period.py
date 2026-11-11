@@ -22,29 +22,18 @@ the registration are the core case (`case`) that `RemoteAudit.Protocol` replays.
 own: accepted, its failure, or undecided while a window is unverified; on acceptance `certified`'s reads `q_bytes`, the
 receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a `BLOCK_BYTES` block each, at
 `eps = (2^24 + S)/2^64` for S the draws, as the Lean's `certify` computes them.
-
-`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for bandwidth: the store is the period's records
-(`pous.period.records`, every copy of the auditor's ledger in them cut to the entries their window cites). The
-verifier and its challenger are a party of their own (`verifier_party`) on `period.json`'s `challenger_host`, with coins
-fresh from that host's OS, and the prover runs on the node. `trusted-host`'s premise, that they run on a machine
-the developer doesn't control, holds only when the challenger host isn't the node, and the leg says which
-(`verifier_party.placement`). The prover reads a store in its process's memory, not a remote node's.
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
 import os
-import subprocess
 import time
 from collections.abc import Callable, Sequence
 from fractions import Fraction
-from pathlib import Path
 from typing import Any, Protocol
 
 from verity.protocols.pous.verifier.period import Period, Run
-from verity.protocols.pous.verifier.period import records
 from verity.protocols.spot.verifier.profile import WINDOW_DELTA
 from verity.commitments.identity import canonical_json_bytes
 
@@ -283,47 +272,5 @@ def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes
     return Period(answer(s), case_of(s, events))
 
 
-def serve(exe: str | os.PathLike, cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """`EXE serve` on `cases`, one canonical JSON line each: the Lean's answers (`Core.Protocol` CLI)."""
-    lines = "".join(canonical_json_bytes(c).decode() + "\n" for c in cases)
-    p = subprocess.run([str(exe), "serve"], input=lines, capture_output=True, text=True, check=True)
-    return [json.loads(x) for x in p.stdout.splitlines()]
-
-
-def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """Bandwidth's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): the session on the
-    period's records, the verifier and its challenger a party of their own on `period.json`'s `challenger_host`
-    (`verifier_party.side_of`; on this node by default, as a process of its own, with its own coins) and the prover
-    here. With `remote-audit-protocol` among the period's tools the Lean verifier answers and must agree
-    with the Python; it writes `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host
-    ran each party, and whether `trusted-host`'s premise holds (`verifier_party.placement`), go in
-    `bandwidth.json` and in an accepted answer's profile (`placement`)."""
-    from . import verifier_party  # noqa: PLC0415  (it imports this module)
-
-    doc = json.loads((Path(period_dir) / "period.json").read_text())
-    tools = doc.get("tools") or {}
-    party = verifier_party.side_of(doc, node)
-    store = records(period_dir)
-    t = time.monotonic()
-    period, side = verifier_party.period_with(party, verifier_party.request_of(node), store)
-    seconds = round(time.monotonic() - t, 2)
-    where = verifier_party.placement(node, party.host)
-    answer_, lean = period.answer, None
-    if "remote-audit-protocol" in tools:
-        lean = serve(tools["remote-audit-protocol"], [period.case])[0]
-        if {k: v for k, v in lean.items() if k != "reason"} != {k: v for k, v in answer_.items() if k != "reason"}:
-            raise RuntimeError(f"remote-audit-protocol answered {lean}, the Python {answer_}")
-        answer_ = lean
-    if answer_["profile"] is not None:
-        answer_ = answer_ | {"profile": answer_["profile"] | {"placement": where}}
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "bandwidth.case.json").write_text(json.dumps(period.case, sort_keys=True))
-    (out / "bandwidth.json").write_text(json.dumps({"answer": answer_, "eps": str(period.eps), "lean": lean,
-                                                    "placement": where | {"reported_host": side["host"]},
-                                                    "q_bytes": period.public("q_bytes"), "seconds": seconds,
-                                                    "store_bytes": len(store)}, sort_keys=True, indent=1))
-    return answer_
-
-
-__all__ = ["DELTA", "PROTOCOL", "Local", "Period", "Prover", "answer", "case_of", "certified", "leg", "opened", "payloads",
-           "records", "registration_json", "registration_of", "run", "serve", "session"]
+__all__ = ["DELTA", "PROTOCOL", "Local", "Period", "Prover", "answer", "case_of", "certified", "opened", "payloads",
+           "registration_json", "registration_of", "run", "session"]
