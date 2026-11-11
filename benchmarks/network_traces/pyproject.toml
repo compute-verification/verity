@@ -77,7 +77,8 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py",
           "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/one_stage/served_verdicts.py",
           "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r2-period0.json",
-          "verity/protocols/certifier/verifier/network/tests/period_case.py", "verity/difftest/python/verity_difftest"]
+          "verity/protocols/certifier/verifier/network/tests/period_case.py", "verity/difftest/python/verity_difftest",
+          "verity/__init__.py", "verity/composite/__init__.py", "verity/composite/device/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
