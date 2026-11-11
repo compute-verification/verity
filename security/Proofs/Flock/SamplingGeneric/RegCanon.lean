@@ -9,9 +9,11 @@ import Proofs.Flock.Claims.Sampling.KS
 /-!
 # The rewinding lemma at the committed trace, counting each bad run at one gate
 
-`pr_offReg_le` at `Verity.Rewinding.prBad_le_canon` in place of `prBad_le`: a run's extractions open a gate of the
-program off the committed trace with probability at most `√(N·Pr[conflict])`, `N` the program's gates, where
-`pr_offReg_le` gives `N·√Pr[conflict]`; `pr_regHit_le_canon` carries it through `ksReg_of_sessionKS`'s first half,
+`pr_off_le_canon_on` is `pr_off_le` at `Verity.Rewinding.prBad_le_canon_on` in place of `prBad_le`, over any finite
+space and a trace that is the table's plurality (`plurAt`) wherever a point opens. At one tape's runs,
+`pr_offReg_le_canon`: a run's extractions open a gate of the program off the committed trace with probability at most
+`√(N·Pr[conflict])`, `N` the program's gates, where `pr_offReg_le` gives `N·√Pr[conflict]`; `pr_regHit_le_canon`
+carries it through `ksReg_of_sessionKS`'s first half,
 so `εreg`'s `N·√Pr[B_conf]` can read `√(N·Pr[B_conf])`. The `_on` forms count only a set `S` of gates holding every
 gate some run's extractions open; `pr_regHit_le_canon_pos` takes for `S` the positions the reveals open under the
 statement's roots (`opensAt_isSome_mem`).
@@ -23,6 +25,65 @@ namespace Claims.SamplingGeneric
 
 open Claims Finset
 open Claims.Sampling (AuditStatement InScope)
+
+/-- **The rewinding lemma at a table's plurality, one position a bad point** (`Verity.Rewinding.prBad_le_canon_on`):
+`pr_off_le` with `√(#T·Pr[conflict])` in place of `N·√Pr[conflict]`, at any set `T` of positions below `N` holding
+every position a point opens. -/
+theorem pr_off_le_canon_on {S : Type} [Fintype S] [Nonempty S] (N : ℕ) (op : S → ℕ → Option Bool)
+    (tr : ℕ → Option Bool) (htr : ∀ a g b, op a g = some b → tr g = some (plurAt op g)) (T : Finset (Fin N))
+    (hT : ∀ (a : S) (g : Fin N), (op a g).isSome → g ∈ T) :
+    Pr (fun a : S => ∃ g < N, ∃ b, op a g = some b ∧ tr g ≠ some b) ≤
+      Real.sqrt (#T * Pr fun aa : S × S =>
+        ∃ g : Fin N, (op aa.1 g).isSome ∧ (op aa.2 g).isSome ∧ op aa.1 g ≠ op aa.2 g) := by
+  classical
+  have hcard : (0 : ℝ) < Fintype.card S := by exact_mod_cast Fintype.card_pos
+  have hcnt : ∀ (g : Fin N) (b : Bool),
+      (#(FlockSoundness.Rewinding.openedTo (fun (a : S) (g : Fin N) => op a g) g b) : ℝ) =
+        Pr (fun a : S => op a g = some b) * Fintype.card S := by
+    intro g b
+    rw [Pr_eq_card_of_mem (fun a : S => op a g = some b)
+      (FlockSoundness.Rewinding.openedTo (fun (a : S) (g : Fin N) => op a g) g b)
+      fun a => mem_filter.trans (and_iff_right (mem_univ _)), div_mul_cancel₀ _ hcard.ne']
+  have hpl : FlockSoundness.Rewinding.IsPlurality (fun (a : S) (g : Fin N) => op a g) fun g => plurAt op g := by
+    intro g v
+    have h := le_plur (fun b => Pr fun a : S => op a g = some b) v
+    have h' : (#(FlockSoundness.Rewinding.openedTo (fun (a : S) (g : Fin N) => op a g) g v) : ℝ) ≤
+        #(FlockSoundness.Rewinding.openedTo (fun (a : S) (g : Fin N) => op a g) g (plurAt op g)) := by
+      rw [hcnt, hcnt]
+      exact mul_le_mul_of_nonneg_right h hcard.le
+    exact_mod_cast h'
+  have hbad := Verity.Rewinding.prBad_le_canon_on (op := fun (a : S) (g : Fin N) => op a g)
+    (fun g => plurAt op g) hpl T hT
+  have hoff : Pr (fun a : S => ∃ g < N, ∃ b, op a g = some b ∧ tr g ≠ some b) ≤
+      (#(FlockSoundness.Rewinding.bad (fun (a : S) (g : Fin N) => op a g) fun g => plurAt op g) : ℝ) /
+        Fintype.card S := by
+    calc Pr (fun a : S => ∃ g < N, ∃ b, op a g = some b ∧ tr g ≠ some b)
+        ≤ Pr (fun a : S => ∃ g,
+            FlockSoundness.Rewinding.Off (fun (a : S) (g : Fin N) => op a g) (fun g => plurAt op g) a g) :=
+          Pr_mono fun a ha => by
+            obtain ⟨g, hg, b, hb, hne⟩ := ha
+            refine ⟨⟨g, hg⟩, Option.isSome_iff_exists.2 ⟨b, hb⟩, fun h => hne ?_⟩
+            rw [htr a g b hb]
+            exact (hb.symm.trans h).symm
+      _ = _ := Pr_eq_card_of_mem _
+          (FlockSoundness.Rewinding.bad (fun (a : S) (g : Fin N) => op a g) fun g => plurAt op g)
+          fun a => by simp only [FlockSoundness.Rewinding.bad, mem_filter, mem_univ, true_and]
+  have hmem : ∀ aa : S × S, aa ∈ FlockSoundness.Rewinding.conflict (fun (a : S) (g : Fin N) => op a g) ↔
+      ∃ g, FlockSoundness.Rewinding.ConflictAt (fun (a : S) (g : Fin N) => op a g) aa g :=
+    fun aa => by simp only [FlockSoundness.Rewinding.conflict, mem_filter, mem_univ, true_and]
+  have hconf : (#(FlockSoundness.Rewinding.conflict (fun (a : S) (g : Fin N) => op a g)) : ℝ) /
+      (Fintype.card S : ℝ) ^ 2 =
+      Pr fun aa : S × S => ∃ g : Fin N, (op aa.1 g).isSome ∧ (op aa.2 g).isSome ∧ op aa.1 g ≠ op aa.2 g := by
+    rw [Pr_eq_card_of_mem
+        (fun aa : S × S => ∃ g : Fin N, (op aa.1 g).isSome ∧ (op aa.2 g).isSome ∧ op aa.1 g ≠ op aa.2 g)
+        (FlockSoundness.Rewinding.conflict (fun (a : S) (g : Fin N) => op a g)) hmem,
+      Fintype.card_prod S S, Nat.cast_mul, sq]
+  calc Pr (fun a : S => ∃ g < N, ∃ b, op a g = some b ∧ tr g ≠ some b)
+      ≤ _ := hoff
+    _ ≤ _ := hbad
+    _ = Real.sqrt (#T * Pr fun aa : S × S =>
+          ∃ g : Fin N, (op aa.1 g).isSome ∧ (op aa.2 g).isSome ∧ op aa.1 g ≠ op aa.2 g) := by
+      rw [hconf]
 
 namespace Compiled
 
@@ -37,56 +98,9 @@ theorem pr_offReg_le_canon_on (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type
       (L.opensAt H P x ω rc.1 rc.2 g).isSome → g ∈ S) :
     Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2) ≤
       Real.sqrt (#S * Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-        L.Conflict H P x ω rr) := by
-  classical
-  have hcard : (0 : ℝ) < Fintype.card ((Fin (L.V.k x) → Coin) × L.SlotEC x) := by
-    exact_mod_cast Fintype.card_pos
-  have hcnt : ∀ (g : Fin (L.nG x)) (b : Bool),
-      (#(FlockSoundness.Rewinding.openedTo (L.opTable H P x ω) g b) : ℝ) =
-        Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.opensAt H P x ω rc.1 rc.2 g = some b) *
-          Fintype.card ((Fin (L.V.k x) → Coin) × L.SlotEC x) := by
-    intro g b
-    rw [Pr_eq_card_of_mem (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.opensAt H P x ω rc.1 rc.2 g = some b)
-      (FlockSoundness.Rewinding.openedTo (L.opTable H P x ω) g b)
-      fun rc => mem_filter.trans (and_iff_right (mem_univ _)), div_mul_cancel₀ _ hcard.ne']
-  have hpl : FlockSoundness.Rewinding.IsPlurality (L.opTable H P x ω) fun g => L.plur H P x ω g := by
-    intro g v
-    have h := le_plur (fun b => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-      L.opensAt H P x ω rc.1 rc.2 g = some b) v
-    have h' : (#(FlockSoundness.Rewinding.openedTo (L.opTable H P x ω) g v) : ℝ) ≤
-        #(FlockSoundness.Rewinding.openedTo (L.opTable H P x ω) g (L.plur H P x ω g)) := by
-      rw [hcnt, hcnt]
-      exact mul_le_mul_of_nonneg_right h hcard.le
-    exact_mod_cast h'
-  have hbad := Verity.Rewinding.prBad_le_canon_on (op := L.opTable H P x ω) (fun g => L.plur H P x ω g) hpl S hS
-  have hoff : Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2) ≤
-      (#(FlockSoundness.Rewinding.bad (L.opTable H P x ω) fun g => L.plur H P x ω g) : ℝ) /
-        Fintype.card ((Fin (L.V.k x) → Coin) × L.SlotEC x) := by
-    calc Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2)
-        ≤ Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => ∃ g,
-            FlockSoundness.Rewinding.Off (L.opTable H P x ω) (fun g => L.plur H P x ω g) rc g) :=
-          Pr_mono fun rc hrc => by
-            obtain ⟨g, hg, b, hb, hne⟩ := hrc
-            refine ⟨⟨g, hg⟩, Option.isSome_iff_exists.2 ⟨b, hb⟩, fun h => hne ?_⟩
-            rw [L.regVal_eq_plur H P x ω hb]
-            exact (hb.symm.trans h).symm
-      _ = _ := Pr_eq_card_of_mem _ (FlockSoundness.Rewinding.bad (L.opTable H P x ω) fun g => L.plur H P x ω g)
-          fun rc => by simp only [FlockSoundness.Rewinding.bad, mem_filter, mem_univ, true_and]
-  have hconf : (#(FlockSoundness.Rewinding.conflict (L.opTable H P x ω)) : ℝ) /
-      (Fintype.card ((Fin (L.V.k x) → Coin) × L.SlotEC x) : ℝ) ^ 2 =
-      Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-        L.Conflict H P x ω rr := by
-    rw [Pr_eq_card_of_mem (fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-        L.Conflict H P x ω rr) (FlockSoundness.Rewinding.conflict (L.opTable H P x ω))
-        fun rr => by simp only [FlockSoundness.Rewinding.conflict, mem_filter, mem_univ, true_and]; exact Iff.rfl,
-      Fintype.card_prod ((Fin (L.V.k x) → Coin) × L.SlotEC x) ((Fin (L.V.k x) → Coin) × L.SlotEC x),
-      Nat.cast_mul, sq]
-  calc Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2)
-      ≤ _ := hoff
-    _ ≤ _ := hbad
-    _ = Real.sqrt (#S * Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
-          ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.Conflict H P x ω rr) := by
-      rw [hconf]
+        L.Conflict H P x ω rr) :=
+  pr_off_le_canon_on (L.nG x) (fun (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : ℕ) => L.opensAt H P x ω rc.1 rc.2 g)
+    (L.regVal H P x ω) (fun _ _ _ h => L.regVal_eq_plur H P x ω h) S hS
 
 /-- `pr_offReg_le_canon_on` at every gate: `√(N·Pr[conflict])`, `N` the program's gates. -/
 theorem pr_offReg_le_canon (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) :

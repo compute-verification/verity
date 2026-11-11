@@ -105,6 +105,11 @@
    "digest": "d389c19a2ddbe109cebd6de895b010c96712878d4b5604219783c0394c18faf0",
    "why": "The compiled verifiers whose sampled sessions are the proof system's honest runs among the first `K` slots, at an error covering theirs: the ones `CompilerComplete` is stated for. (met by `compilerComplete_honest`)"
   },
+  "Claims.SamplingGeneric.CompiledTwo.KSRegTwo": {
+   "owner": "@proofs",
+   "digest": "9dc8778e3250b7defa43c3cc45152502ccc52bc5fba242ae3ea3cd52de76e559",
+   "why": "`CompilerHeadlineTwo` is stated at a compiled two-stage verifier that meets the committed form at two stages, which `CompilerKSRegTwo` proves at the contract's premises. (met by `compilerHeadlineTwo_honest`)"
+  },
   "Claims.ZKMal.RefSession.UnCausal": {
    "owner": "@proofs",
    "digest": "89ed8050e4e652dc3a78971a605b86e10dea446f111f2db071e4923ddda4df7e",
@@ -3896,6 +3901,62 @@
      "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
      "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
     ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.KSRegTwo": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.KSRegTwo_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.MissTwo": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.MissTwo_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.Compiled.KSRegX": {
+    "fails": "Claims.SamplingGeneric.Compiled.KSRegX_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessions_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.KSRegTwoX": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.KSRegTwoX_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.MissTwoX": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.MissTwoX_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
    }
   },
   "not": {
@@ -3999,6 +4060,9 @@
    "Claims.ZKOutLeak": "Claims.zkOutLeak",
    "Claims.SamplingGeneric.CompilerComplete": "Claims.SamplingGeneric.compilerComplete",
    "Claims.SamplingGeneric.CompilerKSTwo": "Claims.SamplingGeneric.compilerKSTwo",
+   "Claims.SamplingGeneric.CompilerKSRegTwo": "Claims.SamplingGeneric.compilerKSRegTwo",
+   "Claims.SamplingGeneric.CompilerMissTwo": "Claims.SamplingGeneric.compilerMissTwo",
+   "Claims.SamplingGeneric.CompilerHeadlineTwo": "Claims.SamplingGeneric.compilerHeadlineTwo",
    "Claims.SamplingGeneric.CompilerExfilTwo": "Claims.SamplingGeneric.compilerExfilTwo",
    "Claims.RecGeneric.CompositionKS": "Claims.RecGeneric.compositionKS",
    "Claims.RecGeneric.CompilerKS": "Claims.RecGeneric.compilerKS",
@@ -4013,7 +4077,11 @@
    "Claims.SamplingGeneric.CompilerKSAt": "Claims.SamplingGeneric.compilerKSAt",
    "Claims.Guarantees.CapTwo": "Claims.SecurityProofs.CapTwo",
    "Claims.SamplingGeneric.CompilerKSAtTwo": "Claims.SamplingGeneric.compilerKSAtTwo",
-   "Claims.SamplingGeneric.CompilerEfficientTwo": "Claims.SamplingGeneric.compilerEfficientTwo"
+   "Claims.SamplingGeneric.CompilerEfficientTwo": "Claims.SamplingGeneric.compilerEfficientTwo",
+   "Claims.SamplingGeneric.CompilerKSRegX": "Claims.SamplingGeneric.compilerKSRegX",
+   "Claims.SamplingGeneric.CompilerKSRegTwoX": "Claims.SamplingGeneric.compilerKSRegTwoX",
+   "Claims.SamplingGeneric.CompilerMissTwoX": "Claims.SamplingGeneric.compilerMissTwoX",
+   "Claims.SamplingGeneric.CompilerHeadlineTwoX": "Claims.SamplingGeneric.compilerHeadlineTwoX"
   }
  },
  "witnesses": {
@@ -4248,6 +4316,18 @@
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
   },
+  "Claims.SamplingGeneric.compilerKSRegTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSRegTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerMissTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerMissTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerHeadlineTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerHeadlineTwo_nontrivial"
+  },
   "Claims.SamplingGeneric.compilerExfilTwo": {
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerExfilTwo_nontrivial"
@@ -4454,10 +4534,6 @@
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledLeakChecked_nontrivial"
   },
-  "Hash.SecurityProofs.HistoryReadBinding": {
-   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
-   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
-  },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledAuditAccepted_nontrivial"
@@ -4542,6 +4618,10 @@
    "honest": ["WeightSecurity.SecurityProofs.TheftServedMinEntropyHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftServedMinEntropyNontrivial"
   },
+  "Hash.SecurityProofs.HistoryReadBinding": {
+   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
+   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
+  },
   "NetTiming.SecurityProofs.PooledLeakCarried": {
    "nontrivial": "NetTiming.Witness.PooledLeakCarried_nontrivial"
   },
@@ -4570,6 +4650,22 @@
   "WeightSecurity.SecurityProofs.TheftFaulted": {
    "honest": ["WeightSecurity.SecurityProofs.TheftFaultedHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftFaultedNontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSRegX": {
+   "honest": ["Claims.SamplingGeneric.compilerKS_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSRegX_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwoX": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSRegTwoX_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerMissTwoX": {
+   "honest": ["Claims.SamplingGeneric.compilerMissTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerMissTwoX_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwoX": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerHeadlineTwoX_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5332,6 +5428,12 @@
    "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
    "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
   },
+  "NetTiming.SecurityProofs.PooledLeakCarried": {
+   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
+   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
+  },
   "Pous.SecurityProofs.BandPubMeets14": {
    "type_hash": "cc0a571f0b841ecb8d43acbf6b871e6cc71d9c7f83d30199fc0e717b117175f9",
    "unfolded_hash": "8f6522076956b9aaec905dfd60718ee9c736ab517c760a58d222cc468a2b172d"
@@ -5526,19 +5628,13 @@
    "type_hash": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
    "unfolded_hash": "edcf280a29bc4ea8fadd07e37edb897784d1e87a921f26547ed9ef8583b5e40a"
   },
-  "Verity.SecurityProofs.ServingBlockSum": {
-   "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
-   "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
-  },
-  "NetTiming.SecurityProofs.PooledLeakCarried": {
-   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
-   "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
-   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
-  },
   "Verity.SecurityProofs.RefineIncorrect": {
    "type_hash": "f002a79b8c5c0755db0aaa9574d5a115e090df1033aa688adadab139a6b4fead",
    "unfolded_hash": "9eb08e5560e18e47ac928a89e057971d0a2163e6394c4cecb743c4bbd61b3a91"
+  },
+  "Verity.SecurityProofs.ServingBlockSum": {
+   "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
+   "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
   }
  },
  "witnesses_assumed": {
@@ -11975,6 +12071,21 @@
    },
    "type_hash": "53f421070c113209ffc605594adc7e8132cf18c8e72e973c096e7b22343e9d06"
   },
+  "Claims.SamplingGeneric.Compiled.KSRegX_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.Compiled.KSRegX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.Compiled.KSRegX H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.Compiled.Scope"],
+    "reads": []
+   },
+   "type_hash": "83be9e5d7dd74bd9128b56e88041e37ea9445e379f3b525afff7e3da3d7ac921"
+  },
   "Claims.SamplingGeneric.Compiled.KSReg_fails": {
    "owner": "@proofs",
    "signature": [
@@ -12020,6 +12131,38 @@
    },
    "type_hash": "e4243fbaf1ee1c234ce100d08e628977ca71758e0c37225e2636dd725e44e044"
   },
+  "Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "06c2a8dae98ba88ef66bda195747f63a3501fc7e1b4be1633363f2bc4924c3c3"
+  },
+  "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.HeadlineTwo H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "8bbf0baef0980cda282840b9a7c3a249b2dcb41025cbd7a9bac830a14b645b95"
+  },
   "Claims.SamplingGeneric.CompiledTwo.KSAt_fails": {
    "owner": "@proofs",
    "signature": [
@@ -12035,6 +12178,36 @@
    },
    "type_hash": "3ce579edc550a7489aba9d13e5f6c39c62013d660319cdef679ea5ff381bdfa2"
   },
+  "Claims.SamplingGeneric.CompiledTwo.KSRegTwoX_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.KSRegTwoX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.KSRegTwoX H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "cbc5b0a1f6d6299853416382e8bdb1cd10070f723e426c63fd93d868f0bd0695"
+  },
+  "Claims.SamplingGeneric.CompiledTwo.KSRegTwo_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.KSRegTwo_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.KSRegTwo H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "827072448093bd2c3f6a5472aa999f6bfaa42aeab5c0ce5bda3eeba65756257b"
+  },
   "Claims.SamplingGeneric.CompiledTwo.KS_fails": {
    "owner": "@proofs",
    "signature": [
@@ -12049,6 +12222,40 @@
     "reads": []
    },
    "type_hash": "4bad71657d26ec907352689f45442dbd782f32e32ed982af684bf697305d4c26"
+  },
+  "Claims.SamplingGeneric.CompiledTwo.MissTwoX_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.MissTwoX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun A =>",
+    "    Exists fun L => Exists fun r₁ => Exists fun r₂ => Not (Claims.SamplingGeneric.CompiledTwo.MissTwoX H L r₁ r₂)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "3fbaf3be388bdd01fab72010b0c0c99519e0a58f1b36e07b4246c5bd17c1b9bb"
+  },
+  "Claims.SamplingGeneric.CompiledTwo.MissTwo_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.MissTwo_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun A =>",
+    "    Exists fun L => Exists fun r₁ => Exists fun r₂ => Not (Claims.SamplingGeneric.CompiledTwo.MissTwo H L r₁ r₂)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "f6366dd9df27f88e399847c8855b57720ee0d44fbccc390f9fe14217840590d9"
   },
   "Claims.SamplingGeneric.ZkArg.ZK_fails": {
    "owner": "@proofs",
@@ -12281,6 +12488,94 @@
    },
    "type_hash": "c988a93104be12490891b9c6f062bef07f7fc39a8bc0cca3901f23255751af48"
   },
+  "Claims.SamplingGeneric.compilerHeadlineTwo": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerHeadlineTwo : Claims.SamplingGeneric.CompilerHeadlineTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.SamplingGeneric.CompiledTwo.KSRegTwo"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope", "Claims.SamplingGeneric.CompiledTwo.Sessions"],
+    "reads": []
+   },
+   "type_hash": "4f3cf3f0f5f4afa46b847df6344ae963d3e424c8a7753fd916e3d8fc1eb7dc3c",
+   "unfolded_hash": "7c27b70db67105e02dde2cc0375fbb1046f5d7455500664eec7b4d129add3316"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwoX": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerHeadlineTwoX : Claims.SamplingGeneric.CompilerHeadlineTwoX"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.CompiledTwo.Scope",
+     "Claims.SamplingGeneric.CompiledTwo.Sessions"
+    ],
+    "reads": []
+   },
+   "type_hash": "3d98419ee2a58d3a3dfef4b0cea8d678e95be760799d35e7de313fb3545f04c9",
+   "unfolded_hash": "7ab7bbdbf55cd18eb5e60394c0c85e4fb8307e179fe33a5c8f9f1692ad400b58"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwoX_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerHeadlineTwoX_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "22bd1a990976998f8674c198c86bfd0a1eed749227beea3ae39fc15393acb733"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwo_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerHeadlineTwo_honest :",
+    "  And (Claims.SamplingGeneric.CompiledTwo.Sessions FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoLTwo Bool))",
+    "    (And (Claims.SamplingGeneric.CompiledTwo.KSRegTwo FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoLTwo Bool))",
+    "      (And ((Claims.Witness.SamplingGeneric.twoLTwo Bool).Scope List.nil)",
+    "        (∀ (r : Fin ((Claims.Witness.SamplingGeneric.twoLTwo Bool).V.k List.nil) → Bool),",
+    "          And",
+    "            (Eq ((Claims.Witness.SamplingGeneric.twoLTwo Bool).replaySample List.nil r)",
+    "              (List.cons 0 (List.cons 1 List.nil)))",
+    "            (And",
+    "              (Eq ((Claims.Witness.SamplingGeneric.twoLTwo Bool).checked List.nil r)",
+    "                (List.cons 0 (List.cons 1 List.nil)))",
+    "              (Eq",
+    "                (Claims.run FlockDeploy.sha512 Claims.Witness.silentP (Claims.Witness.SamplingGeneric.twoLTwo Bool).V",
+    "                    List.nil Unit.unit r).out",
+    "                Claims.Out.acc)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "a59f9d5dc20ff1709b7e84ce883c2f29fa1dd17711b48b251c086f31b0ae7b7e"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerHeadlineTwo_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.HeadlineTwo FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "84640a2ea982221426dcf5d427d69364ad9d6bb442b55b38c05325de2e686379"
+  },
   "Claims.SamplingGeneric.compilerKS": {
    "owner": "@proofs",
    "signature": ["Claims.SamplingGeneric.compilerKS : Claims.SamplingGeneric.CompilerKS"],
@@ -12413,6 +12708,102 @@
    "type_hash": "265125fe0373eb291365875e0e60970f68ee5ece8acbb1e4a275bfa60e18fe84",
    "unfolded_hash": "fe205dc2f44b0a7d088bf33478098cd7bd13b7f888661ee7e4b31369f963c2f7"
   },
+  "Claims.SamplingGeneric.compilerKSRegTwo": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerKSRegTwo : Claims.SamplingGeneric.CompilerKSRegTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.CompiledTwo.Scope",
+     "Claims.SamplingGeneric.CompiledTwo.Sessions"
+    ],
+    "reads": []
+   },
+   "type_hash": "f8899549b5c969e59c9031eec083b963a4760b6e9a22f295751a8fca993aa583",
+   "unfolded_hash": "b90bb396af25024e57bb64cf5d19957bbdd8d6af2e99e66826b6bb7e740624fc"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwoX": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerKSRegTwoX : Claims.SamplingGeneric.CompilerKSRegTwoX"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.CompiledTwo.Scope",
+     "Claims.SamplingGeneric.CompiledTwo.Sessions"
+    ],
+    "reads": []
+   },
+   "type_hash": "bfcfd7033abc1eff84ce976471d8d31dd1144ec9ba568601be40422a8c8e92dd",
+   "unfolded_hash": "00a3f08f576c7da21c2ef310996d6a90f2db4b6a94ef0f03c956f4989f5ee570"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwoX_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSRegTwoX_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.KSRegTwoX FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "0a239b95e53b9dfacbc6731275b3a826632b0fed95ad112b670cbe629ae43a4b"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSRegTwo_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.KSRegTwo FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "d98dc4c4a57e488a69e3b06f203b255b8fba677042501957106d4517399edcf5"
+  },
+  "Claims.SamplingGeneric.compilerKSRegX": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerKSRegX : Claims.SamplingGeneric.CompilerKSRegX"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.Compiled.Scope",
+     "Claims.SamplingGeneric.Compiled.Sessions"
+    ],
+    "reads": []
+   },
+   "type_hash": "8cb2c5498a27d3abf22e4f543707d261c92f161d9884d9b2619d319b9b268dde",
+   "unfolded_hash": "0f36811577bd6ebb45a09dc71abebd5b6ee71a48164447fcedc485098d5b1edc"
+  },
+  "Claims.SamplingGeneric.compilerKSRegX_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSRegX_nontrivial :",
+    "  Not (Claims.SamplingGeneric.Compiled.KSRegX FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksL Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.Compiled.Scope"],
+    "reads": []
+   },
+   "type_hash": "724ac5afce6433379572c693a4d0c0eebaf05cec827d8b19bda40a9f86f035d2"
+  },
   "Claims.SamplingGeneric.compilerKSReg_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -12530,6 +12921,80 @@
     "reads": []
    },
    "type_hash": "2ee399e11183db0f7c3f301abcaf97a5683eac1f2825d864e2773d817b536a31"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerMissTwo : Claims.SamplingGeneric.CompilerMissTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope", "Claims.SamplingGeneric.CompiledTwo.Sessions"],
+    "reads": []
+   },
+   "type_hash": "09e401bb1e532c53972c7511f4a7c2436377179c3d62d1ac7cd2d3d024da0dd4",
+   "unfolded_hash": "e5ae09e75ec49ad1ca61372ddf5caa9a668f37ea214540be5f58cb0bd7bb0361"
+  },
+  "Claims.SamplingGeneric.compilerMissTwoX": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerMissTwoX : Claims.SamplingGeneric.CompilerMissTwoX"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope", "Claims.SamplingGeneric.CompiledTwo.Sessions"],
+    "reads": []
+   },
+   "type_hash": "0c738e211f9f0189132b445b3543fad8123b8b74ce82eeb6cde1e2ea1643de59",
+   "unfolded_hash": "70c1c599d032de8578a31ed3062874fb4e4991b54c1847f2f2f56fffdf31d721"
+  },
+  "Claims.SamplingGeneric.compilerMissTwoX_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerMissTwoX_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.MissTwoX FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool) 1 1)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "415dce9a933c0219d5636e74f8247764bdb4f5c4c53acc27c0aa5d9a3fa91f55"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerMissTwo_honest :",
+    "  And (Claims.SamplingGeneric.CompiledTwo.Sessions FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoLTwo Bool))",
+    "    (And ((Claims.Witness.SamplingGeneric.twoLTwo Bool).Scope List.nil)",
+    "      (And (Claims.Witness.SamplingGeneric.twoTwo.FirstRate 1)",
+    "        (Claims.Witness.SamplingGeneric.twoTwo.SecondRate Claims.Witness.SamplingGeneric.twoPart 1)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "918f05b8878ef4e8452f0f3219f8523b1ace2fabc6d8723256e2a6976aa1a41e"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerMissTwo_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.MissTwo FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool) 1 1)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "791097081f3e7b50579e4ab8db33f0a47fda4245185e1d8516ab0ad01ead91c2"
   },
   "Claims.SamplingGeneric.compilerZK": {
    "owner": "@proofs",
@@ -26430,10 +26895,6 @@
     "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
-   "Hash.SecurityProofs.HistoryReadBinding": {
-    "function": "Hash.EmbeddingRead.ok",
-    "outcome": "accept"
-   },
    "Pouw.Salt.keyed_leaf_hides": {
     "function": "Hash.Keyed.digest",
     "outcome": "none"
@@ -26444,6 +26905,10 @@
    },
    "Verity.SecurityProofs.CapacityWithinEstimate": {
     "function": "Verity.DeviceFigures.Accepted",
+    "outcome": "accept"
+   },
+   "Hash.SecurityProofs.HistoryReadBinding": {
+    "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
    "Accounting.SecurityProofs.TableReadBinding": {
@@ -28732,6 +29197,9 @@
     "∀ (s : g.Strategy), Cls s → ENNReal.instLE.le (Verity.Game.prob Q g s) ε": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : g.Strategy), g.InducedAt post pre σ s → Cls s": "g.InducedAt taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Verity.SecurityProofs.RefineIncorrect": {
+    "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Verity.SecurityProofs.ServingBlockSum": {
     "Finset.instPartialOrder.le V C.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Fin B), SetLike.instMembership.mem S u → Real.instLE.le ((Finset.instInter.inter V (P.gates u)).sum fun v => ω v) (qS u)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28741,9 +29209,6 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Verity.SecurityProofs.RefineIncorrect": {
-    "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -32968,6 +33433,17 @@
     "Claims.SamplingGeneric.simAt": "0b60f8fe98acb3df4ee53a8cc10fd2ffa43444819254e111218d018b6c316c2f"
    }
   },
+  "Definitions.Claims.SamplingGenericX": {
+   "digest": "3caf10b596ab5014e717e685b9a573f29d7ee2dc69bf8144926883d333c6a95b",
+   "definitions": {
+    "Claims.SamplingGeneric.Compiled.BconfX": "b4bd368d3051d387748941570823fb8574f6d7b96b1fcc41ec8ba2cfa91f1008",
+    "Claims.SamplingGeneric.Compiled.FregX": "cf39662cfb549042c0b0555072c9f45863ea7b79e0182b96dd42259dd66f323e",
+    "Claims.SamplingGeneric.Compiled.KSRegX": "3828fa5de7c919e1fd04cc5e95a1534ecc2e07099fc8a0117989f62f6deb31ea",
+    "Claims.SamplingGeneric.Compiled.regValX": "8ac1b824a1c934d780512c491c02042e87ac6e61e2abc8e29fdf045831014f3e",
+    "Claims.SamplingGeneric.Compiled.εregX": "b505b5520b4217041c2c7cafd11bfe96696672f20b674ec08bab6fa349472225",
+    "Claims.SamplingGeneric.CompilerKSRegX": "7a0b638c6015a0c485cf533055070a5c87cdc9674ad876da5800878163c7726a"
+   }
+  },
   "Definitions.Claims.SamplingServed": {
    "digest": "add02b79656af7269f1191c540f8009b9c7f3d1d146da15a2833794294d03f58",
    "definitions": {
@@ -33039,6 +33515,38 @@
     "Claims.Sampling.rankinFactor": "e287aa04eef2610430b6677637f6eca7097ad7ceb517f5372ad301f4bc83d79e",
     "Claims.Sampling.rankinFactorCapped": "02c0b0b035f1c0434ff27e513d8882f449e38ef430b534ad97da6080fef403e8",
     "Claims.Sampling.rankinFactorPatterns": "0063b26a0c3809fe529fa6ebc2c4294db168cf62ca737bd170c1e1fbc8efa676"
+   }
+  },
+  "Definitions.Claims.SamplingTwoReg": {
+   "digest": "70bb7f2f3d79480cfd57d5f23e95b5ae205df3248a3a070aea396a25de66783f",
+   "definitions": {
+    "Claims.Sampling.footprintAt": "bdb45a41848f36d679afb8b2988f9bd7b92102ca919b459e7ddb15972b25ff33",
+    "Claims.Sampling.wrongAtBoundaryAt": "19bcd2a24169ac820763603a0019fffe5dfedc5755d8becdf941a3fa29b3db07",
+    "Claims.Sampling.wrongInAt": "2dc7b771cb91a91a74342ab136ff97e0c8f471607ccc78c7e73ac0a2b385b07b",
+    "Claims.SamplingGeneric.CompiledTwo.BconfTwo": "e5f5b712fc8f5b3a2c1396c1eac60786f8a6bd3a7aff2abba24a31824be6baa1",
+    "Claims.SamplingGeneric.CompiledTwo.FregTwo": "5bb3997a29529aa961f76995c0d820df9b2e653ce1447a630f38f4126d6a2451",
+    "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo": "4b82947bc9af2358e1b87dd9c34f07f4c9ab8fa74e0b3804ac9ceb86686b8d30",
+    "Claims.SamplingGeneric.CompiledTwo.KSRegTwo": "9dc8778e3250b7defa43c3cc45152502ccc52bc5fba242ae3ea3cd52de76e559",
+    "Claims.SamplingGeneric.CompiledTwo.MissTwo": "8bae0f8395baf1814f833c3ab207b377f4f48ec7d5f2bbc5639f27eef714ca88",
+    "Claims.SamplingGeneric.CompiledTwo.iopensAt": "3056f123e7f2f0af6d6a4e2107bd27ced8a0863134f924549fd6ea13c46e295e",
+    "Claims.SamplingGeneric.CompiledTwo.iregVal": "f3ae1e623ee37512210dda6461933a5611b8d3ac8d680870ac355775b55c28c9",
+    "Claims.SamplingGeneric.CompiledTwo.εregTwo": "e217bd0447e89558decc85ffbe6e93b89358e4c57209e30c8bc9b28c91108ab1",
+    "Claims.SamplingGeneric.CompilerHeadlineTwo": "0d020f75cde0338220c50766a1d2fde92dd2697de56cedc9d9e2b1d70d9a2e71",
+    "Claims.SamplingGeneric.CompilerKSRegTwo": "4b00069b6670e336421312c9b951ec2adccc632e7fad7aa23b51462c24c8f854",
+    "Claims.SamplingGeneric.CompilerMissTwo": "11b4a616ec6b83b8b1af9828590558a1ca7f432d10c359bc362fbe232f8d9dd4"
+   }
+  },
+  "Definitions.Claims.SamplingTwoRegX": {
+   "digest": "0a29e26f49b4dc183ef23405164b4436e386cbda2c364e3471c40edc487d6aee",
+   "definitions": {
+    "Claims.SamplingGeneric.CompiledTwo.FregTwoX": "e7f8b6cd53564652078f66eda8b56bfd1dfe97d49ac7dd4a7afaa447a5704375",
+    "Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX": "09b4881ef5d30264d7890bbb9de954dbd2fbda21dbb6266b9a839363c1ef100f",
+    "Claims.SamplingGeneric.CompiledTwo.KSRegTwoX": "509e811eb11df020a8dcd8d146089e76e74f440f9b5214ff9d4c12fe22b6e4d6",
+    "Claims.SamplingGeneric.CompiledTwo.MissTwoX": "7d921d5d270b7bf99e390bf7d59a47fbabbf5282b0c12d779331a3a542fa012a",
+    "Claims.SamplingGeneric.CompiledTwo.εregTwoX": "556480b2225755fc3daf0d6a5c6ec23fd6a14d244e5cee009657eed0ce4725e9",
+    "Claims.SamplingGeneric.CompilerHeadlineTwoX": "7144d29b119cabe26ab9d7c7a87f675c3d5f95b28b75c5318b1518ea7abeb08b",
+    "Claims.SamplingGeneric.CompilerKSRegTwoX": "7f106b3d736ef8553e9f9f05b2f69d71c306f748057421a9a371012c149393ae",
+    "Claims.SamplingGeneric.CompilerMissTwoX": "20f8a807c5efa511f50d2e157a569c28ebef322459a165793d8aa168bc574c93"
    }
   },
   "Definitions.Claims.ZKOut": {
