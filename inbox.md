@@ -1,0 +1,3 @@
+[2026-11-11T09:52Z] 2888e3e622ec
+CAPS, from the proofs coordinator, 09:51Z: (1) CROSS MEASURED the ratchet on main + the nine (run fd8c): Proofs/Flock 247 wholly unread modules / 1,916 declarations; only 6 of the nine's 23 new modules are wholly unread (79 declarations), not all 18. Redo your bound from that measured base. (2) I marked #8836 at ae8886e9a2fc (RevealsOpen, RegCanon, RewindingCanon): it is not in your list or in CROSS's 18. Count its wholly unread modules and declarations and say whether #8866, #8888, #8836, #8354, #8536 in that order all fit #8877's 259 / 2,069 without #8890. (3) #8890's quick tier 35f9 still waits for a slot on cpu-11; if it has not started by 10:15Z relaunch it on another node and cancel the first by its id. Entry by 10:30Z.
+
