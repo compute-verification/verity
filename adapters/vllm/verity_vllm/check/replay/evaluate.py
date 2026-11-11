@@ -26,7 +26,7 @@ from verity_vllm.check.replay.index import (
     described,
     row_args,
 )
-from verity_vllm.check.replay.opening import _ITEMSIZE, CommittedStore
+from verity_vllm.check.replay.opening import _ITEMSIZE, WordStore
 from verity_vllm.check.replay.replay_dump import dump_row_words
 from verity_vllm.commit.opened import OpeningNotVerified, opened_check
 from verity_vllm.program.compact import is_file_prog
@@ -154,7 +154,7 @@ def _weight_gather(pi: ProgramIndex, weights: Callable[[str, int, int], np.ndarr
     return words[idx - mn], {"field": fname, "range": [flo, fhi], "gather": gather}
 
 
-def _cached_prefix_words(pi: ProgramIndex, store: CommittedStore, rid: str, pname: str, lo: int, hi: int, inputs_rec: list) -> list[np.ndarray]:
+def _cached_prefix_words(pi: ProgramIndex, store: WordStore, rid: str, pname: str, lo: int, hi: int, inputs_rec: list) -> list[np.ndarray]:
     """A warm request's cached rows [lo, hi) of the kv-prefix input: what its producing requests of record committed."""
     src = pi.cached_prefix.get(rid)
     if src is None:
@@ -169,7 +169,7 @@ def _cached_prefix_words(pi: ProgramIndex, store: CommittedStore, rid: str, pnam
     return out
 
 
-def _run_words(store: CommittedStore, f: dict, rid: str, engine_step: int, lo: int, hi: int, inputs_rec: list) -> np.ndarray:
+def _run_words(store: WordStore, f: dict, rid: str, engine_step: int, lo: int, hi: int, inputs_rec: list) -> np.ndarray:
     """Leaves [lo, hi) of the `run` field `f`: the request's committed `run_values` words of the step that reads it, one u8 a
     `Value<1>` leaf, refused by name when one is not a bit."""
     elo, ehi = lo - int(f["offset"]), hi - int(f["offset"])
@@ -182,7 +182,7 @@ def _run_words(store: CommittedStore, f: dict, rid: str, engine_step: int, lo: i
     return w
 
 
-def _schedule_witness(pi: ProgramIndex, store: CommittedStore, r: dict, d: dict, rid: str, arrive: int, pname: str, lo: int, hi: int,
+def _schedule_witness(pi: ProgramIndex, store: WordStore, r: dict, d: dict, rid: str, arrive: int, pname: str, lo: int, hi: int,
                       inputs_rec: list) -> np.ndarray:
     """The witness keys of a MoeAlignRanks_v1 row (`format.SCHEDULE_PARAM`): its OWN committed rank, so the row reproduces that rank
     exactly when it ranks each expert's pairs."""
@@ -201,7 +201,7 @@ def _schedule_witness(pi: ProgramIndex, store: CommittedStore, r: dict, d: dict,
     return w
 
 
-def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], r: dict, rid: str, arrive: int,
+def _evaluate_row(pi: ProgramIndex, store: WordStore, weights: Callable[[str, int, int], np.ndarray | None], r: dict, rid: str, arrive: int,
                   inputs_rec: list, *, depth: int, interior: dict[int, dict[str, np.ndarray]] | None = None,
                   row: int | None = None, plan: bool = False) -> dict[str, np.ndarray]:
     """F_row on the row's resolved inputs: committed member words, registered weight slices, committed prompt ids -- or, for an arg that
@@ -342,13 +342,13 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
     return evaluate(fam, st, inputs, wslices, refs=wrefs)
 
 
-def replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, *,
+def replay_vu(pi: ProgramIndex, store: WordStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, *,
               arrive: int) -> dict[str, Any]:
     """One VU: resolve its inputs to committed words / registered weights, evaluate, compare with its committed outputs (`opened_check`)."""
     return opened_check(getattr(store, "committed", None), lambda rec: _replay_vu(pi, store, weights, vu, arrive, rec))
 
 
-def plan_vu(pi: ProgramIndex, store: CommittedStore, vu: dict, *, arrive: int) -> str | None:
+def plan_vu(pi: ProgramIndex, store: WordStore, vu: dict, *, arrive: int) -> str | None:
     """Reads what `replay_vu` would read of the committed store for `vu` -- its inputs (interior rows included), its committed output
     members and their plane copies -- without evaluating it; the first input it cannot resolve, named (the replay will name it too)."""
     r = pi.by_i[vu["i"]]
@@ -383,7 +383,7 @@ def plane_ports(d: dict) -> dict[str, str]:
     return {str(j): m[0] for j, m in enumerate(d["members"])} if d.get("plane_kind") else {}
 
 
-def evaluated(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], r: dict, rid: str,
+def evaluated(pi: ProgramIndex, store: WordStore, weights: Callable[[str, int, int], np.ndarray | None], r: dict, rid: str,
               arrive: int, inputs_rec: list) -> tuple[dict[str, np.ndarray] | None, str | None]:
     """Row `r` of request `rid` evaluated from its committed inputs (`_evaluate_row`) -> (its outputs, None), or (None, why) when an
     input is unresolved or the evaluator raised; an opening that doesn't verify is raised."""
@@ -397,7 +397,7 @@ def evaluated(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, i
         return None, f"evaluator error: {e!r}"[:300]
 
 
-def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, arrive: int,
+def _replay_vu(pi: ProgramIndex, store: WordStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, arrive: int,
                rec: dict[str, Any]) -> dict[str, Any]:
     r = pi.by_i[vu["i"]]
     d = described(pi, r)

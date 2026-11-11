@@ -7,7 +7,7 @@ the manifest's op_path aliases to the one committed entry it names, and reads it
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -44,6 +44,13 @@ def resolve_op_path(aliases: dict[str, tuple[str, int]], op_path: str) -> tuple[
 
 def _invocation(e: dict) -> int:
     return int((e.get("identity") or {}).get("invocation", 0) or 0)
+
+
+class WordStore(Protocol):
+    """What a replay reads of a store: `CommittedStore.words`, which a request's own replay answers as well
+    (`request_replay.Replay`, `recomputed_prefix.RecomputedPrefix`)."""
+
+    def words(self, rid: str, step: int, op_path: str, member: str, elo: int, ehi: int) -> tuple[np.ndarray | None, str]: ...
 
 
 class CommittedStore:
