@@ -143,8 +143,8 @@ Landing:
 - A `# noqa` is an exception too: in `adapters/vllm`, no
   change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
   retirement. The ratchet gate counts them, with no allowlist.
-- Outside `adapters/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each landing's changed Python
-  after it lands, ringing its owner, never reverting: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
+- Outside `adapters/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and judges each candidate's merges off
+  the merge gate, never reverting (`--gate check` rings each failed merge's lane): fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
   list may catch up to what its base's lint finds in its tree, no further. Ruff: the root `ruff.toml`, per (file, rule),
   `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at
   the PR's base). No new swallowing handler: re-raise, record, or test first.
