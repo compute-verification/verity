@@ -77,6 +77,7 @@ statement `x r`: its inputs `ins r` and its setup `tabAt r`, where the verifier'
 @[expose] public section
 open Flock RecDeploy.VStarNets
 open Flock.Readable (Read)
+open FlockDeploy (Ins)
 open Properties.Flock.Nets (sparseOf FixedNetsBuild)
 open FlockDeploy.Concrete (shaB hmB)
 open Lean (Json)
@@ -96,7 +97,7 @@ def outPairs (c : Circuit) : Array (Nat × Nat) := Id.run do
   let msgCol := fun (g p byte t : Nat) =>
     let (k, o) := HmRow.byteAt (c.ports.getD p default) byte
     if k < where_[p]!.size then
-      let (slot, sub) := where_[p]![k]!
+      let (slot, sub) := (where_[p]!)[k]!
       c.slotCol c.shaNet g slot + sin[2 * sub + 1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
     else c.slotCol c.hmNet g p + hin[1]!.1 + 64 * (o / 8) + 56 - 8 * (o % 8) + t
   let forcedZero := c.unitRange.slot 0 + c.unit.useful
