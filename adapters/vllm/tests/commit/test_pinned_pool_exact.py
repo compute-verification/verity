@@ -243,7 +243,12 @@ def test_reserve_makes_exactly_the_blocks_the_takes_after_it_allocate(fake_cuda,
 
     calls: list[int] = []
     real = pp._pinned_block
-    monkeypatch.setattr(pp, "_pinned_block", lambda *a, **k: calls.append(a[0]) or real(*a, **k))
+
+    def counted(*a, **k):
+        calls.append(a[0])
+        return real(*a, **k)
+
+    monkeypatch.setattr(pp, "_pinned_block", counted)
     views = [reserved.take(n) for n in SIZES]
     assert calls == [], "the takes find every block ready"
     assert [int(b.numel()) for b in reserved.in_use] == [int(b.numel()) for b in plain.in_use]

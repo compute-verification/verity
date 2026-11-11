@@ -555,7 +555,7 @@ def test_manifest_program_digest_must_be_a_string(tmp_path):
 def test_composition_check_skips_a_one_request_manifest_whose_engine_steps_are_numbers():
     """A B=1 `build` manifest's engine_steps are the request's engine-step NUMBERS (ints, rc3
     schema); only build-global writes the dict composition.  The int list must be skipped (recorded), never indexed as a dict."""
-    bmap = {"entries": []}
+    bmap: dict[str, list] = {"entries": []}
     r = B.composition_check({"engine_steps": [0, 1, 2, 3], "composition_reference": {}}, bmap)
     assert r["ok"] and r["checked_steps"] == 0 and "no engine-step composition" in r["skipped"]
     r = B.composition_check({"engine_steps": list(range(32))}, bmap)

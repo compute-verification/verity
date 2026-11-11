@@ -247,7 +247,7 @@ def test_a_killed_holder_leaves_no_lock_behind(tmp_path):
     p.start()
     with open(started) as f:
         assert f.readline().strip() == "held"
-    assert _held(bd)
+    assert _held(bd) and p.pid is not None
     os.kill(p.pid, signal.SIGKILL)
     p.join()
     assert p.exitcode == -signal.SIGKILL and not _held(bd), "the kernel drops the lock with its holder"

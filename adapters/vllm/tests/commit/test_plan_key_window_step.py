@@ -71,7 +71,9 @@ class _Runner(PC._Runner):
     def execute_model(self, scheduler_output, *a, **kw):
         n = scheduler_output.total_num_scheduled_tokens
         self.model.model.layers[0].mlp.down_proj((torch.arange(n * K) % 251 - 125).reshape(n, K).bfloat16())
-        self.committer._acquire("logits", torch.zeros(n, 40), self.committer._cur)
+        com = self.committer
+        assert com is not None
+        com._acquire("logits", torch.zeros(n, 40), com._cur)
 
 
 def _sched(reqs: list[tuple[str, int, int]]) -> SimpleNamespace:

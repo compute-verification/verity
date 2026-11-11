@@ -5,6 +5,7 @@ that routes no Waksman network is an error by name, and a manifest row the rank 
 from __future__ import annotations
 
 import random
+from collections.abc import Sequence
 
 import pytest
 import torch
@@ -29,7 +30,7 @@ def order(pos: int, seed: int) -> list[int]:
     return random.Random(seed).sample(range(pos + 1), TOPK)
 
 
-def buffer(orders: list[list[int] | None]) -> torch.Tensor:
+def buffer(orders: Sequence[list[int] | None]) -> torch.Tensor:
     """The indexer's top-k rows, two columns wider than TOPK, -1 where a row holds no order."""
     return torch.tensor([(o or [-1] * TOPK) + [-1, -1] for o in orders], dtype=torch.int32)
 
@@ -53,16 +54,17 @@ def test_the_committed_bits_are_the_programs_run_fields():
     assert rv.targets_at(2) == dict.fromkeys(names, 1) and rv.targets_at(1) == {} and rv.names == {*names, D.run_field(3, 12)}
     rv.begin_step()
     positions = torch.tensor([3, 6, 9])
-    o3, o7 = [None, order(6, 1), order(9, 2)], [None, None, order(9, 3)]
+    a, b, c = order(6, 1), order(9, 2), order(9, 3)
+    o3, o7 = [None, a, b], [None, None, c]
     buf = buffer(o3)
     rv.take(2, 3, positions, buf, 3)
     buf[:] = buffer(o7)                                     # the next indexer layer writes the one buffer
     rv.take(2, 7, positions, buf, 3)
     got, errors = committed(rv)
     assert errors == []
-    assert got == [(names[0], bits(3, 6, o3[1])), (names[1], bits(3, 9, o3[2])), (names[2], bits(7, 9, o7[2]))]
+    assert got == [(names[0], bits(3, 6, a)), (names[1], bits(3, 9, b)), (names[2], bits(7, 9, c))]
     layout = {"fields": [{"name": n, "offset": sum(len(b) for _n, b in got[:i]), "leaves": len(b)} for i, (n, b) in enumerate(got)]}
-    whole = D.run_bits(layout, {(3, 6): o3[1], (3, 9): o3[2], (7, 9): o7[2]}, TOPK)
+    whole = D.run_bits(layout, {(3, 6): a, (3, 9): b, (7, 9): c}, TOPK)
     assert [x for _n, b in got for x in b] == whole, "the fields concatenated are the run input a Build's layout reads"
     assert committed(rv) == ([], []), "a step's rows are committed once"
 

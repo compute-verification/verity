@@ -270,7 +270,7 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
     assert c.roots == reference(c)
     assert c.bc[m.port("x")][:128] != c.bc[m.port("x")][256:]       # fresh salt per table row
     own = np.concatenate([refs, np.arange(15)[:, None]], axis=1)       # an output row is its instance's own
-    yrow = np.zeros((15, 64), dtype=np.uint16)
+    yrow: np.ndarray = np.zeros((15, 64), dtype=np.uint16)
     yrow[:, :1] = y
     assert c.public_body(0) == c.bc[m.port("x")] + c.bc[m.port("w")] + c.bc[m.port("y")] + own.astype("<u4").tobytes()
     assert c.private_body(0) == tables["x"].astype("<u2").tobytes() + tables["w"].astype("<u2").tobytes() + yrow.astype("<u2").tobytes() \

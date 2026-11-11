@@ -58,7 +58,7 @@ def test_a_collector_off_the_windowed_worker_is_refused(monkeypatch):
     windowed collector's scheme is rows-sha512."""
     for retain, gather, env in (("device", True, {}), ("none", True, {"VERITY_WINDOW_MB": "0"}), ("none", False, {})):
         with pytest.raises(ValueError, match="rows-sha512 is implemented on the windowed worker"):
-            committer(monkeypatch, retain, gather=gather, **env)
+            committer(monkeypatch, retain, gather, None, **env)
     with pytest.raises(ValueError, match="windowed staging needs native_collect_v2b"):
         committer(monkeypatch, "none", gather=False, VERITY_WINDOW_MB="256")
     assert committer(monkeypatch, "device", VERITY_WINDOW_MB="16").commit_scheme == "rows-sha512"
