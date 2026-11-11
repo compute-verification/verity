@@ -112,10 +112,10 @@ reads no file of a served run. It prints one block and writes `OUT/slowdown.json
   block's inputs cover), and the block says which of these figures are blank, why, and how the trace is taken again;
 - **S = p·ρ**, with what each factor rests on, and each seed beside it: whether it reaches the gain, and its |C|;
 - **the bound of record** at the same policy: the least slowdown of any partition of the attack's traced circuit, by
-  the theorem's count solved for the fewest blocks (`min_cut.blocks_at_least`, times c/|C|). ρ's products term is the
-  same theorem's closed form on the same work (`calculator.closed_form`), never above the solved count, so the two are lower
-  bounds on one slowdown: the block prints the larger beside S, which keeps ρ's, and never mixes it in. It is "not
-  available", with what is missing, where the search record gives the bound no traced step to read;
+  the theorem's count solved for the fewest blocks, times c/|C| (the calculator's `min_cut.bound`, through
+  `calculator.bound`). ρ's products term is this bound: `formalism.he_figure` chooses the work by it, so where
+  products bind ρ is it and S is p times it. It is "not available", with what is missing, where the search record
+  gives the bound no traced step to read;
 - **per period**: the run's AND gates at S and their share of one datacenter's and of the world's compute over a
   window, a week, a month and a year, with the measured, proved and scaled parts named.
 

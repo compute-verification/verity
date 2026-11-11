@@ -76,34 +76,34 @@ bound on its own, ρ ≥ max_K (|B_K|/|C|)/(cap_K(k)/c): each kind's term, the m
 kind rests on (`RESTS_ON`). Where Fit fails ρ is max(1, that max); where Fit holds it is c/(c − d), and every term is at
 most that. Its one kind:
 - products: the theorem of record's products term (`he_products`, `RESTS_ON` has its statement), a theorem for the
-  run's circuit given (H) and (E): ρ ≥ (c/|C|)·(N/(k + α) − F·(k/2)·√(ON/(β_w·β_x))/(k + α)^1.5),
-  α = F·½·√(k³/(β_w·β_x·b_y)) (the slowdown calculator's arithmetic, read through `calculator`, never restated
-  here), on M, the run's products whose two operands both depend on the update
-  (`he_of_rows` on a step's product rows, `he_of_products` on a model's), N its MACs and O its output wires. M leaves
-  out one array times itself, a product reading a gather's rows before any op makes them token-specific, attention's
-  products and the optimizer's (Newton-Schulz's B·X), from k = 8e7 the head's input and weight gradients
-  (`HEAD_K`), each token-indexed product's share at the positions sequences can share (`SHARED_PREFIX`), the run's
-  steps before its first update (whose products read only registered weights: a traced record counts only the steps
-  of structures with an affected share, `of_record`) and the ⌊k/(τT)⌋ after it, and every product whose operands'
-  β_w·β_x is below the one it charges. An operand's β is its passed width, capped at its Definition's (`HE_BITS`), or
-  `beta_eff`, β/(1 + (K*/r)²) with K* = ½√(k/β), where the update reaches it only through a bottleneck of rank r: its
-  rate below its width implies r, and on a step with an adapter of rank r_step every operand downstream of it is at
-  most its β_eff at r_step, the adapters' own operands at their widths; a weight's is at most the run record's code
-  bits a trained weight (`CODE_LABEL`), an activation's at most β(k) (`calculator.beta`, `BETA_K_LABEL`), the casts of
-  one value counting as one word. b_y is M's least output width and F = 2/√3 where M holds a backward product (a layer's
-  forward, input-gradient and weight-gradient products share arrays, `calculator.share`), else 1, in both α and the
-  outputs' term; that no four arrays are pairwise multiplied is a premise the product rows don't record. The term is the
-  best over three choices of M (`HE_SUBSETS`: M, M less the contractions too short for the main term to outweigh the
-  outputs', and the weight gradients alone, at F = 1), each at the best β_w·β_x threshold it can take (`he_figure`),
-  never below 0. It needs no summation order, so it is measured on products written with elementwise ops (left out of M,
-  kept in |C|) and for a tree. It is unmeasured on a record with no product rows, on rows that predate `SYSTEM_FROM`
-  (`HE_RETRACE`), past the last k the calculator has a β(k) at (`HE_PAST`), from `HEAD_K` on a model's products
-  (`HE_HEAD`) and on a step whose elementwise ops fan out into an operand (`p_match_reason`), and never priced on a
-  trace of another program (`OTHER_PROGRAM`). The products come from `products_of` (steps captured by capture_step or
-  capture_fn) or `products_of_trace` (the product rows a recorded program's trace keeps from training_slowdown 4.8 on,
-  training_slowdown.capture.products), each at the k it classifies them at, a trace's at each k of the console's dial
-  too (`at`). At a fixed k the term is linear in c, so the dial reads it as c times a number for each k it has products
-  at (`products_per_c`).
+  run's circuit given (H) and (E): every partition does N ≤ m(k + α) + F·(k/2)·√(mO/(β_w·β_x)) in its m blocks, α =
+  F·½·√(k³/(β_w·β_x·b_y)), so ρ ≥ c/|C| times the least m that count allows. That is the slowdown calculator's bound of
+  record, read through `calculator.bound` and never restated here: this module states the work, M, the run's products
+  whose two operands both depend on the update (`he_of_rows` on a step's product rows, `he_of_products` on a model's), N
+  its MACs and O its output wires. M leaves out one array times itself, a product reading a gather's rows before any op
+  makes them token-specific, attention's products and the optimizer's (Newton-Schulz's B·X), from k = 8e7 the head's
+  input and weight gradients (`HEAD_K`), each token-indexed product's share at the positions sequences can share
+  (`SHARED_PREFIX`), the run's steps before its first update (whose products read only registered weights: a traced
+  record counts only the steps of structures with an affected share, `of_record`) and the ⌊k/(τT)⌋ after it, and every
+  product whose operands' β_w·β_x is below the one it charges. An operand's β is its passed width, capped at its
+  Definition's (`HE_BITS`), or `beta_eff`, β/(1 + (K*/r)²) with K* = ½√(k/β), where the update reaches it only through a
+  bottleneck of rank r: its rate below its width implies r, and on a step with an adapter of rank r_step every operand
+  downstream of it is at most its β_eff at r_step, the adapters' own operands at their widths; a weight's is at most the
+  run record's code bits a trained weight (`CODE_LABEL`), an activation's at most β(k) (`calculator.beta`,
+  `BETA_K_LABEL`), the casts of one value counting as one word. b_y is M's least output width and F = 2/√3 where M holds
+  a backward product (a layer's forward, input-gradient and weight-gradient products share arrays, `calculator.share`),
+  else 1, in both α and the outputs' term; that no four arrays are pairwise multiplied is a premise the product rows
+  don't record. The term is the best over three choices of M (`HE_SUBSETS`: M, M less the contractions too short for the
+  main term to outweigh the outputs', and the weight gradients alone, at F = 1), each at the best β_w·β_x threshold it
+  can take (`he_figure`), never below 0. It needs no summation order, so it is measured on products written with
+  elementwise ops (left out of M, kept in |C|) and for a tree. It is unmeasured on a record with no product rows, on
+  rows that predate `SYSTEM_FROM` (`HE_RETRACE`), past the last k the calculator has a β(k) at (`HE_PAST`), from
+  `HEAD_K` on a model's products (`HE_HEAD`) and on a step whose elementwise ops fan out into an operand
+  (`p_match_reason`), and never priced on a trace of another program (`OTHER_PROGRAM`). The products come from
+  `products_of` (steps captured by capture_step or capture_fn) or `products_of_trace` (the product rows a recorded
+  program's trace keeps from training_slowdown 4.8 on, training_slowdown.capture.products), each at the k it classifies
+  them at, a trace's at each k of the console's dial too (`at`). At a fixed k the term is linear in c, so the dial reads
+  it as c times a number for each k it has products at (`products_per_c`).
 A kind's term is None where its inputs are unmeasured, with the reason (`unmeasured`), and the max is over the measured
 ones (None, and so ρ where Fit fails, where none is). Beside the kinds, never in the max, the sensitivities
 (`SENSITIVITIES`), each labelled with what it rests on:
@@ -422,8 +422,8 @@ def _beta_rows() -> str:
 RESTS_ON = {
     "products": "theorem of record for this circuit: every partition into blocks of at most c gates, each "
                 "reading at most k bits outside θ, does N ≤ m(k + α) + F·(k/2)·√(mO/(β_w·β_x)) of M's N MACs "
-                "in its m blocks, α = F·½·√(k³/(β_w·β_x·b_y)), so ρ ≥ (c/|C|)·(N/(k + α) − "
-                "F·(k/2)·√(ON/(β_w·β_x))/(k + α)^1.5), floored at 1, O M's output wires; given these premises "
+                "in its m blocks, α = F·½·√(k³/(β_w·β_x·b_y)), so ρ ≥ c/|C| times the least m that count "
+                "allows, floored at 1, O M's output wires; given these premises "
                 "on M, each refuted by a single counterexample: (H) operands are hard: every set of M's words "
                 "with a cut of at most k bits from the unregistered inputs has a cut of at least each word's β, "
                 "the casts of one value counting as one word: a weight's (an operand no token indexes) its "
@@ -850,12 +850,14 @@ def he_figure(he: dict, c: float, C: float, tau: float | None = None, beta_code:
     where a layer's arrays differ in β (Motzkin-Straus sums u_r·u_s/(β_r·β_s) over the pairs M_P multiplies), b_y M_P's
     least output width and F = 2/√3 where M_P holds a backward product (`calculator.share`: a layer's forward,
     input-gradient and weight-gradient products share arrays; Motzkin-Straus bounds π by 4/3 where no four arrays are
-    pairwise multiplied), else 1, and 1 on the weight gradients alone; the subset's term is the largest
-    `calculator.closed_form` over P. The second subset leaves out of M's best the groups whose contraction K is below
-    K_thr = (F·k/2)²·b_y/(β_w·β_x·(k + α)), where the outputs' term outweighs the main one. What it read: the binding
-    subset, each subset's term, β_w, β_x, β (their geometric mean), b_y, F, α, N, O, K_thr, β(k), `beta_code` where it
-    caps a weight in M (`code_bound`), the first steps left out, M_P's share of the candidates' MACs, whether an
-    operand's own β (its rate or β_eff, before either cap) is below its width (`below_width`) and the step's r_step."""
+    pairwise multiplied), else 1, and 1 on the weight gradients alone; the subset's term is the largest bound of record
+    over P, the least m the calculator's count allows M_P times c/|C| (`calculator.bound`'s `blocks`, before its floor
+    at 1). The second subset leaves out of M's best the groups whose contraction K is below K_thr =
+    (F·k/2)²·b_y/(β_w·β_x·(k + α)): on a group that short the count's outputs' term is at least its main one at the m =
+    N/(k + α) its MACs alone would need. What it read: the binding subset, each subset's term, β_w, β_x, β (their
+    geometric mean), b_y, F, α, N, O, K_thr, β(k), `beta_code` where it caps a weight in M (`code_bound`), the first
+    steps left out, M_P's share of the candidates' MACs, whether an operand's own β (its rate or β_eff, before either
+    cap) is below its width (`below_width`) and the step's r_step."""
     k = he["k"]
     bk = calculator.beta(k)
     if bk is None:
@@ -885,8 +887,8 @@ def he_figure(he: dict, c: float, C: float, tau: float | None = None, beta_code:
             N, O = scale * sum(g["macs"] for _, _, g in M), scale * sum(g["wires"] for _, _, g in M)
             b_y = min(g["b_y"] for _, _, g in M)
             F = 1.0 if one or all(g["forward"] for _, _, g in M) else calculator.share(3)
-            raw = calculator.closed_form(c, k, {"N": N, "O": O, "beta_w": bw, "beta_x": bx, "b_y": b_y, "F": F,
-                                                "C_gates": C})
+            work = {"N": N, "O": O, "beta_w": bw, "beta_x": bx, "b_y": b_y, "F": F, "C_gates": C}
+            raw = calculator.bound(c, k, work)["blocks"] * c / C
             if out is None or raw > out["raw"]:
                 out = {"raw": raw, "beta_w": bw, "beta_x": bx, "beta": math.sqrt(P), "b_y": b_y, "F": F,
                        "alpha": F * calculator.alpha(k, P, b_y), "N": N, "O": O,

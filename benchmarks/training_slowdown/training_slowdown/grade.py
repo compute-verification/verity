@@ -35,9 +35,9 @@ no job writes): the grade never reads it and passes it on, beside each record it
   where τ's stub changes no step count: the block says which figures are blank and why (`blank`);
 - **S = p·ρ** against each H, a lower bound where ρ is one (`partial`), with what each factor rests on;
 - **the bound of record** at the same policy (`calculator.bound`): the least slowdown of any partition of the
-  attack's traced circuit, by the theorem's count solved for the fewest blocks. ρ's products term is the same
-  theorem's closed form on the same work, never above the solved count (`BOUND_BESIDE`), so the two are lower bounds
-  on one slowdown; the block prints the larger beside S, which keeps ρ's, and never mixes it in;
+  attack's traced circuit, by the theorem's count solved for the fewest blocks. ρ's products term is this bound:
+  `formalism.he_figure` chooses the work by it, so where products bind ρ is it and S is p times it (`BOUND_IS_RHO`).
+  The block prints it under S with its statement and what it rests on;
 - **per period** (`per_period`): the run's AND gates at S, C·ρ, and their share of one datacenter's and of the
   world's compute over a window, a week, a month and a year (`calculator.fleets`, `calculator.periods`), with the
   measured, proved and scaled parts named.
@@ -76,13 +76,10 @@ TRACE = ("capture", "tokens", "k", "rows", "p_match", "at", "data_dependent", "c
 BESIDE = {"circuit": "the measured step's cut of its gradient and its structure, which the reduction and update "
                      "sensitivities read",
           "capture_code": "the version of the code that took the trace"}
-#: how the bound of record stands to S, which the block says under it: the products term (`calculator.closed_form`) and
-#: the bound of record (`min_cut.blocks_at_least` times c/|C|) are the theorem's second conjunct and its first solved
-#: for m, and `min_cut.slowdown_at_least` says why the first is never above the second
-BOUND_BESIDE = ("rho's products term is this theorem's closed form for the slowdown (min_cut.slowdown_at_least) and "
-                "this is its count solved for the fewest blocks, times c/|C| (min_cut.blocks_at_least), on the same N, "
-                "O, β, b and F: the closed form is never above the solved count, so the two are lower bounds on one "
-                "slowdown, this the larger, and S keeps rho's; the two are never combined")
+#: how the bound of record stands to ρ, which the block says under it: `formalism.he_figure` scores each choice of the
+#: work by `calculator.bound`, so the products term is the bound of record on the work it chose
+BOUND_IS_RHO = ("rho's products term is this bound, the theorem's count solved for the fewest blocks, times c/|C|, on "
+                "the same N, O, β, b and F: where products bind, rho is it and S is p times it")
 #: the job that takes a record's trace again (`training_slowdown.run`'s `retrace`), which a refused trace's reason names
 RETRACE = "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device cpu"
 
@@ -442,10 +439,11 @@ def per_period(run_gates: float, rho: dict) -> dict:
     return {"run_and_gates": run_and, "window": calculator.window()[0], "rows": rows, "parts": {
         "measured": "|C| of each seed and H, the counted gates of the records read, so p; ρ's inputs, one traced step "
                     "of the search record",
-        "proved": (f"the form of ρ's products term, {calculator.theorem()}'s second conjunct (`HEShared`'s where its "
-                   "products share arrays): a lower bound at the N, O, β_w, β_x and b_y the traced step gives, given "
-                   "(H), (E) and the theorem's hypotheses on the circuit, which the trace doesn't check; p and the "
-                   "shares are not proved" if rho["binding_kind"] == "products" else
+        "proved": (f"the count ρ's products term solves for the fewest blocks, {calculator.theorem()}'s first "
+                   "conjunct (`HEShared`'s where its products share arrays): a lower bound at the N, O, β_w, β_x and "
+                   "b_y the traced step gives, given (H), (E) and the theorem's hypotheses on the circuit, which the "
+                   "trace doesn't check; the solving is the calculator's arithmetic, and p and the shares are not "
+                   "proved" if rho["binding_kind"] == "products" else
                    f"nothing: ρ's {rho['binding_kind']} term is computed"),
         "scaled": f"every share: a fleet's AND gates are its registry's peak FLOP a second, two a MAC at the "
                   f"{calculator.FLEET_PRECISION} GEMM's AND gates, times its locations and the period, and the run's "
@@ -593,7 +591,7 @@ def text(s: dict) -> str:
     add("bound of record", *([bound["why"]] if not bound["available"] else [
         f"every partition of the attack's traced circuit into the policy's blocks pays at least "
         f"{bound['slowdown']:,.6g}x ({bound['theorem']}: at least {bound['blocks']:.4g} blocks of c gates over its |C|)",
-        f"rests on: {bound['rests_on']}", BOUND_BESIDE]))
+        f"rests on: {bound['rests_on']}", BOUND_IS_RHO]))
     if per is None:
         add("per period", "none: no S")
     else:

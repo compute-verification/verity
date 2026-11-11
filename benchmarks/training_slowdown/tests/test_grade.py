@@ -535,47 +535,50 @@ def test_p_reads_one_split_and_a_record_out_of_place_is_refused():
     assert not bad["reached"] and bad["why"] == "no scored checkpoint: invalid: foreign op"
 
 
-def test_the_block_says_how_the_bound_of_record_stands_to_rho():
-    """ρ's products term and the bound of record are one theorem's on one work, the traced step's N, O, β_w, β_x, b_y
-    and F: the term is the closed form (`calculator.closed_form`), and the bound is the count solved for the fewest
-    blocks (`min_cut.blocks_at_least`) times c/|C|. So the term is never above the bound, the block says so under the
-    bound, and S is p times ρ, not times the bound."""
+def test_rho_is_the_bound_of_record_where_products_bind():
+    """ρ's products term is the bound of record: the calculator's count solved for the fewest blocks
+    (`min_cut.blocks_at_least`) times c/|C|, on the traced step's N, O, β_w, β_x, b_y and F. So where products bind, ρ
+    is the bound's slowdown and S is p times it, and the block says so under the bound."""
     s = graded([job([OVER, UNDER], 0), traced([OVER, UNDER])], [job([UNDER])])
     w, got = s["rho"]["work"], s["bound_of_record"]
     c, k = policy.CONSOLE
-    closed = calculator.closed_form(c, k, w)
     solved = calculator._min_cut().blocks_at_least(w["N"], w["O"], k, w["beta_w"] * w["beta_x"], w["b_y"], w["F"])
-    assert s["rho"]["binding_kind"] == "products" and s["rho"]["rho"] == s["rho"]["terms"]["products"] == closed
-    assert got["blocks"] == pytest.approx(solved) and got["slowdown"] == pytest.approx(solved * c / w["C_gates"])
-    assert 1 < closed < got["slowdown"] and s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * closed)
-    assert f"\n  {'':<17} {G.BOUND_BESIDE}\n" in G.text(s) and "this attack pays" not in G.text(s)
-    assert "min_cut.slowdown_at_least" in G.BOUND_BESIDE and "min_cut.blocks_at_least" in G.BOUND_BESIDE
-    assert "never above the solved count" in G.BOUND_BESIDE and "overhead" not in G.text(s)
+    assert got["blocks"] == solved and got["slowdown"] == solved * c / w["C_gates"] > 1
+    assert s["rho"]["binding_kind"] == "products"
+    assert s["rho"]["rho"] == s["rho"]["terms"]["products"] == got["slowdown"]
+    assert s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * got["slowdown"])
+    assert f"\n  {'':<17} {G.BOUND_IS_RHO}\n" in G.text(s) and "this attack pays" not in G.text(s)
+    assert "rho is it" in G.BOUND_IS_RHO and "closed form" not in G.text(s) and "overhead" not in G.text(s)
 
 
-def test_the_bound_of_record_is_the_calculators_beside_s_and_never_in_it(monkeypatch):
+def test_the_bound_of_record_is_the_calculators_and_rho_follows_it(monkeypatch):
     """The bound of record is the calculator's `min_cut.bound` at the policy's (c, k) on the traced step's N, O, β_w,
-    β_x, b_y, F and |C|, with no n; S is p·ρ either way. Without a traced step, or on one whose M is empty (no
-    operand holds a bit, so there is no β to hand over), it is not available, with the reason."""
+    β_x, b_y, F and |C|, with no n, and ρ's products term is its blocks times c/|C|: with the calculator's `bound`
+    replaced, each choice of the work is scored by it, and ρ and S follow it. Without a traced step, or on one whose
+    M is empty (no operand holds a bit, so there is no β to hand over), it is not available, with the reason."""
     runs, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])]
     calls = []
 
     def stub(c, k, n, **kw):
         calls.append((c, k, n, kw))
-        return SimpleNamespace(slowdown=7.5, blocks=3.0, statement="HE", rests_on="given (H) and (E)")
+        return SimpleNamespace(slowdown=300.0 * c / kw["size"], blocks=300.0, statement="HE",
+                               rests_on="given (H) and (E)")
 
     stubbed = SimpleNamespace(**vars(calculator._min_cut()) | {"bound": stub, "HE": "the statement"})
     monkeypatch.setattr(calculator, "_min_cut", lambda: stubbed)
     s = graded(runs, ref)
     work, got = s["rho"]["work"], s["bound_of_record"]
-    assert calls == [(*policy.CONSOLE, None, {"N": work["N"], "O": work["O"], "size": work["C_gates"],
-                                              "beta_w": work["beta_w"], "beta_x": work["beta_x"], "b": work["b_y"],
-                                              "F": work["F"]})]
-    assert (got["available"], got["slowdown"], got["blocks"], got["theorem"]) == (True, 7.5, 3.0, "HE")
-    assert s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * s["rho"]["rho"])
-    assert "pays at least 7.5x (HE: at least 3 blocks" in G.text(s) and "rests on: given (H) and (E)" in G.text(s)
+    assert len(calls) > 1 and all(call[:3] == (*policy.CONSOLE, None) for call in calls)
+    assert calls[-1][3] == {"N": work["N"], "O": work["O"], "size": work["C_gates"], "beta_w": work["beta_w"],
+                            "beta_x": work["beta_x"], "b": work["b_y"], "F": work["F"]}
+    slowdown = 300.0 * policy.CONSOLE[0] / work["C_gates"]
+    assert (got["available"], got["slowdown"], got["blocks"], got["theorem"]) == (True, slowdown, 300.0, "HE")
+    assert s["rho"]["rho"] == slowdown > 1 and s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * slowdown)
+    assert f"pays at least {slowdown:,.6g}x (HE: at least 300 blocks" in G.text(s)
+    assert "rests on: given (H) and (E)" in G.text(s)
+    made = len(calls)
     untraced = graded([job([UNDER])], ref)["bound_of_record"]
-    assert not untraced["available"] and "gives none" in untraced["why"] and len(calls) == 1
+    assert not untraced["available"] and "gives none" in untraced["why"] and len(calls) == made
     assert untraced["theorem"] == "the statement" and (untraced["c_gates"], untraced["k_bits"]) == policy.CONSOLE
     assert "bound of record   not available: " in G.text(graded([job([UNDER])], ref))
     flat = trace()
@@ -583,13 +586,13 @@ def test_the_bound_of_record_is_the_calculators_beside_s_and_never_in_it(monkeyp
         b["rows"] = [r | {"rates": [0.0, 0.0]} for r in b["rows"]]
     empty = graded([*runs[:2], traced([OVER, UNDER], **flat)], ref)
     assert empty["rho"]["terms"] == {"products": 0.0} and empty["rho"]["rho"] == 1 and empty["rho"]["work"] is None
-    assert not empty["bound_of_record"]["available"] and len(calls) == 1
+    assert not empty["bound_of_record"]["available"] and len(calls) == made
 
 
 def test_the_bound_call_fits_the_calculator_as_it_is():
     """On the calculator as the tree has it, the grade's own call gives a slowdown of at least 1 under one of the two
-    statements the calculator's `min_cut` names, the first of them the one the grade says ρ's products term has the
-    form of."""
+    statements the calculator's `min_cut` names, the first of them the one the grade says ρ's products term solves
+    the count of."""
     s = graded([job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])])
     got, mod = s["bound_of_record"], calculator._min_cut()
     assert got["available"] and got["slowdown"] >= 1

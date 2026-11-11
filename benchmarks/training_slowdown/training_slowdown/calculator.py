@@ -8,9 +8,10 @@ What the calculator states is read from it through its public functions, never r
 - the monitoring periods (`periods`): its `PERIODS`, core's, with the window of the census's reference deployment
   before them;
 - the bound of record at a policy (`bound`): the lower bound on a circuit's slowdown that the statement its
-  `min_cut` names proves (`theorem`), from its `min_cut.bound`;
-- the bound's own terms, which a caller choosing the work reads (`beta`, `beta_rows`, `share`, `alpha`, and the
-  statement's closed form, `closed_form`): its `min_cut`'s functions of those names.
+  `min_cut` names proves (`theorem`), from its `min_cut.bound`. It is the benchmark's one slowdown from products:
+  `formalism.he_figure` chooses the work by it and the grade's ρ is it;
+- the bound's own terms, which a caller choosing the work reads (`beta`, `beta_rows`, `share`, `alpha`): its
+  `min_cut`'s functions of those names.
 
 No other module or test of this benchmark imports the calculator or names its directory
 (`tests/test_one_calculator.py`).
@@ -122,14 +123,6 @@ def alpha(k: float, q: float, b: float) -> float:
     return _min_cut().alpha(k, q, b)
 
 
-def closed_form(c_gates: float, k_bits: float, work: dict) -> float:
-    """The left side of the statement's second conjunct at the policy (c, k) on `work` (`bound`'s), the calculator's
-    `min_cut.slowdown_at_least`: never above the solved count's slowdown, and below 0 where the outputs' term
-    outweighs the first."""
-    return _min_cut().slowdown_at_least(work["N"], work["O"], work["C_gates"], c_gates, k_bits,
-                                        work["beta_w"] * work["beta_x"], work["b_y"], work["F"])
-
-
 def theorem() -> str:
     """The statement the bound of record instantiates, by the Lean name the calculator's `min_cut` gives it (its
     `HE`; `HEShared` where the products share arrays)."""
@@ -138,9 +131,10 @@ def theorem() -> str:
 
 def bound(c_gates: float, k_bits: float, work: dict | None) -> dict:
     """The bound of record at the policy (c, k) on a circuit's `work` (the theorem's N in MACs, O in wires, β_w, β_x,
-    b_y and F on M, and |C| in gates, as `formalism.he_products` reads them from a traced step): what every partition
-    of that circuit into the policy's blocks pays, the `slowdown` of the calculator's `min_cut.bound`, with its least
-    `blocks`, its `statement` and what it `rests_on`. A policy here states no output bits a block, so the function's
+    b_y and F on M, and |C| in gates, as `formalism.he_figure` states them from a traced step): what every partition
+    of that circuit into the policy's blocks pays, the `slowdown` of the calculator's `min_cut.bound` (the statement's
+    count solved for the fewest blocks, times c/|C|, and at least 1), with its least `blocks`, its `statement` and
+    what it `rests_on`. A policy here states no output bits a block, so the function's
     n is None. Not `available`, with what is missing, where the circuit has no `work`."""
     out = {"available": False, "theorem": theorem(), "c_gates": c_gates, "k_bits": k_bits}
     if work is None:

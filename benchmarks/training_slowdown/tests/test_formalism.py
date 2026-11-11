@@ -525,7 +525,7 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
     dw = [g for g in he["groups"] if g["dw"]]
     N, O = sum(g["macs"] for g in dw), sum(g["wires"] for g in dw)
     alone = {"N": N, "O": O, "beta_w": 15.9, "beta_x": 15.9, "b_y": 16, "F": 1.0, "C_gates": C}
-    assert fig["subsets"][F.HE_SUBSETS[2]] == pytest.approx(max(0.0, calculator.closed_form(c, k, alone)), rel=1e-12)
+    assert fig["subsets"][F.HE_SUBSETS[2]] == calculator.bound(c, k, alone)["blocks"] * c / C
     first = F.he_figure(he, c, C, tau=16)
     assert first["first_steps"] == 4 and first["N"] == pytest.approx(0.6 * fig["N"], rel=1e-12)
     assert fig["first_steps"] is None and F.he_figure(he, c, C, tau=1e3)["first_steps"] == 0
@@ -596,8 +596,9 @@ def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ
     share = 2 / math.sqrt(3)
 
     def rho(M: list, bw: float, bx: float, f: float = share) -> float:
-        return calculator.closed_form(c, k, {"N": sum(g["macs"] for g in M), "O": sum(g["wires"] for g in M),
-                                             "beta_w": bw, "beta_x": bx, "b_y": 16, "F": f, "C_gates": C})
+        work = {"N": sum(g["macs"] for g in M), "O": sum(g["wires"] for g in M), "beta_w": bw, "beta_x": bx,
+                "b_y": 16, "F": f, "C_gates": C}
+        return calculator.bound(c, k, work)["blocks"] * c / C
 
     assert (fig["subset"], fig["beta_w"], fig["beta_x"], fig["code_bound"]) == ("M", 2.0, 8.0, True)
     assert fig["F"] == pytest.approx(share, rel=1e-15) and fig["macs_share"] == 1
@@ -732,10 +733,10 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_d
     """A trace keeps its product rows at each k of the console's dial (training_slowdown.capture.products' `at`), so
     the products term is measured at each of them on that k's M, and off the dial it is unmeasured with the reason. At
     a fixed k the theorem of record's ρ is c/|C| times a function of k, so the dial reads the term as c times a number
-    for each k (`products_per_c`). On the 45M dense step the term falls with k (99,481 at the console's 65,536 bits
-    and 56,743 at 80,000 on M, 23,374 at the served block's 145,568 and 1,655 at 800,000 on M without its short
-    contractions), and from 8e6 bits up β(k) is low enough that the outputs' term exceeds the MACs', so it is 0, which
-    ρ's floor reads as 1."""
+    for each k (`products_per_c`). On the 45M dense step the term falls with k (220,665 at the console's 65,536 bits,
+    160,416 at 80,000, 60,188 at the served block's 145,568 and 2,815 at 800,000 on M, 39 at 8e6 on M without its
+    short contractions), and from 8e7 bits up β(k) is so low that the count allows fewer blocks than |C|/c, so the
+    term is below 1, which ρ's floor reads as 1."""
     from training_slowdown.capture import products
 
     rows = json.loads((FIXTURES / "dense_45m.products.json").read_text())
@@ -752,7 +753,7 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_d
             assert why is None and inputs["k_classified"] == k
             assert term == pytest.approx(c * per[str(k)], rel=1e-12, abs=1e-12)
     c = policy.CONSOLE[0]
-    assert [round(c * per[str(k)]) for k in products.DIAL_K] == [99_481, 56_743, 23_374, 1_655] + [0] * 3
+    assert [round(c * per[str(k)]) for k in products.DIAL_K] == [220_665, 160_416, 60_188, 2_815, 39, 0, 0]
     term, why, _ = F.he_products(m, c, 100_000)
     assert term is None and "keep none at it" in why and "each k of the console's dial" in why
     assert F.products_per_c(replace(m, products={x: v for x, v in got.items() if x != "at"})) == {
@@ -767,8 +768,8 @@ def test_a_fixtures_trace_keeps_its_product_rows_and_their_products_term(name):
     step the circuit traces): the capture's version, the console's k, the circuit's tokens and |C|, P-match holding,
     and by kind every product the op log places. On the tiny start no product is fresh: every counted candidate has an
     operand read through a repeating view or a broadcast below its width (each view read at its own value's rate), so
-    the products term is a measured 0: M's operands are read far below their widths, and at every β M can take its
-    outputs' part is at least its MACs'."""
+    the products term is measured and far below 1, where the bound says nothing: M's operands are read far below
+    their widths, and at every β M can take the count allows fewer blocks than |C|/c."""
     from training_slowdown.capture import products
     from training_slowdown.capture.circuit import StepCircuit, measure
 
@@ -782,7 +783,7 @@ def test_a_fixtures_trace_keeps_its_product_rows_and_their_products_term(name):
     assert got["kinds_macs"]["fresh"] == 0 and any(any(r["gathered"]) for r in block["rows"])
     b = F.bound(replace(one_part(), products=got), 1e11, policy.CONSOLE[1])
     he = b["inputs"]["products"]
-    assert b["terms"]["products"] == 0 and "products" not in b["unmeasured"] and he["below_width"]
+    assert 0 < b["terms"]["products"] < 1 and "products" not in b["unmeasured"] and he["below_width"]
     assert he["beta"] < 4 and he["macs_share"] < 1
 
 

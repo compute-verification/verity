@@ -1,7 +1,7 @@
 """The benchmark reaches the slowdown calculator (`verity/protocols/inference_only/rho`) through one module,
 `training_slowdown.calculator`: no other module or test under this directory imports a module of the calculator or
-names its directory, and the bound the benchmark states is the calculator's, so with the calculator's module replaced
-the products term follows it."""
+names its directory, and the slowdown the benchmark states is the calculator's bound of record, so with the
+calculator's module replaced the products term follows it."""
 import ast
 from pathlib import Path
 from types import SimpleNamespace
@@ -64,22 +64,23 @@ def test_a_reach_is_found():
 
 def test_the_products_term_is_the_calculators(monkeypatch):
     """`formalism` states which work is charged and computes none of the bound: with the calculator's module replaced
-    by one whose closed form is a constant, the products term is that constant, at the β and the F the replaced
-    module gives."""
+    by one whose bound is 42 blocks on every work, the products term is 42 blocks' slowdown, at the β and the F the
+    replaced module gives."""
     real = vars(calculator._min_cut())
     seen = []
 
-    def closed(N, O, size, c, k, q, b, F=1.0):
-        seen.append((N, O, size, c, k, q, b, F))
-        return 42.0
+    def bound(c, k, n, **work):
+        seen.append((c, k, n, work))
+        return SimpleNamespace(slowdown=7.0, blocks=42.0, statement="a statement", rests_on="its premises")
 
     monkeypatch.setattr(calculator, "_min_cut", lambda: SimpleNamespace(**real | {
-        "slowdown_at_least": closed, "beta": lambda k: 3.0, "share": lambda omega: 1.25}))
+        "bound": bound, "beta": lambda k: 3.0, "share": lambda omega: 1.25}))
     group = {"beta": [16.0, 16.0], "width": [16, 16], "weight": [False, True], "b_y": 16, "forward": False,
              "k_dim": 64, "dw": False, "head": False, "macs": 1e9, "wires": 1e7}
     he = {"k": 65_536.0, "groups": [group], "r_step": None, "candidates_macs": 1e9, "self_macs": 0.0,
           "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None, "trained_weights": None}
     fig = F.he_figure(he, 1e11, 1e13)
-    assert (fig["rho"], fig["beta_x"], fig["beta_k"], fig["F"]) == (42.0, 3.0, 3.0, 1.25)
-    assert seen[0] == (1e9, 1e7, 1e13, 1e11, 65_536.0, 16.0 * 3.0, 16, 1.25)
+    assert (fig["rho"], fig["beta_x"], fig["beta_k"], fig["F"]) == (42.0 * 1e11 / 1e13, 3.0, 3.0, 1.25)
+    assert seen[0] == (1e11, 65_536.0, None, {"N": 1e9, "O": 1e7, "size": 1e13, "beta_w": 16.0, "beta_x": 3.0,
+                                              "b": 16, "F": 1.25})
     assert fig["alpha"] == 1.25 * real["alpha"](65_536.0, 16.0 * 3.0, 16)
