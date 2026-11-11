@@ -30,11 +30,11 @@ with the same toolkit at the same path and the same host compiler (a `research r
 - `commit_slots/`: the serve-time commit call, a step's proof-block outputs as hm96-sha512 rows under hiding leaves in
   frame-v3-sha512 trees, one subtree per sequence slot. `gpu.sh` holds the GPU's roots to the CPU reference's.
 - `sha512_rows/`: the SHA-512 compression engine that `commit_slots` runs on: row digests, hm96-sha512 leaves and
-  frame-v3-sha512 levels. `gpu.sh` holds every variant to `verity.ml.commitments`' reference, bit for bit.
+  frame-v3-sha512 levels. `gpu.sh` holds every variant to `verity.commitments`' reference, bit for bit.
 - `p2_stage/`: the store's load: P2's decode of the encoded weights store into GPU memory, with PoUB's
   receipts beside it. `full.sh` holds every loaded tensor to the weights manifest's SHA-256 on an H200, and
   `bw.sh` the receipts to their fixture.
-  The served path and `examples/h200` load through it.
+  The served path and `archive/examples/h200` load through it.
 - `units/`: the H200 demo's non-matmul proof blocks, each word for word its CPU twin. `session.sh` sweeps their
   helpers over every operand word and holds each kernel's words to its twin's, on an H200 or an RTX PRO 6000.
 - `attn_bf16/`: attention's QK^T and PV, a fast path and a reference path, each word `GemmCoordinate_v2`'s. `run.sh`
@@ -52,20 +52,20 @@ without a word to another directory.
 
 | File | What is loaded | Loaded by |
 |---|---|---|
-| `p2_stage/stage.py` | the store's load on the GPU: `EncodedRows` (`decode_into`, `check`), `decode_matrix`, and the modules it binds as `L` (`layout.py`) and `gpu` | `integrations/vllm/verity_vllm/protocols/pous.py`, as the package `p2_stage`; `benchmarks/pous/p2_v1/bandwidth.py` |
+| `p2_stage/stage.py` | the store's load on the GPU: `EncodedRows` (`decode_into`, `check`), `decode_matrix`, and the modules it binds as `L` (`layout.py`) and `gpu` | `adapters/vllm/verity_vllm/protocols/pous.py`, as the package `p2_stage`; `benchmarks/pous/p2_v1/bandwidth.py` |
 | `p2_stage/layout.py` | `StoreLayout`, `open_store`, `segment_rows`, `R`, `ROW` | the same two |
 | `p2_stage/full.py` | `Segments`, `sync`, `DEVICE` | `benchmarks/pous/p2_v1/bandwidth.py` |
-| `p2_stage/build.sh` | run as a script: `libp2v1.so` for one architecture, with its manifest | `benchmarks/one_stage/served_bandwidth.sh`; `benchmarks/pous/p2_v1/bw_session.sh`; `benchmarks/pous/served_case.sh` and `served_piece.sh`; `integrations/vllm/tests/protocols/pous_gpu.sh` |
-| `examples/h200/e2e_h200/served_weights.py` | the seeded weights' generator, by its module name `e2e_h200.served_weights`: `SHAPES`, `ALIASES`, `tensors`, `generate`, `stream_bytes`, `tensor_bytes` | `benchmarks/network_traces/demo_endpoint.py`; `benchmarks/pous/p2_v1/store.py` |
+| `p2_stage/build.sh` | run as a script: `libp2v1.so` for one architecture, with its manifest | `benchmarks/one_stage/served_bandwidth.sh`; `benchmarks/pous/p2_v1/bw_session.sh`; `benchmarks/pous/served_case.sh` and `served_piece.sh`; `adapters/vllm/tests/protocols/pous_gpu.sh` |
+| `benchmarks/torch_gpu/p2_stage/served_weights.py` | the seeded weights' generator, by its module name `benchmarks.torch_gpu.p2_stage.served_weights`: `SHAPES`, `ALIASES`, `tensors`, `generate`, `stream_bytes`, `tensor_bytes` | `benchmarks/network_traces/demo_endpoint.py`; `benchmarks/pous/p2_v1/store.py` |
 | `attn_bf16/attn.py` | `qk`, `pv` | `benchmarks/pouw/gemm_rate/attn_rate.py` |
 | `attn_bf16/build.sh` | run with `CUBIN_ONLY=1`; the cubin it writes is passed on as `$ATTN_BF16_CUBIN` | `benchmarks/pouw/gemm_rate/attn_rate.sh` |
 | `s8_linear/wgmma.py` | `scaled_mm`, `Cfg`, `default_cfg`; its cubin through `$S8_WGMMA_CUBIN` | `benchmarks/pouw/gemm_rate/torch_rate.py` |
 | `s8_linear/build.sh` | run as a script: `s8_wgmma.cubin` | `benchmarks/pouw/gemm_rate/rate.sh` |
 | `s8_linear/s8_acc.h` | `#include` | `benchmarks/pouw/accel_v31` |
-| `commit_slots/slots.py` | the commit call's layout, domains and trees: `CommitShape`, `Group`, `Part`, `Row`, `ROW_SCHEMA`, `layout_digest`, `row_salts`, `slot_domain`, `step_domain`, `unit_domain`, `step_tree` | `examples/h200/interfaces/verity_e2e_demo/replay_bundle.py` |
+| `commit_slots/slots.py` | the commit call's layout, domains and trees: `CommitShape`, `Group`, `Part`, `Row`, `ROW_SCHEMA`, `layout_digest`, `row_salts`, `slot_domain`, `step_domain`, `unit_domain`, `step_tree` | `benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py` |
 
 That bundle check also reads two private names of `slots.py`, `_unit_tree` and `_strings`; a private name is not an
-interface. `verity/ml/commitments/layout.py` names `commit_slots/README.md` as the commit call's specification. A test
+interface. `verity/commitments/layout.py` names `commit_slots/README.md` as the commit call's specification. A test
 of `benchmarks/pouw` loads `attn_bf16/sass_gate.py` and `s8_linear/sass_gate.py` by file, which fixes their paths,
 nothing more. `commit_slots/fixtures/families-shared.layout.json` is the path a registered fixture is fetched to; it is
 not tracked.
