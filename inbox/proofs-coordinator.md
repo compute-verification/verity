@@ -35887,3 +35887,16 @@ Both runs ended rc 0 after 8 minutes; each step's own result is in its `out/verd
 - The other way for `served_composite.sh`, if it stays public: a `[[needed]]` entry for the two composites' Lean packages, which is ci's. They are not private by name, as the policy's is.
 
 **What is left**, for whoever continues: read `r20261111-011020-febf`; the `served_cases.py` cut; your and ci's call on the four files; the line of item 1 once the move is in; the LEAN-249 comment (not posted); `whole_run/Main.lean:86` (my 00:34Z entry). Mailbox read at 01:11Z: no file for me. Next entry by 02:00Z.
+
+### TWOPROVE, Wed 11 Nov 01:13Z: route 3's try is past six of its seven changed modules; part 1's records are still running; R3.4's instance also needs a sampled record at `K₀`
+
+- [run] Route 3's try `r20261111-005526-bfcf` (vy-nebius-cpu-2; `cursor/proofs-capped-extractor-acc7` at `ad3db50852`) has built `Claims.Numbers` (R3.1's `κ_le_sum_cap`), `Claims.DeployCode` (R3.2's `deployZkAt`), `KS.Deploy`, `KS.Range`, `KS.JointR` and `KS.ZkXferW` with no error. At 01:13Z it was at job 10,445 of 10,506, with `KS.TrimBridge`, `KS.ZkUntrim` and `KS.ZkExtend` left, then the try of `Numbers.lean` and the build of `KS.lean` and `Masked.lean`. ETA about 01:30Z [guess].
+- [run] Part 1's records `r20261111-000350-0c4d` (vy-nebius-cpu-7, Lean slot build/1 since 00:04Z) were still running at 01:13Z, at 67.4 GiB. Its `Proofs` dependencies were cloned cold at 00:11Z, so it rebuilds them before the replay. Its timeout is about 02:04Z. If it times out, I relaunch on a node with a warm Lean slot; I'm not racing it on a second node.
+- [read] R3.4's instance needs more than route 3. The deployed compiled verifier fixes each session's truncation at `Numbers.cap`, not at the Flock record's cap:
+  - `deployOf` sets `innerCap _ := Claims.Flock.Numbers.cap` (`Security/Proofs/Flock/Claims/Sampling/Deployed.lean:211`);
+  - `ofDeployAt` copies it into each session's shape, `sh x u := (D.innerWaits x, D.innerCap x, …)` (`Security/Proofs/Flock/SamplingGeneric/Deployed.lean:91`), where `Arg.ofFlock`'s `cap s := s.2.1` reads it;
+  - so at `compiled (deployZkAt K₀ rel) c iroots`, ρ_s is still 1 + 210·2^256, and `InnerNumbers` (`Security/Proofs/Flock/Claims/Sampling/Session.lean:214`, `D.flock.cap xS = D.innerCap x`) holds only at K₀ = 2^256.
+- [guess] The fix stays inside R3.4, with no locked statement changed. It is a sampled record as `deploy` but with `innerCap := fun _ => K₀`, at `deployZkAt K₀ rel`, where `innerNumbersAt_deployOf`'s cap premise holds by `rfl`. The compiled instance's `Sessions` then follows as `sessions_compiled` does, with ρ_s = 1 + 210·K₀. `deployOf` and `deploy` keep their statements. R3.4's date stays Fri 13 Nov 18:00Z.
+- [read] R3.4's generic part is drafted, not built: `bconfCostStrict`, `εregSB`, `KSRegAtSB` and `CompilerKSRegAtSB` beside part 1's `KSRegAt`, and `ksRegAtSB_of_ksReg` beside `ksRegAt_of_ksReg`. Its witnesses are part 1's, at `sksL` and the budget 0. It goes on a branch from part 1's records commit with route 3 merged in. The two branches change no file in common [run: `comm` of their file lists printed nothing].
+- [read] PRF-516 is In Progress with no PR yet, so there is nothing of its to read.
+- Nothing changed for Candidate R.
