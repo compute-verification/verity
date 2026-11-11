@@ -36,7 +36,8 @@ PROTOCOL SUMMARY (Commit stage: local replay (`C2`) of record = sampled exact VU
   Outputs: the replay record {result True|False|None, grade, sample{seed, seed_source, challenge}, strata, population{query_total,
     not_executed_by_rule, ...}, uncovered_by_name, query_checks, catch_probability}; the linkage record {result, why, pairs, linked, unlinked}.
   Invariants: result True only if EVERY sampled VU replays bit-exactly AND every non-empty stratum was evaluated (None = partial,
-    never PASS); the seed is never prover-choosable in advance (run root after commitment, or sha256(challenge|root)[:8]); Calls at
+    never PASS); the seed is the run root's first 8 bytes (no coin: a measurement, steerable by committing again), sha256(challenge|root)[:8]
+    under a challenge, or a targeted one (prover-chosen), and the record says which (`sample.seed_form`); Calls at
     request-relative steps >= n_exec leave the pool into a NAMED class before sampling; a request linked over fewer steps than its
     cap must end on a declared EOS id at steps[-1 - lag] (undeclared EOS / unattested lag = unlinked by name); weights_check.equal
     False fails the replay by name.
@@ -80,11 +81,11 @@ from verity_vllm.check.replay.population import (executed_prefix_of_record, moe_
                                                 split_not_executed)
 from verity_vllm.check.replay.coverage import _uncovered_mechanisms, controller_rows_of, query_population
 from verity_vllm.check.replay.sample import _catch_probability, challenge_seed, sample
-from verity_vllm.check.replay.linkage import arrivals_of_record, boundary_linkage, linkage_horizon, splits_of_record
+from verity_vllm.check.replay.linkage import arrivals_of_record, boundary_linkage, linkage_horizon
 
 
 __all__ = ["arrivals_of_record", "boundary_linkage", "challenge_seed", "engine_facts_of_record", "executed_prefix_of_record",
-           "linkage_horizon", "model_weights_provider", "ProgramIndex", "sampled_replay", "SCHEMA", "splits_of_record", "V2_QUERY"]
+           "linkage_horizon", "model_weights_provider", "ProgramIndex", "sampled_replay", "SCHEMA", "V2_QUERY"]
 
 
 SCHEMA = "verity-sweep/sampled-replay/v1"
