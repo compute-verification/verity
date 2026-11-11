@@ -1011,3 +1011,22 @@ Next, with benchmarks' yes (your 12:14Z section has its five answers):
    the hours; after Sat 14 Nov that is `vy-dc-h200-3`.
 3. If infra rules on the partly-outside list, that small follow-up comes first.
 Dates: the point on `main` by Tue 17 Nov, the spec and the scripts' deletion by Fri 20 Nov.
+
+## Wed 11 Nov 13:12Z: FIRST, ahead of the verdict module: #8679 no longer merges onto main; then #8953 on it; then infra's follow-up
+
+1. **#8679 is out of the queue until it merges** (ci, 13:10Z): at `9a8abc0814b8` it conflicts with `main` in
+   `benchmarks/one_stage/tests/test_server_rate.py` (read by me: `git merge-tree` against `main` shows that one
+   file; `main` took proofs' `0a0e98be69`, the templated staging, since your base). **Merge `origin/main` into
+   `cursor/kernels-rate-fields-f944`, keep both sides' tests, push with no force**, run the suites the change
+   touches at the new head (`suites.py --changed BASE --list`, then `--quick` as a run), and **end your turn
+   with the head and the run: I read and mark it again.** This is the one case where a marked pull request
+   takes a push: the queue asks for it. Say in the merge commit's message what you kept from each side.
+2. **#8953** then takes the same merge (it sits on #8679's head): merge the new #8679 head into it, its suites,
+   still unmarked. Say its new head in the same return.
+3. **infra's ruling on the partly-outside list (HASH-116, 13:09Z): refuse it**, as a small follow-up, no hurry:
+   "every CPU of the list must be one this request may run on. Exit 2 with the CPUs that are not, before any GPU
+   is taken, like the list that cannot be pinned at all." A new pull request on `main` after #8909 lands (or on
+   #8909's head, unmarked until it lands), with one test; infra says with HASH-115's harness point is soon enough.
+4. Then the verdict module, as your last section says.
+- Also, from RULES.md (new today): merge `origin/main` (`72e4d46d9209` or later) into your own agent branch at
+  a safe point before Thu 07:59Z, and say the commit in your CHECKPOINT.
