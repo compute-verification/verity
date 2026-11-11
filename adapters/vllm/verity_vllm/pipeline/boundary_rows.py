@@ -543,19 +543,19 @@ class BoundaryWindows:
     holds a finished one (``drained``), and at `stop`; its finished spans are committed class by class (`commit`, `write`)
     on a thread of their own, under ``out``/w<window>/, before anything can sample them, and each class's
     ``commit.json`` goes to ``sink`` too. ``check`` is the check template, or a callable giving it on that thread, and
-    ``inline`` its `Layout`'s. With ``tables`` (a `boundary_tables.Channel` or `LocalChannel` to rank 0), each class's
-    commitment first assigns its spans their slots and waits for their history tables' roots at ``layers``, of
-    ``capacity`` leaves. A failed commit is reported to ``sink`` (``error``) and registers nothing."""
+    ``inline`` and ``verdicts`` its `Layout`'s. With ``tables`` (a `boundary_tables.Channel` or `LocalChannel` to rank 0),
+    each class's commitment first assigns its spans their slots and waits for their history tables' roots at ``layers``,
+    of ``capacity`` leaves. A failed commit is reported to ``sink`` (``error``) and registers nothing."""
 
     def __init__(self, out: Path, check: SpecializedDefinition | Callable[[], SpecializedDefinition], per_prompt: int,
                  per_output: int, window_s: float, *, drained: bool = True, inline: bool = False,
                  sink: Callable[[dict], None] | None = None, clock: Callable[[], float] = time.monotonic,
                  serve: str | None = None, tables: Any = None, layers: Sequence[int] = (),
-                 capacity: int = HT.CAPACITY) -> None:
+                 capacity: int = HT.CAPACITY, verdicts: bool = False) -> None:
         if (tables is None) != (not layers):
             raise ValueError("history tables need both rank 0's channel and their layers")
         self.out, self.per_prompt, self.per_output = Path(out), int(per_prompt), int(per_output)
-        self.window_s, self.drained, self.inline = float(window_s), drained, inline
+        self.window_s, self.drained, self.inline, self.verdicts = float(window_s), drained, inline, verdicts
         self.tables, self.layers, self.capacity = tables, tuple(int(x) for x in layers), int(capacity)
         self.sink, self.clock = sink, clock
         self.serve = serve or secrets.token_hex(32)
@@ -570,14 +570,15 @@ class BoundaryWindows:
     def of(cls, cfg: Mapping[str, Any], out: Path, sink: Callable[[dict], None] | None = None,
            public: Sequence[Path] = ()) -> BoundaryWindows:
         """From a serve's configuration: ``check``, a serving template's descriptor id (`check_template`), and
-        ``per_prompt``, ``per_output``, ``window_s``, ``drained`` and ``inline``; and ``tables``, rank 0's history tables
-        (`boundary_tables.Channel.of`: its private directory, never under ``out`` or ``public``)."""
+        ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline`` and ``verdicts``; and ``tables``, rank 0's
+        history tables (`boundary_tables.Channel.of`: its private directory, never under ``out`` or ``public``)."""
         t, tc = str(cfg["check"]), cfg.get("tables")
         ch = BT.Channel.of(tc, out, *public) if tc else None
         return cls(out, lambda: check_template(t), int(cfg.get("per_prompt", 0)), int(cfg.get("per_output", 1)),
                    float(cfg.get("window_s", 600)), drained=bool(cfg.get("drained", True)),
                    inline=bool(cfg.get("inline", False)), sink=sink, tables=ch,
-                   layers=BT.layers_of(tc["layers"]) if tc else (), capacity=int((tc or {}).get("capacity", HT.CAPACITY)))
+                   layers=BT.layers_of(tc["layers"]) if tc else (), capacity=int((tc or {}).get("capacity", HT.CAPACITY)),
+                   verdicts=bool(cfg.get("verdicts", False)))
 
     @property
     def check(self) -> SpecializedDefinition:
@@ -643,7 +644,8 @@ class BoundaryWindows:
             for (p, o), mine in classes(spans).items():
                 try:
                     layout = Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
-                                    run_root(self.serve, window), self.inline, self.layers, self.capacity)
+                                    run_root(self.serve, window), self.inline, self.layers, self.capacity,
+                                    verdicts=self.verdicts)
                     c = commit(mine, layout, window, tables=self._tables(window, layout, mine))
                     write(c, self.out / f"w{window}" / f"p{p}-o{o}")
                     line = {**c.public(), "serve": self.serve, "open_s": opened, "close_s": closed, "carried": carried}
