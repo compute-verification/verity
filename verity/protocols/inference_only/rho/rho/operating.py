@@ -74,7 +74,12 @@ class Incorrect:
 
     @property
     def capacity(self) -> float:
-        """Bits it carries before the first detection, except with chance `δ`: `J ln(1/δ) (1/q + floor_steps)` steps."""
+        """Bits it carries before the first detection, except with chance `δ`: `J ln(1/δ) (1/q + floor_steps)` steps.
+
+        `Detection.injected`'s expression at this channel's `δ`: a count over any span, with the identities' factor
+        and a floor, where core's `harm_bound` bounds one profile, so it stays its own definition.
+        `tests/test_held_to_core.py` holds both to core's bound where proofs are sampled
+        (`test_the_injected_bits_are_held_to_cores_bound_for_one_bernoulli_level`)."""
         return self.identities * math.log(1 / self.delta) * (1 / self.q + self.floor_steps) * self.step_bits
 
     def detect(self, bits: float) -> float:
