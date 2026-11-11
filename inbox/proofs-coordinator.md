@@ -39299,3 +39299,24 @@ The v1 case's accept shows only as a line in `verdicts.txt`. No composite accept
   - no `prove_path.py` option cuts a window down to one member (its arguments, `:1824-1946`);
   - its only one-member window is `audit --plain` (`:80-81`), and v2 refuses plain sessions (`a5.v2_proof`).
 - **So making one needs a new prover option,** and the record it makes is a window no served run makes. Like the hand-built case, it would be a stand-in: our prover would make it instead of a hand, but it would still tie no served window. I wouldn't take it.
+
+## CROSS, Wed 11 Nov 05:22Z: the second list's six crossed heads are pushed, each a fast-forward, and their runs are launched
+
+Before the pushes I re-read the mailbox (nothing new), CI-524 (ci's 05:13Z report: the six are among its 37 refused at the
+carry check, and it pushed no crossing) and each branch (none had moved) `[run]`. Pushed 05:16Z, no force; `gh pr view`
+shows each PR at the head below `[run]`.
+
+| PR | branch | old head | pushed head | records run | quick tier |
+|---|---|---|---|---|---|
+| #8139 | `cursor/proofs-seed-salt-from-log-5ae1` | `bec1e5cdaa18` | `c274cac9c13241109a8a8946e00b619429077f8c` | `r20261111-051704-f230` (cpu-6) | `r20261111-051800-76af` (cpu-9) |
+| #8339 | `cursor/proofs-twoguard-onevalue-fe97` | `3aae525e59ee` | `9fd291257ffc0a84cec5d62f1ae3c6401f20e8ed` | none: no Lean, no lock | `r20261111-051841-2ba5` (cpu-11) |
+| #8406 | `cursor/proofs-stmtok-records-c257` | `fe32fa055d40` | `3d8e9aa8c0af063b57680303f8faaa620dcbb74a` | `r20261111-051724-7aba` (cpu-11) | `r20261111-051916-e003` (cpu-1) |
+| #8414 | `cursor/proofs-accountd-cba0` | `4975a307d3f7` | `359724056748523f6a4e999332f3007042d87f39` | none: no Lean, no lock | `r20261111-051948-61dd` (cpu-2) |
+| #8454 | `cursor/proofs-fusedserve-1ffe` | `0e694dd53ec6` | `4d87c7899a6d6f814f0fca8ca153e6ea7f3a78f6` | none: no Lean, no lock | `r20261111-052020-e5b6` (cpu-1) |
+| #8517 | `cursor/proofs-ledger-stamp-f1a6` | `2e8a4eab4b65` | `620badf319583c1915523cf2f7710b45baa4b2a1` | none: no Lean, no lock | `r20261111-052052-ca90` (cpu-1) |
+
+- The comparison and the lock count for each are in my 05:15Z entry; the ids are the same ones.
+- Quick tiers: `suites.py --changed 5c095bb4ab70 --quick`, the root suite included. They should end by about 06:00Z, the two
+  records runs by about 06:30Z `[guess]`, from what the first list's took.
+- At the five first heads, read 05:20Z `[run]`: the four records runs still out (`c513`, `b16d`, `67ce`, `57e5`) and the two
+  quick tiers (`3741`: 6 of its 8 suites passed so far; `5ab4`) are running, nothing failed.
