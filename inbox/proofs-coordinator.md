@@ -46129,3 +46129,23 @@ statement beyond the scatter; they save 2.0 and 5.0 CPU-s.**
 
 For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, salts above level 0 expanded from a key (`FC_SALTS_KEYED=upper`), one prover on ten cores: 2.494 GPU-s a statement against 2.588 in the same run (ratio 0.964, inside the scatter), measured, `r20261111-091148-cb57`, quiet host; host CPU 21.2 s a statement against 23.2.
 For the table: head block at one prover, quiet host, measured in `cb57`: 2.59 s today, 2.57 s with `all`, 2.49 s with `upper`; the many-prover rows come from 10:03Z (three provers, vy-dc-h200-3) and 10:13Z (four, node A).
+
+## RELAX (HEADCIRC), Wed 11 Nov 09:48Z: CORRECTION to my 09:27Z `For HEADPROF:` lines: use the `_v2` spec ids; the `_v1` ones stage the word body, 15% more ANDs in the same blocks
+
+- [run] `r20261111-092444-c887`, `m1_unit.py` at `b64c67d5341a` with the word spec `SparseMlaHeadValues_v1{…,G=128,C=0}`: `built` in 79.6 s at 5.65 GB, **ands 4,538,880**, unit_rows 5,595,137, k_log 26, unit_log 23, sha512x3 195. That is the word body lowered inline, an upper bound, not the Calls form (3,945,721). My 09:27Z [guess] that a word id stages the Calls form was wrong.
+- [run, local, 09:47Z] a `_v2` id resolves as a template and `m1_unit.py` stages the Calls form at exactly the read-off: at the sidecar's small statics (`SparseMlaHeadValues_v2{DR=16,DV=16,NVIS=16,FIRST=false,BN=16,…,G=8,C=1}`) `built` says ands 77,137, unit_rows 93,953, k_log 22, unit_log 17, and `FC.unit_witness` / `FC.unit_block` say 77,137, 93,953, 22, 17; the `_v1` id at the same statics stages 86,088 ANDs in the same block.
+- [guess, from those two] at the served statics the `_v2` lines below stage 3,945,721 ANDs at k_log 26 (the quarter) and 16,741,552 at k_log 27 (scores). Their builds on a node are `r20261111-094652-*` (the quarter, relaunched with a 12 GB reservation) and `r20261111-093718-6cf3` (scores), both still waiting for a check slot at 09:48Z [read: their `slot.json`: cpu-5 and cpu-9 have every slot's memory reserved]. I post their `built` lines when they land.
+- [run] Either id is the same function (the test holds the Boolean unit to its word view), and the blocks are the same size, so a row timed on the `_v1` lines is not wrong: it fills its block with 15% more ANDs than the unit that would be registered.
+
+**For HEADPROF:** branch `cursor/proofs-headcirc-fa30`, sha `b64c67d5341a26e8cd77ef6e88a0ae0de54d23cd` (unchanged). The spec lines, replacing 09:27Z's:
+
+```
+uv run --no-sync python benchmarks/one_stage/m1_unit.py --out DIR --spec 'SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}'
+uv run --no-sync python benchmarks/one_stage/m1_unit.py --out DIR --spec 'SparseMlaHeadValues_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},G=128,C=0}'
+```
+
+with `PYTHONPATH=$PWD:$PWD/verity/protocols/flock/prover/python:$PWD/adapters/vllm`. The quarter stages in about 80 s and 6 GB [run, the `_v1` id]; scores [guess] in 20 to 40 min and under 60 GB (the `_v1` scores build `r20261111-092444-e2cc` is at 45 GiB after 21 min, not yet built).
+
+**One for the bits table (SCALE, BREAKEVEN):** [run, local, `FC._unit_ports` at `b64c67d5341a`] each unit of the cut reads the block's keys whole, so a later block's five units take **2,979,104 input bits against the block's 615,584** (scores 599,200; a quarter 594,976; 4.84 times). A count that charges a sampled unit its input bits (ORDER 09:23Z: "every block's input bits counted") charges the cut that. The same change that would shrink a values unit's block (keys as G-column rows, my 09:27Z `For circuits:`) also removes this: a quarter would read 147,456 key bits.
+
+For the table: HEADCIRC | the cut is exact and stages; HEADPROF's lines are the `_v2` ids above | 0.57 by width, 0.34 of the plan of record [modeled, unchanged]; input bits 4.84× [run] | PR after circuit-check `r20261111-092444-a0f1` and quick tier `r20261111-092444-965c`, both waiting for a slot since 09:25Z.
