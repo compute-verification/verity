@@ -93,6 +93,7 @@ open scoped ENNReal
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 open Classical in
 /-- **The escape a verification phase fixes** is `1`, or its statement is in the two-stage scope and the escape is
 `P̄_a` at the boundary values' footprint at best interiors. -/
@@ -109,6 +110,7 @@ theorem escAt_cases (L : CompiledTwo Coin A) (x : Msg) (val : ℕ → Option Boo
   · exact Or.inr ⟨s, Pt, d, rfl, hPt, hd, hin, by simp only [escAt, hs, hPt, hd, ite_eq_left hin]⟩
   · exact Or.inl (by simp only [escAt, hs, hPt, hd, ite_eq_right hin])
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- The escape a verification phase fixes is finite. -/
 theorem escAt_ne_top (L : CompiledTwo Coin A) (x : Msg) (val : ℕ → Option Bool) : escAt L x val ≠ ⊤ := by
   rcases escAt_cases L x val with h | ⟨s, Pt, d, -, -, -, -, h⟩
