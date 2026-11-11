@@ -17,9 +17,11 @@
 #                         what it answers ($OUT/record.env.add has the lines where they differ); the day's declaration
 #                         at that Program in a scratch log, checked as the follow-on checks it; the Lean the serve,
 #                         the audit and the compose run (Flock's verifier and ZK server, Pearl+'s check, remote's
-#                         composite); Pearl+'s period, salt session, draw, coin and piece against this tree's own
-#                         gate code (`pearlplus_local_e2e.py`), whose piece then holds the execution phase and each
-#                         check's cost.
+#                         composite); that verifier on a circuit file linked into its archive (`a0.lean_verify` under
+#                         `a0.ARCHIVE_LINK`): the same answer as on one it put, and a refusal once the linked bytes
+#                         change; the probe around a stand-in gate; Pearl+'s period, salt session, draw, coin and
+#                         piece against this tree's own gate code (`pearlplus_local_e2e.py`), whose piece then holds
+#                         the execution phase and each check's cost.
 #                         The whole verb runs inside one memory scope (MEM_GB, default 64) where the node makes one.
 #   rehearsal.sh serve    the serve node, one card: the harness at SETTINGS (default the run's sent record.env), after
 #                         the settings are held to what the rehearsal serves (`settings_ok`). Where the serve deferred
@@ -35,8 +37,14 @@
 #                         one memory scope of its own (COMPOSE_MEM_GB, default 64, no swap). Each Lean check it starts
 #                         runs in a scope of its own and is not started past its blob limit (`served_cases.py`:
 #                         CHECK_MEM_GB, CHECK_BLOBS_GB); on a node that makes no user scope the verb is refused.
-#   rehearsal.sh filter CMD...   CMD through the filter alone, with its exit status (`filter-test DIR`, `settings FILE`
-#                         and `serve-test DIR` are `check`'s three steps of those names).
+#   rehearsal.sh probe    a node with the lane's gate key: the gate's read-only verbs at SETTINGS' gate and nothing
+#                         else (no period, no reserve, no session). The harness's own `GATE` line (`ledger` and
+#                         `pins`: the lane's open period, the pin and whether it is on MAIN_FILE's line), then the
+#                         gate's `pubkey` held to PP_CHALLENGER_KEY's record. Exit 0 only where the lane has no open
+#                         period, the pin is a line of MAIN_FILE and the key is the record's.
+#   rehearsal.sh filter CMD...   CMD through the filter alone, with its exit status (`filter-test DIR`, `settings FILE`,
+#                         `serve-test DIR`, `link-test LEAN DIR` and `probe-test DIR` are `check`'s steps of those
+#                         names).
 #
 # A follow-on's settings come from the serve dir (deferred.env, compose.env), which carry no POUW: `audit` and `compose`
 # set POUW=pearlplus, the rehearsal's.
@@ -119,6 +127,43 @@ compose() {
     bash "$HARNESS" compose
 }
 
+probe() {  # the gate's read-only verbs alone, at SETTINGS' gate (GATE_CMD in its place: `probe-test`'s stand-in)
+  export SETTINGS=${SETTINGS:-${RESEARCH_RUN_DIR:?no SETTINGS and no run dir}/inputs/record.env}
+  [ -f "$SETTINGS" ] && [ -r "$SETTINGS" ] || refuse "probe reads the gate, main's line and the key record from the settings: $SETTINGS is not a readable file"
+  (
+    set -a
+    # shellcheck source=/dev/null
+    . "$SETTINGS"
+    set +a
+    gate=${GATE_CMD:-}
+    if [ -z "$gate" ]; then
+      [[ ${PP_CHALLENGER:-} == gate:* ]] || refuse "PP_CHALLENGER is ${PP_CHALLENGER:-unset}, which names no gate (gate:USER@HOST)"
+      g=(ssh -o BatchMode=yes -o ConnectTimeout=20)
+      [ -z "${PP_GATE_KEY:-}" ] || g+=(-o IdentitiesOnly=yes -i "$PP_GATE_KEY")
+      gate=$(printf '%q ' "${g[@]}" "${PP_CHALLENGER#gate:}")
+    fi
+    py=${PY:-$HERE/../../.venv/bin/python}
+    line=$("$py" "$HERE/served_verdicts.py" gate --gate "$gate" --lane "${PEARLC_CHALLENGER_LANE:-vllm}" --main "$MAIN_FILE" 2>&1 | tail -1 | cut -c1-1200)
+    echo "PROBE $line"
+    rc=0
+    [[ $line == "GATE ready:"* && $line == *", on the verifier's first-parent line of main" ]] || rc=1
+    "$py" - "$gate" "$PP_CHALLENGER_KEY" <<'EOF' || rc=1
+import hashlib, json, shlex, subprocess, sys
+gate, record = sys.argv[1:3]
+p = subprocess.run([*shlex.split(gate), "pubkey"], capture_output=True)
+if p.returncode:
+    sys.exit(f"PROBE pubkey refused (exit {p.returncode}): {(p.stderr or p.stdout).decode(errors='replace').strip()[-300:]}")
+key, rec = json.loads(p.stdout), json.load(open(record))
+sha = hashlib.sha512(bytes.fromhex(key["public"])).hexdigest()
+same = sha == rec.get("pubkey_sha512") == key.get("public_sha512") and (key.get("W"), key.get("H")) == (rec.get("W"), rec.get("H"))
+print(f"PROBE pubkey: W {key.get('W')}, H {key.get('H')}, SHA-512 {sha[:16]}…: "
+      + ("the key record's" if same else f"NOT the key record's ({str(rec.get('pubkey_sha512'))[:16]}…, W {rec.get('W')}, H {rec.get('H')})"))
+sys.exit(0 if same else 1)
+EOF
+    exit "$rc"
+  )
+}
+
 # ---- check: the CPU-only steps
 filter_test() {  # the filter around a stand-in harness that quotes a made-up secret; prints counts, never the secret
   local scr=$1 rc pid n=0 h
@@ -183,6 +228,82 @@ EOF
   return "$ok"
 }
 
+link_test() {  # LEAN DIR: the real flock-verify at LEAN on a circuit file linked into its archive, in the tree
+  "${PY:-$HERE/../../.venv/bin/python}" - "$1" "$2" "$HERE" <<'EOF'
+import hashlib, json, os, subprocess, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[3])
+import a0
+lean, root = sys.argv[1], Path(sys.argv[2])
+root.mkdir(parents=True, exist_ok=True)
+circuit = root / "circuit.txt"
+circuit.write_bytes(b"no circuit: the verifier refuses it after it has read it from its archive\n" * 20000)
+key, pub = hashlib.sha512(circuit.read_bytes()).hexdigest(), hashlib.sha512(b"\x01" * 16).hexdigest()
+
+def member(name, link):
+    st = {"dir": root / name, "archived": {}, a0.ARCHIVE_LINK: link}
+    st["dir"].mkdir()
+    os.link(circuit, st["dir"] / "circuit.txt")
+    (st["dir"] / "pub-8.bin").write_bytes(b"\x01" * 16)
+    out = root / f"session-{name}"
+    (out / "sessions" / "s").mkdir(parents=True)
+    (out / "sessions" / "s" / "session.json").write_text("{}")
+    return out, a0.lean_verify(lean, st, 8, out)
+
+def said(out):  # the verifier's own answer on the archive's circuit and public objects, the archive's path left out
+    p = subprocess.run([lean, "statement", "--statement", a0.STATEMENT_ID, "--archive", str(out / "archive"), "--circuit", key,
+                        "--public", pub], capture_output=True, text=True)
+    return p.returncode, (p.stdout + p.stderr).replace(str(out), "OUT")[-600:]
+
+(put_out, put), (link_out, linked) = member("put", False), member("link", True)
+objects = [o / "archive" / "sha512" / key for o in (put_out, link_out)]
+assert all(o.is_file() for o in objects), "Lean's archive-put and a0's hash name the circuit's object by different keys"
+assert objects[1].stat().st_ino == circuit.stat().st_ino != objects[0].stat().st_ino, "the linked archive holds a copy"
+assert (link_out / "archive" / "sha512" / pub).is_file()
+answers = [{k: v.get(k) if k != "why" else str(v.get(k)).replace(str(o), "OUT") for k in ("accepted", "why")}
+           for o, v in ((put_out, put), (link_out, linked))]
+assert answers[0] == answers[1] and "does not hash" not in answers[1]["why"], answers
+before = [said(o) for o in (put_out, link_out)]
+assert before[0] == before[1] and "archive:" not in before[1][1], before
+with open(root / "link" / "circuit.txt", "ab") as f:  # a write in place through the member's name changes the linked object
+    f.write(b"x")
+after = [said(o) for o in (put_out, link_out)]
+assert after[0] == before[0], (before[0], after[0])
+assert after[1][0] != 0 and "does not hash to it" in after[1][1], after[1]
+print(json.dumps({"key": key[:16] + "…", "verify": answers[1], "statement_on_put_and_linked": before[1],
+                  "statement_once_the_linked_bytes_change": after[1]}, sort_keys=True))
+EOF
+}
+probe_test() {  # DIR: `probe` around a stand-in gate, at SETTINGS: ready only at a pin on main's line and the record's key
+  local scr=$1 ok=0 rc pin
+  mkdir -p "$scr"
+  pin=$(bash -c 'set -a; . "$0"; set +a; sed -n 2p "$MAIN_FILE"' "$SETTINGS")
+  cat > "$scr/gate.sh" <<'EOF'
+#!/usr/bin/env bash
+case $1 in
+  pins) echo "{\"commit\": \"$PIN\", \"main\": \"$PIN\", \"pinned_utc\": \"2026-01-02T03:04:05Z\"}" ;;
+  ledger) [ -z "${OPEN:-}" ] || echo '{"kind": "period-open", "body": {"lane": "vllm", "period": "p1"}}' ;;
+  pubkey) "$PY" -c 'import json, sys; d = json.load(open(sys.argv[1])); print(json.dumps({"W": d["W"], "H": d["H"], "public": sys.argv[2] or d["pubkey"], "public_sha512": d["pubkey_sha512"]}))' "$KEY_RECORD" "${OTHER_KEY:-}" ;;
+  *) echo "{\"refused\": \"the stand-in gate takes pins, ledger and pubkey, not $1\"}"; exit 1 ;;
+esac
+EOF
+  try() {  # WHAT WANT_RC ENV...
+    local what=$1 want=$2
+    shift 2
+    env PY="$PY" GATE_CMD="bash $scr/gate.sh" PIN="$pin" \
+      KEY_RECORD="$(bash -c 'set -a; . "$0"; set +a; echo "$PP_CHALLENGER_KEY"' "$SETTINGS")" "$@" bash "$SELF" probe > "$scr/log" 2>&1; rc=$?
+    echo "$what: the probe exits $rc (want $want): $(tr '\n' ' ' < "$scr/log" | cut -c1-600)"
+    [ "$rc" = "$want" ] || ok=1
+  }
+  try "a pin on main's line, no open period, the record's key" 0
+  grep -q "PROBE GATE ready: .* on the verifier's first-parent line of main" "$scr/log" && grep -q "PROBE pubkey: .*the key record's" "$scr/log" || ok=1
+  try "a pin that is not on main's line" 1 PIN=0000000000000000000000000000000000000000
+  try "the lane's period open" 1 OPEN=1
+  try "another key" 1 OTHER_KEY=00
+  grep -q "NOT the key record's" "$scr/log" || ok=1
+  return "$ok"
+}
+
 check() {
   local OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out} MEM_GB=${MEM_GB:-64}
   mkdir -p "$OUT/logs"
@@ -221,6 +342,7 @@ check() {
   cp "$OUT/logs/filter.log" "$OUT/filter.txt"
   step settings 1m bash "$SELF" settings "$SETTINGS"
   step serve-copy 1m env SETTINGS="$SETTINGS" bash "$SELF" serve-test "$scratch/serve-copy"
+  step gate-probe 2m env SETTINGS="$SETTINGS" PY="$PY" bash "$SELF" probe-test "$scratch/probe"
 
   # the class's circuit from phi, as PEARLPLUS-CIRCUIT's command makes it on the serve node
   D=$scratch/serve
@@ -304,6 +426,7 @@ EOF
 
   # the Lean the three verbs run
   step lean-flock 50m bash -c 'cd verity/core/service/flock && lake build Flock flock-verify flock-firewall'
+  step link-lean 5m env PY="$PY" bash "$SELF" link-test "$TREE/verity/core/service/flock/.lake/build/bin/flock-verify" "$scratch/link"
   step lean-pearlplus 40m bash -c 'cd verity/core/protocols/pouw/lean/pearlplus && lake build pouw-pearlplus'
   step lean-remote-v1 40m bash -c 'cd verity/core/protocols/remote && lake build remote-v1'
 
@@ -342,5 +465,8 @@ case ${1:-} in
   filter-test) filter_test "${2:?a scratch directory}" ;;
   settings) settings_ok "${2:?a settings file}" ;;
   serve-test) serve_test "${2:?a scratch directory}" ;;
-  *) refuse "rehearsal.sh check|serve|audit|compose|filter CMD..., not ${1:-nothing}" ;;
+  probe) probe ;;
+  probe-test) probe_test "${2:?a scratch directory}" ;;
+  link-test) link_test "${2:?flock-verify}" "${3:?a scratch directory}" ;;
+  *) refuse "rehearsal.sh check|serve|audit|compose|probe|filter CMD..., not ${1:-nothing}" ;;
 esac
