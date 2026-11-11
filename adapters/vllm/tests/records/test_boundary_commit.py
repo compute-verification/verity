@@ -24,7 +24,7 @@ def test_a_writers_record_loads_and_dumps_back_to_itself():
     rec = BoundaryCommit.of(_doc(), "commit.json")
     assert rec.dump() == _doc() and BoundaryCommit.of(rec.dump(), "w") == rec
     assert set(KINDS) | set(OPTIONAL) == {f.name for f in dataclasses.fields(BoundaryCommit)}
-    stop = _doc() | {"stop": {"ids": [3, 7], "max_model_len": 64, "outputs": 4, "ignore_eos": False}, "stopped": False}
+    stop = _doc() | {"stop": {"ids": [3, 7], "max_model_len": 64, "outputs": 4}, "stopped": False}
     held = BoundaryCommit.of(stop, "commit.json")
     assert held.dump() == stop and held.stop == stop["stop"] and held.stopped is False
     assert rec.stop is None and rec.stopped is None and not {"stop", "stopped"} & set(rec.dump())

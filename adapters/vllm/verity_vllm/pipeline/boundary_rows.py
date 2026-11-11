@@ -18,9 +18,9 @@ program, partition, port, schema, N leaves, run); a u32 is two u16 words, low fi
 The step shapes are no value: they choose the Programs, and the window's advice commits them. Each leaf's salt is fresh
 from the OS (`commit`).
 
-**The stop rule.** A serve may register one (`Stop`: the registered model's stop ids, none under a schedule that sets
-``ignore_eos``, its length, and the cap T on a response's ids). Its classes then commit each row above as its parts,
-one row a span each and no word twice, and the ids served n is no number the serve states:
+**The stop rule.** A serve may register one (`Stop`: the registered model's stop ids, its length, and the cap T on a
+response's ids). Its classes then commit each row above as its parts, one row a span each and no word twice, and the
+ids served n is no number the serve states:
 
 | value | row |
 |---|---|
@@ -32,7 +32,8 @@ one row a span each and no word twice, and the ids served n is no number the ser
 The first three are the class's boundary record's values (`PARTS`). A span the rule ends as it was served (`Stop.word`)
 is in the stop class of its prompt cap, (P, T) whatever n is, which commits `b.stop` too: the output of the span's stop
 block (`egress_stop`: `StopRule16_v1{T, NSTOP}` over the span's `b.request` and `b.egress` rows at the registered stop
-ids and length), so n is a function of committed values. The stop blocks are a population of their own, one a span, slot
+ids and length, with no stop id for a span whose row sets ``ignore_eos``), so n is a function of committed values. The
+stop blocks are a population of their own, one a span, slot
 r its r-th span's (`Layout.stop_program`), registered one-stage in a record of its own that names the class's boundary
 record (`stop_registration`, `stop_record`): its two inputs are that record's ports `b.request` and `b.egress`, taken as
 output values under their roots and domains, and `b.stop` is its one port, under the window domain of the stop
@@ -40,9 +41,10 @@ population's own program, which the serve commits it under as the window closes.
 the network certifier took in is the ingress tie's: until it does, its ``max_tokens`` is the engine's word, and a serve
 that writes any length there has a correct stop block. Every other span is filed by its size class with no `b.stop` and
 no stop block (`filed`, ``p<P>-o<O>-nostop``): an abort, an error, a request still running, one the rule runs past T
-(finish 0), an end the rule doesn't read (a body's own stop strings), a ``min_tokens`` other than 0, an ``ignore_eos``
-that isn't the schedule's, and, where the serve knows its requests' releases, a request the network certifier didn't
-release.
+(finish 0), an end the rule doesn't read (a body's own stop strings), a ``min_tokens`` other than 0, and, where the
+serve knows its requests' releases, a request the network certifier didn't release. A failure the engine doesn't see
+(the certifier's, after the engine's last step for the request) is not known here: such a span is filed as the engine
+ended it.
 
 **The replay block** (`Layout.replay`) is a stand-in until the class's request Definition lands: `per_prompt * P +
 per_output * O` instances of one check template (`population`), so a window committed under it is audited with that one
@@ -244,10 +246,11 @@ def egress_stop(outputs: int, stops: Sequence[int], max_model_len: int) -> Speci
     """`EgressStop_v1{T, STOP, MAX_MODEL_LEN}` (request: Array<`HEAD_U32`, i32>, ids: Array<T, i32>) -> u16 at T =
     ``outputs``: `StopRule16_v1{T, NSTOP}`'s word over ``ids``, ``request``'s ``max_tokens`` and prompt length
     (`FIELD_AT`), the stop ids STOP and MAX_MODEL_LEN: where a span's `b.egress` row stops and why, n + finish * 8192.
-    Its gates are the rule's and the constants': the registered stop ids and model length are statics, public in its id,
-    where the rule takes them as inputs, since a population reads each parameter as one value's whole rows
-    (`stop_registration`) and the registered model's are no value. With no stop ids the rule reads
-    `stop_check.NOT_AN_ID` alone, as `StopCheck_v1` does: no token's id."""
+    A request whose ``ignore_eos`` word in ``request`` is not 0 has no stop id: the rule reads `stop_check.NOT_AN_ID`,
+    no token's id, in place of each, as it does where STOP is empty (`StopCheck_v1`'s way). Its gates are the rule's,
+    the constants' and that choice's: the registered stop ids and model length are statics, public in its id, where the
+    rule takes them as inputs, since a population reads each parameter as one value's whole rows (`stop_registration`)
+    and the registered model's are no value."""
     from verity.definitions.registry import stop_check as SC, stop_rule as X
 
     I32 = X.WORDS.I32
@@ -256,55 +259,51 @@ def egress_stop(outputs: int, stops: Sequence[int], max_model_len: int) -> Speci
         return (("request", Array(HEAD_U32, I32)), ("ids", Array(S.T, I32))), X.WORDS.U16
 
     def body(B: Any, S: Any, request: Any, ids: Any) -> Any:
-        o, stop_ids = X.word_ops(B), S.STOP or (SC.NOT_AN_ID,)
-        words = [o.word(x) for x in stop_ids]
-        return B.call(bind(X.StopRule16, T=S.T, NSTOP=len(stop_ids)), ids, request[FIELD_AT["max_tokens"]],
-                      Coll(Array(len(stop_ids), I32), concat([w.refs for w in words])), request[FIELD_AT["lp"]],
+        o = X.word_ops(B)
+        none = o.word(SC.NOT_AN_ID)
+        heeds = o.ieq(request[FIELD_AT["ignore_eos"]], o.word(0))
+        words = [o.isel(heeds, o.word(x), none) for x in S.STOP] or [none]
+        return B.call(bind(X.StopRule16, T=S.T, NSTOP=len(words)), ids, request[FIELD_AT["max_tokens"]],
+                      Coll(Array(len(words), I32), concat([w.refs for w in words])), request[FIELD_AT["lp"]],
                       o.word(S.MAX_MODEL_LEN))
 
     defn = CompositeDefinition("EgressStop", 1, ("T", "STOP", "MAX_MODEL_LEN"), signature, body, register=False,
                                refuse=_stop_refusal, doc="StopRule16_v1 over a span's b.egress ids and b.request row at "
-                               "the registered stop ids and model length",
+                               "the registered stop ids and model length, with no stop id where the row sets ignore_eos",
                                conformance="model-untested: StopRule16_v1's, which holds no capture of vLLM's finish yet")
     return bind(defn, T=outputs, STOP=tuple(stops), MAX_MODEL_LEN=max_model_len)
 
 
 @dataclass(frozen=True)
 class Stop:
-    """A serve's registered stop rule: the registered model's stop ids ``ids``, none exactly when the schedule sets
-    ``ignore_eos``; its length ``max_model_len``; and ``outputs``, the cap T on a response's ids, a power of two: the
-    output cap of every stop class. Public: each class's ``commit.json`` names it, and the stop block's id holds its ids,
-    length and cap."""
+    """A serve's registered stop rule: the registered model's stop ids ``ids`` (a request that sets ``ignore_eos`` has
+    none, which the stop block reads off its row), its length ``max_model_len``, and ``outputs``, the cap T on a
+    response's ids, a power of two: the output cap of every stop class. Public: each class's ``commit.json`` names it,
+    and the stop block's id holds its ids, length and cap."""
 
     ids: tuple[int, ...]
     max_model_len: int
     outputs: int
-    ignore_eos: bool = False
 
     def __post_init__(self) -> None:
         why = _stop_refusal({"T": self.outputs, "STOP": self.ids, "MAX_MODEL_LEN": self.max_model_len})
         if why is None and self.outputs != cap(self.outputs):
             why = f"its cap is a class's outputs, a power of two at least {MIN_CAP}, not {self.outputs}"
-        if why is None and (type(self.ignore_eos) is not bool or self.ignore_eos != (not self.ids)):
-            why = (f"a schedule that sets ignore_eos registers no stop id, and one that doesn't registers the model's "
-                   f"(got ignore_eos={self.ignore_eos!r} with ids {list(self.ids)})")
         if why is not None:
-            raise ValueError(f"a stop rule's cap, ids, model length and ignore_eos: {why}")
+            raise ValueError(f"a stop rule's cap, ids and model length: {why}")
 
     @classmethod
     def of(cls, doc: Any) -> Stop | None:
         """From a serve's configuration or a ``commit.json`` (`to_json`'s object); None for none."""
         if doc is None:
             return None
-        if not (isinstance(doc, Mapping) and set(doc) == {"ids", "max_model_len", "outputs", "ignore_eos"}
+        if not (isinstance(doc, Mapping) and set(doc) == {"ids", "max_model_len", "outputs"}
                 and isinstance(doc["ids"], (list, tuple))):
-            raise ValueError(f"a stop rule is {{\"ids\": [...], \"max_model_len\": n, \"outputs\": T, \"ignore_eos\": "
-                             f"bool}}, not {doc!r}")
-        return cls(tuple(doc["ids"]), doc["max_model_len"], doc["outputs"], doc["ignore_eos"])
+            raise ValueError(f"a stop rule is {{\"ids\": [...], \"max_model_len\": n, \"outputs\": T}}, not {doc!r}")
+        return cls(tuple(doc["ids"]), doc["max_model_len"], doc["outputs"])
 
     def to_json(self) -> dict[str, Any]:
-        return {"ids": list(self.ids), "max_model_len": self.max_model_len, "outputs": self.outputs,
-                "ignore_eos": self.ignore_eos}
+        return {"ids": list(self.ids), "max_model_len": self.max_model_len, "outputs": self.outputs}
 
     @cached_property
     def template(self) -> SpecializedDefinition:
@@ -312,18 +311,19 @@ class Stop:
         return egress_stop(self.outputs, self.ids, self.max_model_len)
 
     def word(self, span: Span) -> int | None:
-        """`StopRule16_v1`'s word over ``span``'s rows at the cap (its reference), n + finish * 8192, where that is how the
-        span was served under the schedule: n the ids it was served, its finish a stop on 1 or a length on 2 or 3, its
-        ``min_tokens`` 0 and its ``ignore_eos`` the schedule's. None otherwise: a span no stop class holds."""
+        """The stop block's output on ``span``'s rows at the cap, n + finish * 8192 (`StopRule16_v1`'s reference, over no
+        stop id where the span sets ``ignore_eos``), where that is how the span was served: n the ids it was served and
+        its finish a stop on 1 or a length on 2 or 3, with a ``min_tokens`` of 0, which the rule doesn't read. None
+        otherwise: a span no stop class holds."""
         from verity.definitions.registry import stop_check as SC, stop_rule as X
 
         s = span.sampling
         mt = s.get("max_tokens") or 0
         if (span.finish not in ("stop", "length") or len(span.served) > self.outputs or type(mt) is not int
-                or not 0 <= mt < 1 << 32 or (s.get("min_tokens") or 0) != 0
-                or bool(s.get("ignore_eos")) != self.ignore_eos):
+                or not 0 <= mt < 1 << 32 or (s.get("min_tokens") or 0) != 0):
             return None
-        word = X.reference16([*span.served, *[0] * (self.outputs - len(span.served))], mt, self.ids or (SC.NOT_AN_ID,),
+        stops = () if s.get("ignore_eos") else self.ids
+        word = X.reference16([*span.served, *[0] * (self.outputs - len(span.served))], mt, stops or (SC.NOT_AN_ID,),
                              len(span.prompt), self.max_model_len)
         n, finish = word & ((1 << X.N_BITS) - 1), word >> X.N_BITS
         return word if n == len(span.served) and finish in ((1,) if span.finish == "stop" else (2, 3)) else None
@@ -691,9 +691,8 @@ class BoundaryWindows:
            release: Callable[[str], tuple[str, int] | None] | None = None) -> BoundaryWindows:
         """From a serve's configuration: ``check``, a serving template's descriptor id (`check_template`), and
         ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline`` and ``stop`` (`Stop.of`: the registered
-        model's stop ids and length, the cap on a response's ids, and whether the schedule sets ``ignore_eos``). A stop
-        rule the serve can't register (stop ids under ``ignore_eos``, a cap the word can't hold) is refused here, as the
-        serve starts."""
+        model's stop ids and length and the cap on a response's ids). A stop rule the serve can't register (a cap the
+        word can't hold) is refused here, as the serve starts."""
         t = str(cfg["check"])
         return cls(out, lambda: check_template(t), int(cfg.get("per_prompt", 0)), int(cfg.get("per_output", 1)),
                    float(cfg.get("window_s", 600)), drained=bool(cfg.get("drained", True)),

@@ -224,8 +224,8 @@ def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(t
 
 #: a serve's stop rule: two stop ids, a model of 64 ids, responses of at most 4
 RULE = BR.Stop((3, 7), 64, 4)
-#: the same model's under a schedule that sets ``ignore_eos``: no stop id
-IGNORES = BR.Stop((), 64, 4, ignore_eos=True)
+#: a model that states no stop id
+NO_IDS = BR.Stop((), 64, 4)
 #: a law over a class's stop blocks
 STOP_LAW = {"law": "subset", "k": 2}
 
@@ -274,13 +274,13 @@ def test_the_stop_block_is_the_stop_rule_over_a_spans_request_row_and_served_ids
                         ((0, 0, 0, 0), 9, 0), ((9, 9, 9, 3), 0, 70)]:
         s = _ended("x", ids, "length", mt, tuple(range(lp)))
         assert _block(RULE, s) == stop_rule.reference16(list(ids), mt, RULE.ids, lp, RULE.max_model_len)
-    assert IGNORES.template.id != RULE.template.id
-    assert _block(IGNORES, HELD[0], (9, 9, 7, 9)) == _word(4, 2)
+    assert NO_IDS.template.id != RULE.template.id
+    assert _block(NO_IDS, HELD[0], (9, 9, 7, 9)) == _word(4, 2)
     assert _word(4, 2) == stop_rule.reference16([9, 9, 7, 9], 4, (stop_check.NOT_AN_ID,), 3, 64)
     long = _ended("long", (9, 9, 9, 9), "length", 9)
     assert _block(RULE, long) == _word(4, 0) and RULE.word(long) is None
     assert BR.Stop.of(json.loads(json.dumps(RULE.to_json()))) == RULE and BR.Stop.of(None) is None
-    assert BR.Stop.of(IGNORES.to_json()) == IGNORES
+    assert BR.Stop.of(NO_IDS.to_json()) == NO_IDS
     for bad in ((7, 3), (3, 3), (-1,), (1 << 32,)):
         with pytest.raises(ValueError, match="increasing u32 ids"):
             BR.Stop(bad, 64, 4)
@@ -288,26 +288,43 @@ def test_the_stop_block_is_the_stop_rule_over_a_spans_request_row_and_served_ids
         BR.Stop((3,), 64, 5)
     with pytest.raises(ValueError, match="which the stop word's n holds"):
         BR.Stop((3,), 1 << 20, 1 << stop_rule.N_BITS)
-    with pytest.raises(ValueError, match="a stop rule is"):
-        BR.Stop.of({"ids": [3]})
+    for bad in ({"ids": [3]}, {**RULE.to_json(), "ignore_eos": True}):
+        with pytest.raises(ValueError, match="a stop rule is"):
+            BR.Stop.of(bad)
 
 
-def test_a_stop_class_takes_a_span_only_as_the_rule_ends_it_under_the_schedules_ignore_eos(tmp_path):
+def test_the_stop_block_reads_ignore_eos_off_the_request_row_and_takes_no_stop_id_for_that_request():
+    """A request that sets ``ignore_eos`` has no stop id, and the stop block reads that off its `b.request` row: the
+    same served ids end at a stop id without it and run to ``max_tokens`` with it, under one registered rule, so a
+    class holds requests of both kinds and nothing is refused as a serve starts. Any word but 0 there sets it. The
+    block's output on such a row is the rule's over no stop id, and `Stop.word` is that output."""
+    heeds, ignores = _ended("h", (9, 7, 9, 9), "stop"), _ended("i", (9, 7, 9, 9), "length", ignore_eos=True)
+    assert _block(RULE, heeds, (9, 7, 9, 9)) == _word(2, 1) and _block(RULE, ignores) == _word(4, 2)
+    assert RULE.word(ignores) == _word(4, 2) == stop_rule.reference16([9, 7, 9, 9], 4, (stop_check.NOT_AN_ID,), 3, 64)
+    held = _ended("h", (9, 7), "stop")
+    assert RULE.word(heeds) is None and RULE.word(held) == _word(2, 1)
+    assert RULE.word(_ended("i", (9, 7), "stop", ignore_eos=True)) is None
+    head = _u32s(BR.ingress_row(heeds, 4))[:BR.HEAD_U32]
+    at = BR.FIELD_AT["ignore_eos"]
+    assert head[at] == 0 and _u32s(BR.ingress_row(ignores, 4))[at] == 1
+    for word, want in ((0, _word(2, 1)), (1, _word(4, 2)), (2, _word(4, 2)), (1 << 31, _word(4, 2)),
+                       (stop_check.NOT_AN_ID, _word(4, 2))):
+        assert evaluate(RULE.template, [*head[:at], word, *head[at + 1:]], [9, 7, 9, 9]) == (want,)
+    for served, mt, lp in (((3, 9, 9, 9), 4, 3), ((9, 9, 9, 7), 3, 1), ((7, 9, 9, 9), 4, 62), ((9, 9, 9, 3), 9, 5)):
+        s = _ended("x", served, "length", mt, tuple(range(lp)), ignore_eos=True)
+        assert _block(RULE, s) == _block(NO_IDS, s) == stop_rule.reference16(list(served), mt, (stop_check.NOT_AN_ID,), lp, 64)
+    rows = BR.port_rows([held, ignores], BR.Layout(PAIR, 0, 1, 4, RULE.outputs, 2, "a" * 128, stop=RULE))
+    assert rows[BR.STOP][:, 0].tolist() == [_word(2, 1), _word(4, 2)]
+    assert evaluate(population(RULE.template, 2), _flat(rows[BR.REQUEST]), _flat(rows[BR.EGRESS])) == \
+        (_word(2, 1), _word(4, 2))
+
+
+def test_a_stop_class_takes_a_span_only_as_the_rule_ends_it():
     """`Stop.word` is None, and the span in no stop class, for an abort, an error, a request still running, an end that
-    isn't the rule's, a ``min_tokens`` other than 0 and an ``ignore_eos`` that isn't the schedule's. A schedule that
-    sets ``ignore_eos`` registers no stop id and one that doesn't registers the model's: any other rule is refused, in
-    a serve's configuration as it starts."""
+    isn't the rule's and a ``min_tokens`` other than 0, which the rule doesn't read."""
     assert [RULE.word(_ended("f", (9, 9, 7), f)) for f in ("abort", "error", None, "length")] == [None] * 4
     assert RULE.word(_ended("m", (9, 9, 7), "stop", min_tokens=1)) is None
-    ran_on = _ended("i", (9, 9, 7, 9), "length", ignore_eos=True)
-    assert RULE.word(ran_on) is None and IGNORES.word(ran_on) == _word(4, 2)
-    assert IGNORES.word(HELD[1]) is None and RULE.word(HELD[1]) == _word(4, 2)
-    for ids, ignore_eos in (((3, 7), True), ((), False)):
-        with pytest.raises(ValueError, match="registers no stop id"):
-            BR.Stop(ids, 64, 4, ignore_eos)
-    with pytest.raises(ValueError, match="registers no stop id"):
-        BR.BoundaryWindows.of({"check": "c", "stop": {**RULE.to_json(), "ignore_eos": True}}, tmp_path)
-    assert not list(tmp_path.iterdir())
+    assert RULE.word(_ended("m", (9, 9, 7), "stop", min_tokens=0)) == _word(3, 1)
 
 
 def test_a_class_under_a_stop_rule_commits_its_rows_in_parts_and_a_stop_class_its_stop_word(tmp_path):
@@ -440,22 +457,22 @@ def test_a_response_one_id_shorter_or_longer_than_the_stop_rules_is_refused():
 
 
 def test_the_hook_files_the_spans_the_stop_rule_ends_in_stop_classes_and_the_rest_without_a_stop_block(tmp_path):
-    """A serve with a stop rule: a response the rule ends (a stop id, ``max_tokens``) is committed in the stop class of
-    its prompt cap, at the rule's cap whatever its count, with its stop word; one it doesn't (an end at an id that is no
-    stop id of the rule's, an abort, a request that set ``ignore_eos`` where the schedule doesn't) by its size class
-    under ``-nostop``, without one, beside a stop class of the same sizes; every class names the rule and whether it is
-    a stop class, and reopens to its sink line's roots; and a serve's configuration names the rule."""
+    """A serve with a stop rule: a response the rule ends (a stop id, ``max_tokens``, and ``max_tokens`` past a stop id
+    for a request that set ``ignore_eos``) is committed in the stop class of its prompt cap, at the rule's cap whatever
+    its count, with its stop word; one it doesn't (an end at an id that is no stop id of the rule's, an abort) by its
+    size class under ``-nostop``, without one, beside a stop class of the same sizes; every class names the rule and
+    whether it is a stop class, and reopens to its sink line's roots; and a serve's configuration names the rule."""
     lines: list[dict] = []
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-rows-stop")
     bw = BR.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s", stop=RULE)
     bw.install(sched, hooks)
     try:
-        for rid, prompt in (("a", [1, 2, 5]), ("b", [4] * 9), ("c", [5, 6, 8, 8]), ("d", [1])):
+        for rid, prompt in (("a", [1, 2, 5]), ("b", [4] * 9), ("c", [5, 6, 8, 8]), ("d", [1]), ("f", [1, 2, 5])):
             sched.add_request(Request(rid, prompt, ignore_eos=False))
-        sched.add_request(Request("e", [1, 2, 5]))
+        sched.add_request(Request("e", [1, 2, 5], ignore_eos=True))
         sched.finish_requests(["d"], NS(name="FINISHED_ABORTED"))
         _step(sched, {"a": ([9, 7], "stop"), "b": ([9, 9, 9, 9], "length"), "c": ([9, 9], "stop"),
-                      "e": ([9, 7, 9, 9], "length")})
+                      "e": ([9, 7, 9, 9], "length"), "f": ([9, 9, 9, 9], "stop")})
         bw.stop()
         got = {(x["prompt"], x["outputs"], x["stopped"]): x for x in lines}
         assert sorted(got) == [(2, 2, False), (4, 2, False), (4, 4, False), (4, 4, True), (16, 4, True)]
@@ -464,8 +481,10 @@ def test_the_hook_files_the_spans_the_stop_rule_ends_in_stop_classes_and_the_res
             c = BR.reopen(tmp_path / "w0" / f"p{p}-o{o}{'' if held else '-nostop'}", PAIR)
             assert {k: v.hex() for k, v in c.roots.items()} == {k: v["root"] for k, v in x["values"].items()}
             assert list(x["values"]) == [*BR.PARTS, *([BR.STOP] if held else [])]
-        assert [s.engine_id for s in BR.reopen(tmp_path / "w0" / "p4-o4", PAIR).spans] == ["a"]
-        assert [s.engine_id for s in BR.reopen(tmp_path / "w0" / "p4-o4-nostop", PAIR).spans] == ["e"]
+        both = BR.reopen(tmp_path / "w0" / "p4-o4", PAIR)
+        assert [s.engine_id for s in both.spans] == ["a", "e"]
+        assert BR.port_rows(both.spans, both.layout)[BR.STOP][:, 0].tolist() == [_word(2, 1), _word(4, 2)]
+        assert [s.engine_id for s in BR.reopen(tmp_path / "w0" / "p4-o4-nostop", PAIR).spans] == ["f"]
         assert BR.reopen(tmp_path / "w0" / "p4-o2-nostop", PAIR).spans[0].engine_id == "c"
     finally:
         bw.stop()

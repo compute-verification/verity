@@ -2441,7 +2441,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--kv-window-s", type=float, default=600.0, help="the window edge the kv arm hashes the KV cache at")
     r.add_argument("--boundary-rows", type=json.loads, metavar="JSON",
                    help="a boundary commitment's object in place of the arm's own: check, per_prompt, per_output, "
-                        "drained, inline, tables, stop (the serve's stop rule: ids, max_model_len, outputs, ignore_eos)")
+                        "drained, inline, tables, stop (the serve's stop rule: ids, max_model_len, outputs)")
     r.add_argument("--private", metavar="DIR",
                    help="where the arm keeps what never leaves the node (a boundary commitment's classes, history tables' "
                         "rows and salts, the top-k's counters), outside every run's directory (under vLLM's client "
