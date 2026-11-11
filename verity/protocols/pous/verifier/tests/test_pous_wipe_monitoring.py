@@ -26,7 +26,7 @@ LINK = WP.link("control", "n0", "outside", "eth0")
 
 
 def _answer(egress_bits: int) -> dict:
-    """An accepted HBM-only wipe of `HBM`, its egress signed as `egress_bits`, with the placement a GPU leg records."""
+    """An accepted HBM-only wipe of `HBM`, its egress signed as `egress_bits`, with the placement a wipe on a GPU records."""
     w = W.run("n0", HBM, signer=ts.TestSigner(b"wipe monitoring", 2), log=ts.session_log(), schemes=ts.SCHEMES,
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=iter(range(10 ** 9, 10 ** 10)).__next__,
               coin_secret=b"coins", egress_bits=egress_bits)
@@ -99,10 +99,10 @@ def test_an_uncounted_wipe_is_vacuous_until_an_egress_record_counts_it(uncounted
     vacuous = WM.table(uncounted, 1)
     assert vacuous["periods"] is None and "outside 0 to 32766" in vacuous["why"]
     record = {"format": WM.EGRESS, "covered": True, "egress_mib": 5, "egress_bits": 5 * sw.EGRESS_UNIT_BITS,
-              "link": "warden", "delta": "0", "why": []}
+              "link": "uplink", "delta": "0", "why": []}
     r = WM.table(uncounted, 1, egress=record)
     assert r["each"]["foreign_bits"] == W.certify(HBM, 5)["foreign_bits"] and r["each"]["certified"]
-    assert r["egress"] == {"link": "warden", "egress_bits": 5 * sw.EGRESS_UNIT_BITS, "egress_mib": 5, "delta": "0",
+    assert r["egress"] == {"link": "uplink", "egress_bits": 5 * sw.EGRESS_UNIT_BITS, "egress_mib": 5, "delta": "0",
                            "covered": True}
     assert r["periods"]["year"]["1/1000000"]["meeting_at_least"] == 365
     with pytest.raises(ValueError, match="not a covered"):
@@ -123,7 +123,7 @@ def test_a_rejected_wipe_pools_nothing():
     assert r["periods"] is None and "a late read" in r["why"]
 
 
-def test_the_cli_reads_a_legs_wipe_json(tmp_path, capsys, uncounted):
+def test_the_cli_reads_a_runs_wipe_json(tmp_path, capsys, uncounted):
     (tmp_path / "wipe.json").write_text(json.dumps({"answer": uncounted, "uncertified": []}))
     (tmp_path / "egress.json").write_text(json.dumps({"format": WM.EGRESS, "covered": True, "egress_mib": 1}))
     assert WM.main([str(tmp_path / "wipe.json"), "--machines", "2", "--egress", str(tmp_path / "egress.json"),

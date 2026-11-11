@@ -207,7 +207,7 @@ def _same_block_twice(vk):
         key = challenge_key(b"audit-%d" % n, vk)
         if key.uniform(PARAMS.blocks, 0) == key.uniform(PARAMS.blocks, 1):
             return b"audit-%d" % n
-    raise AssertionError("no key draws the same block twice in a row")
+    raise AssertionError("no key samples the same block twice in a row")
 
 
 def test_a_stale_answer_is_not_credited_to_the_next_challenge(world):

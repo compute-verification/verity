@@ -127,11 +127,11 @@ def test_gap_attack_at_the_cliff():
     w = _w(params, 7)
     blocks = [b for seg in encode_segments(params.codec, params, prims, w, SALT) for b in seg]
     vk = VerifierKey.from_segments(params, SALT, [blocks[:16], blocks[16:]])
-    gap = GapResponder(params, prims, SALT, w, blocks)
-    assert len(gap.held) == 32 - 2 * (15 // 5)
+    responder = GapResponder(params, prims, SALT, w, blocks)
+    assert len(responder.held) == 32 - 2 * (15 // 5)
     key = challenge_key(b"audit", vk)
-    assert simulate(vk, gap, prims, key, k=200, rounds=5).accepted
-    result = simulate(vk, gap, prims, key, k=200, rounds=4)
+    assert simulate(vk, responder, prims, key, k=200, rounds=5).accepted
+    result = simulate(vk, responder, prims, key, k=200, rounds=4)
     assert not result.accepted and all(a.correct for a in result.answers)
 
 

@@ -20,7 +20,7 @@ interval a network certifier counts the session's egress over.
 "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report.
 With `--streamer` the fill is `wipe_stream`'s, native on this host's CPUs and gated before the side listens, and the
 report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `side_of(period, node, device)` is
-where `period.json` puts that side (`stream.Side`), and `session(side, request, prover)` is the leg's: it starts the
+where `period.json` puts that side (`stream.Side`), and `session(side, request, prover)` is the prover's: it starts the
 side, connects to it, answers from `prover` (`answer`) and adds the connection's two addresses as it saw them. The
 wipe's two parties as the deployment layer runs them are `wipe_parties`.
 """

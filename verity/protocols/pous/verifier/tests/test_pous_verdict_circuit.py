@@ -21,7 +21,7 @@ from verity.protocols.pous.prover import verdict_circuit as V
 
 RNG = random.Random(27)
 KINDS = ("hit", "zero", "edge", "wrong", "late", "early", "round")
-"""How a drawn round turns out: a hit, a hit with no time elapsed or exactly LIMIT, a digest one bit off, past LIMIT,
+"""How a sampled round turns out: a hit, a hit with no time elapsed or exactly LIMIT, a digest one bit off, past LIMIT,
 received before it was sent, or a record of another round."""
 
 
