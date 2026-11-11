@@ -130,3 +130,17 @@ def test_a_rule_round_trips_and_its_spec_holds_the_boundary_values_then_the_inte
     assert [(v.name, v.phase) for v in spec.values] == [("b.ingress", "serve"), ("b.egress", "serve"),
                                                         ("x", "interior"), ("out", "interior")]
     assert spec.selection == S.TwoStage(_class().layout.grain, RULE.replay, K)
+
+
+def test_a_class_under_a_stop_rule_registers_its_boundary_values_and_is_sampled_like_any_other():
+    """A serve's stop rule cuts a class's boundary rows into `b.request`, `b.prompt` and `b.egress`: the class's Spec
+    names those, its first stage registers their record and samples its spans, and its stop word, the stop record's
+    port, is no value of this stream."""
+    stop = BR.Stop((3,), 64, 4)
+    spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), {**GREEDY, "ignore_eos": False}, (7, 8, 9, i), "length") for i in range(N)]
+    c = BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), stop=stop), 0)
+    assert list(c.public()["values"]) == [*BR.PARTS, BR.STOP]
+    got = TS.first(c.public(), PAIR, RULE, FC.Challenger("first"))
+    assert [v.name for v in got.stream.spec.values if v.phase == "serve"] == list(BR.PARTS)
+    assert [r["port"] for r in got.registration.record["roots"]] == list(BR.PARTS)
+    assert got.registration.record["population"] == N and len(got.draw.units) == Q

@@ -4,7 +4,8 @@
 the replay blocks, which are the class's spans the replay side replays. `resume` gives the replay side the same stream at
 the same point, for its interior registration and the second stage (`First.second`).
 
-* **The Spec** (`spec_of`): the values ``b.ingress`` and ``b.egress`` (phase ``serve``) and the interior values (phase
+* **The Spec** (`spec_of`): the class's boundary values (`Layout.values`: ``b.ingress`` and ``b.egress``, or under a
+  serve's stop rule their parts ``b.request``, ``b.prompt`` and ``b.egress``; phase ``serve``) and the interior values (phase
   ``interior``: the check template's ports as the replay side commits them, `interior_values`); the selection
   `TwoStage(grain, replay, k)` over the class's replay block; the check, its templates' programs and their query
   (`Layout.templates`, `Layout.query`: the check template's instances, or, inlined, the templates its body calls) with
@@ -93,8 +94,8 @@ class Rule:
 
 
 def spec_of(layout: BR.Layout, rule: Rule) -> S.Spec:
-    names = [*BR.PORTS, *(n for n, _ in rule.interior)]
-    values = (tuple(S.Value(p, BR.SCHEMA, "serve") for p in BR.PORTS)
+    names = [*layout.values, *(n for n, _ in rule.interior)]
+    values = (tuple(S.Value(p, BR.SCHEMA, "serve") for p in layout.values)
               + tuple(S.Value(n, s, "interior") for n, s in rule.interior))
     public = (S.Public("population", "structure", "the class's spans N; then the sampled spans' proof blocks Q n_rho"),
               S.Public("window", "structure", "provenance: the serve's run, the window, the class, the check, the index's leaf"),
