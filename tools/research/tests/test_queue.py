@@ -2765,6 +2765,20 @@ def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=None) == 0         # --no-preflight: the lander's
 
 
+def test_under_land_into_main_the_preflight_judges_a_head_on_main_and_reads_no_next(world, capsys):
+    """Under `land_into = "main"` written in drive.toml the verified queue merges each candidate onto `main` and drive's `next`
+    is frozen: a head that conflicts only with what `next` holds is judged on `main`, as the loop merges it, and marked."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world)
+    main = _move_main(world, {DRIVE_FLAGS: 'land_into = "main"\n'})
+    world.gh.put(2, h2 := world.change({"pkg/rows.json": '{"r9": 1}\n'}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight" in s)
+    assert f"merged onto `main` at {main[:12]}:" in said, said
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
 def test_the_preflight_merges_onto_the_landing_tip_when_next_no_longer_holds_it(world, capsys):
     """A `next` the landing branch has moved past is no queue above it, so the head merges onto the landing branch's tip, and a
     conflict with a PR only that `next` holds refuses nothing."""
@@ -3380,7 +3394,9 @@ def test_ready_mark_from_an_agent_vm_builds_the_lean_it_reaches_on_a_node_refuse
 def test_the_lean_step_falls_back_to_the_next_node_when_one_cannot_start_the_build_and_refuses_when_none_can(tmp_path):
     """One node (cpu-3) that can't start a run (its `build` slots full, drained, unreachable) would refuse every Lean mark: each
     node but the last takes its slot with `--no-wait`, and a node that can't start passes the build to the next, within the
-    one deadline; only when none builds is the mark refused, naming each node's reason and the fix."""
+    one deadline; only when none builds is the mark refused, naming each node's reason and the fix. Each launch's budget carries
+    its unit, as `research run` refuses a bare number under five minutes for a machine."""
+    from research.cli import _short_bare_timeout
     from research.queue import LEAN_BUILDER, PREFLIGHT_LEAN_ON, LakeBuild
 
     assert (PREFLIGHT_LEAN_ON, LakeBuild().pool) == (("vy-nebius-cpu-9", "vy-nebius-cpu-5"), None)
@@ -3392,13 +3408,14 @@ def test_the_lean_step_falls_back_to_the_next_node_when_one_cannot_start_the_bui
     built = "lean-build: " + json.dumps({"built": {"lean/b": 0}, "failed": {}, "skipped": {}})
     drained = f"research: run {{rid}} refused on {second}: the node is drained\n"
     for k, says in enumerate(({first: (2, full), second: (0, built)}, {first: (255, None), second: (1, drained)})):
-        argvs, now, runs = [], [0.0], tmp_path / f"runs-{k}"
+        argvs, now, runs, timeouts = [], [0.0], tmp_path / f"runs-{k}", []
 
-        def run(argv, cwd, left, argvs=argvs, says=says, now=now, runs=runs):
+        def run(argv, cwd, left, argvs=argvs, says=says, now=now, runs=runs, timeouts=timeouts):
             if argv[3] == "fetch":
                 return 0, ""
             node = argv[argv.index("--on") + 1]
             argvs.append((node, argv[argv.index("--") + 3:], left))
+            timeouts.append(argv[argv.index("--timeout") + 1])
             now[0] += 30                                               # each launch spends 30 s of the budget
             rc, out = says[node]
             if out is None:
@@ -3414,6 +3431,7 @@ def test_the_lean_step_falls_back_to_the_next_node_when_one_cannot_start_the_bui
                         clock=lambda now=now: now[0])(tmp_path / "wt", ["lean/b/B/Use.lean"], 100)
         assert [(n, tail[:2], left) for n, tail, left in argvs] == [(first, ["--no-wait", "--build"], 100),
                                                                      (second, ["--build", "lean/b/B/Use.lean"], 70)]
+        assert [_short_bare_timeout(["--timeout", t]) for t in timeouts] == [None, None], "`research run` refuses it"
         if says[second][0] == 0:
             assert got.failed == {} and got.notes == [] and got.where == f"on {second} (run r20261030-190002-abcd)"
             assert got.passed == [f"* not built on {first} (run r20261030-190001-abcd): no `build` Lean slot here (all 8 Lean "
@@ -3437,7 +3455,7 @@ def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_it
     rid = "r20261026-120000-abcd"
     line = "lean-build: " + json.dumps({"built": {"lean/b": 1}, "failed": {"lean/b/B/Use.lean": "error: B/Use.lean:2:0: x"},
                                         "skipped": {}})
-    tail = ["--as", "ci", "--project", "verity", "--source", str(tmp_path / "wt"), "--cwd", "clone", "--timeout", "90", "--wait",
+    tail = ["--as", "ci", "--project", "verity", "--source", str(tmp_path / "wt"), "--cwd", "clone", "--timeout", "90s", "--wait",
             "--wait-every", "5", "--wait-max", "90", "--", "python3", LEAN_BUILDER, "--build", "lean/b/B/Use.lean"]
     for pool, flags in ((None, []), ("research", ["--pool", "research", "--pool-wait", "90"])):
         argvs = []
@@ -3729,8 +3747,9 @@ def test_a_result_whose_attempt_cant_be_read_vouches_for_nothing_and_the_warning
 def test_a_pass_on_the_heads_lean_inputs_at_any_commit_vouches_for_it_and_a_change_to_a_file_they_hold_warns(world, capsys):
     """A PR that carries another PR's Lean change needn't rerun records at its own head, hours of queue on a full node: a pass
     whose Lean inputs key is the head's vouches for it wherever it ran, here a commit on no branch the gate could walk to.  The
-    key holds every file of the package and of each package it requires by path, their toolchains, tests and docs included, and
-    the checker's, so a change to any of them samples the warning."""
+    key holds every file of the package and of each package it requires by path, their toolchains and Lean tests included, and
+    the checker's, so a change to any of them samples the warning; not the files no audit reads (`lean_audit.UNREAD_NAMES`: a
+    README, a pytest file), so a change to one of those keeps the pass."""
     world.with_store_remote()
     _keyed(world, {LOCK: _lock(), "lib/tests/T.lean": "def t := 1\n", "lib/README.md": "lib\n"})
     other = world.tmp / "other"
@@ -3749,13 +3768,17 @@ def test_a_pass_on_the_heads_lean_inputs_at_any_commit_vouches_for_it_and_a_chan
     changed = lambda f: (ROOT / f).read_text() + "# changed\n"                   # noqa: E731
     for n, files in ((2, {"lib/L.lean": "def l := 2\n"}), (3, {"pkg/lean-toolchain": "v2\n"}), (4, {"lib/lean-toolchain": "v2\n"}),
                      (5, {"lib/lakefile.toml": 'name = "lib"\ndefaultTargets = ["L"]\n'}), (6, {"lib/tests/T.lean": "def t := 2\n"}),
-                     (7, {"lib/README.md": "lib, said again\n"}), (8, {"pkg/tests/test_t.py": "def test_t(): pass\n"}),
                      (9, {"tools/verity/lean/check.py": changed("tools/verity/lean/check.py")}),
                      (10, {"tools/verity/check/common.py": changed("tools/verity/check/common.py")})):
         head = world.change({LOCK: _lock(A="2"), **files})
         capsys.readouterr()
         assert _mark(world, n, head) == 1, files
         assert f"the store holds no pass of it on {head[:12]}'s Lean inputs" in capsys.readouterr().err
+    for n, files in ((7, {"lib/README.md": "lib, said again\n"}), (8, {"pkg/tests/test_t.py": "def test_t(): pass\n"})):
+        head = world.change({LOCK: _lock(A="2"), **files})
+        capsys.readouterr()
+        assert _mark(world, n, head) == 0, (files, capsys.readouterr().err)
+        assert f"records gate: pkg: records run {rid} of {c[:12]} passed it on {head[:12]}'s Lean inputs" in world.logs[-1]
 
 
 BOTH = {LOCK: _lock(A="2"), "pkg/Proofs/lean-audit.json": _lock(B="2")}
@@ -4045,7 +4068,7 @@ Path(os.environ["FAKE_SEEN"]).write_text(json.dumps({"argv": a, "files": sorted(
                                                      "lake": shutil.which("lake"),
                                                      "env": {k: os.environ.get(k) for k in ("VERITY_STORE_REQUIRED",
                                                              "CHECK_STORE_CUSTODY", "RESEARCH_RUN_ID", "GIT_AUTHOR_EMAIL",
-                                                             "PYTHONPYCACHEPREFIX")}}))
+                                                             "PYTHONPYCACHEPREFIX", "VERITY_REGRESSION")}}))
 fail = os.environ.get("FAKE_FAIL")
 Path(a[a.index("--json") + 1]).write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "failed" if fail else "passed",
                                                        "failed_tests": [fail] if fail else None}]))
@@ -4127,6 +4150,92 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
     monkeypatch.setenv("FAKE_LAKE_FAIL", "1")
     assert tier(world.gh.prs[1]) == "`lake build` in verity/protocols/flock/verifier exited 1 (its output is above)"
     assert (lean / ".lake" / "built").read_text() == "from the last PR\n" and not (lean / "stray.olean").exists()
+
+
+def test_the_quick_tier_runs_on_the_heads_merge_onto_mains_tip_and_a_head_that_does_not_merge_there_refuses(world, monkeypatch,
+                                                                                                           capsys):
+    """What lands is a head's merge with `main`, and a head can pass the tier on its own and fail on that merge: a head behind
+    `main` is judged on its merge onto `main`'s tip, its change measured from that tip, and marked at its head."""
+    from research import queue as Q
+
+    world.with_store_remote()
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    moved = _move_main(world, {"m.txt": "main moved\n"})
+    seen = world.tmp / "seen.json"
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(seen))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    tier = Q.QuickTier(world.dev, str(world.origin), root=world.tmp / "ready")
+
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0
+    s = json.loads(seen.read_text())
+    assert s["argv"][:3] == ["--quick", "--changed", moved] and {"a.txt", "m.txt"} <= set(s["files"])
+    [wt] = [p for p in (world.tmp / "ready").iterdir() if p.is_dir() and p.name != "logs"]
+    at = _git(wt, "rev-parse", "HEAD")
+    assert _git(wt, "rev-parse", f"{at}^1", f"{at}^2").split() == [moved, h1]
+    assert f"#1's head {h1[:12]} merged onto `main` at {moved[:12]}: the tier runs on {at[:12]}" in capsys.readouterr().out
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
+
+    theirs = _move_main(world, {"a.txt": "main's a\n"})
+    world.gh.put(1, h2 := world.change({"a.txt": "a2\n"}, base=h1), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 1
+    assert (f"the quick tier failed: it conflicts with `main` at {theirs[:12]} in a.txt: merge `main` into the branch"
+            in capsys.readouterr().err)
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h2) is False
+
+
+#: the Lean audit (`LEAN_AUDIT`) as the tier runs it: records its arguments, the commit it ran at and whether the suites ran yet,
+#: and fails with a last line when FAKE_AUDIT_FAIL is set
+FAKE_AUDIT = """\
+import json, os, subprocess, sys
+head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+with open(os.environ["FAKE_AUDIT_SEEN"], "a") as f:
+    f.write(json.dumps({"argv": sys.argv[1:], "head": head, "suites_ran": os.path.exists(os.environ["FAKE_SEEN"])}) + "\\n")
+print("audited what the change reaches")
+if os.environ.get("FAKE_AUDIT_FAIL"):
+    print("Pkg.A: unknown identifier 'x'")
+    sys.exit(1)
+"""
+
+
+def test_a_change_that_touches_lean_is_marked_only_after_the_lean_audit_passes_on_its_merge_onto_main(world, monkeypatch,
+                                                                                                         capsys):
+    """The Lean audit on the merge publishes what the audit of the candidate landing it stages: it runs in the tier of a change
+    that touches Lean, on its merge onto `main`'s tip and before the suites, and a failure refuses the mark.  A change that
+    touches no Lean runs none, and neither does any change while `LEAN_AUDIT` is None."""
+    from research import queue as Q
+
+    world.with_store_remote()
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "audit.py": FAKE_AUDIT})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    world.gh.put(1, h1 := world.change({"Pkg/A.lean": "theorem a : True := trivial\n"}), ready=False)
+    world.gh.put(2, world.change({"a.txt": "a1\n"}), ready=False)
+    moved = _move_main(world, {"m.txt": "main moved\n"})
+    seen, suites = world.tmp / "audits.jsonl", world.tmp / "seen.json"
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(suites))
+    monkeypatch.setenv("FAKE_AUDIT_SEEN", str(seen))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    monkeypatch.delenv("FAKE_AUDIT_FAIL", raising=False)
+    tier = Q.QuickTier(world.dev, str(world.origin), root=world.tmp / "ready")
+
+    assert Q.LEAN_AUDIT is None and tier(world.gh.prs[1]) is None and not seen.exists()
+    monkeypatch.setattr(Q, "LEAN_AUDIT", [sys.executable, "audit.py"])
+    assert tier(world.gh.prs[2]) is None and not seen.exists()
+    suites.unlink()
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0
+    [ran] = [json.loads(ln) for ln in seen.read_text().splitlines()]
+    assert ran["argv"][:3] == ["--base", moved, "--out"] and not ran["suites_ran"] and suites.exists()
+    assert _git(world.dev, "rev-parse", f"{ran['head']}^1", f"{ran['head']}^2").split() == [moved, h1]
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
+
+    monkeypatch.setenv("FAKE_AUDIT_FAIL", "1")
+    world.gh.put(1, h3 := world.change({"Pkg/A.lean": "theorem a : True := x\n"}, base=h1), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 1
+    assert "the quick tier failed: the Lean audit on the merge exited 1: Pkg.A: unknown identifier 'x'" in capsys.readouterr().err
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h3) is False
 
 
 def _move_main(world: World, files: dict[str, str]) -> str:
@@ -4438,6 +4547,71 @@ def test_judge_marks_a_pr_whose_head_moved_to_the_same_tree_and_no_other(world, 
     assert "the head of each of #1, #3" in capsys.readouterr().err                          # two PRs with that tree: neither
 
 
+def test_a_remote_tier_on_a_merge_onto_main_reports_the_head_it_merged_and_judge_marks_that_head(world, monkeypatch, capsys):
+    """A tier on a head's merge onto `main`'s tip runs at a commit that is no PR's head, so `judge`, marking a run whose caller
+    died, marks the head its facts say it merged (`merged`); a checkout that isn't that merge refuses."""
+    from research import queue as Q
+
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    machine = Machine(world.tmp)
+    tier, _ = _remote_tier(world, monkeypatch, machine)
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    moved = _move_main(world, {"m.txt": "main moved\n"})
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(world.tmp / "seen.json"))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+
+    def died(d: Path) -> dict:
+        raise KeyboardInterrupt("injected: the caller is gone")
+
+    tier.fetch = died
+    with pytest.raises(KeyboardInterrupt):
+        Q.ready(world.gh, world.store, 1, "lane-1", tier)
+    flags = machine.launched[-1]
+    rid = flags[flags.index("--id") + 1]
+    facts = json.loads((machine.root / "runs" / rid / "result.json").read_text())["tier"]
+    assert (facts["merged"], facts["base"]) == (h1, moved) and facts["head"] not in (h1, moved)
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
+    capsys.readouterr()
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 0
+    assert f"#1 is ready at {h1[:12]} (pr:1@{h1})" in capsys.readouterr().out
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
+
+    from research import quick_tier
+    _git(world.dev, "worktree", "add", "-q", "--detach", str(wt := world.tmp / "not-a-merge"), h1)
+    facts = quick_tier.tier(wt, world.tmp / "q", h1, moved, ["true"], merged=main)
+    assert facts["error"] == f"{h1[:12]} isn't {main[:12]} merged onto {moved[:12]}" and facts["merged"] is None
+
+
+def test_a_remote_tier_runs_the_lean_audit_on_the_merge_it_ships(world, monkeypatch):
+    """`LEAN_AUDIT` reaches the machine's quick_tier.py as `--lean-audit`, shell-quoted, and runs in the shipped merge."""
+    from research import queue as Q
+
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT, "audit.py": FAKE_AUDIT})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    machine = Machine(world.tmp)
+    tier, _ = _remote_tier(world, monkeypatch, machine)
+    world.gh.put(1, h1 := world.change({"Pkg/A.lean": "theorem a : True := trivial\n"}), ready=False)
+    moved = _move_main(world, {"m.txt": "main moved\n"})
+    seen = world.tmp / "audits.jsonl"
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "LEAN_AUDIT", [sys.executable, "audit.py"])
+    monkeypatch.setenv("FAKE_SEEN", str(world.tmp / "seen.json"))
+    monkeypatch.setenv("FAKE_AUDIT_SEEN", str(seen))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    monkeypatch.delenv("FAKE_AUDIT_FAIL", raising=False)
+
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0
+    flags = machine.launched[-1]
+    rid = flags[flags.index("--id") + 1]
+    [ran] = [json.loads(ln) for ln in seen.read_text().splitlines()]
+    assert ran["argv"] == ["--base", moved, "--out", str(machine.root / "runs" / rid / "out" / "lean-audit")]
+    facts = json.loads((machine.root / "runs" / rid / "result.json").read_text())["tier"]
+    assert (facts["merged"], facts["audit"]["rc"], facts["audit"]["command"]) == (h1, 0, [sys.executable, "audit.py"])
+    assert ran["head"] == facts["head"]
+
+
 JUDGE_REFUSALS = {
     "a run that hasn't ended": ({"status": {"state": "running"}}, r"run (\S+) hasn't ended \(last seen running\): `research inspect \1`"),
     "not a quick tier": ({"result": lambda d: {**d, "kind": "check/v1"}}, r"run \S+'s result is a check/v1, not a quick-tier/v1 report"),
@@ -4651,7 +4825,9 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     """On the machine the workload's environment holds no store credential, so `check.py` hands its steps the run's custody key
     (CHECK_STORE_CUSTODY) and VERITY_STORE_REQUIRED=1.  A tier that handed neither would skip Flock's store-backed tests as "the
     evidence store is not reachable", and the skip would pass.  It hands both as check.py does, never the caller's,
-    and nothing of the recording run's own; with no key staged, the store is still required.  The machine's PYTHONPYCACHEPREFIX
+    and nothing of the recording run's own; with no key staged, the store is still required.  It runs the vLLM reference
+    regression as check's steps do (VERITY_REGRESSION=1), so a PR that breaks a row fails before its mark, not first in the
+    full check after landing.  The machine's PYTHONPYCACHEPREFIX
     doesn't reach the suites, or test_remote_cwd.py's runs would write their bytecode there instead of under their own root and
     fail every tier that runs tools/research on that machine."""
     from research import queue as Q
@@ -4664,6 +4840,7 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     monkeypatch.setenv("PYTHONPYCACHEPREFIX", str(world.tmp / "the-machines-pycache"))
     monkeypatch.setenv("CHECK_STORE_CUSTODY", str(world.tmp / "the-callers-custody"))
     monkeypatch.delenv("VERITY_STORE_REQUIRED", raising=False)
+    monkeypatch.setenv("VERITY_REGRESSION", "0")
     monkeypatch.delenv("FAKE_FAIL", raising=False)
     machine = Machine(world.tmp, custody_r2=True)
     tier, _ = _remote_tier(world, monkeypatch, machine)
@@ -4671,12 +4848,12 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     flags = machine.launched[-1]
     key = machine.root / "requests" / flags[flags.index("--id") + 1] / "custody"
     env = json.loads(seen.read_text())["env"]
-    assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] == str(key.resolve())
+    assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] == str(key.resolve()) and env["VERITY_REGRESSION"] == "1"
     assert env["RESEARCH_RUN_ID"] is None and env["PYTHONPYCACHEPREFIX"] is None and env["GIT_AUTHOR_EMAIL"]
     machine.custody_r2 = False
     assert tier(world.gh.prs[1]) is None
     env = json.loads(seen.read_text())["env"]
-    assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] is None
+    assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] is None and env["VERITY_REGRESSION"] == "1"
 
 
 def test_a_quick_tier_with_no_lake_on_the_path_builds_with_elans_and_with_none_refuses(world, monkeypatch):
