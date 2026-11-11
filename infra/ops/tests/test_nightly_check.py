@@ -5,6 +5,7 @@ refused post leave. The launcher, the fetched records, the comparison, Slack and
 checks are made-up records in a store whose remote is a directory: only the clone's tests run a program (git, and a Python
 that prints its environment)."""
 import calendar
+import hashlib
 import importlib.util
 import json
 import os
@@ -17,7 +18,7 @@ from research import monitors as M
 from research import slack
 from research.jobs import dispatch
 from research.store import vocab
-from research.store.local import LocalStore
+from research.store.local import LocalStore, NotFound
 
 ROOT = Path(__file__).resolve().parents[3]
 CONTROL = ROOT / "infra" / "control"
@@ -1043,6 +1044,17 @@ def test_the_recorded_checks_of_a_commit_are_its_clean_attempts_whose_result_is_
     late = N.stored(COMMIT, RUN, "r20261019-041600", LocalStore(tmp_path / "late", config_path=tmp_path / "store.toml"))
     assert sorted(late) == [SHARDS[1], "r20261019-041900-0a03"], "only the attempts since the id given are listed from the remote"
     assert N.stored("e" * 40, RUN, "r20261019-031405", the_pods_store(tmp_path)) == {}, "a commit with no recorded check"
+
+
+def test_a_recorded_checks_report_that_cant_be_fetched_is_an_unread_comparison_never_a_part_with_no_stored_verdict(tmp_path):
+    """The remote lost a suite report a recorded check's files list: read without it, every suite of that shard would count
+    as having no stored verdict and ring nobody. The read raises, so the loop reads it again and then reports it unread."""
+    theirs = recorded()
+    published(tmp_path, SHARDS[0], theirs[SHARDS[0]])
+    lost = hashlib.sha256((tmp_path / "files" / SHARDS[0] / "suites.json").read_bytes()).hexdigest()
+    (tmp_path / "vault" / "objects" / "sha256" / lost).unlink()
+    with pytest.raises(NotFound, match=f"blob {lost} is not local and not on"):
+        N.stored(COMMIT, RUN, "r20261019-031405", the_pods_store(tmp_path))
 
 
 def test_the_comparison_fetches_the_runs_lean_report_once_and_reads_the_recorded_checks_from_the_store(tmp_path):

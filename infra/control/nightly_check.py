@@ -523,11 +523,12 @@ def stored(commit: str, but: str, since: str, store=None) -> dict[str, dict]:
     """{run: its `verdicts`} of the recorded checks of the clean `commit` the store holds: every attempt there whose result is a
     check's, but the run `but` (the night's own) and any other uncached one, which stores no verdict. The store's attempts
     are listed from its remote first, those since `since` (a run id's prefix), and each check's suite reports and Lean report
-    come from its files there."""
+    come from its files there. Raises when a result or a report the store lists can't be fetched: a recorded check is never
+    read as holding fewer verdicts than it stored."""
     from research.queue import CHECK_KINDS
-    from research.store.local import LocalStore, NotFound
+    from research.store.local import LocalStore
 
-    store = store or LocalStore()
+    store, reports = store or LocalStore(), [*SUITE_FILES, LEAN_AUDIT]
     store.refresh(attempts_only=True, since=since)
     out = {}
     for run, doc in store.index.sql("SELECT id, manifest_json FROM attempts WHERE source_commit = ? AND source_dirty = 0 ORDER BY id",
@@ -540,11 +541,9 @@ def stored(commit: str, but: str, since: str, store=None) -> dict[str, dict]:
         if result.kind not in CHECK_KINDS:
             continue
         with tempfile.TemporaryDirectory() as tmp:
-            try:
-                if files := outs.get("run_files") or outs.get("run_record"):
-                    store.fetch(files, Path(tmp), paths=[*SUITE_FILES, LEAN_AUDIT])
-            except NotFound:                     # a shard that ran no suite and no Lean check holds none of them
-                pass
+            files = outs.get("run_files") or outs.get("run_record")
+            if files and store.listing(files, reports):          # a shard that ran no suite and no Lean check holds none of them
+                store.fetch(files, Path(tmp), paths=reports)
             out[run] = verdicts(run, result.meta or {}, suite_rows(Path(tmp)), rows(Path(tmp) / LEAN_AUDIT, dict))
     return out
 
