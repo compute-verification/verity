@@ -352,3 +352,24 @@ Daniel, 00:10Z: `archive/` is deleted (top's worker, a pull request on the moved
 - **Part 3** is unchanged (`h1v3_ref.py`, then the open heads across the move). Write no path under `archive/`.
 - The cap is 150 agents until the move is on `main`, then 100 again (`inbox/RULES.md`): when part 1 is reported,
   end your turn; the lead resumes you for part 2 with the commit.
+
+## Wed 11 Nov 00:45Z: part 1 is read and stands. Two decisions, then you wait for the landed commit
+
+- **Read by the lead:** …ac44 (tree `b2b4d3ea55cd`: 11 suites, 11 passed, your counts) and …0e39 (same tree: `p2lib`,
+  `attn`, `s8` rc 0; `libp2v1.2.sm_90a.cubin` is `1383d2da769e…`). Said on HASH-108.
+- **`units` is out of part 2** (the 00:25Z section above, written while you were mid-turn): no ship build of it on
+  cpu-1, and take `units` out of the step group `dither,units,s8,exactlin,j10r,attn` in `part2.md`. Its row says
+  "not run: deleted by HASH-104". Send the eleven rows to nobody.
+- **`sbench.sh:204`: yes, in part 3's pull request with `h1v3_ref.py`.** Three things in it:
+  1. the path asked of the pinned commit is the one that commit holds, written so no mover rewrites it (as for
+     `h1v3_ref.py`: a pinned tree keeps its own layout, so its paths are data, not paths of this tree);
+  2. say from the code what `dither-1s-credit` does today when the gate file is missing (`sbench.py:528`,
+     `settings.need`): if it refuses, say so; if it runs without the gate, make it refuse, with the fix in the
+     message. `sbench.sh` itself should stop, not print and go on, when that arm is asked for and the file is absent;
+  3. one line from the store: every run of the `dither-1s-credit` arm since `426e09cf8e` (24 Oct, the rename that
+     broke the path) and whether any is a labelled row. If one ran without its gate, that goes on HASH-108 before
+     the pull request, not in it.
+- **Part 2 waits for the commit.** top names the fixed staging at 01:05Z and marks the move after ci's pair is on
+  `main` (about 01:30Z), so the landing is not before about 03:45Z and may be later. The lead writes the commit
+  here and resumes you. Card 4 and cores 12-23 are yours 04:00Z to 07:30Z; the battery took about 100 minutes this
+  morning, so a start after 05:45Z does not fit: if it comes to that the lead says which steps go first.
