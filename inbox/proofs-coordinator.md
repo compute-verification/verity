@@ -35093,6 +35093,7 @@ Mailbox read through your 00:15Z entry. Each fact: [run] by me now unless marked
 #8767's body names the run [run `research queue edit 8767`]. The PR is still at `d6cf59bccf21`, unmarked; `main` is still `2b869ed35db5` [run git, at the time of this entry].
 
 **Nothing of mine is running.** The three things open are as in 00:08Z: SIMPLE's two lines in #8722 for the trial test, the goal line, and the three unmarked tests over 5 s. I start nothing of PRF-371's port before your brief.
+
 ## PRF-270 OUTERSTEP, Wed 11 Nov 00:28Z: first entry. The killed process was still reading its blob files (417.5 GB read, 0.04 s of user CPU); what I read next
 
 Worker OUTERSTEP, `bc-34bf5c3c-0c3d-534f-b8b7-2bf400129790`. PRF-270, started 00:23Z. No run launched and none asked for. The answer entry follows today, well before 20:00Z.
@@ -35563,3 +35564,125 @@ Each fact: [run] by me now unless marked [read] or [guess]. Mailbox reread at 00
 
 **Next.** The records and the suites; then the PR, unmarked, with `Goal proofs/spot-bind-term`. Then part 2 on a branch from #8512's head.
 
+## PRF-270 OUTERSTEP, Wed 11 Nov 00:49Z: the 401 GiB is the case's blob files, read whole before any check (525.5 GB named, 417.5 GB read at the kill); none of it can change this case's verdict, which v2 refuses; a member at a time needs about 112 GB at the largest. No run asked
+
+Worker OUTERSTEP, `bc-34bf5c3c-0c3d-534f-b8b7-2bf400129790`. This is the answer entry for PRF-270's memory question. No run was launched. GB is 10⁹ bytes and GiB is 2³⁰. [run] is a run's record that I read myself, [read] is code or a note that I read, [guess] is my inference. A figure taken from another lane's note says so, and I did not check the run behind it.
+
+### The answer
+
+1. **Where the memory went.** [run] The killed process had done nothing but read files: 417.5 GB read, 0.04 s of user CPU, 401.8 s of system CPU, RSS 390.85 GiB. [read] The executable's `check` reads every blob file named on its command line whole into memory before the check starts (`verity/core/protocols/interface/CoreProtocol/Blobs.lean:90`), and the harness names every blob of the case. [run] The case names 2,790 blobs of 525.5 GB (489.4 GiB), 523.9 GB of them the 561 members' circuit files. So it was killed 79% of the way through loading.
+2. **What of it is needed.** [read] For this case's verdict, none. The case is in the per-member form (561 statements), and at `fc2d47bf11` v2's check never accepts that form (`MULTI_REFUSED`, proved: `stage_zk_at_one_statement`, `Security/Proofs/Properties/Remote.lean:307`). The 525.5 GB can change only which reason the reject gives. For a check that could accept, what is needed at once is one member's files and the verifier's working set on them, about 112 GB at the largest member [guess, scaled from proofs' note], against 525.5 GB held at once today.
+3. **The smallest change.** For Wednesday's rehearsal: ten lines in `served_cases.lean_answer` that refuse to start when the case's blob files sum to more than a stated limit, and run the check in a memory scope of its own (vllm's B). To have the Lean's own answer on a per-member case, in seconds: refuse the per-member form first in `checkBlobsAt`, and hand that form no blobs. To check several members for real (PRF-490's form): a member at a time, which on `main` needs no loader change for separate calls, and a lazy loader for the composite. Details in "The smallest change" below.
+4. **Not a finding for `tests/test_verifier_cost.py`, and not lean's precedent.** [read] The test scans Lean source for gate-by-gate walks and sees no file load. What grew is a sum over the case's statements of files that each describe one template once, never the unrolled window. [run] No check code ran, so no missing compiled replacement is the cause.
+5. **Reading and the existing records settle the cause.** No measurement is needed for the rehearsal. Two numbers reading cannot give are listed under "What reading does not settle"; neither bears on Wednesday.
+
+### What the killed run's record shows
+
+Run `r20261110-070642-0bc9`, vy-nebius-cpu-3, tree `fc2d47bf11`, its `resources.jsonl` (1 s samples), read by me.
+
+- [run] The process: `vstar-recursive`, pid 3445104, a child of the `cases` step's Python (pid 2528197), one thread, first sampled 07:34:59Z and last 07:45:25Z. Over that time it used 0.04 s of user CPU (4 ticks) and 401.8 s of system CPU.
+- [run] Its last sample with memory, 07:45:23.0Z: RSS 390.85 GiB, virtual size 396.80 GiB, bytes read (`rchar`) 417.55 GB = 388.87 GiB. RSS less bytes read is 1.98 GiB: the runtime and the executable.
+- [run] The group is the session's shared one (`session-57354.scope`), not a scope of the check's own. At 07:45:23.9Z it holds 402.92 GiB, 401.21 GiB of it anonymous: this process's 390.85 GiB and the harness's Python's 9.93 GiB make 400.78 GiB of that. `oom_kill` goes 0 to 1 before 07:45:24.9Z; this process's memory is gone at 07:45:24.4Z and the group is at 10.90 GiB at 07:45:25.9Z. So the killed process is seen to be this one, not only inferred from the exit status.
+- [run] It read at 0.75 GiB/s at the start and 0.62 GiB/s on average. The virtual size grew in 47 steps. The last 29 are one allocation a file, 2.61 GiB up to 23.41 GiB, each 0.64 to 0.82 GiB more than the last, and the bytes read between two steps equal the earlier step's size. None was freed.
+- [run] The kill came 21.5 GB into the 23.41 GiB (25.13 GB) file. [read: proofs' note `20261109T2122Z-report-llama-audit-on-main`] The attention members' circuit files grow by about 0.785 GB a visible key, and the largest, `AttnBlockFirst_v1{D=64, NVIS=35, BN=192}`, is 27.48 GB. 27.48 − 3 × 0.785 = 25.13 GB, so the file being read at the kill was NVIS 32's [guess, it fits to 0.01 GB], with NVIS 33 to 35 (80.1 GB) and 24 GB of other members' files still unread.
+- [run] The helper gave this check 15 minutes (`friday_composite.py`, `SAMPLED_S`). At the measured rate the load alone takes 489.4 / 0.621 = 788 s, 13.1 minutes. With memory to spare it would have been cut by the clock about two minutes into the work that follows the load.
+
+### The arithmetic
+
+| what | GB | GiB | tag |
+|---|---|---|---|
+| blobs the case names (2,790 files, all present) | 525.5 | 489.4 | [run: vllm's `r20261110-173836-1382`, `out/du.json`, disk blocks] |
+| of them the 561 circuit files | 523.9 | 487.9 | [run: same] |
+| of those, the 35 attention members (NVIS 1 to 35) | 474.7 | 442.1 | [read: proofs' note] |
+| of those, the 512 Pearl+ row members | 30.5 | 28.4 | [read: proofs' note] |
+| of those, the other 14 members | 18.7 | 17.4 | [read: proofs' note] |
+| the sessions' `session.json` and rep files | 1.6 | 1.5 | [run: `du.json`] |
+| read by the process at the kill | 417.5 | 388.9 | [run] |
+| not yet read | 108.0 | 100.6 | [run, subtraction] |
+| the process, had the load finished (files + 1.98 GiB) | 527.6 | 491.4 | [guess, addition] |
+| the group then, with the harness's Python (9.93 GiB) | 538.3 | 501.3 | [guess, addition] |
+| the group's limit on cpu-3 | 432.6 | 402.9 | [run: the group's peak, with its `max` counter rising; read: proofs' note, "the job's 432.6 GB cap"] |
+
+After the load the check would have needed more, on top, one member at a time. [read: proofs' note, from #8052's measurement on `main`, run `r20261108-055812-5582`] The Lean verifier on a flat 24.2 GB circuit file peaked at 99.0 GB, so 4.09 GB a GB of file. At the 27.48 GB member that is 112 GB, 85 GB above the file itself. So the whole-window check as written needs about 525.5 + 85 + 2 = 613 GB (570 GiB) in the process [guess, scaled across trees: the rehearsal's tree does not carry #8052, and its reader's peak on the largest members is not measured]. Infra's 526 GB, if granted, does not hold it.
+
+The time is its own limit. [read: the same notes] Friday's audit ran these same verifier calls through `flock-verify`, one a member: 559 checks, 45.79 hours on one core on the served tree. The in-process check runs them in sequence on one thread, after hashing all 525.5 GB in Lean (`Blobs.ofArray`, below). No limit set anywhere in the harness is near that.
+
+### What `vstar-recursive sampled check` loads and reads (`fc2d47bf11`)
+
+The command is `vstar-recursive sampled check PARAMS COMMITMENT EVIDENCE BLOB…` (`benchmarks/one_stage/served_cases.py:477`, asked at `:580` and by the run's helper). `sampled` is a dispatcher on the params' `form` (`VStarRecursive/Sampled.lean:57-62`, `:83-85`). [read] The harness writes only `one-stage` (`served_cases.sampled_case` is `with_form(v2_case(audit))`), so what ran is one-stage v2's audit, `SampledProofs.OneStageZk`, not the recursive audit. The executable's name misleads: soundness's 17:40Z comment reads it as the recursive form.
+
+In order, with what each step holds:
+
+1. [read] `CoreProtocol/Blobs.lean:90`: every blob file, whole, into a `ByteArray` each (`IO.FS.readBinFile`), before anything else. **This is all the killed run did.** Grows with the drawn members: per statement its circuit file, public file, `session.json` and rep files (`proofs.evidence_v2`, `statements_v2`), then the tables and the interface records (`a5.case_v2`).
+2. [read] `Blobs.lean:91`: the params, commitment and evidence files. Not reached.
+3. [read] `Blobs.lean:45` and `:28`: `Blobs.ofArray` hashes every blob with the Lean SHA-512 (`Flock/Hash.lean:291`), strictly, before the check's body runs. All 525.5 GB, whatever the check then reads.
+4. [read] The decoders: params to `Json`, with the program's descriptor and the partition object, and the 561 members (`OneStageZk.lean:208-227`); evidence to `Json`, with the 561 statements (`:268-277`). These grow with the population and the program, not with the circuit files.
+5. [read] `checkBlobsAt` (`:638-648`): the coins and trees (`treesOf`, `orderHeld`), each session's record parsed (`treesHeld`, `:611-617`), then `runAll` → `runMembers` (`:574-579`), a fold with one `runFrom` a statement (`:502-527`).
+6. [read] Each `runFrom` takes its member's circuit and public files from the blobs (`:511-512`) and parses the whole circuit file into `Flock.Circuit` (`Flock.ProvedScope.circuitOf`, `:520`); each session parses it again in `sessionAt` (`:389`) and in `verdictOf` (`:452`). Three parses a member, one after another. The file is flat: one row a gate, table reads inline [read: vllm's note of 9 Nov, "this window's record states every template flat"]. This grows with the gates of one unit of one template.
+7. [read] Then v1's check on the verdicts, and only then `MULTI_REFUSED` (`:646`).
+
+Nothing here grows with the unrolled window (the policy's c is 13.8 × 10¹² gates a block): a member's circuit file is read once a template, never once an instance, a slot or a batch member. What it grows with is the number of drawn members, summed, because step 1 holds them all at once.
+
+### Was it meant for more than one member
+
+[read] No. `Blobs.lean`'s docstring speaks of "a statement's circuit file, its public file, each session's record and proofs". `one_stage/proofs.py`'s docstring says the verifier "reads the whole circuit file once a call, in time and memory linear in it (about six times the file at peak) … so a protocol verifies one statement a stratum". The per-member form was added to v2 on the remote line with the same loader, and v2 refuses every acceptance in it. On `main` the form does not exist (below).
+
+### The verifier-cost rule
+
+- [read] `tests/test_verifier_cost.py` scans `verity/core/**/*.lean` for seven forms of an unrolled walk in source (a gate locator, a range over a gate count or over a node's members, a templated unit unrolled, and the recursion's two). A whole-file read in `main` is none of them. `ALLOWED` lists neither `CoreProtocol/Blobs.lean` nor `OneStageZk.lean`, and owes neither an entry.
+- [read] Against the rule's words (work in proportion to the descriptor, once per specialized Definition, multiplied through batches and scans): the load is once per template, so it does not walk batch members or scan iterations. Inside one template it does read every gate row, because the statement is flat. That is the flat statement form's cost, which the templated check addresses, and it is not new here.
+- [guess] So this is a different kind of fault from the one the rule names: a sum over a case's statements where a maximum would do, in the loader. No test sees it. The place to enforce it is the call: a limit on the blob bytes a check is started with, refused with the two numbers.
+
+### The smallest change
+
+In order of size. The first is enough for Wednesday.
+
+1. **In the harness, no Lean (vllm's B).** `served_cases.lean_answer`: add up the sizes of `case["blobs"]` before starting; above a stated limit raise `Refused` with both numbers; start the executable in a memory scope of its own. About ten lines in one place, which both callers go through (`served_cases.produce` and `served_verdicts.lean_sampled_row`, `served_verdicts.py:1669`). [read] The file is on the remote line only, not on `main`. It gives no Lean answer; it gives a reason in words in seconds and protects the node.
+2. **The Lean's own answer on a per-member case, in seconds.** Two parts, and the first alone saves nothing.
+   - [read] `OneStageZk.checkBlobsAt`: refuse the per-member form first, before `treesOf` and `runAll`. No verdict changes, by `stage_zk_at_one_statement`; the reason of a per-member reject changes (today a bad tree or session is named first). The proofs that unfold `checkBlobsAt` (`stage_zk_at`, `stage_zk_at_one_statement`, `Remote.lean:273`, `:307`) are redone and the lock's records move. The two Python mirrors of the reason's order change with it (`verity/core/protocols/composition/tests/reference.py:388`, `verity/core/service/sampled_proofs/tests/test_difftest.py:2038`).
+   - [read] The blobs must also not be read. `main` reads them (`Blobs.lean:90`) and `Blobs.ofArray` hashes them (`:28`, `:45`) before `checkBlobsAt`'s first line. vllm's C as written ("v2 refuses the per-member form before it reads a blob") does not get there by reordering the check alone. With the first part in place the check does not depend on the blobs in that form (a one-line lemma), so the harness can name no blob for a case whose params are per-member, and `composite.py remote-v1` can drop that component's blobs. The verdict stays the Lean's.
+3. **Several members checked for real (PRF-490's form).** Then the blobs must be read, a member at a time.
+   - [read] As separate calls it needs no loader change on `main`: `main`'s v2 takes exactly one circuit, one public file and one session (`Spot/OneStageZk.lean`, `oneSession`), so a call holds one member's files: at most 27.48 GB and about 112 GB at peak for this window's largest member [guess, scaled], and well under 1 GB of files for each of the 512 row members.
+   - [read] The composite is the part that needs code. `productB` runs every component's check again on the union of the blobs (`CoreComposition/Blobs.lean:35-36`) inside one `remote-v1 check` process, which reads them all first (`composite.py:233-234`). For it: `BlobProtocol.main` indexes the files by digest without holding them, and the check is stepped a statement at a time (`runMembers` is already such a fold, and each step reads only its member's files, the pinned tables and the interface record). That needs an incremental SHA-512 (`Flock.Sha512` has a block `compress` and a one-shot `hash` only, `Hash.lean:125`, `:291`) and a lemma that the stepped run equals `checkBlobs` on all blobs. Or the composite takes the members' answers without running them again, which changes what its verdict rests on. That choice is soundness's, with PRF-490.
+
+### `main` against `fc2d47bf11`
+
+- [read] The merge base is `38f6228a3a` (3 Nov). `main` here is `2b869ed35d`.
+- [read] The loader is the same: `CoreProtocol/Blobs.lean:96` on `main` reads every blob file first; the file differs only in its module header.
+- [read] v2 differs: `verity/core/service/spot/Spot/OneStageZk.lean` on `main` has no per-member form (no `members`, no `MULTI_REFUSED`, no `runMembers`). Its params name one circuit and one public file, and it refuses evidence of none or several sessions before it reads a tree (`oneSession`, `:656`). So on `main` a case's blobs are one statement's.
+- [read] `main`'s dispatcher refuses the recursive form at the params (`VStarRecursive/Sampled.lean:62`, `RECURSIVE_REFUSED`).
+- [read] `main` has no `benchmarks/one_stage/served_cases.py`, and nothing under `benchmarks/one_stage/` on `main` asks `vstar-recursive`.
+
+### Lean's precedent (NET-197), and one thing on `main` of that kind
+
+- [run] Not the cause here: the process ran no check code.
+- [read] At `fc2d47bf11`, `OneStageZk.lean` and `OneStage.lean` do not call `popOk` at all, so the missing-import fault has no path in this check. `PopOrder` is imported by `Run.lean:32` and `SampledProofs.lean:20`.
+- [read] On `main` it is the other way round. v2's check calls `Slots.popOk` (`popHeld`, `Spot/OneStageZk.lean:670`, since `349a188fa8`), and `main` has no ranges form of it: `popOkRanges` and `PopOrder` were never on `main` (`git log -S popOkRanges origin/main` is empty; `6ee701f008` is on the remote line only). `popOk` on `main` is `Slots.layout` as written (`Spot/Slots.lean:81`), which builds one proof block for every gate of the root's input nodes (`inputGates`, `:51-60`; `layout`, `:72`). [guess] So on a window with a large input class, v2's check on `main` repeats NET-197's fault, and the remote line's merge of `main` brings `popHeld` to a module that imports no `PopOrder`. CMP-304 reshapes `Slots.layout` and may remove the input class. This is for lean and for whoever merges; I did not read whether any window served from `main` has a large input class.
+
+### What reading does not settle
+
+- The Lean SHA-512's rate on 525.5 GB (`Blobs.ofArray`). Unknown; I found no measured rate.
+- The in-process verifier's peak on the largest members with the rehearsal tree's reader. Friday's audit lost the Lean check of the seven largest (NVIS 29 to 35) to an out-of-memory kill, with no memory limit of their own, so their peak is not on record [read: proofs' note].
+
+Neither changes Wednesday: the form is refused whatever they are. If PRF-490's form is to run on this window, the smallest measurement is one member alone, NVIS 35, in a 200 GB scope of its own on cpu-3, for its peak and its time. I ask for no run now.
+
+### Text ready to paste on PRF-270, for @vllm @soundness @lean
+
+> @vllm @soundness @lean proofs, on the 401 GiB. **The check never started: the process was killed while reading its input files. The case names 525.5 GB of them, and the executable reads them all before it checks anything. For this case none of those bytes can change the verdict.**
+>
+> - [run] The killed process is `vstar-recursive`, seen in the run's samples (`r20261110-070642-0bc9`): RSS 390.85 GiB at 07:45:23Z, 417.5 GB read from files, 0.04 s of user CPU in 626 s. The group's 401.2 GiB is that plus the harness's Python (9.93 GiB).
+> - [read] `Core.BlobProtocol.main` reads every blob file whole before the check (`CoreProtocol/Blobs.lean:90`), then hashes every one (`:28`). The harness names every blob of the case (`served_cases.py:477`).
+> - [run] The case names 2,790 blobs, 525.5 GB (489.4 GiB): 523.9 GB are the 561 members' circuit files (vllm's `r20261110-173836-1382`). The 35 attention members are 474.7 GB of that [read: proofs' note of 9 Nov]. The node's limit is 402.9 GiB, so the load alone does not fit.
+> - [read] What ran was one-stage v2's audit, not the recursive audit: `sampled` dispatches on the params' `form`, and the harness writes `one-stage`. The executable's name misleads.
+> - [read] The case is in the per-member form, and v2 never accepts it (`MULTI_REFUSED`; proved, `stage_zk_at_one_statement`). The refusal comes last, after every member's verifier has run. So the bytes decide only the reason of a reject.
+> - [guess, scaled] If it had memory: about 613 GB at peak (the files, plus about 85 GB of verifier working set on the largest member), 13 minutes of loading, then the 561 verifier runs in sequence, which took 45.8 hours through `flock-verify` on Friday.
+> - **@vllm, for Wednesday:** your B is right and is the smallest change: `served_cases.lean_answer` refuses to start a check whose blob files sum past a stated limit, and runs it in a scope of its own. Your C needs a second part: reordering the refusal is not enough, because the files are read and hashed before the check's first line. With the refusal first, the per-member case can be asked with no blobs and the Lean answers `reject … MULTI_REFUSED` in seconds. Say which you want and proofs makes it.
+> - **@soundness:** a member at a time, as separate calls, needs no loader change on `main`, where v2 takes one circuit, one public file and one session: a call holds one member's files, about 112 GB at peak for this window's largest [guess, scaled]. The composite is different: `productB` runs every component again on all the blobs in one process. With PRF-490, either the loader goes lazy and the check is stepped a statement at a time, or the composite takes the members' answers. Which is yours to say.
+> - **@lean:** not NET-197's fault, since no check code ran [run]. Not a finding for `tests/test_verifier_cost.py` as written: it is a file load, once per template, summed over the case's statements [read]. One thing of NET-197's kind on `main`, by reading only: v2's `popHeld` calls `Slots.popOk`, and `main` has no ranges form of it (`popOkRanges` was never on `main`), so `popOk` builds a proof block for every root input gate there.
+
+### What I did not read or check
+
+- The kept case's files themselves (`case-v2.json`, the circuit files): they are on cpu-3 and private. Their count and sizes are from vllm's `du.json`, and the per-kind split and the 27.48 GB from proofs' note.
+- The runs behind the notes' figures (#8052's 99.0 GB at 24.2 GB, the audit's 45.79 hours).
+- Whether the scan of `tests/test_verifier_cost.py` passes on these two files: I read its patterns against the source and ran nothing.
+- `Flock.ProvedScope.circuitOf`'s parser, for what it allocates a row.
