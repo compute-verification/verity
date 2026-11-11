@@ -36647,3 +36647,119 @@ Why it holds:
 - **(c) K is the union over every checked block** [derived, from `RegTwo.checked`]. That is at most the sum over the ⌈q·n⌉ sampled replay blocks plus the always-checked blocks, with weights counted once. It is one replay block's only where ⌈q·n⌉ = 1.
 
 **Refusal (row 2c), one line.** K is the maximum over non-refused coins (`Reg.lean:94`), and both runs are drawn there. The traces may stay over all coins at `+p_ref*|opensSet|`, which is below 2^-229 [derived].
+
+## BREAKEVEN, Wed 11 Nov 02:36Z: 9.8% and 427 GB: not the same design or target; at the goal's 300 GB both miss 10%, row 1's design at 11.5% and the 427 GB design at 12.4%
+
+To your 02:02Z job (top's question on TOP-389). Each sentence or bullet carries its mark; a section's opening mark covers the bullets that carry none. I launched two planner runs, needed for the corrected row's six periods (point 5). Nothing is posted on Linear or Slack.
+
+**The answer.** [derived] Not the same design and not the same target. Row 1's 9.8% is the fused cut alone, with sparse MLA at the census request's keys and λ = 1, at the total cost where the planner's world-year bound reaches the FP4 weights, 376.7 GB. The 427 GB is the bound at a total cost of exactly 10%, for the fused cut plus the warm estimate and sparse MLA at the 128k plan's keys, × 1.05 for λ, read against the goal's 300 GB. Put on one target they agree: where the bound reaches the goal's 300 GB at λ = 1.05, row 1's design costs 11.54% and the 427 GB design 12.40% of a world year's compute, so neither meets 10%. At row 1's own target they cost 9.80% and 10.46%.
+
+### 1. Row 1's "9.8% as designed"
+
+[read unless marked] Source: run r20261109-201233-0467, row (ii), step "+ the verifier as measured after #8287, #8315, D2", world year. The scratch chain is `servedcard_split.py`, `provecut8d.py` and `breakeven_burst_price.evaluate` in its `inputs/tools.tgz`, over the planner at a5e4e56a11.
+- **The bound.** It is the planner's exfiltration bound over the period (`levers.bound`, as `total_cost._point` computes it): the most bits wrong proof blocks can carry while the two-stage sampled audit at budget β misses them with probability above δ. "Holds" means the bound is at most `target_bits = (1 - share) x WEIGHTS["FP4"]` = 3.0133e12 bits (376.7 GB) at `share` 0. `sweep.solve` finds the least β where it holds: 5.372%.
+- **The division.** total = serve + edge + β + compile + pool. Each term is SPOT's added GPU-seconds over the scope's GPU-seconds. The world's year is 1.1825e16 GPU-seconds: 46.87 million eight-GPU machines (`fleet.world-h200`), all serving at MFU 0.4. In the row:
+  - serve 4.220 points, with the wait at e at 2.293 (modeled), the certified tick at 1.63 (simulated on Llama-3.2-1B) and deterministic top-k at 0.25 among them;
+  - edge 0.044, pool 0.070 and compile 0.096;
+  - β 5.372 (prove 5.108, replay 0.263);
+  - total 9.802%, which is 1.159e15 GPU-seconds a world year [derived].
+- **S.** 28,000 bits a request: 875 tokens × 32 bits (`S_case` "trace128 max x32").
+- **The request.** It uses both, for different parts:
+  - Requests and their work are the 128k serve plan's. That is c343: 3,320.5 computed tokens a request at 79.25e9 MACs a token, 1.7784e16 requests a world year and 4.74e12 a datacenter's. The bound and `q` read them from the line's own scopes (`reprice.workload`). [derived] `replay_sample / q` = 1.7784e16 in the matching row of run r20261110-034443-6e7d, which reproduces 9.80% exactly.
+  - Sparse MLA's blocks are the census request's: one 288-token request's 235 keys a token, layer and rank, where the 128k plan selects about 1,869.
+- **λ and δ.** λ = 1 (`share` 0). δ = 0.01, the design card's evasion threshold.
+- **Verifier.** It is the Lean verifier as measured after #8287, #8315 and the line-view parse (D2), from `provecut8.py`'s docstring:
+  - FlashInfer K2048 costs 22.80 and RMSNorm v8 58.48 core-seconds a one-block statement, plus 0.83 and 6.8 ms a block;
+  - every other type is at the planner's seconds × 0.807 plus 0.83 ms a block, both assumed;
+  - P2's flat-column cut of 0.85 is at its goal (assumed).
+- **Prover.**
+  - The per-expert fused blocks are at `FUSED_H200`'s prices, measured on synthetic fr-w13 and fr-w2 statements on an H200.
+  - Every other type is at the proof-overhead card's price or a computed one.
+  - Everything is at the assumed statement-cache factor of 0.1.
+  - The levers are at their goals: P4's 4× prover (measured: 3.71×), P5's templated check, P3's four dense provers a GPU, N2's replay of a request's lifetime alone with the edge read live, and N4's front run beside device work.
+  - FlashInfer K2048 and K6144 are in lookup slots, measured warm.
+- **Kept by both figures.** Design (d) with 600 s execution phases, the B128 mix, the fault charge, and the same world.
+
+### 2. The 427 GB
+
+[read unless marked] Source: run r20261110-053642-6e43's one row, "lever on (iii): sparse MLA at 128k's keys", world year. The code is `headline_rows.py` and `headline_world.py` in its `inputs/tools.tgz`; the target is goal `proofs/spot-ten-percent`'s.
+- **The bound.** It is the same bound with the same δ, read at a pinned budget instead of solved. β = 5.5773% is the budget at which the total is exactly 10% (serve 4.220, edge 0.044, pool 0.070, compile 0.089). The bound there is 3.2553e12 bits, 406.9 GB, and the 427 GB is that × 1.05 [derived]. The Goals page reads it against 300 GB, its "safe" for the 376.7 GB weights, not against the weights.
+- **The division.** The same shares of the same 1.1825e16 GPU-seconds, except that the total is the input (10%) and the GB the output.
+- **S.** 28,000, the same.
+- **The request.** It is the 128k serve plan's for both parts:
+  - the same 1.7784e16 requests (`replay_sample / q`);
+  - sparse MLA at the 128k plan's keys (`MLA128`: full 64-key parts × 8.45, partial parts × 0.20, whole rows × 0.1, combines × 1.16 at 4× a block).
+- **λ and δ.** λ = 1 in the planner, because the row sets no `share`; × 1.05 is applied to the GB afterwards. δ = 0.01.
+- **Verifier.** The same step and the same prices.
+- **Prover.** It is row 1's, plus the warm estimate: 14 card- or computed-priced families at 0.25 of their statements' fixed seconds, and the 32-split combine at `comb(0.25)`. Every lever is at its goal, with the same assumed cache factor.
+
+**The same design?** [derived] No. The two share the fused cut and its prices, S = 28,000, the verifier step, every lever at its goal, δ, the world and the request count. They differ in five premises:
+1. What is held fixed: row 1 fixes the bound at a target and reports the total; the 427 GB fixes the total at 10% and reports the bound.
+2. The target: the FP4 weights (376.7 GB) against the goal's 300 GB.
+3. λ: 1 against 1.05.
+4. The warm estimate: none, against 0.25 on 14 families and the combine.
+5. Sparse MLA's keys: the census request's 235 against the 128k plan's about 1,869.
+
+**Each figure restated at the other's premises.** [derived] These come from runs r20261111-022451-1447 and r20261111-022959-9a60, with no new measurement.
+- **Row 1's design in the Goals page's unit:** 363.5 GB at 10%, or 381.7 GB × 1.05. 363.5 GB is under the 376.7 GB weights at λ = 1, which is why 9.8% is under 10%; 381.7 GB is over the goal's 300 GB.
+- **The 427 GB design in row 1's unit:** 10.46% where its bound reaches the FP4 weights at λ = 1, and 10.76% at λ = 1.05.
+- **Both at the goal's 300 GB:** 11.54% and 12.40%.
+- **The walk between them,** as totals where the bound reaches the FP4 weights at λ = 1:
+  - 9.80% for row 1's design;
+  - 7.62% with the warm estimate added;
+  - 10.46% with the 128k plan's keys as well;
+  - 10.76% at λ = 1.05;
+  - 12.40% at 300 GB.
+- **How the totals are read** [run]. The planner's bound is inverse in β: each row's fitted elasticity is within 0.0004 of -1 for β from 0.04 to 3. Compile is proportional to β. So each total is read off the bound at pinned budgets, interpolating in log β between the two budgets that bracket the target.
+- **Check.** [derived] The method reproduces every figure the planner solved directly, to the printed digit:
+  - all twelve values of row 1 from run r20261109-201233-0467;
+  - the headline-honest report's 25.76% and 12.44%;
+  - the Goals page's 8,456, 1,446, 543 and 427 GB.
+- **The command.** Use the job script from run r20261110-053642-6e43 (`headline_world_job.sh`) at tree a5e4e56a11 with:
+  - `WORLD_BETAS=0.04,0.07,0.3,1.0,3.0`, `WORLD_SETS=,honest`, the six scopes in `WORLD_SCOPES` and step one in `WORLD_STEPS`;
+  - `WORLD_PY=headline_world_all.py` for the 427 GB row's weeks and months;
+  - then `python lanes/proofs/tools/breakeven_at_target.py ROWS.jsonl...`. Both scripts are now in the notes.
+  - The planner has no flag for a target other than the weights. In `breakeven_burst_price.evaluate`, `share` = 1 - 300 × 8e9 / (1.05 × 3.0133e12) = 0.2415 would solve 300 GB directly.
+- **Why runs.** [read] The lever walk had the world year only, and the corrected row needs every period. Both runs went to vy-nebius-cpu-1's research pool, 2 minutes 16 seconds and 24 seconds of compute. They used `--cwd clone`, not `--cwd source`, because the job writes `reference.toml` and a venv into its tree.
+
+### 3. Which step of run r20261109-201233-0467
+
+[read: `provecut8.py`'s docstring, the headline-honest report] Step one.
+- **Step one's additions are measured:** FlashInfer K2048 and K6144 in lookup slots, warm, and the verifier as measured after #8287, #8315 and D2.
+- **Step two is not built.** It adds "one table at m = 37, one prover an H200": one RMSNorm v8 session of 1,024 blocks of 2^27 on one H200 (116.9 GiB, 14.9 s warm), applied to every block type as statement caps × 4 with fixed seconds × 1.09 and one prover a GPU. No serving path builds it, and it has no owner.
+- **Why row 1 quoted step one, for both cuts:** that is the reason. Its fault is that it named neither the step nor the fact that a second exists, and top read both from the run.
+- **Where step two goes,** if anywhere: as a planned change, 7.87% for (ii) and 68.34% for (i) at the world year.
+
+### 4. The request count
+
+[read unless marked] No printed figure of ours divides by the row's `requests` field.
+- **Where the field comes from.**
+  - `headline_world.run` writes `requests`, `flop_request` and `gpu_seconds` from `scopes()`. That function returns the first loaded module-level `SCOPES` table, which is the census's: 2.029e16 requests a world year at 4.613e14 FLOPs a request.
+  - The bound, β, `replay_sample` and `q` read the case's own line.
+  - `headline_mix.plan` reads only `gpu_seconds` from that table, and it is the same 1.1825e16 in both.
+  - My 10 Nov 16:00Z checkpoint called the field a mislabel. It was never posted.
+- **What I checked:**
+  - **PRF-456's comments:** every per-request figure of ours uses 1.778e16 or 4.74e12. Among them are 300 GB as 1 bit in 7,400 requests, our audits a request, and 13 bits a request at 28,925 TB a world-year and 7.7 TB a datacenter-year.
+  - **PRF-502 (one comment) and HASH-98 (205 comments):** no request count.
+  - **The Goals page:**
+    - `accounting/network-glm53`'s 1 bit in 7,400 uses 1.78e16;
+    - `network/certifier-term-zero`'s 29,000 TB is 13 bits × 1.778e16;
+    - `network/term-in-the-number` labels 2.03e16 the census's, for network's command.
+  - **`benchmarks/spot_figures`' cards on `main`:** none holds a request count. Figure 1's scopes use the census request for Figure 1's own lines, which is its premise.
+- **One reader outside ours.** network-accounting's NET-297 stage-2 draft (`lanes/network-accounting/20261110T1618Z-draft-net297-stage2.md`, its script near line 6298) prints the field as "the period's replay sample ... of 2.03e16 requests" beside our `q`. It divides nothing by it, and it should read 1.778e16.
+- **What such a figure would become.** [derived] A figure that divided our GB by 2.029e16 would rise × 1.141 at 1.778e16: 1 bit in 8,454 requests becomes 1 in 7,400. None exists.
+- **A third count.** [derived: `replay_sample / q` in run r20261111-022451-1447's rows]
+  - Today's cut, rows (i) and (i) honest, is priced at its own line's 2.1157e16 requests a world year (5.64e12 a datacenter's), not at 1.778e16.
+  - [read] `reprice.workload` recomputes the requests from the line's served MACs a token, with the DSA indexer scaled by that line's own linear blocks. [derived] The served cut's line comes to about 66.6e9 MACs a token, against the fused line's 79.25e9. [guess] The served cut's partition gives a different indexer factor or base.
+  - So row 1's 97.05% and the Goals page's 8,456 GB sit at a different count from the rest of the path. It touches neither 9.8%, 427 GB nor the plan of record.
+  - Which count is right is the planner's to settle, which makes it mine. Say if you want it on PRF-456.
+- **The fix for the successor plan.** Take `requests` from the case's line (`L[7]["scopes"][scope]`, as `evaluate` does for `q`), or drop the field.
+
+### 5. Row 1, corrected, ready to paste
+
+[derived, from runs r20261111-022451-1447 and r20261111-022959-9a60]
+
+> 1. Total cost of SPOT for GLM-5.3 at which the planner's exfiltration capacity over the period reaches 300 GB, the goal's "safe" for the 376.7 GB FP4 weights (λ = 1.05) | % of the scope's GPU-seconds over the period, serving tax plus verification; lower | runs r20261111-022451-1447 and r20261111-022959-9a60, `out/rows.jsonl`: the planner's bound at pinned audit budgets (`benchmarks/spot_figures/breakeven/`, driven by `lanes/proofs/tools/headline_world.py` in the notes), the total read where the bound is 300 GB; the same design at 10% is run r20261110-053642-6e43's 427 GB | **With every planned change at its goal** (the Goals page's 427 GB design: per-expert fused MoE at its synthetic H200 prices, a warm factor of 0.25 on 14 block types, sparse MLA at the 128k plan's keys, the verifier as measured after #8287, #8315 and D2, every modelled lever at its goal): the world 12.32 (week), 12.35 (month), 12.40 (year), 1.47e15 GPU-seconds a year; one datacenter 12.14, 12.17, 12.23, 3.86e11 GPU-seconds a year. **On the cut registered and served today, every lever at its measured value** (the Goals page's 8,456 GB, at its line's own 2.12e16 requests a world year): the world 155.18, 157.26, 160.82; one datacenter 143.35, 145.45, 149.05; above 100, the audit would need more GPU time than the world has. [derived] Not on `main`: tree a5e4e56a11 on `cursor/proofs-breakeven-be7a`, no PR. It is a model over cards, at an assumed statement-cache factor of 0.1, measured for no block type, and at 28,000 served bits a request (S = 28,000), which no check holds to the served row. No run has more than 6 of the configuration's 22 switches at the post's value, and Lean checks none of the two-stage designs it plans. | 10 at the world year, the goal's and the post's 10%
+
+- **What the two caveats are worth on it.** [derived from the Goals page's GB at the inverse law; rough] At a cache factor of 0.25, 0.5 and 1.0, the world-year 12.40 becomes about 16.3, 22.9 and 36.1. At the response cap's 32,832 bits it becomes about 13.3.
+- **If you would rather keep row 1's own target and design,** the minimal correction names them: "at the planner's bound at GLM-5.3's FP4 weights (376.7 GB), λ = 1, on the fused cut alone with sparse MLA at the census request's keys, step one of run r20261109-201233-0467: the world 9.73, 9.71, 9.80; one datacenter 9.51, 9.54, 9.59". [guess] I wouldn't use it: it still disagrees with the Goals page by construction, which is top's point.
