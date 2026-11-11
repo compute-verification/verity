@@ -28,13 +28,13 @@ src/research/
 │                   tools/verity/landq replays
 ├── policy.py       drive's policy over tools/verity/check/policy.toml: what is off the merge gate and what may stay red
 ├── checkview.py    `research status RUN` on a check run; tools/verity/check's live view reads its targets
-├── goals.py        `research goals`: the Goals page, read and written (the writing-goals skill)
+├── goals.py        `research goals`: the Goals page (the writing-goals skill)
 ├── linear.py       asks as Linear issues, and the audit the control pod's top watch runs
 ├── flags.py        renamed(): an old flag kept as a hidden alias of its new name; infra/ops uses it
 ├── store/          the evidence store (`research data`); README.md there is the contract and names its modules
 ├── telemetry/      the recorded-attempt harness (below)
 ├── jobs/           the Job queue's client side (below)
-└── pods/           the machines: their registry, leases, budgets and guard, and the Nebius nodes' files; README.md there
+└── pods/           the machines: registry, leases, budgets and guard, the Nebius nodes' files; README.md there
 tests/              pure-Python; the machine side of --on is exercised locally (launch_request is a plain function);
                     waits.py: waiting without a clock, for any suite's tests; test_pythonpath.py: a shipped tree's import roots
 tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_v0.2/: a finished run dir with a `store` section (state.json -> status.json at test time)
@@ -96,10 +96,10 @@ research inspect RUN [--json|--py-spy]   # fetch, status RUN and inspect take a 
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
 research pods SUBCOMMAND ...             # the machines: registry, ssh, sync, leases, the budgets guard (src/research/pods/README.md)
 research tele SUBCOMMAND ...             # the harness's own surface (below)
-research jobs add|list|show|cancel|events ...   # the Job queue (below); `research worker --dispatch` runs its jobs
+research jobs add|list|show|cancel|events ...   # the Job queue (below)
 research goals show|set|confirm|done|remove|replace|priority ...   # the Goals page (goals.py)
-research compare ORIGINAL... REPLAY [--expect E] [--json]   # a replay's verdict against the runs it replays, from the store (compare.py)
-research digest --as LANE   # what changed for a lane since its last digest, on one screen (digest.py)
+research compare ORIGINAL... REPLAY [--expect E] [--json]   # a replay's verdict against the runs it replays (compare.py)
+research digest --as LANE   # what changed for a lane since its last digest (digest.py)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
 research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a train
@@ -356,7 +356,7 @@ job is added, claimed by a worker under a lease, renewed while it runs and compl
 
 ~~~text
 research jobs add merge-check --commit REF      # or `lean-regen --commit REF --package DIR`, or `audit-main`
-research jobs list [--state S] [--kind K] [--json]        research jobs show ID        research jobs cancel ID
+research jobs list [--state S] [--kind K] [--json]    research jobs show ID    research jobs cancel ID
 research worker --dispatch --pods A,B [--once]  # claims jobs and runs each with `research run --on` on one of the pods
 ~~~
 
