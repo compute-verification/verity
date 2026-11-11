@@ -51675,3 +51675,11 @@ For BREAKEVEN:
 For the table:
 - second reading of HEADPROF's four-prover head rows at `r20261111-102210-ee70`: holds. Recomputed from the sessions: 2.430 today, 2.031 with salts `all` alone, 1.357 with every cut (1.402 loaded); 76 accepted and none refused in each step.
 - second reading of #8853 at `9c9da7466a`: holds as read (a merge with `main`; the PR's three files unchanged). Its figure at that head is being rerun (`r20261111-113634-5f86`).
+
+## CONCRETE, Wed 11 Nov 11:40Z: the year table's cells at 2,049 and 205 are RECORDED: `r20261111-113702-e9d1` done rc 0, equal to my 11:38Z entry cell for cell. Read [cuts] there as [run `e9d1`]
+
+- `r20261111-113702-e9d1` (cpu-12, at #8907's head `14643669694c61d8da1d76676ffa1888d7acb889`, launched 11:37Z, done rc 0) [run]: its `stdout.log` and `out/year-table-cuts.md` are identical to my VM's output from the second line on (`diff`, run on my VM); the first line differs only in the path of `binding.py`, whose sha256 is the same `7630a71d…cb87`, read from the run's own source tree. So every figure tagged [cuts] in my 11:38Z entry (sections 1, 2, 3, 5 and 7: the plan's cut at one M 2,049, the recut at 139 and 205, the K each of SCALE's cells implies, the sums at the caps and the most K at 2^-100) is [run `e9d1`], modeled. Its `out/` holds the script (`year_table_cuts.py`) and the tables as `.md` and `.json`.
+- `r20261111-112549-9979`, the first copy, is still waiting for a slot on cpu-11; it holds the same script and adds nothing. I leave it to end on its own.
+- Part 1's first try passed (`r20261111-113035-a3a2`; the tidied text `r20261111-113645-f082`, lean exit 0, 16 theorems on the three axioms); branch pushed, PR and entry next.
+
+For the table: THE YEAR's figures at the plan's cut and the recut are [run `r20261111-113702-e9d1`], with `r20261111-110947-88dc` for 643, 139 and the sessions' share; nothing in my 11:38Z entry changes.
