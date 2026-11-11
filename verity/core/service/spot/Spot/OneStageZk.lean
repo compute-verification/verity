@@ -980,9 +980,9 @@ def EVIDENCE_FITS : String :=
     "digest holds each length in"
 
 /-- **A session's evidence, the bytes its closing round is opened after the SHA-512 of** (`evidenceBytes`): its
-record's bytes, then, for each rep file it names, in the order it names them, the file's name in UTF-8 and its bytes,
-each the blob the verdict reads it from (`step`, `filesOf`). A refusal where no blob holds one, as `step` refuses a
-record, or where a length is past a word (`EVIDENCE_FITS`). -/
+record's bytes, then, for each rep file it names, in the order its `reps` holds them (their names', sorted), the file's
+name in UTF-8 and its bytes, each the blob the verdict reads it from (`step`, `filesOf`). A refusal where no blob holds
+one, as `step` refuses a record, or where a length is past a word (`EVIDENCE_FITS`). -/
 def sessionEvidence (bs : Core.Blobs) (s : RunFiles) : V ByteArray := do
   let record ← bs.get s.record s!"session {s.name}'s record"
   let reps ← s.reps.mapM fun (f, d) => do
