@@ -1,6 +1,6 @@
 """A Commit run publishes only listed files. `research run` publishes what a script leaves under $OUT, its stdout and the
-other files of its run dir, so `examples/vllm/commit.sh` and `a5_llama1b_h200.sh` put a row's file there only when
-`examples/vllm/published.sh` lists it with the reason it holds nothing of a request, and name the files they leave on the node.
+other files of its run dir, so `demos/vllm/commit.sh` and `a5_llama1b_h200.sh` put a row's file there only when
+`demos/vllm/published.sh` lists it with the reason it holds nothing of a request, and name the files they leave on the node.
 Here the list never matches a file known to hold a value; each script's `row` and `records` run over a stand-in row dir with
 values planted in every file a stage leaves; and the demo's Commit runs whole in a toy tree under a stub of vLLM's venv, where
 its run dir gains only listed files, its stdout no planted value, the evidence store nothing, and its bundle stays in the row
@@ -19,8 +19,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-PUBLISHED_SH = ROOT / "examples" / "vllm" / "published.sh"
-COMMIT_SH = ROOT / "examples" / "vllm" / "commit.sh"
+PUBLISHED_SH = ROOT / "demos" / "vllm" / "published.sh"
+COMMIT_SH = ROOT / "demos" / "vllm" / "commit.sh"
 A5_SH = ROOT / "benchmarks" / "one_stage" / "a5_llama1b_h200.sh"
 ROW = "llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 #: what every file a stage leaves carries here, and no path can
@@ -136,7 +136,7 @@ def run_function(tmp: Path, script: Path, body: str, **environ: str) -> tuple[su
     result, the row dir, $OUT and KEPT."""
     tree, base, out, run_dir = tmp / "tree", tmp / "base", tmp / "run" / "out", tmp / "run"
     d, kept, window = base / ROW, base / "unpublished", base / "serving-rows"
-    for p in (tree / "integrations" / "vllm", d, out, kept, window):
+    for p in (tree / "adapters" / "vllm", d, out, kept, window):
         p.mkdir(parents=True)
     venv, _, env = stub_venv(tmp)
     q = shlex.quote
@@ -206,7 +206,7 @@ def test_records_copies_only_listed_files_and_names_the_ones_it_leaves(tmp_path,
 
 def test_the_demos_commit_publishes_listed_files_alone_and_leaves_its_bundle_on_the_node(tmp_path):
     tree, run_dir, root = tmp_path / "tree", tmp_path / "runs" / "r-toy", tmp_path / "llama"
-    (tree / "integrations" / "vllm").mkdir(parents=True)
+    (tree / "adapters" / "vllm").mkdir(parents=True)
     venv, _, env = stub_venv(tmp_path)
     env.update({"OUT": str(run_dir / "out"), "STRAY_IN_OUT": "1", "RESEARCH_RUN_ID": "r-toy", "RESEARCH_RUN_DIR": str(run_dir), "ROW": ROW, "ROLE": "LLAMA32_1B",
                 "REPO": "unsloth/Llama-3.2-1B", "REV": "9535bd9b", "VENV": str(venv.parent), "CUDA_HOME": str(tmp_path),

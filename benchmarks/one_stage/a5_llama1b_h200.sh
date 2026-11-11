@@ -11,7 +11,7 @@
 # sm_90 taps under /workspace/research/vllm-composed-h200int8 and gpu-lease (the row leases the GPU for
 # its Match capture and its Commit's engine only). The uv venv, Lean's verifiers and M0's flock-circuit build in the background
 # while the GPU stages run (M0 in A5_ROOT/flock-work, kept for a rerun). The row dir and the window stay on the node, kept
-# there; $OUT, published as the run's record, keeps the row's records that examples/vllm/published.sh lists (each with the
+# there; $OUT, published as the run's record, keeps the row's records that demos/vllm/published.sh lists (each with the
 # reason it holds nothing of a request) and verdicts.txt, the window's public files, a5.sh's out ($OUT/a5) and summary.txt,
 # whose A5 line is the audit's verdict and whose REGISTERED line the window's kind, commitment and run root length. Every
 # other file of the row stays on the node and the run names it: match/spec.json holds the prompts, commit/ the token record,
@@ -24,7 +24,7 @@ OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 ROW=${ROW:-llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
 ROLE=LLAMA32_1B_INT8 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
 TREE=$PWD
-. "$TREE/examples/vllm/published.sh" || exit 2
+. "$TREE/demos/vllm/published.sh" || exit 2
 H=/workspace/research/vllm-composed-h200int8
 FA3=${FA3_SO:-$H/fa2/build/fa3_matReq/verity_fa3_matReq.so} FA3G=${FA3G_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
 NT=${NORM_TAP_SO:-$H/norm_tap/build/verity_norm_tap.so}
@@ -42,9 +42,9 @@ mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   uv sync --all-packages --extra torch-cpu || exit 5
-  (cd verity/core/service/flock && lake build flock-verify flock-firewall) || exit 7
-  (cd verity/core/service/spot && lake build sampled-proofs-verifier) || exit 7
-  RESEARCH_RUN_DIR=$OUT/prebuild FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh || exit 6
+  (cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) || exit 7
+  (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) || exit 7
+  RESEARCH_RUN_DIR=$OUT/prebuild FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh || exit 6
 ) > "$OUT/prebuild.log" 2>&1 &
 PB=$!
 
@@ -55,7 +55,7 @@ fi
 export CUDA_HOME TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src
 export GPU_LEASE=${GPU_LEASE:-gpu-lease} GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-sha512}
 export VERITY_WEIGHTS_HASH=${VERITY_WEIGHTS_HASH:-device-checked}
 unset CONFIG_RUN REPLAY_K REPLAY_DEFERRED SERVING_ROWS
@@ -68,14 +68,14 @@ rs keep "$ROOT" --owner @vllm --expires 7d --priority normal \
 row() {  # NAME ARGS...: one `verity-vllm row run` of the row dir, its output in KEPT/NAME.out; prints its stages' verdict words
   local name=$1; shift
   echo "$(date -u +%H:%M:%SZ) $name: $*" | tee -a "$OUT/steps.txt"
-  (cd "$TREE/integrations/vllm" && "$PY" -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REV" --sweep-dir "$BASE" \
+  (cd "$TREE/adapters/vllm" && "$PY" -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REV" --sweep-dir "$BASE" \
      --research-run-dir "$KEPT" --hidden-so-fa3 "$FA3" --hidden-so-fa3-guarded "$FA3G" --norm-tap-so "$NT" "$@") > "$KEPT/$name.out" 2>&1
   local rc=$?
   echo "$(date -u +%H:%M:%SZ) $name rc=$rc" | tee -a "$OUT/steps.txt"
   verdicts "$D/stages.txt" "$OUT"
   return $rc
 }
-records() {  # the row's records into $OUT, which the run publishes: only the files examples/vllm/published.sh lists
+records() {  # the row's records into $OUT, which the run publishes: only the files demos/vllm/published.sh lists
   publish "$D" "$OUT"
   verdicts "$D/stages.txt" "$OUT" > /dev/null
   du -sh "$D" "$D"/* "$WD" 2>/dev/null > "$KEPT/sizes.txt"
