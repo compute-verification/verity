@@ -4,9 +4,11 @@
  "model": "GLM-5.3",
  "status": "measured",
  "provisional": true,
- "source": "art:cdef90831b5febd5308ec0f81cc2b5f20901197a94acad0779352d9bef53411b: benchmarks/one_stage/block_census.py's census of GLM-5.3's served circuit, every Program row of its Commit's Build on all 8 ranks and every step of one request (256 prompt tokens, 32 generated), cut into proof blocks; blocks, output bits and MACs counted from the circuit, ANDs the estimator's upper bound; rows no cut fits (SparseMlaSplit_v1, TokenSelect_v1) are in no stratum and in served_macs_per_token; the weights' bytes and parameters as the checkpoint's manifest and safetensors metadata give them",
+ "source": "art:cdef90831b5febd5308ec0f81cc2b5f20901197a94acad0779352d9bef53411b: benchmarks/one_stage/block_census.py's census of GLM-5.3's served circuit, every Program row of its Commit's Build on all 8 ranks and every step of one request (256 prompt tokens, 32 generated), cut into proof blocks; blocks, output bits and MACs counted from the circuit, ANDs the estimator's upper bound, except FlashInfer's FP8 linear coordinates', the MoE router's and DSA's indexer query's: each its Boolean _v2 block as benchmarks/served_units/stage.py builds it (fi, router-row, dsa-q-row), its MUFU reads in gates; rows no cut fits (SparseMlaSplit_v1, TokenSelect_v1) are in no stratum and in served_macs_per_token; the weights' bytes and parameters as the checkpoint's manifest and safetensors metadata give them",
  "runs": [
-  "r20261106-070310-502e"
+  "r20261106-070310-502e",
+  "r20261110-015720-2c17",
+  "r20261110-015748-da59"
  ],
  "owner": "@proofs",
  "value": {
@@ -77,8 +79,8 @@
     "macs": 6144,
     "out_bits": 16,
     "in_bits": 148992,
-    "ands": 22055981,
-    "k_log": 26
+    "ands": 13300905,
+    "k_log": 25
    },
    {
     "block": "FlashInferFp8Linear_v1{K=2048,N=1}",
@@ -87,7 +89,7 @@
     "macs": 2048,
     "out_bits": 16,
     "in_bits": 49664,
-    "ands": 7352045,
+    "ands": 4433033,
     "k_log": 24
    },
    {
@@ -227,7 +229,7 @@
     "macs": 256,
     "out_bits": 16,
     "in_bits": 6208,
-    "ands": 919073,
+    "ands": 553339,
     "k_log": 22
    },
    {
@@ -247,7 +249,7 @@
     "macs": 1536,
     "out_bits": 16,
     "in_bits": 37248,
-    "ands": 5514053,
+    "ands": 3324549,
     "k_log": 24
    },
    {
@@ -1437,8 +1439,8 @@
     "macs": 0,
     "out_bits": 512,
     "in_bits": 16384,
-    "ands": 12379040,
-    "k_log": 25
+    "ands": 8313579,
+    "k_log": 24
    },
    {
     "block": "ResidualAdd_v1{N=6144}",
@@ -1487,7 +1489,7 @@
     "macs": 0,
     "out_bits": 33792,
     "in_bits": 67072,
-    "ands": 29662560,
+    "ands": 21268704,
     "k_log": 26
    },
    {
@@ -1566,5 +1568,5 @@
    "every_block": 293301923.5679442
   }
  },
- "art": "art:a257f41c29b2dfd23cfce01ef820d18855c2cb2abbf4b0dbbcdb8cc1763b3777"
+ "art": "art:ef0e4af863fc2bbc1c41c1d54384526ec1f94c14fced9b44f5292709a9d181fa"
 }

@@ -1,5 +1,5 @@
 # The two-stage audit's second stage on a toy replay block (`toy.py`): its templates and their models, the boundary and
-# interior windows, the link members' rows read from the boundary record (`verity.ml.windows.links`), the verifier's own
+# interior windows, the link members' rows read from the boundary record (`verity.commitments.windows.links`), the verifier's own
 # reads of them, and the auditor's reference headers round 2 holds the sessions' to. Not a package: the tests load toy.py
 # from this directory. Only the reference statements' templates are lowered (one slow test); nothing is proved (audit.py
 # does, on a node). Opt-in (`VERITY_TWO_STAGE_GUARD`; `tests/guard_node.py --pytest` on a node): SPOT[Flock]'s two-stage
@@ -15,4 +15,4 @@ untraced = ["tests/test_toy.py", "tests/test_guard.py"]
 # reads the tests hold them to, and the Lean packages its verifier of record builds from; that lakefile, named on its own, is
 # the package the tests build (`one_stage.verifier.executable`), so check runs them after lean-build; `verity_config`, which
 # reads the guard's command from this directory's settings registry
-inputs = ["verity", "verity/core/service/spot/lakefile.toml", "tools/config/verity_config"]
+inputs = ["verity", "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/configuration/config/verity_config"]

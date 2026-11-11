@@ -658,7 +658,7 @@ def _load(name: str, path: Path):
 @pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_path, monkeypatch):
     """A kept build holds one tree's modules per package per node, so a check whose node's kept build came from an older tree
-    would rebuild over half of `Security/Proofs`' modules (most of the check's time). Lake,
+    would rebuild over half of `security/Proofs`' modules (most of the check's time). Lake,
     reading the cache in the build sandbox, restores each module version it holds instead of compiling it."""
     LC, LA = (_load(f"artifacts_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
     pkg = tmp_path / "control"
@@ -677,13 +677,19 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
         monkeypatch.setattr(LC, "ARTIFACTS", at)
         cache = at / LA.MK.STAGE / "test"
         got, said = LC.stage_build(LA.MK, pkg, ["Control"], cache)
-        assert said == {"modules": len(got), "keyed": len(mods)}
+        assert said == {"modules": len(got), "keyed": len(mods), "missed": said["missed"], "first": said["first"],
+                        "took": said["took"], "left": 0}
+        took.append(said["took"])
+        assert sum(said["missed"].values()) == len(mods) - len(got)
+        why.append(said["first"])
         subprocess.run(LC.in_sandbox(pkg, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"]),
                        cwd=pkg, check=True, capture_output=True, env=LC.lake_env())
         assert LA.MK.misrestored(got, pkg) == []
         shutil.rmtree(cache)
         return got
 
+    why: list[dict] = []
+    took: list[dict] = []
     arts = LA.LakeArtifacts(store)
     assert arts.put({pkg: {"sandbox": True}}) == len(mods)
     lib = pkg / ".lake" / "build" / "lib" / "lean"
@@ -693,6 +699,7 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
     thms.write_text(text + "\ntheorem another_tree : True := trivial\n")
     got = staged(store)                                               # Thms and Control have other keys: compiled
     assert sorted(got.values()) == ["Control.Assumptions", "Control.Defs"]
+    assert why[-1] == {"its source": "Control.Thms", "reads a module not restored": "Control"}
     assert (lib / "Control" / "Thms.olean").read_bytes() != was[lib / "Control" / "Thms.olean"]
     assert not json.loads((lib / "Control" / "Thms.trace").read_text()).get("synthetic")
     thms.write_text(text)
@@ -712,6 +719,104 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
         assert f.read_bytes() == b
     assert all(json.loads(t.read_text())["synthetic"] for t in lib.rglob("*.trace"))
     assert not any(f.name.endswith(".tmp") for f in store.rglob("*"))
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_tree_compiles_no_module_version_another_tree_of_its_node_compiled(tmp_path, monkeypatch):
+    """Two slot trees of one node, through Lake: what one build compiled, no build of the other tree compiles again,
+    whatever that tree held before. A build compiles exactly the module versions the cache lacks: one its tree holds
+    from a build that never stored it (a run before this rule, or one killed before its `put`) is compiled once more
+    and stored, where Lake would have kept it for that tree alone; one the tree holds in another version than the
+    cache's is restored, not compiled. Each build is `check.py`'s: staged and settled, built in the sandbox, then put."""
+    LC, LA = (_load(f"two_trees_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    MK = LA.MK
+    store = tmp_path / "artifacts"
+    monkeypatch.setattr(LC, "ARTIFACTS", store)
+    trees = [tmp_path / n / "control" for n in ("build-0", "build-1")]
+    for pkg in trees:
+        shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    mods = {"Control", "Control.Assumptions", "Control.Defs", "Control.Thms"}
+    n = iter(range(99))
+
+    def lake(pkg: Path, pre: list[str]) -> set[str]:
+        r = subprocess.run(LC.in_sandbox(pkg, [*pre, "lake", "build"]), cwd=pkg, check=True, capture_output=True, text=True,
+                           env=LC.lake_env())
+        return {m for m, *_ in LC.BUILT.findall(r.stdout + r.stderr)}
+
+    def build(pkg: Path) -> tuple[set[str], dict, int]:
+        """(the modules Lake compiled, what the stage step took from the tree, the module versions new in the cache)."""
+        cache = store / MK.STAGE / f"test-{next(n)}"
+        got, said = LC.stage_build(MK, pkg, ["Control"], cache)
+        compiled = lake(pkg, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}"])
+        assert MK.misrestored(got, pkg) == [] and said["left"] == 0
+        shutil.rmtree(cache)
+        return compiled, said["took"], LA.LakeArtifacts(store).put({pkg: {"sandbox": True}})
+
+    def edit(pkg: Path, text: str) -> None:
+        (pkg / "Control" / "Thms.lean").write_text(text)
+
+    text = (trees[0] / "Control" / "Thms.lean").read_text()
+    other = text + "\ntheorem another_version : True := trivial\n"
+    assert build(trees[0]) == (mods, {}, 4)
+    assert build(trees[1]) == (set(), {}, 0), "the second tree of the same commit compiles nothing"
+    assert build(trees[0]) == (set(), {}, 0) and build(trees[1]) == (set(), {}, 0)
+
+    edit(trees[1], other)
+    assert lake(trees[1], []) == {"Control.Thms", "Control"}, "a build that stores nothing leaves them in this tree alone"
+    assert build(trees[1]) == ({"Control.Thms", "Control"}, {MK.ABSENT: 2}, 2), \
+        "the cache lacks both, so they lose their traces and are compiled once more, and stored"
+    assert build(trees[1]) == (set(), {}, 0)
+    lib = [pkg / ".lake" / "build" / "lib" / "lean" for pkg in trees]
+
+    def restored(pkg_lib: Path) -> set[str]:
+        return {".".join(f.relative_to(pkg_lib).with_suffix("").parts) for f in pkg_lib.rglob("*.trace")
+                if json.loads(f.read_text()).get("synthetic")}
+
+    control = (lib[0] / "Control.olean").read_bytes()
+    edit(trees[0], other)
+    assert build(trees[0]) == (set(), {MK.REPLACED: 1}, 0), "the first tree holds the earlier version: restored"
+    assert {"Control.Thms", "Control"} <= restored(lib[0]) and (lib[0] / "Control.olean").read_bytes() == control, \
+        "`Control` only imports: its outputs are the same bytes under both keys, so its trace names what its new entry " \
+        "does and stays, and Lake, whose input hash for it changed, restores it too"
+    edit(trees[0], text)
+    assert build(trees[0]) == (set(), {MK.REPLACED: 1}, 0), "and back, from the entries of the first build"
+    edit(trees[1], text)
+    assert build(trees[1])[0] == set()
+    assert {f.relative_to(lib[0]): f.read_bytes() for f in lib[0].rglob("*.olean")} == \
+        {f.relative_to(lib[1]): f.read_bytes() for f in lib[1].rglob("*.olean")}
+    assert not (store / MK.UNSTORED).exists()
+    damaged = _load("two_trees_lean_changed", HERE.parent / "lean_changed.py").damaged
+    assert [damaged(d) for d in lib] == [[], []], \
+        "the trees and the cache hold one file by hard links, and no build moved its time past the `.hash` beside it"
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_module_file_above_a_private_import_is_stored_and_another_tree_restores_it(tmp_path, monkeypatch):
+    """Through Lake, on `module` files: `Modular` imports `Modular.Uses`, which imports `Modular.Hidden` and
+    `Modular.Secret` privately, so Lake hands `Modular`'s compile neither and its key reads neither. Every module of the
+    build is stored all the same, and a second tree of the node compiles none. Held to the whole closure, `Modular`
+    was never stored, nor any module that loads one like it."""
+    LC, LA = (_load(f"module_files_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    MK = LA.MK
+    store = tmp_path / "artifacts"
+    monkeypatch.setattr(LC, "ARTIFACTS", store)
+    trees = [tmp_path / n / "modules" for n in ("build-0", "build-1")]
+    builds = []
+    for i, pkg in enumerate(trees):
+        shutil.copytree(HERE / "fixtures" / "modules", pkg, ignore=shutil.ignore_patterns(".lake"))
+        cache = store / MK.STAGE / f"test-{i}"
+        got, _ = LC.stage_build(MK, pkg, ["Modular"], cache)
+        r = subprocess.run(LC.in_sandbox(pkg, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"]),
+                           cwd=pkg, check=True, capture_output=True, text=True, env=LC.lake_env())
+        assert MK.misrestored(got, pkg) == []
+        builds.append(({m for m, *_ in LC.BUILT.findall(r.stdout + r.stderr)}, len(got),
+                       LA.LakeArtifacts(store).put({pkg: {"sandbox": True}})))
+    mods = {"Modular", "Modular.Defs", "Modular.Hidden", "Modular.Secret", "Modular.Uses"}
+    keyed = MK.keys(trees[0], ["Modular"])
+    assert keyed["Modular"].closure == mods - {"Modular"}
+    assert set(MK.loads("Modular", keyed)) == {"Modular.Uses", "Modular.Defs"}
+    assert builds == [(mods, 0, 5), (set(), 5, 0)]
+    assert not (store / MK.UNSTORED).exists()
 
 
 @pytest.mark.slow
@@ -1015,7 +1120,7 @@ def test_the_daily_run_publishes_nothing_after_a_probe_a_refusal_an_unclean_tree
 
 def test_a_dependency_whose_name_lean_escapes_counts_as_fetched(tmp_path):
     """Lake writes a name Lean must escape as `«doc-gen4»` in the manifest and `doc-gen4` on disk; reading the manifest's
-    name raw made every package depending on doc-gen4 (Security/Proofs) look unfetched, and the cache built it from source."""
+    name raw made every package depending on doc-gen4 (security/Proofs) look unfetched, and the cache built it from source."""
     (tmp_path / "lake-manifest.json").write_text(json.dumps({"packages": [
         {"name": "«doc-gen4»", "type": "git"}, {"name": "Arklib", "type": "git"}, {"name": "security", "type": "path"}]}))
     (tmp_path / ".lake" / "packages" / "Arklib").mkdir(parents=True)

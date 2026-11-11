@@ -92,15 +92,27 @@ with each path's first offending hunk, every change its docstring doesn't list a
 
 Once the moves have landed, each open branch crosses all of them with one command:
 
-    python3 tools/move/restack.py BRANCH --push-to NEWBRANCH
+    python3 tools/move/restack.py BRANCH --push-to NEWBRANCH --kept
 
 It finds each move `origin/main` (`--main`; fetch it first) has and the branch lacks by its move line, oldest first, reruns that move's
 script and map on the branch, its own additions included, and merges the moved `main` last. It changes no branch: the
 result is pushed to the new branch, never over one. It reports `clean`, or where it stopped: a conflict of the branch's
 own, a script that failed, or pins or Lean locks to regenerate. Its first step merges each move's base into the branch, so
 a branch behind `main` merges `main` up to the window's base before the window: otherwise `restack.py` stops at that
-merge's conflicts, which are the branch's own. A word move that renames declarations a lock records leaves
+merge's conflicts, which are the branch's own. Before a branch crosses a move, `restack.py` checks that the move's commit
+is what its script writes on its base, which takes as long as the script. With `--kept` a check that passed is kept in the
+check's cache (under `~/.cache/verity-check/restack-generated/`), so on one machine only the first restack across a move
+runs it. A word move that renames declarations a lock records leaves
 those records for a commit of their own: `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves`
 prints.
+
+A branch that shares with `main` a commit a move's base lacks is based after that move, whose script never runs on it:
+the move's last merge would bring those commits in a second time. Where a later move's base contains that move, it is
+skipped and named (`skipped`): the later move's base merge brings it in, as a merge of `main` would, and the owner looks
+for its map's old names in what the branch adds. A crossing that skipped a move reports `clean-skipped`, never `clean`,
+pushes nothing and exits 1, and prints the command that crosses the same moves named (`--move-commit` for each, `--onto`),
+which skips none: running it is the owner saying the skip is right. The last move, one no later move's base contains, and
+one named with `--move-commit` are never skipped: the branch is refused (`based-after`), and its owner merges `main`
+instead.
 
     uv run tools/verity/check/suites.py tools/move     # the tests (remotely: AGENTS.md "Tests")

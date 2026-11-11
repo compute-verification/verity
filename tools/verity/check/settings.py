@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Every environment variable `check` reads, declared once: the template is ``integrations/vllm/verity_vllm/settings.py``.
+"""Every environment variable `check` reads, declared once: the template is ``adapters/vllm/verity_vllm/settings.py``.
 
 A `Setting` has a name, a type (the parser of the variable's string), a default, a role, a doc and, for a ``where`` setting, the
 reason it can't change a verdict.  The role says what the setting can change:
@@ -69,6 +69,8 @@ SETTINGS: dict[str, Setting] = _declare(
     # ---- check's own knobs
     S("CHECK_CACHE", str, None, WHERE, "check's caches: circuit-check's reports, the Lean audits, the agreement's passes; unset, "
       "~/.cache/verity-check (`common.cache_dir`)", "a kept verdict is reused only under its inputs' hash"),
+    S("CHECK_AGREEMENT_URLS", str, None, WHERE, "a file of the agreement's pinned upstream build and inputs and their presigned "
+      "URLs, for a local recorded run (`check.agreement_url_file`)", "each file is held to its sha256 in the pin"),
     S("CHECK_LEAN_DEPS_URLS", str, None, WHERE, "a file of the Lean dependency bundles' presigned URLs, for a run sent none "
       "(`--lean-deps-files`)", "each bundle is pinned by its hash (`lean-deps.json`)"),
     S("CHECK_MIN_MEM_GB", str, "", WHERE, "slot.py takes only a slot whose mem= is at least this many GB (`check.py --record "
@@ -102,15 +104,14 @@ SETTINGS: dict[str, Setting] = _declare(
       "placement: which pool an audit waits in"),
     # ---- what check hands its steps (`check.env`), and the suites' runner (suites.py)
     S("VERITY_STORE_REQUIRED", str, None, VALUE, "1: a store-backed test fails where the store is unreachable instead of "
-      "skipping; check sets it in a recorded run"),
-    S("VERITY_REGRESSION", str, None, VALUE, "1: integrations/vllm's reference regression runs; check sets it in a recorded run"),
+      "skipping; check sets it in a recorded run, as do the quick tier and suites.py inside a `research run`"),
+    S("VERITY_REGRESSION", str, None, VALUE, "1: adapters/vllm's reference regression runs; check sets it in a recorded "
+      "run, as do the quick tier and suites.py inside a `research run`"),
     S("VERITY_SKIP_STORE", str, None, DEBUG, "1: the store-backed tests skip, for a hand run without the store"),
     S("VERITY_TEST_CACHE", str, None, WHERE, "the suites' kept passes; unset, $XDG_CACHE_HOME/verity/tests",
       "a kept pass is reused only under its inputs' hash"),
     S("VERITY_TEST_CACHE_MIN_S", str, None, WHERE, "keep per-test passes only of tests whose call took at least this many "
       "seconds (`suites.py --per-test-min-s`)", "which passes are kept, not what they say"),
-    S("FLOCK_AGREEMENT_INPUTS", str, None, WHERE, "a directory check also looks in for the agreement's pinned upstream build "
-      "and inputs (a local recorded run's launcher sets it)", "each is found by its sha256 in the pin"),
     S("PYTHONPATH", str, "", VALUE, "where Python imports from: check hands its steps the entries inside this tree"),
     S("PATH", str, "", WHERE, "where programs are", "which tools a suite finds is keyed (`suites.TOOLS`), their versions pinned"),
     S("CUDA_VISIBLE_DEVICES", str, None, VALUE, "the GPUs a step may use: set and empty, none (`research run` hides gpu-lease's), "

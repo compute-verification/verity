@@ -18,10 +18,12 @@
 # Further arguments go to demo.sh (e.g. --no-lean). The Lean judge (wipe-protocol) is built before the card is checked, in a
 # scratch copy of verity/core (WIPE_PROTOCOL_EXE names one built already), never in this tree's .lake, which
 # served_verdicts.sh's Lean builds write meanwhile. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
-# summary.json), lake-build.log, answer.json (wipe.json's answer, whatever its verdict) and served.json (the serve dir and
-# window the wipe precedes, the server, the card, the lease, the run). The leg's case, which holds the challenger's signed
-# session, goes to SERVE_DIR/private/wipe (0700) instead, and there served_case.py (with PY, default python3) writes the
-# composite's piece beside it: case.json and the leg's own answer.json. Its last line is `WIPE {...}`.
+# summary.json, which names the program that decided and its host under `decided_by` and the SHA-512 of the challenger key
+# the verdict trusted under `key_sha512`), lake-build.log, answer.json (wipe.json's answer, whatever its verdict) and
+# served.json (the serve dir and window the wipe precedes, the server, the card, the lease, the run). The leg's case,
+# which holds the challenger's signed session, goes to SERVE_DIR/private/wipe (0700) instead, and there served_case.py
+# (with PY, default python3) writes the composite's piece beside it: case.json and the leg's own answer.json. Its last
+# line is `WIPE {...}`.
 # Exit: demo.sh's (0 on accept, 1 on another verdict), 3 on a refusal, 7 when wipe-protocol doesn't build.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -48,8 +50,8 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the key, the Le
   if [ -z "${WIPE_PROTOCOL_EXE:-}" ] && [[ " $* " != *" --no-lean "* ]]; then
     S=$(mktemp -d)
     trap 'rm -rf "$S"' EXIT
-    L=verity/core/devices/memory_challenger/lean
-    tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ verity/core | tar -C "$S" -x
+    L=verity/protocols/pous/device/lean
+    tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ "$L" verity/difftest/lean verity/protocols/interface verity/protocols/flock/verifier verity/commitments/attest/lean verity/commitments/lms/lean verity/commitments/randomness | tar -C "$S" -x
     export PATH="$HOME/.elan/bin:$PATH"
     command -v lake >/dev/null 2>&1 || bash "$ROOT/tools/verity/lean/setup.sh" "$S/$L" > "$DIR/lake-setup.log" 2>&1
     (cd "$S/$L" && lake build wipe-protocol) > "$DIR/lake-build.log" 2>&1 \
@@ -100,7 +102,7 @@ try:
 except (OSError, ValueError):
     s = {}
 print("WIPE " + json.dumps({"verdict": answer["verdict"], "reason": answer["reason"], "protocol": answer["protocol"],
-                            "judge": s.get("judge"), "k": s.get("k"), "segments": s.get("segments"),
+                            "decided_by": s.get("decided_by"), "k": s.get("k"), "segments": s.get("segments"),
                             "fill_GBps": (s.get("challenger") or {}).get("fill_GBps"), "t0": s.get("t0"), "t1": s.get("t1"),
                             "server": node, "card": card, "exit": int(rc)}, sort_keys=True), flush=True)
 EOF

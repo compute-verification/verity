@@ -1,6 +1,7 @@
 """`tools/verity/check/slot.py`: a `--record --on` check takes a free check slot's lock and cores, as the lander's train checks do."""
 from __future__ import annotations
 
+import errno
 import fcntl
 import importlib.util
 import json
@@ -139,6 +140,53 @@ def test_a_slot_with_windows_pauses_from_its_lead_to_the_windows_end(tmp_path):
     w.write_text("2026-10-01T09:20Z 30\n")
     assert SLOT.take([slot], tmp_path, NOW) is None
     assert SLOT.parse("a 0-1")[0]["windows"] is None and SLOT.blocked(SLOT.parse("a 0-1")[0], NOW) is None
+
+
+def test_a_slot_whose_windows_cant_be_read_starts_no_check_and_says_how_to_fix_it(tmp_path, monkeypatch):
+    """A windows file that is gone, or a line of it that isn't a window, holds the slot with the fix in its reason, in a wait
+    and in `--status`; it raises in neither, so it never ends every check waiting on the machine."""
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    w = tmp_path / "hold.windows"
+    slot = SLOT.parse(f"d 0-47 windows={w} lead=30")[0]
+    fix = f"take windows= off slot d in {tmp_path / 'slots'}"
+    gone = (f"its windows file {w} can't be read ({os.strerror(errno.ENOENT)}), so no check starts in it: put the file back "
+            f"(an empty one has no windows) or {fix}")
+    assert SLOT.blocked(slot, NOW) == gone
+    assert SLOT.take([slot], tmp_path, NOW) is None and SLOT.upcoming(slot, NOW) == []
+    assert SLOT.status([slot], tmp_path, NOW) == [f"d  cores 0-47  free; blocked: {gone}"]
+    for bad in ("2026-10-01 09:20Z", "2026-10-01T09:20 30", "soon 30", "2026-10-01T09:20Z half"):
+        w.write_text(f"2026-10-01T15:00Z 30 # a window\n{bad} # not one\n")
+        assert SLOT.blocked(slot, NOW) == (f"line 2 of its windows file {w} ({bad!r}) isn't `START_UTC MINUTES` "
+                                           f"(`2026-10-01T09:20Z 30`), so no check starts in it: fix the line or {fix}"), bad
+        assert SLOT.upcoming(slot, NOW) == []
+    w.write_text("")
+    assert SLOT.blocked(slot, NOW) is None
+    taken, fd = SLOT.take([slot], tmp_path, NOW)
+    os.close(fd)
+    assert taken["name"] == "d"
+
+
+def test_a_check_waiting_on_a_hold_outlives_the_holds_end(tmp_path, monkeypatch):
+    """A hold ends by taking windows= off SLOTS and moving its windows file away. A check that read SLOTS before and looks for
+    the file after waits one more try, told why, then runs in the slot."""
+    w = tmp_path / "hold.windows"
+    (tmp_path / "slots").write_text(f"a 0 windows={w} lead=30\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    slept, ran = [], {}
+
+    def end_the_hold(s):
+        slept.append(s)
+        (tmp_path / "slots").write_text("a 0\n")
+
+    def execvpe(f, argv, env):
+        ran.update(argv=argv, slot=env["CHECK_SLOT"])
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec):
+        SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=end_the_hold)
+    assert slept == [SLOT.POLL_S] and ran == {"argv": ["uv", "run", "check.py"], "slot": "a"}
 
 
 def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path, monkeypatch):
@@ -468,7 +516,8 @@ def test_a_wait_with_no_limit_moves_the_run_s_timeout_from_where_it_stands(tmp_p
 
 def test_a_run_s_slot_record_says_it_waits_until_it_takes_a_slot_or_leaves_the_line(tmp_path, monkeypatch):
     """A check waiting in the line is not reported running since its launch: its run's slot.json says waiting,
-    and why, until the slot is taken, then which slot and when; a waiter that gives up says it left, and why."""
+    and why, until the slot is taken, then which slot, when and what it last waited behind; a waiter that gives up says it left,
+    and why."""
     run = tmp_path / "run"
     run.mkdir()
     (tmp_path / "slots").write_text("a 0\n")
@@ -488,7 +537,15 @@ def test_a_run_s_slot_record_says_it_waits_until_it_takes_a_slot_or_leaves_the_l
     assert seen == [{"state": "waiting", "since": "2026-10-01T09:00:00Z", "priority": True,
                      "why": "every check slot is taken (a: busy)"}]
     assert json.loads((run / SLOT.RUN_SLOT).read_text()) == {"state": "held", "since": "2026-10-01T09:00:00Z", "priority": True,
-                                                              "slot": "a", "cores": "0", "took": "2026-10-01T09:00:20Z"}
+                                                              "slot": "a", "cores": "0", "took": "2026-10-01T09:00:20Z",
+                                                              "why": "every check slot is taken (a: busy)"}
+    (tmp_path / "free").mkdir()
+    (tmp_path / "free" / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "free" / "slots")
+    with pytest.raises(Exec):
+        SLOT.main(["--", "true"], now=lambda: t[0], sleep=lambda s: pytest.fail("a free slot is taken without a wait"))
+    assert json.loads((run / SLOT.RUN_SLOT).read_text()) == {"state": "held", "since": "2026-10-01T09:00:20Z", "slot": "a", "cores": "0",
+                                                              "took": "2026-10-01T09:00:20Z"}, "it waited behind nothing"
     (tmp_path / "again").mkdir()
     (tmp_path / "again" / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "again" / "slots")
@@ -688,34 +745,34 @@ def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
 
 
 def test_agreement_sends_the_upstream_build_whatever_the_commit_changes(monkeypatch, tmp_path):
-    """`--record --agreement`: the lander's check of a train that changes a pinned guarantee outside verity/ml/flock/ still runs
-    the agreement step, with the pinned build and inputs as the run's inputs."""
+    """`--record --agreement`: the lander's check of a train that changes a pinned guarantee outside verity/protocols/flock/ still runs
+    the agreement step, with the pinned build and inputs as the run's inputs and their URLs sent with it."""
     spec2 = importlib.util.spec_from_file_location("repo_check_agreement", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    import research.store.local as local
 
-    calls = []
+    calls, signed = [], []
 
     def run(cmd, **kw):
         calls.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
-    class Store:
-        def fetch(self, art):
-            f = tmp_path / art.replace(":", "_")
-            f.write_bytes(b"")
-            return f
+    def url_file(d):
+        signed.append(d)
+        pin = json.loads(check.UPSTREAM_PIN.read_text())
+        (p := d / check.AGREEMENT_URLS).write_text(json.dumps({k: {**pin[k], "bytes": 1, "url": "u"} for k in ("upstream", "inputs")}))
+        return p
 
     monkeypatch.setattr(check.subprocess, "run", run)
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(local, "LocalStore", Store)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(check, "agreement_url_file", url_file)
     assert check.record(["--on", "vy-nebius-1", "--base", "HEAD"]) == 0
-    assert "--input" not in calls[-1]
+    assert "--input" not in calls[-1] and not signed
     assert check.record(["--on", "vy-nebius-1", "--base", "HEAD", "--agreement"]) == 0
     cmd = calls[-1]
     assert [cmd[i + 1].split("=")[0] for i, x in enumerate(cmd) if x == "--input"] == ["flock_upstream", "flock_inputs"]
-    assert "--agreement" not in cmd
+    assert str(signed[0] / check.AGREEMENT_URLS) in cmd and "--agreement" not in cmd
 
 
 def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_priority_ones(tmp_path):
@@ -929,10 +986,11 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_a
     assert check.train_gb(True, None, ["lean-build", "lean-audit:Security"], False) is None
     assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # an after-landing run of the suites
     assert check.train_gb(True, None, ["lean-build", "lean-audit", "lean-suites"], False) == check.TRAIN_GB   # its Lean shard
+    assert check.train_gb(True, None, ["pytest", "lean-audit:security"], False) == check.TRAIN_GB   # the audit's shard
     assert check.train_gb(True, None, ["lean-suites:verity-flock"], False) == check.TRAIN_GB
     assert check.train_gb(True, None, ["flock-circuit-build", "circuit-check"], False) == check.TRAIN_GB
     assert check.train_gb(True, None, None, True) is None
-    assert check.TRAIN_GB == 300 and SLOT.MIN_MEM_ENV not in " ".join(calls[-1][calls[-1].index("--") + 1:])
+    assert check.TRAIN_GB == 200 and SLOT.MIN_MEM_ENV not in " ".join(calls[-1][calls[-1].index("--") + 1:])
 
 
 def test_memory_gb_is_the_least_of_memavailable_and_each_cgroup_limits_headroom(tmp_path):

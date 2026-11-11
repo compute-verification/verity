@@ -54,11 +54,11 @@ from pathlib import Path
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict.window_circuit import WindowClass
 
-from verity.core.protocols import reporting
-from verity.core.protocols.spot.optimize import SHA512_ANDS
-from verity.ml.circuits.defs import bind
-from verity.ml.definitions.registry import io_shell as IO
-from verity.ml.windows import interface as IF
+from verity.protocols import reporting
+from verity.protocols.spot.optimize import SHA512_ANDS
+from verity.circuits.defs import bind
+from verity.definitions.registry import io_shell as IO
+from verity.commitments.windows import interface as IF
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -338,7 +338,7 @@ def window_units(rest: list[Unit], heads: Heads, levers: frozenset[str]) -> list
     return us
 
 
-#: b || c, a row's public commit string (hm96 at SHA-512), and a row's salt (`verity.ml.windows.rows`)
+#: b || c, a row's public commit string (hm96 at SHA-512), and a row's salt (`verity.commitments.windows.rows`)
 BC_BYTES, SALT_BYTES = 128, 192
 #: a member's entry in the leaf layer's canonical JSON: its name and 128 hex
 LEAF_JSON_BYTES = 150
@@ -346,7 +346,7 @@ LEAF_JSON_BYTES = 150
 
 @dataclass(frozen=True)
 class RegistrationSize:
-    """The window's registration as `verity.ml.windows.rows.write` makes it, members of `CAP` units: ``members``, port
+    """The window's registration as `verity.commitments.windows.rows.write` makes it, members of `CAP` units: ``members``, port
     ``roots`` (a unit's rows each a port, the cut rows ``p#j`` included), the public bodies' bytes (b || c a row a unit) and
     the private bodies' (every row's words and salt), the compressions (each public body's SHA-512 twice, for the leaf layer
     and for its member's entry, and one over the leaf layer's canonical JSON), the JSON's bytes and the files (a member's
@@ -752,7 +752,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--layout-levers", default="L1", help="the levers the layouts are under, comma-separated (default L1)")
     ap.add_argument("--stream", default=None, metavar="SIZING", help="price serving's own stream commit (`stream`) at this arena "
                     "sizing record's widths, or a fixture's under \"sizing\" (Llama-3.2-1B's: "
-                    "integrations/vllm/tests/pipeline/fixtures/admission/b16.json)")
+                    "adapters/vllm/tests/pipeline/fixtures/admission/b16.json)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     to = tuple(int(v) for v in a.project.split(",")) if a.project else None

@@ -125,7 +125,7 @@
     "computes": "S8Dot{K = 132,096, A = B = (-127, 127)} binds (its no_wrap holds for the declared bounds) and clamps at S32_MAX on run inputs at -128",
     "rule": "operand ranges come from the producing Definition, never declared",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -140,7 +140,7 @@
     "computes": "[r < 1000] from two S8Dot{T0 = input, C = (0, 2^18)} instances whose accumulator is r + S32_MAX - 2^18",
     "rule": "T_0's interval is derived from its producer, not declared",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -155,7 +155,7 @@
     "computes": "a word whose s32 sign is [r >= 1000], from S8Dot{T0 = input, C = (0, 2^18), DOT = u8 x s8} at T_0 = r + 2^31 - 2^18",
     "rule": "T_0's interval is derived from its producer, not declared",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -170,7 +170,7 @@
     "computes": "two S8Dot{K = 131,040} halves over run s8 inputs, each within s32, whose I32Add combine wraps",
     "rule": "a split-K combine is inside the interval analysis; one that may wrap is not free-affine",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -185,7 +185,7 @@
     "computes": "a runtime S8Dot word as three s8 limbs by LimbSplit_v1{bytes, N = 3}",
     "rule": "a LimbSplit of a runtime word is budgeted, a carry a limb beyond the first",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -200,7 +200,7 @@
     "computes": "the same three limbs from S32LowByte and S32ByteCarry called outside LimbSplit_v1",
     "rule": "every registered primitive outside the free set is budgeted, one unit an output",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -215,7 +215,7 @@
     "computes": "LimbSplit_v1{bytes, N = 2, Y = (-32640, 32639)} on a word in [-520192, 524288]: its last limb truncates a second carry",
     "rule": "a split's Y is its producer's interval, not declared",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -228,7 +228,7 @@
     "computes": "a runtime S8Dot word read back as the s8 operand codes of a second S8Dot, without a split",
     "rule": "an implicit reinterpretation (an s32 word read back as s8 limbs) is refused",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -241,7 +241,7 @@
     "computes": "one int8 linear coordinate at K = 28,672 (s8 by s8, from T_0 = 0)",
     "rule": "free-family: the window is proven from the operands' type range",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -254,7 +254,7 @@
     "computes": "one query against 131,072 keys at head dimension 128",
     "rule": "free-family",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -269,7 +269,7 @@
     "computes": "P\u00b7V at 131,072 keys: P in [0, 127] from its producer against V in [-128, 127], 128 channels",
     "rule": "free-family only with P's interval derived from PQUANT (with P in [-128, 127] the window ends at 131,071)",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -284,7 +284,7 @@
     "computes": "P\u00b7V at 131,072 keys split at 65,536, the halves added by I32Add",
     "rule": "free-family halves; the combine is free-affine, its interval within s32",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -299,7 +299,7 @@
     "computes": "P\u00b7V at 132,096 keys, the most a family K holds within s32 for P in [0, 127] against V in [-128, 127]",
     "rule": "the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte); without them P reads as s8 and the window ends at 131,071",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {
       "K": 132096
@@ -316,7 +316,7 @@
     "computes": "P\u00b7V at 132,128 keys over PQUANT's P in [0, 127], bound with A = (0, 126): from runs at -128 the last step clamps at S32_MIN, one comparison a channel",
     "rule": "operand ranges come from the producer, never declared; the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte) prove the window to 132,104 keys only",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -331,7 +331,7 @@
     "computes": "P\u00b7V at 132,096 keys with P = RzByte(fminf(p, 127)), no fmaxf: RzByte takes every negative and NaN to 0",
     "rule": "F32ToU32RzByte's rule is cvt.rzi.u32.f32's, which saturates below at 0; a rule that reads a negative input as a wrapped byte refuses this, over-strict",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -346,7 +346,7 @@
     "computes": "P\u00b7V at 131,072 keys with P = RzByte(fmaxf(p, 0)), no fminf: P is the truncation's whole low byte, read as s8, so the last step clamps at S32_MAX, one comparison a channel",
     "rule": "F32ToU32RzByte's output is [0, 255] unless its input is below 256: the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte)",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   },
@@ -361,7 +361,7 @@
     "computes": "P\u00b7V at 132,096 keys with P = RzByte(fminf(fmaxf(p, 0), 128)): the byte 128 is s8 -128, so the last 33 steps may clamp at S32_MAX, 33 comparisons a channel",
     "rule": "P's interval is its producer's, [0, 128], and its s8 reading [-128, 127]: the interval rules for P's producers (F32Fmaxf, F32Fminf, F32ToU32RzByte)",
     "needs": [
-      "verity.ml.circuits.ops.s8"
+      "verity.definitions.ops.s8"
     ],
     "size": {}
   }

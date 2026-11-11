@@ -9,12 +9,15 @@ Each check is `ok`, `skip` (it does not apply here) or a `finding`, which says w
   github      `gh auth status` exits 0
   git-push    `git push --dry-run --no-verify` of HEAD to a branch nobody has (`PROBE_REF`) on the checkout's origin: GitHub
               accepts the credential git pushes with
-  notes-push  the same for the notes clone, through `notes_sync.remote_target` (RESEARCH_NOTES_TOKEN's helper when it is set)
+  notes-push  the same for the notes clone, through `notes_sync.remote_target`; it names the credential (`notes_sync.token_source`:
+              the GitHub broker's token on a Cursor agent, RESEARCH_NOTES_TOKEN where the broker gives none), and says when a
+              RESEARCH_NOTES_TOKEN set on an agent is no longer needed
   store       the evidence store's remote answers a HEAD of an absent key with "absent"; a 400, 401 or 403 is a refused credential
   slack       `auth.test` is ok, with the bot token or through the broker (coordinator and infra: a lane asks its coordinator)
   ssh:NAME    `ssh -o BatchMode=yes ... true`, as `research run --on` reaches NAME, for each machine whose entry names an ssh host
               (machines.toml, and the registry where the notes clone already is: the doctor never clones it); a changed host
-              key reads as ok, since `research`'s ssh does not check host keys (runpod.ssh_command)
+              key reads as ok, since `research`'s ssh does not check host keys (runpod.ssh_command). The auditor hosts
+              (`remote.restricted`) refuse lanes' keys by design: they are not probed, and `ssh:auditor-hosts` names them
   venv        `uv sync --locked --check --offline` of the checkout's lock against the venv this runs in (else the checkout's
               .venv), workspace members aside: a worktree's come from PYTHONPATH
   disk        free space on the filesystems of the runs root, the store, the checkout and $TMPDIR, against the floor `research
@@ -126,7 +129,8 @@ def needs(role: str) -> list[tuple[str, ...]]:
 
 
 def check_secrets(role: str) -> Check:
-    injected = [n for n in os.environ.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(",") if n]
+    # the notes go through the GitHub broker: a VM that still injects the notes token needn't have it in its shell
+    injected = [n for n in os.environ.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(",") if n and n != notes_sync.TOKEN_ENV]
     want = needs(role)
     named = {n for alts in want for n in alts}
     want += [(n,) for n in injected if n not in named]
@@ -232,13 +236,15 @@ def check_notes_push() -> Check:
                                             "may be local on purpose, a notes clone may not)",
                      f"`git -C {root} remote add origin {notes_sync.NOTES_URL}`")
     opts, where = notes_sync.remote_target(root)
-    fix = ("the GitHub broker's notes token was refused: the agents' App needs research-notes in its repository access"
-           if os.environ.get(notes_sync.SOURCE_ENV) == "broker"
-           else f"{notes_sync.TOKEN_ENV} was refused (expired or rotated): unset it to use the GitHub broker's token, or put a new "
-                f"one in {DASHBOARD}" if os.environ.get(notes_sync.TOKEN_ENV)
-           else "no notes token: a Cursor agent gets one from the GitHub broker (`notes_sync.notes_token`); elsewhere set "
-                f"{notes_sync.TOKEN_ENV}")
-    return push_probe("notes-push", root, opts, where, fix)
+    source, said = notes_sync.token_source()
+    fix = {"broker": "the GitHub broker's notes token was refused: the agents' App needs research-notes in its repository access",
+           "env": f"{notes_sync.TOKEN_ENV} was refused (expired or revoked), and the GitHub broker gave no token to use instead "
+                  f"({notes_sync.broker_why()}): on a Cursor agent run this again in a minute, since the broker's token needs no "
+                  "secret; where there is no Cursor identity, set a new one",
+           None: "no notes token: a Cursor agent gets one from the GitHub broker (`notes_sync.notes_token`); elsewhere set "
+                 f"{notes_sync.TOKEN_ENV}"}[source]
+    c = push_probe("notes-push", root, opts, where, fix)
+    return Check(c.name, c.status, f"{c.detail}; the credential is {said}", c.fix)
 
 
 def check_store() -> Check:
@@ -296,9 +302,16 @@ def registry_unread() -> bool:
 
 def ssh_machines() -> dict[str, dict]:
     """The machines `research run --on` knows (machines.toml, and the registry unless `registry_unread`) whose entries name an
-    ssh host."""
+    ssh host, the auditor hosts (`remote.restricted`) aside."""
+    return _ssh_machines()[0]
+
+
+def _ssh_machines() -> tuple[dict[str, dict], list[str]]:
+    """(the machines to probe, the auditor hosts left out)."""
     ms = remote.load_machines(remote.machines_path()) if registry_unread() else remote.load_machines()
-    return {n: m for n, m in sorted(ms.items()) if isinstance(m, dict) and m.get("provider") == "ssh"}
+    ssh = {n: m for n, m in sorted(ms.items()) if isinstance(m, dict) and m.get("provider") == "ssh"}
+    skipped = remote.restricted(ssh)
+    return {n: m for n, m in ssh.items() if n not in skipped}, sorted(skipped)
 
 
 def check_ssh(name: str, machine: dict) -> Check:
@@ -415,7 +428,7 @@ def checks(role: str, root: Path | None) -> list[Probe]:
     if role in SLACK_ROLES:
         out.append(("slack", check_slack))
     try:
-        machines = ssh_machines()
+        machines, skipped = _ssh_machines()
     except Exception as e:  # noqa: BLE001  (a TOML error, or a table of the wrong shape: only the class is shown)
         out.append(("ssh", lambda e=e: Check("ssh", FINDING, f"the machines config is unreadable: {type(e).__name__}",
                                              f"{remote.machines_path()} holds one `[machines.NAME]` table per machine; "
@@ -428,6 +441,9 @@ def checks(role: str, root: Path | None) -> list[Probe]:
             "machines.toml or the registry"
         out += [(f"ssh:{n}", lambda n=n, m=m: check_ssh(n, m)) for n, m in machines.items()] or \
                [("ssh", lambda: Check("ssh", SKIP, f"no machine in {where} names an ssh host"))]
+        if skipped:
+            out.append(("ssh:auditor-hosts", lambda: Check("ssh:auditor-hosts", SKIP, f"not probed: {', '.join(skipped)}, which refuse "
+                                                                                        "lanes' keys by design")))
     out += [("venv", lambda: check_venv(root)), ("disk", lambda: check_disk(root)), ("clock", check_clock)]
     return out
 

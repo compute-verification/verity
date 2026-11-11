@@ -1,0 +1,10 @@
+{
+ "verdict": "accept",
+ "reason": null,
+ "commitment": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0",
+ "work": {
+  "credited": 105449127936,
+  "macs": 120000000000,
+  "epsilon": "1/100"
+ }
+}

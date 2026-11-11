@@ -92,10 +92,10 @@ def main(argv=None) -> int:
     ap.add_argument("--int8", action="store_true", help="the exact-int8 checkpoint on the H200 (int8_exact linears)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
-    sys.path.insert(0, str(Path.cwd() / "integrations/vllm"))
+    sys.path.insert(0, str(Path.cwd() / "adapters/vllm"))
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit
-    from verity.ml.windows import interface as IF
+    from verity.commitments.windows import interface as IF
     from verity_vllm.program.predict.steps import Registered
     from verity_vllm.program.predict.phi import Phi
 
@@ -106,7 +106,7 @@ def main(argv=None) -> int:
         cls = WindowClass(8, 4, 2, lanes=4, every=16) if a.slots else WindowClass(2, 4, 2)
         circuit = class_circuit(reg, cls, None, Grain(gemm_words=512, rows=9, select=64), provable=False)
     else:
-        cfg = json.loads((Path.cwd() / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
+        cfg = json.loads((Path.cwd() / "adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
         target = {"compute_capability": [12, 0], "num_sms": 188}
         if a.int8:
             from verity_vllm.program.model import INT8_EXACT_QUANT
