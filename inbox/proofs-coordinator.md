@@ -53538,3 +53538,64 @@ So where Lean has one value a slot, it is by construction of a model whose posit
 **4. A qualification of my 12:01Z entry.** `Addresses` gives one address a gate, chosen once for every run. I showed the port that holds the gate's row cannot be it. Another port could only stand in if it carried the same bit in every accepted run (`RowAt`, `SpotFlock/RevealAt.lean:326-330`) and were a registered boundary read. I know no unit like that; EXTFORM's scratch file settles it.
 
 For the table: "exfiltration" has the same gap as "bits" [read, derived]: `SpotExfilTwo` bounds every unit's outputs given every unit's inputs, over units side by side, under `Addresses h`, which is false at the two-stage registrations the driver builds. No statement on `main` ties a reader's input to its writer's output; the accounting takes it as the field `wrong_eq`. The table may say the wiring is checked by the verifier's code; it may not say a served request's outputs are bounded given its certified inputs.
+
+## HARMSEARCH, Wed 11 Nov 12:17Z: the tree's command could not print the built plan: #8853's driver passes the planner no `widths`, `margin` or `kappas`. #8950 wires it (unmarked, no ready line yet: its quick tier is running; it stacks on #8853 and #8904). At the tree's own prices the command then prints 11,338.8 GB by width where the price of record prints 14,228.6. Lean's check of the setup rows is in; SCALE's `final` cut prices as recut A to 4 GB
+
+Tags: [run], [read] (place given), [relayed], [guess]. Times from `date -u`. Order read through its 12:06Z section: line (a) is out of every row below; bits are line (b) only.
+
+**1. The gap, and #8950** [read: `breakeven/headline.py`, `breakeven/common.py` and `total_cost.py` at #8853's head `9c9da7466aea`].
+- #8853's driver designs every row with the planner's default family (strata by size class, its own κ). Nothing in the tree passes `widths`, `margin` or `kappas` (#8878, #8893, #8904), so "the built plan" in the table is a figure of my scratch calls, not of a command in the tree. I said so at 10:20Z and 10:57Z and offered the call; no order line or entry takes it up [read: the order through 12:06Z; BREAKEVEN's 11:31Z]. So I built it as a PR of its own on top of #8853, touching nothing of BREAKEVEN's branch.
+- **[#8950](https://github.com/compute-verification/verity/pull/8950)**, head `f8b6e599b19b7802eed13126355b6f96a3a65cc6`, branch `cursor/proofs-headline-plan-4e1b`: `main` `86c03d1840cb` with #8853's and #8904's heads merged and two commits of mine in `headline.py` and its test file. A row is a case under a plan: `(i) honest` as it was; `(i) honest, by width` (a stratum a distinct width, margin 1/8, the planner's κ); `(i) honest, by width, kappa 2^-4` to `2^-8` (held to that κ); the same for (ii) and (iii). A row carries its `plan`, its design's `kappa` and `k_sum` (Σ k_t a sampled replay block), so a bits line can be computed from the row's own design. `plan()` now handles a by-width design (it failed on `merged` None).
+- It changes which design a named row asks for, not what a bound says or rests on. The three rows of record keep their names and print to the digit (14,228.6 for (i), below). Which row is the headline is Daniel's.
+- **Not ready to mark:** quick tier `r20261111-121123-87c2` is running at the head; its verdict comes in a ready line. It can land only after #8853 and #8904 (it holds both heads). `git merge-tree` at the head is clean with `main` `86c03d1840cb`, #8708 `635b2f97027d` and #8926 `1204dc214aa2` [run 12:14Z]. If #8853's head moves I merge it in and rerun.
+- **What the command prints** [run `r20261111-121250-8e11`, rc 0, tree `f8b6e599b1`: `python -m benchmarks.spot_figures.breakeven.headline rows --scopes "world year" --rows ...`; all six scopes for nine rows in `r20261111-120335-1c0f`, rc 0, at the commit before]. World year, **at the tree's own cards and prices**: the Lean verifier at the tree's measured one-block statements [read: `headline.py` 113 to 118], so neither the head block's 250.0 nor `main`'s setup on every session is in these rows; they are the base the table calls "price of record on `main`". The command's column is GB at the 10% point times λ = 1.05. κ and Σ k_t are each row's design at β = 0.055.
+
+| row (the command's name) | GB × 1.05, modeled 0.4 | at λ = 1 | measured engine rate on node A (a floor), λ = 1 | κ | Σ k_t | bits (b), one M = 2,049 | (b), M = 139 |
+|---|---:|---:|---:|---|---:|---:|---:|
+| `(i) honest` (the price of record) | 14,228.6 | 13,551.0 | 484 to 522 | 2^-6 | 9,326,621 | -96.99 | -100.86 |
+| `(i) honest, by width` | 11,338.8 | 10,798.9 | 386 to 416 | 2^-6 | 8,136,985 | -97.18 | -101.06 |
+| `(i) honest, by width, kappa 2^-8` | 12,592.3 | 11,992.7 | 429 to 462 | 2^-8 | 2,034,275 | -99.18 | -103.06 |
+| `(ii) honest` | 8,686.3 | 8,272.7 | 296 to 318 | 2^-5 | 11,145,677 | -96.73 | -100.60 |
+| `(ii) honest, by width` | 5,568.6 | 5,303.4 | 190 to 204 | 2^-3 | 37,237,083 | -94.99 | -98.86 |
+| `(iii) honest` | 2,447.5 | 2,331.0 | 83 to 90 | 2^-4 | 22,291,346 | -95.73 | -99.60 |
+| `(iii) honest, by width` | 1,585.8 | 1,510.3 | 54 to 58 | 2^-3 | 37,237,083 | -94.99 | -98.86 |
+| `(iii) honest, by width, kappa 2^-4` | 1,634.4 | 1,556.6 | 56 to 60 | 2^-4 | 18,618,580 | -95.99 | -99.86 |
+| `(iii) honest, by width, kappa 2^-5` | 1,730.7 | 1,648.3 | 59 to 63 | 2^-5 | 9,309,327 | -96.99 | -100.86 |
+| `(iii) honest, by width, kappa 2^-6` | 1,920.6 | 1,829.1 | 65 to 70 | 2^-6 | 4,322,783 | -98.10 | -101.97 |
+| `(iii) honest, by width, kappa 2^-7` | 2,358.3 | 2,246.0 | 80 to 86 | 2^-7 | 2,161,410 | -99.10 | -102.97 |
+| `(iii) honest, by width, kappa 2^-8` | 3,224.5 | 3,071.0 | 110 to 118 | 2^-8 | 1,080,722 | -100.10 | -103.97 |
+
+- Bits: line (b), "over the served wiring, M = 2,049 at the plan's cut (139 at the recut); modeled; no Lean statement at the code is behind it" (order 12:06Z), K a run = 6 Σ k_t × M in compressions, from each row's own Σ k_t [run: `scale_width.term`]. M is SCALE's for the served wiring [relayed: SCALE 11:10Z]; the tree's workload card is the older census (154 strata) and I did not recount its cut.
+- The measured-rate column is by proportion (0.0143 to 0.0154 against 0.4). The rate is a floor and is not measured at the headline's mix, so it cannot show 300 GB is met. No row reaches 300 GB at the modeled 0.4.
+- The tree's row (iii) reads 2,331 GB where the table's measured-prices row (iii) reads 4,042.4: the table's is over BREAKEVEN's run inputs (the 192-stratum card and `bench_prices.json`), which are not in the tree [read: my 11:43Z section 1]. The tree's command prints the tree's cards.
+- By width the rows read 0.797 (i), 0.641 (ii) and 0.648 (iii) of the planner's own [run]. Week, month and a datacenter for `(i) honest, by width`: world 11,065.1 / 11,165.8 / 11,338.8; datacenter 10,505.9 / 10,606.8 / 10,780.2 [run `1c0f`].
+
+**2. Lean's check of the rows with the setup in the cells** [run `r20261111-115045-3bf0`, rc 0, tree `f1e9d625dd`; row (iii), world year, measured prover prices, modeled 0.4; Lean's GB beside the planner's]. Nothing of these rows is built: each is a what-if on the planner's inputs.
+
+| cut | head block | plan | reading | planner GB | Lean certifies GB |
+|---|---|---|---|---:|---:|
+| the plan's | whole | size classes (the record's plan; κ 2^-6 at this reading) | as `main` is, +783 | 16,682.9 | 16,634.5 |
+| the plan's | whole | width + margin, κ 2^-3 | as `main` is | 10,358.2 | 10,292.0 |
+| the plan's | whole | width + margin, κ 2^-8 | as `main` is | 12,331.3 | 12,331.4 |
+| recut A | whole | width + margin, κ 2^-4 | as `main` is | 10,587.7 | 10,443.7 |
+| recut A | whole | width + margin, κ 2^-4 | the hoist, unbuilt (+373) | 7,065.1 | 6,969.0 |
+| recut A | #8917's cut, G = 64 | width + margin, κ 2^-6 | as `main` is | 3,888.0 | 3,881.9 |
+| recut A | #8917's cut, G = 64 | width + margin, κ 2^-6 | the hoist, unbuilt | 2,637.7 | 2,633.6 |
+| recut A | #8917's cut, G = 32 | width + margin, κ 2^-4 | as `main` is | 3,030.6 | 3,030.6 |
+| recut A | #8917's cut, G = 32 | width + margin, κ 2^-4 | the hoist, unbuilt | 1,956.3 | 1,956.3 |
+| the plan's | #8917's cut, G = 32 | width + margin, κ 2^-3 | as `main` is | 2,792.5 | 2,792.5 |
+
+Lean's figure is within 1.4% of the planner's on every row and never above it by more than 0.1 GB.
+
+**3. SCALE's `final` cut, priced before its exact counts** [read: `tools/exact_classes.py` `CFGS["final"]` in the lane's notes: recut A's writers, the embedding shard at H = 4, SiluMul in 192 columns, the indexer a head, the two all-reduces in 48 columns; run: the same planner calls, the three readings; sizes by the census's sizer, the 48-column all-reduces 2^21].
+- It prices as recut A to 4 GB on every line: head whole, κ 2^-4: 3,861 / 7,067 / 10,591 (no program / the hoist unbuilt / as `main` is) against A's 3,860 / 7,065 / 10,588; with #8917's cut at G = 64, κ 2^-6: 1,500 / 2,639 / 3,890 against 1,500 / 2,638 / 3,888. So SCALE's exact counts will move bits, not GB.
+- My tool takes exact counts a cell from a file now. When SCALE's `final` counts are posted I rerun the three grids (about six minutes) and post which κ each line needs at them.
+
+For BREAKEVEN:
+- #8950 (unmarked, stacked on #8853 at `9c9da7466aea` and #8904): row names `(i) honest, by width` and `..., by width, kappa 2^-4` to `2^-8` for each case; a row carries `plan`, `kappa`, `k_sum`. The three rows of record are untouched. If #8853's head moves, tell me and I merge it.
+- At the tree's prices, world year, GB × 1.05: (i) 14,228.6 → 11,338.8 by width; (ii) 8,686.3 → 5,568.6; (iii) 2,447.5 → 1,585.8 [run `8e11`].
+
+For the table:
+- PLAN | #8950 `f8b6e599b19b`, unmarked, quick tier running, stacks on #8853 and #8904 | the tree's command prints a row's plan by width or at a held κ; price of record (i), world year: 14,228.6 → 11,338.8 GB × 1.05 by width (modeled 0.4; 386 to 416 at λ 1 at the measured engine rate on node A, a floor); bits (b) of that design -97.18 at M = 2,049, -101.06 at M = 139 (modeled; no Lean statement at the code) [run `8e11`].
+- Lean's check of ten rows with the setup in the cells: within 1.4% of the planner, never above by more than 0.1 GB [run `3bf0`].
+- SCALE's `final` cut prices as recut A to 4 GB (modeled; nothing built).
