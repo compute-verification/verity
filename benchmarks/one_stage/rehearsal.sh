@@ -14,7 +14,8 @@
 #                         its own PP_PARTITION: its window has no step 1); `serve` around a stand-in
 #                         harness (the deferral's copy asked once, only after a serve that exited 0); the class's
 #                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
-#                         reads the card: the H200's compute capability and SMs); the harness's own policy step,
+#                         reads the card: the H200's compute capability and SMs), its record stating the work table
+#                         of the settings' V3C_FLOORS as the serve's does; the harness's own policy step,
 #                         which fixes the limits and states what they prove; the policy's Lean check on the class's
 #                         own Program (`rehearsal_limits.py`), and the settings' ALPHA, GAMMA and DAY_PROGRAM held to
 #                         what it answers ($OUT/record.env.add has the lines where they differ); the day's declaration
@@ -113,6 +114,10 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
 
 settings_class() {  # $1, the settings file: the class its serve commits the window at
   bash -c 'set -a; . "$0" > /dev/null 2>&1; set +a; printf %s "${V3C_CLASS-4,32,4}"' "$1"
+}
+
+settings_floors() {  # $1, the settings file: the floors its serve states in the window's work table (the harness's default)
+  bash -c 'set -a; . "$0" > /dev/null 2>&1; set +a; printf %s "${V3C_FLOORS:-4/125,1/100}"' "$1"
 }
 
 serve() {
@@ -343,11 +348,12 @@ check() {
     echo "memory scope: NONE (this node makes no user scope): the audit's and the compose's node must" > "$OUT/scope.txt"
   fi
   local WANT_CLASS=${CLASS:-}  # a class the caller names, which the settings must serve
-  local TREE S=$OUT/steps.txt failed=0 scratch PY D CLASS SCHEME=${SCHEME:-pearl-c-h100-v1-h3}
+  local TREE S=$OUT/steps.txt failed=0 scratch PY D CLASS FLOORS SCHEME=${SCHEME:-pearl-c-h100-v1-h3}
   TREE=$(cd "$HERE/../.." && pwd)
   cd "$TREE" || exit 3
   SETTINGS=${SETTINGS:-${RESEARCH_RUN_DIR:-.}/inputs/record.env}
   CLASS=$(settings_class "$SETTINGS")
+  FLOORS=$(settings_floors "$SETTINGS")
   step() {  # NAME LIMIT CMD...
     local name=$1 limit=$2 t rc
     shift 2
@@ -388,7 +394,7 @@ print(json.dumps(doc, sort_keys=True))
 ' "${REPO:-unsloth/Llama-3.2-1B}" "${REV:-9535bd9b1d1dea6acafbdc4813b728796aeb28da}" "$D/pearlplus/serve-phi.json"
   cp "$D/pearlplus/serve-phi.json" "$OUT/serve-phi.json" 2> /dev/null
   step class-circuit 30m "$PY" benchmarks/prove_path/prove_path.py class-circuit --serve "$D/pearlplus/serve-phi.json" \
-    --class "$CLASS" --pearl-tables "$SCHEME" --out "$D/pearlplus/circuit-record.json"
+    --class "$CLASS" --pearl-tables "$SCHEME" --reader-floors "$FLOORS" --out "$D/pearlplus/circuit-record.json"
 
   # the harness's own policy step at the settings' limits: the limits file and its line, with what they prove
   step inference-policy 30m env SETTINGS="$SETTINGS" PEARLC_CHALLENGER_GATE= D="$D" OUT="$OUT" VENV="$TREE/.venv" \
