@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SamplingGeneric.TwoRegX
+public import Proofs.Flock.SamplingGeneric.RunExtAt
 public import Proofs.Core.SamplingGeneric.FirstHit
 import Proofs.Flock.Claims.Aggregate
 import Proofs.Flock.Claims.ERep
@@ -61,9 +62,15 @@ of each lemma here and no clause of `Sessions`.
   with `ex_needs_le`'s second term where only the coins outside a set do.
 
 **What a run costs.** `callsAt` is a whole run's calls: the prover's, the verifier's, and the extraction's of every
-session of the run's sample (`runExt`). Each finder pays it at the first run and at each further run it makes,
-whichever gate it waits for: it extracts every session of a further run, not only the sessions that hold a gate it
-waits for. A finder that extracts by position pays less at a further run; it is not stated here.
+session of the run's sample (`runExt`). `finderX` and `finderI` pay it at the first run and at each further run they
+make, whichever gate they wait for: they extract every session of a further run.
+
+* **By position** (`Compiled.finderXAt`, `CompiledTwo.finderIAt`, `CompiledTwo.eventTwoX_le_firstHit_at_cap`,
+  `CompiledTwo.eventTwoX_le_firstHit_at`): the finders that, at a further run, extract for each gate they wait for
+  only the sessions with a proof block that needs the gate (`Proofs.Flock.SamplingGeneric.RunExtAt`). The event of
+  `KSRegTwoX` is then at most `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[c + Σ_{g ∈ sample} c_g]/2^256`: `c` the
+  first run's calls, read whole, and `c_g` a run's calls with only those sessions extracted. The expectation is at
+  most the whole-run one (`Compiled.ex_callsBy_le`).
 
 **What the bound is small under.** Three premises: the linear expected-time bound (`ExpectedCR`) at the two first-hit
 finders, hypotheses of the statements here; the same at `B_conf,X`, whose success `Pr[B_conf,X]` is a term of the
@@ -364,6 +371,116 @@ theorem ex_needs_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype
       exact_mod_cast Nat.add_le_add_left (hw q.2.1 hb) 1
     have h2 := mul_le_mul_of_nonneg_right h1 hc
     linarith
+
+/-! ## The boundary, by position -/
+
+/-- **The by-position first-hit finder at the boundary trace read at the statement**, at cap `K`. Its seed, its
+sample and its waits are `finderX`'s, and its first run is read whole (`callsAt`). At a further run it pays, for each
+gate still waited for that the run's sample holds, a run at that tape and those coins with only the sessions that
+have a proof block needing the gate extracted (`callsBy`). It outputs `collBy` at the first run, a further run that
+is the first to open some gate the first run opened, and that gate. -/
+noncomputable def finderXAt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (x : Msg) (s : AuditStatement) (needs : ℕ → Finset ℕ) (K : ℕ) : Finder :=
+  Verity.FirstHit.sampleFinderAt
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      L.opensAt H P x a.1 a.2.1 a.2.2 g)
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      decide (∃ u ∈ L.checked x a.2.1, g.val ∈ needs u))
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) => L.callsAt H P x s a.1 a.2.1 a.2.2)
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (J : Finset (Fin (L.nG x))) =>
+      ∑ g ∈ J, L.callsBy H P x s needs g.val a.1 a.2.1 a.2.2) K
+    fun q : Unit × ((Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) ×
+        (Fin K → Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x))) =>
+      Verity.FirstHit.outOfAt
+        (fun (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) => L.opensAt H P x a.1 a.2.1 a.2.2 g)
+        (fun (a a' : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+          L.collBy H P x s needs a a' g.val) K q.2.1 q.2.2
+
+/-- **The mass off the boundary trace read at the statement, by position, at one cap**:
+`2·E[c + Σ_{g ∈ sample} c_g]/2^256 + N/(K + 1)`, under `ExpectedCR` at the by-position finder of the cap `K`: `c` a
+run's calls with every session extracted (`callsAt`), `c_g` its calls with only the sessions that can open gate `g`
+extracted (`callsBy`), `N` the program's gates. -/
+theorem pr_offRegX_le_needs_at_cap {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
+    {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (needs : ℕ → Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (K : ℕ)
+    (hCR : ExpectedCR H (L.finderXAt H P x s needs K)) :
+    Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffRegX H P x q.1 q.2.1 q.2.2) ≤
+      2 * Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+          ((L.callsAt H P x s q.1 q.2.1 q.2.2 +
+            ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u)),
+              L.callsBy H P x s needs g.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) /
+          2 ^ (256 : ℝ) +
+        (L.nG x : ℝ) / ((K : ℝ) + 1) := by
+  have h := Verity.FirstHit.pr_off_at_le_ex_cap H
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      L.opensAt H P x a.1 a.2.1 a.2.2 g)
+    (vstar := fun (_ : Unit) (g : Fin (L.nG x)) => L.plurX H P x g)
+    (fun _ => isPlurality_plurAt (L.nG x)
+      fun (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : ℕ) => L.opensAt H P x a.1 a.2.1 a.2.2 g)
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      decide (∃ u ∈ L.checked x a.2.1, g.val ∈ needs u))
+    (fun _ a g hg => decide_eq_true (L.opensAt_isSome_needs H P x a.1 hs needs hpos a.2.1 a.2.2 g hg))
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) => L.callsAt H P x s a.1 a.2.1 a.2.2)
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (J : Finset (Fin (L.nG x))) =>
+      ∑ g ∈ J, L.callsBy H P x s needs g.val a.1 a.2.1 a.2.2)
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      L.callsBy H P x s needs g.val a.1 a.2.1 a.2.2)
+    (fun _ _ _ => le_rfl) K
+    (fun (_ : Unit) (a a' : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      L.collBy H P x s needs a a' g.val)
+    (fun _ a a' g hg => by
+      obtain ⟨h1, h2, hne⟩ := hg
+      exact collBy_of_conflictAt hbind hs P needs (fun u v w p hp _ => hpos u v w p hp) a a' g.val h1 h2 hne)
+    (fun _ a a' g u v huv => L.collBy_collision H P x s needs a a' g.val huv) hCR
+  rw [Fintype.card_fin] at h
+  have hP := Pr_unit_prod (fun a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => ∃ g : Fin (L.nG x),
+    FlockSoundness.Rewinding.Off
+      (fun (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) => L.opensAt H P x a.1 a.2.1 a.2.2 g)
+      (fun g : Fin (L.nG x) => L.plurX H P x g) a g)
+  have hE := Ex_unit_prod (fun a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+    ((L.callsAt H P x s a.1 a.2.1 a.2.2 +
+      ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x a.2.1, g.val ∈ needs u)),
+        L.callsBy H P x s needs g.val a.1 a.2.1 a.2.2 : ℕ) : ℝ))
+  have hoff : Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffRegX H P x q.1 q.2.1 q.2.2) ≤
+      Pr (fun a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => ∃ g : Fin (L.nG x),
+        FlockSoundness.Rewinding.Off
+          (fun (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+            L.opensAt H P x a.1 a.2.1 a.2.2 g)
+          (fun g : Fin (L.nG x) => L.plurX H P x g) a g) :=
+    Pr_mono fun q hq => by
+      obtain ⟨g, hg, b, hb, hne⟩ := hq
+      refine ⟨⟨g, hg⟩, Option.isSome_iff_exists.2 ⟨b, hb⟩, fun h => hne ?_⟩
+      rw [L.regValX_eq_plurX H P x hb]
+      exact (hb.symm.trans h).symm
+  exact (hoff.trans (hP.symm.le.trans h)).trans_eq
+    (congrArg (fun e : ℝ => 2 * e / 2 ^ (256 : ℝ) + (L.nG x : ℝ) / ((K : ℝ) + 1)) hE)
+
+/-- **The by-position expectation is at most the whole-run one**: `E[c + Σ_{g ∈ sample} c_g] ≤ E[(1 + |sample|)·c]`,
+a run's calls at one gate being at most its calls with every session extracted (`callsBy_le`). -/
+theorem ex_callsBy_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg)
+    (s : AuditStatement) (needs : ℕ → Finset ℕ) :
+    Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+        ((L.callsAt H P x s q.1 q.2.1 q.2.2 +
+          ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u)),
+            L.callsBy H P x s needs g.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) ≤
+      Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+        (((1 + #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u))) *
+          L.callsAt H P x s q.1 q.2.1 q.2.2 : ℕ) : ℝ)) :=
+  Ex_mono fun q => by
+    have h : ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u)),
+        L.callsBy H P x s needs g.val q.1 q.2.1 q.2.2 ≤
+        #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u)) *
+          L.callsAt H P x s q.1 q.2.1 q.2.2 :=
+      (Finset.sum_le_card_nsmul _ _ _ fun g _ => L.callsBy_le H P x s needs g.val q.1 q.2.1 q.2.2).trans
+        (le_of_eq (smul_eq_mul _ _))
+    have h2 : L.callsAt H P x s q.1 q.2.1 q.2.2 +
+        ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u)),
+          L.callsBy H P x s needs g.val q.1 q.2.1 q.2.2 ≤
+        (1 + #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u))) *
+          L.callsAt H P x s q.1 q.2.1 q.2.2 := by
+      rw [Nat.add_mul, Nat.one_mul]
+      exact Nat.add_le_add_left h _
+    exact Nat.cast_le.2 h2
 
 end Compiled
 
@@ -803,6 +920,194 @@ theorem eventTwoX_le_firstHit_of_card_outside {H : Msg → Msg} {L : CompiledTwo
   have h3 := div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left h2 (show (0 : ℝ) ≤ 4 by norm_num))
     (show (0 : ℝ) ≤ 2 ^ (256 : ℝ) by positivity)
   linarith
+
+/-! ## The interior and the event, by position -/
+
+/-- Two second stages on one tape and one first stage whose extractions open a gate two ways, each under the interior
+roots of the replay block that holds it, give `collBy` a pair at that gate: the two share those roots
+(`Sessions.interior`), and the second's opening is kept by its extractions at the gate, a reveal for proof block `u`
+opening only gates of `needs u`. -/
+theorem icollBy_of_conflictAt {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H)
+    (hS : L.Sessions H) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type}
+    (P : Prover Ω) (needs : ℕ → Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (ω : Ω)
+    (r : Fin (L.V.k x) → Coin) (ec ec' : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x))
+    (h : FlockSoundness.Rewinding.ConflictAt (L.iopTable H P x ω Pρ r) (ec, ec') g) :
+    (L.toCompiled.collBy H P x s needs (ω, (forkOn (L.stage2 x) r ec.1, ec.2))
+      (ω, (forkOn (L.stage2 x) r ec'.1, ec'.2)) g.val).isSome := by
+  obtain ⟨h1', h2', hne'⟩ := h
+  have h1 : (L.iopTable H P x ω Pρ r ec g).isSome := h1'
+  have h2 : (L.iopTable H P x ω Pρ r ec' g).isSome := h2'
+  have hne : L.iopTable H P x ω Pρ r ec g ≠ L.iopTable H P x ω Pρ r ec' g := hne'
+  obtain ⟨b1, hb1⟩ := Option.isSome_iff_exists.1 h1
+  obtain ⟨b2, hb2⟩ := Option.isSome_iff_exists.1 h2
+  rw [hb1, hb2] at hne
+  simp only [iopTable, iop] at hb1 hb2
+  obtain ⟨ρ, hgb, hb1'⟩ := Option.bind_eq_some_iff.1 hb1
+  obtain ⟨ρ', hgb', hb2'⟩ := Option.bind_eq_some_iff.1 hb2
+  rw [hgb, Option.some.injEq] at hgb'
+  rw [← hgb'] at hb2'
+  obtain ⟨a, ha, ha1, ha2, ha3, -⟩ := iopensAt_some hs hb1'
+  obtain ⟨a', ha', ha1', ha2', ha3', -⟩ := iopensAt_some hs hb2'
+  have hroots : a.1 = a'.1 := by
+    rw [ha1, ha1', hS.interior x Ω P ω r ec.1 ρ, hS.interior x Ω P ω r ec'.1 ρ]
+  have hc := Compiled.collBy_isSome hbind s P needs (ω, (forkOn (L.stage2 x) r ec.1, ec.2))
+    (ω, (forkOn (L.stage2 x) r ec'.1, ec'.2)) ha ha' (fun u w hm => hpos u _ w a' hm) hroots
+    (ha2.trans ha2'.symm) (by rw [ha3, ha3']; exact fun h => hne (congrArg some h))
+  rw [ha2'] at hc
+  exact hc
+
+/-- **The by-position first-hit finder at the committed interiors**, at cap `K`. Its seed, its sample and its waits
+are `finderI`'s, and its first run is read whole (`callsAt`). At a further run, at the kept tape and first stage, it
+pays, for each gate still waited for that the run's sample holds, a run at those coins with only the sessions that
+have a proof block needing the gate extracted (`callsBy`). It outputs `collBy` at the first run, a further run that
+is the first to open some gate the first run opened under a replay block's interior roots, and that gate. -/
+noncomputable def finderIAt (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) (s : AuditStatement) (Pρ : Partition) (needs : ℕ → Finset ℕ) (K : ℕ) : Finder :=
+  Verity.FirstHit.sampleFinderAt
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) => L.iopTable H P x t.1 Pρ t.2)
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x)
+        (J : Finset (Fin (L.nG x))) =>
+      ∑ g ∈ J, L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2) K
+    fun q : (Ω × (Fin (L.V.k x) → Coin)) × (((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
+        (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
+      Verity.FirstHit.outOfAt (L.iopTable H P x q.1.1 Pρ q.1.2)
+        (fun (ec ec' : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+          L.toCompiled.collBy H P x s needs (q.1.1, (forkOn (L.stage2 x) q.1.2 ec.1, ec.2))
+            (q.1.1, (forkOn (L.stage2 x) q.1.2 ec'.1, ec'.2)) g.val) K q.2.1 q.2.2
+
+/-- **The mass off the committed interiors, by position, at one cap**:
+`2·E[c + Σ_{g ∈ sample} c_g]/2^256 + N/(K + 1)`, under `ExpectedCR` at the by-position finder of the cap `K`: `c` a
+run's calls with every session extracted (`callsAt`), `c_g` its calls with only the sessions that can open gate `g`
+extracted (`callsBy`), `N` the program's gates. The contract's clause it reads is `Sessions.interior`. -/
+theorem pr_offIreg_le_needs_at_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H)
+    (hS : L.Sessions H) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type}
+    [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (K : ℕ)
+    (hCR : ExpectedCR H (L.finderIAt H P x s Pρ needs K)) :
+    Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffIreg H P x q.1 Pρ q.2.1 q.2.2) ≤
+      2 * Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+          ((L.callsAt H P x s q.1 q.2.1 q.2.2 +
+            ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u)),
+              L.toCompiled.callsBy H P x s needs g.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) /
+          2 ^ (256 : ℝ) +
+        (L.nG x : ℝ) / ((K : ℝ) + 1) := by
+  have h := Verity.FirstHit.pr_off_at_le_ex_cap H
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) => L.iopTable H P x t.1 Pρ t.2)
+    (vstar := fun (t : Ω × (Fin (L.V.k x) → Coin)) (g : Fin (L.nG x)) => L.iplur H P x t.1 Pρ t.2 g)
+    (fun t => L.isPlurality_iplur H P x t.1 Pρ t.2)
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+    (fun t ec g hg => decide_eq_true (L.iop_isSome_needs H P x t.1 hs Pρ needs hpos t.2 ec g hg))
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x)
+        (J : Finset (Fin (L.nG x))) =>
+      ∑ g ∈ J, L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+      L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+    (fun _ _ _ => le_rfl) K
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec ec' : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+      L.toCompiled.collBy H P x s needs (t.1, (forkOn (L.stage2 x) t.2 ec.1, ec.2))
+        (t.1, (forkOn (L.stage2 x) t.2 ec'.1, ec'.2)) g.val)
+    (fun t ec ec' g hg => icollBy_of_conflictAt hbind hS hs Pρ P needs hpos t.1 t.2 ec ec' g hg)
+    (fun t ec ec' g u v huv => L.toCompiled.collBy_collision H P x s needs _ _ g.val huv) hCR
+  rw [Fintype.card_fin] at h
+  have hP := Pr_keep_forkOn (L.stage2 x)
+    (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) => L.OffIreg H P x ω Pρ R c)
+  have hE := Ex_keep_forkOn (L.stage2 x) (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
+    ((L.callsAt H P x s ω R c +
+      ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x R, g.val ∈ needs u)),
+        L.toCompiled.callsBy H P x s needs g.val ω R c : ℕ) : ℝ))
+  have hoff : Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      L.OffIreg H P x q.1.1 Pρ (forkOn (L.stage2 x) q.1.2 q.2.1) q.2.2) ≤
+      Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => ∃ g : Fin (L.nG x),
+        FlockSoundness.Rewinding.Off (L.iopTable H P x q.1.1 Pρ q.1.2)
+          (fun g : Fin (L.nG x) => L.iplur H P x q.1.1 Pρ q.1.2 g) q.2 g) :=
+    Pr_mono fun q hq => L.off_of_offIreg H P x q.1.1 Pρ q.1.2 q.2 hq
+  exact (hP.symm.le.trans (hoff.trans h)).trans_eq
+    (congrArg (fun e : ℝ => 2 * e / 2 ^ (256 : ℝ) + (L.nG x : ℝ) / ((K : ℝ) + 1)) hE)
+
+/-- **The event of `KSRegTwoX` with the by-position finders' terms, at one cap for each finder.** On a statement in
+scope, where a reveal for proof block `u` opens only gates of `needs u`, and the boundary's by-position first-hit
+finder of the cap `KX` (`Compiled.finderXAt`) and the interior's of the cap `KI` (`finderIAt`) meet the linear
+expected-time bound, an accepted run samples a proof block of `FregTwoX` with probability at most
+`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[c + Σ_{g ∈ sample} c_g]/2^256 + N/(KX + 1) + N/(KI + 1)`.
+
+* `c` is a run's calls with every session of its sample extracted (`callsAt`): each finder's first run. The sum is
+  over the gates the proof blocks of the run's coins' sample need, and `c_g` is the run's calls with only the sessions
+  that have a proof block needing gate `g` extracted (`callsBy`): what a further run at those coins costs a finder
+  for a gate it waits for.
+* The expectation is over the prover's tape, the run's coins and the extractor's, joint in the sample and the calls.
+  It is at most `E[(1 + |sample|)·c]`, `eventTwoX_le_firstHit_cap`'s (`Compiled.ex_callsBy_le`).
+* The premises the bound is small under are `eventTwoX_le_firstHit_cap`'s, with the linear expected-time bound at
+  these two finders in place of those two. -/
+theorem eventTwoX_le_firstHit_at_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
+    (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
+    {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
+    (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (KX KI : ℕ)
+    (hX : ExpectedCR H (L.toCompiled.finderXAt H P x s needs KX))
+    (hI : ExpectedCR H (L.finderIAt H P x s d.part needs KI)) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregTwoX H P x p.1 p.2) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + (Compiled.BconfX H L.toCompiled Ω P x).Pr H +
+        4 * Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+          ((L.callsAt H P x s q.1 q.2.1 q.2.2 +
+            ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u)),
+              L.toCompiled.callsBy H P x s needs g.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) /
+          2 ^ (256 : ℝ) +
+        ((L.nG x : ℝ) / ((KX : ℝ) + 1) + (L.nG x : ℝ) / ((KI : ℝ) + 1)) := by
+  have hB := (Pr_mono (p := fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      (run H P L.V x q.1 q.2.1).out = .acc ∧ L.OffRegX H P x q.1 q.2.1 q.2.2) fun _ h => h.2).trans
+    (Compiled.pr_offRegX_le_needs_at_cap hbind hs P needs hpos KX hX)
+  have hN := (Pr_mono (p := fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      (run H P L.V x q.1 q.2.1).out = .acc ∧ L.OffIreg H P x q.1 d.part q.2.1 q.2.2) fun _ h => h.2).trans
+    (pr_offIreg_le_needs_at_cap hbind hS hs d.part P needs hpos KI hI)
+  have h := eventTwoX_le_of_off hA hbind hS hs hPt hd hin P hB hN
+  have h4 : ∀ e : ℝ, 2 * e / 2 ^ (256 : ℝ) + 2 * e / 2 ^ (256 : ℝ) = 4 * e / 2 ^ (256 : ℝ) := fun e => by ring
+  rw [← h4]
+  linarith
+
+/-- **The event of `KSRegTwoX` with the by-position finders' terms** where `ε_reg,2,X` has its two square roots:
+`eventTwoX_le_firstHit_at_cap` under the linear expected-time bound at the two by-position finders of every cap, with
+nothing left of the caps' terms: at most
+`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[c + Σ_{g ∈ sample} c_g]/2^256`. -/
+theorem eventTwoX_le_firstHit_at {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
+    (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
+    {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
+    (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u)
+    (hX : ∀ K : ℕ, ExpectedCR H (L.toCompiled.finderXAt H P x s needs K))
+    (hI : ∀ K : ℕ, ExpectedCR H (L.finderIAt H P x s d.part needs K)) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregTwoX H P x p.1 p.2) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + (Compiled.BconfX H L.toCompiled Ω P x).Pr H +
+        4 * Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+          ((L.callsAt H P x s q.1 q.2.1 q.2.2 +
+            ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u)),
+              L.toCompiled.callsBy H P x s needs g.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) /
+          2 ^ (256 : ℝ) := by
+  have hcap : ∀ K : ℕ,
+      Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+          ∃ u ∈ L.checked x p.2, u ∈ L.FregTwoX H P x p.1 p.2) ≤
+        L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + (Compiled.BconfX H L.toCompiled Ω P x).Pr H +
+          4 * Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+            ((L.callsAt H P x s q.1 q.2.1 q.2.2 +
+              ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u)),
+                L.toCompiled.callsBy H P x s needs g.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) /
+            2 ^ (256 : ℝ) +
+          (2 * (L.nG x : ℝ)) / ((K : ℝ) + 1) := by
+    intro K
+    have h := eventTwoX_le_firstHit_at_cap hA hbind hS hs hPt hd hin P needs hpos K K (hX K) (hI K)
+    have e : (L.nG x : ℝ) / ((K : ℝ) + 1) + (L.nG x : ℝ) / ((K : ℝ) + 1) =
+        (2 * (L.nG x : ℝ)) / ((K : ℝ) + 1) := by ring
+    rw [e] at h
+    exact h
+  exact Verity.FirstHit.le_of_forall_cap hcap
 
 end CompiledTwo
 

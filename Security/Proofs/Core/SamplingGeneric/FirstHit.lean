@@ -56,13 +56,17 @@ of the first further tape that opens the node (`firstHit`), and it finds a pair 
   it, `2·Pr[the finder outputs a collision] + N/(K + 1)`, and the finder's expected calls, at most
   `E[(1 + |sample|)·c]`. The statements under `ExpectedCR` are these two together.
 
-**What a further run costs.** Every finder here charges a further run all of `c`, the calls of a whole run, whichever
-nodes it still waits for. A finder whose further run costs less when it waits for fewer nodes (one that reads only the
-part of a run that opens them) is not stated here.
+* **By position** (`sampleFinderAt`, `outOfAt`, `pr_off_at_le_finder`, `ex_cost_sampleFinderAt_le`,
+  `pr_off_at_le_ex_cap`, `pr_off_at_le_ex`): the finders above charge a further run all of `c`, the calls of a whole
+  run, whichever nodes it still waits for. This one pays, at a further run, `c₂` of the nodes still waited for that
+  the run's sample holds: a run, read only where it opens them. Where `c₂` of a set is at most the sum over it of
+  `c₁`, what one node costs, its expected calls are at most `E[c + Σ_{p ∈ sample} c₁(·, p)]`: the first run, read
+  whole, and a further run by the nodes of its sample. Its output reads the first run, and of one further run what
+  one node costs there (`le_loopCostAt`).
 
-`finder`, `tapeFinder` and `sampleFinder` take their output `out` as a function of the whole seed and charge the runs
-the loop makes. The statements under `ExpectedCR` say what they read when `out` reads only those runs, as `outOf`
-does (`le_loopCost`, `le_loopCostOn`).
+`finder`, `tapeFinder`, `sampleFinder` and `sampleFinderAt` take their output `out` as a function of the whole seed
+and charge the runs the loop makes. The statements under `ExpectedCR` say what they read when `out` reads only those
+runs, as `outOf` and `outOfAt` do (`le_loopCost`, `le_loopCostOn`, `le_loopCostAt`).
 -/
 
 @[expose] public section
@@ -1295,5 +1299,301 @@ theorem pr_off_sample_le_ex {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [No
       2 * Ex (fun q : T × Ω => (((1 + #(univ.filter fun p : P => chk q.1 q.2 p)) * c q.1 q.2 : ℕ) : ℝ)) /
         2 ^ (256 : ℝ) :=
   le_of_forall_cap fun K => pr_off_sample_le_ex_cap_of_coll H op hv chk hchk c K coll hc hs (hCR K)
+
+/-! ## By position: a further run pays for the nodes it is waited for
+
+A further run need not be read whole. `c₂ ω J` is what the finder pays at further coins `ω` whose sample holds the
+nodes `J` of those still waited for: a run, read only where it opens nodes of `J`. It is at most the sum over `J` of
+`c₁ ω p`, what one node costs there (`hsub`, so nothing is paid where `J` is empty). The finder's expected calls are
+then at most `E[c + Σ_{p ∈ sample} c₁(·, p)]`: the first run, read whole, and a further run by the nodes of its
+sample. `loopCostOn` is this at `c₂ ω J = c ω` where `J` is nonempty and `c₁ ω p = c ω`. -/
+
+/-- **The further runs' calls, by position**: a further tape's, at the nodes of `need` that its sample holds and that
+have not been opened again. -/
+def loopCostAt (op : Ω → P → Option V) (chk : Ω → P → Bool) (c₂ : Ω → Finset P → ℕ) :
+    (K : ℕ) → Finset P → (Fin K → Ω) → ℕ
+  | 0, _, _ => 0
+  | K + 1, need, ρ =>
+    c₂ (ρ 0) (need.filter fun p => chk (ρ 0) p) +
+      loopCostAt op chk c₂ K (need.filter fun p => (op (ρ 0) p).isNone) fun i => ρ i.succ
+
+/-- The further runs cost at most what waiting for each node of `need` costs, counting for a node the tapes whose
+sample holds it, each at what that node costs there. -/
+theorem loopCostAt_le (op : Ω → P → Option V) (chk : Ω → P → Bool) (c₂ : Ω → Finset P → ℕ) (c₁ : Ω → P → ℕ)
+    (hsub : ∀ ω J, c₂ ω J ≤ ∑ p ∈ J, c₁ ω p) (K : ℕ) :
+    ∀ (need : Finset P) (ρ : Fin K → Ω),
+      loopCostAt op chk c₂ K need ρ ≤ ∑ p ∈ need, nodeCost op (fun ω => if chk ω p then c₁ ω p else 0) p K ρ := by
+  induction K with
+  | zero =>
+    intro need ρ
+    exact Nat.zero_le _
+  | succ K ih =>
+    intro need ρ
+    have e : loopCostAt op chk c₂ (K + 1) need ρ =
+        c₂ (ρ 0) (need.filter fun p => chk (ρ 0) p) +
+          loopCostAt op chk c₂ K (need.filter fun p => (op (ρ 0) p).isNone) (fun i => ρ i.succ) := rfl
+    have e3 : ∑ p ∈ need, nodeCost op (fun ω => if chk ω p then c₁ ω p else 0) p (K + 1) ρ =
+        ∑ p ∈ need, ((if chk (ρ 0) p then c₁ (ρ 0) p else 0) +
+          if (op (ρ 0) p).isNone then
+            nodeCost op (fun ω => if chk ω p then c₁ ω p else 0) p K (fun i => ρ i.succ) else 0) :=
+      Finset.sum_congr rfl fun _ _ => rfl
+    have e2 : ∑ p ∈ need, nodeCost op (fun ω => if chk ω p then c₁ ω p else 0) p (K + 1) ρ =
+        ∑ p ∈ need, (if chk (ρ 0) p then c₁ (ρ 0) p else 0) +
+          ∑ p ∈ need.filter (fun p => (op (ρ 0) p).isNone),
+            nodeCost op (fun ω => if chk ω p then c₁ ω p else 0) p K (fun i => ρ i.succ) := by
+      rw [e3, Finset.sum_add_distrib, Finset.sum_filter]
+    have h1 : c₂ (ρ 0) (need.filter fun p => chk (ρ 0) p) ≤
+        ∑ p ∈ need, (if chk (ρ 0) p then c₁ (ρ 0) p else 0) :=
+      (hsub _ _).trans (le_of_eq (Finset.sum_filter _ _))
+    rw [e, e2]
+    exact Nat.add_le_add h1 (ih _ _)
+
+/-- **The loop charges, at the first tape that opens a node it waits for, whatever any set holding that node costs
+there** (`ha`), where a tape opens the node only if its sample holds it. -/
+theorem le_loopCostAt (op : Ω → P → Option V) (chk : Ω → P → Bool) (c₂ : Ω → Finset P → ℕ) (p : P) (a : Ω → ℕ)
+    (hchk : ∀ ω, (op ω p).isSome → chk ω p = true) (ha : ∀ ω J, p ∈ J → a ω ≤ c₂ ω J) :
+    ∀ (K : ℕ) (need : Finset P) (ρ : Fin K → Ω) (j : Fin K), p ∈ need → firstIdx op p K ρ = some j →
+      a (ρ j) ≤ loopCostAt op chk c₂ K need ρ := by
+  intro K
+  induction K with
+  | zero => intro need ρ j; exact j.elim0
+  | succ K ih =>
+    intro need ρ j hp hj
+    have e : loopCostAt op chk c₂ (K + 1) need ρ =
+        c₂ (ρ 0) (need.filter fun p => chk (ρ 0) p) +
+          loopCostAt op chk c₂ K (need.filter fun p => (op (ρ 0) p).isNone) (fun i => ρ i.succ) := rfl
+    rw [e]
+    cases h0 : op (ρ 0) p with
+    | none =>
+      have hj' : (firstIdx op p K fun i => ρ i.succ).map Fin.succ = some j := by
+        simpa [firstIdx, h0] using hj
+      obtain ⟨j', hj1, hj2⟩ := Option.map_eq_some_iff.1 hj'
+      have hmem : p ∈ need.filter fun p => (op (ρ 0) p).isNone :=
+        Finset.mem_filter.2 ⟨hp, by simp [h0]⟩
+      have h := ih (need.filter fun p => (op (ρ 0) p).isNone) (fun i => ρ i.succ) j' hmem hj1
+      rw [← hj2]
+      exact h.trans (Nat.le_add_left _ _)
+    | some v =>
+      have hj0 : (0 : Fin (K + 1)) = j := by simpa [firstIdx, h0] using hj
+      have hmem : p ∈ need.filter fun p => chk (ρ 0) p :=
+        Finset.mem_filter.2 ⟨hp, hchk (ρ 0) (by simp [h0])⟩
+      rw [← hj0]
+      exact (ha (ρ 0) _ hmem).trans (Nat.le_add_right _ _)
+
+/-- The finder's calls by position, summed over its seeds: the first runs', and for each tape what each node of its
+sample costs there. -/
+theorem sum_costAt_le [Fintype Ω] [Fintype P] (op : Ω → P → Option V) (chk : Ω → P → Bool) (c : Ω → ℕ)
+    (c₂ : Ω → Finset P → ℕ) (c₁ : Ω → P → ℕ) (hsub : ∀ ω J, c₂ ω J ≤ ∑ p ∈ J, c₁ ω p) (K : ℕ) :
+    ∑ ω : Ω, ∑ ρ : Fin K → Ω, (c ω + loopCostAt op chk c₂ K (univ.filter fun p => (op ω p).isSome) ρ) ≤
+      Fintype.card Ω ^ K * ∑ ω, (c ω + ∑ p ∈ univ.filter (fun p : P => chk ω p), c₁ ω p) := by
+  have h1 : ∀ ω : Ω, ∑ ρ : Fin K → Ω, (c ω + loopCostAt op chk c₂ K (univ.filter fun p => (op ω p).isSome) ρ) ≤
+      Fintype.card Ω ^ K * c ω +
+        ∑ p ∈ univ.filter (fun p => (op ω p).isSome),
+          ∑ ρ : Fin K → Ω, nodeCost op (fun ω => if chk ω p then c₁ ω p else 0) p K ρ := by
+    intro ω
+    rw [Finset.sum_add_distrib, sum_tapes_const_nat, Finset.sum_comm]
+    exact Nat.add_le_add_left (Finset.sum_le_sum fun ρ _ => loopCostAt_le op chk c₂ c₁ hsub K _ ρ) _
+  have h2 : ∀ p : P,
+      #(opened op p) * ∑ ρ : Fin K → Ω, nodeCost op (fun ω => if chk ω p then c₁ ω p else 0) p K ρ ≤
+        Fintype.card Ω ^ K * ∑ ω, (if chk ω p then c₁ ω p else 0) :=
+    fun p => mul_sum_nodeCost_le op (fun ω => if chk ω p then c₁ ω p else 0) p K
+  have h3 : ∑ p : P, ∑ ω : Ω, (if chk ω p then c₁ ω p else 0) =
+      ∑ ω, ∑ p ∈ univ.filter (fun p : P => chk ω p), c₁ ω p := by
+    rw [Finset.sum_comm]
+    exact Finset.sum_congr rfl fun ω _ => (Finset.sum_filter _ _).symm
+  calc ∑ ω : Ω, ∑ ρ : Fin K → Ω, (c ω + loopCostAt op chk c₂ K (univ.filter fun p => (op ω p).isSome) ρ)
+      ≤ ∑ ω : Ω, (Fintype.card Ω ^ K * c ω +
+          ∑ p ∈ univ.filter (fun p => (op ω p).isSome),
+            ∑ ρ : Fin K → Ω, nodeCost op (fun ω => if chk ω p then c₁ ω p else 0) p K ρ) :=
+        Finset.sum_le_sum fun ω _ => h1 ω
+    _ = Fintype.card Ω ^ K * ∑ ω, c ω +
+          ∑ p, #(opened op p) * ∑ ρ : Fin K → Ω, nodeCost op (fun ω => if chk ω p then c₁ ω p else 0) p K ρ := by
+        rw [Finset.sum_add_distrib, ← Finset.mul_sum, sum_need op]
+    _ ≤ Fintype.card Ω ^ K * ∑ ω, c ω + ∑ p, Fintype.card Ω ^ K * ∑ ω, (if chk ω p then c₁ ω p else 0) :=
+        Nat.add_le_add_left (Finset.sum_le_sum fun p _ => h2 p) _
+    _ = Fintype.card Ω ^ K * ∑ ω, (c ω + ∑ p ∈ univ.filter (fun p : P => chk ω p), c₁ ω p) := by
+        rw [← Finset.mul_sum, h3, ← Nat.mul_add, ← Finset.sum_add_distrib]
+
+/-- **Cost, by position**: the finder's expected calls are at most the expectation of a run's calls and, for each
+node of its coins' sample, what that node costs there. -/
+theorem ex_costAt_le_ex [Fintype Ω] [Nonempty Ω] [Fintype P] (op : Ω → P → Option V) (chk : Ω → P → Bool)
+    (c : Ω → ℕ) (c₂ : Ω → Finset P → ℕ) (c₁ : Ω → P → ℕ) (hsub : ∀ ω J, c₂ ω J ≤ ∑ p ∈ J, c₁ ω p) (K : ℕ) :
+    Ex (fun s : Ω × (Fin K → Ω) =>
+        ((c s.1 + loopCostAt op chk c₂ K (univ.filter fun p => (op s.1 p).isSome) s.2 : ℕ) : ℝ)) ≤
+      Ex (fun ω : Ω => ((c ω + ∑ p ∈ univ.filter (fun p : P => chk ω p), c₁ ω p : ℕ) : ℝ)) := by
+  have hM : (0 : ℝ) < Fintype.card Ω := by exact_mod_cast Fintype.card_pos
+  have hMK : (0 : ℝ) < (Fintype.card Ω : ℝ) ^ K := pow_pos hM K
+  have hcard : (Fintype.card (Ω × (Fin K → Ω)) : ℝ) = (Fintype.card Ω : ℝ) * (Fintype.card Ω : ℝ) ^ K := by
+    rw [Fintype.card_prod, Fintype.card_pi_const, Nat.cast_mul, Nat.cast_pow]
+  have hN : ∑ s : Ω × (Fin K → Ω), (c s.1 + loopCostAt op chk c₂ K (univ.filter fun p => (op s.1 p).isSome) s.2) ≤
+      Fintype.card Ω ^ K * ∑ ω, (c ω + ∑ p ∈ univ.filter (fun p : P => chk ω p), c₁ ω p) :=
+    (Fintype.sum_prod_type' fun (ω : Ω) (ρ : Fin K → Ω) =>
+      c ω + loopCostAt op chk c₂ K (univ.filter fun p => (op ω p).isSome) ρ).trans_le
+      (sum_costAt_le op chk c c₂ c₁ hsub K)
+  have hR : (∑ s : Ω × (Fin K → Ω),
+        ((c s.1 + loopCostAt op chk c₂ K (univ.filter fun p => (op s.1 p).isSome) s.2 : ℕ) : ℝ)) ≤
+      (Fintype.card Ω : ℝ) ^ K *
+        ∑ ω, ((c ω + ∑ p ∈ univ.filter (fun p : P => chk ω p), c₁ ω p : ℕ) : ℝ) := by
+    exact_mod_cast hN
+  unfold Ex
+  rw [hcard]
+  calc (∑ s : Ω × (Fin K → Ω),
+          ((c s.1 + loopCostAt op chk c₂ K (univ.filter fun p => (op s.1 p).isSome) s.2 : ℕ) : ℝ)) /
+        ((Fintype.card Ω : ℝ) * (Fintype.card Ω : ℝ) ^ K)
+      ≤ ((Fintype.card Ω : ℝ) ^ K *
+            ∑ ω, ((c ω + ∑ p ∈ univ.filter (fun p : P => chk ω p), c₁ ω p : ℕ) : ℝ)) /
+          ((Fintype.card Ω : ℝ) * (Fintype.card Ω : ℝ) ^ K) :=
+        div_le_div_of_nonneg_right hR (mul_pos hM hMK).le
+    _ = (∑ ω, ((c ω + ∑ p ∈ univ.filter (fun p : P => chk ω p), c₁ ω p : ℕ) : ℝ)) / (Fintype.card Ω : ℝ) := by
+        rw [mul_comm ((Fintype.card Ω : ℝ) ^ K), mul_div_mul_right _ _ hMK.ne']
+
+/-- **Cost, by position, over the kept part.** -/
+theorem ex_costAt_tape_le_ex {T : Type} [Fintype T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    (op : T → Ω → P → Option V) (chk : T → Ω → P → Bool) (c : T → Ω → ℕ) (c₂ : T → Ω → Finset P → ℕ)
+    (c₁ : T → Ω → P → ℕ) (hsub : ∀ t ω J, c₂ t ω J ≤ ∑ p ∈ J, c₁ t ω p) (K : ℕ) :
+    Ex (fun q : T × (Ω × (Fin K → Ω)) =>
+        ((c q.1 q.2.1 +
+          loopCostAt (op q.1) (chk q.1) (c₂ q.1) K (univ.filter fun p => (op q.1 q.2.1 p).isSome) q.2.2 : ℕ) : ℝ)) ≤
+      Ex (fun q : T × Ω =>
+        ((c q.1 q.2 + ∑ p ∈ univ.filter (fun p : P => chk q.1 q.2 p), c₁ q.1 q.2 p : ℕ) : ℝ)) :=
+  calc Ex (fun q : T × (Ω × (Fin K → Ω)) =>
+        ((c q.1 q.2.1 +
+          loopCostAt (op q.1) (chk q.1) (c₂ q.1) K (univ.filter fun p => (op q.1 q.2.1 p).isSome) q.2.2 : ℕ) : ℝ))
+      = Ex fun t => Ex fun s : Ω × (Fin K → Ω) =>
+          ((c t s.1 + loopCostAt (op t) (chk t) (c₂ t) K (univ.filter fun p => (op t s.1 p).isSome) s.2 : ℕ) : ℝ) :=
+        ex_tape fun t (s : Ω × (Fin K → Ω)) =>
+          ((c t s.1 + loopCostAt (op t) (chk t) (c₂ t) K (univ.filter fun p => (op t s.1 p).isSome) s.2 : ℕ) : ℝ)
+    _ ≤ Ex fun t => Ex fun ω : Ω =>
+          ((c t ω + ∑ p ∈ univ.filter (fun p : P => chk t ω p), c₁ t ω p : ℕ) : ℝ) :=
+        Ex_mono fun t => ex_costAt_le_ex (op t) (chk t) (c t) (c₂ t) (c₁ t) (hsub t) K
+    _ = Ex (fun q : T × Ω =>
+          ((c q.1 q.2 + ∑ p ∈ univ.filter (fun p : P => chk q.1 q.2 p), c₁ q.1 q.2 p : ℕ) : ℝ)) :=
+        (ex_tape fun t ω => ((c t ω + ∑ p ∈ univ.filter (fun p : P => chk t ω p), c₁ t ω p : ℕ) : ℝ)).symm
+
+/-- **The first-hit finder that pays by position**, with the kept part in its seed: the seed and the output are
+`sampleFinder`'s; its cost is the first run's calls and, at each further run, what the nodes still waited for that its
+sample holds cost there (`c₂`). -/
+noncomputable def sampleFinderAt {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    (op : T → Ω → P → Option V) (chk : T → Ω → P → Bool) (c : T → Ω → ℕ) (c₂ : T → Ω → Finset P → ℕ) (K : ℕ)
+    (out : T × (Ω × (Fin K → Ω)) → Option (Msg × Msg)) : Finder where
+  S := T × (Ω × (Fin K → Ω))
+  out := out
+  cost q :=
+    c q.1 q.2.1 + loopCostAt (op q.1) (chk q.1) (c₂ q.1) K (univ.filter fun p => (op q.1 q.2.1 p).isSome) q.2.2
+
+/-- **The by-position finder's expected calls**: at most `E[c + Σ_{p ∈ sample} c₁(·, p)]`, whatever it outputs and
+whatever its cap. -/
+theorem ex_cost_sampleFinderAt_le {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    (op : T → Ω → P → Option V) (chk : T → Ω → P → Bool) (c : T → Ω → ℕ) (c₂ : T → Ω → Finset P → ℕ)
+    (c₁ : T → Ω → P → ℕ) (hsub : ∀ t ω J, c₂ t ω J ≤ ∑ p ∈ J, c₁ t ω p) (K : ℕ)
+    (out : T × (Ω × (Fin K → Ω)) → Option (Msg × Msg)) :
+    Ex (fun s => ((sampleFinderAt op chk c c₂ K out).cost s : ℝ)) ≤
+      Ex (fun q : T × Ω =>
+        ((c q.1 q.2 + ∑ p ∈ univ.filter (fun p : P => chk q.1 q.2 p), c₁ q.1 q.2 p : ℕ) : ℝ)) :=
+  ex_costAt_tape_le_ex op chk c c₂ c₁ hsub K
+
+open Classical in
+/-- **The pair the by-position finder outputs**, from `coll`, which reads two runs' tapes and a node: `coll` at the
+first run, a further run that is the first to open some node the first run opened, and that node, where that is a
+pair. What it reads of the further run is what that node costs there, which the loop charges (`le_loopCostAt`). -/
+noncomputable def outOfAt (op : Ω → P → Option V) (coll : Ω → Ω → P → Option (Msg × Msg)) (K : ℕ) (ω : Ω)
+    (ρ : Fin K → Ω) : Option (Msg × Msg) :=
+  if h : ∃ jp : Fin K × P, ((op ω jp.2).isSome ∧ firstIdx op jp.2 K ρ = some jp.1) ∧
+      (coll ω (ρ jp.1) jp.2).isSome then
+    coll ω (ρ h.choose.1) h.choose.2
+  else none
+
+/-- When `coll` outputs a pair at two runs and a node they open to two values, and only collisions of `H`, the
+by-position finder outputs a collision of `H` whenever it finds a pair. -/
+theorem outOfAt_collision (H : Msg → Msg) (op : Ω → P → Option V) (coll : Ω → Ω → P → Option (Msg × Msg))
+    (hc : ∀ (ω ω' : Ω) (p : P), ConflictAt op (ω, ω') p → (coll ω ω' p).isSome)
+    (hs : ∀ (ω ω' : Ω) (p : P) (u v : Msg), coll ω ω' p = some (u, v) → Collision H u v) {K : ℕ} {ω : Ω}
+    {ρ : Fin K → Ω} (h : Found op K ω ρ) : ∃ u v, outOfAt op coll K ω ρ = some (u, v) ∧ Collision H u v := by
+  obtain ⟨p, v, w, hv, hw, hne⟩ := h
+  obtain ⟨j, hj, hjw⟩ := firstIdx_of_firstHit op p K ρ hw
+  have hex : ∃ jp : Fin K × P, ((op ω jp.2).isSome ∧ firstIdx op jp.2 K ρ = some jp.1) ∧
+      (coll ω (ρ jp.1) jp.2).isSome :=
+    ⟨(j, p), ⟨by simp [hv], hj⟩, hc ω (ρ j) p ⟨by simp [hv], by simp [hjw], by simp [hv, hjw, hne]⟩⟩
+  obtain ⟨⟨u, v'⟩, huv⟩ := Option.isSome_iff_exists.1 hex.choose_spec.2
+  refine ⟨u, v', ?_, hs _ _ _ u v' huv⟩
+  rw [outOfAt, dite_eq_left hex]
+  exact huv
+
+/-- **The off-plurality mass by the by-position finder's success, with no premise**:
+`Pr[a run opens a node off the plurality] ≤ 2·Pr[the finder outputs a collision of H] + N/(K + 1)`, `N` the number of
+nodes and `K` the finder's cap. Its expected calls are `ex_cost_sampleFinderAt_le`'s. -/
+theorem pr_off_at_le_finder {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    [DecidableEq V] (H : Msg → Msg) (op : T → Ω → P → Option V) {vstar : T → P → V}
+    (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : T → Ω → P → Bool) (c : T → Ω → ℕ)
+    (c₂ : T → Ω → Finset P → ℕ) (K : ℕ) (coll : T → Ω → Ω → P → Option (Msg × Msg))
+    (hc : ∀ (t : T) (ω ω' : Ω) (p : P), ConflictAt (op t) (ω, ω') p → (coll t ω ω' p).isSome)
+    (hs : ∀ (t : T) (ω ω' : Ω) (p : P) (u v : Msg), coll t ω ω' p = some (u, v) → Collision H u v) :
+    Pr (fun q : T × Ω => ∃ p, Off (op q.1) (vstar q.1) q.2 p) ≤
+      2 * (sampleFinderAt op chk c c₂ K
+          fun q : T × (Ω × (Fin K → Ω)) => outOfAt (op q.1) (coll q.1) K q.2.1 q.2.2).Pr H +
+        (Fintype.card P : ℝ) / ((K : ℝ) + 1) := by
+  have h1 := pr_off_tape_le op hv K
+  have h2 : Pr (fun q : T × (Ω × (Fin K → Ω)) => Found (op q.1) K q.2.1 q.2.2) ≤
+      Pr (fun q : T × (Ω × (Fin K → Ω)) =>
+        ∃ u v, outOfAt (op q.1) (coll q.1) K q.2.1 q.2.2 = some (u, v) ∧ Collision H u v) :=
+    Pr_mono fun q h => outOfAt_collision H (op q.1) (coll q.1) (hc q.1) (hs q.1) h
+  have h3 : Pr (fun q : T × (Ω × (Fin K → Ω)) =>
+        ∃ u v, outOfAt (op q.1) (coll q.1) K q.2.1 q.2.2 = some (u, v) ∧ Collision H u v) =
+      (sampleFinderAt op chk c c₂ K
+        fun q : T × (Ω × (Fin K → Ω)) => outOfAt (op q.1) (coll q.1) K q.2.1 q.2.2).Pr H := rfl
+  have h5 := pr_miss_tape_le op K
+  rw [← h3]
+  linarith
+
+/-- **The off-plurality mass by position, under `ExpectedCR` at the finder of one cap**:
+`2·E[c + Σ_{p ∈ sample} c₁(·, p)]/2^256 + N/(K + 1)`, the expectation over the kept part and a run's coins of the
+run's calls and, for each node of its coins' sample, what that node costs there; `N` the number of nodes and `K` the
+finder's cap. A run opens only nodes of its sample (`hchk`, which the proof doesn't read and under which the loop
+charges what the output reads, `le_loopCostAt`). -/
+theorem pr_off_at_le_ex_cap {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    [DecidableEq V] (H : Msg → Msg) (op : T → Ω → P → Option V) {vstar : T → P → V}
+    (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : T → Ω → P → Bool)
+    (_hchk : ∀ (t : T) (ω : Ω) (p : P), (op t ω p).isSome → chk t ω p = true) (c : T → Ω → ℕ)
+    (c₂ : T → Ω → Finset P → ℕ) (c₁ : T → Ω → P → ℕ) (hsub : ∀ t ω J, c₂ t ω J ≤ ∑ p ∈ J, c₁ t ω p) (K : ℕ)
+    (coll : T → Ω → Ω → P → Option (Msg × Msg))
+    (hc : ∀ (t : T) (ω ω' : Ω) (p : P), ConflictAt (op t) (ω, ω') p → (coll t ω ω' p).isSome)
+    (hs : ∀ (t : T) (ω ω' : Ω) (p : P) (u v : Msg), coll t ω ω' p = some (u, v) → Collision H u v)
+    (hCR : ExpectedCR H (sampleFinderAt op chk c c₂ K
+      fun q : T × (Ω × (Fin K → Ω)) => outOfAt (op q.1) (coll q.1) K q.2.1 q.2.2)) :
+    Pr (fun q : T × Ω => ∃ p, Off (op q.1) (vstar q.1) q.2 p) ≤
+      2 * Ex (fun q : T × Ω =>
+          ((c q.1 q.2 + ∑ p ∈ univ.filter (fun p : P => chk q.1 q.2 p), c₁ q.1 q.2 p : ℕ) : ℝ)) /
+          2 ^ (256 : ℝ) +
+        (Fintype.card P : ℝ) / ((K : ℝ) + 1) := by
+  have h1 := pr_off_at_le_finder H op hv chk c c₂ K coll hc hs
+  have h3 : (sampleFinderAt op chk c c₂ K
+        fun q : T × (Ω × (Fin K → Ω)) => outOfAt (op q.1) (coll q.1) K q.2.1 q.2.2).Pr H ≤
+      Ex (fun s => ((sampleFinderAt op chk c c₂ K
+        fun q : T × (Ω × (Fin K → Ω)) => outOfAt (op q.1) (coll q.1) K q.2.1 q.2.2).cost s : ℝ)) /
+        2 ^ (256 : ℝ) := hCR
+  have h4 := div_le_div_of_nonneg_right
+    (ex_cost_sampleFinderAt_le op chk c c₂ c₁ hsub K
+      fun q : T × (Ω × (Fin K → Ω)) => outOfAt (op q.1) (coll q.1) K q.2.1 q.2.2)
+    (show (0 : ℝ) ≤ 2 ^ (256 : ℝ) by positivity)
+  rw [mul_div_assoc]
+  linarith
+
+/-- **The off-plurality mass by position, under `ExpectedCR` at the finder of every cap**:
+`2·E[c + Σ_{p ∈ sample} c₁(·, p)]/2^256`, `pr_off_at_le_ex_cap` with nothing left of the cap's term. -/
+theorem pr_off_at_le_ex {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    [DecidableEq V] (H : Msg → Msg) (op : T → Ω → P → Option V) {vstar : T → P → V}
+    (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : T → Ω → P → Bool)
+    (hchk : ∀ (t : T) (ω : Ω) (p : P), (op t ω p).isSome → chk t ω p = true) (c : T → Ω → ℕ)
+    (c₂ : T → Ω → Finset P → ℕ) (c₁ : T → Ω → P → ℕ) (hsub : ∀ t ω J, c₂ t ω J ≤ ∑ p ∈ J, c₁ t ω p)
+    (coll : T → Ω → Ω → P → Option (Msg × Msg))
+    (hc : ∀ (t : T) (ω ω' : Ω) (p : P), ConflictAt (op t) (ω, ω') p → (coll t ω ω' p).isSome)
+    (hs : ∀ (t : T) (ω ω' : Ω) (p : P) (u v : Msg), coll t ω ω' p = some (u, v) → Collision H u v)
+    (hCR : ∀ K : ℕ, ExpectedCR H (sampleFinderAt op chk c c₂ K
+      fun q : T × (Ω × (Fin K → Ω)) => outOfAt (op q.1) (coll q.1) K q.2.1 q.2.2)) :
+    Pr (fun q : T × Ω => ∃ p, Off (op q.1) (vstar q.1) q.2 p) ≤
+      2 * Ex (fun q : T × Ω =>
+          ((c q.1 q.2 + ∑ p ∈ univ.filter (fun p : P => chk q.1 q.2 p), c₁ q.1 q.2 p : ℕ) : ℝ)) /
+        2 ^ (256 : ℝ) :=
+  le_of_forall_cap fun K => pr_off_at_le_ex_cap H op hv chk hchk c c₂ c₁ hsub K coll hc hs (hCR K)
 
 end Verity.FirstHit
