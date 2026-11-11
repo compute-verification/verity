@@ -42449,3 +42449,21 @@ For the table:
 For BREAKEVEN:
 - Nothing changes yet. The head block's Lean seconds stay the planner's median, assumed, until `d4ef` and `e3ed` end.
 - For the 11 card types the table above splits each type's seconds into a part paid once a circuit (read) and a part paid a statement (setup and check), measured (`r20261109-191738-c631`, `r20261109-211436-1bcd`), at one block. The growth with blocks is not measured yet.
+
+## REGX, Wed 11 Nov 08:34Z: the lemma is PROVED on the three axioms and PR #8871 is open, unmarked, at f2b8eb2ba4e1f49b2a6bb803c43754c0427f58b1; the records run and the quick tier wait for a slot
+
+**Changes to a lock-recorded statement: none** [read: the diff is one new file and one import line].
+
+- [run] Try run `r20261111-081709-f3d0` (`vy-nebius-cpu-1`), `verity lean try security/Proofs/Flock/SpotFlock/NoAlways.lean --siblings --on auto`, at that head: lean exit 0 in 140 s; the sibling check finds no clashing name; "axiom probe: none of its 18 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". It passed as first written, so the statements in my 08:19Z entry are the proved ones, `ksTwo_noAlways` among them.
+- [run] PR [#8871](https://github.com/compute-verification/verity/pull/8871): open, unmarked, no label, GitHub says mergeable. Body opens `Lane proofs`, `Goal proofs/spot-bind-term`, ends `Refs PRF-523`. `research queue open` warned that PRF-523 has no goal label; the label is yours.
+- [run] It holds #8836's head `1fab3dfa6a35` and lands after it. `git merge-tree --write-tree` of the head exits 0 with `main` (`8201dacff26e`), #8836 (`1fab3dfa6a35`), #8820 (`f1a8ef0141ff`), #8827 (`946b7b72f26d`) and #8857 (`96985b18aafb`).
+- [run] Out, both waiting for a slot on `vy-nebius-cpu-11` at 08:33Z: records `r20261111-082857-f3f2` (`lean_changed.py --records security/Proofs --update`, `--cwd clone`) and the quick tier `r20261111-082903-d865` (`suites.py --changed 8201dacff26e --quick`).
+- [read] **A marker should know:** no guarantee reads the new theorems yet, so the module is wholly unread and area `Proofs/Flock` passes its cap in `unread-caps.json` by one module and 20 declarations. I did not raise the cap, as you ruled for #8857; the body says so. `unread_gate.py origin/main HEAD` is rc 0 and leaves the ratchet to the Lean check [run].
+- [read] One correction of emphasis to 08:19Z: the field exists for input slots, which the claims' reading of a sample lists as checked on every run (`Spot/Slots.lean:15-17, 86-89`). At the two-stage code an input slot's cells hold no proof block (`regMatchesTwo`, `Facts.lean:368-380`), and the executable opens an input row only through a sampled block that reads it (`Slots.lean:9-12`), whose in-bits REPBREAK's K already counts.
+
+For SCALE: unchanged from 08:19Z: +0 bits on K mean at D*1 (2^37.69 [relayed]), now with the lemma proved [run]. If you or KILIAN instantiate the by-position bound at the code, instantiate at `h.noAlways`: `sessionOpensTwo_of_frameIs h.noAlways (layoutFor h) (embeds_noAlways h (embeds_layoutFor h)) (frameIs_noAlways h (frameIs_built h hB hS))` gives the sessions' openings there from `Built h` and `Addresses h`.
+
+For the table:
+- K's always-checked term is 0, proved: `SpotFlock.ksTwo_noAlways` and `code_card_biUnion_noAlways_le` on `propext`, `Classical.choice`, `Quot.sound` (try run `f3d0` [run]); PR #8871 at `f2b8eb2ba4e1`, unmarked, on #8836.
+- It adds no bits to the bound: K mean stays 2^37.69 at D*1 [relayed].
+- Left: records `f3f2` and quick tier `d865`, then the ready line.
