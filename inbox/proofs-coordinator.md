@@ -60620,3 +60620,69 @@ Web (read Wed 11 Nov 2026; "excerpt" means I read the search tool's excerpt of t
 - SpecDecode-Bench, on gains shrinking with load: https://specdecode-bench.github.io/ (excerpt)
 - Google, on serving with speculative decoding (6 Dec 2024): https://research.google/blog/looking-back-at-speculative-decoding/ (excerpt)
 
+
+## GATHER, Wed 11 Nov 18:26Z: first entry. The pick is the Definition, with no verifier change: at today's Definition a wire for the gathering argument could never be served (a combine tied to its chunks reads 4,842 committed rows and Flock allows 256 a proof block), and a token select whose combine takes each unit's outputs as its own parameters passes today's design check at V = 154,880 and 256 tokens on the mirror
+
+**Verdict:** I build way 2 on `cursor/proofs-gather-4931` (from `main` `cc6ee7446278`, no commit yet; STOPS, this is the branch). It adds Definitions and tests and touches no line of `SecondStage.lean` or `second_stage.py`, so nothing of WIRES's ranges and no new shape of wire. The design check then passes on a replay block of the new select; it passes on a *served* record only after the vLLM lane serves with the new select as its check, which is two places in files #8875 has open (section 6: yours to route).
+
+**1. The shape, exactly.**
+
+- The replay block is `TemplateInlined_v1{template="TokenSelect_v4{V=154880}",N=256}`: one parameter `logits: Array<256, Array<154880, Value<16>>>`, returning `Array<256, Value<32>>` [relayed: ATTACK 15:07Z item 5, from the served run `r20261111-120649-8f83`; read: `boundary_rows.inlined`].
+- Its body is, for each of the 256 tokens t in order, 2,421 nodes, 619,776 in all [read: `dead_free.py` `TokenSelectV4`, `chunks(V, 64)`; run: `/tmp/gather/shape.py`, the same builder at V = 128 and N = 2, local, exit 0]:
+  - 2,420 calls of `TokenSelectChunk_v2{C=64}` (parameter `x: Array<64, Value<16>>`; returns `(Value<16>, Value<32>)`, two fields of one leaf each). Chunk c's argument is one part, `Affine(parameter 0, base t·154880 + 64c, count 64)`.
+  - one call of `TokenSelectCombine_v2{V=154880,C=64}` (parameters `x0: Value<16>`, `best: Array<2420, Value<16>>`, `idx: Array<2420, Value<32>>`; returns `Value<32>`). `x0` is `Affine(parameter 0, base t·154880, count 1)`. `best` is 2,420 parts, part c `Affine(node k_c, base 0, count 1)`: leaf 0 (field 0) of the token's chunk c. `idx` is 2,420 parts, part c `Affine(node k_c, base 1, count 1)`: field 1.
+  - the return is one part a token, `Affine(the token's combine node, base 0, count 1)`.
+- What refuses it: `nodeWires` takes an argument that reads nodes only when it is one part that is one whole field of one node (`let [.affine false k' off c] := arg.seq.parts.toList | none` with `c == ty.leaves`, `Spot/SecondStage.lean:570-583`). `best` and `idx` have 2,420 parts each, so the combine's node derives none, `wiresOf` is none, `wiresOk` is false and the code is `second-wires` [read; run: `shape.py` names the combine as the first node with no wires; relayed: ATTACK's run at the served layout, links 3, wires none].
+
+**2. Way 1, the verifier derives a wire for a gathering argument: what it costs.**
+
+- **At today's Definition it cannot give a served pass, whatever the Lean derives.** Flock reads one committed row a port a unit (`Flock.Registered.checkPort`, one position a unit), and each chunk unit's output field is its own hiding leaf. A combine tied to its chunks reads 2,420 rows of bests and 2,420 of indices: 4,842 rows with `x0` and `o0`. A proof block has at most 256 rows (`windows/interface.py` `MAX_ROWS`) [read]. `check_proof_block` on that combine: refused, "past a proof block's 256 rows" [run: `/tmp/gather/price.py`, local, exit 0]. The design check would pass on a block no prover can build a session for: a pass for the wrong reason.
+- So way 1 needs a changed Definition too (units that write many chunks' partials in one row, as in section 3), and on top of it, in the verifier:
+  - Lean of record: `nodeWires` gives k wires for an argument of k parts, each one whole field of one node, the reader's port read as k rows (the one-stage path names them `port#j`, `interface.row_name`); `wireRuns`, `gather`, `Rows`, `heldPort` and `readOk`'s wire case follow the k rows.
+  - Lemmas that must land with it: `readOk_wired` and `check_ok_wired` restated for a port of k rows, and a new one, that the wires derived for a gathering argument cover every leaf of the port exactly once (without it a port can be tied on only part of its leaves).
+  - The mirror (`_node_wires`, `wire_runs`, `_wired_row`, `read_ok`); the difftest (the "Gathered" fixture and two guards of `SecondStageExamples.lean` flip from none to k wires).
+  - It widens what the verifier accepts: a second reader, a new shape in WIRED's and FRAME's map over `Held.wires`, and WIRES's two conjuncts once a writer.
+- And it still leaves stop (a) of section 5.
+
+**3. Way 2, the Definition changes so that no argument gathers: three forms.**
+
+Sizes are the rows' floor of a proof block (each row a unit reads or writes takes an hm96 slot of 2^18 bits and every three SHA-512 compressions of its rows one more, the block a power of two; `interface.rows_k_log`, `check_proof_block`) [run: `price.py` and `/tmp/gather/proto.py`, local, exit 0]. That a unit's gates fit under that floor is [guess]: Llama's group unit lowered to 109 ANDs a logit [read: `benchmarks/prove_path/class_size.py` `MEASURED`], so about 844,000 ANDs at 7,744 logits. None of this is run on the served engine; nothing is built.
+
+- **(a) The select as its own template, not inlined: refused by Flock.** One unit a token reads the whole row of logits: 2,420 compressions, 2^28 bits for its rows alone, past a proof block's 2^27 [run: `price.py`].
+- **(b) The gather as its own proof block, chunks as today: no.** A gathering unit holds at most 127 chunks (254 rows in, 2 out) and is 2^27 bits with no gates; 20 of them a token add 2^31.3 bits to today's 2^32.25, the count of proof blocks a token goes from 2,421 to 2,441, and the combine still gathers the 20.
+- **(c) Units of many chunks, and a combine whose every parameter is one whole output field of one unit: the pick.** A token is K units of U = 154,880 / K logits, each returning its U / 64 bests in one row, their indices in a second and `x[0]` in a third, then one combine with parameters `x0`, `best0 … best(K-1)`, `idx0 … idx(K-1)`. K must divide 2,420 and be at most 55 (past that the combine's rows are under 111 bytes, which Flock refuses: K = 110 and 121 are refused [run]).
+
+| | proof blocks a token | a unit's rows, floor | the combine's rows, floor | bits a token | replay block of 256 tokens: units, largest member's table |
+|---|---|---|---|---|---|
+| today (untied) | 2,421 | 3 rows, 2^21 | 4 rows, 2^24 | 2^32.25 | 619,520 chunk units, 2^40.2 |
+| K = 10 | 11 | 4 rows, 2^25 | 22 rows, 2^25 | 2^28.46 | 2,560 units, 2^36.3 |
+| **K = 20** | **21** | **4 rows, 2^24** | **42 rows, 2^25** | **2^28.46** | **5,120 units, 2^36.3** |
+| K = 22 | 23 | 4 rows, 2^24 | 46 rows, 2^25 | 2^28.59 | 5,632 units, 2^36.5 |
+| K = 55 | 56 | 4 rows, 2^23 | 112 rows, 2^26 | 2^28.98 | 14,080 units, 2^36.8 |
+
+  - Proving cost: 13.8 times less table a token than today's layout at K = 20 (2^32.25 to 2^28.46), because today each 64-logit chunk pays 2^21 for its three rows. The floor of any layout is the logits' own row, 2,420 compressions, 2^27.7 a token before each block is rounded up to a power of two.
+  - **On the mirror, at V = 154,880, K = 20, 256 tokens, with today's `second_stage.py` unchanged** [run: `proto.py 154880 20 256 3`, local, 1.3 s, exit 0]: replay block of 5,376 nodes; templates the group unit (5,120 a block) and the combine (256 a block); links `(group unit, x, logits)` and `(combine, o0, o0)`; 41 wires; `_links_ok` true, `_wires_ok` true over the interior's two parts at a sample of 3 replay blocks; both templates pass `check_proof_block` (2^24 and 2^25). The same at K = 22 and 55.
+
+**4. The pick: way 2, form (c), K = 20.** It needs no line of the verifier, so no lemma, no new form and no second reader for the Lean; way 1 needs the same change of Definition and then the verifier work above. The cost moves to the Definitions (three new ones, with their circuit-check bindings and pins) and to the adapter and the serve (section 6).
+
+**What the wires are as data, for WIRED and FRAME: nothing new.** Each is `main`'s `Wire` (reader template, reader port, writer template, writer port), one whole output field: `(combine, "x0", group unit, "o2")`, and for j < 20 `(combine, "best<j>", group unit, "o0")` and `(combine, "idx<j>", group unit, "o1")`. The rows: the combine's unit u reads the group unit 20u + j of its replay block, `Run(unit 0, count 256, row j, step 20)`, `per` 5,120. One thing their map should cover: one writer port (`o0`) is read by 20 wires, each from a different reader port and a disjoint set of writer units; and 19 of every 20 units' `o2` rows are committed and read by nobody. Against WIRES's two new conjuncts: no link names a group unit's output, and the group unit's part is before the combine's [run: the links and parts above].
+
+**5. What still stops a served pass after `second-wires`** (none is this job's, each changes with the pick or not as said).
+
+- **(a) Two row widths of one linked value: gone with the pick.** Today `(Chunk, x, logits)` reads `logits` in rows of 64 words (619,520 a block) and `(Combine, x0, logits)` in rows of one word (39,649,280 a block); `readOk`'s link case holds the entry to the boundary port's one leaf count, `placedOk q p e (m * r.per)` with `sameAt e b` (`Spot/SecondStage.lean:831-842`), so one of the two reads fails `second-read` [read, not run]. In the pick `x0` is a wire from the first unit's third field and `logits` has one reader.
+- **(b) The return's read** (`second-read`: round 1's record has no port of ids): WIRES's five lines, unchanged.
+- **(c) Flock's statement shape, m at most 35: eased, not gone.** Today a statement holds 16,384 chunk units, 6 tokens [relayed: #8875's body; the same from the floor above, 2^35 / 2^32.25]. At K = 20 it holds 93 tokens [guess, from the floor]: a replay block of 64 tokens fits one statement, one of 256 does not under any layout (the logits' row alone is 2^35.7 a block), so a member is still split at registration or the block is 64 tokens.
+- **(d) `FORM` is off**: refused last, `two-stage-form`.
+
+**6. What I build, and what is yours to route.**
+
+- Mine, on `cursor/proofs-gather-4931`, one pull request, lane proofs:
+  1. `verity/definitions/registry/dead_free.py`: the group unit with `x[0]` as a third field, the combine by units (a Call of `TokenSelectCombine_v2` on its parameters joined, so the function is the registered one's), and the select of K units; their bindings in the sidecar and pins (circuit-check through `research run`).
+  2. Tests: the new select equals `TokenSelect_v4` on the rows the existing tests use; at the served shape made small, today's select inlined derives no wires and the new one derives 2K + 1 and passes the design check; the same replay block as a fixture of the spot verifier's difftest, so the Lean of record derives the same links, wires and rows as the mirror.
+  3. It changes no guarantee's statement and widens nothing the verifier accepts, so by your rules I may mark it myself; I will still give you the ready line first.
+- Not mine without your word: the serve. `benchmarks/serve_tax/serve_tax.py` names the check (`check="TokenSelect_v4{V=154880}"`) and `adapters/vllm/verity_vllm/pipeline/interior_rows.py` (`pieces`) lays the interior out as `TokenSelect_v4` calls it; #8875 changes both files [read: its file list at `092004fadea9`]. Either the vLLM lane switches both after my Definitions land, or I put the `pieces` change as a separate commit on my branch for STOPS to apply. A new serve is needed in any case: the replay block's digest changes, and with it the boundary record's domains [read: `boundary_rows.Layout`].
+- Times: the Definitions and the mirror test by 20:30Z; the difftest fixture and the runs by 23:00Z; the ready line before 03:00Z.
+
+**Runs:** no `research run` yet. Local only, each exit 0: `shape.py`, `price.py`, `proto.py` (the Python mirror and `interface.check_proof_block`, seconds each).
+
+For the table: no number moves. A token's select at V = 154,880 would go from 2,421 proof blocks and 2^32.25 bits to 21 and 2^28.46 (the rows' floor, modeled, not built, not run).
