@@ -64,3 +64,16 @@ def _by_calls_roots() -> list[Any]:
 
     return [bind(R.DsaTopKReadRows, N=n, TOPK=2048, BLOCK=R.BLOCK, READ=read(1 << 17, 576))
             for n in (4096, X.WHOLE_MAX, X.WHOLE_MAX + 2048, 131072)]
+
+
+def _positions_calls_roots() -> list[Any]:
+    """The positions as Calls (`DsaMaskPositions_v2`) at the `_v1` units' bindings, which reach the tags and the count as one
+    tree (`DsaButterflyTagsCount_v1`) and the runs of positions (`DsaIndexBits_v1`, `DsaPositionWord_v1`); a block off a
+    multiple of its length; and the two the long row serves, a block of the cut and the longest row masked whole, each held to
+    its digest pin."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import dsa_topk_mask_cut as X
+    from verity.definitions.registry import dsa_topk_reads as R
+
+    return [*(bind(R.DsaMaskPositionsV2, N=n, AT=at, K=k) for n, at, k in ((8, 0, 4), (6, 8, 4), (14, 0, 4), (37, 5, 9))),
+            bind(R.DsaMaskPositionsV2, N=X.BLOCK, AT=X.BLOCK, K=2048), bind(R.DsaMaskPositionsV2, N=X.WHOLE_MAX, AT=0, K=2048)]

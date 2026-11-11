@@ -82,6 +82,12 @@
   }
  },
  "digests": {
+  "DsaMaskPositions_v2{N=16384,AT=16384,K=2048}": {
+   "sha512": ""
+  },
+  "DsaMaskPositions_v2{N=40960,AT=0,K=2048}": {
+   "sha512": ""
+  },
   "DsaPositionsChunk_v1{K=2048,W=32}": {
    "sha512": "2d6cb894d64cd7183afab4e0e4931727558d24cd608c2f9e9fbaa681999ee71e6a3630b1e16fd5c96769d547820deac8cf7c0f5cdc0a0d326a6b47ab977264f7"
   },

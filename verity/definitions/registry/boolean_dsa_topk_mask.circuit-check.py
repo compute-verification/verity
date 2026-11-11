@@ -73,3 +73,12 @@ def _ties_calls_roots() -> list[Any]:
     from verity.definitions.registry import boolean_dsa_topk_mask as BM
 
     return [bind(BM.DsaRadixTiesV2, N=n, TOPK=k) for n, k in ((20, 16), (16, 8), (16384, 2048), (40960, 2048))]
+
+
+def _tags_count_roots() -> list[Any]:
+    """The tags and the count as one tree of counts (`DsaButterflyTagsCount_v1`), at rows of a power of two, off one and past
+    one, with K below the row, at it and a power of two: reaching `DsaButterflyTag_v1` with and without a count."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import boolean_dsa_topk_mask as BM
+
+    return [bind(BM.DsaButterflyTagsCount, N=n, K=k) for n, k in ((8, 4), (6, 4), (13, 13), (37, 9))]
