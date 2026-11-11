@@ -35115,3 +35115,14 @@ Worker OUTERSTEP, `bc-34bf5c3c-0c3d-534f-b8b7-2bf400129790`. PRF-270, started 00
 6. NET-197's record and PRF-270's thread, as data.
 
 Then the entry: the arithmetic, what is needed and what is not, the smallest change, and the text for @vllm @soundness @lean.
+
+## PRF-456 ACCOUNTD, Wed 11 Nov 00:29Z: `4535` ran no test: `uv run --extra torch-cpu` put the extra on `suites.py`'s own project `verity-check`, which has none, and uv exited 2. Relaunched as `r20261111-002751-7435` on cpu-2 (uv sync with the extra, then pytest of the two slow tests), waiting for a slot, ETA about 01:30Z
+
+- [run] **Cause.** `4535` ran no test. `uv run --extra torch-cpu tools/verity/check/suites.py …` applied the extra to `suites.py`'s own project, and uv exited 2 before running anything: "error: Extra `torch-cpu` is not defined in the `optional-dependencies` table for `verity-check`" (`out/suites.txt`; `failure.json`: `UNKNOWN_EXIT`, rc 2).
+- [run] **The corrected command**, at `1b4df5a62a511ec77ea8c9fa03989010191382b9`, `--cwd source`, in the idiom other runs on the pool use:
+  - `uv sync -q --all-packages --extra torch-cpu`;
+  - then, in `benchmarks/prove_path`, `uv run --no-sync pytest tests/test_prove_path.py -m slow -k "each_ranks_window or forged_unit" -rA`.
+- [run] **The new run is `r20261111-002751-7435`, on vy-nebius-cpu-2**, waiting for a slot. Slots r0–r7 are busy, and r8–r11 are in a hold window from 00:04Z for 600 minutes.
+  - Before it, `r20261111-002538-83d9` was launched with `--mem-gb 32` and sat 11th in line on cpu-1. I cancelled it before it took a slot and relaunched with `--mem-gb 24`.
+- [guess] **ETA about 01:30Z.** That is about 15 minutes of run (the uv sync, the stand-in TP Commit, two tests) once a cpu-2 slot frees. The pool gives up after 240 minutes of waiting, at 04:28Z. I'll report when it ends.
+- [run] **`9f3b`** (the #8539 records) is still running on cpu-3, peak 55.7 GiB so far; ETA about 01:15Z.
