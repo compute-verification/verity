@@ -1,5 +1,5 @@
 """machine-model capacity GROUP [GROUP ...] [--vector V] [--json]
-                                          the certified share σ of a window's capacity (capacity.py): each GROUP
+                                          the verified share σ of a window's capacity (capacity.py): each GROUP
                                           is [WEIGHT/]TERM+TERM..., its share of the cell's SMSP-time (default 1)
                                           and its certified load, TERM one of FOLD:SHARE[*R] (a noise-GEMM filler
                                           at SHARE of the tensor peak, its words folded R times; FOLD duo, xin13,

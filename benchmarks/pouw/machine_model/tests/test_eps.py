@@ -224,7 +224,7 @@ def test_luck_and_the_total():
     assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.clock))
 
 
-def test_adapt_is_a_proof_units_term():
+def test_adapt_is_a_proof_blocks_term():
     """ε_adapt (Theorem D) sits in the first factor beside ε_skip, ε_machine and ε_luck, and is the proof block's."""
     assert set(E.adapts()) == {"segment", "whole", "whole-recompute", "per-stage"}
     assert E.adapt("segment").eps == 0.21 and E.adapt("whole").eps == 0.0035

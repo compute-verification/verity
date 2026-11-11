@@ -1,4 +1,4 @@
-"""`machine-model capacity`: the certified share σ of a window's capacity, read on the pooled certified load."""
+"""`machine-model capacity`: the verified share σ of a window's capacity, read on the pooled certified load."""
 from __future__ import annotations
 
 import json

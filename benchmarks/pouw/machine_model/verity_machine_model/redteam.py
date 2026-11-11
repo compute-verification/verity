@@ -42,7 +42,7 @@ class Row:
     load: float                   # the cheater's load on the row over T (1.0: binding)
     dual: float                   # the certificate's weight on the row (0 off the facet)
     ceiling: bool                 # the issue ceiling: silicon cannot beat it
-    flip_pct: float | None        # the move in the cheater's favour (per cent) at which core first rises; None: ≥ cap
+    flip_pct: float | None        # the move in the cheater's favour (per cent) at which core first rises; None: none swept
     core_at_flip: float | None
     core_at_2pct: float           # core with the row's lane coefficient 2 % in the cheater's favour
 
@@ -143,10 +143,10 @@ def _near_rows(pi: E.Machine, d: E.Design, data: Path, q: float, thr: float, ope
 
 
 def _flip(d: E.Design, pi: E.Machine, data: Path, q: float, row: str, base: float, operands: str, credit: str,
-          step: float = 0.005, cap: float = 0.10) -> tuple[float | None, float | None]:
+          step: float = 0.005, limit: float = 0.10) -> tuple[float | None, float | None]:
     m = 0.0
     core = _core(d, data, q, operands, credit)
-    while m < cap - 1e-9:
+    while m < limit - 1e-9:
         m += step
         c = _worst_single(core, pi, row, m)
         if c > base + 5e-4:
