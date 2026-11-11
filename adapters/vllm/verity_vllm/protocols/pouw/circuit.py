@@ -54,7 +54,7 @@ INPUTS_TAG = b"verity/pouw/ncp-v2/inputs/v2\0"
 WEIGHT_INPUTS_TAG = b"verity/pouw/ncp-v2/weight-inputs/v1\0"
 UNIT_TAG = b"verity/pouw/ncp-v2/unit/v1\0"
 NODE_TAG = b"verity/pouw/ncp-v2/units-node/v1\0"
-CALLS_BINDING = "verity/pouw/ncp-v2/calls/v1"
+CALLS_DOMAIN_TAG = "verity/pouw/ncp-v2/calls/v1"
 M32 = 0xFFFFFFFF
 
 
@@ -306,7 +306,7 @@ def call_leaf(rec: CallRecord) -> bytes:
 
 def calls_root(salt: bytes, weights_root: bytes, records: Sequence[CallRecord]) -> bytes:
     """The root over every call's leaf, in call order: a plain tree, which the replay recomputes from the records."""
-    return commit_rows(tagged(CALLS_BINDING, salt, weights_root), -1, [call_leaf(r) for r in records], "sha256",
+    return commit_rows(tagged(CALLS_DOMAIN_TAG, salt, weights_root), -1, [call_leaf(r) for r in records], "sha256",
                        public=True).commitment.root
 
 
@@ -468,7 +468,7 @@ def lower(inst: dict[str, Any], sites: Mapping[str, str]) -> dict[str, Any]:
     return dict(inst, rows=rows)
 
 
-__all__ = ["CALLS_BINDING", "CALLS_DATA_FILE", "CALLS_FILE", "Call", "CallRecord", "Compiled", "Group", "LOWERED", "Quantized",
+__all__ = ["CALLS_DATA_FILE", "CALLS_DOMAIN_TAG", "CALLS_FILE", "Call", "CallRecord", "Compiled", "Group", "LOWERED", "Quantized",
            "ROW_BIAS_FAMILY", "ROW_FAMILY", "Read", "Rows", "RowsDigest", "WeightRecord", "call_leaf", "calls_root", "commit_call_ir",
            "commit_weight_ir", "evaluate_ir", "evaluate_weight_ir", "inputs_digest", "int7_bytes", "kind_of", "load_calls", "lower",
            "program", "save_calls", "sides", "summary", "unit_leaf", "units_root", "weight_inputs_digest", "weight_leaf",

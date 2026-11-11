@@ -400,7 +400,6 @@
     {"file": "verity_vllm/properties/vocab_range_exactness.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
     {"file": "verity_vllm/protocols/__init__.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/protocol-composition/v0"},
     {"file": "verity_vllm/protocols/interface.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
-    {"file": "verity_vllm/protocols/pouw/circuit.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/pouw/ncp-v2/calls/v1"},
     {"file": "verity_vllm/protocols/pouw/h1/__init__.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/pouw-h1-calls/v2"},
     {"file": "verity_vllm/protocols/pouw/h1/__init__.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/protocols/pouw/h1/challenger.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
