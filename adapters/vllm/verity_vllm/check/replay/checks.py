@@ -9,8 +9,9 @@ name (`fold`); one it can't evaluate leaves the replay partial, never a pass.  T
 which no committed word holds: its body's seed, its id and the window's seed salt (`checks_of`'s ``certified``, `_seed_check`)."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import partial
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 

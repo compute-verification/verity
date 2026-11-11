@@ -6,7 +6,8 @@ the manifest's op_path aliases to the one committed entry it names, and reads it
 """
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 
@@ -79,7 +80,7 @@ class CommittedStore:
 
     @classmethod
     def of_record(cls, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
-                  manifest: RequiredManifest | dict[str, Any] | None) -> "CommittedStore":
+                  manifest: RequiredManifest | dict[str, Any] | None) -> CommittedStore:
         """The store the replay of record uses: the binding map read through the manifest's alias table (None manifest = no aliases: a
         shared module's layer-N path is then missing by name, never silently the lowest invocation)."""
         return cls(bmap, committed, alias_table(manifest))
@@ -142,7 +143,7 @@ def model_weights_provider(model, prefix: str) -> Callable[[str, int, int], np.n
 
     def read(field: str, lo: int, hi: int) -> np.ndarray | None:
         name = field[len(prefix):] if prefix and field.startswith(prefix) else field
-        t = params[name] if name in params else (params[field] if field in params else None)     # never `or` on tensors
+        t = params[name] if name in params else params.get(field)                                # never `or` on tensors
         if t is None:
             return None
         if name not in cache:

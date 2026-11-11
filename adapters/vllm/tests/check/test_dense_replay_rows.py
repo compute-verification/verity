@@ -61,15 +61,15 @@ def test_each_dense_row_is_the_ir_reference():
 
 def test_gelu_tanh_mul_at_gemma_width_and_its_declines():
     rng = np.random.default_rng(6)
-    I = 9216
-    gu = (np.asarray(rng.standard_normal(2 * I) * 3, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    width = 9216
+    gu = (np.asarray(rng.standard_normal(2 * width) * 3, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
     gu[:6] = [0x7FC0, 0xFF80, 0x7F80, 0x8000, 0x0001, 0x7F7F]
-    got = ROWS["GeluTanhMul_v1"].fn({"I": I}, [gu])
+    got = ROWS["GeluTanhMul_v1"].fn({"I": width}, [gu])
     assert list(got) == ["0", "out"] and got["out"].dtype == np.uint16
-    assert got["out"].tolist() == list(evaluate(bind(dense.GeluTanhMul, I=I), gu.tolist()))
+    assert got["out"].tolist() == list(evaluate(bind(dense.GeluTanhMul, I=width), gu.tolist()))
     import pytest
     with pytest.raises(ir_rows.Declined, match="arg words"):
-        ROWS["GeluTanhMul_v1"].fn({"I": I}, [gu[:-1]])
+        ROWS["GeluTanhMul_v1"].fn({"I": width}, [gu[:-1]])
     with pytest.raises(ir_rows.Declined, match="past"):
         ROWS["GeluTanhMul_v1"].fn({"I": ir_rows.MAX_WORDS}, [np.zeros(2 * ir_rows.MAX_WORDS, dtype=np.uint16)])
 

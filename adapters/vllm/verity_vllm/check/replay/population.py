@@ -6,7 +6,8 @@ from __future__ import annotations
 import hashlib
 import re
 from collections import Counter
-from typing import Any, Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any
 
 from verity.definitions.numerics.rows import EVALUATORS
 

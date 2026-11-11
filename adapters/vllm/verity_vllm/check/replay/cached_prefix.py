@@ -29,7 +29,8 @@ def layout_of(program_dir: str | None) -> dict[str, Any] | None:
     p = os.path.join(program_dir, PREFIX_FILE) if program_dir else None
     if not p or not os.path.exists(p):
         return None
-    lay = json.load(open(p))
+    with open(p) as f:
+        lay = json.load(f)
     return {"input": int(lay["input"]), "C": int(lay["C"]), "row_leaves": int(lay["row_leaves"]), "layers": [str(x) for x in lay["layers"]]}
 
 

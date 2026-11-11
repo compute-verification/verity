@@ -31,8 +31,9 @@ them, what it never reached), the record's C2 population scope.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any
 
 import numpy as np
 from verity.definitions.numerics import dense_rows as DRW

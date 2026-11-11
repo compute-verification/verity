@@ -22,8 +22,9 @@ from __future__ import annotations
 import gzip
 import json
 import os
+from collections.abc import Iterable
 from types import SimpleNamespace
-from typing import Any, Iterable
+from typing import Any
 
 SHOWN = 5
 #: family -> why its row kernel is not its Definition in this tree ([] when it is), checked once a process

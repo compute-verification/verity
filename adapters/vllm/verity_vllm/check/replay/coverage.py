@@ -118,7 +118,7 @@ def _header(man: RequiredManifest | None, key: str) -> Any:
     return man.query.get(key) if man is not None and man.query is not None else None
 
 
-def controller_rows_of(programs: dict[str, Any], indices: dict[int, "ProgramIndex"] | None = None) -> dict[str, int]:
+def controller_rows_of(programs: dict[str, Any], indices: dict[int, ProgramIndex] | None = None) -> dict[str, int]:
     """The replay's OWN count of guard / controller rows per request Program (spec family under GUARD_PREFIXES) -- the
     cross-check of the manifest header's `guard_rows`, so a stale or foreign header cannot drop or shrink the controller statement ('the
     collector cannot define its own population', applied to the controller)."""
@@ -422,12 +422,12 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
              "Q_fine_v1": ("the fine query (vu_canonical) through the RequiredValues path", "fine VU = relation-level partition unit"),
              "Q_fine_direct_v1": ("the directly-committed fine query", "fine VU ending at a materialised word + the module rows"),
              }.get(_qid0, ("the query of record", (_header(man, "unit") or "per its header")))
-    src = ((f"required manifest: {_qid0}(P) -- {_noun[0]} over the Program (unit: {_noun[1]}; "
+    src = (f"required manifest: {_qid0}(P) -- {_noun[0]} over the Program (unit: {_noun[1]}; "
             "Q_fine_v1 selects the families, not the unit)" if man is not None
             else f"required manifest REFUSED ({refused}): nothing reconciled; the Program rows' own manifest addresses, NOT a Q(P) statement"
             if refused is not None
             else "NO required manifest supplied: the Program rows' own manifest addresses (the v2 query's population; NOT a Q(P) statement -- "
-                 "weights / ids / hidden streams absent)"))
+                 "weights / ids / hidden streams absent)")
     # the guard's state travels with Q(P) onto the record: a manifest whose dataflow guard was not armed says so here
     guard = man.guard if man is not None else None
     guard_line = (("guard armed" if guard.get("armed") else "guard NOT armed") + f" ({guard.get('engine')})" if guard is not None

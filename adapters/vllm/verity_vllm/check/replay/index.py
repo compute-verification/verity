@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import bisect
 import re
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import numpy as np
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
@@ -123,7 +124,7 @@ def index_key(*, prefix: str | None = None, attention_paths: list[str] | None = 
     return (prefix, tuple(attention_paths or ()), t and (t["rank"], t["world"]), program_dir, query or DEFAULT_QUERY, bool(norm_scales))
 
 
-def index_of(inst: dict[str, Any], reuse: Iterable["ProgramIndex"] = (), **kw: Any) -> "ProgramIndex":
+def index_of(inst: dict[str, Any], reuse: Iterable[ProgramIndex] = (), **kw: Any) -> ProgramIndex:
     """``ProgramIndex(inst, **kw)``: the one of ``reuse`` built from this very document (no reader modifies one,
     `instances_file.read_instances`) with these same arguments (`index_key`), else a new one -- one index of a GLM-5.3 TP8 rank
     Program takes minutes."""
