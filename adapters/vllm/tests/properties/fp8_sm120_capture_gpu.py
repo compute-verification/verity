@@ -98,7 +98,7 @@ SPECIAL_ROWS = (0, 2, 3, 4, 5, 6)
 
 
 def dispatch_class(M: int) -> str:
-    return next(name for name, top in DISPATCH if top is None or M <= top)
+    return next(name for name, top in DISPATCH if top is None or top >= M)
 
 
 # ---------------------------------------------------------------------------------------------------------------------- models
@@ -185,15 +185,16 @@ def reference_word(xq, sx, wrow, wsrow, *, G: int, KB: int, form: str, g: int | 
     sx, wsrow = [int(v) for v in np.asarray(sx).reshape(-1)], [int(v) for v in np.asarray(wsrow).reshape(-1)]
     _check(len(xq), G, KB)
     mul, fma = fp32.F32Mul.evaluate, fp32.F32Fma.evaluate
+    step = {"cutlass": lambda d, a, b, acc: fma(d, mul(a, b), acc), "triton": lambda d, a, b, acc: fma(mul(d, a), b, acc),
+            "triton_swap": lambda d, a, b, acc: fma(mul(d, b), a, acc),
+            "mul_add": lambda d, a, b, acc: fp32.F32Add.evaluate(mul(d, mul(a, b)), acc)}[form]
     acc = 0
     for k in range(len(xq) // KB):
         d = 0
         for st in range(KB // 32):
             lo = k * KB + 32 * st
             d = prims.BlackwellE4m3QmmaDot32.evaluate(d, *xq[lo:lo + 32], *wrow[lo:lo + 32])
-        a, b = sx[k * KB // G], wsrow[k * KB // G]
-        acc = {"cutlass": lambda: fma(d, mul(a, b), acc), "triton": lambda: fma(mul(d, a), b, acc),
-               "triton_swap": lambda: fma(mul(d, b), a, acc), "mul_add": lambda: fp32.F32Add.evaluate(mul(d, mul(a, b)), acc)}[form]()
+        acc = step(d, sx[k * KB // G], wsrow[k * KB // G], acc)
     if g is not None:
         acc = mul(acc, int(g))
     return prims.F2fpBf16.evaluate(acc)

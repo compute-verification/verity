@@ -45,9 +45,10 @@ import shutil
 import sys
 import tempfile
 from collections import Counter
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 

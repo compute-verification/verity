@@ -128,8 +128,8 @@ def route_for(facts: dict[str, Any], M: int, N: int):
     device = facts["device"]
     c = T.covered(s, N, route, M, world=facts["world"], device=device, transport=settings["nccl_transport"]) if s else None
     if c is None:
-        return None, f"no CAPTURED entry for setting={s!r} N={N} route={route!r} M={M} world={facts['world']} device={device!r} " \
-                     f"transport={settings['nccl_transport']!r}"
+        return None, (f"no CAPTURED entry for setting={s!r} N={N} route={route!r} M={M} world={facts['world']} device={device!r} "
+                      f"transport={settings['nccl_transport']!r}")
     return c, T.route_binding(c, facts["world"], M, N)[1]
 
 

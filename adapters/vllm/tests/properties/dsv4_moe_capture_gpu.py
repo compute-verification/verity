@@ -51,9 +51,10 @@ import os
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 from verity.definitions.ops import mufu as MU

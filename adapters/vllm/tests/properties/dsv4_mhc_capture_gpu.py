@@ -507,7 +507,7 @@ class Spy:
         self.module, self.name, self.kernel = module, name, getattr(module, name)
         self.calls: list[tuple[Any, Any]] = []
 
-    def __enter__(self) -> "Spy":
+    def __enter__(self) -> Spy:
         setattr(self.module, self.name, self)
         return self
 

@@ -77,7 +77,7 @@ def cpu_workers() -> int:
     """CPUs this container may use: the cgroup v2 quota when one is set (RunPod pods see the host's CPUs), else the affinity mask."""
     n = len(os.sched_getaffinity(0))
     try:
-        quota, period = open("/sys/fs/cgroup/cpu.max").read().split()
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
         if quota != "max":
             n = min(n, max(1, int(quota) // int(period)))
     except (OSError, ValueError):

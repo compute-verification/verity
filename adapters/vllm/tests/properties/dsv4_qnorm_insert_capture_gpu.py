@@ -535,7 +535,7 @@ class Spy:
         self.owner, self.name, self.static = owner, name, static
         self.calls: list[tuple] = []
 
-    def __enter__(self) -> "Spy":
+    def __enter__(self) -> Spy:
         self.raw = vars(self.owner)[self.name] if isinstance(self.owner, type) else getattr(self.owner, self.name)
         fn = getattr(self.owner, self.name)
 

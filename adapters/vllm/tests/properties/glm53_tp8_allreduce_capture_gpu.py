@@ -235,7 +235,7 @@ def expected_comm(M: int, setting: str, N: int | None = None) -> str:
     N = HIDDEN if N is None else N
     custom, symm = T.SETTINGS[setting]
     nbytes = M * N * 2
-    if M <= T.fused_max_tokens(N, WORLD):
+    if T.fused_max_tokens(N, WORLD) >= M:
         return "fi_ar_comm"
     if custom and nbytes < (T.CUSTOM_SYMM_MAX_BYTES if symm else T.CUSTOM_MAX_BYTES):
         return "ca_comm"

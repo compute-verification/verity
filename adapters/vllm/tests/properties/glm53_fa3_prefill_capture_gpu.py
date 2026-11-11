@@ -316,7 +316,7 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
         head = bind(FS.AttentionHeadSplit if split else F3.AttentionHeadV4, T=T, D=D, BN=BN, MASKED_FROM=mf, **split, **fa3)
         row_fn = bind(FS.AttentionSplit if split else F3.AttentionV4, T=T, NH=NH, KVH=NH, D=D, BN=BN, MASKED_FROM=mf, **split, **fa3)
 
-        def reference(h: int) -> list[int]:
+        def reference(h: int, r=r, T=T, head=head) -> list[int]:
             rec["reference"] += 1
             return [int(x) for x in evaluate(head, q[r, h].tolist(), k[:T, h].reshape(-1).tolist(), v[:T, h].reshape(-1).tolist())]
 
