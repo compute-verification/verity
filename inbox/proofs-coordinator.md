@@ -64977,3 +64977,44 @@ Tags: [run] a command I ran now, [read] a file or record I read now (place), [re
 Not blocked. The scores run runs; the values run waits on a slot.
 
 For the table: nothing measured yet; the Lean verifier's seconds on a scores statement and a values statement at 64 columns are due about 22:30Z (`r20261111-211713-1e63`, `r20261111-211639-20e3`).
+
+## FLOCKPKG, Wed 11 Nov 21:24Z: #9042 is marked ready at `00963f010905e7c1f321d18efcb65b4f5df32056` (by me, 21:14Z): records `pass` for six of six packages with nothing regenerated, quick tier 95 of 95 suites, no lock record moved. The mark's records gate warned on six packages with no pass at this head's Lean inputs; one small records run of each is out
+
+**#9042** (https://github.com/compute-verification/verity/pull/9042, branch `cursor/proofs-progjson-89e3`): `research queue status` at 21:22Z reads `ready 00963f010905 admitted` [run]. The head is the one opened at 18:51Z; nothing was pushed since.
+
+- **It holds** #8789 at `6a3d3ea5da067a22c6f7017fe025f7b43611cf55`, #8949 at `c14e4bd284b1641f1ec52d426bfd271de1da34ff` and `main` at `cc6ee7446278`. Neither head moved [run: `git ls-remote`, 21:10Z].
+- **The steps, in the order given** [run]:
+  - Axiom probe on the three theorems that had none, and the three one-file tries: pass (`r20261111-183526-1e24`, `r20261111-184610-5300`, `r20261111-184032-0206`). Each theorem rests on `propext`, `Classical.choice`, `Quot.sound` only.
+  - One records run at the head, `r20261111-185607-2e4b`: `pass` for `verity/circuits/lean`, `verity/protocols/flock/verifier`, `verity/protocols/certifier/verifier/lean`, `security`, `security/Properties`, `security/Proofs`. Nothing regenerated.
+  - Quick tier, `suites.py --changed cc6ee7446278 --quick`, 95 suites: 95 passed, 0 failed. `r20261111-200306-f357` 19, `r20261111-200318-2171` 19, `r20261111-200330-cf2b` 19, `r20261111-200342-aee1` 19, `r20261111-200354-a1b5` 18, `r20261111-200306-604f` verity-vllm (13,966 passed). The six runs' suites are exactly the 95 the change touches.
+  - Beside them, my own addition: the Lean verifier built at the head agrees with upstream's Rust verifier (`lean-build` and `lean-agreement` passed, `r20261111-200755-6da4`).
+- **No lock record moved, and no file under `security/` changes** [run: `2e4b`; the PR's own diff is the three Lean files].
+- **It merges** [run: `git merge-tree`, 21:11Z] with `main` `75ef75838f99` and with each of the 140 heads marked ready; only #8789 and #8949 touch its three files.
+
+**What the mark's preflight said** [run: the mark's own output, `/tmp/flockpkg/mark-9042.log`], exit 0:
+
+- **Records gate, a warning.** The branch changes seventeen locks against `main`, all #8789's.
+  - Eleven have a pass on this head's Lean inputs: six by `2e4b`, five by #8789's small runs at its head.
+  - Six have none: `verity/commitments/identity`, `verity/definitions/evaluate`, `verity/definitions/requirement`, `verity/difftest/lean`, `verity/protocols/inference_only/verifier/nci/lean`, `verity/protocols/recursion/verifier/firewall`.
+  - Why [run: `lean_changed.py --inputs-key` at the three heads]: each reads the circuits package or Flock's verifier, so my three files change its inputs key; at the merge of `main`, #8789 and #8949 below my three files, five of the six keys are #8789's; the firewall's already differs there [guess: it requires Flock's verifier, which #8949 changes]. `--records verity/circuits/lean` audits only the requirers that hold guarantees, and these six hold none (their locks are roots, layers and exemptions).
+  - What can go wrong there [guess]: a build break by a new name. No file of the six imports a changed module by name, and none of the new names is declared in them [run: `git grep`].
+- **Decided, not asked:** the mark stands, since the gate warns and does not refuse. One records run of each of the six at the head is out since 21:19Z (no `--update`, so a stale record is a red). If one fails I eject #9042 at that head and say so at once.
+  - cpu-9: `r20261111-211911-7181` (firewall), `r20261111-211955-690d` (evaluate), `r20261111-212014-5f39` (nci).
+  - cpu-12: `r20261111-212033-7bf7` (difftest), `r20261111-212104-f37e` (identity), `r20261111-212120-3173` (requirement).
+  - All six were fifth to seventh of seven in line at 21:22Z. ETA 22:15Z [guess].
+- **Checks the preflight skipped:** the Lean build (3,529 modules are or import what it changes, over the 40 it builds), and `pytest --collect-only` of 21 of the 95 suites (its 120 s ran out). The quick tier ran all 95.
+- The body of #9042 says all of this.
+
+**Other items:**
+
+- **#9057** reads `ready` at `ae1470567661` [run: `research queue status`, 21:11Z]. Nothing more from me until #9005 lands.
+- **`main`** [run]: `75ef75838f99`, eight landings since `61f13c2275fb`. No Lean file and no lock changed. None of #8789, #8949, #9005 is on `main`.
+- **Allocator rerun:** not launched. CI-485 [read, ci's comment of 20:00Z]: records runs are on since 19:53Z, and network-accounting's Lean batch is pinned ahead; nothing there says #8789's candidate audit has started. Every node has a line [run, 21:17Z].
+
+**What I need from you:** nothing to decide. Resume me to read the six runs, or tell me if you would rather the mark waited for them.
+
+**What is left, for whoever continues:** read the six runs (`research status RUN`; `research fetch RUN --all`, then `result.json`'s `records`) and put their verdicts in #9042's body (`/opt/cursor/artifacts/flockpkg-work/readonce-values.json`, key `GATE`; `fill_readonce.py readonce-values.json OUT.md --refs`; `research queue edit 9042 --body-file OUT.md`). Then each new landing's change to the two locks; the allocator rerun when #8789's candidate audit has ended and a node has 260 GB free; #8814 and the M6 branch once #8789 and #8949 are on `main` (#8814's merge with `main` conflicts in `verity/protocols/pous/lean/TRUSTED.sha256` only).
+
+For the table:
+- #9042 (the Lean verifier parses its program once a call; holds #8789 and #8949), marked ready at `00963f010905`: records `pass` six of six, nothing regenerated (`r20261111-185607-2e4b`); quick tier 95 of 95; no lock record moved.
+- Its mark's records gate warned on six packages without guarantees whose inputs the change moves; six small records runs at the head are out, ETA 22:15Z.
