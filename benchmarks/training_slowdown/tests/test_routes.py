@@ -10,7 +10,7 @@ from training_slowdown import config, run, starts
 from training_slowdown.codecs import ScaledQuant
 from training_slowdown.data import Data, Stream
 from training_slowdown.model import LM
-from training_slowdown.routes import subset
+from training_slowdown.routes import ema, subset
 from training_slowdown.routes._optimizers import newton_schulz
 
 
@@ -178,6 +178,29 @@ def test_an_ema_runs_checkpoints_are_the_average_of_the_weights_it_wrote(tmp_pat
             assert not torch.equal(v, trained[k])
         else:
             assert torch.equal(v, theta[k])
+
+
+def test_an_averages_horizon_is_a_share_of_the_steps_so_far():
+    """`ema_horizon`: the average is the weights themselves until that share of the steps is a whole step, then keeps
+    more of itself each step; over every step so far it is the mean of the weights the steps wrote."""
+    tenth = ema.DIALS | {"ema_horizon": 0.1}
+    assert [ema.keeps(tenth, t) for t in (0, 9, 10, 19, 99)] == pytest.approx([0, 0, 1 - 1 / 1.1, 0.5, 0.9])
+    assert [ema.keeps(ema.DIALS | {"ema_decay": 0.9}, t) for t in (1, 99)] == [0.9, 0.9]
+    g = torch.Generator().manual_seed(1)
+    batches = [torch.randint(0, SHAPE["vocab"], (2, 9), generator=g) for _ in range(6)]
+    for horizon, raw in ((1.0, 1), (0.25, 4)):
+        dials = ema.DIALS | {"trainable": "blocks.0.w_*", "lr": 1e-2, "ema_horizon": horizon}
+        torch.manual_seed(0)
+        model, optimizers = ema.build(SHAPE, dials)
+        names, wrote = subset.trained(model, dials), []
+        for t, rows in enumerate(batches):
+            ema.step(model, rows, optimizers, dials, t, len(batches))
+            wrote.append({n: model.get_parameter(n).detach().clone() for n in names})
+            out = ema.output(model, dials)
+            assert all(torch.equal(out[n], wrote[t][n]) == (t < raw) for n in names), (horizon, t)
+        if horizon == 1.0:
+            for n in names:
+                assert torch.allclose(out[n], sum(w[n] for w in wrote) / len(wrote), rtol=0, atol=1e-7)
 
 
 def test_a_lora_runs_checkpoints_are_the_start_with_its_adapters_merged(tmp_path):

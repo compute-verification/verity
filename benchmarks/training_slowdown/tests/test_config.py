@@ -50,6 +50,9 @@ def test_a_later_dial_left_at_its_default_is_out_of_the_digest(tmp_path, reg):
     assert written.digest == base.digest
     cosine = config.load(write_config(tmp_path / "cosine.toml", dials=dials | {"schedule": "cosine"}), reg)
     assert cosine.digest != base.digest and cosine.run()["dials"] == base.run()["dials"] | {"schedule": "cosine"}
+    average = config.load(write_config(tmp_path / "average.toml", route="ema", dials=dials), reg)
+    assert sorted(set(average.run()["dials"]) - set(base.run()["dials"])) == ["ema_decay"], (
+        "ema's configs digest subset's nine dials and ema_decay: a dial added to it goes in its LATER")
 
 
 @pytest.mark.parametrize("over, why", [
@@ -66,6 +69,8 @@ def test_a_later_dial_left_at_its_default_is_out_of_the_digest(tmp_path, reg):
     ({"dials": {"schedule": "step"}}, "schedule is one of linear, cosine, constant"),
     ({"dials": {"embed": "muon"}}, "embed is adamw or opt"),
     ({"dials": {"gain_lr": -1e-3}}, "gain_lr and embed_lr are rates, or 0 for lr"),
+    ({"route": "ema", "dials": {"ema_horizon": 2.0}}, r"ema_horizon is a share of the steps so far, in \[0, 1\]"),
+    ({"route": "ema", "dials": {"ema_horizon": 0.1, "ema_decay": 0.9}}, "leave ema_decay out"),
     ({"budget": {"steps": 3}}, "budget has no batch"),
     ({"budget": {"steps": 0, "batch": 2}}, "isn't positive"),
     ({"target": {"gain": 1.0}}, "a gain over the start's own compute"),
