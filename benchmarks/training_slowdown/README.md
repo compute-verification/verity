@@ -43,7 +43,10 @@ python -m training_slowdown.library [ENTRY ...] [--starts starts.toml] [--out DI
 
 The library is the configs of `attacks/`. An entry is a route and its dials at a start, with the policy it is read
 under: a standard training algorithm and a covert one are the same kind of thing. A new entry is a config of a route
-`routes/` has, or a new route (the route contract, `routes/__init__.py`) and a config of it.
+`routes/` has, or a new route (the route contract, `routes/__init__.py`) and a config of it; its config's first
+comment says what it trains. Each entry is held to a reference in plain torch (`tests/test_entries.py`): its own
+dials, a few steps at a small shape, and the same weights as torch's own optimizer gives, or the published rule where
+torch has none. An entry without a reference fails the suite.
 
 The command prints one row an entry (every entry, or the ones named): its slowdown under its policy and what binds.
 It trains nothing. It builds the entry's model at the start's shape, traces its step on a CPU as a job does after its
