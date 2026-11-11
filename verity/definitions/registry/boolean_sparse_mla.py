@@ -6,7 +6,7 @@ same statics with the Boolean ``DOT`` and ``INV`` read as their word views.
     SparseMlaHead_v2{T,DR,DV,BN,DOT,INV,SCALE}         INV: `boolean_attention.Fa3InvSum_v2`
     SparseMlaHeadBlock_v2{DR,DV,NVIS,FIRST,BN,DOT,SCALE}
     SparseMlaHeadScores_v2{DR,DV,NVIS,FIRST,BN,DOT,SCALE}
-    SparseMlaHeadValues_v2{DR,DV,NVIS,FIRST,BN,DOT,D0,G}
+    SparseMlaHeadValues_v2{DR,DV,NVIS,FIRST,BN,DOT,G,C}
     SparseMlaHeadsBlock_v2{NHB,DR,DV,NVIS,FIRST,BN,DOT,SCALE}
     SparseMlaHeadEnd_v2{DV,INV}
     SparseMla_v2{T,NH,DR,DV,BN,DOT,INV,SCALE}
@@ -86,7 +86,7 @@ def _head_values(B, S, pb, kv, rescale=None, o_prev=None):
     return M.head_values(bit_steps(B), S, S.DOT, pb, kv, rescale, o_prev)
 
 
-SparseMlaHeadValuesV2 = flat("SparseMlaHeadValues", 2, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "D0", "G"],
+SparseMlaHeadValuesV2 = flat("SparseMlaHeadValues", 2, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "G", "C"],
                              lambda S: M._head_values_type(S, BF16, F32), _head_values, M.SparseMlaHeadValues, lifted=_LIFTED)
 
 

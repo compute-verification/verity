@@ -26,8 +26,8 @@ Registered functions (all `Name_v1`):
                                                   one block of a head's chain, a unit of its own (FIRST takes no state)
   SparseMlaHeadScores{DR,DV,NVIS,FIRST,BN,DOT,SCALE}  (q_nope, q_rope, kv: NVIS x (DV+DR), m, l[4]) -> (m, l[4], pb: NVIS bf16,
                                                   rescale); a head block up to P (FIRST takes no state and returns no rescale)
-  SparseMlaHeadValues{DR,DV,NVIS,FIRST,BN,DOT,D0,G}  (pb: NVIS bf16, kv: NVIS x (DV+DR), rescale, o[G]) -> o[G]; a head block's
-                                                  P V steps on O's columns [D0, D0 + G) (FIRST takes pb and kv only)
+  SparseMlaHeadValues{DR,DV,NVIS,FIRST,BN,DOT,G,C}  (pb: NVIS bf16, kv: NVIS x (DV+DR), rescale, o[G]) -> o[G]; a head block's
+                                                  P V steps on O's columns [C G, (C + 1) G) (FIRST takes pb and kv only)
   SparseMlaHeadsBlock{NHB,DR,DV,NVIS,FIRST,BN,DOT,SCALE}  (q_nope: NHB x DV, q_rope: NHB x DR, kv: NVIS x (DV+DR), m[NHB],
                                                   l[NHB][4], o[NHB][DV]) -> (m[NHB], l[NHB][4], o[NHB][DV]); the same block of
                                                   NHB heads of one row in one unit, their keys read once
@@ -41,7 +41,8 @@ serving stages a `SparseMla` row as that chain (`head_chain`, ``CUTS``).  A row'
 order, so block j of NHB of them is also one unit, `SparseMlaHeadsBlock`: each head's `SparseMlaHeadBlock` on the one ``kv``.
 A `SparseMlaHeadBlock` is itself cut exactly at P: `SparseMlaHeadScores` returns the running max, the lanes, bf16(P) and the
 rescale, and each column of O then depends only on those two, its own column of the keys and of the O before, so
-`SparseMlaHeadValues` on a partition of the columns returns the block's O (`scores`, `values`: the block's body is the two).
+`SparseMlaHeadValues` on each of the DV / G blocks of G columns returns the block's O (`scores`, `values`: the block's body is
+the two).
 """
 from __future__ import annotations
 
@@ -286,12 +287,13 @@ def SparseMlaHeadScores(B, S, q_nope, q_rope, kv, m_prev=None, l_prev=None):
 
 
 def head_values(st: Steps, S, DOT, pb, kv, rescale=None, o_prev=None):
-    """`SparseMlaHeadValues`'s body: `head_block`'s padding, then `values` on columns [D0, D0 + G)."""
+    """`SparseMlaHeadValues`'s body: `head_block`'s padding, then `values` on columns [C G, (C + 1) G)."""
     _whole_or_first("SparseMlaHeadValues", S)
-    if not (0 <= S.D0 and 1 <= S.G and S.D0 + S.G <= S.DV):
-        raise ValueError(f"SparseMlaHeadValues: columns [{S.D0}, {S.D0 + S.G}) of DV={S.DV}")
+    if S.G < 1 or S.DV % S.G or not 0 <= S.C < S.DV // S.G:
+        raise ValueError(f"SparseMlaHeadValues: columns [{S.C}·{S.G}, {S.C + 1}·{S.G}) are not a block of DV={S.DV} in blocks "
+                         "of G")
     kvb = _padded(st, kv, S.NVIS, S.BN, S.DR + S.DV)
-    return array_of(values(st, S, DOT, pb, kvb, rescale, o_prev, S.D0, S.G))
+    return array_of(values(st, S, DOT, pb, kvb, rescale, o_prev, S.C * S.G, S.G))
 
 
 def _head_values_type(S, bf16=BF16, f32=F32):
@@ -299,12 +301,12 @@ def _head_values_type(S, bf16=BF16, f32=F32):
     return ((("pb", Array(S.NVIS, bf16)), ("kv", Array(S.NVIS, Array(S.DR + S.DV, bf16)))) + state, Array(S.G, f32))
 
 
-@composite("SparseMlaHeadValues", 1, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "D0", "G"], _head_values_type, conformance=_CONF)
+@composite("SparseMlaHeadValues", 1, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "G", "C"], _head_values_type, conformance=_CONF)
 def SparseMlaHeadValues(B, S, pb, kv, rescale=None, o_prev=None):
-    """Columns [D0, D0 + G) of a `SparseMlaHeadBlock_v1`'s O, a unit of its own: on `SparseMlaHeadScores_v1`'s bf16(P) and
-    rescale, the block's NVIS keys whole (zero-padded to BN; it reads their columns [D0, D0 + G) of kv_c) and those columns of
-    the O before, each column times the rescale (zero in the first visited block), then += bf16(P) kv_c over the block's
-    k-steps.  Over a partition of the DV columns the units' outputs are the block's O, word for word."""
+    """Columns [C G, (C + 1) G) of a `SparseMlaHeadBlock_v1`'s O, a unit of its own: on `SparseMlaHeadScores_v1`'s bf16(P) and
+    rescale, the block's NVIS keys whole (zero-padded to BN; it reads those columns of their kv_c) and those columns of the O
+    before, each column times the rescale (zero in the first visited block), then += bf16(P) kv_c over the block's k-steps.
+    The DV / G units' outputs side by side are the block's O, word for word."""
     check_block_statics(S.DR, S.DV, S.NVIS, S.BN)
     return head_values(word_steps(B), S, S.DOT, pb, kv, rescale, o_prev)
 
