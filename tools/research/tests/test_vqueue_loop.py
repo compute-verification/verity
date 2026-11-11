@@ -3135,11 +3135,11 @@ def test_the_run_beside_a_lean_candidate_s_check_starts_with_its_check_not_with_
 
 def test_a_records_run_that_failed_drops_its_candidate_and_ejects_its_lean_member(env):
     """A records run that failed refuses its records: no records commit and no check; the candidate is dropped, its Lean
-    member ejected with the reason and out of the next batch, whose other member is built and checked at once, and nobody but
-    the ejected member's owner is told.  A push brings the Lean member back."""
-    two = env.put(2, {"b.txt": "2\n"})
+    member ejected with the reason and out of the next batch, which takes the PR with no Lean change that waited behind it
+    and is checked at once, and nobody but the ejected member's owner is told.  A push brings the Lean member back."""
     loop, records, sha, one, (built, _) = _records_loop(env)
-    assert sorted(built["members"]) == [1, 2] and built["records_first"]
+    assert built["members"] == [1] and built["records_first"]
+    two = env.put(2, {"b.txt": "2\n"})
     why = "it failed: regen-1 failed rc=1"
     records.verdicts["regen-1"] = RecordsRun(FAIL, why)
     judged, eject, drop, rebuilt = loop.tick()
@@ -3816,7 +3816,7 @@ def test_under_gate_check_a_candidate_changing_no_lean_input_takes_lean_audit_fr
     README under security/, a Lean input of the conservative set, so it runs lean-audit too, though its base's check does.
     The top one's changes no Lean input: its check runs every step but lean-audit, its record saying whose verdict on it it
     takes (``lean_audit_from``)."""
-    from research.drive import AFTER_LANDING
+    from research.landing import AFTER_LANDING
 
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
@@ -3835,7 +3835,7 @@ def test_under_gate_check_a_candidate_changing_no_lean_input_takes_lean_audit_fr
 def test_under_gate_check_a_candidate_changing_only_the_task_graph_s_contract_audits_itself(env, monkeypatch):
     """The task graph's contract is in every audit's key (`lean_audit.CONTRACT`): the candidate on a Lean one in flight
     whose member changes only it runs lean-audit itself, its record naming no check whose verdict it takes."""
-    from research.drive import AFTER_LANDING
+    from research.landing import AFTER_LANDING
 
     env.put(1, {"Security/Proofs/A.lean": "-- a\n"})
     env.put(2, {"tools/verity/graph/verity_graph/contract.py": "CONTRACT = 2\n"})
@@ -3884,7 +3884,7 @@ def test_under_gate_check_a_candidate_that_took_lean_audit_from_its_base_drops_w
     pytest.  Either way the top one reads lean-audit as pending while its base is in flight, nothing taken into its record,
     and drops as its base failed, with no outcome, so nobody of its own is blamed or capped; its member, built again on
     `main`, runs lean-audit itself."""
-    from research.drive import AFTER_LANDING
+    from research.landing import AFTER_LANDING
 
     main = env.main()
     head = env.put(1, {"Security/Proofs/A.lean": "-- a\n"} if red == "lean-audit" else
@@ -3918,7 +3918,7 @@ def test_under_gate_check_lean_audit_is_taken_from_the_candidate_that_ran_it_thr
     second's and the third's change no Lean input.  The second takes lean-audit from the lowest, and so does the third,
     built on the second, which ran none: its record and its launch's line name the lowest, whose check ran it, not its
     base.  The fourth's member changes a Lean file, so it runs lean-audit itself, though its base took it."""
-    from research.drive import AFTER_LANDING
+    from research.landing import AFTER_LANDING
 
     env.put(1, {"Security/Proofs/A.lean": "-- a\n"})
     env.put(2, {"b.txt": "1\n"})
@@ -3983,7 +3983,7 @@ def test_under_gate_check_a_candidate_takes_lean_audit_from_a_landed_one_by_the_
     no record of that run, as a loop that lost it, the run beside `main` starts again, and a candidate built then audits:
     nothing beside `main` keeps a verdict on lean-audit to take.  The two that took it are pending while that run runs,
     though their own checks passed, and land on its verdict, the one that audited after them."""
-    from research.drive import AFTER_LANDING
+    from research.landing import AFTER_LANDING
 
     main = env.main()
     env.put(1, {"Security/Proofs/A.lean": "-- a\n"})

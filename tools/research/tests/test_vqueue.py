@@ -640,11 +640,13 @@ def waiting(sha: str, base: str, *members: int, records: RecordsRun | None = RUN
 
 def test_a_batch_with_a_lean_member_is_built_with_its_records_run_first_and_any_other_is_not():
     """`Build.records`: a member that changes Lean, a lock or a spec (`Ready.lean`) has the batch's records regenerated before
-    its check.  A batch with none, or with the step off (`Snapshot.records`), starts its check at once."""
-    assert decide(snap(ready=[pr(1), lean(2), pr(3)], records=True)) == [Build((1, 2, 3), MAIN, 2, records=True)]
-    assert decide(snap(cand("c1", MAIN, 1), ready=[pr(1), lean(2)], records=True)) == [Build((2,), "c1", 1, records=True)]
-    assert decide(snap(ready=prs(1, 3), records=True)) == [Build((1, 3), MAIN, 2)]
-    assert decide(snap(ready=[pr(1), lean(2), pr(3)])) == [Build((1, 2, 3), MAIN, 2)]
+    its check.  A batch with none, as the PRs with no Lean change make on their own, or with the step off
+    (`Snapshot.records`), starts its check at once."""
+    assert decide(snap(ready=[pr(1), lean(2), pr(3)], records=True)) == [Build((1, 3), MAIN, 2)]
+    assert decide(snap(cand("c1", MAIN, 1, 3), ready=[pr(1), lean(2), pr(3)], records=True)) == [
+        Build((2,), "c1", 1, records=True)]
+    assert decide(snap(ready=[lean(2), lean(4)], records=True, lean=2)) == [Build((2, 4), MAIN, 2, records=True)]
+    assert decide(snap(ready=[lean(2), lean(4)], lean=2)) == [Build((2, 4), MAIN, 2)]
 
 
 def test_a_candidate_whose_check_waits_reads_no_verdict_and_nothing_is_built_on_it():
@@ -674,7 +676,7 @@ def test_a_records_run_is_launched_once_more_after_infra_and_its_pending_rings_i
 def test_a_passed_records_run_starts_its_candidates_check_and_a_commit_held_past_pending_s_drops_it():
     """`Commit` (on it as built, or on its records commit: the loop's to tell), each tick while it is held, `pending_s` from
     the first hold; then it is dropped, no outcome, and its members are built again."""
-    s = snap(waiting("c1", MAIN, 1, 2, records=RecordsRun(PASS)), ready=[lean(1), pr(2)], records=True, now=9000.0)
+    s = snap(waiting("c1", MAIN, 1, 2, records=RecordsRun(PASS)), ready=[lean(1), lean(2)], records=True, lean=2, now=9000.0)
     assert decide(s) == [Commit("c1")]
     held = replace(s, candidates=(waiting("c1", MAIN, 1, 2, records=RecordsRun(PASS), held=1000.0),))
     assert decide(replace(held, now=1000.0 + 4 * 3600)) == [Commit("c1")]
@@ -1071,13 +1073,14 @@ class Play:
 def test_two_lean_prs_whose_records_go_stale_only_together_land_together_with_their_records_commit():
     """Each carries its own records, and merged they leave a lock's records stale, as two Lean PRs meeting do: their
     candidate's records are regenerated on its tree before its check and committed on top of it, and that records commit,
-    checked in its place, lands all three, nobody ejected or bisected, one batch built."""
+    checked in its place, lands them on #3, which has no Lean change and goes first in a batch of its own: all three land,
+    nobody ejected or bisected, two batches built."""
     def oracle(tree, c):
         return Verdict(FAIL, (stale(),), ended=True) if {1, 2} <= tree and RECORDS not in tree else Verdict(PASS)
 
     p = Play([lean(1), lean(2), pr(3)], oracle, {"records": True, "lean": 2}, records=lambda tree, c: RecordsRun(PASS),
              regenerates=lambda tree, c: {1, 2} <= tree).run(12)
-    assert sorted(p.landed) == [1, 2, 3] and not p.ejected and p.main == "c1r" and p.built == 1
+    assert sorted(p.landed) == [1, 2, 3] and not p.ejected and p.main == "c2r" and p.built == 2
     assert p.count(Commit) == 1 and p.count(Regenerate) == 0 and not any(o.state == FAIL for o in p.history)
 
 
