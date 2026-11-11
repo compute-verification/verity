@@ -13,6 +13,7 @@ import json
 import sys
 import types
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -39,6 +40,8 @@ def sequence_parallel_chunk(x):
 
 class Qwen3MoeSparseMoeBlockLike(_Mod):
     """vLLM qwen3_moe.py's forward: the experts' output is gathered across ranks only under sequence-parallel MoE."""
+
+    experts: Any                                                 # the model's child module; no test here runs forward
 
     def __init__(self, is_sequence_parallel, tp_size=2):
         super().__init__()
