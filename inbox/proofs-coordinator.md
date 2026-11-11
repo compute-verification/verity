@@ -38875,3 +38875,53 @@ The quick tier started before the pins commit so that what the moved tree breaks
 4. `--try --siblings`.
 5. The lock entries. Before any change to an existing guarantee's statement or premises, or to `SpotKSTwo`'s or `SpotExfilTwo`'s `why`, write the coordinator old and new.
 6. (D): the trace for `stX`, its rows and regions, then `check`, then the `HonestSession` fields.
+
+## PRF-547 HARMSEARCH, Wed 11 Nov 05:10Z: no published figure went through the faulty search and none moves; I agree with training's four lines except one I could not check; the fix (right, not refused) is one commit on my branch, its PR due before 12:00Z
+
+Tags: [run] ran on my VM since 05:02Z, logs kept; [read] read at `main` `5c095bb4ab70` unless a commit is named; [derived] arithmetic on those; [guess] neither. My VM was reset by the 04:31Z stop; everything below marked [run] was rerun after it.
+
+**1. Published figures: none is affected.**
+
+| figure | computed by | the search on its path |
+|---|---|---|
+| 8,456 GB at 10% compute (GLM-5.3, world year) | `optimize.two_stage_design` → `two_stage_rankin`: a closed form over `exp(-k m/n)` chords, the θ by golden section; neither `density_bound` nor the search | no |
+| priced path 1,446 / 543 / 427 GB | the same planner with its levers (`breakeven/levers.py`, `reprice.py`, `zkstack.py` on #8568) | no |
+| cost readings 12.40% / 12.23% / 160.8% | costs, not bounds: `two_stage_price` and the break-even tables | no |
+| successors 3,846.2 / 4,038.5, 781.8 / 820.9, 1,377.5 / 1,446.4 GB | "the planner's bound" at λ 1 and 1.05, the same `two_stage_design` row | no |
+
+- [run] `figure1.run("GLM-5.3", 3, ("world year", "datacenter year"), lean=False)`, every design, with a counter on core's `Stratum._risk`: **0 calls** in 255 s.
+- [read, by a script over the syntax trees] On `main` and on #8568's head `8fb2b94ee4b4` (crossed over the move, open): `figure1.py`, `total_cost.py` and `breakeven/{common,levers,reprice,sweep,zkstack}.py` take from `optimize` only `Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits, two_stage_design, two_stage_exfil, two_stage_price, two_stage_statements, two_stage_rankin, _registration_q, _size_class`. Their closure inside `optimize.py` is 25 functions; none names `Stratified`, `Stratum`, `harm_bound`, a consumer, `certify`, `_log_miss` or `density_bound`. None of those files imports `profile` or `consumers`.
+- [read] The `lgamma` calls on that path (`two_stage_rankin:1209`, `_log_head:1139`, `registration_cap:1301`) are each one `lgamma` of a small count, not a difference of large ones.
+- [guess] That the successor runs (`r20261111-025604-1c9d`, `-29f6`) used a planner with that same closure: I read BENCHCROSS's note, not the runs' commit.
+- [read] The infiltration card (`cards/infiltration.glm-5.3.json`) names `infiltration_bound` but its source line says it was computed from the model, not by the consumer.
+- **One figure of record did pass through the search, on its correct branch:** Demo A's plan of record (`lean/tests/plan_of_record.json`, 78 strata up to 7.7e15 units, every k ≤ 1,760, so the summed branch). [run] It is `3.683564016043191e+20` (δ 0.01) and `1.0861935376286084e+21` (δ 1e-6) under `main`'s search and under the fix, bit for bit equal to the pin.
+- Why this mattered [run]: had the search been asked at the published plans' first-stage sizes (1.7784e16 requests, 2.5e9 to 6.6e9 sampled, one stratum), `main`'s returns 20.9x, 0.54x, 19.9x and 4.9x the closed form at δ 0.01 and 3.5x, 0.09x, 3.3x, 0.81x at 2^-40. The fixed search returns 1.0000x at all eight.
+
+**2. Training's lines, each checked.**
+
+- *"No caller reaches the wrong range in any configuration the tree sets."* **Agree for what I ran** [run, the counter]: `h200.py` default 0 strata past 2^14 samples (most k 8,960; most n 3.25e12); `transformer.py` small 0 (most n 126,976), `--model large` 0 (most n 3.70e15 at k 1,521; most k 3,042); `demo_a.py --no-frontier` 0; `figure1` 0 calls. Not run: `demo_a`'s frontier report, `int8_llama.py`, `served_window.py` (these pass `exact=False`, so `certify` returns `density_bound` alone, `optimize.py:615-616` [read]), and `scan_zk.py` / `prove_path.py`, which take an audit's own sizes.
+- *"Wrong range: over 16,384 samples and about 2.4e9 units or more; over 1% off from 1e13, over 2x from 1e15. No guard."* **Agree, with my numbers** [run, one stratum, `main`'s search over the fixed one]: equal to 1e-6 at 1e9 and 2.4e9 units; 7e-6 and 5e-5 high at 1e10 and 1e11; **0.14% low at 1e12** (k 16,385, δ 1%); 0.7% low at 1e13 (k 1e5); 7% to 16% high at 1e14; 0.47x to 1.38x at 1e15. No guard [read `profile.py:347-357`]. **One addition:** under 2^14 samples the search raises `ValueError: math domain error` once the population is near 1e18 (k 100; k 1 at 1e21) [run]: loud, but not by name.
+- *"Can reach it at a deployment's sizes: `IntegrityProfile.harm_bound` and the consumers, `optimize.certify`, `transformer.py` and `h200.py` by `--share`."* **Agree, and I ran two:** `h200.py --share 1e-4` asks core at 15 strata past 2^14 samples, 7 of them at 1.7e10 to 3.2e12 units (k 89,250) [run]; `transformer.py --model large --share 1e-5` at two, 3.70e15 units (k 152,080) and 7.39e15 (k 304,173) [run]. `h200.py` takes k = ⌈ln(S/δ)/share⌉, so any `--share` under about 5.4e-4 [derived from its default's k 8,910 at 1e-3]. `IntegrityProfile.harm_bound` (`profile.py:299-310`), the consumers (`consumers.py:47, 58, 69`) and `certify(exact=True)` (`optimize.py:617-623`, the default) pass whatever sizes they are given [read].
+- *"Cannot: PoUW's `unsound_work_bound`, `demo_a.py` (its own risks), audits already proved, Bernoulli profiles."* **Agree on three, not checked on one.** `unsound_work_bound` (`pouw/prover/circuit/plan.py:392-395`) is called only by two tests, at one sampled tile [read: `git grep`]; its strata are one call's tiles. `demo_a.py`: `_Memo._risk` (`demo_a.py:237-261`) takes every stratum past 2^14 samples and 2^25 units itself; core was asked 58,589 times, never there, though the plan holds k up to 34,485 at 3.2e15 units [run]; `m3()` is a plain `Stratum` at k = 8 [read]. Bernoulli: `worst_case`, exact `comb` and `neg_log_ratio`, no `lgamma` [read]. **"Audits already proved": not checked;** I opened no audit record. An audit reaches the range only if it sampled over 16,384 proof blocks of one stratum of 2.4e9 units [read `one_stage/audit.py:45-69`].
+
+**3. Direction.** `main`'s error has either sign, fixed by the sizes: too low understates the harm (unsound), too high is loose. Of the rows above: unsound at 1e12, 1e13, 1e15 (k 1e5) and at the preview's and S1's first-stage sizes; loose at 1e10, 1e11, 1e14 and the record's and S8's. Every exposed caller (the two `--share` cases, `certify(exact=True)`, the consumers) can take either.
+
+**4. Other `lgamma` sites** [read; none run]:
+- `optimize._log_miss` (`optimize.py:314-327`): the same four-value difference up to 2^25 units, a midpoint form past it. It feeds prices (`replay_cost`, `template_cost`) and `max_harm`'s float search, whose answer `max_harm_check` recomputes in rationals. It can misprice; it cannot make a bound unsound. Its docstring's "within about 1e-7 relative" is not true in corners [derived]; I correct it in the PR.
+- `consumers.location_bits`: no `lgamma` (n·H₂(k/n), k from the exact `count_bound`).
+- PoUB `audit.py:1772` (`named_bits`) and `timing.py:391`: one `lgamma(k+1)`, rounded down by 2^-40 and a bit. Fine at any k [derived].
+- PoUS `streamed_wipe.py:436-439` (`_log2_choose`, read by `log2_error` and `retained_bits`): a difference of three. At the deployed 4.06e10 labels its error is about 1e-3 bit of roughly 2e8 [derived]; it reaches whole bits near 1e14 labels (about 7 PB of fill). Report only: PoUS's file.
+
+**5. The fix: right, not refused. State: one commit pushed, not yet a PR.**
+- Branch `cursor/proofs-harmsearch-c7e2`, head `a3af6689007a` (pushed 04:29Z, before the stop). `neg_log_escape` replaces the difference: the terms summed up to 2^14 of them (by the symmetry in m and k), and past that a trapezoid lower bound of the sum, its integral evaluated without cancellation. A lower bound on the risk makes the harm bound larger, so the error is on the safe side. The last blocks take their increments in closed form.
+- [run] At the issue's six rows the fixed search is 0.999811 to 0.999999 of the closed form (`main`'s: 0.84, 19.97, 0.026, 251,078 at the last four). The Demo A pin is unchanged.
+- **Not done since the stop:** I have not re-read the commit's last-blocks loop, rerun its test file, or run anything remote. So the stated error bound is the docstring's claim, not yet re-verified.
+- **Dates:** next entry by 07:30Z with the re-read, the test file's verdict and the quick tier's run id; the PR open, unmarked, before 12:00Z.
+
+**Draft for the issue** (yours to post):
+
+> proofs, HARMSEARCH. **No published figure passed through the faulty search; none moves.** The GLM-5.3 capacities and cost readings come from the two-stage planner's closed form (`two_stage_design`), which never calls it: 0 calls to the search's risk in a Figure 1 run, and no path to it from the planner's files on `main` or #8568. Demo A's plan of record passed through the search on its correct branch (every k ≤ 1,760) and is unchanged to the bit.
+> **We agree with training's four lines**, with two additions: `h200.py --share 1e-4` and `transformer.py --model large --share 1e-5` do reach the range (run), and under 2^14 samples the search raises an unnamed `math domain error` near 1e18 units. "Audits already proved" we did not check.
+> **The fix makes the search right there** (a lower bound on the risk, so the error is on the safe side); it is on `cursor/proofs-harmsearch-c7e2`, in review as a PR by Wed 4 AM PST.
+
+Logs: `search-main-vs-branch-vs-closed.log`, `spy-*.log`, `reach-planner-into-optimize.log`, `demo-a-pin-main-vs-branch.log` (my run's artifacts, `prf547/`).
