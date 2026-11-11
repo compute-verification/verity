@@ -277,10 +277,8 @@ def row_units(t: str, d: Mapping[str, Any]) -> int:
 
 
 def chunk_caps(tmpls: Sequence[str], histories: bool = False) -> dict[str, int]:
-    """`chunk_rows.chunk_cap` of each chunked template (``CHUNKED``), for a partition file's ``chunk_cap``, on the rows a
-    window of ``tmpls`` commits under the file's ``histories`` (`history_rows.seg`)."""
-    seg = HR.seg(tmpls, histories)
-    return {t: CR.chunk_cap(template(t), [p for w, p in seg if w == t]) for t in tmpls if template(t).layout in CHUNKED}
+    """`chunk_rows.chunk_cap` of each chunked template (``CHUNKED``), for a partition file's ``chunk_cap`` under its ``histories``."""
+    return {t: CR.chunk_cap(template(t), HR.seg(tmpls, histories)) for t in tmpls if template(t).layout in CHUNKED}
 
 
 def chunked(t: str, caps: Mapping[str, int] | None) -> bool:
@@ -290,11 +288,6 @@ def chunked(t: str, caps: Mapping[str, int] | None) -> bool:
     layout = template(t).layout
     return ((layout in CHUNKED and (layout in ALWAYS_CHUNKED or caps is not None))
             or (layout in ("row", "part") and t in (caps or {})))
-
-
-def row_seg(m: CS.Member) -> list[str]:
-    """The ports member ``m`` commits as ``hm96-sha512/row-seg/v1`` rows."""
-    return [p for p, s in m.schemas if s == CS.SCHEMA_HM96_SHA512_ROW_SEG]
 
 
 def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[int] | None = None,
@@ -318,8 +311,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
                                  f"chunk_cap (pipeline.serving_rows.chunk_caps)")
             if counts is not None and counts[k] != n:
                 raise ValueError(f"{t}: {n} units read off the rows, {counts[k]} in their Definitions")
-            mine = [p for w, p in seg if w == t]
-            out += [CR.unit_member(template(t), min(cap, n - lo), base + lo, f"{t}/c{j}", mine)
+            out += [CR.unit_member(template(t), min(cap, n - lo), base + lo, f"{t}/c{j}", seg)
                     for j, lo in enumerate(range(0, n, cap))]
             base += n
             continue
@@ -494,22 +486,11 @@ def circuit_record(window: CS.Binding, rows: Sequence[list[Row]], arrivals: Mapp
     """The window's ``circuit.json`` (`interface.circuit_record`): each chunked template's statement its `chunk_rows.unit_rows`
     and `chunk_rows.statement`, as ``compose_circuit.py --template`` composes it (a template of word rows has none: the
     verifier's input set lowers it), its ``rows``' window ingress under ``arrivals`` and registered reads (`ingress_rows`,
-    `registered`, its ``histories`` among them). A statement states each row under the schema the template's members
-    commit it under (`row_seg`), so the circuit composed from it hashes the rows the window committed; refused
-    (ValueError) where two members of a template commit a row under two schemas, or a declared history's writer's row
-    (`interface.seg_rows`) is not committed row-seg."""
-    sts, segs = {}, {}
-    for m in window.members:
-        if m.schemas and segs.setdefault(m.template, row_seg(m)) != row_seg(m):
-            raise ValueError(f"{m.template}: its members commit {segs[m.template]} and {row_seg(m)} as row-seg rows, and a "
-                             f"template has one statement; commit every member's rows under one schema (`members`' seg)")
-    for t, seg in segs.items():
-        in_rows, out_rows = CR.unit_rows(template(t), seg)
-        sts[t] = {"in_rows": in_rows, "out_rows": out_rows, **CR.statement(template(t))}
+    `registered`, its ``histories`` among them). A statement states each row under the schema the template's members commit
+    it under, so the circuit composed from it hashes the rows the window committed (`chunk_rows.statements`, with its
+    refusals: a declared history's writer's row, `interface.seg_rows`, is committed row-seg)."""
     got, reg = IR.ingress(window, rows, row_units, arrivals), registered(window.members, rows, histories)
-    if lost := sorted(IF.seg_rows(reg) - {(t, p) for t, seg in segs.items() for p in seg}):
-        raise ValueError(f"the declared history tables' writers' rows {lost} are not committed row-seg; build the window's "
-                         f"members with the partition file's histories (`population`, `history_rows.seg`)")
+    sts = CR.statements(window.members, template, IF.seg_rows(reg))
     return IF.circuit_record(window, CIRCUIT_NAME, IF.templates_of(window), sts, declared={
         **({IF.WINDOW_INGRESS: [g.doc() for g in got]} if got else {}), **({"registered": reg.doc()} if reg else {})} or None)
 

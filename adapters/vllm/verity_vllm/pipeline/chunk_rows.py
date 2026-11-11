@@ -2,12 +2,12 @@
 (`unit_rows`), a chunk's member (`unit_member`), table reads (`reads`) and statement (`statement`), the most of them one
 flock-circuit statement holds (`chunk_cap`, a partition file's ``chunk_cap``), and a template's units read once cut into
 its chunks (`split`).  The window's chunks (`serving_rows.members`) are laid out by `unit_rows`, and the verifier's circuit
-(``benchmarks/one_stage/compose_circuit.py --template``) by `unit_rows` and `statement`.  Each function takes the template as
-`serving_rows.template` reads it.  `zk_refusal` is why ``verify --zk`` refuses a statement's form, and `zk_check` refuses a
+(``benchmarks/one_stage/compose_circuit.py --template``) by `unit_rows` and `statement`, on the rows the chunks commit
+(`statements`, the window's circuit record's).  Each function takes the template as `serving_rows.template` reads it.  `zk_refusal` is why ``verify --zk`` refuses a statement's form, and `zk_check` refuses a
 partition file whose ``zk`` says its window is for such sessions and that names a template of that form."""
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -146,12 +146,13 @@ def zk_check(partition: Mapping[str, Any], tps: Iterable[Any]) -> None:
                 raise ValueError(f"a partition for --zk sessions names {why}")
 
 
-def unit_rows(tp: Any, seg: Collection[str] = ()) -> tuple[list[tuple[str, str, int, list[str]]],
-                                                           list[tuple[str, tuple[int, ...]]]]:
+def unit_rows(tp: Any, seg: Collection[tuple[str, str]] = ()) -> tuple[list[tuple[str, str, int, list[str]]],
+                                                                       list[tuple[str, tuple[int, ...]]]]:
     """Chunked template ``tp``'s rows as `UnitStager` stages them, ``(in_rows, out_rows)``: its Definition's bit rows
     (`interface.unit_rows`) under its cuts (`chain_rows.cuts`, a ``CHAINS`` combine's), parameter g's row ``in<g>``, or
-    ``in<g>.<s>`` for its row s when cut; a row ``seg`` names by its port, output j's ``o<j>``, is
-    ``hm96-sha512/row-seg/v1`` (the window's `history_rows.seg` rows of ``tp``) and every other ``hm96-sha512/row/v2``. The
+    ``in<g>.<s>`` for its row s when cut. A row of ``tp`` that ``seg`` names (``(template, row)`` as `history_rows.seg`
+    and `interface.seg_rows` do, a row by its port and output j by ``o<j>``) is ``hm96-sha512/row-seg/v1``, every other
+    ``hm96-sha512/row/v2``; a name that is no row of ``tp`` is refused. The
     one exception is a ``ScaledMmS8Coordinate``'s A6 rows, ``x`` (the token's s8
     codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2), then the v2 output row ``o0``: each operand
     packed with its scale in one row is the layout serving commits (`serving_rows`' s8 row tables), where
@@ -160,8 +161,9 @@ def unit_rows(tp: Any, seg: Collection[str] = ()) -> tuple[list[tuple[str, str, 
     from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_statics
 
+    seg = {p for t, p in seg if t == tp.id}
     if tp.layout == "s8":
-        if set(seg) - {"x"}:
+        if seg - {"x"}:
             raise ValueError(f"{tp.id}: its A6 rows are x row-seg and w and o0 v2, not {sorted(seg)} row-seg")
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
@@ -176,26 +178,49 @@ def unit_rows(tp: Any, seg: Collection[str] = ()) -> tuple[list[tuple[str, str, 
 
     lay, cuts = IF.layout(tp.fn), CH.cuts(tp) if tp.layout == "chain" else None
     named = {port(p): p for p, _w, _ps in lay.cut(cuts)} | {o: o for o, _w in lay.outs}
-    if set(seg) - set(named):
-        raise ValueError(f"{tp.id}: {sorted(set(seg) - set(named))} is no row of its {sorted(named)}")
+    if seg - set(named):
+        raise ValueError(f"{tp.id}: {sorted(seg - set(named))} is no row of its {sorted(named)}")
     in_rows, out_rows = IF.unit_rows(tp.fn, cuts, {named[p] for p in seg})
     return [(port(p), *rest) for p, *rest in in_rows], out_rows
 
 
-def unit_member(tp: Any, n: int, base: int = 0, name: str = "", seg: Collection[str] = ()) -> CS.Member:
+def unit_member(tp: Any, n: int, base: int = 0, name: str = "", seg: Collection[tuple[str, str]] = ()) -> CS.Member:
     """``n`` units of chunked template ``tp`` from unit ``base`` on bit rows, as `UnitStager` stages a unit: each port under
-    the schema of its row of `unit_rows`, ``seg`` its row-seg rows (a history table's writer's output, its table's leaves),
-    which its statement states likewise (`serving_rows.circuit_record`)."""
+    the schema of its row of `unit_rows`, ``seg`` the window's row-seg rows (`history_rows.seg`: a history table's writer's
+    output, its table's leaves), which its statement states likewise (`statements`)."""
     in_rows, out_rows = unit_rows(tp, seg)
     outs = (("o0", 1),) if tp.layout == "s8" else IF.layout(tp.fn).outs
     schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((outs[j][0], s) for s, js in out_rows for j in js)
     return CS.Member(tp.id, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, n, base, name=name, schemas=schemas)
 
 
-def chunk_cap(tp: Any, seg: Collection[str] = ()) -> int:
+def row_seg(m: CS.Member) -> list[tuple[str, str]]:
+    """The rows member ``m`` commits as ``hm96-sha512/row-seg/v1`` rows, as ``(template, row)``."""
+    return [(m.template, p) for p, s in m.schemas if s == CS.SCHEMA_HM96_SHA512_ROW_SEG]
+
+
+def statements(ms: Sequence[CS.Member], template: Callable[[str], Any],
+               declared: Collection[tuple[str, str]] = ()) -> dict[str, dict[str, Any]]:
+    """The statement of each template of bit rows among a window's members ``ms`` (``template``: `serving_rows.template`), as
+    ``compose_circuit.py --template`` composes it: its `unit_rows`, each row under the schema its members commit it under
+    (`row_seg`), and its `statement`. Refused (ValueError) where two members of a template commit a row under two schemas,
+    since a template has one statement, or where a row ``declared`` names (`interface.seg_rows` of the window's declared
+    tables: a history's writer's output) is not committed row-seg."""
+    segs: dict[str, list[tuple[str, str]]] = {}
+    for m in ms:
+        if m.schemas and segs.setdefault(m.template, row_seg(m)) != row_seg(m):
+            raise ValueError(f"{m.template}: its members commit {segs[m.template]} and {row_seg(m)} as row-seg rows, and a "
+                             f"template has one statement; commit every member's rows under one schema (`serving_rows.members`' seg)")
+    if lost := sorted(set(declared) - {r for seg in segs.values() for r in seg}):
+        raise ValueError(f"the declared history tables' writers' rows {lost} are not committed row-seg; build the window's "
+                         f"members with the partition file's histories (`serving_rows.population`, `history_rows.seg`)")
+    return {t: dict(zip(("in_rows", "out_rows"), unit_rows(template(t), seg)), **statement(template(t))) for t, seg in segs.items()}
+
+
+def chunk_cap(tp: Any, seg: Collection[tuple[str, str]] = ()) -> int:
     """The most instances of chunked template ``tp`` one flock-circuit statement holds, as ``benchmarks/one_stage/a6.py``'s
-    ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`, ``seg`` its row-seg ones: a
-    row-seg row has more compressions than the same row v2) as its `statement`, then
+    ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`, ``seg`` the window's row-seg
+    ones) as its `statement`, then
     ``vus_per_block`` blocks of ``2^(M_MAX - k_log)``.  Builds the circuit (seconds to minutes; a 64-key ``SparseMlaSplitPart``
     about 36 min at 71 GB): a partition file pins it as ``chunk_cap``."""
     import tempfile
