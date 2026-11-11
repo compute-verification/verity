@@ -44462,3 +44462,45 @@ For the table:
 For vllm: a kept pair alone saves at most about 2.6 h. The ZK server and the verifier of record each parsing the program
 once a window removes about 16 h of the gaps. It also removes most of Lean's 30.8 h of setup and about 4 h of its inputs: the
 program's digest, about 28 s a member on `main` [derived from two members' profiles].
+
+## TWOPROVE, Wed 11 Nov 09:10Z: #8885 is open, unmarked, at `6d4878d5670e`, and it is Daniel's. The lock reads the cap: the `reads` hashes of `Compiled.capOut` and `capIn` move, though no guarantee entry does. The waits' term goes from 2^-126.0 to 2^-183.65 an audit, and from 2^-82.6 to 2^-140.25 a world year. The quick tier, the merged build and the kernel replay are running
+
+**The PR** [run]:
+- #8885 is `cursor/proofs-waits-cap-ea0b` at `6d4878d5670e79b8f51b7ffee5a369a388362391`, opened 09:09Z with `--issue PRF-534`.
+- It is open, not a draft, and has no labels.
+- `queue open` warned that PRF-534 has no goal label. Please label it `proofs/spot-bind-term`, or tell me which issue fits better.
+
+**The lock** [run: records run `r20261111-080957-140a`, rc 0, outcome `regenerated`, and my diff of its record against main's]:
+- **What moves:** one record, `reads` of `Definitions.Claims.SamplingGeneric`. That is the hashes of `Compiled.capOut` and `Compiled.capIn` and the module's digest.
+- **What doesn't:** no entry of `guarantees` changes; every signature, premise list, `type_hash` and `unfolded_hash` is as on main. `security/Proofs` and `security/Properties` pass unchanged.
+- **CI-524's three checks pass:** 4,175,579 bytes, `Security/` 6, old paths 0.
+
+**Why it is still Daniel's** [read]:
+- The order counts a definition the lock reads as Daniel's, and `capOut` and `capIn` are in `reads`.
+- 74 theorems read that module, among them `SpotKSTwo`, `SampledKSTwo`, `SpotExfilTwo` and `RecursiveKSCompiledEvery`.
+- `ECoins`, `E`, `κ` and `Efficient` read the two definitions. So what those guarantees say moves: their error is smaller, and `Efficient`'s bound is larger by a negligible amount.
+- If your "no guarantee's record moves" means the `guarantees` entries, this PR meets it. If it includes `reads`, it doesn't.
+
+**The four Lean checks:**
+- **Elaborates:** records run `140a` [run].
+- **Axioms:** `140a`, and the probe `0229`'s `#print axioms` [run].
+- **Kernel replay:** `r20261111-090652-4f5c`, which is `lean_audit.py` on `security`, `security/Proofs` and `security/Properties`. Running [run].
+- **Second reader:** none. Name one if you want one before marking.
+
+**The quick tier** [run]: `r20261111-090609-aa9c` at the head, running. At `8939826c7f88` the same tier passed 4 of 4 suites (`r20261111-083024-7842`).
+
+**The merged build, per your 08:29Z rule** [run]:
+- #8828 and #8781 also change `SamplingGeneric.lean`, adding definitions only.
+- My head merged with both is clean in git (local commit `47937a29fd`, not pushed).
+- Its build is `r20261111-090237-f243`: `lean_changed.py --build` of the 22 Lean files the three PRs change. Running.
+- The other marked Lean heads (#8785, #8788, #8820, #8827, #8836) share only the lock, and none adds a line that reads the cap or the restated theorems.
+
+The ready line follows when `aa9c` and `f243` pass, by 11:00Z.
+
+For CONCRETE:
+- At statement `x` the term is `T_w(x) = (2k_out/K_out + e^{-k_out/8}) + c·(2k_in/K_in + e^{-k_in/8})`, with `K = 2^192·k` and `c = 2^{2^-10}`.
+- At `k = 2^10` that is `(1+c)(2^-191 + e^-128) = 2^-183.65`.
+
+For the table:
+- The waits' cap is `2^192·k` in #8885 at `6d4878d5670e`, unmarked and Daniel's.
+- The term goes from `2^-126.0` to `2^-183.65` an audit, and from `2^-82.6` to `2^-140.25` a world year. Lean states `2^-182` for `c²κ_s` plus the term, where it stated `2^-125`.
