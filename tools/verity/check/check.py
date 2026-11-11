@@ -21,7 +21,9 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             lean-audit repairs a lock's bookkeeping and the caps it breaks and
                                                             warns rather than failing (`lean_audit.py --bookkeeping warn`)
     ... --no-cache [--circuit-cache]                        reuse no pass, and run every job, those off the gate too (the
-                                                            nightly `audit-main`, which gates nothing); with --circuit-cache,
+                                                            nightly `audit-main`, which gates nothing), and unsharded and
+                                                            without --deferred the opt-in tests `OPT_IN` names, with their
+                                                            variables set, after their suites' runs; with --circuit-cache,
                                                             circuit-check alone still reuses and stores its per-target passes,
                                                             and only its entries of a pack are imported: drive's after-landing
                                                             run, where a cold `--all` (~4 h) outlasted every run
@@ -1587,6 +1589,60 @@ def verdicts_fetched(listed: list[dict], only: str | None = None) -> list[dict]:
 #: `suites.py` run on its own builds the verifier before them itself; here it is told the build is done (`--lean-built`).
 AFTER_LEAN = SUITES.AFTER_LEAN
 
+#: The opt-in tests a cold check runs by name (`--no-cache`, unsharded and without `--deferred`: the nightly `audit-main`), each
+#: suite's in a `suites.py` run of its own with its variable set, in the step that runs the suite, after the suite's own run
+#: (`opt_in`): suite -> (the variable, the tests by node id in the suite).  Each skips in every other check by a mark in its own
+#: file that reads the variable (tests/test_opt_in_tests.py), so no candidate's check pays for it and no suite's key holds the
+#: variable; a test the variable turns on that this doesn't name, circuit-check's serial-report test of about 2.5 h, stays off.
+OPT_IN = {
+    "tools/verity/circuit_check": ("VERITY_CIRCUIT_CHECK_SLOW", (
+        "tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
+        "tests/test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")),
+    "verity/protocols/remote/verifier/composition": ("VERITY_SLOW", (
+        "tests/test_composition_difftest.py::test_remote_agrees",
+        "tests/test_composition_difftest.py::test_onsite_agrees",
+        "tests/test_composition_difftest.py::test_product_over_remotes_subprotocols_is_remote",
+        "tests/test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")),
+}
+#: where a cold check's opt-in runs write each suite's outcome and log, apart from its steps' own (`suites.json`, `suites/`)
+OPT_IN_DIR = "opt-in"
+
+
+def then_opt_in(argv: list[str], out: Path, step: str, args: list[str]) -> str:
+    """``argv`` and then, whether or not it passed, the opt-in tests of ``step`` (`opt_in`, with suites.py's ``args``), as one
+    shell command that fails when either fails."""
+    them = [sys.executable, str(Path(__file__).resolve()), "--opt-in", str(out), step, *args]
+    return "rc=0; " + "; ".join(f"{shlex.join(c)} || rc=$?" for c in (argv, them)) + "; exit $rc"
+
+
+def opt_in(out: Path, step: str, args: list[str]) -> int:
+    """`check.py --opt-in OUT STEP ARGS...`, a cold check's opt-in tests (`OPT_IN`) of the suites step STEP runs (pytest: those not
+    in `AFTER_LEAN`; lean-suites: those in it; all: every one, on a tree without the verifier), each suite's in a `suites.py` run
+    of its own with ARGS, its variable set to 1 and its tests named, with its outcome and log in OUT's `OPT_IN_DIR`.  0 only when
+    each named test passed: one that skipped, or that its suite doesn't have, fails the step."""
+    if step not in ("pytest", "lean-suites", "all"):
+        print(f"check: --opt-in OUT STEP: STEP is pytest, lean-suites or all, not {step!r}", file=sys.stderr)
+        return 2
+    names = {s.path: s.name for s in SUITES.select(SUITES.discover(), list(OPT_IN))}
+    d = out / OPT_IN_DIR
+    d.mkdir(parents=True, exist_ok=True)
+    rc = 0
+    for path, (var, tests) in OPT_IN.items():
+        if step != "all" and (names[path] in AFTER_LEAN) != (step == "lean-suites"):
+            continue
+        j = d / f"{path.replace('/', '_')}.json"
+        j.unlink(missing_ok=True)
+        print(f"check: opt-in: {path} with {var}=1: {', '.join(t.partition('::')[2] for t in tests)}", flush=True)
+        ran = subprocess.run([sys.executable, str(ROOT / "tools" / "verity" / "check" / "suites.py"), path, "--json", str(j),
+                              "--logs", str(d), *args, "--", *tests], cwd=ROOT, env={**os.environ, var: "1"}).returncode
+        c = (next(iter(json.loads(j.read_text())), {}).get("counts") or {}) if j.exists() else {}
+        if ran or c.get("passed", 0) < len(tests) or any(c.get(k) for k in ("failed", "error", "skipped")):
+            why = ", ".join(f"{v} {k}" for k, v in c.items() if k != "passed" and v) or f"suites.py exited {ran}"
+            print(f"check: opt-in: {path}: {c.get('passed', 0)} of the {len(tests)} tests named with {var}=1 passed ({why}); "
+                  f"its log is in {d}", flush=True)
+            rc = 1
+    return rc
+
 
 #: what pytest and the Lean steps hold beside circuit-check in one run, in GiB: pytest and lean-audit have held 160 to 350
 #: between them, and circuit-check, given the slot's whole mem=, took the run's scope to its cap (an OOM kill)
@@ -1809,14 +1865,19 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     held = {job: [p.partition(":")[2] for p in only or () if p.partition(":")[0] == job and p.partition(":")[2]]
             for job in SHARDS.SUITE_JOBS}
     after_lean: list[str] = []
+    # a cold check, unsharded and without --deferred, also runs the opt-in tests, by name with their variables set (`OPT_IN`)
+    cold = not cache and only is None
     if len(lean) > 1:
         after_lean = [x for s in AFTER_LEAN for x in ("--skip", s)]
         lean_suites = [*suites, *(suite_args(held["lean-suites"], splits, out) or AFTER_LEAN), "--lean-built",
                        "--json", str(out / "suites-lean.json"),
                        "--logs", str(out / "suites"), *tail]
-        lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
+        lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + (then_opt_in(lean_suites, out, "lean-suites", ["--lean-built", *tail])
+                                                              if cold else shlex.join(lean_suites))], ROOT))
     pytest = [*suites, *suite_args(held["pytest"], splits, out), "--json", str(out / "suites.json"), "--logs", str(out / "suites"),
               *after_lean, *tail]
+    if cold:
+        pytest = ["bash", "-c", then_opt_in(pytest, out, "pytest" if len(lean) > 1 else "all", tail)]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check"), "--catalog-units"] if circuit_cache else []),
           *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else []),
@@ -3146,6 +3207,8 @@ def main(argv: list[str], script: bool = False) -> int:
         return lean_agreement(*map(Path, argv[1:]))
     if argv[:1] == ["--lean-agreement-urls"] and len(argv) == 3:
         return lean_agreement_urls(Path(argv[1]), Path(argv[2]))
+    if argv[:1] == ["--opt-in"] and len(argv) > 2:
+        return opt_in(Path(argv[1]), argv[2], argv[3:])
     if argv[:1] == ["--lean-slot"] and len(argv) > 1:
         cmd = lean_slot(argv[1:])
         os.execve(cmd[0], cmd, {**os.environ, "LEAN_SLOT_POOL": "check"})
