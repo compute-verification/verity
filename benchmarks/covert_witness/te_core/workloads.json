@@ -1,6 +1,6 @@
 {
  "id": "te_core.workloads",
- "te_core": "4.13.4",
+ "te_core": "4.13.6",
  "reading": "A",
  "spec": "note:training-20261103T0600Z-draft-workload-models",
  "io_bound": "cursor/te-io-bound-4207 at 3c2afa62aa",
