@@ -41,8 +41,8 @@ import multiprocessing
 from pathlib import Path
 
 import numpy as np
-from verity.ml.commitments import Commitment, Opening
-from verity.core.protocols.pouw.audit import (
+from verity.commitments import Commitment, Opening
+from verity.protocols.pouw.verifier.audit import (
     HM96,
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
@@ -50,16 +50,16 @@ from verity.core.protocols.pouw.audit import (
     hm96_salt,
     opened_value,
 )
-from verity.core.protocols.pouw import verifier as PV
-from verity.core.protocols.pouw.coins import CoinCommitment
-from verity.core.protocols.pouw.credit import passes_distinct
-from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
+from verity.protocols.pouw.verifier import verifier as PV
+from verity.protocols.pouw.verifier.coins import CoinCommitment
+from verity.protocols.pouw.verifier.credit import passes_distinct
+from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
 from verity_vllm.protocols.pouw import pearl_c as PD
 from verity_config.settings import of
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "clear"))
 import fast_tile as FT
 import clear_work as CW
 from clear_audit import TileOpening, Transcript, Verifier

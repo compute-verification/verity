@@ -17,9 +17,9 @@ from circuit_check import cli
 from circuit_check import sidecars as SC
 from circuit_check import targets as TG
 
-GF2K = TG.REPO / "verity" / "ml" / "circuits" / "ops" / "boolean" / "gf2k.circuit-check.py"
-#: the C++ models' sources, one library each (`verity.ml.definitions.numerics._jit`)
-CPP = TG.REPO / "verity" / "ml" / "definitions" / "numerics" / "cpp"
+GF2K = TG.REPO / "verity" / "definitions" / "ops" / "boolean" / "gf2k.circuit-check.py"
+#: the C++ models' sources, one library each (`verity.definitions.numerics._jit`)
+CPP = TG.REPO / "verity" / "definitions" / "numerics" / "cpp"
 #: a catalog target whose check runs fa2's C++ model (its twin kernel)
 ATTENTION = "Attention_v3{T=5,NH=2,KVH=1,D=16,BN=128}"
 
@@ -216,8 +216,8 @@ def test_a_sidecar_names_the_targets_its_bindings_reach_in_its_module():
     assert TG.kind_of(str(GF2K)) == "sidecar" and TG.kind_of("GfScale_v1{L=2}") == "definition"
     found, templates = TG.sidecar_targets(str(GF2K))
     assert not templates and {"GfScale_v1{L=2}", "Gf128Mul_v1"} <= set(found)
-    assert {SC.owner(fn) for fn in found.values()} == {"verity.ml.circuits.ops.boolean.gf2k"}
-    unit = "verity.ml.circuits.ops.boolean.gf2k.circuit-check#_gf2k_roots"
+    assert {SC.owner(fn) for fn in found.values()} == {"verity.definitions.ops.boolean.gf2k"}
+    unit = "verity.definitions.ops.boolean.gf2k.circuit-check#_gf2k_roots"
     assert all(unit in TG.BINDINGS[fid] for fid in found)
     tasks = cli._tasks([str(GF2K)], CK.Options(), False, None)
     assert [t[1] for t in tasks] == list(found)

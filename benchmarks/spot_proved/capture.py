@@ -1018,7 +1018,7 @@ def _device_chunks() -> Any:
         try:
             from torch.utils.cpp_extension import load_inline
             here = Path(__file__).resolve()
-            hdr = next(p for p in (here.with_name("sha512.cuh"), here.parents[2] / "verity/ml/kernels/sha512.cuh") if p.is_file())
+            hdr = next(p for p in (here.with_name("sha512.cuh"), here.parents[2] / "verity/definitions/kernels/sha512.cuh") if p.is_file())
             tag = hashlib.sha512(CHUNKS_CU.encode() + hdr.read_bytes()).hexdigest()[:16]
             t = time.time()
             S.dev = load_inline(f"spot_chunks_{tag}", cpp_sources="torch::Tensor chunks(torch::Tensor flat, int64_t chunk);",
@@ -1429,7 +1429,7 @@ def site(d: Path, cfg: dict) -> Path:
     (info / "entry_points.txt").write_text("[vllm.general_plugins]\nverity_spot_capture = spot_capture:register\n")
     shutil.copyfile(__file__, d / "spot_capture.py")
     here = Path(__file__).resolve()
-    hdr = next((p for p in (here.with_name("sha512.cuh"), here.parents[2] / "verity/ml/kernels/sha512.cuh") if p.is_file()), None)
+    hdr = next((p for p in (here.with_name("sha512.cuh"), here.parents[2] / "verity/definitions/kernels/sha512.cuh") if p.is_file()), None)
     if hdr is not None:
         shutil.copyfile(hdr, d / "sha512.cuh")
     (d / CONFIG).write_text(json.dumps(cfg, indent=1, sort_keys=True))

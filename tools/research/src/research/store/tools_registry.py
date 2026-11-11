@@ -24,9 +24,9 @@ REGISTRY: dict[str, str] = {
     "commit_cost": "benchmarks.commitments.tool:COMMIT_COST",
     "hiding_leaf_cost": "benchmarks.commitments.tool:HIDING_LEAF_COST",
     "serving_commit_cost": "benchmarks.commitments.tool:SERVING_COMMIT_COST",
-    "flock_pure": "verity.ml.flock.tool:FLOCK_PURE",
-    "flock_agreement": "verity.ml.flock.verifier.tool:FLOCK_AGREEMENT",
-    "flock_class_sweep": "verity.ml.flock.tool:FLOCK_CLASS_SWEEP",
+    "flock_pure": "verity.protocols.flock.tool:FLOCK_PURE",
+    "flock_agreement": "verity.protocols.flock.agreement.tool:FLOCK_AGREEMENT",
+    "flock_class_sweep": "verity.protocols.flock.tool:FLOCK_CLASS_SWEEP",
     "check": "tools.verity.check.tool:CHECK",
     "lean_audit": "tools.verity.lean.tool:LEAN_AUDIT",
     "lean_upstream": "tools.verity.lean.tool:LEAN_UPSTREAM",
@@ -138,7 +138,7 @@ def load(spec_or_name: str, source_root: Path | str | None = None) -> Tool:
     except (ImportError, AttributeError) as e1:
         obj = None
         e2: Exception = e1
-        for cand in (root, *list(root.parents)[:6]):     # `--cwd integrations/vllm`: the declaration's file sits at the repo root above
+        for cand in (root, *list(root.parents)[:6]):     # `--cwd adapters/vllm`: the declaration's file sits at the repo root above
             try:
                 obj = from_tree(spec, cand)
                 break
