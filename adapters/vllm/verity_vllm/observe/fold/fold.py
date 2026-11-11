@@ -393,19 +393,20 @@ class _Fold:
             raise FoldError("second RunHeader")
         self.header = h
         cfg = dict(self.profile.config or {})
-        if not cfg:
-            cfg = dict((h.model or {}).get("config") or {})
+        if not cfg and h.model and h.model.get("config"):
+            cfg = dict(h.model["config"])
         self.config = cfg
         self.weights_type = weights_type_of(self.profile, cfg)
-        reqs = list((h.workload or {}).get("requests") or [])
+        reqs = (h.workload or {}).get("requests")
         if not reqs:
             raise FoldError("RunHeader.workload has no requests")
-        self.requests = reqs
+        self.requests = reqs = list(reqs)
         self.req_index = {r["request_id"]: i for i, r in enumerate(reqs)}
         # n > 1: the runner's rows carry vLLM's child ids (`{index}_{request_id}`, header `workload.children`, a
         # fact of the fork recorded by the adapter).  A child's prompt IS its parent's prompt parameter (one root, not n copies);
         # the served sequences (Program outputs) are per child.  A child naming an unknown parent is a header error.
-        children = list((h.workload or {}).get("children") or [])
+        children = h.workload.get("children")
+        children = list(children) if children else []
         for c in children:
             if c.get("parent") not in self.req_index:
                 raise FoldError(f"RunHeader.workload.children: {c.get('request_id')!r} names unknown parent {c.get('parent')!r}")
@@ -421,9 +422,9 @@ class _Fold:
         # Program -- one `seed` / `seed_<i>` parameter (Array<1, Value<64>>, i = the request's index, like the prompts) between the
         # prompts and the weights; the sampler instance reads it through a `Param("seed", ...)` operand (resolver).  Layout:
         # prompts..., seeds..., weights (weights stay the LAST input node: cb_a.compare / batch_decomp rely on that).
-        samp = dict((h.workload or {}).get("sampling") or {})
+        samp = h.workload.get("sampling")
         self.seed_param: dict[int, int] = {}      # request index -> parameter index
-        if samp.get("greedy") is not True:
+        if not samp or samp.get("greedy") is not True:
             for i, r in enumerate(reqs):
                 if r.get("seed") is not None:
                     self.seed_param[i] = len(params)
@@ -435,7 +436,7 @@ class _Fold:
         # `_finish`.  Layout: prompts..., seeds..., peers..., weights (weights stay the LAST input node; the codec lowers a homogeneous bf16
         # RecordType to ONE Input16 node per request, so the request-owned Input nodes stay the leading ones -- batch_decomp).  A TP1 log
         # (no tp2 note) allocates nothing here: its layout and digests are unchanged.
-        tp = dict((h.notes or {}).get("tp2") or {})
+        tp = (h.notes or {}).get("tp2")
         self.tp = None
         if tp and int(tp.get("world_size") or 1) > 1:
             if tp.get("rank") is None:

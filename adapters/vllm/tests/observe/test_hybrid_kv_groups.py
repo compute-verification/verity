@@ -171,6 +171,21 @@ def test_bare_reshape_and_cache_flash_uses_the_module_hint_for_its_group():
     assert isinstance(res, Unsupported) and "unknown" in res.reason
 
 
+def test_a_group_without_a_slot_mapping_covers_no_row():
+    """A KV-cache group whose slot mapping is missing, null or empty maps no row: the move is unsupported, having 0 slots."""
+    from verity_vllm.observe.fold.patterns import KVCacheUpdate
+    events, start = decode_step()
+    se = step_events(events)
+    rc = next(n for n in se.roots for n in n.walk() if n.op.startswith("_C_cache_ops.reshape_and_cache_flash"))
+    bare = dataclasses.replace(rc, enter=dataclasses.replace(rc.enter, module=LAYER, parent=None), children=[])
+    for absent in ({}, {"slot_mapping": None}, {"slot_mapping": []}):
+        g0, g1 = _groups(start, this_layer_group=1)
+        g1 = {**{k: v for k, v in g1.items() if k != "slot_mapping"}, **absent}
+        res = KVCacheUpdate().match(bare, context(dataclasses.replace(start, kv_groups=[g0, g1]), se.sample))
+        assert isinstance(res, Unsupported) and res.reason == "StepStart.slot_mapping shorter than the rows", absent
+        assert res.detail["have"] == 0 and res.detail["layer"] == LAYER
+
+
 def test_step_start_kv_groups_round_trip_and_old_logs_default_to_none():
     events, start = decode_step()
     two = dataclasses.replace(start, kv_groups=_groups(start, this_layer_group=1))

@@ -78,7 +78,7 @@ def header_gemm_arch_family(ctx: StepContext):
     `verity_vllm.engine.engine_profile.gpu_info` from vLLM's own `_get_tuned_matmul_arch_family`), or `...` when the header predates the field
     (the registry then derives it from the capability alone)."""
     try:
-        gpu = (ctx.header.profile or {}).get("gpu") or {}
+        gpu = (ctx.header.profile or {}).get("gpu")
     except AttributeError:
         return ...
     return gpu["tuned_gemm_arch_family"] if isinstance(gpu, dict) and "tuned_gemm_arch_family" in gpu else ...

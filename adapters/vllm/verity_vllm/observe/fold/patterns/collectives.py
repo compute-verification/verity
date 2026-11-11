@@ -144,17 +144,23 @@ def allreduce_settings(header) -> dict | None:
     notes = getattr(header, "notes", None) or {}
     if notes.get("allreduce_settings"):
         return dict(notes["allreduce_settings"])
-    facts = (notes.get("tp2") or {}).get("facts") or {}
-    pc = facts.get("parallel_config") or {}
-    if not isinstance(pc.get("disable_custom_all_reduce"), bool):
+    tp2 = notes.get("tp2")
+    facts = tp2.get("facts") if tp2 else None
+    pc = facts.get("parallel_config") if facts else None
+    if not pc or not isinstance(pc.get("disable_custom_all_reduce"), bool):
         return None
-    env = {**(facts.get("nccl_env") or {}), **((getattr(header, "profile", None) or {}).get("engine_flags") or {})}
+    env: dict = {}
+    for part in (facts.get("nccl_env"), (getattr(header, "profile", None) or {}).get("engine_flags")):
+        if part:
+            env.update(part)
     return T.settings_of(pc["disable_custom_all_reduce"], env)
 
 
 def capture_device(header) -> tuple[str, int] | None:
     """The capture's GPU as `tp_allreduce.device_of` names it (``RunHeader.profile["gpu"]``), or None when it recorded none."""
-    gpu = (getattr(header, "profile", None) or {}).get("gpu") or {}
+    gpu = (getattr(header, "profile", None) or {}).get("gpu")
+    if not gpu:
+        return None
     cc, sms = gpu.get("compute_capability", gpu.get("cc")), gpu.get("multi_processor_count", gpu.get("sms"))
     return None if cc is None or sms is None else T.device_of(cc, sms)
 

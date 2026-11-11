@@ -42,6 +42,7 @@ from verity_vllm.observe.fold.patterns import (
     unsupported,
     widened_source,
 )
+from verity_vllm.observe.fold.patterns.sampling import header_sampling
 from verity_vllm.observe.fold.resolver import (
     Compute,
     PerRow,
@@ -54,29 +55,25 @@ from verity_vllm.observe.fold.tree import TreeNode
 SCRATCH_OV = "ov_sampling_token_sample"
 
 
-def header_sampling(ctx: StepContext) -> dict:
-    return dict((ctx.header.workload or {}).get("sampling") or (ctx.header.profile or {}).get("sampling") or {})
-
-
 def request_seeds(ctx: StepContext) -> dict[str, int | None]:
     """request id -> seed of the run header's request record (children: the recorded fork fact parent seed + index)."""
     wl = ctx.header.workload or {}
     seeds: dict[str, int | None] = {r["request_id"]: (None if r.get("seed") is None else int(r["seed"])) for r in wl.get("requests", [])}
-    for c in wl.get("children", []) or []:
+    for c in wl.get("children", []):
         seeds[c["request_id"]] = None if c.get("seed") is None else int(c["seed"])
     return seeds
 
 
 def request_temperatures(ctx: StepContext) -> tuple[float, dict[str, float]]:
     s = header_sampling(ctx)
-    per = {p["request_id"]: float(p["temperature"]) for p in s.get("per_request", []) or []}
+    per = {p["request_id"]: float(p["temperature"]) for p in s.get("per_request", [])}
     return float(s.get("temperature", 0.0)), per
 
 
 def sampling_filters_off(s: dict) -> str | None:
     if s.get("top_k") not in (None, 0, -1) or s.get("top_p") not in (None, 1, 1.0):
         return f"top_k/top_p ({s.get('top_k')!r}/{s.get('top_p')!r})"
-    for p in s.get("per_request", []) or []:
+    for p in s.get("per_request", []):
         if p.get("top_k") not in (None, 0, -1) or p.get("top_p") not in (None, 1, 1.0):
             return f"per-request top_k/top_p ({p.get('top_k')!r}/{p.get('top_p')!r}) for {p.get('request_id')}"
     return None
@@ -213,8 +210,8 @@ class TokenSampleGumbel:
         x = first(a.get("self"), a.get("arg0"))
         if not isinstance(x, ViewDesc):
             return None
-        st = ctx.scratch.get(SCRATCH_OV) or {}
-        s1 = (st.get("stage1") or {}).get(x.alloc)
+        st = ctx.scratch.get(SCRATCH_OV)
+        s1 = None if st is None else st["stage1"].get(x.alloc)
         if s1 is None or x.shape != s1["local_max"].shape:
             return None
         dim = a.get("dim", a.get("arg1"))
@@ -235,8 +232,8 @@ class TokenSampleGumbel:
         idx = first(a.get("index"), a.get("arg2"))
         if not isinstance(src, ViewDesc) or not isinstance(idx, ViewDesc):
             return None
-        st = ctx.scratch.get(SCRATCH_OV) or {}
-        s2 = (st.get("stage2") or {}).get(idx.alloc)
+        st = ctx.scratch.get(SCRATCH_OV)
+        s2 = None if st is None else st["stage2"].get(idx.alloc)
         if s2 is None or src.alloc != s2["local_argmax"].alloc:
             return None
         dim = a.get("dim", a.get("arg1"))

@@ -76,7 +76,8 @@ def _is_op(node: TreeNode, name: str) -> bool:
 
 def header_k_scales(ctx: StepContext) -> dict | None:
     try:
-        k = ((ctx.header.profile or {}).get("backends") or {}).get("int8_k_scales")
+        backends = (ctx.header.profile or {}).get("backends")
+        k = backends.get("int8_k_scales") if backends else None
         return k if isinstance(k, dict) else None
     except (AttributeError, TypeError):
         return None

@@ -105,7 +105,8 @@ def header_gate_ll_bf16(ctx: StepContext) -> bool:
     """Whether the record attests that its MoE gates took the cuteDSL `ll_bf16_gemm` tier (`RunHeader.profile["backends"]
     ["moe_gate_ll_bf16_gemm"]`, written by `engine.run_facts` from the gates' `allow_ll_bf16_gemm`)."""
     try:
-        return ((ctx.header.profile or {}).get("backends") or {}).get("moe_gate_ll_bf16_gemm") is True
+        backends = (ctx.header.profile or {}).get("backends")
+        return bool(backends) and backends.get("moe_gate_ll_bf16_gemm") is True
     except (AttributeError, TypeError):
         return False
 

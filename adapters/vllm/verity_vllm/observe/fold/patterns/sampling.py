@@ -46,7 +46,7 @@ SCRATCH_TOKEN_SELECT = "token_select"  # ctx.scratch key: two-stage greedy sampl
 
 def greedy_sampling(ctx: StepContext) -> str | None:
     """None when the run header records greedy sampling (temperature 0) for the whole workload, else the reason."""
-    s = (ctx.header.workload or {}).get("sampling") or (ctx.header.profile or {}).get("sampling") or {}
+    s = header_sampling(ctx)
     if s.get("greedy") is not True:
         return "the run header does not record greedy sampling"
     if s.get("temperature") not in (0, 0.0):
@@ -136,8 +136,8 @@ class TokenSelectGumbelTwoStage:
         x = first(a.get("self"), a.get("arg0"))
         if not isinstance(x, ViewDesc):
             return None
-        st = ctx.scratch.get(SCRATCH_TOKEN_SELECT) or {}
-        s1 = (st.get("stage1") or {}).get(x.alloc)
+        st = ctx.scratch.get(SCRATCH_TOKEN_SELECT)
+        s1 = None if st is None else st["stage1"].get(x.alloc)
         if s1 is None or x.shape != s1["local_max"].shape:
             return None  # not the two-stage sampler's argmax; TokenSelectArgmax may claim it
         dim = a.get("dim", a.get("arg1"))
@@ -158,8 +158,8 @@ class TokenSelectGumbelTwoStage:
         idx = first(a.get("index"), a.get("arg2"))
         if not isinstance(src, ViewDesc) or not isinstance(idx, ViewDesc):
             return None
-        st = ctx.scratch.get(SCRATCH_TOKEN_SELECT) or {}
-        s2 = (st.get("stage2") or {}).get(idx.alloc)
+        st = ctx.scratch.get(SCRATCH_TOKEN_SELECT)
+        s2 = None if st is None else st["stage2"].get(idx.alloc)
         if s2 is None or src.alloc != s2["local_argmax"].alloc:
             return None
         dim = a.get("dim", a.get("arg1"))
@@ -238,7 +238,11 @@ TEMPERATURE_BLOCK = 8192                                                        
 
 
 def header_sampling(ctx: StepContext) -> dict:
-    return dict((ctx.header.workload or {}).get("sampling") or (ctx.header.profile or {}).get("sampling") or {})
+    """The run's sampling parameters: the workload's when it states any, else the pinned profile's, else none."""
+    for doc in (ctx.header.workload, ctx.header.profile):
+        if doc and doc.get("sampling"):
+            return dict(doc["sampling"])
+    return {}
 
 
 def request_sampling(ctx: StepContext) -> dict[str, dict]:
@@ -246,15 +250,15 @@ def request_sampling(ctx: StepContext) -> dict[str, dict]:
     recorded fork fact parent seed + index); the workload's sampling parameters supply what a record does not pin."""
     wl = ctx.header.workload or {}
     s = header_sampling(ctx)
-    per = {p["request_id"]: p for p in s.get("per_request", []) or []}
+    per = {p["request_id"]: p for p in s.get("per_request", [])}
     out: dict[str, dict] = {}
-    for r in wl.get("requests", []) or []:
+    for r in wl.get("requests", []):
         p = per.get(r["request_id"], {})
         out[r["request_id"]] = {"seed": None if r.get("seed") is None else int(r["seed"]),
                                 "temperature": float(first(r.get("temperature"), p.get("temperature"), s.get("temperature", 0.0))),
                                 "top_p": float(first(r.get("top_p"), p.get("top_p"), s.get("top_p", 1.0))),
                                 "top_k": int(first(r.get("top_k"), p.get("top_k"), s.get("top_k", 0)) or 0)}
-    for c in wl.get("children", []) or []:
+    for c in wl.get("children", []):
         base = dict(out.get(c["parent"], {}))
         base["seed"] = None if c.get("seed") is None else int(c["seed"])
         out[c["request_id"]] = base
@@ -509,8 +513,8 @@ class TokenSelectGumbelTopP:
         x = first(a.get("self"), a.get("arg0"))
         if not isinstance(x, ViewDesc):
             return None
-        st = ctx.scratch.get(SCRATCH_TOPP_SELECT) or {}
-        s1 = (st.get("stage1") or {}).get(x.alloc)
+        st = ctx.scratch.get(SCRATCH_TOPP_SELECT)
+        s1 = None if st is None else st["stage1"].get(x.alloc)
         if s1 is None or x.shape != s1["local_max"].shape:
             return None
         dim = a.get("dim", a.get("arg1"))
@@ -531,8 +535,8 @@ class TokenSelectGumbelTopP:
         idx = first(a.get("index"), a.get("arg2"))
         if not isinstance(src, ViewDesc) or not isinstance(idx, ViewDesc):
             return None
-        st = ctx.scratch.get(SCRATCH_TOPP_SELECT) or {}
-        s2 = (st.get("stage2") or {}).get(idx.alloc)
+        st = ctx.scratch.get(SCRATCH_TOPP_SELECT)
+        s2 = None if st is None else st["stage2"].get(idx.alloc)
         if s2 is None or src.alloc != s2["local_argmax"].alloc:
             return None
         dim = a.get("dim", a.get("arg1"))

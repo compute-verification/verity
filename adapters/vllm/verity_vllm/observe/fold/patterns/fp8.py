@@ -66,8 +66,8 @@ def header_fp8_kernel(ctx: StepContext) -> str | None:
     """The block-scaled FP8 linear kernel class the record's engine carried (`RunHeader.profile["backends"]["fp8_block_gemm_kernel"]`,
     written by `vllm_adapter.profile_manifest` from `fp8_block_gemm_kernel_of(model)`), None when the header does not say."""
     try:
-        prof = ctx.header.profile or {}
-        k = (prof.get("backends") or {}).get("fp8_block_gemm_kernel")
+        backends = (ctx.header.profile or {}).get("backends")
+        k = backends.get("fp8_block_gemm_kernel") if backends else None
         return k if isinstance(k, str) else None
     except (AttributeError, TypeError):
         return None

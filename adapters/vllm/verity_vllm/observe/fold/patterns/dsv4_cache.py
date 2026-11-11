@@ -59,7 +59,8 @@ def _entry_slots(node: TreeNode, ctx: StepContext, layer: str, req: str, entries
         g = kv_group_of(ctx, layer)
     except GeometryError as e:
         return unsupported(node, str(e))
-    bt = ((g or {}).get("block_tables") or {}).get(req)
+    tables = g.get("block_tables") if g else None
+    bt = tables.get(req) if tables else None
     n = int((g or {}).get("block_size") or 0) // ratio
     if n != per_block:
         return unsupported(node, "the cache's entries a block are not its KV group's block size over the ratio", layer=layer,

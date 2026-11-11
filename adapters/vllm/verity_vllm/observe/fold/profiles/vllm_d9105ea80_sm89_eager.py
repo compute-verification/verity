@@ -214,7 +214,9 @@ _HF_KEYS = {"hidden_size": "H", "num_hidden_layers": "NL", "num_attention_heads"
 def make_check_header(C: dict[str, Any]) -> Callable[[RunHeader], list[str]]:
     def check_header(header: RunHeader) -> list[str]:
         """Mismatches between the run's recorded HF config and C (empty when consistent or when the header carries no config)."""
-        cfg = (header.model or {}).get("config") or {}
+        cfg = (header.model or {}).get("config")
+        if not cfg:
+            return []
         out = []
         for hf, key in _HF_KEYS.items():
             if hf in cfg and cfg[hf] != C[key]:

@@ -503,6 +503,40 @@ def test_fold_builds_program_and_is_deterministic(memory):
     assert r1.program.gates > 0 and r1.timings["program_s"] >= 0
 
 
+def test_the_header_supplies_the_configuration_a_profile_does_not_state(memory):
+    """`_Fold._header`: a profile with no configuration of its own folds under the run header's (`model.config`)."""
+    import dataclasses
+
+    own = fold(toy_log(), toy_profile(), strict=True, with_program=False)
+    for config in (None, {}):
+        r = fold(toy_log(), dataclasses.replace(toy_profile(), config=config), strict=True, with_program=False)
+        assert r.weights_type == own.weights_type == b1.weights_type(C) and r.report.by_spec == own.report.by_spec
+
+
+@pytest.mark.parametrize("workload", [None, {}, {"requests": None}, {"requests": []}])
+def test_a_header_without_requests_is_refused(memory, workload):
+    import dataclasses
+
+    evs = toy_log()
+    evs[0] = dataclasses.replace(evs[0], workload=workload)
+    with pytest.raises(FoldError, match="RunHeader.workload has no requests"):
+        fold(evs, toy_profile(), strict=True, with_program=False)
+
+
+def test_a_header_reads_alike_without_children_sampling_and_a_tensor_parallel_note(memory):
+    """A workload's `children` and `sampling` and the notes' `tp2` are optional: missing, null and empty each read as none."""
+    import dataclasses
+
+    hdr = toy_log()[0]
+    own = fold(toy_log(), toy_profile(), strict=True, with_program=False)
+    for more in ({}, {"children": None, "sampling": None}, {"children": [], "sampling": {}}):
+        for notes in (None, {}, {"tp2": None}, {"tp2": {}}, {"tp2": {"world_size": 1}}):
+            evs = toy_log()
+            evs[0] = dataclasses.replace(hdr, workload={"requests": hdr.workload["requests"], **more}, notes=notes)
+            r = fold(evs, toy_profile(), strict=True, with_program=False)
+            assert r.tp is None and [n for n, _ in r.params] == ["prompt", "weights"] and r.report.by_spec == own.report.by_spec, (more, notes)
+
+
 def test_registered_values_are_inputs_of_the_program(memory):
     """Under `registered_values` the norms' eps and the attention scale are fields of the registered `values` parameter, read by the
     Definitions that take them as inputs; the Program holds neither as a constant, and each request has a (here empty) run parameter."""

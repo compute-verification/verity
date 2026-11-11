@@ -76,7 +76,11 @@ def kv_slots(ctx: StepContext, request_id: str, T: int, layer: str | None = None
     the step has several groups; see `kv_group_of`)."""
     g = kv_group_of(ctx, layer)
     bs = ctx.start.block_size if g is None else int(g["block_size"])
-    bt = ctx.start.block_tables.get(request_id) if g is None else (g.get("block_tables") or {}).get(request_id)
+    if g is None:
+        bt = ctx.start.block_tables.get(request_id)
+    else:
+        tables = g.get("block_tables")
+        bt = tables.get(request_id) if tables else None
     if bt is None:
         raise GeometryError(f"no block table for request {request_id!r}")
     if len(bt) * bs < T:
@@ -94,7 +98,12 @@ def _kv_moves(rc: TreeNode, ctx: StepContext, pattern: str, consumed: tuple[int,
         group = kv_group_of(ctx, layer)
     except GeometryError as e:
         return unsupported(rc, str(e), layer=layer)
-    public_slots = ctx.start.slot_mapping if group is None else (group.get("slot_mapping") or [])
+    if group is None:
+        public_slots = ctx.start.slot_mapping
+    else:
+        public_slots = group.get("slot_mapping")
+        if not public_slots:
+            public_slots = []
     key, value = a.get("key", a.get("arg0")), a.get("value", a.get("arg1"))
     kc, vc = a.get("key_cache", a.get("arg2")), a.get("value_cache", a.get("arg3"))
     sm = a.get("slot_mapping", a.get("arg4"))

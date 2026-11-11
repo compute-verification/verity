@@ -328,8 +328,11 @@ class StepContext:
 def external_buffers(note: Note, device: Callable[[int], str]) -> dict[str, ViewDesc]:
     """The views the capture's external-buffers Note (`observe.capture`) records with an offset and strides, the KV caches as
     `kv_cache[<module>]`, on the device of their allocation."""
+    buffers = (note.data or {}).get("buffers")
+    if not buffers:
+        return {}
     return {name: ViewDesc(int(b["alloc"]), int(b["offset"]), tuple(b["shape"]), tuple(b["strides"]), b["dtype"], device(int(b["alloc"])))
-            for name, b in ((note.data or {}).get("buffers") or {}).items() if "offset" in b and "strides" in b}
+            for name, b in buffers.items() if "offset" in b and "strides" in b}
 
 
 @runtime_checkable
