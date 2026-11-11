@@ -55599,3 +55599,15 @@ For BREAKEVEN:
 
 For the table:
 - PLAN | K0 | at world year each priced row's own public cap is 3 to 5 (the record 3, κ 2^-4 3, κ 2^-5 3 or 4), where every bits line reads 6; at its own cap κ 2^-4 holds one M to 326 and fits #8914's `MAX_COINS` 2^24 by 1.4% (3,853 GB no program, 10,558 as `main` is), and the record's plan holds to 503; (b), modeled; which K0 the line reads is the coordinator's [run].
+
+## REGX, Wed 11 Nov 12:57Z: the tree merged with `main` as it is (`967b722429f3`) BUILDS: `f321` lean exit 0. The three ready lines (#8912, #8922, #8924) have nothing open
+
+- **The build** [run]: local merge `199dec76431f` of #8924's head `d025f81332e6` with `main` `967b722429f34b24ed73991c28797ea619741256` (tree `fa4876e44b01`, pushed nowhere), try `r20261111-122853-f321` (vy-nebius-cpu-7): done rc 0 SUCCESS; `FirstHitClassAt.lean` lean exit 0 in 1461 s; `code_hpos` and `code_eventTwoX_le_cls_at_budget` on `propext`, `Classical.choice`, `Quot.sound` only; `Spot.Registration`, `Spot.Run`, `Spot.Partition` and `Definitions.Claims.SamplingGeneric` as `main` has them, and `OpensWhole` and `OpensClass`, built under it (11,072 jobs). Siblings: clean over the 75 modules built there, 3,785 unchecked.
+- It is the merged-tree build of all three: #8912's and #8922's heads are ancestors of #8924's, and that head also holds #8906's `e7b2e51d928b` and #8916's `8784a105de5b`.
+- **`main` has not moved since** [run: `git fetch` 12:56Z], and `git merge-tree --write-tree` exits 0 for each of the three heads with it.
+- **Heads** [run: `gh pr view` 12:56Z], all OPEN, unmarked, unmoved: #8912 `62eb1fdc64de88b5a6c5a48f9eae187aa77b61cc`, #8922 `5b37c49d6a5c4a0a744982f75f4e12cbe05c8934`, #8924 `d025f81332e674746d26e91dea64f5166cb64f7f`. The three bodies name `f321` and its verdict since 12:56Z.
+- **Nothing of mine is running.** Side branch `cursor/proofs-onekey-6a2d` at `b40674d790c9b32e00e15535a165edb1db627bf1` (the reduction, no PR) is as my 12:04Z left it.
+- **Open, yours to say:** (1) derive `OneKey.lean`'s two hypotheses at `code h` (closed blocks, no constant in a block), which makes "one class a block at the code" a theorem; less worth having if the repair is (A), where it is the case with no wire. (2) Any part of (A) you want from me: I would start with the substitution lemma through `Bits.wiresOf` (my 12:12Z, item 1). I start neither unasked.
+
+For the table:
+- #8912, #8922, #8924: ready, each at its head; quick tiers, records (nothing regenerated) and the merged-tree build at `main` `967b722429f3` (`f321`) all pass. Lemmas, true as stated, under `Addresses h` (false as defined at a registration with a checked interior row), about the units side by side.
