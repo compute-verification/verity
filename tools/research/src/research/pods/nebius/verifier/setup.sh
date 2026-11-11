@@ -1,6 +1,6 @@
 #!/bin/bash
 # vy-verifier-setup GATE_KEYS TUNNEL_KEYS [--lock]: the verifier's auditor host's accounts and state (vy-auditor-1), as
-# root, safe to rerun. benchmarks/live_verifier/host.py says what runs there and why; /etc/vy/verifier.json is the host's
+# root, safe to rerun. verity/protocols/poub/device/live_verifier/host.py says what runs there and why; /etc/vy/verifier.json is the host's
 # configuration (its challenger and each audited node's capacities, deploy.toml's).
 #
 #   - `auditor`: a system user with no login, home /var/lib/vy-verifier (0700, so research can't enter it): the runs (runs/<id>/),
@@ -108,7 +108,7 @@ mv -f "$tmp" "$ak"
 echo "research's authorized_keys: $n keys, each forced to vy-verifier-gate; lanes that run:${lanes:- none}"
 
 s=/etc/sudoers.d/60-vy-verifier
-printf '%s\n' "# vy-verifier-setup: research runs the verifier's gate as root, and nothing else (benchmarks/live_verifier/host.py)" \
+printf '%s\n' "# vy-verifier-setup: research runs the verifier's gate as root, and nothing else (verity/protocols/poub/device/live_verifier/host.py)" \
   'research ALL=(root) NOPASSWD: /usr/local/sbin/vy-verifier-gate --ssh *' > "$s.tmp"
 visudo -cqf "$s.tmp" || { rm -f "$s.tmp"; die "visudo refuses $s"; }
 chmod 0440 "$s.tmp"
