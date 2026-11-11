@@ -2,7 +2,7 @@
 TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without proving.
 
 * The compiler is total: every byte string is the requests or a `ValueError` naming why, the same on every run; random and
-  truncated advice is refused, advice over the registered cap ℓ is refused before it is read, and a malformed opening is
+  truncated advice is refused, advice over the registered bound ℓ is refused before it is read, and a malformed opening is
   refused the same way.
 * The advice is fixed before the sample: `advice_before_draw` holds the registration the verifier opens the advice under to the
   one the sample's receipt names, and refuses the advice re-committed after the coins.
@@ -16,7 +16,7 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
   the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
 * A served window's pieces on a small synthetic serve-openai run dir (no Commit): its requests' bodies by I1 id, φ of the served
   engine, the registered compiler, the prover committing under the published binding (no re-commit), `serve_check`'s codes
-  (a compiler without the cap, a root that isn't rows-sha512, a carried request that doesn't follow from the last window's
+  (a compiler without the bound ℓ, a root that isn't rows-sha512, a carried request that doesn't follow from the last window's
   close) and its negatives, and the CLI's served run.
 * What no Program digest covers (a Build's row names, its parameters' names and types, its correspondence): the verifier's I2
   reads it only from its own Build of each Program, which its compile writes (`own_builds`, `naming.write_build`), whatever the
@@ -157,15 +157,15 @@ def _bound(rec: dict) -> dict:
 
 def test_the_advice_must_be_in_the_registration_the_challengers_stream_drew_after():
     rec = _rec("11" * 64)
-    drawn = R.receipt(rec, A5.CHALLENGER, received="0")
-    assert PP.advice_before_draw(drawn, rec, _bound(rec)) == {"ok": True, "codes": [], "detail": {
+    receipt = R.receipt(rec, A5.CHALLENGER, received="0")
+    assert PP.advice_before_draw(receipt, rec, _bound(rec)) == {"ok": True, "codes": [], "detail": {
         "drawn_after": R.digest(rec), "registration": R.digest(rec), "received": "0"}}
     late = _rec("22" * 64)
-    assert PP.advice_before_draw(drawn, late, _bound(late))["codes"] == ["after-the-draw"]
+    assert PP.advice_before_draw(receipt, late, _bound(late))["codes"] == ["after-the-draw"]
     assert PP.advice_before_draw(R.receipt(rec, "one-stage-e2e verifier (a5.py)"), rec, _bound(rec))["codes"] == ["after-the-draw"]
-    assert PP.advice_before_draw(drawn, rec, _bound(late))["codes"] == ["advice"]
+    assert PP.advice_before_draw(receipt, rec, _bound(late))["codes"] == ["advice"]
     other = _rec("11" * 64, compiler="ef" * 64)
-    assert PP.advice_before_draw(drawn, rec, _bound(other))["codes"] == ["compiler"]
+    assert PP.advice_before_draw(receipt, rec, _bound(other))["codes"] == ["compiler"]
 
 
 @dataclass(frozen=True)
@@ -394,15 +394,15 @@ def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit
 @pytest.mark.slow
 def test_a_plain_audit_takes_the_stand_ins_window_under_a_stratified_rate_only_inside_one_table(tp):
     """`--plain` covers one table under a stratified sample (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
-    unit, is inside it under the stratified rate a stream's rule states (stratified-rate:1/2, the stratified law at the K its
+    unit, is inside it under the stratified rate a stream's rule states (stratified-rate:1/2, the stratified sampling design at the K its
     one stratum needs), and refused before the sample under the subset or work rate, its own fixed count (subset:8), sampled
     outside a stream, with a second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
     compiler, requests, bound, _o = PP.compiled(tp["args"]["honest"])
     _c, _b, _o, mine, _held = _mine(tp, "honest", 0)
 
-    def rated(law: str):
-        pf = tp["root"] / f"partition-{law.split(':')[0]}.json"
-        pf.write_text(json.dumps({"templates": ["SiluMul_v2{I=256}"], "law": law}))
+    def rated(rate: str):
+        pf = tp["root"] / f"partition-{rate.split(':')[0]}.json"
+        pf.write_text(json.dumps({"templates": ["SiluMul_v2{I=256}"], "law": rate}))
         return AW.window_of_advice(tp["commit"], 0, pf, compiler, requests, bound)[0]
 
     stratified, subset, work = (rated(f"{kind}rate:1/2") for kind in ("stratified-", "", "work-"))
@@ -1296,7 +1296,7 @@ def test_the_prover_commits_a_served_window_under_the_published_binding(tmp_path
     ({"published": "cc" * 64}, ["run_root"]),
 ], ids=["compiler-without-the-cap", "vllm-v1-root", "store-not-rows-sha512", "another-commits-root"])
 def test_a_served_window_is_refused_before_any_commit_by_name(tmp_path, monkeypatch, kw, codes):
-    """A registration whose compiler carries no cap (the inner compiler, so its advice tree's domain is another too), a published
+    """A registration whose compiler carries no bound ℓ (the inner compiler, so its advice tree's domain is another too), a published
     root of 32 bytes, a row dir whose store isn't rows-sha512, or a published root that isn't the row dir's."""
     s = _served(tmp_path, monkeypatch, **kw)
     _c, _r, bound, _o = PP.compiled(s.a)

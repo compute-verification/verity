@@ -247,7 +247,9 @@ def _wiring(r, sel: str, rows: tuple[str, ...]) -> list[tuple[int, list[int]]]:
     """Each read of a row's history in order: the keys it reads, and which of `sel`'s calls (by their order) its positions are."""
     at = {i: j for j, (i, _) in enumerate(_calls(r, sel))}
     reads = sorted(((i, n) for f in rows for i, n in _calls(r, f)), key=lambda x: x[0])
-    keys = lambda b: b["V"] if "V" in b else b.get("T", b.get("N"))   # noqa: E731  (the reads', the rows pad's, the rows')
+
+    def keys(b):
+        return b["V"] if "V" in b else b.get("T", b.get("N"))   # the reads', the rows pad's, the rows'
     return [(keys(n.fn.bindings), [at[k] for k in _reads(n, 0)]) for _, n in reads]
 
 
@@ -266,7 +268,9 @@ def test_table_reads_move_only_a_request_with_rows_past_index_topk(phi):
     assert [b[f] for f in table] == [a[net[0]], a[net[1]] + a[net[2]]] and a[net[2]] > 0
     assert {f: n for f, n in a.items() if f not in (*net, zero)} == {f: n for f, n in b.items() if f not in (*table, zero)}
     assert _wiring(on, table[0], table[1:]) == _wiring(off, net[0], net[1:]), "each row read at the same keys and selection"
-    zeros = lambda r: [n.n for n in r.program.fn.body.nodes if n.form == "batch" and n.fn.id == zero]   # noqa: E731
+
+    def zeros(r):
+        return [n.n for n in r.program.fn.body.nodes if n.form == "batch" and n.fn.id == zero]
     assert len(zeros(off)) == len(zeros(on)) + 1, "the rows network's zero pad is gone"
 
 
