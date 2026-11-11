@@ -7,12 +7,13 @@
 #   research run --as proofs --on auto --cpus 16 --mem-gb 64 --max-min 150 --cwd source -- \
 #     env FM_MEM_GB=64 bash benchmarks/verifier_cost/flock_members.sh
 # Per "NAME<TAB>SPEC<TAB>ARGS" line of the file FM_SPECS (ARGS: more m1_unit.py arguments, or none; default: SPECS below,
-# a router with a small program and an expert GEMM with a large one), $OUT/NAME gets m1.log, the member's verify call
-# (verify.argv), members.json and each process's output and stage lines (flock_members.py's docstring).
+# an expert GEMM at two widths, whose programs are about one size and whose circuits are not), $OUT/NAME gets m1.log,
+# the member's verify call (verify.argv), members.json and each process's output and stage lines (flock_members.py's
+# docstring). A spec whose session the verifier refuses is not timed, and the job exits 1.
 # env: FM_MEM_GB (the job's --mem-gb)  FM_SPECS  FM_MEMBERS=3  FM_ROUNDS=2  FM_CACHE  FM_PORT=7611  FM_CORE
 set -uo pipefail
 SPECS=$(cat <<'EOF'
-router	MoeRouterSigmoidBias_v1{E=64,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}	--reads slots
+expert-gemm-small	MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=384}"},K=768,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}
 expert-gemm	MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=3072}"},K=6144,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}
 EOF
 )
