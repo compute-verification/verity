@@ -18,7 +18,7 @@ its last row's output still in flight), and at AS = 1 ``map``. ReplayStep_v1 rea
 the returns of a slot that is neither a victim nor leaving, the stamp of a slot with no row.
 
 **The calls** (`pool_step`, the step's CacheStep_v2 calls on B_u, in the order vLLM makes them; `cache_pool_vectors`
-holds the same calls to the replay's `_KV`). A pool slot is the running slot its request holds at the step's start.
+holds the same calls to the replay's `pool.BlockPool`). A pool slot is the running slot its request holds at the step's start.
 - *The schedule's R positions.* Position t is the t-th event of the running loop: the compute of a kept slot i, or the
   free of a victim j. vLLM frees victims from the last slot down, each just before the allocation that needs it, so
   victim j is freed before kept slot i's compute iff free + (the returns of the slots after j) < (the needs up to i),
@@ -63,7 +63,7 @@ first seven steps (CN 24, CU 25, 16-token blocks of 17-bit tokens, CD 1, SW 12) 
 CompileSlice_v1's about 7.6M, and is its reference on the honest run and a stamp or a return off. At the crush traces'
 class (CN 159 = NB − 1, R 16, CU 256) a call's eviction is 41,476 ANDs, a unit of its window 99,172 and its free 10,694,
 so a step's calls are about 300M ANDs, 85% of them the R takes' KL = 160-unit windows: there
-`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds the calls to the replay's `_KV`.
+`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds the calls to the replay's `pool.BlockPool`.
 """
 from __future__ import annotations
 

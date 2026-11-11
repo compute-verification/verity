@@ -645,7 +645,7 @@ def cheating(out: Path) -> dict:
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlim(xs[0], xs[-1])
-    ax.set_ylim(min(chi) / 3, 0.1)
+    ax.set_ylim(min(chi) / 3, 3 * max(chi))
     ax.xaxis.set_major_locator(LogLocator(numticks=10))
     ax.xaxis.set_major_formatter(every_two)
     ax.set_xlabel("proving cost (× step work)")
@@ -681,8 +681,8 @@ def cheating(out: Path) -> dict:
         "Left: the cheating share chi at T5 (1% of proof blocks sampled) against the proving cost per unit of step "
         "work (log-log, 1e6 to 1e14), from tiers.evaluate; chi doesn't depend on r̂. The blocks that inject a chosen "
         "output and pass number ln(1/delta) / q per identity, q = share / (overhead + replay), delta = "
-        f"2^{math.log2(P['p_evade']):.0f}, 16 output bits each, each bit worth the chord of one inference block's "
-        f"thread bound ({num(chord)} counted multiplications). "
+        f"2^{math.log2(P['p_evade']):.0f}, {P['step_bits']:,.0f} output bits each, each bit worth the chord of one "
+        f"inference block's thread bound ({num(chord)} counted multiplications). "
         "Marked: " + "; ".join(f"{k} ({num(v['overhead'])}): chi = {num(v['chi'])}" for k, v in quote.items())
         + f". Reference lines: the best PoUW design's r̂ = {num(best)} and NCI's nu = {num(nu)} at the structural "
         f"d = {num(P['d'])}. Right: D at T5 for the top rungs against the same cost (memory rungs by the fit bound, the "

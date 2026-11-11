@@ -568,6 +568,24 @@ def test_the_cli_runs_the_pass_whatever_the_target_and_reports_it(node, monkeypa
     assert seen["keep_s"] == 1800, "a node short of inodes keeps recent trees for less"
 
 
+def test_a_store_pass_that_fails_still_lets_the_source_tree_pass_run(node, monkeypatch, capsys):
+    """A store this user can't write (a catalog another user made, whose schema gained an index) once stopped every pass before the
+    source trees, and the tree stopgaps put in its place deleted trees live runs were in."""
+    import sqlite3
+
+    from research.store.cli import main
+
+    def broken(*a, **kw):
+        raise sqlite3.OperationalError("attempt to write a readonly database")
+
+    monkeypatch.setattr(EV, "evict_store", broken)
+    monkeypatch.setattr(EV, "evict_src", lambda src, **kw: {"deleted": [], "kept": [{"tree": node.a}], "error": None})
+    assert main(["evict", "--target-free-gb", "0", "--src-dir", str(node.src), "--dry-run", "--json"]) == 3
+    rep = json.loads(capsys.readouterr().out)
+    assert rep["error"] == "store pass: OperationalError: attempt to write a readonly database"
+    assert rep["src"]["kept"] == [{"tree": node.a}]
+
+
 def test_by_default_a_tree_is_recoverable_when_the_nodes_own_repository_holds_its_commit(node):
     """Condition 1 is recoverability, so the node's `git/verity.git` (refs/research/src/<sha>, what `research
     run` re-ships from) is its repository and no credential for GitHub is needed: c, a branch origin never saw, goes; a tree whose
