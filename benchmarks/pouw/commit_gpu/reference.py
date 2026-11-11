@@ -36,14 +36,14 @@ import subprocess
 import sys
 import time
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.limits import VerificationLimits
-from verity.ml.commitments.merkle import Commitment, CommitmentDomain, MerkleTree, Opening, tree_levels, verify_opening
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.ml.commitments.rowleaf import (bit_row, row_leaf, sha512_row_seg_digest, sha512_row_seg_prefix, sha512_row_v2_digest,
+from verity.commitments import hm96
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.limits import VerificationLimits
+from verity.commitments.merkle import Commitment, CommitmentDomain, MerkleTree, Opening, tree_levels, verify_opening
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import (bit_row, row_leaf, sha512_row_seg_digest, sha512_row_seg_prefix, sha512_row_v2_digest,
                                            sha512_row_v2_prefix)
 
 INST = hm96.SHA512
