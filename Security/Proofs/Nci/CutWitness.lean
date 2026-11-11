@@ -5,13 +5,14 @@ public import Proofs.Nci.Cut
 /-!
 # The min-cut statements say something
 
-`Cut_honest` and each guarantee's `_nontrivial`, at the toy `Nci.Cut.Toy`. The toy's `w`- and `x`-words are each one
-unregistered input, which every separator from the unregistered inputs holds (`card_inter_le_kappa`), so
-`|S ∩ W| + |S ∩ X| ≤ κ(S)` (`toy_card_words_le`): that is (H) at unit costs for every read cap, and at `κ(S) ≤ 1` no
-matmul has both a `w`- and an `x`-word in `S`, so `Π(k) = 0` and `α = 0` for `k ≤ 1` (`toy_piMax`, `toy_alpha`). Each
-MAC is its output's one wire, so no set of gates finishes an output it holds no wire of (`toy_clear`), and (E) holds at
-every `b`. One block holding both MACs reads the three inputs (`toy_reads_P1`); a block for each reads two
-(`toy_reads_P2`).
+`Cut_honest`, `CountHE_honest` and each guarantee's `_nontrivial`, at the toy `Nci.Cut.Toy`. The toy's `w`- and
+`x`-words are each one unregistered input, which every separator from the unregistered inputs holds
+(`card_inter_le_kappa`), so `|S ∩ W| + |S ∩ X| ≤ κ(S)` (`toy_card_words_le`): that is (H) at unit costs for every read
+cap, and at `κ(S) ≤ 1` no matmul has both a `w`- and an `x`-word in `S`, so `Π(k) = 0` and `α = 0` for `k ≤ 1`
+(`toy_piMax`, `toy_alpha`). Each MAC is its output's one wire, so no set of gates finishes an output it holds no wire of
+(`toy_clear`), and (E) holds at every `b`. One block holding both MACs reads the three inputs (`toy_reads_P1`); a block
+for each reads two (`toy_reads_P2`), so the toy complies with `CompliesAtMost 1 2 2` (`toy_complies`); every block of a
+partition reads an unregistered input, so it fails `CompliesAtMost c 0 n` at every `c` and `n` (`toy_not_complies`).
 -/
 
 @[expose] public section
@@ -136,6 +137,39 @@ theorem HE_nontrivial : Guarantees.HE_nontrivial := by
   refine ⟨one_pos, toy_values, toy_noSharedPair, toy_hardness 0, toy_exports 1, toy_not_reads_P1 (by norm_num), ?_⟩
   rw [toy_N]
   norm_num [alphaHE]
+
+/-- A block for each MAC: the toy complies with `CompliesAtMost 1 2 2`. -/
+theorem toy_complies : CompliesAtMost 1 2 2 Toy.d :=
+  ⟨2, le_rfl, Toy.P2, ⟨⟨fun _ => rfl, by decide⟩, by decide, toy_reads_P2⟩⟩
+
+/-- Every block of a partition of the toy reads an unregistered input: the block of `y₀` reads `w`. -/
+theorem toy_not_complies (c n : ℕ) : ¬ CompliesAtMost c 0 n Toy.d := by
+  rintro ⟨B, -, P, hP⟩
+  obtain ⟨u, hu⟩ := Option.ne_none_iff_exists'.1 fun h => absurd ((P.input_iff 3).1 h) (by decide)
+  have h0 : P.unit 0 = none := (P.input_iff 0).2 (by decide)
+  have hmem : (0 : Fin Toy.C.N) ∈ Toy.d.unregistered (P.gates u) := by
+    simp only [RegisteredCircuit.unregistered, Circuit.into, Partition.gates, mem_sdiff, mem_filter, mem_univ,
+      true_and, h0, reduceCtorEq, not_false_eq_true]
+    exact ⟨⟨3, hu, by decide⟩, by decide⟩
+  have h := hP.reads u
+  rw [Nat.le_zero, card_eq_zero] at h
+  rw [h] at hmem
+  exact absurd hmem (notMem_empty _)
+
+/-- The toy's bound at its two blocks, `k = 2`, unit costs and `b = 2`: `α = 1`, so `2 (2 + 1) + √4 = 8`. -/
+theorem toy_workHE : workHE 2 2 (1 * 1) 2 Toy.W.O = 8 := by
+  have h4 : √(4 : ℝ) = 2 := by
+    rw [show (4 : ℝ) = 2 ^ 2 by norm_num, Real.sqrt_sq zero_le_two]
+  rw [workHE, alphaHE, toy_O]
+  norm_num [h4]
+
+theorem CountHE_honest : Guarantees.CountHE_honest :=
+  ⟨toy_complies, toy_values, toy_noSharedPair, toy_hardness 2, toy_exports 1⟩
+
+theorem CountHE_nontrivial : Guarantees.CountHE_nontrivial := by
+  refine ⟨one_pos, toy_values, toy_noSharedPair, toy_hardness 0, toy_exports 1, toy_not_complies 1 1, ?_⟩
+  rw [toy_N]
+  norm_num [workHE, alphaHE]
 
 theorem HEShared_nontrivial : Guarantees.HEShared_nontrivial := by
   refine ⟨one_pos, zero_le_one, toy_arrays, toy_values, toy_costs, toy_hardness 0, toy_exports 1,
