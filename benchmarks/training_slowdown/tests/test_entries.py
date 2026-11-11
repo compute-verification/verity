@@ -215,6 +215,8 @@ REFERENCES = {
     "l16-t20-1.1x-fullmuon-fe-wsd-ema": (averaged, CLOSE),
     "m-t20-1.1x-fullmuon-wsd": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd-ema": (averaged, CLOSE),
+    "m-t20-1.1x-ref-optim-fullmuon": (under(muon), CLOSE_BF16),
+    "m-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-accumulate": (under(adamw), CLOSE),
     "s-t20-1.1x-adafactor": (under(adafactor), CLOSE),
     "s-t20-1.1x-adamw": (under(adamw), CLOSE),
@@ -228,10 +230,16 @@ REFERENCES = {
     "s-t20-1.1x-lora": (lora, CLOSE),
     "s-t20-1.1x-muon-whole": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-ref-optim": (under(muon), CLOSE_BF16),
+    "s-t20-1.1x-ref-optim-961": (under(muon), CLOSE_BF16),
+    "s-t20-1.1x-ref-optim-fullmuon-758": (under(muon), CLOSE_BF16),
+    "s-t20-1.1x-ref-optim-fullmuon-841": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-sgd": (under(sgd), CLOSE),
+    "s-t20-1.1x-shallow-depthshare-3": (under(muon), CLOSE_BF16),
+    "s-t20-1.1x-shallow-depthshare-6": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-shallow-strideshare": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-shampoo": (under(shampoo), CLOSE),
     "s-t20-1.1x-shampoo-whole": (under(shampoo), CLOSE),
+    "s-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
 }
 
 

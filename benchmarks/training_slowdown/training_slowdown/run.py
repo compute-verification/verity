@@ -497,16 +497,19 @@ def no_bytecode():
             sys.pycache_prefix, sys.dont_write_bytecode = prefix, write
 
 
-def train(te: Harness, cfg: config.Config, route, stream: Stream, model, optimizers) -> None:
+def train(te: Harness, cfg: config.Config, route, stream: Stream, model, optimizers, steps: int | None = None) -> None:
     """The route loop (module docstring) on the route's `build`. A route with an `output` gives each checkpoint its
-    output model; what that computes is counted, in the step after the checkpoint or in the tail."""
+    output model; what that computes is counted, in the step after the checkpoint or in the tail. `steps` stops the
+    loop after the budget's first `steps` steps, each run as the whole budget's, with a checkpoint after the last."""
     te.load(model)
     te.encode_with(route.plan(cfg.dials))
     if hasattr(route, "output"):
         te.output(lambda: route.output(model, cfg.dials))
     n, batch = cfg.budget["steps"], cfg.budget["batch"]
     te.plan(n)
-    for t in range(n):
+    last = n if steps is None else min(steps, n)
+    te.cp_steps.add(last - 1)
+    for t in range(last):
         with te.step():
             route.step(model, te.batch(stream.next(batch).to(te.device)), optimizers, cfg.dials, t, n)
 
