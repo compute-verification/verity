@@ -62,6 +62,9 @@ class Server:
     def close(self) -> dict[str, int]:
         return dict(self.exits)
 
+    #: where `ProofServer` placed the verifiers (``FC_VERIFIER_CPUS``); none unplaced
+    verifier_cpus: str | None = None
+
 
 class Device:
     def __init__(self, dev: str) -> None:
@@ -100,6 +103,16 @@ def run(monkeypatch, tmp_path: Path, *args: str, **server) -> tuple[int, dict]:
 def test_a_clean_row_keeps_its_rate(monkeypatch, tmp_path):
     rc, row = run(monkeypatch, tmp_path)
     assert (rc, row["statements_per_s"], row["accepted"], "void" in row) == (0, 1.0, 9, False)
+
+
+def test_a_row_keeps_its_verifier_cpus_and_their_seconds(monkeypatch, tmp_path):
+    for d in ("shared", "placed"):
+        (tmp_path / d).mkdir()
+    _, row = run(monkeypatch, tmp_path / "shared")
+    assert (row["verifier_cpus"], row["verifier_cpu_s_per_statement"], row["verifier_cpu_gone"]) == (None, 0.0, [])
+    monkeypatch.setattr(Server, "verifier_cpus", "44-47")
+    _, row = run(monkeypatch, tmp_path / "placed")
+    assert row["verifier_cpus"] == "44-47"
 
 
 def test_one_refused_session_voids_the_row_and_the_run(monkeypatch, tmp_path, capsys):
