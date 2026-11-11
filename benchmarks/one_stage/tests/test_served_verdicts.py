@@ -3195,6 +3195,15 @@ def test_v3c_on_an_existing_serve_dir_needs_no_row_dir_taps_or_gpu_lease(tmp_pat
     assert rc == 3 and lines[-1].startswith(f"PREFLIGHT: no {tmp_path / 'no-venv' / 'none'}/bin/python"), lines
 
 
+@pytest.mark.parametrize("extra, linked", [({}, False), ({"V3C_ARCHIVE_LINK": "1"}, True), ({"V3C_ARCHIVE_LINK": "0"}, False)])
+def test_v3c_links_each_members_circuit_into_its_archive_only_where_the_run_says(tmp_path, extra, linked):
+    """With V3C_ARCHIVE_LINK=1 the audit is asked to link each member's circuit file into its session's archive rather
+    than copy it (records_audit.py's --archive-link); unset, or at another value, it copies as before."""
+    rc, lines, order, _limits = _v3c(tmp_path, **extra)
+    assert rc == 0 and "audit" in order, (lines, order)
+    assert ("--archive-link" in json.loads((tmp_path / "order.audit").read_text())) is linked
+
+
 @pytest.mark.parametrize("tied, extra, limit", [
     (False, {}, None), (False, {"V3C_WARM_JOBS": "2"}, "180m"),
     (True, {"V3C_WARM_JOBS": "3", "V3C_WARM_TIMEOUT": "5h"}, "5h"),

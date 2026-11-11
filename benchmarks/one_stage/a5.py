@@ -909,6 +909,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     archived: dict = {}     # the members' circuit, archived once for every Lean verify (`a0.lean_verify`)
     for mm in members:
         mm["st"]["archived"] = archived
+        mm["st"][a0.ARCHIVE_LINK] = bool(getattr(a, "archive_link", False))
 
     server = proof_server(a, out, [mm for mm, _ in drawn])
 
@@ -1303,6 +1304,8 @@ def streamed(a: argparse.Namespace) -> bool:
 FIREWALL_HELP = ("the core protocols' path, Lean's flock-firewall: every session's prover runs behind the ZK server's send check "
                  "(FC_FIREWALL=1, live PROTOCOL.md §10.4); without it each runs prove --zk itself, as SPOT[Flock]'s proof server "
                  "does (a0.DIRECT, zk_cost's dev arm)")
+ARCHIVE_LINK_HELP = ("link each member's circuit file into its session's archive under its SHA-512 rather than copying it "
+                     "(a0.lean_verify): the archive holds no second copy, and Lean still holds the object to its key")
 #: AGENTS.md's live-coins rule, which keeps an audit's sampled members' sessions one after another
 ONE_AT_A_TIME = "outer proofs go through the firewall one at a time (AGENTS.md, \"Live coins only\")"
 
@@ -1543,6 +1546,7 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
     ap.add_argument("--session-jobs", type=one_session, default=1, help="1 only: the sessions run one at a time (ONE_AT_A_TIME)")
+    ap.add_argument("--archive-link", action="store_true", help=ARCHIVE_LINK_HELP)
     ap.add_argument("--session-timeout", type=float, default=14400,
                     help="each drawn member's prover limit in seconds, and each template's compose: one firewalled session of a MoE "
                          "w2 coordinate chunk (MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded "

@@ -89,18 +89,18 @@ def own(root: Path, k: int, archived: dict | None) -> tuple[dict, Path, str]:
     st, out = member(root, k, circuit, archived if archived is not None else {})
     if archived is None:
         del st["archived"]
+    st[a0.ARCHIVE_LINK] = True
     return st, out, hashlib.sha512(circuit.read_bytes()).hexdigest()
 
 
 @pytest.mark.parametrize("shared", [True, False])
-def test_under_archive_link_a_members_own_circuit_is_linked_into_its_archive_and_never_put(tmp_path, monkeypatch, shared):
-    """Each member has a circuit file of its own, so none is archived by an earlier one. Under ARCHIVE_LINK=1 the
+def test_under_archive_link_a_members_own_circuit_is_linked_into_its_archive_and_never_put(tmp_path, shared):
+    """Each member has a circuit file of its own, so none is archived by an earlier one. Under `a0.ARCHIVE_LINK` the
     archive's object is the member's file under a second name (one inode), `archive-put` is given no circuit, and the
     verifier still reads the object under its key and accepts; with or without the members' shared record."""
     lean, puts = tmp_path / "flock-verify", tmp_path / "puts.jsonl"
     lean.write_text(FAKE.format(python=sys.executable, puts=str(puts)))
     lean.chmod(0o755)
-    monkeypatch.setenv(a0.ARCHIVE_LINK, "1")
     archived: dict | None = {} if shared else None
     for k in range(2):
         st, out, key = own(tmp_path, k, archived)
@@ -115,7 +115,6 @@ def test_under_archive_link_a_circuit_that_cannot_be_linked_is_put_as_without_it
     lean, puts = tmp_path / "flock-verify", tmp_path / "puts.jsonl"
     lean.write_text(FAKE.format(python=sys.executable, puts=str(puts)))
     lean.chmod(0o755)
-    monkeypatch.setenv(a0.ARCHIVE_LINK, "1")
     st, out, key = own(tmp_path, 0, {})
 
     def refuse(src, dst):

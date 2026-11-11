@@ -26,7 +26,7 @@
 #   rehearsal.sh audit    the audit node, D the deferral's copy at the serve dir's own path: `served_verdicts.sh v3c`,
 #                         the follow-on, at the deferral's settings. PP_PEER is this node's name in the gate's peers
 #                         file. MAIN_FILE and PP_CHALLENGER_KEY default to the run's sent main.txt and
-#                         challenger-key.json, V3C_AUDIT_TIMEOUT to 46h, and ARCHIVE_LINK to 1: each member's circuit
+#                         challenger-key.json, V3C_AUDIT_TIMEOUT to 46h, and V3C_ARCHIVE_LINK to 1: each member's circuit
 #                         file is linked into its archive, not copied (`a0.lean_verify`). PREFLIGHT_ONLY=1 stops after
 #                         the harness's preflight.
 #   rehearsal.sh compose  a node that holds the compose hand-off alone, D its copy: `served_verdicts.sh compose` inside
@@ -103,7 +103,7 @@ audit() {
     PP_GATE_KEY=${PP_GATE_KEY:-$HOME/.ssh/vllm_lane_ed25519} \
     MAIN_FILE=${MAIN_FILE:-${RESEARCH_RUN_DIR:-.}/inputs/main.txt} \
     PP_CHALLENGER_KEY=${PP_CHALLENGER_KEY:-${RESEARCH_RUN_DIR:-.}/inputs/challenger-key.json} \
-    V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-46h} ARCHIVE_LINK=${ARCHIVE_LINK:-1}
+    V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-46h} V3C_ARCHIVE_LINK=${V3C_ARCHIVE_LINK:-1}
   filtered bash "$HARNESS" v3c
 }
 
