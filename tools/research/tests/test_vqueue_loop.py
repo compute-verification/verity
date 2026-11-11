@@ -3500,3 +3500,19 @@ def test_the_closure_of_what_tasks_read_is_the_walks_per_task(seed):
         assert closure.fails(i, failed) == tuple(j for j in walked if j in failed)
         assert closure.meets(i, erred) == bool(set(walked) & erred)
         assert closure.inputs(i) == _reach(tasks, envs, i, memo)
+
+
+def test_a_cancel_leaves_running_the_runs_the_keep_file_names(tmp_path, monkeypatch):
+    """A first shard's Lean audit writes its node's module index only when it ends, so a drop's cancel leaves the runs
+    `KEEP_RUNS` names running, and cancels the rest; without the file it cancels them all."""
+    cancelled = []
+    monkeypatch.setattr(L, "cancel_runs", lambda repo, ids, why: cancelled.append(list(ids)) or {})
+    keep = tmp_path / "keep-runs"
+    keep.write_text("# first shards\nr-2  # cpu-2's audit\n\n")
+    w = World(type("Q", (), {"workdir": tmp_path})(), None, None, keep_file=keep)
+    assert w.cancel_runs(["r-1", "r-2", "r-3"], "dropped") == {"r-2": f"left running: {keep} names it"}
+    assert cancelled == [["r-1", "r-3"]]
+    assert w.cancel_runs(["r-2"], "dropped") == {"r-2": f"left running: {keep} names it"} and cancelled == [["r-1", "r-3"]]
+    keep.unlink()
+    assert w.cancel_runs(["r-2"], "dropped") == {} and cancelled[-1] == ["r-2"]
+    assert L.kept_runs(None) == frozenset()
