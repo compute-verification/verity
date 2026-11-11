@@ -21,8 +21,8 @@ first-hit finder (`Proofs.Core.SamplingGeneric.FirstHit`):
 * `pr_offReg_le_sample`: over the prover's tape, under `ExpectedCR` at one finder whose seed holds the tape and whose
   output is `B_conf`'s at two runs (`collAt`), `Pr[a run opens a gate off the committed trace] ≤
   2·(1 + w)·E[c]/2^256 + N/(K + 1)`, where `w` bounds the gates one run's sample holds (`chk`, a function of the run's
-  coins) and `c` is a run's calls (`runCost`); `pr_offReg_le_sample_forall`, under the bound at the finder of every
-  cap, has no `N/(K + 1)`.
+  coins alone: the finder's sample never reads the tape here) and `c` is a run's calls (`runCost`);
+  `pr_offReg_le_sample_forall`, under the bound at the finder of every cap, has no `N/(K + 1)`.
 * `pr_offReg_le_pos`: `pr_offReg_le_sample` with `w` the positions any reveal opens under the statement's roots
   (`opensAt_isSome_mem`).
 * `pr_offReg_le_needs`: `pr_offReg_le_sample` with `w` a bound on the gates the reveals open for the proof blocks of
@@ -162,7 +162,7 @@ theorem pr_offReg_le_sample {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.c
     (hchk : ∀ (ω : Ω) (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)),
       (L.opTable H P x ω rc g).isSome → chk rc g = true) {w : ℕ}
     (hw : ∀ rc, #(univ.filter fun g : Fin (L.nG x) => chk rc g) ≤ w) (K : ℕ)
-    (hCR : ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x) chk (L.runCost H P x s) K
+    (hCR : ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x) (fun _ => chk) (L.runCost H P x s) K
       fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
         Verity.FirstHit.outOf (L.opTable H P x q.1) (L.collAt H P x s q.1) K q.2.1 q.2.2)) :
     Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffReg H P x q.1 q.2.1 q.2.2) ≤
@@ -179,8 +179,8 @@ theorem pr_offReg_le_sample {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.c
       rw [L.regVal_eq_plur H P x q.1 hb]
       exact (hb.symm.trans h).symm
   have h := Verity.FirstHit.pr_off_sample_le_of_coll H (L.opTable H P x)
-    (vstar := fun (ω : Ω) (g : Fin (L.nG x)) => L.plur H P x ω g) (fun ω => L.isPlurality_plur H P x ω) chk hchk hw
-    (L.runCost H P x s) K (L.collAt H P x s)
+    (vstar := fun (ω : Ω) (g : Fin (L.nG x)) => L.plur H P x ω g) (fun ω => L.isPlurality_plur H P x ω) (fun _ => chk)
+    hchk (fun _ => hw) (L.runCost H P x s) K (L.collAt H P x s)
     (fun ω rc rc' g hg => collAt_of_conflictAt hbind hs P ω rc rc' g hg)
     (fun ω rc rc' u v huv => L.collAt_collision H P x s ω rc rc' huv) hCR
   rw [Fintype.card_fin] at h
@@ -194,7 +194,7 @@ theorem pr_offReg_le_sample_forall {H : Msg → Msg} {L : Compiled Coin A} (hbin
     (hchk : ∀ (ω : Ω) (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)),
       (L.opTable H P x ω rc g).isSome → chk rc g = true) {w : ℕ}
     (hw : ∀ rc, #(univ.filter fun g : Fin (L.nG x) => chk rc g) ≤ w)
-    (hCR : ∀ K : ℕ, ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x) chk (L.runCost H P x s) K
+    (hCR : ∀ K : ℕ, ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x) (fun _ => chk) (L.runCost H P x s) K
       fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
         Verity.FirstHit.outOf (L.opTable H P x q.1) (L.collAt H P x s q.1) K q.2.1 q.2.2)) :
     Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffReg H P x q.1 q.2.1 q.2.2) ≤
@@ -211,7 +211,7 @@ theorem pr_offReg_le_pos {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.comm
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (Spos : Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.1 = s.roots → p.2.pos ∈ Spos) (K : ℕ)
     (hCR : ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x)
-      (fun (_ : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) => decide (g.val ∈ Spos))
+      (fun (_ : Ω) (_ : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) => decide (g.val ∈ Spos))
       (L.runCost H P x s) K
       fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
         Verity.FirstHit.outOf (L.opTable H P x q.1) (L.collAt H P x s q.1) K q.2.1 q.2.2)) :
@@ -272,7 +272,7 @@ theorem pr_offReg_le_needs {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.co
     (hw : ∀ r : Fin (L.V.k x) → Coin,
       #(univ.filter fun g : Fin (L.nG x) => ∃ u ∈ L.checked x r, g.val ∈ needs u) ≤ w) (K : ℕ)
     (hCR : ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x)
-      (fun (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+      (fun (_ : Ω) (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
         decide (∃ u ∈ L.checked x rc.1, g.val ∈ needs u))
       (L.runCost H P x s) K
       fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
@@ -298,7 +298,7 @@ theorem pr_offReg_le_sample_ex {H : Msg → Msg} {L : Compiled Coin A} (hbind : 
     (chk : (Fin (L.V.k x) → Coin) × L.SlotEC x → Fin (L.nG x) → Bool)
     (hchk : ∀ (ω : Ω) (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)),
       (L.opTable H P x ω rc g).isSome → chk rc g = true)
-    (hCR : ∀ K : ℕ, ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x) chk (L.runCost H P x s) K
+    (hCR : ∀ K : ℕ, ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x) (fun _ => chk) (L.runCost H P x s) K
       fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
         Verity.FirstHit.outOf (L.opTable H P x q.1) (L.collAt H P x s q.1) K q.2.1 q.2.2)) :
     Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffReg H P x q.1 q.2.1 q.2.2) ≤
@@ -314,8 +314,8 @@ theorem pr_offReg_le_sample_ex {H : Msg → Msg} {L : Compiled Coin A} (hbind : 
       rw [L.regVal_eq_plur H P x q.1 hb]
       exact (hb.symm.trans h).symm
   exact hoff.trans (Verity.FirstHit.pr_off_sample_le_ex H (L.opTable H P x)
-    (vstar := fun (ω : Ω) (g : Fin (L.nG x)) => L.plur H P x ω g) (fun ω => L.isPlurality_plur H P x ω) chk hchk
-    (L.runCost H P x s) (L.collAt H P x s)
+    (vstar := fun (ω : Ω) (g : Fin (L.nG x)) => L.plur H P x ω g) (fun ω => L.isPlurality_plur H P x ω)
+    (fun _ => chk) hchk (L.runCost H P x s) (L.collAt H P x s)
     (fun ω rc rc' g hg => collAt_of_conflictAt hbind hs P ω rc rc' g hg)
     (fun ω rc rc' u v huv => L.collAt_collision H P x s ω rc rc' huv) hCR)
 
@@ -326,7 +326,7 @@ theorem pr_offReg_le_needs_ex {H : Msg → Msg} {L : Compiled Coin A} (hbind : L
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (needs : ℕ → Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.1 = s.roots → p.2.pos ∈ needs u)
     (hCR : ∀ K : ℕ, ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x)
-      (fun (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+      (fun (_ : Ω) (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
         decide (∃ u ∈ L.checked x rc.1, g.val ∈ needs u))
       (L.runCost H P x s) K
       fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
@@ -403,7 +403,7 @@ theorem pr_regHit_le_sample {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.c
     (hchk : ∀ (ω : Ω) (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)),
       (L.opTable H P x ω rc g).isSome → chk rc g = true) {w : ℕ}
     (hw : ∀ rc, #(univ.filter fun g : Fin (L.nG x) => chk rc g) ≤ w)
-    (hCR : ∀ K : ℕ, ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x) chk (L.runCost H P x s) K
+    (hCR : ∀ K : ℕ, ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x) (fun _ => chk) (L.runCost H P x s) K
       fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
         Verity.FirstHit.outOf (L.opTable H P x q.1) (L.collAt H P x s q.1) K q.2.1 q.2.2)) :
     Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
@@ -424,7 +424,7 @@ theorem pr_regHit_le_sample_ex {H : Msg → Msg} {L : Compiled Coin A} (hbind : 
     (chk : (Fin (L.V.k x) → Coin) × L.SlotEC x → Fin (L.nG x) → Bool)
     (hchk : ∀ (ω : Ω) (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)),
       (L.opTable H P x ω rc g).isSome → chk rc g = true)
-    (hCR : ∀ K : ℕ, ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x) chk (L.runCost H P x s) K
+    (hCR : ∀ K : ℕ, ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x) (fun _ => chk) (L.runCost H P x s) K
       fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
         Verity.FirstHit.outOf (L.opTable H P x q.1) (L.collAt H P x s q.1) K q.2.1 q.2.2)) :
     Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
