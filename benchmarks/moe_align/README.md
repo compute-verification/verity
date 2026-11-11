@@ -6,7 +6,7 @@ each expert's group to a multiple of the moe block `BM`. A pair is p = token × 
 than 64 experts or at least 1,024 pairs, the op's second kernel (`count_and_sort_expert_tokens_kernel`) places each pair
 at `atomicAdd(&offset[expert], 1)`. The order within an expert is the order the atomics run in, which varies from run to
 run. That order decides which pairs share a Marlin block, and so where the GEMM's reductions are cut. The integration's
-`verity_vllm.engine.moe_align` (`integrations/vllm/verity_vllm/engine/moe_align.py`) makes the op a function of its inputs
+`verity_vllm.engine.moe_align` (`adapters/vllm/verity_vllm/engine/moe_align.py`) makes the op a function of its inputs
 on the Marlin path, and this directory checks and times it on a GPU.
 
 ## The canonical outputs
@@ -22,8 +22,8 @@ buffers vLLM's wrapper allocates (`fused_moe/moe_align_block_size.py`), in the s
 
 No expert owns a pair whose id, read as vLLM's kernel reads it (its low 32 bits, signed), lies outside [0, E), and none
 owns one that `expert_map` sends to -1. vLLM's op writes the same buffers, except for the order within each expert.
-`moe_align.reference` is the definition in Python. The integration's tests (`integrations/vllm/tests/engine/test_moe_align.py`)
-hold it to the circuits' `moe_align_ranks` and `moe_align_blocks` (`verity.ml.definitions.numerics.moe_align_rows`), with the
+`moe_align.reference` is the definition in Python. The integration's tests (`adapters/vllm/tests/engine/test_moe_align.py`)
+hold it to the circuits' `moe_align_ranks` and `moe_align_blocks` (`verity.definitions.numerics.moe_align_rows`), with the
 pair index as the key.
 
 ## How it runs

@@ -11,7 +11,7 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
 * **Public parameters**: the model, the batch slots (vLLM's ``max_num_seqs``), ``T`` rows a step (``max_num_batched_tokens``:
   the scheduler never puts more of a step's tokens in a linear), ``S`` steps and the max tokens.
 * **A side**: each (step s, linear w) call's A table holds all T slot rows, as AROW's row table (`commit.s8_table`,
-  `verity.ml.commitments.row_table`: K s8 bytes, then the f32 scale).  The step's real rows fill slots 0 .. m - 1, and every
+  `verity.commitments.row_table`: K s8 bytes, then the f32 scale).  The step's real rows fill slots 0 .. m - 1, and every
   other slot is an empty row, committed like the rest: zero bytes with scale 0.  Since a served row's scale is never 0,
   "empty" is read from the committed row.  Steps past the last served one are all empty.  A row count never comes from the
   step's tokens, its batch or EOS.  Step s's A root is the tree over its A tables' roots (`step_roots`); AROW's step root
@@ -44,7 +44,7 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
   that noise's coin.  The gate's units come from the sampling coin, opened after the window's receipts root (`receipts_root`).
   This window has no gated session of its own: the gated served window of record is vllm's
-  H1 path, `integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py`, which holds the salt, round-0 request
+  H1 path, `adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py`, which holds the salt, round-0 request
   table, open root R, session S and requests_root rules, so ``--gate USER@HOST`` (or
   ``$POUW_CHALLENGER_GATE``) is refused.  ``--challenger HOST:PORT`` and ``--session ID`` (or ``$POUW_CHALLENGER`` and
   ``$POUW_CHALLENGER_SESSION``, with ``$POUW_CHALLENGER_SECRET_FILE`` for a session that has a secret) take a session
@@ -88,7 +88,7 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             words equal to the tally's bits and a tampered one refused against the admit root, the tile's selected rows
             zeroed under a nonzero scale still admitted, a live unit's receipt the ungated one
 
-    cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../tools/config:../../benchmarks/pouw/served_h1
+    cd adapters/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../verity/configuration/config:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at <ISO time> --by LANE \
       --coins live --challenger 127.0.0.1:PORT --session ID
 """
@@ -282,7 +282,7 @@ def receipts_root(window: str, calls: list[dict]) -> bytes:
 def gate_rng(commitment, coin: bytes, after: bytes) -> random.Random:
     """The gate's picks from the sampling coin `coin` opened after `after` (`receipts_root`): the harness's self-check of the
     receipts, not the window's sample of record."""
-    from verity.ml.randomness import derive
+    from verity.commitments.randomness import derive
     key = derive(coin, GATE_DRAW_DOMAIN, {"coins": commitment.root, "epoch": commitment.epoch, "receipts": after})
     return random.Random(key.stream("gate", 64))
 
@@ -411,7 +411,7 @@ def run(a: argparse.Namespace) -> dict:
     rec = Record(out)
     if a.gate:
         raise ValueError(f"--gate {a.gate}: served_h1's own gated window is superseded; the gated served window of "
-                         "record is vllm's H1 path, integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053), "
+                         "record is vllm's H1 path, adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053), "
                          "which holds the salt, round-0 request table, R, S and requests_root rules (#2950, PRF-132); "
                          "here a window's coins are in-process, or a development session's (--challenger, --session)")
     at = CO.session(a.challenger, a.session)
@@ -438,8 +438,8 @@ def run(a: argparse.Namespace) -> dict:
                                                                        RC.noise_blocks_cpu(probe, 40)))})
 
     from tests.engine import int8_exact_gpu as G
-    from verity.core.protocols.pouw import verifier
-    from verity.core.protocols.pouw.coins import Challenger
+    from verity.protocols.pouw.verifier import verifier
+    from verity.protocols.pouw.verifier.coins import Challenger
     from verity_vllm import protocols as PO
     from verity_vllm.engine import int8_exact as E
     from verity_vllm.engine import int8_ops
@@ -519,9 +519,9 @@ def run(a: argparse.Namespace) -> dict:
     pending: list[tuple] = []
     round_log: list[dict] = []
     if live:
-        from verity.core.protocols.pouw import window as Wd
-        from verity.ml.protocols.pouw.circuit import h1tile as HT
-        from verity.core.protocols.spot import challenger as Ch
+        from verity.protocols.pouw.verifier import window as Wd
+        from verity.protocols.pouw.prover.circuit import h1tile as HT
+        from verity.protocols.spot.device import challenger as Ch
         live_salt = cs.salt(registration)
         rounds = cs.rounds
 
@@ -774,7 +774,7 @@ def run(a: argparse.Namespace) -> dict:
                               "pouw_h1.program_salt: SHA-512(b'verity/pouw/h1/program-salt/v1\\0' || the epoch's 32-byte "
                               "salt), the epoch's salt audit.Epoch.start's from the challenger's salt coin opened after the "
                               "weights' root (pouw.weights_root over every layer's pouw_h1.weight_root)"),
-                "roots": {"a": "the call's a-table root: AROW's row table (verity.ml.commitments.row_table) over its T slot "
+                "roots": {"a": "the call's a-table root: AROW's row table (verity.commitments.row_table) over its T slot "
                                "rows, under this window's per-call domain and salts",
                           "a_step_rule": "per step, the tree over its calls' a-table roots in linear order (domain "
                                          "'a-step'), committed before the step's coin; AROW's step root replaces it once "
@@ -1080,7 +1080,7 @@ def main(argv: list[str] | None = None) -> int:
                          "development only, since its salt coin opens after the registration root, not a window's root")
     ap.add_argument("--gate", default=settings.get(CO.GATE_ENV), metavar="USER@HOST",
                     help=f"refused (default ${CO.GATE_ENV}): the gated served window of record is vllm's H1 path, "
-                         "integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053)")
+                         "adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053)")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
 
