@@ -30,11 +30,13 @@ open Classical in
 noncomputable def canon (op : Ω → P → Option V) (vstar : P → V) (p : P) : Finset Ω :=
   univ.filter fun ω => ∃ h : ∃ q, Off op vstar ω q, Classical.choose h = p
 
+omit [DecidableEq Ω] in
 theorem canon_off {vstar : P → V} {p : P} {ω : Ω} (h : ω ∈ canon op vstar p) : Off op vstar ω p := by
   simp only [canon, mem_filter, mem_univ, true_and] at h
   obtain ⟨h, rfl⟩ := h
   exact Classical.choose_spec h
 
+omit [DecidableEq Ω] in
 theorem canon_unique {vstar : P → V} {p p' : P} {ω : Ω} (h : ω ∈ canon op vstar p)
     (h' : ω ∈ canon op vstar p') : p = p' := by
   simp only [canon, mem_filter, mem_univ, true_and] at h h'
@@ -43,9 +45,12 @@ theorem canon_unique {vstar : P → V} {p p' : P} {ω : Ω} (h : ω ∈ canon op
   rfl
 
 theorem bad_subset_canon (vstar : P → V) : bad op vstar ⊆ univ.biUnion (canon op vstar) := by
+  classical
   intro ω hω
   simp only [bad, mem_filter, mem_univ, true_and] at hω
-  exact mem_biUnion.mpr ⟨Classical.choose hω, mem_univ _, mem_filter.mpr ⟨mem_univ _, hω, rfl⟩⟩
+  refine mem_biUnion.mpr ⟨Classical.choose hω, mem_univ _, ?_⟩
+  unfold canon
+  exact mem_filter.mpr ⟨mem_univ _, hω, rfl⟩
 
 /-- `#canon_p ² ≤ Σ_{ω₁ ∈ canon_p} #{ω₂ : ω₁, ω₂ conflict at p}`. -/
 theorem canon_sq_le (vstar : P → V) (hv : IsPlurality op vstar) (p : P) :
