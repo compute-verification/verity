@@ -114,6 +114,22 @@ def test_the_nodes_layout_names_a_host_tier_in_several_segments_as_the_one_regio
     assert sl.regions(n[:2], base[:2], on_host[:2], [6, 6]) == rstore.Store(b.arena, 2, 7).regions()
 
 
+def test_the_calibrations_trace_reports_each_gpus_host_read_apart():
+    """A pass's `pass_host_ms` is its slowest GPU's host read alone; the calibration's trace (`device.stall_report`)
+    also reports each GPU's over the passes but the first, and nothing for a store with no host tier."""
+    import device
+
+    slowest_first = [{"launch": None, "host_ms": [90.0, 90.0]}]
+    trace = slowest_first + [{"launch": None, "host_ms": [float(i), 10.0 + (i == 7)]} for i in range(1, 101)]
+    assert device.host_reads(trace) == [{"p50": 51.0, "p99": 100.0, "p999": 100.0, "max": 100.0},
+                                        {"p50": 10.0, "p99": 11.0, "p999": 11.0, "max": 11.0}]
+    report = device.stall_report([1000 * i for i in range(101)], trace, None, (0, 0), [])
+    assert report["host_ms_by_gpu"] == device.host_reads(trace) and report["slow"] == 0
+    no_tier = [{"launch": None, "host_ms": []} for _ in range(5)]
+    assert device.host_reads(no_tier) == [] and device.host_reads([]) == []
+    assert device.stall_report([1000 * i for i in range(5)], no_tier, None, (0, 0), [])["host_ms_by_gpu"] == []
+
+
 def greet(backend, b: rstore.Binding | None, **kw) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
     """A prover over `backend` greeting a verifier that binds to `b`: the verifier, its refusal, and the `bye` the
     prover read."""

@@ -106,6 +106,14 @@ def percentiles(xs: list[int]) -> dict:
     return {"p50": at(0.5), "p99": at(0.99), "p999": at(0.999), "max": xs[-1]}
 
 
+def host_reads(trace: list) -> list[dict]:
+    """Each GPU's host segment read over the calibration's passes but the first, in ms and in the GPUs' order: p50,
+    p99, p99.9 and the largest (`percentiles`). Empty with no host tier. A pass's `pass_host_ms` is its slowest
+    GPU's alone."""
+    rows = [t["host_ms"] for t in trace[1:] if t["host_ms"]]
+    return [percentiles(sorted(of_gpu)) for of_gpu in zip(*rows)]
+
+
 def u64s(values) -> ctypes.Array:
     return (ctypes.c_uint64 * len(values))(*values)
 
@@ -182,6 +190,7 @@ def stall_report(observed: list, trace: list, history, clock0: tuple, stats: lis
     over = sorted(iv)
     return {"passes": len(iv), "median_ns": med, "max_ns": over[-1] if over else 0, "slow": len(slow),
             "slow_passes": slow[:256], "max_over_median": over[-1] / med if med else None, "stalls": rows,
+            "host_ms_by_gpu": host_reads(trace),
             "allocator_stats": stats, "allocator_events": len(ev),
             "allocator_event_kinds": sorted({a for _, a, _, _ in ev}),
             "intervals_ns": iv}
