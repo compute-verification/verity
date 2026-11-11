@@ -790,6 +790,334 @@ def test_a_tree_compiles_no_module_version_another_tree_of_its_node_compiled(tmp
         "the trees and the cache hold one file by hard links, and no build moved its time past the `.hash` beside it"
 
 
+WORD = '@[noinline] def Toy.word (n : Nat) : String := s!"version {tag} {n}"\n'
+#: a package with an executable: `Toy.Word`, which `Toy` imports and `Main` (the executable `toy`'s root) calls
+TOY = {"lakefile.toml": 'name = "toy"\ndefaultTargets = ["Toy", "toy"]\n\n[[lean_lib]]\nname = "Toy"\n\n'
+                        '[[lean_exe]]\nname = "toy"\nroot = "Main"\n',
+       "lake-manifest.json": json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": [], "name": "toy",
+                                         "lakeDir": ".lake", "fixedToolchain": False}),
+       "Toy.lean": "import Toy.Word\n", "Toy/Word.lean": WORD.replace("{tag}", "A"),
+       "Main.lean": "import Toy\n\ndef main : IO Unit := IO.println (Toy.word 1)\n"}
+
+
+def toy(pkg: Path) -> Path:
+    """`TOY` at ``pkg``, on the fixtures' toolchain."""
+    for name, text in TOY.items():
+        (pkg / name).parent.mkdir(parents=True, exist_ok=True)
+        (pkg / name).write_text(text)
+    shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg / "lean-toolchain")
+    return pkg
+
+
+def held(pkg: Path) -> dict[str, str]:
+    """{file: its sha256} of everything ``pkg``'s build holds but what names the tree's own path (a trace's log, the
+    linker's arguments, a module's `setup.json`), and {trace: the outputs it names}."""
+    b = pkg / ".lake" / "build"
+    return {f.relative_to(b).as_posix(): json.dumps(json.loads(f.read_text())["outputs"]) if f.suffix == ".trace"
+            else hashlib.sha256(f.read_bytes()).hexdigest()
+            for f in sorted(b.rglob("*")) if f.is_file() and f.suffix not in (".rsp", ".json")}
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_tree_that_held_another_version_ends_with_every_output_object_and_executable_of_the_cache_s(tmp_path, monkeypatch):
+    """A tree holds a module in one version, with its trace, its `.hash` files, its object and the executable linked from
+    it, and the cache holds another. The stage step takes the module's trace (`settle`), and Lake, finding none, removes
+    every output of the module before it restores them, then compiles the object again from the restored `.c`, whose hash
+    the object's trace doesn't name, and links again. So each file of the build is, by digest, what a tree that compiled
+    that version holds, the executable prints the new version, and the same holds for a version the cache lacks, which
+    is compiled. An output kept from the earlier version under the new trace would differ here."""
+    LC, LA = (_load(f"exe_trees_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    MK = LA.MK
+    store = tmp_path / "artifacts"
+    monkeypatch.setattr(LC, "ARTIFACTS", store)
+    trees = [toy(tmp_path / n / "toy") for n in ("build-0", "build-1", "apart")]
+    mods = {"Main", "Toy", "Toy.Word"}
+    n = iter(range(99))
+
+    def lake(pkg: Path, pre: list[str]) -> set[str]:
+        r = subprocess.run(LC.in_sandbox(pkg, [*pre, "lake", "build"]), cwd=pkg, check=True, capture_output=True, text=True,
+                           env=LC.lake_env())
+        return {m for m, *_ in LC.BUILT.findall(r.stdout + r.stderr)}
+
+    def build(pkg: Path) -> tuple[set[str], dict, int]:
+        """`check.py`'s build: staged and settled, built in the sandbox, then put."""
+        cache = store / MK.STAGE / f"test-{next(n)}"
+        got, said = LC.stage_build(MK, pkg, ["Toy", "Main"], cache)
+        compiled = lake(pkg, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}"])
+        assert MK.misrestored(got, pkg) == [] and said["left"] == 0
+        shutil.rmtree(cache)
+        return compiled, said["took"], LA.LakeArtifacts(store).put({pkg: {"sandbox": True}})
+
+    def edit(pkg: Path, tag: str) -> None:
+        (pkg / "Toy" / "Word.lean").write_text(WORD.replace("{tag}", tag))
+
+    def says(pkg: Path) -> str:
+        return subprocess.run([str(pkg / ".lake" / "build" / "bin" / "toy")], check=True, capture_output=True,
+                              text=True).stdout.strip()
+
+    assert build(trees[0]) == (mods, {}, 3) and says(trees[0]) == "version A 1"
+    a = held(trees[0])
+    assert {"bin/toy", "ir/Toy/Word.c", "ir/Toy/Word.c.hash", "ir/Toy/Word.c.o.export", "ir/Toy/Word.c.o.export.hash",
+            "ir/Toy/Word.c.o.export.trace", "lib/lean/Toy/Word.olean", "lib/lean/Toy/Word.ilean",
+            "lib/lean/Toy/Word.trace"} <= set(a)
+    edit(trees[1], "B")
+    assert build(trees[1]) == (mods, {}, 3) and says(trees[1]) == "version B 1"
+    b = held(trees[1])
+    assert {f for f in a if a[f] != b[f]} >= {"bin/toy", "ir/Toy/Word.c", "ir/Toy/Word.c.o.export", "lib/lean/Toy/Word.olean"}
+
+    edit(trees[0], "B")
+    assert build(trees[0]) == (set(), {MK.REPLACED: 1}, 0), "the tree that compiled A restores B"
+    assert held(trees[0]) == b and says(trees[0]) == "version B 1"
+    edit(trees[1], "A")
+    assert build(trees[1]) == (set(), {MK.REPLACED: 1}, 0), "and the tree that compiled B restores A"
+    assert held(trees[1]) == a and says(trees[1]) == "version A 1"
+    edit(trees[0], "A")
+    assert build(trees[0]) == (set(), {MK.REPLACED: 1}, 0), "a tree whose own traces are restores, back again"
+    assert held(trees[0]) == a and says(trees[0]) == "version A 1"
+
+    for pkg in trees[1:]:
+        edit(pkg, "C")
+    assert lake(trees[2], []) == mods                                   # a tree apart, which reads no cache
+    c = held(trees[2])
+    assert build(trees[1]) == (mods, {MK.ABSENT: 1}, 3), "a version the cache lacks is compiled"
+    assert held(trees[1]) == c and says(trees[1]) == "version C 1"
+    assert build(trees[0]) == (set(), {}, 0) and held(trees[0]) == a, "and nothing changes where the source did not"
+
+
+#: a root package `top` (library `Top`) requiring `dep` (library `Dep`) by path: `Top` imports `Dep`, which imports `Dep.Word`
+PAIR = {"dep/lakefile.toml": 'name = "dep"\ndefaultTargets = ["Dep"]\n\n[[lean_lib]]\nname = "Dep"\n',
+        "dep/lake-manifest.json": json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": [],
+                                              "name": "dep", "lakeDir": ".lake", "fixedToolchain": False}),
+        "dep/Dep.lean": "import Dep.Word\n", "dep/Dep/Word.lean": '@[noinline] def Dep.word (n : Nat) : String := s!"word {n}"\n',
+        "top/lakefile.toml": 'name = "top"\ndefaultTargets = ["Top"]\n\n[[require]]\nname = "dep"\npath = "../dep"\n\n'
+                             '[[lean_lib]]\nname = "Top"\n',
+        "top/lake-manifest.json": json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": [
+            {"type": "path", "scope": "", "name": "dep", "manifestFile": "lake-manifest.json", "inherited": False,
+             "dir": "../dep", "configFile": "lakefile.toml"}], "name": "top", "lakeDir": ".lake", "fixedToolchain": False}),
+        "top/Top.lean": "import Dep\n\ndef Top.says : String := Dep.word 1\n"}
+
+
+def pair(tree: Path) -> tuple[Path, Path]:
+    """`PAIR` under ``tree``, on the fixtures' toolchain: (`top`, `dep`)."""
+    for name, text in PAIR.items():
+        (tree / name).parent.mkdir(parents=True, exist_ok=True)
+        (tree / name).write_text(text)
+    for pkg in ("top", "dep"):
+        shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", tree / pkg / "lean-toolchain")
+    return tree / "top", tree / "dep"
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_copied_kept_build_the_cache_lacks_is_compiled_once_and_indexed_with_the_package_that_requires_it(tmp_path, monkeypatch):
+    """An audit that doesn't audit `dep` takes a copy of the node's kept build of it for `top`'s tree
+    (`lean_audit.WarmBuilds.take`). The kept build was compiled by a build that indexed nothing, so the cache lacks its
+    modules. Left alone, the copy keeps its traces, Lake compiles none of it, `put` indexes none of it and records `Top`,
+    which loads it, as a module it could not index: in every tree that takes such a copy, for as long as the node keeps
+    that build. Named to the stage step as a package the run doesn't audit, the copy is settled with `top`'s own build:
+    its modules are compiled once and indexed with `Top`, and a second tree with a fresh copy compiles nothing and
+    leaves nothing unstored. Each build is `check.py`'s: staged and settled, built in the sandbox, then put."""
+    LC, LA = (_load(f"copied_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    MK = LA.MK
+    kept = pair(tmp_path / "kept")[1]
+    subprocess.run(LC.in_sandbox(kept, ["lake", "build"]), cwd=kept, check=True, capture_output=True, env=LC.lake_env())
+    since = max(t.stat().st_mtime for t in (kept / ".lake" / "build").rglob("*.trace"))     # every run here starts later
+    n = iter(range(99))
+
+    def tree(name: str) -> tuple[Path, Path]:
+        """A tree of the two packages whose `dep` holds a copy of the kept build."""
+        top, dep = pair(tmp_path / name)
+        shutil.copytree(kept / ".lake" / "build", dep / ".lake" / "build", symlinks=True)
+        return top, dep
+
+    def build(store: Path, top: Path, unaudited: list[Path]) -> tuple[set[str], dict, int, int]:
+        """(the modules Lake compiled, the traces the stage step took, the module versions new in the cache, the modules
+        it recorded as ones it could not index)."""
+        monkeypatch.setattr(LC, "ARTIFACTS", store)
+        cache = store / MK.STAGE / f"test-{next(n)}"
+        got, said = LC.stage_build(MK, top, ["Top"], cache, unaudited)
+        r = subprocess.run(LC.in_sandbox(top, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"]),
+                           cwd=top, check=True, capture_output=True, text=True, env=LC.lake_env())
+        assert MK.misrestored(got, top) == []
+        shutil.rmtree(cache)
+        new = LA.LakeArtifacts(store).put({top: {"sandbox": True}}, since)
+        return ({m for m, *_ in LC.BUILT.findall(r.stdout + r.stderr)}, said["took"], new,
+                len(list((store / MK.UNSTORED).glob("*.json"))))
+
+    alone = tmp_path / "left-alone"
+    for name in ("alone-0", "alone-1"):
+        top, dep = tree(name)
+        assert build(alone, top, []) == ({"Top"}, {}, 0, 1), "the copy left as it is: `Top` is compiled in each tree, never indexed"
+
+    store = tmp_path / "artifacts"
+    top, dep = tree("first")
+    assert build(store, top, [dep]) == ({"Dep.Word", "Dep", "Top"}, {MK.ABSENT: 2}, 3, 0)
+    top, dep = tree("second")
+    assert build(store, top, [dep]) == (set(), {}, 0, 0), "a fresh copy in another tree: nothing compiled, nothing unstored"
+    assert json.loads((top / ".lake" / "build" / "lib" / "lean" / "Top.trace").read_text())["synthetic"], "`Top` is restored"
+    assert not (store / MK.UNSTORED).exists()
+
+
+#: `Toy.Word` with a function the other versions lack, and the `Main` that calls it
+EXTRA = ('@[noinline] def Toy.extra (n : Nat) : Nat := n + 41\n'
+         '@[noinline] def Toy.word (n : Nat) : String := s!"version B {Toy.extra n}"\n')
+CALLS_EXTRA = "import Toy\n\ndef main : IO Unit := IO.println (Toy.word (Toy.extra 1))\n"
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def publish(LC, pkg: Path, out: Path, own: Path) -> None:
+    """A published build of ``pkg`` in the Lake cache ``own``, as `cache.py` builds, stages and restores one."""
+    writable = {**LC.lake_env(), "LAKE_ARTIFACT_CACHE": "true", "LAKE_CACHE_DIR": str(out / "lake-cache")}
+    for argv, env in ((["lake", "build", "-o", str(out / "outputs.jsonl")], writable),
+                      (["lake", "cache", "stage", str(out / "outputs.jsonl"), str(out / "stage")], writable),
+                      (["lake", "cache", "unstage", str(out / "stage")], {**LC.lake_env(), "LAKE_CACHE_DIR": str(own)})):
+        subprocess.run(argv, cwd=pkg, env=env, check=True, capture_output=True)
+    assert any(f.suffix == ".ltar" for f in (out / "stage").iterdir())
+
+
+def test_a_module_lake_unpacked_from_a_published_build_is_not_indexed_as_one_the_build_compiled(tmp_path):
+    """A `--try` or `--build` build reads Lake's own cache, which holds main's published build as `.ltar` archives. Where
+    a tree compiled a module before (its `setup.json` is there) and a repair has cleared its `.hash` files, Lake unpacks
+    the archive and hashes the outputs afresh, and the trace the archive holds is the publisher's own: the build holds
+    nothing that tells the module from one it compiled. The index is for what this node compiled in the sandbox, so of
+    such a build only the modules Lake said it built go in."""
+    LC, LA, LCH = (_load(f"unpacked_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+    own = tmp_path / "lakes-own-cache"
+    tree, publisher = (toy(tmp_path / n / "toy") for n in ("build-0", "publisher"))
+    publish(LC, publisher, tmp_path / "published", own)
+
+    def build() -> str:
+        r = subprocess.run(LC.in_sandbox(tree, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={own}", "lake", "build",
+                                                "+Toy.Word", "+Main"]), cwd=tree, capture_output=True, text=True,
+                           env=LC.lake_env())
+        assert r.returncode == 0, r.stdout + r.stderr
+        return r.stdout + r.stderr
+
+    def put(name: str, **rep) -> list[str]:
+        arts = LA.LakeArtifacts(tmp_path / name)
+        arts.put({tree: {"sandbox": True, **rep}}, log=lambda s: None)
+        return sorted(json.loads((arts.store / e).read_text())["module"] for e, _ in arts.added)
+
+    (tree / "Toy" / "Word.lean").write_text(EXTRA)
+    (tree / "Main.lean").write_text(CALLS_EXTRA)
+    out = build()
+    assert LCH.compiled(out) == ["Main", "Toy", "Toy.Word"] and put("compiled", compiled=LCH.compiled(out)) == \
+        ["Main", "Toy", "Toy.Word"], "what the build compiled goes in"
+    for name, text in TOY.items():
+        (tree / name).write_text(text)
+    assert "Unpacked Toy.Word" in build()
+    said: list[str] = []
+    LCH.repair(tree.parent, [tree.name], {}, None, said.append)
+    assert any("half-written" in s for s in said), "the unpacked outputs lie beside the `.hash` files of those before them"
+    out = build()
+    assert "Unpacked Toy.Word" in out and LCH.compiled(out) == []
+    assert "Toy.Word" in put("as-built"), "by the build's files alone it passes for a compile"
+    assert put("as-said", compiled=LCH.compiled(out)) == []
+
+
+def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_built(tmp_path, monkeypatch):
+    """A slot tree sees three kinds of build: a records run's (`repair`, stage, the default targets, put), a `--build`
+    run's (`repair`, then the changed modules alone, read from Lake's own cache where it holds them) and a build of the
+    default targets that reads Lake's own cache. Lake's own cache holds a published build as `.ltar` archives, and Lake
+    unpacks one over the outputs in place and leaves their `.hash` files, which it then reads for the new bytes. So the
+    object it compiles from the unpacked C is recorded under the hash of the C that was there before, and when the source
+    returns to that C the module is rebuilt and the object, whose trace names that hash, is taken as built: the link
+    fails where the earlier source lacks a symbol, and passes with the earlier source's code where it doesn't.
+
+    The repair drops the object with the module, so the records run after it ends with every file of a tree built apart;
+    and a tree an earlier repair left with the module rebuilt and the object kept loses the object for being older than
+    the C beside it."""
+    LC, LA, LCH = (_load(f"repair_objects_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+    MK = LA.MK
+    store, own = tmp_path / "artifacts", tmp_path / "lakes-own-cache"
+    monkeypatch.setattr(LC, "ARTIFACTS", store)
+    tree, publisher = (toy(tmp_path / n / "toy") for n in ("build-0", "publisher"))
+    ir = tree / ".lake" / "build" / "ir" / "Toy"
+    n = iter(range(99))
+
+    def edit(pkg: Path, word: str, main: str = TOY["Main.lean"]) -> None:
+        for name, text in (("Toy/Word.lean", word), ("Main.lean", main)):
+            if (pkg / name).read_text() != text:
+                (pkg / name).write_text(text)
+
+    def lake(pkg: Path, pre: list[str], *targets: str) -> tuple[int, str]:
+        r = subprocess.run(LC.in_sandbox(pkg, [*pre, "lake", "build", *targets]), cwd=pkg, capture_output=True, text=True,
+                           env=LC.lake_env())
+        return r.returncode, r.stdout + r.stderr
+
+    def from_own_cache(*targets: str) -> str:
+        """`lake build` as `lean_changed.build` runs it: Lake's own cache read, not written."""
+        rc, out = lake(tree, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={own}"], *targets)
+        assert rc == 0, out
+        return out
+
+    def repair() -> list[str]:
+        said: list[str] = []
+        LCH.repair(tree.parent, [tree.name], {}, None, said.append)
+        return said
+
+    def records() -> tuple[int, str]:
+        """`check.py`'s build, as a records run reaches it: staged, built in the sandbox, then put."""
+        cache = store / MK.STAGE / f"test-{next(n)}"
+        LC.stage_build(MK, tree, ["Toy", "Main"], cache)
+        rc, out = lake(tree, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}"])
+        shutil.rmtree(cache)
+        LA.LakeArtifacts(store).put({tree: {"sandbox": True}})
+        return rc, out
+
+    def says() -> str:
+        return subprocess.run([str(tree / ".lake" / "build" / "bin" / "toy")], check=True, capture_output=True,
+                              text=True).stdout.strip()
+
+    def apart(name: str, word: str, main: str = TOY["Main.lean"]) -> dict[str, str]:
+        pkg = toy(tmp_path / name / "toy")
+        edit(pkg, word, main)
+        assert lake(pkg, [])[0] == 0
+        return held(pkg)
+
+    z, a = WORD.replace("{tag}", "Z"), WORD.replace("{tag}", "A")
+    edit(publisher, a)
+    publish(LC, publisher, tmp_path / "published", own)
+    edit(tree, z)
+    assert repair() == [] and records()[0] == 0 and says() == "version Z 1"
+
+    edit(tree, EXTRA, CALLS_EXTRA)
+    assert repair() == []
+    assert "Built Toy.Word" in from_own_cache("+Toy.Word", "+Main"), "a `--build` run compiles what Lake's cache lacks"
+    extra_c = (ir / "Word.c.hash").read_text()
+    edit(tree, a)
+    out = from_own_cache()
+    assert "Unpacked Toy.Word" in out and "Built Toy.Word:c.o" in out and says() == "version A 1"
+    assert (ir / "Word.c.hash").read_text() == extra_c and extra_c in (ir / "Word.c.o.export.trace").read_text(), \
+        "the unpacked C lies beside the `.hash` of the C before it, which the object compiled from it records as its input"
+
+    edit(tree, EXTRA, CALLS_EXTRA)
+    assert any("1 module(s) half-written by an earlier build, rebuilt: Toy/Word" in s for s in repair())
+    rc, out = records()
+    assert rc == 0, out
+    assert says() == "version B 83" and held(tree) == apart("apart-b", EXTRA, CALLS_EXTRA)
+
+    edit(tree, z)
+    assert repair() == [] and "Built Toy.Word" in from_own_cache("+Toy.Word", "+Main")
+    edit(tree, a)
+    assert "Unpacked Toy.Word" in from_own_cache() and says() == "version A 1"
+    edit(tree, z)
+    lib = tree / ".lake" / "build" / "lib" / "lean" / "Toy"
+    for f in (lib / "Word.trace", *lib.glob("Word.*.hash"), *ir.glob("Word.*.hash")):
+        f.unlink()                                                      # what the repair dropped before it dropped objects
+    rc, out = records()
+    assert rc == 0 and "Toy.Word:c.o" not in out and says() == "version A 1", \
+        "the module is restored, its object is taken as built, and the executable runs the earlier source"
+    assert repair() == ["lean-records: toy: 2 object(s) older than the C Lake compiles them from, dropped: "
+                        "Toy/Word.c.o.export, Toy.c.o.export"], \
+        "`Toy`'s too, compiled from the same C as the one restored after it: Lake compiles it once more"
+    rc, out = records()
+    assert rc == 0, out
+    # `Main`'s object is the published build's, restored from Lake's own cache: the same C, compiled under another name
+    mine, theirs = ({f: d for f, d in h.items() if not f.startswith(("ir/Main.c.o.", "bin/"))}
+                    for h in (held(tree), apart("apart-z", z)))
+    assert says() == "version Z 1" and mine == theirs
+
+
 @pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_module_file_above_a_private_import_is_stored_and_another_tree_restores_it(tmp_path, monkeypatch):
     """Through Lake, on `module` files: `Modular` imports `Modular.Uses`, which imports `Modular.Hidden` and

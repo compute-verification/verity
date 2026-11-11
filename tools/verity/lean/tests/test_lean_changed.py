@@ -211,7 +211,8 @@ def test_a_run_stores_what_the_run_before_it_compiled_and_never_stored_before_it
     """A run killed whole (a timeout, the node's memory) never reaches its own `put`. Its mark says when its build began
     and where check.py's word on it is, and the next run on the tree stores from those first: a key is computed from the
     tree's sources, which its `sync` is about to change. Otherwise a build longer than its timeout would start from
-    nothing every time, since a module the cache lacks keeps no trace (`module_keys.stage`)."""
+    nothing every time, since a module the cache lacks keeps no trace (`module_keys.stage`). What a `--try` or a
+    `--build` left is not stored: which of its modules Lake compiled and which it unpacked, only its output said."""
     _, tree, _ = fast
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     old = tmp_path / "old-run" / "lean-audit"
@@ -226,15 +227,15 @@ def test_a_run_stores_what_the_run_before_it_compiled_and_never_stored_before_it
     monkeypatch.setattr(LC.LA.LakeArtifacts, "put",
                         lambda self, reports, since=None, log=print: events.append(("put", reports, since)) or 2)
     said = []
-    for left in ({"phase": "check", "since": 1234.5, "out": str(old)}, {"phase": "try", "since": 99.0, "sandbox": True},
-                 {"phase": "build", "since": 99.0, "sandbox": False}, {"phase": "deps"}, {"phase": "check", "killed": -9}):
+    for left in ({"phase": "check", "since": 1234.5, "out": str(old)}, {"phase": "try"}, {"phase": "build"},
+                 {"phase": "deps"}, {"phase": "check", "killed": -9}):
         events.clear()
         (tree / LC.DIRTY).write_text(json.dumps({"run": "r-old", "pid": 7, "package": "pkg", "at": "T"} | left))
         assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
         want = {"check": [("put", {tree / "pkg": {"package": str(tree / "pkg"), "sandbox": True},
-                                   tree / "pkg/Proofs": {"package": str(tree / "pkg/Proofs"), "sandbox": False}}, 1234.5)],
-                "try": [("put", {tree / "pkg": {"sandbox": True}}, 99.0)]}.get(left["phase"] if "since" in left else "", [])
-        assert events[:len(want) + 1] == [*(want if left.get("sandbox", True) else []), "sync"], left
+                                   tree / "pkg/Proofs": {"package": str(tree / "pkg/Proofs"), "sandbox": False}}, 1234.5)]
+                }.get(left["phase"] if "since" in left else "", [])
+        assert events[:len(want) + 1] == [*want, "sync"], left
     assert f"lean-records: {tree}: of what r-old left: 2 module version(s) new in the artifact cache" in said
 
 
@@ -781,6 +782,76 @@ def test_an_output_newer_than_its_hash_is_half_written_and_loses_every_hash_with
     assert any("1 module(s) half-written by an earlier build, rebuilt: P/Torn" in s for s in said)
 
 
+def test_a_c_file_under_a_hash_that_is_not_the_trace_s_or_is_older_is_half_written_and_its_objects_go(tmp_path):
+    """A `.ltar` restore writes the C over the one in place and leaves its `.hash`, as it does in `lib/lean`: Lake then
+    compiles the module's object from the new C and records the old C's hash as its input, so the object is taken as built
+    when the source is back at the old C. The module's objects go with its trace; a module with the same prefix keeps
+    its own, and a trace that names a C the build doesn't hold (a fetched dependency's) is not half-written."""
+    tree = tmp_path / "tree"
+    lib = tree / "pkg" / ".lake" / "build" / "lib" / "lean"
+    ir = tree / "pkg" / ".lake" / "build" / "ir" / "P"
+    ir.mkdir(parents=True)
+    traces = {name: module(lib, f"P/{name}") for name in ("Good", "GoodToo", "NoC", "Other", "Later")}
+    at = 10**18
+    for name in traces:
+        for f in (*lib.glob(f"P/{name}.*"), ir / f"{name}.c", ir / f"{name}.c.hash", ir / f"{name}.c.o.export",
+                  ir / f"{name}.c.o.export.hash", ir / f"{name}.c.o.export.trace", ir / f"{name}.c.o.noexport", ir / f"{name}.bc",
+                  ir / f"{name}.bc.o"):
+            if f.parent == ir and not (name == "NoC" and f.name.startswith("NoC.c")):
+                f.write_text("zz" if f.name == "Other.c.hash" else "cc")
+            if f.exists():
+                os.utime(f, ns=(at, at))
+    os.utime(ir / "Later.c", ns=(at + 1, at + 1))
+    assert LC.damaged(lib) == [traces["Later"], traces["Other"]]
+    said = []
+    LC.repair(tree, ["pkg"], {}, None, said.append)
+    for name in ("Later", "Other"):
+        assert not traces[name].exists() and [f.name for f in sorted(ir.glob(f"{name}.*"))] == [f"{name}.bc", f"{name}.c"], \
+            "the C and the bitcode stay for Lake to replace; the C's `.hash`, the objects and their `.hash` and `.trace` go"
+    for name in ("Good", "GoodToo"):
+        assert traces[name].exists() and len(list(ir.glob(f"{name}.*"))) == 8
+    assert traces["NoC"].exists() and (ir / "NoC.bc.o").exists()
+    assert said == ["lean-records: pkg: 2 module(s) half-written by an earlier build, rebuilt: P/Later, P/Other"]
+
+
+def test_an_object_older_than_the_c_beside_it_goes_with_its_hash_and_trace(tmp_path):
+    """Lake compiles an object after its C, so one that is older was compiled from an earlier C, and Lake takes it as
+    built when its trace names the hash the C has now: what a repair that kept a rebuilt module's objects left. An
+    object with no C beside it, or whose module has no trace, is older than the C Lake will write."""
+    tree = tmp_path / "tree"
+    lib = tree / "pkg" / ".lake" / "build" / "lib" / "lean"
+    ir = tree / "pkg" / ".lake" / "build" / "ir" / "P"
+    ir.mkdir(parents=True)
+    at = 10**18
+    for name, c, bc in (("Old", at + 1, at), ("Same", at, at), ("New", at - 1, at), ("OldBc", at, at + 1)):
+        module(lib, f"P/{name}")
+        for f, t in ((ir / f"{name}.c", c), (ir / f"{name}.bc", bc), (ir / f"{name}.c.hash", at + 2)):
+            f.write_text("cc")
+            os.utime(f, ns=(t, t))
+        for o in ("c.o.export", "c.o.noexport", "bc.o"):
+            for f in (ir / f"{name}.{o}", ir / f"{name}.{o}.hash", ir / f"{name}.{o}.trace"):
+                f.write_text("o")
+                os.utime(f, ns=(at, at))
+    module(lib, "P/NoC")
+    for f in (ir / "NoC.c.o.export", ir / "NoC.c.o.export.hash", ir / "NoC.c.o.export.trace", ir / "NoTrace.c",
+              ir / "NoTrace.c.o.export", ir / "NoTrace.c.o.export.trace"):
+        f.write_text("o")
+        os.utime(f, ns=(at, at))
+    for f in lib.rglob("*"):
+        os.utime(f, ns=(at, at))
+    assert LC.damaged(lib) == []
+    old = [ir / "NoC.c.o.export", ir / "NoTrace.c.o.export", ir / "Old.c.o.export", ir / "Old.c.o.noexport", ir / "OldBc.bc.o"]
+    assert LC.outdated(lib) == old
+    said = []
+    LC.repair(tree, ["pkg"], {}, None, said.append)
+    assert not any(f.with_name(f.name + end).exists() for f in old for end in ("", ".hash", ".trace"))
+    assert len(list(ir.glob("Same.*"))) == len(list(ir.glob("New.*"))) == 12 and (ir / "Old.bc.o").exists() \
+        and (ir / "OldBc.c.o.export.trace").exists() and all((ir / f"{n}.c").exists() for n in ("Old", "OldBc"))
+    assert said == ["lean-records: pkg: 5 object(s) older than the C Lake compiles them from, dropped: P/NoC.c.o.export, "
+                    "P/NoTrace.c.o.export, P/Old.c.o.export, P/Old.c.o.noexport, P/OldBc.bc.o"]
+    assert LC.outdated(lib) == [] and LC.outdated(tmp_path / "none" / "lib" / "lean") == []
+
+
 def test_a_module_without_a_trace_loses_the_hash_files_it_kept(tmp_path):
     """A tree can hold an `.olean` newer than its `.hash` and no `.trace`, as a `repair` that drops only the trace leaves it;
     `damaged` reads only traces, so it goes unflagged, and the next `.ltar` restore would keep the stale `.hash` beside a
@@ -878,7 +949,7 @@ def trying(tmp_path, monkeypatch):
     monkeypatch.setattr(LC, "sandboxed", lambda: False)
     monkeypatch.setattr(LC.shutil, "which", lambda _: str(lake))
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: None)
-    calls = {"build": [], "run": [], "link": [], "lean_rc": 0, "deps_rc": 0, "lean_text": ""}
+    calls = {"build": [], "run": [], "link": [], "lean_rc": 0, "deps_rc": 0, "lean_text": "", "deps_text": ""}
 
     def link(pkg, t, deps, links, log=print, copy=False):
         calls["link"].append((pkg, copy))
@@ -887,7 +958,7 @@ def trying(tmp_path, monkeypatch):
 
     def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None):
         calls["build"].append((pkg, t, targets, sandbox, cmd))
-        return (calls["lean_rc"], calls["lean_text"]) if cmd else (calls["deps_rc"], "")
+        return (calls["lean_rc"], calls["lean_text"]) if cmd else (calls["deps_rc"], calls["deps_text"])
 
     monkeypatch.setattr(LC, "link", link)
     monkeypatch.setattr(LC, "build", build)
@@ -914,8 +985,13 @@ def test_try_and_build_store_what_they_compiled_only_from_a_build_in_the_sandbox
     """`--try` and `--build` compile most of what lanes change, and each module they compile in the sandbox goes into the
     node's artifact cache, so the records run after them restores it. Outside the sandbox (this run's, or check.py's
     stricter probe of it) compile-time code could leave any output in the build, and nothing is stored. `--try` stores
-    what `lake build` compiled before `lean` reads the file itself, whose code no build has read."""
+    what `lake build` compiled before `lean` reads the file itself, whose code no build has read. Their build reads Lake's
+    own cache, so it names the modules Lake said it built: one Lake unpacked from main's published build, or replayed, is
+    not this node's compile, and neither is an object."""
     tree, calls = trying
+    calls["deps_text"] = ("✔ [2/9] Unpacked Proofs.Flock.V\n⚠ [3/9] Replayed Proofs.Flock.U\n"
+                          "✔ [4/9] Built Proofs.Flock.W (1.2s)\n✔ [5/9] Built Proofs.Flock.W:c.o (54ms)\n"
+                          "✖ [6/9] Building Proofs.Flock.T\n    ✔ [7/9] Built «Proofs».Flock.S\n")
     (slots := tmp_path / "lean-slots").write_text("build 1\n")
     monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", slots)
     put, marks, ran = [], [], []
@@ -934,9 +1010,10 @@ def test_try_and_build_store_what_they_compiled_only_from_a_build_in_the_sandbox
                 assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 0
             else:
                 assert LC.build_files(["Sec/Proofs/Flock/X.lean"], tmp_path / "deps", log=said.append) == 0
-            last = marks[-1]
-            assert (last["phase"], last["sandbox"]) == (phase, stored) and isinstance(last["since"], float)
-            assert put == ([(store, {tree / "Sec/Proofs": {"sandbox": True}}, last["since"])] if stored else [])
+            assert marks[-1] == {"package": "Sec/Proofs", "phase": phase}, "nothing for the next run to store from"
+            built = {"sandbox": True, "compiled": ["Proofs.Flock.S", "Proofs.Flock.W"]}
+            assert [(s, r) for s, r, _ in put] == ([(store, {tree / "Sec/Proofs": built})] if stored else [])
+            assert all(isinstance(since, float) for _, _, since in put)
             assert (f"lean-{phase}: Sec/Proofs: 4 module version(s) new in the artifact cache" in said) == stored
             assert ran == ([before + 1] if stored else []) and len(calls["build"]) == before + (2 if phase == "try" else 1), \
                 "stored after `lake build`, and for a try before `lake env lean`"
