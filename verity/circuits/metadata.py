@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from .codec import definition_digest
-from .program import input_id
+from .program import is_input_entry
 from .types import type_from_json
 
 FORMAT = "verity/metadata/v0"
@@ -92,8 +92,9 @@ class _Program:
 
     def __init__(self, desc: Mapping[str, Any], digest: str | None) -> None:
         self.desc, self.digest = desc, digest
-        root = desc["definitions"][desc["root"]]["body"]["nodes"]
-        self.calls = {k for k, n in enumerate(root) if input_id(_callee(desc, n)) is None}
+        defs = desc["definitions"]
+        fids = [_callee(desc, n) for n in defs[desc["root"]]["body"]["nodes"]]
+        self.calls = {k for k, fid in enumerate(fids) if not is_input_entry(fid, defs.get(fid))}
 
     def specs(self, d: str) -> list[str]:
         defs = self.desc["definitions"]
