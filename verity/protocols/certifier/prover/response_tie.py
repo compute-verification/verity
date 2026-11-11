@@ -60,7 +60,10 @@ Every array is of bits, least significant first. O is a class's size of ids rele
 bits of at most `UNIT_CLASS_MAX`): `content_rows.check_ids` is that rule, which the shape is held to where it is
 built. It is one Definition with a static for the form, since the two forms return the same row from the same ids
 under the same comparison and differ in the word the count is read from and in three checks; the static adds the
-stop word's parameter, as `compile_slice_v6`'s AS adds its cap bits.
+stop word's parameter, as `compile_slice_v6`'s AS adds its cap bits. Bound at a form it is that form's own circuit,
+so the two forms are two circuit files and two sessions: a failed class's circuit has no ``stop`` port, and every
+port of either is a row each connection of its class has, as a statement's registered reads need
+(`Flock.Registered`'s `checkPort` and `complete`).
 """
 from __future__ import annotations
 
