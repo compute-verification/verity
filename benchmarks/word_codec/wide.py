@@ -143,7 +143,6 @@ def c1(p: int) -> int:
 P255 = FIELDS[255].p
 SQRT_M1 = sqrt_m1(P255)
 C1 = c1(P255)
-C1_SQRT_M1 = C1 * SQRT_M1 % P255
 
 
 def legendre(a: int, p: int) -> int:

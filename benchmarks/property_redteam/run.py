@@ -14,7 +14,6 @@ the one the cases call. Each case's outcome:
   over-strict  an honest case refused
   over-budget  an honest case charged past its allowance
   error        the check raised or returned no verdict, or an honest case did not build
-  skipped      the case binds a module this environment lacks (the s8 family)
 
 An attack the IR refuses to build counts as refused. The exit status is 0 when every graded case is ok or sound.
 """
@@ -29,7 +28,7 @@ from collections.abc import Mapping
 from typing import Any, Callable
 
 PASSING = ("ok", "sound")
-OUTCOMES = ("ok", "sound", "misclassed", "unsound", "over-strict", "over-budget", "error", "skipped")
+OUTCOMES = ("ok", "sound", "misclassed", "unsound", "over-strict", "over-budget", "error")
 
 
 def accept_all(program: Any) -> dict:
@@ -96,9 +95,6 @@ def run(check: Callable[[Any], Any], ids: list[str] | None = None) -> dict:
     for case in chosen:
         row: dict[str, Any] = {"id": case.id, "kind": case.kind, "verdict": case.verdict, "charge": case.charge,
                                "allow": case.allow}
-        if not case.available:
-            rows.append(row | {"outcome": "skipped", "note": f"needs {', '.join(case.needs)}"})
-            continue
         try:
             program = case.program()
         except (TypeError, ValueError) as e:
@@ -115,7 +111,7 @@ def run(check: Callable[[Any], Any], ids: list[str] | None = None) -> dict:
         rows.append(row | ({"reasons": v["reasons"]} if "reasons" in v else {}))
     outcomes = Counter(r["outcome"] for r in rows)
     return {"rows": rows, "outcomes": {o: outcomes[o] for o in OUTCOMES if outcomes[o]},
-            "passed": all(r["outcome"] in PASSING or r["outcome"] == "skipped" for r in rows)}
+            "passed": all(r["outcome"] in PASSING for r in rows)}
 
 
 def metadata() -> list[dict]:
