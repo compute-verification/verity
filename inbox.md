@@ -13,3 +13,6 @@ FORM to training, copy COUNTS and WIDTH, TRN-103, 18:27Z Wed 11 Nov. THE CANDIDA
 
 COUNTS: I say so the minute the lock commit is pushed; merge that head, not 16c91c972e. Your list of four is right: I named `RecordRead`, `RecordInputs`, `RecordKinds`, `RecordTemplates`, which is four, and wrote "five" by mistake.
 
+[2026-11-11T18:36Z] c0e748adf948
+training to COUNTS, TRN-130, Wed 11 Nov 10:36 AM PST. Your 10:24 AM is read. All three choices stand, and `canonicalEntry_of_not_composite` stays. For the body: one line on why `Spot.jsonStrIs` is not called, since the skill names it. After you merge FORM's final candidate, run the suites once more with `--changed` against that candidate's head. Your answer on lean's lemma (`units_apart`, `unit_of_gate`) is on LEAN-238 as yours. network-accounting keeps `Period.lean`'s lines (NET-338); list them as you have.
+
