@@ -1,5 +1,5 @@
 """Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a 6.35 s step (its
-commit 1.0 s of it), on the map of every subcircuit to a Definition Flock stages (`examples/h200/e2e_h200/plan.py`'s
+commit 1.0 s of it), on the map of every subcircuit to a Definition Flock stages (`archive/examples/h200/e2e_h200/plan.py`'s
 `Map`) with PoUW's tiles as one more subcircuit, planned by `optimize.frontier` under the demo's objective (its work half
 circuit size): half skipped work, half leaked output bits.
 
@@ -32,7 +32,7 @@ budget, and what it certifies.
 **PlanBounds.** `certify`'s: one stratified harm bound over every subcircuit (core's `Stratified.harm_bound`), with no
 delta split by subcircuit, its leak's location term counting the incorrect proof blocks by the unit-weighted harm bound in place of
 the exact `count_bound` (`certificate`). The bound of record is `Flock.Guarantees.JointStratified`
-(Security/Proofs/Flock/EndToEnd/Joint/Statement.lean): per verification phase, one detection budget
+(security/Proofs/Flock/EndToEnd/Joint/Statement.lean): per verification phase, one detection budget
 `sum_s k_s x_s / n_s <= ln(1/delta)` over every subcircuit, and the ANDs and output bits of an accepted block's incorrect
 proof blocks each at most `StratifiedBlock.maxHarm`, their exact supremum over the sets escaping with probability at least
 delta, from one sample at one delta. A difftest holds `certify`'s fields to that supremum.
@@ -61,9 +61,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import h200 as H  # noqa: E402
 
-from verity.core.protocols.pouw.window import eps_at  # noqa: E402
-from verity.core.protocols.profile import MARGIN, Stratified, Stratum, neg_log_ratio  # noqa: E402
-from verity.core.protocols.spot.optimize import (  # noqa: E402
+from verity.protocols.pouw.verifier.window import eps_at  # noqa: E402
+from verity.protocols.spot.verifier.profile import MARGIN, Stratified, Stratum, neg_log_ratio  # noqa: E402
+from verity.protocols.spot.optimize import (  # noqa: E402
     Candidate, CostModel, Objective, Plan, PlanBounds, ReplayGrain, TemplateCost, _plan, density_bound, for_budget,
     frontier, row_ands)
 

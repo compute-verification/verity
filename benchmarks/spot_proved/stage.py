@@ -64,8 +64,8 @@ import numpy as np
 
 #: the tree a11.py comes from: this file's, else (sent alone into a run's inputs) the working directory's
 TREE = Path(__file__).resolve().parents[2] if (Path(__file__).resolve().parents[1] / "one_stage").is_dir() else Path.cwd()
-for _p in ("benchmarks/one_stage", "tools/verity/circuit_check/src", "benchmarks/numerical/python", "integrations/vllm",
-           "verity/ml/flock/python", "."):
+for _p in ("benchmarks/one_stage", "tools/verity/circuit_check/src", "benchmarks/numerical/python", "adapters/vllm",
+           "verity/protocols/flock/prover/python", "."):
     sys.path.insert(0, str(TREE / _p))
 sys.setrecursionlimit(100000)
 
@@ -84,14 +84,14 @@ TREE_FILE = "allreduce_tree.json"
 
 def parse_tree(text: str, world: int):
     """A reduction tree over WORLD ranks, as JSON pairs or as kernels' probe writes it, ``(((((((0,2),3),1),5),6),4),7)``."""
-    from verity.ml.definitions.registry import tp_allreduce as AR
+    from verity.definitions.registry import tp_allreduce as AR
     return AR.multimem_tree(json.loads(text.replace("(", "[").replace(")", "]")), world)
 
 
 def multimem_trees(world: int, tree=None) -> str:
     """TREES of `AllReduceMultimem_v1` at WORLD ranks, one per owner: TREE (the node's, read off its switch), else the
     registry's H200 tree at 8 and a chain otherwise."""
-    from verity.ml.definitions.registry import tp_allreduce as AR
+    from verity.definitions.registry import tp_allreduce as AR
     tree = tree if tree is not None else AR.GLM53_H200_TREE if world == 8 else AR.chain(world)
     return json.dumps([AR.multimem_tree(tree, world)] * world, separators=(",", ":"))
 
@@ -448,7 +448,7 @@ def moe_args(cap: Capture, r: int, e: dict, j: int, col: int, router: dict) -> l
 def router_instances(cap: Capture, unstaged: dict | None = None):
     """`_moe_C::grouped_topk` per token row on `MoeRouterSigmoidBias_v1` (one group, sigmoid scores, the selection bias, the
     routed scaling inside), at the kernel its launch takes at its rows; any other configuration is counted in ``unstaged``."""
-    from verity.ml.definitions.registry import moe as M
+    from verity.definitions.registry import moe as M
     unstaged = {} if unstaged is None else unstaged
     for r in cap.ranks:
         for e in cap.events[r]:
@@ -526,7 +526,7 @@ def fused_ar_norm_outputs(e: dict) -> tuple[dict, dict]:
 
 
 def fused_ar_norm_instances(cap: Capture):
-    from verity.ml.definitions.registry.tp_allreduce import mnnvl_grid, mnnvl_shot
+    from verity.definitions.registry.tp_allreduce import mnnvl_grid, mnnvl_shot
     W = len(cap.ranks)
     r0 = cap.ranks[0]
     for calls in aligned(cap, "vllm::flashinfer_trtllm_fused_allreduce_norm"):
@@ -556,7 +556,7 @@ def allreduce_route(cap: Capture, e0: dict) -> str:
     FlashInfer's MNNVL kernel nor NCCL is an op the recorder sees, so a call without one took the route
     `CudaCommunicator.all_reduce` tries first for its bytes: FlashInfer's (``fi_ar_comm``) within `tp_allreduce.FI_MAX_BYTES`,
     else NCCL's."""
-    from verity.ml.definitions.registry.tp_allreduce import FI_MAX_BYTES
+    from verity.definitions.registry.tp_allreduce import FI_MAX_BYTES
     kids = {x["op"] for x in cap.events[cap.ranks[0]] if x.get("parent") == e0["seq"]}
     if any("multimem" in k for k in kids):
         return "symm_mem_comm"
@@ -577,7 +577,7 @@ def same_on_every_rank(cap: Capture, calls: dict, t: int, sl: slice) -> np.ndarr
 def allreduce_instances(cap: Capture, unstaged: dict | None = None):
     """A plain allreduce's (token, half-row) on symm-mem's multimem route or FlashInfer's MNNVL one. A call on NCCL's is
     counted in ``unstaged`` under its label, with why, and the step's other calls are still staged."""
-    from verity.ml.definitions.registry import tp_allreduce as AR
+    from verity.definitions.registry import tp_allreduce as AR
     W = len(cap.ranks)
     unstaged = {} if unstaged is None else unstaged
     for calls in aligned(cap, "vllm::all_reduce"):
@@ -620,7 +620,7 @@ def cublas_route(M: int, K: int, N: int, f32: bool) -> tuple[str, dict] | str:
     """The role and statics the Program binds an unbiased bf16 GEMM of M rows against a [N, K] weight at, cuBLAS's captured
     vLLM-default route at those M (for f32 out, the route `vllm_bindings.bf16_gemm.f32out_route` binds; the linear's
     `default_cublas_route` for bf16 out), or why it has none."""
-    from verity.ml.definitions.registry import bf16_gemm_check as BC
+    from verity.definitions.registry import bf16_gemm_check as BC
     if f32:
         phase = "f32out" if f"f32out {K} {N}" in BC.CUBLAS_ROUTES["routes"] else "router"
         kernel = BC.dispatch_sm90(M, K, N)[0]
@@ -643,7 +643,7 @@ def cublas_instances(cap: Capture, profile, unstaged: dict | None = None):
     the Program binds each row's call to at the M rows cuBLAS saw, in the opened layers (the weights are past the kept small
     parameters). A call whose M has no captured route, and any other ``aten::mm``, is counted in ``unstaged`` under its label,
     with why, and the step's other calls are still staged."""
-    from verity.ml.definitions.registry import bf16_gemm_check as BC
+    from verity.definitions.registry import bf16_gemm_check as BC
     from verity_vllm.program.frontend import targets as T
     from verity_vllm.program.predict.common import kind
     unstaged = {} if unstaged is None else unstaged
@@ -735,7 +735,7 @@ def bmm_instances(cap: Capture, profile, unstaged: dict | None = None):
 def rms_norm_instances(cap: Capture):
     """``_C::rms_norm`` (the first layer's input norm, before any residual) per token row on `RMSNormCudaVector8_v1` at its
     launch block."""
-    from verity.ml.definitions.registry.cuda_rmsnorm import launch_block
+    from verity.definitions.registry.cuda_rmsnorm import launch_block
     for r in cap.ranks:
         for e in cap.events[r]:
             if e["op"] != "_C::rms_norm" or not cap.opened(e):
@@ -773,7 +773,7 @@ def add_instances(cap: Capture, unstaged: dict | None = None):
 
 
 def fused_add_rms_norm_instances(cap: Capture):
-    from verity.ml.definitions.registry.cuda_rmsnorm import launch_block
+    from verity.definitions.registry.cuda_rmsnorm import launch_block
     for r in cap.ranks:
         for e in cap.events[r]:
             if e["op"] != "_C::fused_add_rms_norm" or not cap.opened(e):
@@ -792,7 +792,7 @@ def fused_add_rms_norm_instances(cap: Capture):
 def fa3_calls(cap: Capture):
     """FA3's sparse MLA calls in the opened layers: (rank, the op's event, the tap's event or None, each token's valid keys and
     split count)."""
-    from verity.ml.definitions.registry import sparse_mla_split as SP
+    from verity.definitions.registry import sparse_mla_split as SP
     for r in cap.ranks:
         for e in cap.events[r]:
             if e["op"] == "_vllm_fa3_C::fwd" and e["in"].get("q_v") is not None:
@@ -823,7 +823,7 @@ def mla_combine_instances(cap: Capture):
         for t in range(min(cap.tokens(r), T)):
             if cap.only is not None and t not in cap.only:
                 continue
-            from verity.ml.definitions.registry import sparse_mla_split as SP
+            from verity.definitions.registry import sparse_mla_split as SP
             ns = len(SP.split_blocks(valid[t], nss[t]))
             if ns < 2:
                 continue
@@ -838,7 +838,7 @@ def mla_combine_instances(cap: Capture):
 def mla_split_part_instances(cap: Capture):
     """Each split of a token whose KV rows the tap kept (``kv_gathered_rows``, else its first ``kv_gathered_tokens``), per head:
     its keys' rows in, FA3's (o_partial, lse) for that split out."""
-    from verity.ml.definitions.registry import sparse_mla_split as SP
+    from verity.definitions.registry import sparse_mla_split as SP
     for r, e, tap, valid, nss in fa3_calls(cap):
         if tap is None or "sha512" not in (tap["in"].get("kv_gathered") or {}):
             continue
@@ -1141,7 +1141,7 @@ class Wires:
         table, used = tap["in"].get("block_table"), tap["in"].get("seqused_k")
         if not all(isinstance(x, dict) and rec.kept(r, x) for x in (table, used)):
             return [{**adv, "parts": parts, "bits": _read_bits(adv["width"], adv["shape"], parts)}]
-        from verity.ml.definitions.registry.dsa_topk import waksman_switches
+        from verity.definitions.registry.dsa_topk import waksman_switches
         kept = tap["in"].get("kv_gathered_rows") or list(range(int(tap["in"]["kv_gathered_tokens"])))
         page, used = rec.tensor(r, table), rec.tensor(r, used).astype(np.int64)
         topk, width = page.shape[1], adv["shape"][-1]
@@ -1255,7 +1255,7 @@ class Wires:
         token's keys, the top-k), a row at most the top-k's keys long that doesn't read its keys in order (the Program's
         public map), a longer one that isn't a selection of its keys (which `DsaWaksmanRows_v1`'s settings, charged once per
         token, choose), and a position the step computes whose write isn't recorded."""
-        from verity.ml.definitions.registry.dsa_topk import waksman_switches
+        from verity.definitions.registry.dsa_topk import waksman_switches
         rec, (req, rows) = self.capture, conv
         wev, slots, keys, made = write
         page, used = rec.tensor(r, tap["in"]["block_table"]), rec.tensor(r, tap["in"]["seqused_k"]).reshape(-1)
@@ -1687,8 +1687,8 @@ def main() -> int:
     a = ap.parse_args()
     import a11
     import a11_kinds as K
-    from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.circuits.codec import canonical_json, encode_program
+    from verity.protocols.spot.verifier.one_stage import partition as P
     from verity_vllm import TargetProfile
 
     out = Path(a.out)

@@ -82,10 +82,10 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R  # noqa: E402
-from verity.core.protocols.spot.one_stage import verifier as V  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import verifier as V  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
 
 FORMAT = "verity/prove-leg/v0"
@@ -271,9 +271,9 @@ def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, le
 def frame_ports(set_name: str, meta: dict, n: int, tables: Mapping[str, Any] | None = None) -> dict[str, dict]:
     """Each port's frame-v3 tree as the verifier derives it: its binding names the set, the instance range, the port and its
     schema; its leaves are the instances' rows, or a shared-row port's table rows (`circuit.statement`)."""
-    from verity.ml.commitments.identity import identity_digest_sha512
-    from verity.ml.commitments.indexed import RangeIndexedDomain
-    from verity.ml.commitments.merkle import CommitmentDomain
+    from verity.commitments.identity import identity_digest_sha512
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain
 
     out = {}
     for (port, _w, _c), (schema, _bits) in zip(meta["ports"], meta["row_schemas"], strict=True):
@@ -637,7 +637,7 @@ def out_words(fn, *args: np.ndarray) -> np.ndarray:
     """Each instance's output row ``o0`` (``(n, words)`` u16): ``fn``'s return leaves on ``args`` (each parameter's leaves
     per instance, `evaluation.evaluate_batch`), concatenated little-endian and zero-padded to whole u16 words, as
     `class_statement.unit_lowering`'s output port holds them."""
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation import evaluate_batch
 
     ret = fn.signature()[1]
     leaves = np.asarray(evaluate_batch(fn, *args), dtype=np.uint64).reshape(len(args[0]), ret.leaves)
@@ -656,11 +656,11 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     ``--registered`` file (`registered.reads_file` at the values' roots, and the output rows' port) written under
     ``out``."""
     from circuit_check import targets as TG
-    from verity.core.protocols.spot.one_stage import registered as G
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.program import Program
-    from verity.ml.circuits.refs import coll_concat
-    from verity.ml.circuits.types import Array
+    from verity.protocols.spot.verifier.one_stage import registered as G
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.program import Program
+    from verity.circuits.refs import coll_concat
+    from verity.circuits.types import Array
 
     TG.load_registries()
     fn = TG.definition(f"LlBf16DotprodDot_v1{{K={K},BS=128,VEC=8,FMA=1}}")
@@ -759,8 +759,8 @@ def attention_call(shape: str) -> Any:
     """The Call ``shape`` (``attention-v19|attention-v20:M:T:first|block|end``) names: the served decode head of T keys on its
     ``CUT_TARGETS`` target (`targets.attention_spec`, one query row), cut as `window_circuit.CUTS` cuts it, and its first
     visited block (keys (nb - 1) BN ... T - 1), the full block below it (T > BN) or its epilogue."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.registry import dead_free as DF
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import dead_free as DF
     from verity_vllm import TargetProfile
     from verity_vllm.program.frontend import targets as TG
     from verity_vllm.program.predict.window_circuit import CUTS
@@ -802,10 +802,10 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
         attention-v20:M:T:CALL  the same on the H200 (sm_90, FA3): AttnBlockFirst_v1, AttnBlock_v4 or AttnHeadEnd_v1
         embedding-read:M[:V] EmbeddingRead_v1{V,H}, the window's embedding unit, each stand-in row opening at its token
     """
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity_vllm import TargetProfile
     from verity_vllm.program.frontend import targets as TG
-    from verity.ml.definitions.registry import b1, dead_free as DF
+    from verity.definitions.registry import b1, dead_free as DF
 
     fam, model, *arg = shape.split(":")
     L = LLAMA[model]
@@ -837,7 +837,7 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
         C = a or DF.CHUNK
         return bind(DF.TokenSelectChunkV2, C=C), lambda rng, n: {"x": _gen(rng, n, C, 3.0)}
     if fam == "token-select-combine":
-        from verity.ml.circuits.evaluation import evaluate_batch
+        from verity.circuits.evaluation import evaluate_batch
 
         C = DF.CHUNK
         if V % C:
@@ -869,12 +869,12 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
             return out
         return fn, call
     if fam == "embedding-read":
-        from verity.ml.commitments.gates import embedding as E
-        from verity.ml.commitments.gates.frame_v3 import root_ref
-        from verity.ml.commitments.gates.hm96 import reference as hm96_leaf
-        from verity.ml.commitments.gates.rowleaf import reference as row_digest
-        from verity.ml.commitments.merkle import merkle_depth
-        from verity.ml.commitments.rowleaf import bit_row
+        from verity.commitments.gates import embedding as E
+        from verity.commitments.gates.frame_v3 import root_ref
+        from verity.commitments.gates.hm96 import reference as hm96_leaf
+        from verity.commitments.gates.rowleaf import reference as row_digest
+        from verity.commitments.merkle import merkle_depth
+        from verity.commitments.rowleaf import bit_row
 
         def emb_read(rng, n):
             names, cols = ("tok", "root", "domain", "row", "salt", "path"), []
@@ -947,8 +947,8 @@ def served_member(shape: str, seed: int, n: int = 1, reads: str | None = None) -
     """``shape``'s served unit as a member of ``n`` units: its parameters the prover's rows (`interface.unit_rows`), its outputs
     hidden, values seeded by ``seed``, its table reads laid out by ``reads`` (`Member`), by default its template's own
     (`chunk_rows.reads`)."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.windows import interface as IF
+    from verity.circuits.codec import descriptor_id
+    from verity.commitments.windows import interface as IF
     from verity_vllm.pipeline import chunk_rows as CR, serving_rows as SRW
 
     fn, gen = served(shape)
@@ -1001,7 +1001,7 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
         rec: dict[str, Any] = {"shape": shape}
         summary[shape] = rec
         try:
-            from verity.ml.circuits.codec import descriptor_id
+            from verity.circuits.codec import descriptor_id
 
             fn, _gen = served(shape)
             rec["descriptor_id"] = descriptor_id(fn)
