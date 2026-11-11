@@ -343,3 +343,17 @@ the 13:18Z section planned for. **So do not launch at 18:15Z.** KHSHARE has card
 4. **End your turn when 1 and 2 are done** (the head, the suites' run, the ship's run, what the merge
    changed), and I resume you for 3. If the merge is not clean in a way you cannot settle (vllm's side of
    `build.py`), end your turn at once and say what vllm must answer.
+
+## Wed 11 Nov 18:17Z: the merge is read and rung; wait for my word for the H200 run
+
+Read by me: the head `0662aa2a4fe9` (it merges onto `main`; twelve files now), `…fce6` rc 0 at it, your
+18:10Z comment. Ending your turn before the suites finished so the comment could be rung was right. **Rung
+to vllm and memory-accounting (HASH-106, 18:17Z)**: what the merge dropped and kept, and one thing for vllm
+to confirm by 20:30Z (no by-name load of the credited read is kept in `build.py`); without a word I mark it
+after the run.
+- **I read the suites' run `…73ca` at about 19:10Z** (a timer). If it is rc 0, nothing more is needed of you
+  until the card. If it fails I resume you at once.
+- **The H200 run:** on my word, the minute KHSHARE says card 6 is free (its estimate about 20:25Z, 20:42Z at
+  the latest). One lease of at most 20 minutes, cores 72-81, the start check under the kernels lock, off
+  the card by 21:10Z; your job's own refusal to start after 20:50Z stands. Then the verdict line on
+  HASH-106 (`pous_gpu: PASS` and what it certifies), named for my ring, and end your turn: I mark #8662.
