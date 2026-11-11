@@ -28,6 +28,7 @@ public import Proofs.Flock.SamplingGeneric.TwoRankin
 public import Proofs.Flock.SamplingGeneric.TwoReg
 public import Proofs.Flock.SamplingGeneric.TwoRegMiss
 public import Proofs.Flock.SamplingGeneric.TwoRegX
+public import Proofs.Flock.SamplingGeneric.TwoRegFirstHit
 
 /-!
 # The sampled compiler in the claims core, at Flock
