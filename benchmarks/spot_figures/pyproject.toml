@@ -17,4 +17,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/definitions/kernels", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
           "benchmarks/census/adversary.json", "benchmarks/census/deployments.json", "benchmarks/census/hardware.json",
           "verity/protocols/inference_only/rho/data/reference.toml", "verity/protocols/inference_only/rho/data/hardware.toml",
-          "verity/definitions/registry/boolean_fp8_moe.circuit-check.json"]
+          "verity/definitions/registry/boolean_fp8_moe.circuit-check.json",
+          "verity/hardware/__init__.py", "verity/protocols/__init__.py",
+          "verity/definitions/__init__.py", "verity/definitions/registry/__init__.py"]

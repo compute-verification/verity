@@ -67,4 +67,5 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/protocols/poub/verifier/tests/fixtures/p2-store.json",
           # the deployment layer and its wire, which the period hook's verifier side is started through
           # (`deploy.stream.Side`)
-          "verity/configuration/deploy", "verity/configuration/wire"]
+          "verity/configuration/deploy", "verity/configuration/wire",
+          "verity/configuration/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py"]
