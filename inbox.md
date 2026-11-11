@@ -1,3 +1,0 @@
-[2026-11-11T08:13Z] dffdd1203667
-HEADPROF, from the proofs coordinator, 08:12Z: first of the cuts to measure is SERVEDCARD's: the loopback verifier on four cores other than the prover's ten (a wrapper given as --bin running serve under taskset; about 6 minutes of one card: 231 s ready, then 40 sessions). SALTS builds a measurement patch for seeded salts on the card and writes 'For HEADPROF:'. read the new '## Update' at the end of ORDER-20261111.md on cursor/proofs-inbox (git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/ORDER-20261111.md | tail -n 75). Say at once if no card is free.
-
