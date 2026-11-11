@@ -60259,3 +60259,38 @@ For the table: no number moves.
 **Left:** your mark of #8789 and CI-485. Mine when resumed: the three tier runs' verdicts; the read of `main`'s new landings against the two locks; the small PR for the six sites once #9005 is on `main`; the allocator rerun after #8789's candidate audit; then, with #8789 and #8949 on `main`, the PR that reads the program once, #8814 and the M6 branch.
 
 For the table: #8789 ready to mark at `6a3d3ea5da067a22c6f7017fe025f7b43611cf55`; merged with `main` `cc6ee7446278` its records run ends `pass`, nothing to regenerate (`r20261111-173820-7918`); that merge's quick tier 51 of 85 passed, 0 failed, 34 out.
+
+## COUNT, Wed 11 Nov 18:19Z: first entry. Both forms are below; my pick is the verdict form, built as two pull requests (the cost model first, Python only; the verdict's field second, yours to mark). Under `main`'s design the quoted figures hold only at one size of verification phase, and I print the table by 21:30Z
+
+Branch `cursor/proofs-count-71ac`, from `main` `cc6ee7446278`, nothing pushed yet. [run: `git checkout -b`] My mailbox's 18:07Z section is read: I build on no name of #8915's until LAND2's fix is in, and I reuse BREAKEVEN's harness. [read: the mailbox; LAND2 18:00Z]
+
+**What `main` does, in three lines.**
+- The first stage samples exactly K = T·⌈q·n/T⌉ of the n replay blocks a verification phase holds (T the tables, 1 by default), and refuses a fixed count and a coin a block. [read: `Spot/Rate.lean` `count`; `Spot/Select.lean` `textOver`, `Rule.over`]
+- n is the record's `population`, any positive integer: no code holds a largest n or a largest K. [read: `Spot/Run.lean`, the `register` step]
+- The cost model prices a different first stage: a coin a replay block at rate q, an expected count q·n that is never rounded up, and a count held under K0 by a refusal `main` does not run (`registration_cap`, the least K0 the count passes with chance at most 2^-40). [read: `verity/protocols/spot/optimize.py` lines 1296 to 1448]
+
+**What the binding error reads from a run.** Its hash part is (2·c_R + 4·c_F)/2^256, with c_R = T_H·(1 + e_s·N_s) + c and c_F = T_H·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·c. [read: `security/Proofs/Flock/SamplingGeneric/TwoFirstHitAt.lean` lines 135 to 143; `TwoFirstHitClassCaps.lean` `hashBound`; #8915's body] Of these, a run decides N_s (the proof blocks its second stage sampled, K·Σ_t k_t) and K_s, K_m (their classes of gates); T_H (the adversary's hash calls), e_s and c are not the run's. [read: `SpotFlock/Counts.lean` `code_hNs`; `ClassCounts.lean`] The modeled 2^-95.87 puts K = 6 there. [read: BREAKEVEN 16:58Z; ATTACK 13:13Z point 4]
+
+**Form (a): the verdict carries the error at the run's own counts.**
+- What changes: a decided two-stage run's verdict gains one field beside `interior`. It holds the first stage's count, the second stage's count, and the value of (2·c_R + 4·c_F)/2^256 at them as an exact fraction, at a T_H the auditor names as it names δ today.
+- It changes what the verifier publishes and nothing it accepts or refuses. No number enters the public parameters.
+- Files: `verity/protocols/spot/verifier/lean/Spot/Run.lean` (`interiorAudit`, where the field joins the list `run` appends, so `run_decided`'s statement is untouched [read: `security/Proofs/Flock/Claims/Sampling/Select/Code.lean` lines 119 to 147]); one new small Lean file in the verifier's package for the function; `verity/protocols/spot/verifier/service.py` (`_audit_two`) and `one_stage/verifier.py`, the Python held to it; `verifier/tests/test_two_stage.py` and `lean/tests/test_difftest.py`; one lemma in `security/Proofs` that the verifier's function equals `hashBound`.
+- What it does not do: it holds nothing down. A verification phase of any size is still accepted, and its verdict says how large the error is.
+- Two limits, said now. The compiled verifier refuses every two-stage run today (`SecondStage.FORM` is false), so on `main` the field is read only by the Python and its difftest until the form is allowed. [read: `Spot/SecondStage.lean` line 139] And no verifier code computes a proof block's classes of gates: the 4,130 in the modeled figure is typed in. [read: ATTACK 13:13Z] The field's first version takes the classes a proof block as a public input and says so in its name; code that counts them is a later change.
+
+**Form (b): the verifier refuses past a named count.**
+- What changes: the public parameters gain one number, the most replay blocks a first stage may sample. `run` refuses at `register`, with a new code, a verification phase whose K is over it.
+- It only refuses more, so it may land ahead of any proof. It makes "at most 6" a fact about every accepted run.
+- Files: `Spot/Run.lean` (the `register` step) and `Spot/Registration.lean` (`Verifier`, the parameter); `service.py` (`Stream.register`), `one_stage/verifier.py` (`_params`); the same two test files; `run_decided`'s proof runs again, its statement gaining nothing.
+- What it costs: it is a policy parameter in the protocol, which the design rule rules out. [read: AGENTS.md, "One proof system"] And because K is fixed by q and n, it is in effect a ceiling on a verification phase's size, n ≤ 6/q: a longer one is refused whole, a visible failure with no resample. At the quoted configurations 6/q is 8.4 to 26 million requests, between a tenth and a third of the datacenter's 600 s window. [guess: from BREAKEVEN 16:58Z's q's; my table at 21:30Z replaces it]
+
+**My pick: (a).** It is the form the design rule states, it adds no way for honest serving to fail, and it makes the binding figure a property of each run in place of an assumption about all of them. An auditor that wants (b) gets it outside the protocol by reading the published count. I build (a) unless your mailbox says otherwise within 30 minutes of this entry.
+
+**The cost model, same work, first pull request (Python only, no verifier change).**
+- The rule: a verification phase of n replay blocks samples exactly K of them, K a whole number of at least 1. Its cost is charged at K/n, its bound is read at the rate K/n, and the row carries K, so the binding figure and the gigabytes are read at one K. The bound's Lean already covers this first stage: `AdmissibleTwoRankin` asks only that the first stage miss each set of replay blocks with chance at most ∏(1 − q), and names the uniform K of n at K/n. [read: `security/Definitions/Claims/SamplingTwoRankin.lean`]
+- Files: `verity/protocols/spot/optimize.py` (`two_stage_statements`, `two_stage_price`, `_registration_q`, `two_stage_design`; `registration_cap` and `OVERFLOW` go, since no code refuses on a tail); `benchmarks/spot_figures/breakeven/{common,levers,sweep,zkstack}.py`, `total_cost.py` and `figure1.py`'s note; `verifier/tests/test_optimize.py` and `benchmarks/spot_figures/tests/test_total_cost.py`.
+- What will move, before I have run it [guess]: where n is under 1/q the least `main` can sample is one replay block, which is over the budget (197 to 606 times at one machine's window, by BREAKEVEN's q's), so the planner returns no design there and the drivers must say so; the quoted figures hold where n is near 1/q or above. The binding figure moves by log2(K/6) bits with the K of the size chosen.
+
+**The table I owe at 21:30Z.** For each quoted configuration (19,642 GB and 5,445 GB) and each size of verification phase (one machine's 600 s window, a pod's, the datacenter's, and the sizes at which K is 1 and 6): K, the cost against the budget, the gigabytes and the binding error, each with its run.
+
+Next: the checkpoint note, then `optimize.py`.
