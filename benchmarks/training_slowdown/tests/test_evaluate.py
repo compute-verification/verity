@@ -21,6 +21,17 @@ def setup(tmp_path):
     return data, s, theta, other
 
 
+#: How far apart two forward passes over the same windows may be, relative. On one thread they are equal. On more, a
+#: pass under bf16 autocast now and then rounds a few logits the other way: in a sweep of 2,000 passes at four threads
+#: (40 processes of 50) the scores were at most 4.7e-5 apart. The nearest scores these tests tell apart, θ's and the
+#: other state's over every slice, are 2.2e-3 apart.
+TWO_PASSES = 3e-4
+
+
+def near(x):
+    return pytest.approx(x, rel=TWO_PASSES)
+
+
 def bpb_of(state, shape, toks, starts, nbytes):
     m = LM.of(shape)
     m.load_state_dict(state)
@@ -32,12 +43,13 @@ def test_theta_scores_its_own_start_bpb_and_a_coin_replays_its_slice(setup):
     ev = Evaluator(data, "search", theta, s.shape, "cpu")
     toks, man = held_out(data, "search")
     full, tail = windows(len(toks))
-    assert ev.start_bpb == bpb_of(theta, s.shape, toks, full + tail, man["bytes"])
+    assert ev.start_bpb == near(bpb_of(theta, s.shape, toks, full + tail, man["bytes"]))
     sc = ev(theta, "w")
     assert sc["split"] == "search" and len(sc["slice"]["coin"]) == 32
-    assert sc["slice_bpb"] == sc["start_slice_bpb"]  # the whole pool is the slice here: the same windows, one batch
-    assert sc["bpb"] == pytest.approx(ev.start_bpb, rel=1e-12)
-    assert ev(theta, "w", coin=sc["slice"]["coin"]) == sc
+    assert sc["slice_bpb"] == near(sc["start_slice_bpb"])  # the whole pool is the slice here: the same windows, again
+    assert sc["bpb"] == near(ev.start_bpb)
+    passed = {k: near(sc[k]) for k in ("bpb", "slice_bpb")}  # what the state's pass gives; the other fields are exact
+    assert ev(theta, "w", coin=sc["slice"]["coin"]) == sc | passed
 
 
 def test_a_search_score_is_the_states_bpb_on_the_slice_paired_with_thetas(setup):
@@ -52,10 +64,10 @@ def test_a_search_score_is_the_states_bpb_on_the_slice_paired_with_thetas(setup)
     nbytes = int(sum(tb[toks[w + 1: w + 1025]].sum() for w in picked))
     assert sc["slice"] | {"coin": None} == {"coin": None, "weights_digest": "w", "windows": 3, "bytes": nbytes,
                                             "targets": 3 * 1024}
-    assert sc["slice_bpb"] == bpb_of(other, s.shape, toks, picked, nbytes)
-    assert sc["start_slice_bpb"] == pytest.approx(bpb_of(theta, s.shape, toks, picked, nbytes), rel=1e-6)
+    assert sc["slice_bpb"] == near(bpb_of(other, s.shape, toks, picked, nbytes))
+    assert sc["start_slice_bpb"] == near(bpb_of(theta, s.shape, toks, picked, nbytes))
     assert sc["bpb"] == sc["start_bpb"] + sc["slice_bpb"] - sc["start_slice_bpb"]
-    assert sc["bpb"] != ev.start_bpb
+    assert sc["bpb"] != near(ev.start_bpb)
 
 
 def test_the_final_split_scores_the_whole_set(setup):
@@ -64,11 +76,11 @@ def test_the_final_split_scores_the_whole_set(setup):
     toks, man = held_out(data, "final")
     full, tail = windows(len(toks))
     sc = ev(other, "w")
-    assert sc["bpb"] == bpb_of(other, s.shape, toks, full + tail, man["bytes"])
+    assert sc["bpb"] == near(bpb_of(other, s.shape, toks, full + tail, man["bytes"]))
     assert (sc["split"], sc["targets"], sc["bytes"], sc["documents"]) == ("final", len(toks) - 1, man["bytes"],
                                                                           man["documents"])
     assert "slice" not in sc
-    assert ev(theta, "w")["bpb"] == ev.start_bpb == sc["start_bpb"]
+    assert ev(theta, "w")["bpb"] == near(ev.start_bpb) and ev.start_bpb == sc["start_bpb"]
 
 
 def test_a_search_pool_whose_tokens_arent_its_bytes_is_refused(setup):
