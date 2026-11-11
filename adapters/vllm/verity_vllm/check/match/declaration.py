@@ -384,7 +384,7 @@ def requests_declared(run: MatchRun) -> tuple[dict, list[dict], dict, list[str]]
     the Program's declared applicability.  Returns (the record's engine facts, the header's requests, request -> its prompt parameter,
     the Program's request ids)."""
     res, gp, header, G = run.res, run.gp, run.header, run.declared
-    c = NamedCheck(res, "G1", "requests_declared: manifest == global Program == record header; none omitted/duplicated; prompts as declared; "
+    c = NamedCheck(res, "requests_declared", "manifest == global Program == record header; none omitted/duplicated; prompts as declared; "
                              "record engine conditions inside the Program's declared applicability")
     facts = _execution_conditions(c, res, gp, header, run.oracle_dir)
     g_ids = [r["request_id"] for r in gp["requests"]]

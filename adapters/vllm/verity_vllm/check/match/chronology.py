@@ -31,7 +31,7 @@ def chronology(run: MatchRun, facts: dict, present: dict[str, list[int]], engine
     the next row; bounded by the cap and the declared LAG."""
     res, gp, tokens, steps, samples, rec, B = run.res, run.gp, run.tokens, run.steps, run.samples, run.rec, run.fold
     tokens_optional, tokens_path, oracle_dir = run.tokens_optional, run.tokens_path, run.oracle_dir
-    c = NamedCheck(res, "G6", "chronology: declared == realized == observed arrival; contiguous rows; output events = TokenSelects, k-th = k-th token, feed the next row; bounded")
+    c = NamedCheck(res, "chronology", "declared == realized == observed arrival; contiguous rows; output events = TokenSelects, k-th = k-th token, feed the next row; bounded")
     # the driver's tokens.json is PART of the record: without it every output-association check (driver-served token k
     # == the recorder's k-th TokenSelect, served length == the driver's, the driver's two-length claims, the tokens.json lag attestation) is
     # silently skipped.  Fail closed by name; `tokens_optional=True` (CLI --tokens-optional) accepts a record without it for mechanism /
@@ -66,7 +66,7 @@ def chronology(run: MatchRun, facts: dict, present: dict[str, list[int]], engine
         # association failure -- SampleEnd token != driver token -- a chronology mismatch, ...) makes it False, never True beside a FAIL
         if len(c.problems) > _n_problems_before and ent.get("eos_verified") is True:
             ent["eos_verified"] = False
-            ent["eos_verified_note"] = f"{len(c.problems) - _n_problems_before} G6 problem(s) on this request: the EOS evidence is not accepted"
+            ent["eos_verified_note"] = f"{len(c.problems) - _n_problems_before} {c.id} problem(s) on this request: the EOS evidence is not accepted"
             ent.pop("eos_lag_rows_accepted", None)   # no lag row is 'accepted' on a request whose EOS evidence is not
         ent["g6_problems"] = len(c.problems) - _n_problems_before   # the scheduled workload state is built from established requests only
     conc = _achieved_concurrency(c, res, gp, steps, present)
@@ -94,7 +94,7 @@ def chronology(run: MatchRun, facts: dict, present: dict[str, list[int]], engine
         c.fail(f"VARIABLE LAG: the EOS-stopped requests of this record show different post-EOS row counts {li['lag_rows_observed']} under one "
                f"declared scheduler (Program LAG {decl_lag}, record attests {rec_lag_src}): not a constant-lag profile -- surface as an ALERT, "
                f"never fold into a constant-lag model")
-        res.setdefault("alerts", []).append({"kind": "variable_lag", "check": "G6", "lag_rows_observed": li["lag_rows_observed"], "declared": decl_lag,
+        res.setdefault("alerts", []).append({"kind": "variable_lag", "check": c.id, "lag_rows_observed": li["lag_rows_observed"], "declared": decl_lag,
                                              "record_attests": rec_lag, "action": "ALERT"})
     if not lag_declared and li["exercised"]:
         li["note"] = "Program declares no lag, with EOS stops: every EOS-stopped request failed by name above; rebuild with the declared lag"

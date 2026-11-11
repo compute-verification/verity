@@ -17,7 +17,7 @@ def vu_population(run: MatchRun, att: Attribution, reqs: RequestFacts) -> dict[i
     res, B, fast = run.res, run.fold, run.fast
     per_req, meta_of = att.per_req, att.meta_of
     glob2loc, engine_step_of, comps, exec_pop, unexercised = reqs.glob2loc, reqs.engine_step_of, reqs.comps, reqs.exec_pop, reqs.unexercised
-    c = NamedCheck(res, "G7", "vu_population: global query population (components over executed steps) == attributed fold; boundary probes resolve")
+    c = NamedCheck(res, "vu_population", "global query population (components over executed steps) == attributed fold; boundary probes resolve")
     attributed = sum(len(v) for v in per_req.values())
     if exec_pop != attributed:
         c.fail(f"global query exposes {exec_pop} VUs over the executed steps but the fold holds {attributed} attributed instances")
@@ -70,9 +70,9 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
     per_req = att.per_req
     glob2loc, shared_loc, proj, comps = reqs.glob2loc, reqs.shared_loc, reqs.proj, reqs.comps
     engine_step_of, dep_viol, perm_facts = reqs.engine_step_of, reqs.dep_viol, reqs.perm_facts
-    c = NamedCheck(res, "G8", "within_step_order: each request's own instances in its component order inside every engine step; cross-request interleaving = recorded runtime batch layout"
+    c = NamedCheck(res, "within_step_order", "each request's own instances in its component order inside every engine step; cross-request interleaving = recorded runtime batch layout"
                   if within_step == "sequence" else
-                  "within_step_order: emission order inside an engine step recorded as batch layout (canonical addresses are structural); "
+                  "emission order inside an engine step recorded as batch layout (canonical addresses are structural); "
                   "dependency order is G3's (a consumer before its producer is DAG-unequal)")
     layout = []
     nonmono_steps = {}

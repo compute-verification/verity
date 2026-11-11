@@ -78,7 +78,7 @@ def requests_observed(run: MatchRun, att: Attribution, g_ids: list[str]) -> dict
     steps with its rows."""
     res, steps, G, B = run.res, run.steps, run.declared, run.fold
     per_req, unattributed, shared_idx, shared_gi = att.per_req, att.unattributed, att.shared_idx, att.shared_gi
-    c = NamedCheck(res, "G2", "requests_observed: every declared request has rows + output events + instances; 0 unattributed; no undeclared request")
+    c = NamedCheck(res, "requests_observed", "every declared request has rows + output events + instances; 0 unattributed; no undeclared request")
     present: dict[str, list[int]] = collections.defaultdict(list)
     for s in sorted(steps):
         for rid in {r for r, _ in steps[s]["rows"]}:

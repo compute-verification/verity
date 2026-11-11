@@ -58,9 +58,9 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
     res, B, within_step, fast, _loaded = run.res, run.fold, run.within_step, run.fast, run.loaded
     per_req, meta_of, weights_nodes, weights_nodes_error, shared_gi = (att.per_req, att.meta_of, att.weights_nodes, att.weights_nodes_error,
                                                                        att.shared_gi)
-    c3 = NamedCheck(res, "G3", "subcircuits_x09: each request's projection canonical-equal to its component over the executed steps (eos-truncated labelled)")
-    c4 = NamedCheck(res, "G4", "identity_map: (request, local step, local index) <-> global node is a bijection over the attributed fold")
-    c5 = NamedCheck(res, "G5", "shared_state: one weights input for all requests (no overlapping fields); node operands same-request, producer step <= consumer step; "
+    c3 = NamedCheck(res, SUBCIRCUITS, "each request's projection canonical-equal to its component over the executed steps (eos-truncated labelled)")
+    c4 = NamedCheck(res, IDENTITY_MAP, "(request, local step, local index) <-> global node is a bijection over the attributed fold")
+    c5 = NamedCheck(res, SHARED_STATE, "one weights input for all requests (no overlapping fields); node operands same-request, producer step <= consumer step; "
                                "a warm request's cached rows (the engine's first scheduled position) and their producers are the Program's declared prefix-cache hit")
     glob2loc: dict[int, tuple[str, int, int]] = {}
     shared_loc: dict[int, dict[str, tuple[str, int, int]]] = {}   # weight-only instance -> {request: its local identity}
