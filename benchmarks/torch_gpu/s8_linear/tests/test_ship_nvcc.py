@@ -1,7 +1,7 @@
 """ship_nvcc.sh (the nvcc this directory's build.sh and the other ship builds compile with), without nvcc: a stand-in
 toolkit whose nvcc prints a dry run of nvcc's shape and whose gcc, cicc and ptxas record what they are given. What cicc is
-handed for one source at two places in a tree is the same to the byte, and a dry run the wrapper can't follow is refused
-before cicc runs."""
+handed for one source at two places in a tree is the same to the byte, and a dry run the wrapper can't follow, or a text
+that names the file it is in, is refused before cicc runs."""
 from __future__ import annotations
 
 import os
@@ -28,7 +28,7 @@ DRY = """#$ _NVVM_BRANCH_=nvvm
 """
 
 #: the preprocessor's text for the source at SRC including a header spelled INC: line markers, and one line of the
-#: program that holds a file's name itself, as __FILE__ leaves it
+#: program that holds a string of its own, which names no file of the markers
 TEXT = """# 0 "{src}"
 # 0 "<built-in>"
 # 0 "<command-line>"
@@ -64,12 +64,13 @@ def toolkit(tmp: Path) -> Path:
     return kit
 
 
-def run(tmp: Path, place: str, inc: str, more: str = "", dry: str = DRY) -> subprocess.CompletedProcess:
-    """The wrapper on a source at `place` (a directory under tmp) whose header is spelled `inc`."""
+def run(tmp: Path, place: str, inc: str, more: str = "", dry: str = DRY, text: str = TEXT) -> subprocess.CompletedProcess:
+    """The wrapper on a source at `place` (a directory under tmp) whose header is spelled `inc` and whose preprocessed text
+    is `text`."""
     kit = tmp / "kit"
     src = tmp / place / "t.cu"
     src.parent.mkdir(parents=True, exist_ok=True)
-    src.write_text(TEXT.format(src=src, inc=inc))
+    src.write_text(text.format(src=src, inc=inc))
     (kit / "bin/dry.txt").write_text(dry.format(kit=kit, tmp=tmp / "tmp", temp=TEMP, ii=tmp / "tmp" / f"{TEMP}-5_t.cpp1.ii",
                                                 src=src, out=tmp / "out.cubin", more=more, s=" "))
     env = dict(os.environ, CUDA=str(kit), TMPDIR=str(tmp / "tmp"), NOT_CICCS="1")
@@ -112,6 +113,27 @@ def test_the_other_steps_run_as_nvcc_wrote_them(tmp: Path) -> None:
     gcc = given(tmp, "gcc")
     assert str(tmp / "a/b/t.cu") in gcc["argv"].splitlines() and "NOT_CICCS" in gcc["env"].split()
     assert gcc["input"] == (tmp / "a/b/t.cu").read_text()
+
+
+def test_a_text_that_names_a_file_of_the_tree_is_refused_before_cicc_runs(tmp: Path) -> None:
+    """What __FILE__ leaves in a text: the name its line markers give the file it stands in, or the source's."""
+    src = tmp / "a/b/t.cu"
+    in_header = TEXT.replace("int f(int);\n", 'int f(int);\nconst char *at = "{inc}";\n')
+    in_source = TEXT.replace('"kept/as/written.cuh"', '"{src}"')
+    of_source = TEXT.replace("int f(int);\n", 'const char *of = "{src}";\n')
+    assert len({TEXT, in_header, in_source, of_source}) == 4
+    for text, where in ((in_header, "../h.cuh line 23: "), (in_source, f"{src} line 2: "), (of_source, "../h.cuh line 22: ")):
+        r = run(tmp, "a/b", "../h.cuh", text=text)
+        assert r.returncode != 0
+        assert "the text cicc compiles names a file" in r.stderr and "take it out of " + where in r.stderr
+        assert not (tmp / "rec.cicc").exists() and not (tmp / "out.cubin").exists()
+
+
+def test_a_system_header_may_name_itself(tmp: Path) -> None:
+    text = TEXT.replace('# 1 "{inc}" 1\n', '# 1 "/usr/include/x.h" 1 3\nconst char *x = "/usr/include/x.h";\n# 1 "{inc}" 1\n')
+    assert text != TEXT
+    assert run(tmp, "a/b", "../h.cuh", text=text).returncode == 0
+    assert 'const char *x = "/usr/include/x.h";' in given(tmp, "cicc")["input"].splitlines()
 
 
 def test_a_cicc_step_naming_another_variable_is_refused_before_cicc_runs(tmp: Path) -> None:
