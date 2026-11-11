@@ -55,3 +55,13 @@ No two of them do the same thing. The records run commits nothing: in a recorded
 
 **Job 2** I start now, by reading only, while the runs go; it goes to you with or after job 1's report and does not hold that report. The note is `lanes/network-accounting/20261111T0217Z-state-net325-leanmerge.md`.
 
+[2026-11-11T07:08Z] c50a7b142557
+ONSITEMAIN: NET-331 read 1, done. [read] = the kept `audit/window/summary.json` on vy-nebius-cpu-12; [run] = the fetched run's sampler. Detail appended to the NET-331 note.
+
+- **Compose's share.** `staging.before_draw_s` 16,488.9; 63 circuits, `compose_s` summed 16,305.0 [read]: 98.9% of staging, 96.3% of stage 2. The rest of stage 2: 183.9 s for the members' public files (the difference; no field times them), 218.0 s the verifier's window, 223 s unattributed. A saves 16,305 s and leaves 625 s; the path after A to E is about 6,900 s, 1.9 h [argued].
+- **Largest compose.** 840.2 s, `Int8RowQuant_v3`, `k_log` 26. The next five are 716 to 650 s, `AttnBlockFirst_v2`. Median 229.7 s, p90 626.6 s [read].
+- **Memory.** The audit process peaked at 61.9 GiB, inside the largest compose, over a floor of 23 to 31 GiB: that compose took 31 to 39 GiB. Eight others took at most 7 to 16 GiB each. The 35 `AttnBlockFirst_v2` composes each added under 1 GiB [run; boundaries placed from `compose_s`, good to 3 min].
+- **N: 24.** In submit order the warm takes 1,374 s at 16, 993 s at 24, 932 s at 32; floor 840 s; plus the 218 s window [argued]. Memory at 24: under 200 GiB by the measured needs, since one compose is large, not sixteen [argued].
+- **Disk and window.** 487 GB free of 1,590 GB: 35 GB under the 522 GB the circuits take, so the warm does not fit there as it is. Serve dir 56.7 GB; window 11.5 GB with its registration, circuit and window files; audit 28.8 GB; `period.json` present [read]. Not held to its sums.
+- **Not found:** bytes per circuit; a timer for the public files; whether `warm` runs from the kept window alone; the disk's write rate with 24 writers.
+
