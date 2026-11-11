@@ -32,14 +32,26 @@ def Ratio.ofNat (n : Nat) : Ratio := ⟨n, 1⟩
 def Ratio.toString (r : Ratio) : String :=
   if r.den = 1 then s!"{r.num}" else s!"{r.num}/{r.den}"
 
+/-- `s` as a natural number in canonical form: ASCII digits, with no leading zero. Read over the string's characters,
+which the kernel evaluates (`String.all` and `String.toNat!` it doesn't). -/
 private def natOf (s : String) (ctx : String) : V Nat :=
-  if !s.isEmpty && s.all Char.isDigit && (s.length = 1 || s.front != '0') then .ok s.toNat!
+  let cs := s.toList
+  if !cs.isEmpty && cs.all Char.isDigit && (cs.length = 1 || cs.head? != some '0') then
+    .ok (cs.foldl (fun n c => n * 10 + (c.toNat - '0'.toNat)) 0)
   else .error s!"{ctx}: {s.quote} is not a natural number in canonical form"
+
+/-- A string's characters cut at each `/`, as `String.splitOn "/"` cuts the string: the pieces between its `/`s in
+order, the empty ones too, so one more piece than it has `/`s. `done` holds the pieces already cut and `piece` the
+characters of the one being read, both in reverse. A walk over the characters, which the kernel evaluates
+(`String.splitOn` it doesn't). -/
+private def pieces (done : List String) (piece : List Char) : List Char → List String
+  | [] => (String.ofList piece.reverse :: done).reverse
+  | c :: cs => if c = '/' then pieces (String.ofList piece.reverse :: done) [] cs else pieces done (c :: piece) cs
 
 /-- The inverse of `toString`: refuses a zero denominator, a denominator written as 1, and a ratio not in lowest terms,
 so every ratio has exactly one spelling. -/
 def Ratio.ofString (s : String) (ctx : String) : V Ratio := do
-  match s.splitOn "/" with
+  match pieces [] [] s.toList with
   | [n] => pure ⟨← natOf n ctx, 1⟩
   | [n, d] =>
     let n ← natOf n ctx
@@ -126,6 +138,14 @@ quoting: the ratio, or the refusal's message. -/
 #guard Ratio.ofString "01" "levels[0].bernoulli" matches
   .error "levels[0].bernoulli: \"01\" is not a natural number in canonical form"
 #guard Ratio.ofString "1/2/3" "" matches .error ": \"1/2/3\" is not a ratio n/d"
+
+/-! The kernel evaluates `Ratio.ofString`: on a string it accepts, to the ratio; on one it refuses, as far as the
+refusal and no further, since `String.quote` writes the message through functions no proof unfolds. `Except` has no
+decidable equality, so `decide` reads it through `Except.toOption`. -/
+
+example : Ratio.ofString "1/100" "x" = .ok ⟨1, 100⟩ := rfl
+example : (Ratio.ofString "1/100" "x").toOption = some ⟨1, 100⟩ := by decide
+example : (Ratio.ofString "2/4" "x").toOption = none := by decide
 
 /-- `a ≤ b`, compared exactly. -/
 def Ratio.le (a b : Ratio) : Bool := a.num * b.den ≤ b.num * a.den
