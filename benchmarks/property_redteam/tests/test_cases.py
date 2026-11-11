@@ -13,10 +13,9 @@ sys.path.insert(0, str(HERE.parent))
 
 import cases as C  # noqa: E402
 import run as R  # noqa: E402
+
 from verity.circuits.evaluation.reference import evaluate  # noqa: E402
 from verity.definitions.silicon.integer import S32_MAX, S32_MIN  # noqa: E402
-
-AVAILABLE = [c for c in C.CASES if c.available]
 
 
 def _ids(cases):
@@ -34,8 +33,6 @@ def _program(case):
 
 @pytest.mark.parametrize("case", C.CASES, ids=_ids(C.CASES))
 def test_samples_compute_the_claim(case):
-    if not case.available:
-        pytest.skip(f"{case.id} binds {', '.join(case.needs)}, absent here")
     _program(case)
     samples = case.samples()
     assert samples
@@ -116,11 +113,12 @@ def test_p_s_producer_variants_take_the_intervals_their_cases_claim(q, lo, hi, t
 
 def _oracle(table):
     by_fn = {}
-    for c in AVAILABLE:
+    for c in C.CASES:
         try:
             by_fn[c.program().fn.name] = c
         except (TypeError, ValueError):
-            continue
+            if c.kind == "honest":
+                raise
 
     def check(program):
         return table(by_fn[program.fn.name])
@@ -137,8 +135,7 @@ def _ruling(case):
 
 def test_an_oracle_of_the_ruling_passes_every_case():
     report = R.run(_oracle(_ruling))
-    assert report["passed"] and set(report["outcomes"]) <= {"ok", "skipped"}
-    assert report["outcomes"].get("skipped", 0) == len(C.CASES) - len(AVAILABLE)
+    assert report["passed"] and set(report["outcomes"]) == {"ok"}
 
 
 def test_accept_all_is_unsound_on_every_attack():
@@ -148,8 +145,6 @@ def test_accept_all_is_unsound_on_every_attack():
     assert not report["passed"]
     at_build = set()
     for row in report["rows"]:
-        if row["outcome"] == "skipped":
-            continue
         if row.get("note", "").startswith("the IR refuses it at build"):
             at_build.add(row["id"])
             assert row["kind"] == "attack" and row["outcome"] == R.grade(C.BY_ID[row["id"]], True, {}), row
@@ -161,9 +156,8 @@ def test_accept_all_is_unsound_on_every_attack():
 def test_refuse_all_is_sound_and_over_strict():
     report = R.run(R.refuse_all)
     for row in report["rows"]:
-        if row["outcome"] != "skipped":
-            want = "over-strict" if row["kind"] == "honest" else ("ok" if row["verdict"] == "refuse" else "sound")
-            assert row["outcome"] == want, row
+        want = "over-strict" if row["kind"] == "honest" else ("ok" if row["verdict"] == "refuse" else "sound")
+        assert row["outcome"] == want, row
 
 
 def test_grades():
