@@ -3,6 +3,7 @@ guard, and dependencies kept warm across runs."""
 from __future__ import annotations
 
 import ast
+import fnmatch
 import hashlib
 import importlib.util
 import io
@@ -419,6 +420,39 @@ def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     rc, _ran, doc = _run(tmp_path, 99)
     assert rc == 1 and doc["failed"] == ["pkg/b"]
     assert doc["packages"][1]["failures"] == [f"reads tools/verity/lean/{n}" for n in sorted(LA.NOT_READ)]
+
+
+def test_a_packages_prose_and_pytest_files_are_no_input(tmp_path, monkeypatch):
+    """No audit reads a package's `*.md`, `.gitignore`, `pyproject.toml`, `test_*.py` or `conftest.py` (`UNREAD_NAMES`), so
+    an edit to one audits no package again: two READMEs and a pytest file inside packages audited all three `security`
+    packages cold in a candidate that changed no Lean. A generator, a data file or a fixture the package keeps, under
+    `tests/` too, still audits it again. The dropped files stay out of the scratch tree, so an audit that read one fails."""
+    unread = {"pkg/a/README.md": "", "pkg/a/docs/NOTES.md": "", "pkg/a/.gitignore": "", "pkg/a/pyproject.toml": "",
+              "pkg/a/tests/test_a.py": "", "pkg/a/tests/conftest.py": ""}
+    kept = {"pkg/a/gen.py": "", "pkg/a/tests/difftest_vectors.py": "", "pkg/a/tests/fixtures/vectors.json": "{}",
+            "pkg/a/models.json": "{}", "pkg/a/TRUSTED.sha256": ""}
+    root = _tree(tmp_path, monkeypatch, {**unread, **kept})
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    assert _run(tmp_path, 1)[0] == 0
+    files = LA.COMMON.tracked_files()
+    got = LA.inputs("pkg/b", files)
+    assert not set(unread) & set(got) and set(kept) <= set(got)
+    keys = {p: LA.key(p, files, LA.FLAGS) for p in ("pkg/a", "pkg/b")}
+    for i, f in enumerate(sorted(unread), 2):
+        (root / f).write_text(f"edited {i}\n")
+        assert {p: LA.key(p, files, LA.FLAGS) for p in keys} == keys, f
+        rc, ran, doc = _run(tmp_path, i)
+        assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["pkg/a", "pkg/b"], f
+    for i, f in enumerate(sorted(kept), 20):
+        k = LA.key("pkg/a", files, LA.FLAGS)
+        (root / f).write_text(f"edited {i}\n")
+        assert LA.key("pkg/a", files, LA.FLAGS) != k, f
+        rc, ran, _doc = _run(tmp_path, i)
+        assert rc == 0 and {r.split()[0] for r in ran} == {"pkg/a", "pkg/b"}, f
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": sorted(unread)}))
+    rc, _ran, doc = _run(tmp_path, 99)
+    assert rc == 1 and doc["failed"] == ["pkg/b"]
+    assert doc["packages"][1]["failures"] == [f"reads {f}" for f in sorted(unread)]
 
 
 def test_a_passing_audit_keeps_its_build(tmp_path, monkeypatch):
@@ -1076,6 +1110,8 @@ def test_the_real_packages_and_their_inputs():
     assert {"tools/verity/lean/upstream.py", "tools/verity/lean/setup.sh", "tools/verity/lean/cache.py"} <= set(got)
     assert not {f"tools/verity/lean/{n}" for n in LA.NOT_READ} & set(got)
     assert {f"tools/verity/lean/{n}" for n in LA.NOT_READ} <= set(files), "an entry of NOT_READ names no file: remove it"
+    assert not [f for f in got if not f.startswith(LA.LEAN_TOOL)
+                and any(fnmatch.fnmatchcase(f.rsplit("/", 1)[-1], p) for p in LA.UNREAD_NAMES)]
     assert "tools/verity/lean/Unread.lean" in got and set(LA.UNREAD_FACTS) <= set(pkgs)
     lean_check = (ROOT / "tools" / "verity" / "lean" / "check.py").read_text()
     assert ast.literal_eval(re.search(r"^UNREAD_FACTS = (.+)$", lean_check, re.M).group(1)) == LA.UNREAD_FACTS, \
