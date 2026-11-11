@@ -64,7 +64,7 @@ from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, 
 from verity_vllm.errors import Refused
 from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
-from verity_vllm.pipeline.spans import commit_s_of
+from verity_vllm.pipeline.spans import commit_s_of, end_lap, gc_of, phases_of
 
 #: The compile slice the served windows are proved by, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
 #: rows and schedule, charging the window's decisions and each certified arrival's output length. The serve path commits
@@ -105,17 +105,6 @@ REQUEST_USERS = "request_users.jsonl"
 #: traces, which hold request values, stay in the serve dir with the served rows' salts, and what reads them runs there
 MIRRORED = ("serve.json", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "pauses.jsonl", "summary.json", "remote_session.json",
             "memory_map.jsonl")
-
-
-def gc_of(rc: Any) -> dict[str, Any] | None:
-    """A window's Python collections (the committer's `GcPauses` record, while it was installed): how many, their total and
-    longest, and each of 50 ms or more as (generation, start on `time.perf_counter`, seconds, thread)."""
-    g = (getattr(rc, "extra", None) or {}).get("gc")
-    if not g:
-        return None
-    p = list(g.get("pauses") or [])
-    return {"n": len(p), "total_s": round(sum(x[2] for x in p), 4), "max_s": round(max((x[2] for x in p), default=0.0), 4),
-            "long": [[x[0], round(x[1], 3), round(x[2], 3), x[3]] for x in p if x[2] >= 0.05], "freeze_s": g.get("freeze_s")}
 
 
 class Mirror:
@@ -237,15 +226,6 @@ class _Closed:
     on_loop: dict[str, float] = field(default_factory=dict)    # off the loop: the close's phases on the loop
     t_close: float = 0.0                                       # ... when its job was queued
     seal_wait: float = 0.0                                     # ... and how long the loop waited for the sealer's room
-
-
-def _phases(laps: Sequence[tuple[str, float]]) -> dict[str, float]:
-    return {name: round(t - s, 4) for (_, s), (name, t) in zip(laps, laps[1:])}
-
-
-def _lap(laps: list[tuple[str, float]], clock: Callable[[], float], name: str) -> None:
-    """The end of a close's phase ``name``, marked in ``laps`` (`_phases` reads them)."""
-    laps.append((name, clock()))
 
 
 class CommitWindows:
@@ -444,7 +424,7 @@ class CommitWindows:
         the window's finalize and everything that reads it, then runs on the sealer's threads in window order, and this returns None."""
         t0 = self.clock()
         laps = [("", t0)]
-        lap = functools.partial(_lap, laps, self.clock)
+        lap = functools.partial(end_lap, laps, self.clock)
         if self.arm is not None:
             self._close_arm()
             lap("arm")
@@ -468,7 +448,7 @@ class CommitWindows:
         self._check_finished(c.finished)
         lap("requests")
         rec["seconds"] = {"open": round(self.open_s, 4), "close": round(laps[-1][1] - t0, 4)}
-        rec["close_phases_s"] = _phases(laps)
+        rec["close_phases_s"] = phases_of(laps)
         self._write_window(rec)
         if self.marks is not None:
             self.marks(self.window, "close")
@@ -508,7 +488,7 @@ class CommitWindows:
         c.t_close = self.clock()
         c.seal_wait = self.sealer.submit(functools.partial(self._finish, c, queued), nbytes)
         lap("seal_wait")
-        c.on_loop = _phases(laps)
+        c.on_loop = phases_of(laps)
         queued.set()
         return None
 
@@ -518,7 +498,7 @@ class CommitWindows:
         queued.wait()
         t0 = self.clock()
         laps = [("", t0)]
-        lap = functools.partial(_lap, laps, self.clock)
+        lap = functools.partial(end_lap, laps, self.clock)
         job: Any = None
         waited, checking = 0.0, False
         try:
@@ -547,7 +527,7 @@ class CommitWindows:
         on_loop = sum(c.on_loop.values())
         rec["seconds"] = {"open": round(c.open_s, 4), "close": round(on_loop + laps[-1][1] - t0, 4), "on_loop": round(on_loop, 4),
                           "finalize_wait": round(waited, 4), "seal_wait": round(c.seal_wait, 4), "queued": round(t0 - c.t_close, 4)}
-        rec["close_phases_s"] = {"on_loop": round(on_loop, 4), **_phases(laps)}
+        rec["close_phases_s"] = {"on_loop": round(on_loop, 4), **phases_of(laps)}
         rec["on_loop_phases_s"] = c.on_loop
         self._write_window(rec)
         with self._lock:
