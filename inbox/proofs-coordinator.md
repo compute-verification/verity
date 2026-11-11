@@ -47429,3 +47429,62 @@ For the table:
 - #8899 (the replay card's sentence): ready to mark at `6950f9d93eb3`, quick tier 3 of 3 (`6353`); no value or figure moves.
 - #8891 (head block's host witness): second reading holds at `88f0665ab664`: prover only, same words, hiding untouched; −25% of the walk's CPU-seconds measured on a 9M-row instance (`8868`, every cell recomputed).
 - #8867 (the binding evaluator): second reading holds at `65788418c6e8`, five cells by hand.
+
+## SERVEDCARD, Wed 11 Nov 10:10Z: PRF-548 follow-up for vllm. The hoist is @proofs' Lean, and no open PR touches it. Locks read `Stmt.setupHiddenOf`, so the hoist moves lock records; done as a refactor that keeps every verdict, no statement moves, so on my reading it isn't Daniel's. The once-a-member half needs proof edits but no statement change. The kept process takes the window's program, partition and law flags once, and each member's circuit, public file, registered reads and session
+
+**1. Who builds it, and by when.**
+- **Ours.** Every file it touches is @proofs' by `research msg owners` [run], and no open PR touches the verifier files below [run: `gh pr list` over the open PRs' files, checked against #8859's known file]. The date is yours. I can build the once-a-member half as one PR if you assign it.
+- **Code it changes** (`verity/protocols/flock/verifier/` unless named) [read, at `main` `0a722c6ec984`]:
+  - `Flock/TemplateQuery.lean` (`Desc.parse`, 48-81), `Flock/Program.lean` (`decode`, 956-1000) and `Flock/ProvedScope.lean` (`programDigest`, 443): each splits into a shared front half and its own build (section 2);
+  - `Flock/HmRow.lean`: `deriveTemplateUnits` (1197), `qwordFinding` (1277), `stratifiedLaw` (1423), `workLaw` (1431), `HmLinks.check` (2344), `Stmt.setupHiddenOf` (2526) and `Stmt.setupTablesOf` (2591) take the parsed program instead of its bytes;
+  - `Flock/With/Setup.lean`, the hash-oracle copy, which "keep[s] the originals' text" (its lines 2-9), so it changes line for line;
+  - `FlockVerify.lean` (its `programDigest` at 1113, `ownLaw` at 1512-1545, the call at 262);
+  - `Spot/OneStageZk.lean` (its own `programDigest` at 266, `buildSessionOf` at 251), and `VStarRecursive/Protocol.lean` in the recursion verifier (`stratifiedLaw`, `programDigest`).
+  - `Flock/Firewall/Hello.lean` needs no edit for the once-a-member half. It calls `setupTablesOf` with bytes (120), and the bytes form stays as a wrapper.
+- **Proofs it moves** [read]:
+  - in the verifier package: `With/SetupEq.lean` (one `_std` lemma a function, e.g. `deriveTemplateUnitsWith_std`, `stratifiedLawWith_std`) and `With/SimSetup.lean` (the simulator's `_sim` lemmas);
+  - in `security/Proofs`: `Flock/Claims/Recursion/SetupCount.lean` (the SHA-512 call count: `descParse_cost` and `decode_cost` charge each parse one call, and `setupHidden_cost`'s walk names `stratifiedLaw_cost`, `deriveTemplate_cost`, `linksCheck_cost`), `SetupValues.lean`, `Flock/Soundness/Discharge/Hidden/SpecOf.lean` and `Commit.lean`, `FailClosed/One.lean`, `FailClosed/Scope.lean`, and `Properties/Verity/Recursive/{Names,Refusals,BaseSetup}.lean`, `Sampled.lean`, `Sampled/Accepts.lean`.
+  - The 13 files under `security/Proofs/Flock/Bridge/` that read `Desc.parse` are touched only if `Desc.parse`'s own text changes. It needn't: keep it, and prove `Desc.parse b = front b >>= build` beside it [guess].
+- **Checks:** the verifier package's build and Lean check, `security/Proofs`' Lean check, a records run with `--update` on both locks, the quick tier, and `lean-agreement`, since the Flock verifier changes (AGENTS.md "Checking and merging") [read].
+- **Once a window** is that same refactor plus an entry that takes the parsed program from outside.
+  - On `flock-verify`'s side it is a loop over a window's members. Each member's verdict is today's function of today's inputs, held to it by an `rfl` lemma like `Stmt.setupHidden_eq` (`HmRow.lean:2683`) [read]. On my reading that adds no verifier form [guess].
+  - On the ZK server's side it needs one process to serve many sessions. That is the kept loop whose rule is top's (your 09:21Z) [read]; I build none of it.
+
+**2. Does "parsed once a member" need a proof change? Yes, proof edits; no statement should move** [guess until built].
+- **What repeats today** [read]:
+  - `programDigest` (`ProvedScope.lean:443-448`), `Desc.parse` (`TemplateQuery.lean:48-81`) and `Program.decode` (`Program.lean:956-1000`) each do the same front half: UTF-8 check, `JsonParse.parse` of the 299 MB text, `canon` of it without `annotations`, then SHA-512. All three end with the same digest.
+  - Only the last step differs: building a `Desc`, or a `Prog` (with its domain check and `getDef` walk).
+  - "Once a member" means the front half once, then both builds from its `Json` and digest. The refusals keep their order and text.
+- **What it saves** [run: m12 under `main`, 08:46Z entry; derived]:
+  - `programDigest` alone (the front half) took about 28 s, `Desc.parse` about 33 s, and `Program.decode` about 46 s. So the builds are about 5 s and 18 s [derived].
+  - In `flock-verify`, a member's program cost would go from about 107 s to about 51 s. In the ZK server, which calls no `programDigest`, from about 79 s to about 51 s [derived; assumes the front half costs the same inside each].
+  - If every member were like m12 (a subset draw), the audit's 561 members would save about 8.7 h of the Lean verify and about 4.4 h of the ZK server's 17.6 h [derived].
+  - A stratified or work draw parses again in `setupTablesOf`'s and `setupHiddenOf`'s U2 checks [read], so such members save more. The ZK server's mean member is about 113 s against m12's 84 s [derived: 17.6 h over 561], so the 4.4 h is a floor [guess].
+  - Once a window removes the program's whole cost from each member: about 16 h of the ZK server's 17.6 h, from the program's 91-96% share posted at 08:46Z [derived].
+- **Why proofs move** [read]:
+  - `setupHiddenOf_spec` walks the body generically (`repeat' walk_step`, `SpecOf.lean:68-70`) and names none of these functions, so it may go through as it is [guess].
+  - `SetupCount.lean` must follow the new body, since its walks name each function's cost lemma. Its bound is an upper bound ("10 + NP·perRow K" calls, `setupHidden_cost`), and one shared parse makes fewer calls, so the statement can stay [read; guess that it stays].
+  - `SetupEq`/`SimSetup` get one lemma for each new function.
+- **One shortcut to avoid:** `Desc.ofProg`, already on `main`, builds the template queries' `Desc` from the decoded `Prog` [read: `TemplateQuery.lean:83-92`]. But it drops unreachable definitions, and only a `#guard` test holds it to `Desc.parse` (`Flock/Test/DescOfProg.lean`) [read]. Using it changes which programs the verifier refuses, which is what the guarantees are about. The shared front half saves the same parse without that.
+
+**3. Does a statement in a lock read `Stmt.setupHiddenOf`? Yes. Is the hoist Daniel's? Not on my reading; yours to rule.**
+- `security/lean-audit.json` and `security/Properties/lean-audit.json` both list `Flock.Stmt.setupHiddenOf` and `Flock.Stmt.setupTablesOf` under `reads`, with their hashes [read]. The Lean check fails an entry no guarantee reads, so at least one guarantee in each lock reads them [read: `check.py`].
+- The path runs through `Spot.OneStageZk`, also under `reads`: `buildSessionOf` calls `setupTablesOf` [read: `OneStageZk.lean:251-256`].
+- I can't name the readers: every guarantee pin in the stored facts documents I found (cpu-1, runs `9091` and `3dd5`) is "missing" [run]. The hoist PR's own records run prints them, and its body pastes that printout (lean-proofs skill, "a changed record is a changed claim") [read].
+- **The rule:** your 08:37Z order asks, for each lock record that changes, the owning lane's approval "where a statement or a claim moves", and Daniel's decision for a new named assumption [read]. The asking-daniel skill gives him "what a guarantee says or rests on" [read].
+- A refactor that keeps every verdict, refusal text included, moves only the `reads` hashes of the changed definitions. It changes no statement's text and adds no premise [read: what the record holds; guess: that this makes it not Daniel's]. The `Desc.ofProg` route above would change what is accepted, so it would need the readers' owners at least [guess].
+
+**4. What the kept process takes as input** (for vllm's worker's driver).
+- **Today, a member's `flock-verify`** [read: `benchmarks/one_stage/a0.py:285-345`]: `verify --statement ID --archive DIR --circuit KEY --public KEY --partition KEY --program KEY [--registered KEY] --zk --session DIR`; the plain path adds `--coins tree --stratified K`.
+- **Today, a member's ZK server** [read: `a0.py:265-269`, `Hello.lean:94-115`]: `FC_FIREWALL_STATEMENT` and `FC_FIREWALL_HELLO_ARGS` (`--partition F --program F`), plus `--circuit F --public F [--tables DIR] [--session-tables J] [--stratified K | --work K --work-table F] [--closure F]`. The draw comes on stdin, a session at a time. `Setup` is one statement's files, set up once for each draw within a process (`Setup.setupAt`, 143-158).
+- **Once a window** [run: `ls` and `stat` on the served audit's window, cpu-3]: the statement id, `partition.json` (27 KB), `program.json` (299,118,875 bytes) and the law flags. On the verify side, also the archive they're held in.
+- **Each member** [run: same]:
+  - its circuit, 57 MB to 1.1 GB. 676 member directories hold one, as 561 distinct files (446 used once, 115 by two members), so the circuit's parse stays a member's;
+  - its public file (`pub-N.bin`) and its own `registered.json` (1 to 3 KB; m89948 has none);
+  - its tables, if any;
+  - its session record (verify), or its session's `Register` and nonce (ZK server).
+- **The order:** the window's part first, then members one at a time. A member's verdict is the same function of the same files as today [guess: what the `rfl` lemma would say].
+
+For vllm: the kept process's inputs are in section 4: once a window, the statement id, the partition, the program and the law flags; for each member, its circuit, public file, registered reads, tables and session. Parsing once a member saves at least about 8.7 h of the Lean verify and 4.4 h of the ZK server's 17.6 h; once a window, about 16 h of the ZK server's [derived from m12's measured parse times over 561 members]. Both are ours and unbuilt; the ZK server's kept loop waits on top's rule.
+
+For the table: no change; the audit's hours aren't in the GB table.
