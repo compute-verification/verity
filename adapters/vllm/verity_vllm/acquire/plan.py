@@ -264,7 +264,7 @@ def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapp
         v.identities += 1
         if r.get("promoted"):
             v.promoted = True
-        for c in r.get("consumers", ()):
+        for c in (r.get("consumers") or []):
             if str(c) not in v.consumers:
                 v.consumers.append(str(c))
         sp = r.get("spec")
