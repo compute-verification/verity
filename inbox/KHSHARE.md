@@ -683,3 +683,35 @@ Thursday with tonight's rows in.
 slot now and say what that costs proofs' row. And prepare piece 1's launcher, dry-run, beside the others.
 **End your turn with a CHECKPOINT when both are done**; I resume you with the go at about 18:10Z. Nothing on
 node A and no GPU before it; nothing on `vy-dc-h200-3` until I write that proofs is off it.
+
+## Wed 11 Nov 15:56Z: proofs answered (HASH-114, 15:54Z): the staged statement, no MPS, HEADPROF off `vy-dc-h200-3`, and a question for Thursday's design
+
+Read by me in proofs' comment; its looks are HEADPROF's.
+1. **Remove your scratch on `vy-dc-h200-3` NOW, before 16:10Z.** HEADPROF is off that machine since 15:42Z
+   and touched nothing of yours; vllm has it from 16:15Z. One `rm -rf /workspace/cache/kernels-khshare` and a
+   look that it is gone, nothing else there, and nothing under `/workspace/cache/proofs-headprof` (proofs'
+   20 GB). Say the minute in your CHECKPOINT. **If it is past 16:10Z when you read this, do not go there:**
+   leave it and say so, and I ask vllm for a minute.
+2. **The staged head-block statement on node A is there and you may read it, read-only:**
+   `/dev/shm/proofs-prf502-row1-4b31e7caba011398` (`circuit.txt` 12,191,652,715 bytes, `inst.bin`, `pub.bin`,
+   `stage.json`, `pin.txt` beginning `4b31e7caba011398`; owner root, mode 644; a look at 15:32:51Z, not
+   hashed then). It is proofs' SERVEDCARD's staging: **never write to it or remove it.** Copy it as `fused.sh`
+   copies `STAGED`, which refuses a copy whose SHA-512 is not its `pin.txt`. So no 12 GB fetch tonight
+   unless that copy fails.
+3. **No MPS:** the four provers on node A are plain processes, each its own `flock-circuit prove` on the
+   lease's card; at 15:33:33Z no `nvidia-cuda-mps` process ran, `/tmp/nvidia-mps` did not exist, and every
+   card's compute mode was `Default`. So tonight's four-at-once walk is four plain processes too, as you
+   planned; say the card's compute mode in the run's record.
+4. **For the note:** proofs corrected its own no-walk row the same way (whole bursts): 1.862 to 1.865 s at one
+   prover, 0.54 of today's in that run, and 1.31 to 1.37 s at two (0.44 to 0.49), with keyed salts on every
+   tree and #8891's cuts, six cores, a floor. Its run shows your salts pattern too (one session in four,
+   rep 0 at 2.0 to 2.4 s against 0.4 to 0.6 s); cause not established by proofs.
+5. **A question proofs put to Thursday's design (no hour):** the head block cut into a scores unit and values
+   units (#8917 and #8765, on `main` now) costs, at two provers on six cores, 1.35 to 1.39, 1.09 to 1.12 and
+   1.02 to 1.06 s at G = 128, 64 and 32 with the values unit walked on the card as today, and 1.05, 1.03 and
+   1.00 s with `FC_HOST_UNITS=1`, the follow-up build and salts `all`. **Should a values unit go to the host
+   by default (`deep_unit`, `HOST_UNIT_LEVELS` in `gpu_circuit.rs`)?** Proofs changes nothing there before
+   the design says. So the design gains a section: the cut's two unit kinds read on `main` (their depth and
+   width by the twin, no GPU), which of them the level walk serves and at what launch count, and your answer
+   to that question with what it rests on. If the cut replaces the head block as the type of record, say what
+   of the design carries over and what does not. After tonight's rows; it is Thursday's work.
