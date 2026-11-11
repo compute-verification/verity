@@ -214,8 +214,8 @@ ran. Without a usable remote it refuses rather than report them missing; `--loca
 (`verity-bench/steady-spec/v0`, `verity_bench.steady_spec`), the proof server's rate at steady state. A point is one
 staged block type at K provers with C cores on one card, timed by `benchmarks/one_stage/server_rate.py`. The spec says
 the `workload` whose steady-state record its rows belong to, the `card`, the `cores` (C), the timed `sessions` and the
-sessions a prover runs `ahead`, the GPU `driver` and `cuda` toolkit versions, a `setup` script, `[env]` and
-`[admission]` (`max_minutes`, `mem_gb`); each `[[row]]` is a block type: the stager's `type`
+sessions a prover runs `ahead`, the GPU `driver`'s version and the CUDA toolkit's (`cuda_toolkit`), a `setup` script,
+`[env]` and `[admission]` (`max_minutes`, `mem_gb`); each `[[row]]` is a block type: the stager's `type`
 (`benchmarks/served_units/stage.py`), its units `n`, the `pin` (the SHA-512 of the statement's circuit), the `provers`
 counts (a point each), the `warm` sessions a prover and, optionally, `period` and `staged`, a statement already on the
 node. Loading is as strict as a vLLM spec's.
@@ -229,13 +229,14 @@ the count is fixed before the run and is part of the point; `plan` shows it (`se
 `period` in the row, where the `level` check reads it and cuts the window at whole bursts (`steady.burst_parts`).
 
 **Identity.** A point's identity is a digest of what its time depends on, and nothing else: its row's `type`, `n`,
-`pin`, `warm` and `period`, its prover count, the spec's `card`, `cores`, `sessions`, `ahead`, `driver`, `cuda`, `env` and
-`setup`, and the SHA-256 of every source file of the prover and of the scripts that build it (their flags)
+`pin`, `warm` and `period`, its prover count, the spec's `card`, `cores`, `sessions`, `ahead`, `driver`, `cuda_toolkit`,
+`env` and `setup`, and the SHA-256 of every source file of the prover and of the scripts that build it (their flags)
 (`verity/protocols/flock/prover`, `verity/protocols/flock/pod`; no tests, no Markdown), of the timing script and of the
 setup script. It names no commit, so a commit that changes none of those times no point again, and neither does an edit
 to another row, to `admission`, to `staged` or to the spec's name. The driver and the toolkit are the spec's because
 the node can't be asked before the run: the node side reads both on the node, refuses a node whose versions aren't the
-spec's, and writes what it read in the row (`versions`).
+spec's, and writes what it read in the row (`versions`). The toolkit's version is `cuda_toolkit`, in the spec and in the
+row: `cuda` is the kit's name, in its host stamp, for the newest CUDA the driver serves, which is another number.
 
 **A passed point** is a row whose `pin`, `provers` and `cores.count` are the point's and its spec's, and that passes the
 ten checks of `verity_bench.steady` against the files of the run that measured it (`steady_spec.point_why`); a row
@@ -257,7 +258,8 @@ runs and arts, the targets a record's labels are on, and its attempts started si
 says on stderr when it starts and what it pulled.
 
 **Run.** `verity-bench run SPEC --direct NODE` launches each point without a passing run as one recorded run on NODE
-through one of its GPU slots, which gives the run its cores; a steady-state spec has no queued form. The job is
+through one of its GPU slots, which gives the run its cores, by the harness's one dispatch and its one slot run
+(`jobs.dispatch`, `jobs.slot_run`); a steady-state spec has no queued form. The job is
 `benchmarks/harness/steady_point.sh`, which sources the spec's `setup` in the source tree and runs
 `python -m verity_bench.steady_node` under the Python the setup names. The setup builds the prover and exports
 `VERITY_BENCH_STEADY_BIN` (the prover) and `VERITY_BENCH_STEADY_PY` (a Python the stager, the timing script and the
@@ -266,11 +268,14 @@ harness run under), with the CUDA toolkit the prover was built with first on `PA
 1. before any card is asked for, refuses a tree that gives the point another identity than the one it was launched with,
    an environment that isn't the spec's, a run whose CPUs aren't exactly the spec's `cores`, and a statement (staged
    there, or copied from `staged`) whose circuit isn't the row's `pin` or whose units aren't its `n`;
-2. takes one preemptible lease of one card for the spec's `max_minutes` (`gpu-lease`), and inside it refuses a card
-   that isn't the spec's or a driver or toolkit version that isn't, records what else is on the node before and after
-   the provers run (`steady.card_file`), and times the row;
+2. takes one lease of one card for the spec's `max_minutes`, the kit's (`kit.lease`), preemptible and with the spec's
+   `mem_gb`, and inside it reads the kit's host stamp (`kit.host_stamp`, the leased card's) and the toolkit's version
+   from the node's nvcc, refuses a card that isn't the spec's or a driver or toolkit version that isn't, records what
+   else is on the node before and after the provers run (`steady.card_file`), and times the row;
 3. after the lease has ended, so that its usage line is among the run's files, computes the verdict from the run's own
-   files and writes `out/verdict.json`, `out/point.json` and `result.json`, whose validation passes with it.
+   files and writes `out/verdict.json`, `out/point.json` and `result.json`, whose validation passes with it. A passed
+   point's rate is the result's one measurement, appended by the kit's writer (`kit.Writer`) under the host stamp the
+   timed step ran under.
 
 It exits 0 for a passed point, 3 for a point that was timed and didn't pass, 4 where nothing was timed, and 143 where
 TERM or INT ended it (a cancel, a timeout): it then ends the command it was waiting for first and removes its scratch,

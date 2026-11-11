@@ -10,14 +10,16 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
    exactly the spec's `cores`, which the node's slot gives. It stages the row's statement with
    `benchmarks/served_units/stage.py`, or copies the one the row names as `staged`, and refuses a statement whose
    circuit isn't the row's `pin` or whose units aren't its `n`.
-2. **One lease of one card** (`gpu-lease 1 --wait --max-min M`), and inside it the timed step (this module again, with
-   `--inside`): it reads the card, the driver's version and the toolkit's on the node and refuses a card or a version
+2. **One lease of one card** (the harness kit's, `kit.lease`: `gpu-lease 1 --wait --max-min M`), and inside it the
+   timed step (this module again, with `--inside`): it reads the card and the driver's version from the kit's host
+   stamp (`kit.host_stamp`, the lease's card) and the toolkit's from the node's nvcc, and refuses a card or a version
    that isn't the spec's; records what else is on the node (`steady.card_file`) before and after;
    runs `benchmarks/one_stage/server_rate.py` at the point's load (`steady_spec.timed_sessions`); and keeps the row,
    with the versions it read (`steady_spec.VERSIONS`) and the period its sessions were sized by (`steady.PERIOD`, which
    `level` reads), and the sessions' record under `out/rate/`.
 3. **After the lease has ended**, so that its usage line is among the run's files, the verdict: the row is a passed point
-   when `steady_spec.point_why` finds nothing against it, from the run's own files. `result.json` passes with it.
+   when `steady_spec.point_why` finds nothing against it, from the run's own files. `result.json` passes with it,
+   and a passed point's rate is its one measurement, appended by the kit's writer under the step's host stamp.
 
 It exits 0 for a passed point, `steady_spec.NOT_PASSED` for a point that was timed and didn't pass, and `REFUSED` where
 nothing was timed. Its records are `out/point.json` (the point, the prover, the cores, the card and the versions),
@@ -46,10 +48,9 @@ from typing import Any
 
 from verity_config import sha256
 
-from verity_bench import jobs, settings, steady, steady_spec
+from verity_bench import jobs, kit, settings, steady, steady_spec
 from verity_bench.vllm.presets import GPUS
 
-RESULT_SCHEMA = "research/result/v0.1"
 KIND = "verity-steady-point/v1"
 POINT_FILE, VERDICT_FILE, TIMED_FILE = "out/point.json", "out/verdict.json", "out/timed.json"
 REFUSED = 4
@@ -66,6 +67,8 @@ KEPT_LOG_BYTES = 200_000
 Runner = Callable[[Sequence[str], Path], int]
 #: a command's exit code and what it printed
 Asker = Callable[[Sequence[str]], tuple[int, str]]
+#: where a number is measured, as the kit stamps it (`kit.host_stamp`)
+Stamper = Callable[[], Mapping[str, Any]]
 
 
 class Refused(ValueError):
@@ -173,27 +176,30 @@ def statement(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner)
 
 
 def lease_argv(spec: steady_spec.SteadySpec, inside: Sequence[str]) -> list[str]:
-    """The timed step under one lease of one card, for the spec's bound: preemptible, as a guest's GPU job must be (a
-    preempted point has no passing run, so the next `run` launches it again)."""
+    """The timed step under the kit's lease (`kit.lease`) of one card for the spec's bound, with what a point's lease
+    says beside it, before the command: preemptible, as a guest's GPU job must be (a preempted point has no passing
+    run, so the next `run` launches it again), and the host memory the spec admits."""
 
     minutes = spec.admission.max_minutes
     if minutes is None:
         raise Refused(f"spec {spec.id!r} has no admission max_minutes, which bounds the point's lease")
     memory = ["--mem-gb", str(spec.admission.mem_gb)] if spec.admission.mem_gb is not None else []
-    return ["gpu-lease", "1", "--wait", "--max-min", str(minutes), "--preemptible", *memory, "--", *inside]
+    *lease, command = kit.lease(1, minutes)
+    return [*lease, "--preemptible", *memory, command, *inside]
 
 
 # ---- inside the lease ---------------------------------------------------------------------------------------------------------
 
 
-def card_on_node(device: str, ask: Asker) -> dict[str, str]:
-    """The leased card's driver version, name and UUID, as nvidia-smi gives them."""
+def leased_card(stamp: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The kit's host stamp, once it is of the lease's one card: its name, its UUID and the driver's version."""
 
-    rc, text = ask(["nvidia-smi", "-i", device, "--query-gpu=driver_version,name,uuid", "--format=csv,noheader"])
-    fields = [field.strip() for field in text.strip().splitlines()[0].split(",")] if rc == 0 and text.strip() else []
-    if len(fields) != 3 or not all(fields):
-        raise Refused(f"nvidia-smi doesn't say what GPU {device} is (exit {rc}: {text.strip()[:200]!r})")
-    return dict(zip(("driver", "name", "uuid"), fields, strict=True))
+    gpus = stamp.get("gpus") or []
+    if stamp.get("why") or len(gpus) != 1 or not stamp.get("driver"):
+        raise Refused("the host stamp doesn't say what the lease's card is ("
+                      + (stamp.get("why") or f"it names {len(gpus)} GPUs and the driver {stamp.get('driver')!r}")
+                      + "): inside a gpu-lease of one card it is that card's, which gpu-lease names in GPU_LEASE_UUID")
+    return stamp
 
 
 def toolkit_on_node(ask: Asker) -> str:
@@ -253,8 +259,10 @@ def keep(scratch_rate: Path, out_rate: Path, item: steady_spec.SteadyPoint, read
 
 
 def timed(spec: steady_spec.SteadySpec, item: steady_spec.SteadyPoint, scratch: Path, run_dir: Path, *,
-          run: Runner = _run, ask: Asker = _ask, now: Callable[[], float] = time.time) -> int:
-    """The timed step, inside the lease: the script's exit code, or `REFUSED` with the reason in `TIMED_FILE`."""
+          run: Runner = _run, ask: Asker = _ask, now: Callable[[], float] = time.time,
+          stamp: Stamper = kit.host_stamp) -> int:
+    """The timed step, inside the lease: the script's exit code, or `REFUSED` with the reason in `TIMED_FILE`, which
+    also keeps the host stamp the step ran under (`host`), for the run's measurement."""
 
     out = run_dir / "out"
     record: dict[str, Any] = {"refused": None}
@@ -262,16 +270,16 @@ def timed(spec: steady_spec.SteadySpec, item: steady_spec.SteadyPoint, scratch: 
         device = settings.CUDA_VISIBLE_DEVICES
         if not device or "," in device:
             raise Refused(f"the timed step runs under a gpu-lease of one card (CUDA_VISIBLE_DEVICES is {device!r})")
-        card = card_on_node(device, ask)
-        read = {"driver": card["driver"], "cuda": toolkit_on_node(ask)}
-        record |= {"device": device, "card": {"name": card["name"], "uuid": card["uuid"]}, steady_spec.VERSIONS: read}
-        if GPUS[spec.card].nvidia_smi_name not in card["name"]:
-            raise Refused(f"the lease's card is a {card['name']}, not the `card` of spec {spec.id!r} ({spec.card}: "
+        host = leased_card(stamp())
+        read = {"driver": host["driver"], "cuda_toolkit": toolkit_on_node(ask)}
+        record |= {"device": device, "host": dict(host), steady_spec.VERSIONS: read}
+        if GPUS[spec.card].nvidia_smi_name not in host["card"]:
+            raise Refused(f"the lease's card is a {host['card']}, not the `card` of spec {spec.id!r} ({spec.card}: "
                           f"{GPUS[spec.card].nvidia_smi_name})")
         if read != steady_spec.versions(spec):
             raise Refused(f"the node's driver and CUDA toolkit are {read}, and spec {spec.id!r} says "
                           f"{steady_spec.versions(spec)}: a row at other versions is another point. Set the spec's "
-                          "`driver` and `cuda` to the node's, which times its rows again there")
+                          "`driver` and `cuda_toolkit` to the node's, which times its rows again there")
         row = {"provers": item.provers}
         (out / "rate").mkdir(parents=True, exist_ok=True)
         snapshot(run_dir / steady.card_file(row, "start"), settings.RESEARCH_RUN_ID, ask, now)
@@ -301,20 +309,30 @@ def kept(run_dir: Path) -> list[str]:
 
 
 def write_result(run_dir: Path, identity: str, item: steady_spec.SteadyPoint, why: str | None,
-                 row: Mapping[str, Any] | None) -> None:
+                 row: Mapping[str, Any] | None, host: Mapping[str, Any] | None = None) -> None:
+    """The run's result (`kit.RESULT_SCHEMA`): its validation, which is the point's verdict, written here, and, for a
+    passed point, its rate, the one measurement, appended by the kit's writer under `host`, the stamp the timed step
+    ran under."""
+
     rate = row.get("statements_per_s") if row is not None and why is None else None
     evidence = [path for path in (steady.RATES, VERDICT_FILE, POINT_FILE) if (run_dir / path).is_file()]
-    _write(run_dir / "result.json", {
-        "schema": RESULT_SCHEMA, "kind": KIND, "run_id": settings.RESEARCH_RUN_ID,
+    _write(run_dir / kit.RESULT, {
+        "schema": kit.RESULT_SCHEMA, "kind": KIND, "run_id": settings.RESEARCH_RUN_ID,
         "workload_fingerprint": {"identity": identity, "point": item.to_json()},
         "validation": {"status": "passed" if why is None else "failed", "checker": "verity_bench.steady_spec.point_why",
                        "detail": why or f"{item.id}: the ten checks pass", "evidence": evidence},
-        "measurements": [] if rate is None else [{"name": "statements_per_s", "value": rate, "unit": "1/s"}],
+        "measurements": [],
         "measurement_files": [steady.RATES] if (run_dir / steady.RATES).is_file() else [], "artifacts": kept(run_dir)})
+    if rate is not None:
+        if host is None:
+            raise ValueError(f"{item.id} passed and {TIMED_FILE} holds no host stamp of its timed step, which its "
+                             "measurement is written under")
+        kit.Writer(run_dir, settings.RESEARCH_RUN_ID, host).measurement("statements_per_s", rate, "1/s")
 
 
 def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: Callable[[], float] = time.time,
-          cpus: Callable[[], Sequence[int]] = lambda: sorted(os.sched_getaffinity(0))) -> int:
+          cpus: Callable[[], Sequence[int]] = lambda: sorted(os.sched_getaffinity(0)),
+          stamp: Stamper = kit.host_stamp) -> int:
     root = Path.cwd()
     spec = steady_spec.load_spec(a.spec, root=root)
     item = steady_spec.point(spec, a.point)
@@ -336,10 +354,10 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
     out.mkdir(parents=True, exist_ok=True)
     jobs.check_point_environment(spec, settings.environ())
     if a.inside is not None:
-        return timed(spec, item, a.inside, run_dir, run=run, ask=ask, now=now)
+        return timed(spec, item, a.inside, run_dir, run=run, ask=ask, now=now, stamp=stamp)
 
     # a requeued point reruns whole in its run directory: no earlier attempt's verdict or record stands beside this one's
-    for name in ("result.json", POINT_FILE, VERDICT_FILE, TIMED_FILE, *(steady.card_file(item.to_json(), when)
+    for name in (kit.RESULT, POINT_FILE, VERDICT_FILE, TIMED_FILE, *(steady.card_file(item.to_json(), when)
                                                                         for when in ("start", "end"))):
         (run_dir / name).unlink(missing_ok=True)
     shutil.rmtree(out / "rate", ignore_errors=True)
@@ -380,7 +398,7 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
     _write(run_dir / VERDICT_FILE, {
         "identity": identity, "point": item.id, "passed": why is None, "why": why,
         "verdict": None if isinstance(row, str) else steady.verdict(row, files).record()})
-    write_result(run_dir, identity, item, why, None if isinstance(row, str) else row)
+    write_result(run_dir, identity, item, why, None if isinstance(row, str) else row, record["timed"].get("host"))
     print(f"steady point {item.id}: " + ("passed" if why is None else f"not passed: {why}"))
     return 0 if why is None else steady_spec.NOT_PASSED
 

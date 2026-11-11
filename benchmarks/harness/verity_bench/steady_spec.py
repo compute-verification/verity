@@ -11,7 +11,7 @@ Standard library and `verity_config` only: the node side reads it too.
     sessions = 120        # the timed sessions of a point, at least 8 a prover
     ahead = 2             # the sessions a prover runs ahead of its verifier
     driver = "..."        # the GPU driver's version, as nvidia-smi gives it on the node
-    cuda = "..."          # the CUDA toolkit's version, as its nvcc gives it on the node
+    cuda_toolkit = "..."  # the CUDA toolkit's version, as its nvcc gives it on the node
     setup = "..."         # a script of the tree the launcher sources: it builds the prover and names it and its Python
     [env]                 # variables the point's run is given
     [admission]           # max_minutes: the run's bound, its slot's and its lease's; mem_gb: the lease's host memory
@@ -33,11 +33,13 @@ period in the row (`steady.PERIOD`), where `level` reads it and cuts the window 
 
 **A point's identity** (`point_identity`) is a digest of everything its time depends on, and of nothing else: its row's
 `type`, `n`, `pin`, `warm` and `period`, its prover count, the spec's `card`, `cores`, `sessions`, `ahead`, `driver`,
-`cuda`, `env` and `setup`, and the files of `closure`: the prover's sources with the scripts that build them (their flags), the
-script that times them, and the spec's setup. It leaves out the commit, the spec's other rows, its `id`, `workload` and
+`cuda_toolkit`, `env` and `setup`, and the files of `closure`: the prover's sources with the scripts that build them
+(their flags), the script that times them, and the spec's setup. It leaves out the commit, the spec's other rows, its `id`, `workload` and
 `admission`, and a row's `staged`: a new commit or an edit to another row times no row again. The driver and the
 toolkit are the spec's because the node can't be asked before the run: the node side reads both on the node, refuses a
-node whose versions aren't the spec's, and writes them in the row (`VERSIONS`).
+node whose versions aren't the spec's, and writes them in the row (`VERSIONS`). The toolkit's is `cuda_toolkit`, in the
+spec and in the row: `cuda` is the harness kit's name for the newest CUDA the driver serves (`kit.host_stamp`), another
+number.
 
 **A passed point** (`point_why`): a row whose `pin`, `provers` and `cores.count` are the point's and its spec's, and
 that passes `steady`'s ten checks against the files of the run that measured it. A row of a run of the point itself
@@ -65,7 +67,8 @@ SCHEMA = "verity-bench/steady-spec/v0"
 CLOSURE = ("verity/protocols/flock/prover", "verity/protocols/flock/pod", "benchmarks/one_stage/server_rate.py")
 #: what of `CLOSURE`'s directories is no source: tests, documents and the interpreter's caches
 NOT_SOURCE = re.compile(r"(^|/)(tests|__pycache__)/|\.(md|pyc)$")
-#: the row's field for the versions the node side read on the node: the driver's and the toolkit's
+#: the row's field for the versions the node side read on the node: the driver's (`driver`) and the toolkit's
+#: (`cuda_toolkit`)
 VERSIONS = "versions"
 STAGER = "benchmarks/served_units/stage.py"
 TIMER = "benchmarks/one_stage/server_rate.py"
@@ -111,7 +114,7 @@ class SteadySpec:
     sessions: int
     ahead: int
     driver: str
-    cuda: str
+    cuda_toolkit: str
     setup: str
     row: tuple[SteadyRow, ...]
     env: Mapping[str, str] = field(default_factory=dict)
@@ -197,7 +200,7 @@ def load_spec(source: str | Path, *, root: Path = SOURCE_ROOT) -> SteadySpec:
     _positive(str(path), cores=spec.cores, sessions=spec.sessions)
     if spec.ahead < 0:
         raise ConfigError(f"{path}: `ahead` is {spec.ahead}; it is a count of sessions")
-    for name in ("driver", "cuda"):
+    for name in ("driver", "cuda_toolkit"):
         if not re.fullmatch(r"\d+(\.\d+)*", getattr(spec, name)):
             raise ConfigError(f"{path}: `{name}` {getattr(spec, name)!r} isn't a version (digits and dots), as the node "
                               "gives it: the node side refuses a node whose version is another")
@@ -282,7 +285,7 @@ def point_identity(spec: SteadySpec, item: SteadyPoint, files_sha256: str) -> st
     row = item.row
     return sha256({
         "schema": SCHEMA, "card": spec.card, "cores": spec.cores, "sessions": spec.sessions, "ahead": spec.ahead,
-        "driver": spec.driver, "cuda": spec.cuda, "env": dict(spec.env), "setup": spec.setup,
+        "driver": spec.driver, "cuda_toolkit": spec.cuda_toolkit, "env": dict(spec.env), "setup": spec.setup,
         "files_sha256": files_sha256,
         "row": {"type": row.type, "n": row.n, "pin": row.pin, "warm": row.warm, "period": row.period},
         "provers": item.provers,
@@ -290,7 +293,7 @@ def point_identity(spec: SteadySpec, item: SteadyPoint, files_sha256: str) -> st
 
 
 def versions(spec: SteadySpec) -> dict[str, str]:
-    return {"driver": spec.driver, "cuda": spec.cuda}
+    return {"driver": spec.driver, "cuda_toolkit": spec.cuda_toolkit}
 
 
 def rows(files: steady.Files) -> list[Mapping[str, Any]] | str:

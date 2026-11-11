@@ -17,7 +17,7 @@ import pytest
 from test_steady import DROP, END, SESSIONS, START, lease, made
 from verity_config import ConfigError
 
-from verity_bench import jobs, settings
+from verity_bench import jobs, kit, settings
 from verity_bench import prove_records as R
 from verity_bench import steady as S
 from verity_bench import steady_node as N
@@ -35,7 +35,7 @@ RECORD = "prove-glm53-flock-steady"
 POINT, RUN = "gemm64-k2", "r-own"
 #: what a row of a run of the point holds beyond the script's own fields
 OWN = {"pin": PIN, "cores": {"count": 10, "list": "0-9", "numa_nodes": [0]},
-       SP.VERSIONS: {"driver": DRIVER, "cuda": CUDA}}
+       SP.VERSIONS: {"driver": DRIVER, "cuda_toolkit": CUDA}}
 #: the made-up tree's files beside its spec: the prover's source, its tests and its document, a build script, the timing
 #: script and the spec's setup
 FILES = {
@@ -50,7 +50,7 @@ FILES = {
 }
 SPEC = {
     "schema": SP.SCHEMA, "id": "steady", "workload": "glm53", "card": "h200", "cores": 10, "sessions": 16, "ahead": 2,
-    "driver": DRIVER, "cuda": CUDA, "setup": SETUP,
+    "driver": DRIVER, "cuda_toolkit": CUDA, "setup": SETUP,
     "env": {"RUST_MIN_STACK": "1073741824"},
     "admission": {"max_minutes": 90, "mem_gb": 80},
     "row": [{"type": "gemm64", "n": 1, "pin": PIN, "provers": [1, 2], "warm": 2},
@@ -147,7 +147,7 @@ REFUSED_SPECS = [
     ({"spec": {"cores": 0}}, "`cores` is 0; it is a count of at least 1"),
     ({"spec": {"ahead": -1}}, "`ahead` is -1"),
     ({"spec": {"driver": "v570"}}, "`driver` 'v570' isn't a version"),
-    ({"spec": {"cuda": ""}}, "`cuda` '' isn't a version"),
+    ({"spec": {"cuda_toolkit": ""}}, "`cuda_toolkit` '' isn't a version"),
     ({"spec": {"setup": None}}, "setup"),
     ({"spec": {"setup": "benchmarks/specs/none.sh"}}, "`setup` 'benchmarks/specs/none.sh' is no script of the source tree"),
     ({"spec": {"setup": "../steady-setup.sh"}}, "is no script of the source tree"),
@@ -184,7 +184,7 @@ BOUND = {
     "the timed sessions": {"spec": {"sessions": 32}},
     "the sessions ahead": {"spec": {"ahead": 3}},
     "the driver's version": {"spec": {"driver": "570.86.16"}},
-    "the CUDA version": {"spec": {"cuda": "12.9.41"}},
+    "the CUDA toolkit's version": {"spec": {"cuda_toolkit": "12.9.41"}},
     "the run's environment": {"spec": {"env": {"RUST_MIN_STACK": "2147483648"}}},
     "which script is the setup": {"spec": {"setup": "benchmarks/specs/other-setup.sh"},
                                   "files": {"benchmarks/specs/other-setup.sh": FILES[SETUP]}},
@@ -456,7 +456,7 @@ NOT_IT = [
     ({}, {"changes": {"cores": {"count": 10, "list": "0-4,24-28", "numa_nodes": [0, 1]}}},
      "fail: `one_numa_node` (fail): its CPUs (0-4,24-28) are on 2 NUMA nodes (0, 1)"),
     ({}, {"changes": {"pin": "cd" * 64}}, "fail: its `pin` is another circuit's (cdcdcdcdcdcdcdcd...)"),
-    ({}, {"changes": {SP.VERSIONS: {"driver": "570.86.16", "cuda": CUDA}}}, "cannot tell: its row's `versions`"),
+    ({}, {"changes": {SP.VERSIONS: {"driver": "570.86.16", "cuda_toolkit": CUDA}}}, "cannot tell: its row's `versions`"),
     ({}, {"changes": {SP.VERSIONS: DROP}}, "cannot tell: its row's `versions` (None) aren't the spec's"),
     ({}, {"changes": {"sessions": 15}}, "fail: it timed 15 sessions after 2 warm ones a prover; the point's are 16 and 2"),
     ({}, {"changes": {"warm": 1}}, "fail: it timed 16 sessions after 1 warm ones a prover; the point's are 16 and 2"),
@@ -886,10 +886,13 @@ def test_run_refuses_a_steady_spec_without_a_node_a_node_without_slots_and_a_spe
 
 NVCC = ("nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2025 NVIDIA Corporation\n"
         f"Built on a day\nCuda compilation tools, release 12.8, V{CUDA}\nBuild cuda_12.8.r12.8/compiler.0_0\n")
-#: what the node answers: the leased card, the toolkit, the leases (the run's own, and another run's on GPU 0) and the
-#: compute processes (one, on GPU 0)
+#: the kit's host stamp inside the lease: the leased card, with the driver's version and the newest CUDA it serves,
+#: which is another number than the toolkit's
+STAMP = {"card": "NVIDIA H200", "gpus": [{"uuid": "GPU-3", "sm_mhz": 1980, "mem_mhz": 3201}], "driver": DRIVER,
+         "cuda": "12.9", "node": "the-node", "commit": "c" * 40}
+#: what the node answers: the toolkit, the leases (the run's own, and another run's on GPU 0) and the compute processes
+#: (one, on GPU 0)
 ANSWERS = {
-    "nvidia-smi -i 3 --query-gpu=driver_version,name,uuid --format=csv,noheader": f"{DRIVER}, NVIDIA H200, GPU-3\n",
     "nvcc --version": NVCC,
     "gpu-lease status": (f"3 held 1m pid=7 run={RUN} who=benchmarks cmd=python -m verity_bench.steady_node\n"
                          "0 held 5m pid=11 run=r-other who=other cmd=python train.py\n1 free\n"),
@@ -901,13 +904,14 @@ ANSWERS = {
 class Node:
     """A stand-in for the node under one run of the point: the stager, gpu-lease, the timing script and what the node
     answers. `row`: fields of the row the script writes; `texts`: the run's files as `test_steady.made` takes them;
-    `answers`: an answer replaced (None: the command fails); `circuit`, `said` (its pin.txt) and `units`: what the
-    stager stages."""
+    `answers`: an answer replaced (None: the command fails); `stamp`: fields of the host stamp replaced; `circuit`,
+    `said` (its pin.txt) and `units`: what the stager stages."""
 
     def __init__(self, tmp_path: Path, monkeypatch, *, row: dict | None = None, answers: dict | None = None,
                  circuit: str = CIRCUIT, said: str = PIN, units: int = 1, cpus: int = 10, lease_exit: int | None = None,
-                 spec: dict | None = None, **texts):
+                 spec: dict | None = None, stamp: dict | None = None, **texts):
         self.root, self.spec = tree(tmp_path, spec=spec)
+        self.host = STAMP | (stamp or {})
         self.run_dir = tmp_path / "run"
         self.run_dir.mkdir()
         (scratch := tmp_path / "scratch").mkdir()
@@ -953,7 +957,8 @@ class Node:
             inside = argv[argv.index("--") + 1:]
             assert inside[:3] == [sys.executable, "-m", "verity_bench.steady_node"]
             self.monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "3")
-            rc = N.point(N.parse(inside[3:]), run=self.run, ask=self.ask, now=lambda: 1_700_000_000.0)
+            rc = N.point(N.parse(inside[3:]), run=self.run, ask=self.ask, now=lambda: 1_700_000_000.0,
+                         stamp=lambda: dict(self.host))
             self.monkeypatch.delenv("CUDA_VISIBLE_DEVICES")
             if (usage := self.files(S.LEASES)) is not None:
                 (self.run_dir / S.LEASES).write_text(usage)
@@ -970,7 +975,10 @@ class Node:
 
     def point(self, **changes) -> int:
         return N.point(self.args(**changes), run=self.run, ask=self.ask, now=lambda: 1_700_000_000.0,
-                       cpus=lambda: list(range(20, 20 + self.cpus)))
+                       cpus=lambda: list(range(20, 20 + self.cpus)), stamp=self.no_stamp)
+
+    def no_stamp(self):
+        raise AssertionError("the host is stamped inside the lease, where the stamp is the leased card's")
 
     def read(self, path: str):
         return json.loads((self.run_dir / path).read_text())
@@ -990,6 +998,7 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     scratch = Path(lease_argv[-1])
     assert scratch.parent == node.scratch_root and not scratch.exists(), "the scratch is removed"
     assert stager == [sys.executable, SP.STAGER, "gemm64", "1", str(scratch / "z" / "gemm64" / "c1" / "stage")]
+    assert kit.lease(1, 90) == ["gpu-lease", "1", "--wait", "--max-min", "90", "--"], "the kit's lease, and beside it:"
     assert lease_argv == ["gpu-lease", "1", "--wait", "--max-min", "90", "--preemptible", "--mem-gb", "80", "--",
                           sys.executable, "-m", "verity_bench.steady_node", "--spec", node.spec, "--point", POINT,
                           "--identity", node.identity, "--inside", str(scratch)]
@@ -998,7 +1007,7 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
                      "--sessions", "16", "--warm", "2", "--ahead", "2"]
 
     [row] = node.read(S.RATES)
-    assert row[SP.VERSIONS] == {"driver": DRIVER, "cuda": CUDA}, "read on the node and written in the row"
+    assert row[SP.VERSIONS] == {"driver": DRIVER, "cuda_toolkit": CUDA}, "read on the node and written in the row"
     assert row == node.row | {SP.VERSIONS: row[SP.VERSIONS]}
     start = (node.run_dir / START).read_text()
     assert start == (node.run_dir / END).read_text() == (
@@ -1012,15 +1021,19 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     assert point["prover"] == {"path": str(node.binary), "sha256": hashlib.sha256(b"#!/bin/sh\n").hexdigest()}
     assert point["cores"] == {"count": 10, "list": "20-29"}
     assert point["statement"]["pin"] == PIN and point["statement"]["from"] == SP.STAGER
-    assert point["timed"] == {"refused": None, "device": "3", "card": {"name": "NVIDIA H200", "uuid": "GPU-3"},
-                              SP.VERSIONS: {"driver": DRIVER, "cuda": CUDA}, "exit": 0, "rows": 1}
+    assert point["timed"] == {"refused": None, "device": "3", "host": STAMP,
+                              SP.VERSIONS: {"driver": DRIVER, "cuda_toolkit": CUDA}, "exit": 0, "rows": 1}
+    assert STAMP["cuda"] != CUDA, "the stamp's `cuda` is the driver's newest, never the toolkit's version"
     verdict = node.read(N.VERDICT_FILE)
     assert (verdict["identity"], verdict["point"], verdict["passed"], verdict["why"]) == (node.identity, POINT, True, None)
     assert list(verdict["verdict"]["checks"]) == list(S.CHECKS)
     result = node.read("result.json")
     assert result["kind"] == N.KIND and result["validation"]["status"] == "passed" and result["run_id"] == RUN
     assert result["workload_fingerprint"]["identity"] == node.identity
-    assert result["measurements"] == [{"name": "statements_per_s", "value": row["statements_per_s"], "unit": "1/s"}]
+    assert result["schema"] == kit.RESULT_SCHEMA
+    assert result["measurements"] == [{
+        "name": "statements_per_s", "value": row["statements_per_s"], "unit": "1/s", "commit": STAMP["commit"],
+        "run": RUN, "ci95": None, "target": None, "verdict": None, "inputs": [], "host": STAMP}], "the kit's writer's"
 
     spec = SP.load_spec(node.root / node.spec, root=node.root)
     assert SP.point_why(row, S.files_in(node.run_dir), spec, SP.point(spec, POINT), own=True) is None
@@ -1144,21 +1157,29 @@ def test_the_node_side_refuses_a_run_without_the_prover_its_setup_builds(tmp_pat
 
 #: the timed step refusing inside the lease: what the node answers otherwise, and what the refusal says
 INSIDE_THE_LEASE = [
-    ({"nvidia-smi -i 3 --query-gpu=driver_version,name,uuid --format=csv,noheader": "570.86.16, NVIDIA H200, GPU-3\n"},
-     "the node's driver and CUDA toolkit are {'driver': '570.86.16', 'cuda': '12.8.93'}, and spec 'steady' says"),
-    ({"nvcc --version": NVCC.replace(CUDA, "12.9.41")}, "Set the spec's `driver` and `cuda` to the node's"),
-    ({"nvidia-smi -i 3 --query-gpu=driver_version,name,uuid --format=csv,noheader": f"{DRIVER}, NVIDIA B200, GPU-3\n"},
+    ({"stamp": {"driver": "570.86.16"}},
+     "the node's driver and CUDA toolkit are {'driver': '570.86.16', 'cuda_toolkit': '12.8.93'}, and spec 'steady' says"),
+    ({"answers": {"nvcc --version": NVCC.replace(CUDA, "12.9.41")}},
+     "Set the spec's `driver` and `cuda_toolkit` to the node's"),
+    # the stamp's `cuda`, the newest the driver serves, is never taken for the toolkit's version
+    ({"stamp": {"cuda": CUDA}, "answers": {"nvcc --version": NVCC.replace(CUDA, "12.9.41")}},
+     "the node's driver and CUDA toolkit are {'driver': '570.86.15', 'cuda_toolkit': '12.9.41'}, and spec 'steady' says"),
+    ({"stamp": {"card": "NVIDIA B200"}},
      "the lease's card is a NVIDIA B200, not the `card` of spec 'steady' (h200: NVIDIA H200)"),
-    ({"nvidia-smi -i 3 --query-gpu=driver_version,name,uuid --format=csv,noheader": None},
-     "nvidia-smi doesn't say what GPU 3 is (exit 1: '')"),
-    ({"nvcc --version": None}, "the nvcc on the path the spec's setup leaves doesn't say its version"),
-    ({"nvcc --version": "nvcc: no version here\n"}, "the nvcc on the path the spec's setup leaves doesn't say its version"),
+    ({"stamp": {"card": "none", "gpus": [], "driver": None, "cuda": None, "why": "no nvidia-smi on PATH"}},
+     "the host stamp doesn't say what the lease's card is (no nvidia-smi on PATH)"),
+    ({"stamp": {"gpus": [{"uuid": "GPU-3", "sm_mhz": 1980, "mem_mhz": 3201}, {"uuid": "GPU-4", "sm_mhz": 0, "mem_mhz": 0}]}},
+     "the host stamp doesn't say what the lease's card is (it names 2 GPUs and the driver '570.86.15'): inside a "
+     "gpu-lease of one card it is that card's, which gpu-lease names in GPU_LEASE_UUID"),
+    ({"answers": {"nvcc --version": None}}, "the nvcc on the path the spec's setup leaves doesn't say its version"),
+    ({"answers": {"nvcc --version": "nvcc: no version here\n"}},
+     "the nvcc on the path the spec's setup leaves doesn't say its version"),
 ]
 
 
-@pytest.mark.parametrize("answers, says", INSIDE_THE_LEASE, ids=[says[:36] for _, says in INSIDE_THE_LEASE])
-def test_the_timed_step_refuses_a_card_or_versions_that_are_not_the_specs(tmp_path, monkeypatch, answers, says):
-    node = Node(tmp_path, monkeypatch, answers=answers)
+@pytest.mark.parametrize("change, says", INSIDE_THE_LEASE, ids=[says[:40] for _, says in INSIDE_THE_LEASE])
+def test_the_timed_step_refuses_a_card_or_versions_that_are_not_the_specs(tmp_path, monkeypatch, change, says):
+    node = Node(tmp_path, monkeypatch, **change)
     assert node.point() == N.REFUSED
     assert [argv[0] for argv in node.ran] == [sys.executable, "gpu-lease"] and node.ran[0][1] == SP.STAGER, "nothing timed"
     assert says in node.read(N.POINT_FILE)["refused"] and says in node.read("result.json")["validation"]["detail"]
@@ -1320,6 +1341,7 @@ def test_the_readme_states_a_steady_state_spec_as_the_code_keeps_it():
     assert (f"exits 0 for a passed point, {SP.NOT_PASSED} for a point that was timed and didn't pass, {N.REFUSED} where "
             f"nothing was timed, and {N.STOPPED} where\nTERM or INT ended it") in section
     assert "`steady_plan.completed_rows`, `completed`" in section and "runs and arts" in section
-    spec_keys = {"workload", "card", "cores", "sessions", "ahead", "driver", "cuda", "setup", "[env]", "[admission]",
+    assert all(f"`{name}`" in section for name in ("kit.lease", "kit.host_stamp", "kit.Writer", "jobs.dispatch"))
+    spec_keys = {"workload", "card", "cores", "sessions", "ahead", "driver", "cuda_toolkit", "setup", "[env]", "[admission]",
                  "max_minutes", "mem_gb", "[[row]]", "type", "n", "pin", "provers", "warm", "period", "staged"}
     assert all(f"`{key}`" in section for key in spec_keys), [key for key in spec_keys if f"`{key}`" not in section]
