@@ -194,6 +194,26 @@ def stand_ins(tmp_path: Path, case: dict, **answers: dict | None) -> list:
             "--inference-only-exe", stand_in(tmp_path, "reg", got["reg"])]
 
 
+@pytest.fixture(autouse=True)
+def scope(tmp_path, monkeypatch) -> Path:
+    """The host's memory scope, a stand-in: a command that appends the limit it was given to ``scope.seen`` (the file
+    returned, a line a check) and runs the check, on a host taken to make scopes; none of the limits' variables set."""
+    exe, seen = tmp_path / "scope", tmp_path / "scope.seen"
+    exe.write_text(f"#!{sys.executable}\nimport os, sys\na = sys.argv[1:]\ni = a.index('--')\n"
+                   f"open({str(seen)!r}, 'a').write(' '.join(a[:i]) + '\\n')\nos.execv(a[i + 1], a[i + 1:])\n")
+    exe.chmod(0o755)
+    monkeypatch.setattr(SC, "SCOPE", (str(exe),))
+    monkeypatch.setattr(SC, "scope_here", lambda: True)
+    for k in ("CHECK_SCOPE", "CHECK_MEM_GB", "CHECK_BLOBS_GB"):
+        monkeypatch.delenv(k, raising=False)
+    return seen
+
+
+def not_started(out: str) -> list[dict]:
+    """The NOT_STARTED lines' objects among what `served_cases.main` printed."""
+    return [json.loads(x.split(" ", 1)[1]) for x in out.splitlines() if x.startswith("NOT_STARTED ")]
+
+
 def run(capsys, *argv) -> tuple[int, list[dict], list[dict], str]:
     """`served_cases.main`: its exit, its CASE and NOT_WRITTEN lines' objects, and all it printed."""
     rc = SC.main([str(a) for a in argv])
@@ -373,6 +393,109 @@ def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_p
     for secret in (v1["commitment"], v1["evidence"], reg["evidence"], v2_case["evidence"], sampled["evidence"],
                    reg["params"]["program"][:64]):
         assert secret not in out
+
+
+def test_each_check_is_one_process_in_a_scope_of_its_own_under_the_memory_limit(tmp_path, capsys, scope, monkeypatch):
+    """Every check `lean_answer` starts runs behind the host's scope command with its memory limit and no swap, one
+    scope a check: `CHECK_MEM_GB` by default, ``CHECK_MEM_GB``'s in the environment, and its CASE line says nothing of
+    memory. A check that answers no line says the limit it ran under."""
+    program, query = toy()
+    v1 = v1_case(program, query)
+    argv = ["--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private", "--alpha", "1", "--gamma", 1]
+    v2 = ["--v2", "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, digest_of(v1)))]
+    rc, cases, refused, out = run(capsys, *argv, *stand_ins(tmp_path, v1), *v2)
+    assert (rc, refused) == (0, []) and [c["protocol"] for c in cases] == [V1, SAMPLED, INF, SC.V2], out
+    assert not any("memory" in c for c in cases)
+    assert scope.read_text().splitlines() == [f"-p MemoryMax={SC.CHECK_MEM_GB}G -p MemorySwapMax=0"] * 4
+    scope.unlink()
+    monkeypatch.setenv("CHECK_MEM_GB", "8")
+    rc, _cases, refused, out = run(capsys, *argv, *stand_ins(tmp_path, v1, sampled=None))
+    assert scope.read_text().splitlines() == ["-p MemoryMax=8G -p MemorySwapMax=0"] * 3
+    assert rc == 1 and [r["protocol"] for r in refused] == [SAMPLED], out
+    assert refused[0]["reason"].endswith("answered no line (exit 0) under its own scope, MemoryMax 8G, no swap")
+    monkeypatch.setenv("CHECK_MEM_GB", "a lot")
+    rc, cases, refused, out = run(capsys, *argv, *stand_ins(tmp_path, v1))
+    assert rc == 1 and cases == [] and {r["reason"] for r in refused} == {
+        "CHECK_BLOBS_GB and CHECK_MEM_GB are whole numbers of GB"}, out
+
+
+def test_a_check_whose_blob_files_sum_past_the_limit_is_not_started_and_its_line_names_both(tmp_path, capsys, scope,
+                                                                                            monkeypatch):
+    """A case whose blob files sum past ``CHECK_BLOBS_GB`` is not handed to its executable, which would read every blob
+    into memory first: its NOT_STARTED line names the count, the sum and the limit, in bytes, nothing is written for
+    it, and the cases under the limit are checked and written as ever. At the limit the check runs."""
+    program, query = toy()
+    v1 = v1_case(program, query)
+    audit = audit_dir(tmp_path, v1)
+    blobs = json.loads((audit / "window" / "case-v2.json").read_text())["blobs"]
+    with open(blobs[0], "r+b") as fh:
+        fh.truncate(2 * 10**9)                                  # sparse: its size alone is read
+    total = 2 * 10**9 + len(Path(blobs[1]).read_bytes())
+    argv = ["--audit", audit, "--private", tmp_path / "private", "--alpha", "1", "--gamma", 1]
+    v2 = ["--v2", "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, digest_of(v1)))]
+    monkeypatch.setenv("CHECK_BLOBS_GB", "2")
+    rc, cases, refused, out = run(capsys, *argv, *stand_ins(tmp_path, v1), *v2)
+    left = not_started(out)
+    assert rc == 1 and refused == [] and [c["protocol"] for c in cases] == [V1, INF], out
+    assert [(x["protocol"], x["blobs"], x["blob_bytes"], x["limit_bytes"]) for x in left] == [
+        (SAMPLED, 2, total, 2 * 10**9), (SC.V2, 2, total, 2 * 10**9)]
+    assert all(x["reason"] == f"the case's 2 blob files sum to {total:,} bytes, past the 2,000,000,000 a check is "
+               "started on (CHECK_BLOBS_GB): the executable reads every blob into memory before it checks anything"
+               for x in left)
+    assert not (tmp_path / "sampled.seen").exists() and not (tmp_path / "v2.seen").exists()
+    assert not any((tmp_path / "private" / SC.DIRS[id]).exists() for id in (SAMPLED, SC.V2))
+    assert len(scope.read_text().splitlines()) == 2
+    with pytest.raises(SC.NotStarted) as e:
+        SC.lean_answer(tmp_path / "sampled", SC.sampled_case(audit), tmp_path / "s", SC.SAMPLED_CMD,
+                       SC.Limits(total - 1, 1, ()))
+    assert e.value.line == {"blobs": 2, "blob_bytes": total, "limit_bytes": total - 1}
+    got, _line = SC.lean_answer(tmp_path / "sampled", SC.sampled_case(audit), tmp_path / "s", SC.SAMPLED_CMD,
+                                SC.Limits(total, 1, ()))
+    assert got["protocol"] == SAMPLED and (tmp_path / "sampled.seen").exists()
+
+
+def test_a_host_that_makes_no_scope_starts_no_check_unless_it_says_so(tmp_path, capsys, scope, monkeypatch):
+    """No check runs outside a memory limit of its own: on a host that makes no scope none is started, each line
+    saying so, and nothing is written. ``CHECK_SCOPE=none`` runs them under no limit, a development host's choice, and
+    each CASE line then says it."""
+    program, query = toy()
+    v1 = v1_case(program, query)
+    argv = ["--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private", "--alpha", "1", "--gamma", 1,
+            *stand_ins(tmp_path, v1)]
+    monkeypatch.setattr(SC, "scope_here", lambda: False)
+    rc, cases, refused, out = run(capsys, *argv)
+    left = not_started(out)
+    assert rc == 1 and cases == refused == [] and [x["protocol"] for x in left] == [V1, SAMPLED, INF], out
+    assert all(x["reason"] == SC.NO_SCOPE_HERE for x in left) and [x["blobs"] for x in left] == [0, 2, 0]
+    assert not any((tmp_path / f"{n}.seen").exists() for n in ("v1", "sampled", "reg")) and not scope.exists()
+    monkeypatch.setenv("CHECK_SCOPE", SC.NO_SCOPE)
+    rc, cases, refused, out = run(capsys, *argv)
+    assert rc == 0 and not_started(out) == [] and [c["memory"] for c in cases] == [SC.UNLIMITED] * 3, out
+    assert all((tmp_path / f"{n}.seen").exists() for n in ("v1", "sampled", "reg")) and not scope.exists()
+
+
+def test_a_v2_case_in_the_per_member_form_is_not_asked(tmp_path, capsys, scope):
+    """A v2 case whose proofs are several members' statements, not one statement's sessions, is the form one-stage v2
+    refuses once it has read every blob: neither sampled proofs' check nor the bare v2 check is started on it, each
+    line saying so beside the blobs' sum and the limit, and no answer is written in the Lean's place."""
+    program, query = toy()
+    v1 = v1_case(program, query)
+    audit = audit_dir(tmp_path, v1)
+    f = audit / "window" / "case-v2.json"
+    case = json.loads(f.read_text())
+    evidence = json.loads(bytes.fromhex(case["evidence"]))
+    evidence["proofs"] = {"statements": [{"member": "m0", **evidence["proofs"]}, {"member": "m1", "sessions": []}]}
+    f.write_text(json.dumps({**case, "evidence": codec.canonical_json(evidence).hex()}, sort_keys=True))
+    rc, cases, refused, out = run(capsys, "--audit", audit, "--private", tmp_path / "private", "--alpha", "1", "--gamma", 1,
+                                  *stand_ins(tmp_path, v1), "--v2", "--v2-exe",
+                                  stand_in(tmp_path, "v2", answer(SC.V2, digest_of(v1))))
+    total = sum(len(Path(b).read_bytes()) for b in case["blobs"])
+    assert rc == 1 and refused == [] and [c["protocol"] for c in cases] == [V1, INF], out
+    assert not_started(out) == [{"protocol": id, "reason": SC.PER_MEMBER, "blobs": 2, "blob_bytes": total,
+                                 "limit_bytes": SC.CHECK_BLOBS_GB * 10**9} for id in (SAMPLED, SC.V2)]
+    assert not (tmp_path / "sampled.seen").exists() and not (tmp_path / "v2.seen").exists()
+    assert sorted(p.name for p in (tmp_path / "private").iterdir()) == sorted([SC.DIRS[V1], SC.DIRS[INF], "scratch"])
+    assert len(scope.read_text().splitlines()) == 2
 
 
 def test_without_v2_no_v2_case_is_made(tmp_path, capsys):

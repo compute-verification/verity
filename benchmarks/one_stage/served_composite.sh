@@ -35,7 +35,10 @@
 # the node; its public output (composite.json: the composite's commitment, each case's id, params digest and commitment,
 # what is missing and each outcome; and its verdict lines), which it refuses to write when it shares bytes with any
 # case's evidence, is OUT/composite/PRODUCT. OUT/verdicts.txt gets each case's protocol and verdict (the CASE lines),
-# each case not written by its protocol, each product's NOT_ESTABLISHED and VERDICT lines, and the host it composed on
+# each case not written by its protocol, each case whose check was not started (`served_cases.py`'s NOT_STARTED: no
+# check runs outside a memory scope of its own, CHECK_MEM_GB, or on blob files that sum past CHECK_BLOBS_GB, and the
+# per-member sampled case is not asked) with why, its blob files' sum and the limit, each product's NOT_ESTABLISHED and
+# VERDICT lines, and the host it composed on
 # (the serve dir's: the served node's, or, where SERVED_NODE names another, the node a compose follow-on composed on from
 # the served node's compose hand-off, COMPOSE_HANDOFF set, or a deferral's follow-on copied the serve dir's audit inputs
 # to), headed COMPOSITE, and nothing else. Without composite.py in the tree, or under PRODUCT=onsite without
@@ -106,13 +109,18 @@ if [ -f benchmarks/one_stage/served_cases.py ]; then
     || { [ -f "$D/sampled-proofs-served/window/case.json" ] && where=(--audit "$D/sampled-proofs-served"); }
   "$TPY" benchmarks/one_stage/served_cases.py "${where[@]}" --private "$D/private" "${ag[@]}" > "$P/served_cases.log" 2>&1
   rc=$?
-  grep -hE '^(CASE|NOT_WRITTEN) \{' "$P/served_cases.log" | "$PY" -c '
+  grep -hE '^(CASE|NOT_WRITTEN|NOT_STARTED) \{' "$P/served_cases.log" | "$PY" -c '
 import json, sys
 for line in sys.stdin:
     head, _, body = line.partition(" ")
     c = json.loads(body)
+    if head == "NOT_STARTED":
+        print("COMPOSITE NOT_STARTED {protocol}: its check was not started; the case names {blobs} blob files that sum "
+              "to {blob_bytes} bytes, and the limit a check is started on is {limit_bytes} bytes; {reason}".format(**c))
+        continue
     print("COMPOSITE", head, c["protocol"], *([c["verdict"]] if head == "CASE" else []),
-          *(["(" + c["policy"] + ")"] if "policy" in c else []))' \
+          *(["(" + c["policy"] + ")"] if "policy" in c else []),
+          *(["(its check ran under " + c["memory"] + ")"] if "memory" in c else []))' \
     | tee -a "$OUT/verdicts.txt"
   say "COMPOSITE CASES: served_cases.py exit $rc$([ "$rc" = 0 ] || echo ', its log on the node')"
 fi

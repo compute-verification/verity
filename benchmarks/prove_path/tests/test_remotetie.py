@@ -357,6 +357,15 @@ def test_the_records_accept_a_flipped_table_row_so_only_its_readers_proof_refuse
     assert list(_check(written, toy, toy.h1.W, R2).codes) != []
 
 
+@pytest.fixture(autouse=True, scope="module")
+def _no_scope():
+    """The toy's Lean checks run under no memory limit of their own (`served_cases.NO_SCOPE`), as on a development
+    host: a test's host may make no scope."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("CHECK_SCOPE", "none")
+        yield
+
+
 def _one_stage() -> SimpleNamespace:
     """`served_cases`, `composite` and `replay` of ``benchmarks/one_stage``, which make a served window's cases and compose
     them (`replay` under the name its own tests load it by)."""
