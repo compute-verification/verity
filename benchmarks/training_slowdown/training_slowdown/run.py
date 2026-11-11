@@ -28,7 +28,8 @@ record's trace again with this tree's capture, from the record's own config text
 grade doesn't read.
 
 Writes `OUT/run.json` (the count, the checkpoints, the flags, the config with its digest and text, the route, θ's
-digest, the trace and the job's label). No weights are kept by default: of the last checkpoint the job keeps E, the
+digest, the trace and the job's label; the device, and torch's switch for TF32 matrix products as it stands when
+the record is written, `tf32`). No weights are kept by default: of the last checkpoint the job keeps E, the
 bytes that rebuild its output from θ, when E is under 50 MiB (`E_KEEP_BYTES`), and with `--keep-weights` the whole
 state. Torch
 compilation is disabled and CUDA graph replay refused: both run work the counter can't see. For the same reason a run is
@@ -119,6 +120,14 @@ def no_function_modes():
     finally:
         for mode in reversed(modes):
             torch._C._push_on_torch_function_stack(mode)
+
+
+def tf32() -> dict:
+    """torch's two readings of its switch for TF32 matrix products, as they stand: with either on a GPU computes a
+    float32 GEMM in TF32, which no dtype of an op says. A record states them beside its device (`Harness.finish`),
+    and `gates.tf32_on` reads them."""
+    return {"cuda_matmul_allow_tf32": bool(torch.backends.cuda.matmul.allow_tf32),
+            "float32_matmul_precision": torch.get_float32_matmul_precision()}
 
 
 def git_commit() -> str:
@@ -367,7 +376,7 @@ class Harness:
         rec |= meta | {
             "schema": "training-slowdown/run/v1", "training_slowdown": VERSION, "seed": self.seed, "tier": self.tier,
             "split": self.split, "start": self.start, "theta_sha256": theta_sha256(self.theta), "device": self.device,
-            "forward_macs_per_token": self.forward_macs_per_token, "c": c, "planned_steps": self.n_steps,
+            "tf32": tf32(), "forward_macs_per_token": self.forward_macs_per_token, "c": c, "planned_steps": self.n_steps,
             "checkpoints": self.checkpoints,
             "flags": flags(rec["totals"], float(meta.get("peak_macs_per_s", 0))) + list(notes or []),
             "invalid": problems,

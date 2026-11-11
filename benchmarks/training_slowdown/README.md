@@ -218,6 +218,13 @@ version. The other is `--as-if-assumed`, which counts every record by the assume
 block says so in its first two lines and begins every other line with `as-if`, and it writes
 `OUT/slowdown.as-if.json` (`slowdown-as-if/v1`), never `slowdown.json`. An as-if figure is no config's slowdown.
 
+A record states torch's switch for TF32 matrix products as it stands when the record is written, by both of torch's
+readings of it (`tf32`: `torch.backends.cuda.matmul.allow_tf32` and `torch.get_float32_matmul_precision()`), and the
+block says of each record whether it was on, off or not stated (a record written before one stated it, which is read
+as before). No dtype of torch's says a product ran in TF32, so a record that states the switch on while its op log
+names a GEMM float32 is refused: the reason names the ops and the two ways out, those rows named `tf32` (the TF32
+GEMM's price) or the job run again with the switch off.
+
 ## Limits of the count
 
 - Work outside torch's dispatcher (custom CUDA or Triton kernels, host libraries) isn't counted: the screen refuses the

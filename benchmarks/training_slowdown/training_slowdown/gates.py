@@ -28,7 +28,8 @@ the op and the dtype (`Unpriced`): nothing is priced as the cheapest. A gather m
 A torch dtype doesn't say whether a run set cuda.matmul.allow_tf32, and the counter writes torch's, so a float32 GEMM
 row is priced as the exact f32 one, and only a row whose dtype reads `tf32` as the TF32 one: whoever reads a record of
 a run that set it names its f32 GEMMs' rows so. `tf32` names a GEMM alone: no elementwise op or gather has a price in
-it.
+it. A record states the switch (`tf32_on`), and one that states it on while a GEMM row of its log reads float32 is
+priced at neither (`exact_under_tf32`, which the grade refuses by).
 
 A record whose op log names no dtype is priced by `ASSUMED`: GEMMs and forward or backward elementwise ops in bf16
 (the lf model trains under bf16 autocast), the optimizer and linear algebra in f32, a gather's words at 16 bits;
@@ -153,6 +154,25 @@ def gather_bits(op: str, dtype: str | None = None) -> tuple[int, str]:
         raise Unpriced(f"{op} in {dtype}: a gather's words are priced at their dtype's bits, and {dtype} has none in "
                        f"training_slowdown.gates' BITS ({', '.join(BITS)})")
     return BITS[dtype], ""
+
+
+def tf32_on(record: dict) -> bool | None:
+    """Whether the record's job ran with torch's switch for TF32 matrix products on, by the two readings of it the
+    record states (`tf32`, which `run.Harness.finish` writes): on where either says so. None for a record that
+    states neither, one written before a record stated them."""
+    stated = record.get("tf32")
+    if stated is None:
+        return None
+    return bool(stated["cuda_matmul_allow_tf32"]) or stated["float32_matmul_precision"] != "highest"
+
+
+def exact_under_tf32(record: dict) -> list[str]:
+    """The GEMM ops, by phase and name, that the record's op log names float32, the exact product, while the record
+    states the TF32 switch on: none where it states it off or states nothing."""
+    if not tf32_on(record):
+        return []
+    return sorted({f"{row[0]} {row[2]}" for s in record["structures"].values() for row in s.get("log", [])
+                   if len(row) > 6 and row[6] == "float32" and kind_of(*row[:3], row[6])[0] == "gemm/f32"})
 
 
 def op_key(row: list) -> str:

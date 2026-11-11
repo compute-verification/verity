@@ -513,9 +513,10 @@ def test_records_priced_two_ways_give_no_p_and_no_s_and_the_reason_names_both_wa
         assert "against any route none; against the honest route none" in block and "none: no S" in block
         assert "any route, over 2 configs (attack, reference), no config: none (the configs' records are priced" in block
     lines = G.text(graded([named(r | {"record": r["record"] | {"device": "cpu"}}) for r in attack], [named(ref[0])]))
-    assert "attack 0/final: version 0, on cpu, counted in the dtype its op log names for each op, 2 of 2" in lines
-    assert "reference 0/final: version 0, counted in the dtype its op log names for each op, 1 of 1" in lines
-    assert "attack 0/final: version 0, counted by the assumed dtypes (its op log names none), 2 of 2" in G.text(plain)
+    said = "TF32 switch not stated, counted"
+    assert f"attack 0/final: version 0, on cpu, {said} in the dtype its op log names for each op, 2 of 2" in lines
+    assert f"reference 0/final: version 0, {said} in the dtype its op log names for each op, 1 of 1" in lines
+    assert f"attack 0/final: version 0, {said} by the assumed dtypes (its op log names none), 2 of 2" in G.text(plain)
 
 
 def test_as_if_assumed_counts_every_record_by_the_assumed_dtypes_and_says_so_on_every_line(tmp_path, capsys):
@@ -597,6 +598,45 @@ def test_a_record_with_an_op_in_a_dtype_no_definition_prices_is_refused_with_its
     assert graded([named(job([UNDER]), "float64")], [named(job([UNDER]))], as_if_assumed=True)["p"]["any"]["p"] == 1
 
 
+def stating(run: dict, allow: bool = False, precision: str = "highest") -> dict:
+    """`run` with its record stating torch's TF32 switch as `run.tf32` writes it."""
+    return run | {"record": run["record"] | {"tf32": {"cuda_matmul_allow_tf32": allow,
+                                                      "float32_matmul_precision": precision}}}
+
+
+@pytest.mark.parametrize("on", [{"allow": True, "precision": "high"}, {"allow": True}, {"precision": "medium"}])
+def test_a_record_that_states_tf32_on_and_names_a_gemm_float32_is_refused_with_both_ways_out(on):
+    """A dtype of torch's doesn't say a product ran in TF32, so a record that states the switch on, by either of its
+    two readings, while its op log names a GEMM float32 has its products at a price that isn't its job's: the grade
+    stops, and says which record, which ops and the two ways out. With those rows named `tf32` the same record
+    grades, at the TF32 GEMM's price; one that states the switch off grades at the exact one; and counted as if its
+    log named no dtype it is one that names none."""
+    ref = [stating(named(job([UNDER])))]
+    with pytest.raises(ValueError, match=r"^grade: the record at seed 0, final states torch's TF32 switch on, and its "
+                                         r"op log names 1 GEMM ops float32, the exact product \(fwd mm\): ") as e:
+        graded([stating(named(job([UNDER])), **on)], ref)
+    assert str(e.value).endswith(f"Either {G.TF32_FIX}") and "name those rows `tf32`" in G.TF32_FIX
+    assert "torch.backends.cuda.matmul.allow_tf32 = False" in G.TF32_FIX
+    exact, tf32 = graded(ref, ref), graded([stating(named(job([UNDER]), "tf32"), **on)], ref)
+    assert exact["H"]["honest"]["C"]["mean"] == pytest.approx(80 * gates.per_mac("gemm/f32"))
+    assert tf32["attack"]["splits"]["final"]["C"]["mean"] == pytest.approx(80 * gates.per_mac("gemm/tf32"))
+    assert [x["tf32"] for x in tf32["records"]] == [True, False]
+    assert "attack 0/final: version 0, TF32 on, counted in" in G.text(tf32)
+    assert "reference 0/final: version 0, TF32 off, counted in" in G.text(tf32)
+    as_if = graded([stating(named(job([UNDER])), **on)], ref, as_if_assumed=True)
+    assert as_if["p"]["any"]["p"] == 1 and [x["tf32"] for x in as_if["records"]] == [True, False]
+
+
+def test_a_record_that_states_no_tf32_switch_is_read_as_before_and_its_line_says_so():
+    """A record written before one stated the switch grades as it did, whatever its GEMMs' dtype, and the block
+    says the switch is not stated."""
+    old, new = graded([named(job([UNDER]))], [named(job([UNDER]))]), graded([stating(named(job([UNDER])))],
+                                                                             [stating(named(job([UNDER])))])
+    assert [x["tf32"] for x in old["records"]] == [None, None] and "TF32 switch not stated, counted" in G.text(old)
+    drop = {"records": None}
+    assert {**old, **drop} == {**new, **drop} and gates.exact_under_tf32(named(job([UNDER]))["record"]) == []
+
+
 @pytest.fixture(scope="module")
 def ran(tmp_path_factory):
     """One search job of the tiny start, run as a node runs it, through the sandbox."""
@@ -608,6 +648,8 @@ def test_a_jobs_own_record_is_graded_from_the_trace_its_job_took(ran):
     capture, over the steps after the run's first update (step 0 reads θ and the tables the model builds), of the
     traced step's own shape. Its trace says more than the grade reads, and a refused one has no ρ."""
     assert set(G.TRACE) < set(ran["trace"]) and ran["trace"]["capture"] == products.CAPTURE
+    assert ran["tf32"] == {"cuda_matmul_allow_tf32": False, "float32_matmul_precision": "highest"}
+    assert gates.tf32_on(ran) is False
     assert [s["step"] for s in G.changed_steps(ran, None)] == [1, 2] and ran["steps"][0]["weights"]
     f = G.traced(ran, G.rows_of(ran)[-1])["formalism"]
     assert f["trace"]["products"]["rows"] == [products.priced(r, products.CAPTURE) for r in ran["trace"]["rows"]]

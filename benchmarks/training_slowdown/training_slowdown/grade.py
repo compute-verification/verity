@@ -29,6 +29,10 @@ no job writes): the grade never reads it and passes it on, beside each record it
   (`MIXED`): the records without dtypes counted again by a job of this version, or `--as-if-assumed`, which counts
   every record by the assumed dtypes whatever its log names (`without_dtypes`), labels every line it prints as-if
   and writes `OUT/slowdown.as-if.json` (`SCHEMA_AS_IF`), never `slowdown.json`;
+- **the TF32 switch**: a record states torch's switch for TF32 matrix products (`gates.tf32_on`), which the block
+  says of each record (`TF32`; a record written before one stated it says nothing, and is read as before). One that
+  states it on while its op log names a GEMM float32 is refused, with the two ways out (`TF32_FIX`): no dtype of
+  torch's says a product ran in TF32, and the exact product's price is not that job's;
 - **ρ**, the attack's own cost at the config's policy (`policy.named`): `formalism.published` at (c, k) on the search
   record, at its first checkpoint reaching the gain on the search split, else at its last, which the block says. It
   reads the record's `trace`, the step the job traced itself, and prices its product rows here (`traced`,
@@ -72,6 +76,12 @@ SCHEMA_AS_IF, AS_IF_FILE = "slowdown-as-if/v1", "slowdown.as-if.json"
 PRICED = {True: "in the dtype its op log names for each op",
           False: "by the assumed dtypes (its op log names none)",
           None: "with no op row to price"}
+#: what a record states of torch's switch for TF32 matrix products (`gates.tf32_on`), which the block says of each
+TF32 = {True: "TF32 on", False: "TF32 off", None: "TF32 switch not stated"}
+#: the two ways out for a record that states the switch on and names a GEMM float32, which its refusal names
+TF32_FIX = ("name those rows `tf32`, the dtype training_slowdown.gates prices a float32 GEMM under TF32 by, or run "
+            "the job again with the switch off (torch.backends.cuda.matmul.allow_tf32 = False and "
+            "torch.set_float32_matmul_precision('highest'))")
 #: what `--as-if-assumed` does, which every block it prints says first
 AS_IF = ("every record's ops are counted by the assumed dtypes (`gates.ASSUMED`: "
          + ", ".join(f"{cls} {dtype}" for cls, dtype in gates.ASSUMED.items())
@@ -251,9 +261,16 @@ def checkpoints(run: dict, start: str) -> list[dict]:
     """A job's checkpoints by step (`run`: its `seed`, its `split` and its `record`): each one's loss, the start's
     loss on the job's split and its counted |C| in gates (`counted`), or why it has none. A job from another start, or
     scored on another split than its place says, is refused, and so is one whose op log names an op in a dtype no
-    Definition prices (`gates.Unpriced`)."""
+    Definition prices (`gates.Unpriced`), or names a GEMM float32 while the record states the TF32 switch on
+    (`gates.exact_under_tf32`): the exact product's price is not that job's."""
     where = f"seed {run['seed']}, {run['split']}"
     out = []
+    exact = gates.exact_under_tf32(run["record"])
+    if exact:
+        raise ValueError(f"grade: the record at {where} states torch's TF32 switch on, and its op log names "
+                         f"{len(exact)} GEMM ops float32, the exact product ({', '.join(exact[:4])}"
+                         f"{' and more' if len(exact) > 4 else ''}): under the switch a GPU computes a float32 GEMM "
+                         f"in TF32, at another price. Either {TF32_FIX}")
     try:
         rows = rows_of(run["record"])
     except gates.Unpriced as e:
@@ -580,13 +597,15 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
 
 def _read(name: str, run: dict) -> dict:
     """What the grade read of one job: its place, the label and the version of the code that wrote its record, the
-    device it ran on, how its count is priced (`PRICED`; under `--as-if-assumed`, as if its log named no dtype), how
-    many of its checkpoints are scored, and the record's `provenance` where it has one, passed on as it is."""
+    device it ran on, what it states of the TF32 switch (`gates.tf32_on`; None where it states nothing), how its
+    count is priced (`PRICED`; under `--as-if-assumed`, as if its log named no dtype), how many of its checkpoints
+    are scored, and the record's `provenance` where it has one, passed on as it is."""
     wrote = run["record"]
     priced = "as if its op log named no dtype" if run["as_if"] and run["dtypes"] else PRICED[run["dtypes"]]
     return {"config": name, "seed": run["seed"], "split": run["split"], "source": run.get("source"),
             "label": wrote.get("label"), "version": wrote.get("training_slowdown") or wrote.get("te_core"),
-            "device": wrote.get("device"), "priced": priced, "checkpoints": len(run["checkpoints"]),
+            "device": wrote.get("device"), "tf32": gates.tf32_on(wrote), "priced": priced,
+            "checkpoints": len(run["checkpoints"]),
             "scored": sum(c["gates"] is not None for c in run["checkpoints"])} | (
         {"provenance": wrote["provenance"]} if "provenance" in wrote else {})
 
@@ -682,7 +701,7 @@ def text(s: dict) -> str:
             f"(the window is {per['window']}'s; each fleet at its peak rate)",
             *(f"{k}: {v}" for k, v in per["parts"].items()))
     add("records", *(f"{x['config']} {x['seed']}/{x['split']}: version {x['version']}, "
-                     + (f"on {x['device']}, " if x["device"] else "") + f"counted {x['priced']}, "
+                     + (f"on {x['device']}, " if x["device"] else "") + f"{TF32[x['tf32']]}, counted {x['priced']}, "
                      f"{x['scored']} of {x['checkpoints']} checkpoints scored" + (f", {x['label']}" if x["label"] else "")
                      + (f", provenance: {_said(x['provenance'])}" if "provenance" in x else "")
                      for x in s["records"]))

@@ -89,6 +89,34 @@ def test_sgd_run_records_every_step_and_verifies_an_identity_family(tmp_path, th
     assert all(b > floor for b in fam["beta"].values()), fam["beta"]
 
 
+def test_a_record_states_torchs_tf32_switch_as_it_stands_when_it_is_written(tmp_path, theta):
+    """A record states both of torch's readings of its switch for TF32 matrix products, read when the record is
+    written: off as torch starts, and on by whichever reading a job's code set. The record of a job that set it
+    names its float32 products float32, as torch does, which `gates.exact_under_tf32` lists and the grade refuses."""
+    allow, precision = torch.backends.cuda.matmul.allow_tf32, torch.get_float32_matmul_precision()
+
+    def switched(te):
+        torch.backends.cuda.matmul.allow_tf32 = True
+        sgd(te)
+
+    try:
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.set_float32_matmul_precision("highest")
+        off = counted(tmp_path / "off", theta, sgd)
+        assert off["tf32"] == {"cuda_matmul_allow_tf32": False, "float32_matmul_precision": "highest"} == run.tf32()
+        assert gates.tf32_on(off) is False and gates.exact_under_tf32(off) == []
+        on = counted(tmp_path / "on", theta, switched)
+        assert on["tf32"]["cuda_matmul_allow_tf32"] is True and gates.tf32_on(on) is True
+        assert gates.exact_under_tf32(on) == ["bwd mm", "fwd mm"] and on["invalid"] == []
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.set_float32_matmul_precision("medium")
+        assert run.tf32()["float32_matmul_precision"] == "medium" and gates.tf32_on({"tf32": run.tf32()}) is True
+        assert gates.tf32_on({}) is None and gates.exact_under_tf32(off | {"tf32": None}) == []
+    finally:
+        torch.set_float32_matmul_precision(precision)
+        torch.backends.cuda.matmul.allow_tf32 = allow
+
+
 EPS, LR = 1e-3, 1e-2
 
 
