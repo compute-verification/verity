@@ -42,7 +42,10 @@ lists its members (a served window's) declares its reads beside them, as a serve
 (each ``weights/<label>@<words>``, pinned at the root of the committer's weights registration): each read port its
 members' own rows or a shared-row table of them (`interface.listed_reads`), audited and counted as a stated record's
 reads are, and the count names every parameter it reads whose window root is no pin (``unpinned``), whose reads count
-free.
+free. A history table (`interface.History`) is pinned at the root the window's registration records for it
+(`history.pins`), which a5's registration check before the draw and its stream's registrations hold to the root the
+verifier of record computes over its writers' public bodies (a5's ``history``, `history.params` of the same pins as the
+reads); a held run's strings it doesn't hold, so a window with one is refused.
 
 A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, a
 loop's activation rows) has them fixed before the sample with the rest of the registration;
@@ -156,7 +159,7 @@ from verity.core.protocols.certifier.blocks import SCAN_STATE  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
 from verity.ml.circuits.codec import program_digest  # noqa: E402
-from verity.ml.windows import interface as IF  # noqa: E402
+from verity.ml.windows import history as HW, interface as IF  # noqa: E402
 
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
 #: which outbound connections take theirs
@@ -746,7 +749,8 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
     member's circuit and public file: what the verifier refuses, not the prover. Then that public file with one
     bit flipped (``public-bit-*``) under the honest proof."""
     import a0
-    sys.path.insert(0, str(HERE.parents[1] / "verity" / "ml" / "flock" / "verifier"))
+    # the directory of `zk_mutants.py` and the modules it imports beside it
+    sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/ml/flock/verifier/zk_mutants.py").parent))
     import zk_mutants as ZM
 
     k, honest = next(((k, s.parent) for k in range(len(members))
@@ -807,6 +811,10 @@ def audit(a: argparse.Namespace) -> int:
         for e in registration.get("registered") or ():
             if e.get("value") in tie_pins and roots.setdefault(e["value"], e["root"]) != e["root"]:
                 raise ValueError(f"the window's registration records two roots for {e['value']!r}")
+        histories = HW.pins(doc, roots)
+        if twice := sorted(set(histories) & set(pins)):
+            raise ValueError(f"values {twice} are both pinned and the window's history tables")
+        pins |= histories
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
     except (ValueError, KeyError, TypeError) as e:
         row = {"ok": False, "refused": {"records": f"{type(e).__name__}: {e}"}, "seconds": round(time.time() - t0, 1)}
@@ -842,7 +850,8 @@ def audit(a: argparse.Namespace) -> int:
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
-                         more, rank=0, registered=reads or None, ports=a.ports)
+                         more, rank=0, registered=reads or None, ports=a.ports,
+                         history=(lambda publics: HW.params(doc, mine, publics, pins)) if histories else None)
     finally:
         a.coins.skip(0)
         finisher.join()
