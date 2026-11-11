@@ -1046,6 +1046,23 @@ def test_a_module_a_build_compiled_and_the_cache_could_not_index_is_recorded_und
         "P.B's compile was stopped: the next run's repair has it compiled again, and nothing is recorded of it"
 
 
+def test_a_module_indexable_refuses_is_recorded_with_its_words_though_no_module_loads_it(tmp_path):
+    """A build `indexable` refuses is compiled again by every build that finds no record of it, and `P`, the top of its
+    build, is loaded by no module `put` indexes. It is recorded under its key with `indexable`'s words all the same, and
+    the log counts and names it; a refused module Lake didn't say it built (`"compiled"`) is not recorded."""
+    pkg = _package(tmp_path)
+    setup = pkg / ".lake/build/ir/P.setup.json"
+    setup.write_text(json.dumps(json.loads(setup.read_text()) | {"importArts": {}}))
+    store, said, keys = tmp_path / "store", [], _keys(pkg)
+    assert LA.LakeArtifacts(store).put({pkg: SANDBOXED | {"compiled": ["P.A", "P.B"]}}, log=said.append) == 2
+    assert not (store / LA.MK.UNSTORED).exists() and said == []
+    assert LA.LakeArtifacts(store).put({pkg: SANDBOXED}, log=said.append) == 0
+    why = "Lake imports [] and not ['P.A', 'P.B'] of the workspace"
+    assert json.loads((store / LA.MK.UNSTORED / Path(keys["P"]).name).read_text())["why"] == why
+    assert said == [f"lean-audit: {pkg}: 1 modules this run compiled can't be indexed (`indexable`), 1 recorded under "
+                    f"their keys: P: {why}"]
+
+
 def test_a_build_outside_the_sandbox_indexes_nothing(tmp_path):
     """Where `unshare` is missing, check.py builds without the sandbox, and compile-time code runs as the user: it could
     leave in the build any outputs, traces and `setup.json` it chose, which `put` would index under a module's key for
