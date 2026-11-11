@@ -20,8 +20,8 @@ from research.drive import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, LOS
                             shard_machines, step_paths, step_records, touches)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
-from research.vqueue_slim import (BUILD, CHECK, OWN_TRAIN, WHOLE, abandon, audit_failures, based, combine, failures,
-                                  judge, key, reads, shard_count, start, step_test, unnamed)
+from research.vqueue_slim import (BUILD, CHECK, LEAN_INPUTS, OWN_TRAIN, WHOLE, abandon, audit_failures, audited, audits, based,
+                                  combine, failures, judge, key, reads, shard_count, start, step_test, unnamed)
 from test_drive_executor import PREFLIGHTS, _slim
 from test_drive_policy import LIVE, TEST, _policy
 from test_drive_review import GATED_TREE, _main, _move_main, _plan_doc
@@ -713,6 +713,93 @@ def test_a_lean_audit_failure_is_inherited_only_while_it_prints_no_more_than_the
     assert f.key != f.base_key and f.inputs == {"Security/Proofs/A.lean"} and _inherited(f) is (not more)
     assert f.tests - f.base_tests == ({"Security/Proofs::record: the statement of G changed"} if more else set())
     assert unnamed(f.key) not in f.tests
+
+
+# -- lean-audit taken from the base's check
+
+#: the steps a check taking lean-audit from its base's is sent
+FREE = ",".join(s for s in AFTER_LANDING if s != "lean-audit")
+
+
+@pytest.mark.parametrize("shards", [1, 3, "auto:2"])
+def test_a_check_taking_lean_audit_from_its_base_s_runs_every_step_but_it_and_its_record_says_whose(world, monkeypatch,
+                                                                                                    tmp_path, shards):
+    """``audit_from``, the candidate the check is built on: every step of `AFTER_LANDING` but lean-audit is sent, to each
+    shard alike and to an auto plan's making, and the record says whose verdict on lean-audit it takes (``lean_audit_from``).
+    Judged on no lean-audit, it lends none to a check above it (`audits`), where the check of its base, which ran it, does.
+    The run beside a graph2 check runs no lean-audit, so it takes none."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, plans = "m1,m2,m3", Plans(h.d, tmp_path)
+    rec_base = start(h.d, base, base, shards=1)
+    rec = start(h.d, sha, base, shards=shards, audit_from=base)
+    if shards == "auto:2":
+        assert plans.asked == [(sha, FREE, None, 2)] and rec["plan"]["deferred"] == FREE and len(h.posted) == 1
+    else:
+        assert [steps for _, steps, _ in h.posted[1:]] == [FREE] * shards
+    assert (rec["lean_audit_from"], rec["gate"], "lean-audit" in rec["steps"]) == (base, CHECK, False)
+    assert any(f"as candidate {sha[:12]}'s check, lean-audit {base[:12]}'s: " in x for x in world.logs), world.logs
+    assert audits(h.d, rec_base) and not audits(h.d, rec) and not audits(h.d, None)
+    with pytest.raises(ValueError, match="only the check that gates"):
+        start(h.d, sha, base, audit_from=base)
+
+
+@pytest.mark.parametrize("says", ["passed", "failed", "running", "no record"])
+def test_a_check_that_took_lean_audit_from_its_base_s_passes_it_exactly_when_that_check_passed_it(world, monkeypatch,
+                                                                                                   tmp_path, says):
+    """The candidate's own check passed every step it ran.  Its verdict on lean-audit is its base's check's: where that check
+    passed it, a pass; where it failed it, a fail on that very failure, ended, which `based` reads as the base's; either kept
+    in the candidate's record as if it had run the step, so it answers for it once its candidate is `main`, and read from
+    there.  While that check runs, or with no record of it, a pass is pending and a fail not ended, the record unchanged:
+    the candidate never passes on its other steps alone."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec_base = start(h.d, base, base, shards=1)
+    if says in ("passed", "failed"):
+        _slim(h, tmp_path, **({"lean_audit": AUDIT.format(n=1)} if says == "failed" else {}))
+        assert judge(h.d, rec_base).state == (FAIL if says == "failed" else PASS)
+    rec = start(h.d, sha, base, shards=1, audit_from=base)
+    _slim(h, tmp_path)
+    own = judge(h.d, rec)
+    assert own == Verdict(PASS) and "lean-audit" not in rec["verdict"]["passed"]
+    was, below = json.loads(json.dumps(rec)), None if says == "no record" else rec_base
+    got = audited(h.d, own, rec, below)
+    if says == "passed":
+        assert got == own and rec["verdict"]["passed"] == [*was["verdict"]["passed"], "lean-audit"]
+    elif says == "failed":
+        (f,) = based(got, rec_base).failed
+        assert (got.state, got.ended, f.task, _inherited(f)) == (FAIL, True, "step lean-audit", True)
+        assert rec["verdict"]["state"] == FAIL and rec["verdict"]["failed"] == rec_base["verdict"]["failed"]
+    else:
+        assert got == Verdict(PENDING) and rec == was
+        red = Verdict(FAIL, (_failed(h, base, sha, "pytest"),), ended=True)
+        assert audited(h.d, red, rec, below) == replace(red, ended=False)
+    if says in ("passed", "failed"):
+        assert judge(h.d, rec) == got == audited(h.d, judge(h.d, rec), rec, None), "kept, it is read from the record"
+
+
+def test_where_lean_audit_gates_nothing_no_check_lends_it_and_none_waits_on_its_base_s(world, monkeypatch, tmp_path):
+    """drive.toml's warn step gates nothing: a check that ran it lends no verdict on it, and one that took it from its base's
+    check doesn't wait on that check's."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec_base = start(h.d, base, base, shards=1)
+    rec = start(h.d, sha, base, shards=1, audit_from=base)
+    _slim(h, tmp_path)
+    own = judge(h.d, rec)
+    assert audits(h.d, rec_base) and audited(h.d, own, rec, rec_base) == Verdict(PENDING)
+    h.d.warn_steps = ("lean-audit",)
+    assert not audits(h.d, rec_base) and audited(h.d, own, rec, rec_base) == own == Verdict(PASS)
+
+
+def test_a_lean_input_is_a_lean_or_lake_file_or_lock_anywhere_the_check_s_or_lean_check_s_code_or_the_lean_tree_whole():
+    """The conservative set a member's change is judged against: a README under security/ counts as much as a Lean file;
+    `Security/`, the tree's name before, too; a path that only starts like one of them doesn't, nor the environment's
+    files, which every step reads."""
+    lean = ["security/README.md", "security/Definitions/Core.lean", "Security/Proofs/README.md", "Main.lean",
+            "verity/core/protocols/pous/lean/Grader.lean", "verity/core/service/flock/lakefile.toml",
+            "verity/core/service/flock/lakefile.lean", "lean-toolchain", "verity/x/lake-manifest.json",
+            "verity/core/protocols/nci/lean/lean-audit.json", "tools/verity/lean/check.py", "tools/verity/check/policy.toml"]
+    other = ["docs/security.md", "verity/security/x.py", "tools/verity/checkers/x.py", "tools/verity/lean-tools/x.py",
+             "verity/ml/circuits/ops.py", "uv.lock", ".python-version", "lean.md"]
+    assert [p for p in [*lean, *other] if meets((p,), LEAN_INPUTS)] == lean
 
 
 def test_failures_are_what_an_ended_run_failed_of_a_step_by_what_its_log_names_once_its_verdict_is_kept(

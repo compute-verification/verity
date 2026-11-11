@@ -44,8 +44,11 @@ passed only once every shard holding it passed (`shard_passed`).  A failed step'
 too; what a failure doesn't name is one test no other key has (`unnamed`), so it is never inherited.  It fails as soon as a
 shard has failed a step it judges, or a suite of one, while the others run (`_early`: a shard's failures so far, which its
 check writes as each one fails), a failure read then as it would be at the end; a candidate on another candidate whose check
-runs is compared with what that check has failed so far, the rest unknown until it ends (`based` with ``so_far``).  A step
-it leaves out
+runs is compared with what that check has failed so far, the rest unknown until it ends (`based` with ``so_far``).  A
+candidate built on another in flight whose check is judged on lean-audit (`audits`), no member of it changing a Lean input
+(`LEAN_INPUTS`), audits nothing itself: `start` with ``audit_from`` leaves lean-audit out of its run (``lean_audit_from``),
+and `audited` gives it that check's verdict on the step, so it passes lean-audit exactly when its base's check passed it and
+never while that check hasn't said.  A step it leaves out
 still runs: `failures` reads what it failed, which the loop rings to who acts on it, but what the run beside the base's
 check failed too (`Loop._off_gate`)."""
 from __future__ import annotations
@@ -62,9 +65,9 @@ import signal
 from dataclasses import replace
 from pathlib import Path
 
-from .drive import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, LAUNCH_LOST_S, LEAN_AUDIT_RE, PLAN_WAIT_S, PREFLIGHT,
-                    SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Driver, _epoch, _step_log, implicated, killed, not_run,
-                    shard_machines, shard_passed, shard_steps, step_paths, step_records, suite_paths, suite_rows)
+from .drive import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, LAUNCH_LOST_S, LEAN_AUDIT_RE, LEAN_STEP, PLAN_WAIT_S,
+                    PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Driver, _epoch, _step_log, implicated, killed,
+                    not_run, shard_machines, shard_passed, shard_steps, step_paths, step_records, suite_paths, suite_rows)
 from .queue import _SUMMARY_RE, CHECK_STEPS, _git
 from .reds import named
 from .store.fixtures import REPLICA_MAP, entries
@@ -106,6 +109,13 @@ AUDIT_FAIL_RE = re.compile(r"^lean-audit: FAIL: .*$", re.M)
 AUDIT_SAYS = ("closure:", "staged:", "trust gap:", "heartbeats:")
 #: the audit's scratch tree, which each run names anew
 SCRATCH_RE = re.compile(r"\S*?/lean-audit-scratch-[^/\s]+/")
+#: the Lean inputs, as `vqueue.meets` reads them: a candidate one of whose members changes any of them runs lean-audit itself
+#: rather than take its base's verdict on it (`start`'s ``audit_from``).  A superset of what the audit reads, which nothing
+#: declares yet (`reads` keys lean-audit on the whole tree): every Lean source and Lake file, any lock, the Lean check's code
+#: and check's own, and the Lean tree whole, its READMEs too (`security/`, and `Security/`, its name before, which a member
+#: branched then still changes), so no change it leaves out can change the audit's verdict
+LEAN_INPUTS = ("**/*.lean", "**/lakefile.lean", "**/lakefile.toml", "**/lake-manifest.json", "**/lean-toolchain",
+               "**/lean-audit.json", "tools/verity/lean", "tools/verity/check", "security", "Security")
 
 
 def shard_count(shards: int | str) -> tuple[int, bool]:
@@ -138,7 +148,8 @@ def deselection(driver: Driver, listed: Path | None) -> Path | None:
     return sent
 
 
-def start(driver: Driver, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None) -> dict | None:
+def start(driver: Driver, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None,
+          audit_from: str | None = None) -> dict | None:
     """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it, as `Driver._start_slim` launches
     it beside the executor's check of ``sha`` with ``base`` verified: `SLIM_STEPS` but those a run of every step of ``sha``
     above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's keywords (ratchet-gate
@@ -146,9 +157,12 @@ def start(driver: Driver, sha: str, base: str, shards: int | str = 0, deselect: 
     `Driver.start_postland` launches the after-landing run: `--deferred` every step of `AFTER_LANDING` (each check runs the
     preflights first), `--shard K/N` on shard K's machines (`shard_machines`) for each of that many, one whole run for 1;
     `auto:N` has the auto plan its shards launch by made first (`Driver.plan_shards`, ``plan``, which `judge` follows).
+    With ``audit_from`` too, the candidate it is built on, whose check is judged on lean-audit (`audits`) and whose verdict
+    on it this one takes (`audited`): every step but lean-audit.
     The record to keep (`Driver._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then, or each
     shard's in ``shards``, which `judge` makes ``groups``, each shard's ids); the candidate (``tip``), ``base``, when it
-    launched (``at``), the ``steps`` it runs and those it skips (``skip``), and ``gate`` (`CHECK`) with ``shards``.  None,
+    launched (``at``), the ``steps`` it runs and those it skips (``skip``), ``gate`` (`CHECK`) with ``shards``, and
+    ``lean_audit_from`` with ``audit_from``.  None,
     logged, when it registered no run (a shard that registered none stops the others), or when ``driver`` launches nothing (a
     dry run, or its queue's shadow), as `Driver._start_slim` does.  Every launch leaves out the tests the loop's list
     ``deselect`` names (`deselection`), each shard's alike; the nightly uncached check, which reads no list, runs them."""
@@ -156,17 +170,21 @@ def start(driver: Driver, sha: str, base: str, shards: int | str = 0, deselect: 
         raise ValueError("the run beside a candidate's check needs drive's machines: build the Driver with drive.toml's `on` "
                          "(`research.queue.drive_flags(q.workdir)[0].on`)")
     n, auto = shard_count(shards)
+    if audit_from and not n:
+        raise ValueError(f"audit_from {audit_from[:12]}: only the check that gates (``shards``) runs lean-audit, so only it "
+                         "can take its base's verdict on it")
     kw, skip, _, flags = driver._postland_args({"verified": base}, sha, False)
     if left := deselection(driver, deselect):
         kw = {**kw, "deselect": str(left)}
         flags += f" --deselect {left} ({len(left.read_text().splitlines())} tests)"
-    every = AFTER_LANDING if n else SLIM_STEPS
+    every = [s for s in (AFTER_LANDING if n else SLIM_STEPS) if not (audit_from and s == LEAN_STEP)]
     skip = [s for s in skip if s in every]
     steps = [s for s in every if s not in skip]
     sent = ",".join(every if n else steps)
     what = (f"train.sh {sha[:12]} {driver.on} --deferred {sent}{flags}"
             + (f" as an auto plan's {n} shards" if auto else f" as {n} shards" if n > 1 else "")
-            + (f" as candidate {sha[:12]}'s check" if n else f" beside candidate {sha[:12]}'s check"))
+            + (f" as candidate {sha[:12]}'s check" if n else f" beside candidate {sha[:12]}'s check")
+            + (f", {LEAN_STEP} {audit_from[:12]}'s" if audit_from else ""))
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None
@@ -184,7 +202,7 @@ def start(driver: Driver, sha: str, base: str, shards: int | str = 0, deselect: 
         return None
     driver.q.log(f"research queue vqueue: {what}: {' '.join(rec['ids']) or ('planning' if auto else 'launching')}")
     return {**rec, "tip": sha, "base": base, "at": driver.now(), "steps": steps, **({"skip": skip} if skip else {}),
-            **({"gate": CHECK} if n else {})}
+            **({"gate": CHECK} if n else {}), **({"lean_audit_from": audit_from} if audit_from else {})}
 
 
 def _launch(driver: Driver, sha: str, sent: str, kw: dict, n: int, plan: str | None = None) -> tuple[dict | None, str]:
@@ -352,11 +370,16 @@ def judge(driver: Driver, rec: dict | None) -> Verdict:
                                  "steps.jsonl"), passed)
 
 
-def _gate(driver: Driver, rec: dict) -> list[str]:
-    """The steps the check that gates (``rec``) is judged on: every step `main` waits for at its base (`Driver._gating`), the
-    preflights and a lean-agreement it ran, but policy.toml's `off_gate` there and drive.toml's `warn_steps`."""
+def _gated(driver: Driver, rec: dict) -> set[str]:
+    """The steps the check that gates (``rec``) answers for, run or not: every step `main` waits for at its base
+    (`Driver._gating`), the preflights and lean-agreement, but policy.toml's `off_gate` there and drive.toml's `warn_steps`."""
     at = rec.get("base") or rec["tip"]
-    gate = {*SLIM_JUDGED, *driver._gating(at)} - {*driver._policy(at).off_gate, *driver.warn_steps}
+    return {*SLIM_JUDGED, *driver._gating(at)} - {*driver._policy(at).off_gate, *driver.warn_steps}
+
+
+def _gate(driver: Driver, rec: dict) -> list[str]:
+    """The steps the check that gates (``rec``) is judged on: those it answers for (`_gated`) that it ran, and the preflights."""
+    gate = _gated(driver, rec)
     return [s for s in CHECK_STEPS if s in gate and (s in rec["steps"] or s in PREFLIGHT)]
 
 
@@ -691,3 +714,38 @@ def based(v: Verdict, base: dict | None, so_far: bool = False) -> Verdict:
         return replace(f, base_tests=None if early and tests is not None and not f.tests <= tests else tests)
 
     return replace(v, failed=tuple(of(f) for f in v.failed))
+
+
+def audits(driver: Driver, rec: dict | None) -> bool:
+    """Whether ``rec`` records the check that gates judged on lean-audit (`_gate`), whose verdict on it a check built on its
+    candidate may take in place of running it (`start`'s ``audit_from``)."""
+    return rec is not None and rec.get("gate") == CHECK and LEAN_STEP in _gate(driver, rec)
+
+
+def audited(driver: Driver, v: Verdict, rec: dict | None, base: dict | None) -> Verdict:
+    """``v``, `judge`'s verdict of the check ``rec`` records, with lean-audit's where that check took it from its base's
+    (``lean_audit_from``) and lean-audit gates it (`_gated`): the verdict on the step of the check ``base`` records, the
+    record of the base candidate's check as judged now, or of the run beside `main` once that candidate is `main` (its own).
+    The candidate passes lean-audit exactly when that check passed it.  Passed there (its kept verdict's ``passed``), ``v``.
+    Failed there, ``v`` failed with that check's failure of it, ended once ``v``'s own check has, so `based` reads it as the
+    base's and `vqueue.decide` drops the candidate with its base, or lands it after.  Unknown there (no verdict kept, or one
+    that holds neither), ``v`` never passes: a pass is pending, a fail not ended, which `vqueue.decide` holds while every
+    failure is inherited.  Once known, and ``v`` a pass or fail kept, it is kept in ``rec`` as if the check had run the step
+    (``verdict``: ``passed``, or the failure), so the record answers for it where it is the run beside `main` (`based`) and
+    is read from there."""
+    if not rec or not rec.get("lean_audit_from") or LEAN_STEP not in _gated(driver, rec):
+        return v
+    kept = rec.get("verdict")
+    if isinstance(kept, dict) and (LEAN_STEP in (kept.get("passed") or ()) or any(
+            isinstance(f, dict) and f.get("task") == f"step {LEAN_STEP}" for f in kept.get("failed") or ())):
+        return v
+    got = (base or {}).get("verdict")
+    got = got if isinstance(got, dict) else {}
+    passed = LEAN_STEP in (got.get("passed") or ())
+    if not (failed := tuple(f for f in (_kept(got).failed if got else ()) if f.task == f"step {LEAN_STEP}")) and not passed:
+        return Verdict(PENDING) if v.state == PASS else replace(v, ended=False) if v.state == FAIL else v
+    out = v if passed else Verdict(FAIL, (*v.failed, *failed), v.infra,
+                                   ended=v.state in (PASS, INFRA) or v.state == FAIL and v.ended)
+    if isinstance(kept, dict) and v.state in (PASS, FAIL):
+        _keep(rec, out, [*(kept.get("passed") or ()), *([LEAN_STEP] if passed else [])])
+    return out

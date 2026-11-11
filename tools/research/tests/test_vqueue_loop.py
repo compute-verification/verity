@@ -3155,6 +3155,108 @@ def test_under_gate_check_a_red_above_a_running_candidate_drops_the_stack_above_
     assert (rebuilt["base"], rebuilt["members"]) == (two, [4]) and "early_red" in failed and "early_red" not in above
 
 
+#: `PLAN`'s shards of a check that takes lean-audit from its base's: every step but lean-audit
+FREE = tuple(tuple(s for s in p if s != "lean-audit") for p in PLAN)
+#: lean-audit's log of a package that failed its build: the error its culprit's Lean file names
+AUDIT = ("AUDIT /w/lean-audit-scratch-1-x/Security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
+         "    error: ../Proofs/A.lean:100:2: Tactic `rfl` failed\n")
+
+
+def _steps(runs: Runs, sha: str) -> list[str]:
+    """The steps each launch of a shard of ``sha``'s checks was sent, in launch order."""
+    return [steps for c, _, steps, _ in runs.launches if c == sha]
+
+
+def test_under_gate_check_a_candidate_changing_no_lean_input_takes_lean_audit_from_its_base_s_check(env, monkeypatch):
+    """Three candidates stacked, one PR each.  The lowest, on `main`, runs every step.  The middle one's member changes a
+    README under security/, a Lean input of the conservative set, so it runs lean-audit too, though its base's check does.
+    The top one's changes no Lean input: its check runs every step but lean-audit, its record saying whose verdict on it it
+    takes (``lean_audit_from``)."""
+    from research.drive import AFTER_LANDING
+
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    readme = env.put(2, {"security/README.md": "# the Lean tree\n"})
+    env.put(3, {"c.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=3)
+    _, built, _ = loop.tick()
+    one, (two, three) = built["sha"], (loop.tick()[0]["sha"] for _ in range(2))
+    every, free = ",".join(AFTER_LANDING), ",".join(s for s in AFTER_LANDING if s != "lean-audit")
+    assert [_steps(runs, c) for c in (main, one, two, three)] == [[every] * 3] * 3 + [[free] * 3]
+    started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started"}
+    assert [started[c]["record"].get("lean_audit_from") for c in (one, two, three)] == [None, None, two]
+    assert loop.world._changed(main, readme) == {"security/README.md"}
+
+
+@pytest.mark.parametrize("first", ["its base's check", "its own"])
+def test_under_gate_check_a_candidate_that_took_lean_audit_from_its_base_passes_only_on_its_base_s_verdict_on_it(
+        env, monkeypatch, first):
+    """The top candidate's check runs every step but lean-audit.  Its own check passed while its base's runs: pending, though
+    every step it ran passed.  Its base's check passed: the base advances, and then the top one, judged on the base's
+    verdict on lean-audit, as judged then, or, its own check ending once its base is `main`, as recorded; its record keeps
+    lean-audit as passed, so the run beside `main`, which it is now, answers for it."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "1\n"})
+    seen: list[Snapshot] = []
+    loop, runs = _check(env, monkeypatch, lambda s: seen.append(s) or vqueue.decide(s), batch=1, depth=2)
+    _, built, _ = loop.tick()
+    lower, upper = built["sha"], loop.tick()[0]["sha"]
+    runs.end(main)
+    if first == "its own":
+        runs.end(upper, plan=FREE)
+        assert loop.tick() and env.main() == main
+        assert {c.sha: c.verdict.state for c in seen[-1].candidates} == {lower: PENDING, upper: PENDING}
+    runs.end(lower)
+    assert "advance" in _acts(loop.tick()) and env.main() == lower
+    if first != "its own":
+        assert {c.sha: c.verdict.state for c in seen[-1].candidates}[upper] == PENDING
+        runs.end(upper, plan=FREE)
+    logged = loop.tick()
+    assert "advance" in _acts(logged) and env.main() == upper
+    rec = [r for r in env.lines() if r["action"] == "slim" and r["sha"] == upper][-1]["record"]
+    assert rec["lean_audit_from"] == lower and "lean-audit" in rec["verdict"]["passed"]
+    assert loop.tick() == [] and len(runs.launches) == 9                # `main`'s check is the top candidate's
+
+
+@pytest.mark.parametrize("red", ["lean-audit", "pytest"])
+def test_under_gate_check_a_candidate_that_took_lean_audit_from_its_base_drops_with_it(env, monkeypatch, red):
+    """The top candidate's own check passed; its base's failed.  On lean-audit, which the top one took from it: the top
+    one fails on that very failure, read as its base's, so nobody of its own is blamed.  On pytest, the top one passed
+    lean-audit as its base did.  Either way it drops as its base failed, and its member, built again on `main`, runs
+    lean-audit itself."""
+    from research.drive import AFTER_LANDING
+
+    main = env.main()
+    head = env.put(1, {"Security/Proofs/A.lean": "-- a\n"} if red == "lean-audit" else
+                   {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    env.put(2, {"b.txt": "1\n"})
+    seen: list[Snapshot] = []
+    loop, runs = _check(env, monkeypatch, lambda s: seen.append(s) or vqueue.decide(s), batch=1, depth=2)
+    _, built, _ = loop.tick()
+    lower, upper = built["sha"], loop.tick()[0]["sha"]
+    runs.end(main)
+    runs.end(upper, plan=FREE)
+    if red == "lean-audit":
+        runs.end(lower, 1, "lean-audit", log=AUDIT)
+    else:
+        runs.end(lower, 3, "pytest", rows=(_row(NEW),))
+    logged = loop.tick()
+    top = {c.sha: c.verdict for c in seen[-1].candidates}[upper]
+    if red == "lean-audit":
+        (f,) = top.failed
+        mine = {c.sha: c.verdict for c in seen[-1].candidates}[lower].failed
+        assert (top.state, f.task, f.tests, vqueue._inherited(f)) == (FAIL, "step lean-audit", mine[0].tests, True)
+    else:
+        assert top == Verdict(PASS)
+    dropped = {r["sha"]: r["why"] for r in logged if r["action"] == "drop"}
+    assert dropped[upper] == "its base failed" and lower in dropped and env.withdrawn == [(1, head)]
+    rebuilt = next(r for r in logged if r["action"] == "build")
+    assert (rebuilt["base"], rebuilt["members"]) == (main, [2])
+    assert _steps(runs, upper) == [",".join(s for s in AFTER_LANDING if s != "lean-audit")] * 3
+    assert _steps(runs, rebuilt["sha"]) == [",".join(AFTER_LANDING)] * 3
+
+
 def test_under_gate_check_a_red_while_the_shards_run_with_several_suspects_is_bisected(env, monkeypatch):
     """Two suites fail in two shards while the check runs, each meeting one member's files: both are suspects, nobody is
     ejected, and the next batch takes half of them."""
