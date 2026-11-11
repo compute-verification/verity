@@ -21,7 +21,7 @@ rate and clock comes from the kernels' own `clock64` over `%globaltimer`, and th
 
 ~~~text
 research run --on NODE --project verity --source . --cwd source --env CARD=NODE \
-  --env GPU_LEASE_WHO=compute-accounting -- bash benchmarks/int8_class_rate/run.sh
+  --env GPU_LEASE_WHO=LANE -- bash benchmarks/int8_class_rate/run.sh
 python3 benchmarks/int8_class_rate/summarize.py ~/.research/runs/RUN1/out ~/.research/runs/RUN2/out [--json FILE]
 ~~~
 
