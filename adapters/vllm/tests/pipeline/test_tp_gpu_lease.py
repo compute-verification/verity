@@ -167,7 +167,8 @@ class _Cuda:
     (none left: nothing)."""
 
     def __init__(self, ev: list) -> None:
-        self.ev, self.looks = ev, []
+        self.ev = ev
+        self.looks: list = []
 
     def __call__(self) -> _Cuda:
         return self
@@ -244,7 +245,11 @@ def lease(tmp_path, monkeypatch):
     for owner, name, value in device(ev, watched):
         monkeypatch.setattr(owner, name, value)
     smi: list = []
-    monkeypatch.setattr(GL, "on_gpus", lambda uuids: smi.append(uuids) or [])
+
+    def on_gpus(uuids) -> list:
+        smi.append(uuids)
+        return []
+    monkeypatch.setattr(GL, "on_gpus", on_gpus)
     ranks = [_Rank(r, ev, locks) for r in (0, 1)]
     yield SimpleNamespace(ev=ev, watched=watched, smi=smi, locks=locks, started=started, holder=holder, ranks=ranks, llm=_LLM(ranks, ev),
                           cuda=GL.DRIVER, note=lambda: json.loads((tmp_path / "gpu_lease.released").read_text()))
@@ -464,6 +469,7 @@ def test_the_tp_commit_takes_its_lease_before_the_device_and_gives_it_back_only_
     failed one stopped the Commit after, before the value check it skips; and in the row, the Commit under the lease."""
     src = Path(TPL.__file__).with_name("commit.py").read_text()
     main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    assert main is not None
     marks = ["TPL.acquire()", "va.target_of_workload(wl)", "LLM(**kw)", '"tp2_commit_make"', '"tp2_commit_install"', "TPL.finalize(llm",
              '"tp2_commit_open"', '"tp2_commit_xrank_dump"', "TPL.reset(llm", "TPL.stop(llm", "if args.value_check and not stopped:"]
     at = [main.index(m) for m in marks]
@@ -492,7 +498,11 @@ def test_a_tp_commit_hashes_its_weights_on_the_device_unless_the_item_says_other
         monkeypatch.setattr(R, name, value)
     seen: list[dict] = []
     monkeypatch.setattr(t, "manifest_global", lambda *a: 0)
-    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.append(dict(t.child_env)) or 0)
+
+    def run_tl(stage, to, log, cmd) -> int:
+        seen.append(dict(t.child_env))
+        return 0
+    monkeypatch.setattr(t, "run_tl", run_tl)
     t.commit()
     assert [e.get(GL.WEIGHTS_HASH) for e in seen] == [mode] and (GL.STARTED in seen[0]) == leased
     assert f"weights hash {mode}" in Path(f"{t.d}/row.log").read_text() and "commit PASS" in Path(f"{t.d}/stages.txt").read_text()
@@ -592,6 +602,7 @@ def test_the_tp_capture_takes_its_lease_before_the_device_and_before_its_engine(
     arguments, the LLM), and no CUDA call of its own before it."""
     src = Path(TPL.__file__).with_name("capture.py").read_text()
     main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    assert main is not None
     marks = ["TPL.acquire()", "case_of(", "LLM(**kw)"]
     at = [main.index(m) for m in marks]
     assert at == sorted(at) and main.count("TPL.acquire()") == 1, dict(zip(marks, at))

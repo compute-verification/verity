@@ -138,7 +138,7 @@ def _check_main(args) -> int:
     sched = step_rows(tok)
     gens = [len(q["generated_token_ids"]) for q in tok["requests"]]
     # ---- 1. structure vs each rank's Build peer-input signature
-    struct = {"pass": True, "per_rank": {}}
+    struct: dict[str, Any] = {"pass": True, "per_rank": {}}
     for r, bdir in enumerate(builds):
         links = read_tp_links(str(Path(bdir) / "tp_links.json"))
         sig = [(ln["kind"], int(ln["shape"][-1])) for ln in links["links"]]
@@ -151,7 +151,7 @@ def _check_main(args) -> int:
             raise SystemExit(f"tp_links of build {bdir}: rank {links['rank']} world {links['world']} != rank {r} of world {world}")
         if any(len(ln["peers"]) != world - 1 for ln in links["links"]):
             raise SystemExit(f"tp_links of rank {r}: a link does not name exactly world-1 = {world - 1} peers")
-        per_step = {}
+        per_step: dict[Any, dict[str, Any]] = {}
         bad = []
         bad_sites = []
         bad_rows = []
@@ -201,7 +201,7 @@ def _check_main(args) -> int:
                            "the step's tokens; the logits all-gather's rows == its sampled rows (required); mid-module all-gather rows == its tokens; nothing else")
     res["structure"] = struct
     # ---- 2. cross-rank provenance on the stored steps
-    prov = {"pass": True, "steps_checked": 0, "collectives_checked": 0, "elements_checked": 0, "all_reduce_checked": 0, "all_gather_checked": 0,
+    prov: dict[str, Any] = {"pass": True, "steps_checked": 0, "collectives_checked": 0, "elements_checked": 0, "all_reduce_checked": 0, "all_gather_checked": 0,
             "mismatches": [], "received_equal_both_ranks": 0,
             # the stored tensors are BOUND to the recorder rows: sha256 of every .pt part / out (the recorder's own bytes rule:
             # contiguous, bf16 viewed as uint8) must equal the row's part_sha256 / out_sha256 at the same (rank, step, k); every mismatch or
@@ -251,10 +251,10 @@ def _check_main(args) -> int:
                 xr, part, out = xs_r[rank][k], parts[rank], outs[rank]
                 for what, t, key in (("part", part, "part_sha256"), ("out", out, "out_sha256")):
                     want = xr.get(key)
-                    got = _sha(t)
+                    sha = _sha(t)
                     prov["tensors_digested"] += 1
-                    if not want or got != want:
-                        _digest_fail(rank, s, k, what, f"stored .pt {what} sha256 {got[:12]} != recorder row {str(want)[:12]} (the arithmetic below runs on bytes the record does not describe)")
+                    if not want or sha != want:
+                        _digest_fail(rank, s, k, what, f"stored .pt {what} sha256 {sha[:12]} != recorder row {str(want)[:12]} (the arithmetic below runs on bytes the record does not describe)")
                 if int(xr.get("k", k)) != k or int(xr.get("step", s)) != s:
                     _digest_fail(rank, s, k, "key", f"recorder row keyed (step {xr.get('step')}, k {xr.get('k')}) at position {k} of step {s}")
             kind = x0[k]["kind"]
@@ -285,7 +285,7 @@ def _check_main(args) -> int:
     prov["mismatches"] = prov["mismatches"][:20]
     res["provenance"] = prov
     # ---- 3. tokens: instrumented == control, per request
-    tk = {"pass": None}
+    tk: dict[str, Any] = {"pass": None}
     if (ctl / "tokens.json").exists():
         c = json.load(open(ctl / "tokens.json"))
         A = [(q["request_id"], q["prompt_token_ids"], q["generated_token_ids"]) for q in tok["requests"]]

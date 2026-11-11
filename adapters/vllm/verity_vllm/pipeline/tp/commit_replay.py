@@ -90,7 +90,7 @@ def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank
         raise Refused(f"{bdir}: its context is pair {ctx['pair']} tp {ctx['tp']}, not pair {pair} rank {rank} of world {dd['world']}")
     row = next((r for r in _rows(out) if r["pair"] == pair and r["arm"] != "control"), None)
     c = ((row or {}).get("commit") or {}).get("per_rank", {}).get(str(rank))
-    if c is None or "replay_deferred" not in c or c.get("commit_pass") is not None and (awaiting or c["commit_pass"] is not True):
+    if row is None or c is None or "replay_deferred" not in c or c.get("commit_pass") is not None and (awaiting or c["commit_pass"] is not True):
         raise Refused(f"pair {pair} rank {rank}: no rank " + ("awaiting its deferred replay" if awaiting else "whose deferred replay is pending or passed")
                       + f" in {out / 'runs.jsonl'}")
     vec = {int(v["rank"]): bytes.fromhex(v["run_root"]) for v in row["commit"].get("commitment_vector") or []}

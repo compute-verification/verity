@@ -28,10 +28,12 @@ def apply(target: Any, execution: str | None) -> tuple[dict[str, str], dict[str,
 def extension(target: Any, want: str | None) -> str | None:
     """The engine's `worker_extension_cls`: `want`, else `engine.int8_ranks.EXTENSION` when ``target`` serves int8 parts (its ranks
     import it before they build the model), else None."""
-    if want is None and getattr(target, "int8_parts", ()):
+    if want is not None:
+        return want
+    if getattr(target, "int8_parts", ()):
         from verity_vllm.engine.int8_ranks import EXTENSION
         return EXTENSION
-    return want
+    return None
 
 
 def as_json(target: Any) -> dict | None:

@@ -195,7 +195,7 @@ def register_post_load_tensors(model: Any, names: list[str]) -> list[str]:
         v = getattr(parent, attr, None)
         if isinstance(v, torch.nn.Parameter):
             continue
-        if not isinstance(v, torch.Tensor):
+        if parent is None or not isinstance(v, torch.Tensor):
             raise TypeError(f"the Build registers the post-load tensor {n!r} as a Parameter; the served model holds no tensor there")
         delattr(parent, attr)
         parent.register_parameter(attr, torch.nn.Parameter(v, requires_grad=False))
@@ -204,6 +204,10 @@ def register_post_load_tensors(model: Any, names: list[str]) -> list[str]:
 
 class TP2CaptureWorkerExtension:
     """Mixed into vLLM's Worker (`worker_extension_cls`); `self` is the Worker of one rank."""
+
+    #: the Worker's own attributes that these methods read
+    model_runner: Any
+    vllm_config: Any
 
     # ------------------------------------------------------------------ topology
 

@@ -13,6 +13,7 @@ import bisect
 import json
 import re
 from dataclasses import replace
+from typing import Any
 
 import numpy as np
 import pytest
@@ -65,7 +66,7 @@ def fused_body(world: int, rank: int):
     return B.finish(Coll(row, second[-1][0].refs))
 
 
-def _fns(sites: TW.Sites) -> dict[str, object]:
+def _fns(sites: TW.Sites) -> dict[str, Any]:
     return {descriptor_id(fn): fn for fn, _ in sites.circuit.templates}
 
 
@@ -190,7 +191,7 @@ def _window(sites: TW.Sites, values: dict) -> I.Window:
     return win
 
 
-def _row(ms, publics: dict, tid: str, unit: int, row: str) -> tuple[object, int, slice]:
+def _row(ms, publics: dict, tid: str, unit: int, row: str) -> tuple[Any, int, slice]:
     """The member holding ``tid``'s unit ``unit``, that unit's global index, and where its row ``row``'s string sits in the
     member's public body."""
     base = min(m.base for m in ms if m.template == tid)
@@ -412,7 +413,9 @@ def test_a_wire_closing_a_cycle_is_refused_and_the_tp_windows_wires_have_none(to
         replace(c, wires=wires)
     with pytest.raises(ValueError, match=r"cycle: wire \d+ .* is on a cycle of templates") as e:
         replace(c, wires=wires, order=None)
-    named = wires[int(re.match(r"cycle: wire (\d+)", str(e.value))[1])]
+    cyclic = re.match(r"cycle: wire (\d+)", str(e.value))
+    assert cyclic is not None
+    named = wires[int(cyclic[1])]
     assert {named.reader, named.writer, ptid, ctid} <= set(str(e.value).split("each reading the next: ")[1].split(";")[0]
                                                          .split(" <- "))
     honest = I.ordered(c.units, c.wires, {})

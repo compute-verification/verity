@@ -25,6 +25,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -87,7 +88,7 @@ def _folded_under(fs: dict, construction: list[str]) -> bool:
         (flag("--moe-construction"), flag("--sampler-construction"), "--registered-values" in construction)
 
 
-def fold_rank(py: str, log: Path, profile: str, out: Path, timeout: int | None, reuse: bool = False, construction: list[str] = ()) -> dict:
+def fold_rank(py: str, log: Path, profile: str, out: Path, timeout: int | None, reuse: bool = False, construction: Sequence[str] = ()) -> dict:
     """The rank's fold under `construction`, the fold worker's flags for the rank's Build (`match.fold_construction_args`); --reuse-fold
     keeps a persisted fold only if it was folded under the same flags."""
     out.mkdir(parents=True, exist_ok=True)
@@ -239,6 +240,7 @@ def _rank_legs(a: Options, r: int, rd: Path, build: Path, derived: list[str], gp
     """The checks of folded rank `r` after its fold, into its record `pr` and `problems`: the compare (X-09 at B>1) and GM-01.  `reuse_legs`
     keeps their written documents (--reuse-legs), only for a rank whose fold was kept: a refolded rank's checks read the new fold."""
     def gm01(x09: list[str] | None = None) -> dict:
+        assert gprog is not None and a.workload is not None
         g = global_match_rank(a.python, rd, Path(gprog), Path(a.workload), a.within_step, a.timeout, reuse_legs, x09)
         print(f"[tp2foldmatch] rank {r} GM-01: {g['verdict']} failed={g['failed_checks']} concurrency={g['achieved_concurrency']} {g['seconds']}s", flush=True)
         return g
@@ -267,6 +269,7 @@ def main(a: Options) -> int:
     cap, out = Path(a.capture), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     coll_dir = Path(a.coll_dir) if a.coll_dir else cap
+    derived: dict[int, list[str]]
     if a.build_rank:
         if a.build_rank0 or a.build_rank1:
             raise UsageError("give either --build-rank DIR (repeated, rank order) or --build-rank0/--build-rank1, not both")
@@ -334,8 +337,8 @@ def main(a: Options) -> int:
     res["rank_workers"], res["fold_workers"] = workers, folds
     with ThreadPoolExecutor(max_workers=max(workers, folds)) as ex:
         per_rank = list(ex.map(run_rank, ranks))          # rank order, whatever the completion order
-    for r, (pr, problems) in zip(ranks, per_rank):
-        res["per_rank"][str(r)] = pr
+    for rank, (pr, problems) in zip(ranks, per_rank):
+        res["per_rank"][str(rank)] = pr
         res["problems"].extend(problems)
 
     # ---- cross-rank check
@@ -345,23 +348,23 @@ def main(a: Options) -> int:
         xr = {"verdict": "FAIL", "failed": ["partner_rank"], "why": f"ranks folded {folded} of {ranks}: the cross-rank check needs every rank's fold"}
     else:
         colls, producers, ferr, rec, links, rec_sha = {}, {}, {}, {}, {}, {}
-        for r in ranks:
-            rd = out / f"rank{r}"
+        for rank in ranks:
+            rd = out / f"rank{rank}"
             fs = _load(rd / "fold_summary.json") or {}
-            colls[r] = list((fs.get("fold") or {}).get("collectives") or [])
-            producers[r] = RM.own_producers_from_record(rd / "instances.jsonl")
-            ferr[r] = int(fs.get("errors") or 0)
-            p = coll_dir / f"coll.rank{r}.jsonl"
+            colls[rank] = list((fs.get("fold") or {}).get("collectives") or [])
+            producers[rank] = RM.own_producers_from_record(rd / "instances.jsonl")
+            ferr[rank] = int(fs.get("errors") or 0)
+            p = coll_dir / f"coll.rank{rank}.jsonl"
             if p.exists():
-                rec[r] = RM.load_recorder(p)
-                rec_sha[r] = hashlib.sha256(p.read_bytes()).hexdigest()      # binds the provenance record to THESE rows
+                rec[rank] = RM.load_recorder(p)
+                rec_sha[rank] = hashlib.sha256(p.read_bytes()).hexdigest()      # binds the provenance record to THESE rows
             else:
-                res["problems"].append(f"rank {r}: no collective recorder rows ({p}); the value check cannot run")
-            lk = links_for_rank(r, builds[r], res["per_rank"][str(r)].get("compare") or {}, derived[r])
+                res["problems"].append(f"rank {rank}: no collective recorder rows ({p}); the value check cannot run")
+            lk = links_for_rank(rank, builds[rank], res["per_rank"][str(rank)].get("compare") or {}, derived[rank])
             if lk is None:
-                res["problems"].append(f"rank {r}: no tp_links.json for the rank Program(s); the link check cannot run")
+                res["problems"].append(f"rank {rank}: no tp_links.json for the rank Program(s); the link check cannot run")
             else:
-                links[r] = lk
+                links[rank] = lk
         prov = None
         if a.tp2_match:
             tm = _load(Path(a.tp2_match))

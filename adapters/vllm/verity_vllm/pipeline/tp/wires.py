@@ -248,6 +248,7 @@ class _Window:
             if l1 >= h1:
                 continue
             dest, m, uw = off + l1 - lo, (h1 - l1) // w, u0 + (l1 - slo) // w
+            why: str | None
             if (l1 - slo) % w or (h1 - l1) % w:
                 why = f"part of {w}-word rows of {tw}"
             elif P % w or dest % w:

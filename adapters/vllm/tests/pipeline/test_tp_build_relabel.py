@@ -54,6 +54,7 @@ def _fake_build(W: int, r: int, out: str, args: tuple, hook=None) -> None:
     pre = copy.deepcopy(res) if emit else None
     write(out, res, rep, rank=r)
     if emit:
+        assert session is not None
         emit_ranks.emit(emit, out, pre, session[0], shards=lambda q: T.embedding_shards(W, q), context=contextlib.nullcontext, post=None,
                         write=hook(out, write) if hook else write)
     res = B._finish(out, res, 0.0)
@@ -175,7 +176,8 @@ class _Row:
     step, request, launch_of, launch_args = TpRow.step, TpRow.request, TpRow.launch_of, TpRow.launch_args
 
     def __init__(self, tmp, W: int, hook=None) -> None:
-        self.W, self.B, self.bdir, self.hook, self.lctx, self.aot = W, 1, f"{tmp}/build", hook, {}, None
+        self.W, self.B, self.bdir, self.hook, self.aot = W, 1, f"{tmp}/build", hook, None
+        self.lctx: dict = {}
         self.marks: list = []
         self.logs: list[str] = []
         self.verdicts: list = []
