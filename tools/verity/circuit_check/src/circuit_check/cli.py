@@ -3,7 +3,7 @@
     circuit-check F32Add_v1 'RMSNormTriton_v1{N=64,EPS=1e-05}'     Definitions
     circuit-check rope-head gemm-coordinate/k64/sm80-mma-bf16       templates, subcircuits
     circuit-check path/to/build_request_LP3_T2                      a served workload's request Program
-    circuit-check verity/ml/circuits/ops/boolean/gf2k.circuit-check.py
+    circuit-check verity/definitions/ops/boolean/gf2k.circuit-check.py
                                                                     the targets a sidecar's bindings reach that its module defines
     circuit-check --all                                             every registered Definition and template (the suite's set)
     circuit-check --as-call --ranges SparseMlaSplit_v1              the spots of a family's RANGES rule (`ranges`)
@@ -214,7 +214,7 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     `targets.call_families`, of this suite), so it is in the target's key rather than a read of its check.  A named by-calls
     root brings the targets its callees rely on (`by_calls.relied_targets`), each checked beside it, so the report holds their
     verdicts (`by_calls.joined`); ``--all``'s are its suite's."""
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.evaluation.reference import resolve
 
     TG.load_registries()
     fresh = CC.tracing()
@@ -408,7 +408,7 @@ def _calls(specs: list[str]) -> None:
     """Whether each Definition target is a Call (`targets.is_call`), resolved once in the process the targets' processes fork
     from, so each takes the answer rather than working it out again.  A target that doesn't resolve, or that `is_call` can't
     decide without the catalog (`targets.Undecided`), is left to its own check, which fails on it by name."""
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.evaluation.reference import resolve
 
     for s in specs:
         kind = TG.kind_of(s)
@@ -1501,10 +1501,10 @@ def _batch_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
     return 1 if bad else 0
 
 
-#: what `prebuild` runs in a process of its own: every C++ model of `verity.ml.definitions.numerics` (`twins.preload`), then the
+#: what `prebuild` runs in a process of its own: every C++ model of `verity.definitions.numerics` (`twins.preload`), then the
 #: registries, which build there whatever else they build on first use
 PREBUILD = ("import json\n"
-            "from verity.ml.definitions.numerics import twins\n"
+            "from verity.definitions.numerics import twins\n"
             "from circuit_check import targets\n"
             "built = twins.preload()\n"
             "targets.load_registries()\n"
@@ -1584,7 +1584,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--shard-dir", type=Path, metavar="DIR", help="with --shard: where its records and manifest go")
     ap.add_argument("--binding", metavar="NAME",
                     help="with --all --catalog-units --cache DIR: key and check only the targets of the catalog binding NAME "
-                         "(`shard.binding`, such as verity.ml.circuits.ops.boolean.gf2k.circuit-check#_gf2k_roots): the list's "
+                         "(`shard.binding`, such as verity.definitions.ops.boolean.gf2k.circuit-check#_gf2k_roots): the list's "
                          "Definitions its roots reach first and the templates it binds, from the bindings' records; exit 1 on "
                          "their own new failures, 2 when the records give no task list")
     ap.add_argument("--slice", type=Path, nargs=2, metavar=("SLICE", "SHARED"),

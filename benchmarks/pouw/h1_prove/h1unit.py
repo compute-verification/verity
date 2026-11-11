@@ -67,18 +67,18 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import salt as PS
-from verity.ml.protocols.pouw.circuit import h1window as HW
-from verity.ml.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.spot.one_stage import partition as P
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.commitments import hm96
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.protocols.pouw.prover.circuit import seeds as SD
+from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.spot.verifier.one_stage import registered as G
 
 HM96 = hm96.SHA512
 SALT_BYTES = 192
@@ -454,7 +454,7 @@ class Shape:
 
     @cached_property
     def layout(self):
-        from verity.ml.protocols.pouw.circuit import h1tile as H
+        from verity.protocols.pouw.prover.circuit import h1tile as H
         return H.Layout(self.r, self.c, self.k)
 
     @property
@@ -493,7 +493,7 @@ class Shape:
 
     def unit(self):
         """The tile unit (`h1window.tile_unit`, over the v1 or v3 H1 tile by `tile`; J10-R's with ``j10r``)."""
-        from verity.ml.protocols.pouw.circuit import h1tile as H
+        from verity.protocols.pouw.prover.circuit import h1tile as H
         if self.j10r:
             return HW._chunked(self.k, HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile5))
         return HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile3 if tile() == "v3" else None)
@@ -609,7 +609,7 @@ def path(lv, index: int) -> list[str]:
 
 
 def verify(dom: CommitmentDomain, root: bytes, index: int, bc: bytes, sibs: list[str]) -> bool:
-    from verity.core.protocols.pouw import core_check as CC
+    from verity.protocols.pouw.verifier import core_check as CC
     return CC.verify_path(dom, root, index, leaves_one(dom, index, bc), [bytes.fromhex(s) for s in sibs])
 
 
@@ -623,8 +623,8 @@ def _frame(ports: list, set_name: str, n: int, bcs: dict[str, list[bytes]]) -> d
     """`circuit.statement`'s frame-v3 entry over given ``b || c`` (the verifier's: it never holds a row) of ``n`` instances,
     each port's tree over its table's rows."""
     from verity_flock import circuit as FC
-    from verity.ml.commitments.frame_v3 import BitRowLeaf, FrameV3
-    from verity.ml.commitments.frame_v3 import Port as FPort
+    from verity.commitments.frame_v3 import BitRowLeaf, FrameV3
+    from verity.commitments.frame_v3 import Port as FPort
     bind, doms = {}, {}
     for p in ports:
         bind[p.name] = identity_digest_sha512(FC.BINDING_TAG, {"set": set_name, "lo": 0, "hi": int(n), "port": p.name, "schema": p.schema})

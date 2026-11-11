@@ -22,7 +22,7 @@ research run --pool proofs --cwd source -- bash benchmarks/multi_unit/job.sh
 
 Its settings are environment variables: `MU_SHAPES` (default `1024:4:4 6144:16:2`), `MU_SELFTEST`, `MU_SELFTEST_ALL`,
 `MU_CASES` and `MU_CACHE` (where the builds are cached). It builds with `benchmarks/pouw/hidden_zk/job.sh` (sourced: flock-circuit,
-the Lean `flock-verify`, a venv with numpy) and builds flock-live's tests from an upstream Flock checkout with `verity/ml/flock`'s patches.
+the Lean `flock-verify`, a venv with numpy) and builds flock-live's tests from an upstream Flock checkout with `verity/protocols/flock/prover`'s patches.
 Results go to `$RESEARCH_RUN_DIR/out`, one directory per shape (`k<K>-n<N>-i<n>/`), and scratch to a temporary directory the job
 removes.
 

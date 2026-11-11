@@ -136,7 +136,7 @@ timing record it is of), and each task is:
 | `argv`, `cwd` | the command `check.py` builds for that part alone (`check.groups`), with `<tree>`, `<cache>`, `<out>` and `<python>` for the tree, the check's cache, the run's output directory and the interpreter; `argv` is null where check can't run it on this tree |
 | `reason` | null, or why `argv` is null: one starting `skipped:` is a skip, any other a failure |
 | `inputs` | `{"closure", "paths"}`: paths and globs from the root that cover what the task reads, and the function that lists them (`suites.inputs_of`, with the runner's files; `lean_audit.inputs`; circuit-check's workspace closure). `["."]` is the whole tree, for a job that declares none |
-| `needs` | the artifacts it reads that another task makes: `lean-build:verity/core/service/flock/.lake/build`, `flock-circuit-build:$FLOCK_CHECKOUT` |
+| `needs` | the artifacts it reads that another task makes: `lean-build:verity/protocols/flock/verifier/.lake/build`, `flock-circuit-build:$FLOCK_CHECKOUT` |
 | `outputs` | the artifacts it makes (a build's) |
 | `deps` | the task ids that must end before it starts (its job's ci.toml `needs` and `after`) |
 | `beside` | the tasks that build what it builds (a spec's audit and the packages its `proved_in` names), so best on one worker; no order |
