@@ -112,9 +112,10 @@ of positions inside a request, and a served prefix-cache hit, are not on this pa
 What a replay costs is measured, and no figure is kept in the tree. `replay.json` holds the served window's seconds
 beside the replay's and the engine's start. `benchmarks/serve_tax/tp_restore.sh` serves, restores a fresh engine from a
 snapshot taken at a window's edge and replays to the next edge; its `restore.json` holds the seconds of the build, the
-restore and the replay. `benchmarks/serve_tax/restore.py` and `rebuild.py` write the replay's busy GPU seconds beside
-serving's for the same steps. The planner prices a sampled replay block's replay from the model's `replay` card
-(`benchmarks/spot_figures/cards/`) in `benchmarks/spot_figures/total_cost.py`.
+restore and the replay. For an engine in one process, `benchmarks/serve_tax/restore.py` and `rebuild.py` also write
+the replay's busy GPU seconds beside serving's for the same steps; a tensor-parallel replay has no such counter. The
+planner prices a sampled replay block's replay from the model's `replay` card (`benchmarks/spot_figures/cards/`) in
+`benchmarks/spot_figures/total_cost.py`.
 
 ## Where to look
 
