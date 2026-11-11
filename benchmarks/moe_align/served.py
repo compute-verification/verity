@@ -21,7 +21,12 @@ row; at the row's own budget the first requests of 256 would finish before the l
   more run of each op under a timing wrap, split into decode and prefill calls.
 
 ``summary.json`` gathers them: per rank the MoE layers whose every call equalled the reference, the paths each rank took in
-prefill and in decode, per batch the TPOT of each op and the paired ratios, and the host cost per call and per decode step.
+  prefill and in decode, per batch the TPOT of each op and the paired ratios, and the host cost per call and per decode step.
+
+With ``--vary-repeats N``, ``vary.json``: at ``--vary-batches`` (default ``--check-batches``), for vLLM's op and then the
+canonical one, each call Marlin makes repeated N more times on its own ``topk_ids`` (`Repeater`): per rank and step kind, the
+calls whose outputs were not all one, among those where some expert holds more than one pair, the outputs that were the
+reference's, and whether every output held the reference's pairs per expert. It runs between the check and the decode phases.
 Exits 3 when a rank does not serve the canonical op or its Marlin experts do not call the module's aligner (`MA.loads_global`,
 the guard `install` holds), an MoE layer's calls miss the op (they reach no `Align`, reach one of vLLM's aligners, or the layer
 made none), a call differs from the reference, or a rank took either path in no prefill step.
@@ -259,6 +264,72 @@ def timer_on(worker: Any) -> None:
     t.hooks.wrap(_site(), MA.NAME, t.wrap)
 
 
+class Repeater:
+    """Calls the op Marlin's experts call ``repeats`` more times on each call's own inputs and records, per call, how many
+    distinct outputs the ``repeats + 1`` gave over what Marlin reads (the first ``total`` slots, their blocks, the total), how
+    many were the reference's, whether each held the reference's pairs per expert (`moe_align.canonical`), and whether some
+    expert holds more than one pair (else the order within an expert is no choice)."""
+
+    def __init__(self, repeats: int, rows: int) -> None:
+        from verity_vllm.engine import hooks
+
+        self.hooks, self.repeats, self.rows, self.calls = hooks.Hooks(), repeats, rows, []
+
+    def wrap(self, orig: Any) -> Any:
+        def moe_align_block_size(topk_ids: Any, block_size: int, num_experts: int, expert_map: Any = None, *a: Any, **k: Any) -> Any:
+            outs = [orig(topk_ids, block_size, num_experts, expert_map, *a, **k) for _ in range(self.repeats + 1)]
+            self.record(topk_ids, int(block_size), int(num_experts), expert_map, outs)
+            return outs[0]
+        return moe_align_block_size
+
+    def record(self, topk_ids: Any, block: int, num_experts: int, expert_map: Any, outs: list[tuple]) -> None:
+        ids = topk_ids.reshape(-1).tolist()
+        ref = MA.reference(ids, num_experts, block, None if expert_map is None else expert_map.tolist())
+        key = (tuple(ref[0][:ref[2]]), tuple(ref[1][:ref[2] // block]), ref[2])
+        got = []
+        for s, b, n in outs:
+            t = int(n.reshape(-1)[0])
+            got.append((tuple(s.reshape(-1)[:t].tolist()), tuple(b.reshape(-1)[:t // block].tolist()), t))
+        held = [sum(1 for p in key[0][j * block:(j + 1) * block] if p < len(ids)) for j in range(len(key[1]))]
+        count: dict[int, int] = {}
+        for e, h in zip(key[1], held):
+            count[e] = count.get(e, 0) + h
+        self.calls.append({"kind": "prefill" if int(topk_ids.shape[0]) > self.rows else "decode", "pairs": len(ids),
+                           "distinct": len(set(got)), "reference": sum(g == key for g in got),
+                           "same_pairs": all(g[1] == key[1] and g[2] == key[2]
+                                             and MA.canonical(g[0], g[1], g[2], block, len(ids)) == list(key[0]) for g in got),
+                           "choice": any(v > 1 for v in count.values())})
+
+
+def summarize_vary(calls: list[dict[str, Any]], repeats: int) -> dict[str, Any]:
+    """By step kind: the calls, those where some expert holds more than one pair (``choice``), those whose ``repeats + 1``
+    outputs were not all one (``varying``), the most distinct outputs of a call, the outputs that were the reference's, whether
+    every output held the reference's pairs per expert, and the fewest pairs of a varying call."""
+    out: dict[str, Any] = {}
+    for kind in ("prefill", "decode"):
+        cs = [c for c in calls if c["kind"] == kind]
+        vary = [c for c in cs if c["distinct"] > 1]
+        out[kind] = {"calls": len(cs), "choice": sum(c["choice"] for c in cs), "varying": len(vary),
+                     "max_distinct": max((c["distinct"] for c in cs), default=0), "outputs": len(cs) * (repeats + 1),
+                     "outputs_reference": sum(c["reference"] for c in cs), "same_pairs": all(c["same_pairs"] for c in cs),
+                     "fewest_pairs_varying": min((c["pairs"] for c in vary), default=None)}
+    return out
+
+
+def vary_on(worker: Any, *, repeats: int, rows: int) -> dict[str, Any]:
+    """On a rank: a `Repeater` over Marlin's `moe_align_block_size`, whichever op it calls now, for a run of ``rows`` requests."""
+    r = _STATE["vary"] = Repeater(repeats, rows)
+    r.hooks.wrap(_site(), MA.NAME, r.wrap)
+    return {"rank": _tp_rank(), "canonical": MA.installed() is not None}
+
+
+def vary_off(worker: Any) -> dict[str, Any]:
+    """On a rank: the `Repeater` uninstalled, and its calls summarized (`summarize_vary`)."""
+    r = _STATE.pop("vary")
+    r.hooks.uninstall()
+    return {"rank": _tp_rank(), **summarize_vary(r.calls, r.repeats)}
+
+
 def timer_off(worker: Any, *, rows: int) -> dict[str, Any]:
     """On a rank: the timing wrap uninstalled; the median, 10th and 90th percentile host µs a call, decode and prefill apart."""
     t = _STATE.pop("timer")
@@ -344,12 +415,12 @@ def main() -> None:
     ap.add_argument("--engine-arg", action="append", default=[])
     ap.add_argument("--rpc-timeout", type=float, default=3600.0)
     ap.add_argument("--dummy-layers", type=int, default=0, help="serve the first N layers with dummy weights (0: the checkpoint)")
+    ap.add_argument("--vary-repeats", type=int, default=0, help="each op's every call repeated N more times on its inputs (0: none)")
+    ap.add_argument("--vary-batches", default=None, help="the batches of the repeat phase (default --check-batches)")
     a = ap.parse_args()
 
     from verity_vllm.engine import engine_profile as prof
     prof.apply_env()
-    from vllm import LLM
-
     from verity_vllm import protocols as PO
     from verity_vllm.engine import served as SV
     from verity_vllm.engine import vllm_adapter as va
@@ -358,11 +429,13 @@ def main() -> None:
     from verity_vllm.pipeline.tp import target as TT
     from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.pipeline.tp.rank_worker import EXTENSION
+    from vllm import LLM
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     check_batches = [int(b) for b in a.check_batches.split(",")]
     batches = [int(b) for b in a.batches.split(",")]
+    vary_batches = [int(b) for b in (a.vary_batches or a.check_batches).split(",")] if a.vary_repeats else []
     wl = va.load_workload(a.workload, None)
     target = PO.commit_guard(va.target_of_workload(wl), world=a.tp, installs=False)
     target_env, target_kw = TT.apply(target, wl["execution"])
@@ -378,7 +451,7 @@ def main() -> None:
         print(f"[moe-align] dummy weights: {dummy}", flush=True)
     else:
         cp = prof.checkpoint_for(case, a.checkpoints)
-    seqs = max(check_batches + batches)
+    seqs = max(check_batches + batches + vary_batches)
     kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=True, tensor_parallel_size=a.tp)
     if dummy is not None:
         kw["load_format"] = "dummy"
@@ -400,7 +473,7 @@ def main() -> None:
 
     va.sampling_params = capped
     sampling = wl["sampling"]
-    reqs = {b: requests_at(wl, b, a.rotate) for b in sorted(set(check_batches + batches))}
+    reqs = {b: requests_at(wl, b, a.rotate) for b in sorted(set(check_batches + batches + vary_batches))}
     start = llm.collective_rpc(status, timeout=rpc)
     engine_kwargs = {k: v for k, v in kw.items() if k not in ("model", "tokenizer", "worker_extension_cls")}
     versions = {"git_head": git_head(), "args": vars(a), "weights": weights, "dummy": dummy, "build_s": round(build_s, 1),
@@ -430,6 +503,21 @@ def main() -> None:
         f"rank {r}: {v['layers_equal']}/{v['layers']} layers equal, {v['calls']} calls, {v['calls_reaching_align']} reaching Align "
         f"{v['align_calls']}, vLLM aligners {v['vllm_aligner_calls']}, {v['paths']}" for r, v in check["ranks"].items()), flush=True)
 
+    vary: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    for b in vary_batches:
+        for op in ("vllm", "canonical"):
+            llm.collective_rpc(use, timeout=rpc, kwargs={"canonical": op == "canonical"})
+            llm.collective_rpc(vary_on, timeout=rpc, kwargs={"repeats": a.vary_repeats, "rows": b})
+            run_workload(eng, reqs[b], sampling)
+            got = vary.setdefault(str(b), {})[op] = sorted(llm.collective_rpc(vary_off, timeout=rpc), key=lambda r: int(r["rank"]))
+            print(f"[moe-align] repeats B{b} {op} x{a.vary_repeats + 1}: " + "; ".join(
+                f"{kind} {sum(r[kind]['varying'] for r in got)} of {sum(r[kind]['calls'] for r in got)} calls vary "
+                f"({sum(r[kind]['choice'] for r in got)} with a choice, at most {max(r[kind]['max_distinct'] for r in got)} distinct, "
+                f"{sum(r[kind]['outputs_reference'] for r in got)} of {sum(r[kind]['outputs'] for r in got)} outputs the reference's, "
+                f"same pairs {all(r[kind]['same_pairs'] for r in got)})" for kind in ("prefill", "decode")), flush=True)
+    if vary:
+        (out / "vary.json").write_text(json.dumps({"repeats": a.vary_repeats, "batches": vary}, indent=1) + "\n")
+
     rows: list[dict[str, Any]] = []
     host: dict[int, dict[str, list[dict[str, Any]]]] = {}
     with (out / "decode.jsonl").open("w") as f:
@@ -458,7 +546,7 @@ def main() -> None:
     (out / "host.json").write_text(json.dumps({str(b): v for b, v in host.items()}, indent=1) + "\n")
     layers = max((v["layers"] for v in check["ranks"].values()), default=0)
     decode = summarize_decode(rows, host, layers)
-    summary = {"weights": weights, "dummy": dummy, "check": check, "decode": decode, "layers": layers, "world": len(topo),
+    summary = {"weights": weights, "dummy": dummy, "check": check, "decode": decode, "vary": vary, "layers": layers, "world": len(topo),
                "guard": all(s["guard"] for s in final), "restored": all(s["canonical"] for s in final)}
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     for b, d in decode.items():

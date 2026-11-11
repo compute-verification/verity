@@ -18,6 +18,11 @@ is for `max * scale` too.
 v14 to v17 are v6 to v9 with the scale word `scale_log2` an input (a `registered_values` program registers it), whose words are
 `value_inputs`' `Attention_v10`, `_v12` and `_v13` and `fa2_check_inf`'s `Attention_v11`: v14 is v10's (v6 with the scale an
 input), v15 v12's (v7), v16 v13's (v9) and v17 v11's (v8), each over its own block and head.
+
+`AttnBlockFirst_v3` and `AttnHeadEnd_v2` are the units `dead_free` cuts a head into, on bits: the first visited key block over
+its NVIS keys alone (`AttnBlockFirst_v1`) and the head's end (`AttnHeadEnd_v1`), beside `AttnBlock_v8` and `_v9` for the
+blocks below the first. Each is a head's own Calls (`_block`, the epilogue) and reads no table, so a unit of one is gates
+alone. They are ``opt_in``: `boolean_version` never picks one, and they serve only a caller that names them.
 """
 from __future__ import annotations
 
@@ -36,6 +41,7 @@ from verity.circuits.boolean.trace import definition, word_of
 from verity.definitions.registry import hopper
 from verity.definitions.registry.b1 import (AttentionHeadV2, AttentionHeadV3, AttentionV2, AttentionV3, AttnBlockV2, AttnBlockV3,
                                              _lane, scale_log2_bits)
+from verity.definitions.registry.dead_free import AttnBlockFirstV1, AttnHeadEndV1
 from verity.definitions.registry.fa2_check_inf import (AttentionHeadV5, AttentionHeadV11, AttentionV5, AttentionV11, AttnBlockV5,
                                                         AttnBlockV11)
 from verity.definitions.registry.fa3_check_inf import AttentionHeadV4, AttentionV4, AttnBlockV4
@@ -120,14 +126,14 @@ FmaRowF32FtzScalar, FmaRowF32FtzElement = EW.shared_operand(
     ("the gates of F32FmaFtz_v3(a, b, c) that read only a, once per row", "F32FmaFtz_v3(a, b, c) from a's own gates"))
 
 
-def _step_row(B, DOT, nv: int, a: Coll, bs: Coll, acc: Coll | None) -> Coll:
-    """One `AttnDotStep` per member of a row that shares ``a`` (its first ``nv`` words): ``bs`` and ``acc`` hold one member
-    each (``acc`` None: from +0), and a's own gates are computed once."""
+def _step_row(B, DOT, nv: int, a: Coll, bs: Coll, acc: Coll | None, axis: int = 0) -> Coll:
+    """One `AttnDotStep` per member of a row that shares ``a`` (its first ``nv`` words): ``bs`` (along ``axis``) and ``acc``
+    hold one member each (``acc`` None: from +0), and a's own gates are computed once."""
     S = {"DOT": DOT, "NV": nv, "FROM_ZERO": acc is None}
     ad = B.call(bind(AttnDotStepA, **S), a)
     if acc is None:
-        return B.batch(bind(AttnDotStep, **S), a, bs, ad, axes=(None, 0, None))
-    return B.batch(bind(AttnDotStep, **S), a, bs, acc, ad, axes=(None, 0, 0, None))
+        return B.batch(bind(AttnDotStep, **S), a, bs, ad, axes=(None, axis, None))
+    return B.batch(bind(AttnDotStep, **S), a, bs, acc, ad, axes=(None, axis, 0, None))
 
 
 def _scale_row(B, xs: Coll, s: Coll, bf16: bool = False) -> Coll:
@@ -151,31 +157,22 @@ def _attention_type(S):
              ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16))))), Array(S.NH, Array(S.D, BF16)))
 
 
-def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, m_prev, l_prev, o_prev, check: bool = True,
-           guard_max: bool = True, scale_log2: Coll | None = None):
-    """One BN-key block of FA2's online softmax for one query row, NVIS visible columns (`AttnBlock_v2` / `_v3`'s body); without
-    ``check`` (`AttnBlock_v5`'s unmasked iteration) the rescale reads the running max as it is, not guarded, and without
-    ``guard_max`` (`AttnBlock_v4`'s) so does `max * scale`. ``scale_log2`` is the scale word when it is an input (v14 to v17's),
-    else the constant `scale_log2_bits(D)`."""
-    if BN % 16 or D % 16 or not 1 <= NVIS <= BN:
-        raise ValueError(f"{name}: BN={BN} and D={D} must be multiples of 16 and 1 <= NVIS={NVIS} <= BN")
-    if FIRST and not check:
-        raise ValueError(f"{name}: the first iteration runs Check_inf (FIRST needs CHECK)")
-    c = _Bits(B)
-    kq = k[0:NVIS].reshape(Array(NVIS, Array(D // 16, A16)))
-    acc = None
-    for t in range(D // 16):
-        acc = _step_row(B, DOT, 16, q[16 * t:16 * t + 16], kq.take(1, t), acc)
-    scores, s = acc, list(acc)
+def _softmax(B, c: _Bits, NVIS: int, FIRST: bool, scores: Coll, m_prev, l_prev, check: bool, guard_max: bool,
+             scale_log2: Coll | None, K: int | None):
+    """A block's online softmax between its scores and its P V steps, ``check`` and ``guard_max`` `_block`'s: the running max,
+    the rescale (none in a FIRST block), P = `ex2(s * scale - max * scale)` and the lane sums, by the scale word ``scale_log2``
+    or, when it is None, the constant ``K`` folded into the gates that read it.  ``(m_new, lanes, bf16(P) by column, the
+    rescale or None)``."""
+    s = list(scores)
     bmax = s[0]
     for j in range(1, NVIS):
         bmax = B.call(BA.F32Max, bmax, s[j])
     m_new = bmax if FIRST else B.call(BA.F32Max, m_prev, bmax)
     m_use = B.call(BA.GuardNegInfZero, m_new) if check or guard_max else m_new
-    K = scale_log2_bits(D) if scale_log2 is None else None
 
     def by_scale(x):
         return B.call(BA.F32MulFtz, x, scale_log2) if K is None else B.call(bind(F32MulFtzConst, K=K), x)
+    scores_scale = None
     if not FIRST:
         scores_scale = B.call(BM.MufuEx2Ftz, by_scale(B.call(BA.F32SubFtz, m_prev, m_use if check else m_new)))
     max_scaled = by_scale(m_use if guard_max else m_new)
@@ -194,7 +191,26 @@ def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, 
     for ln, cs in enumerate(cols):
         for j in cs[1:]:
             lanes[ln] = B.call(BA.F32AddFtz, lanes[ln], p[j])
-    pb = [B.call(BG.F2fpBf16, x) for x in p]
+    return m_new, lanes, [B.call(BG.F2fpBf16, x) for x in p], scores_scale
+
+
+def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, m_prev, l_prev, o_prev, check: bool = True,
+           guard_max: bool = True, scale_log2: Coll | None = None):
+    """One BN-key block of FA2's online softmax for one query row, NVIS visible columns (`AttnBlock_v2` / `_v3`'s body); without
+    ``check`` (`AttnBlock_v5`'s unmasked iteration) the rescale reads the running max as it is, not guarded, and without
+    ``guard_max`` (`AttnBlock_v4`'s) so does `max * scale`. ``scale_log2`` is the scale word when it is an input (v14 to v17's),
+    else the constant `scale_log2_bits(D)`."""
+    if BN % 16 or D % 16 or not 1 <= NVIS <= BN:
+        raise ValueError(f"{name}: BN={BN} and D={D} must be multiples of 16 and 1 <= NVIS={NVIS} <= BN")
+    if FIRST and not check:
+        raise ValueError(f"{name}: the first iteration runs Check_inf (FIRST needs CHECK)")
+    c = _Bits(B)
+    kq = k[0:NVIS].reshape(Array(NVIS, Array(D // 16, A16)))
+    acc = None
+    for t in range(D // 16):
+        acc = _step_row(B, DOT, 16, q[16 * t:16 * t + 16], kq.take(1, t), acc)
+    m_new, lanes, pb, scores_scale = _softmax(B, c, NVIS, FIRST, acc, m_prev, l_prev, check, guard_max, scale_log2,
+                                              scale_log2_bits(D) if scale_log2 is None else None)
     o = None if FIRST else _scale_row(B, o_prev, scores_scale)
     for ks in range(BN // 16):
         k0 = 16 * ks
@@ -503,6 +519,40 @@ def _checked_scaled_attention(B, S, q, kc, vc, scale_log2):
 
 AttentionV17 = _on_bits("Attention", 17, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM"], _scaled(_attention_type),
                         _checked_scaled_attention, AttentionV11)
+
+
+def _first_type(S):
+    return ((("q", Array(S.D, BF16)), ("k", Array(S.NVIS, Array(S.D, BF16))), ("v", Array(S.NVIS, Array(S.D, BF16)))),
+            Tuple(F32, Array(4, F32), Array(S.D, F32)))
+
+
+def _first_block(B, S, q, k, v):
+    """`AttnBlockFirst_v1`'s body on bits: a head's first visited key block over its NVIS = 1 ... BN keys alone, the Calls of
+    `AttnBlock_v8` at FIRST (`_block`, which then reads no running state), its V rows padded with the zero bit to the last
+    k-step it runs and no K row past NVIS. Returns the running state (max, lane sums, O) the next block reads."""
+    pad = -S.NVIS % 16
+    if pad:
+        v = Coll(Array(S.NVIS + pad, Array(S.D, BF16)), concat([v.refs, _Bits(B).zeros(Array(pad, Array(S.D, BF16))).refs]))
+    return _block(B, "AttnBlockFirst_v3", S.D, S.NVIS, True, S.BN, S.DOT, q, k, v, None, None, None)
+
+
+AttnBlockFirstV3 = _on_bits("AttnBlockFirst", 3, ["D", "NVIS", "BN", "DOT"], _first_type, _first_block, AttnBlockFirstV1)
+AttnBlockFirstV3.opt_in = True  # type: ignore[attr-defined]
+
+
+def _end_type(S):
+    return ((("l", Array(4, F32)), ("o", Array(S.D, F32))), Array(S.D, BF16))
+
+
+def _head_end(B, S, l, o):
+    """`AttnHeadEnd_v1`'s body on bits: a head's epilogue (`_head`'s) on its last block's lane sums and O, `bf16(o * INV((l0 +
+    l2) + (l1 + l3)))` with `INV` `Fa2InvSum_v2` or `Fa3InvSum_v2`, the inverse's own gates once for the row."""
+    total = B.call(BA.F32AddFtz, B.call(BA.F32AddFtz, l[0], l[2]), B.call(BA.F32AddFtz, l[1], l[3]))
+    return _scale_row(B, o, B.call(S.INV, total), bf16=True)
+
+
+AttnHeadEndV2 = _on_bits("AttnHeadEnd", 2, ["D", "INV"], _end_type, _head_end, AttnHeadEndV1)
+AttnHeadEndV2.opt_in = True  # type: ignore[attr-defined]
 
 
 #: the FA2 (Ampere mma.sync) and FA3 (Hopper wgmma) bindings of v7's DOT and INV
