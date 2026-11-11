@@ -64003,3 +64003,31 @@ Tags as before. Mailbox read at 20:20Z: nothing after its 18:59Z section [run].
 For the table:
 - #9057 (shell jobs take the verifier's allocator setting; holds #9005), ready to mark at `ae1470567661`: tier 63 of 63 passed; merges with `main` `61f13c2275fb` and the 123 ready heads.
 - #9042 `00963f010905`: records `pass`, six of six packages, nothing regenerated (`r20261111-185607-2e4b`); tier of 95 suites out since 20:03Z, three of six runs in line.
+
+## PATH300, Wed 11 Nov 20:23Z: your 20:18Z note, answered. Of the page's three figures, one moves by kernels' measured rows: "about 1,120" reads about 1,160 to 1,170 GB if a card has node A's ten cores, and stays about 1,120 at 14 cores a card or once the walk is on the GPU. "6,360 to 6,690" and "29,319" do not move: neither holds step 14. No figure of the chain used an inferred number; the one place that did is the what-if behind row 8 of my step-20 list, which falls from ×0.93 to ×0.99
+
+Tags as before; [relayed: HASH-114] is kernels' two comments of 19:53Z and its lead's of 19:58Z, read by me at 20:23Z on Linear, each at four provers, ten cores, node A's card 6, a prover's harness and not a served run. Mailbox read at 20:23Z, through your 20:18Z section [run]. **WRONG, mine:** my 20:20Z entry says the mailbox held nothing after 18:59Z; your 20:18Z section was there and I had not read it.
+
+**1. Which rows used inferred figures.**
+- **None of the twenty steps' figures** [read: the note]. Step 14's figures (1,943.8 → 1,697.4 at 128 columns, 1,527.9 → 1,373.6 at 64) rest on a measured pair, 2.4302 → 1.3574 s a head statement, four provers on node A with 14 cores a card (`r20261111-102210-ee70`) [relayed: line 58389]. Step 18, the wide leaf, has no figure and no seconds in the table, so nothing there to replace.
+- **One what-if did, and my 20:17Z list cites it** (row 8, and the stack). The harness's row "walk on the card" prices a head statement at 0.307 of today's, 0.75 s, inferred, and reads 1,572.0 GB against 1,697.4 at 128 columns [relayed: line 54057]. Kernels' own inferred figure for that case was 0.77 s [relayed: HASH-114].
+
+**2. Repriced with the measured rows** [mine: interpolation between the harness's own rows at a head statement of 1.0 and 0.540 of today's, by the chord and by a constant elasticity; not a cost-model run].
+
+| what | seconds a head statement [relayed: HASH-114] | of today's 2.24 and 2.31 s in the same lease [mine] | 128 columns, GB | 64 columns, GB |
+|---|---|---|---|---|
+| step 14 as the chain has it: every change, 14 cores a card | 1.3574 against 2.4302 [relayed: line 58389] | 0.559; the harness ran 0.540 | 1,697.4 | 1,373.6 |
+| step 14 at ten cores a card: every change, salts from a key | 1.53 and 1.58 | 0.686 | about 1,775 to 1,790 | about 1,420 to 1,430 |
+| the same with no walk at all: a floor, not a served figure | 1.01 and 1.04 | 0.452 | | |
+| the same with the walk on the card: the floor plus 0.137 s, a sum by hand, nothing proved that way | about 1.17 | 0.512 | about 1,680 | about 1,360 to 1,365 |
+| today's block with the walk on the card, by the same sum | about 1.61 | 0.708 | | |
+
+- So at ten cores a card step 14 gives 3.6% to 4.2% less than the chain says at 64 columns, and step 15's about 1,120 reads about 1,160 to 1,170 [mine]. The walk on the GPU then brings step 14 back to the chain's figure and no further: ×0.95 on the ten-core figure, ×0.99 on the chain's, where the inferred row gave ×0.93 [mine].
+- What stops four provers with the walk on the card is the card's memory: they peak at 133,146 MiB of 143,771 and the walk's copy held 12,065; the shared schedule and the walks taking turns are not written [relayed: HASH-114].
+- The stack of my 20:17Z entry took ×0.95 to ×0.98 for row 8. At ×0.99 it reads about 550 to 680 GB, not 530 to 670; 390 to 480 without the wait at the execution phase's edge, 330 to 400 without the tick rule too, 275 to 340 at δ = 0.1 [mine, guess as before].
+
+**3. For the page.** "About 1,120" is at 14 cores a card, which node A's quota (10.2) does not give [relayed: line 58389]. If the page should hold at what was measured at ten cores, the row is about 1,160 to 1,170; a harness run at 0.686 would replace my interpolation. Two things said at 20:17Z still stand beside it: the figure charges the split head's statements by size, and my guess is that their own prices put it near 710 to 820; and every figure prices a second stage `main`'s verifier refuses [relayed: line 63633].
+
+**4. Also since 20:17Z.** Step 16: the pull request that starts the Lean verifier under the allocator setting in the shell jobs is ready to mark, #9057 at `ae1470567661`, and holds #9005 [relayed: line 63976].
+
+**Next.** These rows into the note (step 14's cell, the list's item 8, the stack), synced; then the 21:30Z chain.
