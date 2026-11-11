@@ -279,7 +279,7 @@ def test_a_passed_check_with_nothing_contradicted_is_passed(tmp_path):
 def test_a_failed_check_names_each_failed_step_and_suite(tmp_path):
     got = read(tmp_path, "failed")
     assert got == N.Read("failed", "failed steps: `pytest`, `lean-audit`; failed suites: `tools/research`, "
-                         "`verity/core/service/flock`. No cached pass is contradicted.", 95)
+                         "`verity/core/service/flock`. Its result names no cached pass it contradicts.", 95)
 
 
 def test_a_cached_pass_the_run_contradicts_outranks_the_verdict(tmp_path):

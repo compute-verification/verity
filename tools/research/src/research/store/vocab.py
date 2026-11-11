@@ -441,9 +441,10 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "the after-landing run's verdicts with the executor's ({check, graph, run, units, agree, disagree: [{unit, old, executor}], "
        "pending, missing, executor_only, error, incomplete}); `research queue shadow-report` reads it"),
     _k(NIGHTLY_CHECK, GROUP_VERIFICATION, ENUM, "on commit:<sha>, by the control pod's nightly loop: what the uncached check of "
-       "that commit of main (`check.py --no-cache`, every path counted as changed) said, with its run as the ref: passed, with "
-       "no cached pass contradicted; contradicted, a cached pass answers for something it failed; failed, with none "
-       "contradicted; error, no verdict (it never started, timed out or was lost)", NIGHTLY_CHECK_OUTCOMES),
+       "that commit of main (`check.py --no-cache`, every path counted as changed) said, with its run as the ref: passed, and "
+       "the check named no cached pass it contradicts; contradicted, it named one, a cached pass that answers for something "
+       "it failed; failed, and it named none; error, no verdict (it never started, timed out or was lost)",
+       NIGHTLY_CHECK_OUTCOMES),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),

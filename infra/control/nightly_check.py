@@ -25,10 +25,11 @@ stopped and nothing is launched or posted twice:
               `nightly_check` on `commit:<sha>` with the run as its ref. One that fails is tried again each pass until the
               next night is due.
 
-The outcomes: `passed`, the check passed and no cached pass was contradicted (one line, ringing nobody); `contradicted`, a
-cached pass answers for something the uncached run failed, whatever the check's verdict (check records a contradiction only
-for a suite that failed fresh); `failed`, the check failed and contradicted nothing; `error`, no verdict: the run never
-started (slot.py's exit 75), timed out, was refused or lost, or nothing was launched. The state's `last` is the newest
+The outcomes: `passed`, the check passed and its result names no cached pass it contradicts (one line, ringing nobody);
+`contradicted`, its result names one, a cached pass that answers for something the uncached run failed, whatever the check's
+verdict (check records a contradiction only for a suite that failed fresh); `failed`, the check failed and names none;
+`error`, no verdict: the run never started (slot.py's exit 75), timed out, was refused or lost, or nothing was launched. A
+pass says what check's own `--no-cache` and `cache_contradictions` say, and no more than they cover. The state's `last` is the newest
 outcome and when it was read, which the monitors' `nightly-check` reads to ring infra when there has been none for 36 h.
 
 The first pass on a pod starts no night for a day whose hour has passed: its first night is the next one.
@@ -59,7 +60,7 @@ from research import monitors, slack
 from research.jobs import dispatch
 
 SCHEMA = "verity/nightly-check/v1"
-STAMP = "%Y-%m-%dT%H:%M:%SZ"
+STAMP, iso = monitors.STAMP, monitors.iso       # the state's times, as the monitors' nightly-check reads them
 URL = "https://github.com/compute-verification/verity.git"
 HELPER = "!/data/infra/gh_app_token.sh git"     # hands git the App's token when git asks: never in a config or an argument
 CHECK = "tools/verity/check/check.py"
@@ -104,10 +105,6 @@ class Read:
 
 def log(msg: str) -> None:
     print(f"{time.strftime(STAMP, time.gmtime())} {msg}", flush=True)
-
-
-def iso(t: float) -> str:
-    return time.strftime(STAMP, time.gmtime(t))
 
 
 def at(stamp: str) -> float:
@@ -156,7 +153,7 @@ def judge(s: dict, result: dict, suites: list[dict], cfg: Settings) -> Read:
             return Read("contradicted", f"the uncached check {ob.state}, and a cached pass answers for what it failed, so a cache "
                         f"key misses an input or a test isn't a function of its inputs: {tests}{more}." + (f" Its {failed}" if failed else ""),
                         minutes)
-        return Read(ob.state, f"{failed} No cached pass is contradicted." if failed else "", minutes)
+        return Read(ob.state, f"{failed} Its result names no cached pass it contradicts." if failed else "", minutes)
     if rc == monitors.NOT_STARTED:
         why = f"it never started: no slot of `{cfg.on}`'s `{cfg.pool}` pool took it (exit {rc}), so nothing was checked"
     elif s.get("class") == "STAGE_TIMEOUT":
