@@ -53183,3 +53183,24 @@ For the table:
 - Nothing else of mine moves: #8906 is ready to mark at `e7b2e51d928b1b02e63531c2b849493c6abd2367` (my 12:04Z entry) [run].
 
 For the table: nothing moves; credit the reading "at `code h` every opening is under the run's roots and `ReadsInterior` holds nowhere" to ATTACK 11:35Z, and "so `Addresses h` is false at a registration with a checked interior row" to two readings, mine (11:56Z) and ATTACK's (12:01Z) [read].
+
+## TWOPROVE, Wed 11 Nov 12:07Z: `Addresses h` at a wired input is NOT satisfiable, by my reading, wherever an accepted run checks a reader whose wired input round 2 reads off the interior record. #8941's records run and quick tier are launched at b29929d015e4, and no head moved
+
+Tags: [run] a command I ran now, [read] a file I read now, [relayed] another worker's statement I did not check, [derived] my reasoning. Times from `date -u`.
+
+**Your 12:03Z question, three lines** [read at `b29929d015e4`: `SlotsAt.lean:130-160, 322`, `Reveals.lean:45-54`, `RevealAt.lean:321`, `FrameIsAt.lean:37-63`, `Code.lean:155-197, 336-340`, `Definitions/Claims/Sampling.lean:158-161` and `Spot/Bits.lean:237-306`].
+1. **No, at a reader whose wired input round 2 reads off the interior record** (a port no link names, which the interior record has: its writer's output port). At `code h` that input is the reader's own source gate, lowered to `.input` (`keyProg`'s `wire`, `lower`). So `Boundary` is true in every block, `rootsAt`, and so `CheckedRun.roots`, give `s.roots`, and `ReadsInterior` fails on its `Boundary r.rb g = false` [read].
+2. **`ReadsRegistered` then needs `s.roots = readRoots … = irootsOf m₁ ρ`**, since `readsInterior` is true. `portRoots` of the boundary record is 1 + 4k messages and `irootsOf` is 3 + 4k′ or none, so they are never equal. No address holds at that gate, and `Addresses h` is false as soon as one `Ok` run checks such a reader [read, derived]. This agrees with EXTFORM 11:56Z and ATTACK 12:01Z, and I read every link above myself.
+3. **Not refuted by these definitions:** a wired value round 2 reads off the boundary record (a link, or a writer's port the boundary registration holds), and a registration where no `Ok` run checks a reader. To say yes there I would have to read `RowAt`, `Counted`, `regNamed` and `SecondStage.readOk` against a registration's layout, and `SitsAt.closed` for the members, which I took from EXTFORM and ATTACK [relayed].
+
+**#8941** [run]:
+- **Launched at `b29929d015e4`**, at 12:04Z on vy-nebius-cpu-9 (`--on auto`): records `r20261111-120440-bcfe` and quick tier `r20261111-120447-48e3`. `main` is not merged in (your 12:03Z).
+- **The body now says:**
+  - the runs are out;
+  - `main` `86c03d1840cb` merges clean;
+  - 15 open PRs are ancestors, and #8827, #8820, #8785 and #8512 have landed;
+  - `hS` is false at such registrations, so there the theorem holds from a false premise.
+- Its ready line follows as its own entry when both runs pass.
+- The M = 1 corollary is not written.
+
+**#8931**: its ready line is posted at 12:03Z (inbox commit `8ff9cad68b`), and its head is unchanged [run].
