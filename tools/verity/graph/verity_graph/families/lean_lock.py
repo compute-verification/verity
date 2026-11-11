@@ -3,7 +3,7 @@ which recomputes the records of the guarantees its lock lists from the package's
 committed lock (`runners/lean_lock.py`).
 
 Its records read the builds of the packages `lean_changed.closure` names: the package, those it requires by path, and those
-its `proved_in` names with theirs (Security's records read Security/Proofs, which requires the Flock verifier). Its inputs
+its `proved_in` names with theirs (Security's records read security/Proofs, which requires the Flock verifier). Its inputs
 are every file an audit of the package can read, those packages' and the auditor's (`lean_audit.inputs`), and it reads
 every part of each of their modules that has a task (`lean_module.reads` at ALL: its `olean`, and every part of a `module`
 file, since the audit loads them at the private level, where a definition's body is), so a change to any of them reruns

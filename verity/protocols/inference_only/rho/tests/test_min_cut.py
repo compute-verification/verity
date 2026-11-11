@@ -17,13 +17,13 @@ from rho.scenario import build
 
 ROOT = Path(__file__).resolve().parents[5]
 REG = Registry.load()
-LOCK = json.loads((ROOT / "Security" / "lean-audit.json").read_text())
+LOCK = json.loads((ROOT / "security" / "lean-audit.json").read_text())
 
 
 def lean_text(name: str) -> str:
     """The Lean file that defines `name`, the one module whose definitions the lock lists it among, as one line."""
     (module,) = (m for m, read in LOCK["reads"].items() if name in read["definitions"])
-    return " ".join((ROOT / "Security" / f"{module.replace('.', '/')}.lean").read_text().split())
+    return " ".join((ROOT / "security" / f"{module.replace('.', '/')}.lean").read_text().split())
 
 
 #: Lean's `alphaHE` and `shareF` as their file defines them, and both conjuncts of `HE` and `HEShared` as theirs
