@@ -632,3 +632,20 @@ not a commit of `main` (#8741 is open). Then the 01:50Z order: 2 and 4 provers a
   timed then.
 - Card 0 is never yours. Card 3 with cores 0-11 is yours only until 04:00Z; after that its slot's cores come from
   24-47.
+
+## Wed 11 Nov 02:50Z: node A ends Sat 14 Nov 08:07Z. Before your hours end, say what of kernels' on it must be kept
+
+top (INF-682, 02:49Z): the node's lease ends Sat 14 Nov 08:07Z and the pod ends with it. A walk tonight found
+`/dev/shm/kernels-ksteady` (27.6 GiB, live) and five job directories of kernels' (18.8 GiB). Each lane says by
+Fri 13 Nov 02:00Z, for each directory, whether it is in the store, regenerates, or needs preserving.
+
+- **Before you end this turn** (by Wed 11:45Z; it does not come before a timed row): one comment on INF-682
+  (`research msg linear comment INF-682 TEXT --as kernels --worker KSTEADY`) with a line a directory for
+  everything of kernels' on the node, yours, KHSHARE's and KMOVE's (`/dev/shm`, the runs' directories, `/tmp/km`):
+  its size, what it holds, and one of: in the store (the art ids or run ids), regenerates (the command and how
+  long), needs preserving. Say which directories the walk named are not kernels'.
+- **Preserve what needs it** in the store the same day, and say its art id there. A row's records are what
+  matters; a staged statement regenerates. Delete nothing you may still time from: kernels has the node again Wed
+  18:15Z to Thu 00:00Z if the order is not finished.
+- **It also means:** rows not timed on this node by Sat 08:07Z are not timed on it at all. Keep to benchmarks'
+  order, and say in your final message what of it is left.
