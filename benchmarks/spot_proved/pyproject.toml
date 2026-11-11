@@ -10,12 +10,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # hold to the numpy model of FlashInfer's kernel (`tp_allreduce_check`); verity_vllm's imports reach the one-stage protocol and
 # verity.ml's commitments, crypto, windows and the tc kernel; capture.py's site copies the SHA-512 header its device kernel
 # includes
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/definitions",
-          "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness/__init__.py", "verity/ml/windows",
-          "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py", "verity/ml/kernels/sha512.cuh",
-          "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",
-          "verity/core/protocols/record.py", "verity/core/claims/__init__.py", "verity/core/protocols/spot/__init__.py",
-          "verity/core/protocols/spot/one_stage", "verity/core/protocols/spot/service.py",
-          "verity/core/protocols/spot/coins.py", "verity/core/protocols/spot/challenger.py",
-          "verity/core/protocols/spot/remote.py", "verity/core/protocols/spot/second_stage.py",
-          "verity/core/protocols/spot/schedule.py", "integrations/vllm/verity_vllm"]
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/circuits", "verity/definitions",
+          "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness/__init__.py", "verity/commitments/windows",
+          "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "verity/definitions/kernels/sha512.cuh",
+          "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/protocols/spot/verifier/profile.py",
+          "verity/hardware/record.py", "verity/claims/__init__.py", "verity/protocols/spot/verifier/__init__.py",
+          "verity/protocols/spot/verifier/one_stage", "verity/protocols/spot/verifier/service.py",
+          "verity/protocols/spot/device/coins.py", "verity/protocols/spot/device/challenger.py",
+          "verity/protocols/spot/device/remote.py", "verity/protocols/spot/verifier/second_stage.py",
+          "verity/protocols/spot/verifier/schedule.py", "adapters/vllm/verity_vllm"]
