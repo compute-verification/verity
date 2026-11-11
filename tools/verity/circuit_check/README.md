@@ -4,6 +4,20 @@
 template or one of its subcircuits, a served workload's request Program, and their Boolean lowerings. A change that adds or
 modifies a circuit puts its report in the PR, and `check` runs `circuit-check --all`.
 
+## Interface
+
+- **Provides:** the `circuit-check` command (`circuit_check.cli:main`) and its report. `targets` (what a target string
+  names) and `structural` are imported as modules too.
+- **Loaded by:** `check`, which runs the command and plans it by target (`tools/verity/check/plan.py`); the benchmarks
+  that stage or lower a catalog target (`benchmarks/one_stage`, `benchmarks/proof_throughput`, `benchmarks/served_units`,
+  `benchmarks/unit_lowering`); Flock's pod catalog (`verity/protocols/flock/pod/catalog.py`); and a migration tool under
+  `adapters/vllm/tools`.
+- **Loads:** every Definition module's sidecar and pins, `verity.circuits`, `verity.definitions` and Flock
+  (`verity_flock`), and the vLLM integration (`verity_vllm`), imported only inside the functions that read its frontend
+  vocabularies, a request Program or its batch templates.
+
+## Commands and modules
+
 ~~~sh
 uv run circuit-check F32Add_v1 'RMSNormTriton_v1{N=64,EPS=1e-05}'    # Definitions, at a binding
 uv run circuit-check MODULE.circuit-check.py                         # what a sidecar's bindings reach in its module
@@ -28,7 +42,7 @@ from the result cache (`--no-cache` checks it now). It needs about 24 GB a proce
 | `block_held.py` | the Definitions past the Flock block that the report holds rather than fails, each with why; it only shrinks: a held one that fits, or that the whole catalog no longer checks, fails |
 | `bodies.py` | a composite's evaluation and its non-constant gates, body by body |
 | `targets.py` | what a target string names, and the catalog `--all` runs over |
-| `sidecars.py` | each Definition module's bindings and pins, in its `<module>.circuit-check.py` and `.circuit-check.json` |
+| `sidecars.py` | each Definition module's bindings and pins, in its `<module>.circuit-check.py` and `.circuit-check.json`, and where they are found |
 | `ranges.py` | a family a sidecar registers over a range of statics (`RANGES`), checked at its spots (`--ranges`), and the report's `ranges` |
 | `vectors.py` | the edge and seeded random input vectors |
 | `structural.py`, `ambient.py`, `by_calls.py` | `--structural`, `--ambient`, and a Program root checked by its calls alone |
@@ -39,3 +53,8 @@ from the result cache (`--no-cache` checks it now). It needs about 24 GB a proce
 `heavy.json` holds the peak memory, in GiB, of each target that grows past 3 GiB: the `--all` scheduler reads it to
 decide which targets run side by side, never what a check computes. A new Definition gets a binding in its
 module's sidecar: the suite fails any registered Definition family the catalog doesn't reach.
+
+circuit-check imports `verity` and Flock, and no integration. A package under `adapters/` registers itself by a
+sidecar of its own module (`<package>/__init__.circuit-check.py`), and then its sidecars are found like `verity`'s. What
+a check needs of the integration is in that sidecar: the frontend vocabularies' kinds (`_vocabulary_roots`) and the
+reader of a request Program (`request_program`).
