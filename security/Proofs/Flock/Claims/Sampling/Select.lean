@@ -18,6 +18,7 @@ public import Proofs.Flock.Claims.Sampling.Select.SecondUnits
 public import Proofs.Flock.Claims.Sampling.Select.SecondLaw
 public import Proofs.Flock.Claims.Sampling.Select.SecondSample
 public import Proofs.Flock.Claims.Sampling.Select.SecondFormed
+public import Proofs.Flock.Claims.Sampling.Select.SecondFirst
 
 /-! The deployed sampled verifier's sample (`Spot.Slots.select`) against the claims' `P_a`: a sequential sample's
 stopping-time bound (`Select.Seq`); the sample's coins read in order and its sampling design's stages (`Select.Take`); a subset sample
@@ -30,10 +31,11 @@ verifier's partition as the claims' slots (`Select.Layout`); `Select.select`'s s
 program part as five refusals of the verifier's evaluation, each needed (`Select.Refusals`); and `secondMisses`, which
 proves `Properties.Spot.SecondMisses`, the two-stage rule's second stage (`Select.Second`), with its honest
 and nontrivial lemmas (`Select.SecondWitness`); and the units a stratified or work sample returns: ascending, in its
-strata, each stratum's count of them (`Select.SecondUnits`); and the second stage's law as a sampling design on its
-cells, with the chance its units are not sampled on a stream holding the bytes its strata read first
-(`Select.SecondLaw`); the sample object the second stage builds from its units passing `Draw.checkDraw` under a
-well-formed law (`Select.SecondSample`); and that law well formed wherever `secondProblem` passes, so the second
-stage refuses with at most that chance (`Select.SecondFormed`). -/
+strata, each stratum's count of them (`Select.SecondUnits`); the second stage's sampling design on its cells, with the
+chance its units are not sampled on a stream holding the bytes its strata read first (`Select.SecondLaw`); the sample
+object the second stage builds from its units passing `Draw.checkDraw` under a well-formed sampling design
+(`Select.SecondSample`); that sampling design well formed wherever `secondProblem` passes, so the second stage refuses
+with at most that chance (`Select.SecondFormed`); and a uniform subset sample as a replay sample `secondProblem`'s first
+test passes (`Select.SecondFirst`). -/
 
 @[expose] public section
