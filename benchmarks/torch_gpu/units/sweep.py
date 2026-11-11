@@ -76,11 +76,11 @@ def model(op: int, i: np.ndarray) -> np.ndarray:
     if op == 8:
         return W.bf16(W.fadd(W.widen(i >> np.uint32(16)), W.widen(i & np.uint32(0xFFFF)))).astype(np.uint32)
     if op == 9:
-        from verity.ml.circuits.ops import mufu
+        from verity.definitions.ops import mufu
         return mufu.mufu_rsq_words(i, mufu.table("rsq"))
     if op == 10:
-        from verity.ml.circuits.evaluation import evaluate_batch
-        from verity.ml.circuits.ops import mufu
+        from verity.circuits.evaluation import evaluate_batch
+        from verity.definitions.ops import mufu
         return np.asarray(evaluate_batch(mufu.RsqrtApprox, i), np.uint32)
     raise ValueError(f"no sweep op {op}")
 
