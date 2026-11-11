@@ -38942,3 +38942,67 @@ Logs: `search-main-vs-branch-vs-closed.log`, `spy-*.log`, `reach-planner-into-op
 
 - I launch no second records run. `0324` holds a check slot and a Lean audit slot beside it; I do not know why that turn launched it (your 02:33Z condition for a PR was "the Lean check of `Security/Proofs` passes at your head"). It is 55 minutes in, so I leave it; say the word and I cancel it.
 - Linear: [read: PRF-540's comments] my last comment there is 02:19Z, and every comment of mine is by `Verity Asks`, so none went through the connector. What the lost turn did there I can only read off that list: nothing.
+
+## PRF-502 SERVEDCARD (bc-013624b7), Wed 11 Nov 05:12Z: proofs' four provisional rows on node A, Thu 21:00Z to Fri 06:00Z, are on the calendar (`dbd23adb90`); both run plans below; LEAN-249 next
+
+**What the stop cost:**
+- Your 04:21Z brief never reached me. My transcript's last message from you is 03:54Z, and I ended my turn with job D's entry at 04:03Z.
+- The VM was reset (up since 05:03Z). My unpushed 04:05Z checkpoint note was lost; nothing else was.
+- Launched: nothing, anywhere.
+- Checkpoint `lanes/proofs/20261111T0512Z-checkpoint-servedcard-plans.md`, pushed with `research notes sync --path lanes/proofs`.
+
+**Node A's calendar: four PROVISIONAL rows of proofs'**, booked in `calendars/node-a.md` at 05:11Z. No run starts before your go on INF-682.
+
+| start | end | cards | cores | what | waits on |
+|---|---|---|---|---|---|
+| Thu 12 Nov 21:00Z | Fri 13 Nov 00:30Z | all; 1–7 released when the Commit passes | 0–63 | **The fused cut served:** tables, TP8 Commit, then six members staged and proved on card 0 | #8454 on `main` |
+| Fri 00:30Z | Fri 03:00Z | none | 0–47 | The fused Commit's deferred replay, if not done by 00:30Z | the Commit |
+| Fri 00:30Z | Fri 04:30Z | none | 48–95 | **The overhead run's CPU staging**, head blocks first | its commit: circuits' `_v2` sparse attention blocks and #8741 on `main` |
+| Fri 04:30Z | Fri 06:00Z | all | all | **The overhead run's GPU window**, a 90-min lease | the staging |
+
+- Fri 06:00Z to 20:00Z stays free for one retry of either run. I didn't book it.
+- One thing for you: the first row starts Thu 1 PM PST, five hours before your Thu 6 PM PST confirmation. If you must confirm before a row starts, the same rows fit from Fri 02:00Z to 11:00Z, leaving 9 h for a retry before vllm's Fri 20:00Z row. Say so and I move them.
+
+**The fused cut's plan** (`proofs/spot-fused-cut-served`; what is left: the serving change on `main`, a vLLM-served run whose replay check passes, the Lean verdict on its sessions, and the cost table priced from it)
+
+| step | what runs | on what | how long | waits on | gives the Goals page |
+|---|---|---|---|---|---|
+| 0 | #8454 crossed and landed; the run cut from that `main` | — | — | #8454 (marked, admitted; ci crosses it) [read] | "the serving change on main" |
+| 1 | `verity-vllm tp-register-tables` for eight ranks under a fresh key, kept on node A; the old key goes with the pod | node A CPU | about 4 min: 27 s a rank on 9 Nov [read] | step 0 | — |
+| 2 | The TP8 Commit: `row run --stages commit` with `SERVING_ROWS` (`glm53_fused_tp8.py`'s partition), `SERVING_ROWS_TABLES[_KEY]` and `REPLAY_DEFERRED=1`; the sealed bundles are kept this time | node A, eight H200s, cores 0–63 | 48.5 min of all cards for Tue's retry, 05:00:10Z to 05:48:36Z, of which committing was 28.75 min [read]; a second try fits the row | steps 0 and 1 | "a run served by vLLM" (see the caveat below) |
+| 3 | The Commit's deferred C2 replay from its bundles: the Commit's verdict | node A CPU, cores 32–63, then 0–47 | unknown: it has never run on a GLM-5.3 TP8 Commit; 1–4 h [guess] | step 2 | "whose replay check passes" |
+| 4 | `stage_window.py`: the six members (four fused types and two scale reads) as statements | node A CPU, cores 0–31, `/dev/shm` | about 10 min; 28 GB peak at four at once [read] | step 2 | — |
+| 5 | `server_rate.py` at K = 1, 2, 4, 32 timed sessions a K, as G2; the scale reads too if #8771 is on `main`, else they stay bounded at 4.1–4.5% | node A, card 0; 33 GiB host memory at one prover, 127–133 GiB at four [read] | about 32 min, as G2 [read] | step 4; #8425 then #8771 for the scale reads | the fused price on served values, at 1, 2 and 4 provers |
+| 6 | The Lean verifier on the kept sessions | cpu-12 | hours [guess] | step 5, and the Lean verifier taking each block's program (the overhead goal's blocker) [read] | "the Lean verifier's verdict on its sessions" |
+| 7 | The cost table priced from steps 3–6 | proofs, no machine | — | steps 3–6 | "the cost table priced from it" |
+
+**Caveat on "served by vLLM":**
+- This run is the row driver's `tp-commit` on stock vLLM's engine, the same path as Tue's retry.
+- vLLM's OpenAI serve loop commits no serving rows, and `config.py:704` calls `SERVING_ROWS` "opt in, never the record" [read: FUSEDSERVE's 9 Nov 19:20Z note; `adapters/vllm/verity_vllm/config.py:704`].
+- The goal says Tue's request was "committed by a test driver, not by vLLM's server".
+- If the Goals page needs the serve loop itself, nothing on `main` can produce that run, and this plan does not deliver it. That is vllm's code to write.
+
+**The overhead run's plan** (`proofs/spot-overhead-measured`), my Tue 02:45Z plan moved to the new rows. It includes the head block, which kernels name as 91.5% of proving.
+
+| step | what runs | on what | how long | waits on | gives the Goals page |
+|---|---|---|---|---|---|
+| 0 | The run's commit on moved `main`, plus a units file of about 95 statements of about 52 types. It holds `SparseMlaHeadBlock_v2` NVIS=64 with FIRST false and true, and NVIS=1 FIRST, with Window 1's measured seconds as `WIN_SECONDS` [read: plan] | proofs | by Thu 12:00Z | `circuits/glm-sparse-attention-zk` (Wed 10 AM PST, on track); #8741 (marked) [read] | — |
+| 1 | `window.py stage`: the two NVIS=64 head blocks first. Rows 1 and 2, already in node A's `/dev/shm`, are reused through `WIN_ALSO` if the commit gives the same pins (`4b31e7caba011398`, `be5bca5c30515dc4`) [guess], and restaged otherwise. `ks_form.py` checks every statement. | node A, cores 48–95, nice 19, at most 600 GB counting about 330 GB of `/dev/shm` [read: plan] | about 4 h [read: plan]; a head block alone is 73–76 min at 194.67–202.64 GiB [run] | step 0 | the statement list, each with its form verdict |
+| 2 | `window.py prove`: eight groups balanced by measured seconds, unmeasured statements first, every session kept (`out/kept/`) [read: `window.py` on `main`] | node A, eight H200s, a 90-min lease | about 430 GPU-min, or 55 min balanced [read: plan]; a cold head block about 15 min [guess] against 2.24–2.86 GPU-s a statement warm [read: KSTEADY] | step 1 | the proving cost of every served block type, with Flock's verdict |
+| 3 | The Lean leg (VERIFYFAST-B) over the kept records: a verdict a statement, CPU-s, peak RSS | cpu-12 | about 8.5 h [read: plan]; Fri 06:00Z to about 14:30Z | step 2; #8425 for templated statements; the Lean verifier taking each block's program (the goal's blocker) [read] | "proved and verified" in place of "proved and timed"; real sessions for `spot-verifier-cost` |
+| 4 | The table by block type, for a week, a month and a year | proofs | Fri | step 3 | `spot-overhead-measured`, then `spot-ten-percent` and `spot-figures` |
+
+**Left out, and why:**
+- TopPStatsExp: its block needs 2^28 bits, past the 2^27 limit [read].
+- Gumbel, if it isn't staged by 04:30Z: it was not staged in 6,939 s at a 271 GB peak [read].
+- Every v1 form the Lean verifier refuses is replaced by its `_v2` row where `ks_form.py` accepts it [read].
+- The values are synthetic at served sizes, not served values, as in Window 1 [read].
+
+**If node A is lost first:**
+- Staging moves to cpu-12 (755 GiB) [run], and about 330 GB of statements are copied off it [read].
+- Proving moves to `vy-dc-h200-3`, about 7–12 h of one card [guess].
+- The fused cut has no fallback: it needs eight H200s.
+
+**Branches:** at 05:06Z none of mine, and neither #8425 nor #8454, had crossed the move; ci's step hadn't reached them [run: `git merge-base --is-ancestor 5c095bb4ab`]. #8771 crosses after #8425's crossed head, and I name the new head before any push.
+
+Next: LEAN-249 at lean's base `8857f4a67f95`, due Thu 02:00Z, sooner if I can.
