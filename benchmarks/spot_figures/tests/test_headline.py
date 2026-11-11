@@ -124,3 +124,38 @@ def test_a_planner_row_describes_itself_and_restores_the_planner():
     assert isclose(got["requests"], p["replay_sample"] / p["q"], rel_tol=1e-9)
     assert got["requests"] < got["census_scope"]["requests"]
     assert got["total"] == got["serve"] + got["edge"] + got["beta"] + got["compile"] + got["pool"]
+
+
+def test_a_row_is_a_case_under_a_plan():
+    """Every case comes under every plan, the planner's own under the case's bare name; a plan's keywords are the
+    planner's, and a held κ is one of its grid."""
+    from verity.protocols.spot.optimize import KAPPAS
+
+    assert set(H.ROWS) == {case + more for case in H.CASES for more in H.PLANS}
+    for case in H.CASES:
+        assert H.spec_of(case, "world year", 0.4)["plan"] == {}
+    spec = H.spec_of("(iii) honest, by width, kappa 2^-4", "world year", 0.4)
+    assert spec["plan"] == {"widths": True, "margin": H.MARGIN, "kappas": (2.0 ** -4,)}
+    assert (spec["case"], spec["scale"]) == (H.CASES["(iii) honest"]["case"], H.CASES["(iii) honest"]["scale"])
+    for plan in H.PLANS.values():
+        assert set(plan) <= {"widths", "margin", "kappas"} and set(plan.get("kappas", ())) <= set(KAPPAS)
+
+
+@pytest.mark.slow
+def test_a_row_s_design_is_held_to_its_plan():
+    """Three rows on the planner (about 20 s): a by-width row's design gives each width a stratum, is never worse than
+    its case's own, and its plan block by block is over those strata; a held κ is the design's. Catches a driver that
+    names a plan and designs by another, which the plain dicts above can't."""
+    P = H.planner()
+    own, _ = H.run(H.spec_of("(i) honest", "world year", 0.4), P=P)
+    spec = H.spec_of("(i) honest, by width", "world year", 0.4)
+    row, reads = H.evaluate(spec, P)
+    design = reads["design"]
+    assert design["row"]["merged"] is None and design["kw"]["widths"] and design["kw"]["margin"] == H.MARGIN
+    p = H.plan(spec, row, reads, {}, P)
+    wide = H.assemble(row, p, reads["calls"], reads["strata"], reads["pricing"])
+    held, _ = H.run(H.spec_of("(i) honest, by width, kappa 2^-6", "world year", 0.4), P=P)
+    assert (own["plan"], wide["plan"], held["plan"]["kappas"]) == ({}, H.PLANS[", by width"], (2.0 ** -6,))
+    assert wide["bound_bits"] <= own["bound_bits"]
+    assert held["kappa"] == 2.0 ** -6 and held["bound_bits"] >= wide["bound_bits"]
+    assert isclose(wide["requests"], p["replay_sample"] / p["q"], rel_tol=1e-9)

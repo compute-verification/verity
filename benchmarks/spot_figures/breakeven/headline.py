@@ -9,7 +9,8 @@ reaches 10% of its compute, and a row's sampling plan, from one entry point at a
 
 from the repository's root. A row (`ROWS`) is the proof server's line at its last step
 (`sweep.served_line()["P5+poolwin600"]`) with its case's levers at their measured values, over the 128k workload with
-every sparse-MLA head's blocks (`volume`). `price` prices its strata: the planner's per-type pricing, the built AND
+every sparse-MLA head's blocks (`volume`), its design held to the plan its name adds (`PLANS`: the planner's own, or a
+stratum a distinct width, at the planner's κ or a held one). `price` prices its strata: the planner's per-type pricing, the built AND
 gates of FlashInfer K6144 and K2048 in lookup slots at their measured warm sessions, the quant types' host walk, the
 Lean verifier as measured and the row's scale. `evaluate` charges it: the carried pool's pages recommitted at each edge
 (a copy stratum and the kv arm's hash tax), a request cut at the edge recomputed, its prefix hits reproved, B128's
@@ -74,10 +75,21 @@ def comb(f: float) -> dict:
     return {"SparseMlaCombine_v1{": {"marg": 4.0 * f, "fixed_x": f}}
 
 
-#: each row's case fields over the P5 line's, and the factors (seconds a block, fixed seconds) its types take
-ROWS = {"(i) honest": {"case": TOKENS | MEASURED, "scale": comb(1.0)},
-        "(ii) honest": {"case": dict(MEASURED), "scale": comb(1.0)},
-        "(iii) honest": {"case": dict(MEASURED), "scale": warm(0.25) | comb(0.25)}}
+#: each case's fields over the P5 line's, and the factors (seconds a block, fixed seconds) its types take
+CASES = {"(i) honest": {"case": TOKENS | MEASURED, "scale": comb(1.0)},
+         "(ii) honest": {"case": dict(MEASURED), "scale": comb(1.0)},
+         "(iii) honest": {"case": dict(MEASURED), "scale": warm(0.25) | comb(0.25)}}
+#: the margin a by-width plan samples every stratum by but the one that costs the most proving
+MARGIN = 0.125
+#: the plans a case's design may be held to, by what each adds to the case's name: the keywords its design passes the
+#: planner beside the line's (`optimize.two_stage_design`). None is the planner's own, the public size classes at its
+#: κ. By width, each distinct width is a stratum, sampled with `MARGIN`, at the planner's κ or held to the κ named,
+#: which holds down the proof blocks a sampled replay block proves
+PLANS = {"": {}, ", by width": {"widths": True, "margin": MARGIN},
+         **{f", by width, kappa 2^{e}": {"widths": True, "margin": MARGIN, "kappas": (2.0 ** e,)}
+            for e in range(-4, -9, -1)}}
+#: a row: a case under a plan
+ROWS = {name + more: case | {"plan": plan} for name, case in CASES.items() for more, plan in PLANS.items()}
 
 #: the 128k workload's sparse-MLA blocks a token over the census's, one head's (the first prefix that matches wins)
 MLA128_VOLUME = {"SparseMlaSplitPart_v1{T=64,": 29.2 / 3.457, "SparseMlaSplitPart_v1{": 0.175 / 0.864,
@@ -282,6 +294,7 @@ def installed(P: SimpleNamespace, spec: dict):
         return m
 
     def designed(cells, replay_blocks, delta, **kw):
+        kw |= spec["plan"]
         row = design(cells, replay_blocks, delta, **kw)
         trace.designs.append({"cells": list(cells), "row": row, "kw": kw})
         return row
@@ -310,7 +323,7 @@ def installed(P: SimpleNamespace, spec: dict):
 def spec_of(row: str, scope: str, beta: float, n_heads: int | None = None) -> dict:
     """A job: `ROWS[row]` at `scope` and the pinned `beta`, over every sparse-MLA head."""
     r = ROWS[row]
-    return {"row": row, "scope": scope, "beta": beta, "case": r["case"], "scale": r["scale"],
+    return {"row": row, "scope": scope, "beta": beta, "case": r["case"], "scale": r["scale"], "plan": r["plan"],
             "volume": volume(n_heads), "heads": heads() if n_heads is None else n_heads, "S": SERVED_BITS,
             "share": SHARE, "step": STEP, "set": CHARGES, "S_case": SERVED_CASE, "mix": MIX, "rule": RULE,
             "run_s": RUN_S}
@@ -359,6 +372,7 @@ def evaluate(spec: dict, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
                "target_bits": (1 - spec["share"]) * w, "delta_seen": model.delta, "S_seen": float(spec["S"]),
                "served_bits": L[1]["served_bits"].value, "requests": s.requests, "flop_request": s.flop_request,
                "gpu_seconds": gs, "case": spec["case"], "scale": spec["scale"], "volume": spec["volume"],
+               "plan": spec["plan"], "kappa": p["kappa"],
                "census_scope": {k: getattr(sweep.SCOPES[scope], k) for k in ("requests", "flop_request")}}
         verify = [c for c in trace.calls if c[0]]
         reads = {"design": trace.designs[-1], "case": case, "strata": strata, "calls": list(trace.calls),
@@ -401,8 +415,7 @@ def plan(spec: dict, row: dict, reads: dict, known: dict, P: SimpleNamespace | N
     drow, cells, span = d["row"], d["cells"], d["kw"].get("registration", 0.0)
     if len(strata) != len(cells):
         raise ValueError(f"{spec['row']}, {spec['scope']}: {len(strata)} strata against {len(cells)} cells")
-    split = [replace(x, stratum=0 if opt._size_class(x.bits) <= drow["merged"] else opt._size_class(x.bits))
-             for x in cells]
+    split = opt.two_stage_strata(cells, drow["merged"])
     st = opt.two_stage_statements(split, drow["k"], drow["q"], span)
     total = sum(x["prove"] for x in st)
     s = sweep.SCOPES[spec["scope"]]
