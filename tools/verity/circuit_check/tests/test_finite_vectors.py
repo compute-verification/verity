@@ -119,8 +119,9 @@ def test_an_operand_sampled_one_vector_at_a_time_is_finite_on_the_share():
 def test_a_wide_float_word_view_counts_its_finite_vectors(monkeypatch):
     """`ATTN`'s word view: sampled without the share (as before it) 13 of its 1,024 vectors have every input leaf finite in
     every format and 11 give every output finite, all of them all-edge vectors, which is a ``vectors/few-finite`` warning;
-    reading a 16-bit leaf as BF16 alone the inputs are 17 (FP16's NaN and infinity edges are finite BF16 words).  With the
-    share, 512 inputs (those 13 and the 499 rows of the share) and 260 outputs are finite, and nothing warns."""
+    reading a 16-bit leaf as BF16 alone the inputs are 17 (four edge vectors hold a 16-bit word finite as BF16 and not as FP16:
+    BF16's largest of either sign and two FP16 NaNs).  With the share, 512 inputs (those 13 and the 499 rows of the share) and
+    260 outputs are finite, and nothing warns."""
     t, pw, n, edge = _attn_word()
     F = CK.Findings()
     rec = CK.word_view(t, CK.DEFAULTS, F)
