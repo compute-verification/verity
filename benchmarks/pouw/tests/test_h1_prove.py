@@ -22,17 +22,17 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.core.protocols.spot.one_stage import partition as P
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.spot.verifier.one_stage import registered as G
 
 H1 = Path(__file__).resolve().parents[1] / "h1_prove"
 sys.path.insert(0, str(H1))
 import h1unit as U  # noqa: E402
 
-from verity.core.protocols.pouw import core_check as CC  # noqa: E402
-from verity.core.protocols.pouw import salt as PS  # noqa: E402
-from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
+from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1zy as Z  # noqa: E402
+from verity.protocols.pouw.prover.circuit import seeds as SD  # noqa: E402
 
 
 def _module(name: str, file: str):
@@ -451,11 +451,11 @@ def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
     """`h1unit.stager`: with a layout, the templated statement of the unit's own structural template; with none, the flat
     statement, which evaluates the unit alike; and where struct_lower refuses the Definition (its NotImplementedError, as
     for an assertion), the flat statement, said on stderr."""
-    from verity.ml.circuits.boolean import BIT
-    from verity.ml.circuits.boolean.forms import add
-    from verity.ml.circuits.boolean.trace import definition
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.types import Array
+    from verity.circuits.boolean import BIT
+    from verity.circuits.boolean.forms import add
+    from verity.circuits.boolean.trace import definition
+    from verity.circuits.defs import bind
+    from verity.circuits.types import Array
     from verity_flock import circuit as FC
     from verity_flock import struct_lower as SL
 
@@ -482,7 +482,7 @@ def test_ks_statement_rows_are_the_h1_tiles_rows_under_either_ports():
     """`h1window.statement_rows`, the rows the auditor's lowering writes K's circuit file on: under h1_prove's ports
     (`h1unit.ports`) the stager's rows as `Shape` sizes them (an A or B row K / 2 + 2 words, the record 3 R C, the public
     row 100), and by default `window_ports`' A and B ports, which credit's registered file reads, with the rest unchanged."""
-    from verity.ml.protocols.pouw.circuit import h1window as HW
+    from verity.protocols.pouw.prover.circuit import h1window as HW
     for shape in (U.Shape(64), U.Shape(128)):
         t = shape.definition()
         bits = {p.name: p.bits for p in shape.ports()}

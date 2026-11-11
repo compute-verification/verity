@@ -1,7 +1,7 @@
 # inference_only: the inference-only policy of Llama 3.2 1B, and its one number
 
 One command prints the inference-only policy of Llama 3.2 1B as served, and one number for it: the least slowdown of
-training run inside the policy's inference blocks, under the min-cut bound (`benchmarks/rho/rho/min_cut.py`, whose
+training run inside the policy's inference blocks, under the min-cut bound (`verity/protocols/inference_only/rho/rho/min_cut.py`, whose
 `HE` names its Lean statement).
 
 ~~~sh
@@ -63,13 +63,13 @@ The served class leaves the layers' linears outside the circuit, so a block read
 The number is a block's ratio under two assumptions, on a check that Lean does not yet accept for any class.
 
 - **Two assumptions.** The bound holds under (H), the cut's hardness, and (E), its exports, conjectures
-  (`min_cut.HARDNESS` and `min_cut.EXPORTS` are their Lean names). The values of (H)'s β by `k` are rho's (`benchmarks/rho/data/premises.toml`).
+  (`min_cut.HARDNESS` and `min_cut.EXPORTS` are their Lean names). The values of (H)'s β by `k` are rho's (`verity/protocols/inference_only/rho/data/premises.toml`).
 - **No class passes the check.** The Lean count is given the session Program with no θ and no dataflow, so it counts
   every row a unit reads as fresh and refuses the policy on `k`. A built policy's `c` and `k` are the Python count of
   the record's description, which the Lean check does not establish; a stated policy's are not checked here at all.
 - **A block, not a deployment.** The periods table multiplies one block's ratio through the blocks a fleet holds at its
   data sheet's rate. What a deployment registers, what it leaves free and what its proofs miss are the slowdown
-  calculator's (`uv run python benchmarks/rho/periods.py`).
+  calculator's (`uv run python verity/protocols/inference_only/rho/periods.py`).
 - **Units, not converted.** `N` and `limit` are in the policy's own MACs, which count a MAC of the layers' linears as one
   and a BF16 MAC (attention, the LM head) as two, the card's dense int8 rate against its BF16 rate. The bound is at
   `F = 1`, which charges at most two of a training step's three kinds of product; the two thirds that leaves of a step
