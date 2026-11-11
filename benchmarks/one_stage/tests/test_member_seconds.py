@@ -4,7 +4,8 @@ are not the member's, a member with no Lean loop or no setup line has those part
 one put before its sessions is the window's and no member's, a member the window's kept verifier checked has its seconds
 from its own log and the kept process's life is the window's, a wrapper stamps its start and execs its binary under its
 own pid, each reader run alone is the member's own command on the member's files (on stand-in binaries, under an
-injected clock), and `verify` alone must print the audit's verdict line of the member."""
+injected clock), `verify` alone must print the audit's verdict line of the member, and a member's turn runs from the
+record before it to its own, for a process pair's member and for one the audit's proof server proved on its kept prover."""
 from __future__ import annotations
 
 import json
@@ -50,6 +51,8 @@ def plant(tmp_path: Path) -> tuple[Path, Path]:
                         (m / "tables" / "t.u32", 16)):
             f.write_bytes(b"x" * size)
         (s / "draw.json").write_text('{"k": 1}')
+        (s / "sessions" / "abc" / "session.json").write_text("{}")
+        at(s / "sessions" / "abc" / "session.json", (19.5, 29.6)[k])
     (audit / "partition.json").write_bytes(b"p" * 11)
     (audit / "program.json").write_bytes(b"q" * 13)
     (audit / "session-m0-altered").mkdir()
@@ -131,6 +134,63 @@ def test_a_members_seconds_are_its_own_processes(tmp_path):
                           "kept_member": None}
 
 
+def test_a_members_turn_is_from_the_record_before_it_to_its_own(tmp_path):
+    """A process pair's member: the first turn starts with its verifier's process, a later one at the record of the member
+    before it; each is split at its Lean loop's start, absent for a member with no loop."""
+    audit, d = plant(tmp_path)
+    m0, m1 = MS.measure(audit, MS.stamps((d / MS.STAMPS).read_text()))["members"]
+    assert m0["turn"] == {"s": 19.5, "to_loop_s": 6.2, "loop_to_record_s": 13.3, "outside_clock_s": 9.5, "kept_prover": False}
+    assert m1["turn"] == {"s": 10.1, "to_loop_s": None, "loop_to_record_s": None, "outside_clock_s": 4.1, "kept_prover": False}
+    # a member with no record has no turn, and neither has the one after it
+    (audit / "session-m0" / "sessions" / "abc" / "session.json").unlink()
+    m0, m1 = MS.measure(audit, MS.stamps((d / MS.STAMPS).read_text()))["members"]
+    assert (m0["turn"]["s"], m0["turn"]["to_loop_s"], m1["turn"]["s"]) == (None, 6.2, None)
+
+
+def test_a_member_the_proof_server_proved_has_its_kept_provers_loop_and_live_line(tmp_path):
+    """Behind the ZK server the audit's proof server proves the members on one kept prover, which starts a Lean session
+    loop for each: a member has no process pair, its loop is the kept prover's on its circuit before its record (a later
+    one on that circuit is not its), its ``LIVE`` line is the one under its label in the prover's log, and the first turn
+    starts with the server's first process."""
+    audit, d = plant(tmp_path)
+    labels = {}
+    for k in (0, 1):
+        s = audit / f"session-m{k}"
+        labels[k] = json.loads(MS.text(s / "prove.log").split("LIVE\t", 1)[1].splitlines()[0])
+        (s / "prove.log").unlink()
+        (s / "serve.log").unlink()
+    (audit / "proof-server").mkdir()
+    (audit / "proof-server" / "prover-cpu.log").write_text("".join(
+        "LIVE\t" + json.dumps({**labels[k], "label": str(audit / f"session-m{k}")}) + "\n" for k in (1, 0)))
+    loop = [("session", "--verifier", "127.0.0.1:7000", "--statement", "verity/flock-circuit", "--circuit",
+             audit / f"m{k}" / "circuit.txt", "--public", "/tmp/flock-session-700-1.pub") for k in (0, 1)]
+    with open(d / MS.STAMPS, "a") as f:
+        f.write("".join([
+            stamp("flock-circuit", 600, 1, -2, "serve", "--zk", "--queue", "-", "--out", audit / "proof-server" / "verifier-abc",
+                  "--circuit", audit / "m0" / "circuit.txt"),
+            stamp("flock-circuit", 700, 1, -1.5, "prove", "--zk", "--stream", "-"), stamp("flock-firewall", 701, 700, -1.4, "tap"),
+            stamp("flock-firewall", 702, 700, 1, *loop[0]), stamp("flock-firewall", 703, 700, 20.25, *loop[1]),
+            stamp("flock-firewall", 704, 700, 45, *loop[0])]))
+    all_stamps = MS.stamps((d / MS.STAMPS).read_text())
+    ns = T * 10**9
+    assert {x: y and y["pid"] for x, y in MS.kept_prover(audit, 0, all_stamps).items()} == {"prover": 700, "tap": 701, "loop": 702}
+    m0, m1 = MS.measure(audit, all_stamps)["members"]
+    assert {x: m0["starts_ns"][x] for x in ("serve", "prove", "tap", "loop")} == {
+        "serve": None, "prove": None, "tap": ns - 14 * 10**8, "loop": ns + 10**9}
+    assert m1["starts_ns"]["loop"] == ns + 2025 * 10**7
+    assert m0["turn"] == {"s": 21.5, "to_loop_s": 3.0, "loop_to_record_s": 18.5, "outside_clock_s": 11.5, "kept_prover": True}
+    assert m1["turn"] == {"s": 10.1, "to_loop_s": 0.75, "loop_to_record_s": 9.35, "outside_clock_s": 4.1, "kept_prover": True}
+    # what a process pair's logs time is absent, never zero; the clock's own seconds are the LIVE line's
+    assert m0["session"] == {"verifier_ahead_s": None, "verifier_built_s": None, "prover_s": None, "prover_built_s": None,
+                             "tap_at_s": None, "to_loop_s": None, "loop_to_clock_s": None, "before_clock_s": None, "e2e_s": 10.0,
+                             "witness_s": 4.0, "prove_total_s": 1.0, "after_clock_wait_s": 0.5, "accepted": True, "session_s": 20.1}
+    assert (m1["session"]["e2e_s"], m1["session"]["session_s"]) == (6.0, 9.0)
+    # a process pair's member has no kept prover
+    (tmp_path / "pairs").mkdir()
+    audit2, d2 = plant(tmp_path / "pairs")
+    assert MS.kept_prover(audit2, 0, MS.stamps((d2 / MS.STAMPS).read_text())) == {"prover": None, "tap": None, "loop": None}
+
+
 def test_an_audit_that_archived_its_window_once_counts_the_put_once(tmp_path):
     """`a5.audit` puts every sampled member's files before its sessions (``lean-verify/archive``): the put is the window's,
     a member has none of its own (a negative's later put into its archive is not its), and what it spends before Lean's
@@ -188,10 +248,10 @@ def test_measure_writes_each_audit_under_the_root(tmp_path, capsys):
     assert MS.main(["measure", str(tmp_path / "scratch"), "--stamped", str(d), "--no-alone"]) == 0
     line = json.loads(capsys.readouterr().out.removeprefix("MEMBER-SECONDS "))
     assert line == {"audit": "rank0", "window_archive_put_s": None, "members": [
-        {"k": 0, "template": "T0", "before_clock_s": 6.5, "verifier_ahead_s": 3.0, "e2e_s": 10.0, "before_first_check_s": 3.25,
-         "check_s": 0.75, "verify_s": 3.0, "verify_alone": None},
-        {"k": 1, "template": "T1", "before_clock_s": 2.0, "verifier_ahead_s": 1.0, "e2e_s": 6.0, "before_first_check_s": None,
-         "check_s": None, "verify_s": 1.0, "verify_alone": None}]}
+        {"k": 0, "template": "T0", "before_clock_s": 6.5, "verifier_ahead_s": 3.0, "e2e_s": 10.0, "turn_s": 19.5,
+         "turn_outside_clock_s": 9.5, "before_first_check_s": 3.25, "check_s": 0.75, "verify_s": 3.0, "verify_alone": None},
+        {"k": 1, "template": "T1", "before_clock_s": 2.0, "verifier_ahead_s": 1.0, "e2e_s": 6.0, "turn_s": 10.1,
+         "turn_outside_clock_s": 4.1, "before_first_check_s": None, "check_s": None, "verify_s": 1.0, "verify_alone": None}]}
     assert [m["k"] for m in json.loads((audit / "member-seconds.json").read_text())["members"]] == [0, 1]
     assert MS.main(["measure", str(tmp_path / "stamped"), "--stamped", str(d), "--no-alone"]) == 1
     assert "no audit under" in capsys.readouterr().err

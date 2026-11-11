@@ -18,6 +18,15 @@ session behind the ZK server (``--firewall``) or not.
   server's Lean loop, and from there to the clock (the loop's reads, the connection and its pings). The clock's start is
   the prover's exit less ``e2e_s`` and its wait on the verdict after the clock (``wait_s`` less ``wait_e2e_s``), so the
   prover's exit is counted before the clock. Each side's load is its ``statement ... built in`` line.
+* **The kept prover** (`kept_prover`). Behind the ZK server the audit's proof server proves the members on one
+  `prove --zk --stream` process, which starts a Lean session loop for each at its turn, and one verifier a template
+  (`a5.proof_server`): such a member has no process pair, so no figure of the bullet above but its loop's start and its
+  ``LIVE`` line's, which is in the prover's log under its label.
+* **A member's turn** (`turns`), whichever way it was proved: from the record of the member before it to its own (a
+  record is its ``session.json``, which the verifier files at its verdict), and for the first member from the start of
+  the audit's first session process. It is split at the start of the member's Lean session loop, and what is outside the
+  prover's clock is the turn less ``e2e_s``. The turns add up to the window's sessions, so two audits of one window
+  compare by them.
 * **Lean** (`lean`), per member: the draw check, ``archive-put``, and ``verify`` split by its own lines (``inputs:``, the
   files read by key and the circuit parsed; ``setup (drawn):``; the session's line, whose remainder is the check).
   Before the first check is the member's own ``archive-put`` and ``verify`` less the check. The audit's one
@@ -151,8 +160,33 @@ def kept_member(log: str) -> dict | None:
             "s": took and float(took.group(1))}
 
 
+def recorded(s: Path) -> int | None:
+    """When the verifier filed the record of the member's session under ``s``: its ``session.json``'s modification time,
+    in ns."""
+    return max((f.stat().st_mtime_ns for f in (s / "sessions").glob("*/session.json")), default=None)
+
+
+def kept_prover(audit: Path, k: int, all_stamps: list[dict]) -> dict:
+    """Member ``k`` on the audit's proof server (the module docstring's third bullet): the kept prover that proved it
+    (``prover``), that process's tap and the Lean session loop it started for the member, the one on the member's circuit
+    before its record; each None for a member with a process pair, or with no loop."""
+    m, s = audit / f"m{k}", audit / f"session-m{k}"
+    none = {"prover": None, "tap": None, "loop": None}
+    if (s / "prove.log").exists():
+        return none
+    streams = [x for x in all_stamps if x["program"] == "flock-circuit" and x["argv"][0] == "prove" and "--stream" in x["argv"]]
+    mine = [x for x in all_stamps if x["program"] == "flock-firewall" and any(p["pid"] == x["ppid"] and p["ns"] <= x["ns"] for p in streams)]
+    loop = last([x for x in mine if x["argv"][0] == "session" and under(flag(x["argv"], "--circuit"), m)], recorded(s))
+    if loop is None:
+        return none
+    prover = last([p for p in streams if p["pid"] == loop["ppid"]], loop["ns"])
+    tap = [x for x in mine if x["argv"][0] == "tap" and x["ppid"] == prover["pid"] and x["ns"] >= prover["ns"]]
+    return {"prover": prover, "tap": last(tap, loop["ns"]), "loop": loop}
+
+
 def found(audit: Path, k: int, all_stamps: list[dict]) -> dict:
-    """Member ``k``'s honest processes among the stamps: the ones its logs record."""
+    """Member ``k``'s honest processes among the stamps: the ones its logs record. A member the audit's proof server
+    proved has no ``serve`` or ``prove`` of its own: its tap and loop are its kept prover's (`kept_prover`)."""
     m, s = audit / f"m{k}", audit / f"session-m{k}"
     exited = ended(s / "prove.log")
     pair = [x for x in all_stamps if x["program"] == "flock-circuit" and under(flag(x["argv"], "--circuit"), m)]
@@ -161,9 +195,10 @@ def found(audit: Path, k: int, all_stamps: list[dict]) -> dict:
     child = [x for x in all_stamps if x["program"] == "flock-firewall" and prove is not None and x["ppid"] == prove["pid"]
              and x["ns"] >= prove["ns"]]
     verify = [x for x in all_stamps if x["program"] == "flock-verify" and len(x["argv"]) > 1]
+    kept = kept_prover(audit, k, all_stamps)
     return {"serve": serve, "prove": prove,
-            "tap": last([x for x in child if x["argv"][0] == "tap"], exited),
-            "loop": last([x for x in child if x["argv"][0] == "session"], exited),
+            "tap": kept["tap"] or last([x for x in child if x["argv"][0] == "tap"], exited),
+            "loop": kept["loop"] or last([x for x in child if x["argv"][0] == "session"], exited),
             "draw-test": last([x for x in verify if x["argv"][0] == "draw-test" and same(x["argv"][1], s / "u1-u3.cases.json")],
                               ended(s / "u1-u3.lean.log")),
             "archive-put": last([x for x in verify if x["argv"][0] == "archive-put" and under(x["argv"][1], s)],
@@ -172,10 +207,20 @@ def found(audit: Path, k: int, all_stamps: list[dict]) -> dict:
                            ended(s / "lean-verify.log"))}
 
 
+def live_of(audit: Path, k: int) -> dict:
+    """Member ``k``'s ``LIVE`` line: its prover's, or the one under its label in the proof server's prover's log."""
+    s = audit / f"session-m{k}"
+    if (s / "prove.log").exists():
+        return live(text(s / "prove.log"))
+    lines = [json.loads(x[5:]) for log in sorted((audit / "proof-server").glob("prover-*.log"))
+             for x in text(log).splitlines() if x.startswith("LIVE\t")]
+    return next((x for x in lines if Path(str(x.get("label"))).name == s.name), {})
+
+
 def session(audit: Path, k: int, at: dict) -> dict:
     """Member ``k``'s session outside its prover's clock (the module docstring's second bullet)."""
     s = audit / f"session-m{k}"
-    lv = live(text(s / "prove.log"))
+    lv = live_of(audit, k)
     ns = {name: x and x["ns"] for name, x in at.items()}
     prover = sub(ended(s / "prove.log"), ns["prove"])
     after = less(lv.get("wait_s"), lv.get("wait_e2e_s"))
@@ -189,7 +234,7 @@ def session(audit: Path, k: int, at: dict) -> dict:
 
 
 def lean(audit: Path, k: int, at: dict) -> dict:
-    """Member ``k``'s Lean checks (the module docstring's third bullet)."""
+    """Member ``k``'s Lean checks (the module docstring's fifth bullet)."""
     s = audit / f"session-m{k}"
     ns = {name: x and x["ns"] for name, x in at.items()}
     put, whole = sub(ended(s / "archive-put.log"), ns["archive-put"]), sub(ended(s / "lean-verify.log"), ns["verify"])
@@ -220,6 +265,25 @@ def window(audit: Path, all_stamps: list[dict]) -> dict:
                 closed)
     return {"archive_put_s": sub(end, at and at["ns"]), "files": at and len(at["argv"]) - 2,
             "verify_members_s": sub(closed, kept and kept["ns"])}
+
+
+def turns(audit: Path, members: list[dict], all_stamps: list[dict]) -> None:
+    """Adds each of ``members``' turn (the module docstring's fourth bullet) to its record, in the members' order."""
+    if not members:
+        return
+    first = audit / f"session-m{members[0]['k']}"
+    server = [x["ns"] for x in all_stamps if x["program"] == "flock-circuit" and x["argv"][0] == "serve"
+              and under(flag(x["argv"], "--out"), audit / "proof-server")]
+    kept = kept_prover(audit, members[0]["k"], all_stamps)["prover"]
+    began = [members[0]["starts_ns"]["serve"]] if (first / "prove.log").exists() else [*server, kept and kept["ns"]]
+    at = min((x for x in began if x is not None), default=None)
+    for rec in members:
+        s = audit / f"session-m{rec['k']}"
+        loop, record = rec["starts_ns"]["loop"], recorded(s)
+        whole = sub(record, at)
+        rec["turn"] = {"s": whole, "to_loop_s": sub(loop, at), "loop_to_record_s": sub(record, loop),
+                       "outside_clock_s": less(whole, rec["session"]["e2e_s"]), "kept_prover": not (s / "prove.log").exists()}
+        at = record
 
 
 def sizes(audit: Path, k: int) -> dict:
@@ -274,7 +338,7 @@ def kept(argv: list[str], flags: tuple[str, ...]) -> list[str]:
 
 
 def alone(audit: Path, k: int, at: dict, real: dict, reps: int) -> dict:
-    """Each reader of member ``k``'s files run alone (the module docstring's fourth bullet)."""
+    """Each reader of member ``k``'s files run alone (the module docstring's sixth bullet)."""
     m, s = audit / f"m{k}", audit / f"session-m{k}"
     out: dict = {}
     for side, name in (("serve", "verifier_load"), ("prove", "prover_load")):
@@ -366,7 +430,7 @@ def measure(audit: Path, all_stamps: list[dict]) -> dict:
     members = []
     for k in members_of(audit):
         at, s = found(audit, k, all_stamps), audit / f"session-m{k}"
-        sigma = live(text(s / "prove.log")).get("sigma")
+        sigma = live_of(audit, k).get("sigma")
         members.append({"k": k, "template": named.get(k, {}).get("template"), "n": named.get(k, {}).get("n"),
                         "bytes": sizes(audit, k), "starts_ns": {name: x and x["ns"] for name, x in at.items()},
                         "ends_ns": {name: ended(s / log) for name, log in LOGS.items()},
@@ -374,6 +438,7 @@ def measure(audit: Path, all_stamps: list[dict]) -> dict:
                         "lean": lean(audit, k, at)})
     for a, b in zip(members, members[1:]):
         a["to_next_member_s"] = sub(b["starts_ns"]["serve"], a["ends_ns"]["prove"])
+    turns(audit, members, all_stamps)
     return {"audit": audit.name, "firewall": bool(summary.get("firewall")), "stamped": bool(all_stamps),
             "staging": summary.get("staging"), "window": window(audit, all_stamps), "members": members}
 
@@ -425,6 +490,7 @@ def main(argv=None) -> int:
         print("MEMBER-SECONDS " + json.dumps({"audit": audit.name, "window_archive_put_s": got["window"]["archive_put_s"], "members": [
             {"k": r["k"], "template": r["template"], "before_clock_s": r["session"]["before_clock_s"],
              "verifier_ahead_s": r["session"]["verifier_ahead_s"], "e2e_s": r["session"]["e2e_s"],
+             "turn_s": r["turn"]["s"], "turn_outside_clock_s": r["turn"]["outside_clock_s"],
              "before_first_check_s": r["lean"]["before_first_check_s"], "check_s": r["lean"]["check_s"],
              "verify_s": r["lean"]["verify_s"], "verify_alone": r.get("alone", {}).get("verify")}
             for r in got["members"]]}))

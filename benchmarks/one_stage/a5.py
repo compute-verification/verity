@@ -850,7 +850,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     for mm in members:
         mm["st"]["archived"] = archived
 
-    server = proof_server(a, out)
+    server = proof_server(a, out, [mm["st"] for mm, _ in drawn])
 
     def staged(mm: dict, local: list[int]) -> dict:
         """Member ``mm``'s statement on its proved units ``local`` (sampled, and a work sample's closure): its session's draw
@@ -869,8 +869,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
     def member_session(i: int, s: dict) -> dict:
         """Staged member ``s``'s (`staged`) `--zk` session: submitted to the audit's proof server, Lean's verify its verdict
-        of record, else (`proof_server`) on port ``port + i`` (``i`` its place among the members with proved units,
-        `port_refusal`), behind the ZK server under ``--firewall``; `member_checks` adds Lean's verdicts on it."""
+        of record (the window's kept verifier's, where there is one, comes from `member_checks`), else (`proof_server`) on
+        port ``port + i`` (``i`` its place among the members with proved units, `port_refusal`), behind the ZK server
+        under ``--firewall``; `member_checks` adds Lean's verdicts on it."""
         mm, local, sdir, session_draw, session_law = s["mm"], s["local"], s["sdir"], s["session_draw"], s["session_law"]
         m = mm["m"]
         if server is not None:
@@ -879,7 +880,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                         instances=st["dir"] / f"inst-{m.n}.bin", public=st["dir"] / f"pub-{m.n}.bin",
                                         tmpl_unit=st.get("tmpl_unit")),
                               session_draw, str(sdir.resolve()), out=sdir / "sessions",
-                              verdict=lambda _: a0.lean_verify(a.lean, st, m.n, sdir, zk=True))
+                              verdict=None if kept is not None else lambda _: a0.lean_verify(a.lean, st, m.n, sdir, zk=True))
             return {**s, "handle": h}
         t = time.time()
         env = {"FC_COINS": "tree"} if plain(a) else a0.prover_env(a.firewall, mm["st"])
@@ -897,6 +898,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         try:
             h.result(a.session_timeout)
             record, live, lean_v = json.loads((h.dir / "session.json").read_text()), h.live, h.verdict(a.session_timeout)
+            # a member of the window's kept verifier has no verdict yet: it is handed in by `member_checks`, in its turn
         except (ProofServerError, TimeoutError) as e:
             record, live = None, {"accepted": False, "why": str(e)[-1200:]}
             lean_v = {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -923,7 +925,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, flags=flags),
                                         "tool": f"flock-verify verify {' '.join(flags)} --archive"}
         else:
-            lv = s["lean_verify"] if "handle" in s else a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True, members=kept)
+            lv = s.get("lean_verify") or a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True, members=kept)
             got[f"lean-verify/m{k}"] = {**lv, "tool": "flock-verify verify --zk --archive"}
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
@@ -1310,14 +1312,23 @@ def plain(a: argparse.Namespace) -> bool:
     return bool(getattr(a, "plain", False))
 
 
-def proof_server(a: argparse.Namespace, out: Path) -> ProofServer | None:
+def proof_server(a: argparse.Namespace, out: Path, sts: Sequence[dict] = ()) -> ProofServer | None:
     """SPOT's proof server for an audit's sessions (`verity_flock.proof_server`, its processes' logs under
     ``out/proof-server``): one CPU prover and one verifier a template, each verifier on a challenger of its own under
-    FLOCK_CHALLENGER=1, a templated statement's unit (`--tmpl-unit`) handed to both. None where a session is one it doesn't
-    prove (plain, or behind the ZK server under ``--firewall``): each session is then a process pair of its own (`a0.session`)."""
-    if plain(a) or a.firewall:
+    FLOCK_CHALLENGER=1, a templated statement's unit (`--tmpl-unit`) handed to both. Under ``--firewall`` its prover is
+    behind the ZK server: one `prove --zk --stream` process that starts a Lean session loop for each session at the
+    session's turn, one session at a time (``verify_ahead=0``), each loop's `Hello` set up as the process's environment
+    says (`a0.prover_env`), so only where the sampled members' statements ``sts`` agree on it. None where a session is one
+    it doesn't prove (plain, or members that don't agree): each session is then a process pair of its own (`a0.session`)."""
+    if plain(a):
         return None
-    return ProofServer(a.bin, out / "proof-server", env=a0.DIRECT, challenger=a0.own_challenger(zk=True))
+    challenger = a0.own_challenger(zk=True)
+    if not a.firewall:
+        return ProofServer(a.bin, out / "proof-server", env=a0.DIRECT, challenger=challenger)
+    envs = [a0.prover_env(a.firewall, st) for st in sts]
+    if not envs or any(e != envs[0] for e in envs):
+        return None
+    return ProofServer(a.bin, out / "proof-server", env=envs[0], challenger=challenger, verify_ahead=0)
 
 
 def plain_refusal(a: argparse.Namespace, mine: CS.Binding, registered: dict | None) -> str | None:
