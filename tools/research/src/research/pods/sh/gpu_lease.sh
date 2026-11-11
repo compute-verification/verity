@@ -62,14 +62,18 @@
 # CPU quota: where the machine's CPU time is capped (a container's cpu.max: $GPU_LEASE_CPU_MAX, default /sys/fs/cgroup/cpu.max), runs
 # pinned to more CPUs than the cap allows are throttled together, and a timed run among them is void.  --cores CPUS (48-57,60)
 # declares the CPUs a run pins: CMD runs under `taskset -c CPUS`, and the lease records cores=CPUS.  The pin is the lease's word, not
-# a fence: a job can still widen its own affinity.  Before it takes any GPU, such a request counts its CPUS with every live
-# lease's, each CPU once: a lease's cores=, or for a lease that declared none the CPUs its processes are allowed on at that moment
-# (Cpus_allowed_list of its pid's process tree under $GPU_LEASE_PROC, default /proc; every CPU when none of them is left to read).
+# a fence: a job can still widen its own affinity.  A list `taskset -c CPUS` can't pin to here (CPUs this machine hasn't, or outside
+# its cpuset) is refused (2) before any GPU is taken or any lease stopped for it, quota or none; a list only part of which is this
+# machine's is pinned to that part, as taskset does, and is recorded and counted whole.  Before it takes any GPU, such a request
+# counts its CPUS with every live lease's, each CPU once: a lease's cores=, or for a lease that declared none the CPUs its
+# processes are allowed on at that moment (Cpus_allowed_list of its pid's process tree under $GPU_LEASE_PROC, default /proc; every
+# CPU when none of them is left to read).
 # A count over the quota is refused (75, holding nothing), saying the count, the quota, each lease's CPUs and what to do; with
 # --wait the request waits instead, unqueued, until they fit.  A machine without a quota (no file, or `max`) refuses nothing.
-# The count covers leases only: a process that holds no lease is not in it, whatever it is pinned to.  Neither is a request without
-# --cores refused: where there is a quota and a live lease declared its cores, it starts with one warning line naming that lease,
-# and the next request that declares counts it.
+# The count covers leases only: a process that holds no lease is not in it, whatever it is pinned to.  And only the leases of this
+# lease directory ($GPU_LEASE_DIR): a machine with a second directory is not counted across them.  A request without --cores is
+# not refused either: where there is a quota and a live lease declared its cores, it starts with one warning line naming that
+# lease, and the next request that declares counts it.
 # What the count can't see, the machine's own counter shows: every lease writes cpu.stat's nr_throttled and throttled_usec (the
 # file beside cpu.max) into its owner lines when it starts, and end_nr_throttled and end_throttled_usec when it is released, and
 # says the difference on stderr, so a timed run shows whether the machine was throttled while it held its GPUs.
@@ -146,7 +150,8 @@ usage() {
   echo "usage: gpu-lease N [--wait] [--on INDEX|UUID,...] [--cores CPUS] [--max-min M] [--mem-gb G] [--preemptible] [--timed] --" \
     "CMD... | gpu-lease status" >&2
   echo "  --cores CPUS (48-57,60): CMD is pinned to them (taskset -c; a job can still widen its own affinity), and the request is" \
-    "refused when they and the live leases' CPUs pass the machine's CPU quota. The count covers leases only" >&2
+    "refused when they and the live leases' CPUs pass the machine's CPU quota. The count covers leases only, and the leases of this" \
+    "lease directory: a machine with a second directory is not counted across them" >&2
   exit 2
 }
 
@@ -776,6 +781,12 @@ if [ -n "$cores" ]; then
   for tool in python3 taskset; do
     command -v "$tool" > /dev/null 2>&1 || { echo "gpu-lease: --cores needs $tool, which isn't on PATH here" >&2; exit 2; }
   done
+  # tried now: under the lease the pin would fail only at CMD's start, after the GPUs are taken and a lease may have been stopped
+  pin_err=$(taskset -c "$cores" true 2>&1) || {
+    echo "gpu-lease: --cores $cores can't be pinned on this machine, so nothing is leased:" \
+      "${pin_err:-taskset -c $cores true failed}" >&2
+    exit 2
+  }
 fi
 
 who=${GPU_LEASE_WHO:-${RESEARCH_LANE:-$(id -un)}}

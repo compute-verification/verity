@@ -22,7 +22,8 @@ pytestmark = pytest.mark.skipif(shutil.which("flock") is None or shutil.which("b
 class Node:
     """A machine as gpu-lease reads it. Its quota is 81.6 of 96 CPUs unless `quota` says otherwise (None: no cpu.max at all), and
     it has no cpu.stat until `throttled` writes one. Its `taskset` writes its first two arguments to `pinned` and runs the rest
-    unpinned: the made-up CPUs aren't this machine's."""
+    unpinned: the made-up CPUs aren't this machine's. A request with `--cores` calls it once to try its list, and once more
+    to start CMD when it is leased."""
 
     def __init__(self, tmp_path: Path, quota: str | None = "8160000 100000"):
         self.gl, self.proc, self.bin = tmp_path / "gl", tmp_path / "proc", tmp_path / "bin"
@@ -83,7 +84,8 @@ def test_a_request_whose_cores_pass_the_quota_with_the_live_leases_is_refused_be
         "  GPU 1, pid 12, run r-b, who two: cores=40-71,80-83 (36)",
         "  the count covers leases only: a process that holds no lease is not in it",
         "  start when a lease ends, ask for fewer CPUs, or have the holder of a lease that declared none pass --cores"]
-    assert not (node.gl / "2.owner").exists() and not node.pinned.exists()   # no GPU taken, CMD never started
+    assert not (node.gl / "2.owner").exists()                                # no GPU taken
+    assert node.pinned.read_text() == "-c 72-79,84-85\n"                     # its list tried, and CMD never started
     status = subprocess.run(["bash", str(GPU_LEASE), "status"], env=node.env, capture_output=True, text=True).stdout.splitlines()
     assert status[2:] == ["2 free", "3 free"]
     assert len(held) == 2
@@ -100,7 +102,8 @@ def test_a_request_that_fits_is_leased_pinned_and_recorded_so_the_next_request_c
     assert owner.startswith("pid=") and " run=r-new who=asker " in owner and " cores=70-79 cmd=bash -c" in owner
     assert nxt == "next=75"                                                  # with this lease's 10, two more are 82 CPUs
     assert "82 CPUs would be pinned" in r.stderr and "  GPU 2, pid " in r.stderr and ", run r-new, who asker: cores=70-79 (10)" in r.stderr
-    assert "CMD pinned to CPUs 70-79" in r.stderr and node.pinned.read_text() == "-c 70-79\n"
+    assert "CMD pinned to CPUs 70-79" in r.stderr
+    assert node.pinned.read_text() == "-c 70-79\n-c 70-79\n-c 80-81\n"       # its list tried, CMD started, the next one's tried
     assert len(held) == 2
 
 
@@ -109,7 +112,7 @@ def test_a_machine_without_a_quota_refuses_nothing(tmp_path, quota):
     node = Node(tmp_path, quota=quota)
     held = node.lease(0, f"pid=11 run=r-a who=one {SINCE} cores=0-95 cmd=serve")
     r = node.ask("--cores", "0-95")
-    assert r.returncode == 0 and "would be pinned" not in r.stderr and node.pinned.read_text() == "-c 0-95\n"
+    assert r.returncode == 0 and "would be pinned" not in r.stderr and node.pinned.read_text() == "-c 0-95\n" * 2
     r = node.ask()                                                           # and warns nobody: there is no count to be left out of
     assert r.returncode == 0 and "warning" not in r.stderr
     assert held
@@ -156,6 +159,7 @@ def test_a_pinned_process_that_holds_no_lease_is_not_counted_and_the_refusal_and
     usage = subprocess.run(["bash", str(GPU_LEASE), "--help"], env=node.env, capture_output=True, text=True)
     assert usage.returncode == 2 and "The count covers leases only" in usage.stderr
     assert "a job can still widen its own affinity" in usage.stderr
+    assert "the leases of this lease directory: a machine with a second directory is not counted across them" in usage.stderr
     assert held
 
 
@@ -193,7 +197,7 @@ def test_a_lease_writes_the_machines_throttle_counters_at_its_start_and_at_its_r
             f"({node.cpu_max.parent / 'cpu.stat'})") in r.stderr.splitlines()
     r = node.ask("--on", "2", cmd=("true",))                                 # a lease that declares nothing writes them too
     assert " nr_throttled=9 throttled_usec=4000 end_nr_throttled=9 end_throttled_usec=4000 cmd=true" in (node.gl / "2.owner").read_text()
-    assert r.returncode == 0 and node.pinned.read_text() == "-c 0-9\n"       # and is not pinned
+    assert r.returncode == 0 and node.pinned.read_text() == "-c 0-9\n" * 2   # and is not pinned: both are the first request's
     assert "nr_throttled +0, throttled_usec +0" in r.stderr
 
 
@@ -214,7 +218,8 @@ def test_with_wait_a_request_over_the_quota_waits_unqueued_and_starts_when_a_lea
     assert said[5] == "gpu-lease: waiting, unqueued, until they fit" and not list(node.gl.glob("wait.*"))
     os.close(held)                                                           # the lease ends
     out, err = p.communicate()
-    assert p.returncode == 0 and out == "ran\n" and "would be pinned" not in err and node.pinned.read_text() == "-c 80-89\n"
+    assert p.returncode == 0 and out == "ran\n" and "would be pinned" not in err
+    assert node.pinned.read_text() == "-c 80-89\n" * 2                       # tried once, however long it waited
 
 
 def test_a_check_that_fails_leases_nothing_and_cores_must_be_a_cpu_list(tmp_path):
@@ -224,14 +229,29 @@ def test_a_check_that_fails_leases_nothing_and_cores_must_be_a_cpu_list(tmp_path
     node.program("python3", "exit 3")
     r = node.ask("--cores", "0-3")
     assert r.returncode == 2 and "the CPU quota check of --cores 0-3 failed (exit 3), so nothing is leased" in r.stderr
-    assert not node.pinned.exists() and not list(node.gl.glob("*.owner"))
+    assert node.pinned.read_text() == "-c 0-3\n" and not list(node.gl.glob("*.owner"))
+
+
+def test_cores_the_machine_cannot_pin_to_are_refused_before_any_gpu_is_taken(tmp_path):
+    node = Node(tmp_path)
+    node.program("taskset", "echo \"taskset: failed to set pid 7's affinity: Invalid argument\" >&2\nexit 1")
+    r = node.ask("--cores", "200-201", cmd=("echo", "ran"))
+    assert r.returncode == 2 and r.stdout == ""
+    assert r.stderr.splitlines() == ["gpu-lease: --cores 200-201 can't be pinned on this machine, so nothing is leased: taskset: "
+                                     "failed to set pid 7's affinity: Invalid argument"]
+    assert not list(node.gl.glob("*.owner"))                                 # no GPU was taken for a CMD that could not start
 
 
 @pytest.mark.skipif(shutil.which("taskset") is None, reason="needs taskset(1)")
-def test_cmd_runs_on_the_cores_it_declared(tmp_path):
+def test_cmd_runs_on_the_cores_it_declared_and_a_cpu_no_machine_has_is_refused(tmp_path):
     node = Node(tmp_path, quota=None)
     cpu = min(os.sched_getaffinity(0))
     env = {**node.env, "PATH": node.path}                                    # this machine's taskset
     r = subprocess.run(["bash", str(GPU_LEASE), "1", "--cores", str(cpu), "--mem-gb", "0", "--", sys.executable, "-c",
                         "import os; print(sorted(os.sched_getaffinity(0)))"], env=env, capture_output=True, text=True)
     assert r.returncode == 0 and r.stdout == f"[{cpu}]\n"
+    owners = {p.name: p.read_text() for p in node.gl.glob("*.owner")}
+    r = subprocess.run(["bash", str(GPU_LEASE), "1", "--cores", "99999", "--mem-gb", "0", "--", "echo", "ran"], env=env,
+                       capture_output=True, text=True)
+    assert r.returncode == 2 and r.stdout == "" and {p.name: p.read_text() for p in node.gl.glob("*.owner")} == owners
+    assert "gpu-lease: --cores 99999 can't be pinned on this machine, so nothing is leased: " in r.stderr
