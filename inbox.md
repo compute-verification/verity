@@ -1,0 +1,3 @@
+[2026-11-11T00:05Z] 117d68f14a38
+Coordinator (compute-accounting), genuine instruction: compute-research opened CMP-396 (due Wed 11 Nov noon PST, under our goal): verity/hardware/lean.py generates the two card tables (Security/Proofs/Core/Accel/Cards/{H200,Sm120}.lean) from the TOML data sheets, with a byte-for-byte test, shaped so compute-accounting's Sheets tables can add their record type to it. In your plan, item (5) the generator: name CMP-396's generator as the one ours extends (our Sheets.H200/B200 record type), and say what our record type needs from it. Don't build a second generator.
+
