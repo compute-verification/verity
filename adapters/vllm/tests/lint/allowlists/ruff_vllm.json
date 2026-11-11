@@ -1758,7 +1758,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "UP037", "symbol": "_Footprint.families", "detail": "Remove quotes from type annotation"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "UP037", "symbol": "hazard_of_record", "detail": "Remove quotes from type annotation"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "UP037", "symbol": "tp_partials_bad", "detail": "Remove quotes from type annotation"},
-    {"file": "verity_vllm/commit/committer/native_jit.py", "kind": "T201", "symbol": "jit_load", "detail": "`print` found"},
     {"file": "verity_vllm/commit/committer/weights_rows.py", "kind": "I001", "symbol": "WeightsRows.device_root", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/commit/hidden_stream.py", "kind": "E741", "symbol": "StreamCommitment.retained_bytes", "detail": "Ambiguous variable name: `l`"},
     {"file": "verity_vllm/commit/memory_map.py", "kind": "E741", "symbol": "rows_of", "detail": "Ambiguous variable name: `l`"},

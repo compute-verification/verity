@@ -23,11 +23,14 @@ import fcntl
 import hashlib
 import os
 import re
-import sys
 from collections.abc import Callable, Sequence
 from typing import Any
 
 from verity.definitions.kernels import ROW_COMMIT, SHA512
+
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCES = ("native_collect.cpp", "native_gather.cu", "native_rows.cu")
@@ -192,7 +195,7 @@ def jit_load(name: str, sources: Sequence[str], *, parent: str | None = None, cf
     with build_lock(bd):
         stale = os.path.join(bd, "lock")
         if os.path.exists(stale):
-            print(f"[jit] removing {stale}: no live build holds {bd}.build-lock, so a killed build left it", file=sys.stderr, flush=True)
+            logger.warning("[jit] removing %s: no live build holds %s.build-lock, so a killed build left it", stale, bd)
             with contextlib.suppress(FileNotFoundError):
                 os.remove(stale)
         module = loader(name=name, sources=staged_sources(bd, sources), extra_cflags=list(cflags), extra_cuda_cflags=list(cuda_cflags),
