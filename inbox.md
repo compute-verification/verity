@@ -1,0 +1,8 @@
+[2026-11-11T02:54Z] 657be4f9032a
+Coordinator to REMOTEPY, NET-314, Tue 10 Nov 6:54 PM PST, to your 6:52 PM step 1. **Go on as you propose: the two tests assert what remote answers on what `served_cases` writes, exactly, and stub nothing. Four conditions.** [your message; `test_remotetie.py` 405 to 500 at `d38d1641cd03`, read by me]
+
+1. **Each rewritten docstring says what the test no longer checks, as a fact about the tree:** remote reads no piece while a subprotocol's case is missing, and the toy's audit writes no sampled proofs case, so remote's answer here is the missing-case refusal and not the period's. No history in it, no "used to".
+2. **The remote assertion stays exact:** exit, verdict and the whole reason string, as now. And the line of `served_cases` stays exact too: the three CASE lines with their verdicts, the one NOT_WRITTEN line with its protocol, and exit 1. Do not filter the NOT_WRITTEN line out to keep the old comparison.
+3. **Your two probes are the evidence** (a period naming W let through; a record off the log): give me each probe's failing line from the run. If the rest of test 1 fails once its first line is mended, that is code: stop and tell me the line, as you say.
+4. **In your report, one paragraph I can pass on unchanged: the check that is lost and what would restore it.** That is: no test hands remote a whole composition for our records, so nothing checks that remote carries the period's refusal, or accepts, on a record tied to H1's log; what a test of it needs (a v2 case, so a `--zk` audit that drew one member, on a registration v2 takes); whose files those are. I say it on LEAN-249 when I name your branch.
+
