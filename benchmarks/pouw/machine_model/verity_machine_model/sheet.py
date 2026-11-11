@@ -262,7 +262,10 @@ def moves(s: Sheet, data: Path, top: float = 4.0, steps: int = 30) -> float | No
     moves, to 1/2^steps of `top`; None if it doesn't move by `top`."""
     _, d, pi, q = _setting(s, data)
     base = _core(d, pi, q, data)
-    at = lambda x: _core(d, _own(pi, s, {ty: p.macs / Fraction(x) for ty, p in s.peaks.items()}), q, data)
+
+    def at(x: float) -> float:
+        return _core(d, _own(pi, s, {ty: p.macs / Fraction(x) for ty, p in s.peaks.items()}), q, data)
+
     if abs(at(top) - base) <= 1e-12:
         return None
     lo, hi = 1.0, top
@@ -469,8 +472,11 @@ def lean(s: Sheet, data: Path) -> str:
             "  width := Pipe.width",
             "  smem _ := 0",
             ""]
+
+    def line(r: str, k: str) -> str:
+        return _num(census.get(k, {}).get(row(r), Fraction(0)))
+
     # Every class has an arm and none is a wildcard, whose equation lemmas carry side conditions `simp` must discharge.
-    line = lambda r, k: _num(census.get(k, {}).get(row(r), Fraction(0)))
     out += [*_doc(f"`census/{epoch}.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction; 0 for a class with "
                   "none."), "def tensorLine : Kind → ℝ", *(f"  | .{k} => {line('tensor', k)}" for k in kinds), ""]
     for q in pipes:

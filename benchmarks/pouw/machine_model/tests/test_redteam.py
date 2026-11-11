@@ -72,7 +72,10 @@ def test_margin_reads_the_named_vector() -> None:
     assert ri.base > cur.base + 1e-4 and ri.worst > ri.base + 5e-4
     d = E.design("dither-2s-licpw-redux-l32", data)
     e = E.eps(d, RT._single(E.machine("", data), "JI90_0", 1.02), 1.22, data, operands="free", credit="floor")
-    live = lambda m: {k for k, v in m.folds.items() if v > 1e-9}
+
+    def live(m):
+        return {k for k, v in m.folds.items() if v > 1e-9}
+
     assert live(e.cheat) and live(e.cheat) <= set(d.counted_routes), "the cheater's fold there is counted"
     assert live(e.baseline) and not live(e.baseline) & set(d.counted_routes), "♭'s is built"
     assert e.machine_eps == pytest.approx(0.00613, abs=5e-5)
