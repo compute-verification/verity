@@ -21,8 +21,9 @@
 # LOADS loads of `examples/vllm/serve_load.py --fixed`, each under a release run of its own; in a Commit arm the next load
 # waits for the window's seal. The first load after the endpoint listens is what the run of record's one load was; later
 # ones are warm. Once the endpoint stops, `served_ab.py life` reads the serve dir on the node and writes
-# $OUT/<round>/<arm>.json (served_overhead.py's aggregate, each load's step times, each window's timed parts: the load is
-# synthetic and its class public), and the serve dir is deleted. `served_ab.py table $OUT` then prints the table.
+# $OUT/<round>/<arm>.json (served_overhead.py's aggregate, each load's step times, each window's timed parts, and the
+# seconds from the server's start to its endpoint listening: the load is synthetic and its class public), and the serve
+# dir is deleted. `served_ab.py table $OUT` then prints the table.
 #
 # Before the first lease, on CORES alone (the whole script runs under `taskset -c CORES`; the card is CARD): `verity-vllm
 # predict row` for the row's Build of record; the two taps (pod_fa3_tap.sh's guarded build at TAP_HDIMS, pod_norm_tap.sh)
@@ -94,10 +95,11 @@ serve_args() {  # arm $1's serve-openai arguments beyond the engine's, one a lin
 }
 
 life() {  # under the lease: round $1's lifetime of arm $2: the endpoint, its LOADS loads, the endpoint stopped, its record
-  local name=$1 arm=$2 D=$RUNS/$1/$2 srv up=0 rc=0 j release args w s t0=$SECONDS
+  local name=$1 arm=$2 D=$RUNS/$1/$2 srv up=0 rc=0 j release args w s t0=$SECONDS started
   mkdir -p "$D" "$OUT/$name"
   mapfile -t args < <(serve_args "$arm")
   cd "$TREE/integrations/vllm" || return 9
+  started=$(date +%s.%N)   # the record's listen_s runs from here to the server's own time as it begins to listen
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}-$name-$arm" --max-num-batched-tokens "$T" \
     --admit release-order --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" "${args[@]}" \
@@ -130,7 +132,7 @@ life() {  # under the lease: round $1's lifetime of arm $2: the endpoint, its LO
   trap - TERM INT
   kill -TERM "$srv" 2>/dev/null; wait "$srv"
   local stopped=$?
-  "$PY" "$AB" life "$D" --arm "$arm" --round "$name" > "$OUT/$name/$arm.json" 2> "$D/life.err" \
+  "$PY" "$AB" life "$D" --arm "$arm" --round "$name" --started "$started" > "$OUT/$name/$arm.json" 2> "$D/life.err" \
     || { rm -f "$OUT/$name/$arm.json"; tail -60 "$D/serve.log" > "$OUT/$name/$arm.serve.tail"; rc=12; }
   say "$name $arm: listening after $listening s, loads exit $rc, stopped (exit $stopped), $(count "$D/windows.jsonl") window(s)" \
     "closed, $(count "$D/seals.jsonl") sealed$([ "$rc" = 12 ] && echo "; no record: $(tail -1 "$D/life.err" | cut -c1-400)")"

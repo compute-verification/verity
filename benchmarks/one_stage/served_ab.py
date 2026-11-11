@@ -1,13 +1,15 @@
 """`served_ab.sh`'s records and table: what each part of the served step costs, arm by arm.
 
-    python benchmarks/one_stage/served_ab.py life SERVE_DIR --arm ARM --round ROUND
+    python benchmarks/one_stage/served_ab.py life SERVE_DIR --arm ARM --round ROUND [--started EPOCH_S]
     python benchmarks/one_stage/served_ab.py table OUT [--out DIR]
 
 `life` runs on the node, over one lifetime's serve dir, and prints its record: `served_overhead.py`'s aggregate, each
 load's step times (`served_overhead.serve_dir`'s ``step_s``: the first runs from the load's first arrival to its first
 step's output, so it holds the Commit window's open) and each window's and seal's timed parts, numbers alone
 (`numbers`). `served_ab.sh`'s load is synthetic and its class public, so the step times leave the node here, as a served
-window's never do.
+window's never do. With ``--started`` (the node's clock when the server was started) it holds ``listen_s``, the seconds
+from there to the endpoint listening (``serve.json``'s ``clocks.time``, written as the server begins to listen): what an
+arm does before it listens is paid there, not in a load.
 
 `table` reads every ``OUT/rep-<i>/<arm>.json`` (a warm round's is left out) and, for the first load after each endpoint
 listens and for the later, warm loads apart, gives each arm's median, least and greatest over its loads of:
@@ -16,6 +18,9 @@ listens and for the later, warm loads apart, gives each arm's median, least and 
 - ``first_token_s``: the mean over its requests of arrival to the output of the step that emitted its first token;
 - ``decode_step_s``: the mean of its steps after the first;
 - ``close_after_s``: the on-loop part of the window's close after its last step, when the engine can't step.
+
+Beside the first loads it gives ``listen_s`` over the arm's lifetimes, where every one recorded it: a cost moved from a
+load to the server's start shows there.
 
 Arms are ordered stock, commit, pearl, live, each one part more than the one before (`PARTS`), so a part's cost is its
 arm's median less the arm before's: in seconds, as a share of the last arm's wall, and over stock's. `table` writes
@@ -39,6 +44,8 @@ PARTS = {"commit": "the Commit", "pearl": "Pearl+ under the Commit, its coins in
 MEASURES = ("wall_s", "first_token_s", "decode_step_s", "close_after_s")
 HEADS = {"wall_s": "window wall, s", "first_token_s": "to the first token, s", "decode_step_s": "a decode step, s",
          "close_after_s": "on-loop close after, s"}
+#: a lifetime's seconds from the server's start to its endpoint listening, and its column's head
+LISTEN, LISTEN_HEAD = "listen_s", "server start to listening, s"
 
 
 def numbers(x: Any) -> Any:
@@ -59,8 +66,9 @@ def _jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(x) for x in path.read_text().splitlines() if x.strip()] if path.exists() else []
 
 
-def life(d: Path, arm: str, round_: str) -> dict[str, Any]:
-    """One lifetime's record from its serve dir ``d`` (module docstring); `ValueError` as `served_overhead.serve_dir`'s."""
+def life(d: Path, arm: str, round_: str, started: float | None = None) -> dict[str, Any]:
+    """One lifetime's record from its serve dir ``d`` (module docstring), the server started at ``started`` on the node's
+    clock; `ValueError` as `served_overhead.serve_dir`'s."""
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import served_overhead as SO
 
@@ -76,7 +84,9 @@ def life(d: Path, arm: str, round_: str) -> dict[str, Any]:
     seals = [numbers({k: x.get(k) for k in ("window", "seal_s", "phases_s")}) for x in _jsonl(d / "seals.jsonl")]
     serve = json.loads((d / SO.SERVE).read_text())
     protocols = serve.get("protocols")
+    listened = numbers(serve.get("clocks", {}).get("time"))
     return {"schema": LIFE, "arm": arm, "round": round_, "aggregate": agg,
+            LISTEN: None if started is None or listened is None else listened - started,
             "loads": [{k: ld[k] for k in (*SO.PUBLIC_LOAD, "step_s") if k in ld} for ld in s["loads"]],
             "windows": windows, "seals": seals,
             "ready": numbers(protocols.get("ready")) if isinstance(protocols, dict) else None}
@@ -100,6 +110,9 @@ def _kind(by_arm: dict[str, list[dict[str, float]]]) -> dict[str, Any]:
     """One kind of load (first or warm) over the arms that have one: each arm's summaries, and each part's cost."""
     arms = [a for a in ORDER if by_arm.get(a)]
     out: dict[str, Any] = {"arms": {a: {m: summary([x[m] for x in by_arm[a]]) for m in MEASURES} for a in arms}, "parts": []}
+    for a in arms:
+        if all(LISTEN in x for x in by_arm[a]):
+            out["arms"][a][LISTEN] = summary([x[LISTEN] for x in by_arm[a]])
     if not arms:
         return out
     med = lambda a, m: out["arms"][a][m]["median"]   # noqa: E731
@@ -138,7 +151,8 @@ def table(out: Path) -> dict[str, Any]:
                    if w["failed"] or w["passed"] is False or (w["pearl"] or {}).get("failed")]
         for i, ld in enumerate(doc["loads"]):
             shape.add((ld["requests"], ld["tokens"], ld["steps"]))
-            (first if i == 0 else warm).setdefault(arm, []).append(measures(ld))
+            listen = {LISTEN: doc[LISTEN]} if i == 0 and doc.get(LISTEN) is not None else {}
+            (first if i == 0 else warm).setdefault(arm, []).append({**measures(ld), **listen})
     if not first:
         raise ValueError(f"{out}: no rep-<i>/<arm>.json record")
     if len(shape) != 1:
@@ -166,11 +180,13 @@ def markdown(t: dict[str, Any]) -> str:
         k = t[key]
         if not k["arms"]:
             continue
-        lines += [f"**{title}**", "", "| arm | loads | " + " | ".join(HEADS[m] for m in MEASURES) + " | × stock |",
-                  "|---|---|" + "---|" * (len(MEASURES) + 1)]
+        listen = any(LISTEN in row for row in k["arms"].values())
+        lines += [f"**{title}**", "", "| arm | loads | " + " | ".join(HEADS[m] for m in MEASURES) + " | × stock |"
+                  + (f" {LISTEN_HEAD} |" if listen else ""), "|---|---|" + "---|" * (len(MEASURES) + 1 + listen)]
         for a, row in k["arms"].items():
             over = f"{row['over_stock']:.3g}×" if "over_stock" in row else ""
-            lines.append(f"| {a} | {row['wall_s']['n']} | " + " | ".join(_cell(row[m]) for m in MEASURES) + f" | {over} |")
+            lines.append(f"| {a} | {row['wall_s']['n']} | " + " | ".join(_cell(row[m]) for m in MEASURES) + f" | {over} |"
+                         + (f" {_cell(row[LISTEN]) if LISTEN in row else ''} |" if listen else ""))
         if k["parts"]:
             lines += ["", f"| part | adds to the wall, s | share of the {k['top']} arm's wall | over stock's wall | "
                           "adds to the first token, s | adds to a decode step, s |", "|---|---|---|---|---|---|"]
@@ -187,13 +203,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("serve_dir", type=Path)
     p.add_argument("--arm", required=True, choices=ORDER)
     p.add_argument("--round", required=True)
+    p.add_argument("--started", type=float, default=None)
     p = sub.add_parser("table")
     p.add_argument("out_dir", type=Path)
     p.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
     try:
         if a.cmd == "life":
-            print(json.dumps(life(a.serve_dir, a.arm, a.round)))
+            print(json.dumps(life(a.serve_dir, a.arm, a.round, a.started)))
             return 0
         t = table(a.out_dir)
     except (ValueError, KeyError, OSError) as e:

@@ -28,7 +28,8 @@ def _load(t0: float, first: float, step: float, *, window: int | None = None) ->
     return recs + [step_(t0 + first), step_(t0 + first + step), step_(t0 + first + 2 * step, (a, b))]
 
 
-def _dir(d: Path, trace: list[dict], windows: list[dict] = (), seals: list[dict] = (), protocols: dict | None = None) -> Path:
+def _dir(d: Path, trace: list[dict], windows: list[dict] = (), seals: list[dict] = (), protocols: dict | None = None,
+         listened: float | None = None) -> Path:
     d.mkdir(parents=True)
     (d / O.TRACE).write_text("".join(json.dumps(r) + "\n" for r in [HEADER, *trace]))
     (d / O.WINDOWS).write_text("".join(json.dumps(w) + "\n" for w in windows))
@@ -36,13 +37,14 @@ def _dir(d: Path, trace: list[dict], windows: list[dict] = (), seals: list[dict]
         (d / "seals.jsonl").write_text("".join(json.dumps(s) + "\n" for s in seals))
     e = {"pin": {"model": "m", "revision": "r", "world": 1}, "engine_kwargs": {"max_num_batched_tokens": 512}}
     (d / O.SERVE).write_text(json.dumps({"engine": e, "precision": "bfloat16", "admit": "release-order", "window_requests": 2,
-                                         "run_id": d.name, "protocols": protocols}))
+                                         "run_id": d.name, "protocols": protocols,
+                                         **({} if listened is None else {"clocks": {"perf_counter": 3.0, "time": listened}})}))
     return d
 
 
-def _record(out: Path, round_: str, arm: str, d: Path) -> None:
+def _record(out: Path, round_: str, arm: str, d: Path, started: float | None = None) -> None:
     (out / round_).mkdir(parents=True, exist_ok=True)
-    (out / round_ / f"{arm}.json").write_text(json.dumps(AB.life(d, arm, round_)))
+    (out / round_ / f"{arm}.json").write_text(json.dumps(AB.life(d, arm, round_, started)))
 
 
 def test_numbers_keeps_numbers_alone():
@@ -66,7 +68,7 @@ def test_a_lifetimes_record_has_step_times_and_the_windows_timed_parts(tmp_path)
                                "pearl": {"seconds": {"install": 0.3}, "passes": 3, "calls": 9, "coin_source": "in-process",
                                          "failed": False}}]
     assert doc["seals"] == [{"window": 0, "seal_s": 1.2, "phases_s": {"store": 0.7}}]
-    assert doc["ready"] == {"seconds": {"kernel": 0.2, "lean": 1.0}}
+    assert doc["ready"] == {"seconds": {"kernel": 0.2, "lean": 1.0}} and doc["listen_s"] is None
     assert AB.measures(ld) == pytest.approx({"wall_s": 5.0, "first_token_s": 4.0, "decode_step_s": 0.5, "close_after_s": 2.0})
 
 
@@ -97,6 +99,30 @@ def test_the_table_gives_each_part_as_its_arm_less_the_arm_before(tmp_path):
     assert warm["arms"]["commit"]["wall_s"]["median"] == pytest.approx(6.0) and warm["parts"][1]["wall_s"] == pytest.approx(5.0)
     md = AB.markdown(t)
     assert "| the Commit | 5 | 38.5% | 250% | 4 | 0.5 |" in md and "| pearl | 3 |" in md and "6.5×" in md
+
+
+def test_the_seconds_from_the_servers_start_to_listening_are_a_lifetimes_and_a_column_beside_the_first_loads(tmp_path):
+    """``listen_s`` is the server's own time as it begins to listen less the time the wrapper started it; the table
+    gives it for an arm whose every lifetime recorded it, beside the first loads alone, so seconds an arm moved from
+    its first load to before it listens show in the row they left and the column they reached."""
+    out = tmp_path / "out"
+    w = {"window": 0, "passed": True, "seconds": {"open": 0.1, "on_loop": 0.0}}
+    for i, (first, listened) in enumerate(((9.0, 1040.0), (5.0, 1044.5), (5.5, 1044.0)), 1):
+        d = _dir(tmp_path / f"p{i}", _load(10.0, first, 2.0, window=0) + _load(50.0, 4.0, 2.0, window=1),
+                 [w, {**w, "window": 1}], listened=listened)
+        assert AB.life(d, "pearl", f"rep-{i}", 1000.0)["listen_s"] == pytest.approx(listened - 1000.0)
+        assert AB.life(d, "pearl", f"rep-{i}")["listen_s"] is None
+        _record(out, f"rep-{i}", "pearl", d, 1000.0)
+        _record(out, f"rep-{i}", "stock", _dir(tmp_path / f"s{i}", _load(10.0, 1.0, 0.5), listened=1030.0),
+                1000.0 if i < 3 else None)
+    t = AB.table(out)
+    pearl, stock = t["first"]["arms"]["pearl"], t["first"]["arms"]["stock"]
+    assert pearl["listen_s"] == pytest.approx({"n": 3, "median": 44.0, "min": 40.0, "max": 44.5}) and "listen_s" not in stock
+    assert "listen_s" not in t["warm"]["arms"]["pearl"]
+    first, warm = AB.markdown(t).split("**Later loads, warm**")
+    assert "| × stock | server start to listening, s |" in first and "| 44 (40 to 44.5) |" in first
+    assert "server start to listening" not in warm
+    assert next(x for x in first.splitlines() if x.startswith("| stock |")).endswith("|  |")
 
 
 def test_a_part_is_left_out_when_the_arm_before_it_did_not_run(tmp_path):
