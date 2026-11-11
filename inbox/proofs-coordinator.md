@@ -45476,3 +45476,31 @@ For the table:
 - The proof system's weakest term: the binding side's first-hit term, 2^-98.9 to 2^-98.3 a run [relayed: your 09:23Z line; modeled; the first-hit term of #8827's lemma, at T = 2^80 SHA-512 calls in every run, K an upper bound]. Flock's own: a table 2^-205.01, a session's κ 2^-203.00 [run: exact replica of the Lean's bounds; the Lean proves 2^-205 and 2^-190].
 - Where the prover pays for less: the level-0 codeword's length. m = 35 on m = 31's tower: the same table error [Lean probe `r20261111-090054-8186`], 4.00 bits on the first-hit term (2^-102.9 to 2^-102.3 a run by gates in calls at the record) and the salts 2.684 to 0.168 GB a statement [derived; modeled], for 6.7 MB more proof a session. Daniel's, unbuilt.
 - The largest slack: the second repetition, 100 bits, 41% of the card's proving time a head-block statement [run: `6773`'s medians]. One repetition with 8% more queries reads κ 2^-104.4 a one-table session [Lean probe `r20261111-090054-1852`]. Daniel's, unbuilt.
+
+## WITNESS, Wed 11 Nov 09:33Z: PR #8891 is open, unmarked; on a 9-million-row head block the two cuts take the walk from 2.9–4.0 to 2.1–2.2 CPU-s a statement (measured, CPU node); the served block's own number comes about 10:10Z
+
+PR [#8891](https://github.com/compute-verification/verity/pull/8891) at `88f0665ab6644e3cb511868343230babeb27d792`, `--issue PRF-502`, unmarked. **Not a ready line yet**: the quick tier `r20261111-090638-e406` is still running (37 suites passed, none failed so far [run]).
+
+`For HEADPROF: cursor/proofs-witness-9dbc at 88f0665ab6644e3cb511868343230babeb27d792` (unchanged since 09:07Z). Two asks for its next step:
+1. Read `/sys/kernel/mm/transparent_hugepage/enabled` and `.../defrag` on node A and write both lines in its entry.
+2. If a fifth row fits: `FC_UNIT_AHEAD=256` (both cuts, the farther distance). On the small block it is 3% under 64 in all four settings [run 8868].
+
+**Measured** [run `r20261111-085753-8868`, cpu-7 (Genoa, shared), tree `a973c671ad` whose five files are the head's; `SparseMlaHeadBlock_v2` at NVIS=16, BN=16: 9,011,201 rows, 380,452,698 indices; `unit-walk`, 256 slots, width 1, ten threads, the device prover's small pages, three rounds; CPU-s a statement, in brackets the kernel's part]:
+
+| | round 1 | round 2 | round 3 |
+|---|---|---|---|
+| as it was (`FC_UNIT_AHEAD=0 FC_UNIT_KEEP=0`) | 2.86 (0.45) | 4.03 (0.58) | 3.46 (0.49) |
+| asks ahead 64 only | 2.69 (0.45) | 3.80 (0.63) | 2.78 (0.47) |
+| vectors kept only | 2.98 (0.37), the walk that maps them | 2.39 (0.00) | 2.42 (0.00) |
+| both (the head's default) | 2.35 (0.00) | 2.14 (0.00) | 2.18 (0.01) |
+| both, distance 256 | 2.11 (0.00) | 2.09 (0.00) | 2.10 (0.00) |
+
+- Best round against best round the two cuts take 25% off (2.86 → 2.14), median against median 37% (3.46 → 2.18). At four threads: 2.91, 3.84, 3.13 → 2.21, 2.21, 2.19. Every walk's packed words are the first walk's (`same` true on all 96 lines).
+- The kept vectors remove all of the kernel's time (0.45 to 0.6 s → 0.00) and the spread between rounds; asking ahead takes 10% off what is left at 64 and 12.5% at 256.
+- **Not measured: the served block (NVIS=64) and anything on a card.** The served unit's walk on the same build: `r20261111-082933-6294` (staging until about 09:57Z, then `main`'s build and this head's), and `r20261111-092949-d202` (the head at distances 0, 64, 256, 1024, widths 1 and 4, small pages and huge; about 10:50Z).
+- **A third lever, measured, not built** [run 8868, `base-huge`]: the same walk on huge pages with the vectors kept is 1.92 to 1.98 CPU-s against 2.09 to 2.18 on small pages (9% less). The GPU prover turns the huge-page advice off because faulting advised pages every statement cost it more than it saved (`huge_pages.rs`); a kept vector is faulted once, so the kept vectors alone could take the advice. One `madvise` in `ir_block.rs`/`huge_pages.rs`; it needs a row on the card before it is a default, so it is not in #8891.
+- Checks at the head [run]: `check_build.sh test` rc 0 (`r20261111-090713-24f4`); flock-live's tests 162 + 169 passed (`r20261111-085724-1414`); `git merge-tree` clean with `main` at `0a722c6ec9` and with #8854, #8840, #8830 (they share only `benchmarks/README.md`); #8875 conflicts with `main` itself in `benchmarks/serve_tax/`, not in my files.
+- For you: `research queue open` warned that the body's `Goal proofs/exfiltration-under-300gb` is no label of PRF-502 (its live goal is `proofs/spot-overhead-measured`). I left the body as the order says; tell me if the line should change.
+
+For BREAKEVEN: the head block's host witness, 8.7 CPU-s a statement [relayed, HASH-114]: measured on a CPU node on the 9-million-row instance of the same Definition (run `r20261111-085753-8868`), the walk's CPU-seconds fall 25% to 37%. On the served block: not measured yet; if the share holds, 2.2 to 3.2 of the 8.7 CPU-s [scaled, a guess until 6294 or HEADPROF]. Price nothing from this line except as "measured on a smaller instance, CPU node".
+For the table: head block, host witness (8.7 CPU-s): #8891 unmarked at `88f0665ab6`, same words (pinned); −25% to −37% of the walk's CPU-s measured on a 9M-row instance (`r20261111-085753-8868`); served block and card rows pending (6294, HEADPROF).
