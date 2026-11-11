@@ -48,7 +48,7 @@ import subprocess
 import sys
 import time
 from collections import Counter, defaultdict
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -117,7 +117,7 @@ class Plan:
         if not self.steps or self.steps[0] != 0 or self.steps != list(range(len(self.steps))):
             raise SystemExit(f"--snapshot-steps must be contiguous from 0 (got {a.snapshot_steps}): replay of step N needs every earlier KV producer")
         # --full-replay (diagnostic): tier b replays step 0 and these decode steps; every one must be a snapshot step
-        self.tier_b_steps = sorted({0, *TIER_B_STEPS} & set(self.steps)) if getattr(a, "full_replay", False) else []
+        self.tier_b_steps = sorted({0, *a.tier_b_steps} & set(self.steps)) if getattr(a, "full_replay", False) else []
         self.parallel = 1 if (a.laptop or a.parallel is not None and a.parallel <= 1) else (a.parallel or DEFAULT_PARALLEL_REPLAY)
         self.capture_dir = self.run / "capture"
         self.log = Path(a.log).resolve() if a.log else self.capture_dir / "log.jsonl.gz"
@@ -540,6 +540,8 @@ class Options:
     python_cpu: str | None = option("--python-cpu", default=None, help="the torch-free 3.12 python (default: sys.executable)")
     snapshot_steps: str = option("--snapshot-steps", default=DEFAULT_SNAPSHOT_STEPS, help="contiguous from 0, or `all` = every step of the workload (default all)")
     full_replay: bool = option("--full-replay", default=False, action="store_true", help="run.json's sampling.full_replay (no stage reads it)")
+    #: with --full-replay: run.json's tier_b_steps; no flag sets it, and a --run-dir re-run keeps the ones its run.json records
+    tier_b_steps: tuple[int, ...] = field(default=TIER_B_STEPS, init=False)
     parallel: int | None = option("--parallel", type=int, default=None, help="run.json's parallel_replay (default 4; 1 with --laptop)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     engine_arg: list[str] = option("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value) for every GPU stage, repeatable; e.g. max_num_batched_tokens=64, enable_prefix_caching=true")
@@ -693,6 +695,8 @@ def _defaults_from_run_dir(a: Options) -> None:
             setattr(a, arg, man[key])
     if a.snapshot_steps == DEFAULT_SNAPSHOT_STEPS and man.get("snapshot_steps"):
         a.snapshot_steps = ",".join(map(str, man["snapshot_steps"]))
+    if man.get("tier_b_steps"):
+        a.tier_b_steps = tuple(int(s) for s in man["tier_b_steps"])
     if a.snapshot_max_bytes is None and man.get("snapshot_max_bytes"):
         # a CPU-phase re-run keeps the cap the capture RAN with (and its derivation), never a re-derived one
         a.snapshot_max_bytes = int(man["snapshot_max_bytes"])
