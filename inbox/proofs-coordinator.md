@@ -35532,3 +35532,34 @@ Each fact: [run] by me now unless marked [read] or [guess]. Mailbox reread at 00
 3. When the move is on `main`: cross it (`tools/move/restack.py` with the three rows, or by hand as `rehearse.sh` does), drop the rows, pins and manifests, one `--update --moved` records run, the package checks and the quick tier; the rebuilt head named here the minute it is pushed.
 4. `core_base`'s `layers` rule (your item 4): not in the cut, because it is form (B) under another name. With `layers` in `core_base`, `Base` has to leave `reads_exempt` (an entry that exempts no read fails) and enter `meaning`, and then the network lock's four records change (`reads` gain seven definitions for two guarantees) [read: my 20:35Z measurement, not rerun], which breaks condition 1. It is the follow-up branch `cursor/proofs-flockpkg-layers-<hex>`, as your 20:45Z ruling has it, unless you rule otherwise.
 5. After the cut: (B)'s branch and its unmarked PR; one before/after cold-build pair on like slots; the M6 branch (`703053d91aa7`) waits for the cut on `main`.
+
+## PRF-516 REGX, Wed 11 Nov 00:48Z: part 1 (items 1 to 12) is stated and proved on `cursor/proofs-regx-efe1` at `e291286c28`, with the three witnesses and the lock's listing; the records run and the suites are in flight; no PR yet
+
+**State.** \[run\] unless marked.
+
+* Branch `cursor/proofs-regx-efe1`, head `e291286c2891b51972ab8e666a8d121b5af0c645`, on `main` `2b869ed35db5` (`main` had not moved at 00:45Z).
+* Items 1 to 6 (`Security/Definitions/Claims/SamplingGenericX.lean`), 7 to 12 (`Security/Proofs/Flock/SamplingGeneric/RegX.lean`, and `compilerKSRegX` in the aggregator beside `compilerKSReg`): all elaborate, and `compilerKSRegX` reads only `propext`, `Classical.choice`, `Quot.sound`. Tries: `r20261111-000943-f10a` (the aggregator, lean exit 0, 13 theorems probed), `r20261111-002710-b3c1` (`RegX.lean` after the last edit of `Reg.lean`, exit 0, 7 theorems probed), `r20261110-234923-88d5` (the witnesses, exit 0, sibling check passed).
+* The aggregator try's sibling check did not run: its stub failed on `Proofs/Properties/Flock/Nets/Hm2.olean`, which that slot tree did not hold after `Reg.lean` changed (1,617 modules "unchecked, not built"). The records run builds the package root, so a clash shows there.
+* Item 4 is as you ruled: `εregX` reads `BconfX` in both binding terms. It cost one lemma of 15 lines (`pr_inConfX_le`: one run's disagreement is `BconfX`'s first run, by `Pr_fst`), so the condition held.
+* The lock lists `Claims.SamplingGeneric.compilerKSRegX` (`claims.generic` for `CompilerKSRegX`; `witnesses`: honest `compilerKS_honest`, nontrivial `compilerKSRegX_nontrivial`), `compilerKSRegX_nontrivial`, and `Compiled.KSRegX_fails` (`claims.witnesses` for `Compiled.KSRegX`, with `KSReg`'s three `meets`). Their records are the records run's to write. No new premise was needed: the proof takes `Binds`, `Sessions` and `SessionKS`, as `ksReg_of_sessionKS` does.
+
+**Runs in flight.**
+
+* Records: `r20261111-004547-2aea` on `vy-nebius-cpu-1`, launched 00:45Z (`lean_changed.py --records Security --update`). \[guess\] done between 01:45Z and 02:30Z.
+* Suites: `r20261111-004725-9c09` on `vy-nebius-cpu-3`, launched 00:47Z (`suites.py --changed 2b869ed35db5 --quick`), at the head whose lock has no records yet; I rerun it at the head that holds them. \[guess\] done by 01:15Z.
+
+**Shared with `Reg.lean`, and copied.** `Reg.lean`'s own statements are unchanged \[read: its diff\]; each is now an instance.
+
+* Stated once, over the space or the trace: `pr_off_le` (the rewinding lemma at a table's plurality, over any finite space; `pr_offReg_le` and `pr_offRegX_le` are one line each), `trace_split` (the deterministic half at any trace; `reg_split` is it at `regVal`), `bconfX_of_disagree` (two tapes; `bconf_of_disagree` is it at one), `selOf`, `selOf_some` (`selReg` is `selOf` at `Freg`), `pr_miss_le` and `miss_of_event` (the second conjunct from the first, at any family of sets), and `pr_unfound_le` as it was. `opTable` is deleted. In the witnesses, `toy_incorrect_of` and `toy_notM` serve both forms.
+* Copied in `RegX.lean`: the union step inside `ksRegX_of_sessionKS` (about 20 lines; it differs in the space of the two binding events, and a shared statement would take both as parameters and be longer than the copy), `regValX_eq_plurX` (8 lines, unfolds a different definition), and `le_bconfX`, `pr_conflictX_le` (they unfold a different finder).
+
+**Where the plan was wrong, since 22:41Z.**
+
+* Item 11, "reusing `reg_split`, `pr_unfound_le` and `pr_inConf_le` unchanged": only `pr_unfound_le` is reused unchanged. `reg_split` is fixed to `regVal` (22:41Z), and after your ruling `pr_inConf_le` bounds by the wrong finder, so `pr_inConfX_le` replaces it.
+* Item 8, "as `pr_offReg_le`": true, with one trap for whoever does this again. Over a table on `Fin N`, `mem_filter` as a term or under `rw` synthesizes `Nat.decidableExistsFin` where `Rewinding.conflict` holds `Fintype.decidableExistsFintype`, and fails; only `simp only [conflict, mem_filter, mem_univ, true_and]` goes through. Two tries went to that line.
+* \[read\] #8512's `TwoReg.lean` proves the rewinding lemma a third time (`pr_offIreg_le`, about 70 lines, over `iopTable`), and holds `Compiled.selIn`, `selIn_some`, which are my `selOf`, `selOf_some` word for word. Neither clashes by name whichever lands first. In part 2 I use `selOf`; whether #8512 takes `pr_off_le` for `pr_offIreg_le` is its author's.
+
+**For NET-297, when this has landed** \[read: the statements; nothing here is on `main`\]. The fact: `Compiled.FregX H L P x` takes the hash, the verifier, the prover and the statement and no tape, and `Compiled.KSRegX` bounds, over the tape and the run's coins, an accepted run that samples a block of it by `εregX`, and an accepted run with it outside `M_δ` by `δ + εregX`. The premises are `compilerKSReg`'s. The binding is read at `BconfX`, two runs at two independent tapes, not at `Bconf`. What it does not say: that the period's model fixes the prover `P` by the registration; that is the period theorem's to state.
+
+**Next.** The records and the suites; then the PR, unmarked, with `Goal proofs/spot-bind-term`. Then part 2 on a branch from #8512's head.
+
