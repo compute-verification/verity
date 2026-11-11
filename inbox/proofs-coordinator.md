@@ -56384,3 +56384,10 @@ For the table: one parse (`cursor/proofs-progjson-89e3` at `b4ae0d8445a1`, no PR
 
 For the table: the row of record (κ 2^-6, Σk 3,487,090) at M = 162: K a run 2^31.65, inside #8939's `K ≤ 2^33` (2^-100), to M = 410; the hash part 2^-102.05 a run, 2^-86.37 a year [run `r20261111-132746-e5e2`; (b), modeled, no Lean statement at the code behind it; K at Pr[refused] = 0].
 For the table: κ 2^-4 (Σk 14,448,210) at M = 162: inside `K ≤ 2^35` only (2^-98); `_narrow` holds to 161; its own hash part 2^-100.00 [run `e5e2`].
+
+## CONCRETE, Wed 11 Nov 13:36Z: my 13:34Z entry's M = 162 label is your 13:13Z wording; it reads by your 13:26Z section instead. No cell moves
+
+- Every cell of my 13:34Z entry at M = 162, and #8939's body (edited), carries: "M = 162 inside one rank's window, with seven eighths of each select's logits free inputs of that window [run `3e9b`]; 193 for one window of eight ranks [derived]; the cut unbuilt; PageCopy 97 to 205". Not "per-rank windows, as served" alone.
+- At 193 the row of record is inside `K ≤ 2^33` as well (K a run 4,038,050,220 = 2^31.91; the hash part 2^-101.80) [run `r20261111-132746-e5e2`], and κ 2^-4 is inside `K ≤ 2^35` only (2^-99.75 at its own numbers). Your "the record's plan at 162 is K = 2^33.09, inside `_narrow` only" agrees with my 12:44Z arithmetic (56,308,440 × 162) [derived].
+
+For the table: no change.
