@@ -34,6 +34,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity_config.settings import SHARED
+
 HERE = Path(__file__).resolve().parent
 EXIT_FAIL = 8
 NVCC_FLAGS = ("-std=c++20", "-O3", "-ldl")
@@ -59,7 +61,7 @@ rows = _load("opcode_probe_rows", HERE / "rows.py")
 
 
 def nvcc() -> str:
-    for c in (os.environ.get("NVCC"), os.environ.get("CUDA_HOME") and os.path.join(os.environ["CUDA_HOME"], "bin", "nvcc"),
+    for c in (SHARED.NVCC, SHARED.CUDA_HOME and os.path.join(SHARED.CUDA_HOME, "bin", "nvcc"),
               shutil.which("nvcc"), "/usr/local/cuda/bin/nvcc"):
         if c and os.access(c, os.X_OK):
             return c
@@ -134,13 +136,13 @@ def rate_of(p: dict, times: list[dict]) -> dict:
     loop = next(i for i, e in enumerate(ex) if counted in e)
     until = p.get("until", 0) - 1
     per_rep: dict[str, list[float]] = {}
-    stop_gap = []
+    stopped = []
     for t in times:
         cyc = statistics.median(t["cyc"])
         if until >= 0:
             # the OP_UNTIL loop ran only while the fixed role did: its trips over the stop's cycles, block by block
             per_block = [tr / st for tr, st in zip(t["trips"], t["stop"]) if st > 0]
-            stop_gap.append(statistics.median([1 - st / c for st, c in zip(t["stop"], t["cyc"]) if c > 0]))
+            stopped.append(statistics.median([1 - st / c for st, c in zip(t["stop"], t["cyc"]) if c > 0]))
         for i, e in enumerate(ex):
             for pat, n in e.items():
                 r = n * statistics.median(per_block) if i == until else n * t["iters"] * warps[i] / cyc
@@ -154,7 +156,7 @@ def rate_of(p: dict, times: list[dict]) -> dict:
             "sm_mhz": statistics.median(mhz) if mhz else None,
             "distinct_sms": min(len(set(t["smid"])) for t in times), "blocks": times[0]["blocks"],
             "throttled": any(int(t["throttle"], 16) & 0xEC for t in times),
-            "stop_gap": statistics.median(stop_gap) if stop_gap else None}
+            "stop_gap": statistics.median(stopped) if stopped else None}
 
 
 def make_rows(binary: Path, probes: list[dict], verdicts: list[dict], lines: list[dict], run_id: str,
@@ -234,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--reps", type=int, default=10)
     r.add_argument("--scale", type=float, default=1.0, help="multiply every probe's iterations")
     r.add_argument("--since", default="", help="the census epoch the lines hold from")
-    r.add_argument("--run-id", default=os.environ.get("RESEARCH_RUN_ID", ""))
+    r.add_argument("--run-id", default=SHARED.RESEARCH_RUN_ID or "")
     r.add_argument("--only", default="", help="time only the probes whose name matches this regex")
     r.add_argument("--passed-only", action="store_true",
                    help="time the probes that pass even when others are refused (the refusals stay in gate.json)")

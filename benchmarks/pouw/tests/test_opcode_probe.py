@@ -215,8 +215,9 @@ sm89 = _load("opcode_probe_sm89_census", POUW / "opcode_probe" / "sm89" / "censu
 
 def test_sm89_pipe_rate_counts_the_loops_instructions_on_its_pipe():
     """An ALU probe's loop counter runs on the ALU pipe, so the pipe's rate counts it; SHFL's doesn't (SHF isn't SHFL)."""
-    loop = lambda pat, n: {"loops": [{"counts": {pat: n}, "top": {pat.rstrip("*"): n, "IADD3": 1, "ISETP.GE.AND": 1,
-                                                                    "BRA": 1}}]}
+    def loop(pat: str, n: int) -> dict:
+        return {"loops": [{"counts": {pat: n}, "top": {pat.rstrip("*"): n, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}}]}
+
     assert sm89.pipe_rate({"rates": {"0:LOP3.LUT": 1.6}}, loop("LOP3.LUT", 16)) == pytest.approx(1.6 * 18 / 16)
     assert sm89.pipe_rate({"rates": {"0:SHFL.BFLY": 0.5}}, loop("SHFL.BFLY", 16)) == pytest.approx(0.5)
     assert sm89.pipe_rate({"rates": {"0:IMAD": 1.9}}, loop("IMAD", 16)) == pytest.approx(1.9)
@@ -497,6 +498,22 @@ def test_jitter_reports_host_timing_spread_and_the_gap_to_the_chip(tmp_path, cap
 
 
 # ---- the probes themselves -------------------------------------------------------------------------------------------
+
+
+def test_nvcc_is_the_one_nvcc_names_then_cuda_homes(tmp_path, monkeypatch):
+    """The build's nvcc: the executable NVCC names, else CUDA_HOME's bin/nvcc; a name that is no executable is passed over."""
+    named, home = tmp_path / "named", tmp_path / "home" / "bin" / "nvcc"
+    home.parent.mkdir(parents=True)
+    for exe in (named, home):
+        exe.write_text("#!/bin/sh\n")
+        exe.chmod(0o755)
+    monkeypatch.setenv("NVCC", str(named))
+    monkeypatch.setenv("CUDA_HOME", str(home.parents[1]))
+    assert probe.nvcc() == str(named)
+    monkeypatch.setenv("NVCC", str(tmp_path / "absent"))
+    assert probe.nvcc() == str(home)
+    monkeypatch.delenv("NVCC")
+    assert probe.nvcc() == str(home)
 
 
 def _cuda_tools() -> bool:
