@@ -174,7 +174,7 @@ struct Variant {
   const char* name;
   RowKernel k;
 };
-// V's digits are the modes of S0, S1, s0 and s1 (verity/ml/kernels/sha512.cuh); a trailing "s" is ROLL = 0
+// V's digits are the modes of S0, S1, s0 and s1 (verity/definitions/kernels/sha512.cuh); a trailing "s" is ROLL = 0
 #define SXR_V(a, b, c, d) ((a) | (b) << 2 | (c) << 4 | (d) << 6)
 const Variant VARIANTS[] = {
     {"pouw", k_rows<Pouw>},
