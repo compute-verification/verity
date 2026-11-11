@@ -3,7 +3,11 @@ module
 public import Proofs.WeightSecurity.Cut
 public import Proofs.WeightSecurity.Deployed
 public import Proofs.WeightSecurity.Faulted
+public import Proofs.WeightSecurity.FaultedTwo
 public import Proofs.WeightSecurity.Pressure
+public import Proofs.WeightSecurity.Reg
+public import Proofs.WeightSecurity.RegPeriod
+public import Proofs.WeightSecurity.RegWitnesses
 public import Proofs.WeightSecurity.Served
 public import Proofs.WeightSecurity.Stop
 public import Proofs.WeightSecurity.Theft
@@ -15,6 +19,11 @@ public import Proofs.WeightSecurity.TwoRegWitnesses
 
 /-!
 # Model weight security's proofs
+
+`Reg`: a period of one-stage windows at the committed traces, the statement `PeriodReg` in `period_undetected`'s form.
+`RegPeriod`: `PeriodReg` from each window's committed form and miss bound (`periodReg_of`), so **`CompilerPeriodReg` is
+proved** (`compilerPeriodReg`). `RegWitnesses`: its premises hold together at `twoL` (`periodReg_honest`), and
+`PeriodReg` fails at `sksL` (`periodReg_nontrivial`).
 
 `Theft`: the leakage lemma, `WeightSecurity.Guarantees.Theft`, with its witnesses at the toy instance. `Served`: the
 leakage lemma at an audited deployment, `WeightSecurity.Guarantees.TheftServed`, with its witnesses at the toy
@@ -31,7 +40,9 @@ form and miss bound (`periodTwoReg_of`), so **`CompilerPeriodTwoReg` is proved**
 `sksLTwo` (`periodTwoReg_nontrivial`).
 `Faulted`: the leakage lemma with the audit's incorrect proof blocks as inputs
 to a faulted circuit rather than overwrites of releases, `WeightSecurity.Guarantees.TheftFaulted`, with its witnesses at
-the toy deployment, the releases' faithfulness from a checked dataflow, and the range clamp. `Cut`: `Theft` at an honest
-cut's channel (`theft_cut`), faulted use's hardness from honest use's (`faultedUseHard_of_cut`), and the cuts of
-autoregressive decoding: the token gate for position-local blocks, a one-token request's token, and the release.
+the toy deployment, the releases' faithfulness from a checked dataflow, and the range clamp. `FaultedTwo`:
+`TheftFaulted` at a two-stage audit (`TheftFaultedTwo`), its faults incorrect replay blocks within the same budget.
+`Cut`: `Theft` at an honest cut's channel (`theft_cut`), faulted use's hardness from honest use's
+(`faultedUseHard_of_cut`), and the cuts of autoregressive decoding: the token gate for position-local blocks, a
+one-token request's token, and the release.
 -/

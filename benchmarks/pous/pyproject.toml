@@ -11,6 +11,7 @@ untraced = [
     "tests/test_pous_p2_bandwidth.py",
     "tests/test_pous_p2v1.py",
     "tests/test_pous_served_case.py",
+    "tests/test_pous_served_piece_sh.py",
     "tests/test_pous_served_wipe.py",
 ]
 # tests/ checks the harness against PoUS itself (verity.protocols.pous.verifier) and the census's hardware ids;

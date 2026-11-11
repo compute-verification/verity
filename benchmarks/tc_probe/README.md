@@ -37,3 +37,12 @@ writes them with `--out`.
 
 Status: current. `benchmarks/tc_probe_fp4` is the Blackwell FP4 and FP8 counterpart. `tests/` covers the trust levels, the
 input sets and the store declarations without a GPU, and replays a handful of inputs where nvcc and a GPU are present.
+
+## Interface
+
+- **Provides:** the probes (`tc_probe.py`, `instances_hw.py`), run on a GPU, the trust levels (`trust.py`) and the store
+  declarations (`tool.py`).
+- **Loaded by:** the evidence store's tool registry, which loads `tool.py` by name, and one test of
+  `verity/definitions/ops`, which loads the probe's families. Nothing else.
+- **Loads:** `verity.definitions.silicon` and `verity.definitions.circuits.targets`, `verity_numerical`, `verity_config`, and
+  `research` in `tool.py`.
