@@ -772,7 +772,7 @@ def linesOf (e : _root_.Spot.OneStageZk.Evidence) : Flock.V (List String) := do
   ls.toList.mapM fun | .str l => pure l | _ => throw "a line of the session's log is not a string"
 
 /-- **The coins a `--zk` session's record gives round `k` of stream `stream`**, as
-`Spot.Challenger.sessionTreeReason` reads them: its link points at the session stream's round 0, else that
+`Spot.Challenger.challengePhaseTreeReason` reads them: its link points at the session stream's round 0, else that
 stream's round `k`. -/
 def recordRound (record : Lean.Json) (stream : String) (k : ℕ) : Option ByteArray :=
   if stream == _root_.Spot.Challenger.TREE_SESSION && k == 0 then
@@ -888,7 +888,7 @@ def readLog (label : String) (after : ByteArray) (records : List Lean.Json) (ξ 
     else readTail label after records ls [] none ξ
 
 /-- A session's record on the blobs `bs`, as `Spot.OneStageZk.treesHeld` reads it (`Flock.JsonParse.parse`):
-one that doesn't parse is `null`, whose coin tree `Spot.Challenger.sessionTreeReason` finds among no trees, so
+one that doesn't parse is `null`, whose coin tree `Spot.Challenger.challengePhaseTreeReason` finds among no trees, so
 v2 refuses its session; `none` where no blob holds it or it isn't UTF-8. -/
 def recordOn (bs : _root_.Core.Blobs) (r : _root_.Spot.OneStageZk.RunFiles) : Option Lean.Json := do
   let b ← (bs.get r.record s!"session {r.name}'s record").toOption
@@ -954,7 +954,7 @@ after a line opening a coin tree's round (`openLine`), and the first such line o
 one-stage audit `label` is the parameters' challenger family and `after` the registration's digest, so the coins so
 released are the sample's (`Spot.Challenger.challengerStream` holds the sample to every one of them), and the
 rounds opened are the session's link and its streams' rounds, of the one tree the log shows
-(`Spot.Challenger.sessionsTreeReason`). -/
+(`Spot.Challenger.challengePhasesTreeReason`). -/
 def sampleLinkFirst (label : String) (after : ByteArray) (log : List String) : Bool :=
   sampleLinkFirstFrom label after false none log
 

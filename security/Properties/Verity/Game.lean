@@ -812,7 +812,7 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
 /-- **The log subprotocol `a`'s check read is the device's whole log**: every release, in order, and no other
 (`coinsRead`; a check that reads none binds nothing). The device signs its log's line count and the lines' SHA-512 chain
 at its close (`close_session`), and v2 refuses a session whose signed close is missing or doesn't match its log
-(`Spot.Challenger.sessionOf`), so any other log a check read is a forgery of the device's LMS signature, on a
+(`Spot.Challenger.challengePhaseOf`), so any other log a check read is a forgery of the device's LMS signature, on a
 message the device didn't sign in the play (`Exchange.signed`), which `a`'s error bounds where its forger meets
 `Hash.Assumptions.LmsUnforgeable` (`Vocab.Unforgeable`, `Vocab.epsForge`), or a SHA-512 collision of the chain, which
 its finder outputs. -/

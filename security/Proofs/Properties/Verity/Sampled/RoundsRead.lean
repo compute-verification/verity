@@ -31,7 +31,7 @@ per-round bridge between the two:
   (`KeyAt`) is named so in them; they name each tree's streams distinctly, since `coinTreesOf` accepts only specs that
   do, so any stream they name of that tree is its stream so named.
 * **The record's rounds, opened** (`recordRounds_le_openedOf`, `openedOf_eq_recordRounds`): where
-  `sessionTreeReason` accepts a record each round of whose stream gives coins, the read opens that stream of the
+  `challengePhaseTreeReason` accepts a record each round of whose stream gives coins, the read opens that stream of the
   record's tree at least the rounds the record gives it (`recordRounds`): the record's last round is opened
   (`Trees.round_held`), below the read's openings. So where the device's log has the read's frames, opens only the
   record's rounds (`OpenedRecorded`) and serves each opening (`LogServed`), it opens that stream exactly that often.
@@ -1179,14 +1179,14 @@ theorem KeyAt.of_named {label : String} {after : ByteArray} {records : List Json
 /-! ## The record's rounds, opened -/
 
 /-- **The read opens each of a record's streams at least its rounds**: where `coinTreesOf` accepts the release log
-`lines`, `readLog` reads it, `sessionTreeReason` accepts `record` against its trees and each round `record` gives
+`lines`, `readLog` reads it, `challengePhaseTreeReason` accepts `record` against its trees and each round `record` gives
 stream `name` gives coins (`recordRound`), the read opens tree `i`'s stream `si`, that stream of the record's tree
 (`KeyAt`), at least the rounds `record` gives it (`recordRounds`): its last round is one the tree shows opened
 (`Trees.round_held`), below the read's openings of it (`opening_lt_openedOf`). -/
 theorem recordRounds_le_openedOf {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after records ξ lines = some log) {tables : Array (String × Option ℕ)} {record : Json}
-    (h : sessionTreeReason trees tables record = none)
+    (h : challengePhaseTreeReason trees tables record = none)
     {name : String} (hr : ∀ k < recordRounds record name, (recordRound record name k).isSome) {i si : ℕ}
     (hk : KeyAt (heldTrees trees) i si (recordTree record) name) : recordRounds record name ≤ openedOf log i si := by
   rcases Nat.eq_zero_or_pos (recordRounds record name) with h0 | hpos
@@ -1200,7 +1200,7 @@ theorem recordRounds_le_openedOf {label : String} {after : ByteArray} {records :
 
 /-- **The device's log opens each of a record's streams exactly its rounds**: where `coinTreesOf` accepts the release
 log `lines` and `readLog` reads it as releases of the frames and answers of the device's log `Lg`,
-`sessionTreeReason` accepts `record` against its trees, each round `record` gives stream `name` gives coins, and `Lg`
+`challengePhaseTreeReason` accepts `record` against its trees, each round `record` gives stream `name` gives coins, and `Lg`
 opens only the record's rounds (`OpenedRecorded`) and serves each opening (`LogServed`), `Lg` opens tree `i`'s stream
 `si`, that stream of the record's tree (`KeyAt`), exactly the rounds `record` gives it (`recordRounds`): at most by
 `openedOf_le_recordRounds`, at least by `recordRounds_le_openedOf`. -/
@@ -1208,7 +1208,7 @@ theorem openedOf_eq_recordRounds {label : String} {after : ByteArray} {records :
     {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after records ξ lines = some log) {Lg : List Verity.Release}
     (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) log Lg) {record : Json}
-    {tables : Array (String × Option ℕ)} (h : sessionTreeReason trees tables record = none) {name : String}
+    {tables : Array (String × Option ℕ)} (h : challengePhaseTreeReason trees tables record = none) {name : String}
     (hr : ∀ k < recordRounds record name, (recordRound record name k).isSome) (hO : OpenedRecorded record Lg)
     (hS : LogServed Lg) {i si : ℕ} (hk : KeyAt (heldTrees trees) i si (recordTree record) name) :
     openedOf Lg i si = recordRounds record name := by

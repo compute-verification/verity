@@ -8,7 +8,7 @@ public import Proofs.Properties.Verity.Sampled.Walk
 # Every round a session's coin tree opens is a round of its record
 
 v2 holds each round a `--zk` session's record names to an opening of the session's coin tree
-(`Spot.Challenger.sessionTreeReason`), but not each opening to a round of the record: `coinTreesOf` accepts a
+(`Spot.Challenger.challengePhaseTreeReason`), but not each opening to a round of the record: `coinTreesOf` accepts a
 stream's next round while it is below `2^rounds_log`. The refusal that closes it, as a Bool over v2's own inputs and as
 a Prop over the device's log:
 
@@ -17,7 +17,7 @@ a Prop over the device's log:
   none of a stream the record doesn't name.
 * **v2's test** (`openedRecorded`): every round the session's tree shows opened (`coinTreesOf`'s `opened`) is below the
   rounds the record gives its stream. `coinTreesOf` numbers a stream's openings 0, 1, … in order, and
-  `sessionTreeReason` holds each record round to an opening, so where both pass the tree opens each stream the record
+  `challengePhaseTreeReason` holds each record round to an opening, so where both pass the tree opens each stream the record
   names exactly its `rounds.size` times, `TREE_SESSION` once (round 0, the link points), and a stream the record doesn't
   name never. Honest sessions pass it: the challenger opens a round only as the session records it.
 * **On the device's log** (`OpenedRecorded`): before each opening of a coin tree's stream, the log opens that stream
@@ -26,7 +26,7 @@ a Prop over the device's log:
   the device's log wherever it holds of v2's read and the read is the device's log (`openedRecorded_congr`,
   `openedRecorded_logged`: `Binding.Logged
   Binding.readsV2`, `MovesReach`'s premise). On a play v2 accepts the log shows one coin tree, the record's: v2 takes
-  one session (`Spot.OneStageZk.oneSession`) and every tree a session's (`sessionsTreeReason`).
+  one session (`Spot.OneStageZk.oneSession`) and every tree a session's (`challengePhasesTreeReason`).
 -/
 
 @[expose] public section
@@ -53,7 +53,7 @@ def recordRounds (record : Json) (stream : String) : ℕ :=
 
 /-- **Every round the session's coin tree `t` shows opened is a round of its record `record`**: each round
 `Spot.Challenger.coinTreesOf` shows opened is below the rounds `record` gives its stream (`recordRounds`).
-`sessionTreeReason` refuses a record whose tree fails it. -/
+`challengePhaseTreeReason` refuses a record whose tree fails it. -/
 def openedRecorded (t : _root_.Spot.Challenger.LoggedTree) (record : Json) : Bool :=
   t.opened.all fun o => o.round < recordRounds record o.stream
 

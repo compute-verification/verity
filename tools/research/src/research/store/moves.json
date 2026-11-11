@@ -2209,6 +2209,11 @@
         "security/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Properties/NetworkCertifier/Check/TransferBlocks.lean",
         "verity/protocols/certifier/verifier/lean/NetworkCheck/LinkWindow.lean": "verity/protocols/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean"
       }
+    },
+    {
+      "paths": {
+        "security/Proofs/Properties/Challenger/Session.lean": "security/Proofs/Properties/Challenger/ChallengePhase.lean"
+      }
     }
   ]
 }
