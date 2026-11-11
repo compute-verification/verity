@@ -55245,3 +55245,115 @@ For BREAKEVEN:
 For the table:
 - PLAN | (b) at the final recut: **M = 145 over the kinds the plan prices [SCALE's run; ATTACK's second tool agrees]; the token select is in no stratum and uncounted (442 or more at the plan's LM-head cut [derived]: the record 2^-99.18); per-rank windows** | on the plans' side one M holds 2^-100 at κ 2^-4 up to M = 162 (3,853 GB no program, 10,558 as `main` is), κ 2^-5 up to 326 (3,929 / 10,600), κ 2^-6 up to 677 (4,074 / 10,641); world year, modeled 0.4; the select's own proving is in no row; (b), over the served wiring; modeled; no Lean statement at the code is behind it; nothing built [run].
 - PLAN | Lean's check of 20 final-recut designs | all accepted; at most 1.47% below the planner, never above by more than 0.012 GB [run `1da8`].
+
+## CAPS, Wed 11 Nov 12:50Z: the two pairs on a MEASURED `main` `967b722429f3`: `Proofs/Flock` 265 / 2,130 and `Proofs/Core` 4 / 60; #8932 at `dad1a8159197` lowers both; this replaces my 12:17Z pair
+
+**`main` at `967b722429f3` counts 247 / 1,965 under `Proofs/Flock` and 3 / 41 under `Proofs/Core` [run: the ratchet on the facts a recorded check published for that commit, `revfacts.py`, 12:31Z]. `Core/Game/RewindingCanon` is READ there, so it does not count: `Proofs/Core` is 4 / 60 with #8906's `FirstHitClass`, not 5 / 70 and not 3 / 41. The listed modules not on `main` add 18 / 165 under `Proofs/Flock`: 265 / 2,130, two modules UNDER #8890's 267 [derived on run].** #8932 is at `dad1a8159197` with `main` `967b722429f3` merged in and both pairs; quick tier `r20261111-124549-5af1` is running [run: `research status`, 12:47Z].
+
+### 1. The two pairs
+
+| Area | `main` `967b722429f3` [run] | Listed, not on `main` [derived] | The pair in #8932 | `main`'s cap |
+|---|---|---|---|---|
+| `Proofs/Flock` | 247 / 1,965 | +18 / +165 | **265 / 2,130** | 267 / 2,217 |
+| `Proofs/Core` | 3 / 41 | +1 / +19 | **4 / 60** | 6 / 144 |
+
+- **Against lean's 244 / 1,937 at `86c03d1840cb`:** `967b722429f3` adds `RegCanon` (7), `RevealsOpen` (18) and `UnitName` (3), 3 / 28; `ScopeDesc` (27) and `VStarNetsStaged` (5) landed READ and count for nothing [run: each module's status in the report].
+- **My base was 3 modules and 33 declarations high,** as lean found: `HidingDefs`, `HidingStatements` and `FlockHide` are read [run: same report]. My 12:17Z pair, 272 / 2,204, is void.
+- **The measured report** is `/opt/cursor/artifacts/caps/unread-main-967b.json` on my VM; the lookup is `revfacts.py REV OUT` with `main`'s tools [run]. My lookup finds no facts for `86c03d1840cb`, the commit lean counted, nor for any PR head I tried (#8906, #8916, #8905, #8874, #8879, #8896, #8873, #8871, #8941, #8939, #7109) [run, 12:17Z to 12:42Z].
+
+### 2. The list by group, against the measured count
+
+On `main`, status and count are [run]. Not on `main`: the count is [derived] from git at the head, and the status is [read] from the source: every new or changed Lean file at the newest heads that names one of the module's declarations (`readers.py`, output in `readers-967b.txt`).
+
+| Group | Module (declarations) | Where | Counts as |
+|---|---|---|---|
+| 1 | `RunExtAt` (11), `TwoRegFirstHit` (50) | on `main` | unread, 2 / 61 |
+| 2 | `MaskedTrunc` (10) | on `main` | unread, 1 / 10 |
+| 3 | `Bridge/QsRows` (3), `QsRows/Pos` (2), `QsRows/Split` (3), `Bridge/PublicRows` (3) | on `main` | unread, 4 / 11 |
+| 3 | `Bridge/V5/QsRows` (6) | #8896, marked | unread, +1 / +6: only `Bridge/V5/Rows` (#8946) names it |
+| 4 | `SpotFlock/Accepting` (12) | on `main` | unread, 12 |
+| 5 | `RegCanon` (7), `RevealsOpen` (18) | on `main` | unread, 2 / 25 |
+| 6 | `ScopeOf` (40) | on `main` | unread, 1 / 40 |
+| 6 | `ScopeDesc` (27) | on `main` | **read, 0** |
+| 7 | `HidingWitnesses` (18) | on `main` | unread, 1 / 18 |
+| 7 | `HidingDefs` (16), `HidingStatements` (12) | on `main` | **read, 0** |
+| 8 | `UnitName` (3) | on `main` | unread, 1 / 3 |
+| 8 | `VStarNetsStaged` (5) | on `main` | **read, 0** |
+| 9 | `Claims/CanonOk` (6) | #8139, not marked | **read, 0**: `Properties/NetworkCertifier/Check/LinkWindow`, `Properties/Verity/Sampled/Device` and `Properties/Spot/AcceptHonest` open its theorems and use them, and every declaration under `Properties` is a seed |
+| 10 | `SpotFlock/NoAlways` (20) | #8871, marked | unread, +1 / +20: no file names it |
+| 11 | `Claims/NumbersFinder` (11) | #8873, marked | unread, +1 / +11: only `TwoFirstHitClassCaps` (#8939) |
+| 12 | `SpotFlock/Drawn` (4) | #8874, marked | unread, +1 / +4: only `SpotFlock/Counts` (#8931) |
+| 13 | `TwoFirstHitAt` (29) | #8879, #8882, #8905, marked | unread, +1 / +29: only the chain's files |
+| 14 | `SessCount` (7), `Refused` (6) | #8889, #8892 | unread, +2 / +13: only `SpotFlock/Counts` |
+| 15 | `TwoRegFirstHitClass` (21) | #8906 | unread, +1 / +21: only the chain's files |
+| 16 | `TwoFirstHitKS` (3) | #8915, Daniel's | **read when it lands, 0**: `SpotFirstHit.lean`, which declares `Flock.SecurityProofs.SpotFirstHitTwo`, names its declarations |
+| 17 | `TwoFirstHitClassAt` (2) | #8916 | unread, +1 / +2 |
+| 18 | `SpotFlock/OpensWhole` (17) | #8912 | unread, +1 / +17 |
+| 19 | `SpotFlock/OpensClass` (1) | #8922 | unread, +1 / +1 |
+| 20 | `SpotFlock/FirstHitClassAt` (2) | #8924 | unread, +1 / +2 |
+| 21 | `SpotFlock/Counts` (7) | #8931 | unread, +1 / +7 |
+| 22 | `TwoFirstHitClassCount` (9), `SpotFlock/ClassCounts` (2) | #8931 | unread, +2 / +11 |
+| 23 | `SpotFlock/FirstHitClassCaps` (2) | #8941 | unread, +1 / +2 |
+| 24 | `TwoFirstHitClassCaps` (17) | #8939 | unread, +1 / +17 |
+| 25 | `Bridge/V5/Rows` (2) | #8946 | unread, +1 / +2 |
+| 26 | `Core/Game/RewindingCanon` (10), `Proofs/Core` | on `main` | **read, 0**: 1 of its 10 declarations is read |
+| 26 | `Core/SamplingGeneric/FirstHitClass` (19), `Proofs/Core` | #8906 | unread, +1 / +19: only the chain's files |
+
+Sum of the rows not on `main`: 18 modules and 165 declarations under `Proofs/Flock`, 1 and 19 under `Proofs/Core` [derived]. The listed modules on `main` that count are 13 modules and 180 declarations of the 247 / 1,965 [run].
+
+### 3. For PRF-517: the addendum redone, and the Core line
+
+Post from the next line.
+
+Addendum, on the count of `main` at `967b722429f3`: `Proofs/Flock` 247 / 1,965 and `Proofs/Core` 3 / 41, from the ratchet on the facts a recorded check published for that commit. Paths are under `security/Proofs/Flock/` unless the line says `Proofs/Core`. Declarations of modules not on `main` are counted from git at the head named.
+
+17. `SamplingGeneric/TwoFirstHitClassAt` (2): #8916 at `8784a105de5b`. Used by `SpotFlock/FirstHitClassAt` (#8924), `SamplingGeneric/TwoFirstHitClassCount` (#8931) and `SamplingGeneric/TwoFirstHitClassCaps` (#8939). No guarantee reads it; Daniel's.
+18. `SpotFlock/OpensWhole` (17): #8912 at `62eb1fdc64de`. Used by `SpotFlock/OpensClass` (#8922). No guarantee reads it; Daniel's.
+19. `SpotFlock/OpensClass` (1): #8922 at `5b37c49d6a5c`. Used by `SpotFlock/FirstHitClassAt` (#8924). No guarantee reads it; Daniel's.
+20. `SpotFlock/FirstHitClassAt` (2): #8924 at `d025f81332e6`. It holds the by-class bound at the code, `SpotFlock.code_eventTwoX_le_cls_at_budget`. Used by `SpotFlock/FirstHitClassCaps` (#8941). No guarantee reads it; Daniel's.
+21. `SpotFlock/Counts` (7): #8931 at `2cc7decd36a6`. Used by `SpotFlock/ClassCounts`, same PR. No guarantee reads it; Daniel's.
+22. `SamplingGeneric/TwoFirstHitClassCount` (9), `SpotFlock/ClassCounts` (2): #8931 at `2cc7decd36a6`. `ClassCounts` uses the first and `Counts`, and is used by `SpotFlock/FirstHitClassCaps` (#8941). No guarantee reads it; Daniel's.
+23. `SpotFlock/FirstHitClassCaps` (2): #8941 at `b29929d015e4`, the composition: the by-class bound at the code with its counts in closed form, `SpotFlock.code_eventTwoX_le_cls_at_caps`. No other file names it. No guarantee reads it; Daniel's.
+24. `SamplingGeneric/TwoFirstHitClassCaps` (17): #8939 at `6b2922ce5b5e`, the by-class bound at caps. It uses `TwoFirstHitClassAt` (group 17) and `Claims/NumbersFinder` (group 11). No other file names it. No guarantee reads it; Daniel's.
+25. `Bridge/V5/Rows` (2): #8946 at `4dbd0898d7f1`. It holds `Flock.Bridge.sampledKSLiveV5_rows`, on `Bridge/V5/QsRows` (#8896, group 3). No other file names it. No guarantee reads it; Daniel's.
+26. Under `Proofs/Core`: `Core/SamplingGeneric/FirstHitClass` (19): #8906 at `e7b2e51d928b`. Used by `SamplingGeneric/TwoRegFirstHitClass` (group 15) and the chain after it. No guarantee reads it; Daniel's. It is the one module an open PR of ours adds under `security/Proofs/Core` that `main` does not hold. `Core/Game/RewindingCanon` (10, #8836) is on `main` and read.
+
+**Listed modules that count for nothing.** On `main` and read: `ScopeDesc` (27, group 6), `HidingDefs` (16) and `HidingStatements` (12, group 7), `VStarNetsStaged` (5, group 8), `Core/Game/RewindingCanon` (10). Read when its PR lands, by the source: `Claims/CanonOk` (6, group 9; three `Properties` modules use its theorems) and `TwoFirstHitKS` (3, group 16; its PR's guarantee names its declarations).
+
+**The pairs.** `Proofs/Flock`: 247 / 1,965 on `main`, plus 18 modules and 165 declarations not yet on `main` (groups 3, 10 to 15 and 17 to 25), is **265 / 2,130**. `Proofs/Core`: 3 / 41 plus group 26's 1 / 19 is **4 / 60**. #8932 at `dad1a8159197` sets exactly these, both under today's caps of 267 / 2,217 and 6 / 144. No raise of either number.
+
+**What is measured and what is not.** The count on `main` and every status of a module on `main` are from published facts. For the 19 modules not on `main`, the declarations are counted by keyword and "wholly unread" is read from the source; no facts are published for those heads.
+
+(End of the part to post.)
+
+**The Core line you owe lean:** over the 77 open heads of ours (#8914, #8934 and #8940 among them), the only file added under `security/Proofs/Core` that `main` lacks is `Core/SamplingGeneric/FirstHitClass.lean` (19 declarations): #8906 and the six PRs stacked on it (#8916, #8922, #8924, #8931, #8939, #8941) [read: `git diff --name-status --diff-filter=A` at each merge base, 12:46Z]. It is wholly unread by the source [read]. So `Proofs/Core` is 4 / 60, and 3 / 41 would turn #8906 red.
+
+### 4. #8932
+
+- **Pairs:** `Proofs/Flock` 267 / 2,217 → **265 / 2,130**; `Proofs/Core` 6 / 144 → **4 / 60** [read: `gh pr diff 8932`, 12:47Z: those four numbers, nothing else].
+- **Head:** `dad1a8159197b8b943a0abbfd35a65599f47652d`, a merge of `main` `967b722429f3` with the pairs, on `bbf48d9199d7`; no force push [read: `git log -1 --format='%H %P'`]. Title and body replaced, 12:47Z; unmarked.
+- **Quick tier:** `r20261111-124549-5af1` on vy-nebius-cpu-6, `suites.py --changed 967b722429f3 --quick`, launched 12:45Z, running at 12:47Z [run]. On the two heads before, whose only difference from this one is the numbers and the merge of `main`: `r20261111-121121-f441` at `bbf48d9199d7` and `r20261111-120024-caf2` at `a674f6861494`, each "4 suites: 4 passed (0 cached), 0 failed" [run: their `stdout.log`]. The ready line is its own entry when `5af1` passes.
+- **Local:** `test_unread.py -m 'not slow'` 9 passed; `unread_gate.py origin/main HEAD` 0 areas above the cap, on `main`'s published facts [run on my VM, 12:46Z].
+- **It merges** with `main` `967b722429f3` and with #8870, #8874, #8879, #8871, #8882, #8896, #8873, #8905, #8889, #8892, #8906, #8915, #8916, #8912, #8922, #8924, #8919, #8931, #8941, #8939, #8946, #8934, #8940 and #7109 [run: `git merge-tree --write-tree`, 12:48Z]. **#8139 conflicts with `main` itself** (`Select/Code.lean`, `Properties/Spot.lean`, `Spot/OneStage.lean`, `Spot/Pieces.lean`), not with this PR: it does not touch the caps file [run: same command against `main`].
+- **No room, and two ways it can be wrong.** (a) If the check counts a module I read as wholly unread as read, the cap is that much high: harmless. (b) If it counts `CanonOk` (6) as unread, or one declaration more than a keyword count, the last PR to land goes red on the ratchet. None of the 19 files has a `deriving` clause, a local definition under `where` or a `mutual` block [read: `git show` of each].
+- **#7109** (network-accounting, marked, not on `main`): its lookup gave nothing, no facts for `dbf5daaa36e1` [run, 12:17Z]. By the source I expect +0: its guarantees `Flock.SecurityProofs.RecStopsOfRun` and `StreamStopBudget` name declarations of `Recursive/StopCount` (21) and `StopCountStream` (9) [read]. If the check counts them, the list is 2 / 30 short.
+- **Landing order:** these caps are lower than `main`'s, so #8932 can land at any point; every prefix of the list fits them [derived]. A PR outside the list that adds an unread module under either area goes red once #8932 is on `main`.
+
+### 5. The three lines for CI-485
+
+1. **What it does:** #8932 lowers both caps to the count on `main` plus the listed modules not yet on `main`: groups 3, 10 to 15 and 17 to 25 of PRF-517 under `Proofs/Flock` (18 modules, 165 declarations) and group 26 under `Proofs/Core` (1 module, 19 declarations). No guarantee reads them; Daniel's, so they take the Wed 18 Nov date.
+2. **The pairs, on the check's count:** #8932 at `dad1a8159197`, `main` `967b722429f3` merged in: `Proofs/Flock` 267 / 2,217 → 265 / 2,130 (247 / 1,965 measured on `main` + 18 / 165) and `Proofs/Core` 6 / 144 → 4 / 60 (3 / 41 measured + 1 / 19). No room. The 19 modules not on `main` are counted from git and read as wholly unread from the source.
+3. **What #8931 and the composition add:** #8931 is +3 / +18 (`Counts` 7, `TwoFirstHitClassCount` 9, `ClassCounts` 2) and #8941 is +1 / +2. With them and with #8939 and #8946 the list ends at 265 modules, two under #8890's 267: there is no third raise.
+
+### What was wrong, mine and others'
+
+- **Mine, 12:17Z:** the pair 272 / 2,204 and "the list is 5 modules over 267". On the measured count it is 265 / 2,130. I took seven listed modules as wholly unread that are read: `HidingDefs`, `HidingStatements`, `ScopeDesc`, `VStarNetsStaged`, `CanonOk`, `TwoFirstHitKS` and, under `Proofs/Core`, `RewindingCanon`; and `FlockHide` became read [run for the five on `main` and for `FlockHide`; read for `CanonOk` and `TwoFirstHitKS`].
+- **Mine, 12:17Z, group 26:** "`RewindingCanon` and `FirstHitClass` … 5 / 70". `RewindingCanon` is read; the list needs 4 / 60 [run].
+- **Your 12:31Z "5 / 70" and lean's "3 / 41":** neither; 4 / 60 [run + derived].
+- **lean's 12:15Z "at most 259 / 2,110, with groups 17 to 22 at most 266 / 2,152":** on `967b722429f3` the sixteen groups are 255 / 2,069 and with groups 17 to 22 they are 262 / 2,109 [derived on run].
+- **DRAFT-CORE's lines for #8934 (+0 / +23) and #8940 (+0 / +26)** count every declaration their diffs add. On the ratchet's count both are +0 / +0: each added declaration is in a module the report holds `read` [derived on run]. #8940's base is older than #8866, so its `Accepting` has 11 where `main` has 12 [read].
+- **Still standing from 12:17Z:** the holding line's wrong totals (rows 21, 22), `exempt["Flock.Test.RecCap"]` untouched by #8789 and #8814, and the 239-not-236 correction.
+
+For the table: #8932 `dad1a8159197` unmarked, `main` `967b722429f3` merged in; `Proofs/Flock` 265 / 2,130 (cap was 267 / 2,217), `Proofs/Core` 4 / 60 (was 6 / 144); quick tier `r20261111-124549-5af1` running, ready line follows.
+For the table: `main` `967b722429f3` measures 247 / 1,965 and 3 / 41 [run]; every listed PR fits #8890's caps without #8932, so #8931, #8939, #8941 and #8946 can be marked without it [derived on run].
+For the table: #8139 conflicts with `main` `967b722429f3` in four Lean files and needs `main` merged before any mark [run].
