@@ -5,8 +5,8 @@ DIR/answer.json is the leg's core answer (verity/wipe/v0) in the form `Answer.to
 `piece_row` reads through `pouw.core_check.answer_of`), the answer `wipe.case.json` decides, with served.json and the
 summary beside it; the wipe runs on the serve's leased card, or under a lease of its own. A card that isn't idle and a
 gate key that isn't on the node are refused before demo.sh runs, and nothing is killed. The verifier trusts the one
-challenger key WIPE_KEY_SHA512 pins: a session signed under another is rejected, and with none pinned the piece refuses
-before it asks for a card."""
+challenger key WIPE_KEY_SHA512 pins, by default vy-auditor-2's wipe party's: a session signed under another is
+rejected, and with none pinned the piece refuses before it asks for a card."""
 
 from __future__ import annotations
 
@@ -37,6 +37,9 @@ DECIDED = {"program": "python", "host": socket.gethostname()}
 #: the SHA-512 of the key the challenger's stand-in (`wipe_side.py`) signs under: the pin of a deployment of it
 PINNED = runpy.run_path(str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pous" / "verifier" / "tests"
                             / "wipe_side.py"))["key_sha512"]()
+#: the SHA-512 of the public key of vy-auditor-2's wipe party: the pin of a run that sets none of its own
+AUDITOR_PIN = ("c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
+               "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252")
 UNTRUSTED = "the session is signed by a key that is not a trusted memory challenger's"
 
 SMI = """#!/usr/bin/env bash
@@ -231,16 +234,35 @@ def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(node
     assert (headline["verdict"], headline["reason"], headline["exit"]) == ("reject", UNTRUSTED, 1)
 
 
+def test_a_run_that_pins_no_key_trusts_vy_auditor_2s_wipe_party_and_no_other(node, tmp_path) -> None:
+    """With WIPE_KEY_SHA512 unset the wipe is judged under the tree's default pin, the digest of the key of
+    vy-auditor-2's wipe party: demo.sh gets it as `--trusted-sha512`, and the stand-in challenger's session, signed
+    under another key, is rejected as any other key's is, by a case that trusts no key."""
+    d = tmp_path / "pieces" / "wipe"
+    env = {k: v for k, v in node.items() if k != "WIPE_KEY_SHA512"} | {"GPU_LEASE_UUID": CARD}
+    r = _wipe(env, d, "--no-lean")
+    assert r.returncode == 1, r.stdout + r.stderr
+    argv = json.loads((d / "demo-argv.json").read_text())["argv"]
+    assert argv[argv.index("--trusted-sha512") + 1] == AUDITOR_PIN != PINNED
+    assert json.loads((d / "period.json").read_text())["wipe"]["trusted_sha512"] == AUDITOR_PIN
+    _is_core_answer(answer := json.loads((d / "answer.json").read_text()))
+    assert (answer["verdict"], answer["reason"]) == ("reject", UNTRUSTED)
+    case = json.loads((tmp_path / "pieces" / "serve-run" / "private" / "wipe" / "wipe.case.json").read_text())
+    assert case["params"]["trusted"] == [] and _decided(case) == answer
+    summary = json.loads((d / "summary.json").read_text())
+    assert (summary["verdict"], summary["key_pinned"], summary["key_sha512"]) == ("reject", False, PINNED)
+
+
 @pytest.mark.parametrize("pin, why", [
-    (None, "no challenger key is pinned: set WIPE_KEY_SHA512, the SHA-512 of the public key of vy-auditor-2's wipe party"),
+    ("", "no challenger key is pinned: set WIPE_KEY_SHA512, the SHA-512 of the public key of vy-auditor-2's wipe party"),
     ("AB" * 64, "WIPE_KEY_SHA512 is a key's SHA-512 in 128 lowercase hex digits, not ABAB"),
     ("ab" * 63, "WIPE_KEY_SHA512 is a key's SHA-512 in 128 lowercase hex digits, not abab")])
 def test_with_no_key_pinned_the_wipe_is_refused(node, tmp_path, pin, why) -> None:
-    """No WIPE_KEY_SHA512, or one that isn't a SHA-512 in lowercase hex: refused before any lease is asked for and
-    before demo.sh runs (exit 3, the reason in refused.txt), so no session is judged under the key it came with."""
+    """WIPE_KEY_SHA512 set empty, which pins no key, or to something that isn't a SHA-512 in lowercase hex: refused
+    before any lease is asked for and before demo.sh runs (exit 3, the reason in refused.txt), so no session is judged
+    under the key it came with, nor an empty setting taken for the default."""
     d = tmp_path / "wipe"
-    env = {k: v for k, v in node.items() if k != "WIPE_KEY_SHA512"} | ({} if pin is None else {"WIPE_KEY_SHA512": pin})
-    r = _wipe(env, d)
+    r = _wipe(node | {"WIPE_KEY_SHA512": pin}, d)
     assert r.returncode == 3, r.stdout + r.stderr
     refused = (d / "refused.txt").read_text()
     assert refused.startswith(f"WIPE REFUSED: {why}") and r.stdout.strip().splitlines()[-1] == refused.strip()
