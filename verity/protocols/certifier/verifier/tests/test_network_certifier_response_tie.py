@@ -15,6 +15,7 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.partition_v2 import UNIT_CLASSES
+from verity.definitions.registry import stop_rule
 from verity.protocols.certifier.prover import response_tie as RT
 from verity.protocols.certifier.prover.response_tie import ACCEPT
 from verity.protocols.certifier.verifier import content_rows as CT
@@ -107,6 +108,27 @@ def test_the_reference_refuses_rows_of_no_form():
     with pytest.raises(ValueError, match="a failed class's row has no stop word"):
         RT.refusals(failed, [1], end(1, 1), 1)
     assert RT.outputs(stop, [7], ENDED, RT.stop_word(1, 1)) == RT.outputs(stop, [7, 0, 0, 0], ENDED, RT.stop_word(1, 1))
+
+
+def test_the_stop_word_is_the_stop_rules():
+    """The stop word the block reads is `StopRule16_v1`'s: its count bits are the rule's, its packing is the rule's,
+    and its finish is 0 exactly where the rule doesn't end the response within the row's ids. So the block accepts a
+    response the rule ends, with the rule's n as its count, and refuses one the rule doesn't end."""
+    assert (RT.COUNT_BITS, RT.STOP_BITS) == (stop_rule.N_BITS, 16)
+    assert stop_rule.FINISH[0] is None and max(stop_rule.FINISH) < 1 << RT.FINISH_BITS
+    sh = RT.Shape(4, 1)
+    for ids, max_tokens, prompt_len, want in (([5, 7, 6, 8], 9, 10, (2, 1)), ([5, 6, 8, 9], 3, 10, (3, 2)),
+                                              ([5, 6, 8, 9], 9, 98, (2, 3)), ([5, 6, 8, 7], 9, 10, (4, 1)),
+                                              ([5, 6, 8, 9], 9, 10, (4, 0))):
+        rule = (ids, max_tokens, [7], prompt_len, 100)
+        (n, finish), word = stop_rule.reference(*rule), stop_rule.reference16(*rule)
+        assert (n, finish) == want and word == RT.stop_word(n, finish)
+        verdict, row = RT.outputs(sh, ids, ENDED, word)
+        if finish:
+            assert verdict == ACCEPT and row == CT.response_row(ids[:n], sh.O)
+        else:
+            assert verdict == 0 and row[:4] == NO_COUNT
+        assert RT.evaluate(sh, [(ids, ENDED, word)]) == [(verdict, row)]
 
 
 # --- the circuit -----------------------------------------------------------------------------------------------------

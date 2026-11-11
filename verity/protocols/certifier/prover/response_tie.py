@@ -16,9 +16,9 @@ the proof block has no free input of its own.
 **The rows it reads**, each an array of bits, least significant first:
 
 - ``egress``: O u32 ids, bit 32·p + i bit i of id p. Whatever it holds past the count is not read into the output.
-- ``stop``: one u16, n + finish·2^13: n, in its low `COUNT_BITS` bits, the ids the stop rule ends the response
-  after, and finish why (1 a stop id, 2 the request's ``max_tokens``, 3 the model's length; 0 where the rule doesn't
-  end it within the row's ids).
+- ``stop``: one u16, the registry's `StopRule16_v1` word n + finish·2^13: n, in its low `COUNT_BITS` bits, the ids
+  the stop rule ends the response after, and finish why (1 a stop id, 2 the request's ``max_tokens``, 3 the model's
+  length; 0 where the rule doesn't end it within the row's ids).
 - ``end``: `content_rows`' end row, u16 class ‖ u16 at, little-endian: (0, 0) where the connection ended in its
   `END`, (1, n) where it ended in a `FAIL` after n `DATA` cells.
 
@@ -89,7 +89,8 @@ ACCEPT = 1
 STATICS = ("O", "STOP")
 #: an id's and a count's bits, and an end row's
 ID_BITS, END_BITS = 8 * CT.U32_BYTES, 8 * CT.END_BYTES
-#: the stop word: n in its low `COUNT_BITS` bits and the finish in the `FINISH_BITS` above
+#: the stop word: n in its low `COUNT_BITS` bits and the finish in the `FINISH_BITS` above. `COUNT_BITS` is the stop
+#: rule's `N_BITS`, which this unit may not import: the certifier's suite holds the two equal
 STOP_BITS, COUNT_BITS = 16, 13
 FINISH_BITS = STOP_BITS - COUNT_BITS
 #: an end row's `at`, the count a failed class's form reads

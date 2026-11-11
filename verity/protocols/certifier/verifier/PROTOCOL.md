@@ -2104,8 +2104,8 @@ Only the formats exist: the network certifier writes no such row, and no table, 
 
 **The response tie's proof block** (`verity.protocols.certifier.prover.response_tie`, `ResponseTie`, in no Spec) is one
 a connection, in one of two forms by its class. It reads the compute side's committed row of the connection's O ids,
-the network certifier's end row and, in a stop class, the compute side's committed stop word (n + finish·2^13), and no
-cell. Its gates compute the response row: the count, then the first count ids and zeros to O. In a stop class the
+the network certifier's end row and, in a stop class, the compute side's committed stop word (`StopRule16_v1`'s,
+n + finish·2^13), and no cell. Its gates compute the response row: the count, then the first count ids and zeros to O. In a stop class the
 count is the stop word's n, and the block checks that the end row is (0, 0), that the finish is not 0 and that n is
 at most O; in a failed class the count is the end row's `at`, and it checks that the class is 1 and that `at` is at
 most O. Its outputs are a verdict and the row. Where a check fails the row's count word is all ones, a count no
