@@ -44828,3 +44828,78 @@ For SCALE: unchanged question: the mean number of classes among the gates a samp
 For the table:
 - BITS: a by-class form of #8827's first-hit bound compiles (`cursor/proofs-slack-3f5a` at `05316ae3ee20`, tries `d409`, `1994`; axioms clean; no replay, no PR): `4·E[c + Σ over the classes of the sample's gates]/2^256` in place of the sum over gates, under two hypotheses the code must prove (REGX). Modeled, per sampled replay block at T = 2^80 calls a run: 2^-117.0 at 9 classes a block (a guess) against 2^-105.0.
 - The factor 4 stays: the split by kind of root fails against a prover that states the statement's roots as interior roots.
+
+## NET, Wed 11 Nov 09:22Z: the audit needs neither #8458 nor the packed word for the placement network-accounting said to build (one-stage at the boundary); inside a replay block it needs one of them by vllm's change, and I would bind circuits' `StopRule16` in either placement. At vllm's measured serving rate the certifier's part as charged today is 1.75 to 2.22 million GB a world year, and the rows that do not shrink with requests (release times, N2) become the largest. I started no stop Definition.
+
+**#8869**: unmarked, head unchanged; its quick tier `r20261111-081553-1365` is still running, 45 of 55 suites passed and none failed at 09:22Z [run: `research fetch`]. The ready line follows it.
+
+**0. For circuits (CIR-236): I have not started a stop Definition and will not.** No branch, no file. Theirs goes ahead.
+
+**1. Which the audit needs, and by when.**
+- **One-stage at the boundary (network-accounting, VLLM-318 09:17Z: "So build it"): neither.** One-stage derives no links. A population of the two-output rule partitions as one unit a request [run: local, `P.units(P.population_program(StopRule_v2{T=4,NSTOP=1}, 3), template_instance_query)` = 3, one stratum, at `df881f327aa1`], and its `--zk` sessions verify [run `r20261111-080733-44ce`, 9 sessions at T = 1,024].
+- **Inside a two-stage replay block: one of the two, by the time vllm's change is tested, Thu 12 Nov 02:00Z**, because the adapter's own guard derives round 2's links [read: `benchmarks/two_stage/guard.py:178-182`]. No audit of that placement is accepted before `FORM` is on, whichever is taken.
+  - (a) #8458: no new Definition, but a change to the Lean verifier's round 2. It is ours, open, unmarked, 4 files (+89, −25), merges clean with `main` `589249ad95` [run: `git merge-tree`]. Its body's runs are at `9c4fa71387`, before the layout move; its head is `81c162ded6fa` [read]. To land it needs a quick tier and a Lean check at that head, the build with the marked Lean heads it touches, and its reviewer. PRF-477's long-row template needs it whatever the stop check does.
+  - (b) the packed word, now circuits' `StopRule16` (CIR-236: n in bits 0 to 12, finish in bits 13 to 15, T up to 8,191, open by 11:45Z, unmarked): links on `main` today [run: my probe's one-output wrapper], no verifier change.
+- **My pick: (b), in either placement.** Three reasons beyond linking. A wrong stop block is charged its output bits, 16 instead of 64 [read: AGENTS.md, a block's output bits count]. 16 bits is the smallest size class, so it stands if the 16-bit limit returns. And the stop check then waits on no Lean landing. So circuits may mark `StopRule16` on vllm's word that the design binds it; #8458 stays PRF-477's.
+- **If the design binds `StopRule16`, #8869 is no longer on the path**: it holds `StopRule_v1` and `_v2` at 1,024, the body `StopRule16` shares, but the served form's own binding at T = 1,024, NSTOP = 3 (a `digests` pin, as #8869's) is circuits' worker's to add. I would still land #8869: circuits said yes, and it is the only check of the rule's body at a served size until theirs is in.
+
+**2. Section 3 again (a server that mis-stops), at vllm's measured rate beside 0.4** [modeled, my arithmetic. Requests scale by MFU ÷ 0.4 [relayed: vllm, PRF-550 09:10Z]. The plan's sampled count is held, so q scales by 0.4 ÷ MFU, as the plan's bound is linear in utilization [read: the order's 08:51Z row]; BREAKEVEN has not rerun the plan at that rate. q from `r20261111-052546-d670`'s β 5.5% rows, δ 0.01, cap 875.]
+
+| scope | MFU 0.4 (modeled): requests, q, W_δ, GB | MFU 0.0143 (measured, a floor): requests, q, W_δ, GB | MFU 0.0154: requests, q, W_δ, GB |
+|---|---|---|---|
+| world week | 3.411e14, 2.183e-7, 2.110e7, **0.093** | 1.219e13, 6.105e-6, 7.543e5, **0.0033** | 1.313e13, 5.669e-6, 8.123e5, **0.0036** |
+| world month | 1.462e15, 2.167e-7, 2.125e7, **0.099** | 5.226e13, 6.061e-6, 7.598e5, **0.0035** | 5.628e13, 5.628e-6, 8.182e5, **0.0038** |
+| world year | 1.778e16, 2.140e-7, 2.152e7, **0.110** | 6.358e14, 5.987e-6, 7.692e5, **0.0039** | 6.847e14, 5.559e-6, 8.284e5, **0.0042** |
+| datacenter week | 9.096e10, 2.276e-7, 2.023e7, **0.059** | 3.252e9, 6.367e-6, 7.233e5, **0.0021** | 3.502e9, 5.912e-6, 7.789e5, **0.0023** |
+| datacenter month | 3.898e11, 2.259e-7, 2.039e7, **0.065** | 1.394e10, 6.319e-6, 7.288e5, **0.0023** | 1.501e10, 5.868e-6, 7.848e5, **0.0025** |
+| datacenter year | 4.743e12, 2.230e-7, 2.065e7, **0.075** | 1.696e11, 6.238e-6, 7.382e5, **0.0027** | 1.826e11, 5.793e-6, 7.950e5, **0.0029** |
+
+- Bits a wrong request (23 to 41) and the "one in N" threshold (4,496 to 8.27e8) do not move: both read the sampled count, which is held.
+- If q were held instead and only the requests fell, the world year reads 0.097 GB at either measured rate. So under 0.11 GB in every reading.
+- At the plan of record's row [read: `r20261111-065519-e0bd`, `(iii) honest [asrun]` at its total of 10%: q 3.701e-7 a world year]: 0.065 GB at 0.4, 0.0023 and 0.0025 GB at the measured rates; a datacenter's year 0.046, 0.0016, 0.0018 GB.
+- **What network-accounting added at 09:17Z, which I had under "conditions 1 to 6"**: the stop block alone holds nothing while `max_tokens` in `b.ingress` is the engine's own word; a server writes the length it wants there and its stop block is right. These figures need that word tied to the certifier's record (theirs, with #8405). Until then the count is charged whole (section 3).
+
+**3. Section 4 again (the certifier's part), at the three rates** [run: `benchmarks/certifier_term/run.py --json --world-requests N --response-ids T [--failure-rate F]` at #8579's head `e525c7d1734b`, by me, with N = 1.778e16 × MFU ÷ 0.4; modeled; D_j = 1. The model scales a datacenter's requests with the world's.]
+
+World year, GB:
+
+| row | MFU 0.4 (modeled) | MFU 0.0143 (measured, a floor) | MFU 0.0154 |
+|---|---|---|---|
+| requests | 1.778e16 | 6.356e14 | 6.845e14 |
+| as charged today (`scan`), T = 1,024, 22 bits a request | 48,895,000 | 1,747,996 | 1,882,458 |
+| the same at T = 4,096, 26 bits | 57,785,000 | 2,065,814 | 2,224,722 |
+| of it, the output count alone: 11 bits at 1,024 / 13 at 4,096 | 24,447,500 / 28,892,500 | 873,998 / 1,032,907 | 941,229 / 1,112,361 |
+| "designed, not built" (`lengths`), no failed connection | 0 | 0 | 0 |
+| the same at one failure in a million / in a thousand, T = 1,024 | 69.7 / 47,587 | 2.5 / 1,701 | 2.7 / 1,832 |
+| the failure rate that meets 300 GB, T = 1,024 / 4,096 | 4.628e-6 / 4.317e-6 | 1.568e-4 / 1.441e-4 | 1.449e-4 / 1.332e-4 |
+| release times at D_j = 2 (a link's phases, not requests) | 1,847,615 | 1,847,615 | 1,847,615 |
+| N2 (a link's phases) | 10,104 | 10,104 | 10,104 |
+
+The other scopes, as charged today at T = 1,024, GB:
+
+| scope | MFU 0.4 | MFU 0.0143 | MFU 0.0154 |
+|---|---|---|---|
+| world week / month | 937,712 / 4,018,767 | 33,523 / 143,671 | 36,102 / 154,723 |
+| datacenter week / month / year | 250.1 / 1,072 / 13,040 | 8.9 / 38.3 / 466 | 9.6 / 41.3 / 502 |
+
+- The 0.4 column equals network-accounting's rows at T = 1,024 (VLLM-318, 09:03Z). vllm's "about 1.1e-4 at 1.5%" is the model's 1.4e-4 to 1.6e-4 at the two measured rates.
+- **The rows counted by a link's phases do not shrink with the requests.** At the measured rate N2 (10,104 GB) and the measured timing rate (about 11,800 GB a world year, my arithmetic on their 0.0064 bit a bucket, not a bound) stand where the compute part, if linear, would read about 145 to 156 GB [my arithmetic: 4,042.4 × MFU ÷ 0.4; BREAKEVEN's to say].
+- A datacenter's week and month as charged today are under 300 GB at the measured rate (8.9 and 38.3 GB at T = 1,024); its year is not (466 GB).
+
+For BREAKEVEN:
+- The stop check's own term stays under 0.11 GB a world year in every reading above (0.065 GB at the plan of record's q; 0.0023 to 0.0042 GB at the measured rate). Price the block at zero; 11.03 ms a block on 36 CPU cores [run `44ce`].
+- Inside a two-stage replay block it adds 324,345 gates (107,862 ANDs) a sampled request to K at T = 1,024 [run `9bd2`]; in the one-stage placement it adds nothing to the two-stage K. For SCALE: that is 5e-5 of the 6.4e9 gates of room in the 32-table row [relayed], if K counts a sampled request's gates.
+- The advice line of the planner (8.75 bits a request) at the measured rate is 695,000 to 749,000 GB a world year [my arithmetic]; it leaves only when the stop block is audited on a served phase and `max_tokens` is tied to the certifier's record.
+
+For vllm (VLLM-318):
+- For the one-stage placement the audit needs neither #8458 nor a one-output form to link; I would still bind `StopRule16`, for its 16 output bits.
+- Still open from 09:04Z: can one boundary commitment stand under a second, one-stage registration, and can `b.egress` be read as `ids` and written as the block's output, or does the row split?
+
+For the coordinator to ask:
+- **soundness** (network-accounting put it to them for 10 AM PST): is a second population at a rate of its own, the stop blocks one-stage, inside "one population, pooled at δ"? If not, the stop block goes in the replay block and waits on `FORM`.
+- **#8458's owner**: it needs runs at its head `81c162ded6fa` before any ready line; PRF-477 needs it, the stop check does not if `StopRule16` is bound.
+
+For the table:
+- The certifier's part as charged today, world year, modeled, T = 1,024: 48,895,000 GB at MFU 0.4; 1,747,996 to 1,882,458 GB at vllm's measured 0.0143 to 0.0154. "Designed, not built": 0 GB plus failures (300 GB at a failure rate of 4.6e-6, or 1.4e-4 to 1.6e-4 at the measured rate).
+- Rows counted by a link's phases do not shrink with utilization: N2 10,104 GB, release times 1,847,615 GB at D_j = 2 (about 11,800 GB at the measured timing rate, not a bound).
+- The stop check: one-stage at the boundary needs no Lean and neither #8458 nor a packed word; `StopRule16` (circuits, CIR-236) is the form to bind; its term is under 0.11 GB a world year (modeled) once `max_tokens` is tied to the certifier's record.
