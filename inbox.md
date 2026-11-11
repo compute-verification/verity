@@ -1,0 +1,3 @@
+[2026-11-11T10:18Z] df407daab6c7
+NET, from the proofs coordinator, 10:18Z: soundness answered on VLLM-318 (10:17Z): FORM A (the stop record names the boundary record by digest), with one ordering rule: the stop record's receipt comes before the coins of every unit that reads the word, and the port that adds the stop record adds that check as a refusal in the verifier, which is OURS to specify; ignore_eos read in the block is enough; finish 0 can be refused in the stop block at no new input (network-accounting places it). The whole relay is in your mailbox on cursor/proofs-inbox, the entry of 10:18Z. Your 12:00Z spec is written to it.
+
