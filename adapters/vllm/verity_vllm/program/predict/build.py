@@ -449,11 +449,12 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
     Llama-family one (`_Decoder`).  Its `leaves()` are the weights record, `peer_shapes(rows)` one forward pass's peer Inputs in
     collective order, `model(B, W, peers)` the forward and the sampler."""
     from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
-    ff = FAMILY_FACTS.get(str(phi.hf_config.get("model_type", "")).lower()) or {}
+    family = str(phi.hf_config.get("model_type", "")).lower()
+    arch = FAMILY_FACTS[family]["arch"] if family in FAMILY_FACTS else None    # a family the table lacks is `model_shape`'s to refuse
     Net: type[Any]
-    if ff.get("arch") == "dsa-moe":
+    if arch == "dsa-moe":
         from .dsa import Net
-    elif ff.get("arch") == "mhc-moe":
+    elif arch == "mhc-moe":
         from .dsv4 import Net
     else:
         Net = _Decoder
