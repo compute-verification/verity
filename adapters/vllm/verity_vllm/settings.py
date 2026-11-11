@@ -138,6 +138,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_COLLECT_DEAD_GRACE_S", float, 120.0, WHERE, "seconds a dead collector waits for progress before its watchdog exits"),
     S("VERITY_COLLECT_WATCHDOG_MARKER", str, "", WHERE, "the file the collector's watchdog writes when it exits (the Commit sets it)"),
     S("VERITY_CONSUMER_DELAY_MS", float, 0.0, DEBUG, "milliseconds the collector's consumer sleeps per step (a stall injected for tests)"),
+    S("VERITY_CUT", json.loads, None, VALUE, "the carried pool's cut at each window edge under vLLM's engine core "
+      "(`pipeline.cut_plugin`), a JSON object: every_s or every_steps, hold_s, the log directory and the sent feed (`cut_plugin.SentFeed`); unset, none"),
     S("VERITY_DRAIN_SIDE", flag, True, VALUE, "the collector drains a gather replay on its side stream (native_collect.cpp)"),
     S("VERITY_DSA_TOPK", str, None, VALUE, "the DSA top-k plugin's row past INDEX_TOPK keys: canonical rewrites it to the top set in "
       "ascending index order, the order DsaButterflyRows reads (`engine_classes.DSA_TOPK_ENV`); unset, the kernels' own order"),
@@ -190,6 +192,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_INDUCTOR_DIR_PER_PROCESS", flag, False, WHERE, "TORCHINDUCTOR_CACHE_DIR is this process's own (`engine.env.INDUCTOR_DIR_MARK`)"),
     S("VERITY_INT8_CREDITED_READ", str, None, VALUE, "MODE:PAGED_SO, the int8 attention's credited read every engine installs"),
     S("VERITY_INT8_PARTS", csv, (), VALUE, "the int8 parts a rank registers when it starts (`engine.int8_ranks`)"),
+    S("VERITY_POOL_ROW", int_or_zero, 0, VALUE, "the carried pool's token width CTW: the engine keys its blocks by BlockKey_v1 "
+      "for tokens of CTW bits and each window's close exports its pool row (`engine.pool_row`); 0, off"),
     S("VERITY_SPARSE_MLA_NUM_SPLITS", stripped, "0", VALUE, "FA3's sparse MLA splits: 1 pins one split, 0 leaves vLLM's heuristic; "
       "empty is refused", empty=True),
     # ---- Build, Match and the row (pipeline/, check/, query/)
