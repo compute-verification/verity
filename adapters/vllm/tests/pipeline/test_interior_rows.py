@@ -11,6 +11,7 @@ selects."""
 
 from __future__ import annotations
 
+import copy
 import json
 from dataclasses import replace
 
@@ -28,6 +29,7 @@ from verity.definitions.registry import dead_free as DF
 from verity.commitments.windows import rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, index_of
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.check.replay.request_replay import Replay
 from verity_vllm.engine import sampler_capture as SC
 from verity_vllm.pipeline import chunk_rows as CR, interior_rows as IR, serving_rows as SRW
 
@@ -66,8 +68,8 @@ def _weights(world):
     return read
 
 
-def _replay(world, rid: str) -> IR.Replay:
-    return IR.Replay(index_of(world.inst), rid, PROMPTS[rid], _weights(world))
+def _replay(world, rid: str) -> Replay:
+    return Replay(index_of(world.inst), rid, PROMPTS[rid], _weights(world))
 
 
 def _served(world, rid: str):
@@ -103,6 +105,20 @@ def test_a_replay_names_what_it_cannot_give(world):
     assert w is None and "nothing gives it" in why
     w, why = replay.words("r0", 0, replay.embed, "in", 0, 3)
     assert w is None and "prompt ids [0, 3)" in why
+    cached = copy.copy(index_of(world.inst))
+    cached.kv_prefix = {"C": 2}
+    with pytest.raises(ValueError, match=r"another request computed: .*recompute_hits=True"):
+        Replay(cached, "r0", PROMPTS["r0"], _weights(world))
+
+
+def test_a_replay_s_arrival_is_its_program_s_first_step_so_steps_ahead_of_the_request_s_shift_it(world):
+    """A class-G Program that recomputes a hit runs its chunks in steps ahead of the request's first served step: replayed
+    with ``arrive`` that many steps earlier, the request's served step reads the Program's step after them."""
+    op = next(op for (s, _rid, op, m) in world.blocks if s == 1 and m == "out" and op != SAMPLER_OP)
+    ahead = Replay(index_of(world.inst), "r0", PROMPTS["r0"], _weights(world), arrive=-1)
+    got, _ = ahead.words("r0", 0, op, "out", 0, 4)
+    want, _ = _replay(world, "r0").words("r0", 1, op, "out", 0, 4)
+    assert want is not None and np.array_equal(got, want)
 
 
 def test_a_port_map_says_which_committed_word_each_units_word_is(world):
