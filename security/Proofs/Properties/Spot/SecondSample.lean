@@ -3,11 +3,12 @@ module
 public import Proofs.Flock.Claims.Sampling.Select.SecondLaw
 public import Proofs.Flock.Claims.Sampling.Select.SecondUnits
 public import Proofs.Properties.Spot
-public import Proofs.Properties.NetworkCertifier.Check.LinkWindow
+public import Proofs.Flock.Claims.Complete.Json.Canon
+public import Proofs.Flock.Claims.Complete.Json.Record
 public import Proofs.Pouw.Period.Sort
 public import Proofs.Flock.Recursive.FirewallObj
-import all Spot.Draw
-import all Spot.Json
+import Spot.Draw
+import Spot.Json
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import Std.Data.DTreeMap.Internal.WF.Lemmas
@@ -27,7 +28,7 @@ sampled, which `drawUnits_second_error_le` bounds.
 * `entries_mkObj_perm`, `keys_mkObj_perm`: an object built from members with distinct keys has those keys.
 * `secondObj`: the sample object `selectSecond` builds from the units, with its fields, keys and sampling design.
 * `countIn_cell`: `checkDraw`'s count of the units in a cell, as the list's.
-* `SecondFormed`: the sampling design is well formed, which `Select.SecondFormed` shows wherever `secondProblem` passes.
+* `SecondFormed`: the sampling design is well formed, which `secondFormed` shows wherever `secondProblem` passes.
 * `drawn_secondObj`, `checkDraw_secondObj`: the sample object is `Properties.Spot.Drawn`, so `checkDraw` passes.
 * `selectSecond_of_units`: `selectSecond` returns the sample `Draw.drawUnits` gives.
 * `selectSecond_refused_le_of`: under a well-formed sampling design, on a uniform stream of at least `secondRead` bytes,
@@ -133,7 +134,7 @@ theorem lawOf_secondObj (sample ns ks units : Array ℕ) :
   unfold Draw.lawOf
   have hw : jeq (getD (secondObj sample ns ks units) "law") "work" = true := by
     rw [getD_obj_law]
-    obtain ⟨t, ht⟩ := Properties.NetworkCertifier.canon_str "work"
+    obtain ⟨t, ht⟩ := FlockComplete.JsonRT.canon_ok_some _ (Claims.Json.Good.str "work")
     exact jeq_self ht
   simp only [hw, Bool.or_true, ↓reduceIte]
   rfl
@@ -146,32 +147,37 @@ theorem strataMessage_secondObj (sample ns ks units : Array ℕ) (n : Int) :
 
 /-! ## `Flock.canon` prints `secondLaw` -/
 
-theorem canon_cellObj (o n k i r t : ℕ) : ∃ s, Flock.canon (Select.cellObj o n k i r t) = .ok s := by
+/-- A cell's object is printable: distinct keys, a string, naturals and one range of naturals. -/
+theorem good_cellObj (o n k i r t : ℕ) : Claims.Json.Good (Select.cellObj o n k i r t) := by
   unfold Select.cellObj
-  refine Properties.NetworkCertifier.canon_mkObj fun p hp => ?_
+  refine FlockComplete.JsonRT.good_mkObj (by simp) fun p hp => ?_
   simp only [List.mem_cons, List.mem_nil_iff, or_false] at hp
   rcases hp with rfl | rfl | rfl | rfl | rfl
-  · exact Properties.NetworkCertifier.canon_str _
-  · refine Properties.NetworkCertifier.canon_arr fun x hx => ?_
+  · exact .str _
+  · refine .arr fun x hx => ?_
     obtain rfl : x = natsJson #[o + i * n, o + (i + 1) * n] := List.mem_singleton.1 (Array.mem_toList_iff.2 hx)
-    refine Properties.NetworkCertifier.canon_arr fun y hy => ?_
+    refine .arr fun y hy => ?_
     obtain ⟨a, -, rfl⟩ := Array.mem_map.1 hy
-    exact Properties.NetworkCertifier.canon_nat a
-  · exact Properties.NetworkCertifier.canon_nat 1
-  · exact Properties.NetworkCertifier.canon_nat k
-  · exact Properties.NetworkCertifier.canon_nat k
+    exact FlockComplete.JsonRT.good_toJson a
+  · exact FlockComplete.JsonRT.good_toJson 1
+  · exact FlockComplete.JsonRT.good_toJson k
+  · exact FlockComplete.JsonRT.good_toJson k
 
-theorem canon_secondLaw (sample ns ks : Array ℕ) : ∃ s, Flock.canon (Select.secondLaw sample ns ks) = .ok s := by
+/-- `secondLaw` is printable: distinct keys, and each of its cells is. -/
+theorem good_secondLaw (sample ns ks : Array ℕ) : Claims.Json.Good (Select.secondLaw sample ns ks) := by
   unfold Select.secondLaw
-  refine Properties.NetworkCertifier.canon_mkObj fun p hp => ?_
+  refine FlockComplete.JsonRT.good_mkObj (by simp) fun p hp => ?_
   simp only [List.mem_cons, List.mem_nil_iff, or_false] at hp
   rcases hp with rfl | rfl | rfl
-  · exact Properties.NetworkCertifier.canon_str "work"
-  · exact Properties.NetworkCertifier.canon_nat 1
-  · refine Properties.NetworkCertifier.canon_arr fun x hx => ?_
+  · exact .str "work"
+  · exact FlockComplete.JsonRT.good_toJson 1
+  · refine .arr fun x hx => ?_
     obtain ⟨t, -, hx⟩ := List.mem_flatMap.1 (Array.mem_toList_iff.2 hx)
     obtain ⟨i, -, rfl⟩ := List.mem_map.1 hx
-    exact canon_cellObj _ _ _ _ _ _
+    exact good_cellObj _ _ _ _ _ _
+
+theorem canon_secondLaw (sample ns ks : Array ℕ) : ∃ s, Flock.canon (Select.secondLaw sample ns ks) = .ok s :=
+  FlockComplete.JsonRT.canon_ok_some _ (good_secondLaw sample ns ks)
 
 /-! ## The units, as `checkDraw` reads them -/
 
@@ -271,7 +277,8 @@ theorem drawn_secondObj {sample ns ks : Array ℕ} (hp : Select.secondProblem sa
     obtain ⟨t, ht⟩ := canon_secondLaw sample ns ks
     exact jeq_self ht
   · rw [getD_obj_population]
-    obtain ⟨t, ht⟩ := Properties.NetworkCertifier.canon_nat (sample.size * ns.toList.sum)
+    obtain ⟨t, ht⟩ := FlockComplete.JsonRT.canon_ok_some _
+      (FlockComplete.JsonRT.good_toJson (sample.size * ns.toList.sum))
     exact jeq_self ht
   · intro i h
     have h' : i + 1 < units.size := by simpa using h

@@ -1,9 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Sampling.Select.SecondSample
+public import Proofs.Properties.Spot.SecondSample
 public import Proofs.Flock.Soundness.ExecStrataOf
-import all Spot.Draw
-import all Spot.Json
+import Spot.Draw
+import Spot.Json
 import Batteries.Tactic.OpenPrivate
 import Proofs.Core.QSort
 import Proofs.Flock.Claims.Sampling.Select.Take
@@ -708,7 +708,7 @@ theorem second_parses {sample ns ks : Array ℕ} (hp : Select.secondProblem samp
     exact List.not_mem_nil hm
   have hw : jeq (getD (Select.secondLaw sample ns ks) "law") (Json.str "work") = true := by
     rw [getD_secondLaw_law]
-    obtain ⟨t, ht⟩ := Properties.NetworkCertifier.canon_str "work"
+    obtain ⟨t, ht⟩ := FlockComplete.JsonRT.canon_ok_some _ (Claims.Json.Good.str "work")
     exact jeq_self ht
   have hk : int? (getD (Select.secondLaw sample ns ks) "k") = some 1 :=
     (congrArg int? (getD_secondLaw_k sample ns ks)).trans (int_toJson 1)

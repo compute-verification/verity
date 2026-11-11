@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.Coins
 public import Proofs.Flock.SpotFlock.Drawn
-public import Proofs.Flock.Claims.Sampling.Select.SecondFormed
+public import Proofs.Properties.Spot.SecondFormed
 public import Proofs.Flock.Claims.Sampling.Select.SecondFirst
 
 /-!

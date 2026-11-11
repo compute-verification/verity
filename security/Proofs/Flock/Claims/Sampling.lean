@@ -23,8 +23,6 @@ public import Proofs.Flock.Claims.Sampling.Select
 public import Proofs.Flock.Claims.Sampling.Select.SecondCount
 public import Proofs.Flock.Claims.Sampling.Select.SecondStrata
 public import Proofs.Flock.Claims.Sampling.Select.SecondLaw
-public import Proofs.Flock.Claims.Sampling.Select.SecondSample
-public import Proofs.Flock.Claims.Sampling.Select.SecondFormed
 public import Proofs.Flock.Claims.Sampling.Seq
 public import Proofs.Flock.Claims.Sampling.Runs
 public import Proofs.Flock.Claims.Sampling.RunsExp
@@ -48,11 +46,8 @@ then one Flock session at the statement the prefix fixes (`Sampling.Prefix`); th
 `DrawLaw` from it (`Sampling.Select`), and how many proof blocks its second stage proves, `|sample| · Σ_t k_t`
 (`Sampling.Select.SecondCount`), and by template, `|sample| · Σ_t k_t · M_t` for a weight at most `M_t` on template
 `t`'s blocks (`Sampling.Select.SecondStrata`); the second stage's sampling design on its cells, with the chance its
-units are not sampled on a stream holding the bytes its strata read first (`Sampling.Select.SecondLaw`), the sample
-object it builds from its units passing `Draw.checkDraw` under a well-formed sampling design
-(`Sampling.Select.SecondSample`), and that sampling design well formed wherever `secondProblem` passes, so the second
-stage refuses with at most that chance (`Sampling.Select.SecondFormed`); the universal unit's gates running its private
-circuit (`Sampling.Universal`);
+units are not sampled on a stream holding the bytes its strata read first (`Sampling.Select.SecondLaw`); the universal
+unit's gates running its private circuit (`Sampling.Universal`);
 the block's claims assembled, with what remains as hypotheses (`Sampling.Assembled`, at any Flock record), and at the
 deployed record over any Flock record (`Sampling.Deployed`); its zero knowledge by
 sequential composition of the masked sessions' at the masked deployed record, the route of record (`Sampling.Seq`), and,
