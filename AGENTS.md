@@ -21,15 +21,16 @@ what the layout's design has and the tree does not.
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
     (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`). The inference-only
     policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
-    interface each protocol's check implements. Code that came from `benchmarks/` and is in no unit yet: `pouw/clear/`,
-    `pouw/receipts/`, `poub/device/live_verifier/`, `inference_only/nci/` and `inference_only/rho/`.
+    interface each protocol's check implements. Code the move brought from `benchmarks/`, which no unit rule reads yet:
+    `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `inference_only/nci/` and `inference_only/rho/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). `verity/definitions/`: the circuits
     written in it: `ops` (the primitive circuits' Definitions), `silicon` (the GPUs' exact semantics), `kernels`,
-    `private_circuits` (the universal circuit) and the served workloads' Definitions. Target, not yet: `verity/circuits/`
-    also holds the circuits a protocol names, and the served kernels' circuits go with the adapter that serves them.
-  - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`,
-    `identity`, `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands the prover for
-    each execution phase).
+    `private_circuits` (the universal circuit), the served workloads' Definitions, and the evaluator and a circuit's
+    requirement in Lean (`evaluate`, `requirement`). Target, not yet: `verity/circuits/` also holds the circuits a
+    protocol names, and the served kernels' circuits go with the adapter that serves them.
+  - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
+    and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
+    the prover for each execution phase).
   - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU or host model), `site` (its
     types), `registration` (the registration log) and `record` (a record entry). Target, not yet: the data sheets in a
     top-level `hardware/` that holds data only, and the types in one file of `verity/`.
@@ -38,7 +39,7 @@ what the layout's design has and the tree does not.
     directly under `verity/` (what a party is, the registered hardware, what a protocol declares, the configuration)
     and `verity/runtime/`, which runs parties over channels.
   - `verity/claims/`: the security claims' ids. `verity/difftest/`: the Python held to each Lean (target, not yet: under
-    `tools/`). `verity/composite/device/live_challenger/`: the auditor host's challenger service.
+    `tools/`). `verity/composite/device/live_challenger/`: the auditor host's challenger service, from `benchmarks/` too.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `adapters/`: one directory per serving system, holding only what attaches Verity to it: an adapter, which the Design
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
