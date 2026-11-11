@@ -43,7 +43,7 @@ PLAN_FILE = "mix.json"
 #: a proof server's report in a run's files, and the staged types it proved beside it
 REPORTS, TYPES = "*/server-k*/server.json", "types.json"
 #: each fleet's assumed serving MFU
-FLEETS = Path("benchmarks/rho/data/reference.toml")
+FLEETS = Path("verity/protocols/inference_only/rho/data/reference.toml")
 SYSTEMS = ("flock", "spot")
 CENSUS, CUT, STEADY, SINGLE, SAMPLING = "census", "cut", "flock-steady", "flock-single", "spot-sampling"
 
