@@ -31,18 +31,24 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from verity_vllm.config import option, workload_arg
-from verity_vllm.program import prefix_plan as PP
-from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.query.program_view import from_instances, iter_instance_rows
-from verity_vllm.query.compose import compose_global, merge_ranks
-from verity_vllm.query.required import QUERIES, QUERY_OF_RECORD, Q_WORD_ID, request_manifest
 from verity.definitions import cross_call
+from verity.definitions import word as word_query
+
+from verity_vllm.config import option, workload_arg
+from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.program import prefix_plan as PP
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
-from verity.definitions import word as word_query
+from verity_vllm.query.compose import compose_global, merge_ranks
+from verity_vllm.query.program_view import from_instances, iter_instance_rows
+from verity_vllm.query.required import (
+    Q_WORD_ID,
+    QUERIES,
+    QUERY_OF_RECORD,
+    request_manifest,
+)
 
 __all__ = ["TAPS", "DEFAULT_TAPS", "taps_of", "word_record", "cpus", "prefetch_word_rules", "build_components", "build", "build_global",
            "build_global_ranks", "cross_call_check", "main"]
@@ -114,6 +120,7 @@ def recorded_program_digest(program_dir: str, res: dict[str, Any]) -> str | None
     if not os.path.exists(p):
         return None
     import gzip
+
     from verity.circuits.codec import program_digest
     with gzip.open(p, "rt") as f:
         return program_digest(json.load(f))
@@ -602,7 +609,8 @@ COMMANDS = {"build": BuildOptions, "build-global": BuildGlobalOptions}
 def main(a: Any) -> int:
     log = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
     if a.cmd in ("build", "build-global"):
-        from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+        # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+        from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
         _gc_tune()
         word_query.use_rule_cache(a.unit_rule_cache)
     if a.cmd == "build":

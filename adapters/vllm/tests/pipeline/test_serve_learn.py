@@ -10,7 +10,13 @@ from typing import Any
 
 import pytest
 
-from tests.pipeline.test_serve_openai import Committer, Engine, Runner, Tokenizer, records
+from tests.pipeline.test_serve_openai import (
+    Committer,
+    Engine,
+    Runner,
+    Tokenizer,
+    records,
+)
 from verity_vllm import settings
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc

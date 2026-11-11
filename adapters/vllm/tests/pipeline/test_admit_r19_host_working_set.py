@@ -19,12 +19,11 @@ import signal
 import numpy as np
 import pytest
 
-from verity_vllm.commit.committer import native_collect as NC
-from verity_vllm.check.replay import driver as SR
-from verity_vllm.check.replay import fork as FK
-
 # the sampled-replay world / helpers of test_sampled_replay (one fixture set, not a copy)
 from tests.check import test_sampled_replay as TSR
+from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay import fork as FK
+from verity_vllm.commit.committer import native_collect as NC
 
 HIDDEN_PREFIXES = ("fa2.m1/", "fa3.m1/")
 
@@ -269,8 +268,8 @@ def test_sampled_replay_never_reads_the_hidden_m1_family(world):
 
 
 def test_oracle_compare_classifies_the_hidden_family_out_before_any_read(tmp_path):
-    from verity_vllm.check import oracle_compare as OC
     from tests.check import test_oracle_compare as TOC
+    from verity_vllm.check import oracle_compare as OC
     d, vals = TOC.make_match(str(tmp_path))
     bmap, committed = TOC.make_bmap(vals)
     seen: list = []

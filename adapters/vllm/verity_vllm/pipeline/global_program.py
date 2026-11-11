@@ -30,19 +30,36 @@ from dataclasses import dataclass
 
 from verity.circuits.codec import canonical_json, descriptor_size
 from verity.circuits.defs import REGISTRY
-from verity_vllm.config import RowEngine, done_source_refusal, option, row_execution, workload_arg, workload_file
-from verity_vllm.pipeline import layout as build_paths
-from verity_vllm.program import prefix_plan as PP, workload as W
-from verity_vllm.records.workload import Workload, WorkloadSampling
 from verity.definitions.registry.catalog import load as _load_registry
+
+from verity_vllm.config import (
+    RowEngine,
+    done_source_refusal,
+    option,
+    row_execution,
+    workload_arg,
+    workload_file,
+)
+from verity_vllm.pipeline import layout as build_paths
+from verity_vllm.program import prefix_plan as PP
+from verity_vllm.program import workload as W
+from verity_vllm.records.workload import Workload, WorkloadSampling
 
 # the request descriptors decode through the registry the Match reads (`catalog.load`): every registry module loaded
 for _e in _load_registry()[1]:
     print(f"[global_program] registry module unavailable ({_e}): components naming its Definitions will not decode", file=sys.stderr)
 
 from verity_vllm.check.match.batch_decomp import derived_shape
-from verity_vllm.pipeline.components import (component_of, component_provenance, follow_components, load_component, load_desc,  # noqa: F401
-                                             recorded_component_digest, registration_refusal, wrapper_params)
+from verity_vllm.pipeline.components import (  # noqa: F401
+    component_of,
+    component_provenance,
+    follow_components,
+    load_component,
+    load_desc,
+    recorded_component_digest,
+    registration_refusal,
+    wrapper_params,
+)
 
 
 def request_id_of(index: int) -> str:
@@ -676,7 +693,8 @@ class Options:
 
 
 def main(a: Options) -> int:
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
     _gc_tune()
     eos = [int(x) for x in a.eos_token_ids.split(",") if x.strip()] if a.eos_token_ids else None
     early, canon = None, {}

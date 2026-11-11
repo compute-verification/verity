@@ -37,15 +37,25 @@ import hashlib
 import json
 import sys
 import uuid
+from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 
 import numpy as np
-from dataclasses import dataclass
 
 from verity_vllm import settings
-from verity_vllm.config import (CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_execution, row_tokens,
-                                row_world, rows_of_record)
+from verity_vllm.config import (
+    CHECKPOINTS,
+    VLLM,
+    WORKLOAD_SCHEMA,
+    WORKLOADS,
+    RowConfig,
+    option,
+    row_execution,
+    row_tokens,
+    row_world,
+    rows_of_record,
+)
 from verity_vllm.engine import served
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import row_custom_all_reduce_off, row_p2p_env

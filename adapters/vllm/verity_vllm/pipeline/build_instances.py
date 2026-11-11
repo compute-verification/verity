@@ -13,11 +13,15 @@ from __future__ import annotations
 
 import os
 
-from verity_vllm.program.instances_file import INSTANCES_GZ_LEVEL  # noqa: F401 (read through here)
-from verity_vllm.program.instances_file import instance_rows
+from verity_vllm.program.instances_file import (
+    INSTANCES_GZ_LEVEL,  # noqa: F401 (read through here)
+    instance_rows,
+    write_program_instances,
+)
 from verity_vllm.program.instances_file import write_instances as _write_instances  # noqa: F401 (read through here)
-from verity_vllm.program.instances_file import write_instances_file as _write_instances_file
-from verity_vllm.program.instances_file import write_program_instances
+from verity_vllm.program.instances_file import (
+    write_instances_file as _write_instances_file,
+)
 
 
 def _instance_rows(program):
@@ -34,6 +38,7 @@ def _word_rows(program, word):
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import CompositeDefinition, bind
+
     from verity_vllm.program.compact import file_items_from_refs
     links: dict[str, str] = {}
     for k, (b, w) in enumerate(zip(program.fn.body.nodes, word.fn.body.nodes, strict=True)):

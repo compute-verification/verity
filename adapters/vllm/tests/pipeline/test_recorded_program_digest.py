@@ -9,6 +9,7 @@ import json
 
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import program_digest
+
 from verity_vllm.pipeline import manifest as M
 from verity_vllm.query.required import partition_of
 

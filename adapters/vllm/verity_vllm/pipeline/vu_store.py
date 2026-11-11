@@ -33,13 +33,16 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 import numpy as np
-
 from verity.circuits.query_ast import NameSel
 
+from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.check.replay.population import phase_anchor, population, split_not_executed
-from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay.population import (
+    phase_anchor,
+    population,
+    split_not_executed,
+)
 from verity_vllm.pipeline import vu_export as VX
 
 STORE_SCHEMA = "vllm-vu-store/v1"
@@ -108,6 +111,7 @@ def _run_draw(n: int, workers: int, budget_s: float, t0: float) -> Iterator[tupl
             yield None if time.perf_counter() - t0 > budget_s else _one_vu(k)
         return
     import gc
+
     from verity_vllm.check.replay import driver as SR
     from verity_vllm.check.replay.fork import fork_pool
     SR._prewarm_weights(_FORK["indices"], _FORK["picked"], _FORK["weights"])

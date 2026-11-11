@@ -8,13 +8,13 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
-from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, RecordType, Value
 from verity.commitments import hm96
+from verity.protocols.spot.verifier.one_stage import registered as G
+
 from verity_vllm.pipeline import registration_log as RL
 
 _spec = importlib.util.spec_from_file_location(

@@ -9,14 +9,13 @@ from typing import Any
 
 import pytest
 
+from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving
 from verity_vllm import llm as L
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_remote as SR
 from verity_vllm.protocols.remote_bandwidth import remote
-
-from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving
 
 VERIFIER = ("--remote-verifier", "127.0.0.1:7781")
 

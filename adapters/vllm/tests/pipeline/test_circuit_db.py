@@ -9,22 +9,20 @@ import json
 from pathlib import Path
 
 import pytest
-
 from research.store.local import LocalStore
 from verity.circuits import encode_program, program_digest
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation.reference import evaluate
+
+from tests.program.test_running_example import make_program
 from verity_vllm import glue
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.config import WORKLOADS, RowId, UsageError
-from verity_vllm.pipeline import circuit_db
+from verity_vllm.pipeline import circuit_db, epoch
 from verity_vllm.pipeline import config_record as CR
-from verity_vllm.pipeline import epoch
 from verity_vllm.pipeline import research_outputs as ro
 from verity_vllm.pipeline import row_records as RR
 from verity_vllm.properties.record import REGISTRY, seal
-
-from tests.program.test_running_example import make_program
 
 ROW = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 REPO = "meta-llama/Llama-3.2-1B"

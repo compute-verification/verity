@@ -54,7 +54,13 @@ from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.check import gates as G
-from verity_vllm.config import RowEngine, UsageError, option, row_execution, workload_arg
+from verity_vllm.config import (
+    RowEngine,
+    UsageError,
+    option,
+    row_execution,
+    workload_arg,
+)
 from verity_vllm.engine.served import ENFORCE_EAGER
 from verity_vllm.log import init_logger
 from verity_vllm.observe.fold.supplied import program_registered_values
@@ -941,9 +947,10 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     import dataclasses
     import gzip
 
-    from verity_vllm.observe.events import ViewDesc
     from verity.circuits import codec
     from verity.circuits.refs import runs
+
+    from verity_vllm.observe.events import ViewDesc
 
     # the writer converts by SHAPE, not by a generic walk: a ViewDesc is six known fields (the
     # same dict, in field order, that dataclasses.asdict + _jsonable produced), an operand_refs item is a list of a str and ints already
@@ -1054,7 +1061,8 @@ def fold_worker(a: Options) -> int:
     for req in ("log", "profile", "out"):
         if getattr(a, req) is None:
             raise SystemExit(f"--worker fold needs --{req}")
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level; content-neutral (VERITY_GC_THRESHOLDS)
+    # process-level; content-neutral (VERITY_GC_THRESHOLDS)
+    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
     _gc_tune()
     doc, result = fold_summary_result(a.log, a.profile, with_program=not a.no_program, moe_construction=getattr(a, "moe_construction", None), sampler_construction=getattr(a, "sampler_construction", None), registered_values=bool(getattr(a, "registered_values", False)))
     out = Path(a.out)

@@ -26,10 +26,10 @@ import json
 import os
 import sys
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
-from dataclasses import dataclass, field
 
 from verity_vllm.commit import challenge as CH
 from verity_vllm.config import option
@@ -352,8 +352,8 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
 
 def check(d: str, record_npz: str | None = None, verbose: bool = True) -> dict:
     """Model vs fixture: masked row (keep), stats, per-lane Z group, drain batches.  Returns the report dict (ok = every check passed)."""
-    from verity.definitions.registry import topp_split as TS
     from verity.definitions.registry import topp_geometry
+    from verity.definitions.registry import topp_split as TS
     dd = Path(d)
     man = json.loads((dd / "manifest.json").read_text())
     z = np.load(dd / "fixture.npz")

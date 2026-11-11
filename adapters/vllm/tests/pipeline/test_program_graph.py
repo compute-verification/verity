@@ -6,10 +6,10 @@ import copy
 import gzip
 import json
 
-from verity_vllm.pipeline import program_graph as PG
-from verity_vllm.pipeline import vu_export as VX
 from tests.check.test_sampled_replay import H, I, _program
 from tests.pipeline.test_vu_export import _export, _world
+from verity_vllm.pipeline import program_graph as PG
+from verity_vllm.pipeline import vu_export as VX
 
 
 def _write(doc: dict, path) -> str:

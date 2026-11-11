@@ -11,19 +11,21 @@ import json
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import REGISTRY, bind
-from verity.protocols.spot.verifier.one_stage import draw as DR, partition as P, registration as R
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.windows import interface as IF
+from verity.commitments.windows import rows as CS
+from verity.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
+from verity.protocols.spot.verifier.one_stage import draw as DR
+from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.spot.verifier.one_stage import registration as R
+
+from tests.pipeline import served_rope as SR
+from tests.pipeline.served_rope import HEADS, LAW, ROPE, D
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import cpu_replay as CPU
-from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import deferred_rows as DRW
-from verity.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
-
-from tests.pipeline import served_rope as SR
-from tests.pipeline.served_rope import D, HEADS, LAW, ROPE
+from verity_vllm.pipeline import replay_bundle as RB
 
 
 def _commit(tmp_path) -> dict:

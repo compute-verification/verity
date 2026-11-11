@@ -31,16 +31,22 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 import numpy as np
-
 from verity.circuits.codec import definition_digest
 from verity.circuits.defs import bind
+from verity.definitions import word as word_query
+from verity.definitions.encoding import encode_specialization, word_values
 
 from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline.vu_export import template_of
-from verity.definitions.encoding import encode_specialization, word_values
-from verity.definitions import word as word_query
-from verity_vllm.query.program_view import ProgramView, _read_instance_header, from_instances, iter_instance_rows, spec_base, spec_statics
+from verity_vllm.query.program_view import (
+    ProgramView,
+    _read_instance_header,
+    from_instances,
+    iter_instance_rows,
+    spec_base,
+    spec_statics,
+)
 
 SCHEMA = "vllm-program-graph/v1"
 VARYING_MAX = 8

@@ -12,12 +12,12 @@ import json
 import numpy as np
 import pytest
 
+from tests.check.test_weights_of_record import write_safetensors
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import expert_rows as ER
 from verity_vllm.pipeline import expert_tables as ET
 from verity_vllm.records import expert_tables as XT
-from tests.check.test_weights_of_record import write_safetensors
 
 G, I, H, E, WORLD = 128, 256, 256, 8, 2
 LAYERS = (1, 2)

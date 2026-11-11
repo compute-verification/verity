@@ -14,17 +14,16 @@ from types import SimpleNamespace
 from typing import Any, Callable
 
 import pytest
-
-from verity.protocols.spot.verifier.one_stage import registration as REG
 from verity.circuits.codec import canonical_json
-from verity_vllm.pipeline import serve_h1 as SH
-from verity_vllm.pipeline import serve_tie as TIE
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity.protocols.spot.verifier.one_stage import registration as REG
 
 from tests.pipeline.test_serve_h1 import PROMPTS, Later, _Server
 from tests.protocols.test_pouw_h1_commit import ROWS, STEPS, _reusing
 from tests.protocols.test_pouw_h1_served import _unit
+from verity_vllm.pipeline import serve_h1 as SH
+from verity_vllm.pipeline import serve_tie as TIE
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import commit as CT
 
 #: what the tie hears of a sealed window (`serve_commit.CommitWindows`' seal line)
 SEALED = {"run_id": "t/w", "run_root": "ab" * 64, "row_dir": "windows/w"}

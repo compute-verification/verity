@@ -15,7 +15,11 @@ import pytest
 
 from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import dense, served  # noqa: F401  (the dense DSA layers' fixture)
-from verity_vllm.pipeline.build import _instance_rows, _write_instances, _write_instances_file
+from verity_vllm.pipeline.build import (
+    _instance_rows,
+    _write_instances,
+    _write_instances_file,
+)
 from verity_vllm.program.instances_file import write_instances_file
 
 HEAD = {"schema": "cb-a/instance-sequence/v1", "digest": "d" * 64, "correspondence_digest": None, "params": [["prompt", "Array<8,Value<32>>"]]}
@@ -64,7 +68,16 @@ def _attention_program(seed: int):
 
     from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
     from verity.circuits.program import Program
-    from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, broadcast, concat
+    from verity.circuits.refs import (
+        Affine,
+        Coll,
+        Concat,
+        Explicit,
+        PartLog,
+        Strided,
+        broadcast,
+        concat,
+    )
     from verity.circuits.types import Array, Value
     V16, W, N = Value(16), 96, 10
     rng = random.Random(seed)
@@ -121,7 +134,11 @@ def _attention_program(seed: int):
 def test_a_programs_rows_written_from_its_logs_are_the_json_dumps_text(tmp_path, seed):
     """`write_program_instances` writes each log cut as its log's items so far plus its own, and the file's text is the one the
     row dicts give (`instance_rows` through `json.dumps`), cut by cut, whatever the cut's tail and whether it is shorter."""
-    from verity_vllm.program.instances_file import RowTexts, instance_rows, write_program_instances
+    from verity_vllm.program.instances_file import (
+        RowTexts,
+        instance_rows,
+        write_program_instances,
+    )
     program = _attention_program(seed)
     rows = list(instance_rows(program))
     texts = RowTexts()
@@ -184,6 +201,7 @@ def test_the_writer_encodes_each_heads_items_once_not_once_a_call(monkeypatch):
     times less work here, and rows/8 times less at any length.  The work is counted, not timed (no test reads a clock): the I2048
     rank's 4 h writer was that sum, 1.3e9 items."""
     from verity.circuits import codec
+
     from verity_vllm.program import compact
     from verity_vllm.program.instances_file import RowTexts, instance_rows
     monkeypatch.setattr(codec, "descriptor_id", lambda fn: fn)
@@ -206,6 +224,7 @@ def test_the_writer_encodes_a_weight_read_by_every_tokens_call_once(monkeypatch)
 
     from verity.circuits import codec
     from verity.circuits.refs import Affine, Concat, Strided
+
     from verity_vllm.program import compact, instances_file
     from verity_vllm.program.instances_file import RowTexts, instance_rows
     monkeypatch.setattr(codec, "descriptor_id", lambda fn: fn)

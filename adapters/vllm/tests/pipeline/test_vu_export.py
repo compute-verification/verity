@@ -8,10 +8,19 @@ import json
 import numpy as np
 import pytest
 
+from tests.check.test_sampled_replay import (
+    H,
+    Honest,
+    I,
+    V,
+    _bf16,
+    _program,
+    _programs,
+    _weights,
+)
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.pipeline import vu_export as VX
 from verity_vllm.pipeline import vu_store as VS
-from tests.check.test_sampled_replay import H, I, V, Honest, _bf16, _program, _programs, _weights
 
 ROOT = bytes(range(32))
 

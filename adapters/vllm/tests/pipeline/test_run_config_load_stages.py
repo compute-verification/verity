@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import json
 
-from verity_vllm.pipeline import match as RC
 from verity_vllm.check import gates as G
+from verity_vllm.pipeline import match as RC
 
 
 def test_empty_stages_json_is_set_aside_and_the_resume_starts_empty(tmp_path, capsys):

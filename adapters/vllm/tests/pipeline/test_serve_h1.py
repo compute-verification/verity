@@ -11,15 +11,37 @@ import json
 import shlex
 import threading
 from concurrent.futures import Future
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import torch
-
 from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.spot.device.challenger import CoinError
+
+from tests.pipeline import predicted
+from tests.pipeline.test_commit_coins import GATE, KEY, PEER, _Auditor
+from tests.pipeline.test_serve_openai import (
+    CERTIFIER_BODY,
+    Serving,
+    records,
+    serve_concurrently,
+)
+from tests.protocols import challenger_host as CH
+from tests.protocols.test_pouw_h1 import Runner, _so
+from tests.protocols.test_pouw_h1_commit import (
+    ROWS,
+    STEPS,
+    Committer,
+    K,
+    Linear,
+    Model,
+    _ids,
+    _manifest_sites,
+    _served_commit,
+)
+from tests.protocols.test_pouw_h1_served import StandInJ10R, _unit
 from verity_vllm.engine import handle
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import commit_coins as CC
@@ -29,14 +51,6 @@ from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import served as SV
-
-from tests.pipeline import predicted
-from tests.pipeline.test_commit_coins import GATE, KEY, PEER, _Auditor
-from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving, records, serve_concurrently
-from tests.protocols import challenger_host as CH
-from tests.protocols.test_pouw_h1 import Runner, _so
-from tests.protocols.test_pouw_h1_commit import K, ROWS, STEPS, Committer, Linear, Model, _ids, _manifest_sites, _served_commit
-from tests.protocols.test_pouw_h1_served import StandInJ10R, _unit
 
 #: each window's two requests: step 0 admits both (prompt tokens, cap), step 1 decodes a row of each
 PROMPTS = ({"a": [5, 6, 7], "b": [8, 9]}, {"c": [11, 12], "d": [13, 14, 15, 16]})
@@ -238,8 +252,9 @@ def test_the_declared_program_is_written_as_its_digest_is_hashed_with_the_layout
     import gzip
     import hashlib
 
-    from verity.protocols.pouw.verifier import credit as CR
     from verity.circuits.codec import program_digest
+    from verity.protocols.pouw.verifier import credit as CR
+
     from verity_vllm.protocols.pouw.h1 import served as SV
 
     srv = _Server(monkeypatch)
@@ -479,6 +494,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     serve-openai listens: window 0's open then reserves nothing for itself and computes no root, and its session (with
     its sampling session, reserved withheld beside it) is the one reserved at startup."""
     from verity.protocols.pouw.verifier import verifier
+
     from verity_vllm.protocols.pouw.h1 import hooks as PHK
     from verity_vllm.protocols.pouw.h1 import tables_device as TD
 

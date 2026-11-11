@@ -9,10 +9,10 @@ import json
 from pathlib import Path
 
 import pytest
-
+from verity.commitments.windows import rows as CS
 from verity.protocols.certifier.verifier import advice as A
 from verity.protocols.spot.verifier.one_stage import registration as R
-from verity.commitments.windows import rows as CS
+
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
 

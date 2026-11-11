@@ -10,9 +10,9 @@ import re
 from types import SimpleNamespace
 
 import pytest
+from verity.protocols.certifier.verifier import advice as I1
 
 from tests.engine.fake_scheduler import FakeRequest, FakeScheduler, drive
-from verity.protocols.certifier.verifier import advice as I1
 from verity_vllm.config import UsageError
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
@@ -264,6 +264,7 @@ def test_the_registration_records_the_committers_weights_roots_and_refuses_anyth
     aren't weight parameters' entries with a root of 64 bytes, or one of another model than the run's ``serve.json`` names,
     is a usage error."""
     from verity.commitments.windows import interface as IF
+
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.records import weights_registration as WRG
 
