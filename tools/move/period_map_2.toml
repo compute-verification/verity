@@ -1,0 +1,76 @@
+# Stage 2 of lean's period move: the entries network-accounting's draft renames in its second stage (names under a container its
+# stage 1 renames: rename.py renames a container and a name under it only in two moves). Run it on stage 1's commit.
+
+# The period family in the Glossary's words in lean's areas (security/{Definitions,Proofs}/{Core,Hash,Accounting} and
+# security/{Properties,Proofs/Properties}/Accounting): the entries of network-accounting's draft of the period map that
+# rename a declaration or module declared there, as `tools/move/rename.py --map tools/move/period_map.toml` renames them
+# in one move; `period_map_2.toml` is its second stage. The draft's other entries rename what other areas declare and
+# are theirs to move. Each renamed declaration keeps the rest of its name; the word
+# becomes the Glossary's for what it denotes:
+# - "window" for an execution phase (PoUW's, the network certifier's link-window) -> "execution phase"
+#   (`ExecutionPhase`, `executionPhase`); for SPOT's served span with its audit -> "run"; for a span of ticks -> "period"
+#   (its one definition is Core's `Verity.TickSpan`); for a location's gates over a cut of ticks (the dampener's, the
+#   actual circuit's `Windows`/`WindowsAt`) -> "server block". PoUB's window, the span one challenge covers, serves
+#   nothing and keeps the word, as does a numeric, bit, index or concurrency window.
+# - "period" for the stretch a bound is about -> "monitoring period"; a certification period (`NetworkCheck.Period`,
+#   LMS's and the period records'), a joint audit's period and Dither's noise period keep it.
+# - "session" for PoUB's run over its windows and the memory challenger's -> "run"; for the live challenger's
+#   gate session -> "challenge phase"; for a certifier's 32-byte id -> "attachment"; for Nci's prompt-sized blocks ->
+#   "inference block". Flock's session (its own and the ZK server's) waits for a Glossary ruling and is not here.
+# - "run" is already the Glossary's word wherever it means a run; its other senses (a contiguous range, a result,
+#   `Compiler.run`) keep it.
+# Format constants (`WINDOW_*`, `*_SESSION`, the `Domains` tags) and the code's record fields keep the word until a
+# format version. Duplicates are merged by a refactor, not by this move: `Accounting.Window` becomes a use of
+# `Verity.TickSpan`, `NetTiming.WindowCharge`'s `Window` and `Carry` uses of `NetworkCertifier.WindowCharge`'s, and
+# `Verity.Sampled.Device.RunSetup` a use of `Properties.Challenger.Run`; `Accounting.Compose.PeriodRun` is deleted.
+# Declarations keep their place in the locks' records: `rename.py --moves` prints the renames `check.py --update
+# --moved` takes.
+
+[words]
+# Module paths and namespaces named for the word alone, longest first.
+# Declarations whose name holds the word with other parts, each renamed wherever it stands (no other declaration
+# holds it).
+"widen_session" = "widen_run"
+"EveryWindow" = "EveryExecutionPhase"
+"windowAt" = "executionPhaseAt"
+
+[[words_in]]
+# `window_le` names another sense in other files, so it is renamed only where it is declared and where the build's
+# `.ilean` references spell it.
+files = [
+    "security/Definitions/Accounting/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+    "security/Proofs/Accounting/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+]
+words = { "window_le" = "period_le" }
+
+[[words_in]]
+# `window_le` names another sense in other files, so it is renamed only where it is declared and where the build's
+# `.ilean` references spell it.
+files = [
+    "security/Proofs/Accounting/Actual/ServerBlocks.lean",
+    "security/Proofs/Accounting/Actual/Threaded.lean",
+]
+words = { "window_le" = "serverBlock_le" }
+
+[[words_in]]
+# Pouw's proofs declare lemmas of these names too (theirs to rename), so these are renamed only in the file
+# that declares and reads Accounting's.
+files = [
+    "security/Proofs/Accounting/ComposeMonitoringPeriod/Honest.lean",
+]
+words = { "acceptsUpTo_period" = "acceptsUpTo_monitoringPeriod", "liveAt_period" = "liveAt_monitoringPeriod", "period_every" = "monitoringPeriod_every" }
+
+[rewrite]
+    # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+    # files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+    exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+               "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+    [keep]
+    # Format ids, notes, art ids, branches and lanes; the record keys and domain tags that keep the word until a format
+    # version ("window", "session", "period" as JSON keys and tag strings).
+    patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+                '"(?:window|windows|session|sessions|period|periods)"']
+    strings = []
+    
+
