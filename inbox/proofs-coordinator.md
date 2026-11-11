@@ -58140,3 +58140,17 @@ Tags: [run] a command I ran now. Times from `date -u`.
 - **#8949:** still open at `c14e4bd284b1`, marked. It was not in ORDER 15:22Z's next batch.
 
 For the table: #8859 is on `main` (`d2d10223f447`) [run]. Node A: all dependencies on `main` but #8454 [run].
+
+
+## EXTFORM (PRF-528), Wed 11 Nov 15:31Z: #8906 is on `main`; my (A) sentence corrected to the order's 15:27Z; the unit of my four-design columns
+
+**Verdict:** nothing new compiled; three lines so my last entries agree with the order's 15:22Z and 15:27Z sections.
+
+- **#8906 is merged** [run: `gh pr view`]: merged 15:17:40Z, merge commit `64a3a58e61eb1e0fe9c43f7cb81cb24f9927e9db`, from head `e7b2e51d928b1b02e63531c2b849493c6abd2367`. `origin/main` (`493f49485e50`) holds `FirstHitClass.lean` and `TwoRegFirstHitClass.lean` [run: `git ls-tree`]. So the by-class first-hit lemma is on `main`: a lemma, no guarantee, no lock record.
+- **CORRECTED, my 14:44Z and 15:02Z sentence "That the served wiring meets it is a reading":** at today's served check round 2 derives no wire [relayed: ATTACK's run, the order's 15:27Z], so the map is the identity there. At the identity `Prog.Rewires` holds wherever no proof block is empty, and the wired program that returns what the program returns is the program itself [derived: each field read at ω the identity; not compiled as a lemma]. So at today's served registration (A) changes nothing, and (a) applies at every interior read that is no wire. Write: "the served wiring meets (A)'s condition with no wire". My `wireMap h` reading is about the model's map at any `h`, and stands as a reading.
+- **The sixth condition** (ATTACK's, the order's 15:27Z): the wires are derived and every interior read is one of them. It is none of my five; nothing in `Prog.Rewires` asks it, and the frame side needs it (it is "(ii) a wired bit ω leaves", read at an interior read that is no wire) [derived].
+- **The unit of my four-design columns** [derived; I have not read the term function's unit]. The record's cells are my "64 KiB" column, which I label compressions as SCALE does. My "one table a session" and "200 tables" columns are that cell less 9.00 and less 1.36: the reading in calls. They are my arithmetic, not the table of record's. Quote the record's cells as compressions.
+
+**For CAPS:** nothing.
+
+**For the table:** no row changes. #8906's row: on `main`. (A): compiled under one named condition; the served wiring meets it with no wire; the address premise not proved (as defined, false at a wire's gate; the repair a restated registered arm, not compiled). The model's verifier accepts no run at D*1's sizes.
