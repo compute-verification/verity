@@ -24,6 +24,7 @@ import pytest
 
 from pous_fakes import Clock
 import pous_test_signer as ts
+import wipe_side
 from verity.configuration.deploy.stream import Side
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
@@ -33,6 +34,8 @@ from verity.protocols.pous.verifier import wipe_store as WS
 
 KEY = bytes(range(32))
 SMALL = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))
+#: the pin of a period whose challenger is `wipe_side.py` on a host of its own: its key's SHA-512 (`wipe.trusted_sha512`)
+PINNED = wipe_side.key_sha512()
 
 
 def test_the_gate_writes_each_power_of_two_boundary() -> None:
@@ -228,8 +231,8 @@ def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvm
     _drivers(monkeypatch, {"libcuda.so.1": cuda_on_host(cuda)} | ({WS.NVML: nvml_of({BUS: tier}, [])} if nvml else {}))
     period = tmp_path / "periods" / "p0"
     period.mkdir(parents=True)
-    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor",
-                                                    "wipe": {"store": "cuda", "segments": 1}}))
+    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": {
+        "store": "cuda", "segments": 1, "trusted_sha512": PINNED}}))
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
@@ -263,7 +266,7 @@ def test_the_leg_on_a_disk_and_a_gpu_declares_the_gpus_driver_reserve(tmp_path, 
     target = tmp_path / "disk"
     target.mkdir()
     (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": {
-        "store": "cuda", "segments": 1,
+        "store": "cuda", "segments": 1, "trusted_sha512": PINNED,
         "disk": {"paths": [str(target)], "bytes": 1 << 25, "reserve_bytes": 0, "direct": None}}}))
     device = tmp_path / "device"
     device.mkdir()
@@ -292,8 +295,8 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
     figures; the placement names the store."""
     period = tmp_path / "periods" / "p0"
     period.mkdir(parents=True)
-    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor",
-                                                    "wipe": {"store": "host", "segments": 1, "streamer": "native"}}))
+    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": {
+        "store": "host", "segments": 1, "streamer": "native", "trusted_sha512": PINNED}}))
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device),
@@ -311,6 +314,7 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
     assert record["report"]["fill"]["labels"] == W.SEGMENT_LABELS and record["report"]["streamer"]["gates"]
     s = W.summary(record)
     assert s["verdict"] == "accept" and s["decided_by"]["program"] == "python" and s["segments"] == 1
+    assert s["key_pinned"] and s["key_sha512"] == PINNED
     assert s["tier"] == "host-dram"
 
 
@@ -433,8 +437,8 @@ def test_the_leg_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
     target = tmp_path / "disk"
     target.mkdir()
     (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": {
-        "store": "host", "segments": 1, "disk": {"paths": [str(target)], "bytes": 1 << 25, "reserve_bytes": 0,
-                                                 "direct": None}}}))
+        "store": "host", "segments": 1, "trusted_sha512": PINNED,
+        "disk": {"paths": [str(target)], "bytes": 1 << 25, "reserve_bytes": 0, "direct": None}}}))
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
@@ -463,7 +467,7 @@ def test_the_leg_on_a_disk_and_the_whole_dram(tmp_path, monkeypatch) -> None:
     target.mkdir()
     (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": {
         "store": "disk", "disk": {"paths": [str(target)], "bytes": 1 << 25, "reserve_bytes": 0, "direct": None},
-        "dram": {"bytes": 1 << 25, "reserve_bytes": 0}}}))
+        "dram": {"bytes": 1 << 25, "reserve_bytes": 0}, "trusted_sha512": PINNED}}))
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
