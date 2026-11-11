@@ -109,19 +109,18 @@ def key(family: str, **statics: Any) -> str:
     return family + "{" + ",".join(f"{k}={v}" for k, v in statics.items()) + "}"
 
 
+#: a static's value as `key` writes it: Python's text of an int, and of a float; any other is text
+INT = re.compile(r"[+-]?\d+")
+FLOAT = re.compile(r"[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?|[+-]?inf|nan")
+
+
 def parse(k: str) -> tuple[str, dict[str, Any]]:
     """An atom key's family and statics (numbers as numbers)."""
     fam, _, rest = k.split("@")[0].partition("{")
     st: dict[str, Any] = {}
     for kv in filter(None, rest.rstrip("}").split(",")):
         name, v = kv.split("=", 1)
-        try:
-            st[name] = int(v)
-        except ValueError:
-            try:
-                st[name] = float(v)
-            except ValueError:
-                st[name] = v
+        st[name] = int(v) if INT.fullmatch(v) else float(v) if FLOAT.fullmatch(v) else v
     return fam, st
 
 
@@ -971,7 +970,7 @@ def markdown(t: Mapping[str, Any]) -> str:
                          f"{cb['write inputs']:,} | {cb['stored, at write']:,} | {min(cb.values()):,} |")
     sw = t["sweep"]
     ctx = t["workload"]["sweep"]
-    lines += ["", f"**f as the pool's context S varies** (KV at write, L = 10 min, E conjectured, prefills of min(P, S); a model "
+    lines += ["", "**f as the pool's context S varies** (KV at write, L = 10 min, E conjectured, prefills of min(P, S); a model "
               "past its max_context left out). Each cell is f with R_cap / with the decode rate alone, at full cost, the softmax "
               "floor and the exactness floor.", "", "| model | " + " | ".join(f"S = {s}" for s in ctx) + " |",
               "|---|" + "---|" * len(ctx)]

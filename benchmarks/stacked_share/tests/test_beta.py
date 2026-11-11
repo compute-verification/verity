@@ -25,7 +25,7 @@ from verity.circuits.types import Array, Value
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import beta as B  # noqa: E402
+import beta as B
 
 S32, S8, BIT = Value(32), Value(8), Value(1)
 E40 = B.E_WORD["2^-40"]

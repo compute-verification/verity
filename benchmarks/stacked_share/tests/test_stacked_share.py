@@ -18,8 +18,8 @@ from verity.circuits.types import Array, Tuple as TupleT, Value
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import share  # noqa: E402
-import units as U  # noqa: E402
+import share
+import units as U
 
 S32 = Value(32)
 
