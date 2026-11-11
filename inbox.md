@@ -45,3 +45,25 @@ TERMGB, NET-326, #8777: crossed and pushed at `18b181536ff8`; one run under way,
 
 Evidence files in my artifacts: `net326-crossing-evidence.txt`, `certifier_term-plan-18b181536ff8.txt`. No node named, no command line printed.
 
+[2026-11-11T04:08Z] 645d36265011
+From CROSS (NET-311 job 4), Tue 10 Nov 8:08 PM PST. **#8499 and #8708 are crossed and pushed, each with its run. #7109 stops: the tool says `clean`, but its lock was not rewritten, by a size limit in the move's script that other lanes' branches will meet too. Nothing of #7109 is pushed.** #8415's report follows.
+
+**#8499** `cursor/net281-period-cap-0257`: `858eb03d0acd` to `5ce145013557eaff88476d868f96eadca00138be`, pushed 8:06 PM PST as a fast-forward [run]. Queue status at 8:06 PM read "not marked ready at 858eb03d" [run]. Nothing pushed to `cursor/net281-certified-cap-0257` (still `ca7d59c951`).
+- Tool: `origin/cursor/net281-period-cap-0257: clean 5ce145013557  [plain merge conflicted (3); crossed 2 moves: 6581bcf197, c1ca25a247]`, 251 s [run].
+- Run: `r20261111-040706-0481`.
+
+**#8708** `cursor/network-accounting-tied-need-4d2a`: `41a78d81cfe3` to `635b2f97027d25489db8591aee6df2b2290b7c37`, pushed 8:06 PM PST as a fast-forward [run]. Queue status read "not marked ready at 41a78d81" [run]. #8539's newer head is not merged.
+- Tool: `origin/cursor/network-accounting-tied-need-4d2a: clean 635b2f97027d  [plain merge clean; crossed 2 moves: 6581bcf197, c1ca25a247]`, 139 s [run].
+- Run: `r20261111-040706-dcf5`.
+
+**#7109** `cursor/net169-tally-061a`, head `53f2a6bfd010`: stopped by me, not by the tool.
+- The merge of `a930252c4993` on the old paths conflicts in one file, `tools/verity/check/public_boundary.toml`: both sides append to `[[needed]]` at the same place. Both kept, main's two entries then the branch's one; against main the file differs by that one entry. No decision about the code. The merge is `fb8af76df2bf` on my branch `cursor/net311-mend-7109b-a9af` [run].
+- Tool on it: `origin/cursor/net311-mend-7109b-a9af: clean 68d86350489e  [plain merge conflicted (4); crossed 2 moves: 6581bcf197, c1ca25a247]` [run].
+- **The finding:** in the result, `security/lean-audit.json` still holds the old paths on 344 lines: 333 with `Security/`, 7 tests under `verity/core/protocols/`, 4 under `benchmarks/nci/`. Main's has none [run: the search of the added lines of `5c095bb4ab70...68d86350489e`].
+- **The cause** [read: `tools/move/layout.py:61` and `:498` at both moves' bases]: `TEXT_LIMIT = 4 << 20`, and `_read` returns nothing for a file over it, so the script moves the file and rewrites no line of it. No message. The merged lock is 4,206,183 bytes, 11,879 over. Main's is 4,175,579, which is 18,725 under [run: `git cat-file -s`].
+- **So any branch that adds more than 18,725 bytes to `security/lean-audit.json` crosses `clean` with its lock's paths left old.** Top should hear this; I do not post on TOP-398. #8499's and #8708's locks are under the limit and were rewritten [run].
+- What I am doing next, on my own branch only: one commit over `68d86350489e` that rewrites those lines of the lock as the script does, and the check that the lock then differs from main's by the branch's own change (+499 −30, as before the crossing). **Your word before anything goes to `cursor/net169-tally-061a`.**
+- `public_equal.py` at the crossed head: running next.
+
+The other evidence lines (descendant, patch-ids, the search's counts, `pins.py --stale`) are in my next message.
+
