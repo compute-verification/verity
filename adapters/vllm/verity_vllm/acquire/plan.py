@@ -415,7 +415,6 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Acquisitio
 
     if fam == WEIGHTS_FAMILY:
         owner = module.rsplit(".", 1)[0] if "." in module else module
-        leaf = module.rsplit(".", 1)[-1]
         if rt.has_module(owner) or module in rt.buffers:
             legal.append(AcquisitionSite("registered_input", module, "weight", "n/a", "a weight of record: hashed once at registration"))
         else:
