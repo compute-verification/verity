@@ -1544,10 +1544,7 @@ def pearlplus_checks(verified: Mapping[str, Any] | None, lean_check: Path) -> di
     """What each of Pearl+'s two checks cost where it ran (`served_passes.check_cost`: wall seconds and the node): the
     Python check's from ``verify``'s document `verified`, the Lean check's from ``lean``'s check document at `lean_check`;
     None for a check that recorded none (it didn't run)."""
-    try:
-        lean = _json(lean_check)
-    except (OSError, ValueError):
-        lean = None
+    lean = _json(lean_check)
     return {"python": (verified or {}).get("check_cost"),
             "lean": lean.get("check_cost") if isinstance(lean, Mapping) else None}
 
