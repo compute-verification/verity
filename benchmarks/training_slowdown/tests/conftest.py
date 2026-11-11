@@ -7,7 +7,7 @@ from torch import nn
 
 #: oneDNN's AMX kernels return a wrong bf16 product now and then when the process is preempted on a virtual CPU, on one
 #: thread or several: two calls of one Newton-Schulz on one input differ, by a NaN as often as not. Below AMX the
-#: product is the same every time. oneDNN reads the cap at its first product, so it is set before any test's.
+#: product is the same every time. oneDNN reads this limit at its first product, so it is set before any test's.
 os.environ["ONEDNN_MAX_CPU_ISA"] = "AVX512_CORE_BF16"
 
 VOCAB, D, HEADS = 32, 16, 2
@@ -42,7 +42,7 @@ PER_TOKEN = 2 * D * D + VOCAB * D
 @pytest.fixture(autouse=True)
 def one_thread():
     """Every test of the suite runs torch on one CPU thread: at the tests' shapes more threads only wait on each
-    other. It does not make a bf16 product the same every time: the cap above does."""
+    other. It does not make a bf16 product the same every time: the limit on oneDNN above does."""
     threads = torch.get_num_threads()
     torch.set_num_threads(1)
     yield
