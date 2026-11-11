@@ -115,6 +115,19 @@ def test_resume_refuses_another_rule_registration_or_sample():
         TS.resume({**stage1, "units": others}, PAIR)
 
 
+def test_a_hand_off_that_names_no_window_root_resumes_under_its_commitments_run():
+    """The first stage registers under the window's open root, the commitment's ``run`` (`_first_all`), which the
+    outcome holds its session's evidence to. A hand-off that names the root resumes under it; one that names none
+    resumes under the commitment's ``run``, to the same registration and sample."""
+    pub = _class().public()
+    got = TS.first(pub, PAIR, RULE, FC.Challenger("first"), window_root=pub["run"])
+    stage1 = json.loads(json.dumps(got.stage1()))
+    assert "window_root" not in stage1 and TS.first_root(stage1) == pub["run"]
+    assert TS.first_root({**stage1, "window_root": "ab" * 64}) == "ab" * 64
+    again = TS.resume(stage1, PAIR, window_root=TS.first_root(stage1))
+    assert again.registration.digest == got.registration.digest and again.draw.units == got.draw.units
+
+
 def test_the_second_stages_coins_follow_the_whole_first_stage():
     """`Staged` reads the first stage's bytes again in order, commits only once all of them were read, and only to live
     coins of its own."""

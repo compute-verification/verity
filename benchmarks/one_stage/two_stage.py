@@ -770,6 +770,12 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
     return out
 
 
+def first_root(stage1: Mapping[str, Any]) -> str:
+    """The open root a class's first stage registered under: its ``stage1.json``'s ``window_root``, or, where the
+    hand-off names none, its commitment's ``run``, the root `_first_all` opens the window's session on."""
+    return stage1.get("window_root") or stage1["commit"]["run"]
+
+
 def _second(a: argparse.Namespace) -> int:
     """One class's second stage: its stream again from ``stage1.json`` (`resume`), a challenger session of its own on the
     interior window's run (the first stage's session closed with its sample, and a challenger opens a root once), the
@@ -798,7 +804,7 @@ def _second(a: argparse.Namespace) -> int:
     try:
         check = template_fn(stage1["commit"]["check"])
         c = BR.reopen(Path(a.boundary), check)
-        again = resume(stage1, check, delta=a.delta, window_root=stage1.get("window_root"))
+        again = resume(stage1, check, delta=a.delta, window_root=first_root(stage1))
     except (S.Refused, ValueError, KeyError, OSError) as e:
         return done(1, refused=f"{type(e).__name__}: {e}")
     sample = [int(u) for u in again.draw.units]
