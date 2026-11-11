@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Claims.KS.Wait
+import Proofs.Flock.Claims.ERepCost
+import Proofs.Flock.Claims.Prob
 
 /-!
 # What `E^rep`'s waits find, one wait finds at half the rate
