@@ -195,23 +195,24 @@ class Stream(S.Stream):
 
     def _reads(self, second: S.Draw) -> list[dict[str, Any] | None]:
         """Each template's registered reads in the check's order, as an honest session reads them: each port the replay
-        block's Definition links (`second_stage.replay_links`) of the boundary port its link names, each slot the first
-        row of its cell's replay block, and each value the interior registration registers, under a port of its name
-        (None when it reads none)."""
+        block's Definition links (`second_stage.replay_links`) of the boundary port its link names, each slot its unit's
+        row of its cell's replay block's (`second_stage.replay_rows`), and each value the interior registration
+        registers, under a port of its name (None when it reads none)."""
         e = self._entries[second.registration.order]
         rec, boundary = second.registration.record, second.replay_sample.registration.record
         values = {x["value"]: {k: x[k] for k in ("value", "root", "domain", "leaves")}
                   for x in rec.get("registered", [])}
         at = {r["port"]: r for r in boundary["roots"]}
         links = SS.replay_links(e.program, descriptor_id(self.replay), boundary) or ()
+        rows = {(r.template, r.port): r for r in SS.replay_rows(e.program, descriptor_id(self.replay))}
         sample = D.proved(second.replay_sample.draw)
         out = []
         for t, lo, hi, _ref in self._references(second):
             n = (hi - lo) // len(sample)
             reads = {**values, **{x.port: {
                 "value": x.value, **{k: at[x.value][k] for k in ("root", "domain", "leaves")}, "reads_from": lo,
-                "reads": [at[x.value]["leaves"] // boundary["population"] * sample[u // n] for u in range(hi - lo)]}
-                for x in links if x.template == t and x.value in at}}
+                "reads": [sample[u // n] * r.per + (SS.row_at(r.runs, u % n) or 0) for u in range(hi - lo)]}
+                for x in links if x.template == t and x.value in at and (r := rows.get((t, x.port))) is not None}}
             out.append({"ports": reads} if reads else None)
         return out
 
