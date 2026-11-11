@@ -633,7 +633,7 @@ def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_o
     """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, samples
     and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
     accept isn't read as the auditor's devices having placed it."""
-    premise = ("assumed, the auditor's devices not placed: the network certifier ran on 204.12.178.84, not the prover's "
+    premise = ("assumed, the auditor's devices not placed: the network certifier ran on 192.0.2.84, not the prover's "
                "vy-dc-h200, but the chain's checks and draws, the period check and their proofs' coins ran on vy-dc-h200")
     (d := tmp_path / "certifier").mkdir()
     (d / "answer.json").write_text(json.dumps({
@@ -651,7 +651,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
     K counts and the gate's ssh link it doesn't: the accept's clause names the counted link and says every other link of
     the node is uncounted and uncertified, before the premise. Under ``--gate local`` it has no links, and the clause
     states the premise alone."""
-    node, host = "vy-dc-h200", "204.12.178.84"
+    node, host = "vy-dc-h200", "192.0.2.84"
     gated = {"kind": "not-placed", "parties": {"network_certifier": host, "prover": node, "verifier": node},
              "trusted-host": f"assumed, the auditor's devices not placed: the network certifier ran on {host}, not the "
                              f"prover's {node}",

@@ -1401,7 +1401,8 @@ def coin(record: Path, out: Path, run: str | None, research: Sequence[str] | Non
          put: Callable[..., Any] = subprocess.run, run_dir: Path | None = None) -> dict[str, Any]:
     """The verifier's coin record `record` (`served_passes.py verify`'s ``DIR/coin.json``, written before any replay)
     published the moment it is drawn: copied to ``out/coin.json``, then put in the evidence store as `COIN_KIND` through
-    `research` (default the ``research`` command, else this Python's ``-m research``), its meta the run `run` and the run
+    `research` (default the command the shared setting ``RESEARCH`` names, else this Python's ``-m research``), its meta
+    the run `run` and the run
     commitment the coin was drawn on. The put asks ``--preserve`` first; where that fails (a job's node holds no store
     write key) the record goes in the node's own store, under the same content-addressed id, which a put of the run's
     custody copy of ``out/coin.json`` under the same kind and meta preserves. A piece publishes one coin: a record other
@@ -1422,7 +1423,9 @@ def coin(record: Path, out: Path, run: str | None, research: Sequence[str] | Non
     out.mkdir(parents=True, exist_ok=True)
     copy.write_bytes(raw)
     if research is None:
-        found = shutil.which("research")
+        from verity_config.settings import SHARED
+
+        found = shutil.which(SHARED.RESEARCH)
         research = [found] if found else [sys.executable, "-m", "research"]
     meta = json.dumps({"run": run, "commitment": rec["commitment"]}, sort_keys=True)
 
