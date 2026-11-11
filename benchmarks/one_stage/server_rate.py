@@ -21,8 +21,9 @@
   verifier's seconds a statement (``verify_s``: the mean over the window of each session's, from its verifier's record).
 * **What prices a row**: ``gpus``, the devices its provers held, so a statement costs ``gpus / statements_per_s``
   GPU-seconds; ``stage.blocks``, the proof blocks of the proved statement, and ``stage.full``, the most one statement of
-  its circuit holds (`statement_blocks`); and ``flat``, whether the provers' statement caches had stopped filling, with the
-  hit series and the rule that decide it (``cache``; `cache_flat`).
+  its circuit holds (`statement_blocks`); ``flat``, whether the provers' statement caches had stopped filling, with the
+  hit series and the rule that decide it (``cache``; `cache_flat`); and ``cores``, the CPUs the row's processes could run
+  on: their ``count``, their ``list`` and the ``numa_nodes`` that hold them (`cores`).
 * **The verdict of record** (``--lean``): at K = 1, the last ``--lean-sessions`` sessions get Lean `flock-verify verify
   --zk` on their record on the server's verdict pool, one at a time and after the steady window, each with its own CPU
   seconds and peak RSS (`os.wait4`), the circuit and the public file archived once a type.
@@ -68,6 +69,8 @@ M_MAX = 35
 FLAT_RULE = ("every prover's statement-cache hit rate over the last quarter of its timed sessions is within 0.01 of the "
              "third quarter's")
 PAGE_KB = os.sysconf("SC_PAGE_SIZE") // 1024
+#: where the kernel lists each NUMA node's CPUs
+NODES = Path("/sys/devices/system/node")
 # the CUDA prover prints the runtime's error string ("FFI CUDA error out of memory at ...") before it fails the session
 DEVICE_OOM = re.compile(r"out of memory", re.IGNORECASE)
 
@@ -241,6 +244,30 @@ def throttled() -> dict:
     return {k: int(v) for k, v in (x.split() for x in p.read_text().splitlines())} if p.exists() else {}
 
 
+def cpu_list(cpus) -> str:
+    """CPUs as the kernel writes a list: in order, neighbours as a range ("72-81,84")."""
+    runs: list[list[int]] = []
+    for c in sorted(cpus):
+        if runs and c == runs[-1][1] + 1:
+            runs[-1][1] = c
+        else:
+            runs.append([c, c])
+    return ",".join(str(a) if a == b else f"{a}-{b}" for a, b in runs)
+
+
+def cores(cpus=None, nodes: Path | None = None) -> dict:
+    """The CPUs a row's processes can run on: this process's own (its affinity; every process of the row runs within
+    it: unplaced, each inherits it; with ``FC_VERIFIER_CPUS``, the verifiers run on ``verifier_cpus`` and the provers on
+    the rest), as their count, their list and the NUMA nodes that hold any of them (`NODES`' ``nodeN/cpulist``; none on a
+    machine that lists no nodes)."""
+    mine, held = set(os.sched_getaffinity(0) if cpus is None else cpus), []
+    for f in (nodes or NODES).glob("node[0-9]*/cpulist"):
+        parts = f.read_text().strip().split(",")
+        if any(mine & set(range(int(p.split("-")[0]), int(p.split("-")[-1]) + 1)) for p in parts if p):
+            held.append(int(f.parent.name[4:]))
+    return {"count": len(mine), "list": cpu_list(mine), "numa_nodes": sorted(held)}
+
+
 class Lean:
     """Lean `flock-verify verify --zk` on a session's record, with its own CPU seconds and peak RSS; the circuit, public
     file and tables archived once, in scratch outside ``out`` (`close` removes it); ``statement``, the one `verify` sets
@@ -292,8 +319,8 @@ def one(a, dev: str, t: str, K: int) -> dict:
     gpu, t_start, cpu0 = Device(dev), time.monotonic(), throttled()
     wall = time.time() - t_start
     devices, stage = [dev], json.loads((d / "stage.json").read_text())
-    rec: dict = {"type": t, "provers": K, "gpus": len(devices), "n": n, "pin": st.pin, "verify_ahead": a.ahead, "warm": a.warm,
-                 "sessions": timed_n, "device": dev, "stage": stage | statement_blocks(stage)}
+    rec: dict = {"type": t, "provers": K, "gpus": len(devices), "cores": cores(), "n": n, "pin": st.pin, "verify_ahead": a.ahead,
+                 "warm": a.warm, "sessions": timed_n, "device": dev, "stage": stage | statement_blocks(stage)}
     ps = ProofServer(a.bin, out, devices=devices, provers=K, verify_ahead=a.ahead, verdicts=1,
                      env={"FC_FIREWALL": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
     host = Host(ps)
