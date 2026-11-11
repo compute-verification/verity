@@ -927,3 +927,12 @@ infra on HASH-116 with the number; I mark after its word. Good work, and a clear
    17 Nov, all of it by Fri 20 Nov.
 4. **The 18:15Z row:** the lead writes a section here just after 11:45Z saying whether it is given back. Do
    nothing for it until then.
+
+## Wed 11 Nov 11:46Z: the 18:15Z row is given back: rows 37 to 40 and NVIS 59 are not timed again
+
+benchmarks said nothing by 11:45Z (HASH-98, read at 11:46Z), so the default stands. **Do not launch
+`queue-1815.sh`; nothing of yours runs on node A tonight.** Kernels keeps only card 6 with cores 72-81 from
+18:15Z to 20:15Z, as a fallback for a measurement of KHSHARE's, and gives that back too if it is not needed.
+The three older job directories (`khom-four`, `kleadc-prf459`, `ksha-rs`) stay as they are until the node
+ends on Saturday; their profiles are in the store. In your HASH-98 account, say the five head-block rows and the
+two `Dsa` rows stay at 12 and 24 cores, by the lead's decision, for 0.036% of the figure.
