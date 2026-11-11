@@ -26,6 +26,7 @@ from verity_vllm.acquire.sources.allreduce_norm import AllReduceNorm
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 from verity_vllm.engine import hooks
 from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES, MOE_COLLECTIVE_MODULES
+from verity_vllm.engine.profiles import layer_classes as LC
 
 SITES = (("vllm.model_executor.layers.linear", "tensor_model_parallel_all_reduce", "all_reduce"),
          ("vllm.model_executor.layers.vocab_parallel_embedding", "tensor_model_parallel_all_reduce", "all_reduce"),
@@ -129,7 +130,7 @@ class TPPartialSource:
         self.reexec_sites: list[str] = []                                    # the sites the value check's (R) re-executes
         for n, m in model.named_modules():
             cls = type(m).__name__
-            row = cls == "RowParallelLinear" and getattr(m, "reduce_results", True) and int(getattr(m, "tp_size", self.world)) > 1
+            row = cls == LC.ROW_LINEAR and getattr(m, "reduce_results", True) and int(getattr(m, "tp_size", self.world)) > 1
             if row or cls in ("VocabParallelEmbedding", "LogitsProcessor") or (cls in MOE_SITE_CLASSES and _moe_reduces(m, self.world)):
                 self.sites.append((n, cls))
             if row:
@@ -193,11 +194,11 @@ class TPPartialSource:
                 isz = next(m.parameters()).element_size()
             except StopIteration:
                 pass
-            if cls == "RowParallelLinear":
+            if cls == LC.ROW_LINEAR:
                 per_token += int(getattr(m, "output_size", 0) or 0) * isz
-            elif cls == "VocabParallelEmbedding":
+            elif cls == LC.EMBEDDING:
                 per_token += int(getattr(m, "embedding_dim", 0) or 0) * isz
-            elif cls == "LogitsProcessor":
+            elif cls == LC.LOGITS:
                 vocab = int(getattr(m, "vocab_size", 0) or getattr(m, "org_vocab_size", 0) or 0)
                 per_seq += -(-vocab // max(1, self.world)) * 2
             elif cls in MOE_SITE_CLASSES:
@@ -309,7 +310,7 @@ class TPPartialSource:
         self._occ[(step, member)] = occ + 1
         if self.reference:
             self.ref.setdefault(step, {})[_ref_key(member, occ)] = _bytes(x)   # independent clone of the collective INPUT at the moment it exists
-            if step < self.ref_reexec_steps and self._cur_in is not None and _cls == "RowParallelLinear":
+            if step < self.ref_reexec_steps and self._cur_in is not None and _cls == LC.ROW_LINEAR:
                 self.ref_in.setdefault(step, {})[member] = (name, self._cur_in.detach().clone())
         nb = x.numel() * x.element_size()
         self.stats["launches"] += 1
