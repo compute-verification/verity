@@ -11,6 +11,7 @@ untraced = [
     "tests/test_prove_path.py",
     "tests/test_records_audit.py",
     "tests/test_run_request_values.py",
+    "tests/test_warm_twice.py",
 ]
 # `adapters/vllm`: advice_windows, the TP serving rows and the stand-in TP Commit the tests build; `benchmarks/one_stage`:
 # a5, which prove_path imports; `verity`: what both import; `verity_numerical.bench`'s input sets and templates, which a5
