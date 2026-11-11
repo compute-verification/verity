@@ -33,6 +33,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.commit.committer.flush_points import (
+    GATHER_FLUSH_LEAVES,
+    PRE_FLUSH_LEAVES,
+)
 from verity_vllm.correspondence.reader_for_acquire import (
     RUNNER_PATH,
     AcquireCorrespondence,
@@ -451,10 +455,6 @@ def choose(sites: list[AcquisitionSite], v: ValuePlan) -> tuple[AcquisitionSite 
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 def _lifetime_tables() -> dict[str, Any]:
-    from verity_vllm.commit.committer.flush_points import (
-        GATHER_FLUSH_LEAVES,
-        PRE_FLUSH_LEAVES,
-    )
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
     return {"HAZARD_LEAVES": set(NativeHostCommitter.HAZARD_LEAVES), "GATHER_FLUSH_LEAVES": set(GATHER_FLUSH_LEAVES), "PRE_FLUSH_LEAVES": set(PRE_FLUSH_LEAVES)}
 

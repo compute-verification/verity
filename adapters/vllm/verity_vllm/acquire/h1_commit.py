@@ -15,7 +15,11 @@ from collections.abc import Mapping, Sequence
 from types import SimpleNamespace
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.acquire.sources.int8_source import Int8Source
+from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
+from verity_vllm.engine import hooks
+from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw.h1.commit import (
     SCHEME,
     CommitTap,
@@ -23,6 +27,7 @@ from verity_vllm.protocols.pouw.h1.commit import (
     _EveryStep,
     site,
 )
+from verity_vllm.protocols.pouw.h1.hooks import expert_names
 from verity_vllm.protocols.pouw.h1.ranks import RankExtension, RankRun, RankTap
 
 
@@ -38,7 +43,6 @@ class H1Source(Int8Source):
         self.quant, self._at, self.experts = sites, _EveryStep(self._at), dict(experts)
 
     def install(self) -> None:
-        from verity_vllm.engine import hooks
         super().install()
         for name, s in self.experts.items():
             self._hooks.append(hooks.wrap(s.quant_method, "apply", lambda orig, name=name: self._scoped(name, orig)))
@@ -70,7 +74,6 @@ class H1Source(Int8Source):
 def _linears(model: Any, layers: Sequence[Any]) -> tuple[list[str], dict[str, Any]]:
     """H1's ``layers``: the modules' names in ``model`` and the routed experts by their H1 names. ValueError on a module
     the model doesn't name."""
-    from verity_vllm.protocols.pouw.h1.hooks import expert_names
     names = expert_names(list(layers))
     experts = {n: layers[w] for w, n in names.items()}
     ids = {id(m) for w, m in enumerate(layers) if w not in names}
@@ -96,9 +99,6 @@ def tap(com: Any, model: Any, layers: Sequence[Any], steps: Sequence[int], tap: 
     served window commits. ValueError when the Commit has no port or no int8 source, when ``layers`` hold a routed
     expert (only H1's own source acquires those), or when the source doesn't acquire some linear at each engine step of
     ``steps``, the window's. ``tap.untap()`` removes it."""
-    from verity_vllm.acquire.sources.int8_source import Int8Source
-    from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
-
     sources = list(getattr(com, "sources", ()))
     src = next((s for s in sources if isinstance(s, Int8Source) and not isinstance(s, H1Source)), None)
     if not any(isinstance(s, StepInputPort) for s in sources):
@@ -125,7 +125,6 @@ def committer(engine: Any, run_id: str) -> Any:
     as `pipeline.served_match` builds it), the windowed collector under rows-sha512 (`pouw_h1_commit.SCHEME`). It retains
     its values nowhere unless VERITY_RETAIN says otherwise: H1 reads them from its tap, and the windowed collector retains
     none on the device."""
-    from verity_vllm import settings
     from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
     settings.setdefault("VERITY_RETAIN", "none")
@@ -152,8 +151,6 @@ def envelope(engine: Any) -> dict[str, int]:
 def port_tokens(com: Any, tokens: int) -> int:
     """The step-input port's T for a token budget of ``tokens``: rounded up to whole chunks of the committer's i64 ids,
     the only T `served_record.StepInputPort` takes, so H1's T = 64 rows is a port of 512 ids."""
-    from verity_vllm.commit.served_record import StepInputPort
-
     per = int(com.chunk) // StepInputPort.IB
     return -(-int(tokens) // per) * per
 
@@ -166,8 +163,6 @@ def attach(engine: Any, layers: Sequence[Any], tap: CommitTap | None = None, run
     (`port_tokens`); the staging and its window ring sized for the engine's workload (`envelope`); and its `CommitTap`
     (``tap``, else a new one) on the port. Returns the committer, the source and the tap; ``committer.close()`` and
     ``tap.untap()`` remove them."""
-    from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
-
     work = envelope(engine)
     com = committer(engine, run_id)
     if (got := getattr(com, "commit_scheme", None)) != SCHEME:
@@ -205,7 +200,6 @@ class RankCommit(RankExtension):
         scheme and the port it acquires the step's input ids under. A site the rank's source acquires that the window has
         no name for (a routed expert's included) is refused: under its rank-local name it would meet no call, or another
         rank's site of the same name."""
-        from verity_vllm.protocols import pouw
         st = self._h1rank  # type: ignore[attr-defined]
         run: RankRun = st["run"]
         model, layers = self._h1rank_layers()
