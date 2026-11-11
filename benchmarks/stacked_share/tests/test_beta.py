@@ -9,10 +9,10 @@ from __future__ import annotations
 import itertools
 import json
 import random
-import sys
 from fractions import Fraction
 from pathlib import Path
 
+import beta as B
 import pytest
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
@@ -22,10 +22,6 @@ from verity.circuits.types import Array, Value
 from verity.definitions.circuits import stacking as P
 from verity.definitions.circuits.census import census
 from verity.definitions.ops import prims
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-import beta as B
 
 S32, S8, BIT = Value(32), Value(8), Value(1)
 E40 = B.E_WORD["2^-40"]
