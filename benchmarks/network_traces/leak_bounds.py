@@ -39,10 +39,12 @@ scans' knowledge and collision errors. K takes one of two forms:
 datacenter; or the world, rho's world fleet, which is the census's inference at the fleet's serving MFU. Each machine
 is behind one network certifier. Over a monitoring period a scope serves GPU-seconds × MFU × a GPU's peak FLOP/s /
 (a request's tokens × 2 × the served MACs a token) requests of the served model (`MODEL`), the rule
-`benchmarks/spot_figures/figure1.py`'s `scopes` plans with, each on one connection. No run has certified a class for
-that model, so the class is assumed (`Assumed`): the most ids a response holds, an id's bits, and an execution
-phase's buckets. `table` counts each of `ROWS` by its check's own rule, and never by requests what a check counts by
-capacity:
+`benchmarks/spot_figures/figure1.py`'s `scopes` plans with, each on one connection. Which request that is is one of
+`COUNTS`, and every row names its one: by default the sampling plan's (`plan`), so that the rows count the requests
+the compute audit's plan prices; the census's where a caller asks; or none, where a caller gives the world's requests
+a year. No run has certified a class for that model, so the class is assumed (`Assumed`): the most ids a response
+holds, an id's bits, and an execution phase's buckets. `table` counts each of `ROWS` by its check's own rule, and
+never by requests what a check counts by capacity:
 
 * the scan, `rowsTerms`'s terms (`terms`). The network certifier's own are the schedules and the fail cells,
   ⌈log2(egress_cells + 1)⌉ each a connection of the period's parameters, counted by request, and the jitter,
@@ -100,6 +102,9 @@ ADVERSARY, DEPLOYMENTS, HARDWARE = (f"benchmarks/census/{name}.json"
                                     for name in ("adversary", "deployments", "hardware"))
 RHO, RHO_HARDWARE = "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml"
 WORKLOAD = "benchmarks/spot_figures/cards/workload.glm-5.3.json"
+#: the break-even planner the sampling plan is computed with, and the case of it a request is read on: the proof
+#: server's line at its last step, at the 128k serving plan's request
+PLANNER, PLAN_CASE = "benchmarks/spot_figures/breakeven", "P5+poolwin600"
 #: the served model, rho's world fleet and the census's GPU peak, the H200's dense FP8 rate
 MODEL, WORLD, PEAK = "GLM-5.3", "world-h200", "h100-sxm5-80gb/e4m3"
 #: a GB's bits, and FP4's bits a parameter
@@ -430,6 +435,15 @@ RESPONSE_IDS, ID_BITS, BUCKETS = 4096, 18, 1280
 EVERY: int = IS.Class.__dataclass_fields__["EVERY"].default
 #: the GB the term is read against
 TARGET_GB = 300
+#: the request a scope's requests are counted of, which every row names: one a caller chooses (`REQUESTS`), or none
+#: where the caller gives the world's requests a year
+COUNTS = {
+    "plan": "a scope serves the sampling plan's request, the 128k serving plan's as the break-even planner prices "
+            "it (--requests plan, the default)",
+    "census": "a scope serves the census's request, at the workload card's served MACs a token (--requests census)",
+    "given": "the world's requests a year are given, of no stated request (--world-requests)",
+}
+REQUESTS = ("plan", "census")
 
 
 class Kind(NamedTuple):
@@ -506,22 +520,48 @@ class Input(NamedTuple):
     source: str
 
 
+def plan() -> dict[str, Input]:
+    """A request as the sampling plan prices it, and the world's requests a year of it: the planner's case
+    `PLAN_CASE` as the planner builds it (`sweep.build`, whose `reprice.workload` sets the 128k serving plan's tokens
+    a request and served MACs a token and counts each scope's requests by `figure1.scopes`). The planner is loaded by
+    path, and builds Figure 1's lines from the cards as it loads."""
+    if (path := str(ROOT / PLANNER)) not in sys.path:
+        sys.path.insert(0, path)
+    import sweep
+    _, cards, *_, at = sweep.build(sweep.cases()[PLAN_CASE])
+    tokens, by = cards["tokens_per_request"], f"{PLANNER}/sweep.py's case {PLAN_CASE}"
+    return {
+        "request_tokens": Input(tokens.value, "token", _MARK[tokens.status], f"{by}: {tokens.source}"),
+        "token_macs": Input(at["served_macs"], "MAC", "modeled",
+                            f"{by}: the workload card's served MACs a token with the indexer's blocks at the 128k "
+                            "serving plan's keys (reprice.workload)"),
+        "world_requests": Input(at["scopes"]["world year"].requests, "request/year", "modeled",
+                                f"{by}: its world year's requests (reprice.workload), by the rule "
+                                "benchmarks/spot_figures/figure1.py's scopes plans with"),
+    }
+
+
 def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets: int = BUCKETS,
-           bucket_s: float | Fraction = TAU, failure_rate: float | Fraction = 0,
+           bucket_s: float | Fraction = TAU, failure_rate: float | Fraction = 0, requests: str = "plan",
            world_requests: float | None = None, scan_delta: float | Fraction = SCAN_DELTA,
            syncs: int | None = None, lanes: int | None = None) -> dict[str, Input]:
     """Every input of the scaling by requests, each marked (`MARKS`) with its source.
 
     The scale is read from the files: the world's machines and their serving MFU (rho's world fleet), a machine's
-    GPUs (rho's hardware), the reference datacenter's machines, a request's tokens and a GPU's peak (the census), and
-    the served MACs a token and the weights (the workload card). The world's requests a year follow from them, or are
-    ``world_requests`` where a caller gives them. The class is assumed, no run having certified one for the served
-    model: ``response_ids``, the most ids a response holds, ``id_bits``, an execution phase's ``buckets`` of
-    ``bucket_s`` seconds (by default the network certifier's), one connection a request and one link a machine, and
-    ``lanes``, the connections a link holds at once, which only the entries read: with None they are counted one a
-    request. ``syncs`` is N2's #Σ_sync, by default the most a calibration chooses. ``failure_rate`` is the share of
-    connections that fail, which only the rows with the lengths held read, and ``scan_delta`` each execution phase's
-    scan's δ."""
+    GPUs (rho's hardware), the reference datacenter's machines and a GPU's peak (the census), and the weights (the
+    workload card). The world's requests a year follow from them and a request's tokens and served MACs a token:
+    the sampling plan's (``requests`` = ``plan``, read from the planner by `plan`) or the census's tokens at the
+    workload card's MACs (``census``); or they are ``world_requests`` where a caller gives them, whatever
+    ``requests`` is. ``request_count`` names which of `COUNTS` it is. The class is assumed, no run having certified
+    one for the served model: ``response_ids``, the most ids a response holds, ``id_bits``, an execution phase's
+    ``buckets`` of ``bucket_s`` seconds (by default the network certifier's), one connection a request and one link a
+    machine, and ``lanes``, the connections a link holds at once, which only the entries read: with None they are
+    counted one a request. ``syncs`` is N2's #Σ_sync, by default the most a calibration chooses. ``failure_rate`` is
+    the share of connections that fail, which only the rows with the lengths held read, and ``scan_delta`` each
+    execution phase's scan's δ."""
+    if requests not in REQUESTS:
+        raise ValueError(f"the request counted is one of {', '.join(REQUESTS)}, not {requests!r}")
+    counted = "given" if world_requests is not None else requests
     census, dc = _reference("adversary.json"), _reference("deployments.json")
     peak = next(e for e in _json(HARDWARE) if e["id"] == PEAK)
     fleet, card = _toml(RHO)["fleet"][WORLD], _json(WORKLOAD)
@@ -551,7 +591,9 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
         "weights": Input(WEIGHTS.bits, "bit", _MARK[card["status"]],
                          f"{WORKLOAD} params{work}, {FP4} bits each: {WEIGHTS.label}"),
     }
-    if world_requests is None:
+    if counted == "plan":
+        out |= plan()
+    elif counted == "census":
         flop = out["world_machines"].value * gpus["value"] * PERIODS["year"] * mfu["value"] * peak["flop_per_second"]
         out["world_requests"] = Input(
             flop / (census["tokens_per_request"] * 2 * macs), "request/year", "modeled",
@@ -560,6 +602,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
     else:
         out["world_requests"] = Input(world_requests, "request/year", "assumed", "given (--world-requests)")
     out |= {
+        "request_count": Input(counted, "", "assumed", COUNTS[counted]),
         "connections": Input(1, "connection/request", "assumed", "each request on its own connection"),
         "links": Input(1, "link/machine", "assumed", "one network certifier on each machine's uplink"),
         "response_ids": Input(response_ids, "id", "assumed",
@@ -681,12 +724,12 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
     and where it stands (`ROWS`); the inputs; and at the top the term over the world's year as the scan's check
     charges it today at D_j = 1, as ``value`` in ``unit``, with the ``commit`` and the ``run`` that computed it.
     ``only`` and ``periods`` keep the rows of those scopes and monitoring periods; ``covers`` is the share of its
-    scope's compute a row counts."""
+    scope's compute a row counts, and ``request_count`` which of `COUNTS` its requests are, the document's one."""
     only, periods, target = set(only) or set(SCOPES), set(periods) or set(PERIODS), Fraction(target_gb) * GB
     if not target > 0 or only - set(SCOPES) or periods - set(PERIODS):
         raise ValueError(f"the target is positive, a scope one of {', '.join(SCOPES)} and a monitoring period one of "
                          f"{', '.join(PERIODS)}, not {target_gb!r}, {sorted(only)} and {sorted(periods)}")
-    cls, lanes = _class(inp), inp["lanes"].value
+    cls, lanes, counted = _class(inp), inp["lanes"].value, inp["request_count"].value
 
     def term(r: Row, dj: int) -> dict:
         t = Fraction(r.terms[dj].certifier)
@@ -695,8 +738,8 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
 
     rows = [{"scope": r.scope.name, "period": r.period, "row": r.name, "standing": ROWS[r.name].standing,
              "machines": r.scope.machines, "gpu_seconds": r.scope.gpus * PERIODS[r.period],
-             "requests": float(r.requests), "phases": float(r.phases), "covers": 1.0, "eps": float(r.eps),
-             "schedules": _size(r.terms[1].schedules), "cells": _size(r.terms[1].cells),
+             "request_count": counted, "requests": float(r.requests), "phases": float(r.phases), "covers": 1.0,
+             "eps": float(r.eps), "schedules": _size(r.terms[1].schedules), "cells": _size(r.terms[1].cells),
              "jitter": {str(dj): _size(r.terms[dj].jitter) for dj in JITTERS},
              "term": {str(dj): term(r, dj) for dj in JITTERS}, "entries": _size(r.terms[1].entries)}
             for r in table(inp)]
@@ -706,6 +749,7 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
             "name": f"the network certifier's term for {MODEL} over the world's year, as the scan's check charges "
                     "it today at D_j = 1",
             "value": head["term"]["1"]["GB"], "unit": "GB", "commit": commit, "run": run, "model": MODEL,
+            "request_count": counted,
             "target": {"value": float(target_gb), "unit": "GB", "bits_a_phase": float(target) / head["phases"],
                        "bits_a_request": float(target) / head["requests"] if head["requests"] else None},
             "weights": {"value": WEIGHTS.bits / GB, "unit": "GB", "label": WEIGHTS.label},
@@ -724,10 +768,12 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
             "rows": [r for r in rows if r["scope"] in only and r["period"] in periods]}
 
 
-def _n(x: float | None, none: str = "none") -> str:
-    """A number to four significant figures, and ``none`` for None."""
+def _n(x: float | str | None, none: str = "none") -> str:
+    """A number to four significant figures, a name as it is, and ``none`` for None."""
     if x is None:
         return none
+    if isinstance(x, str):
+        return x
     if x == 0:
         return "0"
     if abs(x) >= 1e9 or abs(x) < 1e-3:
@@ -750,7 +796,7 @@ def render(doc: dict) -> str:
     """``doc`` (`document`) as text: what each row counts, the inputs, the scopes, and the terms in GB and in
     bits."""
     ph, tg, at, theirs = doc["phase"], doc["target"], [str(dj) for dj in JITTERS], "the compute side's"
-    seen = {(r["scope"], r["period"]): r for r in doc["rows"]}
+    counted, seen = doc["request_count"], {(r["scope"], r["period"]): r for r in doc["rows"]}
 
     def entries(r: dict, unit: str) -> str:
         return _n(r["entries"] and r["entries"][unit], theirs)
@@ -760,6 +806,8 @@ def render(doc: dict) -> str:
         f"commit {doc['commit'] or 'unknown'}, run {doc['run'] or 'none'}", "",
         "Each row counts all its scope serves over the monitoring period, by its check's own rule. The term is the "
         "schedules, the fail cells and the jitter. The entries are the compute side's.",
+        f"Request count {counted}: {COUNTS[counted]}. Every row names its request count, and rows of two request "
+        "counts don't compare.",
         "The rows of a scope and a monitoring period:",
         *(f"- {name} ({k['standing']}): {k['counts']}" for name, k in doc["legend"].items()),
         f"The entries as the scan's check charges them today: {doc['entries_rule']}.",
@@ -777,25 +825,28 @@ def render(doc: dict) -> str:
         *_pipes(("input", "value", "unit", "mark", "source"),
                 [(k, _n(i["value"]), i["unit"], i["mark"], i["source"]) for k, i in doc["inputs"].items()], 5), "",
         "## The scopes: the compute each row covers, all its scope serves", "",
-        *_pipes(("scope", "period", "machines", "GPU-seconds", "requests", "execution phases", "ε"),
-                [(*k, *(_n(r[c]) for c in ("machines", "gpu_seconds", "requests", "phases", "eps")))
-                 for k, r in seen.items()], 2), "",
+        *_pipes(("scope", "period", "request count", "machines", "GPU-seconds", "requests", "execution phases", "ε"),
+                [(*k, *(_n(r[c]) for c in ("request_count", "machines", "gpu_seconds", "requests", "phases", "eps")))
+                 for k, r in seen.items()], 3), "",
         "## The terms in GB", "",
-        *_pipes(("scope", "period", "row", "schedules", "cells", *(f"jitter, D_j = {dj}" for dj in at),
+        *_pipes(("scope", "period", "row", "request count", "schedules", "cells",
+                 *(f"jitter, D_j = {dj}" for dj in at),
                  *(c for dj in at for c in (f"term, D_j = {dj}", "x target", "x weights")),
                  "entries, the compute side's"),
-                [(r["scope"], r["period"], r["row"], _n(r["schedules"]["GB"]), _n(r["cells"]["GB"]),
-                  *(_n(r["jitter"][dj]["GB"]) for dj in at),
+                [(r["scope"], r["period"], r["row"], r["request_count"], _n(r["schedules"]["GB"]),
+                  _n(r["cells"]["GB"]), *(_n(r["jitter"][dj]["GB"]) for dj in at),
                   *(_n(r["term"][dj][k]) for dj in at for k in ("GB", "of_target", "of_weights")),
-                  entries(r, "GB")) for r in doc["rows"]], 3), "",
+                  entries(r, "GB")) for r in doc["rows"]], 4), "",
         "## The terms in bits", "",
-        *_pipes(("scope", "period", "row", "schedules", "cells", *(f"jitter, D_j = {dj}" for dj in at),
+        *_pipes(("scope", "period", "row", "request count", "schedules", "cells",
+                 *(f"jitter, D_j = {dj}" for dj in at),
                  *(f"term, D_j = {dj}" for dj in at), "entries, the compute side's",
                  *(f"a link's phase, D_j = {dj}" for dj in at), *(f"a request, D_j = {dj}" for dj in at)),
-                [(r["scope"], r["period"], r["row"], _n(r["schedules"]["bits"]), _n(r["cells"]["bits"]),
-                  *(_n(r["jitter"][dj]["bits"]) for dj in at), *(_n(r["term"][dj]["bits"]) for dj in at),
+                [(r["scope"], r["period"], r["row"], r["request_count"], _n(r["schedules"]["bits"]),
+                  _n(r["cells"]["bits"]), *(_n(r["jitter"][dj]["bits"]) for dj in at),
+                  *(_n(r["term"][dj]["bits"]) for dj in at),
                   entries(r, "bits"), *(_n(r["term"][dj]["bits_a_phase"]) for dj in at),
-                  *(_n(r["term"][dj]["bits_a_request"]) for dj in at)) for r in doc["rows"]], 3)]
+                  *(_n(r["term"][dj]["bits_a_request"]) for dj in at)) for r in doc["rows"]], 4)]
     return "\n".join(lines)
 
 
@@ -830,9 +881,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="N2's #Σ_sync (default: the most a calibration chooses)")
     ap.add_argument("--failure-rate", type=Fraction, default=Fraction(0), metavar="F",
                     help="the share of connections that fail, charged pooled where the lengths are held (default 0)")
+    ap.add_argument("--requests", choices=REQUESTS, default=REQUESTS[0],
+                    help="the request a scope's requests are counted of: the sampling plan's, read from the "
+                         f"break-even planner, or the census's at the workload card's MACs (default {REQUESTS[0]})")
     ap.add_argument("--world-requests", type=float, metavar="N",
-                    help="the world's requests a year (default: from the census, rho's world fleet and the workload "
-                         "card)")
+                    help="the world's requests a year, in place of either request's count")
     ap.add_argument("--scan-delta", type=Fraction, default=SCAN_DELTA, metavar="D",
                     help=f"each execution phase's scan's δ (default {SCAN_DELTA})")
     ap.add_argument("--target-gb", type=float, default=TARGET_GB, metavar="GB",
@@ -844,8 +897,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--run", help="the run the document names (under `research run`, its id)")
     a = ap.parse_args(argv)
     inp = inputs(response_ids=a.response_ids, id_bits=a.id_bits, buckets=a.phase_buckets, bucket_s=a.bucket_s,
-                 failure_rate=a.failure_rate, world_requests=a.world_requests, scan_delta=a.scan_delta,
-                 syncs=a.syncs, lanes=a.lanes)
+                 failure_rate=a.failure_rate, requests=a.requests, world_requests=a.world_requests,
+                 scan_delta=a.scan_delta, syncs=a.syncs, lanes=a.lanes)
     doc = document(inp, target_gb=a.target_gb, commit=a.commit or _head(), run=a.run, only=a.scope or (),
                    periods=a.period or ())
     print(json.dumps(doc, indent=1, ensure_ascii=False) if a.json else render(doc))

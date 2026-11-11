@@ -7,6 +7,8 @@ load of a node, the reference datacenter and the world, each check's by its own 
   the count it states, and the design's term is the jitter and that charge;
 - nothing a check counts by capacity scales with the requests;
 - the world, the datacenter, the requests and the weights are read from the files, each input marked with its source;
+- the world's requests are by default the sampling plan's, the break-even planner's own count; the census's where
+  asked; a given count in place of either; and every row names which;
 - the command prints the table and its JSON (value, unit, commit, run), through `verity bench`'s runner too."""
 
 from __future__ import annotations
@@ -172,7 +174,7 @@ def test_the_failed_connections_are_charged_pooled_only_where_the_lengths_are_he
 
 
 def test_the_scale_is_read_from_the_files_and_every_input_is_marked():
-    inp = LB.inputs()
+    inp = LB.inputs(requests="census")
     assert all(i.mark in LB.MARKS and i.source for i in inp.values())
     fleet = tomllib.loads((ROOT / LB.RHO).read_text())["fleet"]["world-h200"]
     card = json.loads((ROOT / LB.WORKLOAD).read_text())
@@ -203,6 +205,62 @@ def test_the_scale_is_read_from_the_files_and_every_input_is_marked():
     assert (given["world_requests"].value, given["world_requests"].mark) == (1e16, "assumed")
     assert [given[k].value for k in ("response_ids", "syncs", "lanes")] == [875, 16, 512]
     assert "--syncs" in given["syncs"].source and "--lanes" in given["lanes"].source
+
+
+def test_the_worlds_requests_are_the_sampling_plans_by_default(monkeypatch):
+    """The default count is the planner's own: its case's world year at the 128k serving plan's request, with that
+    request's tokens and served MACs a token as the inputs beside it, from which the count follows by the scopes'
+    rule. Every scope and monitoring period the planner counts, the table counts alike. Nothing else moves from the
+    census's inputs."""
+    monkeypatch.syspath_prepend(str(ROOT / LB.PLANNER))
+    import sweep
+    case = sweep.cases()[LB.PLAN_CASE]
+    _, cards, *_, at = sweep.build(case)
+    inp = LB.inputs()
+    assert case.ctx == "c343" and inp == LB.inputs(requests="plan") and inp["request_count"].value == "plan"
+    assert inp["world_requests"].value == at["scopes"]["world year"].requests > 0
+    assert (inp["request_tokens"].value, inp["token_macs"].value) == (cards["tokens_per_request"].value,
+                                                                     at["served_macs"])
+    by = f"{LB.PLANNER}/sweep.py"
+    for name in ("request_tokens", "token_macs", "world_requests"):
+        assert inp[name].mark == "modeled" and inp[name].source.startswith(f"{by}'s case {LB.PLAN_CASE}: ")
+    assert (ROOT / by).is_file() and all(i.mark in LB.MARKS and i.source for i in inp.values())
+    flop = (inp["world_machines"].value * inp["machine_gpus"].value * LB.PERIODS["year"] * inp["mfu_serve"].value
+            * inp["peak_flops"].value)
+    assert inp["world_requests"].value == pytest.approx(
+        flop / (inp["request_tokens"].value * 2 * inp["token_macs"].value), rel=1e-12)
+    got = rows(inp)
+    assert sorted(at["scopes"]) == sorted(f"{who} {period}" for who in ("world", "datacenter") for period in LB.PERIODS)
+    for scope in at["scopes"].values():
+        r = got[scope.who, scope.period, "scan"]
+        assert r.scope.gpus * LB.PERIODS[scope.period] == scope.gpu_seconds
+        assert float(r.requests) == pytest.approx(scope.requests, rel=1e-12)
+    census = LB.inputs(requests="census")
+    moved = {k for k in inp if inp[k] != census[k]}
+    assert "request_count" in moved <= {"request_tokens", "token_macs", "world_requests", "request_count"}
+    assert set(inp) == set(census) and list(inp) == list(census)
+
+
+def test_every_row_names_its_request_count():
+    """Each count's document names it at its top and on every row, its text in every row of its three tables; a
+    given count stands in place of either request's."""
+    for given, name in (({}, "plan"), ({"requests": "census"}, "census"), ({"world_requests": 1e16}, "given"),
+                        ({"requests": "census", "world_requests": 1e16}, "given"),
+                        ({"requests": "plan", "world_requests": 1e16}, "given")):
+        inp = LB.inputs(**given)
+        assert (inp["request_count"].value, inp["request_count"].source) == (name, LB.COUNTS[name])
+        assert name != "given" or (inp["world_requests"].value, inp["world_requests"].mark) == (1e16, "assumed")
+        doc = LB.document(inp)
+        assert doc["request_count"] == doc["inputs"]["request_count"]["value"] == name
+        assert len(doc["rows"]) == 63 and {r["request_count"] for r in doc["rows"]} == {name}
+        text = LB.render(doc).splitlines()
+        assert sum(line.startswith(f"Request count {name}: {LB.COUNTS[name]}. Every row names") for line in text) == 1
+        body = [line.split("|") for line in text if line.startswith(("| node ", "| datacenter ", "| world "))]
+        assert len(body) == 9 + 63 + 63 and all(name in (c.strip() for c in cells[3:5]) for cells in body)
+        heads = [line for line in text if line.startswith("| scope ")]
+        assert len(heads) == 3 and all("| request count |" in line for line in heads)
+    assert list(LB.COUNTS) == [*LB.REQUESTS, "given"] and LB.REQUESTS[0] == "plan"
+    json.dumps(LB.document(LB.inputs()))
 
 
 def test_a_scope_serves_the_worlds_requests_in_proportion_to_its_gpu_seconds():
@@ -299,6 +357,14 @@ def test_the_command_prints_the_table_and_its_json(capsys, monkeypatch):
     assert "each charged 10 bits for its schedule" in text and "| failure_rate " in text
     assert "N2's schedules are 4 bits" in text and "512 lanes x 2 strides" in text
     assert "A link's execution phase is 128 s of 32 buckets" in text
+    for argv, given in (([], {}), (["--requests", "plan"], {}), (["--requests", "census"], {"requests": "census"})):
+        assert LB.main(["--json", "--commit", "c0ffee", *argv]) == 0
+        counted = json.loads(capsys.readouterr().out)
+        assert counted == json.loads(json.dumps(LB.document(LB.inputs(**given), commit="c0ffee")))
+        assert counted["request_count"] == given.get("requests", "plan")
+    assert LB.main(["--json", "--commit", "c0ffee", "--run", "r1", "--requests", "census", "--world-requests",
+                    "1e16"]) == 0
+    assert json.loads(capsys.readouterr().out) == doc and doc["request_count"] == "given"
     monkeypatch.setattr(sys, "argv", ["run.py", "--json", "--commit", "c0ffee", "--run", "r1", "--world-requests",
                                       "1e16"])
     with pytest.raises(SystemExit) as done:
@@ -327,3 +393,7 @@ def test_refusals():
         LB.document(small(), only=["rack"])
     with pytest.raises(ValueError, match="the target is positive"):
         LB.document(small(), target_gb=0)
+    with pytest.raises(ValueError, match="the request counted is one of plan, census, not 'given'"):
+        LB.inputs(requests="given")
+    with pytest.raises(SystemExit):
+        LB.main(["--requests", "given"])

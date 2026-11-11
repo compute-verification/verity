@@ -11,6 +11,7 @@ directory holds its runner.
 verity bench certifier_term                              the inputs, the scopes, and the terms in GB and in bits
 verity bench certifier_term --json                       the same as one document: value, unit, commit, run, inputs, rows
 verity bench certifier_term --scope world --period year  only those rows (each flag repeats)
+verity bench certifier_term --requests census            the census's request in place of the sampling plan's
 verity bench certifier_term --help                       every parameter and its default
 ```
 
@@ -21,8 +22,9 @@ commit: `--run "$RESEARCH_RUN_ID" --commit "$RESEARCH_SOURCE_SHA"`. Without `--c
 
 A scope is a node (one machine), the reference datacenter or the world, each machine behind one network certifier.
 Over a week, a month and a year it serves its GPU-seconds × the serving MFU × a GPU's peak FLOP/s / (a request's
-tokens × 2 × the served MACs a token) requests, each on one connection. Each scope and monitoring period has seven
-rows, and each row says where it stands:
+tokens × 2 × the served MACs a token) requests, each on one connection. Which request that is is the row's request
+count, which every row names (Where the scale comes from, below). Each scope and monitoring period has seven rows,
+and each row says where it stands:
 
 - `scan` (on main): the rows form, the scan on the network certifier's own run, as the check charges it today. A
   connection is charged for its schedule and again for its fail cell, one connection a request, so these two terms
@@ -65,6 +67,9 @@ cells, and nothing else.
 - **The scopes**: the compute each row covers, which is all its scope serves: machines, GPU-seconds, requests and
   execution phases, and ε, the scan's execution phases' δ summed (`--scan-delta`). ε is a union bound, so at 1 or more
   it bounds nothing.
+- **request count**: a column of every table, and `request_count` on every row of the document and at its top:
+  `plan`, `census` or `given`, the request the row's requests are counted of. One table holds one request count;
+  rows of two don't compare.
 - **The terms in GB**: schedules, cells, the jitter at each D_j, and the term at each D_j with its multiple of the
   target (`x target`, `--target-gb`) and of one copy of the weights in FP4 (`x weights`); then the entries.
 - **The terms in bits**: the same pooled totals in bits, beside the term for one execution phase of one link
@@ -80,10 +85,16 @@ target.
 - The world is rho's world fleet (`benchmarks/rho/data/reference.toml`, `fleet.world-h200`): the census's inference
   (`benchmarks/census/adversary.json`) on eight-GPU machines at the fleet's serving MFU. The datacenter is the census's
   reference datacenter (`benchmarks/census/deployments.json`).
-- The requests follow from the census's tokens a request, the H200's dense FP8 peak (the H100 SXM5's entry of
-  `benchmarks/census/hardware.json`, one die and one clock) and the served MACs a token of GLM-5.3's workload card
-  (`benchmarks/spot_figures/cards/workload.glm-5.3.json`), by the rule `benchmarks/spot_figures/figure1.py` plans
-  with. `--world-requests N` replaces the world's requests a year, and every scope scales with it.
+- The requests are counted of one request, by the rule `benchmarks/spot_figures/figure1.py` plans with, at the
+  H200's dense FP8 peak (the H100 SXM5's entry of `benchmarks/census/hardware.json`, one die and one clock):
+  - `plan`, the default: the sampling plan's request, so that the rows count the requests the compute audit's plan
+    prices. The world's requests a year, a request's tokens and the served MACs a token are read from the break-even
+    planner (`benchmarks/spot_figures/breakeven/`, `sweep.build` on the case `leak_bounds.PLAN_CASE`), which prices
+    the 128k serving plan's request: fewer tokens than the census's, at more work a token.
+  - `census` (`--requests census`): the census's tokens a request at the served MACs a token of GLM-5.3's workload
+    card (`benchmarks/spot_figures/cards/workload.glm-5.3.json`).
+  - `given` (`--world-requests N`): N requests a world-year, of no stated request, in place of either. Every scope
+    scales with it.
 - The weights are the workload card's parameters at FP4's 4 bits each.
 - A bucket is the network certifier's default, and N2's #Σ_sync the most a calibration chooses by default
   (`verity/core/protocols/certifier/calibration.py`).
