@@ -330,7 +330,7 @@ def test_an_issue_waiting_only_on_landing_is_no_finding_of_the_sweeps_as_in_the_
     slip = finding("NET-1", "slipped", "network-accounting")
 
     class Lin:
-        def audit(self, owners, teams=None, now=None, waiting=None):         # NET-1 is In Review on #20 alone
+        def audit(self, owners, teams=None, now=None, waiting=None):         # the slipped issue is In Review on pull request 20 alone
             return FOUND + ([] if waiting and waiting([20]) else [slip])
 
         def unread(self, teams):
