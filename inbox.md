@@ -410,3 +410,35 @@ Not done: part A (waits on #8779), step 3 (waits on you), step 4.
 [2026-11-11T22:09Z] 15c69d86239b
 BOUNDTIE (bc-f0589019-ca56-5ede-905e-e413d39359da) to the coordinator, NET-341 job 3, Wed 11 Nov 2:09 PM PST. The one run is launched: r20261111-220825-e7f8, `research run --on auto`, the same three suites (the certifier verifier suite, circuit-check, repository) at the new head 9100e6da14d1a709743ac6511ca244e613d9a8ac, pushed to cursor/na-response-tie-cdaa. Launched 2:08 PM PST, timeout 90 min; the launcher said it should start in about 13 min (2 waiting ahead). The two Definitions do not make circuit-check slower: the same five bindings, 21 to 26 more ANDs in the stop form, 1 fewer in the no-stop form [ran: my VM, the five bindings checked in 10 s].
 
+[2026-11-11T22:09Z] 7c32f70040f0
+TERMGB to coordinator (network-accounting). A second execution of me. Written Wed 11 Nov, 2:09 PM PST (read from the clock). This corrects one line of my 2:05 PM PST message.
+
+**I found a second execution of TERMGB at work in my VM, and I have stopped.** The one writing this is the Job 7 thread. It was woken at 2:00 PM PST by copies of three "subagent finished" notices and has no brief after Job 7. The other is at work on NET-345 in the same checkout.
+
+**What I read** [read: the reflog of the VM's checkout, origin, and file times under `/tmp`; no command of mine did any of it]:
+- **1:35 to 1:37 PM PST:** the checkout went to #8777's branch at `f28f4e4acc2d`, then to a new branch, `cursor/na-k-two-schedules-b4e6`.
+- **1:45 and 1:56 PM PST:** two commits there. `8a97ca7ff0`, "leak_bounds: every count names its jitter bound, and K by links is at the term of record's", and `736284f9456a`, "chain_record: leak and d1's K charge the jitter at two release schedules". Against `f28f4e4acc2d` that is 7 files under `benchmarks/network_traces`, 171 added, 72 removed. Origin has the branch at `736284f9456a`. No pull request is on it.
+- **2:00:18 PM PST, as my turn began:** the checkout moved to `cursor/verity-network-accounting-b51f` at `660f5e0871f6`. No commit was made while it was there.
+- **2:03:58 PM PST:** the checkout moved back to `cursor/na-k-two-schedules-b4e6`. A scratch file of that work was written at 2:04 PM PST. So the other execution was live then.
+
+**The correction**: my 2:05 PM PST message said "NET-345 not started" and "started nothing". That is true of this thread only. Work on NET-345 under my name is pushed, as above.
+
+**What this thread did between 2:00 and 2:09 PM PST**, all of it in my 2:05 PM PST message:
+- It read run `r20261111-210610-cf01` (exit 0) and replaced #8777's body at 2:04 PM PST with its verdict lines, one hunk.
+- It wrote one note and three artifacts, saved the new body over the old one in the artifacts, and changed one line of the handoff file.
+- It ran no git command that writes, made no commit, pushed nothing and posted nothing on Linear.
+- It pulled the inbox and got no message each time.
+
+**What may need your eye**:
+1. If the other execution posts #8777's body from a draft made before 2:04 PM PST, the run's verdict lines go. They are in my 2:05 PM PST message and in the artifact `net326-suites-head-r20261111-210610-cf01.txt`.
+2. Both executions share one inbox and one shell hook, so a message to TERMGB may reach either. I run no command after this one.
+3. The checkout moved to your branch under the other execution's hands. Its tree was clean when I looked at 2:06 and 2:08 PM PST, and #8777 was still at `f28f4e4acc2d`, unmarked.
+
+**Least sure** [argued]:
+- That the move at 2:00:18 PM PST was made by the start of my turn. The times agree; I did not see it happen.
+- That the other execution works from a brief of yours. I have not read its conversation. This run's name reads "TERMGB: #8777 takes main; K at two schedules (NET-345)" [read].
+
+**Where I did not look**: the other execution's conversation, its commits beyond their titles and file list, and any process list.
+
+TIMER: none
+
