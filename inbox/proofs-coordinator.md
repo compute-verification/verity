@@ -55075,3 +55075,51 @@ Tags: [run], [read] (place given), [relayed], [guess]. Times from `date -u`.
 
 For the table:
 - PLAN | #8950 `f8b6e599b19b` | ready line written 12:47Z; quick tier `87c2` 57 of 57 passed; stacked on #8853 and #8904 | the tree's command prints a row's plan by width or at a held κ; the price of record (i), world year: 14,228.6 → 11,338.8 GB × 1.05 by width (the tree's own prices, modeled 0.4) [run `8e11`].
+
+## TWOPROVE, Wed 11 Nov 12:48Z: ready to mark #8941 at b29929d015e42b416ea992929c70873f45537676. Its try, records run and quick tier pass at that head, and no lock record changes; it is a lemma PR. Second reader: ATTACK 12:43Z for the file. The head did not move and `main` is not merged in
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another worker's statement I did not check, [derived] my reasoning. Times from `date -u`.
+
+**ready to mark #8941 at b29929d015e42b416ea992929c70873f45537676.** It is open and unmarked, with no label, at that head [run: `gh pr view`, 12:47Z]. `git merge-tree --write-tree` with `main` `967b722429f3` exits 0 [run].
+
+- **Quick tier** `r20261111-120447-48e3` [run: its `stdout.log`]: rc 0, class `SUCCESS`, "9 suites: 9 passed (0 cached), 0 failed; 31.2 min of test time". It ran `suites.py --changed 0a722c6ec984 --quick` on vy-nebius-cpu-9, in slot r8 from 12:07Z. The suites:
+  - verity-pouw-benchmarks: 1216 passed, 21 skipped;
+  - verity/protocols/pouw/verifier: 1844;
+  - verity/definitions/ops: 949 passed, 2 skipped;
+  - verity/protocols/inference_only/rho: 603;
+  - verity/protocols/pous/verifier: 536 passed, 12 skipped;
+  - repository: 292;
+  - verity-graph: 181;
+  - verity/protocols/inference_only/nci: 137;
+  - benchmarks/inference_only: 10.
+- **Records run** `r20261111-120440-bcfe` (`lean_changed.py --records security/Proofs --update`, `--cwd clone`, slot r11) [run: its `stdout.log`, `result.json` and the three `audit.json`]: rc 0, class `SUCCESS`, result `valid`, `OUTCOME` `pass`, at commit `b29929d015e4`.
+  - `security/Proofs`: "PASS 194068 declarations in 3850 modules; axioms propext, Classical.choice, Quot.sound", check.py exit 0 in 1,189 s, on the fast path without the kernel replay.
+  - `security`: PASS, 27,058 declarations in 718 modules and 1,100 guarantees, exit 0 in 387 s.
+  - `security/Properties`: PASS, 3,088 declarations in 94 modules and 463 guarantees, exit 0 in 435 s.
+  - **No lock record changes.** All three `audit.json` files have `regenerated {}` and `failed []`.
+- **The four checks** at this head:
+  - **elaborates:** `r20261111-113439-71a5`, the file's try at the head's own tree: rc 0, its 11,083 jobs built, lean exit 0 in 167 s, no warning in the file [run, my 11:50Z entry];
+  - **axioms clean:** `71a5`'s probe has `code_eventTwoX_le_cls_at_caps` and `code_eventTwoX_le_cls_at_cap` on the three axioms, with siblings clean, and `bcfe`'s audit covers the package [run];
+  - **kernel replay:** the candidate's check;
+  - **second reader: ATTACK, 12:43Z, items 2 and 4.** It read `FirstHitClassCaps.lean` whole, found the statement as my entries give it ("That is what TWOPROVE says"), and names itself "second reader, this entry, for the top file" [relayed].
+- **The merged build.**
+  - `git merge-tree --write-tree` exits 0 with `main` `967b722429f3` [run].
+  - The head is the merge of #8931 and #8924, which the try built [run].
+  - Not run: a whole-package build on the merge of every marked head.
+- **The body is current** [run: `research queue edit 8941`, and `gh pr view` after it shows the head unchanged]. It has:
+  - the four checks with their runs;
+  - no lock record;
+  - the runs at the head with their verdicts;
+  - the merged build against `967b722429f3`;
+  - your 12:06Z line, verbatim, in place of my narrower wording (ATTACK 12:43Z item 3).
+- **What kind of PR** [run: `git diff --stat` over its merge parent `a1128e256f`, whose parents are #8931's and #8924's heads]. It is a lemma PR:
+  - one new module, `SpotFlock/FirstHitClassCaps.lean` (+138 lines), and one import line;
+  - no file under `Definitions/` or `Properties/`, no `lean-audit.json`, no guarantee and no premise.
+- **Stands on** [run: `gh pr view` and `git merge-base --is-ancestor`, 12:45Z]:
+  - 14 open PRs: #8931, #8924, #8922, #8919, #8916, #8912, #8906, #8905, #8892, #8889, #8882, #8879, #8874 and #8870;
+  - TWOWITNESS's `cursor/proofs-codecounts-9e41` at `04def4644bc4`, which has no PR.
+  - #8836 is now on `main`, with #8827, #8820, #8785 and #8512 [run].
+
+**#8931** [run]: its body gained your 12:06Z line, with "these two theorems take no `Addresses h` themselves; the line is about the bounds they feed". It also names ATTACK 12:43Z as second reader, now 10 open ancestors (#8836 landed) and `main` `967b722429f3` (merge-tree exits 0). Its head is unchanged at `2cc7decd36a6`, and its 12:03Z ready line stands.
+
+For CAPS: Proofs/Flock: +1 module, +2 declarations (#8941: SpotFlock/FirstHitClassCaps.lean 2)
