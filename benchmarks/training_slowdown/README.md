@@ -53,6 +53,16 @@ the route and the average's horizon: each is a run of its own, a frontier takes 
 chooses between them inside a run. The suite refuses an average over a horizon with no such entry beside it, and holds
 it to torch's own average of the weights that entry writes.
 
+An entry is at a start `starts.toml` registers: `config.load` refuses another, and no entry at a registered start
+stands in for a run elsewhere. The search's pilot starts (`s50`, `s100`, `m50`, `m100`, on another tokenizer) are not
+registered, so the three keys of the search whose frontier runs are all there have no entry. None is an algorithm the
+library lacks: each is a setting of the dials of entries here, the weights and their average.
+
+- `fullmuon-ema`, at `s100`: the dials of `s-t20-1.1x-fullmuon` and `s-t20-1.1x-fullmuon-ema`;
+- `fullmuon-fe-ema`, at `s100` and `m100`: those of `s-t20-1.1x-fullmuon-fe-wsd` and `s-t20-1.1x-fullmuon-fe-wsd-ema`;
+- `muon-lr`, at `s50` and `m50`: those of `m-t20-1.1x-fullmuon-wsd` and `m-t20-1.1x-fullmuon-wsd-ema`, in two forwards
+  a step.
+
 The standard algorithms differ in two ways the table shows apart. AdamW, SGD, Lion, Adafactor and the average of the
 weights train every tensor by the same forward and backward passes, so they carry the same products with two operands
 the update reaches, and differ only in the gates the optimizer itself adds to the step; gradient accumulation carries
