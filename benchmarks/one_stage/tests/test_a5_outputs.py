@@ -12,15 +12,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value as Bits
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Value as Bits
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "core" / "protocols" / "spot" / "tests"))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "verifier" / "tests"))
 import a5 as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
 
@@ -41,7 +41,9 @@ PUBLIC = tuple(S.Public(i, "structure", r) for i, r in (
     ("population", "N, the draw's range"), ("window", "provenance"), ("leaves:x", "x's leaf count"),
     ("domain:x", "x's served domain"), ("leaves:out", "out's leaf count"), ("domain:out", "out's served domain"),
     (f"population:{P.template_id(PAIR)}", "a template's stratum")))
-SPEC = S.Spec(VALUES, S.Law(f"work:{K}"), S.Check((P.program_digest(Program(PAIR)),), QUERY, proof_deadline=60.0), PUBLIC,
+#: K of the N proof blocks, an eighth of however many the window registers
+RULE = S.Law("work-rate:1/8")
+SPEC = S.Spec(VALUES, RULE, S.Check((P.program_digest(Program(PAIR)),), QUERY, proof_deadline=60.0), PUBLIC,
               bytes.fromhex(ROOT))
 VERDICTS = {"lean": {"of_record": True, "accepted": True, "digest": "dd" * 64, "sessions": [SESSION]}}
 OUTS = list(range(16, 32))
@@ -71,8 +73,8 @@ def _ports() -> dict:
 
 def _record() -> dict:
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **e} for i, (p, e) in enumerate(_ports().items())]
-    return R.record(program(), QUERY, {"law": "work", "k": K}, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0},
-                    work_table=TABLE)
+    return R.record(program(), QUERY, S.selection_law(RULE, N), S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0},
+                    work_table=S.selection_table(RULE, program(), QUERY, TABLE))
 
 
 def stream_of(coins: FC.Challenger) -> S.Stream:

@@ -72,9 +72,9 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, partition as P  # noqa: E402
-from verity.core.protocols.spot.optimize import SHA512_ANDS  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
+from verity.protocols.spot.optimize import SHA512_ANDS  # noqa: E402
 
 #: ANDs of the pieces of a unit with its rows' openings (benchmarks/sampling_plan's inputs: its pins, hm96 PROTOCOL §5)
 S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, SHA512_ANDS, 116_240
@@ -326,7 +326,8 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     o.mkdir(parents=True, exist_ok=True)
     port = free_port()
     if "unit" in pt:
-        inst, pub, tables = pt["inst"], pt["pub"], []
+        inst, pub = pt["inst"], pt["pub"]
+        tables = ["--tables", str(d / "tables")] if (d / "tables").is_dir() else []
         fw_files = {"partition_file": pt["partition"]}
     else:
         inst, pub, tables = str(d / f"inst-{c}.bin"), str(d / f"pub-{c}.bin"), ["--tables", str(d / "tables")]

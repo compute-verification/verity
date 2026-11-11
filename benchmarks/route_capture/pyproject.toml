@@ -9,20 +9,22 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # the plugin patches through the integration's hooks, routes.py reads traces with its kernel_trace, settings.py is built on
 # verity_config's registry, and gap.py evaluates the class G decoder (`program.predict.dsa`, which reads most of the
-# integration, the Definitions' registry and the circuits it builds) on class G's workload row and the capture map; the row
-# is a stored workload, which `config.row_file` checks against its directory's SHA256SUMS and fetches by its art id
+# integration, the Definitions' registry, the circuits it builds and the seed rule's SHA-512 gates) on class G's workload row
+# and the capture map; the row is a stored workload, which `config.row_file` checks against its directory's SHA256SUMS and
+# fetches by its art id
 inputs = [
     "fixtures/artifacts.json",
-    "tools/config/verity_config",
+    "verity/configuration/config/verity_config",
     "verity/__init__.py",
     "verity/errors.py",
     "verity/settings.py",
-    "verity/ml/__init__.py",
-    "verity/ml/circuits",
-    "verity/ml/definitions",
-    "verity/ml/kernels",
-    "integrations/vllm/verity_vllm",
-    "integrations/vllm/manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json",
-    "integrations/vllm/workloads/SHA256SUMS",
-    "integrations/vllm/workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json",
-]
+    "verity/circuits",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/definitions",
+    "verity/definitions/kernels",
+    "adapters/vllm/verity_vllm",
+    "adapters/vllm/manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json",
+    "adapters/vllm/workloads/SHA256SUMS",
+    "adapters/vllm/workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json",
+          "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py"]

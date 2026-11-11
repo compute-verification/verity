@@ -3,8 +3,10 @@ it doesn't, beyond the edges `public_boundary_allowed.txt` lists, which only shr
 (`public_export.py`), whose manifests lose only the entries naming what it doesn't copy."""
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -49,6 +51,45 @@ def test_every_public_group_covers_a_file() -> None:
     boundary, tree = PB.Boundary.load(), PB.Tree(ROOT)
     empty = [g for g, r in boundary.groups.items() if not any(r.fullmatch(f) for f in tree.files)]
     assert not empty, f"public groups whose globs cover no tracked file: {empty}; fix their globs in public_boundary.toml"
+
+
+#: the vLLM integration's Pearl-C path, and the kernel directories a run's `kernel` setting names to it
+PEARL_C = ROOT / "adapters" / "vllm" / "verity_vllm" / "protocols" / "pouw" / "pearl_c"
+PEARL_C_KERNELS = ("benchmarks/pouw/pearl_c_sm120", "benchmarks/pouw/pearl_c_sm90")
+INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]+"([^"]+)"', re.MULTILINE)
+
+
+def _loaded(module: Path) -> set[str]:
+    """The files a module's `_load` calls take from a kernel directory: each call's ``"NAME.py"``."""
+    calls = [n for n in ast.walk(ast.parse(module.read_text(encoding="utf-8")))
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "_load"]
+    return {c.value for n in calls for c in ast.walk(n)
+            if isinstance(c, ast.Constant) and isinstance(c.value, str) and c.value.endswith(".py")}
+
+
+def test_the_pearl_c_kernels_the_integration_loads_are_public() -> None:
+    """`verity_vllm.protocols.pouw.pearl_c.kernel` loads ``run.py``, ``fixture.py`` and the cubin from the directory a run's
+    ``kernel`` setting names, and `pearl_c.grouped` the ``grouped.py`` beside that ``run.py``: paths a run gives, which the
+    check reads no edge for. So a `public` glob covers each kernel directory's loaded files and what builds its cubin:
+    ``build.sh``, the source it compiles and every file that source includes, which the check doesn't read either. What
+    those files import, reach and run in turn are edges the check reads."""
+    boundary, tree = PB.Boundary.load(), PB.Tree(ROOT)
+    always, beside = _loaded(PEARL_C / "kernel.py"), _loaded(PEARL_C / "grouped.py")
+    assert {"run.py", "fixture.py"} <= always and beside, (
+        f"pearl_c's `_load` calls name {sorted(always)} and {sorted(beside)}: read here what it loads as it names it now")
+    needs: set[str] = set()
+    for d in PEARL_C_KERNELS:
+        needs |= {f"{d}/{n}" for n in always} | {f"{d}/{n}" for n in beside if f"{d}/{n}" in tree.files} | {f"{d}/build.sh"}
+        todo = [f"{d}/{n}" for n in re.findall(r"\$HERE/([\w.-]+\.cu)\b", tree.text(f"{d}/build.sh"))]
+        assert todo, f"{d}/build.sh compiles no `$HERE/NAME.cu`: read here the source its cubin is built from"
+        while todo:
+            f = todo.pop()
+            if f in tree.files and f not in needs:
+                todo += [PB._rel(os.path.join(os.path.dirname(f), i)) for i in INCLUDE.findall(tree.text(f))]
+            needs.add(f)
+    private = sorted(f for f in needs if f not in tree.files or boundary.is_private(f) or boundary.group(f) is None)
+    assert not private, ("the public vLLM integration serves Pearl-C from files the export doesn't copy; name each in "
+                         f"public_boundary.toml's `benchmarks` group (a boundary decision), or stop loading it: {private}")
 
 
 BOUNDARY = """
@@ -445,7 +486,7 @@ def test_the_export_is_one_fresh_commit_of_the_public_set(judged, tmp_path_facto
     tree, boundary = PE.PB.Tree(root, files=TREE), PE.PB.Boundary.load(root / "boundary.toml")
     j = PE.PB.judge(tree, boundary)
     dest = tmp_path_factory.mktemp("export")
-    got = PE.export(tree, boundary, j, dest)
+    got = PE.export(tree, boundary, j, dest, {})
 
     def git(*args: str) -> list[str]:
         return subprocess.run(["git", *args], cwd=dest, capture_output=True, text=True, check=True).stdout.split()
@@ -469,7 +510,50 @@ def test_the_export_refuses_an_edge_counted_cut_that_its_rewrite_kept(judged, tm
     root, tree, j = judged
     monkeypatch.setattr(PE, "rewrite_lakefile", lambda text, here, copied: (text, []))
     with pytest.raises(ValueError, match="rewrite kept them: .*lake require priv"):
-        PE.export(tree, PE.PB.Boundary.load(root / "boundary.toml"), j, tmp_path_factory.mktemp("export"))
+        PE.export(tree, PE.PB.Boundary.load(root / "boundary.toml"), j, tmp_path_factory.mktemp("export"), {})
+
+
+def test_the_export_ships_the_fetched_fixtures_its_boundary_names(judged, tmp_path_factory, monkeypatch) -> None:
+    """A fetched fixture (a registry entry git doesn't track) that the boundary's `fixtures` names is fetched and committed as
+    tracked files, a tree's every file; the other public fetched fixtures are listed as not shipped, and a private one isn't
+    listed. One the fetch leaves missing, or with a file over a tracked file's limit, is refused by name."""
+    root, _, _ = judged
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", *TREE], cwd=root, check=True)
+    (root / "boundary.toml").write_text('fixtures = ["verity/pub/data"]\n' + BOUNDARY, encoding="utf-8")
+    reg = {"art:" + c * 64: p for c, p in (("1", "verity/pub/data/w.json"), ("2", "verity/pub/data/set"),
+                                           ("3", "verity/pub/other.bin"), ("4", "tools/secret/s.json"),
+                                           ("5", "verity/pub/imports.py"))}
+    (root / "fixtures").mkdir()
+    (root / "fixtures" / "artifacts.json").write_text(json.dumps(reg), encoding="utf-8")
+    sizes = {"verity/pub/data/w.json": 3, "verity/pub/data/set/a": 1, "verity/pub/data/set/b/c": 2}
+    asked: list[list[str]] = []
+
+    def fetch(r: Path, paths: list[str], log: Path) -> str:
+        asked.append(paths)
+        for f, n in sizes.items():
+            (r / f).parent.mkdir(parents=True, exist_ok=True)
+            (r / f).write_bytes(b"x" * n)
+        return ""
+
+    monkeypatch.setattr(PE, "fetch", fetch)
+    tree, boundary = PE.PB.Tree(root, files=TREE), PE.PB.Boundary.load(root / "boundary.toml")
+    shipped, unshipped = PE.fixtures(tree, boundary, tmp_path_factory.mktemp("logs"))
+    assert asked == [["verity/pub/data/set", "verity/pub/data/w.json"]]
+    assert shipped == {"verity/pub/data/set": ["verity/pub/data/set/a", "verity/pub/data/set/b/c"],
+                       "verity/pub/data/w.json": ["verity/pub/data/w.json"]}
+    assert unshipped == ["verity/pub/other.bin"]
+    dest = tmp_path_factory.mktemp("export")
+    PE.export(tree, boundary, PE.PB.judge(tree, boundary), dest, shipped)
+    listed = subprocess.run(["git", "ls-files"], cwd=dest, capture_output=True, text=True, check=True).stdout.split()
+    assert set(sizes) <= set(listed) and (dest / "verity/pub/data/set/b/c").read_bytes() == b"xx"
+
+    sizes["verity/pub/data/set/b/c"] = PE.REPOSITORY.BLOB_LIMIT + 1
+    with pytest.raises(ValueError, match=r"public_export: verity/pub/data/set/b/c: over 256 KiB, the most a tracked file holds"):
+        PE.fixtures(tree, boundary, tmp_path_factory.mktemp("logs"))
+    monkeypatch.setattr(PE, "fetch", lambda r, paths, log: "verity/pub/data/w.json")
+    with pytest.raises(RuntimeError, match=r"public_export: verity/pub/data/w.json: fixtures the export ships, missing or stale"):
+        PE.fixtures(tree, boundary, tmp_path_factory.mktemp("logs"))
 
 
 def test_the_export_refuses_a_destination_it_would_overwrite(tmp_path: Path) -> None:

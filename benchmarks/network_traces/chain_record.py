@@ -171,7 +171,7 @@ def subset_bound(n: int, k: int, delta: float) -> int | None:
     Selection All (k = n) is 0."""
     if n <= 0 or not 0 < k <= n:
         return None
-    from verity.core.protocols.profile import Stratified
+    from verity.protocols.spot.verifier.profile import Stratified
 
     return Stratified.uniform(n, k).count_bound(delta)
 
@@ -180,7 +180,8 @@ def eps_at_delta(n: int, k: int, law: str) -> dict:
     return {"law": law, "units": n, "drawn": k,
             "incorrect_at_delta": {f"{d:.3g}": subset_bound(n, k, d) for d in DELTAS},
             "per_proof": "each proof's soundness error, ε_ks + ε_bind (KSLinOn's κ + √(γ·Pr B) + Pr[Bext]), "
-                         "symbolic: Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive"}
+                         "symbolic: Claims.SamplingGeneric.Compiled.KS is a hypothesis until "
+                         "Flock.Guarantees.SampledKSLive"}
 
 
 # --- custody ----------------------------------------------------------------------------------------------------------
@@ -211,8 +212,8 @@ def custody(gates: Path) -> dict:
 
 def certs(run: Path, client: Path, deployed: bool = False) -> dict:
     import certifier_serve as cs
-    from verity.ml.crypto import lms
-    from verity.core.protocols.certifier import lean_audit
+    from verity.commitments.crypto import lms
+    from verity.protocols.certifier.verifier import lean_audit
 
     plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json",
                                                                     "deployment.json"))
@@ -283,7 +284,7 @@ def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) 
     `NetworkCheck.LinkWindow.refusals`, ``by`` ``lean``, with `audit.certificate_refusals` beside it as the reference, a
     window where the two differ refused whole)."""
     import certifier_serve as cs
-    from verity.core.protocols.certifier import lean_audit
+    from verity.protocols.certifier.verifier import lean_audit
 
     lines = lambda p: [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
     certs, clocks = lines(kept), lines(kept_clocks)
@@ -585,7 +586,7 @@ def input_terms(circuit: dict, pins: dict | None = None, roots: dict | None = No
 
     Refused (ValueError): a record that lists its members, a statement row of no one port, a wire or declaration outside
     its port's units or rows, two filling one row (Lean's ``apart``), and a pin of `SCAN_STATE`."""
-    from verity.ml.windows import interface as IF
+    from verity.commitments.windows import interface as IF
 
     if "members" in circuit or "wires" not in circuit:
         raise ValueError("a window circuit is counted from its stated record (its templates, statements and wires), as "
@@ -665,7 +666,7 @@ def audit_of(d: Path, pins: dict | None = None) -> dict:
     exactly, and J the offsets within a bucket. A window holding a pin must bind ``circuit.json`` by its SHA-512
     (``window.circuit``), as `NetworkCheck.Period.auditCheck` refuses a count on a circuit its registration doesn't
     bind."""
-    from verity.ml.windows import interface as IF
+    from verity.commitments.windows import interface as IF
 
     reg = json.loads((d / "registration.json").read_text())
     body = (d / "circuit.json").read_bytes()
@@ -766,7 +767,8 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
             "lms_height": [g.get("lms_height") for g in custody_doc.get("gate_runs", [])],
             "uncovered": [
                 "the I/O tie (IoTieRequest) is checked in the clear, outside the proofs",
-                "Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it live",
+                "Claims.SamplingGeneric.Compiled.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it "
+                "live",
                 "hdata (the wardens' arrivals are the framed egress of the certifier's observations) and Carries "
                 "are run conditions, not yet named assumptions",
                 "B_reg: the trace's values at reg are the registration's",
@@ -792,8 +794,8 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
     import scan_zk as SZ
-    from verity.ml.protocols.certifier import ingress_scan as IS
-    from verity.core.protocols.certifier import warden as W
+    from verity.protocols.certifier.prover import ingress_scan as IS
+    from verity.protocols.certifier.verifier import warden as W
     weights = LB.WEIGHTS if weights is None else weights
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
     v = (_json(run / "end.json") or {}).get("verdict") or {}
@@ -949,8 +951,8 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
     that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
     rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
-    from verity.core.protocols.spot.one_stage import registration as R
-    from verity.ml.commitments.identity import tagged_sha512
+    from verity.protocols.spot.verifier.one_stage import registration as R
+    from verity.commitments.identity import tagged_sha512
 
     try:
         raw, params = bytes.fromhex(case["commitment"]), case["params"]

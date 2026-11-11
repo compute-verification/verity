@@ -17,7 +17,8 @@ each suite in its own process from its own directory, and `check` runs the same 
 
 ## Run tests
 
-Suites run remotely through `research run --on auto` (AGENTS.md "Tests"; `research/auto.py` says where a job went). Give
+Suites run remotely through `research run --on auto` (AGENTS.md "Tests"). Its launch says where the job went and when
+it should start, and warns when that is over 10 minutes away (`research/auto.py`). Give
 it `--cwd source`, so the job runs in the shipped tree rather than its run directory, and `uv sync` that tree first:
 `suites.py` refuses another checkout's environment. `research status RUN` checks back on it.
 
@@ -28,7 +29,7 @@ $R "$S"                         # every suite whose inputs changed since it last
 $R "$S flock verity"            # these suites (a package name, a directory, or a unique part of one)
 $R "$S flock -- -k tanh -x"     # arguments after -- go to pytest
 $R "$S --quick"                 # without the tests marked slow
-$R "$S --changed $(git rev-parse origin/main) --quick"   # only the suites your change touches: the pre-mark run (AGENTS.md)
+$R "$S --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"   # only the suites your change touches: the pre-mark run
 $R "$S --fresh"                 # ignore the cache
 uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
@@ -40,7 +41,7 @@ checkout. It starts its own `research run` in a slot of the research pool `resea
 nodes' check slots take train checks only), so inside a `research run` it is refused, naming this command.
 
 Locally, while editing, one named test file or `-k` selection of under about a minute and 1 GB is fine:
-`cd verity/ml/flock && uv run pytest tests/test_layouts.py -k typed`. It doesn't cache and doesn't load the read guard. The shell
+`cd verity/protocols/flock/prover && uv run pytest tests/test_layouts.py -k round_trip`. It doesn't cache and doesn't load the read guard. The shell
 hook refuses a local pytest that names no file or `-k`; `AGENT_GUARD_LOCAL_OK=1` is the opt-in.
 
 A pass is cached under a hash of the suite's inputs (its directory, its workspace dependencies, the paths it declares,
@@ -56,8 +57,8 @@ reviewed change: drive and the quick tier take that failure as not red until it 
 
 ## Where a test goes
 
-- **In the tests/ of the package it tests**, mirroring its modules (`verity/ml/circuits/tests/` tests
-  `verity.ml.circuits`); never in another package's suite or the root `tests/`, which is only for whole-tree invariants.
+- **In the tests/ of the package it tests**, mirroring its modules (`verity/circuits/tests/` tests
+  `verity.circuits`); never in another package's suite or the root `tests/`, which is only for whole-tree invariants.
 - **A new package** joins the workspace (`[tool.uv.workspace] members` in the root pyproject) with its siblings' pytest
   table; a directory with tests but no importable package is a virtual member (`[tool.uv] package = false`), like
   `tools/verity/check`. A test file no suite runs fails `tests/test_repository.py`.
@@ -95,18 +96,20 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   smaller before marking more.
 - **Minutes-long or machine-bound checks are opt-in**, skipping unless a variable asks (`VERITY_POUS_SLOW`,
   `FLOCK_IR_SLOW`, `VERITY_BENCH_FULL`, `VERITY_REGRESSION`). Name it `VERITY_{PACKAGE}_...`, and say in the skip reason
-  how long it takes.
+  how long it takes. A test that leaves `check` this way but must still run goes in `check.py`'s `OPT_IN`, which the
+  nightly cold check (`--no-cache`) runs by name with its variable set; `tests/test_opt_in_tests.py` holds it to its mark.
 - **A check far past ten minutes cold** stays out of `check` and runs as a recorded run on the change that needs it:
-  integrations/vllm's heavy circuit-neutrality tier, `verity-vllm neutrality --tier heavy` on a 256-CPU node (`research
-  pods list`; `integrations/vllm/verity_vllm/pipeline/neutrality.py`), on a change under `integrations/vllm/verity_vllm/program/`,
-  `integrations/vllm/verity_vllm/engine/` or its `pipeline/build.py` meant to leave the circuits alone.
+  adapters/vllm's heavy circuit-neutrality tier, `verity-vllm neutrality --tier heavy` on a 256-CPU node (`research
+  pods list`; `adapters/vllm/verity_vllm/pipeline/neutrality.py`), on a change under `adapters/vllm/verity_vllm/program/`,
+  `adapters/vllm/verity_vllm/engine/` or its `pipeline/build.py` meant to leave the circuits alone. Its fast tier runs
+  after each landing (`post_train.py`), and a row it finds moved rings @vllm: a PR that moves one on purpose re-pins it.
 - **GPU, pod and vLLM tests skip themselves** without the hardware or runtime; their real runs are recorded runs on a pod.
 - **Skip on a third-party package, never on a module of this checkout** (the guard fails that skip):
   `pytest.importorskip("torch")`, then import ours plainly.
 - **A test that needs the evidence store** skips where it can't reach it with a reason containing `the evidence store is
   not reachable` (a recorded `check`, `VERITY_STORE_REQUIRED=1`, fails that skip). Inside `check` and `research run --on`
   the store is reachable only through the run's custody key, so fetch through a helper that hands it to the store CLI
-  (integrations/vllm's `store_io`, Flock's `verifier/ci.py` `fetch`).
+  (adapters/vllm's `store_io`, Flock's `verifier/ci.py` `fetch`).
 - **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`, once it passes `suites.py SUITE
   --fresh` a few times, and its tests then spread over pytest-xdist workers: they must run in any order and process, and
   session and module fixtures are built once per worker, so keep them cheap. A suite whose workers are big declares

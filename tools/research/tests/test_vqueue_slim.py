@@ -391,7 +391,7 @@ def test_start_and_judge_write_nothing_of_drives(world, monkeypatch, tmp_path):
 # -- the check that gates
 
 #: lean-audit's log of a package that failed its build, in the scratch tree ``n``, and one more failure it may print
-AUDIT = ("AUDIT /w/lean-audit-scratch-{n}-x/Security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
+AUDIT = ("AUDIT /w/lean-audit-scratch-{n}-x/security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
          "    error: ../Proofs/A.lean:100:2: Tactic `rfl` failed\n  closure: {n} modules checked, 2 reused\n"
          "  trust gap: 2 premises outside their trust\n    G: 2 (a, b)\n")
 RECORD = "  record: the statement of G changed\n"
@@ -439,7 +439,7 @@ def test_every_shard_of_a_candidates_check_leaves_out_the_tests_the_loops_list_n
     h, base, sha, _ = _harness(world, monkeypatch)
     h.d.on, listed = "m1,m2,m3", tmp_path / "deselect"
     ids = ["tools/verity/circuit_check/tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
-           "verity/core/protocols/composition/tests/test_composition_difftest.py::test_remote_agrees"]
+           "verity/protocols/remote/verifier/composition/tests/test_composition_difftest.py::test_remote_agrees"]
     listed.write_text(f"# over 5 minutes\n\n{ids[0]}\nnot a node id\n/abs/test_x.py::t\n{ids[1]}\n{ids[0]}\n")
     start(h.d, sha, base, shards=3, deselect=listed)
     sent = tmp_path / "deselect.sent"
@@ -688,13 +688,13 @@ def test_a_check_killed_on_what_only_the_candidates_own_allowance_covers_is_infr
 
 
 def test_lean_audit_s_failures_are_what_it_prints_under_each_failed_package_but_its_run_s_counts():
-    log = ("lean-audit: verity/core/primitives/world: PASS reused\n" + AUDIT.format(n=1)
-           + "  tamper: /w/lean-audit-scratch-1-x/Security/Proofs/A.olean changed\n"
-           "AUDIT /w/lean-audit-scratch-1-x/Security: PASS  12 declarations\n  note: fine\n"
-           "AUDIT /w/lean-audit-scratch-1-x/Flock: FAIL\nAUDIT: FAIL (Security/Proofs, Flock); reports in /out\n"
+    log = ("lean-audit: verity/hardware/world: PASS reused\n" + AUDIT.format(n=1)
+           + "  tamper: /w/lean-audit-scratch-1-x/security/Proofs/A.olean changed\n"
+           "AUDIT /w/lean-audit-scratch-1-x/security: PASS  12 declarations\n  note: fine\n"
+           "AUDIT /w/lean-audit-scratch-1-x/Flock: FAIL\nAUDIT: FAIL (security/Proofs, Flock); reports in /out\n"
            "lean-audit: FAIL: unread: Core grew\n")
-    named = {"Security/Proofs::build: exit 1", "Security/Proofs::error: ../Proofs/A.lean:100:2: Tactic `rfl` failed",
-             "Security/Proofs::tamper: Security/Proofs/A.olean changed", "Flock::rest", "lean-audit: FAIL: unread: Core grew"}
+    named = {"security/Proofs::build: exit 1", "security/Proofs::error: ../Proofs/A.lean:100:2: Tactic `rfl` failed",
+             "security/Proofs::tamper: security/Proofs/A.olean changed", "Flock::rest", "lean-audit: FAIL: unread: Core grew"}
     assert audit_failures(log, "rest") == named == audit_failures(log.replace("scratch-1-x", "scratch-22-y"), "rest")
     assert audit_failures("AUDIT: PASS; reports in /out\n", "rest") == set()
 
@@ -710,8 +710,8 @@ def test_a_lean_audit_failure_is_inherited_only_while_it_prints_no_more_than_the
     rec = start(h.d, sha, base, shards=1)
     _slim(h, tmp_path, lean_audit=AUDIT.format(n=2) + more)
     (f,) = based(judge(h.d, rec), rec_base).failed
-    assert f.key != f.base_key and f.inputs == {"Security/Proofs/A.lean"} and _inherited(f) is (not more)
-    assert f.tests - f.base_tests == ({"Security/Proofs::record: the statement of G changed"} if more else set())
+    assert f.key != f.base_key and f.inputs == {"security/Proofs/A.lean"} and _inherited(f) is (not more)
+    assert f.tests - f.base_tests == ({"security/Proofs::record: the statement of G changed"} if more else set())
     assert unnamed(f.key) not in f.tests
 
 

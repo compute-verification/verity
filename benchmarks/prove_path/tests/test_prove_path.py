@@ -1,5 +1,5 @@
 """The prove path's compiler, its advice commitment and its sample-order check, and its prover's and verifier's windows on the CPU
-TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without proving.
+TP stand-in (adapters/vllm's `tests.pipeline.served_tp`, deferred), without proving.
 
 * The compiler is total: every byte string is the requests or a `ValueError` naming why, the same on every run; random and
   truncated advice is refused, advice over the registered cap ℓ is refused before it is read, and a malformed opening is
@@ -9,7 +9,7 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
 * On the stand-in: each rank's window over the compiler's Programs for the advice is held to the verifier's own from the
   opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
   changed, every check before the sample passing), so only the proof can refuse it. A plain audit (`--plain`) takes its window
-  only inside plain's interim scope, one table under a stratified sample (`a5.plain_refusal`).
+  only inside plain's interim scope, one table under a stratified sample, which a stratified rate states (`a5.plain_refusal`).
 * An accepted audit's charge terms: λ_δ, β_δ and their sum, off the audit's profile, and c only where the window's leak count
   is within the charge, so a partial window, whose port from a template it lacks is free, states none (`charge_terms`).
 * A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
@@ -41,17 +41,17 @@ from typing import Any
 
 import pytest
 
-from verity.core.protocols.spot.consumers import exfiltration_bound, location_bits
-from verity.core.protocols.spot.one_stage import audit as AU, draw as DR, registration as R
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.windows import interface as IF, rows as CS
+from verity.protocols.spot.verifier.consumers import exfiltration_bound, location_bits
+from verity.protocols.spot.verifier.one_stage import audit as AU, draw as DR, registration as R
+from verity.circuits.codec import canonical_json
+from verity.commitments.windows import interface as IF, rows as CS
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.tp import serving_rows as SRT
 
 HERE = Path(__file__).resolve().parent
-VLLM = HERE.parents[2] / "integrations" / "vllm"
+VLLM = HERE.parents[2] / "adapters" / "vllm"
 sys.path.insert(0, str(HERE.parent))
 import prove_path as PP  # noqa: E402
 
@@ -392,13 +392,23 @@ def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit
 
 
 @pytest.mark.slow
-def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_stratified_draw(tp):
+def test_a_plain_audit_takes_the_stand_ins_window_under_a_stratified_rate_only_inside_one_table(tp):
     """`--plain` covers one table under a stratified sample (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
-    unit, is inside it under stratified:8, and refused before the sample under its own subset:8, sampled outside a stream, with a
-    second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
+    unit, is inside it under the stratified rate a stream's rule states (stratified-rate:1/2, the stratified law at the K its
+    one stratum needs), and refused before the sample under the subset or work rate, its own fixed count (subset:8), sampled
+    outside a stream, with a second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
+    compiler, requests, bound, _o = PP.compiled(tp["args"]["honest"])
     _c, _b, _o, mine, _held = _mine(tp, "honest", 0)
+
+    def rated(law: str):
+        pf = tp["root"] / f"partition-{law.split(':')[0]}.json"
+        pf.write_text(json.dumps({"templates": ["SiluMul_v2{I=256}"], "law": law}))
+        return AW.window_of_advice(tp["commit"], 0, pf, compiler, requests, bound)[0]
+
+    stratified, subset, work = (rated(f"{kind}rate:1/2") for kind in ("stratified-", "", "work-"))
+    assert stratified.law == {"law": "stratified", "k": DR.strat_k(1, 2, [8], 8)} == {"law": "stratified", "k": 4}
+    assert (subset.law, work.law["law"]) == ({"law": "subset", "k": 4}, "work")
     plain, zk = (argparse.Namespace(plain=p, coins="challenger") for p in (True, False))
-    stratified = replace(mine, law={"law": "stratified", "k": 8})
     assert A5.plain_refusal(plain, stratified, None) is None
     m = mine.members[0]
 
@@ -406,6 +416,8 @@ def test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_
         return SimpleNamespace(members=members, law=stratified.law, population=sum(x.n for x in members), row_tables=())
 
     cases = [("a plain session's draw is stratified", plain, mine, None),
+             ("a plain session's draw is stratified", plain, subset, None),
+             ("a plain session's draw is stratified", plain, work, None),
              ("through a rank's service.Stream", argparse.Namespace(plain=True, coins=None), stratified, None),
              ("the window has 2 members", plain, window(m, replace(m, base=m.n)), None),
              ("registered reads, shared rows", plain, stratified, {m.key: {"ports": {}}}),
@@ -499,11 +511,11 @@ def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(
         i2.load(0, 1, [{"request_id": "r1", "arrive_step": 0, "digest": "d1" * 64}])
 
 
-#: integrations/vllm's `tests.program.predict.test_predict.TINY`: a two-layer Llama whose request Programs are I2's in a second
+#: adapters/vllm's `tests.program.predict.test_predict.TINY`: a two-layer Llama whose request Programs are I2's in a second
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
         "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
-STOCHASTIC = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
+STOCHASTIC = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived", "rid": 4}
 
 
 def _request_build(sampling: dict | None = None, named: bool = False, **shape):
@@ -523,7 +535,7 @@ def _request_program(sampling: dict | None = None, **shape):
 
 @pytest.fixture(scope="module")
 def requests_of_tiny():
-    """TINY's greedy request Programs at (LP, T) = (4, 1) and (4, 2), its stochastic one (seed and splits beside the prompt)
+    """TINY's greedy request Programs at (LP, T) = (4, 1) and (4, 2), its stochastic one (seed, splits and its seed rule's inputs beside the prompt)
     and its cached one (a prefix of 16 rows beside the prompt)."""
     return {"greedy": _request_program(LP=4, T=1), "longer": _request_program(LP=4, T=2),
             "stochastic": _request_program(STOCHASTIC, LP=4, T=2), "cached": _request_program(LP=24, T=2, C=16)}
@@ -534,7 +546,7 @@ def _build(d: Path, program, *, desc: dict | None = None, digest: str | None = N
     program's by default), and its instances and ``result.json`` under ``digest`` (the descriptor's by default); the digest."""
     import gzip
 
-    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.circuits.codec import encode_program, program_digest
     from verity_vllm.pipeline.build_instances import write_instances
 
     d.mkdir(parents=True, exist_ok=True)
@@ -575,7 +587,7 @@ def test_i2_loads_a_build_whose_body_is_the_program_it_compiled(tmp_path, reques
 def test_i2_refuses_a_build_whose_body_was_swapped_under_its_old_digest(tmp_path, requests_of_tiny):
     """The Build's ``result.json`` (and its instances head) keep the digest I2 compiled, and its body is another Program's:
     each is refused by name, the descriptor by its recomputed digest, the instances by the descriptor's rows."""
-    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.circuits.codec import encode_program, program_digest
 
     greedy, longer = requests_of_tiny["greedy"], requests_of_tiny["longer"]
     dg, other = (program_digest(encode_program(p)) for p in (greedy, longer))

@@ -87,7 +87,7 @@ AUDIT /workspace/research/cache/verity-check/lean-audit-scratch-2957380-6l2lanb_
     warning: ../Proofs/Flock/Recursive/PartTie.lean:168:47: Used `tac1 <;> tac2`
     error: ../Proofs/Flock/Claims/NumbersRadius.lean:100:2: Tactic `rfl` failed: The left-hand side
     error: build failed
-AUDIT /workspace/research/cache/verity-check/lean-audit-scratch-2957380-6l2lanb_/Security: FAIL; built WITHOUT a sandbox
+AUDIT /workspace/research/cache/verity-check/lean-audit-scratch-2957380-6l2lanb_/{SPEC}: FAIL; built WITHOUT a sandbox
     error: Definitions/Claims/Sampling.lean:512:20: Type mismatch
 """
 
@@ -107,7 +107,7 @@ def test_a_lean_audit_failure_names_the_lean_files_its_build_errors_are_in(tmp_p
     assert lean_errors(LEAN_AUDIT_LOG) == {"security/Proofs/Flock/Claims/NumbersRadius.lean",
                                            "security/Definitions/Claims/Sampling.lean"}
     assert implicated(_lean_run(tmp_path)) == lean_errors(LEAN_AUDIT_LOG)
-    assert implicated(_lean_run(tmp_path / "b", "AUDIT /x/lean-audit-scratch-1/Security: FAIL\n    error: build failed\n")) is None
+    assert implicated(_lean_run(tmp_path / "b", f"AUDIT /x/lean-audit-scratch-1/{SPEC}: FAIL\n    error: build failed\n")) is None
 
 
 def _killed_run(tmp_path, name: str):
@@ -417,9 +417,9 @@ def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
     failed modules, rather than falling back on every PR touching Lean."""
     from research.drive import lean_errors
 
-    log = ("AUDIT /w/lean-audit-scratch-1-x/Security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
+    log = (f"AUDIT /w/lean-audit-scratch-1-x/{PROOFS}: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
            "    Some required targets logged failures:\n    - Proofs.Flock.Claims.NumbersRadius\n    error: build failed\n"
-           "AUDIT /w/lean-audit-scratch-1-x/Security: FAIL\n    Some required targets logged failures:\n"
+           f"AUDIT /w/lean-audit-scratch-1-x/{SPEC}: FAIL\n    Some required targets logged failures:\n"
            "    - Definitions.Claims.Sampling\n")
     assert lean_errors(log) == {"security/Proofs/Flock/Claims/NumbersRadius.lean", "security/Definitions/Claims/Sampling.lean"}
 
