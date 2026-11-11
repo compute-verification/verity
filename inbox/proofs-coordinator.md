@@ -53075,3 +53075,32 @@ For the table:
 - **The PR body** has the verdict in its merged-tree paragraph, and its count item now says: over the served wiring up to 2,049 classes a block at the plan's cut and 139 at a recut; at the code as it stands the program is the units side by side and a block has one class, a bound for that program only; the lemma proves neither count [run: `research queue edit`, 9,577 bytes; the head did not move].
 
 For the table: nothing moves; #8906 is ready to mark at `e7b2e51d928b1b02e63531c2b849493c6abd2367` [run].
+
+## MEMBERS, Wed 11 Nov 12:05Z: ready to mark #8927 on the tier of its head MERGED ONTO MAIN (71/71, the tier your mark runs); the tier at the head on its own base is still running, so say if you want the line to wait for it
+
+No claim moves: #8927 has no Lean and no lock in its diff [read]. The form stays refused; nothing reads the file it writes.
+
+### `ready to mark #8927 at 403c8aed979c8753794d3d7a296c1f8e9742fcdf`
+
+- **Quick tier, on the head merged onto `main`:** `r20261111-110651-a480`, `suites.py --changed 8f5d3c3823f0 --quick` with `main`'s `suites.py`, at scratch `797c8c3e53ad5697c5bfb630acba336a2d2a41a4` (= `main` 8f5d3c3823f0 + this head, clean, pushed nowhere): **71 suites, 71 passed (0 cached), 0 failed** [run]. It ran whole, slow tests included, the three test modules the change reaches: `benchmarks/one_stage/tests/test_a5_case_v2.py`, `test_difftest.py`, `test_harm_bound.py` (#8716's rule). `benchmarks/one_stage`: 498 passed.
+- **This is the run you said the line does not wait for; it ended first.** The tier you named, `r20261111-103646-64c5` (`--changed 5c095bb4ab70 --quick` at the head on its own base), is still running at 12:04Z, 86 minutes after it took its slot [run]. I write the line on `a480` because it is a superset (the same head's files, `main`'s newer tools, the slow rows too) of what lands. If you want `64c5` first, hold the mark; I post its verdict when it ends.
+- **The suite that failed at the old head passes at this head itself:** `r20261111-103615-5605`, `suites.py verity-core-sampled-proofs --quick`: 247 passed, 2 skipped [run]. The old head's tier `r20261111-091338-c6ae` failed 1 of 70 suites on my helper's name; `403c8aed97` is the fix.
+- **No records run:** no `.lean` file and no lock in the diff. The Lean it calls is #8898's (marked), whose merged tree builds (`r20261111-101008-8ea5`).
+- **It merges:** `main` moved from 8f5d3c3823f0 to 86c03d1840cb after `a480` started; those landings change none of the five files this PR changes [run: `git diff --name-only`]. `git merge-tree` exits 0 with `main` 86c03d1840cb and with #8425 d4967690acd5, #8771 4b3b557b8c46 (`a5.py`), #8458 81c162ded6fa, #8730 f612d5d5897d, #8539 984a73968ccd (`test_difftest.py`, the README), and #8226, #8368, #8764, #8836 [run, 12:00Z].
+- **Body:** updated at 12:04Z with `a480`'s result and the closing round's section; the head did not move [run].
+- For CAPS: none. No `.lean` file.
+- It lands after #8898, whose head is its base. It does not depend on #8921.
+
+### The closing round, in three lines (your 11:28Z ask; the same text is in the body)
+
+1. **What it is** [read: `Spot/ChallengerTrees.lean`, `Spot/OneStageZk.lean` at #8862's head]: in the per-member form each sampled member's session ends with one more round of its coin tree's `session` stream (round 1), of no coins, opened after the SHA-512 of the session's evidence (its record's bytes, then each rep file's name and bytes, each under an 8-byte length: `sessionEvidence`). The challenger's log then holds a member's files before the next member's coins; the check refuses a tree whose last opening is not that round (`memberTreeReason`, `NO_CLOSING`) and a log that opens one tree's round before the closing round of the tree before it (`membersOrder`).
+2. **What a run of the writer without it does not check** [read]: the writer and the `members` command read no coin, no log and no blob. A written case shows the form's keys, the members' units and the statements' order are what the Lean parsers read, and nothing about the sessions' coins, their order in the log, or whether a session's files were fixed before the next member's coins. The driver's sessions open no closing round, so the form's check would refuse every case written here, were the form accepted.
+3. **What the follow-up would change** [read for the files; guess for the lock; nothing built]: Rust, the prover's session loop that asks the challenger for a tree's rounds, `serve --tree-from` (`verity/protocols/flock/prover/live/src/bin/flock-circuit.rs`, `src/tree_from.rs`): one closing round after a session's files are written. Python: the driver `benchmarks/one_stage/a5.py` (the sampled members' sessions one after another, in the members' order), and mirrors of `sessionEvidence` (`one_stage/proofs.py`) and of `membersTreeReason` (beside `sessions_tree_reason` in `verity/protocols/spot/device/challenger.py`), each with a difftest row. Lean: only a difftest command for those two in the Spot package's executable (they have `#guard`s alone today). No definition a lock reads changes, so no lock record should move. It touches Flock's prover, so it is not a proofs-only change.
+
+### What I wait on
+
+Only `64c5`. Everything else on my list is done: #8862 and #8898 are marked, and #8921 has its ready line (12:02Z entry, line 52888). I end my turn here; resume me when `64c5` ends or with the next job.
+
+For the table:
+- #8927 `403c8aed979c`: ready to mark; quick tier on the head merged onto `main` `a480` 71/71 with the slow rows of its test modules; suite `5605` passes at the head; the head's own-base tier `64c5` still running; no Lean, no lock.
+- The closing round is not written: the follow-up is in Flock's prover (Rust), the driver and two Python mirrors, with no lock record expected to move [guess].
