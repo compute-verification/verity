@@ -46,10 +46,6 @@ HF_CONFIG_DIR = Path(__file__).with_name("hf_configs")
 #: with a structure the table does not describe, refuses fail-closed in `generic.structural_refusal` -- not a silently mis-fitted profile.
 
 
-def module_name(role: str) -> str:
-    return f"{MODULE_PREFIX}{role}"
-
-
 def role_of_module(name: str) -> str | None:
     """`dense_<ROLE>` -> ROLE (the suffix is a checkpoint role: upper-case letters / digits / underscores), else None."""
     short = name.rsplit(".", 1)[-1]
