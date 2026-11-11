@@ -38,6 +38,8 @@
     "NvLogf_v1": "verity.ml.definitions.registry.topp_word_gates",
     "NvLogf_v2": "verity.ml.definitions.registry.topp_word_gates",
     "NvLogf_v3": "verity.ml.definitions.registry.gumbel_boolean",
+    "NvLogf_v4": "verity.ml.definitions.registry.sampling",
+    "NvLogf_v5": "verity.ml.definitions.registry.gumbel_boolean",
     "SelectBit_v1": "verity.ml.definitions.registry.topp_word_gates",
     "TemperatureLane_v1": "verity.ml.definitions.registry.sampling",
     "TemperatureScaleGivenGreedy_v1": "verity.ml.definitions.registry.sampling",
