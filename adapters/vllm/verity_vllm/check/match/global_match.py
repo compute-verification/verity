@@ -184,7 +184,10 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
         raise ValueError(f"within_step must be one of {WITHIN_STEP_CRITERIA}, got {within_step!r}")
     log_path = log_path or os.path.join(oracle_dir, "capture", "log.jsonl.gz")
     tokens_path = tokens_path or os.path.join(oracle_dir, "capture", "tokens.json")
-    tokens = json.load(open(tokens_path)) if os.path.exists(tokens_path) else None
+    tokens = None
+    if os.path.exists(tokens_path):
+        with open(tokens_path) as f:
+            tokens = json.load(f)
     rec = read_record(log_path)
     mark("read_record")
     res = {"schema": GM_SCHEMA, "comparator": COMPARATOR, "rules_version": RULES_VERSION,
@@ -363,13 +366,13 @@ class Options:
     gprog: str | None = option("--gprog", default=None, help="the Build's workload_program.json (GP-01) -> converted with from_gprog")
     workload: str | None = option("--workload", type=workload_arg, default=None, help="workload manifest (for the mock global Program)")
     component: list[str] = option("--component", action="append", default=[], help="request component dir (derive_step output); repeatable")
-    tokens_optional: bool = option("--tokens-optional", default=False, action="store_true", help="accept a record without capture/tokens.json (G6 output-association legs skipped, " "LABELLED checks[G6].tokens_json=false; mechanism/fixture runs only, never a row of record)")
+    tokens_optional: bool = option("--tokens-optional", default=False, action="store_true", help="accept a record without capture/tokens.json (G6 output-association legs skipped, LABELLED checks[G6].tokens_json=false; mechanism/fixture runs only, never a row of record)")
     no_x09: bool = option("--no-x09", default=False, action="store_true")
-    within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP, help="within-engine-step correspondence of a request's instances: dag (default of record) | " "sequence (the r14-v1 criterion); the other criterion's verdict is recorded beside it (alternate_verdict)")
+    within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP, help="within-engine-step correspondence of a request's instances: dag (default of record) | sequence (the r14-v1 criterion); the other criterion's verdict is recorded beside it (alternate_verdict)")
     no_alternate: bool = option("--no-alternate", default=False, action="store_true", help="do not run/record the other criterion's verdict beside the verdict of record")
     out: str | None = option("--out", default=None)
-    decomp_out: str | None = option("--decomp-out", default=None, help="also write the X-09 batch decomposition document here (cb_a.batch_decomp's CLI " "schema, the same decompose() call whose verdict is this document's x09 block): row_pod's match_decomp.json " "without a second batch_decomp process over the same fold and components. Exit 4 when X-09 names " "missing derived shapes (batch_decomp's protocol: derive them and rerun), else GM-01's 0 / 3.")
-    derived: list[str] = option("--derived", action="append", default=[], help="derived request-wrapper dir X-09 may use beside the global Program's " "components (repeatable): the shapes row_pod derived after an exit 4")
+    decomp_out: str | None = option("--decomp-out", default=None, help="also write the X-09 batch decomposition document here (cb_a.batch_decomp's CLI schema, the same decompose() call whose verdict is this document's x09 block): row_pod's match_decomp.json without a second batch_decomp process over the same fold and components. Exit 4 when X-09 names missing derived shapes (batch_decomp's protocol: derive them and rerun), else GM-01's 0 / 3.")
+    derived: list[str] = option("--derived", action="append", default=[], help="derived request-wrapper dir X-09 may use beside the global Program's components (repeatable): the shapes row_pod derived after an exit 4")
 
 
 def main(a: Options) -> int:
@@ -380,7 +383,8 @@ def main(a: Options) -> int:
         raise UsageError("--decomp-out needs the X-09 run (drop --no-x09)")
     loaded = {X09_EXTRA_DERIVED: list(a.derived)}   # shared with check(): the fold / components decoded once + the X-09 document
     if a.global_program:
-        gp = json.load(open(a.global_program))
+        with open(a.global_program) as f:
+            gp = json.load(f)
     elif a.gprog:
         gp = from_gprog(a.gprog, a.workload)
     else:
@@ -400,16 +404,19 @@ def main(a: Options) -> int:
         res["x09"].update(derived_available=x.get("derived_available"), missing_derived=x.get("missing_derived"), extra_derived=list(a.derived),
                           pipeline={"shared": bool(a.decomp_out), "decomp_out": a.decomp_out, "derived_args": list(a.derived)})
     if a.out:
-        json.dump(res, open(a.out, "w"), indent=1, default=str)
+        with open(a.out, "w") as f:
+            json.dump(res, f, indent=1, default=str)
         gpp = os.path.splitext(a.out)[0] + "_global_program.json"
-        json.dump(gp, open(gpp, "w"), indent=1)
+        with open(gpp, "w") as f:
+            json.dump(gp, f, indent=1)
     rc_x09 = 0
     if a.decomp_out:
         x = loaded.get(X09_DOCUMENT)
         if x is None or (res.get("x09") or {}).get("verdict") == "ERROR":   # X-09 did not produce a document: no file, loud
             print(json.dumps({"decomp_out": a.decomp_out, "error": "X-09 produced no document", "x09": res.get("x09")}, default=str), file=sys.stderr)
             return 3
-        json.dump(x, open(a.decomp_out, "w"), indent=1, default=str)   # byte-for-byte what cb_a.batch_decomp's CLI writes for this run
+        with open(a.decomp_out, "w") as f:
+            json.dump(x, f, indent=1, default=str)   # byte-for-byte what cb_a.batch_decomp's CLI writes for this run
         rc_x09 = 4 if x.get("verdict") == "MISSING_DERIVED" else 0   # X-09's own PASS/FAIL is read from the document (row_pod's summary), as today
     brief = {"verdict": res["verdict"], "comparator": res["comparator"], "rules_version": res["rules_version"], "within_step": res.get("within_step_criterion"),
              "impl": res["impl"], "phases": res.get("phases"),

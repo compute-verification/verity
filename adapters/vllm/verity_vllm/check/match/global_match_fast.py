@@ -408,9 +408,9 @@ def _runs_fast(refs):
                 continue
             s, i, b = p.space, p.idx, p.base
             if out:
-                l = out[-1]
-                if l[0] == s and l[1] == i and l[3] == b:
-                    out[-1] = (s, i, l[2], b + c)
+                last = out[-1]
+                if last[0] == s and last[1] == i and last[3] == b:
+                    out[-1] = (s, i, last[2], b + c)
                     continue
             out.append((s, i, b, b + c))
         else:

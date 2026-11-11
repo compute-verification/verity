@@ -67,7 +67,9 @@ def manifest_sampling(wl: Workload | Mapping[str, Any], variant: str | None = No
         put("label", "temperature", 0.0)
     elif isinstance(v, str) and _VARIANT_RE.match(v):
         m = _VARIANT_RE.match(v)
-        put("label", "temperature", float(m["t"])); put("label", "top_p", float(m["p"])); put("label", "top_k", int(m["k"] or 0))
+        put("label", "temperature", float(m["t"]))
+        put("label", "top_p", float(m["p"]))
+        put("label", "top_k", int(m["k"] or 0))
     if variant is None:
         s = w.sampling
         explicit = {} if s is None else {"temperature": s.temperature, "top_p": s.top_p, "top_k": s.top_k}
@@ -206,7 +208,8 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     cross-checked (component digests, per-request instance counts, programmed steps).  The manifest it was built from
     (`workload_path`, else `inputs.manifest`) is read through the workload record, and one that declares no prompt for a request (a
     lengths-only plan) is refused by name."""
-    art = json.load(open(artifact_path))
+    with open(artifact_path) as f:
+        art = json.load(f)
     if not art.get("ok", True):
         raise ValueError(f"{artifact_path}: builder result not ok ({art.get('reason')}: {art.get('missing_derived')})")
     # the artifact's `workload_digest` field is a CLAIM: recompute it from the descriptor GP-01 wrote beside the
@@ -337,7 +340,8 @@ def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
         vp = os.path.join(oracle_dir, "capture", "versions.json")
         if os.path.exists(vp):
             try:
-                v = json.load(open(vp))
+                with open(vp) as f:
+                    v = json.load(f)
                 ek_ver = v.get("engine_kwargs") if isinstance(v.get("engine_kwargs"), dict) else {}
             except Exception as e:  # noqa: BLE001 -- an unreadable versions.json is not an attestation
                 unreadable["capture/versions.json"] = repr(e)[:200]

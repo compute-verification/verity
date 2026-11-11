@@ -16,7 +16,7 @@ class Projection(PX.CachedKv, C.RootView):
     """Request r's view of the oracle RootView: the subset of instances attributed to r, segmented at r's TokenSelects (a warm request's reads
     of its cached prefix: `prefix_reads.CachedKv`)."""
 
-    def __init__(self, oracle: C.RootView, label: str, inst_idx: list[int], tok_node: int, weights_node: "int | set[int] | frozenset[int]",
+    def __init__(self, oracle: C.RootView, label: str, inst_idx: list[int], tok_node: int, weights_node: int | set[int] | frozenset[int],
                  seed_node: int | None = None, peer_node: int | None = None):
         # no super().__init__: reuse the decoded oracle, never decode twice
         self.label = label

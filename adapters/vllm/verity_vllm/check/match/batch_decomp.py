@@ -96,7 +96,7 @@ def record_ops() -> Ops:   # the checker of record's operations: X-09's default,
 
 
 def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = None, within_step: str = DEFAULT_WITHIN_STEP,
-              oracle: "C.RootView | None" = None, components: "dict[str, C.RootView] | None" = None, ops: Ops | None = None) -> dict:
+              oracle: C.RootView | None = None, components: dict[str, C.RootView] | None = None, ops: Ops | None = None) -> dict:
     if within_step not in WITHIN_STEP_CRITERIA:
         raise ValueError(f"within_step must be one of {WITHIN_STEP_CRITERIA}, got {within_step!r}")
     ops = ops or record_ops()
@@ -431,7 +431,8 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             run_prof["max_rss_error"] = repr(e)[:200]
         out = settings.get(PROFILE_ENV)
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
-        json.dump(run_prof, open(out, "w"), indent=1, default=str)
+        with open(out, "w") as f:
+            json.dump(run_prof, f, indent=1, default=str)
     return res
 
 
@@ -450,7 +451,8 @@ def main(a: Options) -> int:
     from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
     _gc_tune()
     res = decompose(a.oracle, a.derived, within_step=a.within_step)
-    json.dump(res, open(a.out, "w"), indent=1, default=str)
+    with open(a.out, "w") as f:
+        json.dump(res, f, indent=1, default=str)
     brief = {"verdict": res["verdict"], "within_step": res["within_step_criterion"], "reasons": res["reasons"],
              "requests": [{k: e.get(k) for k in ("request_id", "LP", "T", "n_instances", "steps", "canonical_equal", "sequence_equal", "dag_multiset_equal", "criterion", "chunked_steps")}
                                                                                  for e in res["requests"]],

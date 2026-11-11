@@ -58,7 +58,8 @@ def load_layout(P, d: str) -> None:
     p = os.path.join(d, PREFIX_FILE)
     if not os.path.exists(p):
         return
-    lay = json.load(open(p))
+    with open(p) as f:
+        lay = json.load(f)
     k, C, rl, names = int(lay["input"]), int(lay["C"]), int(lay["row_leaves"]), list(lay["layers"])
     nums = [layer_number(n) for n in names]
     if None in nums:

@@ -315,8 +315,8 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
         ent["global_address"] = ga
         n_addressed = addressed_instances(A)
         if ga.get("n_instances") is not None and int(ga["n_instances"]) != n_addressed:
-            fails.append((IDENTITY_MAP, f"{rid}: address map declares {ga['n_instances']} instances for the request, the component has {n_addressed} "
-                                f"({len(A.inst)} compared + {n_addressed - len(A.inst)} bound splits constants)"))
+            fails.append((IDENTITY_MAP, (f"{rid}: address map declares {ga['n_instances']} instances for the request, the component has {n_addressed} "
+                                         f"({len(A.inst)} compared + {n_addressed - len(A.inst)} bound splits constants)")))
     n_exec = len(P.steps)
     if n_exec > len(A.steps):
         fails.append((SUBCIRCUITS, f"{rid}: executed {n_exec} local steps but the bounded component has {len(A.steps)} (output interface exceeded)"))
@@ -381,8 +381,8 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
                               "sequence_also_equal": not bad_seq}
         if bad:
             ent["first_divergence"] = bad[0]
-            fails.append((SUBCIRCUITS, f"{rid}: {len(bad)} of {n_exec} executed steps not DAG-equal to the component (first: local step {bad[0]['step']}, "
-                                f"{bad[0]['unmatched_fold']} fold / {bad[0]['unmatched_component']} component instances unmatched)"))
+            fails.append((SUBCIRCUITS, (f"{rid}: {len(bad)} of {n_exec} executed steps not DAG-equal to the component (first: local step {bad[0]['step']}, "
+                                        f"{bad[0]['unmatched_fold']} fold / {bad[0]['unmatched_component']} component instances unmatched)")))
         if fast:
             # G8's per-step Merkle matching of every step G8 may name (its address differs from the emission position
             # anywhere), computed HERE with this process's hash ids -- the leg hands back the matching (facts), never hash dicts:

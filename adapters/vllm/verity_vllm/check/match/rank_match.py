@@ -168,7 +168,7 @@ def _recorded_as_folded(x: dict) -> tuple[str, list[int]]:
 
 
 def load_recorder(path: str | Path) -> list[dict]:
-    return [json.loads(l) for l in Path(path).read_text().splitlines() if l.strip()]
+    return [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
 
 
 class _Check:
