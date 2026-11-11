@@ -4,13 +4,17 @@
 # the label, the tree's commit and both switches as the tree states them. An accept from this tree is evidence about
 # the stops, never a result. The rehearsal's own flags pass through (SMALL_ARGS, SMALL_FIRST, SMALL_SECOND,
 # SMALL_INLINE); exit: the rehearsal's. STOPS_SCRIPT names another script to run under the label (the toy's
-# benchmarks/two_stage/audit.sh, whose round 1 commits its replay block's return).
+# benchmarks/two_stage/audit.sh, whose round 1 commits its replay block's return). STOPS_FIREWALL=1 puts every
+# session of `second` behind the ZK server (--firewall, the flock-firewall the rehearsal builds).
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/two_stage_stops.sh
 set -uo pipefail
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
 LABEL="the form's switch on, ahead of its proof; not main's verifier"
 SCRIPT=${STOPS_SCRIPT:-benchmarks/one_stage/two_stage_small.sh}
+if [ -n "${STOPS_FIREWALL:-}" ]; then
+  export SMALL_SECOND="${SMALL_SECOND:-} --firewall $REPO/verity/protocols/flock/verifier/.lake/build/bin/flock-firewall"
+fi
 {
   echo "LABEL: $LABEL"
   echo "commit: $(git rev-parse HEAD)"
