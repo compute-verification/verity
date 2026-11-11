@@ -1011,8 +1011,8 @@ def _rewrite_tree(root: Path, dest: str) -> list[str]:
 # --- snapshot and verify -----------------------------------------------------------------------------------------------
 
 def _digest(fn) -> str:
-    from verity.ml.circuits.codec import canonical_json, definition_entry
-    from verity.ml.circuits.defs import FunctionDefinition
+    from verity.circuits.codec import canonical_json, definition_entry
+    from verity.circuits.defs import FunctionDefinition
     if not isinstance(fn, FunctionDefinition):
         return f"not a definition: {type(fn).__name__}"
     try:
@@ -1029,7 +1029,7 @@ def _import_tree(name: str) -> None:
 
 def snapshot() -> dict:
     from circuit_check import targets as T
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     suite = T.suite()
     _import_tree(QUARANTINE_MODULE)
     if importlib.util.find_spec(PACKAGE) is not None:
