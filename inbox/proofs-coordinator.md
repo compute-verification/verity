@@ -59850,3 +59850,36 @@ For the table: no change.
 **Left:** `87bf`, then #8789's body and the ready line (no mark). Then the candidate-shaped runs' verdicts; the quiet-node allocator rerun, launched when `7918` has ended; and, after #9005 lands, the small PR for its six sites of the executable's old name (your 17:17Z section).
 
 For the table: #8789 at `6a3d3ea5da06`: locks regenerated, only `reads` moved (2 entries in each of 2 locks, 1 definition), 0 of 1,566 guarantee records; records `pass` at the head (`r20261111-171831-8349`, nothing reused); quick tier 95 of 96, verity-vllm running; unmarked.
+
+## LAND3, Wed 11 Nov 17:55Z: #8914, #8934 and #8940 each merge `main` `cc6ee7446278` with no conflict and are pushed; three records runs with `--update` and three quick tiers are out, none marked yet
+
+Agent `bc-48857068-bd7d-55e4-9ddc-9aac24da8ec6`. Tags: [run] a command I ran now, [read] a file I read now, [relayed], [guess]. Note: `note:proofs/20261111T1753Z-report-land3`.
+
+**The merges** [run: `git merge origin/main` in a worktree of each branch, merge commits, pushed without force]:
+
+| PR | branch | head before | head now | merge |
+|---|---|---|---|---|
+| #8914 | `cursor/proofs-max-coins-5b1e` | `3f10472f1963` | `fc55213569b04320e3cb086945d5f14b174028ad` | no conflict; `security/lean-audit.json` and `security/Properties/lean-audit.json` merged by the lock's driver, which printed no warning |
+| #8934 | `cursor/proofs-stage-rounds-e4b7` | `70f018e31257` | `6e21be62c56b543b5947efaa5366d1158c6228c9` | no conflict; `security/lean-audit.json` merged by the driver, no warning |
+| #8940 | `cursor/proofs-spot-stage-7c3d` | `131a557ffc03` | `195bbae4efc0853786ab8892676ac12a423b0a12` | #8934's new head merged in (it holds `main`): no conflict as text; then one commit of mine, below |
+
+**#8940 has one commit that is not a merge**, `195bbae4efc0`. `main` now holds `SpotFlock/Counts.lean`, `SpotFlock/ClassCounts.lean` (#8931) and `SpotFlock/Drawn.lean`, and each reads the second stage's bytes from one round's coin, which #8940's code no longer has, so the text merge alone would not build [read: the three files on `main`; guess that it would not build, not tried]. I took the three files from `cursor/proofs-spot-stage-hwit-9e41` at `1fe91d1e9cd7`, as the author's note says to. Each is `main`'s file with one replacement, `src (r (order h x).second)` to `stageSrc (stageCoins h x r)`, and nothing else: the sha256 of `main`'s file after that `sed` equals the sha256 of the branch's file, for all three [run]. 16 lines in 3 files. No other Lean file that `main` changed since #8940's last merge (`493f49485e50`) names `SpotFlock`, but `Proofs/Flock.lean`'s import list [run: `rg`].
+
+**Runs out** (ETA of the records runs about 19:00Z [guess: the author's runs at these packages took 45 to 70 min]):
+
+| PR | command | run | node | at head |
+|---|---|---|---|---|
+| #8914 | `lean_changed.py --records verity/protocols/spot/verifier/lean --update` | `r20261111-174639-ebdc` | cpu-7 | `fc55213569b0` |
+| #8934 | `lean_changed.py --records security --update` | `r20261111-174915-312c` | cpu-7 | `6e21be62c56b` |
+| #8940 | `lean_changed.py --records security --update` | `r20261111-174955-4f38` | cpu-7 | `195bbae4efc0` |
+| #8914 | `suites.py --changed cc6ee7446278 --quick` | `r20261111-175124-128a` | cpu-7 | `fc55213569b0` |
+| #8934 | the same | `r20261111-175219-f9f9` | cpu-8 | `6e21be62c56b` |
+| #8940 | the same | `r20261111-175240-cc31` | cpu-8 | `195bbae4efc0` |
+
+All six were active at 17:54Z, each records run in a Lean `build` slot of its own [run: `research status`].
+
+**One thing I did that departs from the lean-proofs skill, for you to overrule.** `--on auto` placed #8934's first records run on cpu-2 (`r20261111-174719-3820`), where your brief forbids a Lean build. I cancelled it at 0 min, before any build [run: `research cancel`; it printed "ran 0 min"]. #8940's launch went to cpu-2 as well and the launcher refused it before it ran (the tree shipped there had no `.git` to clone) [run]. I relaunched both with the node named: `--on vy-nebius-cpu-7 --pool research --as proofs --timeout 9000`, the node and pool that `--on auto` had picked for #8914 forty seconds before. The skill says never to name a node; I put your ban on cpu-2 above it. `--on auto` has no way to leave a node out [read: `tools/research/src/research/auto.py`]: cpu-2's pool sat at its inode floor (953,600 free against 1,000,000), so one probe skipped it and the next took it [read: the launch lines]. The suites went by `--on auto` and landed on cpu-7 and cpu-8.
+
+**What the quick tiers out now are for.** They are at the merged heads, to learn of a red an hour early. Each head moves once more when its regenerated records are committed, so each PR's quick tier and its records run without `--update` run again at the final head, and only those count for the mark.
+
+**Next:** read each `--update` run's kept records against the head's lock, `main`'s lock and the PR body's list; commit; #8940 takes #8934's records commit by a merge; the run without `--update` and the quick tier at each final head; the body line; the mark. I stop on a PR and write you if a regenerated guarantee record differs from what its body says moves.
