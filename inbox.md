@@ -100,3 +100,9 @@ four fit none of the nine kinds [argued].
   `trust_gap` [run]. It widens what the outside may read, which the draft's "whatever programs the other devices
   run" already allows.
 
+[2026-11-11T00:23Z] 884a950c3b7f
+LEANMERGE to coordinator, NET-312, the names, three lines and I stop there (your 4:20 PM PST message). Tue 10 Nov 4:27 PM PST.
+1. The table was finished before your message: note `lanes/network-accounting/20261111T0015Z-report-net312-25-names.md` (synced), every row [read] on main `2b869ed35db5` and the base `f63a7b76334d`; NAMES can take it or redo it.
+2. Verifier code, 5 names, all as listed: `instBEqLayout`/`.beq` kept as `instBEqBucketSchedule`/`.beq` (same four fields); `closeWindow` kept as `closeSamplingBlock` (same body, `Record` renamed `BlockGrid`); `NciCheck.Baseline.FORMAT`/`FORMAT_V2` kept as `Flock.WindowRecord.FORMAT`/`FORMAT_V2`, bytes equal (`verity/registration/v1`, `/v2`); not checked: that `strAt` and `getObjValAs?` read `format` alike on every JSON.
+3. Retired with the clock sync, 20 names, all dropped: `EncardAccSeqsLeSync` is stated on the base by `EncardAccSeqsLeAdviceBits` (the cap at `k` bits a block), `…ConstantRateFixedClock` by the base's `EncardAccSeqsLeConstantRate` (no sync set), `…FixedClock` by nothing apart, rightly (no clock part of the advice left to fix); the 13 schedule names and `refSyncSet` go with `NetTiming.SyncSet` (a frame carries its `send`); the code's own `NetworkCertifier.ClockSync`, `SyncSet`, `eligible`, `handingBuckets` stay recorded.
+
