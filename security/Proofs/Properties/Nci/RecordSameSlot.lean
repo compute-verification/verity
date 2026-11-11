@@ -617,17 +617,16 @@ theorem digitsOf_radix (w : Wire) : ∀ d ∈ digitsOf w, 1 ≤ d.r := by
 
 /-! ## The record check's decision -/
 
-set_option linter.unusedVariables false in
 /-- **`sameSlot` is sound**: where it holds of a wire, every row the wire covers is read from a writer of the
 reader's slot: for a row index below the wire's row count, the slot of its reader unit by the reader's grids `gr`
 is the slot of its writer by the writer's grids `gw`, where both have one. The wire's steps are as many as its
-radices, each radix is at least 1, and its cuts are 1 or its last radix. The proof does not read `h0`: with one
-slot both slots are 0, and with more the search has shown every writer in a grid of `gw`. -/
+radices, each radix is at least 1, and its cuts are 1 or its last radix. It asks nothing of the writer's position:
+with one slot both slots are 0, and with more the search has shown every writer in a grid of `gw`. -/
 theorem sameSlot_sound (S : ℕ) (gr gw : List Grid) (w : Spot.Wires.Wire) (hr : OneGrid gr) (hw : OneGrid gw)
     (hlen : w.step.length = w.radix.length) (hrad : ∀ r ∈ w.radix, 1 ≤ r) (hcuts : 1 ≤ w.cuts)
     (hlast : w.cuts = 1 ∨ w.radix.getLast? = some w.cuts)
     (h : sameSlot S gr gw w = true) (i : ℕ) (hi : i < w.units) (s s' : ℕ)
-    (hs : slotOf S gr (w.readerAt i).1 = some s) (h0 : 0 ≤ w.writerAt i)
+    (hs : slotOf S gr (w.readerAt i).1 = some s)
     (hs' : slotOf S gw (w.writerAt i).toNat = some s') : s = s' := by
   unfold sameSlot at h
   simp only [Bool.or_eq_true] at h
