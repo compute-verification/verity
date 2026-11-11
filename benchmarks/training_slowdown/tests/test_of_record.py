@@ -1,5 +1,6 @@
 import hashlib
 import json
+import math
 
 import pytest
 from synthetic import SHAPE, tiny_registry, write_config
@@ -148,6 +149,83 @@ def test_the_unfused_adamw_is_expected_for_cudas_fused_kernel_over_the_same_para
                         (unfused(params), (*fused[:5], 7 * 4 * D))):
         got = of_record.compare(step(log(*BOTH, *cpu)), step(log(*BOTH, record)), SHAPE)
         assert got["expected"] == [] and any("_fused_adamw_" in d for d in got["differences"])
+
+
+def losses(n: int) -> tuple[tuple, tuple]:
+    """The loss's products `n` times a step: as a program arranges it that means each row, then as a route does."""
+    return ((("bwd", "grad", "div", [[1, CTX]], n, n * CTX), ("fwd", "theta", "div", [[]], n, n),
+             ("bwd", "grad", "div", [[]], n, n)),
+            (("fwd", "theta", "mul", [[]], n, n), ("bwd", "grad", "mul", [[]], n, n)))
+
+
+def test_the_routes_loss_is_expected_for_a_programs_mean_of_each_row_where_no_row_is_dropped():
+    program, route = losses(3)
+
+    def compared(cpu=route, record=program, args=("--batch", "96")):
+        return of_record.compare(step(log(*BOTH, *cpu)), step(log(*BOTH, *record)), SHAPE, args=args)
+
+    got = compared()
+    assert got["differences"] == []
+    assert [(e["rule"], e["record_macs"], e["config_macs"]) for e in got["expected"]] == [("loss", 3 * CTX + 6, 6)]
+    assert "3 times a step" in got["expected"][0]["what"] and "state no --trunc" in got["expected"][0]["what"]
+    # no truncation stated as 0 is none; a record that keeps no arguments is not checked, and the output says so
+    assert [e["rule"] for e in compared(args=("--trunc", "0.0"))["expected"]] == ["loss"]
+    assert "keeps no arguments of its program, so that was not checked" in compared(args=())["expected"][0]["what"]
+    # a run that drops rows: its loss is another one
+    for args in (("--trunc", "0.1"), ("--batch", "96", "--trunc=0.1"), ("--trunc",)):
+        got = compared(args=args)
+        assert got["expected"] == [] and len(got["differences"]) == 5
+    # another count on one side, the route's product in the record too, a line missing: none is the exact case
+    for cpu, record in ((losses(2)[1], program), (route, (*program, route[0])), (route, program[:2]),
+                        (route[:1], program), ((*route, program[2]), program)):
+        got = compared(cpu, record)
+        assert got["expected"] == [] and got["differences"]
+
+
+def averaged(tensors: list, times: int = 1) -> tuple:
+    """Route `ema`'s average: a `lerp_` of each of `tensors` with one of its shape, `times` each."""
+    return tuple(("other", "param", "lerp_", [t, t], times * tensors.count(t), times * tensors.count(t) * math.prod(t))
+                 for t in sorted({tuple(t) for t in tensors}) for t in [list(t)])
+
+
+def test_the_routes_average_of_its_trained_tensors_is_expected_for_a_programs_of_every_tensor():
+    trained, frozen = [[D], [D], [D, D]], [[259, D]]
+    macs = 2 * D + D * D
+    program = ("other", "param", "_foreach_lerp_", sorted((trained + frozen) * 2), 1, macs + 259 * D)
+    states = ("--batch", "64", "--ema-frac", "0.1")
+
+    def compared(cpu, record, args=states):
+        return of_record.compare(step(log(*BOTH, *cpu)), step(log(*BOTH, record)), SHAPE, args=args)
+
+    got = compared(averaged(trained), program)
+    assert got["differences"] == []
+    assert [(e["rule"], e["record_macs"], e["config_macs"]) for e in got["expected"]] == [
+        ("average", macs + 259 * D, macs)]
+    what = got["expected"][0]["what"]
+    assert "3 of them" in what and f"1 more that the route does not train ({259 * D:,} MACs a step)" in what
+    # a route that trains every tensor averages the program's own
+    got = compared(averaged(trained + frozen), program)
+    assert got["differences"] == [] and got["expected"][0]["record_macs"] == got["expected"][0]["config_macs"]
+    assert got["expected"][0]["what"].endswith("the same 4")
+    # not its exact case: a program that states no average, or none that is kept; a tensor the program's op lacks; a
+    # `lerp_` twice a tensor; another product of an unfused AdamW step on the config's side; the op twice a step, or
+    # priced otherwise
+    for cpu, record, args in (
+            (averaged(trained), program, ()), (averaged(trained), program, ("--ema-frac", "0.0")),
+            (averaged([*trained, [2 * D]]), program, states), (averaged(trained, 2), program, states),
+            ((*averaged(trained), ("other", "param", "addcmul_", [[D]] * 3, 2, 2 * D)), program, states),
+            (averaged(trained), (*program[:4], 2, 2 * program[5]), states),
+            (averaged(trained), (*program[:5], program[5] + 1), states)):
+        got = compared(cpu, record, args)
+        assert got["expected"] == [] and any("_foreach_lerp_" in d for d in got["differences"])
+    # an unfused AdamW's own `lerp_` is `adamw`'s, which runs first: a route that keeps no average has none left, and
+    # the program's average is then the record's line alone
+    fused = ("other", "param", "_fused_adamw_", [[D]] * 8 + [[]] * 2, 1, 8 * 2 * D)
+    got = of_record.compare(step(log(*BOTH, *unfused([[D], [D]]))), step(log(*BOTH, fused, program)), SHAPE,
+                            args=states)
+    assert [e["rule"] for e in got["expected"]] == ["adamw"]
+    assert got["differences"] == [
+        "log, the record's step only: other/param _foreach_lerp_ [[16] x4, [16,16] x2, [259,16] x2] x1, 4,432 MACs"]
 
 
 def test_32_bits_for_the_records_16_is_expected_and_any_other_use_differs():

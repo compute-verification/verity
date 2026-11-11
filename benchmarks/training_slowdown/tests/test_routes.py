@@ -126,9 +126,10 @@ class Kernel(TorchDispatchMode):
         return func(*args, **(kwargs or {}))
 
 
-def test_fused_steps_adamw_in_torchs_kernel_once_a_group_to_the_same_weights():
+def test_fused_steps_adamw_in_torchs_kernel_once_a_kind_to_the_same_weights():
     """`fused`: AdamW steps in torch's fused kernel, called once a group over the group's tensors, where the default
-    never calls it. The weights agree to rounding. An optimizer that is no AdamW has no such kernel."""
+    never calls it; and its groups are one a kind of tensor, so two kinds at one rate are two calls, where without
+    the dial they are one group. The weights agree to rounding. An optimizer that is no AdamW has no such kernel."""
     rows = torch.randint(0, SHAPE["vocab"], (2, 9), generator=torch.Generator().manual_seed(1))
 
     def stepped(**over):
@@ -141,18 +142,23 @@ def test_fused_steps_adamw_in_torchs_kernel_once_a_group_to_the_same_weights():
         return kernel.calls, model.state_dict(), optimizers[-1]
 
     embed, gain = (SHAPE["vocab"], SHAPE["d_model"]), (SHAPE["d_model"],)
+    def rated(optimizer) -> list:
+        return [(g["lr"], g["initial_lr"], len(g["params"])) for g in optimizer.param_groups]
+
     calls, plain, adamw = stepped()
     assert calls == [] and adamw.defaults["fused"] is None, "a false dial states nothing, so torch's default stands"
+    assert rated(adamw) == [(0.005, 0.01, 4)], "without the dial a group is a rate: the embedding with the gains"
     calls, fused, adamw = stepped(fused=True)
-    assert adamw.defaults["fused"] is True and calls == [[embed, gain, gain, gain]] * 2
+    assert adamw.defaults["fused"] is True and calls == [[embed], [gain, gain, gain]] * 2
+    assert rated(adamw) == [(0.005, 0.01, 1), (0.005, 0.01, 3)]
     torch.manual_seed(0)
     start = LM.of(SHAPE).state_dict()
     for k, v in fused.items():
         assert not torch.equal(v, start[k]) and torch.allclose(v, plain[k], rtol=0, atol=1e-6), k
-    assert stepped(fused=True, embed_lr=0.003)[0] == [[embed], [gain, gain, gain]] * 2, "the kernel once a group"
+    assert stepped(fused=True, embed_lr=0.003)[0] == [[embed], [gain, gain, gain]] * 2
     assert stepped(fused=True, trainable="blocks.*,norm")[0] == [[gain, gain, gain]] * 2
     whole, _, adamw = stepped(fused=True, opt="adamw")
-    assert adamw.defaults["fused"] is True and [len(call) for call in whole] == [len(start)] * 2
+    assert adamw.defaults["fused"] is True and [len(call) for call in whole] == [1, len(GAINS), len(BLOCK)] * 2
     with pytest.raises(ValueError, match="fused is AdamW's kernel, and opt 'sgd' steps no AdamW"):
         subset.plan(subset.DIALS | {"opt": "sgd", "fused": True})
 
