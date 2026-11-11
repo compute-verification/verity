@@ -393,7 +393,7 @@ def search(T: Table, *, lines_bases: int = 200, small_coeff: int = 1, max_rows: 
       and LLL-short rows of the carries' covariance (and of the carries' with the quadratic monomials', ``row+q``);
     * ``beam``: k rows from the pool of the best single rows, extended greedily (`beam` states kept).
     """
-    F, L = T.F, T.F.L
+    L = T.F.L
     mono, _names = monomials(T.digits)
     D = mono.shape[1]
     zero_q = [0] * D
