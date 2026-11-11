@@ -440,7 +440,7 @@ def test_the_registries_and_the_loaded_modules_reads_beyond_reads_count_another_
     rep = _report(("A", []), undeclared={B_ROOTS: mine, GONE: {"probes": ["elsewhere"]}})
     res, _ = _binding_run(tmp_path, monkeypatch, 0, rep)
     assert res["status"] == "error" and res["detail"]["unrecorded"] == ["A"]
-    assert res["undeclared_reads"] == ["infra/ops/verity_vllm", "adapters/vllm/numpy.py", "verity/ml/reg.py"]
+    assert res["undeclared_reads"] == ["adapters/vllm/numpy.py", "infra/ops/verity_vllm", "verity/ml/reg.py"]
     res, _ = _binding_run(tmp_path, monkeypatch, 0, _report(("A", []), undeclared={GONE: {"probes": ["elsewhere"]}}))
     assert (res["status"], res["undeclared_reads"]) == ("pass", []), "another binding's reads are its own task's"
 
