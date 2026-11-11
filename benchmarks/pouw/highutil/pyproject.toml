@@ -7,14 +7,14 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # v31.py's commitments and the coins' derivation (verity.ml), commit_gpu's reference, which v31.py imports, and the s8
-# linear's Boolean lowering (verity.ml.circuits, which reads verity.ml.kernels), the AND credit's, and the H200's clock
+# linear's Boolean lowering (verity.circuits, which reads verity.definitions.kernels), the AND credit's, and the H200's clock
 # readings (h200_step.py), terms.py's.
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/randomness",
-          "verity/ml/crypto", "verity/ml/circuits", "verity/ml/kernels", "benchmarks/pouw/commit_gpu/reference.py",
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/commitments", "verity/commitments/randomness",
+          "verity/commitments/crypto", "verity/circuits", "verity/definitions/kernels", "benchmarks/pouw/commit_gpu/reference.py",
           "benchmarks/pouw/accel_v31/v31.py", "benchmarks/pouw/accel_v31/v31lib.py",
           "benchmarks/pouw/accel_v31/h200_step.py",
-          "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
-          "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw/__init__.py", "verity/ml/protocols/pouw/circuit"]
+          "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/protocols/pouw/verifier/__init__.py",
+          "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover/__init__.py", "verity/protocols/pouw/prover/circuit"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
