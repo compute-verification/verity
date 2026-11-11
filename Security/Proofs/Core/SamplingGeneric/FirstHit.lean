@@ -31,8 +31,14 @@ of the first further tape that opens the node (`firstHit`), and it finds a pair 
 * **Under `ExpectedCR`** (`pr_off_le_of_expectedCR`): when every found pair is a collision of `H` that the finder
   outputs, and the finder (`finder`, its cost the calls of the runs it makes) meets the linear expected-time bound,
   `Pr[a run opens a node off the plurality] ≤ 2·(1 + w)·E[c]/2^256 + Pr[Miss]`.
+* **The cap's term** (`pr_miss_le`): `Pr[Miss] ≤ w/(K + 1)`, so the bound at one cap is
+  `2·(1 + w)·E[c]/2^256 + w/(K + 1)` (`pr_off_le_of_expectedCR_cap`). The cost bound doesn't depend on the cap, so
+  under the linear expected-time bound at the finder of every cap the term goes and the bound is
+  `2·(1 + w)·E[c]/2^256` (`pr_off_le_of_forall_expectedCR`).
 
-The cap's term `Pr[Miss]` is stated as the event's probability.
+`finder` takes its output `out` as a function of the whole seed and charges the runs the loop makes. The statements
+under `ExpectedCR` say what they read when `out` reads only those runs, which is all `Found` reads: the first run and
+each further tape up to the first that opens each node the first run opened.
 -/
 
 @[expose] public section
@@ -144,8 +150,10 @@ theorem card_le_sum_score [Fintype Ω] [DecidableEq V] (op : Ω → P → Option
     | none => simp [score]
     | some w =>
       by_cases hw : w = v
-      · simp [score, hw] <;> norm_num
-      · simp [score, hw] <;> norm_num
+      · simp [score, hw]
+        norm_num
+      · simp [score, hw]
+        norm_num
   have e : ∑ ω, (score v (op ω p) + 2 * (if op ω p = some v then (1 : ℝ) else 0)) =
       ∑ ω : Ω, ((1 : ℝ) + (if (op ω p).isSome then (1 : ℝ) else 0)) :=
     Finset.sum_congr rfl fun ω _ => hpt ω
@@ -186,7 +194,7 @@ theorem score_le [DecidableEq V] (op : Ω → P → Option V) (K : ℕ) {ω : Ω
   | none =>
     have hm : Miss op K ω ρ := Exists.intro p ⟨by simp [h], hf⟩
     have h1 : score v (none : Option V) = 1 := rfl
-    rw [if_pos hm, h1]
+    rw [ite_eq_left hm, h1]
     linarith
   | some w =>
     by_cases hw : w = v
@@ -195,7 +203,7 @@ theorem score_le [DecidableEq V] (op : Ω → P → Option V) (K : ℕ) {ω : Ω
       linarith
     · have hfound : Found op K ω ρ := Exists.intro p (Exists.intro v (Exists.intro w ⟨h, hf, fun e => hw e.symm⟩))
       have h2 : score v (some w) = 2 := by simp [score, hw]
-      rw [if_pos hfound, h2]
+      rw [ite_eq_left hfound, h2]
       linarith
 
 /-- At one first tape: an opening off the plurality, times the sequences of further tapes, is at most twice the
@@ -207,13 +215,13 @@ theorem off_mul_pow_le [Fintype Ω] [DecidableEq V] (op : Ω → P → Option V)
       ∑ ρ : Fin K → Ω,
         (2 * (if Found op K ω ρ then (1 : ℝ) else 0) + (if Miss op K ω ρ then (1 : ℝ) else 0)) := by
   by_cases hb : ∃ p, Off op vstar ω p
-  · rw [if_pos hb, one_mul]
+  · rw [ite_eq_left hb, one_mul]
     obtain ⟨p, hs, hne⟩ := hb
     obtain ⟨v, hv'⟩ := Option.isSome_iff_exists.1 hs
     have hvne : v ≠ vstar p := fun e => hne (by rw [hv', e])
     exact (pow_le_sum_score op (two_mul_openedTo_le op hv hvne) K).trans
       (Finset.sum_le_sum fun ρ _ => score_le op K hv' ρ)
-  · rw [if_neg hb, zero_mul]
+  · rw [ite_eq_right hb, zero_mul]
     exact Finset.sum_nonneg fun ρ _ =>
       add_nonneg (mul_nonneg zero_le_two (indicator_nonneg _)) (indicator_nonneg _)
 
@@ -379,10 +387,10 @@ theorem sum_cost_le [Fintype Ω] [Fintype P] (op : Ω → P → Option V) (c : �
       if (opened op p).Nonempty then Fintype.card Ω ^ K * ∑ ω, c ω else 0 := by
     intro p
     by_cases hp : (opened op p).Nonempty
-    · rw [if_pos hp]
+    · rw [ite_eq_left hp]
       exact mul_sum_nodeCost_le op c p K
     · have h0 : #(opened op p) = 0 := Finset.card_eq_zero.2 (Finset.not_nonempty_iff_eq_empty.1 hp)
-      exact le_of_eq (by rw [if_neg hp, h0, Nat.zero_mul])
+      exact le_of_eq (by rw [ite_eq_right hp, h0, Nat.zero_mul])
   calc ∑ ω : Ω, ∑ ρ : Fin K → Ω, (c ω + loopCost op c K (univ.filter fun p => (op ω p).isSome) ρ)
       ≤ ∑ ω : Ω, (Fintype.card Ω ^ K * c ω +
           ∑ p ∈ univ.filter (fun p => (op ω p).isSome), ∑ ρ : Fin K → Ω, nodeCost op c p K ρ) :=
@@ -464,6 +472,167 @@ theorem pr_off_le_of_expectedCR [Fintype Ω] [Nonempty Ω] [Fintype P] [Decidabl
         ((c s.1 + loopCost op c K (univ.filter fun p => (op s.1 p).isSome) s.2 : ℕ) : ℝ)) / 2 ^ (256 : ℝ) := hCR
   have h4 := div_le_div_of_nonneg_right (ex_cost_le op c K) (show (0 : ℝ) ≤ 2 ^ (256 : ℝ) by positivity)
   rw [mul_div_assoc]
+  linarith
+
+/-! ## The cap's term: at most one in `K + 1` for each node some tape opens -/
+
+/-- The sequences of `K` further tapes none of which opens `p` are the sequences of `K` tapes that don't open `p`. -/
+theorem sum_firstHit_isNone [Fintype Ω] (op : Ω → P → Option V) (p : P) (K : ℕ) :
+    ∑ ρ : Fin K → Ω, (if (firstHit op p K ρ).isNone then (1 : ℕ) else 0) =
+      #(univ.filter fun ω : Ω => (op ω p).isNone) ^ K := by
+  induction K with
+  | zero =>
+    have e : ∑ ρ : Fin 0 → Ω, (if (firstHit op p 0 ρ).isNone then (1 : ℕ) else 0) = ∑ _ρ : Fin 0 → Ω, 1 :=
+      Finset.sum_congr rfl fun _ _ => by simp [firstHit]
+    rw [e, sum_tapes_const_nat]
+    simp
+  | succ K ih =>
+    have h : ∀ ω : Ω,
+        ∑ σ : Fin K → Ω, (if (orHit (op ω p) (firstHit op p K σ)).isNone then (1 : ℕ) else 0) =
+          if (op ω p).isNone then #(univ.filter fun ω : Ω => (op ω p).isNone) ^ K else 0 := by
+      intro ω
+      cases op ω p with
+      | none => simpa [orHit] using ih
+      | some w => simp [orHit]
+    calc ∑ ρ : Fin (K + 1) → Ω, (if (firstHit op p (K + 1) ρ).isNone then (1 : ℕ) else 0)
+        = ∑ ω, ∑ σ : Fin K → Ω, (if (orHit (op ω p) (firstHit op p K σ)).isNone then (1 : ℕ) else 0) :=
+          sum_firstHit_succ op p K fun o : Option V => if o.isNone then (1 : ℕ) else 0
+      _ = ∑ ω, if (op ω p).isNone then #(univ.filter fun ω : Ω => (op ω p).isNone) ^ K else 0 :=
+          Finset.sum_congr rfl fun ω _ => h ω
+      _ = #(univ.filter fun ω : Ω => (op ω p).isNone) ^ (K + 1) := by
+          rw [← Finset.sum_filter, Finset.sum_const, smul_eq_mul, pow_succ']
+
+/-- A miss is a miss at some node: the first run opens it and no further tape does. -/
+theorem miss_le_sum [Fintype P] (op : Ω → P → Option V) (K : ℕ) (ω : Ω) (ρ : Fin K → Ω)
+    [Decidable (Miss op K ω ρ)] :
+    (if Miss op K ω ρ then (1 : ℕ) else 0) ≤
+      ∑ p, (if (op ω p).isSome then (1 : ℕ) else 0) * (if (firstHit op p K ρ).isNone then (1 : ℕ) else 0) := by
+  by_cases hm : Miss op K ω ρ
+  · rw [ite_eq_left hm]
+    obtain ⟨p, hs, hn⟩ := hm
+    have hp : (1 : ℕ) ≤
+        (if (op ω p).isSome then (1 : ℕ) else 0) * (if (firstHit op p K ρ).isNone then (1 : ℕ) else 0) :=
+      le_of_eq (by rw [ite_eq_left hs, ite_eq_left (Option.isNone_iff_eq_none.2 hn), Nat.mul_one])
+    exact hp.trans (Finset.single_le_sum (fun _ _ => Nat.zero_le _) (Finset.mem_univ p))
+  · rw [ite_eq_right hm]
+    exact Nat.zero_le _
+
+/-- One draw in a set of `a` and `K` draws in its complement of `b` are at most one in `K + 1` of the `K + 1` draws. -/
+theorem succ_mul_mul_pow_le (a b K : ℕ) : (K + 1) * (a * b ^ K) ≤ (a + b) ^ (K + 1) := by
+  induction K with
+  | zero => simp
+  | succ K ih =>
+    have hb : b ^ (K + 1) ≤ (a + b) ^ (K + 1) := Nat.pow_le_pow_left (Nat.le_add_left b a) (K + 1)
+    calc (K + 1 + 1) * (a * b ^ (K + 1)) = a * b ^ (K + 1) + b * ((K + 1) * (a * b ^ K)) := by ring
+      _ ≤ a * (a + b) ^ (K + 1) + b * (a + b) ^ (K + 1) :=
+        Nat.add_le_add (Nat.mul_le_mul_left _ hb) (Nat.mul_le_mul_left _ ih)
+      _ = (a + b) ^ (K + 1 + 1) := by ring
+
+/-- **The seeds on which the cap runs out**, `K + 1` times over: at most `w` times all the seeds, `w` the number of
+nodes some tape opens. -/
+theorem succ_mul_sum_miss_le [Fintype Ω] [Fintype P] (op : Ω → P → Option V) (K : ℕ)
+    [∀ (ω : Ω) (ρ : Fin K → Ω), Decidable (Miss op K ω ρ)] :
+    (K + 1) * ∑ ω : Ω, ∑ ρ : Fin K → Ω, (if Miss op K ω ρ then (1 : ℕ) else 0) ≤
+      #(univ.filter fun p : P => (opened op p).Nonempty) * Fintype.card Ω ^ (K + 1) := by
+  have h1 : ∑ ω : Ω, ∑ ρ : Fin K → Ω, (if Miss op K ω ρ then (1 : ℕ) else 0) ≤
+      ∑ p, #(opened op p) * #(univ.filter fun ω : Ω => (op ω p).isNone) ^ K :=
+    calc ∑ ω : Ω, ∑ ρ : Fin K → Ω, (if Miss op K ω ρ then (1 : ℕ) else 0)
+        ≤ ∑ ω : Ω, ∑ ρ : Fin K → Ω, ∑ p,
+            (if (op ω p).isSome then (1 : ℕ) else 0) * (if (firstHit op p K ρ).isNone then (1 : ℕ) else 0) :=
+          Finset.sum_le_sum fun ω _ => Finset.sum_le_sum fun ρ _ => miss_le_sum op K ω ρ
+      _ = ∑ ω : Ω, ∑ p, ∑ ρ : Fin K → Ω,
+            (if (op ω p).isSome then (1 : ℕ) else 0) * (if (firstHit op p K ρ).isNone then (1 : ℕ) else 0) :=
+          Finset.sum_congr rfl fun ω _ => Finset.sum_comm
+      _ = ∑ p, ∑ ω : Ω, ∑ ρ : Fin K → Ω,
+            (if (op ω p).isSome then (1 : ℕ) else 0) * (if (firstHit op p K ρ).isNone then (1 : ℕ) else 0) :=
+          Finset.sum_comm
+      _ = ∑ p, (∑ ω : Ω, if (op ω p).isSome then (1 : ℕ) else 0) *
+            ∑ ρ : Fin K → Ω, (if (firstHit op p K ρ).isNone then (1 : ℕ) else 0) :=
+          Finset.sum_congr rfl fun p _ => (Finset.sum_mul_sum _ _ _ _).symm
+      _ = ∑ p, #(opened op p) * #(univ.filter fun ω : Ω => (op ω p).isNone) ^ K :=
+          Finset.sum_congr rfl fun p _ => by rw [sum_firstHit_isNone, ← Finset.card_filter, opened]
+  have h2 : ∀ p : P, (K + 1) * (#(opened op p) * #(univ.filter fun ω : Ω => (op ω p).isNone) ^ K) ≤
+      if (opened op p).Nonempty then Fintype.card Ω ^ (K + 1) else 0 := by
+    intro p
+    by_cases hp : (opened op p).Nonempty
+    · rw [ite_eq_left hp, ← card_opened_add op p]
+      exact succ_mul_mul_pow_le _ _ K
+    · have h0 : #(opened op p) = 0 := Finset.card_eq_zero.2 (Finset.not_nonempty_iff_eq_empty.1 hp)
+      exact le_of_eq (by rw [ite_eq_right hp, h0, Nat.zero_mul, Nat.mul_zero])
+  calc (K + 1) * ∑ ω : Ω, ∑ ρ : Fin K → Ω, (if Miss op K ω ρ then (1 : ℕ) else 0)
+      ≤ (K + 1) * ∑ p, #(opened op p) * #(univ.filter fun ω : Ω => (op ω p).isNone) ^ K :=
+        Nat.mul_le_mul_left _ h1
+    _ = ∑ p, (K + 1) * (#(opened op p) * #(univ.filter fun ω : Ω => (op ω p).isNone) ^ K) :=
+        Finset.mul_sum _ _ _
+    _ ≤ ∑ p, (if (opened op p).Nonempty then Fintype.card Ω ^ (K + 1) else 0) :=
+        Finset.sum_le_sum fun p _ => h2 p
+    _ = #(univ.filter fun p : P => (opened op p).Nonempty) * Fintype.card Ω ^ (K + 1) := by
+        rw [← Finset.sum_filter, Finset.sum_const, smul_eq_mul]
+
+/-- **The cap's term.** The finder's cap runs out with probability at most `w/(K + 1)`, `w` the number of nodes some
+tape opens: a node a run opens with probability `q` is opened by the first run and by none of the `K` further ones
+with probability `q·(1 − q)^K`, at most one in `K + 1`. -/
+theorem pr_miss_le [Fintype Ω] [Nonempty Ω] [Fintype P] (op : Ω → P → Option V) (K : ℕ) :
+    Pr (fun s : Ω × (Fin K → Ω) => Miss op K s.1 s.2) ≤
+      (#(univ.filter fun p : P => (opened op p).Nonempty) : ℝ) / ((K : ℝ) + 1) := by
+  classical
+  have hM : (0 : ℝ) < Fintype.card Ω := by exact_mod_cast Fintype.card_pos
+  have hK : (0 : ℝ) < (K : ℝ) + 1 := by positivity
+  have hcard : (Fintype.card (Ω × (Fin K → Ω)) : ℝ) = (Fintype.card Ω : ℝ) ^ (K + 1) := by
+    rw [Fintype.card_prod, Fintype.card_pi_const, Nat.cast_mul, Nat.cast_pow, pow_succ']
+  have eZ : Pr (fun s : Ω × (Fin K → Ω) => Miss op K s.1 s.2) =
+      (∑ ω, ∑ ρ : Fin K → Ω, if Miss op K ω ρ then (1 : ℝ) else 0) / (Fintype.card Ω : ℝ) ^ (K + 1) := by
+    rw [Pr_eq_sum (fun s : Ω × (Fin K → Ω) => Miss op K s.1 s.2), hcard]
+    exact congrArg (fun t : ℝ => t / (Fintype.card Ω : ℝ) ^ (K + 1))
+      (Fintype.sum_prod_type' fun (ω : Ω) (ρ : Fin K → Ω) => if Miss op K ω ρ then (1 : ℝ) else 0)
+  have hN := succ_mul_sum_miss_le op K
+  have hR : ((K : ℝ) + 1) * ∑ ω : Ω, ∑ ρ : Fin K → Ω, (if Miss op K ω ρ then (1 : ℝ) else 0) ≤
+      (#(univ.filter fun p : P => (opened op p).Nonempty) : ℝ) * (Fintype.card Ω : ℝ) ^ (K + 1) := by
+    exact_mod_cast hN
+  rw [eZ, div_le_div_iff₀ (pow_pos hM (K + 1)) hK]
+  exact (mul_comm _ _).trans_le hR
+
+/-- The nodes some tape opens are at most the nodes. -/
+theorem card_opened_nonempty_le [Fintype Ω] [Fintype P] (op : Ω → P → Option V) :
+    #(univ.filter fun p : P => (opened op p).Nonempty) ≤ Fintype.card P :=
+  Finset.card_le_univ _
+
+/-- **The off-plurality mass under `ExpectedCR`, with the cap's term bounded.** As `pr_off_le_of_expectedCR`, with
+`w/(K + 1)` for the probability that the cap runs out. -/
+theorem pr_off_le_of_expectedCR_cap [Fintype Ω] [Nonempty Ω] [Fintype P] [DecidableEq V] (H : Msg → Msg)
+    (op : Ω → P → Option V) {vstar : P → V} (hv : IsPlurality op vstar) (c : Ω → ℕ) (K : ℕ)
+    (out : Ω × (Fin K → Ω) → Option (Msg × Msg))
+    (hout : ∀ s : Ω × (Fin K → Ω), Found op K s.1 s.2 → ∃ u v, out s = some (u, v) ∧ Collision H u v)
+    (hCR : ExpectedCR H (finder op c K out)) :
+    Pr (fun ω => ∃ p, Off op vstar ω p) ≤
+      2 * ((1 + (#(univ.filter fun p : P => (opened op p).Nonempty) : ℝ)) * Ex (fun ω : Ω => (c ω : ℝ))) /
+          2 ^ (256 : ℝ) +
+        (#(univ.filter fun p : P => (opened op p).Nonempty) : ℝ) / ((K : ℝ) + 1) := by
+  have h1 := pr_off_le_of_expectedCR H op hv c K out hout hCR
+  have h2 := pr_miss_le op K
+  linarith
+
+/-- **The off-plurality mass under `ExpectedCR` at every cap.** The cost bound `(1 + w)·E[c]` holds at every cap `K`
+and the cap's term `w/(K + 1)` vanishes as `K` grows, so when the finder at every cap outputs each pair it finds as a
+collision of `H` and meets the linear expected-time bound, a uniform run opens some node off the plurality table with
+probability at most `2·(1 + w)·E[c]/2^256`. -/
+theorem pr_off_le_of_forall_expectedCR [Fintype Ω] [Nonempty Ω] [Fintype P] [DecidableEq V] (H : Msg → Msg)
+    (op : Ω → P → Option V) {vstar : P → V} (hv : IsPlurality op vstar) (c : Ω → ℕ)
+    (out : (K : ℕ) → Ω × (Fin K → Ω) → Option (Msg × Msg))
+    (hout : ∀ (K : ℕ) (s : Ω × (Fin K → Ω)),
+      Found op K s.1 s.2 → ∃ u v, out K s = some (u, v) ∧ Collision H u v)
+    (hCR : ∀ K : ℕ, ExpectedCR H (finder op c K (out K))) :
+    Pr (fun ω => ∃ p, Off op vstar ω p) ≤
+      2 * ((1 + (#(univ.filter fun p : P => (opened op p).Nonempty) : ℝ)) * Ex (fun ω : Ω => (c ω : ℝ))) /
+        2 ^ (256 : ℝ) := by
+  refine le_of_forall_pos_le_add fun ε hε => ?_
+  obtain ⟨K, hK⟩ := exists_nat_gt ((#(univ.filter fun p : P => (opened op p).Nonempty) : ℝ) / ε)
+  have hK1 : (0 : ℝ) < (K : ℝ) + 1 := by positivity
+  have h1 := pr_off_le_of_expectedCR_cap H op hv c K (out K) (hout K) (hCR K)
+  have h2 : (#(univ.filter fun p : P => (opened op p).Nonempty) : ℝ) / ((K : ℝ) + 1) ≤ ε := by
+    rw [div_lt_iff₀ hε] at hK
+    rw [div_le_iff₀ hK1]
+    nlinarith
   linarith
 
 end Verity.FirstHit
