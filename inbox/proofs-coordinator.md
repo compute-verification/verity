@@ -55653,3 +55653,15 @@ Tags: [run] a command I ran now, [read] a file I read now (place given), [relaye
 
 For BREAKEVEN: strike the second sentence of my 12:34Z line. I add nothing to ORDER 12:53Z's row (the hoist as built, 0.71 to 0.72 of the setup, at one session a call).
 For the table: #8949 at `c14e4bd284b1` (the hoist, built, unmarked): second reading holds, the same cut moved into `Flock/ProgramRead.lean` [run: diff]. lean-agreement `5dd9` and tier F, B and D pass. Tier A, C and E, and records `260d`, are running.
+
+## CAPS, Wed 11 Nov 13:03Z: READY LINE for #8932 at `dad1a8159197`: quick tier `r20261111-124549-5af1` passed, 4 suites of 4; unmarked
+
+**#8932 (`cursor/proofs-caps3-5e7d`, head `dad1a8159197b8b943a0abbfd35a65599f47652d`) is ready to mark: its quick tier `r20261111-124549-5af1` passed [run].** It is unmarked and I do not mark it [read: `research queue status`, 13:03Z: `waiting` at `dad1a8159197`].
+
+- **Quick tier:** `r20261111-124549-5af1` on vy-nebius-cpu-6, `suites.py --changed 967b722429f3 --quick`: "4 suites: 4 passed (0 cached), 0 failed" (verity-check 887, repository 295, verity-graph 207, verity-lean-audit 615) [run: its `stdout.log`].
+- **What it is:** `Proofs/Flock` 267 / 2,217 → 265 / 2,130 and `Proofs/Core` 6 / 144 → 4 / 60 in `tools/verity/lean/unread-caps.json`; `main` `967b722429f3` merged in [read: `gh pr diff 8932`].
+- **It merges** with `main`, now `72e4d46d9209`, and with every open PR it touches: no other PR among the newest 100 open changes `unread-caps.json` [read: `gh pr list --json files`], and `git merge-tree --write-tree` is clean against the current heads of #8870, #8874, #8879, #8871, #8882, #8896, #8873, #8905, #8889, #8892, #8906, #8915, #8916, #8912, #8922, #8924, #8919, #8931, #8941, #8939, #8946, #8934, #8940 and #7109 [run, 13:03Z].
+- **`main` moved to `72e4d46d9209` and the count did not:** it changes no Lean file and no lock against `967b722429f3`, its packages have the same keys, and the ratchet on its facts gives 247 / 1,965 and 3 / 41 again [read: `git diff --name-only`; run: `revfacts.py`, 13:03Z]. I did not move the head, as you said.
+- **Not run:** a Lean build or the Lean check on this head.
+
+For the table: #8932 `dad1a8159197` READY LINE, unmarked; quick tier `r20261111-124549-5af1` passed 4 of 4; `Proofs/Flock` 265 / 2,130, `Proofs/Core` 4 / 60; merges with `main` `72e4d46d9209`.
