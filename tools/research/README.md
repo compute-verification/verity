@@ -49,8 +49,7 @@ secrets) the environment stands in:
 | `~/.runpod/ssh/runpodctl-ssh-key` | `RUNPOD_SSH_KEY_B64` | decoded once to a mode-600 file under `$XDG_STATE_HOME/research/runpod/` (default `~/.local/state`), known_hosts beside it; public key via `ssh-keygen -y` |
 | `~/.research/store.toml` | `R2_ENDPOINT`, `R2_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` [, `AWS_SESSION_TOKEN`] | only when `$RESEARCH_STORE_CONFIG` is unset; `R2_BUCKET` must be the store's bucket (the one `tools/research/store.pod.toml` names) |
 
-No value is ever printed. `research data mint-credential` already read the
-same variables.
+No value is ever printed.
 
 On a cloud VM a long-lived shell can lose the injected secrets that a fresh
 tmux login shell still has. Every `research` command first sets each secret
@@ -211,6 +210,7 @@ reaches it. The Nebius nodes are such machines (`src/research/pods/nebius/`): `l
 needs no credentials), `teardown.sh` stops or deletes it, `n1_replacement.sh` plans n1's replacement, `check.py` is the
 bootstrap check, `prefetch.py` fills the weight cache, and the lease is `sh/lease.sh` (`LEASE_MACHINE_ID`, a stop command).
 Runs share a node's GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: a flock per GPU, `CUDA_VISIBLE_DEVICES` set).
+`--cores CPUS` pins CMD to those CPUs and holds the leases to the machine's CPU quota: the script's header says how.
 
 What runs on the Nebius nodes outside a run (infra's loops and the files they read) is listed in `src/research/pods/nebius/deploy.toml`,
 each with its repository file and owner (a Slack handle), and goes there only through `research deploy install NODE --by WHO
@@ -368,8 +368,7 @@ keeps them all (`store/evict.py`).
 
 `src/research/store/` is the evidence store; its `README.md` is the contract
 (four objects: Tool, Derivation, Attempt, Artifact; two relations: Replica,
-Label). Artifacts are immutable, typed, content-addressed manifests with an
-optional file or tree payload; the id is the sha256 of the canonical manifest.
+Label).
 Local root `~/.research/store` (or `$RESEARCH_STORE`); an optional remote in
 `~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`: `fs` directory or
 `s3`/R2 via stdlib SigV4). The sqlite catalog is disposable (`reindex`).
@@ -423,9 +422,6 @@ What `research run` does:
   errors` with one line per error class). A configured-but-unusable remote
   (credential env vars unset here) does not stop a local publish: the attempt
   is written, `preserve_error` records why nothing was pushed.
-- The r20 campaign's numbers live in the store: the frozen ledger was imported
-  once (labels on the attempt when the run is in the store, else on a
-  `ledger-row/v1` artifact; red-team verdicts as separate assertions).
 - Repo replicas: `fixtures/artifacts.json` maps `art:` ids to tracked files
   registered with `research data put --kind fixture/v1 --file PATH`; `where`
   lists the `repo` replica when the file still hashes to its id.
@@ -533,11 +529,8 @@ SYNC-REFUSED lanes/x/20260928T0700Z-report-x.md: stamp 20260928T0700Z is 18 min 
 
 Once pushed, it looks up the `art:` ids and run ids the pushed lines cite on the store's remote, which is what every reader
 resolves, and warns, never refuses, for each note citing one the remote lacks. A run counts once its attempt, or a label on it
-(`custody waived`), is there. `RESEARCH_NOTES_CITE_CHECK=0` turns it off.
-
-~~~text
-SYNC-WARN lanes/x/20260929T0600Z-report-x.md: cites r20260928-042319-9aac, which the evidence store does not have (a run is in the store once its attempt is on the remote: `research data custody <run> --publish` where its run dir is, else `research data label <run> custody waived --by <you>`)
-~~~
+(`custody waived`), is there: each `SYNC-WARN` line names the command that puts it there. `RESEARCH_NOTES_CITE_CHECK=0`
+turns it off.
 
 ### The steward off the laptop
 
