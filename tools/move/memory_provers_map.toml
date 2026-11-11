@@ -21,8 +21,8 @@
 # split, edited or deleted. The format is `layout_map.toml`'s.
 
 [roots]
-old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", p2_v1 = "benchmarks/pous/p2_v1" }
-new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", p2_v1 = "benchmarks/pous/p2_v1", p2_store = "verity/protocols/pous/prover/p2/p2_store" }
+old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", p2_store = "verity/protocols/pous/prover/p2/p2_store" }
 
 [paths]
 "benchmarks/remote_session/prover.py" = "verity/protocols/poub/prover/remote_session/prover.py"
@@ -58,6 +58,15 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 "benchmarks/pous/p2_v1/audit-negative-vectors.json" = "verity/protocols/pous/verifier/p2_v1/audit-negative-vectors.json"
 "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json" = "verity/protocols/poub/verifier/bandwidth-mem69-v2.json"
 
+# The harness imports its package by the name it has with `benchmarks/pous` on the path, `p2_v1`: each module of it that
+# moves, under that name.
+[aliases]
+"p2_v1.store" = "p2_store.store"
+"p2_v1.gpu" = "p2_store.gpu"
+"p2_v1.reference" = "verity.protocols.pous.verifier.p2_v1.reference"
+"p2_v1.wire" = "verity.protocols.pous.verifier.p2_v1.wire"
+"p2_v1.vectors" = "verity.protocols.pous.verifier.p2_v1.vectors"
+
 [retired]
 paths = []
 
@@ -89,14 +98,14 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "benchmarks.codec_tensor.reader" = "verity.protocols.poub.prover.codec_tensor.reader"
 "benchmarks.codec_tensor.sketch_receipt" = "verity.protocols.poub.prover.codec_tensor.sketch_receipt"
 "benchmarks.codec_tensor.sketching" = "verity.protocols.poub.prover.codec_tensor.sketching"
+"benchmarks.pous.p2_v1.gpu" = "p2_store.gpu"
+"benchmarks.pous.p2_v1.reference" = "verity.protocols.pous.verifier.p2_v1.reference"
+"benchmarks.pous.p2_v1.store" = "p2_store.store"
+"benchmarks.pous.p2_v1.vectors" = "verity.protocols.pous.verifier.p2_v1.vectors"
+"benchmarks.pous.p2_v1.wire" = "verity.protocols.pous.verifier.p2_v1.wire"
 "benchmarks.remote_session.device" = "verity.protocols.poub.prover.remote_session.device"
 "benchmarks.remote_session.prover" = "verity.protocols.poub.prover.remote_session.prover"
 "benchmarks.vllm_encoded.paged" = "verity.protocols.poub.prover.word_codec.paged"
 "benchmarks.word_codec.cuda_lib" = "verity.protocols.poub.prover.word_codec.cuda_lib"
 "benchmarks.word_codec.kv" = "verity.protocols.poub.prover.word_codec.kv"
 "benchmarks.word_codec.kv_bench" = "verity.protocols.poub.prover.word_codec.kv_bench"
-"p2_v1.gpu" = "p2_store.gpu"
-"p2_v1.reference" = "verity.protocols.pous.verifier.p2_v1.reference"
-"p2_v1.store" = "p2_store.store"
-"p2_v1.vectors" = "verity.protocols.pous.verifier.p2_v1.vectors"
-"p2_v1.wire" = "verity.protocols.pous.verifier.p2_v1.wire"
