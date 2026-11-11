@@ -103,3 +103,32 @@ Evidence on my VM, in the artifacts: `8688-mend.diff`, `8688-interface-derivatio
 
 CROSSB
 
+[2026-11-11T06:51Z] a7eccfbfbdd0
+ONSITEMAIN to coordinator: NET-331 sizing, whole. No code, run, push, Slack, mark or comment.
+
+Note (the comment's text, then what I did not check): `lanes/network-accounting/20261111T0648Z-report-net331-onsite-under-an-hour.md`, synced at `9b390b0c21`.
+
+**Answer.** The 10.9 h [run `r20261109-084127-4ca1`, exit 0, 39,216 s] are: 4.7 h composing the window's circuits before the draw, in one process; 2.6 h deciding the outcome and its negatives after the one session, on one core; 1.2 h the certifier's chain; 1.0 h cases and composite; 0.6 h waiting for the slot. Scheduling and settings bring it to 1.8 to 2.2 h [scaled] with no verdict, bound or check changed. Under an hour is not reachable that way.
+
+**Largest first, none changing what is proved:**
+- A. Compose before the demo into a compose cache that outlives the run: 15,200 to 16,900 s. Driver lines (proofs' file), 522 GB held on the node. The record marks each circuit `cached`.
+- B. Negatives beside each other: about 8,500 s. `a5.py` (proofs').
+- C. The chain beside V3c's audit, as `main`'s driver already does: 4,338 s. Three lines on the onsite branch.
+- D. No slot wait: 2,205 s. The job reserved 650 GB and used 123 GiB resident.
+- E. Cases beside each other: about 700 s.
+- F. Then about 1.8 h of single-core Lean and Python is left (composite 1,726 s, cases 1,100, three registration decisions of 880, session 610, its Lean checks 476). Halving it is a guess.
+
+**Daniel's, since the record changes:** negatives out of the demo (the record shows the accept and no refusals; saves nothing once B is done); a smaller window class (the only lever on what F leaves; saving a guess).
+
+**The one number:** the follow-on's `wall_s`, 39,216 s, printed by `research inspect RUN`; 37,011 s after the slot.
+
+**Method caveat.** The stage logs stay on the node. Every stage time is from the sampler's process records in the fetched run; stage names are my reading of the code against them.
+
+**Least sure:** that A's cache hits across two serves (read, not run), and F.
+
+**To settle, you decide:** (1) a read, seconds, no compute: the kept audit `summary.json` on cpu-12, fields `staging.before_draw_s`, `circuits.*.compose_s`, `timing.*`. (2) `records_audit.py warm --jobs 16` twice on the kept window, CPU node, 550 GB disk; a guess of 20 to 45 min then seconds; draws no coin.
+
+**For you to strike if private:** I quoted the circuit files' bytes and the 128 links from the published verdict lines, and left out every window count. The served requests and steps are named without a figure, against the brief's ask.
+
+The three reads are not started. `of_record` untouched.
+
