@@ -56,7 +56,8 @@ def _dump_results():
     out = os.environ.get("HARDEN_OUT")
     if out:
         os.makedirs(out, exist_ok=True)
-        json.dump(RESULTS, open(os.path.join(out, "guards_results.json"), "w"), indent=1)
+        with open(os.path.join(out, "guards_results.json"), "w") as f:
+            json.dump(RESULTS, f, indent=1)
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -72,7 +73,9 @@ def test_G4c_no_capability_or_sm_literal_outside_target_profile():
     for rel in files:
         p = os.path.join(INTEGRATION, rel)
         assert os.path.exists(p), f"{rel} moved: point G4c at the file that now holds it"
-        for i, line in enumerate(open(p).read().splitlines(), 1):
+        with open(p) as f:
+            lines = f.read().splitlines()
+        for i, line in enumerate(lines, 1):
             # applied / declared VALUES only (the hard-coded literals): not prose that names the architecture in a docstring
             if re.search(r"DeviceCapability\(major=\d", line) or '"8.9 (sm_89' in line or re.search(r'"NUM_SMS":\s*\d', line) \
                     or re.search(r"=\s*\(8,\s*9\)", line):

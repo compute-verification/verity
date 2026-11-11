@@ -157,7 +157,8 @@ def test_the_batch_lists_a_step_in_admission_order():
 
 
 def test_glm53_b8_every_request_sits_in_its_declared_batch():
-    w = json.load(open(GLM_B8))
+    with open(GLM_B8) as f:
+        w = json.load(f)
     assert LC.batch_dispatch(w)
     reqs = LC._requests(w)
     for r in reqs:
@@ -171,7 +172,8 @@ def test_glm53_b8_every_request_sits_in_its_declared_batch():
 
 
 def test_dsv4_b8_every_request_sits_in_its_declared_batch():
-    w = json.load(open(DSV4_B8))
+    with open(DSV4_B8) as f:
+        w = json.load(f)
     assert LC.batch_dispatch(w)
     reqs = LC._requests(w)
     for r in reqs:

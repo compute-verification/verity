@@ -190,7 +190,8 @@ def _dump():
     out = os.environ.get("HARDEN_OUT")
     if out:
         os.makedirs(out, exist_ok=True)
-        json.dump(RESULTS, open(os.path.join(out, "alias_results.json"), "w"), indent=1)
+        with open(os.path.join(out, "alias_results.json"), "w") as f:
+            json.dump(RESULTS, f, indent=1)
 
 
 @pytest.fixture(scope="module", autouse=True)

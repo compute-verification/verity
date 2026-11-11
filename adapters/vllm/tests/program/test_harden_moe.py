@@ -56,7 +56,8 @@ def _dump_results():
     out = os.environ.get("HARDEN_OUT")
     if out:
         os.makedirs(out, exist_ok=True)
-        json.dump(RESULTS, open(os.path.join(out, "moe_results.json"), "w"), indent=1)
+        with open(os.path.join(out, "moe_results.json"), "w") as f:
+            json.dump(RESULTS, f, indent=1)
 
 
 def _reason(rep) -> str:

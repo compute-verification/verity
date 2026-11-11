@@ -30,7 +30,7 @@ def test_the_read_takes_the_entry_at_the_index_low_bits_its_words_low_first():
     word = lambda j: (j * 0x9E37) & 0xFFFF   # noqa: E731
     for idx in [0, (1 << 27) - 1, 0xF8000005, 0x0123_4567]:
         e = idx & ((1 << 27) - 1)
-        assert r27.evaluate_lazy(lambda j: idx if j == 0 else word(j - 1)) == word(2 * e) | word(2 * e + 1) << 16
+        assert r27.evaluate_lazy(lambda j, idx=idx: idx if j == 0 else word(j - 1)) == word(2 * e) | word(2 * e + 1) << 16
     with pytest.raises(ValueError, match="do not fill rows"):
         T.table_read(4, 1)
 

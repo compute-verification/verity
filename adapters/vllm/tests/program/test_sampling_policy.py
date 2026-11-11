@@ -109,7 +109,8 @@ def test_top_k_row_is_refused_before_export(tmp_path):
     assert res["unsupported"]["reason"] == "sampler" and res["unsupported"]["phase"] == "applicability"
     assert "top_k" in res["unsupported"]["hint"] and "TopKMask" in res["unsupported"]["detail"]["missing"]
     assert "program" not in res and not os.path.exists(os.path.join(out, "artifact.json"))
-    man = json.load(open(os.path.join(out, "construction_manifest.json")))
+    with open(os.path.join(out, "construction_manifest.json")) as f:
+        man = json.load(f)
     assert man["structural_inputs"]["sampling"]["kind"] == "stochastic" and man["structural_inputs"]["sampling"]["top_k"] == 50
     assert man["ok"] is False and man["unsupported"]["reason"] == "sampler"
 
