@@ -72,6 +72,7 @@ import hashlib
 import json
 import math
 import struct
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
@@ -240,8 +241,8 @@ def k_prime(eps: Fraction, delta: Fraction, credited: int, n: int, w_max: int) -
     eps, delta = Fraction(eps), Fraction(delta)
     if not (0 < eps <= 1 and 0 < delta < 1 and _positive(n) and _positive(w_max) and _int(credited)
             and 0 < credited <= n * w_max):
-        raise ValueError(f"k_prime needs 0 < ε <= 1, 0 < δ < 1 and 0 < credited <= n·w_max, not {eps}, {delta}, "
-                         f"{credited}, {n}, {w_max}")
+        raise ValueError(f"k_prime needs 0 < ε <= 1, 0 < δ < 1 and 0 < credited <= n·w_max, not {ratio_str(eps)}, "
+                         f"{ratio_str(delta)}, {credited}, {n}, {w_max}")
     p = eps * credited / (n * w_max)
     if p == 1:
         return 1
@@ -272,7 +273,7 @@ def eps_at(k: int, delta: Fraction, credited: int, n: int, w_max: int) -> Fracti
         return k_prime(Fraction(j, one), delta, credited, n, w_max) <= k
 
     if not ok(one):
-        raise ValueError(f"K = {k} establishes no ε <= 1 at δ = {Fraction(delta)}")
+        raise ValueError(f"K = {k} establishes no ε <= 1 at δ = {ratio_str(delta)}")
     lo, hi = 0, one
     while lo + 1 < hi:
         mid = (lo + hi) // 2
@@ -283,10 +284,28 @@ def eps_at(k: int, delta: Fraction, credited: int, n: int, w_max: int) -> Fracti
     return Fraction(hi, one)
 
 
+def _decimal(n: int) -> str:
+    """A natural number's decimal digits, however many: `str` refuses more digits than the process's limit
+    (`sys.get_int_max_str_digits`), so `n` is written in pieces no longer than the least limit a process can set."""
+    if n < 10 ** sys.int_info.str_digits_check_threshold:
+        return str(n)
+    k = n.bit_length() * 3 // 20  # about half of n's digits, a bit being log10(2) = 0.301 of one
+    high, low = divmod(n, 10**k)
+    return _decimal(high) + _decimal(low).zfill(k)
+
+
+def ratio_str(q: Fraction) -> str:
+    """`str` of a Fraction at any length: `Core.Ratio.toString`'s ``n`` or ``n/d``, which `core_check.ratio` reads
+    back."""
+    q = Fraction(q)
+    n = ("-" if q < 0 else "") + _decimal(abs(q.numerator))
+    return n if q.denominator == 1 else f"{n}/{_decimal(q.denominator)}"
+
+
 def sampling(eps: Fraction, delta: Fraction, work: Work, tile_work: int, bits: int = GRID_BITS) -> dict[str, Any]:
     """The `sampling` item: ε, δ, the grid and the sampling design they fix with the level (every tile does `tile_work`)."""
     k = k_prime(eps, delta, work.credited * tile_work, work.n, tile_work)
-    return {"eps": str(Fraction(eps)), "delta": str(Fraction(delta)), "grid_bits": bits, "law": {"law": "subset", "k": k}}
+    return {"eps": ratio_str(eps), "delta": ratio_str(delta), "grid_bits": bits, "law": {"law": "subset", "k": k}}
 
 
 # ---- the fixed length -----------------------------------------------------------------------------------------------------
@@ -845,7 +864,7 @@ __all__ = ["COINS", "DEPTHS", "DRAW", "DRAW_FAMILIES", "ENTRY_SCHEMA", "EPS_BITS
            "STOP_FIXED", "T_BITS", "Work", "bucket", "draw_challenger", "draw_epoch_reason", "entry_bc", "entry_digest",
            "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime", "layout_problem", "length_item",
            "length_problem", "level", "levels", "live_challenger", "live_epoch_reason", "live_families", "mode",
-           "on_grid", "pad_node", "pass_tiles", "point", "public_inputs", "record_digest", "record_problem",
-           "round_key", "rounds_reason", "salt_epoch_reason", "sampling", "session_cap", "sessions", "side_domain",
-           "side_index", "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles",
-           "window_problem"]
+           "on_grid", "pad_node", "pass_tiles", "point", "public_inputs", "ratio_str", "record_digest",
+           "record_problem", "round_key", "rounds_reason", "salt_epoch_reason", "sampling", "session_cap", "sessions",
+           "side_domain", "side_index", "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read",
+           "tiles", "window_problem"]
