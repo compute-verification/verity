@@ -1,6 +1,7 @@
 """Each entry of the library held to a reference in plain torch: the entry's own dials, read from its config, run for
-a few steps at a small shape through its route, and the same steps written here against torch's own optimizers, or
-against the published rule where torch has none. The two end at the same weights."""
+a few steps at a small shape through its route, and the same steps written here against torch's own optimizers and
+its own average of the weights, or against the published rule where torch has none. The two end at the same output
+model."""
 import fnmatch
 import tomllib
 
@@ -8,6 +9,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 from synthetic import SHAPE as TINY
+from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
 
 from training_slowdown import config, library
 from training_slowdown.model import LM
@@ -42,12 +44,12 @@ def batches() -> list[torch.Tensor]:
 
 
 def routed(route, dials: dict) -> dict:
-    """The weights after the route's own steps."""
+    """The output model after the route's own steps."""
     torch.manual_seed(0)
     model, optimizers = route.build(SHAPE, dials)
     for t, rows in enumerate(batches()):
         route.step(model, rows, optimizers, dials, t, STEPS)
-    return model.state_dict()
+    return route.output(model, dials) if hasattr(route, "output") else model.state_dict()
 
 
 class Rule(torch.optim.Optimizer):
@@ -67,9 +69,10 @@ class Rule(torch.optim.Optimizer):
 def plain(dials: dict, optimizers) -> dict:
     """The weights after the same steps as plain torch writes them: the parameters the dials' patterns name, one
     forward and backward over the whole batch, the gradient clipped, each optimizer of `optimizers(matrices, gains)`
-    stepped at the scheduled rate."""
+    stepped at the scheduled rate. With an `ema_decay`, torch's own average of them (`AveragedModel`)."""
     torch.manual_seed(0)
     model = LM.of(SHAPE)
+    average = "ema_decay" in dials and AveragedModel(model, multi_avg_fn=get_ema_multi_avg_fn(dials["ema_decay"]))
     patterns = [p.strip() for p in dials["trainable"].split(",")]
     for n, p in model.named_parameters():
         p.requires_grad_(any(fnmatch.fnmatchcase(n, pat) for pat in patterns))
@@ -84,7 +87,39 @@ def plain(dials: dict, optimizers) -> dict:
                 g["lr"] = dials["lr"] * subset.schedule(dials, t, STEPS)
             o.step()
             o.zero_grad()
-    return model.state_dict()
+        if average:
+            average.update_parameters(model)
+    return (average.module if average else model).state_dict()
+
+
+def under(optimizers):
+    return lambda dials: plain(dials, optimizers(dials))
+
+
+def lora(dials: dict) -> dict:
+    """LoRA written the other way round: each adapted matrix is built whole, W + (alpha/rank) B A, before one forward
+    of the start's own model on it, where the route keeps W frozen and sends its input through A then B. A starts as
+    the route draws it and B at zero, both under torch's AdamW; the output is the matrices as built."""
+    torch.manual_seed(0)
+    built = config.route("lora").build(SHAPE, dials)[0].state_dict()
+    theta = {k: v for k, v in built.items() if not k.endswith((".a", ".b"))}
+    a = {f"{k[:-2]}.weight": built[k].clone().requires_grad_() for k in built if k.endswith(".a")}
+    b = {k: torch.zeros(len(theta[k]), dials["rank"], requires_grad=True) for k in a}
+    opt = torch.optim.AdamW([*a.values(), *b.values()], lr=dials["lr"], betas=(0.9, 0.95),
+                            weight_decay=dials["weight_decay"])
+
+    def merged() -> dict:
+        return theta | {k: theta[k] + dials["alpha"] / dials["rank"] * b[k] @ a[k] for k in a}
+
+    model = LM.of(SHAPE)
+    for t, rows in enumerate(batches()):
+        logits = torch.func.functional_call(model, merged(), (rows[:, :-1],))
+        F.cross_entropy(logits.flatten(0, 1), rows[:, 1:].flatten()).backward()
+        torch.nn.utils.clip_grad_norm_([*a.values(), *b.values()], dials["clip"])
+        opt.param_groups[0]["lr"] = dials["lr"] * subset.schedule(dials, t, STEPS)
+        opt.step()
+        opt.zero_grad()
+    return {k: v.detach() for k, v in merged().items()}
 
 
 def adamw(d: dict):
@@ -154,18 +189,20 @@ CLOSE = 1e-3
 CLOSE_BF16 = 0.1
 #: beside it, a weight's own float32 rounding, a few times a step: all a sign step of a small rate differs by
 EPS, ROUNDINGS = torch.finfo(torch.float32).eps, 4 * STEPS
-#: each entry's reference: the optimizers plain torch steps with at the entry's dials, and how close the route's
-#: weights come to its own
+#: each entry's reference: the output model plain torch ends at under the entry's dials, and how close the route's
+#: comes to it
 REFERENCES = {
-    "s-t20-1.1x-accumulate": (adamw, CLOSE),
-    "s-t20-1.1x-adafactor": (adafactor, CLOSE),
-    "s-t20-1.1x-adamw": (adamw, CLOSE),
-    "s-t20-1.1x-last-blocks": (adamw, CLOSE),
-    "s-t20-1.1x-lion": (lion, CLOSE),
-    "s-t20-1.1x-ref-optim": (muon, CLOSE_BF16),
-    "s-t20-1.1x-sgd": (sgd, CLOSE),
-    "s-t20-1.1x-shallow-strideshare": (muon, CLOSE_BF16),
-    "s-t20-1.1x-shampoo": (shampoo, CLOSE),
+    "s-t20-1.1x-accumulate": (under(adamw), CLOSE),
+    "s-t20-1.1x-adafactor": (under(adafactor), CLOSE),
+    "s-t20-1.1x-adamw": (under(adamw), CLOSE),
+    "s-t20-1.1x-ema": (under(adamw), CLOSE),
+    "s-t20-1.1x-last-blocks": (under(adamw), CLOSE),
+    "s-t20-1.1x-lion": (under(lion), CLOSE),
+    "s-t20-1.1x-lora": (lora, CLOSE),
+    "s-t20-1.1x-ref-optim": (under(muon), CLOSE_BF16),
+    "s-t20-1.1x-sgd": (under(sgd), CLOSE),
+    "s-t20-1.1x-shallow-strideshare": (under(muon), CLOSE_BF16),
+    "s-t20-1.1x-shampoo": (under(shampoo), CLOSE),
 }
 
 
@@ -177,8 +214,8 @@ def test_every_entry_of_the_library_has_a_reference():
 @pytest.mark.parametrize("name", sorted(REFERENCES))
 def test_an_entrys_steps_end_at_its_references_weights(name):
     route, dials = entry(name)
-    optimizers, close = REFERENCES[name]
-    got, want = routed(route, dials), plain(dials, optimizers(dials))
+    reference, close = REFERENCES[name]
+    got, want = routed(route, dials), reference(dials)
     torch.manual_seed(0)
     start = LM.of(SHAPE).state_dict()
     moved = [k for k in got if not torch.equal(got[k], start[k])]

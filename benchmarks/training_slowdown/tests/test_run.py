@@ -1,6 +1,7 @@
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -315,6 +316,30 @@ def test_the_traced_step_has_a_step_before_it_where_the_run_has_one(tmp_path, st
     tr = run.trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
     assert tr["step"] == traced
     assert (tr["circuit"]["affected_share"] > 0) == (tr["circuit"]["u1_bits"] > 0) == (steps > 1)
+
+
+def test_what_a_routes_output_computes_is_traced_and_charged_with_its_step(tmp_path):
+    """A route's `output` is no free place to compute: a product it takes of two trained weights is a row of the
+    trace, a forward product of the measured step with both operands the update's, and the step's circuit holds its
+    gates. Without it the route's `output` would be where a covert entry does its work."""
+    cfg = config.load(write_config(tmp_path / "a.toml", budget={"steps": 5, "batch": 2}),
+                      starts.registry(tiny_registry(tmp_path / "reg")))
+    route = config.route(cfg.route)
+
+    def output(model, dials):
+        b = model.blocks[0]
+        return model.state_dict() | {"blocks.0.wo.weight": b.w_gate.weight.T @ b.w_up.weight}
+
+    def trace(r):
+        tr = run.trace_step(cfg, r, *route.build(cfg.start.shape, cfg.dials), "cpu")
+        return tr, [x for x in tr["rows"] if x["phase"] == "forward" and not x["token_dims"]]
+
+    (bare, no_rows), (traced, rows) = trace(route), trace(SimpleNamespace(step=route.step, output=output))
+    d, ff = cfg.start.shape["d_model"], cfg.start.shape["d_ff"]
+    assert not no_rows and len(rows) == 1 and len(traced["rows"]) == len(bare["rows"]) + 1
+    assert (rows[0]["op"], rows[0]["count"], rows[0]["affected"]) == ("mm", 1, [True, True])
+    assert [rows[0]["dims"][x] for x in "mkn"] == [d, ff, d]
+    assert traced["circuit"]["gates"] > bare["circuit"]["gates"]
 
 
 @pytest.mark.parametrize("steps, width", [(3, 16), (5, 32)])

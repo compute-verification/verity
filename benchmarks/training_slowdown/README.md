@@ -15,7 +15,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `run.py` | one job of an attack config: `Harness`, what a route's code is counted inside, the route loop (`train`) and the record's trace (`trace_step`, `retrace`); `block_c`, a start's c |
 | `config.py` | an attack config: its schema, its digest and its jobs (`Job.label`), each refusal by name |
 | `sandbox.py` | the training job's sandbox: namespaces with no network and an empty directory over each final set (`enter`), and what a process can still reach of either (`refusals`) |
-| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`), E the tensors in full or their deltas in codes |
+| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`), E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
 | `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions |
@@ -45,8 +45,14 @@ The library is the configs of `attacks/`. An entry is a route and its dials at a
 under: a standard training algorithm and a covert one are the same kind of thing. A new entry is a config of a route
 `routes/` has, or a new route (the route contract, `routes/__init__.py`) and a config of it; its config's first
 comment says what it trains. Each entry is held to a reference in plain torch (`tests/test_entries.py`): its own
-dials, a few steps at a small shape, and the same weights as torch's own optimizer gives, or the published rule where
-torch has none. An entry without a reference fails the suite.
+dials, a few steps at a small shape, and the same output model as torch's own optimizer and its own average of the
+weights give, or the published rule where torch has none. An entry without a reference fails the suite.
+
+The standard algorithms differ in two ways the table shows apart. The optimizers (AdamW, SGD, Lion, Adafactor,
+Muon, Shampoo), gradient accumulation and the average of the weights train the same tensors by the same forward and
+backward passes, so they carry the same products with two operands the update reaches, and differ in the gates the
+optimizer itself adds to the step. Frozen layers (`last-blocks`) and adapters (`lora`) change those products: fewer
+of them have an operand the update reaches, or it reaches them only through a rank-wide product.
 
 The command prints one row an entry (every entry, or the ones named): its slowdown under its policy and what binds.
 It trains nothing. It builds the entry's model at the start's shape, traces its step on a CPU as a job does after its
