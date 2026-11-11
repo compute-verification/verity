@@ -13,6 +13,7 @@ program and applies the query itself; it never takes a population or a unit inde
 module
 
 public import Flock.HmRow
+public import Flock.Registered
 public import Spot.Json
 public import Spot.Program
 
@@ -221,5 +222,135 @@ def unitGatesBy (instances : Flock.TemplateQuery.Desc → Array TRange → Excep
 
 /-- `partition.unit_gates`, a template query's instances a range at a time (`TemplateQuery.unitGates`). -/
 def unitGates (p : Program) (query : Json) : V (Array (Nat × Nat)) := unitGatesBy Flock.TemplateQuery.unitGates p query
+
+/-- `partition._once`: a strided run of `count` references, `inner` a row, names each of its leaves at most once, its
+rows (or its columns) lying apart. A run whose rows and columns interleave counts as naming a leaf twice. -/
+def once (inner : Nat) (os is : Int) (count : Nat) : Bool :=
+  let rows := (count + inner - 1) / inner
+  let cols := min inner count
+  if rows == 1 || cols == 1 then (cols == 1 || is != 0) && (rows == 1 || os != 0)
+  else (is != 0 && is.natAbs * (cols - 1) < os.natAbs) || (os != 0 && os.natAbs * (rows - 1) < is.natAbs)
+
+/-- `partition._runs`: `(node, lo, hi, once)` per run of root-node references in `s`: each leaf of the run is one of
+leaves `[lo, hi)` of root node `node`'s result, and with `once` no two of its references name one leaf. A strided run is
+taken at its span (its corners, as `Program.decode` bounds it), an explicit one a run a reference. -/
+def runs (s : Flock.Program.Seq) : Array (Nat × Nat × Nat × Bool) :=
+  s.parts.foldl (init := #[]) fun out part => match part with
+    | .affine p i b c => if p || c == 0 then out else out.push (i, b, b + c, true)
+    | .strided p i b inner os is c =>
+      if p || c == 0 then out else
+      let q := (c - 1) / inner
+      let corners : List (Nat × Nat) :=
+        [(0, 0), (0, min inner c - 1), (q, 0), (q, (c - 1) % inner)] ++ (if q > 0 then [(q - 1, inner - 1)] else [])
+      let at_ := corners.map fun (x, y) => b + (x : Int) * os + (y : Int) * is
+      out.push (i, (at_.foldl min (at_.headD 0)).toNat, (at_.foldl max (at_.headD 0) + 1).toNat, once inner os is c)
+    | .explicit items => items.foldl (init := out) fun o r => if r.p then o else o.push (r.i, r.j, r.j + 1, true)
+
+/-- `partition.fanout` over a template query's ranges `rs`: F, the most proof blocks the root nodes of one joined set
+hold, two nodes joined when one reads any part of the other's result; at least 1. It reads each instance node's
+references once, never its members or its gates. -/
+def fanout (P : Flock.Program.Prog) (rs : Array TRange) : Nat := Id.run do
+  let nodes := Flock.Registered.rootNodes P
+  let mut members : Array (Option Nat) := Array.replicate nodes.size none
+  for r in rs do members := members.set! r.node (some r.count)
+  let mut label : Array Nat := Array.range nodes.size
+  let mut joined : Array Bool := Array.replicate nodes.size false
+  for r in rs do
+    for a in (nodes.getD r.node default).args do
+      for (i, _) in runs a.seq do
+        if (members.getD i none).isSome then
+          let (li, lk) := (label.getD i i, label.getD r.node r.node)
+          if li != lk then label := label.map fun l => if l == li then lk else l
+          joined := (joined.set! i true).set! r.node true
+  let mut held : Array Nat := Array.replicate nodes.size 0
+  for k in [0:nodes.size] do
+    if joined.getD k false then
+      let g := label.getD k k
+      held := held.set! g (held.getD g 0 + (members.getD k none).getD 0)
+  return held.foldl max 1
+
+/-- Spans `(node, lo, hi)` in lexicographic order. -/
+def spanLt (a b : Nat × Nat × Nat) : Bool :=
+  a.1 < b.1 || (a.1 == b.1 && (a.2.1 < b.2.1 || (a.2.1 == b.2.1 && a.2.2 < b.2.2)))
+
+/-- `partition.shared_inputs` over a template query's ranges `rs`: the run Input nodes (an input bound at `run`,
+`Program.inputId?`; a registered input, and an input node whose gates lie in one of `held`, the gates `(first, count)`
+of the parameters the verifier expects registered, are registered values) whose leaves the proof blocks don't each
+read alone, ascending: a batch of more than one member reading one whole (an argument it broadcasts) or by a run that
+names a leaf twice, two of a batch's runs that overlap, or two instance nodes' runs that overlap. -/
+def sharedInputs (P : Flock.Program.Prog) (rs : Array TRange) (held : Array (Nat × Nat) := #[]) : Array Nat := Id.run do
+  let nodes := Flock.Registered.rootNodes P
+  let offs := ((P.defs[P.root]?).map (·.body.offsets)).getD #[]
+  let run := fun (i : Nat) => match nodes[i]? >>= fun x => P.defs[x.fn]? with
+    | some f => f.prim && f.binding == some Flock.Program.RUN &&
+        !held.any fun (first, count) => first ≤ offs.getD i 0 && offs.getD (i + 1) 0 ≤ first + count
+    | none => false
+  let mut shared : Array Nat := #[]
+  let mut spans : Array (Nat × Nat × Nat) := #[]
+  for r in rs do
+    let x := nodes.getD r.node default
+    let batch := x.form == .batch
+    let mut mine : Array (Nat × Nat × Nat) := #[]
+    for ai in [0:if batch then min x.args.size x.axes.size else x.args.size] do
+      let mapped := batch && (x.axes.getD ai none).isSome
+      for (i, lo, hi, one) in runs (x.args.getD ai default).seq do
+        if !run i then continue
+        if r.count > 1 && (!mapped || !one) then shared := shared.push i
+        mine := mine.push (i, lo, hi)
+    let mut last : Option (Nat × Nat) := none
+    let mut merged : Array (Nat × Nat × Nat) := #[]
+    for (i, lo, hi) in mine.qsort spanLt do
+      if let some (j, h) := last then
+        if j == i && r.count > 1 && lo < h then shared := shared.push i
+      last := some (i, hi)
+      merged := match merged.back? with
+        | some (j, l, h) => if j == i && lo < h then merged.pop.push (j, l, max h hi) else merged.push (i, lo, hi)
+        | none => merged.push (i, lo, hi)
+    spans := spans ++ merged
+  let mut top : Option (Nat × Nat) := none
+  for (i, lo, hi) in spans.qsort spanLt do
+    match top with
+    | some (j, t) =>
+      if j == i then
+        if lo < t then shared := shared.push i
+        top := some (i, max t hi)
+      else top := some (i, hi)
+    | none => top := some (i, hi)
+  return (shared.qsort (· < ·)).foldl (init := #[]) fun o i => if o.back? == some i then o else o.push i
+
+/-- A template query's ranges (`partition.is_template_query`) applied to `p`; none for another query or one that
+doesn't apply. -/
+def templateRanges? (p : Program) (query : Json) : Option (Array TRange) :=
+  let name := (query.getObjValAs? String "name").toOption.getD ""
+  if nat? (getD query "version") == some 0 && (name == "Q_template_instance" || name == "Q_template_instances") then
+    (evaluate p query).toOption
+  else none
+
+/-- The fan-out a registration verdict publishes (`registration._readers`): a template query's, else none. -/
+def fanout? (p : Program) (query : Json) : Option Nat := (templateRanges? p query).map (fanout p.prog)
+
+/-- R8: no run Input of a template query's partition, outside the gates `held`, is one its proof blocks don't each read
+alone (`sharedInputs`). -/
+def readAlone (p : Program) (query : Json) (held : Array (Nat × Nat) := #[]) : Bool :=
+  ((templateRanges? p query).map (sharedInputs p.prog · held)).all (·.isEmpty)
+
+/-- The run Input nodes of a template query's partition, outside the gates `held`, that its proof blocks don't each
+read alone (`sharedInputs`); none for another query or one that doesn't apply. -/
+def shared? (p : Program) (query : Json) (held : Array (Nat × Nat) := #[]) : Array Nat :=
+  ((templateRanges? p query).map (sharedInputs p.prog · held)).getD #[]
+
+/-- Whether root node `i`'s gates lie in `[first, first + count)` (`partition.within`). -/
+def within (P : Flock.Program.Prog) (first count i : Nat) : Bool :=
+  let offs := ((P.defs[P.root]?).map (·.body.offsets)).getD #[]
+  first ≤ offs.getD i 0 && offs.getD (i + 1) 0 ≤ first + count
+
+/-- Whether the root's nodes whose gates lie in `[first, first + count)` are run Input nodes, and one does
+(`partition.run_inputs`): a parameter R8 may let through as tied is one the run binds. -/
+def runInputs (P : Flock.Program.Prog) (first count : Nat) : Bool :=
+  let nodes := Flock.Registered.rootNodes P
+  let inside := (List.range nodes.size).filter (within P first count)
+  !inside.isEmpty && inside.all fun i => match nodes[i]? >>= fun x => P.defs[x.fn]? with
+    | some f => f.prim && f.binding == some Flock.Program.RUN
+    | none => false
 
 end Spot.Partition

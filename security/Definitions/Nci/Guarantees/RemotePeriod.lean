@@ -14,10 +14,11 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
 
 * **PoUW** (in place of `PouwSound`): window `t`'s certificate is wrong (`wrong t`: accepted with the window's time
   below `(1 − ε)·T_cred`) with probability at most `p` over its coins. That is
-  `Accounting.SecurityProofs.Compose.CircuitCredit`'s conclusion, `p = δ_s + δ_bind + δ_ks = 3 · 2⁻⁴⁰`, at window `t`'s
-  play, for a run whose window `t` at each value of the other windows' coins is a play meeting `CircuitCredit`'s
-  premises; that bridge is not stated. `ComposeMonitoringPeriod.CircuitCreditPeriod` credits live words over a period's
-  accepted prefix, not time, so it does not give `wrong`'s form.
+  `Accounting.SecurityProofs.Compose.CircuitCredit`'s conclusion, `p = δ_s + δ_bind + δ_ks`, at window `t`'s play, for
+  a run whose window `t` at each value of the other windows' coins is a play meeting `CircuitCredit`'s premises; that
+  bridge is not stated, and `δ_bind` and `δ_ks` have no value yet (`PouwSound`), so `p` is a parameter with none.
+  `ComposeMonitoringPeriod.CircuitCreditPeriod` credits live words over a period's accepted prefix, not time, so it
+  does not give `wrong`'s form.
 * **Sampled proofs** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its incorrect
   proof blocks at registration, `wrongRegZ`), and its sample and verdict read its coins and the past. Two per-window bounds,
   each of which a window of `Flock.Guarantees.IntegrityPeriod` has at the strategy that plays it: the sample misses all
@@ -35,14 +36,14 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   bound, so the escape term needs no Markov's inequality: `J (1 − q)^(K+1)` at an escape share `J K B/C`, against
   `DampenerRemote`'s `J ((1 − q)/q) B/(θC)`.
 * **The halt**: `TerminalDetection` stays a named premise. The halt is code (`Fleet`'s R5-all in
-  `verity/core/protocols/spot/service.py`, its verifier `Spot.Fleet`), and
+  `verity/protocols/spot/verifier/service.py`, its verifier `Spot.Fleet`), and
   `Properties.Spot` proves what it does (`FleetHaltIsFinal`, `NoAcceptAfterHalt`), but not this form: it halts
   an operator at its `budget`-th failure, not its first (`budget ≥ 1`); it ends the operator's registrations, not its
   hardware's use; and nothing states the verdict's time `Δ` after the detected block.
 * **The inference-only policy**: each day `i` of the period declares `d_i`, and the statement takes the day's verdict
   exactly, `CompliesAtMost c k n_i`, at most `n_i` proof blocks of a `(c, k)`-partition at the day's public block count
   `n_i`: what a published `complies` of the count of `(c, k)`-inference blocks (`NciCheck.Count.check`) gives the Boolean
-  declaration its Program lowers to (`NciCheck.Properties.DescCountsCK`, stated in `Security/Properties` and not yet
+  declaration its Program lowers to (`NciCheck.Properties.DescCountsCK`, stated in `security/Properties` and not yet
   proved). Reading the check itself needs the code (package `security_properties`), so the statement takes its verdict.
   The day's charged work meets (H) and (E) (`Nci.Cut.Assumptions.Hardness`, `Exports`), and `Nci.Cut.Guarantees.CountHE`
   bounds its MACs by `n_i (k + α) + (k/2) √(n_i O_i / (β_w β_x))` (`Nci.Cut.workHE`). No rate form, padding or other
@@ -100,8 +101,9 @@ Then, for any `ε' > 0` and `K`, with probability at least `1 − δ` over the p
 least `ρ = max(1, 1/(s + ((1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + J K B/C) + ν + χ)/MFU₀))`, with
 `r̂ = 1 − W_cert/C`, `s = U/(C + U)` and `ν = (2/κ) X/(C + U)` (`efficiency κ X C U`), the declared days' pooled bound
 as a share of all compute at peak. At a pooled `δ` (1% and 10⁻⁶), `ε' = 2p/δ` and `K ≥ ln(2J/δ)/q` give
-`δ + ∑_t ks t`; the per-day figure is the statement at one day (`R` a singleton, `T` the day's windows). With every
-proof block proved (`q = 1`), `K = 0` and the escape share is 0. -/
+`δ + ∑_t ks t`. The pooled `δ` covers the first two terms only: `∑_t ks t`, the windows' knowledge errors, grows with
+the number of windows and has no value yet. The per-day figure is the statement at one day (`R` a singleton, `T` the
+day's windows). With every proof block proved (`q = 1`), `K = 0` and the escape share is 0. -/
 def DampenerRemotePeriod : Prop :=
   ∀ (T : ℕ) (Ω : Fin T → Type) [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)]
     (cap : Fin T → ℝ) (wrong : Fin T → ((t : Fin T) → Ω t) → Prop) (p ε : ℝ)
@@ -148,8 +150,10 @@ the hardware multiple (`remoteDampener`'s value) exceeds 1 while the run's own h
 instance is an honest developer over one window, run by its one identity: its PoUW certificate right, no incorrect proof
 block, its monitored compute all certified work, and one declared day, the toy `Nci.Cut.Toy` complying with
 `CompliesAtMost 1 2 2` under (H) at unit costs and (E) at `b = 2`, whose two MACs are the run's counted multiplications,
-at `MFU₀ = 1/2`, the remote reference's `p = 3 · 2⁻⁴⁰` (`CircuitCredit`'s `δ_s + δ_bind + δ_ks`) and `ε' = 2p/δ` at
-the pooled `δ = 10⁻⁶`, with every proof block proved (`q = 1`, `K = 0`). -/
+at `MFU₀ = 1/2`, `p = 3 · 2⁻⁴⁰` and `ε' = 2p/δ` at the pooled `δ = 10⁻⁶`, with every proof block proved (`q = 1`,
+`K = 0`) and no knowledge error (`ks = 0`). The instance's certificate is never wrong, so it meets `PouwPerWindow` at
+any `p ≥ 0`, and its `δ` is `1/(2 · 10⁶)` at any `p > 0`: it shows the premises hold together where the bound exceeds 1,
+and gives no deployment's `p`, `ks` or `δ`. -/
 def DampenerRemotePeriod_honest : Prop :=
   ∃ (T : ℕ) (Ω : Fin T → Type) (_ : ∀ t, Fintype (Ω t)) (_ : ∀ t, Nonempty (Ω t))
     (cap : Fin T → ℝ) (wrong : Fin T → ((t : Fin T) → Ω t) → Prop) (p ε : ℝ)

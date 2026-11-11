@@ -1,8 +1,8 @@
 """arith_encode: advice v1's arithmetic encoder as Boolean Definitions, held to the advice coders (`code.py`, `code_v1`)
 on what v1 actually codes (the fixture's streams, as `benchmarks/network_e2e/encodings/arith_vectors.py --steps` cut
-them: advice v1's windows, the replay's decisions, the arrival order's deviations and the hits sent past the pool
-bound, on the replay's step traces with v1's charges, and the derived encoding's still-sent fields on the trace corpus
-fixture, each symbol tagged a bit or an integer's, with code.py's state after every symbol and its segment), to the
+them: advice v1's windows, the replay's decisions and the arrival order's deviations, on the replay's step traces with
+v1's charges, and the derived encoding's still-sent fields, the hits past the pool bound among them, on the trace
+corpus fixture and sync-crush, each symbol tagged a bit or an integer's, with code.py's state after every symbol and its segment), to the
 references on random runs, and refusing every other segment and every symbol code.py refuses."""
 from __future__ import annotations
 
