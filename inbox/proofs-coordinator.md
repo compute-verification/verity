@@ -55438,3 +55438,31 @@ For BREAKEVEN: (1) HARMSEARCH's rows hold on my path, so the plan to price at th
 
 For the table: second reading of #8950 at `f8b6e599b19b` and of HARMSEARCH's `8e11` / `3bf0` / 12:35Z rows: holds (`8e11`'s twelve rows in its record to the digit, 67 GB cells within 0.16% of my path, 9 bits cells within 0.02; quick tier `87c2` passed, 57 suites; the planner's `kappas` only narrows the family searched; merges with `main` `967b722429f3`).
 For the table: the order's 12:40Z cells hold by hand, but width 2^-4 holds 2^-100 under one M up to 170 once the conflict term is added (171 by the first-hit term alone).
+
+## MEMBERS, Wed 11 Nov 12:52Z: `494b` PASSES (2 suites, 0 failed): #8927 is tested on `main` as it is now, with #8539. Its ready line (12:23Z, line 54243) has no gap left
+
+No claim moves. No head moved [run: `gh pr view`, 12:51Z].
+
+### #8927 `403c8aed979c8753794d3d7a296c1f8e9742fcdf`: the gap my 12:23Z entry named is closed
+
+- `r20261111-122032-494b`, `suites.py verity-core-sampled-proofs benchmarks/one_stage --quick`, at scratch `943a7b8326bfa1d96867019e740673fa23eda300` (pushed nowhere): **2 suites: 2 passed (0 cached), 0 failed** [run: its own `stdout.log`, line 20, fetched 12:50Z]. `verity-core-sampled-proofs`: 249 passed, 2 skipped. `benchmarks/one_stage`: 505 passed.
+- **`main` moved to 967b722429f3 while it ran, and the scratch is exactly `main` now + this head:** `git merge-tree` of `main` 967b722429f3 and the head gives the tree `1f4e62c2039d`, the scratch commit's tree [run, 12:51Z]. So the two suites this PR changes pass on what lands, #8539 included.
+- What it is not: the whole quick tier on `main` 967b722429f3. The tiers are `64c5` (70/70, at the head) and `a480` (71/71, on `main` 8f5d3c3823f0); between 8f5d3c3823f0 and 967b722429f3 `main` changed two of this PR's five files (the README and `test_difftest.py`, both #8539's) and `494b` ran both suites that read them [run: `git diff --name-only`].
+- The body has `494b`'s row and verdict since 12:51Z [run: `research queue edit`; the head did not move].
+- #8898, its base, is not on `main` yet at 12:51Z [run: `git merge-base --is-ancestor`].
+
+### #8921, for your mark: one line on `main`'s move, by git only
+
+- `git merge-tree` of #8921's head 58a3e8b90f40 with `main` 967b722429f3 exits 0 [run, 12:52Z].
+- My 12:02Z entry said `main`'s landings change no Lean file of the Spot package. That was so at 86c03d1840cb. At 967b722429f3 five do (`OneStage`, `Partition`, `Pieces`, `Registration`, `Run`), all #8539's, landed at 984a73968ccd [run: each landing's `Head:` line]. #8921's merged tree (`018e`, pass) held #8539 at that same head, and #8226, #8368 and #8764 at the heads they landed at, so that build covers them. `OneStageZk.lean` is unchanged on `main` [run]. Not in my tree: #8836 and the fifteen PRs of 847136846dae; none changes a Lean file of the Spot package or of what it requires [run].
+
+### Events of yours that reached me again
+
+- The Task completion notices of CROSS (`515d` passed) and PARAMS (its final report) came to my conversation at about 12:50Z. I did nothing with them; they are yours.
+
+### What I wait on
+
+Nothing. No run of mine is out. I end my turn; resume me with a job if you have one.
+
+For the table:
+- #8927 `403c8aed979c`: ready to mark; `64c5` 70/70 at the head, `a480` 71/71 on `main` 8f5d3c3823f0, `494b` 2/2 suites on `main` 967b722429f3 (249 and 505 passed); no Lean, no lock.
