@@ -49,8 +49,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.definitions.ops import mufu as MU
 from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.ops import mufu as MU
 
 SCHEMA = "verity-vllm/sigmoid-router-capture/v2"
 RECORD = "sigmoid_router_capture.json"

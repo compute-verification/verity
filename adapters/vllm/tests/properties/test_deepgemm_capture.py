@@ -13,13 +13,13 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
-
-from tests.properties import deepgemm_capture_gpu as X
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import deepgemm_twins as T
 from verity.definitions.numerics import derived_rows as R
 from verity.definitions.registry import fp8 as F
+
+from tests.properties import deepgemm_capture_gpu as X
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 K, N, GQ = 256, 200, X.GROUP

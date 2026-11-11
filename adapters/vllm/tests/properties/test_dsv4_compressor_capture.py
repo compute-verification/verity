@@ -15,11 +15,11 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity.definitions.numerics import dsv4_compressor_twin as T
+from verity.definitions.numerics import flashmla_twin as FT
 
 from tests.properties import dsv4_compressor_capture_gpu as X
 from tests.properties import dsv4_flashmla_capture_gpu as FX
-from verity.definitions.numerics import dsv4_compressor_twin as T
-from verity.definitions.numerics import flashmla_twin as FT
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 LAYERS = list(X.LAYERS)

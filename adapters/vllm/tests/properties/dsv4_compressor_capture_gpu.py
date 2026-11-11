@@ -68,14 +68,14 @@ from types import SimpleNamespace
 from typing import Any, NamedTuple
 
 import numpy as np
-
-from tests.properties import dsv4_flashmla_capture_gpu as FX
-from tests.properties import fa2_target_capture_gpu as C
-from tests.properties import fa_tap_exactness_gpu as G
 from verity.definitions.numerics import dsv4_compressor_twin as T
 from verity.definitions.numerics import flashmla_twin as FT
 from verity.definitions.registry import dsv4_compressor as R
 from verity.definitions.registry import dsv4_indexer as I
+
+from tests.properties import dsv4_flashmla_capture_gpu as FX
+from tests.properties import fa2_target_capture_gpu as C
+from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-compressor-capture/v1"

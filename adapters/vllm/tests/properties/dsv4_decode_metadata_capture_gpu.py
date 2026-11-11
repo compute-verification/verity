@@ -81,14 +81,14 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.definitions.numerics import dsv4_decode_metadata_twin as T
+from verity.definitions.registry import dsv4_decode_metadata as R
 
 from tests.properties import dsv4_compressor_capture_gpu as CX
 from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import dsv4_indices_capture_gpu as IX
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.definitions.numerics import dsv4_decode_metadata_twin as T
-from verity.definitions.registry import dsv4_decode_metadata as R
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-decode-metadata-capture/v1"
@@ -401,7 +401,10 @@ def launch_c128(case: str, kind: str, o: dict[str, Any]) -> dict[str, Any]:
     arguments into sentinel buffers at an offset: the buffers as words, whether each launch returned the buffers' [:tokens,
     :width] views, and whether every operand buffer is the bytes it was."""
     import torch
-    from vllm.models.deepseek_v4.sparse_mla import _build_c128a_topk_metadata_kernel, build_c128a_topk_metadata
+    from vllm.models.deepseek_v4.sparse_mla import (
+        _build_c128a_topk_metadata_kernel,
+        build_c128a_topk_metadata,
+    )
 
     st, S = statics(case, kind), stride(case)
     W, nd, nreq = st["W"], o["req"].size, o["table"].shape[0]

@@ -26,11 +26,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
-from tests.properties import glm53_tp8_allreduce_capture_gpu as X
 from verity.definitions.registry import tp_allreduce as T
 from verity.definitions.registry import tp_allreduce_check as K
 from verity.definitions.registry import tp_allreduce_nodes as TN
+
+from tests.properties import glm53_tp8_allreduce_capture_gpu as X
 
 OUT = "glm53_multimem_replay.json"
 #: vectors per Boolean evaluation, so a vector's every wire over them stays a few hundred MB

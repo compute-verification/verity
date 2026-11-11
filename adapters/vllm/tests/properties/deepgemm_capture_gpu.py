@@ -81,11 +81,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.definitions.numerics import deepgemm_schedule as S
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_block_fp8_capture_gpu as B
-from verity.definitions.numerics import deepgemm_schedule as S
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/deepgemm-capture/v2"

@@ -16,11 +16,11 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+from verity.definitions.registry import bf16_gemm_check as BC
+from verity.definitions.registry import mla_check as MK
 
 from tests.properties import glm53_bf16_gemm_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry import mla_check as MK
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 DOTPROD = {"kind": "dotprod", "BS": 32, "VEC": 8}

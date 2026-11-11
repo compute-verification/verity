@@ -8,11 +8,11 @@ from typing import Any
 
 import pytest
 
+from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.acquire.sources.hidden_source import fa3_tile
+from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
 from verity_vllm.properties import fa_tap_exactness as X
 from verity_vllm.properties.record import digest_of
-from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
-from tests.properties import fa_tap_exactness_gpu as G
 
 
 def _record(**fields):
@@ -111,7 +111,6 @@ def test_quick_is_a_subset():
 def _guarded_stream(rows, row_max):
     """A stream whose ROW entries carry `row_max` (per visited block, kernel visit order) and the guarded max in word 3."""
     import numpy as np
-
     from verity.definitions.numerics.derived_rows import guard_neg_inf_zero
 
     layout = StreamLayout(1, len(rows), 2, 128, 64)
@@ -174,7 +173,6 @@ def test_a_guarded_record_needs_its_baseline_and_word_3_checked_in_every_case():
 def _ms_stream(rows, row_max, scale_log2):
     """A stream with the MS class: ROW word 0 = `row_max` per visited block (kernel visit order), MS = the circuit's max_scaled of it."""
     import numpy as np
-
     from verity.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
 
     layout = StreamLayout(1, len(rows), 2, 128, 64, ms=True)

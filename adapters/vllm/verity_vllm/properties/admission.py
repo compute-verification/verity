@@ -30,15 +30,14 @@ import importlib
 import json
 import sys
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from dataclasses import dataclass, field
-
-from verity_vllm.config import option
 
 from verity_vllm.commit import challenge as CH
+from verity_vllm.config import option
 from verity_vllm.properties.record import seal
 
 REQUIRED_EDGE_KINDS = ("zeros", "max", "subnormal", "alternating")

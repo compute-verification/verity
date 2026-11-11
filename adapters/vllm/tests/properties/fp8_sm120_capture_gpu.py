@@ -133,7 +133,12 @@ def block_row(xq, sx, w, ws, *, G: int, KB: int, form: str = "triton", dot: str 
         mul_add       acc = FADD(FMUL(d, FMUL(a, b)), acc), unfused (no kernel computes it: a discriminator)
 
     from acc = +0; then acc = FMUL(acc, g) when g is given, and `cvt.rn.bf16.f32`."""
-    from verity.definitions.numerics.derived_rows import add_rn, f2fp_bf16, fma_rn, mul_rn
+    from verity.definitions.numerics.derived_rows import (
+        add_rn,
+        f2fp_bf16,
+        fma_rn,
+        mul_rn,
+    )
 
     if form not in FORMS:
         raise ValueError(f"unknown scale form {form!r}")
@@ -216,8 +221,8 @@ def _row_operands(a: dict[str, np.ndarray], job: dict[str, Any], i: int):
 def compare_gemm(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [i0, i1) of one GEMM launch against `block_row` at the job's statics; on its reference rows the plain-integer chain on
     three coordinates and every alternative on all of them; on a dense launch the activation quant it received, too."""
-    from verity.circuits.evaluation import evaluate
     from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
     from verity.definitions.numerics import derived_rows as DR
     from verity.definitions.registry import fp8 as F
 
@@ -260,8 +265,8 @@ def compare_gemm(job: dict[str, Any]) -> dict[str, Any]:
 
 def compare_quant(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [i0, i1) of one quant call: (q, scale) against `Fp8GroupQuant_v1{K,G}`'s twin, the reference on the job's rows."""
-    from verity.circuits.evaluation import evaluate
     from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
     from verity.definitions.numerics import derived_rows as DR
     from verity.definitions.registry import fp8 as F
 

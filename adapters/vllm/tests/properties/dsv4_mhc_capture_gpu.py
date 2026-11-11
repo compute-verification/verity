@@ -83,11 +83,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.definitions.numerics import mhc_twin as W
+from verity.definitions.silicon.models import GroupSum
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.definitions.silicon.models import GroupSum
-from verity.definitions.numerics import mhc_twin as W
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-mhc-capture/v1"

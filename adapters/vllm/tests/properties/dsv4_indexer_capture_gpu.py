@@ -80,12 +80,12 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
+from verity.definitions.numerics.dsv4_indexer_twin import OPS, heads_twin, score_twin
+from verity.definitions.registry import dsv4_indexer as I
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as X
-from verity.definitions.numerics.dsv4_indexer_twin import OPS, heads_twin, score_twin
-from verity.definitions.registry import dsv4_indexer as I
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-indexer-capture/v1"

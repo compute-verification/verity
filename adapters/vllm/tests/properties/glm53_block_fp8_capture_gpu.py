@@ -290,9 +290,9 @@ def _halves_step(model, halves) -> Callable:
 
 def _fma_chain(acc, a, b):
     """Thirty-two IEEE FMAs in k order, each product exact: a dot with no grouped adder."""
-    from verity.definitions.silicon.cast import e4m3_to_f32_word
     from verity.definitions.numerics.derived_rows import fma_rn
     from verity.definitions.numerics.fp8_moe_rows import E4M3_NAN
+    from verity.definitions.silicon.cast import e4m3_to_f32_word
 
     f32 = np.array([e4m3_to_f32_word(e) for e in range(256)], dtype=np.uint32)
     acc = np.asarray(acc, dtype=np.uint32)
@@ -306,9 +306,12 @@ def _fma_chain(acc, a, b):
 def mmav2_alternatives() -> dict[str, Callable]:
     """The models of `HopperE4m3MmaV2Dot32_v1` the MMAv2 probe must refute, each a k32 step: the twin is core's
     `HOPPER_BF16_M16N8K16` (one group of 16, adder width 26) over `MMAV2_HALVES` (k mod 4 < 2, then >= 2)."""
-    from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16
     from verity.definitions.numerics.derived_rows import tc_dot32_e4m3
     from verity.definitions.numerics.fp8_moe_rows import MMAV2_HALVES
+    from verity.definitions.silicon.models import (
+        AMPERE_BF16_M16N8K16,
+        HOPPER_BF16_M16N8K16,
+    )
 
     natural = (np.arange(16), np.arange(16, 32))
     alts = {"natural_k": _halves_step(HOPPER_BF16_M16N8K16, natural),
@@ -681,11 +684,17 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
     """Pairs [p0, p1) of one expert launch: the GEMM twin at the launch's statics and DOT against the kernel's words (and every
     competing MMAv2 model on a probe's w13 launch), the input quant (w13) or the activation and its quant (w2) on what the kernel
     read, and the reference on a sample."""
-    from verity.circuits.evaluation import evaluate
     from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
     from verity.definitions.numerics.act_rows import silu_mul_expf_rows
-    from verity.definitions.numerics.deepgemm_twins import ue8m0_group_quant_row, ue8m0_group_quant_rows
-    from verity.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
+    from verity.definitions.numerics.deepgemm_twins import (
+        ue8m0_group_quant_row,
+        ue8m0_group_quant_rows,
+    )
+    from verity.definitions.numerics.fp8_moe_rows import (
+        TWIN_DOT_OF,
+        moe_expert_fp8_block_row,
+    )
     from verity.definitions.registry import act as ACT
     from verity.definitions.registry import deepgemm as DG
     from verity.definitions.registry import fp8_moe as MO
@@ -757,8 +766,8 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
 def compare_sum(job: dict[str, Any]) -> dict[str, Any]:
     """Tokens [r0, r1) of one `moe_sum`: `MoeSum_v1{TOPK,H}`'s twin against the kernel's words (and every competing sum on the
     planted rows), and `MoeSumCoordinate_v1` on a sample of the columns and every planted one."""
-    from verity.circuits.evaluation import evaluate
     from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
     from verity.definitions.numerics.rows import moe_sum
     from verity.definitions.registry import moe as MOE_R
 
@@ -840,8 +849,8 @@ def bind_check(statics: set[tuple[int, int, int, bool, str]]) -> dict[str, Any]:
     """The Programs bind at every GLM-5.3 shape: each expert launch the run made, (K, N, KB, SWAP, DOT id), as
     `MoeExpertFp8BlockGemm(W)_v3` (w13 when K is the hidden size, else w2) and as `fp8_moe_experts`' `MoeExpertFp8Gemm(W)_v1{E=256}`
     with the weight-scale rows each reads; each quant, activation and the sum at the run's sizes."""
-    from verity.circuits.evaluation.batch import type_shape
     from verity.circuits.defs import bind
+    from verity.circuits.evaluation.batch import type_shape
     from verity.definitions.registry import act as ACT
     from verity.definitions.registry import deepgemm as DG
     from verity.definitions.registry import fp8_moe as MO
@@ -984,7 +993,10 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
             doc["errors"]["served"] = _error(e)
         print(f"[glm53-block-fp8] served {json.dumps(doc['served'])} cleared={sorted(cleared)}", flush=True)
         try:
-            from vllm.v1.worker.workspace import init_workspace_manager, is_workspace_manager_initialized
+            from vllm.v1.worker.workspace import (
+                init_workspace_manager,
+                is_workspace_manager_initialized,
+            )
 
             if not is_workspace_manager_initialized():
                 init_workspace_manager(torch.device("cuda"))

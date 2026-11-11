@@ -57,9 +57,15 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.definitions.ops import mufu as MU
 from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics.dsv4_moe_twin import clamp_twin, hash_twin, lg2_words, router_twin, score_words
+from verity.definitions.numerics.dsv4_moe_twin import (
+    clamp_twin,
+    hash_twin,
+    lg2_words,
+    router_twin,
+    score_words,
+)
+from verity.definitions.ops import mufu as MU
 from verity.definitions.registry import dsv4_moe as D
 from verity.definitions.registry import mla_check as MC
 

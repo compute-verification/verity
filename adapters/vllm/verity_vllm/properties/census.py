@@ -54,7 +54,11 @@ from pathlib import Path
 
 from verity_vllm import settings
 from verity_vllm.config import UsageError, option, workload_arg
-from verity_vllm.observe.kernel_trace import kernels_of_trace_events, load_trace, summarize_kernels
+from verity_vllm.observe.kernel_trace import (
+    kernels_of_trace_events,
+    load_trace,
+    summarize_kernels,
+)
 from verity_vllm.properties.record import seal
 
 # ---------------------------------------------------------------------------------------------------------
@@ -359,7 +363,9 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
 
     profile, prof_mod = load_profile(profile_name)
     # protected: a profile cannot allowlist kernels by itself
-    from verity_vllm.properties.kernel_allowlist import KERNEL_ALLOWLIST as FROZEN_ALLOWLIST
+    from verity_vllm.properties.kernel_allowlist import (
+        KERNEL_ALLOWLIST as FROZEN_ALLOWLIST,
+    )
     from verity_vllm.properties.kernel_allowlist import LAUNCH_COUNT_ALLOWLIST
     allow = set(FROZEN_ALLOWLIST) | set(proposed_allowlist)
     profile_extra_allowlist = sorted(set(profile.kernel_allowlist) - set(FROZEN_ALLOWLIST))

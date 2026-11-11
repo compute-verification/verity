@@ -36,7 +36,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.registry import tp_allreduce as T
 from verity.definitions.registry import tp_allreduce_check as K
@@ -136,7 +135,6 @@ def route_for(facts: dict[str, Any], M: int, N: int):
 def _replay(capture: str, step: int, items: list, word: bool) -> list[dict]:
     """One step's calls `items` ([(k, rows, statics)]): every rank's words against each order."""
     import torch
-
     from verity.circuits import evaluation as E
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import bits as BS

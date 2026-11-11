@@ -38,12 +38,13 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.definitions.numerics import rows as RK
+from verity.definitions.numerics import softcap_rows as SR
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.definitions.numerics import rows as RK
-from verity.definitions.numerics import softcap_rows as SR
-from verity_vllm.properties.fa_tap_exactness import PAGE, cases as tap_cases
+from verity_vllm.properties.fa_tap_exactness import PAGE
+from verity_vllm.properties.fa_tap_exactness import cases as tap_cases
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/fa2-softcap-capture/v1"
@@ -115,14 +116,15 @@ def case_list() -> list[dict[str, Any]]:
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
     """Every output row of one launch against `AttentionSoftcap_v2` (a worker process: numpy words in, a record out)."""
-    from verity.circuits.evaluation.reference import evaluate
     from verity.circuits.defs import bind
-    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity.circuits.evaluation.reference import evaluate
     from verity.definitions.numerics import derived_rows as DR
     from verity.definitions.registry import b1, hopper
     from verity.definitions.registry import fa2_softcap as F2S
     from verity.definitions.registry import prims as P
+
     from verity_vllm.program.frontend import targets as TG
+    from verity_vllm.program.frontend.target_profile import TargetProfile
 
     table: np.ndarray = np.memmap(job["tanh_table"], dtype="<u4", mode="r")
     tanh = lambda x: mufu_tanh(x, table, job["tanh_lo"])  # noqa: E731

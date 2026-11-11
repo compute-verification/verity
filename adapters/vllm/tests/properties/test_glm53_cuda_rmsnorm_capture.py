@@ -6,10 +6,10 @@ __models__ = ("zai-org/GLM-5.3",)
 import json
 
 import numpy as np
+from verity.definitions.numerics import cuda_rmsnorm_rows as R
 
 from tests.properties import glm53_cuda_rmsnorm_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity.definitions.numerics import cuda_rmsnorm_rows as R
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 

@@ -47,7 +47,8 @@ from typing import Any
 import numpy as np
 
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.fa_tap_exactness import PAGE, cases as tap_cases
+from verity_vllm.properties.fa_tap_exactness import PAGE
+from verity_vllm.properties.fa_tap_exactness import cases as tap_cases
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/fa2-target-capture/v1"

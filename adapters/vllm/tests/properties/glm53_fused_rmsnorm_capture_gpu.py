@@ -51,12 +51,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics import dsa_norm_rows as NR
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as DS
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import dsa_norm_rows as NR
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-fused-rmsnorm-capture/v2"

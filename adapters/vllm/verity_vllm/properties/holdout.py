@@ -23,9 +23,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import VLLM, WORKLOAD_SCHEMA, UsageError, option
 from verity_vllm.check.gates import HOLDOUT_GATES
 from verity_vllm.commit import challenge as CH
+from verity_vllm.config import VLLM, WORKLOAD_SCHEMA, UsageError, option
 from verity_vllm.properties.record import seal
 
 #: prompt lengths that straddle the kernel-specialization boundaries of the pinned profile (FA2 kBlockN 64 / 128, the

@@ -51,10 +51,15 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.acquire.sources.hidden_source import KBLOCK_M, fa2_kblock_n, fa2_swapped, fa3_tile
+from verity_vllm.acquire.sources.hidden_source import (
+    KBLOCK_M,
+    fa2_kblock_n,
+    fa2_swapped,
+    fa3_tile,
+)
 from verity_vllm.commit.hidden_stream import ROW_GUARD_FIELD, SRC_BITS, StreamLayout
-from verity_vllm.properties.record import digest_of, seal as seal_record
-
+from verity_vllm.properties.record import digest_of
+from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/fa-tap-exactness/v1"
 RECORD = "fa_tap_exactness.json"

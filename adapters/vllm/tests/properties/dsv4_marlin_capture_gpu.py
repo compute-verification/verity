@@ -125,11 +125,18 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.definitions.numerics import marlin_moe_rows as MR
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from tests.properties.glm53_block_fp8_capture_gpu import _activation, _error, _load, _save, _u16, _u32
-from verity.definitions.numerics import marlin_moe_rows as MR
+from tests.properties.glm53_block_fp8_capture_gpu import (
+    _activation,
+    _error,
+    _load,
+    _save,
+    _u16,
+    _u32,
+)
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-marlin-capture/v3"
@@ -707,7 +714,9 @@ def replay(L: dict[str, Any]) -> bool:
     call alone, the claim the record makes of the served path."""
     import torch
     from vllm import _custom_ops as ops
-    from vllm.model_executor.layers.quantization.utils.marlin_utils import marlin_make_workspace_new
+    from vllm.model_executor.layers.quantization.utils.marlin_utils import (
+        marlin_make_workspace_new,
+    )
 
     out = torch.full_like(L["output"].view(torch.int16), SENTINEL).view(torch.bfloat16)
     ops.moe_wna16_marlin_gemm(**{**L["call"], "output": out, "workspace": marlin_make_workspace_new(out.device, 4)})

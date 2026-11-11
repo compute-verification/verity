@@ -15,12 +15,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
-
-from tests.properties import dsv4_indexer_capture_gpu as D4
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import dsv4_indexer_twin as T
 from verity.definitions.registry import dsa
+
+from tests.properties import dsv4_indexer_capture_gpu as D4
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 IDX, X = D4.I, D4.X

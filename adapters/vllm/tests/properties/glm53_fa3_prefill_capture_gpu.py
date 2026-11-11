@@ -283,15 +283,17 @@ def split_twin(q, k, v, rows, L: int, ns: int) -> tuple[np.ndarray, np.ndarray]:
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity.circuits.defs import bind
     from verity.circuits.evaluation.reference import evaluate
+    from verity.definitions.numerics import derived_rows as DR
+    from verity.definitions.numerics import fa2_relation
+    from verity.definitions.numerics import fa3_model as FM
+    from verity.definitions.registry import attention_vocab, hopper
+    from verity.definitions.registry import fa3_check_inf as F3
+    from verity.definitions.registry import fa3_split as FS
+
     from verity_vllm.program.frontend import targets as TG
     from verity_vllm.program.frontend.rules import vllm_dsa_dense
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.numerics import fa2_relation, fa3_model as FM
-    from verity.definitions.registry import attention_vocab, hopper
-    from verity.definitions.registry import fa3_check_inf as F3
-    from verity.definitions.registry import fa3_split as FS
 
     fa3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
     twin = {"dot_prim": "HopperBF16WgmmaDot16_v1", "inv_prim": "Fa3InvSum_v1"}

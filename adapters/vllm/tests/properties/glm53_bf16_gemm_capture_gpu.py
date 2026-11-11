@@ -446,7 +446,10 @@ def distributed(work: Path) -> None:
     """vLLM's TP and PP groups at world size 1 (`ReplicatedLinear` reads the TP group's rank), under the current vLLM config.  Not
     `vllm_meta.ensure_distributed`: importing that module pins `engine.env.EXPORT` (test_env holds every capture that clears
     `SERVED_DEFAULTS` to importing no pinning module)."""
-    from vllm.distributed import ensure_model_parallel_initialized, init_distributed_environment
+    from vllm.distributed import (
+        ensure_model_parallel_initialized,
+        init_distributed_environment,
+    )
 
     init_distributed_environment(world_size=1, rank=0, distributed_init_method=f"file://{work / 'dist_store'}", local_rank=0,
                                  backend="gloo")
@@ -1319,8 +1322,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     work = Path(tmp.name)
     env, cleared = environment(a.served_default, work / "triton_cache")
     import torch
-    from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
     from verity.definitions.registry import bf16_gemm_check as BC
+    from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
 
     tag = "GLM53-BF16-GEMM" + (" (served default)" if a.served_default else "")
     todo = cases(a.quick, only, models)

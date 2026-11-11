@@ -29,7 +29,8 @@ from __future__ import annotations
 import difflib
 from typing import Any
 
-from verity_vllm.properties.record import digest_of, seal as seal_record
+from verity_vllm.properties.record import digest_of
+from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/norm-tap-exactness/v1"
 RECORD = "norm_tap_exactness.json"
@@ -80,9 +81,9 @@ def _scale_gate(kernel: str, call: Any) -> int:
 def ir_scale(kernel: str, N: int, eps: float, x: list[int], res: list[int] | None, w: list[int]) -> int:
     """The circuit's scale word of one row: evaluate `RMSNormFusedCuda_v2{N,EPS}` (x, res, w) or `RMSNormTriton_v1{N,EPS}` (x, w) as a
     standalone Call and read its scale gate from the trace."""
-    from verity.circuits.evaluation.reference import standalone_call
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_call
+    from verity.circuits.evaluation.reference import standalone_call
     from verity.definitions.registry import b1
 
     spec = bind(b1.RMSNormFusedCuda if kernel == "cuda" else b1.RMSNormTriton, N=N, EPS=eps)
@@ -95,7 +96,6 @@ def ir_scale(kernel: str, N: int, eps: float, x: list[int], res: list[int] | Non
 def twin_scales(kernel: str, x: Any, res: Any, w: Any, eps: float) -> Any:
     """Every row's circuit scale word by the vectorised twin (uint32): `derived_rows.rmsnorm_fused_v2_rows(...)["s"]` / `rmsnorm_triton_rows(...)["inv"]`."""
     import numpy as np
-
     from verity.definitions.numerics import derived_rows as D
 
     if kernel == "cuda":
