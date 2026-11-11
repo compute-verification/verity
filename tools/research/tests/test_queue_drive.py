@@ -150,11 +150,16 @@ def test_a_failed_pytest_step_points_at_its_tests_and_the_paths_its_failures_nam
 
 
 def test_a_failure_outside_the_suites_or_without_a_failing_test_points_at_no_file(tmp_path):
-    from research.drive import implicated, touches
+    """A frame in the check's tree (job.json's `run.cwd`) points at its repository path, one outside it at nothing."""
+    import json
 
-    d = _failed_run(tmp_path, "tests/test_x.py::test_y", 'File "/x/site/pkg/conftest.py", line 3')
-    assert implicated(d) >= {"pkg/tests/test_x.py", "/x/site/pkg/conftest.py"}
-    assert touches({"conftest.py", "pkg/conftest.py"}, {"/x/site/pkg/conftest.py"}) == {"pkg/conftest.py"}
+    from research.drive import implicated
+
+    d = _failed_run(tmp_path, "tests/test_x.py::test_y", 'File "/x/site/pkg/conftest.py", line 3\n'
+                                                         'File "/usr/lib/python3.12/runpy.py", line 9')
+    assert implicated(d) == {"pkg/tests/test_x.py"}
+    (d / "job.json").write_text(json.dumps({"run": {"cwd": "/x/site"}}))
+    assert implicated(d) == {"pkg/tests/test_x.py", "pkg/conftest.py"}
     (d / "steps.jsonl").write_text('{"step": "circuit-check", "status": "failed"}\n')
     assert implicated(d) is None
 

@@ -176,6 +176,7 @@ from . import carry, policy
 from .executor import (AFTER_LANDING_PRIORITY, FAIL, PASS, PENDING, SHADOW_WAIT_S, Executor, QueueTransport, compare,
                        old_verdicts)
 from .gates import git_env
+from .notes import ART_RE
 from .queue import (CHECK_STEPS, IDENTITY, LANDED_WINDOW, PR, RESTACKING, Entry, Member, Queue, QueueError, StoreLabels, _brought, _git,
                     _out, _who, built_on, changed, forces_cold, label_target, lean_change, move_of, on_first_parents, queue_commit,
                     unreviewed)
@@ -761,11 +762,13 @@ def _fetch(repo: Path, rid: str, names: list[str]) -> Path | None:
 
 def evidence(repo: Path, ids: list[str]) -> list[Path]:
     """The local run dirs of ``ids`` with their steps, live records, spans, suite reports and failed suites' logs fetched
-    (`research status --also`)."""
+    (`research status --also`), and beside a failed suite's log but the repository's own suite's its guard's report and its
+    children's reads, what its run traced (`vqueue_slim.traced_reads`)."""
     def one(rid: str) -> Path | None:
         if (d := _fetch(repo, rid, [*PROGRESS, SPANS, LIVE, "suites.json", "suites-lean.json"])) is None:
             return None
-        logs = [f"suites/{Path(s['log']).name}" for s in failed_suites(d) if s.get("log")]
+        logs = [f"suites/{Path(s['log']).stem}{x}" for s in failed_suites(d) if s.get("log")
+                for x in (".log", *((".json", ".reads") if (s.get("suite") or ".") != "." else ()))]
         logs += [Path(st["log"]).name for st in failed_steps(d) if st.get("log") and st.get("step") not in ("pytest", "lean-suites")]
         if logs:
             _fetch(repo, rid, logs)
@@ -890,12 +893,46 @@ def killed(run_dir: Path, why: str = "") -> bool:
     return any(f"rc={rc}" in why for rc in (*KILLED_RC, -9, -15))
 
 
-def _named(log: str, base: str) -> set[str]:
-    """The files a pytest log's failures name: its tracebacks' frames, and the repository paths in its failure report."""
-    rel = lambda p: p if p.startswith("/") else os.path.normpath(os.path.join(base, p))  # noqa: E731
-    paths = {rel(m[1] or m[2]) for m in TRACE_RE.finditer(log)}
-    report = log.partition("= FAILURES =")[2].partition("short test summary info")[0]
-    return paths | {rel(m[1]) for m in NAMED_RE.finditer(report)}
+def tree_root(run_dir: Path) -> str | None:
+    """The directory a run's check ran in, its job.json's `run.cwd` (`research run`'s clone or shipped source): the
+    repository's root in the absolute paths its logs print; None when job.json doesn't say."""
+    try:
+        cwd = json.loads((run_dir / "job.json").read_text())["run"]["cwd"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return cwd.rstrip("/") if isinstance(cwd, str) and cwd.startswith("/") else None
+
+
+def relative(path: str, base: str = "", root: str | None = None) -> str | None:
+    """``path`` as a repository path: an absolute one under ``root`` (`tree_root`) from there, a relative one from ``base`` (the
+    directory pytest ran in, a suite's); None for one outside the tree (an interpreter's, an installed package's, the
+    environment's `.venv/`, a temporary directory's), which no change to the tree touches."""
+    if path.startswith("/"):
+        if root is None or not path.startswith(root + "/"):
+            return None
+        path, base = path[len(root) + 1:], ""
+    path = os.path.normpath(os.path.join(base, path))
+    return None if path in (".", "..") or path.startswith(("../", ".venv/")) else path
+
+
+def _report(log: str) -> str:
+    """The part of a pytest log that reports its failures: from its `ERRORS` or `FAILURES` section to its warnings summary or
+    short summary, which name the files of tests that passed; the whole log when it has neither (a crash before pytest
+    reported)."""
+    start = min((i for i in (log.find("= ERRORS ="), log.find("= FAILURES =")) if i >= 0), default=-1)
+    if start < 0:
+        return log
+    ends = [i for i in (log.find("= warnings summary =", start), log.find("short test summary info", start)) if i >= 0]
+    return log[start:min(ends, default=len(log))]
+
+
+def _named(log: str, base: str, root: str | None = None) -> set[str]:
+    """The repository paths a pytest log's failures name (`_report`), each `relative` to the repository: their tracebacks'
+    frames and the paths and `art:` ids the report holds."""
+    report = _report(log)
+    paths = {relative(m[1] or m[2], base, root) for m in TRACE_RE.finditer(report)}
+    paths |= {relative(m[1], base, root) for m in NAMED_RE.finditer(report)}
+    return {p for p in paths if p} | {f"art:{h}" for h in ART_RE.findall(report)}
 
 
 def _step_log(run_dir: Path, st: dict) -> str:
@@ -914,18 +951,27 @@ def _suite_log(run_dir: Path, s: dict) -> str:
 
 def step_paths(run_dir: Path, st: dict) -> set[str] | None:
     """The paths one failed step other than pytest and lean-suites points at (`implicated`), None when its log names none."""
-    log = _step_log(run_dir, st)
-    if st.get("step") == "lean-audit" and (lean := lean_errors(log)):
+    return step_named(st.get("step"), _step_log(run_dir, st), tree_root(run_dir))
+
+
+def step_named(step: str | None, log: str, root: str | None = None) -> set[str] | None:
+    """`step_paths` of failed step ``step`` and its log ``log``, the check's tree at ``root`` (`tree_root`)."""
+    if step == "lean-audit" and (lean := lean_errors(log)):
         return lean
     if not (tests := FAILED_RE.findall(log)):
         return None
-    return {os.path.normpath(t) for t in tests} | _named(log, "")
+    return {os.path.normpath(t) for t in tests} | _named(log, "", root)
 
 
 def suite_paths(run_dir: Path, s: dict) -> set[str] | None:
     """The paths one failed suite's record points at (`implicated`), None when it names no failing test and no outside read."""
+    return suite_named(s, _suite_log(run_dir, s), tree_root(run_dir))
+
+
+def suite_named(s: dict, log: str, root: str | None = None) -> set[str] | None:
+    """`suite_paths` of a failed suite's record ``s`` and its log ``log``, the check's tree at ``root`` (`tree_root`)."""
     base, tests = s.get("suite") or "", s.get("failed_tests") or []
-    log = _suite_log(run_dir, s)
+    base = "" if base == "." else base
     if not tests and (errors := ERROR_RE.findall(log)):     # a collection error names no failing test, only its module,
         tests = errors                                       # and blaming the suite's inputs would take every landing
     if not tests:
@@ -936,12 +982,12 @@ def suite_paths(run_dir: Path, s: dict) -> set[str] | None:
             return None
         return {os.path.normpath(p) for p in files} | {os.path.normpath(m) for m in modules if m and m != "*"}
     paths = {os.path.normpath(os.path.join(base, t.split("::")[0])) for t in tests}
-    return paths | (_named(log, base) if log else set())
+    return paths | (_named(log, base, root) if log else set())
 
 
 def implicated(run_dir: Path) -> set[str] | None:
     """The paths a failed check's failure points at: each failed suite's failing test files and the files its log's failures
-    name (`_named`: relative to the repository, or absolute as the log wrote them), and the same of a failed step that runs
+    name (`_named`, relative to the repository), and the same of a failed step that runs
     pytest on the repository's own tests (`preflight-lints`). A suite the read guard failed with no failing test names the
     files its tests (or their children, `child_outside`) read outside its inputs and the test modules that read them (its
     record's `outside`, path -> module), so the PR that added the reading test, or changed the file read, is implicated.
