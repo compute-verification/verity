@@ -22,13 +22,16 @@ from verity.circuits.refs import (
     concat,
 )
 from verity.circuits.types import Array, Value
+from verity.definitions.numerics import fa3_model
 from verity.definitions.registry import fa3_split
 
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import known, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _OBSERVED,
+    active_launch_context,
     active_target_profile,
 )
 from verity_vllm.program.frontend.rules.vllm_dsa import (
@@ -120,10 +123,6 @@ class DsaDenseMhaRule(StateRule):
         return {iface.dsa_dense_mha.default}
 
     def applies(self, node, ctx):
-        from verity_vllm.program.frontend import targets as TG
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
-            active_launch_context,
-        )
         a = _args(node, _DENSE)
         layer, topk, scale = a["layer_name"], a["topk"], a["scale"]
         if not isinstance(layer, str) or not isinstance(topk, int) or topk < 1 or not _static_float(scale):
@@ -185,7 +184,6 @@ class DsaDenseMhaRule(StateRule):
         return True
 
     def emit(self, node, ctx):
-        from verity_vllm.program.frontend import targets as TG
         a = _args(node, _DENSE)
         has = a.get("index_k") is not None
         layer, TOPK, scale = a["layer_name"], a["topk"], float(a["scale"])
@@ -253,7 +251,6 @@ def _dense_splits(tp, T: int, NH: int, D: int) -> int:
     raises (`fa3_split.check_combine_bound`)."""
     if tp.batch_invariant:
         return 1
-    from verity.definitions.numerics import fa3_model
     static, dyn = fa3_model.split_plan([T], NH, NH, D, num_sms=int(tp.num_sms), Dv=D)
     if dyn[0] > 1:
         fa3_split.check_combine_bound(static)

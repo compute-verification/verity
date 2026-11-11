@@ -73,6 +73,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.pins import (
     moe_expert_refusal,
     moe_expert_role,
 )
+from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
 aten = torch.ops.aten
 logger = init_logger(__name__)
@@ -797,7 +798,6 @@ class PaddedSiluAndMulRule(InPlaceRule):
                     evidence_domain="structural; numerics: inside MoeFfnFixedL_v1 (SiluMul_v1{I} of MoeExpertBody_v1)")
 
     def targets(self):
-        from verity_vllm.program.frontend.rules.vllm_iface import targets_for
         return targets_for("silu_and_mul")
 
     def applies(self, node, ctx):

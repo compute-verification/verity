@@ -29,11 +29,13 @@ from dataclasses import dataclass, field
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import Body, CompositeDefinition, SpecializedDefinition
 from verity.circuits.defs import bind as ir_bind
-from verity.circuits.refs import Affine, Refs, concat
+from verity.circuits.refs import Affine, Refs, concat, tuple_of
+from verity.circuits.refs import Coll as _Coll
+from verity.circuits.refs import array_of as _array_of
 from verity.circuits.refs import (
     runs as _runs,  # pure (was `..derive._runs`): this module must import without torch (capture fold M4 comparison)
 )
-from verity.circuits.types import Array, RecordType, Type
+from verity.circuits.types import Array, RecordType, Type, Value
 from verity.circuits.types import Tuple as TupleT
 
 from verity_vllm.program.frontend.rules.base import FamilyRule, RuleInfo
@@ -550,14 +552,12 @@ SERVE_V3_FAMILY = RegisteredFamily("Family[Serve_v3]", 1, _serve3.ServeV3, _padd
 
 def _layer_weights_with_table(C: dict) -> RecordType:
     lw = _b1.layer_weights_type(C)
-    from verity.circuits.types import Value
     return RecordType(*(list(lw.fields) + [("cos_sin", Array(C["MAX_POS"], Array(C["D"], Value(16))))]))
 
 
 def _decoder_layer_sig(S):
     C = S.C
     H = C["H"]
-    from verity.circuits.types import Value
     BF = Value(16)
     rows = Array(S.T, Array(H, BF))
     params = [("h", rows)] + ([] if S.L0 else [("res", rows)]) + [("w", _layer_weights_with_table(C))]
@@ -569,9 +569,6 @@ def _decoder_layer_body(B, S, h, *rest):
     K/V rows, LayerPost x T. Layer 0 (`L0`) takes no residual (the residual is `h`)."""
     C, T, T0 = S.C, S.T, S.T0
     res, w = (h, rest[0]) if S.L0 else (rest[0], rest[1])
-    from verity.circuits.refs import Coll as _Coll
-    from verity.circuits.refs import array_of as _array_of
-    from verity.circuits.refs import tuple_of
     lw = _Coll(_b1.layer_weights_type(C), w.refs.slice(0, _b1.layer_weights_type(C).leaves))
     cs = w["cos_sin"]
     pre = [B.call(ir_bind(_b1.LayerPre, C=C, L0=S.L0), h[i], res[i], lw, cs[T0 + i], name=f"t={T0 + i}/pre") for i in range(T)]

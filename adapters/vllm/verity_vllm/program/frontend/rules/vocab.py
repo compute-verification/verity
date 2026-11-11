@@ -27,10 +27,13 @@ from verity.definitions.registry import dsv4_indexer as _dsv4_indexer
 from verity.definitions.registry import dsv4_moe as _dsv4_moe
 from verity.definitions.registry import dsv4_qnorm_insert as _dsv4_qnorm
 from verity.definitions.registry import fa2_check_inf as _f2
+from verity.definitions.registry import fa2_softcap as _f2s
 from verity.definitions.registry import fa3_check_inf as _f3
 from verity.definitions.registry import flashmla as _flashmla
 from verity.definitions.registry import flashmla_prefill as _flashmla_prefill
 from verity.definitions.registry import fp8 as _fp8
+from verity.definitions.registry import fp8_moe as _fm
+from verity.definitions.registry import fp8_moe_experts as _x
 from verity.definitions.registry import fp8_vocab as _fp8_vocab
 from verity.definitions.registry import gemm_bias as _gemm_bias
 from verity.definitions.registry import layer_norm as _LN
@@ -100,8 +103,7 @@ def _int8():
 def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
     """Off the accepted target the scale is an input only under FA2's per-iteration Check_inf (Attention_v11): without
     `FA2_MASKED_FROM` the kind does not bind (`Vocabulary.kind`)."""
-    from verity.definitions.registry import fa2_check_inf as _f2v
-    return ir_bind(_f2v.AttentionV11, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
+    return ir_bind(_f2.AttentionV11, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
 
 
 # -- the kinds whose program values are inputs (`TargetProfile.registered_values`): the value is the kind's last operand, a field of
@@ -337,7 +339,6 @@ def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
 
 
 def _silu_mul_fp8_block_quant(I: int, G: int):
-    from verity.definitions.registry import fp8_moe as _fm
     return ir_bind(_fm.SiluMulFp8BlockQuant, I=I, G=G)
 
 
@@ -346,14 +347,12 @@ def _moe_expert_dot(routed, E, K, N, DOT, G, KB, SWAP):
         return ir_bind(_moe.MoeExpertGemmWV2 if routed else _moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT)
     if G is None or KB is None or SWAP is None:
         raise TypeError("the block-FP8 pair forms take G, KB and SWAP together")
-    from verity.definitions.registry import fp8_moe_experts as _x
     return ir_bind(_x.MoeExpertFp8GemmW if routed else _x.MoeExpertFp8Gemm, E=E, K=K, N=N, G=G, KB=KB, SWAP=SWAP, DOT=DOT)
 
 
 def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
     if FA2_MASKED_FROM is None:
         raise TypeError("a softcap off the accepted target is registered only under FA2's per-iteration Check_inf")
-    from verity.definitions.registry import fa2_softcap as _f2s
     return ir_bind(_f2s.AttentionSoftcapV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, CAP=CAP, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
 
 
