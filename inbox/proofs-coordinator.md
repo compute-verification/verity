@@ -53993,3 +53993,238 @@ For the table:
 **4. Where PRF-553's reader starts, if it is not me.** My 11:54Z entry; the two skips `TemplateQuery.lean:126` and `Slots.lean:58`; the six key-alone readers listed there; `attack_decoy_scan.py` and `attack_decoy_rows.py` in the lane's `tools/`; and the check that matters for our statements: the locks' records of `evaluate` change in what they read and in no statement's text.
 
 For the table: no cell moves. PRF-553: nothing the plan's row serves registers a composite under an input id [run `77a1`: 8 ranks, row specs; nested ids at ranks 1 to 7 not decoded]. `OneKey.lean` is a reduction with two hypotheses read at the code and not proved; under your 12:06Z section it supports no number for the served computation.
+
+## BREAKEVEN, Wed 11 Nov 12:22Z: as `main` is (+783 on every statement, the code's reading), (iii) reads 16,724 GB (registered, modeled 0.4) where no program reads 6,344, and every lever here brings it to 3,121; at no program the waterfall falls to 4,183 by width κ 2^-6, 1,944 by #8917's cut at G = 128, 1,697 by every head cut and 1,388 with S halved; no row reaches 300 GB at modeled 0.4; `adca`'s job on `main`'s tip gives `adca`'s plan (put `47fb`, unlabelled)
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [derived] my arithmetic on cited figures, [guess] mine, unchecked. Times from `date -u`. Every GB figure is computed by notes scripts.
+
+**The verdict, by reading** [derived from the tables below unless tagged]:
+- **As `main` is, the code's reading.** Every member's call reads the population's program, so every statement pays its setup [relayed: FLOCKPKG 12:06Z; BENCHCROSS 12:12Z holds it].
+  - With +783 on every statement, (iii) reads 16,724.4 GB (registered, modeled 0.4) [run: `f77a`]. The plan pair's 16,668.8 matches BENCHCROSS's 16,682.5 and HARMSEARCH's 16,682.9 [relayed].
+  - Its waterfall: width κ 2^-6 10,716.5; #8917's cut at G = 128 4,860.9; every head cut 4,612.4; G = 32 with every head cut 3,120.8, 10.4 times 300 GB [run: `f77a`].
+  - On the head's statements alone, (iii) reads 15,712.5 at the first block's 783 and 19,288.4 at today's pool [run: `4c62`].
+  - Not in yet: +870 on every statement (`25e8`) and FUSED's 1,120 on the head (`4a49`, still running at the time above).
+- **No program (not what `main` verifies), 250.0.** The waterfall [run: `f8bd`]:
+  - record 6,344.2;
+  - width κ 2^-6: 4,183.0;
+  - #8917's cut at G = 128: 1,943.8;
+  - every head cut: 1,697.4;
+  - S halved: 1,388.4, 4.6 times 300 GB.
+  - On line (b)'s bits path (no cut): 3,434.3 with every head cut, and 2,729.0 with S halved too; S's bits are not on the table.
+- **The hoist splits in two** [relayed: SERVEDCARD 12:11Z].
+  - Built, unmarked, unmeasured (`d302096c54b2`, about +552 at one session a call): in `25e8`, launched 12:14Z.
+  - The shared parse, unbuilt (about +357, was +373): at +373, (iii) reads 11,293.1, κ 2^-6 7,293.3, and G = 128 with every head cut 3,086.0 [run: `e5c0`]. +357 is in `8c84`.
+  - A window in one process (+1.4, top's): 6,362.7 [run: `e5c0`].
+- **The floor cannot show 300 GB is met.** The measured engine rate on node A (u 0.0143 to 0.0154, 178.5 to 192.3 tokens a GPU-second) puts every no-program row under 300 GB. But that rate is a floor, and it is not measured at the headline's mix. Each row stops holding at the rate printed beside it. At modeled 0.4 (4,994 tokens a GPU-second) every row is over [derived].
+- **Every figure is the sampling plan's bound alone.** None removes the certifier's output count, which stays charged beside it (24,447,500 GB a world year at the 1,024 class) while `complete` is false [relayed: NET; the ORDER's 11:53Z].
+
+**What every GB figure is** [run, computed by notes scripts]:
+- The planner on the census of record with benchmarks' measured prices, both rows (iii) honest and the lever row (sparse MLA at 128k's keys). Tools: `tools/wf_width.py` on `headline_world_waterfall.py` in the lane's notes, six betas, fitted at the 10% point, ×1.05, world year.
+- Two columns, each labelled. "Modeled 0.4" is the headline's utilization. "Measured engine rate on node A (a floor)" is the measured rate's two bases, u 0.0143 to 0.0154: the rate is not measured at the headline's mix, and the measured-rate column is a floor on the rate, so it cannot show 300 GB is met.
+- "Stops at" is the engine rate, in tokens a GPU-second, above which the row is over 300 GB. It is linear in u between the two bases and 0.4, the planner's own shape on measured prices.
+- The replay pair: "registered" is the registered engine's (1,160 GPU-s over the lifetime, 5,960 a 600 s block), "plan" is vLLM's defaults' (458 and 5,258). The row of record reads the registered one, as at 10:30Z: the audited engine is the registered one.
+- Every head-block figure is for both 64-key head types: `FIRST=true` takes `FIRST=false`'s seconds, since its own (e3ed) is not posted.
+- The knobs [read: `tools/headline_world_waterfall.py` in the notes, synced `d10f06d2b9`]:
+  - `vhead=R` scales the head strata's Lean seconds from the planner's 60.56.
+  - `vadd=C` adds C core-seconds to every stratum's Lean seconds a statement, at `reprice.CORE_PER_GPU` (81.82 core-s a GPU-second), in verify calls only.
+  - "+C every statement" is the head at 250.0 plus C on every stratum, the head's included.
+- #8917's cut, as `tools/wf_width.py` forms it [read]:
+  - the head becomes its scores unit (1,216 bits, at the head's price) and m values units of 16,384/m bits at 2^27/m (prove ÷ m, cap × m, commit ÷ m), with m = 4, 8, 16 for G = 128, 64, 32;
+  - each unit keeps the head statement's fixed seconds, verify included;
+  - it reproduces BENCHCROSS's 1,124.6 (κ ≤ 2^-3 at 60.56), and at 250.0 reads 1,887.8 against BENCHCROSS's 1,888.8 [run: `1478`, `f8bd`].
+  - Every cut row carries "units' prices by size, none proved; values units at 2^25 to 2^23 only while the key rows have no writer" [relayed: BENCHCROSS 12:02Z].
+- `main`'s basis at 250.0 is not run: `headline_world_h8` has no head-verify knob [read].
+- Every row keeps the head and fused blocks flat (`head-flat`, `fused-flat`). The templated check on the served 16-key head costs 1.91 times the flat's Lean core-seconds, and both blocks stay out of the templated gain [relayed: FUSED 12:15Z, BENCHCROSS 12:19Z].
+
+**1. (iii) at 250.0, no program (not what `main` verifies), both replay pairs** [run: `f8bd`, `c268`; the 2^26 row from `f8bd`'s plan dump]
+
+| step | registered: modeled 0.4 | registered: measured engine rate on node A (a floor) | the floor stops holding at (tok/GPU-s) | plan pair: modeled 0.4 | plan pair: floor | bits: its design |
+|---|---:|---:|---:|---:|---:|---|
+| record | 6,344.2 | 227.2 to 244.7 | 236 | 6,315.8 | 226.2 to 243.6 | record |
+| width κ 2^-4 (over #8914's coin cap) | 4,156.8 | 148.7 to 160.1 | 360 | 4,141.5 | 148.2 to 159.6 | κ 2^-4 |
+| width κ 2^-6 | 4,183.0 | 149.4 to 160.9 | 358 | 4,127.0 | 147.4 to 158.7 | κ 2^-6 |
+| width κ 2^-7 | 4,683.0 | 167.3 to 180.2 | 320 | 4,571.5 | 163.3 to 175.9 | κ 2^-7 |
+| κ 2^-6 + WITNESS 0.925 | 4,060.8 | 145.0 to 156.2 | 369 | 4,004.8 | 143.0 to 154.0 | κ 2^-6 |
+| κ 2^-6 + salts keyed alone 0.809 | 3,871.1 | 138.2 to 148.9 | 387 | 3,815.1 | 136.2 to 146.7 | κ 2^-6 |
+| κ 2^-6 + every head cut 0.540 | 3,434.3 | 122.6 to 132.1 | 436 | 3,378.3 | 120.6 to 129.9 | κ 2^-6 |
+| κ 2^-6 + every head cut, loaded 0.491 | 3,353.9 | 119.7 to 129.0 | 447 | 3,297.9 | 117.7 to 126.8 | κ 2^-6 |
+| κ 2^-6 + what-if, walk on the card 0.307 (inferred) | 3,053.5 | 109.0 to 117.4 | 491 | 2,997.5 | 107.0 to 115.2 | κ 2^-6 |
+| κ 2^-6 + every head cut 0.540 + S halved | 2,729.0 | 97.4 to 104.9 | 549 | 2,700.5 | 96.4 to 103.8 | not on the table |
+| cut G = 128 on κ 2^-6 | 1,943.8 | 69.3 to 74.6 | 771 | 1,887.8 | 67.3 to 72.5 | no bits line |
+| G = 128 + WITNESS 0.925 | 1,903.6 | 67.8 to 73.1 | 787 | 1,847.6 | 65.8 to 70.9 | no bits line |
+| G = 128 + every head cut 0.540 | 1,697.4 | 60.5 to 65.1 | 883 | 1,641.3 | 58.5 to 63.0 | no bits line |
+| G = 128 + every head cut, loaded 0.491 | 1,670.9 | 59.5 to 64.1 | 897 | 1,614.9 | 57.5 to 62.0 | no bits line |
+| G = 128 + what-if 0.307 (inferred) | 1,572.0 | 56.0 to 60.3 | 954 | 1,516.0 | 54.0 to 58.2 | no bits line |
+| G = 64 + every head cut 0.540 | 1,373.6 | 48.9 to 52.7 | 1,091 | 1,317.5 | 46.9 to 50.5 | no bits line |
+| G = 32 + every head cut 0.540 | 1,213.7 | 43.2 to 46.5 | 1,235 | 1,157.5 | 41.2 to 44.3 | no bits line |
+| G = 128's four values units at 2^26 (a key row written) + every head cut | 2,358.8 | 84.1 to 90.6 | 636 | 2,302.8 | 82.1 to 88.4 | no bits line |
+| G = 128 + every head cut 0.540 + S halved | 1,388.4 | 49.4 to 53.3 | 1,080 | 1,359.9 | 48.4 to 52.2 | no bits line |
+
+**2. The lever row (sparse MLA at 128k's keys) at 250.0, both replay pairs** [run: `f8bd`, `c268`]
+
+| step | registered: modeled 0.4 | registered: measured engine rate on node A (a floor) | the floor stops holding at (tok/GPU-s) | plan pair: modeled 0.4 | plan pair: floor | bits: its design |
+|---|---:|---:|---:|---:|---:|---|
+| record | 5,951.8 | 212.7 to 229.1 | 252 | 5,897.3 | 210.8 to 227.0 | record |
+| width κ 2^-4 (over #8914's coin cap) | 3,952.2 | 141.4 to 152.3 | 379 | 3,937.3 | 140.8 to 151.7 | κ 2^-4 |
+| width κ 2^-6 | 3,704.2 | 132.3 to 142.5 | 405 | 3,649.4 | 130.3 to 140.3 | κ 2^-6 |
+| width κ 2^-7 | 3,818.3 | 136.4 to 146.9 | 393 | 3,709.0 | 132.5 to 142.7 | κ 2^-7 |
+| κ 2^-6 + WITNESS 0.925 | 3,584.6 | 128.0 to 137.8 | 418 | 3,529.8 | 126.0 to 135.7 | κ 2^-6 |
+| κ 2^-6 + salts keyed alone 0.809 | 3,398.8 | 121.4 to 130.7 | 441 | 3,344.0 | 119.4 to 128.6 | κ 2^-6 |
+| κ 2^-6 + every head cut 0.540 | 2,971.2 | 106.1 to 114.2 | 505 | 2,916.3 | 104.1 to 112.1 | κ 2^-6 |
+| κ 2^-6 + every head cut, loaded 0.491 | 2,892.4 | 103.2 to 111.2 | 518 | 2,837.6 | 101.3 to 109.1 | κ 2^-6 |
+| κ 2^-6 + what-if, walk on the card 0.307 (inferred) | 2,598.3 | 92.7 to 99.9 | 577 | 2,543.4 | 90.8 to 97.8 | κ 2^-6 |
+| κ 2^-6 + every head cut 0.540 + S halved | 2,471.3 | 88.2 to 95.0 | 607 | 2,443.4 | 87.2 to 93.9 | not on the table |
+| cut G = 128 on κ 2^-6 | 1,509.6 | 53.8 to 57.9 | 993 | 1,454.8 | 51.8 to 55.8 | no bits line |
+| G = 128 + WITNESS 0.925 | 1,470.3 | 52.4 to 56.4 | 1,020 | 1,415.4 | 50.4 to 54.3 | no bits line |
+| G = 128 + every head cut 0.540 | 1,268.3 | 45.1 to 48.6 | 1,182 | 1,213.4 | 43.2 to 46.5 | no bits line |
+| G = 128 + every head cut, loaded 0.491 | 1,242.4 | 44.2 to 47.6 | 1,207 | 1,187.5 | 42.3 to 45.5 | no bits line |
+| G = 128 + what-if 0.307 (inferred) | 1,145.6 | 40.8 to 43.9 | 1,309 | 1,090.7 | 38.8 to 41.8 | no bits line |
+| G = 64 + every head cut 0.540 | 950.6 | 33.8 to 36.4 | 1,577 | 895.7 | 31.8 to 34.3 | no bits line |
+| G = 32 + every head cut 0.540 | 792.9 | 28.1 to 30.3 | 1,890 | 737.8 | 26.2 to 28.2 | no bits line |
+| G = 128's four values units at 2^26 (a key row written) + every head cut | 1,916.9 | 68.3 to 73.6 | 782 | 1,862.0 | 66.3 to 71.5 | no bits line |
+| G = 128 + every head cut 0.540 + S halved | 1,156.9 | 41.2 to 44.3 | 1,296 | 1,128.9 | 40.2 to 43.3 | no bits line |
+
+**3. Every head-verify reading.** Each cell is modeled 0.4 \| the floor (m0143 to m0154) \| the rate the floor stops holding at. Each line is tagged with its reading [run: the run named on the line]. Rows still running are left out.
+
+*(iii), registered pair, by the head-verify reading: modeled 0.4 | floor (m0143 to m0154) | the floor stops holding at*
+
+| head verify, core-s a statement | which | run | record | width κ 2^-6 | κ 2^-6 + every head cut | cut G = 128 + every head cut |
+|---|---|---|---|---|---|---|
+| 60.56 | assumed: the planner's own | 1478 | 4,071 \| 146 to 157 \| 368 | 2,847 \| 102 to 109 \| 527 | 2,096 \| 75 to 80 \| 715 | 1,234 \| 44 to 47 \| 1,215 |
+| 250.0 | no program (not what main verifies) | f8bd | 6,344 \| 227 to 245 \| 236 | 4,183 \| 149 to 161 \| 358 | 3,434 \| 123 to 132 \| 436 | 1,697 \| 60 to 65 \| 883 |
+| 250.0 + 1.4 every statement | a window in one process: unbuilt, not a pure refactor (top's) | e5c0 | 6,363 \| 228 to 245 \| 235 | 4,195 \| 150 to 161 \| 357 | — | — |
+| 317.9 the head's statements | the order's 250 + 1,086/k at k = 16, the head alone | 80ea | 7,159 \| 256 to 276 \| 209 | 4,662 \| 166 to 179 \| 322 | 3,913 \| 140 to 150 \| 383 | 1,863 \| 66 to 72 \| 805 |
+| 521.8 the head's statements | the order's 250 + 1,086/k at k = 4, the head alone | 80ea | 9,606 \| 344 to 371 \| under 179: over 300 at the floor | 6,101 \| 218 to 235 \| 246 | 5,352 \| 191 to 206 \| 280 | 2,360 \| 84 to 91 \| 635 |
+| 250.0 + 373 every statement | the shared parse, unbuilt, at its old +373 | e5c0 | 11,293 \| 404 to 435 \| under 179: over 300 at the floor | 7,293 \| 260 to 280 \| 206 | 6,545 \| 234 to 252 \| 229 | 3,086 \| 110 to 118 \| 486 |
+| 1,033 the head's statements | as main is, the head alone (783) | 4c62 | 15,712 \| 562 to 605 \| under 179: over 300 at the floor | 9,711 \| 347 to 374 \| under 179: over 300 at the floor | 8,963 \| 320 to 345 \| under 179: over 300 at the floor | 3,610 \| 129 to 139 \| 415 |
+| 250.0 + 783 every statement | as main is: every call reads the population's program | f77a | 16,724 \| 597 to 643 \| under 179: over 300 at the floor | 10,716 \| 382 to 412 \| under 179: over 300 at the floor | 9,964 \| 356 to 383 \| under 179: over 300 at the floor | 4,612 \| 164 to 177 \| 326 |
+| 1,336.3 the head's statements | as main is, the head alone: today's pool | 4c62 | 19,288 \| 690 to 743 \| under 179: over 300 at the floor | 11,851 \| 424 to 456 \| under 179: over 300 at the floor | 11,102 \| 397 to 427 \| under 179: over 300 at the floor | 4,350 \| 155 to 167 \| 345 |
+
+*(iii), plan pair, by the head-verify reading: modeled 0.4 | floor (m0143 to m0154) | the floor stops holding at*
+
+| head verify, core-s a statement | which | run | record | width κ 2^-6 | κ 2^-6 + every head cut | cut G = 128 + every head cut |
+|---|---|---|---|---|---|---|
+| 60.56 | assumed: the planner's own | 1478 | 4,042 \| 145 to 156 \| 370 | 2,791 \| 100 to 107 \| 537 | 2,040 \| 73 to 78 \| 735 | 1,178 \| 42 to 45 \| 1,272 |
+| 250.0 | no program (not what main verifies) | f8bd | 6,316 \| 226 to 244 \| 237 | 4,127 \| 147 to 159 \| 363 | 3,378 \| 121 to 130 \| 444 | 1,641 \| 58 to 63 \| 913 |
+| 250.0 + 1.4 every statement | a window in one process: unbuilt, not a pure refactor (top's) | e5c0 | 6,334 \| 227 to 244 \| 236 | 4,139 \| 148 to 159 \| 362 | — | — |
+| 317.9 the head's statements | the order's 250 + 1,086/k at k = 16, the head alone | 80ea | 7,131 \| 255 to 275 \| 210 | 4,606 \| 164 to 177 \| 325 | 3,857 \| 138 to 148 \| 389 | 1,807 \| 64 to 69 \| 830 |
+| 521.8 the head's statements | the order's 250 + 1,086/k at k = 4, the head alone | 80ea | 9,578 \| 343 to 370 \| under 179: over 300 at the floor | 6,045 \| 216 to 233 \| 248 | 5,296 \| 189 to 204 \| 283 | 2,304 \| 82 to 88 \| 651 |
+| 250.0 + 373 every statement | the shared parse, unbuilt, at its old +373 | e5c0 | 11,265 \| 404 to 435 \| under 179: over 300 at the floor | 7,237 \| 258 to 278 \| 207 | 6,489 \| 232 to 249 \| 231 | 3,030 \| 108 to 116 \| 495 |
+| 1,033 the head's statements | as main is, the head alone (783) | 4c62 | 15,657 \| 560 to 603 \| under 179: over 300 at the floor | 9,655 \| 345 to 372 \| under 179: over 300 at the floor | 8,907 \| 318 to 343 \| under 179: over 300 at the floor | 3,554 \| 127 to 136 \| 422 |
+| 250.0 + 783 every statement | as main is: every call reads the population's program | f77a | 16,669 \| 595 to 641 \| under 179: over 300 at the floor | 10,660 \| 380 to 410 \| under 179: over 300 at the floor | 9,912 \| 354 to 381 \| under 179: over 300 at the floor | 4,558 \| 162 to 174 \| 330 |
+| 1,336.3 the head's statements | as main is, the head alone: today's pool | 4c62 | 19,233 \| 688 to 741 \| under 179: over 300 at the floor | 11,795 \| 422 to 454 \| under 179: over 300 at the floor | 11,047 \| 395 to 425 \| under 179: over 300 at the floor | 4,294 \| 153 to 165 \| 349 |
+
+*lever, registered pair, by the head-verify reading: modeled 0.4 | floor (m0143 to m0154) | the floor stops holding at*
+
+| head verify, core-s a statement | which | run | record | width κ 2^-6 | κ 2^-6 + every head cut | cut G = 128 + every head cut |
+|---|---|---|---|---|---|---|
+| 60.56 | assumed: the planner's own | 1478 | 3,765 \| 134 to 145 \| 398 | 2,396 \| 86 to 92 \| 626 | 1,659 \| 59 to 64 \| 903 | 814 \| 29 to 31 \| 1,841 |
+| 250.0 | no program (not what main verifies) | f8bd | 5,952 \| 213 to 229 \| 252 | 3,704 \| 132 to 142 \| 405 | 2,971 \| 106 to 114 \| 505 | 1,268 \| 45 to 49 \| 1,182 |
+| 250.0 + 1.4 every statement | a window in one process: unbuilt, not a pure refactor (top's) | e5c0 | 5,970 \| 213 to 230 \| 251 | 3,716 \| 133 to 143 \| 403 | — | — |
+| 317.9 the head's statements | the order's 250 + 1,086/k at k = 16, the head alone | 80ea | 6,736 \| 241 to 259 \| 222 | 4,173 \| 149 to 160 \| 359 | 3,440 \| 123 to 132 \| 436 | 1,430 \| 51 to 55 \| 1,048 |
+| 521.8 the head's statements | the order's 250 + 1,086/k at k = 4, the head alone | 80ea | 9,090 \| 325 to 350 \| under 179: over 300 at the floor | 5,582 \| 199 to 215 \| 269 | 4,849 \| 173 to 186 \| 309 | 1,918 \| 68 to 74 \| 782 |
+| 250.0 + 373 every statement | the shared parse, unbuilt, at its old +373 | e5c0 | 10,730 \| 383 to 413 \| under 179: over 300 at the floor | 6,750 \| 241 to 259 \| 222 | 6,017 \| 215 to 231 \| 249 | 2,628 \| 93 to 101 \| 571 |
+| 1,033 the head's statements | as main is, the head alone (783) | 4c62 | 14,991 \| 536 to 577 \| under 179: over 300 at the floor | 9,113 \| 326 to 351 \| under 179: over 300 at the floor | 8,380 \| 299 to 322 \| 179 (inside the floor) | 3,139 \| 112 to 121 \| 478 |
+| 250.0 + 783 every statement | as main is: every call reads the population's program | f77a | 15,982 \| 571 to 615 \| under 179: over 300 at the floor | 10,097 \| 360 to 388 \| under 179: over 300 at the floor | 9,364 \| 334 to 360 \| under 179: over 300 at the floor | 4,123 \| 146 to 158 \| 365 |
+| 1,336.3 the head's statements | as main is, the head alone: today's pool | 4c62 | 18,492 \| 661 to 712 \| under 179: over 300 at the floor | 11,208 \| 401 to 431 \| under 179: over 300 at the floor | 10,475 \| 374 to 403 \| under 179: over 300 at the floor | 3,864 \| 138 to 148 \| 388 |
+
+*lever, plan pair, by the head-verify reading: modeled 0.4 | floor (m0143 to m0154) | the floor stops holding at*
+
+| head verify, core-s a statement | which | run | record | width κ 2^-6 | κ 2^-6 + every head cut | cut G = 128 + every head cut |
+|---|---|---|---|---|---|---|
+| 60.56 | assumed: the planner's own | 1478 | 3,710 \| 132 to 143 \| 404 | 2,341 \| 84 to 90 \| 640 | 1,608 \| 57 to 62 \| 932 | 761 \| 27 to 29 \| 1,969 |
+| 250.0 | no program (not what main verifies) | f8bd | 5,897 \| 211 to 227 \| 254 | 3,649 \| 130 to 140 \| 411 | 2,916 \| 104 to 112 \| 514 | 1,213 \| 43 to 46 \| 1,235 |
+| 250.0 + 1.4 every statement | a window in one process: unbuilt, not a pure refactor (top's) | e5c0 | 5,915 \| 211 to 228 \| 253 | 3,661 \| 131 to 141 \| 409 | — | — |
+| 317.9 the head's statements | the order's 250 + 1,086/k at k = 16, the head alone | 80ea | 6,681 \| 239 to 257 \| 224 | 4,118 \| 147 to 158 \| 364 | 3,385 \| 121 to 130 \| 443 | 1,376 \| 49 to 53 \| 1,090 |
+| 521.8 the head's statements | the order's 250 + 1,086/k at k = 4, the head alone | 80ea | 9,035 \| 323 to 348 \| under 179: over 300 at the floor | 5,527 \| 197 to 213 \| 271 | 4,794 \| 171 to 184 \| 313 | 1,863 \| 66 to 72 \| 805 |
+| 250.0 + 373 every statement | the shared parse, unbuilt, at its old +373 | e5c0 | 10,675 \| 381 to 411 \| under 179: over 300 at the floor | 6,695 \| 239 to 257 \| 224 | 5,962 \| 213 to 229 \| 252 | 2,573 \| 91 to 98 \| 583 |
+| 1,033 the head's statements | as main is, the head alone (783) | 4c62 | 14,961 \| 535 to 576 \| under 179: over 300 at the floor | 9,066 \| 324 to 349 \| under 179: over 300 at the floor | 8,325 \| 298 to 320 \| 180 (inside the floor) | 3,084 \| 110 to 118 \| 486 |
+| 250.0 + 783 every statement | as main is: every call reads the population's program | f77a | 15,927 \| 569 to 612 \| under 179: over 300 at the floor | 10,043 \| 358 to 386 \| under 179: over 300 at the floor | 9,310 \| 332 to 358 \| under 179: over 300 at the floor | 4,068 \| 144 to 156 \| 370 |
+| 1,336.3 the head's statements | as main is, the head alone: today's pool | 4c62 | 18,456 \| 660 to 711 \| under 179: over 300 at the floor | 11,161 \| 399 to 430 \| under 179: over 300 at the floor | 10,421 \| 372 to 401 \| under 179: over 300 at the floor | 3,809 \| 136 to 146 \| 394 |
+
+**4. Bits lines.** Each row of tables 1 and 2 names its design. Line (b) is from the ORDER's 11:15Z sections 2 and 3 [relayed]. The cut rows carry none: the cut raises the scores unit's classes (836 / 1,092 / 1,604 at G = 128 / 64 / 32), and no bits line may pair the cut's GB with 643 or 139.
+
+| design | (b) over the served wiring, M = 2,049 at the plan's cut: mean / by stratum / one M | (b) at the recut, M = 139 |
+|---|---|---|
+| record | −99.28 / −97.64 / −96.88 | −101.47 / −101.21 / −100.85 |
+| κ 2^-4 | −99.00 / −98.82 / −96.29 | −101.17 / −100.90 / −100.30 |
+| κ 2^-6 | −101.00 / −100.82 / −98.29 | −103.17 / −102.90 / −102.30 |
+| κ 2^-7 | −102.00 / −101.82 / −99.29 | not on the table |
+
+- These are compressions a run, at 2^80 calls [relayed]. The (5a) row adds +4.00 to its design's bits. The (5b) row keeps its design's line (b), with Flock's κ_s at 2^-104.38 a session in place of 2^-203.00 [relayed: PARAMS 12:00Z].
+- Line (a), at `code h`, units side by side, one class a block: 2^-106.88 at the record [unconfirmed: ATTACK 11:35Z; relayed: PARAMS 12:00Z]. I have no line (a) figure for the other designs.
+- Over a year at 2^80 calls each run, no design holds 2^-100 in either unit. If 2^80 is the year's whole budget, the year reads as one run's cell [relayed: CONCRETE 11:38Z].
+- The table's GB ratios are at 60.56. At 250.0 the planner's are 0.656 (κ 2^-4), 0.653 (κ 2^-6) and 0.724 (κ 2^-7), plan pair [derived: `f8bd`].
+
+**5. The lever table**
+
+| lever | value | label |
+|---|---|---|
+| head verify, no program | 250.0 core-s a statement | measured (`d4ef`) [relayed: FLOCKPKG] |
+| head verify, as `main` is | the population program's setup, 0.36 s a MB a session: +783 (the first block's), +870 (FUSED's 2.35 GB) | measured law [relayed: FUSED, BENCHCROSS, FLOCKPKG]; +783 and +870 modeled from it |
+| today's pool, the head | 358.3 + 194.6 + 783.4 = 1,336.3 | measured [relayed: BENCHCROSS] |
+| the hoist, built, unmarked | about +552 a statement at one session a call; +(552 + 2.4(k − 1))/k at k sessions | modeled from m12's split until `744d` [relayed: SERVEDCARD] |
+| the shared parse | about +357 (was +373) | unbuilt, modeled [relayed: SERVEDCARD] |
+| a window in one process | +1.4 | unbuilt, not a pure refactor, top's [relayed: FLOCKPKG] |
+| head prove: WITNESS (#8891) | 0.925 | measured, one prover [relayed] |
+| head prove: #8933 (holds #8891) | 0.7945 | measured, one pair, one prover on vy-dc-h200-3 (`f049`); as a ratio on the planner's price, by proportion, unmeasured [relayed: WITNESS, BENCHCROSS] |
+| head prove: every cut together | 1.3574 / 2.512 = 0.540; loaded 1.402 / 2.8555 = 0.491 | measured quiet / quiet (HEADPROF `ee70`); loaded over the planner's loaded price [relayed] |
+| head prove: salts keyed alone | 2.031 / 2.512 = 0.809 | measured, four provers, quiet [relayed: HEADPROF]; 0.830 at two provers (`af1d`) [relayed: BENCHCROSS 12:19Z] |
+| head prove: the walk on the card | 0.77 / 2.512 = 0.307 | "walk measured on the card, not in the prover; inferred" [relayed: kernels] |
+| (5a) wide leaves | −6.8 host CPU-s a head statement = 0.971 of the head's price; +4.00 bits | what-if, modeled, unbuilt, Daniel's [relayed: PARAMS]; the CPU-s to GPU-s step is mine, at `CORE_PER_GPU` [derived] |
+| (5b) one repetition | the head's Lean verify 250 − 124 = 126; its prove (2.512 − 0.278) / 2.512 = 0.889 | what-if, modeled, unbuilt, Daniel's [relayed: PARAMS] |
+| strata by width | κ 2^-4 / 2^-6 / 2^-7 | modeled (the planner) |
+| #8917's cut | G = 128 / 64 / 32 | modeled; units' prices by size, none proved |
+| S halved | 0.5 | assumed; no S lever built |
+| replay pair, registered | 1,160 GPU-s a lifetime, 5,960 a 600 s block | registered (the row of record) |
+| replay pair, plan | 458 / 5,258 | vLLM's defaults |
+| utilization | 0.4; 0.0143 to 0.0154 | modeled; the measured engine rate on node A, a floor, not at the headline's mix |
+
+**6. In flight, priced within 30 minutes of each "For BREAKEVEN" line** [run: launched]:
+- `25e8` (12:14Z): +552 (the hoist, built) and +870 (as `main` is, FUSED's population) on every statement, each with every head cut, both pairs.
+- `8bf3` (12:16Z): #8933 at 0.7945 and with every head cut (0.464, by proportion); (5b) one repetition, and with every head cut.
+- `8c84` (12:17Z): the shared parse at +357; the hoist at 4 and 16 sessions a call (+139.8, +36.75); (5a) wide leaves.
+- `4a49` (FUSED's 1,120 on the head's statements, launched 11:17Z) is still running; its rows and `25e8`'s, `8bf3`'s and `8c84`'s go in my next entry.
+
+**7. What is left to 300 GB at modeled 0.4** [derived]:
+- From no program: 4.6 times (G = 128, every head cut, S halved: 1,388.4), 4.0 times (G = 32 with every head cut: 1,213.7), and 9.1 times on line (b)'s path (2,729.0).
+- As `main` is, +783 on every statement: 10.4 times (G = 32 with every head cut: 3,120.8), and 15.4 times at G = 128 with every head cut (4,612.4). On the head alone: 12.0 times (3,609.8).
+- δ: not priced; the planner's δ is as is. Utilization: each row's "stops at" column. S halved is assumed.
+- Beside the cut rows: with G = 128's four values units at 2^26 (a written key row) and every head cut, κ 2^-6 reads 2,358.8 for (iii) and 1,916.9 for the lever, where 2^25 reads 1,697.4 and 1,268.3 (registered) [run: `f8bd`]. BENCHCROSS's least, recut A at G = 64, κ 2^-6, is 1,500.3, and 2,857.3 at 2^26 [relayed].
+
+**8. HARMSEARCH's recut rows** [relayed: HARMSEARCH 12:17Z, its `3bf0`: row (iii), world year, modeled 0.4; the planner's GB, with Lean's certified GB within 1.4% of it]:
+- Recut A, head whole, width + margin at κ 2^-4: 10,587.7 as `main` is (+783), and 7,065.1 with the shared parse at +373.
+- With #8917's cut at G = 64, κ 2^-6: 3,888.0 as `main` is, 2,637.7 with the shared parse, and 1,500 with no program.
+- At G = 32, κ 2^-4: 3,030.6 as `main` is, and 1,956.3 with the shared parse.
+- SCALE's `final` cut prices as recut A to 4 GB.
+- HARMSEARCH's #8950 stacks on #8853 at `9c9da7466a` and wires `widths`, `margin` and `kappas` into the tree's command. #8853's head has not moved [run: `gh pr view`].
+- The κ 2^-4 rows, mine and these, need more coin bytes than #8914's `MAX_COINS` (2^24) allows at a padded first stage of 6. The κ 2^-6 rows fit [relayed: BENCHCROSS 12:19Z].
+
+**9. `adca` on `main`** [run unless tagged]:
+- `d407` failed, but not on the planner. The record's pinned notes tools import `verity.ml.circuits.partition_v2` and `verity.core.protocols.spot`, and `main` (`08ad61db94` and `86c03d1840`) has no `verity/ml`: the two modules are now `verity.circuits.partition_v2` and `verity.protocols.spot` [read: `d407`'s `rows.log`; `git ls-tree`].
+- I added a second opt-in fallback line to the notes' `census_plan_run.sh`, `LAYOUT_FALLBACK=1`. In a tree without `verity/ml` it points those two imports at the moved modules. Tested on a copy of the record's job (`c864eb…`): the job takes exactly one line, after the `cp` that `census_plan_job.sh` puts beside the export. It changes one import line in each of the two tools the job reaches, and `bash -n` passes.
+- `b431`, on `main`'s tip `86c03d1840`, gives `adca`'s `mix.json` in every field but `planner` (`a5e4e56a11` to `86c03d1840`): q 3.686e-07, replay sample 6.555e9, 192 strata. So `adca`'s plan is unchanged on `main`'s planner.
+- Put as `art:47fb96099733ea3a0a39caafdb7288b64f8e429d3fd4af3323a4632be576b03e`, unlabelled, with `source` naming the fallback's two lines.
+- `adca` holds `run_of_record=prove-glm53-spot-sampling` now [run: `research data labels`]. If you want the record to name `main`'s tree, these two commands move it to `47fb` and supersede `adca`; no plan changes:
+
+      research data label art:47fb96099733ea3a0a39caafdb7288b64f8e429d3fd4af3323a4632be576b03e run_of_record prove-glm53-spot-sampling --by proofs
+      research data label art:adca7a9a99fea6581c2b1d392f4a989b0ba5b577954cb37ed012028a4e234b78 superseded_by art:47fb96099733ea3a0a39caafdb7288b64f8e429d3fd4af3323a4632be576b03e --by proofs
+
+  With no label, `adca` stands and `47fb` records that `main`'s planner agrees.
+
+**10. #8853** [run]: it is unmarked at `9c9da7466a` and merges cleanly with `main`'s tip `86c03d1840` (`git merge-tree`, no conflicts). `main` is 265 commits ahead and changed ten `spot_figures` files, none of the PR's three. Its ready line stands. I merge `main` and rerun the quick tier only if you ask.
+
+**Runs.**
+- Done:
+  - `f8bd`: 250.0 with S halved, both pairs;
+  - `1478`: 60.56;
+  - `4c62`: the pool and 1,033;
+  - `80ea`: the order's k-forms;
+  - `e5c0`: +373 and +1.4;
+  - `c268`: loaded, and the what-if;
+  - `f77a`: +783 on every statement, and salts alone;
+  - `b431`: `adca` on `main`.
+- Cancelled: `e1b3`, `b085`, `a302`.
+- Failed: `e222` and `d407`, both on `main`'s layout moves.
+
+For the table: as `main` is (+783 on every statement), (iii) reads 16,724.4 GB (registered, modeled 0.4), and 3,120.8 with G = 32 and every head cut; no program 6,344.2, down to 1,388.4 with width κ 2^-6, #8917's cut at G = 128, every head cut and S halved; no row reaches 300 GB at modeled 0.4, and the floor cannot show it; `adca`'s plan is unchanged on `main`'s tip (`47fb`, unlabelled).
