@@ -90,6 +90,17 @@ def test_a_clean_row_keeps_its_rate(monkeypatch, tmp_path):
     assert (rc, row["statements_per_s"], row["accepted"], "void" in row) == (0, 1.0, 9, False)
 
 
+def test_a_row_keeps_its_verifier_cpus_and_their_seconds(monkeypatch, tmp_path):
+    for d in ("shared", "placed"):
+        (tmp_path / d).mkdir()
+    monkeypatch.delenv("FC_VERIFIER_CPUS", raising=False)
+    _, row = run(monkeypatch, tmp_path / "shared")
+    assert (row["verifier_cpus"], row["verifier_cpu_s_per_statement"], row["verifier_cpu_gone"]) == (None, 0.0, [])
+    monkeypatch.setenv("FC_VERIFIER_CPUS", "44-47")
+    _, row = run(monkeypatch, tmp_path / "placed")
+    assert row["verifier_cpus"] == "44-47"
+
+
 def test_one_refused_session_voids_the_row_and_the_run(monkeypatch, tmp_path, capsys):
     rc, row = run(monkeypatch, tmp_path, refuse={4})
     assert (rc, row["statements_per_s"], row["accepted"], row["refused_n"]) == (1, None, 8, 1)
