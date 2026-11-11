@@ -436,7 +436,6 @@
     {"file": "tests/engine/test_int8_pins.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/engine/test_int8_zy_h1zy.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/engine/test_moe_align.py", "kind": "I001", "symbol": "test_reference_is_the_definitions_schedule_keyed_by_pair_index", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/engine/test_pin_op.py", "kind": "SIM117", "symbol": "test_a_second_pin_and_a_pin_under_another_patch_are_refused", "detail": "Use a single `with` statement with multiple contexts instead of nested `with` statements"},
     {"file": "tests/engine/test_profiles_generic.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/engine/test_profiles_generic.py", "kind": "I001", "symbol": "test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/engine/test_served_seed.py", "kind": "SIM300", "symbol": "test_the_default_is_the_hash_of_its_name", "detail": "Yoda condition detected"},
