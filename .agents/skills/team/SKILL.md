@@ -151,7 +151,7 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   with a done-condition anyone can check, which its lead proposed and Daniel approved.
 - **Work in a checkout no other agent uses** (your VM, or your own `git worktree` and venv), push only to branches you
   created or were handed, and push after every commit (never `main`, never `--force`).
-- **Slack** (computeverification.slack.com) is for handle holders and named humans; a worker asks its own coordinator.
+- **Slack** is for handle holders and named humans; a worker asks its own coordinator.
   The coordination API is `research msg` (the using-slack skill). Work for another lead goes in as a Linear issue in its
   team; Slack is the conversation around it.
 
