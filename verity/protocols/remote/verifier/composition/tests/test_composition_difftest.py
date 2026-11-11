@@ -47,6 +47,7 @@ import periods
 import reference as R
 import verity_difftest as D
 from verity_difftest import canonical
+from verity_difftest import settings as opt
 
 from verity.configuration.deploy import config as K
 from verity.protocols.spot.verifier import parties as SPP
@@ -55,6 +56,9 @@ from verity.circuits.types import Array, Value
 ROOT = Path(__file__).resolve().parents[6]
 ONSITE_PACKAGE, REMOTE_PACKAGE = ROOT / "verity/protocols/onsite/verifier", ROOT / "verity/protocols/remote/verifier"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+#: the mark of a difftest that takes over five minutes on a node: it stays out of every check but the nightly cold one, which runs
+#: each by name with VERITY_SLOW=1 (check.py's `OPT_IN`), and runs wherever else VERITY_SLOW asks
+OPT_IN = pytest.mark.skipif(opt.get("VERITY_SLOW") != "1", reason="over five minutes on a node: VERITY_SLOW=1")
 
 JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text(max_size=3),
                     lambda inner: st.lists(inner, max_size=3) | st.dictionaries(st.text(max_size=3), inner, max_size=3),
@@ -495,6 +499,7 @@ def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int,
 
 
 @pytest.mark.slow
+@OPT_IN
 def test_remote_agrees(remote_server):
     """Remote's subprotocols meet on one record (left to the subprotocols) and on two (refused), each often."""
     _agree(REMOTE, remote_server, SEEN["remote"], 1000, (R.REJECT, "one record", "two records"))
@@ -695,6 +700,7 @@ def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server
 
 
 @pytest.mark.slow
+@OPT_IN
 def test_onsite_agrees(onsite_server, recorded):
     """Onsite rejects with a subprotocol undecided beside the rejection, its policy and integrity meet on one record
     (left to the subprotocols) and on two (refused), its period's windows on the policy's record and on others, and
@@ -733,6 +739,7 @@ def test_product_names_only_the_two_composites():
 
 
 @pytest.mark.slow
+@OPT_IN
 def test_product_over_remotes_subprotocols_is_remote(product_remote_server):
     _agree(PRODUCT[R.REMOTE.id], product_remote_server, SEEN["remote"], 1000, (R.REJECT, "one record", "two records"))
 
@@ -794,6 +801,7 @@ class Trial(R.TiedSame):
 
 
 @pytest.mark.slow
+@OPT_IN
 def test_a_reference_without_reject_dominance_is_caught(onsite_server, recorded):
     """The difftest tells the composition's rule from the trial's: the case it shrinks to has a subprotocol that rejects and one that
     is undecided, under a commitment that binds their digests."""

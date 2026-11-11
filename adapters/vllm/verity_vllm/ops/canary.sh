@@ -109,11 +109,10 @@ positive() {   # <name> <row-id> <ROLE> <repo> <revision>
 # B>1: Build derives both request shapes, Match = cb_a.batch_decomp, Commit at B=2, root pinned in known_roots.json.  The default
 # positives are the two B=1 workloads; a release touching Build, Match or row_pod runs with llama_b2 too.
 [[ ",$POS," == *,llama_b2,* ]] && positive llama_b2 "$LLAMA_B2" LLAMA32_1B unsloth/Llama-3.2-1B 9535bd9b1d1dea6acafbdc4813b728796aeb28da
-# The stochastic B1 panel workload as a positive: S is a request-owned Program input `splits` and a required family, so this line is the
-# live check that a stochastic workload on the tree Builds (derived S), Matches (the global comparator's G6 reads the bound operand) and
-# Commits with the population complete (sampler_splits acquired from the launched kernel's constexpr, never recomputed).  No known-good root
-# is pinned for the derived-S population yet (the root changes with what is bound): PASS reads "(no reference for this cc)" until a
-# reviewer pins it.  Same model and revision as the llama lines.
+# The stochastic B1 panel workload as a positive: the live check that a stochastic workload on the tree Builds (the registered S, a
+# Const32[S] of the Program), Matches (the global comparator's G6 holds every launch's S to it) and Commits with the population complete
+# (the seed).  No known-good root is pinned for it yet: PASS reads "(no reference for this cc)" until a reviewer pins it.  Same model and
+# revision as the llama lines.
 STOCH=llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager
 [[ ",$POS," == *,stoch,* ]] && positive stoch "$STOCH" LLAMA32_1B unsloth/Llama-3.2-1B 9535bd9b1d1dea6acafbdc4813b728796aeb28da
 # The B=2 workload through Build and Match only: Build must compose the workload Program (build_workload/workload_program.json, request

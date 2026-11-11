@@ -124,7 +124,7 @@ if [ "$ROLE" = verifier ]; then
     "$(hostname)" "$PORT" "$PEER" "$PORT" | tee "$O/address.json"
   # A tty makes the session interactive, so ssh and sshd set TCP_NODELAY (under -N roots were held ~30 ms every few
   # seconds, enough to make a boundary pass's root late); and with keystroke-timing obfuscation off, since it sends an
-  # interactive session's packets on a 20 ms clock (tunnel_rtt.py measures each).
+  # interactive session's packets on a 20 ms clock.
   ssh -tt -o ObscureKeystrokeTiming=no -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
     -R "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}" "sleep 86400" < /dev/null > "$O/tunnel.log" 2>&1 & T=$!
   eval "VA=(${VERIFIER_ARGS:-})"

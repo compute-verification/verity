@@ -4,11 +4,12 @@ sets a PROVER-CHOSEN seed known before the run (seed_source '--replay-seed (targ
 before committing (the population is fixed by the manifest) -- every unpicked VU is free, C3's prechallenge binding is defeated by
 construction.  Neither commit_verdict nor the finalizer read `sample.seed_source`; a seed only had to EXIST.
 
-Behaviour of record (this file): commit_verdict reads the seed source as a FACT.  The root form is RECOMPUTED from the record's run root;
-the challenge form is post-commitment by construction; a prover-chosen seed (or a root-form label whose seed is not the root's, or an
-unknown source) makes the replay a MECHANISM run: C2 of record then rests on form (B) alone and the PASS names it, and without
-a complete form (B) the Commit FAILS by name.  Plane-fed gaps are still named whatever the seed.  Every older record of record
-(150/150 say the root form) recomputes equal and is byte-identical in verdict."""
+Behaviour of record (this file): commit_verdict grades the seed by its form.  The root form is RECOMPUTED from the record's run root and,
+when it recomputes, is not graded: the run root alone, no coin, is a measurement (a prover steers the sample by committing again).  The
+challenge form is recomputed from the recorded challenge, whoever issued it; a prover-chosen seed (or a root-form label whose seed is not
+the root's, or an unknown source) makes the replay a MECHANISM run: C2 of record then rests on form (B) alone and the PASS names it, and
+without a complete form (B) the Commit FAILS by name.  Plane-fed gaps are still named whatever the seed.  A root-form record's verdict
+is the one it had before the seed rule."""
 from __future__ import annotations
 
 import hashlib
@@ -43,8 +44,9 @@ OC_COMPLETE = {"result": True, "grade": "complete", "compared": 13199, "equal": 
 
 
 def test_the_root_form_is_recomputed_from_the_records_run_root_not_believed():
+    # the root's own seed recomputes, and is not graded: the run root alone, no coin, is a measurement
     ok, how = _replay_seed_of_record(_sr(SEED_ROOT, ROOT_FORM), RUN_ROOT)
-    assert ok is True and "recomputed" in how
+    assert ok is None and "recomputed" in how and "no coin -- a measurement, not graded" in how
     # the LABEL says root form but the seed is another integer: a forged label, refused
     ok, why = _replay_seed_of_record(_sr(12345, ROOT_FORM), RUN_ROOT)
     assert ok is False and "!= the run root's first 8 bytes" in why
@@ -53,7 +55,7 @@ def test_the_root_form_is_recomputed_from_the_records_run_root_not_believed():
     assert ok is False and "no run root" in why
     # the summary form (components.sampled_replay: seed / seed_source at the top level) reads the same
     ok, _ = _replay_seed_of_record({"result": True, "seed": SEED_ROOT, "seed_source": ROOT_FORM}, RUN_ROOT)
-    assert ok is True
+    assert ok is None
 
 
 def _sr_chal(seed: int, src: str, chal: str | None) -> dict:
@@ -92,13 +94,13 @@ def test_the_verifier_challenge_form_is_recomputed_from_the_recorded_challenge_a
     ok, why = _replay_seed_of_record(_sr(7, "--replay-seed (targeted)"), RUN_ROOT)
     assert ok is False and "prover-chosen" in why and "not a C2 of record" in why
     ok, why = _replay_seed_of_record(_sr(7, "caller"), RUN_ROOT)
-    assert ok is False and "not a post-commitment form" in why
+    assert ok is False and "not a known form" in why
     # a legacy record without the field is not graded here (the finalizer's ◐ by name), never mistaken for either
     assert _replay_seed_of_record({"result": True, "sample": {"seed": 7}}, RUN_ROOT)[0] is None
 
 
 def test_a_prover_chosen_seed_fails_the_commit_by_name_unless_form_b_is_complete_which_the_pass_then_names():
-    # the honest record of record: root-form seed recomputed -> plain PASS, byte-identical to before the seed rule
+    # a root-form seed that recomputes is not graded: the plain PASS the record had before the seed rule
     ok, why = commit_verdict({**BASE, "sampled_replay": _sr(SEED_ROOT, ROOT_FORM)}, True, min_openings=64)
     assert (ok, why) == (True, "PASS")
     # --replay-seed on a Commit-only rerun (no --match-dir): the replay is a mechanism run, nothing else value-checks -> FAIL by name

@@ -309,6 +309,18 @@ def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(
     assert not job.exists() and (out / AUTO_PLAN).is_file()
 
 
+def test_plan_shards_asks_the_planner_for_its_own_n_at_most_max_shards_or_exactly_n(tmp_path, monkeypatch):
+    """`plan_shards` hands `PLAN_JOB` the steps, and `--max-shards M` (drive's `auto:MAX`) or `--n N` (the loop's `auto:N`)."""
+    asked = []
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(D, "detach", lambda repo, argv, env: asked.append(argv) or {"dir": "job", "pid": 1})
+    got = [D.plan_shards(tmp_path, "t" * 40, "pytest,lean-build", **kw) for kw in ({}, {"max_shards": 4}, {"n": 6})]
+    assert [a[:6] for a in asked] == [["sh", "-c", D.PLAN_JOB, "sh", g["out"], "t" * 40] for g in got]
+    assert [a[6:] for a in asked] == [["--deferred", "pytest,lean-build", *more] for more in ([], ["--max-shards", "4"],
+                                                                                             ["--n", "6"])]
+    assert all(Path(g["out"]).parent == tmp_path / D.LAUNCHES and g["dir"] == "job" for g in got)
+
+
 def _plan_doc(n: int) -> dict:
     return {"kind": "check-shard-plan/v1", "n": n, "digest": "d" * 64, "predicted_s": 3600.0}
 
@@ -1017,16 +1029,26 @@ def test_a_shard_whose_failure_names_nothing_runs_again_once_elsewhere_ringing_i
     assert h.postland()["red"]["suite pkg"]["culprit"][0] == 2 and _main(world) == tip, world.logs
 
 
-def test_a_shard_failure_naming_a_failing_test_is_red_at_once_and_runs_its_shard_no_more(world, monkeypatch, tmp_path):
-    """Only a failure that names nothing runs its shard again: one naming its failing test is red in the tick that reads it,
-    its culprit named, and `INFRA` hears nothing."""
+@pytest.mark.parametrize("names", ["its test", "its merge"])
+def test_a_shard_failure_naming_a_failing_test_is_red_at_once_and_runs_its_shard_no_more(world, monkeypatch, tmp_path, names):
+    """Only a failure that names nothing runs its shard again: one naming its failing test, or a ratchet gate's naming the
+    merge it fails, is red in the tick that reads it, its culprit named, and `INFRA` hears nothing."""
     h, tip, _, shard1 = _two_shards(world, monkeypatch, tmp_path)
     h.run_state["r-post-2"] = ("done", 1, None, None, "m2")
-    h.evidence = [shard1, _suite_failed(tmp_path, "r-post-2", test="tests/test_x.py::test_y")]
+    if names == "its test":
+        shard2, red = _suite_failed(tmp_path, "r-post-2", test="tests/test_x.py::test_y"), "suite pkg"
+    else:
+        shard2, red = _steps_run(tmp_path, "r-post-2", {"lean-suites": "passed"}), "step ratchet-gate"
+        with open(shard2 / "steps.jsonl", "a") as f:
+            f.write(json.dumps({"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}) + "\n")
+        merge2 = _git(world.origin, "rev-parse", "main^1")
+        (shard2 / "ratchet-gate.log").write_text(f"  #2 ({merge2[:12]}): failed: grows p01.json 2 -> 3 entries\n")
+    h.evidence = [shard1, shard2]
     h.tick()
     (ring,) = _rings(h)
-    assert "suite pkg is red on" in ring and "failed tests/test_x.py::test_y" in ring and "Culprit: #2" in ring, ring
-    assert h.postland()["red"]["suite pkg"]["culprit"][0] == 2 and not [p for p in h.posts if p.startswith("@infra")]
+    assert f"{red} is red on" in ring and "Culprit: #2" in ring, ring
+    assert names != "its test" or "failed tests/test_x.py::test_y" in ring, ring
+    assert h.postland()["red"][red]["culprit"][0] == 2 and not [p for p in h.posts if p.startswith("@infra")]
     assert [kw.get("shard") for c, _, kw in h.posted if c == tip] == [None, "1/2", "2/2"], h.posted
 
 
@@ -1906,7 +1928,7 @@ def test_a_shard_of_the_after_landing_run_that_prints_no_run_ids_within_the_boun
     h.clock += 1
     h.tick()
     (post,) = [p for p in h.posts if "--shard 2/2 registered no run" in p]
-    assert "no run ids 60 min after its launch" in post, post
+    assert f"no run ids {LAUNCH_LOST_S // 60} min after its launch" in post, post
     assert h.cancelled == ["r-one"] and starts == [main] * 5, world.logs
 
 
@@ -1958,6 +1980,34 @@ def test_a_detached_train_launch_runs_its_own_copy_of_train_sh(tmp_path, monkeyp
         os.waitpid(job["pid"], 0)
     ids, tail = launched(job)
     assert ids == [rid] and f"train: {copy} in {repo}" in tail, tail
+
+
+def test_a_detached_train_launch_given_a_train_sh_runs_a_copy_of_it_in_the_clone(tmp_path, monkeypatch):
+    """The loop launches with its own train.sh (`script_from`): a copy of that one runs, in the clone, the clone's ignored."""
+    from research.drive import launched, train_launch
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    repo, own, rid = tmp_path / "clone", tmp_path / "own" / "train.sh", "r20261026-093000-abcd"
+    script = repo / "tools" / "verity" / "check" / "train.sh"
+    for path, text in ((script, 'echo "RUN r20261026-093000-ffff"\n'), (own, f'echo "train: own in $PWD"\necho "RUN {rid}"\n')):
+        path.parent.mkdir(parents=True)
+        path.write_text(text)
+    job = train_launch(repo, "c0ffee", "m1", False, deferred=LEAN_STEP, detached=True, script_from=own)
+    assert (Path(job["dir"]) / "train.sh").read_text() == own.read_text()
+    with contextlib.suppress(ChildProcessError):                         # its end, not a clock
+        os.waitpid(job["pid"], 0)
+    ids, tail = launched(job)
+    assert ids == [rid] and f"train: own in {repo}" in tail, tail
+
+
+def test_a_train_launch_given_a_deselect_list_passes_it_to_train_sh(tmp_path, monkeypatch):
+    from research.drive import train_launch
+
+    got = []
+    monkeypatch.setattr(subprocess, "run", lambda argv, **kw: got.append(argv) or subprocess.CompletedProcess(argv, 0, "", ""))
+    train_launch(tmp_path, "c0ffee", "m1", False, deferred="pytest", shard="1/3", deselect="/data/vqueue/live/deselect.sent")
+    train_launch(tmp_path, "c0ffee", "m1", False, deferred="pytest")
+    assert got[0][got[0].index("--deselect") + 1] == "/data/vqueue/live/deselect.sent" and "--deselect" not in got[1]
 
 
 def test_an_eject_off_drive_leaves_next_as_it_is_and_records_the_ejection(world, monkeypatch, capsys):

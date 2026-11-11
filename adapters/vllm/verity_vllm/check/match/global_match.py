@@ -57,7 +57,7 @@ re-sorted; a consumer emitted before its producer, a wiring change or a missing/
 Layout: this module holds the entry points (`check`, the CLI, the MATCH_IMPL dispatch) and the `_check` driver, which runs the
 named checks in order over one `match_run.MatchRun`.  The checks live beside it: `declaration` (the global Program, the record's
 engine facts, G1), `record` (the capture log, canonical request ids), `attribution` (fold instance -> request, G2), `per_request`
-(G3, G4, G5), `chronology` (G6), `sampler_geometry` (the derived S G6 checks) and `engine_steps` (G7, G8).
+(G3, G4, G5), `chronology` (G6), `sampler_geometry` (the registered split count G6 checks) and `engine_steps` (G7, G8).
 
 PROTOCOL SUMMARY (Match stage: the record checker -- GM-01, the runtime match verdict of record for any B >= 1)
   Purpose: establish that THIS row's Build workload Program (GP-01: weights once, one component per declared request, declared arrivals,

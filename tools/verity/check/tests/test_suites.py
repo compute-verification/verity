@@ -276,7 +276,7 @@ def test_jobs_default_to_no_more_test_processes_than_available_memory_holds(tmp_
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S, "cpus", lambda: 4)
     meminfo = tmp_path / "meminfo"
-    for gb, want in ((13, 1), (20, 2), (64, 4), (1, 1)):
+    for gb, want in ((6, 1), (10, 2), (64, 4), (1, 1)):
         meminfo.write_text(f"MemTotal:       99999999 kB\nMemAvailable:   {gb << 20} kB\n")
         assert S.default_jobs(meminfo, 1e9) == want
     assert S.default_jobs(tmp_path / "absent", 1e9) == 4
@@ -289,11 +289,11 @@ def test_jobs_default_to_no_more_test_processes_than_the_runs_own_memory_limit_h
     monkeypatch.setattr(S, "cpus", lambda: 32)
     meminfo = tmp_path / "meminfo"
     meminfo.write_text(f"MemAvailable:   {1500 << 20} kB\n")
-    assert S.default_jobs(meminfo, 16.0) == 1
-    assert S.default_jobs(meminfo, 100.0) == 11
-    assert S.default_jobs(tmp_path / "absent", 40.0) == 4
+    assert S.default_jobs(meminfo, 16.0) == 3
+    assert S.default_jobs(meminfo, 100.0) == 22
+    assert S.default_jobs(tmp_path / "absent", 40.0) == 8
     monkeypatch.setattr(S, "slot_mem_gb", lambda: 20.0)
-    assert S.default_jobs(meminfo) == 2
+    assert S.default_jobs(meminfo) == 4
 
 
 def test_a_research_run_reservation_bounds_the_run_where_no_cgroup_caps_it(tmp_path, monkeypatch):
@@ -1950,7 +1950,7 @@ def test_a_parallel_suite_that_declares_worker_gb_runs_as_many_workers_as_mem_gb
     heavy = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
     assert S.wide_workers(heavy, 69, 350) == 21 and S.wide_workers(heavy, 8, 350) == 8 and S.wide_workers(heavy, 69, 10) == 1
     assert S.wide_workers(heavy, 69, None) == 69, "no --mem-gb: the lane's processes"
-    assert S.wide_workers(S.Suite("light", "l", (), (), parallel=True), 69, 350) == 350 // S.TEST_PROCESS_GB, \
+    assert S.wide_workers(S.Suite("light", "l", (), (), parallel=True), 100, 350) == 350 // S.TEST_PROCESS_GB, \
         "no worker_gb: TEST_PROCESS_GB each (pous_check's undeclared workers can reach 11 GB)"
 
 
@@ -1958,7 +1958,7 @@ def test_parallel_suites_share_what_mem_gb_leaves_beside_the_one_process_suites(
     """Two parallel suites side by side, each sized to all of --mem-gb, would together reach twice it (circuit_check's 53
     workers and flock's 30 reached 800 GB)."""
     S = _suites(monkeypatch, tmp_path)
-    assert S.wide_gb(480, 4) == 480 - 4 * S.TEST_PROCESS_GB and S.wide_gb(20, 4) == 0 and S.wide_gb(None, 4) is None
+    assert S.wide_gb(480, 4) == 480 - 4 * S.TEST_PROCESS_GB and S.wide_gb(16, 4) == 0 and S.wide_gb(None, 4) is None
     flock = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
     assert S.wide_workers(flock, 69, S.wide_gb(480, 4)) == (480 - 4 * S.TEST_PROCESS_GB) // 16
     assert S.worker_gb(flock) == 16 and S.worker_gb(S.Suite("light", "l", (), (), parallel=True)) == S.TEST_PROCESS_GB
@@ -1981,7 +1981,7 @@ def test_the_suites_in_one_process_get_no_more_slots_than_the_memory_holds(tmp_p
     """A 16 GiB agent-test job on 48 CPUs would start 44 test processes if only the parallel suites' workers were sized
     against memory, and the OOM killer took the whole scope."""
     S = _suites(monkeypatch, tmp_path)
-    assert S.serial_slots([5.0] * 48, 0, 48, 16) == 1, "16 GiB holds one process at TEST_PROCESS_GB"
+    assert S.serial_slots([5.0] * 48, 0, 48, 16) == 3, "16 GiB holds three processes at TEST_PROCESS_GB"
     assert S.serial_slots([5.0] * 48, 0, 48, 64) == 64 // S.TEST_PROCESS_GB
     assert S.serial_slots([100.0] * 40, 1, 32, 1000) == 31 and S.serial_slots([100.0] * 40, 1, 32, None) == 31
     assert S.serial_slots([100.0] * 40, 1, 32, 2) == 1, "even a job smaller than one process runs its suites, one at a time"
@@ -1989,14 +1989,14 @@ def test_the_suites_in_one_process_get_no_more_slots_than_the_memory_holds(tmp_p
 
 
 def test_the_suites_in_one_process_leave_the_parallel_suites_half_the_memory(tmp_path, monkeypatch):
-    """A parallel suite's workers are fixed when it starts, which is before the one-process suites finish: 16 serial lanes at
-    TEST_PROCESS_GB took 144 of a 150 GB check's GB for the whole run, and flock ran on one 16 GB worker. Half of 150 GB holds
-    8 serial lanes (72 GB), so flock gets 78 // 16 = 4 workers, and the two together still fit in --mem-gb."""
+    """A parallel suite's workers are fixed when it starts, which is before the one-process suites finish: 32 serial lanes at
+    TEST_PROCESS_GB would take 144 of a 150 GB check's GB for the whole run, and flock would run on one 16 GB worker. Half of
+    150 GB holds 16 serial lanes (72 GB), so flock gets 78 // 16 = 4 workers, and the two together still fit in --mem-gb."""
     S = _suites(monkeypatch, tmp_path)
     flock = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
-    assert S.serial_slots([100.0] * 8 + [50.0] * 16, 4, 90) == 16
-    r = S.serial_slots([100.0] * 8 + [50.0] * 16, 4, 90, 150)
-    assert r == 8 and S.wide_gb(150, r) == 150 - 8 * S.TEST_PROCESS_GB
+    assert S.serial_slots([100.0] * 8 + [50.0] * 48, 4, 90) == 32
+    r = S.serial_slots([100.0] * 8 + [50.0] * 48, 4, 90, 150)
+    assert r == 16 and S.wide_gb(150, r) == 150 - 16 * S.TEST_PROCESS_GB
     assert S.wide_workers(flock, 90 - r, S.wide_gb(150, r)) == 4 and S.wide_workers(flock, 74, S.wide_gb(150, r)) == 4
     assert r * S.TEST_PROCESS_GB + 4 * 16 <= 150
     assert S.serial_slots([5.0] * 48, 0, 48, 150) == 150 // S.TEST_PROCESS_GB, "with no parallel suite they may take all of it"

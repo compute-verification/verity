@@ -56,7 +56,8 @@ every part runs the suite whole.
 
 Passes travel between machines as verdict packs (`verdicts.py`). The Lean audit and `circuit-check` reuse their own verdicts
 the same way, each keyed on what it reads. A nightly uncached run must agree with the cached ones. A disagreement means some
-part reads something it doesn't declare, and the fix goes in the check.
+part reads something it doesn't declare, and the fix goes in the check. The nightly also runs the opt-in tests `check.py`'s
+`OPT_IN` names, by name in runs of their own with their variables set, which every other check leaves skipped.
 
 `suites.py`'s docstring is the full contract. The testing skill (`.agents/skills/testing/SKILL.md`) has the rules every test
 follows.

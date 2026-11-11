@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from verity_bench import breakdown, jobs, overhead, overhead_records, served_table, settings
+from verity_bench import breakdown, jobs, overhead, overhead_records, prove_records, served_table, settings
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
@@ -222,6 +222,34 @@ def _overhead_parser(commands: Any) -> None:
     table.set_defaults(run=_overhead_table, command_parser=table)
 
 
+def _prove(args: Any) -> int:
+    doc = prove_records.build(args.system, args.workload, sampling=args.sampling, provers=args.provers,
+                              local_only=args.local_only)
+    if args.json:
+        print(json.dumps(doc, indent=1, sort_keys=True))
+    else:
+        print(prove_records.render(doc, args.rows), end="")
+    return 0
+
+
+def _prove_parser(commands: Any) -> None:
+    prove = commands.add_parser("prove", help="a proof system's prover on a workload, a block type a row, from the "
+                                              "store's labelled records")
+    prove.add_argument("--system", required=True, choices=prove_records.SYSTEMS,
+                       help="flock: every block proved; spot: Flock at a sampling plan of record")
+    prove.add_argument("--workload", required=True, choices=list(prove_records.WORKLOADS))
+    prove.add_argument("--sampling", metavar="ART", help="spot's sampling plan (default: the workload's plan of record); "
+                                                         "refused unless it is labelled the plan of record")
+    prove.add_argument("--provers", type=int, default=1, metavar="N",
+                       help="the prover count each type is priced at: only steady-state rows at N provers measure a "
+                            "type (default: 1)")
+    prove.add_argument("--rows", type=int, metavar="N", help="show the N block types that take the most proving time, "
+                                                             "the rest in one row (default: every block type)")
+    prove.add_argument("--json", action="store_true", help="the table as JSON, every row whole")
+    prove.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
+    prove.set_defaults(run=_prove, command_parser=prove)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="verity-bench")
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
@@ -268,6 +296,7 @@ def _parser() -> argparse.ArgumentParser:
     split.set_defaults(run=_breakdown, command_parser=split)
 
     _overhead_parser(commands)
+    _prove_parser(commands)
 
     point = commands.add_parser("_vllm-point", help=argparse.SUPPRESS)
     point.add_argument("--spec", required=True)

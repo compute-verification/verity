@@ -74,7 +74,13 @@ def start(src: Path, argv: list[str], execve: Callable = os.execve) -> None:
 
 
 def reexec(argv: list[str], repo: Path | None = None, cache: Path | None = None, execve: Callable = os.execve) -> None:
-    """Re-execute `research ARGV` from origin/main's code when `repo`'s is only behind it (module doc); else return."""
+    """Re-execute `research ARGV` from origin/main's code when `repo`'s is only behind it (module doc); else return. First,
+    as `research`'s own module (not the shim's script, whose `research` comes here again), it says once a session when no shell
+    hook runs on this agent's VM (`guard_notice`): the other way a VM's branch is behind main without a word."""
+    if __package__:
+        from .guard_notice import notice
+
+        notice(os.environ)
     repo = repo or Path(__file__).resolve().parents[4]
     if os.environ.get(OPT_OUT) or not (repo / ".git").exists():
         return

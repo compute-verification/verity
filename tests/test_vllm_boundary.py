@@ -45,7 +45,6 @@ ALLOWED = {
                     "vllm.LLM beside it"),
     **dict.fromkeys(("benchmarks/kv_filler/serve.py", "benchmarks/kv_filler/step_profile.py"),
                     "memory-accounting: a stock vllm.LLM serving under the KV filler's top-up, and its decode step profiled"),
-    "benchmarks/pous/lateness/vllm_load.py": "memory-accounting: a stock vllm.LLM as load on the responder's GPU",
     "benchmarks/pous/p2_v1/scale.py": "memory-accounting: P2's store held beside a stock vllm.LLM serving",
     **dict.fromkeys(("benchmarks/remote_session/engine.py", "benchmarks/remote_session/serve.py"),
                     "memory-accounting: an in-process LLMEngine under the remote bandwidth audit's binder"),
@@ -75,7 +74,7 @@ ALLOWED = {
     **dict.fromkeys(("benchmarks/moe_align/served.py", "benchmarks/moe_align/stress.py"),
                     "kernels: verity_vllm.engine.moe_align's canonical moe_align_block_size held to vLLM's op and to its "
                     "Marlin MoE path, served at TP8"),
-    **dict.fromkeys(("benchmarks/vllm_encoded/kernels.py", "benchmarks/vllm_encoded/selftest.py",
+    **dict.fromkeys(("benchmarks/vllm_encoded/kernels.py",
                      "benchmarks/vllm_encoded/serve.py", "benchmarks/vllm_encoded/stack.py",
                      "benchmarks/vllm_encoded/tests/properties/encoded_kv_append_capture_gpu.py"),
                     "memory-accounting: the encoded-weights stack inside vLLM, its linears, attention and KV append in "

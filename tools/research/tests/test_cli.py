@@ -409,8 +409,8 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
     (repo / "tools/verity/check").mkdir(parents=True)
     (repo / "tools/verity/check/suites.py").write_text(
         "import sys\nrev = sys.argv[sys.argv.index('--changed') + 1]\nif rev == 'broken':\n    sys.exit(2)\n"
-        "hit = 'none' if rev == 'nothing' else 'verity-vllm, verity/core'\n"
-        "print(f'suites: the change from {rev[:12]} touches {0 if hit == \"none\" else 2}: {hit}')\n")
+        "hit = {'nothing': 'none', 'core': 'verity/core'}.get(rev, 'verity-vllm, verity/core')\n"
+        "print(f'suites: the change from {rev[:12]} touches {0 if hit == \"none\" else hit.count(\",\") + 1}: {hit}')\n")
     monkeypatch.chdir(repo)
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
     suites = ["uv", "run", "tools/verity/check/suites.py"]
@@ -423,13 +423,15 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
             (["--max-min", "30"], ["python3", "tools/verity/check/suites.py", "vllm"], (None, 32, 1800)),
             ([], [*suites, "verity-core"], (None, None, 3600)),               # 30 min and the sync: the kind's hour
             # all 3 suites side by side on 4 jobs: (300 + 14400 + 1800) / 4 + the longest, 14400, + the sync
-            ([], [*suites, "--quick"], (None, 36, 19140)),       # in whole minutes; 4 workers x 9 GB: a process a CPU, once
+            ([], [*suites, "--quick"], (None, 32, 19140)),       # in whole minutes; 4 workers x vllm's 8 GB: a process a CPU, once
             # the 2 the change touches, as the checkout's suites.py --list says: (14400 + 1800) / 8 + 14400 + 600
-            (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 72, 17040)),
+            (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 64, 17040)),
             # the lane run `research queue ready` names, suites.py inside a shell string: sized as the same run is
             (["--cpus", "8"], ["bash", "-lc", "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py "
-                                              "--changed main --quick"], (8, 72, 17040)),
+                                              "--changed main --quick"], (8, 64, 17040)),
             (["--cpus", "8", "--mem-gb", "144"], [*suites, "--changed", "main", "--quick"], (8, 144, 17040)),   # a lead's own
+            # a change touching only a suite that declares no worker_gb: 8 workers x suites.py's TEST_PROCESS_GB, 4.5
+            (["--cpus", "8"], [*suites, "--changed", "core", "--quick"], (8, 36, None)),
             ([], [*suites, "--changed=nothing"], (None, None, None)),
             ([], [*suites, "--changed", "broken"], (None, None, None)),     # suites.py can't say: the kind's size
             ([], [*suites, "repository"], (None, None, None)),
@@ -465,12 +467,12 @@ def test_a_run_of_many_suites_reserves_one_test_process_a_cpu_at_the_largest_its
         "print(f'suites: the change from {rev} touches ' + ('1: b' if rev == 'small' else '2: a, b'))\n")
     run = ["uv", "run", "tools/verity/check/suites.py"]
     for cmd, cpus, workers, gb in (
-            ([*run, "--changed", "small"], None, 4, 36),             # no suite declares one: 4 processes x TEST_PROCESS_GB
-            ([*run, "--changed", "small", "--quick"], 12, 12, 108),
+            ([*run, "--changed", "small"], None, 4, 18),             # no suite declares one: 4 processes x TEST_PROCESS_GB
+            ([*run, "--changed", "small", "--quick"], 12, 12, 54),
             ([*run, "--changed", "big"], None, 4, 64),               # a's workers may reach 16 GB each
             ([*run, "--changed", "big", "--jobs", "2"], 8, 2, 32),   # its --jobs is the processes it runs
             ([*run], None, 4, 64),                                   # every suite
-            ([*run, "--changed", "small", "--jobs", "1"], None, 1, 16)):   # 9 GB: never under the kind's own 16
+            ([*run, "--changed", "small", "--jobs", "1"], None, 1, 16)):   # 4.5 GB: never under the kind's own 16
         got = suite_size.size(repo, cmd, cpus)["mem_gb"]
         assert got == gb, (cmd, cpus)
         assert got // suite_size.TEST_PROCESS_GB >= workers, "suites.py's default --jobs gives it a process for each CPU it asked"

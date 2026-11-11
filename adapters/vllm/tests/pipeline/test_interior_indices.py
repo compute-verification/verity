@@ -121,6 +121,14 @@ def staged():
     return _first()
 
 
+@pytest.fixture(scope="module")
+def operands():
+    """The module's one stream over the four parameters the replay gives, its boundary registered and its first stage drawn.
+    A stream takes one interior registration a draw, and this one's is the operand-port test's: a test that registers another
+    interior of these links builds a stream of its own."""
+    return _first(OPERANDS)
+
+
 def _interior(reg, first, per, **kw) -> IR.Interior:
     return IR.interior(per, CELLS, reg.digest, first.units, row=ROW, **{"salt_key": SALT, "links": LINKS, **kw})
 
@@ -169,14 +177,14 @@ def test_an_index_port_is_rows_of_the_value_the_verifier_fills_from_its_own_byte
     assert IR.register(stream, first, it, registered=IR.link_words(LINKS), supplied=srcs, schemas=formats).digest
 
 
-def test_an_operand_port_is_rows_of_a_value_the_interior_registers_as_its_own():
+def test_an_operand_port_is_rows_of_a_value_the_interior_registers_as_its_own(operands):
     """On a stream that takes only the four parameters the replay gives, the interior registers each as a value under
     the name round 2 gives the block's parameter: Q·per rows, row ``s·per + at[j]`` the row unit j of sampled span s
     replayed at the port, under salts that are not the public ones a supplied value takes, and the port is given by
     reference at those rows. The stream registers it, holding each value's name, rows, words and domain to its own
     entry (`link_words`, `link_schemas`); a challenger's copy that lacks one of the values, or holds it at another
     width, refuses it at R7."""
-    stream, reg, first = _first(OPERANDS)
+    stream, reg, first = operands
     per = [_spans(s) for s in first.units]
     it = _interior(reg, first, per, links=OPERANDS)
     c, w = it.committed, it.committed.window
@@ -204,11 +212,11 @@ def test_an_operand_port_is_rows_of_a_value_the_interior_registers_as_its_own():
     assert IR.register(stream, first, it, registered=words, schemas=schemas).digest
 
 
-def test_an_operand_row_is_the_one_row_every_unit_at_it_replayed():
+def test_an_operand_row_is_the_one_row_every_unit_at_it_replayed(operands):
     """`B`'s ``best`` placed as ``i`` is, units j and j + `W` of a span on one row: where the two replayed the same row
     the value holds it once and both read it; where they did not, the interior refuses the later unit's row by name and
     commits nothing. A row no unit reads is the zero row."""
-    _stream, reg, first = _first(OPERANDS)
+    _stream, reg, first = operands
     shared = IR.Operand(P.template_id(B), "best", f"{KEY}/ybest", W, tuple(j % W for j in range(G * W)), 1)
     per = [list(_spans(s)) for s in first.units]
     with pytest.raises(ValueError, match=f"takes at its 'best' a row that is not row [0-9] of {KEY}/ybest, which another"):

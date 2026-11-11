@@ -62,6 +62,9 @@ ALLOWED = {
     "Bf16DivScalar_v3": _GEMMA2_RV,
     "Bf16MulScalar_v3": _GEMMA2_RV,
     "LayerNormAten_v2": "GPT-NeoX only, which has no Build: its GeluErf_v1 has no vocabulary kind",
+    "GumbelTopPTokenSelect_v1": "the fold binds the top-p select with the split kernels' constexpr S as its 6th operand; the compare "
+                                "reads the Build's GumbelTopPTokenSelect_v2{V,S} (v3 registered) as it, held to their S "
+                                "(split_selects.as_fold_selects)",
 }
 
 
