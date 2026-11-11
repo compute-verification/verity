@@ -442,6 +442,9 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
             cross, facts, _ = AUDIT.proved(tree / pkg, policy, facts, work, keep=False)
     finally:
         AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS, AUDIT.SCRATCH = plain, tool, programs, scratch
+    # as the audit hands `judge` its facts: `assumptions_module` may name a module of a package ``pkg`` requires by path
+    # that none of its own modules imports, which only the source files show
+    facts["source_modules"] = sorted(AUDIT.module_files(tree / pkg))
     fails, _ = AUDIT.judge(policy, facts, AUDIT.lean_modules(tree / pkg))
     return [f for f in cross + fails if (AUDIT.code_of(f) or "").split(".")[0] in ("guarantees", "assumptions")]
 
