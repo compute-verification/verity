@@ -1,5 +1,6 @@
 """The training rules' matrix products (`rules.training`): `mm`, `bmm` and `mv` as `LinearRef_v1` rows, and at a compute capability
-whose cuBLAS routes are captured, a bf16 `mm` or `mv` as F.linear's GEMM on that GPU (`Matmul`)."""
+whose cuBLAS routes are captured, a bf16 `mm` or `mv` as F.linear's GEMM on that GPU and, under allow_tf32, an f32 `mm` as its
+TF32 GEMM (`Matmul`)."""
 
 from __future__ import annotations
 
@@ -37,12 +38,14 @@ class Matmul(_TrainRule):
     routes are captured (`cublas_bf16.TRAIN_CC`), a bf16 `mm` is one batch of F.linear's row GEMM as its cuBLAS computes it
     instead: its role read off the operands' layouts (`_ROLES`), its route the capture's (`cublas_bf16.train_route`) and its
     Definition the route's on words, an unsplit one padded with +0 words to whole k16 steps (`cublas_bf16.route_gemm`); a bf16
-    `mv` is that GEMM at one row, x[1, K] @ A^T, as torch's CUDA gemv calls cuBLAS's GEMM with one column.  The rule still claims a
-    product it can't lower that way and refuses it with the capture it needs, so that no other rule lowers it with torch CPU's
-    arithmetic: at ``cc`` a bf16 `bmm`, a layout no role has, a shape the capture doesn't cover, a route with no Definition
-    (`cublas_bf16.route_gemm` refuses it), with ``tf32`` (cuda.matmul.allow_tf32) an f32 `mm` or `bmm` (cuBLAS's TF32 GEMM); an
-    f32 `mv` (cuBLAS's sgemv, or torch CPU's BLAS gemv, whose order is not its mm's row); and a `dot` (cuBLAS's dot kernel, or
-    torch CPU's f32 BLAS dot)."""
+    `mv` is that GEMM at one row, x[1, K] @ A^T, as torch's CUDA gemv calls cuBLAS's GEMM with one column.  With ``tf32``
+    (cuda.matmul.allow_tf32) an f32 `mm` of dense row- or column-major operands at a shape the TF32 capture covers
+    (`cublas_bf16.TRAIN_TF32`) is one batch of cuBLAS's unsplit TF32 GEMM's row (`cublas_bf16.train_tf32`, `GemmTf32_v1`) over a's
+    rows against b's columns.  The rule still claims a product it can't lower that way and refuses it with the capture it needs,
+    so that no other rule lowers it with torch CPU's arithmetic: at ``cc`` a bf16 `bmm`, a layout no role has, a shape the capture
+    doesn't cover, a route with no Definition (`cublas_bf16.route_gemm` refuses it), with ``tf32`` an f32 `bmm`, or an f32 `mm`
+    at another shape or layout (cuBLAS's TF32 GEMM); an f32 `mv` (cuBLAS's sgemv, or torch CPU's BLAS gemv, whose order is not
+    its mm's row); and a `dot` (cuBLAS's dot kernel, or torch CPU's f32 BLAS dot)."""
     info = _info("Matmul", "aten.mm / aten.bmm / aten.mv of f32 or bf16 values", "both operands are values of one dtype, f32 or bf16",
                  "one batch of LinearRef rows per matrix")
 
@@ -56,8 +59,9 @@ class Matmul(_TrainRule):
             self.info = _info(f"Matmul_{self.cc}" + ("_tf32" if tf32 else ""), "aten.mm / aten.bmm / aten.mv of f32 or bf16 values",
                               "both operands are values of one dtype, f32 or bf16",
                               f"a bf16 mm or mv: one of F.linear's GEMMs, at a shape and route {self.cc}'s capture covers",
-                              "an f32 mm or bmm without tf32",
-                              "one batch of rows per matrix: the cuBLAS route's GEMM for a bf16 mm or mv, else LinearRef")
+                              "an f32 mm or bmm without tf32; with it an f32 mm at a shape the TF32 capture covers",
+                              "one batch of rows per matrix: the cuBLAS route's GEMM for a bf16 mm or mv, its TF32 GEMM for "
+                              "an f32 mm with tf32, else LinearRef")
 
     def targets(self):
         return {aten.mm.default, aten.bmm.default, aten.mv.default, aten.dot.default}
@@ -73,6 +77,8 @@ class Matmul(_TrainRule):
 
     def emit(self, node, ctx):
         dt, mv = ctx.dtype_of(node.args[0]), node.target is aten.mv.default
+        if self.tf32 and dt == torch.float32 and node.target is aten.mm.default:
+            return self._emit_tf32(node, ctx)
         if node.target is aten.dot.default or dt == torch.float32 and (mv or self.tf32):
             self._no_order(node, ctx, dt)
         if self.cc is not None and dt == torch.bfloat16:
@@ -116,9 +122,23 @@ class Matmul(_TrainRule):
                    f"{where} at {shapes}")
         else:
             why = (f"an f32 {op} with cuda.matmul.allow_tf32 on {self.cc} is cuBLAS's TF32 GEMM (each operand rounded to TF32 and "
-                   f"multiplied in the tensor cores' TF32 steps), which no capture covers: it needs torch.{op}'s kernels and words "
-                   f"on {where} with allow_tf32 at {shapes}, fitted to a TF32 step's route")
+                   f"multiplied in the tensor cores' TF32 steps), which no capture covers here (the TF32 capture's are dense mm's "
+                   f"at (M, K, N) in {CB.TRAIN_TF32}): it needs torch.{op}'s kernels and words on {where} with allow_tf32 at "
+                   f"{shapes}, fitted to a TF32 step's route")
         refuse("numerics_unregistered", node, ctx.module_path(node), why)
+
+    def _emit_tf32(self, node, ctx):
+        """An f32 `mm(a[M, K], b[K, N])` under allow_tf32: `GemmTf32_v1{K, N}` of each of a's rows against b^T's rows, where the
+        TF32 capture covers its (M, K, N) and both operands are dense row- or column-major; else `_no_order`'s refusal."""
+        (M, K), N = _shape(ctx, node.args[0]), _shape(ctx, node.args[1])[1]
+        if None in (_layout(ctx.tensor_meta(a)) for a in node.args[:2]) or (M, K, N) not in CB.TRAIN_TF32:
+            self._no_order(node, ctx, torch.float32)
+        fn = CB.train_tf32(M, K, N)
+        a = ctx.coll(node.args[0]).reshape(Array(M, Array(K, F32)))
+        w = _view_permute(ctx.coll(node.args[1]).reshape(Array(K, Array(N, F32))), (1, 0), node.name)
+        out = _batch(ctx, node, fn, a, w, axes=(0, None))
+        ctx.define(node, Coll(_tensor_type([M, N], 32), out.refs))
+        ctx.record(self, node, {"M": M, "K": K, "N": N, "tf32": True}, emitted=f"{fn.id} x{M}")
 
     def _emit_gpu(self, node, ctx):
         def no(why: str):
