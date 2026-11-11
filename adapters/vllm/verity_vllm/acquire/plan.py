@@ -482,9 +482,9 @@ def residuals_of(values: list[ValuePlan], rt: RuntimeTree, tables: Mapping[str, 
             out.append(Residual(table, "*", "*", f"the gather collector flushes staged bytes at these module boundaries ({table}); the flush points are lifetime facts "
                                 "the structure does not carry yet", values=[v.value_id for v in hits]))
     for b in sorted(rt.buffers):
-        table = analytic_table_of_buffer(b)
-        if table is not None and b not in weights:
-            out.append(Residual("ANALYTIC_TABLES", b, table, "the Match stage dumps this buffer by name and checks it analytically (root_policy.ANALYTIC_TABLES); "
+        analytic = analytic_table_of_buffer(b)
+        if analytic is not None and b not in weights:
+            out.append(Residual("ANALYTIC_TABLES", b, analytic, "the Match stage dumps this buffer by name and checks it analytically (root_policy.ANALYTIC_TABLES); "
                                 "the manifest names no weight Value for it"))
     return out
 

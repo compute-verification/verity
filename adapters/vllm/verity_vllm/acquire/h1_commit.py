@@ -12,6 +12,7 @@ an expert no token routed to is a call of zero rows, acquired as its zero rows [
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from functools import partial
 from types import SimpleNamespace
 from typing import Any
 
@@ -50,7 +51,7 @@ class H1Source(Int8Source):
     def install(self) -> None:
         super().install()
         for name, s in self.experts.items():
-            self._hooks.append(hooks.wrap(s.quant_method, "apply", lambda orig, name=name: self._scoped(name, orig)))
+            self._hooks.append(hooks.wrap(s.quant_method, "apply", partial(self._scoped, name)))
 
     def _scoped(self, name: str, orig: Any) -> Any:
         """Expert site ``name``'s ``apply`` with the source's scope at ``name``, so its ``row_quant`` is acquired as the

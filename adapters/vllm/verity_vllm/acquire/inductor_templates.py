@@ -241,9 +241,10 @@ def recognize(name: str, source: str, config: dict[str, Any] | None = None, *, c
     if m is None:
         raise Unmodelled(f"{name}: no @triton.jit def")
     head, body = source[:m.start()], "def KERNEL(" + _function_text(source[m.end():])
-    t, got = next(((t, g) for t in TEMPLATES if (g := t.pattern.fullmatch(body))), (None, None))
-    if t is None:
+    found = next(((t, g) for t in TEMPLATES if (g := t.pattern.fullmatch(body))), None)
+    if found is None:
         raise Unmodelled(f"{name}: its source is none of the templates {[t.name for t in TEMPLATES]}")
+    t, got = found
     heur = re.search(r"^@triton_heuristics\.(\w+)\(", head, re.M)
     sig = re.search(r"'signature': (\{[^{}]*\})", head)
     if heur is None or heur.group(1) != t.heuristic:
