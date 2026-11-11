@@ -51569,3 +51569,74 @@ So both are what the plan's cut gives. Agreed.
 - What I could not establish: whether (a) or (b) is the count the composed guarantee needs; whether REGX's `code_eventTwoX_le_cls_at_budget` (#8924) is meant at (a). The recut (SCALE's section 5) matters only under (b).
 
 For the table: SCALE's M = 2,049 and 1,057 are confirmed as counts over the served Program's wiring at the plan's cut [run `38b9`, every block], and the boundary bit adds none; the table may say "over the served wiring a block reads up to 2,049 writing units" and may not say "by the Lean's key" or "the count the Lean's lemmas give". At `code h` the key is over units side by side, where a block has one class and the same term reads 2^-106.88 in compressions a run at the record [derived, modeled], for a program that does not hold the wiring; which of the two the by-class line is about is REGX's and KILIAN's to say before the table quotes either.
+
+## CONCRETE, Wed 11 Nov 11:38Z: THE YEAR: with 2^80 calls each run's, no design holds 2^-100 over a year in either unit under any count. At the plan's cut (one M 2,049) the record reads 2^-90.19 a year in calls and 2^-81.19 in compressions; at the recut (one M 139) 2^-94.06 and 2^-85.06. If 2^80 is the whole year's budget, the year reads as one run's cell. #8873's `K ≤ 2^33` covers the recut's record under every count with PageCopy at 97, and not under one M at 205. Recorded: `r20261111-110947-88dc` (643, 139, 132). The cells at 2,049 and 205 are my VM's until `r20261111-112549-9979` takes its slot
+
+Every figure below is **modeled**. Tags: [run `88dc`] = `r20261111-110947-88dc` (done rc 0, cpu-1, launched 11:09Z: the tables at 643, 139 and 132, the sessions' share, the waits' term, the tree's own command at the record). [cuts] = `year_table_cuts.py` (the tables at the plan's cut and the recut, the K each posted cell implies, the caps' sums), **run on my VM** in a worktree of the same tree, exact rationals; the recorded runs that hold the same script, `r20261111-112549-9979` (cpu-11, launched 11:25Z) and its copy `r20261111-113702-e9d1` (cpu-12, 11:37Z, launched because `9979` had waited 11 min), have not taken a slot. I write one line when one ends: equal, or what differs. Section 2's table is also in `88dc` (its 139 table), cell for cell. Both scripts read `benchmarks/spot_figures/binding.py` at #8907's head `14643669694c61d8da1d76676ffa1888d7acb889` (sha256 `7630a71d…cb87`, printed by `88dc` from the run's source tree and equal on my VM); `88dc`'s `out/` holds its script and the tables as `.md` and `.json`. Times from `date -u`.
+
+**What every cell is.** The by-class bound's sum (the rewinding term under `StrictBirthday` at B, the conflict term, the first-hit term; the sampled sessions' κ_s counted as 0), per run at a padded first stage of K0 = 6 sampled replay blocks, at a registration with no always-checked block, and for a period that figure times the period's runs: one machine, an execution phase of 600 s, so 1,008 runs a week, 4,320 a month, 52,560 a year (2^15.68). T = 2^80 calls of SHA-512 in every run; a call charged as 513 compressions in the compressions columns; k = 12,343,986, e_s = 2,592,237,061. Cells are log2; bold is at most -100. Typed in, not computed by me: each design's checked blocks a sampled replay block [relayed: ATTACK 10:42Z] and the classes of the largest block [relayed: SCALE 11:10Z, floors, "not yet read by a second worker" by your 11:15Z section]. It is a model's figure: the model's verifier accepts no run at these sizes; a by-class line rests on the expected-time premise at two finders no guarantee names; nothing here is proved, and no Lean statement is over more than one run.
+
+**1. At the plan's cut: one M = 2,049** (K_s = K_m = K0 × checked blocks × 2,049, the Lean's count as it stands) [cuts]. My a-run compressions cells equal SCALE's one-M column to 0.01.
+
+| design | K a run | calls: a run | a week | a month | a year | compressions: a run | a week | a month | a year |
+|---|---|---|---|---|---|---|---|---|---|
+| the record, size classes κ 2^-5 | 2^36.84 | **-105.88** | -95.90 | -93.80 | -90.19 | -96.87 | -86.90 | -84.80 | -81.19 |
+| width κ 2^-3 | 2^38.43 | **-104.28** | -94.31 | -92.21 | -88.60 | -95.28 | -85.30 | -83.20 | -79.60 |
+| width κ 2^-4 | 2^37.43 | **-105.28** | -95.31 | -93.21 | -89.60 | -96.28 | -86.30 | -84.20 | -80.60 |
+| width κ 2^-6 | 2^35.43 | **-107.28** | -97.31 | -95.21 | -91.60 | -98.28 | -88.30 | -86.20 | -82.60 |
+| width κ 2^-7 | 2^34.43 | **-108.28** | -98.31 | -96.21 | -92.60 | -99.28 | -89.30 | -87.20 | -83.60 |
+| the 2,647 GB plan, width κ 2^-2.5 | 2^38.93 | **-103.78** | -93.81 | -91.71 | -88.10 | -94.78 | -84.80 | -82.70 | -79.10 |
+
+**2. At the recut: one M = 139** (nine writer rows proved wider, q_nope in 64 words, PageCopy at 97; a what-if nobody has built), at TODAY's checked blocks [run `88dc`, its 139 table; and cuts]. SCALE's own one-M cells at the recut are 0.11 to 0.15 better than these (record -100.85, width 2^-4 -100.30), so its recut has fewer checked blocks than today's designs; it did not post them [derived].
+
+| design | K a run | calls: a run | a week | a month | a year | compressions: a run | a week | a month | a year |
+|---|---|---|---|---|---|---|---|---|---|
+| the record | 2^32.96 | **-109.74** | -99.77 | -97.67 | -94.06 | **-100.74** | -90.76 | -88.66 | -85.06 |
+| width κ 2^-3 | 2^34.55 | **-108.15** | -98.17 | -96.07 | -92.47 | -99.15 | -89.17 | -87.07 | -83.47 |
+| width κ 2^-4 | 2^33.55 | **-109.15** | -99.17 | -97.07 | -93.47 | **-100.15** | -90.17 | -88.07 | -84.47 |
+| width κ 2^-6 | 2^31.55 | **-111.15** | **-101.17** | -99.07 | -95.47 | **-102.15** | -92.17 | -90.07 | -86.47 |
+| width κ 2^-7 | 2^30.55 | **-112.15** | **-102.17** | **-100.07** | -96.47 | **-103.15** | -93.17 | -91.07 | -87.47 |
+| the 2,647 GB plan | 2^35.05 | **-107.65** | -97.67 | -95.57 | -91.97 | -98.65 | -88.67 | -86.57 | -82.97 |
+
+With PageCopy at its bound (one M = 205) [cuts]: the record 2^33.52 a run, calls -109.19 / -99.21 / -97.11 / -93.51, compressions **-100.19** / -90.21 / -88.11 / -84.50; width 2^-4 2^34.11, calls -108.60 / -98.62 / -96.52 / -92.91, compressions -99.59 / -89.62 / -87.52 / -83.91; width 2^-6 2^32.11, compressions **-101.59** / -91.62 / -89.52 / -85.91; width 2^-7 2^31.11, compressions **-102.59** / -92.62 / -90.52 / -86.91.
+
+**3. By the mean and by stratum** (SCALE's a-run cells in compressions, typed in [relayed]; the K a run each implies at today's sessions and the periods at that K [cuts]). Each cell is mean / by stratum.
+
+| cut, design | K a run | calls: a run | a year | compressions: a run (SCALE's) | a year |
+|---|---|---|---|---|---|
+| plan's cut, the record | 2^34.44 / 2^36.08 | **-108.28** / **-106.64** | -92.60 / -90.96 | -99.28 / -97.64 | -83.59 / -81.95 |
+| plan's cut, width 2^-4 | 2^34.71 / 2^34.89 | **-108.00** / **-107.82** | -92.32 / -92.14 | -99.00 / -98.82 | -83.31 / -83.13 |
+| plan's cut, width 2^-6 | 2^32.71 / 2^32.89 | **-110.00** / **-109.82** | -94.32 / -94.14 | **-101.00** / **-100.82** | -85.31 / -85.13 |
+| plan's cut, width 2^-7 | 2^31.71 / 2^31.89 | **-111.00** / **-110.82** | -95.32 / -95.14 | **-102.00** / **-101.82** | -86.31 / -86.13 |
+| plan's cut, the 2,647 GB plan | 2^36.21 / 2^36.39 | **-106.50** / **-106.32** | -90.82 / -90.64 | -97.50 / -97.32 | -81.81 / -81.63 |
+| recut, the record | 2^32.22 / 2^32.49 | **-110.47** / **-110.21** | -94.79 / -94.53 | **-101.47** / **-101.21** | -85.78 / -85.52 |
+| recut, width 2^-4 | 2^32.52 / 2^32.79 | **-110.17** / **-109.90** | -94.49 / -94.22 | **-101.17** / **-100.90** | -85.48 / -85.21 |
+| recut, width 2^-6 | 2^30.52 / 2^30.79 | **-112.17** / **-111.90** | -96.49 / -96.22 | **-103.17** / **-102.90** | -87.48 / -87.21 |
+| recut, width 2^-7 | 2^29.52 / 2^29.79 | **-113.17** / **-112.90** | -97.49 / -97.22 | **-104.17** / **-103.90** | -88.48 / -88.21 |
+| recut, the 2,647 GB plan | 2^34.02 / 2^34.29 | **-108.67** / **-108.40** | -92.99 / -92.72 | -99.67 / -99.40 | -83.98 / -83.71 |
+
+A week and a month are in the run's `out/year-table-cuts.md`: a week is the run's cell + 9.98, a month + 12.08, a year + 15.68.
+
+**4. The older counts** [run `88dc`]. At **643** (a later head block's count, counted by ATTACK's `bac2`; under one M it is superseded by 2,049, and the mean at 643 stands to 0.2 bit): the record a run / week / month / year, calls **-107.55** / -97.57 / -95.47 / -91.86, compressions -98.54 / -88.57 / -86.47 / -82.86; by the mean as posted (K 2^34.31) calls **-108.41** / -98.43 / -96.33 / -92.73, compressions -99.40 / -89.43 / -87.33 / -83.72. The what-if "the q_nope writer proved 64 words a block (139 classes)" is section 2's table. **132 is a count over rows, not the Lean's key: struck.** `88dc` prints its table only so the strike has a number beside it (the record a year -94.14 calls, -85.13 compressions). **Struck with it:** the by-class cells and the "rows within K ≤ 2^33" line of my 10:45Z entry, and every year figure of my two 10:47Z entries (2^-93.15 to 2^-97.65 in calls, "the record keeps 2^-100 over a week, width 2^-6 and 2^-7 over a month"); they were at 132.
+
+**5. What "2^80 calls are each run's" means, and the year at a year's budget.** It means the adversary may spend 2^80 calls of SHA-512 in every one of the period's runs, 52,560 × 2^80 = 2^95.68 calls a year, which is why a year's cell is the run's + 15.68. If 2^80 is instead the adversary's budget for the whole year, the year reads as ONE RUN's cell of the tables above: at the plan's cut the record 2^-105.88 in calls and 2^-96.87 in compressions, at the recut 2^-109.74 and 2^-100.74 [cuts, and run `88dc` at 643 and 139: the evaluator at an even split, T = ⌈2^80 / 52,560⌉ = 2^64.31 calls a run, summed over the year's 52,560 runs; equal to the run's cell in every row to two decimals]. Every term of the sum is linear in T, so any split fixed before the year gives the same [derived]. For a split the adversary chooses as it goes, nothing says it: the Lean's `hT` is a fixed cap on one run and no statement is over several runs, so that reading needs a statement over a period's runs whose one budget is a hypothesis [read: `eventTwoX_le_cls_at_budget`'s `hT`]. Which reading is the claim is Daniel's.
+
+**6. What no count of classes lowers** [run `88dc`]. The sessions' share alone (the bound at one class): a year in calls -100.61 (the record), -99.02 (2^-3), -100.02 (2^-4), -102.02 (2^-6), -103.02 (2^-7), -98.52 (the plan); in compressions -91.61, -90.02, -91.02, -93.02, -94.02, -89.52. So with 2^80 calls each run's, no design holds 2^-100 over a year in compressions whatever the classes, and in calls the record would need K ≤ 2^26.22 a run, about 1.3 classes a checked block. The waits' term (in no sum): 2^-125.99 a run and 2^-110.31 a year at the cap 2^128·k; 2^-183.64 and 2^-167.96 at 2^192·k.
+
+**7. Which rows #8873's `K ≤ 2^33` instance covers** (N_s ≤ 2^30, T and the opening checks' calls at 513·2^80; every design's N_s a run is at most 2^27.93) [cuts for each K; the comparison derived]:
+
+| cut | one M | by stratum | the mean |
+|---|---|---|---|
+| the plan's cut (2,049) | none (the least is width 2^-7, 2^34.43) | widths 2^-6 (2^32.89) and 2^-7; not the record (2^36.08), width 2^-4 (2^34.89), the plan (2^36.39) | widths 2^-6 (2^32.71) and 2^-7; not the record (2^34.44), width 2^-4 (2^34.71), the plan (2^36.21) |
+| the recut, PageCopy 97 (139) | the record (2^32.96 at today's checked blocks, 8,378,781,000 against 8,589,934,592; 2^32.85 by SCALE's cell), widths 2^-6 and 2^-7; not width 2^-4 (2^33.55; 2^33.40 by SCALE's cell), width 2^-3, the plan | the record (2^32.49), widths 2^-4 (2^32.79), 2^-6, 2^-7; not the plan (2^34.29) | the record (2^32.22), widths 2^-4 (2^32.52), 2^-6, 2^-7; not the plan (2^34.02) |
+| the recut, PageCopy 205 | NOT the record (2^33.52; 2^33.42 by SCALE's cell); widths 2^-6 (2^32.11) and 2^-7 | as at 97 | as at 97 |
+
+Your arithmetic checks: the recut's record is under 2^33 by every count with PageCopy at 97 (by 0.04 bit under one M) and over it at 205.
+- At the caps the whole hash part reads [cuts, exact rationals; Lean agrees on the first, third, fourth and fifth as `≤ 2^-100, 2^-98, 2^-97, 2^-96`: try `r20261111-113035-a3a2`, lean exit 0]: K ≤ 2^33 **2^-100.47**; 2^34 2^-99.59; 2^35 2^-98.65; 2^36 2^-97.69; 2^37 2^-96.70; 2^38 2^-95.71; 2^39 2^-94.72. So the least power-of-two cap for each row closes at: the plan's cut under one M, width 2^-7 2^-98.65 (K ≤ 2^35), width 2^-6 2^-97.69, the record 2^-96.70, width 2^-4 2^-95.71, the plan 2^-94.72; the record by the mean 2^-98.65 and by stratum 2^-96.70.
+- The sum stays at most 2^-100 up to K = 12,593,941,139 (2^33.55) at N_s ≤ 2^30 and up to 14,003,227,282 (2^33.70) at N_s ≤ 2^27 [cuts]. The recut's record at 205 (12,357,195,000, N_s a run 2^25.84) is under both, and width 2^-4 at 139 (12,636,467,760, N_s 2^26.43) under the second. So one more instance, at N_s ≤ 2^27 and K ≤ 14·10^9, holds 2^-100 for both: it is in part 1's file (`hashBound_table1_513_narrow`, in the try that passed). In calls (T and the opening checks' calls at 2^80) K ≤ 2^42 holds 2^-100.72 and covers every row of every table here.
+
+**What I could not establish.** The recut's own checked blocks (SCALE's cells imply about 0.11 bit fewer than today's; section 2 is at today's). The by-stratum and mean K's are implied from SCALE's two-decimal cells, not from its strata. Anything about an adaptive split of a year's budget. A recorded run id for the cells at 2,049 and 205 (above). Part 1's first try is back and passed (`r20261111-113035-a3a2`, cpu-11: lean exit 0 in 133 s, 16 theorems on `propext`, `Classical.choice`, `Quot.sound`); its entry is next.
+
+For the table: THE YEAR [modeled; run `88dc` at `14643669694c` for 139 and 643, my VM at the same tree for 2,049 until `9979` ends; per run at a padded first stage of K0 = 6, summed over 52,560 runs on one machine, 2^80 calls each run's; no always-checked block]: the record 2^-90.19 in calls and 2^-81.19 in compressions at the plan's cut (one M 2,049), 2^-94.06 and 2^-85.06 at the recut (139); nothing holds 2^-100 over a year, and in compressions nothing can at any count (the sessions' share alone is 2^-89.5 to 2^-94.0).
+For the table: if 2^80 is the year's budget, the year is one run's cell: the record 2^-105.88 / 2^-96.87 at the plan's cut, 2^-109.74 / 2^-100.74 at the recut [cuts and run `88dc`, a fixed split; an adaptive split has no statement].
+For the table: #8873's `K ≤ 2^33` covers, at the plan's cut, widths 2^-6 and 2^-7 by stratum or the mean and nothing under one M; at the recut the record under every count with PageCopy at 97, not under one M at 205.
