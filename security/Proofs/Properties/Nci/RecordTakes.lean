@@ -20,7 +20,7 @@ namespace NciCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
-open NciCheck.RecordText (Row)
+open NciCheck.RecordText (Row fieldsOf)
 
 /-- **A gate is as wide as the leaf that names it**: a leaf of a reader row, and a leaf of a unit's output row, is
 a gate whose value has the leaf's bits. -/
@@ -67,6 +67,7 @@ def OutFits (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wir
   ∀ (r : Row) wt wu out sc sc' i f, S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out) → 0 ≤ wu →
     UnitAt P rs r.tid r.unit sc → UnitAt P rs wt wu.toNat sc' → i < (P.defs[sc.d]!).params.size →
     (P.defs[sc.d]!).params[i]!.1 = r.port → out = "o" ++ toString f →
+    f < (fieldsOf (P.defs[sc'.d]!).ret).length →
     (outRow (P.defs[sc'.d]!) f).2.foldl (· + ·) 0 ≤
       (inRow (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row).2.foldl (· + ·) 0
 
