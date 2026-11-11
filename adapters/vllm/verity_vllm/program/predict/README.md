@@ -5,7 +5,7 @@ package's docstring lists every module.
 
 ## Interface
 
-- **Provides:** the predicted Program (`build`) and its comparison with the traced one (`aot`); a row's ahead-of-time
+- **Provides:** the predicted Program (`build`) and its score against the traced one (`score`); a row's ahead-of-time
   Build (`aot`, `compiled`); `steps`, which compiles a served run's advice into the Programs its committed rows must pass;
   a served window as its class's one Circuit (`window_circuit`); and the commands `verity-vllm predict` and
   `verity-vllm block-counts`.
