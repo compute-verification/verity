@@ -1804,7 +1804,6 @@
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "index", "symbol": "main", "detail": "", "count": 4},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "var-annotated", "symbol": "audit_padding", "detail": "", "count": 3},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "var-annotated", "symbol": "compare_steps", "detail": ""},
-    {"file": "verity_vllm/check/match/projection.py", "kind": "var-annotated", "symbol": "Projection.__init__", "detail": ""},
     {"file": "verity_vllm/check/match/resolve.py", "kind": "arg-type", "symbol": "advance", "detail": ""},
     {"file": "verity_vllm/check/match/resolve.py", "kind": "arg-type", "symbol": "attribute_record", "detail": "", "count": 3},
     {"file": "verity_vllm/check/match/resolve.py", "kind": "arg-type", "symbol": "is_sampling_event", "detail": ""},
