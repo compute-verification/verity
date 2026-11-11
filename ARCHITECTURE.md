@@ -45,23 +45,23 @@ The auditor never runs the computation; it only checks proofs. The integrity pro
 
 ## Architecture
 
-Each layer may depend on the layers below it. A protocol's directory holds both its verifier and its prover, so the import rules name units, not directories (`AGENTS.md`, "Map and commands"):
+Each layer may depend on the layers below it. A protocol's directory holds its verifier and its prover, so the import rules name units (`AGENTS.md`, "Map and commands"):
 
 ~~~text
 adapters/vllm, demos/, benchmarks/ (with the census)
---------------------------------------------------------
+------------------------------------------------
 the verifiers, trusted: verity/protocols/NAME/verifier and device
   Lean, and Python until its Lean replaces it; Flock's in flock/verifier
   verity/hardware, configuration, claims
 security/: the definitions, models and proofs of the guarantees
---------------------------------------------------------
+------------------------------------------------
 Python and CUDA: the provers, and Python that mirrors the Lean
   verity/protocols/NAME/prover; flock/prover: Flock, the proof system's prover
   verity/circuits; verity/commitments, with crypto and randomness
   verity/definitions: ops, silicon semantics, targets, kernels, private_circuits
 ~~~
 
-`tools/` and `infra/` sit outside the layers: `tools/research` runs and records the work and depends on none of them, and nothing outside `infra/` imports `infra/`.
+`tools/` and `infra/` sit outside the layers.
 
 ### Circuits
 
@@ -98,11 +98,11 @@ The workers' GPU servers send only through a data diode, to the ZK server, which
 
 ### Adapters
 
-An adapter makes Verity work end to end with a real system, and hands Verity only what the rule "Integrations are frontends" lists (`AGENTS.md`; the rule keeps the adapter's older name). Any serving system plugs in without changing `verity/`, and nothing under `verity/` imports an adapter (`tests/test_integration_boundaries.py` lists the sites that still do). The vLLM adapter (`adapters/vllm/`), the only one so far, builds each served workload's circuit, supplies its silicon-specific bindings, and commits the trace while serving.
+An adapter makes Verity work end to end with a real system, and hands Verity only what the rule "Integrations are frontends" lists (`AGENTS.md`, under the adapter's older name). Any serving system plugs in without changing `verity/`, and nothing under `verity/` imports an adapter (`tests/test_integration_boundaries.py` lists the sites that still do). The vLLM adapter (`adapters/vllm/`), the only one so far, builds each served workload's circuit, supplies its silicon-specific bindings, and commits the trace while serving.
 
 ## Documentation
 
-- Specifications: the [program format](verity/circuits/PROTOCOL.md), the commitment schemes ([frame-v3](verity/commitments/frame_v3/PROTOCOL.md), [vllm-v1](adapters/vllm/verity_vllm/commitments/vllm_v1/PROTOCOL.md)), the protocols, stated in Lean (`security/`) with each one's README as its outline (a protocol's `PROTOCOL.md` remains only until its Lean covers it), and Flock's verifier, stated in Lean (`verity/protocols/flock/verifier/`), with [its outline](verity/protocols/flock/agreement/README.md).
+- Specifications: the [program format](verity/circuits/PROTOCOL.md), the commitment schemes ([frame-v3](verity/commitments/frame_v3/PROTOCOL.md), [vllm-v1](adapters/vllm/verity_vllm/commitments/vllm_v1/PROTOCOL.md)), the protocols, stated in Lean (`security/`) with each one's README as its outline, and Flock's verifier, stated in Lean (`verity/protocols/flock/verifier/`), with [its outline](verity/protocols/flock/agreement/README.md).
 - Each subprotocol's README; [AGENTS.md](AGENTS.md) for contributors (the map, the rules, how a change lands).
 
 ## Glossary
