@@ -23,8 +23,8 @@ from circuit_check import units as UN
 from test_circuit_check import PINS, REPO
 
 SNAPSHOT = json.loads((Path(__file__).parent / "fixtures" / "attention_split_facts.json").read_text())
-PKG = "verity.ml.definitions.registry"
-REGISTRY = REPO / "verity" / "ml" / "definitions" / "registry"
+PKG = "verity.definitions.registry"
+REGISTRY = REPO / "verity" / "definitions" / "registry"
 #: the family's Definition modules (the DSA and sparse-MLA ones included), and `hopper`, which the split left as it was
 MODULES = ("fa2_check_inf", "fa3_check_inf", "fa2_softcap", "boolean_attention", "boolean_softcap", "mla", "dsa", "boolean_dsa",
            "sparse_mla", "boolean_sparse_mla", "hopper")
@@ -49,7 +49,7 @@ def _top_level(tree: ast.Module) -> list[str]:
 def family() -> dict[str, str]:
     """``id -> module`` for every Definition a family module binds at top level itself (not one it imports)."""
     from circuit_check import targets as TG
-    from verity.ml.circuits.defs import FunctionDefinition, SpecializedDefinition
+    from verity.circuits.defs import FunctionDefinition, SpecializedDefinition
 
     TG.load_registries()
     out = {}
@@ -101,10 +101,10 @@ def made(fid: str):
 
 
 def digest(fn) -> str:
-    """The canonical descriptor digest of ``fn``: its Program's (`verity.ml.circuits.codec.program_digest`), a primitive's entry's."""
-    from verity.ml.circuits.codec import canonical_json, definition_entry, program_digest
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.program import Program
+    """The canonical descriptor digest of ``fn``: its Program's (`verity.circuits.codec.program_digest`), a primitive's entry's."""
+    from verity.circuits.codec import canonical_json, definition_entry, program_digest
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.program import Program
 
     if isinstance(fn, PrimitiveDefinition):
         return hashlib.sha512(canonical_json(definition_entry(fn))).hexdigest()
@@ -114,7 +114,7 @@ def digest(fn) -> str:
 def changed_ids_and_digests(digests_file: str) -> dict[str, tuple]:
     """Of the slice `DIGESTS` file ``digests_file`` holds, the snapshot's Definitions whose id or digest, made from their id
     (`made`), is not the snapshot's, with both (None where the id makes none)."""
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
 
     part = int(Path(digests_file).stem.removeprefix(DIGESTS)) - 1
     keys = sorted(SNAPSHOT["definitions"])[part::PARTS]

@@ -20,67 +20,67 @@ path = ".."
 
 [[require]]
 name = "pouw_window"
-path = "../../verity/core/protocols/pouw/lean/window"
+path = "../../verity/protocols/pouw/verifier/lean/window"
 
 [[require]]
 name = "pouw_check"
-path = "../../verity/core/protocols/pouw/lean/check"
+path = "../../verity/protocols/pouw/verifier/lean/check"
 
 [[require]]
 name = "pouw_commit"
-path = "../../verity/core/protocols/pouw/lean/commit"
+path = "../../verity/protocols/pouw/verifier/lean/commit"
 
 [[require]]
 name = "nci_check"
-path = "../../verity/core/protocols/network/nci/lean"
+path = "../../verity/protocols/inference_only/verifier/nci/lean"
 
 [[require]]
 name = "certifier_device"
-path = "../../verity/core/devices/certifier/lean"
+path = "../../verity/protocols/certifier/device/lean"
 
 [[require]]
 name = "pous_check"
-path = "../../verity/core/protocols/pous/check"
+path = "../../verity/protocols/pous/verifier/check"
 
 [[require]]
 name = "core_memory_challenger"
-path = "../../verity/core/devices/memory_challenger/lean"
+path = "../../verity/protocols/pous/device/lean"
 
 [[require]]
 name = "core_firewall"
-path = "../../verity/core/service/firewall"
+path = "../../verity/protocols/recursion/verifier/firewall"
 
 [[require]]
 name = "network_check"
-path = "../../verity/core/protocols/network/lean"
+path = "../../verity/protocols/certifier/verifier/lean"
 
 [[require]]
 name = "core_spot"
-path = "../../verity/core/service/spot"
+path = "../../verity/protocols/spot/verifier/lean"
 
 [[require]]
 name = "verity_evaluate"
-path = "../../verity/core/primitives/evaluate"
+path = "../../verity/definitions/evaluate"
 
 [[require]]
 name = "remote_audit"
-path = "../../verity/core/protocols/remote_bandwidth/lean"
+path = "../../verity/protocols/poub/verifier/lean"
 
 [[require]]
 name = "core_requirement"
-path = "../../verity/core/primitives/requirement"
+path = "../../verity/definitions/requirement"
 
 [[require]]
 name = "core_composition"
-path = "../../verity/core/protocols/composition"
+path = "../../verity/protocols/remote/verifier/composition"
 
 [[require]]
 name = "core_onsite"
-path = "../../verity/core/protocols/onsite"
+path = "../../verity/protocols/onsite/verifier"
 
 [[require]]
 name = "flock_verifier"
-path = "../../verity/core/service/flock"
+path = "../../verity/protocols/flock/verifier"
 
 [[lean_lib]]
 name = "Properties"
