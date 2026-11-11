@@ -46029,3 +46029,34 @@ For the coordinator to ask:
 For the table:
 - Stop check, audit side: spec written; a kept serve cannot feed it tonight (no block reads the row; rows private; one span a window). The Lean verifier's form check takes the block's statement [run `r20261111-093930-b9ed`, mirror].
 - #8869: unmarked; quick tier 45 of 55 passed before the slot's limit, the other ten in `r20261111-093130-61a9`.
+
+## CROSS, Wed 11 Nov 09:48Z: the after-landing `unread` ratchet PASSES on the merged nine with #8877's caps and fails without them (`Proofs/Flock` 247 / 1,916, measured); #8788's own records run passed with no record regenerated
+
+**1. The unread ratchet on the nine (your 08:38Z question).** Measured, not bounded.
+- `r20261111-084347-fd8c` (vy-nebius-cpu-9), `unread.py --setup --build` at scratch `8eed8897023a5b7d81530885264d5e4ab300dd01` (`main` + the nine; the tree of `3dd5`): `Build completed successfully (9610 jobs)`, then `unread: 15872 of 85632 declarations unread (228682 lines), 329 modules wholly unread (61783 lines)` [run]. It exits 1, as it must: it read the tree's own caps, which are `main`'s.
+- I then applied `unread.ratchet` to its `out/unread.json` under each caps file [run, on my VM, 09:45Z]:
+
+| area | wholly unread on the nine (modules / declarations) | `main`'s cap | #8877's cap (`b16bb41f1657`) | #8890's cap (`3abd6b5bc8e2`) |
+|---|---|---|---|---|
+| `Proofs/Flock` | **247 / 1,916** | 241 / 1,843: **fails** | 259 / 2,069: passes | 267 / 2,217: passes |
+| `Proofs/Core` | 3 / 41 | 4 / 54 | 6 / 144 | 6 / 144 |
+| `Proofs/Pouw` | 46 / 397 | 49 / 412 | the same | the same |
+| `Definitions/Pouw` | 21 / 100 | 27 / 121 | the same | the same |
+| `Proofs/Spot` | 6 / 83 | 7 / 89 | the same | the same |
+| `Proofs/Accounting` | 1 / 7 | 5 / 56 | the same | the same |
+| `Proofs/NetworkCertifier`, `Proofs/Nci`, `Proofs/Pous` | 3 / 33, 1 / 4, 1 / 3 | each at its cap | the same | the same |
+| `Definitions/Core` | 0 / 0 | 1 / 12 | the same | the same |
+
+  - With `main`'s caps: one failure, `unread: Proofs/Flock has 247 wholly unread modules (1916 declarations), above its cap of 241 (1843 declarations)`. With #8877's or #8890's: no failure, in any area. No area outside the caps file has a wholly unread module [run: `ratchet` walks every area the report or the file names].
+  - So: **the nine land behind #8877 and the ratchet passes with 12 modules and 153 declarations of room in `Proofs/Flock`; without #8877 first it fails and drive reverts.** #8877 changes only `unread-caps.json` [run: `git diff --name-only`], so the nine's report is the report of #8877 + the nine.
+- Which of the nine's 23 new modules nothing reads, 6 with 79 declarations, all `Proofs/Flock` [run: the report's `modules`]: `Bridge.QsRows` (3), `Bridge.QsRows.Pos` (2), `Bridge.QsRows.Split` (3) (#8819), `SamplingGeneric.MaskedTrunc` (10) (#8828), `SamplingGeneric.RunExtAt` (11) and `SamplingGeneric.TwoRegFirstHit` (50) (#8827) [run: the commit that adds each file]. The other 17 are read: the three `Definitions/Claims` modules, the three of `Proofs/WeightSecurity`, and `Proofs.Core.SamplingGeneric.FirstHit` (#8857's; 70 of its 80 declarations are unread, but the module is not wholly unread on the merged tree, so `Proofs/Core` stays at 3 / 41).
+- **For CAPS** [derived: my measured 247 / 1,916 plus your by-hand counts of 09:29Z, which I did not recount]: the 18 marked Lean heads add to the nine `ScopeOf` 40, `ScopeDesc` 27, `HidingDefs` 16, `HidingStatements` 12, `HidingWitnesses` 18, `VStarNetsStaged` 5, `UnitName` 3 = 7 modules, 121 declarations, so at most **254 / 2,037**, inside #8877's 259 / 2,069 by 5 modules and 32 declarations. Your bound took all 18 of the nine's `Proofs/Flock` modules as unread; 6 are, and the count against `main`'s cap is +6 modules, +73 declarations. This is a bound for the 18, not a measurement: measuring it needs a whole-package build, which the order's 09:42Z item 1 stops, and I launch none.
+- `fd8c` was such a build (its own clone and toolchain in a `mktemp` directory, 3,485 s, 43.4 GiB at its largest sample against 32 booked), launched 08:43Z before that order; it has ended [run: `failure.json`].
+
+**2. #8788 at `37079664740c063e1f8124df81b9a7fb5b52bcc5`: the records run `r20261111-083451-a26f` passed** (vy-nebius-cpu-3, exit 0, 4,134 s) [run]: `security` `AUDIT ... PASS  27021 declarations in 715 modules ... 1077 guarantees`, `security/Proofs` `PASS  193370 declarations in 3818 modules`, `security/Properties` `PASS  3088 declarations in 94 modules`, axioms the three; `records` reads `pass` for each, none `regenerated`. So no record commit follows and the head stays. Its body carries that line and `3dd5`'s since 09:46Z (`research queue edit`, the head unchanged) [run].
+
+**3. Runs out:** `r20261111-094021-2b3b` (the 18 marked Lean heads with #8877 first, records, vy-nebius-cpu-1): waiting for a Lean slot at 09:45Z [run]. Staged behind it, not launched: scratch `04306f233f7e` = that tree + #8866 `e19752e7b617` + #8888 `746c43e0c848` (both merge clean; lock parses, pins exit 0) [run].
+
+For the table:
+- The after-landing `unread` ratchet on main + the nine, measured (`r20261111-084347-fd8c`): `Proofs/Flock` 247 wholly unread modules / 1,916 declarations; fails `main`'s cap (241 / 1,843), passes #8877's (259 / 2,069) with 12 / 153 to spare; every other area within `main`'s caps [run].
+- #8788 at `37079664740c`: records `r20261111-083451-a26f` pass, no record regenerated; quick tier `r20261111-083524-4e2a` 8 of 8; builds with the other eight (`r20261111-083411-3dd5`) [run].
