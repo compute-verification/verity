@@ -26,8 +26,9 @@ MEAN, RUN = b.natural("2^37.69"), 5523986
 MEMBERS = (2893, 15694)
 #: the runs of a year, one every 600 s on one machine
 YEAR = 52560
-#: the priced design's gates counted by rows, nine a proof block
-CLASSES = 9 * RUN
+#: the priced design per sampled replay block with every block's input bits counted, each an upper bound: its
+#: gates, its classes and its sessions
+GATES, CLASSES, MOST_SESSIONS = b.natural("2^41.81"), b.natural("2^26.24"), 15694
 
 
 def tenths(p: Fraction) -> Fraction:
@@ -115,7 +116,7 @@ def test_the_bound_is_linear_in_the_gates_and_the_budget_and_rises_with_the_sess
     (dict(K=1, k=1, Km=2), "by gate the bound reads no Km"), (dict(K=1, k=1, units=2), "by gate the bound reads no units"),
     (dict(K=1, k=1, rounds=5, kappa=Fraction(1, 2)), "by gate the bound reads no rounds, kappa"),
     (dict(K=1, k=1, gamma=2), "by gate the bound reads no gamma"), (dict(K=1, k=1, sessions=1, Km=0), "Km"),
-    (dict(K=1, k=1, rows=True), "by gate the bound reads no rows"),
+    (dict(K=1, k=1, by_class=True), "by gate the bound reads no by_class"),
     (dict(K=1, k=1, sessions=1, units=0), "units"), (dict(K=1, k=1, sessions=1, rounds=0), "rounds"),
     (dict(K=1, k=1, sessions=1, gamma=0), "gamma"), (dict(K=1, k=1, sessions=1, kappa=2), "kappa")])
 def test_a_design_outside_the_bounds_domain_is_refused_by_name(design, bad):
@@ -176,9 +177,35 @@ def test_a_monitoring_period_sums_its_runs_each_of_its_first_stages_replay_block
     assert all(p == 6 * n * b.bound(d) for n, p in b.periods(d, first_stage=6).values())
     assert b.periods(d, machines=12500)["year"][0] == 12500 * 52560
     two = members(MEMBERS[0])
-    assert b.periods(two, first_stage=4, at_B="ExpectedCR")["week"] == (1008, 4 * 1008 * b.bound(two, "ExpectedCR"))
+    assert b.periods(two, first_stage=4, at_B="ExpectedCR")["week"] == (
+        1008, 1008 * b.bound(b.at_run(two, 4), "ExpectedCR"))
     with pytest.raises(ValueError, match="at least one replay block"):
         b.periods(d, first_stage=0)
+
+
+def test_a_run_has_its_first_stages_replay_blocks_sessions_and_gates():
+    d = b.Design(K=3, k=1, T=5, sessions=2, Km=7, units=11, open_calls=13)
+    run = b.at_run(d, 6)
+    assert (run.K, run.Km, run.sessions, run.T, run.own, run.k) == (18, 42, 12, 5, 143, 1) and b.at_run(d, 1) == d
+    assert run.rewinds == 4 + 4402 * 12 and b.at_run(b.Design(K=3, k=1, sessions=2, rounds=9), 6).rewinds == 9
+    gate = b.Design(K=3, k=1, d=2, p_ref=Fraction(1, 8), opens=4, M=3)
+    assert b.at_run(gate, 6) == b.Design(K=18, k=1, d=2, p_ref=Fraction(1, 8), opens=4, M=3)
+    assert b.terms(b.at_run(gate, 6))["collision"] == 6 * b.terms(gate)["collision"]
+    one, six = members(MEMBERS[1]), b.at_run(members(MEMBERS[1]), 6)
+    assert b.terms(one)["first hit"] < b.terms(six)["first hit"] < 6 * b.terms(one)["first hit"]
+    assert b.terms(one)["rewinding"] < b.terms(six)["rewinding"] < 6 * b.terms(one)["rewinding"]
+
+
+def test_the_waits_term_at_each_cap():
+    assert b.CAPS == (128, 192) and [b.bits(b.waits(cap)) for cap in b.CAPS] == ["2^-125.99", "2^-183.64"]
+    e_128 = 1 / b.E_LOW ** 128
+    exact = [(1 + b.INNER) * (Fraction(2, 2 ** cap) + e_128) for cap in b.CAPS]
+    assert all(0 <= b.waits(cap) - x < Fraction(1, 2 ** 511) for cap, x in zip(b.CAPS, exact))
+    assert b.INNER ** 1024 >= 2 and b.bits(e_128) == "2^-184.66"
+    assert b.waits(192, 3 * 2 ** 10, 3 * 2 ** 10) < Fraction(1, 2 ** 189) < b.waits(192)
+    assert b.waits(192, 1031, 1031) == b.waits(192) and b.waits(192, 2 ** 10, 2 ** 11) < b.waits(192)
+    with pytest.raises(ValueError, match="positive k"):
+        b.waits(192, 0)
     assert (b.runs(600), b.runs(601), b.runs(0), b.runs(1200, 600, 3)) == (1, 2, 0, 6)
 
 
@@ -228,11 +255,11 @@ def test_a_year_of_runs_costs_15_7_bits():
 def test_the_served_models_card_keeps_100_bits_at_the_smallest_session_over_a_year():
     K = b.card_gates(cards.load("workload", "GLM-5.3"))
     out = b.report(b.Design(K=K, k=b.queries(2 ** 10)))
-    assert [c["at_B"] for c in out["block"]] == [None]
-    assert out["block"][0]["calls"]["meets"] and out["run"][0]["calls"]["meets"]
-    assert all(c[count]["meets"] for cells in out["periods"].values() for c in cells
-               for count in ("calls", "compressions"))
-    assert not b.report(b.Design(K=K, k=TABLE, d=SESSIONS))["periods"]["year"][0]["calls"]["meets"]
+    assert [c["at_B"] for c in out["block"]] == [None] and out["columns"] == ["gates, calls", "gates, compressions"]
+    assert all(c["meets"] for span in ("block", "run") for c in out[span][0]["columns"].values())
+    assert all(c["meets"] for cells in out["periods"].values() for row in cells for c in row["columns"].values())
+    year = b.report(b.Design(K=K, k=TABLE, d=SESSIONS))["periods"]["year"][0]
+    assert not year["columns"]["gates, calls"]["meets"]
 
 
 def test_by_position_the_four_terms_at_one_table_a_session():
@@ -247,7 +274,7 @@ def test_by_position_the_four_terms_at_one_table_a_session():
         assert [b.bits(got[name]) for name in ("rewinding", "conflict", "first hit")] == [strict, conflict, first]
         assert got["sessions"] == 0 and b.bits(b.bound(d)) == "2^-105.03"
         assert b.bits(b.bound(d, "ExpectedCR")) == expected
-        assert [b.bits(n * b.bound(d)) for n in (4, 6)] == ["2^-103.03", "2^-102.45"]
+        assert [b.bits(b.bound(b.at_run(d, n))) for n in (4, 6)] == ["2^-103.03", "2^-102.45"]
         assert b.bits(b.periods(d, first_stage=6)["year"][1]) == "2^-86.77"
         assert b.terms(members(sessions, T=ROWS))["first hit"] == 513 * got["first hit"]
     assert b.bits(b.bound(members(MEMBERS[0], kappa=Fraction(1, 2 ** 203)))) == "2^-105.03"
@@ -276,18 +303,32 @@ def test_in_compressions_each_call_is_taken_as_long_as_the_longest():
     assert b.bound(b.converted(gate)) == 513 * b.bound(gate)
 
 
-def test_by_rows_is_by_position_at_the_rows_that_open_together():
-    """The priced design's gates counted nine row classes a proof block: the first-hit term per sampled replay block
-    and per run, in calls and in compressions."""
-    d = b.Design(K=CLASSES, k=TABLE, sessions=RUN, rows=True)
-    assert d.form == "rows" and b.terms(d) == b.terms(b.Design(K=CLASSES, k=TABLE, sessions=RUN))
-    assert "by rows" in b.premises(d)["first hit"] and "by rows" not in b.premises(members(RUN))["first hit"]
-    first, long = b.terms(d)["first hit"], b.terms(b.converted(d))["first hit"]
-    assert b.log2(CLASSES) == "25.56" and [b.bits(n * first) for n in (1, 4, 6)] == [
-        "2^-117.00", "2^-115.00", "2^-114.42"]
-    assert long == 513 * first and [b.bits(n * long) for n in (1, 4, 6)] == ["2^-108.00", "2^-106.00", "2^-105.42"]
-    few = b.terms(b.Design(K=CLASSES, k=TABLE, sessions=MEMBERS[1], rows=True))["first hit"]
-    assert b.bits(few) == "2^-117.16" and b.bits(513 * few) == "2^-108.15"
+def test_by_classes_is_by_position_at_the_classes_one_reveal_opens_whole():
+    d = b.by_classes(b.Design(K=GATES, k=TABLE, sessions=MOST_SESSIONS, Km=2 * GATES), CLASSES)
+    assert (d.form, d.K, d.Km, d.sessions) == ("classes", CLASSES, None, MOST_SESSIONS)
+    assert b.terms(d) == b.terms(b.Design(K=CLASSES, k=TABLE, sessions=MOST_SESSIONS))
+    assert "by classes" in b.premises(d)["first hit"] and "by classes" not in b.premises(members(RUN))["first hit"]
+    assert b.by_classes(members(RUN), CLASSES, 2 * CLASSES).Km == 2 * CLASSES
+
+
+def test_the_priced_design_by_gates_and_by_classes_in_calls_and_in_compressions():
+    """The first-hit term at the priced design's upper bounds, per sampled replay block and per run at a padded
+    first stage of 4 and of 6 replay blocks: by gates it is above 2^-100 a run, by classes below it in calls and in
+    compressions."""
+    gates = b.Design(K=GATES, k=TABLE, sessions=MOST_SESSIONS)
+    classes = b.by_classes(gates, CLASSES)
+    cells = [(gates, ("2^-100.91", "2^-98.91", "2^-98.33"), (True, False, False)),
+             (b.converted(gates), ("2^-91.91", "2^-89.91", "2^-89.33"), (False, False, False)),
+             (classes, ("2^-116.48", "2^-114.48", "2^-113.90"), (True, True, True)),
+             (b.converted(classes), ("2^-107.48", "2^-105.48", "2^-104.90"), (True, True, True))]
+    goal = Fraction(1, 2 ** 100)
+    for counted, cell, meets in cells:
+        got = [b.terms(b.at_run(counted, n))["first hit"] for n in (1, 4, 6)]
+        assert [b.bits(p) for p in got] == list(cell) and [p <= goal for p in got] == list(meets)
+    width = b.Design(K=b.natural("2^39.15"), k=TABLE, sessions=MOST_SESSIONS)
+    by_width = [b.terms(b.at_run(d, n))["first hit"] for d in (width, b.by_classes(width, b.natural("2^23.83")))
+                for n in (4, 6)]
+    assert [b.bits(p) for p in by_width] == ["2^-101.57", "2^-100.99", "2^-116.89", "2^-116.31"]
 
 
 def test_by_position_the_terms_at_the_bounds_of_a_one_table_session():
@@ -336,8 +377,11 @@ def test_by_position_the_most_mean_gates_32_tables_leave():
     goal = Fraction(1, 2 ** 100)
     assert (k, most) == (395007543, 227711235758) and MEAN <= most
     assert by_position(32, most) <= goal < by_position(32, most + 1)
-    assert b.most_gates(b.Design(K=1, k=k, sessions=RUN), 100, blocks=YEAR) == 0
-    assert b.log2(b.most_gates(b.Design(K=1, k=TABLE, sessions=RUN), 100, blocks=YEAR)) == "26.98"
+    assert b.most_gates(b.Design(K=1, k=k, sessions=RUN), 100, runs=YEAR) == 0
+    assert b.log2(b.most_gates(b.Design(K=1, k=TABLE, sessions=RUN), 100, runs=YEAR)) == "26.98"
+    six = b.most_gates(b.Design(K=1, k=TABLE, sessions=MOST_SESSIONS), 100, first_stage=6)
+    assert b.terms(b.at_run(b.Design(K=six, k=TABLE, sessions=MOST_SESSIONS), 6))["first hit"] <= goal < b.terms(
+        b.at_run(b.Design(K=six + 1, k=TABLE, sessions=MOST_SESSIONS), 6))["first hit"] and b.log2(six) == "40.14"
     assert b.most_gates(b.Design(K=5, k=k, sessions=RUN, Km=9), 100) == most
     own = b.most_gates(b.Design(K=1, k=TABLE, sessions=RUN, open_calls=2 ** 80), 100)
     at_own = b.Design(K=own, k=TABLE, sessions=RUN, open_calls=2 ** 80)
@@ -352,7 +396,7 @@ def test_the_most_gates_a_target_leaves():
         goal = Fraction(1, 2 ** 100)
         assert at(most, k, d) <= goal < at(most + 1, k, d) and b.log2(most) == cell
     d = b.Design(K=1, k=SMALL)
-    assert b.most_gates(d, 100, blocks=52560) == b.most_gates(d, 100) // 52560
+    assert b.most_gates(d, 100, runs=52560) == b.most_gates(d, 100) // 52560
     assert b.most_gates(b.Design(K=1, k=1, opens=1, M=0), 100) == 0
 
 
@@ -368,22 +412,30 @@ def test_the_command_prints_by_gate_the_design_its_terms_and_each_period(capsys)
                       "T = 2^80.00 calls of SHA-512 in every run, the prover's and the verifier's, k = 1507, "
                       "e_s = 316471")
     assert out[1] == ("each figure per sampled replay block or per run at a padded first stage of K0 = 1 replay "
-                      "blocks, twice: in calls, as the Lean says, then in compressions, converted at the longest call "
-                      "(65536 bytes, 513 compressions); ! is above 2^-100")
+                      "blocks, in 2 columns: by gates, calls; by gates, compressions. Calls are as the Lean says; "
+                      "compressions are converted at the longest call (65536 bytes, 513 compressions). A run has 1 "
+                      "times the sessions and the gates. ! is above 2^-100")
     assert [line.split()[0] for line in out[2:-2]] == ["collision", "refused", "cap", "sum", "sum", "week", "month",
-                                                       "year"]
+                                                       "year", "waits", "waits"]
     assert all(out[n].split()[1:3] == ["2^-132.03", "2^-123.02"] for n in (2, 5, 6)) and covered(out)
-    assert out[-2].startswith("in calls, the collision term beside the other two is at most 2^-100 up to K = 2^56.72 ")
-    assert out[-1].startswith("in compressions, the collision term beside the other two is at most 2^-100 up to K = "
-                              "2^47.72 per sampled replay block")
+    assert [out[n].split()[1:3] for n in (10, 11)] == [["2^-125.99"] * 2, ["2^-183.64"] * 2]
+    assert "at 2^128·k" in out[10] and "at 2^192·k" in out[11] and all("in no sum" in out[n] for n in (10, 11))
+    assert out[-2].startswith("by gates, calls, the collision term beside the other two is at most 2^-100 up to K = "
+                              "2^56.72 per sampled replay block")
+    assert out[-1].startswith("by gates, compressions, the collision term beside the other two is at most 2^-100 up "
+                              "to K = 2^47.72 per sampled replay block")
     b.main(["--K", "2^40.23", "--k", "12343986", "--d", "167", "--json"])
     report = json.loads(capsys.readouterr().out)
     block = report["block"][0]
     assert report["design"]["K"] == LEAST and block["unit"] == "per sampled replay block"
-    assert (block["calls"]["bound"], block["compressions"]["bound"]) == ("2^-96.11", "2^-87.11")
-    assert not block["calls"]["meets"] and Fraction(block["calls"]["exact"]) == at(LEAST, TABLE, SESSIONS)
+    calls, each = block["columns"]["gates, calls"], block["columns"]["gates, compressions"]
+    assert (calls["bound"], each["bound"]) == ("2^-96.11", "2^-87.11")
+    assert not calls["meets"] and Fraction(calls["exact"]) == at(LEAST, TABLE, SESSIONS)
     b.main(["--K", "2^40.23", "--symbols", "2^23", "--tables", "200", "--d", "167", "--json"])
-    assert json.loads(capsys.readouterr().out)["block"][0]["compressions"]["bound"] == "2^-79.46"
+    assert json.loads(capsys.readouterr().out)["block"][0]["columns"]["gates, compressions"]["bound"] == "2^-79.46"
+    with pytest.raises(SystemExit):
+        b.main(["--card", "GLM-5.3", "--symbols", "2^10", "--classes", "5"])
+    assert "--classes counts a design by position" in capsys.readouterr().err
 
 
 def test_the_command_prints_by_position_each_term_with_its_premise_and_what_it_covers(capsys):
@@ -393,35 +445,48 @@ def test_the_command_prints_by_position_each_term_with_its_premise_and_what_it_c
                       "(2^37.69), K_m = 221727998429 gates (2^37.69), c = n_PU·openCalls = 1·0 = 0, "
                       "T = 2^80.00 calls of SHA-512 in every run, the prover's and the verifier's, k = 12343986, "
                       "e_s = 2592237061")
+    assert "A run has 6 times the sessions and the gates." in out[1]
     assert [line.split()[:3] for line in out[2:11]] == [
         ["sessions", "0", "0"], ["rewinding", "2^-48.97!", "2^-44.47!"], ["rewinding", "2^-136.97", "2^-127.97"],
         ["conflict", "2^-129.79", "2^-120.78"], ["first", "hit", "2^-105.03"], ["sum", "2^-48.97!", "2^-44.47!"],
-        ["sum", "2^-105.03", "2^-96.03!"], ["sum", "2^-46.39!", "2^-41.89!"], ["sum", "2^-102.45", "2^-93.45!"]]
-    assert covered(out) and len(out) == 19
+        ["sum", "2^-105.03", "2^-96.03!"], ["sum", "2^-47.68!", "2^-43.18!"], ["sum", "2^-102.45", "2^-93.45!"]]
+    assert covered(out) and len(out) == 21
     premise = ["not given, counted as 0", "`ExpectedCR` at B", "`StrictBirthday` at B",
                "`ExpectedCR` at the conflict finder", "`ExpectedCR` at the two first-hit finders, at every cap"]
     assert all(text in line for text, line in zip(premise, out[2:7]))
-    assert all("per run at a padded first stage of K0 = 6 replay blocks" in line for line in out[9:17])
-    assert [line.split()[0] for line in out[11:17]] == ["week", "week", "month", "month", "year", "year"]
-    assert out[-2].startswith("in calls, the first-hit term at K_s = K_m = K is at most 2^-100 up to K = 2^42.72 per ")
-    assert out[-1].startswith("in compressions, the first-hit term at K_s = K_m = K is at most 2^-100 up to K = 2^33.72")
+    assert all("per run at a padded first stage of K0 = 6 replay blocks" in line for line in out[9:19])
+    assert [line.split()[0] for line in out[11:19]] == ["week", "week", "month", "month", "year", "year", "waits",
+                                                        "waits"]
+    assert out[-2].startswith("by gates, calls, the first-hit term at K_s = K_m = K is at most 2^-100 up to K = "
+                              "2^42.72 per sampled replay block; 2^40.14 per run at a padded first stage of K0 = 6")
+    assert out[-1].startswith("by gates, compressions, the first-hit term at K_s = K_m = K is at most 2^-100 up to "
+                              "K = 2^33.72 per sampled replay block")
     b.main(["--K", "2^37.69", "--sessions", "2893", "--symbols", "2^23", "--units", "2^20", "--open-calls", "2^40",
             "--kappa", "1/2^203", "--longest-call", "111", "--json"])
     report = json.loads(capsys.readouterr().out)
     assert report["design"]["form"] == "position" and report["design"]["own_calls"] == 2 ** 60
     assert report["longest_call"] == {"bytes": 111, "compressions": 1}
-    assert [(c["term"], c["calls"]["bound"]) for c in report["terms"]][::4] == [
+    assert [(c["term"], c["columns"]["gates, calls"]["bound"]) for c in report["terms"]][::4] == [
         ("sessions", "2^-203.00"), ("first hit", "2^-105.03")]
-    assert all(c["calls"] == c["compressions"] for c in report["terms"] + report["block"] + report["run"])
-    assert {c["at_B"]: c["calls"]["meets"] for c in report["block"]} == {"ExpectedCR": False, "StrictBirthday": True}
+    rows = report["terms"] + report["block"] + report["run"]
+    assert all(c["columns"]["gates, calls"] == c["columns"]["gates, compressions"] for c in rows)
+    assert {c["at_B"]: c["columns"]["gates, calls"]["meets"] for c in report["block"]} == {
+        "ExpectedCR": False, "StrictBirthday": True}
     assert all(c["unit"] == "per sampled replay block" for c in report["terms"] + report["block"])
-    assert report["most_gates"]["calls"] == report["most_gates"]["compressions"]
+    assert report["most_gates"]["gates, calls"] == report["most_gates"]["gates, compressions"]
+    assert [(c["cap"], c["k"], c["bound"]) for c in report["waits"]] == [(128, 1024, "2^-125.99"),
+                                                                        (192, 1024, "2^-183.64")]
 
 
-def test_the_command_prints_by_rows_when_the_gates_are_counted_by_rows(capsys):
-    b.main(["--K", "49715874", "--sessions", "5523986", "--symbols", "2^23", "--rows", "--first-stage", "4"])
+def test_the_command_prints_four_columns_when_the_classes_are_stated(capsys):
+    b.main(["--K", "2^41.81", "--classes", "2^26.24", "--sessions", "15694", "--symbols", "2^23", "--first-stage",
+            "6"])
     out = capsys.readouterr().out.splitlines()
-    assert out[0].startswith("by rows, per sampled replay block: N_s = 5523986 sessions, K_s = 49715874 row classes "
-                             "(2^25.56), K_m = 49715874 row classes (2^25.56), ")
-    assert out[6].split()[:4] == ["first", "hit", "2^-117.00", "2^-108.00"] and "by rows" in out[6]
-    assert out[10].split()[:3] == ["sum", "2^-114.93", "2^-105.93"] and covered(out)
+    assert out[0].startswith("by position, per sampled replay block: N_s = 15694 sessions, K_s = 3855352734248 gates "
+                             "(2^41.81), K_m = 3855352734248 gates (2^41.81), K_cls = 79255076 classes (2^26.24), ")
+    assert "in 4 columns: by gates, calls; by gates, compressions; by classes, calls; by classes, compressions." in out[1]
+    assert out[6].split()[:6] == ["first", "hit", "2^-100.91", "2^-91.91!", "2^-116.48", "2^-107.48"]
+    assert out[10].split()[:5] == ["sum", "2^-98.33!", "2^-89.33!", "2^-113.90", "2^-104.90"]
+    assert out[16].split()[:5] == ["year", "2^-82.65!", "2^-73.64!", "2^-98.22!", "2^-89.21!"]
+    assert covered(out) and len(out) == 23 and [line.split(",")[0] for line in out[-4:]] == [
+        "by gates", "by gates", "by classes", "by classes"]

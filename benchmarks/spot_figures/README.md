@@ -19,7 +19,7 @@ uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # th
 uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4 (figures.py writes it too)
 uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path P] [--headline CARD]  # Figure 5
 uv run python benchmarks/spot_figures/figure6.py --advice A.json [--points P...] [--old-rule POINT...] --out DIR
-uv run python benchmarks/spot_figures/binding.py --K 2^37.69 --sessions 15694 --symbols 2^23   # the first-hit bound
+uv run python benchmarks/spot_figures/binding.py --K 2^41.81 --classes 2^26.24 --sessions 15694 --symbols 2^23  # the first-hit bound
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
 ~~~
 
@@ -200,20 +200,24 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     `pending` reason where the arm's figure isn't a result yet, hatched).
 - **The first-hit bound** (`binding.py`): the two-stage first-hit finder's bound on the probability that an accepted
   run opens a value off the committed trace, evaluated in exact rational arithmetic at a design given as
-  parameters. Every figure is per sampled replay block, or per run at a padded first stage of K0 replay blocks
-  (`--first-stage`), and every line says which. The design: the gates a sampled replay block's sample needs (`--K`,
-  or `--card`: one proof block a stratum of the model's `workload` card), k, a session's accepted reruns a wait
-  (`--symbols`, `--tables`), and T, the calls of SHA-512 in every run, the prover's and the verifier's.
+  parameters. A design is stated per sampled replay block; a run at a padded first stage of K0 replay blocks
+  (`--first-stage`) has K0 times its sessions and gates. Every figure is per sampled replay block or per run, and
+  every line says which. The design: the gates a sampled replay block's sample needs (`--K`, or `--card`: one proof
+  block a stratum of the model's `workload` card), k, a session's accepted reruns a wait (`--symbols`, `--tables`),
+  and T, the calls of SHA-512 in every run, the prover's and the verifier's.
   - With `--sessions`, the sample's sessions in the mean, it is the by-position form, four terms each printed with
     the premise it holds under: the sessions' knowledge error (`--kappa`), the rewinding term under `ExpectedCR` at
     B and under `StrictBirthday` at B (`--rounds`, `--gamma`), the conflict term, and the first-hit term, which
     reads the sample's mean gates counted once and session by session (`--K`, `--Km`) and the run's own opening
-    checks (`--units`, `--open-calls`). `--rows` counts the gates by the rows that open together.
+    checks (`--units`, `--open-calls`).
   - Without, it is the by-gate form, which reads the most gates and d, the sessions holding one gate.
-  - Each figure is printed twice: in calls, as the premises count a finder's cost, and in compressions, converted
-    at the longest call (`--longest-call`, 64 KiB unless stated).
+  - Each figure is printed in calls, as the premises count a finder's cost, and in compressions, converted at the
+    longest call (`--longest-call`, 64 KiB unless stated). With `--classes`, the classes of gates one reveal opens
+    whole, a design by position is printed in four columns: by gates and by classes, each in calls and in
+    compressions.
   - It prints the sums per sampled replay block, per run and over each monitoring period, marks each above 2^-100
-    (`--target`), and gives the most gates that keep the collision term there.
+    (`--target`), gives the most gates that keep the collision term there, and beside them the term of the cap on
+    the extractor's waits at each cap, per run (`--waits-k`).
 - The headline scope (`figure1.PRIMARY`, a world year) gets the bare file names. Its exfiltration panel also plots
   (A) over the secondary scope (`figure1.SECONDARY`, a datacenter year).
 - A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build

@@ -1,9 +1,10 @@
 """The two-stage first-hit finder's bound, evaluated exactly at a sampling design: each term under its premise.
 
 The finder bounds the probability that an accepted run opens a value off the committed trace (the boundary's trace
-or a sampled replay block's committed interior) by what a collision of SHA-512 costs it. Every figure is per sampled
-replay block: the sample is one replay block's, its sessions and the gates they need. A run whose padded first stage
-samples K0 replay blocks takes K0 times each figure, and a monitoring period the sum over its runs.
+or a sampled replay block's committed interior) by what a collision of SHA-512 costs it. A design is stated per
+sampled replay block: the sample is one replay block's, its sessions and the gates they need. A run whose padded
+first stage samples K0 replay blocks has K0 times the sessions and the gates (`at_run`), and a monitoring period is
+the sum over its runs. Every figure is per sampled replay block or per run, and says which.
 
 By position the bound is four terms, at e_s = 1 + 210·k: the first run with every session extracted and, for each
 position the sample needs, a run with the sessions holding it extracted. Each term holds under its own premise on
@@ -17,9 +18,9 @@ only under the premises its line names:
     first hit   4·(T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·c)/2^256
                                                               `ExpectedCR` at the two first-hit finders, at every cap
 
-By rows is by position with the gates counted by the rows that open together: K_s and K_m count those classes, and
-the first-hit finders extract a class at a time. By gate is the union over the gates of a sample of one finder a
-gate, with a cap on each finder's further runs:
+By classes is by position with the gates counted by the classes one reveal opens whole (a row's gates): K_s and
+K_m count the classes, and the first-hit finders extract a class at a time (`by_classes`). By gate is the union over
+the gates of a sample of one finder a gate, with a cap on each finder's further runs:
 
     2·K·(T·(1 + d·e_s) + d·openCalls)/2^256 + p_ref·|opensSet| + |opensSet|/(M + 1)
 
@@ -29,9 +30,9 @@ gate, with a cap on each finder's further runs:
   (`queries`). The extractor waits 210 times a session (`WAITS`), so e_s bounds the expected reruns of one session's
   extraction.
 * N_s (`sessions`): the sessions of a sampled replay block's sample, in the mean. A design that states it is
-  evaluated by position, or by rows (`rows`).
+  evaluated by position, or by classes (`by_class`).
 * K_s (`K`) and K_m (`Km`, K_s unless stated): the gates the sample needs, in the mean, counted once and counted
-  session by session; by rows, the classes.
+  session by session; by classes, the classes.
 * c: the calls of the run's own opening checks, n_PU·openCalls (`units`, `open_calls`).
 * r (`rounds`) and γ (`gamma`): the verifier's rounds and the sessions' γ, by default 4 rounds and 4,402 a session
   (`ROUNDS`) and 2^51 (`GAMMA`).
@@ -45,7 +46,12 @@ gate, with a cap on each finder's further runs:
 The premises count calls: a finder's cost is its calls of SHA-512, a call on 64 KiB counted as one on 64 bytes. So
 each figure is given twice: in calls, as the Lean says, and in compressions, converted at the longest call. The
 second is the first at L·T and L·c, where the longest call is L compressions (`compressions`, `LONGEST`): what a
-premise counted in compressions gives when every call may be that long (`converted`).
+premise counted in compressions gives when every call may be that long (`converted`). A design by position that
+also states its classes is printed in four columns: by gates and by classes, each in calls and in compressions.
+
+Beside the bound, per run: the term of the cap on the extractor's waits, (2·k/K + e^(−k/8)) at the outer waits plus
+c times that at the inner, K = 2^cap·k and c = 2^(1/1024), at each cap of `CAPS` (`waits`). It is no term of the
+first-hit bound and is in no sum.
 
 `most_gates` is the largest K a target leaves the collision term (by position the first-hit term at K_s = K_m = K).
 
@@ -53,13 +59,13 @@ Every value is an integer or a `Fraction` until it is printed. The rewinding ter
 square root (`root_up`), and what is printed is ⌊−log₂⌋ in hundredths of a bit, found by integer arithmetic
 (`centibits`): a term printed as 2^-132.03 is at most 2^-132.03.
 
-    uv run python benchmarks/spot_figures/binding.py --K 2^37.69 --sessions 15694 --symbols 2^23 --first-stage 6
-    uv run python benchmarks/spot_figures/binding.py --K 2^25.57 --sessions 15694 --symbols 2^23 --rows
+    uv run python benchmarks/spot_figures/binding.py --K 2^41.81 --classes 2^26.24 --sessions 15694 --symbols 2^23 \
+        --first-stage 6                                                                 # by gates and by classes
     uv run python benchmarks/spot_figures/binding.py --card GLM-5.3 --symbols 2^10          # by gate, K from the card
     uv run python benchmarks/spot_figures/binding.py --K 2^40.23 --k 12343986 --d 167       # by gate, K, k and d given
                             # [--T 2^80] [--longest-call 65536] [--Km K] [--units N --open-calls C] [--rounds R]
-                            # [--gamma G] [--kappa P] [--p-ref P] [--opens N --M N] [--first-stage K0]
-                            # [--phase-seconds 600] [--machines N] [--target 100] [--json]
+                            # [--gamma G] [--kappa P] [--waits-k 2^10] [--p-ref P] [--opens N --M N]
+                            # [--first-stage K0] [--phase-seconds 600] [--machines N] [--target 100] [--json]
 """
 from __future__ import annotations
 
@@ -73,7 +79,7 @@ from verity.protocols.reporting import PERIODS
 
 #: the extractor's waits a session
 WAITS = 210
-#: a collision of SHA-512 is found with probability at most a finder's expected compressions over this
+#: a collision of SHA-512 is found with probability at most a finder's expected calls over this
 HASH = 2 ** 256
 #: a SHA-512 block's bytes, and the least padding a message takes (0x80 and its 16-byte length)
 BLOCK, PAD = 128, 17
@@ -87,7 +93,13 @@ PHASE = 600
 ROUNDS = (4, 4402)
 #: the sessions' γ the rewinding term is evaluated at unless it is stated
 GAMMA = 2 ** 51
-#: what one figure covers, and what K0 of them cover
+#: the caps on the extractor's waits the waits' term is given at, each a power of two times k
+CAPS = (128, 192)
+#: the least k of a wait, where the waits' term is largest
+WAITS_K = 2 ** 10
+#: at or above c = 2^(1/1024), the factor on the inner waits' term
+INNER = Fraction(1025, 1024)
+#: what one figure covers
 BLOCK_UNIT = "per sampled replay block"
 #: e between two rationals: its series to 1/39!, and that plus 2/40!, more than the series' tail
 E_LOW = sum(Fraction(1, factorial(n)) for n in range(40))
@@ -95,7 +107,7 @@ E_HIGH = E_LOW + Fraction(2, factorial(40))
 
 
 def run_unit(first_stage: int) -> str:
-    """What K0 sampled replay blocks cover, in words."""
+    """What a figure at a run of K0 sampled replay blocks covers, in words."""
     return f"per run at a padded first stage of K0 = {first_stage} replay blocks"
 
 
@@ -139,7 +151,7 @@ def root_up(p: Fraction) -> Fraction:
 
 
 #: by position's fields, which by gate does not read, each with the value that leaves it unstated
-_POSITION = {"Km": None, "units": 1, "rounds": None, "gamma": GAMMA, "kappa": None, "rows": False}
+_POSITION = {"Km": None, "units": 1, "rounds": None, "gamma": GAMMA, "kappa": None, "by_class": False}
 #: by gate's fields, which by position does not read
 _GATE = {"d": 1, "opens": 0, "p_ref": Fraction(0)}
 
@@ -159,7 +171,7 @@ class Design:
     rounds: int | None = None
     gamma: int = GAMMA
     kappa: Fraction | None = None
-    rows: bool = False
+    by_class: bool = False
     p_ref: Fraction = Fraction(0)
     opens: int = 0
     M: int | None = None
@@ -191,9 +203,9 @@ class Design:
 
     @property
     def form(self) -> str:
-        """Which form the design is evaluated in: `gate` unless it states its sessions, then `position`, or `rows`
-        where its gates are counted by rows."""
-        return "gate" if self.sessions is None else "rows" if self.rows else "position"
+        """Which form the design is evaluated in: `gate` unless it states its sessions, then `position`, or
+        `classes` where its gates are counted by classes."""
+        return "gate" if self.sessions is None else "classes" if self.by_class else "position"
 
     @property
     def reruns(self) -> int:
@@ -207,7 +219,8 @@ class Design:
 
     @property
     def rewinds(self) -> int:
-        """r, the verifier's rounds: as stated, else `ROUNDS`' own and a session's."""
+        """r, the verifier's rounds: as stated, for a run as for a sampled replay block, else `ROUNDS`' own and a
+        session's."""
         return self.rounds if self.rounds is not None else ROUNDS[0] + ROUNDS[1] * (self.sessions or 0)
 
     @property
@@ -226,6 +239,30 @@ def converted(design: Design, longest: int = LONGEST) -> Design:
     opening checks' calls times that call's compressions."""
     each = compressions(longest)
     return replace(design, T=each * design.T, open_calls=each * design.open_calls)
+
+
+def at_run(design: Design, first_stage: int) -> Design:
+    """The design of a run whose padded first stage samples `first_stage` replay blocks: that many times the
+    sessions and the gates of one."""
+    if first_stage < 1:
+        raise ValueError("a padded first stage samples at least one replay block")
+    return replace(design, K=first_stage * design.K, Km=None if design.Km is None else first_stage * design.Km,
+                   sessions=None if design.sessions is None else first_stage * design.sessions)
+
+
+def by_classes(design: Design, classes: int, Km: int | None = None) -> Design:
+    """The design by position counted by classes: `classes` of them in the mean, `Km` session by session."""
+    return replace(design, K=classes, Km=Km, by_class=True)
+
+
+def waits(cap: int, k_out: int = WAITS_K, k_in: int = WAITS_K) -> Fraction:
+    """A rational at or above the term of the cap on the extractor's waits at K = 2^`cap`·k:
+    (2·k_out/K_out + e^(−k_out/8)) + c·(2·k_in/K_in + e^(−k_in/8)), with e^(−k/8) taken at ⌊k/8⌋ and e at `E_LOW`,
+    c at `INNER`, and the sum rounded up to a multiple of 2^-512."""
+    if cap < 0 or k_out < 1 or k_in < 1:
+        raise ValueError("a cap is a power of two times a positive k")
+    out, inner = (Fraction(2, 2 ** cap) + 1 / E_LOW ** (k // 8) for k in (k_out, k_in))
+    return Fraction(ceil((out + INNER * inner) * HASH * HASH), HASH * HASH)
 
 
 #: by position, the premise at B each sum takes the rewinding term under
@@ -262,7 +299,7 @@ def premises(design: Design, at_B: str = "StrictBirthday") -> dict[str, str]:
             "conflict": "2·T·(1 + N_s·e_s)/2^256: `ExpectedCR` at the conflict finder, its expected calls taken as "
                         "that",
             "first hit": "4·(T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·c)/2^256: `ExpectedCR` at the two "
-                         f"first-hit finders{' by rows, the gates of a row opening together' * design.rows}, at "
+                         f"first-hit finders{' by classes, one reveal opening a class whole' * design.by_class}, at "
                          "every cap"}
 
 
@@ -282,19 +319,18 @@ def runs(seconds: int, phase: int = PHASE, machines: int = 1) -> int:
 def periods(design: Design, phase: int = PHASE, machines: int = 1, first_stage: int = 1,
             at_B: str = "StrictBirthday") -> dict[str, tuple[int, Fraction]]:
     """Each monitoring period's runs and its bound: the sum over its runs, each of `first_stage` sampled replay
-    blocks."""
-    if first_stage < 1:
-        raise ValueError("a padded first stage samples at least one replay block")
-    one = first_stage * bound(design, at_B)
+    blocks (`at_run`)."""
+    one = bound(at_run(design, first_stage), at_B)
     return {name: (n, n * one) for name, seconds in PERIODS for n in [runs(seconds, phase, machines)]}
 
 
-def most_gates(design: Design, target: int, blocks: int = 1) -> int:
-    """The most gates K at which the collision term over `blocks` sampled replay blocks is at most 2^-`target`, the
-    design's other fields kept: by gate less its refused and cap terms, 0 where those are above the target alone; by
-    position the first-hit term at K_s = K_m = K."""
-    one, two = (replace(design, K=K, Km=None).calls for K in (1, 2))
-    room = Fraction(HASH, 2 ** target * blocks)
+def most_gates(design: Design, target: int, runs: int = 1, first_stage: int = 1) -> int:
+    """The most gates K of a sampled replay block at which the collision term, summed over `runs` runs of
+    `first_stage` replay blocks each, is at most 2^-`target`, the design's other fields kept: by gate less its
+    refused and cap terms, 0 where those are above the target alone; by position the first-hit term at
+    K_s = K_m = K."""
+    one, two = (at_run(replace(design, K=K, Km=None), first_stage).calls for K in (1, 2))
+    room = Fraction(HASH, 2 ** target * runs)
     if design.sessions is None:
         fixed = terms(design)
         room -= (fixed["refused"] + fixed["cap"]) * HASH
@@ -360,91 +396,105 @@ def probability(text: str) -> Fraction:
 
 
 def report(design: Design, phase: int = PHASE, machines: int = 1, target: int = 100, first_stage: int = 1,
-           longest: int = LONGEST) -> dict:
+           longest: int = LONGEST, classes: int | None = None, waits_k: int = WAITS_K) -> dict:
     """The bound per sampled replay block, term by term with each term's premise, per run at a padded first stage of
-    `first_stage` replay blocks and over each monitoring period. Each figure is given in `calls` and in
-    `compressions` (`converted` at a longest call of `longest` bytes), with whether it is at most 2^-`target`. By
-    position each sum is given under each premise at B (`READINGS`), which its `at_B` names."""
+    `first_stage` replay blocks and over each monitoring period. Each figure is given in each of `columns`: by gates
+    in calls and in compressions (`converted` at a longest call of `longest` bytes) and, where a design by position
+    states its `classes`, by classes in both, with whether it is at most 2^-`target`. By position each sum is given
+    under each premise at B (`READINGS`), which its `at_B` names. `waits` is the waits' term at each cap, per run."""
     goal = Fraction(1, 2 ** target)
     readings = READINGS if design.sessions is not None else (None,)
-    counted = {"calls": design, "compressions": converted(design, longest)}
+    counts = {"gates": design} if classes is None else {"gates": design, "classes": by_classes(design, classes)}
+    columns = {f"{count}, {unit}": d for count, counted in counts.items()
+               for unit, d in (("calls", counted), ("compressions", converted(counted, longest)))}
     run = run_unit(first_stage)
 
-    def cells(figure, **more) -> dict:
-        """One line: `figure` of the design in calls and of the design in compressions."""
-        return {**more, **{count: {"bound": bits(p), "centibits": centibits(p), "exact": str(p), "meets": p <= goal}
-                           for count, d in counted.items() for p in [figure(d)]}}
+    def cell(p: Fraction) -> dict:
+        return {"bound": bits(p), "centibits": centibits(p), "exact": str(p), "meets": p <= goal}
 
-    def sums(times: int, unit: str, **more) -> list[dict]:
-        return [cells(lambda d, at=at_B or READINGS[-1]: times * bound(d, at), at_B=at_B, unit=unit, **more)
-                for at_B in readings]
+    def cells(figure, **more) -> dict:
+        """One line: `figure` of the design in each column."""
+        return {**more, "columns": {column: cell(figure(d)) for column, d in columns.items()}}
+
+    def sums(times: int, stage: int, unit: str, **more) -> list[dict]:
+        return [cells(lambda d, at=at_B or READINGS[-1]: times * bound(at_run(d, stage), at), at_B=at_B, unit=unit,
+                      **more) for at_B in readings]
 
     rows = []
     for name in terms(design):
         for at in (at_B or READINGS[-1] for at_B in readings):
-            row = cells(lambda d, at=at, name=name: terms(d, at)[name], term=name, premise=premises(design, at)[name],
-                        unit=BLOCK_UNIT)
+            row = cells(lambda d, at=at, name=name: terms(d, at)[name], term=name, unit=BLOCK_UNIT,
+                        premise=premises(design, at)[name])
             if row not in rows:
                 rows.append(row)
     spans = {name: n for name, (n, _) in periods(design, phase, machines, first_stage).items()}
 
     def most(d: Design) -> dict[str, int]:
-        return {"block": most_gates(d, target), "run": most_gates(d, target, first_stage),
-                **{name: most_gates(d, target, n * first_stage) for name, n in spans.items()}}
+        return {"block": most_gates(d, target), "run": most_gates(d, target, 1, first_stage),
+                **{name: most_gates(d, target, n, first_stage) for name, n in spans.items()}}
 
-    return {"design": {"form": design.form, "K": design.K, "Km": design.Km, "k": design.k, "d": design.d,
-                       "T": design.T, "sessions": design.sessions, "units": design.units,
+    return {"design": {"form": design.form, "K": design.K, "Km": design.Km, "classes": classes, "k": design.k,
+                       "d": design.d, "T": design.T, "sessions": design.sessions, "units": design.units,
                        "open_calls": design.open_calls, "own_calls": design.own, "rounds": design.rewinds,
                        "gamma": design.gamma, "kappa": None if design.kappa is None else str(design.kappa),
                        "p_ref": str(design.p_ref), "opens": design.opens, "M": design.M, "reruns": design.reruns},
             "target": target, "first_stage": first_stage, "phase_seconds": phase, "machines": machines,
-            "longest_call": {"bytes": longest, "compressions": compressions(longest)},
-            "terms": rows, "block": sums(1, BLOCK_UNIT), "run": sums(first_stage, run),
-            "periods": {name: sums(n * first_stage, run, runs=n) for name, n in spans.items()},
-            "most_gates": {count: most(d) for count, d in counted.items()}}
+            "longest_call": {"bytes": longest, "compressions": compressions(longest)}, "columns": list(columns),
+            "terms": rows, "block": sums(1, 1, BLOCK_UNIT), "run": sums(1, first_stage, run),
+            "periods": {name: sums(n, first_stage, run, runs=n) for name, n in spans.items()},
+            "waits": [{"cap": cap, "k": waits_k, "unit": run, **cell(waits(cap, waits_k, waits_k))} for cap in CAPS],
+            "most_gates": {column: most(d) for column, d in columns.items()}}
 
 
 def render(out: dict) -> str:
     """The report as lines, each saying what it covers: the design, each term per sampled replay block with its
-    premise, the sums per sampled replay block and per run, then each monitoring period. Each figure is printed in
-    calls, then in compressions."""
+    premise, the sums per sampled replay block and per run, each monitoring period, then the waits' term. Each
+    figure is printed in each column."""
     d = out["design"]
     by_gate = d["form"] == "gate"
     longest, run = out["longest_call"], run_unit(out["first_stage"])
 
+    def marked(c: dict) -> str:
+        return f"{c['bound'] + ('' if c['meets'] else '!'):<12}"
+
     def line(name: str, c: dict, text: str) -> str:
-        pair = "".join(f"{c[count]['bound'] + ('' if c[count]['meets'] else '!'):<12}"
-                       for count in ("calls", "compressions"))
-        return f"  {name:<11}{pair}{text}"
+        return f"  {name:<11}{''.join(marked(c['columns'][column]) for column in out['columns'])}{text}"
 
     def summed(c: dict) -> str:
         return c["unit"] + (f", the rewinding term under `{c['at_B']}` at B" if c["at_B"] else "")
 
-    def gates(n: int) -> str:
-        return f"{n} {'row classes' if d['form'] == 'rows' else 'gates'} (2^{log2(n)})"
+    def count(n: int, of: str = "gates") -> str:
+        return f"{n} {of} (2^{log2(n)})"
 
     budget = (f"T = 2^{log2(d['T'])} calls of SHA-512 in every run, the prover's and the verifier's, k = {d['k']}, "
               f"e_s = {d['reruns']}")
     if by_gate:
-        lines = [f"by gate, {BLOCK_UNIT}: K = {gates(d['K'])}, d = {d['d']}, openCalls = {d['open_calls']}, {budget}"]
+        lines = [f"by gate, {BLOCK_UNIT}: K = {count(d['K'])}, d = {d['d']}, openCalls = {d['open_calls']}, {budget}"]
     else:
+        of = "classes" if d["form"] == "classes" else "gates"
+        classes = f", K_cls = {count(d['classes'], 'classes')}" if d["classes"] is not None else ""
         own = f"c = n_PU·openCalls = {d['units']}·{d['open_calls']} = {d['own_calls']}"
-        lines = [f"by {d['form']}, {BLOCK_UNIT}: N_s = {d['sessions']} sessions, K_s = {gates(d['K'])}, "
-                 f"K_m = {gates(d['K'] if d['Km'] is None else d['Km'])}, {own}, {budget}"]
-    lines.append(f"each figure {BLOCK_UNIT} or {run}, twice: in calls, as the Lean says, then in compressions, "
-                 f"converted at the longest call ({longest['bytes']} bytes, {longest['compressions']} compressions); "
-                 f"! is above 2^-{out['target']}")
+        lines = [f"by {d['form']}, {BLOCK_UNIT}: N_s = {d['sessions']} sessions, K_s = {count(d['K'], of)}, "
+                 f"K_m = {count(d['K'] if d['Km'] is None else d['Km'], of)}{classes}, {own}, {budget}"]
+    lines.append(f"each figure {BLOCK_UNIT} or {run}, in {len(out['columns'])} columns: "
+                 f"{'; '.join(f'by {column}' for column in out['columns'])}. Calls are as the Lean says; compressions "
+                 f"are converted at the longest call ({longest['bytes']} bytes, {longest['compressions']} "
+                 f"compressions). A run has {out['first_stage']} times the sessions and the gates. ! is above "
+                 f"2^-{out['target']}")
     lines += [line(c["term"], c, f"{c['unit']}; {c['premise']}") for c in out["terms"]]
     lines += [line("sum", c, summed(c)) for span in ("block", "run") for c in out[span]]
     lines += [line(name, c, f"{c['runs']} runs, one an execution phase of {out['phase_seconds']} s on "
                             f"{out['machines']} machine(s), {summed(c)}")
               for name, cells in out["periods"].items() for c in cells]
+    lines += [f"  {'waits':<11}{marked(c) * len(out['columns'])}{c['unit']}; the cap on the extractor's waits at "
+              f"2^{c['cap']}·k, k = {c['k']} at both waits: (1 + c)·(2/2^{c['cap']} + e^(−k/8)); in no sum"
+              for c in out["waits"]]
     units = {"block": BLOCK_UNIT, "run": run}
     term = "the collision term beside the other two" if by_gate else "the first-hit term at K_s = K_m = K"
-    for count, most in out["most_gates"].items():
+    for column, most in out["most_gates"].items():
         upto = "; ".join(f"{f'2^{log2(n)}' if n else 'none'} {units.get(name, f'over a {name} of such runs')}"
                          for name, n in most.items())
-        lines.append(f"in {count}, {term} is at most 2^-{out['target']} up to K = {upto}")
+        lines.append(f"by {column}, {term} is at most 2^-{out['target']} up to K = {upto}")
     return "\n".join(lines)
 
 
@@ -460,14 +510,16 @@ def main(argv=None) -> None:
     q.add_argument("--symbols", type=natural, help="a table's level-0 codeword symbols: k = ⌈4·tables·symbols/e⌉")
     ap.add_argument("--tables", type=natural, default=1, help="the tables of one session, with --symbols (default 1)")
     ap.add_argument("--sessions", type=natural, help="the sample's sessions, in the mean: evaluate by position")
-    ap.add_argument("--rows", action="store_true",
-                    help="by position with the gates counted by the rows that open together: --K and --Km count them")
+    ap.add_argument("--classes", type=natural, metavar="K_CLS",
+                    help="by position, the classes of gates one reveal opens whole: print by classes beside by gates")
     ap.add_argument("--Km", type=natural, help="by position, the gates counted session by session (default --K)")
     ap.add_argument("--units", type=natural, default=1, help="by position, n_PU: own calls are units·open-calls")
     ap.add_argument("--open-calls", type=natural, default=0, help="the calls of the opening checks")
     ap.add_argument("--rounds", type=natural, help="by position, the verifier's rounds (default 4 + 4402·sessions)")
     ap.add_argument("--gamma", type=natural, default=GAMMA, help="by position, the sessions' γ (default 2^51)")
     ap.add_argument("--kappa", type=probability, help="by position, the sessions' knowledge error (1/2^203)")
+    ap.add_argument("--waits-k", type=natural, default=WAITS_K,
+                    help="the k of a wait the waits' term is given at, at both waits (default 2^10)")
     ap.add_argument("--d", type=natural, default=1, help="by gate, the most sessions holding one gate (default 1)")
     ap.add_argument("--T", type=natural, default=BUDGET,
                     help="the calls of SHA-512 in every run, the prover's and the verifier's (default 2^80)")
@@ -489,8 +541,10 @@ def main(argv=None) -> None:
         gates = card_gates(cards.load("workload", a.card))
     design = Design(K=gates, k=a.k if a.k else queries(a.tables * a.symbols), d=a.d, T=a.T, sessions=a.sessions,
                     Km=a.Km, units=a.units, open_calls=a.open_calls, rounds=a.rounds, gamma=a.gamma, kappa=a.kappa,
-                    rows=a.rows, p_ref=a.p_ref, opens=a.opens, M=a.M)
-    out = report(design, a.phase_seconds, a.machines, a.target, a.first_stage, a.longest_call)
+                    p_ref=a.p_ref, opens=a.opens, M=a.M)
+    if a.classes is not None and a.sessions is None:
+        ap.error("--classes counts a design by position: state --sessions")
+    out = report(design, a.phase_seconds, a.machines, a.target, a.first_stage, a.longest_call, a.classes, a.waits_k)
     print(json.dumps(out, indent=1) if a.json else render(out))
 
 
