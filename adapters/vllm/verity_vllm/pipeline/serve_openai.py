@@ -617,15 +617,14 @@ def main(opts: Options) -> int:
     served = opts.served_model_name or opts.model
     order = rows = ticked = None
     if opts.admit in ("release-order", "tick"):
-        from verity_vllm.engine.handle import model_runner
-        from verity_vllm.engine.step_trace import scheduler_of
-        rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler_of(engine))
+        from verity_vllm.engine.handle import model_runner, scheduler
+        rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler(engine))
     if opts.admit == "release-order":
         order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000)
     elif opts.admit == "tick":
         from verity_vllm.engine.engine_driver import external_id
         from verity_vllm.pipeline.serve_admit import install
-        loop.sched = scheduler_of(engine)
+        loop.sched = scheduler(engine)
         loop.gate = TickGate(Tick.of_ms(opts.tick_bucket_ms, opts.tick_sat_ms, opts.tick_free_ms), hold_s=opts.admit_hold_ms / 1000)
         ticked = install(loop.sched, loop.gate, key=external_id)      # over the advice trace's wrappers, which see admissions
         order = TickAdmit(loop.submit, loop.abort, loop.tick)

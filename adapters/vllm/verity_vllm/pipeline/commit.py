@@ -72,6 +72,7 @@ prof.apply_env()
 import torch  # noqa: E402
 
 from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va  # noqa: E402
+from verity_vllm.engine.handle import scheduler_or_none  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
 from verity_vllm.commit import challenge as CH, opened as OV, step_rows as SR  # noqa: E402
@@ -208,7 +209,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict, step: 
     finished: set[str] = set()
     step_t: list[float] = []
     step_tokens: list[int] = []
-    it, forwards = 0, AR.ForwardCounter(eng, AR.scheduler_of(engine.llm))
+    it, forwards = 0, AR.ForwardCounter(eng, scheduler_or_none(engine.llm))
     t0 = time.perf_counter()
     while pending or eng.has_unfinished_requests():
         while pending and int(requests[pending[0]].get("arrive_step") or 0) <= forwards.n:
