@@ -90,8 +90,8 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
   min_tokens, n > 1, or a parameter this compiler doesn't know);
 - a request Program with a dead unit (`program.prune`: a node no output reads), whose fix is in the lowering, never the advice;
 - a compilation `predict.batch.check_compiled` refuses (`BatchDependent`): one where a request's outputs could read its
-  batch-mates (R3 a derived split count; R2 a request planned differently alone, which keeps a cache hit on another request's KV
-  only when its tokens are checked equal; R1 GP-01's wiring and cones).
+  batch-mates (R2 a request planned differently alone, which keeps a cache hit on another request's KV only when its tokens are
+  checked equal; R1 GP-01's wiring and cones).
 
 A refusal refuses the session. `partial=True` (a measurement over served traffic, never a registration) refuses request by
 request instead: a refused request's rows and Program leave the compilation, and so does every request whose cache hit reads its

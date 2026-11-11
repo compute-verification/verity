@@ -1,8 +1,8 @@
 """A row template in chunks (`pipeline.serving_rows.chunked`): a row Definition the partition file's ``chunk_cap`` names is staged
 by Flock's `UnitStager` on its own ports, one v2 bit row per parameter (``in<g>``) and one per return field (``o<j>``), each
-chunk a member of at most its chunk size of the template's rows, read once; with none it stays the word-row member it was.  A ``COLS``
-row at its own width is the same chunks, and is chunked whenever a window names chunk sizes; under table reads DSA's latent row
-commits its output row-seg.  And a scope of several op_path prefixes takes the rows under any of them."""
+chunk a member of at most its cap of the template's rows, read once; with no cap it stays the word-row member it was.  A ``COLS``
+row at its own width is the same chunks, and is chunked whenever a window names caps.  And a scope of several op_path prefixes
+takes the rows under any of them."""
 from __future__ import annotations
 
 import numpy as np
@@ -13,7 +13,6 @@ from verity_vllm.pipeline import serving_rows as SRW
 from verity.definitions.registry import b1 as B1
 from verity.definitions.registry import dead_free as DF
 from verity.definitions.registry import deepgemm as DG
-from verity.definitions.registry import dsa_norm as DN
 from verity.definitions.registry import fa2_check_inf as FA2
 from verity.definitions.registry import fa3_check_inf as FA3
 from verity.definitions.registry import hopper as HP
@@ -23,15 +22,14 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.ops import mufu as MU
 from verity.definitions.ops import prims as OP
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.windows import interface as IF
 
 #: one plain row template, one ``COLS`` row's at its own width, and one packed with two return fields (a whole ``PARTS`` part,
 #: DeepGEMM's linear's quantisation, here on rows of its own family); each row's committed members and their element dtypes
 ROWS = {"BiasAdd_v1": (B1.BiasAdd, {"N": 8}, [("out", "bf16")]),
         "ResidualAdd_v1": (B1.ResidualAdd, {"N": 8}, [("out", "bf16")]),
-        "Fp8GroupQuantUe8m0_v1": (DG.Fp8GroupQuantUe8m0, {"K": 256, "G": 128}, [("q", "fp8"), ("s", "f32")]),
-        "DsaLatentRow_v1": (DN.DsaLatentRow, {"KVL": 512, "R": 64, "EPS": 1e-5}, [("out", "bf16")])}
+        "Fp8GroupQuantUe8m0_v1": (DG.Fp8GroupQuantUe8m0, {"K": 256, "G": 128}, [("q", "fp8"), ("s", "f32")])}
 OPS = ["model.layers.3.mlp.experts", "moe/L3", "model.layers.4.mlp.experts", "moe/L4", "model.layers.3.mlp.experts"]
 CAP = 2
 
@@ -121,30 +119,6 @@ def test_a_row_template_the_caps_name_is_chunks_of_the_stager_s_bit_rows_on_its_
         st.reference_check(c["rows"], c["outs"])
     with pytest.raises(AssertionError, match="outputs are not the IR reference's"):
         st.reference_check(got[0][0]["rows"], {**got[0][0]["outs"], "o0": got[0][0]["outs"]["o0"] ^ np.uint16(1)})
-
-
-def test_a_dsa_latent_row_chunk_commits_its_output_row_seg_under_table_reads(rows):
-    """Under the partition file's ``dsa_table_reads`` (the registration's `Registered.dsa_table_reads`) a ``DsaLatentRow`` chunk's
-    output row is a row of its request's history table, which a long row's reads open: ``hm96-sha512/row-seg/v1``, its inputs v2
-    as without it, its chunks, rows and outputs read the same.  A word-row member can't commit it, so a window that doesn't chunk
-    it is refused by name; another template's rows are the same either way."""
-    T, store, _ops, _outs = rows("DsaLatentRow_v1")
-    tp = SRW.template(T)
-    in_rows, out_rows = CR.unit_rows(tp, table_reads=True)
-    assert in_rows == CR.unit_rows(tp)[0] and out_rows == [(SEG, (0,))] and CR.unit_rows(tp)[1] == [(V2, (0,))]
-    (rs,), _defs, counts = SRW.member_rows({"r0": {}}, [T])
-    per = 2
-    off, on = (SRW.members([T], [rs], counts, {T: per}, table_reads=x) for x in (False, True))
-    assert [(m.name, m.rows, m.outs) for m in on] == [(m.name, m.rows, m.outs) for m in off]
-    for a, b in zip(off, on, strict=True):
-        assert dict(b.schemas) == {**dict(a.schemas), "o0": SEG} and b.row_schemas[-1] == [SEG, 16 * 576]
-    reads = [SRW.read_all(ms, [rs], store, None) for ms in (off, on)]
-    assert all(np.array_equal(x[0]["outs"]["o0"], y[0]["outs"]["o0"]) for x, y in zip(*reads, strict=True))
-    with pytest.raises(ValueError, match="under dsa_table_reads its output rows are its history table's row-seg rows"):
-        SRW.members([T], [rs], counts, {}, table_reads=True)
-    T, *_ = rows("ResidualAdd_v1")
-    (rs,), _defs, counts = SRW.member_rows({"r0": {}}, [T])
-    assert SRW.members([T], [rs], counts, {T: per}, table_reads=True) == SRW.members([T], [rs], counts, {T: per})
 
 
 def test_a_whole_attention_row_reads_its_tables_in_lookup_slots_and_an_rmsnorm_row_inline():
