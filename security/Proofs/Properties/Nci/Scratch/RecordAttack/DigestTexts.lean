@@ -11,6 +11,9 @@ and `C_v1` have no node. Callee 0 is `A_v1` in one text and `B_v1` in the other.
 * `digestOf`: `K_v1`'s closure digest, as the compiled digest computes it.
 * `rawOf`: the same digest where the form's comparison answers no: the SHA-512 of the one-entry object that maps
   `K_v1` to the SHA-512 of its own descriptor entry.
+* `hashedOf`: the SHA-512 of each byte string `Hashed` holds for `K_v1` in that reading, the descriptor entries of
+  the Definitions `keys` and the object that maps them to their digests: a collision would be two of them equal
+  from two different strings.
 -/
 
 namespace NciCheck.Properties.Record.Attack.Texts
@@ -67,6 +70,24 @@ def same (a b : Except String String) : String :=
   | .ok x, .ok y => if x == y then "one digest" else "two digests"
   | _, _ => "no digest"
 
+/-- The SHA-512 of each string `Hashed` holds for `K_v1` where the comparison answers no, `keys` the Definitions
+`K_v1` reaches: their descriptor entries, then the object of their digests. -/
+def hashedOf (t : String) (keys : List String) : Except String (List String) :=
+  match Flock.JsonParse.parse t with
+  | .ok j => do
+    let sha := fun (s : String) => Flock.hexOf (Flock.Sha512.hash s.toUTF8)
+    let entries ← keys.mapM fun k => Flock.canon ((j.getObjValD "definitions").getObjValD k)
+    let object ← Flock.canon (Json.mkObj ((keys.zip entries).map fun (k, e) => (k, Json.str (sha e))))
+    pure ((entries ++ [object]).map sha)
+  | .error e => .error e
+
+/-- How many of the two texts' hashed strings have a SHA-512 of their own: all but `K_v1`'s entry, which the two
+share, where no two collide. -/
+def distinct (a b : Except String (List String)) : String :=
+  match a, b with
+  | .ok x, .ok y => s!"{(x ++ y).eraseDups.length} digests of {x.length} and {y.length} strings"
+  | _, _ => "no digest"
+
 #eval calleesOf textA
 #eval calleesOf textB
 #eval digestOf textA
@@ -75,5 +96,6 @@ def same (a b : Except String String) : String :=
 #eval rawOf textA
 #eval rawOf textB
 #eval same (rawOf textA) (rawOf textB)
+#eval distinct (hashedOf textA ["K_v1", "A_v1"]) (hashedOf textB ["K_v1", "B_v1", "C_v1"])
 
 end NciCheck.Properties.Record.Attack.Texts
