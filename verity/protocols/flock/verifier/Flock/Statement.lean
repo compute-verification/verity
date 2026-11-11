@@ -214,10 +214,15 @@ structure Stmt where
 in UTF-8 (`canonUtf8`). Canonical JSON (`canon`) would escape what upstream writes raw, and the `--zk` hooks carry `§`. -/
 def identityBytes (identity : Json) : V ByteArray := return (← canonUtf8 identity).toUTF8
 
+/-- Whether the statement is a wide-leaf one (`Tags.wideLeaf`): which `--zk` schedule its tables' proofs follow. -/
+def Stmt.wideLeaf (st : Stmt) : Bool := st.tags.wideLeaf
+
 /-- `Hello`, the session parameters S2 compares. A keyed coin tree's `coins` has an empty nonce here: R7 puts the prover's
-in (`CoinTree.checkHello`). -/
+in (`CoinTree.checkHello`). Its `profile` names the schedule: `fast100`, or a wide-leaf statement's
+(`Tags.WIDE_LEAF_PROFILE`). -/
 def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) (tables : Array String := #[tags.table]) : V String :=
-  let base := [("profile", Json.str "fast100"), ("reps", Lean.toJson (2 : Nat)), ("flavor", Json.str "rs"),
+  let profile := if tags.wideLeaf then Tags.WIDE_LEAF_PROFILE else "fast100"
+  let base := [("profile", Json.str profile), ("reps", Lean.toJson (2 : Nat)), ("flavor", Json.str "rs"),
     ("tables", Json.arr (tables.map Json.str)),
     ("link", Json.mkObj [("sigma", Json.str (hexOf sigma)), ("m", Lean.toJson mPts), ("points", Lean.toJson (2 : Nat))])]
   let base := match coins with

@@ -848,14 +848,15 @@ def level0 (ch : Frame.Chan) (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0
     let mut ls : Array Level0.Level0 := #[]
     let mut ds : Array ByteArray := #[]
     for ((m, len), b) in asks.zip bs do
-      let (slot, kLog) ← match (← reg.get).maskOf (← l0s.get) name ls.size m with
+      let (R, L) := (← reg.get, ← l0s.get)
+      let (slot, kLog) ← match R.maskOf L name ls.size m with
         | .ok x => pure x
         | .error e => return (← say s!"err {e}")
       let w := Frame.words (← IO.getRandomBytes (16 * slot.size).toUSize) 0 slot.size
       let g ← match slot.fill kLog (Frame.words b 0 (len / 16)) w with
         | .ok g => pure g
         | .error e => return (← say s!"err {e}")
-      match ← Level0.draw IO.getRandomBytes m g with
+      match ← Level0.draw IO.getRandomBytes (R.wideOf L name ls.size) m g with
       | .ok l =>
         ls := ls.push l
         ds := ds.push (Frame.wordBytes w ++ Level0.drawsOf l)

@@ -188,7 +188,7 @@ def Inner.load (unit : String) (f : Files) : V Inner := do
   let (spec, st) ← f.stmt unit
   if let some i := f.inner then
     if let .error e := RecVStar.checkInnerStmt i st then throw s!"rec-coins: {unit}: {e}"
-  if let .error e := Zk.schedule st.m then throw s!"rec-coins: {unit}: the inner statement's schedule: {e}"
+  if let .error e := Zk.schedule st.wideLeaf st.m then throw s!"rec-coins: {unit}: the inner statement's schedule: {e}"
   let spec ← match f.drawnSpec spec st with
     | .ok s => pure s
     | .error e => throw s!"rec-coins: {unit}: the inner session's draw: {e}"
