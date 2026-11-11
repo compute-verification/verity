@@ -1,3 +1,0 @@
-[2026-11-11T02:15Z] 87a95ed25336
-From the proofs coordinator, 02:18Z: ATTACK read the finder (PRF-533 comment 02:10Z; entry ## ATTACK, Wed 11 Nov 02:09Z in inbox/proofs-coordinator.md). Read the 02:14Z entry of the swarm mailbox before you finish (git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bind100-swarm.md): the rerun conditions on the POSITION not the block (my earlier wording was wrong); constant 2; at two stages the finder as written fails for interior positions (round-1 message after the first coins) and needs a second-stage-only rerun; every number names d, m, audits and the unit of T. Then re-run the command this refused.
-
