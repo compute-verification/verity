@@ -69,13 +69,13 @@ def actual(row: resolver.Row) -> dict:
         configs.append(cfg)
         stage = tool.split(".", 1)[1] if isinstance(tool, str) and tool.startswith("vllm.") else None
         stages[stage or d["id"]] = {"attempt": d["id"], "tool": tool, "inputs": d.get("inputs") or {},
-                                   "artifact": (d.get("outputs") or {}).get(STAGE_OUTPUT.get(tool, ""))}
+                                   "artifact": (d.get("outputs") or {}).get(STAGE_OUTPUT.get(tool or "", ""))}
     # one configuration across the stages (the first attempt's; the others must agree)
     cfg0 = configs[0] if configs else {k: None for k in CONFIG_KEYS}
-    for i, c in enumerate(configs[1:], 1):
+    for i, other in enumerate(configs[1:], 1):
         for k in CONFIG_KEYS:
-            if c.get(k) != cfg0.get(k):
-                problems.append(f"attempt {docs[i]['id']} {k}={c.get(k)!r} != {docs[0]['id']} {cfg0.get(k)!r}")
+            if other.get(k) != cfg0.get(k):
+                problems.append(f"attempt {docs[i]['id']} {k}={other.get(k)!r} != {docs[0]['id']} {cfg0.get(k)!r}")
     # the chain: Match cites the Build's artifact; Commit cites both
     b, m, c = stages.get("build"), stages.get("match"), stages.get("commit")
     if m and b and m["inputs"].get("build") != b["artifact"]:

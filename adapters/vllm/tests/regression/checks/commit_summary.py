@@ -49,7 +49,7 @@ def summarize(d: str, rc: int) -> dict:
             runs = [json.loads(line) for line in f if line.strip()]
     ctl = [r for r in runs if r.get("arm") == "control" or r.get("committer") in (None, "control")]
     trt = [r for r in runs if r not in ctl]
-    out = {"rc": rc, "summary_keys": list(s)[:40], "n_runs": len(runs), "n_control": len(ctl), "n_treatment": len(trt),
+    out: dict = {"rc": rc, "summary_keys": list(s)[:40], "n_runs": len(runs), "n_control": len(ctl), "n_treatment": len(trt),
            "delta_wall_mean": s.get("delta_wall_mean"), "delta_wall": s.get("delta_wall"),
            "openings": [_g(r, "openings_verified", "openings_ok") for r in trt], "tokens_equal": [_g(r, "tokens_equal", "tokens_equal_ref") for r in trt],
            "backlog": [_g(r, "backlog_max", "backlog") for r in trt], "run_root": [(_g(r, "run_root", "root") or (r.get("commit") or {}).get("run_root") or "")[:16] for r in trt],

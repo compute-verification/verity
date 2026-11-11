@@ -217,9 +217,9 @@ class Row:
             if p.is_file():
                 return self._checked(rel, p) if verify else p
         for role in ("records", "programs"):
-            root = self._store_root(role)
-            if root is not None and (root / rel).is_file():
-                p = root / rel
+            store = self._store_root(role)
+            if store is not None and (store / rel).is_file():
+                p = store / rel
                 return self._checked(rel, p) if verify else p
         for root in self._shared_roots():
             if (root / rel).is_file():

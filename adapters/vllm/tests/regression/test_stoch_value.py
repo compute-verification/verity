@@ -43,7 +43,10 @@ def test_a_moved_token_or_step_changes_the_contract() -> None:
 
 
 def test_a_greedy_row_does_not_apply() -> None:
-    class Greedy:
+    class Greedy(resolver.Row):
+        def __init__(self) -> None:
+            """A row with no file."""
+
         def has(self, rel):
             return False
-    assert "greedy" in SV.applies(Greedy())
+    assert "greedy" in (SV.applies(Greedy()) or "")

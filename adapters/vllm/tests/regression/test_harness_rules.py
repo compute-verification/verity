@@ -24,7 +24,7 @@ from tests.regression.checks import commit_summary as CS
 from tests.regression.checks import manifest_digest as MD
 
 
-class _Fake:
+class _Fake(resolver.Row):
     def __init__(self, docs: dict):
         self.docs = docs
 
@@ -193,9 +193,11 @@ def test_a_store_tree_evicted_under_the_suite_is_fetched_again(tmp_path, monkeyp
         return tmp_path / art
     monkeypatch.setattr(store_io, "fetch", fetch)
     row = resolver.Row("k", {"row": 9, "artifacts": {"record": "art:t"}}, fixtures={})
-    assert (row._store_root("record") / "match" / "tokens.json").is_file()
+    first = row._store_root("record")
+    assert first is not None and (first / "match" / "tokens.json").is_file()
     shutil.rmtree(tmp_path / "art:t")
-    assert (row._store_root("record") / "match" / "tokens.json").is_file() and fetches == ["art:t", "art:t"]
+    again = row._store_root("record")
+    assert again is not None and (again / "match" / "tokens.json").is_file() and fetches == ["art:t", "art:t"]
     assert row._store_root("record") and fetches == ["art:t", "art:t"], "a tree still there is not fetched again"
 
 

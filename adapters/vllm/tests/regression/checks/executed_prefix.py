@@ -44,7 +44,9 @@ def _facts(row: resolver.Row) -> tuple[dict, dict, dict, list, dict]:
     fx = resolver.read_json(row.workload())
     order = _order(fx)
     caps = {order[str(r["request_id"])]: int(r["max_tokens"]) for r in fx["requests"]}
-    tok = row.json(_tokens_rel(row))
+    rel = _tokens_rel(row)
+    assert rel is not None, f"{row.key}: no tokens.json, so `applies` keeps this check off the row"
+    tok = row.json(rel)
     wp = row.json("build_workload/workload_program.json")
     stop = wp.get("stop_rule") or {}
     return fx, order, caps, tok["requests"], stop

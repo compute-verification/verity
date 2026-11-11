@@ -185,8 +185,9 @@ def test_row_candidate_is_the_union_of_its_attempts(store, monkeypatch):
     root = row.candidate_root()
     assert root is not None and root == store["tmp"] / "cache" / ROW
     assert row.candidate("global_match.json") == root / "global_match.json"
-    assert json.loads(row.candidate("build_summary.json").read_text())["program_digest"] == PD
-    assert row.candidate("commit/commit_verdict.json").is_file() and row.candidate("nope.json") is None
+    summary, verdict = row.candidate("build_summary.json"), row.candidate("commit/commit_verdict.json")
+    assert summary is not None and json.loads(summary.read_text())["program_digest"] == PD
+    assert verdict is not None and verdict.is_file() and row.candidate("nope.json") is None
     # cached: a second call does not refetch; a different attempt set does
     (root / "sentinel").write_text("x")
     assert row.candidate_root() == root and (root / "sentinel").exists()
@@ -240,9 +241,9 @@ def test_attempt_provenance_names_a_different_configuration_and_a_broken_chain(s
 
 def test_attempt_provenance_does_not_apply_without_attempt_ids(monkeypatch, tmp_path):
     monkeypatch.delenv(resolver.CANDIDATE_ENV, raising=False)
-    assert "no candidate Attempt ids" in AP.applies(_row())
+    assert "no candidate Attempt ids" in (AP.applies(_row()) or "")
     monkeypatch.setenv(resolver.CANDIDATE_ENV, str(tmp_path))
-    assert "no candidate Attempt ids" in AP.applies(_row())
+    assert "no candidate Attempt ids" in (AP.applies(_row()) or "")
 
 
 def test_row_config_grammar_matches_the_tool_declaration():

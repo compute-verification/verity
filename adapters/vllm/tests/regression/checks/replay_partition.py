@@ -37,7 +37,8 @@ def applies(row: resolver.Row) -> str | None:
 
 
 def _body(doc: dict) -> dict:
-    return doc.get("sampled_replay") if isinstance(doc.get("sampled_replay"), dict) else doc
+    body = doc.get("sampled_replay")
+    return body if isinstance(body, dict) else doc
 
 
 def lift(sr: dict) -> dict:
@@ -90,7 +91,10 @@ def recompute(sr: dict, programs: dict[str, dict], program_dirs: dict[str, str] 
     ranks = [int(r) for r in (sr.get("applicability") or {}).get("ranks") or [0]]
     facts = ((sr.get("executed_prefix_of_record") or {}).get("facts_of_record") or {})
     executed_prefix = {rid: POP.executed_prefix_of_record(rid, **{k: v for k, v in f.items() if k in FACT_KEYS}) for rid, f in facts.items() if isinstance(f, dict)} or None
-    all_vus, not_ev, not_ev_fam, indices, anchors = [], Counter(), Counter(), {}, {}
+    all_vus, anchors = [], {}
+    not_ev: Counter = Counter()
+    not_ev_fam: Counter = Counter()
+    indices: dict = {}
     for rid, inst in programs.items():
         pi = indices.get(id(inst))
         if pi is None:

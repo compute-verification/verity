@@ -124,12 +124,12 @@ def actual(row: resolver.Row) -> dict:
     wp = row.json("build_workload/workload_program.json")
     dirs = component_dirs(wp)
     comps: dict[str, dict] = {}
-    for d in sorted(set(dirs.values())):
-        comps[d] = recompute(row.json(f"{d}/descriptor.json.gz"))
+    for comp_dir in sorted(set(dirs.values())):
+        comps[comp_dir] = recompute(row.json(f"{comp_dir}/descriptor.json.gz"))
     reqs = {}
     for r in wp["requests"]:
         d = _dir_of(r, dirs)
-        if d not in comps:
+        if d is None or d not in comps:
             raise resolver.NotResolvable(f"{row.key}: request {r['request_id']} names no derived component dir (inputs.derived: {sorted(dirs)})")
         c = comps[d]
         reqs[r["request_id"]] = {"cap": int(r["cap"]), "component": d, "program_digest": c["program_digest"], "n_nodes": c["n_nodes"],
