@@ -40,8 +40,6 @@ C_FIELDS = ("model", "revision", "H", "NL", "NH", "KVH", "D", "I", "V", "QKV", "
 ENGINE_ARG_KEYS = ("max_num_seqs", "enable_prefix_caching", "enable_chunked_prefill", "dtype", "quantization", "tensor_parallel_size",
                    "enforce_eager", "seed", "max_model_len", "gpu_memory_utilization", "attention_backend", "kv_cache_dtype", "block_size",
                    "vllm_commit")
-PROVENANCE_LISTS = ("protected_files_modified", "existing_primitives_modified", "new_root_classes", "new_allowlist_entries",
-                    "golden_digest_changes", "new_patterns", "new_definitions")
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -647,6 +645,6 @@ def bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, 
     return means[int(0.025 * n)], means[int(0.975 * n) - 1]
 
 
-__all__ = ["CARD_SCHEMA", "C_FIELDS", "DERIVED_FIELDS", "ENGINE_ARG_KEYS", "PROVENANCE_LISTS", "ReportCard", "slug", "dtype_short",
+__all__ = ["CARD_SCHEMA", "C_FIELDS", "DERIVED_FIELDS", "ENGINE_ARG_KEYS", "ReportCard", "slug", "dtype_short",
            "engine_args_slug", "kappa_short", "config_id_of", "c_with_provenance", "log_header", "workload_summary", "engine_args_of",
            "vu_partition_text", "counts_of", "build_card", "load_card", "write_card", "top_section", "summarize_md", "bootstrap_ci"]
