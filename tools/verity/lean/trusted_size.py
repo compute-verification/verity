@@ -2,7 +2,7 @@
 
     python tools/verity/lean/trusted_size.py [PKG] [--facts FACTS.json.gz | --run RUN] [--unread] [--json]
 
-PKG (default `Security`) is a Lake package with a `lean-audit.json`; its trusted text is the modules under `--prefix`
+PKG (default `security`) is a Lake package with a `lean-audit.json`; its trusted text is the modules under `--prefix`
 (default `Definitions`), grouped by their next component, the area (`Definitions.Pouw.Basic` is in `Pouw`). For each area
 it prints the files, their lines (and the lines that are neither blank nor comment nor docstring), the theorems written
 there, the definitions, how many of them a listed statement reads, and how many guarantees read the area. The
@@ -156,7 +156,7 @@ def table(m: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("pkg", nargs="?", default="Security", help="the Lake package (default %(default)s)")
+    ap.add_argument("pkg", nargs="?", default="security", help="the Lake package (default %(default)s)")
     ap.add_argument("--prefix", default="Definitions", help="the trusted modules' prefix (default Definitions)")
     src = ap.add_mutually_exclusive_group()
     src.add_argument("--facts", type=Path, help="a Lean check's facts.json.gz (or an older one's facts.json) for PKG")
