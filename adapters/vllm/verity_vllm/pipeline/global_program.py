@@ -30,7 +30,7 @@ from dataclasses import dataclass
 
 from verity.circuits.codec import canonical_json, descriptor_size
 from verity.circuits.defs import REGISTRY
-from verity_vllm.config import RowEngine, done_source_refusal, option, workload_arg, workload_file
+from verity_vllm.config import RowEngine, done_source_refusal, option, row_execution, workload_arg, workload_file
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import prefix_plan as PP, workload as W
 from verity_vllm.records.workload import Workload, WorkloadSampling
@@ -82,8 +82,7 @@ def execution_of_workload(w: Workload) -> str:
     sweep = w.sweep or {}
     if ex := sweep.get("execution"):
         return str(ex)
-    rid = str(sweep.get("row_id") or "")
-    return rid.rsplit("__", 1)[-1] if "__" in rid else ""
+    return row_execution(str(sweep.get("row_id") or "")) or ""
 
 
 # engine conditions the workload Program models: the components are eager per-request Programs (X-09) over one shared
