@@ -27,6 +27,9 @@ calls at most `E[c + Σ_{q ∈ classes of the sample} cq(·, q)]`: one term for 
 * **What the loop charges** (`le_loopCostAt_cls`): at the first further tape that opens a node the first run opened,
   the cost of that node's class there, which is what the output reads of that tape.
 
+* **The classes of a key** (`clsOf`): the least point with a point's key names its class, so two points have one
+  class exactly where they have one key (`clsOf_eq_iff`), and a point's class has its key (`key_clsOf`).
+
 Without `hall` the count by class fails: a run that opens one node of a class and not another leaves the other waited
 for, and the class is paid again.
 -/
@@ -273,5 +276,25 @@ theorem pr_off_cls_le_ex {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonem
           ((c a.1 a.2 + ∑ q ∈ (univ.filter fun p : P => chk a.1 a.2 p).image cls, cq a.1 a.2 q : ℕ) : ℝ)) /
         2 ^ (256 : ℝ) :=
   le_of_forall_cap fun K => pr_off_cls_le_ex_cap H cls op hv chk hchk hall c cq K coll hc hs (hCR K)
+
+/-! ## The classes of a key -/
+
+/-- **The class of a point under a key**: the least point with its key. -/
+def clsOf {n : ℕ} {Key : Type} [DecidableEq Key] (key : Fin n → Key) (g : Fin n) : Fin n :=
+  (univ.filter fun g' => key g' = key g).min' ⟨g, mem_filter.2 ⟨mem_univ _, rfl⟩⟩
+
+/-- A point's class has its key. -/
+theorem key_clsOf {n : ℕ} {Key : Type} [DecidableEq Key] (key : Fin n → Key) (g : Fin n) :
+    key (clsOf key g) = key g :=
+  (mem_filter.1 (Finset.min'_mem (univ.filter fun g' => key g' = key g) _)).2
+
+/-- Two points have one class exactly where they have one key. -/
+theorem clsOf_eq_iff {n : ℕ} {Key : Type} [DecidableEq Key] (key : Fin n → Key) (g g' : Fin n) :
+    clsOf key g = clsOf key g' ↔ key g = key g' := by
+  constructor
+  · intro h
+    exact (key_clsOf key g).symm.trans ((congrArg key h).trans (key_clsOf key g'))
+  · intro h
+    simp only [clsOf, h]
 
 end Verity.FirstHit

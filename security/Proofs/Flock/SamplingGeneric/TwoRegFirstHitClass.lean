@@ -46,6 +46,9 @@ have a proof block needing the representative `q` extracted (`callsBy`).
   extract reveals at each proof block of its session does (`Compiled.kept_classWhole_of_wit`,
   `CompiledTwo.eventTwoX_le_firstHit_wit`). That is for the code that instantiates `reveal`, `commit` and the sessions
   to show; a witness no extraction returns is not asked about.
+* **At the classes of a key** (`CompiledTwo.eventTwoX_le_firstHit_key`): where the classes are those of a key of the
+  gates (`Verity.FirstHit.clsOf`), and gates of one key are needed by the same proof blocks and lie in the same replay
+  block, the hypotheses on the representatives hold by the key.
 * **What the finders read.** The seed, the sample, the waits and the output are the by-position finders'. At a further
   run the output reads the extraction of the sessions with a proof block needing the gate it compares
   (`Compiled.collBy`), and the finder is charged the sessions with a proof block needing that gate's representative.
@@ -597,6 +600,42 @@ theorem eventTwoX_le_firstHit_wit {H : Msg → Msg} {L : CompiledTwo Coin A} (hA
           2 ^ (256 : ℝ) :=
   eventTwoX_le_firstHit_kept hA hbind hS hs hPt hd hin P needs hpos cls hrep hblock
     (fun ω r c => L.toCompiled.kept_classWhole_of_wit H P x s ω cls r c (hwit ω r c)) hX hI
+
+/-- **The event of `KSRegTwoX` with the by-class finders' terms, at the classes of a key**:
+`eventTwoX_le_firstHit_wit` at the classes a key of the gates gives (`Verity.FirstHit.clsOf`: a gate's class is named
+by the least gate with its key). Where gates of one key are needed by the same proof blocks (`hneeds`) and lie in the
+same replay block of the first stage's partition (`hblock`), the two hypotheses on the representatives hold, and what
+is left to show is that what the extracted witnesses reveal holds those classes whole (`hwit`). -/
+theorem eventTwoX_le_firstHit_key {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
+    (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
+    {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
+    (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) {Key : Type} [DecidableEq Key]
+    (key : Fin (L.nG x) → Key)
+    (hneeds : ∀ g g' : Fin (L.nG x), key g = key g' → ∀ u, g.val ∈ needs u → g'.val ∈ needs u)
+    (hblock : ∀ g g' : Fin (L.nG x), key g = key g' → gateBlock d.part g.val = gateBlock d.part g'.val)
+    (hwit : ∀ (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x),
+      ∀ iu ∈ (List.finRange (L.nPU x)).zip (L.checked x r),
+        ∀ hu : iu.2 < L.nPU x ∧ (L.sessSlots x (L.checked x r) iu.1).head? = some iu.1.val, ∀ w : A.W,
+          ((L.sessWit x iu.2 r (run H P L.V x ω r).seen (c iu.1 ⟨iu.2, hu.1⟩)).eval H (run H P L.V x ω)).1 =
+              some w →
+            ∀ u' ∈ L.sessBlocks x (L.checked x r) iu.1,
+              L.toCompiled.ClassWhole H x (Verity.FirstHit.clsOf key)
+                (L.reveal s u' (run H P L.V x ω r).seen w))
+    (hX : ∀ K : ℕ, ExpectedCR H (L.toCompiled.finderXCls H P x s needs (Verity.FirstHit.clsOf key) K))
+    (hI : ∀ K : ℕ, ExpectedCR H (L.finderICls H P x s d.part needs (Verity.FirstHit.clsOf key) K)) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregTwoX H P x p.1 p.2) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + (Compiled.BconfX H L.toCompiled Ω P x).Pr H +
+        4 * Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+          ((L.callsAt H P x s q.1 q.2.1 q.2.2 +
+            ∑ c ∈ (univ.filter (fun g : Fin (L.nG x) =>
+                decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u))).image (Verity.FirstHit.clsOf key),
+              L.toCompiled.callsBy H P x s needs c.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) /
+          2 ^ (256 : ℝ) :=
+  eventTwoX_le_firstHit_wit hA hbind hS hs hPt hd hin P needs hpos (Verity.FirstHit.clsOf key)
+    (fun u g hg => hneeds g (Verity.FirstHit.clsOf key g) (Verity.FirstHit.key_clsOf key g).symm u hg)
+    (fun g g' h => hblock g g' ((Verity.FirstHit.clsOf_eq_iff key g g').1 h)) hwit hX hI
 
 end CompiledTwo
 
