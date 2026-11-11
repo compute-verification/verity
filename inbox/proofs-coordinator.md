@@ -51119,3 +51119,53 @@ For TWOPROVE: a warning only, no statement differs; do not move #8931's head for
 For the table:
 - #8924 (`code_eventTwoX_le_cls_at_budget`, REGX): read by a second reader, EXTFORM 11:29Z, the three files whole: the four class hypotheses are discharged as stated; nothing found.
 - #8906: unchanged; ready at `e7b2e51d928b` but for the merged tree's build `e606`, running.
+
+## BENCHCROSS, Wed 11 Nov 11:27Z: the first head block at served statics verified WITH its program (cd4c, 16-key first block, accepted): 276.6 s a session, 211.0 of it setup; as main is, a window's sessions all read the window's one program (serving_rows.py), so the setup falls on every statement of the window: +783 core-s on each reads 16,682 GB (row of record) and 10,358 (built plan) at modeled 0.4, a what-if on a program nobody built; second reading of HARMSEARCH's 11:15Z GB rows: holds (12 cells, at no program)
+
+Follow-up to my 11:23Z entry, three things. Every time is from `date -u`; written 11:27Z to 11:30Z.
+
+**1. The first head block at served statics verified with its program: setup is 76% of its session** [run: `research fetch --all` of `r20261111-103344-cd4c`, still running; `out/HEAD16K-n1-j1.verify-time`, `.verify-time.rep2.out`, `HEAD16K-n1-j1.log`]
+
+- The served 16-key first block, flat, one block (7,287,471 ANDs, k_log 25), `verify --zk --partition --program`, accepted. Rep 2: `inputs` 72,888 ms, `setup (drawn)` 211,018 ms, the session 276,565 ms. So the proof check is 65.5 s and the setup 211.0 s.
+- The first call took 274.94 user + 93.65 system = 368.6 CPU-s in 6:02.95, peak 24.6 GB.
+- Its `program.json` is not in the record yet. #8520's body gives 538,275,867 bytes for a program with that template [read]; at that size the setup is 0.392 s a MB, 6 to 12% above the 0.35 to 0.37 of the other five runs [guess: the size is not the run's own]. The templated twin (`0163`) has no verify line yet.
+
+**2. Which program a session is handed, as `main` is: the window's, with every template in it** [read: `adapters/vllm/verity_vllm/pipeline/serving_rows.py` 430 to 455 at `origin/main` `08ad61db94`]
+
+- A served window is one `CS.Binding(program, query, law, …)`, and its `program` is one `CS.population_program` over every template the window's partition names. So a head block's session is handed every traced body the partition names, and so is every other type's session of that window. I did not trace how many windows an audit of the whole workload has, or which templates each names: that is the partition file's [guess that it is not one a template].
+- So 2.35 GB is a floor for a window with a later head block, and the reading that fits the code is "the setup on every statement of that window". From the planner, same call as 11:23Z:
+
+| setup added to every statement of every type | row of record, modeled 0.4 | measured engine rate on node A (a floor) | stops | built plan, modeled 0.4 | measured engine rate (a floor) | stops |
+|---|---:|---:|---:|---:|---:|---:|
+| 783 core-s (a program holding the first block alone, measured, `5813`) | 16,682.5 | 596 to 642 | 90 | 10,358.4 | 370 to 399 | 145 |
+| 1,790 core-s (#8520's 5.1 GB for step 16's three sparse-MLA templates, at 0.3516 s a MB; unmeasured) | 29,877.4 | 1,068 to 1,150 | 50 | 18,816.9 | 673 to 724 | 80 |
+
+- These are what-ifs on a program nobody has built or timed. They say which way "which program" moves the figure: up, and by more than the head block's own description.
+
+**3. second reading of HARMSEARCH's 11:15Z GB rows at its own inputs (head verify 250.0, no program): holds, 12 cells** [run: the planner on `3db1`'s dumped call; `plan_levers.py`'s new term `R:PREFIX=M:DK` for the writer's recut: blocks over M, M times the bits, 2^DK the seconds a block, 2^-DK the blocks a statement]
+
+- Today's cut, width + margin at κ 2^-4 / 2^-5 / 2^-6 / 2^-7: 3,819.2 / 3,896.8 / 4,069.2 / 4,522.9 (its 3,819 / 3,897 / 4,069 / 4,523). Size classes at κ 2^-7: 6,830.5 (6,830).
+- Query writer at N = 64: size classes 6,322.4 (6,322); width + margin 3,783.6 (3,784); κ 2^-4 3,821.5 (3,821 in its table, 3,822 in its title); κ 2^-5 3,898.7 (3,899). At N = 32: 6,321.1 (6,321) and κ 2^-4 3,819.2 (3,819). At N = 256, κ 2^-4: 3,835.6 (3,836).
+- I did not recompute its bits columns or its last table (the other writers).
+- **The row it names as wanted (width + margin, κ 2^-4, the writer at N = 64), under the setup:**
+
+| the head statement's Lean verify | GB, modeled 0.4 | measured engine rate on node A (a floor) | stops |
+|---|---:|---:|---:|
+| 250.0, no program (as HARMSEARCH printed it) | 3,821.5 | 137 to 147 | 392 |
+| + 783 a session (first block's program, measured) | 9,318.7 | 333 to 359 | 161 |
+| + 870 a session (FUSED's, relayed) | 9,929.4 | 355 to 382 | 151 |
+| a call of 4 sessions | 5,728.4 | 205 to 221 | 262 |
+| a call of 16 sessions | 4,298.2 | 154 to 165 | 349 |
+| + 783 on every statement of every type | 10,397.0 | 372 to 400 | 144 |
+
+All modeled plans; the measured-rate column is by proportion, the rate is not measured at the headline's mix and is a floor, so it cannot show 300 GB is met. Base: measured prices (`3db1`); the price of record on `main` has no dumped call.
+
+For BREAKEVEN:
+- The 16-key served head block with its program: session 276.6 s, of which setup 211.0 and check 65.5; inputs 72.9 s a call (`cd4c`, rep 2, accepted). It is the only head block at served statics verified with a program so far.
+- As `main` is, one program serves a whole window, so the setup falls on every statement of the window, not on the head blocks alone: +783 on every statement reads 16,682.5 (row of record) and 10,358.4 (built plan).
+- HARMSEARCH's 11:15Z GB rows hold as printed, at "no program".
+
+For the table:
+- The served 16-key head block with its program, measured (`cd4c`): 276.6 s a session, 211.0 of it setup; accepted.
+- As `main` is, a window's sessions all read the window's one program [read]; a setup of 783 core-s on every statement reads 16,682 GB (row of record) and 10,358 (built plan) at modeled 0.4; 596 to 642 and 370 to 399 at the measured engine rate on node A (a floor). Modeled, on a program nobody has built.
+- second reading of HARMSEARCH's 11:15Z GB rows: holds (12 cells), at head verify 250.0 with no program.
