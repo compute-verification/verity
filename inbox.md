@@ -101,3 +101,41 @@ WHAT MY UNFINISHED TURN WAS TELLING YOU. Both were written at 16:59Z (the body's
 - Those six by name at c1b4d003e9ff: r20261111-165855-bbff on cpu-1, launched 16:59Z, limit 170 minutes. READ at 18:28Z: STILL RUNNING, no output fetched yet. It is at the head before your merges, and none of the six is of #8978's own change (`research` is the one the stack's vocab.py reaches). You told me to end my turn, so I DO NOT WAIT ON IT and its last line is unread: `research fetch r20261111-165855-bbff --all`, then the "passed"/"failed" lines of its stdout. Say if you want it stopped or read by me.
 - Earlier, also sent: your paragraph is at the top of #8840, #8901 and #8943 (bodies only); not added to #8910 (prints sigma, no slowdown) or #8929 (prints the port check's counts).
 
+[2026-11-11T18:30Z] 6ce04d59e426
+REPLOT to training, TRN-111, Wed 11 Nov 10:33 AM PST. f0ed is in: its restated record traced, and NO SLOWDOWN OF ITS ROWS MOVES. (i) to (iii) below. 106f traced at 10:28 AM PST and its builds are running.
+
+THE RUN (mine, CPU only): r20261111-170414-7b85, rc 0, 9:04 to 10:23 AM PST. The one command at fdc98425dd. f0ed's restated record (the plan's, by sha256) traced at step 1120 in 3,251 s. Memory: 26 GB at most, of 69 declared. The corrected layer holds 378 runs; fe07, 8452 and 106f keep their records in this build.
+
+(i) f0ed's ROWS, PUBLISHED AND CORRECTED. RUN by me: this run's `corr` against the published tables. Three search rows and one overlay row; none on the page.
+
+Row `f0ed@1406`, gain target 1.1, hybrid/staged (the search row, and the overlay row "search split, 1 seed; p honest 4.1", cell for cell the same):
+- slowdown at the default policy: 96,362.25, the same
+- served: 1,770.59, the same
+- own: 96,362.25, the same; console: 96,362.25, the same
+- binding kind, basis at the default and own: fresh_products, the same
+- p 4.0979; C 1.49677e19; H 3.65252e18; reached yes; start "45M · 3.42 tok/p"; start loss 1.20702; end loss 1.19723; own c 5.36682e14 gates; own k 65,536 bits; reading A; data v2.3-pilot; family update-code; te_core 4.13.6; `estimated`, `rests_on` and all 7 leaves of `kinds`: the same
+- gain: 1.11761 -> 1.11764 (+0.003%)
+- start compute: 3.57492e19 -> 3.57044e19 (-0.125%)
+- start effective compute: 3.47235e19 -> 3.46936e19 (-0.086%)
+- `rho_inputs`, 3 of 27 leaves: w_gates 1.57379e11 -> 1.57323e11 (-0.036%); alpha_ratio 0.918889 -> 0.918563 (-0.035%); fresh_per_c at c 800,000, second entry, 4.60763e-12 -> 4.61091e-12 (+0.071%)
+
+Rows `f0ed@3515`, gain targets 2 and 11, hybrid/staged (the two differ only in p and H: 1.27171 and 2.86753e19 at 2, none at 11):
+- slowdown at the default policy: 98,878.94, the same
+- served: 1,816.83, the same
+- own: 98,878.94, the same; console: 98,878.94, the same
+- binding kind and both bases: fresh_products, the same
+- C 3.64668e19; reached no; start, start loss 1.20702, end loss 1.19266, own c, own k, reading, data, family, te_core, `estimated`, `rests_on`, `kinds`: the same
+- gain: 1.17887 -> 1.17891 (+0.004%)
+- start compute and start effective compute: as on the first row (-0.125%, -0.086%)
+- `rho_inputs`, 3 of 27 leaves: w_gates 1.53404e11 -> 1.53383e11 (-0.014%); alpha_ratio 0.896095 -> 0.895967 (-0.014%); fresh_per_c at c 800,000, second entry, 4.72998e-12 -> 4.73133e-12 (+0.029%)
+
+What is f0ed's own: only the three `rho_inputs` leaves. The gain and the two start cells already read so in stage 2's `corr`: they are the pilot start's, which moves on every pilot row.
+
+(ii) NO OTHER ROW DIFFERS FROM STAGE 2's `corr` IN ANY CELL. RUN by me, all 30 columns of every row: page 197 rows, 0 differ; search 1,497, only f0ed's 3 differ (in `rho_inputs` alone); overlay 458, only f0ed's 1 (the same). This run's `fixed` equals the published tables in every cell of every row.
+
+(iii) NO FRONT AND NO COVERAGE CELL CHANGES against stage 2's `corr`: the fronts keep their members (82 search, 56 overlay), 0 of 36 coverage cells differ, and the frontier-fit, frontier-points, coverage and refused files are equal. Against the published tables everything stands as sent: 85 to 82 and 59 to 56, one coverage cell.
+
+SO THE COUNTS OF THE BODY HOLD with f0ed in: 226 search rows, 56 overlay rows and 54 page rows differ in a slowdown, falls 73, 24, 24.
+
+Not done: 106f's builds, then its (i) to (iii); one run of the command that takes both traces, for Thursday's tables; the body.
+
