@@ -183,8 +183,8 @@ def test_the_table_holds_each_number_over_its_windows():
     plain = rows["Round with no Lean change: build to verdict"]
     assert plain["day"] == ("p50 60, p90 60 min (n=1), of 1 with a verdict; slowest step `pytest`, p50 50 min, the slowest in 1 of 1; "
                               "slowest test `tests/test_x.py::test_slow` of suite `tools/research`, p50 40 min, the slowest in 1 of 1")
-    assert plain["now"] == ("0 of the 1 being checked change no Lean; the newest verdict: built 01:00Z in 1 shards, 60 min, 0 Lean files "
-                            "of 5 changed, slowest step `pytest` 50 min")
+    assert plain["now"] == ("0 of the 1 being checked change no Lean; the newest verdict: built 01:00Z in 1 shards, 60 min, 0 of its 5 "
+                            "changed files a Lean change, slowest step `pytest` 50 min")
     assert plain["target"] == "30"
     assert rows["The floor: a round's slowest suite and slowest test"]["day"] == (
         "slowest suite `tools/research`, p50 45 min, the slowest in 1 of 1; slowest test `tests/test_x.py::test_slow` of suite "
@@ -308,3 +308,12 @@ def test_the_long_window_is_the_last_day_and_a_shard_still_running_is_never_outs
     assert rows["Candidates by outcome"]["day"] == "1 built: 0 green, 0 red, 0 dropped for another reason, 1 being checked"
     assert rows["Reserved against used, a check's shard"]["now"].startswith("1 of the 1 running")     # b's shard took its slot at 01:26
 
+
+def test_a_change_of_the_lean_checks_own_code_is_a_lean_change():
+    rule = qt.LEAN_FILE
+    for f in ("Security/Proofs/A.lean", "x/lakefile.toml", "lake-manifest.json", "a/lean-toolchain", "Security/lean-audit.json",
+              "tools/verity/lean/check.py", "tools/verity/check/common.py"):
+        assert rule.search(f), f
+    for f in ("tools/verity/check/suites.py", "verity/ml/circuits/lean.py", "docs/tools/verity/lean/x.md", "a/leanish.py",
+              "tools/verity/lean/tests/test_audit.py", "tools/verity/lean/README.md"):
+        assert not rule.search(f), f

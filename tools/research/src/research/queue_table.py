@@ -40,8 +40,11 @@ REPO = "compute-verification/verity"
 TARGET_MIN, TARGET_SHARE = 120.0, 0.9
 #: the steps off the merge gate when the checkout's policy.toml can't be read: a candidate's verdict doesn't wait for them
 OFF_GATE = ("circuit-check", "ratchet-gate")
-#: a file whose change is a Lean change (a jq regex): a module, a lakefile, a Lake manifest, a toolchain or a lock
-LEAN_FILE = r"\\.lean$|(^|/)lakefile\\.|(^|/)lake-manifest\\.json$|(^|/)lean-toolchain$|(^|/)lean-audit\\.json$"
+#: a file whose change is a Lean change: a module, a lakefile, a Lake manifest, a toolchain, a lock, or the Lean check's own
+#: code less its tests and docs, most of which every package's audit is keyed on (`lean_audit.tool_files`)
+LEAN_FILE = re.compile(r"\.lean$|(^|/)lakefile\.|(^|/)lake-manifest\.json$|(^|/)lean-toolchain$|(^|/)lean-audit\.json$"
+                       r"|^tools/verity/lean/(?!tests/)(?!.*\.md$)|^tools/verity/check/common\.py$"
+                       r"|^tools/verity/graph/verity_graph/contract\.py$")
 #: the most files GitHub's compare lists: a candidate with this many and no Lean file among them is not known to change none
 COMPARE_FILES = 300
 #: the target for a round whose candidate changes no Lean, in minutes
@@ -373,14 +376,16 @@ def _labels(store_root, targets: list[str]) -> dict[str, list[dict]]:
 def lean_files(base: str, sha: str) -> list[int] | None:
     """[the files a candidate changes from its base, those of them that are Lean's], from GitHub's compare of the two commits, which
     lists at most `COMPARE_FILES`; None when it gave no answer."""
-    jq = f'[(.files | length), ([.files[].filename | select(test("{LEAN_FILE}"))] | length)]'
     try:
-        p = subprocess.run(["gh", "api", f"repos/{REPO}/compare/{base}...{sha}", "--jq", jq], capture_output=True, text=True, timeout=90)
+        p = subprocess.run(["gh", "api", f"repos/{REPO}/compare/{base}...{sha}", "--jq", "[.files[].filename]"],
+                           capture_output=True, text=True, timeout=90)
         got = json.loads(p.stdout)
     except (OSError, ValueError, subprocess.SubprocessError) as e:
         print(f"research queue stats: no compare of {base[:12]}...{sha[:12]} ({e!r}); it counts as not known", file=sys.stderr)
         return None
-    return got if isinstance(got, list) and len(got) == 2 and all(isinstance(n, int) for n in got) else None
+    if not isinstance(got, list) or not all(isinstance(f, str) for f in got):
+        return None
+    return [len(got), sum(1 for f in got if LEAN_FILE.search(f))]
 
 
 def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = None, now: float | None = None,
@@ -792,12 +797,13 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
             return ""
         got, step = lean.get(c["sha"][:12]), slowest(c)[0]
         return (f"; the newest verdict: built {datetime.fromtimestamp(c['build'], UTC):%H:%MZ} in {len(c['shards'])} shards, "
-                f"{_m(c['verdict'] - c['build']):.0f} min, " + (f"{got[1]} Lean files of {got[0]} changed" if got else "its changed files not known")
+                f"{_m(c['verdict'] - c['build']):.0f} min, " + (f"{got[1]} of its {got[0]} changed files a Lean change" if got else "its changed files not known")
                 + (f", slowest step `{step['step']}` {step['seconds'] / 60:.0f} min" if step else ""))
 
     add("4", "Round with no Lean change: build to verdict", (f"{sum(1 for c in flying if plain(c))} of the {len(flying)} being checked change no Lean"
         if flying else "none being checked") + newest(), plain_rounds(hour), plain_rounds(day), str(PLAIN_ROUND_MIN),
         "the candidates whose files changed from their base hold no `.lean` file, lakefile, Lake manifest, toolchain or `lean-audit.json` "
+        "and none of the Lean check's own code (`tools/verity/lean` less its tests and docs, which each package's audit is keyed on) "
         "(GitHub's compare); the slowest step on the gate among a round's shards (`steps.jsonl`) and the slowest passed test among each "
         "shard's three slowest suites (the suites' reports); by verdict time")
     add("4", "Candidate: build to `main`", "", _dist(win(b2l, hour)), _dist(win(b2l, day)), "", "green candidates: `build` to `advance`")
@@ -1033,7 +1039,9 @@ def saved(path: Path) -> tuple[list[dict], dict[str, list[int]]]:
         return [], {}
     try:
         doc = json.loads(path.read_text())
-        return [r for r in doc["readings"] if "now" in r and "nodes" in r], dict(doc.get("lean") or {})
+        # a count made under another rule for what a Lean file is says nothing under this one
+        lean = dict(doc.get("lean") or {}) if doc.get("lean_rule") == LEAN_FILE.pattern else {}
+        return [r for r in doc["readings"] if "now" in r and "nodes" in r], lean
     except (OSError, ValueError, KeyError, TypeError) as e:
         print(f"research queue stats: {path} is unreadable ({e!r}); starting it again", file=sys.stderr)
         return [], {}
@@ -1049,7 +1057,7 @@ def main(store_root=None, as_json: bool = False, sample_s: float = 5.0, short: b
                                                if r["kind"] == "shard" and r.get("parallel") is not None])})
     try:
         STATE.parent.mkdir(parents=True, exist_ok=True)
-        STATE.write_text(json.dumps({"readings": readings, "lean": {**lean, **doc["lean"]}}))
+        STATE.write_text(json.dumps({"readings": readings, "lean": {**lean, **doc["lean"]}, "lean_rule": LEAN_FILE.pattern}))
     except OSError as e:
         print(f"research queue stats: {STATE} not written ({e}): the next run has no reading from this one for its last-hour cores",
               file=sys.stderr)
