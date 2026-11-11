@@ -771,3 +771,24 @@ kept the answer sound.
   18:00Z, after tonight's report.
 - **Tonight:** nothing changes. I resume you with the go at about 18:10Z; `stage` and `build` start at
   18:15Z on cores 78-81, KP2 has the card and cores 72-77 until about 18:32Z.
+
+## Wed 11 Nov 18:01Z: GO. One change: KP2 does not run first. You have card 6 and all ten cores (72-81) from 18:15Z
+
+KP2's pull request no longer merges onto `main` (a deletion of vllm's landed at about 18:00Z), so its H200
+run moves to the end of the slot, after you. **So from 18:15Z the card and cores 72-81 are yours alone:**
+- **Start `stage` and `build` at 18:15Z on all ten cores** (no need to keep to 78-81), and your first timed
+  step as soon as both trees are built and the card's start check passes; do not wait for 18:32Z.
+- **The plan is otherwise yours as written:** your row (own, B, A, B), proofs' keyed row (own, B, A, B),
+  piece 1 (a) four at once, (b) one copy beside three keyed, reused provers; the cuts in the order the job
+  enforces; proofs' statement read from `/dev/shm/proofs-prf502-row1-4b31e7caba011398`, never written or
+  removed; windows of whole bursts, both readings a row; the card's compute mode in the record.
+- **Release the lease as early as the plan allows, and no later than 20:42Z. The minute it is released, end
+  your turn with that minute first in your return** ("card 6 free at HH:MMZ"), then the figures: KP2 takes
+  the card after you, to 21:15Z at the latest (the calendar has it). Remove your staging directory after
+  KP2's run, not before, if removing it would load the host while KP2 runs: say what is left and where.
+- **The report** (on HASH-114, for my ring, with `@proofs` leading): your row's ratio at four provers both
+  ways, proofs' row in proofs' words (no walk at all, a floor, not a served figure), piece 1's seconds a
+  statement for each copy and arm with the card's peak memory, the gate step cut and what stands in for it,
+  what the "own" step is, and what is not verified. Then your view on Friday (way 1 or way 2).
+Nothing on `vy-dc-h200-3`. If the start check finds another lane's process on card 6, launch nothing and end
+your turn saying what it found.

@@ -323,3 +323,23 @@ pass-or-fail check and not timed, and its rows need those minutes later. **Pin e
 18:08Z) and before you launch; I then give you all ten and KHSHARE waits. vllm's delete is not on `main`
 at 16:12Z (`493f49485e50`), and #8662 at `0b79bdbc5e1b` still merges onto it, so the run is at that head
 unless the delete lands before the go.
+
+## Wed 11 Nov 18:01Z: a change of plan: #8662 no longer merges onto `main`; merge first, your H200 run moves to the end of the slot (about 20:25Z)
+
+Read by me at 18:00Z (`git merge-tree` of `0b79bdbc5e1b` against `main` at `cc6ee7446278`): two conflicts.
+`adapters/vllm/tests/engine/int8_store_gpu.py` is deleted on `main` and modified in #8662, and
+`adapters/vllm/verity_vllm/engine/build.py` conflicts in content. That is vllm's deletion landing, the case
+the 13:18Z section planned for. **So do not launch at 18:15Z.** KHSHARE has card 6 from 18:15Z.
+1. **Now:** merge `origin/main` into `cursor/kernels-p2-load-0ebe`, drop the hunks the deletion removes (say
+   which, and for `build.py` what you kept from each side), push with no force; the suites the change
+   touches at the new head; the range-diff against `0b79bdbc5e1b` in your comment on HASH-106, so vllm and
+   memory-accounting can see whether anything they read changed.
+2. **The ship for the H200 run rebuilt at the merged head** (a CPU run), and the launcher ready, by 20:15Z.
+3. **The H200 run of the store's decode at that head: node A, card 6, cores 72-81, after KHSHARE releases
+   its lease (about 20:25Z by its estimate, 20:42Z at the latest), and off the card by 21:10Z** (the
+   calendar's row ends 21:15Z). **Launch only on my word**: I resume you or send it through the agent inbox
+   the minute KHSHARE says the card is free. One lease of at most 20 minutes, the start check under the
+   kernels lock, all ten cores are yours then.
+4. **End your turn when 1 and 2 are done** (the head, the suites' run, the ship's run, what the merge
+   changed), and I resume you for 3. If the merge is not clean in a way you cannot settle (vllm's side of
+   `build.py`), end your turn at once and say what vllm must answer.
