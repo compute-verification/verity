@@ -53,6 +53,10 @@ credit nothing (their MACs stay in what the run declared).  The run's commitment
 records, and the verifier records its coin against it (``record``, ``coin.json``): a verdict over other passes or other
 records after the coin is refused (``after-coin``), so neither a retention nor a give-up can follow the coin.
 
+An accepted run's verdict also says where its linears' MACs went uncredited, call by call (`uncredited_calls`, the verify
+document's ``uncredited``): excluded, voluntary and side-channel cells, and the deduction's ε, over-cap and ρ terms. It
+is a property of the committed records, which the answer never states, and changes nothing the verdict accepts.
+
 **The run's draw** (`verify_passes`' ``draw``) is one source S, and the draws' key is
 ``derive(S, RUN_DRAW_DOMAIN, {"run": C})`` over the run's commitment C (`run_commitment`, 64 bytes).  S comes from one of:
 - ``challenger`` (`bench_arm.LiveDraw`, `served_passes.py verify` under ``PEARLC_CHALLENGER_GATE``): a draw session of
@@ -618,29 +622,101 @@ def pass_macs(p: Pass) -> int:
     return sum(sum(credited_cells(p.scheme, r)) * r.k_kept for r in p.records)
 
 
+def _taken(passes: list[Pass], t: int, delta: Fraction, over: int) -> tuple[dict[tuple[int, int], tuple[list[int], Fraction]], Fraction]:
+    """`credit_at_assumption`'s deduction record by record: each record with a credited cell, by (pass, position), its
+    tiles' credited cells and the MACs taken off it, and ε."""
+    units = []
+    for i, p in enumerate(passes):
+        for pos, r in enumerate(p.records):
+            cells = credited_cells(p.scheme, r)
+            if sum(cells):
+                ticket = CW.ticket_cell(p.scheme, r)
+                units.append(((i, pos), cells, r.k_kept / ticket, sum(cells) * ticket))
+    eps = epsilon(t, delta, over)
+    budget, taken = eps * sum(u[3] for u in units), {}
+    for at, cells, ratio, w in sorted(units, key=lambda u: (u[2], u[3]), reverse=True):
+        take = min(budget, w)
+        taken[at], budget = (cells, take * ratio), budget - take
+    return taken, eps
+
+
 def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction, over: int = 0) -> dict:
     """The run's credit at Pearl's Assumption 1 (`pearl_kw`): a tile that passes the rule cost its credited cells' MACs,
     (1 − ρ) of them at the scheme's cap.  Of t draws by ticket weight, ``over`` (X_O) landed on tiles over their
     inert-work bound, credited nothing, and the rest passed: the tiles wrong or over the bound hold at most ε of the
     tickets' weight except with δ (`epsilon`); the most MACs that weight can hold, filled from the records whose cells hold
-    the most MACs a ticket, are taken off."""
-    macs, tiles, units = 0, 0, []
-    for p in passes:
-        for r in p.records:
-            cells = credited_cells(p.scheme, r)
-            if sum(cells):
-                ticket = CW.ticket_cell(p.scheme, r)
-                macs += sum(cells) * r.k_kept
-                tiles += sum(1 for c in cells if c)
-                units.append((r.k_kept / ticket, sum(cells) * ticket))
-    eps, rho = epsilon(t, delta, over), passes[0].scheme.cap
-    budget, wrong = eps * sum(w for _, w in units), Fraction(0)
-    for ratio, w in sorted(units, reverse=True):
-        take = min(budget, w)
-        wrong, budget = wrong + take * ratio, budget - take
+    the most MACs a ticket, are taken off (`_taken`)."""
+    taken, eps = _taken(passes, t, delta, over)
+    macs = sum(sum(cells) * passes[i].records[pos].k_kept for (i, pos), (cells, _) in taken.items())
+    tiles = sum(1 for cells, _ in taken.values() for c in cells if c)
+    wrong, rho = sum((w for _, w in taken.values()), Fraction(0)), passes[0].scheme.cap
     credited = (1 - rho) * max(macs - wrong, Fraction(0))
     return {"credited": math.floor(credited), "credited_tiles": tiles, "macs": macs, "rho": str(rho), "epsilon": str(eps),
             "over_cap_draws": over}
+
+
+#: the causes `uncredited_calls` splits a call's real MACs the credit leaves out by, beside the deduction's three terms
+UNCREDITED_ROWS = ("excluded_a", "excluded_b", "voluntary", "kept_width")
+UNCREDITED_SCHEMA = "verity-pouw/pearl-plus-uncredited/v1"
+
+
+def uncredited_cells(r: PW.UnitRecord) -> tuple[int, dict[str, int]]:
+    """(credited cells, the real cells credited nothing by cause) of a record, by `UnitRecord.credited`'s band rule over
+    its real rows × n columns: a cell in a column block holding an excluded B row is ``excluded_b``; else one in a block
+    holding a voluntary B row, or in a row band holding a voluntary A row, is ``voluntary``; else one in an excluded A
+    row is ``excluded_a``."""
+    n, band, real = r.matmul.shape.n, PW.BAND, r.real_rows
+    eb = {j // band for j in r.excluded_b}
+    vb = {j // band for j in r.voluntary_b} - eb
+    bands = {i // band for i in r.voluntary_a}
+    width = {b: min(band, n - b * band) for b in eb | vb}
+    cols_eb, cols_vb = sum(width[b] for b in eb), sum(width[b] for b in vb)
+    live = n - cols_eb - cols_vb
+    rows_vb = sum(min(band, real - b * band) for b in bands if b * band < real)
+    ea = sum(1 for i in r.excluded_a if i // band not in bands)
+    return (real - rows_vb - ea) * live, {"excluded_a": ea * live, "excluded_b": real * cols_eb,
+                                          "voluntary": real * cols_vb + rows_vb * live}
+
+
+def uncredited_calls(passes: list[Pass], t: int, delta: Fraction, over: int = 0) -> dict:
+    """Where an accepted run's linears' MACs go uncredited, call by call (the verify document's ``uncredited``): each call's
+    real MACs (its real rows × n × its weight's k), the MACs its credited cells hold at |K| (``checked_macs``, summing to
+    the credit's ``macs``), its real MACs the credit leaves out by cause (`uncredited_cells` at |K|, and ``kept_width``,
+    its real rows × n × the k − |K| side channels), and the credit's three terms on it: ``epsilon_macs``, what
+    `credit_at_assumption`'s deduction takes off it at ε with no draw over the inert-work bound; ``over_cap_macs``, what
+    the ``over`` draws on tiles over it add; ``rho_macs``, ρ of the rest; and ``credited_macs``, (1 − ρ) of the rest.  The
+    terms are exact fractions, so a call's real MACs are its checked MACs and its causes, and its checked MACs its three
+    terms and its credit; ``totals`` sums them, ``credited`` floored as the credit is, which is the credit's.  It reads
+    only the records the run committed and the verdict's draws, δ and over-cap draws: properties of values the answer
+    never states, so it stays in the verify document."""
+    full, _ = _taken(passes, t, delta, over)
+    clear, _ = _taken(passes, t, delta, 0)
+    rho = passes[0].scheme.cap
+    calls, sums = [], {}
+    for i, p in enumerate(passes):
+        for pos, r in enumerate(p.records):
+            s, k = r.matmul.shape, p.man["weights"][str(r.matmul.weight)]["k"]
+            cells, left = uncredited_cells(r)
+            tiles, wrong = full.get((i, pos), ([], Fraction(0)))
+            sampled = clear.get((i, pos), ([], Fraction(0)))[1]
+            if cells != sum(tiles):
+                raise ValueError(f"pass {i} call {r.matmul.index}: the band rule's {cells} credited cells are not its "
+                                 f"tiles' {sum(tiles)}")
+            checked = cells * r.k_kept
+            causes = {**{c: m * r.k_kept for c, m in left.items()}, "kept_width": r.real_rows * s.n * (k - r.k_kept)}
+            terms = {"epsilon_macs": sampled, "over_cap_macs": wrong - sampled, "rho_macs": rho * (checked - wrong),
+                     "credited_macs": (1 - rho) * (checked - wrong)}
+            calls.append({"pass": i, "call": r.matmul.index, "weight": r.matmul.weight, "m": s.m, "k": k, "n": s.n,
+                          "real_rows": r.real_rows, "k_kept": r.k_kept,
+                          "rows": {"excluded_a": len(r.excluded_a), "excluded_b": len(r.excluded_b),
+                                   "voluntary_a": len(r.voluntary_a), "voluntary_b": len(r.voluntary_b)},
+                          "macs": r.real_rows * s.n * k, "checked_macs": checked, "uncredited_macs": causes,
+                          **{x: str(v) for x, v in terms.items()}})
+            for x, v in (("macs", r.real_rows * s.n * k), ("checked_macs", checked), *causes.items(), *terms.items()):
+                sums[x] = sums.get(x, 0) + v
+    totals = {x: str(v) if isinstance(v, Fraction) else v for x, v in sums.items()}
+    return {"schema": UNCREDITED_SCHEMA, "rho": str(rho), "over_cap_draws": over, "calls": calls,
+            "totals": {**totals, "credited": math.floor(sums["credited_macs"])}}
 
 
 def rejected(reason: str, commit: str) -> dict:
@@ -789,6 +865,8 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
         tie_clause += f", {over_draws} draws on tiles over their inert-work bound credited nothing"
     if test_instance:
         tie_clause += ", a test instance's, credited nothing"
+    else:
+        out["uncredited"] = uncredited_calls(passes, draws, delta, over_draws)
     out.update(answer={"protocol": PROTOCOL, "verdict": "accept", "reason": None, "commitment": root.hex(), "public": public,
                        "profile": profile},
                line=(f"ACCEPT {PROTOCOL} {scheme.name}: {len(todo) - excluded} drawn and {excluded} exclusion tiles over "

@@ -12,6 +12,7 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
                           [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R]
   served_passes.py lean --passes DIR --verify verify.json --exe pouw-pearlplus --out pearlplus-lean.json [--check C]
                         [--timeout S]
+  served_passes.py uncredited --passes DIR --verify verify.json --out uncredited.json
   served_passes.py case --passes DIR --verify verify.json --lean pearlplus-lean.json --out CASE_DIR
   served_passes.py arm --out config.json [--spec SPEC] [--arm ARM]
 
@@ -116,6 +117,15 @@ printout with W at ``tie``), the file `served_verdicts.pearlplus_of_record` read
 answer within ``--timeout`` seconds, it writes none and removes any there. Either way both verdicts, the Lean's command
 line and the executable's SHA-256 go to ``--check`` (default `LEAN_CHECK` beside ``--out``). Prints one line and exits
 0 on a written accept, 1 on a written reject and 2 when it wrote no answer.
+
+``uncredited`` is where an accepted run's linears' MACs went uncredited, call by call (`verify_run.uncredited_calls`, the
+verify document's ``uncredited``), for a verdict whose document predates it: the passes in DIR (``pass-*/manifest.json``,
+found by the SHA-256s ``--verify``'s document names, so a renamed DIR still serves) read as `verify` reads them against
+``DIR/coins.json``, at that document's draws, δ and over-cap draws. It draws nothing and judges nothing. It writes
+``{schema, verify, commitment, records, uncredited}`` to ``--out`` and exits 0 only where the document accepted, the
+passes are its run's (their commitment is its ``commitment``, `verify_run.run_commitment`) and the totals are its
+credit's exactly (``checked_macs`` its ``macs``, ``credited`` its ``credited``); else it prints why and exits 1, writing
+nothing.
 
 ``case`` writes, from the Lean verdict of record ``lean`` wrote (``--lean``), the parts of the run's case in the form
 remote's composite of record reads it (`PouwCheck.PearlPlus.Protocol`, ``verity/pouw/pearl-plus/v1``) that need no
@@ -687,6 +697,41 @@ def lean(args: argparse.Namespace) -> int:
     return done(None, 0 if got["verdict"] == "accept" else 1)
 
 
+def uncredited(args: argparse.Namespace) -> int:
+    sys.path.insert(0, str(HERE))
+    import verify_run as VR
+
+    passes, doc = Path(args.passes), json.loads(Path(args.verify).read_text())
+    Path(args.out).unlink(missing_ok=True)
+
+    def refused(why: str) -> int:
+        print(f"uncredited REFUSED: {why}", flush=True)
+        return 1
+
+    answer = doc.get("answer") or {}
+    if answer.get("verdict") != "accept" or doc.get("test_instance"):
+        return refused("the verify document is no accepted verdict that credits (an uncredited split is an accept's)")
+    work, want = answer["public"]["work"], [n.rsplit(" sha256:", 1)[1] for n in doc["passes"]]
+    found = {VR.read(m)[1]: m for m in sorted(passes.glob("pass-*/manifest.json"))}
+    if missing := [d[:16] for d in want if d not in found]:
+        return refused(f"no pass in {passes} has the SHA-256 the verify document names for {', '.join(missing)}")
+    held = [VR.load(found[d], VR.epoch_coins(passes / "coins.json")) for d in want]
+    if VR.run_commitment(held).hex() != doc["commitment"]:
+        return refused("the passes' commitment is not the verify document's")
+    got = VR.uncredited_calls(held, doc["draws"], Fraction(doc["delta"]), work["over_cap_draws"])
+    if (got["totals"]["checked_macs"], got["totals"]["credited"]) != (work["macs"], work["credited"]):
+        return refused(f"the calls sum to {got['totals']['checked_macs']:,} checked and {got['totals']['credited']:,} "
+                       f"credited MACs, and the verdict's credit is {work['macs']:,} and {work['credited']:,}")
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({"schema": VR.UNCREDITED_SCHEMA, "verify": str(args.verify), "commitment": doc["commitment"],
+                               "records": [p.man["records_root"] for p in held], "uncredited": got}, indent=1) + "\n")
+    t = got["totals"]
+    print(f"uncredited: {len(got['calls'])} calls over {len(held)} passes; {t['macs']:,} real MACs, {t['checked_macs']:,} "
+          f"checked, {t['credited']:,} credited, the verdict's credit exactly -> {out.name}", flush=True)
+    return 0
+
+
 def tile_files(p, tile: int) -> list[dict]:
     """The manifest entries the opening of pass ``p``'s tile ``tile`` reads (`verify_run.Opened`'s ``open`` and
     ``open_y``, the Lean's ``filesOf``): its call's rows and tree, its weight's, the pass's leaves and transcript tree, and
@@ -827,6 +872,10 @@ def main(argv: list[str] | None = None) -> int:
     n.add_argument("--out", required=True, help="where the Lean's answer goes where it agrees with the Python's")
     n.add_argument("--check", help=f"where both verdicts go (default: {LEAN_CHECK} beside --out)")
     n.add_argument("--timeout", type=float, default=3600, help="seconds the Lean has to answer (default 3,600)")
+    u = sub.add_parser("uncredited")
+    u.add_argument("--passes", required=True)
+    u.add_argument("--verify", required=True, help="verify's --out document, an accept")
+    u.add_argument("--out", required=True)
     c = sub.add_parser("case")
     c.add_argument("--passes", required=True)
     c.add_argument("--verify", required=True, help="verify's --out document")
@@ -834,7 +883,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--out", required=True, help="the case's parts and blobs (0700)")
     args = p.parse_args(argv)
     return {"serve": serve, "same": same, "volunteer": volunteer, "volunteer-needed": volunteer_needed, "retain": retain,
-            "verify": verify, "lean": lean, "case": case, "arm": arm}[args.cmd](args)
+            "verify": verify, "lean": lean, "case": case, "arm": arm, "uncredited": uncredited}[args.cmd](args)
 
 
 if __name__ == "__main__":

@@ -1529,6 +1529,106 @@ def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_ce
     assert VR.pass_macs(more) == VR.pass_macs(p) - (r.real_rows - len(r.excluded_a)) * block * r.k_kept
 
 
+def _split(got: dict) -> None:
+    """Each call's real MACs are its checked MACs and its causes, and its checked MACs its three terms and its credit,
+    exactly; the totals are the calls' sums, ``credited`` floored."""
+    sums: dict = {}
+    for c in got["calls"]:
+        terms = [Fraction(c[x]) for x in ("epsilon_macs", "over_cap_macs", "rho_macs", "credited_macs")]
+        assert c["macs"] == c["checked_macs"] + sum(c["uncredited_macs"].values()) and c["checked_macs"] == sum(terms), c
+        assert set(c["uncredited_macs"]) == set(VR.UNCREDITED_ROWS) and min(terms) >= 0
+        for x, v in (("macs", c["macs"]), ("checked_macs", c["checked_macs"]), *c["uncredited_macs"].items(),
+                     *((x, Fraction(c[x])) for x in ("epsilon_macs", "over_cap_macs", "rho_macs", "credited_macs"))):
+            sums[x] = sums.get(x, 0) + v
+    assert got["totals"] == {**{x: str(v) if isinstance(v, Fraction) else v for x, v in sums.items()},
+                             "credited": math.floor(sums["credited_macs"])}
+
+
+def test_uncredited_calls_split_each_calls_macs_by_cause_and_sum_to_the_runs_credit(tmp_path):
+    """`verify_run.uncredited_calls` splits each call's real MACs into its credited cells' (at |K|) and those the band rule
+    leaves out, by cause: the fixture's excluded A row (its filler rows are no call's real MACs); an excluded B row's block
+    of 64 columns, which takes the excluded A row's cells in it too; a voluntary A row's band, likewise.  Its terms sum to
+    `credit_at_assumption`'s credit exactly, with or without draws over the inert-work bound, which only move part of the
+    deduction to ``over_cap_macs``."""
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    p = VR.load(path, published(path))
+    for over in (0, 3):
+        got = VR.uncredited_calls([p], 459, Fraction(1, 100), over)
+        credit = VR.credit_at_assumption([p], 459, Fraction(1, 100), over)
+        _split(got)
+        assert (got["totals"]["checked_macs"], got["totals"]["credited"]) == (credit["macs"], credit["credited"])
+        assert (Fraction(got["totals"]["over_cap_macs"]) > 0) == (over > 0) and got["over_cap_draws"] == over
+    calls = got["calls"]
+    assert [c["call"] for c in calls] == [r.matmul.index for r in p.records]
+    at = next(j for j, r in enumerate(p.records) if r.excluded_a)
+    r, n = p.records[at], p.records[at].matmul.shape.n
+
+    def changed(**kw) -> dict:
+        got = VR.uncredited_calls([dataclasses.replace(p, records=[dataclasses.replace(x, **kw) if j == at else x
+                                                                   for j, x in enumerate(p.records)])], 459, Fraction(1, 100))
+        _split(got)
+        return got["calls"][at]
+
+    assert calls[at]["rows"]["excluded_a"] == len(r.excluded_a) and calls[at]["macs"] == r.real_rows * n * r.k_kept
+    assert calls[at]["uncredited_macs"] == {"excluded_a": len(r.excluded_a) * n * r.k_kept, "excluded_b": 0,
+                                            "voluntary": 0, "kept_width": 0}
+    block = min(PW.BAND, n)
+    assert changed(excluded_b=(0,))["uncredited_macs"] == {"excluded_a": len(r.excluded_a) * (n - block) * r.k_kept,
+                                                           "excluded_b": r.real_rows * block * r.k_kept, "voluntary": 0,
+                                                           "kept_width": 0}
+    other = next(x for x in range(r.real_rows) if x not in r.excluded_a)
+    band = sum(1 for x in range(r.real_rows) if x // PW.BAND == other // PW.BAND)
+    inside = sum(1 for x in r.excluded_a if x // PW.BAND == other // PW.BAND)
+    assert changed(voluntary_a=(other,))["uncredited_macs"] == {"excluded_a": (len(r.excluded_a) - inside) * n * r.k_kept,
+                                                                "excluded_b": 0, "voluntary": band * n * r.k_kept,
+                                                                "kept_width": 0}
+
+
+def test_an_accepted_run_verdict_says_where_its_macs_went_uncredited_and_served_passes_recomputes_it(tmp_path, monkeypatch, capsys):
+    """An accepted verdict that credits carries `uncredited_calls` in its document (not in its answer); a test instance's
+    credits nothing and carries none.  ``served_passes.py uncredited`` recomputes it from the passes in DIR, found by the
+    document's SHA-256s, without drawing, and refuses a document that didn't accept, a DIR without its passes, passes of
+    another commitment and a credit the calls don't sum to."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    path = proved_pass(tmp_path / "w0" / "pass-00000", PROMOTED[0])[0]
+    shutil.copy(path.parent / "coins.json", tmp_path / "w0" / "coins.json")
+    coins, source = published(path), b"verifier" * 4
+    test = VR.verify_passes([path], 3, 1, "test", coins, source, test_instance=True)
+    assert test["answer"]["verdict"] == "accept" and "uncredited" not in test
+    monkeypatch.setattr(VR, "K_MIN", 32)
+    monkeypatch.setattr(VR, "TILE", 16)
+    doc = VR.verify_passes([path], 3, 1, "test", coins, source)
+    work = doc["answer"]["public"]["work"]
+    assert doc["answer"]["verdict"] == "accept" and work["credited"] > 0, doc["line"]
+    assert doc["uncredited"] == VR.uncredited_calls([VR.load(path, coins)], 3, VR.DELTA, work["over_cap_draws"])
+    assert "uncredited" not in doc["answer"] and "calls" not in json.dumps(doc["answer"])
+    _split(doc["uncredited"])
+    verify, out = tmp_path / "verify.json", tmp_path / "uncredited.json"
+
+    def run(d: dict, passes: Path = tmp_path / "w0") -> tuple[int, str]:
+        verify.write_text(json.dumps(d))
+        rc = SP.main(["uncredited", "--passes", str(passes), "--verify", str(verify), "--out", str(out)])
+        return rc, capsys.readouterr().out
+
+    rc, said = run(doc)
+    got = json.loads(out.read_text())
+    assert rc == 0 and got["uncredited"] == doc["uncredited"] and got["commitment"] == doc["commitment"], said
+    assert got["records"] == [p["records"] for p in doc["answer"]["public"]["passes"]] and "the verdict's credit exactly" in said
+    renamed = tmp_path / "wK"
+    (tmp_path / "w0").rename(renamed)
+    assert run(doc, renamed)[0] == 0
+    for d, why in (({**doc, "answer": {**doc["answer"], "verdict": "reject"}}, "no accepted verdict"),
+                   ({**doc, "test_instance": True}, "no accepted verdict"),
+                   ({**doc, "commitment": "00" * 64}, "commitment is not the verify document's"),
+                   ({**doc, "answer": {**doc["answer"], "public": {**doc["answer"]["public"],
+                                                                     "work": {**work, "credited": work["credited"] + 1}}}},
+                    "the verdict's credit is")):
+        rc, said = run(d, renamed)
+        assert rc == 1 and why in said and not out.exists(), (why, said)
+    rc, said = run(doc, tmp_path)
+    assert rc == 1 and "no pass in" in said and not out.exists()
+
+
 def test_verify_run_refuses_a_call_index_at_2_to_the_32_and_one_held_twice(tmp_path):
     """A pass whose call index is 2^32 (`pearl_c.CALL_RANGE`, past the row seed's range) is refused ``call-range``, and one
     holding an index twice ``repeated-call``, before anything is opened."""
