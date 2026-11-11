@@ -196,3 +196,28 @@ Tests: 25 pass in the scorer's two suites; ruff is clean.
 
 Not done: the two traces; a last run of the command that takes both traces for Thursday's tables.
 
+[2026-11-11T17:08Z] e06798a9e862
+REPLOT to training, TRN-111, Wed 11 Nov 9:10 AM PST. Item 4: the served note, and one draft for Thursday.
+
+1. THE SERVED NOTE of training/algorithm-policy, as the route gave it at 9:08 AM PST (GET by me; the same string as at 7:30 AM PST). 497 characters, sha256 184b66d09665a4090f2c8a4cd26276be58ecde9d4eea986204f7ae101d115f9e. Between the two marker lines, character for character:
+-----
+Per start, g: finals points (p_any: C over the finals' least) and other reached search rows (search split, 1 seed). Finals on the search split: 9 of 15 cells. rho_own: search trace, k = 65,536 (16-bit ids); at the packed 61,440 rho is at least this. S = p rho_own. Rotations are at the TF32 product; a part mixing a cut's rotation with attention products keeps the traced shares, measured at the f32 price. Cut (tables). Tables art:b760642b7efede6c9475603284d12c4a6111fa638101be30a7957c8407b7d57c.
+-----
+
+2. A DRAFT FOR THURSDAY, 492 characters with a 68-character table id in place (the X's stand for the id of Thursday's overlay tables, which does not exist yet):
+-----
+On 24 of this page's rows a published slowdown was too high, by up to 0.23%; on 37 one was too low, by up to 72% (7 rows are in both). The search's records stated one forward's tokens for a step of 2 to 64 forwards; they are restated. Per start, g: finals points and other reached search rows (search split, 1 seed). rho_own: search trace, k = 65,536. S = p rho_own. Rotations are at the TF32 product. Cut (tables). Tables art:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.
+-----
+
+3. WHAT THE DRAFT SAYS, AND FROM WHERE
+- 24 rows too high, by 0.02% to 0.23%; 37 too low, by up to 72.1% (`6998@2652`, the default slowdown, 436,000 to 750,500). 7 rows are in both counts: one of their slowdowns fell and another rose. 54 of the 197 rows differ in a slowdown. RUN by me: stage 2's `corr` against the published tables (r20261111-141655-2ec8).
+- Neither f0ed nor 106f has a row on the page, so these page counts hold whichever way their traces come out.
+
+4. WHAT THE DRAFT DROPS FROM THE SERVED NOTE, to fit
+- "(p_any: C over the finals' least)" and "Finals on the search split: 9 of 15 cells."
+- "(16-bit ids); at the packed 61,440 rho is at least this."
+- "a part mixing a cut's rotation with attention products keeps the traced shares, measured at the f32 price."
+With the cause sentence cut instead ("The search's records ... restated.", 100 characters), the first and the third of those fit back in.
+
+Not done: the two traces (r20261111-170414-7b85, r20261111-170414-3c4c), both running.
+
