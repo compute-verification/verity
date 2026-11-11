@@ -75,7 +75,12 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   restricted to its units (`Member.sizes`: the parameters fix each stratum's size in a member, and nothing the prover
   sends moves a unit between strata), and its public file's units are exactly its member's, in order
   (`Member.population`), so every unit its session proves is its member's; the units the statements proved must be the
-  evidence's `proved_units`.
+  evidence's `proved_units`. The registration is held to the members before any statement's session: the members'
+  units are its population, each member one range of it (`laidHeld`), and each of its roots is exactly one member's,
+  the member whose name, then `/`, the root's port begins with (`rootsOf`; a root that is no member's or two members'
+  refuses, and so does a window's row tables' root, `ROW_TABLES`). A member's public file is held to its slice of the
+  registration (`Member.slice`, `headerHeld`): the window's scheme, the member's roots and their domains under their
+  bare ports, and the member's count of units as its instances.
 
 Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file.
 -/
@@ -88,6 +93,7 @@ public import Spot.Slots
 public import Spot.FilePart
 public import Flock
 public import Flock.JsonParse
+public import Std.Data.HashMap
 meta import CoreProtocol.Blobs
 meta import Spot.OneStage
 meta import Spot.ChallengerTrees
@@ -95,6 +101,7 @@ meta import Spot.Slots
 meta import Spot.FilePart
 meta import Flock
 meta import Flock.JsonParse
+meta import Std.Data.HashMap
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -881,14 +888,101 @@ def Member.heldAt (m : Member) (strata : Array (String × Array (Nat × Nat))) (
   | none => throw MEMBER_STRATA
   | some _ => if unitsHeld m.indices h then pure () else throw MEMBER_UNITS
 
-/-- **A member's population check**, in the place of the one statement's `FilePart.check` (`Member.heldAt` at the
-strata of the member's query over its program, as `FilePart.check` reads them): its strata are the registration's
-restricted to its units, of the sizes `Member.sizes` gives, and its public file `pubB` holds exactly the member's
-units, in order, so slot `i` of its session's table is the member's `i`-th unit and the units a session proves
-(`provedUnits`, read off this file) are the member's. -/
-def Member.population (m : Member) (pubB : ByteArray) : V Unit := do
+/-- The port a registration names a window's row tables' root at (`verity.commitments.windows.rows.TABLE_PORT`). -/
+def TABLE_PORT : String := "row-table"
+
+/-- The refusal of a registration that names a row tables' root (`rootsOf`). -/
+def ROW_TABLES : String :=
+  "roots: the registration names a row tables' root (row-table), the window's and no member's: the per-member " ++
+    "form is refused on a window with row tables until its guarantee covers a root every member reads"
+
+/-- Every way a root's port reads as `<name>/<port name>`: the name and the port name at each `/` of the characters
+given, the first `/` first, after the characters `pre` holds reversed. A member's name holds `/`s, so each `/` of a
+port is a place a name can end. -/
+def splitsFrom : List Char → List Char → List (String × String)
+  | _, [] => []
+  | pre, c :: cs =>
+    if c = '/' then (String.ofList pre.reverse, String.ofList cs) :: splitsFrom (c :: pre) cs
+    else splitsFrom (c :: pre) cs
+
+/-- Every way the port `port` reads as `<name>/<port name>` (`splitsFrom`). -/
+def splitsOf (port : String) : List (String × String) := splitsFrom [] port.toList
+
+/-- One root `r` of the registration given to its member, among the members `acc` holds a name of (`rootsOf`): the
+member whose name, then `/`, the root's port begins with, the root pushed on that member's with the name and the `/`
+taken off its port. A refusal where the root is a row tables' (`ROW_TABLES`), no member's, or two members'. -/
+def rootStep (acc : Std.HashMap String (Array Json)) (r : Json) : V (Std.HashMap String (Array Json)) := do
+  let .str port := getD r "port" | throw "roots: a root of the registration names no port"
+  if port == TABLE_PORT then throw ROW_TABLES
+  match (splitsOf port).filter fun x => acc.contains x.1 with
+  | [(name, bare)] =>
+    pure (acc.modify name (·.push (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"),
+      ("port", .str bare), ("root", getD r "root")])))
+  | [] => throw s!"roots: the registration's root {port} is no member's: a member's roots are named <member>/<port>"
+  | _ =>
+    throw (s!"roots: the registration's root {port} is two members': a member's roots are named " ++
+      "<member>/<port>, and a root is one member's")
+
+/-- **The registration's roots, each its member's**: the roots of the record `rec` by the name of the member each is
+of, in the record's order, each as the record holds it with the member's name and the `/` after it taken off its
+port (`rootStep`). A root is the member's whose name, then `/`, its port begins with, the whole name: the record's
+writer names a member's ports `<name>/<port name>`, and that rule is the prover's, so it is held here. A root that is
+no member's refuses, and one that is two members' (a name holds `/`s, so one port can read as two members'), and a row
+tables' root (`ROW_TABLES`). So every root of a record this reads is exactly one member's, by a function of the
+parameters' members and the record alone, and a member's statement reads no other (`Member.slice`). One pass over the
+record's roots. -/
+def rootsOf (ms : Array Member) (rec : Json) : V (Std.HashMap String (Array Json)) :=
+  match getD rec "roots" with
+  | .arr rs => rs.foldlM rootStep (ms.foldl (fun acc m => acc.insert m.name #[]) {})
+  | _ => throw "roots: the registration's roots are not a list"
+
+/-- How many units a member holds. -/
+def Member.count (m : Member) : Nat := m.units.foldl (fun n x => n + (x.2 - x.1)) 0
+
+/-- **A member's slice of the registration `rec`**, at the roots `rootsOf` gives each member: the window's scheme,
+the member's roots, their ports bare as its public file names them, and the member's units' count as its population.
+What the one statement's public file is held to of the record (`publicHeld`), restricted to the member; the verifier
+computes it from the parameters and the record, and nothing the prover sends after them chooses it. -/
+def Member.slice (m : Member) (rec : Json) (roots : Std.HashMap String (Array Json)) : Json :=
+  Json.mkObj [("population", Lean.toJson m.count), ("roots", .arr (roots.getD m.name #[])),
+    ("scheme", getD rec "scheme")]
+
+/-- A public file's header `h` held to the record `rec`, as `publicHeld` holds the one statement's
+(`Record.matchesPublic`): its scheme, its `frame_v3` roots and their `domain_ids`, and its `instances` against the
+record's scheme, roots, domains and population, a refusal naming the codes that fail. -/
+def headerHeld (rec h : Json) : V Unit :=
+  let fv := getD h "frame_v3"
+  let c := Record.matchesPublic rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids") (getD h "instances")
+  if c.codes.isEmpty then pure () else throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
+
+/-- The refusal of members that are not the registration's population, a range each (`laidHeld`). -/
+def MEMBERS_LAID : String :=
+  "members: the members' units are not the registration's population, each member's one range of it: a member is " ++
+    "the units [base, base + n), and the members' counts sum to the population"
+
+/-- **The members laid over the registration's population**: each member's units are one range, within the record's
+population, and the members' counts sum to it. The parameters' members share no unit (`membersOf`), so every unit of
+the population is exactly one member's, and the members in the order of their first units lie one after another from
+unit 0: a member's units are `[base, base + n)`, `base` the count of the members before it. -/
+def laidHeld (ms : Array Member) (rec : Json) : V Unit :=
+  match nat? (getD rec "population") with
+  | none => throw "the record names no population"
+  | some n =>
+    if ms.all (fun m => m.units.size == 1 && m.units.all (·.2 ≤ n)) && ms.foldl (fun a m => a + m.count) 0 == n then
+      pure ()
+    else throw MEMBERS_LAID
+
+/-- **A member's population check**, in the place of the one statement's `FilePart.check` and `publicHeld`
+(`Member.heldAt` at the strata of the member's query over its program, as `FilePart.check` reads them, then
+`headerHeld` at the member's `slice` of the registration): its strata are the registration's restricted to its units,
+of the sizes `Member.sizes` gives, its public file `pubB` holds exactly the member's units, in order, so slot `i` of
+its session's table is the member's `i`-th unit and the units a session proves (`provedUnits`, read off this file)
+are the member's, and the file's scheme, roots, domains and instances are its slice's. -/
+def Member.population (m : Member) (slice : Json) (pubB : ByteArray) : V Unit := do
   let strata ← Partition.strata (← Program.parse m.own.program) (getD m.own.partition "query")
-  m.heldAt strata (← FilePart.header pubB)
+  let h ← FilePart.header pubB
+  m.heldAt strata h
+  headerHeld slice h
 
 /-- A member's circuit held to the parameters' units a proof block: a circuit file that parses with another
 `vus_per_block` refuses. One that does not parse is its session's reject. -/
@@ -961,9 +1055,10 @@ def statementOf (p : Own) (population : ByteArray → V Unit) (bs : Core.Blobs) 
           readsOf p.registered >>= fun rd => pure (StepAt.ofOwn p tags0 circuitB pubB bs rd (population pubB))
 
 /-- **The statement a member's session is held to**: `statementOf` at the member's own inputs, its population check the
-member's (`Member.population`), and its circuit's units a proof block the parameters' (`Member.blockHeld`). -/
-def Member.statement (m : Member) (bs : Core.Blobs) : V StepAt :=
-  statementOf m.own m.population bs >>= fun a =>
+member's at its `slice` of the registration (`Member.population`), and its circuit's units a proof block the
+parameters' (`Member.blockHeld`). -/
+def Member.statement (m : Member) (slice : Json) (bs : Core.Blobs) : V StepAt :=
+  statementOf m.own (m.population slice) bs >>= fun a =>
   m.blockHeld (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags a.I) a.I.circuitFile a.I.tables) >>= fun _ => pure a
 
 /-- **One statement's sessions, after the sessions the run `r` holds**: the statement `st`, read before any session,
@@ -971,18 +1066,20 @@ then `step` on each session in order. -/
 def runFrom (st : V StepAt) (sessions : Array RunFiles) (bs : Core.Blobs) (r : Run) : V Run :=
   st >>= fun a => sessions.foldlM (fun r s => a.step bs r s) r
 
-/-- One statement's run after the run `r`: its sessions at its member's statement (`runFrom`), a refusal naming the
-member. -/
-def stepMember (bs : Core.Blobs) (r : Run) (z : StatementFiles × Member) : V Run :=
-  (runFrom (z.2.statement bs) z.1.sessions bs r).mapError (s!"member {z.2.name}: {·}")
+/-- One statement's run after the run `r`: its sessions at its member's statement, at the member's `slice` of the
+registration (`runFrom`), a refusal naming the member. -/
+def stepMember (slice : Member → Json) (bs : Core.Blobs) (r : Run) (z : StatementFiles × Member) : V Run :=
+  (runFrom (z.2.statement (slice z.2) bs) z.1.sessions bs r).mapError (s!"member {z.2.name}: {·}")
 
-/-- **The per-member form's run**: the statements' structure held (`membersHeld`), then each statement at its member's
-statement after the statements before it (`stepMember`), so `step`'s coin-tree keys are fresh across statements;
-then, where every session accepted, the union of the statements' proved units held to the evidence's `want`
-(`provedHeld`). Each drawn member's files are read once; a member no statement names is never read. -/
-def runMembers (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat) (bs : Core.Blobs) : V Run :=
+/-- **The per-member form's run**, at each member's `slice` of the registration: the statements' structure held
+(`membersHeld`), then each statement at its member's statement after the statements before it (`stepMember`), so
+`step`'s coin-tree keys are fresh across statements; then, where every session accepted, the union of the statements'
+proved units held to the evidence's `want` (`provedHeld`). Each drawn member's files are read once; a member no
+statement names is never read. -/
+def runMembers (slice : Member → Json) (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat)
+    (bs : Core.Blobs) : V Run :=
   membersHeld ms sts >>= fun held =>
-  (sts.zip held).foldlM (stepMember bs) ⟨#[], #[], #[], true⟩ >>= fun r =>
+  (sts.zip held).foldlM (stepMember slice bs) ⟨#[], #[], #[], true⟩ >>= fun r =>
   (match r.all with
     | true => provedHeld r.proved want
     | false => pure ()) >>= fun _ => pure r
@@ -1046,7 +1143,9 @@ def membersTreesHeld (ts : Array Challenger.LoggedTree) (log : List String) (sts
 evidence `e` and its statements `sts`: the statements' structure (`membersHeld`), their sessions v1's in order, the
 sessions' coins held to the trees the challenger logged in the order it must release them, each tree closed after its
 session's evidence before the next is opened (`treesOf`, `orderHeld`, `membersTreesHeld`), the registration's
-population held to the program (`popHeld`), then each statement's session on the blobs (`runMembers`). -/
+population held to the program (`popHeld`) and the members laid over it (`laidHeld`), the registration's roots each
+one member's (`rootsOf`), then each statement's session on the blobs, at its member's slice of the registration
+(`Member.slice`, `runMembers`). -/
 def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence) (sts : Array StatementFiles)
     (bs : Core.Blobs) : V Run := do
   let held ← membersHeld ms sts
@@ -1056,7 +1155,9 @@ def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : E
   orderHeld p c e
   membersTreesHeld ts (← linesOf e) (sts.zip held) bs
   popHeld p.base.verifier c.record
-  runMembers ms sts e.base.provedUnits bs
+  laidHeld ms c.record
+  let roots ← rootsOf ms c.record
+  runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs
 
 /-- **The per-member form's check at the coins `ξ`** (module docstring, **per member**): the statements' sessions'
 verdicts (`membersRun`), then v1's `checkAt` at `ξ` on them, as the one statement's check; and what would accept is
@@ -1296,11 +1397,84 @@ private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [
   MEMBER_UNITS
 #guard refusal ((memberT "m" #[(2, 4), (7, 8)]).heldAt #[("a", #[(0, 3)]), ("b", #[(3, 7)])] (unitsJ #[2, 3, 7])) ==
   MEMBER_STRATA
-#guard refusal ((memberT "m" #[(2, 4), (7, 8)]).population "{\"units\":{\"indices\":[2,3,7]}}\nrest".toUTF8) != ""
-#guard (runMembers membersT #[] #[] ⟨#[]⟩).toOption.map (·.all) == some true
-#guard whyT (runMembers membersT #[] #[1] ⟨#[]⟩) ==
+#guard refusal ((memberT "m" #[(2, 4), (7, 8)]).population Json.null
+  "{\"units\":{\"indices\":[2,3,7]}}\nrest".toUTF8) != ""
+#guard (runMembers (fun _ => Json.null) membersT #[] #[] ⟨#[]⟩).toOption.map (·.all) == some true
+#guard whyT (runMembers (fun _ => Json.null) membersT #[] #[1] ⟨#[]⟩) ==
   "the units the sessions proved are not the evidence's proved_units"
-#guard (whyT (runMembers membersT #[statementT "m2"] #[] ⟨#[]⟩)).startsWith "member m2: circuit: "
+#guard (whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[] ⟨#[]⟩)).startsWith
+  "member m2: circuit: "
+
+private def rootJ (port root : String) : Json :=
+  Json.mkObj [("domain", Json.str ("d" ++ root)), ("leaves", Lean.toJson (2 : Nat)), ("port", Json.str port),
+    ("root", Json.str root)]
+
+/-- A registration of the population `n` and the roots given, each a port and a root. -/
+private def recordT (n : Nat) (roots : List (String × String)) : Json :=
+  Json.mkObj [("population", Lean.toJson n), ("roots", Json.arr (roots.toArray.map fun (p, r) => rootJ p r)),
+    ("scheme", Json.str "s")]
+
+/-- Two members whose names hold a `/`. -/
+private def keyedT : Array Member := #[memberT "t/c0" #[(0, 2)], memberT "t/c1" #[(2, 5)]]
+
+private def strT : Json → String
+  | .str s => s
+  | _ => ""
+
+/-- The roots `rootsOf` gives the member `name` of `keyedT`, each its bare port and its root. -/
+private def rootsT (roots : List (String × String)) (name : String) : Option (Array (String × String)) :=
+  (rootsOf keyedT (recordT 5 roots)).toOption.map fun rs =>
+    (rs.getD name #[]).map fun r => (strT (getD r "port"), strT (getD r "root"))
+
+#guard splitsOf "t/c0/x" == [("t", "c0/x"), ("t/c0", "x")]
+#guard splitsOf "x" == []
+#guard splitsOf "/x/" == [("", "x/"), ("/x", "")]
+#guard rootsT [("t/c0/x", "aa"), ("t/c1/y", "bb"), ("t/c0/y", "cc")] "t/c0" == some #[("x", "aa"), ("y", "cc")]
+#guard rootsT [("t/c0/x", "aa"), ("t/c1/y", "bb"), ("t/c0/y", "cc")] "t/c1" == some #[("y", "bb")]
+#guard rootsT [] "t/c0" == some #[]
+#guard (whyT (rootsOf #[memberT "t/c0" #[(0, 2)], memberT "t/c0/u" #[(2, 5)]]
+  (recordT 5 [("t/c0/u/y", "bb")]))).startsWith "roots: the registration's root t/c0/u/y is two members'"
+#guard (whyT (rootsOf keyedT (recordT 5 [("t/c2/x", "aa")]))).startsWith
+  "roots: the registration's root t/c2/x is no member's"
+#guard (whyT (rootsOf keyedT (recordT 5 [("t/c0", "aa")]))).startsWith
+  "roots: the registration's root t/c0 is no member's"
+#guard whyT (rootsOf keyedT (recordT 5 [("t/c0/x", "aa"), ("row-table", "bb")])) == ROW_TABLES
+#guard whyT (rootsOf keyedT (Json.mkObj [("roots", Json.arr #[Json.mkObj [("root", Json.str "aa")]])])) ==
+  "roots: a root of the registration names no port"
+#guard whyT (rootsOf keyedT Json.null) == "roots: the registration's roots are not a list"
+#guard (memberT "m" #[(2, 4), (7, 8)]).count == 3
+#guard refusal (laidHeld keyedT (recordT 5 [])) == ""
+#guard refusal (laidHeld keyedT (recordT 6 [])) == MEMBERS_LAID
+#guard refusal (laidHeld keyedT (recordT 4 [])) == MEMBERS_LAID
+#guard refusal (laidHeld #[memberT "a" #[(0, 2), (3, 5)], memberT "b" #[(2, 3)]] (recordT 5 [])) == MEMBERS_LAID
+#guard refusal (laidHeld #[memberT "a" #[(0, 2)], memberT "b" #[(3, 6)]] (recordT 5 [])) == MEMBERS_LAID
+#guard refusal (laidHeld keyedT Json.null) == "the record names no population"
+
+/-- The slice `rootsOf` and `Member.slice` give the member `name` of `keyedT` on the roots given. -/
+private def sliceT (roots : List (String × String)) (name : String) : Json :=
+  match rootsOf keyedT (recordT 5 roots), keyedT.find? (·.name == name) with
+  | .ok rs, some m => m.slice (recordT 5 roots) rs
+  | _, _ => Json.null
+
+/-- A public file's header of the scheme `s`, `n` instances and the roots given, each a bare port and a root. -/
+private def headerT (n : Nat) (roots : List (String × String)) : Json :=
+  Json.mkObj [("frame_v3", Json.mkObj [("domain_ids", Json.mkObj (roots.map fun (p, r) => (p, Json.str ("d" ++ r)))),
+    ("roots", Json.mkObj (roots.map fun (p, r) => (p, Json.str r)))]), ("instances", Lean.toJson n),
+    ("scheme", Json.str "s")]
+
+#guard refusal (headerHeld (sliceT [("t/c0/x", "aa"), ("t/c1/y", "bb"), ("t/c0/y", "cc")] "t/c0")
+  (headerT 2 [("x", "aa"), ("y", "cc")])) == ""
+#guard refusal (headerHeld (sliceT [("t/c0/x", "aa"), ("t/c1/y", "bb"), ("t/c0/y", "cc")] "t/c1")
+  (headerT 3 [("y", "bb")])) == ""
+#guard refusal (headerHeld (sliceT [("t/c0/x", "aa"), ("t/c1/y", "bb"), ("t/c0/y", "cc")] "t/c1")
+  (headerT 3 [("y", "cc")])) == "public file: not the registration's: roots, domains"
+#guard refusal (headerHeld (sliceT [("t/c0/x", "aa"), ("t/c1/y", "bb"), ("t/c0/y", "cc")] "t/c0")
+  (headerT 2 [("x", "aa")])) == "public file: not the registration's: roots, domains"
+#guard refusal (headerHeld (sliceT [("t/c0/x", "aa"), ("t/c1/y", "bb")] "t/c0")
+  (headerT 2 [("x", "aa"), ("y", "cc")])) == "public file: not the registration's: roots"
+#guard refusal (headerHeld (sliceT [("t/c0/x", "aa"), ("t/c1/y", "bb")] "t/c0") (headerT 5 [("x", "aa")])) ==
+  "public file: not the registration's: population"
+#guard refusal (headerHeld (sliceT [("t/c0/x", "aa")] "t/c1") (headerT 3 [])) == ""
 
 #guard Flock.hexOf (evidenceBytes #["ab".toUTF8]) == "0000000000000001" ++ "0000000000000002" ++ "6162"
 #guard (evidenceParts (evidenceBytes #["ab".toUTF8, .empty, "c".toUTF8])).map (·.map Flock.hexOf) ==
