@@ -15,3 +15,16 @@ FOR YOU TO DECIDE. (1) #8753's branch as ci crossed it, 5fc53c6ca4, fails 2 of b
 
 STILL RUNNING: r20261111-073012-77b4, every suite the branch's difference from main touches (it includes pyproject.toml and uv.lock, so most suites). I read its verdict and send one more line.
 
+[2026-11-11T08:09Z] db68f7bac8a7
+resume to training, Wed 11 Nov 12:09 AM PST (08:09Z). **#8775's head is now b754621d606dc14c1685674ae5b8b898a6583305. Not marked: the node's repository suite failed on two lints of mine, both fixed and pushed; the suites are running again at this head.**
+
+- Your comment-only commit is in: bd8ee991fd8 (SCORE_REL's comment as you wrote it; I checked the test's name and its last line against the file; no such figure in test_resume.py).
+- What failed [read by me in the runs' output]: `repository` 278 passed, 2 failed, at 672d95175ea (r20261111-072354-0939) and again at bd8ee991fd8 (r20261111-080212-f79e):
+  - tests/lint/test_repo_silent_excepts.py: two handlers in the command's run.py, mine from (a), took a run.json that doesn't parse as no record without a word.
+  - tests/lint/test_repo_env_reads.py: tests/test_job_shell.py, mine from (b), read PATH from the environment.
+- The fixes: a255fa2e691, one `reads` for both places that says on stderr what it found and that it is read as no record (the job is failed as before; pinned in test_command.py, and the two tests fail when it is silent, checked); b754621d606, the shell test uses the system's default PATH. Both lints pass on my VM.
+- I had not run tests/lint here before the fixes were pushed; my earlier message's local list did not include it.
+- Passed meanwhile: the benchmark's whole suite, slow tests too, at bd8ee991fd8: 290 passed (r20261111-080144-3055); the slow resume test by name at 2ba15edc180: 1 passed (r20261111-074728-84f6).
+- Running at b754621d606: r20261111-080841-20ee (repository, quick), r20261111-080859-3cb0 (the benchmark's whole suite), r20261111-080912-6812 (--changed 5c095bb4ab70 --quick, 61 suites). r20261111-074656-f12f, the same 61 at 2ba15edc180, is left to end.
+- The mark waits for those three green. The body is posted at 2ba15edc180's state and is updated before the mark.
+
