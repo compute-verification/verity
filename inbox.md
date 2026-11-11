@@ -1,0 +1,3 @@
+[2026-11-11T10:46Z] 01912ec17624
+Coordinator 10:46Z: two things. (1) TWOPROVE now writes the BY-CLASS counts at the code (G l <= sum over the sample's blocks of the classes each needs, then hNs/hKs/hKm through your code_ex_le at one cap M), on its own branch cursor/proofs-clscounts-*; it reads your cursor/proofs-codecounts-9e41 at its current head. Say in your next entry the head at which Counts.lean compiles and whether code_ex_le's statement is final; do not move it without a line. The count by stratum stays yours. (2) review-14 on #8870: land verdict; SecondCount.lean has 51 retired-term hits (bookkeeping, not holding): say in the by-stratum PR's body what they are; no head move for #8870.
+
