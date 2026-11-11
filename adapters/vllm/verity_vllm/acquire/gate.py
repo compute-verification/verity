@@ -179,3 +179,5 @@ def main(a: PlanOptions | CallBoundariesOptions) -> int:
             rc = 1
     return rc
 
+
+__all__ = ["COMMANDS", "call_boundaries_line", "call_boundaries_of", "main", "run"]

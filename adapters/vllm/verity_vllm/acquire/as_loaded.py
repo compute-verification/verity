@@ -72,3 +72,6 @@ def attach_rank(model: Any, *, world: int, rank: int, composer: Callable[..., Ca
     loaded = {f"{name}.{f}": t for name, layer in layers.items() for f, t in load(name, layer, compose, repack).items()}
     return WeightsView(model, loaded), {"layers": len(layers), "fields": len(loaded), "bytes": sum(t.numel() for t in loaded.values()),
                                         "held_to": "Marlin's repack of the composed bytes is the served tensor, every field"}
+
+
+__all__ = ["attach_rank"]

@@ -141,3 +141,6 @@ def expand(wired: dict[str, Any], moe: dict[str, Any] | None) -> tuple[dict[str,
             values[pn] = {"width": width, "piece": val["piece"]}
         values[name] = val
     return {**wired, "calls": calls, "values": values}, expert_plans(keys, moe["configs"])
+
+
+__all__ = ["REQUIRED", "expand"]

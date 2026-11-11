@@ -205,3 +205,6 @@ def launch(device: DeviceBindings, qlens: list[int], klens: list[int], heads: tu
                     max_seqlen_k=device.max_model_len if full else max(klens))
     rows = [fa2_attention_rows(q, k, la, NH=NH, KVH=KVH, D=D, dot=device.dot) for q, k in zip(qlens, klens)]
     return [la["NS"]] * len(qlens), rows, {"fa2": la}
+
+
+__all__ = ["DeviceBindings", "card_of", "device_of", "launch"]

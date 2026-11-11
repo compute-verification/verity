@@ -550,3 +550,6 @@ def load_plan(path: str | Path) -> dict[str, Any]:
 
 def hooks_of_doc(doc: Mapping[str, Any]) -> list[tuple[str, str, str]]:
     return [(h["module"], h["kind"], h["slot"]) for h in doc["hooks"]]
+
+
+__all__ = ["HOOK_KINDS", "AcquisitionPlan", "AcquisitionSite", "acquisition_plan", "analytic_table_of_buffer", "hooks_of_doc"]

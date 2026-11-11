@@ -308,3 +308,7 @@ def numel(ty: Any) -> int:
     if isinstance(ty, Value):
         return 1
     raise Unmodelled(f"type {ty} is not an array of values")
+
+
+__all__ = ["FLAGS", "TEMPLATE", "Template", "Unmodelled", "bound", "holes", "instantiate", "kernel_sources", "launch_config", "recognize",
+           "source_sha256"]
