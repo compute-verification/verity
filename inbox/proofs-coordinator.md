@@ -41828,3 +41828,94 @@ For SCALE: the count of drawn blocks in K's mean is exactly `Kfirst·Σ_t k_t` a
 
 For the table:
 1. TWOWITNESS has (b)'s second step: the session count at every outcome, then K's mean at the code's sample with the refusal term stated. Its first lemma, `|proved| = Kfirst·Σ_t k_t` exactly, is in its try [run: `r20261111-081457-4e4e` queued].
+
+## BENCHCROSS, Wed 11 Nov 08:18Z: second readings hold: #8779 at f0f27082ee4c prints d670's 14,228.6 GB, e0bd's eight figures are right to the digit, #8853's rows equal d670's. WRONG, mine: S8's plan of record is 3,850.8 GB at λ 1, not 3,846.2 (+0.12%). And 3,276 / 2,993 GB is not a measured price: it is the Rust check's wall seconds on one core in place of Lean's verifier (3,329 / 3,041 GB at its 2.74 cores)
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [guess] mine. Times from `date -u`. I marked and pushed nothing; my tools are in the lane's notes (`tools/`, `tools/part3/read2/`).
+
+**The readings, one line each**
+- second reading of #8779 at `f0f27082ee4c`: holds [run]. It prints d670's row: 14,228.6345 GB over the world's year.
+- second reading of e0bd's (iii) 4,042.4 GB and lever row 3,228.7 GB at `r20261111-065519-e0bd`: holds (4,042.45 and 3,228.69) [run].
+- second reading of the two corrections counted, 4,047.3 and 3,233.3 GB, at e0bd: holds (4,047.28 and 3,233.33) [run].
+- second reading of the proof server's verifier variant, 3,275.9 and 2,993.0 GB, at e0bd: holds as computed (3,275.92 and 2,992.97) [run]; does not hold as a measured price: see "The verifier variant" below.
+- second reading of the totals at 300 GB, 79.19% and 65.30%, at e0bd: holds (79.188% and 65.301%) [run].
+- second reading of #8853's rows of record at `4ab2b732df` (`r20261111-072105-40ee`): holds, they equal d670's in every number [run]. Its rows are not read by #8779's reader as written: see "#8853".
+- second reading of #8859 at `f458b7ba94` (SERVEDCARD's verifier placement), first pass: holds as a change no guarantee reads [read]; no run measures its saving yet.
+- second reading of FUSED's 08:11Z statement that the 4,042 GB already reads the fused kinds' steady rows (2.3152 and 2.4065 ms a block): holds (0.002315 and 0.002407 s a block in e0bd's rows) [run].
+
+**#8779 at `f0f27082ee4c`: what it computes, with which labels, and against BREAKEVEN's rows**
+- The command itself, on the store's labels [run, VM, 0.2 s after pulling today's labels]: it finds one run of record, r20261111-052546-d670, not superseded, and prints "the compute audit's part: 14,229 GB (modeled)".
+  - World: week 13,961.6, month 14,059.9, year 14,228.6345 GB (bound 13,551.08 GB times 1.05, at β = 5.542234%). Datacenter: 13,429.7, 13,528.4 and 13,697.8523 GB. Each equals my own read-off of d670's rows to the digit [run].
+  - Requests: 1.7784008650e16 a world year, read from the rows (`replay_sample / q`), printed, and held equal to the certifier side's count.
+  - Shares of the row's proving by its own plan at β = 5.5%: 52.40% computed, 47.17% measured, 0.43% measured and computed, 0.002% modeled.
+- Its labels [read, the printout]: "of 30 inputs, 2 are measured, 9 modeled and 19 assumed". The two measured are the weights (3.013e12 bits) and the 47.17% share. Assumed, among others: 28,000 output bits a request, utilization 0.4, λ 1.05, δ 0.01, the 10% share. The planner's rows are one input, modeled.
+- Refusals [run]: ce3c's `h8` rows ("the two parts cover different compute": 1.08214e11 against 9.09599e10 requests a datacenter week); a file with three variants ("--variant names the one meant"). ce3c's `h8lin` rows read 14,239.8 GB with "none of it is marked measured". My three items of 05:54Z are closed.
+- Not rerun by me: its test suites (benchmarks' 11 + 13 passed and `r20261111-063123-9ed8` are [relayed]).
+- **Against BREAKEVEN's corrected rows: nothing contradicts, but they are different rows** [run]:
+  - The shared inputs are equal in d670's and e0bd's rows: requests 1.7784008650e16, 28,000 bits, δ 0.01, the weights, the target, and the serve, edge and wait charges. Only `pool` differs (0.0695% against 0.0710%), with the census.
+  - Neither correction touches d670. Row (i) has no warm factor, and the dropped verifier slope was in my override for benchmarks' prices, which d670 doesn't use.
+  - The command prints row (i) on the planner's prices. The 4,042 to 4,047 GB are rows (ii) and (iii) on benchmarks' prices over the 192-stratum census. Row (i) itself on benchmarks' prices is 5,735.4 GB over a world year (run A, `art:913b7a28…`, as run). So of the fall from 14,229, the prices give 14,229 to 5,735 and the change of row gives 5,735 to 4,044.
+  - "47.17% measured" is the planner's card's account (single sessions). It is not benchmarks' steady rows, which price 99.92% of the prover's seconds a token in e0bd's rows. The two must not be read as one label.
+  - The statement cache's factor 0.1 (assumed, by the order) is not among the command's 30 inputs: it is inside the rows [read].
+
+**e0bd: every figure of BREAKEVEN's 07:30Z table, recomputed** [run]
+- With my own reader (`succ_readoff.py`) on the record's 864 rows (`art:6f2f3405…`). GB at the 10% point times 1.05 over a world year (datacenter year in brackets); total at 300 GB / 1.05:
+
+| variant | (ii) | (iii) | lever row | (iii) at 300 GB | lever at 300 GB |
+|---|---|---|---|---|---|
+| as run | 4,043.76 (4,057.69) | 4,027.26 (4,041.30) | 3,224.49 (3,217.23) | 78.908% | 65.222% |
+| the factor off the verifier's seconds | 4,043.76 | 4,042.45 (4,056.37) | 3,228.69 (3,221.35) | 79.188% | 65.301% |
+| and the verifier's slope kept | 4,048.59 (4,062.41) | 4,047.28 (4,061.09) | 3,233.33 (3,225.87) | 79.278% | 65.389% |
+| and the proof server's verifier, one core | 3,276.62 (3,281.06) | 3,275.92 (3,280.36) | 2,992.97 (2,986.45) | 65.018% | 60.850% |
+| cache factor 1.0 | 4,069.47 | 4,058.29 | 3,263.40 | 79.481% | 65.957% |
+| 144,000 served bits | 5,275.94 | 5,274.20 | 4,177.65 | 101.960% | 83.217% |
+
+- Every row is inside its pinned budgets, at 1.778401e16 requests a world year.
+- Two differences in the last digit, both from subtracting rounded figures: the slope adds 4.83 GB to (iii), not 4.9; the cache at 1.0 adds 15.84 GB, not 15.9.
+- **With my own implementation** of both corrections in my override (`headline_mix_succ.py`: `SUCC_WARM=prover`, `SUCC_VSLOPE=keep`, `SUCC_VERIFIER=steady[:cores]`), written after reading BREAKEVEN's `headline_world_succfix.py` but calling none of it. Four runs on `a5e4e56a11`, 108 rows each, no errors [run]:
+  - `r20261111-080515-927b` (no switch) equals e0bd's `asrun` in all 21,636 numeric values.
+  - `r20261111-080516-3f81` (`SUCC_WARM=prover`) equals `fix` and `fixv`.
+  - `r20261111-080517-3612` (and `SUCC_VSLOPE=keep`) equals `fix+vmarg`.
+  - `r20261111-080518-7804` (and `SUCC_VERIFIER=steady`) equals `fix+vmarg+vsteady`.
+  - The last three are equal in every numeric value outside the `split` diagnostic of the two rows with a warm factor. Mine still records the uncorrected scale there. Nothing reads it.
+- Both artifacts are real [read: `reprice.py` 310, my override]. The row's factor multiplied the Lean verifier's seconds, and my override dropped the verifier's seconds a block on every stratum taking a benchmarks row.
+
+**The wrong number, mine: S8's plan of record**
+- S8 (`r20261111-025604-1c9d`, `art:adca7a9a…`) is row (ii) on my override, so it carries the dropped slope. At its β = 0.05544106123672309 over a world year the bound is 3,850.8041 GB at λ 1, not 3,846.2009 (+4.60 GB, +0.12%) [run: `r20261111-080517-3612` and e0bd's `fix+vmarg`, equal].
+- The plan moves with it: q 3.6858e-07 to 3.6814e-07, the replay sample 6.5548e9 to 6.5470e9 blocks; the total stays 10.0072%.
+- The warm factor does not touch S8: row (ii) has none.
+- I can rerun the plan with `SUCC_VSLOPE=keep` on your word (minutes). I have not relabelled anything.
+
+**The verifier variant (3,276 / 2,993): two things its label must say**
+- It prices the verifier of record at another verifier's seconds [read]. The steady rows' `verifier_seconds` are the proof server's Rust check. The verdict of record is Lean's, and Lean's term is 24.5% of the proving price on these rows (3,749.7 of 15,303.6 GPU-seconds a token, e0bd's `verifier_split`) [run]. So the pair is modeled on a change nobody built: a verifier of record as fast as the Rust check. The measured-price figures for the protocol as built are 4,047.3 and 3,233.3 GB.
+- It takes wall seconds as one core's [read]. SERVEDCARD measured 5.68 CPU-s over 2.07 s of wall on the head block, 2.74 cores [relayed]. At 2.74 cores on all 63 steady rows [guess: only the head block's cores were measured] my run `r20261111-080519-b479` gives (ii) 3,330.39, (iii) 3,329.08 and the lever row 3,040.86 GB over a world year, and 66.00% and 61.75% at 300 GB [run]. That is +53.2 GB (+1.6%) and +47.9 GB (+1.6%).
+- The Rust check's CPU is also already inside the steady rows' GPU-seconds [relayed: SERVEDCARD 07:48Z], so this variant counts it twice. The order's 08:12Z update names the same double count for Lean's term.
+
+**#8853 (the driver in the tree) at `4ab2b732df`**
+- The rows [run]: 40ee is done, rc 0, at that sha with a clean tree (`art:08e367c1…`). Its 54 rows against d670's by scope and β: 16,524 numeric values compared, nested ones included, none differs. My read-off of both gives the same six figures (world year 14,228.6345 GB at β 5.542234%, 267.59% at 300 GB).
+- What differs is names: the step's text (no PR numbers, no leading "+ "), the scratch driver's keys gone (`world`, `b10`, `h8*`, `sc_*`, `trace`), and four added (`case`, `heads`, `scale`, `volume`).
+- **#8779's reader does not read these rows** [run]. Its case filter wants `world == "ours"` and a step starting "+ the verifier as measured", and it reads `b10`: 0 of 40ee's 54 rows pass, and `at_share` raises `KeyError: 'b10'`. With the three supplied it prints 14,228.6345 GB and the same shares. So a run of the in-tree driver cannot become the run of record until one side moves; d670 stays it meanwhile.
+- Its tests [run]: `r20261111-080741-414d` on vy-nebius-cpu-11 at that sha, the suite `benchmarks/spot_figures` fresh with `-k test_headline`: 7 passed in 11 s, the slow planner row among them. The whole suite fresh is out: `r20261111-081118-8d10` on vy-nebius-cpu-9.
+- The diff [read]: `headline.py` (611 lines) is the pricing chain, the charges, the plan and the reader in one module. Its row (iii) still multiplies the verifier's seconds by the warm factor (the first artifact above; the PR's body says so). Row (i), the row of record, has no warm factor.
+
+**#8859 (the verifier's CPUs) at `f458b7ba94`, first pass** [read unless tagged]
+- What a guarantee rests on: nothing moves. The diff touches `verity_flock/proof_server.py` (the prover's distribution, off `SOUNDNESS_PATH`), `benchmarks/one_stage/server_rate.py` and two test files. No Lean, lock, verifier, commitment or randomness code.
+- The whole change is a `taskset -c LIST` prefix on the verifier and prover processes' commands, and the provers' thread share counted over their own CPUs. Unset, `_placement` returns nothing and `_start` adds nothing: the old commands.
+- The hiding argument: untouched. No salt, mask, commitment, coin or transcript byte is made differently.
+- Its tests [run]: `r20261111-081503-9df9` on vy-nebius-cpu-1 at that sha, the two files fresh: 11 + 5 passed.
+- The saving: none measured. "At most 0.62 of 2.5654 GPU-s" is SERVEDCARD's guess (5.68 / 23.3 × 2.5654 = 0.625, the arithmetic holds [run]). HEADPROF was blocked on a card at 08:05Z [relayed]. No GB may be credited until its row.
+
+**Out and next**
+- Out: `r20261111-081118-8d10` (vy-nebius-cpu-9, #8853's whole suite, minutes).
+- Next: BREAKEVEN's 09:00Z report and each new row of its lever table; #8859 again when HEADPROF's row exists; SALTS's cut (its 08:09Z entry says it is a new statement version, so Daniel's); CONCRETE's cells.
+
+For the table:
+- GB, second reader: e0bd's figures hold to the digit, by my own reader and by four runs of my own implementation. On benchmarks' measured prices the world year is 4,047.3 GB for (iii) and 3,233.3 GB for the lever row (three unbuilt changes), 79.28% and 65.39% of compute at 300 GB. The pair 3,276 / 2,993 GB is modeled, not measured: it prices the verifier of record at the Rust check's wall seconds on one core (3,329 / 3,041 GB at that check's measured 2.74 cores).
+- #8779 at `f0f27082ee4c` holds: it prints 14,228.6 GB (modeled) from d670, row (i) on the planner's prices. The same row on benchmarks' prices is 5,735 GB; the 4,047 GB is row (iii).
+- #8853's driver reproduces d670's 54 rows in every number (`r20261111-072105-40ee`), but #8779's reader refuses its rows as written (`world`, `b10` and the step's name).
+
+For BREAKEVEN:
+- `SUCC_VERIFIER=steady:2.74` in my `headline_mix_succ.py` prices the Rust check at its measured cores: 3,329.08 and 3,040.86 GB (`r20261111-080519-b479`). Your `vsteady` rows are 1.6% under that.
+- A row HEADPROF times with `FC_VERIFIER_CPUS` uses the verifier's cores beside the provers' ten. Its new field `verifier_cpu_s_per_statement` is what to add back: 5.68 CPU-s is 0.069 GPU-s a statement at 81.82 core-s a GPU-s, or 0.125 if four cores are held for the statement's 2.57 s [guess on which].
+- #8853 and #8779 disagree on three row keys (`world`, `b10`, the step's "+ "). One of you changes; say which in your entry so the other doesn't.
+- Two digits: the slope adds 4.83 GB to (iii) and the cache at 1.0 adds 15.84 GB.
