@@ -37,7 +37,10 @@ figure where it is free and a tied audit states its circuit record. Sampled proo
 as not credited. PoUW's freed compute is never credited or claimed, whatever its row states, and neither is one
 program a day, each open by name beside what the run's lines say. The run's `publish` leaves the record as written.
 The run is of record only when every verdict, the onsite composite's included, accepted and every drawn member is
-credited, PoUW's verdict aside: the record claims nothing of it, and lists it as its row states it. Where the run has
+credited, PoUW's verdict aside: the record claims nothing of it, and lists it as its row states it. Memory's three
+verdicts, PoUS's, the bandwidth audit's and the wipe's, are listed as their rows state them, missing where the run has
+no such row, and whether the run is of record reads none of them: it is of record exactly when it is without them.
+Where the run has
 the network certifier's composite without PoUW, that is the composite of record, named by its id: the run is of record
 over its verdict and its subprotocols', remote's aside too, its error has no PoUW term, and no verified compute is
 credited.
@@ -1528,7 +1531,7 @@ def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path)
     rec = record(out)
     assert {k: v["verdict"] for k, v in rec["verdicts"].items()} == {
         "sampled proofs": OR.NOT_ESTABLISHED, "PoUW": "accept", "inference-only": "accept", "remote": "accept",
-        "the network certifier": OR.NOT_ESTABLISHED, "onsite": "missing"}
+        "the network certifier": OR.NOT_ESTABLISHED, "onsite": "missing", **dict.fromkeys(OR.MEMORY, "missing")}
     assert rec["verdicts"]["onsite"]["why"] == "the run has no composite of verity/remote-network/v0"
     assert rec["verdicts"]["sampled proofs"]["credit"] == UNESTABLISHED
     assert rec["checked"][OR.AUDITOR_RECORD]["why"] == (
@@ -2332,6 +2335,141 @@ def test_whether_the_run_is_of_record_reads_no_pouw_verdict_which_stays_listed_a
     line = json.loads(capsys.readouterr().out.strip()[7:])
     assert (line["of_record"], line["verdicts"]["PoUW"]) == (True, verdict["verdict"])
     assert record(with_onsite(out, sampled="reject"))["of_record"]["holds"] is False
+
+
+def memory_row(key: str, verdict: str) -> dict:
+    """Memory's row ``key`` of the window report answering ``verdict``, as `served_verdicts.row_of` writes it."""
+    return {"protocol": f"toy/{key}/v0", "owner": "memory-accounting", "verdict": verdict,
+            "reason": None if verdict == "accept" else f"toy: {key} refused", "commitment": "ab" * 64,
+            "quantity": {"bytes": 123456789} if verdict == "accept" else None, "delta": None, "epsilon": None, "runs": []}
+
+
+def with_memory(out: Path, rows: dict[str, dict | None]) -> Path:
+    """``out`` with its window report's memory rows ``rows``, by row name: each the row given, none where None."""
+    f = out / "record" / "verdicts.json"
+    report = json.loads(f.read_text())
+    for key, row in rows.items():
+        report["protocols"].pop(key, None)
+        if row is not None:
+            report["protocols"][key] = row
+    f.write_text(json.dumps(report))
+    return out
+
+
+#: memory's rows of the window report, by the verdict that reads each
+MEMORY_ROWS = {"PoUS": "space", "the bandwidth audit": "bandwidth", "the wipe": "wipe"}
+#: a run's memory rows: none, each accepting, each refusing, each as a product without them drops it, and one of each
+NO_MEMORY = dict.fromkeys(MEMORY_ROWS.values())
+MEMORY_ACCEPTING = {key: memory_row(key, "accept") for key in MEMORY_ROWS.values()}
+MEMORY_REFUSING = {key: memory_row(key, "reject") for key in MEMORY_ROWS.values()}
+MEMORY_DROPPED = {key: {"verdict": "dropped", "owner": "memory-accounting", "why": f"not run: toy drops {key}"}
+                  for key in MEMORY_ROWS.values()}
+MEMORY_MIXED = {"space": MEMORY_ACCEPTING["space"], "bandwidth": MEMORY_REFUSING["bandwidth"], "wipe": None}
+
+
+def test_memorys_three_verdicts_are_among_the_records_and_read_the_rows_memory_names():
+    assert OR.MEMORY == tuple(MEMORY_ROWS) and set(OR.MEMORY) < set(OR.VERDICTS)
+    assert {k: OR.ROWS[k] for k in OR.MEMORY} == MEMORY_ROWS
+    assert {k: SV.NAMES[key] for k, key in MEMORY_ROWS.items()} == {k: k for k in MEMORY_ROWS}
+
+
+@pytest.mark.parametrize("name, key", list(MEMORY_ROWS.items()))
+@pytest.mark.parametrize("row, verdict", [
+    ("accept", {"verdict": "accept"}),
+    ("reject", {"verdict": "reject"}),
+    ("error", {"verdict": "error"}),
+    ("dropped", {"verdict": "missing"}),
+    (None, {"verdict": "missing"}),
+])
+def test_each_memory_verdict_is_listed_as_its_row_states_it_and_missing_where_the_run_has_none(
+        tmp_path, capsys, name, key, row, verdict):
+    """Each of memory's three verdicts reads its own row of the window report: an accepting row's accept and a refusing
+    row's refusal with its reason, under the row's protocol; missing with the row's why where the run's product drops
+    it, and missing, naming the row, where the report has none. Each says it is listed, the two other rows' verdicts
+    stay missing, no figure of the row reaches the record, and the run's line prints the verdict beside the others."""
+    given = None if row is None else MEMORY_DROPPED[key] if row == "dropped" else memory_row(key, row)
+    out = with_memory(served_out(tmp_path), NO_MEMORY | {key: given})
+    assert main([str(out)]) == 0
+    rec = json.loads((out / "record" / "onsite.json").read_text())
+    src = {"from": f"record/verdicts.json protocols.{key}", "listed": OR.LISTED}
+    expect = {"accept": {"protocol": f"toy/{key}/v0", "verdict": "accept"},
+              "reject": {"protocol": f"toy/{key}/v0", "verdict": "reject", "reason": f"toy: {key} refused"},
+              "error": {"protocol": f"toy/{key}/v0", "verdict": "error", "reason": f"toy: {key} refused"},
+              "dropped": {"verdict": "missing", "why": f"not run: toy drops {key}"},
+              None: {"verdict": "missing", "why": f"the window report has no {key} row"}}[row]
+    assert expect["verdict"] == verdict["verdict"] and rec["verdicts"][name] == expect | src
+    others = {k: rec["verdicts"][k] for k in OR.MEMORY if k != name}
+    assert others == {k: {"verdict": "missing", "why": f"the window report has no {MEMORY_ROWS[k]} row",
+                          "from": f"record/verdicts.json protocols.{MEMORY_ROWS[k]}", "listed": OR.LISTED}
+                      for k in others}
+    assert 123456789 not in numbers(rec)
+    line = json.loads(capsys.readouterr().out.strip()[7:])
+    assert list(line["verdicts"]) == sorted(OR.VERDICTS)
+    assert {k: line["verdicts"][k] for k in OR.MEMORY} == dict.fromkeys(OR.MEMORY, "missing") | {name: verdict["verdict"]}
+
+
+def test_a_development_memory_row_is_missing_and_says_so(tmp_path):
+    row = {"verdict": "missing", "owner": "memory-accounting", "why": "development run, credits nothing: toy",
+           "development": {"verdict": "accept"}}
+    rec = record(with_memory(served_out(tmp_path), NO_MEMORY | {"space": row}))
+    assert rec["verdicts"]["PoUS"] == {"verdict": "missing", "why": row["why"], "development": True,
+                                       "from": "record/verdicts.json protocols.space", "listed": OR.LISTED}
+
+
+def of_record_today(tmp_path: Path, run: str) -> tuple[Path, dict]:
+    """A toy run and the ``of_record`` the record states of it with no memory verdict among its verdicts: one of record
+    under onsite's composite, one whose composite of record rejects, one whose sampled proofs leg does, one with no
+    composite of record, one of record under the composite without PoUW, and a rehearsal's."""
+    no = {"missing": [], "not_accepting": [], "not_established": [], "not_credited": [], "not_claimed": ["PoUW"]}
+    if run == "rehearsal":
+        return served_out(tmp_path), {
+            "holds": False, "missing": ["PoUW", "inference-only", "remote", "the network certifier", "onsite"],
+            "not_accepting": [], "not_established": ["sampled proofs"], "not_credited": [], "not_claimed": ["PoUW"],
+            "uncredited": OR.UNESTABLISHED_CREDIT, **ONSITE_OF_RECORD}
+    if run == "no composite of record":
+        return accepted(tmp_path, onsite=False), {
+            "holds": False, **no, "missing": ["onsite"],
+            "not_established": ["sampled proofs", "the network certifier"], "conditional_on": [OR.CERTIFIER_KEY],
+            "uncredited": OR.UNESTABLISHED_CREDIT, **ONSITE_OF_RECORD}
+    out = accepted(tmp_path)
+    if run == "of record":
+        return out, {"holds": True, **no, **ONSITE_OF_RECORD}
+    if run == "sampled proofs rejecting":
+        return with_onsite(out, sampled="reject"), {"holds": False, **no, "not_accepting": ["sampled proofs"],
+                                                    **ONSITE_OF_RECORD}
+    if run == "onsite rejecting":
+        f = out / "composite" / "remote-network" / "composite.json"
+        f.write_text(json.dumps(json.loads(f.read_text()) | {
+            "missing": [OR.NETWORK], "verdict": {"id": OR.ONSITE, "verdict": "reject", "refusal": "components"}}))
+        return out, {"holds": False, **no, "not_accepting": ["onsite"], **ONSITE_OF_RECORD}
+    assert run == "of record without PoUW"
+    with_composite(out, "remote", OR.REMOTE, REMOTE_IDS, "reject", missing=(OR.POUW_ID,), inference_only="reject")
+    with_composite(out, "remote-network", OR.ONSITE, (OR.NETWORK, *REMOTE_IDS), "reject", missing=(OR.POUW_ID,))
+    with_composite(out, "remote-network-no-pouw", WITHOUT, WITHOUT_IDS)
+    return out, {"holds": True, **no, "composite": WITHOUT, "not_accepting": ["remote"],
+                 "not_claimed": ["PoUW", "remote"], "verified_compute": "none"}
+
+
+@pytest.mark.parametrize("run", ["of record", "of record without PoUW", "sampled proofs rejecting", "onsite rejecting",
+                                 "no composite of record", "rehearsal"])
+@pytest.mark.parametrize("memory", [NO_MEMORY, MEMORY_REFUSING, MEMORY_DROPPED, MEMORY_MIXED, MEMORY_ACCEPTING],
+                         ids=["absent", "refusing", "dropped", "mixed", "accepting"])
+def test_whether_the_run_is_of_record_reads_none_of_memorys_three_verdicts(tmp_path, capsys, run, memory):
+    """A run is of record exactly when it is with no memory verdict among the record's: its three rows absent, refusing,
+    dropped, accepting or one of each, ``of_record`` is, field for field, what it states of that run without them, a
+    run of record staying one though each refuses and a run not of record staying none though each accepts; it names
+    none of the three in any of its lists, and the run's line says the same of the run."""
+    out, today = of_record_today(tmp_path, run)
+    assert record(out)["of_record"] == today
+    assert main([str(with_memory(out, memory))]) == 0
+    rec = json.loads((out / "record" / "onsite.json").read_text())
+    assert rec["of_record"] == today
+    assert not set(OR.MEMORY) & {k for x in today.values() if isinstance(x, list) for k in x}
+    states = {k: ("missing" if (memory[key] or {"verdict": "dropped"})["verdict"] == "dropped"
+                  else memory[key]["verdict"]) for k, key in MEMORY_ROWS.items()}
+    assert {k: rec["verdicts"][k]["verdict"] for k in OR.MEMORY} == states
+    line = json.loads(capsys.readouterr().out.strip()[7:])
+    assert (line["of_record"], {k: line["verdicts"][k] for k in OR.MEMORY}) == (today["holds"], states)
 
 
 def test_sampled_proofs_guarantee_is_its_windows_epsilon_at_delta_beside_its_pooled_count_over_each_period(

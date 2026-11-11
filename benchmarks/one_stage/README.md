@@ -231,7 +231,9 @@ negatives.
   `served_verdicts.sh` writes after its composite step when the network certifier is in the run: its piece
   (`CERTIFIER_CMD`, or the split's `CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`) or its front (`CERTIFIER_FRONT`). It holds every verdict
   the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
-  with its why where the run has no answer. Sampled proofs' verdict is its leg in the composite of record, the outcome
+  with its why where the run has no answer. Beside them it lists memory's three (PoUS, the bandwidth audit and the
+  wipe: the window report's `space`, `bandwidth` and `wipe` rows) as their rows state them, missing where the run has
+  no such row; whether the run is of record reads none of them. Sampled proofs' verdict is its leg in the composite of record, the outcome
   of remote's sampled proofs case there (one-stage v2), never the window report's integrity row, the records audit's
   one-stage v1 answer, which is no verdict: where the composite of record has no such case, it is not established, the
   row's answer beside it, and credits no member. The inference-only verdict says where its case's α and Γ came from, never

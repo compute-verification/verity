@@ -37,7 +37,9 @@ run wrote no answer, ``missing`` and ``why``:
   answer gives (``pieces/certifier/answer.json``, `served_verdicts.piece_row`), as onsite's report composes it;
 * onsite: the composite of record's Lean verdict, its id the verdict's ``protocol``: the network certifier's composite
   without PoUW where the run has one (`WITHOUT_POUW`), else the Lean composition of remote's three subprotocols and the
-  network certifier over one registration, the composite whose product is `ONSITE`; missing where the run has none.
+  network certifier over one registration, the composite whose product is `ONSITE`; missing where the run has none;
+* PoUS, the bandwidth audit and the wipe (`MEMORY`): ``record/verdicts.json``'s ``space``, ``bandwidth`` and ``wipe``
+  rows, each listed as its row states it and missing where the run has no such row or its product drops it (`LISTED`).
 
 While `certifier-key` is open (`PREMISES`, `KEY_OPEN`), an accepted network certifier's verdict is ``not
 established``, its Lean answer's accept beside it (``answer``), and its bound conditional on it by name; so is it
@@ -54,7 +56,8 @@ not established, which credits none (`UNESTABLISHED_CREDIT`). ``of_record`` hold
 and every drawn member is credited, the condition for the demo's run of record, naming its composite of record by id (``composite``), the verdicts not established, the
 members not credited and the verdicts it doesn't read (``not_claimed``: PoUW's, `NOT_CLAIMED`, listed as it is, missing
 and development where its row is, and under a composite without PoUW remote's too, `NOT_CLAIMED_WITHOUT_POUW`), and
-the verified compute it credits, none (``verified_compute``, `POUW`); ``placement`` is the network certifier's
+the verified compute it credits, none (``verified_compute``, `POUW`); it neither reads nor names memory's three
+(`MEMORY`), whatever their rows state; ``placement`` is the network certifier's
 answer's, which host ran each party. Sampled proofs' guarantee (``member``) and the ONSITE line (``open_in_lean``)
 state that the drawn unit's member rests on this record's check of θ's layout against a5's pin, not yet on Lean
 (`MEMBER_OPEN`).
@@ -227,9 +230,17 @@ ALPHA_GAMMA_UNSTATED = ("not stated: the record wasn't handed the inference-only
 #: the Lean composition of remote's three subprotocols and the network certifier over one registration, as its
 #: composite.json names it (`composite.py`'s remote-network product)
 ONSITE = "verity/remote-network/v0"
-VERDICTS = ("sampled proofs", "PoUW", "inference-only", "remote", "the network certifier", "onsite")
+VERDICTS = ("sampled proofs", "PoUW", "inference-only", "remote", "the network certifier", "onsite",
+            "PoUS", "the bandwidth audit", "the wipe")
 #: the window report's rows, by verdict
-ROWS = {"sampled proofs": "integrity", "PoUW": "work", "the network certifier": "communication"}
+ROWS = {"sampled proofs": "integrity", "PoUW": "work", "the network certifier": "communication",
+        "PoUS": "space", "the bandwidth audit": "bandwidth", "the wipe": "wipe"}
+#: memory's three verdicts, each its row of the window report as the report names it (`served_verdicts.NAMES`)
+MEMORY = ("PoUS", "the bandwidth audit", "the wipe")
+#: ``listed`` in each of `MEMORY`'s verdicts
+LISTED = ("listed as its row of the window report states it (`row_verdict`), beside the verdicts the run of record "
+          "needs: whether the run is of record doesn't read it, ``of_record`` names it in none of its lists, and no "
+          "figure of its row reaches the record")
 #: where the certifier piece leaves its period's case (`certifier_piece.CASE`), whose params carry the schedule and caps
 CASE = Path("pieces") / "certifier" / "case.json"
 #: the run's advice registration as it publishes it (`served_verdicts.py public-registration`), its compiler's cap ℓ_a
@@ -1945,6 +1956,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
                                                    "composite/remote/composite.json")
     v["the network certifier"] = nv = row_verdict(rows, ROWS["the network certifier"], net_src)
     v["onsite"] = composite_verdict(found, composite, f"the run has no composite of {composite}")
+    v |= {k: row_verdict(rows, ROWS[k]) | {"listed": LISTED} for k in MEMORY}
     v = {k: v[k] for k in VERDICTS}
     v["inference-only"]["alpha_gamma"] = alpha_gamma(case_policy)
     for k in unread:
@@ -1994,18 +2006,19 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     profile = answer.get("profile") if isinstance(answer.get("profile"), Mapping) else {}
     tree = next((x for x in lines(out, "machine.txt") if re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", x)), None)
     held = cond + [c for c in cond_net if c not in cond] if accepted else cond
+    needed = {k: x for k, x in v.items() if k not in MEMORY}
     rec: dict[str, Any] = {
         "format": FORMAT, "extends": EXTENDS, "run": report.get("run"), "tree": tree, "node": report.get("node"),
         "serving": {"missing": NO_SERVING} if serving is None else {
             "window_steps": serving[0], "max_tokens": serving[1], "is": SERVING},
         "verdicts": v, "checked": checked, "coins": drawn, "one_program_a_day": day(out),
         "pouw_freed_compute": pouw(out),
-        "of_record": {"holds": all(x["verdict"] == "accept" for k, x in v.items() if k not in unread)
+        "of_record": {"holds": all(x["verdict"] == "accept" for k, x in needed.items() if k not in unread)
                                and credited(paid), "composite": composite,
-                      "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
-                      "not_accepting": [k for k, x in v.items()
+                      "missing": [k for k, x in needed.items() if x["verdict"] == "missing"],
+                      "not_accepting": [k for k, x in needed.items()
                                         if x["verdict"] not in ("accept", "missing", NOT_ESTABLISHED)],
-                      "not_established": [k for k, x in v.items() if x["verdict"] == NOT_ESTABLISHED],
+                      "not_established": [k for k, x in needed.items() if x["verdict"] == NOT_ESTABLISHED],
                       "not_credited": list(paid.get("not_credited") or ()), "not_claimed": list(unread),
                       "verified_compute": NO_VERIFIED_COMPUTE}
                      | ({"uncredited": paid["missing"]} if "missing" in paid else {})
