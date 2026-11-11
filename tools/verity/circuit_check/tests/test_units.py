@@ -199,7 +199,7 @@ def test_a_file_edited_between_two_stores_in_one_run_is_seen_at_the_second(tmp_p
 #: SynLater, whose body build registers the primitive it calls (as a body on the real tree registers its constants' primitives),
 #: its binding, and the registered roots the catalog starts from: that primitive, once something registered it
 LATE = """
-from verity.ml.circuits import composite, primitive
+from verity.circuits import composite, primitive
 
 from syn.prims import V
 
@@ -217,7 +217,7 @@ LATE_BINDING = """def late():
 
 
 def registered():
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     return [d for d in REGISTRY.defs.values() if d.id == "SynLate_v1"]
 
 
@@ -243,7 +243,7 @@ def test_what_a_body_build_registers_leaves_every_record_counting(tmp_path):
 
 #: the registered roots the catalog starts from, two, each of a module of its own
 TWO_REGISTERED = """def registered():
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from syn import idle, xdef
     return [bind(idle.SynIdle), bind(xdef.SynX)]
 
@@ -295,7 +295,7 @@ def test_a_binding_that_makes_no_root_is_held_by_every_record(tmp_path):
 #: SynStep at a static Definition its body doesn't call, bound by one binding and unbound by another (as `AttnDotStep_v1` takes
 #: its DOT from `boolean_version` and from its sidecar): two Definitions of one id whose descriptors differ
 STEP = """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -555,13 +555,13 @@ def test_records_built_again_are_the_same_bytes_with_each_build_s_seconds_beside
     assert {n: weighed[n] for n in took} == took and all(s is None for n, s in weighed.items() if n not in took)
 
 
-#: a reference two bindings bind at two statics (as `verity.ml.kernels.tc`'s sidecar and the gemm-coordinate template bind
-#: the NVFP4 dot), a word primitive whose Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.
+#: a reference two bindings bind at two statics (as `verity.definitions.kernels.tc`'s sidecar and the gemm-coordinate template bind
+#: the NVFP4 dot), a word primitive whose Boolean Definition (a ``word`` and a ``build``, as `verity.circuits.boolean.
 #: trace` makes one) only another binding's body build registers (as `boolean_marlin_moe`'s gathers), and one whose Boolean
 #: Definition `WORDMOD` registers as it is imported (as `ops.boolean`'s pieces are), which only SynVTop's body imports
 WORDS = """
-from verity.ml.circuits import bind, composite, primitive
-from verity.ml.circuits.evaluation import ScalarReference
+from verity.circuits import bind, composite, primitive
+from verity.circuits.evaluation import ScalarReference
 
 from syn.prims import SynAdd, V
 
@@ -596,7 +596,7 @@ def SynVTop(B, S, a, b):
     return B.call(SynAdd, a, b)
 """
 WORDMOD = """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 from syn.words import SynV
@@ -638,7 +638,7 @@ def vtop():
 #: the check's value also says whether a Boolean Definition of the target's word is registered where it is checked, as
 #: Flock's lowering looks one up (`verity_flock.ir_lower`'s ``_boolean_build``)
 WORDED = """def worded(fid):
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     return any(getattr(getattr(d, "word", None), "id", None) == fid and callable(getattr(d, "build", None))
                for d in REGISTRY.defs.values())
@@ -648,8 +648,8 @@ WORDED = """def worded(fid):
 #: SynK at K = 2 and K = 5 inside another Definition's body, so a record holds K = 5 as reached, not as a root (a root is always
 #: described), beside a smaller member of its family (a binding's smallest of a family is too)
 KBIG = """
-from verity.ml.circuits import composite
-from verity.ml.circuits.defs import bind
+from verity.circuits import composite
+from verity.circuits.defs import bind
 
 from syn.kdef import SynK
 from syn.prims import V
@@ -764,7 +764,7 @@ def test_bindings_built_apart_keep_a_pinned_target_and_read_no_pin(tmp_path):
 #: SynHolder's body
 TILE_FILES = {
     "syn/build.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -782,7 +782,7 @@ def tile():
     "syn/pouw/__init__.py": "",
     "syn/pouw/tile.py": "from syn.build import tile\n\nSynTile = tile()\n",
     "syn/holder.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import V
 
@@ -809,7 +809,7 @@ def held():
 BLOCK_CHECK = """
 def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     from circuit_check import checks as CK
-    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.circuits.evaluation.reference import evaluate
 
     F = CK.Findings()
     w = CK.unit_block(fn, F)
@@ -882,8 +882,8 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
 #: what `targets.on_demand_boolean_families` registers, in order, given word Call families made on demand
 ON_DEMAND = """
 from circuit_check import targets as TG
-from verity.ml.circuits.defs import REGISTRY
-import verity.ml.definitions.boolean
+from verity.circuits.defs import REGISTRY
+import verity.definitions.boolean
 
 before = set(dict.keys(REGISTRY.defs))
 TG.on_demand_boolean_families({"Const8[0x0]_v1", "Const16[0x1]_v1", "Const32[0x2]_v1", "Const4[0x3]_v1", "GatherBf16x4_v1",
@@ -951,7 +951,7 @@ print(json.dumps(out))
 
 #: a model whose body raises, as a model the catalog can't build names its error
 BAD = """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import V
 
@@ -965,7 +965,7 @@ DIE = """
 import os
 import signal
 
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import V
 
@@ -1061,7 +1061,7 @@ def test_a_run_killed_while_its_bindings_build_leaves_no_file_behind(tmp_path):
 SPAWN = """
 import os
 
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
