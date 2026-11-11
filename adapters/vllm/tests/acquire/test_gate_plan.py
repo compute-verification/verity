@@ -1,5 +1,5 @@
-"""`verity-vllm gate plan` through the command line, on a synthetic manifest and runtime tree: the plan it writes, what it says
-of it, its exit, the request Programs it reads under a row dir, and its comparison with another plan."""
+"""`verity-vllm gate plan` (`verity_vllm.acquire.gate`) through the command line, on a synthetic manifest and runtime tree: the
+plan it writes, what it says of it, its exit, the request Programs it reads under a row dir, and its comparison with another plan."""
 from __future__ import annotations
 
 import hashlib
