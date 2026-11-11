@@ -483,13 +483,8 @@ Outside code may run the Lean check on the packages, read a file here as data (a
 to) and build or run Lean in a package's Lake environment. No outside package requires them
 (`tests/test_lean_packages.py`), and a generated file is written only by the generator its header names. Today:
 
-- Lean files importing `Proofs.*` (modules: `Proofs/README.md`):
-  `verity/protocols/pous/lean/submissions/reference.lean`, `ExfiltrationVectors.lean` and
-  `ExfiltrationTwoVectors.lean` in `verity/protocols/spot/verifier/tests/lean/`, and
-  `verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean`.
-- Programs building or running Lean in those environments: `verity/protocols/pous/lean/grade.sh`,
-  `generate.sh` beside the other three files, `verity/protocols/flock/prover/tests/test_lean_verifier.py`, and the NCP pin's command
-  in `tools/verity/check/pins.py`.
+- Lean files importing `Proofs.*` and the programs that build or run them: the one list is in `Proofs/README.md`.
+- The NCP pin's command in `tools/verity/check/pins.py` builds and runs Lean in `security`'s environment.
 - Generators: `lean_headline.py`, `lean_headline_dc.py` and `machine_model/` (the ACCEL model; it prints `Sheets/`)
   in `benchmarks/pouw/`; `verity/definitions/ops/tests/test_lean_fp32_vectors.py`; `fp8atom_vectors.py`,
   `h1t_vectors.py` and `row_prims_vectors.py` in `verity/protocols/pouw/verifier/lean/scripts/`.
