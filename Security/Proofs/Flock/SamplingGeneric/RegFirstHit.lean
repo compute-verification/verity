@@ -12,27 +12,31 @@ import Proofs.Flock.Claims.Sampling.KS
 `pr_offReg_le` (`Proofs.Flock.SamplingGeneric.Reg`) bounds a run's openings off the committed trace by
 `N·√Pr[conflict]`: the rewinding lemma at the runs' openings of the program's gates (`opTable`), whose plurality the
 committed trace is (`plur`). This file bounds the same event at the same table and the same plurality linearly, by the
-first-hit finder (`Proofs.Core.SamplingGeneric.FirstHit`), at each tape of the prover:
+first-hit finder (`Proofs.Core.SamplingGeneric.FirstHit`):
 
-* `isPlurality_plur`: the committed trace's values are a plurality table of the runs' openings.
-* `pr_offReg_le_firstHit`: `Pr[a run opens a gate off the committed trace] ≤ 2·Pr[Found] + N/(K + 1)`, where `Found`
-  is the first-hit finder's event at `K` further runs' coins and `N` the program's gates.
-
+* `isPlurality_plur`: at each tape of the prover, the committed trace's values are a plurality table of the runs'
+  openings.
+* `pr_offReg_le_firstHit`: at each tape, `Pr[a run opens a gate off the committed trace] ≤ 2·Pr[Found] + N/(K + 1)`,
+  where `Found` is the first-hit finder's event at `K` further runs' coins and `N` the program's gates.
 * `pr_offReg_le_sample`: over the prover's tape, under `ExpectedCR` at one finder whose seed holds the tape and whose
   output is `B_conf`'s at two runs (`collAt`), `Pr[a run opens a gate off the committed trace] ≤
   2·(1 + w)·E[c]/2^256 + N/(K + 1)`, where `w` bounds the gates one run's sample holds (`chk`, a function of the run's
-  coins) and `c` is a run's calls (`runCost`).
-
+  coins) and `c` is a run's calls (`runCost`); `pr_offReg_le_sample_forall`, under the bound at the finder of every
+  cap, has no `N/(K + 1)`.
 * `pr_offReg_le_pos`: `pr_offReg_le_sample` with `w` the positions any reveal opens under the statement's roots
   (`opensAt_isSome_mem`).
 * `pr_offReg_le_needs`: `pr_offReg_le_sample` with `w` a bound on the gates the reveals open for the proof blocks of
   one run's sample (`opensAt_isSome_mem_checked`), where a block's reveals open only gates of `needs`.
-
 * `pr_regHit_le_sample`: `KSReg`'s first half with `2·(1 + w)·E[c]/2^256` where `εreg` has `N·√Pr[B_conf]`, the
   proof of `ksReg_of_sessionKS` with `pr_offReg_le_sample_forall` in place of `pr_offReg_le`.
 
 `pr_offReg_le_firstHit` turns no found pair into a collision and builds no `Finder`: `Found` is two runs' extractions
 that open one gate two ways, the event `Conflict` reads at a pair of runs. `pr_offReg_le_sample` does both.
+
+Everything here is at the one-stage contract (`Compiled`), where `KSReg` is stated. The finder waits for a gate, not
+for a proof block, and reruns a whole run: the two openings it compares are under the statement's roots, the only ones
+`opensAt` and the committed trace read. Nothing here covers two stages (`CompiledTwo`): a finder for openings under
+roots that a run fixes after its first coins has to keep those coins and redraw the rest, which this finder does not.
 -/
 
 @[expose] public section
