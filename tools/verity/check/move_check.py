@@ -1695,8 +1695,9 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         file it deleted) and each entry of the new list is one of four. An old entry as the range sent it whole. An old
         entry as its row of the maps sends it (`Rows`: `[tokens]`, or this file's `[split]` row). A part: of HEAD's files
         that the range did not add it holds only ones the old list's paths held at BASE, one of them a file of an old
-        entry that the new list no longer has, whose prefix and suffix (`HEAD:`, `/`, `/**`) it bears; an entry the list
-        has as its row sends it, and every other file of it too, is one it no longer has, and the row's part is a part.
+        entry that the new list no longer has, whose prefix and suffix (`HEAD:`, `/`, `/**`) it bears; an entry whose
+        files went apart, which the list has as the range or its row sends it and every other file of it too, is one it
+        no longer has, and that place is a part.
         A level: the `__init__.py` of a package directory above an entry the old list did not have, itself in a package,
         where the old list named a package's `__init__.py` that the range deleted with its package. And the new list
         still holds every file of each old entry it no longer has, one at least or a level. The list's other words (its
@@ -1722,9 +1723,9 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
                      **({form(m, rows.parts[old, m["p"]]): "split"} if (old, m["p"]) in rows.parts else
                         {form(m, rows.tokens[m["p"]]): "tokens"} if m["p"] in rows.tokens else {})} for m in px]
             has = {f for y in py for f in H.below(y["p"])}
-            # an old entry is gone unless the list has it whole, or has it as its row sends it and not its other files
-            gone = [not news & to.keys() or (form(m, map_path(m["p"], pmap)) not in news and fs <= has)
-                    for m, fs, to in zip(px, files, sent)]
+            # an old entry is gone unless the list has it as the range or its row sends it and not its other files
+            gone = [not news & to.keys() or (fs <= has and any(now(f) != w + f[len(m["p"]):] for f in B.below(m["p"])))
+                    for m, fs, to in zip(px, files, sent) for w in [map_path(m["p"], pmap)]]
             anew = [y["p"] for y in py if form(y, y["p"]) not in was]
             lost = any(x["p"].endswith("/__init__.py") and now(x["p"]) is None and emptied(posixpath.dirname(x["p"])) for x in px)
 

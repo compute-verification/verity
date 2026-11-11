@@ -275,6 +275,27 @@ def test_a_covered_lists_comment_and_its_entry_that_is_no_path_change_as_a_line_
             assert [f["path"] for f in r["refusals"]] == ["gates.toml"], case
 
 
+def test_a_cover_may_keep_the_place_the_range_declares_for_an_entry_and_add_its_other_parts(tmp_path):
+    """`moves.json` sends `lib/h/` to `old/lib/h/` and its `face/` elsewhere, so a line that names `lib/h/` may follow
+    to `old/lib/h/`, which no longer holds `face/`. A list that names it there and `face/`'s new place beside it holds
+    what it held: a cover. With a second entry that holds a file the list never held, it is refused."""
+    moves = {"about": "x", "moves": []}
+    for case, face in (("parts", "bench/face/"), ("wider", "bench/")):
+        repo, base = _repo(tmp_path / case, {MC.MOVES: json.dumps(moves, indent=2) + "\n", "lib/h/a.py": "A = 1\n",
+                                             "lib/h/face/b.py": "B = 1\n", "bench/other.py": "O = 1\n",
+                                             "gates.toml": 'owns = ["lib/h/"]\n'})
+        _move(repo, "lib/h/face", "bench/face")
+        _move(repo, "lib/h/a.py", "old/lib/h/a.py")
+        paths = {"lib/h/": "old/lib/h/", "lib/h/face/": "bench/face/"}
+        _write(repo, {MC.MOVES: json.dumps({**moves, "moves": [{"paths": paths}]}, indent=2) + "\n",
+                      "gates.toml": f'owns = ["old/lib/h/", "{face}"]\n'})
+        r = _check(repo, base)
+        if case == "parts":
+            assert r["certified"] and r["rules"] == {"cover": ["gates.toml"]}, r["refusals"]
+        else:
+            assert [f["path"] for f in r["refusals"]] == ["gates.toml"]
+
+
 def _levels(tmp_path: Path, low_risk: str, marks: str) -> dict:
     """`_covered`'s range, which also moves `other/notes.md` into `docs/` and makes `verity/commit/` a package, on a
     `gates.toml` whose `low_risk` names `docs/` and `lib/core/` and whose `marks` names `lib/core/`'s own `__init__.py`
