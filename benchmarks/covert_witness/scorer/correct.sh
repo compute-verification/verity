@@ -3,12 +3,13 @@
 # layer rebuilt as it is. A research run's workload on the scorer's node; reads K, writes none of it, publishes nothing.
 #
 #   TE=COMMIT [LAYERS=TREE,...] [WORKERS=N] [TRACE_TIMEOUT=S] [TRACED=OUT,...] [LEAVE=RUN,...] [MEM_GB=N]
-#       [NULL=DIR,...] bash correct.sh
+#       [NULL=DIR,...] [SIZE_SCALING=1 [SIZE_SCALING_RUNS=SIZE=RUN,...] [SIZE_SCALING_ART=BUILD=ART,...]] bash correct.sh
 #
 # The run's inputs/ holds: replot.bundle (a bundle holding COMMIT, the checkout whose te_core traced the published
 # layer), replot-code.tar (the checkout's benchmarks/covert_witness that builds), replot-inputs.tar (replot.py node's
 # --inputs), layers.tar (the published layer, a trace40.py node run's out/, as ./new), meta.json (the last refresh's)
-# and this directory's restate.py, restate.json, replot.py and trace40.py.
+# and this directory's restate.py, restate.json, replot.py and trace40.py. With SIZE_SCALING it holds
+# islands/ladder-v3/size_scaling.py and steps.tar too (size_scaling.py trace's directory, as ./steps).
 #
 # 1. restate.py plan, over the runs of the published search table's rows (OUT/runs.txt): the runs restated, from the
 #    factor of the trace the published tables read of each (K's trace caches LAYERS, in the order the tables read
@@ -24,7 +25,10 @@
 #    state holds one of them): `fixed`, the published layer alone on K's records, which is the published tables again,
 #    and `corr`, the corrected layer on a state holding the restated record of each run the layer took (OUT/build-NAME).
 #    With NULL (trace40.py node out/ directories of COMMIT's traces of the records as they are), a third, `null`: the
-#    published layer with those traces of the same runs over it, on K's records.
+#    published layer with those traces of the same runs over it, on K's records. With SIZE_SCALING each build makes
+#    training/size-scaling from its own tables too (replot.py node's --size-scaling, OUT/build-NAME/size-scaling), its
+#    source naming the runs that traced the steps (SIZE_SCALING_RUNS) and the art its tables are stored under
+#    (SIZE_SCALING_ART, per build).
 #
 # What the correction moves is `corr` against `fixed`, never against replot.py's control: the control is the state as
 # the last refresh left it, and the published layer already moves rows against it. `corr` against `null` is the
@@ -44,6 +48,9 @@ TRACED=${TRACED:-}
 LEAVE=${LEAVE:-}
 MEM_GB=${MEM_GB:-0}
 NULL=${NULL:-}
+SIZE_SCALING=${SIZE_SCALING:-}
+SIZE_SCALING_RUNS=${SIZE_SCALING_RUNS:-}
+SIZE_SCALING_ART=${SIZE_SCALING_ART:-}
 S=$(mktemp -d)
 SAMPLER=
 trap '[ -n "$SAMPLER" ] && kill "$SAMPLER" 2>/dev/null; rm -rf "$S"' EXIT
@@ -98,6 +105,10 @@ if ! command -v research >/dev/null; then
   export PATH="$S/bin:$PATH"
 fi
 tar -xf "$IN/layers.tar" -C "$S/layers" ./new || exit 1
+if [ -n "$SIZE_SCALING" ]; then
+  tar -xf "$IN/steps.tar" -C "$S" ./steps || exit 1
+  [ -f "$IN/size_scaling.py" ] || { echo "SIZE_SCALING: no size_scaling.py in the run's inputs"; exit 1; }
+fi
 
 echo "== $(date -u +%H:%M:%SZ) the plan, and a state holding every restated record"
 mkdir -p "$S/pub"
@@ -178,7 +189,7 @@ if [ -n "$NULL" ]; then
 fi
 
 build() {  # NAME: the tables with the layer NAME, on a state holding the restated records of only-NAME.txt
-  local name=$1 rc=0
+  local name=$1 rc=0 size=() art
   mkdir -p "$S/K-$name" "$S/code-$name" "$S/in-$name"
   for p in "$K"/*; do [ "$(basename "$p")" = state ] || ln -s "$p" "$S/K-$name/$(basename "$p")"; done
   "$PY" "$IN/restate.py" overlay --state "$K/state" --plan "$OUT/plan.json" --overlay "$S/K-$name/state" \
@@ -186,9 +197,16 @@ build() {  # NAME: the tables with the layer NAME, on a state holding the restat
   tar -xf "$IN/replot-code.tar" -C "$S/code-$name"
   cp "$IN/replot.py" "$S/code-$name/benchmarks/covert_witness/scorer/replot.py"
   tar -xf "$IN/replot-inputs.tar" -C "$S/in-$name"
+  if [ -n "$SIZE_SCALING" ]; then
+    cp "$IN/size_scaling.py" "$S/code-$name/benchmarks/covert_witness/islands/ladder-v3/size_scaling.py"
+    size=(--size-scaling "$S/steps")
+    [ -n "$SIZE_SCALING_RUNS" ] && size+=(--size-scaling-runs "$SIZE_SCALING_RUNS")
+    art=$(echo "$SIZE_SCALING_ART" | tr , '\n' | sed -n "s/^$name=//p")
+    [ -n "$art" ] && size+=(--size-scaling-art "$art")
+  fi
   ( cd "$S/code-$name/benchmarks/covert_witness" && "$PY" scorer/replot.py node --state "$S/K-$name" --inputs "$S/in-$name" \
-        --scratch "$S/work-$name" --out "$OUT/build-$name" --layer "$name=$S/wt/$name=$S/layers/$name" --publish "$name" ) \
-      > "$OUT/build-$name.txt" 2>&1 || rc=$?
+        --scratch "$S/work-$name" --out "$OUT/build-$name" --layer "$name=$S/wt/$name=$S/layers/$name" --publish "$name" \
+        ${size[@]+"${size[@]}"} ) > "$OUT/build-$name.txt" 2>&1 || rc=$?
   rm -rf "$S/work-$name" "$S/code-$name" "$S/in-$name"
   echo "== $(date -u +%H:%M:%SZ) build $name: rc $rc; peak so far $(cat "$OUT/memory-peak-gb.txt" 2>/dev/null) GB" | tee -a "$OUT/build-$name.txt"
   [ "$rc" = 0 ] && date -u +%H:%M:%SZ > "$OUT/build-$name.done"
