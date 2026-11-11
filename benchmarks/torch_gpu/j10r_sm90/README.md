@@ -1,7 +1,7 @@
 # J10-R's proof blocks on the H200: fixtures, check, bench and an exact fallback
 
 J10-R's per-call-noise PoUW proof block (`PouwH1Tile_v5` / `_v6`, `h1tile.j10r_reference` in
-`verity/ml/protocols/pouw/circuit/h1tile.py`) at the H200 demo's linears on one H200 (sm_90a): the values any build
+`verity/protocols/pouw/prover/circuit/h1tile.py`) at the H200 demo's linears on one H200 (sm_90a): the values any build
 of its kernel must reproduce, a check that holds a build to them bit for bit, a bench that times it against plain exact
 INT8, and a slow but exact CUDA kernel to fall back on. The fast kernels are `benchmarks/hash/dither/h1u.cu`'s
 (`kh_seeds_j10r`, `kh_units_multi_j10r` and `_sm`), built for sm_90a.
@@ -22,7 +22,7 @@ INT8, and a slow but exact CUDA kernel to fall back on. The fast kernels are `be
 - **B** is the demo's served weights, restated from the seeded generator (`verity/seeded-weights/v1`, seed
   `verity/cmp92/h200/weights/v1`): layer 0's tensors (kv is wk's 64 rows then wv's), the head's own. Each 64-byte chunk
   of a row is SHA-512 of the tensor key, the row and the chunk index; the suite holds them to values read from
-  the generator's module (`e2e_h200.served_weights`). Channel scales the same way.
+  the generator's module (`benchmarks.torch_gpu.p2_stage.served_weights`). Channel scales the same way.
 - **A** is the same counter stream under its own seed, with rows 0 to 5 and the last six set to the extremes (all 127,
   all -128, alternating, zero, and near either end of the range).
 - The salt is fixed and public here (`SALT`), standing in for the period's live salt. The roots are stand-ins for
