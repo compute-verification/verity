@@ -38,6 +38,8 @@ is the one an accepted run's registered reads are held to.
   slot at the row `linkRow` names in the boundary port, or `linkRowIn` names in the interior record's value of that
   name. Which of the two a linked read is held to is the interior record's, which the run states, not the auditor's
   copies.
+* **One slot a gate** (`addresses_one_way`): under `Addresses`, every accepted run that needs a gate reads it as a
+  registered value, or every one reads it off the interior record, since an address has one slot.
 -/
 
 @[expose] public section
@@ -76,9 +78,8 @@ theorem writerOf_ownOf (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) 
   have key : (((List.range h.ms.length).map (partAt h (h.reg.sample (src c₀)).size)).toArray).find?
       (fun p => p.template == w.writer) =
         (heldWriter h w.writer).map (partAt h (h.reg.sample (src c₀)).size) := by
-    first
-      | (rw [List.find?_toArray, List.find?_map] <;> rfl)
-      | (simp [heldWriter, partAt, Function.comp_def])
+    rw [List.find?_toArray, List.find?_map]
+    rfl
   exact key
 
 /-! ## Cells -/
@@ -109,19 +110,16 @@ theorem wireCell_eq {t : ℕ} {port : String} {w : Spot.SecondStage.Wire} {r : S
     wireCell h t port c = (cellRow r c).map fun x => (tw, w.wport, x) := by
   have h1 : wireCell h t port c =
       (heldWriter h w.writer).bind fun tw => (cellRow r c).map fun x => (tw, w.wport, x) := by
-    first
-      | (unfold wireCell; rw [hl, hw, hr] <;> rfl)
-      | (simp only [wireCell, hl, hw, hr])
-      | (simp [wireCell, hl, hw, hr])
-  rw [h1, htw] <;> rfl
+    unfold wireCell
+    rw [hl, hw, hr]
+  rw [h1, htw]
+  rfl
 
 theorem linkCell_eq {t : ℕ} {port : String} {l : Spot.SecondStage.Link} {r : Spot.SecondStage.Rows}
     (hl : heldLink h (h.names.getD t "") port = some l) (hr : heldRows h (h.names.getD t "") port = some r) (c : ℕ) :
     linkCell h t port c = (cellRow r c).map fun x => (l.value, r.per, x) := by
-  first
-    | (unfold linkCell; rw [hl, hr] <;> rfl)
-    | (simp only [linkCell, hl, hr])
-    | (simp [linkCell, hl, hr])
+  unfold linkCell
+  rw [hl, hr]
 
 /-! ## Units -/
 
@@ -192,9 +190,7 @@ theorem writer_not_linked (hc : noReturnedWired h = true) {t port : String} {w :
     (hw : heldWire h t port = some w) : heldLink h w.writer w.wport = none := by
   have hm : w ∈ h.wires.getD #[] := Array.mem_of_find?_eq_some hw
   have hn : (heldLink h w.writer w.wport).isNone = true := Array.all_eq_true_iff_forall_mem.1 hc w hm
-  first
-    | exact Option.isNone_iff_eq_none.1 hn
-    | simpa using hn
+  exact Option.isNone_iff_eq_none.1 hn
 
 /-- **The wiring map**: a source bit at a port a wire names goes to the gate on the same bit of its writer unit's
 output row (`wireUnit`), where the writer's program has a gate there and no link names the writer's output port;
@@ -221,10 +217,8 @@ def wiredProg : Prog := (bitsProgs h.ms).rewire (wireMap h)
 
 /-- A position that is no source bit goes to itself. -/
 theorem wireMap_of_not_source {x : ℕ} (hx : (sourceBits h.ms).find? (·.1 == x) = none) : wireMap h x = x := by
-  first
-    | (unfold wireMap; rw [hx] <;> rfl)
-    | (simp only [wireMap, hx])
-    | (simp [wireMap, hx])
+  unfold wireMap
+  rw [hx]
 
 /-! ## The rows a run's slots read -/
 
@@ -252,8 +246,10 @@ theorem wiredRow_cell (p : Spot.SecondStage.Part) (r : Spot.SecondStage.Rows) (j
     show (if x < r.per then some (p.span j * r.per + x) else none) =
       (if x < r.per then some x else none).map fun x => p.span j * r.per + x
     by_cases hlt : x < r.per
-    · first | (rw [if_pos hlt, if_pos hlt] <;> rfl) | simp [hlt]
-    · first | (rw [if_neg hlt, if_neg hlt] <;> rfl) | simp [hlt]
+    · rw [if_pos hlt, if_pos hlt]
+      rfl
+    · rw [if_neg hlt, if_neg hlt]
+      rfl
 
 theorem linkedRow_cell (own : Spot.SecondStage.Own) (p : Spot.SecondStage.Part) (r : Spot.SecondStage.Rows) (j : ℕ) :
     Spot.SecondStage.linkedRow own p r j =
@@ -268,8 +264,10 @@ theorem linkedRow_cell (own : Spot.SecondStage.Own) (p : Spot.SecondStage.Part) 
       show (if x < r.per then some (b * r.per + x) else none) =
         (if x < r.per then some x else none).map fun x => b * r.per + x
       by_cases hlt : x < r.per
-      · first | (rw [if_pos hlt, if_pos hlt] <;> rfl) | simp [hlt]
-      · first | (rw [if_neg hlt, if_neg hlt] <;> rfl) | simp [hlt]
+      · rw [if_pos hlt, if_pos hlt]
+        rfl
+      · rw [if_neg hlt, if_neg hlt]
+        rfl
 
 /-- **At a wired port, the row round 2 holds a slot to is the one the wiring names**, where the writer's cell size is
 the rows' `per`, which round 2 checks. -/
@@ -471,5 +469,28 @@ theorem linked_read {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : st
           true := hpl
     rw [hrow]
     exact hpl'
+
+/-! ## One slot a gate -/
+
+/-- **Under `Addresses`, a gate is read one way**: every accepted run's checked unit that needs it reads it as a
+registered value, or every one reads it off the interior record. An address has one slot, which a registered read asks
+not sized and the interior record's port sized; so no address holds at a gate one unit's session reads as a registered
+value and another's off the interior record. -/
+theorem addresses_one_way (hA : Addresses h) (g : ℕ) : ∃ S : Address,
+    (∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.ReadsRegistered h S g) ∨
+      ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.ReadsInterior h S g := by
+  obtain ⟨S, hS⟩ := hA g
+  refine ⟨S, ?_⟩
+  by_cases hs : S.slot.sized = true
+  · refine Or.inr fun r hr hg => ?_
+    obtain ⟨-, -, hrd⟩ := hS r hr hg
+    rcases hrd with ⟨reg, -, -, -, -, -, hf, -⟩ | hI
+    · exact absurd (hf.symm.trans hs) (by decide)
+    · exact hI
+  · refine Or.inl fun r hr hg => ?_
+    obtain ⟨-, -, hrd⟩ := hS r hr hg
+    rcases hrd with hR | ⟨-, -, -, -, -, ht, -⟩
+    · exact hR
+    · exact absurd ht hs
 
 end SpotFlock
