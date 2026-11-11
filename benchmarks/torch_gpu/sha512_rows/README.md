@@ -1,6 +1,6 @@
 # sha512_rows: the serve-time commit's SHA-512 engine
 
-A device engine for the commitment's hashes, bit for bit the CPU reference's (`verity.ml.commitments`):
+A device engine for the commitment's hashes, bit for bit the CPU reference's (`verity.commitments`):
 
 - the sha512/row/v2 digest of each row: x = SHA-512(P(8 nbytes) ‖ row), `rowleaf.sha512_row_v2_digest`;
 - its hm96-sha512 hiding leaf: b = x ⊕ M·y, c = SHA-512(salt prefix ‖ y), h = SHA-512(leaf prefix(key) ‖ b ‖ c), `hm96.SHA512`;
@@ -8,7 +8,7 @@ A device engine for the commitment's hashes, bit for bit the CPU reference's (`v
 
 commit_slots (the commit path beside this directory) runs on it: the calls below are its inner "hash these rows" and
 "hash this level" steps. The compression is `sx::compress<V, ROLL>` from the GPU's one SHA-512 header
-(`verity/ml/kernels/sha512.cuh`), with `sha::compress`'s contract, so a kernel can also swap just the compression in.
+(`verity/definitions/kernels/sha512.cuh`), with `sha::compress`'s contract, so a kernel can also swap just the compression in.
 
 ## The call
 
@@ -37,7 +37,7 @@ context of that many (commit_slots' `Plan(sms=)`). Calls run on the current torc
 
 ## Compression variants
 
-A variant is four digits, the pipe of each sigma function's shifts (S0, S1, s0, s1; `verity/ml/kernels/sha512.cuh`), and
+A variant is four digits, the pipe of each sigma function's shifts (S0, S1, s0, s1; `verity/definitions/kernels/sha512.cuh`), and
 an optional `s` for straight-line rounds (`engine.variant_flags`):
 
 - 0: funnel shifts on the integer ALU;
@@ -52,7 +52,7 @@ The default is `0000`; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds 
 
 - `rows.cuh`: the row digest and the schedule (the layout `engine.py` fills, the salts, each lane's column order) as
   host+device functions. The frame-v3-sha512 leaf, node and pad and the hm96 leaf's mask, salt digest and value are
-  `verity/ml/kernels/row_commit.cuh`'s.
+  `verity/definitions/kernels/row_commit.cuh`'s.
 - `rows.cu`: the kernels.
 - `rows_host.cpp`: the host twin.
 - `engine.py`: the call.
