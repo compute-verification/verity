@@ -3,6 +3,7 @@ guard, and dependencies kept warm across runs."""
 from __future__ import annotations
 
 import ast
+import fnmatch
 import hashlib
 import importlib.util
 import io
@@ -14,7 +15,9 @@ import signal
 import subprocess
 import sys
 import tarfile
+import threading
 import types
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
@@ -62,6 +65,7 @@ for pkg in named:
     for src in pkg.glob("*.lean"):
         (lib / (src.stem + ".olean")).write_text("built")
     reps.append({"package": str(pkg), "failures": [f"reads {m}" for m in missing]})
+    reps[-1]["sandbox"] = True
     if missing:
         failed.append(str(pkg))
 (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}))
@@ -678,6 +682,39 @@ def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     assert doc["packages"][1]["failures"] == [f"reads tools/verity/lean/{n}" for n in sorted(LA.NOT_READ)]
 
 
+def test_a_packages_prose_and_pytest_files_are_no_input(tmp_path, monkeypatch):
+    """No audit reads a package's `*.md`, `.gitignore`, `pyproject.toml`, `test_*.py` or `conftest.py` (`UNREAD_NAMES`), so
+    an edit to one audits no package again: two READMEs and a pytest file inside packages audited all three `security`
+    packages cold in a candidate that changed no Lean. A generator, a data file or a fixture the package keeps, under
+    `tests/` too, still audits it again. The dropped files stay out of the scratch tree, so an audit that read one fails."""
+    unread = {"pkg/a/README.md": "", "pkg/a/docs/NOTES.md": "", "pkg/a/.gitignore": "", "pkg/a/pyproject.toml": "",
+              "pkg/a/tests/test_a.py": "", "pkg/a/tests/conftest.py": ""}
+    kept = {"pkg/a/gen.py": "", "pkg/a/tests/difftest_vectors.py": "", "pkg/a/tests/fixtures/vectors.json": "{}",
+            "pkg/a/models.json": "{}", "pkg/a/TRUSTED.sha256": ""}
+    root = _tree(tmp_path, monkeypatch, {**unread, **kept})
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    assert _run(tmp_path, 1)[0] == 0
+    files = LA.COMMON.tracked_files()
+    got = LA.inputs("pkg/b", files)
+    assert not set(unread) & set(got) and set(kept) <= set(got)
+    keys = {p: LA.key(p, files, LA.FLAGS) for p in ("pkg/a", "pkg/b")}
+    for i, f in enumerate(sorted(unread), 2):
+        (root / f).write_text(f"edited {i}\n")
+        assert {p: LA.key(p, files, LA.FLAGS) for p in keys} == keys, f
+        rc, ran, doc = _run(tmp_path, i)
+        assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["pkg/a", "pkg/b"], f
+    for i, f in enumerate(sorted(kept), 20):
+        k = LA.key("pkg/a", files, LA.FLAGS)
+        (root / f).write_text(f"edited {i}\n")
+        assert LA.key("pkg/a", files, LA.FLAGS) != k, f
+        rc, ran, _doc = _run(tmp_path, i)
+        assert rc == 0 and {r.split()[0] for r in ran} == {"pkg/a", "pkg/b"}, f
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": sorted(unread)}))
+    rc, _ran, doc = _run(tmp_path, 99)
+    assert rc == 1 and doc["failed"] == ["pkg/b"]
+    assert doc["packages"][1]["failures"] == [f"reads {f}" for f in sorted(unread)]
+
+
 def test_a_passing_audit_keeps_its_build(tmp_path, monkeypatch):
     """b201 rebuilt all 561 of `soundness`'s modules (2,508 s) because the auditor changed, though no `.olean` depends on it."""
     root = _tree(tmp_path, monkeypatch)
@@ -747,6 +784,47 @@ def _built(pkg: Path, mod: str, outputs: dict[str, str], imports: tuple[str, ...
         i: {"olean": str(build / "lib/lean" / f"{i.replace('.', '/')}.olean")} for i in imports}}))
 
 
+def test_what_a_failed_or_a_killed_audit_compiled_goes_into_the_artifact_cache_on_check_py_s_word(tmp_path, monkeypatch):
+    """A module is stored for what its compile read, so a package that failed (a record, a later module) and a check.py
+    that was killed store what they compiled, as a pass does. What says the build ran in the sandbox is check.py's own:
+    its report, or, where it left none, what it wrote in the package's work directory as the build began."""
+    root = _tree(tmp_path, monkeypatch)
+    put_with = []
+    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: put_with.append(
+        {p.name: {k: v for k, v in rep.items() if k != "package"} for p, rep in reports.items()}) or 0)
+    assert _run(tmp_path, 1)[0] == 1, "b fails: it reads a file outside its inputs"
+    assert put_with == [{"a": {"sandbox": True, "failures": []},
+                         "b": {"sandbox": True, "failures": ["reads docs/outside.txt"]}}]
+    (root / "tools/verity/lean/check.py").write_text(FAKE_AUDIT.replace(
+        'reps, failed = [], []', 'reps, failed = [], []\nfor n, pkg in enumerate(named):\n'
+        '    (out / f"audit-{n}").mkdir()\n'
+        f'    (out / f"audit-{{n}}" / "{LA.BUILDING}").write_text(json.dumps({{"package": str(pkg), "sandbox": n == 0}}))\n'
+        'sys.exit(137)'))
+    assert LA.run(tmp_path / "out2", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
+                  log=lambda s: None) == 1
+    assert put_with[1:] == [{"a": {"sandbox": True}, "b": {"sandbox": False}}], "killed: no report, so what each build began with"
+
+
+def test_what_check_py_said_of_a_build_is_its_report_or_what_it_wrote_as_the_build_began(tmp_path):
+    out, a, b = tmp_path / "out", tmp_path / "pkg" / "a", tmp_path / "pkg" / "b"
+    assert LA.built(out) == {}
+    for n, (pkg, sandbox) in enumerate(((a, True), (b, False))):
+        (out / f"audit-{n}").mkdir(parents=True)
+        (out / f"audit-{n}" / LA.BUILDING).write_text(json.dumps({"package": str(pkg), "sandbox": sandbox}))
+    began = {a: {"package": str(a), "sandbox": True}, b: {"package": str(b), "sandbox": False}}
+    assert LA.built(out) == began
+    reps = [{"package": str(a), "sandbox": True, "failures": ["sampled: a: differs"]}, {"package": str(tmp_path / "c")},
+            {"package": str(tmp_path / "d"), "sandbox": True}]
+    (out / "audit.json").write_text(json.dumps({"packages": reps}))
+    assert LA.built(out) == began | {a: reps[0], tmp_path / "d": reps[2]}, \
+        "a report replaces what the build began with; one that doesn't say `sandbox` is of a package check.py didn't build"
+    os.utime(out / "audit.json", ns=(1, 1))
+    assert LA.built(out) == began | {tmp_path / "d": reps[2]}, "a report an earlier check.py left is not this build's"
+    (out / "audit.json").write_text("{")
+    assert LA.built(out) == began
+    assert AUDIT.BUILDING == LA.BUILDING
+
+
 #: check.py's report on a build in the sandbox, the only kind `LakeArtifacts.put` indexes
 SANDBOXED = {"sandbox": True}
 
@@ -785,14 +863,19 @@ def test_the_artifact_cache_indexes_each_module_under_its_key_after_what_it_impo
     arts, entries = LA.LakeArtifacts(store), _keys(pkg)
     assert arts.put({pkg: SANDBOXED}) == 1 and [e for e, _ in arts.added] == [entries["P.A"]]
     names = ["a" * 16 + ".olean", "b" * 16 + ".ilean", "c" * 16 + ".c"]
+    keyed = LA.MK.keys(pkg)
     assert json.loads((store / entries["P.A"]).read_text()) == {
-        "module": "P.A", "scope": "p", "hash": hashlib.sha256(b"P/A").hexdigest()[:16],
+        "schema": "lean-module/v4", "module": "P.A", "scope": "p", "hash": hashlib.sha256(b"P/A").hexdigest()[:16],
         "outputs": json.loads((lib / "P/A.trace").read_text())["outputs"],
-        "digests": {n: LA.MK.C.digest(f"P/A.{n.split('.', 1)[1]} {n.split('.')[0]}".encode()) for n in names}}
+        "digests": {n: LA.MK.C.digest(f"P/A.{n.split('.', 1)[1]} {n.split('.')[0]}".encode()) for n in names},
+        "inputs": {"vars": {"module": "P.A", "package": "p", "library": "P"}, "env": keyed["P.A"].parts,
+                   "files": {f: keyed["P.A"].files[f] for f in ("p/P/A.lean", "p/lakefile.toml")}, "reads": {}}}
+    assert LA.MK.last(store, "p", "P.A") == LA.MK.record("P.A", keyed, {}) and LA.MK.last(store, "p", "P.B") is None
     assert sorted(f.name for f in (store / "artifacts").iterdir()) == sorted(names)
     (lib / "P/B.olean.hash").write_text("d" * 16)
     assert arts.put({pkg: SANDBOXED}) == 2 and arts.put({pkg: SANDBOXED}) == 0, "P.B, then P, which imports it"
     assert sorted(f"keys/{f.name}" for f in (store / "keys").iterdir()) == sorted(entries.values())
+    assert set(LA.MK.last(store, "p", "P")["reads"]) == {"P.A", "P.B"}, "what its key read of each module it loads"
     _built(pkg, "P/A", {"olean": "a" * 16, "ilean": "8" * 16, "c": "9" * 16})
     assert _keys(pkg) == entries and arts.put({pkg: SANDBOXED}) == 0 and arts.added[-1][0] == entries["P.A"], \
         "P.A rebuilt to the same olean: P.B and P, which read only that, keep their keys"
@@ -821,6 +904,163 @@ def test_only_a_module_the_run_compiled_goes_into_the_artifact_cache(tmp_path):
     (tmp_path / "s3" / "artifacts").mkdir(parents=True)
     (tmp_path / "s3" / "artifacts" / ("a" * 16 + ".olean")).write_text("other bytes under P.A's artifact's name")
     assert LA.LakeArtifacts(tmp_path / "s3").put({pkg: SANDBOXED}) == 0
+
+
+def test_a_module_whose_compile_was_stopped_stays_out_of_the_artifact_cache(tmp_path):
+    """A failed or killed run's build is indexed too, so `put` must tell a module whose compile ended from one it was
+    stopped in. Lake removes the outputs, runs `lean`, removes each `.hash`, writes them from the new outputs and writes
+    the trace last, leaving the earlier trace and `.hash` files until then: at every point before the end the trace isn't
+    whole, an output it names is missing or without its `.hash`, or an output is newer than the `.hash` beside it, which
+    names the bytes that were there before."""
+    pkg = _package(tmp_path)
+    lib, n = pkg / ".lake/build/lib/lean", 0
+
+    def put() -> int:
+        nonlocal n
+        n += 1
+        return LA.LakeArtifacts(tmp_path / f"store-{n}").put({pkg: SANDBOXED})
+
+    whole = (lib / "P/A.trace").read_text()
+    (lib / "P/A.trace").write_text(whole[:40])
+    assert put() == 0, "the trace was being written: P.A stays out, and P.B and P, which load it, after it"
+    (lib / "P/A.trace").write_text(whole)
+    olean = (lib / "P/A.olean").read_bytes()
+    (lib / "P/A.olean").unlink()
+    assert put() == 0, "`lean` had not written the output yet"
+    (lib / "P/A.olean").write_bytes(olean[:5])
+    at = (lib / "P/A.olean.hash").stat().st_mtime_ns
+    os.utime(lib / "P/A.olean", ns=(at + 1, at + 1))
+    assert put() == 0, "`lean` wrote the output, half of it, and the `.hash` is still the one of the compile before"
+    (lib / "P/A.olean.hash").unlink()
+    assert put() == 0, "the `.hash` files were removed and not yet written"
+    (lib / "P/A.olean").write_bytes(olean)
+    (lib / "P/A.olean.hash").write_text("a" * 16)
+    assert put() == 3, "whole again"
+
+
+def test_a_build_whose_sampled_recompile_differs_indexes_nothing(tmp_path):
+    """The sampled recompile found a module this build restored or kept that differs from its own compile. What was
+    compiled on top of it read those outputs, so nothing of that build goes in."""
+    pkg, said = _package(tmp_path), []
+    rep = SANDBOXED | {"failures": ["sampled: P.A: the build's P/A.olean differs from the recompile's"]}
+    assert LA.LakeArtifacts(tmp_path / "store").put({pkg: rep}, log=said.append) == 0 and "(`sampled`)" in said[0]
+    assert LA.LakeArtifacts(tmp_path / "store").put({pkg: SANDBOXED | {"failures": ["records: differ"]}}) == 3
+
+
+def test_a_build_whose_sources_run_code_while_they_compile_indexes_nothing(tmp_path):
+    """In the sandbox a build still writes its own `.lake`, so code a module runs while it compiles can leave any other
+    module's outputs, hashes and trace there, as Lake would. A passing audit says its package has no such code, and a
+    build is stored whatever its audit came to, so `put` reads the build's sources itself: where one runs code outside
+    a listing reviewed at its digest, nothing of the build goes in, and each module it compiled is recorded as left to
+    Lake, so the next build of the tree keeps it rather than compile it again."""
+    pkg = _package(tmp_path)
+    (pkg / "P" / "A.lean").write_text("theorem a : True := trivial\n-- run_cmd in a comment runs nothing\n/- #eval 1 -/\n")
+    assert LA.runs_code(pkg) is None
+    (pkg / "P" / "B.lean").write_text("import P.A\n\nopen Nat in\nrun_cmd pure ()\n")
+    why = LA.runs_code(pkg)
+    assert why == "pkg/P/B.lean:4 runs code while it compiles (run_cmd), outside a `compile_time` listing reviewed at its digest"
+    store, said = tmp_path / "store", []
+    arts = LA.LakeArtifacts(store)
+    assert arts.put({pkg: SANDBOXED}, log=said.append) == 0 and not (store / "keys").exists()
+    assert not (store / "artifacts").exists() and len(said) == 1 and why in said[0]
+    left = [json.loads(f.read_text()) for f in sorted((store / LA.MK.UNSTORED).iterdir())]
+    assert sorted(d["module"] for d in left) == ["P", "P.A", "P.B"] and {d["why"] for d in left} == {why}
+
+    def listed(digest: str) -> None:
+        (pkg / "lean-audit.json").write_text(json.dumps({"compile_time": {"P.B": {"why": "a reviewed command", "digest": digest}}}))
+
+    listed(hashlib.sha256((pkg / "P" / "B.lean").read_bytes()).hexdigest())
+    assert LA.runs_code(pkg) is None and arts.put({pkg: SANDBOXED}, log=said.append) == 3 and len(said) == 1
+    assert not list((store / LA.MK.UNSTORED).iterdir()), "indexed, a module is no longer left to Lake"
+    (pkg / "P" / "B.lean").write_text("import P.A\n\n#eval 1\n")
+    assert "pkg/P/B.lean:3 runs code while it compiles (#eval)" in LA.runs_code(pkg), "the listing was reviewed at another digest"
+    (pkg / "lean-audit.json").write_text(json.dumps({"compile_time": {"P.B": "listed, with no digest of what was reviewed"}}))
+    assert "pkg/P/B.lean:3" in LA.runs_code(pkg)
+    (pkg / "lean-audit.json").write_text("[")
+    assert LA.runs_code(pkg) == "pkg: its sources or its lock could not be read (JSONDecodeError)"
+    (pkg / "lean-audit.json").unlink()
+    (pkg / "P" / "B.lean").write_text("import P.A\n")
+    assert LA.runs_code(pkg) is None
+    dep = tmp_path / "dep"
+    (dep / "D").mkdir(parents=True)
+    (dep / "D" / "X.lean").write_text("@[simp] initialize counter : IO.Ref Nat ← IO.mkRef 0\n")
+    (pkg / "lake-manifest.json").write_text(json.dumps({"name": "p", "packages": [{"type": "path", "name": "d", "dir": "../dep"}]}))
+    assert "dep/D/X.lean:1 runs code while it compiles (initialize)" in LA.runs_code(pkg), \
+        "a build of the package writes the `.lake` of each package it requires by path"
+    (dep / "D" / "X.lean").write_text("def x := 1\n")
+    (dep / "lakefile.lean").write_text("import Lake\n")
+    assert LA.runs_code(pkg) == "dep/lakefile.lean runs code whenever Lake loads the package"
+
+
+def test_a_build_that_compiled_nothing_hashes_nothing(tmp_path, monkeypatch):
+    """Every build puts now, and most compile a handful of modules: only those and what they load are read."""
+    pkg = _package(tmp_path)
+    lib = pkg / ".lake/build/lib/lean"
+    for t in lib.rglob("*.trace"):
+        os.utime(t, (1000, 1000))
+    read = []
+    digest = LA.MK.digest
+    monkeypatch.setattr(LA.MK, "digest", lambda f: read.append(Path(f)) or digest(f))
+
+    def outputs() -> set[str]:
+        return {f.name.split(".")[0] for f in read if pkg / ".lake" in f.parents}
+
+    assert LA.LakeArtifacts(tmp_path / "store").put({pkg: SANDBOXED}, since=1000) == 0 and outputs() == set()
+    os.utime(lib / "P/B.trace", (1001, 1001))
+    LA.LakeArtifacts(tmp_path / "store").put({pkg: SANDBOXED}, since=1000)
+    assert outputs() == {"A", "B"}, "P.B, compiled, and P.A, which it loads; not P"
+
+
+def test_a_module_a_build_compiled_and_the_cache_could_not_index_is_recorded_under_its_key(tmp_path):
+    """The next build takes the trace of a module the cache lacks, so that it is compiled and indexed
+    (`module_keys.settle`). One `put` can't index would then be compiled in every build, with everything above it: `put`
+    records it under the key it compiled under, which that build reads and leaves the module to Lake. Only a module
+    the run compiled whole is recorded, with the code that refused it (`module_keys.rules`), and a later `put` that
+    indexes it removes the record."""
+    pkg = _package(tmp_path)
+    lib, store = pkg / ".lake/build/lib/lean", tmp_path / "store"
+    setup = pkg / ".lake/build/ir/P/B.setup.json"
+    whole = setup.read_text()
+    setup.write_text(json.dumps(json.loads(whole) | {"importArts": {}}))        # Lake read no import where `keys` reads P.A
+    arts, keys = LA.LakeArtifacts(store), _keys(pkg)
+
+    def unstored() -> dict[str, str]:
+        return {m: json.loads(f.read_text())["why"] for m, e in keys.items()
+                if (f := store / LA.MK.UNSTORED / Path(e).name).is_file()}
+
+    assert arts.put({pkg: SANDBOXED}) == 1, "P.A"
+    got = unstored()
+    assert set(got) == {"P.B", "P"} and got["P"] == "it loads P.B, which is not indexed" and "P.A" in got["P.B"]
+    assert json.loads((store / LA.MK.UNSTORED / Path(keys["P"]).name).read_text()) == {
+        "module": "P", "scope": "p", "why": got["P"], "by": LA.MK.rules()}
+    setup.write_text(whole)
+    assert arts.put({pkg: SANDBOXED}) == 2 and unstored() == {}, "indexed now: nothing says otherwise"
+    for t in lib.rglob("*.trace"):
+        os.utime(t, (1000, 1000))
+    (lib / "P/B.olean.hash").write_text("0" * 16)
+    other = LA.LakeArtifacts(tmp_path / "store-2")
+    assert other.put({pkg: SANDBOXED}, since=1000) == 0 and not (tmp_path / "store-2" / LA.MK.UNSTORED).exists(), \
+        "nothing this run compiled"
+    os.utime(lib / "P/B.trace", (1001, 1001))
+    assert other.put({pkg: SANDBOXED}, since=1000) == 0 and not (tmp_path / "store-2" / LA.MK.UNSTORED).exists(), \
+        "P.B's compile was stopped: the next run's repair has it compiled again, and nothing is recorded of it"
+
+
+def test_a_module_indexable_refuses_is_recorded_with_its_words_though_no_module_loads_it(tmp_path):
+    """A build `indexable` refuses is compiled again by every build that finds no record of it, and `P`, the top of its
+    build, is loaded by no module `put` indexes. It is recorded under its key with `indexable`'s words all the same, and
+    the log counts and names it; a refused module Lake didn't say it built (`"compiled"`) is not recorded."""
+    pkg = _package(tmp_path)
+    setup = pkg / ".lake/build/ir/P.setup.json"
+    setup.write_text(json.dumps(json.loads(setup.read_text()) | {"importArts": {}}))
+    store, said, keys = tmp_path / "store", [], _keys(pkg)
+    assert LA.LakeArtifacts(store).put({pkg: SANDBOXED | {"compiled": ["P.A", "P.B"]}}, log=said.append) == 2
+    assert not (store / LA.MK.UNSTORED).exists() and said == []
+    assert LA.LakeArtifacts(store).put({pkg: SANDBOXED}, log=said.append) == 0
+    why = "Lake imports [] and not ['P.A', 'P.B'] of the workspace"
+    assert json.loads((store / LA.MK.UNSTORED / Path(keys["P"]).name).read_text())["why"] == why
+    assert said == [f"lean-audit: {pkg}: 1 modules this run compiled can't be indexed (`indexable`), 1 recorded under "
+                    f"their keys: P: {why}"]
 
 
 def test_a_build_outside_the_sandbox_indexes_nothing(tmp_path):
@@ -860,11 +1100,39 @@ def test_the_artifact_cache_drops_its_oldest_past_the_cap_counting_only_what_it_
     assert sorted(f.name for f in (store / "keys").iterdir()) == ["2.json", "3.json"] and not legacy.exists()
 
 
+def test_an_artifact_was_last_used_when_an_entry_that_names_it_was(tmp_path):
+    """A build touches the entries it stages, keeps and indexes, never an artifact: each tree that restored one holds
+    that file by a hard link, and a newer time on it would be an output newer than its `.hash`. So the oldest artifacts
+    by their entries' use go first, and one an entry used lately names stays, however long ago it was written."""
+    store = tmp_path / "store"
+    (store / "artifacts").mkdir(parents=True)
+    (store / "keys").mkdir(parents=True)
+    for i, (written, used) in enumerate([(10, 90), (20, 20), (30, 30), (40, 40)]):
+        f, e = store / "artifacts" / f"{i}.olean", store / "keys" / f"{i}.json"
+        f.write_bytes(b"x" * 10)
+        e.write_text(json.dumps({"digests": {f.name: "sha512:0"}}))
+        os.utime(f, (written, written))
+        os.utime(e, (used, used))
+    (store / "keys" / "also.json").write_text(json.dumps({"digests": {"2.olean": "sha512:0", "gone.olean": "sha512:0"}}))
+    os.utime(store / "keys" / "also.json", (80, 80))
+    (store / "keys" / "torn.json").write_text("{")
+    os.utime(store / "keys" / "torn.json", (1, 1))
+    (store / "keys" / "gone.json").symlink_to(store / "keys" / "no-such-entry")     # listed, then gone: a build removed it
+    assert LA.LakeArtifacts(store, cap=30).prune() == 2
+    assert sorted(f.name for f in (store / "artifacts").iterdir()) == ["0.olean", "2.olean"], \
+        "written first and used last, 0 stays; 2 stays for the later entry that names it too"
+    assert sorted(f.name for f in (store / "keys").iterdir()) == ["0.json", "also.json"], \
+        "2's first entry was used no later than what went, so it goes: a miss, and the module is built"
+
+
+TAKEN = "taken-v4"
+
+
 def _bundle_of(tmp: Path, pkg: Path) -> tuple[Path, str]:
     arts = LA.LakeArtifacts(tmp / "node-a")
     arts.put({pkg: SANDBOXED})
     dest = tmp / "lean-artifacts.tar.gz"
-    assert arts.bundle(dest) == len(arts.added) > 0
+    assert arts.bundle(dest) == (len(arts.added), len(arts.added)) and arts.added
     return dest, hashlib.sha256(dest.read_bytes()).hexdigest()
 
 
@@ -885,7 +1153,7 @@ def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_noth
     assert b.take({LA.SHARED + h: dest.as_uri(), LA.SHARED + "0" * 64: dest.as_uri(), "k": "https://deps"}, logged.append) == 3
     assert any("is not the one named" in ln for ln in logged)
     got = tmp_path / "node-b"
-    assert sorted(f.relative_to(got).as_posix() for f in got.rglob("*") if f.is_file() and f.parent.name != "taken"
+    assert sorted(f.relative_to(got).as_posix() for f in got.rglob("*") if f.is_file() and f.parent.name != TAKEN
                   and f.name != "lock") == sorted([*(n for n in names if n.startswith("artifacts/")), *entries.values()])
     assert (got / "artifacts" / ("a" * 16 + ".olean")).read_text() == "node b's own"
     assert not os.stat(got / "artifacts" / ("d" * 16 + ".olean")).st_mode & 0o222
@@ -901,8 +1169,155 @@ def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_noth
     j = hashlib.sha256(junk.read_bytes()).hexdigest()
     seen = len(logged)
     assert b.take({LA.SHARED + j: junk.as_uri()}, logged.append) == 0 and "could not be unpacked" in logged[seen]
-    assert b.take({LA.SHARED + j: junk.as_uri(), LA.SHARED + "0" * 64: dest.as_uri()}, logged.append) == 0
-    assert len(logged) == seen + 2                         # bytes that failed once are never fetched again
+    assert b.take({LA.SHARED + j: junk.as_uri()}, logged.append) == 0
+    assert len(logged) == seen + 2                         # the bytes named, which can't be unpacked: never fetched again
+
+
+def test_a_bundle_whose_download_gave_other_bytes_than_those_named_is_fetched_again_by_a_later_run(tmp_path, monkeypatch):
+    """A response that ends before its length does so without an error, and what arrived has another sha256 than the one
+    named. Such a bundle was marked taken, so the node never fetched it again and built its modules for as long as the
+    launcher listed it. Nothing tells those bytes from a bundle that is wrong where it is kept, so neither is marked: only
+    bytes that are the ones named are. A chunked response that ends early raises an error that is no `OSError`, which
+    ended the take and the bundles after it."""
+    pkg = _package(tmp_path)
+    dest, h = _bundle_of(tmp_path, pkg)
+    data, asked = dest.read_bytes(), []
+
+    class Short(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            asked.append(self.path)
+            self.send_response(200)
+            if self.path == "/chunked":
+                self.send_header("Transfer-Encoding", "chunked")
+                self.end_headers()
+                self.wfile.write(f"{len(data):x}\r\n".encode() + data[:len(data) // 2])
+            else:
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data[:len(data) // 2] if asked.count(self.path) == 1 else data)
+
+    monkeypatch.setenv("no_proxy", "127.0.0.1")
+    srv = HTTPServer(("127.0.0.1", 0), Short)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        at = f"http://127.0.0.1:{srv.server_address[1]}"
+        b, logged = LA.LakeArtifacts(tmp_path / "node-b"), []
+        assert b.take({LA.SHARED + h: at + "/bundle"}, logged.append) == 0 and "is not the one named" in logged[0]
+        assert not list((tmp_path / "node-b").glob("taken-*/*")), "not marked taken: a later run fetches it again"
+        assert not list((tmp_path / "node-b").glob(".*.part"))
+        assert b.take({LA.SHARED + h: at + "/chunked"}, logged.append) == 0 and "could not be fetched (IncompleteRead)" in logged[2]
+        assert b.take({LA.SHARED + h: at + "/bundle"}, logged.append) == 3, "the next run fetches it whole and takes it"
+        assert b.take({LA.SHARED + h: at + "/bundle"}, logged.append) == 0 and asked == ["/bundle", "/chunked", "/bundle"]
+        other = LA.LakeArtifacts(tmp_path / "node-c")
+        for _ in range(2):
+            assert other.take({LA.SHARED + "0" * 64: dest.as_uri()}, logged.append) == 0 and "is not the one named" in logged[-2]
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_a_run_that_added_more_than_one_bundle_holds_writes_as_many_as_that_takes_and_another_node_takes_them_all(tmp_path):
+    """A bundle has a largest size, since a larger file of a run uploads without resume, and a cold build of a large
+    package adds more than that: what was past it was in no bundle, and every other node compiled it again. So a run
+    writes as many bundles as its additions take, none larger than that and each whole in itself (its entries, and every
+    artifact they name), the entries added first in the first; a node that takes them all restores every module. An
+    entry that is larger than a bundle alone is in none, and those after it still travel."""
+    pkg = _package(tmp_path)
+    entries = _keys(pkg)
+    a = tmp_path / "node-a"
+    arts = LA.LakeArtifacts(a)
+    arts.put({pkg: SANDBOXED})
+    assert [e for e, _ in arts.added] == [entries[m] for m in ("P.A", "P.B", "P")]
+    sizes = [(a / e).stat().st_size + sum((a / "artifacts" / o).stat().st_size for o in outs) for e, outs in arts.added]
+    room = sizes[0] + sizes[1]
+    assert max(sizes) <= room < sum(sizes), "room for the first two, not for all three"
+    out = tmp_path / "out"
+    out.mkdir()
+    dests, n = arts.bundle_into(out, room)
+    assert [d.name for d in dests] == ["lean-artifacts.tar.gz", "lean-artifacts-2.tar.gz"] and n == 3
+    assert all(LA.BUNDLE_FILE.fullmatch(f"lean-audit/{d.name}") for d in dests), "the names the launcher lists"
+    held = []
+    for d in dests:
+        with tarfile.open(d) as t:
+            members = t.getmembers()
+            mine = [json.loads(t.extractfile(m).read()) for m in members if m.name.startswith("keys/")]
+        assert sum(m.size for m in members) <= room, "no bundle holds more"
+        assert [m.name.split("/")[0] for m in members] == ["keys"] * len(mine) + ["artifacts"] * (3 * len(mine))
+        assert {m.name for m in members if m.name.startswith("artifacts/")} == {f"artifacts/{o}" for e in mine for o in e["digests"]}
+        held.append([e["module"] for e in mine])
+    assert held == [["P.A", "P.B"], ["P"]]
+    urls = {LA.SHARED + hashlib.sha256(d.read_bytes()).hexdigest(): d.as_uri() for d in dests}
+    b, said = LA.LakeArtifacts(tmp_path / "node-b"), []
+    assert b.take(urls, said.append) == 3 and "taken from 2 of 2 artifact bundle(s)" in said[0]
+    hashes = {m: hashlib.sha256(m.replace(".", "/").encode()).hexdigest()[:16] for m in entries}
+    assert LA.MK.stage(tmp_path / "node-b", pkg, [], tmp_path / "cache-b")[0] == {("p", hashes[m]): m for m in entries}, \
+        "every module the run added is restored on another node's tree"
+    c = LA.LakeArtifacts(tmp_path / "node-c")
+    assert c.take(dict(list(urls.items())[:1]), lambda s: None) == 2
+    assert sorted(LA.MK.stage(tmp_path / "node-c", pkg, [], tmp_path / "cache-c")[0].values()) == ["P.A", "P.B"], \
+        "the first bundle alone restores what it holds"
+    again = LA.LakeArtifacts(a)
+    again.added = arts.added[2:]
+    dests, n = again.bundle_into(out, room)
+    assert [d.name for d in dests] == ["lean-artifacts-3.tar.gz"] and n == 1, "a later audit of the run: the next free name"
+    assert LA.bundled(dests, n, 1) == "1 of the 1 module version(s) it added bundled for other nodes (lean-artifacts-3.tar.gz)"
+    alone = tmp_path / "alone"
+    alone.mkdir()
+    dests, n = arts.bundle_into(alone, sizes[2] - 1)
+    assert sizes[0] < sizes[1] < sizes[2] and (len(dests), n) == (2, 2), "P alone is more than such a bundle holds; P.A and P.B travel"
+    assert LA.bundled(dests, n, 3).endswith("; 1 in none: gone from the cache since, or more than a bundle holds")
+    assert arts.bundle_into(alone, 1) == ([], 0) and len(list(alone.iterdir())) == 2, "nothing fits: no file"
+
+
+def test_one_run_takes_the_newest_bundles_up_to_a_quarter_of_the_cache_s_cap_and_a_later_run_the_rest(tmp_path):
+    """Every build bundles what it compiled, up to `BUNDLE_CAP` a bundle, and the launcher lists dozens: together more
+    than the cache may hold. One run takes them in the launcher's order, newest first, and stops at its budget, a quarter
+    of the cap; the bundle it stopped in is not marked, and a later run takes what is left of it. Downloads run ahead of
+    the unpacking: a bundle fetched and not reached is dropped, unmarked."""
+    def bundle(i: int) -> tuple[str, str]:
+        f = tmp_path / f"b{i}.tar.gz"
+        with tarfile.open(f, "w:gz") as t:
+            arts = {f"{i}{j}".ljust(16, "0") + ext: bytes([i, j]) * 50 for j, ext in enumerate([".olean", ".ilean", ".c"])}
+            e = json.dumps({"schema": LA.MK.SCHEMA, "module": f"P.M{i}", "scope": "p", "hash": str(i) * 16,
+                            "outputs": {"o": sorted(arts)}, "digests": {a: LA.MK.C.digest(b) for a, b in arts.items()}}).encode()
+            for name, data in [("keys/" + str(i) * 128 + ".json", e), *((f"artifacts/{a}", b) for a, b in sorted(arts.items()))]:
+                info = tarfile.TarInfo(name)
+                info.size = len(data)
+                t.addfile(info, io.BytesIO(data))
+        return LA.SHARED + hashlib.sha256(f.read_bytes()).hexdigest(), f.as_uri()
+
+    urls = dict(bundle(i) for i in (3, 1, 2))                           # the launcher's order, not the hashes'
+    store, said = tmp_path / "node", []
+    arts = LA.LakeArtifacts(store, cap=2000)                            # so a run takes 500 bytes: one bundle and two thirds
+    assert arts.take(urls, said.append) == 1 and len(said) == 1
+    assert "1 module version(s), 0 MiB, taken from 2 of 3 artifact bundle(s)" in said[0] and "left to a later run" in said[0]
+    assert sorted(f.name for f in (store / "keys").iterdir()) == ["3" * 128 + ".json"], "the first the launcher named, whole"
+    assert sorted(f.name[:2] for f in (store / "artifacts").iterdir()) == ["10", "11", "30", "31", "32"], \
+        "the second as far as the budget went: its entry waits for its last artifact"
+    assert [f.name for f in (store / TAKEN).iterdir()] == [next(iter(urls))[len(LA.SHARED):]], "only the first is marked"
+    assert not list(store.glob(".*.part")), "the third was fetched ahead and dropped"
+    assert arts.take(urls, said.append) == 2 and "left to a later run" not in said[1]
+    assert len(list((store / "keys").iterdir())) == 3 and len(list((store / "artifacts").iterdir())) == 9
+    assert len(list((store / TAKEN).iterdir())) == 3 and arts.take(urls, said.append) == 0 and len(said) == 2
+    more = dict(bundle(i) for i in range(1, 10))                        # more than are fetched at once
+    assert LA.AHEAD < len(more) and LA.LakeArtifacts(tmp_path / "other").take(more, said.append) == 9
+    assert "taken from 9 of 9 artifact bundle(s)" in said[2] and len(list((tmp_path / "other" / TAKEN).iterdir())) == 9
+
+
+def test_a_bundle_made_under_another_schema_is_left_for_a_build_of_that_schema_to_take(tmp_path, monkeypatch):
+    """While trees of two schemas build on one node, each takes the bundles of its own: a bundle whose entries are of
+    another schema adds nothing, and its mark is this schema's, so a build of the other still takes it."""
+    pkg = _package(tmp_path)
+    dest, h = _bundle_of(tmp_path, pkg)
+    store = tmp_path / "node"
+    monkeypatch.setattr(LA.MK, "SCHEMA", "lean-module/v5")
+    assert LA.LakeArtifacts(store).take({LA.SHARED + h: dest.as_uri()}, lambda s: None) == 0
+    assert not (store / "keys").exists() and not (store / "artifacts").exists() and (store / "taken-v5" / h).is_file()
+    monkeypatch.undo()
+    assert LA.LakeArtifacts(store).take({LA.SHARED + h: dest.as_uri()}, lambda s: None) == 3
 
 
 def test_a_bundle_member_outside_the_cache_s_layout_or_an_entry_without_its_artifacts_is_left_out(tmp_path):
@@ -910,8 +1325,8 @@ def test_a_bundle_member_outside_the_cache_s_layout_or_an_entry_without_its_arti
     names is here. A bundle of Lake's own layout (`outputs/`), which no build reads any more, adds nothing."""
     ok = LA.MK.C.digest(b"ok")
 
-    def entry(art, d):
-        return json.dumps({"module": "P.A", "scope": "p", "hash": "1" * 16, "outputs": {"o": [art]},
+    def entry(art, d, schema=LA.MK.SCHEMA):
+        return json.dumps({"schema": schema, "module": "P.A", "scope": "p", "hash": "1" * 16, "outputs": {"o": [art]},
                            "digests": {art: d}}).encode()
 
     bad = tmp_path / "bad.tar.gz"
@@ -921,6 +1336,7 @@ def test_a_bundle_member_outside_the_cache_s_layout_or_an_entry_without_its_arti
                            ("keys/" + "3" * 128 + ".json", b"not json"),
                            ("keys/" + "4" * 128 + ".json", entry("8" * 16 + ".olean", LA.MK.C.digest(b"other"))),
                            ("keys/" + "6" * 64 + ".json", entry("e" * 16 + ".olean", ok)),         # a key of before
+                           ("keys/" + "7" * 128 + ".json", entry("e" * 16 + ".olean", ok, "lean-module/v3")),  # an entry of before
                            ("keys/../" + "5" * 128 + ".json", entry("e" * 16 + ".olean", ok)),
                            ("outputs/p/" + "6" * 16 + ".json", json.dumps({"o": ["e" * 16 + ".olean"]}).encode()),
                            ("../escape", b"x"), ("artifacts/../../x.olean", b"x"),
@@ -933,7 +1349,7 @@ def test_a_bundle_member_outside_the_cache_s_layout_or_an_entry_without_its_arti
     store = tmp_path / "node"
     assert LA.LakeArtifacts(store).take({LA.SHARED + h: bad.as_uri()}, lambda s: None) == 1
     assert sorted(f.relative_to(store).as_posix() for f in store.rglob("*") if f.is_file() and f.name != "lock"
-                  and f.parent.name != "taken") == ["artifacts/" + "e" * 16 + ".olean", "keys/" + "1" * 128 + ".json"]
+                  and f.parent.name != TAKEN) == ["artifacts/" + "e" * 16 + ".olean", "keys/" + "1" * 128 + ".json"]
     assert not (tmp_path / "escape").exists() and not (tmp_path / "x.olean").exists()
 
 
@@ -945,11 +1361,16 @@ def test_the_launcher_sends_the_newest_recorded_checks_bundles(tmp_path, monkeyp
             "r1": [("lean-audit/lean-artifacts.tar.gz", "a" * 64, True), ("lean-audit/lean-artifacts-2.tar.gz", "d" * 64, True),
                    ("lean-audit/x/lean-artifacts.tar.gz", "e" * 64, True)]}
     store = types.SimpleNamespace(
-        remote=None, index=types.SimpleNamespace(sql=lambda q, a: [(r,) for r in runs]),
+        remote=None, index=types.SimpleNamespace(sql=lambda q, a: [] if LA.RECORDS_RUNS in q else [(r,) for r in runs]),
         get_attempt=lambda r: {"outputs": {"run_files": f"art:{r}"}},
         listing=lambda art: [{"path": p, "sha256": h, "remote": on} for p, h, on in runs[art[4:]]])
     assert LA.shared_bundles(store) == ["c" * 64, "a" * 64, "d" * 64]
     assert LA.shared_bundles(store, limit=1) == ["c" * 64]
+    assert LA.shared_bundles(store, limit=2) == ["c" * 64, "a" * 64, "d" * 64], "runs are counted: every bundle of the second"
+    runs["r0"] = [("lean-audit/lean-artifacts-10.tar.gz", "3" * 64, True), ("lean-audit/lean-artifacts-2.tar.gz", "2" * 64, True),
+                  ("lean-audit/lean-artifacts.tar.gz", "1" * 64, True)]
+    assert LA.shared_bundles(store)[3:] == ["1" * 64, "2" * 64, "3" * 64], "a run's in the order it wrote them, however listed"
+    del runs["r0"]
     refreshed: list[dict] = []
     store.remote, store.refresh = object(), lambda **kw: refreshed.append(kw)
     monkeypatch.setattr(LA.COMMON, "recent", lambda now: f"r-since-{now > 1.7e9}")
@@ -967,6 +1388,34 @@ def _attempts(tmp: Path, rows: list[tuple[str, str, str, list[str]]]):
         db.execute("INSERT INTO attempts VALUES (?, ?, ?, ?, ?, ?)",
                    (rid, tool, state, f"2026-10-26T{20 - i:02d}:00:00Z", 60.0, json.dumps({"id": rid, "params": {"argv": argv}})))
     return types.SimpleNamespace(sql=lambda q, a=(): db.execute(q, a).fetchall())
+
+
+#: a records run as `research.queue.RECORDS_COMMAND` starts it, and one a lane wrote by hand
+RECORDS_RUN = ["python3", "tools/verity/lean/lean_changed.py", "--records", "security", "--update"]
+RECORDS_BY_HAND = ["bash", "-lc", "uv sync -q && python3 tools/verity/lean/lean_changed.py --records security/Proofs"]
+
+
+def test_the_launcher_also_sends_the_newest_records_runs_bundles(tmp_path):
+    """A records run (`lean_changed.py --records`) bundles the modules its sandboxed builds compiled, and nothing listed
+    them: each node compiled again what another's records run had. `shared_bundles` lists them as one more kind of
+    `PUBLISHERS`, after the recorded checks', newest first and at most ``limit``: a failed run's too, whose compile is
+    worth what a passing run's is (`LakeArtifacts.put`), but not an unfinished one's or another `lean_changed.py` run's."""
+    index = _attempts(tmp_path, [("r-new", "python3", "done", RECORDS_RUN), ("r-check", "check", "done", ["check"]),
+                                 ("r-failed", "python3", "failed", RECORDS_RUN), ("r-running", "python3", "running", RECORDS_RUN),
+                                 ("r-hand", "python3", "done", RECORDS_BY_HAND),
+                                 ("r-try", "python3", "done", ["python3", "tools/verity/lean/lean_changed.py", "--try", "x"]),
+                                 ("r-old", "python3", "cancelled", RECORDS_RUN)])
+    sha = {"r-new": "n", "r-check": "c", "r-failed": "f", "r-running": "u", "r-hand": "h", "r-try": "t", "r-old": "o"}
+    runs = {r: [("lean-audit/lean-artifacts.tar.gz", s * 64, True)] for r, s in sha.items()}
+    runs["r-hand"].append(("lean-audit/lean-artifacts-2.tar.gz", "2" * 64, True))
+    runs["r-old"] = [("lean-audit/lean-artifacts.tar.gz", "o" * 64, False)]            # not on the remote: no node could fetch it
+    store = types.SimpleNamespace(remote=None, index=index, get_attempt=lambda r: {"outputs": {"run_files": f"art:{r}"}},
+                                  listing=lambda art: [{"path": p, "sha256": h, "remote": on} for p, h, on in runs[art[4:]]])
+    assert LA.shared_bundles(store) == ["c" * 64, "n" * 64, "f" * 64, "h" * 64, "2" * 64]
+    assert LA.shared_bundles(store, limit=2) == ["c" * 64, "n" * 64, "f" * 64]
+    assert LA.shared_bundles(store, limit=1) == ["c" * 64, "n" * 64]
+    assert LA.PUBLISHERS[2][0] == LA.RECORDS_RUNS and LA.PUBLISHERS[2][1].fullmatch("lean-audit/lean-artifacts.tar.gz"), \
+        "where `lean_changed.audit_records` writes it"
 
 
 #: drive's Lean check as the store records it: `slot.py` runs the check, so its tool is `python3`
@@ -1135,14 +1584,15 @@ def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_pat
         return 1
 
     monkeypatch.setattr(LA.LakeArtifacts, "put", put)
-    monkeypatch.setattr(LA.LakeArtifacts, "bundle", lambda self, dest, cap=0: dest.write_bytes(b"") or 1)
+    monkeypatch.setattr(LA.LakeArtifacts, "bundle", lambda self, dest, *at: (dest.write_bytes(b"") or 1, 1))
     for n, bundle in enumerate((False, True)):
         shutil.rmtree(tmp_path / "cache", ignore_errors=True)
         assert LA.run(tmp_path / f"out{n}", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
                       log=lambda s: None, bundle=bundle) == 1
         assert (tmp_path / f"out{n}" / "lean-artifacts.tar.gz").exists() == bundle
-        assert put_with[-1] == {"a": json.loads((tmp_path / f"out{n}" / "audit.json").read_text())["packages"][0]}, \
-            "the passing package, with check.py's report on it, which says whether it was built in the sandbox"
+        assert {p: (r["sandbox"], r["failures"]) for p, r in put_with[-1].items()} == {
+            "a": (True, []), "b": (True, ["reads docs/outside.txt"])}, \
+            "each package it built, with check.py's report on it, which says whether it was built in the sandbox"
     out = tmp_path / "steps"
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     def step():
@@ -1463,6 +1913,8 @@ def test_the_real_packages_and_their_inputs():
     assert {"tools/verity/lean/upstream.py", "tools/verity/lean/setup.sh", "tools/verity/lean/cache.py"} <= set(got)
     assert not {f"tools/verity/lean/{n}" for n in LA.NOT_READ} & set(got)
     assert {f"tools/verity/lean/{n}" for n in LA.NOT_READ} <= set(files), "an entry of NOT_READ names no file: remove it"
+    assert not [f for f in got if not f.startswith(LA.LEAN_TOOL)
+                and any(fnmatch.fnmatchcase(f.rsplit("/", 1)[-1], p) for p in LA.UNREAD_NAMES)]
     assert "tools/verity/lean/Unread.lean" in got and set(LA.UNREAD_FACTS) <= set(pkgs)
     lean_check = (ROOT / "tools" / "verity" / "lean" / "check.py").read_text()
     assert ast.literal_eval(re.search(r"^UNREAD_FACTS = (.+)$", lean_check, re.M).group(1)) == LA.UNREAD_FACTS, \
