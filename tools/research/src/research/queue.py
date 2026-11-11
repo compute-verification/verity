@@ -1058,20 +1058,21 @@ def drive_flags(clone: Path, config: str | None = None, from_tree: bool = False)
     return flags, where
 
 
-def priority_list(path: Path) -> tuple[int, ...]:
+def priority_list(path: Path, flag: str = "--priority-file") -> tuple[int, ...]:
     """Drive's priority list (`--priority-file`, `Queue.priority`), the landing order: the PR numbers ``path`` holds, separated
     by spaces or commas, in its order, first to land first, each once (a number repeated keeps its first place); empty when
-    there is no such file.  QueueError, with the fix, when it can't be read or holds anything else."""
+    there is no such file.  QueueError, with the fix, when it can't be read or holds anything else, naming it as ``flag``:
+    the verified queue reads its `--wide-file` so too."""
     try:
         if not path.exists():
             return ()
         text = path.read_text()
     except (OSError, UnicodeDecodeError) as e:
-        raise QueueError(f"--priority-file {path} can't be read ({getattr(e, 'strerror', None) or e}): make it a text file of "
+        raise QueueError(f"{flag} {path} can't be read ({getattr(e, 'strerror', None) or e}): make it a text file of "
                          "PR numbers separated by spaces or commas, or remove it") from None
     words = [w for w in re.split(r"[\s,]+", text) if w]
     if bad := [w for w in words if not re.fullmatch(r"[1-9][0-9]*", w)]:
-        raise QueueError(f"--priority-file {path} holds {', '.join(map(repr, bad[:5]))}, which "
+        raise QueueError(f"{flag} {path} holds {', '.join(map(repr, bad[:5]))}, which "
                          f"{'is not a PR number' if len(bad) == 1 else 'are not PR numbers'}: write PR numbers separated by "
                          "spaces or commas")
     return tuple(dict.fromkeys(map(int, words)))
@@ -6735,7 +6736,8 @@ def main(argv: list[str]) -> int:
         # no sync here, on drive or off: drive's tick rebuilds `next` with its priority list and its flags
         told = q.tell_ejected(q.eject(a.pr, a.reason, a.by, sha=a.sha), a.reason, a.by)
         print(f"research queue: #{a.pr}'s mark is withdrawn; drive's next tick rebuilds `{q.branch}` without it (only drive's "
-              "tick pushes it)")
+              "tick pushes it). A verified-queue candidate in flight holding it still lands it as built unless the eject is "
+              "ci's or not by its owner")
         return told
     except QueueError as e:
         print(f"research queue: {e}", file=sys.stderr)
