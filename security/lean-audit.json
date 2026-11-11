@@ -385,6 +385,10 @@
    "digest": "3af395280aa76f238b3df3ad0243be45fbb61f48e3f20b71c8f9e51773ba2b90",
    "why": "`OnCard`'s scope: the programs of the pooled machine that `OnCard` asks the accelerator to hold, code within the card's text and use within `ρ_r·T` (G1, G2). An antecedent inside a premise the honest witnesses conclude, which no witness is asked to conclude."
   },
+  "Verity.Accel.NaiveStrassen.Packed.Dom": {
+   "owner": "@compute-research",
+   "why": "A scope: the lower bound is stated for an atom table that the RTX PRO 6000's data sheet dominates, one none of whose atoms is cheaper where it holds than the sheet's lightest atom there. (met by `NaiveBeatsStrassenAny_honest` and `NaiveBeatsStrassenAnySize_honest`)"
+  },
   "Verity.Assumptions.GemmAmpereStep": {
    "owner": "@proofs",
    "digest": "02e4cb87864bcee487dafdb2047e70b7e521b0c0e9d0d8cb824ff3854abe00e1",
@@ -4667,6 +4671,16 @@
   "NetTiming.SecurityProofs.PooledLeakAccepted": {
    "honest": ["NetTiming.Witness.PooledLeakAccepted_honest"],
    "nontrivial": "NetTiming.Witness.PooledLeakAccepted_nontrivial"
+  },
+  "Verity.SecurityProofs.NaiveBeatsStrassenAny": {
+   "honest": ["Verity.SecurityProofs.NaiveBeatsStrassenAny_honest"],
+   "nontrivial": "Verity.SecurityProofs.NaiveBeatsStrassenAny_nontrivial",
+   "kind": "exclusion"
+  },
+  "Verity.SecurityProofs.NaiveBeatsStrassenAnySize": {
+   "honest": ["Verity.SecurityProofs.NaiveBeatsStrassenAnySize_honest"],
+   "nontrivial": "Verity.SecurityProofs.NaiveBeatsStrassenAnySize_nontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -25852,31 +25866,23 @@
    },
    "type_hash": "d21255e817f90bf794af5cade4d50ca9367901f165cbd2d41aa9b6887680f6da"
   },
-  "Verity.SecurityProofs.NaiveBeatsStrassenServed": {
-   "owner": "@compute-research",
-   "signature": ["Verity.SecurityProofs.NaiveBeatsStrassenServed : Verity.Guarantees.NaiveBeatsStrassenServed"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "b407fa486f5e45988b407261019fcf886e00671ee067333d6bff87e6957c2258",
-   "unfolded_hash": "46b610ca277d75ebce5986b905edb05329eed57d7d7a49f8b68e5d7f44919297"
+  "Verity.SecurityProofs.NaiveBeatsStrassenAny": {
+   "owner": "@compute-research"
   },
-  "Verity.SecurityProofs.NaiveBeatsStrassenServedSize": {
-   "owner": "@compute-research",
-   "signature": ["Verity.SecurityProofs.NaiveBeatsStrassenServedSize : Verity.Guarantees.NaiveBeatsStrassenServedSize"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "ee9ae0ad531577605e4a05aff701c4c348025113667db39d115b748e7c7e1e95",
-   "unfolded_hash": "cb80712df201d82a070fd7344c01807da12a2050b140d9adf9ea0efa6517058e"
+  "Verity.SecurityProofs.NaiveBeatsStrassenAnySize": {
+   "owner": "@compute-research"
+  },
+  "Verity.SecurityProofs.NaiveBeatsStrassenAnySize_honest": {
+   "owner": "@compute-research"
+  },
+  "Verity.SecurityProofs.NaiveBeatsStrassenAnySize_nontrivial": {
+   "owner": "@compute-research"
+  },
+  "Verity.SecurityProofs.NaiveBeatsStrassenAny_honest": {
+   "owner": "@compute-research"
+  },
+  "Verity.SecurityProofs.NaiveBeatsStrassenAny_nontrivial": {
+   "owner": "@compute-research"
   },
   "Verity.SecurityProofs.PackSoundComplete": {
    "owner": "@proofs",
@@ -27460,8 +27466,8 @@
    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": "frozen (no-function,hash): It is BandwidthOfAuditPerRun on a period's coins: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to PoUB's per-period guarantee (PeriodRun.Sound at .poub) of an abstract period of the device model whose verdicts are a field of the run (security/Definitions/Accounting/JointPeriod.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Gates.FoolingCap": "frozen (no-function): A counting bound over every circuit of the gate model (security/Definitions/Accounting/Gates/Model.lean), every set of inputs and every list of outputs read mod 2^j, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the statement, the files and the draw, proved from it; it reads SampledKSLiveV3 (security/Proofs/Flock/Bridge/ScopeGate.lean), whose event is flock-verify --zk's acceptance (Flock.PortRoots.check: row/v1, row/v2 or row-seg/v1 ports, distinct names, no colliding per-schema roots; Flock.KsScope.check: an untyped statement in scopeOkH, the --zk tags, a draw the tables divide) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
-   "Verity.SecurityProofs.NaiveBeatsStrassenServed": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
-   "Verity.SecurityProofs.NaiveBeatsStrassenServedSize": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.NaiveBeatsStrassenAny": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.NaiveBeatsStrassenAnySize": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model rather than a Lean function's acceptance.",
    "Accounting.SecurityProofs.Remote.SketchBoundP2": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundSession at the P2 store's receipts (units of four 2,056-byte blocks, 257 sectors, 16 sign rows, SHA-512 tags) and rank 12, as Accounting.SecurityProofs.Remote.SketchBoundDeployed is at 4096-byte blocks' 128 sectors, with at most Q + P candidate seeds and Q receipt-hash queries for Q the hashes the prover can try over the session: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512) + (Q + P)^2/2^257 under SketchRank 16 257 12 ε and SketchHashRandom at ε_ro = (Q + P)^2/2^257, the sign keys' birthday among at most Q + P seeds (drafted for the P2 store, not decided; note:20261025T2335Z-report-bw-block)",
    "Pouw.SecurityProofs.Dither.WorkSound": "frozen (verdict): a probability statement over a quantified proof-system verdict whose soundness is the premise ProofSystemSound, not a property of one function; it gets the shape when the proof system's verdict is a named Lean function the event reads (CMP-136).",
    "Pouw.SecurityProofs.Dither.WorkSoundNoFold": "frozen (verdict): as WorkSound, on the no-fold round with ExtractOfRealize in place of ExtractAdv (CMP-136, RT-LEAN-2 L39).",
