@@ -52655,3 +52655,95 @@ Table 5 follows in a few minutes, on `main` `86c03d1840cb`.
 For the table:
 - On `main` since 11:55:49Z (`86c03d1840cb`): #8785, #8820, #8827, #8788, #8828, #8781 [run]. Seventeen of ours on `main` tonight.
 - `mark #8527 at 33452276ad20`: merges with `main` `86c03d1840cb` [run 11:56Z]; 4 files under `Proofs/WeightSecurity`; its build with the marked Lean heads is `r20261111-115723-7815`, out.
+
+## PARAMS, Wed 11 Nov 12:00Z: FINAL. Two recommendations, both Daniel's (each changes a parameter locked statements read) and neither built in the prover or in a PR: the prover pays for LESS at the level-0 length (wide leaves: +4.00 bits on every cell of the bits table) and for MORE at the second repetition (100 bits no bound reads: 41% of the card's proving, 124 core-s of the Lean verifier's check a head statement). No third. #8866 is on `main`. The wide leaf's draft ask for Daniel is note `20261111T1155Z-draft-ask-wide-leaf`
+
+Clock: `date -u` read 12:00Z. Order reread through 11:58Z; your 11:48Z mailbox job read and done below (section 8). This entry stands alone; where it differs from an earlier entry of mine, this one is right.
+
+**The answer to the job's question** (a head-block statement: one table of 2^35 bits, m = 35, `--zk`).
+- **Pays for more than the claim uses:** the second repetition. A table's error is 2^-205.01 and a session's κ 2^-203.00 [run: exact replica of the Lean's rational bounds; the Lean's own bounds are 2^-205 and 2^-190]. Every bound on the table of record is 100 bits weaker than that, and none reads the second repetition.
+- **Pays for less:** the level-0 codeword's length, 2^23 at a 2^35-bit table. It is no error of Flock's. It sets a session's extraction cost (`Deploy.k` = ⌈4·N₀/e⌉, `Definitions/Claims.lean:314`), and that is linear in the first-hit term, the weakest on the table [read].
+- **The weakest term** is that first-hit term, of #8827's lemma, a run, in compressions, at the record [relayed; modeled; K0 = 6; T = 2^80 calls in every run; the model's verifier accepts no run at these sizes; a by-class line rests on the expected-time premise at two finders no guarantee names]:
+  - (a) at `code h`, units side by side, one class a block: 2^-106.88 [unconfirmed: ATTACK 11:35Z];
+  - (b) over the served wiring, M = 2,049 at the plan's cut (139 at the recut): 2^-99.28 by the mean, 2^-97.64 by stratum, 2^-96.88 under one M (at the recut -101.47 / -101.21 / -100.85).
+
+**1. Recommendation (5a): wide level-0 leaves.** m = 32 to 35 on m = 31's tower `[18, 15, 12, 9, 6, 3]`, `k0 = m − 25`, 219 queries at level 0. `fast100` already does this at m = 28 to 30.
+
+| | today | with it | label |
+|---|---|---|---|
+| level-0 length at m = 35 | 2^23 | 2^19 | [read; run: what-if build] |
+| a table's error | 2^-205.01 | 2^-205.06 | [run: replica; the Lean's `≤ 2^-205` builds at the new rows] |
+| e_max | 2,592,237,061 | 162,015,001 | [derived] |
+| first-hit term, every cell | | 4.00 bits better | [derived: exact to 0.001 at 1, 4 and 16 times the sessions] |
+| salts a statement | 2.684 GB, 7.3 CPU-s | 0.168 GB, 0.46 CPU-s | [modeled: SALTS's measured 7.3, by the leaves] |
+| SHA-512 compressions a statement | 176.1 M | 73.9 M | [derived; not counted on the card] |
+| proof a session | 2.66 MB | 9.39 MB | [derived from `6773`'s `wire_sent`] |
+
+- **On the table** [derived: the cells of record less 4.00; modeled; compressions]:
+  - (a) at `code h`, units side by side, one class a block [unconfirmed: ATTACK 11:35Z]: the record 2^-110.88; the 2,647 GB plan 2^-108.79; width 2^-4 2^-110.29. Every design is past 2^-100 there without the lever, so on (a) it buys room and the salts only.
+  - (b) over the served wiring, mean / by stratum / one M. At the plan's cut (M = 2,049): the record -103.28 / -101.64 / -100.88; the 2,647 GB plan (0.655) -101.50 / -101.32 / -98.79; width 2^-4 (0.665) -103.00 / -102.82 / -100.29. At the recut (M = 139): the record -105.47 / -105.21 / -104.85; width 2^-4 -105.17 / -104.90 / -104.30.
+- **Gain in GB, on (b):** with the recut it is room (4 bits) and about 1% of GB, the step from width 2^-4 to the plan's own width [guess: HARMSEARCH's 3,822 against 3,781 at modeled 0.4, both "no program (not what `main` verifies)"]. Without the recut it is what lets a design hold 2^-100 under one M: the record and width 2^-4 (0.665) do with it, and nothing on the table does today.
+- **Gain in seconds a statement:** 6.8 host CPU-s [modeled]. It overlaps SALTS's seed switch: with every salt from a seed under 1.2 CPU-s is left. No card time claimed.
+- **Cost:** 6.7 MB more proof a session; the verifier hashes about 52,000 more compressions a session; the recursion opens level-0 leaves in circuit, about 20,500 to 69,600 compressions an inner session [derived; none measured].
+- **Further along** (replica only; of the Lean, only the table error at m = 30's tower, in a probe): m = 30's tower +5.00 bits at 14.4 MB of opened rows a session; m = 27's +8.00 at 120 MB.
+
+**2. Recommendation (5b): one repetition for a session of one table**, queries `[236, 115, 77, 58, 47, 39, 35]` (8% more).
+
+| | today | with it | label |
+|---|---|---|---|
+| a session's κ | 2^-203.00 | 2^-104.38 | [run: replica; a Lean probe has `≤ (1/2)^106` before the factor 4] |
+| card, `t.prove` | 0.675 s | about 0.40 s | [run: medians, 43 sessions of `r20261111-061047-6773`; less the second repetition's 0.278; the 8% more queries not timed] |
+| host | 23.3 CPU-s | about 19.1 | [modeled: `6773`'s split, SALTS's 7.3] |
+| Lean verifier's proof check, the later head block | 250.0 core-s | about 126 | [derived: FLOCKPKG's measured `d4ef`; `Flock/Zk.lean:199`, `:339-340`: two `verifyRep` calls, each with its own fold of the matrix] |
+
+- More queries do not lower κ: the floor is the PIOP's term over GF(2^128), 2^-106.52 a repetition [run: replica].
+- **On the table** [derived: each cell of record plus 2^-104.38; modeled; compressions]:
+  - (a) at `code h`, one class a block [unconfirmed: ATTACK 11:35Z]: Flock's κ becomes the weakest term. The record reads 2^-104.15 for 2^-106.88, the 2,647 GB plan 2^-103.57 for 2^-104.79.
+  - (b) over the served wiring: it costs up to 0.52 bit. The recut's record reads -101.29 / -101.06 / -100.73 and its width 2^-4 -101.02 / -100.78 / -100.22, so both still hold. With (5a) too every cell of the recut is between 2^-104.2 and 2^-103.3.
+- **Over a world year** Flock's own term reads 2^-61.0 where it reads 2^-159.6 [derived, at the 43.4 bits between TWOPROVE's run and world-year figures, relayed 09:10Z]. That is the price in security, and it is Daniel's to weigh.
+- **It fits one table a session only:** λ is 104.4 − log₂ n, under 100 from 21 tables [derived]. The two-stage code's sessions are one table (#8866). The recursion's are not, and keep two.
+- **Gain in GB:** the verifier's 124 core-s is about 1,480 GB off the row of record and about 870 off the built plan at modeled 0.4 [derived: the slope of BENCHCROSS's 11:23Z planner rows, 11.9 and 7.0 GB a core-second]. It is the same on all three GB lines ("no program", "as `main` is", "the hoist, unbuilt"): it does not touch the setup. FLOCKPKG's cut "one walk of the matrix for both repetitions" takes up to 100 of the 124 s with no parameter changed; after it one repetition is worth about 25 s there.
+- **Gain on the prover:** today the CPU binds at four provers, so the card's 0.278 s buys nothing and the host's 4.2 CPU-s is the gain [relayed: HEADPROF `db9a`]. Where the card binds (kernels' inferred 0.77 s row, your 11:25Z relay) the 0.278 s is on the path [guess].
+
+**3. No third recommendation. Withdrawn and null:**
+- **Withdrawn (10:33Z):** statements of 2^33 bits. +2.00 bits with no Flock change, but the Lean verifier's cost is fixed a statement (262 to 291 s at one block, 241 to 255 at 256 [relayed: FLOCKPKG, `d4ef`, `e3ed`]), so four statements for one cost about 9,000 GB at modeled 0.4 on the "no program" line [guess], more as `main` is, with a setup a session.
+- **Null:** the fold field (GF(2^128) reads 2^-59); half the queries with two repetitions (2^-100.9 a table, no room); η, the rates, the salt's 192 bytes and the 64-byte digest; the count k (it is what `N₀/(e·k) ≤ 1/4` needs, `Claims/KS/Flock.lean:137-145`).
+- **Not mine:** the waits (TWOPROVE's, EXTFORM's); the statement's size (BREAKEVEN's).
+
+**4. SHA-512 inside a head-block statement** (unchanged from 09:32Z): on the card at most 0.140 of 0.675 s of proving (21%) and 5.5% of the statement's 2.565 GPU-s; no record times hashing alone [run: `6773`'s `GPUPHASE` medians]. By count 176.1 M compressions, 125.8 M of them level 0's leaves [derived]. From the parameters' side (5a) takes them to 73.9 M and (5b) takes off 25.2 M.
+
+**5. What reads the parameters** [run: read of both locks' `reads` records; the guarantees' closures not walked].
+- `security/lean-audit.json`: `Flock.fast100`, `FlockSoundness.Accounting.fast100`, `Flock.Zk.queries0`, `m1Queries₀`, `m1Schedule`, `Claims.Flock.zkLevel0` for (5a); `tableError`, `repError`, `EXTRA_LANES`, `queries0`, `m1Queries₀` for (5b).
+- `security/Properties/lean-audit.json`: `Flock.fast100` and `Flock.Zk.queries0` for (5a); `EXTRA_LANES` and `queries0` for (5b).
+- The guarantees over them are Flock's masked knowledge soundness and what is stated on it [guess].
+
+**6. The work, by file.**
+- **(5a), Lean: ten files, edited in a scratch tree, pushed nowhere** (+34/−39; the patch is in the lane's notes, `tools/params_wide_leaves_whatif.patch.txt`).
+  - Built [run: `r20261111-093644-0d0a`, 361 modules rebuilt, none failed; `r20261111-105451-f956`, exit 0; axioms clean in both]: `Flock/Schedule.lean` and `Flock/Zk.lean` (the verifier), `Definitions/Flock/Accounting/Schedule.lean`, `Soundness/Accounting/PaddedNumbers.lean`, `Soundness/Discharge/ZkHidden/Sched.lean`, `Claims/NumbersGamma.lean`, `Claims/NumbersPads.lean`. That includes `Refine.Seam` (the verifier's schedule equals the accounting table) and `m1_check`.
+  - Edited, not built (`k0 ≤ 6` to `≤ 10`; closes by my reading only): `Claims/NumbersDeploy.lean`, `SessionLoop/Concrete/Serves.lean`, `Claims/Recursion/NextRRows.lean`, and everything that imports them (about 700 to 1,500 modules). I did not launch them: a what-if should not take a Lean slot from the marked heads tonight.
+  - Not looked at: hiding beyond `zkSchedFacts`; the agreement with upstream's verifier, which a changed `fast100` breaks (a new profile name).
+- **(5a), prover, nothing done:** `prover/live/src/bin/flock-circuit.rs:99, 171`, `prover/live/src/tables.rs:311`, `prover/verity_unit.rs:259, 366`, `prover/python/verity_flock/rec_algebra.py:95-96`, `prover/tests/arena_layout.py:19`; the recursion's `Flock/RecCoins.lean:283-293`; the card's level-0 leaf kernel at 1,028 lanes, which is kernels'.
+- **(5b), nothing done:** `Flock/Statement.lean:220`, `Flock/Tags.lean:116-205`, `Flock/ZkProof.lean:40`, `Flock/Zk.lean`, `Definitions/Flock/Accounting/Bound.lean:165`, `Padded.lean:93`, every `2^-205` and `2^-190` after them, the masked model's two repetitions. A new statement version.
+
+**7. Mine tonight, and what is left.**
+- **#8866** at `e19752e7b6173d6c5c806d10189c3b7e8469bd48` (`SpotFlock.ref_one_table`: one table a session where the two-stage design evaluates): **on `main`**, commit `6a272166c2` under `ee28015ba726` [run: `git log origin/main`, 11:55Z]. The lane's one PR; I marked nothing.
+- **Struck:** every by-class cell I posted before 10:51Z (at 18, 72 and 132 a head block), and "half the Lean verifier's time".
+- **Left:** the three unbuilt Lean files and their importers under the what-if; the prover and the card at 1,028 lanes; the recursion's cost measured; Daniel's rulings on both.
+
+**8. The wide leaf's draft ask (your 11:48Z job).** Note `20261111T1155Z-draft-ask-wide-leaf` (`lanes/proofs/20261111T1155Z-draft-ask-wide-leaf.md`), synced 11:57Z, in asking-daniel's template beside SALTS's `20261111T0931Z-draft-ask-salts`. Nothing is posted by me.
+- Options: A keep; B the wide leaf (recommended); C the wide leaf and one repetition, shown as a separate lever with what reads the second repetition (a table's error and a session's κ; nothing on the binding side).
+- It says what would change the recommendation: if (a) is confirmed, B buys room and the salts only and A is as good; if the card or the recursion measures badly at 1,028 lanes, `k0` = 8 (2 bits) is the fallback.
+- It is about 1,400 words with its table where SALTS's is 1,100 and the template asks for 900 at most: cut once at 11:59Z; say if you want it shorter.
+
+For BREAKEVEN (what-if rows only; modeled; unbuilt; Daniel's):
+- (5a): 6.8 host CPU-s off a head statement, under 1.2 once salts are from a seed; +4.00 bits on the bits of whatever design the row carries.
+- (5b): 124 core-s off the head block's Lean verify a statement (about 25 after FLOCKPKG's one-walk cut), 0.278 s of the card's 0.675 s `t.prove`, about 4.2 host CPU-s. Kernels' 0.52 s no longer stands, so my "0.31 s" of 09:32Z does not either.
+
+For SCALE and CONCRETE: e_max at a 2^35-bit table by level-0 length: 2,592,237,061 (2^23, the code's), 162,015,001 (2^19, the wide leaf), 81,007,501 (2^18). With one repetition κ_s is 2^-104.38. Neither is the code's.
+
+For kernels (through you): does the level-0 leaf kernel take 1,028 lanes (16,448 bytes a leaf, 524,288 leaves at m = 35), and what do `t.encoding_commitment` and `t.ligerito` read there?
+
+For the table:
+- The proof system's weakest term: the first-hit term of #8827's lemma, a run, in compressions, at the record [modeled, relayed]: (a) at `code h`, units side by side, one class a block: 2^-106.88 [unconfirmed: ATTACK 11:35Z]; (b) over the served wiring, M = 2,049 at the plan's cut (139 at the recut): 2^-99.28 / -97.64 / -96.88 (-101.47 / -101.21 / -100.85). Flock's own κ: 2^-203.00 a session [run: replica of the Lean's bounds].
+- Where the prover pays for less: the level-0 length. Wide leaves: +4.00 bits on every cell, the same table error [run: what-if builds `0d0a`, `f956`; replica]. Daniel's; unbuilt in the prover; three Lean files unbuilt.
+- The largest slack: the second repetition, 100 bits no bound reads: 41% of the card's proving [run: `6773`] and 124 core-s of the Lean verifier's 250.0 a head statement [derived]. One repetition: κ 2^-104.38. Daniel's, unbuilt.
