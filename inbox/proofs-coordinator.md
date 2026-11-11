@@ -63523,3 +63523,29 @@ Every figure here is modeled: a right-hand side in Lean evaluated at sizes no th
 **The vLLM lane's figure** (0.2 s of 9.5 s removed on its small window; the circuit's parse is 1.33 to 1.40 s of a member's 2.84 to 3.36 s): consistent with mine. On my two blocks the program is 141 to 152 MB and its reading is most of what the first branch removes; on a window whose program is small the first branch removes little, and the second branch is the one that matters there.
 
 **Not done**: the memory figures (runs `34fd`, `ee5b`); the second branch's merged head pushed, its tier and its one records run; the pull requests (the first waits on #8789, #8949, #9042).
+
+## REFUSE, Wed 11 Nov 20:01Z: the unconditional form is proved in a try: both loops are through and no parse fact is a hypothesis. Your question is answered below, and the evaluation code reproduces 138,580,196 bytes
+
+**Proved, on branch `cursor/proofs-refuse-a2c0` (not on `main`, no pull request yet).**
+
+- [run r20261111-193711-ea27, exit 0] `Select/SecondFormed.lean` passes `verity lean try`: 45 theorems, none uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. The same run built `Select/SecondSample.lean` as its dependency.
+- [read `Select/SecondFormed.lean`] It proves `secondFormed : Select.secondProblem sample ns ks = none → SecondFormed sample ns ks`: `Draw.flockLaw` reads the second stage's law and `Draw.strataMessage` finds nothing, both loops run on the cells. From it:
+  `selectSecond_refused_le (hp : Select.secondProblem sample ns ks = none) (len : ℕ) (hlen : secondRead sample.size ns ks ≤ len) : prCoin (fun f : Fin len → Fin 256 => ¬ ∃ draw read, Select.selectSecond sample ns ks (bytesOf f) = .ok (draw, read)) ≤ ((sample.size * ks.toList.sum : ℕ) : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹`.
+- [run r20261111-191536-6b8d, exit 0; run r20261111-190809-3a7d, exit 0] The law's file `Select/SecondLaw.lean` and the units' file `Select/SecondUnits.lean` passed earlier and are pushed (`f774a20a80`). [read `git status`] `SecondSample.lean` and `SecondFormed.lean` are in my working tree, not pushed yet.
+- [run r20261111-193711-ea27] So the 02:00Z fallback is not needed.
+
+**Your question: does `secondProblem = none` hold at every first-stage coin the first stage accepts?**
+
+- [read `Claims/Sampling/Reg.lean` `RegTwo.sample`, and `Spot/Select.lean` `secondProblem`] Yes, for a first stage Flock reads as a uniform K-subset (`firstK = some K`) and cells that `secondProblem` passes on some replay sample. The replay sample is then the first stage's K units, K at least 1, strictly ascending, and `secondProblem`'s other tests read only `ns` and `ks`.
+- [read, same places] It fails where the first stage refuses: `RegTwo.sample` is `#[]` there and the second stage refuses on every coin.
+- [not run yet: try r20261111-194618-4e21 of `Select/SecondFirst.lean` and a try of `SpotFlock/Refused.lean` are waiting for a slot] I wrote this as lemmas, so the code's bound needs no probability for that event where the first stage accepts. `secondDraw_refused_le_first`: at every first-stage coin the first stage accepts, the code's second stage returns no sample with probability at most K·Σ_t k_t·2⁻⁶⁴ over its `stage` coins, given `secondRead K ns ks ≤ stage · 2^20`. `refused_after_first_le`: over both stages' coins, the first stage accepts and the second refuses with at most that probability. `secondDraw_none_le`: the code samples no second stage with at most that probability more than the first stage refuses with.
+- [read `Bridge/QsRows/FirstReads.lean` `execSel_error_le`] Nothing in the tree bounds the chance that `Select.select` itself refuses the first stage; its units' part is bounded, at K·2⁻⁶⁴. I leave the first stage out of this pull request unless you want it in.
+
+**The bound at the served sizes, by code in the tree (in my working tree, not pushed yet).**
+
+- [read `benchmarks/spot_figures/second_stage.py`] `first_read` is Lean's `secondRead`, `refusal` the theorem's bound, `stages` the rounds of 2^20 bytes and `coins` the challenger's 64-byte coins that hold a first read. `design_cells` gives the cells of a planner's two-stage design, each stratum's count split among its proof-block types in proportion. `total_cost._point` carries all of it beside every two-stage point, so the figure's JSON has it for every plotted configuration, scope and β.
+- [run local: `pytest tests/test_second_stage.py`, 9 passed] One test holds `first_read` to the bytes `service.select_second` takes.
+- [run local, on the note's design file `20261111T0905Z-finding-coin-cells.design.jsonl`: the planner's design the brief's 138,580,196 bytes is from, a modeled design, not a served run] 151 cells a sampled replay block, 5,523,986 proof blocks sampled of them, first read 138,580,196 bytes. That is 133, 529 and 793 rounds of 2^20 bytes for 1, 4 and 6 sampled replay blocks. The theorem's bound is 2^-41.6 a sampled replay block.
+- [run local, same file] Added up over the replay blocks that design samples in a world-year, the theorem's bound is 0.021. [guess, by proportion] That is about 4·10⁻⁴ a world-week and 1.7·10⁻³ a world-month. [relayed, the note] The 2⁻⁶⁴ a sampled proof block is loose: a cell's first read runs out far less often than that. A tighter lemma is separate work.
+
+**Next.** [read] The two waiting tries, the commits, the merge of `main` once #8940 lands, one records run at the head, the pre-mark suites, then the pull request. It adds theorems and code that measures, changes no guarantee's statement and widens nothing a verifier accepts, so I mark it myself.
