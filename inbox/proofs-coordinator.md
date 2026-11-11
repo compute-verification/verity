@@ -35900,3 +35900,38 @@ Both runs ended rc 0 after 8 minutes; each step's own result is in its `out/verd
 - [read] R3.4's generic part is drafted, not built: `bconfCostStrict`, `εregSB`, `KSRegAtSB` and `CompilerKSRegAtSB` beside part 1's `KSRegAt`, and `ksRegAtSB_of_ksReg` beside `ksRegAt_of_ksReg`. Its witnesses are part 1's, at `sksL` and the budget 0. It goes on a branch from part 1's records commit with route 3 merged in. The two branches change no file in common [run: `comm` of their file lists printed nothing].
 - [read] PRF-516 is In Progress with no PR yet, so there is nothing of its to read.
 - Nothing changed for Candidate R.
+
+## PRF-522 PUBUNITS, Wed 11 Nov 01:19Z: `served_cases.py:128` is cut in our files; the branch is at `bed355f3a6ab`, 9 of our 11 edges are left, all in the four files that need your and ci's call; two runs are out and I stop here until they end
+
+**The branch** [git, by me]: `cursor/proofs-remote-cures-dac3` at `bed355f3a6ab55d50fbfc4f811d79ad16cc17b65`, on the base `f63a7b76334dcc8adb0d63de0e35efa3463c5ea3`. Seven files differ, all under `benchmarks/one_stage/` and `benchmarks/live_challenger/`. No `.lean`, lock, lakefile, manifest or toolchain; `public_boundary.toml` and every count are the base's.
+
+**The new commit, `bed355f3a6`: the `served_cases.py` cut.**
+
+- **What it does:** `served_cases.py` no longer names the policy's Lean package. A new file beside it, `inference_only_lean.py`, names the package, its executable and the Python its check is held to. `served_cases.policy()` loads that file by name when the inference-only case is asked for.
+- **On our tree nothing changes:** the case is made and checked as before, and `SC.INFERENCE_ONLY_LEAN` still reads, so network-accounting's `test_remotetie.py:432` and our two tests that build the executable are untouched.
+- **On a tree without the file** (the public release: a new file is private with no line in the list): the case is `NOT_WRITTEN` with "the inference-only policy's check is not on this tree", exit 1, and the other cases are still written. A new test holds it to that, `test_on_a_tree_without_the_policy_the_inference_only_case_is_refused_by_name`.
+- **It is the list's own way:** its comment on vLLM's PoUS adapter says "load by name and refuse as not on this tree where they are absent".
+- **The layout move rewrites it rightly** [read, `tools/move/layout.py`'s docstring]: the path is a whole literal in a Python join, in a file the move does not move.
+- **Checked on my VM** [run]: the tool reports 27 edges, 9 under `benchmarks/one_stage`, and holds `served_cases.py` public and the new file not. The new test and its two neighbours pass (3 passed), run against the branch's tree with `main`'s environment. `ruff` passes on the three files.
+
+**Run `r20261111-011020-febf` ended rc 0** (vy-nebius-cpu-7, at `a9c191d904f2`, the head before this commit) [its logs read by me]: `test_gate_paths` 8 passed; `test_literal_addresses` names one line, memory-accounting's; 28 edges, 10 under `benchmarks/one_stage`; `-k test_served_verdicts` 392 passed; `live_challenger` 654 passed.
+
+**Out now**, the same job at both commits, each in its own clone, with Lean's toolchain on the PATH:
+
+- `r20261111-011800-6620` on vy-nebius-cpu-1, at the head `bed355f3a6ab`. It was waiting for a slot at 01:18Z.
+- `r20261111-011802-375e` on vy-nebius-cpu-1, at the base `f63a7b76334d`, as the control.
+- The job: the root suite whole (`suites.py repository --quick`), the tool's edges, `benchmarks/one_stage`'s suite whole without its slow tests (so the tests that build the policy's Lean run), and `benchmarks/prove_path`'s `test_remotetie` and `test_pearltie`, which load `served_cases`.
+- **ETA 02:10Z (6:10 PM PST)** [guess: the Lean builds start from nothing in each clone]; each run stops itself at 120 minutes.
+
+**The 9 edges left** are `served_pearlplus.sh:112,113,145,283`, `inference_only.py:93,94,219`, `served_compare.py:59` and `served_composite.sh:69`: the four files of my 01:12Z entry, item 3. With the four out of the public group the tool reports 18 edges and none under `benchmarks/one_stage` [run on my VM at the head, with the list edited and put back: three lines of it, 98, 99 and 102].
+
+**What is left**, for whoever continues:
+
+- Read the two runs: `research fetch --all RUN`, then `out/verdicts.txt` and `out/*.failed.txt`. The head must fail no test the base passes. The base's root suite has 8 failing tests by lean's reading of `r20261110-230520-3586`.
+- Your and ci's call on the four files (my 00:58Z and 01:12Z entries).
+- The one line of `served_composite.sh` after the layout move (01:12Z, item 1).
+- The LEAN-249 comment: **not posted.** Its text is ready once the two runs are read.
+- `whole_run/Main.lean:86` (00:34Z).
+- When the base moves: `git merge-tree --write-tree` of the new head and `bed355f3a6ab`.
+
+Mailbox read at 01:18Z: no file for me. The base is still `f63a7b76334d`.
