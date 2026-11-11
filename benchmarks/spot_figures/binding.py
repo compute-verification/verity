@@ -1,24 +1,34 @@
 """SPOT's binding error by the two-stage first-hit finder, evaluated exactly at a sampling design.
 
 The finder bounds the probability that an accepted run opens a value off the committed trace (the boundary's trace
-or a sampled replay block's committed interior) by
+or a sampled replay block's committed interior) by what a collision of SHA-512 costs it: its expected compressions
+over 2^256. Two forms of that term, at e_s = 1 + 210·k:
 
-    2·K·(T·(1 + d·e_s) + d·openCalls)/2^256 + p_ref·|opensSet| + |opensSet|/(M + 1),        e_s = 1 + 210·k
+    by position:   4·T·(1 + n·e_s + (1 + e_s)·K̄)/2^256
+    by gate:       2·K·(T·(1 + d·e_s) + d·openCalls)/2^256 + p_ref·|opensSet| + |opensSet|/(M + 1)
 
-* K: the gates the proof blocks of one audit's sample need, the most over the coins the verifier does not refuse.
-  `card_gates` is its value at one proof block a stratum of a model's `workload` card, the design with no cap on a
-  stratum's sample; any other design's K is a parameter.
+By position is the form the finder's Lean statement takes at the code (`Claims.Flock.Numbers.firstHitBound`): the
+first run with every session extracted, and for each gate the sample needs a run with the sessions holding it
+extracted. It reads the sample's mean and no d. By gate is the union over the gates of a sample of one finder a
+gate, with a cap on each finder's further runs.
+
 * T: the SHA-512 compressions of one run, the prover's and the verifier's (`compressions` converts calls on rows).
-* d: the most sessions of one run that hold a sampled proof block needing one gate.
-* k: a session's accepted reruns a wait, ⌈4·N₀/e⌉ at a session whose level-0 codeword has N₀ symbols (`queries`).
-  The extractor waits 210 times a session (`WAITS`), so e_s bounds the expected reruns of one session's
+* k: a session's accepted reruns a wait, ⌈4·N₀/e⌉ at a session whose level-0 codewords have N₀ symbols in all
+  (`queries`). The extractor waits 210 times a session (`WAITS`), so e_s bounds the expected reruns of one session's
   extraction.
+* n (`sessions`): the most sessions of one run. A design that states it is evaluated by position.
+* K̄: the gates the proof blocks of one audit's sample need, in the mean over the coins.
+* K: those gates, the most over the coins the verifier does not refuse. `card_gates` is its value at one proof block
+  a stratum of a model's `workload` card, the design with no cap on a stratum's sample; any other design's K or K̄ is
+  a parameter.
+* d: the most sessions of one run that hold a sampled proof block needing one gate.
 * openCalls: the compressions of one session's opening checks.
 * p_ref: the probability that the verifier refuses the coins; |opensSet|: the gates any run can open.
 * M: the cap on the further runs the finder waits for at one gate.
 
-The first term is what a collision of SHA-512 costs the finder: its expected compressions over 2^256, twice, at each
-of the K gates. The other two are zero at the defaults (`open_calls`, `p_ref` and `opens` all 0).
+By gate's last two terms are zero at the defaults (`p_ref` and `opens` 0), and by position has neither. The
+knowledge errors of the sessions and of the sample, which the finder's statement adds, are other numbers and not
+this module's.
 
 An audit's bound holds for each audit of a monitoring period, so a period's is the sum over its audits: one audit an
 execution phase on each machine (`periods`, over `verity.protocols.reporting.PERIODS`). `most_gates` is the largest K
@@ -27,10 +37,11 @@ a target leaves, at one audit or over a period's.
 Every value is an integer or a `Fraction` until it is printed, and what is printed is ⌊−log₂⌋ in hundredths of a bit,
 found by integer arithmetic (`centibits`): a bound printed as 2^-132.03 is at most 2^-132.03.
 
-    uv run python benchmarks/spot_figures/binding.py --card GLM-5.3 --symbols 2^10          # K from the card
-    uv run python benchmarks/spot_figures/binding.py --K 2^40.23 --k 12343986 --d 167       # K, k and d given
-                            # [--T 2^80] [--row-bytes 65536] [--tables N] [--open-calls C] [--p-ref P]
-                            # [--opens N --M N] [--phase-seconds 600] [--machines N] [--target 100] [--json]
+    uv run python benchmarks/spot_figures/binding.py --K 2^37.69 --sessions 5523986 --symbols 2^23 --tables 32
+    uv run python benchmarks/spot_figures/binding.py --card GLM-5.3 --symbols 2^10          # by gate, K from the card
+    uv run python benchmarks/spot_figures/binding.py --K 2^40.23 --k 12343986 --d 167       # by gate, K, k and d given
+                            # [--T 2^80] [--row-bytes 65536] [--open-calls C] [--p-ref P] [--opens N --M N]
+                            # [--phase-seconds 600] [--machines N] [--target 100] [--json]
 """
 from __future__ import annotations
 
@@ -94,6 +105,7 @@ class Design:
     k: int
     d: int = 1
     T: int = BUDGET
+    sessions: int | None = None
     open_calls: int = 0
     p_ref: Fraction = Fraction(0)
     opens: int = 0
@@ -113,6 +125,17 @@ class Design:
             raise ValueError(f"p_ref is a probability, not {self.p_ref}")
         if self.opens and (not isinstance(self.M, int) or isinstance(self.M, bool) or self.M < 0):
             raise ValueError("a design with opens > 0 states M, the cap on the finder's further runs a gate")
+        if self.sessions is None:
+            return
+        if not isinstance(self.sessions, int) or isinstance(self.sessions, bool) or self.sessions < 1:
+            raise ValueError(f"sessions is a positive integer, not {self.sessions!r}")
+        if self.d != 1 or self.open_calls or self.opens or self.p_ref:
+            raise ValueError("by position (sessions stated) the bound reads no d, open_calls, opens or p_ref")
+
+    @property
+    def form(self) -> str:
+        """Which form the design is evaluated in: `position` when it states its sessions, else `gate`."""
+        return "gate" if self.sessions is None else "position"
 
     @property
     def reruns(self) -> int:
@@ -120,14 +143,23 @@ class Design:
         return 1 + WAITS * self.k
 
     @property
-    def cost(self) -> int:
-        """T·(1 + d·e_s) + d·openCalls: a run, and the d sessions' extractions and opening checks."""
-        return self.T * (1 + self.d * self.reruns) + self.d * self.open_calls
+    def first(self) -> int:
+        """The finder's compressions that no gate adds to, times the form's constant: by position 4·T·(1 + n·e_s),
+        the first run with every session extracted; by gate 0."""
+        return 0 if self.sessions is None else 4 * self.T * (1 + self.sessions * self.reruns)
+
+    @property
+    def gate(self) -> int:
+        """The finder's compressions each gate adds, times the form's constant: by position 4·T·(1 + e_s); by gate
+        2·(T·(1 + d·e_s) + d·openCalls), a run and the d sessions' extractions and opening checks."""
+        if self.sessions is None:
+            return 2 * (self.T * (1 + self.d * self.reruns) + self.d * self.open_calls)
+        return 4 * self.T * (1 + self.reruns)
 
 
 def terms(design: Design) -> dict[str, Fraction]:
     """The bound's three terms at one audit, by name."""
-    return {"collision": Fraction(2 * design.K * design.cost, HASH),
+    return {"collision": Fraction(design.first + design.K * design.gate, HASH),
             "refused": design.p_ref * design.opens,
             "cap": Fraction(design.opens, design.M + 1) if design.opens else Fraction(0)}
 
@@ -152,11 +184,11 @@ def periods(design: Design, phase: int = PHASE, machines: int = 1) -> dict[str, 
 
 
 def most_gates(design: Design, target: int, audits: int = 1) -> int:
-    """The most gates K at which `audits` audits of the design sum to at most 2^-`target`, its other fields kept: 0
-    where the terms that do not read K are above it alone."""
+    """The most gates (K, or K̄ by position) at which `audits` audits of the design sum to at most 2^-`target`, its
+    other fields kept: 0 where the terms that do not read the gates are above it alone."""
     fixed = terms(design)
-    room = Fraction(1, 2 ** target) - audits * (fixed["refused"] + fixed["cap"])
-    return max(0, floor(room * HASH / (2 * design.cost * audits)))
+    room = Fraction(1, 2 ** target) / audits - fixed["refused"] - fixed["cap"]
+    return max(0, floor((room * HASH - design.first) / design.gate))
 
 
 def centibits(p: Fraction) -> int | None:
@@ -225,8 +257,9 @@ def report(design: Design, phase: int = PHASE, machines: int = 1, target: int = 
     def cell(p: Fraction, **more) -> dict:
         return {**more, "bound": bits(p), "centibits": centibits(p), "exact": str(p), "meets": p <= goal}
 
-    return {"design": {"K": design.K, "k": design.k, "d": design.d, "T": design.T, "open_calls": design.open_calls,
-                       "p_ref": str(design.p_ref), "opens": design.opens, "M": design.M, "reruns": design.reruns},
+    return {"design": {"form": design.form, "K": design.K, "k": design.k, "d": design.d, "T": design.T,
+                       "sessions": design.sessions, "open_calls": design.open_calls, "p_ref": str(design.p_ref),
+                       "opens": design.opens, "M": design.M, "reruns": design.reruns},
             "target": target, "audit": cell(bound(design)),
             "terms": {name: cell(p) for name, p in terms(design).items()},
             "phase_seconds": phase, "machines": machines,
@@ -243,27 +276,33 @@ def render(out: dict) -> str:
     def cell(c: dict) -> str:
         return c["bound"] + ("" if c["meets"] else f"   above 2^-{out['target']}")
 
-    lines = [f"K = {d['K']} gates (2^{log2(d['K'])}), T = 2^{log2(d['T'])} compressions, d = {d['d']}, "
-             f"k = {d['k']}, e_s = {d['reruns']}",
+    by_position = d["form"] == "position"
+    gates = (f"by position: a mean of {d['K']} gates (2^{log2(d['K'])}), at most {d['sessions']} sessions"
+             if by_position else f"by gate: K = {d['K']} gates (2^{log2(d['K'])}), d = {d['d']}")
+    lines = [f"{gates}, T = 2^{log2(d['T'])} compressions, k = {d['k']}, e_s = {d['reruns']}",
              f"one audit   {cell(out['audit'])}"]
-    lines += [f"  {name:<10}{c['bound']}" for name, c in out["terms"].items()]
+    if not by_position:
+        lines += [f"  {name:<10}{c['bound']}" for name, c in out["terms"].items()]
     lines.append(f"a monitoring period, an audit every {out['phase_seconds']} s on {out['machines']} machine(s):")
     lines += [f"  {name:<6}{c['audits']:>16} audits   {cell(c)}" for name, c in out["periods"].items()]
     most = ", ".join(f"{f'2^{log2(n)}' if n else 'none'} {'at one' if name == 'audit' else 'over a'} {name}"
                      for name, n in out["most_gates"].items())
-    lines.append(f"at most 2^-{out['target']} up to K = {most}")
+    lines.append(f"at most 2^-{out['target']} up to {'a mean of' if by_position else 'K ='} {most}")
     return "\n".join(lines)
 
 
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     k = ap.add_mutually_exclusive_group(required=True)
-    k.add_argument("--K", type=natural, help="the gates one audit's sample needs (2^40.23 is rounded up)")
+    k.add_argument("--K", type=natural,
+                   help="the gates one audit's sample needs: the most by gate, the mean by position (2^40.23 is "
+                        "rounded up)")
     k.add_argument("--card", metavar="MODEL", help="K at one proof block a stratum of the model's workload card")
     q = ap.add_mutually_exclusive_group(required=True)
     q.add_argument("--k", type=natural, help="a session's accepted reruns a wait")
     q.add_argument("--symbols", type=natural, help="a table's level-0 codeword symbols: k = ⌈4·tables·symbols/e⌉")
     ap.add_argument("--tables", type=natural, default=1, help="the tables of one session, with --symbols (default 1)")
+    ap.add_argument("--sessions", type=natural, help="the most sessions of one run: evaluate by position")
     ap.add_argument("--d", type=natural, default=1, help="the most sessions holding one gate (default 1)")
     ap.add_argument("--T", type=natural, default=BUDGET, help="the prover's SHA-512 calls (default 2^80)")
     ap.add_argument("--row-bytes", type=natural,
@@ -282,7 +321,7 @@ def main(argv=None) -> None:
         import cards
         gates = card_gates(cards.load("workload", a.card))
     design = Design(K=gates, k=a.k if a.k else queries(a.tables * a.symbols), d=a.d,
-                    T=a.T * (compressions(a.row_bytes) if a.row_bytes is not None else 1),
+                    T=a.T * (compressions(a.row_bytes) if a.row_bytes is not None else 1), sessions=a.sessions,
                     open_calls=a.open_calls, p_ref=a.p_ref, opens=a.opens, M=a.M)
     out = report(design, a.phase_seconds, a.machines, a.target)
     print(json.dumps(out, indent=1) if a.json else render(out))

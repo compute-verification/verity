@@ -19,7 +19,7 @@ uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # th
 uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4 (figures.py writes it too)
 uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path P] [--headline CARD]  # Figure 5
 uv run python benchmarks/spot_figures/figure6.py --advice A.json [--points P...] [--old-rule POINT...] --out DIR
-uv run python benchmarks/spot_figures/binding.py --card GLM-5.3 --symbols 2^10   # the binding error at a design
+uv run python benchmarks/spot_figures/binding.py --K 2^37.69 --sessions 5523986 --symbols 2^23   # the binding error
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
 ~~~
 
@@ -200,11 +200,13 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     `pending` reason where the arm's figure isn't a result yet, hatched).
 - **The binding error** (`binding.py`): the probability beside every figure's bound, that an accepted run opens a
   value off the committed trace, as the two-stage first-hit finder bounds it. It is evaluated in exact rational
-  arithmetic at a design given as parameters: K, the gates one audit's sample needs (`--card`: one proof block a
-  stratum of the model's `workload` card), k, a session's accepted reruns a wait (`--symbols`, `--tables`), d, the
-  sessions holding one gate, and T, the prover's SHA-512 compressions (`--row-bytes`: calls on rows). It prints the
-  bound at one audit and over each monitoring period, whether each is at most 2^-100 (`--target`), and the most
-  gates that keep it there.
+  arithmetic at a design given as parameters: the gates one audit's sample needs (`--K`, or `--card`: one proof block
+  a stratum of the model's `workload` card), k, a session's accepted reruns a wait (`--symbols`, `--tables`), and T,
+  the prover's SHA-512 compressions (`--row-bytes`: calls on rows). With `--sessions`, a run's most sessions, it is
+  the by-position form, which reads the sample's mean gates and is the expression
+  `Claims.Flock.Numbers.firstHitBound` in Lean; without, the by-gate form, which reads the most gates and d, the
+  sessions holding one gate. It prints the bound at one audit and over each monitoring period, whether each is at
+  most 2^-100 (`--target`), and the most gates that keep it there.
 - The headline scope (`figure1.PRIMARY`, a world year) gets the bare file names. Its exfiltration panel also plots
   (A) over the secondary scope (`figure1.SECONDARY`, a datacenter year).
 - A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build
