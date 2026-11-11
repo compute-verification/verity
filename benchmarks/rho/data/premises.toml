@@ -118,4 +118,4 @@ credible_bits = { value = inf, unit = "bit", source = "a property of the work's 
 # reported alone, labeled draft. false admits every bound whose premises aren't refuted at a block. A cut's premises
 # and the structure's (draft:no-straddle) are not a bound's own.
 [bounds]
-lock_only = { value = true, source = "a published figure about a cheating prover rests on a bound Lean states, under named premises", status = "declared" }
+lock_only = { value = true, source = "a published figure rests only on a bound a lock states", status = "declared" }
