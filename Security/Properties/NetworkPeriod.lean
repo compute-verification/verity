@@ -36,10 +36,11 @@ no link-window whose scan's `prog` is not a compute audit's slot entries, a lane
 of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
 link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
 alters one of the scan's transitions is no Program's input. `RowsTiedCharged` says the public it accepts with supplies
-the charge itself: `charged` is the facts of each tied audit whose sample is smaller than its units, each once, so each
-one's δ is in `eps`, and where such an audit's bound is at least one incorrect proof block, the term of every
-link-window whose scan's `prog` is its output has every slot entry bit (`faultyEntries` at `scan.entries`), the number
-`RowsKBoundsCount` takes as `faulty`. Each says its conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`,
+the charge itself: `charged` is the facts of each tied audit sampled in part (`drawn < units`), each once, so each
+one's δ is in `eps` (`Public.eps` sums the terms' facts' and `charged`'s, and nothing else), and where such an audit's
+bound is at least one incorrect proof block, the term of every link-window whose scan's `prog` is its output has every
+slot entry bit (`faultyEntries` at `scan.entries`), the number `RowsKBoundsCount` takes as `faulty`. Each says its
+conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`,
 `RowsTiedChargedAt`) of every period `check` accepts, and so is, by definition, its property of any period check at
 `check` (`RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedChargedOf`), which the nontrivial lemmas state false at
 `acceptAllRows`, a check that accepts every period. Each guarantee writes its acceptance of `check` out rather than
@@ -130,27 +131,26 @@ def AuditFacts (i : ℕ) (reg : Lean.Json) (x : Core.Answer) (f : Facts) : Prop 
   ∃ (prof : Core.Integrity) (pub : Lean.Json),
     answered s!"audit {i}" reg x = .ok (prof, pub) ∧ factsOf s!"audit {i}" prof pub = .ok f
 
-/-- Among the audits' facts `facts`, in their order and each once, those of each audit `tied` ties whose sample is
-smaller than its units (`drawn < units`). -/
+/-- Among the audits' facts `facts`, in their order and each once, those of each audit `tied` ties that is sampled in
+part (`drawn < units`). -/
 def tiedInPart (tied : ℕ → Bool) (facts : Array Facts) : Array Facts :=
   (Array.range facts.size).filterMap fun i => facts[i]?.filter fun f => tied i && decide (f.drawn < f.units)
 
 /-- What `RowsTiedCharged` says of a period its check accepted with the public `pub`: in the rows form, `pub.charged`
-is `tiedInPart` of the public's audits' facts under the commitment's ties (`tiedIn`), and each tied audit `i` has its
-answer's facts `f` (`AuditFacts`) as the public's `audits[i]`, with either a sample no smaller than its units
-(`f.units ≤ f.drawn`), or `f` among `pub.charged` and, when its bound is at least one incorrect proof block
-(`1 ≤ f.wrong`), every link-window `w` whose scan's `prog` is its output (`tiedAudits`) at
-`faultyEntries = scan.entries` in the public's term `pub.units[w]`. -/
+is `tiedInPart` of the public's audits' facts under the commitment's ties (`tiedIn`), and each tied audit `i` has an
+answer `x` whose facts `f` (`AuditFacts`) are the public's `audits[i]`; if it is sampled in part (`f.drawn < f.units`),
+`f` is among `pub.charged` and, when its bound is at least one incorrect proof block (`1 ≤ f.wrong`), every
+link-window `w` whose scan's `prog` is its output (`tiedAudits`) has `faultyEntries = scan.entries` in the public's
+term `pub.units[w]`. -/
 def RowsTiedChargedAt (p : Params) (c : Commitment) (e : Evidence) (pub : Public) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     pub.charged = tiedInPart (tiedIn c.audits c.windows) pub.audits ∧
-    ∀ (i : ℕ) (reg : Lean.Json) (x : Core.Answer), c.audits[i]? = some reg → e.audits[i]? = some x →
-      tiedIn c.audits c.windows i = true →
-        ∃ f : Facts, AuditFacts i reg x f ∧ pub.audits[i]? = some f ∧
-          (f.units ≤ f.drawn ∨ f ∈ pub.charged ∧ (1 ≤ f.wrong →
-            ∀ (w : ℕ) (wreg : Lean.Json), c.windows[w]? = some wreg →
-              (tiedAudits c.audits wreg).contains i = true →
-                ∃ t : AuditTerms, pub.units[w]? = some t ∧ t.faultyEntries = scan.entries))
+    ∀ (i : ℕ) (reg : Lean.Json), c.audits[i]? = some reg → tiedIn c.audits c.windows i = true →
+      ∃ (x : Core.Answer) (f : Facts), e.audits[i]? = some x ∧ AuditFacts i reg x f ∧ pub.audits[i]? = some f ∧
+        (f.drawn < f.units → f ∈ pub.charged ∧ (1 ≤ f.wrong →
+          ∀ (w : ℕ) (wreg : Lean.Json), c.windows[w]? = some wreg →
+            (tiedAudits c.audits wreg).contains i = true →
+              ∃ t : AuditTerms, pub.units[w]? = some t ∧ t.faultyEntries = scan.entries))
 
 /-- `RowsTiedCharged` of the period check `chk`: `RowsTiedChargedAt` of every period `chk` accepts, at the public it
 accepts with. -/
@@ -158,17 +158,18 @@ def RowsTiedChargedOf (chk : Params → Commitment → Evidence → Core.Outcome
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → RowsTiedChargedAt p c e pub
 
-/-- **The rows form charges every tied audit it accepts with a sample smaller than its units.** If the check accepts a
-period in the rows form with the public `pub`, then `pub.charged`, whose δ `eps` sums beside the scans', is the facts
-of each audit that some link-window's scan's `prog` is an output of (`tiedIn`) and whose sample is smaller than its
-units, in the audits' order and each once (`tiedInPart` of `pub.audits`); and for each such audit whose bound is at
-least one incorrect proof block, the public's term of every link-window whose scan's `prog` is its output has
-`faultyEntries` at the scan's every slot entry bit (`Scan.entries`), which `K` sums. So the `faulty` `RowsKBoundsCount`
-takes and the δ of the audits it is read from are the check's own, of every period it accepts.
+/-- **The rows form charges every tied audit it accepts sampled in part.** If the check accepts a period in the rows
+form with the public `pub`, then `pub.charged` is the facts of each audit that some link-window's scan's `prog` is an
+output of (`tiedIn`) and that is sampled in part (`drawn < units`), in the audits' order and each once (`tiedInPart` of
+`pub.audits`). `Public.eps` sums the δ of the terms' facts and of `charged`, and of nothing else, so each such audit's
+δ is in `eps`. And for each such audit whose bound is at least one incorrect proof block, the public's term of every
+link-window whose scan's `prog` is its output has `faultyEntries` at the scan's every slot entry bit (`Scan.entries`),
+which `K` sums. So the `faulty` `RowsKBoundsCount` takes and the δ of the audits it is read from are the check's own,
+of every period it accepts.
 
-A tied audit the check accepts uncharged has `units ≤ drawn`. The check charges by `drawn < units` (`chargedOf`) and
-reads both off the answer's profile, so a profile naming more members drawn than its level has is neither charged nor
-refused here. -/
+It says nothing of a tied audit with `units ≤ drawn`. The check charges by `drawn < units` (`chargedOf`) and reads both
+off the answer's profile, so a profile naming more members drawn than its level has is neither charged nor refused
+here. -/
 def RowsTiedCharged : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsTiedChargedAt p c e pub
