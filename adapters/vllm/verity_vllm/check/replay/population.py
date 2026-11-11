@@ -79,7 +79,11 @@ def _lifetime(engine_step: int, ring_slots: int | None) -> str:
     return "recycled-window" if int(engine_step) >= int(ring_slots) else "fresh-window"
 
 
-def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict[str, Any]:
+#: how many identical pairs, and how many planes it could not read, `moe_plane_alias_check` names
+ALIAS_NAMED = 12
+
+
+def moe_plane_alias_check(store: CommittedStore) -> dict[str, Any]:
     """[FLUSH-03 fact of record] per (request, step, MoE layer) with BOTH planes committed: the committed `up` bytes differ
     from the committed `down` bytes.  Before FLUSH-03 the gather collector committed the same layer's down plane under the up name (vLLM's
     TritonExperts carves intermediate_cache1 = up and intermediate_cache3 = down out of ONE workspace; with no flush between the layer's two
@@ -115,7 +119,7 @@ def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict
             lo, hi = mems[mem]
             w, why = store.words(rid, step, f"moe/L{layer}", mem, lo, hi)
             if w is None:
-                if len(errors) < max_named:
+                if len(errors) < ALIAS_NAMED:
                     errors.append({"request_id": rid, "step": step, "layer": layer, "plane": mem, "why": str(why)[:200]})
                 break
             got[mem] = w.tobytes()
@@ -128,7 +132,7 @@ def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict
         pl["compared"] += 1
         if n > 0 and got["up"][:n] == got["down"][:n]:
             pl["identical"] += 1
-            if len(identical) < max_named:
+            if len(identical) < ALIAS_NAMED:
                 identical.append({"request_id": rid, "step": step, "layer": layer, "bytes_compared": n,
                                   "sha256": hashlib.sha256(got["up"][:n]).hexdigest()[:16]})
     n_ident = sum(v["identical"] for v in per_layer.values())

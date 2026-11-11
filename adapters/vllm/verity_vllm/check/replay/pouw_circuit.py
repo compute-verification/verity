@@ -131,16 +131,20 @@ def check_call(rec: PC.CallRecord) -> list[str]:
     return why
 
 
-def tamper_tiles(records: Sequence[PC.CallRecord], leaf: int = 7) -> tuple[list[PC.CallRecord], dict[str, Any]]:
-    """A negative control: the calls as a prover commits and opens them with word ``leaf`` of every tile of the first call
+#: the word of each tile that `tamper_tiles` flips
+TAMPER_LEAF = 7
+
+
+def tamper_tiles(records: Sequence[PC.CallRecord]) -> tuple[list[PC.CallRecord], dict[str, Any]]:
+    """A negative control: the calls as a prover commits and opens them with word `TAMPER_LEAF` of every tile of the first call
     flipped in its low bit. Each call's tile stratum samples at least one tile (`plan.WorkLaw`'s floor), so whatever the
     window's fresh sample, a wrong tile is proved. Returns the calls and where the tamper is."""
     rec = records[0]
     nat = PN.Native(rec.call, rec.scheme)
     tiles = [nat.index("tile", rs, cs) for rs in range(nat.ms) for cs in range(nat.ns)]
-    bad = PN.commit_call(rec.index, rec.scheme, rec.call, tamper={(u, leaf): int(rec.opening(u)[leaf]) ^ 1 for u in tiles},
+    bad = PN.commit_call(rec.index, rec.scheme, rec.call, tamper={(u, TAMPER_LEAF): int(rec.opening(u)[TAMPER_LEAF]) ^ 1 for u in tiles},
                          side=rec.side)
-    return [bad, *records[1:]], {"what": "tile", "call": rec.index, "units": tiles, "leaf": leaf}
+    return [bad, *records[1:]], {"what": "tile", "call": rec.index, "units": tiles, "leaf": TAMPER_LEAF}
 
 
 def unit_holds(rec: PC.CallRecord, nat: PN.Native, u: int, opened) -> str | None:

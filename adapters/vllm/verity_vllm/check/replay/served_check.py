@@ -402,7 +402,11 @@ def check(build: dict[str, Any], steps: Iterable[Step], weight: Callable[[str], 
     return c.report()
 
 
-def population(build: dict[str, Any], rep: dict[str, Any], *, ranks: list[int], first: int = 6) -> dict[str, Any]:
+#: how many findings of each kind `population` names
+NAMED = 6
+
+
+def population(build: dict[str, Any], rep: dict[str, Any], *, ranks: list[int]) -> dict[str, Any]:
     """The check's reach (`report`) reconciled against the Build's identities, its Q(P), identity by identity: an identity
     (engine step, request, value) is reached when the report notes its value at that step for that request (a request of the
     step's committed batch; the ids only of a request whose prompt or previous sampled id they were compared to).  A noted value
@@ -440,9 +444,9 @@ def population(build: dict[str, Any], rep: dict[str, Any], *, ranks: list[int], 
     manifest_ranks = sorted({int(i["rank"]) for i in build["identities"]})
     total, n_reached = len(build["identities"]), sum(reached.values())
     ranks_equal = manifest_ranks == sorted(ranks)
-    checks = {"vus_outside_query": {"n": len(outside), "first": outside[:first]},
-              "identities_without_rows": {"n": len(without), "first": without[:first]},
-              "rows_disagree": {"n": len(disagree), "first": disagree[:first]},
+    checks = {"vus_outside_query": {"n": len(outside), "first": outside[:NAMED]},
+              "identities_without_rows": {"n": len(without), "first": without[:NAMED]},
+              "rows_disagree": {"n": len(disagree), "first": disagree[:NAMED]},
               "ranks": {"replay": sorted(ranks), "manifest": manifest_ranks, "equal": ranks_equal},
               "accounted": n_reached + len(without) == total,
               "unstated_families": sorted(set(fam) - {SERVED_FAMILY})}
