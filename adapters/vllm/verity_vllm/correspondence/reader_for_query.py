@@ -139,6 +139,15 @@ def call_name_of(rec: CallCorrespondence) -> CallName:
     return CallName(rec.module, rec.node or "", rec.member or "", row, "")
 
 
+def _return_shape(r: Mapping[str, Any], outs: Sequence[Any], ins: Sequence[Any]) -> Any:
+    """The recorded shape of the tensor a return slot holds: its fx output's, or its written argument's view's; None where the
+    occurrence records neither."""
+    if r.get("output") is not None:
+        return (outs[r["output"]] or {}).get("shape") if r["output"] < len(outs) else None
+    wa = r.get("written_arg")
+    return ((ins[wa] or {}).get("view") or {}).get("shape") if wa is not None and wa < len(ins) else None
+
+
 def recorded_names(doc: Mapping[str, Any]) -> tuple[dict[int, CallName], list[int], dict[int, int], dict[int, tuple[int, int]]]:
     """`call_name_of` of each Call record of a `runtime-correspondence/v1` document, the tensorless Calls (every return slot neither
     an fx output nor a written argument), and each placed Call's row and columns (`call_place`), read off the fields
@@ -171,14 +180,7 @@ def recorded_names(doc: Mapping[str, Any]) -> tuple[dict[int, CallName], list[in
             tensorless.append(k)
         elif rets:
             outs, ins = o.get("outputs") or [], o.get("inputs") or []
-
-            def shape(r: Mapping[str, Any]) -> Any:
-                if r.get("output") is not None:
-                    return (outs[r["output"]] or {}).get("shape") if r["output"] < len(outs) else None
-                wa = r.get("written_arg")
-                return ((ins[wa] or {}).get("view") or {}).get("shape") if wa is not None and wa < len(ins) else None
-
-            r, cols = call_place([(x["leaves"], shape(x)) for x in rets if x.get("leaves") is not None])
+            r, cols = call_place([(x["leaves"], _return_shape(x, outs, ins)) for x in rets if x.get("leaves") is not None])
             if r is not None:
                 rows[k] = r
             if cols is not None:

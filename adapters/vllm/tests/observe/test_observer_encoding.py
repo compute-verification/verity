@@ -188,9 +188,8 @@ def test_nested_mode_instances_share_the_recorder_and_link_parents():
     # its func(...) call reaches the outer mode, whose record has the inner call as parent
     rec, events = _rec()
     a = torch.randn(2, 2)
-    with Observer(rec):
-        with Observer(rec):
-            torch.mm(a, a)
+    with Observer(rec), Observer(rec):
+        torch.mm(a, a)
     enters = [e for e in events if isinstance(e, DispatchEnter)]
     assert len(enters) == 2 and enters[0].parent is None and enters[1].parent == enters[0].id
     exits = [e.id for e in events if isinstance(e, DispatchExit)]
@@ -199,9 +198,8 @@ def test_nested_mode_instances_share_the_recorder_and_link_parents():
 
 def test_exception_survives_with_a_note():
     rec, events = _rec()
-    with Observer(rec):
-        with pytest.raises(RuntimeError):
-            torch.mm(torch.zeros(2, 3), torch.zeros(2, 3))
+    with Observer(rec), pytest.raises(RuntimeError):
+        torch.mm(torch.zeros(2, 3), torch.zeros(2, 3))
     notes = [e for e in events if isinstance(e, Note)]
     assert notes and notes[0].text == "exception in dispatcher call" and notes[0].data["op"] == "aten.mm.default"
     assert [e for e in events if isinstance(e, DispatchExit)][-1].outs is None

@@ -317,15 +317,15 @@ def moe_plane_modules(rows: Iterable[tuple[str, str]]) -> frozenset[str]:
 def moe_identities(g: dict[str, Any]) -> list[tuple[str, int, str]]:
     """(plane, elements, dtype) of the block-stream tensors for one MoE layer in one step: `MOE_PLANES`, or under block-FP8 experts the
     `MOE_FP8_PLANES` the module's rows produce (a quant or SiluMul the Program has no rows for is no plane)."""
-    M, K, H, I, N = g["M"], g["TOPK"], g["H"], g["I"], g["N_up"]
+    M, K, H, inter, N = g["M"], g["TOPK"], g["H"], g["I"], g["N_up"]
     route = [("router_w", M * K, "f32"), ("router_ids", M * K, "i32")]
     tail = [("down", M * K * H, "bf16"), ("sum", M * H, "bf16")]
     if not g.get("fp8"):
-        return route + [("up", M * K * N, "bf16"), ("act", M * K * I, "bf16")] + tail
+        return route + [("up", M * K * N, "bf16"), ("act", M * K * inter, "bf16")] + tail
     G = int(g.get("G") or 1)
     return (route + ([("in_q", M * H, "w8"), ("in_scale", M * H // G, "f32")] if g.get("in_quant_rows") else [])
-            + [("up", M * K * N, "bf16")] + ([("act", M * K * I, "bf16")] if g.get("act_rows") else [])
-            + ([("act_q", M * K * I, "w8"), ("act_scale", M * K * I // G, "f32")] if g.get("act_quant_rows") else []) + tail)
+            + [("up", M * K * N, "bf16")] + ([("act", M * K * inter, "bf16")] if g.get("act_rows") else [])
+            + ([("act_q", M * K * inter, "w8"), ("act_scale", M * K * inter // G, "f32")] if g.get("act_quant_rows") else []) + tail)
 
 
 def fa2_geometry(T_max: int, rows: int, NH: int, KVH: int, D: int, n_seq: int, windowed: bool = False) -> tuple[int, int, int, int, str]:
@@ -455,11 +455,13 @@ def load_program(program_dir: str, *, expand: bool = True) -> dict[str, Any]:
     (`instances_file.read_instances`): read them, never modify them in place."""
     from verity_vllm.program.instances_file import read_instances
     inst = read_instances(os.path.join(program_dir, "instances.json.gz"), expand=expand)
-    res = json.load(open(os.path.join(program_dir, "result.json")))
+    with open(os.path.join(program_dir, "result.json")) as f:
+        res = json.load(f)
     art = None
     p = os.path.join(program_dir, "artifact.json")
     if os.path.exists(p):
-        art = json.load(open(p))
+        with open(p) as f:
+            art = json.load(f)
     return {"instances": inst, "result": res, "artifact": art, "dir": program_dir}
 
 #: the sampling event that ends an engine step: greedy `TokenSelect_v1`, and the stochastic / explicit-argmax selectors of `registry.sampling`

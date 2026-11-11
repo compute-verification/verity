@@ -10,6 +10,7 @@ import json
 import pytest
 
 from verity_vllm.commit import binding as B
+from verity_vllm.program.instances_file import write_instances_file
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.manifest.bind import coverage_check
 from verity_vllm.query.manifest.format import canonical_identity, manifest_digest, spec_statics, split_name
@@ -193,3 +194,16 @@ def test_program_dirs_for_passes_over_a_result_it_cannot_read(tmp_path):
     (tmp_path / "build_request_c" / "result.json").write_bytes(b"\xff\xfe{}")
     with pytest.raises(SystemExit, match="r0 .*168,9"):
         MF.program_dirs_for(fx, str(tmp_path))
+
+
+def test_load_program_reads_the_dirs_result_and_its_artifact_when_there_is_one(tmp_path):
+    """`load_program` returns the Program dir's result.json and artifact.json as the files hold them, and None for an artifact
+    the dir does not have."""
+    head = {"schema": "cb-a/instance-sequence/v2", "digest": "d" * 64, "correspondence_digest": None, "params": []}
+    write_instances_file(str(tmp_path / "instances.json.gz"), head, iter([]))
+    (tmp_path / "result.json").write_text(json.dumps({"ok": True, "LP": 3}))
+    got = MF.load_program(str(tmp_path))
+    assert (got["result"], got["artifact"], got["dir"]) == ({"ok": True, "LP": 3}, None, str(tmp_path))
+    assert got["instances"] == {**head, "rows": []}
+    (tmp_path / "artifact.json").write_text(json.dumps({"program": {"digest": "d" * 64}}))
+    assert MF.load_program(str(tmp_path))["artifact"] == {"program": {"digest": "d" * 64}}

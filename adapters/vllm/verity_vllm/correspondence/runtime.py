@@ -464,8 +464,8 @@ def read_descriptor_annotation(desc_path: str, namespace: str = NAMESPACE) -> di
     dropped, only `annotations` is built.  None when the descriptor carries no `annotations` or no such namespace.  The value is
     exactly `json.load(f)["annotations"][namespace]` (`correspondence_digest` of it is the recorded digest)."""
     import gzip
-    opener = gzip.open(desc_path, "rt", encoding="utf-8") if str(desc_path).endswith(".gz") else open(desc_path, encoding="utf-8")
-    with opener as fh:
+    gz = str(desc_path).endswith(".gz")
+    with (gzip.open(desc_path, "rt", encoding="utf-8") if gz else open(desc_path, encoding="utf-8")) as fh:
         s = _Stream(fh)
         s.take("{")
         found: dict | None = None
@@ -550,9 +550,8 @@ def validate_document(doc: dict) -> list[str]:
             if inp.get("source") not in ("input", "weight", "call", "constant", "other"):
                 problems.append(f"occurrences[{o}].inputs[{j}].source {inp.get('source')!r} not in the enum")
         c = occ.get("collective")
-        if c is not None:
-            if not all(isinstance(x, int) for x in c.get("operand_ranks", [])) or not isinstance(c.get("occurrence"), int):
-                problems.append(f"occurrences[{o}].collective has a non-integer rank coordinate: {c!r}")
+        if c is not None and not (all(isinstance(x, int) for x in c.get("operand_ranks", [])) and isinstance(c.get("occurrence"), int)):
+            problems.append(f"occurrences[{o}].collective has a non-integer rank coordinate: {c!r}")
     for k, c in enumerate(doc["calls"]):
         if "occ" not in c:
             problems.append(f"calls[{k}] lacks 'occ'")
