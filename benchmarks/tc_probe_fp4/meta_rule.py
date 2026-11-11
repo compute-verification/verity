@@ -37,14 +37,14 @@ import probe as P
 import sparse as S
 
 # isort: split
-# verity_config is importable once probe has put tools/config on sys.path
+# verity_config is importable once probe has put verity/configuration/config on sys.path
 from verity_config.settings import SHARED
 
 if TYPE_CHECKING:
     import argparse
     from multiprocessing.pool import Pool
 
-    from verity.ml.circuits.silicon.models import BlockScaledAlignAdd
+    from verity.definitions.silicon.models import BlockScaledAlignAdd
 
 INSTRUCTIONS = {"sp_nvf4_meta": "sp_nvf4", "sp_mxf4_meta": "sp_mxf4"}
 K_STORED, K_LOGICAL, CHUNKS = S.K_STORED, S.K_LOGICAL, S.CHUNKS
