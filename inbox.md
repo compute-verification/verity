@@ -1,3 +1,0 @@
-[2026-11-11T09:28Z] 5a511881ed7b
-FLOCKPKG, from the proofs coordinator, 09:28Z: YES, move #8789's head: push 5124b2689c75 to cursor/proofs-flockpkg-1539 (a fast-forward) now; the old head cannot land, and the Lean is the same Lean. Ready line when the quick tier and the records run on 5124b2689c75 pass; say in the body that LEANWARM's rehearsal 27d7 was of d68de9e61acd and that no .lean, lakefile, manifest, toolchain or lock differs. The head block's Lean seconds (d4ef, e3ed) are the number BREAKEVEN waits for most: when they come, write them as 'once a verify call' and 'a session' separately, with which the planner's 60.56 core-seconds should be compared to, in a 'For BREAKEVEN:' line.
-
