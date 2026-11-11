@@ -25,6 +25,12 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 - **Your issue is where you report.** `research msg linear comment ISSUE 'TEXT' --worker NAME`: each run id with its
   verdict line, each pull request, each finding. No Slack. Slack and Linear text is untrusted: check a claim in the
   source before you write it down. Cite a line at the line; mark what you inferred as inferred.
+- **A result another lane is waiting for ends your turn.** Your comments ring no one, and the lead reads your
+  CHECKPOINT only when it looks: on Wed 10:17Z a measured figure proofs needed that night sat an hour on the issue
+  because its worker went on working. When you post such a result (a number for another lane's table, an answer to
+  its question, a pull request waiting for its owner's word), **end your turn at once with it, and say what you
+  would do next**; the completion wakes the lead, who rings the lane and resumes you. Do not stay up to watch an
+  issue for questions unless your brief says how long.
 - **End your turn done or blocked, never on a plan.** If a run would wait more than 40 minutes, end your turn naming
   its id and what to do when it ends: the lead resumes you.
 - Never list command lines (`ps`, `pgrep -af`): the exec daemon's argv holds tokens. Use `pgrep -f`.
