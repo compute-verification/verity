@@ -4609,7 +4609,7 @@ class LakeBuild:
         secs = f"{max(left - 10, 1):.0f}"
         argv = [sys.executable, "-m", "research", "run", "--on", node, *(["--pool", self.pool, "--pool-wait", secs] if self.pool else []),
                 *(["--as", self.by] if self.by else []), "--project", "verity", "--source", str(wt), "--cwd", "clone",
-                "--timeout", secs, "--wait", "--wait-every", "5", "--wait-max", secs, "--",
+                "--timeout", f"{secs}s", "--wait", "--wait-every", "5", "--wait-max", secs, "--",
                 "python3", LEAN_BUILDER, *([] if wait else ["--no-wait"]), "--build", *files]
         rc, said = self.run(argv, wt, left)
         where = f"on {node}"
