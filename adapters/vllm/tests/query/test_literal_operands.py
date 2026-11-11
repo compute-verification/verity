@@ -16,12 +16,16 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.query.units import ValueRef, boundary
-from verity_vllm.query import program_view as pv
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.query.module_body import Q_module_body_v1, literal_calls, module_body_boundary
+from verity_vllm.query import program_view as pv
+from verity_vllm.query.module_body import (
+    Q_module_body_v1,
+    literal_calls,
+    module_body_boundary,
+)
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import request_manifest
+from verity_vllm.query.units import ValueRef, boundary
 
 R = ValueRef
 W = "model.model"

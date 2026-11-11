@@ -130,7 +130,10 @@ def test_a_run_field_no_step_or_two_steps_read_is_unmodelled_by_name():
 
 def test_the_plan_anchors_one_value_class_per_layer_on_its_readers_module():
     from verity_vllm.acquire import plan as PL
-    from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, runtime_tree_from_paths
+    from verity_vllm.correspondence.reader_for_acquire import (
+        AnnotationCorrespondence,
+        runtime_tree_from_paths,
+    )
 
     m = _served()
     assert PL.ROUTE_OF_FAMILY[fmt.RUN_FAMILY] == "run_tap"

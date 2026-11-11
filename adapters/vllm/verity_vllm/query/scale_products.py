@@ -14,12 +14,11 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
+from collections.abc import Callable, Mapping
 from functools import cache
 from typing import Any
-from collections.abc import Callable, Mapping
 
-from verity.definitions.registry import fp8
-from verity.definitions.registry import fp8_vocab
+from verity.definitions.registry import fp8, fp8_vocab
 from verity.definitions.registry import prims as P
 
 FAMILY = "scale_products"

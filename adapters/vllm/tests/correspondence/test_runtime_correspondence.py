@@ -18,11 +18,18 @@ from pathlib import Path
 
 import pytest
 import torch
-
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.program import Program
+
 from verity_vllm.correspondence.runtime import (
-    JSON_SCHEMA, NAMESPACE, SCHEMA, ArgSpan, RuntimeCorrespondence, correspondence_digest, load_correspondence, validate_document,
+    JSON_SCHEMA,
+    NAMESPACE,
+    SCHEMA,
+    ArgSpan,
+    RuntimeCorrespondence,
+    correspondence_digest,
+    load_correspondence,
+    validate_document,
 )
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import derive_report

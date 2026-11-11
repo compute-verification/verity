@@ -9,8 +9,8 @@ assertion is `fixtures_query` (the explicit `query_ast.oracle_in` / `oracle_out`
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits.parts import Limits, Part, Unsupported
+
 from tests.program import fixtures_query as FX
 
 SLOW_FIXTURES = ("attention", "attention_head", "attention_head_t72", "attention_head_v1")

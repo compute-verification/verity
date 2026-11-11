@@ -55,11 +55,15 @@ from __future__ import annotations
 
 import math
 from collections import Counter, defaultdict
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Iterable, Mapping, Sequence
 
-from verity_vllm.query.manifest.format import RUN_FAMILY, batch_launch_shortfall, promoted_observation
+from verity_vllm.query.manifest.format import (
+    RUN_FAMILY,
+    batch_launch_shortfall,
+    promoted_observation,
+)
 
 __all__ = ["HIDDEN_FAMILIES", "Port", "Binder", "coverage_check", "runtime_place", "source_ports", "split_name"]
 

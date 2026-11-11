@@ -68,10 +68,11 @@ def test_manifest_sites_refuses_two_ranges_at_one_site():
 
 
 def test_the_family_is_in_every_vocabulary():
+    from verity.definitions import word as W_
+
     from verity_vllm.acquire import plan
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.check.replay import coverage
-    from verity.definitions import word as W_
 
     assert VR.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[VR.FAMILY] == "vocab_tap" and VR.FAMILY in coverage.QUERY_FAMILY_MECHANISM
     entry = {"identity": {"op_path": "model.embed_tokens", "output_member": VR.MEMBER}, "name": f"model.embed_tokens/{VR.MEMBER}"}

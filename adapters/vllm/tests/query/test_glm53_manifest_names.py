@@ -17,11 +17,15 @@ import pytest
 from tests.acquire.glm53_model import CMAP, ENV
 from verity_vllm.acquire.sources import linear_quant_source as LQ
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.commit.committer.native_host import CALL_DEPENDENT_RE
-from verity_vllm.correspondence.reader_for_query import Correspondence, held_module_paths, parse_call_name
+from verity_vllm.correspondence.reader_for_query import (
+    Correspondence,
+    held_module_paths,
+    parse_call_name,
+)
 from verity_vllm.query.collective_names import NORM_SITE_MEMBER
 from verity_vllm.query.compose import merge_ranks
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import Population, request_manifest
 from verity_vllm.query.units import ValueRef as R

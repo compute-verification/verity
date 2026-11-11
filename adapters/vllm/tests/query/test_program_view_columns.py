@@ -12,11 +12,28 @@ import json
 import random
 
 import pytest
-from verity_vllm.query.units import PartitionError, ValueRef, VerificationUnit, boundary, partition_by
+
 from verity_vllm.query import module_body as mb
 from verity_vllm.query import program_view as pv
-from verity_vllm.query.module_body import boundary_without_literals, literal_calls, without_literals
-from verity_vllm.query.program_view import CallView, ProgramView, from_instances, param_reads, reads_any_of
+from verity_vllm.query.module_body import (
+    boundary_without_literals,
+    literal_calls,
+    without_literals,
+)
+from verity_vllm.query.program_view import (
+    CallView,
+    ProgramView,
+    from_instances,
+    param_reads,
+    reads_any_of,
+)
+from verity_vllm.query.units import (
+    PartitionError,
+    ValueRef,
+    VerificationUnit,
+    boundary,
+    partition_by,
+)
 
 EPS = '{"f64":"0x1p-17"}'
 PARAMS = [["prompt", "Array<4,Value<32>>"],

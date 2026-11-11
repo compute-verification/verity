@@ -25,14 +25,26 @@ The runtime side is `runtime_tree.RuntimeTree` (module-tree facts: which modules
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from collections.abc import Iterable, Mapping
 
+from verity_vllm.correspondence.runtime import (
+    NAMESPACE,
+    SCHEMA,
+    RuntimeCorrespondence,
+    read_program_dir,
+)
+from verity_vllm.observe.runtime_tree import (
+    RUNNER_PATH,
+    RUNTIME_TREE_SCHEMA,
+    RuntimeTree,
+    mro_names,
+    runtime_tree_from_paths,
+    runtime_tree_of,
+)
 from verity_vllm.query.manifest.format import collector_path, split_name
-from verity_vllm.observe.runtime_tree import RUNNER_PATH, RUNTIME_TREE_SCHEMA, RuntimeTree, mro_names, runtime_tree_from_paths, runtime_tree_of
-from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA, RuntimeCorrespondence, read_program_dir
 
 FALLBACK_READ = "the identity row's op_path: required_manifest.split_name(annotations.node_hints)[0] -> collector_path(wrapper_prefix) -> op_path_aliases"
 

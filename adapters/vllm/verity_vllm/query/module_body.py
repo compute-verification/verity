@@ -23,9 +23,16 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 import numpy as np
-from verity_vllm.query.units import Boundary, Partition, ValueRef, boundary, partition_by
 
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.query.units import (
+    Boundary,
+    Partition,
+    ValueRef,
+    boundary,
+    partition_by,
+)
+
 from .program_view import ProgramView
 
 __all__ = ["Q_MODULE_BODY_ID", "Q_MODULE_BODY_TEXT", "Q_module_body_v1", "literal_calls", "without_literals", "boundary_without_literals",

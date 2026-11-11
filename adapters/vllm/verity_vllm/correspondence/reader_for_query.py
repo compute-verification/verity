@@ -46,13 +46,18 @@ from __future__ import annotations
 import dataclasses
 import re
 from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
-from collections.abc import Iterable, Mapping, Sequence
 
-from verity_vllm.correspondence.runtime import SCHEMA, CallCorrespondence, RuntimeCorrespondence, correspondence_digest, read_program_document
-
+from verity_vllm.correspondence.runtime import (
+    SCHEMA,
+    CallCorrespondence,
+    RuntimeCorrespondence,
+    correspondence_digest,
+    read_program_document,
+)
 from verity_vllm.query.program_view import ProgramView, param_reads
 
 __all__ = ["CallName", "parse_call_name", "row_place", "call_place", "runtime_rows", "recorded_names", "Correspondence", "implementation_prefix",

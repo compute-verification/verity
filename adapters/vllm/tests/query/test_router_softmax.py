@@ -7,13 +7,14 @@ import json
 import types
 
 import pytest
-from verity_vllm.query.manifest.bind import Binder
-from verity_vllm.query.units import ValueRef
+
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query.manifest import format as fmt
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import request_manifest
+from verity_vllm.query.units import ValueRef
 
 W = "model.model"
 H, E, K = 8, 4, 2
@@ -116,7 +117,10 @@ def test_the_family_is_in_every_vocabulary():
 
 def test_the_plan_anchors_the_tap_on_the_moe_module():
     from verity_vllm.acquire import plan as PL
-    from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, runtime_tree_from_paths
+    from verity_vllm.correspondence.reader_for_acquire import (
+        AnnotationCorrespondence,
+        runtime_tree_from_paths,
+    )
 
     man = _manifest(program(), on=True)
     mod = next(x["moe_module"] for x in man["identities"] if x["family"] == RS.FAMILY)

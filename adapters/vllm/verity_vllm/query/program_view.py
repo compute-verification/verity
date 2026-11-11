@@ -38,12 +38,13 @@ import gzip
 import json
 import operator
 from array import array
+from collections.abc import Iterable, Iterator, Sequence
 from collections.abc import Sequence as _SequenceABC
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Iterable, Iterator, Sequence
 
 from verity.definitions.call_scope import spec_base, spec_statics
+
 from verity_vllm.query.type_repr import parse_type_repr
 from verity_vllm.query.units import ValueRef
 
@@ -522,7 +523,8 @@ class _Builder:
 
 def ports_of_type(t) -> tuple[Port, ...]:
     """The output ports of a `verity.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a RecordType."""
-    from verity.circuits.types import RecordType, Tuple as TupleT
+    from verity.circuits.types import RecordType
+    from verity.circuits.types import Tuple as TupleT
 
     def one(name: str, lo: int, ty) -> Port:
         n = ty.leaves

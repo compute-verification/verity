@@ -17,18 +17,18 @@ import json
 from collections import defaultdict
 
 import pytest
+from verity.definitions.registry import hopper
 
 from tests.acquire.glm53_model import CMAP, ENV
 from tests.program import test_dsa_derive as T
 from verity_vllm.acquire.sources import attention_source as AS
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.program.frontend.emit import NAMESPACE
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.frontend.rules.vocab import PROFILES
-from verity.definitions.registry import hopper
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, Port, ProgramView, from_instances
 from verity_vllm.query.required import Population, request_manifest
 from verity_vllm.query.units import ValueRef

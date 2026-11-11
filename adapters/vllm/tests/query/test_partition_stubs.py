@@ -12,21 +12,20 @@
 Nothing here is copied from the other owners' modules; the real modules replace these stubs at merge."""
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Iterator
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.layout import Scope
-from verity.circuits.query_ast import GateSet, oracle_out
 from verity.circuits.parts import Part, Unsupported, n_members
 from verity.circuits.program import Program
+from verity.circuits.query_ast import GateSet, oracle_out
 from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P
 from verity.definitions.registry.prims import BF16, F32
-from verity.circuits.types import Array, Tuple, Value
-
 
 # ---------------------------------------------------------------------------------------------------------
 # GateSet / Family stubs

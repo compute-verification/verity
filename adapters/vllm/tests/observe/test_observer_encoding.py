@@ -9,8 +9,21 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Note, StorageAlloc, StorageFree, ViewDesc  # noqa: E402
-from verity_vllm.observe.observer import EmptyMode, Observer, Recorder, encode_arg, op_name  # noqa: E402
+from verity_vllm.observe.events import (  # noqa: E402
+    DispatchEnter,
+    DispatchExit,
+    Note,
+    StorageAlloc,
+    StorageFree,
+    ViewDesc,
+)
+from verity_vllm.observe.observer import (  # noqa: E402
+    EmptyMode,
+    Observer,
+    Recorder,
+    encode_arg,
+    op_name,
+)
 from verity_vllm.observe.storage import StorageAdapter  # noqa: E402
 
 
