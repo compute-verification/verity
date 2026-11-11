@@ -60895,3 +60895,24 @@ theorem CompiledTwo.eventTwoX_oneWait_le_cls_at_budget  -- hypotheses as eventTw
 - [run] Branch `cursor/proofs-finder-7c1e` at `origin/main` `cc6ee74462`, nothing committed, nothing pushed, no cluster run started. My VM had no `~/.research/notes`; `research notes sync --path lanes/proofs` cloned it at 18:10Z and I read the morning note there.
 - Next: the one-tape lemma and `Arg.OneWaitFinds` for Flock, tried file by file; then the session form. Checkpoint Thu 02:00Z as you set it.
 - One thing I need from you: a yes or no on the statement of section 1.3 before I write its last file. The lemmas under it change no statement, so I go on with them now.
+
+## ATTACK, Wed 11 Nov 18:38Z: #8999 at its merged head: the reading of 16:42Z to 17:54Z holds at `dc1baf648bf3` (LAND WITH NOTES stands); the locks carry the same change, record for record, and the merge lost or doubled nothing of `main`'s
+
+**The line for PRF-553: the reading of 16:42Z to 17:54Z holds at `dc1baf648bf3`.** No run was made at this head, as you asked; what I checked is below.
+
+- **The head.** `dc1baf648bf3` is one merge commit with parents `fef48ce41a13` (the head I read) and `main` `cc6ee7446278` [run: `git cat-file -p`].
+- **The locks, parsed** (a hook that records any key written twice; compared leaf by leaf) [run locally, `tools/attack_8999_lock4.py` in the notes]. For each of the three locks, what the pull request changes at `dc1baf648bf3` against `cc6ee7446278` is equal, in paths, old values and new values, to what it changed at `fef48ce41a13` against `08ad61db9432`:
+  - `security/lean-audit.json`: the five `reads` leaves (`isInputNode` added; `Flock.TemplateQuery.evaluate`, `Flock.TemplateQuery`'s digest, `Spot.Slots.inputGates` and `Spot.Slots`' digest changed).
+  - `security/Properties/lean-audit.json`: the same five.
+  - The inference-only lock: the same ten `runs` leaves.
+- **Nothing of `main`'s dropped or doubled.** In each lock every leaf of `main`'s is in the merged head with `main`'s value, outside those leaves, and the merged head holds no leaf that is neither `main`'s nor the pull request's: 43,617 leaves and one added, 19,756 and one added, 104 and none. No key is written twice in any of the twelve files read. So `guarantees` at the merged head is `main`'s in both security locks.
+- **The records you saw move.** `main` changed 1,196 leaves of `security/lean-audit.json` between the two bases and the pull request changes none of them. In the merged file some of `main`'s keys sit in another place than in `main`'s file (the `compiler…Two` records and their neighbours): order in the text only, the parsed objects are equal.
+- **The other eight files.** Seven have the same blob at both heads. `spot/verifier/lean/tests/test_difftest.py` differs because `main` changed it elsewhere; the pull request's own patch to it has the same lines before and after the merge [run: `git rev-parse REV:PATH`; `diff` of the two patches without their hunk headers].
+- **The code under the reading.** `main` changed nothing under `Flock/` between the bases, so points 1 and 3 (the two readers of the program, the JSON parser) read the same text [run: `git diff --stat`]. Under Spot and the certifier `main` changed 16 files, and I searched its added lines for every input test my point 2 lists:
+  - The by-key readers I listed are still there, at new lines: `Spot/OneStageZk.lean:215-227` (was `:158-170`), used at `:634` and now at `:1128` too, both refusals; `NetworkCheck/Period.lean:745` (was `:698`) [read].
+  - `main` brought two new readers of "is this node an input", `Partition.sharedInputs` and `Partition.runInputs` (`Spot/Partition.lean:285, 353`), and their Python twins (`one_stage/partition.py:341, 382`). Each asks the definition's form first (`f.prim && …`; `isinstance(fn, PrimitiveDefinition)`, `verity/circuits/program.py:41-48`), so a composite keyed with an input id is no input to them. They add nothing to the list for the second pull request [read].
+- NOT CHECKED at this head: any run. Point 5's runs are of `fef48ce41a13`, `7600adda0a55` and `main` at `08ad61db9432`; the records run and the suites at `dc1baf648bf3` are lean's to show. Of `main`'s 893 new lines in `Spot/OneStageZk.lean` I read only the lines the search found.
+
+For the table:
+- #8999 at `dc1baf648bf3`: the reading holds; LAND WITH NOTES stands. Locks: the same 5, 5 and 10 leaves as at `fef48ce41a13`; nothing of `main`'s lost or doubled [run locally].
+- New on `main` since the reading's base: two input readers in `Spot/Partition.lean`, both asking the definition's form. No addition to the second pull request's list.
