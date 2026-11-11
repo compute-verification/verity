@@ -30,7 +30,7 @@ scenarios register a policy as if it were a subprotocol.
 
 ## The Lean
 
-- **The definition**, `Security/Definitions/Nci.lean`. `Nci.Complies c k` says D has a (c, k)-partition
+- **The definition**, `security/Definitions/Nci.lean`. `Nci.Complies c k` says D has a (c, k)-partition
   (`Verity.Partition.IsCK`): every block at most c gates and at most k fresh input bits (`Nci.novelReads`).
   `Nci.CompliesRate c α` is the form the check reads: blocks of at most c gates, each reading at most α fresh input bits
   per gate, so at most αc a block. Where the policy's guarantees assume the policy, they assume `Nci.CompliesRate`, what
@@ -42,13 +42,13 @@ scenarios register a policy as if it were a subprotocol.
   (`Verity.RegisteredCircuit.constInputs`) a declaration needs neither Boolean gates nor positive fan-in for those
   partitions (`Nci.SecurityProofs.constInputs_isCK`, `constInputs_expand_isCK`), which is how the policy's acceptance
   gives them (`Properties.Remote.PolicyMet`).
-- **The guarantees**, `Security/Definitions/Nci/Guarantees/`, each proved in `Security/Proofs/Nci/` as
+- **The guarantees**, `security/Definitions/Nci/Guarantees/`, each proved in `security/Proofs/Nci/` as
   `Nci.SecurityProofs.G`. `ReadBound` turns a lower bound on fresh input into a lower bound on size, `Inference` shows
   honest inference complies, and the covering, training and threading statements are pricing arguments.
   `Nci.Guarantees.DampenerRemote` and its relatives state the remote composition's overhead at (c, k).
-- **The count of (c, k)-inference blocks**, `Nci.CompliesAtMost c k n` (`Security/Definitions/Nci.lean`): D's
+- **The count of (c, k)-inference blocks**, `Nci.CompliesAtMost c k n` (`security/Definitions/Nci.lean`): D's
   computed gates divide into at most n proof blocks of a (c, k)-partition (`Verity.Partition.IsCK`,
-  `Security/Definitions/Core/Formalism.lean`). It is the day's bound's only premise on the circuit
+  `security/Definitions/Core/Formalism.lean`). It is the day's bound's only premise on the circuit
   (`Nci.Cut.Guarantees.CountHE`, with (H) and (E) on the work), and `DampenerRemote` and `DampenerRemotePeriod` take
   it for each declared day.
 - **The registered information's provenance**, `Nci.Assumptions.BaselineRegistered`: every θ entry is registered
@@ -71,7 +71,7 @@ nothing else but Lean core and the core interface (`core_protocol`).
     `nci-check --count --detail` prints that whole verdict (`NciCheck.Count.checkDetail`) for the private record
     only.
 
-  `NciCheck.Properties.DescCountsCK` (`Security/Properties/Nci/Count.lean`) states that a published `complies` means
+  `NciCheck.Properties.DescCountsCK` (`security/Properties/Nci/Count.lean`) states that a published `complies` means
   `Nci.CompliesAtMost c k n`; it is not yet proved, and the lock lists it as an open piece. `nci-count-difftest` holds
   both forms to the Python reference's `check_count` and `check_count_detail` (`lean/scripts/nci_reference.py`), run by
   `../../../certifier/verifier/network/tests/test_nci_count_difftest.py`.
