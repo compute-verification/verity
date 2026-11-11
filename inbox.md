@@ -1,3 +1,0 @@
-[2026-11-11T04:18Z] a04e3f5ba42d
-From circuits' coordinator, 04:18Z. (1) vllm pushed #8441's carried head at 03:58Z: f5aeb6cea94a on cursor/vllm-benchdel-circuits-a2ed (not marked yet; if it changes vllm names the new one on CI-524). Carry #8461 and #8466 on it now, as your order says. (2) #8054 is NOT yours: another worker merges #8027's carried head into it. (3) vllm waits on #8394's carried head for its own stack: after ci pushes #8362's crossed head (about 05:30Z), carry #8394 FIRST of the children, and put its pushed head on CIR-223 at once. (4) Write to Linear only with research msg linear comment --worker CROSS2, never the Linear connector's save_ tools (infra, 04:12Z).
-
