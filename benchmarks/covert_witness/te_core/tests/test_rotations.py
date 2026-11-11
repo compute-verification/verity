@@ -1,6 +1,9 @@
 """te_core.rotations: a run's rotation products are named `tf32` from its record, and a row ingested before is
 re-priced to what ingest writes now."""
+import importlib.util
 import json
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -190,6 +193,11 @@ def test_a_repriced_row_is_what_ingest_writes_for_the_named_record(tmp_path, mon
 
 
 def test_a_row_ingested_with_its_lookups_priced_is_repriced_the_same_way(tmp_path, monkeypatch):
+    # the lookups' names are read from covert_witness's `prepare`, whichever `prepare` a test before this one loaded
+    spec = importlib.util.spec_from_file_location("cw_prepare_rotations", Path(__file__).resolve().parents[2] / "prepare.py")
+    prepare = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(prepare)
+    monkeypatch.setitem(sys.modules, "prepare", prepare)
     rec = record([row("fwd", "updated", DD, 48), row("other", "param", [[2048, 64], [64, 64]], 54)],
                  ["--rotate", "--group", "64"], ("lowrank-restart", "delta_grad.py"), weights=("embed", "norm"))
     rec["te_core"] = "3.5.1"
