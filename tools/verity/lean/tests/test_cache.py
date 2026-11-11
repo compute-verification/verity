@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -709,10 +710,16 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
     trace = json.loads((lib / "Control" / "Thms.trace").read_text())
     assert trace["synthetic"] and trace["log"] == []                  # fetched from the cache: no `lean` ran
     other = tmp_path / "node-b"                                       # another node, which built none of it
-    dest = tmp_path / "lean-artifacts.tar.gz"
-    assert arts.bundle(dest) == len(arts.added) > 0
-    h = hashlib.sha256(dest.read_bytes()).hexdigest()
-    assert LA.LakeArtifacts(other).take({LA.SHARED + h: dest.as_uri()}, lambda s: None) == len(arts.added)
+    sizes = [(store / e).stat().st_size + sum((store / "artifacts" / o).stat().st_size for o in outs) for e, outs in arts.added]
+    out = tmp_path / "out"
+    out.mkdir()
+    dests, n = arts.bundle_into(out, cap := max(sizes))               # what it added is more than one bundle holds
+    assert n == len(arts.added) > 0 and len(dests) > 1
+    for d in dests:
+        with tarfile.open(d) as t:
+            assert sum(m.size for m in t.getmembers()) <= cap
+    urls = {LA.SHARED + hashlib.sha256(d.read_bytes()).hexdigest(): d.as_uri() for d in dests}
+    assert LA.LakeArtifacts(other).take(urls, lambda s: None) == len(arts.added)
     shutil.rmtree(pkg / ".lake")
     assert sorted(staged(other).values()) == mods
     for f, b in was.items():

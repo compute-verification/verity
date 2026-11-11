@@ -101,7 +101,7 @@ Its result is of kind `FAST_KIND`, never a Lean verdict: no kernel replay and no
 in a recorded run, into its `result.json`, the Attempt's result. `check` fails its lean-audit step on a report of that kind or
 one without the replay (`check.lean_fast`), and `research merge` refuses an attempt whose result is of that kind
 (`research.merge.REFUSED_KINDS`), whatever `--tool` recorded it. The compiled modules it leaves are not a verdict either: in a
-run they go into its `lean-audit/` as a bundle (`lean_audit.LakeArtifacts.bundle_into`), and a node that restores one still
+run they go into its `lean-audit/` in bundles (`lean_audit.LakeArtifacts.bundle_into`), and a node that restores one still
 replays every declaration through the kernel.
 
 The step tree holds the tracked files of each package whose audit misses, and those of the packages it requires by path or
@@ -1194,7 +1194,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     What each check.py's builds compiled goes into the node's artifact cache when it ends, whatever its exit (`put_built`: the
     package's, and those of the provers it audits), and what a run that was killed left goes in when the next run takes
     the tree (`put_left`). In a run, the module versions it added go into ``out``
-    as one bundle for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do."""
+    in bundles for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
 
@@ -1304,8 +1304,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 (tree / DIRTY).unlink(missing_ok=True)
             if run_dir and artifacts.added and out.is_relative_to(Path(run_dir).resolve()):
                 try:
-                    dest, n = artifacts.bundle_into(out)
-                    log(f"lean-records: {n} module version(s) it added bundled for other nodes ({dest.name})")
+                    log(f"lean-records: {LA.bundled(*artifacts.bundle_into(out), len(artifacts.added))}")
                 except OSError as e:
                     log(f"lean-records: nothing bundled for other nodes: {e}")
             records = verdicts(outcomes, new, out, tree, files, skip, log, committed)

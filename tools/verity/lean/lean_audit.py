@@ -112,6 +112,7 @@ import functools
 import gzip
 import hashlib
 import importlib.util
+import itertools
 import json
 import os
 import re
@@ -1031,7 +1032,8 @@ ARTIFACTS_CAP = 64 << 30
 ARTIFACT = MK.ARTIFACT
 #: a bundle's members: the index's entries and the artifacts they name, nothing else
 MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|" + MK.INDEX + r"/[0-9a-f]{128}\.json")
-#: what one run's bundle (`LakeArtifacts.bundle`) holds at most, uncompressed: a run's files over 4 GiB upload without resume
+#: what one bundle (`LakeArtifacts.bundle`) holds at most, uncompressed: a run's files over 4 GiB upload without resume. A
+#: run that added more writes as many bundles as that takes (`LakeArtifacts.bundle_into`)
 BUNDLE_CAP = 3 << 30
 #: a key of `lean-deps-urls.json` naming a recorded check's bundle by its sha256 (`shared_bundles`)
 SHARED = "lean-artifacts/"
@@ -1045,9 +1047,10 @@ BUNDLE_FILE = re.compile("lean-audit/" + BUNDLE_NAME)
 #: still has in its run record
 PUBLISHERS = ((COMMON.RECORDED_CHECKS, BUNDLE_FILE, ("run_files",)),
               (COMMON.MARK_AUDITS, re.compile(re.escape(COMMON.MARK_AUDIT_OUT) + BUNDLE_NAME), ("run_files", "run_record")))
-#: how many of the newest bundles of each kind of run the launcher sends: a candidate's shards end by the dozen, and counted
-#: with them a mark's bundle would be gone before the candidate that holds its change is built. The marks of the PRs the
-#: launcher's tree holds are sent beside these, however old (`shared_bundles`' ``heads``)
+#: how many of the newest runs of each kind the launcher sends the bundles of, every bundle of each: a candidate's shards end
+#: by the dozen, and counted with them a mark's bundles would be gone before the candidate that holds its change is built.
+#: The marks of the PRs the launcher's tree holds are sent beside these, however old (`shared_bundles`' ``heads``). Runs
+#: are counted and not bundles, or the count would cut a run's later bundles off its first
 SHARED_LIMIT = 12
 #: how many bundles `LakeArtifacts.take` downloads at once, ahead of the one it unpacks
 AHEAD = 4
@@ -1076,7 +1079,7 @@ class LakeArtifacts:
     every declaration through the kernel, and compiles a random sample of the modules it restored again, failing on any
     output that differs (`check.sampled_recompile`), which is what binds a restored `.olean` to its source.
 
-    Between nodes, the module versions a recorded check's audit added travel as one bundle in its run's files (`bundle`), as
+    Between nodes, the module versions a recorded check's audit added travel as bundles in its run's files (`bundle_into`), as
     do those the audit of a ready mark's merge added (`warm.py`); the launcher sends a URL for each of the newest of each
     and for those of the marks of the PRs its tree holds (`shared_bundles`), and a node takes in each it hasn't yet (`take`).
     A records run (`lean_changed.py --records`) bundles what it added the same way, which `shared_bundles` doesn't list yet.
@@ -1252,24 +1255,31 @@ class LakeArtifacts:
             tmp.write_text(json.dumps({"key": key}))
             os.replace(tmp, f)
 
-    def bundle(self, dest: Path, cap: int = BUNDLE_CAP) -> int:
-        """Write the entries `added` as a gzipped tar at ``dest``, each with every artifact it names, the entries before the
-        artifacts, up to ``cap`` bytes uncompressed; the number of entries written (none: no file)."""
+    def bundle(self, dest: Path, cap: int = BUNDLE_CAP, start: int = 0) -> tuple[int, int]:
+        """Write the entries `added` from its index ``start`` on as a gzipped tar at ``dest``, each with every artifact it
+        names, the entries before the artifacts, up to ``cap`` bytes uncompressed: (the number of entries written (none: no
+        file), the index in `added` of the first entry this bundle had no room for, where the next one starts). A bundle
+        is whole in itself: an artifact that entries of two bundles name is in both. An entry that is gone from the
+        cache, or that with its artifacts is over ``cap`` alone, is in no bundle, and the entries after it still are."""
         with self._lock():
-            todo, size, names = [], 0, set()
-            for entry, outs in self.added:
+            todo, size, names, stop = [], 0, set(), len(self.added)
+            for i in range(start, len(self.added)):
+                entry, outs = self.added[i]
                 try:
                     more = sum((self.store / "artifacts" / n).stat().st_size for n in outs if n not in names)
                     more += (self.store / entry).stat().st_size
                 except OSError:
                     continue
                 if size + more > cap:
-                    break
+                    if todo:
+                        stop = i
+                        break
+                    continue
                 todo.append((entry, outs))
                 names.update(outs)
                 size += more
             if not todo:
-                return 0
+                return 0, stop
             tmp = dest.with_name(f".{dest.name}.tmp")
             with tarfile.open(tmp, "w:gz", compresslevel=1) as t:
                 for entry, _ in todo:
@@ -1277,14 +1287,21 @@ class LakeArtifacts:
                 for n in sorted(names):
                     t.add(self.store / "artifacts" / n, arcname=f"artifacts/{n}", recursive=False)
             os.replace(tmp, dest)
-        return len(todo)
+        return len(todo), stop
 
-    def bundle_into(self, out: Path) -> tuple[Path, int]:
-        """`bundle` at the first free name `shared_bundles` lists in ``out`` (`lean-artifacts.tar.gz`, then `-2`, ...):
-        (that path, the number of entries written)."""
-        dest = next(out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz" for i in range(1, 99)
-                    if not (out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz").exists())
-        return dest, self.bundle(dest)
+    def bundle_into(self, out: Path, cap: int = BUNDLE_CAP) -> tuple[list[Path], int]:
+        """Every entry `added` in bundles of at most ``cap`` bytes each (`bundle`), as many as that takes, at the free
+        names `shared_bundles` lists in ``out`` in their order (`lean-artifacts.tar.gz`, then `-2`, ...), the entries
+        added first in the first: (those paths, the number of entries written)."""
+        free = (d for i in itertools.count(1)
+                if not (d := out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz").exists())
+        dests, n, at = [], 0, 0
+        while at < len(self.added):
+            wrote, at = self.bundle(dest := next(free), cap, at)
+            if wrote:
+                dests.append(dest)
+                n += wrote
+        return dests, n
 
     def take(self, urls: dict[str, str], log=print, budget: int | None = None) -> int:
         """Take in each bundle ``urls`` names (`SHARED` + its sha256) that this node hasn't: downloaded, checked against its
@@ -1664,8 +1681,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
                 mine = {at: rep for at, rep in built(out).items() if work in at.resolve().parents}
                 log(f"lean-audit: {artifacts.put(mine, since, log)} module version(s) new in the artifact cache")
                 if bundle and artifacts.added:
-                    dest = artifacts.bundle_into(out)
-                    log(f"lean-audit: {dest[1]} of them bundled for other nodes ({dest[0].name})")
+                    log(f"lean-audit: {bundled(*artifacts.bundle_into(out), len(artifacts.added))}")
             except OSError as e:
                 log(f"lean-audit: the artifact cache was not written: {e}")
             builds.give_back(work, kept)
@@ -1946,7 +1962,9 @@ def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
 
 def shared_bundles(store=None, limit: int = SHARED_LIMIT, heads: list[str] | tuple[str, ...] = ()) -> list[str]:
     """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the files of the newest runs of each kind of
-    `PUBLISHERS`, the recorded checks' first, each kind's newest first and at most ``limit``: only a recorded run's, as
+    `PUBLISHERS`, the recorded checks' first, each kind's newest first and at most ``limit`` runs with a bundle, every
+    bundle of each in the order its run wrote them (`LakeArtifacts.bundle_into`; a node takes them in this order up to
+    its budget, `LakeArtifacts.take`): only a recorded run's, as
     `check.verdict_packs` takes only theirs, a failed or cancelled run's too, since its bundle holds only modules compiled
     in the sandbox, each under the key of what its compile read (`LakeArtifacts.put`). Before the newest mark audits' come
     those of the marks of ``heads`` (`common.lookups`; the launcher gives the heads of the PRs its tree holds,
@@ -1965,18 +1983,30 @@ def shared_bundles(store=None, limit: int = SHARED_LIMIT, heads: list[str] | tup
         for runs, bundle, listed in PUBLISHERS:
             for which, args, most in COMMON.lookups(runs, limit, heads):
                 found: list[str] = []
+                taken = 0
                 for (rid,) in store.index.sql(f"SELECT id FROM attempts WHERE {which} AND {ended}", args):
                     outputs = (store.get_attempt(rid) or {}).get("outputs") or {}
+                    mine: dict[str, int] = {}
                     for art in dict.fromkeys(a for a in map(outputs.get, listed) if a):
                         for f in store.listing(art):
-                            if bundle.fullmatch(f["path"]) and f["remote"] and f["sha256"] not in (*out, *found):
-                                found.append(f["sha256"])
-                    if most and len(found) >= most:
+                            if (m := bundle.fullmatch(f["path"])) and f["remote"] and f["sha256"] not in (*out, *found):
+                                mine.setdefault(f["sha256"], int(m[1][1:]) if m[1] else 1)
+                    found += sorted(mine, key=mine.__getitem__)
+                    taken += bool(mine)
+                    if most and taken >= most:
                         break
-                out += found[:most]
+                out += found
     except Exception as e:  # noqa: BLE001  (no bundle: each node reuses only what it built)
         print(f"lean-audit: no artifact bundles listed from the store ({type(e).__name__}: {e})", file=sys.stderr)
     return out
+
+
+def bundled(dests: list[Path], n: int, added: int) -> str:
+    """What a run says of the bundles it wrote (`LakeArtifacts.bundle_into`'s, and how many entries it had ``added``)."""
+    return (f"{n} of the {added} module version(s) it added bundled for other nodes "
+            f"({', '.join(d.name for d in dests) or 'no bundle'})"
+            + ("" if n == added else f"; {added - n} in none: gone from the cache since, or over a bundle's "
+                                     f"{BUNDLE_CAP >> 20} MiB alone"))
 
 
 def url_file(dest: Path, ttl_s: int = URL_TTL_S) -> Path | None:
@@ -2097,7 +2127,8 @@ def main(argv: list[str]) -> int:
                     "every failure is a record difference passes and audit.json's `regenerated` names its record; not in the "
                     "cache key, and such a pass is never stored")
     ap.add_argument("--bundle", action="store_true", help="a recorded check's audit: write the module versions it added to the "
-                    "artifact cache as lean-artifacts.tar.gz in --out, for other nodes to take (`shared_bundles`)")
+                    "artifact cache as lean-artifacts.tar.gz in --out, and as lean-artifacts-2.tar.gz and so on when one "
+                    "bundle can't hold them, for other nodes to take (`shared_bundles`)")
     ap.add_argument("--bookkeeping", choices=["warn"], help="with --regenerate, drive's lock run after a landing: "
                     "`check.py --bookkeeping warn`, so a package that fails only on its lock's bookkeeping passes on the lock "
                     "with it repaired; an unread area above its cap, and a cap of `tests/test_lean_packages.py` the locks "

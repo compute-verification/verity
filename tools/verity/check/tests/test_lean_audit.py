@@ -1113,7 +1113,7 @@ def _bundle_of(tmp: Path, pkg: Path) -> tuple[Path, str]:
     arts = LA.LakeArtifacts(tmp / "node-a")
     arts.put({pkg: SANDBOXED})
     dest = tmp / "lean-artifacts.tar.gz"
-    assert arts.bundle(dest) == len(arts.added) > 0
+    assert arts.bundle(dest) == (len(arts.added), len(arts.added)) and arts.added
     return dest, hashlib.sha256(dest.read_bytes()).hexdigest()
 
 
@@ -1152,6 +1152,59 @@ def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_noth
     assert b.take({LA.SHARED + j: junk.as_uri()}, logged.append) == 0 and "could not be unpacked" in logged[seen]
     assert b.take({LA.SHARED + j: junk.as_uri(), LA.SHARED + "0" * 64: dest.as_uri()}, logged.append) == 0
     assert len(logged) == seen + 2                         # bytes that failed once are never fetched again
+
+
+def test_a_run_that_added_more_than_one_bundle_holds_writes_as_many_as_that_takes_and_another_node_takes_them_all(tmp_path):
+    """A bundle holds at most `BUNDLE_CAP`, since a larger file of a run uploads without resume, and a cold build of a
+    large package adds more than that: what was past the cap was in no bundle, and every other node compiled it again. So
+    a run writes as many bundles as its additions take, none over the cap and each whole in itself (its entries, and every
+    artifact they name), the entries added first in the first; a node that takes them all restores every module. An
+    entry that is over the cap alone is in none, and those after it still travel."""
+    pkg = _package(tmp_path)
+    entries = _keys(pkg)
+    a = tmp_path / "node-a"
+    arts = LA.LakeArtifacts(a)
+    arts.put({pkg: SANDBOXED})
+    assert [e for e, _ in arts.added] == [entries[m] for m in ("P.A", "P.B", "P")]
+    sizes = [(a / e).stat().st_size + sum((a / "artifacts" / o).stat().st_size for o in outs) for e, outs in arts.added]
+    cap = sizes[0] + sizes[1]
+    assert max(sizes) <= cap < sum(sizes), "room for the first two, not for all three"
+    out = tmp_path / "out"
+    out.mkdir()
+    dests, n = arts.bundle_into(out, cap)
+    assert [d.name for d in dests] == ["lean-artifacts.tar.gz", "lean-artifacts-2.tar.gz"] and n == 3
+    assert all(LA.BUNDLE_FILE.fullmatch(f"lean-audit/{d.name}") for d in dests), "the names the launcher lists"
+    held = []
+    for d in dests:
+        with tarfile.open(d) as t:
+            members = t.getmembers()
+            mine = [json.loads(t.extractfile(m).read()) for m in members if m.name.startswith("keys/")]
+        assert sum(m.size for m in members) <= cap, "no bundle over the cap"
+        assert [m.name.split("/")[0] for m in members] == ["keys"] * len(mine) + ["artifacts"] * (3 * len(mine))
+        assert {m.name for m in members if m.name.startswith("artifacts/")} == {f"artifacts/{o}" for e in mine for o in e["digests"]}
+        held.append([e["module"] for e in mine])
+    assert held == [["P.A", "P.B"], ["P"]]
+    urls = {LA.SHARED + hashlib.sha256(d.read_bytes()).hexdigest(): d.as_uri() for d in dests}
+    b, said = LA.LakeArtifacts(tmp_path / "node-b"), []
+    assert b.take(urls, said.append) == 3 and "taken from 2 of 2 artifact bundle(s)" in said[0]
+    hashes = {m: hashlib.sha256(m.replace(".", "/").encode()).hexdigest()[:16] for m in entries}
+    assert LA.MK.stage(tmp_path / "node-b", pkg, [], tmp_path / "cache-b")[0] == {("p", hashes[m]): m for m in entries}, \
+        "every module the run added is restored on another node's tree"
+    c = LA.LakeArtifacts(tmp_path / "node-c")
+    assert c.take(dict(list(urls.items())[:1]), lambda s: None) == 2
+    assert sorted(LA.MK.stage(tmp_path / "node-c", pkg, [], tmp_path / "cache-c")[0].values()) == ["P.A", "P.B"], \
+        "the first bundle alone restores what it holds"
+    again = LA.LakeArtifacts(a)
+    again.added = arts.added[2:]
+    dests, n = again.bundle_into(out, cap)
+    assert [d.name for d in dests] == ["lean-artifacts-3.tar.gz"] and n == 1, "a later audit of the run: the next free name"
+    assert LA.bundled(dests, n, 1) == "1 of the 1 module version(s) it added bundled for other nodes (lean-artifacts-3.tar.gz)"
+    alone = tmp_path / "alone"
+    alone.mkdir()
+    dests, n = arts.bundle_into(alone, sizes[2] - 1)
+    assert sizes[0] < sizes[1] < sizes[2] and (len(dests), n) == (2, 2), "P is over this cap alone; P.A and P.B travel"
+    assert LA.bundled(dests, n, 3).endswith("; 1 in none: gone from the cache since, or over a bundle's 3072 MiB alone")
+    assert arts.bundle_into(alone, 1) == ([], 0) and len(list(alone.iterdir())) == 2, "nothing fits: no file"
 
 
 def test_one_run_takes_the_newest_bundles_up_to_a_quarter_of_the_cache_s_cap_and_a_later_run_the_rest(tmp_path):
@@ -1248,6 +1301,11 @@ def test_the_launcher_sends_the_newest_recorded_checks_bundles(tmp_path, monkeyp
         listing=lambda art: [{"path": p, "sha256": h, "remote": on} for p, h, on in runs[art[4:]]])
     assert LA.shared_bundles(store) == ["c" * 64, "a" * 64, "d" * 64]
     assert LA.shared_bundles(store, limit=1) == ["c" * 64]
+    assert LA.shared_bundles(store, limit=2) == ["c" * 64, "a" * 64, "d" * 64], "runs are counted: every bundle of the second"
+    runs["r0"] = [("lean-audit/lean-artifacts-10.tar.gz", "3" * 64, True), ("lean-audit/lean-artifacts-2.tar.gz", "2" * 64, True),
+                  ("lean-audit/lean-artifacts.tar.gz", "1" * 64, True)]
+    assert LA.shared_bundles(store)[3:] == ["1" * 64, "2" * 64, "3" * 64], "a run's in the order it wrote them, however listed"
+    del runs["r0"]
     refreshed: list[dict] = []
     store.remote, store.refresh = object(), lambda **kw: refreshed.append(kw)
     monkeypatch.setattr(LA.COMMON, "recent", lambda now: f"r-since-{now > 1.7e9}")
@@ -1433,7 +1491,7 @@ def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_pat
         return 1
 
     monkeypatch.setattr(LA.LakeArtifacts, "put", put)
-    monkeypatch.setattr(LA.LakeArtifacts, "bundle", lambda self, dest, cap=0: dest.write_bytes(b"") or 1)
+    monkeypatch.setattr(LA.LakeArtifacts, "bundle", lambda self, dest, cap=0, start=0: (dest.write_bytes(b"") or 1, 1))
     for n, bundle in enumerate((False, True)):
         shutil.rmtree(tmp_path / "cache", ignore_errors=True)
         assert LA.run(tmp_path / f"out{n}", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
