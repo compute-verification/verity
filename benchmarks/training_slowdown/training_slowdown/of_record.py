@@ -18,13 +18,23 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   record's rows a forward, so a step has the config's own forwards. `updated` must be equal as its `(MACs a token,
   upstream)` pairs, and `log` by phase, kind, op, shapes, count and MACs. The start and the steps must be the
   record's too.
+- **Attention's kernel.** The counter writes a fused attention kernel as the ops the math kernel computes attention
+  by (`flops.Counter._attention`), so a config's step holds those. A record that holds the kernel as one row is
+  rewritten the same way before it is compared (`as_math.rewrite`, on its modal structure). The row does not say
+  which gradients a backward call asked for: that is read from the record's trace where it holds one, and is
+  otherwise the entry's `partial` in `of_record.toml` (`none`, every call asks for q's, k's and v's, or
+  SUBSET:CALLS), a stated value and never a default: an entry whose record needs one and has none is refused, with
+  `as_math`'s words for what to state, and so is a record `as_math` cannot rewrite. The output says whose word the
+  ask is. A stated ask the record cannot confirm is still held: a wrong one writes products the config's step does
+  not have, or leaves out ones it has, so the comparison shows it as a difference. A `partial` whose record has no
+  fused backward row to read it for is a difference too.
 - **Why a count stands for the run.** θ here is the model's own initialisation and the rows are random tokens, on a
   CPU. The counter reads operand shapes and which weights have left θ, never a value, so it counts the step a job of
   the config takes on the start's θ and data whenever that step is one fixed graph. The capture decides that: the
   step is traced (`run.trace_step`), and an entry whose trace the capture refuses, or whose step reads a value back
   that decides what it computes, is refused here. No route says of itself that it branches on values.
 - **Expected differences.** A route's CPU count differs from a program's CUDA record in ways that are the device's
-  (`width`, `attention`, `norm`) and in ways that are the program's own arrangement of a computation the route
+  (`width`, `norm`) and in ways that are the program's own arrangement of a computation the route
   takes too: the loss as the rows' means over the rows kept where a route means over the tokens (`loss`), and the
   average of the weights as one op over every tensor of the model where a route averages each tensor it trains
   (`average`). Each is named by a rule that fires only on its own exact case (`width`, `RULES`); the output names
@@ -63,7 +73,7 @@ from pathlib import Path
 
 import torch
 
-from . import config, library, run, starts
+from . import as_math, config, library, run, starts
 from .model import LM
 
 HELD = Path(__file__).with_name("of_record.toml")
@@ -79,11 +89,6 @@ FAIR = ("Each config's step was counted at the model's own initialisation on ran
         "the start's weights and data. An expected difference is named by a rule that fires on its exact case "
         "alone: the device's, the harness's, and the record's program's own arrangement of a computation the route "
         "takes too. Not held: the weights, E's bytes and the loss, which only a run has.")
-#: CUDA's attention kernels beside the CPU's, which the counter prices alike (`flops.FLOP_FORMULAS`)
-ATTENTION = {"_scaled_dot_product_flash_attention": "_scaled_dot_product_flash_attention_for_cpu",
-             "_scaled_dot_product_flash_attention_backward": "_scaled_dot_product_flash_attention_for_cpu_backward"}
-#: the operands CUDA's attention backward takes after the CPU's: its dropout's seed and offset
-CUDA_ONLY_OPERANDS = [[2], []]
 #: the argument by which the records' programs drop rows from a step's loss: that share of a forward's rows, the ones
 #: of the highest loss, get no gradient
 DROPS_ROWS = "--trunc"
@@ -94,8 +99,9 @@ NUMBER = re.compile(r"[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?")
 
 
 def held(path: Path = HELD) -> dict:
-    """Each held entry's run of record: `{entry: {"run", "art", "path", "sha256"}}`, and where its record's program
-    computes lines the route rightly doesn't, `"record_only"`, those lines (`named`)."""
+    """Each held entry's run of record: `{entry: {"run", "art", "path", "sha256"}}`; where its record holds fused
+    attention backward rows and no trace, `"partial"`, the gradients those calls asked for (`as_math.parse`); and
+    where its record's program computes lines the route rightly doesn't, `"record_only"`, those lines (`named`)."""
     return tomllib.loads(Path(path).read_text())["held"]
 
 
@@ -127,27 +133,58 @@ def rows_a_forward(struct: dict, ctx: int) -> int:
     return tokens.pop() // ctx
 
 
+def as_counted(struct: dict, rec: dict, said: str | None) -> tuple[dict, str | None, list[str]]:
+    """A record's step structure with each fused attention kernel's row as the ops the counter writes the kernel as
+    (`as_math.rewrite`); what the output says of that, None where the structure holds no such row; and the
+    differences. The gradients a backward row's calls asked for are the record's trace's where it holds one and
+    otherwise `said`, the entry's `partial`: a ValueError in `as_math`'s words where neither says, where the two
+    disagree and where a row can't be rewritten. A `partial` that no backward row was read for is a difference."""
+    trace = (rec.get("trace") or {}).get("rows") or []
+    log, moved, asks = as_math.rewrite(struct["log"], trace, as_math.parse(None if said is None else str(said)))
+    unread = [] if said is None or asks else [
+        f"{HELD.name} states `partial = {json.dumps(said)}` and the record's step has no fused attention backward "
+        "row to read it for"]
+    if not (moved["by"] or moved["macs"]):
+        return struct, None, unread
+    stated = f"{HELD.name}'s word (`partial`) and not the record's, which holds no trace to read it from"
+    asked = "; ".join(f"`{a['asked']}` at {at}, " + (stated if a["from"] == "--partial" else "read from its trace")
+                      for at, a in sorted(asks.items()))
+    return struct | {"log": log}, (
+        "the record holds a fused kernel as one row: compared as the ops the math kernel computes attention by, as "
+        "the counter writes the config's (`as_math`). The gradients its backward calls asked for (`none`: every "
+        f"call q's, k's and v's; SUBSET:CALLS: that many calls a step SUBSET's alone): {asked or 'it has no backward'}"
+    ), unread
+
+
 def _whole(x: Fraction):
     return int(x) if x.denominator == 1 else float(x)
 
 
-def per_row(struct: dict, ctx: int) -> dict:
-    """A step structure per row a forward: `rows`, its rows a forward; `updated`, each use's `(MACs a token, upstream,
-    bits)`; `log`, `{(phase, kind, op, shapes): [count, MACs]}` with the rows divided out of every token shape (a
-    dimension of rows x context becomes the context, a leading dimension of rows before a context becomes 1) and out
-    of the MACs of each entry whose shapes that changed. An optimizer's entries have no such shape and stay whole. A
-    `_foreach_` op's operands are sorted: their order is the order a program lists its parameters in, which is no
-    part of the step."""
+def per_row(struct: dict, shape: dict) -> dict:
+    """A step structure of a model of `shape` per row a forward: `rows`, its rows a forward; `updated`, each use's
+    `(MACs a token, upstream, bits)`; `log`, `{(phase, kind, op, shapes): [count, MACs]}` with the rows divided out of
+    every token shape and out of the MACs of each entry whose shapes that changed. A dimension of rows x context
+    becomes the context, and a leading dimension of rows before a context becomes 1. A product of attention's is
+    batched over rows x heads: a `bmm` whose every operand leads with rows x heads over a context and nothing but
+    contexts and a head's width, and that leading dimension becomes the heads. An optimizer's entries have no such
+    shape and stay whole. A `_foreach_` op's operands are sorted: their order is the order a program lists its
+    parameters in, which is no part of the step."""
+    ctx, heads = shape["ctx"], shape["n_head"]
     r = rows_a_forward(struct, ctx)
+    a_head = {ctx, shape["d_model"] // heads}
 
-    def shape(s: list) -> list:
+    def of_tokens(s: list) -> list:
         s = [ctx if d == r * ctx else d for d in s]
         return [1, *s[1:]] if len(s) > 1 and s[0] == r and ctx in s[1:] else s
+
+    def over_heads(s: list) -> bool:
+        return len(s) == 3 and s[0] == r * heads and ctx in s[1:] and set(s[1:]) <= a_head
 
     log: dict[tuple, list] = {}
     for phase, kind, op, shapes, count, macs in struct["log"]:
         was = json.loads(shapes)
-        now = [shape(s) for s in was]
+        now = ([[heads, *s[1:]] for s in was] if op == "bmm" and all(map(over_heads, was)) else
+               [of_tokens(s) for s in was])
         e = log.setdefault((phase, kind, op, json.dumps(sorted(now) if op.startswith("_foreach_") else now)), [0, 0])
         e[0] += count
         e[1] += _whole(Fraction(macs, r)) if now != was else macs
@@ -177,29 +214,6 @@ def width(mine: list, theirs: list) -> tuple[dict | None, list[str]]:
     return None, ["updated, the weights' bits: " + "; ".join(
         f"the {who}'s " + ", ".join(f"({p:,}, {u:,}) at {bits} x{n}" for (p, u, bits), n in sorted(only.items()))
         for who, only in (("config", wide), ("record", narrow)))]
-
-
-def attention(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
-    """Attention's kernel: a CPU runs `ATTENTION`'s second names where CUDA runs its first. Fires on an entry of the
-    record's under CUDA's name beside one of the config's under the CPU's with its phase, kind, count, MACs and
-    operand shapes (`CUDA_ONLY_OPERANDS` aside)."""
-    pairs = []
-    for key in rec:
-        phase, kind, op, shapes = key
-        s = json.loads(shapes)
-        for n in (len(s), len(s) - len(CUDA_ONLY_OPERANDS)) if op in ATTENTION else ():
-            mine = (phase, kind, ATTENTION[op], json.dumps(s[:n]))
-            if n >= 0 and s[n:] in ([], CUDA_ONLY_OPERANDS) and cfg.get(mine) == rec[key]:
-                pairs.append((key, mine))
-                break
-    if not pairs:
-        return None
-    macs = sum(rec[key][1] for key, _ in pairs)
-    for key, mine in pairs:
-        del rec[key], cfg[mine]
-    return {"rule": "attention", "record_macs": macs, "config_macs": macs,
-            "what": f"the CPU's attention kernels for CUDA's, {_plural(len(pairs), 'entry', 'entries')} of the same "
-                    "phase, kind, count, shapes and MACs"}
 
 
 def norm(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
@@ -327,7 +341,7 @@ def average(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     return found
 
 
-RULES = (attention, norm, loss, average)
+RULES = (norm, loss, average)
 
 
 def _plural(n: int, one: str, many: str = "") -> str:
@@ -504,13 +518,20 @@ def refusal(rec: dict) -> str | None:
 
 def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
     """An entry beside its run of record `rec`: `facts` (what was read, as printed), the `expected` differences, the
-    `named` lines of the record's own program, the `differences`, and `refused`, why the entry's count stands for no
-    run, in which case nothing else was compared."""
+    `named` lines of the record's own program, the `differences`, and `refused`, why nothing else was compared: the
+    record's fused attention rows can't be written as the counter writes them (`as_counted`), or the entry's count
+    stands for no run (`refusal`)."""
     route, shape = config.route(cfg.route), cfg.start.shape
     r = {"entry": cfg.name, "run": h["run"], "record": h["path"], "expected": [], "named": [], "differences": [],
          "refused": None}
     struct, n = modal(rec)
-    theirs = per_row(struct, shape["ctx"])
+    try:
+        struct, attention, unread = as_counted(struct, rec, h.get("partial"))
+    except ValueError as e:
+        return r | {"refused": f"its record's fused attention rows can't be compared as the math kernel's ops: {e} "
+                               f"(what `--partial` would say is the entry's `partial` in {HELD.name})"}
+    r["differences"] += unread
+    theirs = per_row(struct, shape)
     batch, rows = cfg.budget["batch"], theirs["rows"]
     if batch % rows:
         r["differences"].append(f"the batch: the config's {batch} rows are no whole number of the record's {rows} "
@@ -531,7 +552,7 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
                                 f"record's {start['name']} ({start['digest'][:12]})")
     if len(rec["steps"]) != cfg.budget["steps"]:
         r["differences"].append(f"the steps: the config's {cfg.budget['steps']}, the record's {len(rec['steps'])}")
-    found = compare(per_row(mine["structures"][mine["steps"][STEPS - 1]["struct"]], shape["ctx"]), theirs, shape,
+    found = compare(per_row(mine["structures"][mine["steps"][STEPS - 1]["struct"]], shape), theirs, shape,
                     h.get("record_only", []), rec.get("script_args") or [])
     kinds = sorted({c.kind for _, c in route.plan(cfg.dials).rules})
     found["differences"] += e_kind(kinds, last["format"])
@@ -546,6 +567,7 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
                  f"{_plural(rows, 'row')} a forward divided out"),
         ("updated", f"{found['uses']} of the record's {len(theirs['updated'])} uses of an updated weight, by MACs a "
                     "token and updated MACs upstream"),
+        *([("attention", attention)] if attention else []),
         ("log", f"{found['products']} of the record's {len(theirs['log'])} products, by phase, kind, op, operand "
                 "shapes, count and MACs"),
         ("E", e_sizes(kinds, cp["e_bytes"], last, len(rec["steps"])))]

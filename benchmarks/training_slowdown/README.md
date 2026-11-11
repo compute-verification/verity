@@ -27,7 +27,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
 | `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
 | `library.py` | the library's table: each entry of `attacks/` with its step traced on a CPU, its slowdown at its policy (the entry point's on that step) and what binds, and its planned run over each fleet and period |
-| `of_record.py`, `of_record.toml` | an entry beside its run of record: the entry's counted step set beside the run's record's (`compare`), equal, or what differs, each expected difference named by its rule; the data file names each held entry's run, the record's artifact, its path and its sha256, and the lines of the record's own program a route doesn't compute |
+| `of_record.py`, `of_record.toml` | an entry beside its run of record: the entry's counted step set beside the run's record's (`compare`), equal, or what differs, each expected difference named by its rule; the data file names each held entry's run, the record's artifact, its path and its sha256, the gradients its attention's backward asked for where the record can't say, and the lines of the record's own program a route doesn't compute |
 | `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it, and the one module here that does: the benchmark's one slowdown (`slowdown`, below), a fixed policy's numbers, the fleets and periods a figure is presented over and the rows of β(k) |
 | `counterexample.py` | a run's counterexample families: their writer and the sampled bit-for-bit rebuild check |
 | `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, scaled quantized delta, seed replay and their composition |
@@ -125,12 +125,19 @@ whose step reads a value back, is refused. It prints, an entry:
 - `updated`: the uses of an updated weight, each by its MACs a token and the updated MACs upstream of it, which must
   be the record's; this list is the entry's update structure;
 - `log`: the step's products, each by phase, kind, op, operand shapes, count and MACs, which must be the record's;
+- `attention`, for a record that holds attention's fused kernel as one row: the counter writes the kernel as the
+  ops the math kernel computes attention by, so the record's rows are rewritten the same way before they are
+  compared (`as_math`). Such a row doesn't say which gradients a backward call asked for. That is read from the
+  record's trace where it holds one; otherwise the entry states it, `partial` in `of_record.toml` (`none`, or
+  SUBSET:CALLS, as `as_math` reads `--partial`), and the line says it is the data file's word and not the record's.
+  It is never assumed: an entry whose record needs it and has none is refused, naming the key. A stated ask that is
+  wrong writes products the entry's step doesn't have, so it shows as a difference;
 - the start and the steps, which must be the record's, and E: its plan's kinds, each of which must be one of the
   record's format's (`E_KINDS`), with its size after the two steps beside the record's last checkpoint's;
 - `expected`: a difference named by the rule that covers it, with the MACs on each side. A rule fires on its exact
-  case alone. The device's: weights read at 32 bits where the record's are read at 16 (`width`), the CPU's attention
-  kernels of the same count and MACs (`attention`), and the norm as elementwise ops where CUDA's fused kernel is
-  counted at an updated gain alone, and not at all in a step that trains no gain (`norm`). The program's own
+  case alone. The device's: weights read at 32 bits where the record's are read at 16 (`width`), and the norm as
+  elementwise ops where CUDA's fused kernel is counted at an updated gain alone, and not at all in a step that
+  trains no gain (`norm`). The program's own
   arrangement of a computation the route takes too: the loss (`loss`), where the record's program means each row
   and divides the rows' sum by the rows kept and a route means over the tokens, one value and one gradient where
   the run drops no row, which the rule checks in the record's program's arguments; and the average of the weights
@@ -147,7 +154,8 @@ whose step reads a value back, is refused. It prints, an entry:
   config's, and why. A named line that the record's step does not have over the config's as named is a difference;
 - `DIFFERS`: anything else.
 
-The command exits 1 if any entry differs or is refused. `--out` keeps the comparisons (`DIR/of_record.json`) and each
+The command exits 1 if any entry differs or is refused: one whose step the capture refuses or that reads a value
+back, and one whose record's fused attention rows `as_math` can't rewrite. `--out` keeps the comparisons (`DIR/of_record.json`) and each
 entry's counted records: the harness's own count (`DIR/ENTRY/run.json`) and the count compared
 (`DIR/ENTRY/tables/run.json`).
 
