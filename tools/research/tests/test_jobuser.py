@@ -58,7 +58,8 @@ def test_the_unit_is_a_sandboxed_system_service_of_the_job_user():
         "SystemCallArchitectures=native", "KeyringMode=private", "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK",
         "IPAddressDeny=link-local", "UMask=0022",
         "TemporaryFileSystem=/run:ro", "TemporaryFileSystem=/dev/shm:mode=1777,nosuid,nodev",
-        "BindReadOnlyPaths=-/run/systemd/resolve", "BindPaths=-/run/gpu-lease", "BindPaths=-/run/gpu-lease-circuits",
+        "BindReadOnlyPaths=-/run/systemd/resolve/resolv.conf", "BindReadOnlyPaths=-/run/systemd/resolve/stub-resolv.conf",
+        "BindPaths=-/run/gpu-lease", "BindPaths=-/run/gpu-lease-circuits",
         "InaccessiblePaths=-/etc/verity", "InaccessiblePaths=-/etc/rancher", "InaccessiblePaths=-/var/lib/rancher",
         "InaccessiblePaths=-/var/lib/kubelet",
         "TemporaryFileSystem=/workspace/research/runs:ro", "InaccessiblePaths=-/workspace/research/requests",
@@ -71,6 +72,15 @@ def test_the_unit_is_a_sandboxed_system_service_of_the_job_user():
         "--service-type=exec", "--expand-environment=no", f"--working-directory={RUN}", *(x for p in props for x in ("-p", p)), "--"]
     bare = jobuser.unit_argv(jobuser.Unit(name="n", user="vyjob", run_dir=RUN, cwd=RUN, env_file="/e"))
     assert not [p for p in bare if p.startswith(("AllowedCPUs=", "MemoryMax=", "Nice="))], "only the limits the run was started with"
+
+
+def test_of_the_resolvers_directory_the_unit_sees_the_two_resolv_conf_files_and_not_its_sockets():
+    """A bind of the directory would bring systemd-resolved's own socket back into the emptied /run, and that socket looks names
+    up for whoever connects, from a network namespace with no interface too."""
+    props = jobuser.unit_argv(jobuser.Unit(name="n", user="vyjob", run_dir=RUN, cwd=RUN, env_file="/e"))
+    back = [p.split("=", 1)[1].lstrip("-") for p in props if p.startswith(("BindReadOnlyPaths=", "BindPaths=")) and "=-/run" in p]
+    assert back == ["/run/systemd/resolve/resolv.conf", "/run/systemd/resolve/stub-resolv.conf", *jobuser.LEASE_DIRS]
+    assert "TemporaryFileSystem=/run:ro" in props and not [p for p in props if p.endswith("/run/systemd/resolve")]
 
 
 def test_a_unit_may_make_exactly_the_namespace_types_its_run_listed_and_nothing_else_of_it_changes():

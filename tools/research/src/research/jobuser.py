@@ -8,10 +8,13 @@ the runner keeps its records as itself, and the harness spawns, in the workload'
 
 which runs CMD as USER in a transient system service (`sudo -n systemd-run --uid=USER --wait --pipe`, unit_argv): no new
 privileges and no capabilities; the host read-only but for its run dir, and no other run's dir, no launch request, no /home or
-/root; its own /tmp, /dev/shm and IPC; an empty /run but for DNS and the GPU lease dirs; /etc/verity and the k3s state hidden;
-link-local addresses (the cloud metadata service) unreachable; the CPUs, memory cap and nice it was started with; and only the
-variables job_env passes, from a file only root reads (no value travels on a command line).  SIGTERM, SIGINT or SIGHUP stops
-the unit (SIGTERM, then SIGKILL after TIMEOUT_STOP_S) and exits 128+signal.
+/root; its own /tmp, /dev/shm and IPC; an empty /run but for the two files resolv.conf points at and the GPU lease dirs, so the
+resolver's own socket, which looks names up for a caller in any network namespace, stays out with the rest of /run; /etc/verity
+and the k3s state hidden; link-local addresses (the cloud metadata service) unreachable; the CPUs, memory cap and nice it was
+started with; and only the variables job_env passes, from a file only root reads (no value travels on a command line).  The
+unit keeps the node's network namespace, so what listens on its loopback (the resolver's stub, for one) or on an abstract
+socket there stays reachable.  SIGTERM, SIGINT or SIGHUP stops the unit (SIGTERM, then SIGKILL after TIMEOUT_STOP_S) and exits
+128+signal.
 
 The unit makes no namespace (RestrictNamespaces=yes) unless the run lists types with `--job-namespaces LIST`, and then exactly
 those: of NAMESPACES (user, mnt, net) only, for a workload that builds a sandbox of its own around code it trusts less than
@@ -60,6 +63,8 @@ STORE_CONFIG = Path("control") / "store.toml"   # beside it: a --store-read run'
 NAMESPACES = ("mnt", "net", "user")
 SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 LEASE_DIRS = ("/run/gpu-lease", "/run/gpu-lease-circuits")      # gpu-lease's locks, when the workload takes its own lease
+#: systemd-resolved's two files, which /etc/resolv.conf points at: all of its directory that name lookups over the network read
+RESOLV_CONF = ("/run/systemd/resolve/resolv.conf", "/run/systemd/resolve/stub-resolv.conf")
 HIDDEN = ("/etc/verity", "/etc/rancher", "/var/lib/rancher", "/var/lib/kubelet")
 #: where a run dir is out of the unit's reach (ProtectHome, PrivateTmp, the emptied /run)
 UNREACHABLE = ("/home", "/root", "/run", "/tmp", "/var/tmp", "/dev/shm")
@@ -215,9 +220,9 @@ def unit_argv(u: Unit) -> list[str]:
         "ProtectClock=yes", "ProtectHostname=yes", f"RestrictNamespaces={namespaces}", "LockPersonality=yes", "RestrictRealtime=yes",
         "SystemCallArchitectures=native", "KeyringMode=private", "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK",
         "IPAddressDeny=link-local", "UMask=0022",
-        # /run holds sockets that act for any caller; DNS (resolv.conf points into it) and gpu-lease's dirs come back
+        # /run holds sockets that act for any caller; the files resolv.conf points at and gpu-lease's dirs come back
         "TemporaryFileSystem=/run:ro", "TemporaryFileSystem=/dev/shm:mode=1777,nosuid,nodev",
-        "BindReadOnlyPaths=-/run/systemd/resolve", *(f"BindPaths=-{d}" for d in LEASE_DIRS),
+        *(f"BindReadOnlyPaths=-{p}" for p in RESOLV_CONF), *(f"BindPaths=-{d}" for d in LEASE_DIRS),
         *(f"InaccessiblePaths=-{p}" for p in HIDDEN),
         # every other run's records and every launch request (its --env values) out of sight; this run's dir back, writable
         f"TemporaryFileSystem={runs_root}:ro", f"InaccessiblePaths=-{os.path.dirname(runs_root)}/requests",
