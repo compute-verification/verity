@@ -44985,3 +44985,39 @@ For the table: head block, one prover a card: 2.67 s today and 2.52 s with the p
 For the table:
 - #8874 (the second stage proves at most `Kfirst·Σ_t k_t` blocks, at `code h`): on #8870's head `b3fb5853fa`. Try f5d6 passed. Records a581, quick tier 6f84 and the one-tree build b96d/793b are running.
 - #8836: records 6161 and quick tier e971 are running; its ready line when both pass.
+
+## FLOCKPKG, Wed 11 Nov 09:31Z: #8789's head no longer merges with `main`: #8798 (vllm, landed 09:07Z) rewrote the same four prose passages in ci's `check.py` and `train.sh`; the fix is built on a side branch, not pushed to the PR
+
+**Blocked on your word** for one thing only: whether I move #8789's head. Nothing else waits.
+
+- **What happened** [run: `git merge-tree --write-tree d68de9e61acd origin/main` at `main` `0a722c6ec984ad93e9f32cfb82dbf601ec9f0ae8`, rc 1]. Two files conflict, `tools/verity/check/check.py` (three passages) and `tools/verity/check/train.sh` (one). #8798 (`cursor/vllm-map2-baa3`, merged 09:07:15Z) says what the agreement rule leaves out under `verity/protocols/flock/` ("but sigma/, a README.md or PROTOCOL.md"); the cut's last commit says the rule also covers the Lean packages the verifier requires by path. Both edit the same lines. At `8201dacff26e` the head merged clean [run, 08:45Z].
+- **The fix, built and not on the PR** [run]. `cursor/proofs-flockpkg-1539-main-9c07` at `5124b2689c75ec9d405fcd50ddd1c5e8c3777a21`: `main` `0a722c6ec984` merged into `d68de9e61acd`, the four passages keeping both sides ("verity/protocols/flock/ or a Lean package its verifier requires by path (but sigma/, a README.md or PROTOCOL.md)"), which is what `tool.py`'s `merge_requires` lists. It is 0 behind `main`. `train.sh` keeps `main`'s line count, so its usage range is `main`'s.
+- **The Lean is the same Lean** [run: `git diff --stat d68de9e61acd 5124b2689c75` over `*.lean`, lakefiles, manifests, toolchains and `lean-audit.json`: empty]. `main` changed none of those since the cut's base `6735b7d3d42c`; it changed the Lean check's own tooling (`tools/verity/lean/check.py`, `lean_audit.py`, `public_lock.py`, `warm.py`). The merge changes 436 files over the old head, all `main`'s.
+- **What a new head costs:** LEANWARM's rehearsal `r20261111-071024-27d7` is of `d68de9e61acd` (still in lean-audit after 2 h 09 m [run: status]), and the 96 suites at the old head. I do not push to #8789's head without your word (your 08:10Z message).
+- **What I do meanwhile, without waiting:** the quick tier and the records run on `5124b2689c75` from the side branch, so the new head is checked before it is the PR's. On your word I push that same commit to `cursor/proofs-flockpkg-1539` (a fast-forward) and write the ready line with those runs.
+- **The old head's runs** [run, 09:19Z]: 82 of 96 suites passed, 0 failed (`bfb1` 16, A `bd5d` 1, B `a017` 9, D `d84b` 9, E `9a53` 26 done rc 0; C `6589` 5 of 9 and F `5b6a` 12 of 26 running). Records `c476`: composition PASS, `security` still building.
+
+**Lean verifier, a second kind measured** [run: `r20261111-085135-5b01` and `r20261111-085125-31b6`, both rc 0, source `c6cadd0e325f`, one pinned core]:
+
+| Kind | Circuit | Read, once a `verify` | A session at 1, 16, 128 blocks | at 64, 256, 1,024 |
+|---|---|---|---|---|
+| `ScaledMm{K=2048,N=4}` | 0.64 GB, 77.3 M entries | 7.0 s | 6.40, 6.81, n/a | 7.12, 6.70, 7.08 s |
+| `ScaledMm{K=6144,N=4}` | 1.89 GB, 232.6 M entries | 18.9 s | 16.7, 16.1, 16.2 s | n/a |
+
+- **A session's seconds do not grow with its blocks**: 6.4 s at 1 block and 7.1 s at 1,024 for the first kind (under 0.001 s a block), flat for the second. They grow with the circuit: 67 to 90 ns a matrix entry a session, and 10 s of read a GB of text.
+- **The two fused MoE kinds do not stage** at `c6cadd0e325f` (`fd98`, `593c` failed in staging: "a census parameter of 32 leaves of [1] bits, which `census_leaves` doesn't draw"); that is what #8741 adds, and they are FUSED's rows. I do not rerun them.
+- **Head block** (`d4ef`, `e3ed`): still staging; first numbers about 09:50Z to 10:00Z [guess].
+- **The 09:10Z update's figure**: the planner assumes 60.56 core-seconds for the head block's 256-block statement. From the two rates above [guess, until `d4ef`]: a session about 95 to 125 s, and the read about 120 s more on a call that checks one session. So the number is likely to rise, and by how much depends on whether the read is charged once a statement or once a circuit.
+
+**The runner PR** is built, unmarked and not opened yet: `cursor/proofs-leanver-75d9` at `6d78fcfde689b43826f0da3b6afcb156a9cc3366` (`benchmarks/verifier_cost/flock_sessions.sh` and `.py`, a README paragraph; no `.lean` file, no lock). Its quick tier passed: `r20261111-090515-3b3e`, "2 suites: 2 passed (0 cached), 0 failed" (`repository`, `verity-graph`). Its own run from that head, `r20261111-090421-c61c`, waits for a slot. I open it when `c61c` passes.
+
+**Left:** your word on #8789's head; the new head's runs; (B) #8814 (merged locally onto the old head, tree `d6f1647f2bc0`, not pushed) and M6 after the ready line; the head block's seconds; the runner PR.
+
+For the table:
+- #8789: blocked on a conflict with `main` (#8798, four prose passages in `check.py` and `train.sh`). Old head `d68de9e61acd`: 82 of 96 suites passed, 0 failed. Fix built at `5124b2689c75` on a side branch, same Lean; needs your word to become the head.
+- Lean verifier: a session's seconds do not grow with its blocks; `ScaledMm{K=6144,N=4}` 18.9 s read once a call and 16.3 s a session (measured, `r20261111-085135-5b01`).
+
+For BREAKEVEN:
+- `ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}`, measured (`r20261111-082024-2fd1`, `r20261111-085125-31b6`): 7.0 core-seconds once a `verify` call, 6.9 core-seconds a statement (6.4 to 7.1 over 1 to 1,024 blocks), under 0.001 core-seconds a block.
+- `ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}`, measured (`r20261111-085135-5b01`): 18.9 core-seconds once a call, 16.3 core-seconds a statement (1 to 128 blocks), no growth with blocks seen.
+- Head block: nothing measured yet; do not move the 60.56 until `d4ef`.
