@@ -375,20 +375,6 @@ class Row:
                  f"{rec['released_at']}{' (kept: ' + rec['kept'] + ')' if rec.get('kept') else ''}, rc={rc}")
         return rc
 
-    def gpu_exclusive(self, why: str) -> None:
-        """One engine per pod: ask the pod's hot Commit workers to stop before a stage starts its own engine (an idle
-        worker exits, a busy one is waited for, never killed); the wait is on the timeline."""
-        root = self.env.hot_root
-        if not any(Path(root).glob("*/worker.json")):
-            return
-        t0 = time.time()
-        _, out = self.output(self.cli("hot", "stop", "--root", root))
-        out = ("".join(ln + " " for ln in out.split("\n")[-3:]) if out else "")[:300]
-        s = round(time.time() - t0, 3)
-        if '"stopped": []' not in out and out:
-            self.log(f"hot worker(s) stopped before {why} (one engine per pod, {s}s): {out}")
-        self.tl("hot.gpu_exclusive", "mark", ("why", why), ("s", s), ("out", out))
-
     # ------------------------------------------------------------------------------------------------ prechecks
     def release_line(self, fallback: str) -> tuple[str, str]:
         """The release line of the tree whose code runs (``release-json line``) and the record it came from."""
