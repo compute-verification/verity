@@ -24,11 +24,12 @@ is the one an accepted run's registered reads are held to.
   `wireUnit` sends it to its writer's unit in the same replay block, and `linkUnit` to the boundary port's row
   (`wireUnit_block`, `linkUnit_block`).
 * **The gates** (`wireTarget`, `wireMap`): a source bit at a wired port goes to the gate on the same bit of its writer
-  unit's output row, where the writer's key program has one and no link names the writer's output port
-  (`wireTarget_spec`); every other gate to itself. A linked port's source bits stay: the boundary port is no gate of
-  the members' programs, and the auditor's copies name no unit that writes it. `wiredProg` is the members' programs
-  read through that map, returning the written bits the boundary record holds (`Prog.wired` at `returned`: those at
-  an output port a link names).
+  unit's output row, where the writer's key program has one, no link names the writer's output port and the boundary
+  record holds no written bit at that gate (`wireTarget_spec`); every other gate to itself. A linked port's source
+  bits stay: the boundary port is no gate of the members' programs, and the auditor's copies name no unit that writes
+  it. `wiredProg` is the members' programs read through that map, returning the written bits the boundary record holds
+  (`Prog.wired` at `returned`: those at an output port a link names), so no gate the map moves a source bit to is
+  returned (`returned_wireMap`).
 * **Two conditions on the auditor's copies, decided**: every wired source bit has a gate to go to (`wiresMove`,
   `wireTarget_of_wiresMove`), and no unit is wired to itself (`noSelfWire`, `wireUnit_ne_self`).
 * **A returned output wired inside** (`noReturnedWired`, `writer_not_linked`): where a link names a wire's writer's
@@ -262,25 +263,27 @@ theorem writer_not_linked (hc : noReturnedWired h = true) {t port : String} {w :
   have hn : (heldLink h w.writer w.wport).isNone = true := Array.all_eq_true_iff_forall_mem.1 hc w hm
   exact Option.isNone_iff_eq_none.1 hn
 
-/-- **The gate a source bit is wired to**: a source bit at a port a wire names goes to the gate on the same bit of
-its writer unit's output row (`wireUnit`), where the writer's program has a gate there and no link names the writer's
-output port; none for every other position. At a writer's output port a link names, the reader's source bit and the
-writer's gate stay two gates: round 2 holds them to two entries. -/
-def wireTarget (x : ℕ) : Option ℕ :=
-  ((sourceBits h.ms).find? (·.1 == x)).bind fun s =>
-    (wireUnit h s.2.1 s.2.2.row s.2.2.leaf).bind fun y =>
-      if (heldLink h (h.names.getD y.1 "") y.2.1).isSome then none
-      else ((writtenBits h.ms).find? fun z =>
-        z.2.1 == y.1 && z.2.2 == Spot.Bits.RowPos.mk y.2.1 y.2.2 s.2.2.bit).map (·.1)
-
-/-- **The wiring map**: a source bit goes to the gate it is wired to (`wireTarget`), every other position to
-itself. -/
-def wireMap (x : ℕ) : ℕ := (wireTarget h x).getD x
-
 /-- **A gate the boundary record holds**: a written bit at an output port a link names for its template, which its
 replay block returns. Every other written bit is one the interior record alone holds. -/
 def returned (x : ℕ) : Bool :=
   (writtenBits h.ms).any fun y => y.1 == x && (heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome
+
+/-- **The gate a source bit is wired to**: a source bit at a port a wire names goes to the gate on the same bit of
+its writer unit's output row (`wireUnit`), where the writer's program has a gate there, no link names the writer's
+output port and the boundary record holds no written bit at that gate; none for every other position. At a gate the
+boundary record holds, the reader's source bit and the writer's gate stay two gates: round 2 holds them to two
+entries. -/
+def wireTarget (x : ℕ) : Option ℕ :=
+  ((sourceBits h.ms).find? (·.1 == x)).bind fun s =>
+    (wireUnit h s.2.1 s.2.2.row s.2.2.leaf).bind fun y =>
+      if (heldLink h (h.names.getD y.1 "") y.2.1).isSome then none
+      else (((writtenBits h.ms).find? fun z =>
+        z.2.1 == y.1 && z.2.2 == Spot.Bits.RowPos.mk y.2.1 y.2.2 s.2.2.bit).map (·.1)).filter fun g =>
+          !returned h g
+
+/-- **The wiring map**: a source bit goes to the gate it is wired to (`wireTarget`), every other position to
+itself. -/
+def wireMap (x : ℕ) : ℕ := (wireTarget h x).getD x
 
 /-- **The members' programs read through the wiring map**, returning the gates the boundary record holds
 (`Prog.wired`). -/
@@ -298,12 +301,12 @@ theorem wireMap_of_not_source {x : ℕ} (hx : (sourceBits h.ms).find? (·.1 == x
 
 /-- **The gate a source bit goes to is its writer unit's gate at the wire's port, on the same bit**: the source bit
 is member `t`'s at commitment position `r`, the wiring sends unit `r.leaf` at port `r.row` to unit `u` of template
-`tw` at its output port `wport` (`wireUnit`), which no link names, and the gate is `tw`'s written bit at row `wport`,
-leaf `u`, bit `r.bit`. -/
+`tw` at its output port `wport` (`wireUnit`), which no link names, the gate is `tw`'s written bit at row `wport`,
+leaf `u`, bit `r.bit`, and the boundary record holds no written bit at it. -/
 theorem wireTarget_spec {x y : ℕ} (hxy : wireTarget h x = some y) :
     ∃ t r tw wport u, (x, t, r) ∈ sourceBits h.ms ∧ wireUnit h t r.row r.leaf = some (tw, wport, u) ∧
       heldLink h (h.names.getD tw "") wport = none ∧
-      (y, tw, Spot.Bits.RowPos.mk wport u r.bit) ∈ writtenBits h.ms := by
+      (y, tw, Spot.Bits.RowPos.mk wport u r.bit) ∈ writtenBits h.ms ∧ returned h y = false := by
   unfold wireTarget at hxy
   obtain ⟨⟨sx, st, sr⟩, hs, hxy1⟩ := Option.bind_eq_some_iff.1 hxy
   obtain ⟨⟨tw, wport, u⟩, hu, hxy2⟩ := Option.bind_eq_some_iff.1 hxy1
@@ -313,27 +316,47 @@ theorem wireTarget_spec {x y : ℕ} (hxy : wireTarget h x = some y) :
     rw [← hsx]
     exact List.mem_of_find?_eq_some hs
   have hxy3 : (if (heldLink h (h.names.getD tw "") wport).isSome then none
-      else ((writtenBits h.ms).find? fun z =>
-        z.2.1 == tw && z.2.2 == Spot.Bits.RowPos.mk wport u sr.bit).map (·.1)) = some y := hxy2
+      else (((writtenBits h.ms).find? fun z =>
+        z.2.1 == tw && z.2.2 == Spot.Bits.RowPos.mk wport u sr.bit).map (·.1)).filter fun g =>
+          !returned h g) = some y := hxy2
   cases hv : heldLink h (h.names.getD tw "") wport with
   | some l =>
     rw [hv] at hxy3
     simp at hxy3
   | none =>
     rw [hv] at hxy3
-    have hxy4 : ((writtenBits h.ms).find? fun z =>
-        z.2.1 == tw && z.2.2 == Spot.Bits.RowPos.mk wport u sr.bit).map (·.1) = some y := by
+    have hxy4 : (((writtenBits h.ms).find? fun z =>
+        z.2.1 == tw && z.2.2 == Spot.Bits.RowPos.mk wport u sr.bit).map (·.1)).filter
+          (fun g => !returned h g) = some y := by
       first
         | exact hxy3
         | simpa using hxy3
-    obtain ⟨⟨zx, zt, zr⟩, hz, hzy⟩ := Option.map_eq_some_iff.1 hxy4
+    obtain ⟨hxy5, hret⟩ := Option.filter_eq_some_iff.1 hxy4
+    have hret' : returned h y = false := by
+      cases hr : returned h y with
+      | false => rfl
+      | true =>
+        have hret2 : (!returned h y) = true := hret
+        rw [hr] at hret2
+        cases hret2
+    obtain ⟨⟨zx, zt, zr⟩, hz, hzy⟩ := Option.map_eq_some_iff.1 hxy5
     have hzx : zx = y := hzy
     have hzp := List.find?_some hz
     have hzt : zt = tw := eq_of_beq (Bool.and_eq_true_iff.1 hzp).1
     have hzr : zr = Spot.Bits.RowPos.mk wport u sr.bit := eq_of_beq (Bool.and_eq_true_iff.1 hzp).2
     have hm : (zx, zt, zr) ∈ writtenBits h.ms := List.mem_of_find?_eq_some hz
     rw [hzx, hzt, hzr] at hm
-    exact ⟨st, sr, tw, wport, u, hsm, hu, hv, hm⟩
+    exact ⟨st, sr, tw, wport, u, hsm, hu, hv, hm, hret'⟩
+
+/-- **No gate the wiring moves a source bit to is one the boundary record holds**: the wired program does not return
+it. -/
+theorem returned_wireMap {x : ℕ} (hx : wireMap h x ≠ x) : returned h (wireMap h x) = false := by
+  cases hv : wireTarget h x with
+  | none => exact absurd (wireMap_of_no_target h hv) hx
+  | some y =>
+    rw [wireMap_of_target h hv]
+    obtain ⟨_, _, _, _, _, _, _, _, _, hret⟩ := wireTarget_spec h hv
+    exact hret
 
 /-- **Every wired source bit has a gate to go to**, decided: each source bit at a port a wire names and no link names
 has one (`wireTarget`). A wired source bit with none stays an input gate, which round 2 still reads off the interior
