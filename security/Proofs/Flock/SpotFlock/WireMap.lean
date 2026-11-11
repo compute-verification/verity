@@ -77,8 +77,8 @@ def heldWriter (name : String) : Option ℕ :=
   (List.range h.ms.length).find? fun t => h.names.getD t "" == name
 
 /-- **A wire's writer's part is the part of the first template of the writer's name**, in every run. -/
-theorem writerOf_ownOf (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) (w : Spot.SecondStage.Wire) :
-    Spot.SecondStage.writerOf (ownOf h st rec draw c₀) w =
+theorem writerOf_ownOf (st : Roots) (rec smp : Json) (c₀ : FlockDeploy.Coin) (w : Spot.SecondStage.Wire) :
+    Spot.SecondStage.writerOf (ownOf h st rec smp c₀) w =
       (heldWriter h w.writer).map (partAt h (h.reg.sample (src c₀)).size) := by
   have key : (((List.range h.ms.length).map (partAt h (h.reg.sample (src c₀)).size)).toArray).find?
       (fun p => p.template == w.writer) =
@@ -540,23 +540,23 @@ theorem readOk_linked {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.Seco
 /-- **Round 2 passes every registered read of an accepted run**: template `t`'s session statement, as round 2 reads
 it, has each entry of its registered reads pass `SecondStage.readOk` against the template's part, at what the
 verifier holds of the run. -/
-theorem readOk_of_stmtOk {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ}
-    (ht : t < h.ms.length) :
-    ∃ st rec draw w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some draw ∧
+theorem readOk_of_stmtOk {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
+    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
+    ∃ st rec smp w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some smp ∧
       FlockDeploy.decode (stmtAt h m₂ t) = some w ∧ stmtJsonOf h t w = some S ∧
       ∀ port e, (port, e) ∈ Spot.entries (Spot.getD S.registered "ports") →
-        Spot.SecondStage.readOk (ownOf h st rec draw c₀) (Spot.SecondStage.byTemplate rec)
-          (partAt h (ownOf h st rec draw c₀).sample.size t) port e = true := by
+        Spot.SecondStage.readOk (ownOf h st rec smp c₀) (Spot.SecondStage.byTemplate rec)
+          (partAt h (ownOf h st rec smp c₀).sample.size t) port e = true := by
   have hat := stmtOkAt_of h hok ht
   obtain ⟨s, hx⟩ := parse_of_stmtOkAt h hat
   unfold stmtOkAt at hat
   rw [hx] at hat
   simp only [Bool.and_eq_true] at hat
-  obtain ⟨st, rec, draw, w, S, hst, hrec, hdraw, hw, hS, hc⟩ := readsOk_true h hat.2
+  obtain ⟨st, rec, smp, w, S, hst, hrec, hsmp, hw, hS, hc⟩ := readsOk_true h hat.2
   obtain ⟨-, -, -, -, -, -, hreads, -, -, -⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
-  refine ⟨st, rec, draw, w, S, hst, hrec, hdraw, hw, hS, fun port e hm => ?_⟩
-  have hrd : Spot.SecondStage.readOk (ownOf h st rec draw c₀) (Spot.SecondStage.byTemplate rec)
-      (partAt h (ownOf h st rec draw c₀).sample.size t) port e = true :=
+  refine ⟨st, rec, smp, w, S, hst, hrec, hsmp, hw, hS, fun port e hm => ?_⟩
+  have hrd : Spot.SecondStage.readOk (ownOf h st rec smp c₀) (Spot.SecondStage.byTemplate rec)
+      (partAt h (ownOf h st rec smp c₀).sample.size t) port e = true :=
     Array.all_eq_true_iff_forall_mem.1 hreads _ hm
   exact hrd
 
@@ -566,9 +566,9 @@ auditor's copies names and no link does read the writer's output port of the int
 root, domain and leaves: the writer `tw` is the first template of the wire's writer's name, its cell size is the
 rows' `per`, the tree holds that many rows a sampled block, and each slot that reads is one of the template's part
 and reads the row `wireRow` names, its writer's position in the same sampled block's cell. -/
-theorem wired_read {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ}
-    (ht : t < h.ms.length) :
-    ∃ st rec draw w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some draw ∧
+theorem wired_read {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
+    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
+    ∃ st rec smp w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some smp ∧
       FlockDeploy.decode (stmtAt h m₂ t) = some w ∧ stmtJsonOf h t w = some S ∧
       ∀ port e wr, (port, e) ∈ Spot.entries (Spot.getD S.registered "ports") →
         heldLink h (h.names.getD t "") port = none → heldWire h (h.names.getD t "") port = some wr →
@@ -582,11 +582,11 @@ theorem wired_read {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stm
           Spot.SecondStage.placedOk (h.reg.sample (src c₀)).size (partAt h (h.reg.sample (src c₀)).size t) e
             ((h.reg.sample (src c₀)).size * h.reg.ns.getD tw 0)
             (wireRow h t port (partAt h (h.reg.sample (src c₀)).size t)) = true := by
-  obtain ⟨st, rec, draw, w, S, hst, hrec, hdraw, hw, hS, hall⟩ := readOk_of_stmtOk h hok ht
-  refine ⟨st, rec, draw, w, S, hst, hrec, hdraw, hw, hS, fun port e wr hm hl hwr => ?_⟩
+  obtain ⟨st, rec, smp, w, S, hst, hrec, hsmp, hw, hS, hall⟩ := readOk_of_stmtOk h hok ht
+  refine ⟨st, rec, smp, w, S, hst, hrec, hsmp, hw, hS, fun port e wr hm hl hwr => ?_⟩
   obtain ⟨xe, pw, r, hv, hmem, hpw, hr, hn, hsame, hpl⟩ :=
-    Spot.SecondStage.readOk_wired (own := ownOf h st rec draw c₀)
-      (named := Spot.SecondStage.byTemplate rec) (p := partAt h (ownOf h st rec draw c₀).sample.size t)
+    Spot.SecondStage.readOk_wired (own := ownOf h st rec smp c₀)
+      (named := Spot.SecondStage.byTemplate rec) (p := partAt h (ownOf h st rec smp c₀).sample.size t)
       (port := port) (e := e) (w := wr) hl hwr (hall port e hm)
   rw [writerOf_ownOf] at hpw
   obtain ⟨tw, htw, rfl⟩ := Option.map_eq_some_iff.1 hpw
@@ -605,9 +605,9 @@ auditor's copies names read the link's value: where the interior record `rec` re
 value, each reading slot at the row `linkRowIn` names; else the boundary port of that name of the run's statement,
 `per` rows a replay block of its population, each reading slot at the row `linkRow` names, its replay block's. Which
 of the two holds is the interior record's, not the auditor's copies'. -/
-theorem linked_read {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ}
-    (ht : t < h.ms.length) :
-    ∃ st rec draw w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some draw ∧
+theorem linked_read {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
+    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
+    ∃ st rec smp w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some smp ∧
       FlockDeploy.decode (stmtAt h m₂ t) = some w ∧ stmtJsonOf h t w = some S ∧
       ∀ port e l, (port, e) ∈ Spot.entries (Spot.getD S.registered "ports") →
         heldLink h (h.names.getD t "") port = some l →
@@ -622,11 +622,11 @@ theorem linked_read {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : st
               Spot.SecondStage.placedOk (h.reg.sample (src c₀)).size (partAt h (h.reg.sample (src c₀)).size t) e
                 (m * r.per)
                 (linkRow h t port (h.reg.sample (src c₀)) (partAt h (h.reg.sample (src c₀)).size t)) = true)) := by
-  obtain ⟨st, rec, draw, w, S, hst, hrec, hdraw, hw, hS, hall⟩ := readOk_of_stmtOk h hok ht
-  refine ⟨st, rec, draw, w, S, hst, hrec, hdraw, hw, hS, fun port e l hm hl => ?_⟩
+  obtain ⟨st, rec, smp, w, S, hst, hrec, hsmp, hw, hS, hall⟩ := readOk_of_stmtOk h hok ht
+  refine ⟨st, rec, smp, w, S, hst, hrec, hsmp, hw, hS, fun port e l hm hl => ?_⟩
   obtain ⟨hv, r, hr, hcase⟩ :=
-    readOk_linked (own := ownOf h st rec draw c₀) (named := Spot.SecondStage.byTemplate rec)
-      (p := partAt h (ownOf h st rec draw c₀).sample.size t) (port := port) (e := e) (l := l) hl (hall port e hm)
+    readOk_linked (own := ownOf h st rec smp c₀) (named := Spot.SecondStage.byTemplate rec)
+      (p := partAt h (ownOf h st rec smp c₀).sample.size t) (port := port) (e := e) (l := l) hl (hall port e hm)
   have hr' : heldRows h (h.names.getD t "") port = some r := hr
   refine ⟨hv, r, hr', ?_⟩
   rcases hcase with ⟨xe, hxe, hsame, hpl⟩ | ⟨hnone, b, m, hb, hpop, hsame, hpl⟩
@@ -638,11 +638,11 @@ theorem linked_read {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : st
     exact hpl'
   · refine Or.inr ⟨hnone, b, m, hb, hpop, hsame, ?_⟩
     have hrow : linkRow h t port (h.reg.sample (src c₀)) (partAt h (h.reg.sample (src c₀)).size t) =
-        Spot.SecondStage.linkedRow (ownOf h st rec draw c₀) (partAt h (h.reg.sample (src c₀)).size t) r :=
-      linkRow_eq h hl hr' (ownOf h st rec draw c₀) (partAt h (h.reg.sample (src c₀)).size t)
+        Spot.SecondStage.linkedRow (ownOf h st rec smp c₀) (partAt h (h.reg.sample (src c₀)).size t) r :=
+      linkRow_eq h hl hr' (ownOf h st rec smp c₀) (partAt h (h.reg.sample (src c₀)).size t)
     have hpl' : Spot.SecondStage.placedOk (h.reg.sample (src c₀)).size (partAt h (h.reg.sample (src c₀)).size t) e
         (m * r.per)
-        (Spot.SecondStage.linkedRow (ownOf h st rec draw c₀) (partAt h (h.reg.sample (src c₀)).size t) r) =
+        (Spot.SecondStage.linkedRow (ownOf h st rec smp c₀) (partAt h (h.reg.sample (src c₀)).size t) r) =
           true := hpl
     rw [hrow]
     exact hpl'
@@ -654,8 +654,8 @@ registered value, or every one reads it off the interior record. An address has 
 not sized and the interior record's port sized; so no address holds at a gate one unit's session reads as a registered
 value and another's off the interior record. -/
 theorem addresses_one_way (hA : Addresses h) (g : ℕ) : ∃ S : Address,
-    (∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.ReadsRegistered h S g) ∨
-      ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.ReadsInterior h S g := by
+    (∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.ReadsRegistered h S g) ∨
+      ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.ReadsInterior h S g := by
   obtain ⟨S, hS⟩ := hA g
   refine ⟨S, ?_⟩
   by_cases hs : S.slot.sized = true

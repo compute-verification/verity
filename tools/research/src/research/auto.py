@@ -375,11 +375,12 @@ def _blocked(slot: dict, free_gb: Any, mem_gb: float) -> str | None:
     """What keeps a job asking ``mem_gb`` GB from taking ``slot`` now, as slot.py decides it at admission: what blocks the slot
     for any check (its `blocked`), or less memory free than the job would reserve there. slot.py raises a slot's mem= to the
     job's ask (its `asking`: GB as GiB, rounded up) and one without mem= to that ask, so the machine's free memory (the
-    pool's `free_gb`, GiB less what live reservations haven't reached) decides, not the slot's mem=. A document without it
+    pool's `free_gb`, GiB less what live reservations haven't reached) decides, not the slot's mem=. A slot with book= reserves
+    the larger of that and the ask, in place of its mem= (slot.py's `booked`). A document without it
     (no pool's since the probe reads it) leaves the slot's own `blocked`."""
     if slot.get("blocked"):
         return str(slot["blocked"])
-    need = max(slot.get("mem") or 0, -(-int(mem_gb * 1e9) // 2 ** 30) if mem_gb > 0 else 0)
+    need = max(slot.get("book") or slot.get("mem") or 0, -(-int(mem_gb * 1e9) // 2 ** 30) if mem_gb > 0 else 0)
     if need and isinstance(free_gb, (int, float)) and free_gb < need:
         return f"{free_gb:g}{MEMORY_BLOCK}, under the {need} GB this job would reserve there"
     return None

@@ -14,7 +14,7 @@ the wired program returns no gate `ω` moves; and every proof block has a gate `
 
 * `Prog.unread_wired_of_unread`, `Prog.unread_wired_of_moved`: an unread input of the program is one of the wired
   program, and so is every gate `ω` moves.
-* `committed_wired_le`, `unitClass_of_le`: the wired program commits, of a cut proof block, no more than the program
+* `committed_wired_le`, `sizeClass_of_le`: the wired program commits, of a cut proof block, no more than the program
   commits of the block, so the cut block has a public size class that holds what it commits.
 * `Partition.partitions_cut`: the cut partition partitions the wired program.
 * `replayOf_cut`, `replayOf_cut_eq`, `Partition.stratumOf_cut`, `cell_cut`: a cut proof block lies in the replay block
@@ -74,14 +74,15 @@ theorem committed_wired_le {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} (
   simp only [Bool.and_eq_true] at hg
   exact hb g hg.1
 
-/-- **A set that commits no more than one with a public size class has one** that holds what it commits. -/
-theorem unitClass_of_le {C C' : Prog} {u u' : List ℕ} (hle : committed C' u' ≤ committed C u)
-    (h : ∃ w, unitClass C u = some w ∧ committed C u ≤ w) :
-    ∃ w, unitClass C' u' = some w ∧ committed C' u' ≤ w := by
-  obtain ⟨w, hw, hcw⟩ := h
-  unfold unitClass at hw ⊢
-  have hsome : (sizeClasses.find? fun w => decide (committed C' u' ≤ w)).isSome :=
-    List.find?_isSome.2 ⟨w, List.mem_of_find?_eq_some hw, by simpa using hle.trans hcw⟩
+/-- **A count no more than one with a size class has one**: where a list of sizes has a first entry at least `a`, it
+has a first entry at least `a' ≤ a`. At the public size classes, a set that commits no more than one with a public size
+class has one that holds what it commits. -/
+theorem sizeClass_of_le {l : List ℕ} {a a' : ℕ} (hle : a' ≤ a)
+    (h : ∃ w, (l.find? fun w => decide (a ≤ w)) = some w ∧ a ≤ w) :
+    ∃ w, (l.find? fun w => decide (a' ≤ w)) = some w ∧ a' ≤ w := by
+  obtain ⟨w, hw, haw⟩ := h
+  have hsome : (l.find? fun w => decide (a' ≤ w)).isSome :=
+    List.find?_isSome.2 ⟨w, List.mem_of_find?_eq_some hw, by simpa using hle.trans haw⟩
   obtain ⟨w', hw'⟩ := Option.isSome_iff_exists.1 hsome
   exact ⟨w', hw', by simpa using List.find?_some hw'⟩
 
@@ -115,7 +116,7 @@ theorem Partition.partitions_cut {P : Partition} {C : Prog} {ω : ℕ → ℕ} {
     exact List.ne_nil_of_mem (mem_cutBlock.2 ⟨hg, hωg⟩)
   · rw [Partition.blocks_cut] at hu
     obtain ⟨u₀, hu₀, rfl⟩ := List.mem_map.1 hu
-    exact unitClass_of_le (committed_wired_le u₀ hin hw) (hcls u₀ hu₀)
+    exact sizeClass_of_le (l := sizeClasses) (committed_wired_le u₀ hin hw) (hcls u₀ hu₀)
 
 /-- **A cut proof block lies in the replay block the block lay in**, where no gate is in two replay blocks and the
 proof block has a gate `ω` leaves alone: that gate is in no earlier replay block. -/
