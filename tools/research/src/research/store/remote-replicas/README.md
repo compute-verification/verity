@@ -33,6 +33,11 @@ ever written to disk by the tool. A pod with those three variables and the same 
 (the token rides in the signed headers: the store README, §7). A temporary credential cannot mint another (the tool refuses when
 `AWS_SESSION_TOKEN` is set); revoking the parent token kills every child.
 
+`--job push|fetch` mints what a cluster job holds in place of the parent key (`custody.job_env`; the Nebius `sky/submit.sh` passes
+it to the job as its secrets): the key `research run` stages for a run's custody (`push`: it writes, and can neither delete nor
+copy) or its `--store-read` key (`fetch`: read only). It takes `--ttl` and `--env` alone, since no other flag may widen it, and
+prints the three variables with no bucket name.
+
 ## No remote, or an unusable one
 
 No remote configured (no file, or no `[remote]` table) => the local store is the only replica and `where` says so; nothing
