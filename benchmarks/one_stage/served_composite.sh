@@ -66,7 +66,7 @@ PRODUCT=${PRODUCT:-onsite}
 case $PRODUCT in
   onsite) products=(remote onsite) ;;
   remote) products=(remote)
-    [ "${POUW:-}" = pearlplus ] && [ -f "verity/core/protocols/$PRODUCT/RemoteV1Main.lean" ] && products=(remote-v1) ;;
+    [ "${POUW:-}" = pearlplus ] && [ -f verity/core/protocols/remote/RemoteV1Main.lean ] && products=(remote-v1) ;;
   *) say "COMPOSITE: not run, PRODUCT is onsite or remote, not $PRODUCT"; exit 1 ;;
 esac
 [ -f benchmarks/one_stage/composite.py ] || { say "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py"; exit 1; }
