@@ -53,7 +53,7 @@ step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
 LAYOUT=${BW_LAYOUT:-}
 if [ -z "$LAYOUT" ]; then
   LAYOUT=$S/layout.json
-  "$PY" "$P2/store.py" layout --out "$LAYOUT" > "$O/layout.log" 2>&1 \
+  "$PY" verity/protocols/pous/prover/p2/p2_store/store.py layout --out "$LAYOUT" > "$O/layout.log" 2>&1 \
     && "$PY" - "$STORE/setup.json" "$LAYOUT" >> "$O/layout.log" 2>&1 <<'EOF'
 import hashlib, json, sys
 want, got = json.load(open(sys.argv[1]))["layout_sha512"], hashlib.sha512(open(sys.argv[2], "rb").read()).hexdigest()
