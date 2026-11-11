@@ -44223,3 +44223,40 @@ For the table:
 - Templated check: its −11.7% is the Lean verifier's term at an assumed ratio, 91% of it on the head block, which has no template; with the head block flat it is −1.0% (4,002 GB). Measured on eleven other types: 0.137 of the flat.
 - Flat-column cut: on main since 9 Nov (#8101, #8145); its −2.8% is 95% an assumed ×0.85 on the head block; measured families alone −0.05%.
 - Replay over the lifetime: vllm's; −7.7% as priced; defined at `reprice.py` 458-463 and `sweep.py` 118-128.
+
+## WITNESS, Wed 11 Nov 09:07Z: the second cut is built and pushed (the walk keeps its row vectors); both cuts are switches in one binary; no CPU-second of either is measured yet
+
+`For HEADPROF: cursor/proofs-witness-9dbc at 88f0665ab6644e3cb511868343230babeb27d792` (replaces `1f4029960b`).
+
+- **What the head holds** [read: `git log 8201dacff2..88f0665ab6`, four commits]: the pin tests; the walk asks the
+  cache for each row of z 64 column indices ahead (`FC_UNIT_AHEAD`, 0: today's loop); **new:** the walk takes its z, a
+  and b vectors from a pool and gives them back, so a prover maps and faults them in once and not every statement
+  (`FC_UNIT_KEEP=0`: none kept, today's); `unit-walk` now runs on the device prover's small pages, with the vectors
+  kept and not, and prints the kernel's share (`sys_s`).
+- **Same words** [run `r20261111-085724-1414`, cpu-7, tree `a973c671ad` whose five files are the head's, `cmp`]: 162
+  passed with `sha512` and 169 with `sha512,glue,seed-injection`, 0 failed; both pins are main's (taken on main's code
+  in `r20261111-083459-fc1a`); a new test walks on vectors given back full of ones. The bin builds [run
+  `r20261111-085753-8868`, "built in 76 s"].
+- **Why the second cut** [read: `r20261111-061047-6773` `out/cpu/k1-threads.tsv.gz`; `huge_pages.rs`;
+  `flock-circuit.rs` `main`]: the prover's pool threads spend 2.3 of their 9.9 CPU-s a statement in the kernel. The
+  walk maps twelve vectors of 256 MB a statement (3 GB), the GPU prover turns the huge-page advice off
+  (`huge_pages::set(!flag("--gpu"))`), so that is 786,000 small-page faults and twelve unmaps a statement on the pool's
+  threads. What share of the 2.3 s is the walk's is not measured [guess: most].
+- **For HEADPROF, four rows from one build:** `FC_UNIT_AHEAD=0 FC_UNIT_KEEP=0` is today's walk; `FC_UNIT_KEEP=0` the
+  first cut alone; `FC_UNIT_AHEAD=0` the second alone; neither set, both. Memory: a prover holds up to 3 GB more
+  between statements (twelve kept vectors at this block; the pool's cap is 24 vectors).
+  **On kernels' tree `c6cadd0e325f`** the one-file recipe of my 08:53Z entry no longer carries the head (the second cut
+  is in `circuit.rs` too, which differs there). This does, checked with `git apply --check` on that tree's three files
+  [run, local]:
+  `git diff 8201dacff26e50e4b9ea73e6ec98986e200428d9 88f0665ab6644e3cb511868343230babeb27d792 -- verity/protocols/flock/prover/live/src | sed 's#verity/protocols/flock/prover/live/src/#verity/ml/flock/live/src/#g' | git apply`
+- **Measuring now:** `r20261111-085753-8868` (cpu-7; the 9-million-row instance; kept and not, distances 0, 16, 64,
+  256, small pages and huge; staging until about 09:25Z) and `r20261111-082933-6294` (cpu-1; the served block's unit,
+  31,981,569 rows; staging until about 09:57Z, then main's build and this head's). The CPU nodes' huge-page mode is
+  `madvise` [run 8868 `host.txt`]; node A's I do not know, and it decides how much the second cut is worth there.
+- **For you, one question:** the PR needs `--issue`. #8859 (the loopback check's CPUs, the same profile) refs PRF-502;
+  I use PRF-502 unless you name another.
+- **Next:** the two measurements, then the PR (unmarked, quick tier) by 10:30Z; ready line by 11:30Z.
+
+For BREAKEVEN: nothing measured yet. The head block's host witness is 8.7 CPU-s a statement [relayed, HASH-114]; the
+two cuts' sum is 1 to 3 CPU-s [guess] until 8868, 6294 or HEADPROF's rows say.
+For the table: head block, host witness: two bit-identical cuts built at `88f0665ab6` (ask ahead; kept row vectors), CPU-seconds saved not measured yet.
