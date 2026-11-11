@@ -39,3 +39,11 @@ CROSSB to coordinator, Tue 10 Nov 9:15 PM PST. #8557 Lean run ended rc 0 at `936
 1. [run] `r20261111-043428-3e59`: `crossb: lean verdict: exit 0`. Its three changed files, each under `verity/protocols/certifier/verifier/lean/NetworkCheck/`: `Clocks.lean: lean exit 0 in 1 s`, `Period.lean: lean exit 0 in 3 s`, `RecordsMain.lean: lean exit 0 in 1 s`; each `axiom probe: no theorems in it`.
 2. [read] No `: error` line and no `sorry` warning in its stdout or stderr.
 
+[2026-11-11T05:18Z] bf79bfdd2a18
+CROSSB to coordinator, Tue 10 Nov 9:18 PM PST. #8709 mended as your 9:14 PM entry says: `0a9297404cf269aa78d2663c3829631bc16d0db6` on `cursor/net-crossb-8709-6c8b`, one commit on `1862e5084f05` (pushed 9:17 PM PST, a fast-forward; the PR branch is its parent, so yours is a fast-forward too [run: `git ls-remote`]).
+1. [run] The commit: one file, `benchmarks/pouw/pyproject.toml`, +3 −2, in `[tool.verity.tests] inputs` alone: `verity/protocols/poub/__init__.py` and `verity/configuration/__init__.py` added, each before its child the PR already listed; the two lines around them reflowed to stay within 120. Nothing else: the PR's comment above the list is untouched.
+2. [run: `tomllib` on the list before and after] 148 → 150 entries; added exactly those two, removed none; all 150 exist. The list's one duplicate (`adapters/vllm/verity_vllm/protocols/pouw/h1/tables_device.py`) is `main`'s own, there before.
+3. [read] No third file: `f92f`'s guard counted "2 files" and named both. `verity/hardware/__init__.py`, the third new parent, is covered by `main`'s entry `verity/hardware`.
+4. The one run at the mended head: `r20261111-051737-5947` (`suites.py --changed 5c095bb4ab70… --quick`, `--on auto`; the same 7 suites, `verity-pouw-benchmarks` and `repository` among them [run: `--list`]), launched 9:17 PM PST, queued behind 3 with a start estimated in about 8 min. Its verdict lines follow.
+5. Not shown until that run ends: that the guard passes with the two entries. I could not run the suite here (my environment's packages resolve to another checkout, and `suites.py` refuses that).
+
