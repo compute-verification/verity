@@ -152,8 +152,9 @@ def unit_rows(tp: Any, seg: Collection[tuple[str, str]] = ()) -> tuple[list[tupl
     (`interface.unit_rows`) under its cuts (`chain_rows.cuts`, a ``CHAINS`` combine's), parameter g's row ``in<g>``, or
     ``in<g>.<s>`` for its row s when cut. A row of ``tp`` that ``seg`` names (``(template, row)`` as `history_rows.seg`
     and `interface.seg_rows` do, a row by its port and output j by ``o<j>``) is ``hm96-sha512/row-seg/v1``, every other
-    ``hm96-sha512/row/v2``; a name that is no row of ``tp`` is refused. The
-    one exception is a ``ScaledMmS8Coordinate``'s A6 rows, ``x`` (the token's s8
+    ``hm96-sha512/row/v2``; a name that is no row of ``tp`` is refused, and so is a row named with no template (a bare
+    ``"o0"`` would unpack as a pair naming no template and leave the row v2). The one exception is a
+    ``ScaledMmS8Coordinate``'s A6 rows, ``x`` (the token's s8
     codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2), then the v2 output row ``o0``: each operand
     packed with its scale in one row is the layout serving commits (`serving_rows`' s8 row tables), where
     `interface.unit_rows` would give ``x``, ``sx``, ``wrow`` and ``sw`` a row each."""
@@ -161,6 +162,8 @@ def unit_rows(tp: Any, seg: Collection[tuple[str, str]] = ()) -> tuple[list[tupl
     from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_statics
 
+    if any(isinstance(r, str) for r in seg):
+        raise TypeError(f"{tp.id}: seg names each row as (template, row), as `history_rows.seg` does, not {list(seg)}")
     seg = {p for t, p in seg if t == tp.id}
     if tp.layout == "s8":
         if seg - {"x"}:
