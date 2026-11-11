@@ -321,7 +321,7 @@ def test_the_traced_step_has_a_step_before_it_where_the_run_has_one(tmp_path, st
 def test_what_a_routes_output_computes_is_traced_and_charged_with_its_step(tmp_path):
     """A route's `output` is no free place to compute: a product it takes of two trained weights is a row of the
     trace, a forward product of the measured step with both operands the update's, and the step's circuit holds its
-    gates. Without it the route's `output` would be where a covert entry does its work."""
+    gates. Untraced, a route's `output` would be work no step is charged for."""
     cfg = config.load(write_config(tmp_path / "a.toml", budget={"steps": 5, "batch": 2}),
                       starts.registry(tiny_registry(tmp_path / "reg")))
     route = config.route(cfg.route)

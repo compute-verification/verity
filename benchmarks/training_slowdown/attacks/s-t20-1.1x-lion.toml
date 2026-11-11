@@ -6,7 +6,6 @@ target = { gain = 1.1 }
 budget = { steps = 838, batch = 64 }
 seeds = { search = [0], final = [0, 101, 102] }
 policy = "console"
-honest = "s-t20-1.1x-ref-optim"
 
 [dials]
 trainable = "*"

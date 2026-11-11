@@ -54,18 +54,20 @@ def test_a_step_the_bound_cant_read_has_no_slowdown_and_says_why():
 
 
 def test_the_command_traces_each_entry_and_prints_its_row_and_its_run_over_each_period(tmp_path, capsys):
+    """Two entries of two routes: an entry is whatever its config names, here a route with adapters and an output
+    of its own, traced, and one whose E is coded, which a trace alone doesn't bound."""
     reg = tiny_registry(tmp_path / "reg")
-    full = write_config(tmp_path / "full.toml", dials={"trainable": "*", "lr": 1e-2})
+    adapted = write_config(tmp_path / "adapted.toml", route="lora", dials={"rank": 2, "lr": 1e-2})
     coded = write_config(tmp_path / "coded.toml", dials={"trainable": "blocks.0.w_*", "store": "q8"})
-    assert library.main([str(full), str(coded), "--starts", str(reg), "--out", str(tmp_path / "out")]) == 0
+    assert library.main([str(adapted), str(coded), "--starts", str(reg), "--out", str(tmp_path / "out")]) == 0
     out = capsys.readouterr().out
     head, first, second = out.splitlines()[:3]
     assert head.split() == ["entry", "route", "slowdown", "what", "binds"]
-    assert first.split()[:3] == ["full", "subset", "1"] and second.split()[:3] == ["coded", "subset", "-"]
+    assert first.split()[:3] == ["adapted", "lora", "1"] and second.split()[:3] == ["coded", "subset", "-"]
     got = json.loads((tmp_path / "out" / "library.json").read_text())
     assert got["schema"] == library.SCHEMA and list(got["parts"]) == ["traced", "proved", "premise", "scaled"]
     a, b = got["rows"]
-    assert a["step"]["tokens"] == 2 * 1024 and a["policy"]["name"] == "console" and a["dials"]["trainable"] == "*"
+    assert a["step"]["tokens"] == 2 * 1024 and a["policy"]["name"] == "console" and a["dials"]["rank"] == 2
     assert (b["slowdown"], b["binds"], b["periods"]) == (None, library.CODED, None)
     fleets, periods = calculator.fleets(), calculator.periods()
     assert list(periods)[1:] == ["week", "month", "year"] and len(fleets) == 2

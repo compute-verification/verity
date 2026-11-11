@@ -3,8 +3,8 @@
     python -m training_slowdown.library [ENTRY ...] [--starts starts.toml] [--out DIR]
 
 An entry is a config of `attacks/` (`training_slowdown.config`): a route and its dials at a start, with the policy it
-is read under. A standard algorithm and a covert one are the same kind of thing, and a new entry is a config of a
-route `routes/` has, or a new route. ENTRY is a config's file or its name there; none is every entry.
+is read under. There is one kind of entry, whatever its route computes: a new one is a config of a route `routes/`
+has, or a new route and a config of it. ENTRY is a config's file or its name there; none is every entry.
 
 For each entry the command builds its route's model at the start's shape, traces its step on a CPU as a job does
 after its last step (`run.trace_step`: on fake tensors, so it trains nothing and reads no weights and no data), and
