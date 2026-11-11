@@ -46,7 +46,6 @@ from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_build as RB
 from verity_vllm.pipeline import row_config as RC
-from verity_vllm.pipeline import row_group as RG
 from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, copy_first, stage_on
@@ -90,7 +89,7 @@ class SingleRow(Row):
             if stage_on(self.stages, "commit"):
                 self.commit()
             if stage_on(self.stages, "replay"):
-                RG.replay(self) if self.ck_.group else RC.replay(self)
+                RC.replay(self)
                 self.replay_pending = False
         except Stop as s:
             if self.config_run and self.trap:
@@ -727,9 +726,6 @@ class SingleRow(Row):
 
     def commit(self) -> None:
         d, ck = self.d, self.ck_
-        if ck.group:
-            self.replay_pending = RG.commit(self, CAP)
-            return
         to, cmd, man = self.commit_prepare()
         t0 = int(time.time())
         if ck.hot_engine == "1" and not self.leased:

@@ -27,7 +27,6 @@
     {"file": "verity_vllm/pipeline/commit.py", "kind": "vllm-internals", "symbol": "run_workload", "detail": "llm_engine"},
     {"file": "verity_vllm/pipeline/commit_arb.py", "kind": "vllm-internals", "symbol": "main", "detail": "llm_engine"},
     {"file": "verity_vllm/pipeline/commit_arb.py", "kind": "vllm-internals", "symbol": "run", "detail": "llm_engine"},
-    {"file": "verity_vllm/pipeline/commit_group.py", "kind": "vllm-internals", "symbol": "clean", "detail": "llm_engine"},
     {"file": "verity_vllm/pipeline/cpu_replay.py", "kind": "refusal-class", "symbol": "<module>", "detail": "Refused"},
     {"file": "verity_vllm/pipeline/gpu_lease.py", "kind": "vllm-internals", "symbol": "_shut_down", "detail": "engine_core"},
     {"file": "verity_vllm/pipeline/gpu_lease.py", "kind": "vllm-internals", "symbol": "_shut_down", "detail": "llm_engine"},

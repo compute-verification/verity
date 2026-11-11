@@ -61,7 +61,6 @@
     {"file": "tests/ops/test_epoch_row.py", "kind": "UP017", "symbol": "<module>", "detail": "Use `datetime.UTC` alias"},
     {"file": "tests/pipeline/serve_prefix_gpu.py", "kind": "S310", "symbol": "main", "detail": "Audit URL open for permitted schemes. Allowing use of `file:` or custom schemes is often unexpected."},
     {"file": "tests/pipeline/serve_prefix_gpu.py", "kind": "S310", "symbol": "post", "detail": "Audit URL open for permitted schemes. Allowing use of `file:` or custom schemes is often unexpected.", "count": 2},
-    {"file": "tests/pipeline/test_commit_group.py", "kind": "B018", "symbol": "test_the_fingerprint_moves_with_any_change_to_the_weights_words_or_tensors", "detail": "Found useless expression. Either assign it to a variable or remove it."},
     {"file": "tests/pipeline/test_coverage_workloads.py", "kind": "F401", "symbol": "<module>", "detail": "`sys` imported but unused"},
     {"file": "tests/pipeline/test_engine_schedule.py", "kind": "F401", "symbol": "<module>", "detail": "`importlib.util` imported but unused"},
     {"file": "tests/pipeline/test_engine_schedule.py", "kind": "F401", "symbol": "<module>", "detail": "`sys` imported but unused"},

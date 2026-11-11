@@ -70,6 +70,14 @@ def test_only_an_item_with_a_lease_tool_is_leased_and_its_devices_are_hidden_out
     assert env == {"GPU_LEASE": "/x/gpu-lease", "CUDA_VISIBLE_DEVICES": ""}
 
 
+def test_a_process_that_holds_its_lease_takes_no_second_one(monkeypatch):
+    monkeypatch.setattr(GL, "_HELD", [("holder",)])
+    monkeypatch.setattr(GL, "cuda_initialised", lambda: pytest.fail("a held lease is not taken again"))
+    env = {"GPU_LEASE": "/x/gpu-lease", GL.STARTED: "/row/gpu_lease.started", "CUDA_VISIBLE_DEVICES": "5"}
+    GL.acquire(environ=env)
+    assert env == {"GPU_LEASE": "/x/gpu-lease", GL.STARTED: "/row/gpu_lease.started", "CUDA_VISIBLE_DEVICES": "5"} and GL._HELD == [("holder",)]
+
+
 def test_the_commit_requests_its_tasks_gpus_for_at_most_its_timeout():
     env = {"GPU_LEASE": "/l/gpu-lease", GL.STARTED: "/row/gpu_lease.started", GL.MAX_MIN: str(GL.max_min(2400))}
     argv = GL.holder_argv(env, 7)
@@ -370,7 +378,7 @@ def test_a_commit_whose_checks_after_its_last_run_read_host_memory_only_may_rele
 def test_the_commit_releases_its_lease_after_its_last_run_and_before_the_checks_that_follow():
     """In `commit.main`: the release follows the last run's records that read the device (the run, its openings, the replay bundle's
     device-resident tensors in `RB.start`) and precedes every check that reads host memory; nothing after it calls CUDA. A hot
-    worker's job never releases; a grouped Commit's last row does (`commit_group`)."""
+    worker's job never releases."""
     src = Path(GL.__file__).with_name("commit.py").read_text()
     main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
     marks = ["GL.acquire(TL)", "TL.end(_wstage", '"gpu_mem"', 'TL.start("validate.openings"', "RB.start(out, pair", "GL.release(TL",
@@ -379,7 +387,7 @@ def test_the_commit_releases_its_lease_after_its_last_run_and_before_the_checks_
     at = [main.index(m) for m in marks]
     assert at == sorted(at) and main.count("GL.release(") == 1, dict(zip(marks, at))
     call = main[at[5]:main.index("\n", at[5])]
-    assert 'last=pair == args.pairs - 1 and k == len(order) - 1 and (_HOT or {}).get("last", _HOT is None)' in call and "after=_wstage" in call
+    assert "last=pair == args.pairs - 1 and k == len(order) - 1 and _HOT is None" in call and "after=_wstage" in call
     assert "bundle=_rb_started is not None" in call
     after = main[main.index("\n", at[5]):]
     assert not re.search(r"torch\.cuda|\.cuda\(|nvidia_smi|synchronize\(|empty_cache", after)

@@ -198,7 +198,6 @@
         "adapters/vllm/verity_vllm/pipeline/build.py",
         "adapters/vllm/verity_vllm/pipeline/match.py",
         "adapters/vllm/verity_vllm/pipeline/commit.py",
-        "adapters/vllm/verity_vllm/pipeline/commit_group.py",
         "adapters/vllm/verity_vllm/pipeline/commit_plan.py",
         "adapters/vllm/workloads/",
         "adapters/vllm/manifests/",
