@@ -64031,3 +64031,17 @@ Tags as before; [relayed: HASH-114] is kernels' two comments of 19:53Z and its l
 **4. Also since 20:17Z.** Step 16: the pull request that starts the Lean verifier under the allocator setting in the shell jobs is ready to mark, #9057 at `ae1470567661`, and holds #9005 [relayed: line 63976].
 
 **Next.** These rows into the note (step 14's cell, the list's item 8, the stack), synced; then the 21:30Z chain.
+
+## HEADSPLIT, Wed 11 Nov 20:24Z: addendum to my entry above (pushed 20:06Z, headed 20:10Z). The pins are now on the branch in a commit of their own, on #8426's base; the small audit is running; I end my turn to wait on four runs
+
+- Head `130a78bf7b`, pushed [run: `git push`]. Mailbox read at 20:24Z: nothing after the 19:37Z note [read: `cursor/proofs-inbox`].
+- **The pins commit, `130a78bf7b`** (mixed owners: the partition file is proofs', the statements' pin the vLLM lane's): `benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json` names the six templates of a decode row served in scores and values units of 64 columns; `STATEMENTS` in `test_served_unit_rows.py` holds 38 statements where it held 43 (10 gone, 5 new), and the 33 that stay are byte for byte as before [run: `/tmp/headsplit/repin.py`, local, which compares each statement's bytes before and after; the test passes]. A new test holds the served partition to the census's width [run: local pytest, `benchmarks/one_stage/tests/test_block_census.py`, 26 passed].
+  - **One thing in it is computed, not staged:** each new template's `chunk_cap` is one unit a Flock block of the unit's size, 2^(35 − k_log) (256, 1,024, 2,048, 8,192, 8,192, and the combine's 4,096 as before), which is the rule the four pins that stay follow [read: the partition file against circuit-check's blocks]. Run `5ed8` stages each template and prints the number; if one differs I fix the pin and say so [guess that none will].
+  - The planner's card `glm53_blocks.json` is not in it yet: it waits for run `146c`.
+- Also since the entry: `5e023a91e0` (proofs'), the stand-in audit with the row served in scores and values units (`a5_sparse_mla.py --units`, `STANDIN=sparse-mla:units` in `a5_tp.sh`); `fb1e88f7e2` is in the entry.
+- **The figure.** The tree's command is `benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR` [read: `total_cost.py`]. It will read a `partition` card of the sparse-attention rows built from run `146c`'s census, on a new line beside today's; that change (a configuration in `total_cost.py` and the card) is written and not committed, because the card needs the census [read: lane notes `tools/headsplit/figure-configuration.patch`, `partition_card.py`].
+- **Runs** [run: `research status` at 20:24Z]:
+  - `r20261111-200948-13d3`, the small one-stage audit on CPUs with the row served in scores and values units (`STANDIN=sparse-mla:units A5_CHALLENGER=local bash benchmarks/one_stage/a5_tp.sh`, at `5e023a91e0`, vy-nebius-cpu-12): running since about 20:20Z; it builds Flock and the Lean verifier first; back by about 21:45Z [guess].
+  - `r20261111-202405-3d77`, `suites.py --changed 2b2ebcf129ec --quick` at `130a78bf7b`, vy-nebius-cpu-3: launched 20:24Z.
+  - `r20261111-195004-5ed8` (each template's `chunk_cap` staged, and today's blocks) and `r20261111-195905-146c` (the planner's card at `d012feea83`): both still waiting for a slot.
+- **Next when they return:** the card's commit (`glm53_blocks.json`, `test_glm53.py`), the audit's verdict line, the partition card and the figure's run, then the pull request, unmarked.
