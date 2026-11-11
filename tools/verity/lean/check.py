@@ -3896,6 +3896,11 @@ def assign(names, sources: list[tuple[str, dict, dict]]) -> tuple[dict, list[str
     return pins, fails, by
 
 
+class Unpassed(RuntimeError):
+    """A `proved_in` package's build did not pass, so `proved` reads none of its facts: the audit fails with
+    `proved_in.unpassed`, a consequence of that package's own failures."""
+
+
 def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, str] | None = None,
            ready=lambda q: None, keep: bool = True, seals: "Seals | None" = None,
            keys: bool = False) -> tuple[list[str], dict, dict[str, list[str]]]:
@@ -3905,7 +3910,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
     pass. `Facts.lean` reads its roots with this policy's `meaning`, `axioms` and guarantees, so the judgment is the one of
     guarantees proved in ``pkg``; with ``keep``, its document is kept under `proved-in-*/` (`facts_of`). With ``keys``, the
     facts carry `proved_keys` (each prover's own modules' `replay_keys`, folded) for `facts_key`, which stage A computes
-    and a normal audit does not. Raises RuntimeError when a package's build did not pass or its facts cannot be read.
+    and a normal audit does not. Raises `Unpassed` when a package's build did not pass, RuntimeError when its facts
+    cannot be read.
     With ``seals`` (the run's seals) a prover's facts are read from the copies taken at its own seal, which its build
     announced before this one reads it."""
     fails, sources, conflicts = [], [("this package", facts, lean_modules(pkg))], list(facts.get("moved_conflicts", []))
@@ -3941,7 +3947,7 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
                                  f"modules under a root of their own (declarations keep their names)"))
             continue
         if ready(q) is False:
-            raise RuntimeError(f"proved_in: {entry}'s build did not pass (its report says why), so its facts are not read: "
+            raise Unpassed(f"proved_in: {entry}'s build did not pass (its report says why), so its facts are not read: "
                                f"its .lake holds whatever an earlier or interrupted build left, and a module it lacks would "
                                f"read as a missing import here")
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
@@ -4493,8 +4499,10 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     must be there in both or neither and equal byte for byte; where only `PATH_PARTS` differ, the module's parts must be
     one object graph but for strings that are absolute paths ending in the module's source path (`olean_graph.differs`):
     Lean keeps a message's file in `olean.server`, so a build at another path differs there. A failure names the module
-    and its file, and keeps the recompile's outputs in the upper layers; a pass removes them. Without the sandbox there is
-    no overlay, so nothing is recompiled and the report's `unsampled` says so; a module of the population that no build of
+    and its file, the report's `mismatched` lists each module failed so ({module: its package's directory}), which
+    a records run has Lake compile before it audits again (`lean_changed.mismatched`), and the recompile's outputs stay
+    in the upper layers; a pass removes them. Without the sandbox there is no overlay, so nothing is recompiled and the
+    report's `unsampled` says so; a module of the population that no build of
     this process compiled (`RUN_COMPILED`) was restored or kept, which nothing would check, so it fails the audit, and only
     a cold run passes there (`lean_audit.sandboxed`'s probe can pass where this one fails). The audit prints the sample
     under its line (`sampled:`), so a run records what it checked. The caller holds the build's `.lake` directories
@@ -4578,6 +4586,7 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
             graphs.append(m)
     rep["by_graph"] = graphs
     if fails:
+        rep["mismatched"] = {f.entry: str(keyed[f.entry].package.dir.resolve()) for f in fails}
         for f in list(top.rglob("*")):
             if f.is_symlink() or not (f.is_file() or f.is_dir()):
                 f.unlink()                              # whiteouts: the run's files keep regular files only
@@ -5643,7 +5652,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                                                     keep=kept_facts == "all", seals=seals, keys=facts_cache is not None)
             rep["seconds"]["proved-in"] = round(time.monotonic() - p - sum(waited), 1)
     except RuntimeError as e:
-        rep["failures"].append(Failure("lean", None, f"lean: {e}"))
+        rep["failures"].append(Failure("proved_in.unpassed", None, str(e)) if isinstance(e, Unpassed) else
+                               Failure("lean", None, f"lean: {e}"))
         background.shutdown(cancel_futures=True)
         return reported(rep)
     if waited:
