@@ -1,14 +1,14 @@
-"""P2 v4 on the CPU, the scheme's reference (`verity/core/protocols/pous/README.md`, "P2", outlines it): the
+"""P2 v4 on the CPU, the scheme's reference (`verity/protocols/pous/verifier/README.md`, "P2", outlines it): the
 reference the harness's GPU kernels are gated against, and the one the wire verifier (`wire.py`) and the vectors
 (`vectors.py`) are built on. Its maps and key streams are the registered scheme's
-(`verity.core.protocols.pous.schemes.p2`, held to `PousCheck.P2` by its difftest), under the reference's names and with
+(`verity.protocols.pous.verifier.schemes.p2`, held to `PousCheck.P2` by its difftest), under the reference's names and with
 its refusals of non-canonical inputs; its own are its setup framing, `Params` with its refusals (which `PousCheck.Wire`
 mirrors), v4's leaves and the audit's derivations.
 
 v4 is v1.1 with one hash, SHA-512 with its whole 64-byte output, everywhere: the
 W commitment, the verification tree, the epoch id and the keys, which are counter-mode SHA-512 where v1 read SHAKE256.
-`verity.ml.randomness` is the spec's derivation (`frame`, `derive`) and
-`verity.ml.commitments.identity.canonical_json_bytes` its manifest encoding. It is pinned by `vectors.json` beside it
+`verity.commitments.randomness` is the spec's derivation (`frame`, `derive`) and
+`verity.commitments.identity.canonical_json_bytes` its manifest encoding. It is pinned by `vectors.json` beside it
 (`VECTORS_SHA512`).
 
 - `Params`: `p = 2^w − c0 ≡ 3 mod 4`, the payload profile and the store's shape (blocks per segment, segments). A
@@ -23,7 +23,7 @@ W commitment, the verification tree, the epoch id and the keys, which are counte
   `D_j(c) = d(σ_K(d(c))) − t`. They and the keys read only `w`, `c0` and `p`, so they take a `schemes.p2.P2Params` too.
 - `manifest`, `w_commitment`, `row_digest`, `leaf`, `epoch_id`, `audit_key`, `round_key`: the setup commitment, the
   0x00-tagged leaf of each block's `sha512/row/v2` digest, and the audit's challenge derivation (mode 0 and mode 1). The
-  verification tree over the leaves is PoUS's (`verity.core.protocols.pous.verifier`: `MerkleTree`, `verify_path`).
+  verification tree over the leaves is PoUS's (`verity.protocols.pous.verifier.verifier`: `MerkleTree`, `verify_path`).
 """
 from __future__ import annotations
 
@@ -31,11 +31,11 @@ import hashlib
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from verity.core.protocols.pous.schemes import p2 as P2
-from verity.ml.commitments.identity import canonical_json_bytes
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
-from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
-from verity.ml.randomness import Key, derive, frame
+from verity.protocols.pous.verifier.schemes import p2 as P2
+from verity.commitments.identity import canonical_json_bytes
+from verity.commitments.rowleaf import sha512_row_v2_prefix
+from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.commitments.randomness import Key, derive, frame
 
 HERE = Path(__file__).resolve().parent
 VECTORS = HERE / "vectors.json"
@@ -194,7 +194,7 @@ def decode(params: Params | P2.P2Params, c: int, k: int, t: int) -> int:
 
 def w_commitment(params: Params, w: bytes) -> bytes:
     """The commitment to `W` (`w_commitment`): tagged SHA-512 over the canonical manifest and `W`, 64 bytes
-    (`verity.ml.commitments.identity.tagged_sha512`'s frame, hashed here in pieces so that `W` is not copied)."""
+    (`verity.commitments.identity.tagged_sha512`'s frame, hashed here in pieces so that `W` is not copied)."""
     manifest = canonical_json_bytes(params.manifest())
     h = hashlib.sha512(TAGGED_SHA512 + len(W_COMMITMENT_LABEL).to_bytes(4, "big") + W_COMMITMENT_LABEL)
     h.update((8 + len(manifest) + len(w)).to_bytes(8, "big") + len(manifest).to_bytes(8, "big") + manifest)
