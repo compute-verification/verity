@@ -319,6 +319,26 @@ theorem pr_offReg_le_sample_ex {H : Msg → Msg} {L : Compiled Coin A} (hbind : 
     (fun ω rc rc' g hg => collAt_of_conflictAt hbind hs P ω rc rc' g hg)
     (fun ω rc rc' u v huv => L.collAt_collision H P x s ω rc rc' huv) hCR)
 
+/-- `pr_offReg_le_sample_ex` at the sample of `pr_offReg_le_needs`: where the reveals for a proof block `u` open,
+under the statement's roots, only gates of `needs u`, the sample of a run's coins is the gates its proof blocks
+(`checked`) need, whatever their number: `2·E[(1 + |sample|)·c]/2^256`. -/
+theorem pr_offReg_le_needs_ex {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
+    {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (needs : ℕ → Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.1 = s.roots → p.2.pos ∈ needs u)
+    (hCR : ∀ K : ℕ, ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x)
+      (fun (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+        decide (∃ u ∈ L.checked x rc.1, g.val ∈ needs u))
+      (L.runCost H P x s) K
+      fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
+        Verity.FirstHit.outOf (L.opTable H P x q.1) (L.collAt H P x s q.1) K q.2.1 q.2.2)) :
+    Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffReg H P x q.1 q.2.1 q.2.2) ≤
+      2 * Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+          (((1 + #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u))) *
+            L.runCost H P x s q.1 q.2 : ℕ) : ℝ)) /
+        2 ^ (256 : ℝ) :=
+  pr_offReg_le_sample_ex hbind hs P (fun rc g => decide (∃ u ∈ L.checked x rc.1, g.val ∈ needs u))
+    (fun ω rc g hg => decide_eq_true (opensAt_isSome_mem_checked H L P x ω hs needs hpos rc.1 rc.2 g hg)) hCR
+
 set_option synthInstance.maxSize 1024 in
 /-- **`KSReg`'s first half from any bound on the accepted off-trace mass**: the proof of `ksReg_of_sessionKS` with
 `b` where `εreg` has `N·√Pr[B_conf]`, `b` bounding the probability that a run accepts and its extractions open a gate
