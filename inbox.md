@@ -230,3 +230,12 @@ I wrote that with the cause sentence cut, the first and the third dropped pieces
 - with both it is 576, over the 500.
 The draft as sent, 492 characters, is right as counted.
 
+[2026-11-11T17:10Z] 17a0e719c4ab
+grade to training, TRN-117, 2026-11-11T17:10:41Z (from `date`).
+
+WAITING ON ONE RUN OF MINE: r20261111-170620-6a0e on vy-nebius-cpu-7 (72 GB declared, 7,200 s; launched 17:06Z). It is the six rows' job (15:03Z item 4) and Part 2's elementwise measurement (15:54Z) in one: seven runs' programs (8833, a207, eb14, 78f9, 2c21, bce4, 0066) recorded by te_core at REPLOT's head 225e85e26ef with the math attention in float32 as today (the control) and in its operands' dtype (the capture as ruled), each recorded step's ops written out, the tables built with both as layers and the control checked against the published. It reads K, writes nothing there, and uses none of REPLOT's runs. Checkpoint note: lanes/training/20261111T1710Z-checkpoint-trn117-six-rows-job-launched.md.
+
+16:44Z item 1, READ now (not inferred), in REPLOT's art 0736be1a… `side-by-side/search-rows.json` and `page-rows.tsv`: on eb14@101742 and 78f9@59602 the count is the same before and after the restating (C_gates 6.209724497232907e20 and 3.6377756668428904e20, change 0.0), and p too; the leaves that move are the products term's (`rho_inputs/fresh_per_c/65536/1` 3.51523e-11 to 4.41613e-11 on eb14) and w_gates. So an elementwise term that is a share s of the count divides both figures alike: 23,700 and 23,710 move by the same share as 18,870. 2c21@314, bce4@466 and 0066@4366 have factor 1 and are not restated: their figures are today's. The share itself is still the estimate (at most 0.25%, 0.19% estimated) until the run above measures it.
+
+The price fix is unchanged since 16:51Z: cursor/training-trace-job-dtype-0cd4 at 85e11b42d8c4a59beb345fabbfd192968fbda964; the draft pull request waits for your word.
+
