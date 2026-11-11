@@ -26,7 +26,9 @@
 # one, downloaded once into HF_HOME before the GPUs are held and checked by its SHA-512 (serve_tax.py passes --fetch);
 # --dataset chat=FILE names another copy of it, and no run sends or keeps the file. --dataset prefix=FILE serves a table
 # of planned requests (arrival times and lengths; prefix_plan.jsonl is the full-size one) in place of load prefix's
-# four, each sent as it arrives: the row then says whether stock kept up, and which of its figures is the cost. After the table it prints the cost of
+# four, each sent as it arrives: the row then says whether stock kept up, and which of its figures is the cost.
+# HOLD_PROMPTS=N makes a pass send at least N prompts for each request its rung holds (serve_tax.pass_prompts): for a
+# ladder past the rungs a load's own prompts can hold, and the same for every arm of a cost. After the table it prints the cost of
 # ARMS's last arm over compiled (serve_tax.py cost) and writes OUT/serving_cost.{json,txt} and the run's result.json (each
 # load's cost a measurement, and the number one under the model's metric id once every load has run); --json prints the
 # JSON object last. In this form REPS is 6 and WINDOW_S 30 by default, and OUT/gpus.csv names the cards.
@@ -164,7 +166,7 @@ if [ "${1:-}" = leased ]; then
   echo "before the arms: $(fi_cache)" >> "$OUT/engine_env.txt"
   common=(--model-id "$MODEL_ID" --checkpoint "$CK" ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"})
   if [ "$CLIENT" = vllm-bench ]; then
-    load=(--client vllm-bench --loads "$LOADS")
+    load=(--client vllm-bench --loads "$LOADS" ${HOLD_PROMPTS:+--hold-prompts "$HOLD_PROMPTS"})
     for f in ${DATASETS:-}; do load+=(--dataset "$f"); done
   else
     common+=(--c4 "$C4")
@@ -232,6 +234,7 @@ elif [ "$CLIENT" = vllm-bench ]; then
   # where the node has none, and its SHA-512 checked
   ds=(); for f in ${DATASETS:-}; do ds+=(--dataset "$f"); done
   "$PY" "$here/serve_tax.py" passes --loads "$LOADS" "${ds[@]}" --fetch --arms "$ARMS" --model-id "$MODEL_ID" \
+    ${HOLD_PROMPTS:+--hold-prompts "$HOLD_PROMPTS"} \
     ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"} || exit 2
 elif [ "${CAPACITY:-0}" != 1 ]; then
   [ -z "$PLAN_FILE" ] || cp "$PLAN_FILE" "$PLAN" || exit 2

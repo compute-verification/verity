@@ -962,13 +962,20 @@ def passes_of(loads: dict[str, tuple[int, ...]],
     return {n: (ARRIVING,) if n in lines and n in datasets else rungs for n, rungs in loads.items()}, lines
 
 
-def pass_prompts(load: Load, rung: int, lines: Sequence[dict] | None, warm_s: float | None = None) -> int:
+def pass_prompts(load: Load, rung: int, lines: Sequence[dict] | None, warm_s: float | None = None,
+                 hold: int = 0) -> int:
     """The prompts a pass of ``load`` at ``rung`` sends: the load's, or every line of its file where they leave as
     they arrive (`ARRIVING`). A warm-up (``warm_s``) sends two for each request held in flight, or the lines that
-    arrive in its first ``warm_s`` seconds, one at least."""
+    arrive in its first ``warm_s`` seconds, one at least. The load's prompts are few for a high rung: the client
+    starts with ``rung`` requests and ends with none, so a pass of 200 prompts at rung 96 holds 96 for part of its
+    time only, and no rung shows more than the load's prompts in flight. ``hold`` (``--hold-prompts``) makes a pass at
+    a rung send at least that many prompts for each request it holds, so its time at the rung outweighs its ends; a
+    planned load's passes are its plan's whatever ``hold`` is."""
     if rung == ARRIVING:
         return len(lines) if warm_s is None else max(1, sum(x["timestamp"] <= warm_s for x in lines))
-    return load.prompts if warm_s is None else min(load.prompts, 2 * rung)
+    if warm_s is not None:
+        return min(load.prompts, 2 * rung)
+    return load.prompts if load.plan else max(load.prompts, hold * rung)
 
 
 def context_of(loads: dict[str, tuple[int, ...]], given: int | None) -> int | None:
@@ -1259,6 +1266,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             "boundary_rows": ({"window_s": a.window_s, "check": model.check, **(a.boundary_rows or arm.rows)}
                               if "boundary_rows" in arm.plugin else None),
             "client": a.client, "passes": {k: {"load": n, "concurrency": c} for k, (n, c) in passes.items()},
+            "hold_prompts": a.hold_prompts if bench else 0,
             "datasets": {n: {"file": f, "sha512": LOADS[n].file.sha512, "repo": LOADS[n].file.repo,
                              "revision": LOADS[n].file.revision}
                          for n, f in (datasets if bench else {}).items() if LOADS[n].file},
@@ -1288,7 +1296,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
                                   None if warm else a.requests, arm.sampling, busy)
             n, c = passes[name]
             return drive_bench(port, model, checkpoint, LOADS[n], c, tag, d, sent.get(n), a.seed, busy,
-                               pass_prompts(LOADS[n], c, lines.get(n), a.warm_s if warm else None))
+                               pass_prompts(LOADS[n], c, lines.get(n), a.warm_s if warm else None, a.hold_prompts))
 
         if a.warm_s > 0:
             w = send(next(iter(passes or rates)), "warm", out / "warm", None, warm=True)
@@ -1555,6 +1563,7 @@ def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
     return {"schema": SCHEMA + "/metrics", "arm": meta["arm"], "parent": meta.get("parent"), "what": meta.get("what"),
             "run_id": meta.get("run_id"), "commit": meta.get("commit"), "vllm": (meta.get("versions") or {}).get("vllm"),
             "model_id": meta["model_id"], "slo": {"ttft_s": slo[0], "tpot_s": slo[1]},
+            "hold_prompts": meta.get("hold_prompts") or 0,
             "startup_s": meta.get("startup_s"), "error": meta.get("error"), "tick": meta.get("tick"), "loads": loads,
             "edges": edge_summary(edges), "boundary_rows": meta.get("boundary_rows"),
             "boundary_commits": meta.get("boundary_commits"), "planned": meta.get("planned")}
@@ -1848,7 +1857,8 @@ def joined(arms: list[dict]) -> dict[str, dict]:
     """Arms' metrics by arm, the directories of one arm joined: an arm that two jobs served, each a load of its own,
     has both loads' passes, each load with its own job's commit and run (``of``), and its boundary commitment's counts
     are the two jobs' sums. Two directories of one arm that served the same load, where a rung's reps would be of two
-    server lifetimes, or that differ in the model, the SLO or vLLM, are refused."""
+    server lifetimes, or that differ in the model, the SLO, vLLM or the size of their passes (``hold_prompts``), are
+    refused."""
     by: dict[str, dict] = {}
     for a in arms:
         of = {n: {"commit": a.get("commit"), "run": a.get("run_id")} for n in bench_loads(a)}
@@ -1857,7 +1867,7 @@ def joined(arms: list[dict]) -> dict[str, dict]:
             by[a["arm"]] = {**a, "loads": dict(a["loads"]), "of": of}
             continue
         twice = sorted(set(of) & set(b["of"])) or sorted(set(a["loads"]) & set(b["loads"]))
-        differ = [k for k in ("model_id", "slo", "vllm") if a.get(k) != b.get(k)]
+        differ = [k for k in ("model_id", "slo", "vllm", "hold_prompts") if a.get(k) != b.get(k)]
         if twice or differ:
             raise SystemExit(f"cost: two directories of arm {a['arm']} "
                              + (f"both served {', '.join(twice)}" if twice else f"differ in {', '.join(differ)}")
@@ -2001,6 +2011,10 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
         if name not in by:
             raise SystemExit(f"cost: no directory of arm {name} (given: {', '.join(by) or 'none'})")
     ref, ours = by[reference], by[arm]
+    held = [x.get("hold_prompts") or 0 for x in (ref, ours)]
+    if held[0] != held[1]:
+        raise SystemExit(f"cost: {reference} and {arm} served passes of different sizes (--hold-prompts {held[0]} and "
+                         f"{held[1]}): a cost is of the same requests on both sides")
     per = [c for c in (serving_cost(ref, ours, n) for n in NUMBER if n in bench_loads(ref)) if c]
     row = prefix_row(by, reference, arm)
     if not per and not row:
@@ -2428,6 +2442,9 @@ def main(argv: list[str] | None = None) -> int:
                    help=f"vLLM's client: the loads ({', '.join(sorted(LOADS))}) in the order each rep serves them, each at "
                         "its rungs (concurrencies) or the ones given")
     r.add_argument("--dataset", action="append", metavar="NAME=FILE", help="vLLM's client: a load's dataset file")
+    r.add_argument("--hold-prompts", type=int, default=0, metavar="N",
+                   help="vLLM's client: a pass sends at least N prompts for each request its rung holds (pass_prompts; "
+                        "0: the load's prompts at every rung)")
     r.add_argument("--reps", type=int, default=3)
     r.add_argument("--span-s", type=float, default=90.0, help="each load's arrivals span")
     r.add_argument("--requests", type=int, help="each load's request count instead of --span-s's")
@@ -2479,6 +2496,7 @@ def main(argv: list[str] | None = None) -> int:
                                        "checked, before any GPU is held")
     ps.add_argument("--loads", required=True)
     ps.add_argument("--dataset", action="append")
+    ps.add_argument("--hold-prompts", type=int, default=0, metavar="N")
     ps.add_argument("--fetch", action="store_true", help="download a pinned dataset file the node's cache doesn't hold")
     ps.add_argument("--arms", default="", help="the arms that will serve them, each checked against --model-id")
     ps.add_argument("--model-id", choices=sorted(MODELS))
@@ -2562,9 +2580,11 @@ def main(argv: list[str] | None = None) -> int:
             arriving = rungs == (ARRIVING,)
             digest = (None if n not in files else f"SHA-512 {LOADS[n].file.sha512[:16]}" if LOADS[n].file else
                       f"SHA-256 {file_digest(Path(files[n]))[:16]}")
+            sizes = [pass_prompts(LOADS[n], c, lines.get(n), hold=a.hold_prompts) for c in rungs]
             print(f"[serve-tax] load {n}: {GIVEN if arriving else LOADS[n].what}; "
-                  f"{pass_prompts(LOADS[n], rungs[0], lines.get(n)):,} prompts a pass "
+                  f"{', '.join(f'{x:,}' for x in (sizes if len(set(sizes)) > 1 else sizes[:1]))} prompts a pass "
                   f"{at_rung(ARRIVING) if arriving else 'at concurrency ' + ', '.join(map(str, rungs))}"
+                  + (" in turn" if len(set(sizes)) > 1 else "")
                   + (f", from {files[n]} ({digest}...)" if digest else "")
                   + (f", {plan['repeated_tokens']:,} of their {plan['prompt_tokens']:,} prompt tokens repeated"
                      if plan else "")
