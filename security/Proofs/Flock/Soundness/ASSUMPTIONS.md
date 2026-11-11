@@ -268,7 +268,7 @@ A6, which no check of the record establishes. The custody is `live-verifier`, na
 ## Premises the lock lists by name
 
 The Lean check lists by name the premises that guarantees take inside their statements, and each has its record
-in `Security/lean-audit.json`. `assumption-notes/lock-listed-premises.md` gives each one's claim id, what it reduces to and
+in `security/lean-audit.json`. `assumption-notes/lock-listed-premises.md` gives each one's claim id, what it reduces to and
 which guarantees take it.
 
 ## Other named assumptions

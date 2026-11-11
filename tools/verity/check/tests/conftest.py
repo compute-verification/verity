@@ -12,7 +12,7 @@ CLEARED = ("AWS_", "R2_", "RESEARCH_", "CLOUD_AGENT_")      # the last: or, R2_ 
 SET_BY_CHECK = ("CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED", "VERITY_REGRESSION")
 #: the packages' `proved_in` as their policies name them, for a test that resolves this tree's plans (`check.audit_provers`):
 #: reading every package's lean-audit.json would make each one an input of this suite, which most Lean changes rewrite
-PROVERS = {"Security": ["Security/Proofs"], "Security/Properties": ["Security/Proofs"]}
+PROVERS = {"security": ["security/Proofs"], "security/Properties": ["security/Proofs"]}
 
 
 @pytest.fixture(autouse=True)

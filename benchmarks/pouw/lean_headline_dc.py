@@ -1,6 +1,6 @@
 """`lean_headline_dc`: the H200's and B200's headline instances in `lean_headline.py`'s Lean form, exact.
 
-    python benchmarks/pouw/lean_headline_dc.py            write Security/Definitions/Accounting/HeadlineDc/Sm*.lean
+    python benchmarks/pouw/lean_headline_dc.py            write security/Definitions/Accounting/HeadlineDc/Sm*.lean
     python benchmarks/pouw/lean_headline_dc.py --check    exit 1 when a committed file is not what it would write
     python benchmarks/pouw/lean_headline_dc.py --numbers  print each instance's bound, its branches and their terms
     python benchmarks/pouw/lean_headline_dc.py --json F   also write the readings as JSON
@@ -21,7 +21,7 @@ one, `1 − Y·(1 − 41/S)`, where `Y = (N_w w* + N_w φ* + χ*)/B_♭`. Three 
   gap at ♭. The machine model's own certificate doesn't serve: its cheater folds a tensor word on lanes only, where
   the Lean menu prices the fold alone on any route (the uniform datapath's among them, which DS-100's ALU-heavy
   certificate leaves nearly free), so `1 − Y` is at least the LP's ε_machine and ε_skip over ♭, and more;
-- the sheet is `sheet.toml` read by `verity_machine_model.sheet` (`Security/Definitions/Accounting/Sheets/`
+- the sheet is `sheet.toml` read by `verity_machine_model.sheet` (`security/Definitions/Accounting/Sheets/`
   states it): each tensor class's MACs and its type's peak are the sheet's integers, a pipe's width its results an SM
   clock (the uniform pipe's the census's measured UP line, a rational), and ω the sheet's `omega`, the destination's
   32-bit words (A6's count). An MMA the sheet rates on no peak (b1) takes its ω from its census name (`shape`: sm_90's
@@ -603,7 +603,7 @@ def certificate(cert: dict[str, float], digits: int = 9) -> dict[str, Fraction]:
     return {r: x for r, x in lam.items() if x > 0}
 
 
-OUT = LH.ROOT / "Security" / "Definitions" / "Accounting" / "HeadlineDc"
+OUT = LH.ROOT / "security" / "Definitions" / "Accounting" / "HeadlineDc"
 
 
 def _as_written(path: str) -> str:
