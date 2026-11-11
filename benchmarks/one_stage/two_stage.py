@@ -314,9 +314,11 @@ class Design:
     and the verifier derive the same one: the block's descriptor id ``key``; one unit of each of the check's templates
     as an interior window lays it out (``members``, `interior_rows.member`) and each one's proof blocks in a replay
     block (``cells``, the stream's); the block's parameters its templates' ports read, as the interior registers their
-    values (``links``, `interior_rows.links`); its wires (`second_stage.replay_wires`); and its return links
-    (``returns``: a template's output port and the name round 2 gives the block's return it writes). The interior never
-    registers a return: round 2 reads one only at a port round 1's record commits."""
+    values (``links``, `interior_rows.links`); its wires (`second_stage.replay_wires`); its return links
+    (``returns``: a template's output port and the name round 2 gives the block's return it writes); and the rows its
+    linked and wired ports read (``rows``, `second_stage.replay_rows`), by which a wired port's unit reads the writer
+    unit the block names. The interior never registers a return: round 2 reads one only at a port round 1's record
+    commits."""
 
     key: str
     members: tuple[CS.Member, ...]
@@ -324,12 +326,13 @@ class Design:
     links: tuple[IR.Link, ...]
     wires: tuple[SS.Wire, ...]
     returns: tuple[SS.Link, ...]
+    rows: tuple[SS.Rows, ...] = ()
 
     def window(self, boundary: str, sample: Sequence[int]) -> CS.Binding:
         """The interior window of the replay sample ``sample`` after the boundary registration ``boundary``
         (`interior_rows.interior_window`): public items alone."""
         return IR.interior_window(self.members, self.cells, boundary, sample, self.wires,
-                                  IR.link_values(self.links, len(sample)))
+                                  IR.link_values(self.links, len(sample)), self.rows)
 
 
 def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlinked: bool = False) -> Design:
@@ -351,7 +354,7 @@ def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlink
     links = IR.links(layout.program, key, record, members, cells)
     read = {(x.template, x.port) for x in links}
     returns = tuple(x for x in SS.replay_links(layout.program, key, record) or () if (x.template, x.port) not in read)
-    return Design(key, members, cells, links, tuple(wires), returns)
+    return Design(key, members, cells, links, tuple(wires), returns, SS.replay_rows(layout.program, key))
 
 
 def rule_of(layout: BR.Layout, replay: str, k: int, proof_deadline: float = PROOF_DEADLINE_S) -> Rule:
@@ -448,7 +451,7 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     sample = [int(u) for u in again.draw.units]
     per, launches = spans_of(c, capture, sample, rids)
     it = IR.interior(per, d.cells, again.registration.digest, sample, row=again.pub["window"], links=d.links,
-                     wires=d.wires, served=again.record, window_root=window_root, salt_key=salt_key)
+                     wires=d.wires, rows=d.rows, served=again.record, window_root=window_root, salt_key=salt_key)
     record = IR.write(it, directory)
     tie = {**({"registered": IR.link_words(d.links), "schemas": IR.link_schemas(d.members, d.links)} if d.links else {}),
            **({} if window_root is None else {"window_root": window_root})}
