@@ -171,7 +171,7 @@ def main():
                  all(w_ == "QKᵀ, K row (b)" for w_ in worst.values()) and h["L=2048"]["QKᵀ, K row (b)"] == 1 / 16
                  and h["L=32768"]["QKᵀ, K row (b)"] == 1 / 256 and h["L=8192"]["P·V, V column (b)"] == 1
                  and h["L=2048"]["P·V, P row (U)"] == 1.75, str(out["h"]))
-    checks.check("G2 the noise per drawn unit: QKᵀ 5 compressions (4 contiguous); P·V 3 + k/128 on the "
+    checks.check("G2 the noise per sampled proof block: QKᵀ 5 compressions (4 contiguous); P·V 3 + k/128 on the "
                  "patch layout over Vᵀ (19, 67, 259 at k = 2K, 8K, 32K) against 2 + ⌈(224 + k)/512⌉ contiguous (7, 19, "
                  "67)", comp["k=2048"] == {"QKᵀ": (5, 4), "P·V": (19, 7)} and comp["k=8192"]["P·V"] == (67, 19)
                  and comp["k=32768"]["P·V"] == (259, 67), str(comp))

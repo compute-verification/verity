@@ -66,7 +66,7 @@ class NarrowBlock(CellGrid):
         return U + 64 - self.off, c, b, z
 
 
-def draw_u(rng, n, r, w):
+def sample_u(rng, n, r, w):
     beta = rng.integers(0, 2, (n, r, len(w)))
     return -(int(np.sum(w)) // 2) + beta @ w
 
@@ -117,7 +117,7 @@ def main():
 
         nz, k6, r6 = 16, 256, 32
         m6 = n_digits((k6 // r6) * -128, (k6 // r6) * 127)
-        U6 = draw_u(rng, nz, r6, w)
+        U6 = sample_u(rng, nz, r6, w)
         c6, b6 = rng.integers(0, 2, (nz, k6)), rng.integers(0, 2, (k6, nz))
         z6 = rng.integers(0, 2, (m6 - 1, r6, nz))
         Pz, Vz = np.zeros((nz, k6), np.int64), np.zeros((k6, nz), np.int64)
@@ -128,10 +128,10 @@ def main():
 
         T6, D6, Op6 = co32c_words(Pz, Vz, U6, c6, b6, z6, r6, L, m6)
         Tr, Dr, Opr = co32c_words(Pr, Vr, U6, c6, b6, z6, r6, L, m6)
-        draws = 64
+        samples = 64
         zero_words = []
-        for _ in range(draws):
-            Ud, cd, bd = draw_u(rng, 4, r6, w), rng.integers(0, 2, (4, k6)), rng.integers(0, 2, (k6, 4))
+        for _ in range(samples):
+            Ud, cd, bd = sample_u(rng, 4, r6, w), rng.integers(0, 2, (4, k6)), rng.integers(0, 2, (k6, 4))
             zd = rng.integers(0, 2, (m6 - 1, r6, 4))
             Td, Dd, Opd = co32c_words(np.zeros((4, k6), np.int64), np.zeros((k6, 4), np.int64), Ud, cd, bd, zd, r6, L,
                                       m6)
@@ -141,7 +141,7 @@ def main():
         nonzero = np.count_nonzero(D6[0])
         checks.check(f"A{N} committed digits: O = O′ − Σ 128^d D_d in s32 (random and zero instance); at A = B = 0 "
                      f"D_1 = U·z_0 is nonzero in ≥ 95% of cells and every committed word of every cell varies with the "
-                     f"coins ({draws} draws)",
+                     f"coins ({samples} samples)",
                      np.array_equal(served(Opr, Dr), s32((Pr + c6) @ (Vr + b6)))
                      and np.array_equal(served(Op6, D6), s32(c6 @ b6)) and np.array_equal(D6[0], s32(U6 @ z6[0]))
                      and nonzero >= 0.95 * nz * nz and varying,
@@ -176,9 +176,9 @@ def main():
                          f"{[x[:2] for x in res]}, same-side nonzero {[x[2] for x in res]}")
         out[f"N={N} cohalf ranks"] = half
         Bz = NarrowBlock("co", 4, 64, 4, 32, 32, w)
-        zw = Bz.words(np.zeros((4, 64), np.int64), np.zeros((64, 4), np.int64), rng.integers(0, 2, (draws, Bz.nbits)))
+        zw = Bz.words(np.zeros((4, 64), np.int64), np.zeros((64, 4), np.int64), rng.integers(0, 2, (samples, Bz.nbits)))
         checks.check(f"C{N} cohalf at Q = K = 0, U on ±{N}: every committed word of every cell (T_t and O) varies with "
-                     f"the coins ({draws} draws)", bool(np.all(zw.min(0) != zw.max(0))), f"{zw.shape[1]} words")
+                     f"the coins ({samples} samples)", bool(np.all(zw.min(0) != zw.max(0))), f"{zw.shape[1]} words")
         if checks.mutations:
             Bm = NarrowBlock("co", 1, 64, 1, 32, 32, planes(N, even=True))
             r1, r2, _ = cross_ranks(Bm, *instance(Bm, "random", rng))

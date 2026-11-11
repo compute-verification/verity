@@ -28,7 +28,7 @@ Parts:
 - D. The collapses: one-sided, P2 = T_last at P = 0; KSW's four products equal at the zero instance; per-product
   independent noise admits no recovering combination; CO at zero serves the random 0/1 product c·b.
 - E. Priced strategies, each verified word for word against the honest words: int8 MAC = 1, FP4 (E2M1) MAC = ½, one
-  product per int8 limb, additions free. The ε table at production k, and Llama-3.1 8B/70B linears MAC-weighted. Under
+  product per int8 limb, additions free. The ε table at the served k, and Llama-3.1 8B/70B linears MAC-weighted. Under
   co32c the cheater at the zero and the structured instance pays k + m·r products a cell, as honest does.
 - F. Served error: exact mean and variance of O − PV over the coins (Fractions, every coin point), against Dither's.
 - G. Theorem N's bound ε ≥ (1 − θ)/(q − 1 + θ) for schemes whose q checked products are recovered by a per-coordinate
@@ -511,7 +511,7 @@ def strategy(name, P, V, U, c, b, r, L):
     return [s32(x) for x in T], s32(O), tally
 
 
-def draw(rng, n, k, n2, r, two=True):
+def sample(rng, n, k, n2, r, two=True):
     beta = rng.integers(0, 2, (n, r, 7))
     U = -64 + beta @ W_RE
     c = rng.integers(0, 2, (n, k)) if two else np.zeros((n, k), np.int64)
@@ -717,7 +717,7 @@ def main():
     n, k, n2, r, L = 4, 256, 4, 32, 32
     for two in (False, True):
         P, V = rng.integers(-63, 63, (n, k)), rng.integers(-128, 127, (k, n2))
-        U, c, b = draw(rng, n, k, n2, r, two)
+        U, c, b = sample(rng, n, k, n2, r, two)
         T, O = honest_words(P, V, U, c, b, r, L)
         Y = (V + b).reshape(k // r, r, n2).sum(0)
         P2 = s32(U @ Y)
@@ -748,7 +748,7 @@ def main():
                  lt[(128, 64, 7)] == (1, 1) and lt[(4096, 2048, 7)] == (1, 1) and lt[(128, 64, 8)] == (2, 1))
     B = CellGrid("co", 1, k, n2, r, L)
     Pb, Vb = instance(B, "balanced", rng)
-    _, _, bb = draw(rng, 1, k, n2, r)
+    _, _, bb = sample(rng, 1, k, n2, r)
     Yb = (Vb + bb).reshape(k // r, r, n2).sum(0)
     checks.check("A5 structured instance (Y(V) = 0): Y = residue sums of b, in [0, k/r], 1 limb",
                  np.array_equal(Yb, bb.reshape(k // r, r, n2).sum(0)) and limbs(int(Yb.min()), int(Yb.max())) == 1)
@@ -770,7 +770,7 @@ def main():
                  dig_ok and dig == {256: 2, 4096: 2, 8192: 3, 14336: 3, 28672: 3}, f"digits {dig}")
     nz, k6, r6 = 16, 256, 32
     m6 = n_digits((k6 // r6) * -128, (k6 // r6) * 127)
-    U6, c6, b6 = draw(rng, nz, k6, nz, r6)
+    U6, c6, b6 = sample(rng, nz, k6, nz, r6)
     z6 = rng.integers(0, 2, (m6 - 1, r6, nz))
     Z6 = np.zeros((nz, k6), np.int64), np.zeros((k6, nz), np.int64)
     T6, D6, Op6 = co32c_words(*Z6, U6, c6, b6, z6, r6, L, m6)
@@ -853,7 +853,7 @@ def main():
     # ------------------------------------------------------------ D
     P0 = np.zeros((n, k), np.int64)
     V = rng.integers(-128, 127, (k, n2))
-    U, c, b = draw(rng, n, k, n2, r, two=False)
+    U, c, b = sample(rng, n, k, n2, r, two=False)
     T, O = honest_words(P0, V, U, c, b, r, L)
     Y = (V + b).reshape(k // r, r, n2).sum(0)
     checks.check("D1 one-sided at P = 0: O = 0 and P2 = T_last (the checked strip is free)",
@@ -883,7 +883,7 @@ def main():
                  "Σλ = 1 cancels them (a recovery needs unchecked strips)",
                  np.linalg.matrix_rank(np.stack(forms).astype(float)) == q)
     Pz, Vz = np.zeros((n, k), np.int64), np.zeros((k, n2), np.int64)
-    U, c, b = draw(rng, n, k, n2, r)
+    U, c, b = sample(rng, n, k, n2, r)
     T, O = honest_words(Pz, Vz, U, c, b, r, L)
     checks.check("D5 CO at the zero instance: O = c·b (the random 0/1 product) = T_last − U·Y(b)",
                  np.array_equal(O, s32(c @ b)) and np.array_equal(O, s32(T[-1].astype(np.int64)
@@ -903,7 +903,7 @@ def main():
                 P, V = instance(Bc, inst, rng, vbits=vb)
             if inst == "random":
                 V = np.where(rng.random((k, n2)) < 0.5, vlo, vhi)
-            U, c, b = draw(rng, n, k, n2, rr)
+            U, c, b = sample(rng, n, k, n2, rr)
             Th, Oh = honest_words(P, V, U, c, b, rr, L)
             Ts, Os, tally = strategy(strat, P, V, U, c, b, rr, L)
             ok = all(np.array_equal(x, y) for x, y in zip(Th, Ts)) and np.array_equal(Oh, Os)
@@ -921,7 +921,7 @@ def main():
                          hon == k + k // 2 and adv == k + k // 2, f"{hon} vs {adv}")
     out["prices_test"] = price
     m = n_digits((k // 32) * -128, (k // 32) * 127)
-    U, c, b = draw(rng, n, k, n2, 32)
+    U, c, b = sample(rng, n, k, n2, 32)
     z = rng.integers(0, 2, (m - 1, 32, n2))
     cprice = {}
     for inst in ("random", "zero", "balanced"):
@@ -1185,7 +1185,7 @@ def main():
     pv_ok, fresh = {}, {}
     for inst in ("random", "zero", "p0", "onehot", "balanced"):
         P, V = instance(Bp, inst, rng)
-        U, c, b = draw(rng, n, k, n2, r)
+        U, c, b = sample(rng, n, k, n2, r)
         z = rng.integers(0, 2, (m - 1, r, n2))
         T, D, Op = pv_words(P, V, U, c, b, z, r, L, m, M)
         X = V + b
@@ -1214,7 +1214,7 @@ def main():
     checks.check("P3 Ycum's digits at full context (keys − 32 terms over 32 residues, 8-bit X): m = 2 at 2K, 3 at 8K, "
                  "32K and 128K", pv_m == {2048: 2, 8192: 3, 32768: 3, 131072: 3}, str(pv_m))
     P, V = instance(Bp, "onehot", rng)
-    U, c, b = draw(rng, n, k, n2, r)
+    U, c, b = sample(rng, n, k, n2, r)
     z = rng.integers(0, 2, (m - 1, r, n2))
     cut = {}
     for two in (False, True):
