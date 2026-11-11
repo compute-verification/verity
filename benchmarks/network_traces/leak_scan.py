@@ -54,7 +54,8 @@ import sys
 import threading
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/ml/flock/verifier"))
+#: the directory of Flock's reader, `redigest.py`, and the modules it imports beside it
+sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/ml/flock/verifier/redigest.py").parent))
 import redigest as RD  # noqa: E402
 
 #: The verifier's files the statement fixes before any witness: its program and partition, and the staged circuit.

@@ -284,6 +284,15 @@ def chunked(t: str, caps: Mapping[str, int] | None) -> bool:
             or (layout in ("row", "part") and t in (caps or {})))
 
 
+def unit_member(t: str, n: int, base: int = 0, name: str = "") -> CS.Member:
+    """``n`` units of template ``t`` from unit ``base`` on bit rows, as Flock's `UnitStager` stages a unit: its
+    `chunk_rows.unit_rows` in, its outputs' v2 rows out."""
+    in_rows, _outs = CR.unit_rows(template(t))
+    outs = (("o0", 1),) if template(t).layout == "s8" else IF.layout(template(t).fn).outs
+    schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, CS.SCHEMA_HM96_SHA512_ROW_V2) for p, _w in outs)
+    return CS.Member(t, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, n, base, name=name, schemas=schemas)
+
+
 def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[int] | None = None,
             caps: Mapping[str, int] | None = None) -> list[CS.Member]:
     """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree.  A
@@ -303,11 +312,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
                                  f"chunk_cap (pipeline.serving_rows.chunk_caps)")
             if counts is not None and counts[k] != n:
                 raise ValueError(f"{t}: {n} units read off the rows, {counts[k]} in their Definitions")
-            in_rows, _outs = CR.unit_rows(template(t))
-            outs = (("o0", 1),) if layout == "s8" else IF.layout(template(t).fn).outs
-            schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, CS.SCHEMA_HM96_SHA512_ROW_V2) for p, _w in outs)
-            out += [CS.Member(t, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, min(cap, n - lo), base + lo, name=f"{t}/c{j}",
-                              schemas=schemas) for j, lo in enumerate(range(0, n, cap))]
+            out += [unit_member(t, min(cap, n - lo), base + lo, f"{t}/c{j}") for j, lo in enumerate(range(0, n, cap))]
             base += n
             continue
         if layout == "rope":

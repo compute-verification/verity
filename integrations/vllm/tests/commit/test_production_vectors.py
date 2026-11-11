@@ -15,9 +15,10 @@ import pytest
 
 from verity.ml.commitments import vllm_v1 as ref
 from verity.ml.commitments.vllm_v1 import vectors as V
-from verity_vllm.commit import hashing, scheme
+from verity.ml.commitments import leaves as hashing
+from verity_vllm.commit import scheme
 from verity_vllm.commit import hidden_stream as hs
-from verity_vllm.commit.merkle import fold_path, path_shape
+from verity.ml.commitments.leaves import fold_path, path_shape
 
 VECTORS = V.load()
 
