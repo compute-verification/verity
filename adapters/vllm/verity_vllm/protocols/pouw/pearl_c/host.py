@@ -75,8 +75,8 @@ def _constant_keys(t: Any) -> dict[str, int]:
 
 
 #: the salt coin's commitment and opening a device run takes: the challenger's held in this process, or a live session's
-SaltCoins = CoinCommitment | LiveCommitment
-SaltOpening = CoinOpening | LiveOpening
+type SaltCoins = CoinCommitment | LiveCommitment
+type SaltOpening = CoinOpening | LiveOpening
 
 
 def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, opening: SaltOpening,

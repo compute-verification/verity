@@ -127,14 +127,16 @@ class LeadRun:
         leaf = self.backend.key_leaf(ks)
         record = R.PassRecord(SCHEME, self.rank, self.world, self.index, self.weights_root, leaf, self.calls,
                               kernel=self.kernel)
-        salt = self.link.open(self.index, leaf, self.weights_root, self.calls)
-        record.salted(salt)
-        self.record, self.window = record, WindowKeys(self.index, self.calls, ks, record.salt)
-        return self.record, self.window
+        salt = record.salted(self.link.open(self.index, leaf, self.weights_root, self.calls))
+        window = WindowKeys(self.index, self.calls, ks, salt)
+        self.record, self.window = record, window
+        return record, window
 
     def call(self, w: int, layer: Any, xq: Any, s_a: Any) -> Any:
         """Linear ``w``'s call on the s8 rows ``xq`` [m, K] and their scales ``s_a``: the served y."""
-        record, window = (self.record, self.window) if self.window is not None else self._open()
+        record, window = self.record, self.window
+        if record is None or window is None:
+            record, window = self._open()
         (m, k), n = tuple(xq.shape), int(layer.weight.shape[0])
         call = self.unserved = F.Call(window.index, len(record.calls), w, m, k, n)
         root = self.backend.a_root(w, call, xq, window)
