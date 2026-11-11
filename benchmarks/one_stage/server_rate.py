@@ -259,7 +259,7 @@ def one(a, dev: str, t: str, K: int) -> dict:
         vcpu_end, vgone = verifiers_cpu()
         rec["prover_cpu_s_per_statement"] = round((cpu_end - cpu_ready) / timed_n, 2)
         rec["cpu_gone"] = gone
-        rec["verifier_cpus"] = os.environ.get("FC_VERIFIER_CPUS") or None
+        rec["verifier_cpus"] = ps.verifier_cpus
         rec["verifier_cpu_s_per_statement"] = round((vcpu_end - vcpu_ready) / timed_n, 2)
         rec["verifier_cpu_gone"] = vgone
     finally:

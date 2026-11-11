@@ -196,17 +196,17 @@ def test_verifiers_on_their_own_cpus_and_the_provers_on_the_rest(binary, tmp_pat
         monkeypatch.delenv(k, raising=False)
     pins = ["88" * 64, "99" * 64]
 
-    def run(name: str, **kw) -> set[str | None]:
+    def run(name: str, **kw) -> tuple[str | None, set[str | None]]:
         with ProofServer(binary, tmp_path / name, devices=[0], provers=2, **kw) as ps:
             sessions = [ps.submit(statement(tmp_path, pins[i % 2]), draw([i % 4]), f"s{i}") for i in range(4)]
             got = [s.result() for s in sessions]
         assert all(s.accepted for s in got)
-        return {record(s)["proved"]["threads"] for s in got}
+        return ps.verifier_cpus, {record(s)["proved"]["threads"] for s in got}
 
-    assert run("placed", env={"FC_VERIFIER_CPUS": "10-11"}) == {"5"}
+    assert run("placed", env={"FC_VERIFIER_CPUS": "10,11"}) == ("10-11", {"5"})
     assert sorted(set(log.read_text().splitlines())) == ["0-9 prove", "10-11 serve"]
     log.unlink()
-    assert run("unplaced") == {"6"}
+    assert run("unplaced") == (None, {"6"})
     assert not log.exists()
     for bad, why in [("10-", "not a CPU list"), ("11-12", "CPUs 12 are outside"), ("0-11", "none is left for the provers")]:
         with pytest.raises(ValueError, match=why):

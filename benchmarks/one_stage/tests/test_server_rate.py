@@ -29,10 +29,10 @@ class Session:
 
 class Server:
     """K provers that file session i at FILED0 + i, refuse the sessions in ``refuse``, write ``log`` to the first prover's
-    log and close with ``exits``."""
+    log, close with ``exits`` and report the verifiers placed on ``verifier_cpus``."""
 
-    def __init__(self, out: Path, provers: int, refuse=(), exits=None, log: str = "") -> None:
-        self.out, self.k, self.refuse = out, provers, set(refuse)
+    def __init__(self, out: Path, provers: int, refuse=(), exits=None, log: str = "", verifier_cpus: str | None = None) -> None:
+        self.out, self.k, self.refuse, self.verifier_cpus = out, provers, set(refuse), verifier_cpus
         self.exits = exits or {**{f"prover-gpu0-{j}": 0 for j in range(provers)}, "verifier-t": 0}
         (out / "prover-gpu0-0.log").write_text("LIVE\t{}\n" + log)
 
@@ -93,11 +93,9 @@ def test_a_clean_row_keeps_its_rate(monkeypatch, tmp_path):
 def test_a_row_keeps_its_verifier_cpus_and_their_seconds(monkeypatch, tmp_path):
     for d in ("shared", "placed"):
         (tmp_path / d).mkdir()
-    monkeypatch.delenv("FC_VERIFIER_CPUS", raising=False)
     _, row = run(monkeypatch, tmp_path / "shared")
     assert (row["verifier_cpus"], row["verifier_cpu_s_per_statement"], row["verifier_cpu_gone"]) == (None, 0.0, [])
-    monkeypatch.setenv("FC_VERIFIER_CPUS", "44-47")
-    _, row = run(monkeypatch, tmp_path / "placed")
+    _, row = run(monkeypatch, tmp_path / "placed", verifier_cpus="44-47")
     assert row["verifier_cpus"] == "44-47"
 
 

@@ -323,6 +323,12 @@ class ProofServer:
         return dict(self._routes)
 
     @property
+    def verifier_cpus(self) -> str | None:
+        """The verifiers' CPUs as ``FC_VERIFIER_CPUS`` placed them (a CPU list), or none when unplaced."""
+        cpus = self._cpus.get("verifier")
+        return _cpus_text(cpus) if cpus else None
+
+    @property
     def pids(self) -> dict[str, int]:
         """Each process started so far, its pid by name (``prover-...``, ``verifier-...``)."""
         with self._lock:
