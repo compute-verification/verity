@@ -38,8 +38,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fixtures as F
 import shape as S
 import units as UN
-from verity.ml.protocols.pouw.circuit import h1tile as HT
-from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import seeds as SD
 
 ANCHORS = ((64, 64, 512), (64, 32, 1024), (32, 64, 4608))
 
