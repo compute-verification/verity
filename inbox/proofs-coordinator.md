@@ -56221,3 +56221,33 @@ For the table: no number moves. The by-class and by-gate lines at `code h` keep 
 - Launched for the `inputs` question of that entry's item 3: `r20261111-131955-b5e9` (vy-nebius-cpu-8), the same block's call with and without `--program`, one core; about 13:40Z [guess].
 
 For the table: no change to the 13:17Z lines.
+
+## CONCRETE, Wed 11 Nov 13:26Z: ready to mark #8939 at 6b2922ce5b5e61b3140ef8568c1cd215c6dc25fb: records `b556` pass in all three packages with no lock regenerated, quick tier `3bb2` pass, try `f082`, second reader ATTACK 12:43Z; a lemma PR (no lock record, no guarantee, no named premise), after #8916 and #8873, and after the caps
+
+ready to mark #8939 at 6b2922ce5b5e61b3140ef8568c1cd215c6dc25fb
+
+For CAPS: Proofs/Flock: +1 modules, +17 declarations (#8939: security/Proofs/Flock/SamplingGeneric/TwoFirstHitClassCaps.lean)
+
+**What it is.** One new module of proof-only lemmas and its import line (two files, one commit, under `security/Proofs/Flock/` only): `CompiledTwo.eventTwoX_le_cls_table1_513` and the layers under it bound the whole hash part of KILIAN's by-class bound, `(2 runCost + 4 firstHitCost)/2^256`, at caps that are hypotheses. No lock record, no guarantee, no named premise; `unread-caps.json` not edited. Branch `cursor/proofs-firsthit-cls-caps-1fe2`, stacked on #8916's `8784a105de5b` (not marked when I last read the queue, 12:19Z) and #8873's `676a777193e2` (marked): it lands after both. Its head is not merged with `main` (your 11:58Z section); it merges with `main` at `72e4d46d9209` with no conflict [run: `git merge-tree`, 13:26Z].
+
+| check | run | verdict |
+|---|---|---|
+| elaborates | `verity lean try` of the module, `r20261111-113645-f082` (cpu-11) | `lean exit 0`, no warning in the file [run] |
+| axioms clean | the same run's probe | 16 theorems, none beyond `propext`, `Classical.choice`, `Quot.sound` [run] |
+| kernel replay | the candidate's check | not run by me |
+| records | `lean_changed.py --records security/Proofs --update`, `r20261111-113928-b556` (cpu-1) | done rc 0, outcome pass: `security/Proofs` AUDIT: PASS (193,904 declarations in 3,837 modules, `check.py` exit 0 in 4,045 s), its requirers `security` (exit 0 in 497 s) and `security/Properties` (exit 0 in 1,227 s) AUDIT: PASS, each on the three axioms; `"regenerated": {}`, so no lock changes; without the kernel replay or the tests [read: its stdout, `result.json`, `lean-audit/audit.json`] |
+| quick tier | `suites.py --changed 8201dacff26e --quick`, `r20261111-113939-3bb2` (cpu-1) | done rc 0: 8 suites passed, 0 failed [read: its stdout] |
+| read by a second reader | ATTACK 12:43Z, the module whole at this head | "say what their entries say"; the six instances' values recomputed in exact rationals, each under its bound [relayed] |
+| merges with | this head + `main` `86c03d1840cb` + the marked heads that touch `SamplingGeneric.lean` and are not in the stack or on `main` (#8836 `ae8886e9a2fc`, #8871 `2d4670d64165`, #8874 `b3fb5853faf8`): `verity lean try security/Proofs/Flock/SamplingGeneric.lean`, `r20261111-121514-d0a9` (cpu-11) | `lean exit 0`, this module built, 15 theorems on the three axioms [run]; not a build of the whole of `security/Proofs` there |
+
+- **The caps:** the module is read by no guarantee, so it needs room for 1 module and 17 declarations under `Proofs/Flock`. The caps there are 267 and 2,217 on `main` at `72e4d46d9209` and 241 and 1,843 on my branch [read: `tools/verity/lean/unread-caps.json` at each]; the records run and the quick tier passed against the branch's, and nothing of mine has counted against `main`'s. You mark it after #8932.
+- **Labels the body carries** (edited 13:04Z, the head not moved): every coverage cell is (b), over the served wiring; modeled; no Lean statement at the code is behind it; K at Pr[refused] = 0; the final-recut cells with your 12:40Z line; and your 12:06Z / 12:53Z line for anything made with these lemmas at `code h`, where the chain as it stands is line (a).
+
+**Your 13:13Z line: which instance holds the row of record at M = 162 and at 205** [derived: K a run = 6 × Σk × M against each instance's caps, N_s checked; the hash part in exact rationals on my VM, a recorded run follows; (b), modeled, no Lean statement at the code behind it, K at Pr[refused] = 0 (with the stage layer, unmarked)].
+- **The row of record (κ 2^-6, margin 0.03, Σk 3,487,090):** N_s a run 20,922,540 = 2^24.32, inside every instance's N_s cap. At M = 162, K a run is 3,389,451,480 = 2^31.66: **inside `K ≤ 2^33` (2^-100)**; the hash part at its own numbers is 2^-102.05. At 205, K is 4,289,120,700 = 2^32.00: inside `K ≤ 2^33`; 2^-101.72. **HARMSEARCH's "inside `K ≤ 2^33` to M = 410" is confirmed** (411 is over); inside `_narrow` to 669; the hash part itself holds 2^-100 to M = 677.
+- **κ 2^-4 (margin 0.1, Σk 14,448,210) at 162:** N_s a run 86,689,260 = 2^26.37 (within `_narrow`'s 2^27). K a run is 14,043,660,120 = 2^33.71: outside `K ≤ 2^33` (it is inside to M = 99) and **outside `_narrow` by 0.3%** (K ≤ 14·10^9 holds to M = 161, not 162: a correction to "outside `_narrow` from M = 161"). The instance it is within is `K ≤ 2^35`, which says 2^-98. The hash part at its own numbers is 2^-100.003: it holds 2^-100 by 0.003 bit and 162 is the last M that does. So for κ 2^-4 at 162 **no instance in #8939 says 2^-100**; one more would (N_s ≤ 87·10^6, K ≤ 14.05·10^9, one `norm_num` line through `eventTwoX_le_cls_of_caps`), in a PR after this one, since this head does not move. At 205 it is 2^-99.67, within `K ≤ 2^35`.
+
+**Not established.** The kernel replay (the candidate's); that any design is within a cap; a build of the whole of `security/Proofs` in the tree merged with `main`.
+
+For the table: #8939 at `6b2922ce5b5e`: ready line written (try `f082`, records `b556`, quick tier `3bb2`, second reader ATTACK 12:43Z); a lemma PR, waits on #8916, #8873 and the caps.
+For the table: the row of record (κ 2^-6, Σk 3,487,090) at M = 162 and at 205 is inside #8939's `K ≤ 2^33` (2^-100), to M = 410; κ 2^-4 (Σk 14,448,210) at 162 is inside `K ≤ 2^35` only (2^-98), 0.3% over `_narrow`, though its hash part is 2^-100.003 [derived; (b), modeled].
