@@ -199,8 +199,9 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
 def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_no_research_run():
     """The deployed marker lists no command (the challenger runs only through vy-challenger-gate, the verifier through
     vy-verifier-gate) and goes, with the timer that enforces it, to the auditor hosts only, each host's gate to it alone (the
-    challenger's and certifier's units also go to vy-auditor-2, which runs a certifier); the nodes' shared peers file and the
-    cluster's description name no auditor host."""
+    challenger's and certifier's units also go to vy-auditor-2, which runs a certifier); vy-admin's sshd drop-in goes to them and
+    to each CPU node that carries the lock-out, whose sshd lets only research log in without it; the nodes' shared peers file and
+    the cluster's description name no auditor host."""
     import tomllib
     from pathlib import Path
 
@@ -210,8 +211,10 @@ def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_
     rows = tomllib.loads((nebius / "deploy.toml").read_text())["file"]
     on = {e["path"]: e["nodes"] for e in rows if e.get("src", "").endswith(("/auditor", "/vy-auditor-only.service",
                                                                             "/vy-auditor-only.timer", "/11-vy-admin.conf"))}
-    assert on == {p: hosts for p in ("/etc/vy/auditor", "/etc/systemd/system/vy-auditor-only.service",
-                                     "/etc/systemd/system/vy-auditor-only.timer", "/etc/ssh/sshd_config.d/11-vy-admin.conf")}
+    locked_cpu = [n for e in rows if e["path"] == "/usr/local/sbin/vy-lockout" for n in e["nodes"] if n.startswith("vy-nebius-cpu-")]
+    assert on == {**{p: hosts for p in ("/etc/vy/auditor", "/etc/systemd/system/vy-auditor-only.service",
+                                        "/etc/systemd/system/vy-auditor-only.timer")},
+                  "/etc/ssh/sshd_config.d/11-vy-admin.conf": hosts + locked_cpu}
     assert {e["path"]: e["nodes"] for e in rows if e.get("src", "").endswith("/peers-challenger")} == {
         "/etc/vy/peers": ["vy-challenger-1"]}
     assert "--auditor --marker /etc/vy/auditor" in (nebius / "vy-auditor-only.service").read_text()

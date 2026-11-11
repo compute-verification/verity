@@ -2,7 +2,7 @@
 `session_set`), and per block type the fit of that time against the statement's blocks N, T(N) = fixed + N · per_block
 (least squares over its N), its seconds a block amortized at each N (T(N) / N), and with ``--card`` (a GPU's run) the
 block's proof overhead: seconds a block times the card's peak MACs a second over the block's MACs, marginal (``per_block``)
-and amortized. A coordinate's MACs are its K; the card's peak is its s8 rate (`verity.hardware`; e4m3 runs at that rate on
+and amortized. A coordinate's MACs are its K; the card's peak is its s8 rate (`verity.hardware.cards`; e4m3 runs at that rate on
 the cards here, their ``weight.e4m3`` 1). A type without a static K (a census type) gets its seconds a block and no
 overhead.
 
@@ -28,8 +28,8 @@ def _session_set():
 
 def peak_macs(card: str) -> float:
     sys.path.insert(0, str(ROOT))
-    from verity import hardware
-    c = hardware.load(card)
+    from verity.hardware import cards
+    c = cards.load(card)
     return c["rate"]["tensor"]["value"] * c["sm"]["count"]["value"] * c["clock"]["sm"]["value"] * 1e6
 
 
@@ -90,6 +90,6 @@ def main(out: Path, card: str | None) -> dict:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("out", type=Path)
-    ap.add_argument("--card", default=None, help="the GPU's card (verity.hardware SKU) for the proof overhead")
+    ap.add_argument("--card", default=None, help="the GPU's card (verity.hardware.cards SKU) for the proof overhead")
     a = ap.parse_args()
     print(json.dumps(main(a.out, a.card), indent=1, default=str))
