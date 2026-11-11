@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 from verity.circuits.refs import Coll
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import from_rows, norm_kind, row_value, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import aten
 from verity.definitions.registry import layer_norm as _LN
+
+from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    from_rows,
+    norm_kind,
+    row_value,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import aten
 
 
 class LayerNormAtenRule(OpRule):

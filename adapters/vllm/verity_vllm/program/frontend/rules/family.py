@@ -30,8 +30,12 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import Body, CompositeDefinition, SpecializedDefinition
 from verity.circuits.defs import bind as ir_bind
 from verity.circuits.refs import Affine, Refs, concat
-from verity.circuits.refs import runs as _runs  # pure (was `..derive._runs`): this module must import without torch (capture fold M4 comparison)
-from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type
+from verity.circuits.refs import (
+    runs as _runs,  # pure (was `..derive._runs`): this module must import without torch (capture fold M4 comparison)
+)
+from verity.circuits.types import Array, RecordType, Type
+from verity.circuits.types import Tuple as TupleT
+
 from verity_vllm.program.frontend.rules.base import FamilyRule, RuleInfo
 
 Run = tuple[str, int, int, int]  # (space, idx, lo, hi)
@@ -565,7 +569,9 @@ def _decoder_layer_body(B, S, h, *rest):
     K/V rows, LayerPost x T. Layer 0 (`L0`) takes no residual (the residual is `h`)."""
     C, T, T0 = S.C, S.T, S.T0
     res, w = (h, rest[0]) if S.L0 else (rest[0], rest[1])
-    from verity.circuits.refs import Coll as _Coll, array_of as _array_of, tuple_of
+    from verity.circuits.refs import Coll as _Coll
+    from verity.circuits.refs import array_of as _array_of
+    from verity.circuits.refs import tuple_of
     lw = _Coll(_b1.layer_weights_type(C), w.refs.slice(0, _b1.layer_weights_type(C).leaves))
     cs = w["cos_sin"]
     pre = [B.call(ir_bind(_b1.LayerPre, C=C, L0=S.L0), h[i], res[i], lw, cs[T0 + i], name=f"t={T0 + i}/pre") for i in range(T)]

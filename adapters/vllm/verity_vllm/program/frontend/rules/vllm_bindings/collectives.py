@@ -3,17 +3,24 @@
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
-from verity_vllm.program.frontend.derive import StaticIndex
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import from_rows, row_value, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import (active_allreduce_settings, active_target_profile,
-                                                                           launch_tokens_of)
 from verity.definitions.registry import tp_allreduce
 
+from verity_vllm.program.frontend.derive import StaticIndex
+from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    from_rows,
+    row_value,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_allreduce_settings,
+    active_target_profile,
+    launch_tokens_of,
+)
+from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 
 # -- tensor-parallel collectives: `verity_tp::*` ops emitted by the construction's CollectiveBus (cb_a/tp_ops.py) ----------
 

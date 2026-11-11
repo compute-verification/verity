@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from verity_vllm.program.frontend.rules.base import RuleInfo
-from verity_vllm.program.frontend.rules.profile import FusedAddRmsNormRule as _FusedAddRmsNormRule
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, _fused_norm_dispatch_ok
-
+from verity_vllm.program.frontend.rules.profile import (
+    FusedAddRmsNormRule as _FusedAddRmsNormRule,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    _OBSERVED,
+    _fused_norm_dispatch_ok,
+)
 
 # -- fused add + rms norm: the batch-invariant dispatch, derived ------------------------------------------------------------
 

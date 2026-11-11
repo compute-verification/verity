@@ -23,15 +23,23 @@ threads are the kernels' at the hidden size (`MHC_GEOMETRY`).  EPS is `rms_eps` 
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import array_of
+from verity.definitions.numerics.mhc_twin import tf32_num_split
+
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import call_args, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
-from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _rows, _static_float, _value
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_target_profile,
+    launch_tokens_of,
+)
+from verity_vllm.program.frontend.rules.vllm_dsa import (
+    _missing,
+    _rows,
+    _static_float,
+    _value,
+)
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 from verity_vllm.program.frontend.strided_views import _tensor_type
-from verity.definitions.numerics.mhc_twin import tf32_num_split
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 

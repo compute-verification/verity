@@ -28,16 +28,29 @@ from __future__ import annotations
 import math
 
 import torch
-
 from verity.circuits.refs import Coll
-from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
-from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
-from verity_vllm.program.frontend.rules.vllm_iface import targets_for
-from verity_vllm.program.frontend.rules.vllm_moe import INDEXED_READ, MOE_GEMM_PINS, FusedMoeKernelRule, _flat_pairs, _not_owned
 from verity.definitions.registry.fp8 import weight_blocks
+
+from verity_vllm.program.frontend.derive import Alloc
+from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    dtype_is,
+    from_rows,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_target_profile,
+)
+from verity_vllm.program.frontend.rules.vllm_iface import targets_for
+from verity_vllm.program.frontend.rules.vllm_moe import (
+    INDEXED_READ,
+    MOE_GEMM_PINS,
+    FusedMoeKernelRule,
+    _flat_pairs,
+    _not_owned,
+)
 
 FP8_E4M3 = torch.float8_e4m3fn
 

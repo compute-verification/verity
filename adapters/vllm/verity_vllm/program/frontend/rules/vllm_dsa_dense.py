@@ -12,18 +12,45 @@
 
 from __future__ import annotations
 
-from verity.circuits.refs import Affine, Coll, Concat, PartLog, Strided, array_of, concat
+from verity.circuits.refs import (
+    Affine,
+    Coll,
+    Concat,
+    PartLog,
+    Strided,
+    array_of,
+    concat,
+)
 from verity.circuits.types import Array, Value
+from verity.definitions.registry import fa3_split
+
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile
-from verity_vllm.program.frontend.rules.vllm_dsa import (_DENSE, BF16, DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT, E4M3, F32,
-                                                         _append_rows, _args, _decode_threshold, _f32, _missing,
-                                                         _observed_sparse_mla, _open_history, _positions, _rows, _static_float,
-                                                         _value)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    _OBSERVED,
+    active_target_profile,
+)
+from verity_vllm.program.frontend.rules.vllm_dsa import (
+    _DENSE,
+    BF16,
+    DECODE_THRESHOLD,
+    DECODE_THRESHOLD_DEFAULT,
+    E4M3,
+    F32,
+    _append_rows,
+    _args,
+    _decode_threshold,
+    _f32,
+    _missing,
+    _observed_sparse_mla,
+    _open_history,
+    _positions,
+    _rows,
+    _static_float,
+    _value,
+)
 from verity_vllm.program.frontend.rules.vllm_iface import iface
-from verity.definitions.registry import fa3_split
 
 PREFILL_BACKEND = "vllm.v1.attention.backends.mla.prefill.flash_attn.FlashAttnPrefillBackend"
 
@@ -94,7 +121,9 @@ class DsaDenseMhaRule(StateRule):
 
     def applies(self, node, ctx):
         from verity_vllm.program.frontend import targets as TG
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_launch_context
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+            active_launch_context,
+        )
         a = _args(node, _DENSE)
         layer, topk, scale = a["layer_name"], a["topk"], a["scale"]
         if not isinstance(layer, str) or not isinstance(topk, int) or topk < 1 or not _static_float(scale):

@@ -8,12 +8,14 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import torch
-
 from verity.circuits.refs import array_of
+
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import shape
 from verity_vllm.program.frontend.rules.patterns import Consumed
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_target_profile,
+)
 from verity_vllm.program.frontend.rules.vllm_dsa import BF16, _missing, _rows, _value
 from verity_vllm.program.frontend.torch_frontend import _permute
 

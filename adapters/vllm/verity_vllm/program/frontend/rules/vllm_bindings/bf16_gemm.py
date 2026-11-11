@@ -11,14 +11,20 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import torch
-
 from verity.circuits.refs import Coll
+from verity.definitions.registry import bf16_gemm_check
+
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import _strides, _untransposed
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_target_profile,
+    launch_tokens_of,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import (
+    _strides,
+    _untransposed,
+)
 from verity_vllm.program.frontend.rules.vllm_iface import iface
-from verity.definitions.registry import bf16_gemm_check
 
 aten = torch.ops.aten
 

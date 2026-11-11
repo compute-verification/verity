@@ -19,16 +19,33 @@ import os
 import re
 
 import pytest
-
 from verity.circuits import Program, bind
 from verity.circuits.codec import decode_program, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, composite
-from verity.definitions.registry import b1, lifted as L, moe_pad as MP
-from verity.definitions.registry.prims import BF16
 from verity.circuits.types import Array
+from verity.definitions.registry import b1
+from verity.definitions.registry import lifted as L
+from verity.definitions.registry import moe_pad as MP
+from verity.definitions.registry.prims import BF16
 
-from tests.program.test_moe_pad_stage2 import (BOT16, BOT32, OFF, ON, E, H, I, VPT, W13_T, W2_T, X_T, MoeIndexedReadRef, run, token_for_route,
-                                  unlifted_inputs, weights)  # noqa: F401  (weights: the shared fixture)
+from tests.program.test_moe_pad_stage2 import (
+    BOT16,
+    BOT32,
+    OFF,
+    ON,
+    VPT,
+    W2_T,
+    W13_T,
+    X_T,
+    E,
+    H,
+    I,
+    MoeIndexedReadRef,
+    run,
+    token_for_route,
+    unlifted_inputs,
+    weights,  # noqa: F401  (the shared fixture)
+)
 
 LOGITS_T = Array(E, BF16)
 _HERE = os.path.dirname(os.path.abspath(__file__))

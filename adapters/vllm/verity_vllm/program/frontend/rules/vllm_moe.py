@@ -47,16 +47,30 @@ from __future__ import annotations
 import math
 
 import torch
-
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array
+
 from verity_vllm.log import init_logger
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
-from verity_vllm.program.frontend.rules.vllm_bindings.pins import moe_expert_refusal, moe_expert_role
+from verity_vllm.program.frontend.rules.common import (
+    dtype_is,
+    from_rows,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.triton_iface import (
+    launch_meta,
+    launch_tensor,
+    triton_launch,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_target_profile,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import (
+    moe_expert_refusal,
+    moe_expert_role,
+)
 
 aten = torch.ops.aten
 logger = init_logger(__name__)

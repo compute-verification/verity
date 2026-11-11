@@ -4,14 +4,27 @@ attention."""
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
+
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, row_value, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.attention import UnifiedAttentionWithOutputRule
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import ATTN_PINS, _OBSERVED, _norm_attn, attn_kind_for
+from verity_vllm.program.frontend.rules.common import (
+    dtype_is,
+    from_rows,
+    row_value,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.attention import (
+    UnifiedAttentionWithOutputRule,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    _OBSERVED,
+    ATTN_PINS,
+    _norm_attn,
+    attn_kind_for,
+)
 from verity_vllm.program.frontend.torch_frontend import _tensor_type
 
 #: `engine.int8_attention_vllm.Int8AttentionImpl`, by name: the frontend reads the instantiated layers, never the engine

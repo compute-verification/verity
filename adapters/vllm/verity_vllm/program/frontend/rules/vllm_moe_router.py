@@ -21,21 +21,40 @@ DeepSeek-V4's sqrtsoftplus routers (numerics: `verity.definitions.registry.dsv4_
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll, array_of, strided_view
 from verity.circuits.types import Array
-from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import call_args, from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_tokens_of
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import _strides
-from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS, _pins_ok
-from verity_vllm.program.frontend.rules.vllm_iface import targets_for
-from verity_vllm.program.frontend.rules.vllm_moe import INDEXED_READ, DeadOutput, _moe_C_op, _not_owned
 from verity.definitions.registry.dsv4_moe import TOPK as DSV4_TOPK
 from verity.definitions.registry.moe import router_kernel
 from verity.definitions.registry.prims import I32
+
+from verity_vllm.program.frontend.derive import Alloc
+from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    call_args,
+    from_rows,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.triton_iface import (
+    launch_meta,
+    launch_tensor,
+    triton_launch,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    launch_tokens_of,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import _strides
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import (
+    DSV4_TOPK_PINS,
+    _pins_ok,
+)
+from verity_vllm.program.frontend.rules.vllm_iface import targets_for
+from verity_vllm.program.frontend.rules.vllm_moe import (
+    INDEXED_READ,
+    DeadOutput,
+    _moe_C_op,
+    _not_owned,
+)
 
 
 class GroupedTopkRule(OpRule):

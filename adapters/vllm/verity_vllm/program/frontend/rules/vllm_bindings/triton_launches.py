@@ -5,21 +5,45 @@ from __future__ import annotations
 import sys
 
 import torch
-
 from verity.circuits.refs import Coll
-from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.strided_views import _tensor_type
-from verity_vllm.program.frontend.value_types import shape_of
-from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, norm_kind, row_value, rows_of, shape
-from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape
-from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import _strides, _untransposed
-from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, QKV_RMS_PINS, RMS_PINS, _pins_ok, _target_kinds, active_gemm_target, gemm_bias_role,
-                                                                   gemm_pins_for, lookup_key)
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity.definitions.registry.dsa_norm import check_block
 
+from verity_vllm.program.frontend.derive import Alloc
+from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    dtype_is,
+    from_rows,
+    norm_kind,
+    row_value,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape
+from verity_vllm.program.frontend.rules.triton_iface import (
+    launch_meta,
+    launch_tensor,
+    triton_launch,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_target_profile,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import (
+    _strides,
+    _untransposed,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import (
+    GEMM_PINS,
+    QKV_RMS_PINS,
+    RMS_PINS,
+    _pins_ok,
+    _target_kinds,
+    active_gemm_target,
+    gemm_bias_role,
+    gemm_pins_for,
+    lookup_key,
+)
+from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 
 # -- direct Triton launches -----------------------------------------------------------------------------------------------
 

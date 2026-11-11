@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll
-from verity_vllm.program.frontend.derive import refuse
-from verity_vllm.program.frontend.strided_views import _permute
-from verity_vllm.program.frontend.rules.common import shape
 
+from verity_vllm.program.frontend.derive import refuse
+from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.strided_views import _permute
 
 aten = torch.ops.aten
 BF16 = torch.bfloat16

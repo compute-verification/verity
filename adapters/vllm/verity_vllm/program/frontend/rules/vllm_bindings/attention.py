@@ -5,16 +5,28 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import torch
-
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
+
 from verity_vllm.program.frontend.derive import Alloc, refuse
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import attention_scale, kv_logs, row_value, shape
+from verity_vllm.program.frontend.rules.common import (
+    attention_scale,
+    kv_logs,
+    row_value,
+    shape,
+)
 from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import (ATTN_PINS, _OBSERVED, _attn_pins_ok, active_launch_context,
-                                                                           active_target_profile, attn_kind_for, attn_lookup_key)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    _OBSERVED,
+    ATTN_PINS,
+    _attn_pins_ok,
+    active_launch_context,
+    active_target_profile,
+    attn_kind_for,
+    attn_lookup_key,
+)
+from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 
 # -- KV cache write + attention read (two ops) -----------------------------------------------------------------------------
 

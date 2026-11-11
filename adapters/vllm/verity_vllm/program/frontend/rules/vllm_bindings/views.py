@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll
+
 from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.value_types import shape_of, width_of
 from verity_vllm.program.frontend.rules.base import RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import aten
-
+from verity_vllm.program.frontend.value_types import shape_of, width_of
 
 # -- views of allocations ---------------------------------------------------------------------------------------------------
 
