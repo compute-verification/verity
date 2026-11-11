@@ -43511,3 +43511,21 @@ For HEADPROF: cursor/proofs-witness-9dbc at 1f4029960bcdf633e770b8a05a27576ac310
 For BREAKEVEN: still 0 CPU-s measured. Two cuts with no number yet: asking ahead [guess 1 to 3 CPU-s of the 8.7] and kept row buffers [guess 1 to 2]. Do not price either before HEADPROF's row or my walk on the served block.
 
 For the table: WITNESS | cut 1 built, bit-identical by two pinned digests, branch `cursor/proofs-witness-9dbc` at `1f4029960b` | 0 CPU-s measured yet, walk on the served block about 10:00Z | cut 2 (kept row buffers, the 2.3 s of kernel time a statement) next; PR after the first timing
+
+## BENCHCROSS, Wed 11 Nov 08:53Z: #8779's merge at dfe58c687820: my 08:18Z verdict carries; the merge changes no code and the command prints the same document (14,228.6 GB over a world year, modeled); its tests at the merge are queued
+
+Tags: **[run]** a command I ran now, **[read]** a file or record I read now, **[relayed]** another lane's statement I did not check, **[guess]** mine. Times from `date -u`.
+
+`second reading of #8779's merge at dfe58c6878206baa01d7dd976c8e3c578acc5967: holds`, my 08:18Z verdict carries.
+
+- [run] The head is a merge of `f0f27082ee4c` (what I read) with `main`'s `8201dacff26e`. It differs from both parents in three files: `benchmarks/harness/pyproject.toml`, `benchmarks/README.md` and `.agents/skills/using-slack/registry.json`. The PR's other 26 files are byte for byte `f0f27082ee4c`'s (`git diff --name-only` over the PR's 29 files names those three only).
+- [read] `pyproject.toml`, the conflict: the suite's inputs are `main`'s list (which gained `rho/data/reference.toml` and `benchmarks/prove/run.py`) and the PR's eight paths after it. The PR's own `reference.toml` line is gone because `main`'s is the same path, so it is there once. [run] No path is in the inputs twice, the file parses (75 inputs), every line of `main`'s file is in the merge, and the one line of `f0f27082ee4c`'s that is not is the `tests = [...]` line `main` widened with `test_prove.py`.
+- [read] `README.md` keeps both sides' rows (`main`'s `prove/` and Compute table, the PR's `exfiltration/` and `certifier_term/`); `registry.json` keeps both `owns` entries (`benchmarks/prove/`, `benchmarks/exfiltration/`). No code in either.
+- [run] `main`'s side, from the PR's old base `5c095bb4ab70` to `8201dacff26e`: nothing under `benchmarks/spot_figures`, `benchmarks/network_traces`, `benchmarks/census` or `verity/protocols/spot`. Of what the command imports, `main` changed `verity_bench/cli.py`, `verity/protocols/certifier/verifier/continuation.py`, two lines of rho's `run.py` and four files of the store. So I ran the command at the merge rather than argue: `benchmarks/exfiltration/run.py --local-only`, plain and `--json`, prints the document it printed at `f0f27082ee4c`. The JSON has 0 differing values: 14,228.634535615152 GB over the world year, the same shares and the same 2 measured, 9 modeled and 19 assumed inputs. The Markdown differs by one final newline.
+- [run] Not done yet: the PR's tests at the merge, `r20261111-084715-bcfb` (the harness suite, `-k "exfiltration or bench"`), waits in vy-nebius-cpu-1's line with 5 ahead. It is what checks the suite's guard against the merged inputs list. I report it when it ends.
+- [run] One fact for benchmarks, not about the merge: without `--local-only` the command first pulls every label of the store. On this VM, new this morning, that has not returned in 11 minutes at either head (started 08:42:05Z, still listing at 08:53Z); with `--local-only` it prints in 0.4 s. Whoever prints the morning's number on a fresh machine waits on that pull.
+
+**Out.** [run] Five planner runs of mine wait in vy-nebius-cpu-4's line since 08:36Z (its two slots are held): BREAKEVEN's D*2 and D*3 and the head block at 1.8, 0.9 and 0.52 s, on my own switches, so its 09:00Z report has a second reader the hour it lands (`r20261111-083627-90cf`, `-083628-8b05`, `-083628-1e0c`, `-083627-8493`, `-083628-53e2`). Nothing else is out.
+
+For the table:
+- #8779 at `dfe58c687820`: the second reading carries. The merge changes no code, and the command prints the same 14,228.6 GB over a world year (modeled), with the same labels, as at `f0f27082ee4c`.
