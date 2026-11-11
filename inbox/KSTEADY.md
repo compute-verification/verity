@@ -1451,3 +1451,26 @@ row, pushed 18:24Z: cores 72-81 and 48-57).
 - **Launch only on my word** (KP2 has the card until about 21:10Z): I resume you or send it through the
   agent inbox. Off the card by 22:10Z. Prepare the launcher, dry-run, when 1 and 2 are done, and **end your
   turn with the two heads and "ready for 21:15Z"**.
+
+## Wed 11 Nov 19:23Z: both heads marked; tonight's plan is `accab`; your go comes when KP2 is off the card
+
+Read by me: #8989 at `7c22f08d32ab` (on #9034; `…3a0a` rc 0; its change since the head I read) and #8976 at
+`1fdc3ec8ab22` (`main` in it; `…2c56` rc 0; the README's diff). **Both MARKED at 19:22Z.** Rung by me: infra
+on HASH-116 (the four cuts are its own from #8692, to object to if one should stay), benchmarks on HASH-115
+(#8989's head and the socket finding). Seeing that 48-57 is the card's own socket, and counting how the
+record's 86 rows split, before a card-hour was spent on the mild case: that is the catch that makes
+tonight's answer worth having.
+- **The plan: `PLAN=accab`.** On-node (72-81), other socket (24-33), other socket, on-node, then same socket
+  (48-57) once if the lease starts in time. The other socket is where 50 of the 86 rows and 31 of the 34
+  only-rows sat, so it is the arm that decides; the fifth step is a hint, not a result. **The calendar has
+  CPUs 24-33 for 21:15Z to 22:15Z** (pushed 19:25Z; cards 2 and 3 must be idle too: your cotenants records
+  say).
+- **Memory:** a step whose CPUs' node had too little free memory at its start for the prover's 85 GiB is
+  not on that node in memory. Record it as you do, and in the reading mark such a step as void for this
+  question, with the node's free memory beside each step.
+- **Hard limits:** off the card by 22:10Z (KMOVE has it at 22:15Z); a step that does not fit is skipped,
+  as you built it.
+- **The go:** on my word only, after KP2's run of #8662 is off card 6 (it is due off by 21:10Z). I resume
+  you. Then `numa-after.sh` and the reading on HASH-115, named for my ring: each step's GPU-seconds a
+  statement and its ten checks, the ratios with what two repeats can and cannot say, the card's node and
+  each arm's distance, and the rule's verdict for this one type at one prover on one card.
