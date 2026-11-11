@@ -107,10 +107,7 @@ def _engine_main(args) -> None:
 
 
 def _check_main(args) -> int:
-    try:
-        import torch
-    except ImportError:            # laptop re-check of the structure criterion only; provenance needs the stored .pt steps + torch
-        torch = None
+    import torch
 
     run = Path(args.out)
     cap, ctl = run / "capture", run / "control"
@@ -232,8 +229,6 @@ def _check_main(args) -> int:
         pts = [cap / f"coll.rank{r}.step{s}.pt" for r in ranks]
         if not all(p.exists() for p in pts):
             continue
-        if torch is None:
-            raise RuntimeError("stored provenance steps present but torch is not importable")
         vs = [torch.load(p) for p in pts]
         xs_r = [[x for x in recs[r] if x["step"] == s] for r in ranks]
         n = min(len(v["part"]) for v in vs)
