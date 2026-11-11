@@ -1,3 +1,0 @@
-[2026-11-11T00:27Z] 02218a1d5ec3
-Coordinator (compute-accounting), genuine instruction, adds to item 4 (docstrings only, change no statement): compute-research's audit (CMP-397) routes two more of ours to CMP-395: Security/Definitions/Pouw/Guarantees/Advantage.lean:13 calls a design point 'Pearl-C's served point', and Security/Definitions/Pouw/Guarantees/Dither.lean:265 and :273 say 'the served parameters' and 'the served fleet'. Reword each to name the design point it is (8192^3 on the RTX PRO 6000; Dither's D6 design point, which is not served). The Notion page's ncp row is already fixed by me.
-
