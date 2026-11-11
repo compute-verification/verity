@@ -133,7 +133,7 @@ def test_the_lean_vectors_were_generated_from_this_tree():
     sampling design and `stratified_miss_eq_greedy` (`Audit/Stratified.lean`, `Audit/StratifiedMiss.lean`), and the toolchain and
     Mathlib pins.  A change to any of them fails here until the vectors are regenerated."""
     recorded = json.loads(LEAN_VECTORS.read_text())["inputs"]
-    soundness = "Security/Proofs/"
+    soundness = "security/Proofs/"
     assert set(recorded) == {"verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
                              *(soundness + f for f in ("Flock/Soundness/Audit/Influence.lean", "Flock/Soundness/Audit/Law.lean",
                                                        "Flock/Soundness/Audit/Stratified.lean",
@@ -149,9 +149,9 @@ def test_the_two_stage_vectors_were_generated_from_this_tree():
     (`SamplingGeneric/TwoCount.lean`), its table (`SamplingGeneric/TwoTable.lean`), and the toolchain and Mathlib pins.  A
     change to any of them fails here until the vectors are regenerated."""
     recorded = json.loads(LEAN_TWO_VECTORS.read_text())["inputs"]
-    soundness = "Security/Proofs/"
+    soundness = "security/Proofs/"
     assert set(recorded) == {"verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean",
-                             "Security/Definitions/Claims/SamplingTwo.lean",
+                             "security/Definitions/Claims/SamplingTwo.lean",
                              *(soundness + f for f in ("Flock/SamplingGeneric/TwoCount.lean",
                                                        "Flock/SamplingGeneric/TwoTable.lean",
                                                        "lake-manifest.json", "lean-toolchain"))}

@@ -1461,14 +1461,14 @@ def test_word_primitives_on_their_families(server):
     assert counts["PouwBlackwellE4m3SaltDead_v1"] == 35 * 256 + 14 * len(F32_SWEEP), counts
 
 
-ROW_PRIM_VECTORS = Path(__file__).resolve().parents[4] / "Security/Definitions/Pouw/PearlC/RowPrimVectors.lean"
+ROW_PRIM_VECTORS = Path(__file__).resolve().parents[4] / "security/Definitions/Pouw/PearlC/RowPrimVectors.lean"
 #: each vector list's prefix in `RowPrimVectors` by the primitive it pins
 ROW_PRIM_LISTS = {"sqrt": W.PouwF32SqrtRn, "sqacc": W.PouwSqAcc, "sqceil": W.PouwSqCeil, "sqge": W.PouwSqGe,
                   "etilde": W.PouwETilde, "bf16neg": W.PouwBf16Neg}
 
 
 def test_the_pinned_row_prim_vectors(server):
-    """The vectors `Security`'s `RowPrimVectors` pins for the six row primitives (written from the Python by
+    """The vectors `security`'s `RowPrimVectors` pins for the six row primitives (written from the Python by
     `row_prims_vectors.py`, `PouwETilde` on its whole domain): Lean's words are the pinned ones. 24 of `PouwSqCeil`'s
     pin the Python's mask of an `n` of 2^32 or more, which no `Value<32>` input holds: both sides refuse them."""
     import re
