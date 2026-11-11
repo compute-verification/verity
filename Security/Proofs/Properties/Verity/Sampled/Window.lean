@@ -104,9 +104,11 @@ def coinSpec : Flock.CoinTree.Spec := Flock.Zk.coinSpec (m.I.tags.tableNames m.I
 /-- The member's session's live rounds (`Live.N`). -/
 def N : ℕ := 2 * 2 ^ m.coinSpec.roundsLog
 
-/-- The tree openings the member's session reads after a digest of the prover's message (`Live.rounds`): its link
-points', and each round of its coin tree's two rep streams. -/
-def rounds : ℕ := 2 * 2 ^ m.coinSpec.roundsLog + 1
+/-- The tree openings the member's session reads after a digest of the prover's message: its link points', each
+round of its coin tree's two rep streams (`Live.rounds`), and its closing round, the opening with no coins that
+answers the digest of the session's evidence and so puts that evidence in the device's log before the next
+member's coins. -/
+def rounds : ℕ := 2 * 2 ^ m.coinSpec.roundsLog + 2
 
 /-- **Flock's member at `t` SHA-512 calls**: the member's statement and place in the population; the window's joint
 registration, the registration record's digest (`Live.Reg`); the member's sample file at its part `S`, the
@@ -267,8 +269,8 @@ budgets at `t`. -/
 noncomputable def sessionDelta (t : ℕ) : ℝ≥0∞ := W.drawMiss + (W.joint t).eps
 
 /-- **The leg's δ at the window, `t` SHA-512 calls and the read finder's bound `cr`**: the window's error, a
-two-continuation term per round opened after a digest in every member's session, one for the record and one for the
-digests the composition's commitment binds, the coin trees' hiding term, and `cr`. -/
+two-continuation term per round opened after a digest in every member's session, its closing round among them, one
+for the record and one for the digests the composition's commitment binds, the coin trees' hiding term, and `cr`. -/
 noncomputable def delta (t : ℕ) (cr : ℝ) : ℝ≥0∞ :=
   W.sessionDelta t + W.rounds * Live.twoRun (W.qM t) + Live.twoRun (W.qM t) + Live.twoRun (W.qM t) + W.hidingTerm +
     ENNReal.ofReal cr
