@@ -41140,3 +41140,32 @@ For BREAKEVEN:
 - `SparseMlaHeadBlock` NVIS 64, both `FIRST` types, one prover on ten cores: salts 7.3 host CPU-s a statement before (measured, `r20261111-061047-6773`), and after any no-claim change 7.3 (nothing to change). Statement 2.8555 s (measured), 1.78 s with the witness on the card (modeled).
 - Lever "salts from a seed, on the card" (modeled, unbuilt, a claim): salts 0 host CPU-s; statement 1.96 s now, 0.89 s with the witness on the card; with level 0's lanes too 1.89 and 0.82 s.
 - Lever "vDSO getrandom" (modeled, needs a host kernel of 6.11 or later): salts 5.6; statement 2.64 and 1.57 s.
+
+## HEADPROF, Wed 11 Nov 08:05Z: BLOCKED on a card. The planner gives none (`--on auto --gpus 1` is refused: vy-nebius-2 is down) and no other GPU machine but node A answers. I need your go for node A: card 3 with cores 34-43 by kernels' leave (the reference's own slot), or card 4 with cores 12-21, which no calendar row holds until 12:00Z
+
+**What blocks.**
+- [run 08:01:52Z] `research run --on auto --gpus 1 --cpus 10 --mem-gb 120 --as proofs --timeout 3m --wait --cwd source -- nvidia-smi …` answered: "refused: vy-nebius-2 is down: its ssh doesn't answer (Connection timed out), and a GPU or quiet job runs on no other node". Nothing was queued.
+- [run 07:59Z] `research fetch r20261111-061047-6773 --all` asked 24 machines. Every GPU machine with an ssh host timed out at connect: vy-nebius-2, vy-glm53-h8, vy-glm53-eu, vy-glm53-eu2, vy-glm53-s1, vy-dc-h200, -2, -3, -4, vy-dc-l40s. The thirteen CPU nodes answered. I read the run from the store instead (its run record, 132 files).
+- So the only card I can reach is on node A, which is not mine without your go. I have launched nothing there.
+
+**What the reference is** [read: its `job.json`, `launch.json`, `out/host.json`, `out/job.log`, `inputs/`].
+- Node A (vy-spot-glm53, pod `10khharm1q39bu`, eight H200, Xeon Platinum 8568Y+, 96 cores), card 3 (`GPU-9c8c7c48`, NUMA node 1), cores 34-43, source `c6cadd0e325f` clean, binary `bin-32df0a15951c921b-g1-sm90`.
+- The command is `taskset -c 43 bash inputs/fused.sh` under `--no-sampler`, with KHSHARE's five files sent beside it (`fused.sh`, `k_hook.sh`, `cpu_threads.py`, `nsys_trace.py`, `slim_logs.py`; none of them is in the tree) and its environment: `TYPE`/`NAME` the `FIRST=false` head block, `N=full`, `STAGED=/dev/shm/proofs-prf502-row1-4b31e7caba011398`, `EXPECT_PIN=4b31e7caba011398`, `PROVERS=1,2,4`, `SESSIONS=40`, `WARM=3`, `CPU_STEP=1`, `PROF=0`, `CPUS=34-43`, `GPU_ON=3`.
+- It held one lease for 46 minutes: one prover 344 s and its CPU-sampled step 345 s, two provers 424 + 418 s, four 596 + 610 s. One prover alone (the timed step and the CPU split) is about 12 minutes of a card.
+- The statement is the one SERVEDCARD staged on node A, 12 GB in `/dev/shm`. On any other machine it has to be staged first (SERVEDCARD's `r20261110-161706-314f` took about 75 minutes there [read: the calendar's release note]), and another host's cores would not reproduce a number the host bounds.
+
+**One thing about the target** [read: `out/job.log`'s `RESULT` and `CPU RATE` lines; HASH-114's comments of 06:32Z and 07:18Z].
+- `6773` itself measured 2.5654 GPU-s a statement at one prover in its timed step and 2.690 in its CPU-sampled step (0.3718 statements a second), not 2.8555. The 2.8555 is `r20261111-051852-95c3`'s and the labelled row's.
+- So the reference is 6 to 10% under 2.86 on the same card and cores an hour later. I will hold my baseline to the band 2.57 to 2.86 and say where in it it falls; "within 5% of 2.86" is tighter than node A's own run-to-run spread at one prover.
+
+**Node A's calendar** [read: `calendars/node-a.md` on the notes' `main`, 08:00Z].
+- Until 11:45Z kernels holds cards 1, 2, 3, 5, 6, 7 with cores 24-95, and memory-accounting card 0 with cores 0-7.
+- Card 4 with cores 12-23 was kernels' row until 07:30Z, and vllm released its 08:00Z to 10:00Z row on cores 0-23. No row holds card 4 or cores 8-23 from 07:30Z until vllm's 12:00Z row (all cards, all cores).
+- The container's CPU quota is 81.6 of the 96 cores, shared with kernels' timed rows.
+
+**The ask, one line:** your go and a calendar row for node A, **now to 11:45Z, one card and ten cores, lease as `proofs-headprof`**: card 3 with cores 34-43 if kernels lends it once KHSHARE's chain ends (about 08:23Z by its own comment; the same card and cores as the reference), else card 4 with cores 12-21. On card 4 the cores may not be the card's NUMA node [guess]; the run records it in `host.json` and I report it.
+
+**Meanwhile** (nothing waits on the card): the launch is being prepared from `c6cadd0e325f` with the reference's five input files from the store; the two throwaway switches (leaf salts from one bulk OS read; the prover's loopback check skipped) go on `cursor/proofs-headprof-2b18`, measurement only; then SALTS's, SERVEDCARD's and WITNESS's branches as their entries name them.
+
+For BREAKEVEN: nothing measured yet.
+For the table: nothing measured yet; the head block's one-prover figure of record stays 2.8555 GPU-s a statement (labelled row), with `6773`'s own 2.5654 beside it [read].
