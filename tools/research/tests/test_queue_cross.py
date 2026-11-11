@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -231,3 +232,39 @@ def test_a_stack_crosses_lowest_first_and_what_restack_wont_cross_onto_the_cross
     assert {s["pr"]: s["kind"] for s in report["skipped"]} == {7: "not marked", 8: "stack"}
     assert f"skipped #8 {high[:12]}: it holds #7's head, which this run doesn't cross: not marked ready at its head" in (
         Q.cross_table(report))
+
+
+def test_a_crossing_merges_with_mains_drivers_where_the_tree_it_merges_keeps_them_at_their_old_path(tmp_path, monkeypatch):
+    """A clone registers its merge drivers at `main`'s paths, which a move may have changed: merging two trees from before
+    the move, as a crossing's base merge does, finds no driver there and conflicts, unless it runs `main`'s copy
+    (`cross_drivers`)."""
+    r = tmp_path / "r"
+    _git(tmp_path, "init", "-q", "-b", "main", str(r))
+    (r / "old").mkdir()
+    (r / "old" / "drv.py").write_text("import sys\na, b = (open(p).read().splitlines() for p in sys.argv[2:4])\n"
+                                      "open(sys.argv[2], 'w').write(''.join(f'{x}\\n' for x in a + [x for x in b if x not in a]))\n")
+    (r / ".gitattributes").write_text("*.lst merge=lists\n")
+    (r / "x.lst").write_text("a\n")
+    _git(r, "add", "-A")
+    _git(r, "commit", "-q", "-m", "base")
+    (r / "x.lst").write_text("a\nb\n")
+    _git(r, "commit", "-q", "-am", "theirs")
+    base = _git(r, "rev-parse", "HEAD")
+    _git(r, "mv", "old", "new")
+    _git(r, "commit", "-q", "-m", "Move: tools/move/ old -> new")
+    main = _git(r, "rev-parse", "HEAD")
+    _git(r, "checkout", "-q", "-b", "head", "HEAD~2")
+    (r / "x.lst").write_text("a\nc\n")
+    _git(r, "commit", "-q", "-am", "ours")
+    _git(r, "config", "merge.lists.driver", "python3 new/drv.py %O %A %B %P")
+    _git(r, "config", "merge.abs.driver", "python3 /nowhere/drv.py %O %A %B %P")
+    assert Q._git(r, "merge-tree", "--write-tree", "HEAD", base, check=False).returncode == 1
+
+    n = int(os.environ.get("GIT_CONFIG_COUNT") or 0)
+    assert (env := Q.cross_drivers(r, main, tmp_path / "d")) == {
+        "GIT_CONFIG_COUNT": str(n + 1), f"GIT_CONFIG_KEY_{n}": "merge.lists.driver",
+        f"GIT_CONFIG_VALUE_{n}": f"python3 {tmp_path / 'd' / str(n) / 'drv.py'} %O %A %B %P"}
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    merged = Q._git(r, "merge-tree", "--write-tree", "HEAD", base).stdout.strip()
+    assert _git(r, "show", f"{merged}:x.lst") == "a\nc\nb"

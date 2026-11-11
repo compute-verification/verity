@@ -4174,6 +4174,25 @@ def _commit(repo: Path, sha: str) -> bool:
     return not _git(repo, "cat-file", "-e", f"{sha}^{{commit}}", check=False).returncode
 
 
+def cross_drivers(repo: Path, main: str, into: Path) -> dict[str, str]:
+    """`GIT_CONFIG_*` settings that run each merge driver the clone defines as `python3 PATH ...`, PATH in the worktree, from
+    ``main``'s copy of PATH written under ``into``: a crossing merges trees from before a move, where the path ``main``'s
+    drivers name may not be, and a driver that isn't found leaves its file conflicted."""
+    env, n = {}, int(os.environ.get("GIT_CONFIG_COUNT") or 0)
+    for line in _git(repo, "config", "--get-regexp", r"^merge\..*\.driver$", check=False).stdout.splitlines():
+        key, _, cmd = line.partition(" ")
+        words = cmd.split(" ")
+        if len(words) < 2 or words[0] != "python3" or os.path.isabs(words[1]):
+            continue
+        if (src := _git(repo, "show", f"{main}:{words[1]}", check=False)).returncode:
+            continue
+        (f := into / str(n) / Path(words[1]).name).parent.mkdir(parents=True)
+        f.write_text(src.stdout, errors="surrogateescape")
+        env |= {f"GIT_CONFIG_KEY_{n}": key, f"GIT_CONFIG_VALUE_{n}": " ".join(["python3", str(f), *words[2:]])}
+        n += 1
+    return {**env, "GIT_CONFIG_COUNT": str(n)} if env else {}
+
+
 def restack_why(x: dict) -> str:
     """Why `tools/move/restack.py`'s result ``x`` (one branch's, of `--json`) isn't clean: the merge it conflicts at and the
     files, else its status and the first line of its error."""
@@ -6745,7 +6764,18 @@ def _cross(a: argparse.Namespace) -> int:
         raise SystemExit(f"research queue cross: the merge drivers restack.py merges with can't be set here: {e}") from None
     todo, skipped = cross_plan(top, prs, main, named, labels.ready, verdict, a.unlanded, set(a.only or ()), slug_)
     log(f"research queue cross: {len(todo)} to cross, {len(skipped)} skipped; crossing {a.jobs} at once")
-    crossed, refused, stacked = cross_all(top, todo, main, a.jobs, kept=CROSS_KEPT, log=log)
+    with scratch() as d:
+        drivers = cross_drivers(top, main, Path(d))
+        saved = {k: os.environ.get(k) for k in drivers}
+        os.environ.update(drivers)
+        try:
+            crossed, refused, stacked = cross_all(top, todo, main, a.jobs, kept=CROSS_KEPT, log=log)
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
     report = {"main": main, "moves": named or list(dict.fromkeys(m for t in todo.values() for m, _ in t["moves"])),
               "unlanded": a.unlanded, "crossed": crossed, "refused": refused, "skipped": skipped + stacked}
     out = a.out or Path(os.environ.get("OUT") or "cross")
