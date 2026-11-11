@@ -60459,3 +60459,33 @@ For the table:
 - Law `stratified-rate:2/P`: K = 3 and the sample 1, 2, 1, as the old law gave. Runs: `-8b3c` (run 146) 0, `-c07f` (desc 146, 1000) 0, `-d935` (run 1000, 10000, 50000) 0, `-e67a` (suites) 0.
 - Guard, recommended: a `benchmarks/verifier_cost` suite with one elaboration test over its seven `Main.lean` plus `whole_run.py --check`: 3.2 s on a built tree, no lock.
 - #8999's head is now `dc1baf648bf3`; my reading covers `fef48ce41a13` only.
+
+## 18:24Z KEPT: measured, a member waits 20.8 s before its first check in the kept process against 53.8 s alone (152 MB program); `9a4b` exited 1 for a reason I did not expect, and its figures stand; the quick tier has one failure, mine, fixed
+
+Branch `cursor/proofs-keptverify-604f` at `3bd4e3e017` (on a branch, not on main). Tags as before.
+
+**The measurement** (`benchmarks/verifier_cost/flock_members.sh`: one member handed in three times a way, two rounds, every process pinned to one core; the guard, each kept member's `VERDICT` bytes equal to `verify`'s alone, held in both runs). Medians, in seconds; "before" is the verifier's own `inputs:` plus `setup (drawn):` lines.
+
+| block | way | inputs | setup | before first check | member's wall | peak RSS |
+|---|---|---|---|---|---|---|
+| expert GEMM K=6144: circuit 1.79 GB, program 151.8 MB | alone, 6 processes | 33.23 | 20.53 | **53.77** | 78.96 | 9.08 GB |
+| | kept, first member, 2 | 33.39 | 20.59 | 53.97 | 78.60 | 9.29 GB (the process) |
+| | kept, later members, 4 | 20.29 | 0.54 | **20.83** | 44.90 | |
+| expert GEMM K=768: circuit 543 MB, program 141.2 MB | alone, 6 | 19.07 | 18.10 | **37.38** | 44.98 | 6.61 GB |
+| | kept, first, 2 | 21.34 | 20.60 | 41.95 | 50.38 | 6.74 GB (the process) |
+| | kept, later, 4 | 7.10 | 0.22 | **7.35** | 15.03 | |
+
+- First block [measured: `r20261111-174610-9a4b`, cpu-1, one run on a loaded node, load 52 to 108]. Second block [measured: `r20261111-180323-34d7`, cpu-10, load 10 to 18].
+- What they are not: one member handed in three times, not three members; `m1_unit.py`'s stand-in values and a population program of one Definition at one instance, the block `8ab3` timed; not a served run, and not the 299 MB program.
+- My 17:14Z guess (about 21 s) held. A later member saves 32.9 s of 53.8 s (61%) at the large block and 30.0 s of 37.4 s (80%) at the small one. What is left is its own circuit read, hashed and parsed again; setup is 0.5 s.
+- [derived, scaled from one block, not measured] If the 17.6 h is the members' time before their first check and scales as this block does, about 6.8 h of it would remain.
+- The "small" block is not a small program: the program is 141 MB at K=768 too, so only the circuit shrank. The one small-program block I tried, the router, is refused (below), so no block with a small program is timed.
+
+**The run that failed, and why its figures stand**: `9a4b` exited 1 because the first default spec, the router with its reads in lookup slots (`m1_reads.sh`'s default), is refused by Lean at this tree: "a circuit outside the unit's form under --zk (scopeOkH: the unit reads its one input group and returns the outputs)" [read: `9a4b` `out/job.log`]. The script times no refused member, went on to the expert GEMM, whose guard held, and exited 1 for the first. I did not expect the refusal; I have not checked it on the base, and the member's check is `verify`'s, so I take it as the tree's, not mine [guess]. The default specs are now the two expert GEMMs (`3bd4e3e017`); the measurement of record at the head is `r20261111-182303-e9e4` (cpu-7, launched 18:23Z, about 40 min).
+
+**Checks**
+- Fast records run [run: `r20261111-174821-ade7`, cpu-7]: the verifier package AUDIT PASS, 21,722 declarations, the three axioms, 11 guarantees, no `--update`; its requirer the certifier's verifier PASS; later requirers still running. `lean-fast/v1`: no kernel replay.
+- Quick tier of the 60 touched suites at `1c9f1b89b0` [run: `r20261111-175042-926a`, cpu-6]: 56 passed, 3 running, 1 failed: `repository`, `tests/lint/test_repo_silent_excepts.py`, two `except BrokenPipeError` in my `flock_members.py`. Fixed in `05f4ab32c1aa` (the caught error goes into the process's record); the ratchet gate from the base to the head passes [run: local]. I rerun the tier at the head when `926a` ends.
+- Mailbox absent, #8789, #8949, #9005 open, the one-parse PR not opened (18:22Z).
+
+**Not done**: the tier at the head; `e9e4`; the records run's later requirers; the PR.
