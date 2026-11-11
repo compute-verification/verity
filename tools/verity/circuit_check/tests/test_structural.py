@@ -13,7 +13,7 @@ from circuit_check import targets as TG
 from verity_flock import ir_lower as IL
 from verity_flock import tmpl as TM
 
-from verity.circuits.boolean.forms import maj
+from verity.circuits.boolean.forms import const, maj
 from verity.circuits.boolean.trace import definition
 from verity.definitions.ops.boolean import scalar as SB
 
@@ -114,7 +114,7 @@ def _select(mux: TM.Def | None = None, *, count: int = 16, segs=SEL_SEGS, base: 
 def test_a_run_of_calls_is_the_lowering_it_unrolls_to():
     v, r = _verdict(SB.SelectBf16, _select())
     assert (v, r["failures"]) == ("syntactic", [])
-    assert r["structural"]["template_calls"] == 1 and r["structural"]["template"]["live_ands"] == 16
+    assert r["structural"]["template_calls"] == 1 and r["structural"]["template"]["ands"] == 16
 
 
 def test_other_gates_computing_the_same_bits_pass_on_every_input_when_the_inputs_are_few():
@@ -179,6 +179,44 @@ def test_a_dead_row_that_reads_ahead_is_refused():
     assert v == "refused" and _codes(r) == ["order"]
 
 
+ZERO = definition("StructuralTestZero", 1, lambda C, a: [const(0)], (("a", SB.BIT),), SB.BIT, register=False)
+
+
+def _gap() -> TM.Tmpl:
+    """A copy at W of a callee whose row at its column 2 copies its column 1, which the callee leaves unwritten and its
+    caller writes: x at W + 1, after the copy's first column. The output is the copy's column 2."""
+    q = TM.Def(3, 0, ((2, (1,), (3,)),), ())
+    return _unit([1], [1], [(W + 1, (0,), (K,)), (2 * W, (W + 2,), (K,))], [TM.Call(0, 1, W, 3, ())], [q])
+
+
+def _late_input() -> TM.Tmpl:
+    """An output row at W that copies the input at 2 W, whose own row comes after it: ports in any order are allowed."""
+    groups = [1, 2, 1, 1, 1, 1, 1, 1, 1, 1]
+    rows = ((W, (2 * W,), (K,)), (2 * W, (2 * W,), (2 * W,)))
+    return TM.Tmpl("t", 0, [str(g) for g in groups], [TM.Def(K + 1, 0, rows, ())])
+
+
+def test_a_column_a_copy_reads_before_its_caller_writes_it_is_refused_not_read_as_zero():
+    """`tmpl.ordered` accepts the template, and unrolled (`tmpl.unroll`, in column order) its output is x. Copy by copy, the
+    callee's row reads column W + 1 before the caller's row writes it: read as zero there, the template would pass as the
+    lowering of a Definition whose output is zero, so the check refuses the write."""
+    S = pytest.importorskip("verity_flock.struct_lower")
+    tm = _gap()
+    assert TM.ordered(tm)["ok"]
+    assert S.evaluate(TM.unroll(tm), [0b10], 1)[2 * W] == 0b10
+    v, r = _verdict(ZERO, tm)
+    assert v == "refused" and _codes(r) == ["order"], r["failures"]
+    unwritten = dc.replace(tm, defs=[tm.defs[0], dc.replace(tm.defs[1], rows=tuple(r for r in tm.defs[1].rows if r[0] != W + 1))])
+    assert _verdict(ZERO, unwritten)[0] == "syntactic"
+
+
+def test_an_input_read_before_its_own_row_is_refused_not_read_as_zero():
+    """A row is a constraint on all of the unit's columns at once, so the output row at W is x wherever the input's column
+    is. In column order the input's row comes after the read: read as zero there, the template would pass as a zero."""
+    v, r = _verdict(ZERO, _late_input())
+    assert v == "refused" and _codes(r) == ["order"], r["failures"]
+
+
 def test_text_that_is_no_template_is_refused():
     v, r = _verdict(MAJ, f"{TM.FORMAT} t 0 1\nDEF x\n")
     assert v == "refused" and _codes(r) == ["malformed"]
@@ -220,6 +258,25 @@ def test_the_structural_lowering_is_its_definitions_lowering():
     t = bind(GB.GemmAccumulatorS8, K=128, DOT=GB.BlackwellS8ImmaDot32)
     tm = S.lower(t)[0]
     assert any(c.count > 1 for d in tm.defs for c in d.calls)
+    assert _verdict(t, tm)[0] == "syntactic"
+
+
+def test_the_template_is_read_copy_by_copy_and_never_unrolled(monkeypatch):
+    """`_walk` places each Definition's copies as `tmpl.unroll` does without holding the unrolled rows, so a served unit
+    whose unroll is billions of references is checked in memory of its columns: on a GEMM scan's structural template (calls
+    within calls) its output bits on random inputs are the unroll's, and the check never unrolls it."""
+    S = pytest.importorskip("verity_flock.struct_lower")
+    from verity.circuits.defs import bind
+    from verity.definitions.ops.boolean import gemm as GB
+
+    t = bind(GB.GemmAccumulatorS8, K=128, DOT=GB.BlackwellS8ImmaDot32)
+    tm = S.lower(t)[0]
+    ins, outs, _pad = ST.ports(tm.groups)
+    n = sum(map(len, ins))
+    lanes = ST._lanes(n, False, 64, 1)
+    z = S.evaluate(TM.unroll(tm), lanes, n)
+    assert ST.evaluate_template(tm, lanes, 64) == [z[c] for p in outs for c in p]
+    monkeypatch.setattr(TM, "unroll", lambda *_a: pytest.fail("the check unrolled the template"))
     assert _verdict(t, tm)[0] == "syntactic"
 
 
@@ -324,7 +381,7 @@ def test_a_structural_stagers_unit_is_the_flat_unit_on_its_ports_by_construction
     r = ST.check_unit(t, rows, tm, name="unit/structural-test")
     s = r["structural"]
     assert (s["verdict"], s["unit"], r["failures"]) == ("syntactic", "unit/structural-test", [])
-    assert s["error_bound"]["M"] == 4 * (s["template"]["live_rows"] + s["lowering"]["live_ands"]) + 32 + 1
+    assert s["error_bound"]["M"] == 4 * (s["template"]["evaluated_rows"] + s["lowering"]["live_ands"]) + 32 + 1
     assert s["error_bound"]["log2"] < -400
     shifted = [(f"p{r}", [f"x[{r}]", f"wrow[{(r + 1) % 64}]"]) for r in range(64)]
     r = ST.check_unit(t, shifted, tm)
