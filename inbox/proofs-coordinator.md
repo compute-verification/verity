@@ -52884,3 +52884,32 @@ For the table:
 - second reading of #8917 at `9be3347195`: holds (Definitions only; no pin of an existing Definition moves; circuit-check `900f` and quick tier `d53b` at the head pass; the staged sizes are the runs'). It moves no GB row.
 - Its head holds circuits' #8765 and #8520, both open: the mark lands them too unless they land first.
 - The cut's rows are "key rows unwritten": 1,500 GB (recut A, G = 64, κ 2^-6) is 2,857 once a values unit reads a written key row (2^26). Modeled 0.4, no program, nothing built.
+
+## MEMBERS, Wed 11 Nov 12:02Z: ready to mark #8921 (a lemma PR: four theorems, no lock record moved); #8927's tier is still running, its ready line follows it
+
+No claim moves: #8921 changes no statement, premise or definition a lock reads [run: its records run, nothing regenerated]. `MULTI_REFUSED`'s string is left as it is, by your 11:28Z answer. My VM was reset at about 11:57Z; the scratch files and worktrees were rebuilt from the branches and the PRs' bodies, and no head moved [run: `gh pr view` on #8862, #8898, #8921, #8927].
+
+### `ready to mark #8921 at 58a3e8b90f40d75dad15a377f43cf7f16260c8a3`
+
+- **Quick tier:** `r20261111-103902-b6b5`, `suites.py --changed 5c095bb4ab70 --quick`, at this head: 67 suites, 67 passed (6 cached), 0 failed [run].
+- **Records** of `verity/protocols/spot/verifier/lean` with `--update`: `r20261111-103828-4970`: `check.py` exit 0 on the Spot package (5,589 declarations in 50 modules), `security` (27,021 in 715; 1,077 guarantees), `security/Properties` (3,088 in 94; 463 guarantees), `security/Proofs` (193,503 in 3,821); outcome `pass`, `"regenerated": {}` in each `audit.json` [run].
+- **The merged tree builds:** `r20261111-103935-018e` at scratch `349213356392ee9083d7af6690603f1e9d3a9048` (pushed nowhere) = #8898's merged tree `efc3699ea99a` (`main` 589249ad95fe + #8862 + the fifteen Lean heads of ours marked at 09:00Z + #8898) + this head, clean: `check.py` exit 0 on the four packages (Spot 5,628 declarations in 50 modules; `security` 27,069 in 718, 1,106 guarantees; `security/Properties` 3,089 in 94, 463 guarantees; `security/Proofs` 194,366 in 3,851); outcome `pass`, nothing regenerated [run]. A build, the axioms scan and the records; not a kernel replay.
+- **`main` moved to 86c03d1840cb after that build, and I did not rebuild on it** (your 11:58Z section: no new head, no merge of `main`). What I checked instead, by git [run, 12:00Z]:
+  - Nine of those fifteen heads landed at exactly the heads my tree held (#8354, #8536, #8781, #8785, #8819, #8820, #8827, #8828, #8857: each landing's `Head:` line equals mine).
+  - `main`'s other landings since 589249ad95fe change 57 `.lean` files, all under `security/`, and none under the Spot package or what it requires (the interface, Flock's verifier, LMS). #8921's diff is one file of the Spot package, so the four theorems elaborate against unchanged sources. Not rebuilt: `security/` with those 57 files; none of them, and no open head below, names one of the four new declarations [run: `git grep`].
+  - `git merge-tree` exits 0 with `main` 86c03d1840cb and with #8226 f8a3b83aa0f0, #8368 c833b3ff0a9b, #8425 d4967690acd5, #8458 81c162ded6fa, #8539 984a73968ccd, #8730 f612d5d5897d, #8764 8dfde58665a3, #8771 4b3b557b8c46, #8836 ae8886e9a2fc.
+- **The four checks:** elaborates yes (try `r20261111-103337-20db`: lean exit 0; the records run); axioms clean yes (the try's probe: none of the file's 8 theorems past `propext`, `Classical.choice`, `Quot.sound`; the records run); kernel replay: the candidate's check; second reader: none. Two of four, so I do not call them proved.
+- **The statement a reader should check first: `live_checkAt_parsed`.** It is the one your sentence "live's check equals checkOneAt on parsed input" is, and the only one whose hypotheses carry a step that is by definition and not by lemma: it assumes `paramsOfJson j = .ok p` and `evidenceOf b = .ok e`, and that these are what `Protocol.answerAt (protocol.on bs) (live bs)` parses holds because `protocol.params := paramsOfJson`, `protocol.evidence := evidenceOf` and `BlobProtocol.on` replaces `check` alone [read: `OneStageZk.lean`'s `protocol`, `CoreProtocol/Blobs.lean`'s `on`]. `Properties.Challenger.oneStageZk_drawn` already gets `(Core.canonicalJson a >>= paramsOfJson) = .ok p` and `protocol.evidence e = .ok ev` from an accepting answer, so it applies there after one bind [read]. No theorem here states the equality at the level of `answerAt`. The other three: `paramsOfJson_members` and `evidenceOf_statements` are one-line statements about the parsers' results, and `checkBlobsAt_parsed` is `checkBlobsAt_one` at them.
+- **Locks:** none changes; no record, no `reads` entry [run].
+- **Body:** in the 08:37Z layout, replaced at 12:01Z with the three results and the paragraph on `main`; the head did not move [run].
+- For CAPS: none for #8921. No `.lean` file added; the four theorems are in `Spot.OneStageZk`, a code package's module.
+- It lands after #8898 (marked), whose head is its base.
+
+### #8927: not ready yet
+
+- Quick tier `r20261111-103646-64c5` at `403c8aed979c`: still running at 12:01Z, 84 minutes in (the last tier of this branch took 80) [run]. The ready line follows it, with the three lines on the closing round you asked for.
+- `r20261111-110651-a480` (the tier on the head merged onto `main` 8f5d3c3823f0): running; reported when it ends.
+
+For the table:
+- #8921 `58a3e8b90f40`: ready to mark; quick tier `b6b5` 67/67, records `4970` pass with no lock rewritten, merged tree `018e` pass (built before `main` moved to 86c03d1840cb; the Spot package's sources are unchanged since); four theorems, two of four checks; read `live_checkAt_parsed` first.
+- #8927 `403c8aed979c`: open, unmarked; its tier `64c5` still running.
