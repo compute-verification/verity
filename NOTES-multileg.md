@@ -85,7 +85,7 @@ Left as hypotheses of `remote_soundness_window`:
 | `hWR : I.WindowReads .remote ev filesDec` | at each play the sampled verdict accepts on files the verifier sets one of the windows up on (and (a), (a') hold): `WindowRead`, i.e. every release of the sample's family precedes every opening, and where the play's coins of that family are the window's bytes at `ω`, `WindowSessions` at the window's sample at `ω`: the log opens at most as many trees as drawn members, each naming its streams once, an opening of a tree opened before is of the last tree opened, and each drawn member has a `SessionVerdict` at a statement that is its own (`StatesMember`) whose record carries the member's part of the sample, is the record sent for its session, decodes to what the verifier's read holds the log to (`SessionRead`), on a tree the log opens, with proof files decoded from the evidence its closing round reveals | the per-member verifier's (the port, PRF-371): what `membersRun`'s acceptance gives of a play. Not provable on this base: v2 here is `oneSession` |
 | `hWa : I.WindowAt .remote` | committed files that name the registered circuit and public files and that some play's sampled verdict accepts are files the verifier sets the window up on (the one-member `SessionAt`'s shape) | the port's, with `SetsUp` |
 | `hRg : I.RegisteredFiles` | the registered files pass the file check wherever some files do | the registration's (the one-member form takes the same; `registeredFiles_of` proves it at `registeredOf`) |
-| `hC : I.ClaimTransfers …` | `WindowDeployed.claim`: where the extracted transcript fails the claim on the committed files at the published share, more than the window's `ε` share of its population's proof blocks is incorrect at the projected strategy (`JointAuditV5.wrongSet`) | **open, needs soundness's decision** (below) |
+| `hC : I.ClaimTransfers …` | `WindowDeployed.claim`: where the extracted transcript fails the claim on the committed files at the published share, more than the window's `ε` share of its population's proof blocks is incorrect at the projected strategy (`JointAuditV5.wrongSet`) | **open**: shape (i) ruled; waits on proofs' several-member assembly (i-a), then LEG's (i-b) (below) |
 | `hW`, `hI` | PoUW's and the inference-only policy's targets at the base | the other legs' (as in the one-member form) |
 
 Trust base when those close: SHA512CR, uniform randomness, the honest verifier server's log premises;
@@ -93,28 +93,42 @@ LmsUnforgeable remote only. Nothing else is introduced.
 
 ## What is left
 
-1. **The claim's transfer (`ClaimTransfers`).** `V.read θ F` is one statement's files: `FileRead` holds one circuit
-   file and one public file, `programDigest`/`publicDigest` are single digests, and `partsOf`, `Opens`, `extract`
-   are over `(V.read θ F).circuit`. A window's members each have their own circuit file and public file
-   (`Member.I`). So `¬ IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) ε` cannot be carried to
-   `JointAuditV5.wrongSet` (`⋃_k (memberWrong τ k).image emb`) for several members with different circuits without
-   the vocabulary's reading of several members' files. Two shapes: (i) the vocabulary reads the window's files as
-   one circuit, the members' summed, with `partsOf` the members' parts through `emb`; (ii) the claim is stated a
-   member at a time. Either is a statement in `Security/Properties/Verity/Game.lean`, soundness's. Then the proof
-   needs the several-member analog of the one-member `Live.ks` route (`unbound_subset_faulty_part`,
-   `AssemblyTargetV5`'s `faulty ⊆ wrongRegZc`, `OpensUnder`), which Flock has only at one member. Asked on PRF-490.
+1. **The claim's transfer (`ClaimTransfers`).** Soundness ruled shape (i), one circuit for the window (04:43Z
+   Nov 11): the claim stays what it is at one member, over a bigger circuit. The pieces:
+   - **The read's statement (LEG, written):** `Security/Properties/Verity/WindowFiles.lean`. `Circuit.beside` (two
+     circuits side by side: `C`'s gates then `D`'s, no wire between them, reducible), `Partition.beside` (`P`'s
+     units then `Q`'s), `FileRead.circuitWith`/`unitsWith`/`partsWith`/`constsWith` (a first member and the rest,
+     so a window has at least one member), `WindowFiles` (`first`, `rest`; `circuit`, `units`, `parts`, `consts`,
+     `one r` the one-member window, whose four are the member's by `rfl`; `base k` where member `k`'s units
+     start). `Game.lean` is untouched: `Vocab.read` is to return `WindowFiles` once lean has read the statement
+     (posted on PRF-490). Open in the statement: how `programDigest`/`publicDigest`/`Registered` read at a window
+     (soundness: the window's, from the record's `window.circuit` binding); whether `beside` belongs in
+     `Definitions/Core` (it is in the one Properties file so the lock's `layers` stay as they are).
+   - **Its lemmas (LEG, written):** `Security/Proofs/Properties/Verity/WindowFiles.lean`. `run_beside_left/right`,
+     `localEval_beside_left/right`, `mem_committed_beside_left/right`, `mem_io_beside_left/right`,
+     `correct_beside_left/right`, `wrong_beside`, `unbound_beside`, `card_unbound_beside`: the units a trace of two
+     circuits side by side doesn't bind are `C`'s at `C`'s part of the trace (`traceLeft`), then `D`'s at `D`'s, so
+     the counts add. This is the "once per member and then a union" step of (i-b) at two circuits; the form over
+     `WindowFiles`' list is an induction on it, to be stated once (i-a)'s shape is known.
+   - **(i-a), proofs':** the several-member assembly of the knowledge-soundness route (across members,
+     unbound ⊆ faulty ⊆ `wrongRegZc` at the window's read). Not started; doesn't wait on the rows link.
+   - **(i-b), LEG's:** `ClaimTransfers` discharged from (i-a) and the lemmas above, after `Vocab.read` is the
+     window's. Until then it stays the named hypothesis of `remote_soundness_window`.
 2. **`WindowReads` and `WindowAt` from the per-member verifier** (the port, PRF-371; done-when 2). On this base v2
    is `Spot.OneStageZk.oneSession`; the port's `membersRun` (`heldStep`, `laidHeld`, `membersTreesHeld`,
    `sessionEvidence`) still refuses (`checkMembersAt_refuses`, `MULTI_REFUSED`). The gate is lifted there, for the
    per-member form only, with `WindowReads` proved of its acceptance. `WindowSessions`' shape matches the port's
    form at `ad6e765e05`: one session per drawn member, in the members' order, the closing round's evidence the
    proof files' bytes. The Python mirror and difftest change with the gate, there.
-3. **The window's own class** (`row-table` roots and `registered` values; soundness's 03:35Z ruling, my answer of
-   03:53Z): `MemberSteps` holds at such a window but says nothing of the class. Covering it takes proofs'
-   several-member `EndToEndRegisteredRows`, then a clause on `StatesMember` and the step's conclusion. Soundness
-   chooses (a) accept with the open premise named, or (b) refuse until then; I build for (b).
+3. **The window's own class** (`row-table` roots and `registered` values): proofs chose (a) (04:41Z Nov 11): the
+   port accepts members with registered reads on v2's refusals, refuses two members' ports of one value at two
+   roots, and at `ad6e765e05` still refuses a window with row tables and two-stage's shared rows; the rows link
+   (Flock's several-member `EndToEndRegisteredRows`, proofs' piece (1)) is named open. Nothing changes in
+   `MemberSteps`.
 4. **Records.** The fast path for Security and Security/Proofs at the final head.
 5. `Window.hcls` stays a field of `Window` (`JointAuditV5.hcls_of_bounds` discharges it from bounds).
+6. Bookkeeping: `tests/test_lean_vocabulary.py` warns that `Verity.Sampled.Window` declares `Window` again
+   (`Accounting.Window` is the device model's); a rename is the port's to choose.
 
 ## Rulings in force (PRF-490)
 
@@ -123,6 +137,11 @@ LmsUnforgeable remote only. Nothing else is introduced.
 - 00:48Z Nov 11 (soundness): the closing round is in the member's own coin tree (1026 rounds a member).
 - 03:35Z Nov 11 (soundness): member m's roots are the `roots` entries whose `port` is `<m's key>/<port>`; a window
   with row tables is refused in the per-member form until the statement covers that class.
+- 04:41Z Nov 11 (proofs): (a) for the window's class; the rows link is named open, proofs' piece (1).
+- 04:43Z Nov 11 (soundness): shape (i), one circuit for the window; LEG writes the read's statement in the
+  properties tree, keeps `ClaimTransfers` as the named hypothesis until proofs' assembly (i-a) lands, and posts the
+  statement before the shared vocabulary (`Game.lean`'s `FileRead`) is touched. (ii), a member at a time, is out.
+- 04:13Z Nov 11 (soundness): write to Linear only with `research msg linear comment ... --worker LEG`.
 - The guarantee enters the lock with the port onto main's v2 (PRF-371), not from this branch.
 
 ## Runs
@@ -136,6 +155,11 @@ LmsUnforgeable remote only. Nothing else is introduced.
 | `r20261111-022013-9626` | `Window/Counts.lean` | `9e8f2ea265` | 0 | standard axioms |
 | `r20261111-025914-f994` | `Window/Closing.lean` | `66a4360c93` | 0 | standard axioms |
 | `r20261111-033352-9065` | `Window/Steps.lean` | `c8e650a71b` | 1 | 3 rewrite errors in `memberSteps_of_sessions`, fixed in `c2bda01148` |
+| `r20261111-040437-c918` | `Window/Steps.lean` | `c2bda01148` | 0 | 26 theorems, standard axioms |
+| `r20261111-040939-3980` | `Window/Read.lean` | `e5aad38d65` | 2 | infra: no dependencies on the node, nothing ran |
+| `r20261111-041449-343d` | `Window/Read.lean` | `e5aad38d65` | 0 | 7 theorems, standard axioms |
+| `r20261111-043407-3b49` | `Window/Instance.lean` | `38b78daff7` | 0 | 14 theorems, standard axioms (`remote_soundness_window` among them) |
+| `r20261111-051805-5fe9` | `Properties/Verity/WindowFiles.lean` | `41e2d5a6bb` | cancelled | superseded before its check started (`beside` made reducible) |
 
 Earlier rows (the layers up to `Window/Assembled.lean`, and the failed tries fixed forward) are in the git history of
 this file.
