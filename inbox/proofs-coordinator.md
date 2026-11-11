@@ -51887,3 +51887,49 @@ Tags as before; times from `date -u`. Nothing here is a bits line: it is arithme
 
 For the table: the by-class bound's whole hash part at caps is in Lean: `eventTwoX_le_cls_table1_513` gives κ_s + √(k·γ_s·Pr[B]) + 2^-100 at T, n_PU·openCalls ≤ 513·2^80, e_s ≤ 2592237061, N_s ≤ 2^30, K_s, K_m ≤ 2^33 (the sum 2^-100.47); #8939 at `6b2922ce5b5e`, open, unmarked; try `f082` exit 0 on the three axioms; records and quick tier running.
 For the table: at the plan's cut (one M 2,049) no row is inside `K ≤ 2^33`; the record's own instance is `K ≤ 2^37` and closes at 2^-96.70, by the mean `K ≤ 2^35` at 2^-98.65 [run `e9d1`, modeled]. At the recut (139) the record is inside `K ≤ 2^33` under every count.
+
+## BENCHCROSS, Wed 11 Nov 11:44Z: second reading of CONCRETE's 11:38Z year table at 14643669694c: holds (40 cells of five designs and the seven caps by hand, to 0.01 bit); two figures beside it do not and move no row: its largest-K thresholds leave out the rewinding term, and in calls the record holds 2^-100 over a year at NO count of classes (2^-99.88 at one class a checked block), not at 1.3
+
+Your 07:55Z job on CONCRETE's evaluator ("recompute three of its cells by hand"), at its 11:38Z year table. Every time is from `date -u`; written 11:40Z to 11:47Z. Every figure is modeled.
+
+**second reading of CONCRETE's 11:38Z year table at `14643669694c` (`binding.py` sha256 `7630a71dd66b`): holds, 40 cells and 7 caps by hand; two figures beside the tables do not, and neither moves a row.**
+
+**What I did** [run: my own arithmetic in exact rationals, from the three terms as the file's docstring states them, not from its code: rewinding √(r·γ·(2T)²/2^513) at r = 4 + 4,402·N_s and γ = 2^51; conflict 2·T·(1 + N_s·e_s)/2^256; first hit 4·(T·(1 + e_s·N_s + K + e_s·K) + (1 + K)·c)/2^256; e_s = 2,592,237,061; a run at 6 sampled replay blocks; N_s a sampled replay block = the design's checked blocks, K = checked blocks × the classes; a call = 513 compressions]
+- The checked blocks are ATTACK's 10:42Z column [relayed]: record 10,046,500; width 2^-3 30,303,243; 2^-4 15,151,640; 2^-6 3,787,940; 2^-7 1,893,988; the 2,647 GB plan 42,855,252. The classes (2,049, 139, 205) are SCALE's and CONCRETE's [relayed].
+
+| cell | mine: calls a run / week / month / year | CONCRETE's | mine: compressions | CONCRETE's |
+|---|---|---|---|---|
+| plan's cut (2,049), the record, K a run 123,511,671,000 | -105.88 / -95.90 / -93.80 / -90.20 | -105.88 / -95.90 / -93.80 / -90.19 | -96.88 / -86.90 / -84.80 / -81.20 | -96.87 / -86.90 / -84.80 / -81.19 |
+| plan's cut, the 2,647 GB plan | -103.79 / -93.81 / -91.71 / -88.11 | -103.78 / -93.81 / -91.71 / -88.10 | -94.79 / -84.81 / -82.71 / -79.10 | -94.78 / -84.80 / -82.70 / -79.10 |
+| recut (139), the record, K a run 8,378,781,000 | -109.75 / -99.77 / -97.67 / -94.07 | -109.74 / -99.77 / -97.67 / -94.06 | -100.75 / -90.77 / -88.67 / -85.06 | -100.74 / -90.76 / -88.66 / -85.06 |
+| recut (139), width 2^-6 | -111.16 / -101.18 / -99.08 / -95.47 | -111.15 / -101.17 / -99.07 / -95.47 | -102.15 / -92.18 / -90.08 / -86.47 | -102.15 / -92.17 / -90.07 / -86.47 |
+| PageCopy at 205, width 2^-4 | -108.60 / -98.62 / -96.52 / -92.92 | -108.60 / -98.62 / -96.52 / -92.91 | -99.60 / -89.62 / -87.52 / -83.92 | -99.59 / -89.62 / -87.52 / -83.91 |
+
+- Every cell agrees to 0.01: I round to the nearest hundredth, the evaluator rounds toward the weaker figure.
+- The caps at N_s ≤ 2^30 with T and c at 513·2^80 [run]: K ≤ 2^33 gives 2^-100.48, then -99.60, -98.66, -97.69, -96.71, -95.72, -94.72 up to 2^39. CONCRETE's seven hold to 0.01. In calls K ≤ 2^42 gives 2^-100.73 (its -100.72).
+- The sessions' share over a year in calls [run: the sum at K = 1]: -100.62, -99.02, -100.02, -102.02, -103.02, -98.52. CONCRETE's six hold.
+
+**The two figures that do not hold as written**
+1. **"The sum stays at most 2^-100 up to K = 12,593,941,139 at N_s ≤ 2^30 and 14,003,227,282 at N_s ≤ 2^27."** Those are the largest K for the conflict and first-hit terms without the rewinding term [run: I get exactly both numbers that way]. With the rewinding term, which is 2^-119.9 there, the largest are 12,593,927,068 and 14,003,222,307 [run]. The rows it is used for are far inside either (12,357,195,000; 12,636,467,760 under the second; the proposed instance K ≤ 14·10^9), so nothing moves. If the Lean instance's sum has the rewinding term in it, state the cap under the smaller number.
+2. **"In calls the record would need K ≤ 2^26.22 a run, about 1.3 classes a checked block" (section 6).** 2^26.22 is the K at which the first-hit term alone reaches 2^-100 over a year. With the conflict term the whole sum allows K ≤ 2^25.52 a run, 0.80 of a class a checked block [run]. At one class a checked block the record reads 2^-99.88 a year in calls [run]. So in calls too the record holds 2^-100 over a year at no count of classes, if every checked block needs at least one class [guess: that it does].
+
+**What each design can afford, the same arithmetic turned round** [run: the largest K a run at which the whole sum, times the period's runs, is at most 2^-100, in calls, as classes a checked block]
+
+| design | a week | a month | a year |
+|---|---:|---:|---:|
+| the record | 118.4 | 26.5 | 0.80 (none) |
+| width κ 2^-3 | 38.3 | 7.8 | none |
+| width κ 2^-4 | 78.0 | 17.1 | 0.02 (none) |
+| width κ 2^-6 | 316.6 | 72.7 | 4.6 |
+| width κ 2^-7 | 634.6 | 146.9 | 10.7 |
+| the 2,647 GB plan | 26.6 | 5.1 | none |
+
+- Read against one M: at 139 a week holds for widths 2^-6 and 2^-7 and misses for the record by 0.23 bit (118.4 against 139); a month holds only for width 2^-7 (146.9). At 2,049 nothing holds over a week. This is CONCRETE's sections 1 and 2 in one column, and it says what a recut has to reach: the record needs at most 118 classes a checked block for a week.
+- In compressions the sessions' share alone is over 2^-100 for a week in every design (2^-99.73 for width 2^-7, 2^-97.32 for the record) [run: the calls figure plus log2 513], so no count of classes holds a week there.
+
+**Not checked by me:** the checked blocks a design has and the class counts (both relayed); section 3's K "implied from SCALE's two-decimal cells"; section 5's reading of the budget; the Lean try `a3a2`; runs `88dc`, `9979`, `e9d1` (I recomputed, I did not open them).
+
+For the table:
+- second reading of CONCRETE's year table at `14643669694c`: holds. 40 cells of five designs and the seven caps recomputed by hand agree to 0.01 bit (modeled; 2^80 calls each run's).
+- One figure beside it is too kind: in calls the record cannot hold 2^-100 over a year at any count of classes (2^-99.88 at one class a checked block; CONCRETE wrote "about 1.3 classes").
+- What a recut has to reach, in calls, for 2^-100 over a week: at most 118 classes a checked block for the record, 78 for width 2^-4, 317 for width 2^-6, 635 for width 2^-7 (a month: 26, 17, 73, 147).
