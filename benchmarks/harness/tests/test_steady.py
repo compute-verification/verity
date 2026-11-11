@@ -1,4 +1,4 @@
-"""`verity_bench.steady` on made-up files: a run whose files show all nine checks, each check failing alone, each check the
+"""`verity_bench.steady` on made-up files: a run whose files show all ten checks, each check failing alone, each check the
 files can't show, a value that isn't a number passing nothing, a run's rows read from its rate file and from a directory,
 the window and its thirds on stated numbers, a window cut at whole bursts where a row declares its sessions' period, with
 no session of it left unjudged, and the four conditions the reader of these rows still holds itself."""
@@ -30,9 +30,9 @@ def lease(*cards: int) -> str:
 
 
 def made(changes: dict | None = None, *, gaps=EVEN, **texts: str | None) -> tuple[dict, S.Files]:
-    """A made-up run that passes all nine, and its one row: two provers on card 3, two warm sessions each and the timed
-    ones filed `gaps` apart (16 of them unless `gaps` says otherwise), one lease of card 3, and the card clear at the
-    row's start and end. The row's window is the sessions' own: from the second timed session's filing to the third
+    """A made-up run that passes all ten, and its one row: two provers on card 3 with ten CPUs of one NUMA node, two
+    warm sessions each and the timed ones filed `gaps` apart (16 of them unless `gaps` says otherwise), one lease of
+    card 3, and the card clear at the row's start and end. The row's window is the sessions' own: from the second timed session's filing to the third
     from last's, or every timed session where that leaves under two. `changes`: fields of the row replaced, or left out
     (`DROP`); `texts`: a file's text replaced (`rates`, `leases`, `start`, `end`, `sessions`), or the file left out
     (None)."""
@@ -51,6 +51,7 @@ def made(changes: dict | None = None, *, gaps=EVEN, **texts: str | None) -> tupl
            "statements_per_s": round((last - first) / span, 4), "window_sessions": last - first, "window_s": round(span, 2),
            "flat": True, "throttled": {"nr_throttled": 0, "throttled_usec": 0},
            "warm_per_prover": {f"prover-gpu{CARD}-0": WARM, f"prover-gpu{CARD}-1": WARM}, "idle_provers": 0,
+           "cores": {"count": 10, "list": "34-43", "numa_nodes": [1]},
            "stage": {"definition": "Gemm_v1{K=64}", "k_log": 20, "blocks": 8, "full": 8}} | (changes or {})
     row = {k: v for k, v in row.items() if v is not DROP}
     files = {S.RATES: json.dumps([row]), S.LEASES: lease(int(CARD)), START: NODE, END: NODE,
@@ -60,10 +61,10 @@ def made(changes: dict | None = None, *, gaps=EVEN, **texts: str | None) -> tupl
     return row, {path: text for path, text in files.items() if text is not None}.get
 
 
-def test_a_row_whose_files_show_all_nine_checks_passes():
+def test_a_row_whose_files_show_all_ten_checks_passes():
     row, files = made()
     got = S.verdict(row, files)
-    assert [c.name for c in got.checks] == list(S.CHECKS) and len(S.CHECKS) == 9
+    assert [c.name for c in got.checks] == list(S.CHECKS) and len(S.CHECKS) == 10
     assert all(c == S.Check(c.name, S.PASS) for c in got.checks)
     assert (got.status, got.passed, got.why) == (S.PASS, True, None)
     assert got.record() == {"type": TYPE, "provers": K, "status": "pass", "level": 1.25,
@@ -107,6 +108,13 @@ FAILS = [
     ("every_prover_warmed", {"changes": {"warm_per_prover": {"prover-gpu3-0": 4}}},
      "1 of its 2 provers finished a warm session before the timed ones"),
     ("every_prover_warmed", {"changes": {"idle_provers": 1}}, "1 of its 2 provers filed no session in the window"),
+    ("one_numa_node", {"changes": {"cores": {"count": 10, "list": "20-23,24-29", "numa_nodes": [0, 1]}}},
+     "its CPUs (20-23,24-29) are on 2 NUMA nodes (0, 1)"),
+    # the verifiers placed on a third node's CPUs: the row's CPUs are the provers' and theirs
+    ("one_numa_node", {"changes": {"cores": {"count": 12, "list": "34-43,72-73", "numa_nodes": [3, 1]},
+                                   "verifier_cpus": "72-73"}}, "its CPUs (34-43,72-73) are on 2 NUMA nodes (1, 3)"),
+    ("one_numa_node", {"changes": {"cores": {"count": 96, "numa_nodes": [0, 1, 2, 3]}}},
+     "its CPUs are on 4 NUMA nodes (0, 1, 2, 3)"),
 ]
 
 
@@ -167,6 +175,20 @@ UNTOLD = [
      "its window of 12 sessions can't be cut into three parts of whole bursts of 8 sessions that each took time"),
     ("every_prover_warmed", {"changes": {"warm_per_prover": DROP}}, "its row lacks `warm_per_prover`"),
     ("every_prover_warmed", {"changes": {"idle_provers": DROP}}, "its row lacks `idle_provers`"),
+    ("one_numa_node", {"changes": {"cores": DROP}}, "its row lacks `cores.numa_nodes`"),
+    # a count alone, or the CPUs without their nodes, as a row completed before the script wrote them may hold
+    ("one_numa_node", {"changes": {"cores": 10}}, "its row lacks `cores.numa_nodes`"),
+    ("one_numa_node", {"changes": {"cores": {"count": 10, "list": "34-43"}}}, "its row lacks `cores.numa_nodes`"),
+    ("one_numa_node", {"changes": {"cores": {"count": 10, "list": "0-9", "numa_nodes": []}}},
+     "`cores.numa_nodes` of its row names no NUMA node: its machine listed none"),
+    ("one_numa_node", {"changes": {"cores": {"count": 10, "list": "34-43", "numa_nodes": None}}},
+     "`cores.numa_nodes` (None) of its row isn't a list of NUMA nodes"),
+    ("one_numa_node", {"changes": {"cores": {"count": 10, "list": "34-43", "numa_nodes": 1}}},
+     "`cores.numa_nodes` (1) of its row isn't a list of NUMA nodes"),
+    ("one_numa_node", {"changes": {"cores": {"count": 10, "list": "34-43", "numa_nodes": "1"}}},
+     "`cores.numa_nodes` ('1') of its row isn't a list of NUMA nodes"),
+    ("one_numa_node", {"changes": {"cores": {"count": 10, "list": "34-43", "numa_nodes": [1, -1]}}},
+     "`cores.numa_nodes` ([1, -1]) of its row isn't a list of NUMA nodes"),
 ]
 
 
@@ -184,12 +206,13 @@ def test_every_check_has_a_case_that_fails_it_and_one_its_files_cannot_show():
 #: every number a check reads in a row, by its place in the row
 NUMBERS = [("provers",), ("gpus",), ("warm",), ("sessions",), ("accepted",), ("refused_n",), ("unfiled",),
            ("exits", "prover-gpu3-0"), ("statements_per_s",), ("window_sessions",), ("window_s",),
-           ("throttled", "nr_throttled"), ("warm_per_prover", "prover-gpu3-1"), ("idle_provers",), ("period",)]
+           ("throttled", "nr_throttled"), ("warm_per_prover", "prover-gpu3-1"), ("idle_provers",), ("period",),
+           ("cores", "numa_nodes", 0)]
 #: what isn't a number, though JSON or Python lets it stand where one goes
 NOT_NUMBERS = [math.nan, math.inf, -math.inf, True, "2", [2]]
 
 
-@pytest.mark.parametrize("place", NUMBERS, ids=[".".join(place) for place in NUMBERS])
+@pytest.mark.parametrize("place", NUMBERS, ids=[".".join(map(str, place)) for place in NUMBERS])
 def test_a_value_that_is_not_a_number_passes_no_check(place):
     row, files = made({"period": 2})
     assert S.verdict(row, files).passed
@@ -276,7 +299,7 @@ def test_rows_at_one_prover_count_share_a_record_of_the_card_that_clears_none_of
         assert got.status == S.CANNOT_TELL
         assert [(c.name, c.why) for c in got.checks if not c.ok] == [("card_clear_start_end", why)]
     # the row as completed after the run is judged against the same files, and shares the same record
-    assert S.verdict(row | {"flat": True, "cores": {"count": 10}}, shared).why == f"`card_clear_start_end` (cannot tell): {why}"
+    assert S.verdict(row | {"flat": True, "verify_s": 0.5}, shared).why == f"`card_clear_start_end` (cannot tell): {why}"
     # a card the shared record shows taken clears no row either, and fails none: the record is of one row's start
     taken = lambda path: NODE + "lease 3 held 9m pid=13 run=r-other who=other\n" if path == START else shared(path)  # noqa: E731
     assert [c.why for c in S.verdict(row, taken).checks if not c.ok] == [why]
