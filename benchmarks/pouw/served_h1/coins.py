@@ -152,8 +152,14 @@ def ssh_args(key: str | None = None) -> list[str]:
     return [*SSH, *(["-o", "IdentitiesOnly=yes", "-i", key] if key else [])]
 
 
+#: what a refusal shows of a gate answer it can't read: no run of hex digits long enough to be a session's secret or a root
+HEX, HEX_WITHHELD = re.compile(r"[0-9a-fA-F]{32,}"), "(hex withheld)"
+
+
 def gate_call(gate: str, args: list[str], ssh: Sequence[str] = SSH, run: Callable[..., Any] = subprocess.run) -> dict:
-    """The gate's answer to `args` (``ssh GATE VERB ...``, quoted for the gate's shell words); a refusal raises."""
+    """The gate's answer to `args` (``ssh GATE VERB ...``, quoted for the gate's shell words); a refusal raises. It
+    quotes the gate's reason, else ssh's stderr, else the answer without its long hex runs (`HEX`): an open's answer
+    holds its session's secret."""
     p = run([*ssh, gate, shlex.join(args)], capture_output=True, text=True)
     try:
         got = json.loads(p.stdout)
@@ -161,8 +167,7 @@ def gate_call(gate: str, args: list[str], ssh: Sequence[str] = SSH, run: Callabl
         got = None
     if p.returncode or not isinstance(got, dict) or "refused" in got:
         why = got.get("refused") if isinstance(got, dict) else None
-        raise Ch.CoinError(f"infra's gate refused {args[0]}: "
-                           f"{why or p.stderr.strip() or p.stdout.strip() or f'exit {p.returncode}'}")
+        raise Ch.CoinError(f"infra's gate refused {args[0]}: {why or p.stderr.strip() or HEX.sub(HEX_WITHHELD, p.stdout.strip()) or f'exit {p.returncode}'}")
     return got
 
 

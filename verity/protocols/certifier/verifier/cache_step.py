@@ -5,8 +5,8 @@
 `ReplayStep_v1` (`replay_step`) takes each admitting row's prefix-cache hit as witness that it only bounds, so a hit
 the cache didn't give would be a channel nobody charges. The derived encoding's rules
 (`verity_vllm.pipeline.advice_code.derived`, `Prefixes`) fix the hit while the cumulative pool bound rules out
-eviction, and fix the canonical sources always. Past the bound, advice v1 sends and charges each hit's shortfall from
-the longest cached prefix. This Definition is those rules over a committed cache state, with
+eviction, and fix the canonical sources always. Past the bound the hit is the block pool's, which `CacheStep_v2`
+derives, and advice v1 sends none. This Definition is those rules over a committed cache state, with
 `reference` as their specification in Python. The encodings' `test_cache_step.py` difftests both against `Prefixes`
 on the fixture traces.
 
@@ -30,8 +30,8 @@ unit its request's run completed. Unit j is:
   its owner if it has none or a higher one. A unit not cached is appended to the table, and a full table refuses.
 
 With `sent` = 1 the call checks only that the hit is a cached prefix: an evicting cache never hits past what a cache
-that never evicts holds. Advice v1 doesn't use that mode. Its lookups always derive the longest cached prefix, and past
-the bound the hit is that prefix less v1's sent shortfall. The walk's entry after each unit is `trail`. A hit unit's canonical source is its trail entry's owner in the
+that never evicts holds. Advice v1 doesn't use that mode: its lookups always derive the longest cached prefix, which is
+the hit while the bound holds. The walk's entry after each unit is `trail`. A hit unit's canonical source is its trail entry's owner in the
 table at the end of the engine step (`sources`). An owner can still drop later in the same step, when a lower-numbered
 request completes the unit.
 
@@ -44,7 +44,7 @@ is little-endian.
 
 **Composition** (PROTOCOL.md, "Advice v1"): the calls follow `ReplayStep_v1`'s scheduling order, the running rows first.
 An admitting candidate's call (nins = 0) derives the longest cached prefix. The hit `ReplayStep_v1` reads is that
-prefix less the candidate's shortfall (0 while the bound holds, advice v1's sent one past it). A second call, from
+prefix less the candidate's shortfall, 0 while the bound holds; advice v1 sends none past it. A second call, from
 the hit's trail entry, computes the units the row completes. r is the row's I1 request number. The replay's state chain
 (`replay_chain`) carries the table in its state row, and `ReplayStep_v1` carries each running slot's pfx.
 N = num_gpu_blocks − 1 holds every unit computed while the bound holds. Past it, N is the session's units. The compile

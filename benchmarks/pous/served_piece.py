@@ -4,6 +4,7 @@ challenger on the auditor's host; its core answer in ``DIR/answer.json``.
 
     served_piece.py SERVE_DIR WINDOW DIR --hf-home H [--p2-lib LIB] [--device cuda] [--node NAME] [--private P]
       [--rounds K] [--challenger-host NAME --challenger-address HOST:PORT --challenger-command ARGV] [--trusted-sha512 HEX]
+      [--case-exe EXE]
       [--bw-party CMD --bw-host HOST --bw-minutes M] [--bw-windows W --bw-passes P --bw-samples S --bw-window-s T]
       [--bw-out DIR] [--bw-private P] [--bw-case-exe EXE] [--no-bandwidth]
 
@@ -35,7 +36,10 @@ DIR``).
    check under the challenger key that ``--trusted-sha512`` pins (a session signed under any other is refused), and what
    an accepted run certifies (`period.certify`): ``⌊ρ·|C|⌋`` bits at ``1% + 2^-128``, at `ROUNDS` challenges as at
    105 (`p2.wide320_certificate`'s ``2^-20`` is no run's certificate). The check takes about 2.3 minutes at the
-   registered point at 105 challenges or 320: the tie is its cost, not the rounds.
+   registered point at 105 challenges or 320: the tie is its cost, not the rounds. With ``--case-exe``
+   (``pous-run-protocol``, which `served_piece.sh` builds) the Lean answers the same case while the piece still holds
+   it, and its answer is the verdict, refused unless it is the Python's but for the reason (`served_case.judged`): a
+   Lean that answers otherwise, or doesn't answer, leaves the window undecided, saying so, and no case is written.
 5. **Zero knowledge**: the answer's commitment is a hiding one, one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512``
    tree (`verity.commitments.advice`) holding the run's commitment (the SHA-512 of what setup published) under
    `binding`, so the record fixes the run and reveals nothing of ``W``'s digest, the salt or ``C*``'s root. Its opening,
@@ -53,10 +57,16 @@ DIR``).
    the prover. The session's case and its answer go to ``--bw-private`` (by default ``SERVE_DIR/private/bandwidth``,
    0700), held to PoUS's run case as one store (`p2_case.same_store`); its public answer, under a hiding commitment to the
    case's digest, to ``--bw-out`` (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth
-   piece's, `served_bandwidth.py collect`). ``--bw-windows``, ``--bw-passes``, ``--bw-samples`` and ``--bw-window-s``
-   set its length (`held_bandwidth`'s defaults: two minutes); ``--no-bandwidth`` runs none.
+   piece's, `served_bandwidth.py collect`). With ``--bw-case-exe`` (``remote-audit-p2-protocol``) the Lean answers the
+   case, and its answer is the one written. ``--bw-windows``, ``--bw-passes``, ``--bw-samples``, ``--bw-window-s`` and
+   ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_party.SESSION`: two minutes), which
+   its party holds every request to: it refuses one with another value before its first coin, naming each, and the
+   bandwidth answer is then undecided. ``--no-bandwidth`` runs none.
 
-Writes ``DIR/answer.json`` and ``DIR/pous.json`` (sizes and the phases' timings) and prints one ``POUS`` line.
+Writes ``DIR/answer.json`` and ``DIR/pous.json`` (sizes, the phases' timings, the SHA-512 of the key the session was
+signed under and whether it is the trusted one, ``key_sha512`` and ``key_pinned``, and under ``decided_by`` the program
+whose verdict the answer is with the host it ran on, `period.decided_by`: the Lean where it answered the case, with its
+seconds and its peak memory, else this Python) and prints one ``POUS`` line.
 Weights that aren't the pin's are a reject, and a session the challenger's side couldn't complete is undecided, each with
 its reason. Exit 0 on accept, 1 on any other answer, 2 when no answer could be made (no serve.json, no snapshot).
 """
@@ -66,6 +76,7 @@ import argparse
 import hashlib
 import json
 import os
+import resource
 import shlex
 import socket
 import statistics
@@ -303,10 +314,12 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
         private: Path | None = None, pins: Path = PINS, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
         protocol: str = period.PROTOCOL, rounds: int = ROUNDS, bw_party: str | None = None,
         bw_host: str = BW_PARTY_HOST, bw_request: Mapping[str, Any] | None = None, bw_out: Path | None = None,
-        bw_private: Path | None = None, bw_case_exe: str | None = None) -> dict[str, Any]:
+        bw_private: Path | None = None, bw_case_exe: str | None = None,
+        case_exe: str | None = None) -> dict[str, Any]:
     """The piece (module docstring): its answer, written with ``pous.json`` to ``out``; `Refusal` when none can be made.
     ``schemes`` and ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's in
-    tests), ``rounds`` the session's challenges. With ``bw_party`` (the bandwidth party's command), PoUB-P2's session
+    tests), ``rounds`` the session's challenges, ``case_exe`` the run protocol's Lean (``pous-run-protocol``), whose
+    answer on the case is then the verdict. With ``bw_party`` (the bandwidth party's command), PoUB-P2's session
     over the held store once PoUS's has completed (`held_bandwidth.session`, under ``bw_request``, by default
     `held_bandwidth.request`'s), its public answer to ``bw_out`` (by default ``out``'s sibling ``bandwidth``) and its
     case to ``bw_private`` (by default ``SERVE_DIR/private/bandwidth``)."""
@@ -330,7 +343,8 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
     reg_sha = hashlib.sha512(reg_file.read_bytes()).hexdigest() if reg_file.is_file() else None
     bind = binding(repo, rev, window, reg_sha)
     summary: dict[str, Any] = {"window": window, "model": repo, "revision": rev, "node": node, "challenger": party.host,
-                               "binding": bind.hex(), "registration_sha512": reg_sha}
+                               "binding": bind.hex(), "registration_sha512": reg_sha,
+                               "decided_by": period.decided_by(None)}
 
     def done(answer: dict[str, Any], **more: Any) -> dict[str, Any]:
         (out / "answer.json").write_text(json.dumps(answer, indent=1, sort_keys=True) + "\n")
@@ -409,6 +423,16 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
             del inputs
             inner = SC.pous_answer(case, schemes=schemes, protocol=protocol)
             answer_s = round(time.monotonic() - t, 3)
+            decided, lean, agreed = period.decided_by(None), {}, True
+            if case_exe is not None:
+                t, rss = time.monotonic(), resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+                try:
+                    inner, decided = SC.judged(case, inner, case_exe), period.decided_by(case_exe)
+                except SC.Refused as e:
+                    agreed, inner = False, _no("undecided", str(e)[:1000], inner["commitment"], protocol)
+                peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+                # ru_maxrss is the largest of every child so far, in KiB: the Lean's only where it grew over this call
+                lean = {"lean_s": round(time.monotonic() - t, 3), "lean_peak_rss_kib": peak if peak > rss else None}
             row = bytes.fromhex(inner["commitment"])
             hidden = advice.commit([row], 8 * len(row), bind)
             opening = hidden.open(0)
@@ -421,7 +445,8 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                              "public_key": key.hex(), "host": rep.get("host"), "rounds_answered": rep.get("rounds"),
                              "warmups": rep.get("warmups"), "latency": _latencies(session, point.limit_ns)}},
                      s.digests)
-            SC.write(private, case, inner)
+            if agreed:
+                SC.write(private, case, inner)
             pous_case = {"commitment": case["commitment"]}
             del case
             bandwidth = None
@@ -446,7 +471,8 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                                                   "after its serve ended"},
                     "outside": outside, "window": window}
             return done(answer, session_s=session_s, answer_s=answer_s, key_sha512=key_sha,
-                        key_pinned=bool(trusted), private=str(private), public=inner["public"], bandwidth=bandwidth)
+                        key_pinned=bool(trusted), private=str(private), public=inner["public"], bandwidth=bandwidth,
+                        decided_by=decided, **lean)
         finally:
             comp.close()
     finally:
@@ -484,6 +510,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--challenger-address", default=CHALLENGER_ADDRESS, help="HOST:PORT the prover connects to")
     ap.add_argument("--challenger-command", help="the argv that starts the challenger's side, one shell-split line")
     ap.add_argument("--trusted-sha512", default=TRUSTED_SHA512, help="the SHA-512 of the challenger key the verifier trusts")
+    ap.add_argument("--case-exe", help="pous-run-protocol, whose answer on the case is the verdict and must agree with "
+                                       "period.answer (else period.answer alone)")
     bw = ap.add_argument_group("the bandwidth session over the held store (held_bandwidth.py)")
     bw.add_argument("--bw-party", default=BW_PARTY, help="the shell command that starts the bandwidth party (the gate's "
                                                          "bw_party verb), to which --minutes and --pous-session are added")
@@ -509,7 +537,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         answer = run(a.serve_dir, a.window, a.out, hf_home=a.hf_home, device=a.device, p2_lib=a.p2_lib, node=node,
                      party=party, trusted_sha512=a.trusted_sha512, private=a.private, rounds=a.rounds,
                      bw_party=bw_party, bw_host=a.bw_host, bw_request=bw_request, bw_out=a.bw_out,
-                     bw_private=a.bw_private, bw_case_exe=a.bw_case_exe)
+                     bw_private=a.bw_private, bw_case_exe=a.bw_case_exe, case_exe=a.case_exe)
     except Refusal as e:
         print(f"POUS: no answer: {e}", file=sys.stderr, flush=True)
         return 2
