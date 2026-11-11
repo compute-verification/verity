@@ -42,7 +42,8 @@ def _program(fields=(), reads=None, checked=False) -> ProgramView:
         lo += n
     if fields:
         params.append(InputView(-3, fmt.RUN_PARAM, "{...}", tuple(ports)))
-    calls, tok, checks = [], R(-2, "out"), []
+    calls: list[CallView] = []
+    tok, checks = R(-2, "out"), []
     for step in (0, 1):
         k0 = len(calls)
         calls += [_call(k0, "Embedding_v1{V=8,H=4}", f"{W}.embed/embedding[0]", [tok, R(-1, EMBED_W)]),

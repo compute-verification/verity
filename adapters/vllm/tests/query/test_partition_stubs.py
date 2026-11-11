@@ -178,6 +178,7 @@ def _count_of(spec, entries: tuple[NodeTiling, ...], bodies: dict[str, BodyTilin
         elif e.kind == "zip":
             zips[e.group] = max(zips.get(e.group, 0), n)
         elif e.kind == "descend":
+            assert e.child is not None
             total += sum(b - a for a, b in e.members) * bodies[e.child].count
     return total + sum(zips.values())
 
@@ -249,6 +250,7 @@ def materialise(program: Program, t: Tiling) -> list[StubGateSet]:
             elif e.kind == "zip":
                 groups.setdefault(e.group, []).append(j)
             elif e.kind == "descend":
+                assert e.child is not None
                 for a, b in e.members:
                     for m in range(a, b):
                         body(sc.child(j, m), t.bodies[e.child])

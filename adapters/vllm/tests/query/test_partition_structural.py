@@ -114,7 +114,7 @@ def test_unassigned_nested_node_is_gap(gemm):
 
 
 def test_double_assignment_is_overlap(gemm):
-    rules = [(0, ("whole",)), (1, ("whole",)), (2, members_k()), (2, ("whole",))]  # node 2 in two entries, full ranges both
+    rules: list | dict = [(0, ("whole",)), (1, ("whole",)), (2, members_k()), (2, ("whole",))]  # node 2 in two entries, full ranges both
     fast, sweep = both_paths(gemm, tiling(body_tiling(gemm.root, rules)))
     assert fast.status == sweep.status == "overlap"
     assert fast.codes == ("tiling-members-overlap",)

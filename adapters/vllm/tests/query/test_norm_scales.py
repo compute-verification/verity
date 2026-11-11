@@ -206,7 +206,7 @@ def test_manifest_verify_rebuilds_under_the_callers_policy(tmp_path, monkeypatch
     on = _manifest(P, norm_scales=True).manifest
     off = _manifest(P).manifest
     assert V.verify(on, on)["ok"] and not V.verify(on, off)["ok"] and not V.verify(off, on)["ok"]
-    seen = {}
+    seen: dict[str, dict] = {}
     monkeypatch.setattr(M, "build", lambda program, **kw: seen.setdefault("kw", kw) and on)
     MV.rebuild(program="p", norm_scales=True)
     assert seen["kw"]["norm_scales"] is True

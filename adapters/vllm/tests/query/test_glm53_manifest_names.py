@@ -42,7 +42,10 @@ class _Build:
     """A rank Program built Call by Call under v1 names (`<module>/<fx node>[/<hint>][row]`)."""
 
     def __init__(self, rank: int, fused=lambda step, norm: step > 0):
-        self.rank, self.calls, self.weights, self.peers, self.coll, self.fused = rank, [], [], [], 0, fused
+        self.rank, self.coll, self.fused = rank, 0, fused
+        self.calls: list[CallView] = []
+        self.weights: list[str] = []
+        self.peers: list[InputView] = []
 
     def w(self, path: str) -> R:
         if path not in self.weights:
@@ -120,6 +123,7 @@ class _Build:
             down = self.linear(f"{HELD}.down_proj", act, step, weight=f"{shared}.down_proj")
             # the routed experts' stand-in: the runner reads the router logits and adds the shared expert's output
             mlp_out = [R(self.call("ResidualAdd_v1", f"{pre}.mlp.experts/add[{i}]", [r, g]), "out") for i, (r, g) in enumerate(zip(down, logits))]
+        assert mlp_out is not None
         h, _ = self.norm_site("model", "model.norm", mlp_out, residual, step)
         shard = self.call("Gemm_v2", "logits_processor/linear[0]", [h[-1], self.w("lm_head.weight")])
         lm = self.call(f"AllGather_v1{{WORLD={WORLD},N={N}}}", "logits_processor/all_gather[0]/all_gather", self.parts([R(shard, "out")], N),
@@ -196,7 +200,7 @@ def test_each_norms_collective_is_spelt_under_the_norm_on_both_paths(manifests):
     decode (fused): `<norm>/0`, `/1` and `/part_rank<r>` from the one fused Call -- the names `allreduce_norm` binds on either path."""
     rank = 3
     m = manifests[rank]
-    by = {}
+    by: dict[tuple, dict] = {}
     for r in m["identities"]:
         if r["op_path"] in NORMS and r["family"] != "weights":
             by.setdefault((r["step"], r["op_path"]), {})[r["output_member"]] = (r["spec"], r["invocation"], r["element_range"])

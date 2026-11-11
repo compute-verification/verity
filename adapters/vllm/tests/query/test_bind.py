@@ -9,9 +9,9 @@ LIN, ATT = "model.layers.0.mlp.down_proj", "model.layers.0.self_attn"
 QUANT = {"x_q": Port(frozenset({"DeepGemmFp8Linear_v1"}), "0"), "x_s": Port(frozenset({"DeepGemmFp8Linear_v1"}), "1")}
 
 
-def row(op: str, member: str, *, step: int = 0, inv: int = 0, spec: str = "Gemm_v1{K=4}", port: str | None = None, cid: int = 0, **kw) -> dict:
+def row(op: str, member: str, *, step: int | list[int] = 0, inv: int = 0, spec: str = "Gemm_v1{K=4}", port: str | None = None, cid: int = 0, **kw) -> dict:
     return {"family": "instance_outputs", "request_id": "r0", "step": step, "invocation": inv, "rank": 0, "op_path": op,
-            "output_member": member, "spec": spec, "port": port or member, "position": [cid, 0 if port in (None, "out") else int(port)], **kw}
+            "output_member": member, "spec": spec, "port": port or member, "position": [cid, 0 if port is None or port == "out" else int(port)], **kw}
 
 
 def deepgemm(op: str = LIN, inv: int = 0, cid: int = 0) -> list[dict]:

@@ -77,7 +77,8 @@ def _served(P0: ProgramView, doc: dict) -> tuple[ProgramView, dict]:
     w_uv = [c.id for c in P0.calls if c.family == "BatchedGemm_v1" and any(r.call in sparse for r in c.reads)]
     step_nodes = len(MODULE)
     second = next(c.id for c in P0.calls if corr0.name(c.id).node == f"dsa_norm_rope_{step_nodes}")
-    calls, records, new_id, last = [], [], {}, None
+    calls: list[CallView] = []
+    records, new_id, last = [], {}, None
 
     def add(definition: str, name: str, module: str, reads: tuple, elems: int, width: int) -> int:
         cid = len(calls)
@@ -155,8 +156,14 @@ def test_the_manifest_build_word_check_flags_no_indexer_call(glm, tmp_path, monk
     (tmp_path / "result.json").write_text(json.dumps(RES))
     monkeypatch.setattr(M, "from_instances", lambda _path: P)
     monkeypatch.setattr(M.Correspondence, "of", classmethod(lambda cls, *_a, **_k: corr))
-    checks, word_check = [], M.word_check
-    monkeypatch.setattr(M, "word_check", lambda *a, **k: checks.append(word_check(*a, **{**k, "strict": False})) or checks[-1])
+    checks: list[dict] = []
+    word_check = M.word_check
+
+    def lax_word_check(*a, **k):
+        checks.append(word_check(*a, **{**k, "strict": False}))
+        return checks[-1]
+
+    monkeypatch.setattr(M, "word_check", lax_word_check)
     man = M.build(str(tmp_path), request_id="r0", word="16/32")
     (wc,) = checks
     assert wc["calls"] and man["complete"] is True

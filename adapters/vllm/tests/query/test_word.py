@@ -551,7 +551,8 @@ def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp
     with gzip.open(d / "instances.json.gz", "rt") as f:
         hist = Counter(r["spec"] for r in json.load(f)["rows"])
     (d / "result.json").write_text(json.dumps(dict(json.loads((d / "result.json").read_text()), spec_histogram=dict(hist))))
-    fx = {"fixture": "t", "requests": [{"request_id": q, "prompt_len": LP, "max_tokens": T + 1, "arrive_step": 0} for q in "abc"]}
+    requests = [{"request_id": q, "prompt_len": LP, "max_tokens": T + 1, "arrive_step": 0} for q in "abc"]
+    fx = {"fixture": "t", "requests": requests}
     (tmp_path / "wl.json").write_text(json.dumps(fx))
 
     def build_global(jobs: int, out: str, *extra: str, stdin: str | None = None) -> subprocess.CompletedProcess:
@@ -568,7 +569,7 @@ def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp
     p = build_global(3, "none.json", "--workload-digest", "-", stdin="")
     assert p.returncode != 0 and "no workload digest on stdin" in p.stderr and not (tmp_path / "none.json").exists(), p.stderr[-2000:]
     shutil.copytree(d, tmp_path / "row" / f"build_request_LP{LP}_T{T - 1}")    # a wrong component for r1
-    fx["requests"][1]["max_tokens"] = T
+    requests[1]["max_tokens"] = T
     (tmp_path / "wl.json").write_text(json.dumps(fx))
     p = build_global(3, "bad.json")
     assert p.returncode != 0 and f"request r1: Program has {T + 1} steps" in p.stderr, p.stderr[-2000:]

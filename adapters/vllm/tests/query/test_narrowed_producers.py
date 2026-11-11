@@ -159,8 +159,12 @@ class _Committer:
     """A committer's hook as the source sees it: the module's returned tensor first, then what the sources acquire."""
 
     def __init__(self, model: torch.nn.Module) -> None:
-        self.model, self.name, self.errors, self.sources, self.acquired = model, "rec", [], [], []
-        self._cur, self._plan_shape = None, None
+        self.model, self.name = model, "rec"
+        self.errors: list[str] = []
+        self.sources: list[object] = []
+        self.acquired: list[tuple[str, torch.Tensor]] = []
+        self._cur: SimpleNamespace | None = None
+        self._plan_shape: tuple[int, int] | None = None
 
     def attach_source(self, src: object) -> None:
         self.sources.append(src)

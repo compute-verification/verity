@@ -204,7 +204,7 @@ def test_program_dirs_for_passes_over_a_result_it_cannot_read(tmp_path):
 def test_load_program_reads_the_dirs_result_and_its_artifact_when_there_is_one(tmp_path):
     """`load_program` returns the Program dir's result.json and artifact.json as the files hold them, and None for an artifact
     the dir does not have."""
-    head = {"schema": "cb-a/instance-sequence/v2", "digest": "d" * 64, "correspondence_digest": None, "params": []}
+    head: dict[str, object] = {"schema": "cb-a/instance-sequence/v2", "digest": "d" * 64, "correspondence_digest": None, "params": []}
     write_instances_file(str(tmp_path / "instances.json.gz"), head, iter([]))
     (tmp_path / "result.json").write_text(json.dumps({"ok": True, "LP": 3}))
     got = MF.load_program(str(tmp_path))

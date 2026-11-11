@@ -19,7 +19,8 @@ from verity_vllm.correspondence.reader_for_acquire import (
 
 def _record(modules_of_calls: list[str], *, prefix: str = "model.") -> dict:
     """A `runtime-correspondence/v1` document: Call k lowered from an occurrence whose owning module (Program vocabulary = prefix + collector path)."""
-    occs, calls, seen = [], [], {}
+    occs: list[dict] = []
+    calls, seen = [], {}
     for k, m in enumerate(modules_of_calls):
         pm = (prefix + m) if m else ""
         if pm not in seen:

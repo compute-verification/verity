@@ -31,7 +31,8 @@ def result_json() -> dict:
 def _record(P) -> dict:
     """The record the frontend would have emitted for `program()`: one occurrence per (module, node), Call k -> its occurrence; the
     frontend's naming suffix kept as `member` / `row` where its parser reads it, RAW as `hint` where it does not (`.../<fx>/<member>[row]`)."""
-    occs, calls, seen = [], [], {}
+    occs: list[dict] = []
+    calls, seen = [], {}
     for c in P.calls:
         n = parse_call_name(c.name)
         key = (n.module, n.node)
@@ -158,7 +159,8 @@ def tp_attention_program() -> ProgramView:
 def _tp_record(P: ProgramView, rank: int) -> dict:
     """The record the frontend emits for `tp_attention_program()`: a collective's occurrence carries `collective`, its Call the kind as
     `member`, and a site's owning module is the module whose forward called it (`self_attn`), not the fallback's site path."""
-    occs, calls = [], []
+    occs: list[dict] = []
+    calls = []
     for c in P.calls:
         n = parse_call_name(c.name)
         kind = n.suffix or None
