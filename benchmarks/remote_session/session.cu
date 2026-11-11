@@ -248,6 +248,7 @@ __device__ __forceinline__ void sk16_prologue(u32 *sg, const u32 *__restrict__ p
 // sketch64_receipts_kernel does, a block's row r at r ^ 8 (block & 3), and each lane hashes one. A receipt CTA's
 // signs and staging are 96 KiB (SK64R_SMEM), dynamic shared memory its launcher asks the device for (`shared64`).
 constexpr int SK64_PACK = 4 * SK64_SIGNS;   // the packed signs' words
+static_assert(SK64_PACK == SK16_PACK * (SK64_ROWS / 16), "64 rows pack four words a lane where 16 pack one");
 
 // sk16_tile_of at 64 rows: S the warp's staging (32 · SK64_ROWS int32) and sg the packed signs, in shared memory or,
 // for a consumer's own tile, where the pass keeps them.
@@ -653,12 +654,12 @@ __device__ __noinline__ void help64_tile(const uint4 *__restrict__ data, u64 n, 
 // pk). So no wait depends on a CTA that isn't resident, whatever the stream priorities, the order the grids are placed
 // in or what a co-tenant holds, and a pass whose receipt grid never gets an SM still completes.
 //
-// R is the pass's rows: its own tiles are help_tile's at 16 and help64_tile's at 64, staged 32 · R int32 a warp.
+// KS is the pass's rows: its own tiles are help_tile's at 16 and help64_tile's at 64, staged 32 · KS int32 a warp.
 constexpr int CONSUMER_THREADS = 128;
 constexpr size_t CONSUMER_STAGING = (size_t)CONSUMER_THREADS / 32 * 32 * SK_ROWS * sizeof(int);
 constexpr size_t CONSUMER_STAGING64 = (size_t)CONSUMER_THREADS / 32 * 32 * SK64_ROWS * sizeof(int);
 
-template <int R>
+template <int KS>
 __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const uint4 *__restrict__ data, u64 n,
                                                                          u64 base_leaf, const u32 *__restrict__ pk,
                                                                          u64 *ys, unsigned *ctr, u64 *__restrict__ kept,
@@ -694,8 +695,8 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const u
         __nanosleep(256);
         continue;
       }
-      int *S = reinterpret_cast<int *>(scratch) + warp * 32 * R;
-      if constexpr (R == SK_ROWS) help_tile(data, n, base, pk, S, ys, ctr, tiles_per, lane);
+      int *S = reinterpret_cast<int *>(scratch) + warp * 32 * KS;
+      if constexpr (KS == SK_ROWS) help_tile(data, n, base, pk, S, ys, ctr, tiles_per, lane);
       else help64_tile(data, n, base, reinterpret_cast<const uint4 *>(pk), S, ys, ctr, tiles_per, lane);
     }
     __threadfence();
@@ -849,8 +850,8 @@ __device__ __forceinline__ void mapped_leaf(const u64 *__restrict__ Y, u64 c, u6
 // the next 2^h0-leaf subtree, the padding's first (they wait on nothing), waits as pass_consumer_kernel does until the
 // group holding it is counted, hashes its leaves (`mapped_leaf`) and its levels below h0 in shared memory and keeps
 // its root; then one thread climbs, hashing each node whose other child is done, up to the root. kept is level h at
-// the sum of 2^(H − g) over h0 <= g < h, the root last. R is the pass's rows, as pass_consumer_kernel's.
-template <int R>
+// the sum of 2^(H − g) over h0 <= g < h, the root last. KS is the pass's rows, as pass_consumer_kernel's.
+template <int KS>
 __global__ void __launch_bounds__(CONSUMER_THREADS) mapped_consumer_kernel(const u64 *__restrict__ addrs,
                                                                            const u64 *__restrict__ js, u64 n,
                                                                            const u32 *__restrict__ pk, u64 *ys,
@@ -885,8 +886,8 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) mapped_consumer_kernel(const
           __nanosleep(256);
           continue;
         }
-        int *S = reinterpret_cast<int *>(scratch) + warp * 32 * R;
-        if constexpr (R == SK_ROWS) mapped_help_tile(addrs, js, n, pk, S, ys, ctr, lane);
+        int *S = reinterpret_cast<int *>(scratch) + warp * 32 * KS;
+        if constexpr (KS == SK_ROWS) mapped_help_tile(addrs, js, n, pk, S, ys, ctr, lane);
         else mapped_help64_tile(addrs, js, n, reinterpret_cast<const uint4 *>(pk), S, ys, ctr, lane);
       }
     }

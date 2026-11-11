@@ -97,7 +97,7 @@ wait $K || { tail -n 40 "$O/kv.ptxas"; say "BUILD: kv.cu does not compile for sm
 sha256sum "$B"/*.so > "$O/libs.sha256"
 if [ -n "$M" ] && wait "$M"; then
   say "build: sm_$ARCH; against ${BASE_REV:-the sent file}:" \
-    "$(python3 $RS/same_sass.py "$B/base.so" "$B/session.so" --out "$O/same_sass.json" 2>&1)"
+    "$(python3 $RS/same_sass.py "$B/base.so" "$B/session.so" --out "$O/same_sass.json" --listings "$O/sass" 2>&1)"
 else
   say "build: sm_$ARCH; no base build to compare the kernels with (BASE_REV, or inputs/main-session.cu)"
 fi
