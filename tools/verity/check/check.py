@@ -2406,7 +2406,7 @@ STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key
 
 def agreement_closure(files: list[str]) -> list[str]:
     """The tracked files the agreement job can read: verity/protocols/flock/agreement/, less any Lake package nested in its Lean package
-    (Flock's proofs are under `Security/Proofs/`), which `flock-verify` is not built from as long as the Lean package
+    (Flock's proofs are under `security/Proofs/`), which `flock-verify` is not built from as long as the Lean package
     requires nothing (a `require` in its lakefile keeps them all in), and less that package's `lean-audit.json`, which only
     `tools/verity/lean/check.py` reads (a test fails if the agreement's scripts or the package's lakefile mention it)."""
     pre, lean = "verity/protocols/flock/agreement/", "verity/protocols/flock/verifier/"
