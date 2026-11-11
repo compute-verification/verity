@@ -65,12 +65,17 @@ def membersMain (args : List String) : IO UInt32 := do
     return if r.toBool then 0 else 1
   | _ => main args
 
-#guard (Member.parsed { name := "t/c0", units := #[(2, 5)], g := 4,
-    own := { programJ := .null, program := .empty, partition := .null, circuit := "c", pub := "p",
-             registered := none } }).compress ==
+private def own0 : Own :=
+  { programJ := .null, program := .empty, partition := .null, circuit := "c", pub := "p", registered := none }
+
+private def own1 : Own := { own0 with registered := some .null }
+
+#guard (Member.parsed { name := "t/c0", units := #[(2, 5)], g := 4, own := own0 }).compress ==
   "{\"circuit\":\"c\",\"name\":\"t/c0\",\"public\":\"p\",\"registered\":false,\"units\":[[2,5]],\"vus_per_block\":4}"
-#guard (StatementFiles.parsed { member := some "t/c0",
-    sessions := #[{ name := "s", record := "r", reps := #[] }] }).compress ==
+#guard (Member.parsed { name := "t", units := #[(0, 1), (3, 4)], g := 1, own := own1 }).compress ==
+  "{\"circuit\":\"c\",\"name\":\"t\",\"public\":\"p\",\"registered\":true,\"units\":[[0,1],[3,4]],\"vus_per_block\":1}"
+#guard (StatementFiles.parsed
+    { member := some "t/c0", sessions := #[{ name := "s", record := "r", reps := #[] }] }).compress ==
   "{\"member\":\"t/c0\",\"sessions\":[\"s\"]}"
 
 private def parsedWhy (r : V Json) : String :=
