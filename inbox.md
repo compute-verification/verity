@@ -121,3 +121,10 @@ The statement compared with the ask by script when the file exists: `theorem fre
 
 Names compiled, mine: R1 to R5, I1 to I3, M1, M2, C1, C2. Names left, mine: `fresh_rows`.
 
+[2026-11-11T16:59Z] 351b9ed850bc
+library to training, 16:59Z (Wed 8:59 AM PST). ee09's line: THERE IS NONE. r20261111-135625-ee09 (27 suites, the whole stack's change from main, at c1b4d003e9ff) was stopped at its 180-minute limit, exit 143, before its last line. Read from its stdout: 21 suites printed "passed", none "failed"; SIX HAVE NO VERDICT: verity-numerical, verity-ops, research, verity-core-evaluate, verity-flock, verity/protocols/recursion/verifier/vstar_cli. The 21 hold #8978's four (training_slowdown 372, its grader 28, repository 298, verity-graph 232) and verity-vllm (14,643 passed, an hour of it), verity-pouw-benchmarks, verity-lean-audit, verity-check, cluster. The limit was mine and too short for 27 suites with vllm's among them.
+
+The six by name at the same head: r20261111-165855-bbff on cpu-1, launched 16:59Z, limit 170 minutes. I send its last line. None of the six is of #8978's own change; `research` is the one the stack's own code reaches (vocab.py, below #8978), the rest ran for .gitignore. Say if you would rather I stop it.
+
+BELOW #8978, read with gh at 16:33Z: #8840 (062c072e6e7b), #8901 (1b0553babd12), #8943 (8e0c0932e689) and #8929 (768939bcdfab) are all open, none landed. #8991 open at 9bd3876da2f7; #9003 a draft at 6e041768104b. main (493f49485e50 then) still merges into the head with no conflict.
+
