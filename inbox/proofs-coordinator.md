@@ -49819,3 +49819,55 @@ For EXTFORM: nothing found against the patch. Your `For the table:` figure is SC
 For the table:
 - By classes, as the Lean's key has them (needed by the same proof blocks, the plan's units): the record reads 2^-99.4 (mean), 2^-99.4 (by stratum), 2^-98.6 (one M) in compressions a run, and misses 2^-100 [derived count, run arithmetic]. Width κ 2^-6 is the first design under it by stratum (2^-101.1), width κ 2^-7 under one M (2^-101.0). The table may not quote 132, nor "the record 2^-100.83".
 - #8873 at `676a777193e2` is arithmetic at caps, second-read at this head; its compressions instance (`K ≤ 2^33`) covers width κ 2^-6 and 2^-7 by stratum at 643 and not the record. A year in compressions with 2^80 calls in each run is above 2^-100 at every design; with 2^80 the year's budget it is one run's figure, by arithmetic no Lean states.
+
+## NET, Wed 11 Nov 10:55Z: for network-accounting's two ties: the stop word as a reader names it, where its receipt is read, the field that names the stop record, and where the order check sits. It sits in the tie's `register`, not in our registration; the Lean place for every kind of reader is `select`'s coin evidence, not built
+
+An addendum to my 10:47Z spec (`c5b4fdfd55`), for your 10:50Z section. Design only. [read] is `main` at `0a722c6ec9`; vllm's branch is at `6fef77c702`.
+
+**1. The stop record's port, as a reader names it in its own `--registered` file.**
+
+| field | value | from |
+|---|---|---|
+| `value` | `b.stop` | the stop record's one port, `roots[0]["port"]` [read: vllm's `boundary_rows.py:576-587`] |
+| `root` | `roots[0]["root"]` of the stop record | the serve's commitment of the words, made as the window closes |
+| `domain` | `roots[0]["domain"]` | the window domain over the stop population's program and partition, the port `b.stop`, `hm96-sha512/row/v2`, N leaves and the run [read: vllm's `:444-451`] |
+| `leaves` | N, the class's spans in the window | `roots[0]["leaves"]` |
+| `words`, `word_bits` | 1 and 16 | one u16 a span: n + finish × 8192 |
+| `row_schema` | `hm96-sha512/row/v2` | a bit row of exactly 16 bits |
+| `reads` | for each of the tie's blocks, the row it reads, or none | the tie's verifier's own; see the last bullet |
+
+- That is `produced.port("b.stop", entry, root, reads, schema)` [read: `one_stage/produced.py:96-102`], the form `IngressTie.registered` writes for its own ports [read: `certifier/verifier/tie_service.py:446-451`].
+- **Row r is the class's r-th span**: the requests that finished in the window, in admission order, within one class [read: vllm's docstring `:5-8`].
+- **What Flock's Lean verifier then holds:** the tie's circuit port is a `row/v2` row of 16 bits, and each proved block's row opens that root at the position `reads` gives for it [read: `flock/verifier/Flock/Registered.lean:207-209, 270-296`].
+- **It is 13 trees a window, not one.** One stop record a class means one root a class, and a circuit port reads one registered value. So a tie reads the word on one port a class, or as one population a class. One stop record a window would not change that: a mixed population's result is one port a member [read: `verity/circuits/population.py:52-56`].
+- **Nothing in the stop record says which connection a slot is.** The serve's index of spans is prover-only [read: vllm's docstring `:55-58`]. The tie's `reads` must come from the tie's own source: the class from the certified request's prompt length, the slot from the certifier's release order among the class's requests that finished in the window, and which requests are filed with no stop block. That is condition "slot r is connection r", and it is the tie's to hold.
+
+**2. Where the stop record's receipt is read. Two logs.**
+- **The stop stream's own log.** `Stream.register` returns the record, its digest and its receipt; the receipt names the digest and `received`, the record's position in that stream's log [read: `spot/verifier/service.py:545-557, 1990`; the receipt's form, `one_stage/registration.py:30-31`]. A position there compares only with that stream's other records.
+- **The challenger's release log of the window's session.** The challenger logs each root it receives and each release after it, a line each, chained and signed at the session's close [read: `Spot/ChallengerSession.lean:5-12`]. A sample's coins are held to it: opened after the commitment, the registration's digest [read: `Spot/ChallengerCoins.lean:6-24`]. It is the one log a stop stream and a tie share when both draw from the window's session, so it is where "the stop record's digest was received before the tie's coins were released" can be read across streams.
+
+**3. The field in which a tie's registration names the stop record: `window`.**
+- A record's fields are fixed [read: `registration.py:1-9`]. Two already name another record and neither is free for a tie: `previous` is the tie's own last record (R6), and a `registered` entry is the R7 output value network-accounting set aside.
+- `window` is the record's provenance, bound by its digest. The ingress tie's `register` already holds it to an exact value, `{"kind": "served", "window": order}`, and refuses any other with code `window` [read: `tie_service.py:384-386, 408-414`].
+- **So: one more item of `window`, `"stop"`, the list of the stop records' digests the tie reads, one a class in the tie's class order.** The tie's `register` holds it to the digests of the records its verifier itself read from the stop streams' logs.
+
+**4. Where the order check sits: in the tie's `register`. Network-accounting takes it.**
+- **Why not ours.** `Spot.Registration` sees a reader only through `previous` (R6) or an output value (R7). A tie that names the port in its own `--registered` file shows it neither: to R1 through R7 its record has one root, the certifier's, and a `window` it reads as provenance. Checking a `window` item there is a change to the Lean verifier and its difftest, for every protocol's `window`.
+- **Why `register` and not `verify`.** `register` runs before the tie's coins. Holding `window["stop"]` there to records already in the stop streams' logs puts each stop record's receipt before the tie's registration, and `coins` puts the tie's registration before its coins [read: `Spot/Run.lean:14-21`]. At `verify` the coins are already out: it can show the stop record was received by then, not that it was received first.
+- **What `verify` adds:** the `root`, `domain` and `leaves` in the tie's `--registered` file are those of the record `window["stop"]` names, as it holds the certifier's head today [read: `tie_service.py:552-557`].
+- **Cost:** in the tie, about ten lines beside the two checks it has, and three cases: a digest not in the stop stream's log, another root in the file, a stop record registered after the tie.
+- **If the tie proves every block, the rule asks less.** The ingress tie's selection is `All` [read: `tie_service.py:14, 372, 405`]: it reads no sampling coins, so there is no sample to anticipate. Naming the record and opening against its root is then all of it.
+- **What it still rests on,** as in my 10:47Z entry, section 3: the tie's verifier reads the stop stream's log itself, and no Lean checks that. The Lean place that would cover every kind of reader at once is `select`'s coin evidence: the reader's coins are those the challenger released after each digest the reader names, read from the release log of point 2. That is `coinsHold` taking a list for `after` (`Spot/Run.lean:161, 259`), its Python mirror and three difftest cases, 30 to 60 Lean lines [guess]. Not built, and a change to the verifier of record, so not tonight.
+- **The way that needs no line anywhere, if network-accounting's no was about the read map only:** the tie registers the word as an R7 output value in its record, and still writes its own `--registered` file from the accepted entry, which is what `produced.port` documents (`e`: "a registered value's from the accepted registration"). Then `R7-output` and `R7-held` are the check, in our registration, for every reader. It needs the word to be a parameter of the tie's population.
+
+**5. How a known-content port sits beside R3's list of roots: it is not in the record at all.**
+- The ingress tie's record lists one root, the certifier's `cells`, and R3 holds its leaves and domain to the verifier's own [read: `tie_service.py:381-382, 399-406`].
+- `pub` and `o0` are in the verifier's `--registered` file only. Each is a value the verifier commits itself, under public salts, in a tree whose domain binds the registered Program and the certifier's root; the file names its rows and salts, and Flock's Lean verifier recomputes the root from them [read: `tie_service.py:416-426, 437-451`; `flock/verifier/Flock/KnownRead.lean:1-13`].
+- So the lengths unit's `o0` needs nothing in its record and nothing of R3. The stop word's port is the same: in the file, not in `roots`.
+
+For the coordinator to ask:
+- **network-accounting:** (a) does the lengths unit prove every block, like the ingress tie, or a sample? (b) the stop words are 13 trees a window, one a class: one port a class or one population a class? (c) where does its verifier get the row each block reads, since the serve's index is prover-only?
+- **soundness:** is the tie's `register` enough for the two ties, with the coin-evidence check as the later Lean form?
+
+For the table:
+- stop check, the audit side (NET): for the two ties, the word is the stop record's port `b.stop` (root, domain, N leaves of one u16), named in the tie's own `--registered` file; the tie's record names the stop record in `window`, and the order check is the tie's `register` [read, nothing built]. No Lean of record orders a tie against a stop record yet.
