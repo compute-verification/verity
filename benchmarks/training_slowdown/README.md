@@ -20,7 +20,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
 | `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions |
 | `annotate.py` | a record's maximal annotation: per step U and D_t, the depth profile and the cut; `with_structures`, its traced steps' measured quantities |
-| `capture/` | one training step traced on fake tensors (`capture_step` traces any PyTorch step, `capture_fn` a function, `capture_run` a run of them): |C|, the update's dependence and the cuts (`capture.circuit`), the step's matrix products as rows (`capture.products`) and its lowering to the training-step frontend (`capture.lower`) |
+| `capture/` | one training step traced on fake tensors (`capture_step` traces any PyTorch step, `capture_fn` a function, `capture_steps` a step among the steps before and after it, with its step circuit, `capture_run` a run of them): |C|, the update's dependence and the cuts (`capture.circuit`), the step's matrix products as rows (`capture.products`) and its lowering to the training-step frontend (`capture.lower`) |
 | `formalism.py` | a record's quantities (`of_record`, `measure`), Fit and Slowdown at (c, k) (`at`), the one bound and its sensitivities (`bound`), the products term (`he_products`, `he_figure`) and the published ρ with what it rests on (`published`) |
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
 | `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
@@ -74,7 +74,12 @@ no score goes back in. The sandbox hides the paths the registry names and nothin
 After its last step a job traces its route's step once, outside the count, and its record's `trace` holds what the
 capture measures of it for the grade: the token axes, the forward's updated MAC nodes, and the product rows unpriced
 at each k of the console's dial (`capture.products.raw_on_dial`), which `capture.products.priced` prices where they
-are read. A step the capture refuses is recorded as refused, and the job stays valid.
+are read. The capture takes the run's last three steps in one graph and measures the middle one (`capture_steps`),
+so the measured step reads what the step before it wrote and the step after it reads what it makes. That gives the
+step a circuit, which the trace keeps as the capture measures it (`circuit`: the gradient's cut and a token group's
+partial, the carried state, τ, a, the update's profile, and the shares of its gates in token ops and in ops an update
+reaches, at the gate prices of the code that took it), with that code's version (`capture_code`). A step the capture
+refuses is recorded as refused, and the job stays valid.
 
 A job's output holds no weights by default: its record, and its last checkpoint's E when E is under 50 MiB. The
 command's `--weights` makes each job it runs keep its last checkpoint's whole state too.
@@ -100,6 +105,9 @@ reads no file of a served run. It prints one block and writes `OUT/slowdown.json
 - **p**, the attack's |C| over H, against the honest route and against any route, each with its range over the seeds;
 - **ρ**, the attack's own cost at the config's policy: `formalism.published` at (c, k) on the search record, read
   with its `trace`, whose raw product rows the grade prices with `capture.products.priced` (it holds no price);
+- **the sensitivities** beside ρ and never in it, reduction and update, from the trace's `circuit`, and the version
+  of the code that took the trace. A record whose trace has no `circuit` or no `capture_code` grades all the same,
+  and the block says which of these figures are blank, why, and how the trace is taken again;
 - **S = p·ρ**, with what each factor rests on, and each seed beside it: whether it reaches the gain, and its |C|;
 - **the bound of record** at the same policy, what every partition of the attack's traced circuit must pay, beside S
   (what this attack pays) and never mixed into it; "not available", with what is missing, where the search record
@@ -124,9 +132,10 @@ takes it with the capture of the tree it runs in), or says the record has no con
   replay refused.
 - The measured quantities are one traced step's: a record's updated steps take its representative step's structure,
   scaled to their tokens. A cut counts a value at its dtype's width, and values are whole tensors.
-- A job's trace holds the traced step's products and read-backs, and no cut of its gradient. So the grade's ρ is
-  never Fit's, whose check on the training then holds at no (c, k): it is the products term where that exceeds 1,
-  else 1. The reduction and update sensitivities beside ρ have no figure.
+- A job traces one step, one that reads an update. The steps before the run's first update read θ alone and are not
+  traced, so they have no Δ_grad and Fit's check on the training holds at no (c, k): the grade's ρ is never Fit's.
+  It is the products term where that exceeds 1, else 1. The reduction and update sensitivities sum the steps that
+  have the traced step's cuts, and the block says so where an untraced step's token work fills two blocks or more.
 - Bit-for-bit rebuilds need the run's kernels: families are checked on the run's device, right after it trains.
 
 The suite: `uv run tools/verity/check/suites.py benchmarks/training_slowdown`.

@@ -1,6 +1,7 @@
 """training_slowdown.grade on synthetic records and on a job's own: the fit, the seeds, H and p both ways, ρ from the
-search record's trace at a named policy, S and what it refuses, the bound of record beside it, the periods, and the
-command."""
+search record's trace at a named policy, the sensitivities and the code version from the trace's circuit and what is
+blank without them, S and what it refuses, the bound of record beside it, the periods, and the command."""
+import copy
 import json
 import math
 from pathlib import Path
@@ -9,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 import synthetic
 
-from training_slowdown import calculator, gates, policy
+from training_slowdown import VERSION, calculator, gates, policy
 from training_slowdown import formalism as F
 from training_slowdown import grade as G
 from training_slowdown.capture import products
@@ -93,6 +94,25 @@ def traced(losses: list, seed: int = 0, **over) -> dict:
     for cp in rec["checkpoints"]:
         cp["e_bytes"] = 10**8
     return {"seed": seed, "split": "search", "record": rec | {"trace": trace(**over)}}
+
+
+#: a traced step's circuit as the capture measures one (`capture.circuit.measure`), the keys the grade reads; a token
+#: reads one id, so τ is its stub's and ρ counts the same steps with the circuit as without
+CIRCUIT = {"sigma": 0.9, "affected_share": 0.5, "token_factor": 2.0, "grad_cut_bits": 3_000_000,
+           "partial_cut_bits": 2_000_000, "delta_grad_bits": 4_000_000, "tau_ids": 1.0, "tau_other_bits": 0.0,
+           "a_bits": 512.0, "u_in": [[0.0, 0.0], [1.0, 3e6]], "u1_bits": 3e6, "tail_share": 0.25}
+#: the work `heavy` gives each step, over `traced`'s: a step's token work then fills several of the console's blocks
+HEAVY = 4
+
+
+def heavy(search: dict) -> dict:
+    """`search` (a `traced` job) with `HEAVY` times the work in every step."""
+    rec = copy.deepcopy(search["record"])
+    for row in rec["structures"]["a"]["log"]:
+        row[4], row[5] = row[4] * HEAVY, row[5] * HEAVY
+    for s in rec["steps"]:
+        s["by"] = {k: v * HEAVY for k, v in s["by"].items()}
+    return search | {"record": rec}
 
 
 def graded(runs, honest, config=CONFIG, **kw) -> dict:
@@ -276,6 +296,74 @@ def test_the_trace_is_priced_by_the_capture_over_the_steps_after_the_first_updat
     assert "stand_in" not in G.traced(whole, G.rows_of(whole)[0])["formalism"]["products"]
 
 
+def test_the_traces_circuit_gives_the_parts_their_structure_and_both_sensitivities():
+    """A record whose trace has its circuit and its code version. The steps after the first update are one part with
+    the traced step's structure: its σ and affected share of their gates, its token factor of their tokens, its
+    Δ_grad and its cuts; the step before it reads θ alone and is a part with none. The sensitivities are the bound's
+    over the part that has the cuts, n its steps and b the blocks a step's token work fills: reduction
+    c·n·(b − 1)·partial/(k·|C|) and update c·n·grad/(k·|C|), and the bound says each leaves out the first step,
+    whose token work splits too. τ, a and the update's profile are the circuit's, and the code version is stated."""
+    search = heavy(traced([OVER, UNDER], circuit=CIRCUIT, capture_code="9.9"))
+    rec = search["record"]
+    row = G.traced(rec, G.rows_of(rec)[1])["formalism"]
+    n, g = 2 * PER - 1, G.counted(G.rows_of(rec)[1]) / (2 * PER)
+    assert row["parts"] == [
+        {"gates": pytest.approx(g), "tokens": 512, "token_gates": pytest.approx(g), "affected_gates": 0, "steps": 1,
+         "delta_grad_bits": None, "partial_bits": None, "grad_bits": None},
+        {"gates": pytest.approx(n * g), "tokens": n * 512 * 2.0, "token_gates": pytest.approx(0.9 * n * g),
+         "affected_gates": pytest.approx(0.5 * n * g), "steps": n, "delta_grad_bits": 4_000_000,
+         "partial_bits": 2_000_000, "grad_bits": 3_000_000}]
+    assert (row["tau_ids"], row["tau_other_bits"], row["a_bits"], row["u1_bits"], row["tail_share"]) == (1, 0, 512, 3e6, 0.25)
+    assert row["u_in"] == CIRCUIT["u_in"] and row["u"][-1] == [1.0, 3e6]
+    assert row["trace"]["affected_share"] == 0.5 and row["trace"]["products"]["capture_code"] == "9.9"
+    assert {k: row["trace"][k] for k in CIRCUIT} == CIRCUIT and row["labels"]["delta_grad_bits"] == F.TRACED["delta_grad_bits"]
+    s = graded([job([OVER, UNDER], 0), search], [job([UNDER])])
+    c, k, total = s["policy"]["c_gates"], s["policy"]["k_bits"], 2 * PER * g
+    b = math.ceil(0.9 * g / c)
+    assert b >= 2 and math.ceil(g / c) >= 2
+    assert s["rho"]["sensitivities"] == pytest.approx({"reduction": c * n * (b - 1) * 2e6 / (k * total),
+                                                        "update": c * n * 3e6 / (k * total)})
+    assert s["rho"]["blank"] == {} and s["rho"]["capture_code"] == s["rests_on"]["capture_code"] == "9.9"
+    assert set(s["rho"]["unmeasured"]) == {"reduction", "update"} and all(
+        why.endswith("the term sums the parts that have it") for why in s["rho"]["unmeasured"].values())
+    red, upd = s["rho"]["sensitivities"].values()
+    text = G.text(s)
+    assert f"reduction {red:,.6g}, update {upd:,.6g}, beside rho and never in it" in text
+    assert f"reduction: {s['rho']['unmeasured']['reduction']}" in text and ", its code 9.9" in text
+    assert "blank" not in text
+
+
+def test_a_trace_without_its_circuit_or_code_version_still_grades_and_says_what_is_blank():
+    """A record whose trace has only what ρ reads grades at the ρ and S of the same record with its circuit. The
+    figures that read what it lacks are blank, each with why and with how the trace is taken again: both
+    sensitivities without the circuit, the code version without its own. One that lacks only one has only that
+    blank."""
+    ref, final = [job([UNDER])], job([OVER, UNDER], 0)
+    full = graded([final, heavy(traced([OVER, UNDER], circuit=CIRCUIT, capture_code="9.9"))], ref)
+    here = {"config": {"text": 'start = "s"\n'}, "commit": "c0ffee"}
+    bare = heavy(traced([OVER, UNDER]))
+    bare["record"] |= here
+    s = graded([final, bare], ref)
+    assert s["rho"]["rho"] == full["rho"]["rho"] > 1 and s["S"] == full["S"] and s["S"]["any"] is not None
+    assert s["rho"]["sensitivities"] == {"reduction": None, "update": None} and s["rests_on"]["capture_code"] is None
+    again = (f"re-trace it at the record's commit c0ffee and config.text with a CPU job, `{G.RETRACE}`, RUN_JSON the "
+             f"record: the tree the job runs in takes the trace with its own capture, and refuses a config it reads "
+             f"as another program than the record's")
+    no_circuit = (f"the search record's trace has no circuit, the measured step's cut of its gradient and its "
+                  f"structure, which the reduction and update sensitivities read; {again}")
+    no_code = f"the search record's trace has no capture_code, the version of the code that took the trace; {again}"
+    assert s["rho"]["blank"] == {"reduction": no_circuit, "update": no_circuit, "capture_code": no_code}
+    text = G.text(s)
+    assert "reduction blank, update blank, beside rho and never in it" in text
+    assert f"reduction: blank: {no_circuit}" in text and f"update: blank: {no_circuit}" in text
+    assert f", its code blank: {no_code}" in text
+    coded = graded([final, heavy(traced([OVER, UNDER], capture_code="9.9"))], ref)["rho"]
+    assert set(coded["blank"]) == {"reduction", "update"} and coded["capture_code"] == "9.9"
+    assert coded["blank"]["update"].endswith("; the record has no config.text and no commit, so no config to re-trace from")
+    uncoded = graded([final, heavy(traced([OVER, UNDER], circuit=CIRCUIT))], ref)["rho"]
+    assert set(uncoded["blank"]) == {"capture_code"} and uncoded["sensitivities"] == full["rho"]["sensitivities"]
+
+
 def test_a_step_is_after_the_first_update_when_it_reads_a_changed_weight():
     """A weight of θ is listed where its value isn't θ's, and a value derived from a gradient always; a tensor θ
     doesn't hold counts once a value it is read at isn't the first it was read at, so a table a model builds never
@@ -396,13 +484,37 @@ def test_a_jobs_own_record_is_graded_from_the_trace_its_job_took(ran):
     s = G.grade(config, starts, runs, runs)
     assert s["basis"]["split"] == "search" and s["rho"]["checkpoint_step"] == 2
     assert s["rho"]["rho"] is not None and s["rho"]["rho"] >= 1, s["rho"]
-    assert s["rests_on"]["capture"] == products.CAPTURE and s["rests_on"]["capture_code"] is None
+    assert s["rests_on"]["capture"] == products.CAPTURE and s["rests_on"]["capture_code"] == VERSION
+    assert s["rho"]["blank"] == {} and ", its code blank" not in G.text(s)
     assert s["rho"]["terms"]["products"] is not None and s["rests_on"]["provenance"] is None
     assert (s["rho"]["work"] is None) == (not s["bound_of_record"]["available"])
     here = f"re-trace it at the record's commit {ran['commit']} and config.text with a CPU job, `{G.RETRACE}`"
     refused = {"refused": {"reason": "unsupported", "op": "aten::foo", "message": "foo has no trace"}}
     s = G.grade(config, starts, [runs[0] | {"record": ran | {"trace": refused}}], runs)
     assert s["rho"]["rho"] is None and here in s["rho"]["why"] and s["S"]["why"] == s["rho"]["why"]
+
+
+def test_a_jobs_own_trace_gives_both_sensitivities_back(ran):
+    """The tiny start traced through the job, graded at a block a step's token work fills four of: the two steps
+    after the first update are one part with the trace's own circuit, the gradient's cut and a token group's partial
+    as the capture measured them, and the reduction and update sensitivities are the bound's over it. The first step
+    reads θ alone and has no cut, so each sum leaves it out, and no figure is blank."""
+    circuit = ran["trace"]["circuit"]
+    setup, first, rest = G.traced(ran, G.rows_of(ran)[-1])["formalism"]["parts"]
+    assert (setup["tokens"], first["steps"], first["grad_bits"], first["affected_gates"]) == (0, 1, None, 0)
+    assert (rest["steps"], rest["partial_bits"], rest["grad_bits"], rest["delta_grad_bits"]) == (
+        2, circuit["partial_cut_bits"], circuit["grad_cut_bits"], circuit["delta_grad_bits"])
+    assert rest["token_gates"] == circuit["sigma"] * rest["gates"] and circuit["grad_cut_bits"] > 0
+    run = {"seed": 0, "split": "search", "record": ran}
+    c, k = rest["token_gates"] / 2 / 3.5, policy.CONSOLE[1]
+    rho = G.rho_of(run | {"checkpoints": G.checkpoints(run, "tiny")}, FIT, 1.1, {"c_gates": c, "k_bits": k},
+                   synthetic.SHAPE)
+    total = rho["C_gates"]
+    assert total == pytest.approx(setup["gates"] + first["gates"] + rest["gates"])
+    assert rho["sensitivities"] == pytest.approx({"reduction": c * 2 * 3 * circuit["partial_cut_bits"] / (k * total),
+                                                  "update": c * 2 * circuit["grad_cut_bits"] / (k * total)})
+    assert rho["sensitivities"]["reduction"] > rho["sensitivities"]["update"] > 0
+    assert rho["blank"] == {} and rho["capture_code"] == VERSION and set(rho["unmeasured"]) == {"reduction", "update"}
 
 
 def test_p_reads_one_split_and_a_record_out_of_place_is_refused():

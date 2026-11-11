@@ -29,6 +29,10 @@ no job writes): the grade never reads it and passes it on, beside each record it
   `training_slowdown.capture.products.priced`): the grade holds no price. A search record with no trace, with one
   the capture refused or of a capture version this tree doesn't read, or with a step `formalism.measure` refuses, has
   no ρ, and then there is no S; the reason names how the trace is taken again (`retrace`);
+- **the sensitivities** beside ρ, never in it (`formalism.SENSITIVITIES`' reduction and update), and the version of
+  the code that took the trace (`capture_code`): from the trace's `circuit`, the measured step's own cut of its
+  gradient and its structure, and its `capture_code`. A record whose trace has neither still grades, at the same ρ
+  where τ's stub changes no step count: the block says which figures are blank and why (`blank`);
 - **S = p·ρ** against each H, a lower bound where ρ is one (`partial`), with what each factor rests on;
 - **the bound of record** at the same policy (`calculator.bound`): what every partition of the attack's traced
   circuit pays at the least, beside S, what this attack pays, and never mixed into it;
@@ -63,8 +67,13 @@ GAMMAS = np.linspace(0.01, 2.0, 399)
 OUTPUT = ("e_bytes", "format", "rebuild_macs", "decoder_gates")
 #: the theorem's inputs on a traced step, as `formalism.he_products` names them
 WORK = ("N", "O", "beta_w", "beta_x", "b_y", "F")
-#: what ρ reads of a record's `trace` (`traced`); the job writes more (`run.trace_step`), which the grade never reads
+#: what ρ reads of a record's `trace` (`traced`) and has no figure without; the job writes more (`run.trace_step`)
 TRACE = ("capture", "tokens", "k", "rows", "p_match", "at", "data_dependent", "carried_scalars")
+#: what the grade reads of a trace beside `TRACE`, where the trace has it, each with what it is: a record without one
+#: still grades, the figures that read it blank (`blank`)
+BESIDE = {"circuit": "the measured step's cut of its gradient and its structure, which the reduction and update "
+                     "sensitivities read",
+          "capture_code": "the version of the code that took the trace"}
 #: the job that takes a record's trace again (`training_slowdown.run`'s `retrace`), which a refused trace's reason names
 RETRACE = "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device cpu"
 
@@ -282,6 +291,21 @@ def changed_steps(record: dict, through: int | None) -> list[dict]:
     return out
 
 
+def with_circuit(record: dict, circuit: dict) -> dict:
+    """The record with its trace's circuit on every step after the run's first update (`changed_steps`): each one's
+    structure with the traced step's σ, affected share, token factor, Δ_grad and cuts (`formalism.TRACED_STRUCTURE`),
+    as `formalism.of_record` reads a traced structure, so the traced step stands for each of them. A step before the
+    first update keeps its structure: it reads θ alone and no step like it was traced, so in a record with a traced
+    structure it has no affected gates and no Δ_grad."""
+    changed = {s["step"] for s in changed_steps(record, None)}
+    out = dict(record, structures=dict(record["structures"]), steps=[dict(s) for s in record["steps"]])
+    for s in out["steps"]:
+        if s["step"] in changed:
+            was, s["struct"] = s["struct"], f"{s['struct']}+traced"
+            out["structures"][s["struct"]] = record["structures"][was] | {k: circuit[k] for k in F.TRACED_STRUCTURE}
+    return out
+
+
 def traced(record: dict, row: dict) -> dict:
     """`row` (one of `rows_of(record)`) as ρ reads it: with the products of the record's `trace`, the step its job
     traced (`run.trace_step`), in its `formalism` block, as `formalism.measure` takes a traced record's. Each raw
@@ -289,10 +313,14 @@ def traced(record: dict, row: dict) -> dict:
     other k of the console's dial (`at`), and the traced step stands for every step through the row's checkpoint
     after the run's first update (`changed_steps`), by their tokens over its own, a `stand_in` where they differ from
     it in structure or tokens. Of the trace it reads `TRACE`: the capture's version, the traced step's tokens, the
-    rows with their k, their P-match check and the dial's, and the read-backs `formalism.refusal` refuses on; with
-    them goes the share of the traced step's product MACs an update reaches (`affected_share`), which it reads only
-    for being 0. A trace names its capture's version and not the code that took it, and a record whose trace was
-    taken again keeps its job's `training_slowdown`, so the block states no `capture_code`.
+    rows with their k, their P-match check and the dial's, and the read-backs `formalism.refusal` refuses on.
+
+    Beside them it reads what the trace has of `BESIDE`. With the trace's `circuit` the block's parts are the
+    record's with the traced step's structure on those steps (`with_circuit`, `formalism.of_record`), its τ, a and
+    update profile are the circuit's (`formalism.of_trace`), and the share `formalism.refusal` reads for being 0 is
+    the circuit's affected share; without it the parts are the count's, τ, a and the profile are stubs, and that
+    share is the traced step's product MACs an update reaches. With the trace's `capture_code` the products state
+    it; without it they state none, since a record whose trace was taken again keeps its job's `training_slowdown`.
 
     Raises `formalism.Refused`, with how the trace is taken again (`retrace`), for a record with no trace, with one
     the capture refused, with one of a capture version this tree's `priced` doesn't read, or with one that lacks a
@@ -321,7 +349,8 @@ def traced(record: dict, row: dict) -> dict:
         return {"k": b["k"], "rows": [products.priced(r) for r in b["rows"]], "p_match": b["p_match"]}
 
     block = priced(tr) | {"capture": tr["capture"], "tokens": tr["tokens"],
-                          "at": {k: priced(b) for k, b in tr["at"].items()}}
+                          "at": {k: priced(b) for k, b in tr["at"].items()}} | (
+        {"capture_code": tr["capture_code"]} if "capture_code" in tr else {})
     got = F.products_of_trace(block, sum(s["tokens"] for s in steps) / tr["tokens"])
     label = F.TRACED_PRODUCTS
     structures, counts = sorted({s["struct"] for s in steps}), sorted({s["tokens"] for s in steps})
@@ -329,21 +358,43 @@ def traced(record: dict, row: dict) -> dict:
         got["stand_in"] = {"structures": structures, "step_tokens": counts, "traced_tokens": tr["tokens"],
                            "why": F.STAND_IN}
         label = f"{label}; {F.STAND_IN}"
-    macs = [(r["count"] * r["macs"], any(r["affected"])) for r in block["rows"]]
-    share = sum(m for m, hit in macs if hit) / sum(m for m, _ in macs) if macs else 0.0
-    f = row["formalism"]
+    f, circuit = row["formalism"], tr.get("circuit")
+    if circuit is None:
+        macs = [(r["count"] * r["macs"], any(r["affected"])) for r in block["rows"]]
+        circuit = {"affected_share": sum(m for m, hit in macs if hit) / sum(m for m, _ in macs) if macs else 0.0}
+    else:
+        f = F.of_record(with_circuit(record, circuit), prefix(record, row["checkpoint_step"]))
+        f |= F.of_trace(circuit) | {"labels": f["labels"] | F.of_trace(circuit)["labels"]}
     return row | {"formalism": f | {
         "products": got, "labels": f.get("labels", {}) | {"products": label},
-        "trace": {"products": block, "affected_share": share} | {k: tr[k] for k in F.READ_BACKS}}}
+        "trace": circuit | {"products": block} | {k: tr[k] for k in F.READ_BACKS}}}
+
+
+def blank(record: dict, got: dict, unmeasured: dict) -> dict:
+    """The figures beside ρ (`got`, `formalism.published`'s) that have no value, each with why. On a record whose
+    trace lacks a key of `BESIDE`: the reduction and update sensitivities without its `circuit`, the `capture_code`
+    without its own, each with how the trace is taken again (`retrace`; this tree's job keeps both). On a trace that
+    has its circuit, a sensitivity the bound leaves without a figure, with the bound's reason (`unmeasured`)."""
+    tr = record.get("trace") or {}
+
+    def lacks(key: str) -> str:
+        return f"the search record's trace has no {key}, {BESIDE[key]}; {retrace(record)}"
+
+    out = {name: unmeasured[name] if "circuit" in tr else lacks("circuit")
+           for name in F.CELL_SENSITIVITIES if got["sensitivities"][name] is None}
+    if got["capture_code"] is None:
+        out["capture_code"] = lacks("capture_code")
+    return out
 
 
 def rho_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> dict:
     """ρ at the policy `pol` from the config's search job `run`, a start of `shape`: `formalism.published` at (c, k) on
     its first scored checkpoint at or below its target, else on its last (`at` says which), read with its record's
     trace (`traced`), with the theorem's inputs there (`work`, where its products term has them: none where it is
-    unmeasured or its M is empty) and the capture that traced it. No ρ, with why, without a search record, without a
-    scored checkpoint, on a record whose trace `traced` refuses, or on one `formalism.measure` refuses or can't
-    measure."""
+    unmeasured or its M is empty), the capture that traced it, the figures beside it that have no value (`blank`) and
+    what the bound says of a sensitivity that sums only some of the record's parts (`unmeasured`). No ρ, with why,
+    without a search record, without a scored checkpoint, on a record whose trace `traced` refuses, or on one
+    `formalism.measure` refuses or can't measure."""
     if run is None:
         return {"rho": None, "why": "unmeasured: the config has no search record"}
     at = seed_at(run["checkpoints"], f, g)
@@ -358,8 +409,11 @@ def rho_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> dict:
     except ValueError as e:
         return {"rho": None, "why": f"unmeasured: {e}"}
     c, k = pol["c_gates"], pol["k_bits"]
-    term, _, got = F.he_products(m, c, k)
-    return F.published(m, c, k) | {
+    b, out = F.bound(m, c, k), F.published(m, c, k)
+    term, got = b["terms"]["products"], b["inputs"]["products"]
+    return out | {
+        "blank": blank(run["record"], out, b["unmeasured"]),
+        "unmeasured": {name: b["unmeasured"][name] for name in F.CELL_SENSITIVITIES if name in b["unmeasured"]},
         "seed": run["seed"], "checkpoint_step": cp["step"], "C_gates": cp["gates"],
         "at": "its first checkpoint reaching the gain" if at["reached"] else
               f"its last checkpoint: the search record doesn't reach {g:g}x",
@@ -508,6 +562,13 @@ def text(s: dict) -> str:
     add("rho", f"none: {rho['why']}" if rho["rho"] is None else
         f"{rho['rho']:,.6g}{' (a lower bound: ' + str(rho['why'] or 'a kind is unmeasured') + ')' if rho['partial'] else ''}"
         f", binding {rho['binding_kind']}, on search seed {rho['seed']} at {rho['at']} (step {rho['checkpoint_step']})")
+    if rho["rho"] is not None:
+        gaps = rho["blank"]
+        add("sensitivities", ", ".join(f"{name} " + ("blank" if name in gaps else f"{v:,.6g}")
+                                       for name, v in rho["sensitivities"].items())
+            + ", beside rho and never in it: each holds only for partitions split by tokens",
+            *(f"{name}: {'blank: ' if name in gaps else ''}{why}"
+              for name, why in (rho["unmeasured"] | {n: w for n, w in gaps.items() if n in rho["sensitivities"]}).items()))
     seeds = [_seed(split, seed, v) for split in ("final", "search") for seed, v in mine[split]["seeds"].items()]
     theirs = [_seed(split, seed, v) for split in ("final", "search")
               for seed, v in s["honest"]["splits"][split]["seeds"].items()]
@@ -516,7 +577,8 @@ def text(s: dict) -> str:
                                   + (f", sd {C['sd']:.3g}" if C["sd"] is not None else "")))
     r = s["rests_on"]
     add("rests on", f"rho: {r['rho'] or 'nothing: it is unmeasured'}",
-        f"capture: {r['capture'] or 'none'}, its code {r['capture_code'] or 'unrecorded'}"
+        f"capture: {r['capture'] or 'none'}, its code "
+        + (r["capture_code"] or f"blank: {rho.get('blank', {}).get('capture_code', 'rho is unmeasured')}")
         + (f"; the record's provenance: {_said(r['provenance'])}" if r["provenance"] is not None else ""),
         f"p: {r['p']}", f"gain: {r['gain']}")
     add("bound of record", *([bound["why"]] if not bound["available"] else [
