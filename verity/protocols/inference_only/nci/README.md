@@ -56,8 +56,8 @@ This directory has an import root of its own (`SEPARATE` in `tests/test_boundari
 it:
 
 - `verity/protocols/inference_only/rho` reads data files of this directory by path (the algorithm library,
-  `algorithms.json`), and its tests load `tiers.py` and `slowdown.py` by path to hold rho's own arithmetic to theirs;
-  rho's suite names each among its `inputs`;
+  `algorithms.json`, and the calibrations, `calibrations.json`), and its tests load `tiers.py` and `slowdown.py` by
+  path to hold rho's own arithmetic to theirs; rho's suite names each among its `inputs`;
 - the Lean lock (`security/lean-audit.json`) names `tests/test_tiers.py` and `tests/test_fit.py` as the tests of three
   statements it holds open (its `conjectures`), and each of those tests checks that the lock names it;
 - `fixtures/artifacts.json` registers `sources/` by this directory's path.

@@ -111,8 +111,12 @@ this package's capture beside them. It computes no ρ. Its tests are a suite of 
   `grader/pyproject.toml`). From `verity`: the circuits' Definitions the gate prices compile, and the codec, the census
   and the Boolean prices the grader reads with. From `adapters/vllm/verity_vllm`: the frontend, onto whose
   reference Definitions `capture.lower` lowers a traced step, and its training-step module, which derives the steps the
-  grader reads. From the frontend's tests, by path: the lf model. A run also reads what the tree doesn't hold: the
-  program it is given and the start's θ.
+  grader reads. From the frontend's tests, by path: the lf model. From the slowdown calculator
+  (`verity/protocols/inference_only/rho`), its directory put first on `sys.path`: its fleets and periods, its registry
+  and its min-cut bound, which `calculator.py` reads, and with the registry the inference-only policy's calibrations
+  (`verity/protocols/inference_only/nci/calibrations.json`), which the registry loads. From the census
+  (`benchmarks/census/deployments.json`), by path: the reference deployment's window. A run also reads what the tree
+  doesn't hold: the program it is given and the start's θ.
 - **Writes.** The run command writes `OUT/run.json` (the count, the checkpoints, the flags, the program's and θ's
   digests), `OUT/families/` with each counterexample family's `verified.json` and, with `--keep-checkpoints`, each
   checkpoint's weights. `capture.circuit` and `gates` only print.
