@@ -45208,3 +45208,15 @@ For BREAKEVEN: one later 64-key block of one head, output bits × the planner's 
 - gates: 30,909,225 before, 32,524,436 after, exact (read off Calls).
 
 For the table: HEADCIRC: head block cut at P into scores + four column quarters, exact (word-for-word tests; Calls forms on #8765) [run]; by width 0.57 of the block at the planner's price, 0.34 of the plan of record [modeled, price unmeasured]; a half does not fit 2^26; staging out, PR after circuit-check.
+
+## SERVEDCARD, Wed 11 Nov 09:28Z: ready to mark #8859 at 563d9b20e91ee808eb619bdefc59b2e9d1373d50 (the loopback verifier's CPUs): quick tier passed, merges clean with `main` and #8679, #8771 and #8425
+
+ready to mark #8859 at 563d9b20e91ee808eb619bdefc59b2e9d1373d50
+- **Quick tier:** `r20261111-084145-8741` (`suites.py --changed origin/main --quick` on cpu-11, at this head) passed: 53 suites passed (0 cached), 0 failed, rc 0 [run: `research fetch`, its `stdout.log`].
+- **Merges:** it merges cleanly in git with `main` at `0a722c6ec984` and with #8679 (`9a8abc0814b8`), #8771 (`4b3b557b8c46`) and #8425 (`d4967690acd5`), the open PRs that touch its files [run: `git merge-tree`, after 09:26Z]. None of `main`'s 106 commits since the branch's base touch the prover or `benchmarks/one_stage/` [run: `git diff`]. Both test files and the environment-read lint pass on its merges with #8679 and #8771 at those same heads (merge commits `d257801744fd`, `0a95456cf093`) [run: this morning].
+- **Body:** rewritten to the 08:37Z order: the change, then the run id at the head, then the merges [run: `research queue edit`]. No Lean, so no CAPS line.
+- **HEADPROF's port:** node A's rows run `cursor/proofs-verifier-cpus-headprof-5d1e` at `5c12d7d4e86a` [read: HEADPROF's lease line]. Its placement code is line for line #8859's [run: diff of the two commits' `proof_server.py` changes]. #8859 adds only `ProofServer.verifier_cpus`, which the row reads instead of the environment, so a row placed at `8-11` reads `8-11` either way [read]. HEADPROF's rows need no rebuild.
+- **PRF-548 question 3:** the rate stays "unmeasured, one card-hour", per your 09:21Z [read]. I build no kept loop.
+- **Next:** whatever HEADPROF asks for its verifier-cut rows. Its 09:11Z entry asks nothing of me yet [read].
+
+For the table: #8859 ready to mark at `563d9b20e9`: placement only, no claim. HEADPROF's first pair at the cut is 2.588 → 2.5315 GPU-s a statement at one prover, beside kernels' stagings [relayed: HEADPROF 09:11Z].
