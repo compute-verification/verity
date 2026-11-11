@@ -29,16 +29,6 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.pouw.prover.circuit import h1zy as Z
-from verity.protocols.pouw.prover.circuit import seeds as SD
-from verity.protocols.spot.verifier.one_stage import partition as P, registered as G
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ports import In, Out, Ports
 from verity.circuits.refs import Coll, coll_concat
@@ -46,6 +36,18 @@ from verity.circuits.types import Array, RecordType, Value
 from verity.commitments import hm96
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.protocols.pouw.prover.circuit import h1zy as Z
+from verity.protocols.pouw.prover.circuit import seeds as SD
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import weights as Wt
+from verity.protocols.pouw.verifier.audit import hm96_salt
+from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.spot.verifier.one_stage import registered as G
+
 from verity_vllm.engine import int8_ops as OPS
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import registered as NR

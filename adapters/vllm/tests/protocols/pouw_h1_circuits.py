@@ -47,8 +47,9 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 H1_PROVE = HERE.parents[3] / "benchmarks" / "pouw" / "h1_prove"
@@ -78,11 +79,11 @@ def bind_of(descriptor: bytes, layout: dict) -> tuple[dict[str, str], dict[int, 
     (`h1window.tile_unit`) or J10-R's (`h1tile.PouwH1Tile5`, serve-openai's pouw setting ``unit`` j10r). ValueError when
     neither is one of the descriptor's definitions, or (with core's credit) the partition is not the one core's credit
     verifies statements under."""
-    from verity.protocols.pouw.verifier import credit as CR
-    from verity.protocols.pouw.prover.circuit import h1tile as HT
-    from verity.protocols.pouw.prover.circuit import h1window as HW
     from verity.circuits import partition_object as PO
     from verity.circuits.codec import descriptor_id
+    from verity.protocols.pouw.prover.circuit import h1tile as HT
+    from verity.protocols.pouw.prover.circuit import h1window as HW
+    from verity.protocols.pouw.verifier import credit as CR
     program, desc = hashlib.sha512(descriptor).hexdigest(), json.loads(descriptor)
     tile = tuple(layout["tile"])
 

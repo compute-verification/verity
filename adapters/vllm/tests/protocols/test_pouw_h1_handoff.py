@@ -16,6 +16,18 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from tests.protocols import challenger_host as CH  # noqa: E402
+from tests.protocols.test_pouw_h1 import (  # noqa: E402
+    Int8Arm,
+    K,
+    Linear,
+    Model,
+    _entry,
+    _gate,
+    _host,
+    _remote,
+    _so,
+)
 from verity_vllm import protocols as PO  # noqa: E402
 from verity_vllm.engine import int8_ops  # noqa: E402
 from verity_vllm.protocols import pouw  # noqa: E402
@@ -26,9 +38,6 @@ from verity_vllm.protocols.pouw.h1 import kept as KP  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import prover as PV  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import window as PHW  # noqa: E402
-
-from tests.protocols import challenger_host as CH  # noqa: E402
-from tests.protocols.test_pouw_h1 import K, Int8Arm, Linear, Model, _entry, _gate, _host, _remote, _so  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

@@ -7,11 +7,24 @@ import struct
 
 import numpy as np
 import pytest
-
-from verity.protocols.poub.verifier import receipts as rb
 from verity.commitments.merkle import Opening
-from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, Append, Lifecycle, PageLayout, Stale, StoreView
-from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, KindReceipt, NodeMemory, RemoteBandwidthReceipt, chain
+from verity.protocols.poub.verifier import receipts as rb
+
+from verity_vllm.protocols.remote_bandwidth.interface import (
+    IDENTITY,
+    Append,
+    Lifecycle,
+    PageLayout,
+    Stale,
+    StoreView,
+)
+from verity_vllm.protocols.remote_bandwidth.registry import (
+    ArrayBacking,
+    KindReceipt,
+    NodeMemory,
+    RemoteBandwidthReceipt,
+    chain,
+)
 from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
 
 WORD = 64

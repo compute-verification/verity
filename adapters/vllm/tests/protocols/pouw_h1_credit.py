@@ -23,15 +23,15 @@ from __future__ import annotations
 import hashlib
 import json
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
-
+from verity.protocols.pouw.prover.circuit import h1tile as HT
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.prover.circuit import h1tile as HT
 from verity.protocols.spot.verifier.one_stage import proofs as PF
 from verity.protocols.spot.verifier.one_stage import registered as G
 

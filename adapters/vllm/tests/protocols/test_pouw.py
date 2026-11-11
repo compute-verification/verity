@@ -14,12 +14,26 @@ import types
 
 import numpy as np
 import pytest
-from verity.protocols.pouw.verifier.audit import (HM96, HM96_WEIGHTS, Epoch, Workload, activation_binding, commit_rows, weight_binding,
-                                              weights_root)
-from verity.protocols.pouw.verifier.coins import Challenger, CoinCommitment, CoinOpening, coin_reason
+from verity.protocols.pouw.prover.schemes import SCHEMES, get
+from verity.protocols.pouw.verifier.audit import (
+    HM96,
+    HM96_WEIGHTS,
+    Epoch,
+    Workload,
+    activation_binding,
+    commit_rows,
+    weight_binding,
+    weights_root,
+)
+from verity.protocols.pouw.verifier.coins import (
+    Challenger,
+    CoinCommitment,
+    CoinOpening,
+    coin_reason,
+)
 from verity.protocols.pouw.verifier.protocol import Context as UnitContext
 from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape, Tile
-from verity.protocols.pouw.prover.schemes import SCHEMES, get
+
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
@@ -82,6 +96,7 @@ def _int7_linear(x, w, bias=None):
 
 def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_h1_and_the_lead_are_executed():
     from verity.protocols.pouw.prover import circuit
+
     from verity_vllm.protocols.pouw import h1 as pouw_h1
     from verity_vllm.protocols.pouw import lead as pouw_lead
     assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES, pouw_h1.SCHEME, pouw_lead.SCHEME}))
@@ -354,8 +369,8 @@ def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
 def test_served_fp8_claims_registered_weights_only_under_the_shared_rule(monkeypatch):
     """Served FP8 applies no keyed rotation, so its weights register only from the curated list, through the one
     registered-weights rule Pearl-C4 reads too; refused, the claim says it is about nothing and names why."""
-    from verity.protocols.pouw.verifier import registration
     from verity.protocols.pouw.prover.schemes import pearl_c
+    from verity.protocols.pouw.verifier import registration
     s = PPD.scheme_of("pearl-c-sm120-v1-h3")
     seen: list[tuple] = []
     assert pouw.SERVED_TRANSFORMS == () and pearl_c.check_registration is registration.check_registration

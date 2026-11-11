@@ -10,7 +10,13 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity_vllm.protocols.remote_bandwidth.binder import (  # noqa: E402
-    Binder, Every, Inbox, PagedBacking, TorchBacking, page_layout, storage_bytes,
+    Binder,
+    Every,
+    Inbox,
+    PagedBacking,
+    TorchBacking,
+    page_layout,
+    storage_bytes,
 )
 from verity_vllm.protocols.remote_bandwidth.interface import Append, WindowRecord  # noqa: E402
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory  # noqa: E402
@@ -306,6 +312,7 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
     verifies with the tile's z."""
     from verity.protocols.poub.verifier import audit
     from verity.protocols.poub.verifier import receipts as rb
+
     from verity_vllm.protocols.remote_bandwidth.registry import RemoteBandwidthReceipt
     from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
 

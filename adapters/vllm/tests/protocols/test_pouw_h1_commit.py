@@ -21,31 +21,31 @@ import pytest
 torch = pytest.importorskip("torch")
 # ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
 from torch import nn
-
+from verity.circuits.codec import canonical_json
+from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import weights as Wt
 from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.spot.device import remote as R
-from verity.protocols.spot.verifier.one_stage import registered as G, registration as REG
-from verity.circuits.codec import canonical_json
-from verity_vllm import protocols as PO
-from verity_vllm.engine import int8_exact as E
-from verity_vllm.engine import int8_ops
-from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import hooks as PHK
-from verity_vllm.acquire import h1_commit as HC
-from verity_vllm.commit.served_record import StepInputPort
-from verity_vllm.engine import int8_experts as X
-from verity_vllm.engine.hooks import Hooks
-from verity_vllm.protocols.pouw.h1 import commit as CT
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.spot.verifier.one_stage import registration as REG
 
 from tests.protocols import challenger_host as CH
 from tests.protocols.test_pouw_h1 import AUDITOR, Experts, Runner, _host, _remote, _so
 from tests.protocols.test_pouw_h1_served import _unit
+from verity_vllm import protocols as PO
+from verity_vllm.acquire import h1_commit as HC
+from verity_vllm.commit.served_record import StepInputPort
+from verity_vllm.engine import int8_exact as E
+from verity_vllm.engine import int8_experts as X
+from verity_vllm.engine import int8_ops
+from verity_vllm.engine.hooks import Hooks
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity_vllm.protocols.pouw.h1 import hooks as PHK
+from verity_vllm.protocols.pouw.h1 import served as SV
 
 K, ROWS, STEPS = 64, 32, 2
 ENTRY = f"pouw:{PH.SCHEME}"

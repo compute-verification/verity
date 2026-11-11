@@ -32,8 +32,9 @@ import re
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 SCHEMA = "verity/pouw-h1-ranks-gpu/v1"
 KEY = hashlib.sha512(b"verity/pouw-h1-ranks-gpu/key/v1").digest()[:32]

@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+
 from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import records as ZR
 

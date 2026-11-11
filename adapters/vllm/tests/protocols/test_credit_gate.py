@@ -22,21 +22,23 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
+from verity.protocols.pouw.prover.circuit import live as L
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.prover.circuit import live as L
 from verity.protocols.pouw.verifier.coins import Challenger
 from verity.protocols.spot.device import challenger as LC
 from verity.protocols.spot.device import remote as R
 from verity.protocols.spot.device.challenger import LiveOpening, LiveRecord
 from verity.protocols.spot.verifier.one_stage import registered as G
+
+from tests.protocols import challenger_host as CH
 from verity_vllm import protocols as PO
 from verity_vllm.commit.served_record import PORT_NAMES
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops
-from verity_vllm.protocols.pouw import credit_gate as CG
 from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import credit_gate as CG
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import commit as CT
@@ -44,8 +46,6 @@ from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import records as ZR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import served as SV
-
-from tests.protocols import challenger_host as CH
 
 K = 64
 #: the window's T

@@ -37,8 +37,20 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, Append, Codec, PageLayout, Receipt, Segment, WindowRecord
-from verity_vllm.protocols.remote_bandwidth.registry import KindReceipt, NodeMemory, RemoteBandwidthReceipt
+from verity_vllm.protocols.remote_bandwidth.interface import (
+    IDENTITY,
+    Append,
+    Codec,
+    PageLayout,
+    Receipt,
+    Segment,
+    WindowRecord,
+)
+from verity_vllm.protocols.remote_bandwidth.registry import (
+    KindReceipt,
+    NodeMemory,
+    RemoteBandwidthReceipt,
+)
 
 if TYPE_CHECKING:
     from verity.protocols.poub.verifier.audit import Tiles

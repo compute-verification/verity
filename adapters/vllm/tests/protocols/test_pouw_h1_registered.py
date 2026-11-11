@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.protocols.pouw.verifier.audit import hm96_salt
 from verity.protocols.spot.verifier.one_stage import registered as G
+
 from verity_vllm.protocols.pouw.h1 import registered as NR
 
 PROGRAM, WINDOW = "ab" * 64, "cd" * 64
@@ -69,7 +69,8 @@ def test_a_windows_reads_are_cores_statement_drawn_once(monkeypatch):
     """A window's registered reads (`interface._Drawn`, `rows.value_salts` and `value_rows`): for this value and core's, at
     rows in any order and repeated, the salts, rows and header entry core's ``statement`` gives, this value's salts sampled
     in one ChaCha20 pass, never one row at a time."""
-    from verity.commitments.windows import interface as I, rows as CS
+    from verity.commitments.windows import interface as I
+    from verity.commitments.windows import rows as CS
 
     words = np.random.default_rng(4).integers(0, 1 << 16, (9, 40), dtype=np.uint16)
     ref, got = _core(PROGRAM, "h1/v", words, KEY, 3), NR.commit(PROGRAM, "h1/v", words, KEY, 3, True)

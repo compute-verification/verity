@@ -11,10 +11,9 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
+from tests.protocols import pouw_h1_gpu as G
 from verity_vllm.engine import build as B
 from verity_vllm.program.frontend.target_profile import TargetProfile
-
-from tests.protocols import pouw_h1_gpu as G
 
 
 class _Built(Exception):

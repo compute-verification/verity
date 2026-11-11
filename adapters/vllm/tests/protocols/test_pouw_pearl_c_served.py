@@ -28,6 +28,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+from verity.commitments.crypto import lms
 from verity.protocols.pouw.verifier import salt as PS
 from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.pouw.verifier.audit import Workload, salt_of, weights_root
@@ -35,16 +36,15 @@ from verity.protocols.pouw.verifier.coins import Challenger
 from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
 from verity.protocols.spot.device import challenger as LC
 from verity.protocols.spot.device import remote as R
-from verity.commitments.crypto import lms
+
+from tests.protocols import challenger_host as CH
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import window as PHW
-from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import manifest as PPM
-
-from tests.protocols import challenger_host as CH
 
 SCHEME = "pearl-c-sm120-v1-h3"
 ENTRY = f"pouw:{SCHEME}"

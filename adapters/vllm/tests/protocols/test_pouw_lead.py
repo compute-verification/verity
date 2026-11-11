@@ -13,10 +13,10 @@ import hashlib
 
 import numpy as np
 import pytest
-
-from tests.protocols._needs_torch import torch
 from verity.protocols.pouw.verifier.coins import Challenger
 from verity.protocols.pouw.verifier.serving import PassCommitment
+
+from tests.protocols._needs_torch import torch
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.engine import int8_exact as E

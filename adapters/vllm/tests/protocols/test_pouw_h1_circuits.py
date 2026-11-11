@@ -16,15 +16,15 @@ import pytest
 
 pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.circuits import partition_object as PO
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.protocols.pouw.verifier import credit as CR
 
 from tests.protocols import challenger_host as CH
 from tests.protocols import pouw_h1_circuits as PC
 from tests.protocols import pouw_h1_rehearsal as RH
 from tests.protocols.test_pouw_h1_served import _unit
+from verity_vllm.protocols.pouw.h1 import served as SV
 
 AUDITOR = Path(__file__).resolve().parents[4] / "verity" / "composite" / "device" / "live_challenger" / "auditor.py"
 #: two linears at K = 64 and one at K = 128: two strata
@@ -100,9 +100,8 @@ def test_a_commit_runs_period_open_commits_its_declared_fixed_length(tmp_path, m
     """``pouw_h1_gpu.py --commit --peer --period P`` opens P with ``--length``, its ``--declare``'s fixed length, and
     ``--circuit-files``, each K's and the live template's, in the form the gate takes and core's credit reads back
     (`credit.committed_length`, `credit.committed_files`), so credit holds its window to both."""
-    from verity_vllm.protocols.pouw import h1 as PH
-
     from tests.protocols import pouw_h1_gpu as GPU
+    from verity_vllm.protocols.pouw import h1 as PH
     decl = PH.Static((1,) * 32, 3, 32, 4)
     files = {"k4096": "2b" * 64, "k14336": "3c" * 64, CR.LIVE: "4d" * 64}
     argv = GPU.period_open_argv("o1", "a" * 128, 7, decl, files)

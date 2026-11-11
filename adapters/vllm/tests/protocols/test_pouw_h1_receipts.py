@@ -19,10 +19,10 @@ from typing import Any
 
 import numpy as np
 import torch
-
+from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import leaf_lanes as LL
-from verity.protocols.pouw.prover.circuit import h1zy as Z
+
 from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import receipts as RC
 from verity_vllm.protocols.pouw.h1 import registered as NR

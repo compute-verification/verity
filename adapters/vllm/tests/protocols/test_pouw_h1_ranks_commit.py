@@ -19,9 +19,27 @@ import pytest
 torch = pytest.importorskip("torch")
 # ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
 from torch import nn
-
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier.coins import Challenger
+
+from tests.protocols import pouw_h1_gpu as G
+from tests.protocols import pouw_h1_ranks_gpu as RG
+from tests.protocols.test_pouw_h1_commit import (
+    EXPERTS,
+    FIRST,
+    INTERMEDIATE,
+    MOE,
+    PROMPTS,
+    Arm,
+    Committer,
+    K,
+    Linear,
+    MoE,
+    _ids,
+    vllm_config,
+)
+from tests.protocols.test_pouw_h1_ranks import Executor, _rounds, _so
+from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm.acquire import h1_commit as HC
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.protocols import pouw
@@ -31,13 +49,6 @@ from verity_vllm.protocols.pouw.h1 import hooks as PHK
 from verity_vllm.protocols.pouw.h1 import ranks as PHR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import served as SV
-
-from tests.protocols import pouw_h1_gpu as G
-from tests.protocols import pouw_h1_ranks_gpu as RG
-from tests.protocols.test_pouw_h1_commit import (
-    EXPERTS, FIRST, INTERMEDIATE, K, MOE, PROMPTS, Arm, Committer, Linear, MoE, _ids, vllm_config)
-from tests.protocols.test_pouw_h1_ranks import Executor, _rounds, _so
-from tests.protocols.test_pouw_h1_served import _unit
 
 ROWS, STEPS = 32, 3
 KEY = hashlib.sha512(b"key").digest()[:32]

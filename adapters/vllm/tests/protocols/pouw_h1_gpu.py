@@ -111,11 +111,11 @@ import argparse
 import functools
 import gc
 import gzip
-import resource
 import hashlib
 import importlib.util
 import json
 import os
+import resource
 import shlex
 import subprocess
 import sys
@@ -164,6 +164,7 @@ def period_unit(j10r: bool, arch: str | None = None) -> Any:
         return None
     from verity.protocols.pouw.prover.circuit import h1tile as HT
     from verity.protocols.pouw.prover.circuit import h1window as HW
+
     from verity_vllm.protocols.pouw import h1 as PH
     return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 
@@ -562,11 +563,15 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
 
 #: candidates for `fill_prompts`: each word's first token (no BOS) is one prompt
-FILL_WORDS = ("The capital France def Water Once In A To Photosynthesis Columbus Light Gold Tea Autumn Square Planet Primary Speed "
-              "Village Number Return Import Class If When Why How What Where Who My Our Your Their This That These Those Every "
-              "Some Many Most All Each Today Yesterday Tomorrow Science History Music Art Math Code Data River Mountain Ocean "
-              "Forest City Market Doctor Teacher Engine Garden Winter Summer Spring Morning Evening Night Story Letter Question "
-              "Answer Problem").split()
+FILL_WORDS = [
+    "The", "capital", "France", "def", "Water", "Once", "In", "A", "To", "Photosynthesis", "Columbus", "Light",
+    "Gold", "Tea", "Autumn", "Square", "Planet", "Primary", "Speed", "Village", "Number", "Return", "Import", "Class",
+    "If", "When", "Why", "How", "What", "Where", "Who", "My", "Our", "Your", "Their", "This", "That", "These",
+    "Those", "Every", "Some", "Many", "Most", "All", "Each", "Today", "Yesterday", "Tomorrow", "Science", "History",
+    "Music", "Art", "Math", "Code", "Data", "River", "Mountain", "Ocean", "Forest", "City", "Market", "Doctor",
+    "Teacher", "Engine", "Garden", "Winter", "Summer", "Spring", "Morning", "Evening", "Night", "Story", "Letter",
+    "Question", "Answer", "Problem",
+]
 
 
 def fill_prompts(tokenizer: Any, n: int) -> list[int]:
@@ -1158,6 +1163,7 @@ def record_reason(record: dict[str, Any]) -> str | None:
     weights' root `pouw` keys it on (`audit.Epoch.start`'s, the opening's ``after``), not the served one."""
     from verity.protocols.pouw.verifier.audit import salt_of
     from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening
+
     from verity_vllm.engine.hooks import patched
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import challenger as PHC

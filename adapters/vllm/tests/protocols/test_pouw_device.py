@@ -9,6 +9,7 @@ import os
 
 import numpy as np
 import pytest
+
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import device as PD
 from verity_vllm.protocols.pouw import native as PN

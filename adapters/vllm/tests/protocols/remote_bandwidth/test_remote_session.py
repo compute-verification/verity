@@ -27,10 +27,13 @@ from xml.etree import ElementTree
 
 import numpy as np
 import pytest
-
-from verity.protocols.poub.verifier import audit, codec as rcodec, memory_map, receipts as rb
+from verity.protocols.poub.verifier import audit, memory_map
+from verity.protocols.poub.verifier import codec as rcodec
+from verity.protocols.poub.verifier import receipts as rb
 from verity.protocols.poub.verifier.session import verifier, wire
-from verity_vllm.protocols.remote_bandwidth import memory_map as store_map, remote
+
+from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
+from verity_vllm.protocols.remote_bandwidth import remote
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
 from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, NodeMemory
 

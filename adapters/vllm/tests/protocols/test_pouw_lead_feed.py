@@ -8,6 +8,7 @@ import random
 
 import numpy as np
 import pytest
+
 from verity_vllm.protocols.pouw.lead import feed as F
 
 #: Llama-3.2-1B's four linears, (K, n)
