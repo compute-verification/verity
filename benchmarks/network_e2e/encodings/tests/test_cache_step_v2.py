@@ -1,4 +1,4 @@
-"""CacheStep_v2's specification (`verity.ml.protocols.certifier.cache_step_v2.reference`) against vLLM's block pool as
+"""CacheStep_v2's specification (`verity.protocols.certifier.prover.cache_step_v2.reference`) against vLLM's block pool as
 the advice decoder and the replay model it (`verity_vllm.pipeline.advice_code.pool.BlockPool`), through
 `cache_pool_vectors.drive`: over whole traces, sync and async, and over a small pool built to reach every edge (a full
 pool, evictions of blocks one free queued together and of part of one free's blocks, a preempted request's returns and
