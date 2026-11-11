@@ -42,6 +42,9 @@ output: the salt, or the same refusal.
 
 Its `chunks` against `weights.chunks` (an H1 lane's chunks along K, the chunk rows a table at K commits a row as): every
 multiple of 32 below 2^17, then sampled integers and non-integers, compared output for output: the count, or the same refusal.
+
+Its `ratio` against `core_check.ratio`: sampled strings, then numbers of more decimal digits than `int` reads by default,
+compared output for output: the ratio's numerator and denominator in hex, or the same refusal.
 """
 from __future__ import annotations
 
@@ -552,6 +555,36 @@ def test_chunks(pass_server):
     print(f"pouw-check-difftest chunks: 4096 Ks swept, then {stats}")
     assert Counter(next(iter(o)) for o in outs) == {"chunks": 375, "refused": 3721}
     assert [outs[k // 32] for k in (4096, 6144, 12288, 14336, 16384)] == [{"chunks": n} for n in (1, 2, 3, 4, 4)]
+
+
+def ratio(x) -> dict:
+    if not (isinstance(x, dict) and isinstance(x.get("s"), str) and isinstance(x.get("ctx"), str)):
+        raise D.Reject("the input's s or ctx is not a string")
+    try:
+        r = CC.ratio(x["s"], x["ctx"])
+    except CC.Refused as e:
+        return {"refused": str(e)}
+    return {"ratio": [format(r.numerator, "x"), format(r.denominator, "x")]}
+
+
+RATIO = D.Port("pouw-check-difftest", "ratio", ratio, package=LEAN, of_record=V.RECORD_VERDICT,
+               inputs=st.one_of(st.fixed_dictionaries({"s": st.text("0123456789/", max_size=12) | st.text(max_size=4),
+                                                       "ctx": st.sampled_from(["delta", "eps", "profile.delta"])}),
+                                st.none(), st.integers(), st.fixed_dictionaries({"s": st.integers(), "ctx": st.text()})))
+
+
+def test_ratio(pass_server):
+    """`Core.Ratio.ofString` is `core_check.ratio` on sampled strings, and on numbers past `int`'s 4,300 decimal digits:
+    one of 4,301 digits and a ratio of two long numbers read to the same value, and each refusal of a long one says the
+    same."""
+    stats = D.run(RATIO, examples=500, server=pass_server)
+    big, odd = "1" + "0" * 4300, "1" + "0" * 4999 + "1"
+    read = {big: (10**4300, 1), f"{big}/{odd}": (10**4300, 10**5000 + 1), f"7/{odd}": (7, 10**5000 + 1)}
+    for s, (n, d) in read.items():
+        assert json.loads(D.replay(RATIO, {"s": s, "ctx": "delta"}, pass_server)[1]) == {"ratio": [f"{n:x}", f"{d:x}"]}
+    for s in (f"{big}/{big}0", "0" + big, f"{big}/0{odd}", f"{big}/1", f"{big}/{odd}/3"):
+        assert "refused" in json.loads(D.replay(RATIO, {"s": s, "ctx": "delta"}, pass_server)[1])
+    print(f"pouw-check-difftest ratio: {stats}, and {len(read) + 5} long numbers")
 
 
 ROUNDED: Counter[str] = Counter()
