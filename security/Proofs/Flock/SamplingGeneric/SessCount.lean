@@ -15,7 +15,8 @@ disjoint slots. A weight `e_s ≤ e_max` on each session, summed over a set of g
 some block of which needs it, is then at most `e_max` times the sample's blocks' needs, summed:
 `Σ_g Σ_{s ∋ g} e_s = Σ_s e_s·|needs(s)| ≤ e_max·Σ_{u sampled} |needs u|`. At `e = 1` over the first slots among the
 proof units and every gate, the sessions' needs summed are at most the blocks' (`sum_first_sessNeeds_le`), and so are
-the gates the sample needs (`card_filter_needs_le`).
+the gates the sample needs (`card_filter_needs_le`); the sessions are at most the sample's slots
+(`card_firstSlots_le`).
 -/
 
 @[expose] public section
@@ -115,6 +116,23 @@ theorem sum_first_sessNeeds_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (n
   rw [Finset.card_filter]
   refine Finset.sum_congr rfl fun g _ => ?_
   by_cases hg : ∃ u ∈ L.sessBlocks x l i.val, g.val ∈ needs u <;> simp [hg]
+
+/-- **The sessions, counted by slot**: the sessions' first slots among the `n` proof units are at most the sample's
+slots. -/
+theorem card_firstSlots_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (n : ℕ) :
+    (Finset.univ.filter fun i : Fin n => (L.sessSlots x l i.val).head? = some i.val).card ≤ l.length := by
+  have hsub : (Finset.univ.filter fun i : Fin n => (L.sessSlots x l i.val).head? = some i.val).map Fin.valEmbedding ⊆
+      Finset.range l.length := by
+    intro j hj
+    obtain ⟨i, hi, rfl⟩ := Finset.mem_map.1 hj
+    obtain ⟨u, hu, -, -⟩ := mem_sessSlots.1 (List.mem_of_mem_head? (Option.mem_def.2 (Finset.mem_filter.1 hi).2))
+    obtain ⟨hlt, -⟩ := List.getElem?_eq_some_iff.1 hu
+    exact Finset.mem_range.2 hlt
+  calc (Finset.univ.filter fun i : Fin n => (L.sessSlots x l i.val).head? = some i.val).card
+      = ((Finset.univ.filter fun i : Fin n => (L.sessSlots x l i.val).head? = some i.val).map Fin.valEmbedding).card :=
+        (Finset.card_map _).symm
+    _ ≤ (Finset.range l.length).card := Finset.card_le_card hsub
+    _ = l.length := Finset.card_range _
 
 /-- **The sample's needs, counted by block**: the gates below `N` some block of `l` needs are at most its blocks'
 needs, summed. -/
