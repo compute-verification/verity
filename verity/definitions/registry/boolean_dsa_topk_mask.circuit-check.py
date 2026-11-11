@@ -82,3 +82,17 @@ def _tags_count_roots() -> list[Any]:
     from verity.definitions.registry import boolean_dsa_topk_mask as BM
 
     return [bind(BM.DsaButterflyTagsCount, N=n, K=k) for n, k in ((8, 4), (6, 4), (13, 13), (37, 9))]
+
+
+def _select_calls_roots() -> list[Any]:
+    """The radix select's pass and valid bits as Calls: `DsaRadixPass_v2` over the 20 keys of the mask above (under a chunk of
+    its count), over two chunks and a rest (reaching `DsaRadixPassCount_v1` at both, `DsaCountSum_v1` over the chunks,
+    `DsaRadixPassLeft_v1` and `DsaRadixPassKey_v1`) and at the longest row a unit masks whole, 40,960 keys at TOPK 2,048, held
+    to its digest pin; `DsaRowValid_v2` at row lengths no power of two (reaching `DsaRowValidRoot_v1`, `DsaRowValidStep_v1`
+    and `DsaRowValidLast_v1`) and at the served ones, the merge's 2,048 slots, a block's 16,384 keys and the whole row's
+    40,960."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import boolean_dsa_topk_mask as BM
+
+    return [*(bind(BM.DsaRadixPassV2, N=n, TOPK=k) for n, k in ((20, 16), (600, 512), (40960, 2048))),
+            *(bind(BM.DsaRowValidV2, N=n) for n in (13, 20, 2048, 16384, 40960))]

@@ -90,7 +90,13 @@
   "DsaTopKDigitPick_v2{M=8,K=3,TOPK=2048}": {
    "sha512": ""
   },
+  "DsaTopKMaskBlock_v2{N=16384,AT=0,TOPK=2048}": {
+   "sha512": ""
+  },
   "DsaTopKMaskBlock_v2{N=16384,AT=16384,TOPK=2048}": {
+   "sha512": ""
+  },
+  "DsaTopKMaskWhole_v2{N=40960,TOPK=2048}": {
    "sha512": ""
   }
  }

@@ -40,13 +40,16 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 
 
 def _mask_calls_roots() -> list[Any]:
-    """The mask units with their ties as Calls (`DsaRadixTies_v2`), at the `_v1` units' bindings: each block's mask unit and
-    the mask whole.  And a block the cut serves, 16,384 keys from the second block on at TOPK 2,048, held to its digest pin."""
+    """The mask units as Calls (their ties `DsaRadixTies_v2`, their valid bits `DsaRowValid_v2`, the whole mask's passes
+    `DsaRadixPass_v2`), at the `_v1` units' bindings: each block's mask unit (the second reaching `DsaRowValidOffset_v1`) and
+    the mask whole.  And the units as served at TOPK 2,048, each held to its digest pin: a block of 16,384 keys, the row's
+    first and one past its start, and the longest row masked whole, 40,960 keys."""
     from verity.circuits.defs import bind
     from verity.definitions.registry import dsa_topk_mask_cut as X
 
     return [bind(X.DsaTopKMaskBlockV2, N=8, AT=0, TOPK=4), bind(X.DsaTopKMaskBlockV2, N=6, AT=8, TOPK=4),
-            bind(X.DsaTopKMaskWholeV2, N=14, TOPK=4), bind(X.DsaTopKMaskBlockV2, N=X.BLOCK, AT=X.BLOCK, TOPK=2048)]
+            bind(X.DsaTopKMaskWholeV2, N=14, TOPK=4), bind(X.DsaTopKMaskBlockV2, N=X.BLOCK, AT=0, TOPK=2048),
+            bind(X.DsaTopKMaskBlockV2, N=X.BLOCK, AT=X.BLOCK, TOPK=2048), bind(X.DsaTopKMaskWholeV2, N=X.WHOLE_MAX, TOPK=2048)]
 
 
 def _pick_calls_roots() -> list[Any]:

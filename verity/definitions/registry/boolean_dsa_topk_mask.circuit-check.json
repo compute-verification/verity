@@ -42,6 +42,9 @@
   }
  },
  "digests": {
+  "DsaRadixPass_v2{N=40960,TOPK=2048}": {
+   "sha512": ""
+  },
   "DsaRadixTies_v2{N=16384,TOPK=2048}": {
    "sha512": ""
   },
