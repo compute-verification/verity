@@ -1,6 +1,6 @@
 // The PoUB driver's receipts and receipt tree on the device: a device reader of the vLLM store
-// (integrations/vllm/verity_vllm/protocols/remote_bandwidth/), `reader.py` its wrapper and gate, and the driver's
-// verity/core/protocols/remote_bandwidth/receipts.py the reference. A reader receipts a segment of 4 KiB blocks,
+// (adapters/vllm/verity_vllm/protocols/remote_bandwidth/), `reader.py` its wrapper and gate, and the driver's
+// verity/protocols/poub/verifier/receipts.py the reference. A reader receipts a segment of 4 KiB blocks,
 // commits its leaves, builds its subtree and keeps all three for the openings; end_pass takes the subtree's root.
 //
 //   y_p      SHA512(Z(D(receipt) ‖ frame(seed)) ‖ u64be j ‖ (E_j ⊕ spread(z_j))): a thread a block, 33 compressions
@@ -13,7 +13,7 @@
 //   node     frame-v3-sha512 node(level, index, L, R), and pad(rank) past the pass's leaves: a thread a node
 //
 // The hm96 leaf after its salt, the frame-v3 leaf, the pad and the node are the GPU's one row commitment (`rc`,
-// verity/ml/kernels/row_commit.cuh), from the pass's constants kL (rc's leaf and pad templates under the pass's domain
+// verity/definitions/kernels/row_commit.cuh), from the pass's constants kL (rc's leaf and pad templates under the pass's domain
 // and hm96's constants), kNodeTpl (a node's last two blocks), gNib (M_key's nibble table) and kC.node_mid; what is the
 // reader's own is the receipts, the row digest, the salts and which thread hashes what. Positions are at most 2^36,
 // so every leaf, pad and node index is below 2^32.
@@ -25,7 +25,7 @@
 #include <cuda_runtime.h>
 
 #include "sha512.cuh"
-#include "../../verity/ml/kernels/row_commit.cuh"
+#include "../../verity/definitions/kernels/row_commit.cuh"
 
 namespace rb {
 
