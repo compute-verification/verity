@@ -155,6 +155,14 @@ def test_the_return_salts_are_the_serves_at_each_sampled_blocks_row_and_none_on_
 
 
 @pytest.mark.slow
+def test_a_serve_under_another_nonce_commits_under_another_run(tmp_path, served):
+    """The small record's run is its serve nonce's (`boundary_rows.run_root`). A challenger host opens a run's root
+    once, ever, so a rehearsal on one serves under a nonce no run has used, and the class commits under that run."""
+    got = SM.serve(tmp_path, V, 2, 2, nonce="another")
+    pub = json.loads((got["class"] / BR.COMMIT).read_text())
+    assert pub["run"] == BR.run_root("another", 0) != served["pub"]["run"] == BR.run_root(SM.SERVE, 0)
+
+
 def test_round_2_takes_the_hand_over_but_for_the_return_read_round_1_commits_no_port_for(run):
     """What `two_stage.prove` hands over, held to round 2 (`two_stage.round_two`, the form allowed): the verifier's
     window (`Design.window`, public items alone) is the one the interior was committed under; the verifier's reads

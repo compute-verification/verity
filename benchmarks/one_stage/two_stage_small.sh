@@ -8,9 +8,12 @@
 # private body or salts, or a challenger's key or secret).
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/two_stage_small.sh
 #   SMALL_FLOCK_WORK=DIR keeps flock-circuit's build there across runs (default: scratch); SMALL_ARGS="--v 256" passes
-#   two_stage_small.py serve more; SMALL_SECOND="--firewall PATH" passes `second` more; SMALL_INLINE=1 runs the class as
-#   a served vocabulary's is, its block the check's body inlined, with `second --unlinked`: exit 0 when everything
-#   holds but round 2's wires (second-wires)
+#   two_stage_small.py serve more; SMALL_FIRST and SMALL_SECOND="--firewall PATH" pass `first` and `second` more;
+#   SMALL_INLINE=1 runs the class as a served vocabulary's is, its block the check's body inlined, with `second
+#   --unlinked`: exit 0 when everything holds but round 2's wires (second-wires)
+# On a challenger host's gate, from one of its peers: G="--challenger gate:USER@HOST --peer NODE --challenger-key
+# RECORD --ssh-key KEY" as both SMALL_FIRST and SMALL_SECOND (the last --challenger given is the one taken), and
+# SMALL_ARGS="--serve NONCE" with a nonce no run has used: the gate opens a run's root once, ever.
 set -euo pipefail
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
@@ -48,8 +51,9 @@ INLINE=(); UNLINKED=(); [ -n "${SMALL_INLINE:-}" ] && { INLINE=(--inline); UNLIN
 "${PY[@]}" benchmarks/one_stage/two_stage_small.py serve --out "$W/serve" "${INLINE[@]}" ${SMALL_ARGS:-} | tee "$O/serve.json"
 CHECK=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["check"])' "$O/serve.json")
 CLASS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["class"])' "$O/serve.json")
+# shellcheck disable=SC2086
 "${PY[@]}" benchmarks/one_stage/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
-  --challenger local --main "$O/main.txt" --out "$W/first" > "$O/first.log" 2>&1 || { tail -20 "$O/first.log"; exit 3; }
+  --challenger local --main "$O/main.txt" --out "$W/first" ${SMALL_FIRST:-} > "$O/first.log" 2>&1 || { tail -20 "$O/first.log"; exit 3; }
 tail -3 "$O/first.log"
 rc=0
 # shellcheck disable=SC2086

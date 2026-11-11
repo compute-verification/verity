@@ -7,8 +7,10 @@ row, random bf16 bits, and the id `TokenSelect_v4{V}` selects from it, which is 
 for the block's return gives: everything held but the return's read. ``--inline`` writes the class as a served
 vocabulary's is, its replay block the check's body inlined (chunks and a combine a token), which round 2 derives no
 wires from: ``second --unlinked`` runs it, and ``expect --unlinked`` holds that run to round 2's refusal of the wires.
+The window's run is the serve nonce's (``--serve``, `SERVE` unless given): a challenger host opens a run's root once,
+ever, so a first stage on one takes a nonce no run has used.
 
-    python two_stage_small.py serve --out DIR [--v 128] [--outputs 4] [--spans 6] [--inline]
+    python two_stage_small.py serve --out DIR [--v 128] [--outputs 4] [--spans 6] [--inline] [--serve NONCE]
     python two_stage_small.py expect SUMMARY.json [--unlinked]
 """
 from __future__ import annotations
@@ -40,15 +42,16 @@ def template(v: int) -> str:
     return f"TokenSelect_v4{{V={v}}}"
 
 
-def layout(v: int, outputs: int, spans: int, inline: bool = False) -> BR.Layout:
-    return BR.Layout(BR.check_template(template(v)), 0, 1, BR.cap(len(PROMPT)), outputs, spans, BR.run_root(SERVE, 0), inline)
+def layout(v: int, outputs: int, spans: int, inline: bool = False, nonce: str = SERVE) -> BR.Layout:
+    return BR.Layout(BR.check_template(template(v)), 0, 1, BR.cap(len(PROMPT)), outputs, spans, BR.run_root(nonce, 0), inline)
 
 
-def serve(out: Path, v: int = 128, outputs: int = 4, spans: int = 6, seed: int = 1108, inline: bool = False) -> dict[str, Any]:
+def serve(out: Path, v: int = 128, outputs: int = 4, spans: int = 6, seed: int = 1108, inline: bool = False,
+          nonce: str = SERVE) -> dict[str, Any]:
     """The class's directory and the capture under ``out``: ``spans`` requests ``r<i>`` of ``outputs`` tokens over a
-    vocabulary of ``v``, each captured under a launch of its own. -> the check template's id, the two directories, and
-    each request's rows and ids."""
-    L = layout(v, outputs, spans, inline)
+    vocabulary of ``v``, each captured under a launch of its own, in the window of the serve ``nonce``. -> the check
+    template's id, the two directories, and each request's rows and ids."""
+    L = layout(v, outputs, spans, inline, nonce)
     rng = np.random.default_rng(seed)
     rows = {f"r{i}": rng.integers(0, 1 << 16, (outputs, v), dtype=np.uint16) for i in range(spans)}
     toks = {r: [int(evaluate(L.check, x.tolist())[0]) for x in a] for r, a in rows.items()}
@@ -87,12 +90,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--outputs", type=int, default=4)
     s.add_argument("--spans", type=int, default=6)
     s.add_argument("--inline", action="store_true")
+    s.add_argument("--serve", default=SERVE, help="the serve's nonce, which the window's run is of")
     e = sub.add_parser("expect")
     e.add_argument("summary", type=Path)
     e.add_argument("--unlinked", action="store_true")
     a = ap.parse_args(argv)
     if a.cmd == "serve":
-        got = serve(a.out, a.v, a.outputs, a.spans, inline=a.inline)
+        got = serve(a.out, a.v, a.outputs, a.spans, inline=a.inline, nonce=a.serve)
         print(json.dumps({k: str(got[k]) for k in ("check", "class", "capture")}))
         return 0
     checks = expect(json.loads(a.summary.read_text()), UNWIRED if a.unlinked else UNHELD)
