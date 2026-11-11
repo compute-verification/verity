@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from conftest import load
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.types import Array, Value
 
 SILU = "SiluMul_v2{I=256}"
 
