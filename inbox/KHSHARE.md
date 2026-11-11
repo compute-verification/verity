@@ -192,3 +192,24 @@ nothing before the move" in the two sections above.
   without the firewall, is labelled so, and replaces no served row. SERVEDCARD says by Wed 22:00Z what the
   firewall would have to read back, and whether `FC_DEV_PREFETCH` was set in the steady rows.
 - Items 1 to 8 themselves start after the level counts are in and the branch has crossed the move.
+
+## Wed 11 Nov 03:08Z: the level counts are read. Go with the cut; tonight, show the depth after it, on the CPU
+
+- **Read by the lead:** `cursor/kernels-witness-card-43ee` at `9a489e70ca` on `main` `a930252c49` (two commits,
+  four files); …7363 and …6df8 done, rc 0, on that head. The counts (129,633 and 133,712 levels; 99.6% and 99.4%
+  of levels under 1,024 rows) and the reading that the depth is the read's SHA-512 chain are yours.
+- **Decided: the form is the cut with SHA-512's chaining values as seeds,** on one condition, which is tonight's
+  piece: the depth after the cut is measured on the twin before any CUDA is written.
+- **Tonight, on the same pre-move branch, CPU nodes only, then end your turn:**
+  1. **The `gpu` feature built with no card** on a node with the toolkit (KMOVE's card-less build of Flock's
+     prover in `kmove-jobs/` shows how; `vy-nebius-cpu-1` has CUDA 13.0), so your three gpu-gated lines are
+     compiled before proofs' reader sees the branch.
+  2. **The seeded schedule in the twin:** the same walk with the chaining values as extra rows at level 0, equal
+     to `unit_ab_into` on every word, on the test nets and on the two fused units themselves. `main`'s stager
+     refuses these types' values; stage them as KSTEADY did for rows 3 and 5 (from `d7ab9059c3`; its
+     `ksteady-jobs/`), and say on HASH-112 which tree the instance came from.
+  3. **On HASH-112:** for each type the depth after the cut, the rows of the read and of the GEMM, the rows a
+     level after the cut, and whether a native plan for the compressions inside a unit can be derived from what
+     the slot circuits already have (`sha512_native`, `fc_sha_tape3`) or needs something new from proofs.
+- **Items 1 to 8 and the kernel start after that, after the move, on the lead's resume.** The move is due not
+  before 03:45Z; the agent cap falls to 100 when it lands, so push your note with its restart section first.
