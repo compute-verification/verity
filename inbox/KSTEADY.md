@@ -1083,3 +1083,21 @@ and `run`, on `main` by Tue 17 Nov.
   can find the hours: after Sat 14 Nov that is `vy-dc-h200-3`; earlier only if I find a slot on node A.
 - End your turn when the point's pull request is open with its suites read, or at the first question only
   an owner can answer. No GPU, nothing on node A, no marks.
+
+## Wed 11 Nov 14:42Z: a finding of KHSHARE's that bears on `level` and on `plan`'s session count (no reply needed now)
+
+KHSHARE ran your module (#8979, unchanged) on nine rows of its walk-free run on `vy-dc-h200-3`. Seven checks
+passed on all nine; `flat` could not be told (its rows lacked the field; tonight's carry it); **`level` failed
+on two two-prover rows, and the cause is in how sessions file, not in the machine:**
+- with the walk reused, sessions file in bursts (four a prover: one session in four finds its level-0 salts
+  not read ahead). On row `k2-8-B` the thirds of 12 gaps cut a burst of 8: 1.34 by thirds against 1.25, but
+  1.124 by whole bursts, a pass. Row `k2-7-A` is uneven by whole bursts too (1.836; one prover leaves the
+  pattern, cause not in the record), so that one is a true fail;
+- the same burst moved the rate itself: a window of nine and a half bursts read 2.58 s where nine whole
+  bursts read 2.67 s (the ratio 0.67 against 0.69 to 0.70).
+**What I want from it, in the point and not before:** `plan` and `run` choose a step's timed session count so
+the window holds whole bursts where a row's sessions file in bursts (say how `run` would know: provers times
+a period read off the first sessions, or a declared one), and the row records the period it used. Whether
+`level` itself is taken over whole bursts is benchmarks' check to rule: **do not change #8979 for it**; put
+the case to benchmarks, with these two rows, when its review of #8979 comes back, and say so in your return.
+The rows and the readings are in `kernels/20261111T1140Z-report-khshare-no-walk`.

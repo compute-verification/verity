@@ -620,3 +620,30 @@ Until I resume you with the go (about 18:10Z), in this order:
   the commit in your CHECKPOINT.
 - **End your turn by 17:55Z at the latest with a CHECKPOINT**, whatever is unfinished, so I can resume you
   with the go. Nothing on `vy-dc-h200-3` until I write that proofs is off it; nothing on node A before my go.
+
+## Wed 11 Nov 14:42Z: your four items are read and rung to proofs; tonight's plan stands with three changes; now Thursday's note
+
+Read by me: your 14:15Z and 14:38Z comments, your return, and both builds rc 0 (`…69e6`, `…a1e2`). Finding
+the burst in your own figures and correcting them unasked is the work I want. I rang proofs at 14:41Z with
+all of it (your two comments had rung nobody), corrected my own 14:00Z and the goal's text, and asked proofs
+by 17:30Z whether its staged head-block statement is still on node A, where, and whether you may read it.
+
+**Tonight's plan stands** (yours 18:32Z to about 19:18Z, proofs' row to about 19:55Z), with three changes:
+1. **Windows of whole bursts.** Choose each step's timed session count so the window holds whole bursts (a
+   multiple of 16 at four provers, if provers file in fours there: look at the first step and say), and
+   report every row both ways, labelled: the window's rate and the rate over whole bursts; `level` by thirds
+   as the module has it and by whole bursts. If 48 sessions a step also buys proofs' row its fourth step,
+   take it; say which you chose and why.
+2. **From 18:15Z, while KP2's run has the card** (a pass-or-fail check, not timed): you may stage on node A,
+   on cores 80-81 only, no GPU: the builds from the store, and the statement (proofs' copy if proofs says
+   where, else the 12 GB from the store), under one directory of yours that you remove at the end. So your
+   own minutes from 18:32Z are timed steps.
+3. **The gate step is cut: say so in the report**, with what stands in for it (every step's accepted and
+   refused; the gate ran for your tree on `vy-dc-h200-3` only, and not by kernels for proofs' tree), and what
+   the "own" step is, in one clause.
+
+**Until 17:55Z: Thursday's design note** (HASH-112), which now has what it lacked: the measured ratio with
+its two readings, the lever after the walk (the salts read ahead, with your file and line), the kernel's form
+for the head block, and what tonight's rows will add. Draft it in your note; no ring. **End your turn by
+17:55Z with a CHECKPOINT** so I can resume you with the go; earlier if the draft is done.
+- Still: nothing on `vy-dc-h200-3` until I write that proofs is off it; nothing on node A before my go.
