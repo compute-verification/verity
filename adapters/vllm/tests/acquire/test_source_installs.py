@@ -1,13 +1,15 @@
-"""Install and uninstall of the three sources that mark their site with torch forward hooks and replace one op of vLLM's:
-`verity_vllm.acquire.sources.vocab_range_source`, `verity_vllm.acquire.sources.scale_products_source` and
-`verity_vllm.acquire.sources.router_softmax_source`.  The modules are CPU ones and the ops are stand-ins set on `torch.ops` (vLLM is not
-installed where the CPU suites run, and the router's tap is a CUDA build), so what is held here is the wiring: a launch commits only from
-inside a manifest site during a committed step, a site that raises leaves no site marked, and `uninstall` puts back the op and leaves no
-hook on a module and no entry in `engine.hooks.live()`.  The values themselves are the sources' own tests' and the GPU properties'."""
+"""Install and uninstall of four sources that mark their site with torch forward hooks and replace one op of vLLM's:
+`verity_vllm.acquire.sources.vocab_range_source`, `verity_vllm.acquire.sources.scale_products_source`,
+`verity_vllm.acquire.sources.router_softmax_source` and the fused norm of `verity_vllm.acquire.sources.norm_scale_source`.  The modules
+are CPU ones and the ops are stand-ins set on `torch.ops` (vLLM is not installed where the CPU suites run, and the router's and the
+norm's taps are CUDA builds), so what is held here is the wiring: a launch commits only from inside a manifest site during a committed
+step, a site that raises leaves no site marked, and `uninstall` puts back the op and leaves no hook on a module and no entry in
+`engine.hooks.live()`.  The values themselves are the sources' own tests' and the GPU properties'."""
 from __future__ import annotations
 
 import hashlib
 import logging
+import sys
 import types
 from typing import Any
 
@@ -15,12 +17,16 @@ import pytest
 import torch
 
 from tests.acquire.test_vocab_range_source import Recorder
+from verity_vllm.acquire.norm_tap_src.build_ext import NAME as NORM_TAP_NS
+from verity_vllm.acquire.norm_tap_src.build_ext import TAP_VERSION as NORM_TAP_VERSION
 from verity_vllm.acquire.router_tap_src.build_ext import NAME as TAP_NS
 from verity_vllm.acquire.router_tap_src.build_ext import TAP_VERSION
+from verity_vllm.acquire.sources import norm_scale_source as N
 from verity_vllm.acquire.sources import router_softmax_source as R
 from verity_vllm.acquire.sources import scale_products_source as S
 from verity_vllm.acquire.sources import vocab_range_source as V
 from verity_vllm.engine import hooks
+from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
@@ -38,8 +44,8 @@ class Launches(torch.nn.Module):
         super().__init__()
         self.launch = launch
 
-    def forward(self, *args: Any) -> Any:
-        return self.launch(*args)
+    def forward(self, *args: Any, **kw: Any) -> Any:
+        return self.launch(*args, **kw)
 
 
 class FusedMoE(Launches):
@@ -300,3 +306,96 @@ def test_attach_gives_the_committer_the_router_softmax_source_and_its_required_c
     assert R.attach(com, router.so, manifest, ("a",), explicit_classes=True, model=model)[0] == ("a",)
     (declared,) = src.declaration_classes()
     assert declared["class"] == RS.FAMILY and declared["count"] == 0 and hashlib.sha256(BUILD).hexdigest() in declared["evidence"]
+
+
+# --- the fused norm: its tap is a CUDA build, and its install reads vLLM's batch invariance ----------------------------------------------
+
+FUSED = "RMSNormFusedCuda_v2"
+H = 8
+
+
+@pytest.fixture
+def norm(monkeypatch, tmp_path):
+    """`torch.ops` and `vllm.envs` as a pod with the norm tap built has them: `load_library` takes the build, the build's namespace
+    answers `tap_version` and `fused_add_rms_norm_scale` (here it fills the scale buffer with each row's index), `_C.fused_add_rms_norm`
+    is the installed op, and the engine is batch invariant.  Both ops record their launches."""
+    tapped: list[tuple] = []
+    launches: list[tuple] = []
+    loaded: list[str] = []
+
+    def fused_add_rms_norm_scale(x: Any, residual: Any, weight: Any, epsilon: float, scale: Any) -> None:
+        tapped.append((x, residual, weight, epsilon))
+        scale.copy_(torch.arange(scale.numel(), dtype=torch.float32))
+
+    def fused_add_rms_norm(*a: Any) -> None:
+        launches.append(a)
+
+    ns = types.SimpleNamespace(tap_version=lambda: NORM_TAP_VERSION, fused_add_rms_norm_scale=fused_add_rms_norm_scale)
+    c = types.SimpleNamespace(fused_add_rms_norm=fused_add_rms_norm)
+    envs = types.ModuleType("vllm.envs")
+    envs.__dict__["VLLM_BATCH_INVARIANT"] = True
+    vllm = types.ModuleType("vllm")
+    vllm.__dict__["envs"] = envs
+    monkeypatch.setitem(sys.modules, "vllm", vllm)
+    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+    monkeypatch.setattr(torch.ops, "load_library", loaded.append)
+    monkeypatch.setattr(torch.ops, NORM_TAP_NS, ns, raising=False)
+    monkeypatch.setattr(torch.ops, "_C", c, raising=False)
+    so = tmp_path / "verity_norm_tap.so"
+    so.write_bytes(BUILD)
+    return types.SimpleNamespace(ns=ns, c=c, envs=envs, tapped=tapped, launches=launches, loaded=loaded, so=str(so),
+                                 installed=fused_add_rms_norm)
+
+
+WEIGHT = torch.ones(H)
+
+
+def _fused_norm(x: Any = None, residual: Any = None, *, hidden: Any = None) -> None:
+    x = hidden if x is None else x
+    torch.ops._C.fused_add_rms_norm(x, residual, WEIGHT, 1e-6)
+
+
+def test_the_fused_norm_source_installed_taps_its_module_and_uninstalled_leaves_nothing(norm):
+    com, model = Recorder(), _two_modules(_fused_norm, "norm")
+    src = N.NormScaleSource(com, model, {"norm": FUSED}, norm.so)
+    assert src.kinds == ["cuda"] and norm.loaded == [norm.so] and src.stats["so_sha256"] == hashlib.sha256(BUILD).hexdigest()
+    live = hooks.live()
+    x, residual = torch.zeros(2, 3, H), torch.zeros(2, 3, H)
+    src.install()
+    assert src.active and norm.c.fused_add_rms_norm is not norm.installed and _hooked(model.norm) == 2
+    model.norm(x, residual)                                     # the manifest's module, no step
+    com._cur = STEP
+    model.other(x, residual)                                    # a step, a module that is no norm of the manifest
+    assert com.acquired == [] and norm.tapped == [] and len(norm.launches) == 2
+    model.norm(x, residual)
+    assert len(norm.launches) == 2 and len(norm.tapped) == 1                        # the tapped op ran in the installed op's place
+    assert norm.tapped[0][0] is x and norm.tapped[0][1] is residual and norm.tapped[0][2] is WEIGHT and norm.tapped[0][3] == 1e-6
+    name, scale = com.acquired[0]
+    assert name == f"norm/{NS.MEMBER}" and scale.dtype == torch.float32
+    assert scale.tolist() == [[0.0, 1.0, 2.0], [3.0, 4.0, 5.0]]                     # one scale a row, in the input's leading shape
+    model.norm(hidden=x)                                        # the module called by keyword: no leading shape, the scale stays flat
+    assert com.acquired[1][1].tolist() == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+    assert (src.stats["tensors"], src.stats["by_kind"], src.stats["bytes"], src.stats["errors"]) == (2, {"cuda": 2}, 48, 0)
+    src.uninstall()
+    assert not src.active and norm.c.fused_add_rms_norm is norm.installed and hooks.live() == live
+    assert _hooked(model.norm) == 0 and _hooked(model.other) == 0
+    model.norm(x, residual)
+    assert len(com.acquired) == 2 and len(norm.launches) == 3 and com.errors == []
+
+
+def test_the_fused_norm_source_refuses_an_engine_that_is_not_batch_invariant_and_another_tap_version(norm):
+    model, live = _two_modules(_fused_norm, "norm"), hooks.live()
+    src = N.NormScaleSource(Recorder(), model, {"norm": FUSED}, norm.so)
+    norm.envs.VLLM_BATCH_INVARIANT = False
+    with pytest.raises(RuntimeError, match="this engine runs without VLLM_BATCH_INVARIANT"):
+        src.install()
+    assert not src.active and norm.c.fused_add_rms_norm is norm.installed and hooks.live() == live and _hooked(model.norm) == 0
+    norm.ns.tap_version = lambda: NORM_TAP_VERSION + 1
+    with pytest.raises(RuntimeError, match=f"is tap version {NORM_TAP_VERSION + 1}, this source launches version {NORM_TAP_VERSION}"):
+        N.NormScaleSource(Recorder(), model, {"norm": FUSED}, norm.so)
+
+
+def test_a_source_of_no_fused_norm_loads_no_build(norm):
+    src = N.NormScaleSource(Recorder(), _two_modules(_fused_norm, "norm"), {"norm": "RsqrtF32_v1"}, norm.so)
+    assert src.kinds == ["aten"] and norm.loaded == [] and src.ns is None
+    assert src.stats["so"] == norm.so and src.stats["so_sha256"] is None
