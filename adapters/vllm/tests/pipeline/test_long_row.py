@@ -2,9 +2,9 @@
 
 * at the served statics it is 44 units of the mask's cut, 8 positions, the merge, 64 chunks, 2,048 slots and 2,048 reads, 4,213
   units of 56 templates an instance, and its body calls exactly those (built without any callee's body);
-* at small statics its body calls `units` in order, `boundary_rows.Layout` takes it inline over the window's class, and each
-  unit reads the window's operands and the units before it as round 2 links and wires them (`second_stage`'s node links and
-  node wires);
+* at small statics its body calls `units` in order, `boundary_rows.Layout` takes it inline over the window's class, with its
+  return, each read's ok, the boundary's third value, a row a read, and each unit reads the window's operands and the units
+  before it as round 2 links and wires them (`second_stage`'s node links and node wires);
 * where its index rows are `index_values` it returns `DsaTopKReadRows_v1`'s ok and its read units return that Definition's
   kv, so the check and the rows its reads commit are together `DsaTopKReadRows_v1`'s function (slow);
 * its links (`links`) at the served statics are 87, of nine values, and at small statics they are the ones round 2 derives
@@ -94,7 +94,8 @@ def test_the_served_row_is_4213_units_of_56_templates() -> None:
 @pytest.mark.slow
 def test_the_layout_takes_it_inline_and_round_two_links_and_wires_each_units_operands() -> None:
     """The check template registered inline at small statics, and round 2's own derivation run on the replay block it
-    registers: every unit's operand gets a link or a wire. About a minute, nearly all of it building the template's body (its
+    registers: every unit's operand gets a link or a wire, and each read's ok a link to the return the class commits, a row
+    a read. About a minute, nearly all of it building the template's body (its
     units' gates, the picks' most); no cheaper test runs `second_stage` on the registered descriptor, which round 2 reads."""
     t, L = _laid()
     nodes = t.body.nodes
@@ -102,6 +103,8 @@ def test_the_layout_takes_it_inline_and_round_two_links_and_wires_each_units_ope
     assert (L.per_prompt, L.per_output, L.prompt, L.outputs, L.n_rho) == (0, 1, 1 << 17, 2, 2)
     assert [descriptor_id(x) for x in L.templates] == list(dict.fromkeys(descriptor_id(n.fn) for n in nodes))
     assert L.provenance()["check"] == descriptor_id(t) and L.provenance()["inline"] is True
+    assert L.verdict_rows == (L.n_rho * t.bindings["TOPK"], 1) and L.values == (*BR.PORTS, BR.RETURN)
+    assert L.ports()[BR.RETURN]["leaves"] == L.spans * L.n_rho * t.bindings["TOPK"]
     defs = definitions(L.program)
     fn = defs[descriptor_id(L.replay)]
     cs = SS._callers_of(defs, fn)
@@ -113,6 +116,8 @@ def test_the_layout_takes_it_inline_and_round_two_links_and_wires_each_units_ope
     assert {("DsaPositionsChunk_v1", "slots", "DsaPositionsMerge_v1", "o0"),
             ("DsaPositionsSlot_v1", "slots", "DsaPositionsChunk_v1", "o0"),
             ("EmbeddingRead_v1", "tok", "DsaPositionsSlot_v1", "o0")} <= wires
+    returns = [(x.template, x.port, per) for x, per, _ in SS.link_runs(defs, descriptor_id(L.replay)) if x.value == BR.RETURN]
+    assert returns == [(descriptor_id(t.bindings["READ"]), "o1", L.verdict_rows[0])]
 
 
 def _i32s(values) -> list[int]:
