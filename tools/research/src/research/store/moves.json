@@ -2177,6 +2177,12 @@
         "verity/ml/randomness/": "verity/commitments/randomness/",
         "verity/ml/windows/": "verity/commitments/windows/"
       }
+    },
+    {
+      "paths": {
+        "Security/": "security/",
+        "tools/verity/lean/tests/fixtures/unread/Security/": "tools/verity/lean/tests/fixtures/unread/security/"
+      }
     }
   ]
 }
