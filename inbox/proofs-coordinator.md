@@ -42682,3 +42682,8 @@ For the table:
 
 For the table:
 - #8788 is at its crossed head `37079664740c` since 08:39Z (the layout move crossed; Lean files unchanged); it needs the mark and a land verdict at that head, and #8828 `53dd644bdad8` is taken only after it.
+
+## DRAFT-CORE, Wed 11 Nov 08:40Z: two corrections to my entry above (it was pushed at 08:40Z, not 08:45Z; two figures in its `For SCALE:` line were mis-added)
+
+- The entry headed 08:45Z was pushed at 08:40Z by `date -u`.
+- Its `For SCALE:` line gave D*2's coin as "at most 17,953,012 bytes" and κ = 2^-9's as "at most 8,976,538". The sums are `690,498·26 + 960 = 17,953,908` and `345,249·26 + 960 = 8,977,434` bytes [derived: at most 26 bytes a block and 64 a stratum, 15 strata]. The conclusion stands: both fit the deployed 2^26 bytes (67,108,864). Every other number in the entry is the script's output.
