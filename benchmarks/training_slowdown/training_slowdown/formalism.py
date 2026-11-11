@@ -25,7 +25,7 @@ witness bounds from above):
   to t and u_in jumps to the changed layers' full update at once (`tail`): the frozen work is always charged. Where Δ
   counts, both are at most Δ (`capped`): a block can read the update code instead ("a shorter update encoding lowers
   u"), a witness the record exhibits (the checkpoint's, for every step of its prefix);
-- `products`: the run's product rows as the products term reads them (`products_of`, `products_of_trace`).
+- `products`: the run's product rows as the products term reads them (`products_of_trace`).
 
 At (c, k), with s = c/w, w = token_gates / tokens (each part's for Fit; the record's for Slowdown) and
 σ = token_gates / |C|:
@@ -79,9 +79,9 @@ most that. Its one kind:
   run's circuit given (H) and (E): every partition does N ≤ m(k + α) + F·(k/2)·√(mO/(β_w·β_x)) in its m blocks, α =
   F·½·√(k³/(β_w·β_x·b_y)), so ρ ≥ c/|C| times the least m that count allows. That is the slowdown calculator's bound of
   record, read through `calculator.bound` and never restated here: this module states the work, M, the run's products
-  whose two operands both depend on the update (`he_of_rows` on a step's product rows, `he_of_products` on a model's), N
-  its MACs and O its output wires. M leaves out one array times itself, a product reading a gather's rows before any op
-  makes them token-specific, attention's products and the optimizer's (Newton-Schulz's B·X), from k = 8e7 the head's
+  whose two operands both depend on the update (`he_of_rows` on a step's product rows), N its MACs and O its output
+  wires. M leaves out one array times itself, a product reading a gather's rows before any op makes them
+  token-specific, attention's products and the optimizer's (Newton-Schulz's B·X), from k = 8e7 the head's
   input and weight gradients (`HEAD_K`), each token-indexed product's share at the positions sequences can share
   (`SHARED_PREFIX`), the run's steps before its first update (whose products read only registered weights: a traced
   record counts only the steps of structures with an affected share, `of_record`) and the ⌊k/(τT)⌋ after it, and every
@@ -98,12 +98,11 @@ most that. Its one kind:
   can take (`he_figure`), never below 0. It needs no summation order, so it is measured on products written with
   elementwise ops (left out of M, kept in |C|) and for a tree. It is unmeasured on a record with no product rows, on
   rows that predate `SYSTEM_FROM` (`HE_RETRACE`), past the last k the calculator has a β(k) at (`HE_PAST`), from
-  `HEAD_K` on a model's products (`HE_HEAD`) and on a step whose elementwise ops fan out into an operand
-  (`p_match_reason`), and never priced on a trace of another program (`OTHER_PROGRAM`). The products come from
-  `products_of` (steps captured by capture_step or capture_fn) or `products_of_trace` (the product rows a recorded
-  program's trace keeps from training_slowdown 4.8 on, training_slowdown.capture.products), each at the k it classifies
-  them at, a trace's at each k of the console's dial too (`at`). At a fixed k the term is linear in c, so the dial reads
-  it as c times a number for each k it has products at (`products_per_c`).
+  `HEAD_K` on products that don't say which are the head's (`HE_HEAD`) and on a step whose elementwise ops fan out into
+  an operand (`p_match_reason`), and never priced on a trace of another program (`OTHER_PROGRAM`). The products come
+  from `products_of_trace` (the product rows a recorded program's trace keeps from training_slowdown 4.8 on,
+  training_slowdown.capture.products), at the k it classifies them at and at each k of the console's dial (`at`). At a
+  fixed k the term is linear in c.
 A kind's term is None where its inputs are unmeasured, with the reason (`unmeasured`), and the max is over the measured
 ones (None, and so ρ where Fit fails, where none is). Beside the kinds, never in the max, the sensitivities
 (`SENSITIVITIES`), each labelled with what it rests on:
@@ -155,7 +154,7 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -192,8 +191,8 @@ class Measured:
     tail_share: float = 0.0
     context: dict | None = None
     delta_t_bits: float | None = None
-    #: the products kind's inputs, the run's product rows as the term reads them (`products_of` or `products_of_trace`:
-    #: {"k", "he", "p_match", ...}; None: no captured step and no trace product rows)
+    #: the products kind's inputs, the run's product rows as the term reads them (`products_of_trace`: {"k", "he",
+    #: "p_match", ...}; None: no captured step and no trace product rows)
     products: dict | None = None
 
     @property
@@ -258,16 +257,6 @@ class Measured:
     def delta_grad_bits(self) -> float | None:
         """The largest Δ_grad of the parts that measure one (None: none does)."""
         return max((p.delta_grad_bits for p in self.parts if p.delta_grad_bits is not None), default=None)
-
-    def to_json(self) -> dict:
-        return asdict(self) | {"parts": [asdict(p) for p in self.parts], "u": [list(p) for p in self.u],
-                               "u_in": [list(p) for p in self.u_in], "u1_bits": self.u1_bits}
-
-
-def from_json(d: dict) -> Measured:
-    return Measured(tuple(Part(**p) for p in d["parts"]), d["tau_bits"], d["a_bits"], tuple(map(tuple, d["u"])),
-                    tuple(map(tuple, d["u_in"])), d.get("delta_bits"), d.get("decoder_gates"), d.get("labels", {}),
-                    d.get("tail_share", 0.0), d.get("context"), d.get("delta_t_bits"), d.get("products"))
 
 
 # ---- the update profiles -----------------------------------------------------------------------------------------------
@@ -500,22 +489,6 @@ def is_paid(rate: float, width: float) -> bool:
     """Whether an operand a block pays `rate` bits an entry of is paid at its passed width `width`: a cast keeps its
     argument's rate, and a block can cut before it, so a widened operand is paid at the narrower width."""
     return rate >= 0.999 * width
-
-
-def products_of(segments, k: float | None = None, gemm_dtype: str | None = "bfloat16") -> dict:
-    """`Measured.products` for a run of captured steps, `segments` [(steps, StepGraph)] as
-    training_slowdown.capture.capture_run takes them, each captured by capture_step or capture_fn: at k (the console's
-    by default) the steps' P-match check from their product rows (training_slowdown.capture.products) and the products
-    term's M from them, each row's count times its steps (`he`, `he_of_rows`)."""
-    from training_slowdown.capture import products
-
-    k = float(policy.CONSOLE[1] if k is None else k)
-    counted, broken = [], []
-    for n, g in segments:
-        block = products.rows(g, k, gemm_dtype)
-        counted += [r | {"count": n * r["count"]} for r in block["rows"]]
-        broken += block["p_match"]
-    return {"k": k, "p_match": broken, "he": he_of_rows(counted, k)}
 
 
 def product_kind(row: dict) -> str:
@@ -806,35 +779,6 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
             "step_tokens": tokens, "trained_weights": trained if tokens and trained else None}
 
 
-def he_of_products(products: list[dict], k: float, rank: float | None = None) -> dict:
-    """M from products a model states (each group's MACs and output entries at k, its
-    operands' widths, its Definition's gates a gadget and its `role`, forward, dx, dw or optimizer), every one of both
-    operands' update dependence through a trained matrix, at its operands' widths, its first operand an activation
-    and its second a weight but in a weight gradient (dw), whose two are activations; the optimizer's products leave
-    M (`he_of_rows`), and a product with no role counts as an input gradient. With `rank`, a LoRA's adapter rank, each
-    product whose contraction isn't the rank has its activation reached by the update only through the adapters, at
-    `beta_eff`(w, rank, k). A dense model's input and weight gradients sum the head's with the layers' (`head` None),
-    a LoRA's head is frozen (False)."""
-    groups, left = [], 0.0
-    for p in products:
-        role = p.get("role", "dx")
-        if role == "optimizer":
-            left += p["macs"]
-            continue
-        w_op, b_y = HE_BITS.get(p["cell_gates"], (min(p["b_a"], p["b_b"]),) * 2)
-        widths = [min(p["b_a"], w_op), min(p["b_b"], w_op)]
-        betas = list(widths)
-        if rank is not None and not math.isclose(p["k_dim"], rank, rel_tol=1e-9):
-            betas[0] = beta_eff(min(widths), rank, k)
-        groups.append({"beta": betas, "width": widths, "weight": [False, role != "dw"], "b_y": b_y,
-                       "forward": role == "forward", "k_dim": p["k_dim"], "dw": role == "dw",
-                       "head": False if rank is not None or role == "forward" else None, "macs": p["macs"],
-                       "wires": p["outputs"] * b_y})
-    total = sum(p["macs"] for p in products)
-    return {"k": float(k), "groups": groups, "r_step": rank, "candidates_macs": total, "self_macs": 0.0,
-            "gathered_macs": 0.0, "left_out_macs": left, "steps": None, "step_tokens": None, "trained_weights": None}
-
-
 #: the subsets of M `he_figure` takes the best of: all of M, M less its short contractions, and the weight gradients
 #: alone
 HE_SUBSETS = ("M", "M without its short contractions", "the weight gradients alone")
@@ -986,21 +930,6 @@ def he_rests_on(got: dict) -> str:
             f"{got['beta_w']:.4g}{code} and β_x = {got['beta_x']:.4g} bits a word ({BETA_K_LABEL}; the casts of one "
             f"value count as one word), and (E): exports are wide at b_y = {got['b_y']:g} bits an output, premises a "
             f"single counterexample refutes; {which}")
-
-
-def products_per_c(m: Measured) -> dict[str, float | None] | None:
-    """The products term as the console's dial reads it: for each k the run's products are classified at (by its
-    integer as a string; a trace's at each k of the console's dial, `classified_at`), the term over c (`he_products`'):
-    the theorem of record's ρ is (c/|C|) times a function of k, so the term at (c, k) is c times the entry exactly.
-    None at a k where the term is unmeasured; None for a run with no product rows."""
-    p = m.products
-    if p is None:
-        return None
-    out = {}
-    for k in sorted({p["k"], *(b["k"] for b in p.get("at", {}).values())}):
-        term, why, _ = he_products(m, 1.0, k)
-        out[f"{k:.0f}"] = None if why is not None else term
-    return out
 
 
 def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> dict:
@@ -1165,34 +1094,6 @@ def published(m: Measured, c: float | None = None, k: float | None = None) -> di
 def uncomputed(b: dict) -> list[str]:
     """The kinds of `bound`'s result `b` with no figure."""
     return [kind for kind in b["kinds"] if b["terms"][kind] is None]
-
-
-def rhos(m: Measured, cells: dict[str, tuple[float, float]]) -> tuple[dict[str, float], dict[str, bool], dict]:
-    """ρ in each cell of `cells` (key -> (c, k)), whether Fit holds there for the training, and Slowdown's terms there
-    (x0, s* and the attack side's)."""
-    rho, fit, terms = {}, {}, {}
-    for key, (c, k) in cells.items():
-        v = at(m, c, k)
-        rho[key], fit[key] = v["rho"], v["fit"]
-        terms[key] = {n: v[n] for n in ("x0", "s_star", "x0_known", "s_star_known")}
-    return rho, fit, terms
-
-
-def fit_k(m: Measured, c: float, w_run: float) -> tuple[float | None, float | None]:
-    """The least k at which Fit holds at c, for running θ' (one block per s = c/w_run tokens of the served model,
-    `w_run` its gates per token) and for the training (each part's three kinds of block); None: at no k, or
-    unmeasured (Δ, or the decoder)."""
-    if m.delta_bits is None or m.decoder_gates is None or m.decoder_gates >= c:
-        return None, None
-    run = m.delta_bits + c / w_run * m.tau_bits
-    need = []
-    for p in m.parts:
-        st = c * p.tokens / p.token_gates * m.tau_bits if p.tokens else 0.0
-        dg = p.delta_grad_bits
-        if dg is None and p.tokens:
-            return run, None
-        need.append(max((m.delta_bits + st, *((2 * dg, m.delta_t + dg) if dg is not None else ()))))
-    return run, max(need)
 
 
 # ---- measurement -------------------------------------------------------------------------------------------------------

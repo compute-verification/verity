@@ -117,22 +117,6 @@ def test_u_and_u_in_are_at_most_delta_where_delta_counts():
     assert wide["x0"] == pytest.approx(0.5 + 0.25 * 2 / 3)
 
 
-def test_fit_k_is_the_least_k_at_which_fit_holds():
-    """Running θ': Δ + (c/w_run)τ; training: the most of its three kinds (None without Δ_grad), a part with no token
-    blocks (the setup) needing Δ alone; none when the decoder reaches c or is unmeasured."""
-    m, c, w_run = measured(u1=1e6, delta=1e3, dgrad=1e4), 1e13, 2e8
-    s_tau = c / 0.8e9 * 32
-    run, train = F.fit_k(m, c, w_run)
-    assert (run, train) == pytest.approx((1e3 + c / w_run * 32, max(1e3 + s_tau, 2e4, 1e3 + 1e4)))
-    assert F.at(m, c, train)["fit"] and not F.at(m, c, train * (1 - 1e-9))["fit"]
-    setup = F.Part(gates=1e9, tokens=0, token_gates=0.0, affected_gates=0.0)
-    assert F.fit_k(F.Measured(m.parts + (setup,), 32, 8192, m.u, m.u_in, 1e3, 0.0), c, w_run) == pytest.approx(
-        (run, train))
-    assert F.fit_k(measured(u1=1e6), c, w_run)[1] is None
-    assert F.fit_k(measured(u1=1e6, decoder=c), c, w_run) == (None, None)
-    assert F.fit_k(measured(u1=1e6, delta=1e3, dgrad=1e4, decoder=None), c, w_run) == (None, None)
-
-
 def test_update_application_reads_delta_t_where_the_run_has_latents():
     """A straight-through run's update application reads its fp32 latents Δ_t, not its code Δ:
     Δ_t + Δ_grad ≤ k, while compute still reads Δ; a run with no Δ_t reads Δ there."""
@@ -141,8 +125,8 @@ def test_update_application_reads_delta_t_where_the_run_has_latents():
     latent = dataclasses.replace(code, delta_t_bits=k)
     assert F.at(code, c, k)["fit"] and code.delta_t == code.delta_bits
     assert F.at(latent, c, k)["parts"][0]["fit"] == {"compute": True, "reduction": True, "update": False}
-    assert F.fit_k(latent, c, 2e8)[1] == pytest.approx(k + 1e5)
-    assert F.from_json(latent.to_json()).delta_t_bits == k
+    need = k + 1e5
+    assert F.at(latent, c, need)["fit"] and not F.at(latent, c, need * (1 - 1e-9))["parts"][0]["fit"]["update"]
 
 
 def test_the_attack_side_is_reported_beside_the_bounds():
@@ -223,7 +207,7 @@ def test_the_context_quantities_from_the_changed_tensors():
     with pytest.raises(ValueError, match="lm_head"):
         F.context(["lm_head.weight"], SHAPE)
     m = F.complete({"context": emb}, {"output": {"e_bytes": 10}, "macs_log": {"by": {}, "ops": {}}}, SHAPE)
-    assert m.context == emb and m.labels["context"] == F.CONTEXT and F.from_json(m.to_json()).context == emb
+    assert m.context == emb and m.labels["context"] == F.CONTEXT
 
 
 def test_fit_reads_delta_and_slowdown_reads_u1_as_separate_fields():
@@ -254,7 +238,6 @@ def test_a_block_s_tail_share_gives_the_tail_profiles_labelled_as_assumptions():
     m = F.complete({"parts": [part], "u1_bits": 1e9, "tail_share": 0.25}, row, SHAPE)
     assert m.tail_share == 0.25 and (m.u, m.u_in) == F.tail(1e9, 0.25)
     assert m.labels["u"].startswith("assumption (A1)") and m.labels["u_in"].startswith("assumption (A1)")
-    assert F.from_json(m.to_json()) == m
     with pytest.raises(ValueError):
         F.complete({"parts": [part], "u1_bits": 1e9, "tail_share": 1.0}, row, SHAPE)
 
@@ -433,13 +416,21 @@ def test_the_one_bound_is_its_products_kind_resting_on_what_it_names():
         F.bound(stated, c, k, kinds=("decoding_form",))
 
 
-#: one bf16 product of two fresh operands over K = 512, half of one_part's 1e12 gates
-SQUARE = {"macs": 0.5e12 / (23682 / 16), "outputs": 0.5e12 / (23682 / 16) / 512, "k_dim": 512, "b_a": 16, "b_b": 16,
-          "cell_gates": 23682.0}
+#: one bf16 product of two fresh operands over K = 512, half of one_part's 1e12 gates: its MACs and output entries
+SQUARE = {"macs": 0.5e12 / (23682 / 16), "outputs": 0.5e12 / (23682 / 16) / 512}
 
 
-#: SQUARE as products a model states, with the products term's M at the console's k (`he_of_products`)
-STATED = {"k": policy.CONSOLE[1], "he": F.he_of_products([SQUARE], policy.CONSOLE[1])}
+def stated(k: float) -> dict:
+    """SQUARE as the products term's M at k, in `he_of_rows`' form: one input gradient, an activation times a trained
+    weight at 16 bits each with 16-bit outputs, which doesn't say whether it is the head's."""
+    group = {"beta": [16, 16], "width": [16, 16], "weight": [False, True], "b_y": 16, "forward": False, "k_dim": 512,
+             "dw": False, "head": None, "macs": SQUARE["macs"], "wires": SQUARE["outputs"] * 16}
+    return {"k": float(k), "groups": [group], "r_step": None, "candidates_macs": SQUARE["macs"], "self_macs": 0.0,
+            "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None, "trained_weights": None}
+
+
+#: SQUARE as a run's products at the console's k
+STATED = {"k": policy.CONSOLE[1], "he": stated(policy.CONSOLE[1])}
 
 
 def test_the_products_term_is_the_theorem_of_records_on_m():
@@ -543,7 +534,7 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
     assert F.he_figure(far, c, C) == F.he_figure(far | {"groups": [g for g in far["groups"] if not g["head"]]}, c, C)
     assert F.he_figure(he, c, C) != F.he_figure(he | {"groups": [g for g in he["groups"] if not g["head"]]}, c, C)
     for at, why in ((8e7, F.HE_HEAD), (9e8, F.HE_PAST)):
-        model = replace(one_part(), products={"k": at, "he": F.he_of_products([SQUARE], at)})
+        model = replace(one_part(), products={"k": at, "he": stated(at)})
         assert F.he_products(model, c, at)[:2] == (None, why), at
     with pytest.raises(ValueError, match="past k"):
         F.he_figure(F.he_of_rows(HE_STEP, 9e8), c, C)
@@ -743,37 +734,13 @@ def test_published_with_every_kind_measured_and_none_above_1_is_1_binding_none()
     assert one["rests_on"] == F.RESTS_ON_CELL["none"] == "no kind exceeds 1"
 
 
-def test_products_of_is_each_captured_steps_rows_times_its_steps():
-    """`products_of` is the products term's M of each captured step's product rows at k
-    (training_slowdown.capture.products' `rows`, at the console's k by default), each row's count times its segment's
-    steps, and the steps' P-match check: a low-rank chain through trained weights."""
-    import torch
-    import torch.nn.functional as tF
-    from torch import nn
-
-    from training_slowdown.capture import capture_step, products
-
-    torch.manual_seed(0)
-    m = nn.Sequential(nn.Linear(256, 256, bias=False), nn.Linear(256, 64, bias=False), nn.Linear(64, 256, bias=False),
-                      nn.Linear(256, 256, bias=False))
-    g = capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1), lambda mm, b: tF.mse_loss(mm(b[0]), b[1]),
-                     (torch.empty(6, 256), torch.empty(6, 256)))
-    k = policy.CONSOLE[1]
-    block = products.rows(g, k, "bfloat16")
-    got = F.products_of([(3, g), (2, g)])
-    assert got["k"] == k and got["p_match"] == 2 * block["p_match"]
-    assert got["he"] == F.he_of_rows([r | {"count": n * r["count"]} for n in (3, 2) for r in block["rows"]], k)
-    assert got["he"]["groups"] and F.products_of([(1, g)], k=1024)["k"] == 1024.0
-
-
-def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_dial_reads_as_c_times_a_number():
+def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there():
     """A trace keeps its product rows at each k of the console's dial (training_slowdown.capture.products' `at`), so
-    the products term is measured at each of them on that k's M, and off the dial it is unmeasured with the reason. At
-    a fixed k the theorem of record's ρ is c/|C| times a function of k, so the dial reads the term as c times a number
-    for each k (`products_per_c`). On the 45M dense step the term falls with k (220,665 at the console's 65,536 bits,
-    160,416 at 80,000, 60,188 at the served block's 145,568 and 2,815 at 800,000 on M, 39 at 8e6 on M without its
-    short contractions), and from 8e7 bits up β(k) is so low that the count allows fewer blocks than |C|/c, so the
-    term is below 1, which ρ's floor reads as 1."""
+    the products term is measured at each of them on that k's M, linear in c there, and off the dial it is unmeasured
+    with the reason, as at every k but their own for products that keep no rows on the dial. On the 45M dense step
+    the term falls with k (220,665 at the console's 65,536 bits, 160,416 at 80,000, 60,188 at the served block's
+    145,568 and 2,815 at 800,000 on M, 39 at 8e6 on M without its short contractions), and from 8e7 bits up β(k) is so
+    low that the count allows fewer blocks than |C|/c, so the term is below 1, which ρ's floor reads as 1."""
     from training_slowdown.capture import products
 
     rows = json.loads((FIXTURES / "dense_45m.products.json").read_text())
@@ -782,21 +749,18 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_d
     m = replace(one_part(), parts=(F.Part(gates=C, tokens=512, token_gates=C, affected_gates=C / 2),), products=got)
     assert sorted(got["at"], key=int) == [str(k) for k in products.DIAL_K if k != policy.CONSOLE[1]]
     assert all(b["k"] == float(x) and "at" not in b for x, b in got["at"].items())
-    per = F.products_per_c(m)
-    assert list(per) == [str(k) for k in products.DIAL_K]
+    c, terms = policy.CONSOLE[0], []
     for k in products.DIAL_K:
-        for c in (1e12, policy.CONSOLE[0]):
-            term, why, inputs = F.he_products(m, c, k)
-            assert why is None and inputs["k_classified"] == k
-            assert term == pytest.approx(c * per[str(k)], rel=1e-12, abs=1e-12)
-    c = policy.CONSOLE[0]
-    assert [round(c * per[str(k)]) for k in products.DIAL_K] == [220_665, 160_416, 60_188, 2_815, 39, 0, 0]
+        term, why, inputs = F.he_products(m, c, k)
+        assert why is None and inputs["k_classified"] == k
+        assert F.he_products(m, 1e12, k)[0] == pytest.approx(term * 1e12 / c, rel=1e-12, abs=1e-12)
+        terms.append(round(term))
+    assert terms == [220_665, 160_416, 60_188, 2_815, 39, 0, 0]
     term, why, _ = F.he_products(m, c, 100_000)
     assert term is None and "keep none at it" in why and "each k of the console's dial" in why
-    assert F.products_per_c(replace(m, products={x: v for x, v in got.items() if x != "at"})) == {
-        "65536": per["65536"]}
-    assert F.products_per_c(replace(m, products=None)) is None
-    assert F.from_json(m.to_json()).products == m.products
+    own = replace(m, products={x: v for x, v in got.items() if x != "at"})
+    assert F.he_products(own, c, policy.CONSOLE[1])[0] == F.he_products(m, c, policy.CONSOLE[1])[0]
+    assert F.he_products(own, c, 80_000)[:2] == (None, why)
 
 
 @pytest.mark.parametrize("name", ("dense_blocks", "lora_blocks", "wildcard_adapter"))
@@ -961,8 +925,6 @@ def test_a_trace_of_another_program_than_the_runs_is_never_priced():
             assert b["inputs"]["products"]["other_program"] == {"shapes": 1, "unmatched": 1, "ran": ran,
                                                                 "largest": [[4, 512, 8]]}
             assert "beta" not in b["inputs"]["products"]
-    assert F.products_per_c(F.complete(f, {"output": {"e_bytes": 10}, "macs_log": {"by": {}, "ops": ops}},
-                                       SHAPE)) == {"65536": None, f"{served:.0f}": None}
 
 
 def test_a_records_trace_publishes_what_its_rows_give_at_every_dial_k_whichever_version_ingested_it():

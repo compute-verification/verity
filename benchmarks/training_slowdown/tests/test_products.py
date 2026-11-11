@@ -142,8 +142,8 @@ def test_p_match_fails_where_one_entry_is_handed_to_several_on_the_way_into_an_o
                      (torch.randn(6, 16), torch.randn(6, 16)))
     k = policy.CONSOLE[1]
     got = products.rows(g, k)
-    p = formalism.products_of([(1, g)], k)
-    assert got["p_match"] == p["p_match"] == broken
+    p = {"k": k, "p_match": got["p_match"], "he": formalism.he_of_rows(got["rows"], k)}
+    assert got["p_match"] == broken
     m_ = formalism.Measured(parts=(formalism.Part(gates=got["gates"], tokens=6, token_gates=got["gates"],
                                                   affected_gates=got["gates"]),), tau_bits=0.0, a_bits=0.0, u=0.0,
                             u_in=0.0, delta_bits=0.0, products=p)
