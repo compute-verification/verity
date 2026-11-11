@@ -1131,3 +1131,23 @@ Now, in this order:
 3. Reviews' answers come through this file and the agent inbox as they arrive; a change a reviewer asks for
    goes ahead of everything else.
 No GPU, nothing on node A, no marks.
+
+## Wed 11 Nov 15:05Z: benchmarks ruled on both questions (HASH-115, 15:04Z): two changes, AHEAD of the comparison
+
+Benchmarks answered two minutes after my ring, and reviews both pull requests by Thu 18:00Z. Its rulings,
+read by me in its comment; do these first, then the comparison (item 1 of the section above) at the new head:
+
+1. **`level` over whole bursts goes into the check itself, #8979's module, not only the point.** (This
+   overrides my "do not change #8979 for it".) Benchmarks' rule: "where a row declares its sessions' period,
+   the window's thirds are cut at whole bursts; where it doesn't, as today." Its reason: `verity bench prove`
+   and the harness then judge an old row the same way, which is why the rules are one module. Tests hold
+   both of KHSHARE's rows' shapes: the 1.34-by-thirds row passes at 1.124 by bursts; the 1.836 row still
+   fails. Push to #8979 (unmarked), say the new head.
+2. **Runs labelled before `flat` existed are judged on the store's completed row, where one exists.** It is
+   your one constant (`LABELLED_ROW = COMPLETED`); take it. Benchmarks' condition, to hold in code with a
+   test each: the art names the run in `runs`, carries its derivation, and is not superseded. "Cannot tell"
+   is for a run where neither its own files nor such an art hold the field; that one is planned again.
+3. **Restack #8989 on #8979's new head**, with 2 in it and `run` recording the period the check now reads;
+   suites at both heads; say both heads in your return.
+4. **Then the comparison** over the labelled runs at #8979's new head, as briefed, and end your turn with
+   its summary and the two new heads. I post the heads to benchmarks so it reviews those.
