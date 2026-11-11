@@ -4547,6 +4547,26 @@
   "Pouw.SecurityProofs.DitherInstance.WorkSoundAt": {
    "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundAt_honest"],
    "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_nontrivial"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formAt": {
+   "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundAt_honest"],
+   "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_nontrivial_at"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formAnd": {
+   "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundAt_honest"],
+   "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_nontrivial_and"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formNoHosts": {
+   "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundAt_honest_noHosts"],
+   "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_nontrivial"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formLam": {
+   "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundAt_honest_lam"],
+   "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_nontrivial"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formNamed": {
+   "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundAt_honest_named"],
+   "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_nontrivial"
   }
  },
  "unwitnessed": {
@@ -21501,10 +21521,40 @@
   "Pouw.SecurityProofs.DitherInstance.WorkSoundAt": {
    "owner": "@compute-research"
   },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formAnd": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formAt": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formLam": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formNamed": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formNoHosts": {
+   "owner": "@compute-research"
+  },
   "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_honest": {
    "owner": "@compute-research"
   },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_honest_lam": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_honest_named": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_honest_noHosts": {
+   "owner": "@compute-research"
+  },
   "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_nontrivial": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_nontrivial_and": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_nontrivial_at": {
    "owner": "@compute-research"
   },
   "Pouw.SecurityProofs.EndToEnd": {
@@ -26840,7 +26890,12 @@
    "Verity.SecurityProofs.RefineIncorrect": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "WeightSecurity.SecurityProofs.TheftServedTied": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run records each window's trace of a checked population (Security/Definitions/WeightSecurity/Tied.lean) by two to the served channel's covert capacity per charge unit in bits times the honest-use bound, under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable), the bound on what the audit leaves undetected among the traces' incorrect blocks (WeightSecurity.Served.UndetectedLe), the population's check (Population.Dataflow.Checked) and its fan-out to charge units (Population.Dataflow.FanOut), with two open premises as probability terms: that a release is not its trace's outputs, the network certifier's egress tie (WeightSecurity.Assumptions.EgressTied), and that a trace does not hold its window's inputs, the advice charge's (WeightSecurity.Assumptions.AdviceCovered); it reads no function's acceptance.",
    "Nci.Cut.SecurityProofs.CountHE": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry, under the named (H) and (E) (Security/Definitions/Assumptions.lean), with its only premise on the circuit its count verdict (Nci.CompliesAtMost); the join from a published complies of the count to that verdict is NciCheck.Properties.DescCountsCK, stated among the properties and not yet proved, which is what would give it an acceptance.",
-   "Pouw.SecurityProofs.DitherInstance.WorkSoundAt": "frozen (verdict): a probability statement over a quantified proof-system verdict whose soundness is the premise ProofSystemSound, not a property of one function; it gets the shape when the proof system's verdict is a named Lean function the event reads (CMP-136). One statement over every card table, menu and host row, in place of the four at the H200's and the RTX PRO 6000's (CMP-392)."
+   "Pouw.SecurityProofs.DitherInstance.WorkSoundAt": "frozen (verdict): a probability statement over a quantified proof-system verdict whose soundness is the premise ProofSystemSound, not a property of one function; it gets the shape when the proof system's verdict is a named Lean function the event reads (CMP-136). One statement over every card table, menu and host row, in place of the four at the H200's and the RTX PRO 6000's (CMP-392).",
+   "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formAt": "frozen (verdict): a probe of the witnesses rule, `WorkSoundAt`'s statement under another name; not for landing (CMP-394).",
+   "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formAnd": "frozen (verdict): a probe of the witnesses rule, `WorkSoundAt`'s statement under another name; not for landing (CMP-394).",
+   "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formNoHosts": "frozen (verdict): a probe of the witnesses rule, `WorkSoundAt`'s statement under another name; not for landing (CMP-394).",
+   "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formLam": "frozen (verdict): a probe of the witnesses rule, `WorkSoundAt`'s statement under another name; not for landing (CMP-394).",
+   "Pouw.SecurityProofs.DitherInstance.WorkSoundAt_formNamed": "frozen (verdict): a probe of the witnesses rule, `WorkSoundAt`'s statement under another name; not for landing (CMP-394)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
