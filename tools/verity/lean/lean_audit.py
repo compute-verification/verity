@@ -232,6 +232,7 @@ NOT_READ = {
     "unread.py": "the ratchet on wholly unread modules, which `run` runs after the audits on the facts they wrote",
     "unread-caps.json": "the ratchet's caps, which `unread.py` reads",
     "unread_gate.py": "drive's landing gate on the seeds the ratchet reads, which runs `main`'s copy of this tool",
+    "warm.py": "the audit of a ready mark's merge, which starts `lean_audit.py` for the packages a change reaches",
     "pyproject.toml": "the tools/verity/lean suite's settings",
 }
 
@@ -996,9 +997,19 @@ MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|" + MK.INDEX + r"/[0-9a-f]
 BUNDLE_CAP = 3 << 30
 #: a key of `lean-deps-urls.json` naming a recorded check's bundle by its sha256 (`shared_bundles`)
 SHARED = "lean-artifacts/"
-#: a run's file that is a bundle (`LakeArtifacts.bundle_into` in the run's `lean-audit/`), the path `shared_bundles` lists
-BUNDLE_FILE = re.compile(r"lean-audit/lean-artifacts(-\d+)?\.tar\.gz")
-#: how many of the newest recorded checks' bundles the launcher sends
+#: a bundle's name in the directory its audit writes it in (`LakeArtifacts.bundle_into`)
+BUNDLE_NAME = r"lean-artifacts(-\d+)?\.tar\.gz"
+#: a recorded check's file that is a bundle, in the run's `lean-audit/`
+BUNDLE_FILE = re.compile("lean-audit/" + BUNDLE_NAME)
+#: the runs `shared_bundles` lists bundles of, each kind as (the store's attempts of it, a bundle's path among its files,
+#: which of the attempt's outputs list its files): a recorded check lists its own among its run's files; the audit of a
+#: ready mark's merge (`warm.py`) leaves its in the `--out` its caller gave it, which a caller that doesn't list its files
+#: still has in its run record
+PUBLISHERS = ((COMMON.RECORDED_CHECKS, BUNDLE_FILE, ("run_files",)),
+              (COMMON.MARK_AUDITS, re.compile(re.escape(COMMON.MARK_AUDIT_OUT) + BUNDLE_NAME), ("run_files", "run_record")))
+#: how many of the newest bundles of each kind of run the launcher sends: a candidate's shards end by the dozen, and counted
+#: with them a mark's bundle would be gone before the candidate that holds its change is built. The marks of the PRs the
+#: launcher's tree holds are sent beside these, however old (`shared_bundles`' ``heads``)
 SHARED_LIMIT = 12
 #: how many bundles `LakeArtifacts.take` downloads at once, ahead of the one it unpacks
 AHEAD = 4
@@ -1027,10 +1038,11 @@ class LakeArtifacts:
     every declaration through the kernel, and compiles a random sample of the modules it restored again, failing on any
     output that differs (`check.sampled_recompile`), which is what binds a restored `.olean` to its source.
 
-    Between nodes, the module versions a recorded check's audit added travel as one bundle in its run's files (`bundle`); the
-    launcher sends a URL for each of the newest (`shared_bundles`), and a node takes in each it hasn't yet (`take`). A records
-    run (`lean_changed.py --records`) bundles what it added the same way, which `shared_bundles` doesn't list yet. A bundle is
-    trusted as far as its source, as a verdict pack is (`verdicts.py`): a recorded run."""
+    Between nodes, the module versions a recorded check's audit added travel as one bundle in its run's files (`bundle`), as
+    do those the audit of a ready mark's merge added (`warm.py`); the launcher sends a URL for each of the newest of each
+    and for those of the marks of the PRs its tree holds (`shared_bundles`), and a node takes in each it hasn't yet (`take`).
+    A records run (`lean_changed.py --records`) bundles what it added the same way, which `shared_bundles` doesn't list yet.
+    A bundle is trusted as far as its source, as a verdict pack is (`verdicts.py`): a recorded run."""
 
     def __init__(self, store: Path, cap: int = ARTIFACTS_CAP):
         self.store, self.cap = store, cap
@@ -1732,34 +1744,42 @@ def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
     if not hasattr(r, "presign"):
         return {}
     return {**{k: r.presign(object_key(v["sha256"]), ttl_s) for k, v in sorted(pinned.items())},
-            **{SHARED + h: r.presign(object_key(h), ttl_s) for h in shared_bundles()}}
+            **{SHARED + h: r.presign(object_key(h), ttl_s) for h in shared_bundles(heads=COMMON.merged_heads(ROOT))}}
 
 
-def shared_bundles(store=None, limit: int = SHARED_LIMIT) -> list[str]:
-    """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the newest recorded checks' run files, newest first, at
-    most ``limit``: only a recorded run's (`common.RECORDED_CHECKS`), as `check.verdict_packs` takes only theirs, a failed or
-    cancelled run's too, since its bundle holds only modules compiled in the sandbox, each under the key of what its
-    compile read (`LakeArtifacts.put`). When the store has a remote, the attempts started in the last `common.RECENT_S`
-    are refreshed from it first. Empty when the store can't be read: each node then reuses only what it built."""
+def shared_bundles(store=None, limit: int = SHARED_LIMIT, heads: list[str] | tuple[str, ...] = ()) -> list[str]:
+    """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the files of the newest runs of each kind of
+    `PUBLISHERS`, the recorded checks' first, each kind's newest first and at most ``limit``: only a recorded run's, as
+    `check.verdict_packs` takes only theirs, a failed or cancelled run's too, since its bundle holds only modules compiled
+    in the sandbox, each under the key of what its compile read (`LakeArtifacts.put`). Before the newest mark audits' come
+    those of the marks of ``heads`` (`common.lookups`; the launcher gives the heads of the PRs its tree holds,
+    `common.merged_heads`), however old and beside the ``limit``: a PR waits hours between its mark and its candidate,
+    newer marks push its bundle out of the newest, and a tree whose kept build is in use compiles every module above one
+    its node lacks. When the store has a remote, the attempts started in the last `common.RECENT_S` are refreshed from it
+    first. Empty when the store can't be read: each node then reuses only what it built."""
     from research.store.local import LocalStore
 
+    ended = "state IN ('done', 'failed', 'cancelled') ORDER BY start_utc DESC LIMIT ?"
     out: list[str] = []
     try:
         store = store or LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True, since=COMMON.recent(time.time()))
-        rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
-                               "ORDER BY start_utc DESC LIMIT ?", (4 * limit,))
-        for (rid,) in rows:
-            art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
-            for f in store.listing(art) if art else []:
-                if BUNDLE_FILE.fullmatch(f["path"]) and f["remote"] and f["sha256"] not in out:
-                    out.append(f["sha256"])
-            if len(out) >= limit:
-                break
+        for runs, bundle, listed in PUBLISHERS:
+            for which, args, most in COMMON.lookups(runs, limit, heads):
+                found: list[str] = []
+                for (rid,) in store.index.sql(f"SELECT id FROM attempts WHERE {which} AND {ended}", args):
+                    outputs = (store.get_attempt(rid) or {}).get("outputs") or {}
+                    for art in dict.fromkeys(a for a in map(outputs.get, listed) if a):
+                        for f in store.listing(art):
+                            if bundle.fullmatch(f["path"]) and f["remote"] and f["sha256"] not in (*out, *found):
+                                found.append(f["sha256"])
+                    if most and len(found) >= most:
+                        break
+                out += found[:most]
     except Exception as e:  # noqa: BLE001  (no bundle: each node reuses only what it built)
         print(f"lean-audit: no artifact bundles listed from the store ({type(e).__name__}: {e})", file=sys.stderr)
-    return out[:limit]
+    return out
 
 
 def url_file(dest: Path, ttl_s: int = URL_TTL_S) -> Path | None:
