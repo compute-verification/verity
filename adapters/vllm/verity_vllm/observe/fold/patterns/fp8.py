@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import fp8
+from verity.definitions.registry import deepgemm, fp8
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import (
@@ -121,9 +121,6 @@ class PerTokenGroupFp8Quant:
         if not (x.dtype == "bfloat16" and xq.dtype == E4M3 and xs.dtype == "float32"):
             return unsupported(node, "Fp8GroupQuant_v1 is bf16 -> (e4m3, f32)", dtypes=[x.dtype, xq.dtype, xs.dtype])
         if bool(ue8m0):
-            from verity.definitions.registry import (
-                deepgemm,  # loaded only on the ue8m0 branch
-            )
             spec = bind(deepgemm.Fp8GroupQuantUe8m0, K=K, G=G)
         else:
             spec = bind(fp8.Fp8GroupQuant, K=K, G=G)
@@ -210,8 +207,6 @@ class DynamicDeepGemmFp8Linear:
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or op_name(node.op) != "dynamic_flashinfer_deepgemm_blockscale_gemm":
             return None
-        from verity.definitions.registry import deepgemm
-
         a = bound_args(node)
         x, w, ws = _arg(a, "input", pos=0), _arg(a, "weight", pos=1), _arg(a, "weight_scale", pos=2)
         group, ue8m0 = _arg(a, "group_size", pos=3), _arg(a, "use_deep_gemm_e8m0", pos=4)

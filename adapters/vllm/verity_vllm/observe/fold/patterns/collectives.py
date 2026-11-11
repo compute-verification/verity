@@ -15,6 +15,7 @@ rank Program binds through `vllm_bindings.AllReduce2Rule` / `AllGather2Rule`, so
 
 from __future__ import annotations
 
+from verity.circuits.defs import bind
 from verity.definitions.registry import b1_tp2
 from verity.definitions.registry import tp_allreduce as T
 
@@ -104,8 +105,6 @@ class TpCollective:
     def _per_request(self, node: TreeNode, routed: T.Captured, x: ViewDesc, out: ViewDesc, site: str, attribution) -> Resolution:
         """The routed all-reduce as the Build binds it: one call per request over its run of rows, each `rows * N` words on the route
         the launch's M picks (`route_binding`; refused where the route reduces an element by its offset in the launch)."""
-        from verity.circuits.defs import bind
-
         (M, N), parts = x.shape, []
         try:
             spans = request_spans(attribution) or [(0, M)]
@@ -198,8 +197,6 @@ class TpFusedAllReduceRmsNorm:
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or base_op(node.op) != FUSED_AR_NORM_OP:
             return None
-        from verity.circuits.defs import bind
-
         a = bound_args(node)
         x, res, w, out = (a.get(k) for k in ("allreduce_in", "residual", "rms_gamma", "norm_out"))
         eps, world, fp32, code = (a.get(k) for k in ("rms_eps", "world_size", "fp32_acc", "pattern_code"))
@@ -241,7 +238,6 @@ class EmbeddingShardCuda:
     name: str = "tp.embedding_shard_cuda"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
-        from verity.circuits.defs import bind
         if node.is_triton or base_op(node.op) != "_C.vocab_parallel_embedding":
             return None
         a = bound_args(node)

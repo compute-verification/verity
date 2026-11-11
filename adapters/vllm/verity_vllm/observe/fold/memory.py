@@ -77,6 +77,7 @@ from verity.circuits.refs import (
     Strided,
     broadcast,
     concat,
+    runs,
 )
 
 from verity_vllm.observe.events import StorageAlloc, ViewDesc
@@ -154,8 +155,6 @@ def geometry_refs(space: str, idx: int, base: int, shape: tuple[int, ...], strid
 def access_runs(refs: Refs | list | None) -> list | None:
     """An access journal entry's refs as `runs()` lists: the fold keeps the `Refs` it read (shared with the instances, where a
     transposed weight's runs would be one per element); a list is already runs."""
-    from verity.circuits.refs import runs
-
     return runs(refs) if isinstance(refs, Refs) else refs
 
 

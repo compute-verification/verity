@@ -21,6 +21,7 @@ resolution's `consumed` set (no silent, unaccounted children) and that no id is 
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
@@ -381,7 +382,6 @@ def resolve_node(node: TreeNode, ctx: StepContext) -> Resolution:
 
 
 def _with_pattern(r: Resolution, name: str) -> Resolution:
-    import dataclasses
     return dataclasses.replace(r, pattern=name)
 
 

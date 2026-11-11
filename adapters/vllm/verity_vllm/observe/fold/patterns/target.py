@@ -6,6 +6,8 @@ from __future__ import annotations
 from verity.circuits.refs import runs
 
 from verity_vllm.observe.fold.resolver import Shared, StepContext, spec_label
+from verity_vllm.program.frontend.gemm_targets import try_gemm_target_for
+from verity_vllm.program.frontend.rules.vocab import vocabulary_for
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
 X01_SCRATCH_KEY = "x01_num_sms"
@@ -28,7 +30,6 @@ def target_of(ctx: StepContext) -> tuple[TargetProfile, bool]:
 def vocab_kind(ctx: StepContext, role: str, **statics):
     """The Definition the record target's vocabulary binds the Build's `role` to at `statics`: the Build's `ctx.kind`, so a Compute
     over it is the Build's Call."""
-    from verity_vllm.program.frontend.rules.vocab import vocabulary_for
     spec = vocabulary_for("profile", target_of(ctx)[0].numerics_profile).kind(role, **statics)
     if spec is None:
         raise ValueError(f"the record target's vocabulary binds no {role!r}")
@@ -92,7 +93,6 @@ def gemm_target_of(ctx: StepContext):
     the family the capture host reported): `(GemmTarget, None)` or `(None, refusal)` — the ONE source of the launch geometry every
     `matmul_kernel_persistent` launch must show (`GemmTarget.launch_config`), shared with Bet A (`vllm_bindings.gemm_pins_for`).  The
     selection is recorded once in `ctx.scratch[GEMM_TARGET_SCRATCH_KEY]` for the fold / resolution report."""
-    from verity_vllm.program.frontend.gemm_targets import try_gemm_target_for
     tp, recorded = target_of(ctx)
     fam = header_gemm_arch_family(ctx)
     gt, refusal = try_gemm_target_for(tp.compute_capability, fam)

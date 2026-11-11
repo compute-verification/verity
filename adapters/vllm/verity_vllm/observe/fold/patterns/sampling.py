@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import collections
 import math
+import struct
 from dataclasses import dataclass, replace
 from typing import Any
 
 from verity.circuits.defs import bind
 from verity.definitions.registry import b1
+from verity.definitions.registry import sampling as _sampling
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, sub_rows
@@ -40,6 +42,7 @@ from verity_vllm.observe.fold.resolver import (
     Unsupported,
 )
 from verity_vllm.observe.fold.tree import TreeNode
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 SCRATCH_TOKEN_SELECT = "token_select"  # ctx.scratch key: two-stage greedy sampler state (TokenSelectGumbelTwoStage)
 
@@ -266,7 +269,6 @@ def request_sampling(ctx: StepContext) -> dict[str, dict]:
 
 
 def _f32_bits(x: float) -> int:
-    import struct
     return struct.unpack("<I", struct.pack("<f", float(x)))[0]
 
 
@@ -550,7 +552,6 @@ class TokenSelectGumbelTopP:
             return unsupported(node, "sampled ids are not an integer [R] view", out=repr(out))
         if out.rank == 1:
             out = ViewDesc(out.alloc, out.offset, (R, 1), (out.strides[0], 1), out.dtype, out.device)
-        from verity.definitions.registry import sampling as _sampling
         from verity.definitions.registry import sampling_vocab
         construction = self.construction or target_of(ctx)[0].effective_sampler_construction()
         spec = bind(sampling_vocab.select_for(_sampling.GumbelTopPTokenSelect, construction), V=V)
@@ -627,7 +628,6 @@ def with_sampler_construction(profile, construction: str | None):
     `profile` itself when None.  A construction `TargetProfile` does not name is refused by name."""
     if construction is None:
         return profile
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     if construction not in TargetProfile.SAMPLER_CONSTRUCTIONS:
         raise SystemExit(f"sampler construction {construction!r} is not one of {list(TargetProfile.SAMPLER_CONSTRUCTIONS)}")
     return replace(profile, patterns=[replace(p, construction=construction) if isinstance(p, TokenSelectGumbelTopP) else p for p in profile.patterns])

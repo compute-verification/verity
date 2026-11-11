@@ -25,8 +25,12 @@ from verity.definitions.registry.sparse_mla_split import (
 )
 
 from verity_vllm.observe.events import ViewDesc
+from verity_vllm.observe.fold.patterns.collectives import TpFusedAllReduceRmsNorm
+from verity_vllm.observe.fold.patterns.cublas import CublasLinear, MlaAbsorbBmm
+from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_row_major
 from verity_vllm.observe.fold.patterns.kv_cache import kv_slots
+from verity_vllm.observe.fold.patterns.norms import CudaFusedAddRmsNorm, CudaRmsNorm
 from verity_vllm.observe.fold.patterns.ops import bound_args, op_name, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import unsupported
 from verity_vllm.observe.fold.patterns.rotary import step_positions
@@ -590,11 +594,6 @@ class DsaSparseMla:
 def dsa_patterns() -> list:
     """Patterns in dependency order, before generic transparent handlers; with them vLLM's default Hopper block-FP8 linear op
     (`fp8.DynamicDeepGemmFp8Linear`), which GLM-5.3's attention and dense projections run."""
-    from verity_vllm.observe.fold.patterns.collectives import TpFusedAllReduceRmsNorm
-    from verity_vllm.observe.fold.patterns.cublas import CublasLinear, MlaAbsorbBmm
-    from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
-    from verity_vllm.observe.fold.patterns.norms import CudaFusedAddRmsNorm, CudaRmsNorm
-
     return [DsaNormRope(), DsaQ(), DsaMqaGather(), DsaMqaAllocation(), DsaTopK(), DsaIndexShare(), DsaSparseMla(), DynamicDeepGemmFp8Linear(),
             TpFusedAllReduceRmsNorm(world=8), CudaRmsNorm(), CudaFusedAddRmsNorm(), CublasLinear(), MlaAbsorbBmm()]
 
