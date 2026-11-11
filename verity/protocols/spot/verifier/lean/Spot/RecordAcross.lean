@@ -68,7 +68,7 @@ def receiptReason (received : List ByteArray) (earlier later : ByteArray) : Opti
   | some _, none => some "the challenger's log shows no coin released after the later registration: its receipt is not in the log"
   | some a, some b =>
     if a < b then none
-    else some s!"the challenger's log shows coin {b} released after the later registration and coin {a} after the earlier one: the earlier registration's coins come first"
+    else some s!"the challenger's log shows coin {b} released after the later registration and coin {a} after the earlier registration: the earlier registration's coins come first"
 
 /-- The roots of the coin family the evidence `coins` names (its segment's label), from the session the auditor's ledger
 opens on `window` (`Challenger.trustedSessionOf`, as `Challenger.coinsReason` reads it). -/
@@ -79,16 +79,21 @@ def receivedOf (coins : Json) (window : String) : V (List ByteArray) := do
     | .str l => ((roots.find? (·.1 == l)).map (·.2)).getD []
     | _ => []
 
-/-- Why the later stream's sample does not hold the order its registration rests on: its coins are not the ones the
-challenger's signed log shows released after `later` (`Challenger.coinsReason` on the bytes `read`), or that log does not
-show `earlier` received first (`receiptReason`). -/
+def NO_LOG : String := "the challenger's session published no signed log to read the order from"
+
+/-- Why the later stream's sample does not hold the order its registration rests on: it has no coin evidence (`coins`
+null), its coins are not the ones the challenger's signed log shows released after `later` (`Challenger.coinsReason` on
+the bytes `read`), or that log does not show `earlier` received first (`receiptReason`). -/
 def orderReason (window : String) (earlier later : ByteArray) (coins : Json) (read : ByteArray) : Option String :=
-  match Challenger.coinsReason coins window later read with
-  | some why => some s!"the later sample's coins: {why}"
-  | none =>
-    match receivedOf coins window with
-    | .error why => some why
-    | .ok received => receiptReason received earlier later
+  match coins with
+  | .null => some NO_LOG
+  | _ =>
+    match Challenger.coinsReason coins window later read with
+    | some why => some s!"the later sample's coins: {why}"
+    | none =>
+      match receivedOf coins window with
+      | .error why => some why
+      | .ok received => receiptReason received earlier later
 
 /-- Why `audit` is not an accepted audit record of the registration `previous` (its digest, hex): it is no audit record,
 it is another registration's, or it did not accept. -/
@@ -152,6 +157,8 @@ private def root (n : Nat) : ByteArray := ByteArray.mk #[n.toUInt8]
 #guard (receiptReason [] (root 1) (root 2)).isSome
 -- one registration named on both sides is not before itself
 #guard (receiptReason [root 1, root 1] (root 1) (root 1)).isSome
+-- a sample with no coin evidence holds no order
+#guard orderReason "" (root 1) (root 2) .null (root 0) == some NO_LOG
 
 private def audited (digest : String) (accepted : Json) : Json :=
   Json.mkObj [("format", Json.str FORMAT), ("registration_digest", Json.str digest), ("accepted", accepted)]
