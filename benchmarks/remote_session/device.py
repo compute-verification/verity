@@ -35,11 +35,13 @@ skip       the dropped blocks zeroed where they are stored, their true blocks ke
 Gates, before anything is timed (`GpuBackend.gates`), over a small store across the same GPUs and tiers (three chunks a
 GPU, and with a host tier one more a GPU in host memory, so its tree has padding on every GPU when there are several):
 the payload root against `audit.payload_tree` and blocks of the store against `codec.encode` (at each segment's first
-block and the store's last), a pass's root against `receipts.tree` over the reference's receipts, and sessions under
-the registration's key, one honest and accepted by `audit.AuditRun`, one with 1/16 of its blocks dropped and rejected at
-a receipt, and with a host tier one with only host blocks dropped (every fourth) and rejected at a receipt; then in
-calibration, the chained pass against the plain pass at every kept level over the whole store, and its seed and signs
-against the reference's.
+block and the store's last), a pass's receipts and root against the reference's and `receipts.tree` over them, and
+sessions under the registration's key, one honest and accepted by `audit.AuditRun`, one with 1/16 of its blocks dropped
+and rejected at a receipt, and with a host tier one with only host blocks dropped (every fourth) and rejected at a
+receipt; then in calibration, the chained pass against the plain pass at every kept level over the whole store, and its
+seed and signs against the reference's. Every buffer a gate store's pass or opening writes holds 0xA5 before it
+(`DeviceStore.poison`), and the first pass is a control that launches nothing, whose receipts and root the gate must
+refuse (`no_write`): so what the gates accept, the pass they ran wrote.
 """
 from __future__ import annotations
 
@@ -114,6 +116,16 @@ def percentiles(xs: list[int]) -> dict:
 
 def u64s(values) -> ctypes.Array:
     return (ctypes.c_uint64 * len(values))(*values)
+
+
+POISON = 0xA5
+"""The byte a gate store's buffers hold before a pass or an opening writes them (`DeviceStore.poison`)."""
+
+
+def poison(torch, *tensors) -> None:
+    """Every byte of each tensor POISON, a device's on the current stream."""
+    for t in tensors:
+        t.view(torch.uint8).fill_(POISON)
 
 
 ALLOCATOR_STATS = ("num_alloc_retries", "num_ooms", "num_sync_all_streams", "num_device_alloc", "num_device_free",
@@ -395,7 +407,10 @@ class DeviceStore:
 
     What a pass keeps goes to a ring of SLOTS on each GPU and from there, on each GPU's offload stream as its part ends,
     to a pinned host ring, both allocated with the store's shape (`shape`); the store's offloader copies each slot into
-    the pass's handle in ordinary host memory and frees it for the pass SLOTS later. So no pass allocates."""
+    the pass's handle in ordinary host memory and frees it for the pass SLOTS later. So no pass allocates.
+
+    With `poison` set (a gate's store), every buffer a pass writes holds POISON before the pass runs (`_poison`), and
+    so does each buffer an opening recomputes into: what a gate then reads there, that pass or opening wrote."""
 
     def __init__(self, torch, lib: Lib, lib_open: Lib, kv: Kv, blocks: int, key: bytes, generator, *, gpus=None,
                  chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
@@ -488,6 +503,7 @@ class DeviceStore:
         self.free = [threading.Event() for _ in range(SLOTS)]
         for f in self.free:
             f.set()
+        self.poison = False
         self.trace: list | None = None
         self._launch_trace: dict = {}
         self.offload_ns: list[int] = []
@@ -695,10 +711,24 @@ class DeviceStore:
                      SALT_DOMAIN + self.key + seed, self.blocks)
         lib.call("rb_sketch_set", rb.sketch_prefix(seed))
 
-    def launch(self, i: int, after: Ticket | None, seed: bytes | None = None) -> Ticket:
+    def _poison(self, g: int, slot: int) -> None:
+        """POISON in every buffer the pass about to take `slot` writes on GPU g, on the current stream: its seed and
+        packed signs, its root, its padding's scratch and nodes, each of its segments' counters, receipts, tree
+        scratch and kept levels, on the leader its top levels; and in the pinned host memory their copies go to."""
+        ring = self.ring[g]
+        mine = [ring["seed"], ring["pk"], ring["pad"], ring["pad_out"], ring["roots"][slot]]
+        mine += [ring[k][slot] for k in ring["host"]] + [host[slot] for host in ring["host"].values()]
+        for q in self.gpu_segs[g]:
+            x = self.seg_ring[q]
+            mine += [x["ctr"], x["ys"], x["dig"], x["up"], x["kept"][slot], x["host"][slot]]
+        poison(self.torch, *mine, *([self.root_host[slot]] if g == 0 else []))
+
+    def launch(self, i: int, after: Ticket | None, seed: bytes | None = None, write: bool = True) -> Ticket:
         """Queue pass i chained from `after`'s root (None: the window's previous root, `start_chain`) on every GPU,
         each behind the leader's event for that root, or with `seed` an unchained pass under that seed's constants
-        from the host; its ticket at once (`wait`)."""
+        from the host; its ticket at once (`wait`). Without `write` nothing that computes the pass is launched (its
+        signs, its receipts and tree, its top levels), only what carries its buffers to the host: a gate's control,
+        whose root and receipts are whatever the buffers held."""
         so, G, hc = self.lib.so, len(self.gpus), self.hc
         tr = None if self.trace is None else [time.perf_counter_ns(), time.thread_time_ns(), *_faults()]
         slot = self.launched % SLOTS
@@ -714,6 +744,8 @@ class DeviceStore:
             with self.on(gpu) as s:
                 if after is not None:
                     s.wait_event(self.top_done[after.slot])
+                if self.poison:
+                    self._poison(g, slot)
                 if g == 0:
                     self.started[slot].record(s)
                 self.began[g][slot].record(s)
@@ -721,7 +753,9 @@ class DeviceStore:
                 pk = ring["pks"][slot] if g == 0 else ring["pk"]
                 if tr is not None:
                     tr.append(time.perf_counter_ns())
-                if seed is None:
+                if not write:
+                    rc = 0
+                elif seed is None:
                     rc = so.rs_chain_prepare(i, ring["roots"].data_ptr() + 64 * prev, sd.data_ptr(), pk.data_ptr(),
                                              s.cuda_stream)
                 else:
@@ -734,19 +768,19 @@ class DeviceStore:
                     gpu.host_main.wait_event(self.prepared[g][slot])
                     for q in host:
                         x = self.seg_ring[q]
-                        rc = rc or so.rs_pass(self.data_g[q].data_ptr(), self.n[q], self.base[q], pk.data_ptr(),
-                                              x["ctr"].data_ptr(), x["ys"].data_ptr(), x["dig"].data_ptr(),
-                                              x["up"].data_ptr(), x["kept"][slot].data_ptr(), self.h0, self.chunk,
-                                              self.host_ctas, 0, 0, None, None, gpu.host_main.cuda_stream,
-                                              gpu.host_side.cuda_stream, self.host_consumers)
+                        rc = rc or (write and so.rs_pass(
+                            self.data_g[q].data_ptr(), self.n[q], self.base[q], pk.data_ptr(), x["ctr"].data_ptr(),
+                            x["ys"].data_ptr(), x["dig"].data_ptr(), x["up"].data_ptr(), x["kept"][slot].data_ptr(),
+                            self.h0, self.chunk, self.host_ctas, 0, 0, None, None, gpu.host_main.cuda_stream,
+                            gpu.host_side.cuda_stream, self.host_consumers))
                     self.host_done[g][slot].record(gpu.host_main)
                 first, count = self.pads[g]
                 x = self.seg_ring[hbm]
-                rc = rc or so.rs_pass(self.data_g[hbm].data_ptr(), self.n[hbm], self.base[hbm], pk.data_ptr(),
-                                      x["ctr"].data_ptr(), x["ys"].data_ptr(), x["dig"].data_ptr(),
-                                      x["up"].data_ptr(), x["kept"][slot].data_ptr(), self.h0, self.chunk,
-                                      self.sketch_ctas, first * lc, count * lc, ring["pad"].data_ptr(),
-                                      ring["pad_out"].data_ptr(), s.cuda_stream, gpu.side.cuda_stream, 0)
+                rc = rc or (write and so.rs_pass(
+                    self.data_g[hbm].data_ptr(), self.n[hbm], self.base[hbm], pk.data_ptr(), x["ctr"].data_ptr(),
+                    x["ys"].data_ptr(), x["dig"].data_ptr(), x["up"].data_ptr(), x["kept"][slot].data_ptr(), self.h0,
+                    self.chunk, self.sketch_ctas, first * lc, count * lc, ring["pad"].data_ptr(),
+                    ring["pad_out"].data_ptr(), s.cuda_stream, gpu.side.cuda_stream, 0))
                 if rc:
                     raise RuntimeError(f"rs_pass on GPU {gpu.index}: {rc}")
                 if host:
@@ -768,8 +802,8 @@ class DeviceStore:
             top = self.ring[0]["top"][slot]
             if tr is not None:
                 tr.append(time.perf_counter_ns())
-            rc = so.rs_top(u64s(segs), u64s(counts), len(segs), top.data_ptr(), hc, self.H, u64s(roots), G,
-                           s.cuda_stream)
+            rc = write and so.rs_top(u64s(segs), u64s(counts), len(segs), top.data_ptr(), hc, self.H, u64s(roots), G,
+                                     s.cuda_stream)
             if rc:
                 raise RuntimeError(f"rs_top: {rc}")
             self.top_done[slot].record(s)
@@ -844,6 +878,10 @@ class DeviceStore:
                                "part_ms": [self.began[g][k].elapsed_time(self.ended[g][k]) for g in range(len(self.gpus))],
                                "host_ms": host})
         return root, ticket.handle
+
+    def receipts(self) -> list[bytes]:
+        """The receipts on the devices, every block's in store order: the last pass's, once it is waited for."""
+        return [y for x in self.seg_ring for y in digests(x["ys"])]
 
     def run_pass(self, seed: bytes):
         """One unchained pass under `seed`: its root, and what its openings need, (seed, packed signs, each segment's
@@ -1032,6 +1070,8 @@ class DeviceStore:
             total = sum(len(f) for f in firsts)
             ys = torch.empty((total * S, 8), dtype=torch.int64, device=dev)
             nodes = torch.empty((total * per, 8), dtype=torch.int64, device=dev)
+            if self.poison:
+                poison(torch, ys, nodes)
             cs = torch.from_numpy(np.concatenate(firsts)).to(dev)
             ys0, nd0 = np.uint64(ys.data_ptr()), np.uint64(nodes.data_ptr())
             rows, order, hold, q0 = [], [], [], 0
@@ -1066,6 +1106,8 @@ class DeviceStore:
             addrs = np.concatenate(rows)
             n = addrs.size
             got = torch.empty((n, 8), dtype=torch.int64, device=dev)
+            if self.poison:
+                poison(torch, got)
             self.lib_open.call("rs_gather64", torch.from_numpy(addrs.reshape(-1).view(np.int64)).to(dev).data_ptr(), n,
                                got.data_ptr())
             idx = np.concatenate(order)
@@ -1379,18 +1421,21 @@ class GpuBackend:
         reg = audit.Registration(registration.node, small.blocks, root, registration.codec_seed, registration.codec,
                                  registration.receipt, registration.bind, registration.layout, registration.rows)
         seed = rb.seed(self.rng.bytes(32), 0, reg.digest)
-        got, _ = small.run_pass(seed)
         r = rb.receipter(reg.receipt, seed, reg.rows)
         ys = [r(j, encoded[j]) for j in range(small.blocks)]
         ref = rb.tree(seed, small.plan, ys, [store_salt(self.salt_key, seed, c) for c in range(small.blocks // PER_LEAF)])
+        # From here every pass and opening of the gate store writes into poisoned buffers. The control comes first: a
+        # pass that launches nothing, whose receipts and root the pass's own comparisons must refuse.
+        small.poison = True
+        got, _ = small.wait(small.launch(0, None, seed=seed, write=False))
+        out["no_write"] = {"receipts": small.receipts() == ys, "root": got == ref.commitment.root}
+        got, _ = small.run_pass(seed)
         out["rows"] = small.rows
-        out["pass_receipts"] = all(digests(small.seg_ring[q]["ys"]) == ys[small.base[q]:small.base[q] + small.n[q]]
-                                   for q in range(len(small.n)))
-        out["pass_root"] = got == ref.commitment.root
+        out["pass_receipts"], out["pass_root"] = small.receipts() == ys, got == ref.commitment.root
         out["session_honest"] = self.gate_session(small, reg, set())
         out["session_skip_sixteenth"] = self.gate_session(small, reg, set(range(0, small.blocks, 16)))
-        out["ok"] = (out["payload_root"] and out["encode"] and out["decode"] and out["pass_receipts"]
-                     and out["pass_root"] and out["session_honest"]["accepted"]
+        out["ok"] = (out["payload_root"] and out["encode"] and out["decode"] and not any(out["no_write"].values())
+                     and out["pass_receipts"] and out["pass_root"] and out["session_honest"]["accepted"]
                      and out["session_skip_sixteenth"]["failure"] == "receipt")
         if small.hbm_blocks < small.blocks:
             out["session_skip_host"] = self.gate_session(small, reg, set(range(small.hbm_blocks, small.blocks, 4)))
