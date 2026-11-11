@@ -5,7 +5,7 @@ A GPU card file names its Lean table (``lean``), which ``verity.hardware.lean`` 
 none) and ``card`` definitions are evaluated as exact rationals (``^`` a power, ``/`` exact, and a natural-number field
 refused where Lean's division would truncate) and each arm is compared with what the card file gives
 (``verity.hardware.lean.table``), for every store, resource and format the ACCEL ops are priced in
-(``Security/Definitions/Core/Accel/Isa.lean``): a constructor added there fails here until the card files carry it. The
+(``security/Definitions/Core/Accel/Isa.lean``): a constructor added there fails here until the card files carry it. The
 B200 has no card table yet, and its data sheet (``Accounting.TS.Sheets.B200``) is held to its card file instead.
 """
 
@@ -26,8 +26,8 @@ from verity.hardware.cards import load, number, skus
 from verity.hardware.lean import table
 
 ROOT = Path(__file__).resolve().parents[3]
-ISA = ROOT / "Security/Definitions/Core/Accel/Isa.lean"
-SHEET = ROOT / "Security/Definitions/Accounting/Sheets/B200.lean"
+ISA = ROOT / "security/Definitions/Core/Accel/Isa.lean"
+SHEET = ROOT / "security/Definitions/Accounting/Sheets/B200.lean"
 LEAN = lean.tabled()
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
 
@@ -197,7 +197,7 @@ def test_a_generated_table_declares_the_names_its_importers_read() -> None:
     """Each card's table is the module its card file names, a module of the definitions tree, and declares its
     namespace, its clocks and ``card``: a renamed or dropped one fails here before a Lean build does."""
     assert sorted(GENERATED) == sorted(load(sku)["lean"] for sku in LEAN)
-    assert all(path.startswith("Security/Definitions/") for path in GENERATED)
+    assert all(path.startswith("security/Definitions/") for path in GENERATED)
     found = {sku: re.findall(r"^(?:namespace|def|abbrev|theorem|lemma|instance|structure) (\S+)", lean.render(sku), re.M)
              for sku in LEAN}
     assert found == DECLARED
