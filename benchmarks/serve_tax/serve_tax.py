@@ -56,7 +56,7 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``boundary-rows``: ``record`` with prefix caching off and the two-stage audit's boundary commitment at serve, each
   window's finished requests committed by size class (`verity_vllm.pipeline.boundary_rows`), its object the two-stage
   serve's (`ROWS`, with the model's check template, `Model.check`) or ``--boundary-rows``'s JSON instead (``check``,
-  ``per_prompt``, ``per_output``, ``drained``, ``inline``, and ``tables`` for each span's latent history tables:
+  ``per_prompt``, ``per_output``, ``drained``, ``inline``, ``ids``, and ``tables`` for each span's latent history tables:
   `servetax_plugin`), at ``--window-s``; the server is held after its loads until its windows' commits account for
   every finished request (`await_commits`).
 - ``canonical-topk``: ``compiled`` with the canonical DSA top-k (`benchmarks/dsa_topk`'s vLLM plugin, `TOPK`), which

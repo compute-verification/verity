@@ -25,6 +25,8 @@ def test_a_writers_record_loads_and_dumps_back_to_itself():
     assert set(KINDS) | set(OPTIONAL) == {f.name for f in dataclasses.fields(BoundaryCommit)}
     tables = _doc() | {"tables": {"layers": [0, 3], "capacity": 16}}
     assert BoundaryCommit.of(tables, "w").dump() == tables and rec.tables is None
+    ids = _doc() | {"ids": True}
+    assert BoundaryCommit.of(ids, "w").dump() == ids and rec.ids is None
 
 
 @pytest.mark.parametrize("field", sorted(KINDS))

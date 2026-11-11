@@ -18,6 +18,16 @@ program, partition, port, schema, N leaves, run); a u32 is two u16 words, low fi
 The step shapes are no value: they choose the Programs, and the window's advice commits them. Each leaf's salt is fresh
 from the OS (`commit`).
 
+**The return**, a third value of a class that says its replay block returns the ids it served (`Layout.ids`): the block's
+output port, named as round 2 names the value a return link reads (`return_port`: ``o0``, or ``<replay block's id>/o0``
+in a record that names a port with a ``/``, as a history table's name does). Its rows are the ones round 2's return link
+reads (`Layout.return_rows`): O a span, a span's block's in output order then the next span's, row j the id of output j as
+the check returns it, two u16 words, the low one first, under the same row schema and its own fresh salt (`id_rows`). A
+round 2 then holds each sampled proof block's return to its row of this port, opened at round 1's root, where a record
+without the port has nothing to hold it to. The class says so because a return's type can't: 32 bits a unit need not be
+the id served. The ids are the ones `b.egress` holds; nothing ties the two values to each other while the replay block
+is a stand-in that reads neither (below).
+
 **History tables** (`Layout.layers`, off by default): each span's latent rows at each of those layers, one
 `boundary_tables` table a (slot, layer) of `boundary_tables.WORDS` words and ``capacity`` leaves under its own
 `history.domain` (the class's program and the table's name, from the run, the class and the slot), listed beside the two
@@ -47,7 +57,7 @@ import secrets
 import struct
 import threading
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cached_property
 from multiprocessing import util as mp_util
@@ -56,8 +66,9 @@ from typing import Any
 
 import numpy as np
 
+from verity.protocols.spot.verifier import second_stage as SS
 from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
-from verity.circuits.codec import descriptor_id
+from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.population import population
 from verity.circuits.program import Program
@@ -75,6 +86,8 @@ from verity_vllm.records.boundary_tables import TableRoots
 SCHEMA = CS.SCHEMA_HM96_SHA512_ROW_V2
 INGRESS, EGRESS = "b.ingress", "b.egress"
 PORTS = (INGRESS, EGRESS)
+#: the replay block's output port: its return's name where it is a value (`return_port`)
+RETURN = "o0"
 MIN_CAP = 2
 #: `b.ingress`'s fields before its ids, each a u32 (``u64``: two, low first) of the request's own sampling inputs
 FIELDS = (("lp", "u32"), ("max_tokens", "u32"), ("min_tokens", "u32"), ("ignore_eos", "u32"), ("temperature", "f32"),
@@ -172,6 +185,23 @@ def egress_row(span: Span, output_cap: int) -> np.ndarray:
     return _words([len(span.served), finish, *span.served] + [0] * (output_cap - len(span.served)))
 
 
+def id_rows(span: Span, output_cap: int) -> np.ndarray:
+    """Span's rows of its replay block's return at output cap O, (O, 2) u16: row j the id of output j, and past the ids
+    served the last one again, as the block's instances past them are copies of its last (`interior_rows.Span.padded`).
+    A span served no id has no instance to copy, and its rows are zero: no replay reproduces it."""
+    if len(span.served) > output_cap:
+        raise ValueError(f"{span.engine_id}: {len(span.served)} ids served past the class's {output_cap}")
+    last = span.served[-1] if span.served else 0
+    return _words([*span.served] + [last] * (output_cap - len(span.served))).reshape(output_cap, 2)
+
+
+def return_port(block: str, ports: Iterable[str]) -> str:
+    """The name of replay block ``block``'s return in a record whose other ports are ``ports``, as round 2 names the
+    value a return link reads (`second_stage.replay_links`): `RETURN`, or ``<block>/o0`` where the record names a port
+    with a ``/``."""
+    return f"{block}/{RETURN}" if any("/" in p for p in ports) else RETURN
+
+
 def run_root(serve: str, window: int) -> str:
     """The window's run, which every domain binds: the SHA-512 over `FORMAT`, the serve's nonce and the window's index."""
     return hashlib.sha512(f"{FORMAT}\0{serve}\0{int(window)}".encode()).hexdigest()
@@ -203,8 +233,9 @@ class Layout:
     (``per_prompt`` a prompt row, ``per_output`` an output), the class (``prompt``, ``outputs``), the spans N and the run.
     ``inline``: the replay block holds them `inlined`, and the check's proof blocks are the templates the check template's
     body calls (`templates`); else they are its instances (`population`). ``layers``: each span's history tables' layers,
-    of ``capacity`` leaves (the module docstring). What the prover commits under and the challenger's own copies
-    (`ports`)."""
+    of ``capacity`` leaves (the module docstring). ``ids``: the replay block returns the ids the span was served, one
+    check instance an output, and the class commits that return as a third value (`return_rows`). What the prover
+    commits under and the challenger's own copies (`ports`)."""
 
     check: SpecializedDefinition
     per_prompt: int
@@ -216,6 +247,7 @@ class Layout:
     inline: bool = False
     layers: tuple[int, ...] = ()
     capacity: int = HT.CAPACITY
+    ids: bool = False
 
     def __post_init__(self) -> None:
         for k in ("prompt", "outputs"):
@@ -278,40 +310,85 @@ class Layout:
         """Each span's history tables' names, slot by slot, then layer by layer."""
         return tuple(BT.name(self.run, self.prompt, self.outputs, r, x) for r in range(self.spans) for x in self.layers)
 
+    @cached_property
+    def return_rows(self) -> int | None:
+        """The rows a block of the replay block's return, where the class commits it (`ids`): one an output, the id the
+        check's instance there returns, as round 2's return link reads them (`second_stage.link_runs`: unit j of a
+        block its row j). None for a class that doesn't; ValueError for one whose block returns anything else, which
+        round 2 would hold to no row of such a port: other than one template's 32-bit output, one an output of the
+        class, in output order."""
+        if not self.ids:
+            return None
+        params = {P.template_id(t): {name for name, _ty in t.signature()[0]} for t in self.templates}
+        runs = SS.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
+        got = [(x, per, rs) for x, per, rs in runs if x.port not in params.get(x.template, ())]
+        by = {P.template_id(t): t for t in self.templates}
+        ok = (len(got) == 1 and got[0][0].value == RETURN and got[0][0].template in by
+              and sum(by[got[0][0].template].signature()[1].leaf_widths()) == 32 and got[0][1] == self.outputs == self.n_rho
+              and [SS.row_at(got[0][2], j) for j in range(self.outputs)] == list(range(self.outputs)))
+        if not ok:
+            raise ValueError(f"a class commits its replay block's return as ids where the block returns one 32-bit id an "
+                             f"output, in output order, by one return link round 2 derives: not "
+                             f"{P.template_id(self.replay)}'s, of {self.n_rho} instances at {self.outputs} outputs with "
+                             f"return links {[(x.template, x.value, per) for x, per, _rs in got]}")
+        return self.outputs
+
+    @cached_property
+    def returned(self) -> str | None:
+        """The return's name where the class commits it (`return_port`, among the two values and the tables)."""
+        if self.return_rows is None:
+            return None
+        return return_port(descriptor_id(self.replay), (*PORTS, *self.tables))
+
+    @cached_property
+    def values(self) -> tuple[str, ...]:
+        """The values the serve commits rows of, in the record's order: `PORTS`, then the return where the class
+        commits it."""
+        return PORTS if self.returned is None else (*PORTS, self.returned)
+
+    def leaves(self, port: str) -> int:
+        """A value's rows: one a span, or the return's rows a block a span."""
+        return self.spans * (1 if port in PORTS else self.return_rows)
+
     def words(self, port: str) -> int:
         if port in PORTS:
             return 2 * (HEAD_U32 + self.prompt) if port == INGRESS else 2 * (2 + self.outputs)
-        return BT.WORDS
+        return 2 if port == self.returned else BT.WORDS
 
     def domain(self, port: str) -> CommitmentDomain:
-        if port not in PORTS:
+        if port not in self.values:
             return HT.domain(self.partition["program"], port, BT.WORDS, self.capacity)
+        n = self.leaves(port)
         binding = identity_digest_sha512(CS.DOMAIN_TAG, {"program": self.partition["program"],
                                                          "partition": P.digest(self.partition), "port": port, "schema": SCHEMA,
-                                                         "leaves": self.spans, "run": self.run})
-        return CommitmentDomain(binding, CS.OWNER, RangeIndexedDomain(0, self.spans), hash="sha512")
+                                                         "leaves": n, "run": self.run})
+        return CommitmentDomain(binding, CS.OWNER, RangeIndexedDomain(0, n), hash="sha512")
 
     def ports(self) -> dict[str, dict[str, Any]]:
-        """Each value's leaves and domain id, as `Stream.register` takes them: the two values', then each table's."""
-        return {**{p: {"leaves": self.spans, "domain": self.domain(p).domain_id.hex()} for p in PORTS},
+        """Each value's leaves and domain id, as `Stream.register` takes them: the values', then each table's."""
+        return {**{p: {"leaves": self.leaves(p), "domain": self.domain(p).domain_id.hex()} for p in self.values},
                 **{t: {"leaves": self.capacity, "domain": self.domain(t).domain_id.hex()} for t in self.tables}}
 
     def schemas(self) -> dict[str, str]:
         """Each value's row schema, in `ports`' order."""
-        return {**dict.fromkeys(PORTS, SCHEMA), **dict.fromkeys(self.tables, HT.SCHEMA)}
+        return {**dict.fromkeys(self.values, SCHEMA), **dict.fromkeys(self.tables, HT.SCHEMA)}
 
     def provenance(self) -> dict[str, Any]:
         tables = {"tables": {"layers": list(self.layers), "capacity": self.capacity}} if self.layers else {}
         return {"prompt": self.prompt, "outputs": self.outputs, "check": P.template_id(self.check),
-                "per_prompt": self.per_prompt, "per_output": self.per_output, "inline": self.inline, **tables}
+                "per_prompt": self.per_prompt, "per_output": self.per_output, "inline": self.inline, **tables,
+                **({"ids": True} if self.ids else {})}
 
 
 def port_rows(spans: Sequence[Span], layout: Layout) -> dict[str, np.ndarray]:
-    """Each value's rows, (N, words) u16, span by span."""
+    """Each value's rows, (leaves, words) u16, span by span, in `Layout.values`' order."""
     if len(spans) != layout.spans or any(s.shape != (layout.prompt, layout.outputs) for s in spans):
         raise ValueError(f"the spans are not {layout.spans} of class ({layout.prompt}, {layout.outputs})")
-    return {INGRESS: np.stack([ingress_row(s, layout.prompt) for s in spans]),
+    rows = {INGRESS: np.stack([ingress_row(s, layout.prompt) for s in spans]),
             EGRESS: np.stack([egress_row(s, layout.outputs) for s in spans])}
+    if layout.returned is not None:
+        rows[layout.returned] = np.concatenate([id_rows(s, layout.outputs) for s in spans])
+    return rows
 
 
 @dataclass
@@ -359,7 +436,7 @@ def layout_of(pub: Mapping[str, Any], check: SpecializedDefinition) -> Layout:
     if set(t) != {"layers", "capacity"} or not isinstance(t["layers"], list):
         raise ValueError(f"a {FORMAT} commitment's tables are its layers and capacity, not {sorted(t)}")
     return Layout(check, c.per_prompt, c.per_output, c.prompt, c.outputs, c.spans, c.run, c.inline, tuple(t["layers"]),
-                  t["capacity"])
+                  t["capacity"], bool(c.ids))
 
 
 def record(pub: Mapping[str, Any], check: SpecializedDefinition, law: Mapping[str, Any], previous: str | None = None,
@@ -388,9 +465,9 @@ def commit(spans: Sequence[Span], layout: Layout, window: int, *, salts: Mapping
         raise ValueError(f"a class with {len(layout.tables)} history tables is committed with their roots, not "
                          f"{len(tables or {})}")
     rows = port_rows(spans, layout)
-    domains = {p: layout.domain(p) for p in PORTS}
-    ys = {p: os.urandom(CS.SALT_BYTES * layout.spans) for p in PORTS} if salts is None else dict(salts)
-    roots, _bc = CS.commit_ports(domains, rows, {}, ys, schemas=dict.fromkeys(PORTS, SCHEMA))
+    domains = {p: layout.domain(p) for p in rows}
+    ys = {p: os.urandom(CS.SALT_BYTES * layout.leaves(p)) for p in rows} if salts is None else dict(salts)
+    roots, _bc = CS.commit_ports(domains, rows, {}, ys, schemas=dict.fromkeys(rows, SCHEMA))
     roots |= {t: bytes(tables[t]) for t in layout.tables}
     return Committed(window, layout, tuple(spans), roots, ys, os.urandom(CS.SALT_BYTES) if index_salt is None else index_salt,
                      clock() - t0)
@@ -416,7 +493,7 @@ def write(c: Committed, directory: Path) -> Path:
     """`c`'s files under ``directory`` (module docstring), ``commit.json`` last."""
     d = Path(directory)
     d.mkdir(parents=True, exist_ok=True)
-    for name, data in ((INDEX, c.index), (CS.INDEX_SALT, c.index_salt), (SALTS, b"".join(c.salts[p] for p in PORTS))):
+    for name, data in ((INDEX, c.index), (CS.INDEX_SALT, c.index_salt), (SALTS, b"".join(c.salts[p] for p in c.layout.values))):
         (d / name).write_bytes(data)
         os.chmod(d / name, 0o600)
     tmp = d / f".{COMMIT}"
@@ -433,16 +510,17 @@ def reopen(directory: Path, check: SpecializedDefinition, kept: BT.Kept | None =
     pub = BoundaryCommit.of(json.loads((d / COMMIT).read_text()), str(d / COMMIT))
     layout = layout_of(pub.dump(), check)
     spans = [Span.from_json(s) for s in json.loads((d / INDEX).read_bytes())["spans"]]
-    raw, n = (d / SALTS).read_bytes(), CS.SALT_BYTES * layout.spans
-    if len(raw) != n * len(PORTS):
-        raise ValueError(f"{d}: {len(raw)} bytes of salts, not {len(PORTS)} values' {n}")
+    raw, salts, at = (d / SALTS).read_bytes(), {}, 0
+    for p in layout.values:
+        salts[p], at = raw[at:at + CS.SALT_BYTES * layout.leaves(p)], at + CS.SALT_BYTES * layout.leaves(p)
+    if len(raw) != at:
+        raise ValueError(f"{d}: {len(raw)} bytes of salts, not {at}: {CS.SALT_BYTES} a leaf of its {len(layout.values)} values")
     tables = {t: bytes.fromhex(pub.values[t]["root"]) for t in layout.tables if t in pub.values}
     if kept is not None:
         at = (pub.window, layout.run, layout.prompt, layout.outputs)
         tables = {layout.tables[r * len(layout.layers) + i]: kept.table(*at, r, x).root
                   for r in range(layout.spans) for i, x in enumerate(layout.layers)}
-    c = commit(spans, layout, pub.window, salts={p: raw[k * n:(k + 1) * n] for k, p in enumerate(PORTS)},
-               index_salt=(d / CS.INDEX_SALT).read_bytes(), tables=tables)
+    c = commit(spans, layout, pub.window, salts=salts, index_salt=(d / CS.INDEX_SALT).read_bytes(), tables=tables)
     got = BoundaryCommit.of(c.public(), str(d))
     for k in ("values", "index", "program", "partition"):
         if getattr(got, k) != getattr(pub, k):
@@ -475,7 +553,7 @@ class BoundaryWindows:
     holds a finished one (``drained``), and at `stop`; its finished spans are committed class by class (`commit`, `write`)
     on a thread of their own, under ``out``/w<window>/, before anything can sample them, and each class's
     ``commit.json`` goes to ``sink`` too. ``check`` is the check template, or a callable giving it on that thread, and
-    ``inline`` its `Layout`'s. With ``tables`` (a `boundary_tables.Channel` or `LocalChannel` to rank 0), each class's
+    ``inline`` and ``ids`` its `Layout`'s. With ``tables`` (a `boundary_tables.Channel` or `LocalChannel` to rank 0), each class's
     commitment first assigns its spans their slots and waits for their history tables' roots at ``layers``, of
     ``capacity`` leaves. A failed commit is reported to ``sink`` (``error``) and registers nothing."""
 
@@ -483,11 +561,11 @@ class BoundaryWindows:
                  per_output: int, window_s: float, *, drained: bool = True, inline: bool = False,
                  sink: Callable[[dict], None] | None = None, clock: Callable[[], float] = time.monotonic,
                  serve: str | None = None, tables: Any = None, layers: Sequence[int] = (),
-                 capacity: int = HT.CAPACITY) -> None:
+                 capacity: int = HT.CAPACITY, ids: bool = False) -> None:
         if (tables is None) != (not layers):
             raise ValueError("history tables need both rank 0's channel and their layers")
         self.out, self.per_prompt, self.per_output = Path(out), int(per_prompt), int(per_output)
-        self.window_s, self.drained, self.inline = float(window_s), drained, inline
+        self.window_s, self.drained, self.inline, self.ids = float(window_s), drained, inline, ids
         self.tables, self.layers, self.capacity = tables, tuple(int(x) for x in layers), int(capacity)
         self.sink, self.clock = sink, clock
         self.serve = serve or secrets.token_hex(32)
@@ -502,14 +580,15 @@ class BoundaryWindows:
     def of(cls, cfg: Mapping[str, Any], out: Path, sink: Callable[[dict], None] | None = None,
            public: Sequence[Path] = ()) -> BoundaryWindows:
         """From a serve's configuration: ``check``, a serving template's descriptor id (`check_template`), and
-        ``per_prompt``, ``per_output``, ``window_s``, ``drained`` and ``inline``; and ``tables``, rank 0's history tables
+        ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline`` and ``ids``; and ``tables``, rank 0's history tables
         (`boundary_tables.Channel.of`: its private directory, never under ``out`` or ``public``)."""
         t, tc = str(cfg["check"]), cfg.get("tables")
         ch = BT.Channel.of(tc, out, *public) if tc else None
         return cls(out, lambda: check_template(t), int(cfg.get("per_prompt", 0)), int(cfg.get("per_output", 1)),
                    float(cfg.get("window_s", 600)), drained=bool(cfg.get("drained", True)),
                    inline=bool(cfg.get("inline", False)), sink=sink, tables=ch,
-                   layers=BT.layers_of(tc["layers"]) if tc else (), capacity=int((tc or {}).get("capacity", HT.CAPACITY)))
+                   layers=BT.layers_of(tc["layers"]) if tc else (), capacity=int((tc or {}).get("capacity", HT.CAPACITY)),
+                   ids=bool(cfg.get("ids", False)))
 
     @property
     def check(self) -> SpecializedDefinition:
@@ -575,7 +654,7 @@ class BoundaryWindows:
             for (p, o), mine in classes(spans).items():
                 try:
                     layout = Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
-                                    run_root(self.serve, window), self.inline, self.layers, self.capacity)
+                                    run_root(self.serve, window), self.inline, self.layers, self.capacity, self.ids)
                     c = commit(mine, layout, window, tables=self._tables(window, layout, mine))
                     write(c, self.out / f"w{window}" / f"p{p}-o{o}")
                     line = {**c.public(), "serve": self.serve, "open_s": opened, "close_s": closed, "carried": carried}
@@ -639,6 +718,7 @@ class BoundaryWindows:
         return self
 
 
-__all__ = ["COMMIT", "EGRESS", "FIELDS", "FINISH", "FORMAT", "INDEX", "INGRESS", "MIN_CAP", "PORTS", "SALTS", "SCHEMA",
-           "BoundaryWindows", "Committed", "Layout", "Span", "cap", "check_template", "classes", "commit", "egress_row",
-           "ingress_row", "inlined", "layout_of", "port_rows", "record", "reopen", "run_root", "sampling_of", "write"]
+__all__ = ["COMMIT", "EGRESS", "FIELDS", "FINISH", "FORMAT", "INDEX", "INGRESS", "MIN_CAP", "PORTS", "RETURN", "SALTS",
+           "SCHEMA", "BoundaryWindows", "Committed", "Layout", "Span", "cap", "check_template", "classes", "commit",
+           "egress_row", "id_rows", "ingress_row", "inlined", "layout_of", "port_rows", "record", "reopen", "return_port",
+           "run_root", "sampling_of", "write"]
