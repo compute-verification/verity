@@ -152,7 +152,7 @@ class Slot:
         self.row = [int(x) & 0xFFFFFFFF for x in row]
         if len(self.row) != cls.prompt + 2:
             raise ValueError(f"a slot's row is (occupancy, prompt length, {cls.prompt} ids), not {len(self.row)} words")
-        if served is not None and served.LP != self.row[1]:
+        if served is not None and self.row[1] != served.LP:
             raise ValueError(f"the served request's {served.LP} prompt ids, its slot row's {self.row[1]}")
         sig = dict(fn.signature()[0])
         self.params = [n for n, _ in fn.signature()[0]]

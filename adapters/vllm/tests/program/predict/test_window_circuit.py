@@ -548,7 +548,7 @@ def test_every_input_row_is_wired_or_registered_counted_from_the_description(win
     one = WB.weight_param("model.norm.weight", 64)
     alone = IF.input_count(doc, pins={one: pins[one]}, roots=roots)["registered"]
     other = IF.input_count(doc, pins=pins, roots={**roots, one: "cd" * 64})["registered"]
-    assert 0 < alone and other == count["registered"] - alone
+    assert alone > 0 and other == count["registered"] - alone
 
 
 #: TINY's rotary table's parameter, the one weight with no byte digest in the weights record (held to the analytic table)
@@ -716,15 +716,15 @@ def _checkpoint(tmp_path, seed: int = 3, flip: str | None = None, quant: dict | 
     directory and the manifest. With ``quant`` (its config's ``quantization_config``), each linear is an exact-int8 one's,
     ``weight`` I8 [N, K] and ``weight_scale`` F32 [N, 1] (`engine.int8_checkpoint`)."""
     T, rng = S.TINY, np.random.default_rng(seed)
-    H, I, NH, KVH, V = T["hidden_size"], T["intermediate_size"], T["num_attention_heads"], T["num_key_value_heads"], T["vocab_size"]
+    H, INTER, NH, KVH, V = T["hidden_size"], T["intermediate_size"], T["num_attention_heads"], T["num_key_value_heads"], T["vocab_size"]
     D = H // NH
     t = {"model.embed_tokens.weight": _bf16(rng, V, H), "model.norm.weight": _bf16(rng, H)}
     for i in range(T["num_hidden_layers"]):
         p = f"model.layers.{i}."
         t |= {p + "self_attn.q_proj.weight": _bf16(rng, NH * D, H), p + "self_attn.k_proj.weight": _bf16(rng, KVH * D, H),
               p + "self_attn.v_proj.weight": _bf16(rng, KVH * D, H), p + "self_attn.o_proj.weight": _bf16(rng, H, NH * D),
-              p + "mlp.gate_proj.weight": _bf16(rng, I, H), p + "mlp.up_proj.weight": _bf16(rng, I, H),
-              p + "mlp.down_proj.weight": _bf16(rng, H, I), p + "input_layernorm.weight": _bf16(rng, H),
+              p + "mlp.gate_proj.weight": _bf16(rng, INTER, H), p + "mlp.up_proj.weight": _bf16(rng, INTER, H),
+              p + "mlp.down_proj.weight": _bf16(rng, H, INTER), p + "input_layernorm.weight": _bf16(rng, H),
               p + "post_attention_layernorm.weight": _bf16(rng, H)}
     t = {n: ("BF16", a) for n, a in t.items()}
     for n in [n for n in t if quant and n.endswith("_proj.weight")]:
@@ -808,7 +808,7 @@ def test_the_verifier_holds_the_committers_registration_to_its_weights_records_s
     assert unpinned["of_record"] is False and unpinned["root_of_record"] != rec["root_of_record"]
     with pytest.raises(ValueError, match="the checkpoint is not of record"):
         WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
-    assert WR.SCHEMA == rec["schema"]
+    assert rec["schema"] == WR.SCHEMA
 
 
 def test_what_the_class_doesnt_take_is_refused_by_name():

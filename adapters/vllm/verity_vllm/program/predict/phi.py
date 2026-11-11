@@ -43,7 +43,7 @@ class Phi:
                 "engine": self.engine, "workload": self.workload, "execution": self.execution, "profile": self.profile}
 
     @classmethod
-    def from_json(cls, d: dict) -> "Phi":
+    def from_json(cls, d: dict) -> Phi:
         if d.get("schema") != PHI_SCHEMA:
             raise ValueError(f"phi schema {d.get('schema')!r} != {PHI_SCHEMA!r}")
         return cls(model=dict(d["model"]), target=dict(d["target"]), tp=dict(d.get("tp") or {"world": 1, "rank": 0}),

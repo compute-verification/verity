@@ -655,7 +655,8 @@ def test_two_requests_with_one_root_id_over_different_bodies_compose_by_digest()
     assert am["requests"][0]["specialization"] != am["requests"][1]["specialization"]
     assert wl.program.root.body.nodes[-2].fn.gates == 3 and wl.program.root.body.nodes[-1].fn.gates == 4   # T+1 tokens each
     # the same two shapes with DISTINCT root ids compose to the same workload digest: the root id is not part of the workload identity
-    d24b = encode_program(Program(_derived_like(3, 2, {**src, "T": 2}))); d36b = encode_program(Program(_derived_like(3, 3, {**src, "T": 3})))
+    d24b = encode_program(Program(_derived_like(3, 2, {**src, "T": 2})))
+    d36b = encode_program(Program(_derived_like(3, 3, {**src, "T": 3})))
     assert d24b["root"] != d36b["root"]
     c24b, c36b = W.request_component(d24b, REGISTRY, _WP(3), canon={}), W.request_component(d36b, REGISTRY, _WP(3), canon={})
     wlb = W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, 3, 0, c24b, T=2), W.WorkloadRequest("r1", 1, 3, 4, 0, c36b, T=3)], manifest_digest="m" * 8, lag=0)

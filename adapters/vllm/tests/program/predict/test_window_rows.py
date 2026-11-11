@@ -212,8 +212,8 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
             (first, _), (end, _) = plan
             (ft, fu), (et, eu) = calls
             assert first.name == "AttnBlockFirst" and end.name == "AttnHeadEnd" and rows.source[ft][fu] == WR.EVALUATED
-            l, o = (np.ascontiguousarray(rows.outs[ft][k][fu:fu + 4]).view("<u4") for k in (1, 2))
-            node = np.asarray(evaluate_batch(end, l, o)).reshape(4, -1).astype(np.uint16)
+            lw, ow = (np.ascontiguousarray(rows.outs[ft][k][fu:fu + 4]).view("<u4") for k in (1, 2))
+            node = np.asarray(evaluate_batch(end, lw, ow)).reshape(4, -1).astype(np.uint16)
             assert np.array_equal(node, rows.outs[et][0][eu:eu + 4])
             assert np.array_equal(node.reshape(-1), WR._words(s.values[j])) and node.any()
 
@@ -239,7 +239,7 @@ def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
     v = WR.standin_state(PROGRAM, CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)], KEY, 1, window=RUN)
     assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) and v.rows[0] == tuple(STATE[0])
     assert (v.leaves, v.words, v.schema, v.window) == (CLASS.buckets, SS.words(CLASS.scan), CR.SCHEMA_V2, RUN)
-    assert bytes(v.salts[0]) == hm96_salt(KEY, WR.STATE_NONCE + 1, 0) and WR.STATE_NONCE > max(WW.weight_nonces(values).values())
+    assert bytes(v.salts[0]) == hm96_salt(KEY, WR.STATE_NONCE + 1, 0) and max(WW.weight_nonces(values).values()) < WR.STATE_NONCE
     WR.Rows(low, slots, {**values, SS.SCAN_STATE: v})
 
 

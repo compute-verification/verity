@@ -91,8 +91,8 @@ class StepNeeds:
         self.index_topk = int(C["INDEX_TOPK"])
         self.threshold = DECODE_THRESHOLD.get(int(C["NH"]), DECODE_THRESHOLD_DEFAULT)
         NL, first = int(C["NL"]), int(C["FIRST_DENSE"])
-        self._layers = Counter((L in self.net.indexers, L >= first) for L in range(NL))
-        self._rep = {cls: min(L for L in range(NL) if (L in self.net.indexers, L >= first) == cls) for cls in self._layers}
+        self._layers = Counter((L in self.net.indexers, first <= L) for L in range(NL))
+        self._rep = {cls: min(L for L in range(NL) if (L in self.net.indexers, first <= L) == cls) for cls in self._layers}
 
     def kind(self, role: str, **statics: object) -> Need:
         """The vocabulary's Definition for `role` at `statics`, or the refusal naming why it has none."""
@@ -199,7 +199,7 @@ class StepNeeds:
     def _reduce_norm(self, M: int, n: int) -> list[tuple[Need, int]]:
         from verity.definitions.registry import tp_allreduce as AR
         s = self.net.settings
-        if s["flashinfer"] and M <= AR.fused_max_tokens(self.H, self.W):
+        if s["flashinfer"] and AR.fused_max_tokens(self.H, self.W) >= M:
             setting, _ = AR.served_route(s, M, self.H)
             c = AR.covered(setting, self.H, "fused", M) if setting else None
             if c is None:
@@ -215,7 +215,7 @@ class StepNeeds:
         from verity_vllm.engine.profiles.devices import fused_moe_config
         from verity_vllm.program.frontend import targets as TG
         C, H, G = self.C, self.H, self.G
-        E, TOPK, I = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"])
+        E, TOPK, INTER = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"])
         pairs = n * TOPK
         out = [(self._router(M, (L, "gate_w")), n), (self._fp8_linear(M, (L, "sh_gate_up_w")), n),
                (self.kind("silu_mul", I=self._shape[(L, "sh_gate_up_w")][0] // 2), n), (self._fp8_linear(M, (L, "sh_down_w")), n)]
@@ -223,7 +223,7 @@ class StepNeeds:
         out.append((self.kind("moe_router_sigmoid_bias", E=E, TOPK=TOPK, RSF=float(C["ROUTED_SCALING_FACTOR"]), KERNEL=kernel), n)
                    if kernel else (Need("sigmoid-router", _id("grouped-topk", E=E, M=M), "no capture", "at other statics"), n))
         out.append((self.kind("fp8_group_quant_ue8m0", K=H, G=G), n))
-        cfg = fused_moe_config(E, I, self.net.device, "fp8_w8a8", (G, G), M)
+        cfg = fused_moe_config(E, INTER, self.net.device, "fp8_w8a8", (G, G), M)
         if cfg is None:
             why = f"no tuned fused-MoE config at M={M}"
         else:
@@ -234,8 +234,8 @@ class StepNeeds:
             out.append((Need("fp8-moe-triton", _id("fused-moe-tile", E=E, M=M), f"no capture: {why}", "at other statics"), 2 * pairs))
         else:
             st = {"E": E, "G": G, "KB": KB, "SWAP": swap, "DOT": TG.moe_expert_fp8_launch_dot(self.tp, BM, BN, warps, swap)}
-            out += [(self.kind("moe_expert_gemm_dot", K=H, N=2 * I, **st), pairs), (self.kind("moe_expert_gemm_w_dot", K=I, N=H, **st), pairs)]
-        out += [(self.kind("silu_mul", I=I), pairs), (self.kind("fp8_group_quant_ue8m0", K=I, G=G), pairs),
+            out += [(self.kind("moe_expert_gemm_dot", K=H, N=2 * INTER, **st), pairs), (self.kind("moe_expert_gemm_w_dot", K=INTER, N=H, **st), pairs)]
+        out += [(self.kind("silu_mul", I=INTER), pairs), (self.kind("fp8_group_quant_ue8m0", K=INTER, G=G), pairs),
                 (self.kind("moe_sum", TOPK=TOPK, H=H), n), (self.kind("residual_add", N=H), n)]
         return out
 

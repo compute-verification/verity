@@ -156,7 +156,7 @@ def _predict_rank(task: tuple[str, int, str, str, list[tuple[str, int, int]]]) -
     out["step"] = getattr(timed("step", lambda: predict(phi, "step", M=int(st["M"]), pos0=int(st["pos0"]))), "digest", None)
     comps = {}
     for name, LP, T in requests:
-        if (r := timed(name, lambda: predict(phi, "request", LP=LP, T=T))) is not None:
+        if (r := timed(name, lambda LP=LP, T=T: predict(phi, "request", LP=LP, T=T))) is not None:
             out["requests"][name] = r.digest
             if (c := timed("workload", lambda: S.request_component(r))) is not None:
                 comps[(LP, T)] = c

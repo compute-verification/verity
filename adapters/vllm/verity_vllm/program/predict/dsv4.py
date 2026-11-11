@@ -149,7 +149,7 @@ class Net:
         rope cache."""
         from verity.definitions.registry import marlin_moe as MM
         C, r = self.C, self.ratios[L]
-        H, HC, D, DR, QL, NH, NHP, E, I, SI, IH, ID, OL, TOPK = (int(C[k]) for k in (
+        H, HC, D, DR, QL, NH, NHP, E, INTER, SI, IH, ID, OL, TOPK = (int(C[k]) for k in (
             "H", "HC_MULT", "HEAD_DIM", "QK_ROPE", "Q_LORA", "NH", "PADDED_HEADS", "NUM_EXPERTS", "I", "SHARED_I", "INDEX_HEADS",
             "INDEX_HEAD_DIM", "O_LORA", "TOPK"))
         OUT, OG = HC * (2 + HC), int(C["O_GROUPS"]) // self.world
@@ -170,12 +170,12 @@ class Net:
             out["attn.indexer.weights_proj.weight"] = ((IH, H), 16)
         out |= compressor("attn.compressor", D)
         out["ffn.gate.weight"] = ((E, H), 16)
-        if L < int(C["HASH_LAYERS"]):
+        if int(C["HASH_LAYERS"]) > L:
             out["ffn.gate.tid2eid"] = ((int(C["VOCAB"]), TOPK), 32)
         else:
             out["ffn.gate.e_score_correction_bias"] = ((E,), 32)
         out |= self._fp8("ffn.shared_experts.gate_up_proj", 2 * SI, H) | self._fp8("ffn.shared_experts.down_proj", H, SI)
-        for k, N, K in (("w13", 2 * I, H), ("w2", H, I)):
+        for k, N, K in (("w13", 2 * INTER, H), ("w2", H, INTER)):
             out |= {f"ffn.experts.routed_experts.{k}_weight": ((E, N, K // 2), 8), f"ffn.experts.routed_experts.{k}_weight_scale": ((E, N, K // MM.GROUP), 8)}
         return out | {"attn_norm.weight": ((H,), 16), "ffn_norm.weight": ((H,), 16)}
 
@@ -187,7 +187,7 @@ class Net:
         H = int(self.C["H"])
         return [(r, H)] * (1 + 2 * self.NL) + [(1, int(self.C["V"]))]
 
-    def model(self, B: Builder, W: Coll, peers: _Peers) -> "_Model":
+    def model(self, B: Builder, W: Coll, peers: _Peers) -> _Model:
         return _Model(self, B, W, peers)
 
 
@@ -379,7 +379,7 @@ class _Model(dsa._Model):
 
         from verity_vllm.program.frontend.rules.vllm_marlin_moe import served_config
         C, M, H = self.C, len(x), self.H
-        E, TOPK, I, SCALE = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"]), float(C["ROUTED_SCALING_FACTOR"])
+        E, TOPK, INTER, SCALE = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"]), float(C["ROUTED_SCALING_FACTOR"])
         P = M * TOPK
         w = lambda f: self.w[(L, f)]  # noqa: E731
         logits = self.router(x, w("ffn.gate.weight"))
@@ -388,7 +388,7 @@ class _Model(dsa._Model):
             return [self.call(self.k("silu_mul_clamp", I=a.count // 2, LIMIT=float(C["SWIGLU_LIMIT"])), a).refs for a in rows]
 
         shared = self.fp8(swiglu(self.fp8(x, L, "ffn.shared_experts.gate_up_proj")), L, "ffn.shared_experts.down_proj")
-        if L < int(C["HASH_LAYERS"]):
+        if int(C["HASH_LAYERS"]) > L:
             V, table = int(C["VOCAB"]), w("ffn.gate.tid2eid")
             gather = self.k("gather_i32", V=V)
             ids = [concat([self.call(gather, t.refs, strided_view(table, k, V, V * TOPK, TOPK, V)).refs for k in range(TOPK)]) for t in toks]
@@ -412,7 +412,7 @@ class _Model(dsa._Model):
                 _refuse(str(e))
             return self.k(role, E=E, K=K, N=N, TK=cfg[0], TN=cfg[1], GRID=cfg[2], DOT=MM.DOT)
 
-        up, down = launch("marlin_moe_gemm", H, 2 * I, TOPK), launch("marlin_moe_gemm_w", I, H, 1)
+        up, down = launch("marlin_moe_gemm", H, 2 * INTER, TOPK), launch("marlin_moe_gemm_w", INTER, H, 1)
         one = lambda a, p: a.slice(p, p + 1)  # noqa: E731
         a = swiglu([self.call(up, x[p // TOPK], one(ids, p), one(blk, p), par, w("ffn.experts.routed_experts.w13_weight").refs,
                               w("ffn.experts.routed_experts.w13_weight_scale").refs).refs for p in range(P)])

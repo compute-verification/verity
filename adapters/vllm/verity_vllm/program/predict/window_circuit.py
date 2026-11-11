@@ -422,7 +422,7 @@ class _Program:
         if K % R:
             raise Unexpressible(f"{node.fn.id}: its x is {R} writer rows, which don't divide its {K} values")
         t = self.tables
-        if t is None or K != t.k:
+        if t is None or t.k != K:
             self._one(j, node, bind(IX.Int8RowQuantV3, K=K, R=R))
             return
         s, i = t.at(self.cls, self.slot_index, self.position - 1)
@@ -435,11 +435,11 @@ class _Program:
     def _SiluMul(self, j: int, node: Any) -> None:
         """`SiluMul_v2{I}` as P units `SiluMul_v2{I / P}`, unit k reading gate and up elements [k·I/P, (k+1)·I/P) as the
         gate-up GEMM's rows that hold them, P the fewest that leaves a unit within ``grain.rows`` rows."""
-        I, (gu,) = node.fn.bindings["I"], node.args
-        for P in (p for p in range(1, I + 1) if I % p == 0):
-            w = I // P
+        n, (gu,) = node.fn.bindings["I"], node.args
+        for P in (p for p in range(1, n + 1) if n % p == 0):
+            w = n // P
             try:
-                pieces = [self.rows(gu.refs.slice(k * w, (k + 1) * w)) + self.rows(gu.refs.slice(I + k * w, I + (k + 1) * w))
+                pieces = [self.rows(gu.refs.slice(k * w, (k + 1) * w)) + self.rows(gu.refs.slice(n + k * w, n + (k + 1) * w))
                           for k in range(P)]
             except Unexpressible:
                 continue
@@ -449,7 +449,7 @@ class _Program:
             raise Unexpressible(f"{node.fn.id}: no cut of its gate and up rows holds a unit within {self.b.grain.rows} rows")
         tid, u = self.b.unit(bind(node.fn.defn, I=w), P)
         self._each(tid, "gu", u, pieces)
-        self.outs[j] = [(0, I, Row(tid, u, "o0", w))]
+        self.outs[j] = [(0, n, Row(tid, u, "o0", w))]
 
     def _Gemm(self, j: int, node: Any) -> None:
         b = node.fn.bindings

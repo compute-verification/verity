@@ -29,6 +29,7 @@ import sys
 import time
 from collections import Counter
 from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
 
 from verity_vllm.config import UsageError, option
 
@@ -68,7 +69,7 @@ def phi_of(rec: dict, *, hf_home: str | None = None, checkpoints: dict | None = 
     cp = config or hf_config_path(str(hf_home), repo, rev)
     if not os.path.exists(cp):
         raise Unexpressible(f"no config.json for {repo}@{rev} under {hf_home}")
-    hf = json.load(open(cp))
+    hf = json.loads(Path(cp).read_text())
     reqs = [{"request_id": q.get("request_id"), "index": q.get("index", i), "prompt_len": q.get("prompt_len") or q.get("prompt_token_ids"),
              "max_tokens": q.get("max_tokens"), "arrive_step": q.get("arrive_step", 0), "n": q.get("n"), "seed": q.get("seed")}
             for i, q in enumerate(w.get("requests") or [])]
@@ -323,7 +324,7 @@ def _child(fn, task: dict, conn) -> None:
     conn.close()
 
 
-def _pool_map(fn, tasks: list[dict], workers: int, log, cache: "Cache | None" = None, mem_mb: int | None = None, run: bool = True) -> dict:
+def _pool_map(fn, tasks: list[dict], workers: int, log, cache: Cache | None = None, mem_mb: int | None = None, run: bool = True) -> dict:
     """fn over tasks, each in its own spawned process: at most `workers` at a time, and, past the first, only while the running
     tasks' `mem_mb` estimates (`mem_estimate_mb`) sum to at most `mem_mb`. A process that dies without a result (the OOM killer)
     is recorded as `killed`, never waited on; results already in `cache` are reused and every new one is appended to it as it
@@ -399,7 +400,6 @@ def code_version() -> str:
     are source."""
     import pkgutil
     import subprocess
-    from pathlib import Path, PurePosixPath
 
     import verity
 
@@ -429,13 +429,14 @@ class Cache:
         self.path, self.code, self.d = path, code, {}
         rank = {v: i for i, v in reversed(list(enumerate((code, *reuse))))}
         if path and os.path.exists(path):
-            for line in open(path):
-                if line.strip():
-                    r = json.loads(line)
-                    v = r.get("code", UNSTAMPED)
-                    held = self.d.get(r["key"])
-                    if r.get("status") != "killed" and v in rank and (held is None or rank[v] <= rank[held.get("code", UNSTAMPED)]):
-                        self.d[r["key"]] = r
+            with open(path) as f:
+                for line in f:
+                    if line.strip():
+                        r = json.loads(line)
+                        v = r.get("code", UNSTAMPED)
+                        held = self.d.get(r["key"])
+                        if r.get("status") != "killed" and v in rank and (held is None or rank[v] <= rank[held.get("code", UNSTAMPED)]):
+                            self.d[r["key"]] = r
 
     def get(self, key: str) -> dict | None:
         return self.d.get(key)
@@ -646,8 +647,8 @@ def summarize(res: dict) -> dict:
 def table_md(res: dict) -> str:
     s = res["summary"]
     lines = [f"# predictor score ({res['utc']}, max_rows {res['max_rows']})", "",
-             f"units compared {s['units_compared']}: exact {s['units_exact']}, equivalent {s['units_equivalent']}; rows {s['rows']}, "
-             f"rows with a compared unit {s['rows_with_a_compared_unit']}, all-exact rows {s['rows_all_compared_exact']}", "",
+             (f"units compared {s['units_compared']}: exact {s['units_exact']}, equivalent {s['units_equivalent']}; rows {s['rows']}, "
+              f"rows with a compared unit {s['rows_with_a_compared_unit']}, all-exact rows {s['rows_all_compared_exact']}"), "",
              f"predictor code {res.get('code')}; compared units by the code that predicted them: "
              + (", ".join(f"{c} {n}" for c, n in s.get("compared_by_code", {}).items()) or "none"), "",
              "| granularity:status | units |", "|---|---|"]
@@ -712,7 +713,7 @@ def main(a: Options) -> int:
     _refuse_inside(a.out, [inv.get("root"), a.rows])
     _refuse_inside(a.md, [inv.get("root"), a.rows])
     _refuse_inside(a.cache, [inv.get("root"), a.rows])
-    checkpoints = json.load(open(a.checkpoints)) if a.checkpoints else None
+    checkpoints = json.loads(Path(a.checkpoints).read_text()) if a.checkpoints else None
     pm = [tuple(x.split("=", 1)) for x in (a.path_map or [])]
     res = score(inv, hf_home=a.hf_home, checkpoints=checkpoints, max_rows=a.max_rows, max_mem_mb=a.max_mem_mb, mem_mb=a.mem_mb, workers=a.workers, path_map=pm,
                 max_diverge=a.max_diverge, equivalence_on=not a.no_equivalence, rows_filter=a.rows_filter, workload=not a.no_workload,

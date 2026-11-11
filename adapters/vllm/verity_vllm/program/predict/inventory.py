@@ -16,6 +16,7 @@ import gzip
 import hashlib
 import json
 import os
+from pathlib import Path
 
 from verity_vllm.config import workload_file
 
@@ -87,7 +88,7 @@ def row_record(rd: str) -> dict:
     rec["workload_path"] = wp
     rec["workload"] = None
     if wp and os.path.exists(wp):
-        raw = open(wp, "rb").read()
+        raw = Path(wp).read_bytes()
         w = json.loads(raw)
         rec["workload_sha256"] = hashlib.sha256(raw).hexdigest()
         rec["workload"] = {k: v for k, v in w.items() if k != "requests"}

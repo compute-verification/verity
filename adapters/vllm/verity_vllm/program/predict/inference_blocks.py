@@ -33,7 +33,8 @@ frame-v3-sha512 tree, under `BINDING`.
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from verity.circuits import partition_object as PO
 from verity.circuits import partition_v2 as PV2

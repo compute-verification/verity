@@ -36,8 +36,9 @@ import gzip
 import json
 import os
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import Any, Callable
+from typing import Any
 
 from verity.circuits.types import RecordType
 
