@@ -775,8 +775,8 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
     unretained serve's wall and declared share there, and the prover's replay's CPU seconds, cores, the cores it takes to
     keep pace, the card's seconds, its node and the passes it finished (each None without one, or why it has none), the
     execution phase as the challenger saw it (its start, end and seconds on the auditor host's clock, `execution_phase`,
-    with the serve's own wall beside it under ``prover``, the served node's clock) and what Pearl+'s Python check and Lean
-    check each cost where they ran (`pearlplus_checks`)."""
+    with the serve's own wall beside it under ``prover``, the served node's clock), what Pearl+'s Python check and Lean
+    check each cost where they ran (`pearlplus_checks`) and the class with its requests and rounds (`pearlplus_class`)."""
     if doc.get("piece") == "pearlplus":
         shares = doc.get("shares") or {}
         phase = doc.get("execution_phase")
@@ -800,7 +800,7 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
                 "execution_phase": None if phase is None else {
                     "clock": "the auditor host's", **{k: phase.get(k) for k in ("start_utc", "end_utc", "seconds", "why")},
                     "prover": phase.get("prover")},
-                "checks": doc.get("checks")}
+                "checks": doc.get("checks"), "class": doc.get("class")}
     check, credit = doc.get("check") or {}, doc.get("credit") or {}
     return {"verdict": doc.get("verdict"), "development": True, "credited": False, "reasons": doc.get("reasons"),
             "coin_source": doc.get("coin_source"), "session": (doc.get("session") or {}).get("session"),
@@ -1512,6 +1512,13 @@ PROVER_CLOCK = ("the served node's, the prover's: the serve's own wall for its t
                 "host measured")
 #: `served_passes.py lean`'s check document beside the piece's Lean verdict
 PEARLPLUS_LEAN_CHECK = "pearlplus-lean-check.json"
+#: where Pearl+'s two checks ran, which a piece says beside what each cost
+CHECKS_WHERE = ("on the served node, at the serve, over the passes it retained: the node each cost names is the served "
+                "node, not the node the audit runs on, and no auditor host runs either check again, since their case is "
+                "witness")
+#: what a tied piece's ``class`` says its two derived counts are
+CLASS_LOAD = ("the class's fixed load, which Pearl+'s check holds the passes to (verify --class): a request a slot "
+              "(n_requests) and a round an output (n_rounds), from the class alone; no request's own length is here")
 
 
 def execution_phase(ledger: Path, session: str | None, period: str | None) -> dict[str, Any]:
@@ -1548,10 +1555,23 @@ def execution_phase(ledger: Path, session: str | None, period: str | None) -> di
 def pearlplus_checks(verified: Mapping[str, Any] | None, lean_check: Path) -> dict[str, Any]:
     """What each of Pearl+'s two checks cost where it ran (`served_passes.check_cost`: wall seconds and the node): the
     Python check's from ``verify``'s document `verified`, the Lean check's from ``lean``'s check document at `lean_check`;
-    None for a check that recorded none (it didn't run)."""
+    None for a check that recorded none (it didn't run). ``where`` says in words which node that is (`CHECKS_WHERE`)."""
     lean = _json(lean_check)
-    return {"python": (verified or {}).get("check_cost"),
+    return {"where": CHECKS_WHERE, "python": (verified or {}).get("check_cost"),
             "lean": lean.get("check_cost") if isinstance(lean, Mapping) else None}
+
+
+def pearlplus_class(verified: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """The window's class as Pearl+'s check held the passes to it (``verify --class``'s SLOTS,PROMPT,OUTPUTS, its
+    document's ``class``), with the two counts its fixed load fixes (`CLASS_LOAD`): the requests, a slot each, and the
+    rounds, an output each. Each is the class's, public structure, written from the class alone and from nothing the
+    serve measured; None where the check held the passes to no class."""
+    cls = (verified or {}).get("class")
+    if not (isinstance(cls, (list, tuple)) and len(cls) == 3 and all(type(v) is int and v >= 1 for v in cls)):
+        return None
+    slots, prompt, outputs = cls
+    return {"slots": slots, "prompt_tokens": prompt, "outputs": outputs, "n_requests": slots, "n_rounds": outputs,
+            "of": CLASS_LOAD}
 
 
 def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str, Any] | None,
@@ -1589,7 +1609,9 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     ``execution_phase``, on a live session's coins, is the execution phase as the challenger saw it (`execution_phase`, of
     the ledger `pearlplus_coins` fetched), with the serve's own wall beside it as the prover's (its ``prover``:
     `PROVER_CLOCK` and ``generate_s``), and ``checks`` what Pearl+'s Python check and Lean check each cost on the node
-    this piece ran them on (`pearlplus_checks`); both are measurements and neither decides the verdict."""
+    this piece ran them on (`pearlplus_checks`); both are measurements and neither decides the verdict. ``class`` is the
+    class the check held the passes to with the requests and rounds its fixed load fixes (`pearlplus_class`), None
+    without one."""
     import served_shares as SS
     from verity.core.protocols.spot.one_stage import registration as REG
 
@@ -1632,7 +1654,8 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     doc: dict[str, Any] = {"piece": "pearlplus", "credited": False, "why": why, "coin_source": source, "coins": coins,
                            "scheme": None, "arm": None, "passes": None, "load": None, "dropped": None, "line": None,
                            "credit": None, "coin": None, "give_up": None, "shares": None, "tie": None,
-                           "execution_phase": None, "checks": pearlplus_checks(verified, out / PEARLPLUS_LEAN_CHECK)}
+                           "execution_phase": None, "checks": pearlplus_checks(verified, out / PEARLPLUS_LEAN_CHECK),
+                           "class": pearlplus_class(verified)}
     if served is not None and live and (out / "ledger.jsonl").is_file():
         said = served.get("coins") or {}
         doc["execution_phase"] = execution_phase(out / "ledger.jsonl", (said.get("session") or {}).get("session"),

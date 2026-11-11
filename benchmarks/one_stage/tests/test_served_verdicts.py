@@ -1253,7 +1253,8 @@ def test_a_pearlplus_piece_holds_the_execution_phase_as_the_challenger_saw_it_an
     reserve, open and end and its Pearl-C period's open and close, read from the ledger the coins' check fetched, with the
     seconds from the reserve to the end; another session's and another period's entries are not its. The serve's own wall
     is beside it, named the prover's (`PROVER_CLOCK`), never among the challenger's times. And it holds what
-    Pearl+'s Python check and Lean check each cost where they ran (`pearlplus_checks`). The piece's line and the published
+    Pearl+'s Python check and Lean check each cost where they ran (`pearlplus_checks`), with the words that the node
+    each names is the served node and not the audit's (`CHECKS_WHERE`). The piece's line and the published
     form carry both. A ledger without the session's end gives no span and says what it lacks, and a piece with no ledger
     (its coins unchecked) and no check documents holds none."""
     _calls, args = live
@@ -1282,7 +1283,9 @@ def test_a_pearlplus_piece_holds_the_execution_phase_as_the_challenger_saw_it_an
              "period": {"opened_utc": "2026-01-02T17:59:58Z", "closed_utc": "2026-01-02T18:08:10Z"}, "why": None,
              "prover": {"clock": S.PROVER_CLOCK, "generate_s": served["generate_s"]}}
     assert served["generate_s"] and "the prover's" in S.PROVER_CLOCK and "prover" not in S.PHASE_CLOCK
-    assert doc["verdict"] == "accept" and doc["execution_phase"] == phase and doc["checks"] == {"python": python, "lean": lean}
+    checks = {"where": S.CHECKS_WHERE, "python": python, "lean": lean}
+    assert "the served node" in S.CHECKS_WHERE and "not the node the audit runs on" in S.CHECKS_WHERE
+    assert doc["verdict"] == "accept" and doc["execution_phase"] == phase and doc["checks"] == checks
     assert json.loads((piece / "development.json").read_text())["execution_phase"] == phase
     line = S.development_line(doc)
     assert line["execution_phase"] == {"clock": "the auditor host's", "start_utc": phase["start_utc"],
@@ -1299,8 +1302,30 @@ def test_a_pearlplus_piece_holds_the_execution_phase_as_the_challenger_saw_it_an
     (piece / "ledger.jsonl").write_text("not a ledger\n")
     assert S.pearlplus(piece, served, verified, **args)["execution_phase"]["why"].startswith("the ledger can't be read: ")
     none = S.pearlplus(tmp_path / "plain", served, verified, **args)
-    assert none["execution_phase"] is None and none["checks"] == {"python": None, "lean": None}
+    assert none["execution_phase"] is None and none["checks"] == {"where": S.CHECKS_WHERE, "python": None, "lean": None}
     assert S.development_line(none)["execution_phase"] is None
+
+
+def test_a_pearlplus_piece_holds_its_class_with_the_requests_and_rounds_the_class_fixes(tmp_path, live):
+    """The piece holds the class Pearl+'s check held the passes to (``verify``'s ``class``) with the two counts its fixed
+    load fixes, a request a slot and a round an output (`pearlplus_class`), each from the class alone: a serve document
+    that counts other requests changes neither. The piece's line holds it, and the published forms of the document and
+    of the line keep every count of it, where a window's own ``requests`` is held. A check that held no class gives
+    none, and so does a class that isn't three positive integers."""
+    _calls, args = live
+    served, verified = _pearlplus_run()
+    want = {"slots": 4, "prompt_tokens": 32, "outputs": 6, "n_requests": 4, "n_rounds": 6, "of": S.CLASS_LOAD}
+    doc = S.pearlplus(tmp_path / "piece", {**served, "requests": 9}, {**verified, "class": [4, 32, 6]}, **args)
+    assert doc["verdict"] == "accept" and doc["class"] == want and "no request's own length" in S.CLASS_LOAD
+    line = S.development_line(doc)
+    assert line["class"] == want and S.public_json(doc)["class"] == want
+    assert S.public_json({"requests": 9, "class": want}) == {"class": want}
+    published = S.public_line(f"POUW-DEV {json.dumps(line, sort_keys=True)}")
+    assert json.dumps(want, sort_keys=True) in published
+    for cls in (None, [4, 32], [4, 0, 6], [4, "32", 6], "4,32,6"):
+        none = S.pearlplus(tmp_path / "none", served, {**verified, "class": cls}, **args)
+        assert none["class"] is None and S.development_line(none)["class"] is None
+    assert S.pearlplus_class(None) is None
 
 
 def test_a_pearlplus_piece_sets_the_unretained_serve_of_its_load_beside_its_shares(tmp_path, capsys, live):
