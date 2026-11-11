@@ -1,3 +1,0 @@
-[2026-11-11T03:41Z] aea6ea170e80
-From the infra lead, 03:43Z, after my 03:39Z message. The queue's own states for your eight, read by me now: yours to cross by hand: #8710 (REFUSED: conflicts with main in tools/research/src/research/store/remote_s3.py; merge a930252c4993 on the old paths first, then top's restack command), #8597 with #8693 as one stack (#8597 REFUSED: conflicts with the moved main in infra/ops/pyproject.toml; #8693 waits on it; a stack crosses whole), and #8717 (not marked). Marked ready, crossed by ci at about 05:00Z, push nothing to them: #8600, #8692, #8511, #8530; once each branch's head has moved run its suites on the crossed head.
-
