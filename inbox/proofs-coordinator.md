@@ -60294,3 +60294,126 @@ Branch `cursor/proofs-count-71ac`, from `main` `cc6ee7446278`, nothing pushed ye
 **The table I owe at 21:30Z.** For each quoted configuration (19,642 GB and 5,445 GB) and each size of verification phase (one machine's 600 s window, a pod's, the datacenter's, and the sizes at which K is 1 and 6): K, the cost against the budget, the gigabytes and the binding error, each with its run.
 
 Next: the checkpoint note, then `optimize.py`.
+
+## WIRED, Wed 11 Nov 18:23Z: the five files are on one branch and their build is out; "no two moved gates of one block go to one gate" does not follow from the verifier's checks, and needs no third line if the decoded values carry it
+
+Tags: [run] a command I ran now; [read] a file I read now, with the place; [relayed] another's statement I did not
+check; [guess] mine, unchecked. Times from `date -u`. Mailbox read at 18:17Z (your 18:07Z section).
+
+### 1. Your question, inside the hour: does it follow from the checks the verifier already makes?
+
+**No. One shape passes every check and breaks it, and I find only that one.**
+
+- `nodeWires` makes one wire for each argument of a call that is one whole field of one node: `⟨t.key, port, tw.key,
+  "o" ++ f⟩`, with the run `⟨cs.first k, x.members, cs.first k', 0⟩`, which does not read which argument it is [read:
+  `verity/protocols/spot/verifier/lean/Spot/SecondStage.lean:570-583` at `cc6ee74462`]. A replay block's body that
+  passes one node's field to two parameters of one call therefore makes two wires, `(t, port_a, tw, o_f)` and
+  `(t, port_b, tw, o_f)`, with one run.
+- `gather` merges two shares only where template and port agree, so the two stay two [read: `:456-466`, `:593`].
+- `wiresOk` judges each wire alone: its reader's units placed, its writer a part whose units a block are the port's
+  rows a block [read: `:629-634`]. The two lines that are not on `main` yet (no link names the writer's port; the
+  writer's part is before the reader's) judge each wire alone too [read: the 14:44Z entry of `EXTFORM (PRF-528)` in
+  this file, from line 57578].
+- In Lean, `wireCell h t port c` reads the port only through its wire's `(writer, wport)` and its rows, and
+  `wireTarget h` sends a source bit to the first written bit at `(writer, wport, unit, bit)` [read:
+  `security/Proofs/Flock/SpotFlock/WireMap.lean:99-103`, `:134-136`, and `wireTarget`, at `e24f98904a`]. So unit `u` of
+  the reader has, at each bit, one source gate in each of the two ports' rows, and both go to one written bit. Both
+  gates are in unit `u`'s proof block, so `hinj` of `Prog.Rewires.of_earlier` fails there.
+
+The two other ways two gates could meet are closed by a check that already runs: `Spot.Bits.check` refuses "two row
+ports of the circuit file have one name" and "the circuit file's unit returns an output word twice" [read:
+`verity/protocols/spot/verifier/lean/Spot/Bits.lean:801-802`, `:813`]. [guess] From `outGate`, `outRowBit` and `rowBit`
+(`Bits.lean:549-625`) I read that those two give the rest of `hinj`: one written gate has one commitment position,
+and one unit's source bits at one commitment position are one gate. I have proved neither.
+
+**Two ways to close it. I take the second unless you say the first.**
+
+(a) **A third line of `wiresOk`**: no two wires of one reader template name one port of one writer. The verifier
+then refuses a registered program in which a call passes one value to two parameters. [guess] I do not know whether a
+served program has such a call. The Lean check, Python's twin and a difftest change together, and `hinj` is then
+proved from that line and the two refusals of `Spot.Bits.check` above.
+
+(b) **No third line; the verifier is not changed.** `inj` is read at one place. `Prog.exists_correct_wired` uses it to
+define the wired program's values from one block's values, `v (ω i) = v₀ i` [read:
+`security/Proofs/Flock/Claims/Sampling/Rewire.lean:550-570`]; the other uses only pass it down
+(`SamplingGeneric/WiredScope.lean:249`, `SpotFlock/WiredAt.lean:95`), and the scope at the wired program
+(`Prog.Rewires.inScopeTwo`, `scope_rewired`) never reads it [run: `rg -n 'hinj|\.inj\b'` over the three files]. That
+definition needs only that the block's values agree at two gates sent to one gate:
+`∀ i j, S i → S j → ω i = ω j → v₀ i = v₀ j`. So `Prog.Rewires` goes from nine fields to eight, and
+`Prog.Rewires.exists_correct` and `decoded_rewired` take the agreement as a hypothesis. Pull request 3 discharges it
+from the premise on addresses: the two gates are two reads of one committed leaf of the writer's row, so one unit's
+decoded values at them agree unless the commitment breaks. Pull request 3 needs the same agreement between two units
+in any case (the reader's decoded value at a wired read against the writer's at its output), so this adds no premise:
+the premise FRAME states has to cover two gates of one unit as well as of two. [guess] In pull request 2 it is three
+theorems restated, under 60 lines.
+
+Why (b): it refuses no honest program, changes no check, and the condition it replaces was about the map alone while
+the fact that makes it true is about the commitment.
+
+### 2. Pull request 1: the file list, and the run that is out
+
+Branch `cursor/proofs-wired-7ac3`, head `e24f98904a`, from `main` at `cc6ee74462`, pushed [run: `git log`,
+`git push`]. Two merges and one commit:
+
+- `cffce61f42`: merge of `cursor/proofs-addresses-3f5a` at `294cd887df74`, clean.
+- `07bbac7edf`: merge of `cursor/proofs-wiremap-5e7b` at `24b588e7fed5`, clean. `Rewire.lean` and `WiredScope.lean`
+  at the first branch only add to what `WireMap.lean` was compiled against [run: `git diff` of the two tips].
+- `e24f98904a`: two import lines in `security/Proofs/Flock.lean` (`SpotFlock.WiredAt`, `SpotFlock.WireMap`, which
+  import the other three). Neither branch had them, and the Lean check refuses a file no root imports.
+
+Five new files under `security/Proofs/Flock/`, 2,094 lines, and those 2 lines [run: `git diff --stat origin/main...`]:
+
+| file | lines | declarations (by keyword) |
+|---|---|---|
+| `Claims/Sampling/Rewire.lean` | 632 | 51 |
+| `SamplingGeneric/WiredScope.lean` | 350 | 17, and one `example` |
+| `SpotFlock/WiredAt.lean` | 97 | 4 |
+| `SpotFlock/AddressesAt.lean` | 342 | 23 |
+| `SpotFlock/WireMap.lean` | 673 | 47 |
+
+No open pull request carries any of the five, neither source branch has one, and none is on `main` [run:
+`gh pr list --state open --search`, `git ls-tree origin/main`].
+
+**Run out:** `r20261111-181132-e740` on `vy-nebius-cpu-11`, `lean_changed.py --try FILE --siblings` for each of the five
+in turn at `e24f98904a`; running at 18:22Z, in its Lean slot since 18:15Z [run: `research status`]. No verdict yet.
+Then, in this order: open the pull request; one records run (`--records Security/Proofs`) and the quick suites at that
+head; mark it. It changes no guarantee's statement and no verifier, so the mark is mine.
+
+**For CAPS:** `Proofs/Flock` + 5 modules, + 142 declarations by keyword count (51, 17, 4, 23, 47); the cap on `main` is
+265 / 2,130 [read: `tools/verity/lean/unread-caps.json` at `cc6ee74462`]. Nothing reads the five yet. I do not touch
+the caps file. [guess] If the area's count on `main` is within 5 / 142 of its cap, the records run is red on the cap
+alone; I report its line when it is in.
+
+**Two things I need you to know, no answer needed unless you disagree:**
+
+- Your mailbox says FRAME owns `AddressesAt.lean`. Pull request 1 adds that file as it is at `294cd887df74`, because
+  your brief lists it and `WireMap.lean` imports it. I do not edit it after that. FRAME bases on
+  `cursor/proofs-wired-7ac3`, or on `main` once this lands.
+- `research queue open` refuses without `--issue`. A key there links the pull request on its Linear issue, and your
+  rule is that I write nothing to Linear. So I open with `--issue none:REASON` and a `Goal proofs/spot-bind-term` line.
+  To attach it: `research queue link N --issue PRF-528`, yours to run.
+
+### 3. Plan
+
+**Pull request 2, marked by Thu 08:00Z:** `(bitsProgs h.ms).Rewires (membersPart h.ms) (wireMap h) (returned h)` from
+`Prog.Rewires.of_earlier`. What each of its hypotheses comes from [read: the files named; nothing here is proved]:
+
+- A gate's member, in Lean: the number of members whose gates end at or before the gate (`Spot.Bits.base`); it rises
+  with the gate by `base_mono` (`security/Proofs/Flock/Bridge/Members.lean`).
+- A moved gate is an input gate: it is a source bit (`wireTarget_spec`), an input of its member's key program that the
+  constants leave free (`sitsAt_bitsProgs`, `Spot.Bits.lower`'s input arm).
+- Its target is no input and no constant, and is an output: it is a written bit, the last gate of a lowered row, an
+  AND, among the member's outputs (`Spot.Bits.outGate`, `SitsAt.outs`).
+- A moved gate is not returned: a source bit is an input gate and a returned bit is an AND gate.
+- The writer's member is before the reader's: a Boolean on `h` with the text of the second new line of `wiresOk`,
+  taken as the code's fact as your brief says. I read WIRES's entry for the landed text, and GATHER's 19:15Z entry
+  before I fix on the shape of `Held.wires`.
+- A block's gates and reads are one member's, and it holds a gate that is no input: `getElem?_blocks_membersPart`,
+  `SitsAt.closed`; a unit's block holds its rows.
+- No two moved gates of one block to one gate: (b) above.
+
+**Pull request 3:** the two statements in Lean by Thu 02:00Z, before any proof: `SpotKSTwo` and `SpotExfilTwo` over
+`(bitsProgs h.ms).wired (wireMap h) (returned h)` and `(membersPart h.ms).cut (wireMap h)`. What they read
+(`Prog.wired`, `Prog.rewire`, `cutBlock`, `Partition.cut`, `wireMap`, `returned` and the lookups under them) is in the
+proofs tree today and moves to the definitions and properties trees in that pull request, since no statement there may
+read the proofs tree. A small connected instance at which FRAME's premise is proved goes in with it.
