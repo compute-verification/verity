@@ -173,6 +173,7 @@ def test_a_rotating_rows_move_is_split_into_the_prices_and_the_widths(tmp_path):
                          cells("h", 60.0, 30.3, 2.0, "2")]}
     for n, rows in builds.items():
         write(tmp_path / "search" / n / name, rows)
+        replot.dump(tmp_path / "search" / n / replot.TABLES[4], {"rows": [["gone@3", "refused"]]})
         write(tmp_path / ("overlay" if n == "priced" else f"overlays/{n}") / "tables" / name, rows)
     tabs = {n: json.loads((tmp_path / "search" / n / name).read_text()) for n in builds}
     last = {"last": tabs["control"], "served": tabs["control"]}
@@ -188,8 +189,10 @@ def test_a_rotating_rows_move_is_split_into_the_prices_and_the_widths(tmp_path):
     replot.dump(tmp_path / "rotations.json", {
         "runs": {"rot": {"checkpoints": {"40": {"gates_added": 1.0, "C_before": 100.0, "C_after": 101.0,
                                                "rotation_macs": 1}}, "structures": {}}},
-        "unread": [], "no_record": [], "no_arguments": [], "unknown_program": []})
+        "unread": {}, "no_record": ["gone"], "no_arguments": ["nowhere"], "unknown_program": {}})
     v = replot.verdict(tmp_path, {"rows": [{"run": "rot", "step": 40, "before": 4.0, "after": 3.96}]})
+    assert v["lists"]["runs not re-priced that have a row in a table"] == {"unread": [], "no_record": ["gone"],
+                                                                           "no_arguments": [], "unknown_program": []}
     assert v["checks"]["search: each rotating row's |C| rose by its rotations' added gates"]
     assert v["checks"]["overlay: no run without a rotation moves but in p over an H that moved"]
     [moved] = v["lists"]["overlay: rows without a rotation whose p moved"]

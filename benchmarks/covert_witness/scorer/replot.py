@@ -268,9 +268,14 @@ def verdict(OUT: Path, stated: dict | None = None) -> dict:
         all(v["rows"] and v["columns"] for v in fit["tables"].values()) and all(fit["refused"].values())
         and all(v["rows"] and v["columns"] if isinstance(v, dict) else v for v in fit["points"].values())
         and fit["console_served_against_rebuilt"]["rows"] and fit["console_served_against_rebuilt"]["columns"])
-    checks["every rotating run with rows is read"] = not rot["unread"] and not rot["no_record"] and not rot["no_arguments"]
-    lists["rotating runs not re-priced"] = {"unread": rot["unread"], "no_record": rot["no_record"],
-                                            "no_arguments": rot["no_arguments"], "unknown_program": rot["unknown_program"]}
+    # a run the re-pricing couldn't read has no row in any table
+    shown = {k[0] for t in (*search.values(), *over.values()) for k in t}
+    named = json.dumps([load("search", n, TABLES[4]) for n in search])
+    apart = {why: sorted(rot[why]) for why in ("unread", "no_record", "no_arguments", "unknown_program")}
+    held = {why: [r for r in runs if r in shown or r in named] for why, runs in apart.items()}
+    checks["no run the re-pricing couldn't read has a row in a table"] = not any(held.values())
+    lists["runs not re-priced"] = apart
+    lists["runs not re-priced that have a row in a table"] = held
 
     # a run that doesn't rotate moves only in p, and only over an H that moved
     for what, tabs in (("search", search), ("overlay", over)):
