@@ -1971,42 +1971,58 @@ sys.exit(1)
 #: onsite's own protocols: the piece's private directory, its public summary, its Lean, and a directory that isn't its
 ONSITE_OWN = {"verity/pous/p2/v4/run": ("pous/w0", "pous/pous.json", "pous-run-protocol", "pous/w1"),
               "verity/wipe/v0": ("wipe", "wipe/summary.json", "wipe-protocol", "earlier/wipe")}
+#: A stand-in for a product's Lean executable: it reads nothing it is handed and rejects under its own name, so the
+#: VERDICT line it leaves says nothing of what the product's Lean answers
+NO_LEAN = '''import json, sys
+from pathlib import Path
+print(json.dumps({"protocol": f"verity/{Path(sys.argv[0]).name}/v0", "reason": "stand-in: no Lean ran",
+                  "verdict": "reject"}))
+sys.exit(1)
+'''
 
 
 @pytest.mark.parametrize("protocol", list(ONSITE_OWN))
 @pytest.mark.parametrize("killed", [True, False])
 def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and_composes_the_rest(tmp_path, protocol,
                                                                                                     killed):
-    """served_composite.sh with onsite_pieces.sh's `onsite_cases` and a stand-in lake and composite.py, its serve dir
-    named through a link. A piece killed once it wrote its case and its answer and before it published its summary
-    (PoUS's pous.json, the wipe's summary.json): the protocol is NOT_WRITTEN and its directory LEFT_OUT, handed to
-    neither product; the other protocol's case is composed as written, remote gets its own case, and the exit is as
-    composite.py's answers have it. A case of the protocol in another directory beside the piece's own (a second
-    window's; the wipe's left by an earlier run): the piece's own is composed and the other is not. No path reaches
-    OUT/verdicts.txt."""
+    """served_composite.sh with onsite_pieces.sh's `onsite_cases` and composite.py as they are, a stand-in lake, and a
+    stand-in for each product's Lean, which reads nothing and rejects under its own name (`NO_LEAN`); the serve dir,
+    named through a link, holds a case of each of onsite's subprotocols. A piece killed once it wrote its case and its
+    answer and before it published its summary (PoUS's pous.json, the wipe's summary.json): the protocol is
+    NOT_WRITTEN and its directory LEFT_OUT; the case composite.py makes for onsite's Lean names every other
+    subprotocol and not that one, in its params and in its evidence; OUT/verdicts.txt and onsite's composite.json name
+    that protocol, and it alone, as missing (NOT_ESTABLISHED), before the Lean's verdict line; remote, which composes
+    neither protocol, is handed its three cases and misses none; and the exit is 0, each product's Lean having
+    answered. A case of the protocol in another directory beside the piece's own (a second window's; the wipe's left
+    by an earlier run): the piece's own is composed, the other is not, and nothing is missing. No path reaches
+    OUT/verdicts.txt. What onsite's Lean answers on a case that lacks a subprotocol is not shown here, where its Lean
+    is the stand-in."""
+    import composite as C
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "link", tmp_path / "out"
     (tmp_path / "serve").mkdir()
     d.symlink_to(tmp_path / "serve", target_is_directory=True)
-    _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
+    (tmp_path / "lean").write_text(f"#!{sys.executable}\n{NO_LEAN}")
+    (tmp_path / "lean").chmod(0o755)
+    _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
     _script(bin_ / "systemd-run", "exit 1")
     for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    shutil.copy(HERE.parent / "composite.py", tree / "benchmarks" / "one_stage")
 
-    def case(where: str, of: str) -> str:
+    def case(where: str, of: str) -> None:
         (d / "private" / where).mkdir(parents=True)
-        (d / "private" / where / "case.json").write_text(json.dumps({"evidence": "beef"}))
+        (d / "private" / where / "case.json").write_text(json.dumps(
+            {"commitment": "c0", "evidence": "beef", "params": {"in": where}}))
         (d / "private" / where / "answer.json").write_text(json.dumps({"protocol": of, "verdict": "accept"}))
-        return str(d / "private" / where)
 
-    own = {}
-    for p, (where, summary, lean, _) in ONSITE_OWN.items():
-        own[p] = case(where, p)
+    own = {p: ONSITE_OWN[p][0] if p in ONSITE_OWN else f"piece{n}" for n, p in enumerate(C.COMPONENTS["onsite"])}
+    for p, where in own.items():
+        case(where, p)
+    for _, summary, lean, _ in ONSITE_OWN.values():
         (out / "pieces" / summary).parent.mkdir(parents=True)
         (out / "pieces" / summary).write_text(json.dumps(
             {"window": 0, "verdict": "accept", "decided_by": {"program": lean, "host": "the-served-node"}}))
-    v2 = case("spot-v2", "verity/sampled-proofs/one-stage/v2")
     if killed:
         (out / "pieces" / ONSITE_OWN[protocol][1]).unlink()
     else:
@@ -2021,13 +2037,21 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
              for p in ONSITE_OWN}
     lines[protocol].append(f"COMPOSITE LEFT_OUT {protocol}: a case under the serve dir's private that is not its "
                            "piece's with its Lean's answer (onsite_cases.log on the node)")
-    assert said.splitlines()[:4] == [
+    assert said.splitlines()[:-1] == [
         *lines["verity/pous/p2/v4/run"], *lines["verity/wipe/v0"],
-        "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here"]
+        "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here",
+        "COMPOSITE remote: VERDICT verity/remote/v0 reject stand-in",
+        *([f"COMPOSITE onsite: NOT_ESTABLISHED missing {protocol}"] if killed else []),
+        "COMPOSITE onsite: VERDICT verity/onsite/v0 reject stand-in"]
     assert str(tmp_path) not in said
-    handed = {x: json.loads((d / "private" / "composite" / x / "private" / "argv.json").read_text())
-              for x in ("remote", "onsite")}
-    assert handed == {"remote": [v2], "onsite": [own[x] for x in ONSITE_OWN if not (killed and x == protocol)]}
+    for x in ("remote", "onsite"):
+        want = [p for p in C.COMPONENTS[x] if not (killed and p == protocol)]
+        made = d / "private" / "composite" / x / "private"
+        assert [(c["id"], c["params"]) for c in json.loads((made / "params.json").read_text())["components"]] == [
+            (p, {"in": own[p]}) for p in want]
+        assert [c["id"] for c in json.loads((made / "evidence.json").read_text())["components"]] == want
+        assert json.loads((out / "composite" / x / "composite.json").read_text())["missing"] == [
+            p for p in C.COMPONENTS[x] if p not in want]
 
 
 DIGEST = "5e" * 64
