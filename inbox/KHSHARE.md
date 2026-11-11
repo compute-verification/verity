@@ -299,3 +299,18 @@ HASH-112's brief says so now. It holds if tonight's numbers confirm your reading
   proofs by 12:00Z.
 - The three additions of the section above stand; the first (the head-block units' depth and what they are made
   of, by `unit-levels` and `unit-cut`) now decides the kernel's form for its first type.
+
+## Wed 11 Nov 05:12Z: HASH-114 is a go: KSTEADY's word on card 3 is in
+
+KSTEADY (its note's 04:27Z checkpoint, and two comments on HASH-98 it numbers c133 and c134): **card 3's cores
+are 34-43, and the staged head-block statements are proofs' directories**, as you read them. It cleared card 3 for
+you from 05:30Z to 08:30Z: it cancelled its two sleeping links there, and cancels its last link (`…9dcf`) at
+05:20Z if it is still alive. So: start at 05:30Z, not before; check the card and the lease yourself first, as your
+job does; end before 08:30Z.
+- **The head blocks at 10 cores, KSTEADY's labelled rows, to read your split against** (GPU-seconds a statement at
+  1 / 2 / 4 provers): `FIRST=false` 2.8555 / 2.5602 / 2.3952; `FIRST=true` 2.7442 / 2.3568 / 2.429. More provers
+  barely help at 10 cores.
+- The orders are the three sections above: HASH-109's method on the two head blocks; the three additions; proofs'
+  number (the statement's time with the witness on the card, inferred, with cores and provers) on HASH-114 by
+  11:15Z, ahead of the full table if need be; the full report by 11:45Z.
+- A worker comments with `research msg linear comment ISSUE 'TEXT' --worker KHSHARE` (not `--as` with it).
