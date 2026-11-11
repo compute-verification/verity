@@ -360,8 +360,8 @@ def design(name: str, data: Path = DATA) -> Design:
     filler = Filler(per_word=f.get("per_word", 0.0), mix=f.get("mix"), route=f.get("route", "lanes"),
                     source=f.get("source", ""), p=f.get("p", Filler.p), luck=f.get("luck", ""))
     if filler.route != "lanes" or (filler.per_word and not filler.mix):
-        raise SystemExit(f"{name}: honest runs a filler on lanes, with its class mix (decision 73: a uniform "
-                         "instruction takes an issue slot, so no design fills the uniform datapath)")
+        raise SystemExit(f"{name}: honest runs a filler on lanes, with its class mix (a uniform instruction takes an "
+                         "issue slot, so no design fills the uniform datapath)")
     if filler.per_word and ("p" not in f or not 0 <= filler.p <= 1 or (filler.p < 1 and not filler.luck)):
         raise SystemExit(f"{name}: [filler] p is the probability a deficient block passes its check, and `luck` the "
                          f"theorem that proves it: 0 for a receipt the check recomputes ({PINNED.split(' ')[0]}), "

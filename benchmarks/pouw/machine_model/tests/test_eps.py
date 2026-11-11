@@ -367,7 +367,7 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
         E.design("x", data)
     bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n'
                    '[filler]\nper_word = 4\nmix = { ALU = 1 }\nroute = "uniform"\n')
-    with pytest.raises(SystemExit, match="decision 73"):
+    with pytest.raises(SystemExit, match="no design fills the uniform datapath"):
         E.design("x", data)
     head = 'base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n[filler]\nper_word = 4\nmix = { ALU = 1 }\n'
     for luck in ("", "p = 0.854\n", "p = 1.5\nluck = \"x\"\n"):

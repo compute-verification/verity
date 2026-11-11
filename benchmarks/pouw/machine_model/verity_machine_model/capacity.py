@@ -1,4 +1,4 @@
-"""Certified capacity in the tensor–scalar model (FILLER, decision 77).
+"""Certified capacity in the tensor–scalar model (FILLER).
 
 A cell's certified work is a load on Π: n_k warp instructions of class k a SMSP-cycle, counted at the work's floor
 (every MMA it ran and the instructions its mandatory fold costs under FOLD-OPT, never honest's overhead). What it
@@ -16,8 +16,8 @@ hidden(n_g), which is smaller and would credit a placement nobody attests. Each 
 that placement-attested reading.
 
 Beside σ it reports the time-credit reading B(n) = max_r load_r (the share of the cell the floor program needs, the
-floor credit's reading of decision 74), which is never below σ: B credits a saturated facet whole, while σ asks what a
-second program could still issue on the facets that aren't.
+floor credit's reading), which is never below σ: B credits a saturated facet whole, while σ asks what a second program
+could still issue on the facets that aren't.
 
 A tensor filler a MMA writes `words` committed words (128 for m16n8k32 at L = 32) and folds each `rounds` times with
 FOLDS[fold] lane instructions a word; a lane filler is verified scalar work (FILL-OPT) at `rate` warp instructions a
