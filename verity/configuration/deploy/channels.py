@@ -353,19 +353,19 @@ class Adversary:
         if n < self.after:
             self.pipe.send(frame)
             return
-        draw = {k: self.rng.random() for k in ("drop", "corrupt", "reorder", "delay")}
-        if draw["drop"] < self.p["drop"]:
+        sample = {k: self.rng.random() for k in ("drop", "corrupt", "reorder", "delay")}
+        if sample["drop"] < self.p["drop"]:
             self.events.append((n, "drop"))
             return
-        if draw["corrupt"] < self.p["corrupt"] and frame:
+        if sample["corrupt"] < self.p["corrupt"] and frame:
             i = self.rng.randrange(len(frame))
             frame = frame[:i] + bytes([frame[i] ^ (1 + self.rng.randrange(255))]) + frame[i + 1:]
             self.events.append((n, f"corrupt byte {i}"))
-        if draw["reorder"] < self.p["reorder"]:
+        if sample["reorder"] < self.p["reorder"]:
             self.events.append((n, "reorder"))
             self.held.append(frame)
             return
-        if draw["delay"] < self.p["delay"]:
+        if sample["delay"] < self.p["delay"]:
             self.events.append((n, f"delay {self.delay_ns} ns"))
             self.pipe.send(frame, self.delay_ns)  # type: ignore[call-arg]
         else:
