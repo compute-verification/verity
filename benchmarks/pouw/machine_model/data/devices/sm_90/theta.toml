@@ -2,7 +2,7 @@
 # vendor document first (`sheet`, `grade`, `source`), then the census or a measured run (`measured`, `runs`), or the run
 # that would measure it (`gap`). A ceiling the card file holds (verity/hardware/cards/, the SKU model.toml names) is
 # read from it: `card = "EXPR"`, card entries and numbers joined by ` * ` and ` / `, in place of its value, grade and
-# source. A rate is a SM-clock's (MACs, results or bytes a SM-clock); `clock` names the clock its
+# source; `host:PATH` is an entry of the host's card (model.toml's `host`). A rate is a SM-clock's (MACs, results or bytes a SM-clock); `clock` names the clock its
 # per-second figure is at, and `figure` is the number the document prints there (dense), which 2 · sheet · SMs · clock
 # reproduces (`machine-model theta --check`). `machine-model theta` derives d, the exchange rate, B_RF and r_H against
 # r_min from it; `machine-model render theta` tabulates it.
@@ -12,7 +12,7 @@ honest = ["dc90-l32", "dc90-li-l32", "dc90-licpw-redux-l32"]
 documents = [
   "DS: NVIDIA H200 data sheet (nvidia.com/en-us/data-center/h200), Technical Specifications, H200 SXM column; footnote 1 'Preliminary specifications', footnote 2 'With sparsity'",
   "WP: NVIDIA H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3 (p. 39), H100 SXM5 column: the same GH100 die and SM count as the H200",
-  "CPG: CUDA C++ Programming Guide 12.9, §6.4.1 Table 7 'Throughput of Native Arithmetic Instructions (results a clock a multiprocessor)', CC 9.0 column; §20 Table 'Technical Specifications per Compute Capability'; §18.8 (CC 9.0)",
+  "CPG: CUDA C++ Programming Guide 12.9, its sections as 12.9.0 numbers them (12.9.1 renumbers): §6.4.1 Table 7 'Throughput of Native Arithmetic Instructions (results a clock a multiprocessor)', CC 9.0 column; §18.2 Table 28 'Technical Specifications per Compute Capability'; §18.8 (CC 9.0)",
   "PTX: PTX ISA 9.4, §9.7.14 (mma.sync) and §9.7.15 (wgmma.mma_async)",
 ]
 
@@ -427,7 +427,7 @@ what = "shared memory a SM (227 KB a block), of 256 KB unified L1 and shared mem
 value = 233472
 unit = "B/SM"
 grade = "Programming Guide and whitepaper"
-source = "CPG §20, CC 9.0: 'Maximum amount of shared memory per SM 228 KB', 'per thread block 227 KB'; §18.8.3: 256 KB unified data cache and shared memory; WP Table 3 'Shared Memory Size / SM Configurable up to 228 KB'"
+source = "CPG §18.2 Table 28, CC 9.0: 'Maximum amount of shared memory per SM 228 KB', 'per thread block 227 KB'; §18.8.3: 256 KB unified data cache and shared memory; WP Table 3 'Shared Memory Size / SM Configurable up to 228 KB'"
 
 [[capacity]]
 key = "l2"
@@ -448,7 +448,7 @@ what = "resident warps a SM (4 SMSPs, 16 a SMSP)"
 value = 64
 unit = "warps/SM"
 grade = "Programming Guide"
-source = "CPG §20, CC 9.0: 'Maximum number of resident warps per SM 64'"
+source = "CPG §18.2 Table 28, CC 9.0: 'Maximum number of resident warps per SM 64'"
 
 # ---- exact paths: which formats multiply exactly in a fixed operand format (P1) ----------------------------------------------
 
@@ -765,11 +765,9 @@ gap = "a pinned device-to-host cudaMemcpy bandwidth test on an H200 (GPU queue)"
 
 [[rate]]
 key = "host.sha512"
-what = "SHA-512 compressions a second on one host core (AVX-512, eight blocks across a 512-bit register's 64-bit lanes)"
+what = "SHA-512 compressions a second on one host core (AVX-512, eight blocks across a 512-bit register's 64-bit lanes), counted: a block in VPROLQ, VPSRLQ, VPTERNLOGQ and VPADDQ is 80 rounds of 17 (Σ0 and Σ1 three rotates and a ternlog each, Ch and Maj a ternlog each, 7 adds), 64 schedule words of 11 and 8 feed-forward adds, 2,072 512-bit operations per 8 blocks on the two ports 512-bit integer operations issue to (Intel: two 512-bit FMA units a core), so 8 / 1,036 a cycle at the card's max turbo: an upper bound on every core, the 8468 having no Priority Core Turbo (cpu.priority_cores 0)"
 unit = "compressions/s a core"
-sheet = 2.9344e7
-grade = "count (an upper bound: 2,072 512-bit operations per 8 blocks on two vector ports at the max turbo)"
-source = "Xeon Platinum 8468 (Intel ARK: 48 cores, max turbo 3.80 GHz, all-core 3.1 GHz); Intel: two 512-bit FMA units a core, the two ports 512-bit integer operations issue to; a block in VPROLQ, VPSRLQ, VPTERNLOGQ and VPADDQ: 80 rounds of 17 (Σ0 and Σ1 three rotates and a ternlog each, Ch and Maj a ternlog each, 7 adds), 64 schedule words of 11, 8 feed-forward adds = 2,072; 3.8e9 · 8 / (2,072 / 2) = 2.934e7"
+card = "host:clock.turbo * 1e9 * 8 / 1036"
 gap = "isa-l_crypto's multi-buffer sha512_mb on the node's host (CPU only, but on the GPU node: the H200 census batch, rule G)"
 
 [[rate]]
