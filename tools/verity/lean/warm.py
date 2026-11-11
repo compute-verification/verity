@@ -38,7 +38,6 @@ import fcntl
 import importlib.util
 import json
 import os
-import posixpath
 import re
 import subprocess
 import sys
@@ -103,18 +102,28 @@ def reached(la, files: list[str], diff: list[str]) -> list[str]:
     return [p for p in la.packages(files) if not set(diff).isdisjoint(la.inputs(p, known))]
 
 
+def _reads(la, mod: str, p) -> list[Path]:
+    """The files the key of module ``mod`` of package ``p`` reads (`module_keys.keys`, `module_keys.env_parts`), but its
+    root's `MK.ENV`: its source, its package's lakefile and input files, and its package's own manifest, which says which
+    of the packages its root pins are in its env."""
+    return [p.file(mod), p.dir / "lakefile.toml", p.dir / la.MK.MANIFEST, *(p.dir / i for i, _ in p.inputs)]
+
+
+def _at(tree: Path, f: Path) -> str:
+    return Path(os.path.relpath(f, tree)).as_posix()
+
+
 def moved(la, tree: Path, pkgs: list[str], diff: list[str]) -> int:
     """How many Lean modules the builds of ``pkgs`` hold whose key (`module_keys`) the change ``diff`` can move: a module with
-    a changed input (its source, its package's lakefile, a file a module of its package may read as it compiles), every
-    module of a build whose toolchain or manifest changed, and every module that imports one of those, each source file
-    counted once. An upper bound on what the audit compiles, read from the tree's headers with no build: a key reads an
+    a changed input (its source, its package's lakefile, a file a module of its package may read as it compiles) or whose
+    package's own manifest changed, every module of a build whose toolchain or manifest changed, and every module that
+    imports one of those, each source file counted once. An upper bound on what the audit compiles, read from the tree's headers with no build: a key reads an
     import by its outputs, which an edit may leave as they were. A module `module_keys` gives no key isn't counted."""
     changed, out = set(diff), set()
     for pkg in pkgs:
         keyed = la.MK.keys(tree / pkg)
         every = any(f"{pkg}/{f}" in changed for f in la.MK.ENV)
-        at = {i: posixpath.normpath(f"{pkg}/{i}") for k in keyed.values() for i in k.task["inputs"]}
-        direct = {m for m, k in keyed.items() if every or any(at[i] in changed for i in k.task["inputs"])}
+        direct = {m for m, k in keyed.items() if every or any(_at(tree, f) in changed for f in _reads(la, m, k.package))}
         out |= {k.package.file(m) for m, k in keyed.items() if m in direct or not k.closure.isdisjoint(direct)}
     return len(out)
 
