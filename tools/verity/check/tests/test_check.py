@@ -2144,6 +2144,37 @@ def test_train_sh_hands_the_lock_runs_bookkeeping_flag_to_a_check_that_takes_it(
         assert p.returncode == 2 and "train: --bookkeeping-warn refused" in p.stderr and not argv.exists(), (flags, p.stderr)
 
 
+def test_train_sh_hands_the_loops_deselect_list_to_a_check_that_takes_it(tmp_path):
+    """The vqueue loop's list (`--deferred ... --deselect FILE`): it reaches check.py --record when the commit's check.py takes
+    it, and on a commit whose check.py predates it the run launches without it, saying so; without --deferred, by a relative
+    path or with --cc-records it is refused before anything launches."""
+    git, train, argv = _train_repo(tmp_path)
+    check = tmp_path / "repo" / "tools" / "verity" / "check" / "check.py"
+    check.parent.mkdir(parents=True)
+    check.write_text('DESELECT_FILE = "check-deselect.txt"\n')
+    git("add", "tools")
+    git("commit", "-q", "-m", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    listed = tmp_path / "deselect.sent"
+    listed.write_text("tests/test_a.py::test_a\n")
+    p = train("HEAD", "vy-x", "--deferred", "pytest", "--shard", "1/3", "--deselect", str(listed))
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--deselect"):args.index("--deselect") + 2] == ["--deselect", str(listed)], (
+        p.stderr, args)
+    check.write_text("\n")
+    git("commit", "-q", "-am", "older")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--deferred", "pytest", "--deselect", str(listed))
+    args = argv.read_text().split()
+    assert p.returncode == 0 and "--deselect" not in args and "predates --deselect" in p.stdout, (p.stdout, args)
+    argv.unlink()
+    for flags, why in ((["--deselect", str(listed)], "--deselect refused without --deferred"),
+                       (["--deferred", "pytest", "--deselect", listed.name], "--deselect needs a list's absolute path"),
+                       (["--cc-records", "--deselect", str(listed)], "--deselect refused without --deferred")):
+        p = train("HEAD", "vy-x", *flags)
+        assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
+
+
 def test_train_sh_replaces_a_tree_git_no_longer_lists_as_a_worktree(tmp_path):
     """On the control pod's NFS TMPDIR a train's tree can be left half removed and no longer a worktree, which `worktree remove`
     skips and `worktree add` refuses: every relaunch of that commit registered no run."""
