@@ -62,7 +62,8 @@ def _owner(stem: str) -> str:
     `verity.circuits`), or of a primitive's evaluator."""
     d = REGISTRY.defs.get(stem)
     impl = getattr(d, "evaluate", None) or getattr(d, "body", None)
-    return "vllm" if getattr(impl, "__module__", "").startswith(("verity_vllm", "verity.definitions")) else "core"
+    core = tuple(f"verity.definitions.{p}" for p in "circuits commitments evaluate kernels ops private_circuits requirement silicon".split())
+    return "vllm" if (m := getattr(impl, "__module__", "")).startswith(("verity_vllm", "verity.definitions")) and not m.startswith(core) else "core"
 
 
 def _files():
