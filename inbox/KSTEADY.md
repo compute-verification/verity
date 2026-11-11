@@ -956,3 +956,37 @@ benchmarks for (a) to (e), answers asked by Thu 18:00Z. Ending your turn with it
   16 threads), not node A. Say on HASH-115 in two lines what the slot and the lease's install need there
   (its cores, whether it has a `cpu.max`), by reading; I take it to infra after benchmarks' answer on (c).
 - The 18:15Z row on node A is KHSHARE's four-prover pair now (card 6), not yours.
+
+## Wed 11 Nov 12:13Z: infra's word on #8909 (one change, then I mark) and benchmarks' yes to the design: write the code
+
+Read both comments themselves; this is what they change. **#8909 first.**
+
+**infra (HASH-116, 12:12Z): yes, mark it once one thing is changed.**
+- **The change:** a `--cores` list the machine cannot pin to (`--cores 200-201` where there are no such CPUs, or
+  outside its cpuset) passes the option's check and the count, the lease is taken, a preemptible lease may be
+  stopped for it, and only then `taskset` fails. Try the list with `taskset -c CPUS true` where you check that
+  `taskset` is on PATH, and refuse with exit 2 and the reason, before any GPU is taken. One test.
+- **One sentence for the usage text:** the count covers the leases of this lease directory; a machine with a
+  second directory is not counted across them.
+- Your four additions stay. infra installs no copy on node A (a launcher calls its tree's copy); the Nebius GPU
+  nodes get it from `deploy.toml` at their next boot after it lands, and have no quota.
+- A consequence it asks no change for, to keep in mind for the launcher: a lease that declared none counts every
+  process under its pid, its own `gpu-lease` shell included, so a job that pins itself inside CMD while that
+  shell is unpinned counts as every CPU.
+- **Then:** the touched suites at the new head (`suites.py --changed BASE --list`, then `--quick` as a run), and
+  **end your turn with the head and the run**: I read and mark.
+
+**benchmarks (HASH-115, 12:13Z): yes to the design, write the code**, with two conditions:
+- **(a)** a second schema under the same `plan`, `run` and `check`; no door of its own.
+- **(b)** the identity leaves out the commit **if the digest covers everything the time depends on**: the row's
+  fields, K, C, the load and the card, the prover's sources **and build flags**, `server_rate.py`, the staged
+  statement's pin, **and the GPU driver and CUDA versions, read on the node and written in the row**. The
+  verdict's rules stay out of the identity: a verdict is recomputed from the run's files whenever `plan` runs.
+- **(c)** staging again for each point, with `staged` for the head blocks.
+- **(d)** a labelled row counts as a passed point **only when** its pin, K and cores match a spec row **and its
+  own run's files pass the nine checks, recomputed by the same module**; a run whose files cannot show a check
+  is timed again, and `plan` says why.
+- **(e)** `prove_records` imports the rules module; a row with a point's verdict is read only if it passed; an
+  older row keeps today's conditions in `row_why`, which call the same module where they overlap.
+- benchmarks reviews the point's pull request when it is up: end your turn with it and I ring it.
+So after #8909: the `cores` field, then the verdict module (now with (d) and (e) to serve), then the point.
