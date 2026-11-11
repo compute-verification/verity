@@ -383,7 +383,7 @@ PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
 MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py"
 #: the root modules of Security's `Definitions` library and Flock's `Flock`, which the port makes modules: a tree holding
 #: the codemod is on the module system when each is a module (`on_modules`)
-PORTED_ROOTS = ("Security/Definitions.lean", "verity/protocols/flock/verifier/Flock.lean")
+PORTED_ROOTS = ("security/Definitions.lean", "verity/protocols/flock/verifier/Flock.lean")
 #: what the codemod's run over a tree reads besides the codemod and its header reader: a merge that changes none of these onto
 #: a tree on the module system leaves its porting as it was (`ported`'s ``base``); pathspecs, each `*` crossing directories
 PORT_INPUTS = ("*.lean", "*lakefile.toml", "*lakefile.lean", "*lake-manifest.json", "*lean-toolchain")
@@ -1299,11 +1299,11 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 #: the analysis tree: a Lean change only here that touches no lock and no spec (`LEAN_SPEC`) is proofs, checked by the
 #: after-landing run, a failure blaming it; Lean anywhere else runs as code (Flock's verifier and the ZK server, the PoUS
 #: grader, the certifier program, the inference-only check, the remote audit's verifier), and a lock run follows its landing
-LEAN_PROOFS_TREE = "Security/"
-#: the spec: the Lean the guarantees' statements read, `Security/`'s Definitions library, and the Lake files of its package.
+LEAN_PROOFS_TREE = "security/"
+#: the spec: the Lean the guarantees' statements read, `security/`'s Definitions library, and the Lake files of its package.
 #: A change to it, like a lock's, is a Lean change with or without a lock change
-LEAN_SPEC = ("Security/Definitions/", "Security/Definitions.lean", "Security/lakefile.toml", "Security/lake-manifest.json",
-             "Security/lean-toolchain")
+LEAN_SPEC = ("security/Definitions/", "security/Definitions.lean", "security/lakefile.toml", "security/lake-manifest.json",
+             "security/lean-toolchain")
 
 
 def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
@@ -1313,7 +1313,7 @@ def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
     guarantee's statement nor a definition it reads reaches `main` without its record (the after-landing lean-audit,
     `--no-regenerate`, fails on a record difference), or a Lean source outside `LEAN_PROOFS_TREE` of a Lake package that has a
     lock, Lean that runs as code, whose lock (its `verifier.allow` among them) would go stale the same way.  A change to
-    `Security/`'s other Lean alone is proofs: no lock run follows it, and a failure of the after-landing lean-audit blames
+    `security/`'s other Lean alone is proofs: no lock run follows it, and a failure of the after-landing lean-audit blames
     it."""
     files = changed(repo, base or f"{commit}^1", commit)
     if any(Path(f).name == LEAN_LOCK or f.endswith(LEAN_SOURCES) and f.startswith(LEAN_SPEC) for f in files):
