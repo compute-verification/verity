@@ -45,8 +45,10 @@ A verdict read from a row is ``accept`` only where a server is named for the row
 node (`off_node`), the server named being the report's ``servers`` entry and, for the row the network certifier's
 period check's answer gives where the report drops it, the one its piece names (`served_verdicts.piece_server`): an
 answer about another server is missing, naming that server (`ELSEWHERE`), and so is an accept no server is named for
-(`UNSERVED`). Such a row gives the record no figure: the rows its verdicts and figures read are made once, after that
-check (`on_node`), and each figure reads the row as it reads a missing one.
+(`UNSERVED`), and an accept about the node whose source, as the report's ``sources`` or that piece states it, isn't
+``real``, an answer brought from a recorded run (`BROUGHT`). Such a row gives the record no figure: the rows its
+verdicts and figures read are made once, after that check (`on_node`), and each figure reads the row as it reads a
+missing one.
 
 While `certifier-key` is open (`PREMISES`, `KEY_OPEN`), an accepted network certifier's verdict is ``not
 established``, its Lean answer's accept beside it (``answer``), and its bound conditional on it by name; so is it
@@ -255,6 +257,10 @@ ELSEWHERE = ("the run has no answer about this node: the {key} row's answer ({sr
              "another server than the window report's node")
 UNSERVED = ("the run has no answer about this node: the {key} row ({src}) accepts, and no server is named for its "
             "answer")
+#: why an accept about the node whose source isn't ``real`` is missing (`off_node`): the source stated for a row is the
+#: report's ``sources`` entry, and `served_verdicts.piece_server`'s for the row `network_row` composes
+BROUGHT = ("the run has no answer of its own: the {key} row's accept ({src}) was brought from a recorded run (its "
+           "source is {source}, not real)")
 #: where the certifier piece leaves its period's case (`certifier_piece.CASE`), whose params carry the schedule and caps
 CASE = Path("pieces") / "certifier" / "case.json"
 #: the run's advice registration as it publishes it (`served_verdicts.py public-registration`), its compiler's cap ℓ_a
@@ -972,43 +978,50 @@ def missing(why: str, src: str | None = None) -> dict[str, Any]:
     return {"verdict": "missing", "why": why, **({"from": src} if src else {})}
 
 
-def network_row(out: Path, rows: Mapping[str, Any], servers: Mapping[str, Any],
-                run: str | None) -> tuple[Any, str, Any]:
-    """The network certifier's row, where it is from and the server named for its answer: the window report's, with the
-    report's ``servers`` entry, or, where the report's product dropped it and its period check answered under OUT, the
-    row that answer gives (`served_verdicts.piece_row`) with the server its piece names
-    (`served_verdicts.piece_server`): the row and the server the report composes under the onsite product, by the
-    report's own composer, never a second one."""
+def network_row(out: Path, rows: Mapping[str, Any], at: tuple[Any, Any],
+                run: str | None) -> tuple[Any, str, tuple[Any, Any]]:
+    """The network certifier's row, where it is from, and the server and the source named for its answer: the window
+    report's, with what the report states for it (``at``), or, where the report's product dropped it and its period
+    check answered under OUT, the row that answer gives (`served_verdicts.piece_row`) with the server and the source
+    its piece names (`served_verdicts.piece_server`): what the report composes under the onsite product, by the report's
+    own composer, never a second one."""
     key, answer = ROWS["the network certifier"], CASE.parent / "answer.json"
     r = rows.get(key)
     if not (isinstance(r, Mapping) and r.get("verdict") == "dropped" and (out / answer).is_file()):
-        return r, f"record/verdicts.json protocols.{key}", servers.get(key)
+        return r, f"record/verdicts.json protocols.{key}", at
     import served_verdicts as SV
 
-    return SV.piece_row(key, out / "pieces", run), str(answer), SV.piece_server(key, out / "pieces")[0]
+    return SV.piece_row(key, out / "pieces", run), str(answer), SV.piece_server(key, out / "pieces")
 
 
-def off_node(server: Any, node: Any, key: str, src: str, verdict: Any) -> str | None:
-    """Why the row ``key`` (from ``src``), answering ``verdict``, is no answer about the window report's ``node``, None
-    where it is one: the ``server`` named for it is another (`ELSEWHERE`), or none is named and the row accepts
-    (`UNSERVED`). A row that doesn't accept and names no server reads as it states, as the report composes it."""
+def off_node(at: tuple[Any, Any], node: Any, key: str, src: str, verdict: Any) -> str | None:
+    """Why the row ``key`` (from ``src``), answering ``verdict``, is no answer of the run's own about the window
+    report's ``node``, None where it is one, by the server and the source named for it (``at``): the server is another
+    (`ELSEWHERE`), or none is named and the row accepts (`UNSERVED`), or the row accepts and its source is stated and
+    isn't ``real`` (`BROUGHT`). A row that doesn't accept and names no server reads as it states, as the report
+    composes it, and a source no one states is the writer's default, ``real``."""
+    server, source = at
     if server is None:
         return UNSERVED.format(key=key, src=src) if verdict == "accept" else None
-    return None if server == node else ELSEWHERE.format(key=key, src=src, verdict=verdict, server=server)
+    if server != node:
+        return ELSEWHERE.format(key=key, src=src, verdict=verdict, server=server)
+    if verdict == "accept" and source not in (None, "real"):
+        return BROUGHT.format(key=key, src=src, source=source)
+    return None
 
 
-def on_node(rows: Mapping[str, Any], servers: Mapping[str, Any], node: Any,
+def on_node(rows: Mapping[str, Any], at: Mapping[str, tuple[Any, Any]], node: Any,
             srcs: Mapping[str, str]) -> dict[str, Any]:
     """The rows the record reads, made once for its verdicts and its figures alike: each of ``rows`` that answers and
-    is no answer about the window report's ``node``, by the server ``servers`` names for it (`off_node`), is a missing
-    row saying why, so its verdict is missing with that why and no figure of it reaches the record; every other row is
-    as it is. ``srcs``: where a row is from, by key, where it isn't the report's own."""
+    is no answer of the run's own about the window report's ``node``, by the server and the source ``at`` names for it
+    (`off_node`), is a missing row saying why, so its verdict is missing with that why and no figure of it reaches the
+    record; every other row is as it is. ``srcs``: where a row is from, by key, where it isn't the report's own."""
     made = {}
     for key, r in rows.items():
         off = None
         if isinstance(r, Mapping) and r.get("verdict") not in ("missing", "dropped"):
             src = srcs.get(key) or f"record/verdicts.json protocols.{key}"
-            off = off_node(servers.get(key), node, key, src, r.get("verdict"))
+            off = off_node(at.get(key) or (None, None), node, key, src, r.get("verdict"))
         made[key] = {"verdict": "missing", "why": off} if off else r
     return made
 
@@ -1986,12 +1999,14 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
         raise ValueError(f"record/verdicts.json is {report.get('format')!r}, not {EXTENDS}")
     advice = {"served": ADVICE, "charged": {"missing": "no bound"}, "cap": {"missing": "no bound"},
               "measured": measured(advice_charge)}
-    rows, servers = report.get("protocols") or {}, report.get("servers")
-    servers = servers if isinstance(servers, Mapping) else {}
-    net, net_src, net_server = network_row(out, rows, servers, report.get("run"))
+    rows = report.get("protocols") or {}
+    servers, sources = (x if isinstance(x, Mapping) else {} for x in (report.get("servers"), report.get("sources")))
+    at = {key: (servers.get(key), sources.get(key)) for key in rows}
+    net, net_src, net_at = network_row(out, rows, at.get(ROWS["the network certifier"]) or (None, None),
+                                       report.get("run"))
     if net is not None:
         rows = {**rows, ROWS["the network certifier"]: net}
-    rows = on_node(rows, {**servers, ROWS["the network certifier"]: net_server}, report.get("node"),
+    rows = on_node(rows, {**at, ROWS["the network certifier"]: net_at}, report.get("node"),
                    {ROWS["the network certifier"]: net_src})
     found = composites(out)
     composite, with_pouw = of_record_composite(found)

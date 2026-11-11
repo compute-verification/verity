@@ -121,7 +121,8 @@ subprotocol's from
 ``--pieces/<component>/answer.json`` (`piece_row`), else a ``missing`` row naming why. Each answer is about the server
 `piece_server` names: sampled proofs' the record's node, a piece's the one its ``served.json`` names, else the node it ran
 on, and the wipe's the one its ``served.json`` names. They go into the window report (``verdicts.json``, `row_of`'s rows,
-with each one's server) and from it the block record (``block-record.json``, `block_record.from_period`, held by
+with each one's server, ``servers``, and its answer's source, ``sources``) and from it the block record
+(``block-record.json``, `block_record.from_period`, held by
 `block_record.check`), which composes only the answers about the record's node and carries the others as ``elsewhere``;
 an answer that names no server isn't carried. An accepted answer whose outputs are not its leg's certificate
 (`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
@@ -1379,9 +1380,10 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
            deferred: str | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
-    drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; sampled proofs'
-    answer is about ``node``, and a piece's that names no server isn't carried. ``deferred``: what the run left to a
-    follow-on and why, which the report and the line carry."""
+    drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name, whose server
+    and source the report states (``servers``, ``sources``; a source is ``real`` unless its piece says otherwise);
+    sampled proofs' answer is about ``node``, and a piece's that names no server isn't carried. ``deferred``: what the
+    run left to a follow-on and why, which the report and the line carry."""
     from verity_e2e_demo import block_record as BR
 
     legs = {v: k for k, v in BR.RUNNER_KEYS.items()} | {"wipe": "wipe"}
@@ -1401,7 +1403,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     where = {"host": host, "served_node": host == node, "from": COMPOSED_FROM if host == node else COPIED_FROM}
     left = {"deferred": deferred} if deferred else {}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
-              "servers": {k: at[k][0] for k in rows}, "composed_on": where, **left}
+              "servers": {k: at[k][0] for k in rows}, "sources": {k: at[k][1] for k in rows}, "composed_on": where,
+              **left}
     verdicts = {NAMES[k]: DEV_VERDICT if "development" in r and r.get("verdict") == "missing" else r.get("verdict")
                 for k, r in rows.items()}
     missing = {NAMES[k]: r.get("why") for k, r in rows.items() if r.get("verdict") == "missing"}

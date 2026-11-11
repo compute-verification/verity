@@ -690,6 +690,37 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
         assert line["missing"]["the wipe"] == "its piece refused to run: WIPE REFUSED: the card has a compute process"
 
 
+@pytest.mark.parametrize("source", [None, "real", "fixture"])
+def test_the_window_report_states_each_answers_source_beside_its_server_and_nothing_else_of_it_does(
+        tmp_path, monkeypatch, capsys, source):
+    """The report's ``sources`` has, for each of its rows, the source `piece_server` reads for its answer: ``real``
+    unless its piece's served.json says otherwise, and ``real`` for sampled proofs' and for a row with no piece. An
+    accepting wipe whose served.json names the record's node and says its answer is a fixture's is ``fixture`` there and
+    in its leg of the block record, and the rest of the report is, field for field, the report of a real one."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None, _registration=None: _accepted())
+    reports = {}
+    for name, said in (("given", source), ("real", "real")):
+        wipe = tmp_path / name / "pieces" / "wipe"
+        wipe.mkdir(parents=True)
+        (wipe / "answer.json").write_text(json.dumps(WIPE_ACCEPT))
+        (wipe / S.SERVED).write_text(json.dumps({"server": "toy-node"} | ({"source": said} if said else {})))
+        (tmp_path / name / "serve").mkdir()
+        assert S.main(["record", "--serve-run", str(_serve_dir(tmp_path / name / "serve")), "--window", "1",
+                       "--sampled-proofs", str(tmp_path / "audit"), "--registration", str(tmp_path / "registration.json"),
+                       "--pieces", str(tmp_path / name / "pieces"), "--out", str(tmp_path / name / "record"),
+                       "--node", "toy-node"]) == 0
+        reports[name] = json.loads((tmp_path / name / "record" / "verdicts.json").read_text())
+        leg = json.loads((tmp_path / name / "record" / "block-record.json").read_text())["legs"]["wipe"]
+        assert (leg["server"], leg["source"]) == ("toy-node", said or "real")
+    capsys.readouterr()
+    report = reports["given"]
+    assert report["protocols"]["wipe"]["verdict"] == "accept" and report["servers"]["wipe"] == "toy-node"
+    assert set(report["sources"]) == set(report["servers"]) == set(report["protocols"])
+    assert report["sources"] == dict.fromkeys(report["protocols"], "real") | {"wipe": source or "real"}
+    assert {k: x for k, x in report.items() if k != "sources"} == {k: x for k, x in reports["real"].items() if k != "sources"}
+
+
 #: an accepted core answer of each piece's subprotocol, its public outputs the block record's leg certificate
 ACCEPTS = {
     "pouw": {"protocol": "verity/pouw/v1", "public": {"work": {"level": 3, "n": 4, "credited_tiles": 2, "credited": 8192}},
