@@ -15,7 +15,7 @@ on that circuit. These are statements only: none is proved here, and none is a g
   Lean, so the tied circuit is a parameter held to two properties (`Tying.AtW`): its gates at a cell compute `yCell`
   under the pass's salt and the root W registers for the weight, and the commitment opens its y gates, its A row gates
   and its weight rows at W's entries for the cell, the entries `TieMeans` says W registers.
-* **The composite step** (`Period.ValueTie`). Over a period of one node's windows, each remote's play, on the period's
+* **The composite step** (`Period.YIsTheGates`). Over a period of one node's windows, each remote's play, on the period's
   coins: some window and every earlier one are accepted by remote's compiled verifier while the claim fails on them,
   with probability at most the error. The claim (`Period.TiedUpTo`) is, at each of those windows, on the transcript
   sampled proofs' extractor reads off the prover (`Commit.TiedBy`): every served y of a tile that the prover's
@@ -25,7 +25,8 @@ on that circuit. These are statements only: none is proved here, and none is a g
   (`Properties.Pouw.PearlPlus.Run.wrongShare`) the ticket weight of the tiles the reference opening does not tie.
 * **The error** (`Period.error`), three terms: PoUW's δ, wherever (1 − ε)^t ≤ δ at `t` draws a window, once for the
   period however many windows it has; the SHA-512 collision term of the tie's finder at a budget of SHA-512 calls
-  (`Claims.ecrBound`, the one break term); and SPOT's binding error, a named parameter, once a window.
+  (`Claims.ecrBound`, the one break term); and SPOT's binding error, once a window: a named parameter, the
+  probability that an audit is accepted while a value sampled proofs bind is not the one the commitment holds.
 * **The premises** (`Shared`, `Period.WellFormed`, and the two conditions `PeriodYAtWIsTheCall` reads): the shared
   statements about Pearl+ (`TieMeans`, `AcceptedIsHeldToW`, `PeriodYAtWIsTheCall`, `OpeningBinds`), sampled proofs'
   target at remote, and what makes the period one: each window's reference run committed before its coin, its draw `t`
@@ -40,25 +41,28 @@ accepted on its coin is accepted at its reference openings, and PoUW's term take
 position that open two values are the finder's: the reference opening against the prover's on another coin, or against
 the value sampled proofs bind.
 
-**One node, in time order, or pooled.** `Period.ValueTie` takes the order as a premise
+**One node, in time order, or pooled.** `Period.YIsTheGates` takes the order as a premise
 (`Runs.CommittedBeforeCoin`: a window's run is a function of the earlier windows' coins) and counts the accepted
 prefix. Windows it does not hold for, one node's that overlap in time or several nodes', pool convexly instead
-(`Period.ValueTiePooled`): each run a function of every coin but its own, all windows accepted, and the weighted mean
+(`Period.PooledYIsTheGates`): each run a function of every coin but its own, all windows accepted, and the weighted mean
 of the wrong shares at most ε, at any convex weights fixed beforehand.
 
-**What is not tied**, and stays fresh input in the tied circuit:
+**What is not tied**, and counts as fresh input:
 
-* the y of a tile in the wrong share, and the y of a cell that is not credited, of a dropped round's call or of a
-  version-1 W (`Properties.Pouw.PearlPlus`'s list);
-* a y, or a y whose A row holds a gate, that no unit bound in the extractor's transcript reads or writes
-  (`Commit.BoundAt`): sampled proofs' claim bounds the unbound units' share;
-* whether the A rows are the model's activations: the tied gates read the served gates the layout names.
+* the y of a tile in the wrong share;
+* the y of a cell that is not credited, of a dropped round's call or of a version-1 W
+  (`Properties.Pouw.PearlPlus`'s list): no tied circuit that is the run's calls at W's entries computes it, so it stays
+  an input gate that is not registered;
+* a y that no unit bound in the extractor's transcript reads, or whose A row holds a gate no such unit reads or writes
+  (`Commit.BoundAt`): sampled proofs' claim bounds the unbound units' share.
 
-The share is of ticket weight, the work a tile is credited, not of y bits.
+The statement does not say the A rows are the model's activations: the tied gates read the served gates the layout
+names. The wrong share is of ticket weight, the work a tile is credited, not of y bits.
 
-**Constructions the proof defines.** The reference openings and the finder are fields of the period
-(`Period.ref`, `Period.finder`), as the extractor and the finders are fields of `Verity.Vocab`: fixed constructions
-applied to the prover, never chosen per prover, and the statement is a target at them.
+**What the statement is a target at.** The reference openings and the finder are fields of the period (`Period.ref`,
+`Period.finder`), as the extractor and the finders are fields of `Verity.Vocab`: fixed constructions applied to the
+prover, never chosen per prover. SPOT's binding error and the finder's budget are parameters. The statement is a target
+at them: it holds at the constructions and the numbers its proof names, not at every one.
 -/
 
 namespace Verity.ValueTie
@@ -336,10 +340,10 @@ def RefIsThePlays : Prop :=
         (pi, tid) ∈ PouwCheck.PearlPlus.todo R.passes drawn) →
       ∃ o, (P.ref.run x k).opener pi tid = .ok o)
 
-/-- **Each window's tied circuit is its reference run's calls at W's entries** (`Tying.AtW`), under the openings of
-the window's commitment (`Vocab.Opens`). -/
+/-- **Each accepted window's tied circuit is its reference run's calls at W's entries** (`Tying.AtW`), under the
+openings of the window's commitment (`Vocab.Opens`). -/
 def TiedAtW : Prop :=
-  ∀ (x : Fin n → Ω) (k : Fin n),
+  ∀ (x : Fin n → Ω) (k : Fin n), P.Accepted x k →
     (P.commit x k).tying.AtW
       (V.Opens (P.commit x k).params (P.commit x k).files (P.commit x k).commitment) (P.ref.run x k)
 
@@ -369,7 +373,7 @@ their window's coin (`Runs.CommittedBeforeCoin`) and whose draws are each `t` ti
 (`Runs.DrawIsTickets`), and ε, δ with (1 − ε)^t ≤ δ: over the period's coins, some window and every earlier one are
 accepted at remote while the tie's claim up to it fails (`TiedUpTo`), with probability at most the tie's error at `δ`,
 the budget `q` and SPOT's binding error `spot`, whatever `n` is. It counts the accepted prefix alone. -/
-def ValueTie [Fintype Ω] (t : ℕ) (ε δ q : ℝ) (spot : ℝ≥0∞) : Prop :=
+def YIsTheGates [Fintype Ω] (t : ℕ) (ε δ q : ℝ) (spot : ℝ≥0∞) : Prop :=
   Shared V → Properties.Pouw.PearlPlus.PeriodYAtWIsTheCall → P.WellFormed →
     P.ref.CommittedBeforeCoin → P.ref.DrawIsTickets t → 0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
     ENNReal.ofReal (_root_.Pouw.pr fun x : Fin n → Ω => ∃ k : Fin n, P.AcceptedUpTo x k ∧ ¬ P.TiedUpTo ε x k) ≤
@@ -386,7 +390,7 @@ reference runs are each committed apart from their window's coin (`CommittedApar
 tickets on their window's coin, convex weights `lam` fixed beforehand, and ε, δ with (1 − ε)^t ≤ δ: over the period's
 coins, every window is accepted at remote while some window is not tied or the weighted mean of the wrong shares is
 above ε, with probability at most the tie's error. -/
-def ValueTiePooled [Fintype Ω] (t : ℕ) (ε δ q : ℝ) (spot : ℝ≥0∞) (lam : Fin n → ℝ) : Prop :=
+def PooledYIsTheGates [Fintype Ω] (t : ℕ) (ε δ q : ℝ) (spot : ℝ≥0∞) (lam : Fin n → ℝ) : Prop :=
   Shared V → Properties.Pouw.PearlPlus.YAtWIsTheCall → P.WellFormed →
     P.CommittedApart → P.ref.DrawIsTickets t → 0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
     (∀ k, 0 ≤ lam k) → (∑ k, lam k) = 1 →
