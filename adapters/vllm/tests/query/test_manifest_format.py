@@ -177,3 +177,19 @@ def test_fresh_b1_manifest_loads_in_binding_and_composition_skips(tmp_path):
     pb.write_text(json.dumps(bad))
     with pytest.raises(ValueError, match="engine_steps mixes"):
         B.load_required_manifest(str(pb), man["program_digest"], requests=["r0"], steps=2, ranks=[0], arrivals={"r0": 0})
+
+
+def test_program_dirs_for_passes_over_a_result_it_cannot_read(tmp_path):
+    """The lookup by a derive's result.json skips a candidate whose result.json is not JSON or cannot be opened, and takes the
+    next one that declares the request's shape; with no such candidate left it refuses by the request's name."""
+    fx = {"requests": [{"request_id": "r0", "prompt_len": 168, "max_tokens": 10}]}
+    (tmp_path / "build_request_a").mkdir()
+    (tmp_path / "build_request_a" / "result.json").write_text('{"ok": true, "LP": 168')
+    (tmp_path / "build_request_b").mkdir()
+    (tmp_path / "build_request_b" / "result.json").mkdir()
+    (tmp_path / "build_request_c").mkdir()
+    (tmp_path / "build_request_c" / "result.json").write_text(json.dumps({"ok": True, "LP": 168, "T": 9}))
+    assert MF.program_dirs_for(fx, str(tmp_path)) == {"r0": str(tmp_path / "build_request_c")}
+    (tmp_path / "build_request_c" / "result.json").write_bytes(b"\xff\xfe{}")
+    with pytest.raises(SystemExit, match="r0 .*168,9"):
+        MF.program_dirs_for(fx, str(tmp_path))

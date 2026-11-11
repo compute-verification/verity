@@ -679,8 +679,9 @@ def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
                 rj = os.path.join(cand, "result.json")
                 if os.path.isdir(cand) and os.path.exists(rj):
                     try:
-                        res = json.load(open(rj))
-                    except Exception:  # noqa: BLE001
+                        with open(rj) as f:
+                            res = json.load(f)
+                    except (OSError, ValueError):      # unreadable, or not JSON: not this request's Program
                         continue
                     if res.get("ok") and PP.declares(res, sh):
                         hits = [cand]

@@ -3,6 +3,8 @@ without torch): encode_arg, StorageAdapter.view_of / generations / pending drain
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -33,6 +35,20 @@ def test_encode_scalars_and_containers():
     assert encode_arg(torch.strided, st) == "torch.strided"
     other = encode_arg(object(), st)
     assert isinstance(other, dict) and set(other) == {"$repr"} and len(other["$repr"]) <= 200
+
+
+def test_encode_symbolic_scalars():
+    """A symbol with a value encodes as that number; one without (int() and float() of it raise) as its repr."""
+    from torch._dynamo.source import ConstantSource
+    from torch.fx.experimental.symbolic_shapes import ShapeEnv
+
+    st, env = StorageAdapter(), ShapeEnv()
+    src = ConstantSource("n")
+    backed = env.create_symintnode(env.create_symbol(7, source=src), hint=7, source=src)
+    assert isinstance(backed, torch.SymInt) and encode_arg(backed, st) == 7
+    for x in (env.create_unbacked_symint(), env.create_unbacked_symfloat(), env.create_unbacked_symbool()):
+        assert encode_arg(x, st) == {"$repr": repr(x)[:200]}
+    assert encode_arg([backed, env.create_unbacked_symint()], st)[0] == 7
 
 
 def test_view_of_fields_and_shared_storage():
@@ -90,6 +106,34 @@ def test_generation_bump_on_pointer_reuse_raw():
     ev = st.events_pending()
     assert ev[0] == StorageFree(a3, True) and ev[1].alloc == a4
     assert st.live_count() == 1
+
+
+def test_weakref_probe_answers_no_without_torch_or_weakrefs(monkeypatch):
+    """`use_weakrefs` is off where torch is absent, where a storage is not one preserved object, and where it takes no
+    weakref; a `StorageAdapter` made there falls back to implied frees."""
+    from verity_vllm.observe import storage as S
+
+    class NoWeakref:
+        @staticmethod
+        def ref(_obj):
+            raise TypeError("cannot create weak reference to 'UntypedStorage' object")
+
+    def absent(_self):
+        raise AttributeError("'Tensor' object has no attribute 'untyped_storage'")
+
+    with monkeypatch.context() as m:
+        m.setattr(S, "weakref", NoWeakref)
+        assert S._probe_weakrefs() is False and StorageAdapter().use_weakrefs is False
+    with monkeypatch.context() as m:
+        m.setattr(torch.Tensor, "untyped_storage", lambda self: object())
+        assert S._probe_weakrefs() is False
+    with monkeypatch.context() as m:
+        m.setattr(torch.Tensor, "untyped_storage", property(absent))
+        assert S._probe_weakrefs() is False
+    with monkeypatch.context() as m:
+        m.setitem(sys.modules, "torch", None)
+        assert S._probe_weakrefs() is False
+    assert S._probe_weakrefs() is StorageAdapter().use_weakrefs
 
 
 def test_weakref_death_is_a_direct_free_and_reuse_bumps_generation():

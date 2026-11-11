@@ -3000,7 +3000,6 @@
     {"file": "verity_vllm/query/manifest/format.py", "kind": "E741", "symbol": "moe_identities", "detail": "Ambiguous variable name: `I`"},
     {"file": "verity_vllm/query/manifest/format.py", "kind": "I001", "symbol": "program_dirs_for", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/query/manifest/format.py", "kind": "SIM115", "symbol": "load_program", "detail": "Use a context manager for opening files", "count": 2},
-    {"file": "verity_vllm/query/manifest/format.py", "kind": "SIM115", "symbol": "program_dirs_for", "detail": "Use a context manager for opening files"},
     {"file": "verity_vllm/query/manifest/format.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`, `Iterable`"},
     {"file": "verity_vllm/query/module_body.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/query/norm_scales.py", "kind": "I001", "symbol": "_population_class", "detail": "Import block is un-sorted or un-formatted"},

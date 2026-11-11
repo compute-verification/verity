@@ -118,13 +118,14 @@ def encode_arg(x: Any, storage: StorageAdapter) -> Any:
     if isinstance(x, _STR_TYPES):
         return str(x)
     if _SYM_TYPES and isinstance(x, _SYM_TYPES):
+        # a symbol with no value raises torch's GuardOnDataDependentSymNode (a RuntimeError); float() of a SymBool, TypeError
         try:
             v = x.node.maybe_as_int() if hasattr(x, "node") else None
             return int(v) if v is not None else int(x)
-        except Exception:  # noqa: BLE001
+        except (RuntimeError, TypeError):
             try:
                 return float(x)
-            except Exception:  # noqa: BLE001
+            except (RuntimeError, TypeError):
                 return {"$repr": repr(x)[:200]}
     if isinstance(x, dict):
         return {str(k): encode_arg(v, storage) for k, v in x.items()}
