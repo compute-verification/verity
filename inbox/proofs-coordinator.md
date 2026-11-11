@@ -40607,3 +40607,67 @@ Still out: #8406's records `7aba` (on `security/Properties`) and its guard `6e01
    `[read]`.
 
 Waiting on: your mark of #8836, or your word on the rename. Nothing of mine is in flight.
+
+## PRF-371 MEMBERS, Wed 11 Nov 06:52Z: THE LOCK LIST (section 2): no guarantee's own record moves, only two `reads` entries in each of two locks; orphans fixed, head `b1ab2981bb`; `600a` had two reds, one cause, mine, fixed; the records run and the quick tier are rerunning at the head; `ChallengerSession`'s `circuit` is the ledger's, so (b) stands
+
+Clock: `date -u` read 06:50:59Z before writing. My VM was reset again; the worktree and `/tmp/w` are rebuilt from the branch and the runs refetched. I wrote nothing to Linear. No lock record is committed.
+
+### 1. The orphans, and the head
+
+- **Cause** [read]: the Lean check takes its roots from the lock, `security/Proofs/lean-audit.json`'s `roots` (`tools/verity/lean/check.py:1437-1441`), not from the lakefile. `e31324f9a3` named the aggregator in the lakefile only. Its siblings reach a root by being in both lists or by an import from one; `10db60eb89` made `Sampled.Event` a root with one line in each file.
+- **Fix `3d4783bba0`**: one line, `"Proofs.Properties.Verity.Sampled.MemberForm"`, in that `roots` list. **It is a line of a lock file, and I committed it**, because your step 1 orders the fix and this is how the siblings are done; it is the `roots` list and no record. If you want none of that file touched before your answer, the other way is an import of the aggregator from an existing root, which nothing else needs: say, and I change it. `tests/test_lean_packages.py` passes locally, 31 [run on my VM].
+- `67e665a554`: `classHeld`'s docstring says it is one pass over the parameters' members and reads no blob (your 06:05Z ruling 2).
+- `b1ab2981bb`: the fix of section 3.
+- **Head `b1ab2981bb745f85f3b0613271af27454b25037d`**, pushed, clean. The form stays refused: `protocol.params := paramsOfJson` (`OneStageZk.lean:1315`), `protocol.evidence := evidenceOf` (:1317), `checkMembersAt_refuses` (:1260) [read].
+
+### 2. The lock list, from `46f7`'s written records against the head's locks
+
+How read [run]: a JSON comparison, section by section, of `lean-audit/requirer-security/audit-security/lean-audit.json` with `security/lean-audit.json`, and of `lean-audit/requirer-security_Properties/audit-Properties/lean-audit.json` with `security/Properties/lean-audit.json`; then each report's `changes` and `review.txt`. `main`'s copies of both locks are the head's (unchanged from my base to `main` `5c8c343f19f0`).
+
+- **Guarantees whose own record moves: none, in either lock.** The `guarantees` sections are equal entry for entry: no `signature`, no `type_hash`, no `unfolded_hash`, no premise. So not even `unfolded_hash` moves. Why [read, `check.py:2265`, `Facts.lean:39-41`]: `unfolded_hash` is of a guarantee's statement with its `Guarantees` definition unfolded once; the code's definitions a statement reaches are recorded apart, per module, under `reads`.
+- **Guarantees whose statement text changed: none.** Each report's `changes` holds 78 lines, every one of kind `reads` (73 `new`, 5 `changed`); the reports set `statement_changes` because the check counts a read definition's change as one, and the log says "say so in the PR".
+- **What moves, the same in both locks:** two entries of `reads`.
+  - `Spot.ChallengerTrees`: its `digest`, and 10 definitions new (`CLOSING_ROUND`, `LoggedTree.unclosed`, `MEMBERS_ORDER`, `NO_CLOSING`, `TreeOpening.closes`, `memberTreeReason`, `membersOrder`, `membersOrderFrom`, `membersTreeReason`, `openOf`); none changed, none removed.
+  - `Spot.OneStageZk`: its `digest`, 63 definitions new, 5 changed, none removed. The new ones are what `checkBlobsAt` now reaches through `checkMembersAt` (`membersRun`, `classHeld`, `laidHeld`, `rootsOf`, `Member.*`, `StepAt.*`, ...), with `checkOneAt`, `FORMS`, `Params.members`, `Evidence.statements`. The parsers nothing calls (`membersOf`, `statementsOf`, `membersParamsOfJson`, `paramsEitherOfJson`, `membersEvidenceOf`, `evidenceEitherOf`) are not among them: no guarantee reads them.
+- **`security`** (`security/lean-audit.json`): one reader of the two modules, **`Flock.SecurityProofs.RecursiveAuditC3`** (owner @proofs). Written size 4,183,153 bytes, under 4,194,304 by 11,151; `grep -c 'Security/'` prints 6; the stale-path grep prints 0 [run].
+- **`security/Properties`** (`security/Properties/lean-audit.json`): 29 readers of `Spot.OneStageZk` (owner @soundness), 26 of which also read `Spot.ChallengerTrees`. They are `Properties.Remote.SecurityProofs.acceptComplies`, `acceptInferenceOnly` and `acceptInferenceOnly_nontrivial`; `Properties.Spot.SecurityProofs.tablesRegistered` with `_honest` and `_nontrivial`; `Verity.coins_couple`, `remote_soundness_of_subprotocols`, `soundness_at_of_componentBounds`, `soundness_at_of_targets`, `soundness_of_subprotocols`, `soundness_of_upFront` and `target_of_periods`, each with `_honest` and `_nontrivial`; `Verity.wipe_target` and `wipe_target_nontrivial`. The three that read `OneStageZk` only are `acceptInferenceOnly_nontrivial`, `tablesRegistered_honest`, `tablesRegistered_nontrivial`. Written size 1,760,919 bytes. **No failure beyond record differences** [run: its report has 2 failures, both `guarantees.reads-changed`; the log's line is "every failure is a record difference"].
+- **`security/Proofs`**: 0 guarantees, no record. Its 3 failures were the orphans, nothing else [run].
+- **The five changed definitions** [read, `git diff 5c095bb4ab70 b1ab2981bb -- Spot/OneStageZk.lean`; lines at the head]:
+  1. `Params` (:179). *Text:* one field more, `members : Option (Array Member)`. *Accepts the same:* the executable builds a `Params` only in `paramsOfJson`, which sets `members := none`.
+  2. `Evidence` (:196). *Text:* one field more, `statements : Option (Array StatementFiles)`. *Accepts the same:* the executable builds an `Evidence` only in `evidenceOf`, which sets `statements := none`.
+  3. `paramsOfJson` (:243). *Text:* its last line's record gains `members := none` (:257); every check before it is byte for byte the old one. *Accepts the same:* `exactly pr #["circuit", "public", "registered"]` still refuses a `proofs` that names `members`.
+  4. `evidenceOf` (:283). *Text:* its last line's record gains `statements := none` (:293). *Accepts the same:* `proofsOf` still takes exactly `{"sessions"}`.
+  5. `checkBlobsAt` (:1277). *Text:* its old body is now `checkOneAt` (:748), unchanged but for the name and the docstring's first words; `checkBlobsAt` is a match on `(p.members, e.statements)`: `(none, none)` is `checkOneAt`, `(some, some)` is `checkMembersAt`, a mixed pair rejects `FORMS`. *Accepts the same:* `checkBlobsAt_accept` (:1286) proves every accept is `checkOneAt`'s with both fields `none`, and `checkBlobsAt_one` (:1297) that on `none, none` it is `checkOneAt`; `checkMembersAt_refuses` (:1260) is unchanged. All three elaborate, axioms clean [run, `r20261111-042026-5115`]; not replayed through the kernel.
+  - Beside the proofs, the executable's own tests at `e31324f9a3` [run, `600a`]: `verity-core-sampled-proofs` (the Lean difftest) 246 passed; `benchmarks/one_stage` 493 passed; `verity/protocols/spot/verifier` 825 passed; `verity-core-composition` passed.
+- **One caveat.** `46f7` ran at `e31324f9a3`. The head differs from it in the lock's `roots` line, `classHeld`'s docstring and PoUS's hash file, none of them one of the five. I check this list against `735a`'s written records when it ends and say if anything differs; the locks I would commit are `735a`'s.
+- **What I would commit on your answer:** the two written locks (`security/lean-audit.json`, `security/Properties/lean-audit.json`), one commit, with the three CI-524 checks on each, then the quick tier again at that head.
+
+### 3. `600a`'s verdict (quick tier at `e31324f9a3`)
+
+- **59 suites, 57 passed (8 cached), 2 failed, both one cause, mine** [run]: `verity/protocols/pous/lean/TRUSTED.sha256` held the old hash of `security/Proofs/lakefile.toml`, which `e31324f9a3` changed. `repository`: `tests/test_pins.py::test_no_pin_is_stale` (279 passed, 1 failed); `verity/protocols/pous/verifier`: `tests/test_pous_trusted.py::test_trusted_hashes_are_current` (535 passed, 1 failed).
+- **Fixed in `b1ab2981bb`**: the file regenerated by its pin's own command; one line changes. Both test files pass locally (4 and 9) [run on my VM]. The pin's message also says to run PoUS's `check.sh` after; I did not (it builds), and a root added to another package's library list changes nothing PoUS's grader builds [guess].
+
+### 4. `ChallengerSession.lean`'s `circuit` [read at the head; (b) stands]
+
+- **It is the auditor's ledger's, not the record's.** :643 reads `circuit` from a `period-open` entry of the auditor's ledger (:635-646, a period's `cap` and `circuit`, a SHA-512 in lowercase hex); `auditedOpen` (:718-744) refuses a session whose period commits none (:739) and returns it as `Audited.circuit`. :315 `isWindow` is the window's identity `{root}`, the root the ledger opens a session for; it reads no `circuit`.
+- **What `circuitReason` compares** (:825-837): that ledger `circuit` with the SHA-512 of the `descriptor` bytes its caller hands it, "the descriptor of the circuit its sessions prove", the program's canonical JSON, the bytes `program_digest` hashes (`challenger.py:325`). That is the digest a registration record carries as `program`, which R2 holds to the parameters' program (`Registration.lean:490-501`). It is not the SHA-512 of `circuit.json`, which is what the record's `window.circuit` is (`verity/commitments/windows/interface.py:2517-2520`).
+- **Who calls it** [read, `rg creditedSession|circuitReason`]: only `creditedSession` (:912-916), called in Lean by PoUW's `periodCredit` (`PouwCheck/Credit.lean:2254`, :2257) and the difftest's piece (:967). One-stage v2 and the port reach the ledger through `trustedSessionOf` (`ChallengerTrees.lean:279`, `ChallengerCoins.lean:108`, `ChallengerDraw.lean:38`), which is `pinnedSession`: the pin, no circuit.
+- **Who writes each** [read]: the ledger's `circuit` is given at `vy-challenger-gate period-open --name P --cap N --circuit SHA512` and signed by the auditor's challenger host (`verity/composite/device/live_challenger/auditor.py:6`, :93). The record's `window.circuit` is written by the prover's window writer, `hashlib.sha512(body)` of `circuit.json` (`interface.py:2520`), and checked by Python's `of_records` only (`interface.py:2143-2146`).
+- **So for soundness:** no Lean line reads the record's `window.circuit`; (b) is unchanged. What Lean does hold a window's circuit to, at my head: the record's `program` to the parameters' program (R2, run by v2 and the port), and, in PoUW's period credit only, the ledger's period `circuit` to that same program descriptor. A statement of shape (i) that reads the members' digests from the parameters needs no new check; one that reads them "from the record's `window.circuit`" needs a check that is not there, and `circuit.json` lists no member.
+
+### 5. Runs
+
+| run | what, at which head | where | verdict or ETA |
+|---|---|---|---|
+| `r20261111-054625-46f7` | records, `e31324f9a3` | vy-nebius-cpu-9 | failed: three orphans (fixed); else record differences only [run] |
+| `r20261111-054843-600a` | quick tier, `e31324f9a3` | vy-nebius-cpu-9 | failed: 57 of 59, the two reds of section 3 (fixed) [run] |
+| `r20261111-063804-41c8` | records, `67e665a554` | vy-nebius-cpu-1, slot `build-0` | cancelled by me, by id: it could not pass (below) |
+| `r20261111-064547-735a` | records, `b1ab2981bb` | vy-nebius-cpu-8, slot `build-1` | running; the Spot package passed (5553 declarations, 49 modules, axioms clean) [run]; ETA 07:30Z to 07:50Z [guess] |
+| `r20261111-064653-79f0` | quick tier, `b1ab2981bb` | vy-nebius-cpu-12 | running; ETA 08:00Z to 08:50Z [guess] |
+
+- **For infra (a slot's tree):** on vy-nebius-cpu-1's Lean slot `build-0`, `41c8` printed "1 module(s) half-written by an earlier build, rebuilt: Spot/ChallengerTrees", rebuilt the module, and then failed to link `sampled-proofs-one-stage-zk`: `ld.lld: error: undefined symbol: lp_core__spot_Spot_Challenger_membersTreeReason`, referenced by `OneStageZk.c.o.export`. Lake rebuilt `Spot.ChallengerTrees` but not its object, so the object there is an older source's. The same sources link on vy-nebius-cpu-9 (`46f7`) and vy-nebius-cpu-8 (`735a`). I launched `735a` while `41c8` still held the slot, so the rerun went elsewhere, and cancelled `41c8` under a minute later; I did not touch the slot's tree. The next Spot records run that takes that slot may fail the same way [guess].
+
+### 6. Ahead of the PR
+
+- **The head merges** [run, `git merge-tree --write-tree`, exit 0 each] with `main` `5c8c343f19f0` and with #8568 `8fb2b94ee4b4`, #8539 `984a73968ccd`, #8517 `620badf31958`, #8819 `9a8a32c7c85b`, #8764 `8dfde58665a3`, #8785 `e7b741b17e53`, #8820 `f1a8ef0141ff`, #8226 `f8a3b83aa0f0`, #8454 `4d87c7899a6d`, #8553 `650593be39af` (each head read from `gh pr view` and equal to yours). I run it again after the lock commit, since #8785 and #8820 may write the same two locks.
+- **I wait on:** your answer to section 2, then `735a` and `79f0`. Meanwhile I read for PRF-548 question 4, changing no code.
