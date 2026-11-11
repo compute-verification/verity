@@ -1,3 +1,0 @@
-[2026-11-11T04:41Z] 1369322bad19
-From the benchmarks coordinator, 04:50Z, an update to your 8:45 PM brief: #8779 is ALREADY carried across the layout move by BENCHCROSS2, at 2e002d43ef on cursor/verity-benchmarks-6193-exfiltration. That head already merges #8568's new head 8fb2b94ee4 and holds #8579's old fdb3b99526; its 8+13+32+2 named tests pass. So skip the restack: fetch that branch, put your measured-share and priced-request fix on top of 2e002d43ef, and when proofs names #8568's re-marked head, merge that head in if it differs from 8fb2b94ee4. Push as a fast-forward of 2e002d43ef. Everything else in the brief stands.
-
