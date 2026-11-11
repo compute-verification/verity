@@ -55827,3 +55827,28 @@ For the table:
 - Its measured reading is a floor on node A at the 128k plan (181.83 tokens a GPU-second, inside the order's 178 to 192); no row of it is under 300 GB. Its 0.4 is 7,721.5 tokens a GPU-second, not our 4,994: its rows are not our rows.
 
 **The line to paste:** #8926 at `1204dc214aa2` holds as it says on the default (no figure, break-even or planner input reads the card), on its numbers and on the three merges; change one thing before the mark: Figure 3's JSON, Figure 4's JSON and the break-even carry no `serving` label under `--serving measured`; and "by proportion" (4% off on line (A), 2.4× off on `every_block`) is said only in the README and a docstring, not in the row.
+
+## TWOWITNESS, Wed 11 Nov 13:04Z: ready to mark #8892 at 5bbe4bd228035d5841de7e7f70169fc73747d699; #8919's records and quick tier are running; the 12:53Z label is in all three bodies
+
+ready to mark #8892 at 5bbe4bd228035d5841de7e7f70169fc73747d699
+- **Quick tier `r20261111-125051-e309` (`--changed 0a722c6ec984 --quick`, remote) passes [run: its stdout.log].** 4 of 4 suites passed, none cached, 0 failed (repository, verity-graph, verity/definitions/ops, verity/protocols/pouw/verifier). There are 2 skips in `verity/definitions/ops`, as in `9352`, `23c6` and `e31b` [run].
+- **Records `r20261111-121530-eb26` at the head passes [run: its stdout.log and `lean-audit/audit.json`].** `security/Proofs`, `security` and `security/Properties` each check.py exit 0, and the `security/Proofs` audit passes at 193,363 declarations on the three axioms. The audit shows `passed: true`, `failed: []`, `regenerated: {}`, so the lock is unchanged.
+- **Merged tree `r20261111-115228-8084` passes [run].** It is the 12:36Z entry's tree: `main` `08ad61db94`, the twelve marked heads touching my aggregators, #8889, this head, #8919 and Counts. It ran 12370 jobs, `security/Proofs` exit 0, nothing failed or skipped. It built this head's `Refused.lean` with no warning.
+- **`main` `86c03d1840` merges cleanly with that tree [run, 12:05Z].** Kernel replay is not run (`lean-fast/v1`), and no second reader has read it.
+
+For CAPS: Proofs/Flock: +1 modules, +6 declarations (#8892: Claims/Sampling/Refused.lean)
+
+- **The 12:53Z label is in the bodies of #8919, #8889 and #8892 [run: `research queue edit`; read: order 12:53Z].** It replaces "(two readings, not compiled)" with "compiled as an implication … no such run is exhibited in Lean". No head moves.
+- **#8892's body adds one sentence on line (b)'s new clause.** No lemma bounds `Pr[refused]`, so a count that takes `Pr[refused] = 0`, as (b)'s K does, leaves out the term this PR adds [read: `Refused.lean`'s statements].
+  - The by-gate bits line's K_mean is the accepted case too, so it takes `Pr[refused] = 0` as well [read: the order's 09:52Z table; guess that it is the same clause].
+- **What the order relays on M (12:53Z) [relayed: ATTACK].** At `code h`, `hM` is met at M = 1, so a chain that discharges it there is line (a). (b)'s 145 and 4,130 sit in no Lean hypothesis that anything discharges.
+  - #8919's `M t` is such a hypothesis: SCALE's by-stratum column puts (b)'s values in it, and no Lean discharges them [read: the statement].
+- **Runs [run]:**
+  - `r20261111-123424-84cc` (#8919's records) has held its check slot on vy-nebius-cpu-1 since 12:38Z.
+  - `r20261111-130257-e6c7` (#8919's quick tier, `--changed 8201dacff26e`) was launched at 13:02Z on vy-nebius-cpu-1.
+  - #8889 is marked [read: order 13:00Z].
+
+For the table:
+- (c1): #8892 is ready to mark at `5bbe4bd228`, adding the `Pr[refused]·Σ_u w u` term. No lemma bounds `Pr[refused]`.
+- By stratum: #8919 (unmarked, at `eb4dde9196`). Try aaf9 and merged tree 8084 pass; records 84cc and quick tier e6c7 are running. At `code h` it reads "under `Addresses h`, which as defined is false at a registration whose checked units have a row in the interior record: the statement holds there from a false premise, compiled as an implication from one accepted run of a unit whose registered reads round 2 reads off the interior record (EXTFORM's try `r20261111-123549-d61c`: elaborates, axioms clean; no second reader, no kernel replay); no such run is exhibited in Lean".
+- The bits line, by gates (#8827 as it is), at a registration with no always-checked block, with K at Pr[refused] = 0, and at `code h` under that label: "modeled; the first-hit term of #8827's lemma: 2^-100.9 per sampled replay block, 2^-98.9 to 2^-98.3 a run at 4 to 6 replay blocks, at T = 2^80 SHA-512 calls in every run (the prover's and the verifier's), one 2^35-bit table a session, under `SHA512CRExpected` at its two finders; K an upper bound, every block's input bits counted (K_mean <= 2^41.81)."
