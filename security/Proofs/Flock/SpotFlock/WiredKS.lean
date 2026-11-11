@@ -91,10 +91,14 @@ theorem nPU_wired (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.
 /-- **The wired code checks the units `code h` checks.** -/
 theorem checked_wired (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) :
     (codeWired h ω keep true).checked x r = (code h).checked x r := by
-  show ((reg h x).map fun g =>
-    g.checked (units ((baseWired h ω keep true).atOrder (orderWired h ω keep true)) x) _ _).getD [] = _
-  rw [units_wired h ω keep true x]
-  rfl
+  have e := units_wired h ω keep true x
+  show Option.getD (Option.map _ (reg h x)) [] = Option.getD (Option.map _ (reg h x)) []
+  cases reg h x with
+  | none => rfl
+  | some g =>
+    show g.checked (units ((baseWired h ω keep true).atOrder (orderWired h ω keep true)) x) _ _ = _
+    rw [e]
+    rfl
 
 /-- A unit the wired code checks at a slot is one `code h` checks at that slot. -/
 theorem checked_slot_wired (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) {x : Msg}
@@ -104,9 +108,8 @@ theorem checked_slot_wired (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     ∃ p : Fin (Claims.Sampling.nPU (deploy rel (code h)) x),
       ((deploy rel (code h)).checked x r)[p.val]? = some u := by
   obtain ⟨p, hp⟩ := hu
-  have hlt : p.val < Claims.Sampling.nPU (deploy rel (code h)) x := by
-    have := p.isLt
-    rwa [nPU_wired h ω keep rel true x] at this
+  have hlt : p.val < Claims.Sampling.nPU (deploy rel (code h)) x :=
+    Nat.lt_of_lt_of_eq p.isLt (nPU_wired h ω keep rel true x)
   have hp' : ((codeWired h ω keep true).checked x r)[p.val]? = some u := hp
   rw [checked_wired h ω keep x r] at hp'
   exact ⟨⟨p.val, hlt⟩, hp'⟩
@@ -122,7 +125,7 @@ theorem refusesTwo_wired (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) ω ke
   intro x Ω P w r hacc
   obtain ⟨s, Pt, d, hx, hP, hd, hin⟩ := refusesTwo h H x Ω P w r hacc
   have hx' : parse h x = some s := hx
-  obtain rfl : Pt = membersPart h.ms := partition_eq h hP
+  obtain rfl : Pt = membersPart h.ms := partition_eq h (s := s) hP
   have e := scope_rewired h hx' rfl hW hin
   rw [parse_prog h hx'] at e
   exact ⟨{ s with prog := (bitsProgs h.ms).wired ω keep }, (membersPart h.ms).cut ω,
