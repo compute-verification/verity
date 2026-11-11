@@ -292,7 +292,7 @@ def test_the_job_traces_its_routes_step(ran):
     # the three trained matrices of block 0's MLP: each one's forward product reads it, and their MACs a token add up
     trained = [u for u in tr["updated"] if u[2:] == [u[2], tr["tokens"], 32]]
     assert len(tr["updated"]) == len(trained) >= 3
-    priced = [products.priced(r) for r in tr["rows"]]
+    priced = [products.priced(r, tr["capture"]) for r in tr["rows"]]
     assert sum(r["count"] * r["macs"] for r in priced if r["phase"] == "forward" and all(r["affected"])) > 0
     assert all(r["gates_per_mac"] > 0 and "dtypes" not in r for r in priced)
     # the step's circuit, raw: the gradient's cut and a token group's partial are the trained matrices' dW at the

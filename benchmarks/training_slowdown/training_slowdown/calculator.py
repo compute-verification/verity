@@ -277,12 +277,18 @@ def slowdown(policy: dict, step: dict | None, run: dict | None = None) -> dict:
     products with elementwise ops has one (they are left out of M, and stay in |C|), and so does a circuit that
     declares a tree.
 
-    There is no slowdown on a trace the capture refused (`REFUSED`), on a record with no product rows
-    (`work.PRODUCTS_UNMEASURED`), on a trace of another program (`work.OTHER_PROGRAM`), at a k the record's rows
-    weren't classified at, on rows that predate `work.SYSTEM_FROM` (`work.HE_RETRACE`), on products without M
-    (`work.HE_NO_ROWS`), on a step whose elementwise ops fan out into an operand (`work.p_match_reason`), past the
-    calculator's last β(k) (`he_past`), from `work.HEAD_K` on products that don't say which are the head's
-    (`work.HE_HEAD`), and where neither the run nor the record's circuit gives |C| (`NO_GATES`)."""
+    The work and the circuit it is divided by have one price: a trace's products are priced in the dtype its
+    circuit counts them in, and where a trace's capture prices some in another (`work.repriced`) there is no
+    slowdown over the trace's own circuit. Over a run's `gates` the other side is the run's count, which the trace
+    doesn't hold.
+
+    There is no slowdown on a trace the capture refused (`REFUSED`), on a trace whose products and own circuit
+    differ in price (`work.repriced_reason`), on a record with no product rows (`work.PRODUCTS_UNMEASURED`), on a
+    trace of another program (`work.OTHER_PROGRAM`), at a k the record's rows weren't classified at, on rows that
+    predate `work.SYSTEM_FROM` (`work.HE_RETRACE`), on products without M (`work.HE_NO_ROWS`), on a step whose
+    elementwise ops fan out into an operand (`work.p_match_reason`), past the calculator's last β(k) (`he_past`),
+    from `work.HEAD_K` on products that don't say which are the head's (`work.HE_HEAD`), and where neither the run
+    nor the record's circuit gives |C| (`NO_GATES`)."""
     c, k = policy["c_gates"], policy["k_bits"]
     out = {"slowdown": None, "binds": "unmeasured", "why": None, "term": None, "bound": _bound(c, k, None),
            "figure": None, "read": {}}
@@ -293,6 +299,10 @@ def slowdown(policy: dict, step: dict | None, run: dict | None = None) -> dict:
     if step is not None and "rows" in step:
         if gates is None:
             gates = (step.get("circuit") or {}).get("gates")
+            moved = W.repriced(step) if gates is not None else []
+            if moved:
+                return out | {"why": W.repriced_reason(step, moved),
+                              "read": {x: step[x] for x in ("capture", "capture_code") if x in step}}
         step = W.products_of_trace(W.priced(step))
     if step is None:
         return out | {"why": W.PRODUCTS_UNMEASURED}
