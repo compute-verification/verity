@@ -90,6 +90,11 @@ theorem getD_draw_closure (sample ns ks : Array ℕ) (m : ℕ) (units : Array �
     getD (Json.mkObj ((entries (Select.secondLaw sample ns ks)).toList ++
       [("population", Lean.toJson m), ("units", natsJson units)])) "closure" = Json.null := (rfl)
 
+theorem size_natsJson_int (units : Array ℕ) :
+    ((units.map fun x => Lean.toJson x).filterMap int?).size = units.size := by
+  rw [Array.filterMap_map, show (int? ∘ fun x : ℕ => Lean.toJson x) = some ∘ fun x : ℕ => (x : Int) from
+    funext int_toJson, Array.filterMap_eq_map rfl, Array.size_map]
+
 /-- The second stage's sample object proves its units and nothing else: `secondLaw` has no closure. -/
 theorem proved_second_draw (sample ns ks : Array ℕ) (m : ℕ) (units : Array ℕ) :
     (Draw.proved (Json.mkObj ((entries (Select.secondLaw sample ns ks)).toList ++
@@ -97,7 +102,7 @@ theorem proved_second_draw (sample ns ks : Array ℕ) (m : ℕ) (units : Array �
   unfold Draw.proved
   dsimp only
   rw [Verity.QSort.size_qsort, Array.size_append, getD_draw_units, getD_draw_closure]
-  simp [natsJson, Function.comp_def, int_toJson]
+  exact (Nat.add_zero _).trans (size_natsJson_int units)
 
 /-- **An accepted second stage proves `|sample| · Σ_t k_t` proof blocks**: `k_t` of each of template `t`'s cells, one
 cell for each sampled replay block, and no closure. -/
