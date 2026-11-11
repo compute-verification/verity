@@ -59517,3 +59517,71 @@ For the table:
 - lean's question: both readers keep the last entry and hash the parsed object; no disagreement through a repeated key.
 - Readers the body misses: `Spot.OneStageZk.readsRegistered` with `one_stage/proofs.py:213`; Python `pouw/verifier/credit.py:1033, 1852, 2213`; `verity/circuits/metadata.py:96`; three adapter-side lines. None reaches an accept.
 - For the second PR, first: the three PouwCheck lines and their Python twins; then `Desc.parse`'s two malformed forms.
+
+## RECTIME, Wed 11 Nov 17:25Z: records runs, FINAL, B to E whole: an order of steps avoids 138 of the 309 reds (57.4 of 179.1 node-h), 164 of 785 started runs (77.9 of 557.8 node-h) with the covered and repeated runs; a pass is the Lean build (median 35.7 of 46.4 min, 281.7 of 376.7 node-h, 2,463 modules compiled for 21 files changed), no replay; 82 runs (57.5 node-h) rebuilt Lean sources already judged
+
+Note: `note:20261111T1723Z-finding-records-runs-hotspot` (synced; the tables, the scripts inline, E). Per-run table, 1,039 rows by 57 columns: `art:c9695173801a4251245b96ff50749275d9053fe2c83533bd46caa6b0933747f8`. Labels: [run] computed from records I read, [read] read in code or a log, [guess]. Window 2026-11-04T16:13Z to 2026-11-11T16:13Z. A is in my 17:04Z entry and unchanged. `notes sync` warned that the note cites r20261105-140134-6606, which the store does not have: that is the one red I could not read, and I waived nothing.
+
+**B. The 309 reds by cause** [run; 308 of 309 read; 126 of the 193 verdicts carry report codes, the other 67 failed before a report and are read from logs]
+
+| cause | runs | median min | node-h | examples |
+|---|---|---|---|---|
+| **cancelled by the lane** | **116** | **14.2** | **40.9** | |
+| head moved (29 own next commit, 26 merge, restack or base) | 55 | 14.0 | 18.5 | r20261106-164022-859b r20261108-113733-659c |
+| already known red | 38 | 22.9 | 16.4 | r20261105-210508-3555 r20261108-024437-5301 |
+| no longer needed | 8 | 25.4 | 3.8 | r20261107-183124-323c r20261110-051735-dc38 |
+| a second copy | 7 | 2.6 | 1.1 | r20261108-162106-6051 r20261111-053233-79af |
+| moved by hand | 4 | 0.2 | 0.0 | r20261108-160500-102a r20261109-130802-d199 |
+| wrong flags | 3 | 5.4 | 0.9 | r20261108-115214-05fb r20261108-123053-cf44 |
+| no record | 1 | 9.0 | 0.1 | r20261105-140134-6606 |
+| **verdicts** | **193** | **41.2** | **138.2** | |
+| the witnesses rule | 72 | 41.0 | 49.1 | r20261106-082422-deb3 r20261108-040102-f8f8 |
+| the Lean build (elaboration 44, module system 4, clash 3, bad import 2) | 53 | 37.4 | 36.4 | r20261105-082434-d9da r20261106-210312-a7d8 |
+| source scans and the lock's own rules | 24 | 39.7 | 18.8 | r20261105-133231-83ed r20261108-203436-ce9c |
+| premises and shape | 16 | 43.9 | 12.3 | r20261107-010754-f06b r20261108-085002-4036 |
+| the tool or the node | 16 | 62.0 | 12.4 | r20261107-074240-6df1 r20261109-143717-40f0 |
+| `trees.reads` | 9 | 49.0 | 6.5 | r20261108-074214-e5ce r20261108-111631-9967 |
+| `sorry` | 3 | 55.6 | 2.8 | r20261105-093521-6c84 r20261105-111100-65be |
+| a record differs and no `--update` | 0 | | | not a failure: the run ends `regenerated` [read] |
+
+The reds are mostly the week's past [run]: started reds by day, 4 to 11 Nov: 37, 59, 36, 32, 85, 33, 7, 20; witnesses reds: 9, 10, 9, 11, 28, 5, 0, 0. In the last 14 h the 20 started reds cost 4.7 node-h and the 76 passes 66.1 node-h.
+
+**C. A pass's minutes** [run; all 456 passes that ran check.py, not a sample; 16 more were `reused`; the last 14 h's 75 are all in]
+
+| part | week: median min | week: node-h | last 14 h: median | last 14 h: node-h |
+|---|---|---|---|---|
+| the run | 46.4 (p25 33.9, p75 64.7) | 376.7 | 49.8 | 66.1 |
+| waiting for a check slot, before the run | 0.5 | 28.4 h | 2.1 | 6.6 h |
+| waiting for a Lean `build` slot (34 of 456 waited: median 7.7, max 26.1) | 0.0 | 5.4 | 0.0 | 0.1 |
+| waiting for a slot tree another run holds | 0 runs | 0 | 0 runs | 0 |
+| the Lean build | 35.7 (20.6, 49.1) | 281.7 | 31.5 | 39.2 |
+| the replay through the kernel | none: `--no-replay` [read] | 0 | none | 0 |
+| the sampled recompile (since 9 Nov) | 0.0 | 13.6 | 6.3 | 9.5 |
+| facts 2.5, proved-in 2.3, dependencies 3.7, setup and stage 1.5 | 8.8 outside the build | 82.7 | 20.1 | 25.7 |
+
+- Modules [run, the `Built` lines of every pass's build logs]: a pass compiles a median 2,463 modules (p25 265, p75 3,430) of about 4,600 to 5,000, 788,481 of 971,919 of them `Proofs.*`, while its commit changes a median 21 `.lean` files. Last 14 h: 805 compiled, 2,252 staged from the artifact cache.
+- What decides it [run, the `(F files changed there)` of each check.py line]: slot tree changed 0 to 50 files: 156 passes, 400 compiled, build 16.2, run 33.8 min; 51 to 500: 153 passes, 2,596, 36.1, 46.2; 501 to 3,000: 54 passes, 3,251.5, 38.4, 49.4; over 3,000: 93 passes, 4,348, 47.7, 58.0.
+- Packages (their audits overlap in wall time): `security/Proofs` is audited a median 3 times a run, 41.5 min; `security` once, 25.1; `security/Properties` once, 3.7; another package in 119 runs, 1.7. 444 of 456 passes audit all three security packages whichever PKG is named. Since the sampled recompile, each repeat audit of `security/Proofs` costs a median 345 s and its requirer waits 215 s on it: 6.6 min a pass in the last 14 h (9.1 node-h over 75 passes), 0.4 min before 9 Nov.
+- What the logs do not allow: a second check.py on a requirer overwrites its first build's log, so 152 passes' compiled counts are lower bounds (the other 304: median 2,778.5).
+
+**D. What a cheaper step would have shown** [run; "avoidable" is my reading]. The lock's fast path is the records run itself [read]; below it only `--try`, `--try --siblings` and `--build FILE...`, none of which runs check.py.
+
+| | runs | node-h | causes |
+|---|---|---|---|
+| **an order of steps** | **138** | **57.4** | head moved 55 (18.5); known red 38 (16.4); build reds a try of the changed files shows 30 (17.6); `sorry`, by the try's axiom probe 3 (2.8); a second copy, flags, a package path 12 (2.0) |
+| **a tool change** | **135** | **99.2** | judged on the build's facts 59 (43.2); bookkeeping only 42 (27.3); a source scan that reads no build 20 (16.3); the tool or the node 14 (12.4) |
+| a build of the importers | 23 | 18.7 | build reds whose error is in a file the commit does not change: a try of the changed files passes |
+| neither | 13 | 3.9 | not needed 8, moved by hand 4, no record 1 |
+
+- Limits of the 138: 26 of the 55 head moves (7.6 node-h) are a merge, restack or base change, and only a clean merge needs no new run [read]; 26 of the 38 known reds name neither a try nor another run.
+- Several runs at one commit, one per package: 51 of 702 commits (133 runs, 108.1 node-h). At 19 of them one run's check.py calls cover every PKG asked: the other 25 runs (19.1 node-h; 19 passes) were covered, 23 of them (18.2 node-h) outside the 138. At `fc1e553e7dda`, three runs on `Security`, `Security/Properties` and `Security/Proofs` ran 55.8, 63.8 and 47.0 min; the third called check.py on all three.
+- Reruns at Lean sources already built and judged: 82 runs, 57.5 node-h (56 passes, 23 reds, 3 cancels); 49 follow a red (31.4 node-h; 35 a witnesses red), 33 a pass; the locks differ in 73. Only 3 (2.3 node-h) are exactly the records a pass kept.
+- Inside a shell (not in the 861): an order of steps 48 runs, 22.8 node-h.
+
+**E. Three candidates, none built**
+
+1. **An order of steps in the worker's brief. Owner: the proofs coordinator.** A records run only at the head to be marked, after the try passes on each changed file (`--siblings` where names are added); one run a head, on `Security/Proofs` when the head touches the security packages (its run called check.py on all three in 95 of 101 passes; `--records Security` on `Security` and `Security/Properties` only, 153 of 155) [run]; no second copy, no next run before the first's verdict, none for a commit of exactly the records a pass kept. Saving this week: 164 of 785 started runs, 77.9 of 557.8 node-h (138 reds, 23 covered runs, 3 reruns) [run]. Risk: it is an order, not a guard; a passing try never counts as a Lean check, and the run at the marked head still happens.
+2. **Judge without building what needs no build. Owner: the lean lane.** (a) a lock-only change at sources an earlier records run built is judged from that run's facts (`check.py --facts-from` exists; `--records` writes the facts cache and never reads it [read]): 82 runs, 57.5 node-h [run]; (b) the scans that read no build fact run before `lake build`: 20 runs, 16.3 node-h [run]; (c) one audit of `security/Proofs` a run: 9.1 node-h over the last 14 h's 75 passes [run], about 55 a week [guess]. Risk: a facts document judged for sources it was not built from. Key it on every source, the toolchain and the auditor; read only a sandboxed run's; the result stays `lean-fast/v1`, which no merge accepts; an early scan only adds an early red.
+3. **The build compiles only what the head changed. Owner: infra (placement, bundles), the lean lane (cache keys).** The build is 281.7 of the passes' 376.7 node-h, and its size follows the slot tree's distance from the head. Up to 266.5 node-h a week over the 367 passes that built more than 15 min [run for the gap, guess that all could be warm]; floor, the 62 passes that built over 15 min with no `Definitions` change. Other nodes' bundles became readable today at 14:17Z [read]: one pass since (805 compiled, 37.4 min), so measure a day before building anything. Risk: a restored module that is not what its source compiles to; the sampled recompile guards it (3 reds this week) and must stay.
+
+Not a candidate: `--update` repairing bookkeeping in a PR's own run (42 runs, 27.3 node-h). A PR's own check failing on bookkeeping is a stated rule, and the class has not recurred since 8 Nov.
