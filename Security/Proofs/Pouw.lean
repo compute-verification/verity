@@ -169,7 +169,6 @@ public import Proofs.Pouw.PearlC.PeelExists
 public import Proofs.Pouw.PearlC.PeelExists4
 public import Proofs.Pouw.PearlC.TileCheckWords
 public import Proofs.Pouw.PearlC.TileCheckWordsRev1
-public import Proofs.Pouw.PearlPlus
 public import Proofs.Pouw.Pool
 public import Proofs.Pouw.PoolWitness
 public import Proofs.Pouw.Prob
@@ -181,7 +180,6 @@ public import Proofs.Pouw.RelativeSecurityFork
 public import Proofs.Pouw.RelativeSecurityGuarantees
 public import Proofs.Pouw.RelativeSecurityJ10R
 public import Proofs.Pouw.Sampling
-public import Proofs.Pouw.Sampling.ClopperPearson
 public import Proofs.Pouw.Sanity
 public import Proofs.Pouw.ServedFreed
 public import Proofs.Pouw.ServedFreed.Honest
