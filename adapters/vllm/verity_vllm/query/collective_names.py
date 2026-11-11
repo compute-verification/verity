@@ -11,7 +11,8 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from typing import Any
 
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import ProgramView, param_reads, reads_any_of

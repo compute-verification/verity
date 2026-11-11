@@ -13,7 +13,8 @@ Nothing here is copied from the other owners' modules; the real modules replace 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any
+from collections.abc import Iterator
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.layout import Scope

@@ -27,7 +27,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from verity_vllm.query.manifest.format import collector_path, split_name
 from verity_vllm.observe.runtime_tree import RUNNER_PATH, RUNTIME_TREE_SCHEMA, RuntimeTree, mro_names, runtime_tree_from_paths, runtime_tree_of
@@ -122,7 +123,7 @@ class AcquireCorrespondence:
 
     @classmethod
     def from_programs(cls, runtime: RuntimeTree, programs: Iterable[str | Path], *, wrapper_prefix: str = "", aliases: Mapping[str, Any] | None = None,
-                      inplace_facts: Mapping[str, Mapping[str, Any]] | None = None) -> "AcquireCorrespondence":
+                      inplace_facts: Mapping[str, Mapping[str, Any]] | None = None) -> AcquireCorrespondence:
         """Read the record of every component Program dir.  `source` is `correspondence` only when EVERY program carries it; a Build with
         the record on some components and not others falls back as a whole (uniform decision), the components lacking it listed `absent`."""
         tables: dict[str, RuntimeCorrespondence] = {}

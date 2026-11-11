@@ -48,7 +48,8 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
+from collections.abc import Iterable, Mapping, Sequence
 
 from verity_vllm.correspondence.runtime import SCHEMA, CallCorrespondence, RuntimeCorrespondence, correspondence_digest, read_program_document
 
@@ -307,7 +308,7 @@ class Correspondence:
         self.names, self.held = held_module_paths(P, self.names)
 
     @classmethod
-    def of(cls, P: ProgramView, program_dir: str | None, *, implementation_paths: Iterable[str] = ()) -> "Correspondence":
+    def of(cls, P: ProgramView, program_dir: str | None, *, implementation_paths: Iterable[str] = ()) -> Correspondence:
         """The Program's correspondence from its Build dir: the record when the Build carries it, else the v1-annotation fallback.  A
         record that fails to load / mismatches its recorded digest is a `problem` carried on the table (and into the manifest header)."""
         document, digest, problem = read_program_document(program_dir) if program_dir else (None, None, None)

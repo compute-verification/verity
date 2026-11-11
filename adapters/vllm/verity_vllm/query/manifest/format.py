@@ -23,7 +23,8 @@ import hashlib
 import json
 import os
 import re
-from typing import Any, Callable, Iterable
+from collections.abc import Callable, Iterable
+from typing import Any
 
 from verity_vllm.records import required_manifest
 
@@ -670,6 +671,7 @@ def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
     request's Program for a warm one (`prefix_plan.request_shape`).  The traversal engine streams these (rows never all in
     memory: 57 MB vs 1 GB peak on the Llama B8 fold, same digest)."""
     import glob
+
     from verity_vllm.program import prefix_plan as PP
     progs: dict[str, str] = {}
     for r in fx["requests"]:

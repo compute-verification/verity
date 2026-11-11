@@ -40,7 +40,8 @@ import operator
 from array import array
 from collections.abc import Sequence as _SequenceABC
 from dataclasses import dataclass
-from typing import Any, Iterable, Iterator, Sequence
+from typing import Any
+from collections.abc import Iterable, Iterator, Sequence
 
 from verity.definitions.call_scope import spec_base, spec_statics
 from verity_vllm.query.type_repr import parse_type_repr
@@ -131,7 +132,7 @@ class ProgramView:
         raise KeyError(iid)
 
     @property
-    def columns(self) -> "_Columns | None":
+    def columns(self) -> _Columns | None:
         """The columnar body when the view was read from a Build (None for a hand-built tuple of CallViews)."""
         return self.calls._cols if isinstance(self.calls, _Calls) else None
 
@@ -186,7 +187,7 @@ class _Columns:
         self.pread_port = array("H")
         self.views: list[CallView | None] = []
 
-    def call(self, k: int) -> "CallView":
+    def call(self, k: int) -> CallView:
         views = self.views
         if len(views) < self.n:
             views.extend([None] * (self.n - len(views)))

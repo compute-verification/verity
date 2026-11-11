@@ -22,8 +22,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any
 
 from verity.circuits.codec import canonical_json
 
@@ -124,7 +125,7 @@ class TensorView:
     storage_offset: int | None = None
 
     @classmethod
-    def from_json(cls, d: dict | None) -> "TensorView | None":
+    def from_json(cls, d: dict | None) -> TensorView | None:
         if d is None:
             return None
         return cls(tuple(d["shape"]), d["dtype"], tuple(d["strides"]) if d.get("strides") is not None else None,
@@ -164,7 +165,7 @@ class ArgSlot:
     name: str | None
     leaves: tuple[int, int] | None
     view: TensorView | None
-    spans: tuple["ArgSpan", ...] = ()     # non-empty exactly when the argument is read from several fx inputs (then node/arg/leaves are None)
+    spans: tuple[ArgSpan, ...] = ()     # non-empty exactly when the argument is read from several fx inputs (then node/arg/leaves are None)
 
 
 @dataclass(frozen=True)
@@ -223,7 +224,7 @@ class RuntimeCorrespondence:
 
     # -- construction -----------------------------------------------------------------------------------------------------
     @classmethod
-    def from_json(cls, doc: dict) -> "RuntimeCorrespondence":
+    def from_json(cls, doc: dict) -> RuntimeCorrespondence:
         t = cls(doc)
         for k, rec in enumerate(cls.records(doc)):
             t._calls[k] = rec
@@ -486,7 +487,7 @@ def read_descriptor_annotation(desc_path: str, namespace: str = NAMESPACE) -> di
     return found.get(namespace)
 
 
-def read_program_dir(program_dir: Any) -> tuple["RuntimeCorrespondence | None", str | None, str | None]:
+def read_program_dir(program_dir: Any) -> tuple[RuntimeCorrespondence | None, str | None, str | None]:
     """The table of one Build output dir (`derive_step`: `result.json` + `descriptor.json[.gz]`), as (table, digest, problem).
     `result.json:program.correspondence_digest` is the cheap presence test (the frontend that emits the record records its digest there):
     a Build without it is a v1-frontend Build -> (None, None, None) without decoding the descriptor.  With it, the descriptor's record is

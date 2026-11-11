@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
-from functools import lru_cache
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from functools import cache
+from typing import Any
 
 FAMILY = "vocab_range"
 MEMBER = "vocab_range"
@@ -49,7 +50,7 @@ def shard_fn(VS: int, H: int, START: int) -> Any:
     return bind(b1_tp2.EmbeddingShard, VS=VS, H=H, START=START)
 
 
-@lru_cache(maxsize=None)
+@cache
 def slots(VS: int, H: int, START: int) -> tuple[int, ...]:
     """The shard Call's committed interior gates under `Q_word_v1{16,32}` (offsets in its canonical layout, in gate order): word i of a
     row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or that commits other values."""

@@ -22,9 +22,9 @@ def kernels_of_trace_events(evs: list[dict]) -> list[dict]:
     return ks
 
 
-def summarize_kernels(ks: list[dict]) -> "OrderedDict[str, dict]":
+def summarize_kernels(ks: list[dict]) -> OrderedDict[str, dict]:
     """name -> {count, us, grid, block, first_index} (first launch's grid/block), by first appearance."""
-    out: "OrderedDict[str, dict]" = OrderedDict()
+    out: OrderedDict[str, dict] = OrderedDict()
     for i, e in enumerate(ks):
         n = e.get("name", "")
         d = out.get(n)

@@ -18,8 +18,9 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
-from functools import lru_cache
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from functools import cache
+from typing import Any
 
 FAMILY = "norm_scales"
 MEMBER = "norm_scale"
@@ -46,10 +47,10 @@ def scale_calls(P: Any, literals: frozenset[int] = frozenset()) -> list[Any]:
     return [c for c in P.calls if c.family in CALL_SCALES and c.id not in literals and int(c.statics.get("N", 0)) == 1]
 
 
-@lru_cache(maxsize=None)
+@cache
 def _population_class() -> type:
-    from verity_vllm.query.units import Policy, RequiredValues, ValueRef
     from verity_vllm.query.required import DTYPE_OF_WIDTH, CallMember, Population
+    from verity_vllm.query.units import Policy, RequiredValues, ValueRef
 
     class NormScalePopulation(Population):
         """`Population` under the norm-scale policy: the outputs of `scale_calls` are protocol-required and spelt `norm_scale`."""

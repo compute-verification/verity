@@ -57,7 +57,8 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
 from functools import reduce
-from typing import Any, Mapping, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 
 from verity.circuits import partition_object as PO
 from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by

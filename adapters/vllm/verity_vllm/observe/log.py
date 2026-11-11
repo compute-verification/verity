@@ -8,8 +8,9 @@ from __future__ import annotations
 import gzip
 import io
 import json
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import IO, Iterable, Iterator
+from typing import IO
 
 from .events import Event, RunHeader, StepEnd, StepStart, from_json, to_json
 
@@ -42,7 +43,7 @@ class LogWriter:
         if not self._f.closed:
             self._f.close()
 
-    def __enter__(self) -> "LogWriter":
+    def __enter__(self) -> LogWriter:
         return self
 
     def __exit__(self, *exc) -> None:

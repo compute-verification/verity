@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
-from functools import lru_cache
-from typing import Any, Callable, Mapping
+from functools import cache
+from typing import Any
+from collections.abc import Callable, Mapping
 
 from verity.definitions.registry import fp8
 from verity.definitions.registry import fp8_vocab
@@ -44,7 +45,7 @@ POLICY_TEXT = ("scale products: per token row of " + ", ".join(sorted(SHARED)) +
                "F32Mul_v1(x_s[kb], w_s[nb][kb]), nb major -- `<linear module>/scale_products` (family scale_products, f32 [rows, N/G * K/G])")
 
 
-@lru_cache(maxsize=None)
+@cache
 def slots(K: int, N: int, G: int) -> tuple[int, ...]:
     """The shared-scale Call's committed interior gates under `Q_word_v1{16,32}` (offsets in its canonical layout, in gate order): word i
     of a row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or that commits other values."""

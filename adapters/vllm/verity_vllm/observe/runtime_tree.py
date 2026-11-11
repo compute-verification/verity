@@ -14,9 +14,10 @@ A live engine's tree carries the observed facts; `--runner-facts <live runtime_t
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from verity_vllm.config import option
 
@@ -43,14 +44,14 @@ class RuntimeTree:
                 "buffers": sorted(self.buffers)}
 
     @classmethod
-    def from_json(cls, d: Mapping[str, Any]) -> "RuntimeTree":
+    def from_json(cls, d: Mapping[str, Any]) -> RuntimeTree:
         if d.get("schema") not in (None, RUNTIME_TREE_SCHEMA):
             raise ValueError(f"runtime tree schema {d.get('schema')!r} != {RUNTIME_TREE_SCHEMA}")
         return cls(modules={str(k): [str(c) for c in v] for k, v in (d.get("modules") or {}).items()}, buffers=[str(b) for b in (d.get("buffers") or [])],
                    runner=dict(d.get("runner") or {}), source=str(d.get("source") or ""))
 
     @classmethod
-    def load(cls, path: str | Path) -> "RuntimeTree":
+    def load(cls, path: str | Path) -> RuntimeTree:
         return cls.from_json(json.loads(Path(path).read_text()))
 
     def save(self, path: str | Path) -> None:

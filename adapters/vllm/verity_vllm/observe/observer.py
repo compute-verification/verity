@@ -22,8 +22,9 @@ from __future__ import annotations
 import importlib
 import re
 import time
+from collections.abc import Callable
 from functools import partial
-from typing import Any, Callable
+from typing import Any
 
 import torch
 from torch.utils._python_dispatch import TorchDispatchMode

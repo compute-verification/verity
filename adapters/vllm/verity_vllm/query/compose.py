@@ -5,7 +5,8 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.query.required import _as_list, collective_kind

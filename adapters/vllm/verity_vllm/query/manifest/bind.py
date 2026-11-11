@@ -56,7 +56,8 @@ from __future__ import annotations
 import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
+from collections.abc import Iterable, Mapping, Sequence
 
 from verity_vllm.query.manifest.format import RUN_FAMILY, batch_launch_shortfall, promoted_observation
 
@@ -169,7 +170,7 @@ class Binder:
 
     @classmethod
     def of_manifest(cls, manifest: Mapping[str, Any], *, rank: int | None = None, ports: Mapping[str, Port] | None = None,
-                    arrivals: Mapping[str, int] | None = None) -> "Binder":
+                    arrivals: Mapping[str, int] | None = None) -> Binder:
         """The binder of a manifest document: its rows (of `rank`), its shared-instance aliases, its promoted observations and its
         declared requests."""
         rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
