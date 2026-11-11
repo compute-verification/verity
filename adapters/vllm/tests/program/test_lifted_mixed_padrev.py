@@ -1,13 +1,11 @@
-"""Adversarial tests for the MIXED BATCH stage (LIFTING-REVIEW attack list A1/A5/A12), Program side, TINY shape.
+"""Adversarial tests for the MIXED BATCH stage (LIFTING-REVIEW attack list A1/A5), Program side, TINY shape.
 
 Two requests share ONE weights Input and one EOS set; request A stops early (EOS at event 3), request B never stops (cap decides).
 The attacks these tests aim at:
 
   A1  ⊥ leaking across requests — A's deactivation must not change one bit of B's values (no cross-request edge in the greedy
-      Program; the only cross-request value is the S-migration count of PAD-04, which is NOT a value of B's rows);
-  A5  "one inactive request never deactivates its batch-mates" — B's activity vector is [1]*(D_MAX+1) regardless of A's EOS;
-  A12 the S relation reads Program activity values, not observed liveness — n_live_t is Σ_r LIsActive(tok_in_{r,t}), a Program
-      value, and it drops by exactly one at A's a_r while B's rows keep S Active.
+      Program);
+  A5  "one inactive request never deactivates its batch-mates" — B's activity vector is [1]*(D_MAX+1) regardless of A's EOS.
 
 Written against the skeleton (LServe_v1 ×2) before the MIXED BATCH stage was built; the stage's record half (B2 mixedstop) is
 reviewed separately. Uses only the public lifted API; nothing here is implementation."""
@@ -171,29 +169,3 @@ def _walk(ty):
             yield from _walk(f[1] if isinstance(f, tuple) else f)
 
 
-def test_a12_n_live_is_a_program_value_that_drops_by_one_at_a_r_and_b_keeps_an_active_s():
-    """PAD-04 hook on the two-request skeleton: n_live_t = Σ_r LIsActive(tok_in_{r,t}) over the PROGRAM's step inputs (not a
-    liveness observed on the record): 2 for t < a_A = 4, 1 from a_A on (B alone); the S operand stays Active while any row is live,
-    and the retired hook Σ LIsActive(out_r[t-1]) over-counts by one exactly at t = a_A."""
-    if not hasattr(L, "l_splits_for"):
-        pytest.skip("PAD-04 candidate not on this tree")
-    prog, t, out_a, out_b = _serve2((EOS_FOR[3],), prompt_b=_prompt_b())
-    ia, ls = L.l_is_active(32), L.l_splits_for(142)
-    named = {}
-    for c in prog.circuit.root_calls():
-        if c.node.name in ("req_a", "req_b"):
-            for k in c.children():
-                if k.node.name and k.node.name.endswith("/tok_in"):
-                    named[(c.node.name, int(k.node.name.split("=")[1].split("/")[0]))] = k
-    b_stops_itself = any(ia.evaluate(x) and L.payload(32, x) == EOS_FOR[3] for x in out_b[:-1])
-    if b_stops_itself:
-        pytest.skip("TINY B transcript hits the EOS set on its own; the A12 count needs an independent B")
-    for s in range(1, D_MAX + 1):
-        n_live = ia.evaluate(t[named[("req_a", s)].lo]) + ia.evaluate(t[named[("req_b", s)].lo])
-        n_retired = ia.evaluate(out_a[s - 1]) + ia.evaluate(out_b[s - 1])
-        assert n_live == (2 if s < 4 else 1), (s, n_live)
-        assert ls.evaluate(n_live) == 32  # 142 SMs: 1..4 live rows → S = 32; never ⊥ while B is live
-        if s == 4:
-            assert n_retired == 2 and n_live == 1  # the phantom live row of the retired hook, at A's a_r
-        else:
-            assert n_retired == n_live

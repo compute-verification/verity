@@ -221,17 +221,15 @@ def terms() -> tuple[tuple[Term, ...], dict[str, list[Term]]]:
 
 def sites_of(text: str, by: dict[str, list[Term]]) -> list[tuple[int, str]]:
     """(line, ``'X' is retired; say Y``) of each site of a retired term in ``text``, ``by`` its terms by word.  Where two
-    terms give one site, the one spelled longer says it, then the first by spelling: the ratchet gate compares the lines of
-    two runs, so a site says the same in every run."""
+    terms match one span, the one the table spells longer names it, then the first by spelling."""
     words = {w.lower() for w in set(WORDS.findall(text))}
-    candidates = {t for w in words & by.keys() for t in by[w]}
+    candidates = sorted({t for w in words & by.keys() for t in by[w]}, key=lambda t: (-len(t.old), t.old))
     if not candidates:
         return []
     low = text.lower()
     if len(low) != len(text):                           # a character whose lower case is longer: lower it alone
         low = "".join(c if len(c.lower()) != 1 else c.lower() for c in text)
-    hits = sorted(((s, e, t) for t in candidates for s, e in t.matches(text, low)),
-                  key=lambda h: (h[0], -h[1], -len(h[2].old), h[2].old))
+    hits = sorted(((s, e, t) for t in candidates for s, e in t.matches(text, low)), key=lambda h: (h[0], -h[1]))
     out, end, line, at = [], -1, 1, 0
     for s, e, t in hits:
         if s < end or kept(text, s, e):
@@ -355,6 +353,21 @@ def test_what_is_a_retired_term() -> None:
         "DrawIsCoin", "Remote.Draw.Session", "--draw", "Verity.Window"]
     assert olds("the domain verity/flock-firewall/v1 and note:x-draw-law, a session, the window") == []
     assert sites_of("a\nb C-Flock\n", by) == [(2, "'C-Flock' is retired; say Flock (GLOSSARY.md)")]
+
+
+def test_two_terms_on_one_span_name_the_same_one_in_every_process() -> None:
+    """The ratchet gate compares a base's sites with a head's as strings, each found in its own process, and a set of
+    terms iterates in an order that differs between processes."""
+    alive, said = [], set()
+    for i in range(64):
+        pair = [Term("Dampener*", "the slowdown", code=True), Term("*RemotePeriod", "monitoring period", code=True)]
+        alive.append(pair)
+        by: dict[str, list[Term]] = {}
+        for t in pair[::-1] if i % 2 else pair:
+            for a in t.anchors:
+                by.setdefault(a, []).append(t)
+        said |= set(sites_of("the DampenerRemotePeriod\n", by))
+    assert said == {(1, "'DampenerRemotePeriod' is retired; say monitoring period (GLOSSARY.md)")}, sorted(said)
 
 
 def test_two_terms_on_one_site_say_the_same_whatever_order_the_set_holds_them_in() -> None:
