@@ -2164,7 +2164,7 @@ theorem q0At_opened {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (
     p < 2 ^ (lv0 x j).d ∧ ∃ a : Fin (tabC PE x j).z.nS, (((tabC PE x j).T (czExe PE x c j)).s0 (.inl a)).val = p := by
   obtain ⟨-, -, -, -, ht2, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   obtain ⟨-, hL2, -, -, -, -, -⟩ := hdim
-  obtain ⟨hd, -, -, -, -, -⟩ := zkLevel0 wideLeaf (zkTab x j).hz
+  obtain ⟨hd, -, -, -, -, -⟩ := zkLevel0 (zkTab x j).hz
   obtain ⟨hrate, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_pad _ _ _ (zkTab x j).hz
   obtain ⟨hts, hLs, hcs⟩ := tabSizes x j
   have hseam : FlockSoundness.Refine.LevelSeam (lv0 x j) := hlv 0 (by omega)

@@ -194,7 +194,7 @@ theorem tabS_ligTab_size (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (
     (j : Fin (jOf x)) : (FlockComplete.LigLock.tabS coin p0 (ligTab x w τ j) (zkTab x j).sch.k0).size =
       2 ^ (lv0 x j).cols := by
   obtain ⟨-, -, -, -, -, hm⟩ := tabC_z PE x j
-  obtain ⟨-, -, hl0, -, -, -⟩ := zkLevel0 wideLeaf (zkTab x j).hz
+  obtain ⟨-, -, hl0, -, -, -⟩ := zkLevel0 (zkTab x j).hz
   unfold lv0 at hm
   rw [hl0] at hm
   have hmL : (ligSt x j).m = (tabC PE x j).S.m := by

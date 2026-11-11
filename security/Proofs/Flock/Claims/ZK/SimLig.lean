@@ -1435,7 +1435,7 @@ theorem ligYbarE : LigYbarE := by
   dsimp only
   intro _ _
   obtain ⟨hnL, -, htp, -, -, -⟩ := tabC_z PE x j
-  obtain ⟨-, -, hl0, -, -, -⟩ := zkLevel0 wideLeaf (zkTab x j).hz
+  obtain ⟨-, -, hl0, -, -, -⟩ := zkLevel0 (zkTab x j).hz
   unfold ligSrc
   rw [srcE_ybar_L]
   apply Array.ext
@@ -1540,7 +1540,7 @@ theorem ligY1E : LigY1E := by
     rw [repSlot_p0 hs j r]
     omega)
   obtain ⟨hnL, hL, -, -, -, hm⟩ := tabC_z PE x j
-  obtain ⟨-, -, hl0, -, -, -⟩ := zkLevel0 wideLeaf (zkTab x j).hz
+  obtain ⟨-, -, hl0, -, -, -⟩ := zkLevel0 (zkTab x j).hz
   unfold lv0 at hnL hL hm
   rw [hl0] at hnL hm
   have hmL : (ligSt x j).m = (tabC PE x j).S.m := by
@@ -2032,7 +2032,7 @@ private theorem laneF_tabS {x : Msg} (w : Claims.Flock.Wit) (τ : UE.Tape) (c : 
     unfold ligSt
     rw [hst]
     rfl
-  obtain ⟨-, -, -, -, -, hk7⟩ := zkLevel0 wideLeaf (zkTab x j).hz
+  obtain ⟨-, -, -, -, -, hk7⟩ := zkLevel0 (zkTab x j).hz
   have hM7 : 7 ≤ (zkTab x j).table.S.m := by
     have e : (zkTab x j).table.S.m = (stAt x j).m := rfl
     omega
@@ -2067,7 +2067,7 @@ theorem laneB_wSOf {x : Msg} (w : Claims.Flock.Wit) (τ : UE.Tape)
     unfold ligSt
     rw [hst]
     rfl
-  obtain ⟨-, -, -, -, -, hk7⟩ := zkLevel0 wideLeaf (zkTab x j).hz
+  obtain ⟨-, -, -, -, -, hk7⟩ := zkLevel0 (zkTab x j).hz
   obtain ⟨-, -, hsm, -, -, hdim, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   obtain ⟨hn7, -⟩ := hdim
   have hm : (zkTab x j).table.S.m = (stAt x j).m := rfl
@@ -2138,7 +2138,7 @@ private theorem laneMsg_roundPoly {x : Msg} (hx : Live x) (w : Claims.Flock.Wit)
         FlockSoundness.Refine.gOf (FlockComplete.roundPoly
           (FlockComplete.LigLock.tabS (ligCoin c) (ligP0 x j r) (ligTab x w τ j) i)
           (FlockComplete.LigLock.wS (ligCoin c) (ligP0 x j r) (ligBasis x c w τ j r extras) (zkTab x j).sch.n i)).2 := by
-  obtain ⟨-, -, -, -, -, hk7⟩ := zkLevel0 wideLeaf (zkTab x j).hz
+  obtain ⟨-, -, -, -, -, hk7⟩ := zkLevel0 (zkTab x j).hz
   have hm : (zkTab x j).table.S.m = (stAt x j).m := rfl
   obtain ⟨htsz, hF⟩ := laneF_tabS w τ c hs j r i hi.le
   obtain ⟨-, hB⟩ := laneB_wS hx w τ c hs j r extras he i hi.le
@@ -2206,7 +2206,7 @@ theorem ligSumsE : LigSumsE := by
   obtain ⟨htsz, -⟩ := laneF_tabS w τ c hs j r _ le_rfl
   obtain ⟨hwsz, hB⟩ := laneB_wS hx w τ c hs j r extras he _ le_rfl
   obtain ⟨-, hL, -, -, -, -⟩ := tabC_z PE x j
-  obtain ⟨-, -, -, -, -, hk7⟩ := zkLevel0 wideLeaf (zkTab x j).hz
+  obtain ⟨-, -, -, -, -, hk7⟩ := zkLevel0 (zkTab x j).hz
   have hLe : (tabC PE x j).z.L = 2 ^ ((stAt x j).m - 7 - (zkTab x j).sch.k0) := by
     rw [hL]
     congr 1

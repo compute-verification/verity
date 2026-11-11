@@ -359,7 +359,7 @@ open FlockSoundness FlockSoundness.Refine
 /-- The level-0 facts round `0` reads, as one check per `m`: level 0 exists, its codeword block is `cols + rate`
 with `rate ≥ 1`, its lanes are the schedule's `k₀`, `t_pad ≤ 2^cols`, and its lanes and columns pack the table's
 `2^(m−7)` words. -/
-def round0Facts (m : ℕ) : Bool :=
+def round0Facts (wideLeaf : Bool) (m : ℕ) : Bool :=
   match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (s, t) =>
     decide (0 < s.levels.size) &&
@@ -369,9 +369,9 @@ def round0Facts (m : ℕ) : Bool :=
   | .error _ => true
 
 set_option maxRecDepth 100000 in
-theorem round0Facts_all : ∀ m, 25 ≤ m → m ≤ 35 → round0Facts m = true := by
-  intro m h1 h2
-  interval_cases m <;> decide +kernel
+theorem round0Facts_all : ∀ (w : Bool) (m : ℕ), 25 ≤ m → m ≤ 35 → round0Facts w m = true := by
+  intro w m h1 h2
+  cases w <;> interval_cases m <;> decide +kernel
 
 theorem schedOf_level₀ (s : _root_.Flock.Schedule) (h0 : 0 < s.levels.size) :
     (schedOf s).level₀ = levelOf (s.levels.getD 0 default) := by
@@ -382,12 +382,13 @@ theorem schedOf_level₀ (s : _root_.Flock.Schedule) (h0 : 0 < s.levels.size) :
 
 /-- **A `--zk` schedule's level 0**: its codeword block is `cols + rate` with `rate ≥ 1`, its lanes are `k₀`, and
 `t_pad ≤ 2^cols`; and it is the model schedule's level 0. -/
-theorem zkLevel0 (wideLeaf : Bool) {m : ℕ} {s : _root_.Flock.Schedule} {t : ℕ} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (s, t)) :
+theorem zkLevel0 {wideLeaf : Bool} {m : ℕ} {s : _root_.Flock.Schedule} {t : ℕ}
+    (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (s, t)) :
     (s.levels.getD 0 default).d = (s.levels.getD 0 default).cols + (s.levels.getD 0 default).rate ∧
       1 ≤ (s.levels.getD 0 default).rate ∧ (s.levels.getD 0 default).lanes = s.k0 ∧
       t ≤ 2 ^ (s.levels.getD 0 default).cols ∧ (schedOf s).level₀ = levelOf (s.levels.getD 0 default) ∧
       s.k0 + (s.levels.getD 0 default).cols + 7 = m := by
-  have hf := round0Facts_all m (FlockSoundness.Discharge.ZkHidden.schedule_range h).1
+  have hf := round0Facts_all wideLeaf m (FlockSoundness.Discharge.ZkHidden.schedule_range h).1
     (FlockSoundness.Discharge.ZkHidden.schedule_range h).2
   unfold round0Facts at hf
   rw [h] at hf
@@ -410,7 +411,7 @@ theorem tabSizes (x : Msg) (j : Fin (jOf x)) :
     (zkTab x j).table.t ≤ 2 ^ ((zkTab x j).table.sch.level₀.logCols + 1) ∧
       (zkTab x j).table.sch.level₀.logCols + 1 ≤ (zkTab x j).table.sch.level₀.logLen ∧
       (zkTab x j).table.sch.level₀.logCols = (lv0 x j).cols := by
-  obtain ⟨-, hr, -, ht, hl, -⟩ := zkLevel0 wideLeaf (zkTab x j).hz
+  obtain ⟨-, hr, -, ht, hl, -⟩ := zkLevel0 (zkTab x j).hz
   have hc : (zkTab x j).table.sch.level₀.logCols = (lv0 x j).cols := by
     show (schedOf (zkTab x j).sch).level₀.logCols = _
     rw [hl]
@@ -441,7 +442,7 @@ theorem tabC_z (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) :
       (tabC P x j).z.tpad = (zkTab x j).tPad ∧ (zkTab x j).tPad ≤ 2 ^ (lv0 x j).cols ∧
       (tabC P x j).z.nS + (tabC P x j).z.nU = 2 ^ (lv0 x j).d ∧
       (lv0 x j).lanes + (lv0 x j).cols + 7 = (tabC P x j).S.m := by
-  obtain ⟨hd, hr, hl, ht, h0, hp⟩ := zkLevel0 wideLeaf (zkTab x j).hz
+  obtain ⟨hd, hr, hl, ht, h0, hp⟩ := zkLevel0 (zkTab x j).hz
   obtain ⟨-, -, hc⟩ := tabSizes x j
   simp only [lv0] at hc ⊢
   have hL : (zkTab x j).table.sch.level₀.logLen = ((zkTab x j).sch.levels.getD 0 default).d := by
