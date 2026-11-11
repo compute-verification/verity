@@ -23,6 +23,10 @@
 Writes DIR/rate.json (a row a type and K, as each ends) and DIR/<type>-k<K>/ (the server's logs and session records; no
 circuit, prover file or proof). A type whose server fails at some K is recorded with its error, and the next goes on.
 
+``FC_VERIFIER_CPUS`` in the environment (a CPU list within the run's affinity) runs the verifiers on those CPUs and the
+provers on the rest (`ProofServer`'s placement). Either way a row keeps it (``verifier_cpus``) and the verifiers' CPU
+seconds a statement over the timed sessions beside the provers' (``verifier_cpu_s_per_statement``).
+
 A row is **void** when any session was refused (a refused session files fast, so it would raise the rate), any of the
 server's processes exited nonzero, or a prover's log reports the device out of memory: it has no rate
 (``statements_per_s`` is null), ``void`` lists the reasons, and a ``VOID`` line says so. The run exits 1 when any row is
@@ -214,6 +218,7 @@ def one(a, dev: str, t: str, K: int) -> dict:
                      env={"FC_FIREWALL": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
     host = Host(ps)
     provers_cpu = lambda: cpu_s(pid for name, pid in ps.pids.items() if name.startswith("prover-"))  # noqa: E731
+    verifiers_cpu = lambda: cpu_s(pid for name, pid in ps.pids.items() if name.startswith("verifier-"))  # noqa: E731
 
     def wait(s, i: int) -> None:
         try:
@@ -245,13 +250,18 @@ def one(a, dev: str, t: str, K: int) -> dict:
             w.join()
         rec["ready_s"] = round(time.monotonic() - t_start, 1)
         cpu_ready, _ = provers_cpu()
+        vcpu_ready, _ = verifiers_cpu()
         for i in range(K * a.warm, total):
             go(i)
         for w in waits:
             w.join()
         cpu_end, gone = provers_cpu()
+        vcpu_end, vgone = verifiers_cpu()
         rec["prover_cpu_s_per_statement"] = round((cpu_end - cpu_ready) / timed_n, 2)
         rec["cpu_gone"] = gone
+        rec["verifier_cpus"] = os.environ.get("FC_VERIFIER_CPUS") or None
+        rec["verifier_cpu_s_per_statement"] = round((vcpu_end - vcpu_ready) / timed_n, 2)
+        rec["verifier_cpu_gone"] = vgone
     finally:
         rec["exits"] = ps.close()
         rec["host"] = host.stop()
