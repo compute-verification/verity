@@ -2,12 +2,14 @@ module
 
 public import NetworkCheck.Check
 public import CoreProtocol.Profile
+public import Flock.JsonIs
 public import Flock.Program
 public import Flock.Public
 public import Flock.WindowRecord
 public import NciCheck.Desc
 meta import NetworkCheck.Check
 meta import CoreProtocol.Profile
+meta import Flock.JsonIs
 meta import Flock.Program
 meta import Flock.Public
 meta import Flock.WindowRecord
@@ -568,7 +570,7 @@ def canonicalEntry (callees types : Array Json) (e : Json) : V Json := do
   let at_ := fun (xs : Array Json) (i : Json) => match i.getNat? with
     | .ok i => xs.getD i .null
     | .error _ => .null
-  unless e.getObjValD "form" == .str "composite" do return e
+  unless Flock.J.strIs (e.getObjValD "form") "composite" do return e
   let body := e.getObjValD "body"
   let .arr nodes := body.getObjValD "nodes" | return e
   let mut rows : Array (Array (Array Json)) := #[]
@@ -610,7 +612,7 @@ def slotEntryDigest (j : Json) (key : String) : V String := do
       let e := defs.getObjValD k
       if let .null := e then throw s!"program: {key} reaches {k}, no Definition of its descriptor"
       seen := seen.push (k, .str (← definitionDigest callees types e))
-      if e.getObjValD "form" == .str "composite" then
+      if Flock.J.strIs (e.getObjValD "form") "composite" then
         for n in nodesOf e do
           match (n.getObjValD "fn").getNat?.toOption.bind (callees[·]?) with
           | some (.str c) => todo := c :: todo
@@ -942,7 +944,7 @@ def windowCheck (p : Params) (clear : List ByteArray) (earlier : Array ByteArray
     (x : Window) : Found Unit := do
   let what := s!"window {w}"
   let .clock clock := x.shown | refuse s!"{what}: registrations, not a clock certificate: the rows form's"
-  unless reg.getObjValD "program" == .str p.program &&
+  unless Flock.J.strIs (reg.getObjValD "program") p.program &&
       canonText (reg.getObjValD "window") == canonText (served w) do
     refuse s!"{what}: registration: not the link's Program at window {w}"
   unless x.certificates.size == 2 && (x.certificates.zip #[Direction.egress, .ingress]).all
@@ -995,7 +997,7 @@ def rowsCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d : Direct
 def holds (reg : Json) (r : Rows) : Bool :=
   let entries := fun (k : String) => match reg.getObjValD k with | .arr xs => xs | _ => #[]
   (entries "roots" ++ entries "registered").any fun e =>
-    e.getObjValD "root" == .str (Flock.hexOf r.root) && e.getObjValD "domain" == .str r.domain
+    Flock.J.strIs (e.getObjValD "root") (Flock.hexOf r.root) && Flock.J.strIs (e.getObjValD "domain") r.domain
 
 /-- The scan's Programs' rows in its registration, one tree a lane: lane `j`'s is the entry of its `roots` whose port,
 or of its `registered` whose value, is `scan/prog<j>`. -/
@@ -1151,7 +1153,7 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
     (reg : Json) (x : Window) : Found (Facts × Nat) := do
   let what := s!"window {w}"
   let .rows rs := x.shown | refuse s!"{what}: a clock certificate, not registrations: the clock form's"
-  unless reg.getObjValD "program" == .str p.program do refuse s!"{what}: registration: not the scan's Program"
+  unless Flock.J.strIs (reg.getObjValD "program") p.program do refuse s!"{what}: registration: not the scan's Program"
   unless x.certificates.size == 3 && (x.certificates.zip (records p.link)).all
       (fun (c, l, d) => certifiesOn p l d w c) do
     refuse s!"{what}: certificates: the requests', responses' and fails' records', each the key's (the network \
@@ -1172,7 +1174,7 @@ blocks are the Program's, at any sample; a tied audit sampled in part is charged
 (`chargedOf`, `faultyEntries`). -/
 def auditCheck (i : Nat) (a : Audit) (reg : Json) (x : Core.Answer) : Found Facts := do
   let what := s!"audit {i}"
-  unless reg.getObjValD "program" == .str a.program do refuse s!"{what}: registration: not its Program"
+  unless Flock.J.strIs (reg.getObjValD "program") a.program do refuse s!"{what}: registration: not its Program"
   let (prof, pub) ← answered what reg x
   let f ← factsOf what prof pub
   unless f.units == a.units do refuse s!"{what}: profile: {f.units} units, not its Program's {a.units}"
