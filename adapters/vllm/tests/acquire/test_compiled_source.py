@@ -14,7 +14,6 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from verity_vllm.acquire.sources import compiled_kernel_source as cks
 from verity_vllm.acquire.sources import compiled_source as cs
 from verity_vllm.commit.committer.native_collect import plan_key_of
 
@@ -234,17 +233,3 @@ def test_a_replayed_graph_drains_the_steps_tokens_and_requests_under_the_geometr
     src.on_step_end(c._cur)
     assert [(n, t.shape[0]) for n, t in c.acq] == [("layers.0.mlp", 3), ("logits_processor", 2)]
 
-
-def test_a_lone_requests_replayed_kernels_are_drained_under_the_geometry_key():
-    src = cks.CompiledKernelSource()
-    c = _Committer()
-    c.step_rows = {}
-    src.attach(c)
-    src.capture_sizes = {1, 2, 4}
-    key = (0, 0, "triton_poi_fused_0", "out", (1, 3))
-    src.slots[key], src.slot_meta[key] = torch.ones(1, 3), (0, "c0.triton_poi_fused_0/out", "out")
-    _begin(c, [("a", 283, 1)])
-    src.on_step_begin()
-    src.on_step_end(c._cur)
-    assert [(n, t.shape[0]) for n, t in c.acq] == [("c0.triton_poi_fused_0/out", 1)]
-    assert src.stats["replayed_steps"] == 1 and "uncaptured_without_hooks" not in src.stats

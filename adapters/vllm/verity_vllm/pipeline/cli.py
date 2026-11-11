@@ -41,7 +41,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "commit-plan": ("verity_vllm.pipeline.commit_plan", "a Commit's plan, derived before the GPU: its producer facts, keyed"),
     "commit-replay": ("verity_vllm.pipeline.cpu_replay", "a deferred Commit's C2 replay on CPU, from its sealed replay bundle"),
     "replay-plan": ("verity_vllm.pipeline.replay_plan", "a slim replay bundle's planner process (started by a `--replay-deferred slim` Commit)"),
-    "compiled": ("verity_vllm.acquire.compiled", "required-value manifest of an Execution=compiled row"),
+    "compiled": ("verity_vllm.acquire.compiled", "hold the Build an Execution=compiled row's treatment ran with to the one it rederived (verify)"),
     "compiled-merge": ("verity_vllm.pipeline.compiled_merge", "merge control/treatment outputs of a compiled row"),
     "conformance": ("verity_vllm.program.frontend.conformance", "conformance record of the registered library"),
     "coverage-workloads": ("verity_vllm.pipeline.coverage_workloads", "coverage campaign workloads"),
