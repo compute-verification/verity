@@ -45,8 +45,7 @@ def main() -> int:
                  verify=_load(spec["verify"]) if spec.get("verify") else None,
                  seed=None if seed is None else bytes.fromhex(seed), clock_step_ns=spec.get("clock_step_ns", 0),
                  dial_to=spec.get("dial", {}), authenticate=spec.get("authenticate", True))
-    sys.stdout.write(json.dumps(result.summary(), sort_keys=True) + "\n")
-    sys.stdout.flush()
+    print(json.dumps(result.summary(), sort_keys=True), flush=True)
     return 0
 
 

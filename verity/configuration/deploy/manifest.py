@@ -205,9 +205,8 @@ def place(manifest: Manifest, site: Topology, bindings: Mapping[str, str], *, si
                 if link is None:
                     raise Refused("no-link", f"{c.sender} on {s_machine} and {c.receiver} on {r_machine} have no link")
                 if c.latency_ms is not None and link.latency_ms > c.latency_ms:
-                    slow = (f"{c.sender} -> {c.receiver} is bounded by {c.latency_ms} ms, and its link takes "
-                            f"{link.latency_ms} ms")
-                    unmet.append(("latency", slow))
+                    unmet.append(("latency", f"{c.sender} -> {c.receiver} is bounded by {c.latency_ms} ms, and its link "
+                                             f"takes {link.latency_ms} ms"))
                 hops = [v for v in link.via if site.machine(v).owner == "developer"]
                 if c.carries_coins and hops:
                     unmet.append(("coins-hop", f"{c.sender} -> {c.receiver} carries coins through the developer's {hops}"))

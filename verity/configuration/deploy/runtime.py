@@ -45,23 +45,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.configuration.wire import (
-    Int,
-    Message,
-    MessageTypes,
-    Refused,
-    Schema,
-    Str,
-    canonical,
-    parse,
-    split,
-)
+from verity.configuration.wire import Int, Message, MessageTypes, Refused, Schema, Str, canonical, parse, split
 from verity.configuration.wire.handshake import NONCE_BYTES, Handshake, Key, Verify
 
 from . import sources as S
 from .channels import Adversary, MemoryPipe, Pipe, Playback, TcpListen, dial
 from .manifest import SOURCES, Manifest, PlaceResult, place, site_of
-from .party import Action, Finish, Identity, LogEntry, Party, Received, Send, Timer
+from .party import Action, Finish, Identity, Party, Received, LogEntry, Send, Timer
 from .transcript import Entry, PartyLog, record
 
 MODES = ("live", "simulated", "mixed", "replay")
