@@ -30,7 +30,8 @@ flight; and `flying` each member of the chain not ready at its head as built, wi
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
-the command's (`--lean`, `--pending-hours`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
+the command's (`--lean`, `--pending-hours`), and `wide` the PRs `--wide-file` names, read each tick as the priority file is
+(`World.wide`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
 the labels graph2 wrote alone (`GRAPH2_BY`), each key's from the first its retry or any candidate's rerun didn't set aside (a
 task graph2's `verdict` says failed or infra reads so whatever its labels say, one failed by its own fault, which it labels
 no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`reds.RATCHET_STEP`: it judges
@@ -169,6 +170,12 @@ PRIORITY = Path("/data/drive/priority")
 #: file under one waits, as does one that moves a word map there; ordinary edits don't, nor does a head the freeze's owner
 #: cleared against the branch it protects (a `cleared-by HANDLE KEY` line: a `KEY = true` label by HANDLE at the head)
 FROZEN = Path("/data/vqueue/live/frozen")
+#: the tests a candidate's check leaves out, one node id a line from the repository's root (`#` lines skipped), read at each
+#: launch (`vqueue_slim.deselection`); the nightly uncached check, which reads no list, runs them
+DESELECT = Path("/data/vqueue/live/deselect")
+#: the PRs whose Lean change is wide, its build expensive, one number a line as the priority file holds them: a candidate
+#: taking one takes no other Lean member, and one on a candidate holding one takes none until it is on `main` (`vqueue._wide`)
+WIDE = Path("/data/vqueue/live/wide")
 #: how far back the decision log is read
 WINDOW_S = 48 * 3600
 #: what gates a candidate (`--gate`): graph2's check with the run beside it, or drive's after-landing check alone, as `SHARDS`
@@ -585,10 +592,12 @@ class World:
     def __init__(self, q: Queue, labels, tasks: Executor, *, graph2: tuple[str, ...] = (), priority_file: Path | None = None,
                  post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time,
                  labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None, on: str = "",
-                 frozen_file: Path | None = None):
+                 frozen_file: Path | None = None, deselect_file: Path | None = None, wide_file: Path | None = None):
         self.q, self.labels, self.tasks, self.graph2, self.on = q, labels, tasks, tuple(graph2), on
         self.priority_file, self.now, self.repo, self.labels_at = priority_file, now, q.workdir, labels_at
-        self.frozen_file, self._frozen_told = frozen_file, set()
+        self.frozen_file, self._frozen_told, self.wide_file = frozen_file, set(), wide_file
+        #: the tests each candidate's check leaves out (`DESELECT`, `vqueue_slim.deselection`)
+        self.deselect_file = deselect_file
         self.keys = cache / "issuer-keys.json" if cache is not None else None
         if cache is not None:
             cache.mkdir(parents=True, exist_ok=True)
@@ -750,6 +759,11 @@ class World:
             place(n)
         self.prs, self.left, self.pulled = {n: entries[n].pr for n in chosen}, left, pulled
         return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2]) for i, n in enumerate(placed)]
+
+    def wide(self) -> frozenset[int]:
+        """The PRs the wide file names (`WIDE`), parsed and refused as the priority file is (`priority_list`): none while it is
+        missing or empty."""
+        return frozenset(priority_list(self.wide_file, "--wide-file")) if self.wide_file else frozenset()
 
     def _another(self, n: int, by: str | None) -> bool:
         """Whether ``by`` is someone other than PR ``n``'s owner and its handle (`_owners`), compared as `unreviewed` does."""
@@ -1703,6 +1717,7 @@ class Loop:
         w = self.world
         origin = w.fetch()
         main = self._shadow_main(past, origin) if self.shadow else origin
+        wide = w.wide()
         ejected = {(r.get("number"), (r.get("heads") or [None])[0]): r.get("at") for r in past.of("eject") if r.get("shadow")}
         ready, out = [], {}
         for x in w.ready(main):
@@ -1759,9 +1774,10 @@ class Loop:
         left.update(taken := w.taken({(m, h) for m, h in flying if m not in w.pulled}, main))
         snap = Snapshot(main, tuple(sorted((x for x in ready if x.number not in riding), key=lambda x: x.rank)), tuple(cands),
                         history, self.batch, self.depth, lean=self.lean, now=self.now(), pending_s=self.pending_s,
-                        tree_ejects=self.tree_ejects, left=tuple((n, *left[n]) for n in sorted(left)),
+                        tree_ejects=self.tree_ejects, left=tuple((n, *left[n]) for n in sorted(left)), wide=wide,
                         pulled=frozenset(w.pulled | set(out) | set(taken)),
-                        flying=tuple(Ready(m, h, frozenset() if h in gone else w._changed(main, h)) for m, h in sorted(flying)))
+                        flying=tuple(Ready(m, h, frozenset() if h in gone else w._changed(main, h),
+                                           lean=m in wide and h not in gone and w._judge(main, h)[0]) for m, h in sorted(flying)))
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], riding=riding)
 
     def _shadow_main(self, past: Past, origin: str) -> str:
@@ -1945,8 +1961,9 @@ class Loop:
     def summary(self, t: Tick) -> str:
         s = t.snap
         lines = [f"tick {t.n}: main {s.main[:12]}" + (f" (origin's {t.origin[:12]})" if t.origin != s.main else ""),
-                 f"ready {len(s.ready)} (rank order; ! doesn't merge onto main, L a Lean change): "
-                 + " ".join(f"#{x.number}" + ("!" if x.conflict else "") + ("L" if x.lean else "") for x in s.ready)]
+                 f"ready {len(s.ready)} (rank order; ! doesn't merge onto main, L a Lean change, W a wide one): "
+                 + " ".join(f"#{x.number}" + ("!" if x.conflict else "") + ("L" if x.lean else "")
+                            + ("W" if vqueue._wide(x, s.wide) else "") for x in s.ready)]
         for c in s.candidates:
             j = t.judged[c.sha]
             lines.append(f"candidate {c.sha[:12]} on {c.base[:12]}: {' '.join(f'#{n}' for n in c.members)} {c.verdict.state}"
@@ -2062,7 +2079,8 @@ class Loop:
         d = self.world.slim_driver()                       # drive.toml naming no machines stops the tick: no run is infra
         try:
             rec, error = self.slim.start(d, line["sha"], line["base"],
-                                         **({"shards": self.shards} if self.gate == CHECK_GATE else {})), None
+                                         **({"shards": self.shards} if self.gate == CHECK_GATE else {}),
+                                         **({"deselect": f} if (f := getattr(self.world, "deselect_file", None)) else {})), None
         except (QueueError, ValueError, OSError, subprocess.SubprocessError) as e:
             rec, error = None, f"{type(e).__name__}: {e}"[-600:]
         return self._line(n, main, origin, "slim", **line, why=why, record=rec, done=True,
@@ -2573,12 +2591,19 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--priority-file", type=Path, default=PRIORITY, help=f"drive's priority list (default {PRIORITY})")
     ap.add_argument("--frozen", type=Path, default=FROZEN, help=f"a freeze's pathspecs, one a line: while the file exists, a PR "
                                                                 f"renaming or deleting a file under one waits (default {FROZEN})")
+    ap.add_argument("--deselect", type=Path, default=DESELECT, help=f"the tests a candidate's check leaves out, one node id a line "
+                                                                    f"from the repository's root, read at each launch (default "
+                                                                    f"{DESELECT})")
     ap.add_argument("--graph2", default=shlex.join(GRAPH2), help="graph2's argv before its subcommand (default the control pod's)")
     ap.add_argument("--batch", type=int, default=BATCH, help=f"the most members a candidate holds (default {BATCH})")
     ap.add_argument("--depth", type=int, default=DEPTH, help=f"the most candidates stacked at once, each with the run beside "
                                                              f"its check (default {DEPTH})")
     ap.add_argument("--lean", type=int, default=LEAN, help=f"the most members of a candidate whose Lean change compiles: a "
                                                            f"spec's or a Lean source's, not a lock's alone (default {LEAN})")
+    ap.add_argument("--wide-file", type=Path, default=WIDE,
+                    help=f"the PRs whose Lean change is wide, one number a line, read each tick as --priority-file is: a "
+                         f"candidate taking one takes no other member --lean counts, and one stacked on a candidate holding "
+                         f"one takes none until it is on `main`; none while the file is missing or empty (default {WIDE})")
     ap.add_argument("--pending-hours", type=float, default=4.0,
                     help="hours the lowest candidate's check may stay pending after its first enqueue before it is enqueued "
                          "again; rung at twice that (default 4)")
@@ -2652,7 +2677,7 @@ def main(argv: list[str]) -> int:
         graph2 = tuple(shlex.split(a.graph2))
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
                       priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent, on=a.on,
-                      frozen_file=a.frozen)
+                      frozen_file=a.frozen, deselect_file=a.deselect, wide_file=a.wide_file)
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
                     pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects, gate=a.gate,
                     shards=a.shards)

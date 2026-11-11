@@ -432,6 +432,30 @@ def test_start_with_shards_launches_drives_after_landing_run_of_every_step_a_sha
     assert whole == {**{k: v for k, v in rec.items() if k != "groups"}, "ids": ["r-post-3"]}
 
 
+def test_every_shard_of_a_candidates_check_leaves_out_the_tests_the_loops_list_names(world, monkeypatch, tmp_path):
+    """The loop's deselect list, read at each launch: every shard is sent the node ids it names (`train.sh --deselect`), written
+    beside it; a line that is no node id is logged and left out, so a typo drops no test and reds no candidate; no list, or one
+    naming none, sends none."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, listed = "m1,m2,m3", tmp_path / "deselect"
+    ids = ["tools/verity/circuit_check/tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
+           "verity/core/protocols/composition/tests/test_composition_difftest.py::test_remote_agrees"]
+    listed.write_text(f"# over 5 minutes\n\n{ids[0]}\nnot a node id\n/abs/test_x.py::t\n{ids[1]}\n{ids[0]}\n")
+    start(h.d, sha, base, shards=3, deselect=listed)
+    sent = tmp_path / "deselect.sent"
+    assert [kw.get("deselect") for _commit, _steps, kw in h.posted] == [str(sent)] * 3
+    assert sent.read_text().splitlines() == ids
+    assert any("2 line(s) not a test's node id" in x and "not a node id; /abs/test_x.py::t" in x for x in world.logs), world.logs
+    assert any(f"--deselect {sent} (2 tests) as 3 shards" in x for x in world.logs), world.logs
+    for text in (None, "# none yet\n"):
+        listed.unlink(missing_ok=True)
+        if text is not None:
+            listed.write_text(text)
+        h.posted.clear()
+        start(h.d, sha, base, shards=3, deselect=listed)
+        assert len(h.posted) == 3 and not any("deselect" in kw for _commit, _steps, kw in h.posted)
+
+
 @pytest.mark.parametrize("second", [["r-2"], []])
 def test_a_sharded_launch_is_read_once_every_shard_printed_and_a_shard_that_registered_no_run_stops_the_others(
         world, monkeypatch, tmp_path, second):
