@@ -9,8 +9,9 @@
 # --inputs), layers.tar (the published layer, a trace40.py node run's out/, as ./new), meta.json (the last refresh's)
 # and this directory's restate.py, restate.json, replot.py and trace40.py.
 #
-# 1. restate.py plan: the runs restated, from the factor of the trace the published tables read of each (K's trace
-#    caches LAYERS, in the order the tables read them), and the runs kept as they are with why (OUT/plan.json);
+# 1. restate.py plan, over the runs of the published search table's rows (OUT/runs.txt): the runs restated, from the
+#    factor of the trace the published tables read of each (K's trace caches LAYERS, in the order the tables read
+#    them), and the runs kept as they are with why (OUT/plan.json);
 # 2. every restated record traced by COMMIT's te_core (trace40.py pack and node, OUT/traced), each checked to be the
 #    plan's record by its sha256;
 # 3. the corrected layer: the published layer with those traces over it (restate.py layer, OUT/layer-corr.json). A run
@@ -78,8 +79,19 @@ fi
 tar -xf "$IN/layers.tar" -C "$S/layers" ./new || exit 1
 
 echo "== $(date -u +%H:%M:%SZ) the plan, and a state holding every restated record"
-"$PY" "$IN/restate.py" plan --state "$K/state" --scope "$OUT/scope.json" --layers "$LAYERS" --out "$OUT/plan.json" \
-    --workers "$WORKERS" || exit 1
+mkdir -p "$S/pub"
+tar -xf "$IN/replot-inputs.tar" -C "$S/pub" ./last/algorithm-policy.json || exit 1
+"$PY" - "$S/pub/last/algorithm-policy.json" "$OUT/runs.txt" <<'PY' || exit 1
+# the runs of the published search table's rows
+import json, re, sys
+q = json.load(open(sys.argv[1]))
+i = q["columns"].index("record")
+runs = sorted({m.group(0) for r in q["rows"] for m in [re.match(r"r\d{8}-\d{6}-[0-9a-f]{4}", r[i])] if m})
+open(sys.argv[2], "w").write("".join(r + "\n" for r in runs))
+print(f"the published search table: {len(q['rows'])} rows of {len(runs)} runs")
+PY
+"$PY" "$IN/restate.py" plan --state "$K/state" --scope "$OUT/scope.json" --layers "$LAYERS" --runs "$OUT/runs.txt" \
+    --out "$OUT/plan.json" --workers "$WORKERS" || exit 1
 "$PY" "$IN/restate.py" overlay --state "$K/state" --plan "$OUT/plan.json" --overlay "$S/state-all" \
     --out "$OUT/overlay-all.json" || exit 1
 

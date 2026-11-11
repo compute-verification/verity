@@ -148,6 +148,12 @@ def test_plan_and_overlay(tmp_path, monkeypatch):
     assert sorted(doc["restated"]) == ["r-two"] and sorted(doc["kept"]) == ["r-mezo", "r-none", "r-one"]
     assert doc["kept"]["r-none"] == "no trace" and doc["restated"]["r-two"]["trace_cache"] == "tree"
 
+    (tmp_path / "runs.txt").write_text("r-one\nr-none\n")
+    assert run(monkeypatch, "plan", "--state", st, "--scope", tmp_path / "scope.json", "--layers", "tree", "--runs",
+               tmp_path / "runs.txt", "--out", tmp_path / "listed.json", "--workers", 1) == 0
+    listed = json.loads((tmp_path / "listed.json").read_text())
+    assert listed["restated"] == {} and sorted(listed["kept"]) == ["r-none", "r-one"]
+
     over = tmp_path / "overlay"
     assert run(monkeypatch, "overlay", "--state", st, "--plan", plan, "--overlay", over, "--drop-cache", "other",
                "--out", tmp_path / "overlay.json") == 0

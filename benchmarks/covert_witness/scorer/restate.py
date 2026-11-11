@@ -1,6 +1,7 @@
 """A search record's tokens a step, restated, and a copy of the scorer's state that holds the restated records.
 
-    python scorer/restate.py plan --state STATE --scope SCOPE.json --layers TREE[,TREE...] --out PLAN.json [--workers N]
+    python scorer/restate.py plan --state STATE --scope SCOPE.json --layers TREE[,TREE...] --out PLAN.json
+                                  [--runs RUNS.txt] [--workers N]
     python scorer/restate.py overlay --state STATE --plan PLAN.json --overlay DIR [--only RUNS.txt] [--reuse DIR]
                                      [--drop-cache NAME] --out FILE
     python scorer/restate.py layer --base TRACED --over TRACED [--over TRACED ...] [--only RUNS.txt] --dest DIR --out FILE
@@ -17,7 +18,7 @@ The uses of a trained weight a token do not (`formalism.he_of_rows` divides the 
 by the record's count, so with one slice's tokens it counts each trained weight once a forward), nor do the first
 update's term (`step_tokens`) and the pilots' compute a token (`panels.dense_rate`).
 
-The rule (`plan`). A run is restated when the trace the published tables read of it has a factor above 1 and the steps
+The rule (`plan`, over the runs of `--runs`, the published table's, else every run of the scope). A run is restated when the trace the published tables read of it has a factor above 1 and the steps
 of its most common structure each read one value of every weight: the step's forwards then all read the same weights,
 and its tokens are its forwards x rows x context. In a restated run:
 
@@ -191,6 +192,9 @@ def _plan_one(job: tuple) -> tuple[str, dict]:
 def cmd_plan(a: argparse.Namespace) -> int:
     scope = {r["run_id"]: r["record"] for r in json.loads(a.scope.read_text())}
     same = one_name()
+    if a.runs is not None:
+        listed = set(a.runs.read_text().split())
+        scope = {run: art for run, art in scope.items() if run in listed}
     jobs = [(str(a.state), a.layers.split(","), run, art, run in same) for run, art in sorted(scope.items())
             if (a.state / "records" / art / "run" / "run.json").is_file()]
     # the largest records first keeps the peak early and the pool busy
@@ -321,6 +325,7 @@ def main() -> int:
     p.add_argument("--state", type=Path, required=True)
     p.add_argument("--scope", type=Path, required=True)
     p.add_argument("--layers", required=True)
+    p.add_argument("--runs", type=Path, default=None)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--workers", type=int, default=8)
     p.set_defaults(func=cmd_plan)
