@@ -1378,6 +1378,18 @@ def test_workers_are_found_in_recent_notes_and_workers_d_minus_the_coordinators(
     assert found[W1_]["heard"] == T0 - 60
 
 
+def test_a_note_in_a_lanes_subdirectory_is_its_agents_activity_and_its_lanes(tmp_path):
+    """ci's pool reviewers write `lanes/ci/reviewers/review-1.md`; read only one level deep, review-1 was called silent."""
+    notes = tmp_path / "notes"
+    note(notes, "ci", "reviewers/review-1.md", f"review-1 ({W1_})", lane_field=False)
+    coordinators(tmp_path, [], {})
+    coords = W.holders(tmp_path / "registry.json", tmp_path / "routes.d")
+    found = W.workers(notes, tmp_path / "workers.d", tmp_path / "registry.json", coords, T0)
+    assert found[W1_]["lane"] == "ci", "a note with no lane: the lane directory it is under, not its own directory"
+    heard, _, lanes = W.note_times(notes, T0)
+    assert heard[W1_] == T0 - 60 and lanes == {"ci": T0 - 60}
+
+
 def test_a_worker_whose_message_never_became_a_run_is_recorded_dropped_for_its_lane(tmp_path):
     """A pool reviewer is a worker the list doesn't show: read by id, it is IDLE and moved 12 min after its latest run
     FINISHED, which Cursor shows as ERROR. Its lane's handle is rung, once per `updatedAt`."""
@@ -1392,6 +1404,42 @@ def test_a_worker_whose_message_never_became_a_run_is_recorded_dropped_for_its_l
     assert [(r["kind"], r["agent"], r["run"], r["since"], r["ended"], r.get("owner"), r.get("role")) for r in records(tmp_path)
             if r["kind"] == "dropped"] == [
         ("dropped", W1_, "run-w", "2026-10-18T19:45:00Z", "2026-10-18T19:32:53Z", "circuits", "worker")]
+
+
+def test_a_task_worker_whose_latest_run_id_never_moves_is_never_called_dropped(tmp_path):
+    """A worker resumed by Task kept a week-old latestRunId through ten runs, and each IDLE after its work read as a message that
+    never became a run. Seen working with its latest API run finished, it is a Task worker."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker ({W1_})")
+    st = {**worker("ACTIVE", "2026-10-18T19:40:00Z", name="CC-KEY"), "latestRunId": "run-w"}
+    api, clock, w = coordinators(tmp_path, [], {"run-w": {"status": "FINISHED", "updatedAt": "2026-10-18T19:00:00Z"}},
+                                 workers={W1_: st}, notes=notes)
+    for update in ({"status": "ACTIVE"}, {"status": "IDLE", "updatedAt": "2026-10-18T19:45:00Z"},
+                   {"updatedAt": "2026-10-18T20:05:00Z"}):
+        st.update(update)
+        w.sweep(lambda r: None)
+        clock.t += 60
+    assert [r for r in records(tmp_path) if r["kind"] == "dropped"] == []
+
+
+def test_a_worker_with_api_runs_seen_active_then_idle_is_a_run_that_ended_and_a_later_message_is_dropped(tmp_path):
+    """A pool reviewer's runs are the API's: its IDLE right after an ACTIVE read is the run it was doing ending; a message
+    that moves it later, with no run, is dropped."""
+    notes = tmp_path / "notes"
+    note(notes, "ci", "a.md", f"ci reviewer ({W1_})")
+    st = {**worker("ACTIVE", "2026-10-18T19:40:00Z", name="review-1"), "latestRunId": "run-w"}
+    runs = {"run-w": {"status": "RUNNING", "updatedAt": "2026-10-18T19:40:00Z"}}
+    api, clock, w = coordinators(tmp_path, [], runs, workers={W1_: st}, notes=notes)
+    w.sweep(lambda r: None)
+    runs["run-w"].update(status="FINISHED", updatedAt="2026-10-18T19:44:00Z")
+    st.update(status="IDLE", updatedAt="2026-10-18T19:50:00Z")
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert [r for r in records(tmp_path) if r["kind"] == "dropped"] == [], "it ran and stopped: nothing was dropped"
+    st.update(updatedAt="2026-10-18T20:05:00Z")
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert [r["since"] for r in records(tmp_path) if r["kind"] == "dropped"] == ["2026-10-18T20:05:00Z"]
 
 
 def test_the_workers_heard_most_recently_are_read_first_when_more_are_new_than_a_sweep_reads(tmp_path, monkeypatch):
@@ -1792,6 +1840,59 @@ def test_a_push_to_a_pr_branch_whose_body_names_a_worker_is_its_activity(tmp_pat
     w.prs_read = -float("inf")
     w.read_prs(clock.t)
     assert w.pr_branches == {W.short_id(W1_): {"cursor/lean-records-fc8d"}}, "a failed read keeps the last one"
+
+
+def test_a_worker_whose_branches_nothing_names_takes_its_lanes_pushes_as_its_activity(tmp_path):
+    """A worker was archived as silent 40 min after pushing its PR's `cursor/<lane>-...` branch: a Task-launched worker has no
+    `git.branches`, the PR body named only `Lane circuits`, and the branch's suffix isn't its id's. With no branch
+    of its known, pushes to its lane's branches (`cursor/<lane>-*`, and open PRs whose body says `Lane <lane>`) count."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker MOEFUSE ({W1_})", age_s=2 * 3600)
+    sh = FakeSh({"cursor/circuits-cir193-6f04": "a" * 40, "feature/served-rows": "b" * 40, "cursor/lean-x-2222": "c" * 40})
+    prs = [{"branch": "feature/served-rows", "body": "Lane circuits\n\nServed sparse-MLA rows."}]
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=sh, open_prs=lambda: prs)
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 60)
+    sh.heads["cursor/circuits-cir193-6f04"] = "d" * 40
+    sweeps(w, clock, 60)
+    sh.heads["feature/served-rows"] = "e" * 40
+    pushed = clock.t + 5 * 60
+    sweeps(w, clock, 60)
+    sh.heads["cursor/lean-x-2222"] = "f" * 40
+    sweeps(w, clock, 20)
+    assert silent(tmp_path) == [], "its lane's pushes are its activity; another lane's isn't"
+    sweeps(w, clock, 15)
+    (rec,) = silent(tmp_path)
+    assert rec["since"] == W.iso(pushed) and set(rec["branches"]) == {"cursor/circuits-cir193-6f04", "feature/served-rows"}
+
+
+def test_a_worker_whose_branches_nothing_names_takes_its_lanes_runs_as_its_activity(tmp_path):
+    """MOEFUSE's runs went under its coordinator's id (`--by circuits`), so they were no activity of its: with no branch of its
+    known, a run an agent of its lane sent counts as its activity."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker MOEFUSE ({W1_})", age_s=2 * 3600)
+    note(notes, "circuits", "b.md", f"circuits worker W2 ({W2_}) on cursor/w2-x-c7a9", age_s=2 * 3600)
+    (notes / "machines.d").mkdir(parents=True)
+    root = tmp_path / "vy-nebius-1"
+    (notes / "machines.d" / "vy-nebius-1.toml").write_text(
+        f'provider = "ssh"\nhost = "vy-nebius-1.example"\nuser = "research"\nproject = "verity"\nroot = "{root}"\n')
+    (tmp_path / "nodes.json").write_text(json.dumps({"nodes": ["vy-nebius-1"], "every_s": 300, "ssh": ["ssh"]}))
+    active = worker("ACTIVE", W.iso(T0 - 3 * 3600))
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: active, W2_: active}, notes=notes, git_remote=REMOTE,
+                                 sh=FakeSh({"cursor/w2-x-c7a9": "a" * 40}), nodes=tmp_path / "nodes.json", timers=None)
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 60)
+    rid, started = "r20261018-200000-0002", clock.t
+    node_run(root, rid, started + 3600, by=f"https://cursor.com/agents/{W2_}", wall_s=3600)
+    status_json = root / "runs" / rid / "status.json"
+    status_json.write_text(json.dumps({"state": "running", "transitions": [{"state": "running", "t_utc": W.iso(started)}]}))
+    W.os.utime(status_json, (started, started))
+    sweeps(w, clock, 85)
+    assert W1_ not in {r["agent"] for r in silent(tmp_path)}, "a run of its lane's is its activity"
+    sweeps(w, clock, 10)
+    assert [r["since"] for r in silent(tmp_path) if r["agent"] == W1_] == [W.iso(started)], \
+        "its silence counts from its lane's run"
 
 
 def test_github_prs_reads_every_page_of_open_prs_with_the_token_from_its_file(tmp_path, monkeypatch):

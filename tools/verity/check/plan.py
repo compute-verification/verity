@@ -60,8 +60,8 @@ answer for each:
                           the suite that runs it.
 
 The passes are looked up in this machine's caches (`local`: $CHECK_CACHE, $VERITY_TEST_CACHE and every check slot's test
-cache; not with --packs-only), in the verdict pack of each recorded check `gather_verdicts` would take (none with
---no-gather), in both packs of each recorded check of COMMIT and of its after-landing runs (`--deferred`, which drive runs on
+cache; not with --packs-only), in the recorded checks' verdict packs a recorded check imports (`check.verdict_packs`; none
+with --no-gather), in both packs of each recorded check of COMMIT and of its after-landing runs (`--deferred`, which drive runs on
 the `main` it landed: none with --no-gather) and of each RUN given with --from (the
 passes it stored, `verdicts.tar.gz`, and those it reused, `verdicts-reused.tar.xz`: `check.Reused`), and in each PACK given
 (which no gate cites).  A pass found in a recorded check's pack names that attempt, the pack's sha256, which `research merge
@@ -541,8 +541,8 @@ def _post_landing(store, rid: str) -> bool:
 
 
 def gather(C, d: Path, a, notes: list[str], commit: str | None = None) -> list[tuple[str | None, Path]]:
-    """The packs to look passes up in: what `gather_verdicts` would take (unless --no-gather); both packs of each recorded check
-    of ``commit`` (unless --no-gather) and of each --from RUN, the passes it stored and those it reused (`REUSED`, a pack too
+    """The packs to look passes up in: those a recorded check imports (`check.verdict_packs`, unless --no-gather); both packs
+    of each recorded check of ``commit`` (unless --no-gather) and of each --from RUN, the passes it stored and those it reused (`REUSED`, a pack too
     big to take from every check); each --verdicts-in PACK."""
     from research.store.local import LocalStore
 
@@ -665,7 +665,7 @@ def inner(a) -> dict:
             rid, _, path = spec.partition("=")
             try:
                 sources.append(unpack(V, Path(path), Path(d) / str(i), rid or None))
-            except (V.BadPack, OSError, EOFError) as e:
+            except V.UNREADABLE as e:
                 notes.append(f"{rid or path}: its pack is refused ({type(e).__name__}: {e})")
         parts = plan_tree(tree, sources, a.agreement, local=not a.packs_only, own=a.own)
         commit = _git("rev-parse", "HEAD", repo=tree)

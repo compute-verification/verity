@@ -349,7 +349,7 @@ def write(root: Path, files: dict[str, str]) -> None:
 
 #: what each toy package below holds beside its sources
 TOY = {"lean-toolchain": TOOLCHAIN + "\n"}
-#: a spec, `sp`, and the package its `proved_in` names, `sp/pf`, which requires it by path, as Security and Security/Proofs
+#: a spec, `sp`, and the package its `proved_in` names, `sp/pf`, which requires it by path, as Security and security/Proofs
 SP = {**TOY, "Sp.lean": "import Sp.Defs\n", "Sp/Defs.lean": "def Sp.Claim (n : Nat) : Prop := n = n\n",
       "lakefile.toml": 'name = "sp"\ndefaultTargets = ["Sp"]\n\n[[lean_lib]]\nname = "Sp"\n',
       "lake-manifest.json": manifest("sp"), **{f"pf/{f}": t for f, t in TOY.items()},
@@ -364,7 +364,7 @@ SP = {**TOY, "Sp.lean": "import Sp.Defs\n", "Sp/Defs.lean": "def Sp.Claim (n : N
       "pf/lean-audit.json": json.dumps({"roots": ["Pf"]}),
       "lean-audit.json": json.dumps({"roots": ["Sp"], "proved_in": ["pf"], "guarantees": {"Pf.claim": {"owner": "@lean"}},
                                      "layers": {"Sp.Defs": {"imports": [], "why": "the spec imports nothing"}},
-                                     "shape": {"frozen": {"Pf.claim": "lemma: a toy guarantee"}}})}
+                                     "shape": {"frozen": {"Pf.claim": "frozen: a toy guarantee"}}})}
 #: `ext`, a fetched package, and `fx`, which fetches it: its guarantee's premise is headed by `ext`'s `Q`, which its lock
 #: lists as inline, as Security's lists premises Mathlib heads
 EXT = {**TOY, "Ext.lean": "prelude\nimport Init.Prelude\n\ndef Ext.Q (n : Nat) : Prop := Eq n n\n",
@@ -374,7 +374,7 @@ FX = {**TOY, "Fx.lean": "prelude\nimport Ext\n\ntheorem Fx.g (n : Nat) (h : Ext.
       "lakefile.toml": 'name = "fx"\ndefaultTargets = ["Fx"]\n\n[[require]]\nname = "ext"\n'
                        'git = "https://example.invalid/ext"\nrev = "main"\n\n[[lean_lib]]\nname = "Fx"\n',
       "lean-audit.json": json.dumps({"roots": ["Fx"], "guarantees": {"Fx.g": {"owner": "@lean"}},
-                                     "shape": {"frozen": {"Fx.g": "lemma: a toy guarantee"},
+                                     "shape": {"frozen": {"Fx.g": "frozen: a toy guarantee"},
                                                "inline": {"Fx.g": {"Ext.Q n": "a toy premise a fetched package heads."}}}})}
 
 

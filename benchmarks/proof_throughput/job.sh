@@ -42,7 +42,7 @@ for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
 done
 [ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node (71-gemm-slowdown.sh unpacks it)"; exit 1; }
 export PT_CUDA=13.3
-SWEEP=verity/ml/flock/pod/70-class-sweep.sh
+SWEEP=verity/protocols/flock/pod/70-class-sweep.sh
 # this run's records the bundle carries for verify.sh, beside the circuit, the public file and the sessions
 BUNDLED="results.jsonl law.json gpu-mem.txt gpu.csv hardware.json software.json binary.sha256 staged.jsonl instances.json
 stage-rec.json phases.tsv point.json index.jsonl"
@@ -59,7 +59,7 @@ fi
 [ -x "$BIN" ] && [ -x "$PYBIN" ] || { log "missing the prover ($BIN) or the venv ($PYBIN)"; exit 1; }
 sha256sum "$BIN" | cut -d' ' -f1 > "$O/binary.sha256"
 ph build end
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
 PT() { "$PYBIN" -m verity_proof_throughput "$@"; }
 # the population (the class sweep's PT_VU, PT_N) and the verifier's stratified sampling design for B (law.json)
 read -r PT_VU PT_N < <(PT population --workload "$WORKLOAD" --B "$B" --out "$O") && [ -n "${PT_N:-}" ] || { log "no such workload or B"; exit 1; }

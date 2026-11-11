@@ -41,9 +41,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.ml.protocols.certifier import ingress_scan as IS
-from verity.core.protocols.certifier import warden as W
-from verity.core.protocols import reporting
+from verity.protocols.certifier.prover import ingress_scan as IS
+from verity.protocols.certifier.verifier import warden as W
+from verity.protocols import reporting
 
 #: the monitoring periods' seconds, by name
 PERIODS: dict[str, int] = dict(reporting.PERIODS)

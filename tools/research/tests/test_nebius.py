@@ -413,6 +413,9 @@ def test_gpu_lease_hands_out_disjoint_gpus_and_frees_them_when_the_holder_exits(
     assert [ln.split()[:2] for ln in lines[-3:]] == [["0", "held"], ["1", "held"], ["2", "free"]] and "run=r-test" in lines[-3]
     after = subprocess.run(["bash", str(GPU_LEASE), "status"], env=env, capture_output=True, text=True).stdout.split("\n")
     assert [ln.split()[:2] for ln in after if ln] == [["0", "free"], ["1", "free"], ["2", "free"]]
+    for i in range(3):      # an ended lease's line says so, and still names the run that held the GPU last
+        line = (tmp_path / "gl" / f"{i}.owner").read_text()
+        assert re.match(r"released=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ pid=\d+ run=r-test ", line), line
 
 
 @needs_flock
@@ -841,7 +844,12 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
                       ("/usr/local/share/vy/lease.sh", L.LEASE_SH), ("/usr/local/bin/gpu-lease", GPU_LEASE)]:
         assert code(embedded[path]) == code(src.read_bytes()), path
         assert subprocess.run(["bash", "-n"], input=embedded[path], capture_output=True).returncode == 0, path
-    assert embedded["/etc/systemd/system/user@.service.d/vy-cpuset.conf"] == (NEBIUS / "user-cpuset.conf").read_bytes()
+    for path, name in [("/etc/systemd/system/user@.service.d/vy-cpuset.conf", "user-cpuset.conf"),
+                       ("/etc/apt/apt.conf.d/52vy-trust", "apt-security-updates.conf"),
+                       ("/etc/needrestart/conf.d/50-vy.conf", "needrestart-list-only.conf")]:
+        assert embedded[path] == (NEBIUS / name).read_bytes(), path
+    # the first boot writes no unattended-upgrades policy of its own: the one cloud-init wrote is the one deploy.toml installs
+    assert "apt.conf.d" not in "\n".join(code((NEBIUS / "vm_setup.sh").read_bytes()))
     assert b"VY_USER=research\n" in embedded["/etc/vy/vy.env"]
     s = json.loads(spec)["spec"]
     assert s["resources"] == {"platform": "gpu-rtx6000-a", "preset": "8gpu-192vcpu-1744gb"}

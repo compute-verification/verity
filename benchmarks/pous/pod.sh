@@ -31,15 +31,12 @@
 # AUDITS=0 is an untimed placement (a preemptible fill slot): the gates, encode, the synthetic loop and the step floor run, no
 # limit, audit or control does, and the result is labelled timed: false, audits: skipped (untimed placement).
 # LOAD_TOKENS=T (band-gpu and the P2 arms, bench.py --load-tokens) is T of the POUS forwards run during the honest audit (0: none,
-# for a run whose load is another process on the same GPU, as benchmarks/resource_accounting's chain).
+# for a run whose load is another process on the same GPU).
 # BENCH_HOST='SCRIPT ARGS' (the P2 arms) runs bench.py inside SCRIPT's process: `python SCRIPT ARGS benchmarks/pous/bench.py ...`,
-# where SCRIPT calls `bench.main(argv, load=...)` (benchmarks/resource_accounting/chain.py --host-bench: its responder in the
-# chain's own process and CUDA context).
+# where SCRIPT calls `bench.main(argv, load=...)` (its responder in SCRIPT's own process and CUDA context).
 # P2_ENCODE_BLOCKS=N (the P2 arms) encodes the first N blocks of C on the device (0: all of C, so C is W's encoding; default
 # bench.py's 2048, the rest random canonical blocks); with P2_ENCODE_BLOCKS=0, P2_C_CACHE=1 keeps C under $W/p2-c-cache and
 # reuses it (an untimed run encodes, a timed one of the same setup loads it). P2_ARM picks side-by-side's P2 arm (default p2-v3-gpu).
-# BANDWIDTH_SALT=<gpu> (p2-v3-gpu, p2-v3-mc-gpu; joint runs only, benchmarks/resource_accounting's run.sh JOINT=) sets C up under
-# the bandwidth audit's device-bound salt for that GPU in place of PoUS's own (bench.py --bandwidth-salt).
 # KERNELS='<json>' (band-gpu) sets kernel switches over harness.KERNELS (bench.py --kernels): '{"chain_pairs": false}' runs the
 # run of record's kernels.
 #
@@ -63,7 +60,7 @@
 #
 # vllm-gpu bootstraps the implementation tree's Python 3.12 environment (its ops/pod_bootstrap.sh --cpu: the venv, torch cu129,
 # vLLM, the QWEN05 checkpoint; no native taps, which this benchmark does not use), then runs bench.py, which drives that tree's
-# frozen harness (pous-dense-bench) and gates and profiles its result with this tree's verity.core.protocols.pous. reference runs
+# frozen harness (pous-dense-bench) and gates and profiles its result with this tree's verity.protocols.pous.verifier. reference runs
 # bench.py's CPU reference on the pod's cores in a plain Python 3.12 venv. band-gpu needs no implementation tree: a Python 3.12
 # venv with torch built for the pod's CUDA toolkit (TORCH_CUDA=cuNNN overrides), numpy and ninja, and this tree's band_gpu/.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -74,7 +71,7 @@ IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
 # challenger's Lean verdict (its Server and build need only the stdlib)
 export PATH=$HOME/.local/bin:/opt/elan/bin:$HOME/.elan/bin:$PATH
 # Every entry must exist: importlib.metadata opens a missing one as a zip, and the suite guard counts that open as a read.
-export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/verity/core/difftest/python
+export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/verity/difftest/python
 # PREPARE=1 builds the Lean verdict a timed run serves, which it must not compile under its lease, and exits: for
 # p2-v3-mc-gpu the memory challenger's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
 # (pous-timed-audit, band_gpu's judge) where its lakefile declares one. Run it from a clone (--cwd clone: the build writes
@@ -83,8 +80,8 @@ export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/verity/core/difftest/pyth
 #     gpu-lease 1 --on N --max-min M -- QUIET env ... bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu ...'
 if [ "${PREPARE:-0}" = 1 ]; then
   case $IMPL in
-    p2-v3-mc-gpu) set -- verity/core/devices/memory_challenger/lean memory-challenger-verdict ;;
-    p2-v3-gpu) set -- verity/core/protocols/pous/check pous-timed-audit ;;
+    p2-v3-mc-gpu) set -- verity/protocols/pous/device/lean memory-challenger-verdict ;;
+    p2-v3-gpu) set -- verity/protocols/pous/verifier/check pous-timed-audit ;;
     *) exit 0 ;;
   esac
   grep -q "^name = \"$2\"" "$1/lakefile.toml" || exit 0
@@ -277,8 +274,7 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
       $([ "$1" != band-gpu ] && [ -n "${P2_ENCODE_BLOCKS:-}" ] && echo --p2-encode-blocks "$P2_ENCODE_BLOCKS") \
       $([ "$1" != band-gpu ] && [ -n "${P2_C_CACHE:-}" ] && echo --p2-c-cache "$W/p2-c-cache") \
       $([ "$1" = p2-v3-mc-gpu ] && [ "${MC_SIGNER:-lms}" = lms ] && echo --mc-lms-key "$W/pous-mc-lms-n64" \
-        --mc-session-log "$W/pous-mc-session-log") \
-      $(case $1 in (p2-v3-gpu|p2-v3-mc-gpu) [ -n "${BANDWIDTH_SALT:-}" ] && echo --bandwidth-salt "$BANDWIDTH_SALT" ;; esac)
+        --mc-session-log "$W/pous-mc-session-log")
   }
   if [ "$IMPL" = side-by-side ]; then
     mkdir -p "$O/bench/band" "$O/bench/p2"

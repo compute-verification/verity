@@ -11,8 +11,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.ml.protocols.pouw.circuit import h1zy as Z
+from verity.protocols.pouw.verifier import leaf_lanes as LL
+from verity.protocols.pouw.prover.circuit import h1zy as Z
 
 SERVED = Path(__file__).resolve().parents[1] / "served_h1"
 RC, K = (32, 32), 64

@@ -1,8 +1,8 @@
 """Monitors: invariants in code, each with an owner, a severity, a threshold and an action (the infra vision's Signals surface).
 One registry (MONITORS) and one runner. Node 2's service (`vy-monitors.timer`, pods/nebius/monitoring/) runs the node-side
 monitors and writes each incident once when it opens and once when it clears; the relay on the control pod
-(infra/control/watchers.toml) runs the relay-side ones (they need GitHub, the evidence store or Slack) and posts both sets to
-#agent-alerts. Every Nebius machine runs the `machine`
+(infra/control/watchers.toml) runs the relay-side ones (they need GitHub, the evidence store, Slack or the pod's own files, as
+the guard that `main`'s nightly check gave an outcome does) and posts both sets to #agent-alerts. Every Nebius machine runs the `machine`
 monitors (`vy-watchdog.timer`: `run --where machine --machine NAME --peer HOST ...`): memory pressure that holds, each process
 the OOM killer took (named with its run and the run's sender), a peer that stops answering, /workspace filling within hours on its
 recent trend (named with the biggest live runs), a unit deploy.toml runs there that was never installed or is off, and
@@ -679,6 +679,28 @@ def node_heartbeat(ctx: Ctx) -> list[Finding]:
     return found
 
 
+def redirected_base(url: str, key: str) -> str:
+    """The base that `url` redirects `key` to, or `url` itself when it doesn't redirect. The site's edge denies a burst of
+    anonymous HEADs from one address (`X-Vercel-Mitigated: deny`), so the burst goes to where the site redirects."""
+    import urllib.error
+    import urllib.request
+
+    class Stay(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+
+    req = urllib.request.Request(f"{url}/{key}", method="HEAD", headers={"User-Agent": "research-store-fetch"})
+    try:
+        urllib.request.build_opener(Stay).open(req, timeout=30).close()
+    except urllib.error.HTTPError as e:
+        loc = (e.headers.get("Location") or "").split("?")[0]
+        if e.code in (301, 302, 303, 307, 308) and loc.endswith(f"/{key}"):
+            return loc[: -len(key) - 1]
+    except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+        print(f"monitors: the store's redirect probe failed ({type(e).__name__}: {e}); reading {url} directly", file=sys.stderr)
+    return url
+
+
 def public_missing(arts: list[str], url: str, jobs: int = 16) -> list[str]:
     """The ids in `arts` whose manifest the public export at `url` doesn't hold. The export writes a manifest after its blobs, so
     a manifest there means the fixture is whole."""
@@ -688,9 +710,10 @@ def public_missing(arts: list[str], url: str, jobs: int = 16) -> list[str]:
     from .store.local import manifest_key
     from .store.remote import HttpRemote
 
-    pub = HttpRemote(url)
+    keys = [manifest_key(ids.hex_of(a)) for a in arts]
+    pub = HttpRemote(redirected_base(url, keys[0]) if keys else url)
     with ThreadPoolExecutor(max_workers=jobs) as ex:
-        held = list(ex.map(lambda a: pub.head(manifest_key(ids.hex_of(a))) is not None, arts))
+        held = list(ex.map(lambda k: pub.head(k) is not None, keys))
     return [a for a, h in zip(arts, held) if not h]
 
 
@@ -716,6 +739,7 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
 DRIVE_STATE = "root/.research/queue/verity.state.json"
 DRIVE_LOG = "data/drive/drive.log"
 UNVERIFIED_S = 3 * 3600
+VQUEUE_DECISIONS = "data/vqueue/live/decisions.jsonl"
 DRIVE_TICK_STALE_S = 30 * 60
 TICK_RE = re.compile(rb"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick rc=", re.M)
 
@@ -741,7 +765,20 @@ def unverified_main(ctx: Ctx) -> list[Finding]:
     GitHub's compare won't do: it lists each PR's own commits too, dated when their branch made them, and a long range's oldest
     hundreds hold no landing. One event per further hour behind, to ci and top, until an after-landing run verifies
     main again; read from drive's state, not its log, so it still rings while drive is down. Quiet while drive ticks
-    (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead."""
+    (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead.
+
+    Since main moves only through the verified queue (drive stopped for good), its decisions file
+    (`VQUEUE_DECISIONS`) is read instead when it exists: one event per further hour once the queue has decided nothing for
+    `UNVERIFIED_S`, a loop stopped or stuck; a queue that decides is ci's, which it rings itself."""
+    if (decisions := ctx.root / VQUEUE_DECISIONS).exists():
+        lines = [ln for ln in decisions.read_text().splitlines() if ln.strip()]
+        last = json.loads(lines[-1]).get("at") if lines else None
+        since = calendar.timegm(time.strptime(last, "%Y-%m-%dT%H:%M:%SZ")) if last else decisions.stat().st_mtime
+        if (behind := ctx.now - since) < UNVERIFIED_S:
+            return []
+        hours = int(behind // 3600)
+        return [Finding(f"vqueue:{hours}", f"*The verified queue has decided nothing for {hours} h*: its last decision in "
+                        f"`/{VQUEUE_DECISIONS}` is from {iso(since)}, and `main` moves only through it.", owners=("ci", "top"))]
     if drive_ticking(ctx):
         return []
     state = json.loads((ctx.root / DRIVE_STATE).read_text())
@@ -761,6 +798,36 @@ def unverified_main(ctx: Ctx) -> list[Finding]:
     return [Finding(f"{verified[:12]}:{hours}", f"*`main` has gone {hours} h without a passing post-landing check*: its last "
                     f"verified commit is `{verified[:12]}`, and {len(landed)} landing(s) followed it, the first at {iso(since)}.",
                     owners=("ci", "top"))]
+
+
+#: the control pod's nightly loop's state (infra/control/nightly_check.py): `last`, its newest outcome and when it was read;
+#: `since`, when the loop first ran there; `night`, the one in progress
+NIGHTLY_STATE = "data/watchers/nightly-check.json"
+NIGHTLY_SILENT_S = 36 * 3600
+
+
+def nightly_check(ctx: Ctx) -> list[Finding]:
+    """`main`'s nightly uncached check has given no outcome for 36 h. The control pod's `nightly-check` loop
+    (infra/control/nightly_check.py) starts one a day and keeps its newest outcome in its state (`NIGHTLY_STATE`): passed,
+    contradicted, failed, or an error, which is an outcome too, since the loop posts each itself. Timed from when that outcome
+    was read, or from the loop's first pass there while it has none; a pod whose loop never wrote its state is found as well."""
+    path = ctx.root / NIGHTLY_STATE
+    if not path.exists():
+        return [Finding("absent", f"*The nightly check of `main` isn't running*: the control pod has no `/{NIGHTLY_STATE}`, "
+                        "which its `nightly-check` loop writes on its first pass.",
+                        cleared="*Cleared:* the nightly check's loop runs on the control pod.")]
+    state = json.loads(path.read_text())
+    last, night = state.get("last") or {}, state.get("night") or {}
+    if not (since := last.get("at") or state.get("since")):
+        raise RuntimeError(f"/{NIGHTLY_STATE} names neither a last outcome nor when its loop first ran")
+    if (silent := ctx.now - calendar.timegm(time.strptime(since, STAMP))) < NIGHTLY_SILENT_S:
+        return []
+    was = (f"its last was `{last.get('outcome')}` at {since}, of `{str(last.get('commit'))[:12]}`"
+           + (f" (run `{last['run']}`)" if last.get("run") else "") if last else f"its loop has run since {since} and none has ended")
+    now = (f" The one in progress, of {night.get('day')}, is `{night.get('phase')}`"
+           + (f" (run `{night['run']}`)" if night.get("run") else "") + "." if night and night.get("phase") != "done" else "")
+    return [Finding("silent", f"*The nightly check of `main` has given no outcome for {int(silent // 3600)} h*: {was}.{now}",
+                    cleared="*Cleared:* the nightly check of `main` gave an outcome.")]
 
 
 # ---- every machine: its memory, the runs infrastructure killed, the peers it watches, the checks lost -----------------------------
@@ -1492,6 +1559,12 @@ MONITORS: list[Monitor] = [
             "Read the newest post-landing run's verdict line (drive.log's 'told @ci' line names it): land the red suite's fix, or "
             "revert the PR that broke it (AGENTS.md: main always passes). It rings again each hour until a post-landing run passes.",
             every_s=600, events=True, unread_s=3600),
+    Monitor("nightly-check", "infra", "warn", "relay", nightly_check,
+            "On the control pod, read /data/watchers/log/nightly-check.log (each pass says what it did) and status.json (is "
+            "the loop up); a run in progress is `research status RUN`. A loop the supervisor doesn't run is deployed by "
+            "infra/control/README.md's watchers steps; one stuck on a run that never ends gives it up an hour past the run's "
+            "timeout. The log's `launch:` line is the command, to run a night by hand.",
+            every_s=600, for_s=1800, unread_s=3600),
 ]
 BY_ID = {m.id: m for m in MONITORS}
 

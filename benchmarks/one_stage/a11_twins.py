@@ -3,7 +3,7 @@ whole on the capture's operands and held to the capture's output snapshots, retu
 a kind's first ``--per-kind`` Calls and moves on at a disagreement; this names every Call and component that departs. It also
 digests the fold's wiring (each node's Definition and argument refs), so that two folds of one log can be compared.
 
-    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/flock/prover/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a11_twins.py --values DIR --roles derive-report.json --kinds DsaIndexerKRow_v1,DsaMqaLogits_v3 \\
       --out twins.json [--steps 0,1] [--layers 0,3]
 

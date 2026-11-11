@@ -1,0 +1,64 @@
+{
+ "definitions": {
+  "DsaRowValidFrom_v1{N=6,AT=8}": {
+   "and": 94,
+   "type": "c94dc6d9b7b4bf3df55bd96185b84eed003fc2520f607e5417299e77077a11b4ab54e6afd422818404767d07465e6f9ef245445176f95055bf08751df11d4729"
+  },
+  "DsaTopKDigitCount_v1{N=6,AT=8,K=1}": {
+   "and": 3002,
+   "type": "9b118650b25d3ae1a52ec0d7d80a3d8e05ba54bbf1386eaa2223feb7d8c101b479370ebe966002ff1710e42b299a57b8b8bc63b69bda7498a0c33c854aef80eb"
+  },
+  "DsaTopKDigitCount_v1{N=6,AT=8,K=3}": {
+   "and": 3098,
+   "type": "55ee72b7b2470cac9d4770369d577909fb594e800cbcf8e14744dfd7ae3eec4535a3470056b3bbdcdb192a9164cdc65d619dc378aa27bc38569ea0fe26ba1388"
+  },
+  "DsaTopKDigitCount_v1{N=8,AT=0,K=0}": {
+   "and": 4275,
+   "type": "5d17da6440027af6fa9d977077782c5b2739f3ea0d9decebfcf5ab4cfab6b9766f0615451c19a57f4dc7bf9556d3b6eb5efe8134d1ef9de9e35687e15a43a9bb"
+  },
+  "DsaTopKDigitOneHot_v1{K=0}": {
+   "and": 306,
+   "type": "4c29b46e3ae45906f3edb4def9ca3980f4fc1b5a589dcf828dac4aa30e56830a8f8a234fe0e7f995097d1381c840de4cbca54286a1bbb29898e3e12fed9c40c7"
+  },
+  "DsaTopKDigitOneHot_v1{K=1}": {
+   "and": 314,
+   "type": "6835fa7b673ff5b5ff1d7f6b8973e11e70b5eb922c6816f7bab2a3b4ef2768fd1449ce5d8030cee2a1f4c6f8efb4b95dbfc2acfbe57f08ace93c98a231e2e43e"
+  },
+  "DsaTopKDigitOneHot_v1{K=3}": {
+   "and": 330,
+   "type": "60fe7763df00567f560d80337d7304db67ec300c86c57e1692c2a99645d5d6b91b44d071e49081a5e009f31f671a4660cbb8c5ffb83276825d3395383839fb08"
+  },
+  "DsaTopKDigitPick_v1{M=2,K=0,TOPK=4}": {
+   "and": 24194,
+   "type": "5323da23423e39d6dbf8c3d021b9d1fa46d8582dd28d5b270f9b1163a79243c6514954d3fc9515da399d3e279d848775bd773358c73e1c81a9548c45b0313947"
+  },
+  "DsaTopKDigitPick_v1{M=2,K=1,TOPK=4}": {
+   "and": 24960,
+   "type": "4fe9b7f3000ab19c3e961d1d401124c3dd41a67c0bb14ea43ce70a10626358848ed695033e26264b29eb027143d8e9faef330d6470fde603251676bcee79718c"
+  },
+  "DsaTopKDigitPick_v1{M=2,K=3,TOPK=4}": {
+   "and": 33187,
+   "type": "ca1155fed8d2093c10d193d3e26a6407cf2991a71351718fd8917c93439fdf34ca1c454597a75b6e90a0e27ecad66a7111dc7372dd619fa6df4e08658168b3c6"
+  },
+  "DsaTopKKeyCompare_v1": {
+   "and": 65,
+   "type": "738cf0e686b34a228d8364d690f7057877204a8e01d2005a6cd7a94ead91005feafcc12ad785353a47885d75d1594550e946299c205f53d3c52e3354c14eef2d"
+  },
+  "DsaTopKMaskBlock_v1{N=6,AT=8,TOPK=4}": {
+   "and": 515,
+   "type": "5bb53ea0d502659b825872bab9d7ce72ab0d1400be3bb143f57b582389ce70aa8719b244179e4300d08df87dda4a2d166f40b6eda9e6e70bb3cb9dba182e8f07"
+  },
+  "DsaTopKMaskBlock_v1{N=8,AT=0,TOPK=4}": {
+   "and": 599,
+   "type": "0e77bf5e18102c4756c163017c9e646746877467ecc02d00a79c00772398d9addd99c27c999a65f0750961e19f8e901ad35953fc8eddf3d1b299bdcda280c372"
+  },
+  "DsaTopKPopCount_v1{N=6}": {
+   "and": 4,
+   "type": "e9587c2a7f3ffbfacd7dc29ba32db191196a584980d5249c1a4beaac7ba8233af1153d0d7e191fdee79e089c825d2e45fcf8868d3f662cbae8ecfe2efda85054"
+  },
+  "DsaTopKPopCount_v1{N=8}": {
+   "and": 7,
+   "type": "1b941b8a9843edefe008201b6ec850f8becf31cde0341c079b0b151db354045311fc33cafb014c5dc3a300643a04b335dabd7d873032f4bd2dd76147ad56d891"
+  }
+ }
+}

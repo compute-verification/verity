@@ -29,7 +29,7 @@ subdirectory has its own README with the detail; this page maps each machine and
 | The agent watch: frees held runs, records idle workers and run ends | `infra/ops/verity_ops/agent_watch.py`, run by `infra/control/agent_watch.sh` |
 | The agent watch's relay to Slack | `infra/control/agent_watch_relay.py` |
 | The cloud watch: loop health, R2, Neon, spend against budgets | `infra/control/cloud_watch.py` and `cloud_watch.toml` |
-| The watchers supervisor and its loops (VM stops and deadlines, fleet, monitors, top's asks relay) | `infra/control/watchers.py`, `watchers.toml`, `vm_stop.py`, `top_watch.py` |
+| The watchers supervisor and its loops (VM stops and deadlines, fleet, monitors, top's asks relay, the nightly uncached check of `main`) | `infra/control/watchers.py`, `watchers.toml`, `vm_stop.py`, `top_watch.py`, `nightly_check.py` |
 | The control disk alert and the notes sync check | `infra/control/control_disk_alert.py`, `control_disk.sh` |
 | Store index, garbage collection and fixture export | `infra/control/store_index.sh`, `store_gc.sh`, `fixtures_export.sh` |
 | The resource steward | `infra/control/steward-run.sh` |
@@ -43,5 +43,5 @@ subdirectory has its own README with the detail; this page maps each machine and
 |---|---|
 | Launching, handing over and archiving the coordinators | `infra/cursor/launch_coordinator.py`, `infra/cursor/README.md` |
 | The Slack events service, which routes people's posts to lanes | `infra/slack-events/` |
-| The agent VM's secret guard and shell hook | `tools/agent-guard/` |
+| The agent VM's secret guard and shell hook, and the reader that lists an env file's variable names and no value (`envnames.py`) | `tools/agent-guard/` |
 | The run recorder and the run-store client (`research`) | `tools/research/`, the store's contract in `tools/research/src/research/store/README.md` |

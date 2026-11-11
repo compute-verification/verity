@@ -7,7 +7,7 @@ vLLM's kernels write a row of ``n <= k`` keys as ``0, 1, ..., n - 1`` and then `
 leaves those rows untouched (no kernel runs when no row of the call can be longer than ``k``). A longer row's kernels
 place the selected indices with shared-memory atomics, so their order varies run to run, and they admit the keys tied at
 the k-th score in atomic order, so the set can vary too; the sparse attention then sums over the keys in that order.
-The canonical row's selection is the registered relation's top-k set (`verity.ml.definitions.registry.dsa_topk`'s
+The canonical row's selection is the registered relation's top-k set (`verity.definitions.registry.dsa_topk`'s
 ``topk_set``, which ``DsaTopKLongRow`` checks), and its order is ascending:
 
 - each score's key is the fast kernels' own, ``convert_to_uint32_v2`` of its 32 bits, here as the signed integer of the

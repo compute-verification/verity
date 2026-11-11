@@ -3,12 +3,12 @@
     stock(L) = 128 R_cap L / E + R_in L        bytes
     f        = stock(L) / M_dyn
 
-This is `Security/Definitions/Accounting/Guarantees/Stacking.lean`'s C = 8 R_in life + 1024 (c_rho reads) life / E in bits, read in
+This is `security/Definitions/Accounting/Guarantees/Stacking.lean`'s C = 8 R_in life + 1024 (c_rho reads) life / E in bits, read in
 bytes: c_rho reads, the nonlinear units the audit allows a second, is the honest Program's rate R_cap; E is the nonlinear units
 an encode of one 1024-bit word costs (E / 128 a byte); L is a carrier's lifetime in seconds and R_in the node's run-input bytes a
 second. f past 1 means the stock outgrows the pool: no KV is credited.
 
-Nonlinear units are the gate model's (`Security/Definitions/Accounting/Gates/Model.lean`, `nonlinear`): property/v1's
+Nonlinear units are the gate model's (`security/Definitions/Accounting/Gates/Model.lean`, `nonlinear`): property/v1's
 budgeted units plus data products, one a product of two run-time values. `units.py` counts the budgeted ones; the data
 products are the attention row's Q′K′ᵀ, H·D a (query row, key) pair, and its P V′, H·D a key with the row's keys padded to the
 s8 step's `PAD` (`products_coefficients`, as `products_pass.py` counts the Program), and nothing else's: a MAC by a weight is
@@ -73,7 +73,7 @@ PAD = 32
 #: bytes a second the audit certifies (`P·N·4096/T` at 61 ms a pass):
 #: c = caps.total is R_cap over it
 CERTIFIED_B_PER_S = 1.294e13
-#: `Security/Proofs/Accounting/RegisteredCircuit/Witness.lean`'s `bounds_8b` and `bounds_70b`, at the thin-lane prices: c at most
+#: `security/Proofs/Accounting/RegisteredCircuit/Witness.lean`'s `bounds_8b` and `bounds_70b`, at the thin-lane prices: c at most
 #: `c`, E at least `E`, the life `L` windows, and γ = γ0 + (8 L R0 + 1) / (N0 32768) + 128 L P0 c / E (`gamma_bound`)
 WITNESS = {"c": {"8B": Fraction(221, 500), "70B": Fraction(459, 5000)}, "E": 364_497, "L": {"8B": 6, "70B": 30},
            "P0": 984, "R0": 6_000_000, "N0": 1 << 24, "gamma0": Fraction(835, 100_000)}

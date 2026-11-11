@@ -699,28 +699,28 @@ def test_a_lean_change_lands_on_its_verdict_and_the_after_landing_lean_audit_tak
     assert all(kw["no_regenerate"] for _, _, kw in h.posted)
 
 
-#: a Lake package with a lock outside `Security/`, whose Lean runs as code
-FLOCK_LOCK = {"verity/core/service/flock/lean-audit.json": "{}\n"}
+#: a Lake package with a lock outside `security/`, whose Lean runs as code
+FLOCK_LOCK = {"verity/protocols/flock/verifier/lean-audit.json": "{}\n"}
 
 
 def test_every_lean_change_but_proofs_is_one_a_lock_run_follows_whatever_its_title(world, monkeypatch):
-    """A "two demos" title exempts no Lean change.  The spec (Lean under `Security/Definitions/`, `Security/Definitions.lean` and
-    `Security/`'s Lake files: what the guarantees' statements read), every lock and Lean that runs as code (outside `Security/`,
+    """A "two demos" title exempts no Lean change.  The spec (Lean under `security/Definitions/`, `security/Definitions.lean` and
+    `security/`'s Lake files: what the guarantees' statements read), every lock and Lean that runs as code (outside `security/`,
     in a package with a lock: Flock's verifier) are Lean changes (`queue.lean_change`) in a two-demos PR too, which a lock
     run follows on `checked`: with no regenerated lock commit after them, they leave a record stale for the after-landing
-    lean-audit (`--no-regenerate`), the spec's statements or a code package's `verifier.allow`.  `Security/` proofs alone are
+    lean-audit (`--no-regenerate`), the spec's statements or a code package's `verifier.allow`.  `security/` proofs alone are
     none."""
     _move_main(world, FLOCK_LOCK)
     h = Review(world, monkeypatch)
     two_demos = {1: {"pkg/C.lean": "theorem C : True := trivial\n"},
-                 2: {"Security/Definitions/X.lean": "def x := 1\n"},
+                 2: {"security/Definitions/X.lean": "def x := 1\n"},
                  3: {"pkg/lean-audit.json": "{}"},
-                 4: {"Security/Proofs/Y.lean": "theorem Y : True := trivial\n"},
-                 5: {"Security/Definitions.lean": "import Definitions.X\n"},
-                 6: {"Security/lakefile.toml": "name = \"security\"\n"},
-                 7: {"Security/lean-toolchain": "leanprover/lean4:v4.0.0\n"},
-                 8: {"verity/core/service/flock/Flock/X.lean": "def x := Nat.gcd 4 6\n"}}
-    for n, files in {**two_demos, 9: {"Security/Definitions/Z.lean": "def z := 1\n"}}.items():
+                 4: {"security/Proofs/Y.lean": "theorem Y : True := trivial\n"},
+                 5: {"security/Definitions.lean": "import Definitions.X\n"},
+                 6: {"security/lakefile.toml": "name = \"security\"\n"},
+                 7: {"security/lean-toolchain": "leanprover/lean4:v4.0.0\n"},
+                 8: {"verity/protocols/flock/verifier/Flock/X.lean": "def x := Nat.gcd 4 6\n"}}
+    for n, files in {**two_demos, 9: {"security/Definitions/Z.lean": "def z := 1\n"}}.items():
         world.gh.put(n, head := world.change(files))
         if n in two_demos:
             world.gh.prs[n] = PR(n, head, f"two demos: change {n}", f"Lane `lane-{n}`.")
@@ -1058,7 +1058,7 @@ def test_a_red_ratchet_gate_names_the_merge_it_fails_as_the_culprit(world, monke
     here is the gate's own, run on the merges drive landed."""
     import sys
 
-    p01 = "integrations/vllm/tests/lint/allowlists/p01_core.json"
+    p01 = "adapters/vllm/tests/lint/allowlists/p01_core.json"
 
     def allowlist(*files: str) -> str:
         return json.dumps({"rule": "p01", "entries": [{"file": f, "kind": "k", "symbol": "s", "detail": "d"} for f in files]})
@@ -1076,7 +1076,7 @@ def test_a_red_ratchet_gate_names_the_merge_it_fails_as_the_culprit(world, monke
     merge2 = _git(world.origin, "rev-parse", "main^1")
     assert _subject(world, merge2).startswith("Queue: #2")
     _git(world.dev, "fetch", "-q", "origin")
-    gate = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[3] / "integrations/vllm/tools/ratchet_gate.py"),
+    gate = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[3] / "adapters/vllm/tools/ratchet_gate.py"),
                            base, tip], cwd=world.dev, capture_output=True, text=True, env={**os.environ, "RATCHET_GATE_CACHE": ""})
     assert gate.returncode == 1 and f"  #2 ({merge2[:12]}): failed: grows {p01} 2 -> 3 entries" in gate.stdout, gate
     run = _steps_run(tmp_path, "r-post-0", {s: "passed" for s in EVERY if s != "ratchet-gate"})
@@ -1726,6 +1726,24 @@ def test_review_without_sha_refuses_a_head_pushed_since_the_sync_and_takes_a_sho
     assert Q.review(h.q, world.store, labels, 1, "land", None, "lane-9", sha=new) == 0
 
 
+def test_under_land_into_main_review_reads_no_next_and_records_on_the_open_head(world, monkeypatch):
+    """Drive's frozen `next` can hold a PR at an older head than GitHub's.  Under `land_into = "main"` written in drive.toml the
+    verified queue lands on `main` and nothing reads `next`, so a verdict without --sha goes on the open head."""
+    world.with_store_remote()
+    h = Review(world, monkeypatch)
+    _move_main(world, {Q.DRIVE_FLAGS: 'land_into = "main"\n'})
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.d.review = False
+    h.q.sync()
+    old = world.gh.prs[1].head
+    assert [m.head for m in h.q.chain() if m.pr == 1] == [old]
+    world.gh.put(1, new := world.change({"a.txt": "2\n"}))
+    labels = StoreLabels(world.store, log=lambda s: None)
+    assert Q.review(h.q, world.store, labels, 1, "land", None, "lane-9") == 0
+    assert [lab.value for lab in world.store.labels(label_target(1, new), key=vocab.REVIEWED)] == ["land"]
+    assert not world.store.labels(label_target(1, old), key=vocab.REVIEWED)
+
+
 def test_the_owner_of_an_unmarked_pr_marked_ones_wait_for_is_told_once_with_theirs_until_its_head_changes(world, monkeypatch):
     """A marked PR can wait on another's unmarked commits, and that one's owner is told, in one post with every marked PR it takes
     out and their owners.  It is told again when its head moves, not when a PR it takes out moves, and not at all for a waiting PR
@@ -2102,7 +2120,7 @@ def test_the_low_risk_lanes_rebuild_merges_with_each_tips_drivers_not_its_checko
     caps = "tests/test_lean_packages.py"
 
     def counts(sec: int, props: int) -> str:
-        return f'UNWITNESSED = {{"Security": {sec}, "Security/Properties": {props}}}\n'
+        return f'UNWITNESSED = {{"security": {sec}, "security/Properties": {props}}}\n'
 
     lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
     _move_main(world, {caps: counts(354, 184), ".gitattributes": f"{caps} merge=lean-caps\n",

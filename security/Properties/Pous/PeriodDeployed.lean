@@ -1,0 +1,133 @@
+module
+
+public import Properties.Pous.Period
+import Mathlib.Basic.ENNReal.Real
+
+/-!
+# PoUS over one period at the deployed ring budget
+
+`PeriodHeld` (`Pous.Period`) takes P2's ring-model conjecture `P2RingAuditSecure D Q L` at a free budget `(D, Q, L)`,
+and the conjecture is false at some budgets, if `p` is prime: from `D ≥ 32,894` with `Q ≥ 2` and `L ≥ 65,789`, a
+responder that recomputes the block's two roots (`PousP2Ring.tight_p16448`), and from `L ≥ 2^169` with `D ≥ 2` and
+`Q ≥ 2`, a responder that keeps `501,819` blocks without their low `168` bits and recomputes them
+(`Pous.Period.SecurityProofs.not_p2RingAuditSecure_trunc`; the same family refutes `k ≤ 88` from `L ≥ 2^30`,
+`PousP2Ring.not_meetsOn_b19_k88`). This module fixes the budget to the one the deadline and the device model's round
+floor give, outside both regions.
+
+* **The deadline and the floor.** `LIMIT_NS = Δ + RTT = 854,000 ns`, the memory challenger's limit. The fastest
+  modelled multiplication round is `ROUND_NS = 361.55 / 3.490 ≈ 103.6 ns`: the timing red team's 361.55 ns per
+  16,448-bit squaring on one Zen 5 core, cut by the measured 8-core cooperation speedup of 3.490×. At that floor
+  `DEADLINE_ROUNDS = ⌊LIMIT_NS / ROUND_NS⌋ = 8,243` sequential rounds fit the deadline. The PoUS node itself roots a
+  block in 1.0931 s on its H200 and
+  0.4602 s on one host core, about 26 and 61 of a block's 32,894 rounds in 854 µs.
+* **The budget** (`pous-ring-speed`). `RING_D = 16,446` multiplication rounds an answer: the most at which `rootProg`
+  cannot finish one root (`PousP2Ring.rootProg_cost`, `PousP2Ring.p16448_root_bits`), at least `DEADLINE_ROUNDS`, and
+  `RING_D + 1` rounds take more than 1.995 × `LIMIT_NS` at the floor, so a device up to 1.995 times as fast as the
+  floor still stays within it. `RING_Q = 2^20` key queries and `RING_L = 2^64` ring operations an answer, far above what any device
+  does in 854 µs and far below `2^169`.
+* `PeriodHeldDeployed`: `PeriodHeld` at `(RING_D, RING_Q, RING_L)`, so `P2RingAuditSecure` is taken only there.
+* The honest period (`honestRun`, a device that holds all of `C*` in its capacity account at every tick of the
+  session's `105` rounds), its honest strategy (`honestStrategy`, which keeps all of `C` and answers by lookup), the
+  empty period (`emptyRun`) and the certificate `HONEST_S = 63,000,000` bits: what the honest and nontrivial lemmas of
+  `PeriodHeld` and `PeriodHeldDeployed`, `PeriodHeldHonest` and `PeriodHeldNontrivial`
+  (`Security/Proofs/Pous/Lemmas/PeriodDeployed.lean`), are stated at.
+
+The step from the deployed device to the ring model is two premises, and no theorem here discharges either: the device
+model (`DeviceModel`: the state at each round boundary within `B + S_chip + ∑ cap_i · round`, and each on-time answer
+within `(D, Q, L)`, the budget this module fixes from `Δ + RTT` and the measured floor), falsifiable by measurement; and
+the instantiation in reduction form (`Instantiates`, `pous-ring-instantiation` and `prf/sha-512`), which bounds no
+strategy. Both are stated for every prover strategy, and the ring game's server is the fixed extractor's
+(`Pous.Period.extract`), never a witness the prover picks.
+-/
+
+@[expose] public section
+
+namespace Pous.Period
+
+open Pous.EndToEnd PousCheck PousCheck.Properties
+
+open scoped ENNReal
+
+set_option exponentiation.threshold 20000
+
+/-- **The fastest modelled multiplication round, in ns**: the timing red team's 361.55 ns per 16,448-bit squaring on one
+Zen 5 core cut by the measured 8-core cooperation speedup of 3.490×, about 103.6 ns. -/
+def ROUND_NS : ℚ := 36155 / 349
+
+/-- The sequential multiplication rounds that fit the memory challenger's limit at the floor:
+`⌊854,000 / ROUND_NS⌋ = 8,243`. -/
+def DEADLINE_ROUNDS : ℕ := ⌊(LIMIT_NS : ℚ) / ROUND_NS⌋₊
+
+/-- The deployed multiplication rounds an answer (`pous-ring-speed`): one root's depth less one, `16,446`. -/
+def RING_D : ℕ := 16446
+
+/-- The deployed key queries an answer (`pous-ring-speed`). -/
+def RING_Q : ℕ := 2 ^ 20
+
+/-- The deployed ring operations an answer (`pous-ring-speed`). -/
+def RING_L : ℕ := 2 ^ 64
+
+/-- **PoUS's per-period guarantee at the deployed ring budget.** `PeriodHeld` with `P2RingAuditSecure` and
+`DeviceModel` at `(RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64)`, the budget `pous-ring-speed` derives from
+`Δ + RTT` and the round floor (this module's header): given the coin commitments' hiding, for every joint run whose
+capacity coins are the ring game's, every period's audit `P`, every prover strategy `τ` of its device under the device
+model at that budget and the instantiation (`Instantiates`), every
+certificate `S` with `S · len + S_chip + ∑ cap_i · round ≤ S₀` and every value of the other audits' coins, the
+verifier's whole decision accepts the period with no break while the capacity account held fewer than `S · len`
+bit-ticks with probability at most `δ + ε_max`. -/
+def PeriodHeldDeployed : Prop :=
+  Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
+    Pous.P2.Assumptions.P2RingAuditSecure RING_D RING_Q RING_L →
+      ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
+        (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+        (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
+        DeviceModel r P τ RING_D RING_Q RING_L round → Instantiates P τ →
+          S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →
+            ∀ o : ΩW × ΩQ,
+              Pouw.pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+                  P.Accepts (o.1, o.2, x) ∧ ¬ P.Break (o.1, o.2, x) ∧
+                    (r.held (o.1, o.2, x) : ℝ) < S * (r.win .capacity).len) ≤
+                (Params.δ : ℝ) + Params.εMax.toReal
+
+/-! ## The honest period -/
+
+/-- **The honest device**, one H200 serving `C*`, with one tick a round of the session: `2^30` bits of on-chip state, at
+least the H200's 992,061,184 bits of registers, shared memory with L1 and L2 at its data sheet
+(`Verity.Accel.H200.size`); `C*`'s `2^19 · 16,448` bits of device memory; and one side channel, its PCIe Gen 5 ×16
+link at its 64 GB/s line rate, 437,248,000 bits over a round of `854 µs` (the measured GPU-to-host copy is
+57.2 GB/s). -/
+def honestDevice : Accounting.Device Unit := ⟨2 ^ 30, FULL, fun _ => 0, 0, fun _ => 437248000⟩
+
+/-- A period on the honest device whose capacity account holds `m ≤ FULL` bits at every tick, its window the session's
+`105` rounds, one tick each. -/
+def periodRun (m : ℕ) (hm : m ≤ FULL) :
+    Accounting.Run honestDevice Unit Unit Unit ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) where
+  acct _ := ()
+  win _ := ⟨0, K⟩
+  schedule _ _ := ⟨fun _ _ => 0, fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ => m⟩
+  fits := by
+    intro _ _
+    simp [Accounting.Step.Fits, honestDevice, hm]
+  accepts _ _ := True
+
+/-- **The honest period**: the capacity account holds all of `C*`, `FULL` bits, at every tick. -/
+def honestRun : Accounting.Run honestDevice Unit Unit Unit
+    ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) :=
+  periodRun FULL le_rfl
+
+/-- **The empty period**: the capacity account holds nothing. -/
+def emptyRun : Accounting.Run honestDevice Unit Unit Unit
+    ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) :=
+  periodRun 0 (Nat.zero_le _)
+
+/-- **The honest strategy**: it keeps all of `C`, `FULL` bits, as what survives setup, and answers each index by
+looking its block up, with no query, keeping its state. -/
+noncomputable def honestStrategy : Strategy Unit Unit where
+  pre _ _ _ C _ := List.ofFn (codeEquiv sch.B sch.ℓ C)
+  step _ _ _ _ _ σ i := .ret ((codeEquiv sch.B sch.ℓ).symm (fun k => σ.getD k.val false) i, σ)
+
+/-- The honest certificate, in bits on average over the session's `105` rounds: `63,000,000`, within
+`(S₀ − S_chip − c) / 105` (`PeriodHeld`'s peak grading, `Pous.Period`'s header). -/
+def HONEST_S : ℕ := 63000000
+
+end Pous.Period
