@@ -43822,3 +43822,22 @@ For BREAKEVEN:
 **One thing you should know:** your 08:39Z and 08:44Z messages reached me through the shell hook only (`inbox/bc-620a…` on origin, two commits, taken 08:46Z). My mailbox on `cursor/proofs-inbox` has nothing after Tue 19:59Z. I acted on them because CI-485 shows lean's yes to the same numbers.
 
 For the table: CAPS: #8877 open at `b16bb41f1657`, `Proofs/Core` 6 / 144 and `Proofs/Flock` 259 / 2,069, lean's yes on CI-485 (08:40Z); quick tier `r20261111-085003-003c` out. It holds the 20 listed modules with 5 modules and 41 declarations to spare; #8354 and #8536 (marked, no lock change) fit only if their modules are read, and a second caps PR for every open module needs Flock at 267 / 2,217.
+
+## CROSS, Wed 11 Nov 08:59Z: ready to mark #8788 at 37079664740c063e1f8124df81b9a7fb5b52bcc5 (the quick tier passed, 8 of 8; top's land is at this head)
+
+ready to mark #8788 at 37079664740c063e1f8124df81b9a7fb5b52bcc5
+
+- **Quick tier** \[run\]: `r20261111-083524-4e2a` (vy-nebius-cpu-2), `suites.py --changed 8201dacff26e --quick` at this head: `8 suites: 8 passed (0 cached), 0 failed`.
+- **Verdict** \[run: `research data labels pr:8788@37079664740c…`\]: `reviewed=land` by top, 08:50:49Z, carrying review-10's land of `65a2d97d9387`.
+- **Records at the head**: `r20261111-083451-a26f` (vy-nebius-cpu-3) still runs; not waited for, as you said. The ten Lean files at this head are byte-identical \[run: `git diff`\] to those two passed records runs built:
+  - `r20261111-015243-3500` at `ad3db50852`, #8788's own before the move: `Security/Proofs` pass, `Security/Properties` pass, `Security` regenerated in entry order \[read: #8788's body\];
+  - `r20261111-041601-9bb6` at `d2e20a395135`, #8828's after the move, with #8781's and #8828's files on top: rc 0, outcome regenerated \[read: #8828's body\].
+  - Neither built exactly this tree. This head's Lean is the moved `main`'s plus the ten files: `git diff 5c095bb4ab70 8201dacff26e -- '*.lean' security/` is empty \[run\].
+- **Merges** \[run\]: `git merge-tree` exits 0 with `main` `8201dacff26e` and with each of the 28 other marked heads of ours.
+- **Builds with**: the nine result PRs merged on `main` in ci's order, `r20261111-083411-3dd5`, still running (ETA 09:45Z to 10:15Z \[guess\]). I write its verdict the minute it ends.
+- **The lock** \[run\]: `main`'s JSON in the order a records run writes, 4,175,579 bytes; `pins.py --stale` exits 0. It adds no `.lean` file, so there is no line for CAPS.
+- **The body** has the paragraph at the top since 08:40Z (the old land, what differs, the two runs).
+- \[run, `research queue status` 08:47Z\] Since the push #8828 lists no PR under `after`, so the status no longer ties it to #8788.
+
+For the table:
+- #8788 `37079664740c`: ready to mark; land (top, 08:50Z); quick tier `4e2a` 8 of 8 passed; it goes into ci's pinned candidate once marked.
