@@ -8,8 +8,8 @@ import Proofs.Flock.Claims.Prob
 # The two-stage first-hit bound by class of gates, with the finders run on the one-wait extraction
 
 `eventTwoX_le_cls_at_budget` bounds the event of `KSRegTwoX` by `κ_s + √(k·γ_s·Pr[B])` and the binding finders'
-cost over `2^256`, the cost that of the proof system's extraction, `e_s` SHA-512 calls' worth of reruns a session:
-an extractor that waits for `k` accepting runs pays `k` waits.
+cost over `2^256`, the cost that of the proof system's extraction, `e_s = 1 + m′·k` runs' worth of reruns a
+session: an extractor of `m′` waits, each for `k` accepted reruns.
 
 Here the finders run the extraction of the one-wait proof system (`CompiledTwo.oneWait`), which pays one wait a
 session, and the event is the one at that extraction's committed traces:
@@ -19,7 +19,7 @@ session, and the event is the one at that extraction's committed traces:
 * `εclsOneWait`, `eventTwoX_oneWait_le_cls_at_budget`: **the bound at a budget `T` a run**,
   `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·runCost + 4·firstHitCost)/2^256`, the two costs the one-wait compiled
   verifier's. Against `εclsAt` it pays `2·κ_s + √(k·γ_s·Pr[B])` more and twice the cost term, at a cost that is
-  one wait's where `εclsAt`'s is `k` waits'.
+  one wait's, `e_s ≤ 1 + k`, where `εclsAt`'s is `m′` waits'.
 
 The premises are `eventTwoX_le_cls_at_budget`'s, read at the one-wait compiled verifier (its extractions open a class
 whole or not at all, the linear expected-time bound at its `B_conf,X` and its two by-class finders of every cap), and

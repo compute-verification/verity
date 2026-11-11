@@ -17,7 +17,8 @@ at most `1/2 + 2^k·e^{−k}` (the cases of `tape_bound`), so the sum is at most
 other tapes accept with probability at most `2k/K + 4·a` (`tape_finds`). Averaged over the tape, under `ERep_trunc`'s
 hypotheses, for every property `G` of the judged run's coins and the candidate (`ERep_finds`):
 
-  `Pr[acc ∧ E^rep returns w ∧ G(r₀, w)] ≤ 2·Pr[acc ∧ E^rep at one wait returns w ∧ G(r₀, w)] + 4·𝔼[a] + 2k/K + 2·e^{−k/8}`.
+  `Pr[acc ∧ E^rep returns w ∧ G(r₀, w)] ≤ 2·Pr[acc ∧ E^rep at one wait returns w ∧ G(r₀, w)]
+    + 4·𝔼[a] + 2k/K + 2·e^{−k/8}`.
 
 `Finds` names that bound at an extractor, its one-wait form and the errors of a knowledge-soundness claim,
 `2·κ + √(γ·Pr[B])` in place of the last three terms. A bound on a finder that reads `E^rep`'s candidates only through
