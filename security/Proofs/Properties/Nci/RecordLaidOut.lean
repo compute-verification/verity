@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Properties.Nci.LeafWidthsBody
 public import Proofs.Properties.Nci.LeafWidthsResolve
 public import Proofs.Properties.Nci.RecordPrim
 public import Proofs.Properties.Nci.RecordUnits
@@ -15,7 +16,7 @@ the check takes whole says of its two rows (`RecordWhole`). Of resolution: a ref
 ends inside it or at a leaf of one of its parameters (`ResolveWithin`); a leaf it returns through a parameter is a
 leaf of one `Record.passedOn` lists (`RecordPassed`, `ResolvePassed`); and a leaf of a unit's parameter is a gate of
 an input node of the root, no two of them one gate (`RecordOwn`, `ResolveRows`); the gate a reference resolves to
-is as wide as the leaf it names (`LeafWidthsResolve`). Of the root: its ranges are its nodes that are no input, in
-order (`RecordUnits`), and a unit of a primitive is one gate, the gate every leaf it returns resolves to
-(`RecordPrim`).
+is as wide as the leaf it names (`LeafWidthsResolve`), in a body the width check passes (`LeafWidthsBody`). Of
+the root: its ranges are its nodes that are no input, in order (`RecordUnits`), and a unit of a primitive is one
+gate, the gate every leaf it returns resolves to (`RecordPrim`).
 -/
