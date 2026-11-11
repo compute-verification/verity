@@ -51,8 +51,8 @@ or gives a path nobody would look for. A row the rule itself now gives is report
 
 A FILE THE DATA DOESN'T KNOW (tracked at REF, added since the data was cut) goes with the files beside it: a directory
 that goes one way takes it along; in a directory several components share it goes with the one component that holds
-the other files of that directory, and where that isn't one component the script stops and names it, for a row in
-`NEW`. A path of the data that REF no longer tracks is dropped and reported.
+the other files of that directory, archived files aside, and is printed; where that isn't one component the script
+stops and names it, for a row in `NEW`. A path of the data that REF no longer tracks is dropped and reported.
 
 KINDS, each treated one way:
 - Python packages. A whole directory is one directory row; a directory whose files part ways gets one row a file (or a
@@ -83,9 +83,14 @@ ORDER. The one map has none. The maps a move run in the order of their names: ea
 has a row at or under another map's row, and no destination lies under any map's row, so the files land the same in
 any order. Module names do not: a map that moves a package's `__init__.py` renames the package, and would rename with
 it the modules another map takes out of that package. So that other map runs first: the order is derived from the
-maps, their names carry it, and each map's header names the maps that run before it. `[retired]` is empty in every
-map: a directory two maps share can be retired by neither while each map passes alone, and this script's own check
-does that job.
+maps, their names carry it, and each map's header names the maps that run before it.
+
+RETIRED. The one map's `[retired]` names every directory it empties that no directory row holds, the outermost of
+them: every tracked file under it leaves and none arrives. `layout.py` refuses a tracked file under one that has no
+row, so a file that lands there after the map was cut stops the move by name, where it would have stayed behind
+unsaid. A directory with a row needs none: the row carries the file. A directory whose emptied `__init__.py` stays
+for the later commit is not emptied by the map and is not named. In a move's map `[retired]` is empty: a directory
+two maps share can be retired by neither while each map passes alone.
 
 CHECKS (the script fails on any): every tracked file is one the data places or `NEW` names; every file the layout
 moves or archives has exactly one destination, and each map moves exactly its own files; no destination is claimed
@@ -167,6 +172,9 @@ EXCEPT = [
      "the test of `vllm_v1/`, which goes into the integration: with the code it tests, as `test_leaves.py`"),
     ("examples/h200/e2e_h200/served_weights.py", "benchmarks/torch_gpu/p2_stage/served_weights.py",
      "the served weights' reader goes beside the GPU stage that reads it; the demo's other files stay"),
+    ("examples/h200/interfaces/", "benchmarks/one_stage/interfaces/",
+     "the drawn-unit replay bundle and the block record, with their schemas, fixtures and suite, go beside the one-stage "
+     "audit, their main reader, which is live; the demo's other files stay"),
     ("verity/core/protocols/pous/wipe_stream.c", "verity/protocols/pous/verifier/wipe_stream.c",
      "the streamed wipe's native fill goes beside `wipe_stream.py`, the one module that builds it, by the name of the file "
      "beside itself; the rule parts the two (`device/wipe_stream.c`)"),
@@ -179,6 +187,7 @@ EXCEPT_MOVE = {
     "verity/core/devices/memory_challenger/": "pous",
     "verity/core/protocols/remote_bandwidth/": "poub",
     "examples/h200/e2e_h200/served_weights.py": "archive",
+    "examples/h200/interfaces/": "archive",
 }
 #: components the layout gives a directory that stay where they are: {component id: why}
 KEEP = {
@@ -186,6 +195,8 @@ KEEP = {
                 "scripts would read `benchmarks/census` by path",
     "bench:63": "PoUW's calculators stay in `benchmarks/pouw/`: nothing under `verity/` or an integration imports them, "
                 "and one of them loads `benchmarks/sampling_plan`",
+    "bench:30": "the recursion end-to-end run stays in `benchmarks/`: `verity bench NAME` runs `benchmarks/NAME`'s runner, "
+                "which its `run.py` is, and a directory under `workloads/` is a demo with a `demo.toml`, which it has not",
     "benchmarks/network_traces/":
         "its files find each other by bare name, with the directory on `sys.path`, and a move leaves a bare name as "
         "written: the directory stays whole, its archived files too, until its owner imports by package name and splits it",
@@ -200,6 +211,12 @@ ALIASES = {
 DROP = {
     "benchmarks/pouw/contents/paths/machine_model.toml":
         ("hardware", "the entry of `benchmarks/pouw`'s contents for `machine_model/`, which leaves `benchmarks/pouw`"),
+    "benchmarks/pouw/contents/paths/np_kernel.toml":
+        ("archive", "the entry of `benchmarks/pouw`'s contents for `np_kernel/`, which goes to `archive/`"),
+    "benchmarks/pouw/contents/paths/clear.toml":
+        ("pouw", "the entry of `benchmarks/pouw`'s contents for `clear/`, which leaves `benchmarks/pouw`"),
+    "benchmarks/pouw/contents/filler/receipts.toml":
+        ("pouw", "the entry of `benchmarks/pouw`'s filler table for `../receipts/`, which leaves `benchmarks/pouw`"),
 }
 #: files of a component the auditor doesn't trust that land under a trusted directory: {component id: why it may}
 UNTRUSTED = {
@@ -213,6 +230,19 @@ NEW = {
     "verity/ml/commitments/history.py": "ml:commitment-schemes",
     "verity/ml/commitments/tests/test_history.py": "ml:commitment-schemes",
     "archive/AGENTS.md": "stays",                      # what `archive/` is, there before the archive's files arrive
+    "verity/core/protocols/spot/schedule.py": "core:spot-python",       # `second_stage.py` imports it
+    "verity/core/service/flock/Flock/TmplLines.lean": "core:flock-lean-verifier",
+    "verity/ml/definitions/registry/dsa_topk_mask_cut.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/dsa_topk_mask_cut.circuit-check.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/dsa_topk_mask_cut.circuit-check.json": "ml:definitions-registry",
+    "verity/ml/definitions/tests/test_dsa_topk_mask_cut.py": "ml:definitions-registry",
+    "benchmarks/pouw/np_kernel/": "archived",          # its owner archives the kernel: only its test imports it,
+    "benchmarks/pouw/tests/test_np_kernel.py": "archived",              # and the test goes with it
+}
+#: directories written as one row though a file of theirs is archived, so that a file added to the directory, or one it
+#: fetches, goes with it: {the directory today: why}
+WHOLE = {
+    "benchmarks/nci/": "the inference-only policy's benchmark fetches `sources/` and gains files; one row carries them",
 }
 #: references to a directory a map splits that stay right as they are: (the move, "old file: old directory", why)
 SPLIT = [
@@ -251,7 +281,7 @@ MOVES = [
     ("difftest", "the difftest harness, to `verity/difftest`"),
     ("verity", "the claims' ids and the reporting grid, to `verity`"),
     ("vllm", "the commitment scheme named for vLLM and the window-advice compiler, to `integrations/vllm`"),
-    ("workloads", "the demos and the recursion end-to-end run, to `workloads`"),
+    ("workloads", "the demos, to `workloads`"),
     ("benchmarks", "the GPU probes that are Definitions today, to `benchmarks`"),
     ("archive", "what the layout archives, to `archive`"),
 ]
@@ -386,6 +416,13 @@ def excepted(p):
     return (None, None, None) if best is None else (best[0], best[1] + p[len(best[0]):], EXCEPT_MOVE.get(best[0]))
 
 
+def own_row(p):
+    """`p`'s EXCEPT row where that row is one a map always writes for itself, else None: a file's own row, or the row
+    of a directory that leaves an archived directory, which then still goes to `archive/` as one row."""
+    k, _, move = excepted(p)
+    return k if k is not None and (k == p or move == "archive") else None
+
+
 def kept(p):
     """Whether a path row of `KEEP` (a file, or a directory ending in "/") holds `p`."""
     return any(holds(k, p) for k in KEEP if "/" in k)
@@ -421,8 +458,9 @@ def place(data, tracked, say):
     stuck = []
     for p in unknown:
         keys = beside.get(posixpath.dirname(p), set())
-        if len(keys) == 1:
-            owner[p] = next(iter(keys))
+        live = keys - {"archived"}                     # the archive speaks for no directory: a file beside an archived one
+        if len(live) == 1:                             # goes with the one component that still lives there
+            owner[p] = next(iter(live))
             say(f"new since the data was cut: {p} goes with the other files of its directory ({owner[p]})")
         else:
             stuck.append(f"{p}: " + ("its directory holds no file the data knows" if not keys else
@@ -548,10 +586,11 @@ def plan(data, owner, say, suites=()):
 def compress(mine, tracked_dirs, own=()):
     """The rows of one map: `mine` is {old file: new file}; `tracked_dirs` is {directory: (files in it, subdirectories)}
     over every tracked file. A directory is one row where every tracked file under it is the map's and keeps its path
-    below it; otherwise its files are rows and its subdirectories are looked at in turn. A file of `own` is always a row
-    of its own and its directory may still be one row: the longest row wins."""
+    below it; otherwise its files are rows and its subdirectories are looked at in turn. A path of `own` (a file, or a
+    directory ending in "/") is always written by itself and the directory that holds it may still be one row: the
+    longest row wins."""
     whole = {}
-    own = {p for p in own if p in mine}
+    own = {k for k in own if any(holds(k, p) for p in mine)}
 
     def walk(d):
         files, subs = tracked_dirs[d]
@@ -564,7 +603,8 @@ def compress(mine, tracked_dirs, own=()):
             target.add(None if new is None or posixpath.basename(new) != f else posixpath.dirname(new))
         for s in subs:
             n = walk(f"{d}/{s}" if d else s)
-            target.add(None if n is None or posixpath.basename(n) != s else posixpath.dirname(n))
+            if (f"{d}/{s}/" if d else f"{s}/") not in own:
+                target.add(None if n is None or posixpath.basename(n) != s else posixpath.dirname(n))
         whole[d] = target.pop() if len(target) == 1 else None
         return whole[d]
     walk("")
@@ -582,7 +622,11 @@ def compress(mine, tracked_dirs, own=()):
         for s in subs:
             emit(f"{d}/{s}" if d else s)
     emit("")
-    rows.update((p, mine[p]) for p in own)
+    for k in own:
+        if k.endswith("/"):
+            emit(k[:-1])
+        else:
+            rows[k] = mine[k]
     return rows
 
 
@@ -603,8 +647,8 @@ def tokens_for(move, dest, tracked_dirs, rows, emptied=(), one=False):
         if any(d == r or d.startswith(r + "/") for r in dir_rows):
             continue
         mine = [p for p in ps if p in dest and dest[p][2] == move]
-        if not mine:
-            continue
+        if not mine or all(dest[p][0].startswith("archive/") for p in mine):
+            continue                                   # the archive speaks for no directory: what stays keeps its name
         files = tracked_dirs[d][0]
         name = next((n for n in NAMESAKE if n in files), None)
         if name is not None:
@@ -622,7 +666,7 @@ def tokens_for(move, dest, tracked_dirs, rows, emptied=(), one=False):
             # new directory that holds every file of the old one but the archived, where that is narrower than a
             # top-level directory;
             # else, in the one map, as where its package goes, each such reference acknowledged in `[split]`.
-            rest = [p for p in mine if not dest[p][0].startswith("archive/") and excepted(p)[0] != p]
+            rest = [p for p in mine if not dest[p][0].startswith("archive/") and own_row(p) is None]
             whole = {dest[p][0][: -len(p[len(d):])] if dest[p][0].endswith(p[len(d):]) else None for p in rest}
             common = posixpath.commonpath([posixpath.dirname(dest[p][0]) for p in rest or mine])
             if len(whole) == 1 and (n := next(iter(whole))) is not None:
@@ -631,6 +675,20 @@ def tokens_for(move, dest, tracked_dirs, rows, emptied=(), one=False):
                 out[d + "/"] = common + "/"
             elif one and name is not None and posixpath.basename(dest[f"{d}/{name}"][0]) == name:
                 out[d + "/"] = posixpath.dirname(dest[f"{d}/{name}"][0]) + "/"
+    return out
+
+
+def retire(tracked, moved, drop, rows):
+    """The outermost directories a map empties that none of its directory rows holds, each ending in "/": every tracked
+    file under one is moved (`moved`, {today's path: new path}) or dropped, and no new path lies under it."""
+    stays, arrives = set(), {a for n in moved.values() for a in ancestors(n)}
+    for p in tracked:
+        if p not in moved and p not in drop:
+            stays.update(ancestors(p))
+    out = []
+    for d in sorted({a for p in tracked for a in ancestors(p)} - stays - arrives):      # a directory before those under it
+        if not any((d + "/").startswith(k) for k in (*out, *rows) if k.endswith("/")):
+            out.append(d + "/")
     return out
 
 
@@ -689,7 +747,14 @@ def render(fname, v, before, one=False):
     if v["split"]:
         lines += ["", "[split]", "# references to a directory this move splits that stay right: \"old file: old directory\" = why"]
         lines += [f"{toml_str(k)} = {toml_str(x)}" for k, x in sorted(v["split"].items())]
-    lines += ["", "[retired]", "paths = []", "", "[drop]",
+    lines += ["", "[retired]"]
+    if v["retired"]:
+        lines += [wrap("# ", "directories this map empties that no directory row holds: `layout.py` refuses a tracked file "
+                             "under one that has no row"),
+                  "paths = [", *(f"  {toml_str(p)}," for p in v["retired"]), "]"]
+    else:
+        lines.append("paths = []")
+    lines += ["", "[drop]",
               *(wrap("# ", f"`{p}`: {DROP[p][1]}.") for p in v["drop"]),
               "paths = [" + ", ".join(toml_str(p) for p in v["drop"]) + "]", "", "[rewrite]",
               "# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the",
@@ -798,7 +863,8 @@ def main():
             mine = {p: n for p, (n, _, m) in dest.items() if m == move}
             if not mine:
                 die(f"{move}: no file")
-            rows = compress(mine, tracked_dirs, [p for p in mine if excepted(p)[0] == p])
+            rows = compress(mine, tracked_dirs, ({own_row(p) for p in mine} - {None})
+                            | {p for p in mine if mine[p].startswith("archive/") and any(holds(k, p) for k in WHOLE)})
             # the archive speaks for no directory
             tokens = {} if move == "archive" else tokens_for(move, dest, tracked_dirs, rows, emptied, one)
             for k, n in (agree or {}).items():         # a directory a move's map speaks for reads the same in the one map
@@ -827,6 +893,8 @@ def main():
             if set(drop) & set(dest):
                 die(f"{move}: DROP deletes a file a row moves: {sorted(set(drop) & set(dest))}")
             lay_data["drop"] = {"paths": drop}
+            gone = retire(tracked, mine, drop, rows) if one else []
+            lay_data["retired"] = {"paths": gone}
             aliases = {k: n for k, (m, n, _) in sorted(ALIASES.items()) if one or m == move}
             for k, n in aliases.items():
                 if n not in modules.values():
@@ -843,7 +911,7 @@ def main():
             reasons = [(o, n, w) for o, n, w in EXCEPT if any(holds(o, p) for p in mine)]
             maps[move] = {"what": what, "rows": rows, "tokens": tokens, "split": split, "modules": modules,
                           "roots_new": roots_new, "lay": lay, "mine": mine, "reasons": reasons, "data": lay_data, "drop": drop,
-                          "aliases": aliases}
+                          "aliases": aliases, "retired": gone}
 
         # ---- across the maps: no row over another map's files or over a destination, Lake packages whole
         keys = [(m, k) for m in maps for k in maps[m]["rows"]]

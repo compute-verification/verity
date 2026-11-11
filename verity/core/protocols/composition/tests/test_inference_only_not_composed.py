@@ -18,11 +18,12 @@ import pytest
 
 import reference as R
 
-PROTOCOLS = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[5]
 V0 = "verity/inference-only/v0"
 PRIVATE_ONLY = ("only the private form (v1: division committed under hiding leaves, compliance proved, padded profile) "
                 "may be composed")
-COMPOSITES = {"Core.Onsite": PROTOCOLS / "onsite/CoreOnsite.lean", "Core.Remote": PROTOCOLS / "remote/CoreRemote.lean"}
+COMPOSITES = {"Core.Onsite": ROOT / "verity/core/protocols/onsite/CoreOnsite.lean",
+              "Core.Remote": ROOT / "verity/core/protocols/remote/CoreRemote.lean"}
 #: The protocols that publish private data in the clear, each with what it publishes.
 IN_THE_CLEAR = {V0: "the division, and each inference block's gates and fresh-input bits"}
 #: The protocols of `IN_THE_CLEAR` a composite may compose, each with its reason. KNOWN only shrinks: an entry no
@@ -32,7 +33,7 @@ KNOWN = {"verity/inference-only/v0": "a stated exception for one run of record; 
 
 def v0_names() -> set[str]:
     """v0's Lean names: `NciCheck.Protocol.protocol` while its `protocolId` is v0."""
-    text = (PROTOCOLS / "network/nci/lean/NciCheck/Protocol.lean").read_text()
+    text = (ROOT / "verity/core/protocols/network/nci/lean/NciCheck/Protocol.lean").read_text()
     m = re.search(r'^def protocolId : String := "([^"]*)"', text, re.M)
     assert m, "NciCheck/Protocol.lean no longer defines `protocolId` as a string literal: read v0's id where it now is"
     return {"NciCheck.Protocol.protocol"} if m[1] == V0 else set()
@@ -49,7 +50,7 @@ def lean_components(path: Path) -> tuple[list[str], list[str]]:
 
 def configuration_ids() -> list[str]:
     """The ids `parties.IDS` gives as string literals."""
-    for node in ast.parse((PROTOCOLS / "spot/parties.py").read_text()).body:
+    for node in ast.parse((ROOT / "verity/core/protocols/spot/parties.py").read_text()).body:
         if isinstance(node, ast.Assign) and [getattr(t, "id", None) for t in node.targets] == ["IDS"]:
             assert isinstance(node.value, ast.Dict), "parties.IDS is no longer a dict literal: read its ids as it is now"
             return [v.value for v in node.value.values if isinstance(v, ast.Constant)]
