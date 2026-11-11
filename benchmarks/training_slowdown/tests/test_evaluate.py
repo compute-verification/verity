@@ -5,7 +5,7 @@ import math
 
 import pytest
 import torch
-from synthetic import tiny_data, tiny_start
+from synthetic import SCORE_REL, tiny_data, tiny_start
 
 from training_slowdown.data import sample_slice, held_out, windows
 from training_slowdown.evaluate import Evaluator, window_nats
@@ -21,15 +21,9 @@ def setup(tmp_path):
     return data, s, theta, other
 
 
-#: How far apart two forward passes over the same windows may be, relative. On one thread they are equal. On more, a
-#: pass under bf16 autocast now and then rounds a few logits the other way: in a sweep of 2,000 passes at four threads
-#: (40 processes of 50) the scores were at most 4.7e-5 apart. The nearest scores these tests tell apart, θ's and the
-#: other state's over every slice, are 2.2e-3 apart.
-TWO_PASSES = 3e-4
-
-
 def near(x):
-    return pytest.approx(x, rel=TWO_PASSES)
+    """`x` to within what two forward passes may differ by."""
+    return pytest.approx(x, rel=SCORE_REL)
 
 
 def bpb_of(state, shape, toks, starts, nbytes):
