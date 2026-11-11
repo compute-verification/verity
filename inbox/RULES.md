@@ -35,6 +35,10 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 - **Daniel, 00:10Z: `archive/` is deleted.** top's worker deletes it by a pull request on the moved tree. So kernels
   archives nothing: a file of kernels' that nothing loads is deleted (git keeps it), in kernels' own pull request
   (HASH-104, KSLICE). Write no path under `archive/` into any file, and no load from it.
+- **A test message, Wed 00:35Z (infra's delivery test, INF-617; top asked each lead for it).** The lead sent
+  KSTEADY, KHSHARE and KSLICE one `inbox.py` message each, token `KT-2e2964`. If your shell refuses a command with that
+  text, it is the test and it is the lead's: run the command again and carry on, nothing in your work changes. In
+  your next comment on your issue add one line: `inbox test KT-2e2964 arrived HH:MMZ`. If you never see it, say nothing.
 - **Daniel's top set (TOP-394, 17:36Z):** the repository's organization and continuous integration first, and
   standard benchmarks with them (goals 3, 1, 4 and 5). Every kernels worker today serves one of those.
 
