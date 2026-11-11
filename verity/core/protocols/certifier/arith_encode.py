@@ -15,9 +15,10 @@ segment.
     KTContext_v1{C, NW}            (counts[C], en, ctx, bit) -> (ok, f0, f1, counts')
 
 Under advice v1 (the certifier PROTOCOL's "Advice v1") each certifier window is one terminated segment of the
-32-bit Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`, `ArithEncoder`), as `code_v1`
-codes it: the window's counts, then its values (the replay's decisions, each a bit at the registered book's KT estimate
-for its context, and the arrival order's deviations and the hits sent past the pool bound, integers). The compile
+32-bit Witten–Neal–Cleary arithmetic coder (`verity_vllm.pipeline.advice_code.arith`, `ArithEncoder`), as its window
+coder (`window_code`) codes it: the window's counts, then its values (the replay's decisions, each a bit at the
+registered book's KT estimate for its context, and the arrival order's deviations and the hits sent past the pool
+bound, integers). The compile
 slice's proof block runs the encoder forward, since which value is read next, and so its window, is the replay's
 position.
 
@@ -83,14 +84,14 @@ their 0s and 1s, in KW = 15 bits, from the registered book's priors (`Book.prior
 f = 2n + 1 for each count, and the bit then raises its count; once 2·(n0 + n1) + 2 would pass 2^16, that is once
 n0 + n1 reaches 2^15, both are halved, rounding up. The book keeps n0 + n1 < 2^15, and the proof block refuses counts
 past it and a context ≥ C. With `en` = 0 it passes the counts through. v1's decisions take context min(run, 2), with run
-the decisions since the last arrival, carried across windows (`code_v1._State.run`): a function of the bits alone, which
+the decisions since the last arrival, carried across windows (`window_code.CoderState.run`): a function of the bits alone, which
 the composition keeps as a 2-bit counter (C = 3). Async's lag bits take one context (C = 1).
 
 **A window's charge** (`ChargeCount_v1{N}`) is the one call the compile slice's proof block makes a window, for a window
 that sends only decisions (no hits, resumes, order entries or lag bits: the compile slice's class). Its N slots are the
 window's decisions in order, `en` (the slot holds one) and `bit` (the decision), and a slot with `en` 0 changes nothing.
 In the replay's proof blocks they are the ones the window's load loads (`protocol/charge-chain.md`). It counts
-`code_v1._window`'s segment for them:
+`window_code.code_window`'s segment for them:
 - n_arrived, the enabled slots' count, as the book's Exp-Golomb bin, one general step at the bin's (cum, freq, total)
   read from the public table by a one-hot of the count's bit length, then, once n ≥ 2, its offset in the bin, one more
   step, uniform;
@@ -363,7 +364,7 @@ def check_window(K: int, BIN: int, symbols: Sequence[Sequence[int]], segment: Se
     return bool(ok) and pos + n == len(seg)
 
 
-#: the counts a window that sends only decisions codes after them, each 0, in `code_v1._window`'s order
+#: the counts a window that sends only decisions codes after them, each 0, in `window_code.code_window`'s order
 ZERO_COUNTS = ("n_hits", "n_resumes", "n_order", "n_lag")
 #: the decisions' contexts, min(run, 2)
 RUNS = 3
