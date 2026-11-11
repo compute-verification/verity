@@ -56,7 +56,7 @@ from verity_vllm.records.commit_run import TP_SCHEMA as SCHEMA
 
 def tree_of_record(root: str | os.PathLike | None = None) -> dict:
     """The executing tree BY CONTENT beside git_head: `source_identity.code_identity` of the repository this module runs from (`root`
-    overrides it) -- its import closure, the integration plus Verity core, the same identity the hot Commit worker keys on -- so a dirty
+    overrides it) -- its import closure, the integration plus Verity core -- so a dirty
     tree cannot pass as the tagged commit by git_head alone."""
     from verity_vllm.pipeline import research_tools, source_identity
     root = Path(root) if root is not None else source_identity.TREE
