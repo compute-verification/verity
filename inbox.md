@@ -38,3 +38,38 @@ comment there). Your inbox send to me takes no `--local`.
 DATE: Thu 12 Nov noon PST, in one message: the statement, the split with sizes, the answer to 3, what you read
 and did not. If 3's answer is "false as stated", send that the hour you know it, before the rest.
 
+[2026-11-11T12:53Z] 69abfea12fa3
+From @training (coordinator), Wed 11 Nov 4:54 AM PST. One addition to the sizing job (brief-wired-bridge), from
+FORM at 4:51 AM PST. FORM READ it, ran nothing; verify each line before you build on it.
+
+THE QUESTION IS ONE STEP EARLIER THAN "spliced or not". What the composite calls the circuit is not the Program's
+circuit at all:
+- `V.circuitOf θ F = (V.read θ F).circuit` (Properties/Verity/Game.lean 745, 560-562)
+  `= Flock.Bridge.circuitOfFile tags cf tables pf` (Properties/Flock/Circuit/CircuitOf.lean 165)
+  `= Circuit.ofAudit (keyCircuit D hU n)` (54-64, 100-113): the Flock circuit file's key program, the descriptor
+  `Flock.Desc.parse` reads, with ONE unit's rows placed n times (`keyProg D.unroll hU n`, n the public file's
+  population), every gate ONE BIT (`w _ := 1`), gates Boolean (input/and/xor/not/row).
+- `LaysOut P W S rs D at_` is about the circuit whose gates are the Program's (`P.gate g`, the served graph's JSON,
+  `Flock.Program.Prog`), each gate as wide as its primitive's `ret`, wired leaves spliced out.
+- No wire appears in `circuitOf`'s definition: it reads no `Spot.Wires` wiring and no Program.
+- NOT READ by FORM: `keyProg`, `Placed`, `Layout.outsOf`, `HmOut.loadPublic`; so not known how the key program
+  treats a unit's input that another unit writes.
+- At lean's head 72a184b3e792 the guarantee is `ServedComplies` (Properties/Nci/Record.lean 495-496), proved by
+  `complies_of` (Proofs/Properties/Nci/Record.lean 314-316): your reading of `Complies` is a reading of it.
+
+SO SIZE THIS, in place of question 2 of the brief (the rest of the brief stands, and so does Thu 12 Nov noon PST):
+what ties the circuit file's key program (bit gates, one unit placed n times) to the record's Program (value
+gates, the whole graph). Say:
+1. Whether `Served F c D` can hold at all with D = `.ofCircuit (V.circuitOf θ F)` as the two are defined today, or
+   whether its clauses (gate count, widths, reads) are false of a one-bit-gate circuit for any real Program. If
+   false, the statement to prove is another one: write the one you think is meant (a relation between the two
+   circuits under which `CompliesRate` moves across), and say which of `CompliesRate`'s terms that relation must
+   carry (the block sizes in bits, fresh, the declaration's reads).
+2. Whether anything already relates a Program to its Flock circuit file in Lean (grep `Program` under
+   Properties/Flock and Proofs/Flock, `Desc.parse`'s users, the partition check, `NciCheck.Desc`), or only Python
+   does (the builder that writes both files): name the function if so.
+3. Who would own it: is it a statement about the builder (an integration's completeness, which the design rules
+   leave unproved) or about the verifier (which must then CHECK the tie between the two files and be proved to)?
+   One paragraph, your reading, marked as a reading. This is the part lean and Daniel will want first.
+Send what you have when (1) is answered, without waiting for the rest.
+
