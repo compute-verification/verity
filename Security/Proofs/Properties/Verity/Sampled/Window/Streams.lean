@@ -113,7 +113,7 @@ theorem session_stream_logs {γ : Type _} {J : ℕ} (tab : γ → Fin J) (rep : 
           cases hl
         · exact h
         · rw [hj] at h
-          have h' : Slot.rep t.val r k = .rep tables.size 0 1 := h
+          have h' : Slot.rep t.val r (openedOf m τ s) = .rep tables.size 0 1 := h
           rw [Slot.rep.injEq] at h'
           exact absurd h'.1 (by omega)
       obtain ⟨a, hz⟩ := forall₂_zip_right hF hmm
