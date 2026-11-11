@@ -1080,6 +1080,31 @@ def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_p
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
+def test_each_test_process_starts_with_onednn_held_off_amx_unless_the_caller_names_the_variable(tmp_path, monkeypatch):
+    """oneDNN reads its ISA cap once, at a process's first primitive, so a cap set by a suite's own code comes too late for
+    whatever ran a primitive before it. The runner puts it in the environment the suite's process starts with: the suite's
+    conftest sees it as it is imported, ahead of every test module, and a test sees the same. A value the caller's environment
+    names stays, and `research run` gives its jobs the same name and value."""
+    from research import result
+
+    S = _suites(monkeypatch, tmp_path)
+    name, cap = S.ONEDNN_ISA
+    assert (name, cap) == result.ONEDNN_ISA == ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16")
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": f"import os\n\nAT_IMPORT = os.environ.get({name!r})\n\n\ndef test_env(conftest_saw):\n"
+                                 f"    now, want = os.environ.get({name!r}), os.environ['WANT']\n"
+                                 "    assert conftest_saw == AT_IMPORT == now == want\n"})
+    (root / "pkg" / "tests" / "conftest.py").write_text(f"import os\n\nimport pytest\n\nAT_IMPORT = os.environ.get({name!r})\n\n\n"
+                                                        "@pytest.fixture\ndef conftest_saw():\n    return AT_IMPORT\n")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "conftest")
+    monkeypatch.delenv(name, raising=False)
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": cap})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": "AVX2", name: "AVX2"})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
 def test_a_pass_earned_on_one_machine_is_reused_on_another_and_names_its_run(tmp_path):
     """A suite's pass is reused on any machine while its inputs, the base image and the check code
     are as they were.  Machine a's passes travel as a verdict pack; on machine b a change to one suite's inputs runs that suite

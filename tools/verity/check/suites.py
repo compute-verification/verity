@@ -128,7 +128,8 @@ time, beside the others, which run side by side on as few of the processes as le
 does (`serial_slots`, from each suite's last duration); each lane goes longest first. Without pytest-xdist installed, a parallel
 suite runs in one process. Each test process's thread pools (OpenMP, so torch's, MKL, OpenBLAS, numexpr) get the CPUs divided by
 `--jobs` (`threads_per_process`) unless the environment already sets them: sized to the whole node, every xdist worker of every
-lane would run a thread per core, and the node's load would reach several times its cores.
+lane would run a thread per core, and the node's load would reach several times its cores. Each test process also starts with
+oneDNN held off AMX (`ONEDNN_ISA`), unless the environment already names that variable.
 
 Each suite's verdict is its real one: a failed test fails its suite here wherever else it is red. Whether a failure may stay red
 is drive's policy (`research.policy`, tools/verity/check/policy.toml's allowances), judged where drive and the quick tier read
@@ -274,6 +275,13 @@ def default_jobs(meminfo: Path = Path("/proc/meminfo"), limit_gb: float | None =
 
 #: the thread-pool sizes a test process inherits, each left as the environment sets it
 THREAD_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS")
+#: every test process's oneDNN is held off AMX, unless the environment already names the variable. On a CPU with AMX (the flags
+#: `amx_bf16 amx_tile`) oneDNN's AMX kernel now and then returns wrong values for a bf16 matrix product whose process is
+#: preempted, so a test that compares one with torch fails by chance on a loaded machine. Under this cap oneDNN runs the
+#: AVX-512 bf16 kernels instead, the ones a CPU with `avx512_bf16` and no AMX runs anyway. oneDNN reads the variable once, at
+#: the process's first primitive, so it is in the environment the process starts with, where no import order can miss it.
+#: `research run` gives every job the same (research.result's ONEDNN_ISA).
+ONEDNN_ISA = ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16")
 
 
 def threads_per_process(jobs: int) -> int:
@@ -2047,6 +2055,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     env = {k: v for k, v in os.environ.items() if not k.startswith(RUNNER_PREFIX) and k not in RUNNER_ENV}
     for var in THREAD_VARS if threads > 0 else ():
         env.setdefault(var, str(threads))
+    env.setdefault(*ONEDNN_ISA)
     env.update(VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_DENY=json.dumps(dropped(suite, allowed)),
                VERITY_SUITE_REPORT=str(report),
                VERITY_SUITE_WATCH=json.dumps(list(watch)), VERITY_SUITE_MARKDOWN="1" if markdown(suite) else "0",
