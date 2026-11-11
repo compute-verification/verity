@@ -1,7 +1,7 @@
 import json
 
 import pytest
-from synthetic import tiny_registry, write_config
+from synthetic import SHAPE, VOCAB, tiny_registry, write_config
 
 from training_slowdown import calculator, config, gates, library, starts
 from training_slowdown.grade import WORK
@@ -61,12 +61,18 @@ def test_the_command_traces_each_entry_and_prints_its_row_and_its_run_over_each_
     coded = write_config(tmp_path / "coded.toml", dials={"trainable": "blocks.0.w_*", "store": "q8"})
     assert library.main([str(adapted), str(coded), "--starts", str(reg), "--out", str(tmp_path / "out")]) == 0
     out = capsys.readouterr().out
-    head, first, second = out.splitlines()[:3]
-    assert head.split() == ["entry", "route", "slowdown", "what", "binds"]
-    assert first.split()[:3] == ["adapted", "lora", "1"] and second.split()[:3] == ["coded", "subset", "-"]
+    head, first, second, under = out.splitlines()[:4]
+    assert head.split() == ["entry", "route", "trains", "slowdown", "what", "binds"] and under == library.TRAINS
     got = json.loads((tmp_path / "out" / "library.json").read_text())
-    assert got["schema"] == library.SCHEMA and list(got["parts"]) == ["traced", "proved", "premise", "scaled"]
+    assert got["schema"] == library.SCHEMA
+    assert list(got["parts"]) == ["traced", "approximated", "proved", "premise", "scaled"]
     a, b = got["rows"]
+    # the adapters of the start's seven matrices, rank 2, over the start's own parameters
+    adapters = 2 * (4 * (16 + 16) + 3 * (16 + 32))
+    assert a["trains"] == {"parameters": adapters, "of": SHAPE["parameters"], "share": adapters / SHAPE["parameters"]}
+    assert first.split()[:4] == ["adapted", "lora", f"{100 * a['trains']['share']:.3g}%", "1"]
+    assert second.split()[:4] == ["coded", "subset", "-", "-"] and "trains" not in b and "step" not in b
+    assert a["step"]["approximated"] == {"macs": 0, "gates": 0.0, "share": 0.0} and "approximated: " not in first
     assert a["step"]["tokens"] == 2 * 1024 and a["policy"]["name"] == "console" and a["dials"]["rank"] == 2
     assert (b["slowdown"], b["binds"], b["periods"]) == (None, library.CODED, None)
     fleets, periods = calculator.fleets(), calculator.periods()
@@ -79,6 +85,30 @@ def test_the_command_traces_each_entry_and_prints_its_row_and_its_run_over_each_
     for fleet in fleets:
         assert f"as a share of {fleet['over']}'s compute over each period" in out
     assert all(f"{part}: " in out for part in got["parts"])
+
+
+def test_a_row_says_what_share_of_the_start_its_step_trains_and_what_the_capture_approximates(tmp_path):
+    """Two optimizers on the tiny start. AdamW trains every parameter and no op of its step is approximated. Shampoo
+    has no rule for the embedding, so it trains the rest, and its roots are eigendecompositions the capture counts
+    at n³ MACs a matrix: the row holds those MACs and their gates at the price the capture gives one, and the printed
+    row says their share of the step's gates."""
+    reg = starts.registry(tiny_registry(tmp_path / "reg"))
+
+    def row(name: str, **dials) -> dict:
+        return library.row(config.load(write_config(tmp_path / f"{name}.toml", dials={"lr": 1e-2} | dials), reg))
+
+    whole, part = row("whole", trainable="*", opt="adamw"), row("part", trainable="blocks.*,norm", opt="shampoo")
+    assert whole["trains"] == {"parameters": SHAPE["parameters"], "of": SHAPE["parameters"], "share": 1.0}
+    assert part["trains"]["parameters"] == SHAPE["parameters"] - VOCAB * 16 and part["trains"]["share"] < 1
+    assert whole["step"]["approximated"] == {"macs": 0, "gates": 0.0, "share": 0.0}
+    approx = part["step"]["approximated"]
+    # each of the seven matrices' two factors, an eigendecomposition each, at its side cubed
+    assert approx["macs"] == 4 * 2 * 16 ** 3 + 3 * (16 ** 3 + 32 ** 3)
+    assert approx["gates"] == approx["macs"] * gates.per_mac("elementwise/f32")
+    assert 0 < approx["share"] == approx["gates"] / part["step"]["gates"] < 1
+    said = f"; approximated: {approx['share']:.2%} of the step's gates are linear algebra at n³ MACs a matrix"
+    assert library.line(part)[-1] == part["binds"] + said and library.line(whole)[-1] == whole["binds"]
+    assert library.line(whole)[2] == "100%" and library.line(part)[2] == f"{100 * part['trains']['share']:.3g}%"
 
 
 def test_the_library_names_its_entries_and_refuses_one_it_lacks():

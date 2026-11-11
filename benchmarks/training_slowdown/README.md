@@ -56,14 +56,18 @@ rule for the embedding, so their entries leave it untrained, and the output head
 longer has two operands the update reaches. Frozen layers (`last-blocks`) leave more products out, and adapters
 (`lora`) reach a matrix only through a rank-wide product.
 
-The command prints one row an entry (every entry, or the ones named): its slowdown under its policy and what binds.
-It trains nothing. It builds the entry's model at the start's shape, traces its step on a CPU as a job does after its
-last step (`run.trace_step`, on fake tensors), and reads the calculator's bound of record on the traced step
-(`calculator.bound`): the least slowdown of any partition of that step into the policy's blocks, on the products
-whose two operands both depend on the update. Below the rows it prints each statement with what it rests on, each
-entry's planned run at its slowdown (the config's steps times the traced step's gates) as a share of one datacenter's
-and of the world's compute over a window, a week, a month and a year, and which parts are traced, proved, premises
-and scaled; `--out` writes all of it to `DIR/library.json`. A row has no slowdown, and says why, where the capture
+The command prints one row an entry (every entry, or the ones named): the share of the start's parameters its step
+trains, its slowdown under its policy and what binds. It trains nothing. It builds the entry's model at the start's
+shape, traces its step on a CPU as a job does after its last step (`run.traced_step`, on fake tensors), and reads the
+calculator's bound of record on the traced step (`calculator.bound`): the least slowdown of any partition of that
+step into the policy's blocks, on the products whose two operands both depend on the update. `trains` is read from
+the trace, the parameters the step writes over the start's: an entry that trains less charges fewer products, so its
+slowdown is not its optimizer's. Where a step has dense linear algebra (Shampoo's roots), which the capture counts at
+n³ MACs a matrix and not as the gates of the algorithm that computes it, the row says what share of the step's gates
+that count is. Below the rows it prints each statement with what it rests on, each entry's planned run at its
+slowdown (the config's steps times the traced step's gates) as a share of one datacenter's and of the world's compute
+over a window, a week, a month and a year, and which parts are traced, approximated, proved, premises and scaled;
+`--out` writes all of it to `DIR/library.json`. A row has no slowdown, and says why, where the capture
 refuses the step, where the bound can't read it, and where the entry's E keeps less than the trained weights: a
 weight then costs at most E's bits a trained weight, which only a run's record has, so the grade reads that entry.
 

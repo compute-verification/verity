@@ -10,9 +10,10 @@ For each entry the command builds its route's model at the start's shape, traces
 after its last step (`run.trace_step`: on fake tensors, so it trains nothing and reads no weights and no data), and
 reads the bound of record on that step from the slowdown calculator (`calculator.bound`): the least slowdown of any
 partition of the traced step into the policy's blocks, on the work the theorem charges (`formalism.he_of_rows`,
-`formalism.he_figure`: the products whose two operands both depend on the update). It prints one row an entry, its
-slowdown and what binds, then the entry's planned run at that slowdown over each fleet and period (`periods`), and
-with `--out` writes the rows with what each read to `DIR/library.json`.
+`formalism.he_figure`: the products whose two operands both depend on the update). It prints one row an entry: the
+share of the start's parameters its step trains (`trains`), its slowdown and what binds, and how much of the step's
+gates the capture approximates where it does (`approximated`); then the entry's planned run at that slowdown over
+each fleet and period (`periods`). With `--out` it writes the rows with what each read to `DIR/library.json`.
 
 A row has no slowdown, and says why, where the capture refuses the step, where the step breaks a premise the rows'
 rates take, where the trace doesn't classify the products at the policy's k, and where the entry's E keeps less than
@@ -27,10 +28,13 @@ import math
 import sys
 from pathlib import Path
 
+import numpy as np
+
 from . import calculator, config, policy, run, starts
 from . import formalism as F
 from .codecs import Identity
 from .grade import WORK, per_period
+from .opnames import LINALG_NAMES
 
 SCHEMA = "library/v1"
 #: the entries' directory
@@ -39,9 +43,16 @@ CODED = ("needs a record: the entry's E keeps less than the trained weights, so 
          "trained weight, which a trace alone doesn't have")
 FLOOR = "the floor: blocks of at most c gates cover the step's gates, and the theorem's count asks for no more"
 EMPTY = "the floor: no product of the step has two operands the update reaches, so the theorem charges nothing"
+TRAINS = ("trains: the share of the start's parameters the traced step updates. An entry that trains less charges "
+          "fewer products, so its slowdown is not its optimizer's.")
 PARTS = {
     "traced": "each entry's step, by the capture on fake tensors at the config's batch and the start's shape: its "
-              "gates, its tokens and its products' MACs, output wires and operand widths. No entry was trained",
+              "gates, its tokens, the parameters it updates and its products' MACs, output wires and operand "
+              "widths. No entry was trained",
+    "approximated": "a step's dense linear algebra (an eigendecomposition, an SVD, a QR or a Cholesky factor, an "
+                    "inverse, a solve), which the capture counts at n³ MACs a matrix and not as the gates of the "
+                    "algorithm that computes it. A row whose step has any says what share of the step's gates "
+                    "that count is; the slowdown is over the step's gates, that count among them",
     "proved": "the bound's form: the statement named beside each slowdown, a lower bound on every partition of the "
               "traced step into the policy's blocks, given its two premises and its hypotheses on the circuit, "
               "which the trace doesn't check",
@@ -111,10 +122,31 @@ def bound(trace: dict, c: float, k: float) -> dict:
     return {"slowdown": b["slowdown"], "binds": binds, "bound": b, "figure": figure}
 
 
+def trains(graph, of: int) -> dict:
+    """What a traced step trains, from the capture's graph (`run.traced_step`'s): the parameters the step writes (a
+    buffer it writes, such as an average of the weights, is none), and their share of the start's `of` parameters.
+    Adapters a route adds beside the start's weights count over the start's."""
+    n = sum(math.prod(p["shape"]) for p in graph.params if p["trained"])
+    return {"parameters": n, "of": of, "share": n / of}
+
+
+def approximated(graph) -> dict:
+    """What the capture approximates of a traced step, from its graph: the step's dense linear algebra
+    (`opnames.LINALG_NAMES`), counted at n³ MACs a matrix (`StepGraph.approx_macs`) and not as the gates of the
+    algorithm that computes it. Those MACs, their gates as the step's circuit holds them, and their share of the
+    step's gates."""
+    c = graph.circuit
+    ops = [i for i, n in enumerate(graph.graph.graph.nodes) if n.op == "call_function"
+           and getattr(getattr(n.target, "overloadpacket", None), "__name__", "") in LINALG_NAMES]
+    g = float(c.gates[np.isin(c.node, ops)].sum())
+    return {"macs": graph.approx_macs, "gates": g, "share": g / float(c.gates.sum())}
+
+
 def row(cfg: config.Config) -> dict:
     """An entry's row: its route's step traced at its start's shape and its budget's batch (`step`: its gates, its
-    tokens and the capture that took it), and the bound of record on it at the entry's policy (`bound`). An entry
-    whose plan keeps less than the weights isn't traced: `CODED` stands in place of its slowdown."""
+    tokens, the capture that took it and what that capture approximates), the parameters the step trains (`trains`),
+    and the bound of record on it at the entry's policy (`bound`). An entry whose plan keeps less than the weights
+    isn't traced: `CODED` stands in place of its slowdown."""
     route = config.route(cfg.route)
     pol = policy.named(cfg.policy, cfg.start.shape)
     out = {"entry": cfg.name, "route": cfg.route, "dials": cfg.dials, "start": cfg.start.name, "budget": cfg.budget,
@@ -122,10 +154,11 @@ def row(cfg: config.Config) -> dict:
     if not all(isinstance(c, Identity) for _, c in route.plan(cfg.dials).rules):
         return out | {"slowdown": None, "binds": CODED}
     model, optimizers = route.build(cfg.start.shape, cfg.dials)
-    trace = run.trace_step(cfg, route, model, optimizers, "cpu")
-    if "refused" not in trace:
+    trace, graph = run.traced_step(cfg, route, model, optimizers, "cpu")
+    if graph is not None:
         out |= {"step": {"gates": trace["circuit"]["gates"], "tokens": trace["tokens"], "capture": trace["capture"],
-                         "capture_code": trace["capture_code"]}}
+                         "capture_code": trace["capture_code"], "approximated": approximated(graph)},
+                "trains": trains(graph, cfg.start.shape["parameters"])}
     return out | bound(trace, pol["c_gates"], pol["k_bits"])
 
 
@@ -145,12 +178,20 @@ def table(head: list[str], lines: list[list[str]]) -> str:
                      for line in (head, *lines))
 
 
+def line(r: dict) -> list[str]:
+    """A row's cells: `trains` as a share of the start's parameters, and after what binds, where the capture
+    approximated any of the step, how much of its gates."""
+    share = r.get("step", {}).get("approximated", {}).get("share")
+    note = f"; approximated: {share:.2%} of the step's gates are linear algebra at n³ MACs a matrix" if share else ""
+    return [r["entry"], r["route"], f"{100 * r['trains']['share']:.3g}%" if "trains" in r else "-",
+            "-" if r["slowdown"] is None else f"{r['slowdown']:.4g}", r["binds"] + note]
+
+
 def text(rows: list[dict]) -> str:
-    """The rows as the command prints them: the table, each statement's full name, the planned runs over each fleet
-    and period, and which parts are traced, proved, premises and scaled."""
-    out = [table(["entry", "route", "slowdown", "what binds"],
-                 [[r["entry"], r["route"], "-" if r["slowdown"] is None else f"{r['slowdown']:.4g}", r["binds"]]
-                  for r in rows])]
+    """The rows as the command prints them: the table and what its `trains` says, each statement's full name, the
+    planned runs over each fleet and period, and which parts are traced, approximated, proved, premises and
+    scaled."""
+    out = [table(["entry", "route", "trains", "slowdown", "what binds"], [line(r) for r in rows]), TRAINS]
     for b in sorted({(r["bound"]["theorem"], r["bound"]["rests_on"]) for r in rows if "bound" in r}):
         out.append(f"\n{b[0].rsplit('.', 1)[-1]}: {b[1]}")
     over = [(r, p) for r in rows if (p := periods(r))]
