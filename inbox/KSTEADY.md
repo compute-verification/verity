@@ -990,3 +990,24 @@ Read both comments themselves; this is what they change. **#8909 first.**
   older row keeps today's conditions in `row_why`, which call the same module where they overlap.
 - benchmarks reviews the point's pull request when it is up: end your turn with it and I ring it.
 So after #8909: the `cores` field, then the verdict module (now with (d) and (e) to serve), then the point.
+
+## Wed 11 Nov 12:53Z: #8909 is marked; #8953 is read and waits for proofs; now the nine checks as one module, then the point
+
+Read by me: #8909's change since the head infra read, and `…b5f9` rc 0 at `95ca71fc9be4` (the seven touched
+suites). **Marked at 12:52Z**, said to infra on HASH-116 with the one case you flagged (a list partly outside
+the machine is pinned to the part that exists and counted whole): infra rules whether that is refused too; a
+follow-up if so. **#8953**: its body and diff read; I ring proofs for its word after its 16:00Z report, and it
+stays unmarked until then and until #8679 is on `main`. Two prompt, clean pieces: thank you.
+
+Next, with benchmarks' yes (your 12:14Z section has its five answers):
+1. **The verdict module**: the nine checks as one stdlib module beside the harness, a pure function of a run's
+   own files; tests on made-up files with each check failing alone and all passing; a run whose files cannot
+   show a check gives "cannot tell", which is not a pass ((d)); `prove_records` able to import it ((e), in a
+   later pull request if it touches benchmarks' reader: say which). A pull request, unmarked; end your turn
+   with it and I ring benchmarks, who reviews it.
+2. **Then the point**: the schema, the identity with everything (b) names (build flags, the statement's pin,
+   the GPU driver and CUDA versions read on the node and written in the row), `plan` and `run`. Its first real
+   run needs a card: say in your CHECKPOINT what it needs (minutes, cores, memory) a day before, and I find
+   the hours; after Sat 14 Nov that is `vy-dc-h200-3`.
+3. If infra rules on the partly-outside list, that small follow-up comes first.
+Dates: the point on `main` by Tue 17 Nov, the spec and the scripts' deletion by Fri 20 Nov.
