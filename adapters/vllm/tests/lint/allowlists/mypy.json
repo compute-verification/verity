@@ -2334,8 +2334,6 @@
     {"file": "verity_vllm/pipeline/config_record.py", "kind": "union-attr", "symbol": "record", "detail": ""},
     {"file": "verity_vllm/pipeline/coverage_workloads.py", "kind": "operator", "symbol": "parse_variant", "detail": ""},
     {"file": "verity_vllm/pipeline/coverage_workloads.py", "kind": "operator", "symbol": "simulate_schedule_chunked", "detail": "", "count": 2},
-    {"file": "verity_vllm/pipeline/cpu_replay.py", "kind": "arg-type", "symbol": "OnRead.__init__", "detail": ""},
-    {"file": "verity_vllm/pipeline/cpu_replay.py", "kind": "arg-type", "symbol": "opener", "detail": ""},
     {"file": "verity_vllm/pipeline/cpu_replay.py", "kind": "attr-defined", "symbol": "of_record", "detail": ""},
     {"file": "verity_vllm/pipeline/cpu_replay.py", "kind": "var-annotated", "symbol": "replay", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/deferred_rows.py", "kind": "arg-type", "symbol": "of_record", "detail": "", "count": 3},

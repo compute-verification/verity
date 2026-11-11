@@ -242,17 +242,28 @@ def registered_roles(program_dirs: Iterable[str | None], prefix: str = "") -> di
     return {(f[len(prefix):] if prefix and f.startswith(prefix) else f): r for f, r in roles.items()}
 
 
-def opener(bundle: Path, tree: dict[str, Any], ck: Any, *, tp: dict[str, int] | None = None,
-           roles: dict[str, dict[str, Any]] | None = None) -> Callable[[int], tuple[str, np.ndarray | None, str | None, bool]]:
-    """`_open_one` of the tree's tensor i, as `open_weights` opens it: one tensor at a time, the rewrites of ``roles`` made once."""
+def rewrites(tree: dict[str, Any], roles: dict[str, dict[str, Any]] | None, ck: Any, tp: dict[str, int] | None) -> Any:
+    """`fp8_ue8m0.Rewrites` over the tree's servable tensors: the fields of ``roles`` that vLLM rewrites at load, each read from
+    the checkpoint as `weights_of_record.compose` composes it (a TP rank's shard under ``tp``).  None without roles or a checkpoint."""
     from verity_vllm.check import fp8_ue8m0
     from verity_vllm.check import weights_of_record as WR
 
-    rw = None
-    if roles and ck is not None:
-        dims = {n: (list(s), WORDS[dt][0]) for n, dt, s, _b in tree["names"] if dt in WORDS}
-        at = {"world": int(tp["world"]), "rank": int(tp["rank"])} if tp else {}
-        rw = fp8_ue8m0.Rewrites(list(dims), roles, lambda n: WR.compose(n, *dims[n], ck, **at), ck.config)
+    if not roles or ck is None:
+        return None
+    dims = {n: (list(s), WORDS[dt][0]) for n, dt, s, _b in tree["names"] if dt in WORDS}
+    at = {"world": int(tp["world"]), "rank": int(tp["rank"])} if tp else {}
+
+    def composed(name: str) -> tuple[np.ndarray, dict[str, Any]]:
+        shape, bits = dims[name]
+        return WR.compose(name, shape, bits, ck, **at)
+
+    return fp8_ue8m0.Rewrites(list(dims), roles, composed, ck.config)
+
+
+def opener(bundle: Path, tree: dict[str, Any], ck: Any, *, tp: dict[str, int] | None = None,
+           roles: dict[str, dict[str, Any]] | None = None) -> Callable[[int], tuple[str, np.ndarray | None, str | None, bool]]:
+    """`_open_one` of the tree's tensor i, as `open_weights` opens it: one tensor at a time, the rewrites of ``roles`` made once."""
+    rw = rewrites(tree, roles, ck, tp)
     return lambda i: _open_one(bundle, tree, i, ck, tp, rw, roles)
 
 
@@ -316,18 +327,11 @@ class OnRead(Mapping):
 
     def __init__(self, bundle: Path, tree: dict[str, Any], root_of_record: str | None, ck: Any, *, tp: dict[str, int] | None = None,
                  roles: dict[str, dict[str, Any]] | None = None):
-        from verity_vllm.check import fp8_ue8m0
-        from verity_vllm.check import weights_of_record as WR
-
         names = tree["names"]
         _folded, refused = tree_refusal(tree, root_of_record)
         if refused:
             raise ValueError(refused)
-        rw = None
-        if roles and ck is not None:
-            dims = {n: (list(s), WORDS[dt][0]) for n, dt, s, _b in names if dt in WORDS}
-            at = {"world": int(tp["world"]), "rank": int(tp["rank"])} if tp else {}
-            rw = fp8_ue8m0.Rewrites(list(dims), roles, lambda n: WR.compose(n, *dims[n], ck, **at), ck.config)
+        rw = rewrites(tree, roles, ck, tp)
         self._at = {n: i for i, (n, dt, _s, _b) in enumerate(names) if dt in WORDS}
         self._open = lambda i: _open_one(bundle, tree, i, ck, tp, rw, roles)
         self._dtype = {n: WORDS[dt][1] for n, dt, _s, _b in names if dt in WORDS}
