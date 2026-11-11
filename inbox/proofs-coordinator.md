@@ -66035,3 +66035,201 @@ Tags as before. Mailbox read at 22:14Z: nothing after your 20:18Z section [run].
 **What is still unpriced** (the note's list): a session of several statements (whether it pays a statement's fixed seconds once); the sampling weight left free (488.5 where the chain has 912.0) and its binding error; the memory of a verifier's core (the scores check peaks at 19.9 GiB against the 8 GiB the model prices); every step but six at a datacenter's size; the wide leaf's seconds; the bytes the split head commits while serving; network accounting's two tie blocks; a larger replay block and a longer execution phase.
 
 I wait on you. If more comes (the per-step repricing, a ruling on the sessions), resume me and I carry it into the note.
+
+## WIRED, Wed 11 Nov 22:13Z: the two guarantees are restated over the connected program in Lean and elaborate, on #8940's base; their proofs from the two premises compile in scratch; the committed-trace form is stated and its count written, one theorem still in a try; four rulings asked; #9043 waits on #8940, which is not on `main`
+
+Tags: [run] a run of mine (id given) or a command run now, [read] a file read now (place given), [relayed], [derived], [guess]. Times from `date -u`. Mailbox read 22:12Z: six sections, the last your 21:39Z one, answered in section 8 [run].
+
+**What I ask you to rule on, in one place.** (a) the verifier of the statement: refuse where the check of the wiring fails (built), or take the check as a hypothesis (section 3); (b) the lock lines of the restated two (section 7); (c) whether `AddressesAt.lean` stays (section 7); (d) whether the committed-trace statements go in pull request 3 as proved theorems that the lock does not list (section 4). Nothing locked is changed anywhere: every file below is new, on the scratch branch `cursor/proofs-wired-5d1b` at `de60661dfd`, on #8940's head `22adf3144ef0` merged with #9043's files restated [run: `git log`].
+
+### 1. The two restated statements (`security/Proofs/Flock/SamplingGeneric/WiredGuarantees.lean`, elaborates: `r20261111-213835-d2a9`, lean exit 0 in 49 s) [read, run]
+
+```lean
+def SpotKSTwoWired : Prop :=
+  ∀ h : SpotFlock.Held, SpotFlock.BuiltWired h (SpotFlock.wireMap h) (SpotFlock.returned h) →
+    SpotFlock.AddressesWired h (SpotFlock.wireMap h) (SpotFlock.returned h) →
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeConnected h)
+      SpotFlock.iroots (SpotFlock.twoConnected h) (SpotFlock.rsConnected h) (SpotFlock.cap h)).KS
+      FlockDeploy.sha512
+
+def SpotExfilTwoWired : Prop :=
+  ∀ h : SpotFlock.Held, SpotFlock.BuiltWired h (SpotFlock.wireMap h) (SpotFlock.returned h) →
+    SpotFlock.AddressesWired h (SpotFlock.wireMap h) (SpotFlock.returned h) →
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeConnected h)
+      SpotFlock.iroots (SpotFlock.twoConnected h) (SpotFlock.rsConnected h) (SpotFlock.cap h)).Exfil
+      FlockDeploy.sha512
+```
+
+- [read: `Guarantees.lean:74-87` on `main`] Against the locked two, three things change and nothing else: `SpotFlock.code h` becomes `SpotFlock.codeConnected h`, `SpotFlock.two h` and `SpotFlock.rs h` become `twoConnected h` and `rsConnected h`, and the premises `Built h`, `Addresses h` become `BuiltWired`, `AddressesWired` at the code's own wiring map. `CompiledTwo.KS`, `CompiledTwo.Exfil`, `compiledTwo`, the record `deployZk`, `iroots`, `cap h` and SHA-512 are `main`'s, unchanged.
+- [read] In the pull request they take the locked names (`SpotKSTwo`, `SpotExfilTwo`) in `Guarantees.lean` and the side-by-side text goes; the `Wired` names are only so the scratch file compiles beside `main`'s.
+- [read: `SamplingTwo.lean:325-339`] What each says, since the names hide it. `KS`: at every δ ≥ 0, a run is accepted while the extractor's witness has no interiors putting its footprint in the allowed set with probability at most δ + ε_ks + ε_bind, on the statements in scope. `Exfil`: the same with "what the witness opens at the returned gates is outside the influence set at its own inputs", and the influence set at any inputs has at most Σ over admissible sets T of 2^(bits the proof blocks of T commit) members. Both now read the connected program, so a wired read is no longer one of the program's inputs.
+
+### 2. What they stand on (`security/Proofs/Flock/SpotFlock/WiredCode.lean`, 142 lines; elaborates on #8940's base: `r20261111-212456-5a19`, lean exit 0, 4 theorems) [read, run]
+
+```lean
+def gated (ok : Bool) (V : Verifier FlockDeploy.Coin) : Verifier FlockDeploy.Coin where
+  k := V.k
+  next := fun x as cs => bif ok then V.next x as cs else .ret .rej
+
+def parseWired (x : Msg) : Option AuditStatement :=
+  (parse h x).map fun s => { s with prog := (bitsProgs h.ms).wired ω keep }
+
+def twoGated (ok : Bool) (s : AuditStatement) : Option Design.Two := bif ok then twoWired h ω s else none
+
+noncomputable def baseWired (ok : Bool) : Code :=
+  { h.frame with
+    V := gated ok (V h)
+    parse := parseWired h ω keep
+    scopeCheck := fun x => ((parseWired h ω keep x).bind (partitionWired h ω)).isSome
+    partition := partitionWired h ω
+    reveal := revealWired h ω keep h.frame
+    -- stage2, checked, rounds, session, reveals, sessions, tables, unitN₀, innerN₀: `base h`'s, word for word
+    }
+
+noncomputable abbrev codeWired (ok : Bool) : Code :=
+  codeTwoStage (baseWired h ω keep ok) (reg h) (fun _ => L) (fun _ => h.stage * L) (fun _ => coinByte)
+    (fun _ => h.stage) (stageOrderWired h ω keep ok) fun _ => stageByte
+
+def wiredOk : Bool :=
+  (List.range h.ms.length).all (templateOk h) && h.ms.all memberOk && writersFirst h && noReturnedWired h &&
+    wiresMove h
+
+noncomputable abbrev codeConnected : Code := codeWired h (wireMap h) (returned h) (wiredOk h)
+def twoConnected : AuditStatement → Option Design.Two := twoGated h (wireMap h) (wiredOk h)
+noncomputable def rsConnected : (x : Msg) → (Fin ((codeConnected h).V.k x) → FlockDeploy.Coin) → List ℕ :=
+  rsWired h (wireMap h) (returned h) (wiredOk h)
+```
+
+- [read: `Claims/Sampling/Rewire.lean:64-74`, line numbers the scratch's] `Prog.wired C ω keep` is `C`'s gates, each reading gate `ω i` where it read `i`, returning those of `C`'s returned gates that `keep` holds. Gate numbers do not move. A gate the map moves stays in the list as an input gate that no gate reads and no proof block holds (`partitionWired`, `twoWired` take each proof block and replay block without the gates the map moves).
+- [read: `SpotFlock/WireMap.lean:268-286`, #9043's file] `wireMap h` sends a reader's source bit at a port a wire names to the gate on the same bit of its writer unit's output; `returned h` is the written bits at ports a link names, which the boundary record holds.
+- [read] The sessions, their rounds, the samples, the session frame and the check of the session statements are `code h`'s. Five fields of the code differ from `base h` (`Code.lean:708-724`): the verifier (section 3), the statement's program, the partition, the scope check (which is those two's) and the openings a session reveals (`revealWired`, from the address premise's files).
+- [read: `AddressesWired.lean:113-116`, `RevealsWired.lean:211-213`, the address premise's worker's files at `7ac4774443`, restated by me for #8940 in the scratch] The two premises:
+
+```lean
+def AddressesWired : Prop :=
+  ∃ addr : ℕ → Address,
+    (∀ i, (addr i).place = (addr (ω i)).place ∧ (addr i).slot = (addr (ω i)).slot) ∧
+      ∀ r : CheckedRun h.stage, r.Ok h → ∀ i, r.s.prog.Needs r.b i → r.AddressHoldsWired h ω keep (addr i) i (ω i)
+
+def BuiltWired : Prop :=
+  ∃ c₀ : Code, h.frame =
+    frameAt (slotsOf (addressMapWired h ω keep)) (revealCodeWired h ω keep (addressMapWired h ω keep) c₀)
+```
+
+### 3. The one design choice: the verifier refuses where the check of the wiring fails [read, derived]
+
+- [read: `WiredCode.lean:28-30`] The verifier's own check of the session statements reads no wire. So the conditions the proof needs of the wiring (`wiredOk h`, decided on what the verifier holds) are either a refusal or a hypothesis.
+- **Built: a refusal.** `codeConnected h`'s verifier is `V h` where `wiredOk h` holds and refuses every run where it does not; `twoConnected h` gives no design there, so no statement is in scope. The guarantee then speaks at every `h`: where the check fails no statement is in scope (`ksTwo_refused`) and the verifier accepts nothing. The second half is true by `gated`'s definition and is not yet a theorem; I add it (one lemma on `run` at a verifier that rejects at once) if this form stays.
+- **The other: a hypothesis** `SpotFlock.wiredOk h = true →` in the statement, with `V h` itself. It is a small change that removes code: the proof is `ksTwo_wired` as it stands (already at the verifier itself, `gated true V = V` by `rfl`), and `gated`, `twoGated` and `ksTwo_refused` go.
+- [derived] **What is not said by either, and reads as if it were.** The verifier `V h` is the Lean model in the proofs tree (the lock calls the two "frozen (obligation,no-function)" for that reason). With the refusal, the model refuses registrations that the verifier a deployment runs may accept: I found nothing that ties the executable check of wires (#9041's) to `wiredOk h`. So the refusal form reads stronger than what runs. The hypothesis form says the same mathematics and shows the gap in the statement. I built the refusal because of the rule that the verifier gains no form ahead of its proof; I think the hypothesis form is the more honest one until the executable check is shown to imply `wiredOk h`, and I change to it on your word.
+- [read: `WiredCode.lean:132-140`; `WireMap.lean:256-264, 361-380`] Of `wiredOk h`'s five conditions the proof of `Prog.Rewires` uses three (`templateOk` at every template, `memberOk` at every member, `writersFirst`). The other two do not enter a proof here; they are what makes the connected program mean what it reads: `wiresMove` (every source bit at a wired port has a gate to go to, `wireTarget_of_wiresMove`; without it a wired read stays an input of the connected program, which the bound treats as given) and `noReturnedWired` (no wire's writer's port is one a link names, `writer_not_linked`).
+
+### 4. The committed trace (your 19:10Z section) [read, run]
+
+**(1) The statements** (same file; elaborate, same run):
+
+```lean
+def SpotKSRegTwoXWired : Prop :=
+  ∀ h : SpotFlock.Held, SpotFlock.BuiltWired h (SpotFlock.wireMap h) (SpotFlock.returned h) →
+    SpotFlock.AddressesWired h (SpotFlock.wireMap h) (SpotFlock.returned h) →
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeConnected h)
+      SpotFlock.iroots (SpotFlock.twoConnected h) (SpotFlock.rsConnected h) (SpotFlock.cap h)).KSRegTwoX
+      FlockDeploy.sha512
+
+def SpotExfilRegTwoXWired : Prop := -- the same, ending in `.ExfilRegTwoX FlockDeploy.sha512`
+```
+
+`KSRegTwoX` is `main`'s (`Definitions/Claims/SamplingTwoRegX.lean:72`). `ExfilRegTwoX` is new, in a new definitions file `security/Definitions/Claims/SamplingTwoServedX.lean` (79 lines, statements only; built in `r20261111-213835-d2a9`):
+
+```lean
+def traceInputs (s : AuditStatement) (val : ℕ → Option Bool) (g : ℕ) : Option Bool :=
+  if s.prog.gates[g]? = some .input then val g else none
+
+def traceServed (s : AuditStatement) (val : ℕ → Option Bool) : Fin s.prog.outs.length → Bool :=
+  fun i => (s.prog.read val s.prog.outs[i]).getD false
+
+noncomputable def influenceTwoAt (s : AuditStatement) (Pt : Partition) (d : Design.Two) (δ : ℝ)
+    (a : ℕ → Option Bool) : Finset (Fin s.prog.outs.length → Bool) :=
+  Finset.univ.filter fun y => ∃ val : ℕ → Option Bool, traceInputs s val = a ∧
+    (∃ ι : ℕ → ℕ → Bool, footprintAt s Pt d.part val ι ∈ d.M Pt δ) ∧ traceServed s val = y
+
+def ExfilRegTwoX (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop :=
+  L.KSRegTwoX H ∧
+    (∀ x, L.Scope x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
+      ∀ s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → ∀ δ : ℝ, 0 ≤ δ →
+        Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+            traceServed s (L.regValX H P x) ∉ influenceTwoAt s Pt d δ (traceInputs s (L.regValX H P x))) ≤
+          δ + L.εregTwoX H x P) ∧
+    ∀ x s Pt d (a : ℕ → Option Bool), L.parse x = some s → L.partition s = some Pt → L.two s = some d →
+      InScopeTwo Pt d s → ∀ δ : ℝ,
+        (influenceTwoAt s Pt d δ a).card ≤ ∑ T ∈ admissibleTwo Pt d δ, 2 ^ bitsOf s Pt T
+```
+
+- [derived] How the middle clause reads: `regValX H P x` reads the statement and the prover's strategy and neither its tape nor the coins, so the event's second half is fixed before the run. For each prover and statement, either what its committed trace serves is in the influence set at that trace's own inputs, or it is accepted with probability at most δ + ε_reg,2,X.
+- [derived] The three definitions are `inputsOf`, `served` and `influenceTwo` (`SamplingTwo.lean:203-218`) with a trace where those read a witness's openings; `influenceTwo` is the part of `influenceTwoAt` at the witnesses' values (`influenceTwo_subset_at`, written).
+
+**(2) What proving the count takes: it is written, and Lean passes eight of its nine theorems; the ninth is in a try now.**
+- [read, run] `security/Proofs/Flock/SamplingGeneric/TwoCountX.lean`, 214 lines, 9 theorems and one definition. Lean reports one failing theorem of the nine in each of two runs (`r20261111-213835-d2a9`, `r20261111-215326-979a`): `traceServed_eq_of`, the copy of `served_eq_of`, on a bound name that is a token under this file's imports (`Z`, then `X`: ArkLib's notation for a polynomial's variables). Both are renamed; `r20261111-221112-b5d9` tries it now, [guess] verdict by 22:50Z. The count itself is `card_influenceTwoAt_le`, on `InScopeTwo` alone, at every real δ. `CompiledTwo.exfilRegTwoX_of_ks : L.KSRegTwoX H → L.ExfilRegTwoX H` and `compilerExfilRegTwoX` hold at every compiled two-stage verifier, so at the side-by-side code too.
+- [read] It redoes nothing of the determinism argument. Six lemmas of `TwoCount.lean` are copied with a trace in place of a witness's openings (`inter_cell_wrongOfAt`, `counts_wrongOfAt`, `wrongOf_mem_admissibleAt`, `servedAtX`, `traceServed_eq_of`, `card_servedAtX_le`), about 150 lines, because `main`'s are stated at `w.val H Cm s`. The lemmas of `main` it reads as they are: `glue`, `wrongOf`, `glue_correct_iff`, `glue_of_boundary`, `cell_blocks`, `boundary_eq`, `outs_eq` (already at two arbitrary traces), `exits`, `card_exits_le` (`TwoCount.lean`) and `cell_subset` (`TwoFoot.lean`); for the probability, `compilerKSRegTwoX` (`TwoRegX.lean:131`) and `Pr_mono`.
+- [read] At the connected code (`SpotFlock/WiredRegX.lean`, 96 lines, 5 theorems): `sessionsTwo_wired` from `SamplingDeploy.sessionsTwo_stage` at the same facts `ksTwo_wired` gives `ksTwo_stage`; then `compilerKSRegTwoX` at `flockArgKS … MaskedKS (listWithin_deployZk _)` and `SamplingDeploy.commit_binds`.
+- [derived] In the pull request the witness-level lemmas of `TwoCount.lean` can become the trace-level ones' instances, which removes about 150 lines; I have not done it, to keep `main`'s file untouched until you rule.
+
+**(3) Is the address premise needed in that form? Yes, the same premise for the same reason; the count needs none.** [derived, read: `SamplingTwo.lean:308-317`, `TwoRegX.lean:131`]
+- `KSRegTwoX` is proved from the same contract as `KS` (`CompiledTwo.Sessions`), and the contract's clause on openings (`opens`: a session's witness reveals openings that make the sampled proof block correct at the statement's program) is exactly where `AddressesWired` and `BuiltWired` enter, through `stmtOpensWired`. So both forms take both premises, at the wired program, unchanged.
+- The count (`card_influenceTwoAt_le`) reads only the program and its partitions: no premise on addresses, no commitment, no hash.
+- What the committed-trace form drops is the extractor's witness in the event, not a premise.
+
+### 5. The proofs from the premises compile, in scratch (not for landing before the statements are read) [run]
+
+- `SpotFlock/WiredKS.lean` (313 lines): lean exit 0 in 677 s, 17 theorems, no axiom beyond `propext`, `Classical.choice`, `Quot.sound` [run: `r20261111-213835-d2a9`]. It ends in `ksTwo_connected` and `exfilTwo_connected`, which are `SpotKSTwoWired` and `SpotExfilTwoWired` at one `h` (`exfil_of_ks` on the first, as on `main`).
+- Its route: the connected code has `code h`'s checked units, slots and sessions (`units_wired`, `checked_wired`, `sessionRunsTo_wired`, `sessionsIn_wired`); scope, the replay cap and the registration's match are carried over by `Prog.Rewires` (`refusesTwo_wired`, `replayCap_wired`, `regMatchesTwo_wired`); the openings are `stmtOpensWired`; then `SamplingDeploy.ksTwo_stage`, the same theorem `SpotKSTwo` uses on `main`. `Prog.Rewires` at the code's own map is pull request 2's `rewires_wireMap` through `rewires_of_wiredOk`.
+- On #8940's base also: `WireMapRewires.lean` exit 0 (22 theorems), `AddressesWired.lean` exit 0 (5), `RevealsWired.lean` exit 0 (33), `WiredCode.lean` exit 0 (4) [run: `r20261111-212456-5a19`].
+- `SpotFlock/WiredRegX.lean` (the committed form at the connected code) has no verdict yet: it imports `TwoCountX.lean`, whose one theorem failed in both runs; it is in `r20261111-221112-b5d9` with it.
+
+### 6. The connected instance, and why it is of a program and not of a registration [read, run]
+
+- [read: `AddressesWired.lean`, the address premise's worker's] `fanProg` is three members in one replay block: two writers of one output each, and a reader whose first and third inputs are wired to the first writer's output and whose second is wired to the second's. In small it has what the served select's wiring has: one written gate read at two gates of one proof block, and several writers read by one reader.
+- [read: `SpotFlock/FanRewires.lean`, 91 lines, mine] `fanProg_rewires : fanProg.Rewires ⟨[[[[0, 1], [2, 3], [4, 5, 6, 7]]]]⟩ fanWire fanKeep`, and `fanProg_not_injective : fanWire 4 = fanWire 6 ∧ (4 : ℕ) ≠ 6`. Lean exit 0 in 29 s, 4 theorems, no axiom beyond the three [run: `r20261111-215326-979a`].
+- [read: the lock, `SpotKSTwo`'s witnesses] **No instance at a registration exists, here or on `main`.** A `Held` needs session statements that set up (`xS₀_ok`), and the tree builds none; the lock records the honest witness of the side-by-side two as missing for that reason. So the instance witnesses the condition on the program (`Prog.Rewires`) and not the premise on addresses, at which no accepted run is exhibited. The restated two keep the `nontrivial` witnesses' shape and still have no honest one.
+
+### 7. What the lock would carry in pull request 3, for your ruling [read: `security/lean-audit.json` on `main`]
+
+- `Flock.SecurityProofs.SpotKSTwo`, `SpotExfilTwo`: restated under the same names; their records regenerate; the `frozen` reasons are rewritten for the connected code.
+- `SpotFlock.BuiltWired`: `domain`, as `Built` is now ("met by `built_spot`"; here `builtWired_spot`, compiled).
+- `SpotFlock.AddressesWired`: `open`, in place of `SpotFlock.Addresses` (issue PRF-460, due 2026-11-30). I need from you the issue and the due date it carries; I add no open premise on my own.
+- `Claims.SamplingGeneric.CompiledTwo.Scope`, `InScopeTwo`: as now.
+- `Built`, `Addresses` and `AddressesAt.lean` (#9043's file about the side-by-side premise): once nothing listed reads `Addresses`, the file proves facts about a premise no guarantee takes. I would delete it with `Addresses` in pull request 3; say if it should stay.
+- The committed-trace pair: my proposal is that pull request 3 carries them as proved theorems the lock does not list, with the one new definitions file, until Daniel rules which form is the guarantee. Then listing them is a lock change and no Lean.
+
+### 8. Your 21:39Z questions [derived, guess]
+
+- **The date the restated `SpotKSTwo` is listed by: Thu 19 Nov 2026, as the address premise's worker wrote.** It waits on, in order: #8940 on `main`; #9043; pull request 2 (`rewires_wireMap`); the address premise's pull request; your reading and a second reader's of sections 1 to 4; your rulings (a) and (b). The Lean is not what it waits on (section 5). #9043's body says Fri 13 Nov today [guess, mine]; I change it to Thu 19 Nov at its next push so the three bodies carry one date.
+- **Which lands second:** I expect pull request 2 before the address premise's (mine is to be marked by Thu 08:00Z, that one opens Thu 10:00Z), so the address premise's pull request carries the line `fun hag => decoded_rewired … hW hag`. If the order turns, pull request 2 carries it; the line is in the scratch and compiles (`r20261111-212456-5a19`).
+
+### 9. #9043, #8940, pull request 2 [run]
+
+- #9043 is at `7dcb811246`, pushed, not marked, cap and the three terms fixed (my 21:09Z entry). Its quick suites passed at that tree: `r20261111-203724-c947`, exit 0.
+- #8940 is marked at `22adf3144ef0` and not on `main` (`origin/main` = `118003ab7a` at 22:12Z) [run: `gh pr view 8940`, `git fetch`]. [relayed: the 21:47Z entry on #8940] a candidate holding #8885 will make it merge `main` once, on one docstring.
+- #9043's three files restated for `CheckedRun h.stage` on the merge with #8940's head (branch `cursor/proofs-wired-b8f4` at `335e4e4c2d`): `AddressesAt.lean` lean exit 0 (21 theorems), `WiredAt.lean` exit 0 (4 theorems), no axiom beyond the three; `WireMap.lean` is still building its imports [run: `r20261111-211913-1865`].
+- One correction to your 21:04Z text: line 171 is in `AddressesAt.lean`; lines 657 and 658 are in `WireMap.lean` [read].
+- When #8940 is on `main`: merge `main` into `cursor/proofs-wired-7ac3`, bring the three files' restated lines, one try, the quick suites, one records run, the body, then the head to you. If it is not on `main` by Thu 03:00Z I say so.
+
+### 10. Runs since my 21:09Z entry, with exit codes [run]
+
+| run | what | exit |
+|---|---|---|
+| `r20261111-203724-c947` | quick suites at #9043's tree | 0 |
+| `r20261111-211439-bf2a` | the scratch on the base before #8940 | cancelled by me at about 21:38Z: superseded |
+| `r20261111-212456-5a19` | six files on #8940's base | run 0; five files lean exit 0, `WiredKS.lean` 1 (three lemmas, fixed) |
+| `r20261111-213835-d2a9` | four files | run 0; `WiredKS.lean` 0, `WiredGuarantees.lean` 0, `TwoCountX.lean` 1 (a bound name that is a token under its imports, fixed), `WiredRegX.lean` 1 (its import) |
+| `r20261111-211913-1865` | #9043's three files on #8940's base | running; `AddressesAt.lean` 0, `WiredAt.lean` 0, `WireMap.lean` no verdict yet; [guess] by 22:40Z |
+| `r20261111-215326-979a` | `TwoCountX.lean`, `WiredRegX.lean`, `FanRewires.lean` | run 0; `FanRewires.lean` 0; `TwoCountX.lean` 1 (a second such name, fixed), `WiredRegX.lean` 1 (its import) |
+| `r20261111-221112-b5d9` | `TwoCountX.lean`, `WiredRegX.lean` at `de60661dfd` | running; [guess] by 22:50Z |
+
+### 11. Next, in order
+
+1. #9043 when #8940 is on `main` (section 9); pull request 2 on that head, opened and marked by Thu 08:00Z or the line that stops it.
+2. Pull request 3 after your rulings: the statements into `Guarantees.lean` under the locked names, the lock lines, the cap and the body's table.
+3. Until then: the verdicts of `r20261111-221112-b5d9` and `r20261111-211913-1865` in a short entry, and pull request 2's body.
+
+Next entry: Thu 12 Nov 03:00Z at the latest (#8940), sooner at a ruling or when #8940 lands. Checkpoint note `lanes/proofs/20261111T2207Z-report-wired.md`, synced [run].
