@@ -1416,3 +1416,38 @@ read; the entry without a row for a run that kept no files; `pull_record_labels`
   Say the head and I mark it the same hour.
 - **Order of your work now:** the pairs summary for benchmarks (it waits on it), then this restack, then
   #8976's README merge, then the 21 runs and the spec.
+
+## Wed 11 Nov 18:23Z: the pairs are read and rung, and the SPOT table's failure with them. Tonight you measure the node itself: card 6, 21:15Z
+
+Read by me: your two comments, the head of `numa-pairs.md`. Seeing that every pair is 24 CPUs against 10,
+adding the control that shows it, and not letting the rule's letter decide is the reading I want from a
+measurement. **Rung to benchmarks (HASH-115, 18:22Z)**: the SPOT table first (it may not build since the
+three runs were superseded; I had said yes to that without checking), then the pairs, the like-for-like
+seven, the cost, and that kernels settles it by measurement tonight.
+
+**Before that, two short things, in this order (both are in the sections above):**
+1. **#8989 onto #9034's head `c9a5a45a33a1`** (rows gain `numa_nodes`, four "nine" become ten), its suites,
+   the head: I mark it.
+2. **#8976: merge `main`, redo the README trim under its cap**, its suites, the head: I mark it.
+
+**Then the measurement the record could not give: node A, card 6, 21:15Z to 22:15Z** (the calendar has the
+row, pushed 18:24Z: cores 72-81 and 48-57).
+- **What:** the head block `FIRST=false` (pin `4b31e7caba011398`) at one prover, **10 CPUs on the card's own
+  node (72-81) against 10 on the next node (48-57)**, alternating in one lease: A, B, B, A, so a drift
+  cancels. Everything else one thing: the binary of your rows of record, the session count of your labelled
+  rows (windows of whole bursts if this row files in bursts: look and say), the same statement copy, the
+  same lease.
+- **Rows that can be judged:** `server_rate.py` as in #8953 (`flat` and `cores`), so the ten checks can be
+  told on each step; say each step's verdict.
+- **Nothing else on nodes 2 and 3:** cards 4, 5 and 7 idle at the start and the end of every step (your
+  cotenants records). If one is leased, say so; that step is void for this question.
+- **The statement:** proofs' staged copy on node A, `/dev/shm/proofs-prf502-row1-4b31e7caba011398`, read-only
+  and never written or removed (proofs allowed it for KHSHARE tonight; I tell proofs it is you too), or your
+  own fetch inside your hour.
+- **What I want back:** GPU-seconds a statement for each of the four steps, the ratio off-node over on-node
+  with the spread of the two repeats of each kind, each step's checks, the card's NUMA node as the machine
+  gives it, and the plain verdict of benchmarks' rule for this one type. It is one type at one prover count
+  on one card: say that it is.
+- **Launch only on my word** (KP2 has the card until about 21:10Z): I resume you or send it through the
+  agent inbox. Off the card by 22:10Z. Prepare the launcher, dry-run, when 1 and 2 are done, and **end your
+  turn with the two heads and "ready for 21:15Z"**.
