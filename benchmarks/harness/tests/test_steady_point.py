@@ -1,7 +1,7 @@
 """A steady-state spec's points on a made-up tree, a store with a directory remote and stand-ins for the node: the schema
-loaded strictly, what a point's identity binds and what it leaves out, which run `plan` counts as a point's passing run
-and why it counts no other, the command `run --direct` launches, and the node side from its refusals to its verdict. No
-GPU, no node and no clock."""
+loaded strictly, what a point's identity binds and what it leaves out, the sessions a point times where a row's sessions
+file in bursts, which run `plan` counts as a point's passing run and why it counts no other, the command `run --direct`
+launches, and the node side from its refusals to its verdict. No GPU, no node and no clock."""
 
 from __future__ import annotations
 
@@ -127,7 +127,7 @@ def test_a_steady_spec_is_told_by_its_schema_and_its_points_are_each_row_at_each
     assert [point.id for point in spec.points] == ["gemm64-k1", "gemm64-k2", "head_block-k2"]
     head = SP.point(spec, "head_block-k2")
     assert head.to_json() == {"type": "head-block", "name": "head_block", "n": 4, "pin": "ab" * 64, "warm": 2,
-                              "staged": "/dev/shm/head", "provers": 2}
+                              "period": None, "staged": "/dev/shm/head", "provers": 2, "sessions": 16}
     assert (spec.cores, spec.admission.max_minutes, dict(spec.env)) == (10, 90, {"RUST_MIN_STACK": "1073741824"})
     with pytest.raises(ValueError, match=r"point 'gemm64-k4' is not in spec 'steady' \(gemm64-k1, gemm64-k2, head_block-k2\)"):
         SP.point(spec, "gemm64-k4")
@@ -153,6 +153,7 @@ REFUSED_SPECS = [
     ({"spec": {"row": []}}, "missing required key 'row'"),
     ({"spec": {"row0": {"type": "--"}}}, "its `type` names nothing"),
     ({"spec": {"row0": {"n": 0}}}, "`n` is 0"),
+    ({"spec": {"row0": {"period": 0}}}, "`period` is 0; it is a count of at least 1"),
     ({"spec": {"row0": {"pin": PIN[:64]}}}, "`pin` isn't a SHA-512 in lowercase hexadecimal"),
     ({"spec": {"row0": {"pin": PIN.upper()}}}, "`pin` isn't a SHA-512"),
     ({"spec": {"row0": {"provers": []}}}, "`provers` is a list of distinct prover counts"),
@@ -187,6 +188,7 @@ BOUND = {
     "the statement's units": {"spec": {"row0": {"n": 2}}},
     "the statement's pin": {"spec": {"row0": {"pin": "cd" * 64}}},
     "the warm sessions": {"spec": {"row0": {"warm": 3}}},
+    "the period its sessions file in": {"spec": {"row0": {"period": 4}}},
     "the prover's source": {"files": {"verity/protocols/flock/prover/src/main.rs": "fn main() { loop {} }\n"}},
     "a kernel": {"files": {"verity/protocols/flock/prover/cuda/ntt.cu": "// another kernel\n"}},
     "a new source file": {"files": {"verity/protocols/flock/prover/src/extra.rs": "\n"}},
@@ -268,6 +270,47 @@ def test_a_spec_of_a_workload_without_a_steady_state_record_is_refused(tmp_path)
     root, spec = tree(tmp_path, spec={"workload": "llama"})
     with pytest.raises(ValueError, match="the `workload` of spec 'steady', 'llama', has no steady-state record: the workloads are glm53"):
         P.make_plan(root / spec, root=root, lookup=lambda spec, item, identity: (None, None))
+
+
+# ---- the timed sessions ----------------------------------------------------------------------------------------------------
+
+#: a prover's filings where one session in four waits: seven sessions of two provers a second apart, then one after nine
+BURSTY = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 9.0)
+
+
+def test_a_declared_period_sizes_the_timed_sessions_so_the_window_and_its_thirds_hold_whole_bursts():
+    assert [SP.timed_sessions(120, provers, None) for provers in (1, 2, 4)] == [120, 120, 120]
+    assert [SP.timed_sessions(120, provers, 4) for provers in (1, 2, 4)] == [122, 124, 152]
+    assert SP.timed_sessions(124, 2, 4) == 124 and SP.timed_sessions(125, 2, 4) == 148 and SP.timed_sessions(16, 2, 4) == 28
+    for sessions, provers, period in [(120, 1, 4), (120, 2, 4), (120, 4, 4), (16, 2, 4), (40, 3, 5), (17, 2, 1)]:
+        timed = SP.timed_sessions(sessions, provers, period)
+        gaps = len(S.window([float(i) for i in range(timed)], provers)) - 1
+        assert timed >= sessions and gaps == SP.window_gaps(timed, provers), "the window the timing script rates"
+        assert gaps % (3 * period * provers) == 0 and timed - sessions < 3 * period * provers, "the next such count"
+
+
+def test_thirds_that_cut_a_burst_read_uneven_and_the_points_count_reads_whole_bursts(tmp_path):
+    """Two provers whose sessions file in bursts of eight. At 16 timed sessions the window is 12 gaps, a burst and a
+    half, and its thirds read the burst's phase; at the count a period of four gives, 28, each third is one burst."""
+
+    spec = load(tmp_path, spec={"row0": {"period": 4}})
+    item = SP.point(spec, POINT)
+    assert item.sessions == 28 and item.bursts == {"period": 4, "sessions": 8, "window": 3}
+    assert SP.point(spec, "gemm64-k1").bursts == {"period": 4, "sessions": 4, "window": 6}
+    assert SP.point(spec, "head_block-k2").bursts is None
+
+    row, files = made(OWN | {SP.BURSTS: item.bursts}, gaps=(BURSTY * 4)[:15])
+    assert row["sessions"] == 16
+    cut = S.verdict(row, files)
+    assert [check.name for check in cut.checks if not check.ok] == ["level"] and "its window isn't level" in cut.why
+    assert SP.point_why(row, files, spec, item, own=True).startswith("fail: it timed 16 sessions after 2 warm ones")
+
+    row, files = made(OWN | {SP.BURSTS: item.bursts}, gaps=(BURSTY * 4)[:27])
+    assert row["sessions"] == 28 and row["window_sessions"] == 24
+    assert S.verdict(row, files).passed and SP.point_why(row, files, spec, item, own=True) is None
+    for shifted in range(1, 8):
+        row, files = made(OWN | {SP.BURSTS: item.bursts}, gaps=(BURSTY * 5)[shifted:shifted + 27])
+        assert SP.point_why(row, files, spec, item, own=True) is None, f"whatever the burst's phase ({shifted})"
 
 
 # ---- a point's passing run -------------------------------------------------------------------------------------------------
@@ -398,6 +441,10 @@ NOT_IT = [
     ({}, {"changes": {"pin": "cd" * 64}}, "fail: its `pin` is another circuit's (cdcdcdcdcdcdcdcd...)"),
     ({}, {"changes": {SP.VERSIONS: {"driver": "570.86.16", "cuda": CUDA}}}, "cannot tell: its row's `versions`"),
     ({}, {"changes": {SP.VERSIONS: DROP}}, "cannot tell: its row's `versions` (None) aren't the spec's"),
+    ({}, {"changes": {"sessions": 15}}, "fail: it timed 15 sessions after 2 warm ones a prover; the point's are 16 and 2"),
+    ({}, {"changes": {"warm": 1}}, "fail: it timed 16 sessions after 1 warm ones a prover; the point's are 16 and 2"),
+    ({}, {"changes": {SP.BURSTS: {"period": 4, "sessions": 8, "window": 1}}},
+     "cannot tell: its row's `bursts` ({'period': 4, 'sessions': 8, 'window': 1}) aren't the point's (None)"),
     ({}, {"changes": {"type": "gemm32"}}, "cannot tell: the run's `out/rate/rate.json` holds 0 rows of `gemm64` at 2 provers"),
 ]
 
@@ -632,8 +679,8 @@ class Node:
 
     def __init__(self, tmp_path: Path, monkeypatch, *, row: dict | None = None, answers: dict | None = None,
                  circuit: str = CIRCUIT, said: str = PIN, units: int = 1, cpus: int = 10, lease_exit: int | None = None,
-                 **texts):
-        self.root, self.spec = tree(tmp_path)
+                 spec: dict | None = None, **texts):
+        self.root, self.spec = tree(tmp_path, spec=spec)
         self.run_dir = tmp_path / "run"
         self.run_dir.mkdir()
         (scratch := tmp_path / "scratch").mkdir()
@@ -687,6 +734,7 @@ class Node:
         assert argv[1] == SP.TIMER, argv
         out = Path(argv[argv.index("--out") + 1])
         (step := out / f"gemm64-k{argv[argv.index('--provers') + 1]}").mkdir(parents=True)
+        self.timed = argv
         (out / "rate.json").write_text(json.dumps([self.row]))
         if (sessions := self.files(SESSIONS)) is not None:
             (step / "sessions.jsonl").write_text(sessions)
@@ -769,6 +817,23 @@ def test_the_result_lists_every_file_plan_judges_the_run_by(tmp_path, monkeypatc
     spec = SP.load_spec(node.root / node.spec, root=node.root)
     item, files = SP.point(spec, POINT), S.files_in(tmp_path / "stored")
     assert SP.point_why(SP.own_row(files, item), files, spec, item, own=True) is None
+
+
+def test_the_node_side_times_a_row_with_a_period_at_the_points_count_and_records_its_bursts(tmp_path, monkeypatch):
+    period = {"row0": {"period": 4}}
+    node = Node(tmp_path, monkeypatch, spec=period, gaps=(BURSTY * 4)[:27])
+    assert node.point() == 0
+    assert node.timed[node.timed.index("--sessions") + 1] == "28", "not the spec's 16"
+    [row] = node.read(S.RATES)
+    assert row[SP.BURSTS] == {"period": 4, "sessions": 8, "window": 3} and row["sessions"] == 28
+    assert node.read(N.POINT_FILE)["point"] | {"period": 4, "sessions": 28} == node.read(N.POINT_FILE)["point"]
+
+    short = Node(tmp_path / "short", monkeypatch, spec=period)
+    assert short.point() == SP.NOT_PASSED, "a script that timed another count than the point's"
+    assert short.read(N.VERDICT_FILE)["why"].startswith("fail: it timed 16 sessions after 2 warm ones a prover; the "
+                                                        "point's are 28 and 2")
+    plain = Node(tmp_path / "plain", monkeypatch)
+    assert plain.point() == 0 and SP.BURSTS not in plain.read(S.RATES)[0], "a row without a period records none"
 
 
 def test_a_statement_already_on_the_node_is_proved_from_a_copy_checked_against_the_pin(tmp_path, monkeypatch):
@@ -919,5 +984,5 @@ def test_the_readme_states_a_steady_state_spec_as_the_code_keeps_it():
     assert (f"exits 0 for a passed point, {SP.NOT_PASSED} for a point that was timed and didn't pass, and {N.REFUSED} where "
             "nothing was timed") in section
     spec_keys = {"workload", "card", "cores", "sessions", "ahead", "driver", "cuda", "setup", "[env]", "[admission]",
-                 "max_minutes", "mem_gb", "[[row]]", "type", "n", "pin", "provers", "warm", "staged"}
+                 "max_minutes", "mem_gb", "[[row]]", "type", "n", "pin", "provers", "warm", "period", "staged"}
     assert all(f"`{key}`" in section for key in spec_keys), [key for key in spec_keys if f"`{key}`" not in section]

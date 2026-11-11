@@ -21,18 +21,26 @@ Standard library and `verity_config` only: the node side reads it too.
     pin = "..."           # the SHA-512 of the statement's circuit: another circuit takes no GPU time
     provers = [1, 2, 4]   # a point a count
     warm = 2              # warm sessions a prover, before any timed one
+    period = 4            # optional: the sessions a prover's filings repeat over, where they file in bursts
     staged = "/..."       # optional: a statement already on the node, proved from a copy checked against `pin`
 
+**A point's timed sessions** (`timed_sessions`) are the spec's `sessions`, and for a row with a `period` the next count
+whose rated window holds a whole number of bursts, a multiple of three: a burst is `period` sessions a prover, and a
+window or a third of one that cuts a burst reads the burst's phase and not the rate. The period is declared, never read
+off the run's first sessions: the count is then fixed before the run and is the point's. The node side writes what it
+used in the row (`BURSTS`).
+
 **A point's identity** (`point_identity`) is a digest of everything its time depends on, and of nothing else: its row's
-`type`, `n`, `pin` and `warm`, its prover count, the spec's `card`, `cores`, `sessions`, `ahead`, `driver`, `cuda`,
-`env` and `setup`, and the files of `closure`: the prover's sources with the scripts that build them (their flags), the
+`type`, `n`, `pin`, `warm` and `period`, its prover count, the spec's `card`, `cores`, `sessions`, `ahead`, `driver`,
+`cuda`, `env` and `setup`, and the files of `closure`: the prover's sources with the scripts that build them (their flags), the
 script that times them, and the spec's setup. It leaves out the commit, the spec's other rows, its `id`, `workload` and
 `admission`, and a row's `staged`: a new commit or an edit to another row times no row again. The driver and the
 toolkit are the spec's because the node can't be asked before the run: the node side reads both on the node, refuses a
 node whose versions aren't the spec's, and writes them in the row (`VERSIONS`).
 
 **A passed point** (`point_why`): a row whose `pin`, `provers` and `cores.count` are the point's and its spec's, and
-that passes `steady`'s nine checks against the files of the run that measured it.
+that passes `steady`'s nine checks against the files of the run that measured it. A row of a run of the point itself
+also holds the point's load (its timed and warm sessions, its bursts) and the versions read on the node.
 """
 
 from __future__ import annotations
@@ -59,6 +67,9 @@ CLOSURE = ("verity/protocols/flock/prover", "verity/protocols/flock/pod", "bench
 NOT_SOURCE = re.compile(r"(^|/)(tests|__pycache__)/|\.(md|pyc)$")
 #: the row's field for the versions the node side read on the node: the driver's and the toolkit's
 VERSIONS = "versions"
+#: the row's field for the bursts the node side sized the timed sessions by, in a row with a `period`: the period, a
+#: burst's sessions (the period times the provers) and the bursts in the rated window
+BURSTS = "bursts"
 STAGER = "benchmarks/served_units/stage.py"
 TIMER = "benchmarks/one_stage/server_rate.py"
 #: the node side's exit code for a point that was timed and whose row isn't a passed point; 0 is a passed point's
@@ -80,6 +91,7 @@ class SteadyRow:
     pin: str
     provers: tuple[int, ...]
     warm: int
+    period: int | None = None
     staged: str | None = field(default=None, metadata={"identity": False})
 
     @property
@@ -110,24 +122,52 @@ class SteadySpec:
     def points(self) -> tuple[SteadyPoint, ...]:
         """Each row at each of its prover counts, in the spec's order."""
 
-        return tuple(SteadyPoint(row, provers) for row in self.row for provers in row.provers)
+        return tuple(SteadyPoint(row, provers, timed_sessions(self.sessions, provers, row.period))
+                     for row in self.row for provers in row.provers)
 
 
 @dataclass(frozen=True)
 class SteadyPoint:
-    """One row of a spec at one prover count."""
+    """One row of a spec at one prover count, with the sessions it times (`timed_sessions`)."""
 
     row: SteadyRow
     provers: int
+    sessions: int
 
     @property
     def id(self) -> str:
         return f"{self.row.name}-k{self.provers}"
 
+    @property
+    def bursts(self) -> dict[str, int] | None:
+        """What a row of the point records of its bursts (`BURSTS`); None for a row without a `period`."""
+
+        if self.row.period is None:
+            return None
+        burst = self.row.period * self.provers
+        return {"period": self.row.period, "sessions": burst, "window": window_gaps(self.sessions, self.provers) // burst}
+
     def to_json(self) -> dict[str, Any]:
         row = self.row
-        return {"type": row.type, "name": row.name, "n": row.n, "pin": row.pin, "warm": row.warm, "staged": row.staged,
-                "provers": self.provers}
+        return {"type": row.type, "name": row.name, "n": row.n, "pin": row.pin, "warm": row.warm, "period": row.period,
+                "staged": row.staged, "provers": self.provers, "sessions": self.sessions}
+
+
+def window_gaps(sessions: int, provers: int) -> int:
+    """The sessions the timing script rates of `sessions` timed ones at K provers: the gaps of its window, which runs
+    from the K-th timed session's filing to the last but K's (`steady.window`)."""
+
+    return sessions - 2 * provers
+
+
+def timed_sessions(sessions: int, provers: int, period: int | None) -> int:
+    """The sessions a point times: `sessions`, and with a `period` the next count whose rated window is a whole number
+    of bursts and a multiple of three of them, so the window and each third of it (`steady.thirds`) hold whole bursts."""
+
+    if period is None:
+        return sessions
+    three = 3 * period * provers
+    return 2 * provers + -(-window_gaps(sessions, provers) // three) * three
 
 
 def is_steady(source: str | Path) -> bool:
@@ -185,7 +225,7 @@ def load_spec(source: str | Path, *, root: Path = SOURCE_ROOT) -> SteadySpec:
         where = f"{path}: row {row.type!r}"
         if not row.name:
             raise ConfigError(f"{where}: its `type` names nothing")
-        _positive(where, n=row.n, warm=row.warm)
+        _positive(where, n=row.n, warm=row.warm, **({"period": row.period} if row.period is not None else {}))
         if not re.fullmatch(r"[0-9a-f]{128}", row.pin):
             raise ConfigError(f"{where}: `pin` isn't a SHA-512 in lowercase hexadecimal, the circuit's")
         if not row.provers or len(set(row.provers)) != len(row.provers):
@@ -252,7 +292,8 @@ def point_identity(spec: SteadySpec, item: SteadyPoint, files_sha256: str) -> st
         "schema": SCHEMA, "card": spec.card, "cores": spec.cores, "sessions": spec.sessions, "ahead": spec.ahead,
         "driver": spec.driver, "cuda": spec.cuda, "env": dict(spec.env), "setup": spec.setup,
         "files_sha256": files_sha256,
-        "row": {"type": row.type, "n": row.n, "pin": row.pin, "warm": row.warm}, "provers": item.provers,
+        "row": {"type": row.type, "n": row.n, "pin": row.pin, "warm": row.warm, "period": row.period},
+        "provers": item.provers,
     })
 
 
@@ -292,7 +333,8 @@ def point_why(row: Mapping[str, Any], files: steady.Files, spec: SteadySpec, ite
               own: bool = False) -> str | None:
     """Why a row of a run isn't a passed point of the spec, or None when it is one: its `pin`, `provers` and
     `cores.count` are the point's, and it passes the nine checks against the run's `files`. `own`: the row is a run of
-    the point's own identity, so it also holds the versions the node side read, the spec's."""
+    the point's own identity, so it also holds the point's load (its timed and warm sessions, its bursts) and the
+    versions the node side read, the spec's."""
 
     if row.get("pin") != item.row.pin:
         return f"{steady.FAIL}: its `pin` is another circuit's ({str(row.get('pin'))[:16]}...)"
@@ -305,6 +347,12 @@ def point_why(row: Mapping[str, Any], files: steady.Files, spec: SteadySpec, ite
                 "from its own affinity)")
     if count != spec.cores:
         return f"{steady.FAIL}: it ran on {count} cores; the spec's `cores` is {spec.cores}"
+    if own and (row.get("sessions"), row.get("warm")) != (item.sessions, item.row.warm):
+        return (f"{steady.FAIL}: it timed {row.get('sessions')!r} sessions after {row.get('warm')!r} warm ones a prover; "
+                f"the point's are {item.sessions} and {item.row.warm}")
+    if own and row.get(BURSTS) != item.bursts:
+        return (f"{steady.CANNOT_TELL}: its row's `{BURSTS}` ({row.get(BURSTS)!r}) aren't the point's "
+                f"({item.bursts!r}), which size its timed sessions")
     if own and row.get(VERSIONS) != versions(spec):
         return (f"{steady.CANNOT_TELL}: its row's `{VERSIONS}` ({row.get(VERSIONS)!r}) aren't the spec's driver and "
                 "toolkit, read on the node")

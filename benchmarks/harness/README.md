@@ -217,11 +217,18 @@ the `workload` whose steady-state record its rows belong to, the `card`, the `co
 sessions a prover runs `ahead`, the GPU `driver` and `cuda` toolkit versions, a `setup` script, `[env]` and
 `[admission]` (`max_minutes`, `mem_gb`); each `[[row]]` is a block type: the stager's `type`
 (`benchmarks/served_units/stage.py`), its units `n`, the `pin` (the SHA-512 of the statement's circuit), the `provers`
-counts (a point each), the `warm` sessions a prover and, optionally, `staged`, a statement already on the node. Loading
-is as strict as a vLLM spec's.
+counts (a point each), the `warm` sessions a prover and, optionally, `period` and `staged`, a statement already on the
+node. Loading is as strict as a vLLM spec's.
+
+**Timed sessions.** A point times the spec's `sessions`. Where a row's sessions file in bursts, its `period` says the
+sessions a prover's filings repeat over (a burst is `period` times the provers), and the point times the next count
+whose rated window is a whole number of bursts and a multiple of three of them: a window, or a third of one, that cuts
+a burst reads the burst's phase and not the rate. The period is declared, not read off the run's first sessions, so
+the count is fixed before the run and is part of the point; `plan` shows it (`sessions`), and the node side writes the
+period, a burst's sessions and the window's bursts in the row (`bursts`).
 
 **Identity.** A point's identity is a digest of what its time depends on, and nothing else: its row's `type`, `n`,
-`pin` and `warm`, its prover count, the spec's `card`, `cores`, `sessions`, `ahead`, `driver`, `cuda`, `env` and
+`pin`, `warm` and `period`, its prover count, the spec's `card`, `cores`, `sessions`, `ahead`, `driver`, `cuda`, `env` and
 `setup`, and the SHA-256 of every source file of the prover and of the scripts that build it (their flags)
 (`verity/protocols/flock/prover`, `verity/protocols/flock/pod`; no tests, no Markdown), of the timing script and of the
 setup script. It names no commit, so a commit that changes none of those times no point again, and neither does an edit
@@ -230,8 +237,9 @@ the node can't be asked before the run: the node side reads both on the node, re
 spec's, and writes what it read in the row (`versions`).
 
 **A passed point** is a row whose `pin`, `provers` and `cores.count` are the point's and its spec's, and that passes the
-nine checks of `verity_bench.steady` against the files of the run that measured it (`steady_spec.point_why`). `plan`
-and `check` recompute that from each run's files in the store, by the rules of the checkout they run from; a verdict a
+nine checks of `verity_bench.steady` against the files of the run that measured it (`steady_spec.point_why`); a row
+of a run of the point itself also holds the point's timed and warm sessions, its bursts and the versions. `plan` and
+`check` recompute that from each run's files in the store, by the rules of the checkout they run from; a verdict a
 run wrote of itself is never read. A point's passing run is the newest of: a run of the point (the tool
 `verity_bench.tool:STEADY_POINT` with the point's `identity`, at any commit) that ran to its end from a clean tree; or
 a row of the workload's steady-state record (`prove_records`' `flock-steady`: a labelled run, or a run a labelled art

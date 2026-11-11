@@ -13,8 +13,9 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
 2. **One lease of one card** (`gpu-lease 1 --wait --max-min M`), and inside it the timed step (this module again, with
    `--inside`): it reads the card, the driver's version and the toolkit's on the node and refuses a card or a version
    that isn't the spec's; records what else is on the node (`steady.card_file`) before and after;
-   runs `benchmarks/one_stage/server_rate.py` at the row's load; and keeps the row, with the versions it read
-   (`steady_spec.VERSIONS`), and the sessions' record under `out/rate/`.
+   runs `benchmarks/one_stage/server_rate.py` at the point's load (`steady_spec.timed_sessions`); and keeps the row,
+   with the versions it read (`steady_spec.VERSIONS`) and the bursts its sessions were sized by (`steady_spec.BURSTS`),
+   and the sessions' record under `out/rate/`.
 3. **After the lease has ended**, so that its usage line is among the run's files, the verdict: the row is a passed point
    when `steady_spec.point_why` finds nothing against it, from the run's own files. `result.json` passes with it.
 
@@ -213,13 +214,14 @@ def snapshot(path: Path, run_id: str, ask: Asker, now: Callable[[], float]) -> N
 
 
 def keep(scratch_rate: Path, out_rate: Path, item: steady_spec.SteadyPoint, read: Mapping[str, str]) -> int:
-    """The step's records under `out/rate/`: the script's rows, each with the versions this step read on the node, the
-    sessions' record, the device's samples and the end of each log. The verifiers' session files stay in the scratch.
+    """The step's records under `out/rate/`: the script's rows, each with the versions this step read on the node and
+    the bursts its timed sessions were sized by, the sessions' record, the device's samples and the end of each log. The verifiers' session files stay in the scratch.
     How many rows it kept."""
 
     out_rate.mkdir(parents=True, exist_ok=True)
     rates = scratch_rate / "rate.json"
-    rows = [{**row, steady_spec.VERSIONS: dict(read)} for row in (json.loads(rates.read_text()) if rates.is_file() else [])]
+    more = {steady_spec.VERSIONS: dict(read), **({steady_spec.BURSTS: item.bursts} if item.bursts else {})}
+    rows = [{**row, **more} for row in (json.loads(rates.read_text()) if rates.is_file() else [])]
     _write(out_rate / "rate.json", rows)
     step = scratch_rate / f"{item.row.name}-k{item.provers}"
     kept = out_rate / step.name
@@ -257,7 +259,7 @@ def timed(spec: steady_spec.SteadySpec, item: steady_spec.SteadyPoint, scratch: 
         snapshot(run_dir / steady.card_file(row, "start"), settings.RESEARCH_RUN_ID, ask, now)
         rc = run([sys.executable, steady_spec.TIMER, "--bin", prover()["path"], "--staged", str(scratch / "z"),
                   "--types", item.row.name, "--provers", str(item.provers), "--out", str(scratch / "rate"),
-                  "--device", device, "--sessions", str(spec.sessions), "--warm", str(item.row.warm),
+                  "--device", device, "--sessions", str(item.sessions), "--warm", str(item.row.warm),
                   "--ahead", str(spec.ahead)], out / "rate" / "server-rate.log")
         snapshot(run_dir / steady.card_file(row, "end"), settings.RESEARCH_RUN_ID, ask, now)
         record |= {"exit": rc, "rows": keep(scratch / "rate", out / "rate", item, read)}
