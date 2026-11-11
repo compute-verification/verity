@@ -174,3 +174,40 @@ no one). Nothing is asked of you until Thursday morning. Its answers so far:
   pinning: make the job take the slice and `128-191` as arguments, and use them when the slice is named.
 - **Thursday:** the lead resumes you in the morning for the review of the 64-row kernel (MEM-258; findings by
   20:00Z) and before 20:30Z for the runs (21:00Z to 23:30Z).
+
+## Wed 11 Nov 08:22Z: a small pull request tonight, apart from HASH-113: `slot.py` says "not started" where a machine lists no check slots
+
+Your Thursday work is unchanged. This is one small fix top asked kernels to send (the workflow thread, 08:17Z).
+
+- **What happened:** at 07:35Z the lead sent four quick tiers with `research queue ready N --on vy-nebius-cpu-12
+  --by kernels`. A CPU node has pools and no check slots: its `/workspace/research/locks/slots` exists and lists
+  none. Each run ended after 0 s with `slot: /workspace/research/locks/slots lists no slots`, exit 1, and
+  `ready` printed "the quick tier failed ... Push a fix, or run it again", though no test ran
+  (`r20261111-073606-33fe`).
+- **The change, and only this:** in `tools/verity/check/slot.py` on `origin/main`, the one exit at line 896,
+  `sys.exit(f"slot: {SLOTS} lists no slots")`. It becomes a "not started": a message on stderr and `return
+  NOT_STARTED` (75), as the branch a few lines above it does for a `CHECK_SLOTS` file the machine lacks. The
+  message says how to fix it: the file lists no check slots so nothing ran, the machine's pools by name
+  (`lane_pools`, as the `only=trains` exit below names them) with `research run --on MACHINE --pool NAME`, and
+  that `research queue ready N --on auto` places a quick tier itself. `queue.py` already reads exit 75 as "never
+  ran" (`SLOT_NOT_STARTED`), so it needs no change.
+- **Keep to that one exit** (top): its #8835 (head `b27d46450b4a`, a land verdict, waiting) changes `slot.py`
+  and `tools/verity/check/tests/test_slot.py` too. Touch no other line of `slot.py`; not `check.py:590` or
+  `test_placement.py`, which say the same words about another path; not `queue.py`, not `queue status`'s hint.
+  Merge #8835's head onto your branch locally (`git merge --no-commit`, then abort) and say whether it conflicts;
+  if it does, place your lines and your test so that it does not.
+- **A test** in `tools/verity/check/tests/test_slot.py`: a slots file that lists none gives exit 75, not 1, and a
+  message naming the pools beside it; no clock, no sleep, no subprocess of the real machine. If an existing test
+  holds the old exit, change it and say so.
+- **Before the pull request:** the suite `verity-check` at your head, as a run (`research run --on auto --cwd
+  source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
+  verity-check --quick'`), rc 0 read from its record. Nothing runs on your VM. Then read what `ready` prints for
+  a tier that exits 75 (`queue.py`, `NotStarted`, `READY_NOT_STARTED`): if that text would mislead here (it
+  says a slot was waited for), do not change it; tell the lead.
+- **The pull request:** branch `cursor/kernels-slot-empty-<hex>` off `origin/main`; `research queue open --head
+  BRANCH --sha SHA --title T --body-file F --issue CI-489 --by kernels` (top: ci is told on CI-489 when it is
+  marked; it needs no owner's review). The body opens with `Lane kernels`, says what changed and what you ran in
+  under 150 words. No run id, issue id, date or name in code, comments or the test. **Do not mark it**: the lead
+  reads the diff and the run and marks.
+- **Due:** the pull request open by 09:45Z. Report: its number and head, the diff's lines, the run id and
+  verdict, #8835's merge result, and anything you chose not to do.
