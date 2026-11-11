@@ -145,7 +145,7 @@ def test_a_row_at_the_measured_reading_names_the_rate_and_the_rate_at_the_goal()
     assert rows
     for r in rows:
         assert (r["tokens_per_gpu_second"], r["saturated"]) == (rate, card["value"]["saturated"])
-        assert r["tokens_per_gpu_second_at_goal"] == rate * f.SERVING_GOAL / r["bound"]
+        assert r["tokens_per_gpu_second_at_goal_by_proportion"] == rate * f.SERVING_GOAL / r["bound"]
     assert not any("tokens_per_gpu_second" in r for r in f.at_overhead(out) if r["panel"] != "exfiltration")
 
 
@@ -156,7 +156,7 @@ def test_figure_1s_rows_at_its_budgets_name_the_rate_only_under_the_measured_rea
     assert all("tokens_per_gpu_second" not in r for r in t.at_budgets(out))
     exfil, work = t.at_budgets(out | {"serving": {"tokens_per_gpu_second": 180.0, "saturated": False}})
     assert exfil["tokens_per_gpu_second"] == 180.0 and exfil["saturated"] is False
-    assert exfil["tokens_per_gpu_second_at_goal"] == 180.0 * f.SERVING_GOAL / 1.2e12 == 360.0
+    assert exfil["tokens_per_gpu_second_at_goal_by_proportion"] == 180.0 * f.SERVING_GOAL / 1.2e12 == 360.0
     assert "tokens_per_gpu_second" not in work
 
 
@@ -167,3 +167,38 @@ def test_figure_4_counts_tokens_at_the_reading_figure_1_was_planned_at(monkeypat
         with pytest.raises(LookupError):
             figure4.run("GLM-5.3", one)
     assert seen == [{"serving": "assumed"}, {"serving": "measured"}]
+
+
+def test_figure_3_and_the_break_even_name_the_measured_reading_and_the_default_names_none():
+    c = f.cards()
+    said = f.reading(f.slot_cards("GLM-5.3", "measured"), c, parts(c)[0])
+    three = figure3.run("GLM-5.3", "measured")
+    assert three["serving"] == said and three["cards"]["serving_rate"] == kept()
+    assert "serving" not in figure3.run("GLM-5.3") and "serving_rate" not in figure3.run("GLM-5.3")["cards"]
+    be = t.breakeven(scope_names=(), lean=False, serving="measured")
+    assert be["serving"] == said and t.breakeven_table(be).startswith(f.reading_note(said) + "\n\n")
+    default = t.breakeven(scope_names=(), lean=False)
+    assert "serving" not in default and t.breakeven_table(default).startswith("line | ")
+
+
+def test_figure_4_carries_the_reading_figure_1_was_planned_at():
+    one = {"served_bits_request": 144000, "taxes": {n: {"tax": 0.02} for n in figure4.LINES},
+           "configurations": {n: {"label": n, "overhead": 0.03} for n in figure4.LINES}}
+    c = f.cards()
+    said = f.reading(f.slot_cards("GLM-5.3", "measured"), c, parts(c)[0])
+    assumed, measured = figure4.run("GLM-5.3", one), figure4.run("GLM-5.3", one | {"serving": said})
+    assert "serving" not in assumed and measured["serving"] == said
+    assert measured["tokens"] != assumed["tokens"]
+
+
+def test_a_measured_reading_is_written_beside_the_default_never_over_it(tmp_path):
+    assert f.outdir(tmp_path, "assumed") == tmp_path
+    assert f.outdir(tmp_path, "measured") == tmp_path / "measured"
+
+
+def test_a_floors_caption_says_its_bounds_are_floors_and_a_saturated_rates_does_not():
+    said = {"tokens_per_gpu_second": 180.0, "assumed_tokens_per_gpu_second": 7200.0, "saturated": False}
+    floor, most = f.reading_note(said), f.reading_note(said | {"saturated": True})
+    assert "one under 300 GB does not show that 300 GB is met. " + f.REGISTRATION_NOTE in floor
+    assert "lower bound" not in most and most.endswith("0.025 of that reading's. " + f.REGISTRATION_NOTE)
+    assert "holds at a registration of 1/q requests" in f.REGISTRATION_NOTE

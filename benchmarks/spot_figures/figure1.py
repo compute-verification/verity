@@ -439,15 +439,31 @@ def reading(sc: dict, c: dict[str, InputCard], part: TokenBlocks) -> dict:
             "assumed_tokens_per_gpu_second": c["mfu_serve"].value * c["peak_flops"].value / (2 * part.served_macs)}
 
 
+#: where a bound priced at a sampling rate holds, said in every caption that prints a bound beside the measured rate
+REGISTRATION_NOTE = ("A bound priced at a sampling rate q holds at a registration of 1/q requests: the plan counts q·n "
+                     "sampled of a registration's n, and the first stage draws ⌈q·n⌉, never fewer than one. No bound here "
+                     "is what serving costs at a smaller registration.")
+
+
+def outdir(out: Path, serving: str) -> Path:
+    """Where a reading's files go: `out` at the assumed reading and `out/measured` at the measured one, so no file at
+    the measured reading has the path the default writes."""
+    return out if serving == SERVING[0] else out / serving
+
+
 def reading_note(serving: dict) -> str:
-    """The sentence every caption at the measured reading carries: the rate the figure was planned at, whether it is
-    a floor, and what it stands in place of."""
+    """What every caption at the measured reading carries: the rate the figure was planned at, whether it is a floor
+    (and that its bounds then are), what it stands in place of, and the registration its bounds hold at
+    (`REGISTRATION_NOTE`)."""
     rate, assumed = serving["tokens_per_gpu_second"], serving["assumed_tokens_per_gpu_second"]
     what = ("above which the engine computed no more" if serving["saturated"]
             else "a lower bound: no rate above it was served")
+    goal = f"{SERVING_GOAL / 8e9:,.0f} GB"
+    floor = ("" if serving["saturated"] else f" Each bound here is then a lower bound on the bound at the engine's own "
+             f"rate: one under {goal} does not show that {goal} is met.")
     return (f"Serving is planned at the measured {rate:,.5g} computed tokens a GPU-second ({what}), not at rho's "
             f"fleet utilization, {assumed:,.5g} on this circuit: the scope's GPUs are the same, and its requests "
-            f"{rate / assumed:.2g} of that reading's.")
+            f"{rate / assumed:.2g} of that reading's.{floor} {REGISTRATION_NOTE}")
 
 
 def at_reading(serving: dict | None, bound: float) -> dict:
@@ -458,7 +474,7 @@ def at_reading(serving: dict | None, bound: float) -> dict:
         return {}
     rate = serving["tokens_per_gpu_second"]
     return {"tokens_per_gpu_second": rate, "saturated": serving["saturated"],
-            "tokens_per_gpu_second_at_goal": rate * SERVING_GOAL / bound if bound > 0 else None}
+            "tokens_per_gpu_second_at_goal_by_proportion": rate * SERVING_GOAL / bound if bound > 0 else None}
 
 
 def _priced(g: Grain, fill: float) -> Grain:
