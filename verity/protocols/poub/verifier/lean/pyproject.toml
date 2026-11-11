@@ -25,7 +25,7 @@ untraced = [
 # through its path requires, Flock's verifier's Lean, core's randomness, the difftest server and the core protocol
 # interface (`RemoteAudit.Protocol`, which `test_protocol.py` holds to the period hook, `period.py`). The schedule check
 # (`schedule.py`) is a reference too.
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+inputs = ["verity/__init__.py", "verity/errors.py", 
           "verity/hardware/record.py",
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/poub/verifier/__init__.py",
           "verity/protocols/poub/verifier/audit.py", "verity/protocols/poub/verifier/codec.py",
@@ -37,7 +37,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/protocols/pouw/verifier/lean/check/models.json",
           "verity/claims/__init__.py",
           "verity/protocols/spot/verifier/__init__.py", "verity/protocols/spot/device/challenger.py",
-          "verity/protocols/spot/device/remote.py", "verity/ml/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+          "verity/protocols/spot/device/remote.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/commitments/randomness", "verity/difftest/python",
           "verity/protocols/flock/verifier/Flock", "verity/protocols/flock/verifier/lakefile.toml",
           "verity/protocols/flock/verifier/lake-manifest.json", "verity/protocols/flock/verifier/lean-toolchain",
@@ -51,11 +51,11 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/protocols/poub/verifier/p2.py", "verity/protocols/poub/verifier/p2_party.py",
           "verity/protocols/poub/verifier/p2_lean.py", "verity/protocols/poub/verifier/p2_case.py",
           "verity/protocols/pous",
-          "verity/ml/protocols/__init__.py", "verity/protocols/pous/prover",
+          "verity/protocols/pous/prover",
           "verity/commitments/identity/lakefile.toml",
           "verity/commitments/identity/lake-manifest.json", "verity/commitments/identity/lean-toolchain",
           # the memory challenger's party, whose kept setup (`keep`) test_p2_party.py registers a store from
-          "verity/core/devices/__init__.py", "verity/protocols/pous/device/__init__.py",
+          "verity/protocols/pous/device/__init__.py",
           "verity/protocols/pous/device/challenger_party.py",
           "verity/protocols/pous/device/lean/lakefile.toml",
           "verity/protocols/pous/device/lean/lake-manifest.json",
