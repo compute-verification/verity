@@ -58,7 +58,7 @@ e2m1 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "kind::
 f16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "whitepaper v1.1, Table 4: FP16 503.8 dense TFLOPS, half the FP8 rate" }
 bf16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "whitepaper v1.1, Table 4: BF16 503.8 dense TFLOPS" }
 tf32 = { value = 4, unit = "tensor unit/MAC", mark = "ceiling", source = "whitepaper v1.1, Table 4: TF32 251.9 dense TFLOPS" }
-nvf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "whitepaper v1.1, Table 4: FP4 2015.2 dense TFLOPS, twice the FP8 rate (OMMA.SF.16864, 8192 MACs in 16 cycles)" }
+nvf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "whitepaper v1.1, Table 4: FP4 2015.2 dense TFLOPS, twice the FP8 rate (OMMA.SF.16864, 8192 MACs in 16 cycles); the product page's 'FP4 Tensor Core 4 PFLOPS' states no clock and can only be with sparsity counted, twice the dense rate (Table 4's 4030.4, at the Workstation Edition's 2617 MHz): at clock.sm this rate is 1.87 PFLOPS dense and 3.74 so counted, 4 to the page's one digit, and the page's 'TF32 Tensor Core 234 TFLOPS' is the dense TF32 rate at clock.sm, 233.9" }
 mxf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "as nvf4 (OMMA.SF.16864)" }
 f64 = { value = 32, unit = "tensor unit/MAC", mark = "measurement", source = "no document gives sm_120's DMMA rate; measured 1.75 MACs a SM-clock (DMMA.8x8x4, art:ecfc88319554), and the 32 MACs a SM-clock this weight allows is 18 times that" }
 
