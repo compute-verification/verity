@@ -441,8 +441,8 @@ def reading(sc: dict, c: dict[str, InputCard], part: TokenBlocks) -> dict:
 
 #: where a bound priced at a sampling rate holds, said in every caption that prints a bound beside the measured rate
 REGISTRATION_NOTE = ("A bound priced at a sampling rate q holds at a registration of 1/q requests: the plan counts q·n "
-                     "sampled of a registration's n, and the first stage draws ⌈q·n⌉, never fewer than one. No bound here "
-                     "is what serving costs at a smaller registration.")
+                     "sampled of a registration's n, and the first stage draws at least ⌈q·n⌉, never fewer than one. "
+                     "No bound here is what serving costs at a smaller registration.")
 
 
 def outdir(out: Path, serving: str) -> Path:
