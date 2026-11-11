@@ -40,10 +40,10 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 - **The edit loop is `verity lean try FILE`** (the README): `lake env lean FILE` in FILE's package against its built
   imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), with lean's status. Lean's exit 0
-  isn't proof: the last line, the axiom probe's, names each theorem of FILE whose axioms go beyond `propext`,
-  `Classical.choice` and `Quot.sound` (`sorryAx` too). After editing a file others import, `lake build` its module, then
-  try an importer. Try one that adds or renames declarations with `--siblings --on auto` too: a name another module
-  declares otherwise clashes first at the package root, an hour into a records run.
+  isn't proof: the last line, the axiom probe's, names each theorem of FILE whose axioms go beyond the three AGENTS.md
+  allows (`sorryAx` too). After editing a file others import, `lake build` its module, then try an importer. Try one
+  that adds or renames declarations with `--siblings --on auto` too: a name another module declares otherwise clashes
+  first at the package root, an hour into a records run.
 - **Build on a CPU machine.** Never `lake update` or change an external dependency (a git `require` or its revision,
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
   allows may go in one, in its own commit with the regenerated `lake-manifest.json`, the requires acyclic. The full
@@ -63,7 +63,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   tree another run left mid-way: never delete or copy one.
 - **A full record**: `research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --cwd clone --
   python3 tools/verity/lean/check.py --build --update PKG`, unwrapped, leaves it at
-  `lean-audit/audit-TAG/lean-audit.json`; below a package's memory floor check.py refuses and prints the line to run.
+  `lean-audit/audit-TAG/lean-audit.json`.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean
   /tmp/scratch/Probe.lean`): `#print axioms X`, `example … := by exact?`, or
   `trace_state` before a `sorry`. Probe what you build on too: a section `variable` typed through a local notation can
@@ -134,9 +134,9 @@ token, and the parse error lands far from the binder).
 
 - The PR says which guarantees changed and why; the ledger's status rows match `lean-audit.json`.
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
-  `lean-audit.json` merges without a rebuild, by `origin/main`'s copy of the driver; each `merge.py:` warning names an
-  entry it took from one side, so read them. It conflicts only where it can't vouch for the merge (a newer lock `format`,
-  the worktree's copy merging in newer merge rules, a merge that drops most of a section), and says why: do what it says.
+  `lean-audit.json` merges without a rebuild; each `merge.py:` warning names an entry it took from one side, so read
+  them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean", the lock), and says why: do what it
+  says.
 - Record your lock at your own head, then mark; a passing Lean check, a clean merge of `main` over a passing head, or a
   commit of exactly the records a passing run kept needs no new run. Once your PR lands, drive's lock run regenerates
   records another PR moved; re-record only what it can't (a hand-written entry a merge warning says took theirs, `shape`, a
@@ -149,7 +149,9 @@ Their history is in the decisions log.
 - A guarantee is a proved `Prop` under named assumptions, with no third status; proving an assumption removes it from
   every guarantee that took it. Lean is the one source of truth for what we assume.
 - Named assumptions are the few real ones (a hash's collision resistance, the auditor's devices), in the lock's
-  `assumptions_module`; any other premise is `domain` or `open` (the README).
+  `assumptions_module`; any other premise is `domain` or `open` (the README). A named `Prop` counted only as an
+  antecedent inside a premise an honest witness concludes is that premise's scope: `domain`, its `why` saying what it
+  restricts there, and no witness is asked to conclude it.
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is
