@@ -846,6 +846,7 @@ def test_the_heads_a_tree_holds_are_those_the_queues_commits_name_the_newest_fir
         return f"PR: #{n}\nHead: {head}\nOwner: lane\n"
 
     git("init", "-q", "-b", "main")
+    assert LA.COMMON.merged_heads(tmp_path) == [], "no commit yet"
     git("commit", "-q", "--allow-empty", "-m", "root")
     assert LA.COMMON.merged_heads(tmp_path) == []
     first = pr(1)

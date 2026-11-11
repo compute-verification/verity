@@ -39,12 +39,11 @@ RECENT_S = 48 * 3600
 def merged_heads(root: Path = ROOT, limit: int = MERGED) -> list[str]:
     """The head of each PR the verified queue put in the last ``limit`` commits of ``root``'s history (first parents), the
     newest first: a candidate's members, those of the candidates it stands on, and the PRs `main` landed before them. Empty
-    where git can't say (no checkout, no git)."""
-    try:
-        r = subprocess.run(["git", "-C", str(root), "log", "--first-parent", f"--max-count={limit}", "--format=%B%x1e"],
-                           capture_output=True, text=True, errors="replace")
-    except OSError:
+    outside a checkout and in one with no commit."""
+    if not (root / ".git").exists():
         return []
+    r = subprocess.run(["git", "-C", str(root), "log", "--first-parent", f"--max-count={limit}", "--format=%B%x1e"],
+                       capture_output=True, text=True, errors="replace")
     found = (QUEUE_HEAD.search(body) for body in map(str.lstrip, r.stdout.split("\x1e") if r.returncode == 0 else ())
              if body.startswith(QUEUE_SUBJECT))
     return list(dict.fromkeys(m[1] for m in found if m))
