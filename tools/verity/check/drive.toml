@@ -35,8 +35,8 @@ land = "review"
 # merges a head (`Preflight._fetch`). A mark's preflight and `research queue status` judge a head's merges of an old `next`
 # against it, so a head that merged `main` is marked
 land_into = "main"
-# parsed (`DriveFlags`) and read by no other code: the loop's `--gate` checks each candidate (graph2's task check with a run
-# beside it, or the whole check as `--shards` shards)
+# these three keys and `executor_enqueue` are parsed (`DriveFlags`) and read by no other code: the loop's `--gate` checks each
+# candidate (graph2's task check with a run beside it, or the whole check as `--shards` shards)
 after_landing_no_cache = false
 after_landing_shards = 3
 executor = "shadow"
@@ -50,7 +50,7 @@ verdict_first = true
 # `would carry #N's land from OLD to NEW (why)` or `would not carry ...` and writes nothing; "on", it counts the PR as
 # reviewed and writes nothing
 verdict_carry = "on"
-# parsed (`DriveFlags`) and read by no other code
+# these three keys are parsed (`DriveFlags`) and read by no other code
 bottom_ring = ["@ci"]
 bottom_wait_min = 30
 restack_jobs = 3
