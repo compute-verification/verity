@@ -12,10 +12,10 @@ Every path git sees changed must be one of:
   chain `ROOT / "a" / "b"` read as `"a/b"`. A changed line may also, the rest of it kept byte for byte, rewrite each
   place it names from the file's own to name, from where the file now is, where that place moved (`placed`): a relative path from the file's directory (`../../verity/x/`, in a
   comment, prose or code), a path below a moved directory the file is in and stays in (`rho/circuits.py` in a file of
-  `benchmarks/rho/`, a path BASE has), or in a `*.py` file a pathlib join on a name the file binds only to its own place
+  `verity/protocols/inference_only/rho/`, a path BASE has), or in a `*.py` file a pathlib join on a name the file binds only to its own place
   (`HERE.parent / "rho"` after `HERE = Path(__file__).resolve().parent`). Each changed line left may only rewrite a
   moved path as written below a directory its old and new places share (`verity_vllm/program/predict/`), or a dotted
-  name (`verity.ml.flock.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a renamed module was
+  name (`verity.protocols.flock.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a renamed module was
   to where it is now; in any of them, the modules a run of import lines binds each name to
   (`from a import m as M` to `from b import m2 as M`, a line split in two, a `from a import (x,` whose names go on
   past the change; in a heredoc, or in a string literal `"from a import m\n"` whose quotes the move keeps); in a
@@ -36,7 +36,8 @@ Every path git sees changed must be one of:
   `reads` byte for byte (a `reads` key, a module's name, may follow the module's move), may change the structural `roots`,
   `proved_in` (each entry a Lake package at HEAD) and `dependencies` (the fetched modules the package imports, which a
   split shares out and the Lean check holds to the build), and changes any other field only by moved paths and module
-  names; a `runs` entry may move to another lock the range touches (a proofs package's new one), its runner module
+  names, a moved path there too left where it is a word (a reason that calls a conclusion `security`, when the directory
+  of that name moves); a `runs` entry may move to another lock the range touches (a proofs package's new one), its runner module
   renamed, its package-relative paths following the move and its `why` changed only by moved paths from the root, and
   must end up in exactly one, otherwise unchanged (`runs_moved`);
 - a new `lakefile.toml`, `lakefile.lean`, `lake-manifest.json`, `lean-audit.json` or `lean-toolchain` at the root of a new
@@ -52,6 +53,9 @@ Every path git sees changed must be one of:
 - in a JSON pin of `tools/verity/check/pins.py`, a Lake manifest's digest rewritten likewise, since a move changes a
   manifest only in where its path packages sit, which no pinned output reads (`manifest_pin`);
 - an entry appended to research's `moves.json` whose paths agree with the range's (`moves_change`);
+- a new, empty `__init__.py` in a directory at or above a `.py` file the range moved there out of a package (its old
+  directory had an `__init__.py`), and no higher than the root of that file's package after the move (`[roots] new` of a
+  path map under `tools/move/` at BASE): the package level `tools/move/layout.py` writes so the module imports by its new name;
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
   where the range moved it, or a Lean module likewise; or a Lean declaration of a `.lean` file the range edits, to a name
@@ -71,7 +75,7 @@ Anything else is refused, with what differed and its first offending hunk. Exit 
 git error.
 
 The path map comes from the renames. Each rename contributes the shortest prefix pair (old directory, new directory) whose
-whole subtree in BASE moved there file by file. When only `verity/core/protocols/pous` moved, `protocols -> security_proofs` is never
+whole subtree in BASE moved there file by file. When only `verity/protocols/pous` moved, `protocols -> security_proofs` is never
 inferred. Renames are git's exact ones, and its similar ones (`-M`) as candidates, each edit then judged as above; a file
 below a directory that moved whole is paired with its place there, whichever identical file git paired it with. A deleted
 path is paired with the added one a word map at BASE moves it to, and an in-place edit of a path a word map moves to a path
@@ -323,7 +327,7 @@ def partly(old: str, new: str, pmap: dict[str, str]) -> bool:
 
 def short_forms(pmap: dict[str, str], base: Tree) -> dict[str, str]:
     """Each moved path as written below a directory its old and new paths share (`verity_vllm/program/predict` for
-    `integrations/vllm/verity_vllm/program/predict`), keeping at least one shared part; dropped where two moves disagree or where it
+    `adapters/vllm/verity_vllm/program/predict`), keeping at least one shared part; dropped where two moves disagree or where it
     names a path of BASE's tree from the root."""
     out: dict[str, str] = {}
     bad: set[str] = set()
@@ -761,7 +765,7 @@ def lock_change(old: str, new: str, new_path: str, pmap: dict[str, str], lmods: 
             if copy:
                 continue
             return f"`{k}` removed", field_hunk(k, a[k], None)
-        if not same_value(module_sub(substitute(a[k], pmap), lmods), b[k]):
+        if not same_value(module_sub(substitute(a[k], pmap), lmods), b[k]) and not partly(a[k], b[k], pmap):
             return f"`{k}` changed beyond moved paths and module names", field_hunk(k, a[k], b[k])
     here = posixpath.dirname(new_path)
     for k in ("roots", "proved_in"):
@@ -958,6 +962,24 @@ def base_maps(base: Tree) -> list[tuple[dict, object]]:
                 out.append((data, R.Words(data)))
         except (tomllib.TOMLDecodeError, SystemExit, KeyError, TypeError, AttributeError):
             continue
+    return out
+
+
+def package_roots(base: Tree) -> set[str]:
+    """The directory of each import package after a move, as the path maps at BASE give it (`[roots] new` of each `.toml`
+    under `tools/move/`, at any depth: a layout's maps may sit in a directory of their own): `tools/move/layout.py` writes
+    package levels from a moved module up to its root and no higher."""
+    out = set()
+    for p in base.files:
+        if not (p.startswith(MAPS) and p.endswith(".toml")):
+            continue
+        try:
+            roots = tomllib.loads(base.text(p) or "").get("roots")
+        except tomllib.TOMLDecodeError as e:
+            raise SystemExit(f"move-check: {p} doesn't parse at BASE, so the package roots it may name can't be read: {e}") from e
+        new = roots.get("new") if isinstance(roots, dict) else None
+        if isinstance(new, dict):
+            out |= {d.strip("/") for d in new.values() if isinstance(d, str)}
     return out
 
 
@@ -1381,6 +1403,19 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
     def new_lake(p: str) -> bool:
         return new_dir(p) and H.is_package(p) and posixpath.join(p, "lean-audit.json") in H.set
 
+    roots = sorted(package_roots(B), key=len, reverse=True)
+
+    def package_level(d: str) -> bool:
+        """Whether an empty `__init__.py` added in `d` is a package level the move needs: a module the range moved to `d` or
+        below it was a package's at BASE, so it is importable by its new name only if each directory from it up to its
+        package's root is a package (`tools/move/layout.py` writes these, and none above the root)."""
+        for o, n in renamed:
+            if n.endswith(".py") and n.startswith(d + "/") and posixpath.join(posixpath.dirname(o), "__init__.py") in B.set:
+                root = next((r for r in roots if n.startswith(r + "/")), None)
+                if root is not None and (d == root or d.startswith(root + "/")):
+                    return True
+        return False
+
     new_projects = set()
     for e in entries:
         if e["status"] == "A" and posixpath.basename(e["new"]) == "pyproject.toml" and new_dir(posixpath.dirname(e["new"])):
@@ -1435,6 +1470,9 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
                 refuse(e, f"not a copy of {src_path}: {why[0]}", why[1])
             else:
                 report["edits"].append({"path": new, "copy_of": src_path, "kind": "copy"})
+            continue
+        if st == "A" and name == "__init__.py" and text(e, 1) == "" and package_level(posixpath.dirname(new)):
+            report["edits"].append({"path": new, "kind": "package level"})
             continue
         if st not in "RM":
             refuse(e, {"A": "added", "D": "deleted", "C": "copied", "T": "type changed"}.get(st, f"status {st}"))

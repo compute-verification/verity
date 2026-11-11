@@ -1,0 +1,73 @@
+{
+ "format": 1,
+ "roots": ["NetworkCertifier"],
+ "exempt": {
+  "NetworkCertifier.ChargeDifftestMain": "the charge difftest against arith_encode.reference_charge, under `runs`: compiled evaluation of NetworkCertifier.AdviceV1.ChargeDifftest.main, audited under NetworkCertifier, a test and not a proof",
+  "NetworkCertifier.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of NetworkCertifier.Difftest.main, audited under NetworkCertifier, a test and not a proof",
+  "NetworkCertifier.WindowDifftestMain": "the window charge's difftest against window_charge.reference_window, under `runs`: compiled evaluation of NetworkCertifier.WindowCharge.WindowDifftest.main, audited under NetworkCertifier, a test and not a proof"
+ },
+ "runs": {
+  "NetworkCertifier.ChargeDifftestMain": {
+   "why": "4,000 random instances on which advice v1's charge (AdviceV1.window from a carry, and AdviceV1.charges from the book's priors) gives what arith_encode.reference_charge gives, window by window and chained",
+   "args": ["{charge/instances.jsonl}", "{charge/python.jsonl}", "4000"],
+   "data": {
+    "charge/instances.jsonl": "c9414a0972a9234ac8947d5b16d2d4e535b9c5326cb88c1b48d20a2d88945b10",
+    "charge/python.jsonl": "feb58acfa1ca6780f2cdc1fba0b21a6a72f4d74ffd3dea571f1d9c28a562cac8"
+   },
+   "generate": ["python3", "scripts/charge_vectors.py", "{repo}", "--out", "{out}"]
+  },
+  "NetworkCertifier.DifftestMain": {
+   "why": "10,000 random instances on which NetTiming's definitions (expectedRow, and Accepted of constantRate and StatusComplete by decide) give what the Python audit gives: schedule.expected_grids, Audit.check_link with the first differing bucket, Audit.check_ingress_link, and each prefix's acceptance",
+   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "10000"],
+   "data": {
+    "difftest/instances.jsonl": "c048b4c1fcf4b2918611f2c249d46aead1cbd3124d068fe659645964ecc62601",
+    "difftest/python.jsonl": "355d87108c136dd003c12c07f4026ec776d07922de7c1dbbe47381f48b74796f"
+   },
+   "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  },
+  "NetworkCertifier.WindowDifftestMain": {
+   "why": "4,000 instances, random but for the charge's edge at 2^CW, on which advice v1's whole window charged with its length terms (WindowCharge.window from a carry, and WindowCharge.charges from the book's first carry) gives what window_charge.reference_window gives, window by window and chained",
+   "args": ["{window/instances.jsonl}", "{window/python.jsonl}", "4000"],
+   "data": {
+    "window/instances.jsonl": "d00c44e320929428d2b179a7649840f710b2061216245bca245b94e775c4ebc5",
+    "window/python.jsonl": "bed42048094c491ebfa8cad73ec96efb4f69fd14876dfefad1d4f3dc685b4e01"
+   },
+   "generate": ["python3", "scripts/window_vectors.py", "{repo}", "--out", "{out}"]
+  }
+ },
+ "layers": {
+  "NetworkCertifier.AdviceV1": {
+   "imports": [],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "NetworkCertifier.Grid": {
+   "imports": [],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "NetworkCertifier.Run": {
+   "imports": ["NetworkCertifier.Grid"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "NetworkCertifier.Ingress": {
+   "imports": ["NetworkCertifier.Run"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "NetworkCertifier.Schedule": {
+   "imports": ["NetworkCertifier.Run"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "NetworkCertifier.WindowCharge": {
+   "imports": ["NetworkCertifier.AdviceV1"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  }
+ },
+ "dependencies": {
+  "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
+ }
+}

@@ -62,6 +62,26 @@ def test_a_review_landing_moves_checked_and_main_follows_only_once_its_after_lan
     assert any(f"`main` fast-forwarded to {tip[:12]}" in x for x in world.logs), world.logs
 
 
+def test_the_status_command_reads_the_verified_queues_admission_onto_main_not_nexts_places_or_checkeds_landings(world, monkeypatch):
+    """`next` and `checked` stay frozen behind the verified queue, which builds onto `main` from the marked PRs: `research queue
+    status` gives no place on `next`, and a head is landed once it is on `main`, not on `checked`."""
+    h = Review(world, monkeypatch, land_into="checked")
+    for n, f in ((1, "a.txt"), (2, "b.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    h.tick()
+    drive, loop = h.q.status(), h.q.status(loop=True)
+    assert [(drive[n].state, drive[n].position) for n in (1, 2)] == [("queued", None), ("queued", 1)], drive
+    assert [(loop[n].state, loop[n].position) for n in (1, 2)] == [("ready", None), ("ready", None)], loop
+    assert loop[1].why == loop[2].why and loop[2].why.startswith("admitted: the verified queue builds it into a batch onto `main`")
+    _pass(h)
+    h.tick()
+    assert _main(world) == _checked(world), world.logs
+    loop = h.q.status(loop=True)
+    assert (loop[1].state, loop[1].why, loop[2].state) == ("queued", "landed: its head is on `main`", "ready"), loop
+
+
 def test_a_red_after_landing_run_moves_nothing_on_main_and_its_culprit_is_reverted_on_checked(world, monkeypatch, tmp_path):
     _owning(world, {"lane-2": [], "pkg-owner": ["pkg/"]})
     h = Review(world, monkeypatch, land_into="checked")
@@ -246,9 +266,9 @@ def test_while_circuit_check_is_red_a_pr_touching_its_inputs_waits_and_an_unrela
     _circuit_red(h, tmp_path)
     h.tick()
     assert h.postland()["red"]["step circuit-check"]["culprit"] is None
-    world.gh.put(2, world.change({"verity/ml/circuits/library.py": "X = 2\n"}))
+    world.gh.put(2, world.change({"verity/definitions/circuits/library.py": "X = 2\n"}))
     world.gh.put(3, world.change({"b.txt": "3\n"}))
-    world.gh.put(4, world.change({"verity/ml/circuits/README.md": "4\n", "verity/ml/circuits/tests/test_x.py": "4\n"}))
+    world.gh.put(4, world.change({"verity/circuits/README.md": "4\n", "verity/circuits/tests/test_x.py": "4\n"}))
     for n in (2, 3, 4):
         h.review(n)
     assert h.tick().startswith("landed #4"), world.logs
@@ -266,7 +286,7 @@ def test_a_pr_that_says_it_fixes_the_red_circuit_check_lands_through_the_hold(wo
     _landed(h, {"a.txt": "1\n"})
     _circuit_red(h, tmp_path)
     h.tick()
-    world.gh.put(2, world.change({"verity/ml/circuits/library.py": "X = 2\n"}), body="Lane `lane-2`. Fixes step `circuit-check`")
+    world.gh.put(2, world.change({"verity/definitions/circuits/library.py": "X = 2\n"}), body="Lane `lane-2`. Fixes step `circuit-check`")
     h.review(2)
     assert h.tick().startswith("landed #2"), world.logs
 

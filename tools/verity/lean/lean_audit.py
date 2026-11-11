@@ -59,13 +59,13 @@ The audit's `dependencies` check still compares their `.olean` files with the pa
 still covers the package's own modules and their whole import
 closure, the toolchain's, Mathlib's and ArkLib's modules included (`check.py --closure`): each module whose `.olean` files, and
 those of every module it imports, transitively, passed an earlier replay here or in a recorded check whose verdict pack this
-one imported (`check.gather_verdicts`) is reused (`check.py --replay-cache`, `lean-replay/` beside the passes, its
+one imported (`check.verdicts_fetched`) is reused (`check.py --replay-cache`, `lean-replay/` beside the passes, its
 `REPLAYS_KEPT` last used kept), so a change to a few modules replays those and what imports them, and a dependency's
 modules go through the kernel once per change of their `.olean` files. With `--fresh` the replay cache is
 the scratch tree's, so the packages of one run share it and nothing outlives the run. Lean gets this
 machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
 
-The audits of `Security` and `Security/Proofs` (`UNREAD_FACTS`) also write what each constant of the analysis mentions
+The audits of `security` and `security/Proofs` (`UNREAD_FACTS`) also write what each constant of the analysis mentions
 (`check.py`'s `unread_facts`), and their passes are stored, and reused, only with those facts beside them (`unread/` in
 the cache, `UNREAD_KEPT` last used kept). After the audits, the run joins both packages' facts, this run's or the reused
 passes', and runs the ratchet on wholly unread modules (`unread_ratchet`, `unread.py`): an area of the analysis whose
@@ -198,10 +198,10 @@ NOT_READ = {
 
 #: the packages whose audits write `Unread.lean`'s facts (`check.py`'s `UNREAD_FACTS`): a pass of one is reused only with
 #: the facts it wrote, kept beside it, and the ratchet on wholly unread modules joins theirs (`unread_ratchet`)
-UNREAD_FACTS = ("Security", "Security/Proofs")
+UNREAD_FACTS = ("security", "security/Proofs")
 UNREAD = "tools/verity/lean/unread.py"
 UNREAD_SCHEMA = "lean-unread-facts/v1"
-#: the facts entries a node keeps beside the passes (`unread/` in the cache), last stored or reused first: Security/Proofs'
+#: the facts entries a node keeps beside the passes (`unread/` in the cache), last stored or reused first: security/Proofs'
 #: are some 6 MB each, and a pass whose facts went is audited again
 UNREAD_KEPT = 64
 #: the caps `--bookkeeping warn` (drive's lock run after a landing) holds to what the run measures, each
@@ -714,7 +714,7 @@ def build_key(pkg: str, root: Path) -> str:
 
 def source_dirs(pkg: Path) -> list[Path]:
     """The directories a package's module names are relative to: its lakefile's `srcDir` and each `lean_lib`'s under it
-    (Lake's default `.` for each), as `move_check`'s `source_dirs` reads them. `Security/Proofs` has `srcDir = ".."`, so its sources
+    (Lake's default `.` for each), as `move_check`'s `source_dirs` reads them. `security/Proofs` has `srcDir = ".."`, so its sources
     sit beside it, not in it."""
     lake = pkg / "lakefile.toml"
     cfg = tomllib.loads(lake.read_text()) if lake.is_file() else {}
@@ -740,11 +740,11 @@ def prune(pkg: Path) -> int:
 #: (dozens of them fill a 200 GB disk). Each package's newest stays past it (`WarmBuilds.evict`): a cap below the ~30
 #: packages would have every check evict some and rebuild them cold
 BUILDS_KEPT = 48
-#: the GB the kept builds may take on a node before its least recently used go, whatever their number: a Security/Proofs
+#: the GB the kept builds may take on a node before its least recently used go, whatever their number: a security/Proofs
 #: build is about 17 GB, so `BUILDS_KEPT` of them alone would fill a node's root disk. Each package's newest stays past it too
 BUILDS_MAX_GB = SETTINGS.BUILDS_MAX_GB
 #: the kept dependency trees (one per manifest and toolchain, `deps_key`) a node holds before its least recently used go:
-#: Security/Proofs' is about 35k files, so two dozen of them take some 800k inodes
+#: security/Proofs' is about 35k files, so two dozen of them take some 800k inodes
 DEPS_KEPT = 8
 #: the replay cache's entries a node keeps, last used first (a replay touches each entry it reuses): one per module and key,
 #: about 3k a version of the tree plus some 8k of Mathlib's and ArkLib's that every replay reuses, each a few hundred bytes;
@@ -1543,16 +1543,17 @@ def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
 
 def shared_bundles(store=None, limit: int = SHARED_LIMIT) -> list[str]:
     """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the newest recorded checks' run files, newest first, at
-    most ``limit``: only a recorded run's (`common.RECORDED_CHECKS`), as `gather_verdicts` takes only theirs, a failed or
-    cancelled run's too, since its bundle holds only modules of packages whose audit passed. Empty when the store can't be
-    read: each node then reuses only what it built."""
+    most ``limit``: only a recorded run's (`common.RECORDED_CHECKS`), as `check.verdict_packs` takes only theirs, a failed or
+    cancelled run's too, since its bundle holds only modules of packages whose audit passed. When the store has a remote, the
+    attempts started in the last `common.RECENT_S` are refreshed from it first. Empty when the store can't be read: each node
+    then reuses only what it built."""
     from research.store.local import LocalStore
 
     out: list[str] = []
     try:
         store = store or LocalStore()
         if store.remote is not None:
-            store.refresh(attempts_only=True)
+            store.refresh(attempts_only=True, since=COMMON.recent(time.time()))
         rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
                                "ORDER BY start_utc DESC LIMIT ?", (4 * limit,))
         for (rid,) in rows:

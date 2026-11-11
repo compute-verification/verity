@@ -1,11 +1,15 @@
 # spot_figures
 
 The SPOT post's Figures 1-4 for one model, derived from the sampled-proofs planner
-(`verity.core.protocols.spot.optimize`) and the model's cards. A model, not a measurement: every input is a
+(`verity.protocols.spot.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
-plotted series. Lean checks every one-stage and request-level design the figures plot (`plancheck`, which builds
-`sampled-proofs-plancheck` with `lake` on first use; `--no-lean` plans without it): a point plots what Lean certifies,
-and a design Lean refuses is an error. The two-stage designs are the planner's alone.
+plotted series. Lean checks the design behind every exfiltration and skipped-work point of both forms of Figure 1
+(`plancheck`, which builds `sampled-proofs-plancheck` with `lake` on first use; `--no-lean` plans without it): a point
+plots what Lean certifies, a two-stage one the bits at the θ Lean finds, with the planner's bits beside them
+(`figure1.lean_two`, which both forms call), and a design Lean refuses is an error. `--workers` processes (default
+every CPU) plan and check the points, each point one job (`figure1.processes`), and the JSON is the same at any
+number of them. Which design a budget buys is the planner's pricing of the cards, and the infiltration panels' write
+forms are the planner's.
 
 ~~~sh
 uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,1_overhead,2,3}.json, PNGs, SVGs
@@ -13,14 +17,14 @@ uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # f
 uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # Figure 1, from the JSON
 uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
 uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4 (figures.py writes it too)
-uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path P]  # Figure 5, from break-even surfaces
+uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path P] [--headline CARD]  # Figure 5
 uv run python benchmarks/spot_figures/figure6.py --advice A.json [--points P...] [--old-rule POINT...] --out DIR
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
 ~~~
 
 - **Cards** (`cards.py`, schema `spot-card/v1`): every number the figures read arrives as one JSON card in a slot
   (`workload`, `proof_overhead`, `commitment`, `replay`, `design`, `references`, `infiltration`,
-  `commit_hillclimb`, `serve_tax`, `partition`, `verifier_cost`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
+  `commit_hillclimb`, `serve_tax`, `partition`, `verifier_cost`, `headline`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
   them. A card is published to the evidence store and kept in `cards/SLOT.MODEL.json` with its art id; a model's
   `references` cards add up, each kept as `cards/references.MODEL.ART.json`:
 
@@ -35,6 +39,12 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   card's `main_lines` names, per panel and by label prefix (`{model}` for the model's name), the reference lines the
   main figure plots and each one's style (`solid` or `dashed`); a panel it names plots only those, and the appendix
   the rest. Its `notes` are sentences each caption ends with, by panel (`exfiltration_appendix` for the appendix's).
+
+  A `headline` card holds the headline's rows, each with its cells (by S, verifier step and scope) and its `basis`
+  (`cards.BASES`): `served-measured`, the served cut with every type measured on served values and every lever
+  measured; `served-card-priced`, the served cut at the proof-overhead card's prices; or `design`, a cut no serving
+  path commits, or an estimate. A row short of `served-measured` names what sets its basis (`basis_from`), and a card
+  is `measured` only when every row is `served-measured`.
 
   A model without a `workload` card is refused; no census is guessed from a model's config. A `workload` card marks a
   stratum whose Definition has no cut on main `modeled` and gives the whole circuit's MACs a token
@@ -116,8 +126,9 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     one replay block's sampled proof blocks of one Definition, up to the `proof_overhead` card's `statement_blocks`,
     so each design pays at its own fill: one block under one-stage, the k it samples in a request under two-stage, a
     request's blocks under request-level sampling. A one-stage or request-level curve's point is the least target the
-    planner's cheapest plan certifies within the budget, and a two-stage one is the planner's design with the least
-    bound at the budget (`optimize.two_stage_design`).
+    planner's cheapest plan certifies within the budget, and a two-stage one is the bits Lean certifies for the
+    planner's design with the least bound at the budget (`optimize.two_stage_design`, `figure1.lean_point`), each
+    series giving the planner's bits and Lean's θ beside them.
   - Each design's serve-time hashing is in its caption and in the table at the vertical line: every proof block's
     outputs under one-stage, outside the budget; the token ids under two-stage and request-level, inside it.
   - Every caption says who the deployment's parties are and what its bounds rest on (`ROLES`, `TRUST`). Its parties
@@ -127,7 +138,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     verifier. The network certifier, which stamps each request's release order and bucket at ingress, is a layer of
     its own. The bounds are soundness alone, resting on SHA-512's collision resistance, uniform verifier randomness and
     an honest verifier, and, where a bound reads the certifier's stamp, on the certifier's own assumptions, stated in its
-    layer (`verity/core/protocols/spot/README.md`).
+    layer (`verity/protocols/spot/verifier/README.md`).
   - Each panel names the deployment it assumes (`DEPLOYMENT`: what serving commits, and the replay block) and shows
     its headline design solid and its comparisons thin, dash-dotted, dashed or dotted:
     - exfiltration: two-stage sampling (serving commits only token ids), width-stratified (the headline: the public
@@ -168,12 +179,15 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   exact one-stage form, which adds location bits, over the headline and stretch scopes. Beside it is the rate a 10%
   total cost buys at each line's marginal proof overhead, counting proving alone.
 - **Figure 5** (`figure5.py`), where 10% comes from: the break-even total cost at the FP4 weights (serve tax plus
-  the β at which the bound reaches them) over the headline scope, along a path of levers from today's measured system.
-  Each step adds one lever to the ones before it. Beside it is the bound at a 10% total cost. It reads break-even
-  surfaces (`breakeven_surface.json`) and a path (`figure5.PATH` or `--path`) giving each step's status (measured,
-  modeled or assumed) and the surface case that prices it. A step no surface prices is shown as pending. A lever off
-  the path (`off`) is plotted in grey with its owner. A term no step's total includes (`unpriced`) is shown as a named
-  line or an arrow, and a `charged` one is stated in the caption as the condition every total holds under.
+  the β at which the bound reaches them) over the headline scope, along a path of levers. Each step adds one lever to
+  the ones before it. Beside it is the bound at a 10% total cost. It reads break-even surfaces
+  (`breakeven_surface.json`) and a path (`figure5.PATH` or `--path`) giving each step's status (measured, modeled or
+  assumed), its basis (a headline row's) and the surface case that prices it; a path with a `design` step says what
+  makes it one (`design`). The caption calls the first step today's measured system only when it is served and
+  measured, and names the step from which every total is a design. A step no surface prices is shown as pending. A
+  lever off the path (`off`) is plotted in grey with its owner. A term no step's total includes (`unpriced`) is shown as
+  a named line or an arrow, and a `charged` one is stated in the caption as the condition every total holds under. The
+  caption ends with the `headline` card's rows (`--headline`, else the model's card), each with its basis.
 - **Figure 6** (`figure6.py`), the certified tick's trade-off:
   - (a) a timeline of continuous admission against tick admission, with the network certifier stamping release
     buckets as its own layer;

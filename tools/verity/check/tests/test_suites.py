@@ -196,7 +196,7 @@ def test_resync_installs_the_workspace_and_runs_the_command_again_marked_synced(
 
 def test_only_the_trees_own_environment_without_the_workspace_or_torch_is_fresh(tmp_path, monkeypatch):
     """Probed as `foreign` probes, under the tests' PYTHONPATH: a launcher's shim of the root package doesn't make a fresh tree's
-    environment look installed (r20261109-053655-afb9: research's pyshim held a `verity`)."""
+    environment look installed (research's pyshim held a `verity`)."""
     (tmp_path / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["src/rootpkg"]\n')
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S.shutil, "which", lambda name: "/usr/bin/uv")
@@ -1070,9 +1070,9 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     root, log = tmp_path / "tree", tmp_path / "lake.log"
     _env_workspace(root, {"verity-flock": "import shutil\n\ndef test_lake():\n    assert shutil.which('lake')\n",
                           "other": "def test_other():\n    pass\n"})
-    (root / "verity" / "core" / "service" / "flock").mkdir(parents=True)
-    (root / "verity" / "core" / "service" / "flock" / "lakefile.toml").write_text('name = "flock"\n')
-    (root / "verity" / "core" / "service" / "flock" / ".gitignore").write_text(".lake/\n")       # as the verifier's own
+    (root / "verity" / "protocols" / "flock" / "verifier").mkdir(parents=True)
+    (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").write_text('name = "flock"\n')
+    (root / "verity" / "protocols" / "flock" / "verifier" / ".gitignore").write_text(".lake/\n")       # as the verifier's own
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
     # ELAN puts $HOME/.elan/bin first on the PATH, so on a machine with elan its real lake would shadow one only on the PATH
@@ -1089,10 +1089,10 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     assert p.returncode == 0 and not log.exists(), p.stdout
     p = _run_suite(root, tmp_path, "--fresh", extra=extra)
     assert p.returncode == 0 and "passed  verity-flock" in p.stdout and "passed  other" in p.stdout, p.stdout
-    assert log.read_text() == f"{root / 'verity/core/service/flock'} build\n"
+    assert log.read_text() == f"{root / 'verity/protocols/flock/verifier'} build\n"
 
     p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "FAKE_LAKE_RC": "1"})
-    assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/core/service/flock exited 1" in p.stdout
+    assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/protocols/flock/verifier exited 1" in p.stdout
     assert "passed  other" in p.stdout, p.stdout
 
 
