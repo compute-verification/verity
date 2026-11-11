@@ -2056,13 +2056,9 @@
     {"file": "verity_vllm/glue.py", "kind": "str-bytes-safe", "symbol": "_rules", "detail": ""},
     {"file": "verity_vllm/llm.py", "kind": "arg-type", "symbol": "LLM.__init__", "detail": ""},
     {"file": "verity_vllm/llm.py", "kind": "assignment", "symbol": "LLM._install", "detail": ""},
-    {"file": "verity_vllm/observe/capture.py", "kind": "arg-type", "symbol": "Capture._flush_snapshots", "detail": "", "count": 2},
     {"file": "verity_vllm/observe/capture.py", "kind": "arg-type", "symbol": "Capture._snap_tensor", "detail": ""},
-    {"file": "verity_vllm/observe/capture.py", "kind": "arg-type", "symbol": "Capture._write_snapshot_index", "detail": ""},
     {"file": "verity_vllm/observe/capture.py", "kind": "assignment", "symbol": "Capture._emit_step", "detail": ""},
     {"file": "verity_vllm/observe/capture.py", "kind": "call-overload", "symbol": "Capture._emit_step", "detail": ""},
-    {"file": "verity_vllm/observe/capture.py", "kind": "union-attr", "symbol": "Capture._flush_snapshots", "detail": ""},
-    {"file": "verity_vllm/observe/capture.py", "kind": "union-attr", "symbol": "Capture._snap_tensor", "detail": "", "count": 2},
     {"file": "verity_vllm/observe/contract.py", "kind": "arg-type", "symbol": "adapt_row", "detail": ""},
     {"file": "verity_vllm/observe/contract.py", "kind": "var-annotated", "symbol": "_program_json_layout", "detail": ""},
     {"file": "verity_vllm/observe/contract.py", "kind": "var-annotated", "symbol": "read_header", "detail": ""},
@@ -3252,7 +3248,6 @@
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "union-attr", "symbol": "CommitSession.end", "detail": "", "count": 4},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "var-annotated", "symbol": "KvDevice.encode", "detail": ""},
     {"file": "verity_vllm/protocols/remote_bandwidth/verify.py", "kind": "arg-type", "symbol": "verify_opening", "detail": ""},
-    {"file": "verity_vllm/query/required.py", "kind": "union-attr", "symbol": "request_manifest", "detail": ""},
     {"file": "verity_vllm/target_family.py", "kind": "return-value", "symbol": "device_cc", "detail": ""}
   ]
 }

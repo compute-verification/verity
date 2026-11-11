@@ -647,7 +647,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     wr = (workload or {}).get("requests") or []
     workload_request_id = wr[0].get("request_id") if wr and isinstance(wr[0], dict) else None
     request_id = fmt.request_label(request_id, workload)
-    k_req = int(fmt.REQ_RE.match(request_id).group(1))
+    k_req = int(request_id[1:])                            # `request_label` answers `r<k>` or refuses
     if wr and k_req < len(wr) and isinstance(wr[k_req], dict) and str(wr[k_req].get("request_id")) != str(workload_request_id):
         workload_request_id = wr[k_req].get("request_id")
     arr = sweep.get("arrive_steps") or []

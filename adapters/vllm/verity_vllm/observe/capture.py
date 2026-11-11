@@ -696,6 +696,7 @@ class Capture:
                                      "skipped": why})
             return
         src = storage_bytes_view(t, off, nbytes)
+        assert self._arena is not None
         if self._snap_pending and not self._arena.fits(nbytes):
             self._flush_snapshots(self._cur)
         host = self._arena.take(nbytes)
@@ -736,6 +737,7 @@ class Capture:
 
     def _flush_snapshots(self, st: _Step) -> None:
         """Wait for the step's copies and write them out: at a snapshot step's end, and whenever they fill the pinned arena mid-step."""
+        assert self._arena is not None and self.cfg.snapshot_dir is not None
         t0 = time.perf_counter()
         torch.cuda.synchronize()
         self.timing["sync_s"] += (t1 := time.perf_counter()) - t0
@@ -764,14 +766,14 @@ class Capture:
         self.timing["snapshot_s"] += time.perf_counter() - t1
 
     def _write_snapshot_index(self) -> None:
-        p = Path(self.cfg.snapshot_dir) / "snapshots.json"
-        p.write_text(json.dumps({"schema": CAPTURE_SNAPSHOTS_SCHEMA, "layout": "spanned-storage-bytes",
-                                 "note": "file = raw bytes of the storage range [byte_offset, byte_offset+nbytes) the view spans, "
-                                         "copied D2H stream-ordered right after the call; content-addressed (sha256) so identical "
-                                         "bytes share a file; 'sub' = sub-view (dim, index) of an oversize KV-cache tensor",
-                                 "steps": sorted(self.cfg.snapshot_steps), "total_bytes": self._snap_bytes,
-                                 "snapshot_max_bytes": self.cfg.snapshot_max_bytes, "snapshot_max_bytes_op": self.cfg.snapshot_max_bytes_op,
-                                 "entries": self._snap_index}, separators=(",", ":")))
+        assert self.cfg.snapshot_dir is not None
+        index = {"schema": CAPTURE_SNAPSHOTS_SCHEMA, "layout": "spanned-storage-bytes",
+                 "note": "file = raw bytes of the storage range [byte_offset, byte_offset+nbytes) the view spans, "
+                         "copied D2H stream-ordered right after the call; content-addressed (sha256) so identical "
+                         "bytes share a file; 'sub' = sub-view (dim, index) of an oversize KV-cache tensor",
+                 "steps": sorted(self.cfg.snapshot_steps), "total_bytes": self._snap_bytes, "snapshot_max_bytes": self.cfg.snapshot_max_bytes,
+                 "snapshot_max_bytes_op": self.cfg.snapshot_max_bytes_op, "entries": self._snap_index}
+        (Path(self.cfg.snapshot_dir) / "snapshots.json").write_text(json.dumps(index, separators=(",", ":")))
 
 
 def make_header(engine: Engine, workload: dict, *, adapter_revision: str, wheel_sha256: str | None = None,
