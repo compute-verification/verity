@@ -28,7 +28,7 @@ from typing import Any
 
 import torch
 
-from tests.engine import int8_exact_gpu as X
+from tests.engine import int8_pin as X
 
 RECORD = "rope_cache_engine_gpu.json"
 

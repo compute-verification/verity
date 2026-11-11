@@ -18,6 +18,11 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 
 `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every finding is none
 (`firstFinding_none`), each link-window's `wiredCheck` and `stateCheck` among them.
+
+`RowsTiedCharged` reads the public the rows form accepts with (`check_rows`): with no finding, every audit's check gave
+its facts and every link-window's its scan's, so the public's `audits` and `units` hold them position for position
+(`getElem?_filterMap_of_isSome`), `charged` is `chargedOf` over the audits (`charged_eq`), and a link-window's term's
+`faultyEntries` is `faultyEntries` of its registration.
 -/
 
 @[expose] public section
@@ -271,5 +276,226 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
       stateWindow rfl
   rw [stateWindow_skipped] at hs
   cases hs
+
+/-! ## The rows form charges a tied audit sampled in part -/
+
+/-- Where every element maps to a value, `filterMap` keeps the positions. -/
+theorem getElem?_filterMap_of_isSome {α β : Type} (g : α → Option β) (xs : Array α)
+    (h : ∀ a ∈ xs, (g a).isSome = true) (i : ℕ) : (xs.filterMap g)[i]? = xs[i]?.bind g := by
+  obtain ⟨l⟩ := xs
+  simp only [List.filterMap_toArray, List.getElem?_toArray]
+  have h' : ∀ a ∈ l, (g a).isSome = true := fun a ha => h a (by simpa using ha)
+  clear h
+  induction l generalizing i with
+  | nil => simp
+  | cons a l ih =>
+    obtain ⟨b, hb⟩ := Option.isSome_iff_exists.mp (h' a (by simp))
+    rw [List.filterMap_cons_some hb]
+    cases i with
+    | zero => simp [hb]
+    | succ i => simpa using ih i (fun a ha => h' a (by simp [ha]))
+
+/-- Where every element maps to a value, `filterMap` keeps the size. -/
+theorem size_filterMap_of_isSome {α β : Type} (g : α → Option β) (xs : Array α)
+    (h : ∀ a ∈ xs, (g a).isSome = true) : (xs.filterMap g).size = xs.size := by
+  have h' : ∀ a ∈ xs.toList, (g a).isSome = true := fun a ha => h a (Array.mem_toList_iff.mp ha)
+  rw [← Array.length_toList, Array.toList_filterMap, ← Array.length_toList (xs := xs)]
+  generalize xs.toList = l at h'
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    obtain ⟨b, hb⟩ := Option.isSome_iff_exists.mp (h' a (by simp))
+    rw [List.filterMap_cons_some hb, List.length_cons, List.length_cons, ih (fun a ha => h' a (by simp [ha]))]
+
+theorem findingOf_none {α : Type} {y : Found α} (h : findingOf y = none) : ∃ v, y = .ok v := by
+  cases y with
+  | error r => cases h
+  | ok v => exact ⟨v, rfl⟩
+
+/-- The rows form's link-windows' findings, as `check` computes them. -/
+def rowsWindows (p : Params) (c : Commitment) (e : Evidence) (s : Schedule) (sd : ByteArray) :
+    Array (Found (Option (Facts × ℕ))) :=
+  (c.windows.zip e.windows).zipIdx.map fun ((reg, x), i) =>
+    some <$> rowsWindowCheck p s sd c.audits (p.first + i) reg x
+
+/-- What acceptance in the rows form gives: the sizes, no finding of a link-window or an audit, and the public. -/
+theorem check_rows {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile} {s : Schedule}
+    {sd : ByteArray} {scan : Scan} (hform : p.form = .rows s sd scan) (h : check p c e = .accept pub prof) :
+    c.audits.size = p.audits.size ∧ e.windows.size = c.windows.size ∧ e.audits.size = c.audits.size ∧
+      (∀ y ∈ rowsWindows p c e s sd, findingOf y = none) ∧ (∀ y ∈ auditChecks p c e, findingOf y = none) ∧
+      pub = rowsPublic p c (auditChecks p c e) scan ((rowsWindows p c e s sd).filterMap (·.toOption.join)) := by
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  rename_i h1 h2 h3 h4
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    have h0 := firstFinding_none hF
+    refine ⟨by omega, by omega, by omega, ?_, ?_, ?_⟩
+    · intro y hy
+      exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
+        (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy))))))
+    · intro y hy
+      exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
+        (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))
+    · injection h with hp
+      exact hp.symm
+
+theorem auditChecks_getElem? {p : Params} {c : Commitment} {e : Evidence} {i : ℕ} {a : Audit} {reg : Lean.Json}
+    {x : Core.Answer} (ha : p.audits[i]? = some a) (hreg : c.audits[i]? = some reg) (hx : e.audits[i]? = some x) :
+    (auditChecks p c e)[i]? = some (auditCheck i a reg x) := by
+  have hz : ((p.audits.zip c.audits).zip e.audits)[i]? = some ((a, reg), x) :=
+    Array.getElem?_zip_eq_some.mpr ⟨Array.getElem?_zip_eq_some.mpr ⟨ha, hreg⟩, hx⟩
+  simp [auditChecks, Array.getElem?_zipIdx, hz]
+
+/-- An audit the check accepts has its answer's facts. -/
+theorem auditCheck_facts {i : ℕ} {a : Audit} {reg : Lean.Json} {x : Core.Answer} {f : Facts}
+    (h : auditCheck i a reg x = .ok f) : AuditFacts i reg x f := by
+  unfold auditCheck at h
+  cases ha : answered s!"audit {i}" reg x with
+  | error r =>
+    simp only [ha, bind, Except.bind] at h
+    by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
+      simp [c1, refuse] at h
+  | ok pp =>
+    obtain ⟨prof, pub⟩ := pp
+    cases hf : factsOf s!"audit {i}" prof pub with
+    | error r =>
+      simp only [ha, hf, bind, Except.bind] at h
+      by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
+        simp [c1, refuse] at h
+    | ok g =>
+      refine ⟨prof, pub, ha, ?_⟩
+      simp only [ha, hf, bind, Except.bind] at h
+      by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
+        by_cases c2 : g.units = a.units <;> simp_all [refuse, pure, Except.pure]
+
+/-- A link-window with no finding has its scan's facts and its tied audits' free inputs. -/
+theorem rowsWindows_ok {p : Params} {c : Commitment} {e : Evidence} {s : Schedule} {sd : ByteArray}
+    (hws : ∀ y ∈ rowsWindows p c e s sd, findingOf y = none) :
+    ∀ y ∈ rowsWindows p c e s sd, ∃ u, y = .ok (some u) := by
+  intro y hy
+  obtain ⟨v, rfl⟩ := findingOf_none (hws y hy)
+  unfold rowsWindows at hy
+  obtain ⟨z, -, hz⟩ := Array.mem_map.mp hy
+  cases hr : rowsWindowCheck p s sd c.audits (p.first + z.2) z.1.1 z.1.2 with
+  | error r => simp [hr, Functor.map, Except.map] at hz
+  | ok u => exact ⟨u, by simpa [hr, Functor.map, Except.map] using hz.symm⟩
+
+/-- With every audit accepted, the audits the rows form charges are those the accepted facts name: tied and sampled in
+part. -/
+theorem charged_eq {p : Params} {c : Commitment} {s : Schedule} {sd : ByteArray} {scan : Scan}
+    (hform : p.form = .rows s sd scan) {as : Array (Found Facts)} (has : ∀ y ∈ as, findingOf y = none) :
+    (Array.range as.size).filterMap (chargedOf p c as) =
+      tiedInPart (tiedIn c.audits c.windows) (as.filterMap (·.toOption)) := by
+  have hall : ∀ y ∈ as, (Except.toOption y).isSome = true := by
+    intro y hy
+    obtain ⟨v, rfl⟩ := findingOf_none (has y hy)
+    rfl
+  unfold tiedInPart
+  rw [size_filterMap_of_isSome _ _ hall]
+  congr 1
+  funext i
+  rw [getElem?_filterMap_of_isSome _ _ hall]
+  unfold chargedOf
+  cases hi : as[i]? with
+  | none => rfl
+  | some y =>
+    obtain ⟨f, rfl⟩ := findingOf_none (has y (Array.mem_of_getElem? hi))
+    simp [hform, tiedOf, Except.toOption, Option.filter]
+
+theorem rowsTiedCharged : RowsTiedCharged := by
+  intro p c e pub prof h s sd scan hform
+  obtain ⟨hca, hew, hea, hws, has, rfl⟩ := check_rows hform h
+  refine ⟨charged_eq hform has, ?_⟩
+  intro i reg hreg htied
+  obtain ⟨hlt, -⟩ := Array.getElem?_eq_some_iff.mp hreg
+  have hi : i < p.audits.size := by omega
+  have hx : e.audits[i]? = some (e.audits[i]'(by omega)) := Array.getElem?_eq_getElem (by omega)
+  have hget := auditChecks_getElem? (Array.getElem?_eq_getElem hi) hreg hx
+  obtain ⟨f, hf⟩ := findingOf_none (has _ (Array.mem_of_getElem? hget))
+  rw [hf] at hget
+  have hall : ∀ y ∈ auditChecks p c e, (Except.toOption y).isSome = true := by
+    intro y hy
+    obtain ⟨v, rfl⟩ := findingOf_none (has y hy)
+    rfl
+  refine ⟨_, f, hx, auditCheck_facts hf, ?_, ?_⟩
+  · show ((auditChecks p c e).filterMap (·.toOption))[i]? = some f
+    rw [getElem?_filterMap_of_isSome _ _ hall, hget]
+    rfl
+  · intro hd
+    have hch : chargedOf p c (auditChecks p c e) i = some f := by
+      simp [chargedOf, hget, hform, tiedOf, htied, hd]
+    refine ⟨?_, ?_⟩
+    · show f ∈ (Array.range (auditChecks p c e).size).filterMap (chargedOf p c (auditChecks p c e))
+      exact Array.mem_filterMap.mpr ⟨i, Array.mem_range.mpr (Array.getElem?_eq_some_iff.mp hget).1, hch⟩
+    · intro hwrong w wreg hw hc
+      obtain ⟨hwlt, -⟩ := Array.getElem?_eq_some_iff.mp hw
+      have hxw : e.windows[w]? = some (e.windows[w]'(by omega)) := Array.getElem?_eq_getElem (by omega)
+      have hz : (c.windows.zip e.windows)[w]? = some (wreg, e.windows[w]'(by omega)) :=
+        Array.getElem?_zip_eq_some.mpr ⟨hw, hxw⟩
+      have hwget : (rowsWindows p c e s sd)[w]? =
+          some (some <$> rowsWindowCheck p s sd c.audits (p.first + w) wreg (e.windows[w]'(by omega))) := by
+        simp [rowsWindows, Array.getElem?_zipIdx, hz]
+      obtain ⟨u, hu⟩ := rowsWindows_ok hws _ (Array.mem_of_getElem? hwget)
+      rw [hu] at hwget
+      have hwall : ∀ y ∈ rowsWindows p c e s sd, (y.toOption.join).isSome = true := by
+        intro y hy
+        obtain ⟨u, rfl⟩ := rowsWindows_ok hws y hy
+        rfl
+      have hscan : ((rowsWindows p c e s sd).filterMap (·.toOption.join))[w]? = some u := by
+        rw [getElem?_filterMap_of_isSome _ _ hwall, hwget]
+        rfl
+      refine ⟨scan.terms u.1 u.2 (faultyEntries p c (auditChecks p c e) scan wreg) p.jitter, ?_, ?_⟩
+      · have hzip : (((rowsWindows p c e s sd).filterMap (·.toOption.join)).zip c.windows)[w]? = some (u, wreg) :=
+          Array.getElem?_zip_eq_some.mpr ⟨hscan, hw⟩
+        simp [rowsPublic, rowsTerms, hzip]
+      · show faultyEntries p c (auditChecks p c e) scan wreg = scan.entries
+        have hany : ((tiedAudits c.audits wreg).any fun i =>
+            (chargedOf p c (auditChecks p c e) i).any (1 ≤ ·.wrong)) = true :=
+          Array.any_eq_true'.mpr ⟨i, Array.mem_of_contains_eq_true hc, by simp [hch, hwrong]⟩
+        simp [faultyEntries, hany]
+
+/-- An answer of another protocol than one-stage's. -/
+def otherAnswer : Core.Answer :=
+  { protocol := "other", verdict := .accept, reason := none, digest := none, published := none, profile := none }
+
+/-- The parameters of one compute audit, the slot audit, under `slotSchedule` and a scan of 7 slot entry bits. -/
+def chargedParams : Params :=
+  ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 7⟩, 1⟩
+
+/-- Its commitment: the slot audit's registration and the link-window whose scan's `prog` is its entries port. -/
+def chargedCommitment : Commitment := ⟨#[slotReg], #[tiedWindow], .empty⟩
+
+/-- Its honest side, at the slot audit tied to `tiedWindow`: sampled 1 of its 2 units with a bound of one incorrect
+proof block, the audit is charged and its link-window's `β_w` is the scan's every entry bit; sampled whole, it is not
+charged and `β_w` is 0. -/
+theorem rowsTiedCharged_honest :
+    (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1⟩] 0).isSome = true ∧
+      faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1⟩] ⟨0, 0, 0, 0, 7⟩ tiedWindow = 7 ∧
+      (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0⟩] 0).isNone = true ∧
+      faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0⟩] ⟨0, 0, 0, 0, 7⟩ tiedWindow = 0 := by
+  decide +kernel
+
+/-- **No period check that accepts every period has `RowsTiedCharged`'s property** (its nontrivial lemma): such a check
+accepts a rows-form period whose audit 0 is tied to its link-window's scan, and publishes no facts of it and no
+charge. -/
+theorem rowsTiedCharged_nontrivial : ¬ RowsTiedChargedOf acceptAllRows := by
+  intro h
+  let p : Params :=
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+  obtain ⟨-, h1⟩ := h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[otherAnswer], #[]⟩ _ _ rfl slotSchedule .empty
+    ⟨0, 0, 0, 0, 0⟩ rfl
+  obtain ⟨x, f, -, -, hf, -⟩ := h1 0 slotReg rfl rowsProgWired_honest.2
+  simp [rowsTerms] at hf
 
 end Properties.NetworkPeriod
