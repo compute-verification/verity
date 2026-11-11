@@ -60,7 +60,7 @@ counts more bits as fresh.
 **The rate rule** (`Complies`): where the check accepts, the instance's fields are the ones it judged by, the record
 lays out a circuit, and every circuit it lays out meets the policy block by block at the instance's `Γ` and `α`, so
 it complies (`Nci.CompliesRate`). It follows from four statements about the check, `Owns`, `LaidOut`, `Counts` and
-`Rates` (`Proofs.Properties.Nci.Record`).
+`Rates`: that it does is the guarantee `NciCheck.Guarantees.ServedComplies` (`Proofs.Properties.Nci.Record`).
 
 **Provenance** (`Provenance`): the run's own record names this Program and this record by their SHA-512s, and every
 row the check holds is a registered read or a table read of a parameter that the log's first record registers under
@@ -175,7 +175,9 @@ def InLeaf (P : Prog) (sc : Scope) (k : ℕ) (port : String) (row l g lo hi : �
     Flock.Program.resolve P sc (⟨true, i, (inRow (P.defs[sc.d]!) i k row).1 + l⟩ : Ref) = .ok g ∧
     lo = bitAt (inRow (P.defs[sc.d]!) i k row).2 l ∧ hi = lo + (inRow (P.defs[sc.d]!) i k row).2[l]!
 
-/-- Leaf `l` of output row `out` of the activation `sc` is Program gate `g`, at bits `[lo, hi)` of the row. -/
+/-- Leaf `l` of output row `out` of the activation `sc` is Program gate `g`, at bits `[lo, hi)` of the row. An
+activation of a primitive has the default body, whose `ret` resolves to the activation's own gate: the one leaf of its
+one output row `o0` is that gate. -/
 def OutLeaf (P : Prog) (sc : Scope) (out : String) (l g lo hi : ℕ) : Prop :=
   ∃ f, out = "o" ++ toString f ∧ f < (fieldsOf (P.defs[sc.d]!).ret).length ∧
     l < (outRow (P.defs[sc.d]!) f).2.size ∧
@@ -189,7 +191,8 @@ def RowLeaf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (r : Row) (l 
 /-- **`t` is Definition `d`'s template.** No two of `d`'s parameters have one name, and each is whole 16-bit words;
 `t`'s rows are `d`'s parameters by name, each with its words and its outer length; and `t`'s outputs are `d`'s output
 rows `o<f>`, each with its bits rounded up to whole words, never down: a row wired to an output has the output's
-words (`Spot.Wires.check`), so it is no fewer bits than the output it reads. -/
+words (`Spot.Wires.check`), so it is no fewer bits than the output it reads. It does not ask that a parameter or an
+output has a bit, which `NciCheck.RecordText.templatesOf` asks of every template it gives. -/
 def TemplateOf (d : Defn) (t : Spot.Wires.Template) : Prop :=
   (∀ i i', i < d.params.size → i' < d.params.size → d.params[i]!.1 = d.params[i']!.1 → i = i') ∧
     (∀ i, i < d.params.size → 16 ∣ bitsOf d.params[i]!.2) ∧
@@ -324,7 +327,9 @@ def Accepts (F : Form) (j tr : Json) (c : F.Case) : Prop :=
 def Owns (F : Form) : Prop :=
   ∀ (j tr : Json) (c : F.Case), F.read j tr = .ok c → Carries F j c
 
-/-- **A record the check reads lays out a circuit.** -/
+/-- **A record the check reads lays out a circuit.** It says that some circuit has the record's layout: the Program's
+gates no wire covers, with their widths, kinds and reads. It does not say that this circuit's operations are the
+Program's, nor that it is the deployment's registered circuit. -/
 def LaidOut (F : Form) : Prop :=
   ∀ (j tr : Json) (c : F.Case), F.read j tr = .ok c → ∃ d, Served F c d
 
@@ -479,3 +484,17 @@ def PinnedOpens (F : Form) : Prop :=
         Collides j₀ pj key
 
 end NciCheck.Properties.Record
+
+namespace NciCheck.Guarantees
+
+open NciCheck.Properties.Record
+
+/-- **Accepting a served record gives the rate rule on its circuit**, of any check that meets the four statements
+about it: a record it reads carries its instance's fields (`Owns`) and lays out a circuit (`LaidOut`), its summary
+counts every block of every circuit the record lays out (`Counts`), and its rate rule bounds a summary (`Rates`).
+Then where the check accepts, every circuit the record lays out complies with the inference-only policy at the
+instance's `Γ` and `α` (`Complies`). The four are premises here, each a statement about the check's own functions. -/
+def ServedComplies : Prop :=
+  ∀ F : Form, Owns F → LaidOut F → Counts F → Rates F → Complies F
+
+end NciCheck.Guarantees
