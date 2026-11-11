@@ -66,7 +66,7 @@ def reconcile(monkeypatch):
 def device_census() -> dict:
     """What the bare run of the traced log launches: each declared kernel once per declaring event of its step (`ALT`, the
     norm's alternative, never)."""
-    per_step = {}
+    per_step: dict[int, tuple] = {}
     RL.resolve_log("traced", profile(), None, lambda se, sr: per_step.__setitem__(sr.step, (sr, se.roots)))
     steps = []
     for step, (sr, roots) in sorted(per_step.items()):

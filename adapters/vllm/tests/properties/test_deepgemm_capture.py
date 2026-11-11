@@ -7,6 +7,8 @@ from __future__ import annotations
 import copy
 import sys
 import types
+from collections.abc import Mapping
+from typing import Any
 
 import numpy as np
 import pytest
@@ -291,8 +293,7 @@ def test_a_job_that_raises_is_an_error_not_a_crash(tmp_path) -> None:
 
 def test_taps_record_every_call_and_restore_the_module(monkeypatch) -> None:
     mod = types.ModuleType("fake_flashinfer")
-    mod.f = lambda x, **kw: (x + 1, x * 2)
-    mod.g = lambda x: x
+    vars(mod).update(f=lambda x, **kw: (x + 1, x * 2), g=lambda x: x)
     monkeypatch.setitem(sys.modules, "fake_flashinfer", mod)
     f = mod.f
     with X.Taps("fake_flashinfer", ("f",)) as tp:
@@ -344,7 +345,8 @@ def test_equal_is_bit_for_bit() -> None:
 def test_the_branch_operands_are_the_layers_and_the_inputs() -> None:
     layer, x, out = _layer(), torch.zeros(4, K, dtype=torch.bfloat16), torch.zeros(4, N, dtype=torch.bfloat16)
     assert X.branch_operands_ok(_deepgemm_calls(x, layer, out), "deepgemm", x, layer, out)
-    for change in ({"quant_kw": {**QUANT_KW, "use_ue8m0": False}}, {"gemm_kw": {}}, {"w": layer.weight.clone()}):
+    changes: tuple[dict[str, Any], ...] = ({"quant_kw": {**QUANT_KW, "use_ue8m0": False}}, {"gemm_kw": {}}, {"w": layer.weight.clone()})
+    for change in changes:
         assert not X.branch_operands_ok(_deepgemm_calls(x, layer, out, **change), "deepgemm", x, layer, out), change
     assert not X.branch_operands_ok(_deepgemm_calls(x, layer, out), "deepgemm", x, layer, torch.ones(4, N, dtype=torch.bfloat16))
     assert not X.branch_operands_ok(_deepgemm_calls(x, layer, out), "deepgemm", x.clone(), layer, out)
@@ -385,7 +387,7 @@ def _kernel_cu(impl: str, args: list[str]) -> str:
             f"    auto ptr = reinterpret_cast<void*>(&{impl}<\n        {body}\n    >);\n}};\n")
 
 
-def _jit_cache(root, kernels: dict[str, tuple[str, list[str]]]):
+def _jit_cache(root, kernels: Mapping[str, tuple[str | None, list[str]]]):
     for name, (impl, args) in kernels.items():
         (root / "cache" / name).mkdir(parents=True)
         (root / "cache" / name / "kernel.cu").write_text(_kernel_cu(impl, args) if impl else "// nothing instantiated\n")
@@ -459,7 +461,7 @@ def _doc(batch_invariant: bool = False) -> dict:
     def weights(case):
         return {"phase": "weights", "model": "dsv4", "case": case, "deterministic": True, "operands_ok": True}
 
-    doc = {"schema": X.SCHEMA, "batch_invariant": batch_invariant, "gate": {"ok": True}, "errors": {}, "selection": {"ok": True},
+    doc: dict[str, Any] = {"schema": X.SCHEMA, "batch_invariant": batch_invariant, "gate": {"ok": True}, "errors": {}, "selection": {"ok": True},
            "mufu": {"rcp_ok": True}, "schedule": {"ok": True},
            "jit": {"ok": True, "gemm_types": ["GemmType::Batched", "GemmType::Normal"]}, "bind": {"ok": True},
            "launches": [weights("wq_b"), {**lin, "M": 1, "branch": branches[0]}, {**lin, "M": 32, "branch": branches[1]}, weights("wo_a"),
@@ -533,8 +535,8 @@ def _stub_gpu(tmp_path, monkeypatch, *, gate_ok: bool = True, flip: bool = False
     import contextlib
 
     vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
+    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
+                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
     for k in ENV:

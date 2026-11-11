@@ -178,7 +178,8 @@ def test_the_state_rows_are_the_kernel_reads() -> None:
     """Row r of the token at position p is position p - 7 + r of its request through the block table, rows 0-3 the overlap halves
     [0:128] / [256:384], rows 4-7 [128:256] / [384:512]; rows before position 0 kv 0 and score -inf."""
     nb = 6
-    b, r, c = np.meshgrid(np.arange(nb), np.arange(D4.STATE_BLOCK), np.arange(2 * D4.STATE_W), indexing="ij")
+    grid: tuple[np.ndarray, ...] = np.meshgrid(np.arange(nb), np.arange(D4.STATE_BLOCK), np.arange(2 * D4.STATE_W), indexing="ij")
+    b, r, c = grid
     state = (b * 100000 + r * 1000 + c).astype(np.uint32)
     bt = np.array([[4, 1, 5, 0], [2, 3, 0, 0]], dtype=np.int32)
     req, pos = np.array([0, 0, 1]), np.array([3, 11, 7])
@@ -251,7 +252,8 @@ def test_the_head_words_layout() -> None:
     """Head 8 g + i of `fused_inv_rope_fp8_quant`'s (T, G, 8 * 512) bytes and (T, G, 8 * 4) scales is [t, g, 512 i:512 (i + 1)]
     and [t, g, 4 i:4 i + 4]."""
     T = 3
-    t, g, j = np.meshgrid(np.arange(T), np.arange(D4.GROUPS), np.arange(D4.HPG * D4.HD), indexing="ij")
+    grid: tuple[np.ndarray, ...] = np.meshgrid(np.arange(T), np.arange(D4.GROUPS), np.arange(D4.HPG * D4.HD), indexing="ij")
+    t, g, j = grid
     fp8 = (t * 7 + g * 3 + j // D4.HD).astype(np.uint8)
     t, g, j = np.meshgrid(np.arange(T), np.arange(D4.GROUPS), np.arange(D4.HPG * D4.CHUNKS), indexing="ij")
     scale = (t * 1000 + g * 100 + j).astype(np.uint32)
@@ -418,7 +420,7 @@ def test_the_topk_checks() -> None:
     worse = sel.copy()
     worse[np.flatnonzero(vals[ones, sel] == 1)[0]] = np.setdiff1d(np.flatnonzero(vals[ones, :1100] == 0), sel)[0]
     assert D4.topk_valid(vals[ones], 1100, sel)["valid"] and D4.topk_valid(vals[ones], 1100, worse)["valid"] is False
-    wide = np.full((len(lens), D4.MAX_MODEL_LEN + 13), np.inf, dtype=np.float32)
+    wide: np.ndarray = np.full((len(lens), D4.MAX_MODEL_LEN + 13), np.inf, dtype=np.float32)
     wide[:, 5:5 + D4.MAX_MODEL_LEN] = vals
     assert D4.check_topk(wide, np.maximum(lens, 0), out, 5)["long_valid"] == 4
 
@@ -544,8 +546,8 @@ def _stub_vllm(monkeypatch, gate: dict) -> None:
     import types
 
     vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
+    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
+                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
     for k in ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "DG_JIT_CACHE_DIR"):

@@ -325,11 +325,9 @@ def _stand_in_vllm(monkeypatch, calls: list) -> None:
             return run
 
     sw = types.ModuleType("vllm.v1.attention.backends.mla.sparse_swa")
-    sw._COMPUTE_SWA_INDICES_AND_LENS_KERNEL = SwaLauncher()
-    sw._compute_swa_indices_and_lens_kernel = SwaKernel()
+    vars(sw).update(_COMPUTE_SWA_INDICES_AND_LENS_KERNEL=SwaLauncher(), _compute_swa_indices_and_lens_kernel=SwaKernel())
     sm = types.ModuleType("vllm.models.deepseek_v4.sparse_mla")
-    sm.build_c128a_topk_metadata = c128_launcher
-    sm._build_c128a_topk_metadata_kernel = C128Kernel()
+    vars(sm).update(build_c128a_topk_metadata=c128_launcher, _build_c128a_topk_metadata_kernel=C128Kernel())
     for name in ("vllm", "vllm.v1", "vllm.v1.attention", "vllm.v1.attention.backends", "vllm.v1.attention.backends.mla",
                  "vllm.models", "vllm.models.deepseek_v4"):
         monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
@@ -581,8 +579,8 @@ def _stub_config(monkeypatch) -> None:
     for k in ("TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
         monkeypatch.setenv(k, "")
     vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
+    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
+                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
     monkeypatch.setattr(X.G, "_environment", dict)
@@ -596,7 +594,7 @@ def test_main_end_to_end_on_stubbed_launches(observed, tmp_path, monkeypatch, ca
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X, "bind_check", lambda: {"bindings": {}, "ok": True})
     monkeypatch.setattr(X, "ptx", lambda cache, outdir: {"ok": True})
-    by = {}
+    by: dict[str, dict] = {}
     for case in SMALL.values():
         for j in observed[case].jobs:
             by.setdefault(j["case"], j)

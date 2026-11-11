@@ -51,9 +51,9 @@ def test_word_generators(kind):
 def test_check_requires_edge_kinds(tmp_path, monkeypatch):
     # a fake adapter for BiasAdd whose cases are random-only -> admission fails for missing edge kinds
     mod = types.ModuleType("fake_adapter")
-    mod.SEMANTIC_ID = "test/BiasAdd@v1"
-    mod.cases = lambda rng, i: {"statics": {"N": 4}, "inputs": [{"shape": [4], "dtype": "bfloat16", "kind": "random"}] * 2}
-    mod.spec = lambda st: bind(b1.BiasAdd, N=st["N"])
+    vars(mod).update(
+        SEMANTIC_ID="test/BiasAdd@v1", spec=lambda st: bind(b1.BiasAdd, N=st["N"]),
+        cases=lambda rng, i: {"statics": {"N": 4}, "inputs": [{"shape": [4], "dtype": "bfloat16", "kind": "random"}] * 2})
     monkeypatch.setitem(sys.modules, "fake_adapter", mod)
     d = tmp_path / "dt"
     (d / "case_0").mkdir(parents=True)
@@ -75,10 +75,9 @@ def test_produce_writes_bf16_outputs_as_words(tmp_path, monkeypatch):
     # `Tensor.numpy()` raised "Got unsupported ScalarType BFloat16" and every bf16-output Definition was un-difftestable)
     pytest.importorskip("torch")
     mod = types.ModuleType("fake_bf16_adapter")
-    mod.SEMANTIC_ID = "test/BiasAdd@v1"
-    mod.cases = lambda rng, i: {"statics": {"N": 4}, "inputs": [{"shape": [4], "dtype": "bfloat16", "kind": "random"}] * 2}
-    mod.production = lambda st, ins: [ins[0] + ins[1]]
-    mod.spec = lambda st: bind(b1.BiasAdd, N=st["N"])
+    vars(mod).update(
+        SEMANTIC_ID="test/BiasAdd@v1", spec=lambda st: bind(b1.BiasAdd, N=st["N"]), production=lambda st, ins: [ins[0] + ins[1]],
+        cases=lambda rng, i: {"statics": {"N": 4}, "inputs": [{"shape": [4], "dtype": "bfloat16", "kind": "random"}] * 2})
     monkeypatch.setitem(sys.modules, "fake_bf16_adapter", mod)
     man = difftest.produce("fake_bf16_adapter", 1, 3, tmp_path / "dt", device="cpu")
     out = np.load(tmp_path / "dt" / "case_0" / "out_0.npy")

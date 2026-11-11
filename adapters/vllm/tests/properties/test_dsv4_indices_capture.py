@@ -26,7 +26,7 @@ SIM = ["c4", "c128-256"]
 
 def simulate_c128a(case: str, pos: np.ndarray) -> dict:
     c = X.CASES_L[case]
-    pf = np.full((pos.size + 2, c.buffer), X.SENTINEL, np.uint32)
+    pf: np.ndarray = np.full((pos.size + 2, c.buffer), X.SENTINEL, np.uint32)
     pf[:pos.size, :c.topk] = X.short_rows(pos, c.topk, c.ratio)
     run = {"pf": pf, "gd": np.full((1, c.buffer), X.SENTINEL, np.uint32), "dl": np.full(1, X.SENTINEL, np.uint32)}
     return {"runs": [run, copy.deepcopy(run)], "view": True, "pos": pos}
@@ -351,15 +351,15 @@ def test_main_end_to_end_on_stubbed_launches(observed, tmp_path, monkeypatch, ca
     for k in ("TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
         monkeypatch.setenv(k, "")
     vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
+    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
+                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "bind_check", lambda: {"bindings": {}, "ok": True})
     monkeypatch.setattr(X, "ptx", lambda cache, outdir: {"ok": True})
-    by = {}
+    by: dict[str, dict] = {}
     for j in ob.jobs:
         by.setdefault(j["case"], j)
     edge = _flipped(tmp_path / "bad", {**by["c4-edge"], "rows": [0, 2]}, "got_rows", (1, 1000))

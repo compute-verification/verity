@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+from typing import Any
 
 import pytest
 
@@ -297,7 +298,7 @@ def test_the_prefill_cases_are_fa3s_with_a_prefill_row_and_the_class_of_records_
 
 
 def test_decode_shaped_is_exact_only_when_every_prefill_row_is_evaluated_and_equal_and_is_not_part_of_ok():
-    good = {"rows": 10, "heads": 40, "mismatch": 0, "mismatch_rows": 0, "special_mismatch_rows": 0, "min_T_mismatch": None, "unevaluated": 0}
+    good: dict[str, Any] = {"rows": 10, "heads": 40, "mismatch": 0, "mismatch_rows": 0, "special_mismatch_rows": 0, "min_T_mismatch": None, "unevaluated": 0}
     bad = dict(good, mismatch=3, mismatch_rows=2, special_mismatch_rows=1, min_T_mismatch=129)
     doc = _record()
 
