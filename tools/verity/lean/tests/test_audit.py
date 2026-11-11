@@ -5884,6 +5884,7 @@ def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp
     fails, rep = A.sampled_recompile(b, ["P"], tmp_path / "w2", set(), [], log=lambda s: None)
     assert rep["modules"] == sorted(samples[hit]) and [(x.code, x.entry) for x in fails] == [("sampled", "P.M2")], fails
     assert ".lake/build/lib/lean/P/M2.olean differs from what its source compiles to (olean differ" in fails[0]
+    assert rep["mismatched"] == {"P.M2": str(b.resolve())}, "the report names the module and its package's directory"
     assert files_of(build) == before, "the build is never written"
     upper = tmp_path / "w2" / "sampled" / "0" / "upper" / "build"
     assert (upper / "lib/lean/P/M2.olean").read_bytes() == (a / ".lake/build/lib/lean/P/M2.olean").read_bytes()
@@ -6356,7 +6357,7 @@ def test_a_spec_never_reads_a_proving_package_whose_build_did_not_pass(tmp_path,
     monkeypatch.setattr(A, "audit", fake)
     assert A.main([str(s), "--out", str(tmp_path / "out")]) == 1
     assert seen["ready"] is False
-    with pytest.raises(RuntimeError, match=r"\.\./p's build did not pass"):
+    with pytest.raises(A.Unpassed, match=r"\.\./p's build did not pass"):
         A.proved(s, json.loads((s / A.POLICY).read_text()), facts(modules=[], pins={}), tmp_path / "work",
                  ready=lambda q: False)
 
