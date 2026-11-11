@@ -4144,6 +4144,38 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     assert A.renamed_witnesses(POLICY, {"P": "Q"}) == {}
 
 
+def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry_is_held_to_its_witnesses():
+    """A guarantee in scope that the lock lists with neither witnesses nor an `unwitnessed` entry, as a merge leaves one
+    that one side lists and whose entry the other side dropped: the check holds it to its witnesses (`witnesses.missing`),
+    in the words it has for a guarantee that never had an entry, which say how to carry the witnesses and nothing of
+    listing it again. `--update` lists it under no `unwitnessed`, which only shrinks. It is listed again by its entry
+    written back at its record's type hash, or after a landing by the lock run, which lists it there and warns."""
+    lock, now = bookkeeping_cases()["witnesses.missing"]
+    assert "P.sound" in lock["guarantees"] and "witnesses" not in lock and lock["unwitnessed"] == {}
+    assert A.judge(lock, now, FILES)[0] == [
+        "witnesses: P.sound lists no witnesses that it says something, and the rule holds it to them (it reads the claim "
+        "P.Holds): prove `P.sound_honest : P.Compiled d …` (its hypotheses hold at the honest deployed instance d, at the "
+        "deployed verifier, taking only named assumptions of an `Assumptions` or `shape.premises` module or "
+        "`witnesses_assumed`) and "
+        "`P.sound_nontrivial : ¬ P.Holds at acceptAll …` (its conclusion is false for a verifier that accepts "
+        "everything). Each takes no binder over its instance and no hypothesis beyond named assumptions the lock lists: "
+        "it builds the instance at the model level (a small hand-built descriptor, not a parsed file), with any one field "
+        "that can't be built a named assumption. List both under `guarantees`, and write \"P.sound\": {\"honest\": "
+        "[\"P.sound_honest\"], \"nontrivial\": \"P.sound_nontrivial\"} under `witnesses`: a guarantee carries an honest and "
+        "a nontrivial witness"]
+    (missing,) = fails = A.judge(lock, now, FILES)[0]
+    assert (missing.code, missing.entry) == ("witnesses.missing", "P.sound") and "unwitnessed" not in missing
+    kept, rec = A.judge(lock, now, FILES, update=True)
+    assert [(x.code, x.entry) for x in kept] == [("witnesses.missing", "P.sound")] and rec["unwitnessed"] == {}
+    back = {**lock, "unwitnessed": {"P.sound": lock["guarantees"]["P.sound"]["type_hash"]}}
+    assert A.judge(back, now, FILES)[0] == []
+    fixed = A.repaired(lock, now, FILES, fails, TICKET)
+    assert fixed["unwitnessed"] == back["unwitnessed"] and A.judge(fixed, now, FILES)[0] == []
+    assert A.bookkeeping_warnings(fails, fixed, TICKET) == [
+        "bookkeeping: P.sound (@lean): listed under `unwitnessed` at its statement's hashes now: it owes its `honest` and "
+        "`nontrivial` witnesses (witnesses.missing)"]
+
+
 def lifted_pin(body: str) -> dict:
     """`P.SecurityProofs.G : P.Guarantees.G` as `Facts.lean` reports it, with `P.Guarantees.G` defined as ``body``: its
     signature and type hash are the constant's, and only `lift`'s hash of it unfolded once reads the body."""
