@@ -52,7 +52,7 @@ class Demo:
 
 def demos(root: Path) -> list[Demo]:
     out = []
-    for d in sorted(p for p in (root / "examples").iterdir() if p.is_dir() and not p.name.startswith((".", "_"))):
+    for d in sorted(p for p in (root / "demos").iterdir() if p.is_dir() and not p.name.startswith((".", "_"))):
         runner = next((r for r in ("config.toml", "run.py", "run.sh") if (d / r).is_file()), "")
         f = d / "demo.toml"
         if not f.is_file():
@@ -126,7 +126,7 @@ def vocabulary(root: Path) -> tuple[list[str], list[str]]:
     """The known protocols (packages under verity/protocols/, the composites among them) and workloads."""
     def dirs(p: Path) -> list[str]:
         return sorted(d.name for d in p.iterdir() if d.is_dir() and not d.name.startswith((".", "_")) and d.name != "tests")
-    return dirs(root / "verity" / "protocols"), [*dirs(root / "integrations"), "none"]
+    return dirs(root / "verity" / "protocols"), [*dirs(root / "adapters"), "none"]
 
 
 def schema(ex: Demo, root: Path) -> list[str]:
