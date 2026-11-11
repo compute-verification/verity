@@ -31,8 +31,10 @@ preprocessed text's line markers, the source's path, and its directory and envir
 it includes sits, the device compiler is handed the same text and the same arguments, in the same directory, so a commit
 that only moves one leaves each cubin they compile with it as it was. The program's own text is compiled as written,
 so `ship_nvcc.sh` refuses one that names a file (`__FILE__`, or an assert, which expands to it, gives the name as its
-`#include` spells it, which a move changes). That leaves out the row tables' cubins in `s8_linear`'s ship, which the
-adapter's own build compiles.
+`#include` spells it, which a move changes). Each build first holds its compiler to that (`ship_probe.sh`): a probe that
+nvcc itself compiles to two cubins at two places must be one cubin with `ship_nvcc.sh`, and a toolkit or a wrapper with
+which it isn't builds no ship. That leaves out the row tables' cubins in `s8_linear`'s ship, which the adapter's own
+build compiles.
 
 - `commit_slots/`: the serve-time commit call, a step's proof-block outputs as hm96-sha512 rows under hiding leaves in
   frame-v3-sha512 trees, one subtree per sequence slot. `gpu.sh` holds the GPU's roots to the CPU reference's.
