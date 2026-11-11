@@ -142,15 +142,15 @@ BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also
 CHAT_METHODS = ("bookmarks.add", "conversations.archive", "conversations.create", "conversations.info", "conversations.invite",
                 "conversations.inviteShared", "conversations.list", "conversations.unarchive", "pins.add", "users.list",
                 "users.lookupByEmail")
-#: the calls the broker allows only by who asks: `retract`'s edit to a post a name the caller holds or posts as sent,
-#: `groups sync --apply`'s user-group writes (@comms' and @top's holders), and `chat`'s channel calls (@top's and @console's)
+#: the calls the broker allows only by who asks (`retract`'s edit, `groups sync --apply`'s user-group writes and `chat`'s
+#: channel calls); who may make each is `GUARDED_WHO`
 BROKER_GUARDED = ("chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable", "usergroups.update",
                   *CHAT_METHODS)
-#: exactly what the broker's route allows: every Web API method this module calls (the tests check it)
 #: who the broker lets make each guarded call, for its refusal
 GUARDED_WHO = {"chat.update": "only an edit to a post made as a name this agent holds or posts as (its route's holder or posters)",
                **{m: "only @comms' and @top's holders sync the user groups" for m in BROKER_GUARDED if m.startswith("usergroups.")},
                **{m: "only @top's and @console's holders open and close people's chats" for m in CHAT_METHODS}}
+#: exactly what the broker's route allows: every Web API method this module calls (the tests check it)
 BROKER_METHODS = ("auth.test", "chat.getPermalink", "chat.postMessage", "conversations.history", "conversations.replies",
                   "reactions.add", "usergroups.list", *BROKER_GUARDED)
 BROKER_MAX_BODY = 65536                                                   # bytes of request JSON; the route refuses more (413)
