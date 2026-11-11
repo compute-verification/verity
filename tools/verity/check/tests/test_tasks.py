@@ -114,7 +114,8 @@ def test_list_is_a_tasks_v1_graph_closed_under_its_deps_and_the_same_each_time(t
 def test_a_lean_audit_asks_the_large_slot_only_when_it_reads_security(tree):
     """Only an audit of `Security` or of a package requiring it (Mathlib, ArkLib) asks 32 cores and 128 GB: the first graph's 26
     others queued for the two large slots while 21 small ones sat idle."""
-    for name, deps in (("Security", []), ("lean/Q", ["../../Security"])):
+    spec = "Security"
+    for name, deps in ((spec, []), ("lean/Q", [f"../../{spec}"])):
         (tree / name).mkdir(parents=True)
         (tree / name / "lakefile.toml").write_text(f'name = "{name.rsplit("/", 1)[-1]}"\n')
         (tree / name / "lean-audit.json").write_text("{}\n")
@@ -123,7 +124,7 @@ def test_a_lean_audit_asks_the_large_slot_only_when_it_reads_security(tree):
     _git(tree, "commit", "-q", "-m", "security")
     by = {t["id"]: t["resources"] for t in _graph(tree)[0]["tasks"] if t["kind"] == "lean-package"}
     assert by == {"lean-audit:lean/P": {"cores": 16, "mem_gb": 64, "disk_gb": 60},
-                  "lean-audit:Security": {"cores": 32, "mem_gb": 128, "disk_gb": 60},
+                  f"lean-audit:{spec}": {"cores": 32, "mem_gb": 128, "disk_gb": 60},
                   "lean-audit:lean/Q": {"cores": 32, "mem_gb": 128, "disk_gb": 60}}, by
 
 

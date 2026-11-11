@@ -69,6 +69,7 @@ ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
     "integrations/vllm/manifests/checkpoints.json": 320 * 1024,
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
+    "integrations/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "verity/ml/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
@@ -214,8 +215,9 @@ def test_markdown_size_caps() -> None:
     assert not offenders, "maintained documents are small:\n" + "\n".join(offenders)
 
 
-#: Test files that need torch, a GPU or cargo, and were never part of `check`.
-UNSUITED_TEST_DIRS = ("verity/ml/kernels/",)
+#: Test files that need torch, a GPU or cargo, and were never part of `check`; and the tests of archived code, which go to
+#: `archive/` with it and which no suite runs.
+UNSUITED_TEST_DIRS = ("verity/ml/kernels/", "archive/")
 #: what pytest collects from a module: a function or a class of its own named as a test
 _DEFINES_A_TEST = re.compile(r"^(?:async\s+)?def\s+test|^class\s+Test", re.M)
 
