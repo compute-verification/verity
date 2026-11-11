@@ -1428,10 +1428,11 @@ def test_a_sweep_takes_the_runs_check_slot_scope_as_its_own(tmp_path, fake_time)
     assert rec["scopes"] == {CHECK: f"the check slot scope of run {RID}"} and rec["fallback"] is None and rec["empty"] is True
 
 
-def test_a_capped_slots_scope_is_emptied_once_its_workload_has_exited_and_a_scope_only_slots_is_left(tmp_path, fake_time):
+def test_a_capped_slots_scope_is_emptied_once_its_workload_has_exited_and_a_scope_only_slots_is_left(tmp_path, fake_time, capsys):
     """The workload is gone (an open run told to quit ends its own group) and its tasks run on in the slot's scope, holding the
     memory the slot limits: with the slot's cap in the run's slot record they are ended, by SIGTERM then SIGKILL with no grace.
-    Without a cap in the record (a scope=1 slot), with another run's scope in it, or with nothing left, nothing is signalled."""
+    Without a cap in the record (a scope=1 slot), with another run's scope in it, or with nothing left, nothing is signalled, and
+    a record that doesn't parse is said so."""
     from research.telemetry import scope
     w, rd = _slot_world(tmp_path, ignores_term=[B + 301])
     Path(rd).mkdir()
@@ -1442,6 +1443,10 @@ def test_a_capped_slots_scope_is_emptied_once_its_workload_has_exited_and_a_scop
     unit = CHECK.rsplit("/", 1)[-1]
     assert scope.scope_path(w.root, unit) == CHECK and scope.scope_path(w.root, "check-g9-r1.scope") is None
     assert scope.end_slot_scope(Path(rd), B + 100, 7, **how) is None, "no slot record: the run held no slot"
+    assert capsys.readouterr().err == ""
+    (Path(rd) / scope.RUN_SLOT).write_text("{")
+    assert scope.end_slot_scope(Path(rd), B + 100, 7, **how) is None and w.sent == []
+    assert "slot.json not read" in (err := capsys.readouterr().err) and "is not ended" in err
     for doc in ({"state": "held", "slot": "g0", "scope": unit}, {"state": "held", "slot": "g0", "cap_gb": 32},
                 {"state": "held", "slot": "g1", "scope": "check-g1-r20261019-010101-aaaa.scope", "cap_gb": 32}, ["held"]):
         (Path(rd) / scope.RUN_SLOT).write_text(json.dumps(doc))

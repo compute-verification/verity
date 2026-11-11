@@ -41,6 +41,7 @@ import json
 import os
 import re
 import signal
+import sys
 import tempfile
 import time
 from collections.abc import Callable, Iterable
@@ -324,9 +325,13 @@ def end_slot_scope(attempt_dir: Path, leader: int, leader_start: int | None = No
     each in its own session, which its group's end (run.py) never reached.  SIGTERM, then SIGKILL at once: their run is over.  A
     slot that only gives its check a scope (`scope=1`) is left alone.  `how`: a Sweep's stat, pids, cgroup, env_of, cmdline, root
     and kill."""
+    record = attempt_dir / RUN_SLOT
+    if not record.is_file():
+        return None
     try:
-        slot = json.loads((attempt_dir / RUN_SLOT).read_text())
-    except (OSError, ValueError):
+        slot = json.loads(record.read_text())
+    except (OSError, ValueError) as e:
+        print(f"[tele run] {RUN_SLOT} not read ({e}): what the workload left in its check slot's scope is not ended", file=sys.stderr)
         return None
     unit = slot.get("scope") if isinstance(slot, dict) else None
     run_dir = attempt_dir.resolve()
