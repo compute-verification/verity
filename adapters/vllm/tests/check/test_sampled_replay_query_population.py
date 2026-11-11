@@ -135,7 +135,7 @@ def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliati
     ghost = dict(next(r for r in man["identities"] if r["family"] == "instance_outputs"), op_path="model.layers.7.mlp.down_proj", output_member="0")
     bad["identities"].append(ghost)                                              # Q(P) requires something the Program never produces
     bmap, committed = world.bmap_and_reader()
-    # a post-commitment seed of record (root form: seed == run_root[:8]; the seed rule grades the label as a fact where it is on the tree)
+    # a root-form seed (seed == run_root[:8]): the seed rule recomputes it and does not grade it
     run_root = "71f69377" + "ab" * 28
     seed, seed_src = int.from_bytes(bytes.fromhex(run_root)[:8], "big"), "run root (first 8 bytes, after commitment)"
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=seed, seed_source=seed_src, workers=0, manifest=bad)

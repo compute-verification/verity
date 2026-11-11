@@ -73,7 +73,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   then runs `lean-audit` alone on `checked`'s tip (the lock run), commits the records it regenerated as `Lock
   records regenerated for #N...`, and checks that commit, so `main` moves only to one whose records are the regenerated
   ones; a lock run that fails is a red like any other. A PR whose merge onto `checked` changes nothing drive.toml's
-  `lowrisk_excludes` names (Lean, locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone,
+  `lowrisk_excludes` names (Lean, locks, Lake files, the verifiers, the soundness-path Python) lands on its ready mark alone,
   with no verdict (the low-risk lane).
 - One run checks `checked`'s tip after each landing (circuit-check is off the merge gate). A red's culprit, the one landing
   touching what its failure names (never bisected), is rung to fix it forward: mark a fix (its new head, or a PR whose
@@ -151,7 +151,7 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   with a done-condition anyone can check, which its lead proposed and Daniel approved.
 - **Work in a checkout no other agent uses** (your VM, or your own `git worktree` and venv), push only to branches you
   created or were handed, and push after every commit (never `main`, never `--force`).
-- **Slack** (computeverification.slack.com) is for handle holders and named humans; a worker asks its own coordinator.
+- **Slack** is for handle holders and named humans; a worker asks its own coordinator.
   The coordination API is `research msg` (the using-slack skill). Work for another lead goes in as a Linear issue in its
   team; Slack is the conversation around it.
 

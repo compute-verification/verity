@@ -5,8 +5,8 @@ description: >
   scratch probes with #print axioms, exact?, trace_state; a slow proof), records, the fast path and check.py,
   stating a guarantee (counted extractors, what proved means), assumptions as named Props, listing, freezing and
   moving guarantees in lean-audit.json, a property's shape, upstream.py watches, parallel Lean lanes, and the standing
-  Lean rulings. Use when adding or changing Lean proofs, definitions or packages (verity/protocols/flock/verifier, Security
-  and its Proofs and Properties, a protocol's lean/), when a Lean build or proof is slow or runs out of memory, editing
+  Lean rulings. Use when adding or changing Lean proofs, definitions or packages (security/, Lean under verity/protocols/),
+  when a Lean build or proof is slow or runs out of memory, editing
   a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
 
@@ -90,7 +90,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   and the guarantee says nothing. A cost is what the program evaluates, never a field. `tests/test_lean_vocabulary.py`
   flags a second `Extractor` or `Simulator`, not a renamed one.
 - **The verifier derives what soundness reads**: a set soundness depends on (ports to register, sampled proof blocks,
-  bound roots) is computed in Lean from public registered data. A file `verity.ml` or an integration writes only
+  bound roots) is computed in Lean from public registered data. A file a prover or an adapter writes only
   supplies values checked against it; else the guarantee covers the set the writer chose.
 - **"Proved" is four checks**: it elaborates; it and each lemma you added use no axiom past the three AGENTS.md
   allows (the probe's line, or `#print axioms`); a full `check.py` replayed it through the kernel (the fast path

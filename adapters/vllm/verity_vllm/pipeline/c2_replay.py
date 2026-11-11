@@ -244,7 +244,10 @@ def arrivals(s: Any, rl: dict[str, str]) -> tuple[dict[str, int], bool]:
 
 
 def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
-    """[O6] the seed is not prover-choosable in advance: derived from the run root AFTER commitment unless a targeted seed is given."""
+    """[O6] the seed, its source text, its form and its challenge: `args.replay_seed` (prover-chosen), else sha256(`args.replay_challenge` |
+    run root)[:8], else the run root's first 8 bytes.  That last form has no coin: a prover steers the sample by committing again, in about
+    the lesser of 1/p and 2^64 tries (p: the chance one sample misses its faults), so such a replay is a measurement.  The Commit's own
+    replay reads its two flags here and no coin of a challenger gate; the served C2 passes its replay challenge (`pipeline.served_match`)."""
     from verity_vllm.check.replay import driver as SR, replay_codes as RC
 
     _seed_chal = None
