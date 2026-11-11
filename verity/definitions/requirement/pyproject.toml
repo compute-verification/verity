@@ -15,12 +15,12 @@ untraced = ["tests/test_census_and_memory_map.py", "tests/test_requirement_difft
 # files of Flock's verifier (`Flock.Canon` and what it imports, and the package's configuration), both required by
 # path.
 inputs = ["verity/circuits", "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "verity/__init__.py", "verity/settings.py",
-          "verity/errors.py", "verity/ml/__init__.py", "verity/difftest", "verity/definitions",
+          "verity/errors.py", "verity/difftest", "verity/definitions",
           "verity/hardware/record.py",
           "adapters/vllm/verity_vllm",
-          "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/protocols/spot/verifier/profile.py",
+          "verity/protocols/spot/verifier/profile.py",
           "verity/claims/__init__.py", "verity/protocols/pouw/verifier", "verity/protocols/poub/verifier",
-          "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover",
+          "verity/protocols/pouw/prover",
           "verity/protocols/spot/verifier/__init__.py", "verity/protocols/spot/device/challenger.py",
           "verity/protocols/spot/device/remote.py", "verity/protocols/spot/verifier/one_stage",
           "verity/protocols/spot/verifier/service.py", "verity/protocols/spot/device/coins.py",
