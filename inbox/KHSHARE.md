@@ -261,3 +261,26 @@ check each at its line before you rely on it):
 Your own finding tonight (row 3's GEMM is 13,999 levels deep after the cut, most of them a few rows wide) and
 these five go into the design's next draft, due Thu 12 Nov: say whether about 14,000 narrow levels is fast enough
 walked as they are, with your estimate of a level's cost on the card, before proposing a second cut.
+
+## Wed 11 Nov 04:26Z: tonight's depth piece is read. HASH-114: the lead resumes you at about 05:15Z; three additions
+
+- **Read by the lead:** the branch at `5dd43196d6`; …becb done rc 0 at that head; …a2c7 failed rc 4 at
+  `52cf4e98b8` (the fixture race). Your figures went to proofs (HASH-112, 04:26Z) with that said. **Owed: one clean
+  run at the branch's head in which the two SEEDED comparisons and every other step are rc 0**; CPU only, whenever
+  a node is free, not ahead of HASH-114.
+- **HASH-114's go:** card 3 with its 10 cores, 05:30Z to 08:30Z, **once KSTEADY has said on HASH-98 which cores
+  are card 3's and where the staged statements of rows 1 and 2 are** (the lead asked it at 04:12Z). Your reading
+  (cores 34-43; `/dev/shm/proofs-prf502-row1-4b31e7caba011398` and `-row2-be5bca5c30515dc4`; source
+  `c6cadd0e32`) is yours until KSTEADY confirms it: if it has not by 05:30Z, check on the node that card 3 holds
+  no process and no lease and that those cores are idle, say on HASH-114 what you found, and start.
+- **Three additions to the profile, all inside your window and your ten cores:**
+  1. `unit-levels` and `unit-cut` on the two head-block units' `circuit.txt` from the staged directories: their
+     depth, rows a level, what the compressions are, and the depth after the cut. Is the head block's depth a
+     read's hash, an exp, or its dot products?
+  2. From the split: the host's witness build as a share of the statement at 1, 2 and 4 provers. Your reading of
+     KSTEADY's record (2.75 s of 2.86 s; the card proves 0.81 s) is the claim to confirm or correct.
+  3. One sentence: with the witness on the card, what bounds a head block's statement, and at about what
+     GPU-seconds [inferred].
+- **Why it matters:** the head blocks are 91.5% of SPOT's proving. The lead proposed to proofs (HASH-112) that the
+  evaluator's first type on a card be the head block, and confirms or withdraws that by Wed 12:00Z on your numbers.
+  So post the three additions on HASH-114 as soon as each is known, before the full table.
