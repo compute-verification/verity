@@ -100,6 +100,7 @@ UNITS = {
     "valuesWhole64L": (lambda: bind(ValuesWhole, NVIS=64, FIRST=False, C=0), None),
     "valuesWhole64F": (lambda: bind(ValuesWhole, NVIS=64, FIRST=True, C=0), None),
     "valuesWholeKeys64L": (lambda: bind(ValuesWhole, NVIS=64, FIRST=False, C=0), {"kv": 64}),
+    "valuesWholeKeys64F": (lambda: bind(ValuesWhole, NVIS=64, FIRST=True, C=0), {"kv": 64}),
     "writer": (lambda: bind(SG.AllGather, WORLD=64, N=G), None),
     "gather": (lambda: bind(SG.AllGather, WORLD=64, N=G), {"parts": 64}),
     "gatherCols": (lambda: bind(GatherCols, C=0), {"keys": 64}),
