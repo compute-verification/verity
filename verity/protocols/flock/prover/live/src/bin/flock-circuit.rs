@@ -3626,12 +3626,14 @@ fn with_gpu_src<R>(st: &Stmt, wt: &WitData, f: impl FnOnce(flock_live::gpu_circu
 
 #[cfg(feature = "gpu")]
 /// A rep's buckets: the device's phases (`t.`), and the host's around it (`h.`: setup, staging the device's inputs, decoding and
-/// serializing the proof), which with `t.total` make up the rep's wall time.
-fn gpu_buckets(wt: &WitData, ph: [f64; 8], wph: [f64; 3], hph: [f64; 3], reused: bool, native_sha: bool) -> Value {
+/// serializing the proof), which with `t.total` make up the rep's wall time; and where the units came from: the host
+/// (`host_units`), or the device's level walk (`unit_walk`) or its unit kernel (neither).
+fn gpu_buckets(st: &Stmt, wt: &WitData, ph: [f64; 8], wph: [f64; 3], hph: [f64; 3], reused: bool, native_sha: bool) -> Value {
     json!({"t.witness": ph[0], "t.witness_comp": wph[0], "t.witness_units": wph[1], "t.encoding_commitment": ph[1], "t.link": ph[2],
            "t.zerocheck": ph[3], "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
            "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "h.setup": hph[0], "h.stage": hph[1], "h.decode": hph[2],
            "device_witness": !matches!(wt, WitData::Host(..)), "host_units": matches!(wt, WitData::Dev(_, _, i) if i.is_empty()),
+           "unit_walk": matches!(wt, WitData::Dev(_, _, i) if !i.is_empty()) && flock_live::gpu_circuit::unit_walk(st),
            "rep_reused": reused, "native_sha": native_sha,
            "host_slots": match wt { WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) => h.layout(), WitData::Host(..) => "none" },
            "hm96_native": matches!(wt, WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) if !h.hm96_rows.is_empty())})
@@ -3649,7 +3651,7 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
                                                  native_sha))?;
     let ts = Instant::now();
     let bytes = bincode::serialize(&(commitment, proof)).unwrap();
-    let mut bk = gpu_buckets(wt, ph, wph, hph, reused, native_sha);
+    let mut bk = gpu_buckets(st, wt, ph, wph, hph, reused, native_sha);
     bk["h.serialize"] = json!(ts.elapsed().as_secs_f64());
     eprintln!("GPUPHASE\t{bk}");
     Ok((bytes, bk))
@@ -3682,7 +3684,7 @@ fn gpu_zk_device(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook
     let (proof, commitment, ph, wph, hph) =
         with_gpu_src(st, wt, |src| prove_circuit(st, src, &pcs_of(st, lig), &domain(&st.c, rep), hook, Live::Zk { level0, rounds }, Some(salts),
                                                  reuse, native_sha))?;
-    let bk = gpu_buckets(wt, ph, wph, hph, reused, native_sha);
+    let bk = gpu_buckets(st, wt, ph, wph, hph, reused, native_sha);
     eprintln!("GPUPHASE\t{bk}");
     Ok((proof, commitment, bk))
 }
@@ -6549,7 +6551,8 @@ fn gpu_cpu_case(_: &Arc<Stmt>, _: &Arc<Instances>) -> Value {
     json!({"case": "gpu_proofs_match_cpu", "pass": true, "skipped": "built without the test harness's seed-injection feature"})
 }
 
-/// The device prover's paths against each other: the device's units, a rebuilt rep 1 and the compressions level by level, against
+/// The device prover's paths against each other: the device's units (by its level walk under `FC_UNIT_WALK`, else its unit
+/// kernel: `unit_walk` says which), a rebuilt rep 1 and the compressions level by level, against
 /// the host's units, rep 1 from rep 0's level-0 commitment, and the compressions natively (host units only where the
 /// device witness takes them, a statement whose units return its outputs), its witness built ahead of the
 /// session as the prove loop's next session's is. Equal seeds and verifier coins give byte-identical proofs and transcripts.
@@ -6572,7 +6575,7 @@ fn gpu_paths_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let (pe, te) = (a.1 == b.1, a.2 == b.2);
     json!({"case": "gpu_paths_agree", "expect": "byte-identical proofs and transcripts", "gpu": true, "zk": is_zk(st), "accepted": accepted,
            "proofs_equal": pe, "transcripts_equal": te, "transcript_first_difference": first_diff(&a.2, &b.2, String::new()),
-           "host_units": used("host_units"), "rep_reused": used("rep_reused"), "native_sha": used("native_sha"), "host_slots": [used_a("host_slots"), used("host_slots")], "hm96_native": [used_a("hm96_native"), used("hm96_native")], "prebuilt": b.0["witness_prebuilt_s"].is_number(), "prove_s": [a.0["prove_s"].clone(), b.0["prove_s"].clone()],
+           "host_units": used("host_units"), "unit_walk": used_a("unit_walk"), "rep_reused": used("rep_reused"), "native_sha": used("native_sha"), "host_slots": [used_a("host_slots"), used("host_slots")], "hm96_native": [used_a("hm96_native"), used("hm96_native")], "prebuilt": b.0["witness_prebuilt_s"].is_number(), "prove_s": [a.0["prove_s"].clone(), b.0["prove_s"].clone()],
            "pass": accepted && pe && te})
 }
 

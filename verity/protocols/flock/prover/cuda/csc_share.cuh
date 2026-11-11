@@ -1,10 +1,11 @@
-// verity flock-circuit: one device copy per GPU of a circuit's slot types' CSC (FcTypeUploads' set 0, prove_circuit.cuh), mapped
-// into every prover process on that GPU that asks for the same arrays. The first asker allocates it with CUDA's virtual memory
+// verity flock-circuit: one device copy per GPU of a circuit's slot types' CSC (FcTypeUploads' set 0, prove_circuit.cuh), or of
+// its unit's level walk's rows (set 2), mapped into every prover process on that GPU that asks for the same arrays. The first asker allocates it with CUDA's virtual memory
 // management (cuMemCreate, exportable as a POSIX file descriptor), copies the arrays in, and hands the descriptor to each later
 // asker over a Unix socket in the abstract namespace, named by the GPU's UUID and the arrays' key. A later asker maps the copy
 // and never writes it. The memory lives while any process maps it, so the first prover may exit before the others. The key is
 // a digest of the arrays' contents (gpu_circuit.rs `types`), so a copy holds exactly the asker's arrays. A process that can't
-// take part (no VMM, another network namespace, another user, a failed copy) keeps a copy of its own.
+// take part (no VMM, another network namespace, another user, a failed copy) keeps a copy of its own, or goes without where
+// the asker takes no copy (the level walk's rows: flock_cuda_types_share).
 #pragma once
 #include <cuda.h>
 #include <sys/socket.h>
@@ -104,12 +105,13 @@ static CUdeviceptr fc_vmm_map(const FcVmm& V, CUmemGenericAllocationHandle h, si
 }
 
 // The n arrays h[i] of len[i] words on this GPU, shared under `key` (above): their device addresses in d, and 0; nonzero when
-// they aren't shared, and the asker copies them itself
-static int fc_share_get(const uint8_t key[64], const uint32_t* const* h, const size_t* len, size_t n, uint32_t** d) {
+// they aren't shared, and the asker does `instead` (copies them itself, or goes without). `what` names them in the log.
+static int fc_share_get(const uint8_t key[64], const uint32_t* const* h, const size_t* len, size_t n, uint32_t** d,
+                        const char* what = "the slot types' CSC", const char* instead = "a copy of its own") {
     const FcVmm& V = fc_vmm();
     int dev = 0;
     cudaDeviceProp dp;
-    if (!V.ok) { fprintf(stderr, "FFI circuit: the slot types' CSC not shared (no VMM entry points); a copy of its own\n"); return 1; }
+    if (!V.ok) { fprintf(stderr, "FFI circuit: %s not shared (no VMM entry points); %s\n", what, instead); return 1; }
     if (cudaGetDevice(&dev) != cudaSuccess || cudaGetDeviceProperties(&dp, dev) != cudaSuccess) { cudaGetLastError(); return 1; }
     std::vector<size_t> off(n);
     size_t used = 0;
@@ -121,7 +123,7 @@ static int fc_share_get(const uint8_t key[64], const uint32_t* const* h, const s
     p.requestedHandleTypes = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
     size_t g = 0;
     if (V.granularity(&g, &p, CU_MEM_ALLOC_GRANULARITY_MINIMUM) != CUDA_SUCCESS || !g) {
-        fprintf(stderr, "FFI circuit: the slot types' CSC not shared (no shareable device memory); a copy of its own\n");
+        fprintf(stderr, "FFI circuit: %s not shared (no shareable device memory); %s\n", what, instead);
         return 1;
     }
     const size_t bytes = std::max<size_t>((used + g - 1) / g * g, g);
@@ -182,7 +184,7 @@ static int fc_share_get(const uint8_t key[64], const uint32_t* const* h, const s
                 }
             }).detach();
             for (size_t i = 0; i < n; i++) d[i] = (uint32_t*)((char*)va + off[i]);
-            fprintf(stderr, "FFI circuit: the slot types' CSC (%zu MiB) made on the device, shared with this GPU's other provers\n",
+            fprintf(stderr, "FFI circuit: %s (%zu MiB) made on the device, shared with this GPU's other provers\n", what,
                     bytes >> 20);
             return 0;
         }
@@ -226,11 +228,11 @@ static int fc_share_get(const uint8_t key[64], const uint32_t* const* h, const s
         V.release(hd);
         if (!va) { why = "its mapping failed"; break; }
         for (size_t i = 0; i < n; i++) d[i] = (uint32_t*)((char*)va + off[i]);
-        fprintf(stderr, "FFI circuit: the slot types' CSC (%zu MiB) mapped %s from another prover's copy on the device\n",
-                bytes >> 20, ro ? "read-only" : "read-write");
+        fprintf(stderr, "FFI circuit: %s (%zu MiB) mapped %s from another prover's copy on the device\n", what, bytes >> 20,
+                ro ? "read-only" : "read-write");
         return 0;
     }
     cudaGetLastError();
-    fprintf(stderr, "FFI circuit: the slot types' CSC not shared (%s); a copy of its own\n", why);
+    fprintf(stderr, "FFI circuit: %s not shared (%s); %s\n", what, why, instead);
     return 1;
 }

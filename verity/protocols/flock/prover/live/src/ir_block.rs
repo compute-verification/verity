@@ -698,6 +698,60 @@ pub(crate) fn schedule_of<R: RowRead + ?Sized>(net: &IrUnitNet, a: &R, b: &R) ->
     UnitSched { levels0, late_rows, cut_rows, level_off, order }
 }
 
+/// The unit's rows as the device's level walk reads them (`fc_unit_walk`, prove_circuit.cuh) beside [`UnitSched::order`]: the
+/// scheduled rows in the schedule's order, row k's A columns at `cols[st[k]..mid[k]]` and its B columns at
+/// `cols[mid[k]..st[k + 1]]`, and per input row whether A's row (bit 0) and B's (bit 1) is the row's own column. A walk a
+/// level at a time gives [`IrUnitNet::eval_wide`]'s rows, so it needs what that needs: a one-pass net.
+pub struct WalkRows {
+    pub st: Vec<u32>,
+    pub mid: Vec<u32>,
+    pub cols: Vec<u32>,
+    pub own: Vec<u32>,
+}
+
+impl WalkRows {
+    /// None: the net has no one-pass form ([`IrUnitNet::one_pass`]), its schedule has two phases (a cut unit's), or its
+    /// rows hold more columns than a `u32` counts.
+    pub fn of(net: &IrUnitNet, sched: &UnitSched) -> Option<WalkRows> {
+        let (cp, first) = (net.const_pos, net.in_words * WORD);
+        if !net.one_pass() || !sched.late_rows.is_empty() || net.a.nnz() + net.b.nnz() >= u32::MAX as usize {
+            return None;
+        }
+        assert_eq!(sched.order.len(), cp - first, "the schedule is not this net's");
+        let n = sched.order.len();
+        let (mut st, mut mid) = (Vec::with_capacity(n + 1), Vec::with_capacity(n));
+        let mut at = 0u32;
+        for &i in &sched.order {
+            st.push(at);
+            at += net.a.row_len(i as usize) as u32;
+            mid.push(at);
+            at += net.b.row_len(i as usize) as u32;
+        }
+        st.push(at);
+        // the columns, a run of rows a task: each run's part of `cols` is its own
+        const RUN: usize = 1 << 14;
+        let mut cols = vec![0u32; at as usize];
+        let mut parts: Vec<(usize, &mut [u32])> = Vec::with_capacity(n.div_ceil(RUN));
+        let mut rest = cols.as_mut_slice();
+        for k0 in (0..n).step_by(RUN) {
+            let (part, tail) = std::mem::take(&mut rest).split_at_mut((st[(k0 + RUN).min(n)] - st[k0]) as usize);
+            parts.push((k0, part));
+            rest = tail;
+        }
+        parts.into_par_iter().for_each(|(k0, part)| {
+            let mut at = 0;
+            for &i in &sched.order[k0..(k0 + RUN).min(n)] {
+                for row in [net.a.row(i as usize), net.b.row(i as usize)] {
+                    part[at..at + row.len()].copy_from_slice(row);
+                    at += row.len();
+                }
+            }
+        });
+        let own = (0..first).map(|i| u32::from(own_row(&net.a, i)) | u32::from(own_row(&net.b, i)) << 1).collect();
+        Some(WalkRows { st, mid, cols, own })
+    }
+}
+
 fn bit(w: &F128, t: usize) -> bool {
     (if t < 64 { w.lo >> t } else { w.hi >> (t - 64) }) & 1 == 1
 }

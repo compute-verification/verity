@@ -17,6 +17,7 @@ typedef struct {
     int zk;                          // M1: level 0's hiding
     long long t_pad;                 // M1: level 0's padding words per lane
     long long fold_words;            // the lincheck fold's columns, over every slot type
+    long long walk_bytes;            // each of the unit's level walk's three working arrays (fc_unit_walk); 0: no walk
 } FcArenaShape;
 
 static inline size_t fca_max(size_t a, size_t b) { return a > b ? a : b; }
@@ -30,6 +31,9 @@ static inline size_t fc_arena_bytes(const FcArenaShape* s) {
     const size_t n = (size_t)1 << (log_n - ik + s->log_inv_rates[0]), lanes = s->zk ? w + 4 : w;
     const size_t l0 = fca_al(n * lanes * F) + fca_al((2 * n - 1) * s->hash_bytes) +
                       (s->zk ? fca_al(lanes * (size_t)s->t_pad * F) + fca_al((F << (log_n - ik)) * 4) : 0);
+    // the witness: z, a and b, the unit's level walk's working arrays while it runs, and for rep 1 from rep 0's level 0 that
+    // level 0 beside them
+    const size_t witness = 3 * W + l0 + 3 * fca_al((size_t)s->walk_bytes);
     // the commitment, beside z, a and b: under M1 the extra lanes' codewords, and a quarter of the witness's lane codewords
     // where they aren't transformed in place (FC_NTT_REGS=0)
     const size_t commit = 3 * W + l0 + (s->zk ? fca_al(n * (w >> (ik < 2 ? ik : 2)) * F) + fca_al(n * 4 * F) : 0);
@@ -67,5 +71,5 @@ static inline size_t fc_arena_bytes(const FcArenaShape* s) {
     opening = fca_max(opening, prev + rows);
     const size_t ligerito = 4 * W + l0 + fca_al(max_block * F) + fca_al(max_al * F) + fca_al(max_q * 8) +
                             fca_al(F << (log_n - ik + 1)) + opening + salts;
-    return fca_max(fca_max(commit, zerocheck), fca_max(lincheck, ligerito)) + FC_ARENA_MARGIN;
+    return fca_max(fca_max(witness, commit), fca_max(zerocheck, fca_max(lincheck, ligerito))) + FC_ARENA_MARGIN;
 }
