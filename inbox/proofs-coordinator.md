@@ -35859,3 +35859,31 @@ Both runs ended rc 0 after 8 minutes; each step's own result is in its `out/verd
 - **The two runs left out at 23:02Z** [run]: `r20261110-230002-408d` (cpu-11) and `r20261110-223751-f9c0` (cpu-6), both rc 0, "58 suites: 58 passed, 0 failed", at `dd302576e006`.
 
 **State:** nothing running. I labelled nothing, changed no reader and no file of the repository, and opened no PR. `main` is still `2b869ed35db5` [read 01:02Z]. Mailbox read at 01:02Z: nothing after your 00:15Z entry. Detail and the commands: `note:proofs/20261111T0101Z-report-benchcross-census-plan`; the job and launcher are `tools/census_plan_job.sh`, `tools/census_plan_run.sh` and `tools/headline_mix_cols.py` in the lane's notes.
+
+## PRF-522 PUBUNITS, Wed 11 Nov 01:12Z: tonight's layout move leaves `served_composite.sh` building remote's and onsite's Lean in a directory that does not exist; for the same reason I reverted my own cut of its line 69; the branch is at `a9c191d904f2`
+
+**1. For whoever runs the layout move (about 03:00Z, 7 PM PST): `benchmarks/one_stage/served_composite.sh` on `main` breaks with it.**
+
+- **What the move does to it** [run on my VM: `tools/move/layout.py --map tools/move/layout_one_map.toml --dry-run --no-lock --report-splits` on `main` `2b869ed35d`, 71 s; its report read by me]: one path in the file is rewritten, `verity/core/protocols/` to `verity/protocols`, and the report lists it under "approximate directory paths".
+- **The line** [read, `main`'s copy, line 87]: `e=$(exe "$x" "verity/core/protocols/$x")`, with `x` `remote` or `onsite`. After the move it names `verity/protocols/remote` and `verity/protocols/onsite`.
+- **Where the packages go** [read, the map's rows 176 and 218]: `verity/core/protocols/onsite/` to `verity/composite/verifier/onsite/`, and `verity/core/protocols/remote/` to `verity/composite/verifier/remote/`.
+- **So** [guess, from the script; not run]: `exe` does `cd "$TREE/$2" && lake build`, the `cd` fails, and the step says `COMPOSITE: remote doesn't build in verity/protocols/remote` for each product. No composite verdict in any served run until the line is fixed.
+- **The map knows the reference and nobody read it:** its `[split]` row for `benchmarks/one_stage/served_composite.sh: verity/core/protocols` gives as its reason "found by `layout.py`'s own scan and read by nobody".
+- **The cure after the move is one line:** `"verity/composite/verifier/$x"` on `main`; on the remote merge's base it is line 112, `"verity/composite/verifier/${x%-v1}"`. It is our file. I have not written it: the move is not in the base yet, and `main` is not mine to push to. Say who makes it, and when.
+- **Not checked:** the other seven "approximate directory paths" the report lists under `benchmarks/one_stage` (`a11.sh`, `a5.sh`, `a5_tp.sh`, `prove_bundle.sh` twice, `interfaces/pyproject.toml`, `tests/test_served_verdicts.py`), all of `verity/ml/flock` or `verity/ml/circuits`.
+
+**2. My cut of `served_composite.sh:69` is reverted** (`a9c191d904`, a revert of `936925ccb1`; nothing forced).
+
+- **Why:** the base's line names the file whole, `verity/core/protocols/remote/RemoteV1Main.lean`, and the move rewrites a whole path rightly. My cut made the path from `$PRODUCT`, which the move would rewrite by its prefix alone, as in item 1. The probe would then find no file, and under `POUW=pearlplus` the script would take remote's v0 composite without saying so.
+- **So row 4 of my 00:58Z entry is withdrawn, and 10 of our 11 edges are left**, not 9. The one cut that stands is `served_verdicts.py:1332`.
+- **The branch:** `cursor/proofs-remote-cures-dac3` at `a9c191d904f2d4320347d8a77848a7ce7fde2f63`. Against the base `f63a7b76334d` four files differ: `benchmarks/live_challenger/pyproject.toml`, and `served_verdicts.py`, `served_verdicts.sh` and `tests/test_served_verdicts.py` under `benchmarks/one_stage/` [git, by me].
+- **Running:** the same job at that head, `r20261111-011020-febf` on vy-nebius-cpu-7, ETA 01:20Z (5:20 PM PST). So far `test_gate_paths` passes [its `verdicts.txt`, read by me].
+
+**3. The call on the edges, restated with the tenth.**
+
+- `served_composite.sh:69` is a true edge: the script builds remote's and onsite's Lean, which the list does not hold public. The tool sees only line 69, because line 112 makes its path from a variable.
+- **Four of the launch's files run private code and are run only by the private launcher:** `served_pearlplus.sh`, `inference_only.py`, `served_compare.py`, `served_composite.sh`. With the four out of the public group the tool reports 19 edges, one under `benchmarks/one_stage` [run on my VM, on the head's tree with the list edited and put back].
+- The one left is `served_cases.py:128`. My plan for it stands: a small file of its own beside it that names the policy's package, loaded by name, with the case refused as not on this tree where the file is absent. A new file is private without a line in the list.
+- The other way for `served_composite.sh`, if it stays public: a `[[needed]]` entry for the two composites' Lean packages, which is ci's. They are not private by name, as the policy's is.
+
+**What is left**, for whoever continues: read `r20261111-011020-febf`; the `served_cases.py` cut; your and ci's call on the four files; the line of item 1 once the move is in; the LEAN-249 comment (not posted); `whole_run/Main.lean:86` (my 00:34Z entry). Mailbox read at 01:11Z: no file for me. Next entry by 02:00Z.
