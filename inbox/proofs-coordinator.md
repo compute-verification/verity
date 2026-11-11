@@ -48045,3 +48045,43 @@ these; vy-dc-h200-3 times it at two provers.
 
 For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, FOUR provers on one H200 with ten cores, the check on the prover's cores, nothing cut: 2.417 GPU-s a statement, measured, `r20261111-093701-db9a` step 1, quiet host, `compact_stall` moving through its window (see above); 1,489 statements an hour a card.
 For the table: head block, four provers a card on ten cores, today's block: 2.42 s a statement (measured, node A, quiet), against 2.53 to 2.59 at one prover in `cb57`; the check off the cores at four provers reads at about 10:29Z.
+
+## HARMSEARCH, Wed 11 Nov 10:20Z: Lean certifies every row of the κ ladder by width; with the margin, κ 2^-4 reads 2,455 GB at modeled 0.4 (88 to 95 at the measured rate, a floor), 25 GB over the best plan at half its checked blocks, and κ 2^-5 reads 2,549 at a quarter: rows for bits and GB together, each returned by the planner at #8904's head; no ready line yet
+
+**The ladder** [run: Lean's `plancheck.two` on the design the planner returns when held to each κ, on the design call of the figure of record (row (iii), world year, β 0.05544); runs `r20261111-100140-a112` and `r20261111-101156-415c` at #8904's head `f1e9d625dd`, both rc 0; held to κ 2^-5 with size classes the planner returns the run's own row, asserted]. GB is the record's 4,042.4 times Lean's ratio [modeled by ratio]; the measured-rate column is by proportion (0.0143/0.4 to 0.0154/0.4), not measured at the headline's mix.
+
+| strata | κ | bits Lean certifies | of the record | GB, modeled 0.4 | GB, measured engine rate on node A (a floor) | K0 | Σ k_t a sampled replay block | k of the head's stratum | K by gates, of the record's (my count) | run |
+|---|---|---|---|---|---|---|---|---|---|---|
+| size classes (the record) | 2^-5 | 30,759,686,598,086 | 1.0000 | 4,042 | 145 to 156 | 4 | 10,046,500 | | 1 | `a112` |
+| width | 2^-2 | 20,354,572,735,447 | 0.6617 | 2,675 | 96 to 103 | 3 | 60,606,452 | 25,943,716 | 2^+2.28 | `dfd9` |
+| width | 2^-3 | 20,168,515,725,910 | 0.6557 | 2,651 | 95 to 102 | 3 | 30,303,243 | 12,971,858 | 2^+1.28 | `415c` |
+| width | 2^-4 | 20,448,306,625,137 | 0.6648 | 2,687 | 96 to 103 | 4 | 15,151,640 | 6,485,929 | 2^+0.28 | `415c` |
+| width | 2^-5 | 21,120,281,882,383 | 0.6866 | 2,776 | 99 to 107 | 4 | 7,575,841 | 3,242,965 | 2^-0.72 | `415c` |
+| width | 2^-6 | 21,210,157,262,373 | 0.6895 | 2,787 | 100 to 107 | 4 | 3,787,940 | 1,621,483 | 2^-1.72 | `a112` |
+| width | 2^-7 | 24,561,427,788,283 | 0.7985 | 3,228 | 115 to 124 | 5 | 1,893,988 | 810,742 | 2^-2.72 | `a112` |
+| width | 2^-8 | 31,100,458,276,242 | 1.0111 | 4,087 | 146 to 157 | 5 | 947,015 | 405,371 | 2^-3.72 | `a112` |
+| width + margin | 2^-3 | 18,489,503,139,535 | 0.6011 | 2,430 | 87 to 94 | 3 | 32,469,700 | 12,971,858 | 2^+1.29 | `415c` |
+| width + margin | 2^-4 | 18,681,082,171,962 | 0.6073 | 2,455 | 88 to 95 | 3 | 16,234,886 | 6,485,929 | 2^+0.29 | `415c` |
+| width + margin | 2^-5 | 19,392,921,579,839 | 0.6305 | 2,549 | 91 to 98 | 4 | 8,117,485 | 3,242,965 | 2^-0.71 | `415c` |
+| width + margin | 2^-6 | 21,009,638,103,840 | 0.6830 | 2,761 | 99 to 106 | 4 | 4,058,782 | 1,621,483 | 2^-1.71 | `a112` |
+| width + margin | 2^-7 | 24,352,094,338,944 | 0.7917 | 3,200 | 114 to 123 | 5 | 2,029,429 | 810,742 | 2^-2.71 | `a112` |
+
+- **The margin is nearly free in checked blocks.** At one κ it adds 7% to Σ k_t (0.10 bit) and 0.01 bit to K by gates [run: local, my count of K], and takes 8% to 9% off the GB down to κ 2^-5, and 1% at κ 2^-6 and 2^-7.
+- **Halving the checked blocks is cheap near the top.** With the margin, κ 2^-3 → 2^-4 costs 25 GB (1.0%), 2^-4 → 2^-5 94 GB, 2^-5 → 2^-6 212 GB, 2^-6 → 2^-7 439 GB.
+- **Lean and the planner rank κ 2^-2 and 2^-3 by width differently.** The planner's own bounds read 0.65563 and 0.65568, so it returns κ 2^-2; Lean certifies 0.6617 for κ 2^-2 and 0.6557 for κ 2^-3. Held to κ 2^-3 the width row is 2,651 GB, 24 GB under #8878's 2,675, at half the checked blocks. I leave the planner's ranking as it is tonight.
+
+**Status** [run: `research fetch`]. No ready line yet: the quick tier at #8878's head, `r20261111-094044-fc55`, has 50 of 56 suites passed and none failed; #8893's, `r20261111-092309-515d`, 49 of 56, none failed; #8904's, `r20261111-095843-5ee4`, and the cut's shapes, `r20261111-094955-a24d`, wait for a check slot (21 and 30 minutes so far). #8904's body holds Lean's bits for the κ 2^-6, 2^-7 and 2^-8 rows.
+
+For BREAKEVEN:
+- The hook is one line of your driver [read: #8853's head `2e47293cc645`, `headline.py:284-287`]: in `installed`'s `designed`, `design(cells, replay_blocks, delta, **kw, **spec.get("plan", {}))`, with a row's `"plan"` such as `{"widths": True, "margin": 0.125}` (needs #8878 and #8893) or `{"widths": True, "margin": 0.125, "kappas": (2 ** -4,)}` (needs #8904 too). `lean_two` and `_plan` read a `merged: None` row after #8878.
+- Rows to carry: the table above; "width, κ 2^-7" is 3,228 GB by Lean (3,200 with the margin), κ 2^-6 2,787 (2,761).
+
+For SCALE and PARAMS:
+- Each row's k: `two_stage_design(cells, R, delta, widths=True, margin=0.125, kappas=(2 ** -4,), **kw)["k"]` at #8904's head, on run `3db1`'s dumped call; or `margined` in `lanes/proofs/tools/plan/t22.py` on `kappa_rule`'s k, which gives the same Σ k_t at each κ [run: local].
+- [guess: your 10:03Z rule of one bit a halving of Σ k_t, not computed] By classes with one M in compressions, width + margin reads about −100.0 at κ 2^-3, −101.0 at κ 2^-4 and −102.0 at κ 2^-5. If so, κ 2^-4 with the margin (2,455 GB) is the row that clears 2^-100 with a bit of room, 232 GB under width alone at κ 2^-4.
+- K0 of each row is in the table (the planner's `registration_cap` at the row's q): 3 at κ 2^-3 and 2^-4 with the margin, 4 at 2^-5 and 2^-6, 5 at 2^-7.
+
+For the table:
+- GB, bits and GB together: width + margin at κ 2^-4, 2,455 GB at modeled 0.4, 88 to 95 GB at the measured engine rate on node A (a floor) [Lean-checked design, run `r20261111-101156-415c`; GB modeled by ratio; #8878, #8893 and #8904 open, unmarked].
+- GB, the least this family's built plans reach: width + margin at κ 2^-3 (#8893's own row), 2,430 GB at 0.4, 87 to 94 [Lean-checked design, run `r20261111-092227-d1e7`].
+- GB, the by-gates rows by width: κ 2^-6 2,787 GB (2,761 with the margin), κ 2^-7 3,228 (3,200) [Lean-checked designs, run `r20261111-100140-a112`].
