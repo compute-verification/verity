@@ -223,7 +223,8 @@ def _overhead_parser(commands: Any) -> None:
 
 
 def _prove(args: Any) -> int:
-    doc = prove_records.build(args.system, args.workload, sampling=args.sampling, local_only=args.local_only)
+    doc = prove_records.build(args.system, args.workload, sampling=args.sampling, provers=args.provers,
+                              local_only=args.local_only)
     if args.json:
         print(json.dumps(doc, indent=1, sort_keys=True))
     else:
@@ -239,6 +240,9 @@ def _prove_parser(commands: Any) -> None:
     prove.add_argument("--workload", required=True, choices=list(prove_records.WORKLOADS))
     prove.add_argument("--sampling", metavar="ART", help="spot's sampling plan (default: the workload's plan of record); "
                                                          "refused unless it is labelled the plan of record")
+    prove.add_argument("--provers", type=int, default=1, metavar="N",
+                       help="the prover count each type is priced at: only steady-state rows at N provers measure a "
+                            "type (default: 1)")
     prove.add_argument("--rows", type=int, metavar="N", help="show the N block types that take the most proving time, "
                                                              "the rest in one row (default: every block type)")
     prove.add_argument("--json", action="store_true", help="the table as JSON, every row whole")
