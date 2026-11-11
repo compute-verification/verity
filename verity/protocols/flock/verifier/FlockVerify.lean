@@ -1203,17 +1203,20 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (args : List Strin
 def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UInt32 :=
   verifyCmdBy (fun program => (ProgramRead.of program).readers) args upstream
 
-/-- One member of `verify-members`: `verify` on the member's argument list `args`, its program read through `kept`'s
-readers. It takes the kept program and that member's arguments and nothing else: no other member's arguments, files,
-sessions, coins, tables, registered reads or verdict reach it, and all it reads of `kept` is `kept.readers`, which
-compare the member's own program bytes with `kept`'s and return on them what the readers anew return. -/
-def verifyMember (kept : ProgramRead) (args : List String) : IO UInt32 := verifyCmdBy (fun _ => kept.readers) args
+/-- One member of `verify-members`: `verify` on the member's argument list `args`, its program read through `kept` where
+its bytes are `kept`'s, compared in full, and through a read of its own where they are not (`ProgramRead.orOf`), so a
+member with another program reads it once, as `verify` does. It takes the kept program and that member's arguments and
+nothing else: no other member's arguments, files, sessions, coins, tables, registered reads or verdict reach it, and all
+it reads of `kept` is that read's readers, which return on every program what the readers anew return. -/
+def verifyMember (kept : ProgramRead) (args : List String) : IO UInt32 :=
+  verifyCmdBy (fun program => (kept.orOf program).readers) args
 
 /-- **A member's check is `verify`**: whatever program is kept, `verifyMember` on a member's arguments is `verifyCmd` on
 them, the same action: the same files read, the same lines printed, the same exit status. -/
 theorem verifyMember_eq (kept : ByteArray) : verifyMember (ProgramRead.of kept) = fun args => verifyCmd args := by
-  have h : (fun _ : ByteArray => (ProgramRead.of kept).readers) = fun program => (ProgramRead.of program).readers :=
-    funext fun program => (ProgramRead.readers_of kept).trans (ProgramRead.readers_of program).symm
+  have h : (fun program : ByteArray => ((ProgramRead.of kept).orOf program).readers)
+      = fun program => (ProgramRead.of program).readers :=
+    funext fun program => (ProgramRead.readers_orOf kept program).trans (ProgramRead.readers_of program).symm
   funext args
   exact congrArg (fun readers => verifyCmdBy readers args) h
 
