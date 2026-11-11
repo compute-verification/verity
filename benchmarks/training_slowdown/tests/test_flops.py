@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from conftest import D, PER_TOKEN, VOCAB, loss_of
-from training_slowdown import flops, opnames
+from training_slowdown import flops, gates, opnames
 from training_slowdown.annotate import annotate
 from training_slowdown.flops import Counter, flags, forward_macs_per_token, gather_selects, guard_exits, leaked, mux_tree
 
@@ -255,6 +255,90 @@ def test_ops_the_counter_cannot_price_are_recorded():
     assert list(rec["unknown_ops"]) == ["aten._trilinear.default"] and rec["foreign_ops"] == {}
 
 
+def logged(body) -> list:
+    """The op log's rows of `body()`, counted outside any step, each as [op, MACs, dtype]."""
+    c = Counter(digests=False)
+    with c:
+        body()
+    c.finish()
+    rec = c.record()
+    return [[row[2], row[5], row[6]] for row in rec["structures"][rec["setup"]["struct"]]["log"]]
+
+
+def test_an_ops_row_names_the_dtype_it_computed_in():
+    """Each row of the op log names its op's dtype, its result's, and rows of one op and shape in two dtypes stay
+    apart: a product's own; the wider one where its operands differ, whichever comes first; the written operand's
+    for an in-place `_foreach_` form and a fused optimizer step, which return nothing; the floating one of a
+    decomposition's results, beside its integer flags. Results in two dtypes are named together, which no price
+    reads."""
+    a, b = torch.randn(4, 5), torch.randn(5, 3)
+    assert logged(lambda: (a @ b, a.bfloat16() @ b.bfloat16())) == [["mm", 60, "bfloat16"], ["mm", 60, "float32"]]
+    assert logged(lambda: a.bfloat16() * a) == logged(lambda: a * a.bfloat16()) == [["mul", 20, "float32"]]
+    assert logged(lambda: torch._foreach_mul_([a.clone(), b.clone()], 2.0)) == [["_foreach_mul_", 35, "float32"]]
+    spd = a @ a.T + torch.eye(4)
+    for solve, op in ((torch.linalg.eigh, "_linalg_eigh"), (torch.linalg.cholesky, "linalg_cholesky_ex"),
+                      (torch.linalg.inv, "linalg_inv_ex")):
+        assert logged(lambda: solve(spd)) == [[op, 64, "float32"]]
+    w = torch.nn.Parameter(torch.randn(8))
+    w.grad = torch.randn(8)
+    assert logged(torch.optim.AdamW([w], fused=True).step) == [["_fused_adamw_", 64, "float32"]]
+    mixed = logged(lambda: torch._foreach_mul_([a.clone(), b.bfloat16()], 2.0))
+    assert mixed == [["_foreach_mul_", 35, "bfloat16+float32"]]
+    with pytest.raises(gates.Unpriced, match=r"^_foreach_mul_ in bfloat16\+float32: no Definition"):
+        gates.of_log({"ops": {f"other param {op} [[4, 5], [5, 3]] {dtype}": [1, macs] for op, macs, dtype in mixed}})
+
+
+def test_a_fused_kernels_rows_are_in_its_operands_dtype():
+    """A fused attention kernel on bf16 operands is counted as the math kernel's ops in bf16, forward and backward:
+    the dtype its result is in. They are the rows of the math kernel where it stays in the operands' dtype; left to
+    itself it computes a bf16 attention in f32 (`torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp`)."""
+    q = torch.randn(2, HEADS, L, E).bfloat16().requires_grad_(True)
+
+    def body():
+        F.scaled_dot_product_attention(q, q, q, is_causal=True).sum().backward()
+
+    fused = logged(body)
+    assert fused and {dtype for _, _, dtype in fused} == {"bfloat16"}
+    with sdpa_kernel([SDPBackend.MATH]):
+        assert [row[:2] for row in logged(body)] == [row[:2] for row in fused]
+        assert {dtype for _, _, dtype in logged(body)} == {"float32"}
+        torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
+        try:
+            assert logged(body) == fused
+        finally:
+            torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(False)
+
+
+def test_a_step_is_priced_op_by_op_in_the_dtype_each_ran_in():
+    """A step whose forward product runs in bf16 and whose optimizer's runs in f32, beside one whose optimizer casts
+    its product to bf16 as Muon's Newton-Schulz does: the first's optimizer product is an f32 GEMM and the
+    second's a bf16 one, each at its Definition's price, and no assumption is made. A rule by class would price the
+    two alike."""
+    w = torch.randn(D, D)
+
+    def step(cast):
+        c = Counter(digests=False)
+        with c:
+            c.begin_step()
+            tokens(c, 6, D).bfloat16() @ w.bfloat16()
+            cast(w) @ cast(w).T
+            c.end_step()
+        c.finish()
+        rec = c.record()
+        (s,) = rec["steps"]
+        log = rec["structures"][s["struct"]]["log"]
+        return log, gates.of_log({"by": s["by"], "ops": {gates.op_key(row): row[4:6] for row in log}})
+
+    forward, optimizer = 6 * D * D, D * D * D
+    for cast, dtype, kind in ((torch.Tensor.float, "float32", "gemm/f32"), (torch.Tensor.bfloat16, "bfloat16", "gemm/bf16")):
+        log, priced = step(cast)
+        assert [[row[0], row[2], *row[5:]] for row in log] == [["fwd", "mm", forward, "bfloat16"],
+                                                              ["other", "mm", optimizer, dtype]]
+        assert priced["assumed"] == {} and priced["gates"] == pytest.approx(
+            forward * gates.per_mac("gemm/bf16") + optimizer * gates.per_mac(kind))
+    assert gates.per_mac("gemm/f32") == 12637 > gates.per_mac("gemm/bf16")
+
+
 def test_token_data_read_out_of_torch_is_counted_in_its_step():
     guard_exits()
     rec = one_step(lambda w, e: (embedded(e).numpy(), embedded(e).sum(-1).tolist(), w.detach().numpy()))
@@ -441,7 +525,8 @@ def test_a_fused_attentions_record_is_the_math_kernels_whatever_its_operands_are
     kinds = {row[1] for row in fused["log"]}
     assert ("updated" in kinds) == (variant not in ("no token",)), kinds
     if variant == "an updated mask":
-        assert ["fwd", "updated", "add", f"[[3, {HEADS}, {E}, {E}], [{E}, {E}]]", 1, 3 * HEADS * E * E] in fused["log"]
+        assert ["fwd", "updated", "add", f"[[3, {HEADS}, {E}, {E}], [{E}, {E}]]", 1, 3 * HEADS * E * E,
+                "float32"] in fused["log"]
 
 
 def test_a_derived_operand_inside_a_fused_kernel_is_listed_without_a_digest():

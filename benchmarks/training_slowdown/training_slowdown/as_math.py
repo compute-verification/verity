@@ -4,7 +4,8 @@ kernel computes attention by: the rows the counter writes for the kernel (`flops
     python -m training_slowdown.as_math SRC DST [--partial none|SUBSET:CALLS]
 
 Every run.json under SRC is written under DST with its op logs rewritten, and its steps' counts moved with them. A
-fused row [phase, role, op, shapes, calls, MACs] of self-attention (q, k and v of one shape [b, h, s, d]) becomes:
+fused row [phase, role, op, shapes, calls, MACs] of self-attention (q, k and v of one shape [b, h, s, d]) becomes
+these rows, in the row's dtype where it names one:
 
   forward, a call    the products QK [[bh, s, d], [bh, d, s]] and PV [[bh, s, s], [bh, s, d]] (the row's MACs) and the
                      scalings of q [[b, h, s, d]] and of k [[b, h, d, s]], numel(q) MACs each, as `fwd theta mul`
@@ -126,14 +127,14 @@ def rewrite(log: list, trace: list, flag: tuple[str, int] | None = None) -> tupl
     out, by, moved, asks = {}, {}, {"matmul_macs": 0, "elementwise_macs": 0}, {}
 
     def add(phase, role, op, shapes, n, macs, counts=""):
-        row = out.setdefault((phase, role, op, shapes), [0, 0])
+        row = out.setdefault((phase, role, op, shapes, *dtype), [0, 0])
         row[0], row[1] = row[0] + n, row[1] + macs
         if counts:
             by[f"{phase}/{role}"] = by.get(f"{phase}/{role}", 0) + macs
             moved[counts] += macs
 
     backwards = [json.loads(r[3])[0] for r in log if "scaled_dot_product" in r[2] and r[2] not in FORWARD]
-    for phase, role, op, shapes, n, macs in log:
+    for phase, role, op, shapes, n, macs, *dtype in log:   # a row that names its dtype: its ops are in the kernel's
         if "scaled_dot_product" not in op:
             add(phase, role, op, shapes, n, macs)
             continue
@@ -165,7 +166,7 @@ def rewrite(log: list, trace: list, flag: tuple[str, int] | None = None) -> tupl
                 add("bwd", role, "bmm", k, c * times, c * times * each, "matmul_macs")
             for k, c in scalings.items():
                 add("bwd", role, "mul", k, c * times, c * times * numel, "elementwise_macs")
-    rows = [[*key, n, macs] for key, (n, macs) in out.items() if n]
+    rows = [[*key[:4], n, macs, *key[4:]] for key, (n, macs) in out.items() if n]
     return rows, {"by": {k: v for k, v in by.items() if v}, **moved, "macs": sum(moved.values())}, asks
 
 

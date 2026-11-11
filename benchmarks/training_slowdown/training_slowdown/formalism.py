@@ -137,7 +137,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import calculator, policy
-from .gates import gates, of_log, per_mac, split_key
+from .gates import gates, of_log, op_key, per_mac, split_key
 from .work import THE_CODE, products_of_trace
 
 ACT_BITS = 16
@@ -1000,8 +1000,7 @@ def of_record(record: dict, through: int | None = None) -> dict:
             for k, v in s.get("by", {}).items():
                 log["by"][k] = log["by"].get(k, 0) + v
         for row in st.get("log", []):
-            key = " ".join(str(x) for x in row[:4])
-            log["ops"][key] = [row[4] * n, row[5] * n]
+            log["ops"][op_key(row)] = [row[4] * n, row[5] * n]
         gates, tokens = of_log(log)["gates"], sum(s.get("tokens", 0) for s in ss)
         token_gates = of_log(_token_log(log))["gates"]
         partial = grad = None

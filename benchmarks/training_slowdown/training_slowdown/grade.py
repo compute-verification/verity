@@ -159,8 +159,9 @@ def c_spread(f: dict, loss: float) -> float | None:
 # ---- a job's checkpoints ---------------------------------------------------------------------------------------------
 
 def macs_log(record: dict, through: int | None) -> dict:
-    """A record's MACs by class (`by`) and by op and shape (`ops`: [count, MACs]) over its setup and its steps through
-    `through` (None: the whole run, its tail too): what `formalism` checks a trace's products against."""
+    """A record's MACs by class (`by`) and by op, shape and the dtype its op log names (`ops`, by `gates.op_key`:
+    [count, MACs]) over its setup and its steps through `through` (None: the whole run, its tail too): what
+    `formalism` checks a trace's products against."""
     by, ops = {}, {}
     steps = [record["setup"], *(s for s in record["steps"] if through is None or s["step"] <= through)]
     if through is None:
@@ -169,7 +170,7 @@ def macs_log(record: dict, through: int | None) -> dict:
         for k, v in s.get("by", {}).items():
             by[k] = by.get(k, 0) + v
         for row in (record["structures"].get(s.get("struct")) or {}).get("log", []):
-            n, m = ops.get(key := " ".join(map(str, row[:4])), (0, 0))
+            n, m = ops.get(key := gates.op_key(row), (0, 0))
             ops[key] = [n + row[4], m + row[5]]
     return {"by": by, "ops": ops}
 
@@ -207,10 +208,15 @@ def counted(row: dict) -> float | None:
 def checkpoints(run: dict, start: str) -> list[dict]:
     """A job's checkpoints by step (`run`: its `seed`, its `split` and its `record`): each one's loss, the start's
     loss on the job's split and its counted |C| in gates (`counted`), or why it has none. A job from another start, or
-    scored on another split than its place says, is refused."""
+    scored on another split than its place says, is refused, and so is one whose op log names an op in a dtype no
+    Definition prices (`gates.Unpriced`)."""
     where = f"seed {run['seed']}, {run['split']}"
     out = []
-    for r in sorted(rows_of(run["record"]), key=lambda r: r["checkpoint_step"]):
+    try:
+        rows = rows_of(run["record"])
+    except gates.Unpriced as e:
+        raise ValueError(f"grade: the record at {where} has no count in gates: {e}") from None
+    for r in sorted(rows, key=lambda r: r["checkpoint_step"]):
         if r.get("start") not in (None, start):
             raise ValueError(f"grade: the record at {where} is from start {r['start']!r}, not the config's {start!r}")
         if r.get("split") not in (None, run["split"]):
