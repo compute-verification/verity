@@ -11,6 +11,10 @@
   "SparseMlaHeadEnd_v2{DV=16,INV=Fa3InvSum_v2}": {
    "and": 43823,
    "type": "248c4cb736dbe4644b5ff5e11539943152d56ddf878db25569c35bebc2e04004ee7b6ef45c81707177e68e89d0021c78dc62154b397b1ca84ce5c6cc41c42e32"
+  },
+  "SparseMlaHeadValues_v2{DR=16,DV=16,NVIS=5,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v2,G=4,C=1}": {
+   "and": 10317,
+   "type": "597faf04bc763da43a6d42cf804812b85618d679e8f9db15e4db4fe89b0aaee4336ad70fa324edb2f1758a93663ad912f8f47422fec9c972858fef1af6ec0825"
   }
  },
  "digests": {
@@ -25,6 +29,24 @@
   },
   "SparseMlaHeadBlock_v3{DR=64,DV=512,NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
    "sha512": "0bf69ff4363950f7ccb8b04562a667948570b08c4e145cdcf573eb46332eda3f9b17cf1340140fca358230be6d1fc61cc6b19b0439446dcf66cd21c23ae5b6cb"
+  },
+  "SparseMlaHeadScores_v2{DR=16,DV=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "b839bcb2cc6ca38d01eb07c0ca6d6ee210fc3ee02a6f1cce577a0e687d7c74f76a94cd13d37f944113ffa5f0732e23504b55d584caf49056130cb14a1bbd8cda"
+  },
+  "SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=64,FIRST=False,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "21b25aa462177714aea96751a1165692c9b98cdd1d2b87f3c91534025db87310e405517874b459ca020d5c9a18e59f59c6f92604ec977a6fb01a7cde0d65d0e2"
+  },
+  "SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "723897e4ff2005df5dbed1d6769f225d71d11a80a833205c57ca0020357fba797d8fad350729445c3b01b475063f1eba90e76cbb5a5b8a07f3f738b2e8aa1e2e"
+  },
+  "SparseMlaHeadValues_v2{DR=16,DV=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,G=8,C=1}": {
+   "sha512": "24745d3d0f80330bf0b6c35139f6dd210c7e778cfaefa047550966c0a896e2bac27a06235b2599bc823fd70133281476305bf7a6387c260c7a99dbd51fdaf6ce"
+  },
+  "SparseMlaHeadValues_v2{DR=64,DV=512,NVIS=64,FIRST=False,BN=64,DOT=HopperBF16WgmmaDot16_v2,G=128,C=0}": {
+   "sha512": "80be56d69b5c852e07d9fe04d0ddce48962ddb0949267684254a2d44fe030fc543b4e432919c3784b88dfc8ba78fe80353d861c1e70361bc34ba9f933d9b82b0"
+  },
+  "SparseMlaHeadValues_v2{DR=64,DV=512,NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,G=128,C=0}": {
+   "sha512": "b641bcef0244e2adafb66c52772b4396bdcb6f6b826160321764045f93d7bc84e7f532ac03feb77fdbec66c51e7ea092ed83bd391b5d46702d77d11f72693907"
   }
  }
 }
