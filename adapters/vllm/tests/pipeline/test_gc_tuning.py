@@ -79,7 +79,7 @@ def test_a_tuned_process_freezes_its_heap_at_exit(value, expect):
 
 
 def test_the_exit_freeze_is_registered_once(monkeypatch):
-    hooks = []
+    hooks: list[object] = []
     monkeypatch.setattr(gc_tuning.atexit, "register", hooks.append)
     monkeypatch.setattr(gc_tuning, "_freeze_registered", False)
     saved = gc.get_threshold()
@@ -155,8 +155,13 @@ def test_tuned_holds_the_thresholds_for_its_block_and_gives_the_callers_back(mon
 
 def test_a_ranks_program_load_runs_under_the_tuned_thresholds(monkeypatch):
     from verity_vllm.pipeline.tp import rank_replay
-    seen = []
-    monkeypatch.setattr(rank_replay, "_load", lambda *a: seen.append((a, gc.get_threshold())) or "loaded")
+    seen: list[tuple[tuple, tuple[int, int, int]]] = []
+
+    def load(*a):
+        seen.append((a, gc.get_threshold()))
+        return "loaded"
+
+    monkeypatch.setattr(rank_replay, "_load", load)
     monkeypatch.setenv(gc_tuning.ENV, "")
     saved = gc.get_threshold()
     assert rank_replay.load({"programs": {}}, 3, 8, definitions=False) == "loaded"
