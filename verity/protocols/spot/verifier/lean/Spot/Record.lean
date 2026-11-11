@@ -55,6 +55,11 @@ private def obj (kvs : List (String × Json)) : Json := Json.mkObj kvs
 def sameDict (a b : Array (String × Json)) : Bool :=
   a.size == b.size && a.all fun (k, v) => b.any fun (k', v') => k == k' && jeq v v'
 
+/-- Each entry of the dict `a` is one of `b`'s: `b` has its key, with an equal value. An entry of `b` whose key `a` lacks
+is not looked at. -/
+def subDict (a b : Array (String × Json)) : Bool :=
+  a.all fun (k, v) => b.any fun (k', v') => k == k' && jeq v v'
+
 /-- `{r["port"]: r for r in rec["roots"]}`: the last root of each port. -/
 def byPort (rec : Json) : Array (String × Json) :=
   (match getD rec "roots" with | .arr rs => rs | _ => #[]).foldl (fun (acc : Array (String × Json)) r => match getD r "port" with
@@ -126,17 +131,16 @@ def checks (reg receipt draw law : Json) (units : Array Int) (provedUnits : Arra
       | none => some p)
     if roots.isEmpty || !wrong.isEmpty then
       out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (wrong.map Json.str))]))
-  if (field? reg "registered").isSome || sessionRegistered.isSome then
-    let want := registeredRoots reg
-    let opened := sessionRegistered.getD #[]
-    if !sameDict opened want then
-      let wrong := want.filterMap fun (v, r) => match opened.find? (·.1 == v) with
-        | some (_, o) => if jeq o r then none else some v
-        | none => some v
-      out := out.push ("registered", failed "registered" (obj [
-        ("registered", Json.arr ((sortStrings (want.map (·.1))).map Json.str)),
-        ("opened", Json.arr ((sortStrings (opened.map (·.1))).map Json.str)),
-        ("wrong", Json.arr ((sortStrings wrong).map Json.str))]))
+  let want := registeredRoots reg
+  let opened := sessionRegistered.getD #[]
+  if !subDict opened want then
+    let wrong := opened.filterMap fun (v, o) => match want.find? (·.1 == v) with
+      | some (_, r) => if jeq o r then none else some v
+      | none => some v
+    out := out.push ("registered", failed "registered" (obj [
+      ("registered", Json.arr ((sortStrings (want.map (·.1))).map Json.str)),
+      ("opened", Json.arr ((sortStrings (opened.map (·.1))).map Json.str)),
+      ("wrong", Json.arr ((sortStrings wrong).map Json.str))]))
   return out
 
 /-- `byPort` as a hash map, port to its last root. -/
@@ -216,17 +220,16 @@ def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : 
       | none => some p)
     if roots.isEmpty || !wrong.isEmpty then
       out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (wrong.map Json.str))]))
-  if (field? reg "registered").isSome || sessionRegistered.isSome then
-    let want := registeredRoots reg
-    let opened := sessionRegistered.getD #[]
-    if !sameDict opened want then
-      let wrong := want.filterMap fun (v, r) => match opened.find? (·.1 == v) with
-        | some (_, o) => if jeq o r then none else some v
-        | none => some v
-      out := out.push ("registered", failed "registered" (obj [
-        ("registered", Json.arr ((sortStrings (want.map (·.1))).map Json.str)),
-        ("opened", Json.arr ((sortStrings (opened.map (·.1))).map Json.str)),
-        ("wrong", Json.arr ((sortStrings wrong).map Json.str))]))
+  let want := registeredRoots reg
+  let opened := sessionRegistered.getD #[]
+  if !subDict opened want then
+    let wrong := opened.filterMap fun (v, o) => match want.find? (·.1 == v) with
+      | some (_, r) => if jeq o r then none else some v
+      | none => some v
+    out := out.push ("registered", failed "registered" (obj [
+      ("registered", Json.arr ((sortStrings (want.map (·.1))).map Json.str)),
+      ("opened", Json.arr ((sortStrings (opened.map (·.1))).map Json.str)),
+      ("wrong", Json.arr ((sortStrings wrong).map Json.str))]))
   return out
 
 @[csimp] theorem checks_eq_checksFast : @checks = @checksFast := by
