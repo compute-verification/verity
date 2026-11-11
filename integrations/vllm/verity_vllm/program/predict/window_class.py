@@ -21,14 +21,14 @@ computes none but the LM head's. A round's forward calls Pearl+ once a cut linea
 which the circuit reads as the call commits them: round s's call c, the c-th cut linear of a position's forward, has its A
 rows ``pearl-a/<s>/<c>`` (x widened to FP32, the round's m rows of the fixed load, `PearlTables.rows`, then zero rows up to
 the call's `PearlTables.a_rows`) and its y ``pearl-y/<s>/<c>`` (its N BF16 words a row widened to FP32, the round's m rows).
-Each cut linear is a unit `LinearARow_v1{K, R, ROUND, CALL}` (`registry.linear_cut`) whose output, x widened to FP32, is
-held to row i of its call's A rows, i its position's row (`FixedLoad.at`), and a unit `LinearOut_v1{N, W, ROUND, CALL}`
-that reads row i of its call's y and hands its BF16 words on to its readers in rows of W (`PearlTables.words`, doubled
-where a unit of N / W rows would be no proof block). The circuit's program takes them as its values, round by round and
-call by call the A rows then the y. Pearl+'s window record, at its version 2, registers each weight w's B rows too,
-``pearl-b/<w>`` (`PearlTables.b`), at the root of the tree PoUW reads B from; the circuit, cut at its linears, reads none
-of them. Its
-census (`window_cut.census`) counts each cut linear by shape, and none is tied to PoUW's credited product yet.
+Each cut linear is a unit `LinearARow_v1{K, R}` (`registry.linear_cut`) whose output, x widened to FP32, is held to row i
+of its call's A rows, i its position's row (`FixedLoad.at`), and a unit `LinearOut_v1{N, W}` that reads row i of its
+call's y and hands its BF16 words on to its readers in rows of W (`PearlTables.words`, doubled where a unit of N / W rows
+would be no proof block): a template a shape, whatever the round and the call. The circuit's program takes them as its
+values, round by round and call by call the A rows then the y. Pearl+'s window record, at its version 2, registers each
+weight w's B rows too, ``pearl-b/<w>`` (`PearlTables.b`), at the root of the tree PoUW reads B from; the circuit, cut at
+its linears, reads none of them. Its census (`window_cut.census`) counts each cut linear by shape, and none is tied to
+PoUW's credited product yet.
 """
 from __future__ import annotations
 
