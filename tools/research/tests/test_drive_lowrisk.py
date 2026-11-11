@@ -12,8 +12,8 @@ from test_queue import World, _git
 
 #: drive.toml's `lowrisk_excludes`
 EXCLUDES = ("*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
-            "verity/core/", "verity/ml/circuits/", "verity/ml/kernels/", "verity/ml/commitments/", "verity/ml/crypto/",
-            "verity/ml/randomness/")
+            "verity/core/", "verity/circuits/", "verity/definitions/kernels/", "verity/commitments/", "verity/commitments/crypto/",
+            "verity/commitments/randomness/")
 TAG = "(low-risk lane: no Lean, lock or soundness-path change)"
 
 
@@ -41,14 +41,14 @@ def _skipped(world: World) -> list[str]:
 
 @pytest.mark.parametrize("files, low", [
     (["tools/research/src/research/drive.py", "README.md"], True),
-    (["integrations/vllm/verity_vllm/serve.py", "verity/ml/flock/x.py", "verity/ml/definitions/y.py"], True),
+    (["adapters/vllm/verity_vllm/serve.py", "verity/ml/flock/x.py", "verity/ml/definitions/y.py"], True),
     (["Security/Proofs/Core/X.lean"], False),
-    (["docs/a.md", "verity/core/protocols/pous/lean/lean-audit.json"], False),
-    (["verity/core/service/flock/lakefile.toml"], False),
+    (["docs/a.md", "verity/protocols/pous/lean/lean-audit.json"], False),
+    (["verity/protocols/flock/verifier/lakefile.toml"], False),
     (["x/lean-toolchain"], False), (["x/lake-manifest.json"], False), (["x/TRUSTED.sha256"], False),
     (["verity/core/claims.py"], False),
-    (["verity/ml/circuits/ops/add.py"], False), (["verity/ml/kernels/k.cu"], False),
-    (["verity/ml/commitments/c.py"], False), (["verity/ml/crypto/c.py"], False), (["verity/ml/randomness/r.py"], False),
+    (["verity/definitions/ops/add.py"], False), (["verity/definitions/kernels/k.cu"], False),
+    (["verity/ml/commitments/c.py"], False), (["verity/commitments/crypto/c.py"], False), (["verity/commitments/randomness/r.py"], False),
     (["verity/ml/circuitsx/a.py"], True),                   # a directory entry is a whole path component
     ([], False),                                            # nothing to land
 ])
@@ -66,7 +66,7 @@ def test_an_entry_with_a_slash_before_its_end_keeps_that_one_file_off():
     excludes = ("verity/protocols/__init__.py", "verity/hardware/record.py")
     for f in excludes:
         assert not lowrisk(["README.md", f], excludes), f
-    assert lowrisk(["verity/protocols/pouw/__init__.py", "verity/protocols/reporting.py", "integrations/vllm/record.py",
+    assert lowrisk(["verity/protocols/pouw/__init__.py", "verity/protocols/reporting.py", "adapters/vllm/record.py",
                     "x/verity/hardware/record.py", "verity/hardware/record.pyc"], excludes)
 
 

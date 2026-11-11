@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from verity.ml.circuits.silicon.term import FORMATS, PRODUCT_WIDTH
+from verity.definitions.silicon.term import FORMATS, PRODUCT_WIDTH
 
 if TYPE_CHECKING:
     from typing import Any
