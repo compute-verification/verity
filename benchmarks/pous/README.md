@@ -158,15 +158,19 @@ SHA-512 of the wipe party's public key, by default vy-auditor-2's): a session si
 with none pinned, the setting empty, the piece refuses before it asks for a card. Its header lists the challenger's
 settings. `tests/test_pous_served_wipe.py` runs it on a CPU, with one segment in host memory.
 
-`served_piece.sh` is PoUS's piece of a served window (`POUS_CMD`): `served_piece.py` holds the served weights (the
-decoder's linears as the model's pin has them, int8 with their scales or plain BF16) as `C*` on
-the card for one session with the memory challenger on vy-auditor-2, then runs PoUB-P2's session over the same store
-(`held_bandwidth.py`), whose answer the bandwidth piece collects. Each of the two cases is answered by its Lean verifier,
+`served_piece.sh` is PoUS's piece of a served window (`POUS_CMD`), in two parts. On the card, under one lease,
+`served_piece.py --sessions` holds the served weights (the decoder's linears as the model's pin has them, int8 with their
+scales or plain BF16) as `C*` for one session with the memory challenger on vy-auditor-2, then runs PoUB-P2's session
+over the same store (`held_bandwidth.py`), and keeps what the two left in the window's private directory. Once that
+process and its lease have ended, `served_piece.py --answers` answers both with no card: each case by its Lean verifier,
 `pous-run-protocol` and `remote-audit-p2-protocol`, which the script builds in a scratch copy of `verity/` before it asks
 for the card; PoUS's must agree with the Python, and a verifier that doesn't build or doesn't answer leaves no accept.
-Each of the three pieces' summaries (`pous.json`, `bandwidth.json`, the wipe's `summary.json`) names the program that
-decided and the host it ran on under `decided_by`. `tests/test_pous_served_piece.py` runs the piece on a CPU, and
-`tests/test_pous_served_piece_sh.py` the script, with stand-ins for `lake`, the card and the piece.
+The bandwidth piece collects PoUB-P2's answer. A run that ended while answering, or whose Lean didn't answer, is
+answered again from what the sessions kept (`--answers`), with no new session. Each of the three pieces' summaries (`pous.json`, `bandwidth.json`, the wipe's
+`summary.json`) names the program that decided and the host it ran on under `decided_by`; `pous.json` has the bytes of
+the case's line (`case_bytes`), and each piece's directory its timeline, `stamps.txt`: a UTC second and an event a line,
+from the piece's start through each build's end to each session and answer. `tests/test_pous_served_piece.py` runs the
+piece on a CPU, and `tests/test_pous_served_piece_sh.py` the script, with stand-ins for `lake`, the card and the piece.
 
 `served_case.py --window DIR` builds PoUS's or the wipe's piece for the one-stage composite (composite.py, beside
 served_verdicts.py) from what a served window kept: `case.json`, the subprotocol's case, and `answer.json`, its own answer

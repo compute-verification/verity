@@ -170,6 +170,20 @@ def _dump(f: Any, doc: Mapping[str, Any]) -> None:
     f.write(("}" if doc else "{}") + "\n")
 
 
+class _Count:
+    n = 0
+
+    def write(self, s: str) -> None:
+        self.n += len(s)
+
+
+def line_bytes(case: Mapping[str, Any]) -> int:
+    """The bytes of ``case``'s line as `write` writes it, the line its Lean reads."""
+    count = _Count()
+    _dump(count, case)
+    return count.n
+
+
 def write(private: Path, case: Mapping[str, Any], answer: Mapping[str, Any]) -> Path:
     """``case.json`` and ``answer.json`` into ``private`` (0700, each file 0600): the piece composite.py reads."""
     private.mkdir(parents=True, exist_ok=True, mode=0o700)

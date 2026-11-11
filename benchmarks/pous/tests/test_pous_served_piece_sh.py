@@ -3,12 +3,14 @@ and the piece's Python are stand-ins on PATH, the library is one named already (
 Lean verifiers that decide, `pous-run-protocol` and `remote-audit-p2-protocol`, are built in a scratch copy of
 ``verity/`` before the card is asked for and go to `served_piece.py` as ``--case-exe`` and ``--bw-case-exe``; ones
 named already (POUS_EXE, BW_CASE_EXE) are passed as they are and nothing is built; one that doesn't build is no answer,
-and neither the card nor the piece is started."""
+and neither the card nor the piece is started. The piece's Python runs twice: its sessions under the lease, then, once
+that process ended and with it the lease, its answers with no card; the timeline of both is ``stamps.txt``."""
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -31,11 +33,14 @@ shift
 GPU_LEASE_UUID=GPU-own0 exec "$@"
 """
 PYTHON = """#!/usr/bin/env bash
-echo "piece ${CUDA_VISIBLE_DEVICES:-}" >> "$FAKE_LOG"
-printf '%s\\n' "$@" > "$FAKE_ARGV"
+part=${*: -1}
+echo "piece $part ${CUDA_VISIBLE_DEVICES-unset}" >> "$FAKE_LOG"
+printf '%s\\n' "$@" > "$FAKE_ARGV$part"
 for a in "$@"; do case $a in */.lake/build/bin/*) [ -x "$a" ] && echo "$a" >> "$FAKE_BUILT" ;; esac; done
-exit 0
+[ "$part" = --answers ] || exit "${FAKE_SESSIONS_EXIT:-0}"
+exit "${FAKE_ANSWERS_EXIT:-0}"
 """
+STAMP = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ ")
 
 
 def _exe(path: Path, text: str) -> Path:
@@ -53,7 +58,8 @@ def node(tmp_path) -> dict[str, str]:
     _exe(bin_ / "lake", LAKE)
     _exe(bin_ / "gpu-lease", LEASE)
     env = {k: v for k, v in os.environ.items()
-           if not k.startswith(("GPU_LEASE_", "POUS_", "BW_", "CUDA_VISIBLE")) and k not in ("LEASE_MIN", "MEM_GB")}
+           if not k.startswith(("GPU_LEASE_", "POUS_", "BW_", "CUDA_VISIBLE", "FAKE_"))
+           and k not in ("LEASE_MIN", "MEM_GB", "ANSWERS_MEM_GB")}
     return env | {"PATH": f"{bin_}:{env['PATH']}", "HOME": str(tmp_path / "home"), "P2_LIB": str(tmp_path / "lib"),
                   "PY": str(_exe(tmp_path / "python", PYTHON)), "POUS_NODE": "gpu-node",
                   "FAKE_LOG": str(tmp_path / "log"), "FAKE_ARGV": str(tmp_path / "argv"),
@@ -74,25 +80,54 @@ def _option(argv: list[str], name: str) -> str:
     return argv[argv.index(name) + 1]
 
 
+def _argv(env: dict[str, str], part: str = "--sessions") -> list[str]:
+    return Path(env["FAKE_ARGV"] + part).read_text().splitlines()
+
+
+def _stamps(d: Path) -> list[str]:
+    """The events of ``d``'s ``stamps.txt`` in order, each line held to its form: a UTC second, then the event."""
+    lines = (d / "stamps.txt").read_text().splitlines()
+    assert all(STAMP.match(line) for line in lines), lines
+    return [line.split(" ", 1)[1] for line in lines]
+
+
 def test_the_two_leans_are_built_in_a_scratch_copy_before_the_card_is_asked_for(node, tmp_path):
     """Each verifier is built by `lake build` in its package of a copy of ``verity/`` outside the tree, whose ``.lake``
-    is never written; then the card is asked for, at the lease's defaults; and the piece's Python gets the two builds,
-    there while it runs and removed with the scratch copy when it ends."""
+    is never written; then the card is asked for, at the lease's defaults, for the piece's sessions alone; its answers
+    run after the lease, with no card to see; and both get the two builds, there while they run and removed with the
+    scratch copy at the end."""
     d = tmp_path / "pieces" / "pous"
     r = _piece(node, d)
     assert r.returncode == 0, r.stdout + r.stderr
-    (_, check, *run), (_, audit, *bw), lease, piece = _log(node)
+    (_, check, *run), (_, audit, *bw), lease, sessions, answers = _log(node)
     assert run == ["build", RUN_EXE, "package"] and bw == ["build", BW_EXE, "package"]
     scratch = Path(check[:-len(CHECK)])
     assert check.endswith("/" + CHECK) and audit == str(scratch / AUDIT) and ROOT not in scratch.parents
-    assert lease[:7] == ["lease", "1", "--wait", "--max-min", "90", "--mem-gb", "72"]
-    assert piece == ["piece", "GPU-own0"]
-    argv = Path(node["FAKE_ARGV"]).read_text().splitlines()
+    assert lease[:7] == ["lease", "1", "--wait", "--max-min", "90", "--mem-gb", "72"] and lease[-1] == "--sessions"
+    assert sessions == ["piece", "--sessions", "GPU-own0"] and answers == ["piece", "--answers"]
+    argv = _argv(node)
     exes = [str(scratch / CHECK / ".lake/build/bin" / RUN_EXE), str(scratch / AUDIT / ".lake/build/bin" / BW_EXE)]
     assert [_option(argv, "--case-exe"), _option(argv, "--bw-case-exe")] == exes
-    assert Path(node["FAKE_BUILT"]).read_text().splitlines() == exes and not scratch.exists()
+    assert Path(node["FAKE_BUILT"]).read_text().splitlines() == exes * 2 and not scratch.exists()
     assert argv[:4] == [str(ROOT / "benchmarks/pous/served_piece.py"), str(d.parent / "serve-run"), "3", str(d)]
     assert _option(argv, "--node") == "gpu-node" and (d / "lake-build.log").exists()
+    assert _argv(node, "--answers")[:-1] == argv[:-1]
+    assert _stamps(d) == ["start", f"built {RUN_EXE}", f"built {BW_EXE}", "asked for the card", "leased the card",
+                          "the sessions' part exit 0", "the answers' part exit 0"]
+
+
+@pytest.mark.parametrize("exits, code", [({"FAKE_SESSIONS_EXIT": "1"}, 1), ({"FAKE_SESSIONS_EXIT": "2"}, 2),
+                                         ({"FAKE_SESSIONS_EXIT": "124"}, 124), ({"FAKE_ANSWERS_EXIT": "1"}, 1)])
+def test_the_answers_run_only_after_sessions_that_were_kept_and_their_exit_is_the_pieces(node, tmp_path, exits, code):
+    """The sessions' part that exits other than 0 (an answer already, none, the lease's limit) ends the piece with its
+    exit and nothing is answered; else the piece's exit is the answers' part's."""
+    d = tmp_path / "pieces" / "pous"
+    r = _piece(node | exits | {"POUS_EXE": "/built/" + RUN_EXE, "BW_CASE_EXE": "/built/" + BW_EXE}, d)
+    assert r.returncode == code, r.stdout + r.stderr
+    ran = [line[1] for line in _log(node) if line[0] == "piece"]
+    assert ran == (["--sessions"] if "FAKE_SESSIONS_EXIT" in exits else ["--sessions", "--answers"])
+    assert _stamps(d)[-1] == (f"the sessions' part exit {code}" if "FAKE_SESSIONS_EXIT" in exits
+                              else f"the answers' part exit {code}")
 
 
 def test_leans_built_already_are_passed_as_they_are_and_nothing_is_built(node, tmp_path):
@@ -102,16 +137,18 @@ def test_leans_built_already_are_passed_as_they_are_and_nothing_is_built(node, t
     named = {"POUS_EXE": "/built/" + RUN_EXE, "BW_CASE_EXE": "/built/" + BW_EXE}
     r = _piece(node | named | {"GPU_LEASE_UUID": "GPU-serve0"}, d)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert _log(node) == [["piece", "GPU-serve0"]] and not (d / "lake-build.log").exists()
-    argv = Path(node["FAKE_ARGV"]).read_text().splitlines()
+    both = [["piece", "--sessions", "GPU-serve0"], ["piece", "--answers"]]
+    assert _log(node) == both and not (d / "lake-build.log").exists()
+    argv = _argv(node)
     assert [_option(argv, "--case-exe"), _option(argv, "--bw-case-exe")] == list(named.values())
+    assert _stamps(d) == ["start", "asked for the card", "the sessions' part exit 0", "the answers' part exit 0"]
 
     Path(node["FAKE_LOG"]).unlink()
     r = _piece(node | {"POUS_EXE": named["POUS_EXE"], "GPU_LEASE_UUID": "GPU-serve0"}, d)
     assert r.returncode == 0, r.stdout + r.stderr
-    (_, audit, *bw), piece = _log(node)
-    assert audit.endswith("/" + AUDIT) and bw == ["build", BW_EXE, "package"] and piece == ["piece", "GPU-serve0"]
-    argv = Path(node["FAKE_ARGV"]).read_text().splitlines()
+    (_, audit, *bw), *pieces = _log(node)
+    assert audit.endswith("/" + AUDIT) and bw == ["build", BW_EXE, "package"] and pieces == both
+    argv = _argv(node)
     assert _option(argv, "--case-exe") == named["POUS_EXE"]
     assert _option(argv, "--bw-case-exe") == audit + "/.lake/build/bin/" + BW_EXE
 
@@ -124,7 +161,7 @@ def test_a_lean_that_does_not_build_is_no_answer_and_starts_neither_the_card_nor
     assert r.returncode == 7 and f"POUS: no answer: {exe} doesn't build (lake-build.log)" in r.stdout
     assert f"error: {exe} has a hole" in r.stdout and f"error: {exe} has a hole" in (d / "lake-build.log").read_text()
     log = _log(node)
-    assert [line[0] for line in log] == ["lake"] * builds and not Path(node["FAKE_ARGV"]).exists()
+    assert [line[0] for line in log] == ["lake"] * builds and not Path(node["FAKE_ARGV"] + "--sessions").exists()
     assert not Path(log[0][1][:-len(CHECK)]).exists() and not (d / "answer.json").exists()
 
 

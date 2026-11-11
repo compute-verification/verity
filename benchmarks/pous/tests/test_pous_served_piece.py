@@ -17,6 +17,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import socket
 import stat
@@ -226,6 +227,42 @@ def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, **kw)
     return answer, auditor.calls
 
 
+def _gone(*args, **kw):
+    raise AssertionError("the answers reach neither the challenger nor the store")
+
+
+def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, between=lambda: None, **kw):
+    """`_run` in the two parts `served_piece.sh` runs: `sessions`, which leaves no answer, then ``between``, then
+    `answers` with the challenger's sides and the adapter's setup out of reach."""
+    auditor = auditor or Auditor(tmp_path)
+    monkeypatch.setattr(CS, "salt", auditor.salt)
+    monkeypatch.setattr(CS, "session", auditor.session)
+    monkeypatch.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
+    trusted = kw.pop("trusted_sha512", hashlib.sha512(auditor.signer.public_key).hexdigest())
+    card = {k: kw.pop(k) for k in ("rounds", "bw_party", "bw_host", "bw_request") if k in kw}
+    early = SP.sessions(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
+                        party=Side(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610)),
+                        private=s.private, pins=[s.pins], protocol=TEST_PROTOCOL, **card)
+    assert early is None
+    between()
+    with monkeypatch.context() as m:
+        for mod, name in ((CS, "salt"), (CS, "session"), (SP.PO, "install"), (SP.HB, "held")):
+            m.setattr(mod, name, _gone)
+        return SP.answers(s.serve, 3, s.out, trusted_sha512=trusted, private=s.private, schemes=ts.SCHEMES,
+                          protocol=TEST_PROTOCOL, **kw)
+
+
+def _names(directory: Path) -> list[str]:
+    return sorted(p.name for p in directory.iterdir())
+
+
+def _stamps(out: Path) -> list[str]:
+    """The events of the piece's timeline, ``out``'s ``stamps.txt``, in order: each line a UTC second, then the event."""
+    lines = (out / "stamps.txt").read_text().splitlines()
+    assert all(re.match(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ ", line) for line in lines), lines
+    return [line.split(" ", 1)[1] for line in lines]
+
+
 def _public_text(s: Served) -> str:
     return "".join(p.read_text() for p in sorted(s.out.iterdir()))
 
@@ -402,6 +439,53 @@ def test_the_composites_piece_is_written_privately_with_the_runs_own_answer(serv
         assert stat.S_IMODE((served.private / f).stat().st_mode) == 0o600
 
 
+def test_the_sessions_are_kept_and_then_answered_with_no_card(served, tmp_path, monkeypatch):
+    """The piece in its two parts. `sessions` answers nothing: it leaves the run's record so far, the table, ``C*`` as
+    setup sent it and the summary so far, in the private directory alone. `answers` reads them back with no store, no
+    challenger and no setup, and gives the answer one process gives, the case's line counted; ``C*`` and the summary
+    so far are then gone, so nothing is answered twice."""
+    s = served
+
+    def kept():
+        assert _names(s.private) == sorted(["digests.bin", "run.json", SP.HELD, SP.STORE])
+        assert _names(s.out) == ["stamps.txt"]
+        assert (s.private / SP.STORE).stat().st_size == 48 * SMALL.block_bytes
+        assert stat.S_IMODE((s.private / SP.STORE).stat().st_mode) == 0o600
+        assert not {"answer", "trusted"} & set(json.loads((s.private / "run.json").read_text()))
+    answer = _parts(s, tmp_path, monkeypatch, between=kept)
+    assert answer["verdict"] == "accept", answer["reason"]
+    assert json.loads((s.out / "answer.json").read_text()) == answer
+    assert SV.piece_row("space", s.out.parent)["verdict"] == "accept"
+    assert _names(s.private) == ["answer.json", "case.json", "digests.bin", "opening.json", "run.json"]
+    run = json.loads((s.private / "run.json").read_text())
+    case = json.loads((s.private / "case.json").read_text())
+    assert run["answer"] == json.loads((s.private / "answer.json").read_text()) and len(run["trusted"]) == 1
+    assert run["answer"] == SP.SC.pous_answer(case, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+    doc = json.loads((s.out / "pous.json").read_text())
+    assert doc["case_bytes"] == (s.private / "case.json").stat().st_size == len(canonical_json_bytes(case)) + 1
+    assert doc["key_pinned"] and doc["session_s"] >= 0 and doc["answer_s"] >= 0
+    with pytest.raises(SP.Refusal, match="holds no sessions to answer"):
+        SP.answers(s.serve, 3, s.out, private=s.private, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+
+
+def test_the_pin_is_the_answers_own_never_one_the_sessions_kept(served, tmp_path, monkeypatch):
+    """The trusted key is the one `answers` is given: under another pin than the session's key the kept session is
+    rejected, and the record says no key was trusted."""
+    answer = _parts(served, tmp_path, monkeypatch, trusted_sha512="00" * 64)
+    assert answer["verdict"] == "reject" and answer["reason"]
+    assert not json.loads((served.out / "pous.json").read_text())["key_pinned"]
+    assert json.loads((served.private / "run.json").read_text())["trusted"] == []
+
+
+def test_a_kept_store_that_is_not_the_points_blocks_is_no_answer(served, tmp_path, monkeypatch):
+    """A kept ``C*`` cut short is refused before any case is built, and nothing is answered."""
+    def cut():
+        (served.private / SP.STORE).write_bytes((served.private / SP.STORE).read_bytes()[:-1])
+    with pytest.raises(SP.Refusal, match=f"not C\\*'s 48 blocks of {SMALL.block_bytes}"):
+        _parts(served, tmp_path, monkeypatch, between=cut)
+    assert not (served.out / "answer.json").exists()
+
+
 def test_a_store_missing_blocks_is_rejected_with_its_reason(served, tmp_path, monkeypatch):
     """A prover that no longer holds most of C* answers the challenged blocks it dropped with zeros: the run's check
     refuses the session, and the answer is a reject with its reason, still under a hiding commitment."""
@@ -497,6 +581,41 @@ def test_a_serve_dir_without_serve_json_makes_no_answer(served, tmp_path, capsys
     assert not (served.out / "answer.json").exists() and "no serve.json" in capsys.readouterr().err
 
 
+def test_each_part_alone_makes_no_answer_where_the_piece_makes_none(served, tmp_path, capsys):
+    """``--sessions`` and ``--answers`` (`served_piece.sh` runs one, then the other) exit 2 with nothing written where
+    no answer can be made: a serve dir with no serve.json for the sessions' part, no sessions kept for the answers'.
+    The two are never one call."""
+    argv = [str(served.serve), "3", str(served.out), "--hf-home", str(served.hf), "--private", str(served.private)]
+    assert SP.main([str(tmp_path / "nowhere"), "3", str(served.out), "--hf-home", str(served.hf), "--sessions"]) == 2
+    assert "no serve.json" in capsys.readouterr().err
+    assert SP.main([*argv, "--answers"]) == 2
+    assert "holds no sessions to answer" in capsys.readouterr().err and not served.out.exists()
+    with pytest.raises(SystemExit):
+        SP.main([*argv, "--sessions", "--answers"])
+
+
+def test_an_answer_the_sessions_part_leaves_already_is_never_answered_again(served, tmp_path, monkeypatch):
+    """A challenger whose side doesn't start, after an earlier run of the same window kept its sessions: the sessions'
+    part writes its undecided answer and returns it, what the earlier run kept is gone, and the answers' part has
+    nothing to answer, so the earlier run's sessions are never answered as this one's."""
+    auditor = Auditor(tmp_path)
+    card = {"hf_home": served.hf, "device": "cpu", "node": NODE, "private": served.private, "pins": [served.pins],
+            "protocol": TEST_PROTOCOL}
+    with monkeypatch.context() as m:
+        m.setattr(CS, "salt", auditor.salt)
+        m.setattr(CS, "session", auditor.session)
+        m.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
+        assert SP.sessions(served.serve, 3, tmp_path / "earlier", **card,
+                           party=Side(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610))) is None
+    assert (served.private / SP.HELD).exists() and (served.private / SP.STORE).exists()
+    early = SP.sessions(served.serve, 3, served.out, **card,
+                        party=Side(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)))
+    assert early["verdict"] == "undecided" and json.loads((served.out / "answer.json").read_text()) == early
+    assert not (served.private / SP.HELD).exists() and not (served.private / SP.STORE).exists()
+    with pytest.raises(SP.Refusal, match="holds no sessions to answer"):
+        SP.answers(served.serve, 3, served.out, private=served.private, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+
+
 def _built(package: Path, exe: str) -> Path:
     """The Lean executable ``exe``, built in its ``package`` under the difftest's build lock."""
     if shutil.which("lake") is None:
@@ -565,10 +684,11 @@ def test_a_lean_that_does_not_answer_as_the_python_leaves_the_window_undecided(s
     """A `pous-run-protocol` that fails, answers nothing, or answers the case otherwise than the Python (`period.serve`
     stood in for, so no program starts): no verdict is taken from either. The window is undecided, naming the failure
     or both answers, under the hiding commitment; no case is written for the composite; and the summary names the
-    Python, whose answer this is."""
+    Python, whose answer this is. What the sessions kept stays, and once the Lean answers as the Python, the same
+    sessions are answered with no new one, the Lean's answer the one written."""
     exe = tmp_path / RUN_EXE
     monkeypatch.setattr(period, "serve", lean)
-    answer, _ = _run(served, tmp_path, monkeypatch, case_exe=str(exe))
+    answer, calls = _run(served, tmp_path, monkeypatch, case_exe=str(exe))
     assert answer["verdict"] == "undecided" and answer["reason"].startswith(f"{exe} {reason}")
     assert answer["public"] is None and answer["profile"] is None and len(bytes.fromhex(answer["commitment"])) == 64
     assert SV.check_answer(answer) and SV.piece_row("space", served.out.parent)["verdict"] == "undecided"
@@ -577,6 +697,16 @@ def test_a_lean_that_does_not_answer_as_the_python_leaves_the_window_undecided(s
     assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()} and doc["lean_s"] >= 0
     run = json.loads((served.private / "run.json").read_text())
     assert run["answer"]["verdict"] == "undecided" and run["answer"]["reason"] == answer["reason"]
+
+    assert (served.private / SP.STORE).exists() and (served.private / SP.HELD).exists()
+    monkeypatch.setattr(period, "serve", lambda exe, cases, *args: [
+        SP.SC.pous_answer(c, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL) for c in cases])
+    again = SP.answers(served.serve, 3, served.out, trusted_sha512=hashlib.sha512(bytes.fromhex(run["public_key"])).hexdigest(),
+                       private=served.private, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, case_exe=str(exe))
+    assert again["verdict"] == "accept" and len(calls) == 1
+    assert SV.piece_row("space", served.out.parent)["verdict"] == "accept" and (served.private / "case.json").exists()
+    assert json.loads((served.out / "pous.json").read_text())["decided_by"]["program"] == RUN_EXE
+    assert not (served.private / SP.STORE).exists() and not (served.private / SP.HELD).exists()
 
 
 @pytest.fixture
@@ -666,6 +796,10 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert row["verdict"] == "accept" and row["protocol"] == p2_case.PROTOCOL
     assert BR._quantity("bandwidth", row)[0] == {"symbol": "Q_cert", "value": bw["public"]["q_bytes"], "unit": "bytes"}
     assert bw["profile"]["gamma_terms"] and json.loads((s.out / "pous.json").read_text())["bandwidth"]["verdict"] == "accept"
+    assert not any((d / f).exists() for d, f in ((private, SP.HB.HELD), (s.private, SP.STORE), (s.private, SP.HELD)))
+    assert _stamps(s.out) == [
+        "the weights loaded", "setup done", "PoUS's session done", "PoUB's session start", "PoUB's session done",
+        "PoUB's answer done", "PoUS's answer by the Python done", "PoUS's case written"]
 
     text = "".join(p.read_text() for d in (public, s.out) for p in sorted(d.iterdir()))
     digests = (s.private / "digests.bin").read_bytes()
@@ -717,10 +851,19 @@ def test_with_its_lean_the_bandwidth_answer_is_the_leans_and_the_summary_names_i
     """With ``--bw-case-exe``, `remote-audit-p2-protocol` answers the case of the session over the held store, and its
     answer is the one written, privately and under the hiding commitment publicly, whatever the session's own party
     said of it: the summary names the program and this host under ``decided_by``, with the Lean's seconds, where a run
-    without it names the Python. PoUS's answer is its own."""
+    without it names the Python. PoUS's answer is its own. Run in the piece's two parts: both sessions leave only what
+    they kept, the P2 case not yet answered among it and nothing public but the timeline; the answers are then made
+    with neither the store nor a party."""
     s = registered
-    answer, _ = _run(s, tmp_path, monkeypatch, **_bandwidth(tmp_path, bw_case_exe=str(case_exe)))
+    private = s.serve / "private" / "bandwidth"
+
+    def kept():
+        assert {SP.HB.SESSION, SP.HB.HELD} <= set(_names(private)) and p2_case.CASE not in _names(private)
+        assert stat.S_IMODE((private / SP.HB.HELD).stat().st_mode) == 0o600
+        assert _names(s.out) == ["stamps.txt"] and not (s.out.parent / "bandwidth").exists()
+    answer = _parts(s, tmp_path, monkeypatch, between=kept, **_bandwidth(tmp_path, bw_case_exe=str(case_exe)))
     assert answer["verdict"] == "accept", answer["reason"]
+    assert not (private / SP.HB.HELD).exists()
     private, bw, doc = _bandwidth_files(s)
     case = json.loads((private / p2_case.CASE).read_text())
     lean, = p2_case.serve(case_exe, [case])
@@ -749,6 +892,8 @@ def test_a_bandwidth_lean_that_does_not_answer_leaves_the_bandwidth_undecided(re
     assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()} and "lean_s" not in doc
     assert SV.piece_row("bandwidth", registered.out.parent)["verdict"] == "undecided"
     assert json.loads((registered.out / "pous.json").read_text())["bandwidth"]["verdict"] == "undecided"
+    # the case its Lean has not answered stays, with what PoUS's answer needs, for another --answers
+    assert (private / SP.HB.HELD).exists() and (registered.private / SP.STORE).exists()
 
 
 @pytest.mark.slow

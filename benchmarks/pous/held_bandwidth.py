@@ -1,7 +1,8 @@
 """PoUB-P2's session over the ``C*`` the PoUS piece holds (`served_piece.py`): the remote bandwidth audit's prover
 (`p2_party.prove`) over PoUS's store as the vLLM adapter encoded it on the card, run by the same process after PoUS's
 session and before the store is released, so both audits are of one store that one process holds, and no second store
-is encoded.
+is encoded. The session needs the card (`held`); its answer needs none, and is made once the card is released
+(`decide`).
 
 **The registration** is the auditor's, never the prover's: the bandwidth party (the auditor gate's ``bw_party
 --pous-session SID``) builds it from the memory challenger's own record of PoUS session SID on its host
@@ -15,7 +16,8 @@ pass's signs (`p2_v1.bandwidth.Sketch`), y on the device (`receipts_of`), a few 
 the receipt tree (`ReceiptTree`). An opening is the unit's four rows from the device with their PoUS vk paths, from the
 tree over the challenger's table (`row_leaf` of each row digest), whose root must be setup's.
 
-**The outputs** (`session`): the session's core case and its answer (`p2_case.write`, the Lean's with
+**The outputs**: `held` leaves the session's record and its case, not yet answered (`HELD`), in the private directory;
+`decide` answers that case. The session's core case and its answer (`p2_case.write`, the Lean's with
 ``remote-audit-p2-protocol``) and everything that names the store (the registration, the verifier's logs, the session's
 record, the hiding commitment's opening) go to the private directory; the public answer is the case's answer in the core
 form under a hiding commitment to the case's digest (one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512`` tree,
@@ -59,6 +61,8 @@ WINDOW_S, DEADLINE_S = p2_party.SESSION["window_ns"] / 1e9, p2_party.SESSION["de
 #: an H200's specified HBM read rate, bytes a second: what γ is against
 R_BYTES_PER_S = 4_800_000_000_000
 BINDING_TAG = b"verity/remote-bandwidth/served-window/v1"
+#: the session's record, and its case until `decide` answers it, in the private directory
+SESSION, HELD = "session.json", "held-case.json"
 SCOPE = ("beside the served window: the session ran on the card after window {k} was served and PoUS's session bound the "
          "store, over that store as the PoUS piece encoded and held it, and was not interleaved with the engine's reads "
          "(serving is not hooked), so it certifies the session's own reads of the store, not the window's")
@@ -222,25 +226,17 @@ def public_answer(judged: Mapping[str, Any], bind: bytes, scope: str, r_bytes_pe
     return out | {"public": public, "profile": profile}
 
 
-def session(store: Any, *, node: str, party: str, party_host: str, sid: bytes, request_: Mapping[str, Any],
-            private: Path, public: Path, bind: bytes, window: int, pous_case: Mapping[str, Any] | None = None,
-            case_exe: str | None = None, r_bytes_per_s: int | None = R_BYTES_PER_S) -> dict[str, Any]:
+def held(store: Any, *, node: str, party: str, party_host: str, sid: bytes, request_: Mapping[str, Any],
+         private: Path) -> None:
     """One PoUB-P2 session over the held `store` with the bandwidth party `party` (a shell command, to which
-    ``--pous-session`` and PoUS's session id `sid` are added; its port reached at `party_host`), under `request_`: the
-    case and everything naming the store to `private` (0700, files 0600), the public answer and a summary to `public`
-    (``answer.json``, ``bandwidth.json``); the public answer, also returned. With `pous_case` (PoUS's run case), a case
-    whose store isn't PoUS's (`p2_case.same_store`) is refused. With `case_exe` (``remote-audit-p2-protocol``) the Lean
-    answers the case and its answer is the one written, in ``lean_s`` seconds; a Lean that doesn't answer leaves the
-    session undecided and no case written. The summary names the program whose verdict the answer is and the host it
-    ran on (``decided_by``, `period.decided_by`): the Lean where it answered the case, else this Python."""
+    ``--pous-session`` and PoUS's session id `sid` are added; its port reached at `party_host`), under `request_`:
+    the session's record (`SESSION`: the party's answer and its own record of it, the registration, each pass and
+    opening, the seconds) and, where the session made one, its case not yet answered (`HELD`), with the logs, to
+    `private` (0700, files 0600), for `decide`. This is the part that reads the store."""
     private.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(private, 0o700)
-    public.mkdir(parents=True, exist_ok=True)
-    scope = SCOPE.format(k=window)
+    (private / HELD).unlink(missing_ok=True)   # an earlier session's case is never this one's
     command = f"{party} --pous-session {sid.hex()}"
-    summary: dict[str, Any] = {"window": window, "request": dict(request_), "party_host": party_host,
-                               "pous_session": "the PoUS session the PoUS piece ran (its id private)",
-                               "private": str(private), "decided_by": period.decided_by(None)}
     with open(private / "prover.log", "a") as log_f:
 
         def log(m: str) -> None:
@@ -258,15 +254,39 @@ def session(store: Any, *, node: str, party: str, party_host: str, sid: bytes, r
             log(json.dumps({"prover_error": f"{type(e).__name__}: {e}"}))
             answer, setup_s = {"verdict": "prover-error", "reason": f"{type(e).__name__}: {e}"[:1000]}, None
         wall = time.perf_counter() - t0
-    kept = prover.kept if prover is not None else None
-    _write(private / "session.json", {
+    if prover is not None and prover.kept is not None:
+        fd = os.open(private / HELD, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(canonical_json_bytes(dict(prover.kept)) + b"\n")
+    _write(private / SESSION, {
         "answer": answer, "verifier_record": record, "verifier_rc": rc, "request": dict(request_),
         "registration": None if prover is None else p2_party.registration_json(prover.registration, prover.plan),
         "steps": None if prover is None else prover.steps, "opened": None if prover is None else prover.opened,
-        "pous_session": sid.hex(), "party": command, "party_host": party_host}, 0o600)
-    summary |= {"setup_s": None if setup_s is None else round(setup_s, 3), "session_wall_s": round(wall, 3),
-                "verifier_rc": rc, "passes": len(prover.steps) if prover else 0,
-                "pass_s": [s["pass_s"] for s in prover.steps] if prover else []}
+        "pous_session": sid.hex(), "party": command, "party_host": party_host,
+        "setup_s": None if setup_s is None else round(setup_s, 3), "session_wall_s": round(wall, 3)}, 0o600)
+
+
+def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: Mapping[str, Any] | None = None,
+           case_exe: str | None = None, r_bytes_per_s: int | None = R_BYTES_PER_S) -> dict[str, Any]:
+    """The answer to the session `held` left in `private`, with no store and no card: the case and its answer to
+    `private` (`p2_case.write`), the public answer and a summary to `public` (``answer.json``, ``bandwidth.json``); the
+    public answer, also returned. With `pous_case` (PoUS's run case), a case whose store isn't PoUS's
+    (`p2_case.same_store`) is refused. With `case_exe` (``remote-audit-p2-protocol``) the Lean answers the case and
+    its answer is the one written, in ``lean_s`` seconds; a Lean that doesn't answer leaves the session undecided and no
+    case written. The summary names the program whose verdict the answer is and the host it ran on (``decided_by``,
+    `period.decided_by`): the Lean where it answered the case, else this Python. `HELD` stays, so the same session can
+    be answered again; the caller removes it once it needs no other answer."""
+    public.mkdir(parents=True, exist_ok=True)
+    scope = SCOPE.format(k=window)
+    doc = json.loads((private / SESSION).read_text())
+    answer, record, steps = doc["answer"], doc["verifier_record"], doc["steps"] or []
+    kept = json.loads((private / HELD).read_text()) if (private / HELD).is_file() else None
+    summary: dict[str, Any] = {"window": window, "request": doc["request"], "party_host": doc["party_host"],
+                               "pous_session": "the PoUS session the PoUS piece ran (its id private)",
+                               "private": str(private), "decided_by": period.decided_by(None),
+                               "setup_s": doc["setup_s"], "session_wall_s": doc["session_wall_s"],
+                               "verifier_rc": doc["verifier_rc"], "passes": len(steps),
+                               "pass_s": [s["pass_s"] for s in steps]}
     if record is not None and record != answer:
         out = _no("reject", f"the verifier's own record of its answer ({record.get('verdict')}) is not the session's "
                             f"({answer.get('verdict')}); {scope}")
@@ -309,4 +329,5 @@ def line(answer: Mapping[str, Any]) -> str:
     return f"BANDWIDTH: {answer['verdict']}: {answer['reason']}"
 
 
-__all__ = ["Held", "SCOPE", "binding", "line", "missing", "public_answer", "request", "session"]
+__all__ = ["HELD", "Held", "SCOPE", "SESSION", "binding", "decide", "held", "line", "missing", "public_answer",
+           "request"]
