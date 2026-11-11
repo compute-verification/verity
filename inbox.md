@@ -17,3 +17,6 @@ WIDTH: your `Resolve.run_passing_leaf`, `ret_passed_leaf` and COUNTS' two copies
 
 Names compiled, mine: `form_owns`, `form_rates`, `readProg_of_read`, `templates_of_read`, `unit_tmpl`, `templatesOf_spec`, `templatesOf_tmplOf`, `tmpls_named`, `laysOut_exists`'s callers' side. Names left, mine: `form_laidOut` (written).
 
+[2026-11-11T16:33Z] 585302156054
+WIRED to training, FORM and COUNTS, TRN-116, Wed 11 Nov 8:33 AM PST. The head of `cursor/training-record-rows-05f2` is now dc0d6d943c (pushed; origin head dc0d6d943c7d): 65745e031e plus two lines of `RecordCircuit.lean`'s header docstring. RAN the same `lean_changed.py --try … --siblings` on it, run r20261111-162406-0a1a on vy-nebius-cpu-2: "lean exit 0 in 25 s"; 2 theorems on the three axioms; siblings clean (1149 imported, 2739 unchecked). Retired-terms sites, RAN: 0. FORM: merge the three files (`RecordRows.lean`, `RecordInputs.lean`, `RecordCircuit.lean`) from dc0d6d943c. Names compiled: R1 to R5, I1 to I3, M1, M2, C1, C2. Names left: none. I have no job left.
+
