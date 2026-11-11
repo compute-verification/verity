@@ -700,6 +700,18 @@ def test_a_records_run_that_ended_in_infra_twice_refuses_and_rings_infra():
                     Drop("c1", refused, Outcome((1, 2), heads(1, 2), FAIL, (1,), MAIN)), Build((2,), MAIN, 2)]
 
 
+def test_a_refusal_ejects_no_member_its_owner_moved_on_from_and_suspects_it_whatever_its_change():
+    """A member whose owner withdrew its mark or pushed a new head stays in its candidate in flight: the refusal suspects it,
+    as its change as built may be the Lean one, and ejects only the Lean members still marked at the heads they were built
+    at.  With the only Lean member withdrawn, nobody is ejected."""
+    r = RecordsRun(FAIL, "it failed: r1 failed rc=1")
+    why = "its records run refused its records: it failed: r1 failed rc=1"
+    assert decide(snap(waiting("c1", MAIN, 1, 2, records=r), ready=[pr(2)], records=True)) == [
+        Drop("c1", why, Outcome((1, 2), heads(1, 2), FAIL, (1,), MAIN)), Build((2,), MAIN, 2)]
+    assert decide(snap(waiting("c1", MAIN, 1, 2, 3, records=r), ready=[pr(1, "h1b"), pr(2), lean(3)], records=True)) == [
+        Eject(3, "h3", why), Drop("c1", why, Outcome((1, 2, 3), heads(1, 2, 3), FAIL, (1, 3), MAIN)), Build((1, 2), MAIN, 2)]
+
+
 def test_a_refused_candidate_above_another_is_dropped_alone_and_the_next_batch_goes_on_the_one_below():
     r = RecordsRun(FAIL, "it failed: r2 failed rc=1")
     s = snap(cand("c1", MAIN, 1), waiting("c2", "c1", 2, 3, records=r), ready=[pr(1), lean(2), pr(3)], depth=3, records=True)

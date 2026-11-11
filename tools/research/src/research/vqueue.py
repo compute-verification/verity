@@ -556,7 +556,8 @@ def _first(s: Snapshot, c: Candidate, ready: dict[int, Ready]) -> tuple[list[Act
     infra is rung while its passed run's records can't be read; once it passed, its check starts (`Commit`), and a records
     commit still held `pending_s` after it was first drops it, its members built again.  A run that failed or ended in infra
     twice refuses its records: infra is rung of infra, its Lean members are ejected, and it is dropped, an outcome suspecting
-    them."""
+    them.  A member no longer marked at the head it was built at (its owner withdrew the mark, pushed or closed it) is
+    suspected whatever its change, and, as `_failed` reads one, isn't ejected."""
     r = c.records
     if r is None or (r.state == INFRA and r.starts < 2):
         return [Regenerate(c.sha)], None
@@ -568,12 +569,14 @@ def _first(s: Snapshot, c: Candidate, ready: dict[int, Ready]) -> tuple[list[Act
     if r.state == PASS:
         return [Commit(c.sha)], None
     said = f"refused its records: {r.why}" if r.state == FAIL else f"ended in infra twice: {r.why}"
-    lean = tuple(m for m in c.members if m in ready and ready[m].lean) or c.members
     heads = dict(zip(c.members, c.heads))
+    marked = {m for m in c.members if m in ready and ready[m].head == heads[m]}
+    lean = tuple(m for m in c.members if m not in marked or ready[m].lean) or c.members
+    out = tuple(n for n in lean if n in marked)
     acts: list[Action] = [Ring(c.sha, f"{c.sha[:12]}'s records run {said}")] if r.state == INFRA else []
-    acts += [Eject(n, heads[n], f"its records run {said}") for n in lean]
+    acts += [Eject(n, heads[n], f"its records run {said}") for n in out]
     acts.append(Drop(c.sha, f"its records run {said}", Outcome(c.members, c.heads, FAIL, lean, c.base)))
-    return acts, set(lean)
+    return acts, set(out)
 
 
 def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], acts: list[Action], tree: bool = True,

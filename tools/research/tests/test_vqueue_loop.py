@@ -3187,27 +3187,33 @@ def test_a_records_commit_pushed_with_no_line_in_the_log_is_adopted_and_a_restar
 
 
 def test_a_dropped_candidate_s_records_run_is_cancelled_while_it_runs_and_one_that_ended_is_left(env):
+    by: dict[tuple[int, str], str] = {}
+    env.labels.marked_by = lambda n, h: by.get((n, h), f"lane-{n}")
     loop, records, sha, one, _ = _records_loop(env)
-    env.o.gh.ready.discard((1, one))                                 # its ready mark withdrawn: dropped
+    env.o.gh.ready.discard((1, one))
+    by[(1, one)] = "ci"                                              # its ready mark withdrawn by another: dropped
     (drop,) = loop.tick()
     assert (drop["action"], drop["sha"], drop["records_cancelled"]) == ("drop", sha, ["regen-1"])
-    assert env.cancelled == [(["regen-1"], f"vqueue: candidate {sha[:12]} was dropped: #1 isn't taken now: its ready mark was withdrawn by lane-1")]
+    assert env.cancelled == [(["regen-1"], f"vqueue: candidate {sha[:12]} was dropped: #1 isn't taken now: its ready mark was withdrawn by ci")]
     assert loop.tick() == [] and len(env.cancelled) == 1
     two = env.put(2, {"pkg/B.lean": "theorem b : True := trivial\n", "pkg/lean-audit.json": '{"records": 3}\n'})
     built, started = loop.tick()
     assert (built["members"], started["record"]["ids"]) == ([2], ["regen-2"])
     records.verdicts["regen-2"] = RecordsRun(FAIL, "it failed: regen-2 failed rc=1")
-    env.o.gh.ready.discard((2, two))
+    env.o.gh.ready.discard((2, two))                                 # by its owner: it stays in flight
     judged, drop = loop.tick()
     assert (judged["why"], drop["action"], len(env.cancelled)) == ("judged fail", "drop", 1) and "records_cancelled" not in drop
-    assert env.withdrawn == []                                       # dropped for its mark, before its refusal could eject
+    assert env.withdrawn == []                                       # its refusal ejects no member its owner withdrew
 
 
 def test_a_records_run_still_launching_when_its_candidate_is_dropped_is_cancelled_once_it_printed_its_run_ids(env):
     records = Records(env.tmp / "clone")
     records.launching = True
+    by: dict[tuple[int, str], str] = {}
+    env.labels.marked_by = lambda n, h: by.get((n, h), f"lane-{n}")
     loop, _, sha, one, (_, started) = _records_loop(env, records)
-    env.o.gh.ready.discard((1, one))                                 # its ready mark withdrawn: dropped
+    env.o.gh.ready.discard((1, one))
+    by[(1, one)] = "ci"                                              # its ready mark withdrawn by another: dropped
     (drop,) = loop.tick()
     assert (drop["action"], drop["records_launching"], env.cancelled) == ("drop", started["record"], [])
     assert "records_cancelled" not in drop and loop.tick() == []     # still launching
@@ -3215,7 +3221,7 @@ def test_a_records_run_still_launching_when_its_candidate_is_dropped_is_cancelle
     (settled,) = loop.tick()
     assert (settled["action"], settled["sha"], settled["dropped"], settled["records_cancelled"]) == (
         "regenerate", sha, True, ["regen-9"])
-    assert env.cancelled == [(["regen-9"], f"vqueue: candidate {sha[:12]} was dropped: #1 isn't taken now: its ready mark was withdrawn by lane-1")]
+    assert env.cancelled == [(["regen-9"], f"vqueue: candidate {sha[:12]} was dropped: #1 isn't taken now: its ready mark was withdrawn by ci")]
     assert loop.tick() == [] and len(records.started) == 1
 
 
