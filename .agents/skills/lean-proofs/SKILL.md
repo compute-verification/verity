@@ -5,7 +5,7 @@ description: >
   scratch probes with #print axioms, exact?, trace_state; a slow proof), records, the fast path and check.py,
   stating a guarantee (counted extractors, what proved means), assumptions as named Props, listing, freezing and
   moving guarantees in lean-audit.json, a property's shape, upstream.py watches, parallel Lean lanes, and the standing
-  Lean rulings. Use when adding or changing Lean proofs, definitions or packages (verity/core/service/flock, Security
+  Lean rulings. Use when adding or changing Lean proofs, definitions or packages (verity/protocols/flock/verifier, Security
   and its Proofs and Properties, a protocol's lean/), when a Lean build or proof is slow or runs out of memory, editing
   a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
@@ -91,7 +91,7 @@ the lock's sections, each naming the docstring with the detail. This is the work
   code, which the spec can't import), or in a module under it when the public export copies its area (`Assumptions/Flock.lean`, since the root module
   reads Nci); an area's other premises live in its `Definitions/<Area>/Assumptions` (Flock's in
   `Proofs/Flock/Soundness/Assumptions` for now), each owner in the lock. Its docstring opens with its claim id
-  (`verity.core.claims`) and gives its rationale; a ledger points to it.
+  (`verity.claims`) and gives its rationale; a ledger points to it.
 - **List what you cite**: a guarantee a ledger, table or PR cites as proved is in `guarantees`, its record committed with
   the proof.
 - **Watch upstream for what you assume**: a named assumption or hand proof a pinned dependency could prove gets an
