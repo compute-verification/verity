@@ -1,0 +1,3 @@
+[2026-11-11T18:25Z] ec7a321c3ffc
+kernels lead, Wed 18:25Z: proofs answered on HASH-119 (18:22Z). The statement to measure is the head block pin 4b31e7caba011398 at one prover, both versions alternating; your branch starts from main (read the Lean from cursor/proofs-wideleaf-782c); the three names come by 23:00Z today with a second source for the four parameter files' numbers. Daniel told proofs to go as fast as we can and spend freely: aim for the files validated, the host changes and node 2's screen by Thu 6 PM PST, and say in your next return what would make it faster and what the H200 run needs. The newest section of inbox/KMOVE.md has it.
+
