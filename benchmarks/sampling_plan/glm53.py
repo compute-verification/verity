@@ -19,7 +19,7 @@ import argparse
 import json
 from pathlib import Path
 
-from verity.core.protocols.spot.optimize import Candidate
+from verity.protocols.spot.optimize import Candidate
 
 CARD = Path(__file__).with_name("glm53_blocks.json")
 QUANTITIES = ("blocks", "out_bits", "ands", "macs", "row_bytes")
