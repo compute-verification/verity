@@ -4,7 +4,7 @@ lease). The registration of each row count is drawn here, as `audit.register` dr
 
 For each of --rows, in the order given, on the same store (`device.GpuBackend`; its bytes are encoded once, at the
 first), and at a row count for each of its receipt CTA counts in turn (--ctas-at; `--sketch-ctas` alone unless given),
-the gates once and the rest at each count:
+the gates once, at its first count, and the rest at each:
 
     gates      the device's gates at that registration (`GpuBackend.gate`), over a gate store on the same GPUs: its
                payload root, encode and decode, a pass's receipts and root against the reference's
@@ -100,6 +100,7 @@ def main() -> int:
             row = {"rows": rows, "sketch_ctas": ctas}
             out["rows"].append(row)
             try:
+                backend.set_sketch_ctas(ctas)
                 if i == 0 and k == 0:
                     row["encode"] = backend.encode(reg)
                 elif i == 0:
@@ -107,7 +108,6 @@ def main() -> int:
                     backend.gates = backend.gate(reg)
                     if not backend.gates["ok"]:
                         raise RuntimeError(f"a gate failed, nothing is timed: {backend.gates}")
-                backend.set_sketch_ctas(ctas)
                 row["openings"] = openings(backend, rows, a.openings, rng)
                 if not row["openings"]["ok"]:
                     raise RuntimeError(f"the store's openings are not the reference's: {row['openings']}")

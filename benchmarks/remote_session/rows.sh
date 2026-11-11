@@ -137,7 +137,7 @@ leased() {  # step $1 under one lease of CARDS: the rest is its command, its out
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-memory-accounting-rows64} bash "$LEASE" "$N" --on "$CARDS" --max-min "$LEASE_MIN" \
     --mem-gb "$LEASE_MEM_GB" -- "$@" > "$O/$name.log" 2>&1
   rc=$?
-  tail -n 12 "$O/$name.log"
+  tail -n 40 "$O/$name.log"
   say "$name: exit $rc$([ $rc = 75 ] && echo ": the lease on cards $CARDS was not free, so nothing started")"
   return $rc
 }
