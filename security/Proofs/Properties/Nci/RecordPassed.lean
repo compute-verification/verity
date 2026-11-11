@@ -1,0 +1,150 @@
+module
+
+public import NciCheck.Record
+
+/-!
+# What each Definition passes on, as the record check computes it
+
+`Record.passedOn` reads, per Definition of the Program, the parameters a leaf of its return may be, callees first.
+This module states it one Definition at a time: a Definition's entry is `defOn` of the entries before it
+(`passedOn_at`), a node's reach is `nodeOn` of the reaches before it (`reachOf_at`), and a reference of a part is
+among what the part hands on (`partOn_get`). Both are folds that push one entry a step (`foldl_push`), so an entry,
+once pushed, is the fold's.
+-/
+
+@[expose] public section
+
+namespace NciCheck.Record.SecurityProofs
+
+open Flock.Program
+
+/-- A fold that pushes one entry a step: it adds an entry an element, keeps the entries it started from, and its
+entry for element `i` is the step's on the fold of the elements before it. -/
+theorem foldl_push {α β : Type} (f : Array β → α → β) : ∀ (l : List α) (init : Array β),
+    (l.foldl (fun acc a => acc.push (f acc a)) init).size = init.size + l.length ∧
+      (∀ i, i < init.size → (l.foldl (fun acc a => acc.push (f acc a)) init)[i]? = init[i]?) ∧
+      ∀ i (h : i < l.length), (l.foldl (fun acc a => acc.push (f acc a)) init)[init.size + i]? =
+        some (f ((l.take i).foldl (fun acc a => acc.push (f acc a)) init) l[i])
+  | [], init => ⟨rfl, fun _ _ => rfl, fun _ h => by cases h⟩
+  | a :: l, init => by
+    obtain ⟨h1, h2, h3⟩ := foldl_push f l (init.push (f init a))
+    rw [Array.size_push] at h1 h2 h3
+    refine ⟨by rw [List.foldl_cons, h1, List.length_cons]; omega, fun i hi => ?_, fun i hi => ?_⟩
+    · rw [List.foldl_cons, h2 i (by omega), Array.getElem?_push_lt hi, Array.getElem?_eq_getElem hi]
+    · rw [List.foldl_cons]
+      cases i with
+      | zero =>
+        rw [Nat.add_zero, h2 _ (by omega), Array.getElem?_push_size]
+        rfl
+      | succ j =>
+        have := h3 j (by simpa using hi)
+        rw [show init.size + (j + 1) = init.size + 1 + j by omega, this]
+        rfl
+
+/-- What the fold has at an entry it has pushed is what the fold of the elements before a later one has there. -/
+theorem foldl_push_prefix {α β : Type} (f : Array β → α → β) (l : List α) (k i : Nat) (hi : i < k)
+    (hk : k ≤ l.length) :
+    ((l.take k).foldl (fun acc a => acc.push (f acc a)) #[])[i]? =
+      (l.foldl (fun acc a => acc.push (f acc a)) #[])[i]? := by
+  have hsz := (foldl_push f (l.take k) #[]).1
+  have := (foldl_push f (l.drop k) ((l.take k).foldl (fun acc a => acc.push (f acc a)) #[])).2.1 i
+    (by rw [hsz, List.length_take]; simp; omega)
+  rw [← List.foldl_append, List.take_append_drop] at this
+  exact this.symm
+
+/-- The parameters a part's references may be leaves of: its parameter, or what the node it refers to reaches. -/
+def partOn (every : List Nat) (reach : Array (List Nat)) : Part → List Nat
+  | .affine p i _ count | .strided p i _ _ _ _ count =>
+    if count == 0 then [] else if p then [i] else reach[i]?.getD every
+  | .explicit items => items.toList.flatMap fun r => if r.p then [r.i] else reach[r.i]?.getD every
+
+/-- The parameters a sequence's references may be leaves of. -/
+def seqOn (every : List Nat) (reach : Array (List Nat)) (s : Seq) : List Nat :=
+  s.parts.toList.flatMap (partOn every reach)
+
+/-- The parameters a node's output leaves may be: of each argument its callee passes on (`acc`), the parameters
+that argument's references may be. -/
+def nodeOn (acc : Array (List Nat)) (every : List Nat) (reach : Array (List Nat)) (n : Node) : List Nat :=
+  ((acc[n.fn]?.getD (List.range n.args.size)).flatMap fun i =>
+    (n.args[i]?.map fun a => seqOn every reach a.seq).getD []).eraseDups
+
+/-- Each node's reach, in the body's order. -/
+def reachOf (acc : Array (List Nat)) (d : Defn) : Array (List Nat) :=
+  d.body.nodes.foldl (init := #[]) fun reach n => reach.push (nodeOn acc (List.range d.params.size) reach n)
+
+/-- The parameters a Definition passes on: none for a primitive, else those its return's references may be. -/
+def defOn (acc : Array (List Nat)) (d : Defn) : List Nat :=
+  if d.prim then [] else (seqOn (List.range d.params.size) (reachOf acc d) d.body.ret).eraseDups
+
+/-- **`passedOn` is the fold of `defOn`** over the Program's Definitions. -/
+theorem passedOn_eq (P : Prog) : passedOn P = P.defs.foldl (fun acc d => acc.push (defOn acc d)) #[] := by
+  unfold passedOn
+  congr 1
+  funext acc d
+  unfold defOn
+  split <;> rfl
+
+/-- **A Definition's entry**: `passedOn` has an entry a Definition, and Definition `d`'s is `defOn` of an array that
+has `passedOn`'s entries of the Definitions before `d`. -/
+theorem passedOn_at (P : Prog) :
+    (passedOn P).size = P.defs.size ∧ ∀ d (h : d < P.defs.size), ∃ acc : Array (List Nat),
+      (∀ c, c < d → acc[c]? = (passedOn P)[c]?) ∧ (passedOn P)[d]? = some (defOn acc P.defs[d]) := by
+  rw [passedOn_eq, ← Array.foldl_toList]
+  obtain ⟨h1, -, h3⟩ := foldl_push defOn P.defs.toList #[]
+  refine ⟨by simpa using h1, fun d h =>
+    ⟨(P.defs.toList.take d).foldl (fun acc a => acc.push (defOn acc a)) #[], fun c hc => ?_, ?_⟩⟩
+  · exact foldl_push_prefix defOn P.defs.toList d c hc (by simpa using Nat.le_of_lt h)
+  · have := h3 d (by simpa using h)
+    simpa using this
+
+/-- **A node's reach**: `reachOf` has an entry a node, and node `k`'s is `nodeOn` of an array that has `reachOf`'s
+entries of the nodes before `k`. -/
+theorem reachOf_at (acc : Array (List Nat)) (d : Defn) :
+    (reachOf acc d).size = d.body.nodes.size ∧ ∀ k (h : k < d.body.nodes.size), ∃ reach : Array (List Nat),
+      (∀ i, i < k → reach[i]? = (reachOf acc d)[i]?) ∧
+      (reachOf acc d)[k]? = some (nodeOn acc (List.range d.params.size) reach d.body.nodes[k]) := by
+  unfold reachOf
+  rw [← Array.foldl_toList]
+  obtain ⟨h1, -, h3⟩ := foldl_push (nodeOn acc (List.range d.params.size)) d.body.nodes.toList #[]
+  refine ⟨by simpa using h1, fun k h =>
+    ⟨(d.body.nodes.toList.take k).foldl
+      (fun reach n => reach.push (nodeOn acc (List.range d.params.size) reach n)) #[], fun i hi => ?_, ?_⟩⟩
+  · exact foldl_push_prefix _ d.body.nodes.toList k i hi (by simpa using Nat.le_of_lt h)
+  · have := h3 k (by simpa using h)
+    simpa using this
+
+/-- **A reference of a part is among what the part hands on**: its parameter where it refers to one, else every
+parameter the node it refers to reaches. -/
+theorem partOn_get (every : List Nat) (reach : Array (List Nat)) (q : Part) (t : Nat) (ht : t < q.count) :
+    ((q.get t).p = true → (q.get t).i ∈ partOn every reach q) ∧
+      ((q.get t).p = false → ∀ j ∈ reach[(q.get t).i]?.getD every, j ∈ partOn every reach q) := by
+  cases q with
+  | affine p i b c =>
+    have hc : (c == 0) = false := by simp [Part.count] at ht; simp; omega
+    refine ⟨fun hp => ?_, fun hp j hj => ?_⟩
+    · have hp' : p = true := hp
+      simp [partOn, hc, hp']
+      rfl
+    · have hp' : p = false := hp
+      simp only [partOn, hc, hp']
+      exact hj
+  | strided p i b inner os is c =>
+    have hc : (c == 0) = false := by simp [Part.count] at ht; simp; omega
+    refine ⟨fun hp => ?_, fun hp j hj => ?_⟩
+    · have hp' : p = true := hp
+      simp [partOn, hc, hp']
+      rfl
+    · have hp' : p = false := hp
+      simp only [partOn, hc, hp']
+      exact hj
+  | explicit it =>
+    have ht' : t < it.size := ht
+    have hg : (Part.explicit it).get t = it[t] := by
+      show it[t]! = it[t]
+      exact getElem!_pos it t ht'
+    rw [hg]
+    refine ⟨fun hp => ?_, fun hp j hj => ?_⟩
+    · exact List.mem_flatMap.2 ⟨it[t], by simp, by simp [hp]⟩
+    · exact List.mem_flatMap.2 ⟨it[t], by simp, by simpa [hp] using hj⟩
+
+end NciCheck.Record.SecurityProofs
