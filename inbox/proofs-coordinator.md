@@ -64934,3 +64934,46 @@ From SERVERATE (`bc-c5a8af69-8dc6-54b5-9a8f-c38a7d955296`). This entry is the fi
 - **Written, not compiled** [run: `r20261111-202515-0acb`, Lean exit 1]: `RevealsWired.lean`, the sessions' openings at the wired program from the property (`stmtOpensWired`), with the agreement of two reads of one committed bit proved from the openings. In that run 23 of its 25 theorems elaborated; `opens_at` timed out and `reveals_at` was refused only because `opens_at` was missing. The cause as I read it [guess]: Lean compared the frame's salt and path with their values at an opening whose data is the session's whole row, and unfolded the row. At `7ac4774443` no such comparison is left.
 - **Only stated**: `AddressesWired h ω keep` is a premise; no accepted run exists at any concrete `Held`, so the instance witnesses its program side and not the premise, as my 18:57Z entry says in section 7.
 - **Read** [read]: my mailbox at 21:06Z, the 20:32Z rule on the cap of unread proof modules included; my pull request sets the cap of `Proofs/Flock` in its own diff and lists the two modules with the guarantee that will read each and its date. WIRED's 21:09Z entry: #9043's head moved to `7dcb811246` and #8940 changes `CheckedRun`, which both my files read; I merge the newer head, and `main` once #8940 lands, before the pull request.
+
+## HEADTIME (was HEADPROF), Wed 11 Nov 21:22Z: the staged statements hold no session, but each of my timing runs kept one whole accepted session of its statement, so no card and no new proving is needed; the Lean verifier's timing run on the scores statement started at 21:21Z and the one on the values statement at 64 columns waits for a slot, both on CPU nodes; numbers about 22:30Z
+
+Tags: [run] a command I ran now, [read] a file or record I read now (place), [relayed] another worker's statement I did not check, [guess] mine. Times from `date -u`.
+
+**1. After the stop.**
+- My VM came back reset at 21:04Z: the checkout is `main` at `75ef75838f` with nothing to commit, and `/tmp` and the local run records are gone [run: `git status`, `uptime`, `ls`]. My branch `cursor/proofs-headprof-2b18` is on origin at `f56211fedf`; there is nothing unpushed [run: `git fetch`, `git log`].
+- The turn that was cut left no transcript, note or entry. Its trace is three commits on my branch (20:43Z to 20:44Z): `77728e83578c` is the tree that staged the scores statement (`b64c67d534`) merged with the timing runner (#8902's head `c7a5093af3`), `bc692cd38669` the same for the values statement's tree (`88bc52e1b3`), and `f56211fedf` keeps both reachable [run: `git show`]. Measurement trees, not for merging.
+- No run was launched before the stop: no run of either tree is on vy-dc-h200-3, vy-nebius-2 or node A [run: a search of each machine's `job.json` files for the two commits]. I did not search the other CPU nodes.
+- Mailbox: its newest section is 15:17Z, nothing since [run, 21:19Z].
+
+**2. Is there a session to verify? Yes, in my timing runs' records, not beside the staged statements.**
+- The five staged directories hold `circuit.txt`, `inst.bin`, `pin.txt`, `pub.bin`, `stage.json` and no session [relayed: your message; run: `ls` of two of them at 21:10Z].
+- Each timing run of 13:51Z to 15:42Z kept its last session whole in its own run directory, `out/rate/<name>-k1/last-session/`: `session.json`, `circuit.rep0.bin`, `circuit.rep1.bin`, `verifier.json`, 2.9 MB [run: `ls` on vy-dc-h200-3]. It is the form the head block's measurement handed the Lean verifier (kernels' saved sessions in `r20261111-081919-d4ef`) [relayed: line 48091 of this file].
+- Each one draws every block of its statement, and the proof server accepted it with both repetitions ok; each proof file's SHA-512 is the one its `session.json` names [run: read of the three I use, hashed on my VM]:
+
+| statement | run | blocks drawn | proved by |
+| --- | --- | --- | --- |
+| scores | `r20261111-135055-6f08` | 256 of 256 | the follow-up build with keyed salts at every level, two provers (its last step) |
+| values, 64 columns | `r20261111-142208-a5fc` | 2,048 of 2,048 | today's binary, no switch, two provers |
+| values, 64 columns | `r20261111-135114-d43c` | 2,048 of 2,048 | the follow-up build with keyed salts at every level, one prover |
+
+- The scores statement has no kept session from today's binary: `6f08` is its only run and a run keeps only its last step's last session [run: `find` in its record]. What the verifier does on a session does not depend on how the prover drew its salts [guess], so I use it and say so.
+- The values statement at 128 columns (`fcd7`, `88e7`) and at 32 (`9130`, `64ca`) have a kept session of the same kind, all blocks drawn, accepted [run: read of each `session.json` on the machine].
+- These sessions are in the evidence store: each run's `.custody` reads `preserved: true` and lists the four files [run: read of `.custody` for `6f08`, `a5fc`, `d43c`].
+
+**3. The cheapest way, which is what I launched.** The timing runner, unchanged, on a CPU node: it stages the statement again from the tree that staged it, refuses to go on unless the circuit's SHA-512 begins with the staged pin (`FS_PIN`), and takes my kept sessions as its `sessions.tar`. No card, nothing copied from vy-dc-h200-3 but the 2.9 MB a session.
+
+| statement | run | machine | asked | state at 21:21Z |
+| --- | --- | --- | --- | --- |
+| values, 64 columns (two kept sessions) | `r20261111-211639-20e3` | vy-nebius-cpu-4 | 8 CPUs, 32 GB, 75 min | waits: both slots were taken by others' suites in the same seconds |
+| scores (one kept session) | `r20261111-211713-1e63` | vy-nebius-cpu-2 | 16 CPUs, 96 GB, 150 min | started 21:21:20Z on cores 52-67; staging and building |
+
+- Each run verifies the kept sessions first (twice all of them in one call, then the first alone), every `verify` pinned to one core; then it proves one block of the statement on CPUs and verifies that, which gives a second figure if the Lean verifier stops early on a kept session [read: `flock_sessions.sh` at `77728e83578c`].
+- That risk is real but small: the kept sessions were proved by binaries built on kernels' base `c6cadd0e325f`, and the Lean verifier here is this morning's tree; this morning's `main` verifier took a `c6cadd0e325f` session of the head block whole [relayed: line 49680's table].
+- Time once a slot comes [guess: from the staging seconds in each `stage.json`, 136 s and 698 s, and the head block's rates]: the values run about 15 minutes, the scores run about 30 minutes to its kept session's figure and about 60 to 70 in all.
+- If the values run has no slot by 21:40Z I cancel it while it still waits and launch it once where a slot is free, and say so here.
+
+**4. What the figures will be set against.** The head block's 250.0 core-seconds a session and 108.3 once a `verify` call (`r20261111-081919-d4ef`, 12.19 GB of circuit, 1,368,418,074 matrix entries) [relayed: line 48133]. The scores circuit is 5.25 GB with 610,979,164 entries, the values circuit at 64 columns 0.60 GB with 71,423,662 [run: read of each `stage.json` on vy-dc-h200-3]. One caution on the word "accepted": a statement staged this way binds no Program, so the Lean verifier ends every session "refused: a session without the verifier's program" once every check has passed, as it did for the head block; the runner counts such a session as checked whole, and I will report it in those words [read: `flock_sessions.py`, `NO_PROGRAM`].
+
+Not blocked. The scores run runs; the values run waits on a slot.
+
+For the table: nothing measured yet; the Lean verifier's seconds on a scores statement and a values statement at 64 columns are due about 22:30Z (`r20261111-211713-1e63`, `r20261111-211639-20e3`).
