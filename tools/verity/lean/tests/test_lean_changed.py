@@ -547,7 +547,13 @@ def test_a_requirer_one_check_py_fails_only_on_record_differences_still_gets_its
     got = outcome_line(said)
     assert got["outcome"] == LC.REGENERATED
     assert {q: r["outcome"] for q, r in got["records"].items()} == {"s/proofs": LC.PASS, S: LC.PASS, P: LC.REGENERATED}
-    assert any(s.startswith(f"lean-records: {P}: check.py --update exit 0") for s in said)
+    from research.lean_times import WORK
+
+    work = [s for s in said if WORK.match(s)]
+    assert [s.split(": check.py")[0] for s in work] == ["lean-records: s/proofs", f"lean-records: {S}+{P}",
+                                                        f"lean-records: {P}"], \
+        "one line for each check.py, in the form `research lean-times` sums"
+    assert "audited again with --update" in work[2]
 
 
 def test_packages_whose_reports_check_py_would_write_in_one_directory_never_share_a_check_py(monkeypatch):

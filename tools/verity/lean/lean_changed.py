@@ -1297,8 +1297,8 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                                                                   artifacts=artifacts.store, facts_cache=facts_dir()),
                                                        cwd=tree, env=env, pass_fds=fds).returncode
                         put_built(artifacts, LA.built(mine_out), since, log, f"lean-records: {p}")
-                        log(f"lean-records: {p}: check.py --update exit {got} in {time.monotonic() - t1:.0f} s on {tree}; "
-                            f"reports in {mine_out}")
+                        log(f"lean-records: {p}: check.py exit {got} in {time.monotonic() - t1:.0f} s on {tree}, audited again "
+                            f"with --update; reports in {mine_out}")
                     if AUDIT.killed(got):
                         killed[p] = got
                     label(mine_out)
@@ -1371,8 +1371,8 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
                 t1 = time.monotonic()
                 up, got = True, subprocess.run(check_argv([ROOT / p], mine_out, True, moved, p == pkg, dev=True,
                                                           facts_cache=facts_dir()), cwd=ROOT).returncode
-                log(f"lean-records: {p}: check.py --dev-cache --update exit {got} in {time.monotonic() - t1:.0f} s on {ROOT}; "
-                    f"reports in {mine_out}")
+                log(f"lean-records: {p}: check.py --dev-cache exit {got} in {time.monotonic() - t1:.0f} s on {ROOT}, audited "
+                    f"again with --update; reports in {mine_out}")
             label(mine_out)
             if (b := checked(p, pkg, got, ROOT / p / LOCK, committed[f"{p}/{LOCK}"], up, update, out, log)) is not None:
                 new[f"{p}/{LOCK}"] = b
