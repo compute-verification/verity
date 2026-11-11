@@ -19,7 +19,8 @@ Run by `commit_delta.py --value-check` on one extra instrumented run; result in 
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import torch
 
@@ -133,7 +134,7 @@ class ValueChecker:
             for m in sorted(self.c._layouts.get(step, []), key=lambda m: m.ordinal):
                 metas_by.setdefault(m.name, []).append(m)            # repeated calls of one module -> several metas, in call order
 
-            def meta_at(key: str, call_idx: int):
+            def meta_at(key: str, call_idx: int, metas_by: dict[str, list] = metas_by):
                 lst = metas_by.get(key) or []
                 return lst[call_idx] if call_idx < len(lst) else None
             for name, d in taps.items():

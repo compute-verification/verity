@@ -642,8 +642,8 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
              "Each request's executed prefix is the cap on a length stop, or served + the Program's declared LAG on an EOS stop whose last served token is a declared EOS id; never defaulted.",
              ["binding.coverage.executed_prefix_of_record", "sampled_replay.executed_prefix_of_record", "executed_prefix_facts", "coverage.executed_prefix_of_record"])
     C_LINK = ("execution_extent/match_account_link", "executed-prefix conditions (a), (b)",
-              "The Commit's served lengths equal the Match record's (tokens.json) and GM-01's G6 account of the same attempt -- or, with no Match stage, every served "
-              "token of the Commit's token record opens from the run root to the committed sampled id -- and the LAG is attested on every leg.",
+              ("The Commit's served lengths equal the Match record's (tokens.json) and GM-01's G6 account of the same attempt -- or, with no Match stage, every served "
+              "token of the Commit's token record opens from the run root to the committed sampled id -- and the LAG is attested on every leg."),
               ["binding.coverage.match_account_link", "binding.coverage.commit_account_link", "executed_prefix_facts.linked", "executed_prefix_facts.lag_attested",
                "account_missing"])
     C_PAST = ("execution_extent/rows_past_the_stop", "executed-prefix condition (c)",

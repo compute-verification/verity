@@ -1526,7 +1526,7 @@ def test_the_plan_of_every_moe_vu_reads_what_its_replay_reads_its_sum_plane_copy
     for vu in vus:
         seen: dict[str, set] = {"plan": set(), "replay": set()}
 
-        def reader(key):
+        def reader(key, seen=seen):
             def read(step, name, lo, hi):
                 seen[key].add((step, name, lo, hi))
                 return committed(step, name, lo, hi)
@@ -1899,9 +1899,9 @@ def test_padded_moe_block_twin_equals_the_moe01_composition_and_names_every_memb
         f = (rng.standard_normal(shape) * scale).astype(np.float32)
         return (f.view(np.uint32) >> 16).astype(np.uint16)
 
-    E, TOPK, VPT, H, I = 8, 2, 4, 32, 16
-    st = {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": I}
-    x, logits, w13, w2 = bf16((H,)), bf16((E,), 2.0), bf16((E, 2 * I, H), 0.3), bf16((E, H, I), 0.3)
+    E, TOPK, VPT, H, INTER = 8, 2, 4, 32, 16
+    st = {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": INTER}
+    x, logits, w13, w2 = bf16((H,)), bf16((E,), 2.0), bf16((E, 2 * INTER, H), 0.3), bf16((E, H, INTER), 0.3)
     RK._PADDED_BLOCK_MEMO.clear()
     got = RK.padded_moe_block(st, [x, logits, w13, w2], router_gemm=False)
     assert set(got) == {"out", "router_ids", "router_w"} | {f"slot{e}/{m}" for e in range(E) for m in ("up", "act", "down", "g")}
@@ -1912,9 +1912,9 @@ def test_padded_moe_block_twin_equals_the_moe01_composition_and_names_every_memb
     downs = []
     for j in range(TOPK):
         e = ids[j]
-        up = EV.evaluate("MoeExpertGemm_v1", {"E": E, "K": H, "N": 2 * I}, [[x], [np.asarray([e], dtype=np.uint32)], [w13.reshape(-1)]], [None, None, None])["up"]
-        act = EV.evaluate("SiluMul_v1", {"I": I}, [[up]], [None])["out"]
-        down = EV.evaluate("MoeExpertGemmW_v1", {"E": E, "K": I, "N": H},
+        up = EV.evaluate("MoeExpertGemm_v1", {"E": E, "K": H, "N": 2 * INTER}, [[x], [np.asarray([e], dtype=np.uint32)], [w13.reshape(-1)]], [None, None, None])["up"]
+        act = EV.evaluate("SiluMul_v1", {"I": INTER}, [[up]], [None])["out"]
+        down = EV.evaluate("MoeExpertGemmW_v1", {"E": E, "K": INTER, "N": H},
                            [[act], [np.asarray([e], dtype=np.uint32)], [np.asarray([alpha[j]], dtype=np.uint32)], [w2.reshape(-1)]], [None] * 4)["down"]
         assert got[f"slot{e}/up"].tolist() == up.tolist() and got[f"slot{e}/act"].tolist() == act.tolist() and got[f"slot{e}/down"].tolist() == down.tolist()
         assert int(got[f"slot{e}/g"][0]) == alpha[j]

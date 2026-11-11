@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable, Hashable, Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Hashable, Iterable, Sequence
+from typing import Any
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.intervals import Intervals, full, isect, norm

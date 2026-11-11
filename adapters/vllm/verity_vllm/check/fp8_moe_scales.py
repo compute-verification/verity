@@ -37,13 +37,13 @@ def on_rank_grid(parts: list[np.ndarray], srcs: list[str], which: str, ck: Any, 
     if not ck.has(weight):
         raise KeyError(f"{srcs[0]}: no {weight} in the checkpoint to size the expert's block grid from")
     N, K = ck.tensors[weight][2]
-    I, H = (N, K) if which == "w13" else (K, N)
-    if I % G or H % G or I % world:
-        raise ValueError(f"{srcs[0]}: expert width {I} and hidden {H} must be multiples of the block {G}, and the width of the world {world}")
+    width, H = (N, K) if which == "w13" else (K, N)
+    if width % G or H % G or width % world:
+        raise ValueError(f"{srcs[0]}: expert width {width} and hidden {H} must be multiples of the block {G}, and the width of the world {world}")
     for s, p in zip(srcs, parts):
         if list(p.shape) != [N // G, K // G]:
             raise ValueError(f"{s}: scale shape {list(p.shape)} is not the [{N // G}, {K // G}] blocks of {weight} [{N}, {K}]")
-    g = fp8_moe_block(G, I // world, H)
+    g = fp8_moe_block(G, width // world, H)
     f = G // g
     if f == 1:
         return parts

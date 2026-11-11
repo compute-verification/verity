@@ -21,7 +21,7 @@ from verity_vllm.check import c2_rules
 from verity_vllm.check.replay import served_check as SC
 from verity_vllm.query.manifest.format import manifest_digest
 
-V, H, NH, KVH, D, I, P = 64, 64, 2, 1, 64, 32, 512
+V, H, NH, KVH, D, INTER, P = 64, 64, 2, 1, 64, 32, 512
 QKV = (NH + 2 * KVH) * D
 NORM = dict(N=H, EPS=1e-5, XBLOCK=1, R0_BLOCK=256, NUM_WARPS=1)
 SCHEDULE = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 4},
@@ -30,7 +30,7 @@ SCHEDULE = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 
 STEPS = 4
 H200 = SD.device_of((9, 0), 132)
 
-EMB, N0, QKVV, Q, K, ATT, O, N1, GU, ACT, DOWN, RES, OUT = (
+EMB, N0, QKVV, Q, K, ATT, O_PROJ, N1, GU, ACT, DOWN, RES, OUT = (
     "c00.embedding/buf0", "c00.rms_norm/buf1", "c00.mm/buf2", "c00.rope/buf3", "c00.rope/buf4", "c01.attention/layers.0.attn",
     "c02.mm/buf0", "c02.add_rms_norm/buf1", "c02.mm/buf2", "c02.silu_mul/buf3", "c02.mm/buf4", "c02.add2_rms_norm/buf5",
     "c02.add2_rms_norm/buf6")
@@ -60,14 +60,14 @@ PRE = [_call(b1.Embedding, dict(V=V, H=H), [_v(SV.IDS, 1), _w("embed", V, H)], [
        _call(IR.InductorRoPE, dict(NHEADS=KVH, D=D), [_v(QKVV, KVH * D, (NH * D, (NH + KVH) * D)), CS], [K])]
 ATTENTION = {"piece": 1, "layer": "layers.0.attn", "name": ATT, "q": _v(Q, NH * D), "k": _v(K, KVH * D),
              "v": _v(QKVV, KVH * D, ((NH + KVH) * D, QKV)), "NH": NH, "KVH": KVH, "D": D}
-POST = [_mm(_v(ATT, NH * D), _w("o", H, NH * D), O),
-        _call(IR.InductorAddRMSNorm, NORM, [_v(O, H), _v(EMB, H), _w("norm1", H)], [N1]),
-        _mm(_v(N1, H), _w("gate_up", 2 * I, H), GU),
-        _call(IR.InductorSiluMul, dict(I=I), [_v(GU, 2 * I)], [ACT]),
-        _mm(_v(ACT, I), _w("down", H, I), DOWN),
-        _call(IR.InductorAdd2RMSNorm, NORM, [_v(DOWN, H), _v(O, H), _v(EMB, H), _w("norm2", H)], [RES, OUT])]
-WIDTHS = {SV.IDS: 1, SV.POSITIONS: 1, EMB: H, N0: H, QKVV: QKV, Q: NH * D, K: KVH * D, ATT: NH * D, O: H, N1: H, GU: 2 * I,
-          ACT: I, DOWN: H, RES: H, OUT: H}
+POST = [_mm(_v(ATT, NH * D), _w("o", H, NH * D), O_PROJ),
+        _call(IR.InductorAddRMSNorm, NORM, [_v(O_PROJ, H), _v(EMB, H), _w("norm1", H)], [N1]),
+        _mm(_v(N1, H), _w("gate_up", 2 * INTER, H), GU),
+        _call(IR.InductorSiluMul, dict(I=INTER), [_v(GU, 2 * INTER)], [ACT]),
+        _mm(_v(ACT, INTER), _w("down", H, INTER), DOWN),
+        _call(IR.InductorAdd2RMSNorm, NORM, [_v(DOWN, H), _v(O_PROJ, H), _v(EMB, H), _w("norm2", H)], [RES, OUT])]
+WIDTHS = {SV.IDS: 1, SV.POSITIONS: 1, EMB: H, N0: H, QKVV: QKV, Q: NH * D, K: KVH * D, ATT: NH * D, O_PROJ: H, N1: H, GU: 2 * INTER,
+          ACT: INTER, DOWN: H, RES: H, OUT: H}
 
 
 def _route(M: int) -> dict:
@@ -100,7 +100,7 @@ def _bf16(rng: np.random.Generator, *shape: int, scale: float = 1.0) -> np.ndarr
 def _weights() -> dict[str, np.ndarray]:
     rng = np.random.default_rng(7)
     w = {"embed": _bf16(rng, V, H), "qkv": _bf16(rng, QKV, H, scale=H ** -0.5), "o": _bf16(rng, H, NH * D, scale=(NH * D) ** -0.5),
-         "gate_up": _bf16(rng, 2 * I, H, scale=H ** -0.5), "down": _bf16(rng, H, I, scale=I ** -0.5),
+         "gate_up": _bf16(rng, 2 * INTER, H, scale=H ** -0.5), "down": _bf16(rng, H, INTER, scale=INTER ** -0.5),
          "lm_head": _bf16(rng, V, H, scale=H ** -0.5), **{f"norm{i}": _bf16(rng, H) for i in range(3)}}
     inv = 10000.0 ** (-np.arange(D // 2) / (D // 2))
     ang = np.arange(P)[:, None] * inv[None, :]
@@ -133,7 +133,7 @@ def _serve(build: dict, W: dict) -> tuple[list[SC.Step], dict[str, list[int]]]:
         pos = np.concatenate([np.arange(q["klen"] - q["tokens"], q["klen"]) for q in plan["requests"]])
         vals = {SV.IDS: ids.astype(np.int64)[:, None], SV.POSITIONS: pos[:, None]}
 
-        def run(calls):
+        def run(calls, vals=vals, plan=plan):
             for c in calls:
                 xs = [_operand(r, vals, W) for r in c["reads"]]
                 if c["op"] == "mm":

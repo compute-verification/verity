@@ -13,7 +13,7 @@ import pytest
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import cli
 
-H, I, HQ, HKV, D, V = 8, 12, 2, 1, 4, 20          # hidden, intermediate, heads, kv heads, head dim, vocab
+H, INTER, HQ, HKV, D, V = 8, 12, 2, 1, 4, 20          # hidden, intermediate, heads, kv heads, head dim, vocab
 
 
 def _bf16(rng, *shape) -> np.ndarray:
@@ -48,19 +48,19 @@ def checkpoint(tmp_path):
         "model.layers.0.self_attn.k_proj.bias": ("BF16", _bf16(rng, HKV * D)),
         "model.layers.0.self_attn.v_proj.bias": ("BF16", _bf16(rng, HKV * D)),
         "model.layers.0.self_attn.o_proj.weight": ("BF16", _bf16(rng, H, HQ * D)),
-        "model.layers.0.mlp.gate_proj.weight": ("BF16", _bf16(rng, I, H)),
-        "model.layers.0.mlp.up_proj.weight": ("BF16", _bf16(rng, I, H)),
-        "model.layers.0.mlp.down_proj.weight": ("BF16", _bf16(rng, H, I)),
+        "model.layers.0.mlp.gate_proj.weight": ("BF16", _bf16(rng, INTER, H)),
+        "model.layers.0.mlp.up_proj.weight": ("BF16", _bf16(rng, INTER, H)),
+        "model.layers.0.mlp.down_proj.weight": ("BF16", _bf16(rng, H, INTER)),
         "model.layers.0.input_layernorm.weight": ("F32", rng.random(H, dtype=np.float32)),   # stored f32, served bf16 (cast rule)
         "model.norm.weight": ("BF16", _bf16(rng, H)),
         # a 2-expert MoE layer: per-expert checkpoint tensors, fused w13 / w2 in the served model
         "model.layers.1.mlp.gate.weight": ("BF16", _bf16(rng, 2, H)),
-        "model.layers.1.mlp.experts.0.gate_proj.weight": ("BF16", _bf16(rng, I, H)),
-        "model.layers.1.mlp.experts.0.up_proj.weight": ("BF16", _bf16(rng, I, H)),
-        "model.layers.1.mlp.experts.0.down_proj.weight": ("BF16", _bf16(rng, H, I)),
-        "model.layers.1.mlp.experts.1.gate_proj.weight": ("BF16", _bf16(rng, I, H)),
-        "model.layers.1.mlp.experts.1.up_proj.weight": ("BF16", _bf16(rng, I, H)),
-        "model.layers.1.mlp.experts.1.down_proj.weight": ("BF16", _bf16(rng, H, I)),
+        "model.layers.1.mlp.experts.0.gate_proj.weight": ("BF16", _bf16(rng, INTER, H)),
+        "model.layers.1.mlp.experts.0.up_proj.weight": ("BF16", _bf16(rng, INTER, H)),
+        "model.layers.1.mlp.experts.0.down_proj.weight": ("BF16", _bf16(rng, H, INTER)),
+        "model.layers.1.mlp.experts.1.gate_proj.weight": ("BF16", _bf16(rng, INTER, H)),
+        "model.layers.1.mlp.experts.1.up_proj.weight": ("BF16", _bf16(rng, INTER, H)),
+        "model.layers.1.mlp.experts.1.down_proj.weight": ("BF16", _bf16(rng, H, INTER)),
     }
     d = tmp_path / "snap"
     d.mkdir()
@@ -81,13 +81,13 @@ def _program(tp=None):
         ("model.model.layers.0.self_attn.qkv_proj.weight", [(HQ + 2 * HKV) * D, H], 16),
         ("model.model.layers.0.self_attn.qkv_proj.bias", [(HQ + 2 * HKV) * D], 16),
         ("model.model.layers.0.self_attn.o_proj.weight", [H, HQ * D], 16),
-        ("model.model.layers.0.mlp.gate_up_proj.weight", [2 * I, H], 16),
-        ("model.model.layers.0.mlp.down_proj.weight", [H, I], 16),
+        ("model.model.layers.0.mlp.gate_up_proj.weight", [2 * INTER, H], 16),
+        ("model.model.layers.0.mlp.down_proj.weight", [H, INTER], 16),
         ("model.model.layers.0.input_layernorm.weight", [H], 16),
         ("model.model.layers.0.self_attn.attn._k_scale", [], 32),
         ("model.model.layers.1.mlp.gate.weight", [2, H], 16),
-        ("model.model.layers.1.mlp.experts.w13_weight", [2, 2 * I, H], 16),
-        ("model.model.layers.1.mlp.experts.w2_weight", [2, H, I], 16),
+        ("model.model.layers.1.mlp.experts.w13_weight", [2, 2 * INTER, H], 16),
+        ("model.model.layers.1.mlp.experts.w2_weight", [2, H, INTER], 16),
         ("model.model.norm.weight", [H], 16),
         ("model.lm_head.weight", [V, H], 16),
     ]
@@ -567,10 +567,10 @@ def test_a_served_build_is_pinned_by_its_weight_reads(checkpoint):
                                                            {"weight": "model.embed_tokens.weight", "shape": [V, H],
                                                             "row_of": {"value": "c00.input/ids", "width": 1}}]},
                          {"op": "mm", "reads": [{"value": "c00.rms_norm/buf1", "width": H}, qkv]},
-                         {"op": "mm", "reads": [{"value": "c02.silu_mul/buf3", "width": I},
-                                                {"weight": L + "mlp.down_proj.weight", "shape": [H, I]}]},
+                         {"op": "mm", "reads": [{"value": "c02.silu_mul/buf3", "width": INTER},
+                                                {"weight": L + "mlp.down_proj.weight", "shape": [H, INTER]}]},
                          {"op": "mm", "reads": [{"value": "c02.rms_norm/buf1", "width": H},
-                                                {"weight": L + "mlp.gate_up_proj.weight", "shape": [2 * I, H]}]},
+                                                {"weight": L + "mlp.gate_up_proj.weight", "shape": [2 * INTER, H]}]},
                          {"op": "InductorRMSNorm_v1", "reads": [{"value": "c00.embedding/buf0", "width": H},
                                                                 {"weight": L + "input_layernorm.weight", "shape": [H]}]},
                          {"op": "mm", "reads": [{"value": "c00.rms_norm/buf1", "width": H}, qkv]}],
@@ -591,8 +591,8 @@ def test_a_served_build_is_pinned_by_its_weight_reads(checkpoint):
     res = WR.check(rec, live_digests(bad), program_digests_of_record={"b" * 128})
     assert res["result"] is False and [m["served_name"] for m in res["mismatched"]] == [L + "mlp.gate_up_proj.weight"]
     assert WR.check(rec, live_digests(served), program_digests_of_record={"c" * 128})["result"] is False
-    program["calls"][2]["reads"][1]["shape"] = [I, H]
-    program["calls"].append({"op": "mm", "reads": [{"weight": L + "mlp.down_proj.weight", "shape": [H, I]}]})
+    program["calls"][2]["reads"][1]["shape"] = [INTER, H]
+    program["calls"].append({"op": "mm", "reads": [{"weight": L + "mlp.down_proj.weight", "shape": [H, INTER]}]})
     with pytest.raises(ValueError, match="down_proj.weight is read at"):
         WR.served_weight_fields(program)
 
@@ -606,14 +606,14 @@ def test_gemma_normalizer_is_composed_from_config_and_compared_like_a_weight(che
     assert normalizer_word(2304) == 0x4240                              # Gemma-2-2B: sqrt(2304) = 48.0 exactly, bf16 0x4240
     d, man, t = checkpoint
     prog, fields = _program()
-    prog["instances"]["params"] = [["weights", "{model.model.embed_tokens.weight: Array<%d,Array<%d,Value<16>>>, model.model.normalizer: Value<16>, "
-                                    "model.model.norm.weight: Array<%d,Value<16>>}" % (V, H, H)]]
+    prog["instances"]["params"] = [["weights", (f"{{model.model.embed_tokens.weight: Array<{V},Array<{H},Value<16>>>, model.model.normalizer: Value<16>, "
+                                    f"model.model.norm.weight: Array<{H},Value<16>>}}")]]
     rec = WR.weights_of_record(prog, WR.CheckpointIndex(str(d), checkpoints_manifest=str(man)), prefix=PREFIX)
     assert rec["complete"] is True and rec["unresolved"] == [] and rec["unpinned"] == []
     by = {f["field"]: f for f in rec["fields"]}
     nf = by["model.model.normalizer"]
     assert nf["pinned"] is True and nf["served_name"] == "model.normalizer" and nf["sources"] == ["config.json:hidden_size"]
-    assert nf["rule"].startswith("config-derived: bf16(sqrt(hidden_size=%d))" % H)
+    assert nf["rule"].startswith(f"config-derived: bf16(sqrt(hidden_size={H}))")
     word = np.array(normalizer_word(H), dtype=np.uint16)
     assert nf["digest"] == hashlib.sha256(word.tobytes()).hexdigest()
     # the served buffer (named_buffers(): model.normalizer, 0-d bf16) is compared field by field like a weight ...
@@ -626,7 +626,7 @@ def test_gemma_normalizer_is_composed_from_config_and_compared_like_a_weight(che
     res = WR.check(rec, live_digests(bad))
     assert res["result"] is False and [m["served_name"] for m in res["mismatched"]] == ["model.normalizer"]
     # a normalizer declared at another width has no rule: unresolved, named, complete False (fail closed)
-    prog["instances"]["params"] = [["weights", "{model.model.normalizer: Value<32>, model.model.norm.weight: Array<%d,Value<16>>}" % H]]
+    prog["instances"]["params"] = [["weights", f"{{model.model.normalizer: Value<32>, model.model.norm.weight: Array<{H},Value<16>>}}"]]
     rec2 = WR.weights_of_record(prog, WR.CheckpointIndex(str(d), checkpoints_manifest=str(man), verify_shards=False), prefix=PREFIX)
     assert rec2["complete"] is False and rec2["unresolved"][0]["field"] == "model.model.normalizer" and "one bf16 word" in rec2["unresolved"][0]["why"]
 

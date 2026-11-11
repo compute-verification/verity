@@ -564,7 +564,7 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
     root = root_of_fields(out_fields)
     n_pinned = sum(1 for f in out_fields if f.get("digest") or f.get("pinned") == "analytic")
     shards_ok = all(v.get("pinned") is True for v in ck.pin["shards"].values()) if ck.pin["shards"] else None
-    program_digest = str((res.get("program_digest") or (inst.get("digest") or "")))
+    program_digest = str(res.get("program_digest") or (inst.get("digest") or ""))
     return {"schema": SCHEMA, "program_digest": program_digest, "program_dir": program.get("dir"), "wrapper_prefix": prefix,
             "tp": {"world": world, "rank": rank}, "checkpoint": {"dir": ck.dir, "config_tie_word_embeddings": bool(ck.config.get("tie_word_embeddings", False)),
                                                                    **ck.pin, "all_shards_pinned": shards_ok},
@@ -579,7 +579,7 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
 
 # ---------------------------------------------------------------------------------------------------------------------- live side
 
-def live_param_digests(model, *, include_buffers: bool = True, raw_for: "re.Pattern[str] | None" = ENGINE_ROTARY_RE) -> dict[str, Any]:
+def live_param_digests(model, *, include_buffers: bool = True, raw_for: re.Pattern[str] | None = ENGINE_ROTARY_RE) -> dict[str, Any]:
     """sha256 of every live parameter (and buffer) of the served model, by `named_parameters()` name: the SAME tensors the committer's
     weights root covers (register_weights), hashed as raw contiguous bytes (bf16 words row-major).  Tensors whose name matches `raw_for`
     (default: the rotary cos_sin table) also keep their raw words under `raw[name]` (numpy uint16, in memory only -- not for the row
@@ -853,7 +853,7 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
         if not same:
             mine = {f for f, _s, _b in my_struct}
             theirs = {f for f, _s, _b in st}
-            diff = sorted((mine ^ theirs))[:4] or sorted(f for (f, s, b) in st if [f, s, b] not in my_struct)[:4]
+            diff = sorted(mine ^ theirs)[:4] or sorted(f for (f, s, b) in st if [f, s, b] not in my_struct)[:4]
             why.append(f"{os.path.basename(d)} ({pd[:16]}): weights struct differs from the record's ({len(st)} vs {len(my_struct)} fields; e.g. {diff})")
         elif of_rec:
             digests.add(pd)
@@ -926,10 +926,10 @@ def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_man
 class Options:
     """weights of record: per-field digests of the checkpoint-composed served weights"""
     program_dir: str | None = option("--program-dir", default=None, help="the Program of record (instances.json.gz + result.json)")
-    programs_root: str | None = option("--programs-root", default=None, help="a row dir: derive from its first component Program and stamp EVERY component's " "digest + the workload digest as the of-record set (each component's weights struct must equal the record's)")
+    programs_root: str | None = option("--programs-root", default=None, help="a row dir: derive from its first component Program and stamp EVERY component's digest + the workload digest as the of-record set (each component's weights struct must equal the record's)")
     manifest: str | None = option("--manifest", default=None, help="the row's required manifest (default <programs-root>/manifest.json): its digests join the stamp")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the pinned checkpoint snapshot (safetensors shards + config.json); required to derive")
-    diff: list[str] | None = option("--diff", nargs=2, metavar=("A.json", "B.json"), default=None, help="READER (no derivation, nothing written): compare two records field by field and re-root both under the current schema; " "exit 0 when they pin the same weights of record (same-model rows across pods under schema v1)")
+    diff: list[str] | None = option("--diff", nargs=2, metavar=("A.json", "B.json"), default=None, help="READER (no derivation, nothing written): compare two records field by field and re-root both under the current schema; exit 0 when they pin the same weights of record (same-model rows across pods under schema v1)")
     checkpoints: str | None = option("--checkpoints", default=None, help="manifests/checkpoints.json (default: the repo's)")
     model: str | None = option("--model", default=None, help="HF repo id, to select the checkpoints.json entry when --checkpoint-dir is not its local_path")
     revision: str | None = option("--revision", default=None)

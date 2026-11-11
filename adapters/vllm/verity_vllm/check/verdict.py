@@ -44,9 +44,10 @@ import hashlib
 import json
 import os
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from verity_vllm.check import c2_rules as C2
 from verity_vllm.check import commit_rules as CR
@@ -122,7 +123,7 @@ class CommitChecks:
         return d
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "CommitChecks":
+    def from_dict(cls, d: dict[str, Any]) -> CommitChecks:
         if d.get("schema") not in (None, SCHEMA):
             raise ValueError(f"not a {SCHEMA} document: schema {d.get('schema')!r}")
         kw = {k: d.get(k) for k in cls.__dataclass_fields__ if k in d and k != "checks"}
@@ -137,7 +138,7 @@ class CommitChecks:
         return p
 
     @classmethod
-    def load(cls, path: str | os.PathLike) -> "CommitChecks":
+    def load(cls, path: str | os.PathLike) -> CommitChecks:
         with open(path) as f:
             return cls.from_dict(json.load(f))
 

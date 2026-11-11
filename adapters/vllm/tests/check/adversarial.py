@@ -10,8 +10,9 @@ often it fired.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll as _Coll
@@ -253,8 +254,8 @@ def catalogue(*, layer: int, o_hint: str, big_hint: str, ln1_hint: str, alt_hint
             return None
         c = parts[idx[0]]
         gu = c.operands[0].view
-        I = c.outputs[0].view.shape[1]
-        parts[idx[0]] = Transparent("move", c.consumed, PerRow(half_cols(gu, 0, I)), c.outputs[0], c.rows, c.hint,
+        width = c.outputs[0].view.shape[1]
+        parts[idx[0]] = Transparent("move", c.consumed, PerRow(half_cols(gu, 0, width)), c.outputs[0], c.rows, c.hint,
                                     c.kernels, c.pattern)
         return parts
     M["M03"] = Mutation("M03", "swallowed runtime operation (Compute -> Transparent move)",
@@ -304,13 +305,13 @@ def catalogue(*, layer: int, o_hint: str, big_hint: str, ln1_hint: str, alt_hint
         c = parts[idx[0]]
         if c.rows != 1:
             return None                                              # one row per instance keeps the constant table small
-        I = c.outputs[0].view.shape[1]
+        width = c.outputs[0].view.shape[1]
         tag = int(node.id)
         words = BAKED.get(tag)
         if words is None:
             return None                                              # the record (snapshot) was not consulted for this event
-        parts[idx[0]] = dataclasses.replace(c, spec=bind(AdvBakedOutput, N=I, TAG=tag),
-                                            operands=(PerRow(half_cols(c.operands[0].view, 0, I)),))
+        parts[idx[0]] = dataclasses.replace(c, spec=bind(AdvBakedOutput, N=width, TAG=tag),
+                                            operands=(PerRow(half_cols(c.operands[0].view, 0, width)),))
         return parts
     M["M06"] = Mutation("M06", "output smuggled as a Definition constant (per-instance specialization)",
                         f"pattern `{silu_pat}`: layer-{layer} decode SiluMul := AdvBakedOutput{{N,TAG=event}} whose body returns the observed bytes",

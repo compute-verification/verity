@@ -313,8 +313,8 @@ def test_deepgemm_off_or_another_moe_backend_fails():
     assert len(problems) == 1 and problems[0].startswith("expect model.layers.{i}.attn.wo_b kernels.quant_method.fp8_linear.type")
     inv = copy.deepcopy(RANK0)
     next(g for g in inv["groups"] if g["type"] == "RoutedExperts")["kernels"]["quant_method"]["mxfp4_backend"]["_value_"] = "TRITON"
-    assert _check(inv=inv) == ["expect model.layers.{i}.ffn.experts.routed_experts kernels.quant_method.mxfp4_backend._value_ = "
-                               "'MARLIN', the inventory has 'TRITON'"]
+    assert _check(inv=inv) == [("expect model.layers.{i}.ffn.experts.routed_experts kernels.quant_method.mxfp4_backend._value_ = "
+                               "'MARLIN', the inventory has 'TRITON'")]
 
 
 def test_an_unregistered_definition_fails(registry):

@@ -367,7 +367,7 @@ def move_consumer_before_producer(oracle_dir, rid="r1", sampler_to_head=False):
                 if v[0] == "n":
                     v[1] = new_of[v[1]]
                 return {key: v}
-        return {"explicit": [[s, new_of[i] if s == "n" else i, l] for s, i, l in j["explicit"]]}
+        return {"explicit": [[s, new_of[i] if s == "n" else i, at] for s, i, at in j["explicit"]]}
 
     for nd in nodes:
         for a in nd["args"]:
@@ -564,7 +564,7 @@ def test_staggered_arrivals_pass_with_mixed_step_and_declared_chronology(memory,
     by = {e["request_id"]: e for e in res["requests"]}
     assert (by["r0"]["first_step"], by["r1"]["first_step"], by["r2"]["first_step"]) == (0, 1, 2)
     g8 = _check(res, "G8")
-    assert any(l["phase"] == "mixed" for l in g8["batch_layout"]) and not g8["permutations"]
+    assert any(b["phase"] == "mixed" for b in g8["batch_layout"]) and not g8["permutations"]
     assert _check(res, "G6")["status"] == "PASS" and by["r2"]["output_events"] == 3
 
 
@@ -813,7 +813,7 @@ def test_coscheduled_prefill_tgrouped_emission_passes_the_dag_criterion_with_the
     g8 = _check(res, "G8")
     assert g8["status"] == "PASS" and g8["steps_with_emission_out_of_canonical_order"] == 1
     assert len(g8["permutations"]) == 1 and g8["permutations"][0]["same_dag_multiset"] and g8["permutations"][0]["displaced_query_positions"] == [3]
-    assert any(l.get("emitted_out_of_canonical_order") for l in g8["batch_layout"])
+    assert any(b.get("emitted_out_of_canonical_order") for b in g8["batch_layout"])
     g7 = _check(res, "G7")
     assert g7["boundary_probes"] > 0 and g7["boundary_probe_failures"] == 0   # canonical addresses resolve (structural, not emission index)
     r0 = next(e for e in res["requests"] if e["request_id"] == "r0")

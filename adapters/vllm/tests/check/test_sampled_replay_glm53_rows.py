@@ -64,8 +64,8 @@ CASES = [
      bind(fp8_moe_experts.MoeExpertFp8GemmW, E=3, K=256, N=3, G=128, KB=128, SWAP=False, DOT=HopperE4m3MmaV2Dot32)),
     ('MoeExpertFp8GemmW_v1{E=3,K=256,N=3,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}',
      bind(fp8_moe_experts.MoeExpertFp8GemmW, E=3, K=256, N=3, G=128, KB=128, SWAP=True, DOT=HopperE4m3QgmmaDot32)),
-    ('SparseMlaSplit_v1{T=40,NS=2,NH=2,DR=16,DV=16,BN=16,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},'
-     'SCALE={"f64":"0x1.0000000000000p-4"}}', bind(sparse_mla_split.SparseMlaSplit, T=40, NS=2, NH=2, **MLA)),
+    (('SparseMlaSplit_v1{T=40,NS=2,NH=2,DR=16,DV=16,BN=16,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},'
+     'SCALE={"f64":"0x1.0000000000000p-4"}}'), bind(sparse_mla_split.SparseMlaSplit, T=40, NS=2, NH=2, **MLA)),
     ('SparseMlaSplit_v1{T=20,NS=1,NH=3,DR=16,DV=16,BN=16,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}',
      bind(sparse_mla_split.SparseMlaSplit, T=20, NS=1, NH=3, **MLA)),
     ('ResidualAdd_v1{N=16}', bind(b1.ResidualAdd, N=16)),

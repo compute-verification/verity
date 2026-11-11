@@ -79,9 +79,10 @@ import math
 import re
 import time
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from verity_vllm.check.codes import VerificationCode as VC
 from verity_vllm.check.result import MISSING_INPUT, CheckResult
@@ -210,7 +211,7 @@ class GateResult:
         return asdict(self)
 
     @classmethod
-    def from_json(cls, d: dict) -> "GateResult":
+    def from_json(cls, d: dict) -> GateResult:
         return cls(id=d["id"], name=d.get("name", GATE_NAMES.get(d["id"], "")), status=d["status"],
                    evidence=list(d.get("evidence") or []), detail=dict(d.get("detail") or {}), reason=d.get("reason"))
 
@@ -1106,9 +1107,8 @@ def fold_integrity(fold_summary: Any, fold_summary_2: Any = None, resolution: An
         per_step = fs.get("per_step")
         if isinstance(per_step, list) and per_step and n_err is not None:
             vals = [s.get("errors") for s in per_step if isinstance(s, dict)]
-            if all(isinstance(v, int) and not isinstance(v, bool) for v in vals) and len(vals) == len(per_step):
-                if sum(vals) != n_err:
-                    unverified.append(f"{what}.per_step errors sum to {sum(vals)}, errors = {n_err}")
+            if all(isinstance(v, int) and not isinstance(v, bool) for v in vals) and len(vals) == len(per_step) and sum(vals) != n_err:
+                unverified.append(f"{what}.per_step errors sum to {sum(vals)}, errors = {n_err}")
         detail[what] = {**counts, "error_classes": classes if isinstance(classes, dict) else None, "digest": fs.get("digest"),
                         "with_program": fs.get("with_program"), "n_instances": fs.get("n_instances")}
     if resolution is not None:

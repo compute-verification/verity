@@ -13,7 +13,7 @@ from tests.check.test_weights_of_record_routed_experts import _program
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.checkpoint_index import renamed, renames
 
-H, I, E, WORLD, RANK = 64, 64, 3, 2, 1          # hidden, expert width, experts; TP world and the rank composed
+H, INTER, E, WORLD, RANK = 64, 64, 3, 2, 1          # hidden, expert width, experts; TP world and the rank composed
 CONTAINER = "model.layers.0.ffn.experts"
 EX = f"{CONTAINER}.routed_experts"
 
@@ -28,13 +28,13 @@ def dsv4(tmp_path):
     t = {"embed.weight": ("BF16", u8(8, H).view(np.uint16)), "head.weight": ("BF16", u8(8, H).view(np.uint16)),
          "layers.0.attn.wo_b.weight": ("F8_E4M3", u8(H, H)), "layers.0.attn.wo_b.scale": ("F8_E8M0", u8(1, 1)),
          "layers.0.ffn.gate.bias": ("F32", rng.random(E, dtype=np.float32)),
-         "layers.0.ffn.shared_experts.w2.weight": ("F8_E4M3", u8(H, I)), "mtp.0.emb.weight": ("BF16", u8(8, H).view(np.uint16))}
+         "layers.0.ffn.shared_experts.w2.weight": ("F8_E4M3", u8(H, INTER)), "mtp.0.emb.weight": ("BF16", u8(8, H).view(np.uint16))}
     for e in range(E):
         for p in ("w1", "w3"):
-            t[f"layers.0.ffn.experts.{e}.{p}.weight"] = ("I8", u8(I, H // 2).view(np.int8))
-            t[f"layers.0.ffn.experts.{e}.{p}.scale"] = ("F8_E8M0", u8(I, H // 32))
-        t[f"layers.0.ffn.experts.{e}.w2.weight"] = ("I8", u8(H, I // 2).view(np.int8))
-        t[f"layers.0.ffn.experts.{e}.w2.scale"] = ("F8_E8M0", u8(H, I // 32))
+            t[f"layers.0.ffn.experts.{e}.{p}.weight"] = ("I8", u8(INTER, H // 2).view(np.int8))
+            t[f"layers.0.ffn.experts.{e}.{p}.scale"] = ("F8_E8M0", u8(INTER, H // 32))
+        t[f"layers.0.ffn.experts.{e}.w2.weight"] = ("I8", u8(H, INTER // 2).view(np.int8))
+        t[f"layers.0.ffn.experts.{e}.w2.scale"] = ("F8_E8M0", u8(H, INTER // 32))
     d = tmp_path / "snap"
     d.mkdir()
     write_safetensors(str(d / "model.safetensors"), t)
@@ -62,8 +62,8 @@ def test_a_ranks_mxfp4_expert_stacks_are_the_checkpoints_bytes_as_the_loader_wri
     def raw(name):
         return t[name][1].view(np.uint8)
 
-    rows, cols = slice(RANK * I // 2, (RANK + 1) * I // 2), slice(RANK * I // 2 // 2, (RANK + 1) * I // 2 // 2)
-    scols = slice(RANK * I // 32 // 2, (RANK + 1) * I // 32 // 2)
+    rows, cols = slice(RANK * INTER // 2, (RANK + 1) * INTER // 2), slice(RANK * INTER // 2 // 2, (RANK + 1) * INTER // 2 // 2)
+    scols = slice(RANK * INTER // 32 // 2, (RANK + 1) * INTER // 32 // 2)
     want = {f"{EX}.w13_weight": np.stack([np.concatenate([raw(f"layers.0.ffn.experts.{e}.{p}.weight")[rows] for p in ("w1", "w3")]) for e in range(E)]),
             f"{EX}.w13_weight_scale": np.stack([np.concatenate([raw(f"layers.0.ffn.experts.{e}.{p}.scale")[rows] for p in ("w1", "w3")])
                                                 for e in range(E)]),

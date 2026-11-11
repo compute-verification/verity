@@ -363,8 +363,8 @@ def rank_program(rank: int, *, swap_parts: bool = False, peer_of: dict[int, int]
             h2 = [B.call(bind(b1_tp2.AllReduce2, N=H), parts(x, peer(k, i))) for i, x in enumerate(own2)]
             k += 1
             f = [B.call(bind(b1.RMSNormTriton, N=H, EPS=C["EPS"]), x, norm) for x in h2]
-            l = B.call(bind(b1.Gemm, K=H, N=VS), f[-1], embed)
-            lg = B.call(bind(b1_tp2.AllGather2, N=VS), parts(l, peer(k, 0)))
+            own_logits = B.call(bind(b1.Gemm, K=H, N=VS), f[-1], embed)
+            lg = B.call(bind(b1_tp2.AllGather2, N=VS), parts(own_logits, peer(k, 0)))
             k += 1
             t = B.call(bind(b1.TokenSelect, V=V_FULL), lg)
             toks.append(t)
@@ -491,7 +491,7 @@ def test_persisted_record_states_the_layout(tmp_path):
     assert [n for n, _ in pj["params"]] == ["prompt", "peers", "weights"] and pj["tp"] == {"rank": 0, "world": 2}
     assert [f["name"] for f in pj["peers_layout"][0]["fields"]] == ["s0_k0", "s0_k1", "s0_k2", "s1_k0", "s1_k1", "s1_k2"]
     assert pj["n_input_nodes"] == 3       # prompt, peers (one homogeneous RecordType), weights (one homogeneous RecordType)
-    rows = [json.loads(l) for l in (tmp_path / "instances.jsonl").read_text().splitlines()[1:]]
+    rows = [json.loads(ln) for ln in (tmp_path / "instances.jsonl").read_text().splitlines()[1:]]
     coll = [o for o in rows if o.get("collective")]
     assert len(coll) == 2 + 2 + 1 + 1 + 1 + 1 and coll[0]["collective"]["site"] == "model.embed_tokens"
 
