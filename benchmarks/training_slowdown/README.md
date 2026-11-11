@@ -51,10 +51,12 @@ weights give, or the published rule where torch has none. An entry without a ref
 The standard algorithms differ in two ways the table shows apart. AdamW, SGD, Lion, Adafactor and the average of the
 weights train every tensor by the same forward and backward passes, so they carry the same products with two operands
 the update reaches, and differ only in the gates the optimizer itself adds to the step; gradient accumulation carries
-those products in several passes, which write more outputs. The rest change those products. Muon and Shampoo have no
-rule for the embedding, so their entries leave it untrained, and the output head, whose weight is the embedding, no
-longer has two operands the update reaches. Frozen layers (`last-blocks`) leave more products out, and adapters
-(`lora`) reach a matrix only through a rank-wide product.
+those products in several passes, which write more outputs. Muon and Shampoo with AdamW beside them on the gains and
+the embedding (`muon-whole`, `shampoo-whole`) train every tensor by those passes too: the bound is on the same
+products, and the optimizer adds gates and products of its own (Muon's Newton-Schulz steps, Shampoo's factors and
+roots). The rest change the passes' products. `ref-optim` (Muon) and `shampoo` leave the embedding untrained, and the
+output head, whose weight is the embedding, no longer has two operands the update reaches. Frozen layers
+(`last-blocks`) leave more products out, and adapters (`lora`) reach a matrix only through a rank-wide product.
 
 The command prints one row an entry (every entry, or the ones named): the share of the start's parameters its step
 trains, its slowdown under its policy and what binds. It trains nothing. It builds the entry's model at the start's
