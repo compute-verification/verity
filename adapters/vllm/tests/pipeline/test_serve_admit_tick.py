@@ -212,14 +212,14 @@ def test_the_engine_waits_for_the_watermark_and_admits_at_the_bucket_close():
     g.arrive("r0")
     assert not g.step() and g.sched.added == [] and g.gate.pending()
     g.lines(1)
-    assert g.step() and g.sched.added == ["r0"] and TICK.close(0) + TICK.free_us == g.gate.T
+    assert g.step() and g.sched.added == ["r0"] and g.gate.T == TICK.close(0) + TICK.free_us
     assert g.step()                                  # the step that frees r0
     g.release(1, bucket=1)
     g.arrive("r1", out=5)
     assert not g.step()                              # quiet: the next release's bucket is the watermark's to say
     g.lines(2)
     assert g.step() and g.sched.added == ["r0", "r1"] and g.sched.steps[-1] == ["r1"]
-    assert TICK.close(1) + TICK.free_us == g.gate.T
+    assert g.gate.T == TICK.close(1) + TICK.free_us
     g.release(2, bucket=2)
     g.arrive("r2")
     assert g.step() and g.step() and g.sched.added == ["r0", "r1"]   # bucket 2 hasn't closed by T: r1 steps on alone
@@ -597,7 +597,7 @@ def test_the_plugin_gates_the_engine_cores_input_loop(plugin, tmp_path):
     core._process_input_queue()                          # waits until the feeder writes bucket 0's line
     feeder.join()
     assert sched.added == ["cmpl-probe-0-0123abcd", "cmpl-c0-0-0123abcd"]
-    assert sched._verity_tick.summary()["unordered"] == 1 and TICK.close(0) == sched._verity_tick.T
+    assert sched._verity_tick.summary()["unordered"] == 1 and sched._verity_tick.T == TICK.close(0)
     logged = [json.loads(x) for x in next(tmp_path.glob("tick.*.jsonl")).read_text().splitlines()]
     assert logged[0]["event"] == "unordered" and logged[-1]["admitted"] == [0, 1]
     write({"key": "c9", "run": "ab", "n": 1, "bucket": 5})
@@ -706,7 +706,7 @@ def test_serve_openai_admits_at_the_tick_over_http():
         http.shutdown()
     assert raw.startswith(b"HTTP/1.1 200") and end.startswith(b"HTTP/1.1 200")
     assert len(engine.sched.added) == 1 and engine.sched.steps == [engine.sched.added] * 2
-    assert gate.summary()["admitted"] == 1 and TICK.close(1) + 2 * TICK.free_us == gate.T and gate.ended
+    assert gate.summary()["admitted"] == 1 and gate.T == TICK.close(1) + 2 * TICK.free_us and gate.ended
     assert admit.summary() == {"numbered": 1, "unordered": 0, "passed": 0, "watermarks": 1, "runs": 1}
 
 
