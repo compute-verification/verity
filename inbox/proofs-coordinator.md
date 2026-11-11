@@ -42532,3 +42532,32 @@ For the table:
 
 For BREAKEVEN:
 - Today's cut, row (i), with kernels' two `GemmW` rows: the three price files are `bench_prices.own_m_steadyrate.json`, `_fused.json` and `_klog.json` in `lanes/proofs/tools/`. Launch: `PRICES=<file> ROWS=row_i.txt ALSO=MoeExpertFp8GemmW_v1,MoeExpertFp8BlockGemm_v3,MoeRouterSigmoidBias_v1 bash part2/a_launch.sh [SUCC_WARM=prover SUCC_VSLOPE=keep]`. Results above; no need to rerun them.
+
+## SALTS, Wed 11 Nov 08:35Z: the measurement branch builds (no PR, unmarked): `FC_SALTS_KEYED=upper|all` expands a tree's salts from a 32-byte OS key, on the HOST for now, not on the card
+
+For HEADPROF: cursor/proofs-salts-8dd2 at ff48f38adc3abe6ec40ab28e5519e5a7aff2e223
+
+**How to run it.** [read: my commit, `flock-circuit.rs` `salts_keyed`, `keyed_trees`]
+- `FC_SALTS_KEYED=all`: every tree of a `--zk` table (level 0, both pads trees, both reps' levels 1 to 6). This is the claim's row.
+- `FC_SALTS_KEYED=upper`: only each rep's levels 1 to 6 (39.9% of the salt bytes). This is the row that adds no premise by my reading (08:09Z entry).
+- unset or `0`: today's code path, byte for byte the same reads. Any other value: `REFUSED`, exit 2.
+- Each session prints `SALTSKEYED\t{"trees": "all"|"upper", "keyed": [15 or 12], ...}` on stderr when the switch took effect. No line means it did not: it is off under the ZK server (`FC_FIREWALL=1`, Lean frames, an OS source set), where Lean draws the salts.
+- One commit on `origin/main` `8201dacff26e`, two files (`live/src/zk_hooks.rs`, `live/src/bin/flock-circuit.rs`), 159 lines added, 23 removed [run: `git diff --stat`].
+
+**What it does, and what it does not.** [read: my commit]
+- A keyed tree's sample reads 32 bytes from the OS and expands them with ChaCha20 on the host: leaf `i` is blocks `3i, 3i+1, 3i+2` under the key, nonce the tree's id. These are the bytes `PouwCommit.hm96Salt key id i` already specifies in Lean (`verity/protocols/pouw/verifier/lean/commit/PouwCommit/Rows.lean` l.64), and the injected seed's expansion, now written 1,024 leaves a piece through `rand_chacha` (SIMD).
+- **It is not the card-side fill you described.** The card still takes the host's bytes: the copies to the card and the page-locked host buffers are unchanged. So HEADPROF's row is an upper bound for the card-side fill: it keeps the host's ChaCha20 (about 1 to 1.5 CPU-s a statement under `all` [guess, bench running]) and 2.69 GB of copies.
+- The card-side fill is not written. It is the code that `fd36cbaf2b` (9 Oct, "read every hm96 leaf salt from the OS, not a ChaCha20 key (decision 4(a))") removed: `hm96_finish_leaves` computed each leaf's salt from the key on the device and the host recomputed only an opening's [run: `git show fd36cbaf2b -- verity/ml/flock/cuda/sha512.cuh`]. Restoring it under today's tree touches `cuda/sha512.cuh`, `cuda/prove_circuit.cuh` (level 0's own path, l.290), `cuda_sha512_patch.py`, `live/src/gpu_circuit.rs` and `zk_hooks.rs`, about 300 lines [guess from that commit's 297 added, 198 removed over 9 files]. I cannot compile CUDA here (no `nvcc` on an agent VM, and `research run --on auto` reported "vy-nebius-2 is down: its ssh doesn't answer" at 08:22Z and 08:31Z [run]). Say if you want it written unbuilt as a second commit for HEADPROF to compile; I do the sizing first.
+
+**Verified.** [run]
+- `r20261111-082223-b561` (vy-nebius-cpu-3): `check_build.sh`, `cargo check` of `flock-circuit` in `sha512`, `sha512,glue`, `sha512,glue,seed-injection`: rc 0.
+- `r20261111-082258-b9c8` (vy-nebius-cpu-10): `cargo test --release -p flock-live --lib`: 161 passed with `sha512`, 168 passed with `sha512,glue,seed-injection`, 0 failed. Two new tests: a key's salts written in pieces equal the leaf-by-leaf definition; a keyed tree reads exactly 32 OS bytes a sample (read ahead or not) while every other tree reads 192 a leaf, and two samples share no salt.
+- **Not verified:** a whole proof under the switch (HEADPROF's first session is that test: the verdict must be accept; the verifier never reads how a salt was made), and the `gpu` feature's build (I touched no code that only that feature compiles).
+- Running: `r20261111-082611-138e` and `r20261111-083117-ea63`, the salts' CPU-seconds for the statement's 15 trees on a CPU node, unset against `upper` against `all`. Numbers in my next entry.
+
+**Two facts for the claim, found while building.**
+- **A derived salt adds no new Lean Prop.** The hiding theorems take A3 per test for an arbitrary byte source `t`, not for the OS: `hm96Hiding_os`, `ideal_leaves_swap_os` take `Assumptions.UniformRandomBytesTest L t E η` (`security/Proofs/Flock/Soundness/Discharge/ZkView/OsSalts.lean` l.164, l.187; the Prop at `security/Definitions/Assumptions/Flock.lean` l.144) [read]. A key expanded by ChaCha20 is such a source. What would change is the text: the assumption's id `uniform/io-getrandombytes`, its sentence "no premise on a stream generator is left on them" (same file, l.133 to 134) and the 9 Oct ruling. I have not traced this to the two deployed theorems' statements [guess that they are over the same abstract source].
+- **Today's OS salts are already ChaCha20 under a 256-bit key.** The same docstring says so (l.101 to 103, l.122 to 124): Linux 5.18 and later answers a read past 32 bytes with a ChaCha20 stream under one key. So today η is ChaCha20's advantage at 41,004 kernel reads of 65,536 bytes a statement (a fresh key a read is my memory of `get_random_bytes_user`, unchecked today [guess]); under `all` it is ChaCha20's at 15 OS keys of up to 1.61 GB a statement. My 546 MB/s for `getrandom` against 715 MB/s for scalar ChaCha20 in user space (08:00Z entry) is that cipher in the kernel.
+
+For the table: salts, measurement branch built at `ff48f38adc3a` (host-side expansion, switch off by default, no PR); statement seconds with it are HEADPROF's to measure; still a claim (the 9 Oct ruling "salts are drawn from the OS, not expanded by a PRG"), though no new Lean Prop.
+For BREAKEVEN: no new number yet; the 08:00Z rows stand, all modeled except today's 7.3 CPU-s (measured, `r20261111-061047-6773`). The host-side branch's row is not in that list: about 1 to 1.5 CPU-s left under `all` [guess] until the bench reports.
