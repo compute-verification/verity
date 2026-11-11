@@ -1,7 +1,7 @@
 import pytest
 from synthetic import tiny_registry, write_config
 
-from training_slowdown import config, starts
+from training_slowdown import calculator, config, starts
 from training_slowdown.routes import subset
 
 
@@ -27,8 +27,7 @@ def test_the_digest_is_what_decides_the_run(tmp_path, reg):
     base = digest("base")
     assert digest("seeds", seeds={"search": [7], "final": [1, 2]}) == base
     assert digest("target", target={"gain": 2.0}) == base
-    policy = next(p for p in config.policies() if p != "console")
-    assert digest("policy", policy=policy) == base
+    assert digest("policy", policy=calculator.policies()[0]) == base
     assert digest("default", dials={"trainable": "blocks.0.w_*", "lr": 1e-2, "clip": subset.DIALS["clip"]}) == base
     assert digest("dial", dials={"trainable": "blocks.0.w_*", "lr": 2e-2}) != base
     assert digest("budget", budget={"steps": 4, "batch": 2}) != base
@@ -61,9 +60,13 @@ def test_a_config_is_refused_by_name(tmp_path, reg, over, why):
         config.load(write_config(tmp_path / "bad.toml", **over), reg)
 
 
-def test_a_policy_is_policy_pys_rule_or_a_table_of_the_calculators_registry():
-    names = config.policies()
-    assert names[0] == "console" and len(names) > 1 and len(set(names)) == len(names)
+def test_a_policy_is_policy_pys_rule_or_a_table_of_the_calculators_registry(tmp_path, reg):
+    """The fixed policies have one reader, which reads the registry's data files and gives the names the calculator's
+    own registry does; a config names one of them or policy.py's rule."""
+    fixed = calculator.policies()
+    assert fixed and fixed == calculator._calculator()[4].names("policy") and not set(fixed) & set(config.RULES)
+    for name in (*config.RULES, *fixed):
+        assert config.load(write_config(tmp_path / f"{name}.toml", policy=name), reg).policy == name
 
 
 def test_the_honest_config_is_beside_it_at_the_same_start_and_gain(tmp_path, reg):
