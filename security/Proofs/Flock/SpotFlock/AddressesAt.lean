@@ -150,12 +150,12 @@ theorem parse_roots {x : Msg} {s : AuditStatement} (hs : parse h x = some s) :
   | some st => rw [hd] at hs; cases hs; exact ⟨st, rfl, rfl⟩
 
 /-- **Round 2 reads a value off the interior record under the replay block's interior roots**: where the run's
-statement decodes, its round-1 message is a record and its second draw evaluates, a registered read of value `v` at
-template `t`'s port `port` that round 2 reads off the interior record (`readsInterior`) is read under the replay
-block's interior roots. -/
-theorem readRoots_of_readsInterior {x m₁ : Msg} {c₀ c₁ : FlockDeploy.Coin} {st : Roots} {rec draw : Json}
-    (hx : decode x = some st) (hm : jsonMsg m₁ = some rec) (hd : secondDraw h c₀ c₁ = some draw) (ρ t : ℕ)
-    (port v : String) (hri : readsInterior (ownOf h st rec draw c₀) (h.names.getD t "") port v = true) :
+statement decodes, its round-1 message is a record and its second stage's sample evaluates, a registered read of
+value `v` at template `t`'s port `port` that round 2 reads off the interior record (`readsInterior`) is read under the
+replay block's interior roots. -/
+theorem readRoots_of_readsInterior {x m₁ : Msg} {c₀ c₁ : FlockDeploy.Coin} {st : Roots} {rec smp : Json}
+    (hx : decode x = some st) (hm : jsonMsg m₁ = some rec) (hd : secondDraw h c₀ c₁ = some smp) (ρ t : ℕ)
+    (port v : String) (hri : readsInterior (ownOf h st rec smp c₀) (h.names.getD t "") port v = true) :
     readRoots h x m₁ c₀ c₁ ρ t port v = irootsOf m₁ ρ := by
   unfold readRoots
   rw [hx, hm, hd]
@@ -272,14 +272,14 @@ theorem not_addresses (hcl : SideBySide h) (hr : r.Ok h) {g : ℕ} (hg : r.s.pro
   exact not_addressHolds_of_interior hcl hr hg (hI S hH.2.1) hH
 
 /-- **Under `Addresses`, side by side, round 2 reads no needed gate's row off the interior record**: at an accepted
-run whose statement decodes, whose round-1 message is a record and whose second draw evaluates, every gate a checked
-unit needs has an address that holds, and the registered read named like its port is one round 2 doesn't read off the
-interior record (`readsInterior`). -/
+run whose statement decodes, whose round-1 message is a record and whose second stage's sample evaluates, every gate
+a checked unit needs has an address that holds, and the registered read named like its port is one round 2 doesn't
+read off the interior record (`readsInterior`). -/
 theorem addresses_not_readsInterior (hcl : SideBySide h) (hA : Addresses h) (hr : r.Ok h) {g : ℕ}
-    (hg : r.s.prog.Needs r.b g) {st : Roots} {rec draw : Json} (hx : decode r.x = some st)
-    (hm : jsonMsg r.m₁ = some rec) (hd : secondDraw h r.c₀ r.c₁ = some draw) :
+    (hg : r.s.prog.Needs r.b g) {st : Roots} {rec smp : Json} (hx : decode r.x = some st)
+    (hm : jsonMsg r.m₁ = some rec) (hd : secondDraw h r.c₀ r.c₁ = some smp) :
     ∃ S : Address, r.AddressHolds h S g ∧ ∃ reg, regNamed r.ins r.sts (S.port r.u) = some reg ∧
-      readsInterior (ownOf h st rec draw r.c₀) (h.names.getD (templateOf h.ms r.u) "") reg.name reg.value =
+      readsInterior (ownOf h st rec smp r.c₀) (h.names.getD (templateOf h.ms r.u) "") reg.name reg.value =
         false := by
   obtain ⟨S, hH, reg, hreg, -, hne⟩ := addresses_reads hcl hA hr hg
   refine ⟨S, hH, reg, hreg, Bool.eq_false_of_ne_true fun hri => ?_⟩
@@ -287,13 +287,13 @@ theorem addresses_not_readsInterior (hcl : SideBySide h) (hA : Addresses h) (hr 
 
 /-- **`Addresses` fails where round 2 reads a checked unit's registered reads off the interior record**: where the
 code's proof blocks stand side by side, one accepted run whose statement decodes, whose round-1 message is a record
-and whose second draw evaluates, with a checked unit that needs a gate and every one of whose session's registered
-reads round 2 reads off the interior record (`readsInterior`), refutes `Addresses h`. -/
+and whose second stage's sample evaluates, with a checked unit that needs a gate and every one of whose session's
+registered reads round 2 reads off the interior record (`readsInterior`), refutes `Addresses h`. -/
 theorem not_addresses_of_readsInterior (hcl : SideBySide h) (hr : r.Ok h) {g : ℕ} (hg : r.s.prog.Needs r.b g)
-    {st : Roots} {rec draw : Json} (hx : decode r.x = some st) (hm : jsonMsg r.m₁ = some rec)
-    (hd : secondDraw h r.c₀ r.c₁ = some draw)
+    {st : Roots} {rec smp : Json} (hx : decode r.x = some st) (hm : jsonMsg r.m₁ = some rec)
+    (hd : secondDraw h r.c₀ r.c₁ = some smp)
     (hI : ∀ q reg, regNamed r.ins r.sts q = some reg →
-      readsInterior (ownOf h st rec draw r.c₀) (h.names.getD (templateOf h.ms r.u) "") reg.name reg.value = true) :
+      readsInterior (ownOf h st rec smp r.c₀) (h.names.getD (templateOf h.ms r.u) "") reg.name reg.value = true) :
     ¬ Addresses h :=
   not_addresses hcl hr hg fun S _ reg hreg =>
     readRoots_of_readsInterior h hx hm hd r.ρ (templateOf h.ms r.u) reg.name reg.value (hI (S.port r.u) reg hreg)
@@ -326,13 +326,13 @@ theorem not_addresses_of_input (hr : r.Ok h) {g : ℕ} (hg : r.s.prog.Needs r.b 
 
 /-- **`Addresses` fails where a checked unit needs an input gate and round 2 reads its session's registered reads off
 the interior record**: one accepted run whose statement decodes, whose round-1 message is a record and whose second
-draw evaluates, with a checked unit that needs an input gate of the statement's program and every one of whose
-session's registered reads round 2 reads off the interior record (`readsInterior`), refutes `Addresses h`. -/
+stage's sample evaluates, with a checked unit that needs an input gate of the statement's program and every one of
+whose session's registered reads round 2 reads off the interior record (`readsInterior`), refutes `Addresses h`. -/
 theorem not_addresses_of_input_readsInterior (hr : r.Ok h) {g : ℕ} (hg : r.s.prog.Needs r.b g)
-    (hin : r.s.prog.gates[g]? = some .input) {st : Roots} {rec draw : Json} (hx : decode r.x = some st)
-    (hm : jsonMsg r.m₁ = some rec) (hd : secondDraw h r.c₀ r.c₁ = some draw)
+    (hin : r.s.prog.gates[g]? = some .input) {st : Roots} {rec smp : Json} (hx : decode r.x = some st)
+    (hm : jsonMsg r.m₁ = some rec) (hd : secondDraw h r.c₀ r.c₁ = some smp)
     (hI : ∀ q reg, regNamed r.ins r.sts q = some reg →
-      readsInterior (ownOf h st rec draw r.c₀) (h.names.getD (templateOf h.ms r.u) "") reg.name reg.value = true) :
+      readsInterior (ownOf h st rec smp r.c₀) (h.names.getD (templateOf h.ms r.u) "") reg.name reg.value = true) :
     ¬ Addresses h :=
   not_addresses_of_input hr hg hin fun S _ reg hreg =>
     readRoots_of_readsInterior h hx hm hd r.ρ (templateOf h.ms r.u) reg.name reg.value (hI (S.port r.u) reg hreg)
