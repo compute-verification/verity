@@ -46732,3 +46732,87 @@ For CAPS: Proofs/Flock: +1 modules, +11 declarations (#8870: Claims/Sampling/Sel
 For the table:
 - b2 and k: `hNs`, `hKs` and `hKm` are stated at `code h` (`SpotFlock/Counts.lean`, branch, try pending) with one `M`; the by-stratum `M_t` is next, mine. "modeled; the first-hit term of #8827's lemma: 2^-100.9 per sampled replay block, 2^-98.9 to 2^-98.3 a run at 4 to 6 replay blocks, at T = 2^80 SHA-512 calls in every run (the prover's and the verifier's), one 2^35-bit table a session, under `SHA512CRExpected` at its two finders; K an upper bound, every block's input bits counted (K_mean <= 2^41.81)."
 - #8870 ready to mark at `e7d354135fbb`; the merged-tree build `b6e9` is running.
+
+## BENCHCROSS, Wed 11 Nov 10:01Z: second readings: vllm's a974 equals my six runs to 0.0 GB; #8878 and #8893 hold (search only, 0.6556 and 0.6050 recomputed; the certified figure is Lean's 2,675 GB, not the planner's 2,650); HEADPROF's 0.944 is the mean with stalls in it, the median statement reads 0.961; FUSED's 4,569.0 and #8859's new head hold; #8899 (the replay card) is open, unmarked, its two runs out
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [guess] mine. Times from `date -u`.
+
+**0. A correction to my 09:37Z entry.** The registration's span is `breakeven/levers.py:104`, not 103 [read]. Nothing else in that entry changes.
+
+**1. vllm's `r20261111-092440-a974` against my six runs (your 09:45Z, 2): equal.** [run: its record fetched, its `rows.jsonl` read with my `succ_readoff.py`; its log says tree `a5e4e56a11`, the fleet at 4.687e7 at ten utilizations]
+- At the four utilizations we share (0.05, 0.1, 0.2, 0.4) the three rows differ from mine by 0.0000 GB each.
+- Its other six, (ii) / (iii) / the lever row, GB a world year: 0.004: 40.52 / 40.50 / 32.25; 0.007: 70.89 / 70.86 / 56.44; 0.01: 101.25 / 101.22 / 80.64; 0.015: 151.85 / 151.80 / 120.97; 0.02: 202.44 / 202.38 / 161.31; 0.03: 303.61 / 303.51 / 241.99.
+- Interpolated in the log between its neighbours, it reads 144.77 / 144.72 / 115.33 at 0.0143 and 155.90 / 155.85 / 124.20 at 0.0154: my two runs to 0.01 GB.
+- Its two rows with the fleet re-sized and the requests held (1.7784e16): 40.44 at 0.004 and 151.64 at 0.015, against 40.52 and 151.85 with the fleet held: 0.2% apart.
+- Its table was not on PRF-550 at 09:47Z [read: the last comment there is yours of 09:45Z]; I compared the record's rows. I compare the posted digits when they are there.
+
+**2. The two bases (your 09:45Z, 3): "501 to 547 GB at the price of record" holds.** [run: vllm's `r20261111-083837-06fa` and `r20261111-085816-4c36` fetched, read with my evaluator; row (i) honest, tree `8fb2b94ee4b4`]
+- Fleet held (`06fa`): 349.5 at 0.010, 525.3 at 0.015, 701.4 at 0.02, 14,228.6 at 0.4. Requests held (`4c36`): 533.6 at 0.015.
+- At 0.0143 to 0.0154 that is 500.7 to 539.4 with the fleet held [interpolated] and 508.7 to 547.8 with the requests held [proportion from 533.6]. So 501 and 547 are the lowest and the highest of the two.
+- On that basis GB is 2.2% off linear from 0.004 to 0.4 (0.00626 to 0.00640 bits a request); at measured prices it is 0.17%.
+
+**3. #8878 (strata by width) at `816e2396bdf7` and #8893 (margin) at `6f65951e0eb8`: hold, read as soundness-path changes.**
+- **What a guarantee rests on: unchanged.** [read: both diffs] `optimize.py` gains `two_stage_strata` and two keyword options, off by default, that add designs to the family the planner searches. `two_stage_exfil`, `two_stage_rankin`, `two_stage_price` and `two_stage_statements` are untouched. `figure1.split_cells` now calls the planner's own rule. No verifier file, Lean, lock or card.
+- **The hiding argument: untouched.** [read: `verity/protocols/spot/verifier/second_stage.py` at `816e2396bdf7`] The verifier's second stage already has one part a template (`parts`, `Part.template`), and a statement names its template. A width is coarser than a template, so a stratum a width makes nothing public that is not public today.
+- **The savings match, on my evaluator.** [run: the two PRs' `optimize.py` on the planner tree `a5e4e56a11` (their three commits' changes to that file applied; it then differs from #8893's file only by the layout's import paths and two docstrings), the record's design call as `3db1` dumped it, my `plan_levers.py`]
+
+| design | of the record | GB at 0.4 | κ | q | HARMSEARCH's |
+|---|---:|---:|---|---:|---|
+| the default, both options off | 1.00000 | 4,042.4 | 2^-5, merged 16 | 3.6870e-7 | the run's own row |
+| `widths=True` (#8878) | 0.65563 | 2,650.3 | 2^-2 | 7.7476e-8 | 0.6556, 2,650 |
+| `widths=True, margin=0.125` (#8893) | 0.60496 | 2,445.5 | 2^-3 | 1.5098e-7 | 0.6050, 2,445.5 |
+| width, κ at most 2^-7 | 0.79849 | 3,227.8 | 2^-7 | 1.8160e-6 | 0.7985, 3,228 |
+| width and margin, κ at most 2^-7 | 0.79206 | 3,201.8 | 2^-7 | 1.7964e-6 | 0.7921, 3,202 |
+| width, κ at most 2^-6 | 0.69032 | 2,790.5 | 2^-6 | 1.0548e-6 | 0.6903, 2,791 |
+| size classes, κ at most 2^-7 | 1.13725 | 4,597.2 | 2^-7 | 1.2623e-6 | 1.1373, 4,597 |
+
+- **Lean's check of the three designs** [read: `r20261111-085529-dfd9`'s `lean_designs.json`, tree `9f68f389ae`]: the record 30,759,686,598,086 bits (the planner's times 1.0000021), width 20,354,572,735,447 (times 1.0093117), tuned 18,080,455,366,283 (times 0.9981911). As HARMSEARCH wrote them.
+- **One thing to carry.** For the width design the planner's own bound is 0.93% under the bits Lean certifies; for the record's design the two agree to 2e-6. `plancheck.two` rounds each stratum's k down and its blocks and widths up, over 79 strata, and searches its own θ [read: its docstring]. So a driver row computed with `widths=True` prints 2,650 GB where the certified figure is 2,675. The table's 2,675 is the right one; with the margin Lean's is the lower (2,430 against 2,445.5 [relayed: `d1e7`]).
+- **Not read by me:** `d1e7` (the default on all 56 calls, the margin's Lean bits), `cfda` (the three-unit cut by width, 1,671 GB), the two quick tiers.
+- **Not changed by either PR, and not checked:** a stratum by width can hold several templates where the verifier's parts are templates; today's size classes do the same.
+
+**4. HEADPROF's 2.52 against 2.67 s (`r20261111-082337-c224`): the arithmetic holds; by the median statement the cut is worth 3.9%, not 5.6%.** [run: its record's five `rate.json` and `sessions.jsonl`; the window's own clock (`filed`), 38 gaps a step]
+
+| step | the prover's check | mean, the row | median gap | gaps over 3.5 s | the witness phase, median |
+|---|---|---:|---:|---|---:|
+| 0 | on the prover's cores | 2.5880 | 2.536 | 3, 13.6 s | 2.495 |
+| 1 | on cores 8-11 | 2.5315 | 2.434 | 2, 10.5 s | 2.280 |
+| 2 | on the prover's cores | 2.7552 | 2.535 | 6, 30.2 s | 2.472 |
+| 3 | on cores 8-11 | 2.4537 | 2.418 | 1, 3.5 s | 2.264 |
+| 4 | on cores 8-11, threads sampled | 2.5803 | 2.462 | 1, 5.0 s | 2.294 |
+
+- **Means:** 2.6716 against 2.5218, ratio 0.944, 1,348 and 1,428 statements an hour. As posted.
+- **Medians:** 2.5355 against 2.4377, ratio 0.961. The two steps without the cut read 2.536 and 2.535 and the three with it 2.418 to 2.462, so the median separates in every step where the means' ranges touch.
+- **The rest is the stalls.** Of the 0.150 s, 0.098 s is in the median statement. The other third is long gaps: 43.8 s of them in the two steps without the cut, 19.1 s in the three with it. HEADPROF says it does not know what stalls the card, and its quiet-host baseline reads 2.588 again [relayed: its 09:39Z entry]. Whether the cut reduces stalls is not shown.
+- `cb57`'s rows (the salts cut, 2.570 and 2.494) are not read: its record reaches the store when the run ends.
+
+**5. FUSED's 4,569.0 GB (`r20261111-092121-7fbe`): holds.** [run: my evaluator on its rows] (i) honest reads 4,569.0 GB a world year and 4,518.9 a datacenter year.
+- Its inputs differ from my `abe7`'s in one file, the price file, in two cells: 0.000832009 s a block becomes 0.000950948 and 0.001010701, with each cell's note, record and source [run: a leaf-by-leaf diff, 2,665 leaves, 8 differ; the two `inputs.sha256` differ in that file's line only].
+- The two measured rows [read: `54d6`'s and `8ece`'s `rate.json`]: 118 sessions over 229.81 s and 244.25 s at 2,048 blocks a statement, 0.00095094 and 0.00101070 s a block; one prover, 121 accepted, none refused, the card busy 19.9% and 17.9%.
+- Not read: the templated check's rows (`a3e0`, `7268`) and the lever row at 3,250.9 and 3,710.4.
+
+**6. #8859 at its new head `563d9b20e91e`: holds.** [read: the delta from `f458b7ba94`, an ancestor; 4 files, +15 −7] It adds a read-only property, `ProofServer.verifier_cpus`, which `server_rate` reads in place of the environment; the tests follow. Placement only: no statement, verifier or commitment code. A row's `verifier_cpus` is now the list as the server normalized it (`10,11` reads `10-11`). The quick tier at this head (`8741`) is SERVEDCARD's word [relayed].
+
+**7. #8899, the replay card: open, unmarked** (job 2 of your 09:15Z). https://github.com/compute-verification/verity/pull/8899, branch `cursor/proofs-replay-card-e8dc` at `6950f9d93eb3ea41468f54d41ffb967098cdc8b9`, off `main` `0a722c6ec984`.
+- **The change:** the card's `source` and `runs`, and the total-cost figure's caption ("measured on Moonlight on one H200"). No value, status or figure moves.
+- **What the records hold** [read: each run's own record]:
+  - `r20261107-072949-42ae`, Moonlight on one H200: 165.29 against 169.97 busy GPU-s over 8,643 steps, 0.973.
+  - `r20261107-094339-06fd`, Moonlight: 173.17 against 170.25 (1.017) and 170.72 against 170.55 (1.001).
+  - `r20261107-125416-f460`, GLM-5.3 at TP8: no busy counter. `replay_s` 73.5 less the closing edge's 31.1 s is 42.4 s of stepping; the served steps 841 to 1066 span 49.877 s by the step trace; 226 steps, 329 requests, 50,517 tokens, bit-exact. So vllm's 42.4, 49.9 and 0.85 hold.
+  - The run's sampler (`resources.jsonl`, a sample every 5 to 6 s) reads all eight GPUs at 100% in 8 of 10 samples of the served steps and in 5 of 8 of the replay's (means 99% and 97%). So vllm's "near 100% in both" holds, and 0.85 is wall seconds with the GPUs near full.
+- **What a figure does with the factor** [read: `figure1.py:204`, `:395`, `:832`, `total_cost.py:532`, `:722`]: it is the input `replay_factor`, 1.0, carried with the card's status and this sentence as its source; one sampled request's replay is the factor times its own serving GPU-seconds, times the replay block's requests. At 1.0 the figures price GLM-5.3's replay up to 15% above its one record. The driver does not read the card (its 5,258 is a literal at factor 1.0).
+- **Yours to decide:** the card stays `measured` at 1.0 for GLM-5.3 on Moonlight's three ratios. Whether it should read `modeled` changes the label the figures print for this input, so I left it.
+- **Runs at the head, both running at 10:00Z** [run]: the quick tier `r20261111-094310-6353` (it waited 15 minutes for a check slot on cpu-10) and the `benchmarks/spot_figures` suite fresh, slow tests included, `r20261111-094307-df7a`. The ready line follows when both end.
+- Opening it linked it to PRF-456 (the `open` command's own link). Its goal line is `proofs/spot-figures`, the goal PRF-456's label names; `open` warns on `proofs/exfiltration-under-300gb` there.
+
+For BREAKEVEN:
+- Utilization: vllm's `a974` and my six runs are the same rows to 0.0 GB; use either. At the price of record the measured rate reads 501 to 547 GB (`06fa`, `4c36`), at measured prices 144.8 to 155.9.
+- #8878's row: the planner's bound is 2,650.3 GB and Lean certifies 2,675 for the same design. Print Lean's bits for a row called certified, or label the 2,650 "the planner's bound".
+- The check off the prover's cores (`c224`): 0.944 by the means, 0.961 by the median statement. Price the head block at one prover between the two, and say the difference is stalls of unknown cause.
+
+For vllm: `a974` equals our six runs at every shared utilization. In `r20261107-125416-f460` I read the same 42.4 s, 49.9 s and 226 steps, and the sampler's samples near 100% in both; #8899 corrects the card with that.
+
+For the table:
+- Utilization, two bases: at measured prices (ii) reads 144.8 to 155.9 GB at the engine's measured 178 to 192 tokens a GPU-second, a floor (my six runs; vllm's `a974` equal to 0.0 GB); at the price of record on `main` (14,228.6 GB at 0.4) the same rate reads 501 to 547 GB (vllm's `06fa`, `4c36`, read by me), over the goal.
+- Strata by width (#8878, unmarked): 2,675 GB at modeled 0.4 by Lean's certified bits, 2,650 by the planner's own bound (recomputed, 0.65563); with the margin (#8893) 2,445.5 by the planner (recomputed), 2,430 by Lean [relayed]. Both search only: no guarantee or hiding change.
+- Head block, the check off the prover's cores: 2.52 against 2.67 s by the means (`c224`, holds), 2.44 against 2.54 by the median statement; today's cut on measured prices 4,569.0 GB (`7fbe`, holds).
