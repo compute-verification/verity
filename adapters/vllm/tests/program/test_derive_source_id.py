@@ -9,12 +9,12 @@ import sys
 import pytest
 import torch
 from torch import nn
-
 from verity.circuits.codec import encode_program, program_digest
+from verity.definitions.registry import b1
+
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend import vllm_meta as vm
 from verity_vllm.program.frontend.derive import derive_report
-from verity.definitions.registry import b1
 
 PROF = dict(mode="profile", profile="b1-eager")
 OLD_PATH = "verity_capture.experimental.cb_a.vllm_meta"

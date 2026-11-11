@@ -5,17 +5,16 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.defs import bind
-from verity_vllm.program.frontend.target_profile import TargetProfile
+from verity.circuits.evaluation.reference import evaluate
 from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.registry import b1, hopper
+from verity.definitions.registry import attention_vocab, b1, hopper
 from verity.definitions.registry import fa2_check_inf as F2
-from verity.definitions.registry import attention_vocab
 from verity.definitions.registry import fa3_check_inf as F3
 from verity.definitions.registry import prims as P
+
 from verity_vllm.program.frontend import targets as TG
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 NEG_INF, NAN = 0xFF800000, 0x7FFFFFFF
 FA2 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": P.Fa2InvSum}

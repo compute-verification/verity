@@ -48,23 +48,6 @@ import torch
 import torch.fx.traceback as fxt
 import torch.nn as nn
 from torch._library.infer_schema import infer_schema
-
-from verity_vllm.program.frontend import marlin_moe_leaf as mml
-from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
-from verity_vllm.program.frontend.export_compat import (InertEvent, InertStream, cuda_streams_inert, deep_gemm_fp8_einsum_leaf,
-                                                        mhc_pre_broadcast_leaf, registered_op_bodies_as_ops)
-from verity_vllm.program.frontend.rules import vllm_bindings as VB
-from verity_vllm.program.frontend.rules import vllm_dsv4, vllm_marlin_moe, vllm_mhc
-from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
-from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
-from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS
-from verity_vllm.program.frontend.rules.triton_iface import triton_launch
-from verity_vllm.program.frontend.rules.vllm_iface import iface
-from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
-from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.frontend.loader_parity import fp8_block_weights_as_the_loader_does, post_load_tensors_as_the_loader_does
 from verity.definitions.numerics import deepgemm_twins as DT
 from verity.definitions.numerics import dsv4_compressor_twin as DC
 from verity.definitions.numerics import dsv4_qnorm_insert_twin as TQ
@@ -76,8 +59,34 @@ from verity.definitions.numerics.dsv4_moe_twin import clamp_twin, hash_twin, rou
 from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import hopper
+
 from tests.program.test_dsa_norm import ptx_block_model
 from tests.program.test_dsv4_indexer import head as inv_rope_head
+from verity_vllm.program.frontend import marlin_moe_leaf as mml
+from verity_vllm.program.frontend import targets as TG
+from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
+from verity_vllm.program.frontend.export_compat import (
+    InertEvent,
+    InertStream,
+    cuda_streams_inert,
+    deep_gemm_fp8_einsum_leaf,
+    mhc_pre_broadcast_leaf,
+    registered_op_bodies_as_ops,
+)
+from verity_vllm.program.frontend.loader_parity import (
+    fp8_block_weights_as_the_loader_does,
+    post_load_tensors_as_the_loader_does,
+)
+from verity_vllm.program.frontend.rules import vllm_bindings as VB
+from verity_vllm.program.frontend.rules import vllm_dsv4, vllm_marlin_moe, vllm_mhc
+from verity_vllm.program.frontend.rules.triton_iface import triton_launch
+from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
+from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS
+from verity_vllm.program.frontend.rules.vllm_iface import iface
+from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 
 class _Overlapped(nn.Module):

@@ -19,13 +19,17 @@ import pytest
 import torch
 from torch import nn
 
-from verity_vllm.program.frontend import derive_examples as ex
-from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile, vllm_ruleset
 from tests.pipeline import tp_toy
 from tests.program import test_dsa_derive as DSA
 from tests.program import test_sigmoid_moe_fp8_derive as MOE
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
+from verity_vllm.program.frontend import derive_examples as ex
+from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.program.frontend.rules.vllm_bindings import (
+    clear_observations,
+    observe_target_profile,
+    vllm_ruleset,
+)
 
 PINS = Path(__file__).with_name("derive_neutrality.json")
 REPIN = os.environ.get("VERITY_REPIN") == "1"

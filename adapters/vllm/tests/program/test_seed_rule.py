@@ -7,13 +7,13 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from verity_vllm.engine import served_seed
-from verity_vllm.program.frontend import seed_rule as SR
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.definitions.registry import boolean_io_shell as BX
 from verity.definitions.registry import io_shell as X
+
+from verity_vllm.engine import served_seed
+from verity_vllm.program.frontend import seed_rule as SR
 
 
 def _col(xs) -> np.ndarray:
@@ -109,6 +109,7 @@ def test_the_wrappers_inputs_are_the_programs_parameters_and_the_check_refuses_a
     from verity.circuits.defs import Builder
     from verity.circuits.refs import Affine, Coll
     from verity.circuits.types import Array, Value
+
     from verity_vllm.program import workload as W
     from verity_vllm.program.frontend.value_types import type_of_tensor
     from verity_vllm.program.predict import batch

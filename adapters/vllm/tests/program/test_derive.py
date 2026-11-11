@@ -13,18 +13,19 @@ import numpy as np
 import pytest
 import torch
 import torch.nn.functional as F
-
-from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
-from verity_vllm.program.frontend import derive_examples as ex
-from verity_vllm.program.frontend.rules import DEFAULT_RULES
-from verity.circuits.program import Program
 from verity.circuits.codec import program_digest
-from verity.definitions.registry import b1, prims as P
+from verity.circuits.program import Program
 from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.registry import b1
+from verity.definitions.registry import prims as P
 
+from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend import examples
 from verity_vllm.program.frontend.correspond import correspond_rebound
-from verity_vllm.program.frontend.torch_frontend import export as fe_export, function
+from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
+from verity_vllm.program.frontend.rules import DEFAULT_RULES
+from verity_vllm.program.frontend.torch_frontend import export as fe_export
+from verity_vllm.program.frontend.torch_frontend import function
 
 REF = dict(mode="reference")
 PROF = dict(mode="profile", profile="b1-eager")
@@ -143,6 +144,7 @@ def test_s1_gemm_structure_corresponds_to_examples_gemm():
     """Profile-mode Linear (bf16) derives to exactly the registered `Gemm_v1{K,N}` + `BiasAdd_v1{N}` kinds — the same
     definitions `examples.py`'s authored Gemm uses, so the derived body equals the authored body node for node."""
     from verity.circuits.defs import bind as ir_bind
+
     from verity_vllm.program.frontend.correspond import compare_bodies
 
     m = torch.nn.Linear(16, 8, device="meta", dtype=torch.bfloat16)
@@ -303,6 +305,7 @@ def test_literal_written_into_a_tensor_is_a_mutation():
 
 def _layer_oracle_digest(C, L0: bool, T: int, T0: int = 0) -> str:
     from verity.circuits.defs import bind as ir_bind
+
     from verity_vllm.program.frontend.rules.family import DecoderLayerT
     return program_digest(Program(ir_bind(DecoderLayerT, C=C, L0=L0, T=T, T0=T0)))
 
@@ -390,6 +393,7 @@ def test_s3_a_stop_config_returns_the_length_rule_as_the_programs_last_check():
     the Call `predict.build` makes for the same config, and claims no family; a config the rule can't take is refused."""
     from verity.circuits.defs import bind as ir_bind
     from verity.definitions.registry import stop_check as SC
+
     from verity_vllm.program.frontend import stop_rule as SR
     LP, STEPS = 3, 2
     C, stop = _tiny_config(), SR.spec([7, 9], max_tokens=8, prompt_len=LP, max_model_len=64, outputs=STEPS + 1, finish=1)
@@ -529,8 +533,8 @@ def test_neg_profile_mode_refuses_a_batch_invariant_linear_on_a_target_without_b
 )
 def test_profile_mode_binds_the_non_batch_invariant_cuda_rmsnorm(fused, expected, monkeypatch):
     """The rule asks its selector for the served M=4 block and binds one CUDA vector-8 call per token."""
-    from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
     from verity_vllm.program.frontend.rules.vllm_bindings import observations as VB
+    from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
     from verity_vllm.program.frontend.target_profile import TargetProfile
     monkeypatch.setitem(VB._OBSERVED, "target_profile", TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False))
     m = ex.RMSNorm(6144, 1e-5)
@@ -608,7 +612,8 @@ def test_pad_tiny_padded_serve_matches_serve_v3():
     rewrites = [a for a in rep.provenance["applications"] if a["rule"] == "CacheRowWrite[vllm]_v1"]
     assert len(rewrites) == C3["NL"] * D_MAX and all(a["preconditions_checked"]["slot"] == a["preconditions_checked"]["history_rows"] - 1 for a in rewrites)
     # output: (D_MAX+1 token slots i32, D_MAX+1 live bits); the live vector is on the return type, designation is PAD-INT's manifest
-    from verity.circuits.types import Array as Arr_, Tuple as Tup_
+    from verity.circuits.types import Array as Arr_
+    from verity.circuits.types import Tuple as Tup_
     _, ret = fsd.signature()
     assert isinstance(ret, Tup_) and ret.fields[0] == Arr_(D_MAX + 1, P.I32) and ret.fields[1] == Arr_(D_MAX + 1, P.BIT)
 

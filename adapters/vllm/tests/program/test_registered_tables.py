@@ -6,13 +6,12 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import RegisteredTable, evaluate
 from verity.circuits.codec import encode_program, program_digest
-from verity.definitions.circuits.constants import REGISTRATION, inputs
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import RegisteredTable, evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
+from verity.definitions.circuits.constants import REGISTRATION, inputs
 from verity.definitions.registry import dense as D
 from verity.definitions.registry import tables as T
 
@@ -129,10 +128,10 @@ def test_a_registered_values_derivation_registers_no_gelu_table():
     parameter (its Boolean version, `boolean_tanh.GeluTanhMul_v4`, computes the activation), and the Program computes what the
     constants derivation computes."""
     import torch
+    from verity.definitions.numerics.serve3_reference import materialize
 
     from verity_vllm.program.frontend.derive import derive_report
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
-    from verity.definitions.numerics.serve3_reference import materialize
 
     class GeGLU(torch.nn.Module):
         def __init__(self, I: int) -> None:

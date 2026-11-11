@@ -8,8 +8,17 @@ import json
 
 import pytest
 
-from verity_vllm.program.frontend.target_profile import (ApplicabilityError, ArtifactIdentity, TargetProfile, canonical_bytes, check_reuse, load_artifact,
-                                               parse_target_arg, profile_mismatches, reuse_mismatches)
+from verity_vllm.program.frontend.target_profile import (
+    ApplicabilityError,
+    ArtifactIdentity,
+    TargetProfile,
+    canonical_bytes,
+    check_reuse,
+    load_artifact,
+    parse_target_arg,
+    profile_mismatches,
+    reuse_mismatches,
+)
 
 B0_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"  # B0 request 8/4 (identical on every build host)
 CV = {"schema": "cb-a/aot-artifact/v1", "rules": [{"id": "TritonGemm[vllm-bi]", "version": 1}], "sources_sha256": "ab" * 32}
@@ -257,6 +266,7 @@ def test_moe_experts_class_is_read_back_from_every_fused_moe_layer():
 def test_the_engine_refuses_another_experts_class_than_the_declared_one(monkeypatch):
     pytest.importorskip("torch")
     import types
+
     from verity_vllm.engine import build as B
     t = TargetProfile(moe_backend="triton")
     monkeypatch.setattr(B.torch.cuda, "get_device_properties",
@@ -291,6 +301,7 @@ def test_an_engine_whose_attention_carries_no_fa_version_is_no_fa_version_questi
     layers: the engine is judged on its device and kernels; a FlashAttention impl at another version is still a mismatch."""
     pytest.importorskip("torch")
     import types
+
     from verity_vllm.engine import build as B
     t = TargetProfile(compute_capability=(9, 0), num_sms=132)
     monkeypatch.setattr(B.torch.cuda, "get_device_properties", lambda i: types.SimpleNamespace(major=9, minor=0, multi_processor_count=132))

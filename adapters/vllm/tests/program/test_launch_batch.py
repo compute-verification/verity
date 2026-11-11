@@ -16,6 +16,7 @@ import types
 import pytest
 import torch
 import torch.fx.traceback as fxt
+from verity.definitions.registry import tp_allreduce as TA
 
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline.build import applicability_conditions, run
@@ -24,7 +25,6 @@ from verity_vllm.program.frontend.outcomes import Refuse
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.registry import tp_allreduce as TA
 
 #: request steps 0 and 1 of the 65-row prompt of GLM-5.3's B8 row: its prefill beside two decoders, then six sequences
 BATCH = [[[1, 17], [1, 231], [65, 0]], [[1, 18], [1, 65], [187, 0]]]
@@ -100,10 +100,11 @@ def test_step_982_a_full_graph_decode_reduces_on_flashinfer_mnnvl_at_its_padded_
     uncaptured.  No communicator of vLLM d9105ea80 reads the graph mode, so 32 rows reduce on FlashInfer's MNNVL (under its
     512 KiB), the PIECEWISE steps on symm_mem's multimem.  The FULL graph captures the attention at the padded batch, its 7
     padding rows without keys, which leave FA3's split counts the real batch's."""
+    from verity.definitions.registry.sparse_mla_split import launch_num_splits
+
     from verity_vllm.engine.profiles.engine_classes import CLASS_G_LIMITS
     from verity_vllm.program.frontend.compilations import COMPILATIONS
     from verity_vllm.program.predict.common import _Launch
-    from verity.definitions.registry.sparse_mla_split import launch_num_splits
     sizes, seqs = tuple(COMPILATIONS["breakable"]["capture_sizes"]), CLASS_G_LIMITS["max_num_seqs"]
     decode = [[[1, 300 + 37 * i] for i in range(25)]]
     assert TG.graph_launch(25, True, sizes, seqs) == ("FULL", 32)
@@ -218,7 +219,10 @@ def test_bindings_read_the_tagged_launch_and_refuse_what_it_does_not_hold(declar
 
 def test_moe_config_and_gate_tier_are_read_at_the_launchs_tokens(declared, monkeypatch):
     from verity_vllm.engine import hooks
-    from verity_vllm.program.frontend.export_compat import _moe_config_at_launch, moe_gate_leaf
+    from verity_vllm.program.frontend.export_compat import (
+        _moe_config_at_launch,
+        moe_gate_leaf,
+    )
     seen = []
 
     def config(w1_shape, w2_shape, top_k, dtype, M, block_shape=None):

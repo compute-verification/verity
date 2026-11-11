@@ -34,10 +34,14 @@ import numpy as np
 import pytest
 import torch
 from torch import nn
-
-from verity_vllm.program.frontend.derive import DERIVE_VERSION, DeriveReport, derive_report
-from verity.definitions.numerics.serve3_reference import materialize
 from verity.circuits.types import Array, RecordType, Value
+from verity.definitions.numerics.serve3_reference import materialize
+
+from verity_vllm.program.frontend.derive import (
+    DERIVE_VERSION,
+    DeriveReport,
+    derive_report,
+)
 
 transformers = pytest.importorskip("transformers")
 

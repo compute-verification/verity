@@ -193,8 +193,8 @@ def _can_build() -> tuple[bool, str]:
     if os.environ.get("CBTEST_SKIP_BUILDS") == "1":
         return False, "CBTEST_SKIP_BUILDS=1"
     try:
-        import vllm  # noqa: F401
         import torch  # noqa: F401
+        import vllm  # noqa: F401
     except Exception as e:  # noqa: BLE001
         return False, f"vllm/torch not importable here ({type(e).__name__}); run on the pod venv"
     if not _hf_snapshot_present():

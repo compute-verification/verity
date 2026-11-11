@@ -18,26 +18,34 @@ import dataclasses
 
 import numpy as np
 import pytest
-
+from verity.circuits import boolean as BL
 from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
-from verity.circuits import boolean as BL
-from verity.circuits.defs import bind
+from verity.definitions import boolean as SW
+from verity.definitions.numerics import fp8_moe_rows as MR
 from verity.definitions.ops.boolean import gemm as BG
-from verity.circuits.boolean import trace as TR
 from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32 as BW
 from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as HP
-from verity.definitions import boolean as SW
-from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.numerics import fp8_moe_rows as MR
 from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.definitions.registry import fp8_moe as M
 from verity.definitions.registry import fp8_moe_experts as X
+
+from tests.program.test_boolean_fp8 import _flat, _inputs
+from tests.program.test_fp8_moe import (
+    ONE,
+    _bf16,
+    _ffma,
+    _fmul,
+    _operands,
+    _twin_agrees,
+    _wide,
+)
 from verity_vllm.program.frontend import gemm_targets as GT
 from verity_vllm.program.frontend import targets as T
-from tests.program.test_boolean_fp8 import _flat, _inputs
-from tests.program.test_fp8_moe import ONE, _bf16, _ffma, _fmul, _operands, _twin_agrees, _wide
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 PAIRS = [(M.MoeExpertFp8BlockCoordinate, M.MoeExpertFp8BlockCoordinateV3), (M.MoeExpertFp8BlockCoordinateW, M.MoeExpertFp8BlockCoordinateWV3),
          (M.MoeExpertFp8BlockGemm, M.MoeExpertFp8BlockGemmV3), (M.MoeExpertFp8BlockGemmW, M.MoeExpertFp8BlockGemmWV3)]

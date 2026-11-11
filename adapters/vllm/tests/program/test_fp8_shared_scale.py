@@ -11,15 +11,14 @@ import re
 import types
 
 import pytest
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits.cut import call_scope
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.circuits.layout import resolve
-from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity.definitions.registry import fp8
-from verity.definitions.registry import fp8_vocab
 from verity.definitions import word as W
+from verity.definitions.registry import fp8, fp8_vocab
+
+from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
 SHAPES = [(256, 256), (384, 128), (128, 512)]
 #: (K, N) of `ScaledMmFp8Block_v1`'s circuit-check targets, N = 192 ending mid-block
@@ -169,7 +168,10 @@ class _Ctx:
 
 @pytest.mark.parametrize("scale", [None, "shared-per-block"])
 def test_the_frontend_rule_binds_the_active_targets_construction(monkeypatch, scale):
-    from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
+    from verity_vllm.program.frontend.rules.vllm_bindings import (
+        clear_observations,
+        observe_target_profile,
+    )
     from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
 
     K, N = 256, 384
@@ -197,7 +199,10 @@ def test_the_frontend_rule_binds_a_ragged_n(monkeypatch):
     import torch
 
     from verity_vllm.program.frontend.derive import Alloc
-    from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
+    from verity_vllm.program.frontend.rules.vllm_bindings import (
+        clear_observations,
+        observe_target_profile,
+    )
     from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
 
     K, N, G = 6144, 2624, 128

@@ -7,17 +7,16 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from tests.program import test_dead_free as TD
-
-from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.refs import runs
-from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.registry import b1, hopper
+from verity.definitions.registry import attention_vocab, b1, hopper
 from verity.definitions.registry import fa3_check_inf as F3
-from verity.definitions.registry import attention_vocab
+
+from tests.program import test_dead_free as TD
 from verity_vllm.program.frontend import targets as TG
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 NEG_INF, NAN = 0xFF800000, 0x7FFFFFFF
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}

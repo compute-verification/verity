@@ -31,9 +31,14 @@ torch = pytest.importorskip("torch")
 
 from verity.circuits import program_digest  # noqa: E402
 from verity.circuits.evaluation import MissingValue, evaluate_region  # noqa: E402
-from verity_vllm.program.frontend.provenance import registry_version  # noqa: E402
 
-from tests.program.test_derive_negative import IMPORTER_NAME, Outcome, _DERIVE, run_importer  # noqa: E402
+from tests.program.test_derive_negative import (  # noqa: E402
+    _DERIVE,
+    IMPORTER_NAME,
+    Outcome,
+    run_importer,
+)
+from verity_vllm.program.frontend.provenance import registry_version  # noqa: E402
 
 pytestmark = pytest.mark.filterwarnings("ignore::verity_vllm.program.frontend.torch_frontend.DeadGateWarning")
 
@@ -283,7 +288,8 @@ def _input_map(out: Outcome, module: nn.Module, inputs: tuple) -> list[tuple[str
 
 def _flatten_like(t: Any, T) -> list[tuple[torch.Tensor, int]]:
     """Leaf tensors of a (possibly record) argument, paired with the width of the corresponding type leaves."""
-    from verity.circuits.types import Array, RecordType, Tuple as TupleT, Value
+    from verity.circuits.types import Array, RecordType, Value
+    from verity.circuits.types import Tuple as TupleT
     if isinstance(t, torch.Tensor):
         tt = T
         while isinstance(tt, Array):
@@ -513,10 +519,14 @@ def test_audit_s3_derived_b0_serve_digest_and_kv_ownership():
     name-independent KV-ownership oracle holds on the derived program (30 layers x 47 positions)."""
     if not _DERIVE:
         pytest.skip("derive() not available")
+    from verity.definitions.registry.b1 import B0_CONFIG
+
+    from tests.program.test_derive_negative import (
+        check_cache_ownership,
+        check_cache_ownership_by_kind,
+    )
     from verity_vllm.program.frontend import derive_examples as dex
     from verity_vllm.program.frontend.derive import derive_report
-    from verity.definitions.registry.b1 import B0_CONFIG
-    from tests.program.test_derive_negative import check_cache_ownership, check_cache_ownership_by_kind
     rep = derive_report(dex.GreedyServe(B0_CONFIG, 15), (torch.zeros(32, dtype=torch.int32),), mode="profile", profile="b1-eager",
                         config=B0_CONFIG)
     assert rep.ok, rep.unsupported

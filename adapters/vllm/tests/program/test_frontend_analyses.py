@@ -6,14 +6,14 @@ from __future__ import annotations
 from verity.circuits import Program, bind
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition
 from verity.circuits.liveness import dead_gates
-from verity_vllm.program.frontend.correspond import compare_bodies, correspond
-from verity_vllm.program.frontend.provenance import registry_version
 from verity.circuits.refs import Coll, Concat, Strided, array_of
+from verity.circuits.types import Array
 from verity.definitions.registry import b1
 from verity.definitions.registry.prims import F32
-from verity.circuits.types import Array
 
 from tests.program.test_running_example import Id16, Relu16, make_program
+from verity_vllm.program.frontend.correspond import compare_bodies, correspond
+from verity_vllm.program.frontend.provenance import registry_version
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}

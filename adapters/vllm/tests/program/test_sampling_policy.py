@@ -16,7 +16,12 @@ import os
 
 import pytest
 
-from verity_vllm.pipeline.build import SAMPLERS_BOUND, applicability_conditions, run, sampling_policy
+from verity_vllm.pipeline.build import (
+    SAMPLERS_BOUND,
+    applicability_conditions,
+    run,
+    sampling_policy,
+)
 
 
 def _sweep_manifest(tmp_path, sampling: str, params: dict, seeds: list[int]):
@@ -172,10 +177,11 @@ def test_every_workload_takes_the_registered_s_of_its_sm_count(tmp_path, num_sms
     S = registered_splits(num_SMs) = splits_for(1, num_SMs) as a constant of its Program (`sampling["splits"]` the int, no `splits`
     input), for every wrapper shape and the step wrapper alike; the geometry carries nothing of the batch, so every component of every
     workload on the target declares the same (GP-01 agreement by construction)."""
+    from verity.definitions.registry.topp_geometry import registered_splits, splits_for
+
     from verity_vllm.pipeline.build import sampler_geometry
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.frontend.vllm_meta import registered_policy_splits
-    from verity.definitions.registry.topp_geometry import registered_splits, splits_for
     target = TargetProfile.default().with_overrides(num_sms=num_sms)
     cases = [dict(n=1), dict(n=2, arrive=[0, 5], caps=[16, 9]), dict(n=8), dict(n=8, caps=[16] * 4 + [3] * 4),
              dict(n=8, arrive=[0, 0, 0, 0, 3, 3, 6, 6], caps=[16] * 8), None]
