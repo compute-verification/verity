@@ -80,7 +80,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   sends moves a unit between strata), and its public file's units are exactly its member's, in order
   (`Member.population`), so every unit its session proves is its member's; the units the statements proved must be the
   evidence's `proved_units`. The registration is held to the members before any statement's session: the members'
-  units are its population, each member one range of it (`laidHeld`), and each of its roots is exactly one member's,
+  units are its population, each member one range of it (`laidHeld`), in the stratum its name's template names, the
+  template's chunks one after another (`strataHeld`), and each of its roots is exactly one member's,
   the member whose name, then `/`, the root's port begins with (`rootsOf`; a root that is no member's or two members'
   refuses, and so does a window's row tables' root, `ROW_TABLES`). A member's public file is held to its slice of the
   registration (`Member.slice`, `headerHeld`): the window's scheme, the member's roots and their domains under their
@@ -1021,6 +1022,66 @@ def laidHeld (ms : Array Member) (rec : Json) : V Unit :=
       pure ()
     else throw MEMBERS_LAID
 
+/-- A member's name read as its template's id and its chunk, `<template>/c<j>`: the name after its last `/c` is `j`,
+a natural in decimal with no leading zero. None for another name. -/
+def chunkOf (name : String) : Option (String × Nat) :=
+  match (name.splitOn "/c").reverse with
+  | j :: t :: ts =>
+    if !j.isEmpty && j.all Char.isDigit && (j == "0" || !j.startsWith "0") then
+      some ("/c".intercalate (t :: ts).reverse, j.toNat!)
+    else none
+  | _ => none
+
+/-- The chunks `cs`, each `[lo, hi)` and in order, lie one after another through the ranges `rs`: each holds a unit
+and lies inside one range, starting where the chunk before it ended or at the next range's first unit, and no unit of
+a range is left out. -/
+def tiles : List (Nat × Nat) → List (Nat × Nat) → Bool
+  | [], rs => rs.isEmpty
+  | _ :: _, [] => false
+  | (lo, hi) :: cs, (a, b) :: rs =>
+    decide (lo = a) && decide (lo < hi) && decide (hi ≤ b) && tiles cs (if hi == b then rs else (hi, b) :: rs)
+
+/-- The refusal of a member whose name is not its template's id and its chunk (`strataHeld`). -/
+def memberNamed (name : String) : String :=
+  s!"members: member {name} is not named <template>/c<j>, its template's id and its chunk among the template's: a " ++
+    "member's units lie in the stratum its name's template names"
+
+/-- The refusal of a member whose name's template is no stratum of the registration (`strataHeld`). -/
+def memberStratum (name : String) : String :=
+  s!"members: member {name}'s template is no stratum of the registration: a member's units lie in the stratum its " ++
+    "name's template names"
+
+/-- The refusal of a stratum whose members are not its units, chunk after chunk (`strataHeld`). -/
+def stratumLaid (template : String) : String :=
+  s!"members: the members named {template}/c0, {template}/c1 and on are not the units of the registration's " ++
+    s!"stratum {template}, chunk after chunk from its first unit: a member's units lie in the stratum its name's " ++
+    "template names, at the sampling rate the registration's law gives that stratum"
+
+/-- **Each member lies in the stratum its name names**: every member is named `<template>/c<j>` (`chunkOf`), its
+template a stratum of the registration's `strata` (`Partition.strata`), and each stratum's members, in the order of
+their chunks `0, 1, …` with none missing, are one range each and lie one after another through the stratum's units,
+none left out (`tiles`). So a member's first unit is a function of its name, the strata and the counts of the chunks
+before it: a member of one template is never laid in another's units, where the law would sample it at that other
+stratum's rate. One pass over the parameters' members and the strata, and a sort of each stratum's chunks; it reads
+no blob. -/
+def strataHeld (ms : Array Member) (strata : Array (String × Array (Nat × Nat))) : V Unit := do
+  let mut groups : Std.HashMap String (Array (Nat × Nat × Nat)) := {}
+  for m in ms do
+    let some (t, j) := chunkOf m.name | throw (memberNamed m.name)
+    let #[(lo, hi)] := m.units | throw MEMBERS_LAID
+    groups := groups.insert t ((groups.getD t #[]).push (j, lo, hi))
+  let mut held := 0
+  for (t, rs) in strata do
+    let cs := (groups.getD t #[]).qsort (·.1 < ·.1)
+    if cs.map (·.1) != Array.range cs.size ||
+        !tiles (cs.toList.map (·.2)) (rs.toList.filter fun (a, b) => a < b) then
+      throw (stratumLaid t)
+    held := held + cs.size
+  if held != ms.size then
+    match ms.find? fun m => (chunkOf m.name).all fun (t, _) => !strata.any (·.1 == t) with
+    | some m => throw (memberStratum m.name)
+    | none => throw MEMBERS_LAID
+
 /-- The refusal of two members' ports of one registered value that are not one tree's (`classHeld`): `diff` is the
 first field they differ in (`Flock.RecVStar.portDiff?`). -/
 def classTwo (first second value diff : String) : String :=
@@ -1271,10 +1332,10 @@ def membersTreesHeld (ts : Array Challenger.LoggedTree) (log : List String) (sts
 evidence `e` and its statements `sts`: the statements' structure (`membersHeld`), their sessions v1's in order, the
 sessions' coins held to the trees the challenger logged in the order it must release them, each tree closed after its
 session's evidence before the next is opened (`treesOf`, `orderHeld`, `membersTreesHeld`), the registration's
-population held to the program (`popHeld`) and the members laid over it (`laidHeld`), each registered value the
-members read one tree, the registration's entry where it registers the value (`classHeld`), the registration's roots
-each one member's (`rootsOf`), then each statement's session on the blobs, at its member's slice of the registration
-(`Member.slice`, `runMembers`). -/
+population held to the program (`popHeld`) and the members laid over it (`laidHeld`), each in the stratum its name
+names (`strataHeld`), each registered value the members read one tree, the registration's entry where it registers
+the value (`classHeld`), the registration's roots each one member's (`rootsOf`), then each statement's session on the
+blobs, at its member's slice of the registration (`Member.slice`, `runMembers`). -/
 def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence) (sts : Array StatementFiles)
     (bs : Core.Blobs) : V Run := do
   let held ← membersHeld ms sts
@@ -1285,6 +1346,7 @@ def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : E
   membersTreesHeld ts (← linesOf e) (sts.zip held) bs
   popHeld p.base.verifier c.record
   laidHeld ms c.record
+  strataHeld ms (← Partition.strata p.base.verifier.program p.base.verifier.query)
   classHeld ms c.record
   let roots ← rootsOf ms c.record
   runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs
@@ -1658,6 +1720,40 @@ private def rootsT (roots : List (String × String)) (name : String) : Option (A
 #guard refusal (laidHeld #[memberT "a" #[(0, 2), (3, 5)], memberT "b" #[(2, 3)]] (recordT 5 [])) == MEMBERS_LAID
 #guard refusal (laidHeld #[memberT "a" #[(0, 2)], memberT "b" #[(3, 6)]] (recordT 5 [])) == MEMBERS_LAID
 #guard refusal (laidHeld keyedT Json.null) == "the record names no population"
+
+#guard chunkOf "t/c0" == some ("t", 0)
+#guard chunkOf "a/cb/c12" == some ("a/cb", 12)
+#guard chunkOf "a//c3" == some ("a/", 3)
+#guard chunkOf "/c7" == some ("", 7)
+#guard chunkOf "t/c01" == none
+#guard chunkOf "t/c0/u" == none
+#guard chunkOf "t/c" == none
+#guard chunkOf "m" == none
+#guard tiles [(0, 2), (2, 5)] [(0, 5)]
+#guard tiles [(0, 2), (4, 6)] [(0, 2), (4, 6)]
+#guard !tiles [(0, 2)] [(0, 5)]
+#guard !tiles [(0, 3)] [(0, 2), (2, 3)]
+#guard !tiles [(0, 2), (3, 5)] [(0, 5)]
+#guard !tiles [(2, 5), (0, 2)] [(0, 5)]
+#guard refusal (strataHeld keyedT #[("t", #[(0, 5)])]) == ""
+#guard refusal (strataHeld #[memberT "u/c0" #[(2, 4)], memberT "t/c0" #[(0, 2)]]
+  #[("t", #[(0, 2)]), ("u", #[(2, 4)])]) == ""
+#guard refusal (strataHeld #[memberT "t/c1" #[(4, 6)], memberT "u/c0" #[(2, 4)], memberT "t/c0" #[(0, 2)]]
+  #[("t", #[(0, 2), (4, 6)]), ("u", #[(2, 4)])]) == ""
+-- two members of the same count with their first units swapped, each then in the other's stratum
+#guard refusal (strataHeld #[memberT "t/c0" #[(2, 4)], memberT "u/c0" #[(0, 2)]]
+  #[("t", #[(0, 2)]), ("u", #[(2, 4)])]) == stratumLaid "t"
+#guard refusal (strataHeld #[memberT "t/c0" #[(2, 5)], memberT "t/c1" #[(0, 2)]] #[("t", #[(0, 5)])]) ==
+  stratumLaid "t"
+#guard refusal (strataHeld #[memberT "t/c0" #[(0, 2)], memberT "t/c2" #[(2, 5)]] #[("t", #[(0, 5)])]) ==
+  stratumLaid "t"
+#guard refusal (strataHeld #[memberT "t/c0" #[(0, 2)]] #[("t", #[(0, 5)])]) == stratumLaid "t"
+#guard refusal (strataHeld keyedT #[("t", #[(0, 2)]), ("u", #[(2, 5)])]) == stratumLaid "t"
+#guard refusal (strataHeld #[memberT "t/c0" #[(0, 2)], memberT "x/c0" #[(2, 5)]] #[("t", #[(0, 2)])]) ==
+  memberStratum "x/c0"
+#guard refusal (strataHeld #[memberT "t/c0" #[(0, 2)], memberT "m" #[(2, 5)]] #[("t", #[(0, 5)])]) ==
+  memberNamed "m"
+#guard refusal (strataHeld #[memberT "t/c0" #[(0, 2), (3, 5)]] #[("t", #[(0, 5)])]) == MEMBERS_LAID
 
 /-- A registered file of the ports given, each its name, its value, the hex digit its root repeats and its leaves. -/
 private def regT (ports : List (String × String × Char × Nat)) : Json :=
