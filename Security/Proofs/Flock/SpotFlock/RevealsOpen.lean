@@ -1,13 +1,15 @@
 module
 
 public import Proofs.Flock.SpotFlock.Reveals
+public import Proofs.Flock.SpotFlock.Code
 
 /-!
 # What SPOT's reveal opens
 
 Each opening a unit's reveal makes is at a gate its proof block needs opened (`pos_mem_needs`), so every position a
 run's extractions open lies in `opensSet`, the gates some proof block of the partition needs opened: a set the
-statement fixes before the run. It is the `Spos` of `Claims.SamplingGeneric.Compiled.pr_regHit_le_canon_pos`.
+statement fixes before the run. It is the `Spos` of `Claims.SamplingGeneric.Compiled.pr_regHit_le_canon_pos`, and
+`code_reveal_pos` states it at the deployed code's reveal.
 -/
 
 @[expose] public section
@@ -51,3 +53,15 @@ theorem card_opensSet_le (s : AuditStatement) :
   Finset.card_biUnion_le.trans (Finset.sum_le_sum fun u _ => List.toFinset_card_le _)
 
 end SpotFlock.Reveal
+
+namespace SpotFlock
+
+variable (h : Held)
+
+/-- **The deployed code's reveal opens only `opensSet`**: every opening SPOT[Flock]'s two-stage code reveals for a unit
+is at a gate some proof block of the partition needs opened. -/
+theorem code_reveal_pos (s : AuditStatement) (u : ℕ) (v : Seen) (w : Claims.Flock.Wit) :
+    ∀ p ∈ (code h).reveal s u v w, p.2.pos ∈ Reveal.opensSet (partition h) s :=
+  Reveal.pos_mem_opensSet (partition h) (two h) (iroots []) (Reveal.frameAt h.frame) s u v w
+
+end SpotFlock
