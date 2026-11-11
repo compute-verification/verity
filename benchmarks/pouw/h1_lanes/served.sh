@@ -55,10 +55,10 @@ setup
 fw_frame() {   # fw_frame TGZ: the ZK server frame built from TGZ, cached by the tarball's hash; its binary's path on stdout
   local fd
   fd=$HZ_CACHE/firewall-$(sha256sum "$1" | cut -c1-16)
-  (exec 8>"$fd.lock"; flock 8; [ -x "$fd/service/flock/.lake/build/bin/flock-firewall" ] || { rm -rf "$fd" && mkdir -p "$fd" \
-    && tar -xzf "$1" -C "$fd" --strip-components=2 && cd "$fd/service/flock" && lake build flock-firewall; }) \
+  (exec 8>"$fd.lock"; flock 8; [ -x "$fd/protocols/flock/verifier/.lake/build/bin/flock-firewall" ] || { rm -rf "$fd" && mkdir -p "$fd" \
+    && tar -xzf "$1" -C "$fd" --strip-components=1 && cd "$fd/protocols/flock/verifier" && lake build flock-firewall; }) \
     < /dev/null >> "$OUT/build-firewall.log" 2>&1
-  echo "$fd/service/flock/.lake/build/bin/flock-firewall"
+  echo "$fd/protocols/flock/verifier/.lake/build/bin/flock-firewall"
 }
 fw_last() { ls "${H1S_FIREWALL_TGZ_DIR:?}"/*.tgz 2>/dev/null | LC_ALL=C sort | tail -1; }
 FWDIR=${H1S_FIREWALL_TGZ_DIR:-}
