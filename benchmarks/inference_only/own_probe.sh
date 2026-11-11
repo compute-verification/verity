@@ -41,4 +41,13 @@ for f in small-program count-instance class-program; do
     2> "$scratch/$f.time" || echo "PROBE $f: exit $?"
   grep -E "Elapsed|Maximum resident" "$scratch/$f.time" || tail -5 "$scratch/$f.time"
 done
+echo "== 5. the record check's difftest on its own cases, generated here"
+uv run --no-sync python scripts/record_difftest_vectors.py "$root" --out "$scratch/gen" > "$scratch/gen.log" 2>&1 || { tail -30 "$scratch/gen.log"; exit 1; }
+sha256sum "$scratch"/gen/record_difftest/*.jsonl
+grep -n "record_difftest/.*jsonl\": \"" lean-audit.json
+lake build nci-record-difftest > "$scratch/build2.log" 2>&1 || { tail -60 "$scratch/build2.log"; exit 1; }
+.lake/build/bin/nci-record-difftest "$scratch/gen/record_difftest/cases.jsonl" "$scratch/gen/record_difftest/python.jsonl" \
+  "$(wc -l < "$scratch/gen/record_difftest/cases.jsonl")"
+echo "PROBE on the difftest's cases:"
+timeout 3000 lake env lean --run "$root/benchmarks/inference_only/OwnProbe.lean" cases "$scratch/gen/record_difftest/cases.jsonl" || echo "PROBE cases: exit $?"
 echo "== done"
