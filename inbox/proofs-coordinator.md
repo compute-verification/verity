@@ -47071,3 +47071,70 @@ For the table: head block at one prover: node A quiet 2.53 to 2.59 s today, 2.57
 **(1) The reader-set count over the Program's rows:** starting now, on a node other than vy-nebius-cpu-2, cpu-9 and cpu-13, at `--mem-gb 16`, from the census build `art:32c488d8`. It counts per Program row both ways (writer × readers, and readers alone with the side) and by Definition, over every rank. Its run id comes in my next entry.
 
 For the table: by reader sets (132, writer counted) the record reads 2^-100.83 in compressions with the Lean's one-M count (computed, modeled) and 2^-101.63 with the mean. The 2,647 GB plan misses (-98.73 one M, -99.78 by stratum).
+
+## CAPS, Wed 11 Nov 10:06Z: #8890's body holds THE LIST (27 rows, reader and date cells `coordinator`); everything marked, #8836 in, fits #8877's 259 / 2,069 without #8890 (257 / 2,066 on CROSS's measured base); 267 / 2,217 covers every open PR and two branch modules, and not five branches; `Proofs/Core` needs no raise
+
+**Your three points (09:51Z)**
+
+1. **Redone from the measured base.** \[run: `r20261111-084347-fd8c`, its `out/unread.json` read with `unread.counts`\] `main` with the candidate's eight Lean PRs is 247 / 1,916 in `Proofs/Flock` and 3 / 41 in `Proofs/Core`. \[run\] Six new modules are wholly unread, 79 declarations: `RunExtAt` 11, `TwoRegFirstHit` 50, `MaskedTrunc` 10, `Bridge/QsRows` 3, `QsRows/Pos` 2, `QsRows/Split` 3. \[run\] The other new ones are read: `RegX`, `TwoReg`, `TwoRegMiss`, `TwoRegX`, `RegAt`, the four `Claims/Witnesses` modules, `QsRows/RunsOut` (1 of 21 declarations) and Core's `FirstHit` (10 of 80).
+   - **247 / 1,916 is five modules and 36 declarations above what the Lean check should count.** \[run\] The report holds five modules as wholly unread that `main` reads: `Claims/Recursion/CallsClosed` 11, `CallsDecision` 2, `CallsR` 3, `DeployedBringsLam` 12, `InnerSetupCount` 8. 236 + 6 + 5 = 247 and 1,801 + 79 + 36 = 1,916. \[run: the two facts files loaded with `unread.Facts`\] On `main`'s facts `Proofs.Properties.Verity.Recursive.Audit` uses constants of `CallsClosed` and `InnerSetupCount`; `fd8c`'s facts do not hold that module (`found: false`), nor `Proofs.Pouw.PeriodJ10R.Binding`. \[read: `unread.py` lines 222 to 229 and 993 to 996; `rg` for its importers\] No file imports it, and `--build` runs `lake build` of the default targets, so a module no root imports is `unbuilt`. \[run: `git diff`\] No candidate PR changes a file under `Claims/Recursion` or `Recursive`. \[guess\] So the check's ratchet, whose facts come from a check that builds every file, should count 242 / 1,880. Nothing measured that. Every total below uses 247 / 1,916, the safe base.
+2. **#8836 `ae8886e9a2fc`: two wholly unread modules in `Proofs/Flock`, 25 declarations** (`SamplingGeneric/RegCanon` 7, `SpotFlock/RevealsOpen` 18), and one in `Proofs/Core`, `Game/RewindingCanon` 10. \[bound: `git diff --diff-filter=A`, declarations by keyword\] \[run: `unread.lock_seeds` on its locks\] Its lock names none of their constants, and none declares a `SecurityProofs` constant.
+
+   | After | Modules | Declarations | Label |
+   |---|---|---|---|
+   | `main` + the candidate | 247 | 1,916 | measured, `fd8c` |
+   | #8866 `e19752e7b617` | 247 | 1,917 | bound |
+   | #8888 `746c43e0c848` | 248 | 1,920 | bound |
+   | #8836 `ae8886e9a2fc` | 250 | 1,945 | bound |
+   | #8354 `5591b15e3b35` | 251 | 1,985 | bound |
+   | #8536 `7c9387e95a73` | 254 | 2,031 | bound |
+   | #8368 `c833b3ff0a9b`, #8764 `8dfde58665a3` | 257 | 2,066 | bound |
+
+   - **Yes: all five fit #8877's 259 / 2,069 without #8890,** with 5 modules and 38 declarations to spare. \[bound on the measured base\]
+   - With the two other marked PRs that add modules it is 257 / 2,066: 2 modules and **3 declarations** to spare. \[bound\] By the expected count it is 252 / 2,030. \[guess\]
+   - The first unmarked PR of the list passes #8877's declarations (#8139's `CanonOk`, 6, makes 2,072). \[bound\] So #8890 lands before any PR you mark from here.
+3. **`35f9` started at 09:52Z and passed.** \[run\] The ready line is my next entry.
+
+**The list is in #8890's body:** 27 rows (26 modules and #8866's one declaration), the six columns of the brief, in the brief's order. \[read: the bodies of the 16 PRs and the workers' entries\] The last two cells read `coordinator` in every row: no body and no entry names a guarantee that will read one of these modules. The command that gives the first four columns is under the tables there.
+
+| Group | Rows | Running total, `Proofs/Flock` | Label |
+|---|---|---|---|
+| The candidate's wholly unread modules | 6 | 247 / 1,916 | measured, `fd8c` |
+| Marked outside the candidate (#8866, #8888, #8836, #8354, #8536, #8368, #8764) | 11 | 257 / 2,066 | bound |
+| Unmarked PRs (#8139, #8871, #8873 with #8900, #8874, #8879 with #8882, #8889, #8892, #8896) | 8 | 265 / 2,154 | bound |
+| Branches: EXTFORM's `TwoRegFirstHitClass` 25, KILIAN's `TwoFirstHitKS` 3 | 2 | 267 / 2,182 | bound |
+
+- The cap's 267 modules are used exactly, with 35 declarations spare. \[bound on the measured base\] By the expected count 5 modules and 71 declarations are spare. \[guess\]
+
+**New since my 09:29Z entry** \[run: `gh pr list`, `git ls-remote`, 09:54Z to 10:01Z\]
+
+- #8889 `50b06ae65a50` (TWOWITNESS): `SamplingGeneric/SessCount` 7. #8892 `5bbe4bd22803` (TWOWITNESS): `Claims/Sampling/Refused` 6. #8896 `6128ce8267e3` (DRAFT-CORE's strata branch, now a PR): `Bridge/V5/QsRows` 6. #8900 `1c041bac78f5`: `NumbersFinder` 9 becomes 11.
+- EXTFORM's `cursor/proofs-slack-3f5a` moved twice, to `bf1db4193240`: `TwoRegFirstHitClass` 25 declarations (10 at `05316ae3ee20`), Core's `FirstHitClass` 19 (16 before).
+- REGX's `cursor/proofs-noalways-b7d2` `7517af48adb5` has `NoAlways` at 23 declarations (20 at #8871); the totals take 23.
+- **A correction:** #8874's `SpotFlock/Drawn` (4) is in no `SecurityProofs` namespace at `b3fb5853faf8`, so it needs room. My 09:20Z and 09:29Z entries said a seed reads it, which held at `31a6b65da2cc`.
+
+**What 267 / 2,217 does NOT cover** \[bound on the measured base; branches with no PR, by `git ls-remote` over the lane's 50 branches with a commit since Tue 18:00Z\]. Each raises the cap by its own count in its own diff:
+
+| Module | Declarations | Branch, at head | Worker | Total with it |
+|---|---|---|---|---|
+| `SpotFlock/OpensWhole` | 11 | `cursor/proofs-hall-9c2e` `f5f44cc119e9` | REGX | 268 / 2,193 |
+| `SpotFlock/Counts` | 6 | `cursor/proofs-codecounts-9e41` `5a3d01fe1fc9` | no entry names it | 269 / 2,199 |
+| `SamplingGeneric/RegXAt` | 6 | `cursor/proofs-bconfx-cost-c3a9` `d663b05c28c5` | REGX | 270 / 2,205 |
+| `SamplingGeneric/RegFirstHit` | 33 | `cursor/proofs-firsthit-7c3e` `f7d5567807b6`, last commit 05:24Z | KILIAN | 271 / 2,238 |
+| 16 modules of `SpotFlock/InstanceStmt/` | 363 | `cursor/proofs-twowitness-0d28` `ec022ecf7cec`, last commit 05:00Z | TWOWITNESS | 287 / 2,601 |
+
+- By the expected count the first four fit as well (266 / 2,202). \[guess\] TWOWITNESS's 16 fit under neither. \[bound\]
+- KILIAN's `cursor/proofs-firsthit-ks-2c8e` `0108899305e0` needs room only for `TwoFirstHitKS` (3, in the list). \[run: `unread.lock_seeds`\] Its lock names a constant of `Claims/Witnesses/SamplingTwoFirstHit` (6), and `SamplingGeneric/SpotFirstHit` (2) declares `Flock.SecurityProofs.SpotFirstHitTwo`.
+
+**`Proofs/Core` fits #8877's 6 / 144: no ask of lean is needed.** \[run: `fd8c`\] The candidate leaves it at 3 / 41, because the ratchet reads `FirstHit` (10 of its 80 declarations). \[bound\] With `RewindingCanon` 10 (#8836) it is 4 / 51, and with EXTFORM's `FirstHitClass` 19 it is 5 / 70. By the all-unread bound from git it would have been 6 / 150, over; the measured base removes that.
+
+**#8890 against the brief** \[run\]
+
+- It is the PR the 09:30Z brief asks for: one commit `3abd6b5bc8e2da7779a007481a13e5beef2ff001` on #8877's head `b16bb41f1657`, the caps file only, `Proofs/Flock` 259 / 2,069 to exactly 267 / 2,217, `Proofs/Core` untouched, unmarked.
+- **Two differences.** I opened it at 09:28Z, before the brief reached me, so its branch is `cursor/proofs-unread-caps-9a1f`, not `cursor/proofs-caps2-…`. And it was opened with `--issue none:…`; `research queue link 8890 --issue PRF-517` was accepted ("linked to PRF-517 through the Linear app"), and the body now has `Refs PRF-517`.
+- The body is in the brief's order: the change, lean's yes, the list, the checks with run ids, no lock record changes, lands after #8877. The body edits moved no head.
+
+For the table:
+- #8890 `3abd6b5bc8e2` | `Proofs/Flock` 259 / 2,069 to 267 / 2,217 | the list is in its body, 27 rows, reader and date cells `coordinator` | quick tier `35f9` passed
+- Marked with #8836, #8354, #8536, #8368, #8764: 257 / 2,066 \[bound on run `fd8c`\], under #8877's 259 / 2,069. All open PRs: 265 / 2,154. With EXTFORM's and KILIAN's branch modules: 267 / 2,182.
+- Not covered: REGX's `OpensWhole` 11 and `RegXAt` 6, `codecounts-9e41`'s `Counts` 6, KILIAN's `RegFirstHit` 33, TWOWITNESS's `InstanceStmt` 16 / 363. `Proofs/Core`: no raise.
