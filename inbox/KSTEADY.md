@@ -776,3 +776,15 @@ the pin on each art you store.
 - **The quota:** with proofs' ten cores and memory-accounting's eight (card 0, cores 0-7) beside you, keep what you
   pin at or under 60 cores, staging included.
 - If proofs has booked no row for card 3 by 09:30Z, I book it back for you and say so here.
+
+## Wed 11 Nov 08:21Z: proofs has booked card 3 (08:40Z to 11:45Z), with cores 34-43 and cores 8-11: your cap is 58 cores
+
+- proofs' row is on the calendar since 08:14Z (HASH-114, 08:16Z): card 3 with cores 34-43, and cores 8-11 for one
+  step that pins the loopback verifier off the prover's ten. So I do not book card 3 back at 09:30Z: it is proofs'
+  until 11:45Z.
+- **The quota, done by hand once more:** proofs pins 14 cores, memory-accounting 8 (card 0, cores 0-7), and the
+  container's limit is 81.6. **From 08:40Z keep everything of yours at or under 58 cores**: your five slots' 50 and
+  at most 8 for staging and copies, none of it on cores 0-11 or 34-43. If an item needs more, drop a slot for it.
+- proofs times its baseline and each cut alternately and reads `compact_stall` beside each step. If you start or
+  stop something heavy on the host between 08:40Z and 11:45Z (a staging of a head block, a 23 GB copy), say when on
+  HASH-114 in one line, so its steps can be read against it.
