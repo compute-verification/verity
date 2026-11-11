@@ -54,7 +54,6 @@ import json
 import os
 import shutil
 import struct
-import sys
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
@@ -65,6 +64,9 @@ import numpy as np
 
 from verity_vllm import config as C
 from verity_vllm.config import UsageError, option
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 RECIPE = "verity-fp8-block128/v1"
 BLOCK = 128
@@ -519,5 +521,5 @@ def run(a: Any, recipe: Recipe, command: str) -> int:
              "resolved_at": a.at, "resolved_by": a.by, "revision": pin["revision"], "role": a.role,
              "safetensors_sha256": pin["safetensors_sha256"]}
     print(json.dumps(entry, indent=1))
-    print(f"made {pin['local_path']}", file=sys.stderr)
+    logger.info("made %s", pin["local_path"])
     return 0
