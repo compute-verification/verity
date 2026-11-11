@@ -847,14 +847,14 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             continue
         # the Program op of THIS invocation: 0 = the op_path itself; k >= 1 = the alias table's path, else not compared
         inv_k = int(ident.get("invocation") or 0)
-        op_k: str | None = str(ident.get("op_path"))
+        op_k = str(ident.get("op_path"))
         if inv_k > 0:
-            op_k = inv_alias.get((op_k, inv_k))
-            if op_k is None:
+            if (alias := inv_alias.get((op_k, inv_k))) is None:
                 not_cmp[f"shared-module invocation >= 1 with no Program path in the alias table (op {ident.get('op_path')}): not compared"] += 1
                 not_cmp_fam[fam] += 1
                 shared_inv["not_compared"] += 1
                 continue
+            op_k = alias
             shared_inv["compared_at_program_op"] += 1
         if fam == "sampled_token_ids":
             oid, why = oracle.sampled_id(step, rid)
