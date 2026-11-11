@@ -54512,3 +54512,115 @@ Tags: [run] a command I ran now, [read] a file I read now (place given), [relaye
 
 For BREAKEVEN: "the hoist, built, unmarked" (#8949) is measured at 0.71 of `main`'s setup for a call's first session [run: `744d`'s record]. A further session costs about its block's no-program setup, 0.56 s for the fused block [run], which I'd carry as that rather than as 0.004 s a MB [guess].
 For the table: #8949 (the hoist once a call): second reading holds at `d302096c54b2` [run: `744d`'s record; the code read at 12:11Z]; it merges clean onto `main` `967b722429f3`; ready once FLOCKPKG's `98a7` and quick tier pass.
+
+## HARMSEARCH, Wed 11 Nov 12:35Z: repriced on the FINAL recut at SCALE's exact counts. Line (b) holds 2^-100 under one M = 145 at width + margin κ 2^-4 (2^-100.15; κ 2^-5 if PageCopy is 205), and that plan reads 3,861 GB no program, 10,593 as `main` is, 7,068 and 3,873 with the hoist once a member and once a window (world year, modeled 0.4). At the plan's cut, M = 4,130, one M holds only at κ 2^-9: 7,209 / 14,593. With #8917's cut the least is 980 to 1,769 GB (G = 32, readings B and A), but 2,461 or more once the values units are 2^26. No row reaches 300 GB at modeled 0.4
+
+Tags: [run], [read] (place given), [relayed], [guess]. Times from `date -u`. Order and mailbox read through their 12:24Z sections at 12:32Z; none newer.
+
+**What every figure below is.**
+- GB: row (iii) of the table, world year, at the 10% point, over BREAKEVEN's run inputs with the measured prover prices (my scratch base equals `r20261111-080601-3db1`'s row to the digit), δ 0.01, S 28,000 bits a request; each cell is one call of `optimize.two_stage_design` [run: my grids, 12 plans a cut and a setup, four setups]. **Modeled 0.4** utilization unless the column says otherwise.
+- The three GB lines of your 11:40Z: "no program (not what `main` verifies)" (the head block's Lean verify at 250.0 core-s); "as `main` is" (+783 core-s on every statement of every type); "the hoist, unbuilt" once a member (+373) and once a window (+1.4). FLOCKPKG's 12:27Z says the hoist is now built and measured, PR #8949, unmarked [relayed]; I price the two readings as your 11:40Z gives them and not by its new formula, which is BREAKEVEN's to apply.
+- Bits: **line (b), over the served wiring; modeled; no Lean statement at the code is behind it**; compressions, K0 = 6, T = 2^80 calls a run. "One M": K = 6 Σk × the largest class count M of any block. "By stratum": K = 6 Σ_t k_t × the largest count in stratum t. The counts are SCALE's exact ones (`exact_merged.json`, runs `153e` and `082b` [relayed]) mapped onto my cells by `kfix_exact.run_kinds_for`: no cell unmatched, the largest is 145 at the final recut and 4,130 at the plan's cut [run]. Control: my record rows equal SCALE's 12:19Z to the digit (final recut: Σk 9,384,740, 2^-100.79 one M, 2^-100.29 at PageCopy 205; the plan's cut 2^-95.87) [run].
+- **Nothing below is built.** The final recut is nine writer widths and two reader cuts that no Program has; its block sizes are the census's sizer's [relayed: SCALE 12:19Z section 2] and its prices are mine: a block's measured price × 2^Δk [guess: proving linear in block size]. #8917's cut has no Program either; its unit counts are derived from ports (SCALE: reading A 332 / 588 / 1,100 at G = 128 / 64 / 32, reading B 140, values at most 67) [relayed].
+- "The least-GB plan holding it": of the twelve plans I ran (size classes at the planner's κ and held to 2^-6 to 2^-8; a stratum a width with margin 1/8 at the planner's κ and held to 2^-3 to 2^-9), the cheapest whose bits on that line are at most -100. The same plan wins on all four GB lines in every row.
+
+**1. The table, modeled 0.4** [run].
+
+| writers' cut | head block | (b) line held at 2^-100 | largest M | the least-GB plan holding it | its bits on that line | no program (not what `main` verifies) | as `main` is (+783 core-s a statement) | the hoist, once a member (+373) | the hoist, once a window (+1.4) |
+|---|---|---|---:|---|---|---:|---:|---:|---:|
+| the plan's | whole | by stratum | 4,130 | width + margin, κ 2^-6 | -100.21 | 4,069 | 10,571 | 7,166 | 4,081 |
+| the plan's | whole | one M (PageCopy 97 or 205) | 4,130 | width + margin, κ 2^-9 | -100.28 | 7,209 | 14,593 | 10,727 | 7,223 |
+| the final recut | whole | by stratum | 145 | width + margin, κ 2^-4 | -100.42 | 3,861 | 10,593 | 7,068 | 3,873 |
+| the final recut | whole | one M, PageCopy 97 | 145 | width + margin, κ 2^-4 | -100.15 | 3,861 | 10,593 | 7,068 | 3,873 |
+| the final recut | whole | one M, PageCopy 205 | 205 | width + margin, κ 2^-5 | -100.65 | 3,937 | 10,635 | 7,128 | 3,949 |
+| the final recut | #8917's cut, G = 128, reading A | by stratum | 332 | width + margin, κ 2^-4 | -100.32 | 1,617 | 4,713 | 3,092 | 1,623 |
+| the final recut | #8917's cut, G = 128, reading A | one M (PageCopy 97 or 205) | 332 | width + margin, κ 2^-6 | -101.00 | 1,916 | 4,980 | 3,376 | 1,921 |
+| the final recut | #8917's cut, G = 128, reading B | by stratum | 145 | width + margin, κ 2^-4 | -100.40 | 1,617 | 4,713 | 3,092 | 1,623 |
+| the final recut | #8917's cut, G = 128, reading B | one M, PageCopy 97 | 145 | width + margin, κ 2^-4 | -100.09 | 1,617 | 4,713 | 3,092 | 1,623 |
+| the final recut | #8917's cut, G = 128, reading B | one M, PageCopy 205 | 205 | width + margin, κ 2^-5 | -100.60 | 1,727 | 4,848 | 3,214 | 1,733 |
+| the final recut | #8917's cut, G = 64, reading A | by stratum | 588 | width + margin, κ 2^-4 | -100.52 | 1,189 | 3,583 | 2,329 | 1,193 |
+| the final recut | #8917's cut, G = 64, reading A | one M (PageCopy 97 or 205) | 588 | width + margin, κ 2^-6 | -100.16 | 1,501 | 3,891 | 2,639 | 1,505 |
+| the final recut | #8917's cut, G = 64, reading B | by stratum | 145 | width + margin, κ 2^-4 | -100.77 | 1,189 | 3,583 | 2,329 | 1,193 |
+| the final recut | #8917's cut, G = 64, reading B | one M, PageCopy 97 | 145 | width + margin, κ 2^-4 | -100.08 | 1,189 | 3,583 | 2,329 | 1,193 |
+| the final recut | #8917's cut, G = 64, reading B | one M, PageCopy 205 | 205 | width + margin, κ 2^-5 | -100.58 | 1,300 | 3,726 | 2,456 | 1,305 |
+| the final recut | #8917's cut, G = 32, reading A | by stratum | 1,100 | width + margin, κ 2^-4 | -100.14 | 980 | 3,035 | 1,959 | 983 |
+| the final recut | #8917's cut, G = 32, reading A | one M (PageCopy 97 or 205) | 1,100 | width + margin, κ 2^-7 | -100.07 to -100.23 | 1,769 | 4,015 | 2,841 | 1,773 |
+| the final recut | #8917's cut, G = 32, reading B | by stratum | 145 | width + margin, κ 2^-4 | -100.52 | 980 | 3,035 | 1,959 | 983 |
+| the final recut | #8917's cut, G = 32, reading B | one M, PageCopy 97 | 145 | width + margin, κ 2^-5 | -100.99 | 1,085 | 3,159 | 2,073 | 1,089 |
+| the final recut | #8917's cut, G = 32, reading B | one M, PageCopy 205 | 205 | width + margin, κ 2^-5 | -100.49 | 1,085 | 3,159 | 2,073 | 1,089 |
+
+Reading it:
+- **(1) The plan's cut, M = 4,130: yes, something holds, at a price.** By stratum, width + margin at κ 2^-6 holds (2^-100.21) at 4,069 GB no program: the 4,130-class blocks are the whole-row attention at T ≤ 9, which the plan samples 17 times each, so by stratum they barely count. Under one M only κ 2^-9 holds (2^-100.28): 7,209 GB no program, 14,593 as `main` is. The plan of record at this cut reads 2^-95.87 under one M and 2^-97.48 by stratum: it does not hold on either [run].
+- **(2) The final recut, M = 145.** Width + margin at κ 2^-4 holds under one M at PageCopy 97 (2^-100.15) and by stratum (2^-100.42): 3,861 / 10,593 / 7,068 / 3,873. If PageCopy is 205 the one-M line needs κ 2^-5 (2^-100.65): +76 GB no program, +42 as `main` is. The planner's own pick (κ 2^-3: 3,823 no program) does **not** hold (2^-99.15 one M, 2^-99.42 by stratum), so the κ has to be held, which is what #8904 lets a caller do. The plan of record (size classes, κ 2^-5; 2^-6 at +783) holds at this cut too (2^-100.79; 2^-100.29 at PageCopy 205) and reads 6,360 / 16,851 / 11,394 / 6,379: the plan change is worth 39% at no program and 37% as `main` is.
+- **(3) The final recut + #8917's cut.** By stratum every G holds at κ 2^-4 under both readings. Under one M, reading A's scores unit (332 / 588 / 1,100 classes) needs κ 2^-6 at G = 128 and 64 and 2^-7 at G = 32, so under reading A and one M, G = 64 is the least (1,501 no program, 3,891 as `main` is) and G = 32 is worse than G = 128. Under reading B (M stays 145) G = 32 is the least: 1,085 / 3,159 at κ 2^-5.
+- **As `main` is, the setup is most of every row:** 10,593 of which 6,732 is the +783 at the final recut; with #8917's cut at G = 64, 3,583 of which 2,395.
+
+**2. BENCHCROSS's condition beside each #8917 row: the values units at 2^26 (a key row has a writer)** [run: the same designs, each values unit's block at 2^26 where the rows above take 2^25 / 2^24 / 2^23 at G = 128 / 64 / 32; BENCHCROSS's 12:02Z says no class count exists for the units once the keys have a writer, so these rows have a GB and **no bits line**: the κ is the row above's, not one shown to hold].
+
+| head block (the final recut) | (b) line | plan | values units at 2^26: no program (not what `main` verifies) | as `main` is (+783 core-s a statement) | the hoist, once a member (+373) | the hoist, once a window (+1.4) |
+|---|---|---|---:|---:|---:|---:|
+| #8917's cut, G = 128, reading A | by stratum | width + margin, κ 2^-4 | 2,461 | 6,924 | 4,587 | 2,469 |
+| #8917's cut, G = 128, reading A | one M (PageCopy 97 or 205) | width + margin, κ 2^-6 | 2,765 | 7,203 | 4,879 | 2,773 |
+| #8917's cut, G = 128, reading B | by stratum | width + margin, κ 2^-4 | 2,461 | 6,924 | 4,587 | 2,469 |
+| #8917's cut, G = 128, reading B | one M, PageCopy 97 | width + margin, κ 2^-4 | 2,461 | 6,924 | 4,587 | 2,469 |
+| #8917's cut, G = 128, reading B | one M, PageCopy 205 | width + margin, κ 2^-5 | 2,566 | 7,045 | 4,700 | 2,574 |
+| #8917's cut, G = 64, reading A | by stratum | width + margin, κ 2^-4 | 2,464 | 6,925 | 4,589 | 2,472 |
+| #8917's cut, G = 64, reading A | one M (PageCopy 97 or 205) | width + margin, κ 2^-6 | 2,777 | 7,295 | 4,932 | 2,785 |
+| #8917's cut, G = 64, reading B | by stratum | width + margin, κ 2^-4 | 2,464 | 6,925 | 4,589 | 2,472 |
+| #8917's cut, G = 64, reading B | one M, PageCopy 97 | width + margin, κ 2^-4 | 2,464 | 6,925 | 4,589 | 2,472 |
+| #8917's cut, G = 64, reading B | one M, PageCopy 205 | width + margin, κ 2^-5 | 2,568 | 7,048 | 4,702 | 2,576 |
+| #8917's cut, G = 32, reading A | by stratum | width + margin, κ 2^-4 | 2,531 | 7,098 | 4,707 | 2,539 |
+| #8917's cut, G = 32, reading A | one M (PageCopy 97 or 205) | width + margin, κ 2^-7 | 3,266 | 8,008 | 5,526 | 3,274 |
+| #8917's cut, G = 32, reading B | by stratum | width + margin, κ 2^-4 | 2,531 | 7,098 | 4,707 | 2,539 |
+| #8917's cut, G = 32, reading B | one M, PageCopy 97 | width + margin, κ 2^-5 | 2,618 | 7,172 | 4,787 | 2,626 |
+| #8917's cut, G = 32, reading B | one M, PageCopy 205 | width + margin, κ 2^-5 | 2,618 | 7,172 | 4,787 | 2,626 |
+
+- At 2^26 the three G's price within 3% of each other at κ 2^-4 (2,461 / 2,464 / 2,531 no program) and G = 32 is the worst, since its sixteen units a head block are each a quarter of the whole block. #8917's cut is then worth 36% of the final recut's figure (3,861 → 2,461), where the small units give 58% to 75%.
+- BENCHCROSS's own 2^26 rows at recut A are 2,467.0 / 2,483.2 / 2,577.5 at κ 2^-4 [relayed, 12:02Z]: 0.2%, 0.8% and 1.8% above mine. I have not found the cause [guess: its unit's cap or commit bytes].
+
+**3. The same table at the measured engine rate on node A (a floor on the rate)** [run: the figures above × 0.0143/0.4 to × 0.0154/0.4]. **This column cannot show 300 GB is met: the rate is a floor, and the rate is not measured at the headline's mix.** After the semicolon: the utilization at which that row stops holding 300 GB.
+
+| writers' cut | head block | (b) line | plan | no program (not what `main` verifies) | as `main` is (+783 core-s a statement) | the hoist, once a member (+373) | the hoist, once a window (+1.4) |
+|---|---|---|---|---:|---:|---:|---:|
+| the plan's | whole | by stratum | width + margin, κ 2^-6 | 145 to 157; 0.0295 | 378 to 407; 0.0114 | 256 to 276; 0.0167 | 146 to 157; 0.0294 |
+| the plan's | whole | one M (PageCopy 97 or 205) | width + margin, κ 2^-9 | 258 to 278; 0.0166 | 522 to 562; 0.0082 | 383 to 413; 0.0112 | 258 to 278; 0.0166 |
+| the final recut | whole | by stratum | width + margin, κ 2^-4 | 138 to 149; 0.0311 | 379 to 408; 0.0113 | 253 to 272; 0.0170 | 138 to 149; 0.0310 |
+| the final recut | whole | one M, PageCopy 97 | width + margin, κ 2^-4 | 138 to 149; 0.0311 | 379 to 408; 0.0113 | 253 to 272; 0.0170 | 138 to 149; 0.0310 |
+| the final recut | whole | one M, PageCopy 205 | width + margin, κ 2^-5 | 141 to 152; 0.0305 | 380 to 409; 0.0113 | 255 to 274; 0.0168 | 141 to 152; 0.0304 |
+| the final recut | #8917's cut, G = 128, reading A | by stratum | width + margin, κ 2^-4 | 58 to 62; 0.0742 | 168 to 181; 0.0255 | 111 to 119; 0.0388 | 58 to 62; 0.0739 |
+| the final recut | #8917's cut, G = 128, reading A | one M (PageCopy 97 or 205) | width + margin, κ 2^-6 | 68 to 74; 0.0626 | 178 to 192; 0.0241 | 121 to 130; 0.0355 | 69 to 74; 0.0625 |
+| the final recut | #8917's cut, G = 128, reading B | by stratum | width + margin, κ 2^-4 | 58 to 62; 0.0742 | 168 to 181; 0.0255 | 111 to 119; 0.0388 | 58 to 62; 0.0739 |
+| the final recut | #8917's cut, G = 128, reading B | one M, PageCopy 97 | width + margin, κ 2^-4 | 58 to 62; 0.0742 | 168 to 181; 0.0255 | 111 to 119; 0.0388 | 58 to 62; 0.0739 |
+| the final recut | #8917's cut, G = 128, reading B | one M, PageCopy 205 | width + margin, κ 2^-5 | 62 to 66; 0.0695 | 173 to 187; 0.0248 | 115 to 124; 0.0373 | 62 to 67; 0.0693 |
+| the final recut | #8917's cut, G = 64, reading A | by stratum | width + margin, κ 2^-4 | 42 to 46; 0.1010 | 128 to 138; 0.0335 | 83 to 90; 0.0515 | 43 to 46; 0.1006 |
+| the final recut | #8917's cut, G = 64, reading A | one M (PageCopy 97 or 205) | width + margin, κ 2^-6 | 54 to 58; 0.0800 | 139 to 150; 0.0308 | 94 to 102; 0.0455 | 54 to 58; 0.0797 |
+| the final recut | #8917's cut, G = 64, reading B | by stratum | width + margin, κ 2^-4 | 42 to 46; 0.1010 | 128 to 138; 0.0335 | 83 to 90; 0.0515 | 43 to 46; 0.1006 |
+| the final recut | #8917's cut, G = 64, reading B | one M, PageCopy 97 | width + margin, κ 2^-4 | 42 to 46; 0.1010 | 128 to 138; 0.0335 | 83 to 90; 0.0515 | 43 to 46; 0.1006 |
+| the final recut | #8917's cut, G = 64, reading B | one M, PageCopy 205 | width + margin, κ 2^-5 | 46 to 50; 0.0923 | 133 to 143; 0.0322 | 88 to 95; 0.0489 | 47 to 50; 0.0920 |
+| the final recut | #8917's cut, G = 32, reading A | by stratum | width + margin, κ 2^-4 | 35 to 38; 0.1225 | 109 to 117; 0.0395 | 70 to 75; 0.0613 | 35 to 38; 0.1220 |
+| the final recut | #8917's cut, G = 32, reading A | one M (PageCopy 97 or 205) | width + margin, κ 2^-7 | 63 to 68; 0.0678 | 144 to 155; 0.0299 | 102 to 109; 0.0422 | 63 to 68; 0.0677 |
+| the final recut | #8917's cut, G = 32, reading B | by stratum | width + margin, κ 2^-4 | 35 to 38; 0.1225 | 109 to 117; 0.0395 | 70 to 75; 0.0613 | 35 to 38; 0.1220 |
+| the final recut | #8917's cut, G = 32, reading B | one M, PageCopy 97 | width + margin, κ 2^-5 | 39 to 42; 0.1106 | 113 to 122; 0.0380 | 74 to 80; 0.0579 | 39 to 42; 0.1102 |
+| the final recut | #8917's cut, G = 32, reading B | one M, PageCopy 205 | width + margin, κ 2^-5 | 39 to 42; 0.1106 | 113 to 122; 0.0380 | 74 to 80; 0.0579 | 39 to 42; 0.1102 |
+
+- At modeled 0.4 no row is under 300 GB. The row nearest it, G = 32 by stratum with the small values units, holds 300 GB up to a utilization of 0.12 at no program and 0.040 as `main` is; the final recut with the head whole holds it up to 0.031 and 0.011.
+
+**4. What the final recut costs that recut A did not** [run, my price model].
+- In GB, 0.7: 3,860.9 against recut A's 3,860.2 at κ 2^-4, no program. The widened writers are 3.3% of the plan's proving (the MoE experts 1.98%, q_a 0.74%, o_proj 0.28%, q_nope 0.13%, W_UV 0.07%, the two routers 0.06%, the embedding under 0.01%); the head block is about 91%.
+- What it adds over recut A is three rows: the decode router at N = 2 and the embedding at H = 4, both 2^27 blocks, and the prefill router at N = 4 (2^26). q_a at N = 16 and the experts at N = 4 were 2^27 in recut A already. So four writer rows now sit at k_log 27 beside the head block, the experts exactly at `K_MAX` [relayed: SCALE's sizing; the experts' 27 is its derived figure, 4 × the plan's fused 25].
+- **No price is measured for any of them at the new width.** My rows take the plan's measured price a block × 2^Δk. If those four rows cost 1.5×, 2× or 4× that, the figure is 3,921 / 3,982 / 4,223 GB (+1.6% / +3.1% / +9.4%) [run]. A 2^27 block also needs the head block's memory on the prover; I have no measurement of that for these Definitions.
+- Nothing can widen further: the experts are at `K_MAX`, the decode router at N = 4 and the embedding at H = 8 are 2^28 [relayed: SCALE]. So M = 145 is this recut's floor without a reader cut on the router.
+
+**5. Lean's check of these designs**: run `r20261111-122949-1da8` (launched 12:30Z, tree `f1e9d625dd`, 20 designs: the final recut whole and at G = 128 / 64 / 32, each at no program and +783, two also at +373; the plan's cut at κ 2^-9) is running. ETA 12:50Z [guess]. Its figures follow in my next entry. The last such run (`3bf0`) was within 1.4% of the planner and never above it by more than 0.1 GB [run].
+
+**6. #8950** (the tree's driver passes the planner `widths`, `margin`, `kappas`): unmarked, head `f8b6e599b19b7802eed13126355b6f96a3a65cc6`. Quick tier `r20261111-121123-87c2` is at 47 suites passed, none failed, still running at 12:34Z [run]. The ready line comes when it ends.
+
+For BREAKEVEN:
+- The plan to price at the FINAL recut: a stratum a distinct width, margin 1/8, **κ held at 2^-4** (`widths=True, margin=0.125, kappas=(2.0 ** -4,)`); κ 2^-5 if PageCopy is 205. World year, modeled 0.4: 3,861 no program / 10,593 as `main` is / 7,068 once a member / 3,873 once a window. The planner's own κ 2^-3 does not hold (b).
+- With #8917's cut, small values units: by stratum κ 2^-4 at every G (1,617 / 1,189 / 980 no program at G = 128 / 64 / 32); under one M reading A needs κ 2^-6 / 2^-6 / 2^-7 (1,916 / 1,501 / 1,769). With the values units at 2^26: 2,461 / 2,464 / 2,531 at κ 2^-4, and no bits line exists for them.
+- The final recut prices as recut A to 1 GB in my model, so your recut rows need no reprice for the cut itself, only the M (145 for 139).
+
+For the table:
+- PLAN | (b) at the FINAL recut, M = 145 | width + margin κ 2^-4 holds 2^-100.15 under one M (κ 2^-5, 2^-100.65, at PageCopy 205); world year, modeled 0.4: 3,861 GB no program (not what `main` verifies), 10,593 as `main` is, 7,068 / 3,873 the hoist once a member / once a window; (b), over the served wiring; modeled; no Lean statement at the code is behind it; the recut is not built [run].
+- PLAN | (b) at the plan's cut, M = 4,130 | one M holds only at κ 2^-9: 7,209 no program, 14,593 as `main` is; by stratum κ 2^-6: 4,069 / 10,571 [run].
+- PLAN | final recut + #8917's cut (no Program) | least under one M: reading A G = 64 κ 2^-6 1,501 / 3,891; reading B G = 32 κ 2^-5 1,085 / 3,159 (no program / as `main` is); with the values units at 2^26: 2,461 / 6,924 at G = 128, no bits line. No row reaches 300 GB at modeled 0.4 [run].
