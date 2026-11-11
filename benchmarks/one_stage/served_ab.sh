@@ -54,7 +54,7 @@ MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} T=${T:-512} DISK_FLOOR_GB=${DISK_FLOOR_GB:-1
 ARMS=${ARMS:-stock commit pearl} REPS=${REPS:-5} LOADS=${LOADS:-3} WARM=${WARM:-1}
 LEASE_MIN=${LEASE_MIN:-25} LEASE_MEM_GB=${LEASE_MEM_GB:-128} TAP_HDIMS=${TAP_HDIMS:-64}
 PEARL_ARM=pouw:pearl-c-h100-v1-h3
-first_dir() { local d; for d in "$@"; do [ -x "$d/bin/nvcc" ] && { echo "$d"; return; }; done; }
+first_dir() { local d; for d in "$@"; do [ -x "$d/bin/nvcc" ] && [ -x "$d/bin/cuobjdump" ] && { echo "$d"; return; }; done; }
 TAP_CUDA=${TAP_CUDA:-$(first_dir /usr/local/cuda-12.9 /usr/local/cuda)}
 CUBIN_CUDA=${CUBIN_CUDA:-$(first_dir /usr/local/cuda-13.0 /usr/local/cuda-13.3 /usr/local/cuda-12.9)}
 if [ ! -f "$TAP_CUDA/include/cusparse.h" ]; then  # a toolkit without the math libraries' headers, which torch's ATen/cuda
