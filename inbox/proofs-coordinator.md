@@ -37210,3 +37210,115 @@ Next I do C, the two HASH-112 readings, by 22:00Z. I'll also check that proofs' 
 **Core counts:** none of this is a timing of mine; my `689a` rows had the server on 12 cores.
 
 **State:** A, B and C are done. #8771 waits for #8425 and your mark, and its head (`0a0e98be69`) has not moved. Nothing of mine runs or holds a card on node A. My scratch there is about 0.1 GB under `/tmp/servedcard-*`; I'll delete it when you say. I end the turn here; wake me for #8771 or for a ruling on C.
+
+## ATTACK, Wed 11 Nov 02:51Z: TWO-STAGE FINDER: HOLDS (items 1 to 4, 6 and 7 hold against the Lean; item 5 holds only with `always` empty, which the deployed sample has and no line of Lean states)
+
+The comment text for PRF-533 is everything below this line, handle-free; I have not posted it.
+
+TWO-STAGE FINDER: HOLDS
+
+**Verdict.** The derivation is right at SPOT[Flock]'s code: I tried each of the seven and broke none of the one root, the cost at each first-stage transcript, the constant 2, the trace or the refusal term, and the eight numbers I recomputed match [read, derived, run]. Three things the formula does not say and a Lean statement of it must [read, derived]:
+- K carries the always-checked blocks. The registration's field `always` sets them, and no line of Lean makes it empty (item 5).
+- A finder has finitely many coins, so its waits are capped and the bound gains a term that a free cap makes as small as wanted (item 2).
+- The capped-patterns designs (m from 124,289) do not fit the Lean model's coin of 2^20 bytes: the modelled verifier refuses every run there (item 6).
+
+It is a paper derivation. Nothing is built, by SCALE or by me, and the definitions it is stated against (`iregVal`, `KSRegTwoX`) are on branches, not on `main` [read].
+
+**Commits read.** `origin/main` = `a930252c49`; the `main` files cited below are unchanged since `2b869ed35d` [run: `git diff --stat`, empty]. #8512's head `c8c0025bfa` for `SamplingTwoReg.lean`, identical at REGX's `fe391c772c` [run]. `fe391c772c` for `TwoReg.lean`, `SamplingTwoRegX.lean`, `SamplingGenericX.lean`. `db65e96678` for `RevealsOpen.lean`. SCALE's note, its 02:34Z inbox entry, and the mailbox through 02:38Z [read].
+
+## 1. One root: HOLDS
+
+- [read] The game. The prover's next message is `P.next x hist ω`, `hist` its earlier messages and the verifier's answers (`Security/Definitions/Core/Interaction.lean:102-104, 130-141`). The verifier's answer after j messages reads the first j coins only (`run`, `:176-178`).
+- [read] SPOT[Flock]'s order of moves: after a0 the verifier sends c0, after m1 it sends c1, after m2 it checks `stmtOk` (`Security/Proofs/Flock/SpotFlock/Code.lean:532-536`). So m1, the interior registration, is a function of the statement, the tape and c0 [derived].
+- [read] `iroots` reads the first two prover messages only (`iroots_fst`, `SpotFlock/Facts.lean:121-128`), and `stage2` is the rounds after round 0 (`Facts.lean:139-143`). `interiorFixed` (`Facts.lean:130-145`) follows at every prover, tape and coins, with no acceptance hypothesis.
+- [read] The contract clause at two stages is `CompiledTwo.Sessions.interior`, `Security/Definitions/Claims/SamplingTwo.lean:296-297`. SCALE cites its one-stage twin (`SamplingGeneric.lean:488-489`); the statement is the same.
+- [read] The extractor's coins never reach the prover: a rerun is `run H P V x ω` at coins the extractor picks, on the judged run's tape (`Interaction.lean:191-207, 228-230`). A session's extraction replaces only that session's rounds (`sessWit`, `SamplingGeneric.lean:329-338`), which lie in `stage2` (`fixed`, `SamplingTwo.lean:298-299`).
+- [derived] So nothing the second-stage redraw changes reaches m1: not the tape (kept), not the extractor's coins, not a stage-2 coin. A prover that registers the interior after seeing part of stage 2 does not exist in this game, by the verifier's type.
+- [read] Two passing openings of one position under one root with two values are a collision whatever the root is: `pr_iconflict_le` takes the root equality from `interior` and calls `bconf_of_disagree` (`TwoReg.lean:305-333`).
+- [not reached] That the deployed challenger releases c1 only after the interior registration's digest. A docstring says so (`verity/core/service/spot/Spot/Select.lean:294-296`); I did not trace the challenger.
+
+## 2. Expected second runs at most 1 at each first-stage transcript: HOLDS
+
+- [read] Given c0, the sample is a function of c1 alone: `secondDraw c0 c1` (`Code.lean:375-378`), and a session's coins don't move it (`fixed`). So at a transcript τ, "the coins that read p" is a set of round-1 coins, which the finder draws by rejection with no SHA-512 call.
+- [derived] At each τ: `sum_p (O(p|τ)/K) * (π(p|τ)/O(p|τ)) = E[|Reads ∩ interior| given τ]/K <= 1`.
+- [derived] No 1/Pr[first stage] appears. Run 1 reaches τ with the same chance the bad event does, and the second runs stay at τ. A position read at one transcript in 2^40 is caught at (bad mass)/K like any other: success `E_τ[(1/K) * 2*O_0*O_1/O]` against bad mass `E_τ[min(O_0, O_1)]`.
+- [derived] The cost holds even if the prover's work is uneven over coins: the second runs cost `(1/K) * E[cost * |Reads|] <= E[cost of one run]`, so T may be an expectation.
+- [derived] The extraction cost holds: "reads p" is a function of c0 and c1, so a holding session's own coins stay uniform given it (`fixed`), and `ExtractRunsExpLe` is stated at every prover and tape (`Interaction.lean:521-525`).
+- [derived] One term is missing. `Finder.S` is a `Fintype` (`Interaction.lean:263-268`), so the wait is capped at some M draws, and the bound gains at most `|opensSet|/(M + 1)` for a free M. EXTFORM's `n_PU/(K+1)` is the same term. It does not change the constant.
+
+## 3. Success at least min(O_0, O_1)/K with constant 2, run 1 not conditioned on acceptance: HOLDS
+
+- [derived] Arithmetic. Success at p is `sum_b (O_b/K) * (O_notb/O) = 2*O_0*O_1/(K*O) >= min(O_0, O_1)/K`. The bad mass at p (accepted, and opened off the plurality) is at most `min(O_0, O_1) + O_ref(p)`. With run 1 conditioned on acceptance, success is only `A_off * O_t/(K*O) >= A_off/(2K)`: the constant 4.
+- [read] A rejected outer run's accepting sessions are extracted, and the off terms count them:
+  - `runExt` reads no verdict (`SamplingGeneric.lean:367-373`);
+  - `sessWit` runs the session's extractor on the session's own view (`:329-338`);
+  - `ERep` gives up only where the judged run, here the session's, rejects (`Interaction.lean:250-258`);
+  - `runs` gives outer acceptance ⇒ inner acceptance and not the converse (`SamplingTwo.lean:300-304`).
+- [read] At the code, a session is extracted only at a run that passed round 2: `session` needs every round before the session's first answered (`Code.lean:562-564, 575-582`).
+- [read] `acc` in both off terms. The off terms as proved range over all (r, c), acceptance not required (`TwoReg.lean:466-469` at `fe391c772c`). The case split is made at an accepted run (`hacc`, `:481-486`), and the proof drops `acc` only when it sums. Keeping it changes the proof, not what `KSRegTwoX` says [derived].
+- [read] An accepted run is not refused: `readsOk` is false where `secondDraw` is none (`Code.lean:455-461, 483-490`).
+- [read] The finder's restriction to the holding sessions reproduces `opensAt`'s first passing opening: each slot has its own extractor coins (`SlotEC`, `SamplingGeneric.lean:350-354`), and a unit's reveal opens only its own `needs`, one opening a needed gate (`pos_mem_needs`, `RevealsOpen.lean:28-32` at `db65e96678`; not built).
+
+## 4. The trace: HOLDS
+
+- [read] `iregVal` at (ω, r, ρ, g) is the plurality, over `ec`, of `iopensAt ... (forkOn (stage2 x) r ec.1) ec.2 ρ g`: over the second stage's coins and the extractor's, at r's coins off `stage2`; `true` on a tie and where nothing opens (`SamplingTwoReg.lean:96-101` at `c8c0025bfa`). `iopensAt` is the first passing opening under the roots that run shows for ρ (`:81-89`).
+- [read] `KSRegTwoX`'s event and `MissTwoX`'s are the two halves of one set, `FregTwoX H P x ω r` (`SamplingTwoRegX.lean:43-52, 72-75, 96-99` at `fe391c772c`). `OffIreg` is "opens g under ρ's interior roots off `iregVal(ω, r, ρ, g)`" (`TwoReg.lean:196-198`). So the finder's interior event is the theorem's, not a neighbour.
+- [derived] A different interior for each first coin does not fall between the two terms. `Pr[acc] <= Pr[acc and the sample hits FregTwoX(ω, r)] + Pr[the sample misses FregTwoX(ω, r)]`. The first is the finder's term with the sessions' term. The second is `MissTwoX`, whose W asks for a wrong block at every interior (`wrongAtBoundaryAt`, `SamplingTwoReg.lean:60-62`); the interior the prover picks after c0 still leaves one, and c1, drawn after it, samples it.
+- [read] The boundary trace `regValX` is the plurality over the tape, the coins and the extractor's coins together (`SamplingGenericX.lean:49-53` at `fe391c772c`), so the boundary branch redraws the tape too.
+- [read] None of this is on `main`: `iregVal` and `KSRegTwo` occur in no file of `origin/main` [run: `git grep`].
+
+## 5. K as a function of the statement: the inequality HOLDS; the numbers need `always` empty, which no line of Lean states
+
+- [read] At non-refused coins `RegTwo.checked` is the blocks with `always v` or drawn (`Security/Proofs/Flock/Claims/Sampling/Reg.lean:90-94`). So `K(x) <= sum over always-checked |needs| + Kfirst * sum_t k_t * max|needs|` [derived].
+- [read] `always` is a field of the registration (`Reg.lean:60-65`), the registration is a free field of `Held` (`SpotFlock/Code.lean:115-129`), and nothing sets it: no `always :=` under `Security/` or `verity/core/` at `a930252c49` [run: `git grep`].
+- [derived] So in Lean it can be the whole population. Then `checked` is every block at every coin, K is `|opensSet|` (about 2^57.6 at B), and the bound is -99.1 at k = 1,507, d = 1 [run]. By the test this item sets, the claim "K is the sample's" fails for the Lean instance as it is written.
+- [read] It is the auditor's field, not the prover's: `reg x` is `h.reg` at every statement that decodes (`Code.lean:618`).
+- [read] At the deployed design it is empty of real blocks:
+  - the code's facts ask `always` only on an input slot's cells, which are empty (`Facts.lean:368-380`);
+  - the deployed sample has no always-checked proof block: `Slots.checked` lists input slots, each "opened only where a sampled proof block reads its row" (`verity/core/service/spot/Spot/Slots.lean:86-89`), and `Select.lean` and `Run.lean` have no such notion [run: grep].
+- [read, not traced] `SpotFlock/SlotsAt.lean:40-49` says the instance's premise `Addresses h` can't hold at an always-checked unit that is not drawn.
+- [derived] So `K_always` = 0 at the deployed design, and a Lean statement must take `always` false on every block as a hypothesis or carry `K_always` as a term.
+
+## 6. The refusal term below 2^-229: HOLDS, and it is 0 at the code
+
+- [read] A refused run rejects at round 2 (`Code.lean:536, 455-461`), and no session is extracted at a run rejected there: sessions start at round 3 (`Code.lean:362-363, 550`) and `session` needs the earlier rounds answered (`:562-564, 575-582`). So no opening passes at refused coins, `O_ref` = 0, and the traces over all coins and over non-refused coins are the same [derived; `refusedSeen` not read].
+- [read] A correction to my 02:09Z row 2c. A cell's stream is extended when it runs out, not failed (`onWith`, `verity/core/service/flock/Flock/Draw.lean:413-420`); the draw errors only when the coin's bytes run out (`take`, `verity/core/service/spot/Spot/Draw.lean:253-257`; `drawUnits`, `:289-292`).
+- [derived] Where the streams fit the coin (`sum over cells (2*k_t*width + 64) <= 2^20` bytes), refusal needs some cell to extend, which needs more of its words rejected than its 64 spare bytes hold: at most 2^-384 a cell, each rejection below 2^-64 (`Flock/Draw.lean:26-43, 172`). So p_ref <= 2^-370 at the at most 12,787 cells that fit, and p_ref times 2^71 positions is below 2^-299 [run].
+- [read, derived] Where they do not fit, p_ref = 1. The model's coin is 2^20 bytes a round (`Code.lean:366`), and a drawn block takes at least 18, so m <= 58,254. The capped-patterns rows (m = 124,289 to 1,144,826) need 2.2 MB to 20.6 MB [run]: the modelled verifier rejects every run there, and a theorem at this code says nothing about them.
+- [read] The deployed challenger's stream is up to 2^20 coins of 64 bytes, 2^26 bytes (`verity/core/service/spot/Spot/Challenger.lean:48-50`), which holds those designs [derived; that `MAX_COINS` is what bounds the second-stage stream is not traced].
+
+## 7. The numbers: the eight I recomputed match
+
+`log2(2) + log2 K + 80 + log2(1 + d*e_s) - 256`, `e_s = 1 + 210k` [run: `two7.py` on my VM]:
+
+| design | K | k = 1,507, d = 1 | largest k, d = 167 |
+|---|---|---|---|
+| uncapped, m 154 | 2^24.70 | -132.03 | -111.64 |
+| capped sets, m 1,158 | 2^30.1 | -126.63 | -106.24 |
+| capped patterns, low | 2^36.8 | -119.93 | -99.54 |
+| capped patterns, high | 2^40.1 | -116.63 | -96.24 |
+
+- [run] Calls on 64 KiB rows: +log2(513) = 9.00 on each.
+- [run] K = 2^24.70 at m = 154 is my own recount from the card (02:09Z, row 7).
+- [relayed] The m and K of the capped rows are REPBREAK's; I did not rerun them. They imply 2^19.9 bits a block, the card's largest block at nearly every draw, so they read as upper bounds [derived].
+- [derived] d = 1 is the best case: -132.03 is -127.12 at d = 30 [run]. At this code d is at most the templates whose sampled blocks need one gate (`sessions := h.ms.length`, `Code.lean:612`).
+- [derived] The cells leave out `d*openCalls`, one run's self-disagreement (-152.8 at 30 sessions and k = 1,507, -137.3 at 167 sessions and the largest k [run]), the cap term of item 2, and the sessions' own term `κ_s + sqrt(k*γ_s*Pr[B])`, which the finder does not touch.
+- [derived] The two patterns rows are outside the Lean model's coin (item 6).
+
+## What a Lean statement of this still needs
+
+- [read] The finder itself, with a cap; nothing like it is in Lean.
+- [derived] The event's split with `acc` kept in both off terms (item 3).
+- [read] `pos_mem_needs` at the code's own reveal: one line, since `reveal := Reveal.reveal ...` (`Code.lean:610`), and not on the branch. For the generic `CompiledTwo` contract, no clause of `Sessions` confines a reveal's positions (`SamplingTwo.lean:276-319`), so there it needs EXTFORM's added clause.
+- [derived] `always` false on every block, or `K_always` in K (item 5).
+- [derived] The coin's length as large as the design's draw, if the capped designs are to be covered (item 6).
+
+## Not reached
+
+- The deployed challenger's order of release (item 1).
+- `Addresses h` and always-checked units (item 5).
+- REPBREAK's m and K, and which design the cost rows price (item 7).
+- `rerunsExp_le` (`Efficient.lean:181`) and the sessions' term.
+- `refusedSeen` and `view` (item 6).
+
+**In one sentence for Daniel:** the two-stage finder's derivation checks out against the Lean it cites, so the binding miss at two stages is at most `2K*T*(1 + d*e_s)/2^256` for one audit on paper, with K the bits one audit's sample opens; at 2^80 compressions the number runs from -132 bits (the smallest design, its best corner) to -96 (the largest design quoted, its worst corner), it is not yet a Lean theorem, and the Lean must also say that the registration has no always-checked blocks, which is true of the deployed sample and stated nowhere [derived, run, read].
