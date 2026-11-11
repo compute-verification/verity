@@ -33,7 +33,8 @@ size changes. `token_dims` names each batch tensor's token dimensions in axis or
 integer tensor, every one but the last of a floating one); axis i of every tensor is varied together. The captures must
 agree node for node, so a step whose graph changes with the batch size is refused.
 
-Scaled-dot-product attention runs on its math backend during capture, so attention is its matmuls and softmax.
+Scaled-dot-product attention runs on its math backend during capture, so attention is its matmuls and softmax, in its
+operands' dtype (`_math_attention`): the dtype a step under autocast runs its fused attention kernel in.
 
 `CaptureRefused` names what stops a capture, with the user's source line where there is one: a tensor value read into
 Python (``aten._local_scalar_dense``: an ``if`` on a tensor, ``.item()``), an output shape set by values
@@ -260,6 +261,23 @@ def _marked_backward():
         torch.autograd.backward, torch.autograd.grad = ab, ag
 
 
+@contextlib.contextmanager
+def _math_attention():
+    """Scaled-dot-product attention on its math backend, in its operands' dtype. The math backend casts half-width
+    operands (bfloat16, float16) to float32 unless torch's switch for it is on, where a fused kernel runs them as
+    they are, so the capture turns the switch on and puts it back as it was. The switch is named under
+    `torch.backends.cuda` and acts on every device: it is read by the math backend's own code, a CPU's too."""
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+
+    was = torch.backends.cuda.fp16_bf16_reduction_math_sdp_allowed()
+    torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
+    try:
+        with sdpa_kernel([SDPBackend.MATH]):
+            yield
+    finally:
+        torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(was)
+
+
 def _trace(steps: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: torch.nn.Module,
            optimizers: Sequence[torch.optim.Optimizer], leaves: list, spec, device, measured: int | None = None) -> Capture:
     """One `make_fx` capture of `steps` in order, each as ``step(fake_model, batch, fake_optimizers)`` on one fake model
@@ -280,9 +298,8 @@ def _trace(steps: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: 
             with (contextlib.nullcontext() if measured is None else torch.autograd.profiler.record_function(f"{STEP}{i}")):
                 step(fake_model, pytree.tree_unflatten(flat, spec), fake_opts)
 
-    from torch.nn.attention import SDPBackend, sdpa_kernel
     try:
-        with _marked_backward(), sdpa_kernel([SDPBackend.MATH]):
+        with _marked_backward(), _math_attention():
             gm = make_fx(run, tracing_mode="fake", _allow_non_fake_inputs=True)(*[f[i] for f in fakes for i in tensor_at])
     except Exception as e:
         raise _refusal(e) from e
