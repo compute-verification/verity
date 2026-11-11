@@ -60187,3 +60187,62 @@ For the table:
 - #9027 head `ff8f3ea94705`, not marked yet. Law `stratified-rate:2/P`: the same K = 3, record and sample (1, 2, 1) as the old `stratified:3`.
 - `whole_run.sh run toy 146`: exit 0, `"symbol":"accept"` [run `r20261111-180120-8b3c`]. `desc`: `r20261111-180205-c07f`, waiting for a slot. Pre-mark suites: `r20261111-180601-e67a`, running.
 - Correction: the old law drew 1, 2, 1 on the toy, four units, not one a stratum; `1/P` would give one a stratum. Your call if you want that instead.
+
+## WIRES, Wed 11 Nov 18:14Z: first entry. The five lines for PRF-477 are below. The pull request is the two checks of the 14:44Z diff put back on `main`, open by 20:00Z. PRF-559 needs no code: `main` has refused its case since #8730 landed at 16:15Z today
+
+**Verdict:** nothing is built yet and no `research run` is out. The five lines are from the Lean on `main` `cc6ee7446278` and the vLLM lane's command at #8875's head. The pull request changes three files and only refuses more. My branch is `cursor/proofs-wires-0239`, from `main` `cc6ee7446278`, with no commit yet.
+
+**1. The five lines for PRF-477** (what `two_stage.py second` must do so that a read of an output the replay block returns passes round 2's `second-read`).
+
+1. **Which port.** It is the output port `o<f>` of the template whose units' outputs the replay block returns, `f` the field of that template's output (`returnLinks`; at the token select, `Combine`'s `o0`). The template's session reads that port as a registered read (`--registered`) and does not root it at the interior record. A statement that leaves it unread is refused (`second-read`).
+2. **Which record, which name.** The value is a port of round 1's record (the boundary record), committed while serving and before the first draw, under that record's scheme. Its name is `o<j>` for field `j` of the replay block's return, so `o0` when the block returns one field; where round 1's record names its ports by template the name is `<the replay block's descriptor id>/o<j>` (`portOf`). It has `population × per` leaves: the replay blocks' rows in the population's order, `per` rows a replay block (the return field's leaves over one returning unit's).
+3. **What the read says.** The entry for `o<f>` names that value with round 1's record's own `root`, `domain` and `leaves` for it. The slot of unit `j` in the sample's `i`-th replay block `S[i]` reads row `S[i]·per + ρ(j)` and no other, `ρ` from the port's derived rows (`replay_rows`; `readOk`'s link case, `linkedRow`). The template's reference statement in the auditor's params lists the same port as a read of the same value (`second-values`).
+4. **What `second` has to build, and one thing it keeps not doing.** Build the opening of round 1's rows of that port under the serve's salts, which `replayed` refuses by name today when round 1's record commits the return; and make `verifier_reads` give a return link's port round 1's entry in place of the port's own. Keep registering no value of that name in the interior record: round 2 refuses such a record since #8730 (`second-interior-names`).
+5. **What changes when the new check lands.** At the token select, nothing: `Combine`'s `o0` is returned and no template reads it. From then on round 2 refuses, before it reads any statement (`second-wires`), a replay block in which another template's units read an output the block also returns. A block that needs both returns the value through a template of its own, which reads it by wire and returns it. The same pull request refuses an interior window that lists a wire's reader template before its writer: at the token select `Chunk` comes before `Combine`, the order of first call, which `Layout.templates` gives today.
+
+Beside the five, for you: with all of it the read passes `second-read` and the run is still refused last (`two-stage-form`) while `FORM` is off; and an inlined token select is refused at `second-wires` until the verifier derives a wire for an argument that gathers several nodes (GATHER's job).
+
+Sources of the five, by line.
+- Line 1 [read: `Spot/SecondStage.lean:517-536` (`returnLinks`: the link is template `t.key`, port `"o" ++ f`, value `"o" ++ j`), `:857-859` (`linkedRead`), `:941-942` (it is part of `second-read`), `:749-758` (`rootsOk` leaves a port the statement reads out of the roots it holds to the interior record)].
+- Line 2 [read: `:555-558` (`replayLinks` names the value `portOf (byTemplate rec) key l.value`, `rec` the boundary record), `:348-351`, `:838-841` (the port is found among the boundary record's ports; its leaves are `population × per`), `:531-535` (`per` is `g.leaves / w`)]. "Before the first draw" is TWOPROVE's 08:27Z point 2 and #8875's body [relayed]; the check reads only that the port is in round 1's record.
+- Line 3 [read: `:831-842` (`readOk`'s link case), `:812-815` (`linkedRow`), `:777-779` (`sameAt`), `:798-808` (`placedOk`); the module docstring `:61-69` for `second-values`; I did not read `valuesOk` itself].
+- Line 4 [read: `benchmarks/one_stage/two_stage.py:444-447` (`replayed`'s refusal) and `:484-490` (`verifier_reads`: "A return's port is read at its own port too") at #8875's head `092004fadea9`; the file is the same there as at `5dd58e0400d7`, which your brief names (`git diff --stat` of the two is empty) [run]; `Spot/SecondStage.lean:1037-1041` (`namesOk`)].
+- Line 5, "nothing at the token select" [relayed: ATTACK 15:07Z item 5, its run on the mirror at the served layout: links `(Chunk, x, logits)`, `(Combine, x0, logits)`, `(Combine, o0, o0)`, no wires]. The order [read: `adapters/vllm/verity_vllm/pipeline/boundary_rows.py:247-252` at `092004fadea9` (`Layout.templates`, "in the order of its first call"); `Flock/Draw.lean:92-94` (the strata, so round 2's parts, are in the order of their first unit)]. That `Chunk` is called before `Combine`, and that the interior window lays its members out in the order `design` lists them: [guess], I read neither the token select's body nor `interior_window`.
+
+**2. The pull request's plan.** One pull request, three files, on `cursor/proofs-wires-0239`.
+- **What it is.** The diff of EXTFORM's 14:44Z entry, item 3. Its Lean and difftest hunks still apply to `main` `cc6ee7446278`; its Python hunk does not, only because the lines moved (`WIRES_WHY` is at `second_stage.py:94`), so I put it in by hand [run: `git apply --check`].
+- **Check 1:** `wiresOk` gains `(linkOf own w.writer w.wport).isNone`: no wire's writer port is one a link names, so no unit reads off the interior record an output the block returns.
+- **Check 2:** `wiresOk` gains `posOf ps w.writer < posOf ps w.template`: each wire's writer's part is before its reader's. `posOf` moves up in the file, unchanged.
+- **The mirror:** `_wires_ok` in `second_stage.py`, the same two conjuncts; `WIRES_WHY` in both gains the two clauses.
+- **The difftest:** the one expectation that changes (two templates wired to each other: from `second-header`, `second-read` to `second-wires`), and one new case, a wire whose writer's port a link names, which passes the design check on `main` and is refused after.
+- **Docstrings:** the module docstring's sentence on `second-wires` in both files says the two new reasons.
+- **What it refuses that `main` accepts:** a design with a wire from a returned output; a design whose wire's writer is listed after its reader, or is the reader's own template. The body will say so, and that no served record has either, with the run that shows it: the design check on the mirror at the served layout, inlined and not, before and after (ATTACK's `attack_served_wiring.py`, through `research run`). ATTACK's cases A and B of `attack_both_records_toy.py` are in the same run: accepted on `main`, `second-wires` after.
+- **Runs, in this order, each through `research run --on auto --cwd source --as proofs`:** (a) the one-file try of `Spot/SecondStage.lean`, then of `Spot/SecondStageExamples.lean` and `benchmarks/two_stage/tests/TwoGuard.lean`, which read what I change and which EXTFORM's try did not build; (b) the difftest's wire and link cases; (c) at the head I will mark, the Lean check of the spot verifier's package and `suites.py --changed origin/main --quick`.
+- **The lock** [read: the three locks, by name]: no lock names `wiresOk`, `designOk` or `check`. `security/lean-audit.json` names `Spot.SecondStage.posOf` and `linkOf` once each; `posOf` moves with its text unchanged and `linkOf` is not touched, so I expect no record to move [guess, until the check at the head says so].
+- **Times:** tries and the difftest out by 19:00Z, the pull request open by 20:00Z with the head's two runs out, marked by 22:00Z. I mark it myself: it only refuses more and changes no guarantee's statement.
+
+**3. PRF-559: nothing to build.** `main` already refuses its case, in the Lean, in the mirror and in the difftest.
+- [run, here, on `main` `cc6ee7446278`, 0.8 s, the Python mirror only] ATTACK's `attack_linked_redirect_toy.py`: both reads now answer `second-interior-names` (the read at the boundary port: `second-interior-names`, `second-read`; the read at the interior record's value of that name: `second-interior-names`). ATTACK's 15:07Z run, which accepted the second, was at `main` `1a59728741f9` (13:10Z), which has no `names_ok` [run: `git show` of the file there].
+- [read] #8730 (`219763135681`, on `main` at 16:15:04Z; the issue was filed at 16:20:01Z) adds `namesOk` to the Lean and the mirror, and the difftest `test_round_two_refuses_an_interior_that_registers_a_name_round_one_has`, whose case `_read_linked(linked, 0, kept=True)` is this shape: the interior's value of the link's name beside round 1's port of it, the read as placed passing `second-read`, refused. I have not run that test; it is in my difftest run (b).
+- So the issue's first "done when" is met on `main`. Its last sentence (which of the two the statement over the wired program rests on) is not this pull request's.
+- A word on your brief: "cases A and B pass and should not" are `attack_both_records_toy.py`'s (13:13Z), the returned output read inside. That is check 1, not PRF-559; PRF-559's toy is `attack_linked_redirect_toy.py` (15:07Z item 7).
+
+**4. GATHER's ranges and mine** (lines of `main` `cc6ee7446278`).
+
+| file | mine | GATHER's |
+|---|---|---|
+| `Spot/SecondStage.lean` | `WIRES_WHY` `:159-162`, its last clause only; `wiresOk` `:627-634`; `posOf` `:952-954`, moved to just above `wiresOk`; the docstring's `second-wires` sentence `:99-102` | `Rows` `:298-323`; `gather` `:453-466`; `nodeWires` `:564-583`; `wireRuns` `:585-593`; `wiredRow` `:817-821`; `readOk`'s wire case `:843-847`; `readOk_wired` `:1374`, `check_ok_wired` `:1409`; the docstring's wires paragraph `:77-82` |
+| `second_stage.py` | `WIRES_WHY` `:94-96`, its last clause; `_wires_ok` `:739-746` | `Rows` `:223`; `_gather` `:494`; `_node_wires` `:650`; `wire_runs` `:681`; `_wired_row` `:916`; `read_ok` `:884-901` |
+| `lean/tests/test_difftest.py` | one expectation inside `test_round_two_holds_a_wired_port_to_its_writers_output` (`:6352`); one new test after it, before `:6410` | its own new cases |
+
+- The one place both touch is `WIRES_WHY`: GATHER its first clause, I its end.
+- For GATHER: both my conjuncts read a wire as one reader port and one writer port (`w.writer`, `w.wport`, `w.template`). If a wire for a gathering argument gets several writers, both conjuncts must hold for each of them.
+
+**5. Decided, and your mailbox.**
+- Read your 18:07Z section. I land first; a third line for FRAME or WIRED goes in only if asked before the mark.
+- PRF-559 is left out of the pull request: there is no code to add.
+- No checkpoint note yet; it follows this entry.
+
+**Runs:** no `research run` yet. Local only: git reads, and ATTACK's toy on the mirror (exit 0).
+
+For the table: no number moves.
