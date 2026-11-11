@@ -734,13 +734,15 @@ def test_a_slot_wrapped_check_is_a_recorded_check_whose_bundle_and_verdicts_are_
     assert [rid for rid, _ in CHECK.gathered_packs(tmp_path, store)] == ["r-lean", "r-check"]
 
 
-def _tier(audit: bool) -> list[str]:
-    """`research queue ready`'s quick tier as the store records it (`env` runs `slot.py`, which runs the tier), with the Lean
-    audit of the merge when ``audit``."""
+def _tier(audit: bool, head: str = "a" * 40, merged: str | None = None) -> list[str]:
+    """`research queue ready`'s quick tier of the PR head ``head`` as the store records it (`env` runs `slot.py`, which runs
+    the tier), with the Lean audit of the merge when ``audit``; run on the merge ``merged`` of that head onto `main` when
+    given, as a head behind `main` is."""
     uv = "uv run --locked --all-packages --extra torch-cpu python"
     lean = f" --lean-audit '{uv} tools/verity/lean/warm.py'" if audit else ""
+    at = f"--head {merged} --base {'b' * 40} --merged {head}" if merged else f"--head {head} --base {'b' * 40}"
     return ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py", "--by", "ci", "--",
-            "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/quick_tier.py" --head {"a" * 40} --base {"b" * 40}{lean} -- '
+            "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/quick_tier.py" {at}{lean} -- '
                         f"{uv} tools/verity/check/suites.py --quick"]
 
 
@@ -776,6 +778,90 @@ def test_the_audit_of_a_ready_marks_merge_publishes_its_bundle_and_verdicts_as_a
     spec.loader.exec_module(warm)
     assert CHECK.MARK_PACK == LA.COMMON.MARK_AUDIT_OUT + warm.PACK == pack, "the pack is listed where the audit writes it"
     assert LA.PUBLISHERS[1][1].fullmatch(LA.COMMON.MARK_AUDIT_OUT + "lean-artifacts.tar.gz"), "and the bundle where `--bundle` does"
+
+
+def test_a_launch_sends_the_mark_audits_of_the_prs_its_tree_holds_however_old(tmp_path, monkeypatch):
+    """A PR waits hours between its mark and the candidate that holds it, and each newer mark's audit pushes its bundle and
+    pack down the newest: once past them, the candidate compiled the change again, on a node that had not run the mark. The
+    marks of the heads the launcher's tree merged are listed before a kind's newest and beside its count, whether the tier
+    ran on the head or on its merge onto `main`, and only the audits: a head's other runs, and other heads' marks, are not."""
+    bundle, pack = "out/lean-audit/lean-artifacts.tar.gz", "out/lean-audit/verdicts.tar.gz"
+    mine, behind, other = "1" * 40, "2" * 40, "3" * 40
+    rows = [("r-new", "env", "done", _tier(True, other)), ("r-check", "check", "done", ["check"]),
+            ("r-mine-tier", "env", "done", _tier(False, mine)),                       # a mark of this head that audited nothing
+            ("r-mine-running", "env", "running", _tier(True, mine)),
+            ("r-old", "env", "done", _tier(True, other)), ("r-mine", "env", "failed", _tier(True, mine)),
+            ("r-behind", "env", "done", _tier(True, behind, merged="4" * 40))]
+    files = {r: [(bundle, f"{i:x}" * 64, True), (pack, f"{i + 8:x}" * 64, True)] for i, (r, *_) in enumerate(rows)}
+    files["r-check"] = [("lean-audit/lean-artifacts.tar.gz", "c0" * 32, True), ("verdicts.tar.gz", "c1" * 32, True)]
+    store = types.SimpleNamespace(
+        remote=None, index=_attempts(tmp_path, rows), get_attempt=lambda r: {"outputs": {"run_files": f"art:{r}"}},
+        listing=lambda art: [{"path": p, "sha256": h, "remote": on, "bytes": 1} for p, h, on in files[art[4:]]])
+
+    def bundles(**kw) -> list[str]:
+        by = {files[r][0][1]: r for r in files}
+        return [by[h] for h in LA.shared_bundles(store, **kw)]
+
+    def packs(**kw) -> list[str]:
+        return [p["run"] for p in CHECK.verdict_packs(store, **kw)]
+
+    assert bundles(limit=1) == packs(limit=1) == ["r-check", "r-new"], "past the newest, a member's mark was not sent"
+    assert bundles(limit=1, heads=[mine, behind]) == packs(limit=1, heads=[mine, behind]) == ["r-check", "r-mine", "r-behind", "r-new"]
+    assert bundles(heads=[mine, behind]) == packs(heads=[mine, behind]) == ["r-check", "r-mine", "r-behind", "r-new", "r-old"], \
+        "each run once, a member's first"
+    assert bundles(limit=1, heads=["5" * 40]) == packs(limit=1, heads=["5" * 40]) == ["r-check", "r-new"]
+    # the launcher reads the heads from its own checkout: a caller that gives a store gives its heads too
+    monkeypatch.setattr(CHECK.COMMON, "merged_heads", lambda at: [behind] if at == CHECK.ROOT else [])
+    monkeypatch.setattr(pytest.importorskip("research.store.local"), "LocalStore", lambda: store)
+    store.remote, store.refresh = types.SimpleNamespace(presign=lambda key, ttl: f"https://r2/{key}"), lambda **kw: None
+
+    def sent(*given) -> list[str]:
+        return [p["run"] for p in json.loads(CHECK.verdict_url_file(tmp_path, *given).read_text())]
+
+    assert sent() == ["r-check", "r-behind", "r-new", "r-old", "r-mine"]
+    assert sent(store) == ["r-check", "r-new", "r-old", "r-mine", "r-behind"]
+    assert sent(store, [mine]) == ["r-check", "r-mine", "r-new", "r-old", "r-behind"]
+    files["r-mine"][1] = (pack, files["r-mine"][1][1], False)
+    assert packs(limit=1, heads=[mine], remote=True) == ["r-check", "r-new"], "a pack the remote lacks is sent to no node"
+    assert LA.COMMON.lookups(LA.COMMON.RECORDED_CHECKS, 2, [mine]) == [(LA.COMMON.RECORDED_CHECKS, (8,), 2)], "a head names no check"
+    assert len(LA.COMMON.lookups(LA.COMMON.MARK_AUDITS, 2, [mine])) == 2 and len(LA.COMMON.lookups(LA.COMMON.MARK_AUDITS, 2)) == 1
+
+
+def test_the_heads_a_tree_holds_are_those_the_queues_commits_name_the_newest_first(tmp_path):
+    """`common.merged_heads` reads the PRs a candidate holds from the commits the verified queue made of them on its
+    first-parent line, each naming the PR's head in its `Head` trailer: a merge of that head, or the one commit of a move the
+    queue regenerated, which has no second parent. A tier names that head, so its mark's audit is found by it. A PR's own
+    merge of a branch and a commit that only quotes a trailer are no member."""
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+                               *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    def pr(n: int) -> str:
+        git("checkout", "-q", "-b", f"pr-{n}", "main")
+        git("commit", "-q", "--allow-empty", "-m", f"pr {n}")
+        head = git("rev-parse", "HEAD")
+        git("checkout", "-q", "main")
+        return head
+
+    def trailers(n: int, head: str) -> str:
+        return f"PR: #{n}\nHead: {head}\nOwner: lane\n"
+
+    git("init", "-q", "-b", "main")
+    assert LA.COMMON.merged_heads(tmp_path) == [], "no commit yet"
+    git("commit", "-q", "--allow-empty", "-m", "root")
+    assert LA.COMMON.merged_heads(tmp_path) == []
+    first = pr(1)
+    git("merge", "-q", "--no-ff", "-m", f"Queue: #1 one\n\n{trailers(1, first)}", "pr-1")
+    other = pr(2)
+    git("merge", "-q", "--no-ff", "-m", f"Merge branch 'pr-2'\n\n{trailers(2, other)}", "pr-2")
+    git("commit", "-q", "--allow-empty", "-m", f"Lock records regenerated for #1\n\nHead: {other}")
+    moved = pr(3)
+    git("commit", "-q", "--allow-empty", "-m", f"Queue: #3 a move\n\nregenerated by drive\n\n{trailers(3, moved)}Move: tools/move/m.toml\n")
+    last = pr(4)
+    git("merge", "-q", "--no-ff", "-m", f"Queue: #4 four\n\n{trailers(4, last)}", "pr-4")
+    assert LA.COMMON.merged_heads(tmp_path) == [last, moved, first]
+    assert LA.COMMON.merged_heads(tmp_path, limit=2) == [last, moved]
+    assert LA.COMMON.merged_heads(tmp_path / "no-checkout") == []
 
 
 def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_path, monkeypatch):
@@ -1365,7 +1451,8 @@ def test_the_launcher_signs_only_this_trees_pinned_bundles(tmp_path, monkeypatch
     signed = []
     remote = types.SimpleNamespace(presign=lambda key, ttl: signed.append((key, ttl)) or f"https://r2/{key}?sig")
     monkeypatch.setattr(pytest.importorskip("research.store.remote"), "load_remote", lambda: remote)
-    monkeypatch.setattr(LA, "shared_bundles", lambda: ["ef" * 32])
+    monkeypatch.setattr(LA.COMMON, "merged_heads", lambda at: [f"merged in {at.name}"])
+    monkeypatch.setattr(LA, "shared_bundles", lambda heads: ["ef" * 32] if heads == ["merged in repo"] else [])
     p = LA.url_file(tmp_path, ttl_s=60)
     assert json.loads(p.read_text()) == {k: f"https://r2/objects/sha256/{'ab' * 32}?sig",
                                          LA.SHARED + "ef" * 32: f"https://r2/objects/sha256/{'ef' * 32}?sig"}
