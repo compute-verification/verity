@@ -28,6 +28,9 @@ first-hit finder (`Proofs.Core.SamplingGeneric.FirstHit`), at each tape of the p
 * `pr_offReg_le_needs`: `pr_offReg_le_sample` with `w` a bound on the gates the reveals open for the proof blocks of
   one run's sample (`opensAt_isSome_mem_checked`), where a block's reveals open only gates of `needs`.
 
+* `pr_regHit_le_sample`: `KSReg`'s first half with `2·(1 + w)·E[c]/2^256` where `εreg` has `N·√Pr[B_conf]`, the
+  proof of `ksReg_of_sessionKS` with `pr_offReg_le_sample_forall` in place of `pr_offReg_le`.
+
 `pr_offReg_le_firstHit` turns no found pair into a collision and builds no `Finder`: `Found` is two runs' extractions
 that open one gate two ways, the event `Conflict` reads at a pair of runs. `pr_offReg_le_sample` does both.
 -/
@@ -276,6 +279,73 @@ theorem pr_offReg_le_needs {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.co
     (fun ω rc g hg => decide_eq_true (opensAt_isSome_mem_checked H L P x ω hs needs hpos rc.1 rc.2 g hg))
     (fun rc => (le_of_eq (congrArg Finset.card
       (Finset.filter_congr fun _ _ => decide_eq_true_iff))).trans (hw rc.1)) K hCR
+
+/-! ## The committed form's first half, linearly -/
+
+set_option synthInstance.maxSize 1024 in
+/-- **`KSReg`'s first half with the first-hit finder's term** where `εreg` has `N·√Pr[B_conf]`: the proof of
+`ksReg_of_sessionKS` with `pr_offReg_le_sample_forall` in place of `pr_offReg_le`. An accepted run whose sample holds
+a proof block of the committed trace's incorrect set has probability at most
+`κ_s + √(k·γ_s·Pr[B]) + 2·(1 + w)·E[c]/2^256 + Pr[B_conf]`, under the linear expected-time bound at the first-hit
+finder of every cap; `Pr[B_conf]` is one run's own disagreement. -/
+theorem pr_regHit_le_sample {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
+    (hSK : L.SessionKS H) {x : Msg} (hsc : L.Scope x) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    {s : AuditStatement} (hs : L.parse x = some s)
+    (chk : (Fin (L.V.k x) → Coin) × L.SlotEC x → Fin (L.nG x) → Bool)
+    (hchk : ∀ (ω : Ω) (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)),
+      (L.opTable H P x ω rc g).isSome → chk rc g = true) {w : ℕ}
+    (hw : ∀ rc, #(univ.filter fun g : Fin (L.nG x) => chk rc g) ≤ w)
+    (hCR : ∀ K : ℕ, ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x) chk (L.runCost H P x s) K
+      fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
+        Verity.FirstHit.outOf (L.opTable H P x q.1) (L.collAt H P x s q.1) K q.2.1 q.2.2)) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.Freg H P x p.1) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) +
+        2 * ((1 + (w : ℝ)) *
+          Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => (L.runCost H P x s q.1 q.2 : ℝ))) /
+          2 ^ (256 : ℝ) +
+        (Bconf H L Ω P x).Pr H := by
+  obtain ⟨s', Pt, hs', hPt, hin⟩ := hsc
+  obtain rfl : s' = s := Option.some.inj (hs'.symm.trans hs)
+  obtain ⟨β, hβ0, hβ, hκ⟩ := hSK x Ω P
+  have hFlt : ∀ ω, ∀ v ∈ L.Freg H P x ω, v < L.nPU x := by
+    intro ω v hv
+    simp only [Freg, hs, mem_filter, mem_range] at hv
+    simp only [Compiled.nPU, hs]
+    exact hv.1
+  have hper : ∀ ω, Pr (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
+      ∃ u ∈ L.checked x r, u ∈ L.Freg H P x ω) ≤
+      Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
+        ∃ i, L.leadSel x (L.selReg H P x ω) (L.checked x rc.1) = some i ∧
+          ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
+            ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) +
+      (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s' ω rc.1 rc.2) +
+        Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2)) := by
+    intro ω
+    have hIO := Sampling.Pr_union_le
+      (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s' ω rc.1 rc.2)
+      (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2)
+    refine (Pr_fst (β := L.SlotEC x) (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
+      ∃ u ∈ L.checked x r, u ∈ L.Freg H P x ω)).symm.trans_le (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl hIO)
+    obtain ⟨hacc, v, hvl, hvF⟩ := hrc
+    obtain ⟨i, hi, u, hiu, huF⟩ := L.selReg_some H P x ω (hS.slots x rc.1) (hFlt ω) hvl hvF
+    obtain ⟨i₀, u₀, hlead, hu₀⟩ := leadOf_some hiu u.isLt
+    rcases reg_split hS hs hPt hin P ω rc.1 rc.2 hacc i u hiu huF i₀ u₀ hlead hu₀ with h | h | h
+    · exact Or.inl ⟨hacc, i₀, by rw [leadSel, hi, Option.bind_some, hlead], u₀, hu₀, h⟩
+    · exact Or.inr (Or.inl h)
+    · exact Or.inr (Or.inr h)
+  have hT := L.pr_unfound_le H P β hβ0 hβ (fun ω => L.leadSel x (L.selReg H P x ω))
+    fun ω r => hκ ω r (L.leadSel x (L.selReg H P x ω))
+  have hI := pr_inConf_le hbind hs P
+  have hO : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2) ≤
+      2 * ((1 + (w : ℝ)) *
+        Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => (L.runCost H P x s' q.1 q.2 : ℝ))) /
+        2 ^ (256 : ℝ) :=
+    (Sampling.Pr_prod_eq_Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      L.OffReg H P x q.1 q.2.1 q.2.2)).symm.trans_le (pr_offReg_le_sample_forall hbind hs P chk hchk hw hCR)
+  refine (Sampling.Pr_prod_eq_Ex _).trans_le ((Ex_mono hper).trans ?_)
+  rw [Ex_add, Ex_add]
+  linarith
 
 end Compiled
 
