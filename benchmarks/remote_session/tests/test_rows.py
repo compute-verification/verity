@@ -1,6 +1,6 @@
-"""`rows.py --ctas-at`: a row count runs at the receipt CTA counts its word names, in the word's order, and at
-`--sketch-ctas` alone where no word names it; a word for a row count that doesn't run, or one whose counts aren't
-numbers, ends the run saying what a word is. `rows.reference`, the whole-store check's receipts, is the reference
+"""`rows.py --ctas-at`: a row count runs at the receipt CTA counts its word names, each with the arms it names, in
+the word's order, and at `--sketch-ctas` alone where no word names it; a word for a row count that doesn't run, or one
+whose counts aren't numbers or whose arms aren't `rows.ARMS`', ends the run saying what a word is. `rows.reference`, the whole-store check's receipts, is the reference
 receipter's at both row counts, at the int8 extremes and at any first block."""
 from __future__ import annotations
 
@@ -17,12 +17,19 @@ from rows import rb
 
 
 def test_a_row_count_takes_its_words_counts_in_order_and_the_default_elsewhere():
-    assert rows.ctas_at(["64=96,128,264"], [16, 64, 16, 64], 128) == {16: [128], 64: [96, 128, 264]}
-    assert rows.ctas_at([], [64, 16], 0) == {64: [0], 16: [0]}
-    assert rows.ctas_at(["64=132", "16=128"], [64, 16], 64) == {64: [132], 16: [128]}
+    assert rows.ctas_at(["64=96,128,264"], [16, 64, 16, 64], 128) == {16: [(128, ())],
+                                                                      64: [(96, ()), (128, ()), (264, ())]}
+    assert rows.ctas_at([], [64, 16], 0) == {64: [(0, ())], 16: [(0, ())]}
+    assert rows.ctas_at(["64=132", "16=128"], [64, 16], 64) == {64: [(132, ())], 16: [(128, ())]}
 
 
-@pytest.mark.parametrize("word", ["48=128", "64", "64=", "64=128,", "64=a", "x=128", "64=-1"])
+def test_a_count_takes_the_arms_it_names():
+    assert rows.ctas_at(["64=264,264+p0,264", "16=128+p0"], [64, 16], 128) == {
+        64: [(264, ()), (264, ("p0",)), (264, ())], 16: [(128, ("p0",))]}
+
+
+@pytest.mark.parametrize("word", ["48=128", "64", "64=", "64=128,", "64=a", "x=128", "64=-1", "64=128+", "64=128+x",
+                                  "64=+p0", "64=128+p0+"])
 def test_a_word_that_names_no_running_row_count_or_no_counts_ends_the_run(word):
     with pytest.raises(SystemExit, match="ROWS=N"):
         rows.ctas_at([word], [64], 128)

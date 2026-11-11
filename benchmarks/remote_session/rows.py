@@ -3,8 +3,8 @@ pass at 64 rows costs beside one at 16, each over the plain read (`rows.sh` buil
 lease). The registration of each row count is drawn here, as `audit.register` draws the verifier's.
 
 For each of --rows, in the order given, on the same store (`device.GpuBackend`; its bytes are encoded once, at the
-first), and at a row count for each of its receipt CTA counts in turn (--ctas-at; `--sketch-ctas` alone unless given),
-the gates once, at its first count, and the rest at each:
+first), and at a row count for each of its receipt CTA counts in turn (--ctas-at; `--sketch-ctas` alone unless given;
+a count may name an experiment's arms, `ARMS`, as in 264+p0), the gates once, at its first count, and the rest at each:
 
     gates      the device's gates at that registration (`GpuBackend.gate`), over a gate store on the same GPUs: its
                payload root, encode and decode, a pass's receipts and root against the reference's
@@ -25,6 +25,7 @@ order. Prints for each the plain read's and the pass's milliseconds and GB/s.
 
     python rows.py --lib session.so --kv kv.so --out OUT --rows 16 64 16 64 [--gib 496 --gpus 8, `device.py`'s options]
     python rows.py ... --rows 64 --ctas-at 64=96,128,264      which CTA count the 64-row pass is fastest at
+    python rows.py ... --rows 64 16 --ctas-at 64=264,264+p0,264 16=128,128+p0     an arm beside the pass as it is
 """
 from __future__ import annotations
 
@@ -112,15 +113,29 @@ def whole_store(backend: device.GpuBackend, rows: int, rng: np.random.Generator,
             "reference_s": time.perf_counter() - t0, "ok": not differ and same}
 
 
-def ctas_at(words: list[str], rows: list[int], default: int) -> dict[int, list[int]]:
-    """Each row count's receipt CTA counts from --ctas-at's ROWS=N[,N...] words, `default` alone where none names it."""
-    at = {r: [default] for r in rows}
+ARMS = {"p0": "the side stream at priority 0, the main stream's, in place of −1"}
+"""An experiment's arms, which a --ctas-at count names after a +: the pass with one thing changed, beside the pass as
+it is at the same count on the same store."""
+
+
+def ctas_at(words: list[str], rows: list[int], default: int) -> dict[int, list[tuple[int, tuple[str, ...]]]]:
+    """Each row count's receipt CTA counts, each with its arms (`ARMS`), from --ctas-at's ROWS=N[+ARM...][,N...] words;
+    `default` alone, with none, where no word names the row count."""
+    at = {r: [(default, ())] for r in rows}
     for word in words:
         r, _, counts = word.partition("=")
-        if not r.isdigit() or int(r) not in at or not counts or not all(c.isdigit() for c in counts.split(",")):
-            raise SystemExit(f"--ctas-at {word}: ROWS=N[,N...] with ROWS one of --rows ({rows}) and N a CTA count")
-        at[int(r)] = [int(c) for c in counts.split(",")]
+        runs = [(n, tuple(arms)) for n, *arms in (c.split("+") for c in counts.split(","))]
+        if not r.isdigit() or int(r) not in at or not all(n.isdigit() and set(arms) <= set(ARMS) for n, arms in runs):
+            raise SystemExit(f"--ctas-at {word}: ROWS=N[+ARM...][,N...] with ROWS one of --rows ({rows}), N a CTA "
+                             f"count and ARM one of {sorted(ARMS)}")
+        at[int(r)] = [(int(n), arms) for n, arms in runs]
     return at
+
+
+def set_arms(backend: device.GpuBackend, arms: tuple[str, ...]) -> dict:
+    """The backend's passes from here on with `arms` and no other: what a row records as its arms."""
+    backend.set_side_priority(0 if "p0" in arms else -1)
+    return {"side_priority": backend.shape["side_priority"]}
 
 
 def main() -> int:
@@ -128,8 +143,9 @@ def main() -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--rows", type=int, nargs="+", default=[rb.ROWS[1], rb.ROWS[0]], choices=rb.ROWS,
                     help="the row counts, in the order they run")
-    ap.add_argument("--ctas-at", nargs="+", default=[], metavar="ROWS=N[,N...]",
-                    help="the receipt grid's CTA counts at a row count, each in turn (default: --sketch-ctas alone)")
+    ap.add_argument("--ctas-at", nargs="+", default=[], metavar="ROWS=N[+ARM...][,N...]",
+                    help="the receipt grid's CTA counts at a row count, each in turn (default: --sketch-ctas alone); "
+                         "an ARM is " + "; ".join(f"{k}: {v}" for k, v in ARMS.items()))
     ap.add_argument("--openings", type=int, default=256, help="the positions opened on the store each time")
     ap.add_argument("--whole-store", action="store_true",
                     help="at each row count's first CTA count, a pass over the store against the reference at every "
@@ -155,11 +171,12 @@ def main() -> int:
     ok = True
     for k, rows in enumerate(a.rows):
         reg = audit.register(source, node, backend.blocks, root, rows=rows, nonce=rng.bytes(audit.NONCE_BYTES))
-        for i, ctas in enumerate(at[rows]):
-            row = {"rows": rows, "sketch_ctas": ctas}
+        for i, (ctas, arms) in enumerate(at[rows]):
+            row = {"rows": rows, "sketch_ctas": ctas, "arms": list(arms)}
             out["rows"].append(row)
             try:
                 backend.set_sketch_ctas(ctas)
+                row["settings"] = set_arms(backend, arms)
                 if i == 0 and k == 0:
                     row["encode"] = backend.encode(reg)
                 elif i == 0:
@@ -182,10 +199,11 @@ def main() -> int:
             cal = row.get("calibration")
             if i == 0:
                 log(f"rows {rows}: gates {json.dumps(backend.gates, default=str)}")
-            log(f"rows {rows} ctas {ctas}: openings {row.get('openings')} failed {row.get('failed')}")
+            name = "+".join([str(ctas), *arms])
+            log(f"rows {rows} ctas {name}: openings {row.get('openings')} failed {row.get('failed')}")
             if cal:
                 pass_ms, gb = cal["pass_ns_median"] / 1e6, out["bytes"] / 1e9
-                log(f"rows {rows} ctas {ctas}: plain read {cal['read_ms']:.3f} ms {gb / cal['read_ms'] * 1e3:.1f} GB/s, "
+                log(f"rows {rows} ctas {name}: plain read {cal['read_ms']:.3f} ms {gb / cal['read_ms'] * 1e3:.1f} GB/s, "
                     f"pass {pass_ms:.3f} ms {gb / pass_ms * 1e3:.1f} GB/s, pass over read {cal['tau']:.3f} "
                     f"(by the device's events {cal['tau_gpu']:.3f})")
             out["ok"] = ok
@@ -194,8 +212,8 @@ def main() -> int:
                 break
         if not ok:
             break
-    print(json.dumps({"ok": ok, "rows": [(r["rows"], r["sketch_ctas"], r.get("calibration", {}).get("tau"))
-                                         for r in out["rows"]]}), flush=True)
+    print(json.dumps({"ok": ok, "rows": [(r["rows"], "+".join([str(r["sketch_ctas"]), *r["arms"]]),
+                                          r.get("calibration", {}).get("tau")) for r in out["rows"]]}), flush=True)
     # As prover.py ends: tearing down a whole-node store kept the process past its last output.
     sys.stdout.flush()
     sys.stderr.flush()

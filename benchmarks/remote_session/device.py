@@ -1196,7 +1196,7 @@ class GpuBackend:
         self.gate_chunk, self.gate_chunks, self.gate_samples = gate_chunk, gate_chunks, gate_samples
         self.calibration_passes, self.warm_passes = calibration_passes, warm_passes
         self.shape = {"chunk": chunk, "kept_from": kept_from, "sketch_ctas": sketch_ctas,
-                      "payload_kept_from": payload_kept_from}
+                      "payload_kept_from": payload_kept_from, "side_priority": -1}
         self.lib = Lib(lib_path, torch)
         self._open_copy = tempfile.NamedTemporaryFile(suffix=".so")
         shutil.copyfile(lib_path, self._open_copy.name)
@@ -1251,6 +1251,15 @@ class GpuBackend:
         """The receipts grid's CTAs from the next pass on, the gate store's too: `rs_pass` takes the count at each
         call, and no ring is sized by it."""
         self.shape["sketch_ctas"] = self.store.sketch_ctas = ctas
+
+    def set_side_priority(self, priority: int) -> None:
+        """Each GPU's side stream anew at `priority` from the next pass on (−1, above the main stream's 0, until this
+        is called): an experiment's arm, for what the side stream's priority does to a pass."""
+        self.store.sync()
+        for gpu in self.gpus:
+            with self.torch.cuda.device(gpu.index):
+                gpu.side = self.torch.cuda.Stream(priority=priority)
+        self.shape["side_priority"] = priority
 
     def read_ms(self, segments: list[int], tries: int = 6) -> float:
         """The read alone (`rb_read`) of `segments` at once, each on its GPU, a host segment on the GPU's host stream
