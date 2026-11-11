@@ -260,8 +260,8 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     whole, a design by position is printed in four columns: by gates and by classes, each in calls and in
     compressions.
   - It prints the sums per sampled replay block, per run and over each monitoring period, marks each above 2^-100
-    (`--target`), gives the most gates that keep the collision term there, and beside them the term of the cap on
-    the extractor's waits at each cap, per run (`--waits-k`).
+    (`--target`), gives the most gates that keep the collision term there, and beside them the term of the limit on
+    the extractor's waits at each limit, per run (`--waits-k`).
 - The headline scope (`figure1.PRIMARY`, a world year) gets the bare file names. Its exfiltration panel also plots
   (A) over the secondary scope (`figure1.SECONDARY`, a datacenter year).
 - A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build
