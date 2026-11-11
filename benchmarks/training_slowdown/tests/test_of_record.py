@@ -133,24 +133,6 @@ def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding(monkeypatch
         "scaledquant, 1,200 B after 2 steps; the record's quant, 1,000 B after 30")
 
 
-def unfused(params: list, times: int = 1) -> tuple:
-    return tuple(("other", "param", op, [p] * operands, times * params.count(p), times * params.count(p) * p[0])
-                 for p in ([D], [2 * D]) if p in params for op, operands in of_record.UNFUSED_ADAMW)
-
-
-def test_the_unfused_adamw_is_expected_for_cudas_fused_kernel_over_the_same_parameters():
-    params = [[D], [D], [2 * D]]
-    fused = ("other", "param", "_fused_adamw_", params * 4 + [[]] * 3, 1, 8 * 4 * D)
-    got = of_record.compare(step(log(*BOTH, *unfused(params))), step(log(*BOTH, fused)), SHAPE)
-    assert got["differences"] == []
-    assert [(e["rule"], e["record_macs"], e["config_macs"]) for e in got["expected"]] == [("adamw", 32 * D, 20 * D)]
-    # other parameters, a product twice a parameter (a weight decay), a kernel priced otherwise: not its exact case
-    for cpu, record in ((unfused(params[:2]), fused), (unfused(params, 2), fused),
-                        (unfused(params), (*fused[:5], 7 * 4 * D))):
-        got = of_record.compare(step(log(*BOTH, *cpu)), step(log(*BOTH, record)), SHAPE)
-        assert got["expected"] == [] and any("_fused_adamw_" in d for d in got["differences"])
-
-
 def losses(n: int) -> tuple[tuple, tuple]:
     """The loss's products `n` times a step: as a program arranges it that means each row, then as a route does."""
     return ((("bwd", "grad", "div", [[1, CTX]], n, n * CTX), ("fwd", "theta", "div", [[]], n, n),
@@ -221,14 +203,6 @@ def test_the_routes_average_of_its_trained_tensors_is_expected_for_a_programs_of
             (averaged(trained), (*program[:5], program[5] + 1), states)):
         got = compared(cpu, record, args)
         assert got["expected"] == [] and any("_foreach_lerp_" in d for d in got["differences"])
-    # an unfused AdamW's own `lerp_` is `adamw`'s, which runs first: a route that keeps no average has none left, and
-    # the program's average is then the record's line alone
-    fused = ("other", "param", "_fused_adamw_", [[D]] * 8 + [[]] * 2, 1, 8 * 2 * D)
-    got = of_record.compare(step(log(*BOTH, *unfused([[D], [D]]))), step(log(*BOTH, fused, program)), SHAPE,
-                            args=states)
-    assert [e["rule"] for e in got["expected"]] == ["adamw"]
-    assert got["differences"] == [
-        "log, the record's step only: other/param _foreach_lerp_ [[16] x4, [16,16] x2, [259,16] x2] x1, 4,432 MACs"]
 
 
 def test_32_bits_for_the_records_16_is_expected_and_any_other_use_differs():
@@ -339,11 +313,11 @@ def test_the_position_tables_are_expected_where_the_two_counts_differ_in_the_wei
     assert of_record.HARNESS == (of_record.tables,)
 
 
-def as_cuda(struct: dict, rows: int, gains: int) -> dict:
+def as_cuda(struct: dict, rows: int) -> dict:
     """A CPU step's structure as CUDA's counter writes the step: attention under CUDA's names, the norm one fused
-    kernel counted at its updated gains alone, AdamW one fused op over the `gains`, the weights read at 16 bits."""
+    kernel counted at its updated gains alone, the weights read at 16 bits."""
     x, s = [rows, CTX, D], [rows, CTX, 1]
-    cpu, steps, out = {v: k for k, v in ATTENTION}, {op for op, _ in of_record.UNFUSED_ADAMW}, []
+    cpu, out = {v: k for k, v in ATTENTION}, []
     for phase, kind, op, shapes, count, macs in struct["log"]:
         at = json.loads(shapes)
         if op in cpu:
@@ -353,10 +327,7 @@ def as_cuda(struct: dict, rows: int, gains: int) -> dict:
             op = "_fused_rms_norm"
         elif op in ("mul", "div") and all(o in (x, s, G) for o in at) and phase != "other":
             continue
-        elif phase == "other" and op in steps and all(o == G for o in at):
-            continue
         out.append([phase, kind, op, json.dumps(at), count, macs])
-    out.append(["other", "param", "_fused_adamw_", json.dumps([G] * 4 * gains + [[]] * gains), 1, 8 * gains * D])
     return {"updated": [[*u[:4], 16] for u in struct["updated"]], "log": out}
 
 
@@ -378,13 +349,13 @@ def held_to(root, entry: str, rec: dict, record_only=()):
 def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp_path, capsys):
     """A made-up run of record: the config's own counted step at two rows a forward, counted as the records' harness
     counted and written as CUDA's counter writes it. The command divides its rows out, counts the config at one row a
-    forward and names the five expected differences; a config that trains another set, beside a record of another
+    forward and names the four expected differences; a config that trains another set, beside a record of another
     start and length, differs and exits 1. It counts and traces a route's steps, so slow; what the rules' own tests
     can't show is that a route's real step produces the entries each rule names and that the command reads a record
     the way a job writes one."""
     reg = tiny_registry(tmp_path / "reg")
     budget, dials = {"steps": 3, "batch": 4}, {"trainable": "blocks.*,norm", "opt": "muon", "lr": 1e-2,
-                                               "micro_batches": 2}
+                                               "micro_batches": 2, "fused": True}
     path = write_config(tmp_path / "a.toml", budget=budget, dials=dials)
     cfg = config.load(path, starts.registry(reg))
     cpu = of_record.counted(cfg, 1, tmp_path / "count", of_record.AsRecorded)
@@ -395,13 +366,13 @@ def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp
     assert set(tables) == {"theta", "grad"}  # a product with a position table is θ's, as the records count it
     rec = cpu | {"steps": [first, second, second], "start_record": {"name": "tiny", "digest": cfg.start.digest},
                  "structures": cpu["structures"] | {
-                     second["struct"]: as_cuda(cpu["structures"][second["struct"]], rows=2, gains=3)}}
+                     second["struct"]: as_cuda(cpu["structures"][second["struct"]], rows=2)}}
     records, held = held_to(tmp_path, "a", rec)
     argv = ["--records", str(records), "--held", str(held), "--starts", str(reg)]
     assert of_record.main([str(path), *argv, "--out", str(tmp_path / "out")]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("a, held to r-made-up (out/run/run.json): equal, 5 expected differences\n")
-    for rule in ("tables: ", "width: ", "attention: ", "norm: ", "adamw: "):
+    assert out.startswith("a, held to r-made-up (out/run/run.json): equal, 4 expected differences\n")
+    for rule in ("tables: ", "width: ", "attention: ", "norm: "):
         assert f"  expected  {rule}" in out
     assert "are an updated weight's in the harness's own count and θ's here" in out
     assert "2 forwards of one row" in out and "2 of its 3 steps have, 2 rows a forward divided out" in out

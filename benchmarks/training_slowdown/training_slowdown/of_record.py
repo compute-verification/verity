@@ -25,12 +25,12 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   that decides what it computes, is refused here. No route says of itself that it branches on values.
 - **Expected differences.** A route's CPU count differs from a program's CUDA record in ways that are the device's
   (`width`, `attention`, `norm`) and in ways that are the program's own arrangement of a computation the route
-  takes too: AdamW's kernel, the fused one that the record's program asks torch for where a route takes torch's
-  default (`adamw`), the loss as the rows' means over the rows kept where a route means over the tokens (`loss`),
-  and the average of the weights as one op over every tensor of the model where a route averages each tensor it
-  trains (`average`). Each is named by a rule that fires only on its own exact case (`width`, `RULES`); the output
-  names each one that fired with the MACs on both sides. Anything else is printed as a difference, and the command
-  exits 1.
+  takes too: the loss as the rows' means over the rows kept where a route means over the tokens (`loss`), and the
+  average of the weights as one op over every tensor of the model where a route averages each tensor it trains
+  (`average`). Each is named by a rule that fires only on its own exact case (`width`, `RULES`); the output names
+  each one that fired with the MACs on both sides. Anything else is printed as a difference, and the command exits
+  1: a route that steps AdamW otherwise than the record's program did, in torch's default step where the program
+  asked for the fused kernel, differs, and its entry sets the route's dial for the kernel.
 - **The position tables.** One expected difference is the harness's (`HARNESS`): the records' harness checked the
   model's buffers that θ doesn't hold, the position tables, like θ's weights, so a product with one is θ's, where
   `run.Harness` takes such a buffer for a weight the route made. `tables` counts the step again as the records'
@@ -84,8 +84,6 @@ ATTENTION = {"_scaled_dot_product_flash_attention": "_scaled_dot_product_flash_a
              "_scaled_dot_product_flash_attention_backward": "_scaled_dot_product_flash_attention_for_cpu_backward"}
 #: the operands CUDA's attention backward takes after the CPU's: its dropout's seed and offset
 CUDA_ONLY_OPERANDS = [[2], []]
-#: the products of torch's unfused AdamW step on one parameter with no weight decay, each with its tensor operands
-UNFUSED_ADAMW = (("lerp_", 2), ("mul_", 1), ("addcmul_", 3), ("div", 1), ("addcdiv_", 3))
 #: the argument by which the records' programs drop rows from a step's loss: that share of a forward's rows, the ones
 #: of the highest loss, get no gradient
 DROPS_ROWS = "--trunc"
@@ -240,39 +238,6 @@ def norm(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     return found
 
 
-def adamw(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
-    """AdamW's kernel: the record's program asks torch for its fused kernel, one op over every parameter, which the
-    counter prices at eight multiplications a parameter element; a route takes torch's default, which is never the
-    fused kernel and on a CPU is the unfused step, whose five in-place products a parameter the counter counts as
-    they run (`UNFUSED_ADAMW`). This one is the program's choice and not the device's: a route that asked for the
-    fused kernel would step it on a CPU too. Fires on the record's one `_fused_adamw_`
-    over its parameters, their gradients and their two moments beside the config's five products once for each of
-    the same parameter shapes."""
-    key = next((k for k in rec if k[:3] == ("other", "param", "_fused_adamw_")), None)
-    if key is None:
-        return None
-    tensors = [s for s in json.loads(key[3]) if s]
-    params = tensors[:len(tensors) // 4]
-    if tensors != params * 4 or rec[key] != [1, 8 * sum(math.prod(p) for p in params)]:
-        return None
-    want: dict[tuple, list] = {}
-    for p in params:
-        for op, operands in UNFUSED_ADAMW:
-            e = want.setdefault(("other", "param", op, json.dumps([p] * operands)), [0, 0])
-            e[0] += 1
-            e[1] += math.prod(p)
-    if any(cfg.get(k) != v for k, v in want.items()):
-        return None
-    found = {"rule": "adamw", "record_macs": rec[key][1], "config_macs": sum(v[1] for v in want.values()),
-             "what": "torch's unfused AdamW, its default on a CPU, for the fused kernel the record's program asks for, "
-                     f"over the same {_plural(len(params), 'parameter')}: {len(UNFUSED_ADAMW)} products a parameter "
-                     "element counted as they run, where the kernel is priced at 8"}
-    del rec[key]
-    for k in want:
-        del cfg[k]
-    return found
-
-
 def stated(args: list, flag: str) -> str | None:
     """What a program's arguments state for `flag`: the argument after it or after its `=`, None where they have no
     such flag."""
@@ -332,9 +297,9 @@ def average(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     record's one `_foreach_lerp_`, once a step, over tensors each beside its average and priced at one MAC an
     element, beside the config's `lerp_` of a tensor with one of its shape, priced alike, for some of the record's
     tensors and no other.
-    Neither side may have another `lerp_` or `_foreach_lerp_`, and the config's unequal entries no other product of
-    an unfused AdamW step, whose `lerp_` one of these could then be (`adamw` runs first and takes such a step's
-    out). The record's tensors the config has none of are those the route does not train: the output counts them."""
+    Neither side may have another `lerp_` or `_foreach_lerp_`, and the config's unequal entries no `addcmul_` or
+    `addcdiv_`: an unfused AdamW step has those and a `lerp_` of its own, which one of these could then be. The
+    record's tensors the config has none of are those the route does not train: the output counts them."""
     name = ("other", "param")
     theirs = [k for k in rec if k[:3] == (*name, "_foreach_lerp_")]
     mine = {k: json.loads(k[3]) for k in cfg if k[:3] == (*name, "lerp_")}
@@ -362,8 +327,7 @@ def average(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     return found
 
 
-#: in this order: `adamw` before `average`, since an unfused AdamW step has a `lerp_` of its own
-RULES = (attention, norm, loss, adamw, average)
+RULES = (attention, norm, loss, average)
 
 
 def _plural(n: int, one: str, many: str = "") -> str:

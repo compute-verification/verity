@@ -118,13 +118,13 @@ whose step reads a value back, is refused. It prints, an entry:
   case alone. The device's: weights read at 32 bits where the record's are read at 16 (`width`), the CPU's attention
   kernels of the same count and MACs (`attention`), and the norm as elementwise ops where CUDA's fused kernel is
   counted at an updated gain alone, and not at all in a step that trains no gain (`norm`). The program's own
-  arrangement of a computation the route takes too: AdamW's kernel (`adamw`), where the record's program asks torch
-  for its fused kernel and a route takes torch's default, on a CPU the unfused step, over the same parameters; the
-  loss (`loss`), where the record's program means each row and divides the rows' sum by the rows kept and a route
-  means over the tokens, one value and one gradient where the run drops no row, which the rule checks in the
-  record's program's arguments; and the average of the weights (`average`), where the record's program, its
-  arguments stating one, averages every tensor of the model in one op, those it never trains too, and route `ema`
-  each tensor it trains. The harness's (`HARNESS`):
+  arrangement of a computation the route takes too: the loss (`loss`), where the record's program means each row
+  and divides the rows' sum by the rows kept and a route means over the tokens, one value and one gradient where
+  the run drops no row, which the rule checks in the record's program's arguments; and the average of the weights
+  (`average`), where the record's program, its arguments stating one, averages every tensor of the model in one op,
+  those it never trains too, and route `ema` each tensor it trains. AdamW's kernel is no rule's: an entry of a run
+  whose program asked torch for the fused kernel sets `fused`, and a step in torch's default is a difference. The
+  harness's (`HARNESS`):
   the records' harness checked the model's position tables like θ's weights, where `run.Harness` takes them for
   weights the route made (`tables`); the step is counted again as the records' harness counted it, that count is the
   one compared, and the line says how many products and uses move and that the step's MACs are the same on both
