@@ -49767,3 +49767,55 @@ For BREAKEVEN:
 For the table:
 - By classes at ATTACK's 643, in calls, summed over the runs of a period (modeled, K0 = 6, T = 2^80 each run): the record 2^-98.44 a week; width κ 2^-6 2^-100.18 a week and 2^-98.08 a month; width κ 2^-7 2^-101.18 and 2^-99.08. CONCRETE's 10:47Z line (record over a week, the widths over a month) is at the 132 count.
 - Second readings that hold: #8878 at `816e2396bdf7`, #8893 at `6f65951e0eb8` (search only); SALTS's branch at `ff48f38adc3a` as a timing switch (`all` rests hiding on a new premise); CONCRETE's year cells as arithmetic.
+
+## ATTACK, Wed 11 Nov 10:55Z: the ORDER's 10:49Z table of record and three entries after it (CONCRETE 10:45Z and 10:47Z, EXTFORM 10:50Z) are still at 132 classes a head block. By the key `code_hwit` is proved at, a head block has 643, and every by-class cell is 2.2 bits too good: by classes the record is 2^-98.6 to 2^-99.4 in compressions, not 2^-100.83. EXTFORM's count lemmas, #8873's new head and #8914 read: each says what its entry says
+
+Modeled; the first-hit term of #8827's lemma by classes; a run at K0 = 6, T = 2^80 calls in every run; a registration with no always-checked block. The model's verifier accepts no run at D*1's sizes. 643 is [derived] (my 10:42Z); the cells are [run: `attack_unit_classes.py`, 10:40Z]. I am launching a count by writing proof block over the served Program now, so that 643 is a run or is corrected.
+
+**1. Why 132 cannot stand beside `gateKey`** [read: `OpensWhole.lean:359-362` at `62eb1fdc64de`; `serving_rows.py` docstring; `inputs/census.json` of `r20261111-080601-3db1`].
+- The ORDER's 10:49Z says both "key `gateKey` = (needers, replay block, boundary bit)" and "Quote 132 a head block". The needers are proof blocks of the statement's partition, and the plan's proof blocks are `serving_rows`' units.
+- 132 counts the row that writes a head block's 512 query words as one writer [run `r20261111-102053-cf31`: its docstring says "a row a census cuts into several units … is counted whole"]. The plan cuts that row into one unit a word: "`BatchedGemm_v1{B=1,N=1,..}` … every slice of the rows of that Definition … -> the row's output element" (`serving_rows.py`, SLICES). Each word then has its own needer, so its own class: 512, not 1.
+- So SCALE's count for 11:45Z has to be over units. `rs_count.py` reads rows.
+
+**2. The posted lines, at 132 and at 643** (compressions unless said; mean / by stratum / one M as marked).
+
+| line | as posted | at 643 |
+|---|---|---|
+| ORDER 10:49Z, record, one M | 2^-100.83 | 2^-98.55 |
+| ORDER 10:49Z, width 2^-4, one M | 2^-100.23 | 2^-97.96 |
+| ORDER 10:49Z, width 2^-3, by stratum | 2^-100.28 | 2^-98.14 |
+| ORDER 10:49Z, width 2^-6, one M | 2^-102.23 | 2^-99.96 |
+| EXTFORM 10:50Z, record, by stratum | 2^-101.57 | 2^-99.38 |
+| CONCRETE 10:45Z, rows within #8873's `K ≤ 2^33` | record, width 2^-6, width 2^-7 | width 2^-6 and 2^-7 by stratum; under one M width 2^-7 alone; not the record (2^34.3) |
+| CONCRETE 10:47Z, a week, in calls | record 2^-100.65, width 2^-6 2^-102.35, 2^-7 2^-103.35 | 2^-98.43, 2^-100.18, 2^-101.18 |
+| CONCRETE 10:47Z, a month, in calls | width 2^-6 2^-100.25, 2^-7 2^-101.25 | 2^-98.08, 2^-99.08 |
+
+First design under 2^-100 a run in compressions by classes: width κ 2^-6 by stratum (2^-101.14), width κ 2^-7 under one M (2^-100.96). PARAMS and BENCHCROSS already quote this.
+
+**3. EXTFORM's count lemmas** (`extform_class_count.patch`, 8 theorems; try `r20261111-104232-3aba`, rc 0 [run: my `research inspect`, 10:53Z]) [read: the patch whole].
+- They say what EXTFORM says. `clsNeeds` is a block's needs with each gate replaced by its class's representative; its size is the number of classes among the block's gates. The two by-class integrands of #8905 are at most the by-gate ones at `clsNeeds`.
+- So TWOWITNESS's `code_hKs` and `code_hKm` at `clsNeeds` give the by-class counts by stratum. That fills the row "N_s, K_s, K_m by class at the code: nobody" of my 10:48Z table: written, not composed, on no branch.
+- `hM` is then "a block of stratum t has at most M_t classes": for a head block's stratum, 643 [derived], and a hypothesis on the registration in Lean.
+- The refusal's term stays in both counts: Pr[`selectSecond` refuses] × every block's classes.
+
+**4. #8873 at `676a777193e2`: second reading of the new head** [read: the diff from `3b134fb24872`, whole; run: `c02f` rc 0, `9eac` rc 0 by my `research inspect`].
+- The two changes I asked for are made: `N_s ≤ 2^30` in both instances, and `firstHitBound_table1_513` (513·2^80 in place of T and of c, `K_s, K_m ≤ 2^33`). I recomputed it: 2^-100.56 [derived]. Its docstring says "No premise here counts compressions: these are the expression's values at those numbers", which is right.
+- `sqrt_term_le_strict` is now at `k ≤ 4 + 4402·2^30` and 2^-128 (was 2^24 and 2^-131). Recomputed: 2^-128.95 [derived]. Nobody asked for it; it matches `N_s ≤ 2^30` and loses nothing the table uses.
+- Four checks at this head: elaborates and axioms [run `9eac`]; records [run `c02f`]; kernel replay: the candidate's check; second reader: this entry.
+
+**5. CONCRETE's year (10:47Z)** [derived: my arithmetic on the Lean's `firstHitCost`].
+- The sessions' share alone, 4·T·e_s·N_s/2^256 at 513·2^80, is 2^-107.9 a run at the record and 2^-92.2 summed over 52,560 runs: I get CONCRETE's figure. So with 2^80 calls in each run no class count reaches 2^-100 a year in compressions.
+- With 2^80 the year's budget: `firstHitCost` is `T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls`. Its first part is linear in T, so for a split of the budget fixed before the year the runs' terms sum to one run's at 2^80; the second part is counted once a run. For a split the prover chooses as it goes, nothing says it: `hT` caps every run, and no Lean statement is over several runs. Both readings are arithmetic on a per-run lemma [derived]; which is the claim is Daniel's.
+
+**6. #8914 at `3f10472f1963`** (the device's caps, unmarked, Daniel's) [read: the diff, 10 files].
+- Constants only: `MAX_COINS` 2^24, `MAX_PATH` 24, `MAX_TREE_LINES` and `maxTreeLines` 2^23, `DRAW_ROUNDS` 1024. They agree: 2^24 coins of 64 bytes are 2^30 bytes, 1024 coins of 2^20 bytes. 2^30 bytes hold D*1's second stage up to 7 sampled replay blocks (138,580,196 bytes each) [derived].
+- The hiding term's leaves go 2^46 to 2^49, so 2·2^49/2^257 = 2^-207 [derived]; two deployed guarantees read it, as DRAFT-CORE says. Their text is unchanged; what they bound moves 3 bits through a definition.
+- It is the device's cap. The model's verifier is unchanged by it, as DRAFT-CORE says.
+
+For SCALE: the count by `gateKey` needs each row's cut into units (`serving_rows`: SLICES, COORDS, WIDE_COORDS, COLS, KCHUNKS, CHAINS, PARTS). A lower bound that is enough for the table: the distinct writing units among a block's inputs, plus one.
+For CONCRETE: your 10:45Z second `For the table:` line has the record within `K ≤ 2^33`; at 643 it is not. #8873's Lean is unaffected.
+For EXTFORM: nothing found against the patch. Your `For the table:` figure is SCALE's at 132.
+
+For the table:
+- By classes, as the Lean's key has them (needed by the same proof blocks, the plan's units): the record reads 2^-99.4 (mean), 2^-99.4 (by stratum), 2^-98.6 (one M) in compressions a run, and misses 2^-100 [derived count, run arithmetic]. Width κ 2^-6 is the first design under it by stratum (2^-101.1), width κ 2^-7 under one M (2^-101.0). The table may not quote 132, nor "the record 2^-100.83".
+- #8873 at `676a777193e2` is arithmetic at caps, second-read at this head; its compressions instance (`K ≤ 2^33`) covers width κ 2^-6 and 2^-7 by stratum at 643 and not the record. A year in compressions with 2^80 calls in each run is above 2^-100 at every design; with 2^80 the year's budget it is one run's figure, by arithmetic no Lean states.
