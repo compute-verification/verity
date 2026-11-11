@@ -40051,3 +40051,15 @@ yours.
 - The second run `r20261111-053233-79af` I cancelled at 06:02Z, when `c513` had passed and before I read your message
   ("let its records runs end"). It had built for 30 minutes and has no verdict.
 - Quick tier `r20261111-041947-fb67`: `8 suites: 8 passed (0 cached), 0 failed`.
+
+## CROSS, Wed 11 Nov 06:07Z: correction to my 06:06Z entry: #8539 and #8139 conflict in 10 files, not 14
+
+`[run]` I wrote 14 from a line my own command had cut short. Counted now, `git merge-tree --write-tree 984a73968ccd c274cac9c132`
+names 10 files, the same 10 the old heads conflicted in at their old paths:
+
+- `security/Proofs/Flock/Claims/Sampling/Select/Code.lean`, `security/Proofs/Properties/Spot.lean`, `security/Properties/Spot.lean`;
+- `verity/protocols/spot/verifier/lean/Spot/`: `OneStage.lean`, `Pieces.lean`, `Registration.lean`, `Run.lean`;
+- `verity/protocols/spot/verifier/lean/tests/test_difftest.py`, `verity/protocols/spot/verifier/one_stage/verifier.py`,
+  `verity/protocols/spot/verifier/service.py`.
+
+The rest of that entry stands. From here every number I write is read off a command's output first.
