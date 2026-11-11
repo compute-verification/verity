@@ -47958,3 +47958,48 @@ For the table: stratified `Q_s` by the rows a sample reads, at any sampling desi
 For the table: the coin (MAX_COINS 2^24, MAX_TREE_LINES 2^23): built, unmarked, PR number in my next entry; 8 `reads` values move in `security`'s lock and no guarantee's hash; at the model a stage's coin stays 2^20 bytes, so the model's verifier accepts no run at D*1's sizes until the stage (items 3 and 4, both unmarked, the second not yet compiled) lands.
 For CAPS: Proofs/Flock: +1 module, +6 declarations (#8896: security/Proofs/Flock/Bridge/V5/QsRows.lean)
 For TWOWITNESS: on `cursor/proofs-stage-rounds-e4b7`, `SamplingDeploy.ksTwo_stage` is `ksTwo_atOrder` with `R` rounds in the second stage (`StageOrder`, `bytesStage`); at `R = 1` `codeTwoAt_eq_stage` is `rfl`, so nothing stated at `codeTwoAt` moves.
+
+## ATTACK, Wed 11 Nov 10:19Z: four closing lemmas read. KILIAN's by-class cost (#8905) and the by-class bound at a budget say what KILIAN says. CONCRETE's #8873 at `676a777193e2` covers the record in compressions with the Lean's own count too, but only while no block has more than 142 classes. REGX's `hwit` is not a theorem yet (try `cd4c` failed). #8885 says what TWOPROVE says and no bits line of the binding side reads it
+
+Modeled throughout; the first-hit term of #8827's lemma; a run at K0 = 6 at T = 2^80 calls a run; the model's verifier accepts no run at the served sizes.
+
+**1. KILIAN's #8905 at `40b8e7d04736`, `ex_calls_le_at_in` and `ex_calls_le_at_cls`** [read: the whole diff, 178 lines].
+- It says: the expectation, over the tape, the coins and the extractor's coins, of a run's calls with every session extracted plus, for each representative of a class of the gates the sample needs, the run's calls with the sessions needing that representative extracted, is at most `T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls`. Its hypotheses are `CostContract`, `OpenCallsLe`, `hT` and three expectations over the coins.
+- The sum is over the same set EXTFORM's bound sums over (it is written as that expression, and the two compose in try `85f2`).
+- `K_m` counts, for each session, the representatives that a proof block of the session itself needs (`sessCountIn`). That is "the session's classes" where a needed gate's representative is needed too (`hrep`) and a representative represents itself (true of `clsOf`). At one block a session it is the sum over the sample's blocks of each block's classes, the number SCALE's "reader sets" column prices [derived].
+- Nothing counts it at the code. TWOWITNESS's `code_ex_le` takes any weight for a block with one cap M, so it would give both by-class counts once someone shows `G l ≤ Σ_{u ∈ l} w u` for them. Nobody has that lemma.
+- The four checks: elaborates [run: `research inspect r20261111-095808-2009`, rc 0 at source `40b8e7d04736`; log unread]; axioms [relayed: the body's probe line]; replay: the candidate's check; second reader: this.
+
+**2. KILIAN's `eventTwoX_le_cls_at_budget`** [read: the whole file, 88 lines, `cursor/proofs-firsthit-clsat-b3d7` at `c6412ff63497`].
+- It says: an accepted run samples a proof block of `FregTwoX` with probability at most `κ_s + √(k·γ_s·Pr[B]) + (2·runCost + 4·firstHitCost)/2^256`.
+- What it takes, and a line citing it must keep: `hallX` and `hallI` (a run's extractions open a class whole), `hrep`, `hpos`, the three counts, `hT`, and the linear expected-time bound at three finders: `B_conf,X` and the two by-class finders at every cap.
+- **The two by-class finders are new finders.** The premise is a predicate on one finder [read: `Definitions/Assumptions/Flock.lean:12-13`], so a by-class line rests on it at finders no guarantee's premise list names today. Daniel's when it becomes a guarantee.
+- `Pr[B]` stays a probability: no number without the strict bound at B.
+- The hash part [derived]: at CONCRETE's 513 caps, 4·firstHitCost is 2^-100.56 and 2·runCost 2^-104.73, the sum 2^-100.48. No Lean instance bounds the sum (try `707c` replaces the fourth term alone). At the record with the Lean's count the two are 2^-100.83 and 2^-108.9.
+- The four checks: elaborates [run: inspect `r20261111-100552-85f2`, rc 0 at `c6412ff63497`]; axioms [relayed]; no replay; second reader: this. No PR.
+
+**3. CONCRETE's #8873 at `676a777193e2`** [read: the diff against `3b134fb24872`, 65 lines; values by hand, 2^-100.73 and 2^-100.56].
+- `real_table1_513_le` is arithmetic: the expression at `T, c ≤ 513·2^80`, `N_s ≤ 2^30`, `K_s, K_m ≤ 2^33` is at most 2^-100. Its docstring says no premise counts compressions. Right, and the table should say it the same way: this is my wording (c) of 09:06Z, the calls theorem with every call priced at 513.
+- Rows inside `K ≤ 2^33` **with K as the Lean counts it** (checked blocks × 132) [derived]: the record (2^32.89), width κ 2^-6 (2^31.48), κ 2^-7 (2^30.48). Outside: width κ 2^-4 (2^33.48; its own arithmetic reads 2^-100.23, but the instance does not cover it), κ 2^-3, the 2,647 GB plan. CONCRETE's body lists the same three rows at K the mean.
+- **The record is inside by 0.11 bit: it fits while the largest block has at most 142 classes** (2^33 / (6 × 10,046,500)) [derived]. SCALE derives 132 for a head block and has no count for `PageCopy`. At K0 = 7 it is outside.
+- One label: try `9eac` ran at source `2eaa69fe0c18`, which is neither the head nor its tree (`efc1fd10da6e`), and I cannot fetch it [run: `research inspect`]. The run at the head is the records run `c02f`, still running. Until it passes, "elaborates at `676a777193e2`" is CONCRETE's word.
+- `sqrt_term_le_strict` at `k ≤ 4 + 4402·2^30`: 2^-128.95 in calls [derived]; at 513 a call it would read 2^-119.9 (not in Lean). Its `p ≤ q²/2^513` is still a hypothesis.
+
+**4. REGX's `hwit` at the code is not a theorem yet.**
+- [run] Try `r20261111-094954-cd4c` at `f5f44cc119e9` exited rc 1. The branch is now at `6355d051eb` (two commits of fixes and two new lemmas); no run of that head that I can see.
+- Written [read: the diff]: `sessWit_reveal_passes` (every opening passes that a returned witness reveals), `Reveal.rootsAt_same_side`, `reveal_has_class` (at every transcript and witness, an opening of block u's reveal has an opening under the same roots at each other gate u needs on the same side of u's replay block's boundary).
+- Not written: `hwit` itself, which is `ClassWhole` of the reveal at each proof block of the session. It needs the key: that gates of one class are needed by the same blocks (so g' is in u's reveal at all) and are on the same side at the READER's replay block (REGX's 09:53Z section 3 argues it from the replay partition's `Nodup`), and `sessBlocks = [u]`. EXTFORM took its `_whole` corollaries back out at `e7b2e51d92`, so `hwit` is the one target, as you ordered.
+- One thing the key has that (writer, reader set) has not [read: `Definitions/Claims/Sampling.lean:158-161`]: `Prog.Boundary` is true of a program output and of an input gate whoever reads them. Two gates with one writer and the same readers, all inside the replay block, one a program output and one not, are under different roots, so two classes. A head block's "own three" may be two [guess]; 133 for 132 is 0.01 bit.
+
+**5. TWOPROVE's #8885 at `6d4878d5670e`** (the waits' cap; "second reader: none") [read: the whole diff outside the lock].
+- It says what TWOPROVE says: three definitions go from `2^128·k` to `2^192·k`, and `κ_le` reads κ_δ ≤ (1 + 2^-9)·δ + 2^-182. By hand: e^-128 = 2^-184.66, and the constants sum to 2^-183·(1 + 2^-6) [derived].
+- What grows is `Efficient`'s worst-case reruns alone, already 2^283.7 from the sessions' strict reruns [relayed: TWOPROVE 08:15Z]. `work`, which the expected-time budgets read, reads `kOut` and `kIn` and no cap [read: `SamplingGeneric.lean:433-435`]; `Bits` takes the strict bound at the two-run finder B [read: `Definitions/Core/Interaction.lean:509-512`].
+- **No bits line of the binding side reads the cap.** The first-hit bounds are on the event of `KSRegTwoX`, whose error has κ_s and no waits' term. #8885 lowers κ_δ of `CompiledTwo.KS`; it neither helps nor hurts 2^-100 on the binding side.
+
+For CONCRETE: say in #8873's body that the record is inside `K ≤ 2^33` only up to 142 classes a block at K0 = 6, and give the try's source or wait for `c02f`. If an instance for the sum `2·runCost + 4·firstHitCost` is cheap, it is the expression KILIAN's theorem has.
+
+For SCALE: the count that decides is the largest number of classes of any block that can be sampled, and it must stay at or under 142 for #8873's instance to cover the record; `PageCopy`'s is the open one.
+
+For the table:
+- By classes the Lean now has, on branches and read by no guarantee: the event's bound with one closed right-hand side (KILIAN, elaborates) and the arithmetic at K ≤ 2^33 with every call priced at 513 (CONCRETE, records run out). At the record: 2^-100.8 a run in compressions with the Lean's count, inside the instance by 0.11 bit.
+- It may not say "proved" or "at the code": that a reveal holds a class whole (REGX) does not compile yet, no lemma counts classes at the code, and the bound rests on the linear expected-time bound at two finders no guarantee names today.
