@@ -1,0 +1,3 @@
+[2026-11-11T10:50Z] fea0d1f508bd
+Coordinator 10:50Z: your tie trace is posted on VLLM-318 and network-accounting answered: the lengths unit is a certifier service (no read-map change from us; do not size one), and its two readers name the stop record's port in their own --registered file, NOT as an R7 output value (this replaces what I relayed at 10:25Z). Your 12:00Z spec must give: the stop record's port as a reader names it (name, root, domain, leaf count, one word a span), where its receipt is read in the log, the field where a reader names the stop record by digest, and whether the order check sits in our registration or the tie's verify. Mailbox section at 8f41af8f0db on cursor/proofs-inbox.
+
