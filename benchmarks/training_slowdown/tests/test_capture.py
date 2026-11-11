@@ -299,6 +299,7 @@ def top_block():
     return model, torch.optim.AdamW(model.blocks[-1].parameters())
 
 
+@pytest.mark.slow
 def test_a_step_among_its_neighbours_is_the_step_alone_with_its_circuit():
     """Three standard steps training the top block under AdamW, the second measured. Its GEMMs and their roles, its
     updated MACs, its cut and its raw product rows are the step's captured alone. What the step alone lacks, it has:
@@ -363,8 +364,12 @@ def test_steps_taken_mid_run_read_the_runs_own_weights():
     assert late.formalism == first.formalism and late.formalism["grad_cut_bits"] == 16 * (4 * H + 4 * H2 + 2 * HI)
 
 
+def mlp_weights(m) -> list:
+    return [m.blocks[-1].up.weight, m.blocks[-1].down.weight]
+
+
 def momentum(through_copy: bool, nesterov: bool):
-    """A momentum step written by hand: each trained tensor's fp32 buffer is scaled and takes the gradient in place,
+    """A momentum step written by hand: each trained matrix's fp32 buffer is scaled and takes the gradient in place,
     and the update, cast to 16 bits, reads the gradient and the buffer (`nesterov`) or the buffer alone. With
     `through_copy` the buffer is then written through a copy of itself, as a step that keeps its buffer at any width
     writes it: ``b.copy_(b.float()...)``, where an fp32 buffer's ``float()`` is the buffer."""
@@ -373,7 +378,7 @@ def momentum(through_copy: bool, nesterov: bool):
             p.grad = None
         lm_loss(m, batch).backward()
         with torch.no_grad():
-            for i, p in enumerate(m.blocks[-1].parameters()):
+            for i, p in enumerate(mlp_weights(m)):
                 b = m.get_buffer(f"momentum{i}")
                 buf = b.float().mul_(0.9).add_(p.grad)
                 if through_copy:
@@ -391,13 +396,15 @@ def test_a_buffer_written_through_a_copy_of_itself_is_carried(nesterov):
     the buffer takes it whole, past the update's 16-bit cast; and the step's circuit and product rows are those of
     the same step writing the buffer in place."""
     def captured(through_copy: bool):
-        model, _ = top_block()
-        for i, p in enumerate(model.blocks[-1].parameters()):
+        model = TinyLM(V, H, NH, I, 1)
+        model.requires_grad_(False)
+        for i, p in enumerate(mlp_weights(model)):
+            p.requires_grad_(True)
             model.register_buffer(f"momentum{i}", torch.zeros_like(p))
         return capture_steps([momentum(through_copy, nesterov)] * 3, model, lm_batch(), measured=1)
 
     copied, in_place = captured(True), captured(False)
-    weights = 4 * H + 4 * H2 + 2 * HI
+    weights = 2 * HI   # the one block's up and down
     f = copied.formalism
     assert f["state_bits"] == f["grad_cut_bits"] == f["partial_cut_bits"] == f["u1_bits"] == 32 * weights
     assert f["delta_grad_bits"] == 2 * 32 * weights
