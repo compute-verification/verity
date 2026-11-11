@@ -20,7 +20,7 @@ def canonicalize(dp, canon: dict[str, tuple[Any, dict]] | None = None) -> None:
     encoded ONCE (v0, self-contained), compared with the canonical one under its id (fail-closed: a different body under the
     same id is `IdentityConflict`, never first-wins), and every reference to it (node callees, function-valued statics) is
     re-pointed to the canonical object. Primitives come from the registry and are already shared."""
-    from verity.circuits.codec import _encode_definition
+    from verity.circuits.codec import definition_entry
     from verity.circuits.defs import IdentityConflict, PrimitiveDefinition
 
     if canon is None:
@@ -38,7 +38,7 @@ def canonicalize(dp, canon: dict[str, tuple[Any, dict]] | None = None) -> None:
             # bodies, and comparing roots under that id would refuse a valid workload (E_IDENTITY) although their digests differ. Callees stay
             # under the fail-closed rule below; the root's identity is the component digest.
             continue
-        enc = _encode_definition(fn)
+        enc = definition_entry(fn)
         c = canon.get(fid)
         if c is None:
             canon[fid] = (fn, enc)
