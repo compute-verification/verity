@@ -3105,7 +3105,9 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     `Proofs.Flock.SessionLoop`) is recorded through `G`'s body. A premise added to it that no named assumption stands for
     (`n ≠ 5`), or dropped from it while another guarantee still takes it (`Hyp`, whose assumption entry and module record
     stay, though the build no longer has `G` read it), changes the record, and the drop its `premises` too, which the
-    audit refuses until `--update` records it, and the review prints `G` as it is now. A walk that stopped at `G` would record its name alone, and
+    audit refuses until `--update` records it, and the review prints `G` as it is now. For the drop the guarantee's own
+    line comes first and names the premise it no longer takes: its type hash is the same and its `premises` are not, so
+    it is no reprint. A walk that stopped at `G` would record its name alone, and
     neither change would move the lock. What `G` reads under `meaning` (`twice`) is recorded too."""
     pkg, build, audit, lock = excepted_toy(
         tmp_path, "Control.Loop", LOOP,
@@ -3145,8 +3147,10 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
         assert after["reads"]["Control.Loop"]["digest"] not in seen
         seen.add(after["reads"]["Control.Loop"]["digest"])
         changes = A.statement_changes(rep["review"])
-        assert changes[0] == "definition Control.Guarantees.Loop (Control.Loop), read by Control.doubles: changed", changes
-        assert any(shows in line for line in changes[1:]), changes
+        dropped = [] if premises else ["guarantee Control.doubles: no longer takes Control.Hyp (was a named assumption)"]
+        assert changes[:len(dropped) + 1] == [
+            *dropped, "definition Control.Guarantees.Loop (Control.Loop), read by Control.doubles: changed"], changes
+        assert any(shows in line for line in changes[len(dropped) + 1:]), changes
         for module in ("Control.Loop", "Control.Assumptions"):
             after["reads"][module] = before["reads"][module]
         assert after == before, "the statement's record changed, and nothing else"
