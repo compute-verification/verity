@@ -47299,3 +47299,85 @@ For REGX, EXTFORM: nothing changes in `hcls` or the class's Lean (it is `needs`-
 For the table:
 - By classes, a class is the gates needed by the same proof blocks, the writer among them. A later head block has 132. In compressions, a run at K0 = 6: the record 2^-100.8 with the Lean's count today (2^-101.6 as a mean), the 2,647 GB plan 2^-98.7 to 2^-99.9, a miss; width κ 2^-4 2^-100.2 at 0.665 of the GB.
 - Strike "at most 72" and the figures at it (−101.7, −99.6, −100.58) wherever they stand.
+
+## NET, Wed 11 Nov 10:09Z: the audit's spec rewritten to the stop word as a value of its own; a one-stage block cannot write a port of the boundary record, so the word moves to a stop record or is read and checked; `register` cannot read `ignore_eos`, a field of each request; #8869 conflicts with circuits' CIR-236 branch and should wait behind it
+
+Nothing is built: no Definition, no serving change, nothing in `stop_rule.py`. [read] is `main` at `589249ad95` unless a place is given. I read vllm's branch `cursor/vllm-stopcheck-a368` at `9b43287565` and circuits' `cursor/circuits-cir236-stop16-6f04` at `afcf1474a1` [read, no write]. This replaces section 1 of my 09:47Z entry. Soundness's and network-accounting's answers of 09:52Z are read on VLLM-318.
+
+**1. What vllm's branch already has** (the replay placement, written before `StopRule16` was named) [read: its `boundary_rows.py:21-43, 232-256, 287-333`]:
+- the rows cut so that each is read whole: `b.request` (the fields before the ids, `max_tokens` and the prompt's length the first two, `ignore_eos` among them), `b.prompt`, `b.served` (T ids);
+- the word a value of its own: `o1`, one row a span, which serving writes;
+- the block `ServedStop_v1{T, STOP, MAX_MODEL_LEN}`: the stop ids and the model's length are constants of the template, public in its id, and no stop id is `NOT_AN_ID`;
+- the class is (P, T) whatever n is, so one T, and a span the rule does not end as it was served is filed with no stop block (`-nostop`).
+
+So three of the things I would have asked for exist. `o1` there is a port of the boundary record, the replay block's second output.
+
+**2. The spec for the one-stage placement, with the word the block's output.**
+
+| part | what it is |
+|---|---|
+| the block | vllm's `ServedStop` over circuits' `StopRule16{T=1024,NSTOP=3}`, one a released connection, its output the 16-bit word |
+| population Program | `population_program(ServedStop{…}, N)`: every parameter an array over the N blocks, block r the boundary record's slot r [read: `verity/circuits/population.py:143-146`]; `Q_template_instance`, one stratum |
+| what the block reads | row r of `b.request` and row r of `b.served`. Each is a registered value of the stop record that takes its root and domain from the boundary record by that record's digest, so nothing is committed twice and both leaf counts must be N [read: `one_stage/registration.py:76-81`; `one_stage/registered.py:34-35`: a block's parameter whose leaves are exactly row r of a registered value reads row r] |
+| what the block writes | the word: the stop record's one port, N rows of one word, which serving commits as the window closes |
+| registered before the coins | one stop record a boundary record: N, the program's and the partition's digests, the law, the query, the window, the word's root, the two reads |
+| the readers | the lengths unit and the egress tie read the word as an output value of the stop record, by its digest; n is its low 13 bits. Their records come after it in the same log (`R7-output` refuses a digest the log doesn't hold) |
+| the rate | `Law("rate:NUM/DEN")`: ceil(NUM·N/DEN) blocks of N, at least 1 a record, so at least 1 a class a window |
+| the verifier of record (Lean) | `register` (R1 to R7, the receipt), `select` on the challenger's coins released after the record's digest, each sampled session through `flock-verify verify --zk --registered`, the audit record. No change to it |
+| not checked by it | N is the certifier's count, row r is connection r, `b.request` is the request the certifier took in (conditions 1 and 3) |
+
+**3. The one thing this form changes on vllm's branch: where the word is committed.**
+- A record's roots are exactly the ports its own layout derives, under a domain that binds its own program [read: `registration.py:21-23, 38-39`]. **A one-stage block can read a port of the boundary record. It cannot write one.**
+- So with `o1` a port of the boundary record, as on the branch, three forms are open:
+
+| form | the word is | needs |
+|---|---|---|
+| A. the word moves to the stop record | the stop block's output, a port of the stop record | serving commits it under the stop record's domain; `o1` leaves the boundary record. Two records of one log, the second naming the first by digest. R6 takes one record a window, so the stop record's window differs by a name [read: `registration.py:25-26`] |
+| B. `o1` stays, the block reads and checks it | an input the block holds equal to the rule's word on all 16 bits | soundness's fallback: the uniqueness instance stated beside it. The block is a verdict block, the form the certifier's ties have on `main` [read: `certifier/prover/served_tie.py:1-12`]. Who holds a tie's verdict to accept in one-stage I have not traced |
+| C. `o1` stays, the block stays in the replay block | the replay block's second output | the branch as it is; waits on the second stage's form, soundness's, dated Fri 13 Nov |
+
+- Only A is "the word is the stop block's output" in the one-stage placement. Network-accounting's condition 2 says "ports of one boundary commitment": that is B or C to the letter, and A if two records of one log count as one commitment.
+
+**4. Condition 4's three conditions, against form A.**
+
+| soundness's condition | holds by |
+|---|---|
+| the stop blocks' rate law is registered before the coins | the law is a key of the stop record; R1 holds it to the verifier's own |
+| their coins come after the boundary commitment | the stop record names the boundary record's digest, and `select` runs after the stop record's receipt |
+| no block's wrongness can change after it | every input is a boundary value and the output is the stop record's port. It holds from the stop record's receipt, not from the boundary record's |
+
+One point for soundness: the stop record can be registered after the boundary record's first-stage coins. Nothing I found on `main` orders one record's receipt against another record's coins [guess: not finding it is not "none"].
+
+**5. Where the `ignore_eos` refusal goes: no check of `register` can hold it per request.**
+- **`ignore_eos` is a field of each request's body, not of a schedule** [read: `adapters/vllm/verity_vllm/program/predict/reads.py:123`, beside `max_tokens`]. It is committed hidden in the request's row [read: `boundary_rows.py:71`]. vLLM drops the model's stop ids for that request alone [read: `program/frontend/stop_rule.py:61-63`, `program/predict/steps.py:670`]. One record can hold requests of both kinds.
+- `register` reads public items only: the record, the verifier's own copies, the log. My line of 09:47Z was about the two kept serves, whose load set `ignore_eos` on every request. As a rule for served traffic it is wrong.
+- **An honest serve is already safe on vllm's branch**: a span the rule does not end as it was served goes to a class with no stop block (`Stop.end`), so no honest stop block fails. The price is that the span's length is then charged, not explained.
+
+| where | what it reads | what it does | cost |
+|---|---|---|---|
+| in the block | the request's `ignore_eos`, in `b.request`'s row, which the block reads whole already | the rule takes no stop id for that request. Exact, per request; such a span gets a stop block and nothing is refused | no new input. One select a stop id in `ServedStop`, about 100 AND gates on 107,862 [guess, from the shape]. vllm's wrapper; `StopRule16` unchanged |
+| `register`, R2 | the program's digest, which holds the template's stop ids, and the day's declared circuit (`R2-declared`) | a day served wholly with `ignore_eos` declares the template with no stop id; any other record is refused | nothing new: the stop ids are in the template's id on vllm's branch. It can't see a day that declared one rule and served the other |
+| `register`, a new check | a new public field of the record's window ("every request ignores EOS") against the template's stop ids | refuses the pair | a field, a check in `Spot.Registration` and its Python mirror, difftest cases: 40 to 80 lines [guess]. It compares two statements of the developer's, and puts a request field's name in `verity/`'s verifier |
+
+- **My reading:** the first row. It is the only one right for mixed traffic, and it turns charged spans into explained ones. The second row is what the verifier holds today for free.
+- `min_tokens` is the same kind of field, beside it in the row. The rule has no input for it, and the adapter's compiler refuses a body that sets it [read: `reads.py:127`].
+
+**6. One gap in every form: nothing I read refuses finish 0 in a stop class.** A request whose `max_tokens` is past T, cut at exactly T ids, gives the word (T, finish 0) [run: `stop_rule.reference` on 1,024 ids, none a stop id, `max_tokens` 4,000, returns (1024, 0)], and its count matches. An honest serve files it with no stop block; a cheating one need not. The word is hidden, so a block must hold "finish is not 0": the lengths unit reads the word anyway.
+
+**7. #8869 conflicts with circuits' CIR-236 branch in all three of its files** [run: `git merge-tree --write-tree origin/cursor/circuits-cir236-stop16-6f04 cursor/proofs-net-1d7e`, three content conflicts]. Both add a row to the same two lists and a `digests` key to the same pins file. #8869 binds the two-word forms at T = 1,024, which nobody serves now; circuits' binds `StopRule16_v2{T=1024,NSTOP=3}`, the form of record. **My advice: do not mark #8869 before CIR-236's change lands.** After it I rebase #8869, which is a new head and a new quick tier, or you close it as overtaken. It merges with `main` at `0a722c6ec9` [run].
+
+**8. Runs.** Neither has a result [run: `research fetch`, 10:09Z].
+- #8869's quick tier, the ten suites the first run did not reach: `r20261111-093130-61a9` has been in Flock's `lake build` since 09:36Z, no suite run yet, and its slot ends at 10:35Z. **If it is cut I do not relaunch unless you say so**: the PR waits behind CIR-236 anyway, and a check slot tonight is worth more elsewhere. The first run, `r20261111-081553-1365`, passed 45 of 55 and failed none.
+- The stop rule's sessions through the Lean verifier, `r20261111-094004-c2b1`: waiting for a check slot since 09:40Z. It runs the two-word rule, a stand-in for `StopRule16`.
+
+**For vllm** (part A): form A, B or C of section 3 for the one-stage placement; `ignore_eos` read in `ServedStop` (section 5, first row); the block that refuses finish 0 (section 6).
+
+**For the coordinator to ask:**
+- **soundness and network-accounting:** a one-stage block cannot write a port of the boundary record. Is form A (the word a port of a stop record that names the boundary record by digest) what condition 2 means by one boundary commitment? Must the stop record be registered before the boundary record's first-stage coins, or only before its own?
+- **soundness:** `ignore_eos` is per request and hidden, so `register` cannot read it. Is reading it in the block enough, with nothing refused?
+- **network-accounting:** which block holds "finish is not 0", the word being hidden?
+- **circuits:** #8869 conflicts with your CIR-236 branch in the two sidecars and the pins file. Shall I rebase it after yours lands, or is it overtaken?
+
+For the table:
+- stop check, the audit side (NET): spec rewritten to the word as a value of its own [read, nothing built]. In the one-stage placement the word must be a stop record's port (form A) or be read and checked (form B); vllm's branch has it as the replay block's output (form C). `ignore_eos` is per request: it goes in the block. No number changes.
+- #8869 (stop rule pins at T = 1,024): unmarked at `df881f327a`; conflicts with CIR-236's branch; hold behind it.
