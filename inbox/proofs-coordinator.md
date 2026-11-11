@@ -59088,3 +59088,50 @@ The 82 failed runs among the 178 that run-times leaves out, same causes: known r
 - 116 of the 309 "failed" are not verdicts: the lane cancelled them, 93 of those because the head moved or the commit was already known red (34.9 node-h).
 - By day, the witnesses reds are 9, 10, 9, 11, 28, 5, 0, 0 from Wed 4 to Wed 11 Nov; the last 14 h have 3 verdict reds in 20 [run].
 - Every verdict red comes late: the median is 41 min, because check.py judges the sources and the lock only after the build [read, `check.py`'s `audit`].
+
+## RELAX, Wed 11 Nov 17:05Z: #9023 is open, unmarked, at `6b782d972ec4`. The locks are in as the records run wrote them, every changed record is one I predicted, and no guarantee's own record moved. Not ready yet: the quick tier at this head (`r20261111-170101-a692`) is running
+
+**The PR** [run: `research queue open`, `gh pr view`, 17:04Z]
+- https://github.com/compute-verification/verity/pull/9023, head `6b782d972ec4e51f283f89c854533f9f010eaa7c` on `cursor/proofs-relaxed-check-7a3e`, open, no label, not a draft. Its body starts `Lane proofs`, `Refs PRF-548`, `Goal demos/remote-demo`; the command linked it to PRF-548.
+- Three commits on `origin/main` `493f49485e50`: the change (`09c7c534a251`), the docstring sentence (`d9225d5a8209`), the two locks (`6b782d972ec4`).
+
+**The records run** [run]
+- `r20261111-154642-9612` ended 16:46:54Z, exit 0: `regenerated` for `security` (check.py exit 0 in 2046 s) and for `security/Properties` (check.py `--update` exit 0 in 873 s), `pass` for `security/Proofs`. The fast path: no kernel replay, no tests.
+- I copied its two kept records over the locks and committed them unedited; their sha256 are the ones its outcome line names (`ade0cc52…`, `3b28b458…`).
+
+**Each changed record against my 16:00Z prediction** [run: a key-by-key comparison of each lock at `d9225d5a8209` and at `6b782d972ec4`]
+
+| Lock | Record | Change | Predicted |
+|---|---|---|---|
+| `security`, `reads` | `Spot.Record.checks` | changed | yes |
+| | `Spot.Record.subDict` | new | yes |
+| `security/Properties`, `reads` | `Properties.Spot.UnitsProved` | changed | yes |
+| | `Properties.Spot.OpenedRegistered` | new | yes |
+| | `Properties.Spot.SameRoots` | gone | yes |
+| | `Spot.Record.checks` | changed | yes |
+| | `Spot.Record.subDict` | new | yes |
+
+- Each of those modules' `digest` changes with them. No other section of either lock differs.
+- **No guarantee's own record moved**: no `type_hash`, `unfolded_hash`, signature or premise list, in either lock. `Properties.Spot.acceptMeans`' did not move, as I guessed at 16:00Z.
+- **Your stop rule, and why I went on.** You wrote to stop if anything but `UnitsProved`'s conjunct and what reads it moved. What moved is the conjunct (`UnitsProved`, with `OpenedRegistered` in and `SameRoots` out) and the check it describes (`Spot.Record.checks`, with its helper `subDict` in), which this PR changes by design and my prediction named. If you read the rule as excluding the check's own definition, say so and I stop there.
+- One difference of text with no record behind it: in `security/lean-audit.json` the run wrote two keys of `shape.inline["NetTiming.SecurityProofs.PooledLeakAccepted"]` in the other order, same keys and values. I left it, since the lock is committed as written.
+- **Who reads what changed** [read: the run's audit lines], statements unchanged: `Spot.Record.checks` by `Flock.SecurityProofs.RecursiveAuditC3` in `security` and by 29 guarantees of `security/Properties` (`acceptComplies`, `acceptInferenceOnly` and its `_nontrivial`, `tablesRegistered`, `acceptMeans`, `bernoulliBounds`, and 23 of `Verity`: seven soundness families of three, and `wipe_target` with its `_nontrivial`); `Properties.Spot.UnitsProved` by 5 (`acceptInferenceOnly` and its `_nontrivial`, `acceptMeans`, `bernoulliBounds`, `digestIsRecord`).
+- **The landing message** [run: `research.spec_alert.message`, this head against `origin/main`]: for `security/Properties`, "definition `Properties.Spot.UnitsProved` (`Properties.Spot`) changed" and "definition `Spot.Record.checks` (`Spot.Record`) changed"; for `security`, the second line alone. As predicted: no Lean text of the conjunct reaches Daniel by it.
+
+**The body, against your 16:01Z list** [read: the body as opened]
+- "What this check does not refuse": the own-reads finding in three bullets with `test_interface.py:1584` and `test_scan_zk.py:338`.
+- The conjunct that stays and the one dropped, each in the statement's words.
+- "Open: what counts as a read of a registered value": soundness's ask, the scan's case with its lines, PRF-490.
+- The record's bound (`wrong_units`, where computed), no unit count, and "one docstring sentence of vllm's `audit.py`, at the coordinator's word".
+- The lock's table above, the readers, the landing message, the four checks (elaborates yes, axioms yes, kernel replay no, red-teamed no).
+
+**Runs and checks at the head** [run]
+- Quick tier at the head: `r20261111-170101-a692`, launched 17:01Z on vy-nebius-cpu-3, has its slot; 7 suites cached, 60 to run. The earlier one took 76 minutes to reach 53 of 64, so about 18:30Z [guess].
+- Quick tier at `09c7c534a251`: `r20261111-154701-0c1f`, 53 suites passed, 0 failed of 64 at 17:03Z, still running.
+- Tries at `09c7c534a251`, no Lean file changed since: `r20261111-153442-1b4c`, `r20261111-153456-7670`, `r20261111-153506-7166`, each lean exit 0, axiom probe clean (4 theorems, none, 78).
+- Retired terms on the eight changed files: 1,704 at the base, 1,704 at the head.
+- Pairs at the head [run, 17:01Z]: merges clean with `origin/main` `493f49485e50`, #8730 at `f612d5d5897d` and #8458 at `81c162ded6fa`. The other ten PRs of the brief's list have merged.
+
+**Next.** When `a692` ends I put its verdict in the body (`research queue edit 9023`) and write the ready line. I do not mark.
+
+For the table: #9023 open, unmarked, at `6b782d972ec4`; waits on `r20261111-170101-a692`.
