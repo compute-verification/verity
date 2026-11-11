@@ -38,10 +38,10 @@ algorithm families the adversary may use, and the bounds and attacks applied. Fo
 ## Run
 
 ~~~sh
-verity bench rho --out DIR    # every scenario; writes rho.md, rho.json and figures/ to DIR
+uv run python verity/protocols/inference_only/rho/run.py --out DIR    # every scenario; writes rho.md, rho.json and figures/ to DIR
 ~~~
 
-`verity bench rho` runs `run.py`, which prints Markdown and, with `--out DIR`, writes `rho.md`, `rho.json` and
+`run.py` prints Markdown and, with `--out DIR`, writes `rho.md`, `rho.json` and
 `figures/` there. `run.py` takes `--scenario NAME` (repeatable), `--target X` and `--set KEY=VALUE` (any registry key, for the whole run).
 `periods.py` gives the same per monitoring period, over one datacenter and over the world's compute, with each scenario's
 range, its parts by kind and its premises ranked; each row says what it assumes about proofs, and the remote scenario
@@ -137,9 +137,9 @@ under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-
 - `min_cut.bound(c, k, n, N=…, O=…, size=…)` is the bound at a policy `(c, k, n)` on a circuit's own MACs, output
   wires and gates: the least blocks, the most MACs a block, the slowdown `m c / size` (at least 1) and what it rests
   on. `N` and `O` are the caller's: it converts no count. Defaults: `β_w` and `b` a bf16 word's 16 bits, the most (H)
-  and (E) can hold at, since a word's own wires are a cut; `β_x` the rows' `beta(k)`, and no bound past their last
-  `k`; `F = 1` (`HE`: at most two of forward, input-gradient and weight-gradient products), `share(3)` for all
-  three (`HEShared`).
+  and (E) can hold at, since a word's own wires are a cut; `β_x` the rows' `beta(k)` (between two rows the next
+  row's, the most the rows allow there), and no bound past their last `k`; `F = 1` (`HE`: at most two of forward,
+  input-gradient and weight-gradient products), `share(3)` for all three (`HEShared`).
 - The class `min-cut` in `CLASSES` is `min_cut.macs_a_block` on the profile's own counted products, the trained
   weights' forward and input-gradient products: a weight value at `b_w`, an activation value at `β(k)` and at most
   `b_a`, an output at `b_a`, and `outputs_per_product` from the model's shape. It bounds the declared inference
@@ -180,7 +180,7 @@ uncertified or dark gates at a structure whose `s_×` is above 1, with the struc
 
 ## Names
 
-The package, its command and its outputs (`verity/protocols/inference_only/rho`, `verity bench rho`, `rho.md`, `rho.json`) and the
+The package and its outputs (`verity/protocols/inference_only/rho`, `rho.md`, `rho.json`) and the
 identifiers `Overhead.rho`, `Estimate.rho`, `rho_worst`, `Corner.rho` and the JSON's `rho` and `slowdown` all name the
 slowdown (the training cost once called the overhead; `Overhead` and `theorem.overhead` keep that name);
 `Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. The slowdown is the `ρ` of Lean's

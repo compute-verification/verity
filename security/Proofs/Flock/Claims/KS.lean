@@ -670,7 +670,10 @@ on `ExtendJ` alone (`ZkUntrim`: `FlockDeploy.KS.zkSimForkLeCapTau`, `FlockDeploy
 lane no trace one agreement short of its radius has there, which Johnson's bound leaves room for in GF(2^128), so the
 table still does not extract (`Extend`: `Claims.GS.exists_avoid`, `Claims.Flock.fill_step`,
 `Claims.Flock.extendJ_of_fill`; `ZkExtend`: `FlockDeploy.KS.zk_extendJ`). So masked KS at the untrimmed instance holds
-with no premise too (`FlockDeploy.KS.zk_KS_untrim`). The same fill, at the plain code, extends plain's one-table form
+with no premise too (`FlockDeploy.KS.zk_KS_untrim`). The chain proves one wait's bound there
+(`FlockDeploy.KS.zk_oneWait_untrim`), which reads no truncation of `E^rep`, so masked KS holds with each wait truncated
+at any `K₀ > 0` too, `κ`'s term `2k/K` then `2k/K₀` (`FlockDeploy.KS.zk_KS_untrim_at`, at `FlockDeploy.deployZkAt`). The
+same fill, at the plain code, extends plain's one-table form
 (`Claims.Flock.extend_of_fill`), which carries plain's table bound to columns that may be zero
 (`Claims.Flock.tableBoundθ_of_extend`), so plain KS holds at the untrimmed record too, with no premise (`PlainUntrim`:
 `FlockDeploy.KS.plain_extend`, `FlockDeploy.KS.plain_KS_untrim`). The chain reads the verifier only through its setup (`FlockDeploy.KS.ZkSetup`), and
