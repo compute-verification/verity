@@ -55866,3 +55866,90 @@ For the table:
 
 For the table:
 - SCALE | (b), over the served wiring; modeled; no Lean statement at the code is behind it; K at Pr[refused] = 0 | M = 162 with the select counted, per-rank windows [run `3e9b`, `d970`] | κ 2^-6 (row of record) 2^-102.08 / 2^-101.74 at PageCopy 97 / 205; κ 2^-4 2^-100.08 / 2^-99.74 (condition "at most 162" met at 97 only)
+
+## HARMSEARCH, Wed 11 Nov 13:06Z: your 12:53Z and 13:04Z applied. The hoist AS BUILT (#8949, unmarked; one session a call, +554 to +563 core-s a statement) is on every row: the final recut's row of record (κ 2^-6, margin 0.03) reads 8,721 to 8,796 GB as built, between no program's 4,074 and `main`'s 10,641; the cheapest (κ 2^-4, margin 0.1) 8,597 to 8,674. The +373 and +1.4 cells are what-ifs with no caller; the own-cap reading is a column beside K0 = 6. No row reaches 300 GB at modeled 0.4
+
+Tags: [run], [read] (place given), [relayed], [derived] my arithmetic on cited figures, [guess]. Times from `date -u`. Order read through its 13:04Z section at 13:05Z; mailbox: nothing after 12:24Z.
+
+**The labels.**
+- **GB columns** (your 12:53Z). "no program (not what `main` verifies)"; "as `main` is" (+783 core-s on every statement); **"the hoist as built (#8949, unmarked), one session a call"**: +554 to +563 core-s a statement, the measured ratio 0.708 to 0.719 of run `744d` applied by proportion to the population's setup [relayed: your 12:53Z, BENCHCROSS 12:44Z], so the column is modeled; and two **what-ifs, unbuilt, with no caller**: the shared parse once a member (+373) and a window in one process (+1.4). Each cell is a planner call at that setup, not an interpolation [run].
+- **Bits.** **(b), over the served wiring; modeled; no Lean statement at the code is behind it; K at Pr[refused] = 0**; compressions, T = 2^80 calls a run; **K0 = 6 on every bits line of record** (your 13:04Z). Beside every final-recut cell: **M = 145 over the kinds the plan prices [SCALE's run; ATTACK's second tool agrees]; the token select is in no stratum and uncounted (442 or more at the plan's LM-head cut [derived]: the record 2^-99.18); per-rank windows.** Line (b)'s M is in no Lean hypothesis that anything discharges [relayed: your 12:53Z].
+- **The second reading, beside and never instead:** "at the design's own registration cap (3 to 5 at world year; a registration that samples more is refused, 2^-40) [run, the planner's `registration_cap`]".
+- **Scope.** World year, row (iii), measured prover prices, modeled 0.4. The final recut and #8917's cut are not built; a recut block's price is the plan's measured price × 2^Δk [guess]; #8917's units are priced by size, none proved, "key rows unwritten". The select's own proving is in no row.
+
+**1. The row of record and the rows beside it: each held κ at the margin with the least GB, with the as-built column, both K0 readings and the measured engine rate** [run]. The measured-rate column is a floor on the rate, so it cannot show 300 GB is met; the rate is not measured at the headline's mix; its last three figures are the utilization 300 GB stops holding at.
+
+| head block | κ held | the margin with the least GB (no program) | Σk a sampled replay block | (b) under one M = 145 / 205 / 442, K0 = 6 | one M up to, at K0 = 6 (the bits line of record) | one M up to, at the design's own registration cap (3 to 5 at world year; a registration that samples more is refused, 2^-40) [run, the planner's `registration_cap`]: no program / as `main` is / as built | the design's own cap K0 (the five GB columns' setups) | no program (not what `main` verifies) | as `main` is (+783 core-s a statement) | the hoist as built (#8949, unmarked), one session a call (+554 to +563; a measured ratio applied by proportion: modeled) | what-if, unbuilt, no caller: the shared parse once a member (+373) | what-if, unbuilt, no caller: a window in one process (+1.4) | measured engine rate on node A (a floor), no program / as `main` is / as built; the utilization 300 GB stops holding at |
+|---|---|---:|---:|---|---:|---|---|---:|---:|---:|---:|---:|---|
+| whole | 2^-4 | 0.1 | 14,448,210 | -100.17 / -99.67 / -98.57 | 162 | 326 / 326 / 326 | 3 / 3 / 3 to 3 / 3 / 3 | 3,853 | 10,558 | 8,597 to 8,674 | 7,047 | 3,865 | 138 to 148 / 377 to 406 / 307 to 334; 0.031 / 0.011 / 0.014 |
+| whole | 2^-5 | 0.1 | 7,224,145 | -101.17 / -100.67 / -99.57 | 326 | 490 / 654 / 654 | 4 / 3 / 3 to 3 / 3 / 4 | 3,929 | 10,600 | 8,649 to 8,726 | 7,107 | 3,941 | 140 to 151 / 379 to 408 / 309 to 336; 0.031 / 0.011 / 0.014 |
+| whole | 2^-6 | 0.03 | 3,487,090 | -102.22 / -101.72 / -100.62 | 677 | 1,017 / 1,356 / 1,017 | 4 / 3 / 4 to 4 / 4 / 4 | 4,074 | 10,641 | 8,721 to 8,796 | 7,203 | 4,086 | 146 to 157 / 380 to 410 / 312 to 339; 0.029 / 0.011 / 0.014 |
+| whole | 2^-7 | 0.02 | 1,734,656 | -103.22 / -102.73 / -101.62 | 1,363 | 2,046 / 2,046 / 2,046 | 4 / 4 / 4 to 4 / 4 / 4 | 4,518 | 11,215 | 9,256 to 9,333 | 7,708 | 4,530 | 162 to 174 / 401 to 432 / 331 to 359; 0.027 / 0.011 / 0.013 |
+| #8917's cut, G = 128 | 2^-4 | 0.11 | 15,098,772 | -100.10 / -99.61 / -98.50 | 155 | 234 / 312 / 312 | 4 / 3 / 3 to 3 / 3 / 4 | 1,608 | 4,681 | 3,783 to 3,818 | 3,072 | 1,614 | 58 to 62 / 167 to 180 / 135 to 147; 0.075 / 0.026 / 0.031 |
+| #8917's cut, G = 128 | 2^-5 | 0.1 | 7,511,522 | -101.11 / -100.61 / -99.51 | 314 | 471 / 629 / 471 | 4 / 3 / 4 to 4 / 4 / 4 | 1,713 | 4,797 | 3,895 to 3,930 | 3,182 | 1,718 | 61 to 66 / 171 to 185 / 139 to 151; 0.070 / 0.025 / 0.031 |
+| #8917's cut, G = 128 | 2^-6 | 0.03 | 3,623,108 | -102.16 / -101.67 / -100.56 | 652 | 783 / 979 / 979 | 5 / 4 / 4 to 4 / 4 / 5 | 1,891 | 4,932 | 4,043 to 4,078 | 3,340 | 1,897 | 68 to 73 / 176 to 190 / 145 to 157; 0.063 / 0.024 / 0.029 |
+| #8917's cut, G = 128 | 2^-7 | 0.03 | 1,811,597 | -103.16 / -102.67 / -101.56 | 1,305 | 1,567 / 1,959 / 1,959 | 5 / 4 / 4 to 4 / 5 / 5 | 2,355 | 5,573 | 4,632 to 4,669 | 3,888 | 2,360 | 84 to 91 / 199 to 215 / 166 to 180; 0.051 / 0.022 / 0.026 |
+| #8917's cut, G = 64 | 2^-4 | 0.125 | 15,335,043 | -100.08 / -99.58 / -98.48 | 153 | 230 / 307 / 307 | 4 / 3 / 3 to 3 / 4 / 4 | 1,189 | 3,583 | 2,883 to 2,911 | 2,329 | 1,193 | 42 to 46 / 128 to 138 / 103 to 112; 0.101 / 0.033 / 0.041 |
+| #8917's cut, G = 64 | 2^-5 | 0.11 | 7,610,309 | -101.09 / -100.59 / -99.49 | 310 | 465 / 465 / 465 | 4 / 4 / 4 to 4 / 4 / 4 | 1,298 | 3,715 | 3,008 to 3,036 | 2,450 | 1,303 | 46 to 50 / 133 to 143 / 108 to 117; 0.092 / 0.032 / 0.040 |
+| #8917's cut, G = 64 | 2^-6 | 0.04 | 3,671,602 | -102.14 / -101.65 / -100.54 | 643 | 772 / 966 / 966 | 5 / 4 / 4 to 4 / 4 / 5 | 1,475 | 3,847 | 3,153 to 3,181 | 2,605 | 1,479 | 53 to 57 / 138 to 148 / 113 to 122; 0.081 / 0.031 / 0.038 |
+| #8917's cut, G = 64 | 2^-7 | 0.03 | 1,826,302 | -103.15 / -102.65 / -101.55 | 1,295 | 1,554 / 1,943 / 1,554 | 5 / 4 / 5 to 5 / 5 / 5 | 1,940 | 4,489 | 3,743 to 3,773 | 3,154 | 1,944 | 69 to 75 / 160 to 173 / 134 to 145; 0.062 / 0.027 / 0.032 |
+| #8917's cut, G = 32 | 2^-4 | 0.15 | 16,735,370 | -99.95 / -99.46 / -98.35 | 140 | 211 / 281 / 281 | 4 / 3 / 3 to 3 / 4 / 4 | 976 | 3,031 | 2,430 to 2,454 | 1,955 | 980 | 35 to 38 / 108 to 117 / 87 to 94; 0.123 / 0.040 / 0.049 |
+| #8917's cut, G = 32 | 2^-5 | 0.125 | 8,191,389 | -100.99 / -100.49 / -99.38 | 288 | 432 / 432 / 432 | 4 / 4 / 4 to 4 / 4 / 4 | 1,085 | 3,159 | 2,552 to 2,576 | 2,073 | 1,089 | 39 to 42 / 113 to 122 / 91 to 99; 0.111 / 0.038 / 0.047 |
+| #8917's cut, G = 32 | 2^-6 | 0.05 | 3,831,233 | -102.08 / -101.58 / -100.48 | 616 | 740 / 925 / 925 | 5 / 4 / 4 to 4 / 4 / 5 | 1,265 | 3,299 | 2,704 to 2,728 | 2,234 | 1,269 | 45 to 49 / 118 to 127 / 97 to 105; 0.095 / 0.036 / 0.044 |
+| #8917's cut, G = 32 | 2^-7 | 0.04 | 1,898,023 | -103.09 / -102.60 / -101.49 | 1,246 | 1,495 / 1,495 / 1,495 | 5 / 5 / 5 to 5 / 5 / 5 | 1,728 | 3,942 | 3,294 to 3,320 | 2,782 | 1,732 | 62 to 67 / 141 to 152 / 118 to 128; 0.069 / 0.030 / 0.036 |
+
+- **The row of record** is "whole, 2^-6": 4,074 / 10,641 / **8,721 to 8,796 as built**. It holds one M to 677 at K0 = 6, so 2^-100.62 at 442 (the select at the plan's LM-head cut), 2^-101.72 at 205.
+- **The cheapest** is "whole, 2^-4": 3,853 / 10,558 / **8,597 to 8,674 as built**, under its two conditions (the largest count at most 162 at K0 = 6; a coin cap of 2^25). The gap to the row of record is 221 GB no program, 84 as `main` is, 122 to 124 as built.
+- With #8917's cut the κ 2^-6 rows read 4,043 to 4,078 / 3,153 to 3,181 / 2,704 to 2,728 GB as built at G = 128 / 64 / 32.
+- One row does not hold what its neighbours do: G = 32 at κ 2^-4 (margin 0.15) reaches M = 140 at K0 = 6, below 145 (2^-99.95). It holds by stratum only.
+- **Which Lean instance, by K alone** [derived from CONCRETE's 12:44Z caps, relayed: `K ≤ 2^33`; `_narrow` K ≤ 14·10^9; I did not check its N_s cap on my rows]. K a run = 6 Σk M. The row of record is inside `K ≤ 2^33` to M = 410 and inside `_narrow` to 669 (its reach is 677): at 442 it is in `_narrow`. κ 2^-4 (margin 0.1) is at 2^33.55 at M = 145, inside `_narrow` only, which it leaves at M = 161. κ 2^-5: 198 and 322 (reach 326). κ 2^-7: 825 and 1,345 (reach 1,363).
+
+**2. My 12:35Z table (margin 1/8) with the as-built column** [run]. The no-program and as-`main`-is cells stand as posted; the +373 and +1.4 cells are the same numbers under their new label. Bits at K0 = 6.
+
+| writers' cut | head block | (b) line held at 2^-100 | largest M | the least-GB plan holding it (margin 1/8) | its bits | no program (not what `main` verifies) | as `main` is (+783 core-s a statement) | the hoist as built (#8949, unmarked), one session a call (+554 to +563; a measured ratio applied by proportion: modeled) | what-if, unbuilt, no caller: the shared parse once a member (+373) | what-if, unbuilt, no caller: a window in one process (+1.4) |
+|---|---|---|---:|---|---:|---:|---:|---:|---:|---:|
+| the plan's | whole | by stratum | 4,130 | width, κ 2^-6 | -100.21 | 4,069 | 10,571 | 8,669 to 8,744 | 7,166 | 4,081 |
+| the plan's | whole | one M (PageCopy 97 or 205) | 4,130 | width, κ 2^-9 | -100.28 | 7,209 | 14,593 | 12,433 to 12,518 | 10,727 | 7,223 |
+| the final recut | whole | by stratum | 145 | width, κ 2^-4 | -100.42 | 3,861 | 10,593 | 8,624 to 8,701 | 7,068 | 3,873 |
+| the final recut | whole | one M, PageCopy 97 | 145 | width, κ 2^-4 | -100.15 | 3,861 | 10,593 | 8,624 to 8,701 | 7,068 | 3,873 |
+| the final recut | whole | one M, PageCopy 205 | 205 | width, κ 2^-5 | -100.65 | 3,937 | 10,635 | 8,676 to 8,753 | 7,128 | 3,949 |
+| the final recut | #8917's cut, G = 128, reading A | by stratum | 332 | width, κ 2^-4 | -100.32 | 1,617 | 4,713 | 3,807 to 3,843 | 3,092 | 1,623 |
+| the final recut | #8917's cut, G = 128, reading A | one M (PageCopy 97 or 205) | 332 | width, κ 2^-6 | -101.00 | 1,916 | 4,980 | 4,084 to 4,119 | 3,376 | 1,921 |
+| the final recut | #8917's cut, G = 128, reading B | by stratum | 145 | width, κ 2^-4 | -100.40 | 1,617 | 4,713 | 3,807 to 3,843 | 3,092 | 1,623 |
+| the final recut | #8917's cut, G = 128, reading B | one M, PageCopy 97 | 145 | width, κ 2^-4 | -100.09 | 1,617 | 4,713 | 3,807 to 3,843 | 3,092 | 1,623 |
+| the final recut | #8917's cut, G = 128, reading B | one M, PageCopy 205 | 205 | width, κ 2^-5 | -100.60 | 1,727 | 4,848 | 3,935 to 3,971 | 3,214 | 1,733 |
+| the final recut | #8917's cut, G = 64, reading A | by stratum | 588 | width, κ 2^-4 | -100.52 | 1,189 | 3,583 | 2,883 to 2,911 | 2,329 | 1,193 |
+| the final recut | #8917's cut, G = 64, reading A | one M (PageCopy 97 or 205) | 588 | width, κ 2^-6 | -100.16 | 1,501 | 3,891 | 3,192 to 3,219 | 2,639 | 1,505 |
+| the final recut | #8917's cut, G = 64, reading B | by stratum | 145 | width, κ 2^-4 | -100.77 | 1,189 | 3,583 | 2,883 to 2,911 | 2,329 | 1,193 |
+| the final recut | #8917's cut, G = 64, reading B | one M, PageCopy 97 | 145 | width, κ 2^-4 | -100.08 | 1,189 | 3,583 | 2,883 to 2,911 | 2,329 | 1,193 |
+| the final recut | #8917's cut, G = 64, reading B | one M, PageCopy 205 | 205 | width, κ 2^-5 | -100.58 | 1,300 | 3,726 | 3,016 to 3,044 | 2,456 | 1,305 |
+| the final recut | #8917's cut, G = 32, reading A | by stratum | 1,100 | width, κ 2^-4 | -100.14 | 980 | 3,035 | 2,434 to 2,458 | 1,959 | 983 |
+| the final recut | #8917's cut, G = 32, reading A | one M (PageCopy 97 or 205) | 1,100 | width, κ 2^-7 | -100.07 | 1,769 | 4,015 | 3,360 to 3,385 | 2,841 | 1,773 |
+| the final recut | #8917's cut, G = 32, reading B | by stratum | 145 | width, κ 2^-4 | -100.52 | 980 | 3,035 | 2,434 to 2,458 | 1,959 | 983 |
+| the final recut | #8917's cut, G = 32, reading B | one M, PageCopy 97 | 145 | width, κ 2^-5 | -100.99 | 1,085 | 3,159 | 2,552 to 2,576 | 2,073 | 1,089 |
+| the final recut | #8917's cut, G = 32, reading B | one M, PageCopy 205 | 205 | width, κ 2^-5 | -100.49 | 1,085 | 3,159 | 2,552 to 2,576 | 2,073 | 1,089 |
+
+- A check on "the same proportion" [run; relayed for yours]: the record's plan at the plan's cut reads 16,683 as `main` is and 13,682 to 13,802 as built in my model (ratio 0.820 to 0.827); yours goes from 16,738 to between 13,710 and 13,830 (0.819 to 0.826).
+- As built keeps 71% to 72% of what the program costs: of the 6,732 GB between no program and `main` on this table's κ 2^-4 row, 4,763 to 4,840 remain.
+
+**3. BENCHCROSS's condition (values units at 2^26 once a key row has a writer), the same columns** [run]. Rows that repeat another reading's figures are dropped.
+
+| head block (the final recut) | (b) line | plan (margin 1/8) | values units at 2^26: no program (not what `main` verifies) | as `main` is (+783 core-s a statement) | the hoist as built (#8949, unmarked), one session a call (+554 to +563; a measured ratio applied by proportion: modeled) | what-if, unbuilt, no caller: the shared parse once a member (+373) | what-if, unbuilt, no caller: a window in one process (+1.4) |
+|---|---|---|---:|---:|---:|---:|---:|
+| #8917's cut, G = 128, reading A | by stratum | width, κ 2^-4 | 2,461 | 6,924 | 5,619 to 5,670 | 4,587 | 2,469 |
+| #8917's cut, G = 128, reading A | one M (PageCopy 97 or 205) | width, κ 2^-6 | 2,765 | 7,203 | 5,905 to 5,956 | 4,879 | 2,773 |
+| #8917's cut, G = 128, reading B | one M, PageCopy 205 | width, κ 2^-5 | 2,566 | 7,045 | 5,735 to 5,787 | 4,700 | 2,574 |
+| #8917's cut, G = 64, reading A | by stratum | width, κ 2^-4 | 2,464 | 6,925 | 5,620 to 5,672 | 4,589 | 2,472 |
+| #8917's cut, G = 64, reading A | one M (PageCopy 97 or 205) | width, κ 2^-6 | 2,777 | 7,295 | 5,980 to 6,032 | 4,932 | 2,785 |
+| #8917's cut, G = 64, reading B | one M, PageCopy 205 | width, κ 2^-5 | 2,568 | 7,048 | 5,738 to 5,789 | 4,702 | 2,576 |
+| #8917's cut, G = 32, reading A | by stratum | width, κ 2^-4 | 2,531 | 7,098 | 5,762 to 5,815 | 4,707 | 2,539 |
+| #8917's cut, G = 32, reading A | one M (PageCopy 97 or 205) | width, κ 2^-7 | 3,266 | 8,008 | 6,622 to 6,676 | 5,526 | 3,274 |
+| #8917's cut, G = 32, reading B | one M, PageCopy 97 | width, κ 2^-5 | 2,618 | 7,172 | 5,840 to 5,892 | 4,787 | 2,626 |
+
+**Left.** The reprice on SCALE's `For HARMSEARCH:` cells (the select's cut and count, due 13:45Z): blocked on SCALE. #8878, #8893, #8904, #8950: nothing pushed; heads as in my ready lines.
+
+For BREAKEVEN: no change of plan. The as-built setup on my rows is +554 to +563 core-s on every statement of every type (`fixed += 1.1390177 × (0.7401388857748433/60.56) × X`), a planner call at each end. The row of record is width, margin 0.03, κ 2^-6 (Σk 3,487,090); the cheapest is width, margin 0.1, κ 2^-4 (Σk 14,448,210).
+
+For the table: the final recut's row of record, head whole, κ 2^-6, margin 0.03, world year, modeled 0.4 [run; modeled; unbuilt]: **4,074 GB no program (not what `main` verifies) / 10,641 as `main` is / 8,721 to 8,796 the hoist as built (#8949, unmarked), one session a call**; what-ifs with no caller: 7,203 (+373), 4,086 (+1.4). (b), over the served wiring; modeled; no Lean statement at the code is behind it; K at Pr[refused] = 0; K0 = 6: 2^-102.22 at M = 145 over the kinds the plan prices, one M to 677; the token select is in no stratum and uncounted; per-rank windows. At the design's own registration cap (4 / 3 / 4; a registration that samples more is refused, 2^-40) [run, the planner's `registration_cap`]: one M to 1,017 / 1,356 / 1,017.
+For the table: beside it, the cheapest, κ 2^-4, margin 0.1: 3,853 / 10,558 / **8,597 to 8,674 as built**; what-ifs 7,047, 3,865; conditions: the largest count at most 162 at K0 = 6, a coin cap of 2^25. With #8917's cut (unbuilt; key rows unwritten), κ 2^-6, G = 128 / 64 / 32: 1,891 / 1,475 / 1,265 no program; 4,932 / 3,847 / 3,299 as `main` is; **4,043 to 4,078 / 3,153 to 3,181 / 2,704 to 2,728 as built**.
+For the table: measured engine rate on node A (a floor; not at the headline's mix; cannot show 300 GB is met), the row of record: 146 to 157 / 380 to 410 / 312 to 339 GB; it stops holding at utilization 0.029 / 0.011 / 0.014.
