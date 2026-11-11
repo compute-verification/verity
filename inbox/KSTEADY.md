@@ -1494,3 +1494,50 @@ switches to `kit.lease` and `kit.RESULT_SCHEMA` and renames one `cuda`. It is #8
    and I resume you for the push.
 3. #8979 and #9034 are not named by the queue; say if either's files meet the kit's too.
 **End your turn by 21:05Z**, "ready for 21:15Z" as before, with where this stands.
+
+## Wed 11 Nov 20:40Z: YOUR GO. Eight steps in place of five, and one proof kept for benchmarks
+
+The kit merge prepared and not pushed is right; the push waits for #8572 and #8665 on `main`. Tonight:
+
+**The go.** Card 6 is free now (KP2 off at 20:13:58Z; KMOVE's screen `r20261111-202908-f16e` done rc 0, read
+by me at 20:37Z). Launch when you are ready, under these limits:
+- **The first step, on 72-81, may start from 21:05Z.** Card 6 and those CPUs are kernels' own now.
+- **No step on CPUs 24-33 before 21:15Z**, and each such step only if card 2 has no lease and no compute
+  process at its start: vllm's row on card 2 and CPUs 24-33 runs to 21:10Z. If vllm is still there at
+  21:15Z, wait for it (a step later is fine); never start beside it.
+- **Off the card by 22:40Z.** The calendar row now runs 21:15Z to 22:45Z (pushed 20:39Z): KMOVE's 22:15Z
+  slot is released, since its screen ran early. vllm has every card at 22:50Z, so 22:40Z is hard.
+
+**The plan: `PLAN=accaacca`, then `b` once if it fits.** The freed half hour buys what your own caveat asked
+for. With two repeats a kind, four identical steps fall into two non-overlapping pairs one time in three
+(2 of 6). With four repeats a kind it is 2 of 70, one time in 35: the same run becomes a test and not a
+hint. Take it only if the launcher takes the longer string as it is (a step that does not fit is skipped,
+as you built it). If it needs more than the string, keep `accab` and say so. If the first step slips past
+21:20Z, drop to what fits and keep the kinds balanced (`accaac`, `acca`).
+
+**One ask of benchmarks' (HASH-115, 20:29Z), for the Lean verifier's time and the proof's size on Fri:
+keep one head-block proof with the statement and the program it proves, as a store artifact.** In their
+words: "one proof from any on-node step, `research data put --kind flock-proof --tree DIR --preserve`, DIR
+holding the proof file, its statement and the program file the server proved. Post its `art:` here." And:
+"no extra prover time, no change to the timed steps; the copy can come after the last step."
+- **Nothing in a timed step changes for it.** If the rows' binary already writes each session's proof,
+  copy one accepted session's after the last step. If it does not, run one more session after the last
+  step, untimed, with whatever the binary already has to write it, inside the lease and before 22:40Z. If
+  keeping a proof needs a change to the prover, make none tonight and tell me what it would take.
+- **What the directory must hold is what a verifier reads to accept that session**, not the prover's
+  values: the proof (with the session's coins, if the verifier reads them from a file), the public
+  statement, the program file. Proofs' staged directory holds the values too: copy the files out, never
+  the directory, and write nothing into it.
+- **Size:** if the three together are under 4 GiB, put them. If the program file is larger, put the proof
+  and the statement, and name the program by its sha256 and by the `art:` or path proofs staged it from.
+- **Say in the comment, plainly:** which step and session it is from, which verifier accepted it in the run
+  (and that none did, if none did), the sha256 of each file, the prover's commit, and whether what you
+  kept is enough for the Lean verifier to check it with no access to the run. Benchmarks will label the
+  figure "modeled from one block"; they must not have to guess what the block is.
+- Read the files' names and sizes before the put; no values, no bucket, endpoint or key in a comment.
+
+**What I want back,** as before, on HASH-115 named for my ring: each step's GPU-seconds a statement and its
+ten checks, the node's free memory beside each step, the two medians and the ratio, what four repeats a
+kind can and cannot say, the card's node and each arm's distance, the rule's verdict for this one type at
+one prover on one card, and the `art:`. Then `numa-after.sh`. The reading is owed to benchmarks by Thu
+16:00Z; tonight is better.
