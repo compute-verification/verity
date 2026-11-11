@@ -95,6 +95,36 @@ theorem front_inst {j tr : Json} {f : Front} (h : front j tr = .ok f) :
   repeat (split at h <;> try cases h)
   exact ⟨by assumption, by assumption⟩
 
+/-- What `front` checks of the Program it reads: no reference out of order, the root laid out, input nodes at the root
+only, every body walkable, and every unit's rows its own. -/
+theorem front_program {j tr : Json} {f : Front} (h : front j tr = .ok f) :
+    f.P.orderViolation = none ∧ Desc.rootLaidOut f.P = true ∧ Desc.inputsAtRoot f.P = true ∧
+      Desc.walkable f.P = true ∧ ownRows f.P = true := by
+  unfold front at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  repeat (split at h <;> try cases h)
+  rename_i P _ ho hl hw _ _ _ _ _ _ _ _ _ _ _ hown
+  show P.orderViolation = none ∧ Desc.rootLaidOut P = true ∧ Desc.inputsAtRoot P = true ∧
+    Desc.walkable P = true ∧ ownRows P = true
+  simp only [Bool.not_eq_true', Bool.not_eq_false, Bool.and_eq_true] at hl hw hown
+  refine ⟨?_, hl.1, hl.2, hw, hown⟩
+  cases hov : P.orderViolation with
+  | none => rfl
+  | some x => rw [hov] at ho; exact absurd rfl ho
+
+/-- A Program whose templates the text's reader gives has no root node of a composite keyed as an input id. -/
+theorem templatesOf_keyed {P : Flock.Program.Prog} {doc : Json} {ts : List Tmpl} (h : templatesOf P doc = .ok ts) :
+    keyedAsInput P = false := by
+  unfold templatesOf at h
+  simp (config := { iota := false }) only [bind, Except.bind, pure, Except.pure, throw, throwThe,
+    MonadExceptOf.throw] at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · rename_i hk
+      simpa using hk
+
 /-- A record `read` accepts passed `front`, then `finish` on that front. -/
 theorem read_front {j tr : Json} {c : Case} (h : read j tr = .ok c) :
     ∃ f pin, front j tr = .ok f ∧ finish f pin = .ok c := by
@@ -138,6 +168,17 @@ theorem inst_of_read {j tr : Json} {c : Case} (h : read j tr = .ok c) :
   obtain ⟨f, pin, hf, hc⟩ := read_front h
   obtain ⟨rfl, -⟩ := finish_text hc
   exact front_inst hf
+
+/-- **What `read` checks of the Program**, on a record it accepts: no reference out of order, the root laid out,
+input nodes at the root only and none of a composite keyed as an input id, every body walkable, and every unit's
+rows its own. -/
+theorem program_of_read {j tr : Json} {c : Case} (h : read j tr = .ok c) :
+    c.f.P.orderViolation = none ∧ Desc.rootLaidOut c.f.P = true ∧ Desc.inputsAtRoot c.f.P = true ∧
+      Desc.walkable c.f.P = true ∧ ownRows c.f.P = true ∧ keyedAsInput c.f.P = false := by
+  obtain ⟨f, pin, hf, hc⟩ := read_front h
+  obtain ⟨rfl, -⟩ := finish_text hc
+  obtain ⟨h1, h2, h3, h4, h5⟩ := front_program hf
+  exact ⟨h1, h2, h3, h4, h5, templatesOf_keyed (front_text hf)⟩
 
 /-- **The wiring's cuts and wires are the text's**, on a record `read` accepts. -/
 theorem wiring_of_read {j tr : Json} {c : Case} (h : read j tr = .ok c) :
