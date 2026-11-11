@@ -575,7 +575,7 @@ def inputsOf (callees : Array String) (defs : Json) : Flock.TemplateQuery.Desc w
   callees := callees
   defs := match defs with
     | .obj kvs => kvs.toArray.map fun (id, dj) =>
-      (id, ({ prim := get dj "form" == Json.str "primitive", nodes := #[] } : Flock.TemplateQuery.DDef))
+      (id, ({ prim := jsonStrIs (get dj "form") "primitive", nodes := #[] } : Flock.TemplateQuery.DDef))
     | _ => #[]
   root := ""
   sha512 := ByteArray.empty
