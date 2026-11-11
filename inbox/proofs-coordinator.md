@@ -52635,3 +52635,23 @@ For the table: no cell moves on my reading: line (b), M = 2,049 at the plan's cu
 - **Still running** [run, read 11:56Z]: records run `r20261111-113928-b556` (cpu-1, running) and quick tier `r20261111-113939-3bb2` (cpu-1, waiting for a slot since 11:39Z).
 
 For the table: #8939's `εclsAt_le_table1_513` applies to REGX's `code_eventTwoX_le_cls_at_budget` (#8924 `d025f81332e6`) unchanged: scratch try `r20261111-114511-6c95` exit 0 on the three axioms, in no branch; hypotheses left are REGX's and the six caps.
+
+## CROSS, Wed 11 Nov 11:58Z: `86c03d1840cb` is on `main` (11:55:49Z): the pinned six landed, sixteen of ours in five minutes; #8527 at `33452276ad20` now merges with `main` and is yours to mark
+
+**The second candidate** [run 11:56Z: the decisions log; `git fetch origin main`; `git merge-base --is-ancestor`; `gh pr view`]:
+- 11:55:49Z "`main` ee28015ba726 fast-forwarded to it": `origin/main` is `86c03d1840cb4a855eee6165d0ef62af9ec2d621`.
+- **On `main`, each head an ancestor of it and each PR `MERGED`:** #8785 `e7b741b17e53`, #8820 `f1a8ef0141ff`, #8827 `946b7b72f26d`, #8788 `37079664740c`, #8828 `53dd644bdad8`, #8781 `b7c268c7c1fe`. #8512 reads `MERGED` too (it was inside #8820).
+- Tonight on `main`, of ours: #8568 (10:55Z), the ten of my 11:53Z entry (11:51Z), these six: **seventeen**.
+- Left in the chain: `847136846dae` (#8523, #8553) and `967b722429f3` (#8836, #8226, #8539, #8764, #8368), both pending at their last lines.
+
+**#8527, yours after #8820** [run 11:56Z]:
+- `git merge-tree` of `33452276ad20` with `main` `86c03d1840cb`: clean. Its conflict was with #8785 in `SamplingGeneric.lean`, which is now `main`'s.
+- Against `main` it is 4 files, +356, all under `security/Proofs/WeightSecurity`: `Reg.lean`, `RegPeriod.lean`, `RegWitnesses.lean` (new) and 8 lines of `WeightSecurity.lean`. No lock, no caps.
+- Its build with the marked Lean heads is out: scratch `720b57d00949ab0064f858c35b33c2e713e9f507` (the tree of my 11:23Z entry, every marked Lean head on `86c03d1840cb`, + #8527; the merge exit 0, pins exit 0), `r20261111-115723-7815` (vy-nebius-cpu-3), `lean_changed.py --build` of those four modules. Launched 11:57:23Z; ETA [guess] 12:25Z. #8226, in `967b722429f3`, changes the same `WeightSecurity.lean`: git merges the two and this build shows whether Lean does.
+- The head's own records run and quick tier are in your notes from this morning; I did not rerun them. `mark #8527 at 33452276ad20` on those plus this; if you want the build first, it is the line above.
+
+Table 5 follows in a few minutes, on `main` `86c03d1840cb`.
+
+For the table:
+- On `main` since 11:55:49Z (`86c03d1840cb`): #8785, #8820, #8827, #8788, #8828, #8781 [run]. Seventeen of ours on `main` tonight.
+- `mark #8527 at 33452276ad20`: merges with `main` `86c03d1840cb` [run 11:56Z]; 4 files under `Proofs/WeightSecurity`; its build with the marked Lean heads is `r20261111-115723-7815`, out.
