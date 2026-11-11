@@ -71,14 +71,14 @@ def test_the_instance_meets_the_headline():
     one, fold skippers at the whole-unit luck ½, binds. The vector classes are CUDA's lane classes and the 64-bit
     ones."""
     i = H.instance()
-    n = {k: i.nw.get(k, 0) + i.nf.get(k, 0) + i.ns.get(k, 0) for k in {*i.nw, *i.nf, *i.ns}}
-    assert i.pistar == "DS_issue" and H.load(i, "DS_issue", n) == i.B
+    assert i.pistar == "DS_issue" and i.B == H.load(i, "DS_issue", {k: i.nw.get(k, 0) + i.nf.get(k, 0) + i.ns.get(k, 0)
+                                                                   for k in {*i.nw, *i.nf, *i.ns}})
     assert i.cert == {"DS_issue": Fraction(3564, 3761), "DS_smem": Fraction(197, 3761)}
     w, phi = H.stars(i, i.cert, i.writers, i.folds)
     assert (i.Nw * w, i.Nw * phi) == (Fraction(3564, 3761), 16 * Fraction(3564, 3761))
-    assert Fraction(7, 8) == H.P and Fraction(1, 8) == H.LN_P
+    assert H.P == Fraction(7, 8) and H.LN_P == Fraction(1, 8)
     assert i.folded < Fraction(5806, 100000) < i.unfolded == i.bound
-    assert H.exact_logs(i) <= float(i.bound) < float(H.EPS) and Fraction(5860, 100000) == H.EPS
+    assert H.exact_logs(i) <= float(i.bound) < float(H.EPS) and H.EPS == Fraction(5860, 100000)
     assert set(H.VEC_64) <= set(i.vec) and len(set(i.vec)) == len(i.vec)
 
 
@@ -100,11 +100,11 @@ def test_the_measured_instance_meets_its_reading():
     i = H.instance()
     m = H.measured(i)
     n = {k: i.nw.get(k, 0) + i.nf.get(k, 0) + m.ns.get(k, 0) for k in {*i.nw, *i.nf, *m.ns}}
-    assert H.VECTOR == "VF3s-16" and Fraction(2, 15) == H.LN_P_M
+    assert H.VECTOR == "VF3s-16" and H.LN_P_M == Fraction(2, 15)
     assert m.pistar == "JI3t_0" and m.B == H.mload(m, "JI3t_0", n) == max(H.mload(m, r, n) for r in m.rows)
     assert m.wstar == "IMMA16832" and dict(m.writers)["IMMA16832"] == 128 and not set(H.OFF_MENU) & set(dict(m.writers))
     assert m.unfolded < m.folded == m.bound
-    assert H.exact_logs(m) < float(m.bound) < float(H.EPS_M) and Fraction(591, 100000) == H.EPS_M
+    assert H.exact_logs(m) < float(m.bound) < float(H.EPS_M) and H.EPS_M == Fraction(591, 100000)
 
 
 def test_no_census_program_beats_the_measured_vector():

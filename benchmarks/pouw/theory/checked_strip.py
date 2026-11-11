@@ -387,10 +387,10 @@ def check_program(targets, nb, prog):
 
 def limbs(lo, hi):
     """int8 limbs an operand with values in [lo, hi] needs: 1 if it is s8 or u8, else the signed 8m-bit width."""
-    if (lo >= -128 and hi <= 127) or (lo >= 0 and hi <= 255):
+    if (-128 <= lo and hi <= 127) or (0 <= lo and hi <= 255):
         return 1
     m = 2
-    while not (lo >= -(1 << (8 * m - 1)) and hi < (1 << (8 * m - 1))):
+    while not (-(1 << (8 * m - 1)) <= lo and hi < (1 << (8 * m - 1))):
         m += 1
     return m
 
@@ -728,7 +728,7 @@ def main():
     Pt_rng = (Ph_rng[0] + alphabet[0], Ph_rng[1] + alphabet[-1])
     X_rng = (-128, 126 + 1)
     checks.check("A2 U's 128 letters lie in [−64, 64]; P̂ = P + c, P̃ = P̂ + U and X = V + b are int8",
-                 len(alphabet) == 128 and Pt_rng[0] >= -128 and Pt_rng[1] <= 127 and X_rng[1] <= 127,
+                 len(alphabet) == 128 and -128 <= Pt_rng[0] and Pt_rng[1] <= 127 and X_rng[1] <= 127,
                  f"U in [{alphabet[0]}, {alphabet[-1]}], P̂ in {list(Ph_rng)}, P̃ in {list(Pt_rng)}, X in {list(X_rng)}")
     lt = {}
     for kk, rr, vb in [(4096, 32, 8), (14336, 32, 8), (128, 32, 8), (128, 64, 8), (128, 64, 7), (4096, 2048, 7)]:

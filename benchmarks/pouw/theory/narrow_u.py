@@ -112,7 +112,7 @@ def main():
         P_rng, Pt_rng = (-(127 - N), 126 - N), (-(127 - N) + letters[0], 126 - N + 1 + letters[-1])
         checks.check(f"A{N} U's {2 * N} letters are ±1..±{N} (no 0, both parities); P̂ = P + c and P̃ = P̂ + U are "
                      f"int8 with P in {list(P_rng)}",
-                     letters == [v for v in range(-N, N + 1) if v] and Pt_rng[0] >= -128 and Pt_rng[1] <= 127,
+                     letters == [v for v in range(-N, N + 1) if v] and -128 <= Pt_rng[0] and Pt_rng[1] <= 127,
                      f"P̃ in {list(Pt_rng)}")
 
         nz, k6, r6 = 16, 256, 32
