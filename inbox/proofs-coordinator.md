@@ -36895,3 +36895,43 @@ No definition I use changes if refused passes stay in the rerun: a refused pass 
 W at any design (cells are at W = K); d at GLM-5.3; that a cap on K is public; REGX's and #8512's Lean (read, not built); `pr_unfound_le_at` for the session term; SCALE's entry (not read, as asked). The finder is in no Lean, and its trace and deterministic half are on REGX's branch, not `main`.
 
 For Daniel: at two stages the 100-bit finder still works, with the same formula and constant 2, if for values committed after the first coins it reruns only the second stage; the count is the bits one audit's sample reads, about 2^25 to 2^40 depending on which sampling design is registered, giving 131 to 96 bits for one audit [derived, run; K relayed]. Two things it needs are not on `main`: one new clause saying a session opens only what its sampled blocks need (true of our code), and the committed trace for the interior, which REGX's branch already states and proves with the old square-root error (2^-18 at B, 2^-7 at A) [read, run]. My earlier count by block with no new clause does not carry over to two stages [derived, run].
+
+## CONCRETE, Wed 11 Nov 02:36Z: the probe of `sparse9` itself is read: between the two heads its term differs in the power's instance and in nothing else, and the two forms are equal by `rfl`; nothing is committed; a third run prints it on `main`'s own tree (`r20261111-023529-340b`, ETA about 03:15Z)
+
+**The two terms** [run: `lean_changed.py --try` on one scratch file that imports `Concrete.File`, `set_option pp.explicit true in #print FlockDeploy.Concrete.sparse9`; lean exit 0 in both]
+- Head `05c89e29e099`, `r20261111-022112-bcf5` (cpu-1; `Concrete.File` built there in 609 s):
+
+      fun r =>
+        @Option.getD Sparse
+          (@Except.toOption String Sparse
+            (Sparse.ofRows r
+              (@HPow.hPow Nat Nat Nat (@instHPow Nat Nat (@instPowNat Nat instNatPowNat))
+                (@OfNat.ofNat Nat (nat_lit 2) (instOfNatNat (nat_lit 2)))
+                (@OfNat.ofNat Nat (nat_lit 9) (instOfNatNat (nat_lit 9))))))
+          (@default Sparse instInhabitedSparse)
+
+- Old head `a6723b6558`, `r20261111-022133-680e` (cpu-1; built in 646 s): the same term but for its fifth line:
+
+              (@HPow.hPow Nat Nat Nat (@instHPow Nat Nat (@NPow.toPow Nat (@Monoid.toNPow Nat Nat.instMonoid)))
+
+**The one difference** [run: `diff` of the two probe outputs, whole]
+- That line of the term.
+- `sparse9`'s value hash (`Expr.hash`): 1010574871 at the head, 2154541740 at the old head. Its type hash is 146011433 at both.
+- The constants the term names: `instPowNat` and `instNatPowNat` at the head; `NPow.toPow`, `Monoid.toNPow` and `Nat.instMonoid` at the old head.
+- Nothing else. The other constants its type and value name have the same type hash and value hash at both: `Flock.Sparse.ofRows` (961737919, 4257593142), `Flock.instInhabitedSparse` (834408856, 3047694234), `Inhabited.default`, `Except.toOption`, `Option.getD`, `HPow.hPow`, `instHPow`, `OfNat.ofNat`, `instOfNatNat`, `Flock.Sparse`, `Array`, `Nat`, `String`. `#synth Inhabited Flock.Sparse` answers `instInhabitedSparse` at both, and `Sparse.ofRows : Array (Array ℕ) → ℕ → V Sparse` at both. `Flock/Comp.lean` and `Concrete/File.lean` each have one sha256 across the two runs.
+
+**The two forms are one value** [run, both heads]
+- The scratch file states `sparse9`'s text twice with the instance written out: `coreForm` (core's) and `mathlibForm` (Mathlib's).
+- `example : coreForm = mathlibForm := rfl`, `example : FlockDeploy.Concrete.sparse9 = coreForm := rfl`, `example : FlockDeploy.Concrete.sparse9 = mathlibForm := rfl` and the bare `2 ^ 9` equation by `rfl` all elaborate.
+- `sparse9`'s stored value is syntactically `coreForm`'s at the head and `mathlibForm`'s at the old head (`==` on the two `Expr`s: true, false; and false, true).
+
+**What is not yet `main`** 
+- The "before" tree above is my old head, not `main` [run]. There `Concrete/File.lean` has the head's bytes and sees Mathlib through `Text.lean`. That `main`'s term is the same is one step: at the old head the Lean check regenerated nothing (`c5f4`), so the term's SHA-256 there is the one `main`'s lock holds [run, then derived].
+- lean asked for `main` itself, so `r20261111-023529-340b` (cpu-1, launched 02:35Z, cap 60 min) runs the same file on the tree of `2b869ed35db5`, the branch's base; `Concrete/File.lean` is unchanged from there to today's `main` `a930252c4993` [read]. ETA about 03:15Z [guess: on `main` the file compiles last in a long chain].
+
+**Your words** [read]
+- I follow the mailbox's 02:26Z and 02:31Z entries over the 02:17Z turn's step 2: no commit of either kind before the layout move, and the lock comes from the records run on the moved tree. So `2fc1`'s lock is not committed.
+- Both entries also reached me as shell-hook refusals; I acted only after reading them in the mailbox file.
+- I wrote no 02:17Z entry: what you read of the stand-in `p` was my 02:23Z checkpoint line (`ac82`).
+
+**Left**: read `340b` and say if it shows anything else; the PR body (both terms, the sentence, the two hashes, lean's correction about its branch; a first version goes in now, marked where `main`'s print is still owed); after the layout move is on `main`: the mailbox once more, `tools/move/restack.py`, the records run with `--update` on the moved tree and its lock as one commit, the quick tier, then "ready to mark".
