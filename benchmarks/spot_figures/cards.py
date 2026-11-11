@@ -21,7 +21,10 @@ which prices it until the `proof_overhead` card measures its type; they add up a
 1's line of its own.  A `verifier_cost` card gives the verifier's core-seconds a statement by block prefix, a family's
 other types on the line through its members (or through the fixed seconds at size 0 and its one member), any other type
 at the measured types' median, and the core-seconds that cost one GPU-second, which Figure 1 adds to each statement's
-fixed seconds.  A card reaches the figures by art id, a later one naming the earlier card it replaces:
+fixed seconds.  A `headline` card holds the post's headline rows, each with its cells (S, verifier step, scope) and its
+`basis` (`BASES`): `served-measured`, `served-card-priced` or `design`, with what sets it; a `measured` headline card
+holds only `served-measured` rows, and Figure 5 names each row's basis.  A card reaches the figures by art id, a later
+one naming the earlier card it replaces:
 
     uv run python benchmarks/spot_figures/cards.py check CARD.json ...       # refuses unknown and missing fields
     research data put --kind spot-card/v1 --file CARD.json --preserve --json
@@ -90,6 +93,11 @@ TAX = {"config": F(str, choices=CONFIGURATIONS), "status": F(str, choices=("pric
        "low": F(NUM), "high": F(NUM), "lower_bound": F(bool), "parts": F(list, each=TAX_PART), "runs": _opt(list)}
 VERIFY_TYPE = {"block": F(str), "core_seconds": F(NUM), "peak_gb": F(NUM, nullable=True), "runs": _opt(list)}
 VERIFY_FAMILY = {"types": F(list), "size": F(str, nullable=True), "members": F(list)}
+#: what a headline row or a Figure 5 step rests on: the served cut with every type measured on served values and every
+#: lever measured; the served cut at the proof-overhead card's prices; a cut no serving path commits, or an estimate
+BASES = ("served-measured", "served-card-priced", "design")
+HEADLINE_ROW = {"row": F(str), "label": F(str), "pricing": F(str), "basis": F(str, choices=BASES),
+                "basis_from": F(list), "rests_on": F(list), "cells": F(dict), "runs": F(list)}
 SLOTS = {
     "workload": {"ranks": F(int), "device": F(str), "request": F(dict), "tokens": F(int), "weights_bytes": F(NUM),
                  "strata": F(list, each=STRATUM), "served_macs_per_token": _opt(NUM, nullable=True),
@@ -115,7 +123,24 @@ SLOTS = {
     "verifier_cost": {"verifier": F(str), "device": F(str), "core_seconds_per_gpu_second": F(NUM),
                       "ratio_source": F(str), "fixed_seconds": F(NUM), "types": F(list, each=VERIFY_TYPE),
                       "families": F(list, each=VERIFY_FAMILY)},
+    "headline": {"bases": F(list), "rows": F(list, each=HEADLINE_ROW), "quote": F(str)},
 }
+
+
+def _cells(cells: dict, where: str) -> list[str]:
+    """A headline row's cells: each S, then each verifier step, then each scope's share of the compute it covers."""
+    errors = []
+    for s, by_step in cells.items():
+        if not isinstance(by_step, dict):
+            errors.append(f"{where}[{s!r}]: {type(by_step).__name__}, but it is an object of verifier steps")
+            continue
+        for m, by_scope in by_step.items():
+            if not isinstance(by_scope, dict):
+                errors.append(f"{where}[{s!r}][{m!r}]: {type(by_scope).__name__}, but it is an object of scopes")
+                continue
+            errors += [f"{where}[{s!r}][{m!r}][{scope!r}]: {v!r}, but it is a share, a number at least 0"
+                       for scope, v in by_scope.items() if not isinstance(v, NUM) or isinstance(v, bool) or v < 0]
+    return errors
 
 
 def _fields(obj: dict, spec: dict, where: str) -> list[str]:
@@ -181,6 +206,15 @@ def check(card: dict) -> dict:
         errors += [f"partition.value.strata[{i}]: no k_log, so no staged witness bits to price it by until its type is "
                    "measured; give the k_log circuit-check stages it at"
                    for i, x in enumerate(value["strata"]) if "k_log" not in x]
+    if slot == "headline" and not errors:
+        rows = value["rows"]
+        if card["status"] == "measured":
+            errors += [f"headline.value.rows[{i}]: basis {r['basis']!r}, but a measured headline card holds only "
+                       "served-measured rows; mark the card modeled" for i, r in enumerate(rows)
+                       if r["basis"] != "served-measured"]
+        errors += [f"headline.value.rows[{i}]: basis {r['basis']!r} with an empty basis_from; name what sets it"
+                   for i, r in enumerate(rows) if r["basis"] != "served-measured" and not r["basis_from"]]
+        errors += [e for i, r in enumerate(rows) for e in _cells(r["cells"], f"headline.value.rows[{i}].cells")]
     if slot == "workload" and not errors and value.get("served_macs_per_token") is not None:
         in_blocks = sum(s["per_token"] * s["macs"] for s in value["strata"])
         if value["served_macs_per_token"] < in_blocks * (1 - 1e-9):
