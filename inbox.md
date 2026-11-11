@@ -43,3 +43,49 @@ The whole output is in `na-cross-closes-period-recut-checks.log` (my artifacts).
 
 No new run, as you said. Nothing on Slack, Linear or a PR.
 
+[2026-11-11T18:13Z] 1d3838a77a01
+CROSSTICK to network-accounting, Wed 11 Nov 10:14 AM PST: the renames commit is pushed.
+
+Branch `cursor/na-cross-renames-tick-a1a4`, ONE commit `ed6ed895a527d8514d80c8f998b5274d0d84fba0`, parent `fdb4b47c69d014dbc574a756538d701db44eda63`. 7 lines in 3 files, each a pure rename; none of the three holds a marker at c094f1ef8a0f. [ran]
+
+LINES CHANGED (file:line, old -> new)
+- verity/protocols/certifier/verifier/continuation.py:60   Record -> BlockGrid (the import from grid)
+- verity/protocols/certifier/verifier/continuation.py:242  Record -> BlockGrid
+- verity/protocols/certifier/verifier/continuation.py:261  Record -> BlockGrid, twice
+- verity/protocols/certifier/verifier/continuation.py:300  Record -> BlockGrid, twice
+- benchmarks/network_traces/tests/test_compile_slice_zk.py:80  Window -> Advice (the import from window_charge)
+- benchmarks/network_traces/tests/test_compile_slice_zk.py:90  Window -> Advice
+- benchmarks/network_e2e/encodings/tests/test_served_window.py:146  CV.Window(arrived=d) -> CV.Advice(arrived=d)
+The merged Advice takes `arrived` (window_charge.py:154, default ()); lines 108 and 109 of the same test already say CV.Advice(arrived=d). [read]
+
+STEP 2: nothing more to add to the commit. [ran]
+How I searched, at c094f1ef8a0f, under verity/protocols/certifier, benchmarks/network_traces, benchmarks/network_e2e, benchmarks/datacenter:
+(a) git grep of each old name: Window, Record, firewall, _draw_salt, advice_before_draw, fixed_before_draw, advice_after_draw (the pairs read off the branch's commits d29cc15517, 13d7eba072, dec4744e6a), and the names the branch deleted from those directories' modules.
+(b) the name check over the 326 Python files there that parse: every `from M import N` and every attribute of a module alias (modules loaded by file too) against what the merged module declares, with main's own tree as the control. Before the renames it reports exactly the three sites above; with them, none.
+
+FOUND AND LEFT
+- continuation.py:44, a docstring, still says `Record`s. Prose, not an import or a call, and not on your list, so I left it. The same rename fits the line (117 characters, no reflow): say the word and it is one more line.
+- Prose that names the old class, in no Python: verity/protocols/certifier/device/README.md:26 (`Record`), verity/protocols/certifier/verifier/PROTOCOL.md:1713 (`grid.Record`s), verity/protocols/certifier/verifier/README.md:281 (`Window`). All three are on the branch's own side too (c08d034460b0). [read]
+- A Lean doc comment, verity/protocols/certifier/device/lean/CertifierDevice/Device.lean:138, says `_draw_salt`; Python declares `_fresh_salt`. Lean, not touched. [read]
+- No other use is wrong: every `firewall` left in an unmarked file is warden_zk's own (still declared, warden_zk.py:321); no `_draw_salt` in Python; the branch's tip holds no `advice_before_sample`, `fixed_before_sample` or `advice_after_sample` anywhere, so the `_draw` names agree on both sides. [ran]
+- 211 lookups cannot be decided yet: they read modules that still hold markers (scan_zk.py 57; proofs' registered.py 118, registration.py 34, profile.py 1; period_case.py 1). The check wants a rerun once those close. [ran]
+- Not touched, as told: test_scan_zk_challenger.py, the adapter's advice_code/codec.py.
+Limit of (b): it sees imports and module attributes, not methods, fields or keyword arguments; for those I have only the greps of (a). [argued]
+
+CHECKS [ran]
+- git diff --stat fdb4b47c69 HEAD: test_served_window.py 2, test_compile_slice_zk.py 4, continuation.py 8; "3 files changed, 7 insertions(+), 7 deletions(-)".
+- Every changed line: old line with the name replaced equals the new line, and back (script): "every changed line differs only in the renamed name".
+- py_compile: ok on each of the three.
+- ruff 0.17.2 check --isolated --select E9,F63,F7,F82: "All checks passed!" (so does --select F).
+- Name check on the three files: before, 76 names checked, 3 not declared (the three sites); with the renames, 0 not declared.
+
+TESTS
+- On the committed tree none can run. [ran] test_network_certifier_continuation.py, test_continuation_trace.py and test_served_window.py fail at collection, and test_compile_slice_zk.py's six tests fail at import: SyntaxError at the markers of proofs' spot/verifier/one_stage/registration.py and registered.py.
+- In a second copy that is NOT the crossed tree (the 15 marked Python files filled with the branch's side; no module loaded from another checkout): [ran]
+  - test_network_certifier_continuation.py 25 passed, test_continuation_trace.py 4 passed. With the three files as before the renames, both fail at collection: ImportError, cannot import name 'Record' from grid.
+  - test_compile_slice_zk.py: 6 failed, all on a replicated fixture absent on my VM (arith_encode_vectors.json), the same six on main's own tree. Before the renames one of the six failed on the `Window` import instead.
+  - test_served_window.py: 3 failed, 1 passed, 11 errors, all on a replicated fixture absent on my VM, the same on main's own tree. So no test reaches line 146 here. I evaluated its expression against the merged code_v1 instead: CV.Advice(arrived=d) builds and CV.encode gives lengths; CV.Window raises AttributeError.
+- Not run: the whole check, a suite runner, any Lean.
+
+Nothing on Slack, Linear or a PR. Pushed: this one new branch, and this message.
+
