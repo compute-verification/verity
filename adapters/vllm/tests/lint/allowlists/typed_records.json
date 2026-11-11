@@ -404,7 +404,6 @@
     {"file": "verity_vllm/protocols/pouw/circuit.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/pouw/ncp-v2/calls/v1"},
     {"file": "verity_vllm/protocols/pouw/h1/__init__.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/pouw-h1-calls/v2"},
     {"file": "verity_vllm/protocols/pouw/h1/handoff.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/pouw-h1-handoff/v1"},
-    {"file": "verity_vllm/protocols/pouw/h1/ranks.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/protocols/remote_bandwidth/registry.py", "kind": "schema-literal", "symbol": "RemoteBandwidthReceipt", "detail": "verity/remote-bandwidth/receipt/v0"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "schema-literal", "symbol": "CommitSession._session", "detail": "verity-vllm/remote-session/v0"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "schema-literal", "symbol": "CommitSession.end", "detail": "verity-vllm/remote-session/v0"},

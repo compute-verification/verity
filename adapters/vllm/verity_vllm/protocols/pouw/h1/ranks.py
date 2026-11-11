@@ -226,7 +226,7 @@ class RankExtension:
                 try:
                     rc = com.finalize()
                     out = {"lo": st["run"].lo, **CT.committed(com, rc, ("expected_tensors", "committed_tensors", "errors_n")),
-                           "errors": [str(e)[:300] for e in (rc.extra.get("errors") or [])][:8]}
+                           "errors": [str(e)[:300] for e in rc.extra.get("errors", [])][:8]}
                 finally:
                     com.close()
                     tap.untap()
@@ -281,7 +281,7 @@ class Holder:
             rows += o["rows"]
         tap = None if self.run.served is None else self.run.served.tap
         if tap is not None:
-            got = [o.get("acquired") or [] for o in outs]
+            got = [o.get("acquired", []) for o in outs]
             if len(steps := {int(x[1]) for a in got for x in a}) > 1:
                 tap.refused.append(f"one pull held engine steps {sorted(steps)}: the window's tap keeps one step a site")
             for i, a in enumerate(got):
