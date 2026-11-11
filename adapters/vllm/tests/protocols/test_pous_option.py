@@ -3,7 +3,7 @@
 The model's layers are a stand-in linear type (`pous.linear_types`) holding an int8 weight [N, K] and its f32
 ``weight_scale`` [N, 1] as the ``int8_exact`` target's linears do, and P2 runs at the small point's 1,024-bit blocks, 8 a
 segment (`pous._base`), so encoding takes milliseconds.  The layout, the commitment, the salt, the codec, the root, the
-period's audit and the memory challenger are `verity.protocols.pous.verifier`'s and `benchmarks/pous/p2_v1/store.py`'s own; the
+period's audit and the memory challenger are `verity.protocols.pous.verifier`'s and `verity/protocols/pous/prover/p2/p2_store/store.py`'s own; the
 memory challenger's key is the PoUS tests' test signer, its clock a counter.
 """
 from __future__ import annotations

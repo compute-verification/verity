@@ -65,9 +65,9 @@ inputs = ["verity", "verity/protocols/spot/verifier/lean/lakefile.toml", "verity
           "verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py",
           "adapters/vllm/verity_vllm", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",
-          "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/gpu.py", "benchmarks/pous/p2_v1/reference.py",
-          "benchmarks/pous/p2_v1/wire.py", "benchmarks/pous/p2_v1/vectors.json", "benchmarks/pous/p2_v1/audit-vectors.json",
-          "benchmarks/pous/p2_v1/audit-negative-vectors.json", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json",
+          "verity/protocols/pous/prover/p2/p2_store/store.py", "verity/protocols/pous/prover/p2/p2_store/gpu.py", "verity/protocols/pous/verifier/p2_v1/reference.py",
+          "verity/protocols/pous/verifier/p2_v1/wire.py", "verity/protocols/pous/verifier/p2_v1/vectors.json", "verity/protocols/pous/verifier/p2_v1/audit-vectors.json",
+          "verity/protocols/pous/verifier/p2_v1/audit-negative-vectors.json", "verity/protocols/poub/verifier/bandwidth-mem69-v2.json",
           "benchmarks/torch_gpu/p2_stage/layout.py", "benchmarks/torch_gpu/p2_stage/stage.py",
           "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py"]
 

@@ -2,7 +2,7 @@
 held as words of one field (`wt.cu` built at -DWT_RECEIPT=1: the fused decode, sketch-sha512 at k_s = 16 or 64
 (`--rows`) and the FP8 MMA, then the step's receipt tree, `reader.cu`'s), and a bf16 KV cache that fills the
 rest of the GPU's memory at `--batch` sequences,
-held as words of the same field and decoded inside attention (`benchmarks/word_codec/kv.cu`'s `kv_attn`); the step's new tokens' KV is encoded (`step.cu`'s
+held as words of the same field and decoded inside attention (`verity/protocols/poub/prover/word_codec/kv.cu`'s `kv_attn`); the step's new tokens' KV is encoded (`step.cu`'s
 `kv_append`, all layers in one launch on a second stream, beside the step). Where kv.cu runs form 13
 the KV carries the same receipts: each token-layer is one of the store's registered 4 KiB chunks (store-order/v0),
 attention is `kv_attn`'s form 13, which sketches the words it decodes under the pass's signs (`kv_rc_pass`, from
@@ -61,14 +61,14 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((HERE.parents[1] / "benchmarks/codec_tensor/reader.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/poub/prover/codec_tensor/reader.py").parent))
 
 import bench as BW  # noqa: E402
 import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
 
 sys.path.insert(0, str(HERE.parent / "word_codec"))
-sys.path.insert(0, str((HERE.parents[1] / "benchmarks/word_codec/kv_bench.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/poub/prover/word_codec/kv_bench.py").parent))
 import kv as K  # noqa: E402
 import kv_bench as KB  # noqa: E402
 import kv_exhaust as KE  # noqa: E402

@@ -662,7 +662,7 @@ KNOWN: dict[str, str] = {
     "verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py::Draw":
         "homonym, one synthetic benchmark draw: rename (compute-accounting)",
     "benchmarks/one_stage/a5_coins.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
-    "benchmarks/pous/p2_v1/store.py::Store":
+    "verity/protocols/pous/prover/p2/p2_store/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a client of it (memory-accounting)",
     "benchmarks/pouw/accel_v31/v31.py::Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",

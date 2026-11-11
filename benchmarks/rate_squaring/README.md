@@ -8,7 +8,7 @@ the evidence for the bandwidth audit's (PoUB, `verity/protocols/poub/verifier`) 
 fits a form's cycles to its instruction classes, and `gamma.py` and `wide.py` turn the rates into x₁ and γ tables.
 
 **Status: active.** `benchmarks/word_codec/encode_rate.sh` builds and runs `sq.cu`, `sq_gate.py` and `sass_mix.py`;
-`benchmarks/word_codec/kv.cu` and `benchmarks/codec_tensor/wt.cu` take their FOLD 6 form from `sq.cu`; and the audit's
+`verity/protocols/poub/prover/word_codec/kv.cu` and `benchmarks/codec_tensor/wt.cu` take their FOLD 6 form from `sq.cu`; and the audit's
 `timing.py` cites `gamma.py`. Decided by `rg rate_squaring` over `verity/`, `benchmarks/`, `demos/`, `tests/` and
 `adapters/`. `gamma.py`, `wide.py` and `cycle_fit.py` are a finished study beside the parts others run.
 

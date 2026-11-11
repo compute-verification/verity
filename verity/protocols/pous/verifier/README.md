@@ -198,7 +198,7 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `sha512_keys_indexed`,
   `encode_segment`, `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the
   fastest cooperating 16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`).
-  `benchmarks/pous/p2_v1/reference.py` is the reference: its maps and key streams are `schemes.p2`'s (its field and
+  `verity/protocols/pous/verifier/p2_v1/reference.py` is the reference: its maps and key streams are `schemes.p2`'s (its field and
   `sha512_keys_indexed`) under the reference's names and refusals, its `K_AUDIT`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`
   are `CERT_K`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`, its `DEPLOYMENT` is the certificate's store as a `P2Params`
   (`Params.of`), its salt, key prefix, leaves and derivations are its own, and
@@ -234,4 +234,4 @@ authentication, 4 late, 5 decode or payload comparison; 6 is transport and 0 suc
 The vectors are `vectors.json` (schema `p2-test-vectors/v4`), `audit-vectors.json` and `audit-negative-vectors.json`
 beside `reference.py`, which pins each file's SHA-512 (`VECTORS_SHA512`, `AUDIT_VECTORS_SHA512`,
 `NEGATIVE_VECTORS_SHA512`) and each entry's by width (`ENTRY_SHA512`, which `PousCheck.SetupDifftest` holds too).
-`cd benchmarks/pous && uv run python -m p2_v1.vectors` regenerates them and rewrites their pins.
+`cd benchmarks/pous && uv run python -m verity.protocols.pous.verifier.p2_v1.vectors` regenerates them and rewrites their pins.

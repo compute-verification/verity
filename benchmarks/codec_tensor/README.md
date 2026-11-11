@@ -6,7 +6,7 @@ codec. `wt.cu` is the codec, a fused decode with its receipts, held to `wide.py`
 against the audit's `receipts.py`. `sketch_receipt.py` is the reference for the audit's `sketch-sha512` receipt.
 `step.cu` (`step.py`, `step.sh`) is one decode step at HBM exhaustion, and `sha512.cuh` is SHA-512 for the kernels.
 
-**Status: active.** `benchmarks/remote_session/session.cu` includes `reader.cu`; `benchmarks/kv_filler`,
+**Status: active.** `verity/protocols/poub/prover/remote_session/session.cu` includes `reader.cu`; `benchmarks/kv_filler`,
 `benchmarks/vllm_encoded` and `benchmarks/harness` build `wt.cu` and `reader.cu`; `benchmarks/pouw/served_h1` includes
 `sha512.cuh`; and the audit's `PROTOCOL.md` and vectors test name `sketch_receipt.py`. Decided by `rg codec_tensor` over
 `verity/`, `benchmarks/`, `demos/`, `tests/` and `adapters/`.

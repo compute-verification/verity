@@ -97,7 +97,7 @@ from typing import Any
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from p2_v1 import reference
+from verity.protocols.pous.verifier.p2_v1 import reference
 
 from verity.protocols.pous.verifier import setup, verifier
 from verity.protocols.pous.verifier.labels import salt_value, tag
@@ -680,7 +680,7 @@ class GpuEncoder:
     def __init__(self, params: P2Params, salt: bytes, lib: str, device: int) -> None:
         import torch
 
-        from p2_v1.gpu import Kernels
+        from p2_store.gpu import Kernels
 
         torch.cuda.set_device(device)
         self.torch, self.params = torch, params
@@ -918,7 +918,7 @@ def _decoder(params: P2Params, salt: bytes, lib: str | None) -> Any:
                                            [c[i * params.block_bytes:(i + 1) * params.block_bytes] for i in range(params.blocks_per_segment)])
     import torch
 
-    from p2_v1.gpu import Kernels
+    from p2_store.gpu import Kernels
 
     K = Kernels(lib, "", reference.Params.of(params), expand_prefix(params, salt))
     n, nb, pb, p = params.blocks_per_segment, params.block_bytes, params.payload_bytes, params.p
@@ -1001,7 +1001,7 @@ def spot_cmd(a: argparse.Namespace) -> int:
     if a.p2_lib:
         import torch
 
-        from p2_v1.gpu import Kernels
+        from p2_store.gpu import Kernels
 
         gpu = (torch, Kernels(a.p2_lib, "", reference.Params.of(params), prefix))
     rng = random.SystemRandom()

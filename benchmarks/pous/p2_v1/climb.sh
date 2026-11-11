@@ -27,12 +27,12 @@ if [ ! -x "$PY" ]; then
     && uv pip install -q --python "$PY" torch==2.14.0 --index-url https://download.pytorch.org/whl/cu130 || exit 3
 fi
 if [ ! -d "$CG/.git" ]; then
-  git clone -q https://github.com/NVlabs/CGBN "$CG" && git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
+  git clone -q https://github.com/NVlabs/CGBN "$CG" && git -C "$CG" checkout -q "$(cat verity/protocols/pous/prover/p2/p2_gpu/CGBN.commit)" || exit 3
 fi
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bin:$(dirname "$PY"):$PATH
 export PYTHONPATH=$(pwd):${PYTHONPATH:-}
 GMPINC=$("$PY" -c 'import gmpy2, os; print(os.path.dirname(gmpy2.__file__))')
-[ "$(git -C "$CG" rev-parse HEAD)" = "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" ] || { echo "CGBN is not at the pinned commit"; exit 3; }
+[ "$(git -C "$CG" rev-parse HEAD)" = "$(cat verity/protocols/pous/prover/p2/p2_gpu/CGBN.commit)" ] || { echo "CGBN is not at the pinned commit"; exit 3; }
 ARCH=${ARCH:-sm_120}
 mkdir -p "$WORK"
 B=$(mktemp -d "$WORK/build.XXXXXX"); trap 'rm -rf "$B"' EXIT
@@ -42,7 +42,7 @@ for spec in "$@"; do
   d=$B/$name; mkdir -p "$d"
   base="-O3 -arch=$ARCH -std=c++17 -DP2_BITS=16448 -DP2_TPI=32 -DXMP_WMAD -DP2_PARTS=2 -DP2_SYM -DP2_TPB=64 -DP2_LIBRARY"
   # shellcheck disable=SC2086
-  nvcc $base $flags -Xcompiler -fPIC -shared -I "$GMPINC" -I "$CG/include" -o "$d/libp2v1.so" "$(dirname benchmarks/pous/p2_v1/p2v1.cu)/$src" \
+  nvcc $base $flags -Xcompiler -fPIC -shared -I "$GMPINC" -I "$CG/include" -o "$d/libp2v1.so" "$(dirname verity/protocols/pous/prover/p2/p2_store/p2v1.cu)/$src" \
     -Xptxas -v > "$O/$name.ptxas" 2>&1 &
   PIDS+=($!)
   printf '{"name": "%s", "source": "%s", "flags": "%s %s"}\n' "$name" "$src" "$base" "$flags" > "$d/build.json"

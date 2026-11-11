@@ -340,7 +340,7 @@ class P2V1Gpu:
 
     def conformance_gate(self) -> dict[str, Any]:
         sys.path.insert(0, str(HERE))
-        from p2_v1 import reference
+        from verity.protocols.pous.verifier.p2_v1 import reference
 
         return reference.conformance()
 
@@ -422,7 +422,7 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     ap.add_argument("--step-reps", type=int, default=200, help="band-gpu: single-row Π₂ calls timed per kernel variant")
     ap.add_argument("--nvme-dir", default="", help="band-gpu, p2-v1-gpu: also time one block's read of C from a file here (O_DIRECT)")
     ap.add_argument("--nvme-samples", type=int, default=2000, help="band-gpu, p2-v1-gpu: block reads timed from --nvme-dir")
-    ap.add_argument("--p2-lib", default=str((ROOT / "benchmarks/pous/p2_v1/Makefile").parent / "bin"), help="p2-v1-gpu: the directory of libp2v1.so")
+    ap.add_argument("--p2-lib", default=str((ROOT / "verity/protocols/pous/prover/p2/p2_store/Makefile").parent / "bin"), help="p2-v1-gpu: the directory of libp2v1.so")
     ap.add_argument("--p2-encode-blocks", type=int, default=2048,
                     help="p2-v1-gpu: blocks encoded on the device for encode GB/s (0: all; the rest of C is random canonical)")
     ap.add_argument("--p2-c-cache", default="",

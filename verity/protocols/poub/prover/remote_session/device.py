@@ -65,7 +65,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "codec_tensor"))
 sys.path.insert(0, str(HERE.parent / "word_codec"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
 
 import cuda_lib  # noqa: E402
 from verity.protocols.poub.verifier import audit, coins, receipts as rb  # noqa: E402
