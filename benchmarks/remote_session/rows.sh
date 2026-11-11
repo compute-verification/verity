@@ -71,6 +71,11 @@ NVCC=$(first "${CUDA_HOME:-/nonexistent}/bin/nvcc" /usr/local/cuda-12.9/bin/nvcc
   /usr/local/cuda/bin/nvcc)
 [ -n "$NVCC" ] || { say "PREFLIGHT: no nvcc (CUDA_HOME, /usr/local/cuda-12.9, -13.0)"; exit 3; }
 export CUDA_HOME=${NVCC%/bin/nvcc} PATH=${NVCC%/nvcc}:$PATH
+# `cuobjdump -sass` runs nvdisasm. Where NVCC's toolkit has none, another toolkit's goes last on the PATH: same_sass.py
+# compares two listings the same nvdisasm made, each instruction with its encoding.
+command -v nvdisasm > /dev/null || for d in /usr/local/cuda*/bin; do
+  [ -x "$d/nvdisasm" ] && { PATH=$PATH:$d; break; }
+done
 [ -x "$HOME/.elan/bin/lake" ] && export PATH=$HOME/.elan/bin:$PATH
 if [ -z "${ARCH:-}" ]; then
   case $(nvidia-smi --query-gpu=name --format=csv,noheader -i "${CARDS%%,*}" 2> /dev/null) in
@@ -82,7 +87,7 @@ fi
 B=$(mktemp -d /tmp/rows64.XXXXXX); trap 'rm -rf "$B"' EXIT
 export B
 { id -un; hostname; git -C "$TREE" rev-parse HEAD; echo "cores ${CORES:-not pinned} ($(nproc)) cards $CARDS arch $ARCH"
-  "$NVCC" --version | tail -n 2; cat /sys/fs/cgroup/cpu.max; nvidia-smi -L; command -v lake cuobjdump
+  "$NVCC" --version | tail -n 2; cat /sys/fs/cgroup/cpu.max; nvidia-smi -L; command -v lake cuobjdump nvdisasm
 } > "$O/machine.txt" 2>&1
 
 FLAGS=(-O3 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
