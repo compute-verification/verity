@@ -265,7 +265,7 @@ class Ctx:
     def module_path(self, node) -> str | None:
         if node is None or not isinstance(node, torch.fx.Node):
             return None
-        stack = node.meta.get("nn_module_stack") or {}
+        stack = node.meta.get("nn_module_stack")
         if not stack:
             return None
         _path, cls = list(stack.values())[-1]
@@ -273,7 +273,7 @@ class Ctx:
         return f"{path or '<root>'} ({cls.__name__ if isinstance(cls, type) else str(cls).rsplit('.', 1)[-1]})"
 
     def module_class(self, node) -> str | None:
-        stack = node.meta.get("nn_module_stack") or {}
+        stack = node.meta.get("nn_module_stack")
         if not stack:
             return None
         _, cls = list(stack.values())[-1]
@@ -290,7 +290,7 @@ class Ctx:
         from `...mlp.experts`), a duplicate registration replaced by the first (`...mlp.shared_experts.act_fn`, the collector's name).
         A ROOTED duplicate stays under the duplicate name (C1 coverage FAILS it as missing, never a silent merge); an unrooted
         entry under NO registered path keeps its bare name and is COUNTED in `unresolved_module_paths` (provenance)."""
-        stack = node.meta.get("nn_module_stack") or {}
+        stack = node.meta.get("nn_module_stack")
         if not stack:
             return ""
         entries = [str(p or "") for p, _c in stack.values()]

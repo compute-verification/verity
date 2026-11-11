@@ -353,7 +353,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
         return hit[1]
 
     for node in fx_nodes:
-        stack = node.meta.get("nn_module_stack") or {}
+        stack = node.meta.get("nn_module_stack")
         module = ctx.stack_path(node) if stack else ""
         mcls = ctx.module_class(node) if stack else None
         t = node.target
