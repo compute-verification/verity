@@ -117,8 +117,9 @@ def moved(la, tree: Path, pkgs: list[str], diff: list[str]) -> int:
     """How many Lean modules the builds of ``pkgs`` hold whose key (`module_keys`) the change ``diff`` can move: a module with
     a changed input (its source, its package's lakefile, a file a module of its package may read as it compiles) or whose
     package's own manifest changed, every module of a build whose toolchain or manifest changed, and every module that
-    imports one of those, each source file counted once. An upper bound on what the audit compiles, read from the tree's headers with no build: a key reads an
-    import by its outputs, which an edit may leave as they were. A module `module_keys` gives no key isn't counted."""
+    imports one of those, each source file counted once. An upper bound on what the audit compiles, read from the tree's
+    headers with no build: a key reads an import by its outputs, which an edit may leave as they were. A module
+    `module_keys` gives no key isn't counted."""
     changed, out = set(diff), set()
     for pkg in pkgs:
         keyed = la.MK.keys(tree / pkg)
