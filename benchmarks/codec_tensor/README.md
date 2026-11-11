@@ -18,9 +18,9 @@ What code outside this directory may use. Everything else here is internal.
 
 Nothing outside `benchmarks/` reads this directory by its path.
 
-**Status: active.** `verity/protocols/poub/prover/remote_session/session.cu` includes `reader.cu`; `benchmarks/kv_filler`,
-`benchmarks/vllm_encoded` and `benchmarks/harness` build `wt.cu` and `reader.cu`; `benchmarks/pouw/served_h1` includes
-`sha512.cuh`; and the audit's `PROTOCOL.md` and vectors test name `sketch_receipt.py`. Decided by `rg codec_tensor` over
+**Status: active.** `benchmarks/kv_filler`, `benchmarks/vllm_encoded` and `benchmarks/harness` build `wt.cu`;
+`benchmarks/vllm_encoded` reads `wide.py`; and this suite holds the prover's `sketch_receipt.py` and `sketching.py` to
+the audit's code. Decided by `rg codec_tensor` over
 `verity/`, `benchmarks/`, `demos/`, `tests/` and `adapters/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/codec_tensor` checks `wide.py`, `sketch_receipt.py`
