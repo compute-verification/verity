@@ -29,8 +29,9 @@ and its schedule: the engine's counters on ``/metrics`` before and after it (`SC
 
 The arms, each one engine configuration; each adds its change to the arm it names as its parent:
 
-- ``compiled``: stock vLLM at the pin, its defaults (torch.compile and CUDA graphs, chunked prefill, prefix caching,
-  async scheduling), FP8 where the checkpoint is FP8;
+- ``compiled``: stock vLLM at the pin, its defaults (CUDA graphs, with torch.compile on the architectures vLLM
+  compiles, which are not the ones it captures breakable CUDA graphs for, GLM-5.3's among them; chunked prefill,
+  prefix caching, async scheduling), FP8 where the checkpoint is FP8;
 - ``compiled-again``: ``compiled`` in a second server lifetime, which changes nothing: what two starts of one engine
   differ by, the noise floor of a cost (`cost_report`);
 - ``no-prefix-cache``: ``--no-enable-prefix-caching``;
@@ -207,7 +208,7 @@ ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True}
 #: rows and salts kept on the node
 TABLES = {"layers": 1, "private": PRIVATE}
 ARMS = {
-    "compiled": Arm(None, "stock vLLM, compiled (torch.compile, CUDA graphs)"),
+    "compiled": Arm(None, "stock vLLM, its defaults (CUDA graphs, and torch.compile where vLLM compiles the model)"),
     "compiled-again": Arm("compiled", "stock vLLM in a second server lifetime: what two starts of one engine differ by"),
     "no-prefix-cache": Arm("compiled", "prefix caching off", ("--no-enable-prefix-caching",)),
     "published": Arm("compiled", "stock vLLM as its recipe for the model starts it: the recipe's flags and context limit, "

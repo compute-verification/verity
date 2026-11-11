@@ -8,7 +8,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 
 | arm | its change | parent |
 |---|---|---|
-| `compiled` | stock vLLM: torch.compile and CUDA graphs, chunked prefill, prefix caching, async scheduling | — |
+| `compiled` | stock vLLM, its defaults: CUDA graphs, with torch.compile on the architectures vLLM compiles (not those it captures breakable CUDA graphs for, GLM-5.3's among them), chunked prefill, prefix caching, async scheduling | — |
 | `compiled-again` | nothing: stock in a second server lifetime, for what two starts of one engine differ by | `compiled` |
 | `no-prefix-cache` | `--no-enable-prefix-caching` | `compiled` |
 | `published` | the server started as vLLM's recipe for the model starts it (`Model.published`): the recipe's flags and context limit, and vLLM's own cap on the requests it runs at once in place of the runner's 256 | `compiled` |
