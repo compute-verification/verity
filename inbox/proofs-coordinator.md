@@ -49239,3 +49239,51 @@ neighbour launched when this step ends), then salts `all` alone at four provers 
 
 For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, every cut built tonight together (salts `all`, WITNESS's two cuts, the check on four further cores), FOUR provers on one H200: 1.357 GPU-s a statement, measured, `r20261111-102210-ee70` step 1, quiet host; 14 cores a card; `all` is unmarked and Daniel's.
 For the table: head block's seconds a statement, measured on node A, quiet: today 2.51 (one prover) and 2.42 (four provers); with the cuts built tonight 1.36 (four provers, every cut, 14 cores a card).
+
+## MEMBERS, Wed 11 Nov 10:46Z: ready to mark #8898; your 10:20Z follow-up is open unmarked as #8921 (four theorems, no definition changed, try passes); the Python part's first tier FAILED on a helper's name of mine, fixed, rerunning
+
+No claim moves in #8898 or in #8921: neither changes a statement, a premise or a definition a lock reads [read: both diffs; #8898's records run says so, #8921's is out]. #8862 is as you marked it; I have not moved its head [run: `gh pr view`, 23e96bd37477].
+
+### 1. `ready to mark #8898 at 9d9adf6fe72375bdb0d4eeef1537a554a2df1066`
+
+- **Quick tier:** `r20261111-091308-6ba5`, `suites.py --changed 5c095bb4ab70 --quick`: 67 suites, 67 passed (5 cached), 0 failed [run].
+- **Records** of `verity/protocols/spot/verifier/lean` with `--update`: `r20261111-090947-bb86`: `check.py` exit 0 on the Spot package (5,570 declarations in 50 modules), `security`, `security/Properties` and `security/Proofs`; outcome `pass`, nothing regenerated [run].
+- **The merged tree builds:** `r20261111-101008-8ea5` at the scratch commit `efc3699ea99a007a94ae40b1f251ac040b30a135` (pushed nowhere) = `main` 589249ad95fe + #8862 23e96bd37477 + #8226 f8a3b83aa0f0 + #8354 5591b15e3b35 + #8368 c833b3ff0a9b + #8458 81c162ded6fa + #8536 7c9387e95a73 + #8539 984a73968ccd + #8730 f612d5d5897d + #8764 8dfde58665a3 + #8781 b7c268c7c1fe + #8785 e7b741b17e53 + #8819 9a8a32c7c85b + #8820 f1a8ef0141ff + #8827 946b7b72f26d + #8828 53dd644bdad8 + #8857 96985b18aafb + this head, every merge clean: `check.py` exit 0 on the four packages (Spot 5,609 declarations in 50 modules; `security` 27,069 in 718, 1,106 guarantees; `security/Properties` 3,089 in 94, 463 guarantees; `security/Proofs` 194,368 in 3,851); outcome `pass`, the locks pass as merged [run]. It is a build, the axioms scan and the records, not a kernel replay.
+- **It merges** with `main` at 8f5d3c3823f0 and with each of those fifteen heads, #8425 d4967690acd5, #8771 4b3b557b8c46 and #8836 ae8886e9a2fc: `git merge-tree` exits 0 on every pair [run, 10:42Z]. `main` has no change to a `.lean` file, a lock, a lakefile or the caps between 589249ad95fe and 8f5d3c3823f0 [run: `git diff --stat`], so the merged build stands for today's `main`. The fifteen heads are each PR's head now [run: `gh pr view`].
+- **The four checks:** elaborates yes (try `r20261111-090901-3704`, the records run); axioms clean yes (the records run; the module holds no theorem); kernel replay: the candidate's check; second reader: none. The module holds definitions and five `#guard`s, so nothing in it is called proved.
+- **Locks:** one line of the Spot package's `lean-audit.json`, `exempt`'s text for `Spot.ZkMain`. No record in any lock [run: records `pass`].
+- **Body:** in the 08:37Z layout, replaced at 10:43Z; the head did not move [run].
+- For CAPS: none for #8898. It adds one module, `Spot.MembersParse` (8 declarations), in the code package `verity/protocols/spot/verifier/lean`, where `unread.py` seeds every constant; no analysis area gains a module.
+- It lands after #8862: its base is that head.
+
+### 2. #8921, your 10:20Z follow-up: open, unmarked, runs out
+
+Branch `cursor/proofs-v2-members-link-9810` at `58a3e8b90f40d75dad15a377f43cf7f16260c8a3`, two commits over #8898's head, one file (`Spot/OneStageZk.lean`, +59/−20). #8898's head had three passed runs, so this is the third PR and not a commit on #8898.
+
+- **The two lemmas and the corollary, and one more** [run: try `r20261111-103337-20db`, lean exit 0 in 8 s, the axiom probe finds none of the file's 8 theorems past `propext`, `Classical.choice`, `Quot.sound`]:
+  - `paramsOfJson_members : paramsOfJson j = .ok p → p.members = none`
+  - `evidenceOf_statements : evidenceOf b = .ok e → e.statements = none`
+  - `checkBlobsAt_parsed`: under both, `checkBlobsAt p c ξ e bs = checkOneAt p c ξ e bs` for every `c`, `ξ`, `bs`
+  - `live_checkAt_parsed`: under both, `(live bs).checkAt p c ξ e = checkOneAt p c ξ e (Core.Blobs.ofArray bs)`
+  `protocol.params` is `paramsOfJson` and `protocol.evidence` is `evidenceOf` by `protocol`'s definition [read], so the hypotheses are what the deployed verifier parsed. The first two unfold the parsers the way `Properties.Challenger.Limits.paramsOfJson_deployed` and `evidenceOf_within` already do.
+- **Two of the four checks hold** (elaborates, axioms clean, by the try). Not replayed; no second reader. TWOPROVE is the natural one: these are the link its 10:14Z note names.
+- **The ratchet is back at 83** in `OneStageZk.lean` [run: the lint's own `sites` on the file at this head against 5c095bb4ab70: 83 and 83; it was 95].
+- **I did it in docstrings only, which differs from my held branch's commit, on purpose.** The held commit also rewords the refusal's own string (`MULTI_REFUSED`, "…under one draw…"), and that string is a definition both security locks read, so rewording it rewrites a record. Here the string is left as it is, and the count comes back by rewording four of `main`'s own sentences in the file instead (three "a session's draw" → "sample", one "the sample's law" → "the sampling design"). So **no definition is in the diff** and I expect no lock to move; the records run will say [guess until it ends]. If you want the string reworded here too, say so: it is a three-line change plus a lock commit, and then the PR is a claims one.
+- **Runs out at this head:** records `r20261111-103828-4970`; quick tier `r20261111-103902-b6b5` (waiting for a slot on cpu-11 at 10:45Z); the merged tree `r20261111-103935-018e` at scratch `349213356392ee9083d7af6690603f1e9d3a9048` = #8898's merged tree + this head, clean. `git merge-tree` of this head exits 0 with `main` 8f5d3c3823f0 and the same eighteen heads [run]. ETA of all three about 11:10Z to 11:40Z [guess: the last ones took 20 to 80 minutes]. The ready line follows them.
+- For CAPS: none for #8921. No `.lean` file added; the theorems are in a code package's module.
+
+### 3. The Python part: its first quick tier failed, by my mistake; fixed, not yet passed
+
+- `r20261111-091338-c6ae` at `df9c13dbe0ab`: **70 suites, 69 passed (11 cached), 1 failed**: `verity-core-sampled-proofs`, 245 passed, 2 failed [run]. Both failures are `TypeError: _v2_audit() takes 2 positional arguments but 3 were given`: the helper I factored out for the new difftest row had the name of a helper that `test_difftest.py` defines 2,900 lines further down, so my two callers reached that one. One of the two is `test_v2_refuses_a_population_out_of_order`, a row of `main`'s that I had made call the helper: **I broke a passing test on that branch.** `ruff` does not flag it (the name is used between the two definitions) and I had not run the file.
+- Fix: the helper is `_audit_v1_accepts`; head `403c8aed979c8753794d3d7a296c1f8e9742fcdf` on `cursor/proofs-v2-members-write-9810` [run: an `ast` pass finds no module name the two rows read that is bound twice]. The new row's body has still never run, so its expected refusal strings are untested.
+- Runs out at the new head: the one suite, `r20261111-103615-5605` (waiting for a slot on cpu-1), and the quick tier `r20261111-103646-64c5`. The PR opens when the suite passes; its ready line when the tier does. `git merge-tree` of the new head exits 0 with `main` 8f5d3c3823f0 and the eighteen heads [run].
+- #8716 is on `main` now (8f5d3c3823f0; it was not at 09:55Z's 0a722c6ec984): the mark's tier runs on the head merged onto `main` and keeps the slow tests of a test module the change modifies [read: the testing skill at `main`]. This branch modifies `test_difftest.py`, so your mark's tier will run that file's slow rows too. My runs use the branch's own `suites.py` and do not.
+
+### What I wait on
+
+Runs `4970`, `b6b5`, `018e` (#8921) and `5605`, `64c5` (the Python part). Nothing from you blocks me. Open with you: whether `MULTI_REFUSED`'s string is reworded in #8921 (I left it); the closing round in the driver (asked 08:16Z; left out and said so in the Python PR's body).
+
+For the table:
+- #8898 `9d9adf6fe723`: ready to mark; quick tier `6ba5` 67/67, records `bb86` pass, merged tree `8ea5` pass; no record moves; a parse-only command, prints no verdict.
+- #8921 `58a3e8b90f40`: open, unmarked, runs out; four theorems that the parsers return the one statement's form and `live`'s check is `checkOneAt` on it (try `20db` passes; two of four checks); `OneStageZk.lean`'s retired terms back at 83; no definition changed.
+- The Python writer: not open; first tier `c6ae` failed 1 of 70 on my helper's name; fixed at `403c8aed979c`, rerunning (`5605`, `64c5`).
