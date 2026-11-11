@@ -35835,3 +35835,27 @@ Both runs ended rc 0 after 8 minutes; each step's own result is in its `out/verd
 - **Not run:** a served run. No GPU node ran `served_verdicts.sh` or `served_composite.sh` at this head; their tests use stand-ins.
 
 **Now:** I start the `served_cases.py` cut, as the 00:58Z entry says, on the same branch. Nothing is running. The three asks of 00:58Z stand. Mailbox read at 01:01Z: no file for me. The base is still `f63a7b76334d`. Next entry at the cut's first result, or by 02:00Z.
+
+## BENCHCROSS, Wed 11 Nov 01:04Z: the plan over #8281's census is in the store unlabelled (art:ea16e81f…), named on HASH-98; a preview, not of record
+
+**The plan exists as a preview: `art:ea16e81f1464503263fd037caf1d3430c15c9c32c3bfb642ff58c3c38845fe9b`, unlabelled, named on HASH-98 at 01:02Z. It is not a plan of record, and two calls below are yours.**
+
+- **The command** [read]: the Attempt `r20261110-054052-9a23` (`headline_world_job.sh` with `headline_mix.py`, row "(ii) honest", world year, β 0.0554411, at `cursor/proofs-breakeven-be7a@a5e4e56a11`). It reads the census only through the card `workload.glm-5.3.json`, which `workload_card.py` (`art:6fa57fc1…`) makes from a census's `census.json`. So I swapped the card and nothing else.
+- **Control** [run]: the same job over `main`'s census gives the plan of record's `mix.json` byte for byte (`r20261111-004311-37d5` on cpu-1, `r20261111-005559-8ef6` on cpu-7; sha256 `eac7c7f7e318…`).
+- **The plan** [run]: `r20261111-004457-7ee8` on cpu-3, rc 0. 192 cells; `q` 2.4226e-07 against the record's 1.4124e-07; 4.308e9 sampled replay blocks against 2.512e9; 4.063e7 blocks taken a replay block against 4.567e7.
+- **Coverage** [run, with benchmarks' `Census.recut` and `SamplingPlan.of` at `693fc39a2a`; not their whole command]: 192 block types, 190 matched by name and the two fused cells by staged type (`fr-w13`, `fr-w2`), as the record does on `main`'s census. No type without a cell, no cell without a type. The record on this census: 88 and 46.
+- **Pricing** [run]: no type is unpriced, so I invented nothing. 79 of the 88 new cells are priced from `k_log` alone, 64.7% of its proving: `SparseMlaHeadBlock_v1` ×65, `SparseMlaSplitEndCols_v1` ×8, `FlashInferFp8Quant1x128_v1` ×4, `SparseMlaHeadEnd_v1`, `AllReduceMnnvl_v1{…N=96}`. Why [read]: the `proof_overhead` card holds no block of those Definitions. The other 9 take the card's block of the same Definition at 2^Δk.
+
+**Your two calls:**
+
+1. **Sparse MLA is not at the 128k plan's keys** [read]. The record's lever multiplies the blocks of `SparseMlaSplitPart_v1`, which this census does not hold. The head blocks stand at the census request's keys. So the planner's bound here, 792.4 GB, is not comparable with 1,377.5 GB [guess: most of the fall is the lever, not the census]. Restating the lever for head blocks is the plan owner's; I did not.
+2. **I turned the row's column split off** [run]. The row cuts the all-reduces and `MoeSum_v1` in 32 and `ResidualAdd_v1` in 16, and this census already holds those column blocks, so the unchanged command cuts them twice. The unchanged command's plan is in the store too, unlabelled: `art:f08fa5661646ed973e2f48fffc652e357c26c5565653b5c77ea94664715b3638` (`r20261111-004449-4d69`, cpu-3; `q` 2.4678e-07). Five cells differ, the rest within 0.9%. If you want that one named to benchmarks instead, say so.
+
+**Also:**
+
+- [guess] The planner's price for the heaviest head block is 25.4 ms a block. benchmarks' preview ("no sparse-MLA type above 0.03%" of 7,470 GPU-seconds a token) implies at most 0.34 ms. If so the sample is sized on a price some 75 times too high for 64% of its proving.
+- **The comment** [run]: posted as `kernels/BENCHCROSS` (the tool names the issue's team's lane) and it rang no one, so benchmarks hear of it only if you ring them. It is 114 words by `wc -w`, over the skill's 100: I chained the count and the post.
+- **What a plan of record needs** [guess]: a `proof_overhead` card holding the new types from benchmarks' steady rows, the lever restated, and the by-name measurements keyed to this census's names.
+- **The two runs left out at 23:02Z** [run]: `r20261110-230002-408d` (cpu-11) and `r20261110-223751-f9c0` (cpu-6), both rc 0, "58 suites: 58 passed, 0 failed", at `dd302576e006`.
+
+**State:** nothing running. I labelled nothing, changed no reader and no file of the repository, and opened no PR. `main` is still `2b869ed35db5` [read 01:02Z]. Mailbox read at 01:02Z: nothing after your 00:15Z entry. Detail and the commands: `note:proofs/20261111T0101Z-report-benchcross-census-plan`; the job and launcher are `tools/census_plan_job.sh`, `tools/census_plan_run.sh` and `tools/headline_mix_cols.py` in the lane's notes.
