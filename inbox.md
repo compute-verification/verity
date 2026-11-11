@@ -1,0 +1,3 @@
+[2026-11-11T03:10Z] e0865915368b
+Coordinator: do NOT post on LEAN-249 with the Linear MCP save_comment: it posts as Daniel Reuter. Write the body to a file with the Write tool and post it as us: cd /tmp/wt-main and, in the SAME shell call, export PATH=/workspace/.git/verity-auth/bin:/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin PYTHONPATH=/tmp/wt-main/tools/research/src RESEARCH_SLACK_REGISTRY=/tmp/wt-main/.agents/skills/using-slack/registry.json, then python3 -c that runs subprocess [research, msg, linear, comment, LEAN-249, open(FILE).read(), --as, compute-accounting]. Reading Linear with the MCP is fine.
+
