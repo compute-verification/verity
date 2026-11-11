@@ -191,7 +191,9 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   inherits it; with `FC_VERIFIER_CPUS`, the verifiers run on `verifier_cpus` and the provers on the rest), as their
   `count`, their `list` and the `numa_nodes` that hold them. With `--lean`, the last sessions at
   K = 1 also get the Lean verdict inside the server's verdict pool, with its CPU seconds and peak RSS. A proof block's
-  verdict is the `NO_PROGRAM` refusal, as in `served_units`. A row with a refused session, a server process that exited
+  verdict is the `NO_PROGRAM` refusal, as in `served_units`. With `--wide-leaf` every prover and verifier of the run
+  carries `flock-circuit --wide-leaf`, the wide level-0 leaf's statement version: its rows say so (`wide_leaf`), and their
+  Lean verdict is asked under that version's statement name. A row with a refused session, a server process that exited
   nonzero, or a prover out of device memory is void: no rate, its reasons in `void`, a `VOID` line, and the run exits 1.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
   `prove_path/run.sh` builds, with the ZK server's send check. It runs in a proofs slot, one point at a time. Each session's

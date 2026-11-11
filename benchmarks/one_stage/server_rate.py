@@ -2,12 +2,17 @@
 (`verity_flock.proof_server.ProofServer`'s ``provers``), its sessions back to back, each K in turn.
 
     python benchmarks/one_stage/server_rate.py --bin flock-circuit --staged Z --types frw13,frw2 --provers 1,2,4 --out DIR \\
-        --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean flock-verify [--lean-sessions 2]] [--tmpl-unit-bin B]
+        --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean flock-verify [--lean-sessions 2]] [--tmpl-unit-bin B] \\
+        [--wide-leaf]
 
 * **Statements**: ``Z/<type>/c<n>/stage`` (`stationary_gpu.sh`'s layout), the type's largest n, every unit drawn: a
   sampled replay block at the full statement. A templated one (``verity/flock-circuit/tmpl`` in its circuit's META, as
   `served_units/stage.py` stages a table read) is proved and verified with its unit's rows at their positions, which
   ``--tmpl-unit-bin`` (`flock-tmpl-unit`) places once into ``stage/unit.placed`` from the circuit's template section.
+* **The statement version**: fast100's, or with ``--wide-leaf`` the wide level-0 leaf's (`flock-circuit --wide-leaf`),
+  which every prover and verifier of the row then carries; the row says which (``wide_leaf``), and its Lean verdict is
+  asked under the version's own statement name (`WIDE_LEAF`). The two versions of a staged statement are two rows,
+  each run of the script one version.
 * **Load**: ``--warm`` sessions a prover, all finished before any timed one is submitted (a prover and its verifier load
   the circuit on their first session; ``ready_s``), then ``--sessions`` timed ones (at least 8 K) with K (ahead + 2)
   outstanding.
@@ -63,6 +68,8 @@ from verity_flock import circuit as FC
 from verity_flock.proof_server import ProofServer, Statement
 
 STATEMENT_ID = "verity/flock-circuit"
+#: what the wide level-0 leaf's version adds to a statement's name, flat or templated, for the Lean verifier
+WIDE_LEAF = "+wide-leaf"
 #: flock-circuit's statement shape: m = k_log + nbl is at most 35 (`a6.M_MAX`)
 M_MAX = 35
 #: the rule that decides a row's ``flat``, kept in the row's ``cache``
@@ -311,7 +318,7 @@ def one(a, dev: str, t: str, K: int) -> dict:
     st, n, d = staged(Path(a.staged), t, a.tmpl_unit_bin)
     out = Path(a.out) / f"{t}-k{K}"
     out.mkdir(parents=True, exist_ok=True)
-    statement = STATEMENT_ID if st.tmpl_unit is None else FC.TMPL_STATEMENT
+    statement = (STATEMENT_ID if st.tmpl_unit is None else FC.TMPL_STATEMENT) + (WIDE_LEAF if a.wide_leaf else "")
     lean = Lean(a.lean, d, out, statement) if a.lean and K == 1 and a.lean_sessions else None
     draw = {"law": "subset", "population": n, "k": n, "units": list(range(n))}
     timed_n = max(a.sessions, 8 * K)
@@ -320,9 +327,10 @@ def one(a, dev: str, t: str, K: int) -> dict:
     gpu, t_start, cpu0 = Device(dev), time.monotonic(), throttled()
     wall = time.time() - t_start
     devices, stage = [dev], json.loads((d / "stage.json").read_text())
-    rec: dict = {"type": t, "provers": K, "gpus": len(devices), "cores": cores(), "n": n, "pin": st.pin, "verify_ahead": a.ahead,
+    rec: dict = {"type": t, "provers": K, "wide_leaf": a.wide_leaf, "gpus": len(devices), "cores": cores(), "n": n, "pin": st.pin,
+                 "verify_ahead": a.ahead,
                  "warm": a.warm, "sessions": timed_n, "device": dev, "stage": stage | statement_blocks(stage)}
-    ps = ProofServer(a.bin, out, devices=devices, provers=K, verify_ahead=a.ahead, verdicts=1,
+    ps = ProofServer(a.bin, out, devices=devices, provers=K, verify_ahead=a.ahead, verdicts=1, wide_leaf=a.wide_leaf,
                      env={"FC_FIREWALL": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
     host = Host(ps)
     provers_cpu = lambda: cpu_s(pid for name, pid in ps.pids.items() if name.startswith("prover-"))  # noqa: E731
@@ -446,6 +454,8 @@ def main() -> int:
     ap.add_argument("--lean", default=None)
     ap.add_argument("--lean-sessions", type=int, default=2)
     ap.add_argument("--tmpl-unit-bin", default=None, help="flock-tmpl-unit: places a templated statement's unit")
+    ap.add_argument("--wide-leaf", action="store_true",
+                    help="the wide level-0 leaf's statement version: every prover and verifier runs with --wide-leaf")
     ap.add_argument("--deadline", type=float, default=0, help="UTC epoch seconds after which no type and K starts")
     a = ap.parse_args()
     out = Path(a.out)
