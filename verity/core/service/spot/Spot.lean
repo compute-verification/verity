@@ -13,6 +13,7 @@ public import Spot.Bound
 public import Spot.PlanCheck
 public import Spot.PyJson
 public import Spot.Record
+public import Spot.Schedule
 public import Spot.OneStage
 public import Spot.OneStageZk
 public import Spot.Rate
@@ -36,6 +37,7 @@ public import Spot.ChallengerDraw
 public import Spot.ChallengerTrees
 public import Spot.ChallengerInnerTrees
 public import Spot.Wires
+public import Spot.HistoryTable
 public import Spot.WiresSpan
 public import Spot.WiresOrder
 public import Spot.WiresSound
