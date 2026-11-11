@@ -21,15 +21,17 @@
 #    the temperature sampled from 0, 0.7 and 1, top_p 1, a seed on each, all fixed by SEED), the model MODEL or the
 #    endpoint's one, at the schedule below, with the watermark stream sent to the same port. ID_BOUND=N (at most
 #    128,256) scales every prompt id below N and changes nothing else (certside/bounded.py).
-# 3. warden_serve.py check on $OUT/warden, from its files alone: $OUT/check.txt; $OUT/summary.json; then the record's
-#    reading, certside/report.py: $OUT/report.txt and $OUT/report.json.
+# 3. warden_serve.py check on $OUT/warden, from its files alone: $OUT/check.txt (RECHECK=0 leaves it out: rehearse has
+#    already run the same check once and written check.json); $OUT/summary.json, with each step's seconds and the
+#    memory the run took; then the record's reading, certside/report.py: $OUT/report.txt and $OUT/report.json.
 # 4. The guard, on every exit: nothing this job keeps or prints names the serving node. ssh's log and its known-hosts
 #    file stay in the job's temporary directory, which is deleted; everything the job prints is also $OUT/job.log; and
 #    the job fails (exit 9), naming the file, if any file of $OUT holds an IPv4 address other than loopback's, an `@`
 #    before a name, or the serving node's host as PEER gave it.
-# FAKE=1 is the dry run: no ssh; the job starts warden_serve's fake endpoint on this node's loopback, in the id form at
-# the schedule's P, and then does 1 to 4 against it as against a forward. The fake answers a request whole, FIRST_MS
-# after it is released; in the id form it has no time a token, so TOKEN_MS changes nothing there.
+# FAKE=1 is the dry run: no ssh; the job starts a fake endpoint on this node's loopback, in the id form at the
+# schedule's P, and then does 1 to 4 against it as against a forward. The fake is certside/paced.py: a request's first
+# id leaves FIRST_MS after the request and each next one TOKEN_MS later, as a model streams. TOKEN_MS=0 is
+# warden_serve's own fake instead, whose id form has no time a token: the whole answer at once, FIRST_MS after.
 #
 # THE SCHEDULE, each number a variable, for GLM-5.3 behind the id front under a 220 ms tick:
 # - CELL_BYTES 4096, SLOTS 1 (r): in the id form a response is one id event a DATA cell, so r = 1 at BUCKET_MS 250
@@ -89,6 +91,15 @@ cleanup() { [ -n "$TUN" ] && kill "$TUN" 2>/dev/null; [ -n "$FAKED" ] && kill "$
 trap cleanup EXIT
 trap 'exit 143' TERM INT
 log() { echo "$(date -u +%H:%M:%SZ) certside: $*"; }
+SECONDS=0; MARKS=()
+mark() { MARKS+=("$1=$SECONDS"); }   # the seconds since the job began at which step $1 ended: summary.json's `seconds`
+# peak FILE CMD...: runs CMD, and writes FILE the peak resident MB of the largest process among CMD and its children
+peak() {
+  "$PY" -c 'import resource, subprocess, sys
+rc = subprocess.call(sys.argv[2:])
+open(sys.argv[1], "w").write(str(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss >> 10))
+sys.exit(rc)' "$@"
+}
 
 venv() {
   if [ -n "${PY:-}" ]; then log "python: PY, as given"; return; fi
@@ -271,23 +282,30 @@ EOF
   ssh -F "$W/ssh_config" -N -L "127.0.0.1:$LOCAL:127.0.0.1:$PORT" serving-node 2> "$W/tunnel.log" &
   TUN=$!
   reach "$TUN" || exit
+  mark reach
   [ -n "${REACH_ONLY:-}" ] && exit 0
   venv
+  mark venv
 else
   venv
+  mark venv
   payload=$(PYTHONPATH=$SRC "$PY" -c "import sys
 from verity.protocols.certifier.verifier.warden import WardenParams
 print(WardenParams(cell_bytes=int(sys.argv[1])).payload)" "$CELL_BYTES") || { log "couldn't read the schedule's P"; exit 2; }
-  PYTHONPATH=$SRC "$PY" benchmarks/network_traces/warden_serve.py fake --listen 127.0.0.1:0 \
-    --first-ms "${FIRST_MS:-2000}" --token-ms "${TOKEN_MS:-220}" --id-payload "$payload" > "$W/fake.out" 2> "$W/fake.err" &
+  FIRST_MS=${FIRST_MS:-2000}; TOKEN_MS=${TOKEN_MS:-220}
+  fake=("$HERE/paced.py"); how="an id every $TOKEN_MS ms from $FIRST_MS ms after its request (certside/paced.py)"
+  [ "$TOKEN_MS" = 0 ] && { fake=(benchmarks/network_traces/warden_serve.py)
+                           how="each answer whole $FIRST_MS ms after its request (warden_serve's fake)"; }
+  PYTHONPATH=$SRC "$PY" "${fake[@]}" fake --listen 127.0.0.1:0 --first-ms "$FIRST_MS" --token-ms "$TOKEN_MS" \
+    --id-payload "$payload" > "$W/fake.out" 2> "$W/fake.err" &
   FAKED=$!
   for _ in $(seq 100); do [ -s "$W/fake.out" ] && break; sleep 0.1; done
   LOCAL=$("$PY" -c 'import json, sys; print(json.loads(open(sys.argv[1]).readline())["listening"][1])' "$W/fake.out") \
     || { log "the fake endpoint didn't start: $(tail -c 300 "$W/fake.err")"; exit 2; }
   PORT=$LOCAL
-  log "fake: warden_serve's fake endpoint at 127.0.0.1:$LOCAL, the id form at P = $payload, each answer whole" \
-      "${FIRST_MS:-2000} ms after its release"
+  log "fake: a fake endpoint at 127.0.0.1:$LOCAL, the id form at P = $payload, $how"
   reach 0 || exit
+  mark reach
   [ -n "${REACH_ONLY:-}" ] && exit 0
 fi
 export PYTHONPATH=$SRC
@@ -297,21 +315,46 @@ REHEARSE=("$PY" benchmarks/network_traces/warden_serve.py)
 UPSTREAM=(--upstream "127.0.0.1:$LOCAL")
 [ -n "$MODEL" ] && UPSTREAM+=(--model "$MODEL")
 log "rehearse: ${UPSTREAM[*]}, ${TRAFFIC[*]}, ${SCHEDULE[*]}, watermark${ID_BOUND:+, prompt ids below $ID_BOUND}"
-"${REHEARSE[@]}" rehearse "${UPSTREAM[@]}" --watermark --out "$OUT/warden" "${TRAFFIC[@]}" "${SCHEDULE[@]}" 2>&1 \
-  | tee "$OUT/rehearse.log"
+peak "$W/rehearse.mb" "${REHEARSE[@]}" rehearse "${UPSTREAM[@]}" --watermark --out "$OUT/warden" "${TRAFFIC[@]}" \
+  "${SCHEDULE[@]}" 2>&1 | tee "$OUT/rehearse.log"
 rehearsed=${PIPESTATUS[0]}
+mark rehearse
 if [ -n "$TUN" ]; then
   if kill -0 "$TUN" 2>/dev/null; then log "forward: up to the end"; else log "forward: gone before the end"; fi
 fi
 log "rehearse: rc $rehearsed"
-SECONDS=0
-"$PY" benchmarks/network_traces/warden_serve.py check --run "$OUT/warden" > "$OUT/check.txt" 2>&1
-checked=$?
-check_s=$SECONDS
-log "check: rc $checked in $check_s s: $(head -c 600 "$OUT/check.txt")"
-"$PY" - "$OUT" "$rehearsed" "$checked" "$check_s" <<'EOF'
+if [ "${RECHECK:-1}" = 0 ]; then
+  checked=$rehearsed   # rehearse's own exit is its check's verdict
+  log "check: not run again (RECHECK=0): check.json is rehearse's own, whose verdict is its last line above"
+else
+  peak "$W/check.mb" "$PY" benchmarks/network_traces/warden_serve.py check --run "$OUT/warden" > "$OUT/check.txt" 2>&1
+  checked=$?
+  log "check: rc $checked: $(head -c 600 "$OUT/check.txt")"
+fi
+mark check
+"$PY" - "$OUT" "$rehearsed" "$checked" "$W" "${MARKS[@]}" <<'EOF'
 import json, pathlib, sys
-out = pathlib.Path(sys.argv[1])
+out, tmp = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[4])
+
+
+def cgroup():
+    """This run's cgroup's memory, MB (cgroup v2): its peak, page cache included, and its anonymous and file MB now."""
+    try:
+        path = pathlib.Path("/sys/fs/cgroup" + open("/proc/self/cgroup").read().strip().rpartition("::")[2])
+        stat = dict(line.split() for line in (path / "memory.stat").read_text().splitlines())
+        return {"peak_mb": int((path / "memory.peak").read_text()) >> 20, "anon_mb": int(stat["anon"]) >> 20,
+                "file_mb": int(stat["file"]) >> 20}
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def mb(name):
+    try:
+        return int((tmp / name).read_text())
+    except (OSError, ValueError):
+        return None
+
+
 w = json.loads((out / "warden" / "warden.json").read_text())
 check = json.loads((out / "warden" / "check.json").read_text())
 events = sorted([(c["admitted"], 1) for c in w["connections"] if c.get("admitted") is not None]
@@ -324,13 +367,16 @@ size = sum(p.stat().st_size for p in out.rglob("*") if p.is_file())
 summary = {"accepted": check["accepted"], "problems": check["problems"][:10], "summary": check["summary"],
            "released": sum(c.get("release") is not None for c in w["connections"]), "peak_open": peak,
            "watermark": w.get("watermark"), "out_bytes": size,
-           "exit": {"rehearse": int(sys.argv[2]), "check": int(sys.argv[3])}, "check_s": int(sys.argv[4]),
+           "exit": {"rehearse": int(sys.argv[2]), "check": int(sys.argv[3])},
+           "seconds": {k: int(v) for k, v in (m.split("=") for m in sys.argv[5:])},
            "max_rss_mb": {"certifier": (w.get("usage") or {}).get("max_rss_mb"),
-                          "publisher": (w.get("publisher_usage") or {}).get("max_rss_mb")}}
+                          "publisher": (w.get("publisher_usage") or {}).get("max_rss_mb"),
+                          "largest_in_rehearse": mb("rehearse.mb"), "check": mb("check.mb")},
+           "cgroup": cgroup()}
 (out / "summary.json").write_text(json.dumps(summary, indent=1))
-print(json.dumps({k: summary[k] for k in ("accepted", "released", "peak_open", "watermark", "out_bytes", "check_s",
-                                          "max_rss_mb")}))
+print(json.dumps({k: summary[k] for k in ("accepted", "released", "peak_open", "watermark", "out_bytes", "seconds",
+                                          "max_rss_mb", "cgroup")}))
 EOF
 "$PY" "$HERE/report.py" "$OUT" | tee "$OUT/report.txt"
-log "done: rehearse rc $rehearsed, check rc $checked, report rc ${PIPESTATUS[0]}"
+log "done in $SECONDS s: rehearse rc $rehearsed, check rc $checked, report rc ${PIPESTATUS[0]}"
 [ "$rehearsed" = 0 ] && [ "$checked" = 0 ]
