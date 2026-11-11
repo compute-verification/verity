@@ -61,13 +61,18 @@
 #
 # CPU quota: where the machine's CPU time is capped (a container's cpu.max: $GPU_LEASE_CPU_MAX, default /sys/fs/cgroup/cpu.max), runs
 # pinned to more CPUs than the cap allows are throttled together, and a timed run among them is void.  --cores CPUS (48-57,60)
-# declares the CPUs a run pins: CMD runs under `taskset -c CPUS`, and the lease records cores=CPUS.  Before it takes any GPU, such a
-# request counts its CPUS with every live lease's, each CPU once: a lease's cores=, or for a lease that declared none the CPUs its
-# processes are allowed on (Cpus_allowed_list of its pid's process tree under $GPU_LEASE_PROC, default /proc; every CPU when none of
-# them is left to read).  A count over the quota is refused (75, holding nothing), saying the count, the quota, each lease's CPUs
-# and what to do; with --wait the request waits instead, unqueued, until they fit.  A machine without a quota (no file, or `max`)
-# refuses nothing, and neither is a request without --cores refused: the next one that declares counts it.  A process that holds no
-# lease is not counted.
+# declares the CPUs a run pins: CMD runs under `taskset -c CPUS`, and the lease records cores=CPUS.  The pin is the lease's word, not
+# a fence: a job can still widen its own affinity.  Before it takes any GPU, such a request counts its CPUS with every live
+# lease's, each CPU once: a lease's cores=, or for a lease that declared none the CPUs its processes are allowed on at that moment
+# (Cpus_allowed_list of its pid's process tree under $GPU_LEASE_PROC, default /proc; every CPU when none of them is left to read).
+# A count over the quota is refused (75, holding nothing), saying the count, the quota, each lease's CPUs and what to do; with
+# --wait the request waits instead, unqueued, until they fit.  A machine without a quota (no file, or `max`) refuses nothing.
+# The count covers leases only: a process that holds no lease is not in it, whatever it is pinned to.  Neither is a request without
+# --cores refused: where there is a quota and a live lease declared its cores, it starts with one warning line naming that lease,
+# and the next request that declares counts it.
+# What the count can't see, the machine's own counter shows: every lease writes cpu.stat's nr_throttled and throttled_usec (the
+# file beside cpu.max) into its owner lines when it starts, and end_nr_throttled and end_throttled_usec when it is released, and
+# says the difference on stderr, so a timed run shows whether the machine was throttled while it held its GPUs.
 #
 # Usage, report only: when CMD exits (any status), gpu-lease releases the GPUs and then tells the holder on stderr, per GPU, how long
 # it held it and how much of that the node's utilisation sampler saw busy (util > 0 or SM activity >= 1%), with a hint to prepare
@@ -105,6 +110,8 @@
 
 set -u
 dir=${GPU_LEASE_DIR:-/run/gpu-lease}
+cpu_max=${GPU_LEASE_CPU_MAX:-/sys/fs/cgroup/cpu.max}
+case $cpu_max in */*) cpu_stat=${cpu_max%/*}/cpu.stat ;; *) cpu_stat=cpu.stat ;; esac
 
 allowed_file=${GPU_LEASE_ALLOWED_FILE:-/etc/vy/direct-gpus}
 windows_file=${GPU_LEASE_WINDOWS:-/workspace/pouw/fill/windows}
@@ -138,6 +145,8 @@ uuid_table() {
 usage() {
   echo "usage: gpu-lease N [--wait] [--on INDEX|UUID,...] [--cores CPUS] [--max-min M] [--mem-gb G] [--preemptible] [--timed] --" \
     "CMD... | gpu-lease status" >&2
+  echo "  --cores CPUS (48-57,60): CMD is pinned to them (taskset -c; a job can still widen its own affinity), and the request is" \
+    "refused when they and the live leases' CPUs pass the machine's CPU quota. The count covers leases only" >&2
   exit 2
 }
 
@@ -472,17 +481,17 @@ foreign_gpus() {
 cores_over() {
   # why this request's --cores can't be pinned beside the live leases (stdout; exit 75): together, each CPU counted once, they pass
   # the machine's CPU quota.  0 when they fit, or the machine has no quota.  A live lease is a held lock whose owner line isn't
-  # marked released
+  # marked released; a lock whose line is marked is not probed, so a request taking that GPU at this moment never meets the probe
   local i fd line leases=""
   for i in $(gpu_indices); do
+    line=$(cat "$dir/$i.owner" 2>/dev/null)
+    case $line in released=*) continue ;; esac
     exec {fd}>>"$dir/$i.lock" || continue
     if flock -n -s "$fd"; then exec {fd}>&-; continue; fi
     exec {fd}>&-
-    line=$(cat "$dir/$i.owner" 2>/dev/null)
     leases+="$i ${line%% cmd=*}"$'\n'
   done
-  GL_CORES=$cores GL_LEASES=$leases GL_CPU_MAX=${GPU_LEASE_CPU_MAX:-/sys/fs/cgroup/cpu.max} GL_PROC=${GPU_LEASE_PROC:-/proc} \
-    python3 - <<'PY'
+  GL_CORES=$cores GL_LEASES=$leases GL_CPU_MAX=$cpu_max GL_PROC=${GPU_LEASE_PROC:-/proc} python3 - <<'PY'
 import os, re, sys
 
 e = os.environ
@@ -590,9 +599,47 @@ shared = "" if parts == len(total) else "; a CPU two of them name counts once"
 print(f"{len(total)} CPUs would be pinned on this machine, over its CPU quota of {quota / period:g} (cpu.max {quota} {period} in "
       f"{e['GL_CPU_MAX']}){shared}")
 print(f"  this request: --cores {fmt(mine)} ({len(mine)})")
-print("\n".join(rows + ["  start when a lease ends, ask for fewer CPUs, or have the holder of a lease that declared none pass --cores"]))
+print("\n".join(rows + ["  the count covers leases only: a process that holds no lease is not in it",
+                        "  start when a lease ends, ask for fewer CPUs, or have the holder of a lease that declared none pass --cores"]))
 sys.exit(75)
 PY
+}
+
+throttled() {
+  # "NR USEC": cpu.stat's nr_throttled and throttled_usec for the cgroup whose cpu.max is the quota; nothing where it has none
+  awk '$1 == "nr_throttled" {n = $2} $1 == "throttled_usec" {u = $2} END {if (n != "" && u != "") print n, u}' "$cpu_stat" 2>/dev/null
+}
+
+declared_beside() {
+  # the live leases other than this one (TAKEN) that declared their cores, "GPU 0,1, pid P, run R, who W: cores=LIST" each, joined
+  # with "; "; nothing where the machine has no CPU quota
+  local quota="" period="" i fd line cpus pid run w key out="" order=()
+  local -A gpus=() what=()
+  [ -r "$cpu_max" ] && read -r quota period < "$cpu_max"
+  case $quota$period in ''|*[!0-9]*) return 0 ;; esac
+  for i in $(gpu_indices); do
+    case " ${TAKEN[*]} " in *" $i "*) continue ;; esac
+    line=" $(cat "$dir/$i.owner" 2>/dev/null)"
+    line="${line%% cmd=*} "
+    case $line in " released="*) continue ;; esac
+    [[ $line =~ \ cores=([0-9,-]+)\  ]] || continue
+    cpus=${BASH_REMATCH[1]} pid="?" run=- w="?"
+    exec {fd}>>"$dir/$i.lock" || continue
+    if flock -n -s "$fd"; then exec {fd}>&-; continue; fi
+    exec {fd}>&-
+    [[ $line =~ \ pid=([0-9]+)\  ]] && pid=${BASH_REMATCH[1]}
+    [[ $line =~ \ run=([^ ]+)\  ]] && run=${BASH_REMATCH[1]}
+    [[ $line =~ \ who=([^ ]+)\  ]] && w=${BASH_REMATCH[1]}
+    key=$pid
+    [ "$pid" != "?" ] || key=gpu$i
+    if [ -n "${gpus[$key]:-}" ]; then gpus[$key]+=",$i"; continue; fi
+    order+=("$key")
+    gpus[$key]=$i
+    what[$key]="pid $pid, run $run, who $w: cores=$cpus"
+  done
+  [ "${#order[@]}" -gt 0 ] || return 0
+  for key in "${order[@]}"; do out+="${out:+; }GPU ${gpus[$key]}, ${what[$key]}"; done
+  echo "$out"
 }
 
 report_usage() {
@@ -816,11 +863,13 @@ started=${GPU_LEASE_STARTED:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 ends=""
 [ -n "$maxmin" ] && ends=" until=$(date -u -d "@$(($(date -u -d "$started" +%s) + 60 * maxmin))" +%Y-%m-%dT%H:%M:%SZ)"
 uuids=()
+thr0=$(throttled)
+counters=${thr0:+nr_throttled=${thr0% *} throttled_usec=${thr0#* } }
 for i in "${TAKEN[@]}"; do
   u=$(echo "$table" | awk -v i="$i" '$1 == i {print $2}')
   uuids+=("${u:--}")
   echo "pid=$$ run=${RESEARCH_RUN_ID:--} who=${who// /_} uuid=${u:--} since=$started$ends${memgb:+ mem=${memgb}G}" \
-    "${cores:+cores=$cores }${preempt:+preempt=1 }${timed:+timed=1 }${scope:+scope=gpu-lease-$$ }cmd=$(echo "$*" | cut -c1-80)" \
+    "$counters${cores:+cores=$cores }${preempt:+preempt=1 }${timed:+timed=1 }${scope:+scope=gpu-lease-$$ }cmd=$(echo "$*" | cut -c1-80)" \
     > "$dir/$i.owner"
 done
 cores_unlock
@@ -831,6 +880,11 @@ GPU_LEASE_UUID=$(IFS=,; echo "${uuids[*]}")
 export CUDA_VISIBLE_DEVICES CUDA_DEVICE_ORDER=PCI_BUS_ID GPU_LEASE_UUID
 pinned=${cores:+, CMD pinned to CPUs $cores}
 echo "gpu-lease: GPUs $CUDA_VISIBLE_DEVICES ($GPU_LEASE_UUID) for $who, pid $$${RESEARCH_RUN_ID:+ (run $RESEARCH_RUN_ID)}${ends:+,$ends}$pinned" >&2
+if [ -z "$cores" ]; then
+  beside=$(declared_beside)
+  [ -z "$beside" ] || echo "gpu-lease: warning: no --cores here, beside a lease that declared its own ($beside): this run's CPUs are" \
+    "in no count against the machine's CPU quota until the next request that declares counts them; pass --cores" >&2
+fi
 cmdline=$(echo "$*" | cut -c1-200)
 [ -n "$cores" ] && set -- taskset -c "$cores" "$@"
 [ -n "$maxmin" ] && set -- timeout -k 20 "$((maxmin * 60))" "$@"
@@ -843,10 +897,18 @@ rc=0; wait "$child" || rc=$?
 while kill -0 "$child" 2> /dev/null; do rc=0; wait "$child" || rc=$?; done
 trap - TERM INT HUP
 released=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+thr1=$(throttled)
 for i in "${TAKEN[@]}"; do
   line=$(cat "$dir/$i.owner" 2>/dev/null) || continue
-  case "$line" in "pid=$$ "*) echo "released=$released $line" > "$dir/$i.owner" ;; esac
+  case "$line" in
+    "pid=$$ "*" cmd="*)
+      echo "released=$released ${line%% cmd=*}${thr1:+ end_nr_throttled=${thr1% *} end_throttled_usec=${thr1#* }} cmd=${line#* cmd=}" \
+        > "$dir/$i.owner" ;;
+    "pid=$$ "*) echo "released=$released $line" > "$dir/$i.owner" ;;
+  esac
 done
+[ -z "$thr0" ] || [ -z "$thr1" ] || echo "gpu-lease: CPU throttling on this machine while the lease was held: nr_throttled" \
+  "+$((${thr1% *} - ${thr0% *})), throttled_usec +$((${thr1#* } - ${thr0#* })) ($cpu_stat)" >&2
 for fd in "${FDS[@]}"; do exec {fd}>&-; done
 rm -f "$dir/grant.$$"
 report_usage "$rc"

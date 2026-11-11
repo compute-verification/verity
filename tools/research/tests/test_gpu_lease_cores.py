@@ -1,5 +1,5 @@
 """gpu-lease's CPU quota check (`--cores`), run as the script on a made-up machine: a lease directory whose locks the test holds, a
-cpu.max, a /proc and a `taskset` that records what it was given. No GPU, and nothing waits on a clock."""
+cpu.max with its cpu.stat, a /proc and a `taskset` that records what it was given. No GPU, and nothing waits on a clock."""
 from __future__ import annotations
 
 import fcntl
@@ -20,8 +20,9 @@ pytestmark = pytest.mark.skipif(shutil.which("flock") is None or shutil.which("b
 
 
 class Node:
-    """A machine as gpu-lease reads it. Its quota is 81.6 of 96 CPUs unless `quota` says otherwise (None: no cpu.max at all). Its
-    `taskset` writes its first two arguments to `pinned` and runs the rest unpinned: the made-up CPUs aren't this machine's."""
+    """A machine as gpu-lease reads it. Its quota is 81.6 of 96 CPUs unless `quota` says otherwise (None: no cpu.max at all), and
+    it has no cpu.stat until `throttled` writes one. Its `taskset` writes its first two arguments to `pinned` and runs the rest
+    unpinned: the made-up CPUs aren't this machine's."""
 
     def __init__(self, tmp_path: Path, quota: str | None = "8160000 100000"):
         self.gl, self.proc, self.bin = tmp_path / "gl", tmp_path / "proc", tmp_path / "bin"
@@ -42,6 +43,10 @@ class Node:
     def program(self, name: str, script: str) -> None:
         (self.bin / name).write_text(f"#!/bin/sh\n{script}\n")
         (self.bin / name).chmod(0o755)
+
+    def throttled(self, nr: int, usec: int) -> None:
+        (self.cpu_max.parent / "cpu.stat").write_text(
+            f"usage_usec 9\nuser_usec 5\nsystem_usec 4\nnr_periods 70\nnr_throttled {nr}\nthrottled_usec {usec}\nnr_bursts 0\n")
 
     def lease(self, gpu: int, line: str) -> int:
         """A live lease of `gpu` with this owner line: its lock is held until the descriptor returned is closed."""
@@ -76,6 +81,7 @@ def test_a_request_whose_cores_pass_the_quota_with_the_live_leases_is_refused_be
         "  this request: --cores 72-79,84-85 (10)",
         "  GPU 0, pid 11, run r-a, who one: cores=0-39 (40)",
         "  GPU 1, pid 12, run r-b, who two: cores=40-71,80-83 (36)",
+        "  the count covers leases only: a process that holds no lease is not in it",
         "  start when a lease ends, ask for fewer CPUs, or have the holder of a lease that declared none pass --cores"]
     assert not (node.gl / "2.owner").exists() and not node.pinned.exists()   # no GPU taken, CMD never started
     status = subprocess.run(["bash", str(GPU_LEASE), "status"], env=node.env, capture_output=True, text=True).stdout.splitlines()
@@ -104,6 +110,8 @@ def test_a_machine_without_a_quota_refuses_nothing(tmp_path, quota):
     held = node.lease(0, f"pid=11 run=r-a who=one {SINCE} cores=0-95 cmd=serve")
     r = node.ask("--cores", "0-95")
     assert r.returncode == 0 and "would be pinned" not in r.stderr and node.pinned.read_text() == "-c 0-95\n"
+    r = node.ask()                                                           # and warns nobody: there is no count to be left out of
+    assert r.returncode == 0 and "warning" not in r.stderr
     assert held
 
 
@@ -136,14 +144,74 @@ def test_a_shared_cpu_counts_once_an_ended_lease_counts_nothing_and_a_lease_with
             in r.stderr.splitlines())
 
 
+def test_a_pinned_process_that_holds_no_lease_is_not_counted_and_the_refusal_and_the_usage_say_so(tmp_path):
+    node = Node(tmp_path)
+    held = node.lease(0, f"pid=11 run=r-a who=one {SINCE} cores=0-39 cmd=serve")
+    node.process(11, 1, "0-39")
+    node.process(41, 1, "40-81")                                             # pinned, running, and no lease's
+    assert node.ask("--cores", "40-80").returncode == 0                      # 81 CPUs by the leases, 82 with pid 41's
+    r = node.ask("--cores", "40-81")
+    assert r.returncode == 75 and "pid 41" not in r.stderr
+    assert "  the count covers leases only: a process that holds no lease is not in it" in r.stderr.splitlines()
+    usage = subprocess.run(["bash", str(GPU_LEASE), "--help"], env=node.env, capture_output=True, text=True)
+    assert usage.returncode == 2 and "The count covers leases only" in usage.stderr
+    assert "a job can still widen its own affinity" in usage.stderr
+    assert held
+
+
+def test_a_request_without_cores_beside_a_declared_lease_starts_with_one_warning_naming_that_lease(tmp_path):
+    node = Node(tmp_path)
+    held = [node.lease(gpu, f"pid=11 run=r-a who=one {SINCE} cores=0-79 timed=1 cmd=bench") for gpu in (0, 1)]
+    held.append(node.lease(2, f"released=2026-01-01T00:30:00Z pid=12 run=r-b who=two {SINCE} cores=0-95 cmd=done"))
+    r = node.ask(cmd=("echo", "ran"))
+    assert r.returncode == 0 and r.stdout == "ran\n" and not node.pinned.exists()
+    warned = [ln for ln in r.stderr.splitlines() if "warning" in ln]
+    assert warned == ["gpu-lease: warning: no --cores here, beside a lease that declared its own (GPU 0,1, pid 11, run r-a, who one: "
+                      "cores=0-79): this run's CPUs are in no count against the machine's CPU quota until the next request that "
+                      "declares counts them; pass --cores"]
+    assert "warning" not in node.ask("--cores", "80").stderr                 # a request that declares is counted, not warned
+    for fd in held[:2]:
+        os.close(fd)
+    held = node.lease(0, f"pid=13 run=r-c who=three {SINCE} cmd=serve cores=0-3")       # declared nothing: no one to warn beside
+    r = node.ask()
+    assert r.returncode == 0 and "warning" not in r.stderr
+    assert held
+
+
+def test_a_lease_writes_the_machines_throttle_counters_at_its_start_and_at_its_release(tmp_path):
+    node = Node(tmp_path)
+    node.throttled(7, 1500)
+    owner = node.gl / "3.owner"
+    inside = f'cat "{owner}"; printf "nr_throttled 9\\nthrottled_usec 4000\\n" > "{node.cpu_max.parent / "cpu.stat"}"'
+    r = node.ask("--on", "3", "--cores", "0-9", cmd=("sh", "-c", inside))
+    assert r.returncode == 0
+    assert " nr_throttled=7 throttled_usec=1500 cores=0-9 cmd=sh -c" in r.stdout and "end_" not in r.stdout
+    line = owner.read_text()
+    assert line.startswith("released=") and " pid=" in line.split(" cmd=")[0]
+    assert " nr_throttled=7 throttled_usec=1500 cores=0-9 end_nr_throttled=9 end_throttled_usec=4000 cmd=sh -c" in line
+    assert ("gpu-lease: CPU throttling on this machine while the lease was held: nr_throttled +2, throttled_usec +2500 "
+            f"({node.cpu_max.parent / 'cpu.stat'})") in r.stderr.splitlines()
+    r = node.ask("--on", "2", cmd=("true",))                                 # a lease that declares nothing writes them too
+    assert " nr_throttled=9 throttled_usec=4000 end_nr_throttled=9 end_throttled_usec=4000 cmd=true" in (node.gl / "2.owner").read_text()
+    assert r.returncode == 0 and node.pinned.read_text() == "-c 0-9\n"       # and is not pinned
+    assert "nr_throttled +0, throttled_usec +0" in r.stderr
+
+
+def test_a_machine_without_throttle_counters_writes_none(tmp_path):
+    node = Node(tmp_path)
+    r = node.ask("--on", "3", "--cores", "0-9")
+    line = (node.gl / "3.owner").read_text()
+    assert r.returncode == 0 and "throttl" not in line + r.stderr and " cores=0-9 cmd=true" in line
+
+
 def test_with_wait_a_request_over_the_quota_waits_unqueued_and_starts_when_a_lease_ends(tmp_path):
     node = Node(tmp_path)
     held = node.lease(0, f"pid=11 run=r-a who=one {SINCE} cores=0-79 cmd=serve")
     p = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--wait", "--cores", "80-89", "--mem-gb", "0", "--", "echo", "ran"],
                          env=node.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    said = [p.stderr.readline().rstrip("\n") for _ in range(5)]
+    said = [p.stderr.readline().rstrip("\n") for _ in range(6)]
     assert said[0].startswith("gpu-lease: 90 CPUs would be pinned on this machine, over its CPU quota of 81.6 ")
-    assert said[4] == "gpu-lease: waiting, unqueued, until they fit" and not list(node.gl.glob("wait.*"))
+    assert said[5] == "gpu-lease: waiting, unqueued, until they fit" and not list(node.gl.glob("wait.*"))
     os.close(held)                                                           # the lease ends
     out, err = p.communicate()
     assert p.returncode == 0 and out == "ran\n" and "would be pinned" not in err and node.pinned.read_text() == "-c 80-89\n"
