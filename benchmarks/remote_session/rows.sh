@@ -17,6 +17,8 @@
 #   rows      rows.py: at each of ROWS in turn on one store of GIB GiB across CARDS, the device's gates, the store's
 #             openings and the calibration (CAL chained passes each, over the plain read); out/rows.json
 #   inplace   inplace_gate.py --no-timing at 64 and at 16 rows: the in-place pass against the reference
+#   look      rows.py at LOOK_ROWS for each of LOOK_CTAS receipt CTAs in turn, a lease each: which count the pass over
+#             the read is least at; out/look-CTAS/rows.json
 #   session   PLAN's sessions at SESSION_ROWS rows over SESSION_GIB GiB on the first card, the verifier's process
 #             (on VERIFIER_CORES) beside the prover (on PROVER_CORES) on this machine, which audits nothing: a check
 #             of the kernels against the verifier; out/session/
@@ -54,6 +56,7 @@ session() {  # under the lease: PLAN's sessions, the verifier's process beside t
 if [ "${1:-}" = session ]; then session; exit $?; fi
 
 STEPS=${STEPS-rows inplace session} ROWS=${ROWS:-64 16} GIB=${GIB:-16}
+LOOK_ROWS=${LOOK_ROWS:-64} LOOK_CTAS=${LOOK_CTAS:-64 96 128}
 LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
 export CAL=${CAL:-400} SKETCH_CTAS=${SKETCH_CTAS:-128} PLAN=${PLAN:-honest,skip:0.0625}
 export SESSION_ROWS=${SESSION_ROWS:-64} SESSION_GIB=${SESSION_GIB:-16}
@@ -140,6 +143,15 @@ for step in $STEPS; do
       # shellcheck disable=SC2086
       leased rows "$PY" $RS/rows.py --lib "$B/session.so" --kv "$B/kv.so" --out "$O" --rows $ROWS --gib "$GIB" \
         --gpus "$N" --calibration-passes "$CAL" --sketch-ctas "$SKETCH_CTAS" ${ROWS_ARGS:-} ;;
+    look)
+      rc=0
+      for c in $LOOK_CTAS; do
+        mkdir -p "$O/look-$c"
+        # shellcheck disable=SC2086
+        leased "look-$c" "$PY" $RS/rows.py --lib "$B/session.so" --kv "$B/kv.so" --out "$O/look-$c" --rows $LOOK_ROWS \
+          --gib "$GIB" --gpus "$N" --calibration-passes "$CAL" --sketch-ctas "$c" ${ROWS_ARGS:-} || { rc=$?; break; }
+      done
+      (exit $rc) ;;
     inplace)
       # shellcheck disable=SC2016
       leased inplace bash -c 'rc=0; for k in 64 16; do mkdir -p "$O/inplace-$k"
@@ -153,7 +165,7 @@ for step in $STEPS; do
       else
         say "session: not started, the Lean verifier did not build (out/lean-build.log)"; false
       fi ;;
-    *) say "a step is rows, inplace or session, not $step"; exit 3 ;;
+    *) say "a step is rows, look, inplace or session, not $step"; exit 3 ;;
   esac
   rc=$?
   [ $rc = 0 ] || bad=$rc
