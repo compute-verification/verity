@@ -65790,3 +65790,20 @@ Refused before starting or cancelled, none of them a result: `r20261111-212251-2
 LINE and SUITES are the two places I fill when the runs end [guess on both until then].
 
 **Next.** 3(b)'s integration now; the checkpoint note at 22:30Z; my next entry at 23:15Z, or sooner with `7ad3`'s verdict.
+
+## 21:53Z KEPT: the measurement under `MIMALLOC_PURGE_DELAY=-1` is launched, one run a pull request's head, both waiting for a slot on cpu-6; first figures about 23:05Z, the second run about 23:30Z, inside 00:30Z
+
+Tags: [read: file], [run: id], [derived], [guess].
+
+- **First pull request's head** (`cursor/proofs-keptverify-604f` at `0963ff842e`): `r20261111-215159-3112`, vy-nebius-cpu-6's research pool [run]. Both sizes (the 542.7 MB and the 1.79 GB circuit file), `verify` alone and the kept process.
+- **Second pull request's head** (`cursor/proofs-keptcircuit-7c1e` at `5e87ff2c83`): `r20261111-215201-4d4e`, the same pool [run]. Both sizes, and the members handed in with the circuit file changing between them, so the peak at a change is measured under the setting too.
+- **When:** launched 21:52Z. The pool said about 25 min to a slot, three runs waiting ahead [run: its launch lines]. Then about 45 min for the first and about 60 min for the second [derived: `d744`'s pace on cpu-8 today]. So about 23:05Z and 23:30Z [guess: it depends on the pool]. If neither has a slot by 22:40Z I say so at once.
+- **How the setting is given:** `MIMALLOC_PURGE_DELAY=-1` in the job's environment, so `verify` alone and the kept process both start under it, as #9057's shell jobs start the verifier. It also reaches the Lean build; the prover is Rust and does not use that allocator [read: no `mimalloc` in the prover's sources]. No file of either branch changed for it.
+- **`r20261111-212613-d744`** (cpu-8) is ahead of what I said: it began timing the 1.79 GB file at 21:48Z, and the members with a change of file follow; it ends about 22:20Z, not 23:00Z [run: its log; derived]. I read it then.
+- **Soundness's correction of section D: read, and I agree it was wrong as I wrote it.** The order of members in the challenger's log is a refusal the audit's verifier owes; the vLLM lane's test shows only that honest serving keeps it. What stands of mine: line 9 (the process opens no socket and writes no file), and that `verify-members` reads no log.
+  - The sentence goes in both pull requests' bodies and beside every figure, in your words: until that scan is on `main`, a kept process's verdicts are per member only, and a window of more than one member gets no counted verdict.
+  - The note's first section is fixed and synced (`ec1820f60b`): the correction is stated first, the scan is soundness's (PRF-490), and the line that said it needs approval is withdrawn.
+- **This VM was replaced again at 21:49Z.** Nothing was lost: both branches, the entry and the note were pushed. No run was launched twice.
+- **A thing for the merge with `main`, not done now:** once #9005 and #9057 are on `main`, my measurement's Python starts the verifier under whatever its job's environment holds, not through `proofs.verifier_env` as the other Python callers will. I change it at the merge so its default is the callers' setting; until then a figure of mine says which setting it ran under.
+
+**Not done:** `d744`'s reading; the two runs above; the second pull request's records run, quick tier and body; the first pull request, which waits on #8789, #8949 and #9042.
