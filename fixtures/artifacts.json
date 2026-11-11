@@ -138,7 +138,7 @@
   "art:3d22b35a2270253156b8ad3c251d3f3cb61f591ea4f8d0512dc25a6f4e4d325f": "adapters/vllm/tests/engine/fixtures/llama31_8b_int8_attn_l0.values.npz",
   "art:95a86888df5f0424dbb5984f2c59180d2564a6e9fe28885f5f70ad84aa87c40c": "adapters/vllm/tests/engine/fixtures/llama31_8b_int8_attn_l0.jsonl.gz",
   "art:132eb7d0c8e242f7e4253523152ea88e7de07e26200d9fe3720adbb358b7cd83": "adapters/vllm/tests/program/data/fp8_block_operands.npz",
-  "art:b91ae505ad628bb3af9ad9bcfdc56b223493648b61dd3cd23b9f52c2d27b2954": "adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json",
+  "art:253adf1eef867d6ff128cf97ba0460d220a4473960269b018c711b6a15334c51": "adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json",
   "art:85fba674558e464a36b5ca3e9110762cb36749e736a0f94c0b2f2e5cc6a18403": "adapters/vllm/tests/properties/fixtures/dsv4_q_norm_commit_20261021.json",
   "art:b814ce20730fb161ac2e5868cf8c8162d6a875cfd311924d745f0391fddbffd1": "adapters/vllm/tests/check/fixtures/deepseek_v4/inventory-tp8-rank0.json",
   "art:71dfa3cefbe4e4d42f33f018c9d0cb0650e8ea6d48c35c61cb23b53c797b1066": "adapters/vllm/tests/check/fixtures/glm_moe_dsa/inventory-tp8-rank0.json",
