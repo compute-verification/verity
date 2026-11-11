@@ -9,15 +9,15 @@ import json
 import math
 from fractions import Fraction
 
+import pous_test_signer as ts
 import pytest
 
-import pous_test_signer as ts
+from verity.protocols import reporting
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
 from verity.protocols.pous.verifier import wipe_monitoring as WM
 from verity.protocols.pous.verifier import wipe_party as WP
 from verity.protocols.pous.verifier import wipe_period as W
-from verity.protocols import reporting
 
 HBM = sw.WipeParams(64, W.READS, 1, 1_000, ((WM.HBM, 64 * sw.LABEL_BYTES),))
 STORE = {"backend": "cuda", "device": "NVIDIA H200", "tier": WM.HBM, "uuid": "GPU-test", "nvml_total_bytes": 64 * 64,
@@ -128,6 +128,7 @@ def test_the_cli_reads_a_runs_wipe_json(tmp_path, capsys, uncounted):
     (tmp_path / "egress.json").write_text(json.dumps({"format": WM.EGRESS, "covered": True, "egress_mib": 1}))
     assert WM.main([str(tmp_path / "wipe.json"), "--machines", "2", "--egress", str(tmp_path / "egress.json"),
                     "--out", str(tmp_path / "m.json")]) == 0
-    got = json.loads((tmp_path / "m.json").read_text())
-    assert got == json.loads(capsys.readouterr().out)
+    written = (tmp_path / "m.json").read_text()
+    got = json.loads(written)
+    assert capsys.readouterr().out == written
     assert got["periods"]["month"]["wipes"] == 60 and got["each"]["egress_mib"] == 1

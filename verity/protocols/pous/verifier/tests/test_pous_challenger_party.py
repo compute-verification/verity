@@ -16,20 +16,20 @@ import os
 import socket
 import threading
 
-import pytest
-
 import pous_fakes
 import pous_test_signer as ts
+import pytest
+
 from verity.configuration.deploy import sources as S
 from verity.configuration.deploy.party import Send
 from verity.configuration.deploy.runtime import run as deploy_run
 from verity.configuration.deploy.stream import Side
+from verity.configuration.wire import Message
 from verity.protocols.pous.device import challenger_party as CP
 from verity.protocols.pous.device import challenger_session as CS
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period, run
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
-from verity.configuration.wire import Message
 
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(600)
 COINS = hashlib.sha512(b"the period's live coins").digest()
@@ -233,10 +233,9 @@ def _refused(request, salts: mc.SaltLog, log: mc.SessionLog) -> str:
     with pytest.raises(CP.Refusal) as e:
         CP.designate(request, salts, log)
     a, b = socket.socketpair()
-    with a, b, a.makefile("rwb") as f:
-        with pytest.raises(CP.Refusal) as served:
-            CP.serve(f, request, signer=ts.TestSigner(b"unused", 2), log=log, salts=salts, coins=COINS,
-                     domain=period.SESSION_DOMAIN, clock=Clock())
+    with a, b, a.makefile("rwb") as f, pytest.raises(CP.Refusal) as served:
+        CP.serve(f, request, signer=ts.TestSigner(b"unused", 2), log=log, salts=salts, coins=COINS,
+                 domain=period.SESSION_DOMAIN, clock=Clock())
     assert str(served.value) == str(e.value)
     return str(e.value)
 

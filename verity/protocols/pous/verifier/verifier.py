@@ -33,7 +33,6 @@ from .codec import Geometry
 from .labels import salt_value, tag
 from .scheme import Encoding
 
-
 DIGEST_BYTES = _DIGEST_BYTES["sha512"]
 
 

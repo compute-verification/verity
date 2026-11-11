@@ -50,10 +50,15 @@ from typing import Any
 
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
-from verity.commitments.scheme import DIGEST_BYTES
 from verity.commitments.randomness import derive
-
-from verity.protocols.pous.device.memory_challenger import CLOCK_RESOLUTION_NS, SCHEMES, SessionLog, Signer, Verify
+from verity.commitments.scheme import DIGEST_BYTES
+from verity.protocols.pous.device.memory_challenger import (
+    CLOCK_RESOLUTION_NS,
+    SCHEMES,
+    SessionLog,
+    Signer,
+    Verify,
+)
 
 PROTOCOL = "verity-pous/streamed-wipe/v1"
 KEY_DOMAIN = "verity/pous/streamed-wipe-labels/v1"

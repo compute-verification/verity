@@ -13,12 +13,22 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.pous.verifier import dense, setup
-from verity.protocols.pous.verifier.audit import HonestResponder, UnsignedRounds, challenge_key, run_timed, simulate
+from verity.protocols.pous.verifier.audit import (
+    HonestResponder,
+    UnsignedRounds,
+    challenge_key,
+    run_timed,
+    simulate,
+)
 from verity.protocols.pous.verifier.codec import encode_segments, split
 from verity.protocols.pous.verifier.labels import salt_value, tag
 from verity.protocols.pous.verifier.layout import Layout, decode_tensor
 from verity.protocols.pous.verifier.oracle import run
-from verity.protocols.pous.verifier.primitives import OverwriteStepper, Primitives, pad_block
+from verity.protocols.pous.verifier.primitives import (
+    OverwriteStepper,
+    Primitives,
+    pad_block,
+)
 from verity.protocols.pous.verifier.verifier import VerifierKey
 
 PARAMS = dense.DenseParams(8, 64, 3)

@@ -54,12 +54,12 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity.configuration.deploy.stream import Side
-from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.crypto import lms
-
+from verity.commitments.identity import canonical_json_bytes
+from verity.configuration.deploy.stream import Side
 from verity.protocols.pous.device import challenger_session
 from verity.protocols.pous.device import memory_challenger as mc
+
 from . import protocol as pous_protocol
 from . import run as R
 from . import setup
@@ -454,10 +454,10 @@ def cited(entries: Sequence[dict], sessions: Collection[str]) -> list[int]:
                 keep.add(i)
         elif e["session"] in sessions:
             keep.add(i)
-            if kind == "reserve" or (kind == "open" and e["schema"] == LEDGER_SCHEMAS[1] and "reserve" not in b):
-                if (o := current.get(b.get("for") or b.get("by"))) is not None:
-                    keep.add(o)
-                    held.add(o)
+            reserves = kind == "reserve" or (kind == "open" and e["schema"] == LEDGER_SCHEMAS[1] and "reserve" not in b)
+            if reserves and (o := current.get(b.get("for") or b.get("by"))) is not None:
+                keep.add(o)
+                held.add(o)
     opened = {e["session"] for e in entries if e["kind"] == "open"}
     if missing := sorted(set(sessions) - opened):
         raise ValueError(f"the auditor's ledger opens no session {missing[0]}, which a challenger close record beside it "

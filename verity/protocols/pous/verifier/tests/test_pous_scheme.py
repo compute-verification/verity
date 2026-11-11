@@ -8,11 +8,27 @@ import random
 import pytest
 import settings
 
-from verity.protocols.pous.verifier.labels import component, from_bytes, join, split, tag, to_bytes, transpose, w_labels, w_value
+from verity.protocols.pous.verifier.labels import (
+    component,
+    from_bytes,
+    join,
+    split,
+    tag,
+    to_bytes,
+    transpose,
+    w_labels,
+    w_value,
+)
 from verity.protocols.pous.verifier.oracle import run
 from verity.protocols.pous.verifier.params import LEAN_P3_MEETS, OPERATING_POINT, Params
 from verity.protocols.pous.verifier.primitives import heuristic_arx, ideal, reference
-from verity.protocols.pous.verifier.scheme import decode, decode_prog, decode_segment, encode, encode_prog
+from verity.protocols.pous.verifier.scheme import (
+    decode,
+    decode_prog,
+    decode_segment,
+    encode,
+    encode_prog,
+)
 
 BACKENDS = {"reference": reference, "heuristic-arx": heuristic_arx, "ideal": lambda p: ideal(p, b"test-seed")}
 SHAPES = [Params(8, 64, 3), Params(6, 64, 0), Params(4, 96, 12, 3), Params(1, 384, 1)]
