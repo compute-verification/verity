@@ -235,9 +235,9 @@ def sass_kernels(text: str) -> dict[str, dict]:
             kernels[name] = {"tensor": []}
             continue
         # opcodes carry lowercase shape fields (IGMMA.64x8x32.S8.S8)
-        if name and (m := re.search(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Za-z0-9_.]*)\s", line)):
-            if TENSOR_OP.match(m.group(1)):
-                kernels[name]["tensor"].append(line.split("/*", 2)[1].split("*/", 1)[1].strip().rstrip(";").strip())
+        if (name and (m := re.search(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Za-z0-9_.]*)\s", line))
+                and TENSOR_OP.match(m.group(1))):
+            kernels[name]["tensor"].append(line.split("/*", 2)[1].split("*/", 1)[1].strip().rstrip(";").strip())
     for k in kernels.values():
         k["count"] = len(k["tensor"])
         k["opcodes"] = sorted({s.split()[0] for s in k["tensor"]})
@@ -247,8 +247,9 @@ def sass_kernels(text: str) -> dict[str, dict]:
 def check_words(family: str, A, B, C, meta, device: dict[str, np.ndarray]) -> tuple[dict, dict, bool]:
     """Each form's words (``device[form]``, (t, M, N) u32) against the sm_120 model at the form's formats and saturation:
     (report of the forms, the clamp tiles' words by pattern, every form exact)."""
-    from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32 as SAT
-    from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP as WRAP
+    from verity.definitions.silicon import integer
+
+    SAT, WRAP = integer.BLACKWELL_SM120_S8_M16N8K32, integer.BLACKWELL_SM120_S8_M16N8K32_WRAP
 
     t, m, n = C.shape
     Cv = as_s32(C)
@@ -281,7 +282,7 @@ def check_words(family: str, A, B, C, meta, device: dict[str, np.ndarray]) -> tu
                             examples.append({"family": fam_of[tile], "tile": int(tile), "i": i, "j": j, "C": int(Cv[tile, i, j]),
                                              "exact": int(tot[tile, i, j]), "device": int(as_s32(D[tile, i, j])),
                                              "model": int(as_s32(np.uint32(w)))})
-        bad = D != vec
+        bad = vec != D
         overflow = (tot > S32_MAX) | (tot < S32_MIN)
         rec = {"model": f"{(SAT if mode == 'sat' else WRAP).name} at a={fa}, b={fb}", "words": int(D.size),
                "mismatches": int(bad.sum()),

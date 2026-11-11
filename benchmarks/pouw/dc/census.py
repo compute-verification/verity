@@ -377,8 +377,8 @@ def tables(dev: Device) -> str:
         if c:
             out.append(f"- {r}: SM clock f_max {c['f_max']} MHz at default clocks, median {c['f_median']} and least "
                        f"{c['f_min']} MHz under load")
-    out += ["", "| kind | opcode | slots a warp instr | depth | rate (warp instr/SM/clk) | SMSP-cycles held | "
-            "slots/SM/clk | slots a SMSP-cycle | MACs/SM/clk | of rho_T | MHz |", "|" + "---|" * 11]
+    out += ["", ("| kind | opcode | slots a warp instr | depth | rate (warp instr/SM/clk) | SMSP-cycles held | "
+                 "slots/SM/clk | slots a SMSP-cycle | MACs/SM/clk | of rho_T | MHz |"), "|" + "---|" * 11]
     for k, v in sorted(dev.tensor().items(), key=lambda kv: -kv[1]["rate"] * kv[1]["slots_per"]):
         s = v["rate"] * v["slots_per"]
         out.append(f"| {k} | {v['opcode']} | {v['slots_per']:.0f} | {v['depth']} | {v['rate']:.5f} | "
@@ -405,14 +405,16 @@ def tables(dev: Device) -> str:
                    "honest holds rho_T at L = 32 (N >= 64)")
     else:
         sat = model["L_saturated"]
-        out += [f"- the TMEM load beside saturated tcgen05.mma: {model['ld_beside_saturated']:.2f} words/SM/clk "
-                f"(alone {max(v['rate'] * v['words_per'] for v in lds.values()):.2f}); "
-                f"{'not ' if model['ld_beside_saturated'] >= rho * (1 - MARGIN) else ''}the per-word bottleneck at L = 32",
-                f"- honest at L = 32 (loads every slot): {model['honest_fraction_L32']:.4f} of rho_T5 = "
-                f"{model['honest_words_L32']:.2f} words/SM/clk; the tensor stays saturated from L = {sat} (T1 there: "
-                f"{1 - d_h / sat:.3f})",
-                f"- eps_tensor at L = 32: two-stage LP (mma.sync in honest's slack, shared-pipe line) "
-                f"{model['eps_tensor_L32']:.4f}; T1 with the load alone 1 - h = {1 - model['honest_fraction_L32']:.4f}"]
+        out += [(f"- the TMEM load beside saturated tcgen05.mma: {model['ld_beside_saturated']:.2f} words/SM/clk "
+                 f"(alone {max(v['rate'] * v['words_per'] for v in lds.values()):.2f}); "
+                 f"{'not ' if model['ld_beside_saturated'] >= rho * (1 - MARGIN) else ''}the per-word bottleneck "
+                 f"at L = 32"),
+                (f"- honest at L = 32 (loads every slot): {model['honest_fraction_L32']:.4f} of rho_T5 = "
+                 f"{model['honest_words_L32']:.2f} words/SM/clk; the tensor stays saturated from L = {sat} (T1 there: "
+                 f"{1 - d_h / sat:.3f})"),
+                (f"- eps_tensor at L = 32: two-stage LP (mma.sync in honest's slack, shared-pipe line) "
+                 f"{model['eps_tensor_L32']:.4f}; T1 with the load alone 1 - h = "
+                 f"{1 - model['honest_fraction_L32']:.4f}")]
 
     ip = dev.issue_points()
     fs = non_axis(ip)
