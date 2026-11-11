@@ -10,8 +10,10 @@ import Proofs.Flock.Claims.ZK.NonVacuous
 
 `CompiledTwo.KSFirstHitTwoX` fails at `sksLTwo` (`Witnesses.SamplingTwo`: `sksL`, which accepts after one round,
 samples nothing and opens nothing, with the two-stage design `toyTwo`), its silent prover and any hash, at the costs
-`c_R = c_F = 0` (`compiledTwoKSFirstHitX_fails`), and at coins `Bool` and SHA-512 (`FlockDeploy.sha512`) that is the
-nontrivial lemma of `ksFirstHitTwoX` (`compilerKSFirstHitTwoX_nontrivial`).
+`c_R = c_F = 0` (`compiledTwoKSFirstHitX_fails`): the three bounds it takes hold there, and what it concludes,
+`CompiledTwo.FirstHitTwoXAt`, fails there (`compiledTwoFirstHitXAt_fails`). At coins `Bool` and SHA-512
+(`FlockDeploy.sha512`) the second is the nontrivial lemma of `Flock.SecurityProofs.SpotFirstHitTwo`
+(`compilerFirstHitTwoXAt_nontrivial`).
 
 * The form's three bounds hold at the costs `0`: `sksLTwo` has no sessions, so `B_conf,X` finds nothing (`bconfX_pr`);
   its extractions open nothing under the statement's roots (`sksL_opensAt`) or under a replay block's interior roots
@@ -69,18 +71,14 @@ theorem sksLTwo_εfirstTwoX {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabi
   rw [hκ, hb]
   simp
 
-/-- **`CompiledTwo.KSFirstHitTwoX` fails** at `sksLTwo`'s silent prover, at the costs `0`: the three bounds it takes
-hold there, and it accepts always, while `P̄_a` at the footprint of its boundary trace read at the statement is `0` at
-every interior, at an error of `0`. -/
-theorem compiledTwoKSFirstHitX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
-    ¬ (sksLTwo Coin).KSFirstHitTwoX H := by
+/-- **`CompiledTwo.FirstHitTwoXAt` fails** at `sksLTwo`'s silent prover, at the costs `0`: it accepts always, while
+`P̄_a` at the footprint of its boundary trace read at the statement is `0` at every interior, at an error of `0`. -/
+theorem compiledTwoFirstHitXAt_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
+    ¬ (sksLTwo Coin).FirstHitTwoXAt H [] toyStmt toyPart toyTwo silentP 0 0 := by
   intro h
-  have hz : (0 : ℝ) ≤ 2 * 0 / 2 ^ (256 : ℝ) := by simp
-  have h1 := (h [] toyStmt toyPart toyTwo (sksLTwo_scope []) rfl rfl rfl Unit silentP 0 0
-    ((bconfX_pr H (sksLTwo Coin).toCompiled (fun _ _ _ => rfl) Unit silentP []).trans_le hz)
-    ((sksLTwo_offRegX H silentP []).trans_le hz) ((sksLTwo_offIreg H silentP [] toyTwo.part).trans_le hz)).2.2 0
-    fun ι => (toyTwo_Pa
-      (toy_footprintAt (val := (sksLTwo Coin).regValX H silentP []) (sksL_regValX H silentP [] 0) ι)).le
+  unfold CompiledTwo.FirstHitTwoXAt at h
+  have h1 := h.2.2 0 fun ι => (toyTwo_Pa
+    (toy_footprintAt (val := (sksLTwo Coin).regValX H silentP []) (sksL_regValX H silentP [] 0) ι)).le
   have hp : Pr (fun p : Unit × (Fin ((sksLTwo Coin).V.k []) → Coin) =>
       (run H silentP (sksLTwo Coin).V [] p.1 p.2).out = .acc) = 1 :=
     Eq.trans (Pr_congr fun p : Unit × (Fin ((sksLTwo Coin).V.k []) → Coin) =>
@@ -89,17 +87,36 @@ theorem compiledTwoKSFirstHitX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin
   rw [sksLTwo_εfirstTwoX] at h2
   norm_num at h2
 
+/-- **`CompiledTwo.KSFirstHitTwoX` fails** at `sksLTwo`'s silent prover, at the costs `0`: the three bounds it takes
+hold there (`BconfXLe`, `OffRegXLe`, `OffIregLe`), and what it concludes fails there
+(`compiledTwoFirstHitXAt_fails`). -/
+theorem compiledTwoKSFirstHitX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
+    ¬ (sksLTwo Coin).KSFirstHitTwoX H := by
+  intro h
+  have hz : (0 : ℝ) ≤ 2 * 0 / 2 ^ (256 : ℝ) := by simp
+  have hR : (sksLTwo Coin).BconfXLe H [] silentP 0 :=
+    (bconfX_pr H (sksLTwo Coin).toCompiled (fun _ _ _ => rfl) Unit silentP []).trans_le hz
+  have hB : (sksLTwo Coin).OffRegXLe H [] silentP 0 := (sksLTwo_offRegX H silentP []).trans_le hz
+  have hN : (sksLTwo Coin).OffIregLe H [] silentP toyTwo.part 0 :=
+    (sksLTwo_offIreg H silentP [] toyTwo.part).trans_le hz
+  exact compiledTwoFirstHitXAt_fails H
+    (h [] toyStmt toyPart toyTwo (sksLTwo_scope []) rfl rfl rfl Unit silentP 0 0 hR hB hN)
+
 end Claims.Witness.SamplingGeneric
 
 /-! ## Stated over the spec -/
 
 namespace Claims.SamplingGeneric
 
+open Claims.Witness (silentP)
 open Claims.Witness.SamplingGeneric
+open Claims.Witness.Sampling (toyStmt toyPart)
 
-/-- **`ksFirstHitTwoX`'s conclusion fails** at `sksLTwo`, which accepts with `P̄_a` at the footprint of its boundary
-trace read at the statement `0` at every interior, where the three bounds the form takes hold at the costs `0`. -/
-theorem compilerKSFirstHitTwoX_nontrivial : ¬ (sksLTwo Bool).KSFirstHitTwoX FlockDeploy.sha512 :=
-  compiledTwoKSFirstHitX_fails _
+/-- **`SpotFirstHitTwo`'s conclusion fails** at `sksLTwo`, at its silent prover and the costs `0`: it accepts with
+`P̄_a` at the footprint of its boundary trace read at the statement `0` at every interior. The three bounds the
+guarantee takes hold there at those costs (`compiledTwoKSFirstHitX_fails`). -/
+theorem compilerFirstHitTwoXAt_nontrivial :
+    ¬ (sksLTwo Bool).FirstHitTwoXAt FlockDeploy.sha512 [] toyStmt toyPart toyTwo silentP 0 0 :=
+  compiledTwoFirstHitXAt_fails _
 
 end Claims.SamplingGeneric
