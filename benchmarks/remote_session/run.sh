@@ -131,7 +131,8 @@
 # ROLE=verifier pick one nothing listens on when it is not stated. Scratch is under TMPDIR (default /tmp), removed
 # at exit.
 #
-# Exit: 0 every session accepted (SERVE=tiny, SERVE=row: the verifier's record and the prover's both say so);
+# Exit: 0 every session accepted (SERVE=tiny, SERVE=row: the prover's record says so and, under ROLE=both, the
+#     verifier's too; under ROLE=prover the verdict is the verifier's line's, and this code only the prover's word);
 #   3 refused before anything ran: a parameter, a path, a row, windows that cannot fit, no verifier on PORT (and
 #     ROLE=verifier's own code for a registration it refused);
 #   4 a build failed (nvcc, the Lean verifier);
