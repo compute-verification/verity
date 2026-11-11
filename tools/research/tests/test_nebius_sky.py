@@ -891,7 +891,8 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
         "kept = json.loads(os.environ.get('FAKE_KEPT') or json.dumps([{'tree': 'c'}] * 3))\n"
         "src = {'deleted': [{'tree': 'a'}, {'tree': 'b'}], 'deleted_bytes': 31e9, 'deleted_inodes': 812345, 'kept': kept,\n"
         "       'kept_by': {'1': 1, '2': 2}, 'error': os.environ.get('FAKE_ERROR')}\n"
-        "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': False}, 'runs': {'evicted_bytes': 0}, 'src': src}))\n"
+        "err = {'error': os.environ['FAKE_STORE_ERROR']} if os.environ.get('FAKE_STORE_ERROR') else {}\n"
+        "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': False}, 'runs': {'evicted_bytes': 0}, 'src': src, **err}))\n"
         "sys.exit(1)\n")
     (bin_dir / "df").write_text('#!/bin/sh\necho " Avail"\necho " 1443"\n')
     (bin_dir / "df").chmod(0o755)
@@ -916,6 +917,10 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "FAKE_ERROR": "another pass holds /workspace/research/src/.evict.lock"},
                        capture_output=True, text=True)
     assert r.returncode == 0 and "nothing more deleted: another pass holds" in r.stdout, "an overlapping pass is not a fault"
+    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "FAKE_STORE_ERROR": "store pass: OperationalError: readonly"},
+                       capture_output=True, text=True)
+    assert "src trees: deleted 2 (31.0 GB, 812345 inodes)" in r.stdout and "; FAILED store pass: OperationalError: readonly" in r.stdout
+    assert r.returncode == 1 and "the source-tree pass ran without it" in r.stderr, "a store it can't open fails the unit, after the trees"
     assert (tmp_path / "argv.json.cwd").read_text() == "/", "python -m puts its cwd first on sys.path: never a writable one"
     (tool / "research" / "store" / "cli.py").unlink()
     r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env=env, capture_output=True, text=True)
@@ -1009,16 +1014,23 @@ def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_tre
 def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
     """The retention policy is applied on a schedule, so a node never sits at 80% with terabytes collectable while the fill
     runner holds every queued run (the merge gates among them) for a `research retention gc` by hand. It reads the node's
-    store, whose catalog records what custody verified on the remote: without it gc keeps every preserved path."""
+    store, whose catalog records what custody verified on the remote: without it gc keeps every preserved path. It is installed
+    wherever research runs are: the nodes whose runs the store eviction trims, and those `--on auto` places runs on."""
     import subprocess
+    import tomllib
+
+    from research import auto
     unit, timer = (SKY / "retention_gc.service").read_text(), (SKY / "retention_gc.timer").read_text()
     assert "User=research\n" in unit and "python3 -m research retention gc --apply'" in unit and "OnUnitActiveSec=1h\n" in timer
     assert "Environment=RESEARCH_STORE=/workspace/research/store\n" in unit
     deploy = (SKY.parent / "deploy.toml").read_text()
-    nodes = '["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]'
+    doc = tomllib.loads(deploy)
+    files = {f["path"]: f for f in doc["file"]}
+    holds_runs = set(files["/etc/systemd/system/vy-store-evict-research.timer"]["nodes"]) | {m for m in doc["nodes"] if auto.CPU_NODE.fullmatch(m)}
     for u, path in (("retention_gc.service", "vy-retention-gc.service"), ("retention_gc.timer", "vy-retention-gc.timer")):
-        assert (f'path = "/etc/systemd/system/{path}"\nsrc = "tools/research/src/research/pods/nebius/sky/{u}"\n'
-                f'nodes = {nodes}\nrun = ["systemd:vy-retention-gc.timer"]') in deploy
+        f = files[f"/etc/systemd/system/{path}"]
+        assert f["src"] == f"tools/research/src/research/pods/nebius/sky/{u}" and f["run"] == ["systemd:vy-retention-gc.timer"]
+        assert set(f["nodes"]) == holds_runs, "the collector runs on every node of deploy.toml that holds research runs"
     cond = re.search(r"^ExecCondition=/bin/sh -c '(.*)'$", unit, re.M)[1]
     status = tmp_path / "status.txt"
     gate = lambda: subprocess.run(["sh", "-c", cond.replace("/workspace/pouw/fill/status.txt", str(status))]).returncode
