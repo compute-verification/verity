@@ -72,7 +72,9 @@ def _write(path, tensors) -> dict[str, np.ndarray]:
 
 def test_only_a_record_with_dense_layers_and_an_array_of_layers_has_mla_sources():
     wt = _mla_weights_type()
-    first_dense, dense, moe = mla_moe_sources(wt)
+    sources = mla_moe_sources(wt)
+    assert sources is not None
+    first_dense, dense, moe = sources
     assert first_dense == FD and "gate_up_w" in dense and len(moe["w13"]) == 2 * E
     assert mla_moe_sources(RecordType(*((k, t) for k, t in wt.fields if k != "dense_layers"))) is None
     assert mla_moe_sources(RecordType(*((k, t) for k, t in wt.fields if k != "layers"))) is None
