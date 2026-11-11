@@ -109,7 +109,8 @@ BOUNDARY_COMMIT = (0.41e-3, 1.09e-3)
 #: tree node above its leaf
 HISTORY_ROW_BYTES = 2 * 576 + 192 + 128
 #: a history table's rows a computed token: a request's table has a row for each prompt and output position of its
-#: class, each count the least power of two that holds the request's own, so from one to two; the chat load's
+#: class, each count the least power of two that holds the request's own, so from one to two: the chat load's mean,
+#: the least and the most
 HISTORY_FILL = (1.4, 1.0, 2.0)
 #: the measured serving runs of `SERVED_HIGH` and `EDGE_PAUSE`, and of `ENGINE_STEP`, `STEP_ROWS` and `REQUEST_RATE`
 SERVED_RUNS = ["r20261107-155724-3f53", "r20261111-162328-f498"]
@@ -226,7 +227,7 @@ def priced_card(model: str = "GLM-5.3", serving: str = "assumed") -> dict:
             "vLLM)")
     record = {"part": "step record", "status": "modeled", "share": STEP_RECORD[0] / ENGINE_STEP, "low": 0.0,
               "high": STEP_RECORD[1] / ENGINE_STEP,
-              "source": f"the scheduler's record of each step, written on the engine core's thread: "
+              "source": "the scheduler's record of each step, written on the engine core's thread: "
                         f"{STEP_RECORD[0] * 1e6:.0f} µs a step, timed on the serving path's writer off the engine, over "
                         f"the step of {load}, as if it lengthened every step; the high at a full batch of 256 rows, "
                         f"{STEP_RECORD[1] * 1e6:.0f} µs; the low 0, vLLM's queue of two batches letting the thread "
