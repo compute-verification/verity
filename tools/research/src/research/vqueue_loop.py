@@ -85,7 +85,7 @@ plan of the candidate's tree, which splits pytest by suite), judged on every ste
 and its verdict alone is the candidate's; a run started while graph2 gated is started again as the check.  A Lean
 candidate's records run comes first under either gate: neither its graph2 check nor its check starts until that run passed,
 and both start on its records commit, or on it as built when the run regenerated nothing (`Loop._enqueue`).  A candidate built
-on another in flight, no member of it changing a Lean input against its merge base with `main` (`vqueue_slim.LEAN_INPUTS`),
+on another in flight, no member of it changing a Lean input against its merge base with `main` (`vqueue_slim.lean_inputs`),
 runs every step but lean-audit where its base's check is judged on lean-audit, or took its verdict on it from the check of a
 candidate below that is.  It reads lean-audit as pending while the candidate whose check ran it (its record's
 ``lean_audit_from``) is in flight, whatever that check says then, and once that candidate has landed takes the verdict the
@@ -1027,6 +1027,10 @@ class World:
         if (key := (head, main)) not in self._files:
             self._files[key] = frozenset(_out(self.repo, "diff", "--name-only", "--no-renames", f"{main}...{head}").splitlines())
         return self._files[key]
+
+    def _tree(self, sha: str) -> list[str]:
+        """The files of ``sha``'s tree, as `_changed` names them."""
+        return _out(self.repo, "ls-tree", "-r", "--name-only", sha).splitlines()
 
     def _judge(self, main: str, head: str, config: tuple[str, ...] | None = None) -> tuple[bool, bool]:
         """(whether ``head`` is a Lean change that compiles, whether it doesn't merge onto ``main``), kept by (head, main): a
@@ -2458,11 +2462,11 @@ class Loop:
         """The candidate whose check's verdict on lean-audit the check of ``line`` takes in place of running it
         (`vqueue_slim.start`'s ``audit_from``), where the check gates and its base is a candidate in flight, not `main`
         (``below``, its record), when no member's own change, against its merge base with ``main`` (`World._changed`, as
-        `World._judge` reads it), meets a Lean input (`vqueue_slim.LEAN_INPUTS`): that base, whose check is judged on
-        lean-audit (`vqueue_slim.audits`), else the candidate its base's check took it from (``lean_audit_from``), the one
-        whose check ran it, while that check is judged on it, or, once that candidate has landed, while the run beside
-        `main` keeps a verdict on it (`vqueue_slim.answers`; where each is read: ``lent``, `_lent`).  None else, and when
-        git can't say what a member changes: the check audits."""
+        `World._judge` reads it), meets a Lean input of the candidate's tree (`vqueue_slim.lean_inputs`): that base, whose
+        check is judged on lean-audit (`vqueue_slim.audits`), else the candidate its base's check took it from
+        (``lean_audit_from``), the one whose check ran it, while that check is judged on it, or, once that candidate has
+        landed, while the run beside `main` keeps a verdict on it (`vqueue_slim.answers`; where each is read: ``lent``,
+        `_lent`).  None else, and when git can't list that tree or say what a member changes: the check audits."""
         if self.gate != CHECK_GATE or below is None or lent is None or not line.get("heads"):
             return None
         if self.slim.audits(d, below):
@@ -2472,12 +2476,13 @@ class Loop:
             if not ran or not (self.slim.answers(rec) if landed else self.slim.audits(d, rec)):
                 return None
         try:
-            if any(vqueue.meets(self.world._changed(main, h), self.slim.LEAN_INPUTS) for h in line["heads"]):
+            inputs = self.slim.lean_inputs(self.world._tree(line["sha"]))
+            if any(vqueue.meets(self.world._changed(main, h), inputs) for h in line["heads"]):
                 return None
         except QueueError as e:
             # safe: a check that audits itself never takes a verdict it shouldn't, it only costs the audit
             d.q.log(f"research queue vqueue: candidate {line['sha'][:12]}'s check runs lean-audit itself, not taking "
-                    f"{ran[:12]}'s: git can't say what a member changes: {e}")
+                    f"{ran[:12]}'s: git can't list its tree or say what a member changes: {e}")
             return None
         return ran
 

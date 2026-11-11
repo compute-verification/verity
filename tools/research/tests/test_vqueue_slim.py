@@ -21,7 +21,7 @@ from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, L
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
 from research.vqueue_slim import (BUILD, CHECK, LEAN_INPUTS, OWN_TRAIN, WHOLE, abandon, audit_failures, audited, audits, based,
-                                  combine, failures, judge, key, reads, shard_count, start, step_test, unnamed)
+                                  combine, failures, judge, key, lean_inputs, reads, shard_count, start, step_test, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
@@ -791,6 +791,25 @@ def test_a_lean_input_is_a_lean_or_lake_file_or_lock_anywhere_the_check_s_or_lea
     other = ["docs/security.md", "verity/security/x.py", "tools/verity/checkers/x.py", "tools/verity/lean-tools/x.py",
              "verity/ml/circuits/ops.py", "uv.lock", ".python-version", "lean.md"]
     assert [p for p in [*lean, *other] if meets((p,), LEAN_INPUTS)] == lean
+
+
+def test_a_tree_s_lean_inputs_hold_each_directory_of_a_lakefile_or_a_lock_whole_where_the_tree_puts_it():
+    """An audit reads every file of its package (`lean_audit.inputs`), one a module reads with `include_str` among them, as
+    pouw's `check/models.json`: every directory of the tree holding a lakefile or a lock is a Lean input whole, a file the
+    tree doesn't hold yet too, and the root's is all of it; a directory beside or above one isn't, nor one named like it."""
+    pouw, rand, pous = ("verity/protocols/pouw/verifier/lean/check", "verity/commitments/randomness",
+                        "verity/protocols/pous/lean")
+    files = [f"{pouw}/lakefile.toml", f"{pouw}/models.json", f"{rand}/lakefile.lean", f"{rand}/__init__.py",
+             f"{pous}/lean-audit.json", f"{pous}/check.sh", "verity/protocols/README.md", "verity/protocols/pouw/models.json",
+             "a.txt"]
+    inputs = lean_inputs(files)
+    assert inputs[:len(LEAN_INPUTS)] == LEAN_INPUTS
+    lean = [f"{pouw}/models.json", f"{pouw}/tests/pouw_check_cases.py", f"{rand}/__init__.py", f"{rand}/tests/vectors.json",
+            f"{pous}/check.sh", f"{pous}/TRUSTED.sha256"]
+    other = ["verity/protocols/README.md", "verity/protocols/pouw/models.json", "verity/commitments/randomness2/x.py",
+             "verity/protocols/pous/leaner/x.json", "a.txt"]
+    assert [p for p in [*lean, *other] if meets((p,), inputs)] == lean
+    assert meets(("a.txt",), lean_inputs(["lakefile.toml", "a.txt"])) and not meets(("a.txt",), lean_inputs(["a.txt"]))
 
 
 def test_failures_are_what_an_ended_run_failed_of_a_step_by_what_its_log_names_once_its_verdict_is_kept(
