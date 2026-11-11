@@ -38773,3 +38773,41 @@ The quick tier started before the pins commit so that what the moved tree breaks
 **Runs** (all on the planner tree `a5e4e56a11`, the record's tools and job, preserved, nothing labelled): `r20261111-040919-a332` (vy-nebius-cpu-5; one-head control and the records' betas; `rows.jsonl` sha256 `cefd94dd2d47…`), `r20261111-041631-656d` (vy-nebius-cpu-1; betas pinned at the read-offs; `238f919863a9…`), `r20261111-041651-7952` (vy-nebius-cpu-3; utilization 0.2 and 0.6; `28e6a7aa27d7…`), `r20261111-041929-9bfd` (vy-nebius-cpu-7; the old census's eight-head plan as a `mix.json`; waiting). Tools, in the lane's notes: `tools/h8_readoff.py`, `tools/h8_control_compare.py`, `tools/h8_pinned_check.py`, `tools/mix_families.py`, `tools/mla128_lever.old8.json`, `tools/h8_second_read/` (the three launch commands). No file of the repository changed.
 
 **Next, part 2 (10:00Z).** Benchmarks' labels are pulled again (04:22 to 04:25Z); #8664's head moved to `a4947c3d0e` at 04:13Z, a crossing of the layout move with the reader's logic unchanged [read: the diff of `prove_records.py` is one path]. The census of record's own card has today's MoE cut as `MoeExpertFp8BlockGemm_v3{K=6144,N=1}`, `MoeExpertFp8GemmW_v1{E=256,K=256,N=1}` and `MoeRouterSigmoidBias_v1`; whether the reader holds a row for each decides whether `(i) honest` can be built there, and I say so either way.
+
+## TWOPROVE, Wed 11 Nov 04:51Z: PRF-477, your 8:28 PM answer stands for Thursday's serve with one detail corrected; R3.4's quick tier failed on R3.4's own unrecorded lock entries, which `9bb6` writes
+
+**PRF-477: your answer of 8:28 PM PST stands for what vllm serves Thursday (closing 1, round 1's root unchanged, one OS salt a row kept by the prover), but the one-stage audit has no form to reuse: its `known_port` is a port the verifier commits under a public salt, so closing 1 is a new check in round 2.** I posted this on PRF-477 at 04:49Z as `proofs/TWOPROVE`, addressed to @vllm. The tool says a worker's comment rings no one, so @vllm hears of it only if you ring them.
+
+**What I read, with the lines** (paths on main `5c095bb4ab70` unless marked #8730):
+- **How one-stage holds `ok` to one.** Only in PoUW's H1 lane, and never through a salt the prover gives [read]. `produced.known_port` (198–205) commits a row the verifier makes, under a public salt (`pouw/verifier/leaf_lanes.known_salt`, 121–126). The session holds that row through `Flock/KnownRead.lean` (called at `FlockVerify.lean:1095`); the record holds it through `produced.shared` (166–186; in Lean, `Spot/Produced.lean:145`). The callers are `pouw/verifier/credit.py:1954`, `pouw/prover/circuit/h1window.py:827`, and in Lean `PouwCheck/LiveVerified.lean:65–80` and `Lanes.lean:582`. So the precedent is a public-salt port, closing 3's mechanism, and for the verifier's own port rather than round 1's.
+- **Not 2 holds** [read]. `Flock/KsScope.lean:45` (`tagsWhy`, the first step of `checkOf` at 120–133, run at `FlockVerify.lean:1177`) refuses a statement with public outputs under `--zk`. Its test is `WRONG_TAGS` in `test_form_refusals.py:34`.
+- **What exists for closing 1** [read]. Every verdict already reports each registered row's `[position, b ‖ c]` (`registeredOpenings`, `Flock/Registered.lean:656–671`), including the read's `o1` at its linked row (`placedOk` and `linkedRow`, `SecondStage.lean:790–810` at #8730). hm96 binds on SHA-512's collision resistance alone (`commitments/hm96/__init__.py:13–27`), so a revealed salt fixes that row's content and shows no other row.
+- **What round 2 lacks** [read]. `Checked` and `verifiedOf` (`SecondStage.lean:212–231`; `second_stage.py:143–164`, both at #8730) carry no `openings`. `readOk`'s link case (823–847; `_read_ok` 929–940) checks only roots, domain, leaves and row positions, never a row's content.
+- **One salt a row** [read]. On `cursor/vllm-longrow2-return-086b` at `cb4005ad5791`, `boundary_rows.commit` draws `os.urandom(SALT_BYTES * leaves)` for every port, `o0` included (`pipeline/boundary_rows.py:419`), and the prover keeps the salts in `salts.bin` (38, 89).
+
+**The check, not written tonight** [guess]:
+- `SecondStage.lean`: `Checked` gains the verdict's `openings`, which `verifiedOf` reads, and a new `returnOk` covers each statement's reads of a return link (`returnLinks`, 510–530).
+- `returnOk` refuses with a new code `second-return` in `stmtCodes` unless `commit_string(DEFAULT_KEY, row_digest(one), salt)` equals the verdict's `b ‖ c` at that read's linked row.
+- `second_stage.py` mirrors it. Round 2's input newly carries, for each sampled read, the salt of the `o0` row it reads (only the sampled rows' salts, handed over after the sample).
+- Its tests and difftest come with it.
+- The cost is one hm96 commit per sampled read.
+- Nothing changes in round 1's record or Thursday's serve; vllm only passes the sampled rows' salts out of `salts.bin` when round 2 runs.
+
+**The check's size** [guess]:
+- Files: about 80 lines of Lean, 60 of Python, and tests.
+- Lock: no guarantee's statement changes. But the lock's `reads/Spot.SecondStage` lists `Spot.SecondStage.Checked` among its 102 definitions [read], so that digest moves and the record is regenerated.
+- When: it could be open after #8730 lands, since both edit `readOk`'s neighbourhood, and after R3.4 opens: Wed about 16:00Z.
+
+**R3.4: quick tier `r20261111-041637-da28` at `d2e20a3951` failed because of R3.4, not the crossing or the moved main** [run]:
+- What ran: 8 suites, 6 passed. `verity/protocols/pouw/verifier` had 1843 passed and 1 failed (`test_lean_package.py::test_cited_theorems_are_guarantees`, `KeyError: 'signature'`). `verity-pouw-benchmarks` had 1210 passed and 6 failed (`harness/price_twins.py:114`, the same `KeyError`).
+- Why: at `d2e20a3951` exactly R3.4's three new guarantees (`Claims.SamplingGeneric.compilerKSRegAtSB`, `…_nontrivial`, `Compiled.KSRegAtSB_fails`) hold only `owner` and no record [run]. Both tests read `g["signature"]` for every guarantee (`test_lean_package.py:31`, `price_twins.py:112`). Main's 1,077 guarantees all have one [run].
+- What fixes it: the record that records run `9bb6` regenerates. A lock entry waiting for `--update` crashes these two tests instead of warning; I'll leave a friction note.
+- **CI-524's lock checks for `d2e20a3951`** [run]: 4,179,563 bytes, under 4,194,304; `Security/` 6, as main's 6; old paths 0. Main's lock is 4,175,579 bytes.
+- **Records** `r20261111-041601-9bb6` (vy-nebius-cpu-11) is still running, in the Lean build slot since 04:19Z, at 32.0 GiB with a 56.6 GiB peak [run]. ETA 05:35–05:50Z [guess].
+
+**Next:**
+- When `9bb6` ends, I name what it regenerated. I expect only `security/lean-audit.json`: the three records, plus the moved `reads` digest of `Definitions.Claims.SamplingGeneric`, as `ba02` showed. If any other statement or premise moved, I stop and come to you.
+- I commit exactly that file, run CI-524's three checks on the new head, and rerun the quick tier there.
+- Then I open the PR unmarked with `--by proofs` and write "ready to mark #N at SHA".
+- 07:00Z holds if `9bb6` ends by 06:00Z [derived: `da28` took about 25 min of wall time].
+- I wrote nothing through the Linear connector today.
