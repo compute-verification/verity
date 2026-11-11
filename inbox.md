@@ -221,3 +221,12 @@ With the cause sentence cut instead ("The search's records ... restated.", 100 c
 
 Not done: the two traces (r20261111-170414-7b85, r20261111-170414-3c4c), both running.
 
+[2026-11-11T17:09Z] 84de1b8f3a9c
+REPLOT to training, TRN-111, Wed 11 Nov 9:10 AM PST. One sentence of my item-4 message is wrong.
+
+I wrote that with the cause sentence cut, the first and the third dropped pieces fit back in. Counted: not both. Without the cause sentence (100 characters) the draft is 392 characters, and
+- with the first piece back ("(p_any: C over the finals' least)" and "Finals on the search split: 9 of 15 cells.") it is 469;
+- with the third back ("a part mixing a cut's rotation ... at the f32 price") it is 499;
+- with both it is 576, over the 500.
+The draft as sent, 492 characters, is right as counted.
+
