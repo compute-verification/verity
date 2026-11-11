@@ -8,14 +8,17 @@ import torch
 import torch.nn.functional as F
 from synthetic import run_job, tiny_data, tiny_registry, tiny_start, write_config
 from torch import nn
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
-from training_slowdown import VERSION, config, formalism, policy, run, starts
+from training_slowdown import VERSION, config, formalism, grade, policy, run, starts, work
 from training_slowdown.capture import products
 from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, derive_seed
 from training_slowdown.counterexample import check
-from training_slowdown.data import Stream
+from training_slowdown.data import Data, Stream
 from training_slowdown.evaluate import Evaluator
+from training_slowdown.flops import gather_macs
 from training_slowdown.model import LM
+from training_slowdown.opnames import gemm_like
 
 V, D = 32, 16
 
@@ -355,6 +358,92 @@ def test_a_weight_is_passed_at_the_updates_width_only_among_the_runs_first_steps
     tr = run.trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
     read = [r["widths"] for r in tr["rows"] if r["phase"] == "forward" and r["affected"][1]]   # each reads a weight
     assert read and all(w == [32, width] for w in read)
+
+
+LORA = {"targets": "blocks.0.wq.weight,blocks.0.w_up.weight", "rank": 2, "alpha": 4.0, "lr": 1e-2}
+#: the whole model, one block, LoRA's adapters, and one block under Muon in two micro-batches
+JOBS = {"whole": {"dials": {"trainable": "*", "lr": 1e-2}},
+        "block": {"dials": {"trainable": "blocks.0.*,norm", "lr": 1e-2}},
+        "lora": {"route": "lora", "dials": LORA},
+        "muon": {"dials": {"trainable": "blocks.0.*,norm", "opt": "muon", "lr": 1e-2, "micro_batches": 2}}}
+COUNTS = ("tokens", "matmul_macs", "elementwise_macs", "macs")
+
+
+def counted_and_traced(root: Path, steps: int, **over):
+    """A job's steps through the harness's own loop (`run.train` under `run.Harness`), in this process and under the
+    math attention kernel, and then its trace as the job takes it: the counter's record, the trace, the capture's
+    graph the trace was read from, and the model."""
+    reg = tiny_registry(root / "reg")
+    registry = starts.registry(reg)
+    cfg = config.load(write_config(root / "a.toml", budget={"steps": steps, "batch": 4}, **over), registry)
+    te = run.Harness(starts.load(cfg.start, reg.parent / "starts"), root / "out", start=cfg.start.entry(),
+                     clock=lambda: 0.0)
+    route = config.route(cfg.route)
+    torch.manual_seed(0)
+    with sdpa_kernel([SDPBackend.MATH]), te.counter:
+        model, optimizers = route.build(cfg.start.shape, cfg.dials)
+        stream = Stream(Data.of(cfg.start.data, registry), 0, ctx=int(cfg.start.shape["ctx"]))
+        run.train(te, cfg, route, stream, model, optimizers)
+    return te.finish({}), *run.traced_step(cfg, route, model, optimizers, "cpu"), model
+
+
+@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("muon", 3)])
+def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, steps):
+    """What a job's trace says of a step (`run.traced_step`: the capture's graph of it, from shapes alone) against
+    what the job's counter recorded of that same step as it ran: the step's tokens, its GEMMs' MACs, its elementwise
+    MACs and all its MACs are equal; the trace's rows, which the slowdown's products are read from, hold exactly the
+    GEMMs' MACs; the forward's GEMMs are equal apart; and every shape the rows run is one the counter's op log ran
+    (`formalism.other_program`). At a step that reads the step before's update, and for the whole model at a run's
+    only step, which reads none: there the trained embedding is θ's and its lookup counts nothing, and from the next
+    step on the counter holds it at the gather Definition's multiplexers, which |C| counts and no product is, so the
+    counter's forward is the trace's forward GEMMs, that lookup and the forward's elementwise work.
+
+    Under the math attention kernel. A job runs torch's fused attention, which the counter counts by torch's FLOP
+    formula for the whole op and the trace takes apart into the products autograd runs, so the two differ on a job's
+    attention; under the math kernel the counter sees those products too, and nothing else of a step differs.
+
+    The step's `updated` rows are not compared: the trace's are by update dependence and the counter's by use. No
+    cheaper test holds the trace to the counter: each of the two has its own tests, on its own count."""
+    rec, tr, g, model = counted_and_traced(tmp_path, steps, **JOBS[job])
+    assert rec["invalid"] == [] and tr["step"] == min(1, steps - 1)
+    step = rec["steps"][tr["step"]]
+    assert [step[k] for k in COUNTS] == [g.tokens, g.macs, g.elementwise_macs, g.c_macs]
+    rows = work.priced(tr)["rows"]
+    assert tr["tokens"] == step["tokens"] and sum(r["count"] * r["macs"] for r in rows) == step["matmul_macs"]
+    log = [r for r in rec["structures"][step["struct"]]["log"] if r[0] == "fwd"]
+    forward = sum(r["count"] * r["macs"] for r in rows if r["phase"] == "forward" and r["token_dims"])
+    assert sum(r[5] for r in log if gemm_like(r[2])) == forward > 0
+    lookup = gather_macs("embedding", tuple(model.embed.shape), None, step["tokens"] * model.embed.shape[1])
+    assert [r[5] for r in log if r[2] == "embedding"] == ([lookup] if job == "whole" and tr["step"] else [])
+    assert sum(v for k, v in step["by"].items() if k.startswith("fwd/")) == forward + sum(
+        r[5] for r in log if not gemm_like(r[2]))
+    assert formalism.other_program(rows, grade.macs_log(rec, None)) is None
+
+
+def test_a_routes_output_is_the_traces_step_and_the_counters_next_step_or_tail(tmp_path):
+    """The one place the two differ under the math kernel. A route's `output` (LoRA's: each adapted matrix with its
+    B·A merged in) is traced as the end of the measured step and counted where the harness calls it, after the
+    step's checkpoint: in the step after it, or in the tail after the last. So a run of one step traces the merge in
+    its step and counts it in its tail, and the step's counts differ by exactly the tail's; a longer run's traced
+    step holds the merge of the checkpoint before it, and the two agree (the test above)."""
+    rec, _, g, _ = counted_and_traced(tmp_path, 1, **JOBS["lora"])
+    step, tail = rec["steps"][0], rec["tail"]
+    assert tail["matmul_macs"] > 0 and tail["elementwise_macs"] > 0
+    assert [a - step[k] for a, k in zip((g.tokens, g.macs, g.elementwise_macs, g.c_macs), COUNTS)] == [
+        tail[k] for k in COUNTS]
+
+
+def test_a_trace_at_another_rank_is_not_of_the_jobs_program(tmp_path):
+    """`formalism.other_program` on a job's op log and a trace the job didn't take: LoRA at rank 3 runs shapes the
+    rank-2 job never ran (each adapter's factors and their gradients), so the grade doesn't price its rows as that
+    job's, where the job's own trace it does (the test above)."""
+    rec, *_ = counted_and_traced(tmp_path, 3, **JOBS["lora"])
+    cfg = config.load(write_config(tmp_path / "b.toml", budget={"steps": 3, "batch": 4}, route="lora",
+                                   dials=LORA | {"rank": 3}), starts.registry(tmp_path / "reg" / "starts.toml"))
+    route = config.route(cfg.route)
+    tr = run.trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
+    o = formalism.other_program(work.priced(tr)["rows"], grade.macs_log(rec, None))
+    assert o is not None and o["unmatched"] > 0 and all(3 in s for s in o["largest"]), o
 
 
 def test_a_retrace_writes_the_same_record_and_refuses_another_digest(ran, tmp_path):
