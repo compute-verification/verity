@@ -83,8 +83,9 @@ snapshots are ordinary artifacts (kind dataset-snapshot/v1)
 trees/<hex>/                         LOCAL ONLY: where `fetch ART` (no --to) materialises a tree payload
 catalog.sqlite                       LOCAL ONLY: rebuildable index (§5); never uploaded
 scratch/<reuse_key>/<name>/          LOCAL ONLY: tool caches namespaced by reuse_key (§6.5)
-steward/lease.json                   REMOTE ONLY, not a store record: the steward lease, the one mutable key, changed by conditional
+steward/lease.json                   REMOTE ONLY, not a store record: the steward lease, a mutable key, changed by conditional
                                      PUT only (research/steward.py); the store never reads, lists or indexes it
+packs/labels/latest.{tar.gz,json}    REMOTE ONLY, not a store record: the labels pack (§8), replaced in place
 live/<run id>/<seq>.json             REMOTE ONLY, not a store record: a running check's live record, a new immutable object per
                                      write with the run's custody key (tools/verity/check/live.py, read by `verity ci`); the store
                                      never reads, lists or indexes it, and gc leaves it
@@ -307,14 +308,11 @@ class Remote(Protocol):
 `FsRemote` and `S3Remote` also have `list_times(prefix, start_after=None) -> [(key, last modified)]`, what `index()` (§5.1) lists with.
 
 `FsRemote(root)` (a directory, also the test double; its `etag` is the file's MD5) and `S3Remote(endpoint, bucket, access_key,
-secret_key, region="auto", session_token=None)` (SigV4 with signed payload hashes, stdlib `urllib`+`hmac`, path-style
-`<endpoint>/<bucket>/<key>`; one PUT for objects <= 5 GiB, the service's PutObject limit; above that `push` raises `StoreError`
-naming multipart as unimplemented — the planned design is multipart with per-part sha256 recorded in a sidecar key
-`<key>.parts.json`). `S3Remote.put` is HEAD-then-`PUT If-None-Match: *`: a 412 means another writer created the key first
-(`exists`, fine for immutable content); a 400/501 means the service lacks conditional PUT, so it is switched off for the rest of
-the session and the plain PUT is used (the push report carries a note). Cloudflare R2 honours `If-None-Match: *` (checked live).
-The signer is tested against the AWS documented vectors and the client against R2. Config `~/.research/store.toml` (or
-`$RESEARCH_STORE_CONFIG`):
+secret_key, region="auto", session_token=None)` (SigV4 with signed payload hashes, path-style `<endpoint>/<bucket>/<key>`; one
+PUT for objects <= 64 MiB, a multipart upload above). `S3Remote.put` creates with `PUT If-None-Match: *` and never overwrites:
+a key that exists is `skipped` when it holds the same bytes, else a `RemoteConflict`; where the service lacks conditional PUT
+(a 400/501), a plain PUT follows a HEAD for the rest of the session (the push report carries a note). Config
+`~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`):
 
 ~~~toml
 [remote]
@@ -382,7 +380,7 @@ algorithm: `remote-replicas/README.md`.
 
 ### 7.4 Retention on the remote — `research data gc` (`gc.py`)
 
-Blobs that only uncited artifacts past their kind's TTL hold leave the remote (the store grew ~840 GiB a day).
+Blobs that only uncited artifacts past their kind's TTL hold leave the remote.
 TTLs are `gc.TTL_DAYS`, by the manifest's LastModified: run-record/v1, vllm-replay-bundle/v1 and vllm-replay-slim/v1 7 days, vllm-rowdir-tar/v1 3,
 run-files/v1 and vllm-row-meta/v1 14, telemetry/v1 30; every other kind keeps no TTL. Kept: an artifact or run that a label
 (target, ref or value), a citing tree (`--cite`: the notes repository, a checkout of the code with its fixture registry), Linear
@@ -414,10 +412,15 @@ immutable, append-only; a target's assertion set is the listing of its prefix):
 Assertions travel with what they describe (`labels_sync.py`): `push RUN` / `attempt publish` / `push ART` push the assertions
 about the attempt, its derivation and its named artifacts (`attempt_targets`); `push --pending` and `labels-sync` push every local
 one; `reindex --remote`, `labels-sync` and `pull --from MACHINE` bring remote/machine assertions into the local layout and index.
-`preserved` is a three-part gate (attempt manifest, artifacts, labels) naming the part that fails; a preserved Attempt is not
-preserved until its assertions are on the remote. `labels TARGET --remote` marks each both / LOCAL ONLY / REMOTE ONLY.
+`preserved` is a three-part gate (attempt manifest, artifacts, labels) naming the part that fails. `labels TARGET --remote`
+marks each both / LOCAL ONLY / REMOTE ONLY.
 Conflicting ones coexist on both sides. A landing is a `landed` label by `research-merge` on each run its `Check:`
 trailer names, valued main's commit (`research merge`; `--label-landed REV` backfills).
+
+The labels pack (§3) is every assertion of the remote's `labels/` as one tarball beside its sha256, which `labels-pack`
+rebuilds and replaces, hourly on the control pod; a sync that lacks more than 5,000 assertions takes it first and pulls only
+the rest. It is a cache of `labels/`, never its source: a member lands only under a name the remote lists and its
+content hashes to, and a pack that is absent or fails its sha256 is ignored.
 
 Append-only, one file per assertion (`O_EXCL`, mode 0444), never read-modify-write. The file name uses the compact ts
 (`20260922T112029Z`), `by` restricted to `[A-Za-z0-9._-]`, and a `~N` suffix when the same asserter labels twice in one
