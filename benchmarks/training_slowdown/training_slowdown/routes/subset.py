@@ -12,8 +12,9 @@ fnmatch, `blocks.5.*,norm`), the rest frozen.
 - `lr`: the rate, times the schedule. `gain_lr` is the gains' own rate and `embed_lr` the embedding's (0: `lr`),
   under whichever optimizer trains them.
 - `fused`: AdamW, the model's own or the one beside `muon` or `shampoo`, steps in torch's fused kernel, one op a
-  group over every tensor of the group; false leaves the step to torch's default, which is never that kernel. The
-  same update either way, in another order of rounding.
+  group over every tensor of the group; false leaves the step to torch's default, which is never that kernel. Its
+  groups are then one a kind of tensor (the embedding, another matrix, a gain), so the kernel runs once a kind
+  whatever the rates; without it a group is a rate. The same update either way, in another order of rounding.
 - `schedule`: a ramp over the first `warmup` steps (a share of the steps when below 1; 0: none), times `linear`, 1
   until the last `decay` share of the steps, where it falls linearly to 0 (1: from the first step); `cosine`, half a
   cosine from 1 at the first step to 0 after the last; or `constant`, 1.
@@ -93,15 +94,17 @@ def trained(model: torch.nn.Module, dials: dict) -> list[str]:
     return names
 
 
-def groups(named: list, dials: dict) -> list[dict]:
-    """One optimizer's tensors as its groups, one group a rate and each in the model's order: the embedding at
-    `embed_lr`, another matrix at `lr`, a gain at `gain_lr`. A group states its rate twice: `lr`, which `step` scales,
-    and `initial_lr`, where torch's schedulers keep a group's own rate, which nothing writes after this."""
-    rates: dict[float, list] = {}
+def groups(named: list, dials: dict, kinds: bool = False) -> list[dict]:
+    """One optimizer's tensors as its groups, each in the model's order: the embedding at `embed_lr`, another matrix
+    at `lr`, a gain at `gain_lr`. One group a rate, or with `kinds` one a kind of those three, two kinds at one rate
+    then two groups. A group states its rate twice: `lr`, which `step` scales, and `initial_lr`, where torch's
+    schedulers keep a group's own rate, which nothing writes after this."""
+    out: dict = {}
     for n, p in named:
-        rate = dials["embed_lr" if n == "embed" else "lr" if p.ndim == 2 else "gain_lr"] or dials["lr"]
-        rates.setdefault(rate, []).append(p)
-    return [{"params": params, "lr": rate, "initial_lr": rate} for rate, params in rates.items()]
+        kind = "embed_lr" if n == "embed" else "lr" if p.ndim == 2 else "gain_lr"
+        rate = dials[kind] or dials["lr"]
+        out.setdefault(kind if kinds else rate, (rate, []))[1].append(p)
+    return [{"params": params, "lr": rate, "initial_lr": rate} for rate, params in out.values()]
 
 
 def build(shape: dict, dials: dict):
@@ -113,11 +116,11 @@ def build(shape: dict, dials: dict):
     named = [(n, p) for n, p in model.named_parameters() if n in names]
     lr, wd = dials["lr"], dials["weight_decay"]
     if dials["opt"] in WHOLE:
-        return model, [WHOLE[dials["opt"]](groups(named, dials), dials, wd)]
+        return model, [WHOLE[dials["opt"]](groups(named, dials, dials["fused"]), dials, wd)]
     under_opt = {n for n, p in named if p.ndim == 2 and (n != "embed" or dials["embed"] == "opt")}
     matrices, beside = [x for x in named if x[0] in under_opt], [x for x in named if x[0] not in under_opt]
     return model, ([MATRICES[dials["opt"]](groups(matrices, dials), lr=lr, weight_decay=wd)] if matrices else []) + (
-        [adamw(groups(beside, dials), dials, 0.0)] if beside else [])
+        [adamw(groups(beside, dials, dials["fused"]), dials, 0.0)] if beside else [])
 
 
 def schedule(dials: dict, t: int, n: int) -> float:

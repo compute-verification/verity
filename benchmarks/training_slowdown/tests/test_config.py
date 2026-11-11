@@ -50,6 +50,11 @@ def test_a_later_dial_left_at_its_default_is_out_of_the_digest(tmp_path, reg):
     assert written.digest == base.digest
     cosine = config.load(write_config(tmp_path / "cosine.toml", dials=dials | {"schedule": "cosine"}), reg)
     assert cosine.digest != base.digest and cosine.run()["dials"] == base.run()["dials"] | {"schedule": "cosine"}
+    unfused = config.load(write_config(tmp_path / "unfused.toml", dials=dials | {"fused": False}), reg)
+    fused = config.load(write_config(tmp_path / "fused.toml", dials=dials | {"fused": True}), reg)
+    assert unfused.digest == base.digest != fused.digest, (
+        "a job continues a kept state of its own config digest alone, so one kept without `fused` is never loaded "
+        "into the groups of a job with it")
     average = config.load(write_config(tmp_path / "average.toml", route="ema", dials=dials), reg)
     assert sorted(set(average.run()["dials"]) - set(base.run()["dials"])) == ["ema_decay"], (
         "ema's configs digest subset's nine dials and ema_decay: a dial added to it goes in its LATER")
