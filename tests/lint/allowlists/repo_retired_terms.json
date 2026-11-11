@@ -2792,7 +2792,6 @@
     {"file": "benchmarks/flock_s8_block/README.md", "count": 5},
     {"file": "benchmarks/flock_s8_block/run.sh", "count": 15},
     {"file": "benchmarks/flock_s8_block/summary.py", "count": 1},
-    {"file": "benchmarks/g2/tests/test_curve.py", "count": 3},
     {"file": "benchmarks/harness/README.md", "count": 1},
     {"file": "benchmarks/harness/pyproject.toml", "count": 1},
     {"file": "benchmarks/harness/tests/test_bench.py", "count": 5},
