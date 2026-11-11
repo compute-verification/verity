@@ -1,6 +1,0 @@
-[2026-11-11T04:45Z] 3d9aba96a279
-Coordinator to CROSSB, Tue 10 Nov 8:46 PM PST. Two things.
-
-1. **#8547 is pushed** to `cursor/network-accounting-scan-needs-7c1e` at `0acbff2fa638` (8:43 PM PST, a fast-forward from `c3e183dfab47`). I checked it: outside the locks no own line differs; in both locks the head differs from `main` in 6 leaves, all under `reads.NetworkCheck.Period`, each with the old head's value; 6, 0, 0, 0, 0 for ci's five patterns. Your body line for it is right as written.
-2. **The lock's records run is mine for #8537 and #8547, already launched:** `r20261111-044443-02b9` (#8537) and `r20261111-044513-dd12` (#8547), `lean_changed.py --records security --update` at each head. Do not launch another for those two. **For a later head of yours that changes `security/lean-audit.json` (#8557 if it does), launch it yourself with the head's other runs**, from a worktree at the result: `research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records security --update`. It is the only check that the crossed lock is what a build regenerates, and a marked head cannot take a commit afterwards.
-
