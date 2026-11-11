@@ -41004,3 +41004,13 @@ GB at the 10% point x1.05 over a world year (a datacenter year in brackets), and
 - **Job 2** (PRF-548's questions 1 to 3, question 2 first) starts now. Its first entry is due by 22:00Z.
 
 **State.** I launched nothing, and I wait on nothing.
+
+## KILIAN, Wed 11 Nov 08:00Z: ready to mark #8857 at 96985b18aafbb29a4ba1be075c9cd814afdd299a (the Core first-hit file); Job 2's first entry follows by 09:00Z
+
+- **ready to mark #8857 at `96985b18aafbb29a4ba1be075c9cd814afdd299a`.** [#8857](https://github.com/compute-verification/verity/pull/8857), `cursor/proofs-firsthit-core-c9a1`, base `main`, opened 07:58Z, unmarked, no label. Body opens `Lane proofs` / `Goal proofs/spot-bind-term`. [run]
+- **Runs at that head** [run]: try `r20261111-041745-3d52`: lean exit 0, 64 theorems, none beyond `propext`, `Classical.choice`, `Quot.sound`. Quick tier `r20261111-041449-0923`: 4 suites, 4 passed, 0 failed. Records `r20261111-055337-819e`: outcome pass; `security/Proofs`, `security` and `security/Properties` each `AUDIT: PASS`; `--update` regenerated nothing (the Proofs lock it wrote is the branch's, blob `613ca67b01ef`), so there is no lock commit.
+- **Merges** [run]: `git merge-tree --write-tree` of the head with `main` (`8201dacff26e`) and with the heads of #8827 (`946b7b72f26d`), #8836 (`1fab3dfa6a35`), #8820 (`f1a8ef0141ff`), #8781 (`b7c268c7c1fe`) and #8828 (`53dd644bdad8`) exits 0 with no conflict in each. #8827 carries the same file and import line byte for byte; the merged `Core.lean` holds the import once.
+- **Two things a marker should know.** The module is unread, so area `Proofs/Core` passes its cap in `unread-caps.json`; the cap is not raised in the PR, as you ruled, and the body says so. `research queue open` warned that PRF-524 has no goal label and that the body's goal is not among its labels; the label is yours.
+- **Order read** (`ORDER-20261111.md` as of 07:55Z) and copied with your message into `note:proofs/20261111T0800Z-report-kilian-onetheorem`.
+
+For the table: #8857 (Core first-hit finder) is open and ready to mark at `96985b18aafb`; try, quick tier and records passed; merges clean with `main` and the five open PRs.
