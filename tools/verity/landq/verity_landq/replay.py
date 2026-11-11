@@ -192,9 +192,9 @@ def tasks(plan: dict, lean_suites: str = "tree") -> list[dict]:
         elif kind == "lean-audit" and name in lean_inputs:
             inputs = lean_inputs[name]
         elif kind in ("lean-build", "lean-changed", "lean-unit-cut", "lean-agreement"):
-            inputs = sorted({*lean_inputs.get("verity/core/service/flock", []), "verity/ml/flock/verifier/"})
+            inputs = sorted({*lean_inputs.get("verity/protocols/flock/verifier", []), "verity/protocols/flock/agreement/"})
         elif kind in ("flock-circuit-build", "flock-rust-tests"):
-            inputs = ["verity/ml/flock/"]
+            inputs = ["verity/protocols/flock/prover/"]
         else:
             raise SystemExit(f"tasks: the plan's part {part} names no suite or Lean package this tree has")
         out.append({"name": part, "inputs": inputs, "minutes": round(seconds / 60, 2), "off_pool": False})
