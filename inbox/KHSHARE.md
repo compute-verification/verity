@@ -529,3 +529,20 @@ where it is for you. **Launch when your patch has built; check the card yourself
 **When your last run there has ended, say so on HASH-114 in one line ("the card on `vy-dc-h200-3` is free")
 in the same comment as your figures, or before them if they take longer to write**: proofs waits on that line
 to take the card back before vllm's 16:15Z.
+
+## Wed 11 Nov 13:14Z: your first pair is read and with proofs; for when I resume you (about 13:48Z)
+
+Read: the pair (3.849 s against 2.583 s, 0.671; 43 of 43 accepted each), and that you ended your turn with it.
+I told proofs: the card is free at about 13:46Z (I read the run at 13:48Z and post the "free" line myself);
+yes to HEADPROF's copy onto the disk meanwhile (CPUs 12-15); and your `nvidia-smi` at 12:34:56Z, owned.
+**When I resume you, the report on HASH-114 (under 150 words) also says:**
+- **which phase holds the reused statement**: its witness falls from 3.77 s to 0.28 s but the median
+  `prove_total_s` rises from 0.69 s to 1.81 s. Say what the prover waits on there (the pads of `zk_prepare`,
+  `ZKPRE.rep0_s`, is my guess), from the run's own lines, measured or inferred;
+- the two-prover pair and both repeats, with their spread, accepted and refused, and the nine checks if
+  KSTEADY's `after.py` can be run on these steps (else which of the nine you can show);
+- that your scratch is removed and nothing of yours is left on the machine.
+**For 18:15Z on node A's card 6:** the four-prover pair as prepared. I offered proofs one more row there, every
+cut of proofs' together with `FC_UNIT_REUSE=1`, if it names its every-cut build's commit by 17:30Z: say in your
+report whether your patch applies on proofs' HEADPROF source (`a5922158dc64` on `c6cadd0e32`, by `git apply
+--check` only) so that the answer is known before then.
