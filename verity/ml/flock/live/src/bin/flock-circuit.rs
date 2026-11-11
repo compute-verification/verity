@@ -4891,9 +4891,12 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
 
 /// `unit-walk`: circuit `--net` (default the statement's unit) over `--slots` slots of seeded input words, as the device
 /// witness builds its host units (`unit_ab_into`), at each `--wide` lane groups a pass (default 1,2,4,8) on each `--threads`
-/// pool size (default the global pool's) in turn, `--reps` rounds: a `WALK` line each with its wall and CPU seconds and
-/// whether its packed words are the first run's. The walk reads no input value, so seeded words time it as a served
-/// statement's do.
+/// pool size (default the global pool's) in turn, asking the cache for z at each `--ahead` distance (default 0, never, then
+/// the walk's own, `ir_block::unit_ahead`), `--reps` rounds, first with every walk mapping its own row vectors and then with
+/// the vectors kept between walks (`--keep`, default 0,1; `ir_block::keep_rows`): a `WALK` line each with its wall and CPU
+/// seconds, the CPU seconds spent in the kernel, and whether its packed words are the first run's. The walk reads no input
+/// value, so seeded words time it as a served statement's do, and it runs on the device prover's small pages (`main`;
+/// `--huge-pages`: with the huge-page advice a CPU prover takes).
 fn unit_walk(c: &Composite) {
     let ni: usize = arg("--net", &c.unit_net.to_string()).parse().expect("--net");
     let net = &c.nets[ni].1;
@@ -4901,6 +4904,8 @@ fn unit_walk(c: &Composite) {
     let reps: usize = arg("--reps", "2").parse().expect("--reps");
     let list = |name: &str, default: &str| -> Vec<usize> { arg(name, default).split(',').map(|w| w.parse().expect(name)).collect() };
     let widths = list("--wide", "1,2,4,8");
+    let aheads = list("--ahead", &format!("0,{}", flock_live::ir_block::unit_ahead()));
+    let keeps = list("--keep", "0,1");
     let pools: Vec<rayon::ThreadPool> = list("--threads", &rayon::current_num_threads().to_string()).into_iter()
         .map(|t| rayon::ThreadPoolBuilder::new().num_threads(t).stack_size(flock_live::THREAD_STACK).build().expect("a thread pool"))
         .collect();
@@ -4912,19 +4917,28 @@ fn unit_walk(c: &Composite) {
     let one_pass = net.one_pass();
     let flat_s = t.elapsed().as_secs_f64();
     let nnz = net.a.nnz() + net.b.nnz();
+    // this process's CPU seconds in the kernel so far: `/proc/self/stat`'s stime, as `cpu_seconds` reads its sum with utime
+    let sys_seconds = || {
+        let s = std::fs::read_to_string("/proc/self/stat").unwrap_or_default();
+        s.rsplit_once(')').and_then(|x| x.1.split_whitespace().nth(12)).and_then(|x| x.parse::<f64>().ok()).unwrap_or(0.0) / 100.0
+    };
     let (mut out, mut first) = (vec![0u64; 4 * uw * slots], None::<(bool, Vec<u64>)>);
-    for rep in 0..reps {
-        for pool in &pools {
-            for &n in &widths {
-                out.fill(0);
-                let (t, cpu) = (Instant::now(), cpu_seconds());
-                let ok = pool.install(|| flock_live::circuit::unit_ab_into_wide(net, ni, uw, &ins, &mut out, n));
-                let (wall_s, cpu_s) = (t.elapsed().as_secs_f64(), cpu_seconds() - cpu);
-                let want = first.get_or_insert_with(|| (ok, out.clone()));
-                println!("WALK\t{}", json!({"net": ni, "rows": net.useful, "nnz": nnz, "slots": slots,
-                    "groups": slots.div_ceil(64), "wide": n, "rep": rep, "threads": pool.current_num_threads(),
-                    "one_pass": one_pass, "flat_s": flat_s, "wall_s": wall_s, "cpu_s": cpu_s, "ok": ok,
-                    "same": want.0 == ok && want.1 == out}));
+    // the kept vectors outermost: a walk that keeps them maps them once, on its first pass, as a prover's first statement does
+    for &keep in &keeps {
+        flock_live::ir_block::set_keep_rows(keep != 0);
+        for rep in 0..reps {
+            for pool in &pools {
+                for (&n, &ahead) in widths.iter().flat_map(|n| aheads.iter().map(move |d| (n, d))) {
+                    out.fill(0);
+                    let (t, cpu, sys) = (Instant::now(), cpu_seconds(), sys_seconds());
+                    let ok = pool.install(|| flock_live::circuit::unit_ab_into_at(net, ni, uw, &ins, &mut out, n, ahead));
+                    let (wall_s, cpu_s, sys_s) = (t.elapsed().as_secs_f64(), cpu_seconds() - cpu, sys_seconds() - sys);
+                    let want = first.get_or_insert_with(|| (ok, out.clone()));
+                    println!("WALK\t{}", json!({"net": ni, "rows": net.useful, "nnz": nnz, "slots": slots,
+                        "groups": slots.div_ceil(64), "wide": n, "ahead": ahead, "keep": keep != 0, "rep": rep,
+                        "threads": pool.current_num_threads(), "one_pass": one_pass, "flat_s": flat_s, "wall_s": wall_s,
+                        "cpu_s": cpu_s, "sys_s": sys_s, "ok": ok, "same": want.0 == ok && want.1 == out}));
+                }
             }
         }
     }
@@ -7544,9 +7558,10 @@ fn prove_stream(path: &str) {
 }
 
 fn main() {
-    flock_live::huge_pages::set(!flag("--gpu"));
-    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
+    // unit-walk times the device witness's host units, so it runs on the device prover's pages unless --huge-pages asks
+    flock_live::huge_pages::set(!(flag("--gpu") || (cmd == "unit-walk" && !flag("--huge-pages"))));
+    flock_live::init_threads();
     if cmd == "replay-coins" {
         let rec: Value = serde_json::from_str(&std::fs::read_to_string(arg("--record", "session.json")).expect("record")).expect("record JSON");
         match flock_live::replay_coin_seed(&rec) {
@@ -7661,6 +7676,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8]"),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8] [--ahead 0,64] [--keep 0,1] [--huge-pages]"),
     }
 }
