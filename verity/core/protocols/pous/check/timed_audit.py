@@ -40,7 +40,7 @@ from typing import Any
 from verity_difftest import Server, build, canonical
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[4]
+ROOT = Path(__file__).resolve().parents[5]
 EXE = "pous-timed-audit"
 
 

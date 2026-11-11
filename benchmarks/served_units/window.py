@@ -215,7 +215,7 @@ def kill(job: Job, why: str) -> None:
 
 def stage(units: list[Unit]) -> int:
     mem, cpus = limits("600")
-    disk_cap, deadline = float(env("WIN_DISK_GB")) * GB, until()
+    disk_limit, deadline = float(env("WIN_DISK_GB")) * GB, until()
     slow, backfill = float(env("WIN_SLOW")), float(env("WIN_BACKFILL_GB")) * GB
     reserve, disk_backfill = float(env("WIN_FREE_GB")) * GB, float(env("WIN_BACKFILL_DISK_GB")) * GB
     fw = Path(env("FLOCK_WORK"))
@@ -228,7 +228,7 @@ def stage(units: list[Unit]) -> int:
     if free < reserve + 20 * GB:
         raise SystemExit(f"window.py: {free / GB:.0f} GB free under {fw}, under WIN_FREE_GB={reserve / GB:.0f} plus the build's 20")
     t0 = procs()
-    log(f"stage: {len(units)} types, {len(cpus)} CPUs, niceness {os.nice(0)}, memory {mem / GB:.0f} GB, disk {disk_cap / GB:.0f} GB "
+    log(f"stage: {len(units)} types, {len(cpus)} CPUs, niceness {os.nice(0)}, memory {mem / GB:.0f} GB, disk {disk_limit / GB:.0f} GB "
         f"({free / GB:.0f} GB free, {reserve / GB:.0f} GB kept free), until {env('WIN_UNTIL')}, FLOCK_WORK {fw}, key {k}"
         + (f", sharing WIN_MEM_GB with pid {peer}'s tree ({sum(t0[p][1] for p in tree(peer, t0)) / GB:.1f} GB now)" if peer else ""))
     one = {"FLOCK_WORK": str(fw), "CUDA_VISIBLE_DEVICES": "", "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
@@ -288,8 +288,8 @@ def stage(units: list[Unit]) -> int:
         held = sum(j.rss_now for j in running) + (used if in_ram else 0) + peer_rss
         if held > 0.95 * mem and stagings:
             kill(max(stagings, key=lambda j: j.started), f"host memory {held / GB:.0f} GB over {0.95 * mem / GB:.0f}")
-        elif (used > 0.97 * disk_cap or free < reserve) and stagings:
-            kill(max(stagings, key=lambda j: j.started), f"FLOCK_WORK {used / GB:.0f} GB (cap {0.97 * disk_cap / GB:.0f}), "
+        elif (used > 0.97 * disk_limit or free < reserve) and stagings:
+            kill(max(stagings, key=lambda j: j.started), f"FLOCK_WORK {used / GB:.0f} GB (limit {0.97 * disk_limit / GB:.0f}), "
                  f"{free / GB:.0f} GB free (floor {reserve / GB:.0f})")
             closed = closed or "disk"
         if now > deadline:
@@ -303,7 +303,7 @@ def stage(units: list[Unit]) -> int:
                 mem_in_use = sum(max(j.rss, j.peak) for j in running) + (used if in_ram else 0) + peer_rss
                 if now + u.secs * slow > deadline:
                     reason = "time"
-                elif (sum(j.disk for j in running if j.unit) + u.disk * GB > min(0.95 * disk_cap - used, free - reserve)
+                elif (sum(j.disk for j in running if j.unit) + u.disk * GB > min(0.95 * disk_limit - used, free - reserve)
                       or (blocked_disk and u.disk * GB > disk_backfill)):
                     reason = "disk" if not any(j.unit for j in running) else "wait"
                     blocked_disk = blocked_disk or reason == "wait"
