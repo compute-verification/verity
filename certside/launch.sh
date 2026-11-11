@@ -9,8 +9,8 @@
 # PORT is the endpoint's port on the serving node's 127.0.0.1, the one port the forward opens. MODEL, when the endpoint
 # doesn't answer GET /v1/models, is its model's name: the reach check is then a connect, and the run sends it as
 # --model. The job's variables (CELL_BYTES SLOTS BUCKET_MS DELAY LANES QUEUE WINDOW INGRESS_CELLS INGRESS_BUCKETS
-# EGRESS_CELLS CAP RATE REQUESTS SEED PROMPT_MAX MAX_TOKENS TAIL ID_BOUND) pass through when set here; their defaults
-# are the job's, in its header. The serving node's tick's bucket must equal BUCKET_MS.
+# EGRESS_CELLS CAP RATE REQUESTS SEED PROMPT_MAX MAX_TOKENS TAIL ID_BOUND RECHECK) pass through when set here; their
+# defaults are the job's, in its header. The serving node's tick's bucket must equal BUCKET_MS.
 # PEER and SSH_PORT default to MACHINE's ssh endpoint as `research` reaches it: a RunPod pod's (node A, vy-spot-glm53)
 # is root at its public IP and the public port RunPod maps to its 22/tcp, read from the RunPod API at launch (a pod's
 # mapping is its own, so never written down); an ssh machine's is the registry's user, host and port. It reaches the
@@ -53,7 +53,7 @@ else
 fi
 envs=(--env "PEER=$PEER" --env "PORT=$PORT")
 for name in SSH_PORT KEY MODEL ID_BOUND CELL_BYTES SLOTS BUCKET_MS DELAY LANES QUEUE WINDOW INGRESS_CELLS INGRESS_BUCKETS \
-            EGRESS_CELLS CAP RATE REQUESTS SEED PROMPT_MAX MAX_TOKENS TAIL; do
+            EGRESS_CELLS CAP RATE REQUESTS SEED PROMPT_MAX MAX_TOKENS TAIL RECHECK; do
   [ -n "${!name:-}" ] && envs+=(--env "$name=${!name}")
 done
 run=("${R[@]}" run --on "$ON" --project verity --source "$PWD" --cwd source "${envs[@]}")
