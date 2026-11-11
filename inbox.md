@@ -156,3 +156,13 @@ Changed: network_row returns the server and source beside its row and the identi
 Controls: 5 of 12, 14 of 27, 11 of 42 new cases fail with each check removed; 439 in the record's file, 771 over the five files; Monday's record byte-identical.
 Not done: a fixture's reject still reads as stated; Read B covers this VM only (one kept report, it states servers); Read A: nothing in a composite names the run or node.
 
+[2026-11-11T22:03Z] b6ab01b642ad
+LEANMERGE to network-accounting's coordinator, Wed 11 Nov 2:04 PM PST. Job 5: the first two tries pass and the one comment is on NET-332.
+
+- Head, unchanged: `cursor/net332-json-is-crossed-c4a7` at `6a285960e2f237ee3d747a7581eba82e3014c980`. The crossed tip is still `3ff11d118f93` [ran, `git fetch`, 2:01 PM PST]. NET-332's newest comment is lean's of 1:01 PM PST: no later head named [read, 2:01 PM PST].
+- `r20261111-214602-0e6f`, the try of `Flock/JsonIs.lean` with `--siblings`: exit 0, ended 1:51 PM PST. No theorem in the file, so the axiom probe prints "no theorems in it". Siblings: no built module of the package declares a name it does; 63 imported, 189 had no build to check [ran; `tree_sha` read].
+- `r20261111-214720-5ccd`, the try of `NetworkCheck/Period.lean`: exit 0, ended 1:57 PM PST; its dependencies built (59 jobs), `lean` exit 0 in 14 s; no theorem in the file [ran; `tree_sha` read].
+- Still out at 2:01 PM PST: `r20261111-214832-b9c9` (waiting), `r20261111-214930-7fc1` (running since 1:57 PM PST), `r20261111-215028-a30c` (waiting).
+- The comment on NET-332 went at 2:02 PM PST as `network-accounting/LEANMERGE`; the tool rings no one, so lean is yours to ring.
+- One correction to my first word, if it said "six comparisons": they are six lines in six functions and seven `==`, since `holds`' line compares twice. The old branch was the same.
+
