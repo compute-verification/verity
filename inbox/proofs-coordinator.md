@@ -38690,3 +38690,33 @@ Times UTC from the clock. `[run]` a run on a node, `[read]` a file at a commit, 
 - [run] Records run `r20261111-041442-564f` (`lean_changed.py --records security/Proofs --update`): waiting at 04:30Z. cpu-5's slots are held by other post-move records runs (e.g. `r20261111-041418-d23c`, since 04:14Z). ETA for its verdict: about 06:00Z [guess: one slot's wait plus try 4's 23-minute cold build plus the records pass]. I am not relaunching it elsewhere: one run, no race.
 - No write to Linear through the connector today. My one PRF-533 comment (02:33Z) went through `research msg linear comment`.
 - When resumed: read the records run. If it passes, commit any record it kept on the branch, then `research queue open … --by proofs` unmarked and `ready to mark #N at <sha>`. If it fails, fix forward on `cursor/proofs-canonical-node-331e`.
+
+## FLOCKPKG, Wed 11 Nov 04:30Z: #8789's head is `1f59c474be01`; three runs in flight; the ratchet gate will be red on the cut (a warn step) and I cannot make it pass
+
+Correction to my 04:01Z entry: it said a suites run starts at `631e3d733ce7`. None was started there. The quick tier runs once, at the head below.
+
+**Head.** `cursor/proofs-flockpkg-1539` = `1f59c474be01`, pushed 04:29Z [run], one commit above `631e3d733ce7`: `tests/lint/allowlists/repo_retired_terms.json` only. The 17 changed locks' Lean inputs keys do not read that file, so they are the keys of `631e3d733ce7` [read: `lean_changed.py`'s docstring lists what a key covers; not recomputed].
+
+**Runs** (each `research run --on auto`):
+
+| run | what, at which commit | node | state at 04:30Z | ETA [guess] |
+|---|---|---|---|---|
+| `r20261111-040335-fab3` | `pins.py --regen` after `setup.sh security/Proofs`, at `631e3d733ce7` | vy-nebius-cpu-2 | waiting for a check slot since 04:03Z | 20 min after it gets a slot |
+| `r20261111-040434-b4d1` | `lean_changed.py --records verity/circuits/lean --update`, at `631e3d733ce7` | vy-nebius-cpu-12 | running: `verity/circuits/lean` PASS (31 s), Flock's verifier PASS (163 s), the certifier PASS (37 s), now `security` | 05:15Z |
+| `r20261111-042920-3071` | `suites.py --changed 5c095bb4ab70 --quick`, at `1f59c474be01` | vy-nebius-cpu-7 | launched 04:29Z | 06:45Z (`f129` took under 140 min) |
+
+The quick tier started before the pins commit so that what the moved tree breaks in Python shows two hours sooner. `tests/test_pins.py` fails in it (three stale fixtures, expected). After the pins commit I run `suites.py --changed 1f59c474be01 --quick` at it: only the suites that read the three fixtures.
+
+**The eleven other locks without guarantees.** A `--records PKG` run audits PKG and then every package whose records read it: `b4d1` is doing Flock's verifier, the certifier, `security`, `security/Properties` and `security/Proofs` again, because a node asks the store only for its own runs' passes and `eb3d` ran elsewhere [read: `stored()` in `lean_changed.py`; run: no "need no run" line in `b4d1`]. Eleven more runs would each repeat those audits unless they land on a node that kept them, and check slots are short now (`fab3` has waited 27 min). I launch the eleven when `b4d1` ends, a few at a time. If `r20261111-012616-5b02` is enough for the packages that hold no guarantee (check.py passed on each of them on this tree's Lean, failures=0), say so and I launch none.
+
+**Ratchet gate (`adapters/vllm/tools/ratchet_gate.py origin/main HEAD`, off the gate, a warn step): fails, and will at landing** [run, four times uncached at `1f59c474be01`].
+- At `631e3d733ce7` it failed on 115 sites the list did not cover. Three files of the cut were short in the list since before the move (the layer test 17 found, 2 listed; `FlockZkServer.lean` 20, none; the verifier's README 2, 1), and five files that were over the list on `main` had lines the cut shifts. The lint only warns, so no suite showed it.
+- `1f59c474be01` sets, for every file the cut adds, changes or deletes, the entry to what the lint finds at this tree. The list's total goes 110444 to 110341, and the gate's growth check passes ("78 of it in 5 key(s) catching up to what its lint finds in the base's tree").
+- What still fails is the per-file rule: "adds 240 retired-term site(s) to the files it changes". 191 are the three moved modules' own text at their new paths (`Commitments/Draw.lean` 185, `Circuits/Program.lean` 4, `Base/JsonParse.lean` 2): the old path keeps its re-export, so git shows no rename. 49 are new: names under `Flock.Firewall` in the ZK server's umbrella module (20) and the layer test (17), the firewall package's lakefile (5), and one each in seven files. None can go while the re-exports stay and the modules keep their names. Deleting the re-exports (PRF-519) removes the 191.
+- So drive will ring the lane once for #8789. Your call whether that is acceptable for a pure move; I see nothing to fix forward.
+
+**The gate is not deterministic** [run]: of four uncached runs on the same two commits, two failed instead on 19 sites of `security/Proofs/Nci/RemotePeriod.lean`, which the cut does not touch. `sites_of` in `tests/lint/test_repo_retired_terms.py` reports, for a span two rows match (`DampenerRemotePeriod`), whichever term a set yields first, so the base's process says "say the slowdown" and the top's "say monitoring period", and the gate compares the strings. The lint is not mine and the cut does not change it; I leave a friction note.
+
+**The 04:12Z notice:** I have written nothing to Linear through the connector, today or before (read only: PRF-546, TRN-96).
+
+**Left, in order:** (1) `fab3`'s three fixtures, one commit, pushed, named here; (2) `b4d1`'s verdict, then the eleven; (3) `3071`'s verdict and a fix commit for each failure it shows; (4) the suites that read the fixtures, at the pins commit; (5) #8789's body rewritten for the crossed head; then "ready to mark". (6) PRF-546's assessment, by Thu 02:00Z. Not started: (B)'s branch and PR (Condition 2 wants it open before the mark: say if it may follow the mark instead), M6's crossing.
