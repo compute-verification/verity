@@ -1,0 +1,7 @@
+[paths]
+"verity/core/protocols/network/README.md" = "verity/protocols/certifier/verifier/network/README.md"
+"verity/ml/commitments/gates/sha512_stream.py" = "verity/commitments/gates/sha512_stream.py"
+"verity/ml/commitments/gates/sha512_stream.circuit-check.py" = "verity/commitments/gates/sha512_stream.circuit-check.py"
+"verity/ml/commitments/gates/sha512_stream.circuit-check.json" = "verity/commitments/gates/sha512_stream.circuit-check.json"
+"verity/ml/commitments/keyed.py" = "verity/commitments/keyed.py"
+"verity/core/periods/" = "verity/periods/"
