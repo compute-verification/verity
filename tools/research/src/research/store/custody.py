@@ -179,8 +179,8 @@ def stage(run_dir: Path, into: Path, rels: list[str] | None = None) -> list[str]
 #: What a run may be sent that grants access until it expires, as globs relative to its run dir and its request dir: check's presigned
 #: URLs of the Lean dependency bundles (`tools/verity/check/check.py` LEAN_DEPS_URLS), which a run of anything else never takes out of inputs/,
 #: and the temporary name a shipped tree's preflight writes that file under before replacing it; and those of the recorded checks'
-#: verdict packs (VERDICT_URLS)
-CREDENTIALS = ("inputs/lean-deps-urls.json", "inputs/.lean-deps-urls.json.*", "inputs/verdicts-urls.json")
+#: verdict packs (VERDICT_URLS) and of the agreement's pinned upstream build and inputs (AGREEMENT_URLS)
+CREDENTIALS = ("inputs/lean-deps-urls.json", "inputs/.lean-deps-urls.json.*", "inputs/verdicts-urls.json", "inputs/agreement-urls.json")
 
 
 def drop_credentials(d: Path) -> None:
