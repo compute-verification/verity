@@ -101,7 +101,9 @@ its wall time beside the served window's, and `replay_tokens.jsonl.gz` its token
 schedule doesn't depend on the tokens: a replay with no differing step can still sample other tokens. A mode listed twice
 in `REPLAY_MODES` replays again and compares its tokens with the first replay's too, which tells a replay that differs from
 serving from one that differs from itself; `REPLAY_FROM` with no `ARMS` replays an earlier job's window alone, reading
-that job's run directory where it lies on the node. `REPLAY_LOGPROBS=1` records each sampled token's logprob too
+that job's run directory where it lies on the node. A replay runs at the model's GPUs as its tensor-parallel width, and
+`REPLAY_CAPTURE=ID,...` takes those engine ids' logits rows and ids at every rank's sampler into the replay's `capture/`
+(`replay.py --capture`), a token select's span each. `REPLAY_LOGPROBS=1` records each sampled token's logprob too
 (`replay_logprobs.jsonl.gz`), and a repeated mode compares them with the first replay's bit for bit, naming each request's
 first differing step: a one-ulp change anywhere in a logits row shows there even when no token flips. Every engine
 `run.sh` starts, served or replayed, runs with `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`. Without it, each process times a
