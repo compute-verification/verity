@@ -63272,3 +63272,21 @@ Tags: [run] a command I ran in this turn, [read] a file or record I read in this
 With the limit reached I would spend the next free worker on 3 (hours, and it unblocks vLLM's pull request and Thursday's run), then 9 (it decides whether step 9's Definition is written once or twice), then 8.
 
 **6. State.** The note `20261111T1843Z-draft-path300-steps` takes these corrections next and is synced before 20:30Z. Then the step-20 list (23:00Z), and the repriced chain when COUNT's 21:30Z entry is in.
+
+## FLOCKPKG, Wed 11 Nov 19:51Z: hourly. #9042's records run has four of its five audits at PASS and the last one running (`r20261111-185607-2e4b`); the branch for #9005's six sites and the shell jobs is pushed at `ae1470567661` with its quick tier four of six runs green; `main` moved twice (`61f13c2275fb`) and changed no `reads` entry of the two locks
+
+- **#9042** [run] is still at `00963f010905e7c1f321d18efcb65b4f5df32056`, not marked. Its records run's log has `AUDIT: PASS` for the circuits package, Flock's verifier, the certifier's verifier and `security` with `security/Proofs`; `security/Properties` is running. The quick tier (95 suites) starts on its verdict, as ordered. ETA of the verdict 20:15Z [guess].
+- **It merges** [run: `git merge-tree`] with `main` `61f13c2275fb` and with each of the 123 heads marked ready; of those only its two parents touch its three files. I do not re-merge `main`: the head keeps its one records run, and `main`'s Lean since the `cc6ee7446278` it holds is fifteen files under `security/Proofs` and 26 `unwitnessed` entries dropped from `security/lean-audit.json` (#8971).
+- **Item 3** [run]: across the 47 landings since `cc6ee7446278`, `security/lean-audit.json` changes only in `unwitnessed` and `security/Properties/lean-audit.json` not at all: 0 `reads` entries changed, none of a moved Flock module.
+- **Item 4** [run]: branch `cursor/proofs-verifyenv-3b6e`, head `ae1470567661dc89e34217d5a95d7cf683f9030c` (#9005's head, two commits, `main` `0bfe402a6cf2` merged). No pull request yet; I open it holding #9005 when its tier is whole.
+  - One sourced file prints the setting's words; eleven scripts (the seven named and four more a search found: `hidden_zk/job.sh`, `verifier_cost/flock_served.sh`, `flock_s8_block/run.sh`, Flock's agreement check) put them before the verifier's path. Flock's nine pod jobs are not edited (I can run none); the test lists them.
+  - The root test fails on a shell command that starts the verifier without the words, and on a script that uses them without sourcing the file. I checked both by breaking one of each.
+  - All six retired-name sites are gone. Decided: the three in prose say "the Lean verifier's `verify`", not `verity verify proof`, which is a command that does not exist yet; the three test stand-ins take the name from `proofs.EXE`.
+  - Tier, 63 suites in six runs: `7a18`, `5ae0`, `6f3a`, `831c` done rc 0; `6c8f` and `15c2` (verity-vllm) running, ETA 20:25Z [guess].
+- **Item 5** [read: CI-485, ci's comment of 18:36Z]: #8789 gets its candidate's records run after the live loop is on `main`'s code, about 20:30Z. The allocator rerun waits for that.
+- **Two of my open pull requests name no Linear issue** [run: `research queue status`]: #8949 and #8902. I have not edited a marked pull request's body. Say if I should add `Refs PRF-548` to each with `research queue edit`.
+- **`research queue open` warned on #9042** that PRF-548 has no label for the goal `proofs/exfiltration-under-300gb` (its live goal is `demos/remote-demo`). I kept the order's goal line.
+
+For the table:
+- #9042 `00963f010905`: records four of five audits PASS, last running (`r20261111-185607-2e4b`); tier after it; merges with `main` `61f13c2275fb` and all 123 ready heads.
+- Shell jobs take the verifier's allocator setting: branch at `ae1470567661`, tier four of six runs rc 0, opens holding #9005.
