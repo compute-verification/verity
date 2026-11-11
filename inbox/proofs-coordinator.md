@@ -38317,3 +38317,45 @@ Core counts: rows 1 and 2 were staged on node A, at a core count I did not read.
 - #8505 and #8538 landed on 10 Nov [read: gh].
 
 Next: job C with the HASH-112 line before Wed 22:00Z, and #8771's crossing after ci's step.
+
+## CROSS, Wed 11 Nov 04:11Z: step 1, the dry crossing: all seven print `clean`, nothing pushed yet; six carry the old head's change unchanged, #8539 differs in one line the move's script splits; #8568 as the queue admits it (a plain merge) would land a dead import
+
+I am CROSS, agent `bc-dcfd7efe-cf6a-5319-963d-664a31b87093`. I read your mailbox message of 03:55Z. Every head on your list read the same at 03:51Z and again at 04:10Z [read: `gh pr view N --json headRefOid`]. The crossings ran on my VM from a fresh worktree of `main` at `5c095bb4ab70`, with top's command word for word plus `--json`; each line below is that result through `restack.py`'s own `line()`. The merge drivers were all registered already, `vllm-allowlist` at its moved path [read].
+
+**What `restack.py` printed** [run, on my VM, 03:52Z to 04:09Z]
+
+| PR | old head | printed | own change against `main`, old → crossed | the same change? |
+|---|---|---|---|---|
+| #8226 | `169beb6a834e` | `clean 354f604cfdd1  [plain merge conflicted (1); crossed 2 moves: 6581bcf197, c1ca25a247]` | 2 files +77 −3 → 2 files +77 −3 | yes; both blobs byte-identical; no lock in its change |
+| #8512 | `75bdbe8965e1` | `clean 815b893acd23  [plain merge conflicted (8); crossed 2 moves: 6581bcf197, c1ca25a247]` | 15 files +2147 −24 → the same | yes; 14 Lean blobs identical; the lock's change is the same JSON (164 leaves added, none removed or changed) |
+| #8527 | `8731755ddfcc` | two commands, over #8512's result: `clean 457c12667953  [plain merge clean]`, then `clean 33452276ad20  [plain merge conflicted (3)]` | 18 files +2503 −24 → the same; against #8512: 4 files +356 −0 → the same | yes; 17 Lean blobs identical; its lock is byte-identical to #8512's crossed lock |
+| #8785 | `d3f5de9591e5` | `clean e7b741b17e53  [plain merge conflicted (2); crossed 2 moves: 6581bcf197, c1ca25a247]` | 8 files +762 −170 → the same | yes; 7 Lean blobs identical; the lock's change is the same JSON (43 leaves added) |
+| #8539 | `4744e3e96c89` | `clean 984a73968ccd  [plain merge conflicted (1); crossed 2 moves: 6581bcf197, c1ca25a247]` | 41 files +1285 −237 → 41 files +1285 −236 | the same 41 files at moved paths; one count differs, explained below; both locks' changes are the same JSON |
+| #8568 | `e8bf1adc8f0e` | `clean e2d439de8706  [plain merge clean; crossed 2 moves: 6581bcf197, c1ca25a247]` | 8 files +1268 −5 → the same | yes in counts; the script rewrote one import in a file it adds, below |
+| #8788 | `65a2d97d9387` | `clean 42072bd50755  [plain merge clean; crossed 2 moves: 6581bcf197, c1ca25a247]` | 11 files +175 −43 → the same | yes; 10 Lean blobs identical; the lock differs from `main`'s in entry order only, before and after |
+
+- Full ids: #8226 `354f604cfdd1c782d3c55c77e0aa9e3255c325b4`, #8512 `815b893acd230433178477f0feb12c295983c509`, #8527 `33452276ad203bde9290a23a3bd8d7a435786418`, #8785 `e7b741b17e53c48f6e964169a6b4d606867ab79f`, #8539 `984a73968ccdd00ccbcbee982fbe2a11aa8048ef`, #8568 `e2d439de8706795202645129e0dfcfac72168783` (not for pushing), #8788 `42072bd50755755f957562c469f3f4037b4c1354` (not for pushing).
+- Each result descends from its old head and from `main`'s tip [run: `git merge-base --is-ancestor`]. No result is `locks-stale`, `conflicted` or `script-failed`, so no row needs a merge of `a930252c4993` or a `git mv`.
+- How I compared [run]: `git diff --numstat a930252c4993...OLD` against `git diff --numstat origin/main...ID`, paired by moved path; each file's blob at the old head against its blob at the result; each lock's change read as JSON (leaves added, removed, changed, lists as multisets) on both sides.
+
+**#8527, the stack** [run]
+- Its head holds #8512 at `c8c0025bfa13`, one commit below #8512's head. It differs from #8512's head in four Lean files and not in the lock.
+- I crossed it over #8512's result's own `Restack-move:` commits, one command a move, since `--script` takes one `--move-commit`:
+  - `restack.py origin/cursor/proofs-oneperiod-5d1e --move-commit d03d3234b2 --script tools/move/layout.py --script-arg=--map --script-arg tools/move/layout_one_map.toml --kept --no-pins`
+  - `restack.py 457c12667953 --move-commit 394516ec05 --script tools/move/layout.py --script-arg=--map --script-arg tools/move/security_dir_map.toml --onto 815b893acd23 --kept --no-pins`
+- The result descends from #8527's head, from #8512's old head, from #8512's crossed head and from `main`'s tip.
+
+**#8539** [run, read]
+- It is clean at every step: the conflicts your preflight named are the plain merge's file-location conflicts, not real ones. No hunk needed a hand.
+- The one count: `verity/protocols/spot/verifier/tests/test_two_stage.py` removes 3 lines, not 4. The old head changed the line `from verity.core.protocols.spot import second_stage as SS, service as S` to add `optimize as O`. The move splits that package, so the script wrote `from verity.protocols.spot import optimize as O` as a new line and left the other line as `main` has it. Every other file's counts are the old head's.
+- The README: `verity/protocols/spot/verifier/README.md` is 49,321 bytes at the crossed head, 169 over its cap of 49,152; `main`'s is 49,176. I try the trim as one commit before the records run and say in step 2's entry whether it fit.
+
+**#8568: do not let it land as it is** [run for the merge, derived for the failure]
+- A plain merge of `e8bf1adc8f0e` into `main` is clean, which is why the queue admits it. That merge keeps `from verity.core.protocols.spot import optimize as opt` in `benchmarks/spot_figures/breakeven/common.py`, a file the pull request adds, and `main` has nothing under `verity/core/protocols/` any more.
+- The crossed head has `from verity.protocols.spot import optimize as opt`: the one line in which the crossed tree's own change differs from the plain merge's.
+- Its test (`test_breakeven.py`) is marked `slow`, so the quick tier would not see it. I have not run it.
+- So #8568 needs its crossed head, by ci's step or by me on your word. I push nothing to it.
+
+**#8788** [run]: the plain merge the queue makes and the crossed head differ only in the order of 13 lines of `security/lean-audit.json`, the same JSON. It can land as it is.
+
+**Next**: I push #8512, #8527, #8785, #8226 and #8539 in that order and write each head the minute it is up.
