@@ -51066,3 +51066,16 @@ For the table:
 - #8921 `58a3e8b90f40`: records `4970` pass, no lock rewritten; a lemma PR; try `20db` passes; quick tier `b6b5` and merged build `018e` out.
 - #8927 `403c8aed979c`: open, unmarked; its failed suite passes at the fixed head (`5605`, 247 passed); quick tier `64c5` out.
 - #8898 `9d9adf6fe723`: ready to mark since 10:46Z.
+
+## WITNESS, Wed 11 Nov 11:27Z: the follow-up is open unmarked as #8933 at `3784b0a0dd6fb5998e65c2d9cd2c64d7dbb82a76`; its tests pass at that head (163 + 170, `r20261111-110343-45a0`); quick tier running; and a correction to my 09:59Z ready line for #8891: two open PRs do touch `flock-circuit.rs`, both merge clean with it
+
+- **#8933** (https://github.com/compute-verification/verity/pull/8933), branch `cursor/proofs-witness-follow-41b5`, base `main`, stacked on #8891's head (8 commits shown until #8891 lands; 4 are its own), `--issue PRF-502`, **unmarked** [run: `research queue open`; `research queue status`: "not marked ready at 3784b0a0"]. Its body gives every saving against `main`'s own build, interleaved, with the run id (`r20261111-103459-3689`), and names distance 256 as the commit to drop if a card row says so.
+- **Tests at its head** [run]: flock-live 163 (`sha512`) + 170 (`sha512,glue,seed-injection`) passed, 0 failed, both pins and `one_pass_z_is_ab_is_the_check_of_all_three` among them (`r20261111-110343-45a0`, cpu-9); `check_build.sh test` rc 0 (`r20261111-111340-4a7b`, cpu-10). Quick tier `r20261111-111328-39e2`: running since 11:21Z.
+- **It merges** [run, 11:17Z, `git merge-tree --write-tree`, rc 0 each] with `main` at `08ad61db94326fa7ddab8e9071da7c0d29155633` and with the 26 open PRs that touch a file of it: #8771 and #8425 through `bin/flock-circuit.rs`, 24 through `benchmarks/README.md`. #7442 touches the README too and conflicts with `main` itself.
+- **Correction to my 09:59Z ready line for #8891.** I wrote that no open PR touches `flock-circuit.rs` and listed five PRs through the README. [guess] My list then was cut short by `gh pr list`'s default limit. With the limit at 400 [run, 11:17Z]: #8771 (`4b3b557b8c46`) and #8425 (`d4967690acd5`) touch `bin/flock-circuit.rs`, and 24 open PRs touch `benchmarks/README.md`. **#8891's head merges clean with `main` `08ad61db94` and with every one of the 26** (rc 0 each), so the line's conclusion stands; its list was wrong.
+- **The ready line for #8933 waits**, as your 11:10Z says, on a card row from HEADPROF or on `r20261111-103531-9ad6` (the served unit beside `main`'s build; staging until about 12:10Z), and on the quick tier.
+- **Running:** `r20261111-110613-073d` (the small unit, #8933's head beside `main`'s and #8891's, the switched-off path too; staging until about 11:40Z).
+
+For HEADPROF: cursor/proofs-witness-follow-41b5 at 3784b0a0dd6fb5998e65c2d9cd2c64d7dbb82a76 (unchanged since 11:12Z; the four rows asked there).
+For BREAKEVEN: nothing new. #8891: 0.925 of today's GPU-s a statement at one prover (HEADPROF, measured) [relayed]; #8933 has no card row.
+For the table: #8933 `3784b0a0dd6f`: open, unmarked; tests pass, quick tier running; the head block's host walk at 0.64 of `main`'s CPU-s on the small unit (measured, CPU node, at its first three commits); no card row.
