@@ -26,7 +26,8 @@
 # timing of both encoders on one segment, `decode_bench.py` and each encoder alone on the card, then the `regsR`
 # builds, each held to the default build's bytes before it is timed. No pass starts that would end in the lease's last
 # four minutes. SEGMENTS is the store's, for the minutes a whole encode takes; SAY_AT is a rate in blocks a second at
-# or above which the run says so on a line of its own.
+# or above which the run says so on a line of its own. BLOCKS, when given, is how many blocks the run encodes in
+# place of a segment's (a short run: 16384, as many as the `regsR` builds are timed on).
 #
 #   research run --on CPU-NODE ... -- env TOOLKIT=1 BUILD_ONLY=1 ARCH=90a bash benchmarks/pous/p2_v1/encode_rate.sh
 #   research run --on NODE --project verity --source TREE --cwd source --send libs.tar -- \
@@ -189,7 +190,7 @@ PY=${PY:-$(first /workspace/venv312/bin/python /workspace/cp/venv312/bin/python)
 [ -x "$PY" ] || { say "PREFLIGHT: no torch venv (PY)"; exit 3; }
 export PYTHONPATH=$TREE:$TREE/benchmarks/pous${PYTHONPATH:+:$PYTHONPATH}
 export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
-"$PY" $D/encode_bench.py reference --out "$O/reference.json" > "$O/reference.txt" 2>&1 \
+"$PY" $D/encode_bench.py reference ${BLOCKS:+--blocks "$BLOCKS"} --out "$O/reference.json" > "$O/reference.txt" 2>&1 \
   || { tail -n 20 "$O/reference.txt"; say "REFERENCE: the reference's rows did not compute (out/reference.txt)"; exit 5; }
 say "$(tail -n 1 "$O/reference.txt")"
 

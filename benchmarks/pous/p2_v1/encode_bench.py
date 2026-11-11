@@ -19,7 +19,8 @@ sources answer (`encode_rate.sh` says whether the library's are `base`'s).
 every CPU the process may use. The first blocks are edge payloads, one of them the block whose first root is of zero.
 
 `run` goes in four steps. A failed gate ends it there: what was measured before it stays, and nothing is measured
-after. So does a pass that, at its encoder's last rate, would end later than `--minutes` after the start.
+after. So does a pass that, by its build's and encoder's earlier passes (`at_most`), would end later than `--minutes`
+after the start.
 
 1. Gates, not timed: on the segment's first `--warm` blocks, then on the whole segment. Each encoder writes into a
    buffer filled with 0xA5. `p2sq`'s bytes equal `cgbn`'s, no row is left at 0xA5, the picked rows equal the
@@ -211,6 +212,14 @@ def reference(a: argparse.Namespace) -> int:
     return 0
 
 
+def at_most(seen: dict[int, float], count: int) -> float | None:
+    """An upper estimate of the seconds of a pass on `count` blocks from the earlier passes of its build and encoder,
+    `seen` (blocks to seconds), None when there is none: a pass on as many blocks or more took at least as long, and one
+    on fewer took at least as long a block. A rate says nothing here: one block alone takes a whole root's chain of
+    squarings, as long as a thousand side by side."""
+    return min((s if c >= count else s * count / c for c, s in seen.items()), default=None)
+
+
 class Ended(Exception):
     """`run` ends here: what was measured before stays, and nothing is measured after."""
 
@@ -285,7 +294,7 @@ def run(a: argparse.Namespace) -> int:
         "pass": "gpu.Kernels.encode: the key expansion, then the kernel; seconds between two CUDA events"}
     sampler = Sampler(out / "smi.csv", uuid)
     passes: list[dict[str, object]] = []
-    rate: dict[tuple[str, str], float] = {}
+    seen: dict[tuple[str, str], dict[int, float]] = {}
     began = time.monotonic()
     m = host.to(dev)
     buf = torch.empty_like(m)
@@ -298,8 +307,9 @@ def run(a: argparse.Namespace) -> int:
 
     def encode(k: Kernels, build: str, encoder: str, count: int):
         """One pass over the first `count` blocks into the buffer, filled with 0xA5 first; its seconds and wall span.
-        Ended before it starts when, at this build's and encoder's last rate, it would end after `--minutes`."""
-        if (build, encoder) in rate and time.monotonic() - began + count / rate[build, encoder] > 60 * a.minutes:
+        Ended before it starts when, by this build's and encoder's earlier passes, it would end after `--minutes`."""
+        longest = at_most(seen.get((build, encoder), {}), count)
+        if longest is not None and time.monotonic() - began + longest > 60 * a.minutes:
             raise Ended(f"{a.minutes:g} minutes, before {encoder} of the build {build} on {count} blocks")
         buf[:count].fill_(POISON)
         torch.cuda.synchronize()
@@ -310,7 +320,7 @@ def run(a: argparse.Namespace) -> int:
         e1.record()
         e1.synchronize()
         t = {"seconds": e0.elapsed_time(e1) / 1e3, "start_unix": start, "end_unix": time.time()}
-        rate[build, encoder] = count / t["seconds"]
+        seen.setdefault((build, encoder), {})[count] = t["seconds"]
         return c, t
 
     def gate(c, bytes_of, flags: int) -> dict[str, object]:
