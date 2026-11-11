@@ -12,6 +12,10 @@
    "and": 1171,
    "type": "33e328179c1d7e3d6c23febc6e2d1bc0f0b30f674b30c67624b0d3aaed7bcdf383b97c279e4b1bc0120b4716f062adda97f2292e1c46cfa3e45d6d12103c7d57"
   },
+  "SparseMlaSplitEndCols_v2{DV=16,G=8,C=1,INV=Fa3InvSum_v2,SCALE=0.0625}": {
+   "and": 29085,
+   "type": "323837b79b760a9ea268ef9bd510803ce89704859b76e3dc71f3871d0f5492f4427b2fad604ac822227684caa90d6681a55f2eebbdd570808a3b96992e0bb9cd"
+  },
   "SparseMlaSplitEnd_v2{DV=16,INV=Fa3InvSum_v2,SCALE=0.0625}": {
    "and": 48677,
    "type": "823878dfe6ca192e865843fcf3cc3453b1b9fd966fd36e2cda989a3e3007f16b8372da9fc250f309570470c2205c2577a92eb5f236861206cc1765aead7ed89a"

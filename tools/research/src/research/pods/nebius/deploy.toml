@@ -736,7 +736,7 @@ owner = "infra"
 
 # The retention collector: hourly `research retention gc --apply` while /workspace is over 80% of its blocks or its inodes, on every
 # node that holds research runs: vy-store-evict-research's nodes and the nodes whose research pool `--on auto` places runs in
-# (auto.SPILL). The evictors alone can leave a disk there with terabytes collectable. After a node's first install,
+# (auto.spill: every CPU node). The evictors alone can leave a disk there with terabytes collectable. After a node's first install,
 # `sudo systemctl daemon-reload && sudo systemctl enable --now vy-retention-gc.timer`.
 [[file]]
 path = "/etc/systemd/system/vy-retention-gc.service"

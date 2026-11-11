@@ -6,15 +6,21 @@ public import Definitions.WeightSecurity.Tied
 /-!
 # Model weight security: what it rests on
 
-`HonestUseHard` is the one assumption about the world: honest use of the served function doesn't hand out the weights.
-It is about the circuit's input-output behavior alone, with nothing of Verity in it. The other two are premises a
-deployment's guarantees are to discharge, taken as hypotheses until they do:
+`HonestUseHard` is the honest-use rate the guarantees state their bounds relative to: every party of a class steals the
+weights from honest use of the served function with probability at most `p`. It holds at `p = p_hon(q)`, the best a
+party of the class does, so what a bound adds to it is what leaks beyond honest serving. It is about the circuit's
+input-output behavior alone, with nothing of Verity in it. Beside it:
 
+* `Simulable`: the class holds the outsider with each covert string written in, which the class of all parties does.
+  Like `HonestUseHard`, it is part of what the guarantees say: a condition on the class the rate is about.
 * `LeaksThrough`: except with probability `ε`, what the outsider sees is what it would see in honest use through a
   covert channel of `|S|` covert strings. It is the audit's content, stated on the outputs' side: the channel's `tell`
-  sees the honest answer, never an internal value of the circuit.
-* `Simulable`: the class the assumption is about holds the outsider with each covert string written in, which the
-  class of all parties does.
+  sees the honest answer, never an internal value of the circuit. It is a premise a deployment's guarantees are to
+  discharge, taken as a hypothesis until they do.
+
+`FaultBudget` and `patternCount` count what a party sets under SPOT's fault model: the parties that set at most `M`
+faults over their queries, and the fault pattern sequences of total size at most `M`. What faults do to the weights'
+exposure is the named assumption `FaultedUseHard` (`Definitions.Assumptions.WeightSecurity`).
 
 Two premises tie a run's releases to the traces the audit extracts (`Definitions.WeightSecurity.Tied`), each the
 probability of its failure on every run, until the layers below discharge it:
@@ -32,16 +38,18 @@ open WeightSecurity
 
 variable {Ω R X Y M Θ Θ' : Type}
 
-/-- `honest-use-hard` (proposed; about the served function alone). **Honest use doesn't hand out the weights.** With
-the weights sampled as `gen ω` on uniform coins `ω`, every party of the class `A` that sees the served function `C`'s
-answers to `q` queries it chooses adaptively, on coins `r` of its own, outputs a stolen model (`Stolen θ θ'`, e.g. `θ'`
-serves a function close to `C θ`) with probability at most `p`.
+/-- **Honest use hands out the weights with probability at most `p`.** With the weights sampled as `gen ω` on uniform
+coins `ω`, every party of the class `A` that sees the served function `C`'s answers to `q` queries it chooses
+adaptively, on coins `r` of its own, outputs a stolen model (`Stolen θ θ'`, e.g. `θ'` serves a function close to
+`C θ`) with probability at most `p`. The guarantees state their bounds relative to it: it holds at `p = p_hon(q)`, the
+best a party of `A` does, so what they bound is what leaks beyond honest serving.
 
-It is the standard black-box model-extraction hardness, about `C`'s behavior on inputs and nothing else: a query sets
-every input that isn't the weights, so a circuit with an input that makes it print its weights, or a trigger only the
-weights' holder can find, fails it. `A` makes it computational: the parties of a time bound, say, since distillation
-from many queries succeeds given enough compute; at `A = Set.univ` it is information-theoretic, and holds only for few
-queries. `p` is `p_hon(q)`; `log₂ (1/p)` is roughly the weights' min-entropy given honest use. -/
+How small `p_hon(q)` is, is the standard black-box model-extraction hardness, about `C`'s behavior on inputs and nothing
+else: a query sets every input that isn't the weights, so a circuit with an input that makes it print its weights, or a
+trigger only the weights' holder can find, has `p_hon(q)` near `1`. `A` makes it computational: the parties of a time
+bound, say, since distillation from many queries succeeds given enough compute; at `A = Set.univ` it is
+information-theoretic, and small only for few queries. `log₂ (1/p_hon(q))` is roughly the weights' min-entropy given
+honest use. -/
 def HonestUseHard [Fintype Ω] [Fintype R] (C : Θ → X → Y) (gen : Ω → Θ) (Stolen : Θ → Θ' → Prop) (q : ℕ)
     (A : Set (Outsider R X Y Θ')) (p : ℝ) : Prop :=
   ∀ P ∈ A, Claims.Pr (fun z : Ω × R => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) q)) ≤ p
@@ -56,11 +64,25 @@ def LeaksThrough [Fintype Ω] [Fintype R] (C : Θ → X → Y) (gen : Ω → Θ)
   Claims.Pr (fun z : Ω × R =>
     ¬ ∃ s, O.view z.2 (real (gen z.1) z.2) q = O.view z.2 (ch.resp C s (gen z.1) z.2) q) ≤ ε
 
-/-- PREMISE, of the class. **The class holds the outsider with every covert string written in**
-(`Outsider.withString`): the honest-use parties the proof builds from `O` are ones `HonestUseHard` is about. Every
-class holds it at `A = Set.univ`; at a time bound, `O`'s time plus the channel's `ask` and `tell` must be within it. -/
+/-- **The class holds the outsider with every covert string written in** (`Outsider.withString`), a condition on the
+class the guarantees are stated for: the honest-use parties the proof builds from `O` are ones `HonestUseHard` is
+about. The class of all parties (`A = Set.univ`) holds it; at a time bound, `O`'s time plus the channel's `ask` and
+`tell` must be within it. -/
 def Simulable (A : Set (Outsider R X Y Θ')) (O : Outsider R X M Θ') (ch : Channel R X Y M) : Prop :=
   ∀ s, O.withString ch s ∈ A
+
+variable {F : Type}
+
+/-- **The parties that set at most `M` faults**: each query carries a fault pattern `φ : F` beside its input, and on
+every coin and against every responder the patterns of the first `q` queries have sizes summing to at most `M`. -/
+def FaultBudget (size : F → ℕ) (q M : ℕ) : Set (Outsider R (X × F) Y Θ') :=
+  {P | ∀ r resp, ((P.view r resp q).map fun e => size e.1.2).sum ≤ M}
+
+/-- **The number of fault pattern sequences**: sequences of `q` patterns whose sizes sum to at most `M`. Its `log₂` is
+the faults' arbitrary-data capacity: about `M · (c + ℓ)` at patterns that name proof blocks and the values they write,
+`c` a block's output bits and `ℓ` the bits that name a block. -/
+noncomputable def patternCount [Fintype F] (size : F → ℕ) (q M : ℕ) : ℕ :=
+  Fintype.card {φ : Fin q → F // ∑ t, size (φ t) ≤ M}
 
 variable {O I V Tick Adv S Q : Type}
 

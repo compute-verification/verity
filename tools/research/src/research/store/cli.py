@@ -46,9 +46,10 @@
   research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                                    make the registry's fetched entries under PATH (default: all) present and exact, from the
                                                    private remote when reachable, else the public export; every byte checked; exit 1 if any is missing
-  research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
+  research data export [--repo DIR] [--dry-run [--write-check]] [--fresh] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
   research data export --verify-url URL [--repo DIR] [--no-previous] [--blobs FILE] [--jobs N] [--json]
-                                                   copy every registry entry (and its `previous` ids, and each --id) to the public export bucket; --verify-url
+                                                   copy every registry entry (and its `previous` ids, and each --id) to the public export bucket,
+                                                   each a PUT If-None-Match: * (412 = already there), never reading it; --verify-url
                                                    fetches them all back through a public front end into a scratch store, checking every byte
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
   research data gc --cite DIR... --cache DIR [--apply --state FILE] [--report FILE] [--work DIR] [--jobs N]
@@ -1255,7 +1256,11 @@ def cmd_export(argv: list[str]) -> int:
 
     ap = _ap("export")
     ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with fixtures/artifacts.json)")
-    ap.add_argument("--dry-run", action="store_true", help="HEAD the export and report what would be uploaded")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="report what the local side would send; reads nothing from the export (its key may write but not read)")
+    ap.add_argument("--write-check", action="store_true",
+                    help="with --dry-run: create the smallest blob (one PUT If-None-Match: *) to check the key may write")
+    ap.add_argument("--fresh", action="store_true", help="send every object again, even those an earlier export saw land")
     ap.add_argument("--no-previous", action="store_true", help="leave out the ids under the map's `previous` block")
     ap.add_argument("--blobs", default=None, metavar="FILE", help="also these blobs: one `<sha256> <bytes>` per line (history stubs)")
     ap.add_argument("--id", action="append", default=[], metavar="ART", help="also this artifact, which the registry doesn't hold; repeatable")
@@ -1286,7 +1291,7 @@ def cmd_export(argv: list[str]) -> int:
         print("research data export: no export configured ([export] in store.toml, RESEARCH_EXPORT_DIR or RESEARCH_EXPORT_BUCKET)", file=sys.stderr)
         return 1
     rep = F.export(st, root, dest, srcs=fetchset.sources(st, public=""), include_previous=not ns.no_previous, blobs=blobs,
-                   arts=ns.id, jobs=ns.jobs, dry_run=ns.dry_run)
+                   arts=ns.id, jobs=ns.jobs, dry_run=ns.dry_run, write_check=ns.write_check, fresh=ns.fresh)
     if ns.json:
         _dump(rep)
     else:
@@ -1294,9 +1299,16 @@ def cmd_export(argv: list[str]) -> int:
             print(f"ERROR  {e}")
         for w in rep["warnings"]:
             print(f"WARN   {w}")
-        verb = "would upload" if ns.dry_run else "uploaded"
-        print(f"export to {rep['dest']}: {rep['ids']} id(s), {rep['blobs']} blob(s); {verb} {rep['uploaded']} object(s) "
-              f"({rep['bytes_uploaded'] / 1e6:.1f} MB), {rep['skipped']} already there; {len(rep['errors'])} error(s)", file=sys.stderr)
+        if ns.dry_run:
+            wc = rep["write_check"]
+            check = (f"; write check: {wc['key']} {wc['action']}" if wc else "; write not checked (--write-check)")
+            print(f"export to {rep['dest']} (dry run): {rep['ids']} id(s), {rep['blobs']} blob(s); would send {rep['uploaded']} object(s) "
+                  f"({rep['bytes_uploaded'] / 1e6:.1f} MB), each a conditional create, and {rep['known']} an earlier export saw land "
+                  f"would not be sent; what the export holds is not read{check}; {len(rep['errors'])} error(s)", file=sys.stderr)
+        else:
+            print(f"export to {rep['dest']}: {rep['ids']} id(s), {rep['blobs']} blob(s); uploaded {rep['uploaded']} object(s) "
+                  f"({rep['bytes_uploaded'] / 1e6:.1f} MB), {rep['skipped']} already there (412), {rep['known']} not sent (an earlier "
+                  f"export saw them land); {len(rep['errors'])} error(s)", file=sys.stderr)
     return 0 if rep["ok"] else 1
 
 
