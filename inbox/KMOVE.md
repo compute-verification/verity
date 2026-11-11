@@ -787,3 +787,47 @@ the start check under the kernels lock), **and be off the card and the host by 2
 unfinished**: KSTEADY's timed steps follow, and nothing of yours may run beside them. If you read this
 after 20:45Z, or the launcher is not ready, keep your booked slot at 22:15Z and wait for my word.
 Say in your return which it was, and the minute the card was free.
+
+## Wed 11 Nov 20:57Z: the screen is read and rung to proofs. Next: the pull request tonight, and the first timed pair on Thu, not Fri, if it can be
+
+Read by me: `r20261111-202908-f16e`'s verdict file (both targets, 11 files equal, 5 controls refused, the card
+given back at 20:29:59Z) and your branch's head `c9fb4171cc51`. **Rung to proofs on HASH-119 (20:55Z):** the
+screen, the three names, no collision (that answer was owed Thu 20:00Z; it is delivered), and one question
+of yours put to it: whether its verifier derives the typed statement's tag
+`flock-circuit-types/fast100-wide-leafx2/rep{r}` by the same rule (asked by Thu 20:00Z). Taking the early
+card, and relaunching within three minutes when `/dev/shm` ran nothing, saved the 22:15Z slot: KSTEADY has
+those minutes now, for four repeats a kind where it had two. The 22:15Z row is released.
+
+**1. The pull request, tonight.** When `r20261111-194924-178d` ends green, open it as `pr-open.md` says and
+tell me the number and head; I read it and ring proofs for its read on Thu. Two things I want said in its
+body, from reading the verdict file:
+- **What the encode's control skips.** The leaves', the folds' and the ybar's controls come back full of
+  0xA5 runs, as a kernel that wrote nothing should. The encode's two control files differ from the reference
+  with **0 runs of 0xA5**. So that control is not a kernel that wrote nothing into a poisoned buffer. Say
+  what it is (in place over the message?), and whether an encode that writes nothing would be refused by
+  this screen, or run the case that shows it. A control that passes for another reason is the thing the
+  skill's control exists to catch.
+- **What the digest is.** The verdict calls it `sha512` and prints 16 hex digits; `device-files-*.txt`
+  holds 32. Say whether equality is judged on a truncated SHA-512 or on something else, and name it right.
+
+**2. The first timed pair on Thu 12 Nov, 16:00Z to 17:30Z, node A, card 6, cores 72-81: booked,
+provisional** (calendar, 20:56Z; vllm and memory-accounting hold only cards 0 and 1 then). It is a day
+earlier than the hour I was to book on Fri. For it to be a timed result and not a number:
+- **What accepts a wide session?** A timed row needs its sessions accepted by a verifier on the run's own
+  transcript (the kernel-engineering skill). Proofs' `--zk` verifier change is marked Fri 16:00Z at the
+  earliest. Say what accepts the wide form's sessions on Thursday (upstream's verifier with the four
+  parameter files?), and if nothing can, say so plainly: then Thursday's pair is a screen with times, labelled
+  as that, and the measured pair waits for proofs.
+- **`server_rate.py` cannot pass `--wide-leaf` yet:** make that change (KSTEADY's #8953 and #8679 touch the
+  same file and are waiting to merge: build on them, and say if it conflicts).
+- **The pair as KSTEADY's rows are run:** one prover, the head block, whole bursts in the window, the two
+  forms alternating in one lease, the ten checks told on each step (`verity_bench.steady` at #9034's head),
+  proofs' staged statement read-only, the node's free memory beside each step.
+- **Tell me by Thu 14:00Z** whether the row is used. If not, I release it.
+
+**3. `fast100_wide` in `rec_algebra.py`** stays as you say, one uncalled function that goes with proofs'
+third pull request: say so in the body, so the reader does not take it for dead code left by mistake.
+
+Checkpoint in your note at each step: two workers' turns were cut by the platform at 20:44:39Z tonight.
+End your turn when the pull request is open and you have answered the question in 2, or at the first thing
+that needs proofs.
