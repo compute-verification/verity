@@ -1,0 +1,19 @@
+{
+ "format": "verity-bench/inference-only-policy/v1",
+ "class": {
+  "outputs": 4,
+  "positions": 35,
+  "prompt": 32,
+  "slots": 4
+ },
+ "n_inputs": {
+  "work": {
+   "attention": 41287680,
+   "linears": 34057748480,
+   "lm_head": 1050673152
+  }
+ },
+ "serve": {
+  "model": "unsloth/Llama-3.2-1B"
+ }
+}

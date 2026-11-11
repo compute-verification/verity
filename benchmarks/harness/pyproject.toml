@@ -110,6 +110,10 @@ inputs = [
     "verity/protocols/inference_only/rho/data/hardware.toml",
     "benchmarks/overhead/run.py",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/engine/__init__.py", "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py",
+    # the proof-system table prices serving at the reference fleet's assumed serving MFU, and `verity bench prove` is the
+    # door's runner, which a test runs
+    "verity/protocols/inference_only/rho/data/reference.toml",
+    "benchmarks/prove/run.py",
     # `verity bench exfiltration` composes two other benchmarks' calculators, which its tests run on fixture rows: the
     # break-even planner's plan (its modules, with the figure's model, the cost model and the cards they read, and rho's
     # world fleet) for the requests, and the network certifier's calculator of K for its term; a test runs its runner
@@ -118,7 +122,6 @@ inputs = [
     "benchmarks/spot_figures/total_cost.py",
     "benchmarks/spot_figures/cards.py",
     "benchmarks/spot_figures/cards",
-    "verity/protocols/inference_only/rho/data/reference.toml",
     "benchmarks/network_traces/leak_bounds.py",
     "benchmarks/exfiltration/run.py",
 ]
@@ -131,7 +134,7 @@ tests = ["tests/test_bench.py"]
 paths = ["verity/protocols/pouw/verifier/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_breakdown.py", "tests/test_overhead.py", "tests/test_served_table.py"]
+tests = ["tests/test_breakdown.py", "tests/test_overhead.py", "tests/test_prove.py", "tests/test_served_table.py"]
 paths = ["fixtures/artifacts.json"]
 
 [[tool.verity.tests.reads]]
