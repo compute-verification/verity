@@ -61,12 +61,12 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import h1unit as U  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.core.protocols.pouw import core_check as CC  # noqa: E402
-from verity.ml.protocols.pouw.circuit import live as L  # noqa: E402
-from verity.core.protocols.pouw import live_reads as LR  # noqa: E402
-from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
-from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
+from verity.protocols.pouw.prover.circuit import live as L  # noqa: E402
+from verity.protocols.pouw.verifier import live_reads as LR  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
 
 NAME = "unit/pouw-live"
 #: the rows of a piece, past which a round's live check is cut by rows
