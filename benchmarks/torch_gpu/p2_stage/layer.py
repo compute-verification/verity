@@ -5,7 +5,7 @@
                     [--encode-budget S] [--encode-blocks N] [--m 4096,16384]
 
 - `LAYOUT` is the store's layout, p2_v1's fixture (`p2_v1/store.py layout`'s JSON), read by
-  `layout.store_layout`. `M` is the weights stream's manifest (`e2e_h200.served_weights manifest`; with `--digests`,
+  `layout.store_layout`. `M` is the weights stream's manifest (`benchmarks.torch_gpu.p2_stage.served_weights manifest`; with `--digests`,
   each tensor's SHA-256, which every loaded tensor is held to) and `W` a file holding the stream's bytes at their stream
   offsets (`weights write`), at least the layer's; without `W`, the few stream bytes a run reads (the scales, a
   matrix's last label) come from the seeded generator (`--generator`, `--shape`, `--weights-seed`).
@@ -51,10 +51,14 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "s8_linear"))
-import gemm as G
 import int_mm as IM
+
+import gemm as G
 import layout as L
 import stage as S
+
+# isort: split
+# p2_v1 is importable once layout has put benchmarks/pous on sys.path
 from p2_v1 import gpu
 
 LAYERS = 52
@@ -160,7 +164,7 @@ class EncodedStore:
         return out
 
 
-def encode(args, lay: L.StoreLayout, src: L.Weights, read: L.Read, dev: DevStore, out: Out) -> None:
+def encode(args: argparse.Namespace, lay: L.StoreLayout, src: L.Weights, read: L.Read, dev: DevStore, out: Out) -> None:
     kern = gpu.Kernels(str(args.lib), "", lay.spec, lay.prefix)
     kern.raised()
     t0, n0 = time.monotonic(), dev.meta["done"]
@@ -191,7 +195,8 @@ def ready(lay: L.StoreLayout, dev: DevStore, layer: int) -> list[str]:
             if e.start <= lay.tensor(layer, n).first_block and lay.tensor(layer, n).block_range.stop <= e.stop]
 
 
-def against_stream(lay, src: L.Weights, read: L.Read, layer: int, name: str, buf) -> dict:
+def against_stream(lay: L.StoreLayout, src: L.Weights, read: L.Read, layer: int, name: str,
+                   buf: torch.Tensor) -> dict:
     """Mismatching bytes and blocks of the loaded matrix `buf` against the stream's bytes of it."""
     t = lay.tensor(layer, name)
     ne = S.flat(buf) != to_device(src.read(src.parts(layer, name), 0, t.size, read))
@@ -223,7 +228,8 @@ def scales(src: L.Weights, read: L.Read, layer: int, name: str, n: int) -> torch
     return to_device(data).view(torch.float32)
 
 
-def stage(args, lay, src, read: L.Read, dev, out: Out, layer: int) -> tuple[dict, float | None, bool]:
+def stage(args: argparse.Namespace, lay: L.StoreLayout, src: L.Weights, read: L.Read, dev: DevStore | EncodedStore,
+          out: Out, layer: int) -> tuple[dict, float | None, bool]:
     staged, whole_s, ok = {}, None, True
     names = ready(lay, dev, layer)
     out.record(step="stage", ready=names, encoded=[dev.encoded.start, dev.encoded.stop])
@@ -281,7 +287,8 @@ def run_window(st: S.EncodedRows, offset: int, size: int) -> tuple[int, str | No
     return 0, None
 
 
-def controls(args, lay, src, read: L.Read, store: S.EncodedRows, out: Out, layer: int, name: str) -> bool:
+def controls(args: argparse.Namespace, lay: L.StoreLayout, src: L.Weights, read: L.Read, store: S.EncodedRows,
+             out: Out, layer: int, name: str) -> bool:
     """Other keys, a corrupted row, a row at p and a last block nonzero past the matrix's end, each among the last 64
     blocks of `name`: each refused with its flag bit among those it raises (other keys' garbage is nonzero past the end
     too), and the honest blocks passed."""
@@ -323,7 +330,7 @@ def negative_row(neg: dict, c_star: bytes) -> bytes:
     return S.P_BYTES if neg["c"] == "p" else bytes.fromhex(neg["c"])
 
 
-def toy(args, out: Out) -> bool:
+def toy(args: argparse.Namespace, out: Out) -> bool:
     doc = json.loads((args.toy / "toy.json").read_text())
     spot = json.loads((args.toy / "spot.json").read_text())
     c_star, spot_c = (args.toy / "c-star.bin").read_bytes(), (args.toy / "spot-c.bin").read_bytes()
@@ -378,7 +385,7 @@ def activations(M: int, K: int, gen: torch.Generator) -> tuple[torch.Tensor, tor
     return x, sx
 
 
-def gemm(args, staged: dict, out: Out) -> tuple[dict[int, float], bool]:
+def gemm(args: argparse.Namespace, staged: dict, out: Out) -> tuple[dict[int, float], bool]:
     """Each loaded matrix at each batch M: the layer's GEMM seconds per M (all four matrices), and whether every output
     word equals the twin's."""
     gen = torch.Generator(device=DEVICE).manual_seed(args.seed)
@@ -408,13 +415,13 @@ def gemm(args, staged: dict, out: Out) -> tuple[dict[int, float], bool]:
     return totals, ok
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     global DEVICE
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (p2_v1/store.py layout)")
     ap.add_argument("--weights", type=Path, required=True, help="the weights stream's manifest")
     ap.add_argument("--w", type=Path, help="the weights stream's bytes at their stream offsets (else the generator's)")
-    ap.add_argument("--generator", default="e2e_h200.served_weights", help="the seeded generator, without --w")
+    ap.add_argument("--generator", default="benchmarks.torch_gpu.p2_stage.served_weights", help="the seeded generator, without --w")
     ap.add_argument("--shape", default="h200", help="its shape")
     ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1", help="its seed")
     store = ap.add_mutually_exclusive_group(required=True)

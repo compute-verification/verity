@@ -23,9 +23,13 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import dither_one as DO
 from dither_fused import CM, CO
+
+if TYPE_CHECKING:
+    from verity.protocols.spot.device.challenger import ChallengerKey
 
 SCHEMA = "verity/dither-so/window-manifest/v1"
 TAIL_KIND, FINAL_KIND, LATE_KIND, MANIFEST_KIND = "receipt-tail", "round-final", "round-late", "window-manifest"
@@ -100,8 +104,8 @@ def expect(m: dict) -> dict:
             "manifest_root_listed": mroot.hex() == m["manifest_root"]}
 
 
-def check(manifest: str | Path, challenger_out: str | Path, heads: list[str], pins: list[str], main: list[str], key=None,
-          period: str | None = None, root: bytes | None = None) -> dict:
+def check(manifest: str | Path, challenger_out: str | Path, heads: list[str], pins: list[str], main: list[str],
+          key: ChallengerKey | None = None, period: str | None = None, root: bytes | None = None) -> dict:
     """`coins.check` of the execution phase's coins against the challenger's run, over the round roots and manifest root `expect`
     recomputes, with the host's pins log `pins` (its lines) and the verifier's first-parent history of main `main`;
     ``ok`` only when it passes and the recomputed roots are the manifest's."""

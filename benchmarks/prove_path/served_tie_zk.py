@@ -51,8 +51,8 @@ sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
 
 import leak_scan as LS  # noqa: E402
 import served_tie_window as STW  # noqa: E402
-from verity.core.protocols.certifier import served_rows as SR  # noqa: E402
-from verity.ml.protocols.certifier import served_tie as ST  # noqa: E402
+from verity.protocols.certifier.verifier import served_rows as SR  # noqa: E402
+from verity.protocols.certifier.prover import served_tie as ST  # noqa: E402
 
 CLASSES = {
     "slice": dict(R=2, P=7, IW=6, L=4096, T=256, IB=8, PB=8),
@@ -255,7 +255,7 @@ def audit(M, N2, a, sg, m: dict, units: list, w: int, run_root: bytes, out: Path
         want[f"{name}/{p_}"] = wd
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": wd["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_law(f"stratified:{n}")
+    law = M.D.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the served rows' tie on a sealed served window ({a.serve_run.name} w{w})",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "served_tie: each unit's srv row is its served-rows registration's row w; its positions are the step "

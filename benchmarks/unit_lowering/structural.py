@@ -43,7 +43,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
-VLLM = ROOT / "integrations" / "vllm"
+VLLM = ROOT / "adapters" / "vllm"
 H1_PROVE = ROOT / "benchmarks" / "pouw" / "h1_prove"
 #: the zero binding: a tile's, which has no leaf Program (the guard's pins are under it), or a lane's or combine's under
 #: ``--bind zero``, a file no verifier holds a Program and partition for
@@ -73,8 +73,8 @@ def _h1unit(form: str):
 
 def refusal(unit: str, k: int, r: int, c: int) -> str | None:
     """Why the R × C leaf at K has no ``unit`` statement, decided before anything is lowered; None when it has one."""
-    from verity.core.protocols.pouw import weights as W
-    from verity.ml.protocols.pouw.circuit import h1zy as Z
+    from verity.protocols.pouw.verifier import weights as W
+    from verity.protocols.pouw.prover.circuit import h1zy as Z
     if unit not in UNITS:
         return f"a leaf's statement is one of {', '.join(UNITS)}, not {unit!r}"
     if r <= 0 or c <= 0 or r % 4 or c % 8 or k < 64 or k % 32:
@@ -96,11 +96,11 @@ def refusal(unit: str, k: int, r: int, c: int) -> str | None:
 def leaf_statement(U, unit: str, k: int, r: int, c: int) -> tuple:
     """``unit``'s Definition (`h1zy.lane` or `h1zy.combine` over the leaf's tile, as `h1window.leaf_unit` derives it at a
     K of whole lanes) and its input rows, as `h1_lanes`' ``stager`` stages them."""
-    from verity.core.protocols.pouw import leaf_lanes as LL
-    from verity.ml.protocols.pouw.circuit import h1tile as H
-    from verity.ml.protocols.pouw.circuit import h1window as HW
-    from verity.ml.protocols.pouw.circuit import h1zy as Z
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.protocols.pouw.verifier import leaf_lanes as LL
+    from verity.protocols.pouw.prover.circuit import h1tile as H
+    from verity.protocols.pouw.prover.circuit import h1window as HW
+    from verity.protocols.pouw.prover.circuit import h1zy as Z
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     t = HW.h1_tile(k, (r, c), H.PouwH1Tile3 if U.tile() == "v3" else None)
     wp = 2 * LL.words(k)
     if unit == "lane":
@@ -119,14 +119,14 @@ def window(U, k: int, r: int, c: int):
     """A served window of one call at K over the R × C tile: `h1window.program` over `h1window.tile_unit` at K on
     `h1unit.tile`'s H1 tile. `h1window.leaf_program` reads only the window's template at K, so every served window's
     leaf Programs at K are this one's."""
-    from verity.ml.protocols.pouw.circuit import h1tile as H
-    from verity.ml.protocols.pouw.circuit import h1window as HW
+    from verity.protocols.pouw.prover.circuit import h1tile as H
+    from verity.protocols.pouw.prover.circuit import h1window as HW
     h1 = H.PouwH1Tile3 if U.tile() == "v3" else None
     return HW.program((("w", k, c),), (("w", 0),), r, (r, c), unit=lambda kk: HW.tile_unit(kk, (r, c), h1))
 
 
 def _descriptor(program) -> bytes:
-    from verity.ml.circuits import codec
+    from verity.circuits import codec
     return codec.canonical_json({x: v for x, v in codec.encode_program(program).items() if x != "annotations"})
 
 
@@ -134,8 +134,8 @@ def leaf_bind(U, unit: str, k: int, r: int, c: int) -> tuple[object, dict, bytes
     """``unit``'s Definition, binding and leaf Program descriptor as a served window's verifier derives them (`credit`'s
     lanes form): `h1window.leaf_program`'s one-call Program of its wrapper over the lane or combine, a population of one,
     bound as ``{partition: its partition object's digest, program: the descriptor's SHA-512}``."""
-    from verity.ml.protocols.pouw.circuit import h1window as HW
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.protocols.pouw.prover.circuit import h1window as HW
+    from verity.protocols.spot.verifier.one_stage import partition as P
     win = window(U, k, r, c)
     program, query = HW.leaf_program(win, k, unit)
     if P.units(program, query) != 1:
@@ -155,7 +155,7 @@ def stage(U, unit: str, k: int, r: int, c: int, path: Path, staging: str, bind: 
         os.environ["HZ_STAGE"] = staging
         PC._lower(k, r, c, ZERO_BIND, path)
         return {"bind": ZERO_BIND}
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     d, rows = leaf_statement(U, unit, k, r, c)
     out = {"bind": ZERO_BIND}
     if bind == "leaf":
@@ -215,20 +215,25 @@ def _counts(low, struct: dict | None = None, commits: int | None = None) -> dict
 
 
 def _file(path: Path) -> dict:
-    """The file's first line, its META line's bytes and its SHA-512, read in chunks: a templated file's META holds the
-    whole template."""
+    """The file's first line, its META line's bytes, a templated file's template lines (its template section's header
+    ``TEMPLATE n``; None for a flat file) and its SHA-512, read in chunks."""
+    from verity_flock.circuit import TMPL_SECTION
+
     h, newlines, at = hashlib.sha512(), [], 0
     with open(path, "rb") as f:
         while b := f.read(1 << 24):
             h.update(b)
             start = 0
-            while len(newlines) < 2 and (nl := b.find(b"\n", start)) >= 0:
+            while len(newlines) < 3 and (nl := b.find(b"\n", start)) >= 0:
                 newlines.append(at + nl)
                 start = nl + 1
             at += len(b)
     with open(path, "rb") as f:
         head = f.read(newlines[0]).decode()
-    return {"head": head, "meta_bytes": newlines[1] - newlines[0] - 1, "sha512": h.hexdigest()}
+        f.seek(newlines[1] + 1)
+        section = f.read(newlines[2] - newlines[1] - 1).split() if len(newlines) > 2 else []
+    lines = int(section[1]) if len(section) == 2 and section[0] == TMPL_SECTION.encode() else None
+    return {"head": head, "meta_bytes": newlines[1] - newlines[0] - 1, "template_lines": lines, "sha512": h.hexdigest()}
 
 
 def _done(args, rec: dict) -> int:
@@ -258,10 +263,10 @@ def check(args) -> int:
     `partition.partition`'s of the leaf Program); and the circuit files with their leaf Programs in the lanes form
     (`lanes_files`, `form_of`)."""
     U = _h1unit("structural")
-    from verity.core.protocols.pouw import credit as Cr
-    from verity.core.protocols.pouw import leaf_lanes as LL
-    from verity.ml.protocols.pouw.circuit import h1window as HW
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.protocols.pouw.verifier import credit as Cr
+    from verity.protocols.pouw.verifier import leaf_lanes as LL
+    from verity.protocols.pouw.prover.circuit import h1window as HW
+    from verity.protocols.spot.verifier.one_stage import partition as P
     t0 = time.time()
     win = window(U, args.k, args.r, args.c)
     raw = _descriptor(win)
@@ -327,9 +332,8 @@ def lower(args) -> int:
 
     def meta_captured(text):
         m = meta_of(text)
-        tl = m.get("template")
-        got["meta"] = {**{k: m.get(k) for k in BLOCK}, "template_lines": len(tl) if isinstance(tl, list) else None,
-                       "program_sha512": m.get("program_sha512"), "partition": m.get("partition")}
+        got["meta"] = {**{k: m.get(k) for k in BLOCK}, "program_sha512": m.get("program_sha512"),
+                       "partition": m.get("partition")}
         return m
 
     CS.unit_lowering, FC.meta_of = captured, meta_captured
@@ -406,7 +410,7 @@ def _instances(U, shape, rng) -> tuple[list[str], dict[str, np.ndarray], list[tu
 
 def _reference(U, shape, rows: dict, i: int, pub: tuple) -> tuple[np.ndarray, int]:
     """`h1zy.reference` on instance ``i``'s words, as `h1_prove/stage.py` holds a staged round to it."""
-    from verity.ml.protocols.pouw.circuit import h1zy as Z
+    from verity.protocols.pouw.prover.circuit import h1zy as Z
     a = [U.split_row(rows[f"a{x}"][i]) for x in range(shape.r)]
     b = [U.split_row(rows[f"b{x}"][i]) for x in range(shape.c)]
     salt, pos, roots = pub

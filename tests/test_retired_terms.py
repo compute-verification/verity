@@ -10,7 +10,7 @@ word maps of `tools/move/`, which name the words they retire; and of a `.lean` f
 (``lean_prose``, the lane-text lint's reader), where every site is held to its file's count in ``LEAN_LIST``: a file past
 its count, or with a site and no entry, fails, and the ratchet gate holds the list's total from rising, so it only shrinks
 (``--prune`` lowers it to what the tree holds). A term matches case-insensitively as two words, hyphenated, or wrapped onto
-the next line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
+the next line (behind a comment marker or not). Every file under `verity/protocols/inference_only/rho/`, `benchmarks/network_traces/` and the
 network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
 them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
@@ -49,7 +49,7 @@ _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
 
 #: Retired in every file under INCORRECT too, and what to write instead.
-INCORRECT = ("benchmarks/rho/", "benchmarks/network_traces/", "verity/core/protocols/network/tests/")
+INCORRECT = ("verity/protocols/inference_only/rho/", "benchmarks/network_traces/", "verity/protocols/certifier/verifier/network/tests/")
 INCORRECT_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
                    "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set",
                    "faulty window, wrong unit": "incorrect window, incorrect proof block",
@@ -80,7 +80,10 @@ DOC_TERMS = {
                                                       "stays in backticks)",
     "coin server, coin source, coin device, randomness source": "the challenger",
     "salted leaf, salted commitment": "hiding leaf, hiding commitment",
-    "miss probability, detection probability": "acceptance probability (detection is its complement)",
+    "acceptance probability P_a, a sampling design's acceptance probability": "miss probability (detection is its "
+                                                                              "complement; a prover's acceptance probability "
+                                                                              "keeps the word)",
+    "egress cone": "reach (E)",
     "link window": "an execution phase's transfer blocks (`link-window` stays in backticks until a format version)",
     "block-scaled, blockwise, scale block": "scale group",
     "production": "serving, or proving",
@@ -102,7 +105,7 @@ DOC_TERMS = {
     "C-Flock": "Flock (Succinct's is upstream Flock)",
     "netlist": "a private circuit, or the circuit's description",
     "M0": "Flock's circuit prover",
-    "IR, Verity IR": "circuit or Program (`verity.ml.circuits`)",
+    "IR, Verity IR": "circuit or Program (`verity.circuits`)",
     "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
@@ -112,7 +115,7 @@ DOC_TERMS = {
     "prover gateway, verifier gateway": "the ZK server; the challenger",
     "batch verifier": "the verifier",
     "GPU workers": "workers",
-    "escape probability": "acceptance probability",
+    "escape probability": "miss probability",
     "post-landing run, postland": "after-landing run",
     "Commit window": "Commit period",
     "accounting period": "the monitoring period",
@@ -162,7 +165,9 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|wardens?"
                        rf"|legs?|(?:re)?(?:draws?|drawn|drawing|drew)|components?|firewall(?:s|ed)?|flock-verify"
                        rf"|coin{_SPACE}(?:servers?|sources?|devices?)|randomness{_SPACE}sources?"
-                       rf"|salted{_SPACE}(?:leaf|leaves|commitments?)|(?:miss|detection){_SPACE}probabilit(?:y|ies)"
+                       rf"|salted{_SPACE}(?:leaf|leaves|commitments?)|egress{_SPACE}cones?"
+                       rf"|acceptance{_SPACE}probabilit(?:y|ies){_SPACE}\$?(?:\\bar\{{?\s?)?P\u0304?\}}?_\{{?a\b"
+                       rf"|(?:sampling{_SPACE})?design's{_SPACE}acceptance{_SPACE}probabilit(?:y|ies)"
                        rf"|link{_SPACE}windows?|block{_SPACE}scaled|blockwise|scale{_SPACE}blocks?|productions?"
                        rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
                        rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
@@ -196,7 +201,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|\bcommit{_SPACE}periods?\b")
 _DOC_COMMAND = re.compile(r"\bverity[ \t]+(?:bench\|)?example\b")
 #: The commitments' own docs, where hm96 rows keep their name.
-HM96_HOME = "verity/ml/commitments/"
+HM96_HOME = "verity/commitments/"
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {
@@ -209,8 +214,6 @@ ALLOWED: dict[str, str] = {
                                                               "after it lands",
     "production would publish every event": "infra's Vercel deployment, another sense",
     "Production is `verity-slack-events`": "infra's Vercel deployment, another sense",
-    "the coin server keeps each round's bytes": "a row of Flock's Soundness README beside one a queued PR on next "
-                                                "rewrites; renamed after it lands",
     "T proof units per registration, unit t the link-window's bucket row t": "a public item's reason in the ingress tie's "
                                                                              "Spec (`certifier.tie_service`): `Spec.digest` hashes it",
     '"proof-unit"': "the kind circuit-check's Boolean export records for a unit circuit (`boolean_export.Registry.type_of`)",
@@ -219,7 +222,7 @@ ALLOWED: dict[str, str] = {
     "report-proof-service-": "a cited note's id",
     "Faulty ANDs (`Stratified.harm_bound`": "`sampling_plan/h200.py`'s docstring: a queued PR on next rewrites the line beside "
                                             "it; renamed after it lands",
-    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/rho/rho/envelopes.py`, "
+    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `verity/protocols/inference_only/rho/rho/envelopes.py`, "
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
@@ -230,18 +233,16 @@ ALLOWED: dict[str, str] = {
     "an *active warden* in network steganography's sense": "network steganography's own term, which `ARCHITECTURE.md` "
                                                            "names to say it is not the network certifier's name",
     "where a passive warden only watches": "network steganography's own term, beside the one above",
-    "(the bytes say draw)": "`verity/ml/commitments/domains.py`'s comment over the POUW_*_SAMPLING tags, which names their "
-                            "bytes (`verity/pouw/pearl-c-draw/v1` and the rest)",
 }
 
 PENDING: dict[str, str] = {
-    "verity/core/protocols/pouw/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean",
-    "verity/core/protocols/pouw/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; "
+    "verity/protocols/pouw/verifier/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean",
+    "verity/protocols/pouw/verifier/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; "
                                                             "renamed with the Lean",
-    "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; "
+    "adapters/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; "
                                                              "renamed with the Lean",
     "benchmarks/recursion_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "examples/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    "demos/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
 }
 
 
@@ -418,7 +419,7 @@ def test_the_glossary_records_the_retired_terms():
 #: the Glossary's older names (GLOSSARY.md) a Lean declaration's own name may carry, each word's forms and its term;
 #: `session`, `window` and `block` are left out, as each has a sense the Glossary keeps
 LEAN_WORDS = {"draw": (("draw", "draws", "drawn"), "sample"), "law": (("law", "laws"), "sampling design"),
-              "escape": (("escape",), "acceptance probability"), "wrong": (("wrong",), "incorrect"),
+              "escape": (("escape",), "miss probability"), "wrong": (("wrong",), "incorrect"),
               "dampener": (("dampener",), "slowdown"), "firewall": (("firewall",), "ZK server"),
               "horizon": (("horizon",), "monitoring period"), "warden": (("warden",), "network certifier"),
               "tap": (("tap", "taps"), "network certifier"), "leg": (("leg", "legs"), "subprotocol")}
@@ -454,7 +455,7 @@ def test_no_retired_word_in_a_new_lean_name():
 
 #: SPOT's older name (GLOSSARY.md, Older names): each spelling's count in the scanned files' whole text, which only falls
 #: (`_held`). A sampled proof block, and its proof, keep their words and aren't counted where "block" follows.
-SPOT_NAMES = {"sampled proof(s)": 435, "sampled_proofs": 1134, "SampledProofs": 2530, "sampled-proofs": 507}
+SPOT_NAMES = {"sampled proof(s)": 435, "sampled_proofs": 62, "SampledProofs": 15, "sampled-proofs": 507}
 _GAP = r"(?:[ \t]+|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 SPOT_SPELLINGS = {"sampled proof(s)": re.compile(rf"\bsampled{_GAP}proofs?\b(?!{_GAP}blocks?\b)", re.I),
                   "sampled_proofs": re.compile("sampled_proofs", re.I), "SampledProofs": re.compile("[Ss]ampledProofs"),
@@ -524,27 +525,27 @@ def test_the_scan_reads_each_form():
 
 
 def test_the_scan_reads_rho_terms():
-    """`benchmarks/rho`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
+    """`verity/protocols/inference_only/rho`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
     a faulty node, link or device, and the same words outside it stay."""
     docs = {
-        "benchmarks/rho/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
+        "verity/protocols/inference_only/rho/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
                                 'set."""\nx = s["exfil.faulty"], c.faulty_unit_bits  # faultyIngressBits; a faulty node, '
                                 "link or device\n"),
-        "benchmarks/rho/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
+        "verity/protocols/inference_only/rho/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
         "c.py": "# faulty outputs and faulty blocks outside it\n",
     }
     assert offenders(list(docs), read=docs.__getitem__)[0] == [
-        ("benchmarks/rho/a.py", 1, "faulty-outputs"), ("benchmarks/rho/a.py", 1, "faulty step"),
-        ("benchmarks/rho/a.py", 2, "faulty ingress unit"), ("benchmarks/rho/a.py", 2, "faulty set"),
-        ("benchmarks/rho/data/b.toml", 1, "Faulty outputs"), ("benchmarks/rho/data/b.toml", 1, "faulty proof block"),
-        ("benchmarks/rho/data/b.toml", 1, "faulty blocks")]
+        ("verity/protocols/inference_only/rho/a.py", 1, "faulty-outputs"), ("verity/protocols/inference_only/rho/a.py", 1, "faulty step"),
+        ("verity/protocols/inference_only/rho/a.py", 2, "faulty ingress unit"), ("verity/protocols/inference_only/rho/a.py", 2, "faulty set"),
+        ("verity/protocols/inference_only/rho/data/b.toml", 1, "Faulty outputs"), ("verity/protocols/inference_only/rho/data/b.toml", 1, "faulty proof block"),
+        ("verity/protocols/inference_only/rho/data/b.toml", 1, "faulty blocks")]
 
 
 def test_the_scan_reads_the_network_terms():
     """The network tests' and `benchmarks/network_traces`' incorrect proof blocks, windows and K's terms for them, on toy
     files: a key or a name that mirrors the Lean's (`faulty_bits`, `wrong_units`, `faultySets`), a faulty certifier, a
     wrong verdict, and the same words outside them stay."""
-    net = "verity/core/protocols/network/tests/a.py"
+    net = "verity/protocols/certifier/verifier/network/tests/a.py"
     docs = {
         net: ('"""Its faulty bits, no faulty\n    term and at most 3 wrong units."""\n'
               'class _Faulty(Certifier):  # a faulty certifier; a wrong verdict\n'
@@ -594,12 +595,12 @@ def test_the_doc_scan_reads_each_form():
 
 def test_the_doc_scan_reads_the_party_terms():
     """The developer, the composite protocols, the registered circuit and assumptions, on toy files: the proving side's
-    prover, a theorem's premise, a deployment record, `verity.core.deploy` and a registered workload stay."""
+    prover, a theorem's premise, a deployment record, `verity.configuration.deploy` and a registered workload stay."""
     docs = {
         "a.md": "Nothing the prover runs or hosts; a machine the prover doesn't\ncontrol, the prover's node, a "
                 "prover-controlled host and the prover system. The remote deployment's registered work, under a named\n"
                 "premise and the card premise. Flock's prover, a cheating prover, a theorem's premise, a deployment record,"
-                " `verity.core.deploy` and a registered workload stay.\n",
+                " `verity.configuration.deploy` and a registered workload stay.\n",
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "prover runs or hosts"), ("a.md", 1, "prover doesn't control"), ("a.md", 2, "prover's node"),
@@ -615,14 +616,14 @@ def test_the_doc_scan_reads_the_protocol_terms():
         "a.md": "The draw, a drawn unit, nothing redraws; the firewall and a sampling\nblock; the declared circuit.\n"
                 "Committed as hm96 rows before that period's coins; rejection dominates. A Commit period stays.\n"
                 "The commit period, `flock-verify verify`, then flock-verify.\n",
-        "verity/ml/commitments/x/PROTOCOL.md": "hm96 rows in frame-v3-sha512 trees, before the draw.\n",
+        "verity/commitments/x/PROTOCOL.md": "hm96 rows in frame-v3-sha512 trees, before the draw.\n",
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("NETWORK.md", 1, "warden"), ("NETWORK.md", 1, "warden"), ("NETWORK.md", 1, "Wardens"),
         ("a.md", 1, "draw"), ("a.md", 1, "drawn"), ("a.md", 1, "redraws"), ("a.md", 1, "firewall"),
         ("a.md", 1, "sampling block"), ("a.md", 2, "declared circuit"), ("a.md", 3, "hm96 rows"),
         ("a.md", 3, "period's coins"), ("a.md", 3, "rejection dominates"), ("a.md", 4, "commit period"),
-        ("a.md", 4, "flock-verify"), ("verity/ml/commitments/x/PROTOCOL.md", 1, "draw")]
+        ("a.md", 4, "flock-verify"), ("verity/commitments/x/PROTOCOL.md", 1, "draw")]
 
 
 def test_the_doc_scan_reads_the_network_and_process_terms():
@@ -659,7 +660,7 @@ def test_the_doc_scan_reads_the_training_terms():
     slowdown lower bound and a window that caps its samples stay."""
     docs = {
         "a.md": "The compute dampener D; Dampeners. NCI's check, novel\ncommunication intensity.\n"
-                "`Nci.Dampener.remoteDampener` and `benchmarks/nci`, the nci directory, NciCheck stay.\n"
+                "`Nci.Dampener.remoteDampener` and `verity/protocols/inference_only/nci`, the nci directory, NciCheck stay.\n"
                 "The machine model's coverage\ntable, an envelope op; a serving block, two server-windows, the server time block.\n"
                 "The overhead lower bound, an exclusion bound, the training classes, per-block caps; dark compute, certified work.\n"
                 "The `machine-model` command, a server block, the slowdown lower bound and a window that caps its samples stay.\n",
@@ -673,19 +674,21 @@ def test_the_doc_scan_reads_the_training_terms():
 
 
 def test_the_doc_scan_reads_the_owners_terms():
-    """The owners' renames (`GLOSSARY.md`), on toy files: the challenger, hiding leaves, the acceptance probability,
-    transfer blocks, scale groups and serving; `link-window` in backticks, a quoted "production", a reproduction and a
-    scale group stay."""
+    """The owners' renames (`GLOSSARY.md`), on toy files: the challenger, hiding leaves, the miss probability, the reach,
+    transfer blocks, scale groups and serving; `link-window` in backticks, a quoted "production", a reproduction, a
+    scale group and a prover's acceptance probability stay."""
     docs = {
         "a.md": "The coin server, a coin\nsource, the coin devices and a randomness source; salted leaves and a salted commitment.\n"
-                "A miss probability, the detection probabilities; the link window and a link-window.\n"
+                "Acceptance probability $\\bar P_a$, a design's acceptance probabilities, egress cones and a prover's "
+                "acceptance probability; the link window and a link-window.\n"
                 "Block-scaled FP8, blockwise scales, a scale block; in production, two productions.\n"
                 'The `link-window` key, a quoted "production", a reproduction and a scale group stay.\n',
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "coin server"), ("a.md", 1, "coin source"), ("a.md", 2, "coin devices"),
         ("a.md", 2, "randomness source"), ("a.md", 2, "salted leaves"), ("a.md", 2, "salted commitment"),
-        ("a.md", 3, "miss probability"), ("a.md", 3, "detection probabilities"), ("a.md", 3, "link window"),
+        ("a.md", 3, "Acceptance probability $\\bar P_a"), ("a.md", 3, "design's acceptance probabilities"),
+        ("a.md", 3, "egress cones"), ("a.md", 3, "link window"),
         ("a.md", 3, "link-window"), ("a.md", 4, "Block-scaled"), ("a.md", 4, "blockwise"), ("a.md", 4, "scale block"),
         ("a.md", 4, "production"), ("a.md", 4, "productions")]
 

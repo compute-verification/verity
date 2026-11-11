@@ -123,8 +123,8 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
 
 
 def test_a_replay_bundle_goes_only_with_its_complete_slim_keep(tmp_path):
-    """On 1 Oct 00:13-06:01Z node 1's replay tasks deleted 67 passed rows' sealed bundles (1.3 TB) as soon as config_record.json
-    existed: their trees predate keep-leaves, so nothing else held the leaves a later CPU replay reads. A bundle now goes only when
+    """A replay task must not delete a passed row's sealed bundle as soon as config_record.json exists: a tree that predates
+    keep-leaves holds nothing else of the leaves a later CPU replay reads. A bundle goes only when
     commit/replay_slim_p<pair>/ is its complete keep (cpu_replay.keep's slim.json: this bundle's MANIFEST.json, dump_sha256, every
     file's size and sha256); any doubt keeps it, with one line in row.log. config-run.yaml and n2_commit.sh run the same lines."""
     import hashlib
@@ -381,7 +381,7 @@ def test_provers_gives_up_one_gpu_per_gpu_held_for_direct_runs(tmp_path):
 
 
 def test_the_coverage_build_task_has_no_gpu_but_finds_the_hosts_cuda_driver():
-    """A GPU-less pod has no driver libraries, yet vLLM's CUDA platform (#536) loads libcuda.so.1 at import: the build task puts the
+    """A GPU-less pod has no driver libraries, yet vLLM's CUDA platform loads libcuda.so.1 at import: the build task puts the
     host's copy, which cluster_up.sh maintains, on LD_LIBRARY_PATH."""
     head, build, gpu, _ = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")
     assert "accelerators" not in build and "LD_LIBRARY_PATH=/workspace/jobs/cuda-driver" in build
@@ -413,8 +413,8 @@ def test_each_coverage_task_is_one_stage_attempt_whose_tool_reads_the_row():
 
 def test_gpu_tasks_keep_compiled_kernels_per_tree_on_the_host(tmp_path):
     """Each cell's Commit otherwise JIT-compiles vLLM's batch-invariant Triton kernels and rebuilds hidden_gpu_tree again (most of a
-    small cell's 436 s GPU hold; 83-88 s with both). Eager rows only for the Triton cache, and the shared JIT dirs only for trees with
-    #561's staged sources."""
+    small cell's 436 s GPU hold; 83-88 s with both). Eager rows only for the Triton cache, and the shared JIT dirs only for trees whose
+    native_jit stages its sources."""
     import subprocess
     for f in ("config-run.yaml", "config-run-row.yaml"):
         gpu = next(p for p in (SKY / "jobs" / f).read_text().split("\n---\n") if "accelerators:" in p)
@@ -426,7 +426,7 @@ def test_gpu_tasks_keep_compiled_kernels_per_tree_on_the_host(tmp_path):
                                  ("m__bi-compiled", True, "|/workspace/jobs/cache/jit/hidden_gpu"),
                                  ("m__bi-eager", False, "/workspace/jobs/cache/triton/T|")):
             tree = tmp_path / ("fixed" if fixed else "old") / "T"
-            jit = tree / "integrations/vllm/verity_vllm/commit/committer/native_jit.py"
+            jit = tree / "adapters/vllm/verity_vllm/commit/committer/native_jit.py"
             jit.parent.mkdir(parents=True, exist_ok=True)
             jit.write_text("def staged_sources(): ...\n" if fixed else "def jit_load(): ...\n")
             out = subprocess.run(["bash", "-c", block + '\necho "${TRITON_CACHE_DIR:-}|${HIDDEN_GPU_BUILD:-}"'], capture_output=True,
@@ -489,7 +489,7 @@ def test_store_fetch_lays_each_artifact_out_under_its_hex_through_a_scratch_stor
     """store-fetch's run step with `research` from this checkout and a directory remote in place of R2: a tree (PATHS picking its
     files) and a file artifact land under $OUT/$NAME/<hex>/, fetched.tsv names each file's path and sha256, the scratch store is
     gone, a directory older than KEEP_DAYS goes, and an id that isn't a full art id fails before anything is fetched. An id it
-    can't fetch, or whose fetch writes no file (console, 2 Oct), is named and fails the job, and the others still land."""
+    can't fetch, or whose fetch writes no file, is named and fails the job, and the others still land."""
     import hashlib
     import os
     import subprocess
@@ -549,7 +549,7 @@ def test_store_fetch_lays_each_artifact_out_under_its_hex_through_a_scratch_stor
 
 def test_a_per_pod_copy_goes_once_research_run_exits(tmp_path):
     """prover-bench, prover-dev and port-capture run $CMD in a copy of the tree of their own (it writes there), ~4.7k inodes each that
-    nothing reads once the pod is gone: node 1 held ~690 of them on Oct 2. The run step removes its copy after `research run` exits,
+    nothing reads once the pod is gone, and hundreds pile up on a node. The run step removes its copy after `research run` exits,
     keeps that exit status, and leaves the copy in place while research run runs from it. port-capture keeps the shared copy."""
     import os
     import shutil
@@ -597,7 +597,7 @@ def test_a_job_tree_is_one_copy_per_content_and_a_passed_bootstrap_skips_the_loc
     sky.mkdir(parents=True)
     for s in ("job_tree.sh", "vllm_bootstrap.sh"):
         shutil.copy(SKY / s, sky / s)
-    ops = synced / "integrations/vllm/verity_vllm/ops"
+    ops = synced / "adapters/vllm/verity_vllm/ops"
     ops.mkdir(parents=True)
     (ops / "pod_bootstrap.sh").write_text('echo run >> "$WORK/count"; echo BOOTSTRAP-OK\n')
     jobs, trees = tmp_path / "jobs", tmp_path / "jobs" / "src"
@@ -611,7 +611,7 @@ def test_a_job_tree_is_one_copy_per_content_and_a_passed_bootstrap_skips_the_loc
     a, b = tree(synced), tree(synced)
     assert a == b and Path(a, ".copied").exists() and Path(a).parent == trees
     assert subprocess.run(["bash", str(sky / "job_tree.sh"), "--mine"], env=env, capture_output=True, text=True, check=True).stdout.strip() == a
-    (synced / "integrations/vllm/new.py").write_text("x = 1\n")
+    (synced / "adapters/vllm/new.py").write_text("x = 1\n")
     assert tree(synced) != a
 
     boot = Path(a) / "tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh"
@@ -628,8 +628,8 @@ def test_a_job_tree_is_one_copy_per_content_and_a_passed_bootstrap_skips_the_loc
 def test_a_leased_bootstrap_takes_its_gpu_before_the_host_lock_so_others_bootstrap_while_it_waits(tmp_path):
     """A leased job's pod (GPU_LEASE set) has no GPU of its own: a real GPU-mode bootstrap runs under the lease tool, which it calls
     before it opens the host-wide lock. The fake lease tool stands for a pool with no GPU free yet: when called it finds the lock free
-    and runs another job's CPU bootstrap to completion, then grants GPU 3. Taking the lease inside the lock (Oct 1 22:13-23:02Z on
-    vy-nebius-1) finds it held instead. A cached bootstrap and a --cpu one never call the tool."""
+    and runs another job's CPU bootstrap to completion, then grants GPU 3. Taking the lease inside the lock would find it held
+    instead. A cached bootstrap and a --cpu one never call the tool."""
     import os
     import shutil
     import subprocess
@@ -637,7 +637,7 @@ def test_a_leased_bootstrap_takes_its_gpu_before_the_host_lock_so_others_bootstr
     sky = tree / "tools/research/src/research/pods/nebius/sky"
     sky.mkdir(parents=True)
     shutil.copy(SKY / "vllm_bootstrap.sh", sky / "vllm_bootstrap.sh")
-    ops = tree / "integrations/vllm/verity_vllm/ops"
+    ops = tree / "adapters/vllm/verity_vllm/ops"
     ops.mkdir(parents=True)
     (ops / "pod_bootstrap.sh").write_text('echo "$2 cvd=${CUDA_VISIBLE_DEVICES-unset}" >> "$WORK/seen"; echo BOOTSTRAP-OK\n')
     jobs = tmp_path / "jobs"
@@ -855,7 +855,7 @@ def test_the_store_eviction_drops_only_preserved_copies_hourly_as_ubuntu_and_fai
 
 
 def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what_it_kept(tmp_path):
-    """Node 1 hit 74% inodes on 4 Oct with nothing pruning /workspace/research/src: research's unit (its drop-in, from cluster_up.sh
+    """Something must prune /workspace/research/src, or a node runs out of inodes: research's unit (its drop-in, from cluster_up.sh
     and deploy.toml) passes `--src-dir` with the capabilities its /proc scan needs, and the journal line counts what went and why
     the rest stayed, the reason it deleted nothing included."""
     import subprocess
@@ -874,7 +874,7 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
         assert f'"$SRC/$u"' in (SKY / "cluster_up.sh").read_text() and f'src = "tools/research/src/research/pods/nebius/sky/{u}"' in deploy
     assert 'ExecCondition=/bin/grep -qs "timed False" /workspace/pouw/fill/status.txt' in (SKY / "store_evict_timed.conf").read_text()
     assert deploy.count('path = "/usr/local/bin/vy-store-evict"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict.sh"\nmode = "755"\n') == 2, \
-        "a fresh install gets the repository's mode (644): systemd's 203/EXEC on cpu-1, 15 Oct"
+        "a fresh install gets the repository's mode (644), which systemd can't exec (203/EXEC)"
     unit = (SKY / "store_evict_research.service").read_text()   # cpu-1's copy of the unit cluster_up.sh writes on node 1
     assert "User=research\n" in unit and "VY_EVICT_STORE=/workspace/research/store VY_EVICT_RUNS=/workspace/research/runs" in unit
     assert "ExecStart=/usr/local/bin/vy-store-evict\n" in unit and "OnUnitActiveSec=30min\n" in (SKY / "store_evict_research.timer").read_text()
@@ -891,7 +891,8 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
         "kept = json.loads(os.environ.get('FAKE_KEPT') or json.dumps([{'tree': 'c'}] * 3))\n"
         "src = {'deleted': [{'tree': 'a'}, {'tree': 'b'}], 'deleted_bytes': 31e9, 'deleted_inodes': 812345, 'kept': kept,\n"
         "       'kept_by': {'1': 1, '2': 2}, 'error': os.environ.get('FAKE_ERROR')}\n"
-        "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': False}, 'runs': {'evicted_bytes': 0}, 'src': src}))\n"
+        "err = {'error': os.environ['FAKE_STORE_ERROR']} if os.environ.get('FAKE_STORE_ERROR') else {}\n"
+        "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': False}, 'runs': {'evicted_bytes': 0}, 'src': src, **err}))\n"
         "sys.exit(1)\n")
     (bin_dir / "df").write_text('#!/bin/sh\necho " Avail"\necho " 1443"\n')
     (bin_dir / "df").chmod(0o755)
@@ -904,7 +905,7 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
                                                                  "/workspace/research/runs", "--src-dir", "/workspace/research/src", "--min-mb", "1e12",
                                                                  "--json"]
     assert "target reached: False; src trees: deleted 2 (31.0 GB, 812345 inodes), kept 3 (1:1 2:2); no store blob" in r.stdout
-    # node 1's 13:49Z and 14:49Z passes on 9 Oct kept 110 trees under condition 2 and the line couldn't say which process named them
+    # a pass that keeps trees under condition 2 says which process named each
     kept = [{"tree": t, "why": ["2: process 7 (du) uses it", *(["2: process 9 (lake) uses it"] if t == "c" else [])]} for t in "cde"]
     r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "FAKE_KEPT": json.dumps(kept)}, capture_output=True, text=True)
     assert "kept 3 (1:1 2:2); trees a process names: 7 (du) 3, 9 (lake) 1; no store blob" in r.stdout
@@ -916,6 +917,10 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "FAKE_ERROR": "another pass holds /workspace/research/src/.evict.lock"},
                        capture_output=True, text=True)
     assert r.returncode == 0 and "nothing more deleted: another pass holds" in r.stdout, "an overlapping pass is not a fault"
+    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "FAKE_STORE_ERROR": "store pass: OperationalError: readonly"},
+                       capture_output=True, text=True)
+    assert "src trees: deleted 2 (31.0 GB, 812345 inodes)" in r.stdout and "; FAILED store pass: OperationalError: readonly" in r.stdout
+    assert r.returncode == 1 and "the source-tree pass ran without it" in r.stderr, "a store it can't open fails the unit, after the trees"
     assert (tmp_path / "argv.json.cwd").read_text() == "/", "python -m puts its cwd first on sys.path: never a writable one"
     (tool / "research" / "store" / "cli.py").unlink()
     r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env=env, capture_output=True, text=True)
@@ -924,8 +929,8 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
 
 
 def test_researchs_store_eviction_prunes_the_pycache_of_sources_that_are_gone(tmp_path):
-    """Nothing pruned research's PYTHONPYCACHEPREFIX: 1.45M bytecode files of evicted source trees and uv build envs took node 1 to
-    63.5% inodes (11 Oct). The hourly pass removes each mirrored directory whose source no longer exists, and keeps the rest."""
+    """Nothing else prunes research's PYTHONPYCACHEPREFIX, where the bytecode of evicted source trees and uv build envs takes a
+    node's inodes by the million. The hourly pass removes each mirrored directory whose source no longer exists, and keeps the rest."""
     import subprocess
     assert "Environment=VY_EVICT_PYCACHE=/workspace/research/cache/pycache\n" in (SKY / "store_evict_src.conf").read_text()
     tool, bin_dir = tmp_path / "tool", tmp_path / "bin"
@@ -954,7 +959,7 @@ def test_researchs_store_eviction_prunes_the_pycache_of_sources_that_are_gone(tm
 
 
 def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_trees_and_else_evicts_no_blob(tmp_path):
-    """Node 1's runs have no private remote and the public export lacked rec-coins (11 Oct), so the evictor passes the union of
+    """Node 1's runs have no private remote and the public export can lack a fixture, so the evictor passes the union of
     `fixtures/artifacts.json` at the newest `refs/research/src/*` commits as `--keep-registry`; with no registry to read, or a tool
     without the flag, it evicts no store blob or run file (`--min-mb 1e12`) and says why."""
     import subprocess
@@ -1007,18 +1012,25 @@ def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_tre
 
 
 def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
-    """Nothing applied the retention policy on a schedule: on 19 Oct 06:40Z node 2 sat at 80% with 3.5 TiB collectable, and the
-    fill runner held every queued run (ci's gates among them) until infra ran `research retention gc` by hand. It reads the node's
-    store, whose catalog records what custody verified on the remote: without it gc keeps every preserved path."""
+    """The retention policy is applied on a schedule, so a node never sits at 80% with terabytes collectable while the fill
+    runner holds every queued run (the merge gates among them) for a `research retention gc` by hand. It reads the node's
+    store, whose catalog records what custody verified on the remote: without it gc keeps every preserved path. It is installed
+    wherever research runs are: the nodes whose runs the store eviction trims, and those `--on auto` places runs on."""
     import subprocess
+    import tomllib
+
+    from research import auto
     unit, timer = (SKY / "retention_gc.service").read_text(), (SKY / "retention_gc.timer").read_text()
     assert "User=research\n" in unit and "python3 -m research retention gc --apply'" in unit and "OnUnitActiveSec=1h\n" in timer
     assert "Environment=RESEARCH_STORE=/workspace/research/store\n" in unit
     deploy = (SKY.parent / "deploy.toml").read_text()
-    nodes = '["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]'
+    doc = tomllib.loads(deploy)
+    files = {f["path"]: f for f in doc["file"]}
+    holds_runs = set(files["/etc/systemd/system/vy-store-evict-research.timer"]["nodes"]) | {m for m in doc["nodes"] if auto.CPU_NODE.fullmatch(m)}
     for u, path in (("retention_gc.service", "vy-retention-gc.service"), ("retention_gc.timer", "vy-retention-gc.timer")):
-        assert (f'path = "/etc/systemd/system/{path}"\nsrc = "tools/research/src/research/pods/nebius/sky/{u}"\n'
-                f'nodes = {nodes}\nrun = ["systemd:vy-retention-gc.timer"]') in deploy
+        f = files[f"/etc/systemd/system/{path}"]
+        assert f["src"] == f"tools/research/src/research/pods/nebius/sky/{u}" and f["run"] == ["systemd:vy-retention-gc.timer"]
+        assert set(f["nodes"]) == holds_runs, "the collector runs on every node of deploy.toml that holds research runs"
     cond = re.search(r"^ExecCondition=/bin/sh -c '(.*)'$", unit, re.M)[1]
     status = tmp_path / "status.txt"
     gate = lambda: subprocess.run(["sh", "-c", cond.replace("/workspace/pouw/fill/status.txt", str(status))]).returncode

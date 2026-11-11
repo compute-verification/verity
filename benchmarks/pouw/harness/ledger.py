@@ -2,7 +2,7 @@
 ``kernel-attempt/v1``, so what was tried, on which kernel, with what result and why it was kept or dropped is a query, not
 prose.
 
-A record's meta is everything the run knows, numbers included: the kernel variant (`verity.core.protocols.pouw.serving.KernelVariant`'s
+A record's meta is everything the run knows, numbers included: the kernel variant (`verity.protocols.pouw.verifier.serving.KernelVariant`'s
 id, ``{family}-{device}/{source_sha256[:12]}``), the parent attempt, the tier, the harness commit and gate version, the
 metrics and the per-step time split, the gap at both FP32 prices, the verifier's lines, and the one-line hypothesis. Judgments
 that change after the run are labels on it (`KERNEL_OUTCOME`, `KERNEL_REASON`), since a record is immutable.
@@ -18,8 +18,8 @@ is kept as ``arm_claim`` and never published.
 
 `verify.py` builds the records (`records`), writes them under the run's ``ledger/`` (so they are preserved with the run's
 files wherever the store isn't reachable) and publishes them with ``--publish``. `rows` is what `panel.py` reads beside
-``attempts.jsonl``. Stdlib only; `research.store` and `verity.core.protocols.pouw.serving` are imported when present (from this checkout's
-``tools/research/src`` and ``verity/core/protocols/pouw`` otherwise), so a node-2 job without them still writes its records.
+``attempts.jsonl``. Stdlib only; `research.store` and `verity.protocols.pouw.verifier.serving` are imported when present (from this checkout's
+``tools/research/src`` and ``verity/protocols/pouw/verifier`` otherwise), so a node-2 job without them still writes its records.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ TIERS = ("1", "2a", "2b", "3")
 OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superseded")
 #: label keys (`research.store.vocab`): the producing lane about its own attempt
 KERNEL_OUTCOME, KERNEL_REASON = "kernel_outcome", "kernel_reason"
-#: a call's step groups, as `verity.core.protocols.pouw.serving.GROUPS` names them; checked against it when it is importable
+#: a call's step groups, as `verity.protocols.pouw.verifier.serving.GROUPS` names them; checked against it when it is importable
 GROUPS = ("row_seeds", "a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
 PHASES = ("before", "gemm", "after")
 ONE_LINE = 240
@@ -69,9 +69,9 @@ def _import_path(rel: str) -> None:
 
 
 def serving():
-    """`verity.core.protocols.pouw.serving` when importable, else None."""
+    """`verity.protocols.pouw.verifier.serving` when importable, else None."""
     try:
-        from verity.core.protocols.pouw import serving as S
+        from verity.protocols.pouw.verifier import serving as S
     except ImportError:
         return None
     return S if hasattr(S, "KernelVariant") else None
@@ -142,7 +142,7 @@ def variant_id(family: str, device: str, source_digest: str) -> str:
 def variant_record(*, family: str, device: str, schemes: Iterable[str], sources: Iterable[Path], root: Path,
                    binaries: Iterable[Path] = (), schedules: Iterable[str] = ("serial",), loader: str = "cubin-ctypes",
                    prices: str | None = None, config: dict[str, str] | None = None) -> dict:
-    """What an arm's `build` returns as ``variant``: `verity.core.protocols.pouw.serving.KernelVariant`'s fields (its shape rule and step
+    """What an arm's `build` returns as ``variant``: `verity.protocols.pouw.verifier.serving.KernelVariant`'s fields (its shape rule and step
     IO aside) and its id. ``binary_sha256`` is the one binary's digest, or the digest of the sorted digests of several.
     `config` names every run-time choice that selects code from the binary (environment knobs such as
     ``PEARLC_A_FORMS``): it is part of the source digest, so the id tells the forms apart, and serving must pin it."""
@@ -158,7 +158,7 @@ def variant_record(*, family: str, device: str, schemes: Iterable[str], sources:
                             schedules=frozenset(rec["schedules"]), shapes=S.ShapeRule(), source_sha256=src,
                             binary_sha256=binary, loader=loader, prices=prices)
         if v.id != rec["id"]:
-            raise LedgerError(f"variant id {rec['id']} disagrees with verity.core.protocols.pouw.serving's {v.id}")
+            raise LedgerError(f"variant id {rec['id']} disagrees with verity.protocols.pouw.verifier.serving's {v.id}")
     return rec
 
 
@@ -172,12 +172,12 @@ def typed_gamma(result: dict) -> dict[str, str]:
     for name, arm in (result.get("arms") or {}).items():
         lineage = ((arm or {}).get("build") or {}).get("lineage") or {}
         if "gamma" in lineage:
-            out[name] = ("γ is typed into its lineage: the ledger looks γ up from the Lean-pinned price twins on the "
-                         "priced path the attempt ran (the variant's prices), so drop lineage.gamma and declare the path")
+            out[name] = ("the gap is typed into its lineage: the ledger looks it up from the Lean-pinned price twins on "
+                         "the priced path the attempt ran (the variant's prices), so drop lineage.gamma and declare the path")
     return out
 
 
-#: `verity.core.protocols.pouw.serving.SchemeId`'s FP8 grammar, where the device names the record: sm120 (G = 4) is the panel's v1,
+#: `verity.protocols.pouw.verifier.serving.SchemeId`'s FP8 grammar, where the device names the record: sm120 (G = 4) is the panel's v1,
 #: sm120-unpromoted its v2; an older name (``pearl-c-sm120-v2-hot-h3``) isn't checked
 _SCHEME = re.compile(r"pearl-c-(?P<device>sm120|sm120-unpromoted)-(?:v0|v1)(?:-h[0-9]+)?(?:@[a-z0-9_]+)?")
 
@@ -194,9 +194,9 @@ def _scheme_conflict(scheme: str | None, statement: str | None) -> str | None:
 
 def gamma(twins: list[dict] | None, panel: dict | None, scheme: str | None, gate: dict, shape: dict,
           arm_claim: Any) -> dict:
-    """The gap as the record keeps it: the forming-credited twins at both FP32 prices and the larger published, the chain-only
-    reading beside it, every pin with its status (pinned in the Lean store, or staged), and the arm's own derivation kept
-    as ``arm_claim``, never published."""
+    """The gap as the record keeps it (under ``gamma``, its stored key): the forming-credited twins at both FP32 prices and
+    the larger published, with its advantage ε = g/(1 − g) as ``eps``, the chain-only reading beside it, every pin with
+    its status (pinned in the Lean store, or staged), and the arm's own derivation kept as ``arm_claim``, never published."""
     stmt = P.statement((panel or {}).get("line"), (panel or {}).get("version"))
     if twins is None:
         out = {"statement": stmt, "path": gate.get("prices"), "published": None, "by_price": {},
@@ -210,8 +210,14 @@ def gamma(twins: list[dict] | None, panel: dict | None, scheme: str | None, gate
     if conflict:
         out["missing"].append(conflict)
         out["published"] = None
+    out["eps"] = None if out["published"] is None else str(eps(Fraction(out["published"])))
     out["arm_claim"] = arm_claim
     return out
+
+
+def eps(gap: Fraction) -> Fraction:
+    """The adversary's advantage ε that a gap g carries: g/(1 − g) (Lean `Pouw.Proofs.gGap_iff_gε`)."""
+    return gap / (1 - gap)
 
 
 def _twins() -> list[dict] | None:
@@ -250,7 +256,7 @@ def _clocks(p: dict, side: str) -> list[float]:
 
 
 def _gate(result: dict, arm: str, shape: dict, variant: dict | None, verdict: dict, run_id: str) -> dict:
-    """`verity.core.protocols.pouw.serving.GateRecord`'s fields for this (arm, shape), from what the run checked: every device gate of the
+    """`verity.protocols.pouw.verifier.serving.GateRecord`'s fields for this (arm, shape), from what the run checked: every device gate of the
     arm at the shape passed (``exact``), the transcript the harness dumped from poisoned buffers verified
     (``poisoned_accepted``: an arm that dumps its own gets False), every control of the arm rejected (the harness's
     known-bad variants and the verifier's negative control), the SASS gate held. ``schedules_equal`` holds trivially for a
@@ -531,13 +537,14 @@ def panel_row(art: str, meta: dict, labels: dict) -> dict | None:
         what.append("mechanism " + ", ".join(meta["mechanism"]))
     gm = meta.get("gamma") or {}
     if g is not None:
-        what.append(f"γ {gm.get('path')} at FADD {gm.get('published_at')}, the larger, from "
-                    + ("staged price twins (not yet in the Lean store)" if "staged" in (gm.get("pins") or []) else
-                       "Lean-store price twins"))
+        what.append(f"ε {float(eps(Fraction(g))):.4%} from the gap on {gm.get('path')} at FADD {gm.get('published_at')}, "
+                    "the larger, from " + ("staged price twins (not yet in the Lean store)"
+                                           if "staged" in (gm.get("pins") or []) else "Lean-store price twins"))
     else:
-        what.append("γ not published: " + "; ".join(gm.get("missing") or ["no price twin"]))
+        what.append("ε not published: " + "; ".join(gm.get("missing") or ["no price twin"]))
     if outcome:
         what.append(f"outcome {outcome}" + (f": {reason}" if reason else ""))
+    # "gamma" is panel.py's column for the gap g
     row = {"attempt": panel.get("attempt"), "line": panel["line"], "version": panel["version"],
            "precision": meta.get("stream"), "phase": phase, "shape": shape if tier == "2b" else f"{shape}:screen",
            "kind": "measured", "slowdown": mt["slowdown"], "lo": None, "hi": None,

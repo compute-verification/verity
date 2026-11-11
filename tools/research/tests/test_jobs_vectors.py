@@ -137,7 +137,7 @@ def _train_on(tool_py: str | None, pr: int, kind: str = "check/v1"):
 @pytest.mark.parametrize(("tool_py", "pr", "state", "why"), [
     pytest.param(f"{OK}\n", 2, "stuck", f"{trains.TOOL_PY} on main doesn't parse (", id="unparseable"),
     pytest.param(f"{OK}, merge_requires=RULES)\n", 2, "stuck", RULES_UNREAD, id="merge_requires-a-name"),
-    pytest.param(f'{OK}, merge_requires={{"lean-agreement": "verity/ml/flock/"}})\n', 2, "stuck", RULES_UNREAD,
+    pytest.param(f'{OK}, merge_requires={{"lean-agreement": "verity/protocols/flock/prover/"}})\n', 2, "stuck", RULES_UNREAD,
                  id="merge_requires-of-a-string"),
     pytest.param('CHECK = Tool(name="check", produces=("check/v1",))\n', 2, "stuck",
                  f"{trains.TOOL_PY} on main has a produces this gate can't read", id="produces-a-tuple"),
@@ -153,7 +153,7 @@ def _train_on(tool_py: str | None, pr: int, kind: str = "check/v1"):
 ])
 def test_the_gate_reads_only_a_check_declaration_it_can_parse(tool_py, pr, state, why):
     """Python-only beside the vectors: a syntax error's why is Python's own message; a missing `merge_requires` asks for no
-    step, so a verity/ml/flock/ change lands without lean-agreement."""
+    step, so a verity/protocols/flock/prover/ change lands without lean-agreement."""
     s, tr, head = _train_on(tool_py, pr)
     assert tr.state == state, tr.why
     assert tr.why is None if why is None else tr.why.startswith(why), tr.why
@@ -168,7 +168,7 @@ def test_the_gate_reads_only_a_check_declaration_it_can_parse(tool_py, pr, state
 ], ids=["another-tool", "comment", "docstring", "suffix-keyword"])
 def test_the_gate_reads_checks_own_produces_whatever_quotes_one_above_it(above):
     """A pattern for `produces=[...]` took the first one anywhere in main's tool.py: another Tool's, a comment's, a docstring's,
-    or a keyword that merely ends in `produces` (red team, #990).  A bench-result/v1 never lands as a check."""
+    or a keyword that merely ends in `produces`.  A bench-result/v1 never lands as a check."""
     _s, tr, _head = _train_on(above + MAINS, 2, "bench-result/v1")
     assert (tr.state, tr.why) == ("stuck", f"run r9's result is a bench-result/v1, and {trains.TOOL_PY} on main produces check/v1")
     _s, tr, _head = _train_on(above + MAINS, 2)

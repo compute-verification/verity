@@ -1,4 +1,4 @@
-"""a5's case for the audit on the proofs themselves, `SampledProofs.OneStageZk`'s: v1's case with the evidence's verdicts
+"""a5's case for the audit on the proofs themselves, `Spot.OneStageZk`'s: v1's case with the evidence's verdicts
 replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit and public files' digests, and
 blobs the paths of those files and the pinned tables; and the audits v2 can't verify say why."""
 
@@ -16,7 +16,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import a5  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import proofs as PF  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("one_stage_replay", HERE.parent / "replay.py")
 REPLAY = importlib.util.module_from_spec(_spec)
@@ -74,6 +74,18 @@ def test_v2_names_the_public_file_as_it_was_staged_before_the_draw(tmp_path):
     assert got["public"] == "ee" * 64 and got["proof"].public == tmp_path / "pub-4.bin" and got["proof"].sessions == (s,)
 
 
+def test_v2_hands_v2_the_tables_its_circuit_looks_up_alone(tmp_path):
+    """The stage holds every MUFU table a circuit with lookup slots may read, and v2 holds the blobs' pinned tables to the
+    circuit's META lookups (`OneStageZk.tablesHeld`): the case names those tables and no other."""
+    (tmp_path / "circuit.txt").write_text('flock-hm 1\nMETA {"lookups": {"ex2": {}, "rcp": {}}}\ng 1 2\n')
+    (tmp_path / "tables").mkdir()
+    for n in ("rsq", "sqrt", "rcp", "ex2"):
+        (tmp_path / "tables" / f"{n}.u32").write_bytes(n.encode())
+    mm = {"st": {"dir": tmp_path, "public": "ee" * 64}, "m": types.SimpleNamespace(n=4), "pin": "cc" * 64}
+    got = a5.v2_proof([{"mm": mm, "sdir": tmp_path}], zk=True)
+    assert got["tables"] == [tmp_path / "tables" / "ex2.u32", tmp_path / "tables" / "rcp.u32"]
+
+
 def test_v2_says_why_an_audit_has_no_case():
     assert "plain" in a5.v2_proof([{}], zk=False)
     assert "drew 2 members" in a5.v2_proof([{}, {}], zk=True)
@@ -100,7 +112,7 @@ def write(out: Path, v2) -> None:
                   session_roots={}, served=[], v2=v2)
 
 
-def test_a_v2_refusal_is_written_beside_the_v1_case_and_leaves_sampled_proofs_no_case(tmp_path, stub_case):
+def test_a_v2_refusal_is_written_beside_the_v1_case_and_leaves_spot_no_case(tmp_path, stub_case):
     write(tmp_path, "v2 verifies --zk sessions; this audit's are plain")
     assert json.loads((tmp_path / "case.json").read_text())["commitment"] == "ab"
     assert not (tmp_path / "case-v2.json").exists()
@@ -108,7 +120,7 @@ def test_a_v2_refusal_is_written_beside_the_v1_case_and_leaves_sampled_proofs_no
     assert (tmp_path / "case-v2-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
 
 
-def test_sampled_proofs_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, stub_case):
+def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, stub_case):
     """Sampled proofs refuses one-stage v1's case, so its case is v2's with the form, never v1's."""
     zk = {"blobs": ["b"], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),
           "params": {"proofs": {"circuit": "cc" * 64, "registered": None}}}

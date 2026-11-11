@@ -1,7 +1,7 @@
 """One-stage audit, run A0: a template's captured served values through registration, the verifier's sample, M0's prover and
 verifier, the Lean verifier's sample checks, and the audit record with its integrity profile; then the negatives.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
       python benchmarks/one_stage/a0.py --set DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR \\
       [--k 16] [--delta 0.01] [--port 7511]
 
@@ -26,14 +26,14 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 
-from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
-from verity.ml.circuits.program import Program
+from verity.commitments.identity import identity_digest, identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.program import Program
 from verity_flock.input_sets import InputSet
-from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.protocols.spot.device import challenger as Ch, coins as CC
+from verity.protocols.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 
 import r2_population as R2
 
@@ -193,6 +193,13 @@ def stand_in(set_dir: str) -> dict:
             "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
 
 
+def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
+    """Whether `session`, given ``env`` and ``zk``, takes its coin tree from a challenger of its own (FLOCK_CHALLENGER=1 on the
+    keyed coin tree)."""
+    senv = {**os.environ, **(env or {})}
+    return senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree")
+
+
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
             zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
@@ -209,9 +216,8 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     tables = d / "tables"
     zf = ["--zk"] if zk else []
     tu = ["--tmpl-unit", str(st["tmpl_unit"])] if st.get("tmpl_unit") else []
-    senv = {**os.environ, **(env or {})}
     ch = None
-    if senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree"):
+    if own_challenger(env, zk):
         from verity_flock import challengers as CH
         ch = CH.start(out / "challenger")
     serve_log = open(out / "serve.log", "w")
@@ -285,7 +291,10 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
     identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again;
     Lean holds the object to its key when it reads it (`archiveGet`). ``st["statement"]``: the statement `verify` sets up
-    (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`."""
+    (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
+    public file's header, the registered reads, the sample and the tables it checked the session against
+    (``public_header_sha512``, ``registered_sha512``, ``unit_draw``, ``session_tables``), which the second stage's audit
+    holds each statement to."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -320,6 +329,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
             "partition": v.get("partition"), **({"registered": v["registered"]} if "registered" in v else {}),
+            **{k: v[k] for k in ("public_header_sha512", "registered_sha512", "unit_draw", "session_tables") if k in v},
             "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
 
 
@@ -437,9 +447,10 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=7511)
     ap.add_argument("--bind", action="store_true", help="run A1's M0 half: the statement binds the partition, program and unit indices")
     ap.add_argument("--statement", default=STATEMENT_ID,
-                    help="the Lean verifier's statement name; verify takes only verity/flock-circuit and "
-                         "verity/flock-circuit+plain-leaves, and refuses a superseded one (verity/flock-circuit@967b8d06, "
-                         "for files staged at M0 68ae79f2 or later) once every check has passed")
+                    help="the Lean verifier's statement name; verify takes only verity/flock-circuit, "
+                         "verity/flock-circuit+plain-leaves and verity/flock-circuit/tmpl, and refuses a superseded one "
+                         "(verity/flock-circuit@967b8d06, for files staged at M0 68ae79f2 or later) once every check has "
+                         "passed")
     ap.add_argument("--binding", default=STAND_IN_BINDING, choices=sorted(STAND_IN_BINDINGS),
                     help="M0's frame-domain binding tag (verity/flock-ir-frame/binding/v1 for an M0 tree before 64-byte bindings)")
     a = ap.parse_args()
@@ -452,7 +463,7 @@ def main() -> int:
     n = s.n
     template = s.subcircuit.definition()
     law_text = f"subset:{a.k}"
-    law = D.parse_law(law_text)
+    law = D.parse_design(law_text)
     summary: dict = {"set": a.set, "subcircuit": s.subcircuit.id, "n": n, "law": law, "delta": a.delta, "bind": a.bind}
 
     # the partition: Q_template_instance v0 over the verifier's own population program (unit i is instance i)
@@ -521,7 +532,7 @@ def main() -> int:
     v = V.check(dict(rec, roots=[dict(rec["roots"][0], domain="00" * 64), *rec["roots"][1:]]), program, query, law, SCHEME, want,
                 leaf_layer=leaf_layer)
     neg["registration-domain-not-the-layout's"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, program, query, D.parse_law(f"subset:{a.k + 1}"), SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, program, query, D.parse_design(f"subset:{a.k + 1}"), SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-law-not-the-agreement's"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(dict(rec, previous=R.digest(rec)), program, query, law, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
     neg["second-registration-for-the-window"] = {"refused": not v.ok, "codes": list(v.codes)}
@@ -565,7 +576,7 @@ def main() -> int:
     if a.bind:
         hold_bound(tst, tprog, query)
     theader = public_header(tst["dir"], tn)
-    tlaw = D.parse_law("subset:2")
+    tlaw = D.parse_design("subset:2")
     twant = {p: {"leaves": c, "domain": theader["frame_v3"]["domain_ids"][p]} for p, (_, c) in ports(tst["meta"], tn).items()}
     trec = R.record(tprog, query, tlaw, theader["scheme"], registered_roots(theader, twant),
                     {"kind": "stand-in", "of": "tampered copy of the captured set: bit 0 of every instance's first output word flipped"},

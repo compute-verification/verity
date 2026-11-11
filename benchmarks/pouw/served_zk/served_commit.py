@@ -1,5 +1,5 @@
 """A served audit execution phase's commitment in the ZK statement's format, from a retained Pearl-C pass, registered, sampled and
-judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
+judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
 `outcome`), and the check that a hidden tile proof's committed rows are the sampled tile's.
 
   python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P --max-tokens T --registration-deadline S]
@@ -118,32 +118,32 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 import numpy as np
-from verity.ml.circuits.program import Program
-from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
-from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.randomness import Key, derive
-from verity.core.protocols.certifier.active import RUN_ID_BYTES
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import verifier as PV
-from verity.core.protocols.pouw import window as Wd
-from verity.ml.protocols.pouw.circuit import leaves as L
-from verity.ml.protocols.pouw.circuit import pc8
-from verity.core.protocols.pouw.coins import Challenger as Coins
-from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening, coin_reason
-from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
-from verity.ml.protocols.pouw.schemes import pearl_c as C
-from verity.ml.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import draw as D
-from verity.core.protocols.sampled_proofs.one_stage import partition as PT
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict, _Collect
+from verity.circuits.program import Program
+from verity.commitments.identity import identity_digest_sha512, tagged_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
+from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
+from verity.circuits.codec import canonical_json
+from verity.commitments.randomness import Key, derive
+from verity.protocols.certifier.verifier.active import RUN_ID_BYTES
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import verifier as PV
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.prover.circuit import leaves as L
+from verity.protocols.pouw.prover.circuit import pc8
+from verity.protocols.pouw.verifier.coins import Challenger as Coins
+from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
+from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
+from verity.protocols.pouw.prover.schemes import pearl_c as C
+from verity.protocols.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.spot.device import challenger as Ch
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import draw as D
+from verity.protocols.spot.verifier.one_stage import partition as PT
+from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.spot.verifier.one_stage.verdict import Verdict, _Collect
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import of_record as OR  # noqa: E402
@@ -258,7 +258,8 @@ def law_of(params: dict, ell: int) -> dict:
 
 
 def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
-    """P1's Spec of an execution phase at level `ell`: the entries and W committed, subset:K′ of the level, the tile template's
+    """P1's Spec of an execution phase at level `ell`: the entries and W committed, the rate K′/N of the level's N padded tiles
+    (`rate:K′/N`, subset:K′ at the level's N, scaled up with any N the prover registers past it), the tile template's
     Program and query as the check, and `LAYOUT` declared.  The check carries ``registration_deadline`` from `params`
     (seconds on the challenger's clock from the execution phase's salt coin's release, the ``salt`` request that opens it,
     `Pouw.AcceptsBy`'s td: `REGISTRATION_DEADLINE`), and parameters without one raise `ValueError` (`NO_DEADLINE`)
@@ -268,7 +269,7 @@ def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
         raise ValueError(NO_DEADLINE)
     d = template(params["k"])
     return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
-                  selection=S.Law(f"subset:{law_of(params, ell)['k']}"),
+                  selection=S.Law(f"rate:{law_of(params, ell)['k']}/{work_at(params, ell).n}"),
                   check=S.Check(PT.program_sha512(Program(d)), PT.template_instance_query(d),
                                 proof_deadline=params.get("proof_deadline", PROOF_DEADLINE),
                                 registration_deadline=params.get("registration_deadline")),
@@ -985,7 +986,7 @@ class Challenger:
         """One-stage's R1-R6 against the challenger's own copies and the service's public-items rule over the Stream's
         Spec, as `Stream.register` runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
-        law = D.parse_law(st.spec.selection.text)
+        law = S.selection_law(st.spec.selection, n)
         prog = PT.population_program(st.unit, n)
         q = st.spec.check.query
         codes = self._of_record(name, self.record.registration,

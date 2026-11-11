@@ -32,8 +32,9 @@ those ports
 Refused by name, since neither comparison covers them: a template one of whose rows reads a column at or past its own that
 is no input and not the constant (so some column is not a function of the inputs), whose input columns' rows are not their
 own ``(c)·(c)``, whose port groups overlap, reach the constant or are not the Definition's input leaves and output bits, or
-hold a column of their words that is no port's bit at other than zero; and a Definition whose lowering asserts or reads a
-table, which rows carry as more than gates.
+hold a column of their words that is no port's bit at other than zero; and a Definition whose lowering asserts, which rows
+carry as more than gates. A table read is read as the rows the flat layout writes it as (`ir_lower._Read`), so a template
+carrying those rows, as `struct_lower`'s does, is compared gate for gate.
 """
 from __future__ import annotations
 
@@ -208,7 +209,7 @@ def template_bits(flat: Any, K: Canon) -> tuple[list[tuple], dict]:
 def _lowered(target: Any, C: Any = None) -> tuple[Any, list[list], list[list]]:
     from verity_flock import ir_lower as IL
 
-    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.circuits.boolean.forms import Circuit
 
     _prog, root = IL.standalone(target)
     args = list(root.args)
@@ -222,11 +223,38 @@ def _lowered(target: Any, C: Any = None) -> tuple[Any, list[list], list[list]]:
     return C, ins, words
 
 
+def _read_bits(C: Any, g: int, bits: list[int], K: Canon, ev) -> tuple[dict[int, int], int]:
+    """Value ``bits`` of ``C``'s table read ``g`` as the canonical bits of the rows the flat layout writes it as
+    (`ir_lower._Read`, its index forms' bits by ``ev``), so a template carrying those rows is compared gate for gate; and
+    how many rows."""
+    from verity_flock import ir_lower as IL
+
+    r = IL._Read(C, g, bits, 0)
+    out = {j: 1 if c else ZERO for j, c in r.const_bits.items()}
+    if not r.rows:
+        return out, 0
+    ra: dict[int, list] = {}
+    rb: dict[int, list] = {}
+    r.fill(ra, rb, lambda f: [("v", ev(f))])
+    val = [ZERO] * r.rows
+
+    def side(x) -> int:
+        if isinstance(x, np.ndarray):
+            return _xor(val[c] for c in x.tolist())
+        return _xor(1 if t == "C" else t[1] if isinstance(t, tuple) else val[t] for t in x)
+
+    for c in range(r.rows):
+        val[c] = K.AND(side(ra.pop(c)), side(rb.pop(c)))
+    out.update((j, val[r.out_col[j]]) for j in r.bits)
+    return out, r.rows
+
+
 def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon) -> tuple[list[tuple], dict]:
-    """The canonical bit of each of the flat lowering's output bits, its inputs read as nodes ``0 ..`` in order."""
-    if C.asserts or C.lookups:
-        raise Refused("unsupported", f"the lowering has {len(C.asserts)} assertions and {len(C.lookups)} table reads, "
-                                     "which a template's rows do not carry as gates")
+    """The canonical bit of each of the flat lowering's output bits, its inputs read as nodes ``0 ..`` in order; a table read
+    as its rows (`_read_bits`)."""
+    if C.asserts:
+        raise Refused("unsupported", f"the lowering has {len(C.asserts)} assertions, which a template's rows do not carry "
+                                     "as gates")
     val: dict[int, int] = {}
     i = 0
     for w in ins:
@@ -239,15 +267,27 @@ def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon) -> tuple
     def ev(f) -> int:
         return _xor(val[v] for v in f.s) ^ f.c
 
-    ands = 0
+    value_bits: dict[int, list[int]] = {}
+    for v in live:
+        if C.kind[v] == "lookup":
+            value_bits.setdefault(C.data[v][0], []).append(C.data[v][1])
+    reads: dict[int, dict[int, int]] = {}
+    ands = read_rows = 0
     for v in live:
         if C.kind[v] == "and":
             a, b = C.data[v]
             val[v] = K.AND(ev(a), ev(b))
             ands += 1
+        elif C.kind[v] == "lookup":
+            g, j = C.data[v]
+            if g not in reads:
+                reads[g], n = _read_bits(C, g, sorted(value_bits[g]), K, ev)
+                read_rows += n
+            val[v] = reads[g][j]
         elif C.kind[v] != "in":
             raise Refused("unsupported", f"the lowering's bit {v} is a {C.kind[v]}")
-    return [ev(b) for w in words for b in w], {"live_ands": ands, "input_ports": len(ins), "input_bits": sum(map(len, ins)),
+    return [ev(b) for w in words for b in w], {"live_ands": ands + read_rows, "reads": len(reads),
+                                                 "input_ports": len(ins), "input_bits": sum(map(len, ins)),
                                                  "output_bits": sum(map(len, words))}
 
 
@@ -302,7 +342,7 @@ def check(target: Any, tmpl: Any, *, exhaustive_bits: int = EXHAUSTIVE_BITS, vec
     one (``failures``, ``warnings``), with ``structural``: the verdict (``syntactic``, ``exhaustive``, ``random`` or
     ``refused``), the counts on both sides, the bound on a wrong verdict (`error_bound`), and why the forms differ when they
     do."""
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.evaluation.reference import resolve
 
     t = resolve(target)
     return _check(tmpl, lambda: _lowered(t), label or t.id, {"definition": t.id}, ("the Definition's", "input leaves"),
@@ -319,7 +359,7 @@ def check_unit(definition: Any, in_rows: Sequence[tuple[str, Sequence[str]]], tm
     stager lays out."""
     from verity_flock import class_statement as CS
 
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.evaluation.reference import resolve
 
     t = resolve(definition)
 

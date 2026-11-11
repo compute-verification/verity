@@ -83,8 +83,8 @@ def _local_run(tmp_path, *opts):
 
 
 def test_a_local_run_whose_store_has_no_remote_refuses_before_it_starts(tmp_path, monkeypatch, capsys):
-    """Without a remote a local run used to publish its attempt into this disk's store and stop: on 2-3 Oct a night of TP8 and
-    Qwen3-235B runs on vy-nebius-2 sat there until a push loop took them. Every way of having no usable remote refuses, a remote
+    """Without a remote a local run would publish its attempt into this disk's store and stop, where a night of runs sits until
+    a push loop takes them. Every way of having no usable remote refuses, a remote
     that fails to load included."""
     monkeypatch.delenv("RESEARCH_LOCAL_ONLY")
     assert _local_run(tmp_path) == 3
@@ -254,7 +254,7 @@ def test_run_queue_places_the_job_then_launches_on_the_placed_machine_with_its_w
 
 
 def test_queue_placement_places_with_each_nodes_live_stop_and_falls_back_to_the_description(monkeypatch, capsys):
-    """INF-113: placement runs this tree's `cluster submit` with the stop each candidate node reports (its /etc/research/deadline),
+    """Placement runs this tree's `cluster submit` with the stop each candidate node reports (its /etc/research/deadline),
     so a node renewed on the machine but not in the description takes a job past the described stop's drain; a node whose
     deadline can't be read places with the description's stop, and the refusal says so."""
     import tomllib
@@ -346,7 +346,7 @@ def _node_2_read(monkeypatch) -> None:
 
 
 def test_on_auto_is_the_queue_onto_node_2_from_this_checkout(tmp_path, monkeypatch, capsys):
-    """`research run --on auto` (18 Oct, remote by default): --queue pinned to vy-nebius-2 (its Verity share, whole cores of its own
+    """`research run --on auto` (remote by default): --queue pinned to vy-nebius-2 (its Verity share, whole cores of its own
     inside the check slots), from the checkout it runs in, as project verity and kind agent-test, which gives what the run doesn't
     declare."""
     from research import remote
@@ -382,7 +382,7 @@ def test_on_auto_is_the_queue_onto_node_2_from_this_checkout(tmp_path, monkeypat
 
 
 def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_gb_and_timeout_s(tmp_path, monkeypatch, capsys):
-    """vllm's suite declares worker_gb 8 and timeout_s 14400 (#2696): `--on auto` gives its suites.py run 4 CPUs x 8 GB and the
+    """vllm's suite declares worker_gb 8 and timeout_s 14400: `--on auto` gives its suites.py run 4 CPUs x 8 GB and the
     suite's 4 h plus 10 min to sync, where the run says neither; what the run gives, and a run of no named suite, a suite that
     declares nothing, a name that matches none or another kind, keep the kind's size."""
     from research import cli as C
@@ -398,7 +398,7 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
     _node_2_read(monkeypatch)
     repo = tmp_path / "repo"
     for path, body in {".": '[project]\nname = "verity"\n[tool.pytest.ini_options]\n',
-                       "integrations/vllm": '[project]\nname = "verity_vllm"\n[tool.pytest.ini_options]\n'
+                       "adapters/vllm": '[project]\nname = "verity_vllm"\n[tool.pytest.ini_options]\n'
                                             '[tool.verity.tests]\nworker_gb = 8\ntimeout_s = 14400\nparallel = true\n',
                        "verity/core": '[project]\nname = "verity-core"\n[tool.pytest.ini_options]\n[tool.verity.tests]\ntimeout_s = 1800\n',
                        "tools/x": '[project]\nname = "x"\n'}.items():
@@ -416,26 +416,27 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
     suites = ["uv", "run", "tools/verity/check/suites.py"]
     for extra, cmd, want in (
             ([], [*suites, "verity-vllm", "--quick"], (None, 32, 15000)),
-            (["--cpus", "8"], [*suites, "--jobs", "2", "integrations/vllm"], (8, 16, 15000)),     # 2 workers x 8 GB: the kind's 16
+            (["--cpus", "8"], [*suites, "--jobs", "2", "adapters/vllm"], (8, 16, 15000)),     # 2 workers x 8 GB: the kind's 16
             (["--cpus", "8"], [*suites, "vllm", "verity-core"], (8, 64, 14400 + 1800 + 600)),
             (["--mem-gb", "20"], [*suites, "vllm"], (None, 20, 15000)),
             (["--timeout", "2h"], [*suites, "vllm"], (None, 32, 7200)),
             (["--max-min", "30"], ["python3", "tools/verity/check/suites.py", "vllm"], (None, 32, 1800)),
             ([], [*suites, "verity-core"], (None, None, 3600)),               # 30 min and the sync: the kind's hour
-            # all 3 suites side by side on 4 jobs: (300 + 14400 + 1800) / 4 + the longest, 14400, + the sync (INF-98)
-            ([], [*suites, "--quick"], (None, 72, 19140)),       # in whole minutes; 2 x 4 workers x 9 GB beside serial suites
+            # all 3 suites side by side on 4 jobs: (300 + 14400 + 1800) / 4 + the longest, 14400, + the sync
+            ([], [*suites, "--quick"], (None, 36, 19140)),       # in whole minutes; 4 workers x 9 GB: a process a CPU, once
             # the 2 the change touches, as the checkout's suites.py --list says: (14400 + 1800) / 8 + 14400 + 600
-            (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 144, 17040)),
+            (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 72, 17040)),
             # the lane run `research queue ready` names, suites.py inside a shell string: sized as the same run is
             (["--cpus", "8"], ["bash", "-lc", "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py "
-                                              "--changed main --quick"], (8, 144, 17040)),
+                                              "--changed main --quick"], (8, 72, 17040)),
+            (["--cpus", "8", "--mem-gb", "144"], [*suites, "--changed", "main", "--quick"], (8, 144, 17040)),   # a lead's own
             ([], [*suites, "--changed=nothing"], (None, None, None)),
             ([], [*suites, "--changed", "broken"], (None, None, None)),     # suites.py can't say: the kind's size
             ([], [*suites, "repository"], (None, None, None)),
             ([], [*suites, "nosuch"], (None, None, None)),
             ([], [*suites, "verity_vllm"], (None, None, None)),             # suites.py's names are normalized: it matches none
             ([], [*suites, "verity"], (None, None, None)),                  # in two: suites.py refuses it
-            ([], ["pytest", "integrations/vllm"], (None, None, None)),
+            ([], ["pytest", "adapters/vllm"], (None, None, None)),
             (["--kind", "adhoc-x"], [*suites, "vllm"], (None, None, None))):
         specs.clear()
         assert C.main([*runs, *extra, "--", *cmd]) == 3, (extra, cmd)
@@ -443,8 +444,41 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
     assert "32 GB and 250 min, from the [tool.verity.tests] of verity-vllm" in capsys.readouterr().err
 
 
+def test_a_run_of_many_suites_reserves_one_test_process_a_cpu_at_the_largest_its_suites_may_reach(tmp_path):
+    """A `--changed` run, or one of every suite, reserves a test process for each CPU it asks, at the largest figure a process of
+    its suites may reach (TEST_PROCESS_GB where none is declared). The reservation is the budget suites.py divides among its
+    processes, so twice that started processes beyond the CPUs asked, and a node kept it from every other run for as long
+    as the run held its slot."""
+    from research import suite_size
+
+    repo = tmp_path / "repo"
+    for path, body in {".": '[project]\nname = "verity"\n[tool.pytest.ini_options]\n',
+                       "a": '[project]\nname = "a"\n[tool.pytest.ini_options]\n[tool.verity.tests]\nworker_gb = 16\nparallel = true\n',
+                       "b": '[project]\nname = "b"\n[tool.pytest.ini_options]\n'}.items():
+        (repo / path).mkdir(parents=True, exist_ok=True)
+        (repo / path / "pyproject.toml").write_text(body)
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    (repo / "tools/verity/check").mkdir(parents=True)
+    (repo / "tools/verity/check/suites.py").write_text(
+        "import sys\nrev = sys.argv[sys.argv.index('--changed') + 1]\n"
+        "print(f'suites: the change from {rev} touches ' + ('1: b' if rev == 'small' else '2: a, b'))\n")
+    run = ["uv", "run", "tools/verity/check/suites.py"]
+    for cmd, cpus, workers, gb in (
+            ([*run, "--changed", "small"], None, 4, 36),             # no suite declares one: 4 processes x TEST_PROCESS_GB
+            ([*run, "--changed", "small", "--quick"], 12, 12, 108),
+            ([*run, "--changed", "big"], None, 4, 64),               # a's workers may reach 16 GB each
+            ([*run, "--changed", "big", "--jobs", "2"], 8, 2, 32),   # its --jobs is the processes it runs
+            ([*run], None, 4, 64),                                   # every suite
+            ([*run, "--changed", "small", "--jobs", "1"], None, 1, 16)):   # 9 GB: never under the kind's own 16
+        got = suite_size.size(repo, cmd, cpus)["mem_gb"]
+        assert got == gb, (cmd, cpus)
+        assert got // suite_size.TEST_PROCESS_GB >= workers, "suites.py's default --jobs gives it a process for each CPU it asked"
+    assert suite_size.size(repo, [*run, "a"], None)["mem_gb"] == 64, "named suites: their workers at their worker_gb, as before"
+
+
 def test_gpus_with_on_reaches_the_machine_and_without_on_or_queue_means_nothing(tmp_path, monkeypatch, capsys):
-    """INF-55: `research run --on M --gpus N` asks the machine for N GPUs through its gpu-lease (remote.gpu_lease_wrap)."""
+    """`research run --on M --gpus N` asks the machine for N GPUs through its gpu-lease (remote.gpu_lease_wrap)."""
     from research import remote
 
     seen = []

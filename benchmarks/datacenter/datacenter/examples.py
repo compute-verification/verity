@@ -3,7 +3,7 @@
 `rtx_node` is one of our two RTX PRO 6000 nodes as both read with `nvidia-smi topo -m`, `lspci -tv` and `lsmem`:
 two sockets, each an Intel Xeon 6776P with its host DRAM and a PCIe root complex (a switch); eight RTX PRO 6000 GPUs,
 GPUs 0–3 on socket 0 and 4–7 on socket 1, each on a root port of its own; one NIC, on socket 1. Its device model is
-`Accounting.Device`'s one Python mirror, `verity.core.protocols.remote_bandwidth.timing`: a GPU's S_chip, read and write
+`Accounting.Device`'s one Python mirror, `verity.protocols.poub.verifier.timing`: a GPU's S_chip, read and write
 rates, SHA-512 oracle and squaring ceilings, and half the host's on each socket, so the node sums to
 `ledger.Node.stated()`. Beside them: each GPU's memory and its rate for each kind of work (`logical.work`: tensor-core
 multiply-adds by precision at the dense datasheet peaks `benchmarks/census/hardware.json` names; CUDA-core word
@@ -12,7 +12,7 @@ operations, `cuda:op`, and Boolean gates, `cuda:gate`, at its integer rate times
 the upper bound that claims nothing; the residuals are declared.
 
 `with_dpu` adds an NVIDIA BlueField-3 DPU between a node's NIC and its way out, and the DPU's BMC behind it, with Amodo's
-measured stores and wipe coverage (amododesign.com/notes/2026-10-02-dpu-memory-wipes): what a wipe can't reach on them is
+measured stores and wipe coverage (amododesign.com, its note on DPU memory wipes): what a wipe can't reach on them is
 each device's residual, and neither states a write ceiling. `leaf_spine` puts nodes behind a leaf-spine fabric, each
 through its own certifier, with hosts outside every block and challengers on the leaves. `rack` is the demo's: nodes with DPUs on one leaf, a challenger, and
 the outside world over a WAN. `two_sites` is a fleet: two leaf-spines joined by a WAN between their spines.
@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 
-from verity.core.protocols.remote_bandwidth import timing as T
+from verity.protocols.poub.verifier import timing as T
 
 from .physical import Assumption, Cadence, Datacenter, DeviceEntry, Fleet, LinkEntry, Zone
 

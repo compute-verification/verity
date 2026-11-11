@@ -562,8 +562,7 @@ SESSION_RE = re.compile(r"session-(\d+)\.scope$")
 
 
 #: A timer's oneshot that fails every run is `failed` only between its runs, so its incident stays open until the unit has
-#: been out of `systemctl --failed` this long (vy-custody.service, every 5 minutes, opened and cleared 12 times in an hour on
-#: node 1, 8 Oct).
+#: been out of `systemctl --failed` this long (a oneshot every 5 minutes would otherwise open and clear it 12 times an hour).
 UNITS_CLEAR_S = 1800
 
 
@@ -640,8 +639,8 @@ def deploy_drift(ctx: Ctx) -> list[Finding]:
 def asks(ctx: Ctx) -> list[Finding]:
     """An ask in #agent-coordination its record doesn't show answered after 2 hours (`research msg traffic --json`), to its owner,
     naming the record; the asks whose record can't be read (no Linear or Notion credentials), as one finding to infra.  A
-    machine's notice (`vy-*`, the router) isn't an ask anyone answers: vy-monitors' OOM notices naming @ci and @lean would ring
-    them for ever (as top_watch.py's sweep skips them)."""
+    machine's notice (`vy-*`, the router) isn't an ask anyone answers: vy-monitors' OOM notices naming a lane's handle would ring
+    it for ever (as top_watch.py's sweep skips them)."""
     rep = json.loads(ctx.sh([*ctx.research, "slack", "traffic", "--json", "--hours", "24", "--stale-h", "2"], timeout=300))
     out = []
     for a in rep.get("unanswered") or []:
@@ -680,6 +679,28 @@ def node_heartbeat(ctx: Ctx) -> list[Finding]:
     return found
 
 
+def redirected_base(url: str, key: str) -> str:
+    """The base that `url` redirects `key` to, or `url` itself when it doesn't redirect. The site's edge denies a burst of
+    anonymous HEADs from one address (`X-Vercel-Mitigated: deny`), so the burst goes to where the site redirects."""
+    import urllib.error
+    import urllib.request
+
+    class Stay(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+
+    req = urllib.request.Request(f"{url}/{key}", method="HEAD", headers={"User-Agent": "research-store-fetch"})
+    try:
+        urllib.request.build_opener(Stay).open(req, timeout=30).close()
+    except urllib.error.HTTPError as e:
+        loc = (e.headers.get("Location") or "").split("?")[0]
+        if e.code in (301, 302, 303, 307, 308) and loc.endswith(f"/{key}"):
+            return loc[: -len(key) - 1]
+    except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+        print(f"monitors: the store's redirect probe failed ({type(e).__name__}: {e}); reading {url} directly", file=sys.stderr)
+    return url
+
+
 def public_missing(arts: list[str], url: str, jobs: int = 16) -> list[str]:
     """The ids in `arts` whose manifest the public export at `url` doesn't hold. The export writes a manifest after its blobs, so
     a manifest there means the fixture is whole."""
@@ -689,9 +710,10 @@ def public_missing(arts: list[str], url: str, jobs: int = 16) -> list[str]:
     from .store.local import manifest_key
     from .store.remote import HttpRemote
 
-    pub = HttpRemote(url)
+    keys = [manifest_key(ids.hex_of(a)) for a in arts]
+    pub = HttpRemote(redirected_base(url, keys[0]) if keys else url)
     with ThreadPoolExecutor(max_workers=jobs) as ex:
-        held = list(ex.map(lambda a: pub.head(manifest_key(ids.hex_of(a))) is not None, arts))
+        held = list(ex.map(lambda k: pub.head(k) is not None, keys))
     return [a for a, h in zip(arts, held) if not h]
 
 
@@ -717,13 +739,14 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
 DRIVE_STATE = "root/.research/queue/verity.state.json"
 DRIVE_LOG = "data/drive/drive.log"
 UNVERIFIED_S = 3 * 3600
+VQUEUE_DECISIONS = "data/vqueue/live/decisions.jsonl"
 DRIVE_TICK_STALE_S = 30 * 60
 TICK_RE = re.compile(rb"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick rc=", re.M)
 
 
 def drive_ticking(ctx: Ctx) -> bool:
     """Whether drive's log (`DRIVE_LOG`) has a `tick rc=` line from the last `DRIVE_TICK_STALE_S`: drive is alive, so its own
-    `_behind` alarm speaks for a main left unverified (ci and top, 26 Oct)."""
+    `_behind` alarm speaks for a main left unverified."""
     try:
         with open(ctx.root / DRIVE_LOG, "rb") as f:
             f.seek(max(0, f.seek(0, 2) - (1 << 20)))
@@ -735,14 +758,27 @@ def drive_ticking(ctx: Ctx) -> bool:
 
 
 def unverified_main(ctx: Ctx) -> list[Finding]:
-    """`main` has carried commits no after-landing run verified for over 3 h (top, 26 Oct: 467 PRs landed on an unverified main for
-    a day and a half with nobody outside ci told): drive's last verified commit (its state's `drive.postland.verified`) against
+    """`main` has carried commits no after-landing run verified for over 3 h (hundreds of PRs can land on an unverified main for
+    days with nobody outside ci told): drive's last verified commit (its state's `drive.postland.verified`) against
     main, timed from the oldest landing after it: main's first-parent commits after it, drive's `Queue: #N` merges, each
     committed when drive merged it (`git log --first-parent` in `$RESEARCH_DEPLOY_REPO`, the relay's clone, fetched here).
     GitHub's compare won't do: it lists each PR's own commits too, dated when their branch made them, and a long range's oldest
-    hundreds hold no landing (ci, 26 Oct). One event per further hour behind, to ci and top, until an after-landing run verifies
+    hundreds hold no landing. One event per further hour behind, to ci and top, until an after-landing run verifies
     main again; read from drive's state, not its log, so it still rings while drive is down. Quiet while drive ticks
-    (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead."""
+    (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead.
+
+    Since main moves only through the verified queue (drive stopped for good), its decisions file
+    (`VQUEUE_DECISIONS`) is read instead when it exists: one event per further hour once the queue has decided nothing for
+    `UNVERIFIED_S`, a loop stopped or stuck; a queue that decides is ci's, which it rings itself."""
+    if (decisions := ctx.root / VQUEUE_DECISIONS).exists():
+        lines = [ln for ln in decisions.read_text().splitlines() if ln.strip()]
+        last = json.loads(lines[-1]).get("at") if lines else None
+        since = calendar.timegm(time.strptime(last, "%Y-%m-%dT%H:%M:%SZ")) if last else decisions.stat().st_mtime
+        if (behind := ctx.now - since) < UNVERIFIED_S:
+            return []
+        hours = int(behind // 3600)
+        return [Finding(f"vqueue:{hours}", f"*The verified queue has decided nothing for {hours} h*: its last decision in "
+                        f"`/{VQUEUE_DECISIONS}` is from {iso(since)}, and `main` moves only through it.", owners=("ci", "top"))]
     if drive_ticking(ctx):
         return []
     state = json.loads((ctx.root / DRIVE_STATE).read_text())
@@ -1059,12 +1095,12 @@ CHECK_LINE = "/workspace/research/locks/check-line"     # slot.py's LINE beside 
 NOT_STARTED = 75        # slot.py's exit when CMD never ran: a waiter past --wait-max, or a twin whose twin took a slot first
 FAILED_RECENT_S = 6 * 3600
 #: how long a run that ended before any step failed may lack its failure.json: `research run` classifies the end a few seconds
-#: after status.json says so, and a post read in between said "unclassified: no reason recorded" of a hand cancel (dc04, 12 Oct)
+#: after status.json says so, and a post read in between would say "unclassified: no reason recorded" of a hand cancel
 CLASSIFY_S = 120
 TRAIN_RE = re.compile(r"^Merge #(\d+) \(([0-9a-f]+)\)")
 TRAIN_MAIN_RE = re.compile(r"^Merge main \([0-9a-f]+\)")
 #: drive's reason when it cancels a landed train's check (drive.py, `postland`): its deferred steps run in the after-landing run, so
-#: the step it killed did not fail (INF-144)
+#: the step it killed did not fail
 DRIVE_LANDED_CANCEL = "deferred steps run in the post-landing run"
 BC_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 LANE_RE = re.compile(r"-([0-9a-f]{4})$")
@@ -1288,9 +1324,9 @@ def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None
 
 def on_main(ctx: Ctx, sha: str | None) -> bool:
     """Whether ``sha`` is a commit of `main` (GitHub's compare of it with main is `ahead` or `identical`): the tip an
-    after-landing run checks, which runs to its end to name every red step and suite (TOP-90 row 75), so `cancel_failed` never
-    stops it.  27 Oct: main 54713f81's and 0600bab8's runs were cancelled for a Lean check's slot before their pytest step
-    reported, twice leaving main unverified.  False when GitHub can't say."""
+    after-landing run checks, which runs to its end to name every red step and suite, so `cancel_failed` never
+    stops it: cancelling one for a Lean check's slot before its pytest step reports leaves main unverified.  False when GitHub
+    can't say."""
     if not sha:
         return False
     try:
@@ -1301,10 +1337,10 @@ def on_main(ctx: Ctx, sha: str | None) -> bool:
 
 
 def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> str | None:
-    """Cancel a check whose step failed while a ticket waits for a check slot on its machine (top, 8 Oct: running on to find more
+    """Cancel a check whose step failed while a ticket waits for a check slot on its machine (running on to find more
     failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled. A suites.py
     run's failed suite only rings: the lander runs those to land a PR on, and decides whether a suite that failed is its change's
-    (top, 9 Oct: 25ea's verity-ops failure was cpu-1's, and its circuit_check worth keeping)."""
+    (a suite can fail for its machine's sake while the run's other steps are worth keeping)."""
     if not (ctx.act and waiting and row.get("step") and not row.get("suite") and row.get("state") == "running"):
         return None
     if on_main(ctx, row.get("sha")):

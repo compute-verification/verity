@@ -8,11 +8,11 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 ## Map and commands
 
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
-  owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
-  - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
-    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit over PoUS's store,
-    PoUB over a node's registered store and network certification, each a Python verifier until its Lean verifier (its
-    `lean/`) replaces it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims'
+  owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
+  - `verity/core/`: the verifiers, trusted code. `verity/protocols/` holds the integrity profile (`profile`) and one
+    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), PoUB over a node's registered store and
+    network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces it; the inference-only
+    policy (`network/nci/`) is Lean only. `claims` holds the security claims'
     ids, `service/flock/` Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
     release side, and `difftest` the Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
@@ -24,10 +24,10 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
     are on the soundness path: `ml.circuits`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH`, which
     only shrinks); core reaches neither the catalog (`ml.circuits.ops`, `ml.circuits.silicon`) nor the kernels. The rest
     can't affect soundness.
-- `Security/`: the Lean every guarantee is stated and proved in (Lean, below).
-- `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
+- `security/`: the Lean every guarantee is stated and proved in (Lean, below).
+- `adapters/`: one directory per serving stack, holding only what attaches Verity to it. `adapters/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
-- `examples/`: one directory per demo: its workload, placement, commands and doneness (`examples/README.md`).
+- `demos/`: one directory per demo: its workload, placement, commands and doneness (`demos/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
@@ -109,8 +109,10 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **Nondeterminism is quantified, never buried.** Every value a circuit reads is the output of one of its
   blocks, a certified input, a registered value, or advice charged at its width. A value the served hardware decides
   (an atomics order, a split choice) that no block computes is never a free witness checked by a relation: serving makes it
-  canonical so a block computes it, or it is advice. A relation check stands in for computing only where its witness is
-  unique, and it is still a function.
+  canonical so a block computes it, or it is advice. A relation check stands in for computing only where its outputs are
+  unique: a Lean lemma, once per Definition and for all its other inputs, that any two witnesses it accepts give the
+  same value on every output wire. Its witness then carries no bits; until the lemma holds, it counts as free input at
+  its width.
 - **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
@@ -144,7 +146,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   those still in it (the certifier's advice format, vLLM's scheduler) move out. An integration hands Verity only: a
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
-  never interprets, whose length is charged; the values, committed in a `verity.ml.commitments` scheme and registered
+  never interprets, whose length is charged; the values, committed in a `verity.commitments` scheme and registered
   before any coin (under a two-stage sampling design, a sampled replay block's interior between its two stages); and on a
   sample, the sampled proof blocks' openings, to the prover behind the ZK server.
 - **Results are per monitoring period, over all compute.** The time length of interest is the monitoring
@@ -193,20 +195,13 @@ unchanged.
 
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
-only fully checked commits: drive lands `next`'s longest reviewed prefix on `checked`, and its low-risk members (no Lean, lock or
-soundness-path change: drive.toml's `lowrisk_excludes`) on their ready mark alone, runs the full check on its tip itself,
-and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate (how a PR lands: the
-team skill). A red's culprit is the one landing whose change touches what its failure names (its files, the files declaring
-a Lean declaration it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it
-forward, marking a fix within 2 h, or drive then reverts it on `checked`; a red naming several landings reverts none and
-rings each one's lane. A ready mark admits a PR: the sync's own merge onto `next` (a conflict, drive.toml's `landing_gates`)
-is the only check before it joins, and a body naming no live goal gets a warning, never a refusal. A change a `warn_gates`
-gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A red
-ratchet-gate step never reverts (drive.toml's `warn_steps`): drive rings the culprit's owner, who fixes it forward in their
-next PR. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s
-tip (its lock run), commits the lock records it regenerated there, and checks that commit, so `main` moves only to a commit
-whose records are the regenerated ones and whose gated steps all passed on it. The lock run never fails on a lock's
-bookkeeping: it repairs it in that commit, with a warning for each repair (The lock, under Lean).
+only fully checked commits: drive lands each marked PR on `checked` once it is reviewed or low-risk, runs the full check on
+its tip, and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate. A red's
+culprit is the one landing whose change touches what its failure names (its files, the files declaring a Lean declaration
+it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it forward, or drive
+reverts it on `checked`. What drive.toml lets warn (its `warn_gates` and `warn_steps`) and a lock's bookkeeping never
+revert: drive tells the owner, who fixes it in their next PR. How a PR lands, from its ready mark to `main`, and drive's
+rule for each case: the team skill's Landing.
 
 ## Lean
 
@@ -223,29 +218,29 @@ bookkeeping: it repairs it in that commit, with a warning for each repair (The l
   probability, partitions and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`, which every
   area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
   (`tests/test_lean_vocabulary.py`).
-- **Lean is code or security analysis.** Code stays with its subsystem and never requires `Security/`: Flock's
-  executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
-  `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
+- **Lean is code or security analysis.** Code stays with its subsystem and never requires `security/`: Flock's
+  executable verifier and the ZK server (`verity/protocols/flock/verifier/`, with the release side in
+  `verity/protocols/recursion/verifier/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
   PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
   computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
-  hypotheses not yet proved about the live path. The analysis is `Security/`, three trees: definitions
+  hypotheses not yet proved about the live path. The analysis is `security/`, three trees: definitions
   (`Definitions/`, the package `security`, Mathlib only: the vocabulary, named assumptions and guarantee
   statements a reader checks), properties (`Properties/`, `security_properties`: statements about the code's Lean
   functions) and proofs (`Proofs/`, `security_proofs`, ArkLib allowed: every proof, lemma and proof-only definition, with
   `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each proved guarantee). No statement or module of the definitions
-  or properties trees reads the proofs tree (`trees` in `Security/lean-audit.json`, whose `except` is the cleanup's to-do). A subsystem's Lean goes in its own area of each tree (`Core`, `Nci`,
+  or properties trees reads the proofs tree (`trees` in `security/lean-audit.json`, whose `except` is the cleanup's to-do). A subsystem's Lean goes in its own area of each tree (`Core`, `Nci`,
   `Pouw`, `Pous`, `NetworkCertifier`, `Flock`, `Accounting`). All packages share one toolchain and one Mathlib revision,
   bumped together in a PR of their own.
 - **The Lean check** (`tools/verity/lean/check.py`) builds every file and replays every declaration through the kernel:
   only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; a
   premise is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock: a
-  named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean`, and every other premise is
-  open (`open`, with the Linear issue that discharges it and its due date), a list a PR's `--update` never adds to, unless
-  it is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it). Each
-  deployed guarantee (`deployed`) rests, outside the trust base (`trust.base`: SHA-512's collision resistance, uniform
-  randomness, an honest verifier) and the premises a ruling's rule lets it alone rest on (`trust.extra`, each with its
-  reason), only on the premises its `trust_gap` entry lists, which `--update` never adds to; the check prints each one's
-  gap, the number Daniel drives to zero.
+  named assumption (`assumptions`) is declared in `security/Definitions/Assumptions.lean` or a module under it, and
+  every other premise is open (`open`, with the Linear issue that discharges it and its due date), a list a PR's
+  `--update` never adds to, unless it is part of what its guarantee says (`domain`, with a one-line why; an honest
+  witness must conclude it). Each deployed guarantee (`deployed`) rests, outside the trust base (`trust.base`: SHA-512's
+  collision resistance, uniform randomness, an honest verifier) and the premises a ruling's rule lets it alone rest on
+  (`trust.extra`, each with its reason), only on the premises its `trust_gap` entry lists, which `--update` never adds
+  to; the check prints each one's gap, the number Daniel drives to zero.
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
   statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
   A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails
@@ -276,7 +271,10 @@ bookkeeping: it repairs it in that commit, with a warning for each repair (The l
   skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` warns on a doc
   naming a dead path.
 - Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
-  `show-environment`.
+  `show-environment`, and an env file's with `python3 tools/agent-guard/envnames.py FILE...` (on another machine,
+  `ssh HOST python3 - FILE... < tools/agent-guard/envnames.py`), never `cat`, `sed`, `cut` or `grep` on it or on a glob
+  over its directory, which matches the keys beside it. Look at a key with `stat`, `sha256sum` or
+  `openssl pkey -in FILE -pubout`.
 
 ## Where writing goes
 

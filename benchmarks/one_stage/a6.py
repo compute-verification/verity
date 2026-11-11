@@ -2,7 +2,7 @@
 sampling design in one audit. A coordinate is `ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}` (K/32 satfinite s8 IMMA steps on
 sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vLLM's int8 profile serves), one template per K.
 
-    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm:<tree>/tools/verity/circuit_check/src \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/flock/prover/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src \\
       python benchmarks/one_stage/a6.py --bin flock-circuit --lean flock-verify --out DIR [--members 2048:21504,8192:2048] \\
       [--k 32] [--chunk N] [--delta 2^-20]
 
@@ -42,19 +42,19 @@ sys.path.insert(0, str(HERE.parent / "served_units"))
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
 import stage as SU  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.circuits.defs import bind  # noqa: E402
-from verity.ml.circuits.ops import gemm as OG  # noqa: E402
-from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
-from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
-from verity.ml.commitments.merkle import CommitmentDomain  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.defs import bind  # noqa: E402
+from verity.definitions.ops import gemm as OG  # noqa: E402
+from verity.commitments.identity import identity_digest_sha512  # noqa: E402
+from verity.commitments.indexed import RangeIndexedDomain  # noqa: E402
+from verity.commitments.merkle import CommitmentDomain  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 
 #: one Llama-3.2-1B decoder layer's W8A8 coordinates for one token, by K
 LLAMA_3_2_1B_LAYER = "2048:21504,8192:2048"
-#: flock-circuit's spec shape (`verity/ml/flock/live/src/circuit.rs`'s `shape_in_range`): a statement's dense size
+#: flock-circuit's spec shape (`verity/protocols/flock/prover/live/src/circuit.rs`'s `shape_in_range`): a statement's dense size
 #: m = k_log + nbl, nbl = max(3, ceil(log2 blocks)), is at most 35
 M_MAX = 35
 WINDOW_OF = ("seeded s8 rows quantized as benchmarks/ppl/steps.py's quant_rows (benchmarks/served_units/stage.py's s8-coord "
@@ -97,7 +97,7 @@ def stage_template(K: int, n: int, base: int, bound: dict, out: Path, chunk: int
     t0 = time.time()
     tag = f"s8-coord-k{K}"
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/one-stage/a6/v1\0{tag}".encode()).digest()[:8], "little"))
-    rows, twin = SU._s8_coord_draw({"K": K}, n, rng)
+    rows, twin = SU._s8_coord_values({"K": K}, n, rng)
     in_rows = [("x", SEG, 16 * rows["x"].shape[1], ["x", "sx"]), ("w", V2, 16 * rows["w"].shape[1], ["wrow", "sw"])]
     st = CS.UnitStager(template(K), f"unit/a6-{tag}", in_rows, [(V2, (0,))], circuit=out / "circuit.txt", bind=bound)
     t_build = time.time() - t0
@@ -165,7 +165,7 @@ def main() -> int:
     ranges = P.ranges(program, query)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
-    law = D.parse_law(f"stratified:{a.k}")
+    law = D.parse_design(f"stratified:{a.k}")
     strata = P.strata(program, query)
     assert [t for t, _ in strata] == [P.template_id(d) for d in defs] and all(len(rs) == 1 for _, rs in strata)
 
@@ -266,8 +266,8 @@ def main() -> int:
     if len(defs) > 1:
         v = V.check(rec, program, P.template_instances_query(defs[:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg["registration-query-drops-a-template (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    for name, other in (("registration-law-another-k (R1)", D.parse_law(f"stratified:{a.k + 1}")),
-                        ("registration-law-subset-not-stratified (R1)", D.parse_law(f"subset:{a.k}"))):
+    for name, other in (("registration-law-another-k (R1)", D.parse_design(f"stratified:{a.k + 1}")),
+                        ("registration-law-subset-not-stratified (R1)", D.parse_design(f"subset:{a.k}"))):
         v = V.check(rec, program, query, other, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
     first = members[0]["name"]

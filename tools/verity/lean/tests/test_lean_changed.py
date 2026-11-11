@@ -13,7 +13,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import re
 import subprocess
 from pathlib import Path
 
@@ -264,8 +263,8 @@ PAIR = {"s/lakefile.toml": 'name = "s"\n', "s/lean-audit.json": record("old", ["
 
 @pytest.fixture()
 def pair(tmp_path, monkeypatch):
-    """`audit_records` on two stand-in packages each of whose records read the other's build, as `Security`'s and
-    `Security/Properties`' do (`s` names `s/proofs` under `proved_in`, which requires `s` and `s/props` by path), with the
+    """`audit_records` on two stand-in packages each of whose records read the other's build, as `security`'s and
+    `security/Properties`' do (`s` names `s/proofs` under `proved_in`, which requires `s` and `s/props` by path), with the
     real `sync`, requirers and pass cache, and a fake check.py over a fixed build: a package's records pass when its lock is
     `BUILT`'s, fail on a record difference otherwise (`regenerated` in the report names `BUILT`'s, which check.py wrote
     there), and `--update` writes `BUILT`'s; a package in the returned set fails for another reason (with `writes` in it,
@@ -323,7 +322,7 @@ def pair(tmp_path, monkeypatch):
 @pytest.mark.parametrize("hold", [lambda *a, **k: None, refuse], ids=["slot", "dev-cache"])
 def test_one_update_regenerates_a_requirer_failing_only_on_record_differences_and_its_commit_runs_nothing(
         pair, tmp_path, monkeypatch, hold):
-    """A change to what both `Security`'s and `Security/Properties`' guarantees read moves both locks: one `--records
+    """A change to what both `security`'s and `security/Properties`' guarantees read moves both locks: one `--records
     Security --update` run regenerates and keeps both, each audited on the records regenerated before it, and keeps each
     pass under the regenerated locks, so a commit of both records needs no run of either package. Each package's
     `inputs_key` is the commit's, though the `--dev-cache` path's check.py rewrites the locks in the checkout."""
@@ -473,7 +472,7 @@ def unwitnessed(h: str) -> str:
 @pytest.mark.parametrize("hold", [lambda *a, **k: None, refuse], ids=["slot", "dev-cache"])
 def test_a_rename_a_requirers_unwitnessed_entry_reads_regenerates_it_in_one_update_moved_run(pair, tmp_path, monkeypatch,
                                                                                             hold):
-    """A PR renames `DrawIsCoin` in Security, and statements of Security/Properties read it: 8 of its `unwitnessed` entries
+    """A PR renames `DrawIsCoin` in Security, and statements of security/Properties read it: 8 of its `unwitnessed` entries
     hold such a statement's hash, which the build under the new name no longer has. check.py fails that as
     `witnesses.unwitnessed-changed`, no record difference, unless `--moved` says the text under the old names is the
     record's, and it reads `--moved` only with `--update`. So `--records Security --update --moved` audits the requirer
@@ -808,7 +807,7 @@ def test_after_a_run_left_mid_way_dependencies_off_their_pinned_checkout_are_tak
 @pytest.fixture()
 def trying(tmp_path, monkeypatch):
     """`try_file` against nested stand-in packages `Sec` and `Sec/Proofs` (whose modules sit under `srcDir = ".."`, as
-    Security/Proofs' do), a slot tree, no sandbox, and `build` and check.py recorded instead of run."""
+    security/Proofs' do), a slot tree, no sandbox, and `build` and check.py recorded instead of run."""
     root = tmp_path / "root"
     (root / "Sec" / "Proofs" / "Flock").mkdir(parents=True)
     (root / "Sec" / "Proofs" / "lakefile.toml").write_text('name = "p"\nsrcDir = ".."\n')
@@ -968,13 +967,87 @@ def test_try_keeps_dependencies_no_records_run_took_and_leaves_them_out_of_links
     assert calls["link"] == [] and LC.read_links(tree) == {"Sec": "k"}, "a later --records run never drops them"
 
 
-def test_try_refuses_without_a_build_slot_naming_how_to_list_the_pools(trying, tmp_path, monkeypatch):
+def test_a_tree_s_builds_and_links_follow_a_layout_move_before_the_packages_are_synced(tmp_path, monkeypatch):
+    """A slot's tree is keyed by package paths, and a move renames tracked files only: the build of `Old/Proofs` would stay
+    there while `new/Proofs` compiled every module again and took its dependencies again. Under the tree's lock the build
+    directories and their `LINKS` entries move with their packages, and the former directory's stale copies go: where the
+    step takes the lock itself, and in `hold_tree` for every other run, before its caller reads the tree."""
+    def a_tree(name: str) -> Path:
+        tree = tmp_path / name
+        for pkg, built in (("Old", "spec"), ("Old/Proofs", "proofs"), ("code", "code")):
+            (tree / pkg / ".lake" / "build").mkdir(parents=True)
+            (tree / pkg / ".lake" / "build" / "olean").write_text(built)
+            (tree / pkg / "A.lean").write_text("-- a copy the last run synced\n")
+        LC.write_links(tree, {"Old": "k0", "Old/Proofs": "k1", "code": "k2"})
+        return tree
+
+    def carried(tree: Path) -> bool:
+        return (LC.read_links(tree) == {"new": "k0", "new/Proofs": "k1", "code": "k2"} and not (tree / "Old").exists()
+                and [(tree / p / ".lake" / "build" / "olean").read_text() for p in ("new", "new/Proofs", "code")]
+                == ["spec", "proofs", "code"])
+
+    monkeypatch.setattr(LC._moved(), "recorded", lambda root: [{"Older/": "Old/"}, {"Old/": "new/"}])
+    checkout = tmp_path / "checkout"
+    for f in ("new/lakefile.toml", "new/A.lean", "new/Proofs/lakefile.toml", "code/lakefile.lean", "README.md"):
+        (checkout / f).parent.mkdir(parents=True, exist_ok=True)
+        (checkout / f).write_text("")
+    monkeypatch.setattr(LC, "ROOT", checkout)
+    tree, said = a_tree("step"), []
+    LC.carry_builds(tree, said.append)
+    assert carried(tree) and len(said) == 2 and "new/Proofs: its build directory moved with it from Old/Proofs" in said[1]
+    LC.carry_builds(tree, said.append)
+    assert carried(tree) and len(said) == 2, "nothing to carry the next time"
+
+    tree, said = a_tree("records"), []
+    with open(tree / ".lock", "w") as held:
+        assert LC.hold_tree(held, tree, said.append) and carried(tree) and len(said) == 2
+    (checkout / "new" / "Proofs" / "lakefile.toml").unlink()
+    tree = a_tree("no-package")
+    with open(tree / ".lock", "w") as held:
+        assert LC.hold_tree(held, tree, said.append)
+    assert (tree / "Old" / "Proofs" / ".lake").is_dir() and (tree / "new" / ".lake").is_dir(), \
+        "a build whose path the checkout has no package at stays, and its directory with it"
+
+
+def test_try_refuses_without_a_build_slot_naming_the_machines_whose_slots_have_one(trying, tmp_path, monkeypatch):
     _, calls = trying
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", refuse)
+    files = {"a": "build 3\naudit 2\n", "b": "check 4\naudit 4\n", "c": "# NAME N\nbuild 2   # a note\n"}
+
+    def read(ssh):
+        if ssh[-1] not in files:
+            raise OSError("exit 255: Permission denied (publickey).")
+        return files[ssh[-1]]
+
+    peers = {name: ["-i", "KEY", name] for name in ("c", "b", "a", "self")}
+    monkeypatch.setattr(LC.LEAN_SLOT.SLOT, "peers", lambda: peers)
+    monkeypatch.setattr(LC, "slots_there", read)
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
-    assert calls["build"] == [] and any("lean_slot.py --status" in s and "nothing ran" in s for s in said)
-    assert not any(re.search(r"\b(vy-nebius|cpu-\d)", s) for s in said), "a refusal names no node"
+    assert calls["build"] == [], "nothing runs without a build slot"
+    [line] = [s for s in said if "nothing ran" in s]
+    assert "have `build`: a, c (`verity lean try Sec/Proofs/Flock/X.lean --on MACHINE`)" in line, line
+    assert line.endswith("; not read: self"), "a machine it can't read is named, never counted as having none"
+    assert LC.pool_machines("build", {}, read) == ([], {})
+    peers.clear()
+    said.clear()
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
+    assert any("no machine in" in s and "lean_slot.py --status" in s for s in said), "none read: how to list a machine's pools"
+
+
+def test_slots_there_reads_the_path_every_machine_keeps_whatever_lean_slots_says_here(monkeypatch, tmp_path):
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", tmp_path / "lean-slots")
+    ran = []
+
+    def run(argv, **kw):
+        ran.append(argv)
+        return subprocess.CompletedProcess(argv, 255 if len(ran) > 1 else 0, "build 2\n", "Permission denied (publickey).\n")
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    assert LC.slots_there(["-i", "KEY", "research@peer"]) == "build 2\n"
+    assert ran[0][-2:] == ["research@peer", f"cat {LC.LEAN_SLOT.SLOTS_PATH}"] and "BatchMode=yes" in ran[0]
+    with pytest.raises(OSError, match="exit 255: Permission denied"):
+        LC.slots_there(["research@peer"])
 
 
 def test_try_refuses_a_file_in_no_package_and_a_sandbox_without_dependencies(trying, tmp_path, monkeypatch):
@@ -1078,3 +1151,63 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
     box = argv.index(str(LC.SANDBOX))
     assert argv[box + 1:argv.index("--", box)] == [str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
     assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]
+
+
+def test_the_records_facts_cache_is_outside_every_slot_tree_s_build_roots(tmp_path, monkeypatch):
+    """The records step keeps its facts cache (`facts_dir`) beside its slot trees, so no sandboxed build in any slot's tree
+    can write it: neither `check.py`'s (`writable`, path dependencies included) nor this module's (`in_sandbox`, the
+    closure's `.lake`s). check.py refuses an overlapping `--facts-cache` (`build_roots_over`); this keeps that from firing."""
+    monkeypatch.setattr(LC.LA.COMMON, "cache_dir", lambda: tmp_path / "cache")
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "security"])
+    for slot in ("build/1", "build/2", None):
+        if slot:
+            monkeypatch.setenv(LC.LEAN_SLOT.HELD, slot)
+        else:
+            monkeypatch.delenv(LC.LEAN_SLOT.HELD, raising=False)
+        tree = LC.records_tree()
+        pkgs = [tree / "security", tree / "security" / "Proofs"]
+        for p in pkgs:
+            p.mkdir(parents=True, exist_ok=True)
+        (pkgs[1] / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "s", "type": "path", "dir": ".."}]}))
+        assert LC.AUDIT.build_roots_over(LC.facts_dir(), pkgs) == []
+        box = LC.in_sandbox("security/Proofs", tree, ["lake", "build"])
+        rw = box[box.index(str(LC.SANDBOX)) + 1:box.index("--", box.index(str(LC.SANDBOX)))]
+        assert rw and not any(LC.facts_dir().resolve().is_relative_to(d) or Path(d).is_relative_to(LC.facts_dir().resolve())
+                              for d in rw)
+
+
+def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
+    """`--records network_check` names the package whose `lakefile.toml` says `name = "network_check"`: matching it by
+    path alone refused it as matching no package, after the run had waited for its slot."""
+    pkgs = ["verity/protocols/certifier/verifier/lean", "verity/protocols/inference_only/verifier/nci/lean", "security"]
+    for p, n in zip(pkgs, ["network_check", "nci_check", "security"]):
+        (tmp_path / p).mkdir(parents=True)
+        (tmp_path / p / "lakefile.toml").write_text(f'name = "{n}"\n\n[[require]]\nname = "mathlib"\n')
+    assert LC.matching("network_check", pkgs, tmp_path) == ["verity/protocols/certifier/verifier/lean"]
+    assert LC.matching("verity/protocols/certifier/verifier/lean/", pkgs, tmp_path) == ["verity/protocols/certifier/verifier/lean"]
+    assert LC.matching("certifier/verifier/lean", pkgs, tmp_path) == ["verity/protocols/certifier/verifier/lean"]
+    assert LC.matching("verifier", pkgs, tmp_path) == pkgs[:2]
+    assert LC.matching("network_check", pkgs) == []
+
+
+def test_the_step_judges_a_package_on_the_source_modules_of_those_it_requires_by_path(tmp_path, monkeypatch):
+    """`records` hands `judge` the facts as the audit does, `source_modules` included: `Security/Properties` names
+    `Definitions.Assumptions` under `assumptions_module`, a module of `Security`, which it requires by path and none of its
+    own modules imports, so neither `modules` nor `graph` holds it. Without it the step failed that package with
+    `assumptions.module` on every build the audit would pass, and stopped the Lean suites."""
+    spec, props = tmp_path / "Security", tmp_path / "Security" / "Properties"
+    for pkg, name, module in ((spec, "security", "Definitions/Assumptions.lean"), (props, "properties", "Properties/Assumptions.lean")):
+        (pkg / module).parent.mkdir(parents=True)
+        (pkg / module).write_text("")
+        (pkg / "lakefile.toml").write_text(f'name = "{name}"\n')
+    (props / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "security", "type": "path", "dir": ".."}]}))
+    homes = ["Definitions.Assumptions", "Properties.Assumptions"]
+    (props / "lean-audit.json").write_text(json.dumps({"roots": ["Properties"], "assumptions_module": homes}))
+    monkeypatch.setattr(LC.AUDIT, "facts_of", lambda *a, **k: {"modules": ["Properties.Assumptions"], "graph": {}})
+    judged = []
+    monkeypatch.setattr(LC.AUDIT, "judge", lambda policy, facts, files, *a, **k: (judged.append((policy, facts)), ([], {}))[1])
+    assert LC.records("Security/Properties", tmp_path, "lake") == []
+    [(policy, facts)] = judged
+    assert facts["source_modules"] == homes
+    built = set(facts["modules"]) | set(facts["graph"]) | set(facts["source_modules"])     # as `judge` reads them
+    assert [h for h in LC.AUDIT.assumption_homes(policy) if h not in built] == []

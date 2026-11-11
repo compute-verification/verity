@@ -1,4 +1,4 @@
-"""Phase 5a: the vLLM stage Tools (integrations/vllm/verity_vllm/pipeline/research_tools.py), typed outputs (`outputs.json`) and the
+"""Phase 5a: the vLLM stage Tools (adapters/vllm/verity_vllm/pipeline/research_tools.py), typed outputs (`outputs.json`) and the
 durability gate (`research data preserved`, store/preserved.py), against a LocalStore with the FsRemote."""
 from __future__ import annotations
 
@@ -41,10 +41,10 @@ def _drv(tool, argv: list[str], inputs: dict | None = None) -> str:
 def test_vllm_tools_are_registered_and_loadable_by_name():
     for stage in ("build", "plan", "match", "commit", "replay"):
         t = tools_registry.load(f"vllm.{stage}", REPO)
-        assert t.name == f"vllm.{stage}" and t.spec == f"integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_{stage.upper()}"
+        assert t.name == f"vllm.{stage}" and t.spec == f"adapters.vllm.verity_vllm.pipeline.research_tools:VLLM_{stage.upper()}"
         assert t.command == [*CMD, stage]
         assert t.key_conditions == ["hw.family", f"tool.vllm.{stage}.torch", f"tool.vllm.{stage}.vllm"]
-        assert t.closure == ["integrations/vllm/**", *(f"{d}/**" for d in package_dirs(REPO, "verity"))]
+        assert t.closure == ["adapters/vllm/**", *(f"{d}/**" for d in package_dirs(REPO, "verity"))]
         for k in t.produces:
             assert k in KINDS, k
         assert "execution-evidence/v1" in t.produces and "run-files/v1" in t.produces
@@ -107,7 +107,7 @@ def test_parse_accepts_the_module_form_row_run_and_the_earlier_runner_argvs(monk
     # Only for this test: left on sys.path, the repo root makes a later test's `--tool check` import the repo's own
     # tools/verity/check/tool.py instead of its fixture's, outside the suite's inputs.
     monkeypatch.syspath_prepend(str(REPO))
-    from integrations.vllm.verity_vllm.pipeline import research_tools as RT
+    from adapters.vllm.verity_vllm.pipeline import research_tools as RT
 
     m = RT.parse(["/workspace/venv312/bin/python", "-m", "verity_vllm.pipeline.cli", "row", "stage", "commit", ROW, "R", "repo", "rev",
                   "--pairs", "4"], stage="commit")
@@ -117,10 +117,10 @@ def test_parse_accepts_the_module_form_row_run_and_the_earlier_runner_argvs(monk
     # the earlier shell runners, as records in the store carry them
     p = RT.parse(["bash", "/workspace/src/integrations/vllm/verity_vllm/ops/row_pod.sh", ROW, "LLAMA32_1B", "repo", "rev", "build,match"], stage="build")
     assert p["stage"] == "build,match" and p["row"] == ROW and p["model"] == "repo" and p["batch"] == 1
-    q = RT.parse(["bash", "integrations/vllm/verity_vllm/ops/run_row_v2.sh", "stage", "commit", ROW, "R", "repo", "rev", "--pairs=4",
+    q = RT.parse(["bash", "adapters/vllm/verity_vllm/ops/run_row_v2.sh", "stage", "commit", ROW, "R", "repo", "rev", "--pairs=4",
                   "--required-classes", "module_out"], stage="commit")
     assert q["pairs"] == "4" and q["required_classes"] == "module_out" and q["replay_args"] is None
-    # a value that is itself a flag list is a value (the R19 admit fix (a) commit flags), not a bare `--commit-args` switch
+    # a value that is itself a flag list is a value (commit flags), not a bare `--commit-args` switch
     c = RT.parse(_argv("commit", "--commit-args", "--bounded-staging --retain-exclude hidden_m1", "--pairs", "3"), stage="commit")
     assert c["commit_args"] == "--bounded-staging --retain-exclude hidden_m1" and c["pairs"] == "3"
     assert RT.parse(_argv("commit", "--commit-args", "--pairs", "3"), stage="commit")["commit_args"] is True   # a real switch stays one
@@ -287,8 +287,8 @@ PINNED = {"hw.family": "l40s", "torch": "2.9.0", "vllm": "0.11.0"}
 def pinned_probes(monkeypatch):
     """The probes behind the key conditions answer as an L40S host with the workload interpreter's torch and vllm: `hw.family`
     (nvidia-smi) and the vLLM Tools' own `tool.vllm.<stage>.torch|vllm` (a `$PY` subprocess). Each probe gives None when it
-    times out, so on a loaded machine one of two identical requests could see None and get another derivation (train T640's
-    `check` on vy-nebius-1, 1 Oct 2026). Pinned to values, not None, so a caller that skips a probe gets another derivation."""
+    times out, so on a loaded machine one of two identical requests could see None and get another derivation.
+    Pinned to values, not None, so a caller that skips a probe gets another derivation."""
     from research import env as E
     monkeypatch.setattr(E, "_nvidia_smi", lambda: {"hw.sku": "NVIDIA L40S", "hw.count": 1, "hw.vram_mb": 46068, "rt.driver": None, "rt.cuda": None})
     for stage in ("build", "match", "commit", "replay"):

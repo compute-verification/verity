@@ -1,4 +1,4 @@
-"""Shared runner and telemetry v0.1 (R17-49, RUNNER-TELEMETRY-BRIEF.md) -- increment A.
+"""Shared runner and telemetry v0.1.
 
 Project-neutral core: jobs, stages, processes, resources, evidence.  Stdlib only (Python 3.11+); pods have no guaranteed extras.
 
@@ -10,8 +10,6 @@ Project-neutral core: jobs, stages, processes, resources, evidence.  Stdlib only
     RULES.md       rendered from a policy file                     telemetry.policy
 
 `research tele <cmd>` / `python3 -m research.telemetry <cmd>` -- see telemetry.cli.
-
-Promoted from veritor zk/campaign/telemetry @ df7fbea3d (lane/r17-mprof, 2026-09-21); import paths adjusted, nothing else.
 """
 from __future__ import annotations
 
@@ -29,11 +27,11 @@ COLLECTOR_VERSION = "0.1.3"   # 0.1.1: /proc/<pid>/oom_score sampled for tree + 
 CLASSIFIER_VERSION = "0.1.4"   # 0.1.1: shared-scope attribution window extended by half a sampler round (process record follows the cgroup record)
                                # 0.1.4: the run's queue scope (cluster-<run id>.scope) is its own cgroup; rule 6b CGROUP_OOM_ATTRIBUTED = SIGTERM
                                #   + oom_kill increment there (systemd stops the scope after the kill); OOM classes there name the cap (MemoryMax=NG)
-                               # 0.1.3 (r20 issue 3): rule 7b CGROUP_OOM = rc != 0 without a signal + oom_kill increment (v2 memory.events or v1
+                               # 0.1.3: rule 7b CGROUP_OOM = rc != 0 without a signal + oom_kill increment (v2 memory.events or v1
                                #   memory.oom_control) + a `Killed` line in the job's log; v1 memory.failcnt growth recorded as corroboration.  A v1
                                #   cgroup with no oom_kill counter (kernel < 4.13) falls back to failcnt growth / under_oom + the Killed line, one
                                #   certainty step lower; log.killed is evidence whenever the line is present
-                               # 0.1.2 (rev M-1748 d1-d4/d8 + S-r17-51 c1/c2): shared-scope attribution = a tree process vanished AND no outsider vanished
+                               # 0.1.2: shared-scope attribution = a tree process vanished AND no outsider vanished
                                #   (oom_score / RSS ranking recorded as corroboration, never a veto); any class chosen beside SIGKILL + oom_kill delta is
                                #   ambiguous with both evidence sets under `competing` (a delivered + verified marker stays established); low mounts count
                                #   only when they hold the attempt or a declared output; no samples -> UNKNOWN_SIGNAL ambiguous; incidents carry vanished

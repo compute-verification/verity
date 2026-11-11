@@ -5,7 +5,7 @@
 #   research run --on MACHINE --pool proofs --project verity --source . --cwd source \
 #     --mem-gb G --declared-output 'out/*' --env H1L_MEM_GB=G -- bash benchmarks/pouw/h1_lanes/job.sh
 #   1. hidden_zk/job.sh's builds (flock-circuit's proving build, the Lean flock-verify, a venv), PoUW's pouw-leaf-own-window
-#      and, under H1_TMPL=structural, the prover's flock-tmpl-unit (verity/ml/flock/tests/lean/TmplUnit.lean, which
+#      and, under H1_TMPL=structural, the prover's flock-tmpl-unit (verity/protocols/flock/prover/tests/lean/TmplUnit.lean, which
 #      unrolls the unit and so is no part of the verifier), built beside flock-verify's sources
 #   2. run.py prepare: the statements' Programs, the leaf's registered values and partials, every statement staged (WORK/plan.tsv),
 #      each circuit flat, or under H1_TMPL=structural the templated statement of its structural lowering (h1unit.layout),
@@ -14,8 +14,7 @@
 #   4. the plan's Lean checks, each with its statement's own Program, partition, public file and registered reads, and
 #      pouw-leaf-own-window's check of those reads, placed from the window's descriptor and round log, against the
 #      registration and produced record the verifier holds, and of each session's sample against the sample policy (every unit)
-#   5. run.py summarize: out/summary.json (a templated check refused only for its form after every other check,
-#      run.py's TMPL_WHY, is labelled run.py's TEMPLATED, never ACCEPT)
+#   5. run.py summarize: out/summary.json
 # env: H1L_MEM_GB (the job's --mem-gb)  H1L_K (448; h1zy.combine takes K >= 384)  H1L_JOBS (8: prepare's stagers)  H1L_PAR (3: sessions at a time)
 #      H1L_LPAR (8: Lean checks at a time)  H1_TILE (v1 or v3)  H1_TMPL (h1unit.layout's: unset or flat the flat statement,
 #      structural the templated one at iv/hybrid/4)  HZ_CACHE: hidden_zk's
@@ -26,29 +25,29 @@ export HZ_CONFIGS=h1-lanes HZ_MEM_GB=${H1L_MEM_GB:?} HZ_RUNS=1 HZ_WARM=0
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 # shellcheck source=../hidden_zk/job.sh
 . benchmarks/pouw/hidden_zk/job.sh
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/benchmarks/pouw/hidden_zk:$SRC/benchmarks/pouw/h1_prove
+export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/benchmarks/pouw/hidden_zk:$SRC/benchmarks/pouw/h1_prove
 H=$SRC/benchmarks/pouw/h1_lanes
 RUN=$H/run.py K=${H1L_K:-448} PAR=${H1L_PAR:-3} LPAR=${H1L_LPAR:-8}
 [ -n "${H1L_J10R:-}" ] && RUN=$H/j10r.py K=${H1L_K:-4608}
 WK=$W/work
 mkdir -p "$OUT/lean"
 setup
-build_own() {       # build_own DEST: DEST/verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-leaf-own-window
+build_own() {       # build_own DEST: DEST/verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-leaf-own-window
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1
   rm -rf "$D.tmp" && mkdir -p "$D.tmp" \
-    && (cd "$SRC" && tar --exclude=.lake --exclude=__pycache__ -cf - verity/core) | tar -xf - -C "$D.tmp" \
-    && (cd "$D.tmp/verity/core/protocols/pouw/lean/check" && lake build pouw-leaf-own-window) && rm -rf "$D" && mv "$D.tmp" "$D"
+    && (cd "$SRC" && tar --exclude=.lake --exclude=__pycache__ -cf - verity) | tar -xf - -C "$D.tmp" \
+    && (cd "$D.tmp/verity/protocols/pouw/verifier/lean/check" && lake build pouw-leaf-own-window) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
 OWN=:
 if [ -z "${H1L_J10R:-}" ]; then
-  OWN=$(cached leafownwin "$(tree_key verity/core)" build_own)/verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-leaf-own-window
+  OWN=$(cached leafownwin "$(tree_key verity)" build_own)/verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-leaf-own-window
   [ -x "$OWN" ] || { log "pouw-leaf-own-window build FAILED: $(tail -20 "$OUT/build-leafownwin.log")"; exit 1; }
   sha256sum "$OWN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
 fi
 TU= TUP=
 if [ "${H1_TMPL:-flat}" != flat ]; then
-  cached tmplunit "$(tree_key verity/core/service/flock verity/ml/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit > "$W/tu.dir" &
+  cached tmplunit "$(tree_key verity/protocols/flock/verifier verity/protocols/flock/prover/tests/lean/TmplUnit.lean)" build_tmpl_unit > "$W/tu.dir" &
   TUP=$!
 fi
 log "h1-lanes: $(basename "$RUN") K=$K tile=${H1_TILE:-v1} form ${H1_TMPL:-flat} sessions $PAR at a time, Lean $LPAR at a time"

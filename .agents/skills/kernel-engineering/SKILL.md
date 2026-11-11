@@ -5,7 +5,7 @@ description: >
   RTX PRO 6000 (sm_120), or any kernel whose output a verifier recomputes bit for bit. Covers checking what's been tried
   before starting, the evaluation ladder (CPU conformance, a one-GPU screen, the timed whole-node panel row, served vLLM),
   what a timed run must pass (the SASS gate, 0xA5 poisoning and a no-write control, the reference verifier on the run's
-  own transcript, interleaved cuBLASLt and CUTLASS baselines, the gap at both FP32 prices), recording every attempt with its
+  own transcript, interleaved cuBLASLt and CUTLASS baselines, ε at both FP32 prices), recording every attempt with its
   hypothesis and reason, hooking a variant into vLLM (KernelVariant, GateRecord), sharing node 2 (gpu-lease, the fill
   queue) with other kernel lanes, and leaving the tooling better. Use when writing or tuning a CUDA or PTX kernel, a
   mainloop, forming or an epilogue, running benchmarks/pouw/harness (bench.py, verify.py, sass_gate.py), adding a panel
@@ -25,7 +25,9 @@ check" marks a rule no code enforces yet.
   precision, timed in the same run on the same die, at prefill `m8192-n8192-k8192` and decode `m32-n8192-k8192` (tier 3
   adds the served model's (n, k)).
 - **The constraints:** bit-exact against the scheme's reference; the reference verifier accepts the run's own
-  transcript; the gap ≤ 1% (ε ≤ 1/99) at both FP32 prices (a row over 1% is never plotted).
+  transcript; the soundness slack ε ≤ 1/99 at both FP32 prices, the gap g = ε/(1 + ε) ≤ 1% (a row over it is never
+  plotted). ε is the adversary's advantage and γ only the honest overhead, capped at γ ≤ 10 at each operating point
+  (`GLOSSARY.md`): a soundness slack is never a γ.
 - **The scorer is locked:** never change the harness, a gate, the verifier or a statement parameter (the promotion
   period G, the domain's constants, ρ, Lean's W1 prices, the credit formula) to make an arm pass. Harness changes go to
   its owner; a statement change is a proposal to the coordinator.
@@ -47,16 +49,16 @@ message, never an edit in their tree.
 
 ## Where the code goes
 
-- **Exact semantics:** `verity.ml.circuits.silicon`. A newly captured step lands there as a model with a sampled fixture
+- **Exact semantics:** `verity.definitions.silicon`. A newly captured step lands there as a model with a sampled fixture
   and an `instructions` entry (`benchmarks/tc_probe`, `tc_probe_fp4`), never as a kernel directory's own copy.
-- **The scheme and its verifier:** `verity/core/protocols/pouw` (stdlib only; its README, and each scheme's module
+- **The scheme and its verifier:** `verity/protocols/pouw/verifier` (stdlib only; its README, and each scheme's module
   docstring).
 - **The kernel:** a directory under `benchmarks/pouw/` like `pearl_c_sm120/` (`run.py` with `Dev` and `Pipeline`,
   `fixture.py`, `build.sh`, its sources, a harness arm against `arm.py`'s contract). Where serving kernels finally live is
   compute-accounting's call; the loader keys on digests, so a later move is cheap.
-- **The vLLM executor:** `integrations/vllm`.
+- **The vLLM executor:** `adapters/vllm`.
 - **Shared tables** (scheme names, hashing formats, schedules, step groups, kernel variants) are defined once, in
-  `verity.core.protocols.pouw.serving`. Never keep a local copy (tree hashes, keys, arm tables); replace one you find.
+  `verity.protocols.pouw.verifier.serving`. Never keep a local copy (tree hashes, keys, arm tables); replace one you find.
 
 ## One attempt
 
@@ -78,7 +80,7 @@ Stop at the lowest tier that decides the attempt. Only a candidate that beats it
 
 | Tier | Runs on | Establishes | How |
 |---|---|---|---|
-| 1 conformance | CPU | the build; the SASS gate on each binary; no spills; the twin against `verity.ml.circuits.silicon` on small tiles; the executor's step order on `RecordingDev` | `uv run tools/verity/check/suites.py benchmarks/pouw`; `sass_gate.py K.cubin --json gate.json` |
+| 1 conformance | CPU | the build; the SASS gate on each binary; no spills; the twin against `verity.definitions.silicon` on small tiles; the executor's step order on `RecordingDev` | `uv run tools/verity/check/suites.py benchmarks/pouw`; `sass_gate.py K.cubin --json gate.json` |
 | 2a screen | one leased GPU, untimed | the device gates at the served shapes; a poisoned transcript accepted and a no-write control rejected; a diagnostic interleaved time; the time split; ncu, compute-sanitizer, sweeps | `research run ... -- gpu-lease 1 --wait -- ...`, or fill chunks of at most 8 minutes |
 | 2b timed | the whole node, locked-2100 | the measured panel row | `bench.py` under `research run --no-sampler` and `gpu-lease 8 --wait --timed`, then `verify.py --tier 2b` after the lease, in the same run |
 | 3 served | vLLM on the card | the served arms, the time split, the verify job, the served row | [Hooking a kernel into vLLM](#hooking-a-kernel-into-vllm) |
@@ -108,13 +110,14 @@ Every GPU tier holds to these:
   otherwise runs beside you (you are the check that a row's run held one). Every run goes through `research run` (the
   writing-runs skill); a fill chunk's outputs under `/workspace/pouw/fill-out/` reach the store only by `research data
   put --kind evidence/v1 --tree DIR --preserve` when the chunk ends, cited by its `art:` id.
-- **The gap at both prices:** the cheapest bit-exact FADD (8.00 W1 per word) and the measured in-loop price (1047/125 =
+- **ε at both prices:** the cheapest bit-exact FADD (8.00 W1 per word) and the measured in-loop price (1047/125 =
   8.376); publish the larger and say which won. Prices are the Lean guarantees' (`campaigns/pouw/price-twins-lean/`),
-  never a device record or a diagnostic: the harness looks them up (`price_twins.json`); outside it `panel.py --gamma`
-  is typed by hand (you are the check). Price the path you run, named from the kernel your forming step launches at the
-  run's commit, not the one you plan to reach (64-bit stores at a 160-byte stride cost that cast's 8.72 per code; a
-  block scale priced on `lut256`, 8.55, means forming runs `lut256`). Moving the priced path (cast, store width, scale
-  path) moves the gap: re-derive it and say so in the row. Changing a price is a statement change.
+  never a device record or a diagnostic: the harness looks up their gaps (`price_twins.json`); outside it the gap is
+  typed into `panel.py --gamma` by hand, a flag that keeps the gap's old name (you are the check). Price the path you
+  run, named from the kernel your forming step launches at the run's commit, not the one you plan to reach (64-bit
+  stores at a 160-byte stride cost that cast's 8.72 per code; a block scale priced on `lut256`, 8.55, means forming runs
+  `lut256`). Moving the priced path (cast, store width, scale
+  path) moves ε: re-derive it and say so in the row. Changing a price is a statement change.
 
 ### 3. Record it, whatever happened
 

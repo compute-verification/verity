@@ -318,7 +318,8 @@ def test_the_modules_whose_source_inspect_looked_for_are_every_binding_s_loaded_
 def test_update_reads_adds_what_each_run_read_to_what_reads_declares(tmp_path, monkeypatch):
     """`cli.update_reads` adds what a run read to each binding's declared set, and to ``registries`` and ``loaded``: a
     binding's runs read otherwise by how they ran (``--binding`` makes only its own binding's roots), so its declaration holds
-    each way.  A run of every binding drops a binding the catalog no longer has."""
+    each way.  A run of every binding drops a binding the catalog no longer has.  A probe is written as `cache.probed`
+    declares it, one `READS` held already too."""
     monkeypatch.setattr(cli, "READS", tmp_path / "reads")
 
     def rep(bindings: dict, loaded: list[str], files: tuple[str, ...] = ("r.py",)) -> dict:
@@ -335,16 +336,30 @@ def test_update_reads_adds_what_each_run_read_to_what_reads_declares(tmp_path, m
     assert got["loaded"] == ["m", "n"] and got["registries"]["files"] == ["r.py", "s.py"]
     cli.update_reads(rep({"a": a1}, []), every=True)
     assert set(cli._reads_file()["bindings"]) == {"a"}
+    under = {**b, "probes": ["no-such-dir/pins/X_v1.json", "no-such-dir/pins/Y_v1.json"]}
+    cli.update_reads(rep({"b": under}, []), every=False)
+    assert cli._reads_file()["bindings"]["b"]["probes"] == ["no-such-dir"]
 
 
 def test_a_binding_s_name_is_its_root_function_its_files_models_or_its_template_entry():
-    m = "verity.ml.circuits.ops.boolean.gf2k.circuit-check#"
+    m = "verity.definitions.ops.boolean.gf2k.circuit-check#"
     assert [SH.binding(u) for u in ((f"{m}_gf2k_roots",), (f"{m}_x_roots", f"{m}_x_bindings"), ("_kernel_roots",),
                                     ("_vocabulary_roots", "_vocabulary_bindings"), (f"{m}_model_roots:Gf2kMul_v1",),
                                     ("_model_roots:SynOther_v1",), (f"{m}TEMPLATE_PARAMS:token-select-combine",),
                                     ("TEMPLATE_PARAMS:rmsnorm-cuda-vec8",), ("<registered>",))] == [
         f"{m}_gf2k_roots", f"{m}_x_roots", "_kernel_roots", "_vocabulary_roots", f"{m}_model_roots", "_model_roots",
         f"{m}TEMPLATE_PARAMS:token-select-combine", "TEMPLATE_PARAMS", "<registered>"]
+
+
+def test_a_template_entry_at_a_name_is_a_binding_of_its_instances_alone():
+    """``<template>@<name>`` entries (`targets.template_params`) split one template's instances into bindings of their own:
+    each GLM-5.3 RMSNorm launch is one."""
+    m = "verity_flock.subcircuit_templates.circuit-check#TEMPLATE_PARAMS:"
+    got = {label: sorted(TG.BINDINGS[label]) for label, sub, _ in TG.templates() if sub.template.id == "rmsnorm-cuda-vec8"}
+    assert got == {"rmsnorm-cuda-vec8/n6144-b768-eps1e-05/bf16": [f"{m}rmsnorm-cuda-vec8@b768"],
+                   "rmsnorm-cuda-vec8/n6144-b256-eps1e-05/bf16": [f"{m}rmsnorm-cuda-vec8@b256"]}
+    assert [SH.binding((u,)) for (u,) in got.values()] == [f"{m}rmsnorm-cuda-vec8@b768", f"{m}rmsnorm-cuda-vec8@b256"]
+    assert TG.template_of("rmsnorm-cuda-vec8@b256") == TG.template_of("rmsnorm-cuda-vec8") == "rmsnorm-cuda-vec8"
 
 
 def test_the_shard_module_is_outside_the_checker_s_version(tmp_path, monkeypatch):
@@ -362,8 +377,8 @@ def test_the_shard_module_is_outside_the_checker_s_version(tmp_path, monkeypatch
 
 #: a small sidecar set: argmax's chunks and combines and the Boolean scalars, each checked as a Call (`--as-call`), so neither
 #: builds the catalog
-SIDECARS = [str(TG.REPO / "verity/ml/circuits/ops/argmax.circuit-check.py"),
-            str(TG.REPO / "verity/ml/circuits/ops/boolean/scalar.circuit-check.py")]
+SIDECARS = [str(TG.REPO / "verity/definitions/ops/argmax.circuit-check.py"),
+            str(TG.REPO / "verity/definitions/ops/boolean/scalar.circuit-check.py")]
 
 
 def test_three_shards_of_a_sidecar_set_combine_to_the_unsharded_run(tmp_path, capsys):
@@ -473,7 +488,7 @@ def _forked(name: str) -> str:
     # the real registry, which `targets.load_registries` loads before any check and the harness's stand-in doesn't: else the
     # first check to load it records the kernels it registers as reads this process can't digest
     return UNITS_FORKED.replace(*ROOTS_LOGGED).replace("fork=True)", f"fork=True, binding={name!r})").replace(
-        "rep = cli.run(", "from verity.ml.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(", 1)
+        "rep = cli.run(", "from verity.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(", 1)
 
 
 @pytest.mark.slow
@@ -600,8 +615,8 @@ def test_a_binding_s_report_holds_its_read_set_and_what_reads_does_not_declare_o
 #: (`SynWide{n}`, `codec.register_lazy_family`); ``_minted_roots`` a composite its factory makes, which no id makes
 LATE = {
     "syn/wide.py": """
-from verity.ml.circuits.codec import register_lazy_family
-from verity.ml.circuits.defs import PrimitiveDefinition
+from verity.circuits.codec import register_lazy_family
+from verity.circuits.defs import PrimitiveDefinition
 
 from syn.prims import V
 
@@ -618,7 +633,7 @@ register_lazy_family(r"^SynWide(\\d+)_v1$", lambda m: wide(int(m[1])))
 """,
     "syn/late/__init__.py": "",
     "syn/late/lz.py": """
-from verity.ml.circuits import primitive
+from verity.circuits import primitive
 
 from syn.prims import V
 
@@ -628,7 +643,7 @@ def SynLz(a, b):
     return a & b
 """,
     "syn/fresh.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -647,7 +662,7 @@ def made():
 LATE_ROOTS = ("\ndef late():\n    from syn import wide\n    from syn.late import lz\n    return [lz.SynLz, wide.wide(7)]\n\n\n"
               "def minted():\n    from syn import fresh\n    return [bind(fresh.made())]\n\n")
 #: what the forked run's own process has registered of the tree's Definitions, in order, and imported of its modules
-HELD_HERE = ('"here": here,', '"here": here, "registry": [f for f in dict.keys(__import__("verity.ml.circuits.defs", '
+HELD_HERE = ('"here": here,', '"here": here, "registry": [f for f in dict.keys(__import__("verity.circuits.defs", '
              'fromlist=["REGISTRY"]).REGISTRY.defs) if f.startswith("Syn")], "modules": sorted(m for m in sys.modules '
              'if m.startswith("syn")),')
 
@@ -692,7 +707,7 @@ def test_a_binding_run_does_in_each_other_binding_s_place_what_making_its_roots_
 #: `test_units`' ``--records-only`` with each binding's slice and the shared part beside the tree (`cli.records`' ``slices``)
 SLICED_RECORDS = RECORDS_ONLY.replace("jobs=2)", "jobs=2, slices=root.parent / f'{root.name}-slices')")
 #: the real registry loaded before the run, as `_forked` loads it
-LOADED = ("rep = cli.run(", "from verity.ml.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(")
+LOADED = ("rep = cli.run(", "from verity.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(")
 
 
 def _slices(root: Path) -> tuple[dict, Path]:

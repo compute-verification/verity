@@ -26,7 +26,7 @@ Arms, each one linear's call on a BF16 x of M rows:
 A stock arm that can't be built (not importable, refused, or outside 0.08 rel RMS of x·Wᵀ) is recorded with its error and
 left out.  Each rep times every arm once, in an order rotated each rep, each sample `INNER` calls back to back between CUDA
 events on the current stream, so a host-bound call's gaps count.  The slowdown is ``pearlc`` over the fastest stock arm's
-median, at each (n, k, M), beside γ at both FADD readings (`glm53.gamma`); ``slowdowns`` gives each pearlc arm's.  Every
+median, at each (n, k, M), beside the gap at both FADD readings (`glm53.gamma`); ``slowdowns`` gives each pearlc arm's.  Every
 hashing pearlc arm's passes must commit what ``pearlc``'s commit (`COMMITMENT`) and serve y's bytes, and so must one pass of
 each from poisoned outputs (``agree``).  Writes ``timing.json`` in DIR, one row a point; exits non-zero when any arm differs.
 
@@ -171,9 +171,9 @@ def device_run(shapes: list[tuple[int, int]], scheme: str = glm53.SCHEME, cubin:
     weights, 0.05·N(0, 1), one a shape (weight w is shapes[w]), under an epoch whose salt coin a challenger opened after the
     weights' root: (run, weights, kernel, the generator, which goes on to make the calls' x)."""
     import torch
-    from verity.core.protocols.pouw.audit import weights_root
-    from verity.core.protocols.pouw import verifier
-    from verity.core.protocols.pouw.coins import Challenger
+    from verity.protocols.pouw.verifier.audit import weights_root
+    from verity.protocols.pouw.verifier import verifier
+    from verity.protocols.pouw.verifier.coins import Challenger
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
     dev = torch.device("cuda")
@@ -362,7 +362,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--shapes", nargs="*", help="N:K (default every in-domain linear)")
     p.add_argument("--m", nargs="*", type=int, help="M (default decode's and prefill's; --whole: decode's)")
     p.add_argument("--schedule", nargs="+", default=["serial"],
-                   help="pearlc's schedule, then each further arm's (verity.core.protocols.pouw.serving.SCHEDULES)")
+                   help="pearlc's schedule, then each further arm's (verity.protocols.pouw.verifier.serving.SCHEDULES)")
     p.add_argument("--graphs", action="store_true", help="pearlc's calls of up to 256 rows replayed as CUDA graphs (a side lane's schedule: one a lane)")
     p.add_argument("--whole", action="store_true", help="decode's forward captured whole, serial and deferred (whole.json)")
     a = p.parse_args(argv)

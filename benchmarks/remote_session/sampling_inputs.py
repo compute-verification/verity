@@ -7,7 +7,7 @@ the line; and the serving cost of passes and of proved openings, at three served
 `VERIFIER_JSON` is a run's `verifier.json` with accepted paced sessions (`ledger.paced`). The script recomputes
 every recorded stretch from the session's groups and refuses to go on unless the ledger's figures come back, then checks
 the closed form below against the same arithmetic on uniform sessions, and only then tabulates the closed form.
-`COST_MODEL_JSON` is a `sampled_proofs.costfit` record whose observations include `BlockOpeningCheck_v1`'s sessions.
+`COST_MODEL_JSON` is a `spot.costfit` record whose observations include `BlockOpeningCheck_v1`'s sessions.
 
 With o openings proved a second, d of them a group of k passes at r passes a second, and β = B/d, where
 B = −S·expm1(ln δ/S) ≈ ln(1/δ) is `audit.pooled`'s budget over S draws, the line loses this many blocks over a span
@@ -48,10 +48,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
-from verity.core.protocols.sampled_proofs import costfit  # noqa: E402
+from verity.protocols.poub.verifier import audit, timing  # noqa: E402
+from verity.protocols.spot import costfit  # noqa: E402
 
-from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
+from verity.protocols.poub.verifier.session import wire  # noqa: E402
 
 LN = -math.log(audit.DELTA)
 BLOCK = 4096

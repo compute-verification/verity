@@ -63,10 +63,12 @@ PACKAGE = "training_slowdown"
 DERIVE = "derive the step with step_program, the training-step frontend"
 #: the matrix products the grader reads, and the cells each must be lowered to, one cell a row of the product (N dots of K,
 #: its bindings `K` and `N`): torch CPU's arithmetic (`CELL`), or a cuBLAS route's Definition on words
-#: (`cublas_bf16.route_gemm`'s word: unsplit, split-K with a bf16 workspace, serial split-K)
+#: (`cublas_bf16.route_gemm`'s word: unsplit, split-K with a bf16 workspace, serial split-K, or split-K over grid.z with a
+#: bf16 workspace, an f32 one or none)
 PRODUCTS = ("mm", "bmm")
 CELL = "LinearRef_v1"
-ROWS = (CELL, "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1")
+ROWS = (CELL, "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1",
+        "CublasSplitKGemmBf16PartialsAligned_v1", "CublasSplitKGemmAligned_v1", "CublasSerialSplitKGemmAligned_v1")
 DIMS = ("batch", "m", "k", "n")
 PHASES = ("forward", "backward", "optimizer")
 
@@ -78,7 +80,7 @@ class Refused(ValueError):
 # -- the hand-over -------------------------------------------------------------------------------------------------------
 
 def _annotations_digest(desc: dict) -> str:
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
 
     return hashlib.sha512(canonical_json(desc.get("annotations", {}))).hexdigest()
 
@@ -88,7 +90,7 @@ def write_handover(out: Path, step, structure, *, run: str, checkpoints: list[tu
     """Write a lane's hand-over to directory `out`: the run's step Program (`step_program` at the run's batch shape
     `step_batch`), the same step at `structure_batch`, the run record (its id and each checkpoint's steps), theta as
     registered (the step Program's theta) and the frontend commit both were derived at. Returns handover.json's path."""
-    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.circuits.codec import encode_program, program_digest
 
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -137,7 +139,7 @@ def _batch_ok(step: list, structure: list) -> None:
 def _input_names(decoded, role: str) -> list[str]:
     """The names of a decoded Program's input nodes, which its encoding doesn't hold: the program function's inputs as its
     `correspondence` annotation names them, each one input node, the root's first."""
-    from verity.ml.circuits.program import is_input
+    from verity.circuits.program import is_input
 
     nodes = decoded.root.body.nodes
     names = decoded.annotations["correspondence"].get("inputs")
@@ -153,8 +155,8 @@ def load_handover(path: Path) -> Handover:
     """The hand-over at `path` (its directory or its handover.json), checked: its format and fields, each Program file's
     digest and annotations against the record, both Programs a frontend step (`step_program`'s annotations), theta as
     registered, and two batch shapes that tell the token dims apart. Raises `Refused` with the fix."""
-    from verity.ml.circuits.codec import decode_program, program_digest
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.codec import decode_program, program_digest
+    from verity.circuits.defs import REGISTRY
     # registers the Definitions the frontend's rules lower to, which a decoded step calls by id
     import verity_vllm.program.frontend.train_step  # noqa: F401
 
@@ -274,7 +276,7 @@ def _dtype_width(dtype: str | None) -> int:
 
 
 def _leaf_parts(refs):
-    from verity.ml.circuits.refs import Concat
+    from verity.circuits.refs import Concat
 
     if isinstance(refs, Concat):
         for p in refs.parts:
@@ -286,7 +288,7 @@ def _leaf_parts(refs):
 def _ref_nodes(refs, logs: dict | None = None) -> set:
     """The root nodes `refs` reads. With `logs`, a `Concat` cut from a `PartLog` (`prefix`: a causal attention's rows, each
     call's the call before's plus one) reads the log's parts once over all its cuts (`_log_nodes`)."""
-    from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided
+    from verity.circuits.refs import Affine, Concat, Explicit, Strided
 
     if isinstance(refs, Concat):
         got, start = set(), 0
@@ -395,7 +397,7 @@ def _instances(nd) -> int:
 
 
 def _first_node(refs) -> int:
-    from verity.ml.circuits.refs import Affine, Explicit, Strided
+    from verity.circuits.refs import Affine, Explicit, Strided
 
     p = next(iter(_leaf_parts(refs)))
     return p.idx if isinstance(p, (Affine, Strided)) else p.items[0][1] if isinstance(p, Explicit) else p[0][1]
@@ -435,7 +437,7 @@ class Cells:
     and the operands' and the outputs' word widths, from the cell Definition's signature."""
 
     def __init__(self, p: _Program) -> None:
-        from verity.ml.circuits.codec import descriptor_id
+        from verity.circuits.codec import descriptor_id
 
         self.p = p
         P, S = len(p.layout["params"]), len(p.layout["scalars"])
@@ -525,13 +527,17 @@ class Cells:
 
 def boolean_prices(prims: dict) -> dict[str, dict]:
     """Each primitive's Boolean price, by id: its Boolean version (`definitions.boolean.boolean_version`) and that circuit's
-    ANDs, XORs, NOTs and gates (`evaluation.bits.compile`'s counts); a primitive with no Boolean version has none, and why."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.evaluation.bits import compile as compile_bits
-    from verity.ml.definitions.boolean import boolean_version
+    ANDs, XORs, NOTs and gates (`evaluation.bits.compile`'s counts); a primitive with no Boolean version has none, and why.
+    Inputs (`program.is_input`) are left out: they are bound, not computed, and `priced` counts no input class."""
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.evaluation.bits import compile as compile_bits
+    from verity.circuits.program import is_input
+    from verity.definitions.boolean import boolean_version
 
     out = {}
     for pid, fn in sorted(prims.items()):
+        if is_input(fn):
+            continue
         try:
             bv = boolean_version(fn)
         except Exception as e:  # noqa: BLE001  (named in the output: a primitive without a Boolean version is unpriced)
@@ -568,10 +574,10 @@ def priced(cen: dict, prices: dict) -> dict:
 
 
 def circuit_size(program) -> dict:
-    """|C|: the step Program's census (`verity.ml.circuits.census`) at the Boolean prices of the primitives it calls
+    """|C|: the step Program's census (`verity.definitions.circuits.census`) at the Boolean prices of the primitives it calls
     (`boolean_prices`): its gates and ANDs by root callee class, and the word gates of the primitives with no Boolean
     version, which it leaves out."""
-    from verity.ml.circuits.census import census
+    from verity.definitions.circuits.census import census
     from verity_vllm.program.frontend.train_step import primitives
 
     return priced(census(program), boolean_prices(primitives(program)))

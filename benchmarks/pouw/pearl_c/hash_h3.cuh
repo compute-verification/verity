@@ -1,11 +1,11 @@
-// Pearl-C's hashing format -h3, SHA-512 throughout (`verity.ml.protocols.pouw.schemes.pearl_c`'s module docstring).  The
+// Pearl-C's hashing format -h3, SHA-512 throughout (`verity.protocols.pouw.prover.schemes.pearl_c`'s module docstring).  The
 // labels' H_l = `pearl_c.s512`, SHA-512 after a 128-byte label block, its first 32 bytes (the labels keep their `pearl-c/h3s/`
 // bytes, `pearl_c.S512_LABELS`); A's row digests (`s512_rows`) and the tile leaf, `sha512/row-seg/v1` over each row and over
-// the tile's messages; the trees `audit.HM96`: frame-v3-sha512 (`verity.ml.commitments.merkle`, hash="sha512") over
-// hm96-sha512 leaves (`audit.Hm96Domain`, `verity.ml.commitments.hm96.SHA512`) salted by ChaCha20 (`audit.hm96_salt`).
+// the tile's messages; the trees `audit.HM96`: frame-v3-sha512 (`verity.commitments.merkle`, hash="sha512") over
+// hm96-sha512 leaves (`audit.Hm96Domain`, `verity.commitments.hm96.SHA512`) salted by ChaCha20 (`audit.hm96_salt`).
 // Every SHA-512 word is big-endian; buffers hold bytes, loaded as little-endian u32 (`rs_be64`).  A frame message's integers
 // have minimal big-endian lengths, so each thread assembles it in its own slice of shared memory (`SMsg`), never in a local
-// array.  SHA-512's compression is sha512.cuh's; the frame messages and the hm96 leaf are verity/ml/kernels/row_commit.cuh's
+// array.  SHA-512's compression is sha512.cuh's; the frame messages and the hm96 leaf are verity/definitions/kernels/row_commit.cuh's
 // over it.  pearl_c_sm120.cu includes it; hash_host.cpp builds it for the host tests.
 #pragma once
 #include <cstdint>
@@ -15,7 +15,7 @@ struct Args { uint64_t p[16]; int32_t i[16]; };
 #define DEV __device__ __forceinline__
 
 #include "sha512.cuh"
-#include "../../../verity/ml/kernels/row_commit.cuh"
+#include "../../../verity/definitions/kernels/row_commit.cuh"
 
 // Pearl-C's compression (rs_compress) as the row commitment's policy
 struct PcSha {
@@ -407,7 +407,7 @@ DEV void chacha20_block(const uint32_t* key, uint64_t counter, uint64_t nonce, u
 }
 DEV uint64_t rs_bswap64(uint64_t v) { return rs_be64((uint32_t)v, (uint32_t)(v >> 32)); }
 
-// the inner leaves of an `audit.HM96` tree (Flock's ``hm96_finish_leaves``): leaf i < i0 over x_i (p0 + 64 i: a row's
+// the inner leaves of an `audit.HM96` tree (Flock's ``launch_hm96_finish``): leaf i < i0 over x_i (p0 + 64 i: a row's
 // sha512/row-seg/v1 digest, or a tile leaf) and its salt y_i = `audit.hm96_salt`(key, nonce, i): b = x ⊕ M·y (the byte
 // tables), c = SHA-512(salt prefix ‖ y), hl = SHA-512(leaf prefix ‖ b ‖ c); s512_frame_leaves makes hl the frame leaf.  p0 x,
 // p1 out (64 B a leaf, hl), p2 the salt key (32 B), p3 `audit.hm96_kernel_constants` (the prefixes' midstates, 8 u64 each,

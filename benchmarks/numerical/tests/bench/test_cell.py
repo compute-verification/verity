@@ -1,7 +1,7 @@
 """The benchmark entry point (``bench.cell``): planning a cell into its backend's jobs, the reasons a cell cannot run, the protocol
-check on two real Flock cells (``data/flock-cells``: art:6d1295ed and art:d1961ba4, the registered bench-result/v1 documents,
-both independently replayed) and their mutations, and registration through ``verity_flock.register`` on the runs behind
-art:1589ffe1 (``data/flock-runs``)."""
+check on two real Flock cells (``data/flock-cells``, the registered bench-result/v1 documents, both independently
+replayed) and their mutations, and registration through ``verity_flock.register`` on the runs behind an H100 BF16 cell
+(``data/flock-runs``)."""
 from __future__ import annotations
 
 import copy
@@ -15,7 +15,7 @@ from verity_numerical.bench import cell as C
 from verity_numerical.bench import drivers
 
 DATA = Path(__file__).parent / "data"
-SLICE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "ml" / "flock" / "tests" / "data" / "captured-101" / "slices" / "gemm-coordinate-ampere-bf16-k2048"
+SLICE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "flock" / "prover" / "tests" / "data" / "captured-101" / "slices" / "gemm-coordinate-ampere-bf16-k2048"
 BF16 = ("gemm-coordinate/k1536/sm90-mma-bf16+frame-v3/blake3-keyed", "bench-instances-bf16-hopper-v1")
 #: Two machines as the RunPod API and the probes record them (red-team-flock 12:00Z: the H100 prover and its A40 verifier).
 SEPARATE = {"prover": {"pod_id": "pod-p", "machine_id": "m-h100", "public_ip": "203.0.113.10", "cpu_model": "Xeon 8470"},
@@ -47,11 +47,11 @@ def test_plan_wraps_the_flock_cell_script():
         assert cmd[:4] == ["bash", "-c", C.PROBE_WRAP, "cell-job"] and cmd[4] == ("10.0.0.2:7400" if j["role"] == "prover" else "")
         assert cmd[5] == ""                                  # a 10.x address, not a .runpod.internal name: no RTT target
         cmd = cmd[6:]
-        assert cmd == j["command"] and cmd[:2] == ["bash", "verity/ml/flock/pod/30-cell.sh"] and "REL=bf16-hopper" in cmd and "RUNS=5" in cmd
+        assert cmd == j["command"] and cmd[:2] == ["bash", "verity/protocols/flock/pod/30-cell.sh"] and "REL=bf16-hopper" in cmd and "RUNS=5" in cmd
         assert f"POINTS={C.DEFAULT_POINTS}" in cmd
     assert "ROLE=verifier" in v["command"]
     assert {"ROLE=prover", "VERIFIER=10.0.0.2:7400", "RTT_TARGET=10.0.0.2:22", "LOOPBACK=1"} <= set(p["command"])
-    assert (Path(C.LW.REPO) / "verity/ml/flock/pod/30-cell.sh").is_file()
+    assert (Path(C.LW.REPO) / "verity/protocols/flock/pod/30-cell.sh").is_file()
     assert C.launch(cell, dry_run=True) == [{"role": "verifier", "argv": v["argv"]}, {"role": "prover", "argv": p["argv"]}]
     assert C.Cell(**json.loads(cell.to_json())) == cell
 
@@ -179,7 +179,7 @@ PROVER_RUN, VERIFIER_RUN = "r20260925-233831-a064", "r20260925-233818-a37e"
 
 
 def _real_runs(tmp_path: Path, mutate=None) -> tuple[Path, Path]:
-    """The runs behind art:1589ffe1 (H100 BF16, the open-connection re-run) as ``verity_flock.register`` reads them: job.json,
+    """The runs behind the H100 BF16 cell (the open-connection re-run) as ``verity_flock.register`` reads them: job.json,
     out/binary.sha256, the prover's result.json (``artifacts`` naming its plateau point p4-16384, as bench.py writes it in the run
     directory) and that point's session logs (prove-s0/s1, loopback-prove-s0/s1)."""
     shutil.copytree(RUNS, tmp_path / "runs")

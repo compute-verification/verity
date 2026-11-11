@@ -1,4 +1,4 @@
-"""Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`sampled_proofs.costfit`): A6's
+"""Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`spot.costfit`): A6's
 W8A8 coordinates (`ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}`) staged in statements of c units, each
 session proving k of them sampled by the verifier's Lean, with `flock-circuit prove --zk --gpu`, and the Lean verifier on the
 sessions.
@@ -16,7 +16,8 @@ sessions.
   once.
 * **Served proof-block types** (`--units`): instead of A6's coordinates, each of `benchmarks/served_units/stage.py`'s types
   (GLM-5.3's at TP8, synthetic values), staged by that script with no Program: `--sizes` takes counts or `full` (the most
-  instances under the prover's 2^35 witness bits, from a probe staging's k_log) and `half`. Their samples are uniform
+  instances under the prover's 2^35 witness bits, from a probe staging's k_log, whose 2 instances a size of 2 reuses)
+  and `half`. Their samples are uniform
   subsets the server reads (`serve --draw-file`), every instance at k = c, and Lean verifies the newest session of each
   point and arm against the type's own partition and no Program, which it refuses once every other check has passed.
 * **Samples.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `flock-verify draw --stratified k` over the statement's
@@ -24,14 +25,19 @@ sessions.
   (`a0.challenger_draw`), served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
   sampled proof blocks in one statement. An entry `k:arm+arm` runs only those arms at k (`c:dev+nofw 8:dev+nofw+fw`).
 * **Sessions.** Per point and arm, `--cold` processes proving one session each (`--runs 1 --warm 0`: one touched
-  statement's prover) and one proving `--warm` + `--runs` sessions (the in-process session cost). Arm `fw` is the
+  statement's prover) and one proving `--warm` + `--runs` sessions (the in-process session cost), the whole plan
+  `--passes` times with each family's sizes in ABBA order, so that a drift in the node's load falls on every size alike.
+  Each session records its prover's and ZK server's user and system seconds (their process trees', between the prover's
+  LIVE lines) and the node's load, so that a session slowed by a busy node shows as one. Arm `fw` is the
   design's path: the ZK server's send check on every session (`FC_FIREWALL=1`), which rechecks the host's witness; `nofw`
   is the same with the check off. Both take the host's witness (`FC_HOST_WITNESS=1`), as proof_throughput's ZK point does,
   so their difference is the ZK server's. Arm `dev` leaves both unset: the device builds the witness, which the ZK server
   can't recheck (flock-circuit refuses `FC_FIREWALL=1` without the host's witness).
 * **Overhead** (`overhead`): per served type and arm, the timed sessions' end-to-end seconds at k = c fitted as
-  `fixed + marginal c` over its sizes, and a dot product's proof overhead: its GPU-seconds a proof block over the
-  GPU-seconds the same card's datasheet dense peak needs for the block's K MACs in its operand format (`verity.hardware.rate`).
+  `fixed + marginal c` over its sizes, with the marginal's standard error, each of the session's parts (`PARTS`: witness,
+  proving, the wait on the ZK server, the rest) fitted the same way, and a dot product's proof overhead: its GPU-seconds a
+  proof block over the GPU-seconds the same card's datasheet dense peak needs for the block's K MACs in its operand format
+  (`verity.hardware.rate`; `--card none` on a CPU node, whose witness and proving run on its CPUs rather than a device).
   Per statement and arm, its sessions at every k it drew, k = c among them, fitted over k (`drawn`): the statement's
   fixed seconds and a sampled block's, the deployed sample's price; `fw` less `nofw` at the same samples is the send
   check's increment. Its `observations.json` holds each arm's `costfit.Observation`s, prove the median timed session.
@@ -66,9 +72,9 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
+from verity.protocols.spot.optimize import SHA512_ANDS  # noqa: E402
 
 #: ANDs of the pieces of a unit with its rows' openings (benchmarks/sampling_plan's inputs: its pins, hm96 PROTOCOL §5)
 S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, SHA512_ANDS, 116_240
@@ -105,14 +111,42 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
+def proc_cpu(pids) -> tuple[float, float, int]:
+    """The user and system seconds of ``pids`` so far, each with its reaped children's (``/proc/PID/stat``'s utime + cutime,
+    stime + cstime), and how many had exited before their stat was read: their seconds reach their parent's once it reaps
+    them."""
+    u = s = gone = 0
+    for pid in pids:
+        try:
+            f = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+        except (FileNotFoundError, ProcessLookupError):
+            gone += 1
+            continue
+        u, s = u + int(f[11]) + int(f[13]), s + int(f[12]) + int(f[14])
+    tck = os.sysconf("SC_CLK_TCK")
+    return u / tck, s / tck, gone
+
+
+def session_cpu(marks: list[dict], names: tuple[str, ...]) -> list[dict]:
+    """Each session's share of a prover's marks (`Peak.mark`: one at its start, then one at each LIVE line): each named root's
+    process tree's user and system seconds since the mark before, the node's 1-minute load at the session's end, and how
+    many of the trees' processes exited between being listed and read at that end."""
+    return [{"load1": round(b["load1"], 2), "gone": sum(x[2] for x in b["cpu"]),
+             **{f"{n}_{k}_s": round(b["cpu"][i][j] - a["cpu"][i][j], 3) for i, n in enumerate(names)
+                for j, k in enumerate(("user", "sys"))}}
+            for a, b in zip(marks, marks[1:])]
+
+
 class Peak:
     """The peak of the summed RSS of some processes and all their descendants, sampled every `every` seconds in a thread:
     a ZK server session's prover, its live verifier (`serve`) and the ZK server's Lean child peak together, and their sum is
-    what a node must hold for the session (ru_maxrss gives only the largest one process)."""
+    what a node must hold for the session (ru_maxrss gives only the largest one process). `mark` records each root's tree's
+    CPU seconds, so that a session's are its own rather than its process's."""
 
     def __init__(self, every: float = 0.5) -> None:
         import threading
         self.roots: list[int] = []
+        self.marks: list[dict] = []
         self.peak_kb = 0
         self._stop = threading.Event()
         self._every = every
@@ -120,8 +154,12 @@ class Peak:
         self._t = threading.Thread(target=self._run, daemon=True)
         self._t.start()
 
-    def _tree(self) -> set[int]:
-        seen, todo = set(), list(self.roots)
+    def mark(self, t: float) -> None:
+        self.marks.append({"t": round(t, 3), "load1": os.getloadavg()[0],
+                           "cpu": [proc_cpu(self._tree([r])) for r in self.roots]})
+
+    def _tree(self, roots: list[int] | None = None) -> set[int]:
+        seen, todo = set(), list(self.roots if roots is None else roots)
         while todo:
             pid = todo.pop()
             if pid in seen:
@@ -154,14 +192,17 @@ class Peak:
 def timed(cmd: list[str], stdout, stderr, env: dict | None = None,
           peak: Peak | None = None) -> tuple[int, dict, list[tuple[float, str]]]:
     """Run ``cmd``; its exit code, wall and CPU seconds and peak RSS, and each stdout line with the seconds since start;
-    ``peak`` also samples its process tree."""
+    ``peak`` also samples its process tree and marks its roots' CPU seconds at the start and at each LIVE line."""
     t0 = time.monotonic()
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=stderr, text=True, env=a0.environ(env))
     if peak is not None:
         peak.roots.append(p.pid)
+        peak.mark(0.0)
     lines = []
     for line in p.stdout:
         lines.append((time.monotonic() - t0, line.rstrip("\n")))
+        if peak is not None and line.startswith("LIVE\t"):
+            peak.mark(lines[-1][0])
         stdout.write(line)
     _, status, ru = os.wait4(p.pid, 0)
     p.returncode = os.waitstatus_to_exitcode(status)
@@ -203,7 +244,12 @@ def stage_units(a, out: Path) -> list[dict]:
         for size in a.sizes.split(","):
             want = {"full": full, "half": max(1, full // 2)}.get(size) or int(size)
             sd = out / f"{tag}-c{want}"
-            st = stage_served(spec, want, sd / "stage")
+            if want == probe["n"] and (out / f"{tag}-probe").is_dir():
+                sd.mkdir(parents=True, exist_ok=True)
+                (out / f"{tag}-probe").rename(sd / "stage")
+                st = probe
+            else:
+                st = stage_served(spec, want, sd / "stage")
             c = st["n"]
             name = spec.partition(":")[0]
             rec = {"unit": spec, "tag": tag, "c": c, "full": full, "ands": st["ands"], "k_log": st["k_log"],
@@ -254,7 +300,7 @@ def stage(a) -> int:
             jsonl(out / "records" / "stage.jsonl", rec)
             statement = hashlib.sha512(canonical_json({"partition": P.digest(part), "pin": st["pin"]})).hexdigest()
             for k, arms in draws(c, a.draws):
-                law = D.derive(program, query, D.parse_law(f"stratified:{k}"))
+                law = D.derive(program, query, D.parse_design(f"stratified:{k}"))
                 p = a0.challenger_draw(a.lean, ["--program", str(sd / "program.json"), "--partition",
                                                 str(sd / "partition.json"), "--stratified", str(k)], law, c, statement,
                                        sd / f"draw-k{k}.log")
@@ -280,7 +326,8 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     o.mkdir(parents=True, exist_ok=True)
     port = free_port()
     if "unit" in pt:
-        inst, pub, tables = pt["inst"], pt["pub"], []
+        inst, pub = pt["inst"], pt["pub"]
+        tables = ["--tables", str(d / "tables")] if (d / "tables").is_dir() else []
         fw_files = {"partition_file": pt["partition"]}
     else:
         inst, pub, tables = str(d / f"inst-{c}.bin"), str(d / f"pub-{c}.bin"), ["--tables", str(d / "tables")]
@@ -328,8 +375,10 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
                         fw[key] = fw.get(key, 0.0) + float(x)
             lives.append({"t_emit_s": round(t, 3), "firewall": fw, "proof_bytes": sum(v.get("proof_bytes") or [0]),
                           **{x: v.get(x) for x in ("run", "warm", "accepted", "why", "prover_stopped", "e2e_s", "witness_s",
-                                                   "witness_prebuilt_s", "prove_total_s", "wait_s", "wire_sent", "wire_recv",
-                                                   "k_log", "dense_m", "instances", "gpu", "prover")}})
+                                                   "witness_prebuilt_s", "prove_total_s", "wait_s", "wait_e2e_s", "calls",
+                                                   "wire_sent", "wire_recv", "k_log", "dense_m", "instances", "gpu", "prover")}})
+    for x, cpu in zip(lives, session_cpu(peak.marks, ("serve", "prover"))):
+        x["cpu_s"] = cpu
     built = next((float(x.rsplit("built in ", 1)[1].rstrip("s")) for x in (o / "prove.err").read_text().splitlines()
                   if x.startswith("statement ") and " built in " in x), None)
     sessions = sorted((o / "sessions").glob("*/session.json"), key=lambda f: f.stat().st_mtime)
@@ -348,6 +397,16 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
           f"accepted {rec['accepted']}"
           + ("" if rec["accepted"] else f" ({[x['why'] for x in lives]}; {(o / 'prove.err').read_text()[-300:]!r})"), flush=True)
     return rec
+
+
+def passes(plan: list[dict], n: int) -> list[tuple[int, dict]]:
+    """The plan's points over ``n`` passes, each with its pass: a family's points (one served type's sizes, or A6's
+    coordinates) in plan order on even passes and reversed on odd ones (ABBA), so that a drift in the node's load over the
+    run falls on each size alike."""
+    fams: dict[str, list[dict]] = {}
+    for pt in plan:
+        fams.setdefault(pt.get("tag") or "s8-coordinate-v1", []).append(pt)
+    return [(p, pt) for p in range(n) for pts in fams.values() for pt in (pts if p % 2 == 0 else pts[::-1])]
 
 
 def prove(a) -> int:
@@ -371,14 +430,14 @@ def prove(a) -> int:
         first = (mine[0]["c"], mine[0]["k"])
         if not any(r["accepted"] for r in mine if (r["c"], r["k"]) == first):
             dropped.add(key)
-    for pt in plan:
+    for p, pt in passes(plan, a.passes):
         for arm in [x for x in arms if pt.get("arms") is None or x in pt["arms"]]:
             key = (arm, family(pt))
             if key in dropped:
                 continue
-            recs = [session(a, pt, arm, "cold", rep, out / "points") for rep in range(a.cold)]
+            recs = [session(a, pt, arm, "cold", rep, out / "points") for rep in range(p * a.cold, (p + 1) * a.cold)]
             if a.runs:
-                recs.append(session(a, pt, arm, "warm", 0, out / "points"))
+                recs.append(session(a, pt, arm, "warm", p, out / "points"))
             for rec in recs:
                 jsonl(out / "records" / "prove.jsonl", rec)
                 ok &= rec["accepted"]
@@ -570,34 +629,46 @@ DEFINITION = ("proof overhead: the GPU-seconds the prover takes to prove a proof
 
 
 def line(points: dict[int, list[float]]) -> dict:
-    """``seconds = fixed + marginal n`` over every session at each n, by least squares (one n: no slope)."""
+    """``seconds = fixed + marginal n`` over every session at each n, by least squares, with the marginal's standard error
+    from the residuals (one n: no slope; two sessions: no error)."""
     xs = [(n, y) for n, ys in points.items() for y in ys]
     if len(points) < 2:
-        return {"fixed_s": None, "marginal_s": None, "points": len(xs)}
-    a = np.array([[1.0, n] for n, _ in xs])
-    coef, *_ = np.linalg.lstsq(a, np.array([y for _, y in xs]), rcond=None)
-    return {"fixed_s": float(coef[0]), "marginal_s": float(coef[1]), "points": len(xs)}
+        return {"fixed_s": None, "marginal_s": None, "marginal_se_s": None, "points": len(xs)}
+    a, y = np.array([[1.0, n] for n, _ in xs]), np.array([y for _, y in xs])
+    coef, *_ = np.linalg.lstsq(a, y, rcond=None)
+    dof = len(xs) - 2
+    se = sqrt(float(((y - a @ coef) ** 2).sum()) / dof * np.linalg.inv(a.T @ a)[1, 1]) if dof > 0 else None
+    return {"fixed_s": float(coef[0]), "marginal_s": float(coef[1]), "marginal_se_s": se, "points": len(xs)}
+
+
+#: a session's parts of its end-to-end seconds, from its LIVE record: the witness, the proving, the wait on the ZK server's live
+#: verifier inside them (`wait_e2e_s`; `wait_s` adds the final verdict's, after the proofs are sent), and the rest of the
+#: prover's host work. On a CPU node the first two run on its CPUs, on a GPU node on the device
+PARTS = {"witness": lambda x: x.get("witness_s") or 0.0, "proving": lambda x: x["prove_total_s"],
+         "wait": lambda x: x["wait_e2e_s"],
+         "rest": lambda x: x["e2e_s"] - (x.get("witness_s") or 0.0) - x["prove_total_s"] - x["wait_e2e_s"]}
 
 
 def overhead(a) -> int:
     from verity import hardware
     out = Path(a.out)
-    card = hardware.load(a.card)
+    # --card none: a CPU node's sessions, which no GPU's peak divides
+    card = None if a.card == "none" else hardware.load(a.card)
     stages = [r for r in read_jsonl(out / "records" / "stage.jsonl") if r.get("unit")]
     proves = [r for r in read_jsonl(out / "records" / "prove.jsonl") if r.get("unit") and r["accepted"]]
     verifies = [r for r in read_jsonl(out / "records" / "verify.jsonl") if r.get("unit")]
     gpu = (out / "records" / "gpu.csv").read_text().splitlines()[1:2] if (out / "records" / "gpu.csv").exists() else []
     if gpu:
         name, cc = gpu[0].split(",")[0].strip(), gpu[0].split(",")[4].strip().replace(".", "")
-        if card.get("arch", "").rstrip("a") != f"sm_{cc}":
-            raise SystemExit(f"overhead: the run's GPU is {name} (sm_{cc}) but --card {a.card} is {card.get('arch')}; pass the "
-                             "card it ran on (zk_cost.sh's ZK_CARD, e.g. h200-sxm-141gb for an H200)")
+        if (card or {}).get("arch", "").rstrip("a") != f"sm_{cc}":
+            raise SystemExit(f"overhead: the run's GPU is {name} (sm_{cc}) but --card {a.card} is {(card or {}).get('arch')}; "
+                             "pass the card it ran on (zk_cost.sh's ZK_CARD, e.g. h200-sxm-141gb for an H200)")
     types: dict[str, dict] = {}
     obs: dict[str, list[dict]] = {}
     for tag in dict.fromkeys(r["tag"] for r in stages):
         st = {r["c"]: r for r in stages if r["tag"] == tag}
         s0 = st[max(st)]
-        peak = float(hardware.rate(card, fmt=s0["format"])) if s0["macs"] else None
+        peak = float(hardware.rate(card, fmt=s0["format"])) if s0["macs"] and card else None
         t = {"unit": s0["unit"], "definition": s0["definition"], "class": s0.get("class"), "ands": s0["ands"],
              "k_log": s0["k_log"], "full": s0["full"], "sizes": sorted(st), "macs": s0["macs"], "format": s0["format"],
              "peak_mac_per_s": peak, "stage_s": {c: r["stage_s"] for c, r in st.items()}, "arms": {}, "drawn": {}}
@@ -617,8 +688,16 @@ def overhead(a) -> int:
                        "dense_m": {c: xs[0]["dense_m"] for c, xs in whole.items()}, "amortized_s": med / cmax,
                        "cold_wall_s": {c: [r["wall_s"] for r in mine if r["mode"] == "cold" and r["c"] == r["k"] == c] for c in whole},
                        "peak_rss_kb": max(r["peak_rss_kb"] for r in mine),
+                       # records from before the harness kept wait_e2e_s have no parts
+                       "parts": {n: {**line({c: [f(x) for x in xs] for c, xs in whole.items()}),
+                                     "s": {c: float(np.median([f(x) for x in xs])) for c, xs in whole.items()}}
+                                 for n, f in PARTS.items()}
+                       if all(x.get("wait_e2e_s") is not None for xs in whole.values() for x in xs) else {},
                        "lean": [{"c": v["c"], "k": v["k"], "passes": v["passes"], "why": v["why"]}
                                 for v in verifies if v["tag"] == tag and v["arm"] == arm]}
+            cpu = {c: [x["cpu_s"] for x in xs if x.get("cpu_s")] for c, xs in whole.items()}
+            if any(cpu.values()):
+                arm_rec["cpu_s"] = {c: {k: float(np.median([y[k] for y in ys])) for k in ys[0]} for c, ys in cpu.items() if ys}
             if peak:
                 native = s0["macs"] / peak
                 arm_rec["overhead_amortized"] = arm_rec["amortized_s"] / native
@@ -660,12 +739,21 @@ def overhead(a) -> int:
     rows = ["| type | definition | arm | sizes | fixed s | marginal ms | amortized ms | overhead (marginal) | overhead (amortized) | Lean |",
             "|---|---|---|---|---:|---:|---:|---:|---:|---|"]
     fmt = lambda x, s=1.0, f=".3g": "-" if x is None else format(x * s, f)  # noqa: E731
+    pm = lambda f: fmt(f["marginal_s"], 1e3) + ("" if f.get("marginal_se_s") is None else f" ± {fmt(f['marginal_se_s'], 1e3, '.2g')}")  # noqa: E731
+    cpu_rows = ["| type | arm | c | prover user s | prover sys s | serve user s | serve sys s | load (1 min) |",
+                "|---|---|---:|---:|---:|---:|---:|---:|"]
     for tag, t in types.items():
         for arm, r in t["arms"].items():
             lean = ",".join("pass" if v["passes"] else "FAIL" for v in r["lean"]) or "-"
             rows.append(f"| {tag} | {t['definition']} | {arm} | {','.join(map(str, t['sizes']))} | {fmt(r['fixed_s'])} | "
-                        f"{fmt(r['marginal_s'], 1e3)} | {fmt(r['amortized_s'], 1e3)} | {fmt(r.get('overhead_marginal'))} | "
+                        f"{pm(r)} | {fmt(r['amortized_s'], 1e3)} | {fmt(r.get('overhead_marginal'))} | "
                         f"{fmt(r.get('overhead_amortized'))} | {lean} |")
+            for n, f in r["parts"].items():
+                rows.append(f"| {tag} | its {n} | {arm} | {','.join(map(str, t['sizes']))} | {fmt(f['fixed_s'])} | {pm(f)} "
+                            "| - | - | - | - |")
+            for c, m in (r.get("cpu_s") or {}).items():
+                cpu_rows.append(f"| {tag} | {arm} | {c} | {m['prover_user_s']:.1f} | {m['prover_sys_s']:.1f} | "
+                                f"{m['serve_user_s']:.1f} | {m['serve_sys_s']:.1f} | {m['load1']:.1f} |")
         for c, fits in t["drawn"].items():
             for arm, f in fits.items():
                 if f["marginal_s"] is not None:
@@ -678,6 +766,8 @@ def overhead(a) -> int:
                     rows.append(f"| {tag} | send check at c={c} | fw - nofw | k {','.join(map(str, ks))} | {fmt(d[ks[0]])} | "
                                 f"{fmt((d[ks[-1]] - d[ks[0]]) / (ks[-1] - ks[0]) if len(ks) > 1 else None, 1e3)} "
                                 "| - | - | - | - |")
+    if len(cpu_rows) > 2:
+        rows += ["", "Each timed session's CPU seconds (medians), its prover's and its ZK server's process trees:", "", *cpu_rows]
     (out / "overhead.md").write_text(DEFINITION + "\n\n" + "\n".join(rows) + "\n")
     print("\n".join(rows))
     return 0
@@ -692,7 +782,8 @@ def main() -> int:
     ap.add_argument("--ks", default="4096,14336")
     ap.add_argument("--units", default="", help="stage: served types (stage.py's TYPE[:S=V,...]), space-separated, instead of --ks")
     ap.add_argument("--sizes", default=None, help="stage: staged units a statement (default 1,8,64,512; with --units half,full)")
-    ap.add_argument("--card", default="rtx-pro-6000-server", help="overhead: the card whose datasheet peak divides (verity.hardware)")
+    ap.add_argument("--card", default="rtx-pro-6000-server",
+                    help="overhead: the card whose datasheet peak divides (verity.hardware); none: a CPU node's sessions")
     ap.add_argument("--draws", default="1,8,64,c", help="stage: the sample sizes a statement is proved at, c meaning all its units")
     ap.add_argument("--points", default=None, help="prove: only these indices of plan.json (one GPU lease a point)")
     ap.add_argument("--arms", default="fw,nofw", help="fw: the ZK server's send check on (the design's path); nofw: off; "
@@ -700,6 +791,7 @@ def main() -> int:
     ap.add_argument("--cold", type=int, default=2, help="one-session prover processes a point and arm")
     ap.add_argument("--warm", type=int, default=1)
     ap.add_argument("--runs", type=int, default=3, help="the warm process's timed sessions; 0: no warm process")
+    ap.add_argument("--passes", type=int, default=1, help="prove: the plan this many times, each family's sizes in ABBA order")
     ap.add_argument("--cpu", action="store_true", help="prove: on the node's CPUs (no --gpu), as the CPU nodes prove a sample")
     ap.add_argument("--run", default=os.environ.get("RESEARCH_RUN_ID"), help="fit: the run id the observations name")
     a = ap.parse_args()

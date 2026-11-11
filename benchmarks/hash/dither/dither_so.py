@@ -103,10 +103,12 @@ import queue
 import threading
 import time
 import traceback
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
 import triton
+from verity_config.settings import of
 
 import dither_a as DA
 import dither_fused as DF
@@ -115,9 +117,11 @@ import dither_one as DO
 import forms as F
 import h1c as H1CM
 import j10r_ws as JWS
+from dither_a import auto_j
 from dither_fused import CM, CO, H1R, Call, Dom, Tab, unwords, words
-from hb_side import auto_j
-from verity_config.settings import of
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
 
 settings = of(__file__)
 LIB_ENV = DA.LIB_ENV
@@ -168,8 +172,7 @@ UNITS_FORMS = {"today": "each unit's own seed_j stream", "j10r": "J10-R: each ca
 # read both (h1u.cu's kh_units_multi_j10rc, an h1u build with H1U_JRC=1, each call's workspace kh_j10r_ws_bytes at T
 # rows; under $DITHER_SO_UNITS_SMQ without a cap, kh_units_multi_j10rc_sm); the same receipts.  Unset, never: J10-R's
 # units hash a column tile once in each row tile
-# they compute, so it pays at prefill's 64 and costs at decode's one, where its own launch is the difference (unitsbench
-# --j10r, H1U_JSWZ 32: faster at T 2048 and 512, slower at T 64, M 32 unswizzled)
+# they compute, so it pays at prefill's 64 and costs at decode's one, where its own launch is the difference
 J10RC_MIN_T_ENV = "DITHER_SO_J10RC_MIN_T"
 # J10-R's layout rows of a call (h1tile.j10r_blocks' m; j10r_so.M_MODES), open until J10R rules: "slot" (default) or "live"
 J10R_M_ENV = "DITHER_SO_J10R_M"
@@ -275,7 +278,7 @@ class SoWindow(DO.DitherState):
     window_end = False  # -we: each execution phase ends (`end`)
     spill_mode: str | None = None   # -we: what each step keeps until the sample (SPILLS), held by `SoSide.spill`
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         if self.depth < 2:
             raise ValueError(f"dither-a-so's ring depth is at least 2, not {self.depth}")
         # the execution phase's own state (`_start` sets it at each open, the first from `_epoch` at the build)
@@ -397,7 +400,7 @@ class SoWindow(DO.DitherState):
         """An execution phase opens at step s (its first, s0): its coins (made beforehand by `prepare`, else now), the salt coin
         opened after the execution phase's root, the execution-phase round (round 0) over the B tables' roots, and the round pipe; under -we
         its last step (`end_at`): the layout's (R rounds: R - 2 steps), or an `arm_end` execution phase's."""
-        from verity.ml.protocols.pouw.circuit import h1tile as HT
+        from verity.protocols.pouw.prover.circuit import h1tile as HT
         t0 = time.perf_counter()
         self.HT = HT
         self.clean_from = None
@@ -461,7 +464,7 @@ class SoWindow(DO.DitherState):
     def steps_left(self) -> int:
         return self.end_at - self.s + 1 if self.open and self.end_at is not None else 0
 
-    def put_row(self, s: int, mid, rnd) -> None:
+    def put_row(self, s: int, mid: H1CM.Set, rnd: H1CM.Set) -> None:
         """Under -we, step s's manifest row on the current stream once its round is built: each round leaf's per-call
         roots (mid's leaves) and the round's leaves, to pinned host memory without a wait."""
         if not self.window_end:
@@ -510,7 +513,7 @@ class SoWindow(DO.DitherState):
         DA.SIDE[0].dispatch(j, salt, m, g)
         return t_coin
 
-    def _salt_early(self, sd, j: int) -> None:
+    def _salt_early(self, sd: SoSide, j: int) -> None:
         """At step j's units' prequeue (before the root read, the host well ahead of the GPU), its salt from its coin if
         that is back, and the salt's words staged in its ring slot: its dispatch, after the round's root is sent, then
         sets the flag alone.  The salt is `live_salt` of a coin and a root both already recorded, as at dispatch."""
@@ -1017,7 +1020,7 @@ class SoWindow(DO.DitherState):
         self.steps += 1
         self._step_end(s)
 
-    def _ybad_copy(self, sd, put: bool = False) -> None:
+    def _ybad_copy(self, sd: SoSide, put: bool = False) -> None:
         """sd.ybad into ybad_pin on the serving stream: a copy, or (put) h1c's kernel stores, which no other stream's
         transfers hold up."""
         if self.ybad_pin is None:
@@ -1160,7 +1163,7 @@ class SoWindow(DO.DitherState):
                 "spill": DA.SIDE[0].spill.stats() if DA.SIDE and DA.SIDE[0].spill is not None else None}
 
 
-def _q(xs: list, f: float):
+def _q(xs: list, f: float) -> float | None:
     return round(xs[min(len(xs) - 1, int(f * len(xs)))], 3) if xs else None
 
 
@@ -1187,7 +1190,7 @@ class SoSide(DA.Side):
     def adopted(self) -> tuple[str, ...]:
         return ("j10r",) if self._j10r_part() == "j10r" else ()
 
-    def __init__(self, win: SoWindow, unit: str, h1u: str, ao: str, pt: bool):
+    def __init__(self, win: SoWindow, unit: str, h1u: str, ao: str, pt: bool) -> None:
         if unit not in DA.KONE or ao not in AO:
             raise ValueError(f"dither-a-so's unit: one of {DA.KONE}, not {unit!r}; its A tables: one of {tuple(AO)}, not {ao!r}")
         super().__init__(win, unit, h1u, "zy", "", pt)
@@ -1516,7 +1519,7 @@ class SoSide(DA.Side):
         return 0
 
     @staticmethod
-    def _cu_ok(res):
+    def _cu_ok(res: Any) -> Any:
         err, *out = res if isinstance(res, tuple) else (res,)
         if int(err) != 0:
             raise RuntimeError(f"${PREQ_ENV}=1: {err!r}")
@@ -1625,7 +1628,7 @@ class SoSide(DA.Side):
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 
 
-def _remap(c, st, data: list | None = None, out: list | None = None):
+def _remap(c: H1CM.H1C, st: H1CM.Set, data: list | None = None, out: list | None = None) -> H1CM.Set:
     """A set of `st`'s tables over its own levels and roots, table w's rows at data[w] and its root at out[w] where
     given."""
     return c.set([dataclasses.replace(t, data=t.data if data is None else data[w], out=t.out if out is None else out[w])
@@ -1641,7 +1644,7 @@ class Ov:
 
     EV = 8      # the GPU's events a step, in a ring of this many steps (the host's waits keep them that far apart)
 
-    def __init__(self, win: SoWindow, sd: SoSide, ring: int):
+    def __init__(self, win: SoWindow, sd: SoSide, ring: int) -> None:
         if not 1 <= ring < self.EV - 1:
             raise ValueError(f"dither-a-so -ov: the round ring's depth is 1 to {self.EV - 2}, not {ring}")
         self.win, self.sd, self.R = win, sd, ring
@@ -1664,7 +1667,7 @@ class Ov:
         self.stepv_r = [torch.empty_like(win.stepv) for _ in range(ring)]
         self.a_off = win.pre["mid"].level_off[0]
         self.sets = []
-        def leaves(st, at: int) -> list[int]:
+        def leaves(st: H1CM.Set, at: int) -> list[int]:
             return [at + 64 * w for w in range(len(st.tabs))]
         for q in range(ring):
             zv, yv = self.zy_r[q].split(self.zl), self.ysv_r[q].split(self.yl)
@@ -1706,7 +1709,7 @@ class Ov:
 
     # -- the host's order -------------------------------------------------------------------------------------------
 
-    def wait(self, ready) -> None:
+    def wait(self, ready: Callable[[], bool]) -> None:
         with self.cv:
             while self.error is None and not ready():
                 self.cv.wait()
@@ -1742,7 +1745,7 @@ class Ov:
             self._set(draining=False)
         torch.cuda.synchronize()
 
-    def _loop(self, qu: queue.SimpleQueue, fn) -> None:
+    def _loop(self, qu: queue.SimpleQueue, fn: Callable[[int], None]) -> None:
         torch.cuda.set_device(self.dev_index)
         while True:
             s = qu.get()
@@ -1755,7 +1758,7 @@ class Ov:
                 return
 
     @contextlib.contextmanager
-    def phase(self, name: str):
+    def phase(self, name: str) -> Iterator[None]:
         """`DitherState.phase`'s NVTX range on this thread (stepprof joins a launch to its own thread's phase)."""
         if not self.win.nvtx:
             yield
@@ -1947,7 +1950,7 @@ class Spill:
     (`release`).  An off-node execution phase's pool is pinned whole when the spill is made, at its open (`reserve`); an
     in-process arm's grows in sbench's warm-up."""
 
-    def __init__(self, win: SoWindow, sd: SoSide, mode: str):
+    def __init__(self, win: SoWindow, sd: SoSide, mode: str) -> None:
         if mode not in SPILLS:
             raise ValueError(f"dither-a-so -we: a spill is one of {tuple(SPILLS)}, not {mode!r}")
         self.win, self.sd, self.mode, self.zy = win, sd, mode, mode == "azy"
@@ -2172,7 +2175,8 @@ def capture_at(priority: int) -> None:
     class graph(base):
         so_priority = priority
 
-        def __init__(self, cuda_graph, pool=None, stream=None, *args, **kwargs):
+        def __init__(self, cuda_graph: torch.cuda.CUDAGraph, pool: tuple[int, int] | None = None,
+                     stream: torch.cuda.Stream | None = None, *args, **kwargs) -> None:
             if stream is None or stream.priority > priority:
                 dev = torch.cuda.current_device()
                 if dev not in streams:
@@ -2183,7 +2187,7 @@ def capture_at(priority: int) -> None:
     torch.cuda.graph = graph
 
 
-def stats(win: SoWindow):
+def stats(win: SoWindow) -> Callable[[], dict]:
     def doc() -> dict:
         return {**win.stats(), **DA.arm_label(), "dither_a": DA.SIDE[0].info() if DA.SIDE else None}
     return doc
@@ -2305,7 +2309,7 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     step's receipts against h1r v1 under its coin's salt, `rehashed_calls`' A tables and receipt tables rehashed; under -we
     three steps opened from its spill (`open_spill`).  Under fault_tail and fault_late_receipt, ``conforming`` holds
     when it is refused exactly where its fault is."""
-    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.protocols.pouw.prover.circuit import h1tile as HT
     rec = win.end_recs.get(name)
     if rec is None or rec.get("rows") is None or "last" not in rec:
         return {"which": name, "ok": False, "complete": False, "why": f"no ended execution phase {name!r} with its rows"}
@@ -2455,13 +2459,13 @@ def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
         x, row = sp["steps"][s], rows[s - s0]
         m, n, u = x["m"], win.nk[w][0], sd.unit_of[w]
 
-        def q_of(v: int, x=x, m=m) -> np.ndarray:
+        def q_of(v: int, x: dict = x, m: int = m) -> np.ndarray:
             kv, iv = sd.spill.slot_of[v]
             q = np.zeros((t, win.nk[v][1]), dtype=np.int8)
             q[:m] = x["a"][kv][iv].numpy()
             return q
 
-        def sc_of(v: int, x=x, m=m) -> np.ndarray:
+        def sc_of(v: int, x: dict = x, m: int = m) -> np.ndarray:
             sc = np.zeros(t, dtype=np.float32)
             sc[:m] = x["sa"][win.spos[v]].numpy()
             return sc
@@ -2474,7 +2478,7 @@ def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
         cnt = recs.shape[0]
         zd = CM.domain(DA.zy_fields(win, w, s, u), cnt, DA.ZY_KIND)
 
-        def root(r: np.ndarray, s=s, w=w, zd=zd, cnt=cnt) -> bytes:
+        def root(r: np.ndarray, s: int = s, w: int = w, zd: CM.CommitmentDomain = zd, cnt: int = cnt) -> bytes:
             return CM.levels(zd, [CM.leaf(zd, key, f"zy/{s}/{w}", e, bytes(r[e]))[0] for e in range(cnt)])[-1][0]
         want = unwords(row[zi * L8 + 8 * w:zi * L8 + 8 * w + 8])
         o = {"s": s, "call": w, "module": win.names[w], "m": m, "a_root": a_ok, "zy_recomputed_root": root(recs) == want}
@@ -2507,7 +2511,7 @@ def end_verdict(docs: dict) -> dict:
     return v
 
 
-def end_gate(win: SoWindow, generate) -> None:
+def end_gate(win: SoWindow, generate: Callable[[int], object]) -> None:
     """The end faults, each in an execution phase of its own `end_steps` steps that ends on its own inside `generate(n)`."""
     n = end_steps(win.depth)
     for f in END_FAULTS:

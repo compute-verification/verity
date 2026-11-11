@@ -9,7 +9,7 @@ the task list's build, nor an earlier target's check):
   name and content stand for), every path it only probed (``os.stat``: whether it was a file, a directory or absent; when
   `inspect` or `linecache` probes a loaded module's source file, the module, by its name), every library built in the tree
   that it loaded (``ctypes.dlopen``: by its bytes), and the sources of every C++ model it called (`MODEL`, which each call of a
-  `verity.ml.definitions.numerics._jit.Model` raises: by their content, wherever the library was built and whichever check
+  `verity.definitions.numerics._jit.Model` raises: by their content, wherever the library was built and whichever check
   loaded it), and of every one its process, or one it was forked from, called before it ended (`_CALLED`): a process-wide memo
   of a model's result, filled by another target's check or a binding's build, hands it the result without a call;
 - the module of every function that ran (``sys.monitoring``: the first start or resume of each code object in the recording),
@@ -17,7 +17,7 @@ the task list's build, nor an earlier target's check):
   at import decides a lookup that runs none of its code); a module imported by a name computed at run time (``import_module``,
   ``__import__`` called rather than an ``import`` statement), and every name an import of which failed;
 - what the Definitions the check reached were built from: each specialization whose body it read (and every one reachable from
-  its target through body nodes) brings the recording of its body's build (`verity.ml.circuits.defs._build_body`: the code that ran and
+  its target through body nodes) brings the recording of its body's build (`verity.circuits.defs._build_body`: the code that ran and
   the files read while it was traced, wherever in the process that happened, its nested builds included), and each primitive
   the module of its evaluator;
 - what made the Definitions it reached: the recording of each catalog root function, `_model_roots` entry or `TEMPLATE_PARAMS`
@@ -45,11 +45,11 @@ Python imports it; any binding code its check ran, by the unit that holds it) an
 (`recorded_pins`), each in the file that holds it (one no file holds, where it would be added, `sidecars.pin_reads`), by its
 value, or absent.  `targets.py` and ``pins/``'s files are named by their paths, a sidecar by its module's name (``<module>``
 and `SUFFIX`, `_side`), so it moves with its module.  Likewise each Definition whose kernels its check looked up in
-`verity.ml.circuits.evaluation.batch._KERNELS` (`_RecordedKernels`), by what is registered for it now (each kernel's name, domain, version
+`verity.circuits.evaluation.batch._KERNELS` (`_RecordedKernels`), by what is registered for it now (each kernel's name, domain, version
 and which function and sampler it is, `_where`: by its module's content and its own definition, not its path), or none, and by
 each in-tree module whose import registered it, as a module it ran (so a wrapper's `_where` hides no change of what it wraps):
 the module that registers a kernel is imported with the registries, and no check of a target without one runs any of it.  And
-its reads of `verity.ml.circuits.defs.REGISTRY` (`_RecordedDefs`, ``registrars``), each by what was registered once the
+its reads of `verity.circuits.defs.REGISTRY` (`_RecordedDefs`, ``registrars``), each by what was registered once the
 registries were loaded (`_AT_LOAD`, the same on every path of a run; `_registration`): the id of every Definition it reached or
 found there and of every kernel it looked up, by whether a module whose import registered its Definition (every in-tree module
 whose code was running, and the one `targets.load_registries` was importing: `_REGISTRAR`), or one that registered its kernels,
@@ -97,7 +97,7 @@ module of its content.  Not covered: a file a C extension reads with its own I/O
 which the interpreter, platform, distribution list and ``sys.path`` stand for (the compiler a C++ model's library was built with
 among it: ``$CXX``, and whether the library a build directory holds is the one its sources compile to, which `_jit.stale`
 judges by their times); a file a module read while it was imported before
-tracing began (the checker's own imports, ``verity.ml.circuits`` and ``verity.ml.circuits.evaluation`` among them: their sources are inputs, data
+tracing began (the checker's own imports, ``verity.circuits`` and ``verity.circuits.evaluation`` among them: their sources are inputs, data
 they opened at import is not), and a C++ model called before then (`cli.prebuild` builds them in a process of its own); what
 a function read or imported in its body when it did not run in the recording (a value a process-wide cache,
 ``functools.cache`` and the like, holds from a call another target's check made, beyond the function's own module and its
@@ -137,8 +137,8 @@ Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.js
 shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
 
 A run's reads, declared as the inputs of a task keyed on them (`declared`: a catalog binding's, `cli.READS`), are the paths of
-the tree whose bytes, listing or kind `lookup` takes of them, and, for reads of what the registries registered, every module
-the registries import (`registry_inputs`).
+the tree whose bytes, listing or kind `lookup` takes of them, a kind under a path that is no directory as that path's
+(`probed`), and, for reads of what the registries registered, every module the registries import (`registry_inputs`).
 """
 from __future__ import annotations
 
@@ -165,7 +165,7 @@ _LINKS: dict[str, str] = {}
 #: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
 UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork")
 #: the audit event each call of a C++ model raises with the files its library is built from
-#: (`verity.ml.definitions.numerics._jit.CALLED`, named rather than imported: this module imports nothing of the tree at its import)
+#: (`verity.definitions.numerics._jit.CALLED`, named rather than imported: this module imports nothing of the tree at its import)
 MODEL = "verity.numerics.model"
 #: the sources in the tree of every C++ model this process, or one it was forked from, called while tracing (`MODEL`): a
 #: process-wide memo of a model's result hands it to a later check or build without a call, so every recording holds them all
@@ -418,7 +418,7 @@ def _importing() -> bool:
 
 #: the functions (module, qualified name) that list a package with ``pkgutil`` only to import each module it lists, naming any
 #: that fails: what they list and import is held by the package's modules (`_children`); one moved is no longer one of them
-_ENUMERATORS = frozenset({("verity.ml.definitions.registry.catalog", "load"), ("verity.ml.definitions.boolean", "_load")})
+_ENUMERATORS = frozenset({("verity.definitions.registry.catalog", "load"), ("verity.definitions.boolean", "_load")})
 
 
 def _enumerator(f) -> bool:
@@ -720,11 +720,11 @@ def _instrument() -> None:
 
     builtins.__import__, importlib.import_module = __import__, import_module
     try:
-        from verity.ml.circuits import defs as D
+        from verity.circuits import defs as D
     except ImportError:
         return
     try:
-        from verity.ml.circuits.evaluation import batch
+        from verity.circuits.evaluation import batch
     except ImportError:
         batch = None
     if batch is not None and not isinstance(batch._KERNELS, _RecordedKernels):
@@ -1258,7 +1258,7 @@ def _loaded(root: Path) -> dict[str, list[str]]:
 # --- the kernels a check looked up ------------------------------------------------------------------------------------------
 
 class _RecordedKernels(dict):
-    """`verity.ml.circuits.evaluation.batch._KERNELS`, noting in the open recording each Definition whose kernels are looked up (a lookup
+    """`verity.circuits.evaluation.batch._KERNELS`, noting in the open recording each Definition whose kernels are looked up (a lookup
     that finds none included), and all of them on any enumeration.  Registering (``setdefault``) is no lookup; it notes the
     in-tree module whose import registered each key (`by`), which a lookup of that key adds to the code the recording ran."""
 
@@ -1369,7 +1369,7 @@ def _defined_in(h: str, data: bytes, line: int) -> str:
 def _kernels_now(key: str) -> str | None:
     """What is registered now for ``key`` (``*``: for every Definition), digested; None when nothing is."""
     try:
-        from verity.ml.circuits.evaluation import batch
+        from verity.circuits.evaluation import batch
     except ImportError:
         return None
     reg = batch._KERNELS
@@ -1393,7 +1393,7 @@ ABSENT = "absent:"
 
 
 class _RecordedDefs(dict):
-    """`verity.ml.circuits.defs.REGISTRY`'s Definitions by id, noting in the open recording each id looked up (`ABSENT` when it
+    """`verity.circuits.defs.REGISTRY`'s Definitions by id, noting in the open recording each id looked up (`ABSENT` when it
     found none) and on any enumeration ``*``, or one of `_WORD_ENUMERATORS`' `WORD` read.  Registering (`Registry.add`) is
     no lookup."""
 
@@ -1464,11 +1464,11 @@ def _registrations() -> dict[str, Any]:
     """`_AT_LOAD` now: each registered Definition's id with the modules whose import registered it (`_REGISTRAR`; one registered
     before tracing began, the module of the function it builds or evaluates by), each kernel key with the modules whose import
     registered its kernels (`_RecordedKernels.by`; one registered before, its functions' modules), the ids of the Boolean
-    Definitions of each word, and the on-demand families (`verity.ml.circuits.codec.register_lazy_family`), in order.  The
+    Definitions of each word, and the on-demand families (`verity.circuits.codec.register_lazy_family`), in order.  The
     registries were just loaded from these modules, so a failed import raises: an empty `_AT_LOAD` would hold no registration."""
-    from verity.ml.circuits import codec
-    from verity.ml.circuits.defs import REGISTRY
-    from verity.ml.circuits.evaluation import batch
+    from verity.circuits import codec
+    from verity.circuits.defs import REGISTRY
+    from verity.circuits.evaluation import batch
 
     names = {}
     for name, m in list(sys.modules.items()):
@@ -2127,13 +2127,13 @@ _NEXT: dict[int, tuple[Any, bool, tuple[Any, ...]]] = {}
 
 def descriptor(fn: Any) -> str:
     """The digest of every primitive and specialization ``fn`` reaches (through body nodes and function statics), each by its
-    descriptor id and the digest of its canonical descriptor entry (`verity.ml.circuits.codec`), and of every reference, by its
+    descriptor id and the digest of its canonical descriptor entry (`verity.circuits.codec`), and of every reference, by its
     id and statics: what the target is, whatever module or path it was written in.  A by-calls root (`targets.is_by_calls`) is
     its own entry (`by_calls.entry`), without what its body calls.  A body that cannot be built gives the error's type, so no
     stored entry matches."""
-    from verity.ml.circuits import codec as C
-    from verity.ml.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
-    from verity.ml.circuits.evaluation import ScalarReference
+    from verity.circuits import codec as C
+    from verity.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.circuits.evaluation import ScalarReference
 
     from . import by_calls as BC
     from . import targets as TG
@@ -2544,10 +2544,27 @@ def declared(root: Path, reads: dict[str, list[str]]) -> dict[str, Any]:
             probes |= got[2]
     # a code object's pseudo-file (``<frozen abc>``, ``<string>``) is no path of the tree
     out: dict[str, Any] = {"files": sorted(files), "listed": sorted(listed),
-                           "probes": sorted(p for p in probes - files if p not in ("", ".") and not p.startswith("<")),
+                           "probes": sorted(probed(root, (p for p in probes - files if p not in ("", ".") and not p.startswith("<")))
+                                            - files),
                            "registry": any(reads.get(k) for k in _REGISTRY)}
     if libs := reads.get("libs"):
         out["untracked"] = sorted(libs)
+    return out
+
+
+def probed(root: Path, probes: Iterable[str]) -> set[str]:
+    """Each of ``probes`` as the first of its ancestors that is no directory of the tree (`visible`'s), or as itself: nothing is
+    under a path that is no directory, so that path's kind holds the kind of every path under it, and changes when one is
+    there (a check asks for a ``digests`` pin of every Definition it checks, ``pins/digests/<id>.json``, while there is no
+    ``pins/digests``)."""
+    v = visible(root)
+    out: set[str] = set()
+    with internal():
+        for p in probes:
+            i = p.find("/")
+            while i > 0 and (p[:i] in v[1] if v is not None else (root / p[:i]).is_dir()):
+                i = p.find("/", i + 1)
+            out.add(p[:i] if i > 0 else p)
     return out
 
 
@@ -2665,17 +2682,36 @@ def task_list_reads(roots: Iterable[Any]) -> dict[str, list[str]]:
     got = attributed(fr, (), roots, sidecars=False)
     _INTERNAL.append(True)
     try:
-        root = _ROOT[0]
-        by_file: dict[str, str] = {}
-        for name, m in list(sys.modules.items()):
-            if (f := _module_file(m)) is not None:
-                by_file.setdefault(os.path.abspath(f), name)
-        mods = {name for f, name in by_file.items() if _rel(f) is not None and not f.startswith(os.path.join(str(_HERE), ""))
-                and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f)}
+        mods, by_file = _tree_modules()
         units = {f"{n}#*" for f in _unit_files() if (n := _named_file(f, ".py", by_file)) is not None}
     finally:
         _INTERNAL.pop()
     return {**got, "modules": sorted(set(got["modules"]) | mods), "units": sorted(set(got["units"]) | units)}
+
+
+def modules_since(loaded: set[str]) -> dict[str, list[str]]:
+    """What a process forked from one that had loaded the modules ``loaded`` names adds to that one's `task_list_reads` beyond
+    the reads of the Definitions it built (`unit_reads`, `circuit_check.units`' builds apart): each in-tree module it imported
+    under a name ``loaded`` lacks.  The rest of its `task_list_reads` walks what every binding made, which the one it was
+    forked from walks too."""
+    _INTERNAL.append(True)
+    try:
+        return {"modules": sorted(_tree_modules(loaded)[0])}
+    finally:
+        _INTERNAL.pop()
+
+
+def _tree_modules(loaded: set[str] = frozenset()) -> tuple[set[str], dict[str, str]]:
+    """Each in-tree module this process imported, by the first name it was loaded under, as the tree resolves that name, but
+    the checker's own (its key's `version`) and those ``loaded`` names; and that first name by each loaded module's file."""
+    root = _ROOT[0]
+    by_file: dict[str, str] = {}
+    for name, m in list(sys.modules.items()):
+        if (f := _module_file(m)) is not None:
+            by_file.setdefault(os.path.abspath(f), name)
+    own = os.path.join(str(_HERE), "")
+    return {name for f, name in by_file.items() if name not in loaded and _rel(f) is not None and not f.startswith(own)
+            and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f)}, by_file
 
 
 def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: dict,
@@ -2697,6 +2733,6 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
     return eid
 
 
-__all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup", "pin_files",
-           "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store", "task_list_reads", "trace", "tracing",
-           "unit_files", "unit_reads", "untraced", "version", "warm"]
+__all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup",
+           "modules_since", "pin_files", "probed", "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store",
+           "task_list_reads", "trace", "tracing", "unit_files", "unit_reads", "untraced", "version", "warm"]

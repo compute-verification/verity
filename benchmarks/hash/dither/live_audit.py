@@ -48,7 +48,7 @@ def _sha(p: Path) -> str:
     return hashlib.sha512(p.read_bytes()).hexdigest()
 
 
-def _dump(p: Path, doc) -> None:
+def _dump(p: Path, doc: dict) -> None:
     p.write_text(json.dumps(doc, indent=1) + "\n")
 
 
@@ -56,7 +56,7 @@ def _git(d: Path) -> str:
     return _run(["git", "-C", str(d), "rev-parse", "HEAD"]).decode().strip()
 
 
-def fetch(a, out: Path) -> dict:
+def fetch(a: argparse.Namespace, out: Path) -> dict:
     """The challenge phase (``fetch SID``) and every ledger head (``ledger``) from the gate, the run's record and the key record
     from the store; their paths."""
     ssh = ["ssh", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-i", a.ssh_key, a.gate]
@@ -98,11 +98,12 @@ def newest_pins(out: Path) -> tuple[Path, str]:
     return next(pdir.rglob("*.jsonl")), art
 
 
-def manifest_check(a, p: dict, out: Path) -> dict:
+def manifest_check(a: argparse.Namespace, p: dict, out: Path) -> dict:
     """`dither_manifest.check` at this tree, and what the verifier recomputes from the manifest for core's check."""
     for d in (ROOT / "benchmarks" / "pouw" / "served_h1", HERE):
         sys.path.insert(0, str(d))
     import coins as CO
+
     import dither_manifest as MF
     root = CO.stand_in_root(a.session)
     pins = [x for x in p["pins"].read_text().split("\n") if x]
@@ -116,13 +117,13 @@ def manifest_check(a, p: dict, out: Path) -> dict:
     return got
 
 
-def core_check(a) -> int:
+def core_check(a: argparse.Namespace) -> int:
     """Core's check from main's `verity` (this process's PYTHONPATH): see the module docstring."""
     import verity
-    from verity.core.protocols.pouw import core_check as CC
-    from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.sampled_proofs import challenger as Ch
-    from verity.core.protocols.sampled_proofs import remote as R
+    from verity.protocols.pouw.verifier import core_check as CC
+    from verity.protocols.pouw.verifier import window as Wd
+    from verity.protocols.spot.device import challenger as Ch
+    from verity.protocols.spot.device import remote as R
     src = Path(verity.__file__).resolve().parent
     if not src.is_relative_to(Path(a.core_from).resolve()):
         raise SystemExit(f"core's check imported verity from {src}, not --core-from {a.core_from}")

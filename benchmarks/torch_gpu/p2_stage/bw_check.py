@@ -25,29 +25,33 @@ import random
 import sys
 from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "pous"))
+from p2_v1 import serve  # noqa: E402
+
 import layout as L  # noqa: E402
 import sketch as K  # noqa: E402
 import stage as S  # noqa: E402
-from p2_v1 import serve  # noqa: E402
+from verity.protocols.poub.verifier import p2  # noqa: E402
+from verity.protocols.poub.verifier import receipts as R  # noqa: E402
 
-from verity.core.protocols.remote_bandwidth import p2  # noqa: E402
-from verity.core.protocols.remote_bandwidth import receipts as R  # noqa: E402
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
 
 STORE_UNITS = -(-68_013_623 // p2.UNIT_BLOCKS)
 CHUNK = 1 << 16
 
 
-def le(t) -> list[str]:
+def le(t: Iterable[torch.Tensor]) -> list[str]:
     return [bytes(r.cpu().numpy().astype("<i4").tobytes()).hex() for r in t]
 
 
-def hexes(t) -> list[str]:
+def hexes(t: Iterable[torch.Tensor]) -> list[str]:
     return [bytes(r.cpu().numpy()).hex() for r in t]
 
 
@@ -56,7 +60,7 @@ def same(a: list[str], b: list[str]) -> dict:
     return {"match": len(a) - len(bad), "of": len(a), "first_bad": bad[:8]}
 
 
-def fixture(args, dev: torch.device) -> dict:
+def fixture(args: argparse.Namespace, dev: torch.device) -> dict:
     data = serve.fixture_bytes()
     fx = json.loads(data)
     _, doc, c_star = serve.toy()
@@ -129,7 +133,7 @@ def random_check(units: int, sample: int, dev: torch.device) -> dict:
             "root": root == want, "ok": not bad_sigma and not bad_y and root == want}
 
 
-def fastest(fn, reps: int = 5) -> float:
+def fastest(fn: Callable[[], Any], reps: int = 5) -> float:
     return min(S.timed(fn, reps, torch.device("cuda")))
 
 
@@ -161,7 +165,7 @@ def bench(dev: torch.device) -> dict:
             "step_receipts_s": round(step, 4), "vs_decode_4.883s": round(step / 4.883, 4)}
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--lib", type=Path, help="build.sh's libp2v1 directory: the toy through the store's load too")

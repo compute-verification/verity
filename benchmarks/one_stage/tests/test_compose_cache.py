@@ -3,7 +3,8 @@ can be made before its timed audit (`a5.warm`). A circuit composed bound to one 
 another (`restamp`) is byte for byte, with compose's line, the circuit composed bound to that one, its caller never composing,
 whatever the reads' chunks split; taken bound to the same one it is the kept file, linked and never read, and a sampled proof
 block's copy that changed is refused before a prover reads it (`a5.held`); a cache key moves with what the compose reads (the
-template, the reads' layout, the Definition's program, the composer's inputs), any composing file, compose_circuit's own and
+template, the reads' layout, the Definition's program, the composer's inputs, a table read's verifier executable), any
+composing file, compose_circuit's own and
 the composer's among them, any data file of the packages and a lowering flag, and with nothing else; a circuit whose reads are
 in slots gets its MUFU tables beside it whether composed or restamped; and a kept circuit that changed, a binding not in the
 file once, or a binding that is not two SHA-512 digests is refused, writing nothing. A toy unit Definition."""
@@ -11,6 +12,7 @@ file once, or a binding that is not two SHA-512 digests is refused, writing noth
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sys
 from pathlib import Path
@@ -18,12 +20,12 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
-from verity.ml.circuits.boolean import BIT
-from verity.ml.circuits.boolean.forms import add
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.types import Array
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.forms import add
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
+from verity.circuits.types import Array
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import class_statement as CS
 
 HERE = Path(__file__).resolve().parent
@@ -128,6 +130,21 @@ def test_a_cache_key_moves_with_what_the_compose_reads_and_nothing_else(tmp_path
     assert e.value.code == 2
 
 
+def test_a_table_reads_key_holds_the_verifiers_executable(monkeypatch):
+    """A ``--template`` compose's ``what`` (`template_inputs`) is the template and its statement's form and, for a table read,
+    the digest of the executable whose template its unit is (`read_tmpl.digest`), so a rebuilt verifier's read is composed
+    afresh; no other template's asks for it."""
+    read = SimpleNamespace(fn=SimpleNamespace(base_id=CC.RT.READ))
+    stmt = {"layout": "iv/hybrid/4", "structural": True}
+    monkeypatch.setattr(CC.RT, "digest", lambda: "d1")
+    k = CC.template_inputs("EmbeddingRead_v1{V=7,H=3}", read, stmt)
+    assert k == ["unit/serving-rows", "EmbeddingRead_v1{V=7,H=3}", json.dumps(stmt, sort_keys=True), "d1"]
+    monkeypatch.setattr(CC.RT, "digest", lambda: "d2")
+    assert CC.template_inputs("EmbeddingRead_v1{V=7,H=3}", read, stmt) != k
+    monkeypatch.setattr(CC.RT, "digest", lambda: pytest.fail("a template reading no table asked for the verifier's executable"))
+    assert CC.template_inputs("Toy", SimpleNamespace(fn=TOY), {"reads": "slots"}) == ["unit/serving-rows", "Toy", "slots"]
+
+
 def test_an_own_composers_key_moves_with_its_inputs_its_definition_and_its_file(tmp_path):
     """a5's key for a caller's composer (`compose_key`): another statement, another template id, another Definition (its
     program digest) or another composer file each move it; a composer that says nothing of its inputs is not cached."""
@@ -193,7 +210,7 @@ def test_a_slots_circuit_gets_its_tables_composed_or_restamped(tmp_path, monkeyp
     template, through a stand-in for `verity_vllm`'s template lookup, which this suite doesn't read."""
     pipeline = ModuleType("verity_vllm.pipeline")
     pipeline.serving_rows = SimpleNamespace(template=lambda tid: SimpleNamespace(fn=TOY))
-    pipeline.chunk_rows = SimpleNamespace(unit_rows=lambda tp: (ROWS, [(V2, (0,))]))
+    pipeline.chunk_rows = SimpleNamespace(unit_rows=lambda tp: (ROWS, [(V2, (0,))]), statement=lambda tp: {"reads": "inline"})
     monkeypatch.setitem(sys.modules, "verity_vllm", ModuleType("verity_vllm"))
     monkeypatch.setitem(sys.modules, "verity_vllm.pipeline", pipeline)
     monkeypatch.setattr(CC, "cache_key", lambda what: f"{what[1]}-{what[2]}")

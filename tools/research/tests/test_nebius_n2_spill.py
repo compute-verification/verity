@@ -1,5 +1,5 @@
 """Node 1's dispatcher spills a GPU Job that Kueue has held 2 min to node 2's fill queue when node 2's runner would start it now
-(proofs' NVF4 K=16384 step 1 waited behind eight held node-1 GPUs at 07:44Z, 1 Oct, while node 2's GPUs 0-3 sat empty). The
+(so a Job never waits behind held node-1 GPUs while node 2's sit empty). The
 spill deactivates the Kueue workload, a node-2 exit 0 ends the task on node 1, and a failure or a second stop sends it back.
 The node-2 probe, the writer and the generated fill script run here for real, against a node-2 tree in tmp_path."""
 from __future__ import annotations
@@ -81,7 +81,7 @@ def dispatch(tmp_path, monkeypatch):
 
 def _item(tree: Path, **n2) -> dict:
     return {"id": "nvf4", "template": "prover-bench", "tree": str(tree), "queue": "provers",
-            "env": {"CMD": "bash verity/ml/flock/pod/74-gemm-hill.sh DTYPE=nvf4 K=16384 CPUS=16", "QUESTION": "q"},
+            "env": {"CMD": "bash verity/protocols/flock/pod/74-gemm-hill.sh DTYPE=nvf4 K=16384 CPUS=16", "QUESTION": "q"},
             "resources": {"prover-bench": {"cpus": 16, "memory": 96, "gpus": 1}},
             "n2": {"cmd": "true", "owner": "bc-8416bc72", "max_min": 25, "cpus": 16, "mem_gb": 96, **n2}}
 

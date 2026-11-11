@@ -6,12 +6,16 @@
 #     [REPLAY=LOAD [REPLAY_FROM=RECORD_ARM_DIR] [REPLAY_MODES="compiled eager"] [REPLAY_LOGPROBS=1]] [MAX_MIN=240]
 #     bash benchmarks/serve_tax/run.sh
 #   CAPACITY=1 [REQUESTS=800] bash benchmarks/serve_tax/run.sh   # stock compiled under one burst: its capacity
-#   REPLAY=LOAD REPLAY_FROM=RECORD_ARM_DIR [REPLAY_MODES=...] bash benchmarks/serve_tax/run.sh   # only replay an earlier window
+#   REPLAY=LOAD REPLAY_FROM=RECORD_ARM_DIR [REPLAY_MODES=...] [REPLAY_CAPTURE=ID,...] bash benchmarks/serve_tax/run.sh
+#     # only replay an earlier window, at the model's GPUs as tensor-parallel width, taking REPLAY_CAPTURE's requests'
+#     # logits rows and ids at the sampler into OUT/replay-<mode>/capture (replay.py --capture)
 #   ARMS="restore-base restore-pause restore" RATES=medium=R REPS=1 SPAN_S=720 EDGES_S=180,360,540 [SAVE_KV=1]
 #     [RESTORE=1:2 [RESTORE_ARM="restore ..."] [RESTORE_WARM=N]] [NUM_GPU_BLOCKS=N] [KV_DIR=DIR]
 #     bash benchmarks/serve_tax/run.sh   # boundary states at the edges, one restored
 #   ARMS="compiled record tokens-only boundary" RATES=... EDGES_EVERY_S=30 [KV_COPY=all|first|none] [PLAN_FILE=PLAN.jsonl]
 #     [MAX_MODEL_LEN=N] [FLASHINFER=1] [LDCONFIG=1] [BUDGET_MIN=M] bash benchmarks/serve_tax/run.sh   # the production tax
+#   ARMS=boundary-rows BOUNDARY_ROWS='{"check":T,"per_prompt":0,"per_output":1}' RATES=... [PLAN_FILE=PLAN.jsonl]
+#     bash benchmarks/serve_tax/run.sh   # the two-stage boundary committed at serve, under OUT/boundary-rows/server/boundary
 # EDGES_EVERY_S puts the boundary arm's edge each that many seconds of a load (its replay blocks' length); at TP > 1 each
 # rank keeps its KV copy and rows in host memory, and KV_COPY=first copies rank 0's pool alone (for ranks that hold the
 # same KV bytes, as GLM-5.3's replicated MLA cache does). PLAN_FILE (else a sent inputs/plan.jsonl) is a ready plan, served
@@ -130,7 +134,7 @@ if [ "${1:-}" = leased ]; then
     echo "== $arm $(date -u +%FT%TZ)"
     "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" --rates "$RATES" --reps "$reps" --span-s "$SPAN_S" \
       --plan "$PLAN" --docs "$DOCS" --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" \
-      --out "$OUT/$arm" || rc=1
+      ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} --out "$OUT/$arm" || rc=1
     echo "after $arm: $(fi_cache)" >> "$OUT/engine_env.txt"
     echo "== $arm done $(date -u +%FT%TZ): $reps reps, $((($(date +%s) - t_leased) / 60)) min since the GPUs were held" | tee -a "$OUT/arms.txt"
     last=$arm
@@ -150,8 +154,9 @@ if [ "${1:-}" = leased ]; then
       n=$(( ${times[$mode]:-0} + 1 )); times[$mode]=$n
       dir="replay-$mode"; [ "$n" -gt 1 ] && { dir="replay-$mode-$n"; flag+=(--against "$OUT/replay-$mode"); }
       echo "== replay $REPLAY $mode #$n $(date -u +%FT%TZ)"
-      "$PY" "$here/replay.py" --arm-dir "${REPLAY_FROM:-$OUT/record}" --load "$REPLAY" --checkpoint "$CK" "${flag[@]}" \
-        --out "$OUT/$dir" > "$OUT/$dir.log" 2>&1 || { tail -n 40 "$OUT/$dir.log"; rc=1; }
+      "$PY" "$here/replay.py" --arm-dir "${REPLAY_FROM:-$OUT/record}" --load "$REPLAY" --checkpoint "$CK" --tp "$GPUS" \
+        "${flag[@]}" ${REPLAY_CAPTURE:+--capture "$REPLAY_CAPTURE"} --out "$OUT/$dir" > "$OUT/$dir.log" 2>&1 \
+        || { tail -n 40 "$OUT/$dir.log"; rc=1; }
       tail -n 1 "$OUT/$dir.log"
     done
   fi

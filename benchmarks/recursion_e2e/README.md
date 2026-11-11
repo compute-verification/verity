@@ -3,12 +3,12 @@
 Recursive witness zero knowledge proves an inner statement with Flock's circuit prover, ZK off, against the inner phase's ZK server. It then
 proves V*, the inner verifier written as Flock statements, with `--zk`, and the auditor's Lean verifier checks V*'s
 releases only. This is the one runner for that pipeline. It drives the steps of the pod script,
-`verity/ml/flock/pod/85-rec-reprice.sh`, as one recorded run, times each step on the smallest real input (K = 4096,
+`verity/protocols/flock/pod/85-rec-reprice.sh`, as one recorded run, times each step on the smallest real input (K = 4096,
 N = 2), repeats what is cheap to repeat, and says whether the run was whole (every step of one recursive proof) and whether it was accepted. Speed work measures each cut
 before and after with it.
 
 This pipeline hides the inner witness over a public circuit. The run that also hides the circuit, recursion with
-`InnerFold.lean --hide` over a hidden RoPE proof block, is `verity/ml/flock/pod/88-rec-c3-inner.sh`; this runner doesn't
+`InnerFold.lean --hide` over a hidden RoPE proof block, is `verity/protocols/flock/pod/88-rec-c3-inner.sh`; this runner doesn't
 time it yet.
 
 ~~~text
@@ -68,7 +68,7 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   fails unless every part was released at its time. With `--env TREE_FROM=local` the challenger runs beside the inner
   step, every inner coin is its coin tree's, and `rec_inner.py tree-held` holds the inner session to its signed release log
   (`out/inner/tree-held.json`, by `rec_live.tree_held_reason`, the Python mirror of the check the recursive audit reads,
-  `SampledProofs.Challenger.innerTreesReason`). The result's `release` and the table's release-side section give each
+  `Spot.Challenger.innerTreesReason`). The result's `release` and the table's release-side section give each
   part's window, release time, decision time, slack and prove wall; the headline's `released` is its verdict, and `ok`
   needs it. `--max-min` gives oprove twice its proving model (a window is about twice its part's prove) and the lead.
 - **The session's times** (the result's `session_times`): each step of one recursive session after its build (inner,

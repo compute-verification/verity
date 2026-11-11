@@ -1,9 +1,9 @@
 # network_traces
 
-The network certifier (`verity/core/protocols/certifier/`) on real served traffic: per-token timing traces for its
-calibration, the certifier in front of a served endpoint (as a proxy, `active.Proxy`, or as a relay that knows bytes
-only, `warden`), the zero-knowledge proofs of their proof blocks, and the network chain's run of record end to end. Each
-driver's docstring says what it runs, what it publishes and what its verifier receives.
+The network certifier (`verity/protocols/certifier/`) on real served traffic: per-token timing traces for its
+calibration, the certifier in front of a served endpoint (as a proxy, `active.Proxy`, or as a relay of the egress
+record's one form, `warden`), the zero-knowledge proofs of their proof blocks, and the network chain's run of record end
+to end. Each driver's docstring says what it runs, what it publishes and what its verifier receives.
 
 ## Running it
 
@@ -26,9 +26,11 @@ driver's docstring says what it runs, what it publishes and what its verifier re
   of a served OpenAI endpoint (`rehearse`) and checks what it published offline. The endpoints it rehearses against
   besides vLLM: `demo_endpoint.py` and `demo_stub.py`. `compact_render.py` is the client's shim for compact egress
   framing.
-- **The certifier as a relay.** `warden_serve.py` runs `verity.core.protocols.certifier.warden`, the network certifier
-  as a relay that knows bytes only, in front of any TCP server and checks what it published offline; `warden_chain.py`
-  is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof system.
+- **The certifier as a relay.** `warden_serve.py` runs `verity.protocols.certifier.verifier.warden`, the network certifier
+  as a relay in front of any TCP server and checks what it published offline: `serve` releases only the egress
+  record's id form by default, and `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes);
+  `warden_chain.py` is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof
+  system.
 - **Proofs in zero knowledge.** Each driver proves its proof blocks with Flock `prove --zk` behind the Lean ZK server
   and holds them by the Lean `flock-verify verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
   record), `n2_tie_zk.py` (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed
@@ -47,7 +49,7 @@ driver's docstring says what it runs, what it publishes and what its verifier re
 ## The demo's load
 
 The H200 demo serves plain INT8 weights generated from the public seed `verity/cmp92/h200/weights/v1`
-(`e2e_h200.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
+(`benchmarks.torch_gpu.p2_stage.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
 two gate verbs on the auditor's machine:
 
 - `vy-challenger-gate weights-write [--shape h200|tiny]` writes the shape's weights stream onto the auditor's store disk
@@ -82,7 +84,7 @@ the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpo
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
 id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
-`examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
+`demos/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
 staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
 (prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node, so the chain's
 endpoint step runs there: `io` writes the kept network certifier run's certified I/O to a 0600 file in the kept fetch's
@@ -202,11 +204,11 @@ request with outputs still to keep and no next Commit period, is refused.
 `per_link` gives K for one link: one network certifier on one uplink, certifying a request rate of one scan class (an
 `ingress_scan.Class`, or a window class's `scan`). `datacenter` sums K over a datacenter's links, and `world` over the
 world's. Each comes in two forms, beside its share of one copy of the weights and its ε. The terms are those of
-`NetTiming.Guarantees.PeriodLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/Period.lean`, proved in
-`Security/Proofs/NetworkCertifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose execution phases'
-failures `NetTiming.periodLeak_le_sum` sums by a union bound (`Security/Proofs/NetworkCertifier/PeriodSum.lean`); the
+`NetTiming.Guarantees.PeriodLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/Period.lean`, proved in
+`security/Proofs/NetworkCertifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose execution phases'
+failures `NetTiming.periodLeak_le_sum` sums by a union bound (`security/Proofs/NetworkCertifier/PeriodSum.lean`); the
 pooled form is `NetTiming.Guarantees.PooledLeakAccepted`
-(`Security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
+(`security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
 over links is our composition, which no Lean statement covers. It holds except where some link's statement fails, so a
 datacenter at δ takes each link at δ / links, and each link pays its own incorrect proof blocks (`datacenter`'s
 docstring says why pooling them by weight copy would be unsound).
@@ -221,7 +223,7 @@ and the scan accepted.
 
 The terms, in the generator reading of the scan's statement (each proof block's registered rows its boundary values):
 - The schedules and the fail cells, ⌈log2(cap_c + 1)⌉ each a connection (`capsTerm`, charged twice, as
-  `#S_s ≤ ∏_c (cap_c + 1)`; the record's `terms.cap_per_request`). Here cap_c bounds `WardenSchedule.cells c`, the
+  `#S_s ≤ ∏_c (cap_c + 1)`; the record's `terms.cap_per_request`). Here cap_c bounds `CertifierSchedule.cells c`, the
   egress cells of connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network
   certifier's schedule: it enters the compute audit's terms, which go into JointPeriodLive.
 - The free inputs (`terms.free`): as registered, the tied audit's slot entries, NR·T / EVERY entries of NE bits

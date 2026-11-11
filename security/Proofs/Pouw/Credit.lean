@@ -1,0 +1,564 @@
+module
+
+public import Definitions.Core.Game
+public import Proofs.Flock.Claims.Sampling.Select.Misses
+public import Proofs.Pouw.Credit.Lanes
+public import Proofs.Properties.Pouw
+public import Proofs.Properties.Pouw.Strata
+public import Properties.Pouw.Credit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.Order.Interval.Finset.Box
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.Served
+import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.VBridge.Full
+import Std.Tactic.BVDecide.Normalize.Bool
+
+/-!
+# Proofs: the ε a served window's credit reports (`WorkDrawMisses`, `EpsAtSound`, `EstablishedSound`)
+
+The sample `drawnOn` runs over the strata `law` gives misses a set `B` only if every stratum's own `subset` sample misses
+`B`'s units in it, and the streams are independent (`miss_le_prod`, the first steps of
+`Law.stratified_exec_escape_le`): the miss probability is at most `∏_s C(n_s − m_s, k_s)/C(n_s, k_s)`, `m_s` the units
+of stratum `s` in `B` (`localOf`). The work sampling design's sizes make that product at most `((W − Σ_s w_s m_s)/W)^K`
+(`prod_le_pow`, `Law.work_escape_le`'s weighted AM-GM over the strata, here with strata that may overlap and floors
+that may be zero), and `B`'s work (`unitWork`) is at most `Σ_s w_s m_s` (`unitWork_le`). So a set of work `ε·C`
+escapes with at most `(1 − εC/W)^K ≤ (1 − εC/W)^K′ ≤ δ` (`kPrimeLeast`) when `K′ < W`; at `K′ = W ≤ K` every stratum
+doing work samples all its units, and a set of positive work escapes never.
+-/
+
+@[expose] public section
+
+namespace Properties.Pouw.Credit.SecurityProofs
+
+open Lean (Json toJson)
+open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset
+open Properties.Pouw.Strata (unitWork)
+open scoped ENNReal NNReal
+
+/-- Stratum `s`'s local indices whose units are in `B`. -/
+def localOf (S : Array Flock.Draw.Stratum) (B : Finset ℕ) (s : Fin S.size) : Finset (Fin S[s].size) :=
+  univ.filter fun j => S[s].unit j.val ∈ B
+
+theorem card_localOf_le (S : Array Flock.Draw.Stratum) (B : Finset ℕ) (s : Fin S.size) :
+    (localOf S B s).card ≤ S[s].size :=
+  (Finset.card_filter_le _ _).trans (by rw [Finset.card_univ, Fintype.card_fin])
+
+/-- **The sample misses `B` no more often than each stratum's `subset` sample misses `B`'s units in it, independently.** -/
+theorem miss_le_prod (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[s].k ≤ S[s].size) (B : Finset ℕ) :
+    prCoin (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d) ≤
+      ∏ s : Fin S.size, ((S[s].size - (localOf S B s).card).choose S[s].k : ℝ≥0∞) /
+        (S[s].size.choose S[s].k : ℝ≥0∞) := by
+  classical
+  calc prCoin (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d)
+      ≤ prCoin (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∀ s ∈ (univ : Finset (Fin S.size)),
+          (fun (s : Fin S.size) (f : Fin S[s].need → Fin 256) =>
+            ∃ D, Flock.Draw.subset S[s].k S[s].size (Law.streamOf f) = some D ∧
+            ∀ j ∈ localOf S B s, j.val ∉ D) s (g s)) := by
+        refine prCoin_mono fun g ⟨D, hD, hmiss⟩ s _ => ?_
+        have hD' : Flock.Draw.stratified S (Array.ofFn fun i => Properties.Spot.bytesOf (g i)) = some D := hD
+        obtain ⟨li, hli, hmem⟩ := Law.stratified_units _ _ D hD' s.val s.isLt
+        have hSs : S[s.val]! = S[s] := getElem!_pos S s.val s.isLt
+        have hfs : (Array.ofFn fun i => Properties.Spot.bytesOf (g i)).getD s.val ByteArray.empty =
+            Law.streamOf (g s) := by
+          simp [Array.getD_eq_getD_getElem?, Properties.Spot.bytesOf, Law.streamOf]
+        rw [hSs, hfs] at hli
+        rw [hSs] at hmem
+        exact ⟨li, hli, fun j hj hjli => hmiss _ (Finset.mem_filter.1 hj).2 (hmem _ hjli)⟩
+    _ = ∏ s : Fin S.size, prCoin (fun f : Fin S[s].need → Fin 256 =>
+          ∃ D, Flock.Draw.subset S[s].k S[s].size (Law.streamOf f) = some D ∧ ∀ j ∈ localOf S B s, j.val ∉ D) :=
+        prCoin_pi_forall (ι := Fin S.size) (Ω := fun s : Fin S.size => Fin S[s].need → Fin 256) univ
+          (fun (s : Fin S.size) (f : Fin S[s].need → Fin 256) =>
+          ∃ D, Flock.Draw.subset S[s].k S[s].size (Law.streamOf f) = some D ∧ ∀ j ∈ localOf S B s, j.val ∉ D)
+    _ ≤ ∏ s : Fin S.size, (Law.subset S[s].size S[s].k (hk s)).escape (localOf S B s) :=
+        Finset.prod_le_prod fun s _ => Law.subset_exec_escape_le _ _ _ (hk s) _
+    _ = _ := Finset.prod_congr rfl fun s _ => Law.subset_escape (hk s) _
+
+/-- `miss_le_prod` as `prob` reads it, the product in `ℝ≥0`. -/
+theorem prob_le (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[s].k ≤ S[s].size) (B : Finset ℕ) :
+    Pouw.RelativeSecurity.prob
+        (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d) ≤
+      ((∏ s : Fin S.size, ((S[s].size - (localOf S B s).card).choose S[s].k : ℝ≥0) /
+        (S[s].size.choose S[s].k : ℝ≥0) : ℝ≥0) : ℝ) := by
+  rw [Properties.Served.SecurityProofs.prob_eq_pr, Claims.Sampling.Pr_eq_toReal_prCoin]
+  have hC : ∀ s : Fin S.size, ((S[s].size.choose S[s].k : ℕ) : ℝ≥0) ≠ 0 := fun s => by
+    exact_mod_cast (Nat.choose_pos (hk s)).ne'
+  have h := miss_le_prod S hk B
+  have heq : (∏ s : Fin S.size, ((S[s].size - (localOf S B s).card).choose S[s].k : ℝ≥0∞) /
+      (S[s].size.choose S[s].k : ℝ≥0∞)) =
+      ((∏ s : Fin S.size, ((S[s].size - (localOf S B s).card).choose S[s].k : ℝ≥0) /
+        (S[s].size.choose S[s].k : ℝ≥0) : ℝ≥0) : ℝ≥0∞) := by
+    rw [ENNReal.ofNNReal_finsetProd]
+    refine Finset.prod_congr rfl fun s _ => ?_
+    rw [ENNReal.coe_div (hC s)]
+    simp
+  rw [heq] at h
+  exact (ENNReal.toReal_mono ENNReal.coe_ne_top h).trans_eq (ENNReal.coe_toReal _)
+
+/-- **The work sampling design's weighted AM-GM**: strata of `N s` units, `k s` sampled and `M s` in the set, each unit doing `w s`,
+sample sizes at least `K w_s N_s / W` (or all), escape with at most `((W − Σ_s w_s M_s)/W)^K`. -/
+theorem prod_le_pow {ι : Type} [Fintype ι] (N M k w : ι → ℕ) (K W : ℕ) (hMN : ∀ s, M s ≤ N s) (hkN : ∀ s, k s ≤ N s)
+    (hW : 0 < W) (hWsum : ∑ s, w s * N s = W) (hge : ∀ s, k s = N s ∨ K * w s * N s ≤ W * k s)
+    (hk1 : ∀ s, 0 < w s → 0 < N s → 1 ≤ k s) :
+    ∏ s, ((N s - M s).choose (k s) : ℝ≥0) / ((N s).choose (k s) : ℝ≥0) ≤
+      (((W - ∑ s, w s * M s : ℕ) : ℝ≥0) / (W : ℝ≥0)) ^ K := by
+  classical
+  have hW0 : (W : ℝ≥0) ≠ 0 := by exact_mod_cast hW.ne'
+  set x : ι → ℝ≥0 := fun s => ((N s - M s : ℕ) : ℝ≥0) / (N s : ℝ≥0) with hxdef
+  set a : ι → ℝ≥0 := fun s => ((w s * N s : ℕ) : ℝ≥0) / (W : ℝ≥0) with hadef
+  have ha1 : ∑ s, a s = 1 := by
+    simp only [hadef]
+    rw [← Finset.sum_div, ← Nat.cast_sum, hWsum, div_self hW0]
+  have hterm : ∀ s, a s * x s = ((w s * (N s - M s) : ℕ) : ℝ≥0) / (W : ℝ≥0) := by
+    intro s
+    simp only [hadef, hxdef]
+    rcases Nat.eq_zero_or_pos (N s) with h0 | hpos
+    · have hM0 : M s = 0 := by have := hMN s; omega
+      simp [h0, hM0]
+    · have hN0 : (N s : ℝ≥0) ≠ 0 := by exact_mod_cast hpos.ne'
+      rw [div_mul_div_comm, ← Nat.cast_mul, show w s * N s * (N s - M s) = w s * (N s - M s) * N s by ring,
+        Nat.cast_mul, mul_div_mul_right _ _ hN0]
+  have hax : ∑ s, a s * x s = ((W - ∑ s, w s * M s : ℕ) : ℝ≥0) / (W : ℝ≥0) := by
+    rw [Finset.sum_congr rfl fun s _ => hterm s, ← Finset.sum_div, ← Nat.cast_sum]
+    congr 2
+    have hsplit : ∑ s, w s * (N s - M s) + ∑ s, w s * M s = ∑ s, w s * N s := by
+      rw [← Finset.sum_add_distrib]
+      exact Finset.sum_congr rfl fun s _ => by rw [← Nat.mul_add, Nat.sub_add_cancel (hMN s)]
+    omega
+  have hfac : ∀ s, ((N s - M s).choose (k s) : ℝ≥0) / ((N s).choose (k s) : ℝ≥0) ≤ x s ^ ((a s : ℝ) * K) := by
+    intro s
+    rcases Nat.eq_zero_or_pos (N s) with h0 | hpos
+    · have hk0 : k s = 0 := by have := hkN s; omega
+      have hM0 : M s = 0 := by have := hMN s; omega
+      simp [hadef, h0, hk0, hM0]
+    have hC0 : ((N s).choose (k s) : ℝ≥0) ≠ 0 := by exact_mod_cast (Nat.choose_pos (hkN s)).ne'
+    rcases Nat.eq_zero_or_pos (M s) with hM0 | hMpos
+    · have hx1 : x s = 1 := by
+        simp only [hxdef, hM0, Nat.sub_zero]
+        exact div_self (by exact_mod_cast hpos.ne')
+      rw [hx1, NNReal.one_rpow, hM0, Nat.sub_zero, div_self hC0]
+    rcases Nat.eq_zero_or_pos (w s) with hw0 | hwpos
+    · have ha0 : a s = 0 := by simp [hadef, hw0]
+      rw [ha0, NNReal.coe_zero, zero_mul, NNReal.rpow_zero]
+      exact div_le_one_of_le₀ (by exact_mod_cast Nat.choose_le_choose (k s) (Nat.sub_le (N s) (M s))) zero_le
+    have hk1s : 1 ≤ k s := hk1 s hwpos hpos
+    have hMNs := hMN s
+    by_cases hzero : k s = N s ∨ M s = N s
+    · have : (N s - M s).choose (k s) = 0 := Nat.choose_eq_zero_of_lt (by omega)
+      rw [this, Nat.cast_zero, zero_div]
+      exact zero_le
+    push Not at hzero
+    have hges : K * w s * N s ≤ W * k s := (hge s).resolve_left hzero.1
+    have hx0 : 0 < x s := div_pos (by exact_mod_cast (show 0 < N s - M s by omega)) (by exact_mod_cast hpos)
+    have hx1 : x s ≤ 1 := div_le_one_of_le₀ (by exact_mod_cast Nat.sub_le _ _) zero_le
+    have hexp : (a s : ℝ) * K ≤ (k s : ℝ) := by
+      simp only [hadef, NNReal.coe_div, NNReal.coe_natCast]
+      rw [div_mul_eq_mul_div, div_le_iff₀ (by exact_mod_cast hW)]
+      exact_mod_cast (show w s * N s * K ≤ k s * W by linarith [hges, mul_comm (K * w s) (N s)])
+    calc ((N s - M s).choose (k s) : ℝ≥0) / ((N s).choose (k s) : ℝ≥0) ≤ x s ^ (k s) :=
+          Law.choose_div_le_pow (hkN s) hpos
+      _ = x s ^ ((k s : ℕ) : ℝ) := (NNReal.rpow_natCast _ _).symm
+      _ ≤ x s ^ ((a s : ℝ) * K) := NNReal.rpow_le_rpow_of_exponent_ge hx0 hx1 hexp
+  calc _ ≤ ∏ s, x s ^ ((a s : ℝ) * K) := Finset.prod_le_prod fun s _ => hfac s
+    _ = (∏ s, x s ^ (a s : ℝ)) ^ K := by
+        rw [← Finset.prod_pow]
+        exact Finset.prod_congr rfl fun s _ => by rw [NNReal.rpow_mul, NNReal.rpow_natCast]
+    _ ≤ (∑ s, a s * x s) ^ K :=
+        pow_le_pow_left₀ zero_le (NNReal.geom_mean_le_arith_mean_weighted univ a x ha1) K
+    _ = _ := by rw [hax]
+
+/-- **The work bound over executable strata**: the sample over strata `S` sized by the work sampling design at `K` (`hge`, `hk1`),
+units of stratum `s` doing `w s` and all of them `W`, misses a set `B` with at most `((W − T)/W)^K` for any `T` at most
+`Σ_s w_s m_s`. -/
+theorem prob_le_pow (S : Array Flock.Draw.Stratum) (w : Fin S.size → ℕ) (K W T : ℕ) (hW : 0 < W)
+    (hWsum : ∑ s, w s * S[s].size = W) (hkN : ∀ s : Fin S.size, S[s].k ≤ S[s].size)
+    (hge : ∀ s : Fin S.size, S[s].k = S[s].size ∨ K * w s * S[s].size ≤ W * S[s].k)
+    (hk1 : ∀ s : Fin S.size, 0 < w s → 0 < S[s].size → 1 ≤ S[s].k) (B : Finset ℕ)
+    (hT : T ≤ ∑ s, w s * (localOf S B s).card) :
+    Pouw.RelativeSecurity.prob
+        (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d) ≤
+      (((W - T : ℕ) : ℝ) / W) ^ K := by
+  refine (prob_le S hkN B).trans ?_
+  have h := prod_le_pow (fun s : Fin S.size => S[s].size) (fun s => (localOf S B s).card) (fun s => S[s].k) w K W
+    (fun s => card_localOf_le S B s) hkN hW hWsum hge hk1
+  have h2 : (((W - ∑ s, w s * (localOf S B s).card : ℕ) : ℝ≥0) / (W : ℝ≥0)) ^ K ≤
+      (((W - T : ℕ) : ℝ≥0) / (W : ℝ≥0)) ^ K := by
+    gcongr
+  calc _ ≤ ((((((W - T : ℕ) : ℝ≥0) / (W : ℝ≥0)) ^ K : ℝ≥0)) : ℝ) := NNReal.coe_le_coe.2 (h.trans h2)
+    _ = _ := by rw [NNReal.coe_pow, NNReal.coe_div, NNReal.coe_natCast, NNReal.coe_natCast]
+
+/-- A unit doing work is one of a stratum's units, in a stratum doing that work. -/
+theorem holder (ss : Array Flock.Draw.WorkStratum) (S : Array Flock.Draw.Stratum) (hsz : S.size = ss.size)
+    (hunits : ∀ s : Fin S.size, S[s].units = ss[s.val]!.units) {u : ℕ} (hu : 0 < unitWork ss u) :
+    ∃ s : Fin S.size, ss[s.val]!.work = unitWork ss u ∧ ∃ j : Fin S[s].size, S[s].unit j.val = u := by
+  obtain ⟨i, hi, hhold, hwork⟩ := Properties.Pouw.Strata.unitWork_pos hu
+  have hi' : i < S.size := by omega
+  refine ⟨⟨i, hi'⟩, by rw [getElem!_pos ss i hi]; exact hwork, ?_⟩
+  have hany : S[(⟨i, hi'⟩ : Fin S.size)].units.any (fun (lo, hi) => lo ≤ u && u < hi) = true := by
+    rw [hunits, getElem!_pos ss i hi]
+    exact hhold
+  obtain ⟨j, hj, hju⟩ := FlockVBridge.Full.mem_unit _ u hany
+  exact ⟨⟨j, hj⟩, hju⟩
+
+/-- The units of stratum `s`'s local indices in `B`. -/
+def unitsIn (S : Array Flock.Draw.Stratum) (B : Finset ℕ) (s : Fin S.size) : Finset ℕ :=
+  (localOf S B s).image fun j => S[s].unit j.val
+
+/-- **`B`'s work is at most `Σ_s w_s m_s`**: each unit of `B` doing work is a unit of a stratum doing that work. -/
+theorem unitWork_le (ss : Array Flock.Draw.WorkStratum) (S : Array Flock.Draw.Stratum) (hsz : S.size = ss.size)
+    (hunits : ∀ s : Fin S.size, S[s].units = ss[s.val]!.units) (B : Finset ℕ) :
+    ∑ u ∈ B, unitWork ss u ≤ ∑ s : Fin S.size, ss[s.val]!.work * (localOf S B s).card := by
+  classical
+  have hone : ∀ u ∈ B, unitWork ss u ≤
+      ∑ s : Fin S.size, if u ∈ unitsIn S B s then ss[s.val]!.work else 0 := by
+    intro u hu
+    rcases Nat.eq_zero_or_pos (unitWork ss u) with h0 | hpos
+    · rw [h0]
+      exact Nat.zero_le _
+    obtain ⟨s, hws, j, hju⟩ := holder ss S hsz hunits hpos
+    have hmem : u ∈ unitsIn S B s :=
+      Finset.mem_image.2 ⟨j, Finset.mem_filter.2 ⟨Finset.mem_univ _, by rw [hju]; exact hu⟩, hju⟩
+    calc unitWork ss u = if u ∈ unitsIn S B s then ss[s.val]!.work else 0 := by rw [ite_eq_left hmem, hws]
+      _ ≤ _ := Finset.single_le_sum (f := fun s => if u ∈ unitsIn S B s then ss[s.val]!.work else 0)
+          (fun _ _ => Nat.zero_le _) (Finset.mem_univ s)
+  calc ∑ u ∈ B, unitWork ss u
+      ≤ ∑ u ∈ B, ∑ s : Fin S.size, (if u ∈ unitsIn S B s then ss[s.val]!.work else 0) := Finset.sum_le_sum hone
+    _ = ∑ s : Fin S.size, ∑ u ∈ B, (if u ∈ unitsIn S B s then ss[s.val]!.work else 0) := Finset.sum_comm
+    _ = ∑ s : Fin S.size, ss[s.val]!.work * (B.filter (· ∈ unitsIn S B s)).card := by
+        refine Finset.sum_congr rfl fun s _ => ?_
+        rw [← Finset.sum_filter, Finset.sum_const, smul_eq_mul, mul_comm]
+    _ ≤ ∑ s : Fin S.size, ss[s.val]!.work * (localOf S B s).card := by
+        refine Finset.sum_le_sum fun s _ => Nat.mul_le_mul_left _ ?_
+        calc (B.filter (· ∈ unitsIn S B s)).card ≤ (unitsIn S B s).card :=
+              Finset.card_le_card fun x hx => (Finset.mem_filter.1 hx).2
+          _ ≤ (localOf S B s).card := Finset.card_image_le
+
+/-- The strata's work, read stratum by stratum over the sampling design's strata `S` (as many as `ss`). -/
+theorem sum_work (ss : Array Flock.Draw.WorkStratum) (S : Array Flock.Draw.Stratum) (hsz : S.size = ss.size) :
+    ∑ s : Fin S.size, ss[s.val]!.work * ss[s.val]!.size = Flock.Draw.totalWork ss := by
+  rw [Properties.Spot.SecurityProofs.totalWork_eq, ← Fin.sum_univ_fun_getElem]
+  refine Fintype.sum_equiv (finCongr (hsz.trans Array.length_toList.symm)) _ _ fun s => ?_
+  have hs : s.val < ss.size := by omega
+  simp only [finCongr_apply_coe, Array.getElem_toList, getElem!_pos ss s.val hs]
+  exact Nat.mul_comm _ _
+
+theorem workDrawMisses : WorkDrawMisses := by
+  intro layout ss K strata eps δ C k' _ hlaw hk' B hk'K hB
+  classical
+  obtain ⟨hK1, -, hstrata⟩ := Properties.Pouw.Strata.law_ok hlaw
+  have hsz : strata.size = ss.size := by rw [hstrata, Array.size_map]
+  have hS : ∀ s : Fin strata.size,
+      strata[s] = Properties.Pouw.Strata.lawOf K (Flock.Draw.totalWork ss) ss[s.val]! := by
+    subst hstrata
+    exact Properties.Pouw.Strata.getElem_lawOf ss K _
+  have hWsum' := sum_work ss strata hsz
+  generalize hWdef : Flock.Draw.totalWork ss = W at hS hk' hWsum'
+  obtain ⟨he0, he1, hd0, -, hW1, -, hC0, hCW⟩ := Properties.Pouw.Window.kPrimeRefuses _ _ _ _ _ _ hk'
+  have hq := Properties.Pouw.Window.kPrimeLeast _ _ _ _ _ _ hk'
+  dsimp only at hq
+  obtain ⟨-, hk'W, hlt, -⟩ := hq
+  simp only [Int.toNat_natCast] at hk'W hlt
+  have hW : 0 < W := by omega
+  have hCW' : C ≤ W := by omega
+  have hN : ∀ s : Fin strata.size, strata[s].size = ss[s.val]!.size := fun s => by rw [hS s]; rfl
+  have hunits : ∀ s : Fin strata.size, strata[s].units = ss[s.val]!.units := fun s => by rw [hS s]; rfl
+  have hkN : ∀ s : Fin strata.size, strata[s].k ≤ strata[s].size := fun s => by
+    rw [hS s]
+    exact Properties.Pouw.Strata.workK_le _ _ _ _ _
+  rcases Nat.lt_or_ge k' W with hlt' | hge'
+  · have hWsum : ∑ s : Fin strata.size, ss[s.val]!.work * strata[s].size = W := by
+      rw [← hWsum']
+      exact Finset.sum_congr rfl fun s _ => by rw [hN s]
+    have hge : ∀ s : Fin strata.size, strata[s].k = strata[s].size ∨
+        K * ss[s.val]!.work * strata[s].size ≤ W * strata[s].k := fun s => by
+      rw [hS s]
+      exact Properties.Pouw.Strata.workK_ge K _ _ W _ hW
+    have hk1 : ∀ s : Fin strata.size, 0 < ss[s.val]!.work → 0 < strata[s].size → 1 ≤ strata[s].k := by
+      intro s hw hn
+      rw [hS s] at hn ⊢
+      exact Properties.Pouw.Strata.workK_pos K _ _ W _ (Nat.mul_pos (Nat.mul_pos hK1 hw) hn) hW
+    have hT := unitWork_le ss strata hsz hunits B
+    have hP := prob_le_pow strata (fun s => ss[s.val]!.work) K W (∑ u ∈ B, unitWork ss u) hW hWsum hkN hge hk1 B hT
+    have hTW : ∑ u ∈ B, unitWork ss u ≤ W := by
+      refine hT.trans ?_
+      rw [← hWsum]
+      exact Finset.sum_le_sum fun s _ => Nat.mul_le_mul_left _ (card_localOf_le _ _ _)
+    have hWr : (0 : ℝ) < W := by exact_mod_cast hW
+    have he0r : (0 : ℝ) < eps := by exact_mod_cast he0
+    have he1r : (eps : ℝ) ≤ 1 := by exact_mod_cast he1
+    have hBr : (eps : ℝ) * C ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℝ) := by exact_mod_cast hB
+    have hx : ((W - ∑ u ∈ B, unitWork ss u : ℕ) : ℝ) / W ≤ 1 - (eps : ℝ) * C / W := by
+      rw [Nat.cast_sub hTW, sub_div, div_self hWr.ne']
+      have := (div_le_div_iff_of_pos_right hWr).2 hBr
+      linarith
+    have hx0 : 0 ≤ ((W - ∑ u ∈ B, unitWork ss u : ℕ) : ℝ) / W := div_nonneg (Nat.cast_nonneg _) hWr.le
+    have hCWr : (eps : ℝ) * C ≤ W :=
+      calc (eps : ℝ) * C ≤ 1 * C := mul_le_mul_of_nonneg_right he1r (Nat.cast_nonneg _)
+        _ = C := one_mul _
+        _ ≤ W := by exact_mod_cast hCW'
+    have hq0 : 0 ≤ 1 - (eps : ℝ) * C / W := by
+      rw [sub_nonneg, div_le_one₀ hWr]
+      exact hCWr
+    have hq1 : 1 - (eps : ℝ) * C / W ≤ 1 := by
+      have : 0 ≤ (eps : ℝ) * C / W := div_nonneg (mul_nonneg he0r.le (Nat.cast_nonneg _)) hWr.le
+      linarith
+    have hδq : (((1 - PouwWindow.missShare eps C W 1) ^ k' : ℚ) : ℝ) ≤ (δ : ℝ) := Rat.cast_le.2 (hlt hlt')
+    have hδ : (1 - (eps : ℝ) * C / W) ^ k' ≤ (δ : ℝ) := by
+      convert hδq using 1
+      rw [PouwWindow.missShare]
+      push_cast
+      ring
+    calc _ ≤ (((W - ∑ u ∈ B, unitWork ss u : ℕ) : ℝ) / W) ^ K := hP
+      _ ≤ (1 - (eps : ℝ) * C / W) ^ K := pow_le_pow_left₀ hx0 hx K
+      _ ≤ (1 - (eps : ℝ) * C / W) ^ k' := pow_le_pow_of_le_one hq0 hq1 hk'K
+      _ ≤ δ := hδ
+  · have hWK : W ≤ K := by omega
+    have hTpos : 0 < ∑ u ∈ B, unitWork ss u := by
+      have h1 : (0 : ℚ) < eps * C := mul_pos he0 (by exact_mod_cast (show 0 < C by omega))
+      exact_mod_cast h1.trans_le hB
+    obtain ⟨u, hu, hu0⟩ := Finset.exists_ne_zero_of_sum_ne_zero hTpos.ne'
+    obtain ⟨s, hws, j, hju⟩ := holder ss strata hsz hunits (Nat.pos_of_ne_zero hu0)
+    have hjl : j ∈ localOf strata B s := Finset.mem_filter.2 ⟨Finset.mem_univ _, by rw [hju]; exact hu⟩
+    have hM : 1 ≤ (localOf strata B s).card := Finset.card_pos.2 ⟨j, hjl⟩
+    have hMN := card_localOf_le strata B s
+    have hkall : strata[s].k = strata[s].size := by
+      rw [hS s]
+      exact Properties.Pouw.Strata.workK_cap K _ _ W _ hWK (by rw [hws]; omega) hW
+    have hzero : ((strata[s].size - (localOf strata B s).card).choose strata[s].k : ℝ≥0) /
+        (strata[s].size.choose strata[s].k : ℝ≥0) = 0 := by
+      rw [Nat.choose_eq_zero_of_lt (by omega), Nat.cast_zero, zero_div]
+    have h0 : (∏ s : Fin strata.size, ((strata[s].size - (localOf strata B s).card).choose strata[s].k : ℝ≥0) /
+        (strata[s].size.choose strata[s].k : ℝ≥0)) = 0 :=
+      Finset.prod_eq_zero (Finset.mem_univ s) hzero
+    calc _ ≤ _ := prob_le strata hkN B
+      _ = 0 := by rw [h0, NNReal.coe_zero]
+      _ ≤ δ := by exact_mod_cast hd0.le
+
+theorem epsAtSound : EpsAtSound := by
+  intro layout ss K strata δ e C hss hlaw he B hB
+  obtain ⟨k', hk', hk'K⟩ := Properties.Pouw.Strata.epsAt_ok he
+  exact workDrawMisses layout ss K strata e δ C k' hss hlaw hk' B (by exact_mod_cast hk'K) hB
+
+theorem sum_range_list (g : ℕ → ℕ) : ∀ n, ∑ i ∈ Finset.range n, g i = ((List.range n).map g).sum
+  | 0 => by simp
+  | n + 1 => by
+    rw [Finset.sum_range_succ, List.range_succ, List.map_append, List.sum_append, sum_range_list g n]
+    simp
+
+/-- `EstablishedSound` from the tiling: the total work `established` passes `epsAt` is the strata's, and its credited
+work is `creditedWork`. -/
+theorem establishedSound_of (htile : Properties.Pouw.Strata.StrataTile) : EstablishedSound := by
+  intro layout ss K strata got served e hss hlaw hest B hB
+  obtain ⟨-, -, -, htotal, -⟩ := htile layout ss hss
+  have hok := Properties.Pouw.Strata.established_ok hest
+  have key : ((List.range (PouwCheck.Credit.servedWork layout served).length).map fun i =>
+      if i ∈ got then ((PouwCheck.Credit.servedWork layout served).getD i (0, 0)).1 *
+        ((PouwCheck.Credit.servedWork layout served).getD i (0, 0)).2 else 0).sum =
+      creditedWork layout got served := by
+    rw [← sum_range_list, creditedWork, Finset.sum_filter]
+  rw [key, ← htotal] at hok
+  exact epsAtSound layout ss K strata PouwCheck.Credit.DELTA e (creditedWork layout got served) hss hlaw hok B hB
+
+/-- **The ε a credit reports is established** (`EstablishedSound`): `strata` tiles the window's units
+(`Properties.Pouw.Strata.strataTile`), so the total work `established` passes `epsAt` is the strata's. -/
+theorem establishedSound : EstablishedSound := establishedSound_of Properties.Pouw.Strata.strataTile
+
+/-! ## The sampling coin's session is withheld (`DrawWithheld`) -/
+
+section Withheld
+
+open Spot.Challenger (ChallengerKey trustedSessionOf withheldOn)
+
+theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {v : β} (h : (x >>= f) = .ok v) :
+    ∃ a, x = .ok a ∧ f a = .ok v := by
+  cases x with
+  | error e => cases h
+  | ok a => exact ⟨a, rfl, h⟩
+
+theorem drawSession_withheld {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
+    (h : PouwCheck.Credit.drawSession ledger k pins main session root = .ok x) : withheldOn ledger root = true := by
+  unfold PouwCheck.Credit.drawSession at h
+  obtain ⟨_, -, h⟩ := bind_eq_ok h
+  by_cases hw : withheldOn ledger root = true
+  · exact hw
+  · simp [hw] at h
+    cases h
+
+theorem creditedDraw_withheld {ledger : Json} {k : ChallengerKey} {pins main draw : Json} {root : ByteArray}
+    (h : PouwCheck.Credit.Internal.creditedDraw ledger k pins main draw root = .ok ()) :
+    ∃ r, PouwCheck.get draw "root" = .str r ∧ withheldOn ledger r = true := by
+  unfold PouwCheck.Credit.Internal.creditedDraw at h
+  dsimp only at h
+  split at h
+  · next hr =>
+    obtain ⟨_, hx, -⟩ := bind_eq_ok h
+    refine ⟨Flock.hexOf root, ?_, drawSession_withheld hx⟩
+    revert hr; cases PouwCheck.get draw "root" <;> simp [PouwCheck.str?]
+  · cases h
+
+theorem drawWithheld : DrawWithheld := by
+  intro key ledger pins main salt calls served commit rounds draw got h
+  unfold PouwCheck.Credit.Internal.credited at h
+  obtain ⟨⟨k, out, root⟩, -, h⟩ := bind_eq_ok h
+  obtain ⟨u, hu, -⟩ := bind_eq_ok h
+  cases u
+  exact creditedDraw_withheld hu
+
+/-- The sample session's step (`drawSession`) accepts every session the ledger opens withheld on the sample root and
+`trustedSessionOf` trusts, as a withheld deployment's is. -/
+theorem drawSession_honest {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
+    (ht : trustedSessionOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session = .ok x)
+    (hw : withheldOn ledger root = true) : PouwCheck.Credit.drawSession ledger k pins main session root = .ok x := by
+  simp [PouwCheck.Credit.drawSession, ht, hw, Except.mapError]
+
+/-- **`DrawWithheld`'s nontrivial lemma**: its conclusion fails at the empty ledger, which opens no session, and the sample
+`{root: ""}`, for every root `r`: the empty ledger withholds no sample root. -/
+theorem drawWithheld_nontrivial :
+    ∀ r : String, ¬ (PouwCheck.get (Json.mkObj [("root", Json.str "")]) "root" = .str r ∧
+      withheldOn (.arr #[]) r = true) := by
+  rintro r ⟨-, hw⟩
+  simp [withheldOn] at hw
+
+/-- **`DrawWithheld` fails at a verifier that accepts everything**: such a verifier credits the empty ledger and the sample
+`{root: ""}`, where the conclusion fails (`drawWithheld_nontrivial`). -/
+theorem drawWithheld_acceptAll
+    (f : Json → Json → Json → Json → Json → Json → Json → Json → Json → Json → Except (String × String) (List Nat))
+    (hall : ∀ key ledger pins main salt calls served commit rounds draw,
+      ∃ got, f key ledger pins main salt calls served commit rounds draw = .ok got) :
+    ¬ ∀ key ledger pins main salt calls served commit rounds draw got,
+      f key ledger pins main salt calls served commit rounds draw = .ok got →
+        ∃ r, PouwCheck.get draw "root" = .str r ∧ withheldOn ledger r = true := by
+  intro h
+  obtain ⟨got, hf⟩ := hall .null (.arr #[]) .null .null .null .null .null .null .null (Json.mkObj [("root", Json.str "")])
+  obtain ⟨r, hr, hw⟩ := h _ _ _ _ _ _ _ _ _ _ _ hf
+  exact drawWithheld_nontrivial r ⟨hr, hw⟩
+
+end Withheld
+
+/-- **The grouped sample misses a set of blocks of work `ε·C` with probability at most `δ`** (`GroupedDrawMisses`): the
+blocks of `Bb` miss every sampled group exactly when their leaves `Bb.image leafOf` are all missed, and those leaves do at
+least the blocks' work, so `workDrawMisses` at `B = Bb.image leafOf`. -/
+theorem groupedDrawMisses : GroupedDrawMisses := by
+  intro layout ss K strata eps δ C k' hss hlaw hk' β leafOf w Bb hk'K hw hB
+  classical
+  have hle : ∑ b ∈ Bb, w b ≤ ∑ u ∈ Bb.image leafOf, unitWork ss u := by
+    rw [← Finset.sum_fiberwise_of_maps_to (fun b hb => Finset.mem_image_of_mem leafOf hb)]
+    exact Finset.sum_le_sum fun u _ => hw u
+  have hev : (fun g : (i : Fin strata.size) → Fin strata[i].need → Fin 256 =>
+      ∃ d, drawnOn strata g = some d ∧ ∀ b ∈ Bb, leafOf b ∉ d) =
+      fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ Bb.image leafOf, u ∉ d := by
+    funext g
+    simp only [Finset.forall_mem_image]
+  rw [hev]
+  exact workDrawMisses layout ss K strata eps δ C k' hss hlaw hk' (Bb.image leafOf) hk'K
+    (hB.trans (Nat.cast_le.mpr hle))
+
+/-! ## `GroupedDrawMisses`'s witnesses
+
+The compiled `strata` and `law` on the lanes window are `Proofs.Pouw.Credit.Lanes`'s (`strata_lanes`, `law_lanes`);
+`kPrime`'s `K′` is pinned by `kPrime_least` as `Accept` pins H1's. -/
+
+/-- **`K′ ≤ 8` at ε = 1/2 and δ = 1/256 over the whole window's work**: `q = 1/2`, and `q^8 = δ`. -/
+theorem kPrime_lanes : ∃ k', PouwWindow.kPrime (1 / 2) (1 / 256) (Flock.Draw.totalWork lanesStrata)
+    (Flock.Draw.totalWork lanesStrata) 1 = .ok k' ∧ k' ≤ lanesK := by
+  have hd : PouwWindow.KPrimeDomain (1 / 2) (1 / 256) (Flock.Draw.totalWork lanesStrata)
+      (Flock.Draw.totalWork lanesStrata) 1 := by
+    unfold PouwWindow.KPrimeDomain; decide +kernel
+  have h := Properties.Pouw.Window.kPrime_least _ _ _ _ _ hd
+  dsimp only at h
+  obtain ⟨k, hk, -, -, -, hmin⟩ := h
+  exact ⟨k, hk, Nat.le_of_not_lt fun hlt => absurd (hmin 8 (by decide) hlt) (by decide +kernel)⟩
+
+/-- **No leaf's blocks do more than the leaf**: leaf `u < 16`'s 32 lanes do its 32·32·2048, and no block is past
+leaf 15. -/
+theorem leaves_lanes (u : ℕ) :
+    ∑ b ∈ lanesBlocks.filter (fun b => lanesLeaf b = u), lanesWork b ≤ unitWork lanesStrata u := by
+  by_cases hu : u < 16
+  · interval_cases u <;> decide +kernel
+  · have he : lanesBlocks.filter (fun b => lanesLeaf b = u) = ∅ := by
+      refine Finset.filter_eq_empty_iff.2 fun b hb => ?_
+      simp only [lanesBlocks, Finset.mem_range] at hb
+      unfold lanesLeaf
+      omega
+    rw [he, Finset.sum_empty]
+    exact Nat.zero_le _
+
+theorem work_lanes : ∑ b ∈ lanesBlocks, lanesWork b = Flock.Draw.totalWork lanesStrata := by decide +kernel
+
+/-- **`GroupedDrawMisses`'s honest lemma**: its premises hold at the lanes window (`lanesLayout`), sixteen 32 × 32 leaves
+at K = 2048 each proved as its 32 lanes and their combine (`lanesBlocks`, `lanesLeaf`, `lanesWork`): `strata` and `law`
+accept it at `K = 8`, `kPrime` answers `K′ ≤ 8` at ε = 1/2 and δ = 1/256 over its whole work, no leaf's blocks do more
+than the leaf, and the blocks do at least ε of the work. -/
+theorem groupedDrawMisses_honest :
+    ∃ k', PouwCheck.Credit.strata lanesLayout = .ok lanesStrata ∧
+      PouwCheck.Credit.law lanesStrata (toJson lanesK) = .ok lanesLaw ∧
+      PouwWindow.kPrime (1 / 2) (1 / 256) (Flock.Draw.totalWork lanesStrata) (Flock.Draw.totalWork lanesStrata) 1 =
+        .ok k' ∧ k' ≤ lanesK ∧
+      (∀ u, ∑ b ∈ lanesBlocks.filter (fun b => lanesLeaf b = u), lanesWork b ≤ unitWork lanesStrata u) ∧
+      (1 / 2 : ℚ) * (Flock.Draw.totalWork lanesStrata : ℚ) ≤ ((∑ b ∈ lanesBlocks, lanesWork b : ℕ) : ℚ) := by
+  obtain ⟨k', hk', hkK⟩ := kPrime_lanes
+  refine ⟨k', strata_lanes, law_lanes, hk', hkK, leaves_lanes, ?_⟩
+  rw [work_lanes]
+  have : (0 : ℚ) ≤ (Flock.Draw.totalWork lanesStrata : ℚ) := Nat.cast_nonneg _
+  linarith
+
+/-- **`GroupedDrawMisses`'s nontrivial lemma**: its conclusion fails under the strata a sampling design that accepts everything may
+give, none (`idleLaw`): the sample is empty whatever the streams, so the lanes window's blocks all escape, with
+probability 1 > 1/256. -/
+theorem groupedDrawMisses_nontrivial :
+    ¬ Pouw.RelativeSecurity.prob (fun g => ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) ≤
+      ((1 / 256 : ℚ) : ℝ) := by
+  classical
+  have hall : ∀ g : (i : Fin idleLaw.size) → Fin idleLaw[i].need → Fin 256,
+      ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d := fun g => by
+    refine ⟨(#[] : Array ℕ).qsort (· < ·), ?_, fun b _ hb =>
+      absurd ((DrawExec.mem_qsort (#[] : Array ℕ) _ _).1 hb) (by simp)⟩
+    unfold drawnOn Flock.Draw.stratified
+    dsimp only
+    rw [Std.Legacy.Range.forIn_eq_forIn_range']
+    rfl
+  have h1 : Pouw.RelativeSecurity.prob
+      (fun g => ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) = 1 := by
+    unfold Pouw.RelativeSecurity.prob Claims.prUniform
+    have hf : ∀ inst : DecidablePred (fun g : (i : Fin idleLaw.size) → Fin idleLaw[i].need → Fin 256 =>
+        ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d),
+        @Finset.filter _ _ inst Finset.univ = Finset.univ := fun _ => Finset.filter_true_of_mem fun g _ => hall g
+    rw [hf, Finset.card_univ]
+    exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
+  rw [h1]
+  norm_num
+
+end Properties.Pouw.Credit.SecurityProofs

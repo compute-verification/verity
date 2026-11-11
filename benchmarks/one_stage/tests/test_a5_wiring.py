@@ -10,11 +10,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.windows import interface as I
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.definitions.ops import gemm as G
+from verity.commitments.windows import interface as I
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import a5
@@ -46,7 +46,8 @@ def negatives(circuit: I.Circuit, cap: int, records) -> tuple[I.Window, dict[str
 @pytest.mark.parametrize("cap, step", [(2, 1), (1, 1), (2, 0)])
 def test_each_wiring_negative_is_stated_and_refused_at_one_unit_a_member_and_on_a_fan_out(cap, step):
     circuit = I.Circuit("chain", ((GEMM, 2 * UNITS),), external=(f"{GID}/x",),
-                        wires=(I.Wire(GID, "x", GID, "o0", at=UNITS, radix=(UNITS,), base=0, step=(step,)),))
+                        wires=(I.Wire(GID, "x", GID, "o0", at=UNITS, radix=(UNITS,), base=0, step=(step,)),),
+                        order=((GID, 0, UNITS), (GID, UNITS, UNITS)))
     w, x0 = bf16(2 * UNITS, 16, 16), bf16(UNITS, 16)
     x1 = gemm(GEMM, x0, w[:UNITS])[np.arange(UNITS) * step]
     _, neg = negatives(circuit, cap, [(GEMM, np.concatenate([x0, x1]), w)])

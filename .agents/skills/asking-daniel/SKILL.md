@@ -100,7 +100,8 @@ Slack card from its output. If the card route fails, `research msg send --as <yo
 mentions him too.
 
 The card's question is one line and its why a sentence or two. **Blocking** is for a click only he can make: nothing
-happens until he makes it. **Default** applies at the deadline unless he comments or decides.
+happens until he makes it. **Default** applies at the deadline unless he comments or decides. The default is the
+recommendation; when it can't be (say, it would change a guarantee unasked), the page says why in one line.
 
 ## Iterate and record
 
@@ -112,12 +113,15 @@ happens until he makes it. **Default** applies at the deadline unless he comment
 - **A decision** is the Status: **Approved** takes the recommendation, **Decided otherwise** his Decision text; a button
   or thread reply on the card counts the same, and you set Status to match. Record it with `resolve` (only the asker may)
   and as a ruling for its class of case where the next asker reads it (friction skill §3). `status` or `resolve` on a
-  decided card rings @top once for Daniel's decisions log: file no issue to log it.
+  decided card rings @top once for Daniel's decisions log: file no issue to log it. Both follow the page once its Status
+  has left Waiting on Daniel: they print and ring its Status and Decision, and a card that says otherwise (the lane's
+  or the default's choice under Decided otherwise, a letter other than Choose, a card still pending) gets one `differs:`
+  line naming both, never a ring as the decision. Without `$NOTION_API_KEY` they say the page was unreadable and report the card alone.
 - **A default** applies at the deadline only if he hasn't commented since posting and Status isn't Revising; then set
   Default applied. Withdrawn is for an ask that events overtook.
 
 ~~~bash
-research msg ask-daniel status <id> [--wait]                  # the card: "status choice source decided_at"; exit 0 once decided
+research msg ask-daniel status <id> [--wait]                  # the card: "status choice source decided_at", and its answered page; exit 0 once decided
 research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]
 research msg ask-daniel resolve <id> --choice <value> --note '<page url or his reply>'
 ~~~

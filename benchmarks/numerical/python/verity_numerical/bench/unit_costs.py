@@ -4,7 +4,7 @@ work weight.
 
     python -m verity_numerical.bench.unit_costs --out DIR [--exact-nnz 4e8] [--jobs 8] [--workload SUBSTRING] [--reuse JSON]
 
-**Registered lowerings (the primary count).** Where the template has a registered Flock lowering (``bench.lowerings``,
+**Registered lowerings (the primary count).** Where the template has a registered Flock lowering (``verity_flock.lowerings``,
 :func:`registered`), a subcircuit is that lowering's ``units.n`` identical units, each one ``flock-ir-unit/v2`` layout: the
 matrix a session evaluates, with the intermediates the lowering commits as rows and the native tail outside it. A unit's
 committed rows are ``units x rows`` and its nonzeros ``units x (nnz_a + nnz_b + rows)`` (C = I over rows). Attention's
@@ -19,7 +19,7 @@ an earlier inventory. :func:`reconcile` sets circuits' F3 unit figures beside th
 
 **Gates and nonzeros (generic).** A unit type's subcircuit is its census template bound at the census parameters
 (``bench.templates.subcircuit``), and its circuit is that Definition lowered whole, piece by piece, by Flock's generic
-lowering (``verity_flock.ir_lower.lower``) into ``verity.ml.circuits.boolean.forms.Circuit`` with CSE, the builder Flock's
+lowering (``verity_flock.ir_lower.lower``) into ``verity.circuits.boolean.forms.Circuit`` with CSE, the builder Flock's
 units use. ``counts()`` gives the live cone's committed input bits, ANDs, output copies and ``nnz_AB`` (the nonzeros of A and
 B); C = I adds one nonzero per AND row, so a unit's Flock nonzeros are ``nnz_AB + ands``. Table reads (``lookups``) are not
 ANDs; their tables and widths are listed.
@@ -50,7 +50,7 @@ sharing a VU-level circuit could make between its subcircuits (an operand they s
 ANDs and nonzeros.
 
 **Sampled instances.** The sample is uniform over all units, because a hidden partition cannot be stratified by type: K =
-``record_k(ε, δ)`` units (``verity.ml.protocols.pouw.circuit.plan``, 27,713 at the default ε = 0.1%, δ = 2⁻⁴⁰) without
+``record_k(ε, δ)`` units (``verity.protocols.pouw.prover.circuit.plan``, 27,713 at the default ε = 0.1%, δ = 2⁻⁴⁰) without
 replacement from the workload's N evaluable units, at each granularity. A type with n of the N units gets a hypergeometric
 count: its mean ``K n / N`` and its upper ``1 − δ`` quantile, the least k with P(X > k) ≤ δ, summed exactly over the tail
 in log space.
@@ -108,7 +108,7 @@ BLOCK_CHECKS = (1, 2)
 
 def build(template: str, params: Mapping[str, Any], statics: Mapping[str, int] | None = None) -> dict[str, Any]:
     """The subcircuit's Definition lowered whole into a CSE'd forms Circuit: ``counts()`` plus the live table reads by table."""
-    from verity.ml.circuits.evaluation.reference import resolve, signature_of
+    from verity.circuits.evaluation.reference import resolve, signature_of
     from verity_flock import ir_lower
     from verity_flock.gf2 import Circuit
 
@@ -167,10 +167,10 @@ ATTENTION_REG_T = (1, 15, 16, 17, 100, 128, 129, 1000)
 
 
 def registered(template: str, params: Mapping[str, Any], T: int | None = None) -> dict[str, Any]:
-    """The template's registered Flock lowering (``bench.lowerings``): its units per subcircuit and the unit's
+    """The template's registered Flock lowering (``verity_flock.lowerings``): its units per subcircuit and the unit's
     ``flock-ir-unit/v2`` layout counts, the matrix a session evaluates per unit with the intermediates the lowering commits.
     The native tail (``tail_gates``) is evaluated by the verifier and has no rows. ``{"none": why}`` without one."""
-    from . import lowerings
+    from verity_flock import lowerings
     from verity_flock import subcircuit_templates as TM
 
     mod = lowerings.registry("C-Flock").module(template)
@@ -234,7 +234,7 @@ def registered_costs(types: Sequence[UnitType], n_jobs: int, log: Callable[[str]
 def argmax_step() -> dict[str, Any]:
     """token-select has no registered lowering. Its scan's middle ArgmaxStep as one unit, the carry (best, best_i, i) as cut
     words like gumbel's registered lane: the layout a cut lowering would give per step (the first and last steps differ)."""
-    from verity.ml.circuits.evaluation.reference import resolve
+    from verity.circuits.evaluation.reference import resolve
     from verity_flock import ir_lower
     from verity_flock.gf2 import Circuit
 
@@ -261,7 +261,7 @@ def argmax_step() -> dict[str, Any]:
 
 def _layout(d: Any) -> dict[str, int]:
     """A Boolean Definition laid out whole as one unit (CSE'd forms Circuit): rows, ANDs, nnz_a, nnz_b."""
-    from verity.ml.circuits.evaluation.reference import resolve, signature_of
+    from verity.circuits.evaluation.reference import resolve, signature_of
     from verity_flock import ir_lower
     from verity_flock.gf2 import Circuit
 
@@ -282,11 +282,11 @@ TREES = {"token-select-greedy": "TokenSelectStage", "gumbel-top-p-token-select":
 
 def argmax_tree(V: int, stage: str = "TokenSelectStage") -> dict[str, Any]:
     """The argmax tree over V logits (``sampling_boolean.stages``): each stage is separable
-    (``verity.ml.circuits.cut.separable``), so it costs its members' own layouts times their multiplicities, each member
+    (``verity.circuits.cut.separable``), so it costs its members' own layouts times their multiplicities, each member
     laid out as one unit (nnz = nnz_a + nnz_b + rows, C = I over rows)."""
-    from verity.ml.circuits.cut import separable
-    from verity.ml.circuits.evaluation.reference import resolve
-    from verity.ml.definitions.registry import sampling_boolean as SB
+    from verity.circuits.cut import separable
+    from verity.circuits.evaluation.reference import resolve
+    from verity.definitions.registry import sampling_boolean as SB
 
     members: list[dict[str, Any]] = []
     memo: dict[str, dict[str, int]] = {}
@@ -338,16 +338,15 @@ def retree(inv: dict[str, Any], trees: Mapping[tuple[str, int], Mapping[str, Any
     return inv
 
 
-#: circuits' F3 unit nonzeros (``benchmarks/private_circuit/nonzero_cost.py`` on cursor/f3-nonzero-cost-f253 @76e405893,
-#: art:b56410cabae792600c86d960160b0c8da7a3ca408b867357103ce4719e07dd47): nnz_a + nnz_b of one registered unit (the RMSNorm
-#: figure is the fused lowering's unit, one warp)
+#: circuits' F3 unit nonzeros (``benchmarks/private_circuit/nonzero_cost.py`` on cursor/f3-nonzero-cost-f253 @76e405893):
+#: nnz_a + nnz_b of one registered unit (the RMSNorm figure is the fused lowering's unit, one warp)
 CIRCUITS_F3 = {"rope-pair": 156_755, "tc-step-k2048": 254_460, "silu-element": 378_759, "f32mul-ftz": 94_333,
                "rmsnorm-fused-warp-n2048": 8_045_790}
 
 
 def _f32mul() -> dict[str, Any]:
-    from verity.ml.circuits.boolean.forms import Circuit
-    from verity.ml.circuits.ops.boolean import attention as AT
+    from verity.circuits.boolean.forms import Circuit
+    from verity.definitions.ops.boolean import attention as AT
     from verity_flock import ir_lower
 
     out: dict[str, Any] = {}
@@ -464,7 +463,7 @@ def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], 
 # --- the sample --------------------------------------------------------------------------------------------------------------
 
 def sample_size(epsilon: Fraction = EPSILON, delta: Fraction = DELTA) -> int:
-    from verity.ml.protocols.pouw.circuit.plan import record_k
+    from verity.protocols.pouw.prover.circuit.plan import record_k
 
     return record_k(epsilon, delta)
 

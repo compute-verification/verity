@@ -1,5 +1,5 @@
-"""`moe_align.Align`'s checks and timing on one GPU, at DeepSeek-V4-Pro's routed experts (E = 384, top-k 6) with the moe
-block `fused_marlin_moe` picks for bf16 activations (`moe_block`).
+"""`verity_vllm.engine.moe_align`'s checks and timing on one GPU, at DeepSeek-V4-Pro's routed experts (E = 384, top-k 6)
+with the moe block `fused_marlin_moe` picks for bf16 activations (`moe_block`).
 
 ``stress.py check --out DIR --tag T [--reps R]`` runs each case (rows, a routing, BM, the ids' dtype, an expert map) R
 times through vLLM's op and R times through `Align`, into buffers poisoned before every call, every other call beside a
@@ -9,10 +9,11 @@ output is `moe_align.reference`'s bit for bit, and whether every vLLM output has
 for each expert. ``stress.py compare --out DIR`` reads every ``check.*.json`` into ``DIR/summary.json``: per case the
 distinct outputs of each op across processes and repetitions. ``stress.py time --out DIR`` writes ``DIR/time.json``:
 per row count, the median device time a call of each op by CUDA events and the host's time to issue it, for the op
-alone and through vLLM's wrapper (which allocates the outputs), and what `Align` adds to a decode step of `LAYERS`
-calls. ``stress.py plugin --out DIR``, in a process whose ``PYTHONPATH`` holds the site directory `moe_align.site` wrote,
-loads the plugin as vLLM does (``load_general_plugins``) and runs cases through the function `fused_marlin_moe` calls,
-eagerly and replayed from CUDA graphs, writing ``DIR/plugin.json``.
+alone and through a wrapper (vLLM's, which allocates the outputs, and `moe_align.wrapper`), and what `Align` adds to a
+decode step of `LAYERS` calls. ``stress.py plugin --out DIR`` loads the integration's vLLM general plugins as vLLM does
+(``load_general_plugins``) and runs cases through the function `fused_marlin_moe` calls, eagerly and replayed from CUDA
+graphs, writing ``DIR/plugin.json``; in a venv where the integration is on ``PYTHONPATH`` but not installed, put the
+directory ``stress.py site --out DIR`` writes on ``PYTHONPATH`` too: a dist-info declaring the integration's entry points.
 """
 from __future__ import annotations
 
@@ -24,14 +25,18 @@ import os
 import platform
 import sys
 import time
+import tomllib
 import types
 from pathlib import Path
 
 import torch
 
-from verity.ml.definitions.numerics.marlin_moe_rows import MOE_BLOCKS, moe_block
+from verity.definitions.numerics.marlin_moe_rows import MOE_BLOCKS, moe_block
 
 HERE = Path(__file__).resolve().parent
+#: the integration's distribution, whose entry points `site` declares
+PYPROJECT = HERE.parents[1] / "adapters" / "vllm" / "pyproject.toml"
+MODULE = "verity_vllm.engine.moe_align"
 E, TOPK = 384, 6
 #: DeepSeek-V4-Pro's layers (config.json ``num_hidden_layers``), each with routed experts: the op's calls a decode step
 LAYERS = 61
@@ -304,8 +309,7 @@ def time_(args) -> None:
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    ns = torch.ops._moe_C
-    real = getattr(ns, MA.OP)
+    real = getattr(torch.ops._moe_C, MA.OP)
     arms = {spec: variant(spec) for spec in dict.fromkeys(["default", *args.variants.split(",")])}
     rows_out = []
     for ki, kind in enumerate(("uniform", "same6")):
@@ -321,13 +325,9 @@ def time_(args) -> None:
             for spec, al in arms.items():
                 row["op"][spec] = timed(lambda al=al: al(ids, E, BM, s, b, n, None), iters)
             row["op"]["vllm_again"] = timed(lambda: real(ids, E, BM, s, b, n, None), iters)
-            call = lambda: wrapper(ids, BM, E, None, ignore_invalid_experts=True)  # noqa: E731
-            row["wrapper"]["vllm"] = timed(call, iters)
-            MA.install(ns, arms["default"])
-            try:
-                row["wrapper"]["default"] = timed(call, iters)
-            finally:
-                setattr(ns, MA.OP, real)
+            ours = MA.wrapper(arms["default"])
+            row["wrapper"]["vllm"] = timed(lambda: wrapper(ids, BM, E, None, ignore_invalid_experts=True), iters)
+            row["wrapper"]["default"] = timed(lambda: ours(ids, BM, E, None, ignore_invalid_experts=True), iters)
             ok = {k: v for k, v in row["op"].items() if k not in ("vllm", "vllm_again") and "device_us" in v}
             row["best"] = min(ok, key=lambda k: ok[k]["device_us"]) if ok else None
             v = min(row["op"]["vllm"]["device_us"], row["op"]["vllm_again"]["device_us"])
@@ -357,8 +357,7 @@ def time_(args) -> None:
 def plugin(args) -> None:
     from vllm.model_executor.layers.fused_moe.experts import marlin_moe
 
-    fn = getattr(torch.ops._moe_C, MA.OP)
-    align = vars(fn).get("moe_align") if isinstance(fn, types.FunctionType) else None
+    align = MA.installed()
     call = marlin_moe.moe_align_block_size
     rows_out, graphs = [], []
     for ki, kind in enumerate(("uniform", "same6", "skew")):
@@ -390,22 +389,35 @@ def plugin(args) -> None:
             ok.append(torch.equal(torch.cat(outs).cpu(), pack(MA.reference(new.flatten().tolist(), E, BM))))
         graphs.append({"rows": rows, "block": BM, "replays_ref": ok})
         print(json.dumps(graphs[-1]), flush=True)
-    rec = {"module": MA.__file__, "wrapped": align is not None, "align": align.record() if align else None,
+    rec = {"module": MA.__file__, "loaded_by_plugin": args.loaded_by_plugin, "wrapped": align is not None,
+           "marlin_calls": f"{call.__module__}.{call.__qualname__}", "align": align.record() if align else None,
            "rows": rows_out, "graphs": graphs}
-    rec["ok"] = (align is not None and Path(MA.__file__).resolve().parent != HERE
+    rec["ok"] = (align is not None and args.loaded_by_plugin and call.__module__ == MA.__name__
                  and rec["align"]["calls"]["one"] > 0 and rec["align"]["calls"]["chunked"] > 0
                  and all(r["ref"] for r in rows_out) and all(all(g["replays_ref"]) for g in graphs))
-    print(json.dumps({k: rec[k] for k in ("ok", "module", "wrapped", "align")}), flush=True)
+    print(json.dumps({k: rec[k] for k in ("ok", "module", "loaded_by_plugin", "wrapped", "marlin_calls", "align")}), flush=True)
     Path(args.out).mkdir(parents=True, exist_ok=True)
     (Path(args.out) / "plugin.json").write_text(json.dumps(rec, indent=1) + "\n")
     if not rec["ok"]:
         raise SystemExit(1)
 
 
+def site(args) -> None:
+    """A site directory whose dist-info declares the integration's entry points (its pyproject's), so a venv with the
+    integration on ``PYTHONPATH`` but not installed loads its vLLM plugins."""
+    eps = tomllib.loads(PYPROJECT.read_text())["project"]["entry-points"]
+    info = Path(args.out) / "verity_vllm_plugins-0.0.dist-info"
+    info.mkdir(parents=True, exist_ok=True)
+    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: verity-vllm-plugins\nVersion: 0.0\n")
+    (info / "entry_points.txt").write_text("".join(f"[{group}]\n" + "".join(f"{k} = {v}\n" for k, v in names.items())
+                                                   for group, names in eps.items()))
+    print(info)
+
+
 def main() -> None:
     global MA
     p = argparse.ArgumentParser()
-    p.add_argument("mode", choices=("check", "compare", "time", "plugin"))
+    p.add_argument("mode", choices=("check", "compare", "time", "plugin", "site"))
     p.add_argument("--out", required=True)
     p.add_argument("--tag", default="0")
     p.add_argument("--reps", type=int, default=100)
@@ -414,16 +426,18 @@ def main() -> None:
                                          "2048:512:32:128:32,2048:512:32:64:16",
                    help="stress.py time: `Align`'s parameters (`variant`), by comma")
     args = p.parse_args()
+    if args.mode == "site":
+        return site(args)
     if args.mode == "plugin":
-        # the plugin's module must come from the site on PYTHONPATH, not from this script's directory
-        sys.path[:] = [q for q in sys.path if Path(q or ".").resolve() != HERE]
+        # the module must be imported by vLLM's plugin loader, not by this script
         from vllm.plugins import load_general_plugins
 
+        before = MODULE in sys.modules
         load_general_plugins()
+        args.loaded_by_plugin = not before and MODULE in sys.modules
     else:
-        sys.path.insert(0, str(HERE))
-        import vllm._custom_ops  # noqa: F401
-    MA = importlib.import_module("moe_align")
+        importlib.import_module("vllm._custom_ops")
+    from verity_vllm.engine import moe_align as MA
     {"check": check, "compare": compare, "time": time_, "plugin": plugin}[args.mode](args)
 
 

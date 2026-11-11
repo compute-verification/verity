@@ -4,7 +4,7 @@ certifier's signed root
 (`warden_rows.bucket_port`: unit base + t reads row t), proved by Flock `prove --zk` behind the Lean ZK server and held
 by the Lean verifier's registered reads (`flock-verify verify --zk --registered`); each unit's one public output, its
 16-bit ``o0`` (1 when the state renders a row), opened to the verifier. Standalone: no Spec holds these units yet
-(`verity.ml.protocols.certifier.egress`).
+(`verity.protocols.certifier.prover.egress`).
 
     python benchmarks/network_traces/egress_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
 
@@ -48,14 +48,14 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import warden_zk as WZ  # noqa: E402
-from verity.ml.circuits.defs import bind  # noqa: E402
-from verity.ml.crypto import lms  # noqa: E402
-from verity.ml.protocols.certifier import egress as EG  # noqa: E402
-from verity.core.protocols.certifier import io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
-from verity.core.protocols.certifier.active import DATA  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
+from verity.circuits.defs import bind  # noqa: E402
+from verity.commitments.crypto import lms  # noqa: E402
+from verity.protocols.certifier.prover import egress as EG  # noqa: E402
+from verity.protocols.certifier.verifier import io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
+from verity.protocols.certifier.verifier.active import DATA  # noqa: E402
+from verity.protocols.certifier.verifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
 
-_TRAFFIC = HERE.parents[1] / "verity/core/protocols/certifier/tests/egress_traffic.py"
+_TRAFFIC = HERE.parents[1] / "verity/protocols/certifier/verifier/tests/egress_traffic.py"
 _spec = importlib.util.spec_from_file_location("egress_traffic", _TRAFFIC)
 traffic = sys.modules["egress_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(traffic)
@@ -243,7 +243,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"],
                       "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_law(f"stratified:{n}")
+    law = M.D.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the {n} egress bucket rows of the warden's link-window {at.window} "
                                       "(egress_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},

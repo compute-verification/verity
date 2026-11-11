@@ -54,10 +54,10 @@ from typing import Any
 
 from composite import line, outcome, write_private
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw import period_check as PC
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as Cr
+from verity.protocols.pouw.verifier import period_check as PC
+from verity.protocols.spot.verifier.one_stage import proofs as PF
 
 V1, PERIOD = CC.ID, PC.ID
 CASE = {V1: CC.case, PERIOD: PC.case}
@@ -266,8 +266,7 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
                       "period's open committed and credit reads the window's layout from")
     if statements is None:
         raise Missing(f"no statements for window {k}'s drawn units (--statements): the drawn calls are proved as "
-                      "templated --registered statements, which the verifier of record doesn't accept yet (PRF-133 "
-                      "part 3, PRF-274)")
+                      "templated --registered statements")
     if live is None:
         raise Missing(f"no live evidence for window {k}'s rounds (--live-evidence: h1_prove/live.sh on the run's "
                       "--h1-prover dump)")

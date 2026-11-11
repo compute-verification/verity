@@ -199,7 +199,7 @@ def test_a_file_edited_between_two_stores_in_one_run_is_seen_at_the_second(tmp_p
 #: SynLater, whose body build registers the primitive it calls (as a body on the real tree registers its constants' primitives),
 #: its binding, and the registered roots the catalog starts from: that primitive, once something registered it
 LATE = """
-from verity.ml.circuits import composite, primitive
+from verity.circuits import composite, primitive
 
 from syn.prims import V
 
@@ -217,7 +217,7 @@ LATE_BINDING = """def late():
 
 
 def registered():
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     return [d for d in REGISTRY.defs.values() if d.id == "SynLate_v1"]
 
 
@@ -243,7 +243,7 @@ def test_what_a_body_build_registers_leaves_every_record_counting(tmp_path):
 
 #: the registered roots the catalog starts from, two, each of a module of its own
 TWO_REGISTERED = """def registered():
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from syn import idle, xdef
     return [bind(idle.SynIdle), bind(xdef.SynX)]
 
@@ -295,7 +295,7 @@ def test_a_binding_that_makes_no_root_is_held_by_every_record(tmp_path):
 #: SynStep at a static Definition its body doesn't call, bound by one binding and unbound by another (as `AttnDotStep_v1` takes
 #: its DOT from `boolean_version` and from its sidecar): two Definitions of one id whose descriptors differ
 STEP = """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -430,6 +430,21 @@ def test_bindings_built_apart_give_a_full_builds_targets_keys_and_records(tmp_pa
 
 
 @pytest.mark.slow
+def test_the_task_list_a_forked_run_stores_holds_what_only_a_bindings_own_process_imported(tmp_path):
+    """A binding built apart hands back its record's reads and the in-tree modules its build imported (`cache.modules_since`),
+    and with ``--jobs`` the task list's entry holds them beside this process's own reads: SynTop's body builder's helper, moved
+    into a subpackage `load_registries` doesn't enumerate, is imported in the core binding's process alone, and is in it."""
+    from test_cache import FILES, _entry
+
+    lazy = {"syn/lazy/__init__.py": "", "syn/lazy/shape.py": FILES["syn/shape.py"],
+            "syn/top.py": FILES["syn/top.py"].replace("from syn.shape import", "from syn.lazy.shape import")}
+    root = _tree(tmp_path / "t", lazy)
+    _bindings(root, *BINDINGS)
+    assert _run(root, FORKED)["here"] == []
+    assert "syn.lazy.shape" in _entry(root, "--all")["reads"]["modules"]
+
+
+@pytest.mark.slow
 def test_a_target_that_misses_through_a_record_that_counts_is_made_where_it_is_checked(tmp_path):
     """With ``--jobs``, a target whose result misses while its binding's record counts (SynX, its pin changed) is made by the
     zygote that forks its check, as one through a binding built apart is (`cli._planned`): this process builds and describes
@@ -540,13 +555,13 @@ def test_records_built_again_are_the_same_bytes_with_each_build_s_seconds_beside
     assert {n: weighed[n] for n in took} == took and all(s is None for n, s in weighed.items() if n not in took)
 
 
-#: a reference two bindings bind at two statics (as `verity.ml.kernels.tc`'s sidecar and the gemm-coordinate template bind
-#: the NVFP4 dot), a word primitive whose Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.
+#: a reference two bindings bind at two statics (as `verity.definitions.kernels.tc`'s sidecar and the gemm-coordinate template bind
+#: the NVFP4 dot), a word primitive whose Boolean Definition (a ``word`` and a ``build``, as `verity.circuits.boolean.
 #: trace` makes one) only another binding's body build registers (as `boolean_marlin_moe`'s gathers), and one whose Boolean
 #: Definition `WORDMOD` registers as it is imported (as `ops.boolean`'s pieces are), which only SynVTop's body imports
 WORDS = """
-from verity.ml.circuits import bind, composite, primitive
-from verity.ml.circuits.evaluation import ScalarReference
+from verity.circuits import bind, composite, primitive
+from verity.circuits.evaluation import ScalarReference
 
 from syn.prims import SynAdd, V
 
@@ -581,7 +596,7 @@ def SynVTop(B, S, a, b):
     return B.call(SynAdd, a, b)
 """
 WORDMOD = """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 from syn.words import SynV
@@ -623,7 +638,7 @@ def vtop():
 #: the check's value also says whether a Boolean Definition of the target's word is registered where it is checked, as
 #: Flock's lowering looks one up (`verity_flock.ir_lower`'s ``_boolean_build``)
 WORDED = """def worded(fid):
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     return any(getattr(getattr(d, "word", None), "id", None) == fid and callable(getattr(d, "build", None))
                for d in REGISTRY.defs.values())
@@ -633,8 +648,8 @@ WORDED = """def worded(fid):
 #: SynK at K = 2 and K = 5 inside another Definition's body, so a record holds K = 5 as reached, not as a root (a root is always
 #: described), beside a smaller member of its family (a binding's smallest of a family is too)
 KBIG = """
-from verity.ml.circuits import composite
-from verity.ml.circuits.defs import bind
+from verity.circuits import composite
+from verity.circuits.defs import bind
 
 from syn.kdef import SynK
 from syn.prims import V
@@ -744,12 +759,12 @@ def test_bindings_built_apart_keep_a_pinned_target_and_read_no_pin(tmp_path):
     assert out["values"] == whole["values"] and out["hits"] == sorted(set(out["values"]) - {"SynK_v1{K=2}"}), out["hits"]
 
 
-#: a unit staged whole (`checks.UNIT_OWNERS` is ``syn.pouw.`` in `BLOCKED`): SynTile, made by `syn.build`'s function, which binds
-#: it at no top level, and bound at the top level of `syn.pouw.tile` alone, which only SynHolder's body imports; the tiled
-#: binding makes SynTile from `syn.build`, and the held one reaches it through SynHolder's body
+#: SynTile, made by `syn.build`'s function, which binds it at no top level, and bound at the top level of `syn.pouw.tile` alone,
+#: which only SynHolder's body imports; the tiled binding makes SynTile from `syn.build`, and the held one reaches it through
+#: SynHolder's body
 TILE_FILES = {
     "syn/build.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
@@ -767,7 +782,7 @@ def tile():
     "syn/pouw/__init__.py": "",
     "syn/pouw/tile.py": "from syn.build import tile\n\nSynTile = tile()\n",
     "syn/holder.py": """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import V
 
@@ -794,7 +809,7 @@ def held():
 BLOCK_CHECK = """
 def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     from circuit_check import checks as CK
-    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.circuits.evaluation.reference import evaluate
 
     F = CK.Findings()
     w = CK.unit_block(fn, F)
@@ -802,20 +817,19 @@ def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     return {"failures": F.failures, "warnings": [], "gates": fn.gates,
             "value": [evaluate(fn, 3, 0x0105), w["applies"], [f["name"].split(" ")[0] for f in F.failures]]}
 """
-#: `FORKED` with Flock's range at 2^5 witness bits, which SynTile's 48 port bits are past, and ``syn.pouw.`` PoUW's; a unit
-#: counted here first, so what counting imports (the kernels its pieces register) is here before any check, as the catalog's
-#: registries have it
+#: `FORKED` with Flock's range at 2^5 bits, which every target's block (2^`K_MIN` at the least) is past; a unit counted here
+#: first, so what counting imports (the kernels its pieces register) is here before any check, as the catalog's registries
+#: have it
 BLOCKED = FORKED.replace("rep = cli.run(", "from verity_flock import circuit as FC\nfrom syn.prims import SynAdd\nFC.unit_witness(SynAdd)\n"
-                         "FC.K_MAX, CK.UNIT_OWNERS = 5, ('syn.pouw.',)\nrep = cli.run(")
+                         "FC.K_MAX = 5\nrep = cli.run(")
 
 
 @pytest.mark.slow
 def test_a_unit_past_the_range_fails_block_on_the_fast_path_as_in_a_full_build(tmp_path):
-    """The fail-open case: from the bindings' records, built apart or reused, with ``--jobs`` or without, a unit staged whole
-    and past Flock's range fails ``block/past-range`` as a full build fails it, though the module that makes it PoUW's
-    (`sidecars.owner`, `checks.UNIT_OWNERS`) is imported only by another binding's body, which a full build builds before any
-    check: once the records count and SynTile alone misses (its new pin), no process here builds SynHolder's body.  A lookup
-    that read only what the checking process imported would skip the check."""
+    """From the bindings' records, built apart or reused, with ``--jobs`` or without, every unit checked whole and past
+    Flock's range fails ``block/past-range`` as a full build fails it, SynTile among them, though the module that binds it at a
+    top level is imported only by another binding's body, which a full build builds before any check: once the records count
+    and SynTile alone misses (its new pin), no process here builds SynHolder's body."""
     from test_cache import _set_pin
 
     trees = []
@@ -831,8 +845,8 @@ def test_a_unit_past_the_range_fails_block_on_the_fast_path_as_in_a_full_build(t
     root, here = trees
     in_turn = BLOCKED.replace(", jobs=2, isolate=True, fork=True)", ")")
     whole = _run(here, in_turn)
-    assert whole["values"]["SynTile_v1"][1:] == [True, ["block/past-range"]], whole["values"]
-    assert not [fid for fid, v in whole["values"].items() if v[2] and fid != "SynTile_v1"], whole["values"]
+    assert "SynTile_v1" in whole["values"], whole["values"]
+    assert all(v[1:] == [True, ["block/past-range"]] for v in whole["values"].values()), whole["values"]
     first = _run(root, BLOCKED)
     assert first["here"] == [] and first["stats"]["units"]["reused"] == 0, (first["here"], first["stats"]["units"])
     assert first["values"] == whole["values"], (first["values"], whole["values"])
@@ -845,8 +859,9 @@ def test_a_unit_past_the_range_fails_block_on_the_fast_path_as_in_a_full_build(t
 
 def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_kinds(monkeypatch):
     """`units.call_families` gives `targets.call_families`' Calls: a word Call family made on demand (`Const32[0x..]_v1`) has
-    its Boolean version among them though no record holds one, and a vocabulary kind that doesn't bind refuses them by name, as
-    `targets.word_call_families` does (left out, its family's partition would be judged as no Call's)."""
+    its Boolean version among them though no record holds one, `targets.CALLEE_CALLS`' families are among them, and a vocabulary
+    kind that doesn't bind refuses them by name, as `targets.word_call_families` does (left out, its family's partition would be
+    judged as no Call's)."""
     from circuit_check import targets as TG, units as UN
 
     nothing = UN.Derived([], {}, {})
@@ -854,7 +869,7 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
         m.setattr(TG, "word_call_families", lambda: {"Const32[0x00000001]_v1", "GatherI32x16_v1"})
         m.setattr(TG, "boolean_call_candidates", lambda words: set())
         assert UN.call_families([], nothing, {}) == {"Const32[0x00000001]_v1", "GatherI32x16_v1",
-                                                    "Const32[0x00000001]_v2", "GatherI32x16_v2"}
+                                                    "Const32[0x00000001]_v2", "GatherI32x16_v2", *TG.CALLEE_CALLS}
     monkeypatch.setattr(TG, "_SHORT", {})
     monkeypatch.setattr(TG, "_BOUND", {})
     monkeypatch.setattr(TG, "load_registries", lambda: None)
@@ -867,8 +882,8 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
 #: what `targets.on_demand_boolean_families` registers, in order, given word Call families made on demand
 ON_DEMAND = """
 from circuit_check import targets as TG
-from verity.ml.circuits.defs import REGISTRY
-import verity.ml.definitions.boolean
+from verity.circuits.defs import REGISTRY
+import verity.definitions.boolean
 
 before = set(dict.keys(REGISTRY.defs))
 TG.on_demand_boolean_families({"Const8[0x0]_v1", "Const16[0x1]_v1", "Const32[0x2]_v1", "Const4[0x3]_v1", "GatherBf16x4_v1",
@@ -936,7 +951,7 @@ print(json.dumps(out))
 
 #: a model whose body raises, as a model the catalog can't build names its error
 BAD = """
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import V
 
@@ -950,7 +965,7 @@ DIE = """
 import os
 import signal
 
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import V
 
@@ -1046,7 +1061,7 @@ def test_a_run_killed_while_its_bindings_build_leaves_no_file_behind(tmp_path):
 SPAWN = """
 import os
 
-from verity.ml.circuits import composite
+from verity.circuits import composite
 
 from syn.prims import SynAdd, V
 
