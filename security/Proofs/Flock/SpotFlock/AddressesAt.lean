@@ -30,6 +30,10 @@ side by side, each reading only its own gates and constants:
   one gate it needs, every registered read named like a port whose row holds the gate's bit (`RowAt`) is read under
   the replay block's interior roots, no address holds at the gate, and `Addresses h` is false.
   `readRoots_of_readsInterior` names those reads: round 2 reads the value off the interior record (`readsInterior`).
+* `CheckedRun.addresses_not_readsInterior`, `CheckedRun.not_addresses_of_readsInterior`: the same two in round 2's
+  own terms: under `Addresses h` every needed gate has an address whose registered read round 2 doesn't read off the
+  interior record, and one accepted run with a checked unit that needs a gate, all of whose session's registered reads
+  round 2 reads off the interior record, refutes `Addresses h`.
 -/
 
 @[expose] public section
@@ -263,6 +267,33 @@ theorem not_addresses (hcl : SideBySide h) (hr : r.Ok h) {g : ℕ} (hg : r.s.pro
   obtain ⟨S, hS⟩ := hA g
   have hH := hS r hr hg
   exact not_addressHolds_of_interior hcl hr hg (hI S hH.2.1) hH
+
+/-- **Under `Addresses`, side by side, round 2 reads no needed gate's row off the interior record**: at an accepted
+run whose statement decodes, whose round-1 message is a record and whose second draw evaluates, every gate a checked
+unit needs has an address that holds, and the registered read named like its port is one round 2 doesn't read off the
+interior record (`readsInterior`). -/
+theorem addresses_not_readsInterior (hcl : SideBySide h) (hA : Addresses h) (hr : r.Ok h) {g : ℕ}
+    (hg : r.s.prog.Needs r.b g) {st : Roots} {rec draw : Json} (hx : decode r.x = some st)
+    (hm : jsonMsg r.m₁ = some rec) (hd : secondDraw h r.c₀ r.c₁ = some draw) :
+    ∃ S : Address, r.AddressHolds h S g ∧ ∃ reg, regNamed r.ins r.sts (S.port r.u) = some reg ∧
+      readsInterior (ownOf h st rec draw r.c₀) (h.names.getD (templateOf h.ms r.u) "") reg.name reg.value =
+        false := by
+  obtain ⟨S, hH, reg, hreg, -, hne⟩ := addresses_reads hcl hA hr hg
+  refine ⟨S, hH, reg, hreg, eq_false_of_ne_true fun hri => ?_⟩
+  exact hne (readRoots_of_readsInterior h hx hm hd r.ρ (templateOf h.ms r.u) reg.name reg.value hri)
+
+/-- **`Addresses` fails where round 2 reads a checked unit's registered reads off the interior record**: where the
+code's proof blocks stand side by side, one accepted run whose statement decodes, whose round-1 message is a record
+and whose second draw evaluates, with a checked unit that needs a gate and every one of whose session's registered
+reads round 2 reads off the interior record (`readsInterior`), refutes `Addresses h`. -/
+theorem not_addresses_of_readsInterior (hcl : SideBySide h) (hr : r.Ok h) {g : ℕ} (hg : r.s.prog.Needs r.b g)
+    {st : Roots} {rec draw : Json} (hx : decode r.x = some st) (hm : jsonMsg r.m₁ = some rec)
+    (hd : secondDraw h r.c₀ r.c₁ = some draw)
+    (hI : ∀ q reg, regNamed r.ins r.sts q = some reg →
+      readsInterior (ownOf h st rec draw r.c₀) (h.names.getD (templateOf h.ms r.u) "") reg.name reg.value = true) :
+    ¬ Addresses h :=
+  not_addresses hcl hr hg fun S _ reg hreg =>
+    readRoots_of_readsInterior h hx hm hd r.ρ (templateOf h.ms r.u) reg.name reg.value (hI (S.port r.u) reg hreg)
 
 end CheckedRun
 
