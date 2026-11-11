@@ -16055,37 +16055,40 @@
    "signature": [
     "Flock.SecurityProofs.SampledKSTwo_honest :",
     "  And (SamplingDeploy.CallsUniform (fun x => 0) SamplingDeploy.toyBytes)",
-    "    (And (SamplingDeploy.CallsUniform (fun x => 0) SamplingDeploy.toyBytes)",
+    "    (And (SamplingDeploy.StageUniform (fun x => 1) (fun x => 0) SamplingDeploy.toyStageBytes)",
     "      (And",
-    "        (SamplingDeploy.RegMatchesTwo (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder) (fun x => Option.none)",
-    "          fun x => Option.none)",
+    "        (SamplingDeploy.RegMatchesTwo (SamplingDeploy.toyCode.atOrder (SamplingDeploy.orderOf SamplingDeploy.toyStage))",
+    "          (fun x => Option.none) fun x => Option.none)",
     "        (And",
-    "          (SamplingDeploy.Code.RefusesTwo FlockDeploy.sha512 (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder)",
-    "            fun x => Option.none)",
+    "          (SamplingDeploy.Code.RefusesTwo FlockDeploy.sha512",
+    "            (SamplingDeploy.toyCode.atOrder (SamplingDeploy.orderOf SamplingDeploy.toyStage)) fun x => Option.none)",
     "          (And",
-    "            (SamplingDeploy.Code.ReplayCap FlockDeploy.sha512 (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder)",
-    "              (fun x => Option.none)",
-    "              (SamplingDeploy.replayTwo (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder) (fun x => Option.none)",
+    "            (SamplingDeploy.Code.ReplayCap FlockDeploy.sha512",
+    "              (SamplingDeploy.toyCode.atOrder (SamplingDeploy.orderOf SamplingDeploy.toyStage)) (fun x => Option.none)",
+    "              (SamplingDeploy.replayTwo",
+    "                (SamplingDeploy.toyCode.atOrder (SamplingDeploy.orderOf SamplingDeploy.toyStage)) (fun x => Option.none)",
     "                (fun x => 0)",
-    "                (SamplingDeploy.bytesFirst SamplingDeploy.toyCode (fun x => 0) SamplingDeploy.toyOrder",
-    "                  SamplingDeploy.toyBytes))",
+    "                (SamplingDeploy.bytesFirst SamplingDeploy.toyCode (fun x => 0)",
+    "                  (SamplingDeploy.orderOf SamplingDeploy.toyStage) SamplingDeploy.toyBytes))",
     "              fun x => 0)",
     "            (And",
     "              (SamplingDeploy.Code.InteriorFixed FlockDeploy.sha512",
-    "                (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder) fun x x_1 x_2 => List.nil)",
+    "                (SamplingDeploy.toyCode.atOrder (SamplingDeploy.orderOf SamplingDeploy.toyStage)) fun x x_1 x_2 =>",
+    "                List.nil)",
     "              (And",
     "                (Claims.Sampling.SessionRuns FlockDeploy.sha512",
     "                  (SamplingDeploy.deploy Flock.Readable.relation",
-    "                    (SamplingDeploy.codeTwoAt SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
-    "                      SamplingDeploy.toyOrder SamplingDeploy.toyBytes SamplingDeploy.toyBytes)))",
+    "                    (SamplingDeploy.codeTwoStage SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
+    "                      SamplingDeploy.toyBytes (fun x => 1) SamplingDeploy.toyStage SamplingDeploy.toyStageBytes)))",
     "                (And",
     "                  (SamplingDeploy.SessionsIn",
-    "                    (SamplingDeploy.codeTwoAt SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
-    "                      SamplingDeploy.toyOrder SamplingDeploy.toyBytes SamplingDeploy.toyBytes))",
+    "                    (SamplingDeploy.codeTwoStage SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
+    "                      SamplingDeploy.toyBytes (fun x => 1) SamplingDeploy.toyStage SamplingDeploy.toyStageBytes))",
     "                  (Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512",
     "                    (SamplingDeploy.deploy Flock.Readable.relation",
-    "                      (SamplingDeploy.codeTwoAt SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
-    "                        SamplingDeploy.toyOrder SamplingDeploy.toyBytes SamplingDeploy.toyBytes))",
+    "                      (SamplingDeploy.codeTwoStage SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0)",
+    "                        (fun x => 0) SamplingDeploy.toyBytes (fun x => 1) SamplingDeploy.toyStage",
+    "                        SamplingDeploy.toyStageBytes))",
     "                    (fun x => Option.none) fun x x_1 x_2 => List.nil))))))))"
    ],
    "assumptions": [],
@@ -16095,7 +16098,7 @@
     "open": [],
     "reads": ["FlockSoundness.Assumptions.UniformRandomBytes"]
    },
-   "type_hash": "fe645d949a84b923ead012613f96d40384a0a06a3d10c7e666970ba14130a4aa"
+   "type_hash": "d4ebf4c0bc865e16721edc6ddde768037bc76d2d998f272b9881b1cdee7baa55"
   },
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "owner": "@proofs",
@@ -49012,12 +49015,13 @@
    }
   },
   "Proofs.Flock.Claims.Sampling.Reg": {
-   "digest": "6516229f634a499c0dced900e9c5688567c81c81cb19c6cca7607f9925053a4a",
+   "digest": "9e2de95582c62dd8363f3a8291cc6730f68168adcaff058192c95e84d5d31339",
    "definitions": {
     "SamplingDeploy.Code.atOrder": "c9c6c79ebe69a96a8c2812bd44128bdb89b9c4d800890215d3ed13ebc0ccce4c",
     "SamplingDeploy.Order": "e792cfd93feb1130e3e08748fdee92779db92ee177866cbfe3128777efc8f4f5",
     "SamplingDeploy.Order.first": "d2cc2ae07afdf25872bca01cf6ce048ad81e0653fb1e1acb54205f89c431be64",
     "SamplingDeploy.Order.second": "f5e0bb21160cc6b2859b5086057f018a8cc21728044493990c0faacae00aaa84",
+    "SamplingDeploy.Order.stage": "dda477856de0f561054ffbafe05fd59297d74b35330af04be5a9978ee7d345f2",
     "SamplingDeploy.Reg": "1b3e12ffcdf4cbd70b94a9df2b9d25dd47a90d992601800807f7478748b592f6",
     "SamplingDeploy.Reg.checked": "228693f4cc8f39249ac59312a7dede25b2162ce7ad922605a48e49c6dd0a3322",
     "SamplingDeploy.Reg.closure": "8c719e90a70b4e9db69f4fcc993be691c120dbf425cabd7f5cb6b888a492e29e",
@@ -49037,10 +49041,16 @@
     "SamplingDeploy.RegTwo.ns": "a4666cba86127ce9281665318084a608d65efee2499306e02e50c8911b4e937b",
     "SamplingDeploy.RegTwo.sample": "1c8be293dfabdbebd9ff2131f0cfbb515fb3ef6085e75264f10592d628305026",
     "SamplingDeploy.RegTwo.templateAt": "70bffada2ca628b49f5ef1c4a69f7fd231769f51804bc07a8f794c2d2622c547",
+    "SamplingDeploy.StageOrder": "548ebb09b9ee5194da86bb2fd2852d1ba3f6d8aae5de7869bb7ff63fece5d2f0",
+    "SamplingDeploy.StageOrder.round": "e16947edd25caaca77b0ff64b864d4b9e6d5c174cf458ce351d098f3910d1199",
+    "SamplingDeploy.StageOrder.toOrder": "6085582265ebc09e15038dda9948b4512c9c80e1a544e39d05ed72efa87a96fd",
     "SamplingDeploy.bytesFirst": "b22325e952197d5678dbdbbf62643a152fbded6e789826f85ed7c67a9754f41f",
     "SamplingDeploy.bytesSecond": "1b0c62bbc8f6089a2e7a2a684d4714931ccaa9cb0e4407919b47c9861fd62c50",
+    "SamplingDeploy.bytesStage": "089f7882b32d97600b7d7a029f3e9c7d6f521caa178b11e6fbeb62b002aec0d1",
     "SamplingDeploy.codeTwo": "f9f8bd974e1b4ca5ee71976b5a9dac1d93f64a0cdc7be5b090ec87fb1c7904fb",
     "SamplingDeploy.codeTwoAt": "671fc8cf8cef54b6e7c78239c41874db7bab6edfa7fbbfc44d09bfd118be03e0",
+    "SamplingDeploy.codeTwoStage": "e74914ad9da0d2c72cec82e1f03387b0ca4ce24ce4a57d105a3470daef6dac97",
+    "SamplingDeploy.orderOf": "bb1a528827fedb3a951b1c85ef77877fdd76bc172c65503d68fa784c5016a466",
     "SamplingDeploy.replayTwo": "e97056cbf61eca5b206aa8415c4c8fccef2a4b49c3d99c9cef58028feedf4750"
    }
   },
@@ -51382,9 +51392,9 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.Guarantees": {
-   "digest": "a9358e6df85c44df1e79036fdc78789a25d2ec872b3b3b4513228b63ed6c9657",
+   "digest": "bc57fee09ca3e8a7fe0c95ad0a344e19f87054c8599d3b5b5e936698e0d47986",
    "definitions": {
-    "Flock.Guarantees.SampledKSTwo": "5a77023c5d1421fffd958bb5178c1f4a2a1102ceb43d35a260f35df541840d0a",
+    "Flock.Guarantees.SampledKSTwo": "30ffe2b28d47195d8240120c7674301bc14a571edbdd70c910b32bf3c9faa884",
     "Flock.Guarantees.SpotExfilTwo": "097271a4310d5e7764bb4753dab66ef363db9d20a19b0e44e6f3edb2edd916d8",
     "Flock.Guarantees.SpotKSTwo": "dad9e5b89978f6e5ccad6a2ef9ceed7e4885f11196f4a068960fac5e693b6955"
    }
@@ -51396,13 +51406,16 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoAt": {
-   "digest": "d7d3fc1292784ba7e1c2b8ace73a48d5a5d278861c1d7448df875fbdf2177494",
+   "digest": "e0582d2a89b19d5e931d2636d82f33e680caed83f30a222b80ae80f324f2f7dd",
    "definitions": {
     "SamplingDeploy.CallsUniform": "843c1524d45050b8823823ed2154b5a9b3a1eda8b0662d004096ab45c5796cf0",
+    "SamplingDeploy.StageUniform": "76ebe582282af0e76797d1308b6241d385034311aeed2454cd9e41c600711b69",
     "SamplingDeploy.rejV2": "b71044f828348b7a6b1927c95185b50016f758f394d3fef7be25cff41fc2a002",
     "SamplingDeploy.toyBytes": "f99781febbdb5bea67640621c729c901b1467344841a6847441f0d820f8c93af",
     "SamplingDeploy.toyCode": "9a270ff00c5d14c939f5fef658316c820b89e15057ab386d8057863bb1fdb4af",
-    "SamplingDeploy.toyOrder": "1df79ebb8308638dd62bcb1c4c578d308e282939e77366429f979f8bdfe9331d"
+    "SamplingDeploy.toyOrder": "1df79ebb8308638dd62bcb1c4c578d308e282939e77366429f979f8bdfe9331d",
+    "SamplingDeploy.toyStage": "dd133caaa224530149c33f2f98a7ff998d53f3a889a8d77ce9e001d38a338232",
+    "SamplingDeploy.toyStageBytes": "e3e092ed64e9cc71616e6f436b8368110e6284c377be50bbd8dc02e1a825f99e"
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoCode": {
