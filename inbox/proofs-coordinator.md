@@ -38043,3 +38043,37 @@ Branch `cursor/proofs-v2-members-9810`, head `43f313ea6b`. Still refused: `check
 **One sentence for Daniel:** the two-stage finder now elaborates in Lean as well: at `KSRegTwoX`'s own event both square-root terms become `2·E[(1 + |sample|)·c]/2^256`, under `ExpectedCR` at two first-hit finders and one position hypothesis the contract does not state; clean axioms, not kernel-replayed, not red-teamed, no locked statement changed; and like the one-stage bound it charges a whole run with every session extracted at each rerun, so its number is the Lean's row (d = s), not the paper's.
 
 Tries: `r20261111-032547-b57b` (first, 21 theorems), `r20261111-032956-68c7` (head). I cancelled my own `r20261111-032211-1952` on cpu-2 (queued behind a records run). Note: `note:proofs/20261111T0301Z-checkpoint-firsthit-kilian-resume`, updated next.
+
+## CONCRETE, Wed 11 Nov 03:47Z: ready to mark #8764 at `f1d6c2686e56f5526430a4b74cfce851fa023435`, your way (a): its quick tier passed 8 of 8; way (b) is prepared beside it, `restack.py` clean at `8dfde58665a325d4619801958bc4336ebe68c296` on a branch of my own, its two runs started
+
+**The head for (a)** [read]
+- `f1d6c2686e56` is `05c89e29e099ea9caf397bbc2be1fc498af72792` plus one commit of exactly `2fc1`'s record (my 03:34Z entry has the sums). The pull request is open and unmarked. I push nothing more to its branch.
+- Both its runs are on the tree before the move, so they are evidence for this head only.
+
+**Its runs and their verdict lines** [run]
+- Records, `r20261111-003652-2fc1` (cpu-7), at `05c89e29e099`, rc 0:
+  - `lean-records: Security/Proofs: check.py exit 0 in 2090 s ... without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse`
+  - `lean-records: Security: check.py --update exit 0 in 879 s`, then `the regenerated record is .../lean-audit/record/Security/lean-audit.json; commit it over Security/lean-audit.json`
+  - `lean-records: Security/Properties: check.py exit 0 in 461 s`
+  - `lean-records: OUTCOME {"outcome": "regenerated", "package": "Security/Proofs", ...}`
+- Quick tier, `r20261111-032348-c174` (cpu-9), at `f1d6c2686e56`, rc 0, `suites.py --changed 2b869ed35db5 --quick`:
+  - `passed  verity/core/protocols/pouw   1843 passed in 477 s on 2 workers`
+  - `passed  verity-pouw-benchmarks       1237 passed, 21 skipped in 565 s`
+  - `passed  verity-graph                 181 passed in 16 s`
+  - `passed  verity/ml/circuits/ops       946 passed, 2 skipped in 187 s on 2 workers`
+  - `passed  repository                   279 passed in 242 s`
+  - `passed  verity/core/protocols/pous   536 passed, 12 skipped in 146 s`
+  - `passed  benchmarks/nci               137 passed in 30 s`
+  - `passed  benchmarks/rho               602 passed in 29 s`
+  - `8 suites: 8 passed (0 cached), 0 failed; 28.2 min of test time`
+
+**(b): what `restack.py` printed** [run: `r20261111-033722-1f90`, cpu-9, rc 0, in a clone holding the head and `main` at `5c095bb4ab70`]
+- status `clean`, result `8dfde58665a325d4619801958bc4336ebe68c296`; crossed `6581bcf197d3` then `c1ca25a24748`, the last step merging `main`'s tip; a plain merge it reports `conflicted` in the two added files.
+- I launched it at 03:37Z, before your 03:43Z entry, so its flags are not top's: no `--move-commit` (it found the same two commits by their `Layout-move:` lines) and no `--no-pins` (the pins step ran on the node and changed nothing). It ran through `research run`, not on my VM.
+- Checked [run]: the result descends from the pull request's head and from `main`'s tip. Its 15 Lean files are the head's blobs at `security/...`. Against `main` it changes the same 16 names, 353 lines added and 271 removed, as the head against its base. Its `security/lean-audit.json` differs from `main`'s, as JSON, in two values: `sparse9`'s hash and its group's digest.
+- Pushed at 03:45Z to `cursor/proofs-concrete-leaves-crossed-1fe2`, a new branch of mine. The pull request's branch is untouched.
+- Its runs at that head, both on cpu-9, no verdict yet: records `r20261111-034617-db3a` (`lean_changed.py --records security/Proofs --update`; ETA about 05:15Z [guess: I expect a cold build of the moved tree]) and quick tier `r20261111-034702-522b` (`--changed 5c095bb4ab70`; ETA about 04:20Z [guess]).
+
+**My branches** [read]: one, `cursor/proofs-concrete-leaves-1ca7` (#8764), head `f1d6c2686e56`, crossed head `8dfde58665a3` as above.
+
+**Left**: your mark for (a). For (b): the two runs' verdict lines; if the records run regenerates a record, one commit of exactly it on the crossed branch and the quick tier again at that head; the pull request's body says today's state once you say which head lands. Then NET-313's scoping.
