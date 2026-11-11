@@ -48,15 +48,18 @@ BINDINGS = {"<registered>": (F.TARGETS, "_registered"), "TEMPLATE_PARAMS": (F.TA
                 "_a_roots", "_b_roots", "_c_roots", "_shared_roots", "_model_roots", "TEMPLATE_PARAMS:t-two",
                 "TEMPLATE_PARAMS:t-one")},
             "verity.ml.pkg.circuit-check#_p_roots": ("verity/ml/pkg/__init__.circuit-check.py", "_p_roots"),
-            "verity_flock.rec.circuit-check#_rec_roots": (FLOCK, "_rec_roots")}
+            "verity_flock.rec.circuit-check#_rec_roots": (FLOCK, "_rec_roots"),
+            "pk.circuit-check#_q_roots": ("stacks/s/pk/__init__.circuit-check.py", "_q_roots"),
+            "pk.in.w.circuit-check#_w_roots": ("stacks/s/pk/in/w.circuit-check.py", "_w_roots")}
 #: where the toy's runs can look: under the checker and its declared inputs; at the root, the workspace's members but the
-#: excluded one, and the directories above the checker
-PLACES = {"under": [F.CHECKER, "uv.lock", "verity"], "at": ["", "adapters/vllm", "tools", "tools/config", "tools/verity"]}
+#: excluded one, and the directories above the checker and above a declared input
+PLACES = {"under": ["stacks/s/pk", F.CHECKER, "uv.lock", "verity"],
+          "at": ["", "adapters/vllm", "stacks", "stacks/s", "tools", "tools/config", "tools/verity"]}
 
 TOY = {"pyproject.toml": '[tool.uv.workspace]\nmembers = ["tools/config", "adapters/*"]\nexclude = ["adapters/skip"]\n',
-       f"{F.CHECKER}/pyproject.toml": '[tool.verity.tests]\ninputs = ["verity", "uv.lock"]\n',
+       f"{F.CHECKER}/pyproject.toml": '[tool.verity.tests]\ninputs = ["verity", "stacks/s/pk", "uv.lock"]\n',
        f"{F.CHECKER}/README.md": "prose\n", f"{F.CHECKER}/tests/test_x.py": "", f"{F.SOURCE}/__init__.py": "",
-       F.SIDECARS: NEVER_RUN + 'PACKAGES = ("verity", "verity_flock.sub")\n', F.TARGETS: TARGETS,
+       F.SIDECARS: NEVER_RUN + 'PACKAGES = ("verity", "verity.ml.sub")\nTREES = ("stacks",)\n', F.TARGETS: TARGETS,
        "verity/__init__.py": "", "verity/ml/__init__.py": "", "verity/ml/x.py": "", "verity/ml/x.circuit-check.py": SIDECAR,
        "verity/ml/x.circuit-check.json": "{}\n", "verity/ml/pkg/__init__.py": "",
        "verity/ml/pkg/__init__.circuit-check.py": NEVER_RUN + "def _p_roots(): ...\n",
@@ -64,6 +67,9 @@ TOY = {"pyproject.toml": '[tool.uv.workspace]\nmembers = ["tools/config", "adapt
        "verity/protocols/flock/prover/python/verity_flock/__init__.py": "",
        "verity/protocols/flock/prover/python/verity_flock/rec.circuit-check.py": NEVER_RUN + "def _rec_roots(): ...\n",
        "other/__init__.py": "", "other/z.circuit-check.py": NEVER_RUN + "def _z_roots(): ...\n",
+       "stacks/s/pk/__init__.py": "", "stacks/s/pk/__init__.circuit-check.py": NEVER_RUN + "def _q_roots(): ...\n",
+       "stacks/s/pk/in/__init__.py": "", "stacks/s/pk/in/w.circuit-check.py": NEVER_RUN + "def _w_roots(): ...\n",
+       "stacks/s/un/__init__.py": "", "stacks/s/un/v.circuit-check.py": NEVER_RUN + "def _v_roots(): ...\n",
        "tools/config/pyproject.toml": "[project]\n", "adapters/vllm/pyproject.toml": "[project]\n",
        "adapters/skip/pyproject.toml": "[project]\n",
        **{f"{graph.RUNNERS}/{m}.py": "" for m in ("circuit_binding", "circuit_catalog", "circuit_coverage")}}
@@ -83,7 +89,7 @@ def test_each_binding_is_a_task_named_as_circuit_check_names_it_from_the_files_s
     reads = [{"task": F.CATALOG, "output": "records"}]
     assert sorted(by) == sorted([F.CATALOG, "circuit-coverage:catalog",
                                  *(f"circuit-binding:{f}:{e}" for f, e in BINDINGS.values())])
-    base = sorted(f for f in files if f.startswith(("verity/", f"{F.CHECKER}/")) and not f.startswith(f"{F.CHECKER}/tests/")
+    base = sorted(f for f in files if f.startswith(("verity/", "stacks/s/pk/", f"{F.CHECKER}/")) and not f.startswith(f"{F.CHECKER}/tests/")
                   and not f.endswith(".md") or f == "uv.lock")
     assert F.places(root, files) == PLACES
     seen = F.lookups(files, PLACES)
@@ -189,6 +195,7 @@ def test_an_edit_to_any_file_moves_no_task_s_lookups_and_only_an_input_s_moves_i
     ({f"{F.CHECKER}/pyproject.toml": '[tool.verity.tests]\ninputs = ["uv.lock"]\n'}, "outside what circuit-check's suite"),
     ({f"{F.CHECKER}/pyproject.toml": "[project]\n"}, "no [tool.verity.tests] inputs"),
     ({F.SIDECARS: "ROOTS = ()\n"}, "no PACKAGES tuple"),
+    ({F.SIDECARS: 'PACKAGES = ("verity",)\n'}, "no TREES tuple"),
     ({"pyproject.toml": "[project]\n"}, "no [tool.uv.workspace]")])
 def test_a_tree_the_listing_can_t_read_bindings_from_is_refused_by_name(tmp_path, files, error):
     root = _toy(tmp_path / "tree", **files)
