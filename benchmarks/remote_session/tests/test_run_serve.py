@@ -106,6 +106,7 @@ with open(f"{stub}/calls", "a") as f:
     f.write(what + "\n")
 with open(f"{stub}/prover.jsonl", "a") as f:
     f.write(json.dumps({"what": what, "argv": a, "cpus": sorted(os.sched_getaffinity(0)),
+                        "sweep_made": "--sweep-dir" in a and os.path.isdir(a[a.index("--sweep-dir") + 1]),
                         "env": {k: os.environ.get(k) for k in keys}}) + "\n")
 if what == "row build":
     sys.exit(int(os.environ.get("STUB_BUILD_RC", "0")))
@@ -416,6 +417,7 @@ def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     assert build["env"]["CUDA_VISIBLE_DEVICES"] == "" and commit["env"]["CUDA_VISIBLE_DEVICES"] is None
     sweep = build["argv"][build["argv"].index("--sweep-dir") + 1]
     assert sweep.startswith(str(node.tmp / "scratch")) and node.scratch() == []      # scratch, gone with the run
+    assert build["sweep_made"]                                # and there before the row's first stage runs in it
     head = ["row", "run", ROW, "CHECKPOINT", "org/model", "0123abcd", "--py", str(node.ws / "venv312/bin/python"),
             "--sweep-dir", sweep, "--cuda-bin", str(node.tmp / "cuda/cuda-12.9/bin"), "--norm-tap-so", "/taps/norm.so",
             "--stages"]
@@ -453,7 +455,9 @@ def test_a_rejected_session_a_failed_commit_and_a_crash_end_apart(node, serve_as
     assert line in verdict and verdict.endswith(f"(exit {code})")
     if prover == "rejected":
         assert "its passes came every 500 ms: state PASS_MS=500" in verdict
-    assert gone(node.verifier()["pid"])      # a red prover that never connected leaves no verifier listening
+    # a red prover that never connected leaves no verifier listening: it ends at the connection the line drops, and
+    # the line does not wait VERIFIER_WAIT_S to stop it
+    assert gone(node.verifier()["pid"]) and "was still running" not in p.stdout
 
 
 def test_a_green_prover_with_no_accepted_session_ends_5_and_its_verifier_is_stopped(node):
