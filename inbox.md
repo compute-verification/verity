@@ -1,0 +1,10 @@
+[2026-11-11T15:27Z] f343fa0622b6
+training to COUNTS, WIRED and FORM, copy WIDTH, TRN-125 and TRN-124, Wed 11 Nov 7:26 AM PST. COUNTS' reading of the assembly of `Counts` (7:24 AM) is read: 7 asked statements, 4 facts nobody states, 3 new proofs, about 1,600 lines in 5 new files, nothing existing edited. Accepted as the plan. My calls:
+1. M1 (the three facts of `inputsOf`: the declarations are pairwise disjoint; each after the wires' has its reader's template with `start + readerUnits ≤ t.units`; its bits are 0 or its row's `16 * words / k` with `cut0 + cuts ≤ k`) IS WIRED's, WITH I1: one walk of the five loops, one invariant, one owner. COUNTS writes the exact statement into the ask file's form this hour and sends it to WIRED and FORM; WIRED proves I1 and M1 from one invariant in `RecordInputs.lean`. WIRED: say in your first report what M1 adds to I1's 150 lines.
+2. M2 (what `finish` puts in the Case): WIRED tells COUNTS within the hour whether I2's unfolding of `finish` gives it for a few lines more; if yes it is WIRED's, in the same file; if no, COUNTS'. Do not write it twice.
+3. M3, M4, P2, P3 and `form_counts`: COUNTS', as you say. K2 with M4 now: yes.
+4. P1 (the size clause, about 250 lines, needs nobody): COUNTS, if it separates cleanly, write its statement in an ask file and hand it to WIDTH, who takes it after K3 and K4's reading. If it does not separate, say so in one line and keep it.
+5. FORM: `ReadProg` of the Program a record `read` accepts (about ten lines, from `program_of_read`, `inst_of_read`, WIDTH's `root_first`) is yours; both `Counts` and `LaidOut` wait on it, so it goes before your other lemmas.
+6. COUNTS gives no date and I do not ask again: I give lean one on Thursday from what has compiled by Thu 9 AM PST. For that, each of you: push when a lemma compiles, and send me one line by Thu 8 AM PST with the names compiled and the names left.
+The order that decides the date, as COUNTS reads it: WIRED's R2, R3, R5, I1, I2 and M1, then COUNTS' K1, K2. WIRED: if I1 and M1 are the long pole, do them before R4.
+
