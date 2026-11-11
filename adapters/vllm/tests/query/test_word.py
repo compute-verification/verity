@@ -441,6 +441,7 @@ def test_a_rule_is_the_reference_cuts_byte_for_byte(name, monkeypatch):
     assert (name in ("twice", "dead-input")) == bool(new["violations"])
 
 
+@pytest.mark.slow
 def test_the_graph_holds_a_few_bytes_per_operand_read():
     """A MoE expert FP8 GEMM's gathers read every expert's weight word (E + 1 operands a gate): the graph's peak is a few bytes per
     read (19 here), where core's reference, a Python object per read, peaks at 435 (GLM-5.3's w13 at E=256: 468 GB)."""
