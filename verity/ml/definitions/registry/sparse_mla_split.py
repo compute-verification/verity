@@ -48,6 +48,7 @@ Registered functions (all `Name_v1`):
   MufuLg2Ftz                                    (x: f32) -> f32
   F32NeZeroFtz, F32GtZeroFtz                    (x: f32) -> Value<1>   x != 0 (false on NaN), x > 0, a subnormal x read as 0
   SparseMlaSplitEnd{DV,INV,SCALE}               (m, l[4], o[DV]) -> (o_partial[DV], lse)
+  SparseMlaSplitEndCols{DV,G,C,INV,SCALE}       (m, l[4], o[DV]) -> (o_partial[C G : (C+1) G], lse)
   SparseMlaSplitPart{T,DR,DV,BN,DOT,INV,SCALE}  (q_nope: DV bf16, q_rope: DR bf16, kv: T x (DV+DR) bf16) -> (o_partial[DV], lse)
   SparseMlaCombine{NSPLIT,DV,INV}               (lse: NSPLIT f32, o: NSPLIT x DV f32) -> DV bf16
   SparseMlaCombineLse{NSPLIT,DV,INV}            (lse: NSPLIT f32, o: NSPLIT x DV f32) -> (DV bf16, lse)
@@ -58,6 +59,12 @@ NS is the token's split count (`launch_num_splits`), the boundaries `split_block
 of `SparseMlaHeadSplit` on its own T keys (the split's blocks and its end, `split_part`, the loop the head runs per split): its
 (o_partial, lse) is what FA3's split kernel writes to HBM for the combine kernel to read, so a head at NS > 1 is its splits' parts
 and `SparseMlaCombine` over them.
+
+The cut (`split_chain`, ``CUTS``).  A part of a whole block fits a Flock block and a part of two does not, nor a combine of a
+token's most splits at DV = 512, so serving stages a row as each split's key blocks as `sparse_mla.head_chain` chains a head's,
+each split ended in column blocks (`SparseMlaSplitEndCols`: a wire reads its writer's output row whole, so a combine unit's
+columns are a writer's row), and `SparseMlaCombine` at DV = `COMBINE_COLS` on each column block of the splits' partials, which
+is those columns of the combine: each output column is its own FMA chain, its weights the lse's alone.
 """
 from __future__ import annotations
 
@@ -390,6 +397,29 @@ def SparseMlaSplitEnd(B, S, m, l, o):
     return split_end(word_steps(B), S, S.INV, m, l, o)
 
 
+def check_cols(DV: int, G: int, C: int) -> None:
+    """Refuse a column block that is not one of DV / G whole blocks of G columns."""
+    if G < 1 or DV % G or not 0 <= C < DV // G:
+        raise ValueError(f"SparseMlaSplitEndCols: columns [{C}·{G}, {C + 1}·{G}) are not a block of DV={DV} in blocks of G")
+
+
+def split_end_cols(st: M.Steps, S, INV, m, l, o):
+    """`SparseMlaSplitEndCols`' body: `split_end` on o's columns [C G, (C + 1) G), its lse over the whole state's sum."""
+    check_cols(S.DV, S.G, S.C)
+    return split_end(st, S, INV, m, l, o[S.C * S.G:(S.C + 1) * S.G])
+
+
+def _end_cols_type(S, f32=F32):
+    return ((("m", f32), ("l", Array(4, f32)), ("o", Array(S.DV, f32))), Tuple(Array(S.G, f32), f32))
+
+
+@composite("SparseMlaSplitEndCols", 1, ["DV", "G", "C", "INV", "SCALE"], _end_cols_type, conformance=_CONF)
+def SparseMlaSplitEndCols(B, S, m, l, o):
+    """Columns [C G, (C + 1) G) of `SparseMlaSplitEnd_v1{DV, INV, SCALE}`'s partial output, and its lse, on the same state: a
+    split's end as the column block a `SparseMlaCombine_v1{NSPLIT, DV = G}` unit reads (`split_chain`)."""
+    return split_end_cols(word_steps(B), S, S.INV, m, l, o)
+
+
 def _part_type(S, bf16=BF16, f32=F32):
     return ((("q_nope", Array(S.DV, bf16)), ("q_rope", Array(S.DR, bf16)), ("kv", Array(S.T, Array(S.DR + S.DV, bf16)))),
             Tuple(Array(S.DV, f32), f32))
@@ -461,5 +491,52 @@ def SparseMlaSplit(B, S, q_nope, q_rope, kv):
     return B.batch(hd, q_nope, q_rope, kv, axes=(0, 0, None))
 
 
-SPARSE_MLA_SPLIT_COMPOSITES = [SparseMlaSplitEnd, SparseMlaSplitPart, SparseMlaCombine, SparseMlaCombineLse, SparseMlaHeadSplit,
-                               SparseMlaSplit]
+#: the columns of a combine unit of a split row's cut (`split_chain`): each output column of the combine is its own ordered FMA
+#: chain over the splits, its weights read off the lse alone, so the combine at DV = G on columns [c, c + G) of every split's
+#: partial output is those columns of the combine at the row's DV
+COMBINE_COLS = 64
+
+
+def combine_cols(DV: int) -> int:
+    """The columns G of each combine unit of a row of DV output columns: `COMBINE_COLS`, or DV when narrower."""
+    G = min(COMBINE_COLS, DV)
+    check_cols(DV, G, 0)
+    return G
+
+
+def split_chain(row) -> list[tuple[object, int]]:
+    """The units a `SparseMlaSplit_v1` binding ``row`` (or a `SparseMlaHeadSplit_v1`'s, one head) is cut into, each Definition
+    bound and how many of it.  Per head, each non-empty split's key blocks (`split_blocks`) as a head's are
+    (`sparse_mla.head_chain`): its first visited block `SparseMlaHeadBlock_v1{FIRST}` at its key count, each later one at BN.
+    At NS = 1 the one split is the head, ended by `SparseMlaHeadEnd_v1`; above it, each split is ended in its DV / G column
+    blocks (`SparseMlaSplitEndCols_v1{G, C}`, G = `combine_cols(DV)`), and `SparseMlaCombine_v1{NSPLIT, DV = G}` combines
+    each column block of the splits.  What `serving_templates` stages a row as, and what circuit-check holds to the block in its
+    place."""
+    if getattr(row, "defn", None) not in (SparseMlaSplit, SparseMlaHeadSplit):
+        raise ValueError(f"split_chain cuts a SparseMlaSplit_v1 or SparseMlaHeadSplit_v1 binding, not {row!r}")
+    S = row.bindings
+    T, NS, BN, DV = (int(S[k]) for k in ("T", "NS", "BN", "DV"))
+    NH = int(S["NH"]) if "NH" in S else 1
+    check_split_statics(T, NS)
+    blk = {k: S[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")}
+    splits = split_blocks(T, NS, BN)
+    first: dict[int, int] = {}
+    for _b0, b1 in splits:
+        nvis = min(T, b1 * BN) - (b1 - 1) * BN
+        first[nvis] = first.get(nvis, 0) + NH
+    out = [(bind(M.SparseMlaHeadBlock, NVIS=n, FIRST=True, **blk), k) for n, k in first.items()]
+    if later := NH * sum(b1 - b0 - 1 for b0, b1 in splits):
+        out.append((bind(M.SparseMlaHeadBlock, NVIS=BN, FIRST=False, **blk), later))
+    if NS == 1:
+        return out + [(bind(M.SparseMlaHeadEnd, DV=DV, INV=S["INV"]), NH)]
+    G = combine_cols(DV)
+    out += [(bind(SparseMlaSplitEndCols, DV=DV, G=G, C=c, INV=S["INV"], SCALE=S["SCALE"]), NH * len(splits))
+            for c in range(DV // G)]
+    return out + [(bind(SparseMlaCombine, NSPLIT=len(splits), DV=G, INV=S["INV"]), NH * (DV // G))]
+
+
+SPARSE_MLA_SPLIT_COMPOSITES = [SparseMlaSplitEnd, SparseMlaSplitEndCols, SparseMlaSplitPart, SparseMlaCombine, SparseMlaCombineLse,
+                               SparseMlaHeadSplit, SparseMlaSplit]
+#: each family serving stages as its cut, never whole, with the cut at a binding's statics (circuit-check's ``block`` holds
+#: each unit to the Flock block in the Call's place); a `SparseMlaHeadSplit_v1` is one head of a split row's cut
+CUTS = {"SparseMlaSplit_v1": split_chain, "SparseMlaHeadSplit_v1": split_chain}
