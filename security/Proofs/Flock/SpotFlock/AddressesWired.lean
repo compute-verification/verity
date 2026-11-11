@@ -45,8 +45,9 @@ variable (h : Held) (ω : ℕ → ℕ) (keep : ℕ → Bool)
 
 namespace CheckedRun
 
-variable (r : CheckedRun)
+variable (r : CheckedRun h.stage)
 
+variable {h} in
 /-- **The roots the wired program opens gate `g` of the unit under**: its replay block's, where `g` is a gate of the
 replay block that `ω` leaves alone and the wired program doesn't commit as that block sees it; the statement's
 otherwise (`Reveal.rootsAt`, at the wired program and the replay block without the gates `ω` moves). -/
@@ -112,7 +113,7 @@ place and slot; so has a unit that reads it and the unit that writes it. -/
 def AddressesWired : Prop :=
   ∃ addr : ℕ → Address,
     (∀ i, (addr i).place = (addr (ω i)).place ∧ (addr i).slot = (addr (ω i)).slot) ∧
-      ∀ r : CheckedRun, r.Ok h → ∀ i, r.s.prog.Needs r.b i → r.AddressHoldsWired h ω keep (addr i) i (ω i)
+      ∀ r : CheckedRun h.stage, r.Ok h → ∀ i, r.s.prog.Needs r.b i → r.AddressHoldsWired h ω keep (addr i) i (ω i)
 
 /-! ## The entry a writer and its readers name -/
 
@@ -172,7 +173,8 @@ theorem fanProg_sideBySide :
 /-- **The roots at the instance**: at a run whose statement's program is the three members' and whose unit's replay
 block holds them, the wired program opens the two wired gates under the replay block's roots, and the writers'
 inputs and the reader's output under the statement's. -/
-theorem rootsWired_fanProg (r : CheckedRun) (hp : r.s.prog = fanProg) (hrb : r.rb = [0, 1, 2, 3, 4, 5, 6, 7]) :
+theorem rootsWired_fanProg (r : CheckedRun h.stage) (hp : r.s.prog = fanProg)
+    (hrb : r.rb = [0, 1, 2, 3, 4, 5, 6, 7]) :
     r.rootsWired fanWire fanKeep 1 = iroots r.x r.seen r.ρ ∧ r.rootsWired fanWire fanKeep 3 = iroots r.x r.seen r.ρ ∧
       r.rootsWired fanWire fanKeep 0 = r.s.roots ∧ r.rootsWired fanWire fanKeep 2 = r.s.roots ∧
       r.rootsWired fanWire fanKeep 7 = r.s.roots := by

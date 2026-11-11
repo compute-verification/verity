@@ -216,7 +216,7 @@ def BuiltWired : Prop :=
 
 namespace CheckedRun
 
-variable {h ω keep} {r : CheckedRun}
+variable {h ω keep} {r : CheckedRun h.stage}
 
 /-- **The gates an accepted run's checked unit needs side by side are `needsSide`'s.** -/
 theorem mem_needsSide (hr : r.Ok h) {i : ℕ} : i ∈ needsSide h r.s r.u ↔ r.s.prog.Needs r.b i := by
@@ -584,9 +584,9 @@ in the relation of unit `u`'s statement, each unit `u` the two stages check has 
 the wired program and that pass (under the run's roots, and the interior roots `m₁` states for `ρ`) make `b`, without
 the gates `ω` moves, correct at the wired program on the values of `ρ` without them. -/
 def StmtOpensWired : Prop :=
-  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u,
+  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (rest : List (Msg × Out)) wF u,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
-    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     ∃ b ρ rb, Pt.blocks[u]? = some b ∧ replayOf Pt d.part u = some ρ ∧ d.part.blocks[ρ]? = some rb ∧
       ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
