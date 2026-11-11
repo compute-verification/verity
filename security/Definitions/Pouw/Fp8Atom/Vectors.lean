@@ -9,7 +9,7 @@ public import Definitions.Pouw.Fp8Atom.Vectors.C01
 
 namespace Pouw.Fp8Atom
 
-/-- The 631 kernel-pinned conformance vectors: `verity.ml.circuits.silicon`'s `HOPPER_E4M3_K32` words on the branch covers of `scripts/fp8atom_cover.json` and the 49 reference steps (`scripts/fp8atom_vectors.py`, seed 2026092819). -/
+/-- The 631 kernel-pinned conformance vectors: `verity.definitions.silicon`'s `HOPPER_E4M3_K32` words on the branch covers of `scripts/fp8atom_cover.json` and the 49 reference steps (`scripts/fp8atom_vectors.py`, seed 2026092819). -/
 def vectors : List Vec :=
   Vectors.c00 ++
   Vectors.c01

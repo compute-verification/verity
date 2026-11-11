@@ -24,8 +24,6 @@ inputs = [
     # the network certifier makes them, which the server's feed reads in a warden trace under `--admit tick`, and its
     # packages
     "verity/__init__.py",
-    "verity/core/__init__.py",
-    "verity/core/protocols/__init__.py",
     "verity/protocols/certifier/verifier/__init__.py",
     "verity/protocols/certifier/verifier/release.py",
           "verity/protocols/__init__.py", "verity/protocols/certifier/__init__.py"]
