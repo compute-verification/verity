@@ -23,6 +23,8 @@ from verity.definitions.ops.prims import HopperBF16WgmmaDot16
 from verity.commitments.windows import interface as IF
 from verity.commitments.windows import rows as CS
 
+from tests.pipeline.stated_rows import unstated_in
+
 ST = {"K": 32, "N": 3, "DOT": HopperBF16WgmmaDot16}
 ROW, UNIT = bind(G.Gemm, **ST), bind(G.Gemm, **{**ST, "N": 1})
 T = descriptor_id(UNIT)
@@ -55,7 +57,9 @@ def served(monkeypatch):
 
     def window(partition):
         w, rows = SRW.population({"r0": {}, "r1": {}}, partition, "ab" * 64)
-        return w, rows, json.loads(IF.circuit_bytes(SRW.circuit_record(w, rows)))
+        doc = json.loads(IF.circuit_bytes(SRW.circuit_record(w, rows)))
+        assert unstated_in(doc) == []
+        return w, rows, doc
     return window
 
 

@@ -32,6 +32,8 @@ from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
 
+from tests.pipeline.stated_rows import unstated_in
+
 K, N = 256, 200
 NB, KG = -(-N // FP8_BLOCK), K // FP8_BLOCK
 #: a window's rows' N: its population program grows with its units
@@ -234,6 +236,7 @@ def test_the_wires_hold_on_the_window_s_commitment(served, kinds, tmpls):
     w, rows = SRW.population({"r0": {}}, {"templates": tmpls, "law": "subset:2", "chunk_cap": caps}, "ab" * 64)
     assert w.members == tuple(wired(tmpls, caps)[0])
     doc = json.loads(IF.circuit_bytes(SRW.circuit_record(w, rows)))
+    assert unstated_in(doc) == []
     assert IF.input_count(doc)["wired"] == kinds.count("fi") * WN * (8 * K + 32 * KG)
     got = SRW.read_all(w.members, rows, x["store"], None)
     for m, (g, _e) in zip(w.members, got):
