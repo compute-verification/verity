@@ -32,7 +32,8 @@ def slots(tmp_path, monkeypatch):
     f = tmp_path / "lean-slots"
     f.write_text("# vy-nebius-1: 4, split for proofs and the lander\naudit 2\ncheck 2   # check's lean-audit step\n")
     monkeypatch.setattr(LS, "SLOTS", f)
-    for v in (LS.HELD, "LEAN_SLOT_POOL", "CHECK_SLOT", "RESEARCH_LANE", "RESEARCH_RUN_ID", "RESEARCH_RUN_DIR", "RESEARCH_AGENT_URL"):
+    for v in (LS.HELD, "LEAN_SLOT_POOL", "CHECK_SLOT", "RESEARCH_LANE", "RESEARCH_RUN_ID", "RESEARCH_RUN_DIR", "RESEARCH_AGENT_URL",
+              LS.SLOT.RUN_MEM_ENV, LS.SLOT.MIN_MEM_ENV):       # a run launched with --mem-gb sets them, and a slot's who names the GB
         monkeypatch.delenv(v, raising=False)
     return tmp_path
 
