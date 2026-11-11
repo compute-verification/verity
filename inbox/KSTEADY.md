@@ -1582,3 +1582,9 @@ address is the one your own runs recorded tonight.
   What reads files and holds no card (the proof's look, the put) may run after it on a core of kernels'
   row until 22:45Z, and after that only if it touches no card and no core vllm's row names; vllm's row is
   all cores, so past 22:45Z do it from the store and your VM, not on the node.
+- **Added 22:23Z, for the kept directory:** proofs' worker says the staged directory also holds `pin.txt`
+  and `stage.json`. Copy both into the directory you put, beside `pub.bin`, if they are small and hold no
+  bucket, endpoint or key (read them first): they say which statement this is, and proofs' answer on the
+  program and partition (by Thu 18:00Z) checks the two files against what `pub.bin` binds. Proofs also
+  says a kept session is checked whole by the Lean verifier and refused only for want of a Program, so
+  the proof you keep is the right thing to keep.
