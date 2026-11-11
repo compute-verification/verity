@@ -19535,7 +19535,7 @@
    }
   },
   "NetworkCheck.Period": {
-   "digest": "0ed0d32dd2d6763fef1b933ce9e7687eaff211d78fa0d02fbc0e4cc36ebd1979",
+   "digest": "1defc83854bf31c8703cd98e691f0b83401784b632fd1c3bc0b24b9e6e16d0ee",
    "definitions": {
     "NetworkCheck.Period.Audit": "0d641bb152e911020e01f254af27bca6b76ff4e2cb57994e3121b4fcb8e976f4",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -19653,7 +19653,7 @@
     "NetworkCheck.Period.atMost": "3df31d5d5297b8a4f0576162646c9449346e9ceb4d2d2f5f49f6fc7693514a84",
     "NetworkCheck.Period.auditCheck": "49a5add6075b56213d317b125ea0d99100422b09b24333db9e5944a9badfa641",
     "NetworkCheck.Period.auditChecks": "52014dcfea3476d3f9ac2c6c3863094a72309a9edbd4173f1adb6a50e41ff7c5",
-    "NetworkCheck.Period.auditOf": "0267d6e860ef47ceb6f25787209486258e79910be0b63197b9fa0b1a78bd8f41",
+    "NetworkCheck.Period.auditOf": "b773b5555fc6b9ac3bbe8d7bc692bd62a2f6aa6eeae537d8770573e58a73020d",
     "NetworkCheck.Period.bitsOf": "bfa24d57cf13db4bdb0032e9d460ef313ca29a96afa96396acb0b72642570cd8",
     "NetworkCheck.Period.canonText": "f3f56595df2de44e1a87807d7066086208c80a22fdfffa9044b637fa3f43e82e",
     "NetworkCheck.Period.capsTerm": "b0344cf3feee99420207429449a56894f1be391186237460231820aa80faf275",
