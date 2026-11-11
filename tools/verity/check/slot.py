@@ -322,22 +322,19 @@ def reserve(slot: dict, now: datetime, priority: bool = False) -> str | None:
     return f"slot: holds a {gb:g} GB research.mem reservation ({path}) while the check runs"
 
 
-class Unread(Exception):
-    """A slot's windows FILE can't be read as windows: its text is why `blocked` holds the slot, and the fix."""
-
-
-def _windows(slot: dict) -> list[tuple[str, datetime, int, str]]:
-    """`slot`'s windows as its FILE writes them: (start as written, start, minutes, comment). `Unread` when FILE can't be read
-    (a hold ended by moving its file while SLOTS, or a waiter's last reading of it, still names it) or a line of it isn't a
-    window: a slot whose windows nobody can read starts no check, and no waiter or `--status` on the machine dies of it."""
+def _windows(slot: dict) -> tuple[list[tuple[str, datetime, int, str]], str | None]:
+    """`slot`'s windows as its FILE writes them, (start as written, start, minutes, comment), and why they can't be read, if
+    they can't, with the fix: FILE is gone (a hold ended by moving its file while SLOTS, or a waiter's last reading of it,
+    still names it) or a line of it isn't a window. `blocked` holds the slot for that reason: a slot whose windows nobody can
+    read starts no check, and no waiter or `--status` on the machine dies of it."""
     if not slot["windows"]:
-        return []
+        return [], None
     fix = f"take windows= off slot {slot['name']} in {SLOTS}"
     try:
         lines = Path(slot["windows"]).read_text().splitlines()
     except OSError as e:
-        raise Unread(f"its windows file {slot['windows']} can't be read ({e.strerror or e}), so no check starts in it: put the "
-                     f"file back (an empty one has no windows) or {fix}") from None
+        return [], (f"its windows file {slot['windows']} can't be read ({e.strerror or e}), so no check starts in it: put the "
+                    f"file back (an empty one has no windows) or {fix}")
     out = []
     for n, line in enumerate(lines, 1):
         body, _, note = line.partition("#")
@@ -348,10 +345,10 @@ def _windows(slot: dict) -> list[tuple[str, datetime, int, str]]:
                 if start.tzinfo is None:
                     raise ValueError(f[0])
             except ValueError:
-                raise Unread(f"line {n} of its windows file {slot['windows']} ({body.strip()!r}) isn't `START_UTC MINUTES` "
-                             f"(`2026-10-01T09:20Z 30`), so no check starts in it: fix the line or {fix}") from None
+                return [], (f"line {n} of its windows file {slot['windows']} ({body.strip()!r}) isn't `START_UTC MINUTES` "
+                            f"(`2026-10-01T09:20Z 30`), so no check starts in it: fix the line or {fix}")
             out.append((f[0], start, minutes, note.strip()))
-    return out
+    return out, None
 
 
 #: no slot starts a check while DISK has fewer free inodes or GB than these: a machine can run out of inodes with
@@ -392,10 +389,9 @@ def blocked(slot: dict, now: datetime, priority: bool = False) -> str | None:
     """Why `slot` can't start a check at `now` (a window open or within its lead, a disk short of space (`disk_short`), or less
     memory free than its mem=), or None. A `priority` waiter's check, or any check of an only=trains slot (which only those
     take), counts only other priority checks' reservations (`reserved_gb`)."""
-    try:
-        windows = _windows(slot)
-    except Unread as e:
-        return str(e)
+    windows, unread = _windows(slot)
+    if unread:
+        return unread
     for raw, start, minutes, _note in windows:
         if start - timedelta(minutes=slot["lead"]) < now < start + timedelta(minutes=minutes):
             return f"window {raw} ({minutes} min) is open or starts within {slot['lead']} min"
@@ -418,11 +414,7 @@ def upcoming(slot: dict, now: datetime, hours: int = AHEAD_H) -> list[dict]:
     """`slot`'s windows open at `now` or starting within `hours`, by start: when, how long, minutes until it starts (negative
     while open) and its comment's first NOTE_WORDS words; none while they can't be read, which `blocked` says."""
     out = []
-    try:
-        windows = _windows(slot)
-    except Unread:
-        return out
-    for raw, start, minutes, note in sorted(windows, key=lambda w: w[1]):
+    for raw, start, minutes, note in sorted(_windows(slot)[0], key=lambda w: w[1]):
         if now < start + timedelta(minutes=minutes) and start < now + timedelta(hours=hours):
             words = note.split()
             out.append({"start": raw, "minutes": minutes, "starts_in_min": int((start - now).total_seconds() // 60),
