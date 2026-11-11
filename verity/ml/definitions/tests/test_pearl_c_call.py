@@ -160,8 +160,10 @@ def test_a_rows_boolean_version_is_its_word_forms_calls_on_bits():
 @pytest.mark.slow
 def test_a_row_is_laid_out_in_units_each_under_the_whole_lowering():
     """`units` of a call's rows at k = 2,048 and 8,192 and rank 32 on the H100's atom: every AND of a row is in a
-    Definition of at most 65,536 ANDs, the ones `UNITS_A` and `UNITS_B` name, and the rows' ANDs are these. Tracing every
-    unit takes seconds, which is why this is slow; the count of `ands` is the compiled circuit's on a small Definition."""
+    Definition of at most 65,536 ANDs, the ones `UNITS_A` and `UNITS_B` name, and the rows' ANDs are these; each unit
+    that is a Pearl-C Definition of this registry has a pin of its lowering, and so has the cell circuit-check binds.
+    Tracing every unit takes seconds, which is why this is slow; the count of `ands` is the compiled circuit's on a small
+    Definition."""
     small = on(F.PearlCPeelAV2, "h100", K=32, R=2)
     assert K.ands(small) == compile_bits(small).counts["and"] == 15_454
     want = {(K.PearlCRowAV2, 2048): 39_742_282, (K.PearlCRowBV2, 2048): 39_657_287,
@@ -172,25 +174,17 @@ def test_a_row_is_laid_out_in_units_each_under_the_whole_lowering():
         assert {i.split("_v")[0] for i in laid} == (UNITS_A if row is K.PearlCRowAV2 else UNITS_B)
         assert all(0 < each <= K.LOWERED_WHOLE for _calls, each in laid.values())
         assert sum(calls * each for calls, each in laid.values()) == K.ands(d) == total
-    digest = K.units(on(K.PearlCRowAV2, "h100", K=2048, R=32))
-    assert digest["PearlCRowBlock_v2"] == (72, 57_947) and digest["PearlCShaBlock_v2"] == (5, 57_947)
+    row = K.units(on(K.PearlCRowAV2, "h100", K=2048, R=32))
+    assert row["PearlCRowBlock_v2"] == (72, 57_947) and row["PearlCShaBlock_v2"] == (5, 57_947)
+    pins = {}
+    for module in ("pearl_c_noise", "pearl_c_forming", "pearl_c_call"):
+        pins |= json.loads((REGISTRY_DIR / f"{module}.circuit-check.json").read_text())["definitions"]
+    ours = [i for i in row if i.startswith("PearlC")]
+    assert len(ours) == 10 and all(i in pins for i in ours), [i for i in ours if i not in pins]
+    assert K.bindings()[-1].id in pins and K.ands(K.bindings()[-1]) <= K.LOWERED_WHOLE
     cell = K.units(on(K.PearlCCellV2, "h100", K=2048, R=32))
     assert {i.split("_v")[0]: calls for i, (calls, _each) in cell.items()} == {"HopperE4m3QgmmaDot32": 64, "F32Add": 16,
-                                                                             "HopperBF16WgmmaDot16": 4}
+                                                                             "PearlCPeel": 1}
+    assert K.ands(on(K.PearlCCellV2, "h100", K=2048, R=32)) == 479_120
     with pytest.raises(ValueError, match="ANDs of its own"):
         K.units(bind(N.PearlCRowBlockV2), limit=50_000)
-
-
-@pytest.mark.slow
-def test_each_hash_and_code_unit_of_a_row_is_pinned():
-    """The units of a row that are this registry's Pearl-C Definitions each have a pin of their lowering in their module's
-    sidecar, which circuit-check holds them to."""
-    pins = {}
-    for module in ("pearl_c_noise", "pearl_c_forming"):
-        pins |= json.loads((REGISTRY_DIR / f"{module}.circuit-check.json").read_text())["definitions"]
-    laid = K.units(on(K.PearlCRowAV2, "h100", K=64, R=32)) | K.units(on(K.PearlCRowBV2, "h100", K=64, R=32))
-    ours = [i for i in laid if i.startswith("PearlC")]
-    assert len(ours) == 10 and all(i in pins for i in ours), [i for i in ours if i not in pins]
-    cell = bind(K.PearlCCellV2, **{k: v for k, v in K.bindings()[-1].bindings.items()})
-    assert K.ands(cell) <= K.LOWERED_WHOLE
-    assert cell.id in json.loads((REGISTRY_DIR / "pearl_c_call.circuit-check.json").read_text())["definitions"]
