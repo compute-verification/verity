@@ -1,4 +1,4 @@
-"""`zk_cost.py overhead` divides by `verity.hardware.rate`, the one peak calculator: on the H200 an e4m3 block's peak is
+"""`zk_cost.py overhead` divides by `verity.hardware.cards.rate`, the one peak calculator: on the H200 an e4m3 block's peak is
 132 SMs x 4096 MACs at the 1830 MHz tensor clock, the data sheet's 1,979 dense FP8 TFLOPS, and never the 1980 MHz SM clock's
 1.0705e15. Toy records of one served type, staged at two sizes and proved warm by the dev arm, give a known marginal second
 a block, so its h is fixed by the peak alone. A served type's size of 2 proves its probe's staging rather than staging the
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from verity import hardware
+from verity.hardware import cards
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import zk_cost as Z
@@ -38,18 +38,18 @@ def _records(out: Path, sizes: tuple[int, ...] = (1024, 2048)) -> None:
 
 
 def test_the_h200_e4m3_peak_is_the_data_sheets_at_the_tensor_clock():
-    card = hardware.load("h200-sxm-141gb")
-    peak = hardware.rate(card, fmt="e4m3")
+    card = cards.load("h200-sxm-141gb")
+    peak = cards.rate(card, fmt="e4m3")
     assert peak == 132 * 4096 * 1830 * 10**6
     assert float(peak) == pytest.approx(9.8945e14, rel=1e-4)
-    assert hardware.rate(card, fmt="e4m3", mhz=1980) == 132 * 4096 * 1980 * 10**6
+    assert cards.rate(card, fmt="e4m3", mhz=1980) == 132 * 4096 * 1980 * 10**6
 
 
 def test_overhead_divides_a_blocks_seconds_by_the_cards_rate(tmp_path):
     _records(tmp_path)
     assert Z.overhead(argparse.Namespace(out=str(tmp_path), card="h200-sxm-141gb", run="r-test")) == 0
     (t,) = json.loads((tmp_path / "overhead.json").read_text())["types"].values()
-    peak = float(hardware.rate(hardware.load("h200-sxm-141gb"), fmt="e4m3"))
+    peak = float(cards.rate(cards.load("h200-sxm-141gb"), fmt="e4m3"))
     assert t["peak_mac_per_s"] == peak
     dev = t["arms"]["dev"]
     assert dev["marginal_s"] == pytest.approx(MARGINAL_S) and dev["fixed_s"] == pytest.approx(FIXED_S)

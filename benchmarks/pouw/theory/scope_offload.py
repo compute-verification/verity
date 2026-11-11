@@ -48,7 +48,7 @@ package.
 
 Run: `python scope_offload.py [--mutations] [--device-lean security/Definitions/Accounting/Device.lean] [--verdict PATH]`.
 Stdlib, exact_kit, and verity_machine_model for each headline design's eps and credited time a word.
-Sources: each device's card (verity.hardware): MAC_rate = s8 macs/SM/clk * SMs * f_max (`verity.hardware.rate` at the
+Sources: each device's card (verity.hardware.cards): MAC_rate = s8 macs/SM/clk * SMs * f_max (`verity.hardware.cards.rate` at the
 card's SM clock), and its device memory; the headline eps at both
 readings, `headline.row` for `machine_model/data/headline.toml`'s designs; PCIe5 x16 64 GB/s one way;
 ConnectX-7/BlueField-3 400 Gb/s = 50 GB/s a NIC; NVLink4 450 GB/s and NVLink5 900 GB/s one way; RTX PRO 6000 has no
@@ -69,7 +69,7 @@ from verity_machine_model.eps import design, machine, setup
 from verity_machine_model.headline import CREDIT, OPERANDS, READINGS, row, spec
 from verity_machine_model.model import device as family_data
 
-from verity import hardware
+from verity.hardware import cards
 
 MAC_PER_WORD = 32  # a committed word sums 32 int8 products (FOLD-BW)
 BYTES_PER_WORD = 4  # a fresh s32
@@ -82,8 +82,8 @@ INT8 = range(-128, 128)
 WEIGHT = range(-63, 64)
 
 # Per device, its card (verity/hardware/cards), whose numbers are read from it.
-CARDS = {"sm_120 RTX PRO 6000": hardware.load("rtx-pro-6000-server"), "H200 sm_90": hardware.load("h200-sxm-141gb"),
-         "B200 sm_100": hardware.load("b200-sxm-180gb")}
+CARDS = {"sm_120 RTX PRO 6000": cards.load("rtx-pro-6000-server"), "H200 sm_90": cards.load("h200-sxm-141gb"),
+         "B200 sm_100": cards.load("b200-sxm-180gb")}
 # Per device: s8 dense MACs a SM clock, SMs, f_max (Hz, the SM clock).
 DEVICES = {name: (c["rate"]["tensor"]["value"], c["sm"]["count"]["value"], c["clock"]["sm"]["value"] * 1e6)
            for name, c in CARDS.items()}
@@ -145,7 +145,7 @@ HOSTS = {
 
 def mac_rate(device: str) -> float:
     """The device's s8 MACs a second at f_max, the SM clock its credited word is timed at (`credited_word`)."""
-    return float(hardware.rate(CARDS[device], mhz=CARDS[device]["clock"]["sm"]["value"]))
+    return float(cards.rate(CARDS[device], mhz=CARDS[device]["clock"]["sm"]["value"]))
 
 
 def amx_rate(host: str, mode: str) -> float:
