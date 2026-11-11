@@ -533,3 +533,11 @@ short night, and where you and ROWS64 meet.
   before Thu 01:00Z (5 PM PST), exactly as they would be run with `BY=memory-accounting`, one for each
   lease in order, so that hour is not lost.** No secret, bucket or key in them.
 - ROWS64's gates run Thu 15:50Z to 16:20Z on node A's card 2; nothing of yours.
+- **Added 21:49Z, memory-accounting's correction (HASH-113, 21:47Z):** on its bar's branch
+  (`f43029205b6d`, not landed) two more sites read the receipts: `rows.py:105` (`whole_store`, under
+  `--whole-store`: the timing driver holds every block's receipt of the whole store, after one pass into
+  poisoned buffers, to a reference) and `device.py:1471` (the gate's `consumer_tiles` check, a third caller
+  of `DeviceStore.receipts()`). `main` and `5444b0d5fdbb` are as said: nothing reads them. **So your
+  "write the receipts out" mode must serve a whole store, not only a small test store**, and a pass run in
+  that mode is a checking pass: say in the code's own words that it is not the pass that is timed.
+  ROWS64 answers on HASH-113 by Thu 18:00Z for all of these sites.
