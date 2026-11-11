@@ -487,7 +487,7 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
 
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     for can, said in ((False, True), (True, False)):
         monkeypatch.setattr(CHECK, "landable", lambda base, can=can: can)
         assert CHECK.record(["--base", "HEAD"]) == 0 and len(launched) == 1
@@ -620,14 +620,16 @@ def test_the_ratchet_gate_step_fails_when_its_base_is_head_or_above_it(tmp_path,
     assert CHECK.ratchet_gate(out, True) == "skipped: no base: origin/main names no commit here"
 
 
-def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them_unless_no_cache(tmp_path, monkeypatch):
+def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them(tmp_path, monkeypatch):
     """A launch sends the newest recorded checks' packs as URLs the run fetches, never the packs: fetching and combining them on
     the launcher held each shard's launch some ten minutes.  `--verdicts-in` travels beside them, never in their place: a stale
-    pack given once turned reuse off for every check it rode with, because the gathered pack it replaced held the passes."""
+    pack given once turned reuse off for every check it rode with, because the gathered pack it replaced held the passes.  An
+    uncached launch sends them too, with the commit's own recorded checks' first (`commit_packs`): its fresh suites are
+    compared with every pass the commit was recorded with, not only those its slot holds."""
     import subprocess
     import sys
 
-    real, launched, listed = subprocess.run, [], []
+    real, launched, listed, commits = subprocess.run, [], [], []
 
     def run(cmd, *a, **k):
         if cmd[:4] == [sys.executable, "-m", "research", "run"]:
@@ -636,8 +638,9 @@ def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them_unles
             return subprocess.CompletedProcess(cmd, 0)
         return real(cmd, *a, **k)
 
-    def url_file(d: Path) -> Path:
+    def url_file(d: Path, commit: str | None = None) -> Path:
         listed.append(d / CHECK.VERDICT_URLS)
+        commits.append(commit)
         listed[-1].write_text("[]")
         return listed[-1]
 
@@ -663,16 +666,17 @@ def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them_unles
     [(tail, sends, env, _)] = launched
     assert env[CHECK.VERDICT_URLS_ENV] == str(listed[-1]) and sends == []
     launched.clear()
-    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(listed) == 3
+    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(listed) == 4      # the nightly `audit-main`
     [(_, sends, env, head)] = launched
-    assert sends == [] and CHECK.VERDICT_URLS_ENV not in env
+    assert env[CHECK.VERDICT_URLS_ENV] == str(listed[-1]) and sends == []
     assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == [*CHECK.PACK_FILES, "check-live.json"], \
         "custody uploads the packs and the live record however the run ends, never trimming them as undeclared"
     launched.clear()
-    # drive's after-landing run: circuit-check's passes come from the packs sent (main imports only theirs)
-    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--no-cache", "--circuit-cache"]) == 0 and len(listed) == 4
+    # drive's after-landing run: circuit-check's passes come from the packs sent (main imports only theirs and the suites')
+    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--no-cache", "--circuit-cache"]) == 0 and len(listed) == 5
     [(tail, sends, _, _)] = launched
     assert tail[-2:] == ["--no-cache", "--circuit-cache"] and str(listed[-1]) in sends
+    assert commits == [None, None, None, CHECK._rev("HEAD"), CHECK._rev("HEAD")] and commits[-1]
     (bad := tmp_path / "bad.tar.gz").write_bytes(b"not a pack")
     for given, why in ((bad, "refused"), (tmp_path / "absent.tar.gz", "no such pack")):
         with pytest.raises(SystemExit, match=why):
@@ -736,7 +740,7 @@ def test_a_launch_that_needs_the_agreement_sends_its_urls_and_fetches_nothing(tm
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(research.store.local, "LocalStore", Store)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     monkeypatch.delenv(CHECK.AGREEMENT_URLS_ENV, raising=False)
     _remote(monkeypatch, remote := _Remote())
     pin = json.loads(CHECK.UPSTREAM_PIN.read_text())
@@ -811,7 +815,7 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     monkeypatch.setattr(CHECK, "UPSTREAM_PIN", tmp_path / "upstream.json")
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     _remote(monkeypatch, _Remote())
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
@@ -967,7 +971,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert pt[1][1].endswith("tools/verity/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
     assert cc[1][cc[1].index("--jobs") + 1] == "8" and "--cache" in cc[1]
     cold = CHECK.groups(tmp_path, 16, cache=False)
-    assert lean[0] == "lean" and "--cache" not in cold[1][0][1] and "--fresh" in cold[0][0][1]
+    assert lean[0] == "lean" and "--cache" not in cold[1][0][1] and "--fresh" in " ".join(cold[0][0][1])
     assert gate[0] == "ratchet-gate" and cold[-1][0][0] == "ratchet-gate"
     assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
 
@@ -1572,6 +1576,78 @@ def test_circuit_cache_keeps_circuit_checks_reuse_alone_under_no_cache(tmp_path,
     assert after["lean-changed"].startswith("skipped: --no-cache")
 
 
+def test_an_uncached_check_runs_its_steps_with_lakes_artifact_cache_off(tmp_path, monkeypatch):
+    """`--no-cache` compiles what it tests: its steps (the verifier's `lake build`, and the Lean steps and suites after it,
+    which build and run Lean too) run with Lake's local artifact cache off, where Lake would unpack what an earlier build on
+    the node left there instead of compiling it.  A cached check's steps get no Lake setting, the caller's neither."""
+    monkeypatch.setenv("LAKE_ARTIFACT_CACHE", "true")
+    names = ("lean-build", "lean-suites", "pytest")
+    for cache, want in ((False, "false"), (True, "unset")):
+        out = tmp_path / f"cache-{cache}"
+        out.mkdir()
+        probe = "import os, sys; open(sys.argv[1], 'w').write(os.environ.get('LAKE_ARTIFACT_CACHE', 'unset'))"
+        _fake_run(monkeypatch, [[(s, _py(probe, out / f"{s}.said"), tmp_path)] for s in names])
+        ok, done = CHECK.run(out, 2, cache)
+        assert ok, done
+        assert {s: (out / f"{s}.said").read_text() for s in names} == dict.fromkeys(names, want)
+
+
+def test_a_cold_check_runs_the_opt_in_tests_after_their_steps_suites_and_no_other_check_does(tmp_path, monkeypatch):
+    """The nightly (`--no-cache`, unsharded): pytest and lean-suites each run their suites, then the opt-in tests of those suites
+    (`OPT_IN`) in runs of their own.  A shard's or a deferred run's parts and a cached check leave them out, so no candidate pays
+    for them and no suite's key holds their variables."""
+    out, _ = _pinned(tmp_path, monkeypatch)
+
+    def steps(**kw) -> dict:
+        return {name: argv for g in CHECK.groups(out, 8, **kw) for name, argv, _ in g}
+
+    cold = steps(cache=False)
+    for step, then in (("pytest", "pytest --timeouts"), ("lean-suites", "lean-suites --lean-built --timeouts")):
+        bash, flag, cmd = cold[step]
+        suites, opt_in, end = cmd.split(" || rc=$?; ")
+        assert (bash, flag, end) == ("bash", "-c", "exit $rc") and "suites.py" in suites and "--opt-in" not in suites, step
+        assert f"check.py --opt-in {out} {then} --jobs 4 --fresh" in opt_in, step
+    for kw in ({}, {"cache": False, "only": ["pytest", "lean-suites"]}, {"cache": False, "circuit_cache": True, "only": ["pytest"]}):
+        assert not any("--opt-in" in " ".join(a) for a in steps(**kw).values() if isinstance(a, list)), kw
+
+
+def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless_each_passed(tmp_path, monkeypatch, capsys):
+    """Each suite's named tests in a `suites.py` run of its own with its variable set and no other's.  A named test that skipped
+    (its mark reads another variable) or that its suite lacks (pytest's "not found") ran nowhere, so it fails the step."""
+    from collections import namedtuple
+
+    suite = namedtuple("suite", "name path")
+    monkeypatch.setattr(CHECK, "OPT_IN", {"a/one": ("VERITY_A_SLOW", ("tests/test_a.py::test_x", "tests/test_a.py::test_y")),
+                                          "b/two": ("VERITY_B_SLOW", ("tests/test_b.py::test_z",))})
+    monkeypatch.setattr(CHECK.SUITES, "discover", lambda: [suite("one", "a/one"), suite("two", "b/two")])
+    monkeypatch.setattr(CHECK, "AFTER_LEAN", ("two",))
+    ran: list = []
+    outcome = {"a/one": (0, {"passed": 2, "failed": 0, "error": 0, "skipped": 0}),
+               "b/two": (0, {"passed": 1, "failed": 0, "error": 0, "skipped": 0})}
+
+    def run(cmd, cwd, env):
+        suite = cmd[2]
+        ran.append((suite, [v for v in ("VERITY_A_SLOW", "VERITY_B_SLOW") if env.get(v) == "1"], cmd[cmd.index("--") + 1:]))
+        rc, counts = outcome[suite]
+        if counts is not None:
+            Path(cmd[cmd.index("--json") + 1]).write_text(json.dumps([{"suite": suite, "status": "passed", "counts": counts}]))
+        return subprocess.CompletedProcess(cmd, rc)
+
+    monkeypatch.setattr(CHECK.subprocess, "run", run)
+    assert CHECK.opt_in(tmp_path, "pytest", ["--fresh"]) == 0
+    assert ran == [("a/one", ["VERITY_A_SLOW"], ["tests/test_a.py::test_x", "tests/test_a.py::test_y"])], "pytest's suites alone"
+    ran.clear()
+    assert CHECK.opt_in(tmp_path, "lean-suites", []) == 0 and ran == [("b/two", ["VERITY_B_SLOW"], ["tests/test_b.py::test_z"])]
+    capsys.readouterr()
+    outcome["a/one"] = (0, {"passed": 1, "failed": 0, "error": 0, "skipped": 1})
+    outcome["b/two"] = (4, None)
+    assert CHECK.opt_in(tmp_path, "all", []) == 1
+    said = capsys.readouterr().out
+    assert "a/one: 1 of the 2 tests named with VERITY_A_SLOW=1 passed (1 skipped)" in said
+    assert "b/two: 0 of the 1 tests named with VERITY_B_SLOW=1 passed (suites.py exited 4)" in said
+    assert CHECK.opt_in(tmp_path, "circuit-check", []) == 2
+
+
 def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_path, monkeypatch):
     marker = tmp_path / "ran"
     touch = _py("open(__import__('sys').argv[1], 'w')", marker)
@@ -1761,7 +1837,7 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
 
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     _remote(monkeypatch, _Remote())
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
@@ -2086,6 +2162,37 @@ def test_train_sh_hands_the_lock_runs_bookkeeping_flag_to_a_check_that_takes_it(
                   ["--deferred", "lean-audit", "--shard", "1/3", "--bookkeeping-warn"]):
         p = train("HEAD", "vy-x", *flags)
         assert p.returncode == 2 and "train: --bookkeeping-warn refused" in p.stderr and not argv.exists(), (flags, p.stderr)
+
+
+def test_train_sh_hands_the_loops_deselect_list_to_a_check_that_takes_it(tmp_path):
+    """The vqueue loop's list (`--deferred ... --deselect FILE`): it reaches check.py --record when the commit's check.py takes
+    it, and on a commit whose check.py predates it the run launches without it, saying so; without --deferred, by a relative
+    path or with --cc-records it is refused before anything launches."""
+    git, train, argv = _train_repo(tmp_path)
+    check = tmp_path / "repo" / "tools" / "verity" / "check" / "check.py"
+    check.parent.mkdir(parents=True)
+    check.write_text('DESELECT_FILE = "check-deselect.txt"\n')
+    git("add", "tools")
+    git("commit", "-q", "-m", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    listed = tmp_path / "deselect.sent"
+    listed.write_text("tests/test_a.py::test_a\n")
+    p = train("HEAD", "vy-x", "--deferred", "pytest", "--shard", "1/3", "--deselect", str(listed))
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--deselect"):args.index("--deselect") + 2] == ["--deselect", str(listed)], (
+        p.stderr, args)
+    check.write_text("\n")
+    git("commit", "-q", "-am", "older")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--deferred", "pytest", "--deselect", str(listed))
+    args = argv.read_text().split()
+    assert p.returncode == 0 and "--deselect" not in args and "predates --deselect" in p.stdout, (p.stdout, args)
+    argv.unlink()
+    for flags, why in ((["--deselect", str(listed)], "--deselect refused without --deferred"),
+                       (["--deferred", "pytest", "--deselect", listed.name], "--deselect needs a list's absolute path"),
+                       (["--cc-records", "--deselect", str(listed)], "--deselect refused without --deferred")):
+        p = train("HEAD", "vy-x", *flags)
+        assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
 
 
 def test_train_sh_replaces_a_tree_git_no_longer_lists_as_a_worktree(tmp_path):
