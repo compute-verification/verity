@@ -17,7 +17,7 @@ it, so `node` builds the panel again from the scorer's state, changing nothing i
    so every later difference is the rotations';
 4. a copy of the measured ledger with each rotating run's rows as ingest writes them now (`rotations.repriced`, from
    the run's record in K/state): which runs rotate is read from every row's program and stored arguments, and a record
-   te_core.rotations refuses (`Unread`) keeps its rows, listed with why;
+   te_core.rotations refuses (`Unread`) keeps its rows, listed with why. The rewritten rows go to OUT whole;
 5. the builder on that copy, twice: as te_core reads it (the price, and te_core.tiles' 32-bit operands for a row
    named `tf32`), and with the tiles' width for such a row held at a bf16 row's (`PRICE_ONLY`), which no panel
    publishes: the second is what the price alone moves;
@@ -25,6 +25,8 @@ it, so `node` builds the panel again from the scorer's state, changing nothing i
    store and ingested afresh, so the hook names their rotations), and the overlay (plot2_final.py) of each finals
    table over each search table: the served pair, the control, the price alone, and the one to publish (OUT/overlay);
 7. each panel's rows, cell by cell, across those builds (`compare`), under OUT/diff.
+
+Every build's tables, console copies and logs go to OUT, so nothing is read back from the node.
 
 `diff` is `compare` on stored panels.
 """
@@ -336,7 +338,7 @@ def reprice(measured: Path, priced: Path, K: Path) -> dict:
 
     price = gates.per_mac(f"gemm/{rotations.TF32}") - gates.per_mac("gemm/bf16")
     out = {"runs": {}, "unread": {}, "unknown_program": {}, "no_record": [], "no_arguments": [],
-           "gates_added_per_mac": price}
+           "gates_added_per_mac": price, "rewritten": []}
     for run_id, paths in by_run.items():
         head, record, art = first[run_id], None, None
         if not head["said"]:
@@ -381,6 +383,7 @@ def reprice(measured: Path, priced: Path, K: Path) -> dict:
             d.parent.mkdir(parents=True, exist_ok=True)
             if p in new and new[p][1] is not new[p][0]:
                 d.write_text(json.dumps(new[p][1], sort_keys=True) + "\n")
+                out["rewritten"].append(str(d.relative_to(priced)))
                 n["rows rewritten"] += 1
             else:
                 os.link(p, d)
@@ -459,6 +462,8 @@ def node(a) -> int:
     procs = {"control": builder(S / "control", S / "measured", K, meta, cap, failed, policy_io)}
     say("the rotating runs' rows")
     rot = reprice(S / "measured", S / "priced", K)
+    (S / "rewritten.txt").write_text("".join(f"{x}\n" for x in rot.pop("rewritten")))
+    run(["tar", "-C", S / "priced", "-czf", OUT / "priced-rows.tar.gz", "-T", S / "rewritten.txt"], logs / "priced-rows.log")
     dump(OUT / "rotations.json", rot)
     rotating = set(rot["runs"])
     say(f"{rot['rotating_runs']} rotating runs of {rot['runs_in_ledger']}: {rot['counts']}; unread {len(rot['unread'])}, "
@@ -486,7 +491,7 @@ def node(a) -> int:
             (OUT / "search" / name).mkdir(parents=True, exist_ok=True)
             shutil.copyfile(d / "tables" / f, OUT / "search" / name / f)
         shutil.copyfile(d / "run.log", OUT / "search" / name / "run.log")
-    shutil.copytree(S / "priced-out" / "console", OUT / "search" / "priced" / "console")
+        shutil.copytree(d / "console", OUT / "search" / name / "console")
     last = {n: json.loads((IN / "last" / n).read_text()) for n in TABLES}
     ap, ff = TABLES[0], TABLES[1]
     dump(OUT / "diff" / "search.json",
@@ -507,8 +512,7 @@ def node(a) -> int:
             "price": overlay(new_finals, S / "price-out" / "tables" / ap, S / "overlay-price", logs / "overlay-price.log"),
             "priced": overlay(new_finals, S / "priced-out" / "tables" / ap, OUT / "overlay", logs / "overlay.log")}
     for name in ("control", "price"):
-        (OUT / "overlays" / name).mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(S / f"overlay-{name}" / "tables" / ap, OUT / "overlays" / name / ap)
+        shutil.copytree(S / f"overlay-{name}", OUT / "overlays" / name)
     dump(OUT / "diff" / "overlay.json", compare(over, rotating, base="control"))
     was = json.loads((IN / "served" / "console-algorithm-policy.json").read_text())
     now = json.loads((OUT / "overlay" / "console" / ap).read_text())

@@ -72,6 +72,7 @@ def test_a_rotating_runs_rows_are_rewritten_and_every_other_file_is_linked(tmp_p
     out = replot.reprice(measured, priced, K)
     assert {p.name: p.read_text() for p in (measured / "records" / "a").iterdir()} == before, "the source is untouched"
     assert sorted(out["runs"]) == ["r-rot"] and out["counts"] == {"rows rewritten": 2, "rows linked": 6, "other files": 1}
+    assert sorted(out["rewritten"]) == sorted(f"records/a/{w['id']}.json" for w in new["r-rot"])
     assert list(out["unknown_program"]) == ["r-odd"] and list(out["unread"]) == ["r-none"]
     assert out["no_record"] == [] and out["no_arguments"] == []
     got = {json.loads(p.read_text())["id"]: p for p in (priced / "records" / "a").glob("*.json")}
