@@ -41,11 +41,29 @@ from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, RecordType, Type, Value
+
 from verity_vllm.program.inputs import check_params
 from verity_vllm.program.prune import dead_free as dead_free_form
 
-from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, edge_config, in_launch, kind,
-                     launch_batch, launch_rows, launch_seqlen_q, request_passes, select_token, with_checks, with_edge)
+from .common import (
+    Unexpressible,
+    _arr,
+    _arr_shape,
+    _Peers,
+    _ptypes,
+    _Stochastic,
+    drive,
+    edge_config,
+    in_launch,
+    kind,
+    launch_batch,
+    launch_rows,
+    launch_seqlen_q,
+    request_passes,
+    select_token,
+    with_checks,
+    with_edge,
+)
 from .domain import check_phi
 from .model_shape import _ACTS, ModelShape, model_shape, rank_shape, weight_leaves
 from .phi import Phi
@@ -103,7 +121,7 @@ class _Specs:
             self.q_norm, self.k_norm = (
                 self.kind("rmsnorm", N=n * C.D * world, EPS=C.EPS, TARGET=target, M=M) for n in (C.NH, C.KVH)
             )
-            self.q_gather, self.k_gather = (self.kind("all_gather2", N=n * C.D) for n in (C.NH, C.KVH)) if world > 1 else (None, None)
+            self.q_gather, self.k_gather = [self.kind("all_gather2", N=n * C.D) if world > 1 else None for n in (C.NH, C.KVH)]
         self.gate_up, self.down, self.logits = self.linear(C.H, 2 * C.I), self.linear(C.I, C.H), self.gemm(C.H, VS)
         if C.E:
             self.moe()
@@ -126,8 +144,13 @@ class _Specs:
         """The fused-MoE block's kinds under the target's declared construction (`rules.vllm_moe`): the router GEMM, the top-k
         softmax (in selection order under `indexed-read-ordered`; the renormalizing form when the family renormalizes), the per-pair
         expert GEMMs (the target's k16 step as `DOT` where `frontend.targets.moe_expert_dot` names one) and the routed sum."""
-        from verity_vllm.program.frontend.rules.vllm_moe import INDEXED_READ, INDEXED_READ_ORDERED, TOPK_SOFTMAX_VPT
         import torch
+
+        from verity_vllm.program.frontend.rules.vllm_moe import (
+            INDEXED_READ,
+            INDEXED_READ_ORDERED,
+            TOPK_SOFTMAX_VPT,
+        )
         C = self.C
         c = self.tp.effective_moe_construction()
         if c not in (INDEXED_READ, INDEXED_READ_ORDERED):
@@ -236,7 +259,8 @@ class _Model:
         n += 1 if C.embed_scale else 0
         self.cos_sin = W[n]
         self.hist: list[tuple[list, list]] = [([], []) for _ in range(C.NL)]
-        self.cached, self.ctx = 0, None
+        self.cached = 0
+        self.ctx: dict | None = None
         self.lp_of: dict[int, int] = {}
         self.plus_one: dict[int, Coll] = {}
 
@@ -291,10 +315,11 @@ class _Model:
         h = self.collective(S.all_reduce, [self.call(S.embedding, Coll(pe[0], t.refs), Coll(pe[1], self.embed.refs)) for t in toks])
         if C.embed_scale:
             pz = _ptypes(S.embed_scale)
+            assert self.normalizer is not None, "the weights record holds the normalizer of a family that scales its embedding"
             h = [self.call(S.embed_scale, Coll(pz[0], h[i].refs), Coll(pz[1], self.normalizer.refs)) for i in range(M)]
         x, _ = self.rms(h, self.layers[0]["ln1"])
-        res = [h[i].refs for i in range(M)]
-        d = None
+        res: list | None = [h[i].refs for i in range(M)]
+        d: list[Coll] = []
         for L in range(C.NL):
             lw = self.layers[L]
             if L > 0:
@@ -425,6 +450,7 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
     collective order, `model(B, W, peers)` the forward and the sampler."""
     from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
     ff = FAMILY_FACTS.get(str(phi.hf_config.get("model_type", "")).lower()) or {}
+    Net: type[Any]
     if ff.get("arch") == "dsa-moe":
         from .dsa import Net
     elif ff.get("arch") == "mhc-moe":
@@ -469,6 +495,16 @@ class _Decoder:
         return _Model(B, self.specs, W, self.specs.C, peers)
 
 
+def request_shape(wrapper: str, LP: int | None, T: int | None) -> tuple[int, int]:
+    """A wrapper's (LP, T): (0, 0) for a `step`, which reads neither; for any other the prompt rows and the decode steps its
+    Program is built for, a TypeError without them."""
+    if wrapper == "step":
+        return 0, 0
+    if LP is None or T is None:
+        raise TypeError(f"a {wrapper} wrapper's Program is built for a prompt of LP rows and T decode steps (LP={LP!r}, T={T!r})")
+    return int(LP), int(T)
+
+
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
                   with_desc: bool = True, C: int = 0, dead_free: bool = False, batched: bool = False, finish: Callable | None = None,
                   batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None, entries: tuple[int, ...] = ()) -> BuildResult:
@@ -495,7 +531,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     and checks, every layer's rows [0, LP + T) of each as `prefix_params(LP + T)` lays them out (`common.with_edge`), in its SRC config."""
     from verity_vllm.program.frontend import seed_rule as SEED
     t0 = time.time()
-    net = decoder(phi, M, pos0 + M if wrapper == "step" else int(LP) + int(T))
+    prompt_rows, decode_steps = request_shape(wrapper, LP, T)
+    net = decoder(phi, M, pos0 + M if wrapper == "step" else prompt_rows + decode_steps)
     kind = (phi.sampling or {}).get("kind", "greedy")
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
@@ -508,23 +545,23 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                             f"(a request's, greedy on one rank of the dense or fused-MoE decoder, or on the sparse-attention decoder)")
     resumed, chunks, passes, sampled = request_passes(wrapper, LP, T, M, C, chunks, dense, bool(edge))
     wrec = RecordType(*net.leaves())
-    n = M if wrapper == "step" else int(LP)
-    params: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" and world == 1 else "prompt", Array(n, I32))]
+    n = M if wrapper == "step" else prompt_rows
+    listed: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" and world == 1 else "prompt", Array(n, I32))]
     if kind == "stochastic":
-        params += [("seed", Array(1, I64)), *(SEED.params(SEED.rid_in(phi.sampling)) if wrapper == "request" else ())]
-    history = len(params)
+        listed += [("seed", Array(1, I64)), *(SEED.params(SEED.rid_in(phi.sampling)) if wrapper == "request" else ())]
+    history = len(listed)
     if C:
-        params += net.prefix_params(C)   # `vllm_meta.prefix_input`
+        listed += net.prefix_params(C)   # `vllm_meta.prefix_input`
     if resumed:
-        params.append(("last_token", Array(1, I32)))
-    n_user = len(params)
+        listed.append(("last_token", Array(1, I32)))
+    n_user = len(listed)
     if world > 1:
         # `vllm_meta.WithPeers`: world - 1 peer Inputs per collective of each forward pass, in call order; a pass that samples
         # nothing gathers no logits, the last of `peer_shapes`
         shapes = [s for r, smp in zip(passes, sampled) for s in net.peer_shapes(r)[:None if smp else -1] for _ in range(world - 1)]
-        params += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
-    n_peers = len(params) - n_user
-    params = check_params((*params, ("weights", wrec)))
+        listed += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
+    n_peers = len(listed) - n_user
+    params = check_params((*listed, ("weights", wrec)))
     B = Builder(params, Value(1))
     inputs = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
     ids, W = inputs[0], inputs[-1]
@@ -538,10 +575,10 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     model = net.model(B, W, peers)
     if batched and hasattr(model, "batched"):
         model.batched = True
-    batch = (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None
-    in_launch(model, batch, net.model_class, chunks, T, entries=tuple(entries))
+    batch = (launch_batch(phi, prompt_rows, decode_steps) if batch is None else batch) if wrapper == "request" else None
+    in_launch(model, batch, net.model_class, chunks, T or 0, entries=tuple(entries))
     if wrapper == "request" and isinstance(model, _Model):
-        model.ctx = launch_rows(phi, LP, T, C)
+        model.ctx = launch_rows(phi, prompt_rows, decode_steps, C)
     if C:
         model.open_with(inputs[history:n_user - resumed], C)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]

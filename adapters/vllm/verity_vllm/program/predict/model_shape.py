@@ -59,7 +59,8 @@ class ModelShape:
     def nodes_per_row_layer(self) -> int:
         """About how many root nodes one row adds per layer: 14, plus the q/k/v bias, the q/k RMSNorms, the MoE block's three per pair,
         Gemma-2's four unfused norm chains' thirty and the int8 linears' four quantizers."""
-        return 14 + self.qkv_bias + {"head": self.NH + self.KVH, "all": 2}.get(self.qk_norm, 0) + (3 * self.TOPK + 2 if self.E else 0) + \
+        qk: dict[str | None, int] = {"head": self.NH + self.KVH, "all": 2}
+        return 14 + self.qkv_bias + qk.get(self.qk_norm, 0) + (3 * self.TOPK + 2 if self.E else 0) + \
             30 * self.norm_chain + 4 * self.int8
 
 
