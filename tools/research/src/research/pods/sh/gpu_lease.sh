@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Share one machine's GPUs between concurrent runs: one lock file per GPU, held with flock(1).
 #
-#   gpu-lease N [--wait] [--on LIST] [--max-min M] [--mem-gb G] [--preemptible] [--timed] -- CMD...
+#   gpu-lease N [--wait] [--on LIST] [--cores CPUS] [--max-min M] [--mem-gb G] [--preemptible] [--timed] -- CMD...
 #                                                take N free GPUs and run CMD with CUDA_VISIBLE_DEVICES naming them
 #   gpu-lease status                             one line per GPU: index, free or held, and the holder: minutes held, pid, run
 #                                                id, who, UUID, start and command
@@ -58,6 +58,16 @@
 # --max-min it has no end, so while a window lies ahead a request needs a --max-min that ends by the window's start.  With --wait
 # it waits instead, unqueued (so it holds up no other request), until its lease clears every window.  GPU_LEASE_NOW overrides the
 # time it reads, epoch seconds (tests).
+#
+# CPU quota: where the machine's CPU time is capped (a container's cpu.max: $GPU_LEASE_CPU_MAX, default /sys/fs/cgroup/cpu.max), runs
+# pinned to more CPUs than the cap allows are throttled together, and a timed run among them is void.  --cores CPUS (48-57,60)
+# declares the CPUs a run pins: CMD runs under `taskset -c CPUS`, and the lease records cores=CPUS.  Before it takes any GPU, such a
+# request counts its CPUS with every live lease's, each CPU once: a lease's cores=, or for a lease that declared none the CPUs its
+# processes are allowed on (Cpus_allowed_list of its pid's process tree under $GPU_LEASE_PROC, default /proc; every CPU when none of
+# them is left to read).  A count over the quota is refused (75, holding nothing), saying the count, the quota, each lease's CPUs
+# and what to do; with --wait the request waits instead, unqueued, until they fit.  A machine without a quota (no file, or `max`)
+# refuses nothing, and neither is a request without --cores refused: the next one that declares counts it.  A process that holds no
+# lease is not counted.
 #
 # Usage, report only: when CMD exits (any status), gpu-lease releases the GPUs and then tells the holder on stderr, per GPU, how long
 # it held it and how much of that the node's utilisation sampler saw busy (util > 0 or SM activity >= 1%), with a hint to prepare
@@ -126,8 +136,8 @@ uuid_table() {
 }
 
 usage() {
-  echo "usage: gpu-lease N [--wait] [--on INDEX|UUID,...] [--max-min M] [--mem-gb G] [--preemptible] [--timed] -- CMD... |" \
-    "gpu-lease status" >&2
+  echo "usage: gpu-lease N [--wait] [--on INDEX|UUID,...] [--cores CPUS] [--max-min M] [--mem-gb G] [--preemptible] [--timed] --" \
+    "CMD... | gpu-lease status" >&2
   exit 2
 }
 
@@ -459,6 +469,129 @@ foreign_gpus() {
   said_foreign=$note
 }
 
+cores_over() {
+  # why this request's --cores can't be pinned beside the live leases (stdout; exit 75): together, each CPU counted once, they pass
+  # the machine's CPU quota.  0 when they fit, or the machine has no quota.  A live lease is a held lock whose owner line isn't
+  # marked released
+  local i fd line leases=""
+  for i in $(gpu_indices); do
+    exec {fd}>>"$dir/$i.lock" || continue
+    if flock -n -s "$fd"; then exec {fd}>&-; continue; fi
+    exec {fd}>&-
+    line=$(cat "$dir/$i.owner" 2>/dev/null)
+    leases+="$i ${line%% cmd=*}"$'\n'
+  done
+  GL_CORES=$cores GL_LEASES=$leases GL_CPU_MAX=${GPU_LEASE_CPU_MAX:-/sys/fs/cgroup/cpu.max} GL_PROC=${GPU_LEASE_PROC:-/proc} \
+    python3 - <<'PY'
+import os, re, sys
+
+e = os.environ
+proc = e["GL_PROC"]
+
+
+def parse(text):
+    out = set()
+    for part in text.strip().split(","):
+        lo, _, hi = part.partition("-")
+        if lo.isdigit() and (not hi or hi.isdigit()):
+            out.update(range(int(lo), int(hi or lo) + 1))
+    return out
+
+
+def fmt(cpus):
+    runs = []
+    for c in sorted(cpus):
+        if runs and runs[-1][1] == c - 1:
+            runs[-1][1] = c
+        else:
+            runs.append([c, c])
+    return ",".join(f"{a}-{b}" if b > a else f"{a}" for a, b in runs)
+
+
+def tree(pid, kids={}):
+    """pid and its descendants, from every process's parent in its stat"""
+    if not kids:
+        for p in os.listdir(proc):
+            if p.isdigit():
+                try:
+                    with open(f"{proc}/{p}/stat") as fh:
+                        s = fh.read()
+                    kids.setdefault(s[s.rindex(")") + 2:].split()[1], []).append(p)
+                except (OSError, ValueError, IndexError):
+                    pass
+    out, todo = [], [pid]
+    while todo:
+        out.append(todo.pop())
+        todo += kids.get(out[-1], [])
+    return out
+
+
+def allowed(pid):
+    """the CPUs pid's threads may run on"""
+    try:
+        tasks = [f"{proc}/{pid}/task/{t}" for t in os.listdir(f"{proc}/{pid}/task")]
+    except OSError:
+        tasks = [f"{proc}/{pid}"]
+    out = set()
+    for t in tasks:
+        try:
+            with open(f"{t}/status") as fh:
+                out |= parse(next((ln.split(":", 1)[1] for ln in fh if ln.startswith("Cpus_allowed_list:")), ""))
+        except OSError:
+            pass
+    return out
+
+
+def every():
+    try:
+        with open(f"{proc}/stat") as fh:
+            n = sum(1 for ln in fh if re.match(r"cpu\d", ln))
+    except OSError:
+        n = 0
+    return set(range(n or os.cpu_count() or 1))
+
+
+try:
+    with open(e["GL_CPU_MAX"]) as fh:
+        cap = fh.read().split()
+except OSError:
+    cap = []
+if len(cap) != 2 or not (cap[0].isdigit() and cap[1].isdigit() and int(cap[1])):
+    sys.exit(0)                     # no quota here: no file, or `max`
+quota, period = int(cap[0]), int(cap[1])
+leases = {}
+for line in e["GL_LEASES"].splitlines():
+    i, _, head = line.partition(" ")
+    if head.startswith("released="):
+        continue
+    f = dict(t.split("=", 1) for t in head.split() if "=" in t)
+    leases.setdefault(f.get("pid") or f"GPU {i}'s", ([], f))[0].append(i)
+mine = parse(e["GL_CORES"])
+total, parts, rows = set(mine), len(mine), []
+for pid, (gpus, f) in leases.items():
+    if f.get("cores"):
+        cpus = parse(f["cores"])
+        how = f"cores={fmt(cpus)}"
+    else:
+        cpus = set().union(*(allowed(p) for p in tree(pid))) if pid.isdigit() else set()
+        how = f"none declared, its processes are allowed on {fmt(cpus)}"
+        if not cpus:
+            cpus = every()
+            how = f"none declared and no process of it left to read, so every CPU, {fmt(cpus)}"
+    total |= cpus
+    parts += len(cpus)
+    rows.append(f"  GPU {','.join(gpus)}, pid {f.get('pid', '?')}, run {f.get('run', '-')}, who {f.get('who', '?')}: {how} ({len(cpus)})")
+if len(total) * period <= quota:
+    sys.exit(0)
+shared = "" if parts == len(total) else "; a CPU two of them name counts once"
+print(f"{len(total)} CPUs would be pinned on this machine, over its CPU quota of {quota / period:g} (cpu.max {quota} {period} in "
+      f"{e['GL_CPU_MAX']}){shared}")
+print(f"  this request: --cores {fmt(mine)} ({len(mine)})")
+print("\n".join(rows + ["  start when a lease ends, ask for fewer CPUs, or have the holder of a lease that declared none pass --cores"]))
+sys.exit(75)
+PY
+}
+
 report_usage() {
   # report only (the lease's status never depends on it): each leased GPU's held time, and its busy time over the node sampler's
   # readings inside the lease; never NVML, so a timed window stays quiet
@@ -542,7 +675,7 @@ PY
 if [ "$1" = status ]; then status; exit 0; fi
 n=$1; shift
 case $n in ''|*[!0-9]*|0) usage ;; esac
-wait=0 on="" maxmin="" memgb="" preempt="" timed=${GPU_LEASE_TIMED:-}
+wait=0 on="" cores="" maxmin="" memgb="" preempt="" timed=${GPU_LEASE_TIMED:-}
 [ "$timed" = 1 ] || timed=""
 while [ $# -gt 0 ] && [ "$1" != -- ]; do
   case $1 in
@@ -550,6 +683,7 @@ while [ $# -gt 0 ] && [ "$1" != -- ]; do
     --preemptible) preempt=1 ;;
     --timed) timed=1 ;;
     --on) [ $# -ge 2 ] || usage; on=$2; shift ;;
+    --cores) [ $# -ge 2 ] || usage; cores=$2; shift; [[ $cores =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]] || usage ;;
     --max-min) [ $# -ge 2 ] || usage; maxmin=$2; shift; case $maxmin in ''|*[!0-9]*|0) usage ;; esac ;;
     --mem-gb) [ $# -ge 2 ] || usage; memgb=$2; shift; case $memgb in ''|*[!0-9]*) usage ;; esac ;;
     *) usage ;;
@@ -584,6 +718,11 @@ fi
 if [ "$n" -gt "$total" ]; then echo "gpu-lease: $n GPUs asked, $total are gpu-lease's here${on:+ in --on $on}" >&2; exit 2; fi
 mkdir -p "$dir" 2>/dev/null
 [ -w "$dir" ] || { echo "gpu-lease: $dir is not writable" >&2; exit 2; }
+if [ -n "$cores" ]; then
+  for tool in python3 taskset; do
+    command -v "$tool" > /dev/null 2>&1 || { echo "gpu-lease: --cores needs $tool, which isn't on PATH here" >&2; exit 2; }
+  done
+fi
 
 who=${GPU_LEASE_WHO:-${RESEARCH_LANE:-$(id -un)}}
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
@@ -605,9 +744,26 @@ ALL=("${CANDIDATES[@]}")
 MYWAIT=""
 rm -f "$dir/grant.$$"
 asked=$(date -u +%s)
-said=""
+said="" said_over="" cfd=""
+cores_unlock() { [ -z "$cfd" ] || { exec {cfd}>&-; cfd=""; }; }
 while :; do
+  if [ -n "$cores" ]; then
+    # under cores.lock from the count until this lease's owner lines are written, so two requests never count without each other
+    exec {cfd}>>"$dir/cores.lock" && flock -x "$cfd" || { echo "gpu-lease: can't lock $dir/cores.lock" >&2; exit 2; }
+    over=$(cores_over); rc=$?
+    if [ "$rc" != 0 ]; then
+      cores_unlock
+      [ "$rc" = 75 ] || { echo "gpu-lease: the CPU quota check of --cores $cores failed (exit $rc), so nothing is leased" >&2; exit 2; }
+      if [ -n "$MYWAIT" ]; then rm -f "$MYWAIT"; exec {wfd}>&-; MYWAIT=""; fi
+      if [ "$wait" != 1 ]; then echo "gpu-lease: refused, holding nothing: $over" >&2; exit 75; fi
+      [ "$said_over" = "$over" ] || printf 'gpu-lease: %s\ngpu-lease: waiting, unqueued, until they fit\n' "$over" >&2
+      said_over=$over
+      sleep "${GPU_LEASE_POLL_S:-15}"
+      continue
+    fi
+  fi
   if [ -z "$timed" ] && clash=$(window_clash); then
+    cores_unlock
     if [ -n "$MYWAIT" ]; then rm -f "$MYWAIT"; exec {wfd}>&-; MYWAIT=""; fi
     span="from now with no --max-min"
     [ -z "$maxmin" ] || span="of up to $maxmin min from now"
@@ -629,6 +785,7 @@ while :; do
       echo "gpu-lease: the node's agent granted no $n GPU(s) in ${GPU_LEASE_AGENT_WAIT_S:-10} s: add --wait to queue" >&2
       exit 75
     fi
+    cores_unlock
     sleep "${GPU_LEASE_AGENT_POLL_S:-0.5}"
     continue
   fi
@@ -644,6 +801,7 @@ while :; do
     fi
     exit 75
   fi
+  cores_unlock
   [ -n "$(ahead)" ] || [ -n "$preempt" ] || preempt_for "$n"
   [ -n "$MYWAIT" ] || queue_me ""
   sleep "${GPU_LEASE_POLL_S:-15}"
@@ -656,15 +814,19 @@ for i in "${TAKEN[@]}"; do
   u=$(echo "$table" | awk -v i="$i" '$1 == i {print $2}')
   uuids+=("${u:--}")
   echo "pid=$$ run=${RESEARCH_RUN_ID:--} who=${who// /_} uuid=${u:--} since=$started$ends${memgb:+ mem=${memgb}G}" \
-    "${preempt:+preempt=1 }${timed:+timed=1 }${scope:+scope=gpu-lease-$$ }cmd=$(echo "$*" | cut -c1-80)" > "$dir/$i.owner"
+    "${cores:+cores=$cores }${preempt:+preempt=1 }${timed:+timed=1 }${scope:+scope=gpu-lease-$$ }cmd=$(echo "$*" | cut -c1-80)" \
+    > "$dir/$i.owner"
 done
+cores_unlock
 if [ -n "$MYWAIT" ]; then rm -f "$MYWAIT"; exec {wfd}>&-; fi
 rm -f "$dir/grant.$$"
 CUDA_VISIBLE_DEVICES=$(IFS=,; echo "${TAKEN[*]}")
 GPU_LEASE_UUID=$(IFS=,; echo "${uuids[*]}")
 export CUDA_VISIBLE_DEVICES CUDA_DEVICE_ORDER=PCI_BUS_ID GPU_LEASE_UUID
-echo "gpu-lease: GPUs $CUDA_VISIBLE_DEVICES ($GPU_LEASE_UUID) for $who, pid $$${RESEARCH_RUN_ID:+ (run $RESEARCH_RUN_ID)}${ends:+,$ends}" >&2
+pinned=${cores:+, CMD pinned to CPUs $cores}
+echo "gpu-lease: GPUs $CUDA_VISIBLE_DEVICES ($GPU_LEASE_UUID) for $who, pid $$${RESEARCH_RUN_ID:+ (run $RESEARCH_RUN_ID)}${ends:+,$ends}$pinned" >&2
 cmdline=$(echo "$*" | cut -c1-200)
+[ -n "$cores" ] && set -- taskset -c "$cores" "$@"
 [ -n "$maxmin" ] && set -- timeout -k 20 "$((maxmin * 60))" "$@"
 # CMD runs as a child, not exec'd, so the lease can report its usage once CMD is done.  `0<&0` keeps CMD's stdin (a background job's
 # is /dev/null otherwise); a SIGTERM, SIGINT or SIGHUP to gpu-lease is passed on to CMD; gpu-lease exits with CMD's status.
