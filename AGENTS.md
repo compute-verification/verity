@@ -216,22 +216,21 @@ suite, test, target and step's real verdict. What gates and what may stay red is
 the commit it judges: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
 which a failure is not red until it expires. `circuit-check` is off the merge gate until `circuit-check --all`
 fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it out, and it runs with
-each candidate's check, where a red its base doesn't share is rung to the owner of the target's pins and holds nothing.
+each candidate's check.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.
 
-A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
-docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` moves
-only to a checked candidate with no new failure: the verified queue (`research queue vqueue`) stacks the marked PRs that are
-reviewed or low-risk, one `Queue: #N` merge each, on `main`'s tip or on the candidate below, checks that tree, and
-fast-forwards `main` to it once every task on the merge gate passed or fails on its base too, so `main`'s reds only shrink.
-A candidate that fails never reaches `main`, and nothing is reverted: its suspects are the members whose changed files meet
-a failed task's inputs, every member when none does; a lone suspect loses its ready mark and its owner is told which tasks
-failed, several are bisected over the next batches, and the candidates built on it are dropped. An infra error blames
-nobody: the check is enqueued again. What drive.toml lets warn (its `warn_gates` and `warn_steps`) and a lock's
-bookkeeping never revert: drive tells the owner, who fixes it in their next PR. How a PR gets its mark and its verdict:
-the team skill's Landing; the queue's rule for each case: `tools/research/src/research/vqueue.py`'s docstring.
+A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a docs-only
+change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` moves only to
+a checked candidate with no new failure: the verified queue (`research queue vqueue`) stacks the marked PRs that are
+reviewed or low-risk on `main`'s tip or on the candidate below, checks that tree, and fast-forwards `main` to it once
+every task on the merge gate passed or fails on its base too, so `main`'s reds only shrink. A candidate that fails never
+reaches `main`, and nothing is reverted: the member whose changed files meet a failed task's inputs loses its ready mark
+and its owner is told which tasks failed (several such members are bisected), and the candidates built on it are dropped.
+A step off the gate (policy.toml's `off_gate`, drive.toml's `warn_steps`) holds and ejects nothing: what a candidate fails
+there and its base doesn't is rung to its owner, to fix forward. How a PR gets its mark and its verdict: the team skill's
+Landing; the queue's rule for each case: `tools/research/src/research/vqueue.py`'s docstring.
 
 ## Lean
 
