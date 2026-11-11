@@ -47381,3 +47381,51 @@ One point for soundness: the stop record can be registered after the boundary re
 For the table:
 - stop check, the audit side (NET): spec rewritten to the word as a value of its own [read, nothing built]. In the one-stage placement the word must be a stop record's port (form A) or be read and checked (form B); vllm's branch has it as the replay block's output (form C). `ignore_eos` is per request: it goes in the block. No number changes.
 - #8869 (stop rule pins at T = 1,024): unmarked at `df881f327a`; conflicts with CIR-236's branch; hold behind it.
+
+## BENCHCROSS, Wed 11 Nov 10:09Z: ready to mark #8899 at 6950f9d93eb3 (quick tier 3 of 3, r20261111-094310-6353); second readings: #8891 at 88f0665ab664 holds (prover only, same words, hiding untouched; quote 25%, not 37%), #8867 at 65788418c6e8 holds (five cells by hand)
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [guess] mine. Times from `date -u`.
+
+ready to mark #8899 at 6950f9d93eb3ea41468f54d41ffb967098cdc8b9
+- **Quick tier at that head:** `r20261111-094310-6353` (cpu-10), `suites.py --changed 0a722c6ec984 --quick`: 3 suites, 3 passed (0 cached), 0 failed, rc 0: `benchmarks/spot_figures` 95 tests, `repository` 292, `verity-graph` 181 [run: its `stdout.log` from the store; its `tree_sha` is the head].
+- **Still running:** the same suite fresh with its slow tests, `r20261111-094307-df7a` (it took its slot at 09:53Z and ends by 10:33Z). No test of the suite reads the card's sentence or its `runs` [run: grep of `benchmarks/spot_figures/tests`]. I report its end in my next entry and in the body.
+- **Merges:** clean with `main` `0a722c6ec984` and with #8568 `8fb2b94ee4b4`, #8853 `2e47293cc645`, #8878 `816e2396bdf7` and #8867 `65788418c6e8` [run: `git merge-tree`]. In #8853's tree the range is stated in the same two places and nowhere else [run: `git grep`].
+- **No claim.** No Lean, lock, value or figure moves: the card's `source` and `runs`, and one caption. The body is in your 08:37Z order.
+- **One correction to my 10:01Z entry, in the body since 10:00Z:** the record does hold GPU utilization, in the run's sampler (`resources.jsonl`), near 100% on all eight GPUs in both intervals. I had written that no file shows the GPUs' work. The card's sentence is unchanged by it.
+- **Yours:** whether GLM-5.3's card should read `modeled` while its factor is Moonlight's.
+
+**1. #8891 (WITNESS, the host unit walk) at `88f0665ab664`: holds, read as a soundness-path change.**
+- **What a guarantee rests on: nothing here.** [read: the whole diff from its base `8201dacff26e`] Three host-side Rust files of the prover (`ir_block.rs`, `circuit.rs`, `bin/flock-circuit.rs`), the benchmark's runner and one README row. No verifier, statement, commitment, transcript or Lean file.
+- **The words are the same, by reading.**
+  - Asking ahead is one `_mm_prefetch` on an address computed without a read; no value depends on it. It is the file's only `unsafe`.
+  - `fold_own` folds the same slice as before: `cols[off[i]..off[i+1]]` is `Rows::row(i)`.
+  - At width 1 the evaluator call changes from `eval64_flat` to `eval_wide_ahead(..).unwrap_or_else(eval64)`, which is `eval64_flat`'s own body with the distance passed in.
+- **The hiding argument: untouched.** A kept vector holds the last statement's witness words in the prover's own memory. It comes back with z zeroed over its whole length (`clear`, then `resize(n, 0)`) and a and b empty, and the walk writes every word it returns (z zeroed, a and b pushed row by row to `u`). Nothing reads past a vector's length: there is no `set_len` in the file. So no word of one statement reaches another's witness, and nothing new leaves the prover.
+- **The saving matches its run.** [run: `r20261111-085753-8868`'s 96 `WALK` lines from the store] Every cell of WITNESS's 09:33Z table reproduces: as it was 2.86, 4.03, 3.46 CPU-s a statement; both cuts 2.35, 2.14, 2.18; at distance 256 2.11, 2.09, 2.10; four threads 2.91, 3.84, 3.13 against 2.21, 2.21, 2.19; huge pages 1.92 to 2.00. All 96 lines say `same` and `ok`.
+- **What I would quote: 25%, not 37%.** The baseline's three rounds spend 2.41, 3.45 and 2.97 s outside the kernel on the same words (cpu-7 is shared), so the median leans on two rounds a neighbour inflated [guess: the cause; the spread is the record's]. Best against best is 25% at ten threads and 24% at four.
+- **One cost the entry does not state:** a prover now holds up to 24 row vectors between statements, where each walk freed them (only vectors of 32 MiB or more are kept). At the benchmark's instance that is 24 × 72 MB = 1.7 GB a prover [run: 9,011,201 rows × 8 bytes]. It is memory held, not a new peak: the walk had it mapped already. `FC_UNIT_KEEP=0` turns it off.
+- Not read: the quick tier `e406` and `check_build` `24f4` [relayed]; that the two pins are `main`'s words (`fc1a`) [relayed]. The instance is NVIS 16 (9.0 million rows), not the served block, as WITNESS says.
+
+**2. #8867 (CONCRETE's evaluator) at its new head `65788418c6e8`: holds; five cells by hand.**
+- [run: my own arithmetic from the docstring's formula, 4·(T·(1 + e_s·N_s + K_s + e_s·K_m))/2^256 at k = ⌈4·2^23/e⌉ = 12,343,986, e_s = 1 + 210·k = 2,592,237,061, T = 2^80, N_s = 15,694, a run at K0 the design at K0 times the sessions and the gates, L = 513 compressions]
+
+| cell | by hand | the evaluator at the head | CONCRETE's table |
+|---|---:|---:|---:|
+| per sampled replay block, by gates, calls | 2^-100.918 | 2^-100.91 | 2^-100.91 |
+| per run at K0 = 4, by gates, calls | 2^-98.918 | 2^-98.91 | 2^-98.91 |
+| per run at K0 = 4, by gates, compressions | 2^-89.916 | 2^-89.91 | 2^-89.91 |
+| per run at K0 = 6, by classes, calls | 2^-113.903 | 2^-113.90 | 2^-113.90 |
+| a year of runs at K0 = 6, by classes, calls | 2^-98.22 | 2^-98.22 | 2^-98.22 |
+
+- [run: `binding.py --K 2^41.81 --classes 2^26.24 --sessions 15694 --symbols 2^23 --first-stage 4` and `6` at the head] It prints the four columns as CONCRETE's table has them: first hit 2^-100.91, 2^-91.91, 2^-116.48, 2^-107.48 a block; rewinding 2^-48.97 under `ExpectedCR` and 2^-136.97 under `StrictBirthday`, at r = 69,084,992 rounds; conflict 2^-129.79.
+- The delta from `64f7cb635e3d` is three files in `benchmarks/spot_figures` [run: `git diff --stat`]. I read the formula's docstring and ran the evaluator; I did not read the 500 changed lines one by one.
+- Not checked: SCALE's bounds themselves (2^41.81, 2^26.24, 15,694), which your 09:52Z update has since moved (2^42.53 as the Lean counts it).
+
+**Not read yet:** HEADPROF's `cb57` rows (2.570 with the salts cut, 2.494 with `upper`): its record is not in the store until it ends. vllm's `serving_rate` PR and `a974`'s posted table: neither is on PRF-550 at 09:47Z [read].
+
+For BREAKEVEN: the host witness's two cuts (#8891): quote 25% of the walk's CPU-seconds (best round against best, `8868`), on a 9-million-row instance on a CPU node; the 37% leans on two inflated baseline rounds. Nothing on a card yet.
+
+For the table:
+- #8899 (the replay card's sentence): ready to mark at `6950f9d93eb3`, quick tier 3 of 3 (`6353`); no value or figure moves.
+- #8891 (head block's host witness): second reading holds at `88f0665ab664`: prover only, same words, hiding untouched; −25% of the walk's CPU-seconds measured on a 9M-row instance (`8868`, every cell recomputed).
+- #8867 (the binding evaluator): second reading holds at `65788418c6e8`, five cells by hand.
