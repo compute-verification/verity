@@ -54,16 +54,18 @@ Two kinds of committed run:
         [--cap-bits L] [--transfer-gate T ...]
     prove_path.py window-circuit --serve-run DIR --window K --row-dir DIR --advice FILE --out FILE [--cap N] [--description] \\
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pin NAME=ROOT ...] [--pins FILE ...] \\
-        [--pearl-tables SCHEME | --window-registration W] [--hf-config F] [--target F] [--cap-bits L]
+        [--pearl-tables SCHEME [--reader-floors EPS,DELTA] | --window-registration W] [--hf-config F] [--target F] \\
+        [--cap-bits L]
     prove_path.py serve-phi --model REPO --revision SHA --out FILE [--async-scheduling]
-    prove_path.py class-circuit --serve FILE --out FILE [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pearl-tables SCHEME] \\
-        [--cap N] [--description] [--pin NAME=ROOT ...] [--pins FILE ...] [--hf-config F] [--target F] [--cap-bits L]
+    prove_path.py class-circuit --serve FILE --out FILE [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] \\
+        [--pearl-tables SCHEME [--reader-floors EPS,DELTA]] [--cap N] [--description] [--pin NAME=ROOT ...] [--pins FILE ...] \\
+        [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --key FILE --registration FILE \\
         --checkpoint-dir DIR --out DIR [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--law L] [--cap N] \\
-        [--workers N] [--window-registration W (--h1-key FILE | --pearl-passes DIR)] [--hf-config F] [--target F] \\
-        [--cap-bits L]
+        [--workers N] [--window-registration W (--h1-key FILE | --pearl-passes DIR [--reader-floors EPS,DELTA])] \\
+        [--hf-config F] [--target F] [--cap-bits L]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
@@ -151,7 +153,12 @@ Two kinds of committed run:
   (`window_class.PearlTables` under W's scheme; its rounds the window's steps, the class's outputs), each cut linear's y
   taken as served, and the registration is chained right after W and registers W's values (`pearl_c.window.reuse`),
   refused unless its proof blocks make each row as Pearl+ committed it. ``window-circuit --pearl-tables SCHEME`` is the
-  verifier's own record of that cut circuit.
+  verifier's own record of that cut circuit. A cut circuit's reader templates are a template a shape of linear, each
+  reading every round's and call's rows of its shape, so a sample no longer has a reader of every value: with
+  ``--reader-floors EPS,DELTA`` (each NUM/DEN; ``window-circuit``, ``class-circuit`` and ``window-commit`` alike) the
+  record states the verifier's work table (`reader_table_of`: every template works 1, Pearl+'s reader templates at the
+  floors under which at most EPS of their units are wrong except with probability DELTA, every other at floor 1), the
+  table a ``--law work:K`` window samples by.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -191,6 +198,7 @@ import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
+from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -1333,6 +1341,42 @@ def window_class_of(arg: str | None) -> Any:
     return CLASS_OF_RECORD if arg is None else WindowClass(*(int(x) for x in arg.split(",")))
 
 
+def reader_floors_arg(text: str) -> tuple[Fraction, Fraction]:
+    """``--reader-floors``'s EPS,DELTA as exact fractions, each NUM/DEN in ASCII digits with 0 < EPS <= 1 and
+    0 < DELTA < 1."""
+    parts = [p.partition("/") for p in text.split(",")]
+    if len(parts) != 2 or not all(x.isascii() and x.isdigit() for n, _, d in parts for x in (n, d)) \
+            or not all(int(d) for _, _, d in parts):
+        raise argparse.ArgumentTypeError(f"EPS,DELTA, each NUM/DEN, not {text!r}")
+    eps, delta = (Fraction(int(n), int(d)) for n, _, d in parts)
+    if not (0 < eps <= 1 and 0 < delta < 1):
+        raise argparse.ArgumentTypeError(f"EPS,DELTA with 0 < EPS <= 1 and 0 < DELTA < 1, not {text!r}")
+    return eps, delta
+
+
+def reader_table_of(a: argparse.Namespace, circuit: Any) -> dict[str, Any] | None:
+    """With ``--reader-floors EPS,DELTA``: the verifier's work table of ``circuit``, cut at Pearl+'s linears
+    (`window_law.reader_table`): every template works 1, Pearl+'s reader templates (`window_cut.readers`, a template a
+    shape of cut linear) at the floors under which at most EPS of their units are wrong except with probability DELTA
+    (`window_law.reader_floors`), and every other template at floor 1. None without. ValueError for a circuit not cut,
+    which has no reader template to set a floor for."""
+    if getattr(a, "reader_floors", None) is None:
+        return None
+    from verity_vllm.pipeline.window_law import reader_table
+    from verity_vllm.program.predict.window_cut import readers
+
+    if not (mine := readers(circuit)):
+        raise ValueError("--reader-floors: the circuit has no Pearl+ reader template, since it isn't cut at Pearl+'s linears "
+                         "(--pearl-tables, or window-commit's --pearl-passes)")
+    return reader_table(circuit.units, mine, *a.reader_floors)
+
+
+def stated(doc: dict[str, Any], table: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The circuit record ``doc`` (`interface.descriptor_record`) stating the verifier's work table ``table``
+    (`reader_table_of`), as the committed window's ``circuit.json`` states its own; ``doc`` where there is none."""
+    return doc if table is None else {**doc, "work_table": {t: dict(v) for t, v in table.items()}}
+
+
 def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window's advice through I2 as its window class's one Circuit (V3: `window_circuit.window_circuit` at
     ``--class``, a class Program a slot flattened into units, every input row wired or registered, the weights' or the
@@ -1360,7 +1404,8 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
     lowered = time.time() - t0
-    doc = circuit.description() if a.description else IF.descriptor_record(circuit, a.cap)
+    table = reader_table_of(a, circuit)
+    doc = circuit.description() if a.description else stated(IF.descriptor_record(circuit, a.cap), table)
     Path(a.out).write_bytes(IF.circuit_bytes(doc))
     c = AW.codec_of()
     roots = registration_roots(json.loads((Path(a.serve_run) / "advice" / f"w{a.window}" / "registration.json").read_text()))
@@ -1410,7 +1455,8 @@ def class_circuit_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     except Unexpressible as e:
         raise ValueError(f"I2's class circuit refuses φ: {e}") from None
     lowered = time.time() - t0
-    doc = circuit.description() if a.description else IF.descriptor_record(circuit, a.cap)
+    table = reader_table_of(a, circuit)
+    doc = circuit.description() if a.description else stated(IF.descriptor_record(circuit, a.cap), table)
     Path(a.out).write_bytes(IF.circuit_bytes(doc))
     return {"count": IF.input_count(doc, pins=pins), "seconds": {"circuit": round(lowered, 1),
                                                                   "record": round(time.time() - t0 - lowered, 1)}}
@@ -1686,6 +1732,9 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
         low = WC.lower(registered, cls, tables=tables)
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
+    law, table = DR.parse_design(a.law), reader_table_of(a, low.circuit)
+    if table is not None and law["law"] != "work":
+        raise ValueError(f"--reader-floors: a floor is the work sampling design's (--law work:K), not {a.law}'s")
     lap("lower")
     r = record1(str(a.bundle), str(a.row_dir))
     run = bytes(r.run.run_root).hex()
@@ -1744,7 +1793,7 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
         values |= PWR.reuse(pw, manifests, filled.value, rounds)
         previous = R.digest(pw)
     lap("rows")
-    win = IF.Window(low.circuit, run, DR.parse_design(a.law), a.cap, registered=values, forms=WRS.FORMS)
+    win = IF.Window(low.circuit, run, law, a.cap, registered=values, forms=WRS.FORMS, work_table=table)
     win.supply(CR)
     filled.record(win)
     lap("record")
@@ -1969,6 +2018,12 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["window-circuit"].add_argument("--pearl-tables", metavar="SCHEME", help="the circuit cut at its linears, "
                                                "as a window tied to Pearl+'s W under PoUW scheme SCHEME commits it "
                                                "(`window_class.PearlTables`)")
+    for name in ("window-circuit", "class-circuit", "window-commit"):
+        sub.choices[name].add_argument("--reader-floors", type=reader_floors_arg, metavar="EPS,DELTA", help="for a circuit "
+                                       "cut at Pearl+'s linears: the record states the verifier's work table, Pearl+'s "
+                                       "reader templates at the floors under which at most EPS of their units are wrong "
+                                       "except with probability DELTA (each NUM/DEN; `reader_table_of`), the table a "
+                                       "--law work:K window samples by")
     for name in ("window-circuit", "class-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--class", dest="window_class", help="the window class SLOTS,PROMPT,OUTPUTS[,LANES,"
                                        "EVERY] (`window_circuit.WindowClass`; by default `CLASS_OF_RECORD`, 8,1024,64,4,16)")
