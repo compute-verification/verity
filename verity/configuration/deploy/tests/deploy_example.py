@@ -12,11 +12,11 @@ import functools
 import hashlib
 from pathlib import Path
 
+from verity.commitments.crypto import lms
 from verity.configuration.deploy.manifest import Channel, Manifest, Role
-from verity.configuration.deploy.party import Finish, Received, LogEntry, Send, Timer
+from verity.configuration.deploy.party import Finish, LogEntry, Received, Send, Timer
 from verity.configuration.deploy.runtime import ProtocolDef
 from verity.configuration.wire import Body, Bool, Int, Message, Schema
-from verity.commitments.crypto import lms
 
 ID = "verity/example/deadline"
 HERE = Path(__file__).parent
