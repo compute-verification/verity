@@ -72,12 +72,18 @@ make, whichever gate they wait for: they extract every session of a further run.
   first run's calls, read whole, and `c_g` a run's calls with only those sessions extracted. The expectation is at
   most the whole-run one (`Compiled.ex_callsBy_le`).
 
+* **With no premise** (`CompiledTwo.eventTwoX_le_finder`, `CompiledTwo.eventTwoX_le_finderAt`): the event of
+  `KSRegTwoX` with the two finders' successes in it,
+  `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 2·Pr[F_X finds] + 2·Pr[F_I finds] + N/(KX + 1) + N/(KI + 1)`, and the
+  finders' expected calls as statements of their own (`Compiled.ex_cost_finderX_le`, `CompiledTwo.ex_cost_finderI_le`
+  and their `At` forms). The statements under `ExpectedCR` are these together.
+
 **What the bound is small under.** Three premises: the linear expected-time bound (`ExpectedCR`) at the two first-hit
-finders, hypotheses of the statements here; the same at `B_conf,X`, whose success `Pr[B_conf,X]` is a term of the
-bound; and the strict birthday bound (`StrictBirthday`) at `B`, whose success is under the square root
-`√(k·γ_s·Pr[B])`, where the linear bound leaves the square root of a linear term. The expectation
-`E[(1 + |sample|)·c]` is joint: a bound on a run's mean calls at each coins bounds it by one more than the mean sample
-times that bound, and a bound on the mean over all coins does not.
+finders, hypotheses of the statements here but those with no premise; the same at `B_conf,X`, whose success
+`Pr[B_conf,X]` is a term of the bound; and the strict birthday bound (`StrictBirthday`) at `B`, whose success is
+under the square root `√(k·γ_s·Pr[B])`, where the linear bound leaves the square root of a linear term. The
+expectation `E[(1 + |sample|)·c]` is joint: a bound on a run's mean calls at each coins bounds it by one more than
+the mean sample times that bound, and a bound on the mean over all coins does not.
 -/
 
 @[expose] public section
@@ -481,6 +487,132 @@ theorem ex_callsBy_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Finty
       rw [Nat.add_mul, Nat.one_mul]
       exact Nat.add_le_add_left h _
     exact Nat.cast_le.2 h2
+
+/-! ## The boundary, with no premise -/
+
+/-- A run that opens a gate of the program off the trace read at the statement opens it off the plurality table of
+the boundary's finders. -/
+theorem pr_offRegX_le_off (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (x : Msg) :
+    Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffRegX H P x q.1 q.2.1 q.2.2) ≤
+      Pr (fun q : Unit × (Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) => ∃ g : Fin (L.nG x),
+        FlockSoundness.Rewinding.Off
+          (fun (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+            L.opensAt H P x a.1 a.2.1 a.2.2 g)
+          (fun g : Fin (L.nG x) => L.plurX H P x g) q.2 g) := by
+  have hP := Pr_unit_prod (fun a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => ∃ g : Fin (L.nG x),
+    FlockSoundness.Rewinding.Off
+      (fun (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) => L.opensAt H P x a.1 a.2.1 a.2.2 g)
+      (fun g : Fin (L.nG x) => L.plurX H P x g) a g)
+  have hoff : Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffRegX H P x q.1 q.2.1 q.2.2) ≤
+      Pr (fun a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => ∃ g : Fin (L.nG x),
+        FlockSoundness.Rewinding.Off
+          (fun (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+            L.opensAt H P x a.1 a.2.1 a.2.2 g)
+          (fun g : Fin (L.nG x) => L.plurX H P x g) a g) :=
+    Pr_mono fun q hq => by
+      obtain ⟨g, hg, b, hb, hne⟩ := hq
+      refine ⟨⟨g, hg⟩, Option.isSome_iff_exists.2 ⟨b, hb⟩, fun h => hne ?_⟩
+      rw [L.regValX_eq_plurX H P x hb]
+      exact (hb.symm.trans h).symm
+  exact hoff.trans hP.symm.le
+
+/-- **The mass off the boundary trace read at the statement, with the first-hit finder's success in it**, with no
+premise on `H`: `2·Pr[the finder outputs a collision] + N/(K + 1)`, at the boundary's first-hit finder of the cap `K`
+(`finderX`), `N` the program's gates. -/
+theorem pr_offRegX_le_finder {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
+    {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (needs : ℕ → Finset ℕ) (K : ℕ) :
+    Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffRegX H P x q.1 q.2.1 q.2.2) ≤
+      2 * (L.finderX H P x s needs K).Pr H + (L.nG x : ℝ) / ((K : ℝ) + 1) := by
+  have h := Verity.FirstHit.pr_off_sample_le_finder H
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      L.opensAt H P x a.1 a.2.1 a.2.2 g)
+    (vstar := fun (_ : Unit) (g : Fin (L.nG x)) => L.plurX H P x g)
+    (fun _ => isPlurality_plurAt (L.nG x)
+      fun (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : ℕ) => L.opensAt H P x a.1 a.2.1 a.2.2 g)
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      decide (∃ u ∈ L.checked x a.2.1, g.val ∈ needs u))
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) => L.callsAt H P x s a.1 a.2.1 a.2.2) K
+    (fun _ => L.collX H P x s)
+    (fun _ a a' g hg => collX_of_conflictAt hbind hs P a a' g hg)
+    (fun _ a a' u v huv => L.collX_collision H P x s a a' huv)
+  rw [Fintype.card_fin] at h
+  exact (L.pr_offRegX_le_off H P x).trans h
+
+/-- **The boundary's first-hit finder's expected calls** are at most `E[(1 + |sample|)·c]`, whatever `H` is: `c` a
+run's calls with every session of its sample extracted (`callsAt`), `|sample|` the gates the proof blocks of its
+coins' sample need. -/
+theorem ex_cost_finderX_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (x : Msg) (s : AuditStatement) (needs : ℕ → Finset ℕ) (K : ℕ) :
+    Ex (fun sd => ((L.finderX H P x s needs K).cost sd : ℝ)) ≤
+      Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+        (((1 + #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u))) *
+          L.callsAt H P x s q.1 q.2.1 q.2.2 : ℕ) : ℝ)) :=
+  (Verity.FirstHit.ex_cost_sampleFinder_le
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      L.opensAt H P x a.1 a.2.1 a.2.2 g)
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      decide (∃ u ∈ L.checked x a.2.1, g.val ∈ needs u))
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) => L.callsAt H P x s a.1 a.2.1 a.2.2) K
+    (L.finderX H P x s needs K).out).trans_eq
+    (Ex_unit_prod fun a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      (((1 + #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x a.2.1, g.val ∈ needs u))) *
+        L.callsAt H P x s a.1 a.2.1 a.2.2 : ℕ) : ℝ))
+
+/-- **The mass off the boundary trace read at the statement, with the by-position finder's success in it**, with no
+premise on `H`: `2·Pr[the finder outputs a collision] + N/(K + 1)`, at the boundary's by-position first-hit finder of
+the cap `K` (`finderXAt`), `N` the program's gates. -/
+theorem pr_offRegX_le_finderAt {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
+    {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (needs : ℕ → Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (K : ℕ) :
+    Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffRegX H P x q.1 q.2.1 q.2.2) ≤
+      2 * (L.finderXAt H P x s needs K).Pr H + (L.nG x : ℝ) / ((K : ℝ) + 1) := by
+  have h := Verity.FirstHit.pr_off_at_le_finder H
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      L.opensAt H P x a.1 a.2.1 a.2.2 g)
+    (vstar := fun (_ : Unit) (g : Fin (L.nG x)) => L.plurX H P x g)
+    (fun _ => isPlurality_plurAt (L.nG x)
+      fun (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : ℕ) => L.opensAt H P x a.1 a.2.1 a.2.2 g)
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      decide (∃ u ∈ L.checked x a.2.1, g.val ∈ needs u))
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) => L.callsAt H P x s a.1 a.2.1 a.2.2)
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (J : Finset (Fin (L.nG x))) =>
+      ∑ g ∈ J, L.callsBy H P x s needs g.val a.1 a.2.1 a.2.2) K
+    (fun (_ : Unit) (a a' : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      L.collBy H P x s needs a a' g.val)
+    (fun _ a a' g hg => by
+      obtain ⟨h1, h2, hne⟩ := hg
+      exact collBy_of_conflictAt hbind hs P needs (fun u v w p hp _ => hpos u v w p hp) a a' g.val h1 h2 hne)
+    (fun _ a a' g u v huv => L.collBy_collision H P x s needs a a' g.val huv)
+  rw [Fintype.card_fin] at h
+  exact (L.pr_offRegX_le_off H P x).trans h
+
+/-- **The boundary's by-position finder's expected calls** are at most `E[c + Σ_{g ∈ sample} c_g]`, whatever `H`
+is: `c` a run's calls with every session of its sample extracted (`callsAt`), and `c_g` its calls with only the
+sessions that have a proof block needing gate `g` extracted (`callsBy`). -/
+theorem ex_cost_finderXAt_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) (s : AuditStatement) (needs : ℕ → Finset ℕ) (K : ℕ) :
+    Ex (fun sd => ((L.finderXAt H P x s needs K).cost sd : ℝ)) ≤
+      Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+        ((L.callsAt H P x s q.1 q.2.1 q.2.2 +
+          ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u)),
+            L.callsBy H P x s needs g.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) :=
+  (Verity.FirstHit.ex_cost_sampleFinderAt_le
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      L.opensAt H P x a.1 a.2.1 a.2.2 g)
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      decide (∃ u ∈ L.checked x a.2.1, g.val ∈ needs u))
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) => L.callsAt H P x s a.1 a.2.1 a.2.2)
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (J : Finset (Fin (L.nG x))) =>
+      ∑ g ∈ J, L.callsBy H P x s needs g.val a.1 a.2.1 a.2.2)
+    (fun (_ : Unit) (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g : Fin (L.nG x)) =>
+      L.callsBy H P x s needs g.val a.1 a.2.1 a.2.2)
+    (fun _ _ _ => le_rfl) K (L.finderXAt H P x s needs K).out).trans_eq
+    (Ex_unit_prod fun a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      ((L.callsAt H P x s a.1 a.2.1 a.2.2 +
+        ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x a.2.1, g.val ∈ needs u)),
+          L.callsBy H P x s needs g.val a.1 a.2.1 a.2.2 : ℕ) : ℝ))
 
 end Compiled
 
@@ -1108,6 +1240,181 @@ theorem eventTwoX_le_firstHit_at {H : Msg → Msg} {L : CompiledTwo Coin A} (hA 
     rw [e] at h
     exact h
   exact Verity.FirstHit.le_of_forall_cap hcap
+
+/-! ## The interior and the event, with no premise -/
+
+/-- **The mass off the committed interiors, with the first-hit finder's success in it**, with no premise on `H`:
+`2·Pr[the finder outputs a collision] + N/(K + 1)`, at the interior's first-hit finder of the cap `K` (`finderI`),
+`N` the program's gates. The contract's clause it reads is `Sessions.interior`. -/
+theorem pr_offIreg_le_finder {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H)
+    (hS : L.Sessions H) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type}
+    [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ) (K : ℕ) :
+    Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffIreg H P x q.1 Pρ q.2.1 q.2.2) ≤
+      2 * (L.finderI H P x s Pρ needs K).Pr H + (L.nG x : ℝ) / ((K : ℝ) + 1) := by
+  have h := Verity.FirstHit.pr_off_sample_le_finder H
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) => L.iopTable H P x t.1 Pρ t.2)
+    (vstar := fun (t : Ω × (Fin (L.V.k x) → Coin)) (g : Fin (L.nG x)) => L.iplur H P x t.1 Pρ t.2 g)
+    (fun t => L.isPlurality_iplur H P x t.1 Pρ t.2)
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2) K
+    (fun t => L.icoll H P x s t.1 t.2)
+    (fun t ec ec' g hg => icoll_of_conflictAt hbind hS hs Pρ P t.1 t.2 ec ec' g hg)
+    (fun t ec ec' u v huv => L.icoll_collision H P x s t.1 t.2 ec ec' huv)
+  rw [Fintype.card_fin] at h
+  have hP := Pr_keep_forkOn (L.stage2 x)
+    (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) => L.OffIreg H P x ω Pρ R c)
+  have hoff : Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      L.OffIreg H P x q.1.1 Pρ (forkOn (L.stage2 x) q.1.2 q.2.1) q.2.2) ≤
+      Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => ∃ g : Fin (L.nG x),
+        FlockSoundness.Rewinding.Off (L.iopTable H P x q.1.1 Pρ q.1.2)
+          (fun g : Fin (L.nG x) => L.iplur H P x q.1.1 Pρ q.1.2 g) q.2 g) :=
+    Pr_mono fun q hq => L.off_of_offIreg H P x q.1.1 Pρ q.1.2 q.2 hq
+  exact hP.symm.le.trans (hoff.trans h)
+
+/-- **The interior's first-hit finder's expected calls** are at most `E[(1 + |sample|)·c]`, whatever `H` is: `c` a
+run's calls with every session of its sample extracted (`callsAt`), `|sample|` the gates the proof blocks of its
+coins' sample need. -/
+theorem ex_cost_finderI_le (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) (s : AuditStatement) (Pρ : Partition) (needs : ℕ → Finset ℕ) (K : ℕ) :
+    Ex (fun sd => ((L.finderI H P x s Pρ needs K).cost sd : ℝ)) ≤
+      Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+        (((1 + #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u))) *
+          L.callsAt H P x s q.1 q.2.1 q.2.2 : ℕ) : ℝ)) :=
+  (Verity.FirstHit.ex_cost_sampleFinder_le
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) => L.iopTable H P x t.1 Pρ t.2)
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2) K
+    (L.finderI H P x s Pρ needs K).out).trans_eq
+    (Ex_keep_forkOn (L.stage2 x) fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
+      (((1 + #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x R, g.val ∈ needs u))) *
+        L.callsAt H P x s ω R c : ℕ) : ℝ))
+
+/-- **The mass off the committed interiors, with the by-position finder's success in it**, with no premise on `H`:
+`2·Pr[the finder outputs a collision] + N/(K + 1)`, at the interior's by-position first-hit finder of the cap `K`
+(`finderIAt`), `N` the program's gates. The contract's clause it reads is `Sessions.interior`. -/
+theorem pr_offIreg_le_finderAt {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H)
+    (hS : L.Sessions H) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type}
+    [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (K : ℕ) :
+    Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffIreg H P x q.1 Pρ q.2.1 q.2.2) ≤
+      2 * (L.finderIAt H P x s Pρ needs K).Pr H + (L.nG x : ℝ) / ((K : ℝ) + 1) := by
+  have h := Verity.FirstHit.pr_off_at_le_finder H
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) => L.iopTable H P x t.1 Pρ t.2)
+    (vstar := fun (t : Ω × (Fin (L.V.k x) → Coin)) (g : Fin (L.nG x)) => L.iplur H P x t.1 Pρ t.2 g)
+    (fun t => L.isPlurality_iplur H P x t.1 Pρ t.2)
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x)
+        (J : Finset (Fin (L.nG x))) =>
+      ∑ g ∈ J, L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2) K
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec ec' : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+      L.toCompiled.collBy H P x s needs (t.1, (forkOn (L.stage2 x) t.2 ec.1, ec.2))
+        (t.1, (forkOn (L.stage2 x) t.2 ec'.1, ec'.2)) g.val)
+    (fun t ec ec' g hg => icollBy_of_conflictAt hbind hS hs Pρ P needs hpos t.1 t.2 ec ec' g hg)
+    (fun t ec ec' g u v huv => L.toCompiled.collBy_collision H P x s needs _ _ g.val huv)
+  rw [Fintype.card_fin] at h
+  have hP := Pr_keep_forkOn (L.stage2 x)
+    (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) => L.OffIreg H P x ω Pρ R c)
+  have hoff : Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      L.OffIreg H P x q.1.1 Pρ (forkOn (L.stage2 x) q.1.2 q.2.1) q.2.2) ≤
+      Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => ∃ g : Fin (L.nG x),
+        FlockSoundness.Rewinding.Off (L.iopTable H P x q.1.1 Pρ q.1.2)
+          (fun g : Fin (L.nG x) => L.iplur H P x q.1.1 Pρ q.1.2 g) q.2 g) :=
+    Pr_mono fun q hq => L.off_of_offIreg H P x q.1.1 Pρ q.1.2 q.2 hq
+  exact hP.symm.le.trans (hoff.trans h)
+
+/-- **The interior's by-position finder's expected calls** are at most `E[c + Σ_{g ∈ sample} c_g]`, whatever `H`
+is: `c` a run's calls with every session of its sample extracted (`callsAt`), and `c_g` its calls with only the
+sessions that have a proof block needing gate `g` extracted (`callsBy`). -/
+theorem ex_cost_finderIAt_le (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) (s : AuditStatement) (Pρ : Partition) (needs : ℕ → Finset ℕ) (K : ℕ) :
+    Ex (fun sd => ((L.finderIAt H P x s Pρ needs K).cost sd : ℝ)) ≤
+      Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+        ((L.callsAt H P x s q.1 q.2.1 q.2.2 +
+          ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u)),
+            L.toCompiled.callsBy H P x s needs g.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) :=
+  (Verity.FirstHit.ex_cost_sampleFinderAt_le
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) => L.iopTable H P x t.1 Pρ t.2)
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x)
+        (J : Finset (Fin (L.nG x))) =>
+      ∑ g ∈ J, L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+    (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+      L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+    (fun _ _ _ => le_rfl) K (L.finderIAt H P x s Pρ needs K).out).trans_eq
+    (Ex_keep_forkOn (L.stage2 x) fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
+      ((L.callsAt H P x s ω R c +
+        ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x R, g.val ∈ needs u)),
+          L.toCompiled.callsBy H P x s needs g.val ω R c : ℕ) : ℝ))
+
+/-- **The event of `KSRegTwoX` with the two first-hit finders' successes in it, with no premise on `H`.** On a
+statement in scope, an accepted run samples a proof block of `FregTwoX` with probability at most
+`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 2·Pr[F_X finds] + 2·Pr[F_I finds] + N/(KX + 1) + N/(KI + 1)`, where
+`ε_reg,2,X` has its two square roots.
+
+* `F_X` is the boundary's first-hit finder of the cap `KX` (`Compiled.finderX`) and `F_I` the interior's of the cap
+  `KI` (`finderI`); `Pr[F finds]` is the probability that the finder outputs a collision of `H`. Each one's expected
+  calls are at most `E[(1 + |sample|)·c]` (`Compiled.ex_cost_finderX_le`, `ex_cost_finderI_le`).
+  `eventTwoX_le_firstHit_cap` is this statement and those two under `ExpectedCR` at the two finders.
+* Each finder's cost charges a further run only when the run's sample holds a gate still waited for. That its output
+  reads no other run needs that a reveal for proof block `u` opens only gates of `needs u`, which this statement does
+  not take. -/
+theorem eventTwoX_le_finder {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hbind : L.commit.Binds H)
+    (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two}
+    (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s)
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ) (KX KI : ℕ) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregTwoX H P x p.1 p.2) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + (Compiled.BconfX H L.toCompiled Ω P x).Pr H +
+        (2 * (L.toCompiled.finderX H P x s needs KX).Pr H + 2 * (L.finderI H P x s d.part needs KI).Pr H) +
+        ((L.nG x : ℝ) / ((KX : ℝ) + 1) + (L.nG x : ℝ) / ((KI : ℝ) + 1)) := by
+  have hB := (Pr_mono (p := fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      (run H P L.V x q.1 q.2.1).out = .acc ∧ L.OffRegX H P x q.1 q.2.1 q.2.2) fun _ h => h.2).trans
+    (Compiled.pr_offRegX_le_finder hbind hs P needs KX)
+  have hN := (Pr_mono (p := fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      (run H P L.V x q.1 q.2.1).out = .acc ∧ L.OffIreg H P x q.1 d.part q.2.1 q.2.2) fun _ h => h.2).trans
+    (pr_offIreg_le_finder hbind hS hs d.part P needs KI)
+  have h := eventTwoX_le_of_off hA hbind hS hs hPt hd hin P hB hN
+  linarith
+
+/-- **The event of `KSRegTwoX` with the two by-position finders' successes in it, with no premise on `H`.** On a
+statement in scope, where a reveal for proof block `u` opens only gates of `needs u`, an accepted run samples a proof
+block of `FregTwoX` with probability at most
+`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 2·Pr[F_X finds] + 2·Pr[F_I finds] + N/(KX + 1) + N/(KI + 1)`, where
+`ε_reg,2,X` has its two square roots.
+
+`F_X` is the boundary's by-position first-hit finder of the cap `KX` (`Compiled.finderXAt`) and `F_I` the interior's
+of the cap `KI` (`finderIAt`); `Pr[F finds]` is the probability that the finder outputs a collision of `H`. Each
+one's expected calls are at most `E[c + Σ_{g ∈ sample} c_g]` (`Compiled.ex_cost_finderXAt_le`,
+`ex_cost_finderIAt_le`). `eventTwoX_le_firstHit_at_cap` is this statement and those two under `ExpectedCR` at the two
+finders. -/
+theorem eventTwoX_le_finderAt {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hbind : L.commit.Binds H)
+    (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two}
+    (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s)
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (KX KI : ℕ) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregTwoX H P x p.1 p.2) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + (Compiled.BconfX H L.toCompiled Ω P x).Pr H +
+        (2 * (L.toCompiled.finderXAt H P x s needs KX).Pr H + 2 * (L.finderIAt H P x s d.part needs KI).Pr H) +
+        ((L.nG x : ℝ) / ((KX : ℝ) + 1) + (L.nG x : ℝ) / ((KI : ℝ) + 1)) := by
+  have hB := (Pr_mono (p := fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      (run H P L.V x q.1 q.2.1).out = .acc ∧ L.OffRegX H P x q.1 q.2.1 q.2.2) fun _ h => h.2).trans
+    (Compiled.pr_offRegX_le_finderAt hbind hs P needs hpos KX)
+  have hN := (Pr_mono (p := fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      (run H P L.V x q.1 q.2.1).out = .acc ∧ L.OffIreg H P x q.1 d.part q.2.1 q.2.2) fun _ h => h.2).trans
+    (pr_offIreg_le_finderAt hbind hS hs d.part P needs hpos KI)
+  have h := eventTwoX_le_of_off hA hbind hS hs hPt hd hin P hB hN
+  linarith
 
 end CompiledTwo
 
