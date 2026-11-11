@@ -1,4 +1,4 @@
-// The control for hashcat's SHA-512 rate: the default compression, sx::compress<0, ROLL> (verity/ml/kernels/sha512.cuh),
+// The control for hashcat's SHA-512 rate: the default compression, sx::compress<0, ROLL> (verity/definitions/kernels/sha512.cuh),
 // timed in the shapes of hashcat's -m 1700 optimized kernel (OpenCL/m01700_a3-optimized.cl, v7.1.2), so the difference between our raw
 // rate and hashcat's can be attributed to what each form leaves out. Each thread runs REPS compressions a launch:
 //
@@ -27,7 +27,7 @@
 #include <cstring>
 #include <vector>
 
-#include "../../../verity/ml/kernels/sha512.cuh"
+#include "../../../verity/definitions/kernels/sha512.cuh"
 
 using u64 = uint64_t;
 
