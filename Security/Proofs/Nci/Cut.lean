@@ -266,7 +266,7 @@ theorem sum_card_inBlock_le {ι : Type} [Fintype ι] (P : Partition C m) (W : Wo
 theorem card_whole_eq {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (u : Fin m) :
     (univ.filter fun s : W.Mac => W.mac s ⊆ P.gates u).card = ∑ a, (inBlock P W u a).card :=
   calc (univ.filter fun s : W.Mac => W.mac s ⊆ P.gates u).card
-      = (univ.sigma (inBlock P W u)).card := congrArg Finset.card (Finset.ext fun s =>
+      = (univ.sigma (inBlock P W u)).card := congrArg Finset.card (Finset.ext fun _ =>
         ⟨fun h => mem_sigma.2 ⟨mem_univ _, mem_filter.2 ⟨mem_univ _, (mem_filter.1 h).2⟩⟩,
           fun h => mem_filter.2 ⟨mem_univ _, (mem_filter.1 (mem_sigma.1 h).2).2⟩⟩)
     _ = ∑ a, (inBlock P W u a).card := card_sigma _ _
