@@ -36,7 +36,7 @@ integration's `pouw_h1_static.Static`) has none. A tile of the
 round whose rows all lie at or past m (R·ti ≥ m) is dead. Its admit bits, [i < m], are all 0, so its receipt is `h1tile`'s
 canonical dead-tile receipt (`PouwH1Tile_v4`, `h1tile.reference`'s gated branch). Dense credit's population is the live
 tiles, so a dead tile is never sampled. The Lean statement is `Pouw.SecurityProofs.LiveCredit`
-(``Security/Proofs/Pouw/LiveCredit.lean``), whose `liveOk` is `live_ok`.
+(``security/Proofs/Pouw/LiveCredit.lean``), whose `liveOk` is `live_ok`.
 
 `live_ok` is the unit on words, and `traced(T)` its gate circuit.
 
