@@ -1,6 +1,6 @@
 """The finite share of the correspondence vectors (`vectors.finite_share`) and the finite counts each comparison records: the
-rows outside the share are the draw without it bit for bit, the share's words are finite in every float format of their width
-at working scale, and a wide float Definition's word view is counted as drawn with and without the share."""
+rows outside the share are the vectors sampled without it bit for bit, the share's words are finite in every float format of
+their width at working scale, and a wide float Definition's word view is counted as sampled with and without the share."""
 from __future__ import annotations
 
 import functools
@@ -15,12 +15,12 @@ from verity.circuits.types import Array, Tuple, Value
 
 #: a wide float Definition a catalog binding checks, its word view's 1,024 vectors over 16- and 32-bit leaves
 ATTN = "AttnBlock_v15{D=16,NVIS=5,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v2}"
-#: every width the draw treats apart: 8, 16, 32 and 64 bits, a width no float has (24), the object path (a tuple with 128 bits)
+#: every width `vectors` treats apart: 8, 16, 32 and 64 bits, a width no float has (24), the object path (a tuple with 128 bits)
 MIXED = [Value(8), Array(3, Value(16)), Value(32), Value(64), Array(2, Value(24)), Tuple(Value(32), Value(128))]
-#: sha256 of the draw before the finite share, rows outside it: ATTN's word view and MIXED's 40 vectors at seed 7
+#: sha256 of the vectors sampled before the finite share, rows outside it: ATTN's word view and MIXED's 40 vectors at seed 7
 KEPT = {"attn": "652ee110f57e255e2c30bc749a29c14d32ebf6386c79f4ed3a38054889fe7319",
         "mixed": "2493db2966b32beaedf10f793fb219acb7879f784eaff9ec66e8c0994ad77226"}
-#: and of MIXED's 24- and 128-bit leaves on the share's rows, which the share leaves as they were drawn
+#: and of MIXED's 24- and 128-bit leaves on the share's rows, which the share leaves as they were sampled
 MIXED_OTHER = "660cb184177812bf991db3ee047db7918ec80f4144e538809776c4909870b9b0"
 
 
@@ -57,7 +57,7 @@ def _finite_by_numpy(x: int, w: int) -> bool:
     return bool(np.isfinite(np.array([x], np.uint64).view(np.float64))[0])
 
 
-def test_the_rows_outside_the_finite_share_are_the_draw_without_it():
+def test_the_rows_outside_the_finite_share_are_sampled_as_without_it():
     _t, pw, n, edge = _attn_word()
     new, old = VX.vectors(pw, n, CK.DEFAULTS.seed + 2, edge), VX.vectors(pw, n, CK.DEFAULTS.seed + 2, edge, finite=False)
     assert _digest(new, _kept(n, edge)) == _digest(old, _kept(n, edge)) == KEPT["attn"]
@@ -117,7 +117,7 @@ def test_an_operand_sampled_one_vector_at_a_time_is_finite_on_the_share():
 
 
 def test_a_wide_float_word_view_counts_its_finite_vectors(monkeypatch):
-    """`ATTN`'s word view: drawn without the share (the draw before it) 13 of its 1,024 vectors have every input leaf finite in
+    """`ATTN`'s word view: sampled without the share (as before it) 13 of its 1,024 vectors have every input leaf finite in
     every format and 11 give every output finite, all of them all-edge vectors, which is a ``vectors/few-finite`` warning;
     reading a 16-bit leaf as BF16 alone the inputs are 17 (FP16's NaN and infinity edges are finite BF16 words).  With the
     share, 512 inputs (those 13 and the 499 rows of the share) and 260 outputs are finite, and nothing warns."""

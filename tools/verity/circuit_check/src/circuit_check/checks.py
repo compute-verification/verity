@@ -264,11 +264,11 @@ def _finite_outputs(t: Any, ref: Sequence[tuple[int, ...] | None]) -> int:
 
 def _finite(rec: dict, t: Any, via: str, inputs: int, outputs: int, share: int, F: Findings) -> None:
     """``rec`` with its counts of vectors whose inputs and whose outputs are all finite, and the warning when the inputs are
-    fewer than `FINITE_FLOOR` and than the ``share`` drawn finite."""
+    fewer than `FINITE_FLOOR` and than the ``share`` sampled finite."""
     rec["finite_inputs"], rec["finite_outputs"] = int(inputs), int(outputs)
     if inputs < min(FINITE_FLOOR, share):
         F.warn("vectors", "few-finite", t.id, 1, f"[{via}]: {inputs} of its {rec.get('vectors', rec.get('compared'))} vectors have "
-               f"every input leaf finite, fewer than {FINITE_FLOOR} and than the {share} drawn finite", via=via)
+               f"every input leaf finite, fewer than {FINITE_FLOOR} and than the {share} sampled finite", via=via)
 
 
 def _probed_correspondence(t: Any, params: Sequence, probe: Any, opts: Options, F: Findings) -> tuple[dict, None, list]:

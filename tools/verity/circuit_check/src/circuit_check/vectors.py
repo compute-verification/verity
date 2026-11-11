@@ -12,9 +12,9 @@ floats only: arithmetic in the range serving sees) or a uniform word.  ``E`` is 
 keeps room for random vectors (`circuit_check.checks.Options.random_floor`).
 
 Over many float leaves such a vector almost always holds a NaN or an infinity somewhere, so half the random vectors, those of
-odd index (`finite_share`), are drawn finite instead: every leaf of width 8, 16, 32 or 64 at working scale (`_WORKING`), from a
-second random stream, written over those rows once the first stream has drawn every row, so every other row is the draw
-without the share (``finite=False``) bit for bit.  A leaf of another width keeps its first-stream word.  A leaf is finite when it
+odd index (`finite_share`), are sampled finite instead: every leaf of width 8, 16, 32 or 64 at working scale (`_WORKING`), from
+a second random stream, written over those rows once the first stream has sampled every row, so every other row is the
+sample without the share (``finite=False``) bit for bit.  A leaf of another width keeps its first-stream word.  A leaf is finite when it
 is finite in every float format of its width (`NONFINITE`): a 16-bit word only when BF16 and FP16 both read it finite, since
 the vectors don't know which one a leaf holds.
 
@@ -52,10 +52,10 @@ NONFINITE = {8: (0x7F, 0x7C), 16: (0x7F80, 0x7C00), 32: (0x7F800000,), 64: (0x7F
 #: (exponent bits, bias) of the format a random "near 1.0" word is sampled in, per width
 _NEAR_ONE = {16: (8, 127), 32: (8, 127)}
 #: (exponent bits, bias, spread) of the finite share's words, per width (a random sign and mantissa, the exponent within the
-#: spread of the bias): the near-1.0 draw where the width has one, an E4M3 word within 2^6 of 1.0 either way at 8 bits (normal,
+#: spread of the bias): the near-1.0 words where the width has them, an E4M3 word within 2^6 of 1.0 either way at 8 bits (normal,
 #: and finite read as E5M2) and an FP64 one within 2^8 at 64; each finite in every format of its width (`NONFINITE`)
 _WORKING = {8: (4, 7, 6), 16: (*_NEAR_ONE[16], 8), 32: (*_NEAR_ONE[32], 8), 64: (11, 1023, 8)}
-#: the second random stream's key beside the seed, from which the finite share is drawn
+#: the second random stream's key beside the seed, from which the finite share is sampled
 FINITE_STREAM = 0xF1
 
 
@@ -119,7 +119,7 @@ def finite_args(params: Sequence[Type], args: Sequence[Any]) -> bool:
 
 
 def finite_share(n: int, edge: int) -> range:
-    """The rows of ``n`` vectors, the first ``edge`` all-edge, that `vectors` draws finite: the random rows of odd index, half of
+    """The rows of ``n`` vectors, the first ``edge`` all-edge, that `vectors` samples finite: the random rows of odd index, half of
     them (to within one), spread through them so that every prefix of the random vectors holds its half, and a function of a
     row's index alone, so an operand sampled one vector at a time (`wide_words`) agrees with the rest."""
     return range(min(n, edge) | 1, n, 2)
