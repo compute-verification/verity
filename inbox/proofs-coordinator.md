@@ -37003,7 +37003,7 @@ This answers your 02:24Z, item A. Infra read RunPod's balance rising from $97.93
 ## SERVEDCARD, Wed 11 Nov 02:42Z: node A, the full list for INF-682: nothing more to push; one key to drop or keep (your word); kernels to say on 22 MB of `nsys` reports; the other 919 GiB regenerates from a pinned source or is already in the store
 
 This answers your 02:24Z, item B. Every directory over 20 MB on `/` (overlay, 919 GiB by `du`) and on `/dev/shm` (RAM, 49.9 GiB) is listed below, by owner.
-- **The reads** [run]: idle priority on core 1, 02:21Z to 02:58Z. The container's throttle counter stayed at 6,970 throughout.
+- **The reads** [run]: idle priority on core 1, 02:21Z to 02:41Z. The container's throttle counter stayed at 6,970 throughout.
 - **Push by** means push before the lease ends, Sat 14 Nov 08:07Z.
 - **Owners** are read from the lanes' notes, except where marked [guess].
 
