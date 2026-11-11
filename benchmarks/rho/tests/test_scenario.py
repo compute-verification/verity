@@ -61,7 +61,8 @@ def test_only_a_bound_a_lock_states_sets_the_lower_bound_and_a_draft_one_is_stil
     remote's, 2.99, 3.03 and 3.04 a week, a month and a year over one datacenter and over the world. Each of the four
     is still reported alone, labeled draft, at the slowdown it had. A cut's premises and the structure's are not a
     bound's own: the lower bound still cites `draft:no-straddle`. With `bounds.lock_only` off the four are admitted
-    and the lower bound is what fanout-priced gave, 886 at every period and fleet."""
+    and the lower bound is what fanout-priced gave, 886 at every period and fleet. Asked for alone
+    (`periods.py --bounds`), a draft bound sets no row, and the header says so with the setting that admits it."""
     monkeypatch.setattr(sys, "path", list(sys.path))
     import periods
     import run
@@ -85,6 +86,13 @@ def test_only_a_bound_a_lock_states_sets_the_lower_bound_and_a_draft_one_is_stil
         assert lo == pytest.approx(record[period], abs=5e-3)
         assert lo == pytest.approx(evaluate_named(REG.override(at), remote).lo, rel=1e-9)
         assert evaluate_named(DRAFTS_TOO.override(at), name).lo == pytest.approx(886, abs=0.5)
+    year = (("world-h200", "the world"),), ("year",)
+    for reg, slowdown, setter, said in ((REG, 1, None, True), (DRAFTS_TOO, 886, "fanout-priced", False)):
+        alone = periods.only(reg, [name], ["fanout-priced"])
+        rows = periods.evaluate(alone, [name], *year)
+        assert rows[0]["slowdown"] == pytest.approx(slowdown, abs=0.5) and rows[0]["parts"].get("setter") == setter
+        header = periods.alone_md(alone, rows, ["fanout-priced"])[0]
+        assert ("own citations of `fanout-priced`, which so bounds no block" in header) is said
 
 
 def test_the_draft_bounds_set_these_scenarios_and_no_other(monkeypatch):

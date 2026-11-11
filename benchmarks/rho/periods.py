@@ -52,7 +52,7 @@ from rho import analysis, circuits, lean, operating, params
 from rho.classes import CLASSES, premise_status, premises
 from rho.envelopes import ROUTES
 from rho.params import Param, Registry
-from rho.scenario import Result, _binding_k
+from rho.scenario import Result, _binding_k, draft
 
 SCENARIOS = ("reference-onsite-h200", "reference-remote-h200", "reference-remote-h200-sampled",
              "reference-onsite-h200-today")
@@ -225,16 +225,20 @@ def measured_md(reg: Registry, m: circuits.Comparison) -> list[str]:
              f"{fmt(m.s_x_unsplit)}) | — |"), ""]
 
 
-def alone_md(rows: list[dict], bounds: Sequence[str]) -> list[str]:
+def alone_md(reg: Registry, rows: list[dict], bounds: Sequence[str]) -> list[str]:
     """What rows bounded by the classes `bounds` alone cover (`only`): a figure is those classes' on the blocks they
-    bound and no class's on the rest, so the share on the blocks stands beside it."""
+    bound and no class's on the rest, so the share on the blocks stands beside it. A class left out as a draft
+    (`bounds.lock_only`) is named, with the setting that admits it."""
     shares = [x["scaled"]["per_window_share"] for x in rows]
     names = ", ".join(f"`{b}`" for b in bounds)
+    out = ", ".join(f"`{b}`" for b in bounds if reg["bounds.lock_only"] and draft(CLASSES[b].cites))
     return [(f"Each row is bounded by {names} alone (`--bounds`), every other class left out. A class bounds the "
              f"blocks its premises hold at, which hold {min(shares):.2g} to {max(shares):.2g} of a row's rate here; "
              "the rest is the uncertified routes and the unregistered pool at `q_U`, which no class sets, and a block "
              "no class bounds counts at its capacity. So a figure in these rows is a class's only on that share: "
-             "\"what sets it\" and \"Its parts\" name the rest."), ""]
+             "\"what sets it\" and \"Its parts\" name the rest."
+             + (f" A `draft:` statement is among the own citations of {out}, which so bounds no block in these rows "
+                "(`bounds.lock_only`); `--set bounds.lock_only=false` admits it." if out else "")), ""]
 
 
 def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.Comparison | None = None,
@@ -252,7 +256,7 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
             "`T_0 / (MFU₀ Φ_total)`. Each row says what it assumes about proofs: every unit proved, or proofs "
             "sampled at the regime's compute share (`regime.<name>.proof_share`), where each accepted incorrect proof "
             "block injects the widest public size class of output bits (`step_bits`)."), "",
-           *(alone_md(rows, bounds) if bounds else ()),
+           *(alone_md(reg, rows, bounds) if bounds else ()),
            *(measured_md(reg, measured) if measured else ()),
            "## The lower bound", "",
            ("| scenario | proofs | over | period | slowdown ≥ | range | corner | padded size ratio | status, premises | "

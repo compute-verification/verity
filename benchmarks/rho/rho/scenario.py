@@ -260,7 +260,7 @@ def _admitted(cap: Cap, cites: tuple[str, ...], table: Mapping[str, Mapping]) ->
     return lambda b: math.inf if _refuted(cites, b.inputs, table) else cap(b)
 
 
-def _draft(cites: tuple[str, ...]) -> bool:
+def draft(cites: tuple[str, ...]) -> bool:
     """Whether a bound's own citations name a statement no lock holds, a `draft:` id."""
     return any(lean.status(c) == "draft" for c in cites)
 
@@ -274,7 +274,7 @@ def _combine(args: tuple[Argument, ...], bounds: list[tuple[Estimate, Cap | None
     `lock_only` a bound one of whose own citations is a `draft:` statement bounds no block (it is still reported alone,
     labeled draft), and `drafts` names those."""
     met = [(a, cap) for a, (_, cap) in zip(args, bounds, strict=True) if cap is not None]
-    drafts = tuple(a.name for a, _ in met if lock_only and _draft(a.cites))
+    drafts = tuple(a.name for a, _ in met if lock_only and draft(a.cites))
     met = [m for m in met if m[0].name not in drafts]
     cap = least(*(_admitted(c, a.cites, table) for a, c in met))
     w = weight_per_gate(p, ctx.units)
