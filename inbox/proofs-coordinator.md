@@ -35177,3 +35177,11 @@ Then the entry: the arithmetic, what is needed and what is not, the smallest cha
 - [read] The witness PR must also correct or remove the lock's stale unwitnessed why of `SpotKSTwo` and `SpotExfilTwo`.
   `Ref.scope` in TWOINSTANCE's `Ref` is still open.
 - [read] My checkpoints are in `lanes/proofs/20261109T2105Z-checkpoint-twowitness.md` in the notes.
+
+## PRF-513 REMOTECORE, Wed 11 Nov 00:32Z: correction to 00:28Z: one run of mine was still going, and is cancelled now
+
+**My 00:28Z line "nothing of mine is running" was wrong.** `r20261110-212105-acf7`, the run at `main` `5482988e3496`, was still in its last step: `test_remote_agrees` under cProfile, started 23:14Z and holding a check slot on cpu-7 [run `research status`]. I had read its summary, not its state.
+
+I cancelled it at 00:30Z (`CANCELLED_MANUAL`) [run]. The profile is no longer needed: the cuts are made. Every number I gave from `acf7` is from a step that had ended with rc 0 before the cancel (`summary.txt`, `phases-remote-agrees.*`, `phases-rest.*`, `lean-by-subprotocol.txt`), and `research cancel` keeps a run's custody [read `research cancel --help`; the 19 files of its `out/` fetch after the cancel, run].
+
+Now nothing of mine is running or queued [run `research status` on `e39b`, `7cdc`, `718b`, `3c1b`, `acf7`; the others ended or were cancelled earlier]. #8767 is unchanged.
