@@ -43,6 +43,39 @@ def jobs(s: str) -> int:
     return int(s)
 
 
+def budget(s: str) -> float:
+    """``--memory-budget-gb``: a positive number of GB."""
+    if not re.fullmatch(r"[0-9]+(\.[0-9]+)?", s.strip()) or float(s) <= 0:
+        raise argparse.ArgumentTypeError(f"{s}: a budget is a positive number of GB")
+    return float(s)
+
+
+def peaks(s: str) -> str:
+    """``--pool-memory``: the path of a file `Needs.read` takes, read here with the command line: an audit reads it only
+    after its draw, where a file that is missing or malformed would end it with its coins spent."""
+    try:
+        Needs.read(s)
+    except (OSError, ValueError, AttributeError, TypeError) as e:
+        raise argparse.ArgumentTypeError(f"{s}: no pool-memory file the pool can read ({type(e).__name__}: {e})") from e
+    return s
+
+
+def options(ap: argparse.ArgumentParser) -> None:
+    """The pool's options, for every command line that reaches `a5.audit`: each is refused there, before anything runs,
+    where the pool could not take it."""
+    ap.add_argument("--session-jobs", type=jobs, default=1,
+                    help="the sampled members' sessions, each its own process pair, run side by side, at most this many; each is "
+                         "its statement's one session with its own live coins and is never rerun (default 1: one at a time, in "
+                         "the members' order; the proof server's one prover takes them one at a time whatever this says)")
+    ap.add_argument("--lean-jobs", type=jobs, default=1, help="Lean's checks of finished sessions run side by side, at most this many")
+    ap.add_argument("--memory-budget-gb", type=budget, default=None,
+                    help="admit a session or a Lean check only while its template's measured peak memory plus 10%% fits under this "
+                         "beside the jobs running (--pool-memory); a job with no measured peak, or over the budget alone, runs alone")
+    ap.add_argument("--pool-memory", type=peaks, default=None,
+                    help='the measured peaks in GB, a JSON file {"session": {KEY: GB}, "lean": {KEY: GB}}, KEY a template or its '
+                         "size class NAME@k_log=K")
+
+
 def size_class(template: str, k_log: int | None) -> str | None:
     """A template's size class, ``<Definition name>@k_log=<K>``: what a measured peak is filed under when no run has measured
     the template itself."""

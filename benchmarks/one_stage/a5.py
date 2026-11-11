@@ -1333,18 +1333,8 @@ ARCHIVE_LINK_HELP = ("link each member's circuit file into its session's archive
 
 
 def pool_options(ap: argparse.ArgumentParser) -> None:
-    """The session pool's options (`a5_pool`), for every command line that reaches `audit`."""
-    ap.add_argument("--session-jobs", type=POOL.jobs, default=1,
-                    help="the sampled members' sessions, each its own process pair, run side by side, at most this many; each is "
-                         "its statement's one session with its own live coins and is never rerun (default 1: one at a time, in "
-                         "the members' order; the proof server's one prover takes them one at a time whatever this says)")
-    ap.add_argument("--lean-jobs", type=POOL.jobs, default=1, help="Lean's checks of finished sessions run side by side, at most this many")
-    ap.add_argument("--memory-budget-gb", type=float, default=None,
-                    help="admit a session or a Lean check only while its template's measured peak memory plus 10%% fits under this "
-                         "beside the jobs running (--pool-memory); a job with no measured peak, or over the budget alone, runs alone")
-    ap.add_argument("--pool-memory", default=None,
-                    help='the measured peaks in GB, a JSON file {"session": {KEY: GB}, "lean": {KEY: GB}}, KEY a template or its '
-                         "size class NAME@k_log=K")
+    """The session pool's options (`a5_pool.options`), for every command line that reaches `audit`."""
+    POOL.options(ap)
 
 
 def plain(a: argparse.Namespace) -> bool:

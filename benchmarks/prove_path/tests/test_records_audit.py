@@ -1448,7 +1448,8 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
 def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, monkeypatch, capsys):
     """``warm`` hands `a5.warm` the verifier's window and its composers, each saying what it composes from (the record's
     statement under the stager's label, which a5's cache keys), with ``--compose-cache`` and ``--jobs``; the audit hands a5
-    that cache, and none without ``--compose-cache``. It hands a5 ``--archive-link`` too, and only where it is given."""
+    that cache, and none without ``--compose-cache``. It hands a5 ``--archive-link`` too, and only where it is given, and
+    the session pool's options (`a5.pool_options`): one session and one Lean check at a time unless they are given."""
     import a5 as A5
     import a5_coins as AC
 
@@ -1472,6 +1473,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
 
     def audit(a, *args, **kw):
         seen["audit"] = a.compose_cache, a.archive_link
+        seen["pool"] = a.session_jobs, a.lean_jobs, a.memory_budget_gb, a.pool_memory
         raise Opened
 
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
@@ -1485,7 +1487,17 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     for extra, want in ((["--compose-cache", cache], (cache, False)), ([], (None, False)), (["--archive-link"], (None, True))):
         with pytest.raises(Opened):
             RA.main([*args, *extra])
-        assert seen["audit"] == want
+        assert seen["audit"] == want and seen["pool"] == (1, 1, None, None)
+    peaks = tmp_path / "peaks.json"
+    peaks.write_text(json.dumps({"session": {"A@k_log=24": 16}, "lean": {"A@k_log=24": 9.5}}))
+    with pytest.raises(Opened):
+        RA.main([*args, "--archive-link", "--session-jobs", "4", "--lean-jobs", "4", "--memory-budget-gb", "440",
+                 "--pool-memory", str(peaks)])
+    assert seen["audit"] == (None, True) and seen["pool"] == (4, 4, 440.0, str(peaks))
+    peaks.unlink()      # a file the pool can't read is refused with the command line, before the coins' session opens
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: pytest.fail("the audit's coins session was opened"))
+    with pytest.raises(SystemExit):
+        RA.main([*args, "--session-jobs", "4", "--pool-memory", str(peaks)])
 
 
 def test_the_audit_from_the_records_imports_no_vllm(written, tmp_path):

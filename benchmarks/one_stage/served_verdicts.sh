@@ -113,8 +113,9 @@
 #     Coins; pinned on main's first-parent line: MAIN_FILE's, kept as $OUT/v3c-audit/main.txt, else MAIN_SHA's) and
 #     proves them, its composes made before it with V3C_WARM_JOBS (at `v3c_audit`), its sessions and Lean's checks side by
 #     side with V3C_POOL (records_audit.py's --session-jobs, --lean-jobs, --memory-budget-gb and --pool-memory, as one
-#     string; unset, one at a time), and with V3C_ARCHIVE_LINK=1 each member's circuit file linked into its session's
-#     archive rather than copied (records_audit.py's --archive-link); then
+#     string, which the preflight holds as the audit's command line does; unset, one at a time), and with
+#     V3C_ARCHIVE_LINK=1 each member's circuit file linked into its session's archive rather than copied
+#     (records_audit.py's --archive-link); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
 #     and a copy in $OUT/v3c-audit: the registration, the Program, its answer and its free inputs), and V3c fails where it
 #     writes none. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close, its
@@ -1616,6 +1617,14 @@ fi
 if [ -n "${V3C_POOL:-}" ]; then  # V3c's audit's sessions and Lean's checks side by side
   grep -q -- 'pool_options' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: V3C_POOL runs the audit's sessions side by side with records_audit.py's --session-jobs, --lean-jobs, --memory-budget-gb and --pool-memory, which this tree's records_audit.py doesn't take"; exit 3; }
+  read -ra pool <<< "$V3C_POOL"  # held as the audit's own command line holds them (a5_pool.options), before anything runs
+  why=$("$SAY_PY" -c 'import argparse, sys
+sys.path.insert(0, sys.argv[1])
+import a5_pool
+ap = argparse.ArgumentParser(prog="V3C_POOL", add_help=False, allow_abbrev=False)
+a5_pool.options(ap)
+ap.parse_args(sys.argv[2:])' "$(dirname "$SV")" "${pool[@]}" 2>&1) \
+    || { say "PREFLIGHT: V3C_POOL is not the audit's pool's options (a5_pool.options): $(tail -1 <<< "$why" | cut -c1-600)"; exit 3; }
 fi
 case $DEVELOPMENT in '' | 1) ;; *) say "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not $DEVELOPMENT"; exit 3 ;; esac
 if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live challenger's, or a development run's

@@ -47,15 +47,38 @@ def test_the_default_is_one_session_and_one_lean_check_at_a_time_with_no_budget(
     assert (a.session_jobs, a.lean_jobs, a.memory_budget_gb, a.pool_memory) == (1, 1, None, None)
 
 
-def test_session_jobs_and_lean_jobs_take_more_than_one():
-    a = options("--session-jobs", "16", "--lean-jobs", "4", "--memory-budget-gb", "430.5", "--pool-memory", "peaks.json")
-    assert (a.session_jobs, a.lean_jobs, a.memory_budget_gb, a.pool_memory) == (16, 4, 430.5, "peaks.json")
+def test_session_jobs_and_lean_jobs_take_more_than_one(tmp_path):
+    f = tmp_path / "peaks.json"
+    f.write_text(json.dumps({"session": {"LinearARow_v1@k_log=24": 16}}))
+    a = options("--session-jobs", "16", "--lean-jobs", "4", "--memory-budget-gb", "430.5", "--pool-memory", str(f))
+    assert (a.session_jobs, a.lean_jobs, a.memory_budget_gb, a.pool_memory) == (16, 4, 430.5, str(f))
 
 
 @pytest.mark.parametrize("n", ["0", "-1", "two", "1.5"])
 def test_a_pool_of_no_jobs_is_refused(n):
     with pytest.raises(argparse.ArgumentTypeError, match="at least 1 job"):
         POOL.jobs(n)
+
+
+@pytest.mark.parametrize("gb", ["0", "-440", "lots", "nan", "inf", "4e2", ""])
+def test_a_budget_that_is_no_positive_number_of_gb_is_refused_with_the_command_line(gb):
+    with pytest.raises(argparse.ArgumentTypeError, match="positive number of GB"):
+        POOL.budget(gb)
+    assert POOL.budget("440") == 440.0 and POOL.budget(" 430.5 ") == 430.5
+
+
+@pytest.mark.parametrize("text", [None, "{", "[]", '{"sessions": {}}', '{"session": {"A@k_log=1": 0}}', '{"lean": 9}'])
+def test_a_pool_memory_file_the_pool_cannot_read_is_refused_with_the_command_line(tmp_path, capsys, text):
+    """An audit reads the file only after its draw (`a5.audit`), so one that is missing (``text`` None) or malformed is
+    refused where the options are parsed, before any coin: by `POOL.peaks`, and so by every parser `a5.pool_options` fills."""
+    f = tmp_path / "peaks.json"
+    if text is not None:
+        f.write_text(text)
+    with pytest.raises(argparse.ArgumentTypeError, match="no pool-memory file the pool can read"):
+        POOL.peaks(str(f))
+    with pytest.raises(SystemExit) as e:
+        options("--session-jobs", "4", "--pool-memory", str(f))
+    assert e.value.code == 2 and "argument --pool-memory" in capsys.readouterr().err
 
 
 def test_a_need_is_the_measured_peak_plus_ten_percent_by_template_then_size_class(tmp_path):

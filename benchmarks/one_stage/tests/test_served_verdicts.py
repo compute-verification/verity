@@ -3207,6 +3207,58 @@ def test_v3c_links_each_members_circuit_into_its_archive_only_where_the_run_says
     assert ("--archive-link" in json.loads((tmp_path / "order.audit").read_text())) is linked
 
 
+#: a toy tree's records_audit.py that takes the audit's pool's options, as `served_verdicts.sh`'s preflight reads it
+POOLED_RECORDS_AUDIT = FAKE_RECORDS_AUDIT + "# A5.pool_options(p)\n"
+POOL_OPTIONS = ("--session-jobs", "--lean-jobs", "--memory-budget-gb", "--pool-memory")
+
+
+def _peaks(tmp_path: Path) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    f = tmp_path / "peaks.json"
+    f.write_text(json.dumps({"session": {"LinearARow_v1@k_log=24": 16}, "lean": {"LinearARow_v1@k_log=24": 9.5}}))
+    return f
+
+
+def test_v3c_hands_the_audit_the_pools_options_only_where_the_run_sets_them(tmp_path):
+    """With V3C_POOL the audit is given the pool's options as the run wrote them, so its sessions and Lean's checks run
+    side by side (records_audit.py's --session-jobs, --lean-jobs, --memory-budget-gb, --pool-memory); unset or empty, it
+    is given none of them and runs one session at a time."""
+    pool = f"--session-jobs 4 --lean-jobs 4 --memory-budget-gb 440 --pool-memory {_peaks(tmp_path)}"
+    rc, lines, order, _limits = _v3c(tmp_path, records_audit=POOLED_RECORDS_AUDIT, V3C_POOL=pool, V3C_ARCHIVE_LINK="1")
+    assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
+    audit = json.loads((tmp_path / "order.audit").read_text())
+    at = audit.index("--session-jobs")
+    assert audit[at:at + 8] == pool.split() and "--archive-link" in audit
+    for i, extra in enumerate(({}, {"V3C_POOL": ""})):
+        rc, lines, order, _limits = _v3c(tmp_path / f"none{i}", records_audit=POOLED_RECORDS_AUDIT, **extra)
+        assert rc == 0 and "audit" in order, (lines, order)
+        assert not set(POOL_OPTIONS) & set(json.loads((tmp_path / f"none{i}" / "order.audit").read_text()))
+
+
+@pytest.mark.parametrize("pool, records_audit, why", [
+    ("--session-jobs 4", FAKE_RECORDS_AUDIT,
+     "V3C_POOL runs the audit's sessions side by side with records_audit.py's --session-jobs, --lean-jobs, "
+     "--memory-budget-gb and --pool-memory, which this tree's records_audit.py doesn't take"),
+    ("--session-jobs 0", POOLED_RECORDS_AUDIT, "V3C_POOL is not the audit's pool's options (a5_pool.options): V3C_POOL: error: "
+     "argument --session-jobs: 0: a pool runs at least 1 job at a time; pass a positive whole number"),
+    ("--session-jobs 4 --memory-budget-gb 0", POOLED_RECORDS_AUDIT, "V3C_POOL is not the audit's pool's options "
+     "(a5_pool.options): V3C_POOL: error: argument --memory-budget-gb: 0: a budget is a positive number of GB"),
+    ("--session-jobs 4 --jobs 4", POOLED_RECORDS_AUDIT, "V3C_POOL is not the audit's pool's options (a5_pool.options): "
+     "V3C_POOL: error: unrecognized arguments: --jobs 4"),
+    ("--session-jobs 4 --pool-memory {missing}", POOLED_RECORDS_AUDIT, "V3C_POOL is not the audit's pool's options "
+     "(a5_pool.options): V3C_POOL: error: argument --pool-memory: {missing}: no pool-memory file the pool can read "
+     "(FileNotFoundError: "),
+])
+def test_the_preflight_refuses_pool_options_the_audit_would_not_take_before_anything_runs(tmp_path, pool, records_audit, why):
+    """The audit's command line is parsed only once the follow-on's earlier steps have run, and a5 reads the pool-memory
+    file only after its draw: so V3C_POOL on a tree without the pool, a count or a budget that isn't one, an option the
+    pool hasn't and a pool-memory file that isn't there are each refused by the preflight, and nothing runs."""
+    missing = str(tmp_path / "none.json")
+    rc, lines, order, _limits = _v3c(tmp_path, records_audit=records_audit, V3C_POOL=pool.format(missing=missing))
+    assert (rc, order) == (3, []) and len(lines) == 1, (lines, order)
+    assert lines[0].startswith("PREFLIGHT: " + why.format(missing=missing)), lines
+
+
 @pytest.mark.parametrize("tied, extra, limit", [
     (False, {}, None), (False, {"V3C_WARM_JOBS": "2"}, "180m"),
     (True, {"V3C_WARM_JOBS": "3", "V3C_WARM_TIMEOUT": "5h"}, "5h"),
