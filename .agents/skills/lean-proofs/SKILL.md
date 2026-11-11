@@ -172,7 +172,7 @@ Their history is in the decisions log.
 - A PoUW scheme gets new Lean only once its honest overhead γ ≤ 10 at both operating points, as the benchmarks'
   overhead front door measures it. Measure first, prove second.
 - Every security guarantee has an honest lemma (its hypotheses hold at the honest deployed instance) and a nontrivial
-  one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails`;
+  one (its conclusion fails at an instance of it the lemma builds), in the lock as a claim's `meets` and `fails`;
   failing either, it says nothing. Both build their instance (`witnesses` in `check.py`), taking
   only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one assumption and the bound fail, or, for an exclusion with no premise, one where a tighter bound fails. `nontrivial` may
   be a list: each lemma past the first has that exclusion form, whatever the guarantee's kind, and drops a premise no
