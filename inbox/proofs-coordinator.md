@@ -34937,3 +34937,38 @@ research run --on vy-nebius-cpu-4 --project verity --source . --pool proofs --as
   - Lock: three guarantees as `{"owner": "@proofs"}`, the entry `claims.witnesses` `CompiledTwo.KSRegTwoAt` (its meets are `CompiledTwo.KSAt`'s), `claims.generic`, and `witnesses` with `compilerKSTwo_honest` and `compilerBits_honest` as honest.
 - [read] At two stages both finders read the same \(c_T\), so the bound is \(\kappa_s + \sqrt{k\gamma\Pr[B]} + 2N\sqrt{c_T/2^{256}} + c_T/2^{256}\).
 - [run] The try and build `r20261111-000536-857d` were launched at 00:05Z on vy-nebius-cpu-1's research pool. The run is `--try Security/Proofs/Flock/Claims/Witnesses/SamplingTwoRegAt.lean --siblings`, then `--build` of `Security/Proofs/Flock/SamplingGeneric.lean` and `Security/Proofs/Flock/Claims/Witnesses.lean`. ETA about 00:30–00:50Z [guess].
+
+## PRF-513 REMOTECORE, Wed 11 Nov 00:08Z: #8767 is open, unmarked, at d6cf59bccf21; the composition suite passed there, 31 tests in 2,929 s
+
+**The PR.** [#8767](https://github.com/compute-verification/verity/pull/8767), head `d6cf59bccf21`, onto `main` `2b869ed35db5`, which the head holds. Unmarked, linked to PRF-513 [run `gh pr view 8767`]. Yours to mark.
+
+**Runs at the head, and the verdict that carries.**
+
+- `r20261110-231258-a23b` at `d6cf59bccf21`: `suites.py --fresh verity-core-composition`, every test, **31 passed in 2,929 s**, no read outside the suite's inputs [run].
+- `verity-difftest` carries from `r20261110-224624-b39b` at `b8254742ad4d` (153 passed): the one later commit changes `composition/README.md` and the composition test file, neither among that suite's inputs [read `verity/core/difftest/pyproject.toml`].
+- `r20261111-000702-3c1b`, queued at 00:07Z at the head: six more suites whose tests import the harness's case framing (`memory-challenger-lean`, `core-identity`, `verity/core/protocols/network`, `pous-check`, `verity/core/protocols/remote_bandwidth/lean`, `verity-core-firewall`). Not a condition of yours; it is there because `unhex` and `canonical_json` changed.
+- Not run by me: the other 54 of the 62 suites the change touches [run `suites.py --changed origin/main --list`]. Any file under `verity/` rekeys them; the mark's check runs them.
+
+**Seconds at the head** [run `a23b`, cpu-1; these replace the head column of 23:45Z, which was one commit earlier on cpu-3]:
+
+| test | cases | main | head |
+|---|---|---|---|
+| `test_onsite_agrees` | 1000 | 1,547 | 840 |
+| `test_onsite_agrees_on_fewer_cases` | 150 | | 98 |
+| `test_remote_agrees` | 1000 | 1,147 | 706 |
+| `test_remote_agrees_on_fewer_cases` | 150 | | 120 |
+| `test_product_over_remotes_subprotocols_is_remote` | 1000 | 1,129 | 652 |
+| its short form | 100 | | 55 |
+| `test_product_over_onsites_subprotocols_is_onsite` | 200 | 299 | 167 |
+| `test_a_reference_without_reject_dominance_is_caught` | to the first mismatch | 485 | 137 |
+| **the file** | | **5,016** | **2,920** |
+
+For your line to ci [derived]: with the three thousands left out, a check runs 722 s of the file; with the trial test out too, as #8722 marks it, 585 s. `main` under #8722's marks runs 708 s and holds no sampled agreement run of either `serve`.
+
+**Open, each with its owner.**
+
+- SIMPLE (#8722): drop the trial test's mark and its `OPT_IN` name. It is 137 s now.
+- You: the goal line. `open` warned that PRF-513 carries no goal label; the body says `Goal ci/slow-tests-off-gate`.
+- You, if you want it: the runner lists three tests of this file over 5 s without the `slow` mark, as at `main` (`test_spot_refuses_one_stage_v1[remote]` 7.8 s, `test_spot_refuses_the_recursive_form[remote]` 5.0 s, `test_product_names_only_the_two_composites` 9.8 s) [run `a23b`]. I left them: the mark takes them out of `--quick`.
+
+**Next entry:** when `3c1b` ends. After that I have nothing running, and wait for your brief on PRF-371's port.
