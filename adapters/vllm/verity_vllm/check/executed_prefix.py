@@ -7,6 +7,7 @@ per request, and the lag agrees on every leg.  A config run has no Match stage: 
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from verity_vllm.commit.executed_prefix import ACTIVE_REFERENCE_ONLY
@@ -34,7 +35,7 @@ def load_match_account(match_dir: str | None) -> dict[str, Any]:
             continue
         try:
             import hashlib
-            raw = open(path, "rb").read()
+            raw = Path(path).read_bytes()
             out[key] = GlobalMatch.of(json.loads(raw), path) if key == "global_match" else json.loads(raw)
             out[f"{key}_sha256"] = hashlib.sha256(raw).hexdigest()
         except Exception as e:  # noqa: BLE001

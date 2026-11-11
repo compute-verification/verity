@@ -10,6 +10,7 @@ import gzip
 import itertools
 import json
 import os
+from pathlib import Path
 
 import pytest
 
@@ -243,7 +244,7 @@ def component(req, d, witness=None):
     evs = batched_log([full])
     r = fold(evs, profile(witness=witness), strict=True)
     p = persist(r, evs, d, [full])
-    json.dump({"structural_inputs": {"LP": len(req["prompt"]), "T": _cap(req) - 1}}, open(f"{p}/construction_manifest.json", "w"))
+    Path(f"{p}/construction_manifest.json").write_text(json.dumps({"structural_inputs": {"LP": len(req["prompt"]), "T": _cap(req) - 1}}))
     return p
 
 
@@ -297,13 +298,13 @@ def move_consumer_before_producer(oracle_dir, rid="r1", sampler_to_head=False):
     consumer's Merkle hash names a forward reference; G4: no canonical address; G8: consumer-before-producer), as `sequence` does."""
     from verity.circuits import codec
 
-    doc = json.load(open(f"{oracle_dir}/program.json"))
+    doc = json.loads(Path(f"{oracle_dir}/program.json").read_text())
     desc = doc["program"]
     body = desc["definitions"][desc["root"]]["body"]
     nodes = body["nodes"]
     n_in = doc["n_input_nodes"]
     fid_of = (lambda nd: desc["callees"][nd["fn"]]) if "callees" in desc else (lambda nd: nd["fn"])
-    lines = open(f"{oracle_dir}/instances.jsonl").read().splitlines()
+    lines = Path(f"{oracle_dir}/instances.jsonl").read_text().splitlines()
     head, inst = json.loads(lines[0]), [json.loads(x) for x in lines[1:]]
     by_root = {n_in + m["node"]: m for m in inst}
 
@@ -375,7 +376,7 @@ def move_consumer_before_producer(oracle_dir, rid="r1", sampler_to_head=False):
     body["ret"] = remap(body["ret"])
     body["nodes"] = [nodes[old] for old in order]
     doc["digest"] = codec.program_digest(desc)
-    json.dump(doc, open(f"{oracle_dir}/program.json", "w"), separators=(",", ":"), sort_keys=True)
+    Path(f"{oracle_dir}/program.json").write_text(json.dumps(doc, separators=(",", ":"), sort_keys=True))
     for m in inst:
         m["node"] = new_of[n_in + m["node"]] - n_in
     inst.sort(key=lambda m: m["node"])                  # instances.jsonl line order == node order
@@ -404,15 +405,15 @@ def sampling_block(**fields):
 
 
 def workload(reqs, path):
-    json.dump(workload_doc(requests=[{"request_id": r["id"], "prompt_token_ids": list(r["prompt"]), "max_tokens": _cap(r), "arrive_step": _arr(r),
-                                      **({"seed": r["seed"]} if r.get("seed") is not None else {})} for r in reqs],
-                           sampling={"temperature": 0.0, "variant": "greedy"}, sweep={"arrive_steps": [_arr(r) for r in reqs]}), open(path, "w"))
+    Path(path).write_text(json.dumps(workload_doc(requests=[{"request_id": r["id"], "prompt_token_ids": list(r["prompt"]), "max_tokens": _cap(r), "arrive_step": _arr(r),
+                                                             **({"seed": r["seed"]} if r.get("seed") is not None else {})} for r in reqs],
+                                                  sampling={"temperature": 0.0, "variant": "greedy"}, sweep={"arrive_steps": [_arr(r) for r in reqs]})))
     return str(path)
 
 
 def _sha(path):
     """RunHeader.workload.sha256 as the driver computes it (vllm_adapter.load_workload): the canonical manifest document."""
-    return __import__("hashlib").sha256(json.dumps(json.load(open(path)), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return __import__("hashlib").sha256(json.dumps(json.loads(Path(path).read_text()), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 EOS = 11   # the fixture model's EOS id (R1_EOS stops on it); the Program declares it as its stop rule
@@ -590,9 +591,9 @@ def test_early_stop_without_an_eos_token_fails_g6_whatever_the_driver_says(memor
     gp, oracle = assemble([R0, R1_EOS], tmp_path, eos_token_ids=(99,))
     for finish in ("stop", None):
         tp = os.path.join(oracle, "capture", "tokens.json")
-        tk = json.load(open(tp))
+        tk = json.loads(Path(tp).read_text())
         next(r for r in tk["requests"] if r["request_id"] == "r1")["finish_reason"] = finish
-        json.dump(tk, open(tp, "w"))
+        Path(tp).write_text(json.dumps(tk))
         res = gm.check(gp, oracle)
         assert res["verdict"] == "FAIL" and "G6" in res["failed_checks"], (finish, res["reasons"])
         g6 = _check(res, "G6")
@@ -626,9 +627,9 @@ def test_early_stop_without_an_eos_token_fails_g6_whatever_the_driver_says(memor
     # eos_verified must read False beside the G6 FAIL, never True
     gp6, oracle6 = assemble([R0, R1_EOS], tmp_path / "assoc")
     tp6 = os.path.join(oracle6, "capture", "tokens.json")
-    tk6 = json.load(open(tp6))
+    tk6 = json.loads(Path(tp6).read_text())
     next(r for r in tk6["requests"] if r["request_id"] == "r1")["generated_token_ids"] = [8, 99]
-    json.dump(tk6, open(tp6, "w"))
+    Path(tp6).write_text(json.dumps(tk6))
     res6 = gm.check(gp6, oracle6)
     assert res6["verdict"] == "FAIL" and "G6" in res6["failed_checks"]
     r1 = next(e for e in res6["requests"] if e["request_id"] == "r1")
@@ -657,19 +658,19 @@ def test_manifest_field_edited_after_the_build_is_named_per_request(memory, tmp_
     gp, oracle = assemble([R0, R1_LATE], tmp_path)
     wl_path = gp["workload"]["path"]
     for field, value in (("max_tokens", 5), ("arrive_step", 0)):
-        wl = json.load(open(wl_path))
+        wl = json.loads(Path(wl_path).read_text())
         wl["requests"][1][field] = value
         if field == "arrive_step":
             wl["sweep"]["arrive_steps"][1] = value
-        json.dump(wl, open(wl_path, "w"))
+        Path(wl_path).write_text(json.dumps(wl))
         res = gm.check(gp, oracle)
         g1 = _check(res, "G1")
         assert res["verdict"] == "FAIL" and g1["status"] == "FAIL", (field, res["reasons"])
         assert any(p.startswith("r1: manifest " + field) for p in g1["problems"]), (field, g1["problems"])
     # a shorter prompt in the manifest: prompt_len named AND the prompt itself (record != manifest)
-    wl = json.load(open(wl_path))
+    wl = json.loads(Path(wl_path).read_text())
     wl["requests"][1]["prompt_token_ids"] = wl["requests"][1]["prompt_token_ids"][:1]
-    json.dump(wl, open(wl_path, "w"))
+    Path(wl_path).write_text(json.dumps(wl))
     g1 = _check(gm.check(gp, oracle), "G1")
     assert any(p.startswith("r1: manifest prompt_len") for p in g1["problems"]) and any("record prompt != manifest prompt" in p for p in g1["problems"])
 
@@ -685,10 +686,10 @@ def test_mutation_duplicate_request_fails(memory, tmp_path):
 
 def test_mutation_swapped_outputs_fail_the_chronology(memory, tmp_path):
     gp, oracle = assemble([R0, R1], tmp_path)
-    tj = json.load(open(f"{oracle}/capture/tokens.json"))
+    tj = json.loads(Path(f"{oracle}/capture/tokens.json").read_text())
     a, b = tj["requests"]
     a["generated_token_ids"], b["generated_token_ids"] = b["generated_token_ids"], a["generated_token_ids"]
-    json.dump(tj, open(f"{oracle}/capture/tokens.json", "w"))
+    Path(f"{oracle}/capture/tokens.json").write_text(json.dumps(tj))
     res = gm.check(gp, oracle)
     assert res["verdict"] == "FAIL" and res["failed_checks"] == ["G6"]
     assert any("output association" in p for p in _check(res, "G6")["problems"])
@@ -830,10 +831,10 @@ def test_dag_criterion_negatives_wrong_arrival_swapped_outputs_wiring(memory, tm
     assert any("declared arrival step 0 != observed 1" in p for p in _check(res, "G6")["problems"])
     # swapped request outputs -> G6 (output association)
     gp, oracle = assemble([R0, RX_LATE], tmp_path / "b", tgrouped=True)
-    tj = json.load(open(f"{oracle}/capture/tokens.json"))
+    tj = json.loads(Path(f"{oracle}/capture/tokens.json").read_text())
     a, b = tj["requests"]
     a["generated_token_ids"], b["generated_token_ids"] = b["generated_token_ids"], a["generated_token_ids"]
-    json.dump(tj, open(f"{oracle}/capture/tokens.json", "w"))
+    Path(f"{oracle}/capture/tokens.json").write_text(json.dumps(tj))
     res = gm.check(gp, oracle, within_step="dag")
     assert res["verdict"] == "FAIL" and "G6" in res["failed_checks"] and any("output association" in p for p in _check(res, "G6")["problems"])
     # a permutation that also changes the wiring (attention reading another request's KV row) -> G5 + G3, not a layout
@@ -1109,7 +1110,8 @@ def test_record_engine_conditions_outside_the_declared_applicability_fail_g1(mem
     def set_header(profile_engine=None, profile_compilation=None, top_engine=None, top_compilation=None):
         """Rewrite the RunHeader's engine facts at the RECORDER'S location (profile.*) and/or the top level; None = absent."""
         p = f"{oracle}/capture/log.jsonl.gz"
-        lines = gzip.open(p, "rt").read().splitlines()
+        with gzip.open(p, "rt") as fh:
+            lines = fh.read().splitlines()
         for i, line in enumerate(lines):
             if line.startswith('{"$e":"RunHeader"'):
                 d = json.loads(line)
@@ -1239,7 +1241,8 @@ def test_compiled_program_requires_the_record_to_attest_the_same_compilation_fac
     def set_header(engine_kwargs=None, compilation=None):
         """The facts at the RECORDER'S location, RunHeader.profile.{engine_kwargs,compilation}; None = absent."""
         p = f"{oracle}/capture/log.jsonl.gz"
-        lines = gzip.open(p, "rt").read().splitlines()
+        with gzip.open(p, "rt") as fh:
+            lines = fh.read().splitlines()
         for i, line in enumerate(lines):
             if line.startswith('{"$e":"RunHeader"'):
                 d = json.loads(line)
@@ -1339,8 +1342,8 @@ def test_gp01_stop_rule_is_read_from_the_pinned_checkpoint_and_the_manifest(tmp_
     from verity_vllm.pipeline import global_program as gp
     ck = tmp_path / "ckpt"
     ck.mkdir()
-    json.dump({"eos_token_id": 128001}, open(ck / "config.json", "w"))
-    json.dump({"eos_token_id": [128001, 128008, 128009]}, open(ck / "generation_config.json", "w"))
+    (ck / "config.json").write_text(json.dumps({"eos_token_id": 128001}))
+    (ck / "generation_config.json").write_text(json.dumps({"eos_token_id": [128001, 128008, 128009]}))
     sr = gp.stop_rule(str(ck), None, sampling_block())
     assert sr["eos_token_ids"] == [128001, 128008, 128009]
     assert sr["source"] == {"config.json": [128001], "generation_config.json": [128001, 128008, 128009]}
@@ -1385,9 +1388,9 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
     comps = [r["component"]["dir"] for r in gp["requests"]]
 
     def recomposed(mutate):
-        wl = json.load(open(wl_path))
+        wl = json.loads(Path(wl_path).read_text())
         mutate(wl)
-        json.dump(wl, open(wl_path, "w"))
+        Path(wl_path).write_text(json.dumps(wl))
         return GD.mock_global_program(wl_path, comps, eos_token_ids=[EOS])   # GP-01 recomposed on the edited manifest, as the attacker would
 
     def swap(wl):
@@ -1483,7 +1486,8 @@ def _set_async_scheduling(oracle, value):
     """Rewrite RunHeader.profile.engine_kwargs.async_scheduling on the persisted record; value None = the key absent (unattested); _NULL =
     the key present with null (resolved_async_scheduling returned None: the engine exposed no resolved bool)."""
     p = f"{oracle}/capture/log.jsonl.gz"
-    lines = gzip.open(p, "rt").read().splitlines()
+    with gzip.open(p, "rt") as fh:
+        lines = fh.read().splitlines()
     for i, line in enumerate(lines):
         if line.startswith('{"$e":"RunHeader"'):
             d = json.loads(line)
@@ -1503,23 +1507,23 @@ def _driver_stop_at(oracle, rid, n_answer, eos_step):
     """The driver's word for an EOS stop under async scheduling (generated_token_ids ends in the EOS, finish_step = the
     EOS step, the lag row's sample is NOT reported)."""
     tp = os.path.join(oracle, "capture", "tokens.json")
-    tk = json.load(open(tp))
+    tk = json.loads(Path(tp).read_text())
     e = next(r for r in tk["requests"] if r["request_id"] == rid)
     e["generated_token_ids"] = e["generated_token_ids"][:n_answer]
     e["n_generated"], e["finish_step"], e["finish_reason"] = n_answer, eos_step, "stop"
-    json.dump(tk, open(tp, "w"))
+    Path(tp).write_text(json.dumps(tk))
 
 
 def _driver_claims(oracle, rid=None, lag=None, **fields):
     """The driver's tokens.json record-schema claims: doc.lag.value (the resolved fact as the driver wrote it) and per request the
     served_output_len / executed_prefix_len / cap_exhausted fields m1_capture writes."""
     tp = os.path.join(oracle, "capture", "tokens.json")
-    tk = json.load(open(tp))
+    tk = json.loads(Path(tp).read_text())
     if lag is not None:
         tk["lag"] = {"value": lag, "async_scheduling": bool(lag), "source": "test"}
     if rid is not None:
         next(r for r in tk["requests"] if r["request_id"] == rid).update(fields)
-    json.dump(tk, open(tp, "w"))
+    Path(tp).write_text(json.dumps(tk))
 
 
 def _r(res, rid):
@@ -1766,7 +1770,7 @@ def test_gp01_carries_manbind_weights_of_record_per_component_and_refuses_stale_
         d = tmp_path / name
         d.mkdir()
         if rec is not None:
-            json.dump(rec, open(d / "weights_of_record.json", "w"))
+            (d / "weights_of_record.json").write_text(json.dumps(rec))
         return {"dir": str(d), "recorded_digest": digest}
     def rec(root, rank=0, world=1, digest="d" * 64, complete=True, unresolved=(), pinned=True, source=None):
         r = {"schema": "verity/weights_of_record/v1", "program_digest": digest, "tp": {"world": world, "rank": rank}, "root_of_record": root,
@@ -2058,7 +2062,7 @@ def test_scheduled_state_on_the_r15_b8_record_reproduces_the_kernel_s_flips():
     kernel's flips (0,1,32) -> (32,5,16) -> (101,4,32)."""
     from verity.definitions.registry.topp_geometry import splits_for
     p = os.path.join(os.path.dirname(gm.__file__), "..", "..", "..", "tests", "program", "data", "topp_split_fixture", "b8_s_schedule_r15_attempt2.json")
-    d = json.load(open(p))
+    d = json.loads(Path(p).read_text())
     reqs = [_req(rid, v["arrive"], v["served"], cap=v["cap"]) for rid, v in d["served_vs_cap"].items()]
     present: dict = {}
     for st in d["steps"]:
@@ -2122,7 +2126,7 @@ def test_a_record_without_tokens_json_fails_g6_by_name_unless_tokens_optional_is
     out2 = tmp_path / "gm2.json"
     cli.main(["global-match", "--oracle", oracle, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--out", str(out1)])
     cli.main(["global-match", "--oracle", oracle, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--tokens-optional", "--out", str(out2)])
-    assert json.load(open(out1))["verdict"] == "FAIL" and json.load(open(out2))["verdict"] == "PASS"
+    assert json.loads(Path(out1).read_text())["verdict"] == "FAIL" and json.loads(Path(out2).read_text())["verdict"] == "PASS"
 
 
 def test_fast_path_dag_hash_ids_are_per_process_and_a_foreign_dict_is_refused(memory, tmp_path, monkeypatch):

@@ -4,6 +4,7 @@ builds a rank's fused expert stacks from those bytes as the loader writes them. 
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -38,10 +39,10 @@ def dsv4(tmp_path):
     d = tmp_path / "snap"
     d.mkdir()
     write_safetensors(str(d / "model.safetensors"), t)
-    json.dump({"model_type": "deepseek_v4", "expert_dtype": "fp4", "hidden_size": H}, open(d / "config.json", "w"))
+    (d / "config.json").write_text(json.dumps({"model_type": "deepseek_v4", "expert_dtype": "fp4", "hidden_size": H}))
     man = tmp_path / "checkpoints.json"
-    json.dump({"checkpoints": [{"repo": "test/dsv4", "revision": "abc", "local_path": str(d),
-                                "files": {"model.safetensors": {"sha256": WR.sha256_file(str(d / "model.safetensors"))}}}]}, open(man, "w"))
+    Path(man).write_text(json.dumps({"checkpoints": [{"repo": "test/dsv4", "revision": "abc", "local_path": str(d),
+                                                      "files": {"model.safetensors": {"sha256": WR.sha256_file(str(d / "model.safetensors"))}}}]}))
     return {"t": t, "ck": WR.CheckpointIndex(str(d), checkpoints_manifest=str(man))}
 
 

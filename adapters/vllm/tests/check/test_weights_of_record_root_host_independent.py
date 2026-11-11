@@ -14,6 +14,7 @@ by the reader (records are never hand-edited: the row_pod reuse rule re-derives 
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import numpy as np
 
@@ -26,10 +27,10 @@ FIELD = "model.model.layers.0.self_attn.rotary_emb.cos_sin_cache"
 
 
 def _rotary_setup(d, theta=10000.0):
-    cfg = json.load(open(d / "config.json"))
+    cfg = json.loads((d / "config.json").read_text())
     cfg.update({"model_type": "llama", "num_hidden_layers": 1, "intermediate_size": 12, "vocab_size": 20, "rope_theta": theta,
                 "max_position_embeddings": 64, "head_dim": 4, "rms_norm_eps": 1e-5, "torch_dtype": "bfloat16"})
-    json.dump(cfg, open(d / "config.json", "w"))
+    (d / "config.json").write_text(json.dumps(cfg))
     C, _ = analytic.config_of(cfg)
     MAXP, ROT = int(C["MAX_POS"]), analytic.rotary_dim(C)
     prog, _fields = _program()
@@ -83,7 +84,7 @@ def test_the_root_moves_with_the_analytic_inputs_and_with_the_checkpoint_bytes(c
     t["model.norm.weight"] = ("BF16", w)
     write_safetensors(str(d / "model.safetensors"), t)
     man2 = d.parent / "checkpoints2.json"
-    json.dump({"checkpoints": [{"repo": "test/x", "revision": "abc", "local_path": str(d), "files": {"model.safetensors": {"sha256": WR.sha256_file(str(d / "model.safetensors"))}}}]}, open(man2, "w"))
+    Path(man2).write_text(json.dumps({"checkpoints": [{"repo": "test/x", "revision": "abc", "local_path": str(d), "files": {"model.safetensors": {"sha256": WR.sha256_file(str(d / "model.safetensors"))}}}]}))
     rec_bytes = WR.weights_of_record(_rotary_setup(d), WR.CheckpointIndex(str(d), checkpoints_manifest=str(man2)), prefix=PREFIX)
     assert rec_bytes["root_of_record"] != rec["root_of_record"]
     assert {f["field"]: f for f in rec_bytes["fields"]}[FIELD]["analytic"]["inputs_sha256"] == e0["inputs_sha256"]
@@ -100,7 +101,7 @@ def test_a_v1_record_is_read_as_it_is_and_the_checker_still_pins_by_field(checkp
             f["analytic"].pop("inputs_sha256")
             f["analytic"].pop("inv_freq_note")
     d, _man, t = checkpoint
-    cfg = json.load(open(d / "config.json"))
+    cfg = json.loads((d / "config.json").read_text())
     C, _ = analytic.config_of(cfg)
     norm = WR.to_served(t["model.norm.weight"][1], t["model.norm.weight"][0], 16)[0]
     import hashlib

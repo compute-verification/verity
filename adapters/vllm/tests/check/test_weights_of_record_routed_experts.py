@@ -17,6 +17,7 @@ CPU, synthetic checkpoint (real safetensors), no torch.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -55,10 +56,10 @@ def moe(request, tmp_path):
     d = tmp_path / "snap"
     d.mkdir()
     write_safetensors(str(d / "model.safetensors"), t)
-    json.dump({"tie_word_embeddings": False, "hidden_size": H}, open(d / "config.json", "w"))
+    (d / "config.json").write_text(json.dumps({"tie_word_embeddings": False, "hidden_size": H}))
     man = tmp_path / "checkpoints.json"
-    json.dump({"checkpoints": [{"repo": f"test/{fam}", "revision": "abc", "local_path": str(d),
-                                "files": {"model.safetensors": {"sha256": WR.sha256_file(str(d / 'model.safetensors'))}}}]}, open(man, "w"))
+    Path(man).write_text(json.dumps({"checkpoints": [{"repo": f"test/{fam}", "revision": "abc", "local_path": str(d),
+                                                      "files": {"model.safetensors": {"sha256": WR.sha256_file(str(d / 'model.safetensors'))}}}]}))
     served_w13 = f"{container}.routed_experts.w13_weight"
     served_w2 = f"{container}.routed_experts.w2_weight"
     fields = [("model.model.embed_tokens.weight", [10, H], 16), ("model." + served_w13, [E, 2 * INTER, H], 16), ("model." + served_w2, [E, H, INTER], 16),

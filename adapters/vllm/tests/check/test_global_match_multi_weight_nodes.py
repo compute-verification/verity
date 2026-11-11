@@ -103,7 +103,8 @@ def test_header_and_program_input_layout_disagreement_is_named(memory, inhomogen
     gp, oracle = T.assemble([T.R0, T.R1], tmp_path)
     comps = [g["component"]["dir"] for g in gp["requests"]]
     log = f"{oracle}/capture/log.jsonl.gz"
-    lines = gzip.open(log, "rt").read().splitlines()
+    with gzip.open(log, "rt") as fh:
+        lines = fh.read().splitlines()
     hdr = json.loads(lines[0])
     hdr["workload"]["requests"].append({"request_id": "r9", "prompt_token_ids": [1, 2], "max_tokens": 2, "arrive_step": 0})
     lines[0] = json.dumps(hdr)

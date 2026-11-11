@@ -9,6 +9,7 @@ import gzip
 import hashlib
 import json
 import os
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -42,13 +43,13 @@ def make_match(tmp: str, *, snapshot_steps=(0,), sampled=None) -> tuple[str, dic
     for (op, mem), data in vals.items():
         sha = hashlib.sha256(data).hexdigest()
         fn = f"values/0/{sha[:16]}.bin"
-        open(os.path.join(d, "capture", fn), "wb").write(data)
+        Path(os.path.join(d, "capture", fn)).write_bytes(data)
         dt, isz = ("int32", 4) if mem == "in" else ("bfloat16", 2)
         entries.append({"event": events[op], "path": "args[0]" if mem == "in" else ("outs" if mem == "out" else f"outs[{mem}]"),
                         "view": {"$v": [allocs[(op, mem)], 0, [n] if mem == "in" else [n, H], [1] if mem == "in" else [H, 1], dt, "cuda:0"]},
                         "dtype": dt, "shape": [n] if mem == "in" else [n, H], "strides": [1] if mem == "in" else [H, 1], "byte_offset": 0,
                         "nbytes": len(data), "layout": "spanned-storage-bytes", "sha256": sha, "file": fn, "step": 0})
-    json.dump({"schema": "verity-capture/snapshots/v1", "steps": list(snapshot_steps), "entries": entries}, open(os.path.join(d, "capture", "snapshots.json"), "w"))
+    Path(os.path.join(d, "capture", "snapshots.json")).write_text(json.dumps({"schema": "verity-capture/snapshots/v1", "steps": list(snapshot_steps), "entries": entries}))
     with open(os.path.join(d, "instances.jsonl"), "w") as f:
         f.write(json.dumps({"schema": "verity-gen/instances/v1", "digest": "f" * 64, "n_instances": 0,
                             "requests": [{"index": 0, "request_id": U0, "prompt_len": 5, "served_samples": 1, "max_tokens": 1},
@@ -91,9 +92,8 @@ def make_match(tmp: str, *, snapshot_steps=(0,), sampled=None) -> tuple[str, dic
         f.write(json.dumps({"$e": "StepStart", "step": 1, "rows": [[u, ROWS[u]] for u in order]}) + "\n")
         f.write(json.dumps({"$e": "SampleEnd", "step": 1, "sampled_token_ids": [1, 2]}) + "\n")
     # tokens.json: the ids oracle (prompt + generated per request); the 'in' member above is arange(100..) in row order: U1 rows 0-2, U0 rows 3-7
-    json.dump({"requests": [{"request_id": U1, "prompt_token_ids": [100, 101, 102], "generated_token_ids": [sampled[0]]},
-                            {"request_id": U0, "prompt_token_ids": [103, 104, 105, 106, 107], "generated_token_ids": [sampled[1]]}]},
-              open(os.path.join(d, "capture", "tokens.json"), "w"))
+    Path(os.path.join(d, "capture", "tokens.json")).write_text(json.dumps({"requests": [{"request_id": U1, "prompt_token_ids": [100, 101, 102], "generated_token_ids": [sampled[0]]},
+                                                                                        {"request_id": U0, "prompt_token_ids": [103, 104, 105, 106, 107], "generated_token_ids": [sampled[1]]}]}))
     return d, vals
 
 
@@ -287,9 +287,11 @@ def test_b2_attribution_ambiguous_when_two_requests_share_ids_on_an_unsnapshotte
     # the log's step-1 samples are [1, 2]: make them equal too so the step is fully ambiguous
     import gzip
     p = os.path.join(d, "capture", "log.jsonl.gz")
-    lines = gzip.open(p, "rt").read().splitlines()
+    with gzip.open(p, "rt") as fh:
+        lines = fh.read().splitlines()
     lines = [json.dumps({"$e": "SampleEnd", "step": 1, "sampled_token_ids": [1, 1]}) if '"step": 1' in ln and "SampleEnd" in ln else ln for ln in lines]
-    gzip.open(p, "wt").write("\n".join(lines) + "\n")
+    with gzip.open(p, "wt") as fh:
+        fh.write("\n".join(lines) + "\n")
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
     assert res["mismatch_n"] == 0 and res["result"] is None
     assert res["attribution"]["ambiguous_steps"] == [1] and res["attribution"]["complete"] is False and res["grade"] == "partial"
@@ -357,15 +359,15 @@ def _exploded_norm_match(tmp: str, *, permute: bool = False):
     resid, normed, square = _bf16(n, 7), _bf16(n, 8), np.arange(n * H, dtype="<f4").tobytes()
     addw, mulv = (np.arange(n * H, dtype="<f4") + 1000).tobytes(), (np.arange(n * H, dtype="<f4") + 2000).tobytes()
     ev_resid, ev_normed = (82, 81) if permute else (81, 82)
-    snap = json.load(open(os.path.join(d, "capture", "snapshots.json")))
+    snap = json.loads(Path(os.path.join(d, "capture", "snapshots.json")).read_text())
     for alloc, data, ev, dt in ((23, addw, 78, "float32"), (24, mulv, 79, "float32"), (20, square, 80, "float32"),
                                 (21, resid, ev_resid, "bfloat16"), (22, normed, ev_normed, "bfloat16")):
         sha = hashlib.sha256(data).hexdigest()
         fn = f"values/0/{sha[:16]}.bin"
-        open(os.path.join(d, "capture", fn), "wb").write(data)
+        Path(os.path.join(d, "capture", fn)).write_bytes(data)
         snap["entries"].append({"event": ev, "path": "outs", "view": {"$v": [alloc, 0, [n, H], [H, 1], dt, "cuda:0"]}, "dtype": dt, "shape": [n, H],
                                 "strides": [H, 1], "byte_offset": 0, "nbytes": len(data), "layout": "spanned-storage-bytes", "sha256": sha, "file": fn, "step": 0})
-    json.dump(snap, open(os.path.join(d, "capture", "snapshots.json"), "w"))
+    Path(os.path.join(d, "capture", "snapshots.json")).write_text(json.dumps(snap))
     with open(os.path.join(d, "instances.jsonl"), "a") as f:
         row = 0
         for u in [U1, U0]:
@@ -398,15 +400,15 @@ def _biased_linear_match(tmp: str):
     n = sum(ROWS.values())
     op = "model.layers.0.self_attn.qkv_proj"
     pre, post = _bf16(n, 11), _bf16(n, 12)
-    snap = json.load(open(os.path.join(d, "capture", "snapshots.json")))
+    snap = json.loads(Path(os.path.join(d, "capture", "snapshots.json")).read_text())
     for alloc, data, ev in ((30, pre, 90), (31, post, 91)):
         sha = hashlib.sha256(data).hexdigest()
         fn = f"values/0/{sha[:16]}.bin"
-        open(os.path.join(d, "capture", fn), "wb").write(data)
+        Path(os.path.join(d, "capture", fn)).write_bytes(data)
         snap["entries"].append({"event": ev, "path": "outs", "view": {"$v": [alloc, 0, [n, H], [H, 1], "bfloat16", "cuda:0"]}, "dtype": "bfloat16",
                                 "shape": [n, H], "strides": [H, 1], "byte_offset": 0, "nbytes": len(data), "layout": "spanned-storage-bytes",
                                 "sha256": sha, "file": fn, "step": 0})
-    json.dump(snap, open(os.path.join(d, "capture", "snapshots.json"), "w"))
+    Path(os.path.join(d, "capture", "snapshots.json")).write_text(json.dumps(snap))
     with open(os.path.join(d, "instances.jsonl"), "a") as f:
         row = 0
         for u in [U1, U0]:
@@ -582,15 +584,15 @@ def test_f_r16_24_the_oracle_provenance_carries_the_tie_facts_of_the_match_recor
     pv = OC.MatchOracle(d).provenance()
     tie = pv["tie"]
     assert tie["fold_summary_sha256"] is None                                      # make_match writes no fold_summary.json: named absent
-    assert tie["instances_sha256"] == hashlib.sha256(open(os.path.join(d, "instances.jsonl"), "rb").read()).hexdigest()
+    assert tie["instances_sha256"] == hashlib.sha256(Path(os.path.join(d, "instances.jsonl")).read_bytes()).hexdigest()
     with gzip.open(os.path.join(d, "capture", "log.jsonl.gz"), "rb") as f:
         assert tie["run_header_sha256"] == hashlib.sha256(f.readline()).hexdigest()
-    open(os.path.join(d, "fold_summary.json"), "w").write('{"digest": "abc"}')
+    Path(os.path.join(d, "fold_summary.json")).write_text('{"digest": "abc"}')
     tie2 = OC.oracle_tie_facts(d)
     assert tie2["fold_summary_sha256"] == hashlib.sha256(b'{"digest": "abc"}').hexdigest() and tie2["instances_sha256"] == tie["instances_sha256"]
     # a second Match record of the same workload is another oracle: its tie differs (the fold digest / header line are its own)
     d2, _ = make_match(str(tmp_path / "other"))
-    open(os.path.join(d2, "fold_summary.json"), "w").write('{"digest": "def"}')
+    Path(os.path.join(d2, "fold_summary.json")).write_text('{"digest": "def"}')
     assert OC.oracle_tie_facts(d2)["fold_summary_sha256"] != tie2["fold_summary_sha256"]
     assert OC.oracle_tie_facts(str(tmp_path / "nowhere")) == {"fold_summary_sha256": None, "instances_sha256": None, "run_header_sha256": None}
 
@@ -600,7 +602,7 @@ def test_an_unreadable_run_header_is_named_in_the_tie_facts_not_passed_off_as_an
     record doesn't read as a Match stage that wrote no log."""
     import os
     d, _vals = make_match(str(tmp_path))
-    open(os.path.join(d, "capture", "log.jsonl.gz"), "wb").write(b'{"$e": "RunHeader"}\n')
+    Path(os.path.join(d, "capture", "log.jsonl.gz")).write_bytes(b'{"$e": "RunHeader"}\n')
     tie = OC.oracle_tie_facts(d)
     assert tie["run_header_sha256"] is None
     assert tie["run_header_unreadable"].startswith("unreadable: capture/log.jsonl.gz (BadGzipFile: ")
@@ -622,7 +624,7 @@ def _shared_rotary_match(tmp: str, n_layers: int = 3):
     for k, data in vals.items():
         sha = hashlib.sha256(data).hexdigest()
         fn = f"values/0/{sha[:16]}.bin"
-        open(os.path.join(d, "capture", fn), "wb").write(data)
+        Path(os.path.join(d, "capture", fn)).write_bytes(data)
         entries.append({"event": 100 + k, "path": "outs[0]", "view": {"$v": [20 + k, 0, [n, H], [H, 1], "bfloat16", "cuda:0"]}, "dtype": "bfloat16",
                         "shape": [n, H], "strides": [H, 1], "byte_offset": 0, "nbytes": len(data), "layout": "spanned-storage-bytes", "sha256": sha, "file": fn, "step": 0})
         op = f"model.layers.{k}.self_attn.rotary_emb"
@@ -630,7 +632,7 @@ def _shared_rotary_match(tmp: str, n_layers: int = 3):
             lines.append({"node": 0, "step": 0, "event": 100 + k, "pattern": "x", "spec": "RoPE_v1{}", "row": pos, "rows": n, "name": f"t={pos}/rotary_emb",
                           "hint": f"{op}/rope.q", "request": U0, "position": pos, "operand_views": [],
                           "output_views": [{"alloc": 20 + k, "offset": pos * H, "shape": [H], "strides": [1], "dtype": "bfloat16", "device": "cuda:0"}]})
-    json.dump({"schema": "verity-capture/snapshots/v1", "steps": [0], "entries": entries}, open(os.path.join(d, "capture", "snapshots.json"), "w"))
+    Path(os.path.join(d, "capture", "snapshots.json")).write_text(json.dumps({"schema": "verity-capture/snapshots/v1", "steps": [0], "entries": entries}))
     with open(os.path.join(d, "instances.jsonl"), "w") as f:
         f.write(json.dumps({"schema": "verity-gen/instances/v1", "digest": "f" * 64, "n_instances": len(lines),
                             "requests": [{"index": 0, "request_id": U0, "prompt_len": n, "served_samples": 1, "max_tokens": 1}]}) + "\n")
@@ -640,7 +642,7 @@ def _shared_rotary_match(tmp: str, n_layers: int = 3):
         f.write(json.dumps({"$e": "RunHeader", "schema": "verity-capture/log/v1", "created_utc": "2026-09-20T21:00:00Z", "profile_id": "abc", "profile": {}}) + "\n")
         f.write(json.dumps({"$e": "StepStart", "step": 0, "rows": [[U0, p] for p in range(n)]}) + "\n")
         f.write(json.dumps({"$e": "SampleEnd", "step": 0, "sampled_token_ids": [5]}) + "\n")
-    json.dump({"requests": [{"request_id": U0, "prompt_token_ids": [1, 2, 3, 4, 5], "generated_token_ids": [5]}]}, open(os.path.join(d, "capture", "tokens.json"), "w"))
+    Path(os.path.join(d, "capture", "tokens.json")).write_text(json.dumps({"requests": [{"request_id": U0, "prompt_token_ids": [1, 2, 3, 4, 5], "generated_token_ids": [5]}]}))
     return d, vals
 
 

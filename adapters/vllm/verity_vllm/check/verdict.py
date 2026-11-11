@@ -293,12 +293,13 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
     written; the harness keeps a reader for old records); verdict.json `execution` is the record."""
     d = Path(row_dir)
     out: dict = {}
-    s = json.load(open(d / "commit" / "summary.json")) if (d / "commit" / "summary.json").is_file() else {}
+    s = json.loads((d / "commit" / "summary.json").read_text()) if (d / "commit" / "summary.json").is_file() else {}
     runs = CommitRun.load_lines(d / "commit" / "runs.jsonl") if (d / "commit" / "runs.jsonl").is_file() else []
     trt = [r for r in runs if not (r.arm == "control" or r.committer in (None, "control"))]
     cmd = None
     if (d / "commit.log").is_file():
-        first = open(d / "commit.log", encoding="utf-8", errors="replace").readline().strip()
+        with open(d / "commit.log", encoding="utf-8", errors="replace") as log:
+            first = log.readline().strip()
         if first.startswith("$ "):
             cmd = first[2:]
     out["cmd"] = cmd
@@ -453,9 +454,9 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
         if p.is_file():
             digests[rel] = _sha256(p)
     rows = CommitRun.load_lines(d / "commit" / "runs.jsonl") if (d / "commit" / "runs.jsonl").is_file() else []
-    vd = json.load(open(d / "commit" / "verdict.json")) if (d / "commit" / "verdict.json").is_file() else None
-    summ = json.load(open(d / "commit_summary.json")) if (d / "commit_summary.json").is_file() else None
-    mv = json.load(open(d / "commit" / "manifest_verify.json")) if (d / "commit" / "manifest_verify.json").is_file() else None
+    vd = json.loads((d / "commit" / "verdict.json").read_text()) if (d / "commit" / "verdict.json").is_file() else None
+    summ = json.loads((d / "commit_summary.json").read_text()) if (d / "commit_summary.json").is_file() else None
+    mv = json.loads((d / "commit" / "manifest_verify.json").read_text()) if (d / "commit" / "manifest_verify.json").is_file() else None
     bs: BuildSummary | None = None
     refused = None
     if (d / "build_summary.json").is_file():
@@ -469,7 +470,7 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
         for p in sorted(glob.glob(str(d / "build_*" / "result.json"))):
             w = os.path.basename(os.path.dirname(p))
             try:
-                results[{"build_step": "step", "build_request": "request"}.get(w, w)] = json.load(open(p))
+                results[{"build_step": "step", "build_request": "request"}.get(w, w)] = json.loads(Path(p).read_text())
             except (OSError, ValueError) as e:
                 unreadable.append(f"{os.path.relpath(p, d)} ({e!r:.200})")
     v = build(rows, vd, summary=summ, manifest_verify=mv, file_digests=digests, row=d.name, rc=rc, build_summary=bs, build_results=results,

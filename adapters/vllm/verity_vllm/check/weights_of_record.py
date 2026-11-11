@@ -828,7 +828,7 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
     why: list[str] = []
     if os.path.exists(mpath):
         try:
-            m = json.load(open(mpath))
+            m = json.loads(Path(mpath).read_text())
             manifest_digests = [str(x) for x in ([m.get("program_digest")] + list(m.get("component_digests") or [])
                                                  + [c.get("program_digest") for c in (m.get("components") or {}).values() if isinstance(c, dict)]) if x]
         except Exception as e:  # noqa: BLE001
@@ -863,7 +863,7 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
     workload_digest = None
     if wl.exists():
         try:
-            workload_digest = str(json.load(open(wl)).get("workload_digest") or "") or None
+            workload_digest = str(json.loads(Path(wl).read_text()).get("workload_digest") or "") or None
         except Exception as e:  # noqa: BLE001
             why.append(f"build_workload/workload_program.json unreadable ({type(e).__name__})")
     if workload_digest:
@@ -943,7 +943,7 @@ class Options:
 
 def main(a: Options) -> int:
     if a.diff:
-        A, B = (json.load(open(x)) for x in a.diff)
+        A, B = (json.loads(Path(x).read_text()) for x in a.diff)
         d = diff_records(A, B)
         print(f"weights_of_record --diff: schema {d['schema'][0]} vs {d['schema'][1]}; roots as recorded {str(d['root_of_record'][0])[:16]} / "
               f"{str(d['root_of_record'][1])[:16]}; fields {d['n_fields'][0]} / {d['n_fields'][1]}; equal {d['equal_fields']}, differ {len(d['differ'])}, "

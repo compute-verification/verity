@@ -13,6 +13,7 @@ import gzip
 import hashlib
 import json
 import os
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -96,8 +97,8 @@ def write_checkpoint(d, *, truncate: int = 0) -> None:
     write_safetensors(second, {n: t[n] for n in names[len(names) // 2:] + ["lm_head.weight"]})
     if truncate:
         os.truncate(second, os.path.getsize(second) - truncate)
-    json.dump({"tie_word_embeddings": False, "num_attention_heads": HQ, "num_key_value_heads": HKV, "hidden_size": H, "head_dim": D,
-               "quantization_config": {"weight_block_size": [G, G]}}, open(os.path.join(d, "config.json"), "w"))
+    Path(os.path.join(d, "config.json")).write_text(json.dumps({"tie_word_embeddings": False, "num_attention_heads": HQ, "num_key_value_heads": HKV, "hidden_size": H, "head_dim": D,
+                                                                "quantization_config": {"weight_block_size": [G, G]}}))
 
 
 @pytest.fixture
@@ -106,7 +107,7 @@ def ckpt(tmp_path):
     write_checkpoint(d)
     man = tmp_path / "checkpoints.json"
     files = {fn: {"sha256": WR.sha256_file(os.path.join(d, fn))} for fn in sorted(os.listdir(d)) if fn.endswith(".safetensors")}
-    json.dump({"checkpoints": [{"repo": "test/reads", "revision": "abc", "local_path": d, "files": files}]}, open(man, "w"))
+    Path(man).write_text(json.dumps({"checkpoints": [{"repo": "test/reads", "revision": "abc", "local_path": d, "files": files}]}))
     return d, str(man)
 
 
@@ -160,8 +161,7 @@ def write_program_dir(root, world: int, rank: int) -> str:
     with gzip.open(os.path.join(d, "instances.json.gz"), "wt") as f:
         json.dump({"schema": "cb-a/instance-sequence/v2", "digest": "e" * 128, "params": [weights_param(world), ["prompt", "Array<4,Value<32>>"]],
                    "rows": rows}, f)
-    json.dump({"program_digest": "e" * 128, "attention_impls_observed": {"model.layers.0.self_attn.attn": "FLASH_ATTN"}, **({"tp": tp} if tp else {})},
-              open(os.path.join(d, "result.json"), "w"))
+    Path(os.path.join(d, "result.json")).write_text(json.dumps({"program_digest": "e" * 128, "attention_impls_observed": {"model.layers.0.self_attn.attn": "FLASH_ATTN"}, **({"tp": tp} if tp else {})}))
     return d
 
 
