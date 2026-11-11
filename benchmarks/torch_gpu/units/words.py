@@ -5,7 +5,7 @@
                               arithmetic with every NaN result the GPU's 0x7FFFFFFF (`fp32.F32AddV2`, `F32MulV2`, `F32DivV2`)
   widen                       bf16 -> f32 (`prims.Bf16ToF32`): the word shifted up 16
   bf16                        cvt.rn.bf16.f32 (F2FP.BF16.F32.PACK_AB, `prims.F2fpBf16`): RNE, every NaN 0x7FFF
-                              (`verity.ml.kernels.tc.f2fp_bf16_batch`)
+                              (`verity.definitions.kernels.tc.f2fp_bf16_batch`)
   ex2                         ex2.approx.ftz.f32 (MUFU.EX2, `mufu.MufuEx2Ftz`, its registered kernel): a subnormal operand
                               reads as 0, a subnormal result is +0
   s8                          cvt.rni.sat.s8.f32 (`F32ToS8RniSat_v1`): ties to even, saturated to [-128, 127], NaN 0
@@ -83,7 +83,7 @@ def f32word(v: float) -> int:
 
 
 def bf16(a: ArrayLike) -> np.ndarray:
-    from verity.ml.kernels.tc import f2fp_bf16_batch
+    from verity.definitions.kernels.tc import f2fp_bf16_batch
     a = u32(a)
     if a.size == 0:
         return a.astype(np.uint16)
@@ -91,8 +91,8 @@ def bf16(a: ArrayLike) -> np.ndarray:
 
 
 def ex2(a: ArrayLike) -> np.ndarray:
-    from verity.ml.circuits.evaluation import evaluate_batch
-    from verity.ml.circuits.ops import mufu
+    from verity.circuits.evaluation import evaluate_batch
+    from verity.definitions.ops import mufu
     a = u32(a)
     if a.size == 0:
         return a
