@@ -1448,7 +1448,7 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
 def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, monkeypatch, capsys):
     """``warm`` hands `a5.warm` the verifier's window and its composers, each saying what it composes from (the record's
     statement under the stager's label, which a5's cache keys), with ``--compose-cache`` and ``--jobs``; the audit hands a5
-    that cache, and none without ``--compose-cache``."""
+    that cache, and none without ``--compose-cache``. It hands a5 ``--archive-link`` too, and only where it is given."""
     import a5 as A5
     import a5_coins as AC
 
@@ -1471,7 +1471,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
         pass
 
     def audit(a, *args, **kw):
-        seen["audit"] = a.compose_cache
+        seen["audit"] = a.compose_cache, a.archive_link
         raise Opened
 
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
@@ -1482,7 +1482,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     args = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
             "--skip-negatives", "--challenger", "local", "--main", "m.txt"]
-    for extra, want in ((["--compose-cache", cache], cache), ([], None)):
+    for extra, want in ((["--compose-cache", cache], (cache, False)), ([], (None, False)), (["--archive-link"], (None, True))):
         with pytest.raises(Opened):
             RA.main([*args, *extra])
         assert seen["audit"] == want
