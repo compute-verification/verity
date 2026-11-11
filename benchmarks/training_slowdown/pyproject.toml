@@ -12,7 +12,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # registry, fleets and periods `calculator.py` reads and whose min-cut module and rows of β(k) test_min_cut holds
 # formalism's copy to; the inference-only policy's calibrations, which the calculator's registry loads from outside its
 # directory; and the census's deployments, whose reference window `calculator.py` reads
+# The command's and the config's: of that registry too, the [policy.*] tables, whose names are the policies a config
+# may give (`config.py`); and `verity/configuration/config/verity_config`, the command's $OUT through its SHARED settings
 inputs = ["verity", "adapters/vllm/verity_vllm", "adapters/vllm/tests/program/train_step_lf.py",
           "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/program/__init__.py",
           "verity/protocols/inference_only/rho", "benchmarks/census/deployments.json",
-          "verity/protocols/inference_only/nci/calibrations.json"]
+          "verity/protocols/inference_only/nci/calibrations.json", "verity/configuration/config/verity_config"]

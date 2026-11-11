@@ -19,12 +19,14 @@ def test_a_pass_of_the_stream_reads_every_window_of_every_part_once(tmp_path):
     every = {p[j * CTX: j * CTX + CTX + 1].tobytes() for p in parts for j in range((len(p) - 1) // CTX)}
     s = Stream(data, seed=3, ctx=CTX)
     assert len(s.order) == len(every) == sum((n - 1) // CTX for n in PARTS)
-    rows = [s.next(10) for _ in range(len(every) // 10)]
+    batch = 8
+    assert len(every) % batch == 0, "a pass reads whole batches: a batch past its end starts the order again"
+    rows = [s.next(batch) for _ in range(len(every) // batch)]
     seen = [r.numpy().astype(np.uint16).tobytes() for b in rows for r in b]
     assert sorted(seen) == sorted(every)
-    assert torch.equal(s.next(10), rows[0])  # the order starts again
-    assert torch.equal(Stream(data, seed=3, ctx=CTX).next(10), rows[0])
-    assert not torch.equal(Stream(data, seed=4, ctx=CTX).next(10), rows[0])
+    assert torch.equal(s.next(batch), rows[0])  # the order starts again
+    assert torch.equal(Stream(data, seed=3, ctx=CTX).next(batch), rows[0])
+    assert not torch.equal(Stream(data, seed=4, ctx=CTX).next(batch), rows[0])
 
 
 def test_a_stream_that_isnt_the_registrys_is_refused(tmp_path):
