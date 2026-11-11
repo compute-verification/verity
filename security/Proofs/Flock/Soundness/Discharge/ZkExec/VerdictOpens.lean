@@ -759,7 +759,7 @@ rounds, the ring switch's `claims + 1` and Ligerito's `k0 + 8`. -/
 theorem zk_rep_reqs {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
-    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
     (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
     (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
       ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j])
@@ -911,7 +911,7 @@ wide), at the level-0 cap the proof's cap reads as and openings whose rep-`r` ro
 theorem zk_opens_ok {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round)
     (dom : ByteArray) (tr : Flock.Transcript) (cap₀ : Cap Dig) (os : ZkLink.OpensZ 𝔽 Dig (List UInt8))
-    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hms : st.merkle = MerkleScheme.hm96Sha512)
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hms : st.merkle = MerkleScheme.hm96Sha512)
     (hseam : ZkTabSeam T st sch tPad)
     (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
     (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),

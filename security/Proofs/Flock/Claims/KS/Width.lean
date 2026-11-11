@@ -169,7 +169,7 @@ theorem plainRunCols_width {r : Claims.Flock.ZkRun} {p : ℕ × List 𝔽} (hp :
 
 /-- **A masked run's columns have level 0's `2^lanes` witness symbols.** -/
 theorem zkRunCols_width {r : Claims.Flock.ZkRun} {p : ℕ × List 𝔽} (hp : p ∈ Claims.Flock.zkRunCols r) :
-    p.2.length = 2 ^ (Claims.Flock.zkLevel0 r.m).lanes := by
+    p.2.length = 2 ^ (Claims.Flock.zkLevel0 r.wideLeaf r.m).lanes := by
   obtain ⟨y, -, hy⟩ := List.mem_flatMap.1 (mem_of_distinctBelow hp)
   exact zkRepColsOf_width hy
 
@@ -303,7 +303,7 @@ theorem acc_cols {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Cl
     {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) {q : ℕ} {u : List 𝔽}
     (hu : Claims.Flock.lookCol (cols zk (Claims.run H P (V zk) x ω r).seen 0) q = some u) :
     ∃ spec st, (tables zk x).head? = some (spec, st) ∧
-      u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes := by
+      u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes := by
   obtain ⟨s, spec, sts, f, hs, hf, hx⟩ := acc_last h
   unfold cols at hu
   split at hu
@@ -325,7 +325,7 @@ theorem acc_cols {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Cl
 theorem zeroCol_length {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h : (tables zk x).head? = some (spec, st)) :
     (zeroCol zk x).length =
-      2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes := by
+      2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes := by
   unfold zeroCol
   rw [h]
   cases zk <;> simp

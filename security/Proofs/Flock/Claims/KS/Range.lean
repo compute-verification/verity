@@ -77,6 +77,8 @@ theorem stepWith_acc {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Pro
 
 namespace Gen
 
+variable {wideLeaf : Bool}
+
 variable [S : ZkSetup]
 
 /-- **An accepting step at SHA-512 is an accepting verdict** at the statement's setup. -/
@@ -108,11 +110,11 @@ theorem fast100_range {m : ℕ} {s : Flock.Schedule} (h : Flock.fast100 m = some
     unfold Flock.fast100 at h
     simp [hb] at h⟩
 
-theorem queries0_range {m q : ℕ} (h : Zk.queries0 m = .ok q) : 25 ≤ m ∧ m ≤ 35 := by
+theorem queries0_range {m q : ℕ} (h : Zk.queries0 wideLeaf m = .ok q) : 25 ≤ m ∧ m ≤ 35 := by
   unfold Zk.queries0 at h
   split_ifs at h <;> first | (cases h; done) | (simp only [beq_iff_eq] at *; omega)
 
-theorem schedule_range {m : ℕ} {p : Flock.Schedule × ℕ} (h : Zk.schedule m = .ok p) : 25 ≤ m ∧ m ≤ 35 := by
+theorem schedule_range {m : ℕ} {p : Flock.Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok p) : 25 ≤ m ∧ m ≤ 35 := by
   unfold Zk.schedule at h
   obtain ⟨q, hq, -⟩ := FlockSoundness.Refine.ebind_ok h
   exact queries0_range hq
@@ -151,7 +153,7 @@ variable [S : ZkSetup]
 /-- `N₀` at a statement that sets up a table is at least table 0's level-0 codeword length. -/
 theorem N₀_ge_of_setup {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (h : setupOf zk x = some (s, spec, sts)) (h0 : 0 < sts.size) :
-    (2 : ℝ) ^ (if zk then Claims.Flock.zkLevel0 sts[0].m else Claims.Flock.plainLevel0 sts[0].m).d ≤ N₀ zk x := by
+    (2 : ℝ) ^ (if zk then Claims.Flock.zkLevel0 sts[0].wideLeaf sts[0].m else Claims.Flock.plainLevel0 sts[0].m).d ≤ N₀ zk x := by
   unfold N₀ tables
   rw [h]
   rcases sts with ⟨_ | ⟨a, l⟩⟩
@@ -170,7 +172,7 @@ end Gen
 /-- `N₀` at a statement that sets up a table is at least table 0's level-0 codeword length. -/
 theorem N₀_ge_of_setup {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (h : setupOf zk x = some (s, spec, sts)) (h0 : 0 < sts.size) :
-    (2 : ℝ) ^ (if zk then Claims.Flock.zkLevel0 sts[0].m else Claims.Flock.plainLevel0 sts[0].m).d ≤ N₀ zk x :=
+    (2 : ℝ) ^ (if zk then Claims.Flock.zkLevel0 sts[0].wideLeaf sts[0].m else Claims.Flock.plainLevel0 sts[0].m).d ≤ N₀ zk x :=
   Gen.N₀_ge_of_setup (S := S₀) (zk := zk) (x := x) (s := s) (spec := spec) (sts := sts) (h := h) (h0 := h0)
 
 /-- `k ≥ 8` once `N₀ ≥ 2^10`. -/
@@ -240,7 +242,7 @@ theorem k_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg
   have hi : Claims.Flock.ZkIdx.m ⟨sts[0].m - 25, by omega⟩ = sts[0].m := by
     simp only [Claims.Flock.ZkIdx.m]
     omega
-  have hlen : 10 ≤ (Claims.Flock.zkLevel0 sts[0].m).d := by
+  have hlen : 10 ≤ (Claims.Flock.zkLevel0 sts[0].wideLeaf sts[0].m).d := by
     unfold Claims.Flock.zkLen at hd
     rw [hi] at hd
     exact hd

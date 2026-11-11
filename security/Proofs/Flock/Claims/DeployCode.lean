@@ -101,6 +101,8 @@ open FlockSoundness FlockSoundness.Model
 
 local notation "𝔽" => FlockLevel3.GF128
 
+variable {wideLeaf : Bool}
+
 /-! ## A plain run's opened level-0 columns -/
 
 /-- **The round of level 0's query coins** in a plain rep's stream: after zerocheck's `3 + (m − 6)` rounds, lincheck's
@@ -210,16 +212,16 @@ theorem zkDim_ge : ∀ i : ZkIdx, 4650 ≤ 2 ^ zkCols i + zkPad i := by
   decide +kernel
 
 /-- The masked level 0 makes at most `277` queries at every `m` (none where `Zk.schedule` refuses `m`). -/
-theorem zkLevel0_q_le (m : ℕ) : (zkLevel0 m).q ≤ 277 := by
+theorem zkLevel0_q_le (m : ℕ) : (zkLevel0 wideLeaf m).q ≤ 277 := by
   by_cases hm : 25 ≤ m ∧ m ≤ 35
   · obtain ⟨i, rfl⟩ : ∃ i : ZkIdx, i.m = m := ⟨⟨m - 25, by omega⟩, by simp only [ZkIdx.m]; omega⟩
-    have h : ∀ i : ZkIdx, (zkLevel0 i.m).q ≤ 277 := by decide +kernel
+    have h : ∀ i : ZkIdx, (zkLevel0 i.wideLeaf i.m).q ≤ 277 := by decide +kernel
     exact h i
-  · have hq : ∃ e, _root_.Flock.Zk.queries0 m = .error e := by
+  · have hq : ∃ e, _root_.Flock.Zk.queries0 wideLeaf m = .error e := by
       unfold _root_.Flock.Zk.queries0
       split_ifs <;> first | exact ⟨_, rfl⟩ | (exfalso; simp only [beq_iff_eq] at *; omega)
     obtain ⟨e, he⟩ := hq
-    have h : _root_.Flock.Zk.schedule m = .error e := by
+    have h : _root_.Flock.Zk.schedule wideLeaf m = .error e := by
       unfold _root_.Flock.Zk.schedule
       rw [he]
       rfl
@@ -510,7 +512,7 @@ end KS.Gen
 
 /-- A table's level-0 codeword length, `2^{d₀}`. -/
 noncomputable def tableLen (zk : Bool) (st : Stmt) : ℝ :=
-  2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).d
+  2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).d
 
 /-- **`N₀`**: the session's tables' level-0 codeword lengths, summed: table 0's `2^{d₀}` at one table. -/
 noncomputable def N₀ (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableLen zk p.2).sum
@@ -529,7 +531,7 @@ end KS.Gen
 noncomputable def tableWeight (zk : Bool) (st : Stmt) : ℝ :=
   if zk then
     Claims.Flock.Numbers.weightOf (Accounting.m1Schedule st.m)
-      (Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0))
+      (Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0))
   else Claims.Flock.Numbers.weightOf ((Accounting.fast100 st.m).getD default) 0
 
 /-- **The weight `C` of `γ`**: the session's tables' weights, summed. -/

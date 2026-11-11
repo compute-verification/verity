@@ -204,7 +204,7 @@ theorem zk_le_sessionsJW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
       (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
       (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
       (T j).N ≤ Claims.Flock.Numbers.padDomain
-        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).m).1.k0))
+        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω)
     (rd : (j : ℕ) → Claims.Flock.IZW (T j).sch.levels.length → Fin ((V true).k x))
     (hrd : ∀ j, Function.Injective (rd j))
@@ -358,7 +358,7 @@ theorem zk_le_sessionsJW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
       (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
       (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
       (T j).N ≤ Claims.Flock.Numbers.padDomain
-        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).m).1.k0))
+        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω)
     (rd : (j : ℕ) → Claims.Flock.IZW (T j).sch.levels.length → Fin ((V true).k x))
     (hrd : ∀ j, Function.Injective (rd j))
@@ -548,7 +548,7 @@ theorem zk_tableBoundJAccAtR_of_sessionsW {K D Sl : Type} [Field K] [Fintype K] 
       (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
       (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
       (T j).N ≤ Claims.Flock.Numbers.padDomain
-        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).m).1.k0))
+        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     (hnc : ∀ j < (tables true x).length, ∀ C : Fin (wordLenJ true x j) → List 𝔽, (∀ p, Ok x j (C p)) →
       ¬ Claims.Flock.GoodTableAt (deployZk rel) (wordLenJ true) x j C →
         ¬ (T j).Committed A (Claims.Flock.oracleOf C))
@@ -585,7 +585,7 @@ theorem zk_tableBoundJAccAtR_of_sessionsW {K D Sl : Type} [Field K] [Fintype K] 
       (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
       (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
       (T j).N ≤ Claims.Flock.Numbers.padDomain
-        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).m).1.k0))
+        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     (hnc : ∀ j < (tables true x).length, ∀ C : Fin (wordLenJ true x j) → List 𝔽, (∀ p, Ok x j (C p)) →
       ¬ Claims.Flock.GoodTableAt (deployZk rel) (wordLenJ true) x j C →
         ¬ (T j).Committed A (Claims.Flock.oracleOf C))

@@ -48,7 +48,7 @@ from the domain `dom` on rounds that all retained their bytes emitted `repFrames
 `T`). -/
 theorem zk_rep_emitted (st : Setup) (sch : Flock.Schedule) (tPad r : ℕ) (extras : Array Flock.Claim)
     (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
-    (hsch : Zk.schedule st.m = .ok (sch, tPad))
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (hrun : (repProg st sch tPad r extras zp).run (Flock.Transcript.init rounds dom) = .ok ((), tr))
     (hret : AllRetained rounds) :
     ∃ T : F128, Emitted ⟨rounds, 0, ByteArray.empty⟩ tr (repFramesZ st sch dom (2 + extras.size) zp T) := by
@@ -101,7 +101,7 @@ on rounds that all retained their bytes, consuming every round, round `k` retain
 squeeze of `rounds[k].n` coins. -/
 theorem zk_rep_counts (st : Setup) (sch : Flock.Schedule) (tPad r : ℕ) (extras : Array Flock.Claim)
     (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
-    (hsch : Zk.schedule st.m = .ok (sch, tPad))
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (hrun : (repProg st sch tPad r extras zp).run (Flock.Transcript.init rounds dom) = .ok ((), tr))
     (hk : tr.k = rounds.size) (hret : AllRetained rounds) :
     ∀ k < rounds.size, ∃ (pre : List UInt8) (kind : UInt8),

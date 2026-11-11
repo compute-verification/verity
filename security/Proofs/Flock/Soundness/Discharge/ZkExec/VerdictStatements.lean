@@ -168,7 +168,7 @@ def ZkRepAccepts : Prop :=
     (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof)
     (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript) (cap₀ : Cap Dig)
     (os : ZkLink.OpensZ 𝔽 Dig (List UInt8)),
-    Zk.schedule st.m = .ok (sch, tPad) → st.merkle = MerkleScheme.hm96Sha512 → ZkTabSeam T st sch tPad →
+    Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) → st.merkle = MerkleScheme.hm96Sha512 → ZkTabSeam T st sch tPad →
     ZkTabLay T st sch → FoldRealizes st.fold T.S →
     extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length →
     (∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
@@ -195,7 +195,7 @@ def ZkTableVerdict : Prop :=
   ∀ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts) (S : Finset (Fin n)) (R : Reg)
     (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray),
-    Zk.schedule st.m = .ok (sch, tPad) → st.merkle = MerkleScheme.hm96Sha512 → ZkTabSeam (T S R) st sch tPad →
+    Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) → st.merkle = MerkleScheme.hm96Sha512 → ZkTabSeam (T S R) st sch tPad →
     ZkTabLay (T S R) st sch → FoldRealizes st.fold (T S R).S →
     ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts) →
     (∀ s ∈ sess.streams.toList, RoundsWF s.rounds) →

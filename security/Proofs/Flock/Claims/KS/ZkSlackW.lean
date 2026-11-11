@@ -343,7 +343,7 @@ theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.M
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
-        (Claims.Flock.zkSched (st j).m).1.k0))
+        (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin ((deployZk rel).V.k x))
     (hr0 : ∀ j i, (rd j i).val = 0 → i = .inr ()) (r₀ : Fin ((deployZk rel).V.k x)) (hr₀ : r₀.val = 0) :
     2 * ((deployZk rel).k x : ℝ) + Claims.Flock.joinCW (tables true x).length sch Np rd r₀ +
@@ -395,7 +395,7 @@ theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.M
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
-        (Claims.Flock.zkSched (st j).m).1.k0))
+        (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin ((deployZk rel).V.k x))
     (hr0 : ∀ j i, (rd j i).val = 0 → i = .inr ()) (r₀ : Fin ((deployZk rel).V.k x)) (hr₀ : r₀.val = 0) :
     2 * ((deployZk rel).k x : ℝ) + Claims.Flock.joinCW (tables true x).length sch Np rd r₀ +
@@ -419,7 +419,7 @@ theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
-        (Claims.Flock.zkSched (st j).m).1.k0))
+        (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin ((deployZk rel).V.k x))
     (hr0 : ∀ j i, (rd j i).val = 0 → i = .inr ())
     (ev : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Ω → (Fin ((deployZk rel).V.k x) → Coin) →
@@ -447,7 +447,7 @@ theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
-        (Claims.Flock.zkSched (st j).m).1.k0))
+        (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin ((deployZk rel).V.k x))
     (hr0 : ∀ j i, (rd j i).val = 0 → i = .inr ())
     (ev : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Ω → (Fin ((deployZk rel).V.k x) → Coin) →

@@ -68,12 +68,14 @@ namespace FlockComplete
 
 open With
 
+variable {wideLeaf : Bool}
+
 /-! ## The masked session in three parts -/
 
 /-- The masked session's schedules: each table's `--zk` schedule and `t_pad`. -/
 def schedsPZk {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (tabs : Array Setup) :
     M (Array (Schedule × ℕ)) :=
-  tabs.mapM fun st => (monadLift (Zk.schedule st.m) : M (Schedule × Nat))
+  tabs.mapM fun st => (monadLift (Zk.schedule st.wideLeaf st.m) : M (Schedule × Nat))
 
 /-- Each table's masked level-0 commitment, salted from the tape's level `0`. -/
 def commitsPZk {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (hs : Hashes M)
@@ -213,7 +215,7 @@ theorem getD_set_zero_d (a : Array Level) (l : Level) (hl : l.d = a[0]!.d) :
   · simp [Array.getD, Array.set!, Array.setIfInBounds, h0]
 
 /-- The `--zk` schedule keeps fast100's level-0 `d`, so it is at most `56`. -/
-theorem zkSchedule_d0 {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) : (v.1.levels.getD 0 default).d ≤ 56 := by
+theorem zkSchedule_d0 {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) : (v.1.levels.getD 0 default).d ≤ 56 := by
   unfold Zk.schedule at h
   obtain ⟨q0, -, h⟩ := except_ok_bind h
   cases hf : fast100 m with
@@ -278,7 +280,7 @@ theorem linkFirstZk_goal (H : Claims.Msg → Claims.Msg) (hH : ∀ m, (H m).leng
   obtain ⟨schs, cms, hs, hc, hh⟩ := sessionSZk_link o.ran
   obtain ⟨st, hsts, hms⟩ := o.hm96
   have htabs : tabsOf o.sts = #[Setup.ofCircuit st] := by rw [hsts]; simp [tabsOf]
-  have hsch : ∃ v, Zk.schedule st.m = .ok v ∧ schs = #[v] := by
+  have hsch : ∃ v, Zk.schedule st.wideLeaf st.m = .ok v ∧ schs = #[v] := by
     unfold schedsPZk at hs
     rw [htabs] at hs
     obtain ⟨h1, h2⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem hs

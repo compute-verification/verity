@@ -83,10 +83,12 @@ open Flock Transcript FlockComplete FlockDeploy JsonRT FlockComplete.Replay Floc
 
 local notation "𝔽" => FlockLevel3.GF128
 
+variable {wideLeaf : Bool}
+
 /-- A `--zk` schedule of a table in scope folds at most its table's variables at level 0. -/
-theorem zkSchedule_k0n {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) :
+theorem zkSchedule_k0n {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     v.1.k0 ≤ v.1.n := by
-  have key : ∀ k : Fin 11, (match Zk.schedule (k.val + 25) with
+  have key : ∀ k : Fin 11, (match Zk.schedule wideLeaf (k.val + 25) with
       | .ok v => decide (v.1.k0 ≤ v.1.n)
       | .error _ => false) = true := by
     decide +kernel

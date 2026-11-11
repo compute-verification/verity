@@ -40,15 +40,17 @@ open FlockSoundness FlockSoundness.Model
 
 local notation "𝔽" => FlockLevel3.GF128
 
+variable {wideLeaf : Bool}
+
 /-- **The masked verifier's schedule at `m`**: `Zk.schedule`'s schedule and padding `t = 2·q₀`; the default where the
 verifier refuses `m`. -/
-def zkSched (m : ℕ) : Flock.Schedule × ℕ :=
-  match Flock.Zk.schedule m with
+def zkSched (wideLeaf : Bool) (m : ℕ) : Flock.Schedule × ℕ :=
+  match Flock.Zk.schedule wideLeaf m with
   | .ok p => p
   | .error _ => (default, 0)
 
 /-- The masked verifier's level 0 at `m`. -/
-def zkLevel0 (m : ℕ) : Flock.Level := (zkSched m).1.levels.getD 0 default
+def zkLevel0 (wideLeaf : Bool) (m : ℕ) : Flock.Level := (zkSched wideLeaf m).1.levels.getD 0 default
 
 /-- The masked verifier's `m`, `25 + i`: `Zk.queries0` refuses `m ≤ 24`, `fast100` `m > 35`. -/
 abbrev ZkIdx := Fin 11
@@ -57,10 +59,10 @@ abbrev ZkIdx := Fin 11
 def ZkIdx.m (i : ZkIdx) : ℕ := 25 + i.val
 
 /-- Level 0's lanes (log), columns (log), padding and codeword length (log) at index `i`. -/
-def zkLanes (i : ZkIdx) : ℕ := (zkLevel0 i.m).lanes
-def zkCols (i : ZkIdx) : ℕ := (zkLevel0 i.m).cols
-def zkPad (i : ZkIdx) : ℕ := (zkSched i.m).2
-def zkLen (i : ZkIdx) : ℕ := (zkLevel0 i.m).d
+def zkLanes (i : ZkIdx) : ℕ := (zkLevel0 i.wideLeaf i.m).lanes
+def zkCols (i : ZkIdx) : ℕ := (zkLevel0 i.wideLeaf i.m).cols
+def zkPad (i : ZkIdx) : ℕ := (zkSched i.wideLeaf i.m).2
+def zkLen (i : ZkIdx) : ℕ := (zkLevel0 i.wideLeaf i.m).d
 
 /-- The masked code's lanes at index `i`: the witness's `2^k0`. -/
 abbrev zkWidth (i : ZkIdx) : ℕ := 2 ^ zkLanes i
@@ -71,9 +73,9 @@ theorem zkShape_fits : ∀ i : ZkIdx, zkLen i ≤ 40 ∧ 2 ^ zkCols i + zkPad i 
 /-- **The masked shapes**: `Zk.schedule` accepts every `m = 25 + i`; level 0 has `k0` lanes (log), `m − 7 − k0`
 columns (log), rate `1/2` of the unpadded message (`d = cols + 1`), `q₀` queries, and padding `t = 2·q₀`. -/
 theorem zkShape_table : ∀ i : ZkIdx,
-    (Flock.Zk.schedule i.m).toBool = true ∧ zkLanes i = (zkSched i.m).1.k0 ∧ zkCols i + zkLanes i + 7 = i.m ∧
-      zkLen i = zkCols i + 1 ∧ zkPad i = 2 * (zkLevel0 i.m).q ∧
-      (Flock.Zk.queries0 i.m).toOption = some (zkLevel0 i.m).q := by
+    (Flock.Zk.schedule i.wideLeaf i.m).toBool = true ∧ zkLanes i = (zkSched i.wideLeaf i.m).1.k0 ∧ zkCols i + zkLanes i + 7 = i.m ∧
+      zkLen i = zkCols i + 1 ∧ zkPad i = 2 * (zkLevel0 i.wideLeaf i.m).q ∧
+      (Flock.Zk.queries0 i.wideLeaf i.m).toOption = some (zkLevel0 i.wideLeaf i.m).q := by
   decide +kernel
 
 /-- **The deployed masked level-0 code at index `i`**: `zkLevelZero` in the executable's arithmetic, the `2^k0`
@@ -122,7 +124,7 @@ theorem listComplete_zkDecodeD (agree : ℝ) (ha : 0 < agree) :
 /-- **One masked run opens fewer level-0 columns than the Johnson count**: at `0 < agree ≤ 1`, both reps' `2·q₀`
 level-0 queries are below the candidate's count. -/
 theorem zkQueries_lt_zkNMinD {agree : ℝ} (ha0 : 0 < agree) (ha1 : agree ≤ 1) (M : ZkTrace) :
-    2 * (zkLevel0 M.1.m).q < zkNMinD agree M := by
+    2 * (zkLevel0 M.1.wideLeaf M.1.m).q < zkNMinD agree M := by
   rw [zkNMinD_eq, ← (zkShape_table M.1).2.2.2.2.1]
   exact pad_lt_zkJohnsonCount ha0 ha1
 

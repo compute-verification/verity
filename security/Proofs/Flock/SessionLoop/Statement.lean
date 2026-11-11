@@ -87,7 +87,7 @@ def Loop.realOf {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F
   match FlockDeploy.setupOf true x with
   | some (_, _, sts) => do
     let (g, d, hi) ← src x w ρ k
-    let l ← _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.m g d
+    let l ← _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.wideLeaf sts[k / 2]!.m g d
     let t ← _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit sts[k / 2]!) l
     pure (t, hi)
   | none => .error "no session"
@@ -97,7 +97,7 @@ witness and sampled bytes `src` gives rep stream `2j` (one level 0 a table, as `
 def Loop.level0Of {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (x : Msg) (w : Flock.Wit) (ρ : R) (sts : Array Stmt) (j : ℕ) : V _root_.Flock.Firewall.Level0.Level0 := do
   let (g, d, _) ← src x w ρ (2 * j)
-  _root_.Flock.Firewall.Level0.ofDraws sts[j]!.m g d
+  _root_.Flock.Firewall.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d
 
 /-- **The loop's own link** at the source `src`: each table's sampled level-0 root, with no public words, as the loop's
 `Commit` carries them (`Session.relay`'s `commitFrame` of the roots `Level0.ofSession` bound); the empty root where the
@@ -279,7 +279,7 @@ packed witness and sampled bytes `src` gives rep stream `k` (`Loop.realOf`'s). -
 def Loop.level0At {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (x : Msg) (w : Flock.Wit) (ρ : R) (sts : Array Stmt) (k : ℕ) : V _root_.Flock.Firewall.Level0.Level0 := do
   let (g, d, _) ← src x w ρ k
-  _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.m g d
+  _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.wideLeaf sts[k / 2]!.m g d
 
 /-- **The link's level 0 is the tape's** at `x`: at every nonce and tape, table `j`'s sampled level 0 (`Loop.level0Of`) has
 `Masked.linkIn`'s inputs. `Loop.Src`'s level-0 half gives it (`Loop.Src.linkLevel0`). -/

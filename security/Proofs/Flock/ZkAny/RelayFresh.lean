@@ -166,7 +166,7 @@ theorem repInv_withAlg {s : Release} {l0 : _root_.Flock.Firewall.Level0.Level0} 
     (hi : Array ByteArray) : Loop.RepInv t (s.spec.domain name p.rep).toUTF8 xs hi p' := by
   obtain ⟨sch, tp, hsch, ha⟩ := withAlg_alg hw (fresh_alg hp) hst
   obtain ⟨hts, hsch'⟩ := Count.tabOfLevel0_sched htab
-  have e : _root_.Flock.Zk.schedule stm.m = .ok (t.sch, t.tPad) := hsch'
+  have e : _root_.Flock.Zk.schedule stm.wideLeaf stm.m = .ok (t.sch, t.tPad) := hsch'
   rw [hsch, Except.ok.injEq, Prod.mk.injEq] at e
   obtain ⟨-, -, hco, hop, hod, hto⟩ := withAlg_keep hw
   refine ⟨?_, by rw [hto]; exact hp.toOpening,

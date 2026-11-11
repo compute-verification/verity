@@ -96,7 +96,7 @@ theorem zk_tableBoundθAt_of_sessions {K D Sl : Type} [Field K] [Fintype K] [Dec
     (T : TabZK 𝔽 mPts) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hsch : T.sch = Accounting.m1Schedule st.m)
     (ht : T.t = Accounting.m1Pad st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st) (hN : T.N ≤ 2 ^ 13)
     (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ)
-    (hNp : T.N ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0))
+    (hNp : T.N ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0))
     (hnc : ∀ C : Fin (wordLen true x) → List 𝔽, (∀ p, Ok x (C p)) →
       ¬ Claims.Flock.GoodTable (deployZk rel) (wordLen true) x C → ¬ T.Committed A (Claims.Flock.oracleOf C))
     (hmix : ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
@@ -250,7 +250,7 @@ theorem zk_tableBoundθAt_of_live {K D Sl : Type} [Field K] [Fintype K] [Decidab
     (T : TabZK 𝔽 mPts) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hsch : T.sch = Accounting.m1Schedule st.m)
     (ht : T.t = Accounting.m1Pad st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st) (hN : T.N ≤ 2 ^ 13)
     (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ)
-    (hNp : T.N ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0))
+    (hNp : T.N ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0))
     (hnc : ∀ C : Fin (wordLen true x) → List 𝔽, (∀ p, Ok x (C p)) →
       ¬ Claims.Flock.GoodTable (deployZk rel) (wordLen true) x C → ¬ T.Committed A (Claims.Flock.oracleOf C))
     (hlive : ZkLiveAt A Hs Ok x T) :

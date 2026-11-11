@@ -64,11 +64,13 @@ open Flock Transcript FlockSoundness FlockSoundness.Refine FlockComplete Replay 
 
 local notation "𝕂" => FlockLevel3.GF256
 
+variable {wideLeaf : Bool}
+
 /-! ## The `--zk` schedule -/
 
 /-- **The `--zk` schedule's facts**: fast100's dimensions, levels and caps, and level 0's `t_pad` padding coefficients
 within its `2^cols` columns. -/
-theorem zkSch_facts {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) :
+theorem zkSch_facts {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     v.1.n ≠ 0 ∧ 1 ≤ v.1.k0 ∧ 2 ≤ v.1.levels.size ∧ v.1.k0 + 3 * (v.1.levels.size - 1) ≤ v.1.n ∧
       (∀ j < v.1.levels.size, (v.1.levels.getD j default).q ≠ 0) ∧
       (∀ i < v.1.levels.size, LevelSeam (v.1.levels.getD i default)) ∧
@@ -89,7 +91,7 @@ theorem zkSch_facts {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × �
       have := hc i (by omega)
       rw [ih (by omega)] at this
       omega
-  have ht : ∀ k : Fin 11, (match Zk.schedule (k.val + 25) with
+  have ht : ∀ k : Fin 11, (match Zk.schedule wideLeaf (k.val + 25) with
       | .ok v => decide (v.2 ≤ 2 ^ (v.1.levels.getD 0 default).cols)
       | .error _ => false) = true := by
     decide +kernel

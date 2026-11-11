@@ -160,7 +160,7 @@ theorem tab_of_same {st : _root_.Flock.Setup} {l l' : _root_.Flock.Firewall.Leve
   · cases h
   rename_i h2
   rw [ite_eq_right h2]
-  rcases hs : _root_.Flock.Zk.schedule st.m with e | ⟨sch, tPad⟩
+  rcases hs : _root_.Flock.Zk.schedule st.wideLeaf st.m with e | ⟨sch, tPad⟩
   · rw [hs] at h
     cases h
   · rw [hs] at h
@@ -176,7 +176,7 @@ placeholder's level 0 gives one, at the same `m` and the `t_pad` of its schedule
 theorem tab_of_placeholder {spec : SessionSpec} {sts : Array Stmt} {k : Nat} {link : Array F128} {c' : Cfg}
     {t' : _root_.Flock.Firewall.Finish.Tab} {dom' : ByteArray} {xs' : Array (Array F128)} {hi' : Array ByteArray}
     (hph : Loop.placeholder spec sts k link = .ok (c', t', dom', xs', hi')) {g : Array F128} {d : ByteArray}
-    {l : _root_.Flock.Firewall.Level0.Level0} (hl : _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.m g d = .ok l) :
+    {l : _root_.Flock.Firewall.Level0.Level0} (hl : _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.wideLeaf sts[k / 2]!.m g d = .ok l) :
     ∃ t, _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit sts[k / 2]!) l = .ok t := by
   have bok : ∀ {α β : Type} {x : V α} {f : α → V β} {b : β}, x >>= f = .ok b → ∃ a, x = .ok a ∧ f a = .ok b := by
     intro α β x f b hb

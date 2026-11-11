@@ -127,7 +127,7 @@ def ZkRepPlays : Prop :=
   ∀ {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽)
     (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (zp : Zk.ZkProof)
     (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript),
-    Zk.schedule st.m = .ok (sch, tPad) → ZkTabSeam T st sch tPad →
+    Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) → ZkTabSeam T st sch tPad →
     extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length →
     (∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
       ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j]) →
@@ -146,7 +146,7 @@ def ZkRepRun : Prop :=
   ∀ {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽)
     (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray)
     (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript),
-    Zk.schedule st.m = .ok (sch, tPad) → st.merkle.digestLen = 64 → ZkTabSeam T st sch tPad →
+    Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) → st.merkle.digestLen = 64 → ZkTabSeam T st sch tPad →
     extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length →
     (∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
       ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j]) →

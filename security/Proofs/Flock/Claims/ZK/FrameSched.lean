@@ -1024,6 +1024,8 @@ section Skel
 
 open _root_.Flock.Firewall.Skeleton (RecM recAsks padsFrames)
 
+variable {wideLeaf : Bool}
+
 /-- **Two recordings alike, pinned at their first rounds** `h` and `h'`: as many coins flipped, rounds of one shape. -/
 def RecP (h h' : ByteArray × ℕ) (s s' : Array (ByteArray × ℕ) × ℕ) : Prop :=
   s.2 = s'.2 ∧ RoundsAt s.1 s'.1 ∧ s.1[0]? = some h ∧ s'.1[0]? = some h'
@@ -1251,8 +1253,8 @@ def TabAlike (t t' : _root_.Flock.Firewall.Finish.Tab) : Prop :=
 /-- **Two level 0s the loop samples at one `m`**, of packed tables of one size, give tables of one shape, or are both
 refused. -/
 theorem tabOfLevel0_alike (st : _root_.Flock.Setup) {m : ℕ} {g g' : Array F128} {d d' : ByteArray}
-    {l l' : _root_.Flock.Firewall.Level0.Level0} (h : _root_.Flock.Firewall.Level0.ofDraws m g d = .ok l)
-    (h' : _root_.Flock.Firewall.Level0.ofDraws m g' d' = .ok l') (hg : g.size = g'.size)
+    {l l' : _root_.Flock.Firewall.Level0.Level0} (h : _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g d = .ok l)
+    (h' : _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g' d' = .ok l') (hg : g.size = g'.size)
     (hd : 64 * 2 ^ l.lv.d < 2 ^ 64) :
     RelV TabAlike (_root_.Flock.Firewall.Finish.tabOfLevel0 st l) (_root_.Flock.Firewall.Finish.tabOfLevel0 st l') := by
   obtain ⟨hm, hgl, ⟨s, hs, hlv⟩, -, -, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok h

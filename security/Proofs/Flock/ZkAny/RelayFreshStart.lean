@@ -36,6 +36,8 @@ open _root_.Flock (V F128 SessionSpec Stmt)
 open _root_.Flock.Firewall.Frames (Sessions Rep Release)
 open _root_.Flock.Firewall.Frame (Cfg Masker Place)
 
+variable {wideLeaf : Bool}
+
 /-- **Level 0's padded codeword has a row for each tree position.** -/
 theorem linkRows_size (lv : _root_.Flock.Level) (tPad : Nat) (g : Array F128) (extra lanePad : Nat → Nat → F128) :
     (_root_.Flock.Firewall.Link.rows lv tPad g extra lanePad).size = 2 ^ lv.d := by
@@ -52,10 +54,10 @@ theorem buildRows_size (m : Nat) (lv : _root_.Flock.Level) (tPad : Nat) (g : Arr
 
 /-- **A level 0 is sampled at `m`** from a packed table and samples of the sizes `m`'s `--zk` schedule takes. -/
 theorem ofDraws_of_sizes {m : Nat} {s : _root_.Flock.Schedule} {tp : Nat}
-    (hz : _root_.Flock.Zk.schedule m = .ok (s, tp)) {g : Array F128} {d : ByteArray}
+    (hz : _root_.Flock.Zk.schedule wideLeaf m = .ok (s, tp)) {g : Array F128} {d : ByteArray}
     (hg : g.size = 2 ^ ((s.levels.getD 0 default).lanes + (s.levels.getD 0 default).cols))
     (hd : d.size = _root_.Flock.Firewall.Level0.drawSize (s.levels.getD 0 default) tp) :
-    ∃ l, _root_.Flock.Firewall.Level0.ofDraws m g d = .ok l := by
+    ∃ l, _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g d = .ok l := by
   unfold _root_.Flock.Firewall.Level0.ofDraws
   simp only [hz, hg, hd, buildRows_size, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte, bind, Except.bind,
     pure, Except.pure]
@@ -64,7 +66,7 @@ theorem ofDraws_of_sizes {m : Nat} {s : _root_.Flock.Schedule} {tp : Nat}
 /-- **A level 0 sampled at a statement's `m` gives a table** where the statement commits under `hm96Sha512`. -/
 theorem tab_of_drawn {stm : Stmt} (hmk : stm.merkle = _root_.Flock.MerkleScheme.hm96Sha512) {g : Array F128}
     {d : ByteArray} {l : _root_.Flock.Firewall.Level0.Level0}
-    (hl : _root_.Flock.Firewall.Level0.ofDraws stm.m g d = .ok l) :
+    (hl : _root_.Flock.Firewall.Level0.ofDraws stm.wideLeaf stm.m g d = .ok l) :
     ∃ t, _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l = .ok t := by
   obtain ⟨hm, -, ⟨s, hz, -⟩, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok hl
   have e1 : (_root_.Flock.Setup.ofCircuit stm).merkle = _root_.Flock.MerkleScheme.hm96Sha512 := hmk
@@ -86,8 +88,8 @@ statement's zero level 0 gives a table. -/
 theorem placeholder_of {spec : SessionSpec} {sts : Array Stmt} {k : Nat} (link : Array F128) {stm : Stmt}
     (hk : sts[k / 2]! = stm) {lay : _root_.Flock.Zk.PadLayout} {mask : _root_.Flock.Firewall.Frame.MaskSlot}
     (hst : _root_.Flock.Firewall.Drive.start stm = .ok (lay, mask)) {sch : _root_.Flock.Schedule} {tp : Nat}
-    (hz : _root_.Flock.Zk.schedule stm.m = .ok (sch, tp)) {l : _root_.Flock.Firewall.Level0.Level0}
-    (hl : _root_.Flock.Firewall.Level0.ofDraws stm.m
+    (hz : _root_.Flock.Zk.schedule stm.wideLeaf stm.m = .ok (sch, tp)) {l : _root_.Flock.Firewall.Level0.Level0}
+    (hl : _root_.Flock.Firewall.Level0.ofDraws stm.wideLeaf stm.m
       (Array.replicate (2 ^ ((sch.levels.getD 0 default).lanes + (sch.levels.getD 0 default).cols)) 0)
       (Loop.zeros (_root_.Flock.Firewall.Level0.drawSize (sch.levels.getD 0 default) tp)) = .ok l)
     {t : _root_.Flock.Firewall.Finish.Tab}

@@ -176,7 +176,7 @@ structure DrawSetupZHJP (I' : Inputs) (own : Option ByteArray) (mPts : ℕ) (S :
   x : DrawSetupHP I' own mPts S d
   sch : Flock.Schedule
   tPad : ℕ
-  hz : Zk.schedule x.st.m = .ok (sch, tPad)
+  hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)
   hshape : 2 ≤ (schedOf sch).levels.length ∧ ((schedOf sch).levels.headD default).lanes = (schedOf sch).k0 ∧
     (schedOf sch).m - 7 = (schedOf sch).k0 + ((schedOf sch).levels.headD default).logCols ∧
     levelsChained (schedOf sch).levels (schedOf sch).ext = true
@@ -270,7 +270,7 @@ end DrawSetupZHJP
 `DrawSetupZHJP` (`drawSetupZHJ_of`). -/
 theorem drawSetupZHJP_of {I' : Inputs} {own : Option ByteArray} {S : Finset (Fin n)} {d : Lean.Json}
     (x : DrawSetupHP I' own mPts S d) (hshape : Flock.Zk.shapeOk x.st = .ok ()) {sch : Flock.Schedule} {tPad : ℕ}
-    (hz : Zk.schedule x.st.m = .ok (sch, tPad)) :
+    (hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)) :
     ∃ y : DrawSetupZHJP I' own mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := zk_schedOK x.st _ _ x.wf.1 x.wf.2 x.hm hshape hz
   exact ⟨⟨x, sch, tPad, hz, h1, h2, h3, h4, h5, h6 _, hshape⟩, rfl, rfl, rfl⟩
@@ -529,7 +529,7 @@ noncomputable def opnAtZHJP (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽
     (proofs : Array ByteArray) (j : Fin (planZ S R).length) : OpensZ 𝔽 Dig (List UInt8) :=
   match Stmt.setupHidden (tagsAt (zkTags I) I.count j.val) I.circuitFile I.publicFile (zkCoins I) I.tables
       (some (drawJ I (dj S) j.val)) I.partition I.program own with
-  | .ok st => match Zk.schedule st.m with
+  | .ok st => match Zk.schedule st.wideLeaf st.m with
     | .ok (sch, _) => opnZ (Setup.ofCircuit st) sch (nXZJ ((planZ S R).get j))
         #[proofs[2 * j.val]!, proofs[2 * j.val + 1]!]
     | .error _ => default

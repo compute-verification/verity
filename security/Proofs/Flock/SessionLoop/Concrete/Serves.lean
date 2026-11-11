@@ -13,6 +13,7 @@ public import Proofs.Flock.SessionLoop.Concrete.Inputs
 public import Proofs.Flock.SessionLoop.Concrete.Stmt
 public import Proofs.Flock.Soundness.Refine.Setup
 public import Proofs.Flock.Soundness.Refine.Seam
+public import Proofs.Flock.Soundness.Refine.WideLeafChecks
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import all Init.Data.String.Defs
@@ -25,7 +26,8 @@ concrete statement's setup, one table set up by `Stmt.setupH` under `Concrete.tz
 
 * `Loop.sizesOk_one`: one table's session passes `Session.sizesOk` where the table's link points, regions, rep stream
   domains and frame start are within the frames'; `Loop.sizesOk_setupH`: `Stmt.setupH`'s range check
-  (`checkInRange`) and the `--zk` schedule's at most 6 lanes (`Loop.schedule_k0`) put them there.
+  (`checkInRange`) and the `--zk` schedule's at most 10 lanes (log) at either statement version (`Loop.schedule_k0`)
+  put them there.
 * `Loop.msg_ne_nil`: the setup's `Hello` at the zero nonce `Loop.z32` is JSON (`helloZk_of`, `canon_ok_some`), so
   `Hello.msg` frames it.
 * `Loop.concreteServes`: so `State.sendHello` lets it leave.
@@ -36,6 +38,8 @@ concrete statement's setup, one table set up by `Stmt.setupH` under `Concrete.tz
 namespace Claims.ZKServer.Loop
 
 open _root_.Flock.Firewall.Session (sizesOk)
+
+variable {wideLeaf : Bool}
 
 private theorem ok_bind {α β : Type} {y : _root_.Flock.V α} {f : α → _root_.Flock.V β} {b : β}
     (h : y >>= f = .ok b) : ∃ a, y = .ok a ∧ f a = .ok b := by
@@ -55,17 +59,29 @@ theorem fast100_k0_le {m : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.
   · rw [FlockSoundness.Refine.exec_fast100_none m (by omega)] at h
     cases h
 
-/-- The `--zk` schedule keeps `fast100`'s lanes: at most 6 at level 0. -/
-theorem schedule_ok_k0 {m : ℕ} {p : _root_.Flock.Schedule × ℕ} (h : _root_.Flock.Zk.schedule m = .ok p) :
-    p.1.k0 ≤ 6 := by
+/-- Either statement version's schedule puts at most 10 lanes (log) at level 0: 6 on `fast100`, `m − 25` on the
+wide-leaf schedule from `m = 32`. -/
+theorem fast100At_k0_le {m : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.fast100At wideLeaf m = some sch) :
+    sch.k0 ≤ 10 := by
+  by_cases hm : m < 40
+  · have key : ∀ (w : Bool) (m : Fin 40), ∀ s ∈ _root_.Flock.fast100At w m.val, decide (s.k0 ≤ 10) = true := by
+      decide +kernel
+    exact of_decide_eq_true (key wideLeaf ⟨m, hm⟩ sch h)
+  · have hn := FlockSoundness.Refine.fast100At_isSome (wide := wideLeaf) m
+    rw [h, FlockSoundness.Refine.exec_fast100_none m (by omega)] at hn
+    simp at hn
+
+/-- The `--zk` schedule keeps its statement version's lanes: at most 10 (log) at level 0. -/
+theorem schedule_ok_k0 {m : ℕ} {p : _root_.Flock.Schedule × ℕ} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok p) :
+    p.1.k0 ≤ 10 := by
   unfold _root_.Flock.Zk.schedule at h
   obtain ⟨q0, -, h⟩ := ok_bind h
-  cases hf : _root_.Flock.fast100 m with
+  cases hf : _root_.Flock.fast100At wideLeaf m with
   | none => rw [hf] at h; cases h
   | some sch =>
     rw [hf] at h
     cases h
-    have hk := fast100_k0_le hf
+    have hk := fast100At_k0_le hf
     exact hk
 
 /-- **A rep's frame start leaves its pads and pad row within a `u64`'s count** at a statement with `m` below 68 and
@@ -80,7 +96,7 @@ theorem start_len {st : _root_.Flock.Stmt} (hm : st.m < 68) (hk : st.c.kLog ≤ 
   have hlay : lay = _root_.Flock.Zk.PadLayout.new st.m st.c.kLog sch.k0 := by
     cases h
     rfl
-  have hk0 : sch.k0 ≤ 6 := schedule_ok_k0 hs
+  have hk0 : sch.k0 ≤ 10 := schedule_ok_k0 hs
   subst hlay
   simp only [_root_.Flock.Zk.PadLayout.len, _root_.Flock.Zk.PadLayout.tw, _root_.Flock.Zk.PadLayout.hab,
     _root_.Flock.Zk.PadLayout.zp, _root_.Flock.Zk.PadLayout.lc, _root_.Flock.Zk.PadLayout.fc,

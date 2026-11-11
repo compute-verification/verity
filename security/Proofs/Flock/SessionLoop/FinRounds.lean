@@ -529,7 +529,7 @@ theorem viewRep_size (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
   unfold viewRep at h
   obtain ⟨he, -, -⟩ := (FlockComplete.CutEq.repCut_eqAt (fun k i => Masked.slotAt (finCoins x ops) k i) (refK x)
     _ _ hS (k % 2) _ cms[k / 2]! extras ic _ _ _ _ _ rfl hB hA).2 _ _ h
-  have hv : _root_.Flock.Zk.schedule (Masked.stsOf x)[k / 2]!.m = .ok schs[k / 2]! := by
+  have hv : _root_.Flock.Zk.schedule (Masked.stsOf x)[k / 2]!.wideLeaf (Masked.stsOf x)[k / 2]!.m = .ok schs[k / 2]! := by
     rw [hsch, hst]
     exact (Masked.zkTab x ⟨k / 2, hi⟩).hz
   have hes : extras.size = spec.points * (Masked.stsOf x)[k / 2]!.regions.size := by
@@ -1052,7 +1052,7 @@ theorem viewRep_rounds (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     rw [getElem!_pos (FlockDeploy.tabsOf (Masked.stsOf x)) (k / 2) (by simpa [FlockDeploy.tabsOf] using hi'),
       getElem!_pos (Masked.stsOf x) (k / 2) hi']
     simp [FlockDeploy.tabsOf]
-  have hv : _root_.Flock.Zk.schedule (Masked.stsOf x)[k / 2]!.m = .ok schs[k / 2]! := by
+  have hv : _root_.Flock.Zk.schedule (Masked.stsOf x)[k / 2]!.wideLeaf (Masked.stsOf x)[k / 2]!.m = .ok schs[k / 2]! := by
     rw [hsch, hst]
     exact (Masked.zkTab x ⟨k / 2, hi⟩).hz
   have hes : extras.size = spec.points * (Masked.stsOf x)[k / 2]!.regions.size := by

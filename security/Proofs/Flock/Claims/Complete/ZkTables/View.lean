@@ -105,6 +105,8 @@ theorem ringSwitchWith_checks (hs : Hashes V) (m : ℕ) (claims : Array Claim) (
 
 namespace Rs
 
+variable {wideLeaf : Bool}
+
 variable {tr : Trace} {c₁ c₂ : Array Claim}
 
 theorem betas_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Coins) :
@@ -396,7 +398,7 @@ theorem basis_size (sws : Array Switched) (q : Array F256) (e : ℕ) : (basis sw
   rw [← Array.foldl_toList]
   exact foldl_size_const (fun _ _ => by simp) _ _ (by simp)
 
-theorem zkSchedule_n {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) : v.1.n = m - 7 := by
+theorem zkSchedule_n {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) : v.1.n = m - 7 := by
   unfold Zk.schedule at h
   obtain ⟨q0, -, h⟩ := except_ok_bind h
   cases hf : fast100 m with

@@ -282,6 +282,8 @@ namespace LeanRelease
 
 open Loop
 
+variable {wideLeaf : Bool}
+
 /-- **The frames refuse `β = 0`**: at a `Live` statement the loop serves, on a live history of at most `refK x`
 openings whose last coins the frame takes, table `j`'s rep `r`'s `β`, where it is among them, is nonzero. The opening at
 `betaSlot` is the rep's inner round 2, its frame there at the inner proof's round 2 (the schedule so far complete,
@@ -308,7 +310,7 @@ theorem beta_unrefused (T : ZKMal.CoinLayer.TableData)
   have hst : (Masked.stsOf x)[(2 * j + r) / 2]! = (Masked.stsOf x)[j] := by
     rw [show (2 * j + r) / 2 = j by omega]
     exact getElem!_pos _ j hj
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]; exact y.hz
   have hk6 : 6 ≤ (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog := by rw [hst]; exact y.wf.1.hk6
   obtain ⟨N, hN⟩ : ∃ N, N = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j + r) / 2]! +
@@ -371,7 +373,7 @@ theorem beta_unrefused (T : ZKMal.CoinLayer.TableData)
   obtain ⟨hts', ⟨tp, htp⟩, hxs⟩ := Count.placeholder_tab hph
   rw [hz, Except.ok.injEq, Prod.mk.injEq] at htp
   obtain ⟨htsch, -⟩ := htp
-  obtain ⟨hm36, hk0, hn, hq⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule _ = .ok (t.sch, y.tPad))
+  obtain ⟨hm36, hk0, hn, hq⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule wideLeaf _ = .ok (t.sch, y.tPad))
   obtain ⟨⟨hmp, hmp0, hpc⟩, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨-, -, -, -, hdm, -⟩ := placeholder_ok hph
   have hls : (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0).size =
@@ -407,7 +409,7 @@ theorem beta_unrefused (T : ZKMal.CoinLayer.TableData)
     rw [Count.piop_counts, hts', List.length_map, Array.length_toList] at e
     exact e
   have hplan := congrArg List.length (Count.repPlan_list (spec := spec) (htsch ▸ hz :
-    _root_.Flock.Zk.schedule _ = .ok (t.sch, y.tPad)))
+    _root_.Flock.Zk.schedule wideLeaf _ = .ok (t.sch, y.tPad)))
   rw [Array.length_toList, repPlan_size] at hplan
   simp only [repRounds_true, hz, List.length_append] at hplan
   have h4 : ([1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0)).length = 4 := by

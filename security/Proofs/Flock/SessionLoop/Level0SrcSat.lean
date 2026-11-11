@@ -152,11 +152,13 @@ theorem In_ext {a b : Link.In} (h1 : a.m = b.m) (h2 : a.g = b.g) (h3 : a.extra =
   exact ⟨h1, h2, h3, h4, h5⟩
 
 set_option maxHeartbeats 1000000 in
+
+variable {wideLeaf : Bool}
 /-- **`ofDraws` on a table's inputs written in its layout gives them back**: where `i`'s packed table has
 `2^(lanes + cols)` words, its extra lanes and lane paddings are `0` past level 0's sizes, and its salts are `192` bytes at
 the `2^d` tree positions and empty past them, `ofDraws` on `i.g` and `inBytes` returns a level 0 whose inputs are `i`. -/
 theorem ofDraws_inBytes {m : Nat} {s : _root_.Flock.Schedule} {tPad : Nat} {lv : Level}
-    (hz : Zk.schedule m = .ok (s, tPad))
+    (hz : Zk.schedule wideLeaf m = .ok (s, tPad))
     (hlv : s.levels.getD 0 default = lv) (i : Link.In) (hm : i.m = m) (hg : i.g.size = 2 ^ (lv.lanes + lv.cols))
     (he : ∀ e c, ¬ (e < Zk.EXTRA_LANES ∧ c < 2 ^ lv.cols) → i.extra e c = 0)
     (hp : ∀ l k, ¬ (l < 2 ^ lv.lanes + Zk.EXTRA_LANES ∧ k < tPad) → i.lanePad l k = 0)

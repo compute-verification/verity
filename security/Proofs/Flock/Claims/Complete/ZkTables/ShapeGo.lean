@@ -75,6 +75,8 @@ namespace FlockComplete.ZkTables
 open Flock Transcript FlockComplete FlockDeploy JsonRT FlockComplete.Replay FlockSoundness.Refine
 open FlockSoundness.Discharge
 
+variable {wideLeaf : Bool}
+
 /-! ## The file's length -/
 
 /-- `Vec` of elements of at most `k` bytes. -/
@@ -198,9 +200,9 @@ theorem wInner_size_le (p : Zk.InnerProof) {nY nD : ℕ} (hr : p.root.size = 64)
 
 /-- **Every `--zk` schedule's file part is under `2^32`** at hm96-sha512's digests and salts, and its `t_pad` is at
 most `1024`. -/
-theorem zkSchedule_file {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) :
+theorem zkSchedule_file {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     schedPartZk v.1 64 (some 192) ≤ 2 ^ 32 ∧ v.2 ≤ 1024 := by
-  have key : ∀ k : Fin 11, (match Zk.schedule (k.val + 25) with
+  have key : ∀ k : Fin 11, (match Zk.schedule wideLeaf (k.val + 25) with
       | .ok v => decide (schedPartZk v.1 64 (some 192) ≤ 2 ^ 32 ∧ v.2 ≤ 1024)
       | .error _ => false) = true := by
     decide +kernel

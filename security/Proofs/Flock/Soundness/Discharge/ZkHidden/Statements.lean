@@ -97,7 +97,7 @@ message's, and uniform query positions. It reads `st` only through `m`, `kLog` a
 `setupH`'s and `setupHidden`'s statements. -/
 def ZkSchedOK : Prop :=
   ∀ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st → RegionsWF st → 13 ≤ st.m →
-    Zk.shapeOk st = .ok () → Zk.schedule st.m = .ok (sch, tPad) →
+    Zk.shapeOk st = .ok () → Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) →
     (2 ≤ (schedOf sch).levels.length ∧ ((schedOf sch).levels.headD default).lanes = (schedOf sch).k0 ∧
       (schedOf sch).m - 7 = (schedOf sch).k0 + ((schedOf sch).levels.headD default).logCols ∧
       levelsChained (schedOf sch).levels (schedOf sch).ext = true) ∧
@@ -126,7 +126,7 @@ def TablesAtZKHLive : Prop :=
     ∀ S R o, DrawOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
-          I.program = .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+          I.program = .ok st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
         ∃ y : DrawSetupZKH I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
           tablesAtZKH (Reg := Reg) dj y₀ S R = y.table ∧
           ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →
@@ -143,7 +143,7 @@ def TablesAtZKHLiveI : Prop :=
     ∀ S R o, DrawOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
-          I.program = .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+          I.program = .ok st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
         ∃ y : DrawSetupZKH I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
           tablesAtZKH (Reg := Reg) dj y₀ S R = y.table ∧
           ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →
@@ -161,7 +161,7 @@ def TablesAtZKHLiveSt : Prop :=
     ∀ S R o, DrawOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
-          I.program = .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+          I.program = .ok st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
         ∃ y : DrawSetupZKH I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
           tablesAtZKH (Reg := Reg) dj y₀ S R = y.table ∧
           ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →
@@ -178,7 +178,7 @@ def TablesAtZKHLiveISt : Prop :=
     ∀ S R o, DrawOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
-          I.program = .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+          I.program = .ok st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
         ∃ y : DrawSetupZKH I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
           tablesAtZKH (Reg := Reg) dj y₀ S R = y.table ∧
           ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →
@@ -195,7 +195,7 @@ def TablesAtZKHLiveU : Prop :=
     ∀ S R o, DrawOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
-          I.program = .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+          I.program = .ok st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
         ∃ y : DrawSetupZKH I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
           tablesAtZKH (Reg := Reg) dj y₀ S R = y.table ∧
           ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →

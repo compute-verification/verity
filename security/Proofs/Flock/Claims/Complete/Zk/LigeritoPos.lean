@@ -404,7 +404,7 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 the ring switch left it, and it ends `k0 + 7 + 11 R` rounds on with nothing pending; those rounds issued one coin, then
 two each. -/
 theorem RunZk.lg_pos (hLg : LigeritoZk H rel) (o : RunZk H rel) {st : Flock.Stmt}
-    (htabs : o.tabs = #[Setup.ofCircuit st]) {v : Schedule × ℕ} (hv : Zk.schedule st.m = .ok v) (hsch : o.sch 0 = v.1)
+    (htabs : o.tabs = #[Setup.ofCircuit st]) {v : Schedule × ℕ} (hv : Zk.schedule st.wideLeaf st.m = .ok v) (hsch : o.sch 0 = v.1)
     {r : ℕ} (hr : r < 2) :
     (o.lg 0 r).1.target = (o.sw 0 r).1.1 ∧
       (o.lg 0 r).1.ood = #[(((o.sw 0 r).2.rounds[(o.sw 0 r).2.k + 1]!).coins.getD 0 0,

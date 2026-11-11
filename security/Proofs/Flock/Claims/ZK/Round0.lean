@@ -360,7 +360,7 @@ open FlockSoundness FlockSoundness.Refine
 with `rate ≥ 1`, its lanes are the schedule's `k₀`, `t_pad ≤ 2^cols`, and its lanes and columns pack the table's
 `2^(m−7)` words. -/
 def round0Facts (m : ℕ) : Bool :=
-  match _root_.Flock.Zk.schedule m with
+  match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (s, t) =>
     decide (0 < s.levels.size) &&
       decide ((s.levels.getD 0 default).d = (s.levels.getD 0 default).cols + (s.levels.getD 0 default).rate) &&
@@ -382,7 +382,7 @@ theorem schedOf_level₀ (s : _root_.Flock.Schedule) (h0 : 0 < s.levels.size) :
 
 /-- **A `--zk` schedule's level 0**: its codeword block is `cols + rate` with `rate ≥ 1`, its lanes are `k₀`, and
 `t_pad ≤ 2^cols`; and it is the model schedule's level 0. -/
-theorem zkLevel0 {m : ℕ} {s : _root_.Flock.Schedule} {t : ℕ} (h : _root_.Flock.Zk.schedule m = .ok (s, t)) :
+theorem zkLevel0 (wideLeaf : Bool) {m : ℕ} {s : _root_.Flock.Schedule} {t : ℕ} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (s, t)) :
     (s.levels.getD 0 default).d = (s.levels.getD 0 default).cols + (s.levels.getD 0 default).rate ∧
       1 ≤ (s.levels.getD 0 default).rate ∧ (s.levels.getD 0 default).lanes = s.k0 ∧
       t ≤ 2 ^ (s.levels.getD 0 default).cols ∧ (schedOf s).level₀ = levelOf (s.levels.getD 0 default) ∧
@@ -399,6 +399,8 @@ theorem zkLevel0 {m : ℕ} {s : _root_.Flock.Schedule} {t : ℕ} (h : _root_.Flo
 
 open FlockSoundness.Discharge
 
+variable {wideLeaf : Bool}
+
 /-- Level 0 of table `j`'s `--zk` schedule. -/
 noncomputable def lv0 (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Level := (zkTab x j).sch.levels.getD 0 default
 
@@ -408,7 +410,7 @@ theorem tabSizes (x : Msg) (j : Fin (jOf x)) :
     (zkTab x j).table.t ≤ 2 ^ ((zkTab x j).table.sch.level₀.logCols + 1) ∧
       (zkTab x j).table.sch.level₀.logCols + 1 ≤ (zkTab x j).table.sch.level₀.logLen ∧
       (zkTab x j).table.sch.level₀.logCols = (lv0 x j).cols := by
-  obtain ⟨-, hr, -, ht, hl, -⟩ := zkLevel0 (zkTab x j).hz
+  obtain ⟨-, hr, -, ht, hl, -⟩ := zkLevel0 wideLeaf (zkTab x j).hz
   have hc : (zkTab x j).table.sch.level₀.logCols = (lv0 x j).cols := by
     show (schedOf (zkTab x j).sch).level₀.logCols = _
     rw [hl]
@@ -439,7 +441,7 @@ theorem tabC_z (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) :
       (tabC P x j).z.tpad = (zkTab x j).tPad ∧ (zkTab x j).tPad ≤ 2 ^ (lv0 x j).cols ∧
       (tabC P x j).z.nS + (tabC P x j).z.nU = 2 ^ (lv0 x j).d ∧
       (lv0 x j).lanes + (lv0 x j).cols + 7 = (tabC P x j).S.m := by
-  obtain ⟨hd, hr, hl, ht, h0, hp⟩ := zkLevel0 (zkTab x j).hz
+  obtain ⟨hd, hr, hl, ht, h0, hp⟩ := zkLevel0 wideLeaf (zkTab x j).hz
   obtain ⟨-, -, hc⟩ := tabSizes x j
   simp only [lv0] at hc ⊢
   have hL : (zkTab x j).table.sch.level₀.logLen = ((zkTab x j).sch.levels.getD 0 default).d := by
@@ -619,14 +621,14 @@ theorem schedsPZk_live {x : Msg} (hx : Live x) :
     ∃ schs, (FlockComplete.schedsPZk (FlockDeploy.tabsOf (stsOf x)) : _root_.Flock.V _) = .ok schs ∧
       ∀ j : Fin (jOf x), schs[j.val]! = ((zkTab x j).sch, (zkTab x j).tPad) := by
   let g : _root_.Flock.Setup → _root_.Flock.Schedule × ℕ := fun st =>
-    match _root_.Flock.Zk.schedule st.m with
+    match _root_.Flock.Zk.schedule st.wideLeaf st.m with
     | .ok v => v
     | .error _ => default
   have hsch : ∀ i (hi : i < (stsOf x).size),
-      _root_.Flock.Zk.schedule (stsOf x)[i].m = Except.ok (g (_root_.Flock.Setup.ofCircuit (stsOf x)[i])) := by
+      _root_.Flock.Zk.schedule (stsOf x)[i].wideLeaf (stsOf x)[i].m = Except.ok (g (_root_.Flock.Setup.ofCircuit (stsOf x)[i])) := by
     intro i hi
     obtain ⟨y⟩ := hx.2 i hi
-    show _ = Except.ok (match _root_.Flock.Zk.schedule (stsOf x)[i].m with
+    show _ = Except.ok (match _root_.Flock.Zk.schedule (stsOf x)[i].wideLeaf (stsOf x)[i].m with
       | .ok v => v
       | .error _ => default)
     rw [y.hz]
@@ -640,7 +642,7 @@ theorem schedsPZk_live {x : Msg} (hx : Live x) :
   · have hj := lt_of_jOf j
     rw [getElem!_pos ((FlockDeploy.tabsOf (stsOf x)).map g) j.val (by simpa [FlockDeploy.tabsOf] using hj)]
     simp only [FlockDeploy.tabsOf, Array.getElem_map]
-    show (match _root_.Flock.Zk.schedule (stAt x j).m with
+    show (match _root_.Flock.Zk.schedule (stAt x j).wideLeaf (stAt x j).m with
       | .ok v => v
       | .error _ => default) = _
     rw [(zkTab x j).hz]

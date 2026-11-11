@@ -58,8 +58,10 @@ namespace FlockComplete.L0
 
 open Flock Transcript FlockComplete Replay ZkTables.Level0
 
+variable {wideLeaf : Bool}
+
 /-- The `--zk` schedule keeps fast100's `n`, which is not zero. -/
-theorem zkSchedule_n {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) : v.1.n ≠ 0 := by
+theorem zkSchedule_n {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) : v.1.n ≠ 0 := by
   unfold Zk.schedule at h
   obtain ⟨q0, -, h⟩ := except_ok_bind h
   cases hf : fast100 m with

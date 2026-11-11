@@ -558,8 +558,8 @@ theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (
   unfold runCut runExe sessionCut sessionPZk
   refine both_sends_bind (both_rfl _ _) ?_
   rintro schs _ l1 ⟨rfl, hA⟩
-  obtain ⟨hssz, hsf⟩ := Ret.go (Ret.mapM_array _ (fun st' v => _root_.Flock.Zk.schedule st'.m = .ok v) _
-    fun a _ => Ret.monadLift (_root_.Flock.Zk.schedule a.m)) hA
+  obtain ⟨hssz, hsf⟩ := Ret.go (Ret.mapM_array _ (fun st' v => _root_.Flock.Zk.schedule st'.wideLeaf st'.m = .ok v) _
+    fun a _ => Ret.monadLift (_root_.Flock.Zk.schedule a.wideLeaf a.m)) hA
   have hl1 := Still.go (Still.mapM_array (fun a l => by rw [monadLift_go]) _) hA
   subst hl1
   have hsch : ∀ i (hi : i < jOf x), schs[i]! = ((zkTab x ⟨i, hi⟩).sch, (zkTab x ⟨i, hi⟩).tPad) := fun i hi => by
@@ -612,7 +612,7 @@ theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (
     have hst : (stsOf x)[k / 2]! = stAt x ⟨k / 2, hi⟩ := by
       unfold stAt
       exact getElem!_pos _ _ _
-    have hv : _root_.Flock.Zk.schedule (stsOf x)[k / 2]!.m =
+    have hv : _root_.Flock.Zk.schedule (stsOf x)[k / 2]!.wideLeaf (stsOf x)[k / 2]!.m =
         .ok ((zkTab x ⟨k / 2, hi⟩).sch, (zkTab x ⟨k / 2, hi⟩).tPad) := by
       rw [hst]
       exact (zkTab x ⟨k / 2, hi⟩).hz

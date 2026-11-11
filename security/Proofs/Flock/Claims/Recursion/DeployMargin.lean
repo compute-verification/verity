@@ -67,6 +67,8 @@ open Claims (Msg Prover run)
 open Flock (SessionSpec Stmt)
 open FlockDeploy (Coin)
 
+variable {wideLeaf : Bool}
+
 /-! ## A session's rounds -/
 
 /-- **The recursive setup passes every table's `Zk.shapeOk`** where the statement is masked. -/
@@ -90,13 +92,13 @@ theorem m35_of_shapeOk {st : Stmt} (h : Flock.Zk.shapeOk st = .ok ()) : st.m ≤
   split_ifs at hq <;> simp only [beq_iff_eq] at * <;> omega
 
 /-- `Zk.schedule` accepts every `m` from 25 to 35. -/
-theorem zkSchedule_ok {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) : ∃ p, Flock.Zk.schedule m = .ok p := by
+theorem zkSchedule_ok {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) : ∃ p, Flock.Zk.schedule wideLeaf m = .ok p := by
   have h := (Claims.Flock.zkShape_table ⟨m - 25, by omega⟩).1
   have hi : Claims.Flock.ZkIdx.m ⟨m - 25, by omega⟩ = m := by
     simp only [Claims.Flock.ZkIdx.m]
     omega
   rw [hi] at h
-  cases hs : Flock.Zk.schedule m with
+  cases hs : Flock.Zk.schedule wideLeaf m with
   | ok p => exact ⟨p, rfl⟩
   | error e => rw [hs] at h; simp [Except.toBool] at h
 

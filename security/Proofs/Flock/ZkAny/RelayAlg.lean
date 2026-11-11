@@ -31,7 +31,7 @@ frame's table's statement, at its `--zk` schedule, on the level-0 root and the s
 theorem withAlg_alg {s : Release} {l0 : _root_.Flock.Firewall.Level0.Level0} {name : String} {p q : Rep} {stm : Stmt}
     (h : _root_.Flock.Firewall.Frames.withAlg s l0 name p = .ok q) (hp : p.alg.isEmpty = true)
     (hst : s.sts[p.table]? = some stm) :
-    ∃ sch tp, _root_.Flock.Zk.schedule stm.m = .ok (sch, tp) ∧
+    ∃ sch tp, _root_.Flock.Zk.schedule stm.wideLeaf stm.m = .ok (sch, tp) ∧
       _root_.Flock.Firewall.Skeleton.rounds (_root_.Flock.Setup.ofCircuit stm) sch.k0 l0.root
         (s.spec.domain name p.rep).toUTF8 = .ok q.alg := by
   unfold _root_.Flock.Firewall.Frames.withAlg at h

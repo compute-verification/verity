@@ -116,6 +116,8 @@ theorem fibersEq_comp_emb {A B Cod : Type} (ι : A ↪ B) : FibersEq fun f : B �
 
 namespace Masked
 
+variable {wideLeaf : Bool}
+
 /-- `Fin n` in `Fin N`, `n ≤ N`, at the same index. -/
 def castEmb {n N : ℕ} (h : n ≤ N) : Fin n ↪ Fin N :=
   ⟨Fin.castLE h, fun a b e => Fin.ext (show a.val = b.val from (congrArg Fin.val e :))⟩
@@ -334,7 +336,7 @@ def bnd (p : _root_.Flock.Schedule × ℕ) : ℕ :=
 
 /-- `bnd` at `Zk.schedule m`, `0` where it refuses. -/
 def schB (m : ℕ) : ℕ :=
-  match _root_.Flock.Zk.schedule m with
+  match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok p => bnd p
   | .error _ => 0
 

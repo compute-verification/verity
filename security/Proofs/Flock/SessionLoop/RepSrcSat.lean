@@ -211,7 +211,7 @@ theorem tapeSalt_size (x : Msg) (t : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) {l p
     (h2 : l < (zkTab x j).sch.levels.size) (hp : p < 2 ^ ((zkTab x j).sch.levels.getD l default).d) :
     ((UE.tapeZk t).salt j.val r.val l p).size = 192 := by
   obtain ⟨-, -, -, -, -, -, hseam, -, -⟩ :=
-    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   have hat : HiAt (zkTab x j).table.sch.levels l p := by
     have e : (zkTab x j).table.sch.levels.getD l default =
         FlockSoundness.Refine.levelOf ((zkTab x j).sch.levels.getD l default) := by

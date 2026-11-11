@@ -94,7 +94,7 @@ theorem lig_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hq2 : 2 * j.val + r.val < spec.repStreams.size := by rw [FlockDeploy.repStreams_size, hspec]; omega
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
   have hstj : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hj
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz
@@ -299,7 +299,7 @@ theorem lig_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hmkR : tr.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by rw [hT1]; exact hmkt
   have hkR : tr.sch.k0 = (Masked.zkTab x j).sch.k0 := by rw [hT2, hsch]
   have hlvR : tr.sch.levels.size = (Masked.zkTab x j).sch.levels.size := by rw [hT2, hsch]
-  have hschR : _root_.Flock.Zk.schedule (Masked.stAt x j).m = .ok (tr.sch, tp) := by rw [hT2, ← hst]; exact htp
+  have hschR : _root_.Flock.Zk.schedule (Masked.stAt x j).wideLeaf (Masked.stAt x j).m = .ok (tr.sch, tp) := by rw [hT2, ← hst]; exact htp
   have hOL := Count.openList_length hschR (c := xs'.size + 2) (by omega)
   have hC1 : alg'.size + (xs'.size + 2) + 1 + tr.sch.k0 + 4 ≤ cr.size := by omega
   have hC2 : cr.size < alg'.size + (Count.openList (xs'.size + 2) tr.sch).length := by omega

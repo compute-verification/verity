@@ -187,7 +187,7 @@ structure DrawSetupZK (S : Finset (Fin n)) (d : Lean.Json) where
   x : DrawSetup (zkInputs I) mPts S d
   sch : Flock.Schedule
   tPad : ℕ
-  hz : Zk.schedule x.st.m = .ok (sch, tPad)
+  hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)
   hshape : 2 ≤ (schedOf sch).levels.length ∧ ((schedOf sch).levels.headD default).lanes = (schedOf sch).k0 ∧
     (schedOf sch).m - 7 = (schedOf sch).k0 + ((schedOf sch).levels.headD default).logCols ∧
     levelsChained (schedOf sch).levels (schedOf sch).ext = true
@@ -288,7 +288,7 @@ theorem drawSetup_of_setupH_g (ht : I.tags.typed = false) {st : Flock.Stmt}
 /-- A `DrawSetup` at `zkInputs I` whose statement passes `Zk.shapeOk`, with `Zk.schedule`'s schedule at its `m`, is a
 `DrawSetupZK`. -/
 theorem drawSetupZK_of (ht : I.tags.typed = false) (x : Integrate.DrawSetup (ZkExec.zkInputs I) mPts S d)
-    (hzk : Zk.shapeOk x.st = .ok ()) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule x.st.m = .ok (sch, tPad)) :
+    (hzk : Zk.shapeOk x.st = .ok ()) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)) :
     ∃ y : DrawSetupZK I mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
   obtain ⟨hshape, hmsch, hpad⟩ := schedule_zk hz
   obtain ⟨-, hm35, -⟩ := schedule_spec hz
@@ -373,7 +373,7 @@ def TablesAtZKLive : Prop :=
     ∀ S R o, DrawOkZK I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupH (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition I.program =
-          .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+          .ok st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
         ∃ y : DrawSetupZK I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
           tablesAtZK (Reg := Reg) dj y₀ S R = y.table ∧
           ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →
@@ -386,7 +386,7 @@ theorem tablesAtZK_live : TablesAtZKLive (n := n) (mPts := mPts) (Reg := Reg) :=
   rw [(hrec S R o hacc).1] at hst
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := ZkExec.zk_verify_ok _ _ _ _ hv
   obtain ⟨hs, c, hz, -⟩ := hall 0 (by simp)
-  have hz' : Zk.schedule st.m = .ok (schs[0].1, schs[0].2) := hz
+  have hz' : Zk.schedule st.wideLeaf st.m = .ok (schs[0].1, schs[0].2) := hz
   generalize schs[0].1 = sch at hz'
   generalize schs[0].2 = tPad at hz'
   obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'

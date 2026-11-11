@@ -273,7 +273,7 @@ schedule of its table, a rep that `Zk.verifyRepWith hs` accepts (in `V`, any ora
 for every level `1 ≤ ℓ`, against the proof's `ℓ − 1`-th recursive cap on its level-`ℓ` rows at the positions of round
 `zkLevelRound`'s coins, and the reader's level-`ℓ` rows (`zkLevelRowsOf`) are those positions with those rows. -/
 theorem zkLevels_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : ℕ)
-    (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : Zk.schedule st.m = .ok (sch, tPad))
+    (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Claim) (zp : Zk.ZkProof),
       sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
@@ -333,7 +333,7 @@ open FlockSoundness.Discharge.ZkExec (shapeZK) in
 theorem zkLevels_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
     ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
-      ∀ (i : ℕ) (hi : i < tabs.size), ∃ (sch : Schedule) (tPad : ℕ), Zk.schedule tabs[i].m = .ok (sch, tPad) ∧
+      ∀ (i : ℕ) (hi : i < tabs.size), ∃ (sch : Schedule) (tPad : ℕ), Zk.schedule tabs[i].wideLeaf tabs[i].m = .ok (sch, tPad) ∧
         ∀ r < 2, ∃ (stream : StreamRec) (extras : Array Claim) (zp : Zk.ZkProof),
           sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
           tabs[i].extra sess.points = .ok extras ∧ Zk.decode (shapeZK tabs[i] sch extras) proofs[2 * i + r]! = .ok zp ∧
@@ -410,10 +410,10 @@ theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} 
   rw [hrr] at hb
   obtain ⟨st, extras, hst, hext, rfl⟩ := runOf_eqJ hf hx hs hlv hrr
   obtain ⟨hk, ha, hb⟩ : k < 2 ∧
-      (q, a) ∈ zkLevelRowsOf (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
+      (q, a) ∈ zkLevelRowsOf (Claims.Flock.zkProofShape (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
         (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)))
         (lv.streams.getD (2 * j + k) #[]) (f.proofs.getD (2 * j + k) ByteArray.empty) ℓ ∧
-      (q, b) ∈ zkLevelRowsOf (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
+      (q, b) ∈ zkLevelRowsOf (Claims.Flock.zkProofShape (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
         (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)))
         (lv.streams.getD (2 * j + k) #[]) (f.proofs.getD (2 * j + k) ByteArray.empty) ℓ := by
     rcases k with _ | _ | k
@@ -447,14 +447,14 @@ theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} 
   have hys : y = stream := Option.some.inj (hy.symm.trans hstream)
   subst hys
   have hcoins := forall₂_coins (fun _ _ hab => hab.2.1) hfa
-  have hzs : Claims.Flock.zkSched (Setup.ofCircuit st).m = (sch, tPad) := by
+  have hzs : Claims.Flock.zkSched (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = (sch, tPad) := by
     simp only [Claims.Flock.zkSched]
     rw [hsch]
-  have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
+  have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
       (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)) =
       FlockSoundness.Discharge.ZkExec.shapeZK (Setup.ofCircuit st) sch extras := by
     simp only [Claims.Flock.zkProofShape, hzs, FlockSoundness.Discharge.ZkExec.shapeZK, saltLenOf, ite_true]
-  have hsched : (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
+  have hsched : (Claims.Flock.zkProofShape (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
       (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st))).sched = sch := by
     rw [hsh]
     rfl
@@ -463,7 +463,7 @@ theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} 
     rw [zkLevelRowsOf, ite_eq_right (by rw [hsched]; exact hn)] at ha
     simp at ha
   obtain ⟨hent, hmc⟩ := hlev ℓ hℓ.1 hℓ.2
-  have hrowsEq : zkLevelRowsOf (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
+  have hrowsEq : zkLevelRowsOf (Claims.Flock.zkProofShape (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
       (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)))
       (lv.streams.getD (2 * j + k) #[]) (f.proofs.getD (2 * j + k) ByteArray.empty) ℓ =
       Claims.Flock.zkRepCols (sch.levels.getD ℓ default)

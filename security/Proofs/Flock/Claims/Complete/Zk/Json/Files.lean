@@ -148,7 +148,7 @@ theorem sessionPZk_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
     {bodies : Array Claims.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] words trs tape).go #[] =
       (.ok r, bodies)) :
-    ∃ v cm e, Zk.schedule st.m = .ok v ∧
+    ∃ v cm e, Zk.schedule st.wideLeaf st.m = .ok v ∧
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2
         (packed trs[0]! st.m) (tape.extra 0) (tape.lanePad 0) (tape.salt 0 0 0) = .ok cm ∧
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok e ∧
@@ -156,11 +156,11 @@ theorem sessionPZk_files (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
       r.2.size = spec.repStreams.size ∧ ∀ b ∈ r.2, RepFileZk resp (Claims.hOf H) st v trs[0]! cm e tape b := by
   unfold sessionPZk at hrun
   obtain ⟨schs, l1, hA, hrun⟩ := go_bind_ok hrun
-  have hschs := Ret.go (Ret.mapM_array _ (fun st' v => Zk.schedule st'.m = .ok v) _ fun a _ =>
-    Ret.monadLift (Zk.schedule a.m)) hA
+  have hschs := Ret.go (Ret.mapM_array _ (fun st' v => Zk.schedule st'.wideLeaf st'.m = .ok v) _ fun a _ =>
+    Ret.monadLift (Zk.schedule a.wideLeaf a.m)) hA
   have hl1 := Still.go (Still.mapM_array (fun a l => by rw [monadLift_go]) _) hA
   subst hl1
-  obtain ⟨v, rfl, hv⟩ : ∃ v, schs = #[v] ∧ Zk.schedule st.m = .ok v := by
+  obtain ⟨v, rfl, hv⟩ : ∃ v, schs = #[v] ∧ Zk.schedule st.wideLeaf st.m = .ok v := by
     obtain ⟨hsz, hf⟩ := hschs
     have h1 : schs.size = 1 := by simpa using hsz
     exact ⟨schs[0], eq_singleton_of h1, by simpa using hf 0 (by simp) (by omega)⟩
@@ -238,7 +238,7 @@ table committed at the `--zk` schedule's first level under the case's tape (`cm`
 link's points (`e`), and the tape's pads committed (`ic`), each masked proof a rep returns is `Shaped` at the shape the
 masked verifier decodes it at. -/
 def RepShapedZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
-  ∀ c : CaseZk H rel, ∀ st v cm e, c.sts = #[st] → Zk.schedule (Setup.ofCircuit st).m = .ok v →
+  ∀ c : CaseZk H rel, ∀ st v cm e, c.sts = #[st] → Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v →
     commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle (v.1.levels.getD 0 default) v.2
       (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) (c.ω.extra 0) (c.ω.lanePad 0) (c.ω.salt 0 0 0) =
       .ok cm →

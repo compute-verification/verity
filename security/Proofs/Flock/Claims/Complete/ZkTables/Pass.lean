@@ -243,7 +243,7 @@ slot and the next) are independent and its inner `β` (`betaSlotsZk`'s slot) is 
 its claim points from its first send (`ptsAt`), after rep `q − 1`'s at rep `1`, over its table's `words`. -/
 def PassAt (resp : ℕ → Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) (words : Array (List ℕ))
     (q : ℕ) : Prop :=
-  (∀ v : Schedule × ℕ, Zk.schedule sts[q / 2]!.m = .ok v →
+  (∀ v : Schedule × ℕ, Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok v →
     Zk.rhoIndependent (coinKOf (resp (repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! + (v.1.k0 + 2))),
       coinKOf (resp (repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! + (v.1.k0 + 2) + 1))) = true ∧
     (coinOf (resp (repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! +
@@ -260,7 +260,7 @@ def RepRanAt (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (spec :
   ∃ (v : Schedule × ℕ) (extras : Array Claim) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (l : Array Claims.Msg),
-    Zk.schedule sts[q / 2]!.m = .ok v ∧ extras.size = spec.points * sts[q / 2]!.regions.size ∧
+    Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok v ∧ extras.size = spec.points * sts[q / 2]!.regions.size ∧
       l.size = repStartZk spec sts q ∧
       ((repPZk (asksS resp) (Hashes.ofSha512 hsh) (Setup.ofCircuit sts[q / 2]!) v.1 v.2 (q % 2) dom tr tb cm0
         extras pads ic extra lanePad salt nonce (if q % 2 = 1 then ptsAt resp spec sts (q / 2) (q - 1) else #[])
@@ -340,15 +340,15 @@ theorem sessionPZk_reach (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArra
   · have := Still.go (Still.mapM_array (fun a l => by rw [monadLift_go]) _) hA
     subst this
     exact .inr ⟨⟨e, rfl⟩, 0, fun q hq => absurd hq (Nat.not_lt_zero _), .inl (by simp)⟩
-  obtain ⟨hssz, hsf⟩ := Ret.go (Ret.mapM_array _ (fun st' v => Zk.schedule st'.m = .ok v) _ fun a _ =>
-    Ret.monadLift (Zk.schedule a.m)) hA
+  obtain ⟨hssz, hsf⟩ := Ret.go (Ret.mapM_array _ (fun st' v => Zk.schedule st'.wideLeaf st'.m = .ok v) _ fun a _ =>
+    Ret.monadLift (Zk.schedule a.wideLeaf a.m)) hA
   have hl1 := Still.go (Still.mapM_array (fun a l => by rw [monadLift_go]) _) hA
   subst hl1
   have htabs : (tabsOf sts).size = sts.size := tabsOf_size sts
   have htab : ∀ i (hi : i < sts.size), (tabsOf sts)[i]! = Setup.ofCircuit sts[i]! := fun i hi => by
     rw [getElem!_pos (tabsOf sts) i (by omega), getElem!_pos sts i hi]
     simp [tabsOf]
-  have hv : ∀ i (hi : i < sts.size), Zk.schedule sts[i]!.m = .ok schs[i]! := fun i hi => by
+  have hv : ∀ i (hi : i < sts.size), Zk.schedule sts[i]!.wideLeaf sts[i]!.m = .ok schs[i]! := fun i hi => by
     have := hsf i (by omega) (by omega)
     rw [← getElem!_pos (tabsOf sts) i (by omega), htab i hi, ← getElem!_pos schs i (by omega)] at this
     exact this
@@ -559,7 +559,7 @@ coins are the replies at `rhoSlotsZk`'s slot and the next (`repPZk_rho_stop`). -
 theorem sessionPZk_rho_stop (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog)
-    {q : ℕ} (hq : q < 2 * sts.size) {v : Schedule × ℕ} (hz : Zk.schedule sts[q / 2]!.m = .ok v)
+    {q : ℕ} (hq : q < 2 * sts.size) {v : Schedule × ℕ} (hz : Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok v)
     (hbad : Zk.rhoIndependent (coinKOf (resp (repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! + (v.1.k0 + 2))),
       coinKOf (resp (repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! + (v.1.k0 + 2) + 1))) = false)
     {R : Except String (String × Array ByteArray)} {L : Array Claims.Msg}
@@ -594,7 +594,7 @@ the reply at `betaSlotsZk`'s slot (`repPZk_beta_stop`). -/
 theorem sessionPZk_beta_stop (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog)
-    {q : ℕ} (hq : q < 2 * sts.size) {v : Schedule × ℕ} (hz : Zk.schedule sts[q / 2]!.m = .ok v)
+    {q : ℕ} (hq : q < 2 * sts.size) {v : Schedule × ℕ} (hz : Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok v)
     (hbad : (coinOf (resp (repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! +
       (v.1.k0 + 7 + 11 * (v.1.levels.size - 1)) + 2)) 0).isZero = true)
     {R : Except String (String × Array ByteArray)} {L : Array Claims.Msg}

@@ -3,25 +3,26 @@ module
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 public import Flock.WideLeaf
-public import Proofs.Flock.Soundness.Accounting.WideLeafChecks
+public import Proofs.Flock.Soundness.Accounting.PaddedNumbers
 public import Proofs.Flock.Soundness.Refine.Seam
-import Mathlib.Tactic.IntervalCases
 
 /-!
 # Seams of the wide-leaf schedule: the executable's constants are the model's
 
-The executable's wide-leaf schedule (`Flock.fast100Wide`, and under `--zk` `Flock.Zk.scheduleWide`) against the model's
-(`Accounting.fast100Wide`, `Accounting.m1ScheduleWide`), as `Refine.Seam` has `fast100`'s, for every `m`:
+The executable's wide-leaf schedule (`Flock.fast100Wide`) against the model's (`Accounting.fast100Wide`), as
+`Refine.Seam` has `fast100`'s, for every `m`:
 
 * `fast100Wide_schedOf`: the executable's schedule, read as the model's (`schedOf`), is the model's schedule;
 * `fast100Wide_level`, `fast100Wide_alpha`, `fast100Wide_dims`: at every level the stratified queries, the cap depth and
   path length, the consistency-coin count and the codeword length are the model's (`LevelSeam`), the number of
-  consistency coins is not one, and the dimensions are the ones the model's rounds use (`DimSeam`);
-* `scheduleWide_m1`: `Zk.scheduleWide m`'s schedule is `m1ScheduleWide m` and its `t_pad` is `m1PadWide m`, at every `m`
-  it accepts (25 to 35);
-* `padTableError_le_scheduleWide`: so a table at the executable's wide-leaf `--zk` schedule is sound to `2^-205`.
+  consistency coins is not one, and the dimensions are the ones the model's rounds use (`DimSeam`).
 
 The kernel checks each for `m < 40`, and both schedules are `none` above 35.
+
+A statement's version picks its tables' schedule (`Flock.fast100At`, `Accounting.fast100At`: the wide-leaf schedule
+at a wide-leaf statement, `fast100` otherwise), so each seam holds at either version (`fast100At_schedOf`,
+`fast100At_level`, `fast100At_alpha`, `fast100At_dims`), and the two versions have a schedule at the same `m`
+(`fast100At_isSome`).
 -/
 
 @[expose] public section
@@ -80,52 +81,50 @@ theorem fast100Wide_dims (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100Wide 
     simpa using key ⟨m, hm⟩ s hs
   · rw [exec_fast100Wide_none m (by omega)] at hs; cases hs
 
-/-- `Zk.queries0Wide` gives a count only at `25 ≤ m ≤ 35`. -/
-theorem queries0Wide_spec {m q : ℕ} (h : Flock.Zk.queries0Wide m = .ok q) : 25 ≤ m ∧ m ≤ 35 := by
-  unfold Flock.Zk.queries0Wide Flock.Zk.queries0 at h
-  repeat' split at h
-  all_goals first
-    | (cases h; done)
-    | (simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at *; omega)
+/-! ## The statement version's schedule -/
 
-/-- `Zk.scheduleWide` accepts only `25 ≤ m ≤ 35`. -/
-theorem scheduleWide_spec {m : ℕ} {r : Flock.Schedule × ℕ} (h : Flock.Zk.scheduleWide m = .ok r) :
-    25 ≤ m ∧ m ≤ 35 := by
-  unfold Flock.Zk.scheduleWide at h
-  cases hq : Flock.Zk.queries0Wide m with
-  | error e => rw [hq] at h; cases h
-  | ok q => exact queries0Wide_spec hq
+theorem exec_fast100At_none (wide : Bool) (m : ℕ) (h : 35 < m) : Flock.fast100At wide m = none := by
+  cases wide
+  · exact exec_fast100_none m h
+  · exact exec_fast100Wide_none m h
 
-/-- What the wide rows' numbers need of `Zk.scheduleWide m`'s schedule and `t_pad`, as a `Bool` (`true` where it
-refuses `m`). -/
-def zkWideFacts (m : ℕ) : Bool :=
-  match Flock.Zk.scheduleWide m with
-  | .ok (s, t) => decide (schedOf s = m1ScheduleWide m) && decide (t = m1PadWide m)
-  | .error _ => true
+/-- **The schedule.** The executable's schedule of a statement version is the model's, for every `m`. -/
+theorem fast100At_schedOf (wide : Bool) (m : ℕ) :
+    Option.map schedOf (Flock.fast100At wide m) = Accounting.fast100At wide m := by
+  cases wide
+  · exact fast100_schedOf m
+  · exact fast100Wide_schedOf m
 
-/-- **The m check**: at every `m` `Zk.scheduleWide` accepts (25 to 35), its schedule and `t_pad` are Flock ZK's on
-the wide-leaf schedule, by the kernel's `decide`. -/
-theorem zkWideFacts_all : ∀ m, 25 ≤ m → m ≤ 35 → zkWideFacts m = true := by
-  intro m h1 h2
-  interval_cases m <;> decide +kernel
+variable {wide : Bool}
 
-/-- **`Zk.scheduleWide`'s schedule is `m1ScheduleWide`, its `t_pad` `m1PadWide`.** -/
-theorem scheduleWide_m1 {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (h : Flock.Zk.scheduleWide m = .ok (sch, tPad)) :
-    schedOf sch = m1ScheduleWide m ∧ tPad = m1PadWide m := by
-  obtain ⟨h1, h2⟩ := scheduleWide_spec h
-  have hf := zkWideFacts_all m h1 h2
-  unfold zkWideFacts at hf
-  rw [h] at hf
-  simpa only [Bool.and_eq_true, decide_eq_true_eq] using hf
+/-- **Every level**, at either statement version's schedule (`fast100_level`, `fast100Wide_level`). -/
+theorem fast100At_level (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100At wide m = some s) :
+    ∀ lv ∈ s.levels, LevelSeam lv := by
+  cases wide
+  · exact fast100_level m s hs
+  · exact fast100Wide_level m s hs
 
-/-- **A table at the executable's wide-leaf `--zk` schedule is sound to `2^-205`**, for every statement shape in
-range: `padTableError_le_m1Wide` at the schedule and padding `Zk.scheduleWide` gives. -/
-theorem padTableError_le_scheduleWide {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ}
-    (h : Flock.Zk.scheduleWide m = .ok (sch, tPad)) (st : Accounting.Stmt) (hst : st.InRange) :
-    padTableError (schedOf sch) st tPad 2 ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by
-  obtain ⟨h1, h2⟩ := scheduleWide_spec h
-  obtain ⟨hs, ht⟩ := scheduleWide_m1 h
-  rw [hs, ht]
-  exact padTableError_le_m1Wide m h1 h2 st hst
+/-- **Not one consistency coin**, at either statement version's schedule. -/
+theorem fast100At_alpha (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100At wide m = some s) :
+    ∀ lv ∈ s.levels, ceilLog2 lv.q ≠ 1 := by
+  cases wide
+  · exact fast100_alpha m s hs
+  · exact fast100Wide_alpha m s hs
+
+/-- **The dimensions**, at either statement version's schedule. -/
+theorem fast100At_dims (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100At wide m = some s) : DimSeam s ∧ s.m = m := by
+  cases wide
+  · exact fast100_dims m s hs
+  · exact fast100Wide_dims m s hs
+
+/-- A statement version has a schedule exactly where `fast100` has one: the two tables cover the same `m`. -/
+theorem fast100At_isSome (m : ℕ) : (Flock.fast100At wide m).isSome = (Flock.fast100 m).isSome := by
+  cases wide
+  · rfl
+  · by_cases hm : m < 40
+    · have key : ∀ m : Fin 40, (Flock.fast100Wide m.val).isSome = (Flock.fast100 m.val).isSome := by decide +kernel
+      exact key ⟨m, hm⟩
+    · show (Flock.fast100Wide m).isSome = _
+      rw [exec_fast100Wide_none m (by omega), exec_fast100_none m (by omega)]
 
 end FlockSoundness.Refine

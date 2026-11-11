@@ -389,7 +389,7 @@ theorem fwTarget_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w
     rw [getElem!_pos _ v'.val (by rw [Array.size_ofFn]; exact v'.isLt), Array.getElem_ofFn]
     rfl
   -- the target, claim by claim
-  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [stsOf_half]
     exact (zkTab x j).hz

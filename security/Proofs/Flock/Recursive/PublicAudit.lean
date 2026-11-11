@@ -71,7 +71,7 @@ def AcceptsPublic (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt) : Prop 
   (∃ (cf pf : ByteArray) (spec : Flock.SessionSpec),
     Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.RecVStar.innerTree 1 (partition := some obj)
       (program := some prog) = .ok (spec, #[st])) ∧
-  ∃ p, Flock.Zk.schedule st.m = .ok p
+  ∃ p, Flock.Zk.schedule st.wideLeaf st.m = .ok p
 
 theorem AcceptsPublic.acceptsStmt {obj : Lean.Json} {prog : ByteArray} {st : Flock.Stmt}
     (h : AcceptsPublic obj prog st) : AcceptsStmt st := by

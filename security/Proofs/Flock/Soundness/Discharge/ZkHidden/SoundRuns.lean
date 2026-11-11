@@ -90,7 +90,7 @@ theorem runsZC_liveHU {n mPts : ℕ} {Reg : Type} (I : Inputs) (ht : I.tags.type
   obtain ⟨-, sess, schs, hdecS, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, c, hz0, hv0, hv1⟩ := hall 0 (by simp)
   simp only [Array.getElem_map] at hz0 hv0 hv1
-  change Zk.schedule (Setup.ofCircuit y.x.st).m = .ok schs[0] at hz0
+  change Zk.schedule (Setup.ofCircuit y.x.st).wideLeaf (Setup.ofCircuit y.x.st).m = .ok schs[0] at hz0
   change Zk.verifyRep y.x.st.spec (Setup.ofCircuit y.x.st) schs[0].1 schs[0].2 sess 0 0 _ = .ok c at hv0
   change Zk.verifyRep y.x.st.spec (Setup.ofCircuit y.x.st) schs[0].1 schs[0].2 sess 0 1 _ = .ok c at hv1
   have hsc : schs[0] = (y.sch, y.tPad) := Except.ok.inj (hz0.symm.trans hz)

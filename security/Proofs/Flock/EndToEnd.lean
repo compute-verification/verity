@@ -70,7 +70,7 @@ theorem EndToEnd_refSetup {n : ℕ} (I : Inputs) (ht : I.tags.typed = false) {c 
   obtain ⟨-, _, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨_hs0, _, hz0, -⟩ := hall 0 (by simpa using hj)
   simp only [Array.getElem_map] at hz0
-  have hz' : Flock.Zk.schedule sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
+  have hz' : Flock.Zk.schedule sts[0].wideLeaf sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
   obtain ⟨-, -, _, hf⟩ := schedule_spec hz'
   have hDraw := drawOkZKJ_of_file I ht hc kd pop hdiv dj hdj S ⟨0, nTab_pos I⟩
   obtain ⟨_, -, hdr⟩ := Layout.setupH_drawn hst

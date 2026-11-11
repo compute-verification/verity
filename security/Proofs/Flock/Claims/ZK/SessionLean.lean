@@ -80,12 +80,14 @@ set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds
 
 namespace Loop
 
+variable {wideLeaf : Bool}
+
 /-! ## A rep's rounds -/
 
 /-- Ligerito's rounds at `m`'s `--zk` schedule, less those of no coins, are the verifier's `k0 + 7 + 11 R`, and a
 schedule needs `m ≥ 25`. -/
 def ligOk (m : ℕ) : Bool :=
-  match _root_.Flock.Zk.schedule m with
+  match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (sch, _) =>
     decide (25 ≤ m) && ((ligeritoCoins sch).filter (· != 0)).size == sch.k0 + 7 + 11 * (sch.levels.size - 1)
   | .error _ => true
@@ -93,7 +95,7 @@ def ligOk (m : ℕ) : Bool :=
 /-- Every `--zk` schedule, `m < 36`, by the kernel's evaluation. -/
 theorem ligOk_lt : ∀ m, m < 36 → ligOk m = true := by decide +kernel
 
-theorem queries0_ge {m : ℕ} (h : 36 ≤ m) : ∃ e, _root_.Flock.Zk.queries0 m = .error e := by
+theorem queries0_ge {m : ℕ} (h : 36 ≤ m) : ∃ e, _root_.Flock.Zk.queries0 wideLeaf m = .error e := by
   unfold _root_.Flock.Zk.queries0
   have h1 : ¬ m ≤ 24 := by omega
   have h2 : (m == 25) = false := by rw [beq_eq_false_iff_ne]; omega
@@ -104,7 +106,7 @@ theorem queries0_ge {m : ℕ} (h : 36 ≤ m) : ∃ e, _root_.Flock.Zk.queries0 m
   simp only [h1, h2, h3, h4, h5, h6, ↓reduceIte, Bool.false_eq_true]
   exact ⟨_, rfl⟩
 
-theorem schedule_ge {m : ℕ} (h : 36 ≤ m) : ∃ e, _root_.Flock.Zk.schedule m = .error e := by
+theorem schedule_ge {m : ℕ} (h : 36 ≤ m) : ∃ e, _root_.Flock.Zk.schedule wideLeaf m = .error e := by
   obtain ⟨e, he⟩ := queries0_ge h
   unfold _root_.Flock.Zk.schedule
   rw [he]
@@ -121,7 +123,7 @@ theorem size_filter_toList (p : ℕ → Bool) (xs : Array ℕ) : (xs.filter p).s
   rw [← Array.toList_filter, Array.length_toList]
 
 theorem repCoins_ok {m kLog claims : ℕ} {sch : _root_.Flock.Schedule} {tp : ℕ}
-    (h : _root_.Flock.Zk.schedule m = .ok (sch, tp)) :
+    (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp)) :
     repCoins m kLog claims = .ok ((replayCoins m kLog ++ Array.replicate claims 7 ++ #[claims] ++ ligeritoCoins sch ++
       #[1, INNER_CONS, 1, _root_.Flock.Zk.Q]).filter (· != 0)) := by
   unfold repCoins
@@ -129,7 +131,7 @@ theorem repCoins_ok {m kLog claims : ℕ} {sch : _root_.Flock.Schedule} {tp : �
   rfl
 
 theorem repCoins_size {m kLog claims : ℕ} {sch : _root_.Flock.Schedule} {tp : ℕ}
-    (h : _root_.Flock.Zk.schedule m = .ok (sch, tp)) (hc : claims ≠ 0) :
+    (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp)) (hc : claims ≠ 0) :
     ((repCoins m kLog claims).toOption.getD #[]).size =
       (m + (kLog - 6)) + (claims + 1) + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 4 := by
   have hlig := ligOk_all m
@@ -150,7 +152,7 @@ theorem repCoins_size {m kLog claims : ℕ} {sch : _root_.Flock.Schedule} {tp : 
 
 theorem repRounds_true (spec : _root_.Flock.SessionSpec) (st : _root_.Flock.Stmt) :
     FlockDeploy.repRounds true spec st =
-      match _root_.Flock.Zk.schedule st.m with
+      match _root_.Flock.Zk.schedule st.wideLeaf st.m with
       | .ok (sch, _) => (st.m + (st.c.kLog - 6)) + ((2 + spec.points * st.regions.size) + 1) +
           (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 4
       | .error _ => 0 := rfl
@@ -160,7 +162,7 @@ theorem repPlan_size (spec : _root_.Flock.SessionSpec) (st : _root_.Flock.Stmt) 
     (repPlan spec st).size = FlockDeploy.repRounds true spec st := by
   rw [repRounds_true]
   unfold repPlan
-  cases h : _root_.Flock.Zk.schedule st.m with
+  cases h : _root_.Flock.Zk.schedule st.wideLeaf st.m with
   | error e =>
     have hc : repCoins st.m st.c.kLog (2 + spec.points * st.regions.size) = .error e := by
       unfold repCoins

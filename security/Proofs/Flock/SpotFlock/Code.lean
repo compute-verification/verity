@@ -93,6 +93,8 @@ namespace SpotFlock
 open Claims Claims.Sampling SamplingDeploy Properties.Spot Finset
 open Lean (Json)
 
+variable {wideLeaf : Bool}
+
 /-! ## The auditor's copies and the run's statement -/
 
 /-- **A session's statement is in Flock's masked scope**, decided (`FlockDeploy.ZkIn`): it sets up with `1` to `200`
@@ -581,7 +583,7 @@ def session (u : ℕ) (v : Seen) : Option (Msg × Seen) :=
   else some (h.xS₀ (templateOf h.ms u), refusedSeen)
 
 /-- Template `t`'s reference statement's masked level-0 lengths, summed. -/
-noncomputable def n₀ (t : ℕ) : ℝ := ((shapeOf (h.xS₀ t)).map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum
+noncomputable def n₀ (t : ℕ) : ℝ := ((shapeOf (h.xS₀ t)).map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 wideLeaf m).d).sum
 
 /-- **The interior registration's roots** of replay block `ρ`, as the round-1 message states them (`irootsOf`); none
 before it. -/

@@ -394,7 +394,7 @@ theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) 
     rw [Array.size_append, FlockComplete.abcClaims_size] at hl3
     have hS4 := FlockComplete.SimInner.ligeritoPZk_ok (ligCoin c) n (respE c) (coinOf_respE c) _ _ _ _ _ _ _ _ _ _ _ _
       _ _ _ t₃ l₃ _ _ h₄
-    have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+    have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
         .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
       rw [stsOf_half]
       exact (zkTab x j).hz

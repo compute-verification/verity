@@ -81,9 +81,9 @@ def placeholder (spec : SessionSpec) (sts : Array Stmt) (k : ℕ) (link : Array 
     V (Cfg × Tab × ByteArray × Array (Array F128) × Array ByteArray) := do
   let st := sts[k / 2]!
   let (lay, mask) ← _root_.Flock.Firewall.Drive.start st
-  let (sch, tPad) ← _root_.Flock.Zk.schedule st.m
+  let (sch, tPad) ← _root_.Flock.Zk.schedule st.wideLeaf st.m
   let lv := sch.levels.getD 0 default
-  let l0 ← _root_.Flock.Firewall.Level0.ofDraws st.m (Array.replicate (2 ^ (lv.lanes + lv.cols)) 0)
+  let l0 ← _root_.Flock.Firewall.Level0.ofDraws st.wideLeaf st.m (Array.replicate (2 ^ (lv.lanes + lv.cols)) 0)
     (zeros (_root_.Flock.Firewall.Level0.drawSize lv tPad))
   let t ← tabOfLevel0 (_root_.Flock.Setup.ofCircuit st) l0
   let hi := (Array.range (t.sch.levels.size - 1)).map fun j => zeros (192 * 2 ^ (t.sch.levels.getD (j + 1) default).d)

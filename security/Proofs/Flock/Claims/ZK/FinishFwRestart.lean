@@ -119,6 +119,8 @@ theorem wS_foldKs (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (b : Arr
     rfl
 
 set_option maxHeartbeats 4000000 in
+
+variable {wideLeaf : Bool}
 /-- **A deployed rep's level-0 restart is `Σ y₁'·bFold`**: where `repFwC` on table `j`'s rep `r`, answered by the opened
 coins from the rep's base at the packed table of the witness's trace (`hg`) and extra lanes that are the tape's below
 `2^cols` (`hext`),
@@ -220,7 +222,7 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
   have hL2 : l₂.size = repBase x (2 * j.val + r.val) + 3 + ((stAt x j).m - 6) + 3 + ((stAt x j).c.kLog - 6) := by
     rw [hl₂, hl₁, hl, hkL, hSk, hSm]
   -- level 0 starts at `p₀`
-  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [stsOf_half]
     exact (zkTab x j).hz
@@ -322,7 +324,7 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
           (FlockComplete.ZkTables.Level0.pairLane extra (2 * r.val + 1)
             (FlockComplete.LigLock.tabS (ligCoin c) (ligP0 x j r) (ligTab x w τ j) (zkTab x j).sch.k0).size)) col := by
     obtain ⟨hnL, hL, -, -, -, hm⟩ := tabC_z PE x j
-    obtain ⟨-, -, hl0, -, -, -⟩ := zkLevel0 (zkTab x j).hz
+    obtain ⟨-, -, hl0, -, -, -⟩ := zkLevel0 wideLeaf (zkTab x j).hz
     unfold lv0 at hnL hL hm
     rw [hl0] at hnL hm
     have hmL : (ligSt x j).m = (tabC PE x j).S.m := by
@@ -402,7 +404,7 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
         (congrArg₂ (· * ·) rfl (congrArg FlockLevel3.embed e1))
   -- the restart, column by column
   obtain ⟨-, hL, -, -, -, -⟩ := tabC_z PE x j
-  obtain ⟨-, -, -, -, -, hk7⟩ := zkLevel0 (zkTab x j).hz
+  obtain ⟨-, -, -, -, -, hk7⟩ := zkLevel0 wideLeaf (zkTab x j).hz
   unfold lv0 at hL
   have hLm : (tabC PE x j).z.L = 2 ^ ((stAt x j).m - 7 - (zkTab x j).sch.k0) := by
     rw [hL]

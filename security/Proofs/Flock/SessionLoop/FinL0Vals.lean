@@ -114,7 +114,7 @@ theorem words_slot {x : Msg} {ops : List (Msg × Msg)} (hl : ops.length = refK x
 /-- **The loop asks rep `q`'s rounds through level 0 for its plan's counts.** -/
 theorem loopNr_plan {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, sts)) {q : ℕ} (hq : q < spec.repStreams.size)
-    {sch : _root_.Flock.Schedule} {tp : ℕ} (hz : _root_.Flock.Zk.schedule sts[q / 2]!.m = .ok (sch, tp))
+    {sch : _root_.Flock.Schedule} {tp : ℕ} (hz : _root_.Flock.Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok (sch, tp))
     (hk : 6 ≤ sts[q / 2]!.c.kLog) {i : ℕ} (hi : i ≤ FlockComplete.piopRoundsZk spec sts[q / 2]! + sch.k0 + 2) :
     loopNr x (FlockComplete.repStartZk spec sts q + i) =
       (_root_.Flock.Firewall.Session.repPlan spec sts[q / 2]!).getD i 0 := by
@@ -134,7 +134,7 @@ theorem loopNr_plan {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : 
 /-- **The loop's counts in level 0**: `z`'s `n`, then one, then two for each lane round and the extra lanes. -/
 theorem loopNr_l0 {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, sts)) {q : ℕ} (hq : q < spec.repStreams.size)
-    {sch : _root_.Flock.Schedule} {tp : ℕ} (hz : _root_.Flock.Zk.schedule sts[q / 2]!.m = .ok (sch, tp))
+    {sch : _root_.Flock.Schedule} {tp : ℕ} (hz : _root_.Flock.Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok (sch, tp))
     (hm : 14 ≤ sts[q / 2]!.m) (hk : 6 ≤ sts[q / 2]!.c.kLog) {i : ℕ} (hi : i ≤ sch.k0 + 2) :
     loopNr x (FlockComplete.repStartZk spec sts q + FlockComplete.piopRoundsZk spec sts[q / 2]! + i) =
       if i = 0 then sch.n else l0Nc i := by
@@ -149,7 +149,7 @@ theorem loopNr_l0 {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Ar
 ones, each claim's `7` and the claims' batching. -/
 theorem loopNr_piop {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, sts)) {q : ℕ} (hq : q < spec.repStreams.size)
-    {sch : _root_.Flock.Schedule} {tp : ℕ} (hz : _root_.Flock.Zk.schedule sts[q / 2]!.m = .ok (sch, tp))
+    {sch : _root_.Flock.Schedule} {tp : ℕ} (hz : _root_.Flock.Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok (sch, tp))
     (hm : 14 ≤ sts[q / 2]!.m) (hk : 6 ≤ sts[q / 2]!.c.kLog) :
     loopNr x (FlockComplete.repStartZk spec sts q + 1) = sts[q / 2]!.m - 13 ∧
       (∀ i < sts[q / 2]!.m - 6, loopNr x (FlockComplete.repStartZk spec sts q + 3 + i) = 1) ∧
@@ -310,7 +310,7 @@ theorem l0_loop (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Rea
   have hjj : (2 * j.val + r.val) / 2 = j.val := by omega
   have hmod : (2 * j.val + r.val) % 2 = r.val := by omega
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz

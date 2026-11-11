@@ -66,6 +66,8 @@ namespace FlockComplete
 
 open With
 
+variable {wideLeaf : Bool}
+
 /-- **The masked zerocheck** sends at most `3 + (m − 6)` rounds. -/
 theorem zerocheckPZk_sends (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout)
     (h : Array F128) (tr : Trace) :
@@ -215,7 +217,7 @@ theorem afterLinkPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteAr
 
 /-- One table's `--zk` schedules: its `--zk` schedule. -/
 theorem schedsPZk_one {st : Stmt} {schs : Array (Schedule × ℕ)}
-    (hs : (schedsPZk #[Setup.ofCircuit st] : V _) = .ok schs) : ∃ v, Zk.schedule st.m = .ok v ∧ schs = #[v] := by
+    (hs : (schedsPZk #[Setup.ofCircuit st] : V _) = .ok schs) : ∃ v, Zk.schedule st.wideLeaf st.m = .ok v ∧ schs = #[v] := by
   unfold schedsPZk at hs
   obtain ⟨h1, h2⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem hs
   have h0 := h2 0 (by simp) (by rw [h1]; simp)
@@ -239,7 +241,7 @@ theorem fast100_k0 {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) : 1 ≤
     cases h
 
 /-- The `--zk` schedule keeps fast100's lane rounds and levels: at least one, and at least two. -/
-theorem zkSchedule_shape {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) :
+theorem zkSchedule_shape {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     1 ≤ v.1.k0 ∧ 2 ≤ v.1.levels.size := by
   unfold Zk.schedule at h
   obtain ⟨q0, -, h⟩ := except_ok_bind h

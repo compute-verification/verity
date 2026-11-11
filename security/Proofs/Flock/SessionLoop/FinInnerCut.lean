@@ -354,7 +354,7 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
       ((swSrcE x c w v τ j.val).rep r.val).masked k = vals[k]! + pads.h[k]!) :
     SwRows x c w v τ j r res.2.2 := by
   subst hg
-  obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   have hk6' : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
   have hkm : (stAt x j).c.kLog ≤ (stAt x j).m := (zkTab x j).wf.1.hk
   have hfk : (stAt x j).circuitFold.kLog = (stAt x j).c.kLog := rfl
@@ -571,7 +571,7 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
   rw [Array.size_append, FlockComplete.abcClaims_size] at hl3
   have hS4 := FlockComplete.SimInner.ligeritoPZk_ok (ligCoin c) n (respE c) (coinOf_respE c) _ _ _ _ _ _ _ _ _ _ _ _ _
     _ _ t₃ l₃ _ _ h₄
-  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [stsOf_half]
     exact (zkTab x j).hz

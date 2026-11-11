@@ -60,6 +60,8 @@ open Flock FlockDeploy
 
 namespace FlockComplete
 
+variable {wideLeaf : Bool}
+
 /-- **The masked scope at the case's setup**: one table, of `25 ≤ m ≤ 35`, and the session spec is its own. -/
 theorem CaseZk.table {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : CaseZk H rel) :
     ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧ 25 ≤ st.m ∧ st.m ≤ 35 := by
@@ -103,8 +105,8 @@ theorem CaseZk.table {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → 
     omega
 
 /-- `Zk.schedule` has a schedule at every `m` from 25 to 35. -/
-theorem zkSchedule_ok {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) : ∃ v, Zk.schedule m = .ok v := by
-  obtain ⟨q, hq⟩ : ∃ q, Zk.queries0 m = .ok q := by
+theorem zkSchedule_ok {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) : ∃ v, Zk.schedule wideLeaf m = .ok v := by
+  obtain ⟨q, hq⟩ : ∃ q, Zk.queries0 wideLeaf m = .ok q := by
     unfold Zk.queries0
     interval_cases m <;> exact ⟨_, rfl⟩
   obtain ⟨sch, hs⟩ := Option.isSome_iff_exists.1 (fast100_isSome (by omega) h2)

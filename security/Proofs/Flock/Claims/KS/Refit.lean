@@ -333,7 +333,7 @@ theorem bound_le_εtable_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] (hF
       (FlockSoundness.Accounting.m1Pad st.m) := by
     unfold FlockSoundness.Accounting.padLinkError
     positivity
-  have hr0 := FlockSoundness.Accounting.m1_rep_nonneg st.m h25 h35 (acct spec st)
+  have hr0 := FlockSoundness.Accounting.m1_rep_nonneg (wide := st.wideLeaf) st.m h25 h35 (acct spec st)
   have hi := Claims.Flock.Numbers.innerUp_nonneg
   have hb : εInner T.N F T.q T.δ ≤ ENNReal.ofReal (Claims.Flock.Numbers.innerUp : ℝ) := by
     rw [hq]
@@ -572,7 +572,7 @@ theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : 
     (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables true x).head? = some (spec, st))
     (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) {sch : FlockSoundness.Accounting.Schedule}
     (hsch : sch = FlockSoundness.Accounting.m1Schedule st.m) (Np : ℕ)
-    (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0))
+    (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0))
     (j : Claims.Flock.IZ sch.levels.length → Fin ((deployZk rel).V.k x)) (hj : Function.Injective j)
     (ev : Claims.Flock.IZ sch.levels.length → Ω → (Fin ((deployZk rel).V.k x) → Coin) →
       (Fin ((deployZk rel).V.k x) → Coin) → Prop)
@@ -611,28 +611,28 @@ theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : 
       have h1 : (1 : ℝ) ≤ 2 ^ (sch.levels.headD default).logLen := one_le_pow₀ (by norm_num)
       have h2 : (1 : ℝ) ≤ (sch.levels.headD default).queries := by exact_mod_cast hq0
       nlinarith
-    set pd := Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0)
+    set pd := Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0)
     have htw : tableWeight true st = Claims.Flock.Numbers.weightOf sch pd := by
       simp only [tableWeight, ↓reduceIte, hsch, pd]
     have hNp2 : (Np : ℝ) * Np ≤ (pd : ℝ) ^ 2 := by
       have := Nat.mul_le_mul hNp hNp
       rw [sq]
       exact_mod_cast this
-    have hlen : tableLen true st = 2 ^ (Claims.Flock.zkLevel0 st.m).d := rfl
+    have hlen : tableLen true st = 2 ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d := rfl
     have hfits := kFits_all true st.m
     simp only [level0, wSched, ↓reduceIte, ← hsch] at hfits
     have he := Real.exp_pos 1
-    have hpow : (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
+    have hpow : (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
       pow_le_pow_right₀ (by norm_num) hfits
-    have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 ≤
+    have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d / Real.exp 1 ≤
         4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1 := by
       gcongr
     have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) (N₀_nonneg true x)) he.le)
     have hk : ((deployZk rel).k x : ℝ) = (⌈4 * N₀ true x / Real.exp 1⌉₊ : ℝ) := rfl
     have hsplit := weight_split h0
     rw [hlen] at hsplit
-    have e : 4 * (N₀ true x - 2 ^ (Claims.Flock.zkLevel0 st.m).d) / Real.exp 1 =
-        4 * N₀ true x / Real.exp 1 - 4 * 2 ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 := by ring
+    have e : 4 * (N₀ true x - 2 ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d) / Real.exp 1 =
+        4 * N₀ true x / Real.exp 1 - 4 * 2 ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d / Real.exp 1 := by ring
     rw [e] at hsplit
     show ((2 : ℕ) : ℝ) * ((deployZk rel).k x + ∑ i : Claims.Flock.IZ sch.levels.length, Claims.Flock.cZ sch Np i) ≤
       2 * weight true x

@@ -270,7 +270,7 @@ theorem tauLig : TauLig := by
   have hhalf : (stsOf x)[(2 * j.val + r.val) / 2]! = stAt x j := by
     rw [show (2 * j.val + r.val) / 2 = j.val by omega, getElem!_pos (stsOf x) j.val hj]
     rfl
-  have hz' : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz' : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [hhalf]
     exact hz

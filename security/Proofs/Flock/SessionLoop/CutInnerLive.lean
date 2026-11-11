@@ -207,7 +207,7 @@ theorem repCut_inner_stop (coin : ℕ → ℕ → F128) {resp : ℕ → Claims.M
       ts.size = st.fold.kLog - 6 → ∃ w, st.fold.folded a b lw ρ ts = .ok w ∧ w.size = 64)
     (hf : ∀ (a : F128) (lw ρ : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
       ∃ v, st.fold.fold a lw ρ = .ok v)
-    {sch : Schedule} {tPad : ℕ} (hz : Zk.schedule st.m = .ok (sch, tPad)) (rep : ℕ) (dom : ByteArray) (cm0 : Commit)
+    {sch : Schedule} {tPad : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (rep : ℕ) (dom : ByteArray) (cm0 : Commit)
     (extras : Array Claim) (ic : InnerCommit) (src : RepSrc) (prior : Array (List F128)) (words : List ℕ)
     (l : Array Claims.Msg) {i : ℕ} (hi : i < 4) {n : ℕ} (hn : n = CutEq.innerAt l.size st sch extras + i)
     (hrk : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
@@ -323,10 +323,10 @@ theorem repCut_inner_stop {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDep
   have hr := r.isLt
   obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
   have hst : (stsOf x)[j.val]! = stAt x j := getElem!_pos _ _ _
-  have hz₀ : _root_.Flock.Zk.schedule (stsOf x)[j.val]!.m = .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
+  have hz₀ : _root_.Flock.Zk.schedule (stsOf x)[j.val]!.wideLeaf (stsOf x)[j.val]!.m = .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [hst]
     exact (zkTab x j).hz
-  have hz₁ : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz₁ : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [show (2 * j.val + r.val) / 2 = j.val by omega]
     exact hz₀
@@ -446,7 +446,7 @@ theorem runCut_innerBody {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDepl
         _root_.Flock.Firewall.Session.INNER_CONS i := by
   have hjs : j.val < (stsOf x).size := lt_of_jOf j
   have hr2 := r.isLt
-  have hz₁ : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz₁ : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [show (2 * j.val + r.val) / 2 = j.val by omega, getElem!_pos (stsOf x) j.val hjs]
     exact (zkTab x j).hz

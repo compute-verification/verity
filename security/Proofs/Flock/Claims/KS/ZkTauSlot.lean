@@ -381,7 +381,7 @@ end Session
 the masked phase's coins (`coinsK_maskedZ`) at two link points per region and four lanes after level 0. -/
 theorem zkTau_dist {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {spec : SessionSpec} {sts : Array Stmt}
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (hp : spec.points = 2) (j : ℕ) (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (r : ℕ) (hr : r < 2)

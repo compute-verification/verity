@@ -148,6 +148,8 @@ open Flock
 
 local notation "𝔽" => FlockLevel3.GF128
 
+variable {wideLeaf : Bool}
+
 /-! ## `k ≤ weight` -/
 
 /-- The weight's schedule at `m`: `fast100`'s, under `--zk` M1's (`tableWeight`). -/
@@ -156,7 +158,7 @@ def wSched (zk : Bool) (m : ℕ) : FlockSoundness.Accounting.Schedule :=
 
 /-- The verifier's level 0 at `m` (`N₀`'s). -/
 def level0 (zk : Bool) (m : ℕ) : Flock.Level :=
-  if zk then Claims.Flock.zkLevel0 m else Claims.Flock.plainLevel0 m
+  if zk then Claims.Flock.zkLevel0 wideLeaf m else Claims.Flock.plainLevel0 m
 
 /-- Level 0's codeword is no longer than the weight schedule's level 0. -/
 def kFits (zk : Bool) (m : ℕ) : Bool :=
@@ -170,7 +172,7 @@ theorem level0_d_of_gt {zk : Bool} {m : ℕ} (hm : 35 < m) : (level0 zk m).d = 0
   · simp only [level0, Bool.false_eq_true, ↓reduceIte, Claims.Flock.plainLevel0, Claims.Flock.plainSched,
       FlockSoundness.Refine.exec_fast100_none m hm, Option.getD_none]
     rfl
-  · cases h : Zk.schedule m with
+  · cases h : Zk.schedule wideLeaf m with
     | ok p => have := schedule_range h; omega
     | error e =>
       simp only [level0, ↓reduceIte, Claims.Flock.zkLevel0, Claims.Flock.zkSched, h]
@@ -195,7 +197,7 @@ theorem tableWeight_ge (zk : Bool) (st : Stmt) :
     linarith [h2 ((FlockSoundness.Accounting.fast100 st.m).getD default) 0]
   · simp only [tableWeight, wSched, ↓reduceIte, Claims.Flock.Numbers.weightOf]
     linarith [h2 (FlockSoundness.Accounting.m1Schedule st.m)
-      (Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0))]
+      (Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0))]
 
 theorem tableWeight_nonneg (zk : Bool) (st : Stmt) : 0 ≤ tableWeight zk st := by
   unfold tableWeight
@@ -683,8 +685,8 @@ theorem zk_not_committed {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hw : ∀ q, wide true x (C q)) (hg : ¬ Claims.Flock.GoodTable (deployZk Readable.relation) (wordLen true) x C) :
     ¬ FlockSoundness.CommittedPad FlockSoundness.execArith
       (L.model (FlockSoundness.Refine.regionsOf (sts[0]'(by omega))))
-      (FlockSoundness.Refine.schedOf (Claims.Flock.zkSched (sts[0]'(by omega)).m).1)
-      (Claims.Flock.zkSched (sts[0]'(by omega)).m).2 padC (Claims.Flock.oracleOf C) := by
+      (FlockSoundness.Refine.schedOf (Claims.Flock.zkSched (sts[0]'(by omega)).wideLeaf (sts[0]'(by omega)).m).1)
+      (Claims.Flock.zkSched (sts[0]'(by omega)).wideLeaf (sts[0]'(by omega)).m).2 padC (Claims.Flock.oracleOf C) := by
   have h0 : 0 < sts.size := by omega
   have hm := parse_m hs hset h0
   have h25 : 25 ≤ sts[0].m := by have := hin.1; simp only [↓reduceIte] at this; omega

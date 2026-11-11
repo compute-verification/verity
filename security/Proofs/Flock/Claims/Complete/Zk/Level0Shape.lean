@@ -66,6 +66,8 @@ namespace FlockComplete.L0
 
 open Flock Transcript FlockComplete Replay Replay.Lg JsonRT FlockSoundness.Discharge
 
+variable {wideLeaf : Bool}
+
 /-! ## Level 0's masked commitment, by its shape -/
 
 /-- `CommitOk` at a row width `w`. -/
@@ -169,7 +171,7 @@ theorem openP_okW {sh : Shape} {ms : MerkleScheme} {lv : Level} {w : ℕ} {cm : 
 
 /-- **The walk follows the `--zk` schedule**: fast100's dimensions and levels above 0, every level's seam, and level
 0's cap within its depth. -/
-theorem zkSchedule_lig {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) :
+theorem zkSchedule_lig {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     LigSched v.1 := by
   obtain ⟨-, -, hm, hk0, -, ⟨hnm, -, -, -, hl4, -, -⟩, hseam, -, -⟩ :=
     FlockSoundness.Discharge.ZkExec.zk_schedule_seams m v.1 v.2 h

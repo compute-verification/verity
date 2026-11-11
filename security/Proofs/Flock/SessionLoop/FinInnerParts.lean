@@ -96,7 +96,7 @@ theorem repSlot_nSched {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {sp
   have hj : k / 2 < (Masked.stsOf x).size := by omega
   obtain ⟨y⟩ := hx.2 (k / 2) hj
   have hst : (Masked.stsOf x)[k / 2]! = (Masked.stsOf x)[k / 2] := getElem!_pos _ (k / 2) hj
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[k / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[k / 2]!.wideLeaf (Masked.stsOf x)[k / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]
     exact y.hz
   have hk6 : 6 ≤ (Masked.stsOf x)[k / 2]!.c.kLog := by
@@ -145,7 +145,7 @@ theorem piopNR_le_nSched {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {
   have hrsz : spec.repStreams.size = 2 * (Masked.stsOf x).size := by rw [FlockDeploy.repStreams_size, hspec]
   have hk : 2 * j.val + r.val < spec.repStreams.size := by omega
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz
@@ -184,7 +184,7 @@ theorem loopNr_piop_at {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {sp
   have hrsz : spec.repStreams.size = 2 * (Masked.stsOf x).size := by rw [FlockDeploy.repStreams_size, hspec]
   have hkk : 2 * j.val + r.val < spec.repStreams.size := by omega
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz
@@ -550,8 +550,8 @@ theorem innerHist_fin (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
   obtain ⟨g, d, l, -, htr⟩ := hRT _ tr hi hrk
   obtain ⟨hts, hsch⟩ := Count.tabOfLevel0_sched htr
   have hst' : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hjs
-  have hsc' : _root_.Flock.Zk.schedule (Masked.stAt x j).m = .ok (tr.sch, tr.tPad) := by
-    have e : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m = .ok (tr.sch, tr.tPad) := hsch
+  have hsc' : _root_.Flock.Zk.schedule (Masked.stAt x j).wideLeaf (Masked.stAt x j).m = .ok (tr.sch, tr.tPad) := by
+    have e : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m = .ok (tr.sch, tr.tPad) := hsch
     rwa [hk2, hst'] at e
   rw [(Masked.zkTab x j).hz] at hsc'
   have htsch : tr.sch = (Masked.zkTab x j).sch := (Prod.mk.inj (Except.ok.inj hsc')).1.symm
@@ -667,7 +667,7 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
     omega
   have hstj : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hjs
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz
@@ -1234,8 +1234,8 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
   obtain ⟨g₀, d₀, l₀, -, htr⟩ := hRT _ tr hi hr
   obtain ⟨hts, hsch⟩ := Count.tabOfLevel0_sched htr
   have hst' : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hjs
-  have hz : _root_.Flock.Zk.schedule (Masked.stAt x j).m = .ok (tr.sch, tr.tPad) := by
-    have e : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m = .ok (tr.sch, tr.tPad) := hsch
+  have hz : _root_.Flock.Zk.schedule (Masked.stAt x j).wideLeaf (Masked.stAt x j).m = .ok (tr.sch, tr.tPad) := by
+    have e : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m = .ok (tr.sch, tr.tPad) := hsch
     rwa [hk2, hst'] at e
   obtain ⟨hn6, hq6⟩ := FlockComplete.JsonRT.zkSchedule_small hm25 hm35 hz
   have hn6' : tr.sch.n + 1 ≤ 65536 := hn6

@@ -45,7 +45,7 @@ theorem runOf_shape_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {i
     {sts : Array Stmt} {lv : Live} {j : ℕ} {sch : Schedule} {tPad : ℕ} (hf : lastFinal seen = some f)
     (hset : setupOf true f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
     (hv : Zk.verifyWithM hs spec (tabsOf sts) f.record f.proofs = .ok ()) (hj : j < sts.size)
-    (hsch : Zk.schedule sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) :
+    (hsch : Zk.schedule sts[j].wideLeaf sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) :
     ∃ rr, runOf true seen j = some rr ∧
       rr.shape = ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size) := by
   obtain ⟨hsz, hall⟩ := rep_zk hs hv hlv
@@ -57,10 +57,10 @@ theorem runOf_shape_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {i
   rw [hj', hpts] at hex
   have hx : extras.size = 2 * sts[j].regions.size := by
     rw [extraClaims_size (st := sts[j]) hex, ← hpts, hpn, hp2, Nat.mul_comm]
-  have hzs : Claims.Flock.zkSched (Setup.ofCircuit sts[j]).m = (sch, tPad) := by
+  have hzs : Claims.Flock.zkSched (Setup.ofCircuit sts[j]).wideLeaf (Setup.ofCircuit sts[j]).m = (sch, tPad) := by
     simp only [Claims.Flock.zkSched]
     rw [show (Setup.ofCircuit sts[j]).m = sts[j].m from rfl, hsch]
-  have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit sts[j]).m (Setup.ofCircuit sts[j]).kLog (2 + extras.size)
+  have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit sts[j]).wideLeaf (Setup.ofCircuit sts[j]).m (Setup.ofCircuit sts[j]).kLog (2 + extras.size)
       (Setup.ofCircuit sts[j]).merkle.digestLen (saltLenOf true (Setup.ofCircuit sts[j])) =
       ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size) := by
     simp only [Claims.Flock.zkProofShape, hzs, ZkExec.shapeZKn, saltLenOf, hx, ite_true]
@@ -81,7 +81,7 @@ theorem runOf_shape_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {i
     {sts : Array Stmt} {lv : Live} {j : ℕ} {sch : Schedule} {tPad : ℕ} (hf : lastFinal seen = some f)
     (hset : setupOf true f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
     (hv : Zk.verifyWithM hs spec (tabsOf sts) f.record f.proofs = .ok ()) (hj : j < sts.size)
-    (hsch : Zk.schedule sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) :
+    (hsch : Zk.schedule sts[j].wideLeaf sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) :
     ∃ rr, runOf true seen j = some rr ∧
       rr.shape = ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size) :=
   Gen.runOf_shape_zk (S := S₀) (hs := hs) (seen := seen) (f := f) (ins := ins) (spec := spec) (sts := sts) (lv := lv)
@@ -121,7 +121,7 @@ theorem zk_levelOpeningJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
   rename_i rr hrr
   obtain ⟨st, extras, hst, hext, rfl⟩ := runOf_eqJ hf hx hs hlv hrr
   obtain ⟨hk, ha⟩ : k < 2 ∧
-      (q, a) ∈ zkLevelRowsOf (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
+      (q, a) ∈ zkLevelRowsOf (Claims.Flock.zkProofShape (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
         (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)))
         (lv.streams.getD (2 * j + k) #[]) (f.proofs.getD (2 * j + k) ByteArray.empty) ℓ := by
     rcases k with _ | _ | k
@@ -155,14 +155,14 @@ theorem zk_levelOpeningJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
   have hys : y = stream := Option.some.inj (hy.symm.trans hstream)
   subst hys
   have hcoins := forall₂_coins (fun _ _ hab => hab.2.1) hfa
-  have hzs : Claims.Flock.zkSched (Setup.ofCircuit st).m = (sch, tPad) := by
+  have hzs : Claims.Flock.zkSched (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = (sch, tPad) := by
     simp only [Claims.Flock.zkSched]
     rw [hsch]
-  have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
+  have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
       (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)) =
       FlockSoundness.Discharge.ZkExec.shapeZK (Setup.ofCircuit st) sch extras := by
     simp only [Claims.Flock.zkProofShape, hzs, FlockSoundness.Discharge.ZkExec.shapeZK, saltLenOf, ite_true]
-  have hsched : (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
+  have hsched : (Claims.Flock.zkProofShape (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
       (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st))).sched = sch := by
     rw [hsh]
     rfl
@@ -171,7 +171,7 @@ theorem zk_levelOpeningJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
     rw [zkLevelRowsOf, ite_eq_right (by rw [hsched]; exact hn)] at ha
     simp at ha
   obtain ⟨hent, hmc⟩ := hlev ℓ hℓ.1 hℓ.2
-  have hrowsEq : zkLevelRowsOf (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
+  have hrowsEq : zkLevelRowsOf (Claims.Flock.zkProofShape (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
       (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)))
       (lv.streams.getD (2 * j + k) #[]) (f.proofs.getD (2 * j + k) ByteArray.empty) ℓ =
       Claims.Flock.zkRepCols (sch.levels.getD ℓ default)
@@ -212,7 +212,7 @@ theorem zk_levelOpeningJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
       by rw [opensInsOf_hm96]; exact hlog i hi⟩
   rw [hiq] at hop
   refine ⟨_, f, sch, zp, _, hrr, hsched, hf, ?_, hia, hcs, hcw, hop⟩
-  show Zk.decode (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
+  show Zk.decode (Claims.Flock.zkProofShape (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
     (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st))) f.proofs[2 * j + k]! = .ok zp
   rw [hsh]
   exact hzp
@@ -306,7 +306,7 @@ theorem zkViewOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true 
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
@@ -322,7 +322,7 @@ theorem zkViewOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true 
       (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
       (viewOf (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec.mPts spec' link c₁ f) a)
     (rr : Fin 2) :
-    ∃ (hj' : j < sts.size) (sch : Schedule) (tPad : ℕ) (zp : Zk.ZkProof), Zk.schedule sts[j].m = .ok (sch, tPad) ∧
+    ∃ (hj' : j < sts.size) (sch : Schedule) (tPad : ℕ) (zp : Zk.ZkProof), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (sch, tPad) ∧
       (∀ ℓ dc, CapAtZ rr.val ℓ (a.getD j dfltOutZC) dc → Refine.capDig zp.proof.ligerito.recursiveCaps[ℓ]! = dc) ∧
       ∀ ℓ, 1 ≤ ℓ → ∀ q v, (q, v) ∈ (slotOpensZ (a.getD j dfltOutZC) rr.val ℓ
           (lvOf (zkTabs h0 L hz hk hlay j).sch ℓ).queries).map (fun x => (x.1, x.2.1)) →
@@ -431,7 +431,7 @@ theorem zkViewOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true 
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
@@ -447,7 +447,7 @@ theorem zkViewOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true 
       (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
       (viewOf (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec.mPts spec' link c₁ f) a)
     (rr : Fin 2) :
-    ∃ (hj' : j < sts.size) (sch : Schedule) (tPad : ℕ) (zp : Zk.ZkProof), Zk.schedule sts[j].m = .ok (sch, tPad) ∧
+    ∃ (hj' : j < sts.size) (sch : Schedule) (tPad : ℕ) (zp : Zk.ZkProof), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (sch, tPad) ∧
       (∀ ℓ dc, CapAtZ rr.val ℓ (a.getD j dfltOutZC) dc → Refine.capDig zp.proof.ligerito.recursiveCaps[ℓ]! = dc) ∧
       ∀ ℓ, 1 ≤ ℓ → ∀ q v, (q, v) ∈ (slotOpensZ (a.getD j dfltOutZC) rr.val ℓ
           (lvOf (zkTabs h0 L hz hk hlay j).sch ℓ).queries).map (fun x => (x.1, x.2.1)) →
@@ -484,7 +484,7 @@ theorem zkAccOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true R
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
@@ -497,7 +497,7 @@ theorem zkAccOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true R
       (liveOut (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) (fun _ => spec.mPts) zkN
         spec.dg (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset))
         sha512 (zkSim P x spec sts) x (ω, u) r') a) (rr : Fin 2) :
-    ∃ (hj' : j < sts.size) (sch : Schedule) (tPad : ℕ) (zp : Zk.ZkProof), Zk.schedule sts[j].m = .ok (sch, tPad) ∧
+    ∃ (hj' : j < sts.size) (sch : Schedule) (tPad : ℕ) (zp : Zk.ZkProof), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (sch, tPad) ∧
       (∀ ℓ dc, CapAtZ rr.val ℓ (a.getD j dfltOutZC) dc → Refine.capDig zp.proof.ligerito.recursiveCaps[ℓ]! = dc) ∧
       ∀ ℓ, 1 ≤ ℓ → ∀ q v, (q, v) ∈ (slotOpensZ (a.getD j dfltOutZC) rr.val ℓ
           (lvOf (zkTabs h0 L hz hk hlay j).sch ℓ).queries).map (fun x => (x.1, x.2.1)) →
@@ -525,7 +525,7 @@ theorem zkAccOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true R
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {j : ℕ}
@@ -538,7 +538,7 @@ theorem zkAccOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true R
       (liveOut (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) (fun _ => spec.mPts) zkN
         spec.dg (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset))
         sha512 (zkSim P x spec sts) x (ω, u) r') a) (rr : Fin 2) :
-    ∃ (hj' : j < sts.size) (sch : Schedule) (tPad : ℕ) (zp : Zk.ZkProof), Zk.schedule sts[j].m = .ok (sch, tPad) ∧
+    ∃ (hj' : j < sts.size) (sch : Schedule) (tPad : ℕ) (zp : Zk.ZkProof), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (sch, tPad) ∧
       (∀ ℓ dc, CapAtZ rr.val ℓ (a.getD j dfltOutZC) dc → Refine.capDig zp.proof.ligerito.recursiveCaps[ℓ]! = dc) ∧
       ∀ ℓ, 1 ≤ ℓ → ∀ q v, (q, v) ∈ (slotOpensZ (a.getD j dfltOutZC) rr.val ℓ
           (lvOf (zkTabs h0 L hz hk hlay j).sch ℓ).queries).map (fun x => (x.1, x.2.1)) →

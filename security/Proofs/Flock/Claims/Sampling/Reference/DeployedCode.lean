@@ -85,6 +85,8 @@ namespace SamplingDeploy
 open Claims Claims.Sampling Claims.Sampling.Reference Properties.Spot
 open Lean (Json)
 
+variable {wideLeaf : Bool}
+
 /-- **The sampled verifier's code with its Lean sample**: `c` with `checked` the sample of record on the registration
 `reg x` over the bytes `bytes x` of the coins, and one session per registration, `sess`, on the rounds `sr`, so every
 unit has the statement's `N₀`. -/
@@ -274,7 +276,7 @@ def ShapesFixed (shape : Msg → List ℕ) : Prop :=
   ∀ x v xS vS, sess x v = some (xS, vS) → (FlockDeploy.tables true xS).map (fun p => p.2.m) = shape x
 
 /-- A shape's `N₀`: its tables' masked level-0 codeword lengths, summed. -/
-noncomputable def shapeN₀ (ms : List ℕ) : ℝ := (ms.map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum
+noncomputable def shapeN₀ (ms : List ℕ) : ℝ := (ms.map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 wideLeaf m).d).sum
 
 /-- **`N₀` reads only the table shapes**: at fixed shapes, every session at `x` has `N₀` the shapes'. -/
 theorem N₀_of_shapes (shape : Msg → List ℕ) (h : ShapesFixed sess shape) (x : Msg) (v : Seen) (xS : Msg) (vS : Seen)

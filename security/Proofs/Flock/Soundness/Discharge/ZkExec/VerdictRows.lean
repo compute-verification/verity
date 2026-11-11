@@ -283,7 +283,7 @@ the setup's circuit fold realizes, on a decoded proof, has an inner check that h
 theorem zk_inner_rows {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof)
     (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
-    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad) (htab : ZkTabLay T st sch)
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad) (htab : ZkTabLay T st sch)
     (hfold : FoldRealizes st.fold T.S)
     (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
     (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
@@ -449,7 +449,7 @@ theorem zk_inner_of_rep {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 
     (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof)
     (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript) (cap₀ : Cap Dig)
     (os : ZkLink.OpensZ 𝔽 Dig (List UInt8))
-    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (_hms : st.merkle = MerkleScheme.hm96Sha512)
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (_hms : st.merkle = MerkleScheme.hm96Sha512)
     (hseam : ZkTabSeam T st sch tPad) (htab : ZkTabLay T st sch) (hfold : FoldRealizes st.fold T.S)
     (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
     (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
@@ -474,7 +474,7 @@ rep's messages and the rounds' coins, records at inner query `jj` the table's `p
 theorem zk_qpos_of_rep {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2)
     (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof)
     (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
-    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad) (htab : ZkTabLay T st sch)
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad) (htab : ZkTabLay T st sch)
     (hfold : FoldRealizes st.fold T.S)
     (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
     (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),

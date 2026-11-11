@@ -31,6 +31,8 @@ namespace Claims.ZKServer.Count
 open _root_.Flock (V F128 Transcript TMW liftTM)
 open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
 
+variable {wideLeaf : Bool}
+
 /-- **A step program that asks for nothing**: where it ends, with a value in `Q`. -/
 def NA {α : Type} (Q : α → Prop) : Step α → Prop
   | .done a => Q a
@@ -228,14 +230,14 @@ theorem sched_prefix (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : B
 
 theorem tabOfLevel0_ok {st : _root_.Flock.Setup} {l : _root_.Flock.Firewall.Level0.Level0}
     {t : _root_.Flock.Firewall.Finish.Tab} (h : _root_.Flock.Firewall.Finish.tabOfLevel0 st l = .ok t) :
-    t.st = st ∧ ∃ tp, _root_.Flock.Zk.schedule st.m = .ok (t.sch, tp) := by
+    t.st = st ∧ ∃ tp, _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (t.sch, tp) := by
   unfold _root_.Flock.Firewall.Finish.tabOfLevel0 at h
   simp only [bind, Except.bind] at h
   split at h
   · cases h
   split at h
   · cases h
-  rcases hs : _root_.Flock.Zk.schedule st.m with e | ⟨sch, tPad⟩
+  rcases hs : _root_.Flock.Zk.schedule st.wideLeaf st.m with e | ⟨sch, tPad⟩
   · rw [hs] at h; cases h
   · rw [hs] at h
     simp only at h
@@ -251,7 +253,7 @@ theorem placeholder_tab {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Fl
     {c' : _root_.Flock.Firewall.Frame.Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} (h : Loop.placeholder spec sts k link = .ok (c', t, dom, xs, hi)) :
     t.st = _root_.Flock.Setup.ofCircuit sts[k / 2]! ∧
-      (∃ tp, _root_.Flock.Zk.schedule sts[k / 2]!.m = .ok (t.sch, tp)) ∧
+      (∃ tp, _root_.Flock.Zk.schedule sts[k / 2]!.wideLeaf sts[k / 2]!.m = .ok (t.sch, tp)) ∧
       xs = _root_.Flock.Firewall.Drive.extras sts[k / 2]! (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]! link) := by
   have bok : ∀ {α β : Type} {x : V α} {f : α → V β} {b : β}, x >>= f = .ok b → ∃ a, x = .ok a ∧ f a = .ok b := by
     intro α β x f b hb
@@ -279,7 +281,7 @@ theorem linkPoints_size (st : _root_.Flock.Stmt) (c : Array F128) :
 
 /-- A `--zk` schedule's facts the opening's asks read: a lane round before the pair, and its counts within a squeeze's. -/
 def schedOk (m : ℕ) : Bool :=
-  match _root_.Flock.Zk.schedule m with
+  match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (sch, _) => decide (1 ≤ sch.k0) && decide (sch.n < 2 ^ 62) &&
       sch.levels.all (fun lv => decide (lv.q < 2 ^ 63)) && decide ((default : _root_.Flock.Level).q < 2 ^ 63)
   | .error _ => true
@@ -287,7 +289,7 @@ def schedOk (m : ℕ) : Bool :=
 /-- Every `--zk` schedule, `m < 36`, by the kernel's evaluation. -/
 theorem schedOk_lt : ∀ m, m < 36 → schedOk m = true := by decide +kernel
 
-theorem sched_facts {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule m = .ok (sch, tp)) :
+theorem sched_facts {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp)) :
     m < 36 ∧ 1 ≤ sch.k0 ∧ sch.n < 2 ^ 62 ∧ ∀ i, (sch.levels.getD i default).q < 2 ^ 63 := by
   have hm : m < 36 := by
     by_contra hc
@@ -314,7 +316,7 @@ theorem flatten_seven (n : ℕ) : (List.replicate n [7]).flatten = List.replicat
 
 /-- **A rep's plan**, as a list: the algebraic phase's counts, the opening's, then the inner proof's. -/
 theorem repPlan_list {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
-    (h : _root_.Flock.Zk.schedule st.m = .ok (sch, tp)) :
+    (h : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) :
     (_root_.Flock.Firewall.Session.repPlan spec st).toList =
       (_root_.Flock.Firewall.Session.replayCoins st.m st.c.kLog).toList.filter (· != 0) ++
         openList (2 + spec.points * st.regions.size) sch ++

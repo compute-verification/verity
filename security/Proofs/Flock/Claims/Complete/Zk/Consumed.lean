@@ -104,7 +104,7 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 replay's `m + (kLog − 6)`, the ring switch's `claims + 1`, Ligerito's `k0 + 7 + 11 R` and the inner proof's `4`. -/
 theorem RunZk.inner_k (hRp : Replay H rel) (hRS : RingSwitchZk H rel) (hLg : LigeritoZk H rel) (hIn : Inner H rel)
     (o : RunZk H rel) {st : Flock.Stmt} (htabs : o.tabs = #[Setup.ofCircuit st]) {v : Schedule × ℕ}
-    (hv : Zk.schedule st.m = .ok v) (hsch : o.sch 0 = v.1) {r : ℕ} (hr : r < 2) :
+    (hv : Zk.schedule st.wideLeaf st.m = .ok v) (hsch : o.sch 0 = v.1) {r : ℕ} (hr : r < 2) :
     (o.inner 0 r).2.k = (st.m + ((Setup.ofCircuit st).kLog - 6)) + ((2 + (o.extras 0).size) + 1) +
         (v.1.k0 + 7 + 11 * (v.1.levels.size - 1)) + 4 ∧
       (o.inner 0 r).2.k ≤ (o.stream 0 r).rounds.size := by
@@ -165,7 +165,7 @@ theorem consumedZk_goal (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     rw [FlockDeploy.extraClaims_size (st := st) he, hsess]
     simp [JsonRT.sessOf, pointsOf, Nat.mul_comm]
   have hrep : repRounds true o.spec st = (o.inner 0 0).2.k := by
-    have hv' : Zk.schedule st.m = .ok v := hv
+    have hv' : Zk.schedule st.wideLeaf st.m = .ok v := hv
     rw [k0, hx]
     simp [repRounds, hv', Setup.ofCircuit]
   have e0 := hstream 0 (by omega)

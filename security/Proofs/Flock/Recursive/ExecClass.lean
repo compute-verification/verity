@@ -71,7 +71,7 @@ def shapeOf (st : Flock.Stmt) : Flock.Stmt :=
 /-- **The executable's checks of a statement's class**: its layout (`StmtWF`), its regions (`RegionsWF`), and
 `Zk.schedule` accepting its `m`. -/
 def ClassOk (st : Flock.Stmt) : Prop :=
-  Refine.StmtWF st ∧ Refine.RegionsWF st ∧ ∃ p, Flock.Zk.schedule st.m = .ok p
+  Refine.StmtWF st ∧ Refine.RegionsWF st ∧ ∃ p, Flock.Zk.schedule st.wideLeaf st.m = .ok p
 
 /-- **Lean's verifier accepts `st` as the inner statement**, set up as `RecVStar.innerOf` and `RecCoins.Inner.load` set
 it up: from some circuit and public files, partition object and program (`innerOf` passes the verifier's own, and
@@ -82,7 +82,7 @@ def AcceptsStmt (st : Flock.Stmt) : Prop :=
   (∃ (cf pf : ByteArray) (partition : Option Lean.Json) (program : Option ByteArray) (spec : Flock.SessionSpec),
     Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.RecVStar.innerTree 1 (partition := partition)
       (program := program) = .ok (spec, #[st])) ∧
-  ∃ p, Flock.Zk.schedule st.m = .ok p
+  ∃ p, Flock.Zk.schedule st.wideLeaf st.m = .ok p
 
 /-- The inner tags hide the statement's outputs, so `setupTables` sets the inner statement up with `setupHidden`. -/
 theorem innerTags_hiddenOutputs : Flock.RecVStar.innerTags.hiddenOutputs = true := rfl
