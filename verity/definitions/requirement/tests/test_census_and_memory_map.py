@@ -43,6 +43,13 @@ from itertools import chain, count
 import pytest
 import verity_difftest as D
 from test_requirement_difftest import PORT, _lean, encode, rmsnorm, serve, toy_decoder
+from verity_vllm.commit import memory_map as MM
+from verity_vllm.program.predict.build import build_program
+from verity_vllm.program.predict.phi import Phi
+from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
+from verity_vllm.protocols.remote_bandwidth.memory_map import Lines
+from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
+from verity_vllm.query.required import SAMPLING_EVENTS
 
 from verity.circuits.program import REGISTRATION, Program, is_input
 from verity.definitions.circuits import requirement as R
@@ -176,9 +183,6 @@ def _payload(r: str, row) -> bytes:
 
 @pytest.fixture(scope="module")
 def requests() -> dict[str, Program]:
-    from verity_vllm.program.predict.build import build_program
-    from verity_vllm.program.predict.phi import Phi
-
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": WIDE},
               target={"compute_capability": [12, 0], "num_sms": 188}, workload={"requests": []})
     return {"r0": build_program(phi, "request", LP=4, T=5).program, "r1": build_program(phi, "request", LP=4, T=1).program}
@@ -195,8 +199,6 @@ def row_reads(program: Program, c: dict | None = None):
     """A KV row's group -> the request steps that read it, and those whose selections may: the requirement over the
     Program's census `c` (at its sampling events when not given), which `MM.rows` takes, at the census values the row's
     leaves are."""
-    from verity_vllm.query.required import SAMPLING_EVENTS
-
     c = census(program, step_ends(program, SAMPLING_EVENTS)) if c is None else c
     req = R.from_census(c)
 
@@ -239,8 +241,6 @@ def session_lines(pages: list, arrive: dict[str, int], blocks: int) -> list[Step
     `pages`, each block of each page (`map_case`): a slot's registered block is freed at the step a write first reaches
     it, and a whole block is appended at the step its last row is born, with its digest and its rows' last structural
     reader, a step's blocks one append by slot whose coin is back before the next step's reads (it lands at once)."""
-    from verity_vllm.protocols.remote_bandwidth.memory_map import Lines
-
     reach: dict[int, list[int]] = {}
     done: dict[int, list[tuple[int, bytes, int]]] = {}
     for r, _, _, got, slot, off, whole, _ in pages:
@@ -266,10 +266,6 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int], censuses: dic
     request, layer, plane and `MM.Row`, each value's block, and the blocks the replayed map holds at each step. A
     request's census is its Program's at its sampling events unless `censuses` gives one. The registered store is the
     KV pool, a region a layer, and each slot is one request's."""
-    from verity_vllm.commit import memory_map as MM
-    from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
-    from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
-
     censuses = censuses or {}
     rows = {r: MM.rows(p, censuses.get(r)) for r, p in requests.items()}
     tables = first_need(rows, arrive)
@@ -401,8 +397,6 @@ def test_a_block_a_gather_may_select_stays_resident_through_the_last_step_that_m
     where Lean's `live` ends. The builder's record frees the page after step 5, and the link holds at every step. Freed
     after step 4, their last use, the page is out of the store at step 5, where its rows are live and credited though
     step 5 reads none of them: `StoreMatches` fails there alone, and `PlanMatches` holds."""
-    from verity_vllm.commit import memory_map as MM
-
     r0 = requests["r0"]
     c = MM.census_of(r0)
     first = set().union(*(census_values(r0, c, x.group) for kv in MM.rows(r0, c).layers for plane in kv for x in plane[:4]))
