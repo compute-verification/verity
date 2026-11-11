@@ -1,6 +1,8 @@
 """``circuit-check --structural DIR TARGET`` where DIR holds a split (`verity_flock.struct_slots`, ``struct-slots/v1``: a
 ``flock-ir-tmpl`` template a net and ``slots.json``): its nets, composed through its lookup slots by its wires, held to the
-Definition TARGET's flat lowering as `structural` holds one template.
+Definition TARGET's flat lowering as `structural` holds one template. circuit-check imports nothing of Flock: the split, its
+format's name, its slot tables' widths and their words come from the reader its module's sidecar defines
+(`targets.struct_slots_split`).
 
 The nets are composed by the wires alone, as the statement composes them: the unit's input ports are the Definition's input
 leaves; each later net's input port is the one port a wire into it names, of an earlier net or of a ``lookup:<table>``
@@ -18,21 +20,22 @@ from __future__ import annotations
 
 import operator
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Sequence
 
 import numpy as np
 
 from . import checks as CK
 from . import structural as ST
+from . import targets as TG
 
 
 class Split:
     """A split as `structural._check`'s side: its counts, its inputs, its canonical output bits and its evaluation."""
 
-    def __init__(self, sp: Any, slots: dict[str, tuple[int, int]]) -> None:
+    def __init__(self, sp: Any, slots: dict[str, tuple[int, int]], words: Callable[[str], Sequence[int]]) -> None:
         if not sp.nets:
             raise ST.Refused("malformed", "a split of no nets")
-        self.sp, self.slots = sp, slots
+        self.sp, self.slots, self.words = sp, slots, words
         self.names = [("unit" if s == 0 else f"stage{s - 1}") for s in range(len(sp.nets))]
         self.ports = [ST.ports(t.groups) for t in sp.nets]
         self.inputs = sum(map(len, self.ports[0][0]))
@@ -158,14 +161,12 @@ class Split:
         return [b or ST.ZERO for b in mine], rec
 
     def evaluate(self, lanes: list[int], T: int) -> list[int]:
-        from verity_flock import gf2
-
         n = (T + 7) // 8
 
         def read(table: str, idx: list[int]) -> list[int]:
             bits = np.stack([np.unpackbits(np.frombuffer(b.to_bytes(n, "little"), np.uint8), bitorder="little")[:T]
                              for b in idx]).astype(np.int64)
-            w = np.asarray(gf2.table(table), np.uint32)[(bits << np.arange(len(idx))[:, None]).sum(axis=0)]
+            w = np.asarray(self.words(table), np.uint32)[(bits << np.arange(len(idx))[:, None]).sum(axis=0)]
             return [int.from_bytes(np.packbits(((w >> j) & 1).astype(np.uint8), bitorder="little").tobytes(), "little")
                     for j in range(self.slots[table][1])]
 
@@ -174,20 +175,19 @@ class Split:
 
 def check(target: Any, path: Path, *, exhaustive_bits: int = ST.EXHAUSTIVE_BITS, vectors: int = ST.VECTORS,
           seed: int = CK.Options.seed, label: str | None = None) -> dict:
-    """The split in the directory ``path`` (`verity_flock.struct_slots.read`) held to ``target``'s flat lowering, as
-    `structural.check` holds a template."""
-    from verity_flock import struct_slots as SS
-
+    """The split in the directory ``path``, read by the sidecar that defines its reader (`targets.struct_slots_split`), held
+    to ``target``'s flat lowering, as `structural.check` holds a template."""
     from verity.circuits.evaluation.reference import resolve
 
     t = resolve(target)
+    read, form, slots, words = TG.struct_slots_split(str(path))
 
     def side() -> Split:
         try:
-            sp = SS.read(Path(path))
+            sp = read()
         except (OSError, KeyError, TypeError, AssertionError, IndexError, ValueError) as e:
-            raise ST.Refused("malformed", f"not a {SS.FORMAT} directory: {type(e).__name__} {e}") from None
-        return Split(sp, SS.SLOTS)
+            raise ST.Refused("malformed", f"not a {form} directory: {type(e).__name__} {e}") from None
+        return Split(sp, slots, words)
 
     return ST._check(side, lambda: ST._lowered(t), label or t.id, {"definition": t.id, "split": str(path)},
                      ("the Definition's", "input leaves"), exhaustive_bits, vectors, seed)
