@@ -1099,6 +1099,9 @@ class LakeArtifacts:
         one Lake restored) under its key; the number of entries new to the index. Whether the run passed is not read: a
         key names what a compile read, and a failed or killed run's compile of those is the compile a passing run's is,
         given the two things a passing audit said of the build, which are asked here of every build instead.
+        Of a build that names the modules Lake said it built (`"compiled"`: one that read Lake's own cache, where an
+        archive of main's published build unpacks to outputs, fresh `.hash` files and the publisher's trace, which nothing
+        in the build tells from a compile), only those go in.
         Only a build that says it ran in the sandbox (`"sandbox": true`) goes in: outside it, compile-time
         code runs as the user and could leave any outputs, traces and `setup.json` it chose in the build, each then indexed
         as its module's. And only a build none of whose sources runs code while it compiles, outside a reviewed listing
@@ -1131,6 +1134,9 @@ class LakeArtifacts:
                 keyed, owners = MK.keys(pkg, MK.policy_roots(pkg)), {}
                 with ThreadPoolExecutor(max_workers=8) as ex:
                     built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners), keyed)))
+                if isinstance(only := rep.get("compiled"), list):
+                    built = {m: b if isinstance(b, str) or m in only else "not compiled by this run: Lake didn't say it built it"
+                             for m, b in built.items()}
                 need, todo = set(), [m for m, b in built.items() if not isinstance(b, str)]
                 while todo:
                     if (m := todo.pop()) not in need:

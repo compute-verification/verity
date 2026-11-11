@@ -211,7 +211,8 @@ def test_a_run_stores_what_the_run_before_it_compiled_and_never_stored_before_it
     """A run killed whole (a timeout, the node's memory) never reaches its own `put`. Its mark says when its build began
     and where check.py's word on it is, and the next run on the tree stores from those first: a key is computed from the
     tree's sources, which its `sync` is about to change. Otherwise a build longer than its timeout would start from
-    nothing every time, since a module the cache lacks keeps no trace (`module_keys.stage`)."""
+    nothing every time, since a module the cache lacks keeps no trace (`module_keys.stage`). What a `--try` or a
+    `--build` left is not stored: which of its modules Lake compiled and which it unpacked, only its output said."""
     _, tree, _ = fast
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     old = tmp_path / "old-run" / "lean-audit"
@@ -226,15 +227,15 @@ def test_a_run_stores_what_the_run_before_it_compiled_and_never_stored_before_it
     monkeypatch.setattr(LC.LA.LakeArtifacts, "put",
                         lambda self, reports, since=None, log=print: events.append(("put", reports, since)) or 2)
     said = []
-    for left in ({"phase": "check", "since": 1234.5, "out": str(old)}, {"phase": "try", "since": 99.0, "sandbox": True},
-                 {"phase": "build", "since": 99.0, "sandbox": False}, {"phase": "deps"}, {"phase": "check", "killed": -9}):
+    for left in ({"phase": "check", "since": 1234.5, "out": str(old)}, {"phase": "try"}, {"phase": "build"},
+                 {"phase": "deps"}, {"phase": "check", "killed": -9}):
         events.clear()
         (tree / LC.DIRTY).write_text(json.dumps({"run": "r-old", "pid": 7, "package": "pkg", "at": "T"} | left))
         assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
         want = {"check": [("put", {tree / "pkg": {"package": str(tree / "pkg"), "sandbox": True},
-                                   tree / "pkg/Proofs": {"package": str(tree / "pkg/Proofs"), "sandbox": False}}, 1234.5)],
-                "try": [("put", {tree / "pkg": {"sandbox": True}}, 99.0)]}.get(left["phase"] if "since" in left else "", [])
-        assert events[:len(want) + 1] == [*(want if left.get("sandbox", True) else []), "sync"], left
+                                   tree / "pkg/Proofs": {"package": str(tree / "pkg/Proofs"), "sandbox": False}}, 1234.5)]
+                }.get(left["phase"] if "since" in left else "", [])
+        assert events[:len(want) + 1] == [*want, "sync"], left
     assert f"lean-records: {tree}: of what r-old left: 2 module version(s) new in the artifact cache" in said
 
 
@@ -934,7 +935,7 @@ def trying(tmp_path, monkeypatch):
     monkeypatch.setattr(LC, "sandboxed", lambda: False)
     monkeypatch.setattr(LC.shutil, "which", lambda _: str(lake))
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: None)
-    calls = {"build": [], "run": [], "link": [], "lean_rc": 0, "deps_rc": 0, "lean_text": ""}
+    calls = {"build": [], "run": [], "link": [], "lean_rc": 0, "deps_rc": 0, "lean_text": "", "deps_text": ""}
 
     def link(pkg, t, deps, links, log=print, copy=False):
         calls["link"].append((pkg, copy))
@@ -943,7 +944,7 @@ def trying(tmp_path, monkeypatch):
 
     def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None):
         calls["build"].append((pkg, t, targets, sandbox, cmd))
-        return (calls["lean_rc"], calls["lean_text"]) if cmd else (calls["deps_rc"], "")
+        return (calls["lean_rc"], calls["lean_text"]) if cmd else (calls["deps_rc"], calls["deps_text"])
 
     monkeypatch.setattr(LC, "link", link)
     monkeypatch.setattr(LC, "build", build)
@@ -970,8 +971,13 @@ def test_try_and_build_store_what_they_compiled_only_from_a_build_in_the_sandbox
     """`--try` and `--build` compile most of what lanes change, and each module they compile in the sandbox goes into the
     node's artifact cache, so the records run after them restores it. Outside the sandbox (this run's, or check.py's
     stricter probe of it) compile-time code could leave any output in the build, and nothing is stored. `--try` stores
-    what `lake build` compiled before `lean` reads the file itself, whose code no build has read."""
+    what `lake build` compiled before `lean` reads the file itself, whose code no build has read. Their build reads Lake's
+    own cache, so it names the modules Lake said it built: one Lake unpacked from main's published build, or replayed, is
+    not this node's compile, and neither is an object."""
     tree, calls = trying
+    calls["deps_text"] = ("✔ [2/9] Unpacked Proofs.Flock.V\n⚠ [3/9] Replayed Proofs.Flock.U\n"
+                          "✔ [4/9] Built Proofs.Flock.W (1.2s)\n✔ [5/9] Built Proofs.Flock.W:c.o (54ms)\n"
+                          "✖ [6/9] Building Proofs.Flock.T\n    ✔ [7/9] Built «Proofs».Flock.S\n")
     (slots := tmp_path / "lean-slots").write_text("build 1\n")
     monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", slots)
     put, marks, ran = [], [], []
@@ -990,9 +996,10 @@ def test_try_and_build_store_what_they_compiled_only_from_a_build_in_the_sandbox
                 assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 0
             else:
                 assert LC.build_files(["Sec/Proofs/Flock/X.lean"], tmp_path / "deps", log=said.append) == 0
-            last = marks[-1]
-            assert (last["phase"], last["sandbox"]) == (phase, stored) and isinstance(last["since"], float)
-            assert put == ([(store, {tree / "Sec/Proofs": {"sandbox": True}}, last["since"])] if stored else [])
+            assert marks[-1] == {"package": "Sec/Proofs", "phase": phase}, "nothing for the next run to store from"
+            built = {"sandbox": True, "compiled": ["Proofs.Flock.S", "Proofs.Flock.W"]}
+            assert [(s, r) for s, r, _ in put] == ([(store, {tree / "Sec/Proofs": built})] if stored else [])
+            assert all(isinstance(since, float) for _, _, since in put)
             assert (f"lean-{phase}: Sec/Proofs: 4 module version(s) new in the artifact cache" in said) == stored
             assert ran == ([before + 1] if stored else []) and len(calls["build"]) == before + (2 if phase == "try" else 1), \
                 "stored after `lake build`, and for a try before `lake env lean`"

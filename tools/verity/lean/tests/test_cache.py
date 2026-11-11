@@ -891,6 +891,56 @@ CALLS_EXTRA = "import Toy\n\ndef main : IO Unit := IO.println (Toy.word (Toy.ext
 
 
 @pytest.mark.skipif(LAKE is None, reason="no lake")
+def publish(LC, pkg: Path, out: Path, own: Path) -> None:
+    """A published build of ``pkg`` in the Lake cache ``own``, as `cache.py` builds, stages and restores one."""
+    writable = {**LC.lake_env(), "LAKE_ARTIFACT_CACHE": "true", "LAKE_CACHE_DIR": str(out / "lake-cache")}
+    for argv, env in ((["lake", "build", "-o", str(out / "outputs.jsonl")], writable),
+                      (["lake", "cache", "stage", str(out / "outputs.jsonl"), str(out / "stage")], writable),
+                      (["lake", "cache", "unstage", str(out / "stage")], {**LC.lake_env(), "LAKE_CACHE_DIR": str(own)})):
+        subprocess.run(argv, cwd=pkg, env=env, check=True, capture_output=True)
+    assert any(f.suffix == ".ltar" for f in (out / "stage").iterdir())
+
+
+def test_a_module_lake_unpacked_from_a_published_build_is_not_indexed_as_one_the_build_compiled(tmp_path):
+    """A `--try` or `--build` build reads Lake's own cache, which holds main's published build as `.ltar` archives. Where
+    a tree compiled a module before (its `setup.json` is there) and a repair has cleared its `.hash` files, Lake unpacks
+    the archive and hashes the outputs afresh, and the trace the archive holds is the publisher's own: the build holds
+    nothing that tells the module from one it compiled. The index is for what this node compiled in the sandbox, so of
+    such a build only the modules Lake said it built go in."""
+    LC, LA, LCH = (_load(f"unpacked_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+    own = tmp_path / "lakes-own-cache"
+    tree, publisher = (toy(tmp_path / n / "toy") for n in ("build-0", "publisher"))
+    publish(LC, publisher, tmp_path / "published", own)
+
+    def build() -> str:
+        r = subprocess.run(LC.in_sandbox(tree, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={own}", "lake", "build",
+                                                "+Toy.Word", "+Main"]), cwd=tree, capture_output=True, text=True,
+                           env=LC.lake_env())
+        assert r.returncode == 0, r.stdout + r.stderr
+        return r.stdout + r.stderr
+
+    def put(name: str, **rep) -> list[str]:
+        arts = LA.LakeArtifacts(tmp_path / name)
+        arts.put({tree: {"sandbox": True, **rep}}, log=lambda s: None)
+        return sorted(json.loads((arts.store / e).read_text())["module"] for e, _ in arts.added)
+
+    (tree / "Toy" / "Word.lean").write_text(EXTRA)
+    (tree / "Main.lean").write_text(CALLS_EXTRA)
+    out = build()
+    assert LCH.compiled(out) == ["Main", "Toy", "Toy.Word"] and put("compiled", compiled=LCH.compiled(out)) == \
+        ["Main", "Toy", "Toy.Word"], "what the build compiled goes in"
+    for name, text in TOY.items():
+        (tree / name).write_text(text)
+    assert "Unpacked Toy.Word" in build()
+    said: list[str] = []
+    LCH.repair(tree.parent, [tree.name], {}, None, said.append)
+    assert any("half-written" in s for s in said), "the unpacked outputs lie beside the `.hash` files of those before them"
+    out = build()
+    assert "Unpacked Toy.Word" in out and LCH.compiled(out) == []
+    assert "Toy.Word" in put("as-built"), "by the build's files alone it passes for a compile"
+    assert put("as-said", compiled=LCH.compiled(out)) == []
+
+
 def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_built(tmp_path, monkeypatch):
     """A slot tree sees three kinds of build: a records run's (`repair`, stage, the default targets, put), a `--build`
     run's (`repair`, then the changed modules alone, read from Lake's own cache where it holds them) and a build of the
@@ -951,19 +1001,9 @@ def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_buil
         assert lake(pkg, [])[0] == 0
         return held(pkg)
 
-    def publish(word: str) -> None:
-        """A published build of ``word`` in Lake's own cache, as `cache.py` builds, stages and restores one."""
-        edit(publisher, word)
-        out = tmp_path / "published"
-        writable = {**LC.lake_env(), "LAKE_ARTIFACT_CACHE": "true", "LAKE_CACHE_DIR": str(out / "lake-cache")}
-        for argv, env in ((["lake", "build", "-o", str(out / "outputs.jsonl")], writable),
-                          (["lake", "cache", "stage", str(out / "outputs.jsonl"), str(out / "stage")], writable),
-                          (["lake", "cache", "unstage", str(out / "stage")], {**LC.lake_env(), "LAKE_CACHE_DIR": str(own)})):
-            subprocess.run(argv, cwd=publisher, env=env, check=True, capture_output=True)
-        assert any(f.suffix == ".ltar" for f in (out / "stage").iterdir())
-
     z, a = WORD.replace("{tag}", "Z"), WORD.replace("{tag}", "A")
-    publish(a)
+    edit(publisher, a)
+    publish(LC, publisher, tmp_path / "published", own)
     edit(tree, z)
     assert repair() == [] and records()[0] == 0 and says() == "version Z 1"
 

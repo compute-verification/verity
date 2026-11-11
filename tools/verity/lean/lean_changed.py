@@ -507,13 +507,25 @@ DIRTY = "dirty.json"
 
 
 def mark(tree: Path, **what) -> None:
-    """`DIRTY`, replaced whole: this run and ``what`` (`package`, `phase`, and for a phase that builds what `put_left`
+    """`DIRTY`, replaced whole: this run and ``what`` (`package`, `phase`, and for a `--records` run's build what `put_left`
     reads)."""
     doc = {"run": os.environ.get("RESEARCH_RUN_ID") or "a run", "pid": os.getpid(),
            "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **what}
     tmp = tree / f"{DIRTY}.tmp"
     tmp.write_text(json.dumps(doc, sort_keys=True) + "\n")
     os.replace(tmp, tree / DIRTY)
+
+
+#: Lake's line for a module it compiled (`Built Mod (1.2s)`); one it restored says `Unpacked` or `Replayed`, and a facet's
+#: (an object, an executable) has a colon in its name
+BUILT = re.compile(r"^\s*\S+ \[\d+/\d+\] Built ([^\s:]+)(?: \(.*\))?$", re.M)
+
+
+def compiled(text: str) -> list[str]:
+    """The modules Lake's output ``text`` says it compiled. A `--try` or `--build` build reads Lake's own cache, so it
+    unpacks main's published build where that holds a module's input hash, and `put` must not take such a module as one
+    this node compiled: `LakeArtifacts.put` indexes only these."""
+    return sorted({m.replace("«", "").replace("»", "") for m in BUILT.findall(text)})
 
 
 def put_built(artifacts, reps: dict[Path, dict], since: float, log=print, who: str = "lean-records") -> None:
@@ -530,16 +542,15 @@ def put_built(artifacts, reps: dict[Path, dict], since: float, log=print, who: s
 
 def put_left(tree: Path, left: dict | None, artifacts, log=print) -> None:
     """`put_built` what the run that left ``tree`` mid-way (``left``, its `DIRTY`) had compiled when it stopped, which it never
-    stored itself: its mark names when its build began (`since`) and what says the build ran in the sandbox, check.py's
-    reports (`out`, `LA.built`) for `--records` and the run's own word (`sandbox`) for `--try` and `--build`. A run does
-    this before it syncs the tree. Without it a build that is killed each time (a timeout shorter than a cold build)
-    would start from nothing each time, since `stage` leaves no trace of a module the cache doesn't hold."""
-    if not left or not isinstance(since := left.get("since"), (int, float)) or not isinstance(pkg := left.get("package"), str):
+    stored itself: its mark names when its build began (`since`) and where check.py's reports say whether each build
+    ran in the sandbox (`out`, `LA.built`). Only a `--records` run's: what a `--try` or a `--build` left is not stored,
+    since Lake's output, which alone says which modules that build compiled and which it unpacked (`compiled`), ended
+    with the run. A run does this before it syncs the tree. Without it a build that is killed each time (a timeout
+    shorter than a cold build) would start from nothing each time, since `stage` leaves no trace of a module the cache
+    doesn't hold."""
+    if not left or left.get("phase") != "check" or not isinstance(since := left.get("since"), (int, float)):
         return
-    if left.get("phase") == "check":
-        reps = LA.built(Path(str(left.get("out"))))
-    else:
-        reps = {tree / pkg: {"sandbox": True}} if left.get("sandbox") is True else {}
+    reps = LA.built(Path(str(left.get("out"))))
     if reps := {at: rep for at, rep in reps.items() if tree.resolve() in at.resolve().parents}:
         put_built(artifacts, reps, since, log, f"lean-records: {tree}: of what {left.get('run', 'a run')} left")
 
@@ -1511,7 +1522,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 log(f"lean-try: {pkg}: its dependencies are fetched cold, once for this tree")
             write_links(tree, links)
             since, storing = time.time(), storable(sandbox)
-            mark(tree, package=pkg, phase="try", since=since, sandbox=storing)
+            mark(tree, package=pkg, phase="try")
             opts = SIBLINGS.options(tree / pkg)
             log(f"lean-try: {file} on {tree} ({n} files changed there, {time.monotonic() - t0:.0f} s; "
                 f"{'' if sandbox else 'no sandbox here, '}lake build +{mod}:deps, then lake env lean "
@@ -1519,7 +1530,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 f"{', then the sibling check' if siblings else ''})")
             step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox)
             if storing:                                 # before `lean` reads the file itself, whose code then runs
-                put_built(artifacts, {tree / pkg: {"sandbox": True}}, since, log, f"lean-try: {pkg}")
+                put_built(artifacts, {tree / pkg: {"sandbox": True, "compiled": compiled(text)}}, since, log, f"lean-try: {pkg}")
             plan = SIBLINGS.plan(tree / pkg, rel) if siblings and rc == 0 else None
             if isinstance(plan, str):
                 log(f"lean-try: {file}: no sibling check: {plan}")
@@ -1636,12 +1647,13 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
                     continue
                 write_links(tree, links)
                 since = time.time()
-                mark(tree, package=pkg, phase="build", since=since, sandbox=storing)
+                mark(tree, package=pkg, phase="build")
                 mods = [f"+{module_of(pkg, f)}" for f in fs]
                 log(f"lean-build: {pkg} on {tree} ({n} files changed there): lake build {' '.join(mods)}")
                 rc, text = build(pkg, tree, lake, mods, sandbox)
                 if storing:
-                    put_built(artifacts, {tree / pkg: {"sandbox": True}}, since, log, f"lean-build: {pkg}")
+                    put_built(artifacts, {tree / pkg: {"sandbox": True, "compiled": compiled(text)}}, since, log,
+                              f"lean-build: {pkg}")
                 errs = first_errors(text, pkg, have)
                 if rc and (healed := clashed(tree, closure(pkg), text)):
                     errs = {f: e for f, e in errs.items() if not CLASH.search(e)}
