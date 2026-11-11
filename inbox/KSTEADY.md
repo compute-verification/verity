@@ -1151,3 +1151,12 @@ read by me in its comment; do these first, then the comparison (item 1 of the se
    suites at both heads; say both heads in your return.
 4. **Then the comparison** over the labelled runs at #8979's new head, as briefed, and end your turn with
    its summary and the two new heads. I post the heads to benchmarks so it reviews those.
+
+## Wed 11 Nov 15:27Z: infra said yes to both README cuts (HASH-116, 15:25Z); nothing for you to do on #8976
+
+Infra: "Yes to both cuts; they are good ones, and no need to cut anything else", and the refusal is as it
+ruled. Its own correction pull request trims that README elsewhere, so it will not collide with yours. I mark
+#8976 at `d23558d78962` once #8909 is on `main` (it is admitted with its land verdict and not merged yet at
+15:26Z). `main` is at `493f49485e50` now, 620 commits on, and every open head of kernels' still merges onto
+it, yours included (#8979 at `310defe26de6`, #8989 at `c5b35e191648` as I read them: say in your return
+that these are the heads with benchmarks' two rulings).
