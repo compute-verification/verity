@@ -204,7 +204,7 @@ def test_a_record_whose_members_and_declared_tables_disagree_on_the_row_seg_rows
     _plan, ms = cut(rows)
     with pytest.raises(ValueError, match="a template has one statement"):
         statements(monkeypatch, [*ms, CR.unit_member(SRW.template(LAT), 1)])
-    declared = SimpleNamespace(histories=(SimpleNamespace(writer=LAT, out=HR.OUT),))
+    declared = SimpleNamespace(histories=(SimpleNamespace(writer=LAT, out=HR.OUT),), doc=dict)
     assert statements(monkeypatch, ms, declared)[LAT]["out_rows"] == [(SEG, (0,))]
     with pytest.raises(ValueError, match="are not committed row-seg"):
         statements(monkeypatch, SRW.members([LAT], rows[:1], None, CAPS), declared)
