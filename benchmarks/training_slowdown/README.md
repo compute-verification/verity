@@ -25,7 +25,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
 | `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
 | `library.py` | the library's table: each entry of `attacks/` with its step traced on a CPU, its slowdown at its policy (the calculator's bound of record on that step) and what binds, and its planned run over each fleet and period |
-| `of_record.py`, `of_record.toml` | an entry beside its run of record: the entry's counted step set beside the run's record's (`compare`), equal, or what differs, each difference the device or the harness makes named by its rule; the data file names each held entry's run, the record's artifact, its path and its sha256, and the lines of the record's own program a route doesn't compute |
+| `of_record.py`, `of_record.toml` | an entry beside its run of record: the entry's counted step set beside the run's record's (`compare`), equal, or what differs, each expected difference named by its rule; the data file names each held entry's run, the record's artifact, its path and its sha256, and the lines of the record's own program a route doesn't compute |
 | `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: a fixed policy's numbers, the fleets and periods a figure is presented over, and the bound of record |
 | `counterexample.py` | a run's counterexample families: their writer and the sampled bit-for-bit rebuild check |
 | `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, scaled quantized delta, seed replay and their composition |
@@ -97,15 +97,16 @@ whose step reads a value back, is refused. It prints, an entry:
 - `log`: the step's products, each by phase, kind, op, operand shapes, count and MACs, which must be the record's;
 - the start and the steps, which must be the record's, and E: its plan's kinds, each of which must be one of the
   record's format's (`E_KINDS`), with its size after the two steps beside the record's last checkpoint's;
-- `expected`: a difference that is the device's or the harness's, named by the rule that covers it, with the MACs on
-  each side. A rule fires on its exact case alone. The device's: weights read at 32 bits where the record's are read
-  at 16 (`width`), the CPU's attention kernels of the same count and MACs (`attention`), the norm as elementwise ops
-  where CUDA's fused kernel is counted at an updated gain alone, and not at all in a step that trains no gain
-  (`norm`), and torch's unfused AdamW over the parameters the record steps with CUDA's fused kernel (`adamw`). The
-  harness's (`HARNESS`): the records' harness checked the model's position tables like θ's weights, where
-  `run.Harness` takes them for weights the route made (`tables`); the step is counted again as the records' harness
-  counted it, that count is the one compared, and the line says how many products and uses move and that the step's
-  MACs are the same on both counts;
+- `expected`: a difference named by the rule that covers it, with the MACs on each side. A rule fires on its exact
+  case alone. The device's: weights read at 32 bits where the record's are read at 16 (`width`), the CPU's attention
+  kernels of the same count and MACs (`attention`), and the norm as elementwise ops where CUDA's fused kernel is
+  counted at an updated gain alone, and not at all in a step that trains no gain (`norm`). AdamW's kernel (`adamw`):
+  the record's program asks torch for its fused kernel, where a route takes torch's default, on a CPU the unfused
+  step, over the same parameters; this one is the program's choice, not the device's. The harness's (`HARNESS`):
+  the records' harness checked the model's position tables like θ's weights, where `run.Harness` takes them for
+  weights the route made (`tables`); the step is counted again as the records' harness counted it, that count is the
+  one compared, and the line says how many products and uses move and that the step's MACs are the same on both
+  counts;
 - `named`: a line of the record's own program that the route rightly doesn't compute, which no rule knows: the
   entry's `record_only` in `of_record.toml` names the line, the count and MACs the record's step has of it over the
   config's, and why. A named line that the record's step does not have over the config's as named is a difference;
