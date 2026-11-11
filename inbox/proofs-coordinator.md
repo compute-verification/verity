@@ -52747,3 +52747,32 @@ For the table:
 - The proof system's weakest term: the first-hit term of #8827's lemma, a run, in compressions, at the record [modeled, relayed]: (a) at `code h`, units side by side, one class a block: 2^-106.88 [unconfirmed: ATTACK 11:35Z]; (b) over the served wiring, M = 2,049 at the plan's cut (139 at the recut): 2^-99.28 / -97.64 / -96.88 (-101.47 / -101.21 / -100.85). Flock's own κ: 2^-203.00 a session [run: replica of the Lean's bounds].
 - Where the prover pays for less: the level-0 length. Wide leaves: +4.00 bits on every cell, the same table error [run: what-if builds `0d0a`, `f956`; replica]. Daniel's; unbuilt in the prover; three Lean files unbuilt.
 - The largest slack: the second repetition, 100 bits no bound reads: 41% of the card's proving [run: `6773`] and 124 core-s of the Lean verifier's 250.0 a head statement [derived]. One repetition: κ 2^-104.38. Daniel's, unbuilt.
+
+## ATTACK, Wed 11 Nov 12:01Z: second reading of EXTFORM's new claim (11:56Z): it holds. As the definitions stand, `Addresses h` is false at any registration where an honest run checks a unit with a row round 2 reads off the interior record, so there the by-class bound, and the by-gate one before it, hold from a false premise
+
+EXTFORM asked for REGX or me to read it. Read at `62eb1fdc64de` and at #8924's head `d025f81332e6` (the five files below are the same at both [run: `git diff --stat`, empty]). Nothing run.
+
+**1. What was mine before I read EXTFORM's entry, and what is theirs.**
+- Mine, in the 11:35Z entry: every gate a block of `bitsProgs h.ms` needs is an input or a returned gate, so it is on its replay block's boundary, every opening is under the run's roots and `ReadsInterior` holds at no needed gate.
+- Mine, derived at about 11:58Z before opening theirs: `ReadsRegistered` then has to carry every needed gate, and it asks the gate's roots to be `readRoots`, which are the replay block's interior roots wherever round 2 reads the value off the interior record.
+- Theirs, which I then checked: the two root lists are never equal.
+
+**2. The chain, each link read** [read].
+- `Prog.Boundary` is true at a returned gate and at an `.input` gate, whatever the block (`Definitions/Claims/Sampling.lean:158-161`).
+- `rootsAt` gives the interior roots only where `g ∈ rb ∧ Boundary rb g = false`, else `s.roots` (`SpotFlock/Reveals.lean:45-54`). `CheckedRun.roots` is `rootsAt` (`RevealAt.lean:321`). So at every needed gate the roots are `s.roots`.
+- `AddressHolds` is `Counted ∧ RowAt ∧ (ReadsRegistered ∨ ReadsInterior)` (`SlotsAt.lean:159-160`). `ReadsInterior` asks `Boundary r.rb g = false` (`:149`): false at every needed gate.
+- `ReadsRegistered` asks `r.roots h g = readRoots …` (`:133`). `readRoots` is `irootsOf m₁ ρ` where `readsInterior`, else the statement's (`FrameIsAt.lean:59-63`). `readsInterior` is true at a port no link names when the interior record has a port of that name (`:37-42`): round 2's own ports and a wired input at its writer's port (`SecondStage.readOk`, `Spot/SecondStage.lean:814-836`).
+- `irootsOf m₁ ρ` is two numbers and then `portRoots` of the interior record, or `[]` (`Code.lean:196-197`). `portRoots` is one message and four an entry (`:155-157, 174-175`). `s.roots` is `portRoots` of the boundary record (`:184, 336-339`). So the lengths are 3 + 4k′ or 0 against 1 + 4k, never equal [derived: 4(k − k′) = 2 has no solution].
+- So at a needed gate whose row round 2 reads off the interior record, no address holds, and `Addresses h` (`SlotsAt.lean:322-323`) is false as soon as one `Ok` run checks such a unit. An honest run is `Ok`.
+
+**3. EXTFORM's open point, one step further** [read; the last line a guess]. For a port no link and no wire names, round 2 refuses a read off a boundary port (`readOk`'s `| none, some _ => false`, `SecondStage.lean:831-834`). It allows the interior record's own port or a value a registration registers. So a unit's row is under the statement's roots only at a port a link names whose value the interior does not register, or at a registered value of the boundary. A unit that returns anything inside its replay block has an output row at neither [guess: I did not read what the adapter links].
+
+**4. What it does to tonight's lines.**
+- Every statement at `code h` that takes `hS : Addresses h` is true and says nothing at such a registration: `code_eventTwoX_le_cls_at_budget` (#8924), `…_at_caps` (#8941, whose binders I read at `b29929d015e4`), `SpotFirstHitTwo`, `SpotKSTwo`, `SpotExfilTwo` [the last three relayed from EXTFORM's list; I read the first two].
+- This is not a new premise: it is the open premise `Addresses h`, whose docstring already says it "can't hold" at some registrations (`SlotsAt.lean:40-55`). What is new is which: every registration with a checked interior row, which is what a two-stage registration is for.
+- It is the same root as my 11:35Z and 11:50Z entries: the statement's program has no gate off a boundary, and the docstrings (`one tree a gate`, `ReadsInterior`, `rootsAt`'s interior branch) are written for a program with one gate a value.
+- What refutes it: one needed gate of `bitsProgs h.ms` that is neither returned nor `.input`. I looked again and found none: gates 0 and 1 are constants (`Bits.lower`, `Spot/Bits.lean:265-271`; `consts`), every other input is `.input`, and `sideBySide` keeps each member's outputs (`Properties/Spot/Members.lean:52-55`).
+
+**5. A correction to my 11:54Z entry, mine.** "The other fourteen" readers of an input id is fifteen that read a program, each testing the primitive or reading a located gate's primitive, plus `Qcall.inputIdsCmd`, which reads none. The six that test the key alone are as listed.
+
+For the table: the by-class line's label "under `Addresses h` (open)" understates it [read, derived; two readings, EXTFORM's and mine]. It should read "under `Addresses h`, which as defined is false at a registration whose checked units have a row in the interior record: the statement at `code h` holds there from a false premise". The table may still print line (b) as modeled over the served wiring; it may not call any by-class or by-gate line at `code h` proved for a two-stage registration, with or without the hash premises.
