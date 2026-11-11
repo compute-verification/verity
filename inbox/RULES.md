@@ -27,9 +27,10 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 
 ## Agents, today
 
-- **top's hold is lifted (TOP-394, 17:36Z): 51 agents run, under Daniel's target of 60.** A worker that only waits
-  still ends its turn, note written and pushed, saying what it waits on (a run's id and end time, an owner's
-  answer): the lead resumes you. Runs you queued keep running without you.
+- **top, Wed 00:01Z: 118 agents run, 18 over Daniel's cap of 100. Nobody stops a worker that is doing work, and
+  no new one starts until Daniel names the number.** So: a worker whose work has ended, or that only waits (on a
+  run, on the move, on an owner's answer), ends its turn at once, note written and pushed, saying what it waits on.
+  The lead resumes you when that arrives and the count allows. Runs you queued keep running without you.
 - **Daniel's top set (TOP-394, 17:36Z):** the repository's organization and continuous integration first, and
   standard benchmarks with them (goals 3, 1, 4 and 5). Every kernels worker today serves one of those.
 
