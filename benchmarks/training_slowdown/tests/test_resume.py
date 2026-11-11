@@ -14,7 +14,7 @@ import torch
 from synthetic import SCORE_REL, tiny_registry, write_config
 
 from training_slowdown import NOTHING, TOLD, VERSION, config, grade, run, starts, stop_record, told
-from training_slowdown.data import Data, Stream
+from training_slowdown.data import Data
 
 #: what depends on when a job ran, not on what it computed: its times, and the flags read from them
 TIMES = {"cpu_s", "wall_s", "gpu_s", "process_cpu_s", "process_wall_s", "children_cpu_s", "self_cpu_s", "elapsed_s",
@@ -89,9 +89,9 @@ def segment(tiny, kept=None, state=None, stop_after=None):
             raise run.Stopped
 
     torch.manual_seed(0)
+    stream = run.stream_of(cfg, Data.of(cfg.start.data, registry), 0, reg.parent / "starts")
     te = run.Harness(theta, root / "out", start=cfg.start.entry(), clock=lambda: 0.0, keep=keep,
-                     kept={"digest_key": KEY} | (kept or {}))
-    stream = Stream(Data.of(cfg.start.data, registry), 0, ctx=int(cfg.start.shape["ctx"]))
+                     kept={"digest_key": KEY} | (kept or {}), stream=stream)
     with contextlib.nullcontext() if stop_after is None else pytest.raises(run.Stopped), te.counter:
         model, optimizers = route.build(cfg.start.shape, cfg.dials)
         run.train(te, cfg, route, stream, model, optimizers, state)
@@ -308,6 +308,89 @@ def test_a_segment_that_names_another_job_than_the_kept_record_is_refused(stoppe
                       ({"steps": rest["steps"][1:]}, "first step")):
         with pytest.raises(SystemExit, match=f"the kept record's {why} is .* no record is written"):
             run.joined(first, rest | over)
+
+
+@pytest.fixture(scope="module")
+def fresh(tmp_path_factory):
+    """The tiny config asking for fresh windows, of a start that names the stream's middle part as read: five of
+    the stream's six windows are fresh, so the job's four steps of two run out of them once, after step 1."""
+    root = tmp_path_factory.mktemp("fresh")
+    reg = tiny_registry(root / "reg", read=(1,))
+    return root, reg, write_config(root / "a.toml", budget=BUDGET, windows="fresh")
+
+
+def test_a_job_served_fresh_windows_is_served_after_a_stop_what_the_unbroken_job_is(fresh):
+    """The harness alone, in one process: a job that asked for fresh windows is stopped after the checkpoint of
+    step 1, and the segment that continues it is served, from the kept position, the windows the unbroken job's
+    steps 2 and 3 are, the order starting again where the unbroken job's does. The two records joined state the
+    unbroken job's windows; a segment that left other parts out is refused."""
+    whole = run.joined(None, segment(fresh))
+    cut = segment(fresh, stop_after=1)
+    rest = segment(fresh, {"step": 2}, cut["state"])
+    served = whole["windows"]["served"]
+    assert len(served) == 4 and whole["windows"]["rounds"] == 1 and not {2} & {i for step in served for i in step}
+    assert cut["state"]["stream"] == 2 * BUDGET["batch"]
+    assert (cut["record"]["windows"]["served"], cut["record"]["windows"]["rounds"]) == (served[:2], 0)
+    assert (rest["windows"]["served"], rest["windows"]["rounds"]) == (served[2:], 1)
+    first = run.joined(None, cut["record"])
+    both = run.joined(first, rest)
+    assert both["windows"] == whole["windows"]
+    assert_continues(whole, both, at=2)
+    other = rest["windows"] | {"fresh": 4, "excluded": [e | {"part": 0} for e in rest["windows"]["excluded"]]}
+    every = {k: v for k, v in rest.items() if k != "windows"}
+    for segment_, states in ((rest | {"windows": other}, r"\[4, \[0\]\]"), (every, "None")):
+        with pytest.raises(SystemExit, match=rf"the kept record's fresh windows .how many, and the parts left out. "
+                                             rf"is \[5, \[1\]\] and the segment that continued it states {states}: "
+                                             rf"no record is written"):
+            run.joined(first, segment_)
+
+
+def stop_once_kept(monkeypatch, step: int):
+    """Tell the job to stop (SIGTERM) once its own process has kept its state after `step`."""
+    write = run.Kept.write
+
+    def stop_after(self, tensors, record, elapsed_s):
+        write(self, tensors, record, elapsed_s)
+        if record["checkpoints"][-1]["step"] == step:
+            os.kill(os.getpid(), signal.SIGTERM)
+
+    monkeypatch.setattr(run.Kept, "write", stop_after)
+
+
+@pytest.mark.slow
+def test_a_job_that_asked_for_fresh_windows_stopped_and_run_again_is_served_the_unbroken_jobs_windows(
+        tmp_path, fresh, monkeypatch):
+    """The job as a node runs it, three times, each two processes, so slow: what the quick test above doesn't reach
+    is the windows served going from the route's process into the state the job's own process keeps, and from that
+    state into the record of the job that continues it. An unbroken job that asked for fresh windows; the same job
+    told to stop (SIGTERM) once it has kept its state after step 1, whose state holds the windows of steps 0 and 1;
+    and the stopped job again, which continues, and whose record states the windows the unbroken job's does, step
+    for step, none of them one the start read, with every checkpoint's state the unbroken job's bit for bit."""
+    root, reg, path = fresh
+
+    def job(out, state):
+        return run.main(["--config", path, "--seed", 0, "--split", "final", "--out", tmp_path / out, "--starts", reg,
+                         "--device", "cpu", "--state", tmp_path / state])
+
+    assert job("whole", "state-whole") == 0
+    whole = json.loads((tmp_path / "whole" / "run.json").read_text())
+    served = whole["windows"]["served"]
+    assert whole["invalid"] == [] and len(served) == 4 and whole["windows"]["rounds"] == 1
+    assert [e["windows"] for e in whole["windows"]["excluded"]] == [[2, 3]]
+    assert not {2} & {i for step in served for i in step}
+
+    with monkeypatch.context() as stopping:
+        stop_once_kept(stopping, 1)
+        assert job("cut", "state") == run.STOPPED
+    so_far = json.loads((tmp_path / "state" / "state.json").read_text())["record"]
+    assert (so_far["windows"]["served"], so_far["windows"]["rounds"]) == (served[:2], 0) and len(so_far["steps"]) == 2
+
+    assert job("cut", "state") == 0 and not (tmp_path / "state").exists()
+    cut = json.loads((tmp_path / "cut" / "run.json").read_text())
+    assert cut["invalid"] == [] and cut["windows"] == whole["windows"]
+    assert_continues(whole, cut, at=2, keyed=False)
+    states = [(cp["output_sha256"], cp["e_sha256"]) for cp in whole["checkpoints"]]
+    assert [(cp["output_sha256"], cp["e_sha256"]) for cp in cut["checkpoints"]] == states and len(set(states)) == 4
 
 
 def test_a_route_that_names_a_signal_is_refused():
