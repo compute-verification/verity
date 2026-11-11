@@ -41014,3 +41014,74 @@ GB at the 10% point x1.05 over a world year (a datacenter year in brackets), and
 - **Order read** (`ORDER-20261111.md` as of 07:55Z) and copied with your message into `note:proofs/20261111T0800Z-report-kilian-onetheorem`.
 
 For the table: #8857 (Core first-hit finder) is open and ready to mark at `96985b18aafb`; try, quick tier and records passed; merges clean with `main` and the five open PRs.
+
+## SCALE, Wed 11 Nov 07:59Z: D*: the priced design is at 2^-105.0 an audit under #8827's by-position bound with sessions of one 2^35-bit table, and κ ≤ 2^-8 holds 2^-100 at every session size the code admits; nothing reaches it counting 64 KiB calls except κ ≈ 0, and nothing over a year at 200 tables on SHA-512
+
+**Daniel's, first:** every design below rests on one proof nobody has written: #8827's by-position bound, instantiated at the code [read; derived]. Two coin changes may also be needed:
+
+- **`MAX_COINS` (Daniel's):** D*1 needs `2^27` to `2^28` bytes of coin against the deployed `2^26`. D*2 and D*3 fit `MAX_COINS` as deployed [run].
+- **The model's coin (Daniel's unless a stage reads several rounds):** the Lean model's coin, `FlockDeploy.Coin` (`2^20` bytes a round, `security/Proofs/Flock/Claims/Deploy.lean:86`), is in 9 locked guarantee signatures (`security/lean-audit.json`) [read]. Only D*3 fits one round [run].
+
+Nothing was built. Every number is from `lanes/proofs/tools/scale_frontier.py` [run] unless tagged otherwise.
+
+**1. Why the bits move: #8827's by-position form has no d, and takes the mean of K, not its max.**
+
+- [read] The theorem is `eventTwoX_le_firstHit_at` (#8827, `TwoRegFirstHit.lean:1211`, head `946b7b72f26d`). It bounds the event of `KSRegTwoX` by `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[c + Σ_{g ∈ ∪ needs of the checked blocks} c_g]/2^256`, under `ExpectedCR` at its two finders of every cap. Here `c_g` (`callsBy`) is a run with only the sessions that have a block needing `g` extracted.
+- [derived] Take `c_g ≤ T·(1 + Σ_{s ∋ g} e_s)`, which is not proved. Then `Σ_g Σ_{s ∋ g} e_s = Σ_s e_s·|needs(s)| ≤ e_max·Σ_{u sampled} |needs u|`. That sum's expectation is REPBREAK's K mean, and it is the same for every coin choice. So the binding term is `4·T·(1 + n_sess·e_max + (1 + e_max)·K_mean)/2^256`.
+  - It has no d, so the 167 corner is gone. It reads K mean, not K max: 2.54 bits less at (ii) and (iii), and 0.76 less at (i).
+  - Against the brief's `2K·T(1 + d·e_s)`, this gives up 1 bit (the 4) and gains `lg d + lg(K max/K mean)`.
+- [read] The session sizes the code serves, from `Zk.lean` `queries0` and `Schedule.lean` `fast100`:
+  - A ZK table has m from 25 to 35 and level-0 length `2^{m−6−k0}`, from `2^13` to `2^23`, so one table has k = 12,055 to 12,343,986 [run]. The code admits up to 200 tables a session (k = 2,468,797,139), per `ref_numbers` in `Accepting.lean`.
+  - **Correction to the table's third line:** k = 1,507 is a plain table at m = 22, not a ZK session. At the least ZK session (one m = 25 table, d = 1) the brief's form reads −113.5 to −110.5, not −116.5 to −113.5 [run].
+- [read] The cost rows' statements are one 2^35-bit table each: `statement_blocks = 2^35 >> k_log` (`total_cost.py:344-350`; `proof_overhead.glm-5.3.json`, "full 2^35-bit statements"). So the design the cost rows price has k = 12,343,986 at a session of one table.
+
+**2. D\*, per sampled replay block, at T = 2^80 SHA-512 compressions** [run]. In the table, "64 KiB" means T counts calls on 64 KiB rows (+9.00), and "year" means T is 2^80 per 600-second audit on one stream (+15.68).
+
+| design | blocks a sampled request | K mean | coin (bytes) | one m = 35 table | 200 tables | one table, 64 KiB | one table, year |
+|---|---|---|---|---|---|---|---|
+| D*1: (ii) as priced, κ = 2^-5 | 5,523,986 | 2^37.69 | 110-133 MB (2^27) | **−105.04** | −97.40 | −96.04 | −89.36 |
+| (iii) warm as priced, κ = 2^-4 | 11,047,962 | 2^38.69 | 221-265 MB (2^28) | **−104.04** | −96.40 | −95.04 | −88.36 |
+| (i) as priced, κ = 2^-6 | 6,389,664 | 2^41.82 | 128-153 MB (2^27-2^28) | **−100.91** | −93.27 | −91.91 | −85.23 |
+| D*2: (ii) at κ = 2^-8 | 690,498 | 2^34.69 | 14-17 MB (2^24) | −108.04 | **−100.40** | −99.04 | −92.36 |
+| (ii) at κ = 2^-9 | 345,249 | 2^33.69 | 7-8 MB (2^23) | −109.04 | **−101.40** | **−100.04** | −93.36 |
+| D*3: κ = 0, one block a size class | 15 | 2^21.61 | ~1.3 KB | −121.12 | **−113.48** (64 KiB −104.47) | −112.12 | **−105.44** |
+
+Reading the table:
+
+- **Most m = 35 tables a session that keeps 2^-100** [run]: 32 for (ii) as priced, 16 for (iii), 1 for (i), 263 at κ = 2^-8, 526 at κ = 2^-9, and 2,279,732 at κ = 0. Counting 64 KiB calls the figures are none, none, none, none, 1 and 4,443.
+- **Over a year at 200 tables:** no SHA-512 design reaches 2^-100; κ = 0 reads −97.79 [run]. KECCAK[c=640] puts every priced row at −132.6 to −136.7 even with 64 KiB calls and a year [run].
+- **Other terms.** The bound's first run, with `n_sess ≤ m`, is at most −115.3 at the largest row [run]. The m = 37 rows' table shape is refused by the deployed ZK verifier (`queries0`: no schedule past m = 35) [read]. Their k (49,375,943) is my extrapolation [guess].
+
+**3. What each D\* changes from the priced design.**
+
+- **D\*1 changes no sampling parameter** [derived]. It needs each session to be one table of at most 2^35 bits, which is what the planner already prices a statement as. But the Lean code holds one session per template, and up to 200 tables a session [read: `Accepting.lean` `ref_numbers`; `Code.lean` `sessions := h.ms.length`]. The priced sample is about 8,000 to 170,000 tables a sampled request (m times 2^25.6 to 2^27 witness bits, over 2^35) [guess, from the card's k_log mix]. So the code must split a template's sample into many sessions whichever D* is chosen, and D*1 makes each split one table.
+- **D\*2 and D\*3 lower κ.** In proving, D*2 proves 1/8 of the blocks of a sampled request and opens 1/8 of the bits. D*3 proves 15 blocks against 5,523,986 (2^-18.5) and opens 2^-16.1 of the bits [run]. The planner chose κ = 2^-5 at these budgets with κ = 0 and 2^-8 in `KAPPAS`, so both cost GB at equal budget [read: `optimize.py` `KAPPAS`]. How much is BREAKEVEN's to price.
+
+**4. Not established.**
+
+- [derived; not proved] The instantiation `callsBy g ≤ T(1 + Σ_{s ∋ g} e_s) + openCalls` at the code, and `Σ_s |needs(s)| ≤ Σ_u |needs u|`, are paper.
+- [relayed] The always-checked term (`RegTwo.always`) is REGX's. It adds its gates to K mean directly, and none of the numbers above include it.
+- **Which first stage applies** [run]. Everything above is per sampled replay block. If a run's first stage is the planner's Bernoulli Q (0.0025 to 0.033 a registration), each audit is lower by 4.9 to 8.6 bits. If the first stage is the padded cap K0 (4 to 6), add 2.0 to 2.6 bits. Then (ii) and (iii) as priced stay below −101.7, (i) reads −98.9, and D*2 needs κ = 2^-11.
+- [relayed: REPBREAK] Rows (ii) and (iii) omit the in_bits of 5 strata, so their K is low by an unmeasured amount.
+
+For CONCRETE: the right-hand side at D*1 is `4·T·(1 + n_sess·e_max + (1 + e_max)·K_mean)/2^256 + Pr[B_conf,X] + κ_s + √(k·γ_s·Pr[B])`, with these inputs:
+
+- T = 2^80;
+- e_max = 1 + 210·12,343,986 = 2,592,237,061 (2^31.27);
+- n_sess ≤ m = 5,523,986;
+- K_mean = Σ_t k_t·mean_t(in + out bits) = 2^37.69, with k_t from REPBREAK's row (ii) at S = 28,000, plus REGX's always-term;
+- binding term −105.04.
+
+d is not an input.
+
+For BREAKEVEN:
+
+- **D\*1:** no parameter changes. Row (ii) "verifier as measured" as priced (S = 28,000, patterns, `union=True`, machine registration, κ = 2^-5), on the condition that a statement is one 2^35-bit table (`statement_blocks = 2^35 >> k_log`). Your corrected 4,042.4 GB for (iii) and 4,043.8 for (ii) stand [relayed].
+- **D\*2:** rows (ii) and (iii) with κ ≤ 2^-8, that is `KAPPAS = (0.0, 2^-10, 2^-9, 2^-8)`. Label: modeled, with no measurement needed beyond yours.
+- **D\*3:** the same rows with `KAPPAS = (0.0,)`.
+- **The year at 200 tables:** KECCAK[c=640] on any row. WIDEHASH's factors [relayed]: serve-time hashing ×1.28 on `byte_s`, proving −3% to +2%, digest 80 bytes.
+
+For the table:
+- Under #8827's by-position bound (no d; the sampled blocks' mean needs), the priced design is at 2^-105.0 an audit at T = 2^80 SHA-512 compressions with sessions of one 2^35-bit table. It reads 2^-96.0 if T counts calls on 64 KiB rows and 2^-89.4 over a year of 600-s audits. This is modeled and rests on an instantiation nobody has proved and a 2^27-byte coin.
+- At the 200 tables a session the code admits, 2^-100 needs κ ≤ 2^-8 (1/8 of the blocks a sampled request; 2^-100.4), or κ = 0 for the 64 KiB reading (15 blocks; 2^-104.5). A year of per-audit budgets at 200 tables needs a 640-bit digest.
+- Correction: no cost row has k = 1,507 under ZK; the least ZK session is k = 12,055, so line 3 reads 2^-113.5 to 2^-110.5.
