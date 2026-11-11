@@ -741,3 +741,39 @@ verdict I owed it.
   the staged statement (proofs' copy on node A is the head block `4b31e7caba011398`), a guess of minutes
   that says it is a guess.
 - **End your turn when the launcher is ready**, saying so.
+
+## Wed 11 Nov 19:25Z: proofs' three names for the wide leaf are fixed (HASH-119, WIDELEAF 18:26Z; proofs 19:19Z): put them in, and say if one collides
+
+WIDELEAF's comment, word for word where it matters (it also holds the four files' rows: a second source for
+your derivation):
+
+1. **`profile` string: `fast100-wide-leaf`**, in the identity's `profile` and in Hello's `profile` (today
+   `fast100`). Under `--zk` the identity's `hooks.ligerito_level0_queries` is today's text followed by
+   `; wide leaf: level 0 of 2^19 symbols at m = 32..35 (k_0 = m - 25, L = 2^18), where q_0 = 219`.
+2. **Domain tag: today's with `fast100x2` replaced by `fast100-wide-leafx2`**:
+   `flock-circuit/fast100-wide-leafx2/rep{r}`; several tables
+   `flock-circuit/fast100-wide-leafx2/{table}/rep{r}`; templated
+   `flock-circuit-tmpl/fast100-wide-leafx2/rep{r}`. The statement id (`verity/flock-circuit`,
+   `verity/flock-circuit/tmpl`) and the Sigma tags do not change. The verifier's `--statement` names are
+   `verity/flock-circuit+wide-leaf` and `verity/flock-circuit/tmpl+wide-leaf`.
+3. **`PcsParams.profile` stays index 1.** `log_inv_rate` stays 1 and `num_lanes` none; only
+   `log_batch_size` differs, `m - 25` (7, 8, 9, 10 at m = 32 to 35) where today's is 6.
+
+**The four parameter files' numbers are `Flock.fast100Wide`'s rows** (`verity/protocols/flock/verifier/Flock/WideLeaf.lean`
+on `cursor/proofs-wideleaf-782c`, held by its `#guard`s). For m = 32, 33, 34, 35: n = m - 7 (the packed
+table's variables), `initial_k` = m - 25, the final level's columns `ext` = 3, and six levels as (log inverse
+rate, queries, log message columns, log codeword length, log lanes): level 0 plain (1, 218, 18, 19, m - 25),
+`--zk` (1, 219, 18, 19, m - 25) with `t_pad` 438, strata of 219 at depth 19, cap 7; levels 1 to 5, plain and
+`--zk` alike: (2, 106, 15, 17, 4), (3, 71, 12, 15, 4), (4, 53, 9, 13, 4), (5, 43, 6, 11, 4), (6, 36, 3, 9, 4),
+which are m = 31's. For m <= 31 the wide-leaf version's schedule is today's, with the names above.
+
+**From proofs (19:19Z):** its #9040 (`7e779f6e6323`, marked) writes the schedule down as data and changes
+nothing of the prover's. The pull request that makes the `--zk` verifier read it is being built; **its
+earliest mark is Fri 13 Nov 16:00Z, a guess.** The plain verifier, the recursion and `rec_algebra.fast100`
+are a third pull request, not started: **say what that means for your change to `rec_algebra.py`** (yours
+touches it; proofs' third one will).
+
+**What I want:** the three names in your branch in place of the placeholders; your four files held to the
+rows above, line by line, with any difference said; **whether any of the names collides with something in
+the tree or in kernels' benchmarks** (I owe proofs that answer by Thu 12 Nov 20:00Z; say it in your next
+return); then the pull request for proofs. Tonight's screen on node A at 22:15Z stands; launch on my word.
