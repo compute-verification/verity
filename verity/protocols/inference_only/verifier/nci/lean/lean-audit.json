@@ -84,22 +84,22 @@
  },
  "layers": {
   "NciCheck.Check": {
-   "imports": ["Std", "Flock.Program"],
+   "imports": ["Std", "Circuits.Program"],
    "except": [],
    "why": "the check is code: Lean core and C-Flock's program decoder only, no Mathlib and nothing of Security"
   },
   "NciCheck.Desc": {
-   "imports": ["Std", "Flock.Program", "NciCheck.Check"],
+   "imports": ["Std", "Circuits.Program", "NciCheck.Check"],
    "except": [],
    "why": "the description-sized check is code, as NciCheck.Check is: Lean core, C-Flock's program decoder and the check's instance format and verdict"
   },
   "NciCheck.Baseline": {
-   "imports": ["Std", "Flock.Program", "NciCheck.Check", "NciCheck.Desc"],
+   "imports": ["Std", "Circuits.Program", "NciCheck.Check", "NciCheck.Desc"],
    "except": [],
    "why": "θ's provenance check is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports) and the policy check it runs first"
   },
   "NciCheck.Count": {
-   "imports": ["Std", "Flock.Program", "NciCheck.Check", "NciCheck.Desc"],
+   "imports": ["Std", "Circuits.Program", "NciCheck.Check", "NciCheck.Desc"],
    "except": [],
    "why": "the count of (c, k)-inference blocks is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder, the check's instance format and refusals, and the description-sized check's summaries and θ"
   },
