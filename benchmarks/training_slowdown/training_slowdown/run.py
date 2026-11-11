@@ -498,9 +498,12 @@ def no_bytecode():
 
 
 def train(te: Harness, cfg: config.Config, route, stream: Stream, model, optimizers) -> None:
-    """The route loop (module docstring) on the route's `build`."""
+    """The route loop (module docstring) on the route's `build`. A route with an `output` gives each checkpoint its
+    output model; what that computes is counted, in the step after the checkpoint or in the tail."""
     te.load(model)
     te.encode_with(route.plan(cfg.dials))
+    if hasattr(route, "output"):
+        te.output(lambda: route.output(model, cfg.dials))
     n, batch = cfg.budget["steps"], cfg.budget["batch"]
     te.plan(n)
     for t in range(n):
@@ -514,7 +517,9 @@ def trace_step(cfg: config.Config, route, model, optimizers, device: str) -> dic
     capture takes the run's last three steps in one graph and measures the middle one, which reads what the step
     before it wrote and makes what the step after it reads (`TRACED_STEPS`; a run of two steps is measured at its
     second, a run of one at its only step, which reads no update). Where the three aren't the run's first steps the
-    capture is told so (`mid_run`): the first of them reads the run's own weights, not θ's.
+    capture is told so (`mid_run`): the first of them reads the run's own weights, not θ's. A route's `output` is
+    traced as the end of every step, so the products it computes are the measured step's, charged like any other,
+    though a run calls it at its checkpoints only.
 
     It keeps the capture's and torch's versions, the version of the code that took the trace (`capture_code`, this
     tree's: a record whose trace is taken again keeps its job's `training_slowdown`), the step and the token axes it
@@ -529,6 +534,13 @@ def trace_step(cfg: config.Config, route, model, optimizers, device: str) -> dic
 
     The batch is traced as its inputs and each window's last target apart, so the token axes are the batch and the
     context, the tokens the counter counts a step."""
+    return traced_step(cfg, route, model, optimizers, device)[0]
+
+
+def traced_step(cfg: config.Config, route, model, optimizers, device: str) -> tuple[dict, object]:
+    """`trace_step`'s trace beside the capture's graph it was read from (a `StepGraph`), which holds what the record
+    doesn't keep: the parameters the step writes and the ops the capture prices by a rule of thumb. No graph, None,
+    for a step the capture refuses."""
     from .capture import CaptureRefused, capture_steps, products
 
     n, batch, ctx = cfg.budget["steps"], cfg.budget["batch"], int(cfg.start.shape["ctx"])
@@ -536,14 +548,19 @@ def trace_step(cfg: config.Config, route, model, optimizers, device: str) -> dic
     at = min(1, len(ts) - 1)
 
     def step(t: int):
-        return lambda m, rows, opts: route.step(m, torch.cat(rows, dim=1), opts, cfg.dials, t, n)
+        def traced(m, rows, opts):
+            route.step(m, torch.cat(rows, dim=1), opts, cfg.dials, t, n)
+            if hasattr(route, "output"):
+                with torch.no_grad():
+                    route.output(m, cfg.dials)
+        return traced
 
     example = (torch.zeros(batch, ctx, dtype=torch.long), torch.zeros(batch, 1, dtype=torch.long))
     try:
         g = capture_steps([step(t) for t in ts], model, example, measured=at, optimizers=optimizers,
                           token_dims=((0, 1), (0,)), device=device, mid_run=ts[0] > 0)
     except CaptureRefused as e:
-        return {"refused": {"reason": e.reason, "op": e.op, "message": str(e)}}
+        return {"refused": {"reason": e.reason, "op": e.op, "message": str(e)}}, None
     raw = products.raw_on_dial(g)
     read_backs = g.circuit.read_backs or {}
     return {"capture": raw["capture"], "capture_code": VERSION, "torch": torch.__version__, "step": ts[at],
@@ -552,7 +569,7 @@ def trace_step(cfg: config.Config, route, model, optimizers, device: str) -> dic
             "elementwise_products": raw["elementwise_products"],
             "data_dependent": list(read_backs.get("data_dependent", [])),
             "carried_scalars": list(read_backs.get("carried_scalars", [])),
-            "circuit": {k: v for k, v in g.formalism.items() if k not in read_backs}}
+            "circuit": {k: v for k, v in g.formalism.items() if k not in read_backs}}, g
 
 
 def retrace(a: argparse.Namespace) -> int:

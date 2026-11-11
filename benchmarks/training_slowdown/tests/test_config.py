@@ -44,7 +44,7 @@ def test_the_digest_is_what_decides_the_run(tmp_path, reg):
     ({"dials": {"lr": 1e-2, "nonesuch": 1}}, "has no dial 'nonesuch'"),
     ({"dials": {"lr": "fast"}}, "dial 'lr' is str"),
     ({"dials": {"micro_batches": 1.5}}, "dial 'micro_batches' is float"),
-    ({"dials": {"opt": "sgd"}}, "bad.toml: subset: opt 'sgd' is neither adamw nor muon"),
+    ({"dials": {"opt": "adam"}}, "bad.toml: subset: opt 'adam' is none of adamw, sgd, lion, adafactor, muon, shampoo"),
     ({"dials": {"store": "q9"}}, "store 'q9' is neither full nor q2 to q8"),
     ({"dials": {"decay": 0}}, r"decay is a share of the steps in \(0, 1\]"),
     ({"budget": {"steps": 3}}, "budget has no batch"),

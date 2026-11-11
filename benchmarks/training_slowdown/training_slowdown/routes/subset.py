@@ -1,9 +1,12 @@
 """Route `subset`: train the parameters `trainable` names (comma-separated patterns over the start's parameter names,
 fnmatch, `blocks.5.*,norm`), the rest frozen.
 
-- `opt`: `adamw` trains every one of them with AdamW (betas 0.9, 0.95) under `weight_decay`. `muon` trains the
-  matrices with Muon (`Muon`: Nesterov momentum 0.95, the update orthogonalized by five Newton-Schulz steps in bf16,
-  `weight_decay` decoupled) and the gains with AdamW, undecayed; it has no rule for the embedding.
+- `opt`: the optimizer. Four train every one of them, the embedding included, under `weight_decay`: `adamw` (betas
+  0.9, 0.95), `sgd` (torch's, Nesterov momentum 0.9, its decay added to the gradient), `lion` and `adafactor`
+  (`_optimizers`; Adafactor's rate is at most 1/sqrt(t) and relative to each weight's RMS). Two train the matrices
+  and leave the gains to AdamW, undecayed, with no rule for the embedding: `muon` (Nesterov momentum 0.95, the
+  update orthogonalized by five Newton-Schulz steps in bf16) and `shampoo` (the gradient between the inverse fourth
+  roots of its two Kronecker factors), both in `_optimizers`, `weight_decay` decoupled.
 - `lr`: every optimizer's rate, times the schedule: a ramp over the first `warmup` steps (a share of the steps when
   below 1; 0: none), then 1 until the last `decay` share of the steps, where it falls linearly to 0 (1: from the first
   step).
@@ -23,42 +26,18 @@ import torch.nn.functional as F
 from training_slowdown.codecs import Identity, Plan, ScaledQuant
 from training_slowdown.model import LM
 
+from ._optimizers import Adafactor, Lion, Muon, Shampoo
+
 VERSION = 2
 DIALS = {"trainable": "*", "opt": "adamw", "lr": 3e-4, "weight_decay": 0.0, "warmup": 0.0, "decay": 1.0, "clip": 1.0,
          "micro_batches": 1, "store": "full"}
-
-
-def newton_schulz(g: torch.Tensor) -> torch.Tensor:
-    a, b, c = 3.4445, -4.7750, 2.0315
-    x = g.bfloat16()
-    tall = x.shape[0] > x.shape[1]
-    if tall:
-        x = x.T
-    x = x / (x.norm() + 1e-7)
-    for _ in range(5):
-        s = x @ x.T
-        x = a * x + (b * s + c * s @ s) @ x
-    return (x.T if tall else x).to(g.dtype)
-
-
-class Muon(torch.optim.Optimizer):
-    def __init__(self, params, lr: float, momentum: float = 0.95, weight_decay: float = 0.0):
-        super().__init__(params, {"lr": lr, "momentum": momentum, "weight_decay": weight_decay})
-
-    @torch.no_grad()
-    def step(self):
-        for g in self.param_groups:
-            for p in g["params"]:
-                if p.grad is None:
-                    continue
-                st = self.state[p]
-                if "buf" not in st:
-                    st["buf"] = torch.zeros_like(p)
-                buf = st["buf"].mul_(g["momentum"]).add_(p.grad)
-                u = newton_schulz(p.grad.add(buf, alpha=g["momentum"]))
-                if g["weight_decay"]:
-                    p.mul_(1 - g["lr"] * g["weight_decay"])
-                p.add_(u, alpha=-g["lr"] * max(1.0, p.shape[0] / p.shape[1]) ** 0.5)
+#: `opt`'s values that train every trained tensor, the embedding included
+WHOLE = {"adamw": lambda p, lr, wd: torch.optim.AdamW(p, lr=lr, betas=(0.9, 0.95), weight_decay=wd),
+         "sgd": lambda p, lr, wd: torch.optim.SGD(p, lr=lr, momentum=0.9, nesterov=True, weight_decay=wd),
+         "lion": lambda p, lr, wd: Lion(p, lr=lr, weight_decay=wd),
+         "adafactor": lambda p, lr, wd: Adafactor(p, lr=lr, weight_decay=wd)}
+#: and those that train the matrices, the gains then under AdamW, undecayed: neither has a rule for the embedding
+MATRICES = {"muon": Muon, "shampoo": Shampoo}
 
 
 def codec(dials: dict):
@@ -71,8 +50,8 @@ def codec(dials: dict):
 
 
 def plan(dials: dict) -> Plan:
-    if dials["opt"] not in ("adamw", "muon"):
-        raise ValueError(f"subset: opt {dials['opt']!r} is neither adamw nor muon")
+    if dials["opt"] not in WHOLE and dials["opt"] not in MATRICES:
+        raise ValueError(f"subset: opt {dials['opt']!r} is none of {', '.join([*WHOLE, *MATRICES])}")
     if not 0 < dials["decay"] <= 1 or dials["warmup"] < 0 or dials["micro_batches"] < 1:
         raise ValueError("subset: decay is a share of the steps in (0, 1], warmup is not negative and micro_batches "
                          "is at least 1")
@@ -95,12 +74,12 @@ def build(shape: dict, dials: dict):
         p.requires_grad_(n in names)
     params = [p for n, p in model.named_parameters() if n in names]
     lr, wd = dials["lr"], dials["weight_decay"]
-    if dials["opt"] == "adamw":
-        return model, [torch.optim.AdamW(params, lr=lr, betas=(0.9, 0.95), weight_decay=wd)]
+    if dials["opt"] in WHOLE:
+        return model, [WHOLE[dials["opt"]](params, lr, wd)]
     if "embed" in names:
-        raise SystemExit("subset: opt muon has no rule for the embedding; leave it out of trainable")
+        raise SystemExit(f"subset: opt {dials['opt']} has no rule for the embedding; leave it out of trainable")
     matrices, gains = [p for p in params if p.ndim == 2], [p for p in params if p.ndim != 2]
-    return model, ([Muon(matrices, lr=lr, weight_decay=wd)] if matrices else []) + (
+    return model, ([MATRICES[dials["opt"]](matrices, lr=lr, weight_decay=wd)] if matrices else []) + (
         [torch.optim.AdamW(gains, lr=lr, betas=(0.9, 0.95), weight_decay=0.0)] if gains else [])
 
 
