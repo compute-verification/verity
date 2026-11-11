@@ -42561,3 +42561,34 @@ For HEADPROF: cursor/proofs-salts-8dd2 at ff48f38adc3abe6ec40ab28e5519e5a7aff2e2
 
 For the table: salts, measurement branch built at `ff48f38adc3a` (host-side expansion, switch off by default, no PR); statement seconds with it are HEADPROF's to measure; still a claim (the 9 Oct ruling "salts are drawn from the OS, not expanded by a PRG"), though no new Lean Prop.
 For BREAKEVEN: no new number yet; the 08:00Z rows stand, all modeled except today's 7.3 CPU-s (measured, `r20261111-061047-6773`). The host-side branch's row is not in that list: about 1 to 1.5 CPU-s left under `all` [guess] until the bench reports.
+
+## CROSS, Wed 11 Nov 08:37Z: the build of the nine is `r20261111-083411-3dd5`; #8788's marked head lacks the layout move, so the loop will leave it out (and #8828 waits on it); its crossed head is built and waits for your word to push
+
+**1. The build you asked for** \[run\]
+
+- Run `r20261111-083411-3dd5` on vy-nebius-cpu-1, launched 08:34Z: `lean_changed.py --records security --update`, `--cwd clone`, `--as proofs`. ETA 09:45Z to 10:15Z \[guess\].
+- The tree is my scratch commit `8eed8897023a5b7d81530885264d5e4ab300dd01`, on no branch and pushed nowhere: `main` `8201dacff26e`, then merged in your order #8785 `e7b741b17e53`, #8820 `f1a8ef0141ff`, #8827 `946b7b72f26d`, #8788 (as its crossed head `37079664740c`, see 2), #8828 `53dd644bdad8`, #8781 `b7c268c7c1fe`, #8819 `9a8a32c7c85b`, #8841 `5f197bc45539`, #8857 `96985b18aafb`.
+- Each of the nine merges exits 0 with the registered drivers. Against `main` the tree changes 56 files, 47 of them Lean. Its lock parses, is 4,204,787 bytes, and `pins.py --stale` exits 0.
+- I kept `--update`: the build is the same, and the run then also says whether the merged lock is what the build writes.
+- A second run was already out when your message came: `r20261111-082551-f107` (cpu-2, 08:25Z), the same command on the ten with #8836 (scratch `2fef359d9164`). It should go red at `RegCanon.lean` as KILIAN found \[guess\]; I read it for any second red.
+
+**2. #8788 is marked at a head below the layout move** \[run, except where tagged\]
+
+- Its head `65a2d97d9387` is based at `2b869ed35db5` and holds neither move. The loop's own test (`moves_between`: `git log --no-merges -E --grep='^(Move|Layout-move): tools/move/' origin/main ^HEAD`) prints `6581bcf197` and `c1ca25a247` for it, and nothing for our other 29 marked heads or #8857.
+- \[read: `vqueue_loop.py` lines 731 to 735 at the loop's live pin `fd558c996b10`\] The loop leaves such a head out, with "it lacks the move … `main` landed: cross it with `tools/move/restack.py` and push the crossed head, as a merge of `main` doesn't rewrite its own lines".
+- `research queue status` (07:55Z) still shows #8788 as admitted, and shows #8828 as `after: [8788]`. So #8828 waits with it \[guess\]. Both are in the ten ci pinned for about 09:30Z.
+- **The crossing is done, and nothing is pushed.** Top's recipe from a detached worktree at `5c095bb4ab70`: `restack.py origin/cursor/proofs-capped-extractor-acc7 --move-commit 6581bcf197 --move-commit c1ca25a247 --onto origin/main --kept --no-pins --json` printed status `clean` (plain merge clean, crossed 2 moves), result `37079664740c063e1f8124df81b9a7fb5b52bcc5`, onto `main` `8201dacff26e`.
+  - It descends from the old head (a fast-forward) and from `main`. `pins.py --stale` exits 0. Its lock is 4,175,579 bytes, `Security/` count 6, old paths 0.
+  - Against `main` it changes #8788's ten Lean files under `security/Proofs/Flock/Claims/` and the lock's entry order (the lock is the same JSON as `main`'s; sha256 `b2f5c6c6…`, the order a records run writes).
+  - Its tree and a plain merge's differ in that entry order only: the ten Lean files are byte-identical. So build 1 holds for #8788 at either head.
+- Runs at `37079664740c`, launched from a scratch worktree: records `r20261111-083451-a26f` (cpu-3) and the quick tier `r20261111-083524-4e2a` (cpu-2, `--changed 8201dacff26e --quick`), both 08:35Z.
+- **The ask.** The branch is marked and not on my list, so I did not push. Say `CROSS push #8788` and I push `37079664740c` to `cursor/proofs-capped-extractor-acc7` as a fast-forward at once. Then yours: `mark #8788 at 37079664740c063e1f8124df81b9a7fb5b52bcc5`, and a line to ci that the head in the pinned ten changed and needs its land verdict at the new head (review-10's is at the old one; I have not checked whether the label store carries it).
+
+**3. A correction to my 08:11Z table** \[read: the loop's `decisions.jsonl`, copied 08:23Z\]
+
+- #8568 is in no candidate. `cf6545401576` was dropped at 08:06:14Z ("its base was dropped"), after `2360e02207c2` failed `lean-suites` and ci withdrew #8572's mark.
+- The candidates built since are `589249ad95fe` (#8818, #8589), `b61f8a67b3c3` (#8591, #8798) and `0a722c6ec984` (#8391, #8040, #8623, #8682). None holds a PR of ours.
+
+For the table:
+- The nine result PRs merged in ci's order: Lean build `r20261111-083411-3dd5` running, ETA about 10:00Z \[guess\].
+- #8788 `65a2d97d9387` is marked with a land verdict but lacks the layout move, so the queue's loop leaves it out and #8828 waits on it; crossed head `37079664740c` is built with its runs out (`a26f`, `4e2a`), not pushed until the coordinator says so.
