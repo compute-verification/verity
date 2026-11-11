@@ -565,9 +565,8 @@ class _Fold:
                 if top_open is not None and ev.id == top_open:
                     top_open = None
                     nxt = self._flush_and_execute(pending, pairs, nxt)
-            elif isinstance(ev, TritonLaunch):
-                if ev.parent is None:
-                    nxt = self._flush_and_execute(pending, pairs, nxt)
+            elif isinstance(ev, TritonLaunch) and ev.parent is None:
+                nxt = self._flush_and_execute(pending, pairs, nxt)
         for ev in pending:
             self._mem_event(ev)
         pending.clear()
@@ -606,11 +605,11 @@ class _Fold:
 
     def _write_tokens(self, start: StepStart, links: list[StepLink]) -> None:
         link_by_row: dict[int, StepLink] = {}
-        for l in links:
-            if l.step != start.step:
-                self._problem("StepLink", f"StepLink for step {l.step} inside step {start.step}", {})
+        for link in links:
+            if link.step != start.step:
+                self._problem("StepLink", f"StepLink for step {link.step} inside step {start.step}", {})
                 continue
-            link_by_row[l.row] = l
+            link_by_row[link.row] = link
         if len(start.input_token_ids) < len(start.rows):
             raise FoldError(f"step {start.step}: {len(start.input_token_ids)} input token ids for {len(start.rows)} rows")
         for i, (req, pos) in enumerate(start.rows):
@@ -639,22 +638,22 @@ class _Fold:
         if start.input_ids_view is None and start.rows:
             self.notes.append(f"step {start.step}: no input_ids_view; token refs were not written into memory")
 
-    def _token_refs(self, start: StepStart, i: int, req: str, pos: int, l: StepLink | None) -> Refs:
+    def _token_refs(self, start: StepStart, i: int, req: str, pos: int, link: StepLink | None) -> Refs:
         """The reference of token row `i`: a prompt parameter leaf, or the sampler output a StepLink names."""
         tok = int(start.input_token_ids[i])
         if req not in self.req_index:
             raise FoldError(f"step {start.step} row {i}: unknown request {req!r}")
-        if l is not None:
-            if l.request_id != req:
-                raise FoldError(f"step {start.step} row {i}: StepLink names request {l.request_id!r}, the row is {req!r}")
-            if l.relation != "eq":
-                raise FoldError(f"step {start.step} row {i}: StepLink relation {l.relation!r} is not 'eq'")
-            samp = self.sampled.get((req, l.src_step))
-            if (l.value is not None and int(l.value) != tok) or (samp is not None and int(samp) != tok):
-                raise FoldError(f"step {start.step} row {i}: token {tok} != StepLink.value {l.value} / sampled at step {l.src_step} {samp}")
-            refs = self.outputs.get((req, l.src_step))
+        if link is not None:
+            if link.request_id != req:
+                raise FoldError(f"step {start.step} row {i}: StepLink names request {link.request_id!r}, the row is {req!r}")
+            if link.relation != "eq":
+                raise FoldError(f"step {start.step} row {i}: StepLink relation {link.relation!r} is not 'eq'")
+            samp = self.sampled.get((req, link.src_step))
+            if (link.value is not None and int(link.value) != tok) or (samp is not None and int(samp) != tok):
+                raise FoldError(f"step {start.step} row {i}: token {tok} != StepLink.value {link.value} / sampled at step {link.src_step} {samp}")
+            refs = self.outputs.get((req, link.src_step))
             if refs is None:
-                raise FoldError(f"step {start.step} row {i}: StepLink to step {l.src_step} whose sampler output for {req!r} is unknown")
+                raise FoldError(f"step {start.step} row {i}: StepLink to step {link.src_step} whose sampler output for {req!r} is unknown")
             return refs
         r = self.req_index[req]
         prompt = self.requests[r]["prompt_token_ids"]
@@ -882,7 +881,7 @@ class _Fold:
         own = op.own
         M = max(int(own.shape[0]), 1) if op.flat and own.rank == 2 else c.rows        # token rows: one Compute row when flat
         N = int(ptype.elem.n) // M if op.flat else int(ptype.elem.n)
-        if own.rank != 2 or tuple(own.shape) != (M, N) or own.dtype != "bfloat16" or tuple(own.strides) != (N, 1) or (op.flat and (c.rows != 1 or M * N != ptype.elem.n)):
+        if own.rank != 2 or tuple(own.shape) != (M, N) or own.dtype != "bfloat16" or tuple(own.strides) != (N, 1) or (op.flat and (c.rows != 1 or ptype.elem.n != M * N)):
             raise FoldError(f"{what}: own partial must be a row-major bf16 [{M}, {N}] view{' (one flat row)' if op.flat else ''}, got {own!r}")
         if op.kind not in (*COLLECTIVE_KINDS.values(), FUSED_COLLECTIVE_KIND):
             raise FoldError(f"{what}: unknown collective kind {op.kind!r}")

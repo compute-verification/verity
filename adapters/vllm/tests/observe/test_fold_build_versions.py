@@ -23,7 +23,7 @@ import ast
 import importlib
 import inspect
 import itertools
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 import pytest
@@ -99,7 +99,7 @@ def _imported(module: str, node: ast.Import | ast.ImportFrom) -> dict:
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def fold_references() -> dict[str, tuple[CompositeDefinition, str]]:
     """Definition id -> (the Definition, `module:line` of its first mention) over every fold pattern module."""
     out: dict[str, tuple[CompositeDefinition, str]] = {}
@@ -135,7 +135,7 @@ def _tries(p: inspect.Parameter) -> tuple:
     return (v,) if p.default is inspect.Parameter.empty else (p.default, v)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _binds(profile: str, role: str) -> tuple[tuple[dict, CompositeDefinition], ...]:
     """(statics, the Definition unspecialised) of every combination of `_tries` at which the role binds one."""
     binder = PROFILES[profile].kinds[role]
@@ -151,13 +151,13 @@ def _binds(profile: str, role: str) -> tuple[tuple[dict, CompositeDefinition], .
     return tuple(out)
 
 
-@lru_cache(maxsize=None)
+@cache
 def build_bindings(profile: str) -> dict[str, frozenset]:
     """Role -> the Definitions (unspecialised) the profile's vocabulary binds it to."""
     return {role: frozenset(d for _, d in _binds(profile, role)) for role in PROFILES[profile].kinds}
 
 
-@lru_cache(maxsize=None)
+@cache
 def twin_pairs(profile: str) -> dict[str, frozenset]:
     """Role -> (Definition, its `<role>_value` twin) bound at the same values of the statics the two share: a role whose twin
     exists only on some targets (`rmsnorm_fused_value` under batch invariance) pairs with it only there."""
@@ -215,5 +215,5 @@ def test_a_fold_pattern_naming_the_older_silu_is_a_violation():
     """The dense `SiluAndMul` named `SiluMul_v1` while the b1-eager-v3 Build binds `SiluMul_v2`: exactly what rule 1 reports."""
     refs = {k: v for k, v in fold_references().items() if not k.startswith("SiluMul")}
     refs["SiluMul_v1"] = (b1.SiluMul, "verity_vllm.observe.fold.patterns.activations:37")
-    assert violations(refs, DEFAULT) == ["rule 1: verity_vllm.observe.fold.patterns.activations:37 names SiluMul_v1; the b1-eager-v3 "
-                                         "vocabulary binds SiluMul at ['v2']"]
+    assert violations(refs, DEFAULT) == [("rule 1: verity_vllm.observe.fold.patterns.activations:37 names SiluMul_v1; the b1-eager-v3 "
+                                          "vocabulary binds SiluMul at ['v2']")]

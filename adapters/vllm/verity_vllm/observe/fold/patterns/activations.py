@@ -45,10 +45,10 @@ class SiluAndMul:
         statics = self.statics(node, a)
         if isinstance(statics, Unsupported):
             return statics
-        M, I = out.shape
+        M, INTER = out.shape
         numerics = target_of(ctx)[0].numerics_profile
         try:
-            spec = vocabulary_for("profile", numerics).kind(self.kind, I=I, **statics)
+            spec = vocabulary_for("profile", numerics).kind(self.kind, I=INTER, **statics)
         except ValueError as e:
             return unsupported(node, f"the record target's numerics profile has no vocabulary: {e}", numerics_profile=numerics)
         if spec is None:

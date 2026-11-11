@@ -17,7 +17,7 @@ from verity_vllm.observe.fold.resolver import (Compute, Gather, GatherMany, PerR
 from verity_vllm.observe.fold.tree import step_events
 
 C = PROF.C
-H, NH, KVH, D, I, V, QKV, GU = C["H"], C["NH"], C["KVH"], C["D"], C["I"], C["V"], C["QKV"], C["GU"]
+H, NH, KVH, D, INTER, V, QKV, GU = C["H"], C["NH"], C["KVH"], C["D"], C["I"], C["V"], C["QKV"], C["GU"]
 EPS = C["EPS"]
 BS = 16
 NUM_BLOCKS = 64
@@ -94,7 +94,7 @@ def weights_roots() -> list[Root]:
         Root(bf(A_O_W, (H, NH * D)), "weight", "model.layers.0.self_attn.o_proj.weight"),
         Root(bf(A_LN2, (H,)), "weight", "model.layers.0.post_attention_layernorm.weight"),
         Root(bf(A_GU_W, (GU, H)), "weight", "model.layers.0.mlp.gate_up_proj.weight"),
-        Root(bf(A_DOWN_W, (H, I)), "weight", "model.layers.0.mlp.down_proj.weight"),
+        Root(bf(A_DOWN_W, (H, INTER)), "weight", "model.layers.0.mlp.down_proj.weight"),
         Root(bf(A_NORM, (H,)), "weight", "model.norm.weight"),
         Root(bf(A_COS_SIN, (C["MAX_POS"], D)), "buffer", "model.layers.0.self_attn.rotary_emb.cos_sin_cache"),
     ]
@@ -258,11 +258,11 @@ def decode_step(step=1, position=32, token=42, prev_token=7, with_unknown=False,
     b.leaf("_C.fused_add_rms_norm.default", "_C::fused_add_rms_norm(Tensor! input, Tensor! residual, Tensor weight, float epsilon) -> ()",
            [o, h, bf(A_LN2, (H,)), EPS], module="model.layers.0.post_attention_layernorm")
     gu = gemm_launch(b, o, bf(A_GU_W, (GU, H)), 306, H, GU, M, num_sms=num_sms)
-    act = bf(307, (M, I))
+    act = bf(307, (M, INTER))
     b.leaf("aten.empty.memory_format", "aten::empty.memory_format(SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, MemoryFormat? memory_format=None) -> Tensor",
-           [[M, I]], {"dtype": {"$repr": "torch.bfloat16"}}, outs=act)
+           [[M, INTER]], {"dtype": {"$repr": "torch.bfloat16"}}, outs=act)
     b.leaf("_C.silu_and_mul.default", "_C::silu_and_mul(Tensor! result, Tensor input) -> ()", [act, gu], module="model.layers.0.mlp.act_fn")
-    d = gemm_launch(b, act, bf(A_DOWN_W, (H, I)), 308, I, H, M, num_sms=num_sms)
+    d = gemm_launch(b, act, bf(A_DOWN_W, (H, INTER)), 308, INTER, H, M, num_sms=num_sms)
     b.leaf("_C.fused_add_rms_norm.default", "_C::fused_add_rms_norm(Tensor! input, Tensor! residual, Tensor weight, float epsilon) -> ()",
            [d, h, bf(A_NORM, (H,)), EPS], module="model.norm")
     if with_unknown:
@@ -662,7 +662,7 @@ def test_silu_embedding_tokenselect_gather():
     res = resolve_step(se, context(start, se.sample))
     specs = by_spec(res)
     s = specs["SiluMul_v2{I=1536}"][0]
-    assert s.operands == (PerRow(bf(306, (1, GU))),) and s.outputs == (PerRow(bf(307, (1, I))),)
+    assert s.operands == (PerRow(bf(306, (1, GU))),) and s.outputs == (PerRow(bf(307, (1, INTER))),)
     e = specs["Embedding_v1{V=49152,H=576}"][0]
     # the token operand is the step's input_ids view (int32), not the int64 copy vLLM made of it
     assert e.operands == (PerRow(ViewDesc(A_INPUT_IDS, 0, (1,), (1,), "int32", CUDA)), Shared(bf(A_EMBED, (V, H))))
@@ -689,7 +689,7 @@ def test_silu_is_the_builders_silu_mul_kind_under_the_record_targets_numerics_pr
     doc = {**ctx.header.profile, "target": TargetProfile(numerics_profile=numerics).to_json()}
     ctx = dataclasses.replace(ctx, header=dataclasses.replace(ctx.header, profile=doc))
     (s,) = [c for k, v in by_spec(resolve_step(se, ctx)).items() if k.startswith("SiluMul") for c in v]
-    assert s.spec is vocabulary_for("profile", numerics).kind("silu_mul", I=I)
+    assert s.spec is vocabulary_for("profile", numerics).kind("silu_mul", I=INTER)
     assert s.spec.base_id == {"b1-eager-v3": "SiluMul_v2", "b1-eager": "SiluMul_v1"}[numerics]
 
 

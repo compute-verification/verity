@@ -41,7 +41,8 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from verity.circuits.defs import bind
 from verity.definitions.registry import act as _ACT
@@ -124,7 +125,7 @@ def scope_hidden(node: TreeNode, ctx: StepContext, H: int) -> tuple[ViewDesc, li
     M = hidden.shape[0]
     if hidden.rank != 2 or hidden.shape[1] != H or hidden.dtype != "bfloat16" or not is_row_major(hidden):
         return unsupported(node, "moe_forward_shared hidden_states is not a row-major bf16 [M,H] view", hidden=repr(hidden), H=H)
-    if M != len(ctx.start.rows) or ctx.start.num_tokens != ctx.start.num_tokens_padded:
+    if len(ctx.start.rows) != M or ctx.start.num_tokens != ctx.start.num_tokens_padded:
         return unsupported(node, "MoE rows are not exactly the step's token rows (padding rows would reach the router)",
                            M=M, rows=len(ctx.start.rows), num_tokens=ctx.start.num_tokens, num_tokens_padded=ctx.start.num_tokens_padded)
     outs = node.output_views()
@@ -355,7 +356,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
         """The input quant, the alignment schedule, w13, the SiLU and its quant, w2 and moe_sum over the (token, slot) pairs."""
         from verity_vllm.observe.fold.patterns.fp8 import PerTokenGroupFp8Quant
         C, G = self.config, self.group
-        E, TOPK, H, I, M = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"], hidden.shape[0]
+        E, TOPK, H, INTER, M = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"], hidden.shape[0]
         P = M * TOPK
         weights, ids = sc.router.output_views()
         ids_flat, tp = _flat(ids, P), target_of(ctx)[0]
@@ -365,7 +366,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
                                            "expert_ids, num_tokens_post_padded); no output word depends on it", kernels=K_ALIGN_KERNELS,
                                            pattern=self.name)))
         launched = {}
-        for launch, K, N, routed in ((sc.up, H, 2 * I, False), (sc.down, I, H, True)):
+        for launch, K, N, routed in ((sc.up, H, 2 * INTER, False), (sc.down, INTER, H, True)):
             r = self._fused(node, launch, ctx, expect_weighted=routed, expect_top_k=1 if routed else TOPK, E=E, K=K, N=N, P=P)
             if isinstance(r, Unsupported):
                 return r
@@ -394,9 +395,9 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
         rows = tuple(p // TOPK for p in range(P))
         w13n, w13s = _root_name(ctx, s_up.b, "w13"), _root_name(ctx, s_up.b_s, "w13_ws")
         out.append((sc.up.id, Compute(up_spec, P, (Gather(s_up.a, rows), Gather(s_up.a_s, rows), PerRow(ids_flat), Shared(s_up.b), Shared(s_up.b_s)),
-                                      (PerRow(_as_rows(c1, P, 2 * I)),), (sc.up.id,), hint=f"{hint}/{w13n}", kernels=(K_FUSED,), pattern=self.name,
+                                      (PerRow(_as_rows(c1, P, 2 * INTER)),), (sc.up.id,), hint=f"{hint}/{w13n}", kernels=(K_FUSED,), pattern=self.name,
                                       roots=(None, None, None, w13n, w13s))))
-        sq = self._silu_quant(node, ctx, sc, c1, s_dn, P, I, G, hint)
+        sq = self._silu_quant(node, ctx, sc, c1, s_dn, P, INTER, G, hint)
         if isinstance(sq, Unsupported):
             return sq
         out += sq
@@ -421,16 +422,16 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
                                         kernels=(K_SUM,), attribution=tuple(ctx.start.rows), pattern=self.name)))
         return out
 
-    def _silu_quant(self, node, ctx, sc: _Scope, c1: ViewDesc, s_dn, P: int, I: int, G: int, hint: str) -> list[tuple[int, Any]] | Unsupported:
+    def _silu_quant(self, node, ctx, sc: _Scope, c1: ViewDesc, s_dn, P: int, INTER: int, G: int, hint: str) -> list[tuple[int, Any]] | Unsupported:
         """`_C.silu_and_mul(cache2!, cache1 as [P, 2I])` then `per_token_group_fp8_quant(cache2)`, the writer of the w2 launch's A and
         a_scale (triton_moe.py's unfused branch)."""
         from verity_vllm.observe.fold.patterns.fp8 import PerTokenGroupFp8Quant
         sr = SiluAndMul().match(sc.rsilu, ctx)
-        if not isinstance(sr, Compute) or sr.rows != P or sr.spec.bindings.get("I") != I:
+        if not isinstance(sr, Compute) or sr.rows != P or sr.spec.bindings.get("I") != INTER:
             return unsupported(node, "the routed silu_and_mul did not resolve as SiluMul{I} on the pair rows", child_id=sc.rsilu.id,
-                               child_reason=getattr(sr, "reason", None), I=I, P=P)
+                               child_reason=getattr(sr, "reason", None), I=INTER, P=P)
         x = sr.operands[0].view
-        if (x.alloc, x.offset) != (c1.alloc, c1.offset) or x.shape[-1] != 2 * I:
+        if (x.alloc, x.offset) != (c1.alloc, c1.offset) or x.shape[-1] != 2 * INTER:
             return unsupported(node, "the routed silu_and_mul does not read the w13 output as [P, 2I]", input=repr(x), cache1=repr(c1))
         q = sc.quants[1]
         qr = PerTokenGroupFp8Quant(group=G).match(q, ctx)
@@ -440,7 +441,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
         if not _same(qr.operands[0].view, sr.outputs[0].view) or not (sc.up.id < sc.rsilu.id < q.id < sc.down.id):
             return unsupported(node, f"the routed {K_QUANT} does not read the SiLU output between the two launches",
                                quant_input=repr(qr.operands[0].view), silu_output=repr(sr.outputs[0].view))
-        return [(sc.rsilu.id, dataclasses.replace(sr, spec=bind(_ACT.SiluMul, I=I), hint=f"{hint}/silu_and_mul", pattern=self.name)),
+        return [(sc.rsilu.id, dataclasses.replace(sr, spec=bind(_ACT.SiluMul, I=INTER), hint=f"{hint}/silu_and_mul", pattern=self.name)),
                 (q.id, dataclasses.replace(qr, hint=f"{hint}/w2_act_quant", attribution=(), pattern=self.name))]
 
 

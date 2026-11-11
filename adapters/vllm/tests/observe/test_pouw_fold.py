@@ -199,7 +199,8 @@ def test_a_workloads_protocols_config_reaches_the_capture_and_the_commit(tmp_pat
 
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import cli
-    doc = json.loads(open("workloads/workload_qwen05_32x16_1req.json").read())
+    with open("workloads/workload_qwen05_32x16_1req.json") as f:
+        doc = json.load(f)
     doc["protocols_config"] = {"pouw": {"draws": 8}}
     (tmp_path / "wl.json").write_text(json.dumps(doc))
     assert va.load_workload(tmp_path / "wl.json")["protocols_config"] == {"pouw": {"draws": 8}}

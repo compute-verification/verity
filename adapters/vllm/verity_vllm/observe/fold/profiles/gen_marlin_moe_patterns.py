@@ -33,7 +33,8 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 import re
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS
 from verity_vllm.program.frontend.rules.vllm_marlin_moe import served_config

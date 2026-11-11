@@ -154,7 +154,7 @@ class TokenSampleGumbel:
         if logits.dtype != "bfloat16":
             return unsupported(node, "GumbelArgmaxBf16_v1 is defined over bf16 logits", dtype=logits.dtype)
         R, V = logits.shape
-        if self.vocab is not None and V != self.vocab:
+        if self.vocab is not None and self.vocab != V:
             return unsupported(node, "logits width is not the vocabulary", V=V, vocab=self.vocab)
         if not isinstance(block, int) or block != self.block_size:
             return unsupported(node, "BLOCK_SIZE differs from the pinned sampler block", BLOCK_SIZE=block, pinned=self.block_size)

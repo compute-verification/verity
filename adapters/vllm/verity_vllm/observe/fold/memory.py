@@ -546,7 +546,7 @@ class MemoryModel:
                 shape.append(n)
                 strides.append(leaf[d])
             else:
-                return geometry_refs(space, idx, base + sum(c * l for c, l in zip(coord, leaf)), tuple(shape), tuple(strides))
+                return geometry_refs(space, idx, base + sum(c * s for c, s in zip(coord, leaf)), tuple(shape), tuple(strides))
         return None
 
     def _compatible(self, x: _Interval, view: ViewDesc) -> bool:

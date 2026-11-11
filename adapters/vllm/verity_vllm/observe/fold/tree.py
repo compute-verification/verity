@@ -8,7 +8,7 @@ consumes a whole subtree (or is explicitly asked to descend), so that no event i
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterator
+from collections.abc import Iterator
 
 from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Event, SampleEnd, StepEnd, StepLink, StepStart, TritonLaunch,
                      ViewDesc, views_in)
@@ -18,7 +18,7 @@ from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Event, Samp
 class TreeNode:
     enter: DispatchEnter | TritonLaunch
     exit: DispatchExit | None = None
-    children: list["TreeNode"] = field(default_factory=list)
+    children: list[TreeNode] = field(default_factory=list)
 
     @property
     def id(self) -> int:
@@ -56,7 +56,7 @@ class TreeNode:
     def output_views(self) -> list[ViewDesc]:
         return list(views_in(self.outs))
 
-    def walk(self) -> Iterator["TreeNode"]:
+    def walk(self) -> Iterator[TreeNode]:
         yield self
         for c in self.children:
             yield from c.walk()
@@ -64,7 +64,7 @@ class TreeNode:
     def ids(self) -> set[int]:
         return {n.id for n in self.walk()}
 
-    def leaves(self) -> Iterator["TreeNode"]:
+    def leaves(self) -> Iterator[TreeNode]:
         if not self.children:
             yield self
         for c in self.children:

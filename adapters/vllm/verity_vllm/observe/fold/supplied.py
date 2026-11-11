@@ -86,7 +86,8 @@ def program_registered_values(program_dirs) -> bool:
     got = set()
     for d in program_dirs:
         try:
-            prog = json.load(open(os.path.join(d, "result.json"))).get("program") or {}
+            with open(os.path.join(d, "result.json")) as f:
+                prog = json.load(f).get("program") or {}
         except (OSError, ValueError, AttributeError) as e:
             raise SystemExit(f"{d}: no readable result.json ({type(e).__name__}): whether its Program registers its values is unknown") from None
         got.add(bool((prog.get("supplied") or {}).get("registration")))

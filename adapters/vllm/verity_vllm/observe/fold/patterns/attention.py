@@ -145,7 +145,7 @@ class AttentionScope:
             return unsupported(node, "KV cache geometry does not match q", q=repr(q), k_cache=repr(kcs), v_cache=repr(vcs))
         if q.strides[1:] != (D, 1) or out.shape != (M, NH, D) or out.strides[1:] != (D, 1):
             return unsupported(node, "q/out rows are not [NH][D] row-major", q=repr(q), out=repr(out))
-        if M != len(ctx.start.rows):
+        if len(ctx.start.rows) != M:
             return unsupported(node, "FA2 query rows differ from the step's token rows", M=M, rows=len(ctx.start.rows))
         if fa_v == 2 and self.bn != b1.fa2_kblock_n(D):
             return unsupported(node, "pinned kBlockN is not the FA2 head-dim dispatch rule's", bn=self.bn, rule=b1.fa2_kblock_n(D), D=D)
@@ -167,7 +167,7 @@ class AttentionScope:
         for i, (req, position) in enumerate(ctx.start.rows):
             T = int(position) + 1
             seq = ctx.start.seq_lens.get(req)
-            if seq is not None and T > seq:
+            if seq is not None and seq < T:
                 return unsupported(node, "row position exceeds the request's KV length", row=i, request=req, T=T, seq_len=seq)
             groups.setdefault((T, int(position) - first_pos[req] if check_inf or check_inf2 else None, own[req] if check_inf2 else None),
                               []).append(i)

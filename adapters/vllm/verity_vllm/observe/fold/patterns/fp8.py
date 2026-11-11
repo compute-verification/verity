@@ -89,7 +89,7 @@ class PerTokenGroupFp8Quant:
         ue8m0 = _arg(a, "scale_ue8m0", "use_ue8m0", pos=7)
         if not all(isinstance(v, ViewDesc) for v in (x, xq, xs)) or not isinstance(G, int) or eps is None or lo is None or hi is None:
             return unsupported(node, "per_token_group_fp8_quant arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
-        if G != self.group:
+        if self.group != G:
             return unsupported(node, "group size differs from the group this pattern resolves", group_size=G, pinned=self.group)
         if G not in fp8.QUANT_GROUPS:
             return unsupported(node, "group size is not one Fp8GroupQuant_v1 is registered at", group_size=G, registered=list(fp8.QUANT_GROUPS))

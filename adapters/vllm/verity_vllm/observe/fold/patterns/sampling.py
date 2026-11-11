@@ -90,7 +90,7 @@ class TokenSelectGumbelTwoStage:
         if logits.rank != 2 or logits.strides[1] != 1 or logits.dtype != "bfloat16":
             return unsupported(node, "TokenSelect_v1 is defined over row-contiguous bf16 [R,V] logits", logits=repr(logits))
         R, V = logits.shape
-        if self.vocab is not None and V != self.vocab:
+        if self.vocab is not None and self.vocab != V:
             return unsupported(node, "logits width is not the vocabulary", V=V, vocab=self.vocab)
         vs = a.get("vocab_size")
         if vs is not None and int(vs) != V:
@@ -150,7 +150,7 @@ class TokenSelectGumbelTwoStage:
         out = outs[0]
         if out.numel != R or not is_int(out):
             return unsupported(node, "sampled ids are not an integer [R] view", out=repr(out))
-        rows = tuple(ctx.start.logits_rows) if R == len(ctx.start.logits_rows) else ()
+        rows = tuple(ctx.start.logits_rows) if len(ctx.start.logits_rows) == R else ()
         return Compute(bind(b1.TokenSelect, V=V), R, (PerRow(logits),), (PerRow(out),), (node.id,),
                        hint=hint_of(node, "gumbel_sample stage 3 (token id) = argmax(logits)"), kernels=(*s2["kernels"], "ArgMaxOps", "gather_kernel"),
                        attribution=rows, pattern=self.name)
@@ -188,7 +188,7 @@ class TokenSelectArgmax:
         R, V = logits.shape
         if logits.strides[1] != 1:
             return unsupported(node, "logits rows are not contiguous", view=repr(logits))
-        if self.vocab is not None and V != self.vocab:
+        if self.vocab is not None and self.vocab != V:
             return unsupported(node, "argmax width is not the vocabulary", V=V, vocab=self.vocab)
         why = greedy_sampling(ctx)
         if why is not None:
@@ -207,7 +207,7 @@ class TokenSelectArgmax:
         if out.numel != R or not is_int(out):
             return unsupported(node, "argmax output is not an integer [R] view", out=repr(out))
         return Compute(bind(b1.TokenSelect, V=V), R, (PerRow(logits),), (PerRow(out),), (node.id,), hint=hint_of(node, "argmax"),
-                       kernels=("ArgMaxOps",), attribution=tuple(ctx.start.logits_rows) if R == len(ctx.start.logits_rows) else (),
+                       kernels=("ArgMaxOps",), attribution=tuple(ctx.start.logits_rows) if len(ctx.start.logits_rows) == R else (),
                        pattern=self.name)
 
 
@@ -582,7 +582,7 @@ class LogitsGather:
             return unsupported(node, "gather index is not an integer [R] view", index=repr(idx))
         R = idx.shape[0]
         li = ctx.start.logits_indices
-        if R != len(li):
+        if len(li) != R:
             return unsupported(node, "gather rows differ from the step's logits_indices", R=R, logits_indices=len(li))
         if src.rank < 1 or any(i < 0 or i >= src.shape[0] for i in li):
             return unsupported(node, "logits_indices outside the gathered source", src=repr(src), logits_indices=list(li)[:8])

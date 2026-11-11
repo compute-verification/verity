@@ -19,7 +19,8 @@ model is a configuration record, not a second profile implementation.
 from __future__ import annotations
 
 import re
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
 from verity.definitions.registry import b1

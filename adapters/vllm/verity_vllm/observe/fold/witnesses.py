@@ -43,8 +43,8 @@ class WitnessInputs:
             n = sum(f["leaves"] for f in self.fields[(ri, name)])
             if not n:
                 req = requests[ri]["request_id"]
-                empty.append((f"request {req!r}: no read took its {params[pidx][0]!r} witness parameter, which would be empty (input layout "
-                              f"shift); refused", {"request": req, "param": params[pidx][0]}))
+                empty.append(((f"request {req!r}: no read took its {params[pidx][0]!r} witness parameter, which would be empty (input layout "
+                               f"shift); refused"), {"request": req, "param": params[pidx][0]}))
             params[pidx] = (params[pidx][0], Array(n, Value(32)) if n else RecordType())
         return tuple(params), empty
 
