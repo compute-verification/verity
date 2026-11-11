@@ -24,7 +24,6 @@
     {"file": "verity_vllm/engine/kernel_identity.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "kernel-identity"},
     {"file": "verity_vllm/engine/meta_inventory.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "meta-inventory"},
     {"file": "verity_vllm/glue.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "glue"},
-    {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "admission-bound"},
     {"file": "verity_vllm/pipeline/commit_arb.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "commit-arb"},
     {"file": "verity_vllm/pipeline/coverage_workloads.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "coverage-workloads"},
     {"file": "verity_vllm/pipeline/pouw_serve.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "pouw-serve"},

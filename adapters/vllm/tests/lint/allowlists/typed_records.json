@@ -164,7 +164,7 @@
     {"file": "verity_vllm/observe/runtime_tree.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/runtime-tree/v1"},
     {"file": "verity_vllm/observe/runtime_tree.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
     {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/admission/f-da-15/v1"},
-    {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 7},
+    {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
     {"file": "verity_vllm/pipeline/advice.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/advice-registration/v1"},
     {"file": "verity_vllm/pipeline/advice.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/advice-report/v3"},
     {"file": "verity_vllm/pipeline/advice.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/advice-windows-index/v1"},
