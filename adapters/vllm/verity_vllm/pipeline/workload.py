@@ -44,6 +44,7 @@ from pathlib import Path
 import numpy as np
 
 from verity_vllm import settings
+from verity_vllm.commit import challenge as CH
 from verity_vllm.config import (
     CHECKPOINTS,
     VLLM,
@@ -87,7 +88,7 @@ def row_seed(row_id: str) -> str:
 
 def rng_for(seed_hex: str, purpose: str) -> np.random.Generator:
     h = hashlib.sha256(bytes.fromhex(seed_hex) + b"/" + purpose.encode()).digest()
-    return np.random.default_rng([int.from_bytes(h[i:i + 4], "little") for i in range(0, 32, 4)])
+    return CH.generator([int.from_bytes(h[i:i + 4], "little") for i in range(0, 32, 4)])
 
 
 def sampling_seed(seed_hex: str, index: int) -> int:
