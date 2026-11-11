@@ -359,6 +359,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   registration*); the *second stage* samples k_t of its n_t proof blocks of each template t on fresh coins, and misses
   every incorrect one with probability at most ∏_t C(n_t − w_t, k_t)/C(n_t, k_t), w_t of them template t's.
   Harm is read at ρ's *footprint* w(ρ), the fewest incorrect proof blocks of any interior its boundary commitment allows.
+  A replay block is *closed* when it reads no other replay block's values, recomputing from its own inputs any it
+  needs; the *fan-out* F is the most replay blocks one group joined by such reads holds, 1 when all are closed, and a
+  served cap of S bits charges each replay block at most F S.
 - **Cell**: one benchmark result: a proof system (or an archived one's backend id) × statement × input set × prover
   hardware.
 - **Input block** (`INPUT_UNIT` in `verity.circuits.partition`): the part of a partition that holds every input gate.

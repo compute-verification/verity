@@ -809,6 +809,32 @@ def test_a_capped_design_charges_what_a_request_serves():
             assert row["total"] <= budget * (1 + 1e-12)
 
 
+def test_a_replay_block_others_read_is_charged_its_groups_served_bits():
+    """A replay grain of fan-out F (`partition.fanout`), some replay block reading values another computed, is charged as
+    if each replay block served F S bits, the capped form at N = F: more than at F = 1 where the served bound binds, and a
+    design's bound is the capped `two_stage_exfil` at F.  At F = 1, every replay block closed, the charge is the served
+    bound's alone.  The sets' form without a served bound doesn't read F, and the patterns' form, each request read in one
+    replay block, refuses it."""
+    delta, replay_blocks, budget, served = 2.0 ** -20, 10 ** 8, 1e7, 4096.0
+    cells = [Cell(10 ** 5, 16.0, prove=1e-3, commit_bytes=2.0), Cell(4, 131072.0, prove=1e-3, commit_bytes=2.0 ** 14)]
+    k, q = {0: 995}, 0.0438
+    one = two_stage_exfil(cells, k, replay_blocks, q, delta, served)
+    assert two_stage_exfil(cells, k, replay_blocks, q, delta, served, fanout=1) == one
+    for f in (2, 8):
+        shared = two_stage_exfil(cells, k, replay_blocks, q, delta, served, fanout=f)
+        assert shared == two_stage_exfil(cells, k, replay_blocks, q, delta, f * served) > one
+    assert two_stage_exfil(cells, k, 10, .5, delta, fanout=8) == two_stage_exfil(cells, k, 10, .5, delta)
+    kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "served": served}
+    closed, read = (two_stage_design(cells, replay_blocks, delta, fanout=f, **kw) for f in (1, 4))
+    assert closed == two_stage_design(cells, replay_blocks, delta, **kw) and read["bound"] > closed["bound"]
+    strata = [replace(c, stratum=0 if c.bits <= read["merged"] else 131072) for c in cells]
+    assert read["bound"] == two_stage_exfil(strata, read["k"], replay_blocks, read["q"], delta, served, fanout=4)
+    with pytest.raises(ValueError, match="needs fan-out 1, not 2"):
+        two_stage_exfil(cells, k, 10, .5, delta, served, union=True, fanout=2)
+    with pytest.raises(ValueError, match="fan-out is at least 1"):
+        two_stage_exfil(cells, k, 10, .5, delta, served, fanout=0)
+
+
 def test_a_one_stage_sample_replays_the_replay_blocks_it_meets():
     """`met_replay`: d proof blocks sampled uniformly over R replay blocks meet R (1 - (1 - 1/R)^d) of them, each
     replayed once; and `grain_costs` adds it to a one-stage total, which is otherwise unchanged."""
