@@ -666,6 +666,66 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     assert summary["leak"]["registered"] == 8 * 8 * K and "unpinned" not in summary["leak"]
 
 
+def _history(d: Path, n: int = 4) -> SimpleNamespace:
+    """``n`` units of ``Gemm_v2{K=16, N=8}``, two a member, their outputs history table ``latent``'s rows (capacity 16),
+    the window written to ``d`` with the members' public bodies."""
+    from verity.ml.commitments import history as HT
+    g8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
+    gid, rng = descriptor_id(g8), np.random.default_rng(3)
+
+    def bf16(a: np.ndarray) -> np.ndarray:
+        return (np.asarray(a, np.float32).view(np.uint32) >> 16).astype(np.uint16)
+
+    x, w = bf16(rng.standard_normal((n, 16))), bf16(rng.standard_normal((n, 8, 16)) / 4)
+    y = np.asarray(evaluate_batch(g8, x, w, kernel="reference"), dtype=np.uint16).reshape(n, 8)
+    table = HT.HistoryTable("program", "latent", 8, 16)
+    table.append(y)
+    runs = ({"start": 0, "count": n, "writer": gid, "out": "o0", "radix": [n], "base": 0, "step": [1]},)
+    circuit = IF.Circuit("history", ((g8, n),),
+                         registered=IF.Registered({}, histories=(IF.History("latent", "program", gid, "o0", 8, runs, 16),)))
+    win = IF.Window(circuit, RUN, D.parse_design(LAW), 2, registered={"latent": table})
+    win.record(g8, [x, w], [y])
+    win.write(win.close(), d, {"label": "test"}, registrar=R)
+    return SimpleNamespace(dir=d, table=table, rec=json.loads((d / "registration.json").read_text()),
+                           publics={m.key: (d / f"m{k}-public.bin").read_bytes() for k, m in enumerate(win.window.members)})
+
+
+def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_bodies(tmp_path, monkeypatch):
+    """A window with a history table (`interface.History`) is audited with a5 handed the table as the verifier of record
+    takes it (``history``, `ml.windows.history.params`): from the window's public bodies it computes the table's root, to
+    which it holds the root the window's registration records, the root the table is pinned at (`history.pins`). A
+    registration that records no root for the table is refused before any session. The sessions (`a5.audit`) are stubbed
+    and sample nothing, so the audit doesn't pass."""
+    import a5 as A5
+    import a5_coins as AC
+    from verity.ml.commitments import history as HT
+
+    got, seen = _history(tmp_path / "w"), {}
+
+    def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
+        seen.update(history=kw["history"])
+        return {"audit": {"accepted": True}}, True
+
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    monkeypatch.setattr(RA, "output_class", lambda circuit, given=(), own=frozenset(): [])
+    base = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", got.rec["window"]["circuit"], "--run", RUN,
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives", "--challenger",
+            "local", "--main", "m.txt"]
+    assert RA.main([*base, "--out", str(tmp_path / "out")]) == 1
+    hist = seen["history"](got.publics)
+    assert hist["registered"] == {"latent": got.table.root.hex()} == IF.registered_roots(got.rec["window"])
+    assert HT.roots_of(CS.leaf_layer(got.publics), hist) == {"latent": (got.table.root, got.table.domain.domain_id)}
+    seen.clear()
+    rec = {**got.rec, "window": {**got.rec["window"], "registered_roots": {}}}
+    (got.dir / "registration.json").write_text(json.dumps(rec))
+    assert RA.main([*base, "--out", str(tmp_path / "refused")]) == 1
+    assert "records no root" in json.loads((tmp_path / "refused" / "summary.json").read_text())["refused"]["records"]
+    assert not seen
+
+
 def _audited(window: Path, out: Path, registration: dict | None = None, accepted: bool = True) -> Path:
     """What the records audit leaves under its ``--out`` ``out`` for ``window``: the population Program it sampled, its
     summary, and an audit record of ``registration`` (default the window's) accepting a subset sample of 2 proof blocks;
