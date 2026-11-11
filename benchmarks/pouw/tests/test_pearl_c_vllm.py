@@ -740,7 +740,7 @@ class TwinDev(RecordingDev):
                 a.p[j] = v
             for j, v in enumerate(i):
                 a.i[j] = v
-            getattr(TWIN.build(), f"run_{name}")(ctypes.byref(a), grid, block, smem)
+            assert getattr(TWIN.build(), f"run_{name}")(ctypes.byref(a), grid, block, smem) == 0, name
         if name.startswith("pd_") or name == "s512_heads":
             a = R.Args()
             for j, v in enumerate(p):
