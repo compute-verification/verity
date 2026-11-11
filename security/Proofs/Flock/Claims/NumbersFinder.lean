@@ -3,218 +3,147 @@ module
 public import Proofs.Flock.Claims.Numbers
 
 /-!
-# The first-hit finder's binding term, as a number
+# The first-hit finder's terms, as numbers
 
 The by-position first-hit finder bounds the probability that an accepted run opens a value off the committed trace by
-its expected SHA-512 compressions over `2^256`, four times. At a run of `T` compressions with at most `n` sessions,
-each extracted in at most `e` expected reruns, and a sample whose proof blocks need `K̄` gates in the mean, that is
+its expected calls of SHA-512 over `2^256`, four times. With every run of at most `T` calls, the prover's and the
+verifier's, sessions extracted in at most `e` expected reruns each, a sample of `N_s` sessions in the mean that needs
+`K_s` gates in the mean, `K_m` counted session by session, and `c` calls of the run's own opening checks, that term
+is
 
-`4·T·(1 + n·e + (1 + e)·K̄)/2^256`, with `e = 1 + m′·k`
+`4·(T·(1 + e·N_s + K_s + e·K_m) + (1 + K_s)·c)/2^256`.
 
-at a session of `k` accepted reruns a wait and `m′ = 210` waits (`waits`): the first run with every session
-extracted, and for each needed gate a run with the sessions holding it extracted.
+A call is one of SHA-512 on a whole message, whatever its length, as a finder's cost counts them: none of these
+numbers counts compressions.
 
 This file holds that expression over the rationals (`firstHitBound`), where an instance at numerals is decided by
-arithmetic, and its value at two session sizes:
+arithmetic, and its value at sessions of one table:
 
-* `k_le_of_one_table`, `k_le_of_tables_le_32`: a session whose level-0 lengths sum to at most `2^23`, one table, has
-  `k = ⌈4N₀/e⌉ ≤ 12343986`, and one of at most `32·2^23`, `32` tables, has `k ≤ 395007543`;
-* `firstHitBound_le`: the bound rises with `T`, `n`, `k` and `K̄`, so its value at a design's numbers bounds it at
-  every statement within them;
-* `firstHitBound_table1`: at most `2^-100` at `T = 2^80`, `n = 2^24` sessions of one table and `K̄ = 2^42` gates;
-* `firstHitBound_tables32`: at most `2^-100` at `T = 2^80`, `n = 5523986` sessions of `32` tables and
-  `K̄ = 227711235758` gates, the most that keeps it (`firstHitBound_tables32_tight`);
-* `real_le_firstHitBound`, `real_le_two_rpow_neg_100`, `real_table1_le`, `real_tables32_le`: the same expression over
-  the reals, at any reals within a design's numbers, with `2^256` and `2^-100` real powers as the finder's
-  statements write them;
-* `calls_table1_le`, `calls_tables32_le`: the finder's term `4·E/2^256` itself, at expected compressions
-  `E ≤ T·(1 + n·e + (1 + e)·K̄)` within those numbers.
+* `firstHitBound_table1`: at most `2^-100` at `T = 2^80` calls, `e = 2592237061 = 1 + 210·12343986` (a session of one
+  table, at most `2^23` level-0 symbols), `N_s = 2^24`, `K_s = K_m = 2^42` and `c = 2^80`;
+* `real_le_firstHitBound`, `real_le_two_rpow_neg_100`, `real_table1_le`: the same expression over the reals, at any
+  reals within a design's numbers, with `2^256` and `2^-100` real powers as the finder's statements write them;
+* `sqrt_term_le_strict`: the rewinding term `√(k·γ·p)` beside it is at most `2^-131` at `k ≤ 4 + 4402·2^24` rounds,
+  `γ ≤ 2^51` and `p ≤ q²/2^513` at `q ≤ 2·2^80`, the strict birthday bound at a finder of two runs.
 -/
 
 @[expose] public section
 
 namespace Claims.Flock.Numbers
 
-/-! ## A session's `k` at one table and at 32 -/
-
-/-- **`k ≤ 12343986` at a session of one table**: `⌈4N₀/e⌉` at `N₀ ≤ 2^23`. -/
-theorem k_le_of_one_table {N : ℝ} (hN : N ≤ 2 ^ 23) : ⌈4 * N / Real.exp 1⌉₊ ≤ 12343986 := by
-  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
-  have hlo := Real.exp_one_gt_d9
-  rw [Nat.ceil_le, div_le_iff₀ he0]
-  push_cast
-  linarith
-
-/-- **`k ≤ 395007543` at a session of at most `32` tables**: `⌈4N₀/e⌉` at `N₀ ≤ 32·2^23`. -/
-theorem k_le_of_tables_le_32 {N : ℝ} (hN : N ≤ 32 * 2 ^ 23) : ⌈4 * N / Real.exp 1⌉₊ ≤ 395007543 := by
-  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
-  have hlo := Real.exp_one_gt_d9
-  rw [Nat.ceil_le, div_le_iff₀ he0]
-  push_cast
-  linarith
-
 /-! ## The bound over the rationals -/
 
-/-- `e = 1 + m′·k`: the expected reruns of one session's extraction, at `k` accepted reruns a wait. -/
-def sessionReruns (k : ℕ) : ℚ := 1 + (waits : ℚ) * (k : ℚ)
+/-- The first-hit finders' expected calls, as an expression: `T·(1 + e·N_s + K_s + e·K_m) + (1 + K_s)·c`. -/
+def firstHitCalls (T e Ns Ks Km c : ℚ) : ℚ :=
+  T * (1 + e * Ns + Ks + e * Km) + (1 + Ks) * c
 
-/-- **The by-position first-hit finder's binding term**: `4·T·(1 + n·e + (1 + e)·K̄)/2^256` at `e = 1 + m′·k`. -/
-def firstHitBound (T n k : ℕ) (Kmean : ℚ) : ℚ :=
-  4 * (T : ℚ) * (1 + (n : ℚ) * sessionReruns k + (1 + sessionReruns k) * Kmean) / 2 ^ 256
+/-- **The by-position first-hit finder's term**: `4·(T·(1 + e·N_s + K_s + e·K_m) + (1 + K_s)·c)/2^256`. -/
+def firstHitBound (T e Ns Ks Km c : ℚ) : ℚ :=
+  4 * firstHitCalls T e Ns Ks Km c / 2 ^ 256
 
-theorem sessionReruns_nonneg (k : ℕ) : 0 ≤ sessionReruns k := by
-  unfold sessionReruns
-  positivity
-
-theorem sessionReruns_le {k k' : ℕ} (hk : k ≤ k') : sessionReruns k ≤ sessionReruns k' := by
-  have hk' : (k : ℚ) ≤ k' := by exact_mod_cast hk
-  have hw : (0 : ℚ) ≤ (waits : ℚ) := by positivity
-  unfold sessionReruns
-  linarith [mul_le_mul_of_nonneg_left hk' hw]
-
-/-- **The bound is monotone**: it rises with `T`, `n`, `k` and `K̄`. -/
-theorem firstHitBound_le {T T' n n' k k' : ℕ} {K K' : ℚ} (hT : T ≤ T') (hn : n ≤ n') (hk : k ≤ k') (hK0 : 0 ≤ K)
-    (hK : K ≤ K') : firstHitBound T n k K ≤ firstHitBound T' n' k' K' := by
-  have hT' : (T : ℚ) ≤ T' := by exact_mod_cast hT
-  have hn' : (n : ℚ) ≤ n' := by exact_mod_cast hn
-  have hn0 : (0 : ℚ) ≤ n' := by positivity
-  have he0 := sessionReruns_nonneg k
-  have he := sessionReruns_le hk
-  have h1 : (n : ℚ) * sessionReruns k ≤ (n' : ℚ) * sessionReruns k' := mul_le_mul hn' he he0 hn0
-  have h2 : (1 + sessionReruns k) * K ≤ (1 + sessionReruns k') * K' :=
-    mul_le_mul (by linarith) hK hK0 (by linarith)
-  have h3 : 0 ≤ (n : ℚ) * sessionReruns k := mul_nonneg (by positivity) he0
-  have h4 : 0 ≤ (1 + sessionReruns k) * K := mul_nonneg (by linarith) hK0
-  have h5 : 4 * (T : ℚ) * (1 + (n : ℚ) * sessionReruns k + (1 + sessionReruns k) * K) ≤
-      4 * (T' : ℚ) * (1 + (n' : ℚ) * sessionReruns k' + (1 + sessionReruns k') * K') :=
-    mul_le_mul (by linarith) (by linarith) (by linarith) (by linarith)
-  unfold firstHitBound
-  exact div_le_div_of_nonneg_right h5 (by positivity)
-
-/-! ## Sessions of one table -/
-
-/-- **At most `2^-100` at sessions of one table**: a prover of `2^80` compressions, `2^24` sessions, `k = 12343986`
-and a sample needing `2^42` gates in the mean. -/
-theorem firstHitBound_table1 : firstHitBound (2 ^ 80) (2 ^ 24) 12343986 (2 ^ 42) ≤ 1 / 2 ^ 100 := by
-  norm_num [firstHitBound, sessionReruns, waits]
-
-/-- **At most `2^-100` at every statement within those numbers.** -/
-theorem firstHitBound_le_of_table1 {T n k : ℕ} {K : ℚ} (hT : T ≤ 2 ^ 80) (hn : n ≤ 2 ^ 24) (hk : k ≤ 12343986)
-    (hK0 : 0 ≤ K) (hK : K ≤ 2 ^ 42) : firstHitBound T n k K ≤ 1 / 2 ^ 100 :=
-  (firstHitBound_le hT hn hk hK0 hK).trans firstHitBound_table1
-
-/-! ## Sessions of at most 32 tables -/
-
-/-- **At most `2^-100` at sessions of `32` tables**: a prover of `2^80` compressions, `5523986` sessions,
-`k = 395007543` and a sample needing `227711235758` gates in the mean. -/
-theorem firstHitBound_tables32 : firstHitBound (2 ^ 80) 5523986 395007543 227711235758 ≤ 1 / 2 ^ 100 := by
-  norm_num [firstHitBound, sessionReruns, waits]
-
-/-- One gate more in the mean and the bound is above `2^-100`. -/
-theorem firstHitBound_tables32_tight : 1 / 2 ^ 100 < firstHitBound (2 ^ 80) 5523986 395007543 227711235759 := by
-  norm_num [firstHitBound, sessionReruns, waits]
-
-/-- **At most `2^-100` at every statement within those numbers.** -/
-theorem firstHitBound_le_of_tables32 {T n k : ℕ} {K : ℚ} (hT : T ≤ 2 ^ 80) (hn : n ≤ 5523986) (hk : k ≤ 395007543)
-    (hK0 : 0 ≤ K) (hK : K ≤ 227711235758) : firstHitBound T n k K ≤ 1 / 2 ^ 100 :=
-  (firstHitBound_le hT hn hk hK0 hK).trans firstHitBound_tables32
+/-- **At most `2^-100` at sessions of one table**: runs of `2^80` calls, `e = 1 + 210·12343986`, `2^24` sessions, a
+sample needing `2^42` gates in the mean, counted either way, and `2^80` calls of the run's own opening checks. -/
+theorem firstHitBound_table1 :
+    firstHitBound (2 ^ 80) 2592237061 (2 ^ 24) (2 ^ 42) (2 ^ 42) (2 ^ 80) ≤ 1 / 2 ^ 100 := by
+  norm_num [firstHitBound, firstHitCalls]
 
 /-! ## Over the reals -/
 
 /-- **The bound over the reals**, `2^256` a real power. -/
-theorem firstHitBound_cast (T n k : ℕ) (K : ℚ) :
-    ((firstHitBound T n k K : ℚ) : ℝ) =
-      4 * (T : ℝ) * (1 + (n : ℝ) * (1 + 210 * (k : ℝ)) + (1 + (1 + 210 * (k : ℝ))) * (K : ℝ)) / 2 ^ (256 : ℝ) := by
+theorem firstHitBound_cast (T e Ns Ks Km c : ℚ) :
+    ((firstHitBound T e Ns Ks Km c : ℚ) : ℝ) =
+      4 * ((T : ℝ) * (1 + (e : ℝ) * (Ns : ℝ) + (Ks : ℝ) + (e : ℝ) * (Km : ℝ)) + (1 + (Ks : ℝ)) * (c : ℝ)) /
+        2 ^ (256 : ℝ) := by
   rw [show (256 : ℝ) = ((256 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
-  simp only [firstHitBound, sessionReruns, waits]
+  simp only [firstHitBound, firstHitCalls]
   push_cast
-  ring
+  all_goals ring
 
-/-- **The expression at reals within a design's numbers is at most the bound at them**: a run of `T ≤ T'`
-compressions, `n ≤ n'` sessions, each extracted in `e ≤ 1 + 210·k'` expected reruns, and a mean of `K ≤ K'` gates. -/
-theorem real_le_firstHitBound {T n e K : ℝ} {T' n' k' : ℕ} {K' : ℚ} (hn0 : 0 ≤ n) (he0 : 0 ≤ e) (hK0 : 0 ≤ K)
-    (hT : T ≤ T') (hn : n ≤ n') (he : e ≤ 1 + 210 * (k' : ℝ)) (hK : K ≤ K') :
-    4 * T * (1 + n * e + (1 + e) * K) / 2 ^ (256 : ℝ) ≤ ((firstHitBound T' n' k' K' : ℚ) : ℝ) := by
-  have hn'0 : (0 : ℝ) ≤ n' := by positivity
-  have h1 : n * e ≤ (n' : ℝ) * (1 + 210 * (k' : ℝ)) := mul_le_mul hn he he0 hn'0
-  have h2 : (1 + e) * K ≤ (1 + (1 + 210 * (k' : ℝ))) * (K' : ℝ) := mul_le_mul (by linarith) hK hK0 (by linarith)
-  have h3 : 0 ≤ n * e := mul_nonneg hn0 he0
-  have h4 : 0 ≤ (1 + e) * K := mul_nonneg (by linarith) hK0
-  have h5 : 4 * T * (1 + n * e + (1 + e) * K) ≤
-      4 * (T' : ℝ) * (1 + (n' : ℝ) * (1 + 210 * (k' : ℝ)) + (1 + (1 + 210 * (k' : ℝ))) * (K' : ℝ)) :=
-    mul_le_mul (by linarith) (by linarith) (by linarith) (by linarith)
+/-- **The expression at reals within a design's numbers is at most the bound at them**: runs of `T ≤ T'` calls,
+sessions extracted in `e ≤ e'` expected reruns, `N_s ≤ N_s'` sessions, `K_s ≤ K_s'` and `K_m ≤ K_m'` gates, and
+`c ≤ c'` calls of the run's own. -/
+theorem real_le_firstHitBound {T e Ns Ks Km c : ℝ} {T' e' Ns' Ks' Km' c' : ℚ} (hT0 : 0 ≤ T) (he0 : 0 ≤ e)
+    (hNs0 : 0 ≤ Ns) (hKs0 : 0 ≤ Ks) (hKm0 : 0 ≤ Km) (hc0 : 0 ≤ c) (hT : T ≤ T') (he : e ≤ e') (hNs : Ns ≤ Ns')
+    (hKs : Ks ≤ Ks') (hKm : Km ≤ Km') (hc : c ≤ c') :
+    4 * (T * (1 + e * Ns + Ks + e * Km) + (1 + Ks) * c) / 2 ^ (256 : ℝ) ≤
+      ((firstHitBound T' e' Ns' Ks' Km' c' : ℚ) : ℝ) := by
+  have hT' : (0 : ℝ) ≤ T' := hT0.trans hT
+  have he' : (0 : ℝ) ≤ e' := he0.trans he
+  have hKs' : (0 : ℝ) ≤ Ks' := hKs0.trans hKs
+  have h1 : e * Ns ≤ (e' : ℝ) * (Ns' : ℝ) := mul_le_mul he hNs hNs0 he'
+  have h2 : e * Km ≤ (e' : ℝ) * (Km' : ℝ) := mul_le_mul he hKm hKm0 he'
+  have h3 : 0 ≤ e * Ns := mul_nonneg he0 hNs0
+  have h4 : 0 ≤ e * Km := mul_nonneg he0 hKm0
+  have h5 : T * (1 + e * Ns + Ks + e * Km) ≤
+      (T' : ℝ) * (1 + (e' : ℝ) * (Ns' : ℝ) + (Ks' : ℝ) + (e' : ℝ) * (Km' : ℝ)) :=
+    mul_le_mul hT (by linarith) (by linarith) hT'
+  have h6 : (1 + Ks) * c ≤ (1 + (Ks' : ℝ)) * (c' : ℝ) := mul_le_mul (by linarith) hc hc0 (by linarith)
+  have h7 : 4 * (T * (1 + e * Ns + Ks + e * Km) + (1 + Ks) * c) ≤
+      4 * ((T' : ℝ) * (1 + (e' : ℝ) * (Ns' : ℝ) + (Ks' : ℝ) + (e' : ℝ) * (Km' : ℝ)) + (1 + (Ks' : ℝ)) * (c' : ℝ)) := by
+    linarith
   rw [firstHitBound_cast]
-  exact div_le_div_of_nonneg_right h5 (by positivity)
+  exact div_le_div_of_nonneg_right h7 (by positivity)
 
 /-- `1/2^100` over the rationals is `2^-100`, a real power. -/
 theorem cast_two_pow_neg_100 : ((1 / 2 ^ 100 : ℚ) : ℝ) = 2 ^ (-(100 : ℝ)) := by
   rw [Real.rpow_neg (by norm_num), show (100 : ℝ) = ((100 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
   push_cast
-  ring
+  all_goals ring
 
 /-- **The expression over the reals is at most `2^-100`** wherever the rational bound at numbers above it is. -/
-theorem real_le_two_rpow_neg_100 {T n e K : ℝ} {T' n' k' : ℕ} {K' : ℚ} (hn0 : 0 ≤ n) (he0 : 0 ≤ e) (hK0 : 0 ≤ K)
-    (hT : T ≤ T') (hn : n ≤ n') (he : e ≤ 1 + 210 * (k' : ℝ)) (hK : K ≤ K')
-    (h : firstHitBound T' n' k' K' ≤ 1 / 2 ^ 100) :
-    4 * T * (1 + n * e + (1 + e) * K) / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ)) := by
+theorem real_le_two_rpow_neg_100 {T e Ns Ks Km c : ℝ} {T' e' Ns' Ks' Km' c' : ℚ} (hT0 : 0 ≤ T) (he0 : 0 ≤ e)
+    (hNs0 : 0 ≤ Ns) (hKs0 : 0 ≤ Ks) (hKm0 : 0 ≤ Km) (hc0 : 0 ≤ c) (hT : T ≤ T') (he : e ≤ e') (hNs : Ns ≤ Ns')
+    (hKs : Ks ≤ Ks') (hKm : Km ≤ Km') (hc : c ≤ c') (h : firstHitBound T' e' Ns' Ks' Km' c' ≤ 1 / 2 ^ 100) :
+    4 * (T * (1 + e * Ns + Ks + e * Km) + (1 + Ks) * c) / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ)) := by
   rw [← cast_two_pow_neg_100]
-  exact (real_le_firstHitBound hn0 he0 hK0 hT hn he hK).trans (Rat.cast_le.2 h)
+  exact (real_le_firstHitBound hT0 he0 hNs0 hKs0 hKm0 hc0 hT he hNs hKs hKm hc).trans (Rat.cast_le.2 h)
 
-/-- **The binding term is at most `2^-100` at sessions of one table**: at a run of `T ≤ 2^80` compressions,
-`n ≤ 2^24` sessions, each extracted in `e ≤ 1 + 210·12343986` expected reruns, and a sample needing `K ≤ 2^42` gates
-in the mean. -/
-theorem real_table1_le {T n e K : ℝ} (hn0 : 0 ≤ n) (he0 : 0 ≤ e) (hK0 : 0 ≤ K) (hT : T ≤ 2 ^ 80) (hn : n ≤ 2 ^ 24)
-    (he : e ≤ 1 + 210 * 12343986) (hK : K ≤ 2 ^ 42) :
-    4 * T * (1 + n * e + (1 + e) * K) / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ)) := by
-  refine real_le_two_rpow_neg_100 (T' := 2 ^ 80) (n' := 2 ^ 24) (k' := 12343986) (K' := 2 ^ 42) hn0 he0 hK0
-    ?_ ?_ ?_ ?_ firstHitBound_table1
-  · rw [Nat.cast_pow, Nat.cast_ofNat]
+/-- **The first-hit term is at most `2^-100` at sessions of one table**: at runs of `T ≤ 2^80` calls of SHA-512,
+sessions extracted in `e ≤ 2592237061 = 1 + 210·12343986` expected reruns, `N_s ≤ 2^24` sessions, `K_s ≤ 2^42` and
+`K_m ≤ 2^42` gates in the mean, and `c ≤ 2^80` calls of the run's own opening checks. -/
+theorem real_table1_le {T e Ns Ks Km c : ℝ} (hT0 : 0 ≤ T) (he0 : 0 ≤ e) (hNs0 : 0 ≤ Ns) (hKs0 : 0 ≤ Ks)
+    (hKm0 : 0 ≤ Km) (hc0 : 0 ≤ c) (hT : T ≤ 2 ^ 80) (he : e ≤ 2592237061) (hNs : Ns ≤ 2 ^ 24) (hKs : Ks ≤ 2 ^ 42)
+    (hKm : Km ≤ 2 ^ 42) (hc : c ≤ 2 ^ 80) :
+    4 * (T * (1 + e * Ns + Ks + e * Km) + (1 + Ks) * c) / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ)) := by
+  refine real_le_two_rpow_neg_100 (T' := 2 ^ 80) (e' := 2592237061) (Ns' := 2 ^ 24) (Ks' := 2 ^ 42)
+    (Km' := 2 ^ 42) (c' := 2 ^ 80) hT0 he0 hNs0 hKs0 hKm0 hc0 ?_ ?_ ?_ ?_ ?_ ?_ firstHitBound_table1
+  · rw [Rat.cast_pow, Rat.cast_ofNat]
     exact hT
-  · rw [Nat.cast_pow, Nat.cast_ofNat]
-    exact hn
-  · push_cast
+  · rw [Rat.cast_ofNat]
     exact he
   · rw [Rat.cast_pow, Rat.cast_ofNat]
-    exact hK
+    exact hNs
+  · rw [Rat.cast_pow, Rat.cast_ofNat]
+    exact hKs
+  · rw [Rat.cast_pow, Rat.cast_ofNat]
+    exact hKm
+  · rw [Rat.cast_pow, Rat.cast_ofNat]
+    exact hc
 
-/-- **The binding term is at most `2^-100` at sessions of at most `32` tables**: at a run of `T ≤ 2^80`
-compressions, `n ≤ 5523986` sessions, each extracted in `e ≤ 1 + 210·395007543` expected reruns, and a sample
-needing `K ≤ 227711235758` gates in the mean. -/
-theorem real_tables32_le {T n e K : ℝ} (hn0 : 0 ≤ n) (he0 : 0 ≤ e) (hK0 : 0 ≤ K) (hT : T ≤ 2 ^ 80)
-    (hn : n ≤ 5523986) (he : e ≤ 1 + 210 * 395007543) (hK : K ≤ 227711235758) :
-    4 * T * (1 + n * e + (1 + e) * K) / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ)) := by
-  refine real_le_two_rpow_neg_100 (T' := 2 ^ 80) (n' := 5523986) (k' := 395007543) (K' := 227711235758) hn0 he0 hK0
-    ?_ ?_ ?_ ?_ firstHitBound_tables32
-  · rw [Nat.cast_pow, Nat.cast_ofNat]
-    exact hT
-  · push_cast
-    exact hn
-  · push_cast
-    exact he
-  · push_cast
-    exact hK
+/-! ## The rewinding term beside it -/
 
-/-! ## The finder's term at a bound on its expected compressions -/
-
-/-- `4·E/2^256` at expected compressions `E ≤ T·(1 + n·e + (1 + e)·K)` is at most the expression. -/
-theorem four_mul_div_le {E T n e K : ℝ} (hE : E ≤ T * (1 + n * e + (1 + e) * K)) :
-    4 * E / 2 ^ (256 : ℝ) ≤ 4 * T * (1 + n * e + (1 + e) * K) / 2 ^ (256 : ℝ) := by
-  have h256 : (0 : ℝ) ≤ 2 ^ (256 : ℝ) := by positivity
-  have h4 : 4 * E ≤ 4 * T * (1 + n * e + (1 + e) * K) := by linarith
-  exact div_le_div_of_nonneg_right h4 h256
-
-/-- **The finder's term is at most `2^-100` at sessions of one table**: its expected compressions `E` at most
-`T·(1 + n·e + (1 + e)·K)` at the numbers of `real_table1_le`. -/
-theorem calls_table1_le {E T n e K : ℝ} (hn0 : 0 ≤ n) (he0 : 0 ≤ e) (hK0 : 0 ≤ K) (hT : T ≤ 2 ^ 80)
-    (hn : n ≤ 2 ^ 24) (he : e ≤ 1 + 210 * 12343986) (hK : K ≤ 2 ^ 42)
-    (hE : E ≤ T * (1 + n * e + (1 + e) * K)) : 4 * E / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ)) :=
-  (four_mul_div_le hE).trans (real_table1_le hn0 he0 hK0 hT hn he hK)
-
-/-- **The finder's term is at most `2^-100` at sessions of at most `32` tables**: its expected compressions `E` at
-most `T·(1 + n·e + (1 + e)·K)` at the numbers of `real_tables32_le`. -/
-theorem calls_tables32_le {E T n e K : ℝ} (hn0 : 0 ≤ n) (he0 : 0 ≤ e) (hK0 : 0 ≤ K) (hT : T ≤ 2 ^ 80)
-    (hn : n ≤ 5523986) (he : e ≤ 1 + 210 * 395007543) (hK : K ≤ 227711235758)
-    (hE : E ≤ T * (1 + n * e + (1 + e) * K)) : 4 * E / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ)) :=
-  (four_mul_div_le hE).trans (real_tables32_le hn0 he0 hK0 hT hn he hK)
+set_option exponentiation.threshold 600 in
+/-- **The rewinding term `√(k·γ·p)` is at most `2^-131` under the strict birthday bound**: at `k ≤ 4 + 4402·2^24`
+rounds, a session's `γ ≤ 2^51`, and `p ≤ q²/2^513` at a finder of `q ≤ 2·2^80` calls on every coin, two runs of
+`2^80`. -/
+theorem sqrt_term_le_strict {k γ p q : ℝ} (hγ0 : 0 ≤ γ) (hp0 : 0 ≤ p) (hq0 : 0 ≤ q) (hk : k ≤ 4 + 4402 * 2 ^ 24)
+    (hγ : γ ≤ 2 ^ (51 : ℝ)) (hq : q ≤ 2 * 2 ^ 80) (hp : p ≤ q ^ 2 / 2 ^ (513 : ℝ)) :
+    Real.sqrt (k * γ * p) ≤ 2 ^ (-(131 : ℝ)) := by
+  have h51 : (2 : ℝ) ^ (51 : ℝ) = 2 ^ 51 := by
+    rw [show (51 : ℝ) = ((51 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
+  have h513 : (2 : ℝ) ^ (513 : ℝ) = 2 ^ 513 := by
+    rw [show (513 : ℝ) = ((513 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
+  have h131 : (2 : ℝ) ^ (-(131 : ℝ)) = 1 / 2 ^ 131 := by
+    rw [Real.rpow_neg (by norm_num), show (131 : ℝ) = ((131 : ℕ) : ℝ) by norm_num, Real.rpow_natCast, one_div]
+  rw [h51] at hγ
+  rw [h513] at hp
+  have hq2 : q ^ 2 ≤ (2 * 2 ^ 80) ^ 2 := pow_le_pow_left₀ hq0 hq 2
+  have hp' : p ≤ (2 * 2 ^ 80) ^ 2 / 2 ^ 513 := hp.trans (div_le_div_of_nonneg_right hq2 (by positivity))
+  have hkγ : k * γ ≤ (4 + 4402 * 2 ^ 24) * 2 ^ 51 := mul_le_mul hk hγ hγ0 (by positivity)
+  have h : k * γ * p ≤ (4 + 4402 * 2 ^ 24) * 2 ^ 51 * ((2 * 2 ^ 80) ^ 2 / 2 ^ 513) :=
+    mul_le_mul hkγ hp' hp0 (by positivity)
+  rw [h131, Real.sqrt_le_left (by positivity)]
+  refine h.trans ?_
+  norm_num
 
 end Claims.Flock.Numbers
