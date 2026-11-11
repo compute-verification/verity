@@ -41301,3 +41301,86 @@ For the table:
 - The bits sit in the finder's first term at every priced row. The cheapest way to 100 bits is a proof that costs no GB: #8827's by-position bound at the code (no d; the sampled blocks' mean needs) with one-table sessions, giving 2^-105.0 at (ii) and 2^-104.0 at (iii) an audit at T = 2^80 compressions (modeled; the proof is unwritten).
 - Counting 64 KiB calls, that is 2^-96.0. It reaches 2^-100 either by counting `ExpectedCR` in compressions (Daniel's, 0 GB) or by κ ≤ 2^-9 (1/16 of the blocks a sampled request, GB to price).
 - A year of per-audit budgets (2^-89.4) needs a 640-bit digest (2^-132.6 or better, serve-time hashing ×1.28). Every priced row needs a 2^27- to 2^30-byte coin against 2^26 deployed.
+
+## TWOWITNESS, Wed 11 Nov 08:04Z: b652 passed whole, (A) proved at ec022ecf7c on the three axioms; (A) moves no term and is not two hours from a ready line, so I park (A) and (D) and take the count Kfirst·Σ_t k_t in Lean
+
+Clock: `date -u` read 08:03Z before writing. My VM was reset; the branch, the notes clone and both runs are rebuilt and refetched. Checkpoint note `lanes/proofs/20261111T0759Z-report-twowitness.md` holds the order and your 07:55Z message. I wrote nothing to Linear or Slack, and changed no lock record.
+
+1. **The try's verdict** `r20261111-050055-b652` at `ec022ecf7c` (head of `cursor/proofs-twowitness-0d28`, the moved tree) [run: its `stdout.log`, restored from its evicted-files artifact]:
+   - `Scope.lean`: "Build completed successfully (11005 jobs)", then "lean exit 0 in 4928 s". "axiom probe: none of its 27 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The 27 include `sessionOk_x`, `scopeCheck_x`, `zkOk_x`, `templateOk_x` and `hiddenOf_x`.
+   - `Round2.lean`: "Build completed successfully (11257 jobs)", then "lean exit 0 in 82 s"; 11 theorems, the same three axioms.
+   - No `skip` line, and no warning in an InstanceStmt file.
+2. **What of mine can be a PR with a ready line by 12:00Z**:
+   - (A) cannot. What it still needs:
+     - a records run, with `--mem-gb 64`, which must build `Scope.lean`, whose elaboration alone took 4,928 s [run];
+     - the quick tier;
+     - the PR and the merge sentence.
+
+     That is about 2.5 to 3 h with slot waits [guess], so its ready line lands near or after 12:00Z.
+   - **(A) and (D) are parked.** Where they stand is in my checkpoint note and below.
+   - **I take the count `Kfirst·Σ_t k_t` in Lean, so nobody doubles it.** I aim for a ready line on one small PR off `origin/main` by about 11:30Z [guess], with its runs: one try, a records run of `security/Proofs`, and the quick tier.
+3. **Which term or gap.**
+   - (A) and (D) move no term of the two-stage bound and close no gap. They make the `HonestSession` premise hold at #8363's instance, which is non-vacuity only.
+   - The count closes the gap SCALE's line 2 names, "the count `Kfirst·Σ_t k_t` of sampled blocks is paper only". With #8836's `code_card_biUnion_le_mul` it makes `K ≤ Kfirst·(Σ_t k_t)·M` a Lean theorem, with `M` the most gates a block needs.
+
+**The count, as I will state it** [read: `Spot/Select.lean:262-306`, `Spot/Draw.lean:232,297`, `Select/Second.lean`, `Select/Size.lean`, `Sampling/Reg.lean:60-94`, #8836's `RevealsOpen.lean`]:
+
+- **The theorem.** Where `Select.selectSecond sample ns ks src = .ok (draw, n)`:
+
+  `(Spot.Draw.proved draw).size = sample.size * ks.toList.sum`.
+
+  It is an equality, not a bound.
+- **Why it is exact:**
+  - `secondLaw`'s strata are one cell per template `t` and sampled replay block `i`. Each cell is the work law at `k = 1` with count `ks[t]` (`flockLaw_second`, on `main`).
+  - `stratifiedWith` returns exactly the sum of its strata's counts (`stratifiedWith_size`, on `main`).
+  - The sample object `drawFirstRead` writes has its `units` and no `closure`, so `proved` is the drawn units, sorted.
+- **At the registration.** `RegTwo.sample src₁` is the replay sample, the units the first stage's `Select.select` proves. So `Kfirst := (g.sample src₁).size`, and the count reads `(proved draw).size = Kfirst · Σ_t g.ks[t]`. That is exactly the factor in `code_card_biUnion_le_mul`'s right-hand side, `(Spot.Draw.proved draw).size * M`.
+- **Files.** A new file under `security/Proofs/Flock/Claims/Sampling/Select/`, touching neither #8836's nor #8827's files.
+- **The corollary in K.** `K ≤ Σ_always |needs v| + Kfirst·Σ_t k_t·M` reads #8836's `RevealsOpen.lean`, so it is a two-line theorem in a second PR once #8836 lands. Your word if you want it stacked on #8836's head now instead.
+- **What it leaves out.** `Kfirst` here is the replay sample's size. That size includes the first stage's closure, so it can exceed the first law's draw. Bounding it by the first stage's own law is the next piece. No lemma on `main` bounds it [run: grep of `security/Proofs/Flock/Claims/Sampling` and `SamplingGeneric`].
+
+**(A) and (D), parked** [run unless tagged]:
+
+- **(A)** is proved at `ec022ecf7c` (b652). Its next steps, in order: the records run (`--mem-gb 64`, one run), one commit of exactly the lock if it writes one, the quick tier, then the PR. The lock at `ec022ecf7c` reads 4,175,579 bytes, `Security/` count 6, old paths 0.
+- **Your 05:24Z item 2.**
+  - At TWOINSTANCE's `a81a1b11ea`, only `decode_x0` exists (`Security/Proofs/Flock/SpotFlock/InstanceRecords.lean:278`); `readOf_x` does not.
+  - Mine are `decode_x` (`security/Proofs/Flock/SpotFlock/InstanceStmt/Sizes.lean:263`) and `readOf_x` (`InstanceStmt/Inputs.lean:147`), at `ec022ecf7c`. (D)'s `reads` field builds on them.
+- **(D)'s table, the facts I would state by `kernel_rfl'`**, as `r20261111-051530-3bd6` printed them (your 05:24Z item 3):
+  - **Shape:** `tables 1`; `m 25`, `kLog 22`, `nbl 3`, `n 1`, `blocksReal 1`, `mPts 27`, `pin 246784`; `g 1`, `upv 1`; nets unit 0, sha 1, hm 2, out 0; `perVu #[1, 1, 2]`.
+  - **Ranges:**
+    - net 2: slotLog 18, pos0 0, count 2, start 0;
+    - net 1: slotLog 18, pos0 2, count 1, start 524288;
+    - net 0: slotLog 9, pos0 1536, count 1, start 786432;
+    - mask: slotLog 14, pos0 64, count 1, start 1048576.
+  - **Nets:**
+    - unit: useful 257, constPos 256, inWords 1, unitLog 9, in `#[(0,16)]`, out `#[(128,16)]`;
+    - sha512x3: useful 256001, constPos 256000, inWords 64, unitLog 18, in 6 ranges from `(0,512)` to `(3584,1024)`, out `#[(253952,512),(254464,512),(254976,512)]`;
+    - hm96: useful 246785, constPos 246784, inWords 32, unitLog 18, in `#[(0,512),(512,1024),(1536,1536)]`, out `#[(245760,1024)]`.
+  - **Ports**, both v2 and unsegmented:
+    - `i0`: 64 words, 1 chunk, 1024 bits;
+    - `o0`: 1 word, 0 chunks, 16 bits.
+
+    Their midstates are as printed.
+  - **Wiring:** `wires [((2,(0,0)),(1,(0,0)))]`, `leafCuts #[]`, `rowSlots (1, #[#[(0,0)], #[]])`, `outPorts #[(o0,1)]`.
+  - **Δ:** 7206 pairs (`da = db`), in 11 runs with 0 off-pattern:
+    - three slot constants, at 508928, 780288 and 786688;
+    - sha's cv0 = `i0`'s midstate, at `[524288,+512)`;
+    - hm96 slot 0's pad, at `[512,+1024)`;
+    - `o0`'s midstate plus pad bits 0–47, at `[262144,+560)`;
+    - hm96 slot 1's pad words 1–15, at `[262720,+960)`;
+    - the unit's 16 leaf bits from `i0`'s msg0, at `[786432,+16)`;
+    - the sha-to-hm wire, `[0,+512)` from 778240;
+    - `o0`'s two bytes, `[262712,+8)` from 786560 and `[262704,+8)` from 786568.
+  - **Regions:** both digests' free words are `#[0..9]` with mask 4193280. Their `bytes0` equal the dummy digests, `3a54ee92…` and `5bba43fb…`.
+- **(D)'s route, unchanged:**
+  1. a trace adapted from Concrete's to two hm96 slots and the sha net;
+  2. the regions by `row_bc_tgt` and `hidden_layoutP`;
+  3. the witness `zIn (a % 2^22)`.
+
+  It is about 1,000 lines [guess]. (D)'s date of Fri 13 Nov 12:00Z holds only if I return to it by Thu 12 Nov [guess].
+
+For SCALE: at the deployed second stage the number of drawn proof blocks is exactly `Kfirst·Σ_t k_t`, an equality, with `Kfirst` the replay sample's size, the first stage's proved units including its closure [read: `secondLaw`, `RegTwo.sample`]. Its Lean form follows within about 3 h [guess].
+
+For the table:
+1. (A) of #8363's instance is proved in Lean at `ec022ecf7c`: 27 + 11 theorems on the three axioms [run: b652]. It is parked unopened, and it moves no term of the bound.
+2. The count `Kfirst·Σ_t k_t` of sampled blocks is being proved as an equality at SPOT[Flock]'s second stage. With #8836 it makes `K ≤ Kfirst·Σ_t k_t·M` a Lean theorem [read: the plan above; ready line about 11:30Z, guess].
