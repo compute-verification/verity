@@ -28,8 +28,8 @@ templates, or for one when the file names ``Q_template_instances``) is the one t
 is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
 (``model.layers.0.``, or a MoE layer's ``moe/L40``), or to the rows under any of a list of them, ``scope.steps`` (``[lo, hi)``)
 to those steps of each request.  A chunked template's units (``CHUNKED``: a ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate,
-a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk, a ``SPLITS`` split part or combine, a ``CHAINS`` key
-block or end or a ``STAGES`` stage; and a row template or
+a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk, a ``CHAINS`` key block, end, column end or combine, or a
+``STAGES`` stage; and a row template or
 whole ``PARTS`` part the file's ``chunk_cap`` names, its rows its Definition's own ports, `chunked`) are split
 into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes
 it; ``chunk_caps`` writes the entry), each chunk a member on Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
@@ -43,9 +43,8 @@ does not compute what the row computes is no match), or when the template's word
 row is split into its N coordinates), or for a ``WIDE_COORDS`` family at N = c (its N / c coordinates of c outputs), or at a halving of its width (``COLS``: the row is split into column blocks), or when it
 is a part of the row's Definition (``PARTS``: the row is split into Definitions of its own, one member per part), or when it
 is the row's Definition at every axis of a batch 1 (``SLICES``: the row is split into its slices along those axes), or when it
-is a K-chunk of the row's coordinate (``KCHUNKS``, `kchunk_rows`), a split part or the combine of the row's Definition
-(``SPLITS``, `split_rows`), or a key block or the end of its heads' chain (``CHAINS``, `chain_rows`), or a stage of its cut
-(``STAGES``, `stage_rows`).  A Boolean Program's rows are its word view (`pipeline.build_instances`: each row the word Definition
+is a K-chunk of the row's coordinate (``KCHUNKS``, `kchunk_rows`), a key block, an end or a combine of its heads' chains
+(``CHAINS``, `chain_rows`), or a stage of its cut (``STAGES``, `stage_rows`).  A Boolean Program's rows are its word view (`pipeline.build_instances`: each row the word Definition
 its Call's Boolean Definition computes, that Boolean Definition its ``bits``), so a template matches the same rows under either IR,
 and the members, their rows and every committed word are the same; the population program is over the template as the partition
 names it.  The rows commit u16 words: a template's every port is 16-bit elements in its word view (a
@@ -78,12 +77,11 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
   ``ScaledMmFp8BlockSharedScale_v1{K=..,N=c,G=..}``  likewise every coordinate j of c outputs (``WIDE_COORDS``, c a power of two
                                    dividing G and the row's N): ``w[:, jc:(j + 1)c, :]`` and ``ws[:, jc // G, :]`` -> the row's
                                    output words [jc, (j + 1)c)
-  ``MoeExpertFp8CoordinateChunk_v1{K=k,..}``, ``SparseMlaSplitPart_v1{T=k,..}``, ``SparseMlaCombine_v1{NSPLIT=n,..}``,
-  ``SparseMlaHeadBlock_v1{NVIS=k,FIRST=..,..}``, ``SparseMlaHeadEnd_v1{..}``, ``TopPStep_v1{..}``, ..  K-chunks
-                                   (``KCHUNKS``), split parts and combines (``SPLITS``), key blocks and ends (``CHAINS``) and
-                                   the top-p select's stages (``STAGES``), laid out by `kchunk_rows`, `split_rows`,
-                                   `chain_rows`, `stage_rows` and `chunk_rows.reads`; always chunked, v2 bit rows, one index
-                                   entry per row
+  ``MoeExpertFp8CoordinateChunk_v1{K=k,..}``, ``SparseMlaHeadBlock_v1{NVIS=k,FIRST=..,..}``, ``SparseMlaHeadEnd_v1{..}``,
+  ``SparseMlaSplitEndCols_v1{C=c,..}``, ``SparseMlaCombine_v1{NSPLIT=n,..}``, ``TopPStep_v1{..}``, ..  K-chunks (``KCHUNKS``),
+                                   key blocks, ends, column ends and combines (``CHAINS``) and the top-p select's stages
+                                   (``STAGES``), laid out by `kchunk_rows`, `chain_rows`, `stage_rows` and `chunk_rows.reads`;
+                                   always chunked, v2 bit rows, one index entry per row
   ``MoeSum_v1{H=w,..}``, ``AllReduceMnnvl_v1{N=w,..}``, ``ResidualAdd_v1{N=w}``  every block j of w columns of the rows of that
                                    Definition W wide, W / w a power of two (``COLS``): ``in<g>`` per argument group, each of its
                                    rows' columns [jw, jw + w) in order -> ``out.<member>``, the row's output columns [jw, jw + w);
@@ -144,21 +142,20 @@ from verity_vllm.pipeline import chain_rows as CH, chunk_rows as CR, ingress_row
 from verity_vllm.pipeline import expert_rows as EX
 from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
 from verity_vllm.pipeline import s8_rows as S8, slice_rows as SL
-from verity_vllm.pipeline import split_rows as SP, stage_rows as ST, weight_rows as WT
+from verity_vllm.pipeline import stage_rows as ST, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
 from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS,  # noqa: F401
-                                                    SLICES, SPLITS, STAGES, WIDE_COORDS, Template, _bind, coord_width, part,
-                                                    template, unit_templates)
+                                                    SLICES, STAGES, WIDE_COORDS, Template, _bind, coord_width, part, template,
+                                                    unit_templates)
 from verity_vllm.pipeline.window_law import law_of, work_table_of
 from verity_vllm.program.compact import runs_from_file_items
 
 #: the layouts whose units are bit rows as Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
-CHUNKED = ("s8", "coord", "cols", "slice", "kchunk", "split", "chain", "stage", *EX.LAYOUTS)
+CHUNKED = ("s8", "coord", "cols", "slice", "kchunk", "chain", "stage", *EX.LAYOUTS)
 #: the chunked layouts a window always chunks, whose units are no word rows
-ALWAYS_CHUNKED = ("s8", "kchunk", "split", "chain", "stage", *EX.LAYOUTS)
+ALWAYS_CHUNKED = ("s8", "kchunk", "chain", "stage", *EX.LAYOUTS)
 #: the chunked layouts read by a module of their own: a row's unit count, and the reader of a member's rows
-READERS = {"slice": (SL.extent, SL.read), "kchunk": (KC.units, KC.read), "split": (SP.units, SP.read),
-           "chain": (CH.units, CH.read), "stage": (ST.units, ST.read)}
+READERS = {"slice": (SL.extent, SL.read), "kchunk": (KC.units, KC.read), "chain": (CH.units, CH.read), "stage": (ST.units, ST.read)}
 #: the committed signed integer dtypes a narrower packed port reads by value (`_packed`): torch's int64 indices
 BY_VALUE = frozenset(("i64", "int64"))
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
@@ -231,14 +228,14 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
             if steps is not None and not int(steps[0]) <= int(d["step"]) < int(steps[1]):
                 continue
             ps = [part(ts[k].word, r["spec"]) for k, _ in hits]
-            chain = {KC.chain(ts[k])[0] if ts[k].layout == "kchunk" else ts[k].layout if ts[k].layout in ("split", "chain", "stage")
+            chain = {KC.chain(ts[k])[0] if ts[k].layout == "kchunk" else ts[k].layout if ts[k].layout in ("chain", "stage")
                      else None for k, _ in hits}
             experts = all(ts[k].layout in ("read", "expert", "fused") for k, _ in hits)
             if len(hits) > 1 and (None in ps or len({p[0] for p in ps}) < len(ps)) and (None in chain or len(chain) > 1) and not experts:
                 raise ValueError(f"row {i} ({r['spec']}) holds instances of {[tmpls[k] for k, _ in hits]}: one member reads a row, "
                                  f"or one member per part of it (PARTS), or one per K-chunk template of one chain (KCHUNKS), or one "
-                                 f"per split part and combine (SPLITS), key-block and end (CHAINS) or stage (STAGES) template of it, "
-                                 f"or its per-expert blocks, fused blocks and table reads (EXPERTS, FUSED)")
+                                 f"per key-block, end and combine (CHAINS) or stage (STAGES) template of it, or its per-expert "
+                                 f"blocks, fused blocks and table reads (EXPERTS, FUSED)")
             for k, n in hits:
                 out[k].append((str(rid), pi, r, d))
                 counts[k] += n
@@ -287,6 +284,15 @@ def chunked(t: str, caps: Mapping[str, int] | None) -> bool:
             or (layout in ("row", "part") and t in (caps or {})))
 
 
+def unit_member(t: str, n: int, base: int = 0, name: str = "") -> CS.Member:
+    """``n`` units of template ``t`` from unit ``base`` on bit rows, as Flock's `UnitStager` stages a unit: its
+    `chunk_rows.unit_rows` in, its outputs' v2 rows out."""
+    in_rows, _outs = CR.unit_rows(template(t))
+    outs = (("o0", 1),) if template(t).layout == "s8" else IF.layout(template(t).fn).outs
+    schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, CS.SCHEMA_HM96_SHA512_ROW_V2) for p, _w in outs)
+    return CS.Member(t, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, n, base, name=name, schemas=schemas)
+
+
 def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[int] | None = None,
             caps: Mapping[str, int] | None = None) -> list[CS.Member]:
     """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree.  A
@@ -306,11 +312,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
                                  f"chunk_cap (pipeline.serving_rows.chunk_caps)")
             if counts is not None and counts[k] != n:
                 raise ValueError(f"{t}: {n} units read off the rows, {counts[k]} in their Definitions")
-            in_rows, _outs = CR.unit_rows(template(t))
-            outs = (("o0", 1),) if layout == "s8" else IF.layout(template(t).fn).outs
-            schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, CS.SCHEMA_HM96_SHA512_ROW_V2) for p, _w in outs)
-            out += [CS.Member(t, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, min(cap, n - lo), base + lo, name=f"{t}/c{j}",
-                              schemas=schemas) for j, lo in enumerate(range(0, n, cap))]
+            out += [unit_member(t, min(cap, n - lo), base + lo, f"{t}/c{j}") for j, lo in enumerate(range(0, n, cap))]
             base += n
             continue
         if layout == "rope":
@@ -426,7 +428,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     rows, defs, counts = member_rows(programs, tmpls, scope.get("op_path_prefix"), program_dirs, index, scope.get("steps"), reuse)
     plan = EX.Plan(tmpls, rows)
     ms = EX.wire(EX.cut(members(tmpls, rows, counts, partition.get("chunk_cap") or {}), plan), plan)
-    ms = ST.wire(CH.wire(SP.wire(KC.wire(ms, tmpls, rows), tmpls, rows), tmpls, rows), tmpls, rows)
+    ms = ST.wire(CH.wire(KC.wire(ms, tmpls, rows), tmpls, rows), tmpls, rows)
     ms = PR.wire(ms, tmpls, rows, row_units)
     ms = WT.cut(ms, WT.reads(ms, rows, row_units))
     tables: tuple[CS.RowTable, ...] = ()
