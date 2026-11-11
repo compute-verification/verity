@@ -207,7 +207,9 @@ its rows, columns and inputs are in `benchmarks/certifier_term/README.md`). By l
 one link, one network certifier on one uplink, certifying a request rate of one scan class (an `ingress_scan.Class`,
 or a window class's `scan`); `datacenter` sums K over a datacenter's links; and `at_link_rate` sums as many links at
 one link's rate as a scope has machines. Each comes in two forms, beside its share of one copy of the weights and its
-ε. The terms are those of
+ε, and charges the jitter at the term of record's two release schedules unless its caller names another bound (`dj`);
+the checks' own counts (`terms`, `clock_terms`) take the bound from their caller and have no default. The terms are
+those of
 `NetTiming.Guarantees.PeriodLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/Period.lean`, proved in
 `security/Proofs/NetworkCertifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose execution phases'
 failures `NetTiming.periodLeak_le_sum` sums by a union bound (`security/Proofs/NetworkCertifier/PeriodSum.lean`); the
@@ -223,7 +225,9 @@ SUMMARY --out FILE`, with RUN a fetched certifier run and SUMMARY its scan's `su
 the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block unsampled. FILE holds the widths, each
 term, the links and a row for each monitoring period, scope and reading; `FILE.md`, which it prints, holds the tables.
 A run's figures are its published Attempt's. The report's `d1` lists, per execution phase, whether its certificates, N2
-and the scan accepted.
+and the scan accepted. Its K (`chain_record.pooled_k`) charges the same jitter once, as one of the network's own terms
+(`network_terms`): a bit a bucket of each execution phase, the buckets the certificates step's, and K is open where
+that step names none.
 
 The terms, in the generator reading of the scan's statement (each proof block's registered rows its boundary values):
 - The schedules and the fail cells, ⌈log2(cap_c + 1)⌉ each a connection (`capsTerm`, charged twice, as
@@ -233,10 +237,12 @@ The terms, in the generator reading of the scan's statement (each proof block's 
 - The free inputs (`terms.free`): as registered, the tied audit's slot entries, NR·T / EVERY entries of NE bits
   (`ingress_scan.entry_bits`) an execution phase; or an entry's 33 + KO·IDB bits a request if `prog` is an input only at
   its anchored entries.
-- No term for incorrect proof blocks with every proof block sampled, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
-  not met at D_j = 1 until a run shows the certifier's written buckets tell a receiver no more than an idle one. The
-  certifier hands each bucket to a pacer that releases it at a time fixed before the bucket is made
-  (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
+- No term for incorrect proof blocks with every proof block sampled.
+- The jitter, at two release schedules (D_j = 2, `leak_bounds.OF_RECORD`): a bit a bucket, T bits an execution phase
+  (the record's `terms.jitter` at its `terms.jitter_bound`), assumed (J), `NetTiming.JitterBounded`. With a set-time
+  card (not yet tested) it is 0, at D_j = 1, which no run has met: none has shown the certifier's written buckets tell
+  a receiver no more than an idle one. The certifier hands each bucket to a pacer that releases it at a time fixed
+  before the bucket is made (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
 Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
 reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of the entries (`NetworkCheck.Period`'s `readsEntries`) and ignores it
@@ -289,8 +295,9 @@ K also rests on these conditions:
   `NetworkCheck.Period` doesn't check.
 - The scan proves execution phase 0. A monitoring period's figures scale its per-execution-phase and per-request terms at
   the run's rate.
-- The jitter term is 0 at D_j = 1, assumed (J), not met until a run shows the paced certifier's written buckets tell a
-  receiver no more than an idle one.
+- The jitter is counted at two release schedules, assumed (J). A figure at D_j = 1, where the jitter is 0, is what a
+  network certifier with a set-time card would be charged, and FILE.md gives it only under that label
+  (`leak_bounds.SET_TIME`): each K less by T bits an execution phase of each of its links.
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
   audit's (the `SlotEntry_v1` stand-in's) are the execution phase's free inputs above.
 

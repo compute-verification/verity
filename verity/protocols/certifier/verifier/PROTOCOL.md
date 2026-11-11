@@ -984,11 +984,11 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | Envelope, with no clock | `T·log2(r + 1)` bits per execution phase | Proposition 2 |
 | Accepted runs, with clock-sync advice | `A_c + W·log2 #Σ_sync + n·log2 D` bits | `SecurityProofs.EncardAccSeqsLeSync`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRate` |
 | The shipped schedule, over the first m windows | `A_c + min(W, m)·log2 #Σ_sync + n·log2 D` bits, for n ≤ min(W, m)·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateWindows`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
-| The shipped schedule, per window | `A_c` once, then `log2 #Σ_sync + T·log2 D` bits per window over the run's first m whole windows (n = m·T ≤ W·T): 7 bits per window at 16 × 8 sync values under J. Cumulative: a later window may carry more, since content advice and an earlier window's sync can first show in it | `SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerWindow` |
+| The shipped schedule, per window | `A_c` once, then `log2 #Σ_sync + T·log2 D` bits per window over the run's first m whole windows (n = m·T ≤ W·T): at 16 × 8 sync values, 7 + T bits per window at two release schedules (D = 2), the term of record, and 7 with a set-time card (not yet tested), J at D = 1. Cumulative: a later window may carry more, since content advice and an earlier window's sync can first show in it | `SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerWindow` |
 | The circuit's Program under a sampled audit of its step units, at δ | `c + log2 #(faulty sets) + Σ_{v faulty} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and an incorrect set is one `RAcc δ` allows (in `M_δ`, no unit sampled `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no unit may be faulty, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
 | The network certifier (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. Over a monitoring period of sampled audits, plus each window's sampled charge (the row above) at the network certifier's rows | for a decoder of the client's view, under `trusted-host`, `Claims.SamplingGeneric.Compiled.KS` and `Commitment.Binds`, `SecurityProofs.PeriodLeakAccepted` |
-| A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
-| Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
+| A fixed clock | 0 bits of timing with a set-time card (not yet tested), J at D = 1; T bits per window at two release schedules (D = 2), the term of record | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
+| Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, statuses complete, and `log2 D/τ_in` of jitter: a bit a bucket at two release schedules (D = 2), the term of record, and none with a set-time card (not yet tested), J at D = 1 | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
 | Ingress, per execution phase (the K charge's unit) | `T·log2(r_in + 1)` bits per execution phase over the first m whole windows, plus `T·log2 D` of jitter per window, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerWindow`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at n = m·T |
 
@@ -1054,14 +1054,17 @@ audited, with no record.
 The shipped schedule's egress bounds are proved in Lean for `constantRate`, the Program of `schedule`, with no
 dataflow hypothesis: for every frame function, sync set and operator, over a monitoring period within the W windows with advice
 (n ≤ W·T), since those are the windows the audit checks. The clock-sync bound is 7 bits per window at 16 × 8 sync
-values, summed from the run's start (`SecurityProofs.EncardAccSeqsLeConstantRate`). Under J with one sync
-value it is 0 bits of timing (`SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`). A monitoring period within the first m
+values, summed from the run's start (`SecurityProofs.EncardAccSeqsLeConstantRate`), beside the jitter's `T·log2 D`
+per window: T bits at two release schedules (D = 2), the term of record. With one sync value and a set-time card
+(not yet tested), J at D = 1, it is 0 bits of timing
+(`SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`). A monitoring period within the first m
 windows is charged only those m windows (`SecurityProofs.EncardAccSeqsLeConstantRateWindows`), and a decoder of the
 wire recovers no more (`SecurityProofs.EncardDecodableLeConstantRate`).
 
 The ingress bound is proved in Lean, for a decoder in X that reads the wire (`SecurityProofs.EncardIngressDecodableLe`)
 or the records (`SecurityProofs.EncardIngressObsDecodableLe`). It counts `(r_in + 1)^T` occupancies per ingress
-execution phase (times `D^T` for jitter, 1 under J), given the frames' content, on runs whose statuses are all complete
+execution phase (times `D^T` for jitter: `2^T` at two release schedules, the term of record, and 1 with a set-time
+card, not yet tested), given the frames' content, on runs whose statuses are all complete
 (`StatusComplete`). The reference audits ingress statuses (see above), so an accepted verdict on every link of ∂X
 establishes `StatusComplete` for the windows audited. That is the acceptance hypothesis of every ingress guarantee:
 `SecurityProofs.EncardIngressObsDecodableLe`, `SecurityProofs.EncardIngressDecodableLe`, their `Contents` versions and
@@ -1209,8 +1212,9 @@ Each assumption, and what breaks without it:
   - Each field is charged to a window no later than the first window whose rows it can change. Then the first m
     windows' charges bound the first m windows, which the per-window form needs, as `ExpectedRowCausal` gives it for
     the syncs. A prefill step that releases nothing is still charged.
-- **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-host`, W1 to W6 and J (D = 1
-  is no jitter), and the advice's release buckets are certifier buckets. Nothing else in the accounting reads a time.
+- **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-host`, W1 to W6 and J at its jitter
+  bound D (2 at the term of record, two release schedules; D = 1, no jitter, only with a set-time card, not yet
+  tested), and the advice's release buckets are certifier buckets. Nothing else in the accounting reads a time.
   The challenger's readings of when a registration or a proof arrived (`received_at`) are the prover's choice within
   their deadlines, so they stay out of anything published, or they are charged.
 - **A7, the advice set is fixed before the run.** The codec and the cap c are registered before the audit's first
