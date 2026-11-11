@@ -434,9 +434,9 @@ def test_each_scan_check_refuses_its_negative(server):
     bucket) whose `sin` is not the returned state's, one past the resolution's walk, one whose root doesn't return
     an egress leaf, one whose egress template passes a parameter's leaves through, one whose bucket 0 row is a constant
     gate's, one with an egress argument a later ingress output, one whose egress state is an ingress row's input, one
-    (a window of more than one bucket) whose `sin` reads its row's input node, one whose egress state is the slot
-    entries' input node, one with an input node no argument reads, and one whose ingress template names a later root
-    node."""
+    (a window of more than one bucket) whose `sin` reads its row's input node, one whose egress state is lane 0's
+    slot entries' input node, one with an input node no argument reads, and one whose ingress template names a later
+    root node."""
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         for name, (bad, fragment) in PC.scan_negatives(case["params"]).items():

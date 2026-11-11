@@ -86,11 +86,11 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   last unit's o1, S_{G·T−1}, which no state leaf holds, is a member's own rows (`Frame`), committed and never opened.
   Leaf 0 is opened by
   no unit, and the entries boundary 0's Programs write on it are read by none: bucket 0 reads the empty state, in
-  which no slot is live, so none is due. Accepted: every o0 opens to 1. Its registration names ``prog`` tied, which
-  R8 lets through though `EVERY` units read each slot entry, and both verifiers' verdict publishes it
-  (``rests_on_period_check: ["prog"]``): the acceptance rests on a period check, `NetworkCheck.Period`'s `wired`, which
-  ties ``prog``'s rows to the audit that registered them and refuses this run's stand-in block, no pinned
-  `SlotEntry_v1` (`period_case.UNWIRED`). The registration's roots also name, as
+  which no slot is live, so none is due. Accepted: every o0 opens to 1. Its registration names each lane's
+  ``prog<j>`` tied, which R8 lets through though `EVERY` units read each slot entry, and both verifiers' verdict
+  publishes them (``rests_on_period_check``, the lanes' ``prog<j>``): the acceptance rests on a period check,
+  `NetworkCheck.Period`'s `wired`, which ties each ``prog<j>``'s rows to the audit that registered them and refuses
+  this run's stand-in block, no pinned `SlotEntry_v1` (`period_case.UNWIRED`). The registration's roots also name, as
   ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
   reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **Every port registered**: the verifier's registered reads name every port of every member's circuit, inputs and
@@ -1177,7 +1177,7 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: P
                                       lower_s=round(time.time() - t, 1))
     return SimpleNamespace(program=prog, query=query, templates=templates, members=members, stagers=stagers,
                            units=sum(counts.values()), partition_file=out / "partition.json",
-                           program_file=out / "program.json", tied=("prog",) if templates == TEMPLATES else ())
+                           program_file=out / "program.json", tied=lane_kinds(cls) if templates == TEMPLATES else ())
 
 
 def port_prefix(defn, mr: SimpleNamespace) -> str:
