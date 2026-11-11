@@ -182,10 +182,11 @@ or Winograd somewhere costs at least naive tiled's `8^(l+1)` plus 32, i.e. `1 + 
 
 The guarantee (`Verity.Guarantees.NaiveBeatsStrassenAny`) states it at `L = 12` on every table that `rtx6000Sheet`
 dominates (`Packed.Dom`). Served inner and outer dimensions are at most 65536 (DeepSeek-V4's and Llama-3.1-70B's
-MLPs), and a leaf is at least 16: sm_120 has no `wgmma`, its `mma.sync` tiles are 16 wide, and the H200 is taken at
-`Open.sync = 1`. So a recursion on a served product is at most `log₂(65536 / 16) = 12` deep. Deeper schedules pad past
-the served size, and the size form `NaiveBeatsStrassenUpTo` at `c = 4096` bounds them at every depth. Both are about
-int8 operands at `(256, 256)`.
+MLPs), and a leaf is at least 16: sm_120 has no `wgmma`, its `mma.sync` tiles are 16 wide, and the H200's 16-wide
+`mma.sync` tiles are priced at its `wgmma`'s weight, the most permissive price (an atom's weight is its format's
+alone), which allows a leaf of 16 there too. So a recursion on a served product is at most `log₂(65536 / 16) = 12`
+deep. Deeper schedules pad past the served size, and the size form `NaiveBeatsStrassenUpTo` at `c = 4096` bounds them
+at every depth. Both are about int8 operands at `(256, 256)`.
 
 The exact tables hold further on three of the four card tables: to depth 13 on the H200 (both `k`) and the RTX PRO
 6000 at the measured `k`. On the RTX PRO 6000's data sheet they stop at 12: with b1 at `1/8`, a schedule reaches
