@@ -7,8 +7,9 @@ each library, split at its `Function :` lines. A kernel is the lines under its o
 Prints how many of BASE's kernels NEW holds and names the ones it does not; FILE gets those, the kernels NEW holds
 under another name, and NEW's kernels BASE has none equal to. DIR gets, for each of BASE's kernels NEW does not hold
 (the --listings-max shortest), its listing beside NEW's kernel of that name (a template's instance at 16 rows first)
-and their diff. Exits 0 whatever it finds, 2 if cuobjdump fails on a library (with what it said, on one line) or a
-library lists no kernel: `rows.sh` records what it prints.
+and their diff. Exits 0 only when NEW holds every kernel of BASE's, 1 when it does not, 2 if cuobjdump fails on a
+library (with what it said, on one line) or a library lists no kernel: `rows.sh` records what it prints and runs
+nothing unless it exits 0.
 """
 from __future__ import annotations
 
@@ -88,7 +89,7 @@ def main() -> int:
                 "\n".join(difflib.unified_diff(was, now, name, twins[0] if twins else "(none)", lineterm="")) + "\n")
     print(f"{len(same)} of BASE's {len(base)} kernels are in NEW as they were ({len(doc['renamed'])} under a new name); "
           f"changed: {', '.join(doc['changed']) or 'none'}")
-    return 0
+    return 1 if doc["changed"] else 0
 
 
 if __name__ == "__main__":

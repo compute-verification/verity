@@ -1,6 +1,7 @@
 """`same_sass.py`: a kernel is the same when its listing is, whatever its name and however wide cuobjdump made the
-encodings' column; a kernel whose instructions changed is named, with its listing beside the new build's. cuobjdump is
-a stub that prints each library's canned listing. A cuobjdump that fails is said on one line, with what it said."""
+encodings' column; a kernel whose instructions changed is named, with its listing beside the new build's, and the
+comparison exits 1, so `rows.sh` runs nothing on that build. cuobjdump is a stub that prints each library's canned
+listing. A cuobjdump that fails is said on one line, with what it said."""
 from __future__ import annotations
 
 import json
@@ -22,12 +23,12 @@ def listing(kernels: dict[str, list[str]], column: int) -> str:
     return "\n".join(out) + "\n"
 
 
-def compare(tmp_path, monkeypatch, capsys, base: dict, new: dict) -> tuple[dict, str]:
+def compare(tmp_path, monkeypatch, capsys, base: dict, new: dict, exits: int = 0) -> tuple[dict, str]:
     libraries = {"base.so": listing(base, 60), "new.so": listing(new, 61)}
     monkeypatch.setattr(subprocess, "run", lambda argv, **kw: subprocess.CompletedProcess(argv, 0, libraries[argv[-1]]))
     monkeypatch.setattr(sys, "argv", ["same_sass.py", "base.so", "new.so", "--out", str(tmp_path / "same.json"),
                                       "--listings", str(tmp_path / "sass")])
-    assert same_sass.main() == 0
+    assert same_sass.main() == exits
     return json.loads((tmp_path / "same.json").read_text()), capsys.readouterr().out
 
 
@@ -42,11 +43,12 @@ def test_a_wider_encoding_column_and_a_new_name_leave_a_kernel_the_same(tmp_path
     assert said.startswith("2 of BASE's 2 kernels") and "changed: none" in said and not (tmp_path / "sass").exists()
 
 
-def test_a_changed_kernel_is_named_with_its_listing_beside_its_16_row_instance(tmp_path, monkeypatch, capsys):
+def test_a_changed_kernel_exits_1_and_is_named_with_its_listing_beside_its_16_row_instance(tmp_path, monkeypatch,
+                                                                                           capsys):
     name = "_ZN2rb20chain_prepare_kernelEv"
     doc, said = compare(tmp_path, monkeypatch, capsys, {name: ["LEA.HI R13, R0, R5", "EXIT"]},
                         {"_ZN2rb20chain_prepare_kernelILi64EEEvv": ["NOP", "EXIT"],
-                         "_ZN2rb20chain_prepare_kernelILi16EEEvv": ["LEA.HI R15, R0, R5", "EXIT"]})
+                         "_ZN2rb20chain_prepare_kernelILi16EEEvv": ["LEA.HI R15, R0, R5", "EXIT"]}, exits=1)
     assert doc["same"] == 0 and doc["changed"] == [name] and f"changed: {name}" in said
     diff = next((tmp_path / "sass").glob("chain_prepare_kernel-*.diff")).read_text()
     assert "+++ _ZN2rb20chain_prepare_kernelILi16EEEvv" in diff and "-/*0000*/ LEA.HI R13, R0, R5 ; /* 0x00 */" in diff

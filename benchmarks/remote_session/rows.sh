@@ -6,9 +6,10 @@
 # Holding no card, it builds session.cu and kv.cu (p1024, masked) for ARCH, and writes which kernels of BASE_REV's
 # session.cu (default: the commit this one's branch left `origin/main` at; else the file sent as
 # inputs/main-session.cu) the new build holds instruction for instruction (`same_sass.py`, out/same_sass.json): at 16
-# rows the pass runs those. BUILD_ONLY=1 ends there, so a machine with no GPU checks that it compiles (TOOLKIT=1
-# assembles CUDA 12.9's nvcc first, `benchmarks/pouw/harness/jobs/toolkit.sh`). DEFS are session.cu's own nvcc
-# arguments (-DSK64_PER_SM=2: the 64-row receipt kernels at 128 registers a thread).
+# rows the pass runs those, so the run ends there (exit 5) unless the build holds every one, and also when there is
+# no base, the base does not compile or cuobjdump fails. BUILD_ONLY=1 ends after the build, so a machine with no GPU
+# checks that it compiles (TOOLKIT=1 assembles CUDA 12.9's nvcc first, `benchmarks/pouw/harness/jobs/toolkit.sh`).
+# DEFS are session.cu's own nvcc arguments (-DSK64_PER_SM=2: the 64-row receipt kernels at 128 registers a thread).
 #
 # Then each of STEPS (`rows session` unless given) under a lease of its own on CARDS, of at most LEASE_MIN minutes and
 # taken without waiting: a card whose lock is held, or with a compute process or more than a GiB in use on it, ends
@@ -105,13 +106,25 @@ M=
 [ -f "$BASE" ] && { "$NVCC" "${FLAGS[@]}" -o "$B/base.so" "$BASE" > "$O/base.ptxas" 2>&1 & M=$!; }
 wait $S || { grep -n -m 40 -A 3 'error' "$O/session.ptxas"; say "BUILD: session.cu does not compile for sm_$ARCH"; exit 4; }
 wait $K || { tail -n 40 "$O/kv.ptxas"; say "BUILD: kv.cu does not compile for sm_$ARCH"; exit 4; }
+[ -n "$M" ] || {
+  say "BUILD: no base to compare the kernels with, so nothing runs: give BASE_REV (a commit whose $RS/session.cu is" \
+    "main's) or send main-session.cu"
+  exit 5
+}
+wait "$M" || {
+  tail -n 20 "$O/base.ptxas"
+  say "BUILD: the base's session.cu (${BASE_REV:-the sent file}) does not compile for sm_$ARCH, so nothing runs"
+  exit 5
+}
 sha256sum "$B"/*.so > "$O/libs.sha256"
-if [ -n "$M" ] && wait "$M"; then
-  say "build: sm_$ARCH; against ${BASE_REV:-the sent file}:" \
-    "$(python3 $RS/same_sass.py "$B/base.so" "$B/session.so" --out "$O/same_sass.json" --listings "$O/sass" 2>&1)"
-else
-  say "build: sm_$ARCH; no base build to compare the kernels with (BASE_REV, or inputs/main-session.cu)"
-fi
+same=$(python3 $RS/same_sass.py "$B/base.so" "$B/session.so" --out "$O/same_sass.json" --listings "$O/sass" 2>&1)
+rc=$?
+say "build: sm_$ARCH; against ${BASE_REV:-the sent file}: $same"
+[ $rc = 0 ] || {
+  say "BUILD: same_sass.py exits $rc: this build is not shown to hold every kernel of the base's as it was, so" \
+    "nothing runs (out/same_sass.json, out/sass)"
+  exit 5
+}
 [ -z "${BUILD_ONLY:-}" ] || exit 0
 
 export PY=${PY:-$(first /workspace/venv312/bin/python \
