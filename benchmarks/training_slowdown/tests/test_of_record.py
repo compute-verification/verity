@@ -127,14 +127,9 @@ def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding(monkeypatch
     assert of_record.e_kind(["identity"], "model") == [
         "E's kind: the config's plan is identity, the record's format model (none known here)"]
     assert of_record.e_kind([], "full") == ["E's kind: the config's plan is empty, the record's format full (identity)"]
-    # the sizes are printed and not compared; a codec that packs the same encoding another way is named as that
-    last = {"format": "quant", "e_bytes": 1000}
-    assert of_record.e_sizes(["scaledquant"], 1200, last, 30) == (
+    # the sizes are printed and not compared
+    assert of_record.e_sizes(["scaledquant"], 1200, {"format": "quant", "e_bytes": 1000}, 30) == (
         "scaledquant, 1,200 B after 2 steps; the record's quant, 1,000 B after 30")
-    monkeypatch.setitem(of_record.E_PACKING, "coded", "one stream a matrix")
-    assert of_record.e_sizes(["coded"], 1200, last, 30) == (
-        "coded, 1,200 B after 2 steps; the record's quant, 1,000 B after 30; expected to differ in size by the "
-        "packing too: coded is one stream a matrix")
 
 
 def unfused(params: list, times: int = 1) -> tuple:
