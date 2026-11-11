@@ -91,7 +91,7 @@ def under(optimizers):
 def lora(dials: dict) -> dict:
     """LoRA written the other way round: each adapted matrix is built whole, W + (alpha/rank) B A, before one forward
     of the start's own model on it, where the route keeps W frozen and sends its input through A then B. A starts as
-    the route draws it and B at zero, both under torch's AdamW; the output is the matrices as built."""
+    the route builds it and B at zero, both under torch's AdamW; the output is the matrices as built."""
     torch.manual_seed(0)
     built = config.route("lora").build(SHAPE, dials)[0].state_dict()
     theta = {k: v for k, v in built.items() if not k.endswith((".a", ".b"))}
