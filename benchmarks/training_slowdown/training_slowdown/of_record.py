@@ -32,9 +32,9 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   harness did, and that count is the one compared; the output says how many products and uses that moves and that
   the step's MACs are the same on both counts.
 - **A line of the record's own program.** A product the record's program computes and a route rightly doesn't (a
-  logging line's arithmetic) is no rule's: the entry of `of_record.toml` names it (`record_only`: the line as the
-  command prints it, and why), and it is printed as named and taken out of the differences. A named line that is
-  not the record's step's alone is a difference.
+  logging line's arithmetic) is no rule's: the entry of `of_record.toml` names it (`record_only`: the line, the
+  count and MACs the record's step has of it over the config's, and why), and it is printed as named and taken out
+  of the differences. A named line that the record's step does not have over the config's as named is a difference.
 - **The encoding.** Each codec of the config's plan must be of the record's kind (`E_KINDS`: the record's `format`
   beside the codecs of that kind); E's size after the counted steps is printed beside the record's last
   checkpoint's, with how a codec packs the same encoding another way than the record's program did (`E_PACKING`).
@@ -283,20 +283,25 @@ def _entry(key: tuple, value: list) -> str:
     return f"{key[0]}/{key[1]} {key[2]} {_shapes(key[3])} x{value[0]}, {value[1]:,} MACs"
 
 
-def named(lines: list[dict], rec: dict) -> tuple[list[dict], list[str]]:
-    """The lines of the record's own program that its entry of `of_record.toml` names (`record_only`), out of the
-    record's unequal entries `rec`: products the route rightly doesn't compute, each `phase`, `kind`, `op`, `shapes`,
-    `count` and `macs` as the command prints the line, and `why`. No rule in code knows them. A named line that is
-    not there as named is a difference, so a name outlives neither its line nor a route that computes it."""
+def named(lines: list[dict], cfg: dict, rec: dict) -> tuple[list[dict], list[str]]:
+    """The lines of the record's own program that its entry of `of_record.toml` names (`record_only`): products the
+    route rightly doesn't compute, each by `phase`, `kind`, `op` and `shapes`, with the `count` and `macs` the
+    record's step has of it over the config's (all of the line where the config has none of it) and `why`. No rule
+    in code knows them. A line is taken out of the two sides' unequal entries `cfg` and `rec` where the record's
+    excess is the named one; a named line whose excess is another, or none, is a difference, so a name outlives
+    neither its line nor a route that computes it."""
     found, differences = [], []
     for line in lines:
         key = (line["phase"], line["kind"], line["op"], json.dumps(line["shapes"]))
         value = [line["count"], line["macs"]]
-        if rec.get(key) == value:
+        mine, theirs = cfg.get(key, [0, 0]), rec.get(key, [0, 0])
+        if key in rec and [theirs[0] - mine[0], theirs[1] - mine[1]] == value:
             del rec[key]
+            cfg.pop(key, None)
             found.append({"line": _entry(key, value), "why": line["why"]})
         else:
-            differences.append(f"{HELD.name} names a line that is not the record's step's alone: {_entry(key, value)}")
+            differences.append(f"{HELD.name} names a line the record's step does not have over the config's as "
+                               f"named: {_entry(key, value)}")
     return found, differences
 
 
@@ -312,7 +317,7 @@ def compare(mine: dict, theirs: dict, shape: dict, lines=()) -> dict:
         del cfg[k], rec[k]
     expected = [wide] if wide else []
     expected += [found for rule in RULES if (found := rule(cfg, rec, shape))]
-    only, unnamed = named(lines, rec)
+    only, unnamed = named(lines, cfg, rec)
     differences += unnamed
     for k in sorted(set(cfg) | set(rec)):
         if k in cfg and k in rec:
@@ -521,8 +526,8 @@ def text(rows: list[dict]) -> str:
             macs = f"; MACs a step at one row a forward: the record's {e['record_macs']:,}, the config's " \
                    f"{e['config_macs']:,}" if "record_macs" in e else ""
             lines.append(("expected", f"{e['rule']}: {e['what']}{macs}"))
-        lines += [("named", f"the record's step only: {e['line']}; {HELD.name} names it: {e['why']}")
-                  for e in r["named"]]
+        lines += [("named", f"in the record's step and not the config's: {e['line']}; {HELD.name} names it: "
+                            f"{e['why']}") for e in r["named"]]
         lines += [("DIFFERS", d) for d in r["differences"]]
         out += [f"  {k:<9} {v}" for k, v in lines] + [""]
     n = collections.Counter(verdict(r).split(",")[0].split(":")[0] for r in rows)

@@ -108,8 +108,8 @@ whose step reads a value back, is refused. It prints, an entry:
   counted it, that count is the one compared, and the line says how many products and uses move and that the step's
   MACs are the same on both counts;
 - `named`: a line of the record's own program that the route rightly doesn't compute, which no rule knows: the
-  entry's `record_only` in `of_record.toml` names the line as the command prints it and says why. A named line that
-  is not the record's step's alone is a difference;
+  entry's `record_only` in `of_record.toml` names the line, the count and MACs the record's step has of it over the
+  config's, and why. A named line that the record's step does not have over the config's as named is a difference;
 - `DIFFERS`: anything else.
 
 The command exits 1 if any entry differs or is refused. `--out` keeps the comparisons (`DIR/of_record.json`) and each

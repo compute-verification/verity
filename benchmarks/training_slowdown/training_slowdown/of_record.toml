@@ -5,10 +5,10 @@
 # that file's.
 #
 # `record_only`, where an entry has it, lists the lines of the record's own program that the route rightly does not
-# compute, each a table `[[held."ENTRY".record_only]]`: `phase`, `kind`, `op`, `shapes`, `count` and `macs` as the
-# command prints the line among the record's step's alone, and `why` the route does not compute it. The command prints
-# such a line as named and counts the entry equal; a line named here that the record's step does not have alone is a
-# difference.
+# compute, each a table `[[held."ENTRY".record_only]]`: the line's `phase`, `kind`, `op` and `shapes` as the command
+# prints them, the `count` and `macs` the record's step has of it over the config's (all of the line where the config
+# has none of it), and `why` the route does not compute it. The command prints such a line as named and counts the
+# entry equal; a line named here that the record's step does not have over the config's as named is a difference.
 
 [held."s-t20-1.1x-ref-optim-fullmuon-758"]
 run = "r20261103-151852-c62c"

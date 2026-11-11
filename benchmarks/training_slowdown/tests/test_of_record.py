@@ -196,20 +196,28 @@ SCALE = {"phase": "fwd", "kind": "act", "op": "mul", "shapes": [[], []], "count"
          "why": "its multiplier is 1"}
 
 
-def test_a_line_the_entry_names_is_the_records_alone_and_one_the_record_lacks_is_a_difference():
-    record = log(*BOTH, ("fwd", "act", "mul", [[], []], 3, 3))
+def test_a_line_the_entry_names_is_the_records_over_the_configs_and_one_the_record_lacks_is_a_difference():
+    scale = ("fwd", "act", "mul", [[], []])
+    record = log(*BOTH, (*scale, 3, 3))
     got = of_record.compare(step(log(*BOTH)), step(record), SHAPE, [SCALE])
     assert got["differences"] == [] and got["expected"] == [] and got["products"] == 2
     assert got["named"] == [{"line": "fwd/act mul [[] x2] x3, 3 MACs", "why": "its multiplier is 1"}]
+    # a line the config has one of and the record four: the three over the config's are the named ones
+    got = of_record.compare(step(log(*BOTH, (*scale, 1, 1))), step(log(*BOTH, (*scale, 4, 4))), SHAPE, [SCALE])
+    assert got["differences"] == [] and [e["line"] for e in got["named"]] == ["fwd/act mul [[] x2] x3, 3 MACs"]
     # unnamed, the line is a difference; named with another count, or where the config computes it too, the name is
     assert of_record.compare(step(log(*BOTH)), step(record), SHAPE)["differences"] == [
         "log, the record's step only: fwd/act mul [[] x2] x3, 3 MACs"]
-    stale = "of_record.toml names a line that is not the record's step's alone: fwd/act mul [[] x2] x"
+    stale = "of_record.toml names a line the record's step does not have over the config's as named: fwd/act mul "
     got = of_record.compare(step(log(*BOTH)), step(record), SHAPE, [SCALE | {"count": 2, "macs": 2}])
     assert got["named"] == [] and got["differences"] == [
-        stale + "2, 2 MACs", "log, the record's step only: fwd/act mul [[] x2] x3, 3 MACs"]
+        stale + "[[] x2] x2, 2 MACs", "log, the record's step only: fwd/act mul [[] x2] x3, 3 MACs"]
+    got = of_record.compare(step(log(*BOTH, (*scale, 2, 2))), step(record), SHAPE, [SCALE])
+    assert got["named"] == [] and got["differences"] == [
+        stale + "[[] x2] x3, 3 MACs",
+        "log, unequal: fwd/act mul [[] x2] x2, 2 MACs in the config's step, x3, 3 MACs in the record's"]
     got = of_record.compare(step(record), step(record), SHAPE, [SCALE])
-    assert got["named"] == [] and got["differences"] == [stale + "3, 3 MACs"] and got["products"] == 3
+    assert got["named"] == [] and got["differences"] == [stale + "[[] x2] x3, 3 MACs"] and got["products"] == 3
 
 
 def count(*more, updated=((D * D, D),), macs=None) -> dict:
@@ -368,8 +376,8 @@ def test_a_difference_no_rule_names_is_printed_and_the_command_exits_1(tmp_path,
     out = capsys.readouterr().out
     assert out.startswith("a, held to r-made-up (out/run/run.json): equal, 1 named line of the record's program "
                           "alone\n") and "DIFFERS" not in out and "1 entry: 1 equal, 0 differ, 0 refused." in out
-    assert ("  named     the record's step only: fwd/act mul [[] x2] x3, 3 MACs; of_record.toml names it: its "
-            "multiplier is 1\n") in out and "  log       2 of the record's 3 products" in out
+    assert ("  named     in the record's step and not the config's: fwd/act mul [[] x2] x3, 3 MACs; of_record.toml "
+            "names it: its multiplier is 1\n") in out and "  log       2 of the record's 3 products" in out
 
     mine["structures"] = count(("fwd", "act", "matmul", [[CTX, D], [D, D]], 1, CTX * D * D))["structures"]
     assert of_record.main(argv) == 1
