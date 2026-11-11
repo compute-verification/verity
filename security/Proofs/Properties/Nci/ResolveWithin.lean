@@ -14,8 +14,11 @@ one of `U`'s parameters resolves to (`run_within`).
 
 Of a body's return that is `ret_within`, and of a primitive node's operands `operands_within`: every leaf an
 activation returns, and every operand of a gate inside it, is a gate of the activation or a leaf of one of its
-parameters. `ret_within_of` states the first on what a decoded Program with no order violation and bodies laid out
-gives, with no hypothesis on its bodies.
+parameters, a leaf the parameter has. `ret_within_of` states the first on what a decoded Program with no order
+violation and bodies laid out gives, with no hypothesis on its bodies.
+
+`Prog.gate`'s walk for a gate inside a member of a root node goes from the root into that member (`gateStep_member`)
+and stays under it (`walk_within`), so the operands it ends with are `operands_within`'s: `gate_within`.
 -/
 
 @[expose] public section
@@ -142,7 +145,8 @@ leaf of one of `U`'s parameters resolves to. -/
 theorem run_within (U : Scope) (B : ℕ) :
     ∀ (n : ℕ), n ≤ Flock.Steps.FUEL → ∀ (s : Scope × Ref) (b : ℕ), Inv P B s → Under U s.1 →
       Flock.Steps.run "scope resolution" (resolveStep P) n s = .ok b →
-      (U.off ≤ b ∧ b < B) ∨ ∃ i j, resolve P U ⟨true, i, j⟩ = .ok b
+      (U.off ≤ b ∧ b < B) ∨ ∃ i j, i < (P.defs[U.d]!).body.params.size ∧
+        j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b
   | 0, _, _, _, _, _, h => by simp [Flock.Steps.run, throw, throwThe, MonadExceptOf.throw] at h
   | n + 1, hn, s, b, hs, hu, h => by
     have h' := h
@@ -165,7 +169,10 @@ theorem run_within (U : Scope) (B : ℕ) :
           have hp' : p = true := hp
           have hU' : sc = U := hU
           rw [hp', hU'] at h
-          exact Or.inr ⟨i, j, resolve_of_run P hn h⟩
+          have hb : i < (P.defs[sc.d]!).body.params.size ∧ j < ((P.defs[sc.d]!).body.params[i]!).2.leaves :=
+            hs.2.1.1 hp'
+          rw [hU'] at hb
+          exact Or.inr ⟨i, j, hb.1, hb.2, resolve_of_run P hn h⟩
         · have hup : Under U parent := by
             rw [hsc] at hu hU
             have hu' : U = .child parent d off k m ∨ Under U parent := hu
@@ -183,7 +190,8 @@ theorem run_within (U : Scope) (B : ℕ) :
 /-- **A leaf an activation returns is one of its gates or a leaf of one of its parameters.** -/
 theorem ret_within (U : Scope) (hU : Good P U) (t : ℕ) (ht : t < (P.defs[U.d]!).body.ret.count) {b : ℕ}
     (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
-    (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨ ∃ i j, resolve P U ⟨true, i, j⟩ = .ok b :=
+    (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨ ∃ i j, i < (P.defs[U.d]!).body.params.size ∧
+      j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b :=
   run_within P hroot hB hL U _ Flock.Steps.FUEL (Nat.le_refl _) _ b
     (down_ok P hroot hB hL _ U hU (Nat.le_refl _) t ht) (under_refl U) h
 
@@ -196,7 +204,8 @@ theorem operands_within (U : Scope) (sc : Scope) (hg : Good P sc) (hu : Under U 
     (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members) {ops : Array ℕ}
     (h : operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m = .ok ops) :
     ∀ a ∈ ops, (U.off ≤ a ∧ a < sc.off + (P.defs[sc.d]!).body.offsets[k]!) ∨
-      ∃ i j, resolve P U ⟨true, i, j⟩ = .ok a := by
+      ∃ i j, i < (P.defs[U.d]!).body.params.size ∧ j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧
+        resolve P U ⟨true, i, j⟩ = .ok a := by
   intro a ha
   obtain ⟨i, hi, t, ht, hres⟩ := operands_spec P sc _ _ ops h a ha
   obtain ⟨-, hargs, -, -, hop⟩ := (hB sc hg).1 k hk
@@ -213,6 +222,150 @@ theorem operands_within (U : Scope) (sc : Scope) (hg : Good P sc) (hu : Under U 
   exact run_within P hroot hB hL U _ Flock.Steps.FUEL (Nat.le_refl _) _ a
     (start_ok P hroot hB hL sc hg k hk _ (hargs i _ hidx)) hu hres
 
+/-- **An operand of a gate the walk locates from inside `U` is an earlier gate of `U` or a leaf of one of its
+parameters.** `Prog.gate`'s walk for `g`, from an activation under `U` that holds `g`: it stays under `U`, and the
+operands it ends with are those of a primitive node of an activation under `U` (`operands_within`). -/
+theorem walk_within (U : Scope) {g : ℕ} (n : ℕ) (sc : Scope) (x : ℕ × Array ℕ × Scope) (hq : WalkQ P g sc)
+    (hu : Under U sc) (h : Flock.Steps.run "gate location" (gateStep P g) n sc = .ok x) :
+    ∀ a ∈ x.2.1, (U.off ≤ a ∧ a < g) ∨ ∃ i j, i < (P.defs[U.d]!).body.params.size ∧
+      j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok a := by
+  refine DescAgree.run_inv "gate location" (gateStep P g) (fun sc => WalkQ P g sc ∧ Under U sc)
+    (fun b => ∀ a ∈ b.2.1, (U.off ≤ a ∧ a < g) ∨ ∃ i j, i < (P.defs[U.d]!).body.params.size ∧
+      j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok a) ?_ ?_ n sc x ⟨hq, hu⟩ h
+  · intro sc b ⟨⟨hg, hoff, _⟩, hu⟩ hb
+    obtain ⟨hd, hpc⟩ := good_d P hroot hB sc hg
+    obtain ⟨-, -, hnodes⟩ := hL sc.d hd hpc
+    unfold gateStep at hb
+    simp only [bind, Except.bind] at hb
+    split at hb
+    · rename_i k hk
+      obtain ⟨hkK, hpk⟩ := DescAgree.find?_range_some hk
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at hpk
+      have hx : g - sc.off - (P.defs[sc.d]!).body.offsets[k]! <
+          ((P.defs[sc.d]!).body.nodes[k]!).members * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates := by
+        have := hnodes k hkK
+        omega
+      obtain ⟨hm1, -, -⟩ := Walk.member_of ((P.defs[sc.d]!).body.nodes[k]!) _ _ hx
+      by_cases hpc' : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true
+      · simp only [hpc', ite_true] at hb
+        split at hb
+        · cases hb
+        · rename_i ops' hops
+          simp only [pure, Except.pure, Except.ok.injEq, Sum.inl.injEq] at hb
+          subst hb
+          intro a ha
+          rcases operands_within P hroot hB hL U sc hg hu k hkK hpc' _ hm1 hops a ha with ⟨h1, h2⟩ | h1
+          · exact Or.inl ⟨h1, by omega⟩
+          · exact Or.inr h1
+      · simp only [hpc', Bool.false_eq_true, ite_false, pure, Except.pure] at hb
+        cases hb
+    · simp [throw, throwThe, MonadExceptOf.throw] at hb
+  · intro sc sc' ⟨⟨hg, hoff, _⟩, hu⟩ hb
+    obtain ⟨hd, hpc⟩ := good_d P hroot hB sc hg
+    obtain ⟨-, -, hnodes⟩ := hL sc.d hd hpc
+    unfold gateStep at hb
+    simp only [bind, Except.bind] at hb
+    split at hb
+    · rename_i k hk
+      obtain ⟨hkK, hpk⟩ := DescAgree.find?_range_some hk
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at hpk
+      have hx : g - sc.off - (P.defs[sc.d]!).body.offsets[k]! <
+          ((P.defs[sc.d]!).body.nodes[k]!).members * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates := by
+        have := hnodes k hkK
+        omega
+      obtain ⟨hm1, hm2, hm3⟩ := Walk.member_of ((P.defs[sc.d]!).body.nodes[k]!) _ _ hx
+      by_cases hpc' : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true
+      · simp only [hpc', ite_true] at hb
+        split at hb
+        · cases hb
+        · simp only [pure, Except.pure, Except.ok.injEq] at hb
+          cases hb
+      · simp only [hpc', Bool.false_eq_true, ite_false, pure, Except.pure, Except.ok.injEq, Sum.inr.injEq] at hb
+        subst hb
+        refine ⟨⟨good_child P hg hkK rfl (by simpa using hpc') hm1 rfl, ?_, ?_⟩, Or.inr hu⟩
+        · simp only [Prog.child, Scope.off.eq_2]
+          omega
+        · simp only [Prog.child, Scope.off.eq_2, Scope.d.eq_2]
+          omega
+    · simp [throw, throwThe, MonadExceptOf.throw] at hb
+
+omit hroot hB in
+/-- **The step of `Prog.gate`'s walk into a member**: for a gate of member `m` of node `k` of an activation, the
+node calling a composite, the step from the activation goes to that member's. -/
+theorem gateStep_member (sc : Scope) (hd : sc.d < P.defs.size) (hp : (P.defs[sc.d]!).prim = false) {k m g : ℕ}
+    (hk : k < (P.defs[sc.d]!).body.nodes.size) (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members)
+    (hc : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false)
+    (hlo : sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+      m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates ≤ g)
+    (hhi : g < sc.off + (P.defs[sc.d]!).body.offsets[k]! +
+      m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates +
+      (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates) {x : (ℕ × Array ℕ × Scope) ⊕ Scope}
+    (h : gateStep P g sc = .ok x) : x = .inr (P.child sc k m) := by
+  have hmono := offsets_mono P sc.d (hL sc.d hd) hp
+  obtain ⟨-, -, hnodes⟩ := hL sc.d hd hp
+  have hstep := hnodes k hk
+  have hle : (m + 1) * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates ≤
+      ((P.defs[sc.d]!).body.nodes[k]!).members * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates :=
+    Nat.mul_le_mul_right _ hm
+  rw [Nat.add_mul, Nat.one_mul] at hle
+  unfold gateStep at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · rename_i k' hk'
+    obtain ⟨hkK, hpk⟩ := DescAgree.find?_range_some hk'
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hpk
+    have hkk : k' = k := by
+      rcases Nat.lt_trichotomy k' k with hlt | heq | hgt
+      · have := hmono (k' + 1) k (by omega) (by omega)
+        omega
+      · exact heq
+      · have := hmono (k + 1) k' (by omega) (by omega)
+        omega
+    rw [hkk] at h
+    simp only [hc, Bool.false_eq_true, ite_false, pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    have hx : g - sc.off - (P.defs[sc.d]!).body.offsets[k]! <
+        ((P.defs[sc.d]!).body.nodes[k]!).members * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates := by
+      omega
+    obtain ⟨-, hm2, hm3⟩ := Walk.member_of ((P.defs[sc.d]!).body.nodes[k]!) _ _ hx
+    have e1 : (g - sc.off - (P.defs[sc.d]!).body.offsets[k]!) /
+        (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates = m :=
+      Nat.div_eq_of_lt_le (by omega) (by rw [Nat.add_mul, Nat.one_mul]; omega)
+    have hM := (Nat.div_eq_of_lt_le hm2 (by rw [Nat.add_mul, Nat.one_mul]; omega)).symm.trans e1
+    exact congrArg (fun M => Sum.inr (P.child sc k M)) hM
+  · simp [throw, throwThe, MonadExceptOf.throw] at h
+
+/-- **An operand of a gate inside a member of a root node is an earlier gate of the member or a leaf of one of its
+parameters.** The walk's first step, from the root, goes into the member (`gateStep_member`), and from there it
+stays under it (`walk_within`). -/
+theorem gate_within {k m : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
+    (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members)
+    (hc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false) {g p : ℕ} {ops : Array ℕ} {sc' : Scope}
+    (hlo : (P.child P.rootScope k m).off ≤ g)
+    (hhi : g < (P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).gates)
+    (h : P.gate g = .ok (p, ops, sc')) :
+    ∀ a ∈ ops, ((P.child P.rootScope k m).off ≤ a ∧ a < g) ∨
+      ∃ i j, i < (P.defs[(P.child P.rootScope k m).d]!).body.params.size ∧
+        j < ((P.defs[(P.child P.rootScope k m).d]!).body.params[i]!).2.leaves ∧
+        resolve P (P.child P.rootScope k m) ⟨true, i, j⟩ = .ok a := by
+  have hgood : Good P (P.child P.rootScope k m) :=
+    good_child P (parent := P.rootScope) (by show Good P (.top P.root 0 none); unfold Good; exact ⟨rfl, rfl, rfl⟩)
+      hk rfl hc hm rfl
+  unfold Prog.gate at h
+  by_cases hge : g ≥ (P.defs[P.root]!).gates
+  · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+  simp only [hge, ite_false, bind, Except.bind] at h
+  obtain ⟨n, hn⟩ : ∃ n, Flock.Steps.FUEL = n + 1 :=
+    ⟨Flock.Steps.FUEL - 1, by unfold Flock.Steps.FUEL; omega⟩
+  rw [hn, Flock.Steps.run.eq_2] at h
+  rcases hs : gateStep P g P.rootScope with e | x
+  · simp [hs, bind, Except.bind] at h
+  have hx := gateStep_member P hL P.rootScope hroot.1 hroot.2 hk hm hc hlo hhi hs
+  subst hx
+  simp only [hs, bind, Except.bind] at h
+  exact walk_within P hroot hB hL (P.child P.rootScope k m) (g := g) n (P.child P.rootScope k m) (p, ops, sc')
+    ⟨hgood, hlo, by omega⟩ (under_refl _) h
+
 end
 
 /-- **`ret_within`, on a Program read**: one that decodes, with no order violation and its bodies laid out
@@ -221,7 +374,8 @@ theorem ret_within_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decod
     (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (U : Scope) (hU : Good P U) (t : ℕ)
     (ht : t < (P.defs[U.d]!).body.ret.count) {b : ℕ}
     (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
-    (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨ ∃ i j, resolve P U ⟨true, i, j⟩ = .ok b := by
+    (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨ ∃ i j, i < (P.defs[U.d]!).body.params.size ∧
+      j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b := by
   obtain ⟨hr, hrp, -⟩ := BodiesOk.decode_root bytes P hdec
   obtain ⟨-, hL, -, -⟩ := Walk.bodiesLaidOut_spec P hlay
   obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec
