@@ -48,6 +48,9 @@ blocks' sources and the stream's witness) at their widths.
   - Order is 0 only under release-order serving, and 8eb1 wasn't served in release order. The order's charge is the
     I/O tie's (`io_tie`, a draft), outside the slice's proof.
 
+`CompileSlice_v7` (`compile_slice_v7`) is v1 with `window_charge.ChargeLink_v2{D, 0, 0, K}` in place of this charge, so
+it charges advice v1's length terms too ([charge-chain.md](charge-chain.md), "The slice").
+
 **What binds the charge's inputs** (the phase-14 attack: `ChargeCount_v1` on its own is faithful, but its enables, its bits
 and its carry are witness until the slice binds them):
 - *`en` is the scan's own asks.* It is ``count``'s, and the scan can't read past ``count``. `ReplayLoad` refuses
