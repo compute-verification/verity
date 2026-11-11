@@ -7,7 +7,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # Test-only: test_hm96 looks up the claims hm96's PROTOCOL.md cites in verity.claims, and test_block_check holds the
 # check-3 units to PoUB's codec and receipts. test_layout reads commit_slots' interface fixture,
 # whose layout is slots._layout_json's.
-inputs = ["verity", "verity/circuits", "verity/definitions/kernels", "verity/core/__init__.py", "verity/claims", "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py",
+inputs = ["verity", "verity/circuits", "verity/definitions/kernels", "verity/claims", "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py",
           "adapters/vllm/verity_vllm/check", "verity/commitments/hm96/PROTOCOL.md",
           "verity/protocols/poub/verifier", "verity/commitments/tests/fixtures/commit-slots-v1.json"]
 parallel = true
