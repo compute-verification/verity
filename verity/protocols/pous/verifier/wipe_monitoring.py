@@ -42,7 +42,7 @@ from . import wipe_period
 
 FORMAT = "verity/wipe-monitoring-period/v1"
 STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose",
-             "file": "Security/Proofs/Flock/Soundness/Audit/Periods.lean"}
+             "file": "security/Proofs/Flock/Soundness/Audit/Periods.lean"}
 CADENCE_S = 86400
 EGRESS = "wipe-egress/v1"
 HBM = "gpu-hbm"
