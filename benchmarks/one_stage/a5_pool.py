@@ -52,11 +52,15 @@ def budget(s: str) -> float:
 
 def peaks(s: str) -> str:
     """``--pool-memory``: the path of a file `Needs.read` takes, read here with the command line: an audit reads it only
-    after its draw, where a file that is missing or malformed would end it with its coins spent."""
+    after its draw, where a file that is missing or malformed would end it with its coins spent. The refusal names the
+    path and the kind of error and none of the file's keys, which can be the drawn members' own templates."""
     try:
         Needs.read(s)
-    except (OSError, ValueError, AttributeError, TypeError) as e:
-        raise argparse.ArgumentTypeError(f"{s}: no pool-memory file the pool can read ({type(e).__name__}: {e})") from e
+    except OSError as e:
+        raise argparse.ArgumentTypeError(f"{s}: no pool-memory file the pool can read ({type(e).__name__}: {e.strerror})") from None
+    except (ValueError, AttributeError, TypeError) as e:
+        raise argparse.ArgumentTypeError(f'{s}: no pool-memory file the pool can read ({type(e).__name__}): it is JSON, {{"session": '
+                                         '{KEY: GB}, "lean": {KEY: GB}} with each GB a positive number') from None
     return s
 
 

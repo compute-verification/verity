@@ -3247,16 +3247,22 @@ def test_v3c_hands_the_audit_the_pools_options_only_where_the_run_sets_them(tmp_
      "V3C_POOL: error: unrecognized arguments: --jobs 4"),
     ("--session-jobs 4 --pool-memory {missing}", POOLED_RECORDS_AUDIT, "V3C_POOL is not the audit's pool's options "
      "(a5_pool.options): V3C_POOL: error: argument --pool-memory: {missing}: no pool-memory file the pool can read "
-     "(FileNotFoundError: "),
+     "(FileNotFoundError: No such file or directory)"),
+    ("--session-jobs 4 --pool-memory {bad}", POOLED_RECORDS_AUDIT, "V3C_POOL is not the audit's pool's options "
+     "(a5_pool.options): V3C_POOL: error: argument --pool-memory: {bad}: no pool-memory file the pool can read (ValueError): "
+     "it is JSON, "),
 ])
 def test_the_preflight_refuses_pool_options_the_audit_would_not_take_before_anything_runs(tmp_path, pool, records_audit, why):
     """The audit's command line is parsed only once the follow-on's earlier steps have run, and a5 reads the pool-memory
     file only after its draw: so V3C_POOL on a tree without the pool, a count or a budget that isn't one, an option the
-    pool hasn't and a pool-memory file that isn't there are each refused by the preflight, and nothing runs."""
-    missing = str(tmp_path / "none.json")
-    rc, lines, order, _limits = _v3c(tmp_path, records_audit=records_audit, V3C_POOL=pool.format(missing=missing))
+    pool hasn't and a pool-memory file that isn't there or isn't one are each refused by the preflight, and nothing runs.
+    The refusal of a file holds none of its keys, which can be the drawn members' templates."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    paths = {"missing": str(tmp_path / "none.json"), "bad": str(tmp_path / "bad.json")}
+    (tmp_path / "bad.json").write_text(json.dumps({"session": {"Secret_v1{n=7}": 0}}))
+    rc, lines, order, _limits = _v3c(tmp_path, records_audit=records_audit, V3C_POOL=pool.format(**paths))
     assert (rc, order) == (3, []) and len(lines) == 1, (lines, order)
-    assert lines[0].startswith("PREFLIGHT: " + why.format(missing=missing)), lines
+    assert lines[0].startswith("PREFLIGHT: " + why.format(**paths)) and "Secret" not in lines[0], lines
 
 
 @pytest.mark.parametrize("tied, extra, limit", [

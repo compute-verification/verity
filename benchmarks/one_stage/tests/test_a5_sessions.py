@@ -67,18 +67,22 @@ def test_a_budget_that_is_no_positive_number_of_gb_is_refused_with_the_command_l
     assert POOL.budget("440") == 440.0 and POOL.budget(" 430.5 ") == 430.5
 
 
-@pytest.mark.parametrize("text", [None, "{", "[]", '{"sessions": {}}', '{"session": {"A@k_log=1": 0}}', '{"lean": 9}'])
+@pytest.mark.parametrize("text", [None, "{", "[]", '{"sessions": {}}', '{"session": {"Secret_v1{n=7}": 0}}', '{"lean": 9}',
+                                  '{"session": {"Secret_v1{n=7}": "16"}}', '{"session": {"Secret_v1{n=7}": 16}, "Secret_v1{n=8}": {}}'])
 def test_a_pool_memory_file_the_pool_cannot_read_is_refused_with_the_command_line(tmp_path, capsys, text):
     """An audit reads the file only after its draw (`a5.audit`), so one that is missing (``text`` None) or malformed is
-    refused where the options are parsed, before any coin: by `POOL.peaks`, and so by every parser `a5.pool_options` fills."""
+    refused where the options are parsed, before any coin: by `POOL.peaks`, and so by every parser `a5.pool_options` fills.
+    The refusal holds none of the file's keys: an exact file's are the drawn members' templates."""
     f = tmp_path / "peaks.json"
     if text is not None:
         f.write_text(text)
-    with pytest.raises(argparse.ArgumentTypeError, match="no pool-memory file the pool can read"):
+    with pytest.raises(argparse.ArgumentTypeError, match="no pool-memory file the pool can read") as refused:
         POOL.peaks(str(f))
+    assert "Secret" not in str(refused.value) and refused.value.__cause__ is None and refused.value.__suppress_context__
     with pytest.raises(SystemExit) as e:
         options("--session-jobs", "4", "--pool-memory", str(f))
-    assert e.value.code == 2 and "argument --pool-memory" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert e.value.code == 2 and "argument --pool-memory" in err and "Secret" not in err
 
 
 def test_a_need_is_the_measured_peak_plus_ten_percent_by_template_then_size_class(tmp_path):
