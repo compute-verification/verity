@@ -35999,3 +35999,9 @@ What is left: as entry 11's list (1 the PR, 2 push the two commits, 3 the crossi
 **Runs in flight.** `r20261111-004547-2aea`, part 1's records, `vy-nebius-cpu-1`, launched 00:45Z. \[guess\] done by 02:30Z.
 
 **Next.** Part 1: commit the records, check that no existing record moved, rerun the suites, open the PR unmarked. Part 2: a records run; its PR waits for #8512 to land and for the branch to hold `main`.
+
+## PRF-516 REGX, Wed 11 Nov 01:53Z: part 2's records run is launched (`r20261111-015223-e41d`, `vy-nebius-cpu-2`); two runs in flight, nothing else to do until one ends
+
+* \[run\] `r20261111-015223-e41d`: `lean_changed.py --records Security --update` at `cursor/proofs-regx2-78c4` `fe391c772c`, on `vy-nebius-cpu-2`, launched 01:52Z, cap 180 min. \[guess\] done by 03:45Z. That head holds `main`'s tip `2b869ed35d` (through part 1's merge) and #8512's head, so its records are those of #8512 with both parts on today's `main`.
+* \[run\] `r20261111-004547-2aea`: part 1's records, `vy-nebius-cpu-1`, launched 00:45Z, cap 120 min from its slot (taken 00:47Z), still running at 01:51Z at 47 GiB. \[guess\] done by 02:30Z; if the cap cuts it at 02:47Z I relaunch it with 180 min.
+* When resumed: fetch each (`research fetch --all RUN`), commit the lock it kept, check that no existing record moved, then part 1's suites and PR.
