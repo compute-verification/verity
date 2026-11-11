@@ -41,8 +41,7 @@
    "name": "core_commitments",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir":
-   "../../protocols/interface/../../service/flock/../../primitives/commitments",
+   "dir": "../flock/../../primitives/commitments",
    "configFile": "lakefile.toml"}],
  "name": "core_firewall",
  "lakeDir": ".lake",

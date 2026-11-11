@@ -86,7 +86,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../../protocols/network/lean/../../interface/../../service/flock/../../primitives/commitments",
+   "../../../protocols/network/lean/../../../service/flock/../../primitives/commitments",
    "configFile": "lakefile.toml"}],
  "name": "certifier_device",
  "lakeDir": ".lake",

@@ -64,7 +64,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../../devices/memory_challenger/lean/../../../protocols/interface/../../service/flock/../../primitives/commitments",
+   "../../../devices/memory_challenger/lean/../../../attest/lean/../../primitives/commitments",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

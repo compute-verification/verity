@@ -2,10 +2,10 @@ module
 
 public import CoreProtocol.Protocol
 public import CoreProtocol.Site
-public import Flock.Hash
+public import Base.Hash
 meta import CoreProtocol.Protocol
 meta import CoreProtocol.Site
-meta import Flock.Hash
+meta import Base.Hash
 
 /-!
 # The registration log
