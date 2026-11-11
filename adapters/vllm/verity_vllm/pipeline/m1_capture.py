@@ -140,7 +140,7 @@ class Options:
     vllm_commit: str = option("--vllm-commit", default="d9105ea80")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     case: str | None = option("--case", default=None,
-                              help="checkpoint role (B0 SmolLM2-135M, B1 Qwen2.5-1.5B); default: the workload file's, else B0")
+                              help="checkpoint role (B0, B1, ...: a role of --checkpoints); default: the workload file's, else B0")
     verify_weights: bool = option("--verify-weights", default=False, action="store_true",
                                   help="sha256-verify the local checkpoint files against the manifest before loading (root policy: weight identity)")
     engine_arg: list[str] = option("--engine-arg", action="append", default=[],

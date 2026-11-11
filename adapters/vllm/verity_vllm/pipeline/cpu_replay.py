@@ -15,7 +15,8 @@ not served (a relation that reads it is not evaluated, named).  The tree is rows
 
 Then the same C2 as the in-process Commit (`pipeline.c2_replay.run`), and the run's verdict (`check.verdict.commit_verdict`): the
 row in `runs.jsonl`, `summary.json` and `verdict.json` are rewritten with the replay on the record and `commit.weights_attest`.
-Exit 0 PASS, 3 FAIL, 2 refused (a bundle that is not this record's, or a pick too large for this host's memory: `driver.PoolDoesNotFit`).
+Exit 0 PASS, 3 FAIL, 2 refused (`errors.Refused`: a bundle that is not this record's, or a record with no deferred replay to decide;
+`driver.PoolDoesNotFit`: a pick too large for this host's memory).
 
 Before the record is rewritten, the decided replay leaves its SLIM KEEP beside the bundle, `<out>/replay_slim_p<pair>/` (`keep`): what a
 later replay of the same picks reads, so the bundle can go and the Commit can still be replayed on CPU, by other row kernels, without
@@ -58,6 +59,7 @@ import numpy as np
 from verity_vllm.commit import step_rows
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.config import option
+from verity_vllm.errors import Refused
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.program.compiled_relations import warm_vml
@@ -89,10 +91,6 @@ class Options:
                                           help="a forked worker's measured peak memory beyond what the row evaluator states for its pick, "
                                                "GiB (default: the word replay's, admission commit.c2.replay_workers.small_vu): after the "
                                                "prewarm the workers are fitted to the cgroup's memory.max less its use (`driver.fit_pool`)")
-
-
-class Refused(Exception):
-    """The bundle is not the Commit record's, or the record has no deferred replay to decide."""
 
 
 def open_keep(keep: str | os.PathLike) -> dict[str, Any]:
