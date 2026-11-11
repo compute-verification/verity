@@ -26,7 +26,7 @@ namespace NciCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope isInputId)
 open Flock.TemplateQuery (TRange)
-open NciCheck.Record.SecurityProofs (RootFirst ranges_spec)
+open NciCheck.Record.SecurityProofs (RootFirst ranges_spec evaluate_asked)
 open NciCheck.Properties.SecurityProofs
 
 /-- **A Program the record check reads**: it decodes, in order, its root and its bodies laid out and its input
@@ -213,5 +213,115 @@ theorem gatesOwn {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadPr
     omega
   · rw [hoff, hd, ← ho, ← hG]
     omega
+
+/-! ## Units apart -/
+
+/-- A range of the root: its node is one of the root's, and its count the node's members. -/
+theorem range_node {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.root < P.defs.size)
+    (hk : RootFirst P) (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {i : ℕ}
+    (hi : i < rs.size) :
+    rs[i]!.node < (P.defs[P.root]!).body.nodes.size ∧
+      rs[i]!.count = ((P.defs[P.root]!).body.nodes[rs[i]!.node]!).members := by
+  obtain ⟨-, hall⟩ := ranges_spec hr hk hrs
+  have hmem : rs[i]! ∈ rs.toList := by
+    rw [getElem!_pos rs i hi]
+    simp
+  obtain ⟨hlt, -, -, hcount⟩ := hall _ hmem
+  exact ⟨hlt, hcount⟩
+
+/-- The root's ranges are in the order of their nodes. -/
+theorem ranges_sorted {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.root < P.defs.size)
+    (hk : RootFirst P) (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs)
+    {i i' : ℕ} (hi : i < rs.size) (hi' : i' < rs.size) (h : i < i') : rs[i]!.node < rs[i']!.node := by
+  obtain ⟨hnodes, -⟩ := ranges_spec hr hk hrs
+  have hs : (rs.toList.map (·.node)).Pairwise (· < ·) := by
+    rw [hnodes]
+    exact List.Pairwise.filter _ List.pairwise_lt_range
+  rw [List.pairwise_iff_getElem] at hs
+  have := hs i i' (by simpa using hi) (by simpa using hi') h
+  rw [getElem!_pos rs i hi, getElem!_pos rs i' hi']
+  simpa using this
+
+/-- Two members of one root node hold no gate in common. -/
+theorem members_apart (P : Prog) (k : ℕ) {m m' : ℕ} (h : m < m') :
+    (P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).gates ≤
+      (P.child P.rootScope k m').off := by
+  obtain ⟨hd, hoff⟩ := child_root P k m
+  obtain ⟨-, hoff'⟩ := child_root P k m'
+  have hle : (m + 1) * (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).gates ≤
+      m' * (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).gates := Nat.mul_le_mul_right _ h
+  rw [Nat.add_mul, Nat.one_mul] at hle
+  rw [hd, hoff, hoff']
+  omega
+
+/-- **Units are apart**: two members of the root's ranges, not one member of one range, hold no gate in common. -/
+theorem units_apart {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {i i' m m' : ℕ}
+    (hi : i < rs.size) (hi' : i' < rs.size) (hm : m < rs[i]!.count) (hm' : m' < rs[i']!.count)
+    (hne : i ≠ i' ∨ m ≠ m') :
+    (P.child P.rootScope rs[i]!.node m).off + (P.defs[(P.child P.rootScope rs[i]!.node m).d]!).gates ≤
+        (P.child P.rootScope rs[i']!.node m').off ∨
+      (P.child P.rootScope rs[i']!.node m').off + (P.defs[(P.child P.rootScope rs[i']!.node m').d]!).gates ≤
+        (P.child P.rootScope rs[i]!.node m).off := by
+  obtain ⟨hr, hrp, hlay, -⟩ := read_bodies hP
+  have hfirst : RootFirst P := hP.2.2.2.2.2.2
+  obtain ⟨hk, hc⟩ := range_node hr hfirst hrs hi
+  obtain ⟨hk', hc'⟩ := range_node hr hfirst hrs hi'
+  rw [hc] at hm
+  rw [hc'] at hm'
+  have hw := unit_within P (hlay P.root hr) hrp hk hm
+  have hw' := unit_within P (hlay P.root hr) hrp hk' hm'
+  rcases Nat.lt_trichotomy i i' with h | h | h
+  · have hn := ranges_sorted hr hfirst hrs hi hi' h
+    have hmono := Resolve.offsets_mono P P.root (hlay P.root hr) hrp (rs[i]!.node + 1) rs[i']!.node hn
+      (Nat.le_of_lt hk')
+    exact Or.inl (Nat.le_trans hw.2 (Nat.le_trans hmono hw'.1))
+  · subst h
+    have hmm : m ≠ m' := by
+      rcases hne with h | h
+      · exact absurd rfl h
+      · exact h
+    rcases Nat.lt_or_gt_of_ne hmm with h | h
+    · exact Or.inl (members_apart P _ h)
+    · exact Or.inr (members_apart P _ h)
+  · have hn := ranges_sorted hr hfirst hrs hi' hi h
+    have hmono := Resolve.offsets_mono P P.root (hlay P.root hr) hrp (rs[i']!.node + 1) rs[i]!.node hn
+      (Nat.le_of_lt hk)
+    exact Or.inr (Nat.le_trans hw'.2 (Nat.le_trans hmono hw.1))
+
+/-! ## A unit's template is the wiring's -/
+
+/-- **Every unit's template is one the root's ranges were asked for.** -/
+theorem unit_asked {P : Prog} {ts : Array String} {rs : Array TRange}
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
+    {sc : Scope} (h : UnitAt P rs tid u sc) : tid ∈ ts := by
+  obtain ⟨i, m, hi, hti, -, -, -⟩ := h
+  have hmem : rs[i]! ∈ rs.toList := by
+    rw [getElem!_pos rs i hi]
+    simp
+  have hc := evaluate_asked hrs _ hmem
+  rw [hti] at hc
+  simpa using hc
+
+/-- A unit has a template of the wiring, and is a unit of its Definition, where the wiring's templates are the
+Program's and the root's ranges were asked for them. -/
+theorem unit_template {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring}
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
+      (W.templates.map (·.1)).toArray = .ok rs)
+    (hT : Templates P rs W) {tid : String} {u : ℕ} {sc : Scope} (hu : UnitAt P rs tid u sc) :
+    ∃ t, (tid, t) ∈ W.templates ∧ TemplateOf (P.defs[sc.d]!) t := by
+  have hmem : tid ∈ W.templates.map (·.1) := by simpa using unit_asked hrs hu
+  obtain ⟨⟨tid', t⟩, ht, rfl⟩ := List.mem_map.1 hmem
+  exact ⟨t, ht, (hT tid' t ht).2 u sc hu⟩
+
+/-- **A unit's parameters have their own names** (`PortsNamed`): a unit's Definition is a template's of the
+wiring, whose parameters' names are apart. -/
+theorem portsNamed {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring}
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
+      (W.templates.map (·.1)).toArray = .ok rs)
+    (hT : Templates P rs W) : PortsNamed P rs := by
+  intro tid u sc i i' hu hi hi' hname
+  obtain ⟨t, -, htmpl⟩ := unit_template hrs hT hu
+  exact htmpl.1 i i' hi hi' hname
 
 end NciCheck.Properties.Record.SecurityProofs
