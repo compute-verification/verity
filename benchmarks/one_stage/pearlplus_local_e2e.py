@@ -19,7 +19,8 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
    in coin.json. The toy isn't the served instance (k_min 1,024 at 64 x 64 tiles), so its passes are read as a
    test instance's, crediting nothing.
 5. ``served_verdicts.py coin`` and ``served_verdicts.py pearlplus``: the coin published and the piece written, each
-   session fetched through the gate and held to the signed ledger under the scratch key's pin.
+   session fetched through the gate and held to the signed ledger under the scratch key's pin. The piece holds the
+   execution phase as that ledger times it and what each of Pearl+'s two checks cost (OUT/e2e.json's ``piece``).
 6. `served_verdicts.piece_row`: PoUW's row, composed of record when `pearlplus_of_record` holds. A test instance
    credits nothing, so on the toy every condition holds up to its last, the Lean's credit, which the row names
    (`TOY_ROW`).
@@ -282,7 +283,8 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     (doc := scratch / "served-doc.json").write_text(json.dumps({
         "arm": f"pouw:{SCHEME}", "spec": "toy", "run": T.RUN, "served_tokens": 1, "generate_s": 1.0, "prompt_tokens": 1,
         "output_tokens": 1, "ok": True, "over_caps": [],
-        "coins": {"source": S.LIVE_SOURCE, "session": carried, "closed": {"closed": True, "complete": True}},
+        "coins": {"source": S.LIVE_SOURCE, "reserved": reserved, "session": carried,
+                  "closed": {"closed": True, "complete": True}},
         "passes": [{"pass": 0, "timed": True, "units": 2, "macs": work.get("macs"), "manifest": str(path)}]}))
     _cli(log, "pearlplus", ["benchmarks/one_stage/served_verdicts.py", "pearlplus", str(piece), "--served", str(doc),
                             "--verify", str(piece / "verify.json"), "--gate", gate_cmd, "--key-sha512", key_sha512,
@@ -322,7 +324,8 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
 
     dev = json.loads((piece / S.DEVELOPMENT).read_text())
     report["piece"] = {k: dev.get(k) for k in ("verdict", "reasons", "coin_source")} | {
-        "coins": {k: (dev.get("coins") or {}).get(k) for k in ("check", "draw")}, "coin": dev.get("coin")}
+        "coins": {k: (dev.get("coins") or {}).get(k) for k in ("check", "draw")}, "coin": dev.get("coin"),
+        "execution_phase": dev.get("execution_phase"), "checks": dev.get("checks")}
     report["row"] = row()
     print(f"[row] {json.dumps(report['row'])[:1500]}", flush=True)
 
