@@ -36597,3 +36597,53 @@ This follows my 02:07Z entry (the record: `Security/lean-audit.json`, `reads`, `
 **Also**: five completion notices of your other workers reached me at 02:00Z (PRF-536, PRF-537, PRF-530, PRF-541, PRF-529). I acted on none.
 
 **Left**: your and lean's pick (I wait for it, and do neither meanwhile); that commit; when the layout move is on `main` (it is not at `a930252c4993` [read 02:17Z]), the crossing; then one records run and the quick tier on the moved tree; then "ready to mark".
+
+## SCALE, Wed 11 Nov 02:34Z: TWO-STAGE FINDER: HOLDS (on paper, at SPOT[Flock]'s code, constant 2); K at the rows' design (capped patterns) is what misses 100 at the worst corners; item 5: (a) agree, (b) patterns, (c) the union over every sampled replay block
+
+**Verdict.** The two-stage targeted finder holds, for the boundary and the interior together [derived]. It bounds `Pr[acc and (off regValX or OffIreg)] <= 2K*(T(1 + d*e_s) + d*openCalls)/2^256 + p_ref*|opensSet|`, in place of `N*sqrt(Pr[B_conf,X]) + N*sqrt(Pr[B_conf,2])` in `εregTwoX` [derived]. Nothing is Lean, and I built nothing. The full derivation is in `note:proofs/20261111T0230Z-finding-two-stage-finder`, and the comment on PRF-533 (02:33Z) opens with `TWO-STAGE FINDER: HOLDS`.
+
+**The finder** [derived]:
+- Draw run 1 on non-refused coins, accepted or not.
+- Pick one of the K slots of `Reads(r)`, the union of `needs` over `checked x r`.
+- Extract only the at most d sessions holding that position.
+- Rerun among the coins that read it until an opening passes, then compare the two openings:
+  - boundary: rerun the whole run (and the tape too, for `regValX`);
+  - interior: keep ω and r off `stage2`, and redraw only the second stage.
+
+Why it holds:
+- **One root.** Both openings are under one root: `s.roots`, or `Sessions.interior` (`SamplingGeneric.lean:488-489`, no acceptance hypothesis) [read].
+- **Only holding sessions open p.** `pos_mem_needs` (`RevealsOpen.lean:28-32` at `db65e96678`) confines a reveal to its unit's `needs` [read].
+- **Success** is at least `min(O_0, O_1)/K`. The stopped rerun's value has run 1's law at p [derived].
+- **Expected second runs** are `E|Reads|/K <= 1`; for the interior this holds at each first-stage transcript [derived].
+- **Extraction.** `e_s` holds at every fixed outer coin (`ExtractRunsExpLe`, `Interaction.lean:523-529`) [read].
+- **The constant is 2.** It would be 4 if run 1 were conditioned on acceptance: rejected outer runs still extract accepting inner sessions, and the off terms of `eventTwo_split` (`TwoReg.lean:456-468`) count them [read, derived]. This corrects my 01:20Z card.
+- **The bridge** must carry `acc` into both off terms (REPBREAK item 1, at two stages) [derived].
+
+**The trace.** #8512's `iregVal` (`SamplingTwoReg.lean:96-101`) is the trace per first-stage transcript: the plurality over the second stage's and the extractor's coins at (ω, r off `stage2`) [read].
+- REGX's `KSRegTwoX` is the miss against it [read].
+- `MissTwoX` is the sample's miss at the same set, and its W reads no interior [read].
+- A different interior for each first coin gives two roots, no collision and no binding event; the sampling prices it through `wrongAtBoundaryAt` [read, derived].
+- One root and two openings is the collision the finder finds [derived].
+
+**K.**
+- **As a function of the statement:** `K(x) <= Σ_{always}|needs| + Kfirst*Σ_t k_t*max|needs|` [derived, from `Reg.lean:86-94` and `Cap.lean:165-169`].
+- **Always-checked blocks.** `RegTwo.always` is set nowhere, and is in nobody's count. It is unsized [read].
+- **From the card, one block a stratum** (m 154): K = 2^24.70, 40% boundary (weights) and 60% interior [run; guess on the classification].
+- **Caps.** The only public cap is the coin: 2^35.9 at the largest block and 2^42.8 at 2^27 bits a block [read: ATTACK].
+
+**Numbers.** One audit, constant 2, T = 2^80 in compressions / in 64 KiB calls; each row gives k = 1507 then the largest k [run]:
+- uncapped, m 154, K 2^24.70, d 1: −132.0/−123.0; largest k, d 167: −111.6/−102.6.
+- capped sets, m 1,158, K 2^30.1: −126.6/−117.6; largest k, d 167: −106.2/−97.2.
+- capped patterns, m 124,289 to 1,144,826, K 2^36.8 to 2^40.1: −119.9 to −116.6 (d 1); largest k, d 167: −99.5 to −96.2, and −90.5 to −87.2 with 64 KiB calls.
+- A year adds 15.7 bits.
+
+**Item 5:**
+- **(a) Agree.** My K ≤ 2^25.6 was an uncapped one-a-stratum reading; I withdraw it for B and A. I did not rerun REPBREAK's m and K [not done].
+- **(b) The rows of record price the capped patterns form at machine registration.** Rows: `art:7db57b96…`, run `r20261110-033213-4d4e`.
+  - Row (i) is `line: tokens`, configured `form="patterns", registration="machine"` (`total_cost.py:166-169` at `a5e4e56a11`) [read].
+  - Rows (ii) and (iii) are patterns too [guess].
+  - The cap is S = 28,000 bits [read].
+  - κ and m are not in the rows [read].
+- **(c) K is the union over every checked block** [derived, from `RegTwo.checked`]. That is at most the sum over the ⌈q·n⌉ sampled replay blocks plus the always-checked blocks, with weights counted once. It is one replay block's only where ⌈q·n⌉ = 1.
+
+**Refusal (row 2c), one line.** K is the maximum over non-refused coins (`Reg.lean:94`), and both runs are drawn there. The traces may stay over all coins at `+p_ref*|opensSet|`, which is below 2^-229 [derived].
