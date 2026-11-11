@@ -97,11 +97,11 @@ theorem traceServed_eq_of {s : AuditStatement} {Pt Pρ : Partition} (hC : s.prog
       (glue s.prog Pρ val ι g).getD false = (glue s.prog Pρ val' ι' g).getD false) :
     traceServed s val = traceServed s val' := by
   classical
-  have hcor : ∀ Z : ℕ → Option Bool, wrongOf s.prog Pt Z = T →
-      ∀ v < Pt.blocks.length, v ∉ T → s.prog.Correct Z (Pt.blocks.getD v []) := by
-    intro Z hZ v hv hvT
+  have hcor : ∀ tr : ℕ → Option Bool, wrongOf s.prog Pt tr = T →
+      ∀ v < Pt.blocks.length, v ∉ T → s.prog.Correct tr (Pt.blocks.getD v []) := by
+    intro tr htr v hv hvT
     by_contra hc
-    refine hvT (hZ ▸ ?_)
+    refine hvT (htr ▸ ?_)
     unfold wrongOf
     exact mem_filter.2 ⟨mem_range.2 hv, hc⟩
   have hin : ∀ g, s.prog.gates[g]? = some .input → glue s.prog Pρ val ι g = glue s.prog Pρ val' ι' g := by
