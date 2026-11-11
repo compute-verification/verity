@@ -51185,3 +51185,54 @@ For the table:
 
 For the table:
 - b2 and k at `code h`: `code_hNs`, `code_hKs` and `code_hKm` compile at `04def4644b` (try `75a7`, axioms clean), K_s and K_m by template; no PR, it stacks #8874, #8879, #8889, #8892 and #8919. "modeled; the first-hit term of #8827's lemma: 2^-100.9 per sampled replay block, 2^-98.9 to 2^-98.3 a run at 4 to 6 replay blocks, at T = 2^80 SHA-512 calls in every run (the prover's and the verifier's), one 2^35-bit table a session, under `SHA512CRExpected` at its two finders; K an upper bound, every block's input bits counted (K_mean <= 2^41.81)."
+
+## HEADPROF, Wed 11 Nov 11:29Z: salts `all` ALONE at four provers: 2.031 GPU-s a statement against 2.430 (measured, `r20261111-102210-ee70` step 5; 0.836, where one prover gave 0.993); NODE A IS RELEASED: I hold no card, lease or process there since 11:28:18Z
+
+**The row** [run: `r20261111-102210-ee70` step 5, 11:17:49Z to 11:28:18Z, node A card 3, cores 34-43, the check on
+those cores, today's binary with `FC_SALTS_KEYED=all` and nothing else; four provers, 64 timed sessions, 76 accepted,
+0 refused; quiet: the neighbour on card 2 was stopped at 11:18:04Z, in this step's load]. **`all` is Daniel's claim:
+built, unmarked.**
+
+| what, four provers on ten cores | GPU-s a statement | card busy | prover CPU-s | check CPU-s | prover cores busy | `compact_stall` |
+|---|---|---|---|---|---|---|
+| today's block (step 2) | 2.4302 | 22.5% | 18.80 | 6.36 | 9.85 | +38,348 |
+| salts `all` alone (step 5) | **2.0311** | 27.7% | 13.94 | 6.22 | 9.91 | +32,727 (22 of 23 samples) |
+
+- The salts' 4.9 CPU-s a statement leave the prover's cores and, the cores being full, the statement gets 0.40 s
+  shorter. At one prover the same switch gave 2.570 against 2.588 (`cb57`): SALTS's share shows only at full cores.
+- **The cuts multiply.** Alone at four provers: salts `all` 0.836; the check off the cores 0.716 (`db9a`, on
+  WITNESS's tree); WITNESS's two cuts 0.925 (one prover, vy-dc-h200-3). Their product is 0.554; all three together
+  measured 0.559 (1.3574 against 2.4302). So no cut hides another, and the next one to the host will show whole.
+- `compact_stall` grew here too (the check is on the prover's cores): four of four such steps, none of three with
+  the check on cores 8-11.
+- The container's throttle count is 6,970 at the end [run, 11:28:39Z]: it did not move in any step of mine since
+  08:40Z.
+
+**Node A, all four-prover rows** (card 3, cores 34-43; `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`; measured):
+
+| what | quiet | loaded (a prover on card 2) | run, steps |
+|---|---|---|---|
+| today's block | 2.430 | 2.382 | `ee70` 2, 4 |
+| salts `all` alone | 2.031 | | `ee70` 5 |
+| the check on cores 8-11 alone (WITNESS's tree, its cuts off: 2.417 with the check on the cores) | 1.731 | | `db9a` 2, 1 |
+| every cut: salts `all`, WITNESS's two, the check on 8-11 | 1.357 | 1.402 | `ee70` 1, 3 |
+| one prover, today's block | 2.512 | 2.8555 (kernels' row of record [relayed]) | `ee70` own |
+
+**Released** [run: `pgrep`, `nvidia-smi` at 11:28:39Z]: cards 2 and 3 hold 0 MiB, no prover, verifier or harness of
+mine is alive on node A, `/dev/shm/proofs-headprof` is gone; `ee70`'s supervisor is writing its record on my
+fourteen cores for a minute more. I launch nothing more there. On its disk I leave three builds under
+`/workspace/jobs/proofs-headprof/flock-circuit` until tonight's rows are final, then remove the directory; I read
+nothing from `/workspace/research/store`.
+
+**Not run on node A:** `FC_UNIT_WIDE=4` (lost at 09:56Z, in vy-dc-h200-3's list), `upper` and WITNESS's cuts alone at
+four provers, two and one provers a card with every cut, cores a prover 20 and all (your first brief's (d): the row
+was fourteen cores).
+
+**Next, on vy-dc-h200-3** [run]: `af1d` is in its two-prover steps (every cut; salts alone), to about 11:37Z. Then
+I stop it and time WITNESS's follow-up (`cursor/proofs-witness-follow-41b5` at `3784b0a0dd6f`, ported onto the
+timed tree as `7b12b8825b39`, on my branch): its four rows at one prover against today's binary in one run, then
+every cut with it at two provers, then `FC_UNIT_WIDE=4`. HEADCIRC's scores unit and quarter after that, when its
+`For HEADPROF:` line names the staged statements.
+
+For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, four provers on one H200 with ten cores, salts `all` alone (unmarked, Daniel's): 2.031 GPU-s a statement against 2.430 today, measured, `r20261111-102210-ee70` steps 5 and 2, quiet.
+For the table: head block at four provers a card on node A (measured, quiet): today 2.43 s; salts `all` 2.03; the check off the prover's cores 1.73; every cut 1.36 (1.40 loaded). Node A's row is released at 11:28Z.
