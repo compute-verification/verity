@@ -788,7 +788,8 @@ def test_a_c_file_under_a_hash_that_is_not_the_trace_s_or_is_older_is_half_writt
     at = 10**18
     for name in traces:
         for f in (*lib.glob(f"P/{name}.*"), ir / f"{name}.c", ir / f"{name}.c.hash", ir / f"{name}.c.o.export",
-                  ir / f"{name}.c.o.export.hash", ir / f"{name}.c.o.export.trace", ir / f"{name}.c.o.noexport", ir / f"{name}.bc.o"):
+                  ir / f"{name}.c.o.export.hash", ir / f"{name}.c.o.export.trace", ir / f"{name}.c.o.noexport", ir / f"{name}.bc",
+                  ir / f"{name}.bc.o"):
             if f.parent == ir and not (name == "NoC" and f.name.startswith("NoC.c")):
                 f.write_text("zz" if f.name == "Other.c.hash" else "cc")
             if f.exists():
@@ -798,17 +799,18 @@ def test_a_c_file_under_a_hash_that_is_not_the_trace_s_or_is_older_is_half_writt
     said = []
     LC.repair(tree, ["pkg"], {}, None, said.append)
     for name in ("Later", "Other"):
-        assert not traces[name].exists() and [f.name for f in sorted(ir.glob(f"{name}.*"))] == [f"{name}.c"], \
-            "the C stays for Lake to replace; its `.hash`, the objects and their `.hash` and `.trace` go"
+        assert not traces[name].exists() and [f.name for f in sorted(ir.glob(f"{name}.*"))] == [f"{name}.bc", f"{name}.c"], \
+            "the C and the bitcode stay for Lake to replace; the C's `.hash`, the objects and their `.hash` and `.trace` go"
     for name in ("Good", "GoodToo"):
-        assert traces[name].exists() and len(list(ir.glob(f"{name}.*"))) == 7
+        assert traces[name].exists() and len(list(ir.glob(f"{name}.*"))) == 8
     assert traces["NoC"].exists() and (ir / "NoC.bc.o").exists()
     assert said == ["lean-records: pkg: 2 module(s) half-written by an earlier build, rebuilt: P/Later, P/Other"]
 
 
 def test_an_object_older_than_the_c_beside_it_goes_with_its_hash_and_trace(tmp_path):
     """Lake compiles an object after its C, so one that is older was compiled from an earlier C, and Lake takes it as
-    built when its trace names the hash the C has now: what a repair that kept a rebuilt module's objects left."""
+    built when its trace names the hash the C has now: what a repair that kept a rebuilt module's objects left. An
+    object with no C beside it, or whose module has no trace, is older than the C Lake will write."""
     tree = tmp_path / "tree"
     lib = tree / "pkg" / ".lake" / "build" / "lib" / "lean"
     ir = tree / "pkg" / ".lake" / "build" / "ir" / "P"
@@ -823,18 +825,23 @@ def test_an_object_older_than_the_c_beside_it_goes_with_its_hash_and_trace(tmp_p
             for f in (ir / f"{name}.{o}", ir / f"{name}.{o}.hash", ir / f"{name}.{o}.trace"):
                 f.write_text("o")
                 os.utime(f, ns=(at, at))
+    module(lib, "P/NoC")
+    for f in (ir / "NoC.c.o.export", ir / "NoC.c.o.export.hash", ir / "NoC.c.o.export.trace", ir / "NoTrace.c",
+              ir / "NoTrace.c.o.export", ir / "NoTrace.c.o.export.trace"):
+        f.write_text("o")
+        os.utime(f, ns=(at, at))
     for f in lib.rglob("*"):
         os.utime(f, ns=(at, at))
     assert LC.damaged(lib) == []
-    old = [ir / "Old.c.o.export", ir / "Old.c.o.noexport", ir / "OldBc.bc.o"]
+    old = [ir / "NoC.c.o.export", ir / "NoTrace.c.o.export", ir / "Old.c.o.export", ir / "Old.c.o.noexport", ir / "OldBc.bc.o"]
     assert LC.outdated(lib) == old
     said = []
     LC.repair(tree, ["pkg"], {}, None, said.append)
     assert not any(f.with_name(f.name + end).exists() for f in old for end in ("", ".hash", ".trace"))
     assert len(list(ir.glob("Same.*"))) == len(list(ir.glob("New.*"))) == 12 and (ir / "Old.bc.o").exists() \
         and (ir / "OldBc.c.o.export.trace").exists() and all((ir / f"{n}.c").exists() for n in ("Old", "OldBc"))
-    assert said == ["lean-records: pkg: 3 object(s) older than the C they were compiled from, dropped: P/Old.c.o.export, "
-                    "P/Old.c.o.noexport, P/OldBc.bc.o"]
+    assert said == ["lean-records: pkg: 5 object(s) older than the C Lake compiles them from, dropped: P/NoC.c.o.export, "
+                    "P/NoTrace.c.o.export, P/Old.c.o.export, P/Old.c.o.noexport, P/OldBc.bc.o"]
     assert LC.outdated(lib) == [] and LC.outdated(tmp_path / "none" / "lib" / "lean") == []
 
 

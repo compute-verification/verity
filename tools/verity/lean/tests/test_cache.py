@@ -1034,7 +1034,7 @@ def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_buil
     rc, out = records()
     assert rc == 0 and "Toy.Word:c.o" not in out and says() == "version A 1", \
         "the module is restored, its object is taken as built, and the executable runs the earlier source"
-    assert repair() == ["lean-records: toy: 2 object(s) older than the C they were compiled from, dropped: "
+    assert repair() == ["lean-records: toy: 2 object(s) older than the C Lake compiles them from, dropped: "
                         "Toy/Word.c.o.export, Toy.c.o.export"], \
         "`Toy`'s too, compiled from the same C as the one restored after it: Lake compiles it once more"
     rc, out = records()

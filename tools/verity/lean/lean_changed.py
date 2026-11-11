@@ -644,20 +644,20 @@ def forget(lib: Path, trace: Path) -> None:
 
 
 def outdated(lib: Path) -> list[Path]:
-    """The objects in the build's `ir/` (``lib`` is its `.lake/build/lib/lean`) written before the C or bitcode beside
-    them, which Lake compiles them from: Lake writes an object after its source, so such an object is from an earlier
-    source, and Lake takes it as built whenever its trace names the hash the new source has. A `repair` that dropped a
-    module's trace and `.hash` files and kept its objects left them so."""
+    """The objects in the build's `ir/` (``lib`` is its `.lake/build/lib/lean`) older than the C or bitcode Lake compiles
+    them from: one written before the source beside it, one with no source beside it, and one whose module has no trace,
+    which Lake rebuilds, writing the source anew. Lake writes an object after its source, so such an object is from an
+    earlier source, and Lake takes it as built whenever its trace names the hash the new source has. A `repair` that
+    dropped a module's trace and `.hash` files and kept its objects left them so."""
     out = []
     ir = lib.parent.parent / "ir"
     for o, of in OBJECTS.items() if ir.is_dir() else ():
         for obj in ir.rglob(f"*.{o}"):
-            src = obj.with_name(obj.name.removesuffix(o) + of)
-            try:
-                if src.stat().st_mtime_ns > obj.stat().st_mtime_ns:
-                    out.append(obj)
-            except OSError:
-                pass
+            base = obj.with_name(obj.name.removesuffix(f".{o}"))
+            src = base.with_name(f"{base.name}.{of}")
+            if not (lib / base.relative_to(ir)).with_name(f"{base.name}.trace").is_file() or not src.is_file() \
+                    or src.stat().st_mtime_ns > obj.stat().st_mtime_ns:
+                out.append(obj)
     return sorted(out)
 
 
@@ -695,8 +695,8 @@ def clashed(tree: Path, pkgs: list[str], text: str) -> list[str]:
 def repair(tree: Path, pkgs: list[str], links: dict[str, str], left: dict | None, log=print) -> None:
     """Make ``tree``'s copy of ``pkgs`` one Lake builds from, whatever a run left there: each module whose outputs `damaged`
     finds loses its trace, its `.hash` files and its objects (`forget`), so Lake rebuilds it, a module with no trace loses
-    its `.hash` files (`orphaned`), and an object older than the C beside it goes with its trace (`outdated`), so Lake
-    compiles it again. Where a run ended mid-way (``left``, its `DIRTY`), also each package whose
+    its `.hash` files (`orphaned`), and an object older than the C Lake compiles it from goes with its trace (`outdated`),
+    so Lake compiles it again. Where a run ended mid-way (``left``, its `DIRTY`), also each package whose
     fetched dependencies hold a damaged module or a checkout that is not its manifest's, and the one whose dependencies it
     was taking (`phase` `deps`), has them dropped, so they are taken again."""
     if left is not None:
@@ -723,7 +723,7 @@ def repair(tree: Path, pkgs: list[str], links: dict[str, str], left: dict | None
                 for f in (obj, obj.with_name(f"{obj.name}.hash"), obj.with_name(f"{obj.name}.trace")):
                     f.unlink(missing_ok=True)
             names = [str(obj.relative_to(lib.parent.parent / "ir")) for obj in old]
-            log(f"lean-records: {p}: {len(names)} object(s) older than the C they were compiled from, dropped: "
+            log(f"lean-records: {p}: {len(names)} object(s) older than the C Lake compiles them from, dropped: "
                 f"{', '.join(names[:8])}{' ...' if len(names) > 8 else ''}")
         if left is None:
             continue
