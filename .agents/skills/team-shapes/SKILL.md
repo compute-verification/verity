@@ -112,11 +112,10 @@ Every swarm runs by the rules below, and a new one posts only its differences on
   branch if it is no better. Memory accounting's code, six seats and four held, starts at 599 list entries and 768
   findings; compute accounting's, three seats and eight to follow, at 655 and 1,320 [read: their issues; the counts
   are each lead's report].
-- **Open, with no owner:** each swarm keeps its own tools (who owns a file, the score, the frozen list, the check
-  before a hand-in) in its lead's directory of the notes (`lanes/vllm/tools/`, `lanes/memory-accounting/tools/`,
-  `lanes/compute-research/tools/`), and none is in the repository. The three score tools differ only in their table
-  of seats [report: @compute-research]. Two swarms already share one check: memory accounting's `gone`, which lists
-  every line of any directory that still names a file a head deletes, renames or moves [read: its code].
+- **Open:** the swarms' tools (who owns a file, the score, the frozen list, the check before a hand-in) are three
+  sets, each in its lead's notes and none in the repository [read: the three]. One tool for every swarm, reading a
+  file of seats, is agreed and not yet made; it stays in the notes until a review keeps the swarms [read: @top's
+  ruling].
 
 ### Builder with an adversary
 
