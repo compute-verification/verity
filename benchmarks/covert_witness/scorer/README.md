@@ -175,6 +175,9 @@ The rules a rebuild follows:
   timeout raised, where `LEAVE` names the restated runs that run does not trace and `TRACED` names the out/ of the
   earlier runs, whose traces are laid over rather than made again. A run `LEAVE` names is kept as one that did not
   trace.
+- **A run stays under the memory it declares.** `MEM_GB` is what the run declared (`--mem-gb`): the job stops itself
+  when its processes hold that much. Every run writes the most they held (`memory-peak-gb.txt`), which the next
+  declaration is made from.
 
 The standard-workloads panel reads two of the search's records through its own stored traces. Its builder takes the
 plan `correct.sh` wrote and reads those runs restated, each stored trace against the restated count of its step

@@ -2,7 +2,7 @@
 # The published tables rebuilt with each search record's tokens a step restated (restate.py), beside the published
 # layer rebuilt as it is. A research run's workload on the scorer's node; reads K, writes none of it, publishes nothing.
 #
-#   TE=COMMIT [LAYERS=TREE,...] [WORKERS=N] [TRACE_TIMEOUT=S] [TRACED=OUT,...] [LEAVE=RUN,...]
+#   TE=COMMIT [LAYERS=TREE,...] [WORKERS=N] [TRACE_TIMEOUT=S] [TRACED=OUT,...] [LEAVE=RUN,...] [MEM_GB=N]
 #       [NULL=DIR,...] bash correct.sh
 #
 # The run's inputs/ holds: replot.bundle (a bundle holding COMMIT, the checkout whose te_core traced the published
@@ -29,6 +29,9 @@
 # What the correction moves is `corr` against `fixed`, never against replot.py's control: the control is the state as
 # the last refresh left it, and the published layer already moves rows against it. `corr` against `null` is the
 # restating alone, with the same te_core on both sides.
+#
+# OUT/memory-peak-gb.txt is the most this job's processes held at once. With MEM_GB, the memory the run declared, the
+# job stops itself when they hold that much (OUT/over-memory.txt, exit 143).
 set -uo pipefail
 K=${TE_SCORER_K:-/workspace/research/lanes/training/te-scorer}
 IN=$RESEARCH_RUN_DIR/inputs
@@ -39,17 +42,29 @@ WORKERS=${WORKERS:-20}
 TRACE_TIMEOUT=${TRACE_TIMEOUT:-3000}
 TRACED=${TRACED:-}
 LEAVE=${LEAVE:-}
+MEM_GB=${MEM_GB:-0}
 NULL=${NULL:-}
 S=$(mktemp -d)
 SAMPLER=
 trap '[ -n "$SAMPLER" ] && kill "$SAMPLER" 2>/dev/null; rm -rf "$S"' EXIT
+trap 'exit 143' TERM
 mkdir -p "$OUT" "$S/layers"
 echo "== $(date -u +%Y-%m-%dT%H:%M:%SZ) $(hostname) cores $(nproc) scratch $S"
 free -g | head -2
-# this job's own memory: the resident sizes of this shell's session, every 10 s (the cgroup is the node's, shared)
-( peak=0; while sleep 10; do
-    now=$(ps -o rss= -s "$(ps -o sid= -p $$ | tr -d ' ')" | awk '{s += $1} END {print int(s / 1048576)}')
+# this job's own memory: the resident sizes of this shell's session, every 5 s (the cgroup is the node's, shared). At
+# MEM_GB this shell is told to exit and every process below it but the sampler's own is stopped, by its pid.
+( peak=0; sid=$(ps -o sid= -p $$ | tr -d ' ')
+  while sleep 5; do
+    now=$(ps -o rss= -s "$sid" | awk '{s += $1} END {print int(s / 1048576)}')
     [ "$now" -gt "$peak" ] && peak=$now && echo "$(date -u +%H:%M:%SZ) $peak" > "$OUT/memory-peak-gb.txt"
+    if [ "$MEM_GB" -gt 0 ] && [ "$now" -ge "$MEM_GB" ]; then
+      echo "$(date -u +%H:%M:%SZ) this job holds $now GB, its MEM_GB is $MEM_GB: stopped" | tee "$OUT/over-memory.txt"
+      kill -TERM $$
+      ps -o pid=,ppid= -s "$sid" | awk -v top=$$ -v me="$BASHPID" '{p[$1] = $2}
+        END {for (c in p) {a = c; while (a in p && a != top && a != me) a = p[a]; if (a == top && c != top) print c}}' |
+        xargs -r kill -TERM 2>/dev/null
+      exit 0
+    fi
   done ) &
 SAMPLER=$!
 (cd "$IN" && sha256sum -- *) > "$OUT/inputs.sha256.txt"
