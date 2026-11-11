@@ -155,6 +155,15 @@ def test_arms_switch_only_between_passes_and_name_the_stacks_executor():
         stack.activate(Arm("ncp", "bf16", "pouw:ncp-v2"))
 
 
+def test_an_arm_that_executes_on_a_stack_with_no_executor_is_refused():
+    stack = Stack(SITES)
+    with pytest.raises(ValueError, match="this stack's executor is none"):
+        stack.activate(PEARLC)
+    stack.active = PEARLC                 # past `activate`: the pass refuses it too
+    with pytest.raises(RuntimeError, match="this stack has no executor"), stack.pass_():
+        pass
+
+
 def test_the_interface_imports_neither_vllm_nor_torch():
     path = Path(__file__).resolve().parents[3] / "verity_vllm" / "protocols" / "linear" / "api.py"
     mods = {a.name for n in ast.walk(ast.parse(path.read_text())) if isinstance(n, ast.Import) for a in n.names}

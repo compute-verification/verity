@@ -92,7 +92,7 @@ def chain(challenge: bytes, previous: bytes, index: int) -> bytes:
     return rb.seed(challenge, index, previous)
 
 
-def runs_of(blocks: np.ndarray) -> np.ndarray:
+def runs_of(blocks: np.ndarray | Sequence[int]) -> np.ndarray:
     """``(R, 2)`` int64 ``(first, count)``: ``blocks`` (in read order) as runs of consecutive indices."""
     b = np.asarray(blocks, np.int64)
     if not len(b):
@@ -264,9 +264,17 @@ class _Pass:
     step: int | None = None
     _plan: Plan | None = None
 
+    def window_seed(self) -> bytes:
+        """The seed of a pass inside a window.  A pass outside one has none, so no plan, receipts or tree."""
+        if self.seed is None:
+            raise RuntimeError(f"pass {self.index} is outside a window: it has no seed")
+        return self.seed
+
     def plan(self) -> Plan:
         """The driver's `Plan` of the pass, built when the store builds or opens its tree."""
         if self._plan is None:
+            if self.runs is None:
+                raise RuntimeError(f"pass {self.index} is outside a window: it has no plan")
             self._plan = plan_of(self.runs, self.store_blocks)
         return self._plan
 
@@ -496,11 +504,11 @@ class NodeMemory:
         """The step's KV writes: each block a write reaches turns dirty, and each it completes is registered again
         (epoch + 1, under ``step``).  One registration record for the step.  A memory map closes the last step's line,
         opens this one's (`memory_map`).  A store with no KV pool takes steps with no appends."""
-        t, p, m = time.perf_counter(), self.pool if appends else self._pool, self.memory_map
+        t, p, m = time.perf_counter(), self.pool if appends else None, self.memory_map
         if m is not None:
             m.flush(step)
         key = reached = np.zeros(0, np.int64)
-        if appends:
+        if p is not None:
             n = len(appends)
             pg = np.fromiter((a.page for a in appends), np.int64, n)
             first = np.fromiter((a.first for a in appends), np.int64, n)
@@ -614,17 +622,19 @@ class NodeMemory:
         j = len(self._passes)
         seed = None
         if self._challenge is not None:
+            assert self._last_root is not None, "begin_window sets the root its first pass chains from"
             seed = chain(self._challenge, self._last_root, j)
         ps = _Pass(j, seed, [], [], step=step)
-        parts = [(r.info.name, 0, r.info.blocks, None, None) for r in self._regions if r.info.kind == "weights"]
-        if self._pool is not None and live_pages is None:
-            live_pages = np.nonzero(self._pool.allocated)[0]
-        if self._pool is not None and len(live_pages):
-            p = self._pool
-            pages = np.unique(np.asarray(live_pages, np.int64))
-            read = p.read(pages)
-            ids, epochs = p.ids[pages][read], p.epoch[pages][read]
-            parts += [(rn, -1, len(ids), ids, epochs) for rn in p.regions]
+        parts: list[tuple[str, int, int, np.ndarray | None, np.ndarray | None]] = [
+            (r.info.name, 0, r.info.blocks, None, None) for r in self._regions if r.info.kind == "weights"]
+        p = self._pool
+        if p is not None:
+            live = np.nonzero(p.allocated)[0] if live_pages is None else live_pages
+            if len(live):
+                pages = np.unique(np.asarray(live, np.int64))
+                read = p.read(pages)
+                ids, epochs = p.ids[pages][read], p.epoch[pages][read]
+                parts += [(rn, -1, len(ids), ids, epochs) for rn in p.regions]
         if self.filler_plan is not None:
             for rn, blocks in self.filler_plan(self, j):
                 blk = np.asarray(blocks, np.int64)
@@ -682,16 +692,18 @@ class NodeMemory:
         return out
 
     def _leaf(self, ps: _Pass, dom: Any, z: Callable[[str, int], bytes | None] | None = None) -> Callable[[int], bytes]:
+        seed = ps.window_seed()
+
         def leaf(c: int) -> bytes:
             ys = self.receipts_at(ps, c * PER_LEAF, min((c + 1) * PER_LEAF, ps.positions), z)
-            return leaf_digest(dom, c, b"".join(ys), self.salt(ps.seed, c))
+            return leaf_digest(dom, c, b"".join(ys), self.salt(seed, c))
         return leaf
 
     def receipts(self, ps: _Pass, index: int, z: Callable[[str, int], bytes | None] | None = None) -> list[bytes]:
         """The reference reader: segment ``index``'s receipts, from its blocks' bytes now."""
         seg, z = ps.segments[index], ps.z if z is None else z
         r = self._by_name[seg.region]
-        keyed, bb, first = r.receipt.keyed(ps.seed), r.info.block_bytes, r.info.first
+        keyed, bb, first = r.receipt.keyed(ps.window_seed()), r.info.block_bytes, r.info.first
         return [keyed(first + b, r.backing.read(b * bb, bb), z(seg.region, b) if z else None)
                 for b in ps.segment_blocks(index).tolist()]
 
@@ -755,7 +767,8 @@ class NodeMemory:
         """Each sampled (pass, position) of ``window`` (None: the latest) as that pass read it.  A KV block
         re-registered since (its epoch moved) or dirty now raises `Stale`: the binder reuses freed pages as late as
         the pool allows."""
-        out, inner = [], {}
+        out: list[BlockOpening] = []
+        inner: dict[tuple[int, int], dict[tuple[int, int], bytes]] = {}
         t = self._window if window is None else window
         for j, position in sample:
             ps = self._retained.get((t, j))
@@ -769,6 +782,7 @@ class NodeMemory:
             b = ps.block(k, q)
             if k in ps.epochs:
                 p = r.pool
+                assert p is not None, "only a pool's blocks are read under their epochs"
                 page, c = p.page_of[b], p.slot_of[b]
                 if p.epoch[page, c] != ps.epochs[k][q] or p.dirty[page, c]:
                     raise Stale(f"{seg.region} block {b} was rewritten after pass {j}")
@@ -777,7 +791,7 @@ class NodeMemory:
             memo = inner.setdefault((j, k), {}) if aligned(seg) else ps.top
             path = [_node(dom, n, h, (c >> h) ^ 1, leaf, memo if h < level else ps.top) for h in range(merkle_depth(n))]
             ys = self.receipts_at(ps, c * PER_LEAF, min((c + 1) * PER_LEAF, ps.positions))
-            bb, salt = r.info.block_bytes, self.salt(ps.seed, c)
+            bb, salt = r.info.block_bytes, self.salt(ps.window_seed(), c)
             out.append(BlockOpening(j, position, r.info.first + b, seg.region, r.info.tier, self.kind_now(seg.region, b),
                                     r.backing.read(b * bb, bb), ys[position % PER_LEAF], tuple(ys), self.source(seg.region, b),
                                     salt, Opening(c, rb.hidden(b"".join(ys), salt), tuple(path))))

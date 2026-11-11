@@ -257,6 +257,16 @@ def test_outside_a_window_a_pass_commits_nothing():
     assert s.counters.calls == {"register": 1, "begin_pass": 1, "end_pass": 1}
 
 
+def test_a_pass_outside_a_window_has_no_plan_and_no_receipts():
+    s = NodeMemory()
+    weights(s)
+    ps = s.begin_pass()
+    with pytest.raises(RuntimeError, match="outside a window: it has no plan"):
+        ps.plan()
+    with pytest.raises(RuntimeError, match="outside a window: it has no seed"):
+        s.receipts(ps, 0)
+
+
 def test_openings_verify_and_a_tampered_one_does_not():
     host = ArrayBacking(np.zeros(4 * BLOCK, np.uint8))
     s = NodeMemory(filler_plan=lambda st, j: [("dram", range(4)), ("kv/1", st.idle_blocks("kv/1")[:3])])

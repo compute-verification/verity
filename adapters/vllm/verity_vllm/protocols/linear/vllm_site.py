@@ -28,8 +28,9 @@ def discover(model: Any, shard: Shard = _UNSHARDED, types: tuple[type, ...] | No
     """Every linear layer of `model` (``LinearBase`` unless `types` says otherwise), in module order, with its site."""
     types = types or linear_types()
     named = model.named_modules() if hasattr(model, "named_modules") else ((str(i), m) for i, m in enumerate(model.modules()))
+    layers: list[tuple[str, Any]] = [(q, m) for q, m in named if isinstance(m, types)]
     out = []
-    for ordinal, (qualname, layer) in enumerate((q, m) for q, m in named if isinstance(m, types)):
+    for ordinal, (qualname, layer) in enumerate(layers):
         n, k = layer.weight.shape
         dtype = str(getattr(layer.weight, "dtype", "")).removeprefix("torch.")
         site = LinearSite(weight_id=ordinal * shard.world + shard.rank, ordinal=ordinal, qualname=qualname, n=int(n), k=int(k),

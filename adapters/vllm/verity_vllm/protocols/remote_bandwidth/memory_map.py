@@ -67,7 +67,7 @@ from collections import deque
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any
 
 import numpy as np
 from verity.definitions.circuits import requirement
@@ -113,7 +113,8 @@ def end(store: Any) -> None:
         store.memory_map = None
 
 
-class Live(NamedTuple):
+@dataclass(frozen=True, slots=True)
+class Live:
     """A written block live as of the last line: its index, its digest, its last structural reader (None: until a free)
     and its append's window."""
 
@@ -385,7 +386,8 @@ def agreement(backend: Any) -> dict[str, Any]:
 
     def replay() -> tuple[Replay, dict[int, bytes]]:
         head, steps = parse(store.memory_map.text().splitlines(keepends=True))
-        r, digests = Replay(head), {}
+        r = Replay(head)
+        digests: dict[int, bytes] = {}
         for st in steps:
             r.apply(st)
             digests.update((w.index, w.digest) for w in st.written)
@@ -401,8 +403,8 @@ def agreement(backend: Any) -> dict[str, Any]:
     appends = sorted(digests) == list(range(n, r.extent)) and trace.digests[:r.extent - n] == [digests[j] for j in sorted(digests)]
     store.memory_map.flush()
     r, digests = replay()
-    held = sorted(x for x, j in r.moved.items() if j is not None and j >= n)
-    wrong = [x for x in held if not backend.holds(x, r.holds(x), digests[r.holds(x)])]
+    slots = sorted(x for x, j in r.moved.items() if j is not None and j >= n)
+    wrong = [x for x in slots if not backend.holds(x, r.holds(x), digests[r.holds(x)])]
     return {"live_agrees": live, "appends_agree": appends, "recorded": r.extent - n,
-            "unrecorded": len(trace.digests) - (r.extent - n), "held_appended": len(held), "held_wrong": wrong[:16],
+            "unrecorded": len(trace.digests) - (r.extent - n), "held_appended": len(slots), "held_wrong": wrong[:16],
             "agrees": live and appends and not wrong}
