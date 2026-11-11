@@ -1,5 +1,5 @@
 """The store's load: a layer's matrices from the P2-encoded store into plaintext load buffers on the GPU, by
-memory-accounting's decode unchanged (`libp2v1.so` from `benchmarks/pous/p2_v1/`, built for sm_90a by `build.sh`, through
+memory-accounting's decode unchanged (`libp2v1.so` from `verity/protocols/pous/prover/p2/p2_store/`, built for sm_90a by `build.sh`, through
 its own wrapper `p2_store.gpu.Kernels`), with the refusals the store's reference decode (`p2_store/store.py`'s `decode_range`)
 makes that the library's fast decode leaves to its caller.
 

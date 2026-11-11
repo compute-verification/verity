@@ -6,7 +6,12 @@ the device, since each step below is one of the kernel's 32- or 64-bit operation
 
 from __future__ import annotations
 
-from kv import Field, chain, from_limbs, low_bits, to_limbs
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/poub/prover/word_codec/kv.py").parent))
+
+from kv import Field, chain, from_limbs, low_bits, to_limbs  # noqa: E402
 
 U32 = (1 << 32) - 1
 

@@ -3,7 +3,7 @@
 
     uv run python verity/protocols/pous/verifier/check/interop.py --all [--out FILE]
 
-The transcripts are every vector the P2 vectors files (`benchmarks/pous/p2_v1/`) hold:
+The transcripts are every vector the P2 vectors files (`verity/protocols/pous/verifier/p2_v1/`) hold:
 
 * every transcript of `audit-negative-vectors.json`, `audit-vectors.json`'s two-round end-to-end one, and its full-width
   response in a one-block setup, public and private (`scripts/difftest_vectors.py` builds them, and checks both files against
