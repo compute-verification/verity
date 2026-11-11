@@ -40,7 +40,8 @@ def tree_with(root: Path, parts: tuple[str, ...] | None, source: str = STUB) -> 
 def run(tree: Path, tmp_path: Path) -> tuple[subprocess.CompletedProcess, Path]:
     src, dst = tmp_path / "in.json", tmp_path / "out.json"
     src.write_text(json.dumps({"wrap_table": True}))
-    path = os.pathsep.join(filter(None, [str(tree), os.environ.get("PYTHONPATH", "")]))
+    # the tree first, as a launcher puts it, then what this process imports from, so the script starts as the suite does
+    path = os.pathsep.join([str(tree), *filter(None, sys.path)])
     r = subprocess.run([sys.executable, str(SCRIPT), str(src), str(dst)], env={**os.environ, "PYTHONPATH": path},
                        capture_output=True, text=True)
     return r, dst
