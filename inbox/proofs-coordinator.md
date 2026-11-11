@@ -64045,3 +64045,48 @@ Tags as before; [relayed: HASH-114] is kernels' two comments of 19:53Z and its l
   - `r20261111-202405-3d77`, `suites.py --changed 2b2ebcf129ec --quick` at `130a78bf7b`, vy-nebius-cpu-3: launched 20:24Z.
   - `r20261111-195004-5ed8` (each template's `chunk_cap` staged, and today's blocks) and `r20261111-195905-146c` (the planner's card at `d012feea83`): both still waiting for a slot.
 - **Next when they return:** the card's commit (`glm53_blocks.json`, `test_glm53.py`), the audit's verdict line, the partition card and the figure's run, then the pull request, unmarked.
+
+
+## LAND3, Wed 11 Nov 20:25Z: step 2's answer. #8914's merge with `main` elaborates as it is; #8940's does not (`FirstHitClassCaps.lean:35` and `NoAlways.lean:107`) and elaborates with the two files restated (first file passed, second running); #8934's two tries have waited 29 min for a slot. A second pair is in the same trap: #9043 and #8940. #9051 is open for Job B
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed], [guess]. Times from `date -u`.
+
+**Step 1: no pull request of mine is in a candidate.** [run 20:05Z: `research queue status`, `git ls-remote origin 'refs/heads/queue/*'`, `git merge-base --is-ancestor`] #8914 `fc552135`, #8934 `cd9c2280`, #8940 `f047277a` are `ready`, admitted. The candidate refs `queue/acdd9739568a`, `queue/e8cbe62e205b` and `queue/1b612589f3ec` hold none of the three heads. So a push is allowed. #8941 is on `main` (`1f0366cd7c`, inside `2b2ebcf129ec`), so nothing is owed to its branch.
+
+**Which `main`.** [run] The local merges are with `2b2ebcf129ec`. `61f13c2275fb` differs from it in 63 files, none a `.lean` file, a `lean-audit.json` or a lakefile (`git diff --name-only 2b2ebcf129ec 61f13c2275fb`), so each try below says the same of the merge with `61f13c2275fb`.
+
+**Which files a try must cover.** [run: `closure.py`, the import closure of each of the 14 Lean files `main` changed since `cc6ee7446278`, on each merged tree] The files `main` changed that read a file a pull request changes: for #8914, `FirstHitClassCaps.lean`, `NoAlways.lean` and `SecondStrata.lean` (which `FirstHitClassCaps.lean` imports); for #8934 and #8940 those and `WeightSecurity/RegPeriod.lean` (it reads `Claims/Sampling/Reg.lean`, which #8934 adds declarations to). The `Nci` files and `WeightSecurity/Reg.lean`, `RegWitnesses.lean` read none. No tree names a declaration #9002 renamed [run: `rg`].
+
+**Step 2, each try a `lean_changed.py --try` through `research run`, `--cwd clone`:**
+
+| pull request, merged tree | files tried | run | verdict |
+|---|---|---|---|
+| #8914, `575f184964` (its head + `main`) | `FirstHitClassCaps.lean`, `NoAlways.lean` | `r20261111-194200-2b66` | [run] rc 0. Both elaborate (219 s and 29 s); no theorem uses an axiom beyond the three. **Elaborates as it is: leave its mark.** |
+| #8934, `27b4ae17f7` (its head + `main`) | the same two; `RegPeriod.lean` | `r20261111-195502-f9ed`; `r20261111-195619-bdab` | [run] both waiting for a slot of cpu-5's research pool since 19:55Z. No verdict yet. [guess] It elaborates: #8934 only adds declarations to three files and restates `SampledKSTwo`, which none of these reads. |
+| #8940, `29a6e34570` (its head + `main`, as it is) | the same two | `r20261111-194312-e4f6` | [run] rc 1. **Does not elaborate.** First error: `FirstHitClassCaps.lean:35:0: error: (deterministic) timeout at whnf, maximum number of heartbeats (200000) has been reached` (the theorem `code_eventTwoX_le_cls_at_caps`; both of its theorems fail). `NoAlways.lean`: first error `107:0`, the same timeout; then `136:55` and `147:48` application type mismatch, `132:96` unsolved goals, `189:36` type expected (`CheckedRun` without its rounds); 5 of 18 theorems fail. |
+| #8940, `b7d2e91710` (that + the two files restated) | the same two; `RegPeriod.lean` | `r20261111-194312-ca59`; `r20261111-195619-08db` | [run] `FirstHitClassCaps.lean`: lean exit 0, axioms clean. `NoAlways.lean`: running since 20:22Z. `RegPeriod.lean`: waiting for a slot. |
+
+**The restated files.** [run] Each is `main`'s landed file with `src (r (order h x).second)` replaced by `stageSrc (stageCoins h x r)`, and in `NoAlways.lean` one `{r : CheckedRun}` by `{r : CheckedRun h.stage}`: 13 lines in 2 files. I made them by that replacement on `main`'s files and they equal the copies on `cursor/proofs-spot-stage-hwit-9e41` byte for byte (sha256). One local commit, `b7d2e91710`, not pushed.
+
+**Step 3, what I do next without asking.** When `NoAlways.lean` and `RegPeriod.lean` pass on the restated tree: push `cursor/proofs-spot-stage-7c3d` (the restated commit, then `main` `61f13c2275fb` merged, local head `22adf3144e`), one records run at that head, the body's lock line and its last section updated, the quick tier, the mark. #8914 keeps its mark. #8934 keeps its mark if its two tries pass.
+
+**Step 4, landing order, and two more pull requests that collide with #8940.** [run 20:12Z: `gh pr list` of the 276 open pull requests by files, then `git merge-tree` and `git show` at each head]
+- **#8934 before #8940** (#8940 holds #8934's head).
+- **#9043** (`cursor/proofs-wired-7ac3`, `e24f98904a29`, marked ready) merges with #8940 as text (`git merge-tree` exits 0) and will not elaborate with it: its new `SpotFlock/AddressesAt.lean` says `CheckedRun` without its rounds on lines 171, 657 and 658, and `WireMap.lean` names it on 2 lines. It is the same trap as `NoAlways.lean`. A candidate that holds both fails its Lean check. Whichever lands second restates: if #9043 is first, #8940 takes `AddressesAt.lean` and `WireMap.lean` with `CheckedRun` replaced by `CheckedRun h.stage` (I can do that in the same push if you say #9043 goes first); if #8940 is first, #9043's owner makes that replacement.
+- **#8885** (`cursor/proofs-waits-cap-ea0b`, `06712030ed93`, marked ready) conflicts with #8940 as text in `SpotFlock/Accepting.lean`. Whichever lands second merges that file by hand.
+- **#8406** (`cursor/proofs-stmtok-records-c257`, `3d8e9aa8c0af`, not marked) conflicts with #8940 in `SpotFlock/Code.lean` and `fixtures/artifacts.json`.
+- [guess] The cheapest order for the lane: #8934, then #8940, then #9043 and #8885 each re-merged by its owner, because #8940 touches 27 files of `SpotFlock` and every pull request that lands in that directory before it costs #8940 another merge and another records run (the last one: 14 min of Lean after a 37-minute build of what the file imports).
+
+**Job B: #9051 is open, not marked** (`cursor/proofs-terms-8527-928d`, head `9dff8880f284`, from `main` `61f13c2275fb`, `Refs PRF-466`).
+- [run: the lint's module on #8527's and #8867's merges] ci's counts reproduce: #8527 added 42 sites, #8867 added 54.
+- **#8867's 54** are all the word "cap" in `benchmarks/spot_figures`. 23 were prose and now say "limit"; 31 stay, each a name code reads (`CAPS`, the parameter `cap` of `waits`, the key `"cap"` of the report). `README.md` is back at its 10.
+- **#8527's 42 are all names, none is prose, so no Lean file changes.** 35 are its own declarations and module (`PeriodReg`, `CompilerPeriodReg`, `compilerPeriodReg`, `compilerPeriodReg_of`, `RegPeriod`): the Glossary retires every Lean name that holds `Period`. 7 are uses of older names (`Sessions.draws`, `stage2`, `PeriodPlays`). You said to rename no declaration, so they stay and the allowlist gains six entries at the counts the lint finds now.
+- **The allowlist has no field for a reason** (an entry is `{file, count}` and the parser refuses any other key), so the one-line reasons are in the body's table.
+- [run] `python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD` at the head: passed, "82 of it in 6 key(s) catching up to what its lint finds in the base's tree". The six entries are allowed because each records what `main` already holds.
+- [run] No `.lean`, `lean-audit.json` or lakefile differs from `origin/main`, so no lock record can change; I ran no Lean check for it.
+- [run] `test_binding.py` locally: 55 passed. The quick tier `r20261111-195335-d960` has waited for a slot on cpu-11 since 19:53Z; I mark #9051 when it passes.
+- **For you to decide, not done:** only renames remove the 73 sites that stay, as #9002 did for #8939. The lock names none of `PeriodReg`, `CompilerPeriodReg` [run: `grep` of the three locks], so a rename would move no record by name; but the two-stage names on `main` (`PeriodTwoReg`, `CompilerPeriodTwoReg`, `TwoRegPeriod`) are the same kind and the Glossary's line gives no name to use instead (a name that says "MonitoringPeriod" is counted too). That is a question about the Glossary's line first.
+
+**Deviation, as before:** `--on auto` put the first three tries on cpu-9, which the first brief keeps Lean builds off, so I cancelled them unstarted (`r20261111-193920-c587`, `-7b17`, `-986e`) and named nodes (cpu-1, cpu-5, cpu-8). One more cancelled unstarted and relaunched on cpu-5: `r20261111-194200-f41a`.
+
+**Runs out:** `r20261111-194312-ca59` (verdict about 20:50Z [guess]), `r20261111-195502-f9ed`, `r20261111-195619-bdab`, `r20261111-195619-08db` (each about 10 min once it has a slot), `r20261111-195335-d960`.
