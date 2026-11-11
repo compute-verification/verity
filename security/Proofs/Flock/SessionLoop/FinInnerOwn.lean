@@ -365,8 +365,10 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     · unfold padCoin
       rw [getElem?_neg Q.coins (nSched spec (Masked.stsOf x) (2 * j.val + r.val) + 2) (by omega)]
       decide
+  have e9 : tr.st.wideLeaf = (Masked.stAt x j).wideLeaf :=
+    congrArg (fun s : _root_.Flock.Setup => s.wideLeaf) htst
   have hzT : _root_.Flock.Zk.schedule tr.st.wideLeaf tr.st.m = .ok (tr.sch, tr.tPad) := by
-    rw [e7]
+    rw [e7, e9]
     exact hz
   exact finInner_ok_at (by rw [e7]; exact hm25) (by rw [e7]; exact hm35) (by rw [e6, e7]; exact hwf.hk)
     (e8.trans e6.symm) hms hfoldT hfT hzT hxb hpre hcl (by omega) hρQ hvalQ h0 h1 h2 h3 hβQ

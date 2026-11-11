@@ -411,7 +411,7 @@ theorem ofLoop_answered_end (T : CoinLayer.TableData)
     show sts[k / 2]!.merkle = _
     rw [hst]
     exact (htabs (k / 2) hj2).2.2
-  have hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp) := by rw [htm]; exact htp
+  have hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp) := by rw [hts']; exact htp
   obtain ⟨sch3, tp3, hs3, hl3⟩ := start_lay hds
   rw [htp, Except.ok.injEq, Prod.mk.injEq] at hs3
   have hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0 := by

@@ -525,8 +525,9 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hlay : lay = _root_.Flock.Zk.PadLayout.new tph.st.m tph.st.kLog tph.sch.k0 := by
     rw [hlayE, hts', hsch]
     try rfl
+  have htw : tph.st.wideLeaf = (Masked.stAt x j).wideLeaf := by rw [hts']; rfl
   have htp' : _root_.Flock.Zk.schedule tph.st.wideLeaf tph.st.m = .ok (tph.sch, tp) := by
-    rw [htm, ← hst]
+    rw [htm, htw, ← hst]
     exact htp
   obtain ⟨hCA, -, -, -⟩ := ofLoop_cfg_place Masked.dataE L₁ (Loop.realOf src) x (ν, t) ((m₀, ρ₀) :: ops) hsx
     (q := i0 + 1) (by simp only [List.length_cons]; omega) hloc hph0

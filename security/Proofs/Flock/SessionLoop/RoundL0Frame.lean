@@ -473,8 +473,9 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
     exact Claims.ZKServer.ofDraws_order _ _ _
+  have htw : tb.st.wideLeaf = (Masked.stAt x j).wideLeaf := by rw [hts']; rfl
   have htp' : _root_.Flock.Zk.schedule tb.st.wideLeaf tb.st.m = .ok (tb.sch, tp) := by
-    rw [htm, ← hst]
+    rw [htm, htw, ← hst]
     exact htp
   have hlay : lay = _root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0 := by
     rw [hlayE, hts', hsch]
