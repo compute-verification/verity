@@ -16,7 +16,7 @@ def _doc(n: int = 3) -> dict:
     return {"summary": {"engine_steps_in_record": n, "sampled_steps_in_log": n, "steps_chain_absent": 0, "sampled_rows_total": n,
                         "rows_checked": n, "complete": True, "rows": {"exact-match": n, "mismatch": 0, "no-snapshot": 0, "skipped": 0},
                         "device_facts_all_match": True, "verdict": "PASS", "seconds": 66.0},
-            "reasons": [], "declared_facts": {"r0": {"seed": 7}}, "header_vs_manifest": [], "program_splits": {"r0": {"derived": 142}},
+            "reasons": [], "declared_facts": {"r0": {"seed": 7}}, "header_vs_manifest": [], "program_splits": {"r0": 32},
             "evaluator": {"name": "lane", "eval_seconds_total": 61.3}, "utc": "2026-09-23T20:39:27Z", "rows": rows}
 
 
