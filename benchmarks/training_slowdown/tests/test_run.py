@@ -1,12 +1,15 @@
+import hashlib
 import json
+from pathlib import Path
 
 import pytest
 import torch
 import torch.nn.functional as F
-from synthetic import tiny_data, tiny_registry, tiny_start, write_config
+from synthetic import run_job, tiny_data, tiny_registry, tiny_start, write_config
 from torch import nn
 
-from training_slowdown import config, run, starts
+from training_slowdown import config, policy, run, starts
+from training_slowdown.capture import products
 from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, derive_seed
 from training_slowdown.counterexample import check
 from training_slowdown.data import Stream
@@ -80,7 +83,6 @@ def test_sgd_run_records_every_step_and_verifies_an_identity_family(tmp_path, th
     # tied table's lookup (58 multiplexers per word), w1 and the head
     floor = 32 * (V * D + D * D) / (58 * D + D * D + V * D)
     assert all(b > floor for b in fam["beta"].values()), fam["beta"]
-    assert (tmp_path / "out" / "checkpoints").exists()
 
 
 EPS, LR = 1e-3, 1e-2
@@ -150,13 +152,39 @@ def one_step(plan):
     return train
 
 
-def test_each_checkpoint_carries_its_e_and_one_that_doesnt_rebuild_is_invalid(tmp_path, theta):
-    (cp,) = counted(tmp_path / "full", theta, one_step(Plan([("w1.*", Identity())])))["checkpoints"]
+def test_each_checkpoint_carries_its_e_and_its_output_is_what_e_rebuilds(tmp_path, theta):
+    """Under a plan that keeps the trained weights whole the output model is the trained state, as it was hashed and
+    scored before any plan could keep less. Under one that keeps less, the output is the model E rebuilds from θ:
+    its digest, the state the evaluator gets and the kept weights are that model's, and `trained_sha256` is the
+    trained state's. A plan with no E of the output makes the run invalid."""
+    scored = {}
+
+    def run_one(name, plan):
+        def evaluator(state, sha):
+            scored[name] = (sha, {k: v.clone() for k, v in state.items()})
+            return {"bpb": 1.0}
+        te = run.Harness(theta, tmp_path / name, clock=lambda: 0.0, evaluator=evaluator, keep_weights=True)
+        with te.counter:
+            one_step(plan)(te)
+        return te.finish({})
+
+    (cp,) = run_one("full", Plan([("w1.*", Identity())]))["checkpoints"]
     assert (cp["format"], cp["changed"], cp["rebuild_macs"]) == ("full", 1, 0)
-    assert cp["e_bytes"] >= 4 * D * D and len(cp["e_sha256"]) == 64
-    rec = counted(tmp_path / "lossy", theta, one_step(Plan([("w1.*", QuantDelta(bits=1))])))
-    assert rec["checkpoints"][0]["format"] == "codecs"
-    assert any("doesn't rebuild its output's ['w1.weight']" in p for p in rec["invalid"])
+    assert cp["e_bytes"] >= 4 * D * D and len(cp["e_sha256"]) == 64 and "trained_sha256" not in cp
+    sha, trained = scored["full"]
+    assert sha == cp["output_sha256"] == run.theta_sha256(trained) != run.theta_sha256(theta)
+    assert run.theta_sha256(torch.load(tmp_path / "full" / cp["path"], weights_only=True)) == sha
+
+    rec = run_one("lossy", Plan([("w1.*", QuantDelta(bits=1))]))
+    (lossy,) = rec["checkpoints"]
+    assert rec["invalid"] == [] and lossy["format"] == "codecs" and lossy["trained_sha256"] == cp["output_sha256"]
+    sha, output = scored["lossy"]
+    enc = (tmp_path / "lossy" / lossy["e_path"]).read_bytes()
+    rebuilt = theta | Plan([("w1.*", QuantDelta(bits=1))]).decode(enc, {"w1.weight": theta["w1.weight"]})
+    assert sha == lossy["output_sha256"] == run.theta_sha256(rebuilt) == run.theta_sha256(output) != cp["output_sha256"]
+    assert not torch.equal(output["w1.weight"], trained["w1.weight"]) and torch.equal(output["emb"], trained["emb"])
+    assert run.theta_sha256(torch.load(tmp_path / "lossy" / lossy["path"], weights_only=True)) == sha
+
     rec = counted(tmp_path / "none", theta, one_step(Plan([("emb", Identity())])))
     assert rec["checkpoints"][0]["e_bytes"] is None
     assert any("has no E of its output" in p for p in rec["invalid"])
@@ -172,21 +200,145 @@ def test_a_route_reaching_past_the_codecs_and_the_model_is_refused(tmp_path, mon
         config.route("sneaky")
 
 
-def test_the_route_loop_trains_scores_and_encodes_from_the_config(tmp_path):
-    reg = tiny_registry(tmp_path / "reg")
-    path = write_config(tmp_path / "a.toml")
-    cfg = config.load(path, starts.registry(reg))
-    out = tmp_path / "out"
-    rc = run.main(["--config", str(path), "--seed", "0", "--split", "search", "--out", str(out), "--starts", str(reg),
-                   "--device", "cpu"])
-    rec = json.loads((out / "run.json").read_text())
-    assert rc == 0, rec["invalid"]
+@pytest.fixture(scope="module")
+def ran(tmp_path_factory):
+    """One search job of the tiny start's config, as a node runs it."""
+    return run_job(tmp_path_factory.mktemp("job"))
+
+
+def test_the_route_loop_trains_scores_and_encodes_from_the_config(ran):
+    rec, cfg, reg, _ = ran
+    final = starts.registry(reg)["data"]["tiny"]["final"]
+    assert rec["invalid"] == [] and rec["sandbox"] == {"interfaces": {"lo": False}, "final_sets": {final: "empty"}}
     assert rec["label"] == f"training-slowdown={cfg.digest}/0/search"
     assert rec["config"] == json.loads(json.dumps(cfg.record())) and rec["route"]["name"] == "subset"
     assert len(rec["steps"]) == 3 and [cp["step"] for cp in rec["checkpoints"]] == [0, 1, 2]
     for cp in rec["checkpoints"]:
         assert cp["score"]["split"] == "search" and cp["bpb"] == cp["score"]["bpb"]
+        assert cp["score"]["slice"]["weights_digest"] == cp["output_sha256"]
         assert (cp["format"], cp["changed"]) == ("full", 3) and cp["e_bytes"] > 0
+
+
+def test_a_record_whose_checkpoints_arent_the_states_scored_is_invalid():
+    def unscored():
+        return {"invalid": [], "checkpoints": [{"step": t, "bpb": None, "score": None, "output_sha256": sha}
+                                               for t, sha in enumerate("ab")]}
+    rec = run.with_scores(unscored(), [("a", {"bpb": 1.5}), ("b", {"bpb": 1.25})])
+    assert rec["invalid"] == [] and [(cp["bpb"], cp["score"]) for cp in rec["checkpoints"]] == [
+        (1.5, {"bpb": 1.5}), (1.25, {"bpb": 1.25})]
+    for scores in ([("a", {"bpb": 1.5})], [("b", {"bpb": 1.25}), ("a", {"bpb": 1.5})]):
+        rec = run.with_scores(unscored(), scores)
+        assert all(cp["score"] is None for cp in rec["checkpoints"])
+        assert rec["invalid"] == [f"the {len(scores)} states the evaluator scored aren't the record's 2 checkpoints' "
+                                  f"outputs, one for one"]
+
+
+def test_a_job_keeps_no_weights_but_its_last_e(ran, tmp_path, theta, monkeypatch):
+    """By default a job's output is its record and its last checkpoint's E, which rebuilds that checkpoint's output
+    from θ bit for bit; an E at or over the size a job keeps stays out too."""
+    rec, cfg, reg, out = ran
+    *before, last = rec["checkpoints"]
+    assert sorted(p.name for p in out.iterdir()) == ["e", "run.json"] and [p.name for p in (out / "e").iterdir()] == [
+        "step0000002.bin"] == [Path(last["e_path"]).name]
+    assert not any("path" in cp or "e_path" in cp for cp in before) and "path" not in last
+    enc = (out / last["e_path"]).read_bytes()
+    assert (len(enc), hashlib.sha256(enc).hexdigest()) == (last["e_bytes"], last["e_sha256"])
+    start = starts.load(cfg.start, reg.parent / "starts")
+    plan = config.route(cfg.route).plan(cfg.dials)
+    rebuilt = start | plan.decode(enc, {k: start[k] for k in plan.keys(enc)})
+    assert run.theta_sha256(rebuilt) == last["output_sha256"] != run.theta_sha256(start)
+
+    full = Plan([("w1.*", Identity())])
+    (cp,) = counted(tmp_path / "small", theta, one_step(full))["checkpoints"]
+    assert (tmp_path / "small" / "out" / cp["e_path"]).stat().st_size == cp["e_bytes"]
+    monkeypatch.setattr(run, "E_KEEP_BYTES", cp["e_bytes"])
+    (cp,) = counted(tmp_path / "large", theta, one_step(full))["checkpoints"]
+    assert "e_path" not in cp and [p.name for p in (tmp_path / "large" / "out").iterdir()] == ["run.json"]
+
+
+@pytest.mark.slow
+def test_a_job_keeps_its_last_checkpoints_whole_state_only_when_asked(tmp_path):
+    """`--keep-weights` adds the last checkpoint's whole state, and no other's, to what a job keeps. It is a job of
+    its own, so slow; the command's test shows the flag reaches the job, not what the job then writes."""
+    rec, _, _, out = run_job(tmp_path / "kept", "--keep-weights")
+    last = rec["checkpoints"][-1]
+    state = torch.load(out / last["path"], weights_only=True)
+    assert last["path"] == "checkpoints/step0000002.pt" and run.theta_sha256(state) == last["output_sha256"]
+    assert not any("path" in cp for cp in rec["checkpoints"][:-1])
+
+
+RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "affected", "widths", "self", "gathered", "rates"}
+
+
+def test_the_job_traces_its_routes_step(ran):
+    """The record's `trace` is the capture's measurement of the route's last step at the job's batch and the start's
+    context, the tokens the counter counted a step, with the rows unpriced and nothing the formalism derives; the
+    rows price where they are read."""
+    rec = ran[0]
+    tr = rec["trace"]
+    assert set(tr) == {"capture", "torch", "step", "axes", "tokens", "order", "updated", "rows", "k", "p_match", "at",
+                       "elementwise_products", "data_dependent", "carried_scalars"}
+    assert (tr["capture"], tr["torch"], tr["step"]) == (products.CAPTURE, torch.__version__, 2)
+    assert tr["axes"] == {"batch": 2, "seq": 1024} and {s["tokens"] for s in rec["steps"]} == {tr["tokens"]} == {2048}
+    assert tr["data_dependent"] == tr["carried_scalars"] == [] and tr["k"] == policy.CONSOLE[1]
+    assert sorted(map(int, tr["at"])) == sorted(set(products.DIAL_K) - {int(tr["k"])})
+    for block in (tr, *tr["at"].values()):
+        assert block["rows"] and all(set(r) == RAW for r in block["rows"])
+    # the three trained matrices of block 0's MLP: each one's forward product reads it, and their MACs a token add up
+    trained = [u for u in tr["updated"] if u[2:] == [u[2], tr["tokens"], 32]]
+    assert len(tr["updated"]) == len(trained) >= 3
+    priced = [products.priced(r) for r in tr["rows"]]
+    assert sum(r["count"] * r["macs"] for r in priced if r["phase"] == "forward" and all(r["affected"])) > 0
+    assert all(r["gates_per_mac"] > 0 and "dtypes" not in r for r in priced)
+
+
+def test_a_retrace_writes_the_same_record_and_refuses_another_digest(ran, tmp_path):
+    """`--retrace` takes a record's trace again and changes nothing else, and refuses a record whose config this tree
+    reads as another digest. Here `retrace` runs in the test's process; the job's own path to it is the slow test."""
+    rec, _, reg, _ = ran
+    stale = tmp_path / "stale.json"
+
+    def retrace(out):
+        return run.retrace(run.parse(["--retrace", str(stale), "--out", str(tmp_path / out), "--starts", str(reg),
+                                      "--device", "cpu", "--inside", str(tmp_path)]))
+
+    stale.write_text(json.dumps(rec | {"trace": {"capture": "0"}}))
+    assert retrace("again") == 0 and [p.name for p in (tmp_path / "again").iterdir()] == ["run.json"]
+    assert json.loads((tmp_path / "again" / "run.json").read_text()) == rec
+    stale.write_text(json.dumps(rec | {"config": rec["config"] | {"digest": "0" * 64}}))
+    with pytest.raises(SystemExit, match="retrace in a clone at the record's commit"):
+        retrace("other")
+    assert not (tmp_path / "other" / "run.json").exists()
+
+
+@pytest.mark.slow
+def test_the_job_retraces_where_its_route_runs(ran, tmp_path):
+    """Through the job's command a retrace runs in the process a route runs in, started through the sandbox's entry,
+    and writes the record alone. It is a process of its own, so slow."""
+    rec, _, reg, _ = ran
+    stale = tmp_path / "stale.json"
+    stale.write_text(json.dumps(rec | {"trace": {"capture": "0"}}))
+    assert run.main(["--retrace", stale, "--out", tmp_path / "again", "--starts", reg, "--device", "cpu"]) == 0
+    assert [p.name for p in (tmp_path / "again").iterdir()] == ["run.json"]
+    assert json.loads((tmp_path / "again" / "run.json").read_text()) == rec
+
+
+def test_a_step_the_capture_refuses_is_recorded_as_refused(tmp_path):
+    """A step that reads a tensor's value into Python is no fixed graph: the trace says so, with the capture's reason
+    and op, and holds nothing else."""
+    cfg = config.load(write_config(tmp_path / "a.toml"), starts.registry(tiny_registry(tmp_path / "reg")))
+    route = config.route(cfg.route)
+    model, optimizers = route.build(cfg.start.shape, cfg.dials)
+
+    class Branching:
+        @staticmethod
+        def step(model, rows, optimizers, dials, t, n):
+            if float(model(rows[:, :-1]).sum()) > 0:
+                route.step(model, rows, optimizers, dials, t, n)
+
+    tr = run.trace_step(cfg, Branching, model, optimizers, "cpu")
+    assert set(tr) == {"refused"} and set(tr["refused"]) == {"reason", "op", "message"}
+    assert tr["refused"]["reason"] == "dynamic_control_flow" and "reads a tensor's value" in tr["refused"]["message"]
 
 
 def test_each_checkpoint_of_a_registered_start_is_scored_on_the_jobs_split(tmp_path):

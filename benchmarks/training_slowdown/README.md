@@ -12,9 +12,10 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 
 | module | what it does |
 |---|---|
-| `run.py` | one job of an attack config: `Harness`, what a route's code is counted inside, and the route loop (`train`); `block_c`, a start's c |
+| `run.py` | one job of an attack config: `Harness`, what a route's code is counted inside, the route loop (`train`) and the record's trace (`trace_step`, `retrace`); `block_c`, a start's c |
 | `config.py` | an attack config: its schema, its digest and its jobs (`Job.label`), each refusal by name |
-| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with AdamW |
+| `sandbox.py` | the training job's sandbox: namespaces with no network and an empty directory over each final set (`enter`), and what a process can still reach of either (`refusals`) |
+| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with AdamW or Muon, E the tensors in full or their deltas in codes |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
 | `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions |
@@ -25,7 +26,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
 | `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: a fixed policy's numbers, the fleets and periods a figure is presented over, and the bound of record |
 | `counterexample.py` | a run's counterexample families: their writer and the sampled bit-for-bit rebuild check |
-| `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, seed replay and their composition |
+| `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, scaled quantized delta, seed replay and their composition |
 | `starts.py`, `starts.toml` | the starts registry: each start by its store artifact, its files' sha256, its shape, C0 and loss, and its data's pins; `load` reads an installed start and checks it |
 | `data.py` | a start's data: the training stream (`Stream`, by the job's data seed) and the held-out sets (`held_out`: the search pool and the final set), checked against the registry; the search slice from a live coin (`sample_slice`) |
 | `evaluate.py` | the harness's evaluator: a checkpoint's bits per byte on the job's split, the search pool's paired with θ on the same slice |
@@ -36,16 +37,18 @@ The reference shapes are the lf model's (`adapters/vllm/tests/program/train_step
 ## Running an attack
 
 ~~~text
-verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]]
+verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]] \
+    [--weights]
 python -m training_slowdown.run --config CONFIG.toml --seed 0 --split search|final --out OUT [--starts-root DIR] \
-    [--device cuda]                                     # one job
+    [--device cuda] [--keep-weights]                    # one job
+python -m training_slowdown.run --retrace RUN_JSON --out OUT   # a record with its trace taken again
 python -m training_slowdown.capture.circuit STEP.npz    # a saved step circuit's quantities
 python -m training_slowdown.gates [--check]             # gates per multiply-add by op; --check compiles the Definitions
 ~~~
 
-An attack is a config (`config.py`'s docstring has the schema): a start, a route and its dials, the budget, the seeds,
-and what the grade reads, the target gain, the policy (`console`, policy.py's rule, or a `[policy.*]` table of
-`verity/protocols/inference_only/rho/data`) and the honest config. The command (`run.py` here) expands a config and its honest config into
+An attack is a config of `attacks/` (`config.py`'s docstring has the schema): a start, a route and its dials, the
+budget, the seeds, and what the grade reads, the target gain, the policy (`console`, policy.py's rule, or a
+`[policy.*]` table of `verity/protocols/inference_only/rho/data`) and the honest config. The command (`run.py` here) expands a config and its honest config into
 jobs, one per seed and split, each labelled in the store `training-slowdown=<digest>/<seed>/<split>`, and runs the ones
 its labels lack: on the queue (kind `training-attack`, `infra/cluster/kinds/training.toml`), on one machine with `--on`,
 or here, one after another, with `--local`. It exits 0 when every job has its record, 3 while one is pending and 1 when
@@ -54,11 +57,27 @@ one failed; a failed job is never run again.
 A job trains the config's start along its route and scores each checkpoint on its split. A route is a module of
 `routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`); the harness
 owns the loop, the batches, the checkpoints and each checkpoint's E, the weights that differ from θ encoded by the
-route's plan and rebuilt bit for bit. Everything a route computes through torch is counted; the harness's own work
-(loading, evaluating, encoding) isn't. A route that names anything of `training_slowdown` but the codecs and the model,
+route's plan. A checkpoint's output model, the one scored, is what E rebuilds from θ: the trained weights under a
+plan that keeps them whole, and the model the kept bits give under one that keeps less. Everything a route computes
+through torch is counted; the harness's own work (loading, evaluating, encoding) isn't. A route that names anything of `training_slowdown` but the codecs and the model,
 or a route around the dispatcher (`run.FORBIDDEN`), is refused, and one that uses an op the counter can't price, reads
 token data out of torch, starts a thread or a process, or imports a module the screen refuses makes its run invalid
 (`run.py`'s docstring has the screen).
+
+A route's code runs in a process of its own, inside the job's sandbox (`sandbox.py`): no network interface is up and
+each registered final set's directory is empty there. That process stops before it imports the route if it finds
+either reachable, or holds a capability that could undo them, as root's does, so on a machine that can't make the
+sandbox a job fails with the reason and trains nothing. The
+job's own process reads the held-out split and scores each checkpoint's state as the route's process hands it out;
+no score goes back in. The sandbox hides the paths the registry names and nothing else of the file system.
+
+After its last step a job traces its route's step once, outside the count, and its record's `trace` holds what the
+capture measures of it for the grade: the token axes, the forward's updated MAC nodes, and the product rows unpriced
+at each k of the console's dial (`capture.products.raw_on_dial`), which `capture.products.priced` prices where they
+are read. A step the capture refuses is recorded as refused, and the job stays valid.
+
+A job's output holds no weights by default: its record, and its last checkpoint's E when E is under 50 MiB. The
+command's `--weights` makes each job it runs keep its last checkpoint's whole state too.
 
 Run the `python -m` commands from this directory. A start and its data are read where `starts.toml` says a node holds them, and checked
 against it; elsewhere, `research data fetch ART --path starts/NAME/theta.safetensors` (and its `start.json`) gets a

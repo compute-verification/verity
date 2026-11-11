@@ -1,7 +1,7 @@
 """An attack config: one TOML file naming a start, a route and its dials, the training budget, the seeds, and what the
 grade reads (the target gain, the policy, the honest config). `load(path)` reads one and refuses, by name, a key the
-schema lacks, a start the registry lacks, a route `routes/` lacks, a dial the route lacks or of another type, a policy
-neither the calculator's registry nor `policy.py` names, and an honest config at another start or gain.
+schema lacks, a start the registry lacks, a route `routes/` lacks, a dial the route lacks, of another type or of a
+value its plan refuses, a policy neither the calculator's registry nor `policy.py` names, and an honest config at another start or gain.
 
     start = "s-t20"                       # a start in starts.toml
     route = "subset"                      # routes/subset.py
@@ -172,9 +172,22 @@ def load(path: Path, reg: dict | None = None) -> Config:
                          f"[policy.*] table of verity/protocols/inference_only/rho/data)")
     start = starts.start(raw["start"], reg)
     mod = route(raw["route"])
+    given = dials(mod, raw.get("dials", {}), where)
+    try:
+        mod.plan(given)
+    except ValueError as e:
+        raise SystemExit(f"{where}: {e}") from None
     return Config(path=path, text=text, start=start, route=raw["route"], route_version=int(mod.VERSION),
-                  dials=dials(mod, raw.get("dials", {}), where), budget=dict(raw["budget"]), seeds=dict(seeds),
+                  dials=given, budget=dict(raw["budget"]), seeds=dict(seeds),
                   target=dict(raw["target"]), policy=raw["policy"], honest=raw.get("honest", ""))
+
+
+def start_of(path: Path, reg: dict | None = None) -> starts.Start:
+    """The start a config names, read without its route: all a process that runs no route's code may read of it."""
+    try:
+        return starts.start(tomllib.loads(Path(path).read_text())["start"], reg)
+    except (OSError, tomllib.TOMLDecodeError, KeyError) as e:
+        raise SystemExit(f"config {path}: no start to read ({type(e).__name__}: {e})") from None
 
 
 def honest(cfg: Config, reg: dict | None = None) -> Config | None:

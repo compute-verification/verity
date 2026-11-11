@@ -2,7 +2,7 @@
 label and run where it is missing.
 
     verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]]
-        [--starts FILE] [--starts-root DIR] [--device DEVICE]
+        [--weights] [--starts FILE] [--starts-root DIR] [--device DEVICE]
 
 A config (`training_slowdown.config`; a bare NAME is `attacks/NAME.toml`) and its honest config expand into jobs, one
 per seed and split, each labelled `training-slowdown=<digest>/<seed>/<split>` (`config.Job.label`). Each time it runs,
@@ -14,6 +14,10 @@ the command looks every job up and runs the missing ones:
   store's labels are its only state and the next run of the command picks up where this one stopped;
 - with `--local` each runs here, one after another, with no `research` call, into `ROOT/<digest>/<seed>/<split>/`
   (`run.json`, and `job.json` with the job's exit status); ROOT is `--root`, else `$OUT`.
+
+A job's output holds no weights: its record, and its last checkpoint's E (the bytes that rebuild its output model
+from θ) when E is under 50 MiB. `--weights` makes each job this call runs keep its last checkpoint's whole state too,
+for a promoted config; a job that already has its record isn't run again for them.
 
 `--dry-run` prints what it would run and runs nothing. The command exits 0 when every job has its record, 3 when a job
 is still pending (its run id says which), and 1 when a job failed: a failed job is shown, and never run again.
@@ -67,6 +71,8 @@ def job_args(job: config.Job, config_path: str, a: argparse.Namespace) -> list[s
         out += ["--starts-root", str(a.starts_root)]
     if a.device:
         out += ["--device", a.device]
+    if a.weights:
+        out += ["--keep-weights"]
     return out
 
 
@@ -171,6 +177,8 @@ def parse(argv=None) -> argparse.Namespace:
     where.add_argument("--on", metavar="MACHINE", help="run the missing jobs on MACHINE (research run --on)")
     ap.add_argument("--root", type=Path, help="--local's directory of jobs (default $OUT)")
     ap.add_argument("--pool", help="with --on, the machine's pool")
+    ap.add_argument("--weights", action="store_true",
+                    help="each job this call runs keeps its last checkpoint's whole state (default: no weights)")
     ap.add_argument("--starts", type=Path, default=starts.REGISTRY, help="the starts registry (default starts.toml)")
     ap.add_argument("--starts-root", type=Path, help="where the starts are installed (default the registry's)")
     ap.add_argument("--device", help="the jobs' device (default: theirs, cuda where there is one)")
