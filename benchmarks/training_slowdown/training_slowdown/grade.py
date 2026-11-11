@@ -80,8 +80,8 @@ BESIDE = {"circuit": "the measured step's cut of its gradient and its structure,
 #: bound of record (`min_cut.blocks_at_least` times c/|C|) are the theorem's second conjunct and its first solved for
 #: m, and `min_cut.slowdown_at_least` says why the first is never above the second
 BOUND_BESIDE = ("rho's products term is this theorem's closed form for the slowdown (formalism.he_rho) and this is its "
-                "count solved for the fewest blocks, times c/|C| (min_cut.blocks_at_least), on the same N, O, β and b: "
-                "the closed form is never above the solved count, so the two are lower bounds on one slowdown, this "
+                "count solved for the fewest blocks, times c/|C| (min_cut.blocks_at_least), on the same N, O, β, b and "
+                "F: the closed form is never above the solved count, so the two are lower bounds on one slowdown, this "
                 "the larger, and S keeps rho's; the two are never combined")
 #: the job that takes a record's trace again (`training_slowdown.run`'s `retrace`), which a refused trace's reason names
 RETRACE = "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device cpu"
