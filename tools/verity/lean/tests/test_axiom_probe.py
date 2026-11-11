@@ -273,7 +273,7 @@ end Probe
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-@pytest.mark.parametrize("head", ["import Control.Defs\n\n", "module\n\n"])
+@pytest.mark.parametrize("head", ["import Control.Defs\n\n", "module\n\n"], ids=["plain", "module"])
 def test_on_the_controls_fixture_a_theorem_lean_refuses_is_named_failed_and_no_answer_for_it_is_shown(control, capsys, head):
     """A term-mode `rfl` that runs out of recursion depth, bare and under a docstring, an attribute, an `open … in` and a
     match, a type mismatch, and a theorem using a refused one: lean exits 1 with its errors on their lines, and the
