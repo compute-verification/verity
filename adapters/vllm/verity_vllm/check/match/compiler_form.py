@@ -191,7 +191,8 @@ def _narrowed(inst: list[dict], compact: bool) -> tuple[list[dict], collections.
                     if k in spans:
                         sp = spans[k]
                         sp[0], sp[1] = min(sp[0], lo), max(sp[1], hi)
-    by, out, made = {}, list(inst), collections.Counter()
+    by, out = {}, list(inst)
+    made: collections.Counter[str] = collections.Counter()
     for k, (N, i, scope, base, statics, (s, e)) in cand.items():
         a, b = spans[k]
         if b <= a or (a, b) == (0, N):

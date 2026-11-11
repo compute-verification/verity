@@ -142,7 +142,7 @@ def test_gm01_fails_a_component_whose_constant_S_is_not_the_folds(within_step):
     def g3(S_fold):
         P = _prog("fold", splits_form="const", S=S_fold, weights=2)
         P.xreq = collections.Counter()
-        out = {"fails": [], "perm": {}}
+        out: dict = {"fails": [], "perm": {}}
         PR._compare_component(BD.record_ops(), within_step, False, {"request_id": "r0", "component": {"LP": LP, "T": T}}, {}, P, A,
                               "component-dir", LP, out)
         return out["fails"]

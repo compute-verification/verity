@@ -424,7 +424,7 @@ def coverage_of_unreplayable(res: dict[str, Any], dumps_meta: list[dict[str, Any
             continue
         for f, ss in us.items():
             sites_by_fam.setdefault(f, set()).update(str(x) for x in (ss or []))
-    strata = {k.split("|")[0]: set() for k in (res.get("by_stratum") or {})}
+    strata: dict[str, set[str]] = {k.split("|")[0]: set() for k in (res.get("by_stratum") or {})}
     for k, v in (res.get("by_stratum") or {}).items():
         strata[k.split("|")[0]].update(v.get("families") or ())
     strata_sites = set(strata)
@@ -435,7 +435,7 @@ def coverage_of_unreplayable(res: dict[str, Any], dumps_meta: list[dict[str, Any
         xs = [x for x, fs in strata.items() if not fs or fam in fs]
         return any(x == site or x.endswith("." + site) or site.endswith("." + x) or x.startswith(site + ".") for x in xs)
 
-    fams = {}
+    fams: dict[str, dict[str, Any]] = {}
     for f, ss in sorted(sites_by_fam.items()):
         miss = sorted(x for x in ss if not covered(x, f))
         fams[f] = {"sites": len(ss), "covered": len(ss) - len(miss), "missing": miss,

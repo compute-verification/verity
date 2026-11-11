@@ -294,9 +294,9 @@ def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps
     first_eos = next((j for j, (_s, t) in enumerate(served) if eos_ids and int(t) in eos_ids), None)
     # an EOS sampled AT the cap is a length stop (vLLM checks max_tokens before the EOS; the scheduler knows the length ahead: no
     # placeholder row); an EOS before the cap is an EOS stop and the lag rule applies
-    eos_stop = first_eos is not None and first_eos + 1 < cap
+    eos_at = first_eos if first_eos is not None and first_eos + 1 < cap else None   # the EOS stop's output event; None: a length stop
     # a length stop's served output is AT MOST the cap: rows beyond it are execution past the cap (named below), never output
-    a_r = first_eos + 1 if eos_stop else min(len(served), cap)
+    a_r = eos_at + 1 if eos_at is not None else min(len(served), cap)
     lag_rows = len(served) - a_r
     ent["answer_events"] = a_r
     ent["lag_rows"] = lag_rows
@@ -304,13 +304,13 @@ def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps
     ent["served_output_len"] = a_r
     ent["executed_prefix_len"] = len(served)
     ent["cap_exhausted"] = (a_r == cap)
-    if eos_stop:
+    if eos_at is not None:
         lag_obs[rid] = lag_rows
         if lag_declared and (rec_lag is None or rec_lag != decl_lag):
             # the record-level disagreement (named once above) makes THIS request's EOS stop unacceptable too: its post-EOS rows cannot be
             # read as the declared lag when the record does not attest the Program's scheduler -- the request is not established (no
             # downstream state, stoch's scheduled live included, is built on it)
-            c.fail(f"{rid}: EOS stop at engine step {served[first_eos][0]} on a record whose attested scheduler ({rec_lag_src}) is not the "
+            c.fail(f"{rid}: EOS stop at engine step {served[eos_at][0]} on a record whose attested scheduler ({rec_lag_src}) is not the "
                    f"Program's declared LAG {decl_lag}: the {lag_rows} post-EOS row(s) are not accepted as the declared lag")
     # the driver's own claims for the two lengths (tokens.json: served = len(generated_token_ids), executed = served + the
     # record's lag on an EOS stop) must be what the record's rows show -- a claim beside the rows, named when it disagrees
@@ -357,18 +357,18 @@ def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps
     # Program's DECLARED lag: executed_prefix_len == a_r + LAG exactly on an EOS stop (an EOS is among the served tokens), == a_r on a
     # length stop (vLLM knows the length ahead: no placeholder row). Under a declared ignore_eos (empty set) there is nothing to pass.
     finish_step_expected = last
-    if eos_stop:
-        eos_step = served[first_eos][0]
+    if eos_at is not None:
+        eos_step = served[eos_at][0]
         finish_step_expected = eos_step
         ent["eos_step"] = eos_step
         if eos_lag is None:
-            c.fail(f"{rid}: stopped on the declared EOS id {int(served[first_eos][1])} at engine step {eos_step} with {lag_rows} more "
+            c.fail(f"{rid}: stopped on the declared EOS id {int(served[eos_at][1])} at engine step {eos_step} with {lag_rows} more "
                    f"row(s) executed after it, but the Program declares no LAG ({eos_lag_src}): the post-EOS rows cannot be checked against "
                    f"a declaration -- refuse by name, nothing is inferred from the trace or read from the header as the rule; rebuild the "
                    f"workload Program with the declared async-scheduling specialization")
             ent["eos_verified"] = False
         elif lag_rows > eos_lag:
-            c.fail(f"{rid}: execution past EOS -- output event {first_eos} is the declared EOS id {int(served[first_eos][1])} but "
+            c.fail(f"{rid}: execution past EOS -- output event {first_eos} is the declared EOS id {int(served[eos_at][1])} but "
                    f"{lag_rows} more row(s) were executed where the Program's declared scheduler ({eos_lag_src}) computes LAG {eos_lag} after an EOS "
                    f"(executed_prefix_len {len(served)} > served_output_len {a_r} + LAG {eos_lag}): the Program calls the request finished there")
             ent["eos_verified"] = False

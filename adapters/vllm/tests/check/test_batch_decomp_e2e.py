@@ -120,6 +120,7 @@ def _tok(r, p):
 
 def step_events(step, reqs, active, ids, base_alloc):
     """One engine step: every active request contributes its rows (step 0: the whole prompt; later: one decode row)."""
+    rows: list[tuple]
     rows, toks, links, roots, logits_rows, logits_idx, slots, seq_lens, num_computed, block_tables, sampled = [], [], [], [], [], [], [], {}, {}, {}, []
     for ri, r in enumerate(reqs):
         if ri not in active:

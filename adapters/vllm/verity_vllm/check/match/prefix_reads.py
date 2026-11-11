@@ -156,7 +156,8 @@ class CachedKv:
     def _kv_reads(self, i: int, kv: int, a: list, rl: int, unfold: bool, count: bool = True) -> list[tuple[tuple, str | None]]:
         """Canonical sources of one key / value operand, each with the request whose row it links to (None for the request's own)."""
         layer = layer_number((self._meta(self.inst[i]["k"]) or {}).get("hint"))
-        out, o = [], 0
+        out: list[tuple[tuple, str | None]] = []
+        o = 0
         for p in a:
             if self.compact and not (p[0] == "n" and any(self._foreign(x) for x in idx_values(p))):
                 out.extend((t, None) for t in self._srcP(p, unfold))

@@ -28,7 +28,7 @@ def vu_population(run: MatchRun, att: Attribution, reqs: RequestFacts) -> dict[i
         by_step[s].append(gi)
     for s in sorted(by_step):
         gis = sorted(by_step[s])
-        owners = []
+        owners: list[tuple[str, int]] = []
         block_last: list[int] = []
         if fast:   # same blocks; the last attributed instance of each block kept while building them (O(1) per boundary below)
             owners, block_last = GMF.g7_owner_blocks(gis, glob2loc)

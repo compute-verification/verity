@@ -101,7 +101,7 @@ def mock_global_program(workload_path: str, component_dirs: list[str], eos_token
     `lag` = the declared scheduler's post-EOS rows (0/1) the mock Program is specialized for; None = an older Program that
     declares no lag (G6 then fails by name on any EOS stop)."""
     wl = Workload.load(workload_file(workload_path))
-    comps = {}
+    comps: dict[tuple[int, ...], str] = {}
     for d in component_dirs:
         sh = component_shape(d)
         if sh is not None:
@@ -350,7 +350,7 @@ def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
                     "RunHeader.engine_kwargs.compilation_config": ek_top.get("compilation_config"),
                     "RunHeader.engine_kwargs.compilation": ek_top.get("compilation"),
                     "capture/versions.json engine_kwargs.compilation_config": ek_ver.get("compilation_config")}
-    out = {"engine": {}, "compilation": {}, "values": {}, "sources": {}, "disagreements": {}}
+    out: dict[str, dict] = {"engine": {}, "compilation": {}, "values": {}, "sources": {}, "disagreements": {}}
 
     def _j(v):
         return json.dumps(v, sort_keys=True, default=str)
