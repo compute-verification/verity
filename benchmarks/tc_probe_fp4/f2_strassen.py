@@ -6,7 +6,7 @@ the TF32 tensor core issue (7/8)^L of its MMAs, plus additions.  Within one NVFP
 scale and a column of B one scale, so the group's product of scaled values is diag(sa) (CA CB) diag(sb).  The route runs
 Strassen on the E2M1 codes as integer halves (exact in TF32; every product's sum an integer below 2^14, exact in the FP32
 accumulator), then feeds the group dots with the scales to the atom's align-add, as the atom does
-(``verity.ml.circuits.silicon.models.BLACKWELL_SM120_NVF4``).  Strassen on the scaled values themselves (``scaled``, recorded, never gated) adds
+(``verity.definitions.silicon.models.BLACKWELL_SM120_NVF4``).  Strassen on the scaled values themselves (``scaled``, recorded, never gated) adds
 rows and columns of different scales, and TF32 rounds those sums.
 
     python benchmarks/tc_probe_fp4/f2_strassen.py build --out DIR                        # the library and its SASS gate
@@ -59,7 +59,7 @@ import probe as P  # noqa: E402
 import vec as V  # noqa: E402
 
 # isort: split
-# verity_config is importable once probe has put tools/config on sys.path
+# verity_config is importable once probe has put verity/configuration/config on sys.path
 from verity_config.settings import SHARED  # noqa: E402
 
 ARCH = "sm_120a"
