@@ -649,6 +649,13 @@ class Verdict:
         return {"accepted": self.accepted}
 
 
+def _verifies(verify: Verify, signed: SignedSession) -> bool:
+    try:
+        return bool(verify(signed.public_key, signed.commitment.session, signed.message(), signed.signature))
+    except Exception:  # noqa: BLE001 - a malformed signature verifies nothing
+        return False
+
+
 def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequence[CoinOpening],
             expected: Callable[[int], bytes], *, trusted: frozenset[bytes] | set[bytes],
             schemes: Mapping[str, Verify] = SCHEMES) -> Verdict:
@@ -662,13 +669,8 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
         reasons.append(f"signature scheme {signed.scheme!r} is not accepted")
     elif signed.public_key not in trusted:
         reasons.append("the session is signed by a key that is not a trusted memory challenger's")
-    else:
-        try:
-            ok = bool(verify(signed.public_key, signed.commitment.session, signed.message(), signed.signature))
-        except Exception:  # noqa: BLE001 - a malformed signature verifies nothing
-            ok = False
-        if not ok:
-            reasons.append("the signature does not verify")
+    elif not _verifies(verify, signed):
+        reasons.append("the signature does not verify")
     if signed.commitment != commitment:
         reasons.append("the signed header is not the session's commitment")
     if signed.ended != COMPLETE or len(signed.rounds) != commitment.k:
