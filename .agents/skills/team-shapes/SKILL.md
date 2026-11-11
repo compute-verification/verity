@@ -45,7 +45,7 @@ Each block says who is in it and how they coordinate, how it fails, and what its
 
 ### Lane, the default
 
-One lead, a handle's holder, and its workers, one a sub-issue. The registry has 16 lanes.
+One lead, a handle's holder, and its workers, one a sub-issue.
 
 - **Fails when:** it grows past what its lead can answer: a message to a lead waits for its running turn to end, and a
   turn's subagents stop when the turn is cut.
@@ -70,18 +70,53 @@ PR, which the lead opens unmarked, reads and then marks.
 
 ### Swarm with an integrator
 
-One worker a directory (a seat), one integrator owning the one branch, and the lead, who launches, reads and marks. A
-seat hands in by a comment on the integrator's issue, with its quick suites' run id and a named reader; the integrator
-tests hand-ins in batches and answers took or refused, refusing one that touches a file an open PR changes. One PR a
-day goes from the branch to the queue, and one count scores the work.
+One worker a directory (a seat), one integrator owning the one branch, and the lead, who launches, reads and marks.
+Every swarm runs by the rules below, and a new one posts only its differences on its own issue.
 
+- **What a seat edits:** its own files; for a line in another seat's it asks on that seat's issue. Nothing a guarantee
+  rests on: no swarm edits Lean, a Definition or a pin, or changes what a run of record depends on.
+  @memory-accounting's and @compute-research's add: no lock, and no edit of a kernel's source (a dead file is deleted
+  whole). No decision of a verifier changes: @memory-accounting's rule. @compute-research's swarm keeps its verifier's
+  files off the branch instead, and the adapter's holds none.
+- **What is frozen:** every file an open PR changes, on a list the integrator remakes each hour, and any file another
+  lead asks held, on that lead's word, until what it waits for is on `main`. A frozen file takes no line, not even one
+  a deletion forces.
+- **A hand-in** is small and of one kind. The seat merges the branch's head, runs the quick tier on a node and comments
+  on the integrator's issue: its seat, branch and head, the run id, the score's change and a paragraph for the PR's
+  body. One that deletes, renames or moves a file also shows that nothing still imports or names it. Another seat
+  reads it. The integrator tests hand-ins in batches and answers took or refused, and the seat goes on with its next
+  change meanwhile.
+- **How seats are reached:** they poll. A worker launched as a seat is refused a subscription to an issue's comments,
+  so it starts an hourly timer and at each wake reads its own issue, the swarm's and the integrator's. A rule change is
+  said on the swarm's issue. A seat comments only to hand in, to fault a hand-in it read, to ask another seat, to
+  announce a rename an hour ahead or to question the lead; its progress goes in its note.
+- **How the branch lands:** one PR a day, which the integrator opens unmarked and the lead reads whole and marks. If no
+  snapshot reached `main` in 24 hours, the integrator takes nothing new. Two kinds of a swarm's files stay out of that
+  PR, both on @ci's word. A verifier's files, since a hold on them would hold the rest: they are a second PR that day
+  in @memory-accounting's swarm and the seat's own small PRs in @compute-research's. And files in a Lean package
+  directory (one holding a lakefile or a lock, and everything below it), since a PR holding one waits for a batch that
+  audits Lean again: @memory-accounting's seats hand them in apart, never mixed with another file, and
+  @compute-research's edit none.
+- **The score** is the trial's number, the same for every swarm: list entries and ruff findings removed a seat a day,
+  and the swarm's PRs the queue ejected.
 - **Fails when:** the branch runs for days without landing and comes back as conflicts (an earlier one: 49 hunks across
-  six owners [report]); hand-ins queue at the integrator (up to 90 minutes [report]); seats can't subscribe to an
-  issue's comments and poll by timer; a worker told to launch seats had no tool for it.
-- **Record:** the adapter's refactor, 23 seats and one integrator: the first hand-in about an hour after launch, about
-  15 within 90 minutes [read: the issue's comments]. Not scored: no daily PR has landed. Its lead scores it against the
+  six owners [report]); hand-ins queue at the integrator (up to 90 minutes [report]); a worker told to launch seats had
+  no tool for it; files of a Lean package directory ride an ordinary hand-in [report: @ci; none read in a swarm]; a
+  change deletes or renames a module that a function elsewhere still imports. Git merges that cleanly and the quick
+  tier doesn't see it, because the test that resolves imports is marked slow [read: the test; the integrator's run of
+  both tiers is its report]; it fails when the function runs. One such import, in four marked PRs, turned a candidate
+  red and 91 PRs lost the round [read: @ci's and @top's comments on the candidate, and the import at one head].
+- **Record:** three swarms, none scored: no day's PR has landed. The adapter's refactor, 23 seats: the first hand-in
+  about an hour after launch, about 15 within 90 minutes [read: the issue's comments]. Its lead scores it against the
   day before (47 changes landed, opened to `main` at a median of 24.5 hours [report: the lead's count]) and stops the
-  branch if it is no better.
+  branch if it is no better. Memory accounting's code, six seats and four held, starts at 599 list entries and 768
+  findings; compute accounting's, three seats and eight to follow, at 655 and 1,320 [read: their issues; the counts
+  are each lead's report].
+- **Open, with no owner:** each swarm keeps its own tools (who owns a file, the score, the frozen list, the check
+  before a hand-in) in its lead's directory of the notes (`lanes/vllm/tools/`, `lanes/memory-accounting/tools/`,
+  `lanes/compute-research/tools/`), and none is in the repository. The three score tools differ only in their table
+  of seats [report: @compute-research]. Two swarms already share one check: memory accounting's `gone`, which lists
+  every line of any directory that still names a file a head deletes, renames or moves [read: its code].
 
 ### Builder with an adversary
 
