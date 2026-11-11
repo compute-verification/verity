@@ -31,7 +31,7 @@ import numpy as np
 from verity.definitions.registry.sampling import GumbelArgmaxBf16, GumbelArgmaxTempBf16
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns import SCRATCH_TOKEN_SELECT, ComputeGroup, _fmt, bound_args, first, hint_of, is_int, sub_rows, triton_name, unsupported, widened_source
+from verity_vllm.observe.fold.patterns import ComputeGroup, _fmt, bound_args, first, hint_of, is_int, sub_rows, triton_name, unsupported, widened_source
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, StepContext, Transparent
 from verity_vllm.observe.fold.tree import TreeNode
 

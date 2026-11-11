@@ -24,7 +24,7 @@ the pattern list; the resolver is first-match and `GemmLaunch` answers `Unsuppor
 tiling) keeps deciding those.  A tabled (N, K) launched with any tiling other than its bucket's stays Unsupported."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET

@@ -102,7 +102,9 @@ def test_layer_in_group_1_reads_and_writes_group_1_cells():
         assert isinstance(a.dst, Gather) and isinstance(b.dst, Gather) and b.dst.view == a.dst.view
         assert b.dst.indices == tuple(s + 8 * BS for s in a.dst.indices)
     # everything else in the step is the same
-    others = lambda d: sorted(s for s in d if not s.startswith("Attention_v3"))
+    def others(d):
+        return sorted(s for s in d if not s.startswith("Attention_v3"))
+
     assert others(by_spec(res)) == others(by_spec(base))
 
 

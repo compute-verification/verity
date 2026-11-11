@@ -119,7 +119,6 @@ def step_events(step: int, positions: list[int], ids: Ids, base_alloc: int, samp
     R = 1
     p0 = positions[0]
     a = itertools.count(base_alloc)
-    ids_view = V(A_IDS, (4,), dtype=ids_dtype)
     pos_view = V(A_POS, (4,), dtype=I64D)
     hidden, normed, qkv, attn, o, gu, act, down, gathered, logits, sampled_v = (V(next(a), s, dtype=d) for s, d in (
         ((M, 16), BF), ((M, 16), BF), ((M, 32), BF), ((M, 2, 8), BF), ((M, 16), BF), ((M, 32), BF), ((M, 16), BF), ((M, 16), BF),
@@ -463,7 +462,7 @@ def test_fold_builds_program_and_is_deterministic(memory):
     assert r1.sampled == {REQ: [(0, 9), (1, 3)]}
     # per-specialization instance counts: prefill 2 rows + decode 1 row = 3 positions
     by = r1.report.by_spec
-    assert by[f"Embedding_v1{{V=16,H=16}}"] == 3
+    assert by["Embedding_v1{V=16,H=16}"] == 3
     assert by["RMSNormTriton_v1{N=16,EPS=1e-05}"] == 3
     assert by["Gemm_v1{K=16,N=32}"] == 6          # qkv + gate_up per position
     assert by["Gemm_v1{K=16,N=16}"] == 8          # o + down per position, lm_head per step
