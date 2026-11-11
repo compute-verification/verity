@@ -61,12 +61,14 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((HERE.parents[1] / "benchmarks/codec_tensor/reader.py").parent))
 
 import bench as BW  # noqa: E402
 import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
 
 sys.path.insert(0, str(HERE.parent / "word_codec"))
+sys.path.insert(0, str((HERE.parents[1] / "benchmarks/word_codec/kv_bench.py").parent))
 import kv as K  # noqa: E402
 import kv_bench as KB  # noqa: E402
 import kv_exhaust as KE  # noqa: E402

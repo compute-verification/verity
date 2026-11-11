@@ -21,7 +21,7 @@ B=$(mktemp -d /tmp/codec-tensor.XXXXXX); trap 'rm -rf "$B"' EXIT
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v ${NVFLAGS:-})
 READER=()
 if [ "${RECEIPT:-0}" = 1 ]; then
-  nvcc "${FLAGS[@]}" -o "$B/reader.so" $CT/reader.cu > "$O/reader.ptxas" 2>&1 || { tail -40 "$O/reader.ptxas"; exit 4; }
+  nvcc "${FLAGS[@]}" -o "$B/reader.so" benchmarks/codec_tensor/reader.cu > "$O/reader.ptxas" 2>&1 || { tail -40 "$O/reader.ptxas"; exit 4; }
   READER=(--reader-lib "$B/reader.so")
   FLAGS+=(-DWT_RECEIPT=1)
 fi

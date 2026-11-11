@@ -104,7 +104,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.protocols.poub.verifier import audit, coins, memory_map, receipts as rb  # noqa: E402
 from verity.protocols.poub.verifier import codec as rcodec  # noqa: E402

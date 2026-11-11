@@ -36,6 +36,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((HERE.parents[1] / "benchmarks/remote_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.protocols.poub.verifier import store as rstore  # noqa: E402

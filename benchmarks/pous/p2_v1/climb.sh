@@ -42,7 +42,7 @@ for spec in "$@"; do
   d=$B/$name; mkdir -p "$d"
   base="-O3 -arch=$ARCH -std=c++17 -DP2_BITS=16448 -DP2_TPI=32 -DXMP_WMAD -DP2_PARTS=2 -DP2_SYM -DP2_TPB=64 -DP2_LIBRARY"
   # shellcheck disable=SC2086
-  nvcc $base $flags -Xcompiler -fPIC -shared -I "$GMPINC" -I "$CG/include" -o "$d/libp2v1.so" "benchmarks/pous/p2_v1/$src" \
+  nvcc $base $flags -Xcompiler -fPIC -shared -I "$GMPINC" -I "$CG/include" -o "$d/libp2v1.so" "$(dirname benchmarks/pous/p2_v1/p2v1.cu)/$src" \
     -Xptxas -v > "$O/$name.ptxas" 2>&1 &
   PIDS+=($!)
   printf '{"name": "%s", "source": "%s", "flags": "%s %s"}\n' "$name" "$src" "$base" "$flags" > "$d/build.json"

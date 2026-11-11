@@ -27,6 +27,7 @@ sys.path.insert(0, str(HERE))
 import bench as BW  # noqa: E402
 
 sys.path.insert(0, str(HERE.parent / "word_codec"))
+sys.path.insert(0, str((HERE.parents[1] / "benchmarks/word_codec/kv_bench.py").parent))
 import kv_bench as KB  # noqa: E402
 
 SECTIONS = ("LaunchStats", "Occupancy", "SpeedOfLight", "ComputeWorkloadAnalysis", "InstructionStats",

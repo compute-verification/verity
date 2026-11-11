@@ -72,6 +72,7 @@ ROOT = HERE.parents[2]
 STAGE = ROOT / "benchmarks" / "torch_gpu" / "p2_stage"
 if __package__ in (None, ""):
     sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str((ROOT / "benchmarks/pous/p2_v1/store.py").parents[1]))
 sys.path.insert(0, str(STAGE))
 
 from verity.protocols.pous.verifier import verifier as V

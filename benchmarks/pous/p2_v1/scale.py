@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks/pous/p2_v1/gpu.py").parents[1]))
 
 BPS = 1 << 16
 WIDTH, C0, PAYLOAD = 16_448, 21_065, 2_054

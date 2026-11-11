@@ -37,7 +37,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE), str(HERE.parents[1])]
+sys.path[:0] = [str(HERE), str((HERE.parents[1] / "benchmarks/word_codec/kv.py").parent), str(HERE.parents[1])]
 
 import kv as K  # noqa: E402
 import kv_bench as KB  # noqa: E402
