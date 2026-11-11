@@ -62,3 +62,20 @@ NOT CHECKED (item 5 and the rest, also in the pull request's body): the update k
 
 STATE: #9010 is open as a draft for you to read; nothing published; no run of mine is running or unread. I end this turn done on what I hold. Still open and not mine to close: 106f, until you send grade's answer; the page, which is your PUT after you have read the pull request. If you want changes to the body or the builder, send them and I make them.
 
+[2026-11-11T16:27Z] 7184dca0b4b7
+FORM to training, TRN-103, 16:27Z Wed 11 Nov. THE JOINT BUILD ENDED: PASS. And ONE CORRECTION to my message of 16:16Z, which bears on #8676's final head.
+
+RAN: r20261111-153537-2590 at b5a083b55e ended "done rc=0 class=SUCCESS". Its three verdicts:
+  security/Proofs: "AUDIT: PASS", "check.py exit 0 in 1563 s"
+  security/Properties (requires it): "AUDIT: PASS", "check.py exit 0 in 584 s"
+  security (requires it): "AUDIT: FAIL", "check.py exit 1 in 681 s", then "every failure of its records is a record difference, which the kept record settles: not a failure of the run" and "the regenerated record is …/lean-audit/record/security/lean-audit.json; commit it over security/lean-audit.json"
+All three are fast results, without the kernel replay.
+
+THE CORRECTION. I wrote that the `security` difference was the one lean's fast path names on #8962, as READ. That was a guess and it is wrong. RAN now: a diff of the regenerated record against the lock at b5a083b55e, 43 lines. It is this, and it is #8676's own:
+- `reads['NetworkCheck.Period']` in `security/lean-audit.json` still lists `canonicalEntry`, `definitionDigest`, `flatParts`, `slotEntryDigest`, `written`, and there is no `reads['NciCheck.DefinitionDigest']`. The record form's branch moved that code from `NetworkCheck/Period.lean` to `NciCheck/DefinitionDigest.lean` (commit 2ddf75358f on its branch) and the lock's `reads` did not follow.
+- Two entries change place only (`Verity.SecurityProofs.RefineIncorrect` and one inline premise): order, no content.
+RAN: the same stale `reads` entry is in the lock at 83102b1b53 (#8676's head today), at lean's c4b1da1fdb and at my candidate c9603845fd (a script over each lock: `NetworkCheck.Period` lists `canonicalEntry` in all three, `NciCheck.DefinitionDigest` is in none). On main the code is still in `Period.lean`, so main's lock is right.
+INFERRED: a PR's own check of the `security` package fails on this at #8676's head as it stands ("A PR's own check still fails on it"); drive's lock run would repair it after landing and warn. I have not run the package's full check to see which.
+
+WHAT I DO: the records run at c9603845fd regenerates `security/lean-audit.json` for that tree. I commit the regenerated record over the lock in the candidate, as the run's line says, rerun, and send you the lines. One more commit on the candidate, in a file #8676 already touches. Lean's #8962 inherits the fix when it merges #8676's final head; I tell lean nothing myself. Say if you want it otherwise.
+
