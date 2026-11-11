@@ -1,7 +1,7 @@
 """The counted operations of a circuit, and each product's subcircuit inside one operation's Definition.
 
 A designation names the counted operations of an arbitrary circuit in the `verity-ir/descriptor/v1` format
-(`verity/ml/circuits/PROTOCOL.md`): a `Site` is a Definition (a regex over its id) whose activations compute counted
+(`verity/circuits/PROTOCOL.md`): a `Site` is a Definition (a regex over its id) whose activations compute counted
 products, with the parameter holding the activation operands (`x`) and the one holding the weight operands (`w`). With
 ``lanes`` the two parameters are arrays of one length L, and lane k of an activation computes the product of x[k] and
 w[k]; without, an activation is one product of the whole of both. ``within`` counts an activation only under an
@@ -21,10 +21,10 @@ import re
 from dataclasses import dataclass
 from functools import cached_property
 
-from verity.ml.circuits import cut
-from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-from verity.ml.circuits.program import is_input
-from verity.ml.circuits.types import Array
+from verity.circuits import cut
+from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.program import is_input
+from verity.circuits.types import Array
 
 
 @dataclass(frozen=True)
