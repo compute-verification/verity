@@ -31,7 +31,8 @@ import operator
 
 import torch
 
-from training_slowdown.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _Flow, _gemms, _macs, _phases, _pk, _shape
+from training_slowdown.capture.structure import (
+    _GATHERS, _WALK, _closure, _dtype_name, _Flow, _gemms, _macs, _past, _phases, _pk, _shape, _slots)
 from training_slowdown.formalism import is_paid
 from training_slowdown.policy import CONSOLE
 
@@ -194,17 +195,11 @@ class _Values:
             return s is not None and any(vshape(n, idx, vs) != s for vs in vnodes)
 
         flow = self.flow = _Flow(gm, _phases(gm), tok)
+        entry, writes, before = _slots(base, flow)
         if self.region is not None:
-            past = {v for v, k in flow.source.items() if k[0] == "input" and flow.step[v] < self.region}
-            self.dep = _closure(flow, past.__contains__)
+            self.dep = _closure(flow, _past(flow, self.region, entry, before).__contains__)
             return
         params = {t: v for t, v in base.attrs.items() if v[0] == "parameter"}
-        entry = {key: v for v, key in flow.source.items() if key[0] == "attr"}
-        writes: dict = {}
-        for key, v, _ in flow.writes:
-            if key[0] == "attr":
-                writes.setdefault(key, []).append(v)
-        before = {("attr", t) for t in base.written_before if ("attr", t) in entry}
         seeded = {key for key in entry if key[1] in params and params[key[1]][1] in graph.updated}
         slots = {key for key in set(writes) | before if key[1] not in params}
         while True:

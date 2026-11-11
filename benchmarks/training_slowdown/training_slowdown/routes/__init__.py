@@ -8,7 +8,11 @@ A route module states:
 - `step(model, rows, optimizers, dials, t, n)`, training step `t` of `n` on `rows`, a batch of windows of the start's
   data, (batch, ctx + 1) token ids;
 - `plan(dials)`, the `training_slowdown.codecs.Plan` the output model's E is encoded with against θ; it raises
-  `ValueError` on a dial value the route has no meaning for, which a config's load turns into its refusal.
+  `ValueError` on a dial value the route has no meaning for, which a config's load turns into its refusal;
+- optionally `output(model, dials)`, the output model's state dict under θ's names, where it isn't the trained
+  model's own (an average of the weights, adapters merged into theirs). The harness calls it at each checkpoint. It is
+  no free place to compute: a run counts what it computes, and the trace takes it as the end of every step, so its
+  products are charged with the step's.
 
 The harness owns the loop around `step` (`training_slowdown.run`): the counter, the data, the checkpoints, their
 evaluation and E, which it encodes itself from the weights that differ from θ, so no route code runs uncounted.
@@ -16,7 +20,9 @@ Which windows `rows` holds is the harness's too: every window of the start's dat
 where the config asks (`windows`, `training_slowdown.config`), only those the start's own training did not read. No
 dial chooses them, and a route sees a batch and never the stream. A
 route is screened like any code the counter runs (`training_slowdown.screen`): it reaches the harness only through these
-functions' arguments, and imports from `training_slowdown` only `codecs` and `model`.
+functions' arguments, and imports from `training_slowdown` only `codecs` and `model`, and a module beside it here
+(`from ._optimizers import Lion`, `from . import subset`), which is held to the same screen. A module whose name
+starts with `_` is no route: no config names it.
 
 A job may stop after any checkpoint and continue in another process, which calls `build` again and then gets back
 what the job kept (`run.resume_state`): the model's `state_dict`, each optimizer's `state_dict`, and torch's, numpy's

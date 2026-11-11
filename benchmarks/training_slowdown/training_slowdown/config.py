@@ -38,13 +38,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
-from . import starts
+from . import calculator, starts
 from .data import SPLITS
 from .screen import screen
 
 ROUTES = Path(__file__).with_name("routes")
-#: the calculator's registry, whose [policy.*] tables are the fixed policies a config may name
-RHO_DATA = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inference_only" / "rho" / "data"
 #: the policies stated relative to the start, in `training_slowdown.policy` (`CONSOLE`)
 RULES = ("console",)
 LABEL_KEY = "training-slowdown"
@@ -57,13 +55,6 @@ WINDOWS = ("fresh",)
 TABLES = {"target": {"gain": (int, float)}, "budget": {"steps": int, "batch": int, "minutes": (int, float)},
           "seeds": {s: list for s in SPLITS}}
 REQUIRED_IN = {"target": ("gain",), "budget": ("steps", "batch"), "seeds": ()}
-
-
-def policies() -> list[str]:
-    names = list(RULES)
-    for f in sorted(RHO_DATA.glob("*.toml")):
-        names += sorted(tomllib.loads(f.read_text()).get("policy", {}))
-    return names
 
 
 def route(name: str) -> ModuleType:
@@ -184,7 +175,7 @@ def load(path: Path, reg: dict | None = None) -> Config:
     if raw.get("windows", WINDOWS[0]) not in WINDOWS:
         raise SystemExit(f"{where}: windows is {raw['windows']!r}, not {' or '.join(map(repr, WINDOWS))} (the windows "
                          f"the start's own training did not read); drop the key for every window of the start's data")
-    if raw["policy"] not in (names := policies()):
+    if raw["policy"] not in (names := [*RULES, *calculator.policies()]):
         raise SystemExit(f"{where}: no policy {raw['policy']!r} (have {', '.join(names)}: policy.py's rule, or a "
                          f"[policy.*] table of verity/protocols/inference_only/rho/data)")
     start = starts.start(raw["start"], reg)
