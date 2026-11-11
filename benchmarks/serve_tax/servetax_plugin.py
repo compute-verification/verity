@@ -11,8 +11,9 @@ directory its files go to, ``window_s``, and a true value for each change), ever
   in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
 - ``boundary_rows`` (an object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``): the
   two-stage audit's boundary commitment (`verity_vllm.pipeline.boundary_rows.BoundaryWindows`), each window's finished
-  requests committed by size class as the window closes, under ``boundary/``, each class's public part in
-  ``boundary.PID.jsonl``.
+  requests committed by size class as the window closes, each class's public part in ``boundary.PID.jsonl``. A class's
+  directory holds its requests' tokens and its salts, which are values: it goes under ``private``, the configuration's
+  directory for what never leaves the node (``private``/boundary/), and under ``out`` only where none is named.
 
 and with ``edges_s`` (seconds after the first request whose id holds ``edge_tag``) or ``every_s`` (an edge each
 ``every_s`` seconds of a load's serving) every engine core takes a replay block's boundary state at each edge
@@ -565,7 +566,8 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
         from verity_vllm.pipeline import boundary_rows as BR
 
         sink = _lines(out / f"boundary.{pid}.jsonl")
-        done.append(BR.BoundaryWindows.of(cfg["boundary_rows"], out / "boundary", sink).install(sched, hooks))
+        kept = Path(cfg["private"]) if cfg.get("private") else out
+        done.append(BR.BoundaryWindows.of(cfg["boundary_rows"], kept / "boundary", sink).install(sched, hooks))
     if cfg.get("release_order"):
         add, finish = sched.add_request, sched.finish_requests
         gate = ReleaseGate(add, lambda ids: finish(ids, _aborted()), key=release_key, hold_s=float(cfg.get("hold_s", 5.0)))

@@ -6,7 +6,8 @@ prices it: the devices its provers held, the proved statement's proof blocks bes
 verifier's mean seconds over the window, and whether the provers' statement caches had stopped filling (``flat``, with the
 quarters' hit rates and the rule), which a prover still building statements in its last quarter fails without voiding the
 row; and the CPUs its processes could run on (``cores``: this process's affinity as a count, a list and the NUMA nodes
-that hold them, on a made-up node directory)."""
+that hold them, on a made-up node directory). A templated staging is proved with its unit placed, and verified under its
+own statement."""
 from __future__ import annotations
 
 import json
@@ -14,6 +15,8 @@ import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -74,21 +77,21 @@ class Device:
         return None
 
 
-def stand_ins(monkeypatch, tmp_path: Path, **server) -> None:
+def stand_ins(monkeypatch, tmp_path: Path, tmpl_unit: Path | None = None, **server) -> None:
     d = tmp_path / "staged"
     d.mkdir()
     (d / "stage.json").write_text(json.dumps({"n": 1, "k_log": 34}))
-    monkeypatch.setattr(SR, "staged", lambda z, t: (SimpleNamespace(pin="pin"), 1, d))
+    monkeypatch.setattr(SR, "staged", lambda z, t, tu: (SimpleNamespace(pin="pin", tmpl_unit=tmpl_unit), 1, d))
     monkeypatch.setattr(SR, "Device", Device)
     monkeypatch.setattr(SR, "ProofServer", lambda binary, out, *, provers, **kw: Server(Path(out), provers, **server))
 
 
-def run(monkeypatch, tmp_path: Path, **server) -> tuple[int, dict]:
+def run(monkeypatch, tmp_path: Path, *args: str, **server) -> tuple[int, dict]:
     stand_ins(monkeypatch, tmp_path, **server)
     out = tmp_path / "out"
     monkeypatch.setattr(sys, "argv", ["server_rate.py", "--bin", "flock-circuit", "--staged", str(tmp_path), "--types", "t",
                                       "--provers", "1", "--out", str(out), "--device", "0", "--sessions", "8", "--warm", "1",
-                                      "--ahead", "1"])
+                                      "--ahead", "1", *args])
     rc = SR.main()
     [row] = json.loads((out / "rate.json").read_text())
     return rc, row
@@ -192,3 +195,55 @@ def test_statement_blocks_are_its_instances_beside_the_most_its_circuit_holds():
     assert SR.statement_blocks({"n": 2048, "k_log": 24, "vus_per_block": 1}) == {"blocks": 2048, "full": 2048}
     assert SR.statement_blocks({"n": 256, "k_log": 27, "vus_per_block": 4}) == {"blocks": 256, "full": 1024}
     assert SR.statement_blocks({"n": 1}) == {"blocks": 1, "full": None}
+
+
+def staging(tmp_path: Path, meta: dict, template: list[str] | None = None) -> Path:
+    """``tmp_path/t/c4/stage`` holding a circuit file whose head is a header, META and (a templated one's) its template
+    section, then a body line."""
+    d = tmp_path / "t" / "c4" / "stage"
+    d.mkdir(parents=True)
+    section = [] if template is None else [f"{SR.FC.TMPL_SECTION} {len(template)}", *template]
+    (d / "circuit.txt").write_text("\n".join(["FLOCK-CIRCUIT", "META " + json.dumps(meta), *section, "body"]) + "\n")
+    (d / "stage.json").write_text(json.dumps({"n": 4}))
+    (d / "pin.txt").write_text("pin\n")
+    return d
+
+
+def place_stand_in(tmp_path: Path) -> str:
+    """`flock-tmpl-unit TMPL --layout L --out F`'s stand-in: F holds the layout and the template it was given."""
+    b = tmp_path / "flock-tmpl-unit"
+    b.write_text('#!/bin/sh\n{ echo "$3"; cat "$1"; } > "$5"\n')
+    b.chmod(0o755)
+    return str(b)
+
+
+def test_a_templated_statement_is_proved_with_its_unit_placed(tmp_path):
+    """A templated staging (META's statement `verity/flock-circuit/tmpl`) gets its unit placed from its circuit's template
+    section and META's layout, which the proof server hands both sides; without `--tmpl-unit-bin` it is refused."""
+    d = staging(tmp_path, {"statement": SR.FC.TMPL_STATEMENT, "layout": "iv/hybrid/4"}, ["row 0", "row 1"])
+    st, n, got = SR.staged(tmp_path, "t", place_stand_in(tmp_path))
+    assert (got, n, st.tmpl_unit) == (d, 4, d / "unit.placed")
+    assert st.tmpl_unit.read_text() == "iv/hybrid/4\nrow 0\nrow 1\n"
+    with pytest.raises(RuntimeError, match="--tmpl-unit-bin"):
+        SR.staged(tmp_path, "t")
+
+
+def test_a_flat_statement_has_no_unit(tmp_path):
+    staging(tmp_path, {"statement": SR.STATEMENT_ID})
+    st, _, d = SR.staged(tmp_path, "t")
+    assert st.tmpl_unit is None and not (d / "unit.placed").exists()
+
+
+def test_a_templated_statements_lean_verdict_is_under_its_statement(monkeypatch, tmp_path):
+    got = []
+
+    class Lean:
+        def __init__(self, lean, d, out, statement):
+            got.append(statement)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(SR, "Lean", Lean)
+    run(monkeypatch, tmp_path, "--lean", "flock-verify", tmpl_unit=tmp_path / "unit.placed")
+    assert got == [SR.FC.TMPL_STATEMENT]
