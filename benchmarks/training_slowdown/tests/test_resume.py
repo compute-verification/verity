@@ -1,6 +1,7 @@
 """A stopped job continues from its kept state: what it keeps, what it refuses, and that its record over two segments
 is the unbroken job's."""
 import contextlib
+import copy
 import io
 import json
 import os
@@ -150,10 +151,39 @@ def kept_state(tmp_path, stopped):
     return state, record
 
 
+def changed(state: dict, part: str) -> dict:
+    """`state` with one bit of `part` flipped: of its first tensor's first byte, or of the stream's position."""
+    other = copy.deepcopy(state)
+    if part == "stream":
+        other[part] ^= 1
+    else:
+        first = next(t for t in run._tensors(other[part]) if t.numel())
+        first.reshape(-1).view(torch.uint8)[0] ^= 1
+    return other
+
+
+def test_each_part_of_a_kept_state_has_a_sha512_of_its_own(stopped):
+    """One bit of a part changed moves that part's digest and no other's; a mapping's order and a tuple written as
+    a list move none."""
+    whole = run.kept_sha512(stopped["state"])
+    assert sorted(whole) == ["generators", "model", "optimizers", "stream"]
+    assert all(len(d) == 128 and int(d, 16) >= 0 for d in whole.values()) and len(set(whole.values())) == 4
+    for part in whole:
+        got = run.kept_sha512(changed(stopped["state"], part))
+        assert [k for k in whole if got[k] != whole[k]] == [part]
+    again = {k: stopped["state"][k] for k in reversed(stopped["state"])}
+    again["model"] = dict(reversed(again["model"].items()))
+    again["generators"] = again["generators"] | {"python": tuple(again["generators"]["python"])}
+    assert run.kept_sha512(again) == whole
+    with pytest.raises(TypeError, match="a kept state holds plain values, and this is a set"):
+        run.kept_sha512({"stream": {1}})
+
+
 def test_a_job_keeps_one_state_and_continues_only_its_own(tmp_path, stopped):
-    """The state directory holds the last state alone, the tensors moved in and named by sha256. A state of another
-    VERSION, seed or split, with tensors that aren't the ones it names or a model that isn't its record's last
-    checkpoint's, is refused by what differs, and left as it was."""
+    """The state directory holds the last state alone, the tensors moved in, the SHA-512 of each of their parts in
+    the record's last segment. A state of another VERSION, seed or split, with a part of its tensors that doesn't
+    hash to what its record states or a model that isn't its record's last checkpoint's, is refused by what
+    differs, and left as it was."""
     state, record = kept_state(tmp_path, stopped)
     assert sorted(p.name for p in state.dir.iterdir()) == ["state.json", "tensors-0000001.pt"]
     assert not (tmp_path / "handed.pt").exists()
@@ -163,8 +193,10 @@ def test_a_job_keeps_one_state_and_continues_only_its_own(tmp_path, stopped):
     assert sorted(p.name for p in state.dir.iterdir()) == ["state.json", "tensors-0000002.pt"]
     state.write(state.dir / "tensors-0000002.pt", record, 1.5)
     kept = state.load(0, "final")
-    assert kept["record"] == json.loads(json.dumps(record)) and kept["elapsed_s"] == 1.5
-    assert (kept["tensors"], kept["sha256"]) == ("tensors-0000001.pt", run.file_sha256(state.dir / kept["tensors"]))
+    stated = run.kept_sha512(stopped["state"])
+    assert "kept" not in record["segments"][-1] and kept["record"] == json.loads(json.dumps(
+        record | {"segments": [record["segments"][-1] | {"kept": stated}]}))
+    assert (kept["tensors"], kept["elapsed_s"]) == ("tensors-0000001.pt", 1.5) and "sha256" not in kept
 
     for seed, split, why in ((1, "final", "its seed is 0 and this job's is 1"),
                              (0, "search", "its split is 'final' and this job's is 'search'")):
@@ -186,13 +218,35 @@ def test_a_job_keeps_one_state_and_continues_only_its_own(tmp_path, stopped):
     refused(whole[:-9], "its state.json doesn't parse")
     refused(json.dumps({k: v for k, v in other.items() if k != "elapsed_s"}),
             "its state.json lacks what a state holds .KeyError: 'elapsed_s'.")
-    refused(json.dumps(other | {"sha256": "0" * 64}), f"its tensors, tensors-0000001.pt, have sha256 {other['sha256']}")
+    segment = other["record"]["segments"][-1]
+    bare = {k: v for k, v in segment.items() if k != "kept"}
+    refused(json.dumps(other | {"record": other["record"] | {"segments": [bare]}}),
+            "its state.json lacks what a state holds .KeyError: 'kept'.")
+    moved = segment | {"kept": stated | {"stream": "0" * 128}}
+    refused(json.dumps(other | {"record": other["record"] | {"segments": [moved]}}),
+            f"the SHA-512 of its stream, as tensors-0000001.pt holds it, is {stated['stream']} and the record of the "
+            f"segment that kept it states {'0' * 128}")
     earlier = other["record"] | {"checkpoints": other["record"]["checkpoints"][:1]}
     refused(json.dumps(other | {"record": earlier}),
             "its model hashes to .* its record's last checkpoint, of step 0, to")
     assert state.load(0, "final") == kept
 
-    (state.dir / "tensors-0000001.pt").unlink()
+    tensors = state.dir / "tensors-0000001.pt"
+    as_kept = tensors.read_bytes()
+    for part in stated:
+        flipped = changed(stopped["state"], part)
+        torch.save(flipped, tensors)
+        with pytest.raises(SystemExit, match=f"the SHA-512 of its {part}, as tensors-0000001.pt holds it, is "
+                                             f"{run.kept_sha512(flipped)[part]} and the record of the segment that "
+                                             f"kept it states {stated[part]}. Remove {state.dir} to start"):
+            state.load(0, "final")
+    tensors.write_bytes(as_kept[:-9])
+    with pytest.raises(SystemExit, match="its tensors, tensors-0000001.pt, don't load as a state's"):
+        state.load(0, "final")
+    tensors.write_bytes(as_kept)
+    assert state.load(0, "final") == kept
+
+    tensors.unlink()
     with pytest.raises(SystemExit, match="its tensors, tensors-0000001.pt, are missing"):
         state.load(0, "final")
     state.clear()
@@ -217,9 +271,12 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
     """The job as a node runs it, four times, each two processes, so slow: what the quick tests above don't reach is
     the job's own process keeping the state, the stop, and the sandbox. An unbroken job; the same job told to stop
     (SIGTERM) once it has kept its state after step 1, which ends with `STOPPED`, no record and the state left; a
-    job of another config on that state, refused by both digests before it trains, the state left; and the
-    stopped job again, which continues while its state directory, hidden from the route's process, still holds the
-    state, writes the unbroken job's record in two segments and removes the state."""
+    job of another config on that state, refused by both digests before it trains, the state left; the stopped job
+    on its state with one bit of the optimizers' part flipped, in the state directory and then only in the copy
+    handed to the route's process, refused each time by that part's two SHA-512; and the stopped job again, which
+    continues while its state directory, hidden from the route's process, still holds the state, writes the
+    unbroken job's record in two segments, the first with the digests of the state it kept, and removes the
+    state."""
     root, reg, path = tiny
 
     def job(out, state, cfg=path):
@@ -251,9 +308,27 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
         job("other", "state", other)
     assert sorted(p.name for p in (tmp_path / "state").iterdir()) == kept and not (tmp_path / "other").exists()
 
+    stated = so_far["segments"][-1]["kept"]
+    tensors = tmp_path / "state" / "tensors-0000001.pt"
+    as_kept = tensors.read_bytes()
+    flipped = changed(torch.load(tensors, weights_only=True), "optimizers")
+    refusal = (f"the SHA-512 of its optimizers, as {{}}, is {run.kept_sha512(flipped)['optimizers']} and the record "
+               f"of the segment that kept it states {stated['optimizers']}")
+    torch.save(flipped, tensors)
+    with pytest.raises(SystemExit, match=refusal.format("tensors-0000001.pt holds it")):
+        job("changed", "state")
+    tensors.write_bytes(as_kept)
+    with monkeypatch.context() as on_the_way:
+        on_the_way.setattr(run.shutil, "copyfile", lambda src, dst: torch.save(flipped, dst))
+        with pytest.raises(SystemExit, match=refusal.format("the route's process read it")):
+            job("changed", "state")
+    assert sorted(p.name for p in (tmp_path / "state").iterdir()) == kept and tensors.read_bytes() == as_kept
+    assert not (tmp_path / "changed").exists()
+
     assert job("cut", "state") == 0 and not (tmp_path / "state").exists()
     cut = json.loads((tmp_path / "cut" / "run.json").read_text())
     assert cut["invalid"] == [] and cut["digest_key"] == so_far["digest_key"] != whole["digest_key"]
+    assert [s.get("kept") for s in cut["segments"]] == [stated, None] and "kept" not in whole["segments"][0]
     assert_continues(whole, cut, at=2, keyed=False)
     assert [cp["score"] for cp in cut["checkpoints"]] == [cp["score"] for cp in whole["checkpoints"]]
     assert sorted(p.name for p in (tmp_path / "cut").iterdir()) == ["e", "run.json"]

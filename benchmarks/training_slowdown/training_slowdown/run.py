@@ -24,15 +24,19 @@ the registered model.
 With `--state DIR` a stopped job continues (`Kept`). After each checkpoint but the last, which is the job's end, the
 job's own process keeps in DIR what continuing needs: the tensors the route's process hands it (the model, the
 optimizers' state, the stream's position, torch's, numpy's and Python's generators) and, written by itself, the
-record so far with its scores and where the clock stands. DIR is hidden from the route's process as a final set is.
-A job that finds a state in DIR continues from it when the state is its own: the same `training_slowdown` VERSION,
-seed, split and config digest, tensors with the sha256 the state names, and a model that hashes to its record's last
-checkpoint. Any other it refuses, naming what differs, and trains nothing. The route's process then loads θ, takes
-the kept tensors and runs the steps that remain; it is told the next step, the clock and the digest key, and never
-the record. Each stretch a process ran is a segment: the record lists them (`segments`), its steps and checkpoints
-are every segment's in order, and its count is their sum (`joined`), which a stopped segment's work after its last
-kept checkpoint is not in. `budget.minutes` runs over all of them. Told to stop (SIGTERM), the job ends with
-`STOPPED` and leaves the state; a job that ends itself, with its record or with a failure, removes it.
+record so far with its scores, where the clock stands and, in the record's last segment, the SHA-512 of each part
+of the tensors as DIR holds them (`kept_sha512`). DIR is hidden from the route's process as a final set is. A job
+that finds a state in DIR continues from it when the state is its own: the same `training_slowdown` VERSION, seed,
+split and config digest, tensors whose every part hashes to what the record states, and a model that hashes to its
+record's last checkpoint. Any other it refuses, naming what differs, and trains nothing. The route's process then
+takes the kept tensors and, before it imports the route, says what each part hashes to as it holds it: the job's
+own process ends the job there when that isn't what the record states. It loads θ, puts the tensors back and runs
+the steps that remain; it is told the next step, the clock and the digest key, and never the record. Each stretch a
+process ran is a segment: the record lists them (`segments`, a stopped one with the digests of the state the next
+one continued from), its steps and checkpoints are every segment's in order, and its count is their sum (`joined`),
+which a stopped segment's work after its last kept checkpoint is not in. `budget.minutes` runs over all of them.
+Told to stop (SIGTERM), the job ends with `STOPPED` and leaves the state; a job that ends itself, with its record or
+with a failure, removes it.
 
 After the last step, outside the count, the job traces its route's step once for the grade (`trace_step`): the
 record's `trace` is what the capture measures of it, the product rows unpriced, and a step the capture refuses is
@@ -119,6 +123,39 @@ def theta_sha256(state: dict[str, torch.Tensor]) -> str:
 def file_sha256(path: Path) -> str:
     with open(path, "rb") as f:
         return hashlib.file_digest(f, "sha256").hexdigest()
+
+
+def _feed(h, x) -> None:
+    """Feed `h` a kept state's value under its kind: a tensor as its dtype, shape and bytes, a mapping as its items
+    in their keys' order, a list or a tuple as its items, a number, a string or None as its type and text."""
+    if isinstance(x, torch.Tensor):
+        t = x.detach().contiguous()
+        h.update(f"tensor\0{t.dtype}\0{tuple(t.shape)}\0".encode())
+        h.update(t.reshape(-1).view(torch.uint8).cpu().numpy())
+    elif isinstance(x, dict):
+        h.update(f"dict\0{len(x)}\0".encode())
+        for k in sorted(x, key=repr):
+            _feed(h, k)
+            _feed(h, x[k])
+    elif isinstance(x, (list, tuple)):
+        h.update(f"list\0{len(x)}\0".encode())
+        for v in x:
+            _feed(h, v)
+    elif x is None or type(x) in (bool, int, float, str):
+        h.update(f"{type(x).__name__}\0{x.hex() if type(x) is float else repr(x)}\0".encode())
+    else:
+        raise TypeError(f"training_slowdown: a kept state holds plain values, and this is a {type(x).__name__}")
+
+
+def kept_sha512(state: dict) -> dict[str, str]:
+    """The SHA-512 of each part of a kept state (`resume_state`: the model, the optimizers' state, the stream's
+    position, the generators), over its values as they are held: every bit of every tensor and number in it."""
+    out = {}
+    for part in sorted(state):
+        h = hashlib.sha512()
+        _feed(h, state[part])
+        out[part] = h.hexdigest()
+    return out
 
 
 @contextmanager
@@ -628,10 +665,11 @@ def parse(argv=None) -> argparse.Namespace:
 
 class Outside:
     """The job's own process, as the route's process reaches it from inside the sandbox. What it says comes first and
-    once: where a job that continues stands (`kept`), or nothing. What goes out: the job's config digest, before any
-    step (`names`); each checkpoint's state, through a file of the job's scratch directory, to be scored
-    (`outside`); and after it what continuing from that checkpoint needs, where the job keeps a state. One byte
-    comes back for each, and no score: nothing of a held-out set enters the process a route runs in."""
+    once: where a job that continues stands (`kept`), or nothing. What goes out: what the kept tensors hash to as
+    this process holds them, before it imports the route (`holds`); the job's config digest, before any step
+    (`names`); each checkpoint's state, through a file of the job's scratch directory, to be scored (`outside`);
+    and after it what continuing from that checkpoint needs, where the job keeps a state. One byte comes back for
+    each, and no score: nothing of a held-out set enters the process a route runs in."""
 
     def __init__(self, scratch: Path, channel: str):
         states, scored = (int(fd) for fd in channel.split(","))
@@ -655,6 +693,11 @@ class Outside:
         torch.save(tensors, self.scratch / name)
         self._say(**{kind: name}, **said)
 
+    def holds(self, kept: dict[str, str]) -> None:
+        """Say what each part of the kept tensors hashes to as this process holds it (`kept_sha512`): the job's own
+        process ends it here when that isn't what the record of the segment that kept them states."""
+        self._say(kept=kept)
+
     def names(self, digest: str) -> None:
         """Say which config this process runs: the job's own process ends it here when its kept state is another's."""
         self._say(digest=digest)
@@ -671,9 +714,10 @@ class Outside:
 class Kept:
     """A job's state directory (`--state`), which only the job's own process reads and writes: `state.json`, holding
     the record so far (which names the job: its config's digest, seed, split and VERSION), where the clock stands,
-    and the name and sha256 of the one file beside it, the tensors the route's process continues from
-    (`resume_state`). A new state is written beside the old one and takes its place by a rename, so a job stopped
-    while it writes leaves the old one whole."""
+    and the name of the one file beside it, the tensors the route's process continues from (`resume_state`). The
+    record's last segment states the SHA-512 of each part of those tensors (`kept`, by `kept_sha512`), which the
+    job's own process hashes from this directory's copy. A new state is written beside the old one and takes its
+    place by a rename, so a job stopped while it writes leaves the old one whole."""
 
     SCHEMA = "training-slowdown/state/v1"
 
@@ -685,12 +729,20 @@ class Kept:
         raise SystemExit(f"training_slowdown: the state in {self.dir} isn't one this job continues: {why}. Remove "
                          f"{self.dir} to start again from θ.")
 
+    def same(self, got: dict[str, str], stated: dict[str, str], where: str) -> None:
+        """Refuse a state a part of which, as `where`, hashes to another SHA-512 than the record of the segment that
+        kept it states."""
+        for part in sorted(got.keys() | stated.keys()):
+            if got.get(part) != stated.get(part):
+                self.refuse(f"the SHA-512 of its {part}, as {where}, is {got.get(part)} and the record of the "
+                            f"segment that kept it states {stated.get(part)}")
+
     def load(self, seed: int, split: str) -> dict | None:
         """The directory's state, for the job of `seed` and `split` to continue from; None where it holds none. One
         this tree didn't write for this job is refused by what differs: its schema, its `training_slowdown` VERSION,
-        its seed or its split, tensors that aren't the file it names by sha256, or a model that doesn't hash to
-        its record's last checkpoint. Its config's digest is compared once the route's process, which reads the
-        route's VERSION and dials, names its own (`outside`)."""
+        its seed or its split, a part of its tensors that doesn't hash to what its record's last segment states,
+        or a model that doesn't hash to its record's last checkpoint. Its config's digest is compared once the
+        route's process, which reads the route's VERSION and dials, names its own (`outside`)."""
         path = self.dir / "state.json"
         if not path.is_file():
             return None
@@ -702,8 +754,8 @@ class Kept:
             self.refuse(f"its schema is {kept.get('schema') if isinstance(kept, dict) else None!r} and this tree's "
                         f"is {self.SCHEMA!r}")
         try:
-            rec, name, sha = kept["record"], Path(kept["tensors"]).name, kept["sha256"]
-            last = rec["checkpoints"][-1]
+            rec, name = kept["record"], Path(kept["tensors"]).name
+            last, stated = rec["checkpoints"][-1], dict(rec["segments"][-1]["kept"])
             said = (("training_slowdown VERSION", rec["training_slowdown"], VERSION), ("seed", rec["seed"], seed),
                     ("split", rec["split"], split))
             want = (last["step"], last.get("trained_sha256", last["output_sha256"]))
@@ -713,34 +765,34 @@ class Kept:
         for what, its, mine in said:
             if its != mine:
                 self.refuse(f"its {what} is {its!r} and this job's is {mine!r}")
-        tensors = self.dir / name
-        if not tensors.is_file() or (got := file_sha256(tensors)) != sha:
-            self.refuse(f"its tensors, {name}, " + (f"have sha256 {got} and it names {sha}" if tensors.is_file()
-                                                    else "are missing"))
+        if not (self.dir / name).is_file():
+            self.refuse(f"its tensors, {name}, are missing")
         try:
-            model = theta_sha256(torch.load(tensors, map_location="cpu", weights_only=True)["model"])
+            held = torch.load(self.dir / name, map_location="cpu", weights_only=True, mmap=True)
+            got, model = kept_sha512(held), theta_sha256(held["model"])
         except Exception as e:  # noqa: BLE001 - whatever torch.load raises on a file that isn't a state's tensors
             self.refuse(f"its tensors, {name}, don't load as a state's ({type(e).__name__}: {e})")
+        self.same(got, stated, f"{name} holds it")
         if model != want[1]:
             self.refuse(f"its model hashes to {model} and its record's last checkpoint, of step {want[0]}, to "
                         f"{want[1]}")
         return kept | {"tensors": name}
 
     def write(self, tensors: Path, record: dict, elapsed_s: float) -> None:
-        """Keep `record` and the file at `tensors`, which moves here, as the directory's one state."""
+        """Keep `record` and the file at `tensors`, which moves here, as the directory's one state. The SHA-512 of
+        each of its parts goes into the record's last segment, hashed from the copy here: the route's process,
+        which wrote the file at `tensors`, can't write this one."""
         name = f"tensors-{record['checkpoints'][-1]['step']:07d}.pt"
-        h = hashlib.sha256()
         with open(tensors, "rb") as src, open(self.dir / f"{name}.tmp", "wb") as dst:
-            while chunk := src.read(1 << 22):
-                h.update(chunk)
-                dst.write(chunk)
+            shutil.copyfileobj(src, dst, 1 << 22)
             dst.flush()
             os.fsync(dst.fileno())
         os.replace(self.dir / f"{name}.tmp", self.dir / name)
         tensors.unlink()
+        kept = kept_sha512(torch.load(self.dir / name, map_location="cpu", weights_only=True, mmap=True))
+        record = record | {"segments": [*record["segments"][:-1], record["segments"][-1] | {"kept": kept}]}
         with open(self.dir / "state.json.tmp", "w") as f:
-            json.dump({"schema": self.SCHEMA, "tensors": name, "sha256": h.hexdigest(), "elapsed_s": elapsed_s,
-                       "record": record}, f)
+            json.dump({"schema": self.SCHEMA, "tensors": name, "elapsed_s": elapsed_s, "record": record}, f)
             f.flush()
             os.fsync(f.fileno())
         os.replace(self.dir / "state.json.tmp", self.dir / "state.json")
@@ -792,7 +844,8 @@ def joined(prior: dict | None, rec: dict) -> dict:
     is the segments' sum: `totals` adds up, and `setup` holds what every segment counted outside its steps
     (`outside_steps`), so a segment's own setup is counted, and the steps a stopped segment ran after its last kept
     checkpoint, which the next one ran again, are not. `segments` lists each one's first step, its steps, its count
-    and its commit. A segment whose record names another job than the kept one's is refused."""
+    and its commit, and of one that was continued the digests of the state it kept last (`Kept.write`). A segment
+    whose record names another job than the kept one's is refused."""
     first = len(prior["steps"]) if prior else 0
     segment = {"first": first, "steps": len(rec["steps"]), "macs": rec["totals"]["macs"], "commit": rec.get("commit")}
     if prior is None:
@@ -868,7 +921,9 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
                           file=sys.stderr)
                 for line in lines:
                     said = json.loads(line)
-                    if "digest" in said:
+                    if "kept" in said:
+                        state.same(said["kept"], prior["segments"][-1]["kept"], "the route's process read it")
+                    elif "digest" in said:
                         if prior and said["digest"] != prior["config"]["digest"]:
                             state.refuse(f"its config digest is {prior['config']['digest']} and this job's is "
                                          f"{said['digest']}")
@@ -930,10 +985,11 @@ def with_scores(rec: dict, scores: list[tuple[str, dict]]) -> dict:
 def inside(a: argparse.Namespace) -> int:
     """The route's process. It stops before it imports the route unless it is in the sandbox (`sandbox.refusals`):
     an interface that is up, or a registered final set or the job's state directory it can read an entry of, is a
-    failed job. It takes the kept tensors the job's own process hands it, if any, before it imports the route, and
-    names its config's digest to that process, which ends it there when the kept state is another config's. Then it
-    trains as the module's docstring says, from θ or from the kept tensors, and leaves its record, the checkpoints
-    unscored, in the job's scratch directory."""
+    failed job. It takes the kept tensors the job's own process hands it, if any, and says what each part of them
+    hashes to as it holds it, before it imports the route; then it names its config's digest. The job's own process
+    ends it at the first when the tensors aren't what the record of the segment that kept them states, and at the
+    second when the kept state is another config's. Then it trains as the module's docstring says, from θ or from
+    the kept tensors, and leaves its record, the checkpoints unscored, in the job's scratch directory."""
     reg = starts.registry(a.starts)
     hidden = sandbox.final_sets(reg)
     if reached := sandbox.refusals([*hidden, *([a.state.resolve()] if a.state is not None else [])]):
@@ -947,9 +1003,11 @@ def inside(a: argparse.Namespace) -> int:
     kept = own.kept if own else None
     state = None
     if kept:
-        # read and removed before the route is imported: none of its code finds the file
+        # read, removed and hashed before the route is imported: none of its code finds the file, and what this
+        # process continues from is what the job's own process finds its record to state
         state = torch.load(a.inside / kept["tensors"], map_location=a.device, weights_only=True)
         (a.inside / kept["tensors"]).unlink()
+        own.holds(kept_sha512(state))
     imports = Imports()
     with no_bytecode():
         cfg = config.load(a.config, reg)

@@ -60,8 +60,11 @@ A stopped job continues. After each checkpoint but the last a job keeps what con
 (`--state`): the model, the optimizers' state, the stream's position, the generators, and the record so far with its
 scores and its clock. Told to stop (SIGTERM: an eviction, or the end of its run's time) it exits with 75 and leaves
 the state; the command's next run starts it again, and the job continues from the state when it is its own (the same
-config digest, seed, split and `training_slowdown` VERSION, tensors with the sha256 the state names, a model that
-hashes to the record's last checkpoint) and refuses any other, naming what differs. The record lists the segments
+config digest, seed, split and `training_slowdown` VERSION, a model that hashes to the record's last checkpoint) and
+refuses any other, naming what differs. The job's own process states in the record so far, for the segment that
+kept the state, the SHA-512 of each of its parts (the model, the optimizers' state, the stream's position, the
+generators); the job that continues hashes them again, in the state directory and as the route's process holds them
+before it imports the route, and refuses a state a part of which hashes to anything else. The record lists the segments
 the job ran in, and its count is their sum: every step once, and each segment's `build`. What a stopped segment
 computed after its last kept checkpoint is run again and is in no record. A state is a cache: the command keeps it
 with the stopped run's output on the store, the next run fetches it on whichever machine it gets (`NODE_STATE` in
