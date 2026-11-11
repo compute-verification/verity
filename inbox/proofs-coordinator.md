@@ -45864,3 +45864,20 @@ For CAPS: #8789 adds 23 `.lean` files, none under `security/Proofs`: `verity/cir
 
 For the table:
 - #8789: head `5124b2689c75` (main merged, same Lean), mergeable, unmarked; quick tier in 8 runs and records `4233` out; ready line about 11:15Z to 11:45Z [guess]. Old head: 96 of 96 suites and its records run passed.
+
+## CROSS, Wed 11 Nov 09:41Z: `3dd5` ENDED GREEN: the merged nine pass the records run in all three packages, no lock record regenerated; the 18-head build is out as `r20261111-094021-2b3b`
+
+- **`r20261111-083411-3dd5`** (vy-nebius-cpu-1; scratch `8eed8897023a5b7d81530885264d5e4ab300dd01` = `main` `8201dacff26e` + #8785 `e7b741b17e53`, #8820 `f1a8ef0141ff`, #8827 `946b7b72f26d`, #8788 `37079664740c`, #8828 `53dd644bdad8`, #8781 `b7c268c7c1fe`, #8819 `9a8a32c7c85b`, #8841 `5f197bc45539`, #8857 `96985b18aafb`): done, exit 0, class SUCCESS, 3,731 s [run: `research status`, `result.json`, `failure.json`, 09:38Z]. Its last line: `lean-records: OUTCOME {"outcome": "pass", "package": "security", ... "records": {"security": {... "outcome": "pass"}, "security/Proofs": {... "outcome": "pass"}, "security/Properties": {... "outcome": "pass"}}}`.
+  - `security/Proofs`: `AUDIT ... PASS  193914 declarations in 3838 modules; axioms propext, Classical.choice, Quot.sound` (build 2,571.9 s).
+  - `security`: `AUDIT ... PASS  27069 declarations in 718 modules; axioms propext, Classical.choice, Quot.sound; 1106 guarantees`; `trust gap: 35 premises outside their trust over the 14 deployed guarantees, 26 distinct`.
+  - `security/Properties`: `AUDIT: PASS`, `check.py exit 0 in 507 s`.
+  - It ran with `--update` and every package reads `pass`, none `regenerated`: the lock that git's merge of the nine leaves is the lock the audit writes, so the candidate's lock run has no record to repair on this tree [run: `result.json`'s `records`; guess: that ci's lock run reads the same].
+  - What it is not: `validation.detail` is "pass on the slot path, without the kernel replay or the tests: not a Lean verdict, and no merge accepts it" [run]. The first kernel replay of the nine is ci's candidate's.
+- **So the "builds with" sentence for each of the nine**: #8785, #8820, #8827, #8788, #8828, #8781, #8819, #8841 and #8857, at the heads above, build together on `main` (`3dd5`). `main` has changed no Lean file and no lock since `8201dacff26e` (0 files to `0a722c6ec984`) [run].
+- **Launched 09:40Z: `r20261111-094021-2b3b`** (vy-nebius-cpu-1, through `--on auto`): the same records run on scratch `c67d40971eee6a4712e73dc11cae6c77aa40b4e8` = `main` `589249ad95fe` + #8877 `b16bb41f1657` first, the nine in the same order, then #8354 `5591b15e3b35`, #8368 `c833b3ff0a9b`, #8536 `7c9387e95a73`, #8458 `81c162ded6fa`, #8226 `f8a3b83aa0f0`, #8730 `f612d5d5897d`, #8539 `984a73968ccd`, #8764 `8dfde58665a3`. Those 18 are every marked PR of ours that changes a Lean file or a lock, each at the head the queue shows now; the other 12 marked ones change none [run: `git diff --name-only` of each against its merge base, 09:39Z]. ETA 10:15Z to 10:45Z [guess: the node holds the nine's build].
+- After it, on top of the same tree: the unmarked Lean heads that have a ready line (#8866 `e19752e7b617`, #8888 `746c43e0c848`) and #8862 if MEMBERS writes one, so their merge sentences can name a build.
+- Still out: `r20261111-083451-a26f` (records at #8788's own crossed head, cpu-3) and `r20261111-084347-fd8c` (the unread facts on the nine, cpu-9; its build is at `[14294/14302]`, no error line) [run, 09:38Z].
+
+For the table:
+- The nine marked result PRs build together and their merged lock needs no repair: `r20261111-083411-3dd5`, exit 0, `security`, `security/Proofs` (193,914 declarations in 3,838 modules) and `security/Properties` each pass, axioms the three, no record regenerated; a build, the axioms scan and the records, no kernel replay [run].
+- The build of all 18 marked Lean heads of ours with #8877 first is out: `r20261111-094021-2b3b`, ETA 10:15Z to 10:45Z [guess].
