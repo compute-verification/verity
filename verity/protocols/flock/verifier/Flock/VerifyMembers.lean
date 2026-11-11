@@ -36,8 +36,13 @@ that member's argument list and nothing else, and keeps of it only its exit stat
 (`verifyMember`) takes the kept program and the member's arguments: every file is read again, every setup made again and
 every session's coin key held fresh among that member's sessions alone, as in a `verify` call of its own. What is kept is
 a function of the kept program's bytes, and a member receives it only where its own program's bytes are those bytes,
-compared in full; a member with another program has it read anew. No session's record, coins, tables, registered reads
-or verdict is kept, and nothing is keyed by anything but the program's bytes.
+compared in full; a member with another program has it read anew, once, as `verify` reads its own. No session's
+record, coins, tables, registered reads or verdict is kept, and nothing is keyed by anything but the program's bytes.
+
+**It reaches no other host.** The process reads its standard input, its own program and the files its members' lines
+name, and writes its two streams: it opens no connection and writes no file. So it may be started before a member's
+session exists and kept while later sessions run: what a challenger's release log holds, and in what order, is decided
+by who talks to the challenger, and this process does not.
 
 **It fails closed.** A member that `verify` refuses, cannot read or stops on has that member's lines and exit status, and
 the members after it have theirs. If the process dies, the members it did not reach have no `MEMBER` line. A caller

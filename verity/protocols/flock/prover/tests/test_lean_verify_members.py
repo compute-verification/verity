@@ -13,7 +13,9 @@ process, the run's registered program read once and kept. What it holds, each on
 - a member's lines on standard error are there when its `MEMBER` line arrives, and are `verify`'s for it alone but for
   the milliseconds they report;
 - the same holds in the form a caller that keeps its files by content hands: `--archive` and a key for every file, each
-  member with an archive of its own.
+  member with an archive of its own;
+- the process opens no socket from its start to its end, so one that is started before a session is opened and kept
+  while later sessions run reaches no other host: the order of the challenger's release log is not its to change.
 
 `Flock/VerifyMembers.lean`'s `#guard`s hold the line formats; these hold the command to `verify` on sessions. Each verify
 sets up a table (m = 22 for the plain session, m = 25 for the `--zk` one), so the module is slow. No cheaper test reaches
@@ -25,7 +27,9 @@ import hashlib
 import json
 import re
 import shutil
+import signal
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -36,6 +40,26 @@ from test_lean_plain_tree import BIN, FIXTURE as PLAIN, LEAN
 
 VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
 NOT_A_LIST = "a member's line is a JSON array of strings"
+
+#: A command prefix: the command after it runs under the kernel's system-call filter (seccomp), which kills the process, and
+#: any it starts, at its first `socket` call (SIGSYS). The filter loads the call's number, kills on `socket` and allows every
+#: other call. Exit status 97 where the kernel installs no filter.
+NO_SOCKET = (sys.executable, "-c", """
+import ctypes, os, platform, sys
+nr = {"x86_64": 41, "aarch64": 198}.get(platform.machine())
+class Filter(ctypes.Structure):
+    _fields_ = [("code", ctypes.c_ushort), ("jt", ctypes.c_ubyte), ("jf", ctypes.c_ubyte), ("k", ctypes.c_uint)]
+class Program(ctypes.Structure):
+    _fields_ = [("len", ctypes.c_ushort), ("filter", ctypes.POINTER(Filter))]
+steps = (Filter * 4)(Filter(0x20, 0, 0, 0), Filter(0x15, 0, 1, nr or 0), Filter(0x06, 0, 0, 0x80000000),
+                     Filter(0x06, 0, 0, 0x7FFF0000))
+libc = ctypes.CDLL(None, use_errno=True)
+PR_SET_NO_NEW_PRIVS, PR_SET_SECCOMP, SECCOMP_MODE_FILTER = 38, 22, 2
+if nr is None or libc.prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) or libc.prctl(
+        PR_SET_SECCOMP, SECCOMP_MODE_FILTER, ctypes.byref(Program(len(steps), steps)), 0, 0):
+    sys.exit(97)
+os.execv(sys.argv[1], sys.argv[1:])
+""")
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 
@@ -52,12 +76,13 @@ def _alone(args: list[str]) -> tuple[int, bytes, bytes]:
     return p.returncode, p.stdout, p.stderr
 
 
-def _members(kept: list[str], lines: list[bytes], log: Path) -> tuple[int, list[list[bytes]], bytes, list[bytes]]:
+def _members(kept: list[str], lines: list[bytes], log: Path,
+             under: tuple[str, ...] = ()) -> tuple[int, list[list[bytes]], bytes, list[bytes]]:
     """`verify-members` with the kept program's flags ``kept`` on ``lines``, each written once the line before it is
-    answered: its exit status, each line's answer (what it printed up to that member's `MEMBER` line), what it printed
-    after the last, and its standard error, the file ``log``, cut where each `MEMBER` line arrived: a piece a line, then
-    what it wrote after the last."""
-    with log.open("wb") as err, subprocess.Popen([str(BIN), "verify-members", *kept], stdin=subprocess.PIPE,
+    answered, run under the command prefix ``under``: its exit status, each line's answer (what it printed up to that
+    member's `MEMBER` line), what it printed after the last, and its standard error, the file ``log``, cut where each
+    `MEMBER` line arrived: a piece a line, then what it wrote after the last."""
+    with log.open("wb") as err, subprocess.Popen([*under, str(BIN), "verify-members", *kept], stdin=subprocess.PIPE,
                                                  stdout=subprocess.PIPE, stderr=err) as p:
         answers, marks = [], [0]
         for line in lines:
@@ -285,3 +310,32 @@ def test_a_zk_member_on_registered_reads_gets_verifys_verdict_whichever_bytes_na
     assert (rc, rest, kept_rc, spaced_rc) == (0, b"", 0, 0)
     [v] = _verdicts(kept)
     assert (v["accepted"], v["why"]) == (True, "") and kept == anew, (kept, anew)
+
+
+def test_the_kept_process_opens_no_socket_from_its_start_to_its_end(built, tmp_path):
+    """The kept process under a system-call filter that kills it at its first `socket` call: it starts, reads its
+    program, answers an accepted member, a refused one and the accepted one again, each as `verify` answers it alone,
+    and ends with its own exit status. So before, during and between its members it opens no connection: it reads the
+    files its lines name and writes its two streams, and nothing it does reaches another host. That is what lets it be
+    started before a session is opened and kept while later sessions run: what the challenger's release log holds, and
+    in what order, is decided by who talks to the challenger, and this process does not. The control: under the same
+    filter a process that opens a socket is killed. Skipped where the kernel installs no filter."""
+    opens = subprocess.run([*NO_SOCKET, sys.executable, "-c", "import socket; socket.socket()"], check=False)
+    if opens.returncode == 97:
+        pytest.skip("this kernel installs no system-call filter for the process")
+    assert opens.returncode == -signal.SIGSYS, opens.returncode
+    st = PLAIN / "stage"
+    flipped = shutil.copytree(PLAIN / "session", tmp_path / "flipped")
+    rep = sorted(flipped.glob("*.bin"))[0]
+    b = bytearray(rep.read_bytes())
+    b[len(b) // 2] ^= 1
+    rep.write_bytes(bytes(b))
+    members = [["--statement", "verity/flock-circuit", "--coins", "tree", "--circuit", str(st / "circuit.txt"), "--public",
+                str(st / "pub-32.bin"), "--partition", str(st / "partition.json"), "--program", str(st / "program.json"),
+                "--session", str(session)] for session in (PLAIN / "session", flipped, PLAIN / "session")]
+    rc, answers, rest, errs = _members(["--program", str(st / "program.json")], [_line(m) for m in members],
+                                       tmp_path / "members.log", under=NO_SOCKET)
+    assert (rc, rest, len(answers), errs[-1]) == (1, b"", len(members), b""), (rc, rest, answers, errs)
+    runs: dict[tuple[str, ...], tuple[int, bytes, bytes]] = {}
+    statuses = [_as_alone(i, m, answer, err, runs)[0] for i, (m, answer, err) in enumerate(zip(members, answers, errs))]
+    assert statuses == [0, 1, 0], statuses

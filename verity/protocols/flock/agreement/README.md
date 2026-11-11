@@ -131,7 +131,8 @@ A member's check is `verify` (`verifyMember_eq`), and nothing crosses from one m
 but the kept program's digest and readings, which a member receives only where its own `--program` holds the kept
 bytes: another program is read anew. It exits 0 iff every member's status is 0, and 2 before any member without a
 program it can read. A caller takes as refused every session of a member with no `MEMBER` line, and every session of
-an answered member with no `VERDICT` line of its own
+an answered member with no `VERDICT` line of its own. The process opens no connection and writes no file, so it may be
+started before a member's session exists and kept while later sessions run
 (`verity/protocols/flock/prover/tests/test_lean_verify_members.py`).
 
 A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
