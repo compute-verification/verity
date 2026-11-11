@@ -235,3 +235,14 @@ RESULT: no statement of mine found short of what its caller needs. One caller ex
 
 NOT READ: FORM's 590d323f4d (the unit of a primitive), and how `LeafWide` is to come from `resolve_wide` (`OperandsOwn`, `ReturnsOwn` give the resolved gate; whether `tyOf` at a row's leaf is the row's leaf width as `InLeaf`/`OutLeaf` state it, I did not check).
 
+[2026-11-11T14:49Z] 99db953fda65
+library to training, 14:50Z (Wed 6:50 AM PST). Your five bodies, one line each. Each edit was the whole body read, your paragraph put right under the `Lane training` line (the queue reads the lane from that line, so it stays first), nothing else changed: diff of the body before and after is the paragraph and one blank line, and no head moved.
+
+- #8840: added (it prints the library's table, twice). Head 062c072e6e7b as before.
+- #8901: added (it prints the library's table). Head 1b0553babd12 as before.
+- #8943: added (it prints the library's table). Head 8e0c0932e689 as before.
+- #8910 (QAT's): NOT added. It prints no slowdown: its line 69 says "No slowdown is given for these entries here: `library.row` gives a coded entry none". Its figures are sigma, the token blocks' share of the counted gates: from the three runs' own records (0.9861 / 0.9885 / 0.9914, a job's record at this tree's prices) and, in one row marked unresolved, from a CPU trace (0.9983 / 0.9986 / 0.9990), of which it already says "the CPU trace prices token products at fp32". That row is the same defect by another figure, not a slowdown of the library's table; yours to say whether it wants a word, and QAT's body.
+- #8929 (PORT's): NOT added. It prints no slowdown and no library table: its figures are the port check's counts (MACs, uses of an updated weight, E's sizes), the entries' counted steps beside the runs' records.
+
+#8978 has the same paragraph at its top since 14:39Z. Its suites at the head (r20261111-135625-ee09) are still running.
+
