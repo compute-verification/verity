@@ -16,8 +16,10 @@ packages whose passes can't be reused, with dependencies kept warm.
 
 A package's verdict is reused while everything its audit reads is unchanged, wherever the package is. Its key hashes content,
 each file under its path relative to its package (a module's is its name), never the package's own path:
-- the tracked files of the package, less the Lake packages nested in it (`audit.lean_modules` skips them), its
-  `lean-toolchain`, `lake-manifest.json` and `lean-audit.json` among them;
+- the tracked files of the package, its `lean-toolchain`, `lake-manifest.json` and `lean-audit.json` among them, less the
+  Lake packages nested in it (`audit.lean_modules` skips them) and the files `UNREAD_NAMES` names, which no audit reads:
+  its `*.md`, `.gitignore`, `pyproject.toml`, `test_*.py` and `conftest.py`, so a README or a pytest file changed inside
+  a package audits nothing again. The scratch tree leaves them out too, so a read of one would fail;
 - each package its `proved_in` names (`provers`), whose build the audit reads its guarantees from, by its content (which
   names the packages it requires by theirs), under its path;
 - the same for each package it requires by path (`audit.path_deps`), under the name its manifest gives it. Where the
@@ -105,6 +107,7 @@ from __future__ import annotations
 import argparse
 import base64
 import fcntl
+import fnmatch
 import functools
 import gzip
 import hashlib
@@ -197,11 +200,24 @@ def packages(files: list[str]) -> list[str]:
     return sorted({f.rsplit("/", 1)[0] for f in files if f.endswith("/lean-audit.json") and not f.startswith(LEAN_TOOL)})
 
 
+#: the files of a package no audit reads, by name, each with what does: out of the package's key and of the scratch tree,
+#: where a read of one fails the audit. Nothing goes by directory: a generator, its helpers, data and fixtures stay in
+#: wherever they sit, `tests/` included (a `runs` entry may run a generator kept there)
+UNREAD_NAMES = {
+    "*.md": "the package's README and other prose, for readers",
+    ".gitignore": "git, which never checks out what it lists",
+    "pyproject.toml": "the settings of the package's Python suite, which its suite reads",
+    "test_*.py": "the package's pytest files, which its suite runs",
+    "conftest.py": "pytest's fixtures for those files",
+}
+
+
 def own_files(pkg: str, files: list[str]) -> list[str]:
-    """The package's tracked files, less those of the Lake packages nested in it."""
+    """The package's tracked files, less those of the Lake packages nested in it and those `UNREAD_NAMES` names."""
     nested = {f.rsplit("/", 1)[0] + "/" for f in files if f.startswith(pkg + "/") and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")
               and f.rsplit("/", 1)[0] != pkg}
-    return [f for f in files if f.startswith(pkg + "/") and not any(f.startswith(n) for n in nested)]
+    return [f for f in files if f.startswith(pkg + "/") and not any(f.startswith(n) for n in nested)
+            and not any(fnmatch.fnmatchcase(f.rsplit("/", 1)[-1], p) for p in UNREAD_NAMES)]
 
 
 def path_deps(pkg: str) -> list[str]:
