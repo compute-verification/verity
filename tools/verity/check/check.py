@@ -910,7 +910,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
     fails when the file sent can't be read or doesn't list both.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
     drive's after-landing run, where a record difference fails), with ``bookkeeping`` (`--bookkeeping-warn`, drive's lock run)
     repairs the bookkeeping too and warns (`lean_audit.py --bookkeeping warn`), and inside a recorded run it bundles the module versions it
-    built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/protocols/flock/prover/` (`tools/verity/check/tool.py`), and
+    built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/protocols/flock/` (`tools/verity/check/tool.py`), and
     `--record` sends its URLs then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
     directory (`requires_outside`)."""
     lean = FLOCK_LEAN

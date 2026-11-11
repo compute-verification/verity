@@ -66,7 +66,7 @@ REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"'
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
 LROW=llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
-{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/flock/prover; } | tee $O/machine.txt
+{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/flock; } | tee $O/machine.txt
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }

@@ -1862,8 +1862,8 @@ echo '{{"protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' > {d}/privat
 echo '{{"protocol": "verity/certifier/v9", "verdict": "accept"}}' > {d}/private/other/answer.json
 echo "CASE: evidence beef"
 echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' ''')
-    for pkg in ("protocols/pous/check", "devices/memory_challenger/lean", "protocols/remote", "protocols/onsite"):
-        (tree / "verity" / "core" / pkg).mkdir(parents=True)
+    for pkg in ("protocols/pous/verifier/check", "protocols/pous/device/lean", "protocols/remote/verifier", "protocols/onsite/verifier"):
+        (tree / "verity" / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
     v2 = d / "private" / "sampled-proofs-v2"

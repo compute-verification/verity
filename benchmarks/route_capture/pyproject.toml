@@ -28,4 +28,4 @@ inputs = [
     "adapters/vllm/manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json",
     "adapters/vllm/workloads/SHA256SUMS",
     "adapters/vllm/workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json",
-]
+          "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py"]

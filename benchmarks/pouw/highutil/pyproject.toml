@@ -14,7 +14,9 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "ve
           "benchmarks/pouw/accel_v31/v31.py", "benchmarks/pouw/accel_v31/v31lib.py",
           "benchmarks/pouw/accel_v31/h200_step.py",
           "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/protocols/pouw/verifier/__init__.py",
-          "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover/__init__.py", "verity/protocols/pouw/prover/circuit"]
+          "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover/__init__.py", "verity/protocols/pouw/prover/circuit",
+          "verity/definitions/__init__.py", "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon",
+          "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

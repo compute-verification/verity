@@ -169,7 +169,7 @@ LEAN_BIN=$L/lean-$LSHA/flock-verify
 # the Lean frame a firewalled prover (MODES=ZK server) releases through, built beside flock-verify
 export FC_FIREWALL_LEAN=$L/lean-$LSHA/flock-firewall
 # the release side's Lean session loop (RELEASE=1: prove --firewall-state), keyed by its package's sources and those it requires
-CSHA=$(cd verity/core && find service/flock service/firewall protocols/interface difftest/lean -name .lake -prune -o -type f -print \
+CSHA=$(find verity/protocols/flock/verifier verity/protocols/recursion/verifier/firewall verity/protocols/interface verity/difftest/lean -name .lake -prune -o -type f -print \
   | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 export FC_CORE_FIREWALL=$L/corefw-$CSHA/core-firewall
 FWS=$DD/fw RELEASE=${RELEASE:-0}
@@ -537,10 +537,10 @@ corefw_build() {
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/corefw.lock; flock 9
     if [ ! -x $FC_CORE_FIREWALL ]; then
-      C=$L/corefw-src; rm -rf $C && mkdir -p $C/service $C/protocols $C/difftest \
-        && cp -r verity/protocols/flock/verifier verity/protocols/recursion/verifier/firewall $C/service/ && cp -r verity/protocols/interface $C/protocols/ \
-        && cp -r verity/difftest/lean $C/difftest/ && (cd $C/service/firewall && lake build core-firewall) \
-        && mkdir -p $L/corefw-$CSHA && cp $C/service/firewall/.lake/build/bin/core-firewall $FC_CORE_FIREWALL
+      C=$L/corefw-src; rm -rf $C && mkdir -p $C/protocols/flock $C/protocols/recursion/verifier $C/difftest \
+        && cp -r verity/protocols/flock/verifier $C/protocols/flock/ && cp -r verity/protocols/recursion/verifier/firewall $C/protocols/recursion/verifier/ && cp -r verity/protocols/interface $C/protocols/ \
+        && cp -r verity/difftest/lean $C/difftest/ && (cd $C/protocols/recursion/verifier/firewall && lake build core-firewall) \
+        && mkdir -p $L/corefw-$CSHA && cp $C/protocols/recursion/verifier/firewall/.lake/build/bin/core-firewall $FC_CORE_FIREWALL
     fi
   )
 }
