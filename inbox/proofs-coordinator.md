@@ -43841,3 +43841,49 @@ ready to mark #8788 at 37079664740c063e1f8124df81b9a7fb5b52bcc5
 
 For the table:
 - #8788 `37079664740c`: ready to mark; land (top, 08:50Z); quick tier `4e2a` 8 of 8 passed; it goes into ci's pinned candidate once marked.
+
+## KILIAN, Wed 11 Nov 08:59Z: b1 compiles with clean axioms (try `03ba`); #8879 is open, unmarked, at 9eb9f26cea4a, its records run and quick tier out; a2 is already written on a side branch (one try out), so REGX need not start it; I start g now
+
+**b1.** `TwoFirstHitAt.lean` at `9eb9f26cea4a84d128f4d742bb96e125750e8435` elaborates and its probe is clean: try
+`r20261111-084512-03ba`, `lean exit 0 in 73 s`, "none of its 13 theorems uses an axiom beyond propext,
+Classical.choice and Quot.sound" [run: its stdout, 08:52Z]. The statement is the one in my 08:41Z entry, unchanged.
+Not yet: the kernel replay (records run `r20261111-085441-70f9`, running at 08:59Z, about 85 minutes [guess, from
+my last records run]), the quick tier (`r20261111-085515-a6b0`, waiting), and a try of the file on the local merge
+of my head with #8781 `b7c268c7c1fe`, #8828 `53dd644bdad8` and #8857 `96985b18aafb`, the marked Lean heads that
+change files it reads (`r20261111-085625-ed8e`, waiting; the merge is local, `a2458a9974b2`, never pushed)
+[run: `research status`, 08:59Z]. No second reader has read it.
+
+**#8879** is open, unmarked, head `9eb9f26cea4a84d128f4d742bb96e125750e8435`, branch
+`cursor/proofs-firsthit-one-4b7e`, body in the 08:37Z order [run: `research queue open`, 08:58Z]. `git merge-tree`
+of that head is clean against `main` `8201dacff26e` and against #8781, #8828, #8857, #8836 `ae8886e9a2fc`, #8874,
+#8873, #8871, #8870, #8866, #8788, #8819 [run, 08:46Z]. The ready line follows when the three runs are in.
+
+**a2 overlaps what I had written before your 08:52Z message reached me.** On top of b1, on my side branch
+`cursor/proofs-firsthit-bconfx-7a1d` at `da385b86ccd2356402733e1881e04716e43bf7f7` (pushed), on #8827 alone, without
+#8781 [read: the file there]:
+- `Compiled.runCost x T Ns = T·(1 + e_s·N_s) + n_PU·openCalls`;
+- `Compiled.ex_callsAt_le_at`: a run's expected calls with its extractions are at most `runCost`;
+- `Compiled.ex_bconfX_cost_le`: `E[cost of BconfX] ≤ 2·runCost`, with no hypothesis on the parse;
+- `Compiled.bconfX_le_at`: under `ExpectedCR H (BconfX H L Ω P x)`, `Pr[B_conf,X] ≤ 2·runCost/2^256`;
+- `CompiledTwo.eventTwoX_le_at_budget`: the event at
+  `κ_s + √(k·γ_s·Pr[B]) + (2·runCost + 4·firstHitCost)/2^256`.
+Its first try (`r20261111-085244-e062`) failed on one parse error only (a binder named `X`); every other
+declaration elaborated, the two cost lemmas with `sorryAx` through the missing helper [run: its stdout, 08:57Z].
+The fixed head's try is `r20261111-085736-0f9c`, running. It is **not** in #8879. Yours to rule: REGX takes that
+branch as its a2 (or reads it and keeps its own on #8781), or I open it as a second small PR on #8879 when the try
+passes. I do nothing more on a2 until you say.
+
+**g, starting now.** A new branch of my own on #8879's head merged with #8836's `ae8886e9a2fc`: first the statement
+at the code (`needs` from `reveal_needs_spot`, `hS` from `sessionsTwo_spot`), then a guarantee whose conclusion is
+the first-hit bound. A new guarantee is Daniel's: I build it unmarked and name the lock's new record in the entry
+that reports it. First report on g by 10:00Z.
+
+For CAPS: Proofs/Flock: +1 module, +18 declarations (13 theorems, 5 definitions) (#8879:
+`security/Proofs/Flock/SamplingGeneric/TwoFirstHitAt.lean`). #8879 changes no lock and does not edit
+`unread-caps.json`.
+
+For the table:
+- BITS, gap b1 (the cost of extracting a gate, in expectation): the Lean elaborates with clean axioms (try `03ba`),
+  #8879 open unmarked at `9eb9f26cea4a`; its kernel replay (records `70f9`) and quick tier (`a6b0`) are out.
+- Its fourth term is `4·(T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls)/2^256`; any number read off it
+  is modeled: the first-hit term of #8827's lemma, per sampled replay block, at T calls a run.
