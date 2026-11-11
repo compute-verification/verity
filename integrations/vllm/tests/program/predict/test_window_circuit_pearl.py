@@ -174,7 +174,8 @@ def test_each_cut_linear_reads_its_row_of_its_calls_a_rows_and_y(low):
 def test_a_shapes_readers_are_one_template_reading_every_call_of_the_shape(low):
     """Every value has readers, all units of one template, its call's shape's; a template reads a value on each of its
     units, the values of every round's every call of its shape. So a window's templates don't grow with its rounds and
-    calls, and a sample stratified by template has a reader of each shape, not of each value."""
+    calls, and a sample stratified by template has a reader of each shape, not of each value. Those templates, each with
+    its units, are the cut's readers (`window_cut.readers`), the strata a floor is set for."""
     c = low.circuit
     units, values, read, readers = {IF.descriptor_id(fn): n for fn, n in c.templates}, {}, {}, {}
     for (tid, _port, u), (v, _row) in _value_rows(c).items():
@@ -182,6 +183,7 @@ def test_a_shapes_readers_are_one_template_reading_every_call_of_the_shape(low):
         read.setdefault(tid, set()).add(u)
         readers.setdefault(v, set()).add(tid)
     assert all(read[t] == set(range(units[t])) for t in values) and len(values) == 6
+    assert WK.readers(c) == {t: n for t, n in units.items() if t in values}
     assert set(readers) == set(c.registered.values) and all(len(ts) == 1 for ts in readers.values())
     shape = {v: t for s in M for ci, (K, N) in enumerate(CALLS)
              for v, t in ((PEARL.a(s, ci), f"LinearARow_v1{{K={K},R={4 if ci % 4 == 1 else 1}}}"),
