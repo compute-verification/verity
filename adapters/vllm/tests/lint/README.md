@@ -47,32 +47,42 @@ failure message carries its fix.
  flagged in `verity_vllm/` outside `pipeline/cli.py`: a diagnostic goes to the logger. In the suite, a finding the list
  lacks, or an entry that matches nothing, warns; the gate fails a change that adds a finding, and judges `ruff_vllm.toml`
  as this lint's code. Once both lists are small, one config and one list replace the two.
+- **mypy** (`test_mypy.py`, allowlist `allowlists/mypy.json`): mypy under vLLM's settings (`[tool.mypy]` in
+ `adapters/vllm/pyproject.toml`), the library at `follow_imports = "silent"` and `tests/` on its own at `skip`, an error
+ keyed by file, error code and enclosing symbol, with a count; one the list lacks, or an entry that matches nothing, warns in the suite. `CLEAN` names the directories held to no error. Its findings
+ depend on the installed packages, so the list records the environment it was taken in and the lint refuses any other;
+ the ratchet gate counts the list but doesn't rerun the lint.
 - **The ratchet itself** (`test_ratchet.py`). A new key fails: fix the new code. A moved violation moves its entry in
  the same change. An entry allowing more than is found fails as stale: delete it or lower its count. So an allowlist
  only shrinks, and every failure prints the exact entry lines.
 
 **The rule on every change: no growth.** No PR adds a ratchet
-exception or raises a recorded count: against the commit below it (on `checked`, its `Queue: #N` merge against the merge
+exception or raises a recorded count: against the commit below it (in a candidate, its `Queue: #N` merge against the merge
 below; a branch, against its merge base with `main`, or the merge of its merge bases when a branch that merged both `main`
 and a since-landed branch has several), no ratchet holds more entries and no entry's `count` is higher. An entry may move with the violation it allows. A kind whose entries record counts (typed_records' or-empty per
 file, P07's) is held by its total instead: a key may rise, or a new one appear, when the same kind's other keys fall by
 at least as much, so a move from one file to another passes, but the kind's total may not grow. P10's count is a size,
 not a number of findings, so it is never pooled. A change to a lint's own code or thresholds is judged like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
-lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `adapters/vllm/ruff.toml`, the root `ruff.toml` it
+lint to drop entries fails. A lint that keys a counted kind anew (per file where it was per package) is compared in the
+base's form, the base's lint held to the base's entries, when the change keeps that kind's total: re-key in one change and
+lower the counts in another. A change that edits P9's layer map or package units (`_imports.LAYER`, `PACKAGE_OF`) is
+judged by its own table at the edges of the modules it adds and by the base's between modules the base holds: a row may
+change with the new module that first imports under it, and an import between two existing modules waits for the next
+change. Ruff's lint code is `test_ruff.py`, `adapters/vllm/ruff.toml`, the root `ruff.toml` it
 extends and the root `dev` group's ruff pin (with vLLM's rules, `test_ruff_vllm.py` and `ruff_vllm.toml`), so the gate reruns
 it with the base's configs at the base's pin. The gate holds
 the repository's ruff lint the same way (`tests/lint/test_repo_ruff.py`, list `tests/lint/allowlists/repo_ruff.json`: every
 tracked file outside this lint's own), except that it counts findings per (file, rule), an entry
 `{"file", "rule", "count"}` pooled by rule, and a count above what a tree finds doesn't fail: its list may hold the findings of
-PRs queued on `next` that a tree doesn't have yet, and `python3 tests/lint/test_repo_ruff.py --prune` lowers what a tree no
+queued PRs that a tree doesn't have yet, and `python3 tests/lint/test_repo_ruff.py --prune` lowers what a tree no
 longer finds. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
 PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `adapters/vllm/tools/ratchet_gate.py` holds the
-rule after landing, off the merge gate (`tools/verity/check/policy.toml`'s `off_gate`): it is the check's `ratchet-gate` step,
-which drive's run of `checked`'s tip runs as the step's base has it, judging each `Queue: #N` merge above that base against
-the one below. It fails a merge that grows a ratchet (naming the entries it added) or on whose tree the base's lints find what
-its lists don't cover (naming each violation). Nothing runs it before a PR lands, and its red never holds `main`: drive takes
-each merge it fails as a culprit and never reverts one (`tools/verity/check/drive.toml`'s `warn_steps`), ringing each one's
-owner, who fixes it forward in their next PR.
+rule off the merge gate (`tools/verity/check/policy.toml`'s `off_gate`): it is the check's `ratchet-gate` step, which each
+candidate's check runs as the step's base has it, judging each `Queue: #N` merge above that base against the one below. It
+fails a merge that grows a ratchet (naming the entries it added) or on whose tree the base's lints find what its lists don't
+cover (naming each violation). No check before a PR's candidate runs it, and its red never holds `main`
+(`tools/verity/check/drive.toml`'s `warn_steps`): the verified queue rings the owner of each merge it fails, who fixes it
+forward in their next PR.
 It lints the PR's own Python too: ruff, under its base's root `ruff.toml`, on each `*.py` file the PR adds or modifies
 outside this lint's files, before and after, and a PR whose (file, rule) count grows fails, naming each new finding
 `file:line RULE message`. Fix the code; the list never takes a new finding. (file, rule) is the repository lint's key too, so
@@ -85,7 +95,7 @@ It holds direct environment reads the same way, so that configuration is read in
 `tests/lint/test_repo_env_reads.py` counts each tracked `*.py` file's reads (`os.environ[...]`, `.get`, `.setdefault`, a
 `.pop` whose value is used, an `in` test, `os.getenv`, through any alias) outside `adapters/vllm/` (P07 is its settings
 rule), against `tests/lint/allowlists/repo_env_reads.json` (`{"file", "count"}`, each file's largest count
-over `main`, `next` and the admitted PRs), and fails only when a file reads more than its entry allows. A settings registry
+over `main` and the admitted PRs), and fails only when a file reads more than its entry allows. A settings registry
 is exempt: a module named `settings.py`, or one the list marks `{"file", "registry": true}`. The gate fails a PR that adds
 a read to a file it changes, naming each, with the fix: read it through the area's settings registry (the template is
 `adapters/vllm/verity_vllm/settings.py`), or create one. A mark counts from the PR's base, so it lands before the reads
@@ -99,9 +109,9 @@ changes, naming each, with the fix: re-raise; or record the outcome in the area'
 expected case and let the rest raise (a narrower handler that still swallows still counts). A rename moves its entry
 (`python3 tests/lint/test_repo_silent_excepts.py --move OLD NEW`). A repository list (ruff's or a counted lint's) may
 raise a key, in any file, up to what its lint, as the PR's base has it, finds there in the base's tree: a list that records
-its base's findings adds none, so one left behind by PRs that were on `next` before its lint landed catches up, while growth
+its base's findings adds none, so one left behind by PRs that were queued before its lint landed catches up, while growth
 past the base's findings fails as before. A counted lint that comes to count more records its list in the same PR:
-the gate takes a rise at a file the PR leaves untouched (on `main`, or one a PR on `next` brings) from a PR that edits that
+the gate takes a rise at a file the PR leaves untouched (on `main`, or one a PR below it in its candidate brings) from a PR that edits that
 lint's module, since the PR adds no text there, and the source check still holds each file a later PR touches. A rise at a
 file the PR edits is held as before.
 It holds lane text the same way, in every area, this integration's included: `tests/lint/test_repo_lane_text.py` counts, in

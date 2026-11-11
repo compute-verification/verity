@@ -20,6 +20,7 @@ from research.cli import main as research_main
 from research.store import custody as CU
 from research.store import remote as RM
 from research.store import vocab
+from research.store import withdraw as W
 from research.store.local import LocalStore
 
 REPO = Path(__file__).resolve().parents[3]
@@ -516,6 +517,26 @@ def test_gc_deletes_a_run_whose_stored_copy_was_withdrawn(tmp_path, vault_store)
     a = by_path(plan)["research/runs/r-withdrawn"]
     assert not d.exists() and plan["stored"] == stored(withdrawn=1)
     assert a["reason"].endswith(f"preserved {art} (withdrawn from the remote: 'values that must not be shared', by bc-elsewhere)")
+
+
+def test_gc_reads_a_withdrawal_of_some_paths_as_preserved_does(tmp_path, vault_store):
+    """`research data withdraw --path` gives up only the files under its paths, and `research data preserved` reads a blob the
+    remote lacks outside them as absent. So a run goes as withdrawn when the withdrawn files are all the remote lacks; one lacking a
+    blob outside them stays, unless its kind's time to live explains that blob."""
+    st, vault, runs = LocalStore(vault_store), tmp_path / "vault", {}
+    elsewhere = LocalStore(tmp_path / "elsewhere")
+    for name, under, days in (("r-under", "out", 1), ("r-outside", "logs", 1), ("r-outside-old", "logs", 7)):
+        d, art = runs[name] = stored_run(tmp_path / "ws", st, name)
+        dropped(vault, d, art, days=days)
+        elsewhere.add_label(art, vocab.WITHDRAWN, W.label_value("a leaked count", [under]), "bc-elsewhere", ts="2026-09-30T00:00:00Z")
+        assert not elsewhere.push_labels([art])["failed"]
+    plan = collect(tmp_path / "ws", vault_store)
+    acts = {name: by_path(plan)[f"research/runs/{name}"] for name in runs}
+    assert [d.exists() for d, _ in runs.values()] == [False, True, False]
+    assert plan["stored"] == stored(withdrawn=1, mismatch=1, expired=1)
+    assert acts["r-under"]["reason"].endswith("(withdrawn from the remote: 'a leaked count (only out)', by bc-elsewhere)")
+    assert acts["r-outside"]["reason"].endswith(": absent, which neither a withdrawal nor its kind's time to live explains")
+    assert acts["r-outside-old"]["reason"].endswith("(expired on the remote: a run-record/v1 lives 7 d there, and its manifest is 7.0 d old)")
 
 
 def test_gc_keeps_and_counts_a_run_the_remote_never_stored(tmp_path, vault_store):
