@@ -363,6 +363,47 @@ def test_steps_taken_mid_run_read_the_runs_own_weights():
     assert late.formalism == first.formalism and late.formalism["grad_cut_bits"] == 16 * (4 * H + 4 * H2 + 2 * HI)
 
 
+def momentum(through_copy: bool, nesterov: bool):
+    """A momentum step written by hand: each trained tensor's fp32 buffer is scaled and takes the gradient in place,
+    and the update, cast to 16 bits, reads the gradient and the buffer (`nesterov`) or the buffer alone. With
+    `through_copy` the buffer is then written through a copy of itself, as a step that keeps its buffer at any width
+    writes it: ``b.copy_(b.float()...)``, where an fp32 buffer's ``float()`` is the buffer."""
+    def step(m, batch, _opts):
+        for p in m.parameters():
+            p.grad = None
+        lm_loss(m, batch).backward()
+        with torch.no_grad():
+            for i, p in enumerate(m.blocks[-1].parameters()):
+                b = m.get_buffer(f"momentum{i}")
+                buf = b.float().mul_(0.9).add_(p.grad)
+                if through_copy:
+                    buf = b.copy_(buf).float()
+                u = p.grad.add(buf, alpha=0.9) if nesterov else buf
+                p.add_(u.bfloat16().float(), alpha=-0.01)
+    return step
+
+
+@pytest.mark.parametrize("nesterov", [True, False])
+def test_a_buffer_written_through_a_copy_of_itself_is_carried(nesterov):
+    """A copy's source that is the storage it writes is read, so a momentum buffer written through a copy of itself
+    keeps what the step scaled and added the gradient into. The measured step reads the buffer as carried, at its 32
+    bits an element; the gradient's cut and one token group's partial are the gradient at 32 bits an element, since
+    the buffer takes it whole, past the update's 16-bit cast; and the step's circuit and product rows are those of
+    the same step writing the buffer in place."""
+    def captured(through_copy: bool):
+        model, _ = top_block()
+        for i, p in enumerate(model.blocks[-1].parameters()):
+            model.register_buffer(f"momentum{i}", torch.zeros_like(p))
+        return capture_steps([momentum(through_copy, nesterov)] * 3, model, lm_batch(), measured=1)
+
+    copied, in_place = captured(True), captured(False)
+    weights = 4 * H + 4 * H2 + 2 * HI
+    f = copied.formalism
+    assert f["state_bits"] == f["grad_cut_bits"] == f["partial_cut_bits"] == f["u1_bits"] == 32 * weights
+    assert f["delta_grad_bits"] == 2 * 32 * weights
+    assert f == in_place.formalism and products.raw_on_dial(copied) == products.raw_on_dial(in_place)
+
+
 # --- refusals ----------------------------------------------------------------------------------------------------------
 
 class Branchy(torch.nn.Module):
