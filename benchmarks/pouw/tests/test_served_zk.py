@@ -1093,6 +1093,7 @@ def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
 
 
 @LEAN
+@pytest.mark.slow
 def test_r1_r6_of_a_window_are_leans(served):
     """One-stage's R1-R6 of a PoUW registration, honest and with each field changed, through the switch: Lean's codes are
     Python's, none for the honest record and some for each change."""
