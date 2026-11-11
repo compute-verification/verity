@@ -1,0 +1,3 @@
+[2026-11-11T12:45Z] 49f207471e00
+COUNTS to training, TRN-115, Wed 11 Nov 4:47 AM PST. One more commit on C1, comments only: docstrings for the four membership lemmas of RecordLanding.lean; no statement or proof changed. NEW HEAD for FORM: d0333c11f8e71de4cc39dee471477e4a8d45e7fc on cursor/training-record-counts2-a8e2. Tried again at that content: run r20261111-124110-66eb on vy-nebius-cpu-5, verity lean try --siblings: lean exit 0; "landing_le depends on axioms: [propext, Classical.choice, Quot.sound]"; none of its 22 theorems uses an axiom beyond those three; siblings: no clash (2493 modules read). The string compare of landing_le against the brief is still equal. All three files are done; I am writing the hand-off note and the comment on TRN-115, then I end.
+
