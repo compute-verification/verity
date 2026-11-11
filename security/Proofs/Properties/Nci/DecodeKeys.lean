@@ -168,13 +168,6 @@ private theorem kept_busy {B : String → Prop} {s s1 : DecState} {fid : String}
     · simp [hB k h1]
     · simp [h1]
 
-private theorem getElem!_push_lt {xs : Array Defn} {d : Defn} {i : Nat} (h : i < xs.size) :
-    (xs.push d)[i]! = xs[i]! := by
-  simp [Array.getElem!_eq_getD, Array.getD_eq_getD_getElem?, Array.getElem?_push, Nat.ne_of_lt h]
-
-private theorem getElem!_push_size (xs : Array Defn) (d : Defn) : (xs.push d)[xs.size]! = d := by
-  simp
-
 /-- `getDef`'s push of a Definition keyed `fid`, a name without an index entry, keeps `Keys` and `Rets`, and the names
 of `B` busy when none of them is `fid`. -/
 private theorem kept_push {B : String → Prop} {s s' : DecState} {defn : Defn} {fid : String} (hk : Keys s)
@@ -193,10 +186,10 @@ private theorem kept_push {B : String → Prop} {s s' : DecState} {defn : Defn} 
     · simp only [hf, ↓reduceIte] at hv
       have hv' : (DecState.defs s).size = v := Option.some.inj hv
       subst hv'
-      exact ⟨Nat.lt_succ_self _, by rw [getElem!_push_size, hkey, eq_of_beq hf]⟩
+      exact ⟨Nat.lt_succ_self _, by rw [BodiesOk.getElem!_push_eq, hkey, eq_of_beq hf]⟩
     · simp only [hf, Bool.false_eq_true, ↓reduceIte] at hv
       obtain ⟨h1, h2⟩ := k1 k v hv
-      exact ⟨Nat.lt_succ_of_lt h1, by rw [getElem!_push_lt h1, h2]⟩
+      exact ⟨Nat.lt_succ_of_lt h1, by rw [BodiesOk.getElem!_push_lt _ _ h1, h2]⟩
   · intro i hlt
     rw [hd, Array.size_push] at hlt
     rw [hi, hd, Std.HashMap.getElem?_insert]
@@ -204,7 +197,7 @@ private theorem kept_push {B : String → Prop} {s s' : DecState} {defn : Defn} 
     · subst he
       simp [hkey]
     · have hlt' : i < (DecState.defs s).size := Nat.lt_of_le_of_ne (Nat.le_of_lt_succ hlt) he
-      rw [getElem!_push_lt hlt']
+      rw [BodiesOk.getElem!_push_lt _ _ hlt']
       have h2 := k2 i hlt'
       have hne : ¬ (fid == ((DecState.defs s)[i]!).key) = true := by
         intro hf
@@ -226,10 +219,10 @@ private theorem kept_push {B : String → Prop} {s s' : DecState} {defn : Defn} 
     rw [hd]
     by_cases he : i = (DecState.defs s).size
     · subst he
-      rw [getElem!_push_size]
+      rw [BodiesOk.getElem!_push_eq]
       exact hret
     · have hlt' : i < (DecState.defs s).size := Nat.lt_of_le_of_ne (Nat.le_of_lt_succ hlt) he
-      rw [getElem!_push_lt hlt']
+      rw [BodiesOk.getElem!_push_lt _ _ hlt']
       exact hr i hlt'
   · intro k hBk
     obtain ⟨h1, h2⟩ := hsub k hBk

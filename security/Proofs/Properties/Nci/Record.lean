@@ -1,6 +1,7 @@
 module
 
 public import Properties.Nci.Record
+public import Proofs.Properties.Nci.RecordJson
 import Mathlib.Algebra.Order.Field.Basic
 
 /-!
@@ -31,6 +32,8 @@ open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
 open NciCheck.DefinitionDigest (closureDigest)
 open NciCheck.RecordText (Row Tmpl tmplOf templatesOf)
+open NciCheck.Record.SecurityProofs (nodup_of_eraseDups)
+open NciCheck.Record.SecurityProofs.Json (bind_ok)
 
 theorem complies_of {F : Form} (hown : Owns F) (hlaid : LaidOut F) (hcount : Counts F) (hrate : Rates F) :
     Complies F := by
@@ -103,30 +106,6 @@ theorem pin_listed {F : Form} (hown : Owns F) (hprov : Provenance F) {j tr : Jso
 `UnitAt` numbers a template's units over the root's ranges: member `m` of a range, after the units of the template's
 earlier ranges. The record's text numbers them from 0 to the template's `units` (`templatesOf`). The text's readers
 accept only where no two ranges have one template, and there the two numberings are one. -/
-
-private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : x >>= f = .ok b) :
-    ∃ a, x = .ok a ∧ f a = .ok b := by
-  cases x with
-  | error => cases h
-  | ok a => exact ⟨a, rfl, h⟩
-
-/-- `eraseDups` keeps a list's length only where the list has no duplicates. -/
-private theorem eraseDups_nodup {α : Type} [BEq α] [LawfulBEq α] : ∀ (n : ℕ) (l : List α), l.length ≤ n →
-    l.eraseDups.length ≤ l.length ∧ (l.eraseDups.length = l.length → l.Nodup)
-  | _, [], _ => by simp
-  | 0, _ :: _, h => by simp at h
-  | n + 1, a :: as, h => by
-    have hf : (as.filter fun b => !b == a).length ≤ as.length := List.length_filter_le ..
-    obtain ⟨ih1, ih2⟩ := eraseDups_nodup n (as.filter fun b => !b == a) (by simp at h; omega)
-    rw [List.eraseDups_cons, List.length_cons, List.length_cons]
-    refine ⟨by omega, fun he => ?_⟩
-    have hfl : (as.filter fun b => !b == a).length = as.length := by omega
-    have hall := List.length_filter_eq_length_iff.1 hfl
-    have hfe : (as.filter fun b => !b == a) = as := List.filter_eq_self.2 hall
-    rw [hfe] at ih2 he
-    refine List.nodup_cons.2 ⟨fun hm => ?_, ih2 (by omega)⟩
-    have := hall a hm
-    simp at this
 
 /-- Two loops over one list from one state end in one state where both accept, if their bodies give one step
 wherever both accept. -/
@@ -240,7 +219,7 @@ theorem templatesOf_ranges {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Arra
   obtain rfl := evaluate_ranges hev hrs
   refine ⟨?_, mapM_tmplOf _ _ hmapM⟩
   have hnd : (tsp.map (·.1)).toList.Nodup :=
-    (eraseDups_nodup _ (tsp.map (·.1)).toList (Nat.le_refl _)).2 (hdup.trans Array.length_toList.symm)
+    (nodup_of_eraseDups _ (tsp.map (·.1)).toList (Nat.le_refl _)).2 (hdup.trans Array.length_toList.symm)
   subst hmap
   simpa [Function.comp_def] using hnd
 
@@ -257,7 +236,7 @@ theorem range_unique {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array Stri
   simpa using h
 
 /-- The text's template at a range's place has the range's template and its count for units. -/
-private theorem tmpl_at {ts : List Tmpl} {rs : Array TRange}
+theorem tmpl_at {ts : List Tmpl} {rs : Array TRange}
     (hmap : ts.map (fun t => (t.tid, t.units)) = rs.toList.map (fun r => (r.template, r.count))) {i : ℕ}
     (hi : i < rs.size) : ∃ t, ts[i]? = some t ∧ t.tid = rs[i]!.template ∧ t.units = rs[i]!.count := by
   have hlen : ts.length = rs.size := by simpa using congrArg List.length hmap

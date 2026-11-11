@@ -7,9 +7,9 @@ public import Proofs.Properties.Nci.RecordPassed
 # A leaf an activation returns through a parameter is a leaf of a parameter its Definition passes on
 
 `Resolve.ret_within` says a leaf an activation `U` returns is one of `U`'s gates or the gate a leaf of one of `U`'s
-parameters resolves to. This module names the parameter (`ret_passed_on`): it is one `Record.passedOn` lists for
-`U`'s Definition. So a parameter `passedOn` does not list has no leaf among the leaves `U` returns that are not
-`U`'s own gates.
+parameters resolves to. This module names the parameter and its leaf (`ret_passed_on`): the parameter is one
+`Record.passedOn` lists for `U`'s Definition, and the leaf is one of its leaves. So a parameter `passedOn` does not
+list has no leaf among the leaves `U` returns that are not `U`'s own gates.
 
 The walk of resolution from a leaf of `U`'s return keeps `Record.SecurityProofs.Passing` (`step_passing`): a step
 down enters a member at a reference of its callee's return, a step up reaches a reference of the argument that fills
@@ -185,12 +185,13 @@ theorem step_passing (U : Scope) (B : ℕ) (s s' : Scope × Ref) (hs : Inv P B s
           exact passing_up P U parent d off k m i j hpass hU hpd hk hfn hia hq ht' (hre.trans hget)
             (fun h => key _ hre h)
 
-/-- **A walk of resolution that starts passing under `U` ends in `U` or leaves through a parameter `U`'s Definition
-passes on.** -/
+/-- **A walk of resolution that starts passing under `U` ends in `U` or leaves through a leaf of a parameter `U`'s
+Definition passes on**: the state the walk leaves `U` from is a reference of `U`'s body. -/
 theorem run_passing (U : Scope) (B : ℕ) :
     ∀ (n : ℕ), n ≤ Flock.Steps.FUEL → ∀ (s : Scope × Ref) (b : ℕ), Inv P B s → Under U s.1 → Passing P U s →
       Flock.Steps.run "scope resolution" (resolveStep P) n s = .ok b →
-      (U.off ≤ b ∧ b < B) ∨ ∃ i j, i ∈ passOf P U.d ∧ resolve P U ⟨true, i, j⟩ = .ok b
+      (U.off ≤ b ∧ b < B) ∨ ∃ i j, i ∈ passOf P U.d ∧ i < (P.defs[U.d]!).body.params.size ∧
+        j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b
   | 0, _, _, _, _, _, _, h => by simp [Flock.Steps.run, throw, throwThe, MonadExceptOf.throw] at h
   | n + 1, hn, s, b, hs, hu, hpass, h => by
     have h' := h
@@ -215,7 +216,10 @@ theorem run_passing (U : Scope) (B : ℕ) :
           have hp' : p = true := hp
           have hU' : sc = U := hU
           rw [hp', hU'] at h hpass
-          exact Or.inr ⟨i, j, passing_exit P U i j hpass, resolve_of_run P hn h⟩
+          have hb : i < (P.defs[sc.d]!).body.params.size ∧ j < ((P.defs[sc.d]!).body.params[i]!).2.leaves :=
+            hs.2.1.1 hp'
+          rw [hU'] at hb
+          exact Or.inr ⟨i, j, passing_exit P U i j hpass, hb.1, hb.2, resolve_of_run P hn h⟩
         · have hpass' := step_passing P hroot hB hret harg U B s s' hs hx (fun hc' => hU hc'.1) hpass
           have hup : Under U parent := by
             rw [hsc] at hu hU
@@ -235,7 +239,8 @@ theorem run_passing (U : Scope) (B : ℕ) :
 theorem ret_passed_on (U : Scope) (hU : Good P U) (t : ℕ) (ht : t < (P.defs[U.d]!).body.ret.count) {b : ℕ}
     (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
     (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨
-      ∃ i j, i ∈ passOf P U.d ∧ resolve P U ⟨true, i, j⟩ = .ok b := by
+      ∃ i j, i ∈ passOf P U.d ∧ i < (P.defs[U.d]!).body.params.size ∧
+        j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b := by
   obtain ⟨hd, hpc⟩ := good_d P hroot hB U hU
   obtain ⟨q, hq, t', ht', hget⟩ := seq_part _ (hret U.d hd hpc) t ht
   exact run_passing P hroot hB hL hret harg U _ Flock.Steps.FUEL (Nat.le_refl _) _ b
@@ -284,7 +289,8 @@ theorem ret_passed_on_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.de
     (ht : t < (P.defs[U.d]!).body.ret.count) {b : ℕ}
     (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
     (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨
-      ∃ i j, i ∈ passOf P U.d ∧ resolve P U ⟨true, i, j⟩ = .ok b := by
+      ∃ i j, i ∈ passOf P U.d ∧ i < (P.defs[U.d]!).body.params.size ∧
+        j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b := by
   obtain ⟨hroot, hB, hL, -, hret, harg⟩ := decoded_walk bytes P hdec hov hlay
   exact ret_passed_on P hroot hB hL hret harg U hU t ht h
 
@@ -304,8 +310,8 @@ theorem param_returned_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.d
     resolve_lt P hroot hB hL U.off U ⟨true, i, j⟩
       ⟨hU, ⟨fun _ => by rw [hprm U.d hd hpc]; exact ⟨hi, hj⟩, fun hc => by cases hc⟩, fun _ => Nat.le_refl _,
         fun hc => by cases hc⟩ hb
-  rcases ret_passed_on P hroot hB hL hret harg U hU t ht h with ⟨hge, -⟩ | hx
+  rcases ret_passed_on P hroot hB hL hret harg U hU t ht h with ⟨hge, -⟩ | ⟨i', j', hi', -, -, hx⟩
   · omega
-  · exact hx
+  · exact ⟨i', j', hi', hx⟩
 
 end NciCheck.Properties.SecurityProofs.Resolve

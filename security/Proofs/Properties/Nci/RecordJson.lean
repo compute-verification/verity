@@ -166,7 +166,7 @@ theorem mapM_ok {α β : Type} (f : α → Except String β) : ∀ (l : List α)
           · rw [hy] at hz; cases hz; exact Or.inl rfl
           · exact Or.inr ⟨x', hx', hz⟩
 
-theorem bind_ok {α β : Type} {x : Except String α} {f : α → Except String β} {b : β} (h : x >>= f = .ok b) :
+theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : x >>= f = .ok b) :
     ∃ a, x = .ok a ∧ f a = .ok b := by
   cases x with
   | error e => cases h
@@ -379,7 +379,7 @@ open Flock.Sigma (bits)
 open NciCheck.RecordText (Tmpl tmplOf wiresOf fieldsOf outerOf)
 
 /-- `eraseDups` keeps a list's length only where the list has no duplicates. -/
-theorem nodup_of_eraseDups : ∀ (n : Nat) (l : List String), l.length ≤ n →
+theorem nodup_of_eraseDups {α : Type} [BEq α] [LawfulBEq α] : ∀ (n : Nat) (l : List α), l.length ≤ n →
     l.eraseDups.length ≤ l.length ∧ (l.eraseDups.length = l.length → l.Nodup)
   | _, [], _ => by simp
   | 0, _ :: _, h => by simp at h

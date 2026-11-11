@@ -74,18 +74,6 @@ private theorem sum_fin_map {α : Type} (g : α → ℕ) : ∀ (l : List α) (n 
     show ∑ i : Fin (l.length + 1), f i.val = _
     exact (Fin.sum_univ_succ fun i : Fin (l.length + 1) => f i.val).trans rfl
 
-/-- The text's template at a range's place has the range's template and its count for units. -/
-private theorem tmpl_of_range {ts : List Tmpl} {rs : Array TRange}
-    (hmap : ts.map (fun t => (t.tid, t.units)) = rs.toList.map (fun r => (r.template, r.count))) {i : ℕ}
-    (hi : i < rs.size) : ∃ t, ts[i]? = some t ∧ t.tid = rs[i]!.template ∧ t.units = rs[i]!.count := by
-  have hlen : ts.length = rs.size := by simpa using congrArg List.length hmap
-  have hi' : i < ts.length := by omega
-  have h : (ts.map fun t => (t.tid, t.units))[i]? = (rs.toList.map fun r => (r.template, r.count))[i]? := by
-    rw [hmap]
-  refine ⟨ts[i], List.getElem?_eq_getElem hi', ?_⟩
-  rw [getElem!_pos rs i hi]
-  simpa [hi, hi'] using h
-
 /-! ## A template's grids -/
 
 /-- **A template's grids**, where the check reads the text's grids: no unit lies in two of them, each has a row
@@ -214,7 +202,7 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
         (fun i => rs[i]!.count / S * (P.defs[((P.defs[P.root]!).body.nodes[rs[i]!.node]!).fn]!).gates) hlen ?_
       intro i hi
       have hir : i < rs.size := by omega
-      obtain ⟨t, hget, htt, htu⟩ := tmpl_of_range hmap hir
+      obtain ⟨t, hget, htt, htu⟩ := tmpl_at hmap hir
       have hti : ts[i] = t := Option.some.inj ((List.getElem?_eq_getElem hi).symm.trans hget)
       show rs[i]!.count / S * (P.defs[((P.defs[P.root]!).body.nodes[rs[i]!.node]!).fn]!).gates =
         ts[i].units / S * (P.defs[ts[i].defn]!).gates
@@ -246,7 +234,7 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
       exact hmapu
     · intro i v g h1 h2
       obtain ⟨hk, hcnt⟩ := range_node hr hP.2.2.2.2.2.2 hrs i.isLt
-      obtain ⟨t, hget, htt, htu⟩ := tmpl_of_range hmap i.isLt
+      obtain ⟨t, hget, htt, htu⟩ := tmpl_at hmap i.isLt
       have hunit : UnitAt P rs rs[i.val]!.template v.val (P.child P.rootScope rs[i.val]!.node v.val) :=
         (unitAt_iff hts hrs _ _ _).2
           ⟨i.val, t, i.isLt, rfl, hget, htt, htu, Nat.lt_of_lt_of_eq v.isLt htu.symm, rfl⟩
@@ -264,7 +252,7 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
       rw [hinp]
       exact hcomp _ _ _ g p ops sc' hunit h1 h2 hgate
     · intro i
-      obtain ⟨t, hget, htt, htu⟩ := tmpl_of_range hmap i.isLt
+      obtain ⟨t, hget, htt, htu⟩ := tmpl_at hmap i.isLt
       exact tmpl_slot_card hgr hnd (List.mem_of_getElem? hget) hu htt htu
   · right
     by_contra hne
