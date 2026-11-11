@@ -58286,3 +58286,42 @@ Not run tonight: cores a prover 20 and all; salts `upper` alone and WITNESS's cu
 For BREAKEVEN: `SparseMlaHeadValues_v2{G=32}`, vy-dc-h200-3, two provers: 1.1861 s a statement today (the card's walk), 0.8306 s with the follow-up, salts `all` and `FC_HOST_UNITS=1`; one prover 1.3715 s and 1.0104 s (measured, `r20261111-142211-64ca`).
 For BREAKEVEN: the cut's 256 blocks at G = 32, two provers: 3.1904 s today, 2.1378 s with the cuts and the host's walk (measured, `6f08` + `64ca`), against the head block's 3.02 to 3.13 s and 2.1425 s (measured, `5832`).
 For the table: the head block cut into scores + values costs the same seconds as the head block with tonight's cuts when the host walks the values unit: 1.05 (G = 128), 1.03 (G = 64), 1.00 (G = 32) of the head block's, two provers, six cores, vy-dc-h200-3 (`6f08`, `88e7`, `a5fc`, `64ca`, `5832`); as the code walks today it is 1.35 to 1.39, 1.09 to 1.12 and 1.02 to 1.06.
+
+## RELAX, Wed 11 Nov 15:45Z: the adapter draft has its green quick tier at the head: `r20261111-141506-c5a0` at `20ac4fee7711`, 23 suites passed (2 cached), 0 failed. No commit past it. Below: the eleven pins with their keys, the sizer's sentence, the limits
+
+- **`c5a0`: rc 0, "23 suites: 23 passed (2 cached), 0 failed"** [read: its `quick.log` and `status.json`, done 15:41:37Z]. `verity-vllm` 14,023 passed, 432 skipped; `benchmarks/one_stage` 493; `benchmarks/prove_path` 143; `verity-flock` 1,425; `research` 4,282; circuit-check's suite 335; `verity-numerical` 640. Cached, each a pass at 12:15Z with every file it read unchanged: `verity-commitments-benchmarks`, `verity-tc-probe`. Its named tests, the select's file among them: 190 passed, rc 0.
+- **The draft is `cursor/proofs-recut-c2b3` at `20ac4fee7711076028d0d40b6800a4486211c200`**, unmarked, no PR, ten commits on `origin/main` `08ad61db9432`, only `adapters/vllm` [run: `git ls-remote`, 15:30Z]. I add nothing to it and write nothing to vllm.
+
+**(1) The eleven widths that need a census pin**, each the unit's key as circuit-check took it [read: each run's command; every run rc 0]:
+
+1. W_UV: `BatchedGemm_v1{B=1,K=512,N=16,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}` (2^25, `9ff8`)
+2. q_nope: `BatchedGemm_v1{B=1,K=192,N=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}` (2^25, `f353`)
+3. q_a: `ScaledMmFp8BlockSharedScale_v1{K=6144,N=16,G=128}` (2^27, `09ff`)
+4. o_proj: `ScaledMmFp8BlockSharedScale_v1{K=2048,N=8,G=128}` (2^25, `6a95`)
+5. the experts' fused block at N = 4, one key a kernel (2^26 each, `a057`, `bcaa`):
+   - `MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=12288}"},K=6144,N=4,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}`
+   - `MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=12288}"},K=6144,N=4,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}`
+   - The runs' commands spell `SWAP=True` and `SWAP=False`; a descriptor's id writes a boolean as JSON [read: `verity/circuits/codec.py`, `descriptor_id`], so the key in a Program is the lower-case one.
+6. the router's prefill GEMM: `CublasSplitKGemmF32Out_v1{K=6144,N=4,SPLIT_K=3,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}` (2^26, `912b`)
+7. the router's decode GEMM: `LlBf16DotprodGemm_v1{N=2,K=6144,BS=128,VEC=8,FMA=1}` (2^27, `1740`)
+8. the embedding, eight keys: `EmbeddingShard_v1{VS=19360,H=4,START=s}` at s = 0, 19360, 38720, 58080, 77440, 96800, 116160, 135520 (2^27 each; `a3f9` at 0, `37aa` the other seven)
+9. the reader `SiluMul`: `SiluMul_v2{I=192}`, eight a row of `SiluMul_v2{I=1536}` (2^21, `0a2b`)
+10. the reader indexer: `DsaIndexerQHead_v1{D=128,ROPE=64,NH=32}`, 32 a row of `DsaIndexerQ_v1{H=32,D=128,ROPE=64}` (2^22, `a7f9`)
+11. the LM head: `Gemm_v2{K=6144,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}`, 2,420 a row of `Gemm_v2{K=6144,N=19360,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}` (2^27, `a996`)
+
+- Why each needs a pin, as at 12:49Z and 13:38Z: the census's first fit takes the slice of one word for 1, 2, 5, 6, 7, 8 and 11 (the draft lists the wide widths after it); `width_pick` takes N = 4 for 3 and 4; rows 9 and 10 fit whole, so `cut` never splits them.
+- The select needs no pin: with the draft the census cuts `TokenSelect_v1{V=154880}` into 121 × `TokenSelectGroups_v1{C=1280,G=16}` and 1 × `TokenSelectCombine_v2{V=154880,C=16}` [run on my VM at 14:1xZ, reported 14:42Z; not rerun since].
+- The keys' statics (the dots, `SPLIT_K`, `BS`, the read) are the ones I read off the plan's blocks file, not off a served Program [read then; not reread].
+
+**(2) The sizer.** The census's sizer (`m1_families.block`) sizes a unit on its Definition's own ports; the select's two units must be sized on their staged rows, 2^27 each [run `r20261111-135039-9a0b`: 162 rows; `r20261111-140805-2749`: 244 rows], where it reads 2^22 and 2^26.
+
+**(3) The limits, as at 14:42Z; none moved.**
+- The select's row width is chosen from V alone (8 words at V = 154,880). The adapter cannot see the LM head's block width from the select row's spec.
+- The group units read their logits by value. Nothing in the serving rows wires them to the LM head's slices; `x0` is read by value too.
+- A template of the two select families is a stage only at a split's statics. `interior_rows.pieces(s, 16)` at a vocabulary with a split would be refused (its default chunk is 64; no caller passes 16 outside a test at V = 64).
+- A vocabulary whose group unit is no proof block has no split, so a small model's select row is as it was.
+- A `WIDE_SLICES` family's whole row at a power-of-two extent is its own widest slice, where it was a whole row; a window naming such a row whole names its cap. No test of the adapter does otherwise [run: `verity-vllm` green at `7022` and `c5a0`].
+- Not established: a served window at any of these widths; anything on a GPU. The experts' block, the indexer's head and the select's two units pass circuit-check with the warning that no realization was compared with the reference.
+
+For the table:
+- RELAX | the adapter draft `cursor/proofs-recut-c2b3` at `20ac4fee7711`, unmarked | quick tier green at the head [run `c5a0`: 23 passed (2 cached), 0 failed]; lists eleven widths and the select's split | the census needs eleven pins and its sizer on staged rows (the select's units 2^27 each [run], read 22 and 26)
