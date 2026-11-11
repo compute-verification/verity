@@ -77,7 +77,8 @@ kind rests on (`RESTS_ON`). Where Fit fails ρ is max(1, that max); where Fit ho
 most that. Its one kind:
 - products: the theorem of record's products term (`he_products`, `RESTS_ON` has its statement), a theorem for the
   run's circuit given (H) and (E): ρ ≥ (c/|C|)·(N/(k + α) − F·(k/2)·√(ON/(β_w·β_x))/(k + α)^1.5),
-  α = F·½·√(k³/(β_w·β_x·b_y)) (`he_rho`), on M, the run's products whose two operands both depend on the update
+  α = F·½·√(k³/(β_w·β_x·b_y)) (the slowdown calculator's arithmetic, read through `calculator`, never restated
+  here), on M, the run's products whose two operands both depend on the update
   (`he_of_rows` on a step's product rows, `he_of_products` on a model's), N its MACs and O its output wires. M leaves
   out one array times itself, a product reading a gather's rows before any op makes them token-specific, attention's
   products and the optimizer's (Newton-Schulz's B·X), from k = 8e7 the head's input and weight gradients
@@ -88,21 +89,21 @@ most that. Its one kind:
   `beta_eff`, β/(1 + (K*/r)²) with K* = ½√(k/β), where the update reaches it only through a bottleneck of rank r: its
   rate below its width implies r, and on a step with an adapter of rank r_step every operand downstream of it is at
   most its β_eff at r_step, the adapters' own operands at their widths; a weight's is at most the run record's code
-  bits a trained weight (`CODE_LABEL`), an activation's at most β(k) (`BETA_K`, `BETA_K_LABEL`), the casts of one
-  value counting as one word. b_y is M's least output width and F = 2/√3 where M holds a backward product (a layer's
-  forward, input-gradient and weight-gradient products share arrays, `SHARE`), else 1, in both α and the outputs'
-  term; that no four arrays are pairwise multiplied is a premise the product rows don't record. The term is the best
-  over three choices of M (`HE_SUBSETS`: M, M less the contractions too short for the main term to outweigh the
+  bits a trained weight (`CODE_LABEL`), an activation's at most β(k) (`calculator.beta`, `BETA_K_LABEL`), the casts of
+  one value counting as one word. b_y is M's least output width and F = 2/√3 where M holds a backward product (a layer's
+  forward, input-gradient and weight-gradient products share arrays, `calculator.share`), else 1, in both α and the
+  outputs' term; that no four arrays are pairwise multiplied is a premise the product rows don't record. The term is the
+  best over three choices of M (`HE_SUBSETS`: M, M less the contractions too short for the main term to outweigh the
   outputs', and the weight gradients alone, at F = 1), each at the best β_w·β_x threshold it can take (`he_figure`),
-  never below 0. It needs no summation order, so it is measured on products written with elementwise ops (left out
-  of M, kept in |C|) and for a tree. It is unmeasured on a record with no product rows, on rows that predate
-  `SYSTEM_FROM` (`HE_RETRACE`), past `BETA_K`'s last k (`HE_PAST`), from `HEAD_K` on a model's products
+  never below 0. It needs no summation order, so it is measured on products written with elementwise ops (left out of M,
+  kept in |C|) and for a tree. It is unmeasured on a record with no product rows, on rows that predate `SYSTEM_FROM`
+  (`HE_RETRACE`), past the last k the calculator has a β(k) at (`HE_PAST`), from `HEAD_K` on a model's products
   (`HE_HEAD`) and on a step whose elementwise ops fan out into an operand (`p_match_reason`), and never priced on a
-  trace of another program (`OTHER_PROGRAM`). The products come from `products_of` (steps captured by capture_step
-  or capture_fn) or `products_of_trace` (the product rows a recorded program's trace keeps from training_slowdown 4.8
-  on, training_slowdown.capture.products), each at the k it classifies them at, a trace's at each k of the console's
-  dial too (`at`). At a fixed k the term is linear in c, so the dial reads it as c times a number for each k it has
-  products at (`products_per_c`).
+  trace of another program (`OTHER_PROGRAM`). The products come from `products_of` (steps captured by capture_step or
+  capture_fn) or `products_of_trace` (the product rows a recorded program's trace keeps from training_slowdown 4.8 on,
+  training_slowdown.capture.products), each at the k it classifies them at, a trace's at each k of the console's dial
+  too (`at`). At a fixed k the term is linear in c, so the dial reads it as c times a number for each k it has products
+  at (`products_per_c`).
 A kind's term is None where its inputs are unmeasured, with the reason (`unmeasured`), and the max is over the measured
 ones (None, and so ρ where Fit fails, where none is). Beside the kinds, never in the max, the sensitivities
 (`SENSITIVITIES`), each labelled with what it rests on:
@@ -158,7 +159,7 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
-from . import policy
+from . import calculator, policy
 from .gates import gates, of_log, per_mac, split_key
 
 ACT_BITS = 16
@@ -409,6 +410,14 @@ THE_CODE = "training's slowdown code"
 P_MATCH = "elementwise steps don't fan out (P-match)"
 #: the one bound's kinds (`bound`), each a lower bound on its own
 KINDS = ("products",)
+
+
+def _beta_rows() -> str:
+    """The slowdown calculator's rows of β(k) (`calculator.beta_rows`), as a sentence states them."""
+    (k0, b0), *rest = calculator.beta_rows()
+    return ", ".join([f"{b0:g} up to k = {k0:,.0f}", *(f"{b:g} at {k:.0e}".replace("e+0", "e") for k, b in rest)])
+
+
 #: what each kind rests on
 RESTS_ON = {
     "products": "theorem of record for this circuit: every partition into blocks of at most c gates, each "
@@ -420,8 +429,8 @@ RESTS_ON = {
                 "the casts of one value counting as one word: a weight's (an operand no token indexes) its "
                 "width as the circuit passes it, at most the run record's code bits a trained weight (β_w "
                 "from the run record's code size), an activation's at most a uniform β(k) (β(k) per "
-                "the red-team of (H): 15.9 up to k = 145,568, 15.3 at 8e5, 10.8 at 8e6, 2.7 at 8e7, "
-                "0.37 at 8e8, between two of them the next one's, none past it), and β_eff = β/(1 + (K*/r)²), "
+                f"the red-team of (H): {_beta_rows()}, between two of them the next one's, none past it), and "
+                "β_eff = β/(1 + (K*/r)²), "
                 "K* = ½√(k/β), for "
                 "an operand the update reaches only through a bottleneck of rank r a row or column (an "
                 "adapter's Ax, a broadcast vector, a frozen edge); each product of M has β_w·β_x at most its "
@@ -673,27 +682,20 @@ def beta_eff(w: float, r: float, k: float) -> float:
 SIDES = (("batch", "m", "k"), ("batch", "k", "n"))
 
 
-#: β(k), the β a derived activation's word holds at k as the red-team of (H) finds it on the traced s-t20 step
-#: over every set it built: its first β up to its first k, between two points the next one's (a point is the least it
-#: found up to its k, which only falls as k rises, so the points allow no more between them), none past its last. A
-#: source activation (a norm's output, a layer's output gradient) holds at least as much, so every activation takes it
-BETA_K = ((145_568, 15.9), (800_000, 15.3), (8e6, 10.8), (8e7, 2.7), (8e8, 0.37))
+#: what a row calls the β an activation's word holds at k, the slowdown calculator's rows (`calculator.beta`). They are
+#: a derived activation's; a source activation (a norm's output, a layer's output gradient) holds at least as much, so
+#: every activation takes them
 BETA_K_LABEL = "β(k) per the red-team of (H)"
 CODE_LABEL = "β_w from the run record's code size"
 #: the k from which the head's input and weight gradients leave M: their operand δ_logits, a token's vocabulary-wide
 #: row, comes from its 512 words and two scalars, and with them in M no β(k) holds there
 HEAD_K = 8e7
-#: why the products term is unmeasured past `BETA_K`'s last k
-HE_PAST = (f"unmeasured: no β an activation holds is known past k = {BETA_K[-1][0]:.0e} ({BETA_K_LABEL} stops "
-           "there)").replace("e+0", "e")
+#: why the products term is unmeasured past the last k the calculator has a β(k) at
+HE_PAST = (f"unmeasured: no β an activation holds is known past k = {calculator.beta_rows()[-1][0]:.0e} "
+           f"({BETA_K_LABEL} stops there)").replace("e+0", "e")
 #: why the products term is unmeasured from `HEAD_K` on products that don't say which are the head's
 HE_HEAD = (f"unmeasured: from k = {HEAD_K:.0e} M leaves out the head's input and weight gradients, and the "
            "model's products sum them with the layers'").replace("e+0", "e")
-
-
-def beta_k(k: float) -> float | None:
-    """`BETA_K` at k: an activation's β(k), the β of its first point at or past k, None past its last k."""
-    return next((b for point_k, b in BETA_K if k <= point_k), None)
 
 
 def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: float | None = None) -> dict | None:
@@ -831,19 +833,6 @@ def he_of_products(products: list[dict], k: float, rank: float | None = None) ->
             "gathered_macs": 0.0, "left_out_macs": left, "steps": None, "step_tokens": None, "trained_weights": None}
 
 
-def he_rho(N: float, O: float, beta_w: float, beta_x: float, b_y: float, F: float, c: float, k: float,
-           C: float) -> float:
-    """The theorem of record's ρ before its floor, (c/|C|)·(N/(k + α) − F·(k/2)·√(ON/(β_w·β_x))/(k + α)^1.5) with
-    α = F·½·√(k³/(β_w·β_x·b_y)): Motzkin-Straus's 4/3 bounds π, whose square root multiplies both the split-free term and the
-    outputs' (the proof's Σ√(π_I z_I) ≤ √(max π)·√(m(O + mk/b_y))), so F = 2/√3 enters both."""
-    bb = beta_w * beta_x
-    a = F * math.sqrt(k ** 3 / (bb * b_y)) / 2
-    return c / C * (N / (k + a) - F * k / 2 * math.sqrt(O * N / bb) / (k + a) ** 1.5)
-
-
-#: F where M holds a backward product: a layer's forward, input-gradient and weight-gradient products share three
-#: arrays, and Motzkin-Straus bounds π by 4/3 where no four are pairwise multiplied
-SHARE = 2 / math.sqrt(3)
 #: the subsets of M `he_figure` takes the best of: all of M, M less its short contractions, and the weight gradients
 #: alone
 HE_SUBSETS = ("M", "M without its short contractions", "the weight gradients alone")
@@ -853,22 +842,22 @@ def he_figure(he: dict, c: float, C: float, tau: float | None = None, beta_code:
     """The products term on M (`he_of_rows`) at (c, he's k) and |C|, the best of three valid choices of M
     (`HE_SUBSETS`), each at its best threshold, and 0 where none is positive. Each operand is charged its β, a
     weight's at most `beta_code` (the run record's code bits a trained weight), an activation's at most β(k)
-    (`beta_k`); from `HEAD_K` the head's products leave M; and where M is over a run's steps (he's `steps`, of
+    (`calculator.beta`); from `HEAD_K` the head's products leave M; and where M is over a run's steps (he's `steps`, of
     `step_tokens` tokens each), their N and O lose the ⌊k/(τ·T)⌋ steps after the first update (a block of k bits
     holds the inputs they read), τ the bits a token's input costs. On a subset, for each product P of a group's two
     β, M_P its groups with product at least P, charged β_w·β_x = P (the group's weight's β and its activation's, or
     its wider and narrower where its operands are of one class), the least pair among M_P's products, which F needs
     where a layer's arrays differ in β (Motzkin-Straus sums u_r·u_s/(β_r·β_s) over the pairs M_P multiplies), b_y M_P's
-    least output width and F = 2/√3 where M_P holds a backward product (`SHARE`: a layer's forward, input-gradient and
-    weight-gradient products share arrays; Motzkin-Straus bounds π by 4/3 where no four arrays are pairwise
-    multiplied), else 1, and 1 on the weight gradients alone; the subset's term is the largest `he_rho` over P. The
-    second subset leaves out of M's best the groups whose contraction K is below K_thr = (F·k/2)²·b_y/(β_w·β_x·(k +
-    α)), where the outputs' term outweighs the main one. What it read: the binding subset, each subset's term, β_w,
-    β_x, β (their geometric mean), b_y, F, α, N, O, K_thr, β(k), `beta_code` where it caps a weight in M
-    (`code_bound`), the first steps left out, M_P's share of the candidates' MACs, whether an operand's own β (its rate
-    or β_eff, before either cap) is below its width (`below_width`) and the step's r_step."""
+    least output width and F = 2/√3 where M_P holds a backward product (`calculator.share`: a layer's forward,
+    input-gradient and weight-gradient products share arrays; Motzkin-Straus bounds π by 4/3 where no four arrays are
+    pairwise multiplied), else 1, and 1 on the weight gradients alone; the subset's term is the largest
+    `calculator.closed_form` over P. The second subset leaves out of M's best the groups whose contraction K is below
+    K_thr = (F·k/2)²·b_y/(β_w·β_x·(k + α)), where the outputs' term outweighs the main one. What it read: the binding
+    subset, each subset's term, β_w, β_x, β (their geometric mean), b_y, F, α, N, O, K_thr, β(k), `beta_code` where it
+    caps a weight in M (`code_bound`), the first steps left out, M_P's share of the candidates' MACs, whether an
+    operand's own β (its rate or β_eff, before either cap) is below its width (`below_width`) and the step's r_step."""
     k = he["k"]
-    bk = beta_k(k)
+    bk = calculator.beta(k)
     if bk is None:
         raise ValueError(f"he_figure at k = {k:g}: {HE_PAST}")
     first, scale = None, 1.0
@@ -895,11 +884,12 @@ def he_figure(he: dict, c: float, C: float, tau: float | None = None, beta_code:
             bw, bx = next(w_x(cb, g) for p, cb, g in M if p == P)
             N, O = scale * sum(g["macs"] for _, _, g in M), scale * sum(g["wires"] for _, _, g in M)
             b_y = min(g["b_y"] for _, _, g in M)
-            F = 1.0 if one or all(g["forward"] for _, _, g in M) else SHARE
-            raw = he_rho(N, O, bw, bx, b_y, F, c, k, C)
+            F = 1.0 if one or all(g["forward"] for _, _, g in M) else calculator.share(3)
+            raw = calculator.closed_form(c, k, {"N": N, "O": O, "beta_w": bw, "beta_x": bx, "b_y": b_y, "F": F,
+                                                "C_gates": C})
             if out is None or raw > out["raw"]:
                 out = {"raw": raw, "beta_w": bw, "beta_x": bx, "beta": math.sqrt(P), "b_y": b_y, "F": F,
-                       "alpha": F * math.sqrt(k ** 3 / (P * b_y)) / 2, "N": N, "O": O,
+                       "alpha": F * calculator.alpha(k, P, b_y), "N": N, "O": O,
                        "code_bound": beta_code is not None and any(
                            w and beta_code < b for _, _, g in M for b, w in zip(g["beta"], g.get("weight", ()))),
                        "below_width": any(b < w for _, _, g in M for b, w in zip(g["beta"], g["width"])),
@@ -945,9 +935,9 @@ def he_products(m: Measured, c: float, k: float) -> tuple[float | None, str | No
     (a block's split MACs are charged k a block), so it is measured on a step that writes products with elementwise
     ops (they are left out of M, and stay in |C|) and on a circuit that declares a tree. It is unmeasured on a record
     with no product rows (`PRODUCTS_UNMEASURED`), on rows that predate `SYSTEM_FROM` (`HE_RETRACE`), on products
-    without M (`HE_NO_ROWS`), past `BETA_K`'s last k (`HE_PAST`), from `HEAD_K` on products that don't say which are
-    the head's (`HE_HEAD`) and on a step whose elementwise ops fan out into an operand (`p_match_reason`), and never
-    priced on a trace of another program (`OTHER_PROGRAM`). A weight's β is at most the record's code bits
+    without M (`HE_NO_ROWS`), past the calculator's last β(k) (`HE_PAST`), from `HEAD_K` on products that don't say
+    which are the head's (`HE_HEAD`) and on a step whose elementwise ops fan out into an operand (`p_match_reason`), and
+    never priced on a trace of another program (`OTHER_PROGRAM`). A weight's β is at most the record's code bits
     (`delta_bits`) over M's trained weights where M counts them, and τ is the record's."""
     p = m.products
     if p is None:
@@ -968,7 +958,7 @@ def he_products(m: Measured, c: float, k: float) -> tuple[float | None, str | No
         return None, HE_RETRACE if "he" in p else HE_NO_ROWS, got
     if p.get("p_match"):
         return None, p_match_reason(p["p_match"]), got | {"p_match": p["p_match"]}
-    if beta_k(k) is None:
+    if calculator.beta(k) is None:
         return None, HE_PAST, got
     if k >= HEAD_K and any(g.get("head") is None for g in he["groups"]):
         return None, HE_HEAD, got

@@ -11,8 +11,8 @@ import pytest
 from conftest import SHAPE
 
 from training_slowdown import VERSION as F_VERSION
+from training_slowdown import calculator, policy
 from training_slowdown import formalism as F
-from training_slowdown import policy
 from training_slowdown.gates import per_mac
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -509,8 +509,9 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
     after the first update, and from 8e7 the head's products leave M. Model products that sum the head's gradients
     with the layers' are unmeasured from 8e7, and every M past 8e8."""
     c, k, C, T = 1e11, 65_536.0, 1e13, 1024
-    assert (F.beta_k(1.0), F.beta_k(145_568), F.beta_k(8e6), F.beta_k(8e8)) == (15.9, 15.9, 10.8, 0.37)
-    assert F.beta_k(8e6 + 1) == F.beta_k(math.sqrt(8e6 * 8e7)) == F.beta_k(8e7) == 2.7 and F.beta_k(8.1e8) is None
+    beta = calculator.beta
+    assert (beta(1.0), beta(145_568), beta(8e6), beta(8e8)) == (15.9, 15.9, 10.8, 0.37)
+    assert beta(8e6 + 1) == beta(math.sqrt(8e6 * 8e7)) == beta(8e7) == 2.7 and beta(8.1e8) is None
     he = F.he_of_rows(HE_STEP, k, 10.0, T)
     opt, att = HE_STEP[7], HE_STEP[8]
     assert he["left_out_macs"] == 10 * (opt["count"] * opt["macs"] + att["count"] * att["macs"])
@@ -523,8 +524,8 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
     assert 8 < fig["K_thr"] < 1024 and fig["beta_k"] == 15.9 and fig["F"] == pytest.approx(2 / math.sqrt(3))
     dw = [g for g in he["groups"] if g["dw"]]
     N, O = sum(g["macs"] for g in dw), sum(g["wires"] for g in dw)
-    assert fig["subsets"][F.HE_SUBSETS[2]] == pytest.approx(max(0.0, F.he_rho(N, O, 15.9, 15.9, 16, 1.0, c, k, C)),
-                                                            rel=1e-12)
+    alone = {"N": N, "O": O, "beta_w": 15.9, "beta_x": 15.9, "b_y": 16, "F": 1.0, "C_gates": C}
+    assert fig["subsets"][F.HE_SUBSETS[2]] == pytest.approx(max(0.0, calculator.closed_form(c, k, alone)), rel=1e-12)
     first = F.he_figure(he, c, C, tau=16)
     assert first["first_steps"] == 4 and first["N"] == pytest.approx(0.6 * fig["N"], rel=1e-12)
     assert fig["first_steps"] is None and F.he_figure(he, c, C, tau=1e3)["first_steps"] == 0
@@ -595,7 +596,8 @@ def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ
     share = 2 / math.sqrt(3)
 
     def rho(M: list, bw: float, bx: float, f: float = share) -> float:
-        return F.he_rho(sum(g["macs"] for g in M), sum(g["wires"] for g in M), bw, bx, 16, f, c, k, C)
+        return calculator.closed_form(c, k, {"N": sum(g["macs"] for g in M), "O": sum(g["wires"] for g in M),
+                                             "beta_w": bw, "beta_x": bx, "b_y": 16, "F": f, "C_gates": C})
 
     assert (fig["subset"], fig["beta_w"], fig["beta_x"], fig["code_bound"]) == ("M", 2.0, 8.0, True)
     assert fig["F"] == pytest.approx(share, rel=1e-15) and fig["macs_share"] == 1
@@ -605,7 +607,7 @@ def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ
 
 
 def test_f_is_1_where_the_binding_m_holds_forward_products_alone():
-    """F = 2/√3 (`SHARE`) where the M_P a term takes holds a backward product, since a layer's forward,
+    """F = 2/√3 (`calculator.share`) where the M_P a term takes holds a backward product, since a layer's forward,
     input-gradient and weight-gradient products share three arrays, and 1 where it holds forward products alone: a
     forward product sixteen times the gradients' MACs binds at its own pair, alone, at F = 1, and gradients sixteen
     times its bind at the least pair, with all three, at 2/√3."""
@@ -627,7 +629,7 @@ def test_f_is_1_where_the_binding_m_holds_forward_products_alone():
     assert (alone["subset"], alone["F"], alone["beta_w"], alone["beta_x"]) == ("M", 1.0, 16.0, 15.9)
     assert alone["macs_share"] == pytest.approx(16 / 18, rel=1e-15)
     shared = F.he_figure(step(1, 16), c, C)
-    assert shared["subset"] == "M" and shared["F"] == pytest.approx(F.SHARE, rel=1e-15) and shared["macs_share"] == 1
+    assert shared["subset"] == "M" and shared["F"] == calculator.share(3) and shared["macs_share"] == 1
 
 
 #: a code name in a published string: a dotted path (a module's, or its function's), an identifier with an underscore

@@ -8,13 +8,19 @@ What the calculator states is read from it through its public functions, never r
 - the monitoring periods (`periods`): its `PERIODS`, core's, with the window of the census's reference deployment
   before them;
 - the bound of record at a policy (`bound`): the lower bound on a circuit's slowdown that the statement its
-  `min_cut` names proves (`theorem`), from its `min_cut.bound`.
+  `min_cut` names proves (`theorem`), from its `min_cut.bound`;
+- the bound's own terms, which a caller choosing the work reads (`beta`, `beta_rows`, `share`, `alpha`, and the
+  statement's closed form, `closed_form`): its `min_cut`'s functions of those names.
+
+No other module or test of this benchmark imports the calculator or names its directory
+(`tests/test_one_calculator.py`).
 
 The calculator counts in FLOP and in its own gates (`units.gates_per_flop`); training's slowdown code counts in the
 gates of the circuits' Definitions (`training_slowdown.gates`). A figure crosses in FLOP, two a MAC, never in gates.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 import tomllib
@@ -84,12 +90,44 @@ def fleets() -> list[dict]:
     return out
 
 
+@cache
 def _min_cut():
-    """The calculator's module for the bound of record, its `min_cut`."""
-    _calculator()
-    from rho import min_cut
+    """The calculator's module for the bound, its `min_cut`, loaded by its path: it is standard library only and
+    imports nothing of its package, so reading it loads no registry and leaves the import path as it was."""
+    spec = importlib.util.spec_from_file_location("training_slowdown_min_cut", CALCULATOR / "rho" / "min_cut.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
-    return min_cut
+
+def beta(k: float) -> float | None:
+    """(H)'s β for an activation at a block of k bits (the calculator's `min_cut.beta`): None past its last row's k,
+    where the bound says nothing."""
+    return _min_cut().beta(k)
+
+
+def beta_rows() -> tuple[tuple[float, float], ...]:
+    """The rows (k, β) that `beta` reads, k rising (the calculator's `min_cut.BETA`)."""
+    return _min_cut().BETA
+
+
+def share(omega: int) -> float:
+    """The bound's F on a work no ω + 1 of whose arrays are pairwise multiplied (the calculator's `min_cut.share`): 1
+    at ω = 2, 2/√3 at ω = 3."""
+    return _min_cut().share(omega)
+
+
+def alpha(k: float, q: float, b: float) -> float:
+    """The bound's α at k, q = β_w·β_x and b (the calculator's `min_cut.alpha`), before F multiplies it."""
+    return _min_cut().alpha(k, q, b)
+
+
+def closed_form(c_gates: float, k_bits: float, work: dict) -> float:
+    """The left side of the statement's second conjunct at the policy (c, k) on `work` (`bound`'s), the calculator's
+    `min_cut.slowdown_at_least`: never above the solved count's slowdown, and below 0 where the outputs' term
+    outweighs the first."""
+    return _min_cut().slowdown_at_least(work["N"], work["O"], work["C_gates"], c_gates, k_bits,
+                                        work["beta_w"] * work["beta_x"], work["b_y"], work["F"])
 
 
 def theorem() -> str:
