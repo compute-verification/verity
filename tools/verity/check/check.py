@@ -263,7 +263,8 @@ fetched (Flock's `verifier/ci.py` hands the custody key to its store CLI too).
 
 The vLLM reference regression.  A recorded run's steps also get VERITY_REGRESSION=1, so adapters/vllm's suite runs
 `tests/regression`'s T0 tier against the frozen rows in the store (about four minutes of tests): every check but the manifest
-rebuilds, which take an hour and run after each train on main instead (`post_train.py`).  Under VERITY_STORE_REQUIRED=1 a row's
+rebuilds, which take an hour and run after each train on main instead (`post_train.py`).  The quick tier before a mark
+(`research queue ready`) and suites.py inside a `research run` set it too, so a PR that breaks a row fails there first.  Under VERITY_STORE_REQUIRED=1 a row's
 input or contract that doesn't resolve fails there; only a check `fixtures.toml` retires on a row, with its reason, skips.
 """
 from __future__ import annotations
@@ -436,7 +437,7 @@ SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
 #: the least slot memory a train check that runs pytest, lean-suites or circuit-check takes (slot.py's MIN_MEM_ENV): the train
 #: slots' mem=. In a lane slot every parallel suite gets one test worker, the one-process suites share one process and circuit-check
 #: runs one target at a time: two to four times a train slot's wall time
-TRAIN_GB = 300
+TRAIN_GB = 200
 #: the steps that need a train slot's memory
 TRAIN_STEPS = ("pytest", "lean-suites", "circuit-check")
 
