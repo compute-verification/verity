@@ -159,14 +159,14 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    (`map_moves`), N heads at a time, as JSON by `mapped_key`: copied into
                                                    `mapped-changes.d/` beside the verified queue's loop's cache, it spares the
                                                    loop's threads the work, each head running every move's script on a whole tree
-    research queue cross [--main REF] [--move-commit SHA]... [--only N...] [--jobs N] [--out DIR] [--unlanded]
-                         [--push [--from DIR]]
+    research queue cross [--main REF] [--move-commit SHA]... [--only N...] [--jobs N] [--out DIR] [--push [--from DIR]]
                                                    each open PR into `main` marked ready at a head that lacks the moves REF
-                                                   (default origin/main) has, with a land verdict (or, with --unlanded, only
-                                                   those without one), crossed by REF's `tools/move/restack.py` as `map_one`
-                                                   runs it, a stack lowest first onto the crossing below it: clean when
-                                                   restack.py is and the crossed head's own change is the old one mapped
-                                                   across the moves, the equality the loop carries its mark and verdict by;
+                                                   (default origin/main) has, with a land verdict (one without is its owner's
+                                                   to restack: `CROSS_UNLANDED`), crossed by REF's `tools/move/restack.py` as
+                                                   `map_one` runs it, a stack lowest first onto the crossing below it: clean
+                                                   when restack.py is, the crossed head's own change is the old one mapped
+                                                   across the moves, the equality the loop carries its mark and verdict by,
+                                                   and the root suite passes on its tree;
                                                    the report, a bundle of the crossings and their mapped changes into DIR
                                                    (`cross_plan`, `cross_all`, `cross_write`); --push pushes each clean one to
                                                    its PR's branch with a lease on its old head (`cross_push`), --from DIR what
@@ -4153,11 +4153,12 @@ def map_moves(repo: Path, heads: Iterable[str], main: str, jobs: int,
 #: own changes mapped across the moves by `mapped_key`, `map_moves`'s JSON, for the loop's `mapped-changes.d/`
 CROSS_REPORT, CROSS_BUNDLE, CROSS_MAPPED, CROSS_PUSHED = "cross.json", "crossed.bundle", "mapped-changes.json", "pushed.json"
 CROSS_NEW, CROSS_PR = "refs/cross/new/", "refs/cross/pr/"
-#: why `research queue cross` crosses a head with no land verdict of its own only when asked (`--unlanded`), and then only such
-#: heads: `restack.py` runs a head's own code (its `pins.py --regen`, `uv lock` of its workspace) as the run's user, which could
-#: forge another head's crossing in the same run, or a mapping that carries a passed head's verdict (`UNLANDED`)
-CROSS_UNLANDED = ("no land verdict of its own counts, so its mark wouldn't carry, and restack.py runs a head's own code: "
-                  "`--unlanded` crosses such heads, in a run of their own")
+#: why `research queue cross` never crosses a head with no land verdict of its own: `restack.py` runs a head's own code (its
+#: `pins.py --regen`, `uv lock` of its workspace) and the root suite its tests, as the run's user, in worktrees of the clone
+#: `--push` pushes from with that clone's hooks and credential config.  Code no reviewer passed could plant a hook or config
+#: there, or forge another head's crossing in the same run, or a mapping that carries a passed head's verdict (`UNLANDED`)
+CROSS_UNLANDED = ("no land verdict of its own counts, so its mark wouldn't carry, and restack.py runs a head's own code, which "
+                  "runs only on a head a reviewer passed: its owner restacks it")
 #: what a push says when its lease on the old head fails: the branch moved since the crossing read it
 LEASE_RE = re.compile(r"\(stale info\)")
 #: the branches `research queue cross --push` never pushes, whatever a PR names as its own
@@ -4250,17 +4251,17 @@ def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]
 
 
 def cross_plan(repo: Path, prs: Iterable[PR], main: str, named: list[str], ready: Callable[[int, str], bool],
-               verdict: Callable[[int, str], str | None], unlanded: bool = False, only: Collection[int] = (),
+               verdict: Callable[[int, str], str | None], only: Collection[int] = (),
                slug: str = REPO) -> tuple[dict[int, dict], list[dict]]:
     """Which open PRs into `main` ``prs`` (``only`` these numbers, when given) `research queue cross` carries across the moves
-    ``main`` has and their heads lack: ({number: {"pr", "branch", "old", "lands", "src", "moves", "below"}} of each to cross,
-    [each skipped, with its `kind` and why]).  A head crosses the moves ``named`` names that it lacks (none named: every move
+    ``main`` has and their heads lack: ({number: {"pr", "branch", "old", "src", "moves", "below"}} of each to cross, [each
+    skipped, with its `kind` and why]).  A head crosses the moves ``named`` names that it lacks (none named: every move
     `moves_between` finds), whatever other moves it lacks, as `restack.py --move-commit` crosses a branch: restack.py judges
     whether it crosses them, and `cross_one` whether its mark would carry.  It crosses once marked ready at its head
-    (``ready``, as the loop reads marks), and with a land verdict (``verdict``: the head of the PR whose own verdict counts for
-    it, `src`, that one or one whose labels it takes) unless ``unlanded``, then only without one (`CROSS_UNLANDED`).  A PR whose
-    head holds another open PR's head off `main` crosses only with that PR, onto its crossed head (`below`, the highest of those
-    it holds), and is skipped as a `stack` when that one doesn't cross here or those it holds aren't one stack."""
+    (``ready``, as the loop reads marks), and only with a land verdict (``verdict``: the head of the PR whose own verdict counts
+    for it, `src`, that one or one whose labels it takes; `CROSS_UNLANDED`).  A PR whose head holds another open PR's head off
+    `main` crosses only with that PR, onto its crossed head (`below`, the highest of those it holds), and is skipped as a
+    `stack` when that one doesn't cross here or those it holds aren't one stack."""
     def has(a: str, b: str) -> bool:
         return not _git(repo, "merge-base", "--is-ancestor", a, b, check=False).returncode
 
@@ -4288,12 +4289,10 @@ def cross_plan(repo: Path, prs: Iterable[PR], main: str, named: list[str], ready
             off[n] = "not asked for (--only)"
         elif not ready(n, p.head):
             skip(p, "not marked", "not marked ready at its head")
-        elif ((src := verdict(n, p.head)) is not None) == unlanded:
-            skip(p, "land verdict" if src else "no land verdict",
-                 "it has a land verdict of its own: the run without --unlanded crosses it" if src else CROSS_UNLANDED)
+        elif (src := verdict(n, p.head)) is None:
+            skip(p, "no land verdict", CROSS_UNLANDED)
         else:
-            todo[n] = {"pr": n, "branch": p.branch, "old": p.head, "lands": src is not None, "src": src, "moves": moves,
-                       "below": None}
+            todo[n] = {"pr": n, "branch": p.branch, "old": p.head, "src": src, "moves": moves, "below": None}
     off_main = {n: set(_out(repo, "rev-list", t["old"], "--not", main).split()) for n, t in todo.items()}
     holds = {n: [m for m, q in opened.items() if m != n and q.head != todo[n]["old"] and q.head in off_main[n]] for n in todo}
     while gone := [n for n in todo if any(m not in todo for m in holds[n])]:
@@ -4374,7 +4373,7 @@ def cross_all(repo: Path, todo: dict[int, dict], main: str, jobs: int, kept: boo
         done = [x for f in [pool.submit(stack, n) for n in above.get(None, [])] for x in f.result()]
     crossed, refused, skipped = [], [], []
     for n, got in sorted(done, key=lambda x: x[0]):
-        t = {k: todo[n].get(k) for k in ("pr", "branch", "old", "lands", "src", "below")}
+        t = {k: todo[n].get(k) for k in ("pr", "branch", "old", "src", "below")}
         if "own" in got:
             crossed.append({**t, "new": got["new"], "own": got["own"], "key": got["key"]})
         elif "under" in got or "stack" in got:
@@ -4392,18 +4391,16 @@ def _stacked(above: dict[int | None, list[int]], n: int) -> list[int]:
 
 
 def cross_table(report: dict) -> str:
-    """`research queue cross`'s report, short: a line of counts, each crossed PR (old head, new head, whether its old head's
-    land verdict carries its mark and verdict there), each refused with why, the skipped by kind, and each stack skipped."""
+    """`research queue cross`'s report, short: a line of counts, each crossed PR (its old head and the new head its land
+    verdict carries its mark and verdict to), each refused with why, the skipped by kind, and each stack skipped."""
     kinds: dict[str, int] = {}
     for s in report["skipped"]:
         kinds[s["kind"]] = kinds.get(s["kind"], 0) + 1
-    lines = [f"research queue cross: main {report['main'][:12]}, moves {' '.join(m[:12] for m in report['moves']) or 'none'}"
-             f"{'; heads without a land verdict of their own' if report.get('unlanded') else ''}",
+    lines = [f"research queue cross: main {report['main'][:12]}, moves {' '.join(m[:12] for m in report['moves']) or 'none'}",
              f"crossed {len(report['crossed'])}, refused {len(report['refused'])}, skipped {len(report['skipped'])}"
              + (f" ({', '.join(f'{k} {v}' for k, v in sorted(kinds.items()))})" if kinds else "")]
     lines += [f"  crossed #{c['pr']} {c['old'][:12]} -> {c['new'][:12]}"
-              + (f" onto #{c['below']}'s" if c.get("below") else "")
-              + ("  carries its mark and verdict" if c["lands"] else "  no land verdict of its own: its owner marks the new head")
+              + (f" onto #{c['below']}'s" if c.get("below") else "") + "  carries its mark and verdict"
               for c in report["crossed"]]
     lines += [f"  refused #{r['pr']} {r['old'][:12]}: {r['why']}" for r in report["refused"]]
     lines += [f"  skipped #{s['pr']} {s['head'][:12]}: {s['why']}" for s in report["skipped"] if s["kind"] == "stack"]
@@ -4413,12 +4410,10 @@ def cross_table(report: dict) -> str:
 
 def cross_write(repo: Path, out: Path, report: dict) -> None:
     """``report`` into ``out``: `CROSS_REPORT`, `CROSS_BUNDLE` of its crossed heads as `CROSS_NEW` + N (what `main` and the old
-    heads lack; none when nothing crossed), and `CROSS_MAPPED` of those whose own land verdict counts, which a run of
-    `--unlanded` writes none of (`CROSS_UNLANDED`)."""
+    heads lack; none when nothing crossed), and `CROSS_MAPPED` of their own changes mapped across the moves."""
     out.mkdir(parents=True, exist_ok=True)
     (out / CROSS_REPORT).write_text(json.dumps(report, indent=1) + "\n")
-    if not report["unlanded"]:
-        (out / CROSS_MAPPED).write_text(json.dumps({c["key"]: c["own"] for c in report["crossed"] if c["lands"]}) + "\n")
+    (out / CROSS_MAPPED).write_text(json.dumps({c["key"]: c["own"] for c in report["crossed"]}) + "\n")
     if report["crossed"]:
         for c in report["crossed"]:
             _git(repo, "update-ref", f"{CROSS_NEW}{c['pr']}", c["new"])
@@ -6827,7 +6822,7 @@ def _cross(a: argparse.Namespace) -> int:
         set_drivers(top)
     except Refused as e:
         raise SystemExit(f"research queue cross: the merge drivers restack.py merges with can't be set here: {e}") from None
-    todo, skipped = cross_plan(top, prs, main, named, labels.ready, verdict, a.unlanded, set(a.only or ()), slug_)
+    todo, skipped = cross_plan(top, prs, main, named, labels.ready, verdict, set(a.only or ()), slug_)
     log(f"research queue cross: {len(todo)} to cross, {len(skipped)} skipped; crossing {a.jobs} at once")
     with scratch() as d:
         drivers = cross_drivers(top, main, Path(d))
@@ -6843,7 +6838,7 @@ def _cross(a: argparse.Namespace) -> int:
                 else:
                     os.environ[k] = v
     report = {"main": main, "moves": named or list(dict.fromkeys(m for t in todo.values() for m, _ in t["moves"])),
-              "unlanded": a.unlanded, "crossed": crossed, "refused": refused, "skipped": skipped + stacked}
+              "crossed": crossed, "refused": refused, "skipped": skipped + stacked}
     out = a.out or Path(os.environ.get("OUT") or "cross")
     cross_write(top, out, report)
     if a.push:
@@ -6880,7 +6875,6 @@ def main(argv: list[str]) -> int:
                     "a head lacking others besides crosses the named ones, as restack.py --move-commit crosses it")
     ap.add_argument("--only", type=int, nargs="+", metavar="N", help="cross: only these PRs; one stacked on a PR it doesn't name "
                     "is skipped, as its stack doesn't cross")
-    ap.add_argument("--unlanded", action="store_true", help=f"cross: only the marked heads with no land verdict: {CROSS_UNLANDED}")
     ap.add_argument("--push", action="store_true", help="cross: push each crossing that is clean to its PR's own branch, with a "
                     "lease on its old head (default: a dry run, which pushes nothing)")
     ap.add_argument("--from", dest="from_dir", type=Path, metavar="DIR", help="cross --push: push what a run left in DIR (its "

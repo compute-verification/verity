@@ -65,8 +65,8 @@ def test_a_clean_crossing_is_pushed_only_with_push_and_its_mark_and_verdict_carr
     assert _cross(world, monkeypatch, "--out", str(out)) == 0
     report = _report(out)
     (c,) = report["crossed"]
-    assert (c["pr"], c["old"], c["lands"], c["branch"], report["refused"], report["moves"]) == (1, old, True, "lane-1", [],
-                                                                                                [move])
+    assert (c["pr"], c["old"], c["src"], c["branch"], report["refused"], report["moves"]) == (1, old, old, "lane-1", [],
+                                                                                              [move])
     assert _branch(world, 1) == old and (out / Q.CROSS_BUNDLE).is_file() and not (out / Q.CROSS_PUSHED).exists()
     assert capsys.readouterr().out.strip() == Q.cross_table(report)
     assert f"crossed #1 {old[:12]} -> {c['new'][:12]}  carries its mark and verdict" in Q.cross_table(report)
@@ -103,7 +103,7 @@ def test_a_head_lacking_an_earlier_move_crosses_the_later_one_named_and_its_mark
     out = world.tmp / "out"
     assert _cross(world, monkeypatch, "--move-commit", second, "--out", str(out)) == 0
     report = _report(out)
-    assert report["refused"] == [] and [(c["pr"], c["old"], c["lands"]) for c in report["crossed"]] == [(1, old, True)]
+    assert report["refused"] == [] and [(c["pr"], c["old"], c["src"]) for c in report["crossed"]] == [(1, old, old)]
     new = report["crossed"][0]["new"]
     assert _cross(world, monkeypatch, "--push", "--from", str(out)) == 0 and _branch(world, 1) == new
     world.gh.put(1, new, ready=False)
@@ -117,8 +117,7 @@ def test_a_head_lacking_an_earlier_move_crosses_the_later_one_named_and_its_mark
 def test_a_crossing_that_conflicts_is_refused_with_why_and_a_head_with_the_moves_or_no_verdict_is_skipped(world, monkeypatch):
     """#2 edits a line `main` edited again after the move landed: restack.py conflicts there, and the crossing is refused,
     naming the file.  #3, based after the move, has it: skipped as already crossed.  #4, marked with no land verdict, is
-    skipped (its mark wouldn't carry, and restack.py would run its own code), and `--unlanded` crosses it alone, writing no
-    mapped change.  #5 isn't marked: skipped."""
+    skipped (its mark wouldn't carry, and restack.py would run its own code).  #5 isn't marked: skipped."""
     _open(world, 2, two := world.change({"old_proto/a.py": A.replace("return 2", "return 3")}))
     _mark(world, 2, two)
     _open(world, 4, four := world.change({"b.py": B + "W = old_proto.a.g()\n"}))
@@ -138,14 +137,32 @@ def test_a_crossing_that_conflicts_is_refused_with_why_and_a_head_with_the_moves
         3: (three, "already crossed"), 4: (four, "no land verdict"), 5: (five, "not marked")}
     assert {_branch(world, n) for n in (2, 4)} == {two, four}
 
-    unlanded = world.tmp / "unlanded"
-    assert _cross(world, monkeypatch, "--unlanded", "--only", "2", "4", "--out", str(unlanded)) == 0
-    report = _report(unlanded)
-    (c,) = report["crossed"]
-    assert (c["pr"], c["old"], c["lands"], report["refused"]) == (4, four, False, [])
-    assert [(s["pr"], s["kind"]) for s in report["skipped"]] == [(2, "land verdict")]
-    assert not (unlanded / Q.CROSS_MAPPED).exists() and _branch(world, 4) == four
-    assert "no land verdict of its own: its owner marks the new head" in Q.cross_table(report)
+
+def test_a_head_with_no_land_verdict_is_never_crossed_so_none_of_its_code_runs_in_the_clone_the_push_runs_from(world,
+                                                                                                             monkeypatch):
+    """restack.py runs a crossed head's own code and the root suite its tests, in worktrees of the clone `--push` pushes from
+    with its hooks and credential config.  #4, marked with no land verdict of its own, adds a root conftest that writes into
+    that clone's git directory, where a hook would go: no run crosses it (`UNLANDED`), `--unlanded` is no option, and nothing
+    of it runs there.  Once a reviewer passes it, the same run crosses it and its conftest runs, so the check isn't vacuous."""
+    monkeypatch.setattr(Q, "CROSS_ROOT_SYNC", None)
+    monkeypatch.setattr(Q, "CROSS_ROOT_PYTHON", sys.executable)
+    monkeypatch.setattr(Q, "CROSS_ROOT_SUITE", ["tests", "-m", "not slow"])
+    plant = ("import pathlib\nimport subprocess\n\n"
+             "git = subprocess.run(['git', 'rev-parse', '--git-common-dir'], capture_output=True, text=True, check=True)\n"
+             "pathlib.Path(git.stdout.strip(), 'planted').write_text('a hook could go here\\n')\n")
+    _open(world, 4, four := world.change({"tests/conftest.py": plant, "tests/test_toy.py": "def test_toy():\n    pass\n"}))
+    world.store.add_label(label_target(4, four), vocab.READY, True, "lane-4", ts="2026-11-10T10:00:00Z")
+    _land(world, _move(world))
+    planted = world.tmp / "elsewhere" / ".git" / "planted"
+    assert _cross(world, monkeypatch, "--out", str(out := world.tmp / "out")) == 0
+    assert [(s["pr"], s["kind"], s["why"]) for s in _report(out)["skipped"]] == [(4, "no land verdict", Q.CROSS_UNLANDED)]
+    with pytest.raises(SystemExit) as refused:
+        _cross(world, monkeypatch, "--unlanded", "--out", str(world.tmp / "unlanded"))
+    assert refused.value.code == 2 and not planted.exists()
+
+    world.store.add_label(label_target(4, four), vocab.REVIEWED, "land", "reviewer", ts="2026-11-10T11:00:00Z")
+    assert _cross(world, monkeypatch, "--out", str(passed := world.tmp / "passed")) == 0
+    assert [c["pr"] for c in _report(passed)["crossed"]] == [4] and planted.exists()
 
 
 def test_an_owners_push_since_the_crossing_wins_over_its_lease(world, monkeypatch):
