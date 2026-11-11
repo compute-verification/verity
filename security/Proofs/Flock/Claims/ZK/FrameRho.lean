@@ -447,20 +447,20 @@ theorem openStep_rho (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : B
     exact spw_bind (fun _ _ h => h) _ _ ho
 
 /-- Every `--zk` schedule asks `z`'s coins, and Ligerito's rounds `k₀ + 2` and `k₀ + 3` (`ρ₀`'s and `ρ₁`'s) two each. -/
-def rhoOk (m : ℕ) : Bool :=
+def rhoOk (wideLeaf : Bool) (m : ℕ) : Bool :=
   match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (sch, _) => decide (1 ≤ sch.n) &&
       ((_root_.Flock.Firewall.Session.ligeritoCoins sch).toList.filter (· != 0))[sch.k0 + 2]? == some 2 &&
       ((_root_.Flock.Firewall.Session.ligeritoCoins sch).toList.filter (· != 0))[sch.k0 + 3]? == some 2
   | .error _ => true
 
-/-- Every `--zk` schedule, `m < 36`, by the kernel's evaluation. -/
-theorem rhoOk_lt : ∀ m, m < 36 → rhoOk m = true := by decide +kernel
+/-- Every `--zk` schedule, `m < 36` at either statement version, by the kernel's evaluation. -/
+theorem rhoOk_lt : ∀ (w : Bool) (m : Fin 36), rhoOk w m.val = true := by decide +kernel
 
 theorem sched_rho {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp)) :
     1 ≤ sch.n ∧ ∀ e < 2,
       ((_root_.Flock.Firewall.Session.ligeritoCoins sch).toList.filter (· != 0))[sch.k0 + 2 + e]? = some 2 := by
-  have hok := rhoOk_lt m (sched_facts h).1
+  have hok := rhoOk_lt wideLeaf ⟨m, (sched_facts h).1⟩
   unfold rhoOk at hok
   rw [h] at hok
   simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hok
@@ -472,7 +472,7 @@ theorem sched_rho {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Z
 
 theorem openList_length {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp))
     {c : ℕ} (hc : c ≠ 0) : (openList c sch).length = c + 1 + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) := by
-  have hlig := Loop.ligOk_all m
+  have hlig := Loop.ligOk_all (wideLeaf := wideLeaf) m
   unfold Loop.ligOk at hlig
   rw [h] at hlig
   simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hlig

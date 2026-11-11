@@ -68,17 +68,17 @@ namespace Claims.ZKServer.Count
 variable {wideLeaf : Bool}
 
 /-- Every `--zk` schedule's `n` (the packed table's variables, `m − 7`) is under `64`. -/
-def nOk (m : ℕ) : Bool :=
+def nOk (wideLeaf : Bool) (m : ℕ) : Bool :=
   match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (sch, _) => decide (sch.n < 64)
   | .error _ => true
 
-/-- Every `--zk` schedule, `m < 36`, by the kernel's evaluation. -/
-theorem nOk_lt : ∀ m, m < 36 → nOk m = true := by decide +kernel
+/-- Every `--zk` schedule, `m < 36` at either statement version, by the kernel's evaluation. -/
+theorem nOk_lt : ∀ (w : Bool) (m : Fin 36), nOk w m.val = true := by decide +kernel
 
 theorem sched_n {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp)) :
     sch.n < 64 := by
-  have hok := nOk_lt m (sched_facts h).1
+  have hok := nOk_lt wideLeaf ⟨m, (sched_facts h).1⟩
   unfold nOk at hok
   rw [h] at hok
   simpa only [decide_eq_true_eq] using hok

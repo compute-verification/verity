@@ -59,18 +59,18 @@ variable {wideLeaf : Bool}
 
 /-- A `--zk` schedule's pad and tree sizes within a `u64`'s count: what `tabOfLevel0_alike` and `schedSoFar_alike`
 read. -/
-def schedBnd (m : ℕ) : Bool :=
+def schedBnd (wideLeaf : Bool) (m : ℕ) : Bool :=
   match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (sch, tp) => decide (2 * tp < 2 ^ 64) && sch.levels.all (fun lv => decide (64 * 2 ^ lv.d < 2 ^ 64)) &&
       decide (64 * 2 ^ (default : _root_.Flock.Level).d < 2 ^ 64)
   | .error _ => true
 
-/-- Every `--zk` schedule, `m < 36`, by the kernel's evaluation. -/
-theorem schedBnd_lt : ∀ m, m < 36 → schedBnd m = true := by decide +kernel
+/-- Every `--zk` schedule, `m < 36` at either statement version, by the kernel's evaluation. -/
+theorem schedBnd_lt : ∀ (w : Bool) (m : Fin 36), schedBnd w m.val = true := by decide +kernel
 
 theorem sched_bounds {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp)) :
     2 * tp < 2 ^ 64 ∧ ∀ i, 64 * 2 ^ (sch.levels.getD i default).d < 2 ^ 64 := by
-  have hok := schedBnd_lt m (sched_facts h).1
+  have hok := schedBnd_lt wideLeaf ⟨m, (sched_facts h).1⟩
   unfold schedBnd at hok
   rw [h] at hok
   simp only [Bool.and_eq_true, decide_eq_true_eq, Array.all_eq_true] at hok
