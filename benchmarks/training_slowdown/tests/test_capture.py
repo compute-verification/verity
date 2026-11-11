@@ -480,7 +480,7 @@ def test_a_step_that_reads_the_runs_own_tensor_around_its_arguments_is_refused_w
     assert e.value.reason == "trace" and "the run's own optimizers.0.params.0 and not the copy" in str(e.value)
     assert "hold it on the model as a parameter" in str(e.value) and "param_groups" in str(e.value)
     with pytest.raises(CaptureRefused, match="the run's own emb.weight and not the copy"):
-        capture_fn(lambda m, batch, opts: lm_loss(model, batch).backward(), model, lm_batch())
+        capture_steps([lambda m, batch, opts: lm_loss(model, batch).backward()], model, lm_batch(), measured=0)
 
 
 # --- refusals ----------------------------------------------------------------------------------------------------------
