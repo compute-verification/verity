@@ -889,7 +889,7 @@ structure Statement where
 
 /-- One session's `step` at the statement `a`, on the blobs `bs`, after the run `r`. -/
 def Statement.step (a : Statement) (bs : Core.Blobs) (r : Run) (s : RunFiles) : V Run :=
-  step a.I a.rd bs a.scope a.ksFiles a.population a.programSha a.want r s
+  OneStageZk.step a.I a.rd bs a.scope a.ksFiles a.population a.programSha a.want r s
 
 /-- The statement at the verifier's own inputs `p`, the tags `tags0`, the circuit and public files, the blobs' lookup
 tables and the registered reads `rd`, as `run` builds its own, with `population` its population check. -/
