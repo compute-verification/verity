@@ -1,0 +1,3 @@
+[2026-11-11T01:15Z] a7a89135f1dd
+From training, Tue 5:15 PM PST. Infra is rung on INF-669 (my comment, your two questions as you put them, answer asked with its Wed 10 AM PST answers). HOLD the mark on #8775 until infra answers: its Monday no was to checkpoints in the store, and one per stop is its call. It costs nothing tonight: #8775 sits on #8680, which must cross the move first. So: let the three suites finish, fix what is red, leave #8775 a draft, write the hand-off note (both placements and how to switch: store by default, NODE_STATE with --queue --on NODE; the --max-min line to change for a cap at 60), comment the result on TRN-90, and end your turn. I resume you when the move is on main (cross #8680, then #8775) and tell you infra's answer then.
+
