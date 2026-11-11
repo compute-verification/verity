@@ -160,19 +160,20 @@ def _share(part: int, whole: int) -> str:
     return f"{part:,} of {whole:,}" + (f" ({100 * part / whole:.1f}%)" if whole else "")
 
 
-def render(row: dict[str, Any]) -> str:
-    """One trace's report as Markdown: the table by window and class, the lookups, and each class's standing."""
+def render(row: dict[str, Any], standing: bool = True) -> str:
+    """One trace's report as Markdown: the table by window and class, the lookups, the round trip and, with
+    ``standing``, each class's standing with its rules."""
     if "error" in row:
         return f"**{row['trace']}**: error: {row['error']}\n"
     names = list(BC.CLASSES)
     tick = "under the certified tick" if row["tick"] else "admitted on arrival"
     cache = "on" if row["prefix_caching"] else "off"
     t = row["total"]
+    columns = ["window", "charge", *names, *BC.NO_FIELD, "length terms", "lookups", "of them hit", "admissions",
+               "of them from a hit", "their hit blocks"]
     out = [f"**{row['trace']}**: {row['requests']:,} requests, {row['steps']:,} steps, {tick}, the prefix cache {cache}; "
-           f"{row['windows']} windows of T = {row['T']} buckets; {row['bits']:,} bits.", "",
-           "| window | charge | " + " | ".join(names) + " | " + " | ".join(BC.NO_FIELD) + " | length terms | lookups | "
-           "of them hit | admissions | of them from a hit | their hit blocks |",
-           "|---|" + "---|" * (len(names) + len(BC.NO_FIELD) + 6)]
+           f"{row['windows']} window{'s' if row['windows'] != 1 else ''} of T = {row['T']} buckets; {row['bits']:,} bits.", "",
+           "| " + " | ".join(columns) + " |", "|" + "---|" * len(columns)]
 
     def line(head: str, r: dict[str, Any]) -> str:
         cells = [f"{r['classes'][c]:,}" for c in names] + ["no field"] * len(BC.NO_FIELD)
@@ -185,7 +186,8 @@ def render(row: dict[str, Any]) -> str:
     out.append(f"The lengths are {f['output_len']:,} bits of output_len and {f['finish']:,} of finish; the admission is "
                f"{f['decisions']:,} bits of decisions and {f['order']:,} of order entries.")
     e = row["engine_hits"]
-    out.append(f"Lookups that hit: {_share(t['lookups_hit'], t['lookups'])}. Admissions from a hit: "
+    off = "" if row["prefix_caching"] else " (the prefix cache is off: a lookup returns nothing)"
+    out.append(f"Lookups that hit: {_share(t['lookups_hit'], t['lookups'])}{off}. Admissions from a hit: "
                f"{_share(t['admissions_hit'], t['admissions'])}, {t['hit_blocks']:,} blocks; the engine's own record: "
                f"{e['admissions_hit']:,} admissions, {e['hit_blocks']:,} blocks.")
     d = row["first_step_that_differs"]
@@ -198,11 +200,21 @@ def render(row: dict[str, Any]) -> str:
         back += (f" The replay's schedule differs from the engine's from step {d['step']}, in window {d['window']} "
                  f"({d['matched']:,} of {d['steps']:,} steps match).")
     out.append("decode(encode(a)) == a: " + back)
-    out.append("")
-    for name, c in row["classes"].items():
-        why = "; ".join(f"{r['why']} (`{r['file']}:{r['line']}`)" for r in c["rules"])
-        out.append(f"- {name}: {c['standing']}" + (f": {why}." if why else "."))
+    if standing:
+        out.append("")
+        for name, c in row["classes"].items():
+            why = "; ".join(f"{r['why']} (`{r['file']}:{r['line']}`)" for r in c["rules"])
+            out.append(f"- {name}: {c['standing']}" + (f": {why}." if why else "."))
     return "\n".join(out) + "\n"
+
+
+def render_all(rows: Sequence[dict[str, Any]]) -> str:
+    """Every trace's report; the classes' standing once for each run of traces that share it, after the last of them."""
+    out = []
+    for k, r in enumerate(rows):
+        last = k + 1 == len(rows) or rows[k + 1].get("classes") != r.get("classes")
+        out.append(render(r, standing=last))
+    return "\n".join(out)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -219,7 +231,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     stops = tuple(int(s) for s in a.stops.split(","))
     rows = [V._guarded(report, *t.split("=", 1), stops, a.T, a.ingress) for t in a.traces]
     a.out.write_text(json.dumps({"T": a.T, "stops": stops, "ingress": a.ingress, "rows": rows}, indent=1) + "\n")
-    print("\n".join(render(r) for r in rows), end="")
+    print(render_all(rows), end="")
     return 0 if all("error" not in r and r["round_trip"] for r in rows) else 1
 
 

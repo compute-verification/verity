@@ -151,6 +151,7 @@ def test_the_report_splits_a_trace_by_class_and_counts_its_hits(tmp_path, capsys
     text = capsys.readouterr().out
     assert "| all |" in text and "- hits: 0 by construction: " in text and "- aborts: no field: " in text
     assert "decode(encode(a)) == a: yes." in text and "NO" not in text
+    assert len({line.count("|") for line in text.splitlines() if line.startswith("|")}) == 1
     rows = {r["trace"]: r for r in json.loads(out.read_text())["rows"]}
     t, p = rows["tick"], rows["plain"]
     lengths = sum(io.max_tokens.bit_length() + 1 for io in ios)
@@ -178,6 +179,9 @@ def test_the_report_splits_a_trace_by_class_and_counts_its_hits(tmp_path, capsys
                                       "hit_blocks": sum(hits) // e.block_size}
         assert (total["admissions_hit"], total["hit_blocks"]) == (len(hits), sum(hits) // e.block_size)
         assert total["admissions_hit"] <= total["lookups_hit"] <= total["lookups"]
+    assert text.count("- hits: 0 by construction: ") == 2 and BYC.render_all([t, p]) == text
+    twice = BYC.render_all([t, dict(t, trace="again"), p])
+    assert twice.count("- lengths: charged.") == 2 and twice.count("decode(encode(a)) == a: yes.") == 3
 
 
 def test_the_report_names_the_first_step_that_differs(tmp_path, capsys):
