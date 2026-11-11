@@ -1386,8 +1386,9 @@ def two_stage_strata(cells: Iterable[Cell], merged: int | None) -> list[Cell]:
 
 
 def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *, budget: float, replay: float,
+                     widths: bool = False,
                      boundary: float = 0.0, h: float = 0.0, stratify: bool = True, served: float | None = None,
-                     union: bool = False, registration: float = 0.0, widths: bool = False) -> dict | None:
+                     union: bool = False, registration: float = 0.0) -> dict | None:
     """The two-stage design with the least `two_stage_exfil` bound at a cost of at most `budget`: width-stratified
     (`stratify`) or uniform (one stratum).  A width-stratified design merges the public size classes (`unit_class`) up
     to a threshold into stratum 0 and gives each wider class a stratum of its own, the threshold chosen with κ: at the
