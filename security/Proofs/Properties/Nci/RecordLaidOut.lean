@@ -4,6 +4,7 @@ public import Proofs.Properties.Nci.LeafWidthsBody
 public import Proofs.Properties.Nci.LeafWidthsDecoded
 public import Proofs.Properties.Nci.LeafWidthsResolve
 public import Proofs.Properties.Nci.RecordPrim
+public import Proofs.Properties.Nci.RecordProgram
 public import Proofs.Properties.Nci.RecordUnits
 public import Proofs.Properties.Nci.RecordWhole
 public import Proofs.Properties.Nci.ResolveRows
@@ -20,5 +21,5 @@ an input node of the root, no two of them one gate (`RecordOwn`, `ResolveRows`);
 is as wide as the leaf it names (`LeafWidthsResolve`), in a body the width check passes (`LeafWidthsBody`), as
 it passes every body of a decoded Program (`LeafWidthsDecoded`). Of the root: its ranges are its nodes that are no
 input, in order (`RecordUnits`), and a unit of a primitive is one gate, the gate every leaf it returns resolves to
-(`RecordPrim`).
+(`RecordPrim`). Of the record: its Program is one the record check reads (`RecordProgram`).
 -/

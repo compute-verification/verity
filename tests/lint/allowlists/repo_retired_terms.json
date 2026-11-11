@@ -2548,7 +2548,7 @@
     {"file": "security/Proofs/Properties/Nci/RecordGates.lean", "count": 11},
     {"file": "security/Proofs/Properties/Nci/RecordGrid.lean", "count": 3},
     {"file": "security/Proofs/Properties/Nci/RecordJson.lean", "count": 6},
-    {"file": "security/Proofs/Properties/Nci/RecordLaidOut.lean", "count": 7},
+    {"file": "security/Proofs/Properties/Nci/RecordLaidOut.lean", "count": 8},
     {"file": "security/Proofs/Properties/Nci/RecordLanding.lean", "count": 8},
     {"file": "security/Proofs/Properties/Nci/RecordOwn.lean", "count": 3},
     {"file": "security/Proofs/Properties/Nci/RecordPassed.lean", "count": 3},
