@@ -25,7 +25,7 @@ from verity.circuits.boolean.forms import add
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import bind
 from verity.circuits.types import Array
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import class_statement as CS
 
 HERE = Path(__file__).resolve().parent
@@ -131,18 +131,27 @@ def test_a_cache_key_moves_with_what_the_compose_reads_and_nothing_else(tmp_path
 
 
 def test_a_table_reads_key_holds_the_verifiers_executable(monkeypatch):
-    """A ``--template`` compose's ``what`` (`template_inputs`) is the template and its statement's form and, for a table read,
-    the digest of the executable whose template its unit is (`read_tmpl.digest`), so a rebuilt verifier's read is composed
-    afresh; no other template's asks for it."""
+    """A ``--template`` compose's ``what`` (`template_inputs`) is the template, its statement's form and its rows and, for a
+    table read, the digest of the executable whose template its unit is (`read_tmpl.digest`), so a rebuilt verifier's read
+    is composed afresh; no other template's asks for it."""
     read = SimpleNamespace(fn=SimpleNamespace(base_id=CC.RT.READ))
-    stmt = {"layout": "iv/hybrid/4", "structural": True}
+    stmt, rows = {"layout": "iv/hybrid/4", "structural": True}, (ROWS, [(V2, (0,))])
     monkeypatch.setattr(CC.RT, "digest", lambda: "d1")
-    k = CC.template_inputs("EmbeddingRead_v1{V=7,H=3}", read, stmt)
-    assert k == ["unit/serving-rows", "EmbeddingRead_v1{V=7,H=3}", json.dumps(stmt, sort_keys=True), "d1"]
+    k = CC.template_inputs("EmbeddingRead_v1{V=7,H=3}", read, stmt, rows)
+    assert k == ["unit/serving-rows", "EmbeddingRead_v1{V=7,H=3}", json.dumps(stmt, sort_keys=True), rows, "d1"]
     monkeypatch.setattr(CC.RT, "digest", lambda: "d2")
-    assert CC.template_inputs("EmbeddingRead_v1{V=7,H=3}", read, stmt) != k
+    assert CC.template_inputs("EmbeddingRead_v1{V=7,H=3}", read, stmt, rows) != k
     monkeypatch.setattr(CC.RT, "digest", lambda: pytest.fail("a template reading no table asked for the verifier's executable"))
-    assert CC.template_inputs("Toy", SimpleNamespace(fn=TOY), {"reads": "slots"}) == ["unit/serving-rows", "Toy", "slots"]
+    assert CC.template_inputs("Toy", SimpleNamespace(fn=TOY), {"reads": "slots"}, rows) == ["unit/serving-rows", "Toy", "slots", rows]
+
+
+def test_a_templates_key_holds_each_rows_schema():
+    """A ``--template`` compose's ``what`` holds its rows as `UnitStager` takes them, so the circuit kept for a template's v2
+    rows is never taken where ``--seg`` names one of them row-seg: the two have keys of their own."""
+    toy, stmt = SimpleNamespace(fn=TOY), {"reads": "inline"}
+    v2, seg = (ROWS, [(V2, (0,))]), (ROWS, [(SEG, (0,))])
+    keys = [CC.cache_key(CC.template_inputs("Toy", toy, stmt, rows), ()) for rows in (v2, seg, v2)]
+    assert keys[0] == keys[2] != keys[1]
 
 
 def test_an_own_composers_key_moves_with_its_inputs_its_definition_and_its_file(tmp_path):
@@ -210,7 +219,7 @@ def test_a_slots_circuit_gets_its_tables_composed_or_restamped(tmp_path, monkeyp
     template, through a stand-in for `verity_vllm`'s template lookup, which this suite doesn't read."""
     pipeline = ModuleType("verity_vllm.pipeline")
     pipeline.serving_rows = SimpleNamespace(template=lambda tid: SimpleNamespace(fn=TOY))
-    pipeline.chunk_rows = SimpleNamespace(unit_rows=lambda tp: (ROWS, [(V2, (0,))]), statement=lambda tp: {"reads": "inline"})
+    pipeline.chunk_rows = SimpleNamespace(unit_rows=lambda tp, seg=(): (ROWS, [(V2, (0,))]), statement=lambda tp: {"reads": "inline"})
     monkeypatch.setitem(sys.modules, "verity_vllm", ModuleType("verity_vllm"))
     monkeypatch.setitem(sys.modules, "verity_vllm.pipeline", pipeline)
     monkeypatch.setattr(CC, "cache_key", lambda what: f"{what[1]}-{what[2]}")
