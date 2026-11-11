@@ -44962,3 +44962,26 @@ cancellation; I mark that step and do not use it. Then `FC_SALTS_KEYED=all`, `up
 
 For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, the prover's check on four other cores, 2.52 GPU-s a statement against 2.67 in the same run (ratio 0.944), measured, `r20261111-082337-c224`, one prover on ten cores, beside kernels' stagings and no proving neighbour.
 For the table: head block, one prover a card: 2.67 s today and 2.52 s with the prover's check off its cores (both measured in `r20261111-082337-c224`, not the loaded 2.8555); the salts and witness cuts are being timed now.
+
+## SCALE, Wed 11 Nov 09:25Z: #8874 is on #8870's head already (`b3fb5853fa`, pushed before your 09:20Z ruling), and both of the ruling's points hold there
+
+- [read: `git log --first-parent b3fb5853fa`] #8874's head `b3fb5853faf88d60f9945379689990c2c1bde6ab` merges #8870's `e7d354135fbb` (merge `07f63986bb`, a plain merge). It then restates `Drawn.lean` over TWOWITNESS's `size_proved_selectSecond`.
+- [read: `git show b3fb5853fa:security/Proofs/Flock/SpotFlock/Drawn.lean`] It has two plain imports, `Proofs.Flock.SpotFlock.RevealsOpen` and `Proofs.Flock.Claims.Sampling.Select.SecondCount`. It has no `import all`, and none of `selectSecond_proved_size`, `drawUnits_work_size` or `getD_draw_closure`. Its four theorems are the code-level ones:
+  - `RegTwo.sample_size_le`: the first stage's sample has at most `Kfirst` units;
+  - `RegTwo.proved_size_le`: `|proved| ≤ Kfirst·Σ_t k_t`, by `size_proved_selectSecond`;
+  - `RegTwo.card_biUnion_checked_le_count`;
+  - `SpotFlock.code_card_biUnion_le_count`.
+- [run `r20261111-085732-f5d6`] The try of `Drawn.lean --siblings` at `b3fb5853fa` exited 0. All four theorems use only `propext`, `Classical.choice` and `Quot.sound`, and no sibling clashes.
+- [run: a three-way comparison I scripted over the JSON] The lock at `b3fb5853fa` is exactly the three-way union of #8836's lock (#8820's, byte for byte) and #8870's: none of its 37,874 leaves differs. #8870 changes no lock.
+- Running at `b3fb5853fa` [run]:
+  - records run `r20261111-091422-a581`;
+  - quick tier `r20261111-091429-6f84` (`--changed 8201dacff26e`, #8870's base, which is in the head).
+- The one-tree build with #8827's `946b7b72f26d` and #8781's `b7c268c7c1fe` is also running [run]. The local merge `99aac9c62a` was clean; its tries are `r20261111-092214-b96d` (`Proofs/Flock.lean`) and `r20261111-092214-793b` (`Proofs/WeightSecurity.lean`).
+- #8836 [run]:
+  - Records run `r20261111-085254-6161` and quick tier `e971` are still running. The quick tier has passed `verity/protocols/pouw/verifier` (1,844 tests) so far: its base `8201dacff26e` is above the branch's `5c095bb4ab70`, so it runs a superset of the suites.
+  - The body is in the 08:37Z format, with "Lands after #8820".
+  - Its ready line comes when both pass; [guess] ETA 10:15Z.
+
+For the table:
+- #8874 (the second stage proves at most `Kfirst·Σ_t k_t` blocks, at `code h`): on #8870's head `b3fb5853fa`. Try f5d6 passed. Records a581, quick tier 6f84 and the one-tree build b96d/793b are running.
+- #8836: records 6161 and quick tier e971 are running; its ready line when both pass.
