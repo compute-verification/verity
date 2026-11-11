@@ -879,7 +879,7 @@ def window_of(a: argparse.Namespace, r: int, compiler: Capped, requests: list[di
 
 
 def tables_of(a: argparse.Namespace) -> dict[str, str] | None:
-    """The per-expert cut's tables as a serving-rows request names them (`expert_rows.of_request`): the committer's registration
+    """The per-expert cut's tables as a serving-rows request names them (`expert_tables.of_request`): the committer's registration
     ``--serving-rows-tables`` (``{rank}`` in its path its rank's) and the key file it is read under; None without one."""
     return {"key": a.serving_rows_tables_key, "registration": a.serving_rows_tables} if a.serving_rows_tables else None
 
@@ -905,10 +905,10 @@ def commit1(a: argparse.Namespace, compiler: Capped, requests: list[dict], bound
     from verity_vllm.check.oracle_compare import OpenedReader
     from verity_vllm.check.replay.index import ProgramIndex
     from verity_vllm.pipeline import cpu_replay as CPU
-    from verity_vllm.pipeline import expert_rows as EX
+    from verity_vllm.pipeline import expert_tables as XT
     from verity_vllm.pipeline import serving_rows as SRW
 
-    tables = EX.of_request(tables_of(a))
+    tables = XT.of_request(tables_of(a))
     r = record1(str(a.bundle), str(a.row_dir))
     if r.store.commit_scheme != SRT.ROWS_SCHEME:
         raise ValueError(f"the Commit's store commits under {r.store.commit_scheme}, not {SRT.ROWS_SCHEME}: no stand-in names a SHA-512 root")
