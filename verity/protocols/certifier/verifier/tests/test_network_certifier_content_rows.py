@@ -1,7 +1,7 @@
 """The network certifier's content rows (`content_rows`): each of a connection's three rows is its class's size and
 whole 16-bit words, a decoder gives back what its encoder was given, and bytes that are not a row of the form are
 refused by the field that says so. A request row's room is the canonical id request's length at its class's prompt
-ids, the end row is a fails slot, and a response row's ids are bounded by the widest public size class."""
+ids, the end row has a fails slot's layout, and a response row's ids are bounded by the widest public size class."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def test_the_most_ids_follow_the_widest_class(monkeypatch):
 
 
 def test_every_row_is_whole_words_of_its_classes_size():
-    """A response row is its count and O ids, an end row a fails slot's four bytes, and a request row its count and
+    """A response row is its count and O ids, an end row the four bytes of a fails slot, and a request row its count and
     its class's room to a whole word, so each is whole 16-bit words (`warden_rows.words` reads it)."""
     assert [CT.response_bytes(O) for O in (2, 16, 4096)] == [12, 68, 16_388]
     assert CT.END_BYTES == 4 and CT.END_SLOT is CR.SLOT[CR.FAILS]
@@ -139,20 +139,21 @@ def test_a_response_row_is_its_count_and_its_ids():
         CT.response_of(struct.pack("<I", 1) + row[4:], 4)
 
 
-def test_an_end_row_is_a_fails_slot():
-    """A connection that ended in its `END` has the end row (0, 0) however many cells it released, and one that
-    ended in a `FAIL` (1, the cells before it): the fails table's slot format. A class past 1, a row without a
-    failure whose `at` isn't 0 and a row of another size are refused."""
-    assert CT.end_row(False, 0) == CT.end_row(False, 77) == bytes(4)
+def test_an_end_row_is_how_the_connection_ended_and_its_cells():
+    """A connection that ended in its `END` has the end row (0, the cells it released), and one that ended in a
+    `FAIL` (1, the cells before it), in the fails table's slot layout: `at` counts the cells either way, where a
+    fails slot counts them before a `FAIL` alone. A class past 1 and a row of another size are refused."""
+    assert CT.end_row(False, 0) == bytes(4) and CT.end_row(False, 77) == struct.pack("<HH", 0, 77)
     assert CT.end_row(True, 0) == struct.pack("<HH", 1, 0) and CT.end_row(True, 0xFFFF) == b"\x01\0\xff\xff"
-    assert CT.end_of(bytes(4)) == (False, 0) and CT.end_of(CT.end_row(True, 300)) == (True, 300)
-    assert CT.end_of(CT.end_row(True, 0)) == (True, 0)
-    for failed, cells in ((1, 0), (True, -1), (True, 1 << 16), (False, True), (None, 0)):
+    assert CT.end_row(False, 0xFFFF) == b"\0\0\xff\xff" and CT.END_SLOT is CR.SLOT[CR.FAILS]
+    for failed in (False, True):
+        for cells in (0, 1, 300, 0xFFFF):
+            assert CT.end_of(CT.end_row(failed, cells)) == (failed, cells)
+    for failed, cells in ((1, 0), (True, -1), (True, 1 << 16), (False, 1 << 16), (False, True), (None, 0)):
         with pytest.raises(ValueError, match="after a u16 of DATA cells"):
             CT.end_row(failed, cells)
     for bad, why in ((struct.pack("<HH", 2, 0), "class is 2, not 0 or 1"),
                      (struct.pack("<HH", 0x101, 3), "class is 257"),
-                     (struct.pack("<HH", 0, 5), "no failure and at = 5, not 0"),
                      (bytes(3), "is 4 bytes, not 3"), (bytes(8), "is 4 bytes, not 8")):
         with pytest.raises(ValueError, match=why):
             CT.end_of(bad)

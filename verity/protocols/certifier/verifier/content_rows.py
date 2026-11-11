@@ -9,8 +9,9 @@ none: `WardenParams` has no form for them, and a schedule's records, heads and c
 - `response`: u32 m ‖ O u32 ids. m is the `DATA` cells the network certifier released on the connection before its
   `END` or its `FAIL`, one id each (`io_tie.parse_cell`), word p is cell p's id for p below m, and words m to O − 1
   are 0. The count is in the row because an id may be 0: the ids alone don't say where they end.
-- `end`: u16 class ‖ u16 at, a fails slot (`connection_rows.SLOT`): (0, 0) where the connection ended in its `END`
-  and (1, n) where it ended in a `FAIL` after n `DATA` cells.
+- `end`: u16 class ‖ u16 at, in a fails slot's layout (`connection_rows.SLOT`): (0, n) where the connection ended in
+  its `END` after n `DATA` cells and (1, n) where it ended in a `FAIL` after n. `at` is the `DATA` cells the network
+  certifier released, on an `END` too, where the fails table's own slot counts them before a `FAIL` alone.
 
 **A row's size is its class's**, so which class a connection is in is the one thing its rows' sizes say. A class
 is a size of prompt ids P and a size of ids released O, each a power of two of at least `MIN_SIZE`:
@@ -29,7 +30,7 @@ among them, is no response row's (`response_of` refuses it).
 
 A decoder (`request_of`, `response_of`, `end_of`) gives back what its encoder was given and refuses, naming the
 field, bytes that are not a row of the form: another size, a count past the row, anything past the count, an end
-that is neither (0, 0) nor (1, n).
+row whose class is neither 0 nor 1.
 """
 
 from __future__ import annotations
@@ -48,7 +49,7 @@ REQUEST, RESPONSE, END = "request", "response", "end"
 MIN_SIZE = 2
 #: a count's and an id's bytes: a u32
 U32_BYTES = 4
-#: an end row: a fails slot, u16 class ‖ u16 at
+#: an end row: a fails slot's layout, u16 class ‖ u16 at
 END_SLOT = CR.SLOT[CR.FAILS]
 END_BYTES = END_SLOT.size
 #: how a connection ended, an end row's class: in its `END`, or in a `FAIL`
@@ -156,23 +157,20 @@ def response_of(row: bytes, O: int) -> tuple[int, ...]:
 
 def end_row(failed: bool, cells: int) -> bytes:
     """The end row of a connection that released `cells` `DATA` cells and then ended: in a `FAIL` (`failed`), (1,
-    `cells`), or in its `END`, (0, 0). ValueError for a count that is no u16."""
+    `cells`), or in its `END`, (0, `cells`). ValueError for a count that is no u16."""
     if type(failed) is not bool or type(cells) is not int or not 0 <= cells < 1 << 16:
         raise ValueError(f"a connection ended in a FAIL or not, after a u16 of DATA cells, not {failed!r}, {cells!r}")
-    return END_SLOT.pack(FAILED, cells) if failed else END_SLOT.pack(ENDED, 0)
+    return END_SLOT.pack(FAILED if failed else ENDED, cells)
 
 
 def end_of(row: bytes) -> tuple[bool, int]:
-    """An end row's reading: whether the connection ended in a `FAIL`, and the `DATA` cells released before it (0
-    for one that ended in its `END`, whose row doesn't count them). ValueError naming how the bytes are no end
-    row."""
+    """An end row's reading: whether the connection ended in a `FAIL`, and the `DATA` cells released before it or
+    before its `END`. ValueError naming how the bytes are no end row."""
     if len(row) != END_BYTES:
         raise ValueError(f"an end row is {END_BYTES} bytes, not {len(row)}")
     cls, at = END_SLOT.unpack(row)
     if cls not in (ENDED, FAILED):
         raise ValueError(f"the end row's class is {cls}, not {ENDED} or {FAILED}")
-    if cls == ENDED and at:
-        raise ValueError(f"the end row has no failure and at = {at}, not 0")
     return cls == FAILED, at
 
 
