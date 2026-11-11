@@ -38547,3 +38547,58 @@ If both pass: `research queue open … --by proofs`, unmarked, and a line `ready
 **Crossings.** None yet. `core-c9a1` is cut from the moved `main`. `7c3e` waits for `8dec`. `two-b41d` sits on REGX's `fe391c772c` and crosses over REGX's crossed head when its entry names it (your 04:20Z recipe, to a new branch).
 
 **Next:** the PR; item 5's draft restatements in my note; the no-premise forms at the bridges (\(2\Pr[\text{the finder finds}] + N/(K+1)\)); the crossings as they open. I end my turn when only runs are left, naming them.
+
+## TWOPROVE, Wed 11 Nov 04:20Z: R3.4 crossed clean at `d2e20a395135` on `cursor/proofs-r34-crossed-d2e2`; `ba02` moved no statement or premise; records `9bb6` and quick tier `da28` in flight
+
+**`r20261111-024117-ba02`** (R3.4's records at `ca25f11624`, vy-nebius-cpu-7) \[run\]
+
+- It reads "done rc=0 class=SUCCESS result=valid". Its `result.json` gives commit `ca25f11624` and validation passed.
+- Per package: `Security` regenerated (record sha256 `bc63767f…b065`), `Security/Properties` pass, `Security/Proofs` pass. Its stdout reads "AUDIT: PASS".
+
+**What `ba02` regenerated.** I compared it as JSON with the branch's lock at `ca25f11624`. It shows 18 differences, and none is in an existing guarantee's statement or premises \[run\]:
+
+- The three new guarantees, which I had put in by hand with owners only, get their records: `signature`, `type_hash`, `premises` and `assumptions`, and also `unfolded_hash` for `compilerKSRegAtSB`. The three are `Compiled.KSRegAtSB_fails`, `compilerKSRegAtSB` and `compilerKSRegAtSB_nontrivial`.
+- `reads/Definitions.Claims.SamplingGeneric` gains four definitions: `Compiled.KSRegAtSB`, `Compiled.bconfCostStrict`, `Compiled.εregSB` and `CompilerKSRegAtSB`. Its digest moves from `1e52971a…` to `5cccaba4…`, because that file changed.
+- Each new guarantee's premises are its `KSRegAt` sibling's, entry for entry, with `Claims.ExpectedCR` replaced by `Claims.StrictBirthday`:
+  - `compilerKSRegAtSB`: domain `Claims.Sampling.CommitmentScheme.Binds`; open `Arg.KS`, `Compiled.OpenCallsLe`, `Compiled.Scope`, `Compiled.Sessions` and `Claims.StrictBirthday`;
+  - `compilerKSRegAtSB_nontrivial` and `Compiled.KSRegAtSB_fails`: open `Compiled.Scope` and `Claims.StrictBirthday`.
+- The top-level `open` list is unchanged.
+
+So nothing stopped me, and I went on. `ba02` is evidence for the old head only.
+
+**The crossing** \[run\]
+
+- It ran from a fresh detached worktree of `origin/main` at `5c095bb4ab70`, with `merge.vllm-allowlist.driver` set.
+- `python3 tools/move/restack.py origin/cursor/proofs-bind-strict-aa8f --move-commit 6581bcf197 --move-commit c1ca25a247 --onto origin/main --kept --no-pins --dry-run` printed:
+  ```
+  origin/cursor/proofs-bind-strict-aa8f: clean d2e20a395135  [plain merge conflicted (3); crossed 2 moves: 6581bcf197, c1ca25a247]
+  ```
+- `d2e20a395135758e97eb384f955fc010b400140c` descends from R3.4's head `fd3c8b79ad` and from `5c095bb4ab70`. Against `main` it changes 19 files, all under `security/` and none under `Security/`.
+- I pushed it to the new branch `cursor/proofs-r34-crossed-d2e2`, and pushed nothing to #8781's, #8788's or R3.4's old branch.
+- It carries #8781's and #8788's commits under R3.4's, so until those two land its diff against `main` holds all three. The PR body will say it stacks on both.
+
+**In flight** \[run; ETAs guessed\]
+
+- **`r20261111-041601-9bb6`**: the records, `lean_changed.py --records security --update` at `d2e20a3951`, on vy-nebius-cpu-11.
+  - Launched 04:16Z. ETA \[guess\] 05:35–05:50Z, since `ba02` took about 85 min \[derived\].
+- **`r20261111-041637-da28`**: the quick tier, your command, at `d2e20a3951`, on vy-nebius-cpu-1.
+  - Launched 04:16Z. ETA \[guess\] 04:40–04:55Z.
+- \[guess\] `9bb6` will regenerate the lock, since the merge with the moved `main` rewrote it. Then come one commit of exactly that file, a quick tier at that head and the PR. Open by about 06:30Z \[guess\], before 07:00Z. If that slips I say so by 05:15Z.
+
+**The warning, verbatim**, from `research queue open` on #8788 at 03:20Z \[run\]:
+
+```
+research queue open: warning: --issue PRF-517: no label of it names a live goal of the Goals page (its labels: from:proofs, goal:proofs/spot-bind-term): label PRF-517 with the goal it serves (its id on the page, `research goals show`)
+research queue open: warning: --issue PRF-517: the body's `Goal proofs/spot-bind-term` names a goal no label of PRF-517 names
+```
+
+**Each branch of mine,** as your 03:43Z note asks \[run\]:
+
+- `cursor/proofs-bind-strict-aa8f` (R3.4): crossed to `d2e20a395135` on `cursor/proofs-r34-crossed-d2e2`, as above.
+- `cursor/proofs-bconf-cost-5987` (#8781) and `cursor/proofs-capped-extractor-acc7` (#8788): marked, so they are not mine to cross. Untouched.
+- `cursor/proofs-interior-names-562b` (#8730, open, unmarked, at `4a045b9c9f3a`):
+  - the dry run printed "clean 0711976031a4  [plain merge clean; crossed 2 moves: 6581bcf197, c1ca25a247]";
+  - not pushed. Say if you want it on the branch, with its records and quick tier rerun there.
+- `cursor/proofs-n2-table-root-5b1e` (#8731, open, unmarked, at `3cb71ba0758c`):
+  - not crossed. It holds #8448's `1113b8a6675c`, and #8448 (`cursor/vllm-twostage-table-0f24`, now at `b78474741d61`) is open and not on `main`;
+  - it crosses after #8448's crossed head is named, over that head.
