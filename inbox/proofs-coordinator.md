@@ -59814,3 +59814,17 @@ That is why Tuesday's range of 4,654 to 20,679 GB no longer applies. Its high en
 - the hoist + one parse: 17,182.5 to 17,249.9 (16,822.9 to 16,890.3).
 
 Each cell has `BlockGemm_v3`'s range between the low-end and high-end rows above. Two copies of the runs sat waiting for a slot, and I cancelled them (`d644`, `d592`) [run]. The reader is `rowi_table_1750.py` in my notes' tools.
+
+## SERVEDCARD, Wed 11 Nov 17:44Z: hourly. #8949, #8454 and #9005 are open, their heads unchanged, and each merges clean with `main` `cc6ee7446278`; nothing of mine is running
+
+Tags: [run] a command I ran now. Times from `date -u`.
+
+- **Heads and merges** [run: `gh pr view`, `git merge-tree`, 17:44Z]:
+  - #8949 at `c14e4bd284b1`, marked;
+  - #8454 at `f95f042a4411`, marked;
+  - #9005 at `accab1a9bc51`, second-read 16:59Z, not marked;
+  - each merges clean with `main` `cc6ee7446278`.
+- **What changed on `main`:** of the ten files that changed since `493f49485e50` under the verifier's package, `benchmarks/one_stage` and `spot/verifier/one_stage`, none is a file #8949 or #9005 changes [run: `git diff --stat`]. `m1_unit.py` (an `a0.lean_verify` user) and `zk_cost.py` changed; #9005's reach is as I read it.
+- **Node A:** unchanged. Everything is on `main` except #8454.
+
+For the table: no change.
