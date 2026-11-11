@@ -41934,3 +41934,66 @@ For BREAKEVEN:
 - Still out: `ae4e` (the #8139 draft's records, about 08:50Z [guess]) and `e226`.
 
 For the table: #8454 is left out of candidates until #8694 and #8698 land; its merge is drafted (two prose hunks) and its quick tier runs. #8458, #8730 and #8781 passed every run of mine at ci's heads. No other head of ours conflicts anywhere in the line.
+
+## REGX, Wed 11 Nov 08:19Z: `always` is EMPTY at the code and K carries no always-checked term: 0 blocks, 0 gates, 0 opened bits, 0 bits added to K mean. No statement a lock records changes and no premise is added; the lemma is written and its try run is out
+
+**Changes to a lock-recorded statement: none.** `Held`, `SpotKSTwo` and every recorded statement stay as they are; the lemma is a new theorem beside them [read: my diff, one new file and one import line].
+
+**1. What `always` is.**
+
+- [read] It is the auditor's, not the prover's, and it is not in what runs. The executable verifier accepts no record whose proved units are not exactly the drawn ones: `Draw.checkProvedFull` fails `units` unless `provedUnits = Draw.proved draw` (`verity/protocols/spot/verifier/lean/Spot/Draw.lean:238-247`), `Record.checks` runs it on every record (`Record.lean:108-113`), and `Record.record` accepts only where every check passes (`Record.lean:382-383`); `Run.run` builds both stages' records over `Draw.proved draw` (`Run.lean:221-222, 263-274`). So the check that bounds the set exists, the verifier has it, and the honest value is the empty set.
+- [read] In the model, `RegTwo.always` is read in two places only: `RegTwo.checked` (`security/Proofs/Flock/Claims/Sampling/Reg.lean:90-94`) and `SpotFlock.cap` (`SpotFlock/Cap.lean:169`). `rg -n 'h\.reg\.[a-z]+' security/Proofs/Flock/SpotFlock` [run] shows `V`, `parse`, `partition`, `two`, `secondDraw`, `stmtOk`, `session`, `base` and the reveal read `first`, `ns`, `ks`, `blockOf` and `sample`, never `always`.
+- [read] The one fact that names it, `regMatchesTwo`'s input-slot clause (`Facts.lean:380`), is proved at every `h`, so it asks nothing of the field (an input slot's cells are empty).
+- [read] A nonempty `always` only hurts the theorem's own premise: `SlotsAt.lean:48-49` says `Addresses h` can fail at "an always-checked unit", whose instance `rankAt` need not have.
+
+**2. The statement** (branch `cursor/proofs-noalways-4e1c` at `f2b8eb2ba4e1f49b2a6bb803c43754c0427f58b1`, file `security/Proofs/Flock/SpotFlock/NoAlways.lean`; not yet elaborated, try run `r20261111-081709-f3d0` on `vy-nebius-cpu-1` is out [run]):
+
+```lean
+def RegTwo.noAlways (g : RegTwo) : RegTwo := { g with always := fun _ => false }
+def Held.noAlways (h : Held) : Held := { h with reg := h.reg.noAlways }
+
+-- the verifier does not read the field
+theorem V_noAlways : V h.noAlways = V h := rfl          -- and parse, partition, two, session, base
+
+-- the checked units are the drawn ones, exactly
+theorem RegTwo.mem_noAlways_checked (g : RegTwo) {N u} {src₁ src₂} {draw} {n}
+    (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) :
+    u ∈ g.noAlways.checked N src₁ src₂ ↔
+      u < N ∧ ∃ j ∈ Spot.Draw.proved draw, g.blockAt (g.sample src₁) j.toNat = u
+
+-- knowledge soundness there, from SpotKSTwo's own two premises at h
+theorem ksTwo_noAlways (hB : Built h) (hS : Addresses h) :
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h.noAlways) iroots
+      (two h.noAlways) (rs h.noAlways) (cap h.noAlways)).KS FlockDeploy.sha512
+
+-- K there: the drawn blocks' gates and nothing else (no `hal` hypothesis)
+theorem code_card_biUnion_noAlways_le (x r needs) {draw n}
+    (hsel : Spot.Select.selectSecond (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks
+      (src (r (order h x).second)) = .ok (draw, n)) :
+    (((code h.noAlways).checked x r).toFinset.biUnion needs).card ≤
+      ((Spot.Draw.proved draw).toList.map fun j =>
+        (needs (h.reg.blockAt (h.reg.sample (src (r (order h x).first))) j.toNat)).card).sum
+theorem code_card_biUnion_noAlways_le_mul … (M) (hM : ∀ u, (needs u).card ≤ M) :
+    (((code h.noAlways).checked x r).toFinset.biUnion needs).card ≤ (Spot.Draw.proved draw).size * M
+
+-- the replay cap there, and the premise only weakens
+theorem cap_noAlways (x) : cap h.noAlways x =
+    (firstK h.reg.first).elim (nBlocks h) fun K => min (nBlocks h) (K * perBlock h)
+theorem addresses_noAlways (hS : Addresses h) : Addresses h.noAlways
+```
+
+- [guess, until the try run returns] The proof of `ksTwo_noAlways` is three lines: the emptied registration's checked units are among `h`'s (`code_noAlways_checked_sub`), so `FrameIs h L → FrameIs h.noAlways L` and `Embeds h L → Embeds h.noAlways L`, then `ksTwo_spot h.noAlways`. It does not go through `Built h.noAlways`, which does not follow from `Built h` (`addressMap` chooses over runs that read `checked`).
+- [read] Of SCALE's three ways (its 02:58Z entry): this needs neither (a) a hypothesis on the K lemma, nor (b) a public `K_always` term, nor (c) a change to `Held`. `code_card_biUnion_le_mul`'s `hal` is discharged by `fun _ => rfl`.
+
+**3. Branch.** `main` (`8201dacff26e`) merged with #8836's head `1fab3dfa6a3562ba9ff3e678793a32083ecf262e`, one commit on top [run: `git merge`, no conflict]. It needs #8836 for `code_card_biUnion_le` and `code_card_biUnion_le_mul`; it needs nothing of #8820 or #8827.
+
+**Next** [guess]: try run back by about 08:35Z; then the records run and the quick tier together, the PR unmarked, and the ready line, before 11:30Z.
+
+For SCALE: the always-checked term adds **0 bits** to K mean at D*1: K_mean stays 2^37.69 [relayed: your 07:59Z entry], and K max stays 2^40.23 to 2^43.23 [relayed: REPBREAK's 02:53Z rows, which count sampled blocks only]. Nothing falls either: the term was never in the priced numbers, only in what Lean could not exclude. If a registration did keep G always-checked gates, K mean would be 2^37.69 + G, that is lg(1 + G/2^37.69) bits more (19.9 bits at G = 2^57.6, every block [relayed: your 02:58Z entry]) [guess: arithmetic, not run].
+
+For CONCRETE: instantiate at `h.noAlways`: K is `Σ_{j ∈ Draw.proved draw} |needs (blockAt sample j)|`, at most `(Draw.proved draw).size * M`; the always term is 0; `n_in` is `cap h.noAlways`, with no always term (`cap_noAlways`). The right-hand side is unchanged.
+
+For the table:
+- K's always-checked term is 0 at the code: the executable verifier refuses any record whose proved units are not exactly the drawn ones [read], and Lean's `always` field is read by no verifier function [read].
+- `ksTwo_noAlways`: under `SpotKSTwo`'s own premises, the code with the field emptied is knowledge sound and its checked units are the drawn ones alone; written at `f2b8eb2ba4e1`, try run `f3d0` out [run]. No locked statement or premise changes.
+- K mean at D*1 stays 2^37.69 [relayed]; this factor gives the bound no bits.
