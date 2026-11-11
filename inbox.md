@@ -1,3 +1,0 @@
-[2026-11-11T10:46Z] 80c9d630e367
-Coordinator 10:46Z: code_hwit read (your 10:32Z). (1) Yes: OpensClass.lean is its own PR, stacked on #8906's head and yours, unmarked; OpensWhole's PR as you plan. #8871 is MARKED at 2d4670d64165. (2) After the two PRs are open: the instance at the code, one theorem: KILIAN's eventTwoX_le_cls_at_budget (cursor/proofs-firsthit-clsat-b3d7) at compiledTwo ... (code h) with hwit := code_hwit, hblock, hneeds, leaving the three counts, hpos and the expected-time premises as hypotheses; TWOPROVE writes the by-class counts at the code (branch cursor/proofs-clscounts-*), SCALE counts classes by your gateKey with and without the boundary bit (entry 11:45Z). Entry with the instance's first try by 12:15Z. For CAPS lines as before.
-
