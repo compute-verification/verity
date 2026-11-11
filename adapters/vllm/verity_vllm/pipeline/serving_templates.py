@@ -44,6 +44,12 @@ SLICES = {"LlBf16DotprodGemm_v1": (("N",), ((None,), (0,))), "Gemm_v2": (("N",),
           "DsaMqaLogits_v3": (("N",), ((None,), (None,), (0,), (0,))), "EmbeddingShard_v1": (("H",), ((None,), (1,))),
           "AllGather_v1": (("WORLD",), ((0,),)), "CublasSplitKGemmF32Out_v1": (("N",), ((None,), (0,))),
           "GemmF32Out_v1": (("N",), ((None,), (0,)))}
+#: the ``SLICES`` families whose slices may also be c elements wide along one of their axes, by that axis (`slice_widths`): a
+#: slice is then the family's Definition at that axis c and every other axis 1, unit (.., j) reading elements [jc, (j + 1)c)
+#: along it of each parameter that carries it, and returning the row's output elements there (torch.bmm's member in blocks of
+#: c output words, ``w[b, jc:(j + 1)c]``).  One proof block then writes c words of the row's output, where slices of one word
+#: are c writers of them
+WIDE_SLICES = {"BatchedGemm_v1": "N"}
 #: the row Definitions whose Calls are split into parts, each a Definition of its own at the row's statics it names: per part, its
 #: family, what it reads in order (``("arg", g)`` the row's argument group g, ``("out", j)`` the row's committed output member j,
 #: ``("mid", name)`` the row's intermediate) and what it returns (``j`` the row's committed output member j, ``name`` an
@@ -123,7 +129,7 @@ class Template:
     """A partition's template as the rows are read for it: its descriptor id and Definition (the population program's), the id of
     the word Definition it computes (its own for a word Definition), and its member layout (``LAYOUTS``; ``"coord"`` for a
     ``COORDS`` family at N = 1 or a ``WIDE_COORDS`` one at a power of two N dividing its G, ``"cols"`` for a ``COLS`` family, ``"part"`` for any other ``PARTS`` part, ``"slice"`` for a
-    ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"chain"`` for a ``CHAINS`` unit family,
+    ``SLICES`` family at every axis 1 or a ``WIDE_SLICES`` one c wide (`slice_width`), ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"chain"`` for a ``CHAINS`` unit family,
     ``"stage"`` for a ``STAGES`` stage family, ``"expert"``, ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's
     block GEMMs, fused blocks, table reads and router slots (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``), ``"history"`` for a
     ``HISTORY`` row's history reads (`history_read`); else ``"row"``).
@@ -183,9 +189,8 @@ def template(t: str) -> Template:
         widths = {x for ty in types for x in ty.width_set()}
         view = types
     word = descriptor_id(w)
-    sl = SLICES.get(spec_base(word))
     layout = ("coord" if coord_width(word) else "cols" if spec_base(word) in COLS
-              else "part" if spec_base(word) in PART_OF else "slice" if sl and all(int(spec_statics(word)[a]) == 1 for a in sl[0])
+              else "part" if spec_base(word) in PART_OF else "slice" if slice_width(word)
               else "kchunk" if spec_base(word) in KCHUNKS.values()
               else "chain" if spec_base(word) in CHAIN_OF else "stage" if spec_base(word) in STAGE_OF
               else "history" if history_read(word) else LAYOUTS.get(spec_base(word), "row"))
@@ -263,6 +268,34 @@ def coord_widths(fam: str, statics: dict[str, Any]) -> list[int]:
     return [1 << j for j in range(G.bit_length() - 1, 0, -1) if (1 << j) < N and N % (1 << j) == 0 and G % (1 << j) == 0]
 
 
+def slice_width(word: str) -> int:
+    """The elements template ``word`` holds along its family's wide axis as a slice: 1 for a ``SLICES`` family at every axis 1,
+    and c for a ``WIDE_SLICES`` family at a power of two c > 1 along its wide axis and every other axis 1; else 0 (it is no
+    slice)."""
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
+    base = spec_base(word)
+    if base not in SLICES:
+        return 0
+    S, wide = spec_statics(word), WIDE_SLICES.get(base)
+    if any(int(S[a]) != 1 for a in SLICES[base][0] if a != wide):
+        return 0
+    c = int(S[wide]) if wide is not None else 1
+    return c if c >= 1 and c & (c - 1) == 0 else 0
+
+
+def slice_widths(fam: str, statics: dict[str, Any]) -> list[int]:
+    """The widths c > 1 of a ``WIDE_SLICES`` family's slices on a row of ``statics``, coarse to fine: each power of two that
+    divides the row's extent along the wide axis, but that extent itself where it is the row's only one past 1 (the row
+    itself); none for any other family."""
+    axis = WIDE_SLICES.get(fam)
+    if axis is None:
+        return []
+    N = int(statics[axis])
+    whole = all(int(statics[a]) == 1 for a in SLICES[fam][0] if a != axis)
+    return [1 << j for j in range(N.bit_length() - 1, 0, -1) if N % (1 << j) == 0 and not (whole and 1 << j == N)]
+
+
 def part(word: str, spec: str) -> tuple | None:
     """The ``PARTS`` entry of template word ``word`` on a row of ``spec`` when ``word``'s family is a part of the row's; else None
     (the row is ``word``'s own family)."""
@@ -286,7 +319,9 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     `coord_widths`, N / c of them, coarse to fine, then every family's at N = 1, N of them), for a ``COLS`` family,
     its Definition at each halving W / k of its width (k of them) that `cols_refused` admits, for a ``PARTS`` family, each part
     at the row's statics and its ``PART_STATICS`` (a ``COLS`` part also at each halving, a ``COORDS`` part also in coordinates), for
-    a ``SLICES`` family, its Definition at every axis 1 (the product of its extents of them), for a ``KCHUNKS`` row family, at
+    a ``SLICES`` family, its Definition at every axis 1 (the product of its extents of them), then a ``WIDE_SLICES`` family's
+    at each width c of `slice_widths` (that product over c of them), coarse to fine and after the slice of one element, which a
+    reader taking a row's first fitting unit so keeps, for a ``KCHUNKS`` row family, at
     each chunk width k (`chunk_widths`), its first, middle and last chunks (N, N (K / k - 2) and N of them), for a ``CHAINS``
     row family, its cut (`sparse_mla.head_chain`: per head the first visited block at its key count, the later blocks at BN and
     the end; `sparse_mla_split.split_chain`: a split row's at NS = 1, else per head and split its blocks so and its end in
@@ -320,6 +355,9 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
         n = math.prod(int(spec_statics(spec)[a]) for a in axes)
         if n > 1 and (c := _bind(spec, **dict.fromkeys(axes, 1))) is not None:
             hit += ((descriptor_id(c), n),)
+        for w in slice_widths(spec_base(spec), spec_statics(spec)):
+            if (c := _bind(spec, **{**dict.fromkeys(axes, 1), WIDE_SLICES[spec_base(spec)]: w})) is not None:
+                hit += ((descriptor_id(c), n // w),)
         for fam in [spec_base(spec)] + [p[0] for p in PARTS.get(spec_base(spec), ())]:
             own = fam == spec_base(spec)
             over = {} if own else PART_STATICS.get(spec_base(spec), {})

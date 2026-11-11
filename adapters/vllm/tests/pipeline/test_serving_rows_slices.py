@@ -5,7 +5,9 @@ LM head and cuBLAS's split-K (at a bf16 and an f32 output) into W's rows, torch.
 shard's embedding into columns (every unit reads the token) and the all-gather into its ranks' shards.  The units cover the
 row's outputs with nothing left over (one index entry per row, the units' outputs the row's output in order), each reads its
 own elements of the row's operands (an independent gather by index), and the Definition at every axis 1 on each unit's rows is
-the row's Definition's element; in a window the units are chunks of the stager's bit rows, read once."""
+the row's Definition's element; in a window the units are chunks of the stager's bit rows, read once.  A ``WIDE_SLICES``
+family's row is also slices c elements wide along its wide axis (torch.bmm's member in blocks of c output words): unit (.., j)
+reads elements [jc, (j + 1)c) there and returns the row's c outputs, held to the same."""
 from __future__ import annotations
 
 import math
@@ -39,27 +41,42 @@ ROWS = {"LlBf16DotprodGemm_v1": (LL.LlBf16DotprodGemmWord, {"N": 3, "K": 64, "BS
         "DsaMqaLogits_v3": (DSA.DsaMqaLogitsV3, {"N": 3, "H": 8, "D": 32}),
         "EmbeddingShard_v1": (T2.EmbeddingShard, {"VS": 5, "H": 4, "START": 2}),
         "AllGather_v1": (T2.AllGather, {"WORLD": 4, "N": 3})}
+#: each wide family's row (statics over ``ROWS``') and the widths c > 1 its slices take along its wide axis, coarse to fine
+WIDE = {"BatchedGemm_v1": ({"N": 8}, (8, 4, 2))}
+#: every slice a test reads: a family, its row's statics over ``ROWS``' and the slice's width
+CASES = [(f, None, 1) for f in sorted(ROWS)] + [(f, st, c) for f, (st, cs) in sorted(WIDE.items()) for c in (1, *cs)]
 OP = "model.layers.3.mlp.gate"
 CAP = 4
 
 
 def test_every_family_of_the_table_is_tested():
-    assert set(ROWS) == set(SRW.SLICES)
+    assert set(ROWS) == set(SRW.SLICES) and set(WIDE) == set(SRW.WIDE_SLICES)
 
 
-def defn(family: str, unit: bool = False):
-    d, st = ROWS[family]
-    return bind(d, **{**st, **(dict.fromkeys(SRW.SLICES[family][0], 1) if unit else {})})
+def statics(family: str, st: dict | None = None) -> dict:
+    return {**ROWS[family][1], **(st or {})}
 
 
-def extents(family: str) -> list[int]:
-    return [int(ROWS[family][1][a]) for a in SRW.SLICES[family][0]]
+def defn(family: str, unit: bool = False, st: dict | None = None, c: int = 1):
+    """The family's row at ``ROWS``' statics under ``st``, or (``unit``) its slice ``c`` wide: every axis 1, the wide one c."""
+    over = {**dict.fromkeys(SRW.SLICES[family][0], 1), **({SRW.WIDE_SLICES[family]: c} if c > 1 else {})} if unit else {}
+    return bind(ROWS[family][0], **{**statics(family, st), **over})
 
 
-def operands(family: str, seed: int) -> list[np.ndarray]:
+def held(family: str, c: int = 1) -> list[int]:
+    """Per axis, the elements a slice ``c`` wide holds along it: c along the family's wide axis, else 1."""
+    return [c if a == SRW.WIDE_SLICES.get(family) else 1 for a in SRW.SLICES[family][0]]
+
+
+def extents(family: str, st: dict | None = None, c: int = 1) -> list[int]:
+    """The row's units along each axis as slices ``c`` wide."""
+    return [int(statics(family, st)[a]) // h for a, h in zip(SRW.SLICES[family][0], held(family, c), strict=True)]
+
+
+def operands(family: str, seed: int, st: dict | None = None) -> list[np.ndarray]:
     rng = np.random.default_rng(seed)
     out = []
-    for name, ty in defn(family).signature()[0]:
+    for name, ty in defn(family, st=st).signature()[0]:
         n, w = len(ty.leaf_widths()), ty.leaf_widths()[0]
         if family == "EmbeddingShard_v1" and name == "tok":
             out.append(np.array([4], dtype=np.int32))
@@ -73,9 +90,11 @@ def operands(family: str, seed: int) -> list[np.ndarray]:
     return out
 
 
-def gather(o: np.ndarray, dims: list[int], carried: tuple, ix: tuple) -> np.ndarray:
-    """Unit ``ix``'s elements of operand ``o`` by indexing: i_k along each dimension that carries axis k, all along the others."""
-    at = {j: ix[k] for k, j in enumerate(carried) if j is not None}
+def gather(o: np.ndarray, dims: list[int], carried: tuple, ix: tuple, wide: list[int] | None = None) -> np.ndarray:
+    """Unit ``ix``'s elements of operand ``o`` by indexing: i_k along each dimension that carries axis k (elements
+    [i_k c, (i_k + 1) c) where ``wide`` gives the axis c > 1 of them), all along the others."""
+    wide = wide or [1] * len(ix)
+    at = {j: ix[k] if wide[k] == 1 else slice(ix[k] * wide[k], (ix[k] + 1) * wide[k]) for k, j in enumerate(carried) if j is not None}
     return o.reshape(dims or [1])[tuple(at.get(dim, slice(None)) for dim in range(max(len(dims), 1)))]
 
 
@@ -86,12 +105,12 @@ def leaves(a: np.ndarray, bits: int) -> np.ndarray:
 
 @pytest.fixture
 def row(monkeypatch):
-    def make(family: str, seed: int = 1):
-        ops = operands(family, seed)
-        y = np.asarray(evaluate_batch(defn(family), *(o.view(f"<u{o.itemsize}").astype(np.uint64).reshape(1, -1) for o in ops))).reshape(-1)
-        y = y.astype(np.uint16 if defn(family).signature()[1].leaf_widths()[0] == 16 else np.uint32)
-        r = {"i": 9, "spec": descriptor_id(defn(family)), "args": [[["x", k, 0, o.size]] for k, o in enumerate(ops)]}
-        d = {"statics": ROWS[family][1], "op_path": OP, "members": [("out", y.size, str(y.dtype))], "row": 0, "step": 16}
+    def make(family: str, seed: int = 1, st: dict | None = None):
+        ops, fn = operands(family, seed, st), defn(family, st=st)
+        y = np.asarray(evaluate_batch(fn, *(o.view(f"<u{o.itemsize}").astype(np.uint64).reshape(1, -1) for o in ops))).reshape(-1)
+        y = y.astype(np.uint16 if fn.signature()[1].leaf_widths()[0] == 16 else np.uint32)
+        r = {"i": 9, "spec": descriptor_id(fn), "args": [[["x", k, 0, o.size]] for k, o in enumerate(ops)]}
+        d = {"statics": statics(family, st), "op_path": OP, "members": [("out", y.size, str(y.dtype))], "row": 0, "step": 16}
 
         class Store:
             def words(self, rid, step, op, member, lo, hi):
@@ -111,11 +130,35 @@ def test_a_row_holds_its_definition_at_every_axis_one(family):
     assert SRW.template(spec).layout == "row"
 
 
-@pytest.mark.parametrize("family", sorted(ROWS))
-def test_the_slices_cover_the_row_s_output_read_their_own_elements_and_compute_them(row, family):
-    x, ops, y, store = row(family)
-    ext, (_axes, carry) = extents(family), SRW.SLICES[family]
-    n, T = math.prod(ext), descriptor_id(defn(family, unit=True))
+@pytest.mark.parametrize("family", sorted(WIDE))
+def test_a_wide_family_s_row_also_holds_its_slices_c_wide_listed_after_the_slice_of_one(family):
+    """The row's unit templates are the row, its slice of one element, then its slices c wide, coarse to fine: a reader that
+    takes the first of a row's units that fits takes the slice of one element where it did before.  A row that is one member
+    along every other axis is itself its widest slice, so it is not listed again."""
+    st, widths = WIDE[family]
+    spec, n = descriptor_id(defn(family, st=st)), math.prod(extents(family, st))
+    units = [(descriptor_id(defn(family, unit=True, st=st, c=c)), n // c) for c in widths]
+    assert SRW.unit_templates(spec) == ((spec, 1), (descriptor_id(defn(family, unit=True, st=st)), n), *units)
+    for (u, _n), c in zip(units, widths, strict=True):
+        t = SRW.template(u)
+        assert (t.layout, t.word, SRW.slice_width(u)) == ("slice", u, c)
+    assert SRW.template(spec).layout == "row" and SRW.slice_width(spec) == 0
+    wide = SRW.WIDE_SLICES[family]
+    one = {**st, **{a: 1 for a in SRW.SLICES[family][0] if a != wide}}
+    N = int(statics(family, one)[wide])
+    row1 = descriptor_id(defn(family, st=one))
+    assert row1 == units[0][0] and SRW.template(row1).layout == "slice"
+    assert SRW.unit_templates(row1) == ((row1, 1), (descriptor_id(defn(family, unit=True, st=one)), N),
+                                        *((descriptor_id(defn(family, unit=True, st=one, c=c)), N // c) for c in widths[1:]))
+    odd = descriptor_id(defn(family, st={**st, wide: 12}))
+    assert [SRW.slice_width(u) for u, _n in SRW.unit_templates(odd)[1:]] == [1, 4, 2]
+
+
+@pytest.mark.parametrize(("family", "st", "c"), CASES)
+def test_the_slices_cover_the_row_s_output_read_their_own_elements_and_compute_them(row, family, st, c):
+    x, ops, y, store = row(family, st=st)
+    ext, (_axes, carry) = extents(family, st, c), SRW.SLICES[family]
+    n, T = math.prod(ext), descriptor_id(defn(family, unit=True, st=st, c=c))
     tp = SRW.template(T)
     bits = tp.packed or (16,) * (len(ops) + 1)
     (m,) = SRW.members([T], [[x]], [n])
@@ -124,20 +167,31 @@ def test_the_slices_cover_the_row_s_output_read_their_own_elements_and_compute_t
     assert entries == [[0, n, "r0", 16, 3, OP, "out", 0, 9]]
     out = leaves(data["outs"]["out.out"], bits[-1])
     assert out.reshape(-1).tolist() == y.astype(np.uint64).tolist()
-    params = defn(family).signature()[0]
+    params = defn(family, st=st).signature()[0]
     for u, ix in enumerate(np.ndindex(*ext)):
-        for g, ((_nm, ty), c, o) in enumerate(zip(params, carry, ops, strict=True)):
-            want = gather(o, SL.dims(ty), c, ix).reshape(-1).view(f"<u{o.itemsize}").astype(np.uint64)
-            assert leaves(data["rows"][f"in{g}"][u], bits[g]).tolist() == want.tolist()
-    ref = evaluate_batch(defn(family, unit=True), *(leaves(data["rows"][f"in{g}"], b) for g, b in enumerate(bits[:-1])))
-    assert np.asarray(ref).reshape(n, -1).tolist() == out.tolist()
+        for g, ((_nm, ty), on, o) in enumerate(zip(params, carry, ops, strict=True)):
+            want = np.ascontiguousarray(gather(o, SL.dims(ty), on, ix, held(family, c))).reshape(-1)
+            assert leaves(data["rows"][f"in{g}"][u], bits[g]).tolist() == want.view(f"<u{o.itemsize}").astype(np.uint64).tolist()
+    ref = evaluate_batch(defn(family, unit=True, st=st, c=c), *(leaves(data["rows"][f"in{g}"], b) for g, b in enumerate(bits[:-1])))
+    assert np.asarray(ref).reshape(n, -1).tolist() == out.reshape(n, -1).tolist()
 
 
-@pytest.mark.parametrize("family", ["LlBf16DotprodGemm_v1", "CublasSplitKGemmF32Out_v1", "GemmF32Out_v1", "BatchedGemm_v1",
-                                    "EmbeddingShard_v1", "DsaMqaLogits_v3"])
-def test_a_window_s_slices_are_chunks_of_the_stager_s_bit_rows_read_once(row, family):
-    x, ops, y, store = row(family)
-    n, T = math.prod(extents(family)), descriptor_id(defn(family, unit=True))
+def test_a_row_that_is_not_whole_slices_of_a_width_is_refused(row):
+    """A slice 4 wide matches no row of 6 (`unit_templates` lists it for none), and reading one through it is refused."""
+    family = "BatchedGemm_v1"
+    x, _ops, _y, _store = row(family, st={"N": 6})
+    T = descriptor_id(defn(family, unit=True, st={"N": 6}, c=4))
+    assert T not in dict(SRW.unit_templates(x[2]["spec"]))
+    with pytest.raises(ValueError, match="a row of 6 along N is not whole slices of its width there"):
+        SL.extent(SRW.template(T), x[3]["statics"])
+
+
+@pytest.mark.parametrize(("family", "st", "c"), [(f, None, 1) for f in (
+    "LlBf16DotprodGemm_v1", "CublasSplitKGemmF32Out_v1", "GemmF32Out_v1", "BatchedGemm_v1", "EmbeddingShard_v1",
+    "DsaMqaLogits_v3")] + [("BatchedGemm_v1", WIDE["BatchedGemm_v1"][0], 2)])
+def test_a_window_s_slices_are_chunks_of_the_stager_s_bit_rows_read_once(row, family, st, c):
+    x, ops, y, store = row(family, st=st)
+    n, T = math.prod(extents(family, st, c)), descriptor_id(defn(family, unit=True, st=st, c=c))
     tp = SRW.template(T)
     in_rows, out_rows = CR.unit_rows(tp)
     assert [(p, s) for p, s, _b, _ps in in_rows] == [(f"in{g}", V2) for g in range(len(ops))] and out_rows == [(V2, (0,))]

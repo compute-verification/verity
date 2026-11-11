@@ -22,7 +22,7 @@ from verity.commitments.windows import interface as IF
 from verity.commitments.windows import rows as CS
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline.serving_templates import SLICES, _bind, template
-from verity_vllm.pipeline.slice_rows import dims
+from verity_vllm.pipeline.slice_rows import dims, spans
 from verity_vllm.program.compact import runs_from_file_items
 from verity_vllm.query.program_view import spec_base
 
@@ -50,19 +50,22 @@ def _words(elements: int, bits: int) -> int | None:
 def _row_reads(t: str, pi: Any, r: Mapping[str, Any], d: Mapping[str, Any], at: int) -> list[tuple[IF.Read, int | None]]:
     """Slice template ``t``'s units of row ``r`` (from unit ``at``) each reading one row of one weight on a port, each read with
     the weight's words (None where its elements aren't whole words): an argument whose whole weight the row reads and whose
-    dimensions carry the template's axes first, in order, so unit i's element is the weight's row i."""
-    axes, carry = SLICES[spec_base(template(t).word)]
-    ext, out = tuple(int(d["statics"][a]) for a in axes), []
+    dimensions carry the template's axes first, in order, so unit i's element is the weight's row i; a unit c wide along its
+    last carried axis (`slice_rows.spans`) reads c of them in a run, a row of c times the words."""
+    _axes, carry = SLICES[spec_base(template(t).word)]
+    sp = spans(template(t), d["statics"])
+    ext, out = tuple(x for x, _c in sp), []
     for k, (g, (_nm, ty), carried) in enumerate(zip(r["args"], _bind(r["spec"]).signature()[0], carry, strict=True)):
         got, shape = _weight(pi, g), dims(ty)
         on = [j for j in carried if j is not None]
-        if got is None or not on or on != list(range(len(on))) or got[2] != math.prod(shape):
+        held = [c for (_x, c), j in zip(sp, carried) if j is not None]
+        if got is None or not on or on != list(range(len(on))) or got[2] != math.prod(shape) or any(c > 1 for c in held[:-1]):
             continue
         label, first, _n, count, bits = got
-        row, base = _words(math.prod(shape[len(on):]), bits), _words(first, bits)
+        row, base = _words(held[-1] * math.prod(shape[len(on):]), bits), _words(first, bits)
         if row is None or base is None:
             continue
-        step = tuple(0 if j is None else math.prod(shape[j + 1:]) * bits // 16 for j in carried)
+        step = tuple(0 if j is None else c * math.prod(shape[j + 1:]) * bits // 16 for (_x, c), j in zip(sp, carried))
         out.append((IF.Read(t, f"in{k}", WR.weight_param(label, row), at=at, radix=ext, base=base, step=step), _words(count, bits)))
     return out
 

@@ -42,7 +42,8 @@ row's Definition is cut into them (``CUT``: its body batches the template's word
 does not compute what the row computes is no match), or when the template's word is the row's Definition at N = 1 (``COORDS``: the
 row is split into its N coordinates), or for a ``WIDE_COORDS`` family at N = c (its N / c coordinates of c outputs), or at a halving of its width (``COLS``: the row is split into column blocks), or when it
 is a part of the row's Definition (``PARTS``: the row is split into Definitions of its own, one member per part), or when it
-is the row's Definition at every axis of a batch 1 (``SLICES``: the row is split into its slices along those axes), or when it
+is the row's Definition at every axis of a batch 1 (``SLICES``: the row is split into its slices along those axes), or for a
+``WIDE_SLICES`` family at c along its wide axis and 1 along the others (its slices c elements wide there), or when it
 is a K-chunk of the row's coordinate (``KCHUNKS``, `kchunk_rows`), a key block, an end or a combine of its heads' chains
 (``CHAINS``, `chain_rows`), or a stage of its cut (``STAGES``, `stage_rows`).  A Boolean Program's rows are its word view (`pipeline.build_instances`: each row the word Definition
 its Call's Boolean Definition computes, that Boolean Definition its ``bits``), so a template matches the same rows under either IR,
@@ -105,6 +106,9 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
                                    row's output element; packed ports, one index entry per row; chunked (``chunk_cap``), v2
                                    bit rows (`chunk_rows.unit_rows`) -> ``o0``
+  ``BatchedGemm_v1{B=1,N=c,..}``   every slice c wide of the rows of that Definition (``WIDE_SLICES``, c a power of two that
+                                   divides the row's N): as a slice, with elements [jc, (j + 1)c) along the wide axis
+                                   (``x[b]`` whole, ``w[b, jc:(j + 1)c]``) -> the row's c output elements there
   ``EmbeddingRead_v1{V=2^17,H=..}``  every history read of a ``DsaHistoryReads_v1`` row where the partition file says
                                    ``"histories": true`` (`history_rows`: its ports, and its writer's row-seg ``o0``); always
                                    chunked, v2 bit rows
@@ -148,8 +152,8 @@ from verity_vllm.pipeline import s8_rows as S8, slice_rows as SL
 from verity_vllm.pipeline import stage_rows as ST, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
 from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS,  # noqa: F401
-                                                    SLICES, STAGES, WIDE_COORDS, Template, _bind, coord_width, part, template,
-                                                    unit_templates)
+                                                    SLICES, STAGES, WIDE_COORDS, WIDE_SLICES, Template, _bind, coord_width,
+                                                    part, slice_width, template, unit_templates)
 from verity_vllm.pipeline.window_law import law_of, work_table_of
 from verity_vllm.program.compact import runs_from_file_items
 

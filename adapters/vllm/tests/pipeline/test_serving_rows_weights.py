@@ -131,6 +131,40 @@ def test_the_committer_commits_each_read_by_reference_as_the_lean_verifier_opens
     assert IF.registered_roots(json.loads((tmp_path / "registration.json").read_text())["window"]) == roots
 
 
+def test_a_wide_slice_reads_c_rows_of_a_weight_in_a_run(monkeypatch):
+    """torch.bmm's row of 2 members and 4 outputs as slices 2 wide (``WIDE_SLICES``): unit (b, j) reads rows 2j and 2j + 1 of
+    member b of the weight, one row of 2 K words from the weight's leaf (4b + 2j) K; as slices of one output, row n of 32
+    words.  Either read is of the weight at rows of the unit's own width."""
+    from verity.definitions.registry import cublas_bf16 as CB
+
+    st = {"B": 2, "K": 32, "N": 4, "DOT": HopperBF16WgmmaDot16}
+    row = descriptor_id(bind(CB.BatchedGemmWord, **st))
+    label = "model.layers.0.attn.w_uv.weight"
+
+    class Bmm(Index):
+        fields, foff = [(label, 256, [2, 4, 32], 16)], [0]
+
+        def __init__(self, *_a, **_k):
+            self.by_i = {10: {"i": 10, "spec": row, "args": [[["n", 3, 0, 64]], [["p", 0, 0, 256]]]}}
+
+        def describe(self, r):
+            return {"statics": {"B": 2, "K": 32, "N": 4}, "op_path": "model.layers.0.attn.w_uv", "row": 0, "step": 0,
+                    "members": [("out", 8, "bf16")]}
+
+    monkeypatch.setattr(SRW, "index_of", lambda inst, _pool, **kw: Bmm(inst, **kw))
+    for c, units in ((2, 4), (1, 8)):
+        t = descriptor_id(bind(CB.BatchedGemmWord, **{**st, "B": 1, "N": c}))
+        w, rows = SRW.population({"r0": {}}, {"templates": [t], "law": "subset:1", "chunk_cap": {t: 8}}, "ab" * 64)
+        doc = json.loads(IF.circuit_bytes(SRW.circuit_record(w, rows)))
+        param = f"weights/{label}@{32 * c}"
+        assert doc["registered"]["params"] == {param: 256} and sum(m.n for m in w.members) == units
+        reads = IF.declarations(doc)[2].reads
+        assert {(r.reader, r.port, r.param) for r in reads} == {(t, "in1", param)}
+        at = np.concatenate([r.at + np.arange(r.reader_units) for r in reads])
+        src = np.concatenate([r.source(np.arange(r.units)) for r in reads])
+        assert at.tolist() == list(range(units)) and src.tolist() == [32 * c * u for u in range(units)]
+
+
 def test_a_read_whose_rows_are_not_its_values_is_refused_and_no_values_commit_rows_in_full(served):
     window, _rows, doc = served(PARTITION)
     values, data = values_and_rows(window, doc)
