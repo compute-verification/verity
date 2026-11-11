@@ -49498,3 +49498,50 @@ For TWOWITNESS: nothing found against #8919. By class the two integrands need th
 For the table:
 - By classes, every Lean piece of the bound now compiles at the model's code, as lemmas on five unmarked branches; no one statement composes them. What a number still takes as hypotheses: each block's class count, the three counts by class, the budget T on every run of both parties, `Scope`, the refusal's probability, and `ExpectedCR` at three finders. The table may say "compiled as lemmas at the model's code, not composed, counts are hypotheses"; it may not say "proved" or "at the code we serve".
 - Gap f (the opening checks' calls) is closed in KILIAN's two corollaries. #8915's lock record lists `Built` and `Addresses` and not `Scope`.
+
+## BENCHCROSS, Wed 11 Nov 10:49Z: second reading of #8853 at 2e47293cc645 holds (40ee equals the run of record on every number they share); with tonight's measurements together (Lean verify 250 core-s, width at kappa <= 2^-6, the cut, the head at 1.357 s) the plan reads 2,270 GB at modeled 0.4, world year (81 to 87 at the measured engine rate, a floor), not 1,460: the Lean verify is now most of the head's price
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [guess] mine, unchecked. Times from `date -u`. Every GB figure is modeled: the planner's bound, my calls on the dumped row (iii) of `r20261111-080601-3db1`, each scope's own read (world year 4,042.4). The inputs I change are labelled in each row.
+
+**1. Second readings, one line each.**
+- second reading of #8853 (BREAKEVEN's driver) at `2e47293cc645`: holds. [read: both runs' `rows.jsonl` from the store] `r20261111-072105-40ee` against the run of record `r20261111-052546-d670` (sha256 `92774cbd…5433`, as the body says): 54 rows, the same keys, and of 16,524 numbers the two files share, none differs. The six lines are 13,961.6 / 14,059.9 / 14,228.6 (world) and 13,429.7 / 13,528.4 / 13,697.9 (datacenter) [read: `40ee`'s `figure.txt`]. Only `step`'s text and `split.what` differ, as the body says. `40ee` ran one commit before the head (`4ab2b732dfa2`); [read: that diff] the head adds `world`, `b10` and the step's prefix, no number. The PR is three files under `benchmarks/spot_figures`; it patches that package's own pricing names in process and restores them, and nothing a guarantee or the hiding argument rests on is touched.
+- **What #8853's label list now has wrong, by tonight's measurement:** it lists "every other block's Lean verifier seconds" as assumed (`V_OTHER`), which is right as a label, but for the head block the assumption is off by 4.1 times (60.56 against 250.0 core-s a statement, `d4ef`). (i), the figure of record at 14,228.6, prices the head block the same way; I have no dumped call for (i), so its read with the measured verify is BREAKEVEN's to print.
+- HEADPROF's 1.357 (`r20261111-102210-ee70` step 1): not read. The run is on node A, which my VM cannot reach, and is not in the store [run: `research fetch`, 10:47Z]. It is [relayed] in what follows.
+- ATTACK's 10:42Z cell: its 2^-99.41 in compressions and 2^-108.4 in calls follow from its K a run of 2^34.31 by the evaluator's formula [run: my arithmetic, 2^-99.412 and 2^-108.414]. The 643 itself I did not check.
+
+**2. The measured Lean verify at each scope** [run: the same term at each of `3db1`'s six dumped calls, × that scope's read]. (iii) with the head block's verify at 250.0 core-s; then with the width plan (κ ≤ 2^-3) and the four-quarter cut as well. Modeled 0.4, GB:
+
+| | world week | world month | world year | datacenter week | datacenter month | datacenter year |
+|---|---|---|---|---|---|---|
+| (iii) as `e0bd` prices it (verify assumed) | 4,049.1 | 4,046.6 | 4,042.4 | 4,064.0 | 4,061.4 | 4,056.4 |
+| (iii), verify measured | 6,333.4 | 6,328.3 | 6,319.7 | 6,363.4 | 6,358.1 | 6,348.3 |
+| + width + cut | 2,548.0 | 2,549.5 | 2,552.3 | 2,539.6 | 2,540.9 | 2,543.4 |
+
+**3. Held to κ ≤ 2^-6, which ATTACK's count needs for 2^-100 in compressions by classes** [relayed: ATTACK 10:42Z]. World year, the Lean verify at its measured 250.0 core-s in every row. Second column by proportion (× 0.0143/0.4 to × 0.0154/0.4); the rate is not measured at the headline's mix. No row of mine on the price-of-record base.
+
+| row | modeled 0.4, GB | measured engine rate on node A (a floor), GB | under 300 GB only while the engine serves at most |
+|---|---|---|---|
+| (iii) | 6,319.7 | 225.9 to 243.3 | 237 tokens a GPU-second |
+| width, κ ≤ 2^-6 | 4,129.5 | 147.6 to 159.0 | 363 |
+| + the four-quarter cut | 2,767.0 | 98.9 to 106.5 | 541 |
+| + head at four provers, the check off the cores (1.731, `db9a`) | 2,393.7 | 85.6 to 92.2 | 626 |
+| + every cut at four provers (1.357, `ee70`, relayed; salts `all` is Daniel's, unmarked) | 2,269.9 | 81.1 to 87.4 | 660 |
+| width at κ ≤ 2^-7 (clears under every count) | 4,574.2 | 163.5 to 176.1 | 328 |
+| the same + cut | 3,271.1 | 116.9 to 125.9 | 458 |
+
+- **Holding κ to 2^-6 costs nothing on the width plan once the verify is measured:** the planner's own best width design at 250 core-s is κ 2^-6 (4,129.5 with the grid open to 2^-3 as well). With the cut it costs 8% (2,767.0 against 2,552.3 at κ ≤ 2^-3).
+- **Every cut at four provers is worth 0.82 on the plan, not 0.54:** 2,269.9 / 2,767.0, where the block's own seconds fall to 0.54 (1.357 / 2.512). The Lean verify is most of the head's price now.
+- **The last three rows compose things measured apart.** The cut's statements were timed at one prover on `vy-dc-h200-3`; 1.731 and 1.357 are the uncut block's at four provers on node A. Unsupported as a product until a cut statement runs at four provers. A cut block's class count is also not ATTACK's 643 (nobody counted it).
+- On (iii) alone: head 1.357 reads 4,855.4 (173.6 to 186.9; stops at 309); one prover today (2.512, `ee70`) 5,983.9.
+- With the verify left at its assumed 60.56 the bottom row would read 1,460.2: that is the figure a waterfall prints if it takes tonight's prover levers and not tonight's verify measurement.
+
+**Not read:** `ee70`, `af1d` (not in the store); #8917; #8873's Lean; #8904's `figure1.py`. vllm's `serving_rate` PR is not posted [read: PRF-550's comments, 10:46Z]. BREAKEVEN has posted nothing since 10:26Z.
+
+For BREAKEVEN:
+- With the Lean verify at 250.0 core-s and κ ≤ 2^-6: width 4,129.5; + cut 2,767.0; + head 1.731 2,393.7; + head 1.357 2,269.9 (world year, modeled 0.4). Recompute; mine are one dumped call.
+- The driver's `V_OTHER` on the head block is the 4.1 times: a `V_MEASURED` entry for the head type needs FLOCKPKG's rows at 1, 2 and 4 blocks for its slope. (i)'s read with it is yours.
+- The six scopes move together: verify measured is × 1.563 to × 1.566 at every scope.
+
+For the table:
+- Everything measured tonight, together: Lean verify 250 core-s (measured), width plan at κ ≤ 2^-6, the cut, the head at four provers with every cut (1.357 s, relayed): 2,270 GB at modeled 0.4, world year; 81 to 87 at the measured engine rate on node A (a floor); under 300 only while the engine serves at most 660 tokens a GPU-second. The composition is unsupported (the cut was not timed at four provers) and salts `all` is Daniel's.
+- #8853 at `2e47293cc645`: second reading holds (`40ee` equals `d670` on every number they share).
