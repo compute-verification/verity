@@ -1749,7 +1749,8 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
              "homes": {"layers"}, "tree_roles": {"trees"}, "read_by_dependents": {"reads"}, "_finish": whole,   # the judge's
              "load": whole, "dump": whole,                                   # the reader and the writer themselves
              "packages": whole,                                              # the file's name, among a directory's
-             "controls_of": whole}                                           # a control's copy of a fixture
+             "controls_of": whole,                                           # a control's copy of a fixture
+             "unowned_at": whole}                                            # the report's `unowned`, of the judged lock
     for name, got in by_path.items():
         if name not in apart:
             reads.setdefault(name, set()).update(A.JUDGED if got is None else got)
