@@ -42,6 +42,10 @@ and its owner regenerates them with `check.py --update`; `--push-to` pushes it; 
 conflict there likewise takes `--onto`'s and the pins step regenerates it) or `pins-stale` (the result's id, and the tail of `--regen`'s output, which names each stale pin's command). `plain` beside it is what an ordinary `git merge` of the branch into `--onto` gives, for comparison. `--push-to`
 pushes a clean result of one branch to a new branch on `--remote`, and refuses a name that already exists there. Exit 0 when
 every branch is clean or up to date, 1 otherwise.
+
+Before any branch, a clone that defines no merge driver for one `.gitattributes` names gets them registered (`DRIVERS`, as
+`research`'s own clones have them), since without them a lock or a Lean import list merges as text and stops a branch its
+owner's merge would carry; when `--python` can't register them, nothing runs, the refusal names the command, and the exit is 2.
 """
 from __future__ import annotations
 
@@ -87,6 +91,10 @@ KEEP = False
 #: the clone's worktree lock, in its git directory, under the name `research.queue.WORKTREES_LOCK` gives it: a scratch
 #: worktree is added and forgotten holding it alone, and every fetch the queue runs holds it shared
 WORKTREES_LOCK = "research-worktrees.lock"
+#: what registers in a clone the merge drivers `.gitattributes` names, as `research`'s own clones have them
+#: (`research.clone.set_drivers`): without them a lock, a Lean import list or a test list merges as text, and a branch stops
+#: at a merge its owner's clone would make clean
+DRIVERS = "import pathlib, research.clone as c; c.set_drivers(pathlib.Path.cwd())"
 
 
 class ScriptFailed(Exception):
@@ -142,6 +150,32 @@ def drop_worktree(wt: str, cwd: str | None) -> None:
 
 def out(*args: str, cwd: str | None = None) -> str:
     return git(*args, cwd=cwd).stdout.decode().strip()
+
+
+def missing_drivers(cwd: str | None = None) -> list[str]:
+    """The merge drivers the checkout's `.gitattributes` names (`merge=NAME`) that its clone's config defines no
+    `merge.NAME.driver` for."""
+    attrs, names = os.path.join(out("rev-parse", "--show-toplevel", cwd=cwd), ".gitattributes"), []
+    if os.path.isfile(attrs):
+        with open(attrs) as f:
+            names = sorted(set(re.findall(r"\bmerge=([\w.-]+)", f.read())))
+    have = git("config", "--get-regexp", r"^merge\..*\.driver$", cwd=cwd, ok=(0, 1)).stdout.decode().splitlines()
+    got = {key.split(".")[1] for key, _, _ in (line.partition(" ") for line in have) if key.count(".") == 2}
+    return [n for n in names if n not in got]
+
+
+def drivers(python: str, cwd: str | None = None) -> str | None:
+    """None once the clone defines every merge driver `.gitattributes` names, registering those it lacks with ``python``
+    (`DRIVERS`); else why not, with the command that registers them."""
+    if not missing_drivers(cwd):
+        return None
+    r = subprocess.run([python, "-c", DRIVERS], cwd=out("rev-parse", "--show-toplevel", cwd=cwd), capture_output=True, text=True)
+    if not (lacking := missing_drivers(cwd)):
+        return None
+    said = ((r.stderr or r.stdout).strip().splitlines() or [f"exit {r.returncode}"])[-1]
+    return (f"this clone defines no merge driver for {', '.join(lacking)} (.gitattributes), so a lock, a Lean import list or a "
+            f"test list would merge as text, and {python} couldn't register them ({said}): run `uv run python -c "
+            f"\"{DRIVERS}\"` at the repository's root, then this again")
 
 
 def rev(ref: str, cwd: str | None) -> str:
@@ -548,6 +582,9 @@ def main(argv: list[str] | None = None) -> int:
     if a.push_to and len(a.branches) != 1:
         ap.error("--push-to takes one branch")
     KEEP = a.kept
+    if why := drivers(a.python):
+        print(f"restack: {why}", file=sys.stderr)
+        return 2
     named = [(m, a.script or SCRIPT, tuple(a.script_arg)) if a.script or a.script_arg
              else (m, *(move_line(m, None) or (SCRIPT, ()))) for m in a.move_commit]
     results = []
