@@ -19,7 +19,9 @@ protected_regular keep it from following or opening what the job leaves at the t
 anything reads the run dir, finish() waits for the unit to be gone, deletes as root every entry the job left that is neither a
 file nor a directory (a symlink, a FIFO, a socket), gives the rest to the runner's user and restores the mode.  admit refuses a
 job user that is root, is the runner, or is in a privileged group or the runner's own; nothing falls back to running the
-workload as the runner.
+workload as the runner.  Which accounts a unit may run as is vy-sudo's rule where it is the one asked, and stated only there:
+an account root has listed in its job users' group (JOB_GROUP).  check_user doesn't repeat it; the command it gives for a
+missing job user makes one in that group.
 """
 from __future__ import annotations
 
@@ -41,6 +43,8 @@ from .telemetry.run import OUT_DIR
 SUDO = ("sudo", "-n")
 #: the lock-out's helper (pods/nebius/lockout/vy_sudo.py): the only root a locked-out node leaves the runner
 VY_SUDO = "/usr/local/sbin/vy-sudo"
+#: vy-sudo's JOB_GROUP, the group it wants a job user listed in: named here only to make a new job user in it
+JOB_GROUP = "vy-job"
 UNIT_PREFIX = "research-job-"
 ENV_FILE = Path("control") / "job.env"          # run-dir relative, in the runner's control/ (the job can't write there)
 SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -73,14 +77,16 @@ def log(msg: str) -> None:
 def check_user(name: str, *, getpwnam=pwd.getpwnam, getgrall=grp.getgrall, uid: int | None = None,
                gid: int | None = None) -> pwd.struct_passwd:
     """The job user's passwd entry; Refused when it's missing, root, the runner itself, or in a group that is privileged or the
-    runner's primary group (which owns the runner's trees, its store and the machine's git repository)."""
+    runner's primary group (which owns the runner's trees, its store and the machine's git repository).  The command a missing
+    user's refusal gives makes the account and lists it in JOB_GROUP, which vy-sudo wants and this check doesn't read."""
     uid = os.getuid() if uid is None else uid
     gid = os.getgid() if gid is None else gid
     try:
         pw = getpwnam(name)
     except KeyError:
-        raise Refused(f"--job-user {name}: no such user here (sudo useradd --system --no-create-home --shell /usr/sbin/nologin "
-                      f"{name})") from None
+        raise Refused(f"--job-user {name}: no such user here (root, on a locked node vy-admin, makes one: sudo groupadd -f --system "
+                      f"{JOB_GROUP} && sudo useradd --system --no-create-home --shell /usr/sbin/nologin --groups {JOB_GROUP} {name})"
+                      ) from None
     if pw.pw_uid in (0, uid):
         raise Refused(f"--job-user {name}: uid {pw.pw_uid} is {'root' if pw.pw_uid == 0 else 'the runner'}")
     groups = getgrall()

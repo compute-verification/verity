@@ -673,6 +673,26 @@ def test_the_refusal_of_an_unlisted_account_names_who_lists_it_and_with_what_com
             assert fix in err and "root (vy-admin, after the lock-out)" in err and "made to run jobs and nothing else" in err
 
 
+def test_the_plan_the_readme_and_research_give_the_command_that_makes_a_job_user(monkeypatch):
+    """No tool makes a job user, so the command is where an operator reads it, and each place names vy-sudo's group."""
+    group = VS.JOB_GROUP
+    assert jobuser.JOB_GROUP == LO.JOB_GROUP == group
+    make, grant = f"sudo groupadd -f --system {group}", f"sudo usermod -aG {group} USER"
+    for text in (LO.plan_text("vy-nebius-1"), LO.plan_text(CPU13), (LOCKOUT / "README.md").read_text(), VS.__doc__):
+        assert make in text and grant in text
+    deploy = next(ln for ln in LO.plan_text(CPU13).splitlines() if ln.startswith("1. deploy"))
+    assert make in deploy and grant in deploy, "vy-sudo is the one asked from the deploy on, so the plan has it there"
+
+    def missing(name):
+        raise KeyError(name)
+    with pytest.raises(jobuser.Refused) as e:
+        jobuser.check_user("newjob", getpwnam=missing, getgrall=list)
+    said = str(e.value)
+    assert f"{make} && sudo useradd --system --no-create-home --shell /usr/sbin/nologin --groups {group} newjob" in said
+    acc = _node(monkeypatch, listed=())                             # research's own admission has no such rule: vy-sudo's alone
+    assert jobuser.check_user("vyjob", getpwnam=acc.getpwnam, getgrall=acc.getgrall, uid=CALLER, gid=CALLER_GID).pw_name == "vyjob"
+
+
 # ---- vy-lockout: the allowlist --------------------------------------------------------------------------------------------------
 
 def test_each_committed_allowlist_is_its_profiles_render_and_every_rule_names_its_evidence():

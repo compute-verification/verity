@@ -1407,7 +1407,8 @@ owner = "infra"
 # ---- both nodes and the CPU nodes that carry it: the lock-out (pods/nebius/lockout, its README: the apply order and each
 # step's rollback). Install stages the tools, LIB's files and root.env, and starts nothing: sudoers.d and a unit's .d are
 # vy-lockout's to write, as vy-admin, and its steps enable the timers. A CPU node's allowlist is its own file, staged under the
-# same name. Where vy-sudo is installed, `research run --job-user` asks for root through it.
+# same name. Where vy-sudo is installed, `research run --job-user` asks for root through it, and vy-sudo runs a job's unit only
+# as an account root has listed in group vy-job (the README's step 1 has the command, to run before the install).
 
 [[file]]
 path = "/usr/local/sbin/vy-admin-setup"
