@@ -253,7 +253,6 @@ class CommitWindows:
     `NativeHostCommitter` with a `served_record.SamplerInputsSource` attached (or its offline stand-in in the tests:
     ``reset``, ``install``, ``uninstall``, ``finalize``, ``_layouts``, ``_step_index``, ``sources``, and to close off the loop
     ``enable_window_views`` and ``detach``, whose view has ``wait_absorbed`` and ``finalize``); ``eos_ids`` and
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
     ``decode`` are the tokenizer's, for the finish check (`served_record.finish_problems`). A window closed on the loop takes
     the committer off the engine and the next one installs it again; one closed off the loop leaves it installed, its view
     detached, for the next window, which opens before the next engine step (`before_step`), so every step the hooks see is
@@ -262,21 +261,8 @@ class CommitWindows:
     at its close, before the committer comes off or its window is detached, its hooks being on top of the committer's; what
     its ``close`` returns is the window line's ``pouw_h1`` (the arm's ``outcome_key`` where it has one), and when that is a
     `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm with
-    ``sealed`` hears each window's seal line, or why it has none."""
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    ``decode`` are the tokenizer's, for the finish check (`served_record.finish_problems`). ``arm`` (`serve_h1.H1Windows`)
-    opens on each window once its committer is installed and closes first at its close, before the committer comes off,
-    its hooks being on top of the committer's; what its ``close`` returns is the window line's ``pouw_h1``, and when that
-    is a `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm
-    with ``sealed`` hears each window's seal line, or why it has none."""
-=======
-    ``decode`` are the tokenizer's, for the finish check (`served_record.finish_problems`). ``arm`` (`serve_h1.H1Windows`)
-    opens on each window once its committer is installed and closes first at its close, before the committer comes off,
-    its hooks being on top of the committer's; what its ``close`` returns is the window line's ``pouw_h1``, and when that
-    is a `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm
-    with ``sealed`` hears each window's seal line, or why it has none. With ``pool`` (a call for the engine's live
-    ``BlockPool``) and its blocks' size ``pool_block``, each close exports the pool's row on the loop (`_pool_row`)."""
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+    ``sealed`` hears each window's seal line, or why it has none. With ``pool`` (a call for the engine's live ``BlockPool``)
+    and its blocks' size ``pool_block``, each close exports the pool's row on the loop (`_pool_row`)."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -621,15 +607,9 @@ class CommitWindows:
                 self._awaiting[rec["window"]] = rec
                 return
             if self.arm is not None:
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
                 rec[self.arm_key] = self._arm_out.pop(rec["window"], None)
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-                rec["pouw_h1"] = self._arm_out.pop(rec["window"], None)
-=======
-                rec["pouw_h1"] = self._arm_out.pop(rec["window"], None)
             if self.pool is not None:
                 rec["pool_row"] = self._pool_out.pop(rec["window"], None)
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
             self.records.append(rec)
             with open(self.out / "windows.jsonl", "a") as fh:
                 fh.write(json.dumps(rec) + "\n")

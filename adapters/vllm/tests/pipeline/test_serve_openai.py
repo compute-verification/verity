@@ -400,16 +400,8 @@ class Serving:
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
                  served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None,
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-                 arm: Any = None, runner: Runner | None = None) -> None:
+                 arm: Any = None, runner: Runner | None = None, pool: tuple[Any, int] | None = None) -> None:
         self.runner = runner if runner is not None else Runner()
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-                 arm: Any = None) -> None:
-        self.runner = Runner()
-=======
-                 arm: Any = None, pool: tuple[Any, int] | None = None) -> None:
-        self.runner = Runner()
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
                                        clock=lambda: 0.0, wall=lambda: 0.0, served=served, marks=marks,
