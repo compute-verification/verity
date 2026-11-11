@@ -618,13 +618,13 @@ def test_a_red_main_lands_what_fails_nothing_more_and_its_reds_only_shrink():
 
 # ---- the records run before a Lean candidate's check ---------------------------------------------------------------------------
 
-def stale(pkg: str = "Security", *inputs: str) -> Failed:
+def stale(pkg: str = "security", *inputs: str) -> Failed:
     """graph2's lean-lock fail of ``pkg``: its lock records don't match its tree."""
     return Failed(f"lean-lock:{pkg}", f"key:lean-lock:{pkg}", frozenset(inputs or (f"{pkg}/",)))
 
 
 def lean(n: int, *files: str) -> Ready:
-    return pr(n, None, *(files or (f"Security/A{n}.lean",)), lean=True)
+    return pr(n, None, *(files or (f"security/A{n}.lean",)), lean=True)
 
 
 #: a records run that runs
@@ -649,7 +649,7 @@ def test_a_batch_with_a_lean_member_is_built_with_its_records_run_first_and_any_
 def test_a_candidate_whose_check_waits_reads_no_verdict_and_nothing_is_built_on_it():
     """Whatever its verdict says (graph2 knows no check of it), it is never read; and while its records run runs no batch is
     built on it, which its records commit would drop.  The candidate below it is decided as ever."""
-    c1 = replace(waiting("c1", MAIN, 1), verdict=Verdict(FAIL, (task("t", "Security/"),), ended=True))
+    c1 = replace(waiting("c1", MAIN, 1), verdict=Verdict(FAIL, (task("t", "security/"),), ended=True))
     assert decide(snap(c1, ready=[lean(1), *prs(2, 3)], depth=3, records=True)) == []
     s = snap(cand("c0", MAIN, 3, state=PASS), waiting("c1", "c0", 1), ready=[lean(1), *prs(2, 3)], depth=3, records=True)
     assert decide(s) == [Advance("c0"), Drop("c0", "on main", Outcome((3,), heads(3), PASS))]
