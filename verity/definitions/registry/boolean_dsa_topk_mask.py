@@ -4,11 +4,15 @@ circuit-check and adapters/vllm/tests/program/test_dsa_topk_mask.py hold equal t
     DsaTopKKey_v2                  (s: 32 bits) -> 32 bits; word view DsaTopKKey_v1
     DsaRadixPass_v1{N,TOPK}        (eq, gt: N bits, r: RB bits, e: N bits) -> (N bits, N bits, RB bits); traced, no word
                                    Definition (RB = TOPK's bit length)
+    DsaRadixPass_v2{N,TOPK}        the same pass as Calls to And2_v1, DsaRadixPassCount_v1{N}, DsaCountSum_v1{W},
+                                   DsaRadixPassLeft_v1{W,RB} and DsaRadixPassKey_v1; no word Definition
     DsaRadixTies_v1{N,TOPK}        (eq, gt: N bits, r: RB bits) -> N bits; traced, no word Definition
     DsaRadixTies_v2{N,TOPK}        the same mask as Calls to DsaCountSum_v1{W}, DsaCountSplit_v1{W,U} and DsaRadixTie_v1{W,RB}, the
                                    steps of its prefix count and a key's tie; no word Definition
     DsaTopKMask_v2{N,TOPK}         (scores: N x 32 bits) -> N bits; word view DsaTopKMask_v1
     DsaRowValid_v1{N}              (n: 32 bits) -> N bits, bit j n > j; traced, no word Definition
+    DsaRowValid_v2{N}              the same bits as Calls to DsaRowValidRoot_v1{L}, DsaRowValidStep_v1 and DsaRowValidLast_v1, a
+                                   batch a level of its trie; no word Definition
     DsaTopKMaskCounted_v2{N,TOPK}  (scores: N x 32 bits, n: 32 bits) -> N bits; word view DsaTopKMaskCounted_v1
     DsaButterflyTagBits_v1{N,K}    (mask: N bits) -> N x (1 + kb) bits; traced, no word Definition
     DsaButterflyTagsCount_v1{N,K}  (mask: N bits) -> (those tags, the mask's count: 32 bits), as Calls to DsaCountSum_v1{W},
@@ -201,6 +205,18 @@ def _count_tree(B, N: int, bits: Coll, cap: int | None = None) -> tuple[list[Col
     return up, before
 
 
+def _sum_counts(B, zero: Coll, nodes: list, cap: int) -> tuple:
+    """The sum of counts given as (references, width), as (references, width) in at most ``cap`` bits: `DsaCountSum_v1` over
+    them in turn, the narrower operand padded with zeros."""
+    total, wide = nodes[0]
+    for node, n in nodes[1:]:
+        w = max(wide, n)
+        x, y = (Coll(Array(w, BIT), concat([v, _rep(zero, w - m)]) if w > m else v) for v, m in ((total, wide), (node, n)))
+        wide = min(w + 1, cap)
+        total = B.call(bind(DsaCountSum, W=w), x, y).refs.slice(0, wide)
+    return total, wide
+
+
 def _ties_calls(B, S, eq, gt, r):
     """`DsaRadixTies_v2{N,TOPK}`: `DsaRadixTies_v1`'s mask, its prefix count written as Calls (`_count_tree`): a few batches
     for each level of `prefix_counts`' tree and not a gate for each key, then a `DsaRadixTie_v1` per key.  `_v1` carries each
@@ -226,6 +242,77 @@ DsaRadixTiesV2 = CompositeDefinition(
     doc=_ties_calls.__doc__,
     conformance="exact-model-tested: held to DsaRadixTies_v1 and to the mask's rule by adapters/vllm/tests/program/test_dsa_long_row_calls.py")
 
+#: how many keys one `DsaRadixPassCount_v1` counts: `DsaRadixPass_v2` counts a row in chunks of this many
+PASS_CHUNK = 256
+
+
+def _pass_count(S):
+    """`DsaRadixPassCount_v1{N}`: how many of N bits are set, in N's bit length: `DsaRadixPass_v1`'s carry-save tree."""
+    w = S.N.bit_length()
+    return lambda C, a: [(compress_columns(C, [list(a)]) + [ZERO] * w)[:w]]
+
+
+def _pass_left(S):
+    """`DsaRadixPassLeft_v1{W,RB}`: a pass's (p, r') of its count (W bits) and r (RB bits): p = (cnt >= r), the threshold's
+    bit, and r' = r where p, else r - cnt."""
+    def build(C, cnt, r):
+        p = NOT(sub(C, list(cnt), list(r), max(S.W, S.RB))[1])
+        return [[p, *mux(C, p, list(r), sub(C, list(r), list(cnt), S.RB)[0])]]
+    return build
+
+
+def _pass_key(S):
+    """`DsaRadixPassKey_v1`: a key's (eq, gt) after a pass, of its a = eq AND e and the pass's p: eq AND (e = p) and
+    gt OR (a AND NOT p), two ANDs."""
+    return lambda C, q, g, a, p: [[q[0] ^ a[0] ^ C.AND(p[0], q[0]), g[0] ^ a[0] ^ C.AND(p[0], a[0])]]
+
+
+DsaRadixPassCount = _piece("DsaRadixPassCount", ["N"], _pass_count,
+                           lambda S: ((("a", Array(S.N, BIT)),), Array(S.N.bit_length(), BIT)))
+DsaRadixPassLeft = _piece("DsaRadixPassLeft", ["W", "RB"], _pass_left,
+                          lambda S: ((("cnt", Array(S.W, BIT)), ("r", Array(S.RB, BIT))), Array(1 + S.RB, BIT)))
+DsaRadixPassKey = _piece("DsaRadixPassKey", [], _pass_key,
+                         lambda S: ((("eq", BIT), ("gt", BIT), ("a", BIT), ("p", BIT)), Array(2, BIT)))
+
+
+def _pass_calls(B, S, eq, gt, r, e):
+    """`DsaRadixPass_v2{N,TOPK}`: `DsaRadixPass_v1`'s pass as Calls: a an AND a key; its count the sum of
+    `DsaRadixPassCount_v1` over chunks of `PASS_CHUNK` keys, the chunks' counts summed in pairs (`DsaCountSum_v1{W}`, a batch a
+    level) and what no pair takes after them; `DsaRadixPassLeft_v1` once and `DsaRadixPassKey_v1` a key.  `_v1` counts the row
+    in one carry-save tree: the two are one function, and this one pays the ANDs of summing the chunks' counts."""
+    check_statics(S.N, S.TOPK)
+    N, RB, top = S.N, _rb(S), S.N.bit_length()
+    a = B.batch(BL.AND, Coll(Array(2, Array(N, BIT)), concat([eq.refs, e.refs])), axes=(1,))
+    full, rest = divmod(N, PASS_CHUNK)
+    nodes = []
+    if full:
+        t, w = full, PASS_CHUNK.bit_length()
+        level = B.batch(bind(DsaRadixPassCount, N=PASS_CHUNK), Coll(Array(full, Array(PASS_CHUNK, BIT)), a.refs.slice(0, full * PASS_CHUNK)),
+                        axes=(0,))
+        while True:
+            if t % 2:
+                nodes.insert(0, (level.refs.slice((t - 1) * w, t * w), w))
+            if t < 2:
+                break
+            t //= 2
+            level = B.batch(bind(DsaCountSum, W=w), *(Coll(_counts(t, w), strided_view(level, w * i, w, 2 * w, 1, t * w)) for i in (0, 1)),
+                            axes=(0, 0))
+            w += 1
+    if rest:
+        nodes.append((B.call(bind(DsaRadixPassCount, N=rest), Coll(Array(rest, BIT), a.refs.slice(N - rest, N))).refs, rest.bit_length()))
+    cnt, w = _sum_counts(B, B.call(BL.constant(0)), nodes, top)
+    out = B.call(bind(DsaRadixPassLeft, W=w, RB=RB), Coll(Array(w, BIT), cnt), r)
+    keys = B.batch(DsaRadixPassKey, eq, gt, a, Coll(BIT, out.refs.slice(0, 1)), axes=(0, 0, 0, None))
+    return tuple_of(*(Coll(Array(N, BIT), strided_view(keys, i, 1, 2, 1, N)) for i in (0, 1)),
+                    Coll(Array(RB, BIT), out.refs.slice(1, 1 + RB)))
+
+
+DsaRadixPassV2 = CompositeDefinition(
+    "DsaRadixPass", 2, ("N", "TOPK"),
+    lambda S: ((("eq", Array(S.N, BIT)), ("gt", Array(S.N, BIT)), ("r", Array(_rb(S), BIT)), ("e", Array(S.N, BIT))),
+               Tuple(Array(S.N, BIT), Array(S.N, BIT), Array(_rb(S), BIT))), _pass_calls, doc=_pass_calls.__doc__,
+    conformance="exact-model-tested: held to DsaRadixPass_v1 and to the pass's rule by adapters/vllm/tests/program/test_dsa_long_row_calls.py")
+
 
 def _row_valid(S):
     """`DsaRowValid_v1{N}`: bit j is n > j (n u32), for a row's first n of N keys.  A binary trie over n's low L = ceil(log2 N)
@@ -250,17 +337,68 @@ DsaRowValid = EW.specialized("DsaRowValid", 1, ["N"], _row_valid, lambda S: ((("
                              doc=_row_valid.__doc__)
 
 
-def _select(B, S, scores, n=None, ties=DsaRadixTies):
+def _valid_root(S):
+    """`DsaRowValidRoot_v1{L}`: the root of `DsaRowValid_v1`'s trie over n's low L bits, (E, G) = (n < 2^L, n >= 2^L)."""
+    def build(C, n):
+        g = or_reduce(C, n[S.L:])
+        return [[NOT(g), g]]
+    return build
+
+
+def _valid_step(S):
+    """`DsaRowValidStep_v1`: a node (E, G) of `DsaRowValid_v1`'s trie and n's next bit b to its children, one AND,
+    t = E AND b: the 0 child (E XOR t, G XOR t), the 1 child (t, G)."""
+    def build(C, node, b):
+        t = C.AND(node[0], b[0])
+        return [[node[0] ^ t, node[1] ^ t], [t, node[1]]]
+    return build
+
+
+def _valid_last(S):
+    """`DsaRowValidLast_v1`: a node (E, G) over n's last bit b to its two keys' bits, (G XOR (E AND b), G)."""
+    return lambda C, node, b: [[node[1] ^ C.AND(node[0], b[0]), node[1]]]
+
+
+def _nodes(n: int) -> Array:
+    return Array(n, Array(2, BIT))
+
+
+DsaRowValidRoot = _piece("DsaRowValidRoot", ["L"], _valid_root, lambda S: ((("n", I32),), Array(2, BIT)))
+DsaRowValidStep = _piece("DsaRowValidStep", [], _valid_step, lambda S: ((("node", Array(2, BIT)), ("b", BIT)), _nodes(2)))
+DsaRowValidLast = _piece("DsaRowValidLast", [], _valid_last, lambda S: ((("node", Array(2, BIT)), ("b", BIT)), Array(2, BIT)))
+
+
+def _valid_calls(B, S, n):
+    """`DsaRowValid_v2{N}`: `DsaRowValid_v1`'s trie as Calls, a batch a level: its root (`DsaRowValidRoot_v1{L}`), a
+    `DsaRowValidStep_v1` for each node that reaches a key below N, and over n's last bit a `DsaRowValidLast_v1` for each
+    pair of keys.  The same ANDs as `_v1`, one a node."""
+    N, L = S.N, (S.N - 1).bit_length()
+    level = B.call(bind(DsaRowValidRoot, L=L), n)
+    if L == 0:
+        return Coll(Array(1, BIT), level.refs.slice(1, 2))
+    for i in reversed(range(L)):
+        t = -(-N >> i + 1)
+        level = B.batch(DsaRowValidStep if i else DsaRowValidLast, Coll(_nodes(t), level.refs.slice(0, 2 * t)),
+                        Coll(BIT, n.refs.slice(i, i + 1)), axes=(0, None))
+    return Coll(Array(N, BIT), level.refs.slice(0, N))
+
+
+DsaRowValidV2 = CompositeDefinition(
+    "DsaRowValid", 2, ("N",), lambda S: ((("n", I32),), Array(S.N, BIT)), _valid_calls, doc=_valid_calls.__doc__,
+    conformance="exact-model-tested: held to DsaRowValid_v1 and to n > j by adapters/vllm/tests/program/test_dsa_long_row_calls.py")
+
+
+def _select(B, S, scores, n=None, ties=DsaRadixTies, step=DsaRadixPass, valid=DsaRowValid):
     """The radix select over ``scores``' keys (`DsaTopKKey_v2`): 32 `DsaRadixPass_v1` from eq all 1 (with ``n``, `DsaRowValid_v1`),
-    gt all 0 and r = TOPK, and `DsaRadixTies_v1` (or ``ties``, its `_v2`)."""
+    gt all 0 and r = TOPK, and `DsaRadixTies_v1` (or ``ties``, ``step`` and ``valid``, their `_v2`)."""
     check_statics(S.N, S.TOPK)
     N, RB = S.N, _rb(S)
     keys = B.batch(DsaTopKKeyV2, scores, axes=(0,))
     one, zero = B.call(BL.constant(1)), B.call(BL.constant(0))
-    eq = Coll(Array(N, BIT), _rep(one, N)) if n is None else B.call(bind(DsaRowValid, N=N), n)
+    eq = Coll(Array(N, BIT), _rep(one, N)) if n is None else B.call(bind(valid, N=N), n)
     gt = Coll(Array(N, BIT), _rep(zero, N))
     r = Coll(Array(RB, BIT), concat([(one if S.TOPK >> i & 1 else zero).refs for i in range(RB)]))
-    step = bind(DsaRadixPass, N=N, TOPK=S.TOPK)
+    step = bind(step, N=N, TOPK=S.TOPK)
     for i in reversed(range(32)):
         out = B.call(step, eq, gt, r, Coll(Array(N, BIT), strided_view(keys, i, 1, 32, 1, N)))
         eq, gt, r = out[0], out[1], out[2]
@@ -334,15 +472,7 @@ def _tags_count(B, S, mask):
                      for h, c in sorted(before.items()))])
     tiles = ([(depth - 1, 0), (depth - 1, 1)] if N == 1 << depth
              else [(k, N >> k + 1 << 1) for k in reversed(range(depth)) if N >> k & 1])
-    total, wide = None, 0
-    for k, t in tiles:
-        node, w = up[k].refs.slice(t * (k + 1), (t + 1) * (k + 1)), max(wide, k + 1)
-        if total is None:
-            total, wide = node, k + 1
-            continue
-        a, b = (Coll(Array(w, BIT), concat([x, _rep(zero, w - n)]) if w > n else x) for x, n in ((total, wide), (node, k + 1)))
-        wide = min(w + 1, depth + 1)
-        total = B.call(bind(DsaCountSum, W=w), a, b).refs.slice(0, wide)
+    total, wide = _sum_counts(B, zero, [(up[k].refs.slice(t * (k + 1), (t + 1) * (k + 1)), k + 1) for k, t in tiles], depth + 1)
     return tuple_of(Coll(Array(N, _tag(S.K)), tags), Coll(I32, concat([total, _rep(zero, 32 - wide)])))
 
 
@@ -435,7 +565,8 @@ DsaTopKRowV2 = EW.on_bits("DsaTopKRow", 2, ["N", "TOPK"], lambda S: ((("scores",
                           _row_check, M.DsaTopKRow)
 
 BOOLEAN_DSA_TOPK_MASK = [DsaTopKKeyV2, DsaRadixPass, DsaRadixTies, DsaCountSum, DsaCountSplit, DsaRadixTie, DsaRadixTiesV2,
-                         DsaTopKMaskV2, DsaRowValid, DsaTopKMaskCountedV2,
+                         DsaRadixPassCount, DsaRadixPassLeft, DsaRadixPassKey, DsaRadixPassV2,
+                         DsaTopKMaskV2, DsaRowValid, DsaRowValidRoot, DsaRowValidStep, DsaRowValidLast, DsaRowValidV2, DsaTopKMaskCountedV2,
                          DsaButterflyTagBits, DsaButterflyTag, DsaButterflyTagsCount, DsaButterflyCtl, DsaButterflySettingsV2, DsaButterflyRowsV2, DsaButterflyRowsPadV2,
                          DsaTopKRowV2]
 
