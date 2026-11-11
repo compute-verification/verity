@@ -309,10 +309,9 @@ def prover_env(firewall: str | None, st: dict) -> dict:
 
 def identity(f: Path) -> tuple | None:
     """File ``f``'s identity, the same for every link of one file; None for a file that is not there."""
-    try:
-        s = f.stat()
-    except OSError:
+    if not f.exists():
         return None
+    s = f.stat()
     return (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
 
 
