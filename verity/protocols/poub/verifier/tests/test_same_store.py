@@ -14,13 +14,13 @@ from types import ModuleType
 
 import pytest
 
+from verity.protocols.poub.verifier import p2, p2_case, p2_party
+from verity.protocols.poub.verifier import period as P
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period as pous
 from verity.protocols.pous.verifier import run as R
 from verity.protocols.pous.verifier import setup
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.poub.verifier import p2, p2_case, p2_party
-from verity.protocols.poub.verifier import period as P
 
 HERE = Path(__file__).resolve().parent
 SIGNER = Path(__file__).resolve().parents[5] / "verity/protocols/pous/verifier/tests/pous_test_signer.py"

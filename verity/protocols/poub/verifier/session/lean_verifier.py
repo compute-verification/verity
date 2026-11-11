@@ -10,6 +10,7 @@ back as the `audit.Record` the ledger reads (`record_of`)."""
 from __future__ import annotations
 
 import collections
+import contextlib
 import fcntl
 import functools
 import hashlib
@@ -93,10 +94,8 @@ class Lean:
                 self.proc.stdin.flush()
             except (BrokenPipeError, ValueError, OSError) as e:
                 self._end(f"the process is gone: {e}")
-        try:
+        with contextlib.suppress(OSError):
             self.proc.stdin.close()
-        except (BrokenPipeError, OSError):
-            pass
 
     def _read(self) -> None:
         for line in self.proc.stdout:
