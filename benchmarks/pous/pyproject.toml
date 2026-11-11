@@ -55,7 +55,9 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/protocols/spot/verifier/one_stage/registered.py",
           # the deployment layer and its wire, which the memory challenger's and the wipe's sides are started through
           # (`deploy.stream.Side`) and the challenger's parties run on
-          "verity/configuration/deploy", "verity/configuration/wire"]
+          "verity/configuration/deploy", "verity/configuration/wire",
+          "verity/configuration/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py",
+          "verity/protocols/pouw/__init__.py", "benchmarks/numerical/python/verity_numerical/__init__.py", "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/numerical/python/verity_numerical/bench/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
