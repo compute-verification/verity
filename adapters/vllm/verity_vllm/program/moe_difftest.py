@@ -20,7 +20,13 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import b1
-from verity.definitions.registry.moe import MoeExpertGemm, MoeExpertGemmV2, MoeExpertGemmW, MoeExpertGemmWV2, MoeSum
+from verity.definitions.registry.moe import (
+    MoeExpertGemm,
+    MoeExpertGemmV2,
+    MoeExpertGemmW,
+    MoeExpertGemmWV2,
+    MoeSum,
+)
 from verity.definitions.registry.prims import BF16, F32, I32
 
 SEMANTIC_ID = "moe/MoeExpertGemm@v1"
@@ -125,8 +131,8 @@ FusedMoEDifftestDot = CompositeDefinition("FusedMoEDifftestDot", 1, ("E", "TOPK"
 def spec(statics: dict):
     """The block as a config run on the capture's device binds it (`frontend.targets.moe_expert_dot` of its compute capability,
     recorded by `production`; none recorded = the default target's `_v1` Definitions)."""
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.frontend import targets as T
+    from verity_vllm.program.frontend.target_profile import TargetProfile
     st = {k: int(statics[k]) for k in ("E", "TOPK", "H", "I", "M")}
     cc = statics.get("cc")
     dot = T.moe_expert_dot(TargetProfile(compute_capability=tuple(cc))) if cc else None

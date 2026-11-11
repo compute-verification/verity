@@ -244,9 +244,10 @@ def capture(a: CaptureOptions) -> int:
 
 def step_model(dot: str):
     """``(the registered step primitive, a cpu_model TCModel with its parameters)`` for a ``GemmTarget.dot`` name."""
+    from verity.definitions.numerics.mma import TCModel
     from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16
     from verity.definitions.silicon.total import HOPPER_BF16_WGMMA_K16
-    from verity.definitions.numerics.mma import TCModel
+
     from verity_vllm.program.frontend.targets import DOTS
 
     groupsum = {"AmpereBF16TcDot16": AMPERE_BF16_M16N8K16, "HopperBF16WgmmaDot16": HOPPER_BF16_WGMMA_K16}.get(dot)
@@ -294,6 +295,7 @@ def check_case(case: dict, d, wd, model, spec_of) -> dict[str, Any]:
 
 def check(a: CheckOptions) -> int:
     from verity.definitions.numerics import cpu_model as CM
+
     from verity_vllm.program.frontend.gemm_targets import gemm_target_for
 
     root = Path(a.case_dir)

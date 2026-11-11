@@ -14,21 +14,21 @@ import zlib
 
 import numpy as np
 import pytest
-
-from verity.circuits import evaluation as E
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import boolean as BL
 from verity.circuits import codec
+from verity.circuits import evaluation as E
 from verity.circuits import partition_object as PO
-from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import Circuit
-from verity.definitions.numerics import twins  # registers RoPE_v1's kernel, which the served shapes' word side runs
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.definitions.numerics import (
+    twins,  # registers RoPE_v1's kernel, which the served shapes' word side runs
+)
 from verity.definitions.numerics.twins import rand_bf16, tie_pairs_mul
-from verity.definitions.registry import b1
+from verity.definitions.registry import b1, ref_prims
 from verity.definitions.registry import boolean_rope as R
-from verity.definitions.registry import ref_prims
 
 U16 = np.uint16
 HALVES = [R.RopeOut, R.RopeOutAdd]

@@ -7,7 +7,6 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import numpy as np
 import pytest
-
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check

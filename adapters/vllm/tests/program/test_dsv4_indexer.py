@@ -20,12 +20,12 @@ import math
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.registry import dsa as D
 from verity.definitions.registry import dsv4_indexer as I
 from verity.definitions.registry import prims as P
+
 from tests.program import test_dsa as G
 
 SIGN, INF, M32, NAN_PTX = G.SIGN, G.INF, G.M32, G.NAN_PTX

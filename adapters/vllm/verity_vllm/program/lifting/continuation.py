@@ -37,6 +37,7 @@ from enum import Enum
 from typing import Any
 
 from verity.definitions.registry import lifted as L
+
 from verity_vllm.program.lifting import lifted_records
 
 CONTINUATION_VERSION = "continuation-v1"  # every Continuation_v1 result carries it (recorder, builder and Match share one version)

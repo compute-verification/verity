@@ -473,7 +473,12 @@ def lean_root(desc: dict, registry) -> dict:
     {"nodes": [(k, fid, form, args, out_str, n)], "n_nodes", "params"}.  Root-body semantics mirrored from codec.decode_program:
     v1 `alias` = the compact operand of an earlier node (flattened concat parts and nesting do not change the run sequence); v0
     descriptors have no aliases."""
-    from verity.circuits.codec import SCHEMA_V0, definition_decoder, descriptor_id, type_from_json
+    from verity.circuits.codec import (
+        SCHEMA_V0,
+        definition_decoder,
+        descriptor_id,
+        type_from_json,
+    )
     get = definition_decoder(desc, registry)
     schema = desc["schema"]
     if schema == SCHEMA_V0:

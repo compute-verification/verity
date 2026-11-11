@@ -325,8 +325,8 @@ def _bits_groups(d: Path, man: dict, tmin: int | None, tmax: int | None) -> dict
     instance one token); a combine key one case (a row and an instance are one token)."""
     from collections import defaultdict
 
-    from verity.circuits.evaluation import bits as BS
     from verity.circuits.defs import bind
+    from verity.circuits.evaluation import bits as BS
     from verity.definitions.registry import mla as M
 
     G = M.GLM47_FLASH

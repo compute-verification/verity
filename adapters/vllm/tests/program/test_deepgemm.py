@@ -22,10 +22,9 @@ from fractions import Fraction
 
 import numpy as np
 import pytest
-
+from verity.circuits import boolean as BL
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
-from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
@@ -35,8 +34,17 @@ from verity.definitions.numerics import derived_rows as R
 from verity.definitions.registry import boolean_deepgemm as BDG
 from verity.definitions.registry import deepgemm as DG
 from verity.definitions.registry import prims as P
+
 from tests.program.test_boolean_fp8 import _flat, _inputs
-from tests.program.test_dsa import _ceil_ftz, _e4m3, _ex2_integer, _ftz, _is_nan, _val, log2f
+from tests.program.test_dsa import (
+    _ceil_ftz,
+    _e4m3,
+    _ex2_integer,
+    _ftz,
+    _is_nan,
+    _val,
+    log2f,
+)
 from tests.program.test_fp8_moe import _q, _rn
 
 SIGN, INF = 1 << 31, 0x7F800000

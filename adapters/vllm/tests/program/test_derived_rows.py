@@ -344,6 +344,7 @@ def test_ampere_tc_dot16_total_rules_and_no_veritor_import_at_evaluation():
     `verity.definitions.numerics.mma` and follows silicon_total's rules: grouped (8, 8) truncating 25-bit accumulation; NaN / inf*0 /
     mixed infinities -> 0x7FFFFFFF; a one-signed infinity -> that infinity; group overflow is a sticky infinity; +0; subnormals."""
     import sys
+
     from verity.definitions.registry import prims as P
     one, two, z, inf, ninf, nan, big = 0x3F80, 0x4000, 0x0000, 0x7F80, 0xFF80, 0x7FC0, 0x7F7F
     ones = [one] * 16
@@ -496,8 +497,8 @@ def test_attention_rows_fa2_equals_the_registered_attention_v3_definition(T):
     KV head h // (NH/KVH)), one query over T keys, ceil(T/BN) blocks last -> first, Fa2InvSum epilogue -- on random N(0,1) words."""
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_call
-    from verity.definitions.registry import b1
     from verity.definitions.numerics import derived_rows as D
+    from verity.definitions.registry import b1
     NH, KVH, Dh, BN = 4, 2, 64, 128
     rng = np.random.default_rng(7000 + T)
     q = _rand_bf16(rng, (NH, Dh))
@@ -518,12 +519,11 @@ def test_attention_rows_fa3_equals_the_registered_attention_v2_hopper_definition
     the independent C++ model `verity.definitions.numerics.fa3_model.fa3_rows` (the arithmetic MEASURED exact on the H100 production
     capture, hopper-profile.md) on Qwen2.5-1.5B geometry (NH=12, KVH=2, D=128, BN=128) and Llama-3.2-1B's (NH=32, KVH=8, D=64, BN=192
     -- the tile the H100 B8 1024/128 Program of record binds at T >= 2) -- two implementations, one word sequence."""
-    from verity.definitions.numerics import fa2_relation, fa3_model
-
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_call
-    from verity.definitions.registry import b1, hopper
     from verity.definitions.numerics import derived_rows as D
+    from verity.definitions.numerics import fa2_relation, fa3_model
+    from verity.definitions.registry import b1, hopper
     from verity.definitions.registry import prims as P
     NH, KVH, Dh, BN = (12, 2, 128, 128) if geometry == "qwen" else (32, 8, 64, 192)
     rng = np.random.default_rng(9000 + T)
