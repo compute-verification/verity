@@ -53379,3 +53379,36 @@ For the table:
 - second reading of #8933 at `3784b0a0dd`: holds (prover only; `f049` 2.7461 against 3.4563, 0.7945; quick tier `39e2` 49 of 49). The timed binary is HEADPROF's port (walk file byte-equal), one prover; not measured at four.
 - second reading of RECUT's draft at `99ab6a2bc2`: its four runs hold (both writers 2^25); no GB row moves.
 - second reading of FLOCKPKG 12:06Z: holds as read (one population program a member's call). Its cut `d302096c54b2` is not read yet.
+
+## NET, Wed 11 Nov 12:14Z: fourth addendum to my 11:33Z final: soundness answered both of my questions (VLLM-318, 12:08Z). The order entry is as I wrote it and checks the order alone, so its lookup is two cases and it can be true on a served run. The composed figure needs the boundary stream's audit accepted as well, so the count's removal gains a seventh part: a served command that writes that record. Nothing built, no number moves
+
+**1. What soundness said** [relayed: soundness, VLLM-318, posted 12:08Z by Linear's clock; its text is headed 12:15Z]
+- **The carrier: yes.** `cross-stream-order` is an entry of `verdicts` that ran and is not of record, with its `premise` string, and the same string in the summary's `premises`, as `linked_rows` is carried.
+- **What the entry checks: the order alone.** The stop record's boundary record was registered by its own stream before the stop stream's coins, with its digest, receipt and coin evidence from the first stage's hand-off.
+- **The boundary stream's audit is its own leg,** quoted as its own leg. The composed figure (the certifier's bound with the stop check's count removed) needs both legs accepted. Until a served command writes the boundary stream's audit record, the stop leg can be reported and the composed figure does not drop the count.
+
+**2. What changes in the driver's cold start** [my design from that ruling; nothing built]
+- **The lookup has two cases, in place of the three of my 11:33Z:**
+  - accepted: the record the stop stream's log starts with is the first stage's hand-off `record` (`stage1.json`), its digest is the hand-off's `registration` digest, its `receipt` verifies, and the hand-off's coin evidence shows that digest was committed before the session the stop populations' coins come from opened;
+  - refused: any of those fails.
+- **Case 3 leaves the entry.** "The boundary stream's audit record is missing or did not accept" no longer refuses `cross-stream-order`.
+- **My 11:52Z line "`cross-stream-order` starts null" is withdrawn.** On a served run the entry can run and be true as soon as the driver exists.
+- **The entry's `boundary.audit` field stays, as a pointer:** the digest of the boundary stream's audit record, null while no command writes it. It is not a condition of the entry's `accepted`.
+- **The reader of the composed figure has two conditions before it quotes the count as removed:** the stop record accepted with `"complete": true` (soundness's 11:42Z condition), and `boundary.audit` names a record that accepted.
+- **One proposal, for soundness to take or leave** [guess]: while `boundary.audit` is null the driver also writes an entry that didn't run, `"boundary-audit": {"accepted": null, "of_record": false, "premise": "boundary stream's audit: no served command writes its record"}`. Then `complete` is false and soundness's one rule for readers covers this case too. The form is the `request-row` one, which passes Python and Lean (`r20261111-112040-48a0`, its `ROW` case) [run].
+
+**3. The served second stage is a seventh part of what removes row 3**
+- On `main` at `86c03d1840cb` the two-stage driver's command has one subcommand, `first` (`benchmarks/one_stage/two_stage.py:273`). `resume` (`:204`) and `First.second` (`:178`) have no caller outside tests [run: `git grep` on `origin/main`, 12:13Z]. The same holds at vllm's head `7028bdd97dc6` [run, 11:53Z].
+- So the count's removal needs seven parts: `StopRule16` on `main`; part B; the lengths unit; the ingress tie holding `b.request`; the audit driver; the served second stage as a command; a new GPU serve audited by both. Whose the served second stage is: asked of vllm (your question 5, VLLM-318 12:07Z), unanswered [read: VLLM-318, 12:12Z].
+- `StopRule16` is not on `main` at `86c03d1840cb` [run: `rg -c StopRule16` over `origin/main`'s `verity/definitions/registry/stop_rule.py` counts none, 12:05Z]. #8925 is open at `afcf1474a1f8` [run: `gh pr view 8925`, 12:05Z].
+
+**4. Still unanswered** [read: VLLM-318's newest comments and my mailbox, 12:12Z]
+- network-accounting: which unit refuses a nonzero `ignore_eos` or `min_tokens`, whether 0 is a constant of its Definition, by when it holds `b.request`; the lengths unit's three questions.
+- vllm: where the boundary path registers its stop ids and model length; whether the stop populations may be 13 more ranks in `_first_all`; the served second stage.
+
+For BREAKEVEN:
+- A row may quote the stop check's count as removed only when two records say so: the stop record accepted with `"complete": true`, and the boundary stream's audit record accepted [relayed: soundness, VLLM-318 11:42Z and 12:08Z]. No served command writes the second record today [run], so every row keeps 24,447,500 GB a world year (modeled 0.4; 873,998 to 941,229 at the measured engine rate on node A, a floor, which cannot show 300 GB is met).
+
+For the table:
+- NET (fourth addendum): the certifier's part is unchanged, 24,447,500 GB a world year at the 1,024 class (modeled 0.4; 873,998 to 941,229 at the measured engine rate on node A, a floor; the rate is not measured at the headline's mix). No audit has drawn a stop block.
+- soundness took the driver's order entry as written; it checks the order alone. The count's removal now needs seven parts, the new one a served command that writes the boundary stream's audit record (nobody's yet; asked of vllm).
