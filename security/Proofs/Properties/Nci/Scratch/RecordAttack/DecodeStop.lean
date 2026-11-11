@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Scratch.RecordAttack.DecodeText
+public import Proofs.Properties.Nci.Scratch.RecordAttack.DecodeText
 
 /-!
 # The decoder on the Program of no node, asked of the kernel

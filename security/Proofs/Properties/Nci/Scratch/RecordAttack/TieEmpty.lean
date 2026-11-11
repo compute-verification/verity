@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Scratch.RecordAttack.Tie
-public import Proofs.Scratch.RecordAttack.DecodeText
+public import Proofs.Properties.Nci.Scratch.RecordAttack.Tie
+public import Proofs.Properties.Nci.Scratch.RecordAttack.DecodeText
 
 /-!
 # A served record, but for the decoder
