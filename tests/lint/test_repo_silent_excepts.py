@@ -1,4 +1,4 @@
-"""Except handlers that swallow what they catch, in every tracked Python file outside ``integrations/vllm/`` and ``archive/``,
+"""Except handlers that swallow what they catch, in every tracked Python file outside ``adapters/vllm/`` and ``archive/``,
 held to ``allowlists/repo_silent_excepts.json``, so no area adds one while its owner turns the ones it has into raises and
 records.
 
@@ -8,7 +8,7 @@ exception's, or an empty container.  Such a handler neither raises, nor logs, no
 so the code goes on with less than it had and leaves no trace of why; a guard never fails open (AGENTS.md).  Broad and typed
 handlers count alike, and a file that doesn't parse counts one, since its handlers can't be seen.  A string says why (``return "unparseable"``), ``return False`` is a predicate's or a verifier's answer,
 failing closed, and a handler that names what it caught (``return e``) hands it on, so none of those swallows.  This is the
-integration's rule (``integrations/vllm/tests/lint/test_silent_excepts.py``, whose README section "Recorded outcomes" says
+integration's rule (``adapters/vllm/tests/lint/test_silent_excepts.py``, whose README section "Recorded outcomes" says
 why), which holds two of its packages per handler; here every file is held, per file.
 
 Handlers are counted per file, the key the ratchet gate counts by too: an entry ``{"file", "count"}`` allows ``count``
@@ -16,7 +16,7 @@ swallowing handlers in its file.  A file with more than its entry allows, or wit
 allows more than is found doesn't: the list can run ahead of a tree, holding the handlers of PRs queued below it on ``next``,
 and ``--prune`` deletes and lowers what this tree no longer finds.  A file that moves takes its entry with it, in the same
 change (``--move``): this lint reads no history, so a renamed file's handlers count under its new path.  The ratchet gate
-(``integrations/vllm/tools/ratchet_gate.py``) fails a change whose Python gains a swallowing handler, or that grows this list
+(``adapters/vllm/tools/ratchet_gate.py``) fails a change whose Python gains a swallowing handler, or that grows this list
 or leaves a renamed file's entry behind, and judges a change to this module by running it as the change's base has it on the
 change's tree.  So it imports only the standard library, ``test_no_new_silent_excepts`` takes no fixture, and the gate reads
 ``LEFT_OUT``, ``FIX``, ``handlers`` and ``parse`` from the base's copy of this module.
@@ -38,8 +38,8 @@ NAME = "repo_silent_excepts"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 #: the integration's own lint holds it, and the archive isn't developed
-LEFT_OUT = ("integrations/vllm/", "archive/")
-WHY = "integrations/vllm/tests/lint/README.md (Recorded outcomes)"
+LEFT_OUT = ("adapters/vllm/", "archive/")
+WHY = "adapters/vllm/tests/lint/README.md (Recorded outcomes)"
 FIX = ("Re-raise; or record the outcome in your area's typed record or log, saying what was caught and what the code did "
        "instead; or narrow it away: test for the case you expect (`path.exists()`, `d.get(k)`) and let the rest raise, since "
        f"a narrower handler that still swallows still counts (why: {WHY}). If the file moved, move its entry in the same "
