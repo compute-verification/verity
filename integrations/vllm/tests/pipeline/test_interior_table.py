@@ -143,8 +143,9 @@ def _first(tables):
 
 @pytest.fixture(scope="module")
 def staged():
-    """Round 1's tables and `_first`'s stream once for the module, for the tests that read its record, digest and drawn
-    units. None has its stream accept an interior: a stream takes one a draw, so the test that does stages its own."""
+    """Round 1's tables and `_first`'s stream once for the module, for the tests that read its record, digest and
+    sampled units. None has its stream accept an interior: a stream takes one a first-stage sample, so the test that does
+    stages its own."""
     tables = _tables()
     return (*_first(tables), tables)
 
@@ -182,9 +183,9 @@ def _history(rec, first, it) -> dict:
 
 @pytest.mark.slow
 def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them():
-    """Slow, on a stream of its own (a stream takes one interior a draw, and this test's accepts one): it catches the
-    reads' interior and the verifier disagreeing on a supplied row's bytes, format or order, which shows only where the
-    verifier checks the reads' own interior program, here three times.
+    """Slow, on a stream of its own (a stream takes one interior a first-stage sample, and this test's accepts one): it
+    catches the reads' interior and the verifier disagreeing on a supplied row's bytes, format or order, which shows only
+    where the verifier checks the reads' own interior program, here three times.
 
     The interior registers the block's parameters as round 2 names them, the two supplied values ``root`` and
     ``domain`` and then the reads' key and opening, a row a read, the replayed ones (`Operand`), and
@@ -350,7 +351,7 @@ def test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length(stag
     """Two spans of one class, of lengths 5 and 3, each publish C = 6 strings, so the strings never show a span's length:
     a read past its length opens a fill row (the zero row under a salt of its own) and one past C the zero row under the
     zero salt, each the zero row. A table of other than C strings is refused by name. Slow: what is published is the
-    interior's own, read off one built over a registered round 1 and its drawn spans, which the tables alone don't give."""
+    interior's own, read off one built over a registered round 1 and its sampled spans, which the tables alone don't give."""
     _stream, reg, first, rec, tables = staged
     drawn = [tables[u] for u in first.units]
     assert [len(t.rows) for t in drawn] == [C, C] and [LENGTHS[u] for u in first.units] == [5, 3]
@@ -434,7 +435,7 @@ def test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_c
     """Each sampled span brings its table exactly when a template reads one, with round 1's record and its class's C, and
     the reads' root and domain are both the verifier's; a table of another capacity and a commitment made on the rows'
     device are refused by name. Slow: each refusal is `interior`'s own, past its building of the reads' window and on
-    round 1's registration and draw; it catches an interior of table reads committed without the tables it must open."""
+    round 1's registration and sample; it catches an interior of table reads committed without the tables it must open."""
     _stream, reg, first, rec, tables = staged
     drawn = [tables[u] for u in first.units]
     spans = _spans(drawn)
