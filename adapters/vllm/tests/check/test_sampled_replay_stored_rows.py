@@ -10,7 +10,7 @@ import json
 import pytest
 
 from verity_vllm.check.replay import driver as SR, index as IX, population as POP
-from verity_vllm.program.compact import expanded_file_args, file_items_from_runs
+from verity_vllm.program.compact import file_items_from_runs
 from verity_vllm.pipeline.tp import rank_replay as RR
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.required import Q_WORD_ID

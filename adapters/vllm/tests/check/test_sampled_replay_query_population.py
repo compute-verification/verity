@@ -386,7 +386,10 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     assert POP.executed_prefix_of_record("r0", a_r=2, lag=2, cap=cap, eos_declared=True, served_len_commit=2, **ok)["faults"][0].startswith("LAG 2 outside")
     assert "outside [0, cap" in POP.executed_prefix_of_record("r0", a_r=cap + 1, lag=1, cap=cap, served_len_commit=cap + 1, **ok)["faults"][0]
     # (a)(b)(c) + the served-length rule, each a fault BY NAME; an unasserted fact is a fault, never a default
-    f = lambda **kw: POP.executed_prefix_of_record("r0", **{**dict(a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2), **ok, **kw})["faults"]
+
+    def f(**kw):
+        return POP.executed_prefix_of_record("r0", **{**dict(a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2), **ok, **kw})["faults"]
+
     assert f() == []
     assert any("not linked to the served output" in x for x in f(linked=None)) and any("(condition (a))" in x for x in f(linked=False))
     assert any("LAG rule not attested" in x for x in f(lag_attested=None)) and any("(condition (b))" in x for x in f(lag_attested=False))

@@ -111,13 +111,13 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
     norm_t, norm_f = (f"RMSNormTriton_v3{{N={H}}}", f"RMSNormFusedCuda_v4{{N={H}}}") if registered else \
         (f"RMSNormTriton_v1{{N={H},EPS={EPS}}}", f"RMSNormFusedCuda_v2{{N={H},EPS={EPS}}}")
     eps_arg = [VAL["eps"]] if registered else []
-    prev_norm_out = None                                       # (row, member offset) of the last fused norm (residual stream)
+    sel_prev = None                                            # the row that selected the previous step's token
     kv_rows: list[tuple[int, int]] = []                        # attn: (key RoPE row, qkv row) per position, in position order
     for s in range(1 + T):
         toks = list(range(LP)) if s == 0 else [0]
         norm_rows = []
         for k in toks:
-            ids = [["p", 0, k, k + 1]] if s == 0 else [["n", sel_prev, 0, 1]]  # noqa: F821  -- sel_prev set after step 0
+            ids = [["p", 0, k, k + 1]] if s == 0 else [["n", sel_prev, 0, 1]]
             e = add(f"Embedding_v1{{V={V},H={H}}}", f"model.model.embed_tokens/embedding_{s}[{k}]", [ids, W("model.model.embed_tokens.weight")])
             if scale:                                                  # the root module's own scaling of the embedding: read by the child norms
                 e = add(f"Bf16MulScalarTensor_v1{{N={H}}}", f"model/mul_{s}[{k}]", [[["n", e, 0, H]], W("model.normalizer")])
@@ -1182,7 +1182,10 @@ def test_attention_stratum_key_keeps_the_block_count_and_the_full_or_partial_las
     lane sums); the key carries `last=full|partial` so the full-block chain is a stratum of its own again (<= +1 stratum per formerly mixed
     stratum).  The VU keeps its spec (T); only the stratum key changes.  Every other family's spec is its own key."""
     spec = "Attention_v3{T=%d,NH=32,KVH=8,D=64,BN=128}"
-    key = lambda t, bn=128: POP._stratum_spec("Attention_v3", spec % t, {"T": t, "NH": 32, "KVH": 8, "D": 64, "BN": bn})
+
+    def key(t, bn=128):
+        return POP._stratum_spec("Attention_v3", spec % t, {"T": t, "NH": 32, "KVH": 8, "D": 64, "BN": bn})
+
     assert key(128) == "Attention_v3{NB=1,last=full,NH=32,KVH=8,D=64,BN=128}"
     assert key(127) == "Attention_v3{NB=1,last=partial,NH=32,KVH=8,D=64,BN=128}"
     assert key(1) == key(127) and key(129) == "Attention_v3{NB=2,last=partial,NH=32,KVH=8,D=64,BN=128}"
@@ -1422,11 +1425,12 @@ def _moe_program():
 
     W = lambda n: [["p", 1, woff[n][0], woff[n][1]]]  # noqa: E731
     X = "model.model.layers.0.mlp.experts"
+    sel_prev = None                                            # the row that selected the previous step's token
     for s in range(1 + T):
         toks = list(range(LP)) if s == 0 else [0]
-        norm_rows, sum_rows, dn_rows = [], [], []
+        norm_rows = []
         for t in toks:
-            ids = [["p", 0, t, t + 1]] if s == 0 else [["n", sel_prev, 0, 1]]  # noqa: F821
+            ids = [["p", 0, t, t + 1]] if s == 0 else [["n", sel_prev, 0, 1]]
             e = add(f"Embedding_v1{{V={V},H={H}}}", f"model.model.embed_tokens/embedding_{s}[{t}]", [ids, W("model.model.embed_tokens.weight")])
             ln = add(f"RMSNormTriton_v1{{N={H},EPS={EPS}}}", f"model.model.layers.0.input_layernorm/triton_launch_{s}[{t}]",
                      [[["n", e, 0, H]], W("model.model.layers.0.input_layernorm.weight")])

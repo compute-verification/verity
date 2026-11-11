@@ -35,7 +35,6 @@ CMAP = CM.load(MAP)
 SITES = {
     "embedding-shard": {"embedding_shard": dict(VS=8, H=8, START=0)},
     "fp8-block-linear-deepgemm": {"flashinfer_fp8_linear": dict(K=256, N=256), "deepgemm_fp8_linear": dict(K=256, N=256)},
-    "rmsnorm-cuda": {"rmsnorm_cuda": dict(N=8, EPS=1e-6, BLOCK=1), "rmsnorm_fused_cuda": dict(N=8, EPS=1e-6, BLOCK=8)},
     "silu-mul": {"silu_mul": dict(I=8)},
     "bf16-add": {"residual_add": dict(N=8)},
     "moe-sum": {"moe_sum": dict(TOPK=2, H=8)},

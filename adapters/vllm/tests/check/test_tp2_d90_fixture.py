@@ -32,7 +32,7 @@ import pytest
 
 from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
                                    StorageAlloc, TritonLaunch, ViewDesc)
-from verity_vllm.observe.fold.fold import FoldError, fold
+from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, Transparent, Gather
 from verity_vllm.check.match import rank_match as RM
 from verity_vllm.observe.fold.patterns.collectives import TpCollective

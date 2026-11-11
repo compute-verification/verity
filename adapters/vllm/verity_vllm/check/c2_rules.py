@@ -310,7 +310,7 @@ def _replay_seed_of_record(sr: dict, run_root_hex: str | None) -> tuple[bool | N
         # source text (sampled_replay.challenge_seed); a label without its challenge / another seed is the prover-chosen class (unverifiable)
         chal = smp.get("challenge")
         if chal is None:
-            return False, f"sampled replay seed source claims a verifier challenge but the challenge is not on the record (sample.challenge): unverifiable"
+            return False, "sampled replay seed source claims a verifier challenge but the challenge is not on the record (sample.challenge): unverifiable"
         if not run_root_hex or seed is None:
             return False, f"sampled replay seed source says '{src[:40]}...' but the record carries no run root / seed to recompute it from"
         import hashlib
