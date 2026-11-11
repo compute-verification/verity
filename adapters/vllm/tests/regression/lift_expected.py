@@ -37,7 +37,6 @@ REFERENCE = {"tag": "v1-reference", "release": "r19-int-21", "commit": "89af272a
 SNAPSHOT_NAME = "r19-reference-v1"
 PROGRAM_RE = re.compile(r"(^|/)build(_request[^/]*|/rank\d+/build_request[^/]*)/instances\.json\.gz$")
 FOLD_RE = re.compile(r"^match/(program\.json|instances\.jsonl|accesses\.jsonl\.gz)$|^commit/binding_map_p\d+\.json$")
-LIVE_ROOT = "/workspace/cp/sweep"
 
 
 def _toml_str(s: str) -> str:

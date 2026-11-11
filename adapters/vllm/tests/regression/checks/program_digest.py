@@ -13,9 +13,7 @@ v2's `build_summary.json` is read instead and compared to the same expected.
 """
 from __future__ import annotations
 
-import glob
 import json
-import os
 
 from .. import resolver
 

@@ -21,7 +21,6 @@ import gzip
 import json
 import os
 from collections import Counter
-from typing import Any
 
 from .. import resolver
 
