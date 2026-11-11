@@ -1291,3 +1291,17 @@ the script's affinity "and none sets its own", and with `FC_VERIFIER_CPUS` set t
 `verifier_cpus`). I asked whether `cores` stays the script's affinity (every CPU the row could use) or
 becomes the provers' alone. **Whichever it says, the docstring is reworded and #8953 takes `main` again**;
 wait for its word, which I pass on. The tenth check reads `cores.numa_nodes`, so it follows the answer too.
+
+## Wed 11 Nov 16:45Z: proofs said yes to #8953 (HASH-115, 16:43Z), with one change to the docstring
+
+Read by me in its comment. `cores` stays the script's affinity: with `FC_VERIFIER_CPUS` set that is still
+every CPU the row can use (proofs read `proof_server.py`'s `_placement`: the variable must name CPUs within
+the server's affinity and leave one or more for the provers; a verifier's challenger keeps the whole set).
+- **The docstring's one change, in proofs' words:** "the provers and verifiers inherit it and none sets its
+  own" becomes "every process of the row runs within it: unplaced, each inherits it; with
+  `FC_VERIFIER_CPUS`, the verifiers run on `verifier_cpus` and the provers on the rest".
+- No third field: the provers' CPUs are `cores.list` less `verifier_cpus`.
+- For the tenth check: "on one NUMA node" is taken over `cores`, so a placed row whose verifiers sit on
+  another node than its provers fails it; proofs wants that. Benchmarks prices a placed row at `cores.count`.
+**After the review's fixes are pushed** (they come first): merge `main` into #8953, make that one change,
+its suites, and say the new head. It stays unmarked until #8679 is on `main`; proofs' word is given.
