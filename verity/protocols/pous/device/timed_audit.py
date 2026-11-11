@@ -385,7 +385,7 @@ def verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
         need(root == vk.root.hex(), "root")
         need(limit == deadline + rtt, "limit")
         cert = scheme.certificate
-        k = doc["k"] if "k" in doc else cert.k if cert is not None else pous_audit.CHALLENGES
+        k = doc.get("k", cert.k if cert is not None else pous_audit.CHALLENGES)
 
         def timed(source: bytes, clock: Callable[[], int]) -> Any:
             return protocol.TimedAudit(scheme, vk, protocol.challenge_key(source, vk), k=k, deadline_ns=deadline,
