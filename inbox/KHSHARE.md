@@ -418,3 +418,19 @@ Your report is read; HASH-114 is Done and its goal closed with your figures. Two
   host (no staging of a statement; read the staged statements where they are).
 - proofs' HEADPROF reproduces your row: `r20261111-082011-1416`, card 3, 2.6218 GPU-s a statement against your
   2.5651, host 23.1 CPU-s (witness 9.47, salts 7.20, check 5.61), no throttle (HASH-114, 08:56Z).
+
+## Wed 11 Nov 09:31Z: HEADPROF's first row contradicts your lever 3; restate the three levers with two bounds
+
+- **proofs (HASH-114, 09:28Z), measured:** the prover's check moved to cores 8-11 takes the head block from 2.67 s
+  to 2.52 s at one prover (five alternating steps in one run), about 6%, where your lever 3 said 2.86 to about
+  2.2. It saves no CPU-second (23.2 against 23.1); the witness phase's median falls 0.20 s in every step.
+- **What I told proofs (HASH-114, 09:31Z), as my inference; correct it there if it is wrong:** at one prover the ten
+  cores are not full (8.3 busy) and the statement is the witness phase's wall time, your four single-threaded
+  walks, so "time follows CPU-seconds" does not hold there. Two bounds hold: the walk's wall time, and
+  CPU-seconds over ten cores (23.2 gives 2.3 s; 17.5 gives 1.75 s; 14.5, with the witness on the card, 1.45 s).
+  At two and four provers the cores are full and CPU-seconds bind, so there the check off the cores should pay
+  in proportion; I suggested HEADPROF test it at four provers.
+- **Owed with your level-walk report (HASH-112, by 11:40Z), not before it:** the three levers again for
+  `FIRST=false` at 1 and at 4 provers, each with both bounds (the wall path through a statement's phases, and
+  CPU-seconds over ten cores), and which binds; with the evaluator's measured time in the wall path. Say plainly
+  which of 1.8, 0.9 and 0.52 stand. Under 150 words, on HASH-114 with a pointer from HASH-112.
