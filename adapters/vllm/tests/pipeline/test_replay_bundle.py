@@ -42,7 +42,9 @@ def test_the_commit_pass_is_none_only_while_every_failure_is_absent():
     _pass_of = RB.pass_of
     ok, pend = {"commit": {"commit_pass": True}}, {"commit": {"commit_pass": None, "sampled_replay": DEFERRED}}
     bad = {"commit": {"commit_pass": False}}
-    rows = lambda *cs: [{"arm": "instrumented", **c} for c in cs] + [{"arm": "control", "commit": {}}]
+
+    def rows(*cs):
+        return [{"arm": "instrumented", **c} for c in cs] + [{"arm": "control", "commit": {}}]
     assert _pass_of(rows(ok, ok)) is True and _pass_of(rows(ok, pend)) is None
     assert _pass_of(rows(pend, bad)) is False and _pass_of(rows(bad)) is False
     assert _pass_of(rows({"commit": {"commit_pass": None}})) is False, "a pass that is None without a deferred replay is no pass"

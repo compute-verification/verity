@@ -131,7 +131,7 @@ class ReportCard:
         return asdict(self)
 
     @classmethod
-    def from_json(cls, d: dict) -> "ReportCard":
+    def from_json(cls, d: dict) -> ReportCard:
         known = {f for f in cls.__dataclass_fields__}  # type: ignore[attr-defined]
         return cls(**{k: v for k, v in d.items() if k in known})
 
@@ -631,7 +631,7 @@ def summarize_md(card: ReportCard) -> str:
         L.append(f"- spend: {card.spend.get('pod_hours')} pod-hours, ${card.spend.get('usd')}")
     failed = [s for s, r in (card.stages or {}).items() if r.get("status") not in ("ok", None)]
     if failed:
-        L.append(f"- stages not ok: " + ", ".join(f"{s} ({card.stages[s].get('status')}, {card.stages[s].get('log')})" for s in failed))
+        L.append("- stages not ok: " + ", ".join(f"{s} ({card.stages[s].get('status')}, {card.stages[s].get('log')})" for s in failed))
     if card.mechanism_notes:
         L.append("- mechanism notes: " + ", ".join(f"`{p}`" for p in card.mechanism_notes))
     if card.notes:

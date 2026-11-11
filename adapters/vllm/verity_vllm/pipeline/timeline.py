@@ -23,10 +23,11 @@ import json
 import os
 import sys
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import option
@@ -64,7 +65,7 @@ class Timeline:
             self.path.parent.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def from_env(cls, proc: str, **defaults: Any) -> "Timeline":
+    def from_env(cls, proc: str, **defaults: Any) -> Timeline:
         return cls(settings.VERITY_TIMELINE, proc=proc, **defaults)
 
     @property

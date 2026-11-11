@@ -159,7 +159,8 @@ class Options:
 
 
 def main(a: Options) -> int:
-    w = json.load(open(a.workload))
+    with open(a.workload) as f:
+        w = json.load(f)
     if a.LP is not None and a.T is not None:
         print(spec_for(w, a.LP, a.T, a.C))
         return 0

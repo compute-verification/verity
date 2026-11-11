@@ -8,8 +8,9 @@ import glob
 import os
 import subprocess
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable
+from typing import Any
 
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.program import prefix_plan as PP
@@ -55,7 +56,8 @@ def required_manifest(row: Any, stage: str, digest: Callable[[], str] | None = N
         return 0
     if os.path.exists(f"{row.d}/manifest.json"):
         os.remove(f"{row.d}/manifest.json")
-    hit = next((ln for ln in open(log, errors="replace") if "PRECHECK_FAIL_REGISTRY_UNAVAILABLE" in ln), None)
+    with open(log, errors="replace") as f:
+        hit = next((ln for ln in f if "PRECHECK_FAIL_REGISTRY_UNAVAILABLE" in ln), None)
     if hit is not None:
         row.log(f"PRECHECK_FAIL_REGISTRY_UNAVAILABLE: {hit.rstrip(chr(10))}")
         row.tl(f"{stage}.required_manifest", "end", ("rc", 3), ("fail_class", "PRECHECK_FAIL_REGISTRY_UNAVAILABLE"))

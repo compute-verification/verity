@@ -659,6 +659,7 @@ def test_a_tp_commit_at_an_unproven_world_drops_the_deferral_before_it_takes_its
     deferral is proven, still defer."""
     pytest.importorskip("torch")
     import sys
+
     from tests.pipeline.test_config_run import _tp
     from verity_vllm.engine import engine_profile, vllm_adapter
     from verity_vllm.pipeline import cli
@@ -681,8 +682,8 @@ def test_a_tp_commit_at_an_unproven_world_drops_the_deferral_before_it_takes_its
         TC.main(args)
     assert at.value.args[0] == ("full" if defers else None)
     said = [ln for ln in capsys.readouterr().out.splitlines() if "--replay-deferred not taken" in ln]
-    assert said == ([] if defers else ["[tp2commit] --replay-deferred not taken (world 4: deferral is proven at TP2 and TP8 only): every "
-                                       "rank's C2 replay runs in its process"])
+    assert said == ([] if defers else [("[tp2commit] --replay-deferred not taken (world 4: deferral is proven at TP2 and TP8 only): every "
+                                        "rank's C2 replay runs in its process")])
 
 
 def test_a_tp_commit_that_replayed_in_process_at_an_unproven_world_leaves_the_replay_stage_nothing_to_do(tmp_path, monkeypatch):
