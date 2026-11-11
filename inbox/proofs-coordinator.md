@@ -38077,3 +38077,85 @@ Tries: `r20261111-032547-b57b` (first, 21 theorems), `r20261111-032956-68c7` (he
 **My branches** [read]: one, `cursor/proofs-concrete-leaves-1ca7` (#8764), head `f1d6c2686e56`, crossed head `8dfde58665a3` as above.
 
 **Left**: your mark for (a). For (b): the two runs' verdict lines; if the records run regenerates a record, one commit of exactly it on the crossed branch and the quick tier again at that head; the pull request's body says today's state once you say which head lands. Then NET-313's scoping.
+
+## BREAKEVEN, Wed 11 Nov 03:49Z: CONFIRMED: the plan of record's 128k sparse-MLA lever counts one head a row of the cut's eight; at eight heads the Goals path reads 16,948 / 8,698 / 2,459 / 1,965 GB and 41.45% at 300 GB, and 11.54% does not move; one request count (1.7784e16) takes 8,456 GB to 7,108; label S8
+
+**CONFIRMED [read]: the plan of record's 128k sparse-MLA lever is one query head's blocks a row, and the cut proves eight heads' blocks a row.** The deciding line is the lever as the record ran it: `tools/headline_rows.py:109-117` in r20261110-054052-9a23's `inputs/tools.tgz`, byte for byte the tools of r20261110-053642-6e43 (427 GB) and of my TOP-389 runs. The record's 128k counts are "computed tokens about 1,869 … 29.2 full parts, 0.175 partial parts, one combine", where 29.2 = 1,869 / 64 is one head's 64-key blocks. It divides them by the census's "3.457 full 64-key parts, 0.864 partial parts, 0.864 combines" a token, layer and rank, which are eight heads' blocks. I wrote that lever.
+
+Marks: [read] a file I read; [run] r20261111-034244-ce3c (below); [derived] arithmetic on [read] or [run] numbers; [guess]. Nothing was built on the VM.
+
+**1. Is it right? Yes, by the Definitions and not by BENCHCROSS's count.**
+- [read] The lever is `MLA128` at lines 115-117:
+  - `SparseMlaSplitPart_v1{T=64,` × 29.2/3.457 (8.447);
+  - partial parts × 0.175/0.864;
+  - one-split whole rows × 0.1;
+  - `SparseMlaCombine_v1{` × 1.0/0.864.
+
+  `run` (lines 191-199) scales each stratum's `per_token` by the first prefix that matches.
+- [read] The cut the record's census counted is at the record's tree `a5e4e56a11`, in `verity/ml/definitions/registry/sparse_mla_split.py`:
+  - `SparseMlaSplit` (lines 457-461) is "One query token's NH heads … head h `SparseMlaHeadSplit_v1`", built as `B.batch(hd, q_nope, q_rope, kv, axes=(0, 0, None))`: one `SparseMlaHeadSplit` a head over the shared latent KV.
+  - `SparseMlaHeadSplit` (lines 440-449) is "One query head": its own split parts, split ends and `SparseMlaCombine_v1`.
+  - A part's query is one head's: `_part_type` (lines 393-395) takes `q_nope` as `Array(DV)` and `q_rope` as `Array(DR)`.
+  - `NH` is 8 (`sparse_mla.py:46-47`, "GLM-5.3 at TP8: 8 of the 64 heads per rank").
+
+  So each of the eight heads has its own blocks; no block covers the eight.
+- [read] On `main` the cut states the same in its chains. `split_chain` (`verity/definitions/registry/sparse_mla_split.py:507-535`) and `head_chain` (`sparse_mla.py:244-258`) count every block `NH` times, and `SPARSE_MLA_GLM53` has `"NH": 8` (line 53).
+- [derived] The census's numbers are eight heads' blocks:
+  - A decode token of the 288-token census request reads 257 to 287 keys, which per head is 4 full parts, 1 partial part and a five-split combine.
+  - 8 heads × 4 × 31 decode tokens × 624 rows = 619,008 full parts, which over 287 tokens and 624 rows is 3.456.
+  - 8 × 31 / 287 = 0.864 partial parts and combines.
+
+  So the record's factor sets one head at 128k against eight at the census. At eight heads the full-part factor is 8 × 29.2/3.457 = 67.6, and the partial part's and the combine's are 8 times the record's too.
+- [derived] The comment's "about 235 keys a token, layer and rank" (line 109) is also an eight-head sum, about 29.4 keys a head; the full parts alone are 3.457 × 64 = 221 of them.
+- I find nothing that makes the eight wrong.
+- [read: BENCHCROSS's report, "What the 128k plan and the cut do not settle"] Their rule gives 7.6 times the record's blocks where I get 8. The difference is their plan's own launch shapes and its keys below 2,048 (mean 538, against the record's 1,024), not the head count.
+
+**2. What else carries the same lever: every honest row and the lever row; row 1's design does not.**
+
+The eight-head figures below are [run] r20261111-034244-ce3c. They change only the head count and keep the rest of the record's premises: its census (the one at `a5e4e56a11`), the planner's prices and the 1,869 keys. So they restate the Goals path like for like. GB are at 10% of the scope's GPU-seconds, × 1.05 as the Goals page reads them, world year.
+
+| Goals path figure | uses the one-head lever | at eight heads |
+|---|---|---|
+| 8,456 GB today, `(i) honest` | yes [read: `HONEST`, line 142; every honest row takes `"volume": MLA128["volume"]`] | 16,948.3 GB (× 2.00); 14,239.8 GB at one request count (section 3) |
+| 1,446 GB, `(ii) honest`, the plan of record | yes [read: line 142] | 8,697.5 GB (× 6.01) |
+| 543 GB, `(iii) honest` | yes [read: line 142] | 2,459.2 GB (× 4.53) |
+| 427 GB, the lever row | yes [read: lines 151-153] | 1,965.2 GB (× 4.60) |
+| 12.40%, the lever row at 300 GB, lambda 1.05 | yes | 41.45% (beta 36.87%) |
+| 11.54%, row 1's design at 300 GB | **no** [read: `HEAD["(ii)"]` is `{}`, line 85] | **11.54%, unchanged** |
+
+- **Why 11.54% does not move** [read]: row 1's design carries no `volume`, so its sparse MLA is priced at the census request's own keys, about 235 a token, layer and rank. That is itself an eight-head sum, so the head count was never wrong there, and the lever never touches it. The same holds for 9.80%, row 1 at FP4 lambda 1.
+- **At the FP4 target**, lambda 1 / lambda 1.05 [run]:
+  - lever row: 10.46 / 10.76% become 32.49 / 33.90%;
+  - `(ii) honest`: 25.76% becomes 132.55% (lambda 1.05);
+  - `(iii) honest`: 12.44% becomes 40.67%;
+  - `(i) honest`: 129.00% becomes 254.09%.
+- **At 300 GB**, lambda 1.05 [run]: `(ii) honest` 31.20% becomes 165.29%, `(iii) honest` 14.49% becomes 49.93%, and `(i) honest` 160.82% becomes 317.89%.
+- **Per monitoring period, the lever row** [run]:
+  - At 300 GB (lambda 1.05), as a share of the compute the scope covers: world 41.42 / 41.39 / 41.45% (week / month / year); datacenter 41.23 / 41.26 / 41.32%.
+  - Its pooled bound at 10%: world 1,963.7 / 1,962.0 / 1,965.2 GB; datacenter 1,953.2 / 1,955.1 / 1,958.2 GB.
+  - `(ii) honest` at 10%: world 8,717.9 / 8,709.3 / 8,697.5 GB; datacenter 8,757.1 / 8,750.9 / 8,761.3 GB.
+- **First-entry cross-check** [derived], by the inverse law at fixed beta from each plan's own `mix.json` cells:
+  - In the record's `(ii) honest` (r20261110-054052-9a23), the cells `MLA128` scales hold 78.33% of proving; the full-part cell alone holds 70.21%. Proving is 97.98% of the budget, which gives × 6.37, or 9,218 GB.
+  - In the lever row (r20261110-053642-6e43), those cells hold 55.27%, which gives × 4.70, or 2,008 GB.
+  - The run reads 5.6% and 2.1% below these, because the planner picks other designs at the larger volume.
+- [read: BENCHCROSS's 03:07Z entry and report] **These are not S8's numbers.** S8 is the plan over the census of record at benchmarks' rows of record: 3,846.2 GB at lambda 1, 4,038.5 at 1.05, for the record's row, where my like-for-like `(ii) honest` reads 8,697.5. The gap comes from the census and the prices, not the heads; BENCHCROSS's planner-price eight-head figure is 5,783.2 GB.
+
+**3. The request counts (PRF-456).**
+- **One count is right for today's cut in the planner: 1.7784e16 requests a world year** (4.74e12 a datacenter year), the same as every fused line, because requests are the serve plan's and a cut doesn't change them. The served line's 2.1157e16 is a prefix miss in `reprice.indexer_factor` (`benchmarks/spot_figures/breakeven/reprice.py:476-481` at `a5e4e56a11`) [read; derived from `workload.glm-5.3.json`]. Its `LINEARS` (lines 56-58) match none of today's MoE GEMMs: `MoeExpertFp8CoordinateChunk_v1`, kind `MoeExpertFp8Gemm_v1`, at 1.51e10 MACs a token, and `MoeExpertFp8GemmW_v1` at 7.55e9. So that line's 128k indexer is stated against 2.77e10 MACs of linears instead of 5.04e10. That gives k = 156.0 against 283.5, and 66.62e9 served MACs a token against 79.25e9.
+- **8,456 GB moves, to 7,108.4 GB** (× 0.8406, the request ratio), and its eight-head 16,948.3 GB moves to 14,239.8 GB [run, `(i) honest` with `LINEARS` plus `MoeExpertFp8CoordinateChunk` and `MoeExpertFp8Gemm`, which puts the line at 1.778401e16 requests and k = 283.5]. At that count, the 300 GB point (lambda 1.05) reads 135.90% at one head and 267.80% at eight. The datacenter year reads 6,572.6 GB at one head and 13,707.9 GB at eight.
+
+**4. The label: S8, eight heads, as `run_of_record prove-glm53-spot-sampling`, with the record `superseded_by` it.**
+- The head count is not open. The cut's Definition fixes it on both trees, and the census pins it.
+- S1 would make the run of record a plan for one head a row, a cut nobody serves. It would also carry a known 8-fold undercount of the full parts the cut proves.
+- What S8 still waits on is the same for S1, and neither item concerns heads: rows still being re-timed at 10 cores (under 2% on S8) and benchmarks' reader on an open PR ([#8664](https://github.com/compute-verification/verity/pull/8664)).
+- What labelling S8 commits to [derived]: the Goals path has to be restated. Its eight-head numbers on the record's premises are above. Restating it on S8's own premises, the census of record with benchmarks' rows, needs `(i)`, `(iii)` and the lever row run there, which neither of us has done [read: BENCHCROSS's table covers the record's row only].
+
+**Runs and tools.**
+- [run] r20261111-034244-ce3c, on vy-nebius-cpu-7, ran 03:43 to 03:46Z: 252 rows, 0 errors, preserved, `out/rows.jsonl` sha256 71975204221d….
+  - Its source is the planner tree `a5e4e56a11`, with the record's tools.
+  - Its driver, new in the lane's notes as `tools/headline_world_h8.py`, scales `MLA128`'s three per-head factors by the head count per job and adds `LINEARS` prefixes per job.
+  - Variants: `h8` covers the four rows in six periods; `h1lin` and `h8lin` cover `(i) honest` in the two year scopes.
+  - It ran at 9 pinned betas from 0.05 to 15, with fit elasticity −1.000 ± 0.0005.
+- r20261111-033526-aa27 is the same job on another node. I cancelled it while it waited behind a check; it never started.
+- I left `MLA128` in `tools/headline_rows.py` as it is, because BENCHCROSS's `headline_mix_succ.py` imports it and their controls reproduce the record through it.
+- No file of the repository changed, and I ran no label.
