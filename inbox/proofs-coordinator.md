@@ -57303,3 +57303,91 @@ For the table: head block 3.12 s today and 2.14 s with the cuts built tonight; c
 For BREAKEVEN: `SparseMlaHeadValues_v2{G=64}` (2,048 units a statement) 1.5171 s a statement today, 1.5320 s with the follow-up and salts `all`; `{G=32}` (4,096 units) 1.2889 s and 1.2481 s; one prover, vy-dc-h200-3 (measured, `r20261111-135114-d43c`, `r20261111-135118-9130`). Walked on the card, as G = 128.
 For BREAKEVEN: the cut's 256 blocks at one prover today: 4.5035 s (G = 128), 3.7594 s (G = 64), 3.5312 s (G = 32), against the head block's 3.416 s to 3.456 s (measured; `6f08` with `fcd7`, `d43c`, `9130`; head `af1d`, `f049`, `5832`).
 For the table: the cut's block at one prover today is 1.31, 1.10 and 1.03 of the head block's seconds at G = 128, 64, 32 (vy-dc-h200-3, measured). The values unit is walked on the card at every G.
+
+## BENCHCROSS, Wed 11 Nov 14:27Z: the 14:13Z second reading: 1 select as wired HOLDS (+0.18 / +1.57 GB; under 1% at 16 times the seconds; HARMSEARCH's x16 scaled a block's seconds only), 2 N at +990 HOLDS, 3 vllm's 505 to 521 / 417 to 430 read 586 to 606 / 496 to 516 at +990, 4 and 5 HOLD, 6 ATTACK's rates are at +783's q (2.19e6 and 606 at +990), 7 HOLDS
+
+**The verdicts** (each figure's check is below, in the same order)
+1. **The select as wired moves no row: HOLDS.** By the tree's planner on the plan's cells with the select's two cells added, as wired: +0.0044% no program and +0.0127% at +990, which is +0.18 and +1.57 GB on 4,074 and 12,379 (HARMSEARCH: +0.18 and +1.54) [run]. At 16 times the seconds no row moves by 1%: the row of record +0.07% / +0.035% [run], the most on any row +0.22% [derived]. **One sentence DOES NOT HOLD as written:** HARMSEARCH's ×4 and ×16 scaled a block's seconds only, not the statement's fixed seconds, and were of the uncut cells (`recut3.py:132-139`). As wired with both scaled 16 times, the row of record moves by 2.9 GB no program and 4.3 GB at +990, not "by under 0.1 GB"; still under 0.1%. A row moves by over 1% only if a statement also holds 16 times fewer blocks (16, not 256) at 16 times the seconds.
+2. **N at +990: HOLDS.** 199.4 no program / 605.9 (578.8 to 632.6) as `main` is / 511.8 to 515.5 the hoist as built / 381.3 to 382.5 the hoist + one parse, from each cell's own q [read: its data; derived].
+3. **The three rows' N at +990.** On the recut's cells HARMSEARCH's figures **HOLD**: G = 128 92.5 / 280.7 / 237.2 to 238.9 / 176.7 to 177.3; G = 64 72.9 / 221.0 / 186.7 to 188.1 / 139.2 to 139.6 [read; derived]. On the plan's cells [run: my reader on BREAKEVEN's rows]: κ 2^-6 197.1 / 586.3 / 496.1 to 499.9 / 371.2 to 372.4; G = 128 91.6 / 265.3 / 225.1 to 226.7 / 169.3 to 169.8; G = 64 71.9 / 205.5 / 174.5 to 175.8 / 131.7 to 132.1. **vllm's "197 to 199 / 505 to 521 / 417 to 430" DOES NOT HOLD at +990: it reads 197 to 199 / 586 to 606 / 496 to 516**, and the hoist + one parse 371 to 383.
+4. **One machine's window: HOLDS.** Replay alone is 19.76 times the budget on the plan pair (5,258 against 266.1) [derived from the dump's fields]; on the registered pair, which BREAKEVEN's table is on, it is 22.4. The planner at q = 1/7,219 on the plan's cells returns 20.7 GB (HARMSEARCH's 20.4 on the recut's) at 197 budgets no program and 586 as `main` is [run]. κ 2^-9 (164 GB at 44 and 102) and κ 2^-10 (327 at 33 and 67) follow from its own rows by arithmetic [derived]; **NOT CHECKED by the planner.**
+5. **The datacenter's one window: HOLDS.** K = 21 (20 to 22) as `main` is, cost 1.018 (1.012 to 1.019); K = 21 reads 2^-100.251 at M = 162, 2^-99.999997 at 193 (short by 3 millionths of a bit) and 2^-99.913 at 205; K = 63 with no program, 2^-98.666 [run: the same term function]. The ends 605 and 3,635 machines hold (⌊605.87⌋, ⌊3,635.2⌋) [derived].
+6. **ATTACK's two rates: the arithmetic HOLDS at q = 2.66·10^-7, which is the setup-alone row's (+783). At +990 they DO NOT HOLD:** q is 2.286·10^-7, so as served is 2.19·10^6 times the rate (not 1.88·10^6), and one request a class a window is 4.37·10^6/c times it: 547,000 at c = 8 (not 470,000) and 606 at c = 7,219 (not 521) [derived].
+7. **The measured-rate column: HOLDS.** HARMSEARCH's 443 to 477 is its 12,379 times 0.0143/0.4 to 0.0154/0.4 (178.5 to 192.3 tokens a GPU-second), by proportion. In the planner's rows GB follows the rate to within 0.1% to 0.8% [run], so both conversions are one line. 279.5 gives 279.5/4,994 = 0.05597: vllm's 0.0560 and its 693 hold.
+
+Tags: [run] a command I ran now, [read] a file or record I read now (place given), [relayed] another lane's statement I did not check, [derived] my arithmetic on tagged figures, [guess] mine, unchecked. Times from `date -u`. Read: HARMSEARCH 14:02Z whole, ATTACK 14:06Z Job 1 and "For the report", the order from 13:36Z through 14:05Z, BREAKEVEN 14:12Z's sections 1 and 2.
+
+**What `research` runs.** `main` at `72e4d46d9209` [run: `git rev-parse HEAD` in the checkout it imports from; `origin/main` is `1a59728741f9` and contains it]. `research doctor`: "ok notes-push … the credential is the GitHub broker's token, by this agent's Cursor identity" [run, after the notes clone was made again]. My VM restarted before 14:13Z and lost its scratch; everything here is fetched or run again.
+
+### 1. The select as wired
+- **My route** [run]: the tree's `two_stage_design` at `f1e9d625dd` (#8904's head, HARMSEARCH's tree), by width, κ 2^-6, margin 0.03, on the **plan's cut's cells** as BREAKEVEN's runs dumped the design call (`plan_dump` of `r20261111-134358-85c3`, no program, and of `r20261111-140144-95aa`, +990; registered pair; the row at β = 0.056, next to the 10% point). I added the select's two cells from HARMSEARCH's point 3: the group unit (n = 358,383, 3,840 bits) and the combine (n = 2,962, 32 bits). Not HARMSEARCH's cells (the recut's) and not its scripts.
+- **What the planner samples of it:** 305 group units and 0.1 combine a sampled replay block [run]. As wired that is 2.3 s of proving and statements at no program and 19.8 s at +990, against 52,524 and 156,526 s a sampled replay block [run].
+
+| the select's two cells | no program: the bound moves | as `main` is (+990) |
+|---|---:|---:|
+| uncut (2^22, 2^26), HARMSEARCH's (a) | +0.0021% | +0.0102% |
+| as wired, both at the LM head's 8-word cell (1.527e-03, 1.454, cap 256) | +0.0044% | +0.0127% |
+| as wired, prove and fixed × 4 | +0.018% | +0.017% |
+| as wired, prove and fixed × 16 | +0.070% | +0.035% |
+| as wired, × 16, and 16 blocks a statement (not 256) | +0.86% | +0.46% |
+| as wired, × 16, and one block a statement | +13.5% | +7.2% |
+
+- On the row of record's GB [derived]: as wired +0.18 GB of 4,074 and +1.57 of 12,379. HARMSEARCH's +0.18 and +1.54 hold. Its four cells 4,074.24 / 12,379.13 / 10,458.16 to 10,533.66 / 7,790.56 to 7,815.73 are in its `sel/wired.jsonl` as printed [read].
+- **The other rows of the recut, by hand** [derived: the select's seconds above over each row's own cost a sampled replay block, N × 266.1; that the select's 305 sampled blocks are the same in the rows with #8917's cut is a guess]. At 16 times the seconds: G = 128 +0.15% / +0.07%, G = 64 +0.19% / +0.09%, G = 32 +0.22% / +0.11% (no program / +990). With 16 blocks a statement as well: 1.8% to 2.7% no program, 1.0% to 1.4% at +990. So the price that matters is how many 2^27 blocks one statement holds, not a block's seconds.
+- **The correction** [read: `tools/harmsearch/recut3.py:132-139` and `sel/recut3.py:139-146`]: `SELECT_PRICE` multiplies `prove` only, and only on the uncut cells (the wired branch returns before it). HARMSEARCH's point 3 says "the select's seconds (prove and fixed, both cells) ×4 / ×16". Its 4,074.15 / 4,074.17 are the uncut block's seconds alone. My ×4 and ×16 rows above are as wired with both scaled: +0.070% of 4,074 is 2.9 GB and +0.035% of 12,379 is 4.3 GB [derived]. I did not run the uncut cells with both scaled.
+- **Not checked:** "361,344 of 36,509,981,918" is the recut's count; the plan's cells count 58,096,656,283 units a replay block [run]. The unit share is not what bounds the move: the planner samples 305 of the select's units a sampled replay block, and the move is their seconds over the block's.
+
+### 2 and 3. N, from each cell's own q
+- **The recut's cells** [read: `sel/hold.jsonl`, `sel/parts.jsonl`, `sel/margins4/recut4_*.jsonl`; derived: N = 1/(q × 7,219.04)]. The row of record: q = 6.9474e-07 / 2.2863e-07 (2.3934e-07 to 2.1899e-07) / 2.7063e-07 to 2.6869e-07 / 3.6331e-07 to 3.6214e-07.
+- **A check that does not read q** [derived]: N is a sampled replay block's cost over the window's budget (its `per` over 266.117), and the cost is linear in the setup: 53,060 s + 7,849 statements × 0.013921 s a core-s. That gives N = 199.4 + 0.4106 × the setup: 605.9 at +990, 520.9 at +783, 381.3 at +443. The 0.013921 is also the step between BREAKEVEN's +990 and no-program cells (13.782114 a statement on every cell) [run].
+- **The plan's cells** [run: `r20261111-134358-85c3`, `r20261111-140144-95aa`, `r20261111-134708-fead`, all rc 0 at tree `a5e4e56a1171`; q read at the 10% point by my reader]. They agree with BREAKEVEN's 14:12Z section 2 (197 / 586 / 496 to 500 / 371 to 372).
+
+| row, κ 2^-6 | cells | no program | as `main` is (+990) | the hoist as built (+761 to +770) | the hoist + one parse (+443 to +446) |
+|---|---|---:|---:|---:|---:|
+| the row of record | the recut's | 199.4 | 605.9 | 511.8 to 515.5 | 381.3 to 382.5 |
+| | the plan's | 197.1 | 586.3 | 496.1 to 499.9 | 371.2 to 372.4 |
+| + #8917's cut, G = 128 | the recut's | 92.5 | 280.7 | 237.2 to 238.9 | 176.7 to 177.3 |
+| | the plan's | 91.6 | 265.3 | 225.1 to 226.7 | 169.3 to 169.8 |
+| + #8917's cut, G = 64 | the recut's | 72.9 | 221.0 | 186.7 to 188.1 | 139.2 to 139.6 |
+| | the plan's | 71.9 | 205.5 | 174.5 to 175.8 | 131.7 to 132.1 |
+
+- For vllm's page, both sets of cells in one range: the row of record 197 to 199 / 586 to 606 / 496 to 516 / 371 to 383; G = 128 92 to 93 / 265 to 281 / 225 to 239 / 169 to 177; G = 64 72 to 73 / 205 to 221 / 175 to 188 / 132 to 140. The recut's cells are on the plan pair (replay 5,258) and the plan's on the registered pair (5,960) [read: each dump's `kw.replay`].
+
+### 4. One machine's window
+- **19.8** [derived from fields I read]: the window's budget is the row's budget a request times the span, which is β × 4,800 GPU-seconds (8 GPUs, 600 s). At the 10% point β is 0.05540 to 0.05544 [run: my reader], so 265.9 to 266.1; HARMSEARCH's 266.117 is `left` 0.036863 × 7,219.04 [read: `hold.jsonl`]. 5,258 over it is 19.76. I read the budget, the span and the replay in BREAKEVEN's dumps, not in `e0bd`'s, which I did not fetch.
+- **The same on the registered pair is 22.4** (5,960 over 266.0) [run].
+- **One GB cell by the planner** [run]: on the plan's cells, by width at κ 2^-6, margin 0.03, own statements, the budget times N: the planner returns q × span = 1.000000 and the same k, and the bound is 20.74 GB (×1.05). The same 20.74 comes from the no-program cells and the +990 cells, at 195.4 and 582.3 budgets of β = 0.056 (197.1 and 586.3 at the 10% point). HARMSEARCH's 20.4 is the recut's cells.
+- **κ 2^-9 and 2^-10** [derived from `hold.jsonl`]: GB over N is 163.4 and 326.9 (it prints the planner's 163.5 and 327.0); N is 44.0 / 102.2 and 32.9 / 66.5. I did not run those designs.
+
+### 5. The datacenter's one window as one registration
+- n = 12,500 × 7,219.04 = 90,237,980. q·n = 62.69 no program; 20.63 at +990 (21.60 at +924, 19.76 at +1,055); 24.42 to 24.25 the hoist; 32.78 to 32.68 the one parse. So K = 63 / 21 (22 to 20) / 25 / 33, and K over q·n is 1.005 / 1.018 (1.019 to 1.012) / 1.024 to 1.031 / 1.007 to 1.010 [derived from its q].
+- **(b) at K** [run: `scale_width.term` as `hold.py` calls it, at Σk = 3,486,644; it is SCALE's function run by me, not a second derivation of line (b)]:
+
+| K | M = 162 | M = 193 | M = 205 |
+|---:|---:|---:|---:|
+| 1 | -104.643 | -104.392 | -104.306 |
+| 6 | -102.059 | -101.807 | -101.721 |
+| 20 | -100.322 | -100.070 | -99.984 |
+| 21 | -100.251 | -99.999997 | -99.913 |
+| 22 | -100.184 | -99.933 | -99.846 |
+| 25 | -99.9996 | -99.748 | -99.662 |
+| 63 | -98.666 | -98.415 | -98.328 |
+
+- The most K a registration at which the row of record holds 2^-100: 24 at M = 162, 20 at 193, 19 at 205 [run]. So at +990 the datacenter's window holds at 162 over the whole range, at 193 only at the +1,055 end, and at 205 nowhere. The hoist as built (K = 25) misses at 162 by 0.0004 of a bit, and the one parse (K = 33) by 0.40.
+
+### 6. ATTACK's two rates
+- At q = 2.66·10^-7: 0.5 / q = 1.880·10^6; 1/q = 3.759·10^6; over 8 it is 469,900; over 7,219 it is 520.8 [derived]. That q is the row of record's at the setup alone (2.6594e-07 at +783) [read: `sel/parts.jsonl`].
+- At +990, q = 2.2863e-07 (2.3934e-07 to 2.1899e-07 over +924 to +1,055): as served 2.19·10^6 (2.09 to 2.28) times the rate; one request a class a window 4.37·10^6/c: 546,700 at c = 8 and 605.9 at c = 7,219 [derived].
+
+### 7. The measured-rate column
+- HARMSEARCH's conversion is `LO, HI = 0.0143 / 0.4, 0.0154 / 0.4` [read: `sel/e18.py:13`]: 12,378.8 × 0.03575 = 442.5 and × 0.0385 = 476.6. Those are 178.5 and 192.3 tokens a GPU-second against the 4,994 that 0.4 stands for [relayed: your 09:15Z].
+- **Is GB proportional to the rate in the planner: nearly** [run: `85c3`'s rows at the three worlds]. The requests are exactly proportional (0.03575 and 0.0385 of the 0.4 world's). GB at node A's rate over GB at 0.4 is 0.9989 of that at κ 2^-6 no program, 0.9978 at κ 2^-6 with +783, 0.993 to 0.996 at G = 64, and 1.0018 at the record no program. So proportion is within 0.8% of the planner, most often a little above it.
+- **279.5 tokens a GPU-second** [relayed: yours]: 279.5 / 4,994 = 0.05597, a utilization of 0.0224. 12,379 × 0.05597 = 692.8. By the planner it would read about 0.2% less [guess: the deviation at 0.0143 carried to 0.0224].
+
+**Left.** Not run by the planner: κ 2^-9 and κ 2^-10 at one machine's window; the recut's own cells (every planner run of mine is on the plan's cells); the hoist's columns for the select. #8949's new head `c14e4bd284b1`: my reading of it was lost with the VM and is not posted.
+
+For BREAKEVEN: no cell moves. The select as wired adds 2.3 s (no program) and 19.8 s (+990) a sampled replay block, 305 group units sampled; on your cells that is +0.0044% and +0.0127% at κ 2^-6. The only way it reaches 1% is a statement that holds 16 of its blocks rather than 256, at 16 times the seconds.
+
+For the table: BENCHCROSS | the select as wired, second route (the planner on the plan's cells) | +0.18 GB no program, +1.57 as `main` is on the row of record; +0.07% / +0.035% at 16 times the seconds; over 1% only with 16 blocks a statement as well [run] | HARMSEARCH's ×16 scaled the block's seconds only [read].
+For the table: BENCHCROSS | N at +990, κ 2^-6 | the row of record 197 to 199 / 586 to 606 / 496 to 516 / 371 to 383 machine-windows (the plan's cells to the recut's); G = 128 92 to 93 / 265 to 281 / 225 to 239 / 169 to 177; G = 64 72 to 73 / 205 to 221 / 175 to 188 / 132 to 140 [run; read; derived] | "505 to 521" and "417 to 430" were at the setup alone.
+For the table: BENCHCROSS | one machine's window and the datacenter's | 20.7 GB at q = 1/7,219 by the planner on the plan's cells (20.4 on the recut's), replay alone 19.8 budgets on the plan pair and 22.4 on the registered; the datacenter's window K = 21 (20 to 22), 2^-100.251 / 2^-99.999997 / 2^-99.913 at M = 162 / 193 / 205 [run] | ATTACK's 1.88·10^6 and 521 are at +783's q; at +990 they read 2.19·10^6 and 606 [derived].
