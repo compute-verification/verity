@@ -54,6 +54,7 @@ import collections
 import hashlib
 import json
 import math
+import re
 import sys
 import tempfile
 import tomllib
@@ -90,6 +91,8 @@ UNFUSED_ADAMW = (("lerp_", 2), ("mul_", 1), ("addcmul_", 3), ("div", 1), ("addcd
 DROPS_ROWS = "--trunc"
 #: the argument by which the records' programs keep an average of the weights: its horizon, a share of the steps so far
 AVERAGES = "--ema-frac"
+#: a number as a program's arguments write one
+NUMBER = re.compile(r"[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?")
 
 
 def held(path: Path = HELD) -> dict:
@@ -281,6 +284,15 @@ def stated(args: list, flag: str) -> str | None:
     return None
 
 
+def number(args: list, flag: str) -> float | None:
+    """The number a program's arguments state for `flag`: 0 where they have no such flag, and None where what they
+    state is no number, which no rule takes for its case."""
+    said = stated(args, flag)
+    if said is None:
+        return 0.0
+    return float(said) if NUMBER.fullmatch(said) else None
+
+
 def loss(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     """The loss's arrangement: a record's program may mean each row's loss over its tokens, sum the rows and divide
     by the rows the step keeps, where a route means over a forward's tokens and scales by the forward's share of the
@@ -288,8 +300,8 @@ def loss(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     no other loss. Fires on the record's backward quotient over a row's tokens with its scalar quotient, forward and
     backward, beside the config's scalar product, forward and backward: all five of one count, and neither side with
     a line of the other's. What is checked for a dropped row: the record's program's arguments (`script_args`),
-    where the record keeps them, state no `DROPS_ROWS` but 0; with one the rule does not fire, and of a record that
-    keeps none the output says that nothing was checked."""
+    where the record keeps them, state no `DROPS_ROWS` but 0; with one, or with one that is no number, the rule does
+    not fire, and of a record that keeps none the output says that nothing was checked."""
     scalar, a_row = "[[]]", json.dumps([[1, shape["ctx"]]])
     theirs = (("bwd", "grad", "div", a_row), ("fwd", "theta", "div", scalar), ("bwd", "grad", "div", scalar))
     mine = (("fwd", "theta", "mul", scalar), ("bwd", "grad", "mul", scalar))
@@ -298,11 +310,7 @@ def loss(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
             or [cfg.get(k) for k in mine] != [[n, n]] * 2 or any(k in cfg for k in theirs)
             or any(k in rec for k in mine)):
         return None
-    drops = stated(args, DROPS_ROWS)
-    try:
-        if drops is not None and float(drops) != 0:
-            return None
-    except ValueError:
+    if number(args, DROPS_ROWS) != 0:
         return None
     checked = (f"the record's program's arguments state no {DROPS_ROWS}" if args else
                "the record keeps no arguments of its program, so that was not checked")
@@ -320,20 +328,17 @@ def loss(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
 def average(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     """The average of the weights: a record's program may keep one of every tensor of the model, those it never
     trains too, in one `_foreach_lerp_` a step, where route `ema` keeps one of each tensor it trains, a `lerp_` a
-    tensor. Fires where the record's program's arguments state an average (`AVERAGES`, not 0), on the record's one
-    `_foreach_lerp_`, once a step, over tensors each beside its average and priced at one MAC an element, beside the
-    config's `lerp_` of a tensor with one of its shape, priced alike, for some of the record's tensors and no other.
+    tensor. Fires where the record's program's arguments state an average (`AVERAGES`, a number other than 0), on the
+    record's one `_foreach_lerp_`, once a step, over tensors each beside its average and priced at one MAC an
+    element, beside the config's `lerp_` of a tensor with one of its shape, priced alike, for some of the record's
+    tensors and no other.
     Neither side may have another `lerp_` or `_foreach_lerp_`, and the config's unequal entries no other product of
     an unfused AdamW step, whose `lerp_` one of these could then be (`adamw` runs first and takes such a step's
     out). The record's tensors the config has none of are those the route does not train: the output counts them."""
     name = ("other", "param")
     theirs = [k for k in rec if k[:3] == (*name, "_foreach_lerp_")]
     mine = {k: json.loads(k[3]) for k in cfg if k[:3] == (*name, "lerp_")}
-    try:
-        states = float(stated(args, AVERAGES) or 0) != 0
-    except ValueError:
-        return None
-    if (not states or len(theirs) != 1 or not mine or any(k[:3] == (*name, "lerp_") for k in rec)
+    if (not number(args, AVERAGES) or len(theirs) != 1 or not mine or any(k[:3] == (*name, "lerp_") for k in rec)
             or any(k[:2] == name and k[2] in ("_foreach_lerp_", "addcmul_", "addcdiv_") for k in cfg)):
         return None
     left = collections.Counter(tuple(t) for t in json.loads(theirs[0][3]))

@@ -171,8 +171,9 @@ def test_the_routes_loss_is_expected_for_a_programs_mean_of_each_row_where_no_ro
     # no truncation stated as 0 is none; a record that keeps no arguments is not checked, and the output says so
     assert [e["rule"] for e in compared(args=("--trunc", "0.0"))["expected"]] == ["loss"]
     assert "keeps no arguments of its program, so that was not checked" in compared(args=())["expected"][0]["what"]
-    # a run that drops rows: its loss is another one
-    for args in (("--trunc", "0.1"), ("--batch", "96", "--trunc=0.1"), ("--trunc",)):
+    # a run that drops rows, or whose argument states no number: its loss is another one
+    for args in (("--trunc", "0.1"), ("--batch", "96", "--trunc=0.1"), ("--trunc",), ("--trunc", "nan"),
+                 ("--trunc", "some")):
         got = compared(args=args)
         assert got["expected"] == [] and len(got["differences"]) == 5
     # another count on one side, the route's product in the record too, a line missing: none is the exact case
@@ -207,11 +208,13 @@ def test_the_routes_average_of_its_trained_tensors_is_expected_for_a_programs_of
     got = compared(averaged(trained + frozen), program)
     assert got["differences"] == [] and got["expected"][0]["record_macs"] == got["expected"][0]["config_macs"]
     assert got["expected"][0]["what"].endswith("the same 4")
-    # not its exact case: a program that states no average, or none that is kept; a tensor the program's op lacks; a
-    # `lerp_` twice a tensor; another product of an unfused AdamW step on the config's side; the op twice a step, or
-    # priced otherwise
+    assert [e["rule"] for e in compared(averaged(trained), program, ("--ema-frac=1e-1",))["expected"]] == ["average"]
+    # not its exact case: a program that states no average, none that is kept, or no number for it; a tensor the
+    # program's op lacks; a `lerp_` twice a tensor; another product of an unfused AdamW step on the config's side; the
+    # op twice a step, or priced otherwise
     for cpu, record, args in (
             (averaged(trained), program, ()), (averaged(trained), program, ("--ema-frac", "0.0")),
+            (averaged(trained), program, ("--ema-frac", "inf")), (averaged(trained), program, ("--ema-frac",)),
             (averaged([*trained, [2 * D]]), program, states), (averaged(trained, 2), program, states),
             ((*averaged(trained), ("other", "param", "addcmul_", [[D]] * 3, 2, 2 * D)), program, states),
             (averaged(trained), (*program[:4], 2, 2 * program[5]), states),
