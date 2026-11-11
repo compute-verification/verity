@@ -5,8 +5,8 @@ cleanly that Lean doesn't) fails the run in minutes rather than when the audit's
 `--try` and `--build` work on a slot tree instead, one per `build` slot (below).
 
     python tools/verity/lean/lean_changed.py --cache DIR --deps DIR --tree DIR
-    python tools/verity/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR] [--dev-cache] [--rebuild]
-                                             [--allow CODE:ENTRY]...   a lane's records
+    python tools/verity/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR] [--dev-cache] [--rebuild]   a lane's records
+                                             [--allow CODE:ENTRY]...   with --records: a failure it takes as known, which is no pass
     python tools/verity/lean/lean_changed.py --try FILE [--siblings]   a lane's edit loop on a node (`verity lean try FILE --on NODE`)
     python tools/verity/lean/lean_changed.py [--no-wait] --build FILE...   the ready mark's preflight's Lean step (`build_files`)
     python tools/verity/lean/lean_changed.py --inputs-key PKG... [--head SHA] [--repo DIR]   each PKG's inputs key at SHA
@@ -107,8 +107,8 @@ it); any other is refused before anything runs (exit 2), a record difference, th
 `native_decide`, a kernel bypass and a malformed lock among them. An allowance that matches no failure of the run fails
 it (`unmatched`), so one outlives its finding by no run. It is for a finding cured before the mark: one meant to land
 goes into the lock (`trees.except`), as ever. Allowances come from the command line alone, and only a lane gives one:
-the lean-changed step, `--build`, check.py and every caller of either in the check, the merge queue and the ready mark's
-preflight take none.
+this file's other modes (`--build` among them), check.py and every caller of either in the check, the merge queue and
+the ready mark's preflight take none.
 
 A package whose records need no run is skipped, and with none left nothing is built and no slot taken (`reused`; the
 `result.json`'s `path` is `reused`). Each package whose check.py passes is kept under `lean-records/passes/`, keyed on the
@@ -2236,8 +2236,8 @@ def main(argv: list[str]) -> int:
                     "(default this file's checkout); a clone with no worktree checked out serves")
     a = ap.parse_args(argv)
     if a.allow and not a.records:
-        ap.error("--allow goes with --records, a lane's fast path, and with nothing else: the lean-changed step, --try, "
-                 "--build (the ready mark's preflight) and --inputs-key take no allowance")
+        ap.error("--allow goes with --records, a lane's fast path, and with nothing else: no other mode takes an "
+                 "allowance, --try, --build (the ready mark's preflight) and --inputs-key among them")
     if a.inputs_key:
         if a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild or a.try_ or a.build or a.no_wait or a.tree:
             ap.error("--inputs-key takes only --head and --repo")

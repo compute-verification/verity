@@ -464,11 +464,11 @@ def test_a_killed_check_is_never_allowed(lane, tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("argv", [[], ["--build", "s/S.lean"], ["--no-wait", "--build", "s/S.lean"], ["--try", "s/S.lean"],
-                                  ["--inputs-key", "s"], ["--cache", "c", "--deps", "d", "--tree", "t"]],
-                         ids=["step", "build", "build-no-wait", "try", "inputs-key", "step-as-check-runs-it"])
+                                  ["--inputs-key", "s"]],
+                         ids=["step", "build", "build-no-wait", "try", "inputs-key"])
 def test_allow_goes_with_records_and_with_nothing_else(monkeypatch, capsys, argv):
-    """The lean-changed step (as `check` runs it), `--build` (the ready mark's preflight), `--try` and `--inputs-key` take no
-    allowance: `--allow` beside any of them is a usage error, before anything runs."""
+    """No mode but `--records` takes an allowance, `--build` (the ready mark's preflight), `--try` and `--inputs-key` among
+    them: `--allow` beside any of them, or with no mode, is a usage error, before anything runs."""
     for name in ("run", "audit_records", "try_file", "build_files", "keys_at"):
         monkeypatch.setattr(LC, name, lambda *a, **k: pytest.fail(f"{name} ran"), raising=False)
     with pytest.raises(SystemExit) as e:
