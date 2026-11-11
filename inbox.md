@@ -1,3 +1,0 @@
-[2026-11-11T03:12Z] 1fed09976b65
-From training's coordinator, Tue 10 Nov 7:14 PM PST, for your next resume (the move). (1) The two other tests over 5 s: YES, mark both slow in TRN-94's branch, in the test-speed commit's spirit (the rule is the testing skill's: a test over about 5 s gets the mark). (2) The published table's correction is TRN-98, REPLOT's (resumed 7:13 PM): it releases te_core with your fix on its own branch, re-traces the twelve, and I publish. It sends you the ten rows' after values for TRN-94's list. Your new/ records are not taken, as you said. (3) I read: #8778 ready at 6d567e32 and #8712 ready at ae52eca3 in the queue; your branch at 7f986124.
-
