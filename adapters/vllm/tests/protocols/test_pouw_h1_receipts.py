@@ -89,14 +89,13 @@ class Window:
     def roots(self, c: int) -> tuple[bytes, bytes]:
         """Call c's (root(a/<K>@<s>), root(b/<K>)) as the record registers them."""
         k, s = int(self.calls[c]["k"]), int(self.calls[c]["step"])
-        a, b = (bytes.fromhex(self.entry(f"{self.prefix}{v}")["root"]) for v in (f"a/{k}@{s}", f"b/{k}"))
-        return a, b
+        return tuple(bytes.fromhex(self.entry(f"{self.prefix}{v}")["root"]) for v in (f"a/{k}@{s}", f"b/{k}"))
 
     def operands(self, c: int) -> tuple[np.ndarray, np.ndarray]:
         """Call c's A over the Program's M slots (its served codes as the prover kept them, then zero rows) and its B."""
         row = self.calls[c]
         k, m = int(row["k"]), int(row["served"])
-        a: np.ndarray = np.zeros((int(self.layout["m"]), k), np.int8)
+        a = np.zeros((int(self.layout["m"]), k), np.int8)
         if m:
             with np.load(self.prover / PV.CALLS / f"{c}.npz") as kept:
                 a[:m] = kept["a"].reshape(m, k)

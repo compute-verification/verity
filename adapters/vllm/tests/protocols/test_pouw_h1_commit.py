@@ -933,10 +933,9 @@ class _Gate:
         self.ledger = CH.Ledger(self.dir / "auditor.jsonl", 1, self.leaves)
 
         def connect(cls, at, secret=None):
-            if at != AUDITOR:
-                return None
-            assert self.opened is not None, "no session is open"
-            return self.opened.client
+            opened = self.opened if at == AUDITOR else None
+            assert opened is not None or at != AUDITOR, "no session is open"
+            return None if opened is None else opened.client
 
         monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(connect))
 

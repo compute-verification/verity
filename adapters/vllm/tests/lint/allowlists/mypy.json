@@ -1421,6 +1421,8 @@
     {"file": "tests/protocols/test_pous_option.py", "kind": "func-returns-value", "symbol": "test_a_dropped_block_rejects.lost", "detail": ""},
     {"file": "tests/protocols/test_pous_option.py", "kind": "union-attr", "symbol": "_signer_module", "detail": "", "count": 2},
     {"file": "tests/protocols/test_pous_option.py", "kind": "var-annotated", "symbol": "_in_process_party", "detail": ""},
+    {"file": "tests/protocols/test_pouw_h1_receipts.py", "kind": "return-value", "symbol": "Window.roots", "detail": ""},
+    {"file": "tests/protocols/test_pouw_h1_receipts.py", "kind": "var-annotated", "symbol": "Window.operands", "detail": ""},
     {"file": "tests/protocols/test_pouw_h1_records.py", "kind": "var-annotated", "symbol": "test_negative_and_zero_weight_scales_hold", "detail": ""},
     {"file": "tests/protocols/test_pouw_h1_records.py", "kind": "var-annotated", "symbol": "test_non_finite_weight_scales_take_the_whole_read", "detail": ""},
     {"file": "tests/protocols/test_pouw_h1_records_device.py", "kind": "operator", "symbol": "test_a_served_y_that_isnt_the_records_is_left_to_the_hosts_read", "detail": ""},
