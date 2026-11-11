@@ -488,7 +488,7 @@ SERVE_FAMILY = RegisteredFamily("Family[Serve_v1]", 1, _b1.Serve, _serve_binder,
                                 "structural: verified isomorphism to Serve_v1{C,LP,STEPS} (the certificate of record's program identity)")
 
 
-def _serve_v3_binder(flat_sd, ctx):
+def _padded_serve_binder(flat_sd, ctx):
     """`Serve_v3{C3, LP, D_MAX, GEMM, ATTENTION, NORM}` (serve3.py): the padded circuit. `C3` is the derivation's config
     with `EOS_ID` (spec §10: bound at the binding site, never into a v1/v2 dict); the guards the source computed must
     all test that id. The implementation records come from the vocabulary (a v2-skeleton profile)."""
@@ -514,7 +514,7 @@ def _serve_v3_binder(flat_sd, ctx):
 
 from verity.definitions.registry import serve3 as _serve3  # noqa: E402
 
-SERVE_V3_FAMILY = RegisteredFamily("Family[Serve_v3]", 1, _serve3.ServeV3, _serve_v3_binder,
+SERVE_V3_FAMILY = RegisteredFamily("Family[Serve_v3]", 1, _serve3.ServeV3, _padded_serve_binder,
                                    "structural: verified isomorphism to Serve_v3{C3,LP,D_MAX,GEMM,ATTENTION,NORM} (the padded circuit, serve3-spec)")
 
 
