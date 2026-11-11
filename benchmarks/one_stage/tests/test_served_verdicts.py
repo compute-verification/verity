@@ -1251,7 +1251,8 @@ def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_pa
 def test_a_pearlplus_piece_holds_the_execution_phase_as_the_challenger_saw_it_and_what_each_check_cost(tmp_path, live):
     """The piece's document holds the execution phase on the auditor host's clock (`execution_phase`): its salt session's
     reserve, open and end and its Pearl-C period's open and close, read from the ledger the coins' check fetched, with the
-    seconds from the reserve to the end; another session's and another period's entries are not its. And it holds what
+    seconds from the reserve to the end; another session's and another period's entries are not its. The serve's own wall
+    is beside it, named the prover's (`PROVER_CLOCK`), never among the challenger's times. And it holds what
     Pearl+'s Python check and Lean check each cost where they ran (`pearlplus_checks`). The piece's line and the published
     form carry both. A ledger without the session's end gives no span and says what it lacks, and a piece with no ledger
     (its coins unchecked) and no check documents holds none."""
@@ -1278,12 +1279,14 @@ def test_a_pearlplus_piece_holds_the_execution_phase_as_the_challenger_saw_it_an
     phase = {"clock": S.PHASE_CLOCK, "start_utc": "2026-01-02T18:00:05Z", "end_utc": "2026-01-02T18:07:45Z", "seconds": 460,
              "session": {"reserved_utc": "2026-01-02T18:00:05Z", "opened_utc": "2026-01-02T18:00:09Z",
                          "ended_utc": "2026-01-02T18:07:45Z"},
-             "period": {"opened_utc": "2026-01-02T17:59:58Z", "closed_utc": "2026-01-02T18:08:10Z"}, "why": None}
+             "period": {"opened_utc": "2026-01-02T17:59:58Z", "closed_utc": "2026-01-02T18:08:10Z"}, "why": None,
+             "prover": {"clock": S.PROVER_CLOCK, "generate_s": served["generate_s"]}}
+    assert served["generate_s"] and "the prover's" in S.PROVER_CLOCK and "prover" not in S.PHASE_CLOCK
     assert doc["verdict"] == "accept" and doc["execution_phase"] == phase and doc["checks"] == {"python": python, "lean": lean}
     assert json.loads((piece / "development.json").read_text())["execution_phase"] == phase
     line = S.development_line(doc)
     assert line["execution_phase"] == {"clock": "the auditor host's", "start_utc": phase["start_utc"],
-                                       "end_utc": phase["end_utc"], "seconds": 460, "why": None}
+                                       "end_utc": phase["end_utc"], "seconds": 460, "why": None, "prover": phase["prover"]}
     assert line["checks"] == doc["checks"]
     public = S.public_json(doc)
     assert (public["execution_phase"], public["checks"]) == (phase, doc["checks"])

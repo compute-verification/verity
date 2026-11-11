@@ -774,8 +774,9 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
     what it said if not, and the record's SHA-512), the prover's give-up (`give_up`), its shares at the tensor clock, the
     unretained serve's wall and declared share there, and the prover's replay's CPU seconds, cores, the cores it takes to
     keep pace, the card's seconds, its node and the passes it finished (each None without one, or why it has none), the
-    execution phase as the challenger saw it (its start, end and seconds on the auditor host's clock, `execution_phase`)
-    and what Pearl+'s Python check and Lean check each cost where they ran (`pearlplus_checks`)."""
+    execution phase as the challenger saw it (its start, end and seconds on the auditor host's clock, `execution_phase`,
+    with the serve's own wall beside it under ``prover``, the served node's clock) and what Pearl+'s Python check and Lean
+    check each cost where they ran (`pearlplus_checks`)."""
     if doc.get("piece") == "pearlplus":
         shares = doc.get("shares") or {}
         phase = doc.get("execution_phase")
@@ -797,7 +798,8 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
                 "replay": None if rp is None else rp.get("error") or {
                     k: rp.get(k) for k in ("s", "cpus", "cores_to_keep_pace", "device_s", "node", "finished", "of")},
                 "execution_phase": None if phase is None else {
-                    "clock": "the auditor host's", **{k: phase.get(k) for k in ("start_utc", "end_utc", "seconds", "why")}},
+                    "clock": "the auditor host's", **{k: phase.get(k) for k in ("start_utc", "end_utc", "seconds", "why")},
+                    "prover": phase.get("prover")},
                 "checks": doc.get("checks")}
     check, credit = doc.get("check") or {}, doc.get("credit") or {}
     return {"verdict": doc.get("verdict"), "development": True, "credited": False, "reasons": doc.get("reasons"),
@@ -1505,6 +1507,9 @@ def pearlplus_why_tied(reserved: Mapping[str, Any] | None) -> str:
 #: whose clock `execution_phase` reads, and where
 PHASE_CLOCK = ("the auditor host's, to the second, in its signed ledger's entries as the gate answered them "
                "(ledger.jsonl beside this document); none of these times is the served node's")
+#: whose clock the serve's own wall is on, which a piece holds beside `execution_phase`'s times
+PROVER_CLOCK = ("the served node's, the prover's: the serve's own wall for its timed call (generate_s), which no auditor "
+                "host measured")
 #: `served_passes.py lean`'s check document beside the piece's Lean verdict
 PEARLPLUS_LEAN_CHECK = "pearlplus-lean-check.json"
 
@@ -1582,7 +1587,8 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     can't be read; the record holds the verdict to W, `pearlplus_of_record`), and why it credits nothing by itself names
     the Pearl-C period the epoch's live salt session joined (`pearlplus_why_tied`, or `PEARLPLUS_WHY_TIED_IN_PROCESS`).
     ``execution_phase``, on a live session's coins, is the execution phase as the challenger saw it (`execution_phase`, of
-    the ledger `pearlplus_coins` fetched), and ``checks`` what Pearl+'s Python check and Lean check each cost on the node
+    the ledger `pearlplus_coins` fetched), with the serve's own wall beside it as the prover's (its ``prover``:
+    `PROVER_CLOCK` and ``generate_s``), and ``checks`` what Pearl+'s Python check and Lean check each cost on the node
     this piece ran them on (`pearlplus_checks`); both are measurements and neither decides the verdict."""
     import served_shares as SS
     from verity.core.protocols.spot.one_stage import registration as REG
@@ -1631,6 +1637,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
         said = served.get("coins") or {}
         doc["execution_phase"] = execution_phase(out / "ledger.jsonl", (said.get("session") or {}).get("session"),
                                                  (said.get("reserved") or {}).get("period"))
+        doc["execution_phase"]["prover"] = {"clock": PROVER_CLOCK, "generate_s": served.get("generate_s")}
     if served is not None:
         arm = served.get("arm") or served.get("entry")
         doc.update(arm=arm, scheme=(arm or "").partition(":")[2] or None,

@@ -288,6 +288,7 @@ assert lean["rc"] == 0 and lean["lean"]["verdict"] == "accept" and not lean["dif
 assert row["verdict"] == "missing" and "the Lean verdict credits 0 MACs" in row["why"], row
 period = phase["period"]
 assert phase["start_utc"] and phase["end_utc"] and period["opened_utc"] and period["closed_utc"], phase
+assert phase["prover"]["generate_s"] and "prover's" in phase["prover"]["clock"], phase
 assert all((checks.get(k) or {}).get("seconds") is not None for k in ("python", "lean")), checks
 print(json.dumps({"verdict": piece["verdict"], "execution_phase": phase, "checks": checks, "row": e2e["row"]}, sort_keys=True))
 EOF
