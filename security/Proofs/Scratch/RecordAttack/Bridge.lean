@@ -11,9 +11,10 @@ A scratch file, never merged.
   (`served_registration_free`: a one-entry log whose builder is the constant compiler of the circuit's own output,
   with no advice) and with every operation and output replaced (`served_ops_free`). So the circuits `Complies`
   speaks of are not tied to a deployment's log, builder or advice.
-* **The tie it lacks** (`Declares`): the record lays out the declaration's circuit, under some division into blocks,
-  with every row the check holds among the declaration's registered inputs. With it, an accepted record gives the
-  rate rule on the declaration itself (`compliesRate_of_declares`), whatever the declaration's own blocks are: on
+* **The tie it lacks** (`DeclaresBy`, `Declares`): the record lays out the declaration's circuit, under some division
+  into blocks, with every row the check holds among the declaration's registered inputs. With it, an accepted record
+  gives both bounds on each of those blocks at the declaration's own registered inputs (`meets_of_declaresBy`), so
+  the rate rule on the declaration itself (`compliesRate_of_declares`), whatever the declaration's own blocks are: on
   the declaration over a circuit with each computed gate its own block (`compliesRate_ofCircuit`).
 * **One size for every block** (`counts_one_size`): where the summary counts every block, any two blocks of a served
   circuit that hold a gate hold the same number of gates.
@@ -48,11 +49,15 @@ theorem served_ops_free {F : Form} {c : F.Case} {d : Verity.RegisteredCircuit} (
 
 /-! ### The tie to a declaration -/
 
-/-- **The record `c` lays out the declaration `d₀`**: `d₀`'s circuit is the record's, under some division into blocks,
-and every row the check holds is one of `d₀`'s registered inputs. -/
-def Declares (F : Form) (c : F.Case) (d₀ : Verity.RegisteredCircuit) : Prop :=
-  ∃ (n : ℕ) (I : Verity.Partition d₀.D n) (θ' : Finset (Fin d₀.D.N)) (h : ∀ g ∈ θ', d₀.D.isInput g = true),
+/-- **The record `c` lays out the declaration `d₀` in the blocks `I`**: `d₀`'s circuit, divided by `I`, is the
+record's, and every row the check holds is one of `d₀`'s registered inputs. -/
+def DeclaresBy (F : Form) (c : F.Case) (d₀ : Verity.RegisteredCircuit) {n : ℕ} (I : Verity.Partition d₀.D n) : Prop :=
+  ∃ (θ' : Finset (Fin d₀.D.N)) (h : ∀ g ∈ θ', d₀.D.isInput g = true),
     θ' ⊆ d₀.θ ∧ Served F c (Verity.RegisteredCircuit.ofPartition d₀.D θ' h n I)
+
+/-- **The record `c` lays out the declaration `d₀`**, in some division of its circuit into blocks. -/
+def Declares (F : Form) (c : F.Case) (d₀ : Verity.RegisteredCircuit) : Prop :=
+  ∃ (n : ℕ) (I : Verity.Partition d₀.D n), DeclaresBy F c d₀ I
 
 /-- Fewer registered inputs, more fresh ones. -/
 theorem novelReads_anti (d₀ : Verity.RegisteredCircuit) {n : ℕ} (I : Verity.Partition d₀.D n)
@@ -63,20 +68,27 @@ theorem novelReads_anti (d₀ : Verity.RegisteredCircuit) {n : ℕ} (I : Verity.
   unfold Verity.Circuit.width
   exact Finset.sum_le_sum_of_subset (Finset.sdiff_subset_sdiff (Finset.Subset.refl _) hsub)
 
-/-- **An accepted record gives the rate rule on a declaration it lays out.** -/
-theorem compliesRate_of_declares {F : Form} (hc : Complies F) {j tr : Json} {c : F.Case} (hacc : Accepts F j tr c)
-    {d₀ : Verity.RegisteredCircuit} (hd : Declares F c d₀) :
-    Nci.CompliesRate (F.inst c).gamma (((F.inst c).num : ℝ) / (F.inst c).den) d₀ := by
-  obtain ⟨n, I, θ', h, hsub, hs⟩ := hd
+/-- **An accepted record gives both bounds on every block of a declaration it lays out**, at the declaration's own
+registered inputs. -/
+theorem meets_of_declaresBy {F : Form} (hc : Complies F) {j tr : Json} {c : F.Case} (hacc : Accepts F j tr c)
+    {d₀ : Verity.RegisteredCircuit} {n : ℕ} {I : Verity.Partition d₀.D n} (hd : DeclaresBy F c d₀ I) (u : Fin n) :
+    Meets d₀ I (F.inst c).gamma (((F.inst c).num : ℝ) / (F.inst c).den) u := by
+  obtain ⟨θ', h, hsub, hs⟩ := hd
   obtain ⟨-, -, hall⟩ := hc j tr c hacc
   obtain ⟨hmeets, -⟩ := hall _ hs
-  unfold Nci.CompliesRate
-  refine ⟨n, I, fun u => ?_⟩
   have hm : Meets (Verity.RegisteredCircuit.ofPartition d₀.D θ' h n I) I (F.inst c).gamma
       (((F.inst c).num : ℝ) / (F.inst c).den) u := hmeets u
   obtain ⟨hsize, hnov⟩ := hm
   refine ⟨hsize, le_trans ?_ hnov⟩
   exact_mod_cast novelReads_anti d₀ I θ' h hsub (I.gates u)
+
+/-- **An accepted record gives the rate rule on a declaration it lays out.** -/
+theorem compliesRate_of_declares {F : Form} (hc : Complies F) {j tr : Json} {c : F.Case} (hacc : Accepts F j tr c)
+    {d₀ : Verity.RegisteredCircuit} (hd : Declares F c d₀) :
+    Nci.CompliesRate (F.inst c).gamma (((F.inst c).num : ℝ) / (F.inst c).den) d₀ := by
+  obtain ⟨n, I, hI⟩ := hd
+  unfold Nci.CompliesRate
+  exact ⟨n, I, fun u => meets_of_declaresBy hc hacc hI u⟩
 
 /-- The same on the declaration over a circuit `C` with registered inputs `θ`, each computed gate its own block. -/
 theorem compliesRate_ofCircuit {F : Form} (hc : Complies F) {j tr : Json} {c : F.Case} (hacc : Accepts F j tr c)
@@ -86,6 +98,13 @@ theorem compliesRate_ofCircuit {F : Form} (hc : Complies F) {j tr : Json} {c : F
     Nci.CompliesRate (F.inst c).gamma (((F.inst c).num : ℝ) / (F.inst c).den)
       (Verity.RegisteredCircuit.ofCircuit C θ hθ) :=
   compliesRate_of_declares hc hacc (d₀ := Verity.RegisteredCircuit.ofCircuit C θ hθ) ⟨n, I, θ', h, hsub, hs⟩
+
+/-- **`Complies` at the registration's own**: every circuit a record lays out is one a compiler of no advice and a log
+of one entry registers, so `Complies` holds of it whatever the deployment registered. -/
+theorem complies_reads_no_registration {F : Form} (hc : Complies F) {j tr : Json} {c : F.Case}
+    (hacc : Accepts F j tr c) : ∃ d, Served F c d ∧ d.a = [] := by
+  obtain ⟨-, ⟨d, hd⟩, -⟩ := hc j tr c hacc
+  exact ⟨_, served_registration_free hd, rfl⟩
 
 /-! ### The summary's one size -/
 
