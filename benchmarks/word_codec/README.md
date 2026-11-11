@@ -24,10 +24,10 @@ What code outside this directory may use. Everything else here is internal.
 Nothing outside `benchmarks/` reads this directory by its path: `kv.cu`, `kv.py` and `kv_bench.py` are PoUB's prover's
 (`verity/protocols/poub/prover/word_codec/`), with `paged.py` beside them.
 
-**Status: active.** `kv.cu` is the store's encode on the GPU: `benchmarks/remote_session/run.sh` builds it, the vLLM
-integration calls it (`adapters/vllm/verity_vllm/protocols/remote_bandwidth/remote.py`), and `benchmarks/vllm_encoded`
-and `benchmarks/kv_filler` build it. The `codec_tensor`, `kv_filler` and `vllm_encoded` suites read
-its Python as inputs. Decided by `rg word_codec` over `verity/`, `benchmarks/`, `demos/`, `tests/` and `adapters/`.
+**Status: active.** `run.sh` and `encode_rate.sh` are the GPU runs of the prover's `kv.cu`, and this suite holds its
+`kv.py` and `cuda_lib.py` to their vectors. `benchmarks/vllm_encoded` includes `wc.cu` and takes `wide.cu`'s build, and
+`benchmarks/codec_tensor/bench.py` loads `codec.py`. The `codec_tensor` and `vllm_encoded` suites read its Python as
+inputs. Decided by `rg word_codec` over `verity/`, `benchmarks/`, `demos/`, `tests/` and `adapters/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/word_codec` checks the references against their vectors
 (`tests/vectors.json`, `tests/wide_vectors.json` and the prover's `kv_vectors.json`) and the twins against the references, on the
