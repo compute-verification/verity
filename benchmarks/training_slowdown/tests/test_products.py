@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as tF
 from torch import nn
 
-from training_slowdown import formalism, policy
+from training_slowdown import calculator, policy, work
 from training_slowdown.capture import capture_fn, capture_step, products
 
 V, H, B, CTX = 16, 256, 4, 8
@@ -39,7 +39,7 @@ def test_a_steps_rows_and_their_kinds():
     got = products.rows(g, k)
     assert (got["capture"], got["order"]) == (products.CAPTURE, "unknown")
     assert got["gates"] == products.step_gates(g, "bfloat16") > 0 and all(r["count"] == 1 for r in got["rows"])
-    assert sorted((r["phase"], formalism.product_kind(r)) for r in got["rows"]) == sorted(
+    assert sorted((r["phase"], work.product_kind(r)) for r in got["rows"]) == sorted(
         [("forward", "fresh"), ("forward", "expansion"), ("backward", "expansion")] + [("backward", "fresh")] * 3)
     dial = products.rows_on_dial(g)
     assert sorted(map(int, dial["at"])) == sorted(set(products.DIAL_K) - {k})
@@ -80,7 +80,7 @@ def test_a_raw_row_has_no_price_and_priced_makes_it_the_row_rows_states():
         d, got = r["dims"], products.priced(r)
         assert set(got) == RAW - {"dtypes"} | PRICE
         assert (got["macs"], got["outputs"]) == (d["batch"] * d["m"] * d["k"] * d["n"], d["batch"] * d["m"] * d["n"])
-        assert got["paid"] == [formalism.is_paid(x, w) for x, w in zip(r["rates"], r["widths"])]
+        assert got["paid"] == [work.is_paid(x, w) for x, w in zip(r["rates"], r["widths"])]
         assert got["b_c"] == products.ACC_BITS
         # an fp32 product of the forward or the backward is priced at the GEMM dtype, and at its own with none
         assert products.priced(r, None)["gates_per_mac"] > got["gates_per_mac"] == products.priced(
@@ -142,14 +142,12 @@ def test_p_match_fails_where_one_entry_is_handed_to_several_on_the_way_into_an_o
                      (torch.randn(6, 16), torch.randn(6, 16)))
     k = policy.CONSOLE[1]
     got = products.rows(g, k)
-    p = {"k": k, "p_match": got["p_match"], "he": formalism.he_of_rows(got["rows"], k)}
+    p = {"k": k, "p_match": got["p_match"], "he": work.he_of_rows(got["rows"], k)}
     assert got["p_match"] == broken
-    m_ = formalism.Measured(parts=(formalism.Part(gates=got["gates"], tokens=6, token_gates=got["gates"],
-                                                  affected_gates=got["gates"]),), tau_bits=0.0, a_bits=0.0, u=0.0,
-                            u_in=0.0, delta_bits=0.0, products=p)
-    term, why, _ = formalism.he_products(m_, *policy.CONSOLE)
+    entry = calculator.slowdown(dict(zip(("c_gates", "k_bits"), policy.CONSOLE)), p, {"gates": got["gates"]})
+    term, why = entry["term"], entry["why"]
     if broken:
-        assert term is None and f"breaks the premise that {formalism.P_MATCH}" in why and "expand (fan-out 16" in why
+        assert term is None and f"breaks the premise that {work.P_MATCH}" in why and "expand (fan-out 16" in why
     else:
         assert why is None and term is not None
 
@@ -196,10 +194,10 @@ def test_products_that_read_an_embeddings_rows_before_a_position_makes_them_toke
     second = [("backward", 16, (True, False)), ("forward", 256, (True, False))]
     assert flags == sorted(first if pos else first + second)
     assert got["p_match"] == []
-    second_fresh = [r for r in got["rows"] if r["dims"]["n"] == 16 and formalism.product_kind(r) == "fresh"]
+    second_fresh = [r for r in got["rows"] if r["dims"]["n"] == 16 and work.product_kind(r) == "fresh"]
     assert second_fresh and all(any(r["gathered"]) != pos for r in second_fresh)
     gathered = [r for r in got["rows"] if all(r["affected"]) and not r["self"] and any(r["gathered"])]
-    assert formalism.products_of_trace(got)["he"]["gathered_macs"] == sum(r["count"] * r["macs"] for r in gathered) > 0
+    assert work.products_of_trace(got)["he"]["gathered_macs"] == sum(r["count"] * r["macs"] for r in gathered) > 0
 
 
 def _product(form: str, u, v):
@@ -296,7 +294,7 @@ def test_products_written_with_elementwise_ops_are_found_and_are_no_rows(form, f
     got = products.rows(g, policy.CONSOLE[1])
     found = got["elementwise_products"]
     assert [x["op"] for x in found] == flagged
-    fresh = [r for r in got["rows"] if formalism.product_kind(r) == "fresh"]
+    fresh = [r for r in got["rows"] if work.product_kind(r) == "fresh"]
     if form in ("matmul", "sparse"):
         assert sum(r["count"] for r in fresh) == 3 and sum(r["count"] * r["macs"] for r in fresh) == 50_331_648
     else:

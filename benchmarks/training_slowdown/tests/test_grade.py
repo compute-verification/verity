@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 import synthetic
 
-from training_slowdown import VERSION, calculator, gates, policy
+from training_slowdown import VERSION, calculator, gates, policy, work
 from training_slowdown import formalism as F
 from training_slowdown import grade as G
 from training_slowdown.capture import products
@@ -284,7 +284,7 @@ def test_the_trace_is_priced_by_the_capture_over_the_steps_after_the_first_updat
     assert (block["k"], block["tokens"], block["capture"]) == (STATED["k"], STATED["tokens"], products.CAPTURE)
     assert "capture_code" not in block
     steps = (2 * PER - 1) * 512 / STATED["tokens"]
-    want = F.products_of_trace(STATED | {"capture": products.CAPTURE}, steps)
+    want = work.products_of_trace(STATED | {"capture": products.CAPTURE}, steps)
     assert got["he"]["steps"] == steps and {k: got[k] for k in want} == want
     assert got["stand_in"] == {"structures": ["a"], "step_tokens": [512], "traced_tokens": STATED["tokens"],
                                "why": F.STAND_IN}
@@ -508,8 +508,8 @@ def test_a_jobs_own_trace_gives_both_sensitivities_back(ran):
     assert rest["token_gates"] == circuit["sigma"] * rest["gates"] and circuit["grad_cut_bits"] > 0
     run = {"seed": 0, "split": "search", "record": ran}
     c, k = rest["token_gates"] / 2 / 3.5, policy.CONSOLE[1]
-    rho = G.rho_of(run | {"checkpoints": G.checkpoints(run, "tiny")}, FIT, 1.1, {"c_gates": c, "k_bits": k},
-                   synthetic.SHAPE)
+    rho, _ = G.rho_of(run | {"checkpoints": G.checkpoints(run, "tiny")}, FIT, 1.1, {"c_gates": c, "k_bits": k},
+                      synthetic.SHAPE)
     total = rho["C_gates"]
     assert total == pytest.approx(setup["gates"] + first["gates"] + rest["gates"])
     assert rho["sensitivities"] == pytest.approx({"reduction": c * 2 * 3 * circuit["partial_cut_bits"] / (k * total),
@@ -567,11 +567,11 @@ def test_the_bound_of_record_is_the_calculators_and_rho_follows_it(monkeypatch):
     stubbed = SimpleNamespace(**vars(calculator._min_cut()) | {"bound": stub, "HE": "the statement"})
     monkeypatch.setattr(calculator, "_min_cut", lambda: stubbed)
     s = graded(runs, ref)
-    work, got = s["rho"]["work"], s["bound_of_record"]
+    w, got = s["rho"]["work"], s["bound_of_record"]
     assert len(calls) > 1 and all(call[:3] == (*policy.CONSOLE, None) for call in calls)
-    assert calls[-1][3] == {"N": work["N"], "O": work["O"], "size": work["C_gates"], "beta_w": work["beta_w"],
-                            "beta_x": work["beta_x"], "b": work["b_y"], "F": work["F"]}
-    slowdown = 300.0 * policy.CONSOLE[0] / work["C_gates"]
+    assert calls[-1][3] == {"N": w["N"], "O": w["O"], "size": w["C_gates"], "beta_w": w["beta_w"],
+                            "beta_x": w["beta_x"], "b": w["b_y"], "F": w["F"]}
+    slowdown = 300.0 * policy.CONSOLE[0] / w["C_gates"]
     assert (got["available"], got["slowdown"], got["blocks"], got["theorem"]) == (True, slowdown, 300.0, "HE")
     assert s["rho"]["rho"] == slowdown > 1 and s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * slowdown)
     assert f"pays at least {slowdown:,.6g}x (HE: at least 300 blocks" in G.text(s)

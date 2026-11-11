@@ -8,9 +8,9 @@ has, or a new route and a config of it. ENTRY is a config's file or its name the
 
 For each entry the command builds its route's model at the start's shape, traces its step on a CPU as a job does
 after its last step (`run.trace_step`: on fake tensors, so it trains nothing and reads no weights and no data), and
-reads the bound of record on that step from the slowdown calculator (`calculator.bound`): the least slowdown of any
-partition of the traced step into the policy's blocks, on the work the theorem charges (`formalism.he_of_rows`,
-`formalism.he_figure`: the products whose two operands both depend on the update). It prints one row an entry: the
+reads the slowdown on that step from the benchmark's one entry point (`calculator.slowdown`): the least slowdown of
+any partition of the traced step into the policy's blocks, by the slowdown calculator's bound of record on the work
+the theorem charges (the products whose two operands both depend on the update). It prints one row an entry: the
 share of the start's parameters its step trains (`trains`), its slowdown and what binds, and how much of the step's
 gates the capture approximates where it does (`approximated`); then the entry's planned run at that slowdown over
 each fleet and period (`periods`). With `--out` it writes the rows with what each read to `DIR/library.json`.
@@ -31,9 +31,8 @@ from pathlib import Path
 import numpy as np
 
 from . import calculator, config, policy, run, starts
-from . import formalism as F
 from .codecs import Identity
-from .grade import WORK, per_period
+from .grade import per_period
 from .opnames import LINALG_NAMES
 
 SCHEMA = "library/v1"
@@ -86,13 +85,12 @@ def classified(trace: dict, k: float) -> dict | None:
 
 
 def bound(trace: dict, c: float, k: float) -> dict:
-    """The bound of record at (c, k) on a traced step (`run.trace_step`'s): its `slowdown` and what `binds`, with
-    the calculator's bound (`bound`) and the work it read (`figure`, `formalism.he_figure`'s on the step's M at the
-    step's own gates). No slowdown, and why in `binds`, on a step the capture refused, on one whose elementwise ops
-    fan out into a product's operand (its `p_match`), at a k the trace has no rows at, and past the last k (H) states
-    an activation's β at. The floor, 1, where M is empty or the theorem's count is under the blocks the gates fill."""
-    from .capture import products
-
+    """The slowdown at (c, k) on a traced step (`run.trace_step`'s), as `calculator.slowdown` gives it on the trace
+    at the step's own gates: its `slowdown` and what `binds`, with the calculator's bound (`bound`) and the choice
+    of the work it read (`figure`). No slowdown, and why in `binds`, on a step the capture refused, on one whose
+    elementwise ops fan out into a product's operand (its `p_match`), at a k the trace has no rows at, and past the
+    last k (H) states an activation's β at. The floor, 1, where M is empty or the theorem's count is under the
+    blocks the gates fill."""
     if "refused" in trace:
         r = trace["refused"]
         return {"slowdown": None, "binds": f"refused: the capture refused the step ({r['reason']}, {r['op']}: "
@@ -102,24 +100,19 @@ def bound(trace: dict, c: float, k: float) -> dict:
         at = ", ".join(f"{b['k']:g}" for b in (trace, *trace["at"].values()))
         return {"slowdown": None, "binds": f"unmeasured: the trace classifies the step's products at k = {at}, and "
                                            f"the policy's k is {k:g}"}
-    if block["p_match"]:
-        return {"slowdown": None, "binds": F.p_match_reason(block["p_match"])}
-    he = F.he_of_rows([products.priced(r) for r in block["rows"]], k, None, trace["tokens"])
-    size = trace["circuit"]["gates"]
-    try:
-        figure = F.he_figure(he, c, size)
-    except ValueError as e:
-        return {"slowdown": None, "binds": f"unmeasured: {e}"}
+    got = calculator.slowdown({"c_gates": c, "k_bits": k}, trace)
+    if got["slowdown"] is None:
+        return {"slowdown": None, "binds": got["why"]}
+    figure, b = got["figure"], got["bound"]
     if figure["subset"] is None:
-        return {"slowdown": 1.0, "binds": EMPTY, "figure": figure}
-    b = calculator.bound(c, k, {x: figure[x] for x in WORK} | {"C_gates": size})
+        return {"slowdown": got["slowdown"], "binds": EMPTY, "figure": figure}
     binds = FLOOR
-    if b["slowdown"] > 1:
+    if got["binds"] == "products":
         through = f", an operand reached through a rank-{figure['r_step']} bottleneck" if figure["below_width"] else ""
         binds = (f"{b['theorem'].rsplit('.', 1)[-1]} on {figure['subset']}, {figure['macs_share']:.0%} of the MACs "
                  f"whose two operands the update reaches (β_w {figure['beta_w']:.3g}, β_x {figure['beta_x']:.3g}, "
                  f"b_y {figure['b_y']:g}, F {figure['F']:.4g}{through})")
-    return {"slowdown": b["slowdown"], "binds": binds, "bound": b, "figure": figure}
+    return {"slowdown": got["slowdown"], "binds": binds, "bound": b, "figure": figure}
 
 
 def trains(graph, of: int) -> dict:

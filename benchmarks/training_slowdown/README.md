@@ -21,11 +21,12 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions |
 | `annotate.py` | a record's maximal annotation: per step U and D_t, the depth profile and the cut; `with_structures`, its traced steps' measured quantities |
 | `capture/` | one training step traced on fake tensors (`capture_step` traces any PyTorch step, `capture_fn` a function, `capture_steps` a step among the steps before and after it, with its step circuit, `capture_run` a run of them): |C|, the update's dependence and the cuts (`capture.circuit`), the step's matrix products as rows (`capture.products`) and its lowering to the training-step frontend (`capture.lower`) |
-| `formalism.py` | a record's quantities (`of_record`, `measure`), Fit and Slowdown at (c, k) (`at`), the one bound and its sensitivities (`bound`), the products term (`he_products`, `he_figure`) and the published ρ with what it rests on (`published`) |
+| `work.py` | the work a step's record states for the theorem of record: M, the products whose two operands both depend on the update, from a trace's product rows (`priced`, `products_of_trace`, `he_of_rows`), and each reason a record states none. It computes no slowdown |
+| `formalism.py` | a record's quantities (`of_record`, `measure`), Fit and Slowdown at (c, k) (`at`), the one bound's products term, which is the entry point's, and its sensitivities (`bound`), and the published ρ with what it rests on (`published`) |
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
 | `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
-| `library.py` | the library's table: each entry of `attacks/` with its step traced on a CPU, its slowdown at its policy (the calculator's bound of record on that step) and what binds, and its planned run over each fleet and period |
-| `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it, and the one module here that does: a fixed policy's numbers, the fleets and periods a figure is presented over, the bound of record and the bound's own terms (β(k), F, α) |
+| `library.py` | the library's table: each entry of `attacks/` with its step traced on a CPU, its slowdown at its policy (the entry point's on that step) and what binds, and its planned run over each fleet and period |
+| `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it, and the one module here that does: the benchmark's one slowdown (`slowdown`, below), a fixed policy's numbers, the fleets and periods a figure is presented over and the rows of β(k) |
 | `counterexample.py` | a run's counterexample families: their writer and the sampled bit-for-bit rebuild check |
 | `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, scaled quantized delta, seed replay and their composition |
 | `starts.py`, `starts.toml` | the starts registry: each start by its store artifact, its files' sha256, its shape, C0 and loss, and its data's pins; `load` reads an installed start and checks it |
@@ -34,6 +35,17 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `model.py` | the starts' architecture, the lf dense decoder |
 
 The reference shapes are the lf model's (`adapters/vllm/tests/program/train_step_lf.py`), which the suite checks.
+
+## The one entry point
+
+`calculator.slowdown(policy, step, run=None)` is the one place the benchmark computes a slowdown: the grade (through
+`formalism.bound`) and the library's table call it, and `tests/test_one_calculator.py` fails on a second one. `policy`
+is a block's `c_gates` and `k_bits`; `step` is a step's record, a job's trace (`run.trace_step`'s) or the products
+stated from one (`work.products_of_trace`'s); `run` adds the run's `gates` (|C|; else the trace's own circuit's),
+`tau_bits` and `code_bits`. It returns `slowdown`, the calculator's bound of record on the work the record states (at
+least 1; None, with the reason in `why`, where the record gives none); `binds` (`products`, `none` or `unmeasured`);
+`term`, the count before the floor; `bound`, the calculator's bound with its theorem, least blocks, premises and the
+work it read; `figure`, the choice of that work; and `read`, what the record says of itself.
 
 ## The library of training algorithms
 
@@ -59,8 +71,8 @@ longer has two operands the update reaches. Frozen layers (`last-blocks`) leave 
 The command prints one row an entry (every entry, or the ones named): the share of the start's parameters its step
 trains, its slowdown under its policy and what binds. It trains nothing. It builds the entry's model at the start's
 shape, traces its step on a CPU as a job does after its last step (`run.traced_step`, on fake tensors), and reads the
-calculator's bound of record on the traced step (`calculator.bound`): the least slowdown of any partition of that
-step into the policy's blocks, on the products whose two operands both depend on the update. `trains` is read from
+slowdown on the traced step from the one entry point (`calculator.slowdown`): the least slowdown of any partition of
+that step into the policy's blocks, on the products whose two operands both depend on the update. `trains` is read from
 the trace, the parameters the step writes over the start's: an entry that trains less charges fewer products, so its
 slowdown is not its optimizer's. Where a step has dense linear algebra (Shampoo's roots), which the capture counts at
 n³ MACs a matrix and not as the gates of the algorithm that computes it, the row says what share of the step's gates
@@ -142,16 +154,17 @@ reads no file of a served run. It prints one block and writes `OUT/slowdown.json
   given (`--also` adds configs at the same start and gain);
 - **p**, the attack's |C| over H, against the honest route and against any route, each with its range over the seeds;
 - **ρ**, the attack's own cost at the config's policy: `formalism.published` at (c, k) on the search record, read
-  with its `trace`, whose raw product rows the grade prices with `capture.products.priced` (it holds no price);
+  with its `trace`, whose raw product rows are priced with `capture.products.priced` (the grade holds no price);
+  where Fit fails it is the one entry point's slowdown on those products;
 - **the sensitivities** beside ρ and never in it, reduction and update, from the trace's `circuit`, and the version
   of the code that took the trace. A record whose trace has no `circuit` or no `capture_code` still grades: ρ reads
   the rows either way (the circuit's τ stands in for a stub, which moves ρ only where it changes how many steps a
   block's inputs cover), and the block says which of these figures are blank, why, and how the trace is taken again;
 - **S = p·ρ**, with what each factor rests on, and each seed beside it: whether it reaches the gain, and its |C|;
 - **the bound of record** at the same policy: the least slowdown of any partition of the attack's traced circuit, by
-  the theorem's count solved for the fewest blocks, times c/|C| (the calculator's `min_cut.bound`, through
-  `calculator.bound`). ρ's products term is this bound: `formalism.he_figure` chooses the work by it, so where
-  products bind ρ is it and S is p times it. It is "not available", with what is missing, where the search record
+  the theorem's count solved for the fewest blocks, times c/|C| (the calculator's `min_cut.bound`, the `bound` of
+  `calculator.slowdown`'s result). ρ's products term is this bound, so where products bind ρ is it and S is p times
+  it. It is "not available", with what is missing, where the search record
   gives the bound no traced step to read;
 - **per period**: the run's AND gates at S and their share of one datacenter's and of the world's compute over a
   window, a week, a month and a year, with the measured, proved and scaled parts named.

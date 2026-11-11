@@ -3,6 +3,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from training_slowdown import calculator
+
 VOCAB, D, HEADS = 32, 16, 2
 #: the 45M start's shape, as a start's record states it
 SHAPE = {"d_model": 512, "n_layer": 6, "vocab": 50304, "ctx": 1024, "parameters": 45_029_888, "tokens": 154_206_208,
@@ -53,3 +55,23 @@ def tiny():
 
 def loss_of(m, idx):
     return F.cross_entropy(m(idx).reshape(-1, VOCAB), idx.reshape(-1))
+
+
+def figure(he: dict, c: float, C: float, tau: float | None = None, beta_code: float | None = None) -> dict:
+    """The entry point's choice of the work (`calculator.slowdown`'s `figure`) on the products `he` at (c, he's k) and
+    |C| = `C`, at the run's τ `tau` and with a weight's β at most `beta_code` (stated as the run's code bits over one
+    trained weight). Raises ValueError with the entry point's reason where it gives no slowdown."""
+    step = {"k": he["k"], "he": he if beta_code is None else he | {"trained_weights": 1.0}}
+    got = calculator.slowdown({"c_gates": c, "k_bits": he["k"]}, step,
+                              {"gates": C, "tau_bits": tau, "code_bits": beta_code})
+    if got["why"] is not None:
+        raise ValueError(got["why"])
+    return got["figure"]
+
+
+def calculators_count(c: float, k: float, work: dict) -> float:
+    """The calculator's own count on `work` at (c, k), asked of its `min_cut.bound` and not through the benchmark's
+    entry point: the least blocks times c/|C|."""
+    b = calculator._min_cut().bound(c, k, None, N=work["N"], O=work["O"], size=work["C_gates"],
+                                    beta_w=work["beta_w"], beta_x=work["beta_x"], b=work["b_y"], F=work["F"])
+    return b.blocks * c / work["C_gates"]

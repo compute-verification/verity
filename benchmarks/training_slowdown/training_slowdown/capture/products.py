@@ -33,7 +33,7 @@ import torch
 
 from training_slowdown.capture.structure import (
     _GATHERS, _WALK, _closure, _dtype_name, _Flow, _gemms, _macs, _past, _phases, _pk, _shape, _slots)
-from training_slowdown.formalism import is_paid
+from training_slowdown.work import is_paid
 from training_slowdown.policy import CONSOLE
 
 #: the capture's version of these rows (training_slowdown's VERSION when they were last changed), so a trace that has

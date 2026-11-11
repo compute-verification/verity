@@ -6,8 +6,9 @@ import ast
 from pathlib import Path
 from types import SimpleNamespace
 
+from conftest import figure
+
 from training_slowdown import calculator
-from training_slowdown import formalism as F
 
 HERE = Path(__file__).resolve().parents[1]
 #: the one module that reaches the calculator, and this file, whose toy sources name it
@@ -63,8 +64,8 @@ def test_a_reach_is_found():
 
 
 def test_the_products_term_is_the_calculators(monkeypatch):
-    """`formalism` states which work is charged and computes none of the bound: with the calculator's module replaced
-    by one whose bound is 42 blocks on every work, the products term is 42 blocks' slowdown, at the β and the F the
+    """The entry point chooses which work is charged and computes none of the bound: with the calculator's module
+    replaced by one whose bound is 42 blocks on every work, its term is 42 blocks' slowdown, at the β and the F the
     replaced module gives."""
     real = vars(calculator._min_cut())
     seen = []
@@ -79,7 +80,7 @@ def test_the_products_term_is_the_calculators(monkeypatch):
              "k_dim": 64, "dw": False, "head": False, "macs": 1e9, "wires": 1e7}
     he = {"k": 65_536.0, "groups": [group], "r_step": None, "candidates_macs": 1e9, "self_macs": 0.0,
           "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None, "trained_weights": None}
-    fig = F.he_figure(he, 1e11, 1e13)
+    fig = figure(he, 1e11, 1e13)
     assert (fig["rho"], fig["beta_x"], fig["beta_k"], fig["F"]) == (42.0 * 1e11 / 1e13, 3.0, 3.0, 1.25)
     assert seen[0] == (1e11, 65_536.0, None, {"N": 1e9, "O": 1e7, "size": 1e13, "beta_w": 16.0, "beta_x": 3.0,
                                               "b": 16, "F": 1.25})

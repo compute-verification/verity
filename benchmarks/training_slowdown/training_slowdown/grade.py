@@ -26,18 +26,20 @@ no job writes): the grade never reads it and passes it on, beside each record it
 - **ρ**, the attack's own cost at the config's policy (`policy.named`): `formalism.published` at (c, k) on the search
   record, at its first checkpoint reaching the gain on the search split, else at its last, which the block says. It
   reads the record's `trace`, the step the job traced itself, and prices its product rows here (`traced`,
-  `training_slowdown.capture.products.priced`): the grade holds no price. A search record with no trace, with one
-  the capture refused or of a capture version this tree doesn't read, or with a step `formalism.measure` refuses, has
-  no ρ, and then there is no S; the reason names how the trace is taken again (`retrace`);
+  `work.priced`): the grade holds no price. Where the Fit fails it is the slowdown the benchmark's one entry point
+  gives on those products (`calculator.slowdown`, which `formalism.bound` calls): the grade computes none. A search
+  record with no trace, with one the capture refused or of a capture version this tree doesn't read, or with a step
+  `formalism.measure` refuses, has no ρ, and then there is no S; the reason names how the trace is taken again
+  (`retrace`);
 - **the sensitivities** beside ρ, never in it (`formalism.SENSITIVITIES`' reduction and update), and the version of
   the code that took the trace (`capture_code`): from the trace's `circuit`, the measured step's own cut of its
   gradient and its structure, and its `capture_code`. A record whose trace has neither still grades, at the same ρ
   where τ's stub changes no step count: the block says which figures are blank and why (`blank`);
 - **S = p·ρ** against each H, a lower bound where ρ is one (`partial`), with what each factor rests on;
-- **the bound of record** at the same policy (`calculator.bound`): the least slowdown of any partition of the
-  attack's traced circuit, by the theorem's count solved for the fewest blocks. ρ's products term is this bound:
-  `formalism.he_figure` chooses the work by it, so where products bind ρ is it and S is p times it (`BOUND_IS_RHO`).
-  The block prints it under S with its statement and what it rests on;
+- **the bound of record** at the same policy (the `bound` of `calculator.slowdown`'s result there): the least
+  slowdown of any partition of the attack's traced circuit, by the theorem's count solved for the fewest blocks. ρ's
+  products term is this bound, so where products bind ρ is it and S is p times it (`BOUND_IS_RHO`). The block prints
+  it under S with its statement and what it rests on;
 - **per period** (`per_period`): the run's AND gates at S, C·ρ, and their share of one datacenter's and of the
   world's compute over a window, a week, a month and a year (`calculator.fleets`, `calculator.periods`), with the
   measured, proved and scaled parts named.
@@ -54,7 +56,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import VERSION, calculator, gates, policy
+from . import VERSION, calculator, gates, policy, work
 from . import formalism as F
 
 SCHEMA = "slowdown/v1"
@@ -67,8 +69,6 @@ PER_DECADE, FIT_MIN, FIT_SPAN, FIT_TARGET, PARAMS, DIGITS = 20, 3, 10.0, 5, 3, 6
 GAMMAS = np.linspace(0.01, 2.0, 399)
 #: a checkpoint's facts about its output that `formalism.measure` reads, where the record has them
 OUTPUT = ("e_bytes", "format", "rebuild_macs", "decoder_gates")
-#: the theorem's inputs on a traced step, as `formalism.he_products` names them
-WORK = ("N", "O", "beta_w", "beta_x", "b_y", "F")
 #: what ρ reads of a record's `trace` (`traced`) and has no figure without; the job writes more (`run.trace_step`)
 TRACE = ("capture", "tokens", "k", "rows", "p_match", "at", "data_dependent", "carried_scalars")
 #: what the grade reads of a trace beside `TRACE`, where the trace has it, each with what it is: a record without one
@@ -76,8 +76,8 @@ TRACE = ("capture", "tokens", "k", "rows", "p_match", "at", "data_dependent", "c
 BESIDE = {"circuit": "the measured step's cut of its gradient and its structure, which the reduction and update "
                      "sensitivities read",
           "capture_code": "the version of the code that took the trace"}
-#: how the bound of record stands to ρ, which the block says under it: `formalism.he_figure` scores each choice of the
-#: work by `calculator.bound`, so the products term is the bound of record on the work it chose
+#: how the bound of record stands to ρ, which the block says under it: `calculator.slowdown` scores each choice of the
+#: work by the calculator's bound, so the products term is the bound of record on the work it chose
 BOUND_IS_RHO = ("rho's products term is this bound, the theorem's count solved for the fewest blocks, times c/|C|, on "
                 "the same N, O, β, b and F: where products bind, rho is it and S is p times it")
 #: the job that takes a record's trace again (`training_slowdown.run`'s `retrace`), which a refused trace's reason names
@@ -315,7 +315,7 @@ def with_circuit(record: dict, circuit: dict) -> dict:
 def traced(record: dict, row: dict) -> dict:
     """`row` (one of `rows_of(record)`) as ρ reads it: with the products of the record's `trace`, the step its job
     traced (`run.trace_step`), in its `formalism` block, as `formalism.measure` takes a traced record's. Each raw
-    product row is priced here by `capture.products.priced`, at the k the job classified the rows at and at each
+    product row is priced here (`work.priced`), at the k the job classified the rows at and at each
     other k of the console's dial (`at`), and the traced step stands for every step through the row's checkpoint
     after the run's first update (`changed_steps`), by their tokens over its own, a `stand_in` where they differ from
     it in structure or tokens. Of the trace it reads `TRACE`: the capture's version, the traced step's tokens, the
@@ -350,14 +350,8 @@ def traced(record: dict, row: dict) -> dict:
     if not steps and (row.get("output") or {}).get("e_bytes") != 0:
         raise F.Refused(f"update-free prefix: E is not empty, but no step through checkpoint {row['checkpoint_step']} "
                         f"reads a weight the run changed")
-
-    def priced(b: dict) -> dict:
-        return {"k": b["k"], "rows": [products.priced(r) for r in b["rows"]], "p_match": b["p_match"]}
-
-    block = priced(tr) | {"capture": tr["capture"], "tokens": tr["tokens"],
-                          "at": {k: priced(b) for k, b in tr["at"].items()}} | (
-        {"capture_code": tr["capture_code"]} if "capture_code" in tr else {})
-    got = F.products_of_trace(block, sum(s["tokens"] for s in steps) / tr["tokens"])
+    block = work.priced(tr)
+    got = work.products_of_trace(block, sum(s["tokens"] for s in steps) / tr["tokens"])
     label = F.TRACED_PRODUCTS
     structures, counts = sorted({s["struct"] for s in steps}), sorted({s["tokens"] for s in steps})
     if len(structures) > 1 or counts not in ([], [tr["tokens"]]):
@@ -393,30 +387,33 @@ def blank(record: dict, got: dict, unmeasured: dict) -> dict:
     return out
 
 
-def rho_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> dict:
-    """ρ at the policy `pol` from the config's search job `run`, a start of `shape`: `formalism.published` at (c, k) on
-    its first scored checkpoint at or below its target, else on its last (`at` says which), read with its record's
-    trace (`traced`), with the theorem's inputs there (`work`, where its products term has them: none where it is
-    unmeasured or its M is empty), the capture that traced it, the figures beside it that have no value (`blank`) and
-    what the bound says of a sensitivity that sums only some of the record's parts (`unmeasured`). No ρ, with why,
-    without a search record, without a scored checkpoint, on a record whose trace `traced` refuses, or on one
-    `formalism.measure` refuses or can't measure."""
+def rho_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> tuple[dict, dict]:
+    """ρ at the policy `pol` from the config's search job `run`, a start of `shape`, and the bound of record there:
+    `formalism.published` at (c, k) on its first scored checkpoint at or below its target, else on its last (`at`
+    says which), read with its record's trace (`traced`), with the theorem's inputs there (`work`, the bound of
+    record's: none where the record gives no slowdown or its M is empty), the capture that traced it, the figures
+    beside it that have no value (`blank`) and what the bound says of a sensitivity that sums only some of the
+    record's parts (`unmeasured`). The bound of record is the `bound` of `calculator.slowdown`'s result on the
+    record, which ρ's products term is of too (`formalism.bound`'s `entry`). No ρ, with why, and the bound not
+    available, without a search record, without a scored checkpoint, on a record whose trace `traced` refuses, or on
+    one `formalism.measure` refuses or can't measure."""
+    none = calculator.slowdown(pol, None)["bound"]
     if run is None:
-        return {"rho": None, "why": "unmeasured: the config has no search record"}
+        return {"rho": None, "why": "unmeasured: the config has no search record"}, none
     at = seed_at(run["checkpoints"], f, g)
     cp = next((c for c in run["checkpoints"] if c["gates"] is not None and c["step"] == at.get("step")), None)
     if cp is None:
-        return {"rho": None, "why": f"unmeasured: the search record has no scored checkpoint ({at.get('why')})"}
+        return {"rho": None, "why": f"unmeasured: the search record has no scored checkpoint ({at.get('why')})"}, none
     fwd = run["record"].get("forward_macs_per_token")
     try:
         m = F.measure(traced(run["record"], cp["row"]), shape | ({"forward_macs_per_token": fwd} if fwd else {}))
     except F.Refused as e:
-        return {"rho": None, "why": f"refused: {e}"}
+        return {"rho": None, "why": f"refused: {e}"}, none
     except ValueError as e:
-        return {"rho": None, "why": f"unmeasured: {e}"}
+        return {"rho": None, "why": f"unmeasured: {e}"}, none
     c, k = pol["c_gates"], pol["k_bits"]
     b, out = F.bound(m, c, k), F.published(m, c, k)
-    term, got = b["terms"]["products"], b["inputs"]["products"]
+    of_record = b["entry"]["bound"]
     return out | {
         "blank": blank(run["record"], out, b["unmeasured"]),
         "unmeasured": {name: b["unmeasured"][name] for name in F.CELL_SENSITIVITIES if name in b["unmeasured"]},
@@ -424,8 +421,7 @@ def rho_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> dict:
         "at": "its first checkpoint reaching the gain" if at["reached"] else
               f"its last checkpoint: the search record doesn't reach {g:g}x",
         "capture": (m.products or {}).get("capture"), "provenance": run["record"].get("provenance"),
-        "work": None if term is None or got.get("subset") is None else
-                {x: got.get(x) for x in WORK} | {"C_gates": cp["gates"]}}
+        "work": of_record.get("work")}, of_record
 
 
 def per_period(run_gates: float, rho: dict) -> dict:
@@ -481,7 +477,7 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
     p = {k: ratio(C, h["C"]) for k, h in H.items()}
     wanted = (config.get("seeds") or {}).get("search") or [None]
     search = next((r for r in jobs[me] if r["split"] == "search" and wanted[0] in (None, r["seed"])), None)
-    rho = rho_of(search, f, g, pol, entry["shape"])
+    rho, of_record = rho_of(search, f, g, pol, entry["shape"])
     why = (rho.get("why") or "ρ is unmeasured") if rho["rho"] is None else \
         None if C else f"no seed of the config reaches {g:g}x on {SPLITS[basis]}"
     S = {k: None if why or not p[k] else p[k]["p"] * rho["rho"] for k in H} | {
@@ -494,7 +490,7 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
                     "c_spread": c_spread(f, target(f, entry["l0_bpb"], g))},
         "attack": sides[me], "honest": sides[hon], "others": [sides[n] for n in others or {}],
         "H": H, "p": p, "rho": rho, "S": S,
-        "bound_of_record": calculator.bound(pol["c_gates"], pol["k_bits"], rho.get("work")),
+        "bound_of_record": of_record,
         "rests_on": {
             "p": f"counted |C| ({gates.UNIT}) at each seed's first checkpoint at or below its target on "
                  f"{SPLITS[basis]}, the mean over the seeds that reach, over the same for H",
