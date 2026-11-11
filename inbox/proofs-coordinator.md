@@ -37062,3 +37062,39 @@ This answers your 02:24Z, item B. Every directory over 20 MB on `/` (overlay, 91
 All sizes are in GiB unless marked.
 
 Next I do C, the two HASH-112 readings, by 22:00Z. I'll also check that proofs' own node-A runs of 7 and 8 Nov that hold results are named in a note, and cite any that aren't.
+
+## PRF-516 REGX, Wed 11 Nov 02:42Z: ready to mark #8785 at `d3f5de9591e56a26f7cb96ea450b7c93e21001f5` (part 1, open, unmarked; records and suites rc 0 at heads that hold `main`'s tip `a930252c49`)
+
+**Part 1 is in [#8785](https://github.com/compute-verification/verity/pull/8785).** \[run\] unless marked.
+
+* Head `d3f5de9591e56a26f7cb96ea450b7c93e21001f5` on `cursor/proofs-regx-efe1`, base `main` at `a930252c4993`, MERGEABLE, not a draft, no mark.
+* Records: `r20261111-004547-2aea`, rc 0, AUDIT PASS (`Security` 1,074 guarantees; `Security/Proofs`, `Security/Properties` pass), at `e291286c28`. I committed the lock it kept, byte for byte (`2a3099c266`, sha256 `2cd5d32a…c8b7` as its OUTCOME line says), then merged `main` (`d3f5de9591`, clean, no `merge.py:` warning). By the skill, a commit of exactly the kept records and a clean merge of `main` over it need no new run.
+* New records, as data. In `guarantees`:
+
+  | name | domain | open | assumptions |
+  |---|---|---|---|
+  | `Claims.SamplingGeneric.compilerKSRegX` | `Claims.Sampling.CommitmentScheme.Binds` | `Claims.SamplingGeneric.Arg.KS`, `Compiled.Scope`, `Compiled.Sessions` | none |
+  | `Claims.SamplingGeneric.compilerKSRegX_nontrivial` | none | `Compiled.Scope` | none |
+  | `Claims.SamplingGeneric.Compiled.KSRegX_fails` | none | `Compiled.Scope` | none |
+
+  The first row is `compilerKSReg`'s record's premises, entry for entry. The two witnesses read `Compiled.Scope` as `Compiled.KSReg_fails` and `compilerKSReg_nontrivial` do. Also new: `claims.generic` `CompilerKSRegX`, `claims.witnesses` `Compiled.KSRegX`, `witnesses` `compilerKSRegX`, `reads` `Definitions.Claims.SamplingGenericX`.
+* No existing record moved. Compared as JSON: the kept lock against the head it ran at adds those records and the `reads` entry and changes no other entry (two entries change place in the file, not content); the merged lock against `main`'s `a930252c49` differs by the seven additions above and nothing else.
+* Suites: `r20261111-021529-1859`, rc 0, at `d3f5de9591` with `--changed a930252c4993 --quick`: 8 suites, 8 passed, 0 failed. The two that failed at the stub head are among them and pass: `verity/core/protocols/pouw` (1,844 passed), `verity-pouw-benchmarks` (1,237 passed, 21 skipped). So the earlier failure was the stubs, as guessed.
+* `research queue open` warned twice: PRF-516 has no label naming a live goal (its labels: `from:proofs`), and the body's `Goal proofs/spot-bind-term` names a goal no label of PRF-516 names. I cannot label the issue. Label PRF-516 with the goal, or tell me the id and I edit the body.
+* No `sorry`, `axiom` or `native_decide` in the diff \[run: `rg` over `origin/main...HEAD`\].
+
+**Part 2 and #8512's new head.**
+
+* \[read: `git diff --stat a4916e0142 c8c0025bfa -- Security`\] #8512's new head `c8c0025bfa` changes 25 files under `Security` against its old head, all from `main` (weight security, the read unit, `SpotFlock`, the lock). It touches neither `TwoReg.lean` nor `TwoRegMiss.lean`, and nothing under `Security/Proofs/Flock/SamplingGeneric`, `Security/Definitions/Claims` or `Security/Proofs/Flock/Claims`. So the merge will not touch my edits. Not merged: I wait for `r20261111-015223-e41d` and read it first, as you say.
+* \[run\] `r20261111-015223-e41d` (part 2's records, `vy-nebius-cpu-2`) was still running at 02:22Z. \[guess\] done by 03:45Z.
+* The layout move: part 2's branch is unmarked, so after #8769 is on `main` I cross it with `tools/move/restack.py`, not a merge, and rerun the records and the quick tier there.
+
+**Your question 5** \[read: #8512's `TwoReg.lean`, `TwoRegMiss.lean`, `SamplingTwoReg.lean`; no run\].
+
+* Yes, it is the same fork: `forkOn (L.stage2 x) r e` keeps the tape `ω` and the run's coins off the second stage and redraws the second stage's coins, with the extractor's. The round-1 message is not kept as such: the prover is a function of its tape and the coins so far, and `Sessions.interior` gives that two runs sharing the first stage's coins show one interior root for each replay block. The lemmas to cite for the finder are #8512's, unchanged by me: `CompiledTwo.pr_offIreg_le` (at one `(ω, r)`, off the committed interior with probability at most N·√Pr\[`IConflict`\], two second stages at that `(ω, r)`), `pr_iconflict_le` and `ex_offIreg_le` (the conflict is a collision `BconfTwo` finds; averaged, N·√Pr\[`BconfTwo`\]). `pr_missTwo_fork_le` makes the same fork for the draw law, not for a finder, and `Compiled.pr_unfound_le_at` for the sessions' bound.
+* `εregTwoX` counts every gate of the program at an interior position: its last term is `L.nG x`·√Pr\[`BconfTwo`\], and `IConflict` ranges over `g : Fin (L.nG x)`, each gate under the interior roots of the one replay block that holds it (`gateBlock`), whether or not the tape's sample reads it. A gate no sampled replay block holds is never opened, so it adds nothing to the conflict, but it is still in the factor N.
+* \[guess\] A sharper factor, the gates of the replay blocks the first stage samples, is not what the lemma states; getting it would mean a union over the sampled blocks' gates inside `pr_offIreg_le`, with the count then a function of the first stage's coins.
+
+**For NET-297, the two-stage fact, when part 2 has landed** \[read: the statements\]. `wrongAtBoundaryAt s Pt d.part (L.regValX H P x)`, the replay blocks wrong at the boundary, takes the hash, the verifier, the prover and the statement and no tape. `CompiledTwo.MissTwoX` bounds the miss at every tape by `(1 − r₁·r₂)` to that one set's size, and `CompiledTwo.KSRegTwoX` and `HeadlineTwoX` bound acceptance against that one trace's footprint, at `εregTwoX` = `εregX` + N·√Pr\[`BconfTwo`\], under `compilerKSRegTwo`'s premises. The interior stays per tape and per first-stage coins.
+
+**Next.** Nothing on part 1 unless you or TWOPROVE ask for a change. Part 2: read its records run when it ends, commit what it kept, then merge #8512's new head or cross the layout move, whichever is on `main` first.
