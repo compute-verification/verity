@@ -38393,3 +38393,82 @@ A child crosses over its parent's crossed head with one command a move, the seco
 - A branch on two parents (REGX's second part, on #8785 and #8512) is not covered by this: the two parents have different crossing commits. I have not tried one. [guess] It crosses over one parent this way and then merges the other parent's crossed head, which is an ordinary merge on the moved tree.
 
 **Next**: #8539's README trim if it fits, then a records run and the quick tier at each of the five heads, launched by 05:30Z.
+
+## SCALE, Wed 11 Nov 04:17Z: items 1, 2 and 3 are proved in Lean at the crossed head `1fab3dfa6a` (try `r20261111-035025-93ff`: 17 theorems, only `propext`, `Classical.choice`, `Quot.sound`); the branch crossed clean; the coin's length, read; the records run and the quick tier for a PR are running
+
+**The crossing.** [run] `cursor/proofs-canonical-node-331e` crossed with your recipe, from a detached worktree of `origin/main` = `5c095bb4ab`. `restack.py … --move-commit 6581bcf197 --move-commit c1ca25a247 --onto origin/main --kept --no-pins` printed `clean 1fab3dfa6a35 [plain merge conflicted (3); crossed 2 moves: 6581bcf197, c1ca25a247]`. I pushed it to the branch as a fast-forward, so the head is `1fab3dfa6a`. [run: `git diff --stat origin/main 1fab3dfa6a`] Its diff from `main` is my six files only:
+- `security/Proofs/Core/Game/RewindingCanon.lean`;
+- `security/Proofs/Flock/SamplingGeneric/RegCanon.lean`;
+- `security/Proofs/Flock/SpotFlock/RevealsOpen.lean`;
+- one import line each in `security/Proofs/Core.lean`, `Flock.lean` and `Flock/SamplingGeneric.lean`. Without them `check.py` fails a file the roots don't import (`orphan.file`).
+
+**Tries of `RevealsOpen.lean`.**
+- [run] `r20261111-025055-6cd6`, at the first four lemmas: one error, in `code_reveal_iroots`.
+- [run] `r20261111-030119-accc`, with item 3 added: one error, `rw [Finset.biUnion_union]`. At Mathlib `5ed2965256` that name is the lemma for a union of functions; the index-set lemma is `Finset.union_biUnion`. Every theorem but the four K lemmas showed only `propext`, `Classical.choice` and `Quot.sound`. The K lemmas showed `sorryAx` from that line only.
+- [run] `r20261111-033907-b1fd`: nothing ran, because cpu-5 kept no dependencies for the pre-move `Security/Proofs`.
+- [run] `r20261111-035025-93ff`, at the crossed head `1fab3dfa6a`: **`lean exit 0` in 1,358 s.** The axiom probe: "none of its 17 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". No warning in the file. The sibling check: no built module declares a name the file does, with 2,749 modules unchecked because they weren't built. [run: `rg` under `security/`] None of my 11 new names is declared anywhere else.
+
+**Item 1, `hpos` at the code** (`security/Proofs/Flock/SpotFlock/RevealsOpen.lean`, namespace `SpotFlock`):
+- `hpos_spot`: your `hpos` in its exact binder form at the only `Compiled` of SPOT[Flock] on `main`, `(compiledTwo F (code h) iroots (two h) (rs h) (cap h)).toCompiled`, with `needs u := (Reveal.needs (partition h) s u).toFinset`.
+- `reveal_needs_spot`: the same without `p.1 = s.roots`, which is the root-free form you told KILIAN to take.
+- Both come from `code_reveal_at`.
+
+**Item 2:** `code_reveal_at`, `code_reveal_roots` and `code_reveal_iroots`, as stated in my 02:58Z entry, plus `Reveal.rootsAt_cases : rootsAt … = s.roots ∨ ∃ ρ, rootsAt … = ir v ρ`.
+
+**Item 3, K, in Lean, way (b)** (namespace `SamplingDeploy`, then `SpotFlock`):
+
+~~~lean
+theorem RegTwo.card_biUnion_checked_le (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) {draw : Lean.Json} {n : ℕ}
+    (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) (needs : ℕ → Finset ℕ) :
+    ((g.checked N src₁ src₂).toFinset.biUnion needs).card ≤
+      ∑ v ∈ (Finset.range N).filter (fun v => g.always v = true), (needs v).card +
+        ((Spot.Draw.proved draw).toList.map fun j => (needs (g.blockAt (g.sample src₁) j.toNat)).card).sum
+
+theorem code_card_biUnion_le (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) (needs : ℕ → Finset ℕ)
+    {draw : Lean.Json} {n : ℕ}
+    (hsel : Spot.Select.selectSecond (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks
+      (src (r (order h x).second)) = .ok (draw, n)) :
+    (((code h).checked x r).toFinset.biUnion needs).card ≤
+      ∑ v ∈ (Finset.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).filter
+          (fun v => h.reg.always v = true), (needs v).card +
+        ((Spot.Draw.proved draw).toList.map fun j =>
+          (needs (h.reg.blockAt (h.reg.sample (src (r (order h x).first))) j.toNat)).card).sum
+~~~
+
+- Way (a) is its corollary: `RegTwo.card_biUnion_checked_le_mul` and `code_card_biUnion_le_mul` add `(hal : ∀ v, h.reg.always v = false) (M : ℕ) (hM : ∀ u, (needs u).card ≤ M)` and conclude `≤ (Spot.Draw.proved draw).size * M`.
+- `code_checked_sub` holds the code's checked blocks to the registration's, on the two stages' coin bytes `src (r (order h x).first)` and `src (r (order h x).second)`.
+
+**K on paper: `|proved draw| = Kfirst·Σ_t k_t`, each step marked.** Lean has no lemma about the size of `selectSecond`'s draw.
+1. [read] `selectSecond` returns `drawFirstRead`'s object (`verity/protocols/spot/verifier/lean/Spot/Select.lean:298-305`). That object is `entries law ++ [population, units]`, with no `closure` key (`…/Spot/Draw.lean:297-300`). `secondLaw`'s entries are `law`, `k` and `strata` (`Select.lean:273-276`).
+2. [read] `proved draw` is `(get "units" ++ get "closure").qsort`, and `get` of a missing key is `#[]` (`Spot/Draw.lean:232-236`; `getD` is `null` there, `Spot/Json.lean:60`). So `|proved draw| = |units|`, or fewer if `int?` drops entries.
+3. [read] The strata are `|sample|` copies of `(n_t, k_t)` for each template t (`sizes_second`, `security/Proofs/Flock/Claims/Sampling/Select/Second.lean:292`).
+4. [not traced to a lemma] Flock's work draw yields exactly `k` units a stratum, so `|units| = |sample|·Σ_t k_t`.
+5. [read] `|sample| = Kfirst` where `firstK h.reg.first = some Kfirst` (`select_subset_size`, `Cap.lean:122`).
+6. [derived] So `K(x) ≤ K_always + Kfirst·Σ_t k_t·max_u|needs u|`. The template-wise form, `Σ_t Kfirst·k_t·max_{u in t's cell}|needs u|`, is tighter.
+
+**The coin's length (read only, for Wednesday's table).**
+- [read] The 2^20 is the round coin's size, not a SPOT parameter: `FlockDeploy.Coin := Fin 65536 → F128` (`security/Proofs/Flock/Claims/Deploy.lean:86`), and `SpotFlock.L` restates it (`Code.lean:366`).
+- [read] Its readers are all in `SpotFlock/`:
+  - `coinByte` and `src` (`Code.lean:369-372`), and `code` and `rs` (`:623, :627-628`);
+  - `Coins.lean:25-58`: `coinByte_injective`, `card_coin`, `coinEquiv` (Coin ≃ `Fin 1 → Fin L → Fin 256`) and `callsUniform`, which is A3 as a theorem and needs the stage's bytes in bijection with one coin;
+  - `KS.lean:75-76, 86, 96-97`, which pass `fun _ => L` and `callsUniform` to `ksTwo_atOrder` and its siblings;
+  - `Cap.lean:260` (a `show`).
+- [read] The generic layer is already parametric: `codeTwo`, `codeTwoAt`, `CallsUniform` and `ksTwo_atOrder` take `L₁ L₂ : Msg → ℕ` (`Claims/Sampling/Reg.lean:98-141`, `SamplingGeneric/TwoAt.lean:48-53`).
+- [read] What pins the length is that a stage reads one coin. `b₁ : x → Coin → Fin (L₁ x) → Fin 256`, `bytesFirst … x r = b₁ x (r (j x).first)` (`Reg.lean:128-130`), and `Order` names one round a stage (`Reg.lean:112-115`).
+- [read] The assumption already takes several calls: `UniformRandomBytes (L : Fin m → ℕ)` (`security/Definitions/Assumptions/Flock.lean:109`).
+- [derived] What it takes for the design to fix the length: a stage reads `m` coins.
+  - `Order`'s `first` and `second` become runs of rounds.
+  - `bytesFirst` and `bytesSecond` concatenate.
+  - `callsUniform` is restated at `Fin m` calls, with `coinEquiv` a product.
+  - SpotFlock's `V` gets `m₁ + m₂` challenge rounds before the sessions: the move order at `Code.lean:532-536`, `off` and `sessOff 3` at `:363`, `stage2` and `iroots_fst` at `Facts.lean:121-145`, `order` at `Code.lean:553`.
+  - `m` is then a function of the design's draw: about `Σ_cells(2·k_t·width + 64)` bytes, ATTACK's [read].
+  - Growing `FlockDeploy.Coin` itself would instead change every Flock round.
+- [read] The deployed challenger caps its stream at `MAX_COINS = 2^20` coins of `COIN_BYTES = 64`, i.e. 2^26 bytes (`verity/protocols/spot/verifier/lean/Spot/Challenger.lean:48-50`).
+- [derived from REPBREAK's 99 to 795 MB, not recomputed] That is short of the priced designs as well.
+- [not traced] Whether `MAX_COINS` is what bounds the second stage's stream.
+
+**Next.** Two checks for a PR are running at `1fab3dfa6a`:
+- the Lean check, records run `r20261111-041442-564f` (`lean_changed.py --records security/Proofs --update`, `--cwd clone`), on cpu-5. It was waiting for a slot at 04:15Z; ETA about 05:15Z [guess: try 4's cold build took 23 minutes];
+- the quick tier, `r20261111-041704-92f3` (`suites.py --changed 5c095bb4ab --quick`), on cpu-3.
+
+If both pass: `research queue open … --by proofs`, unmarked, and a line `ready to mark #N at <sha>` here. If the records run changes a lock record, I commit only what it kept and say what changed. Nothing has been pushed but the crossing. Checkpoint note `20261111T0320Z-finding-scale-hpos-at-code` (synced `6db5475708`; updated with this entry).
