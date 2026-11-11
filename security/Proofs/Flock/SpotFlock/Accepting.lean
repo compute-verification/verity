@@ -223,11 +223,11 @@ theorem κ_lt_one (x : Msg) {δ : ℝ} (hδ0 : 0 ≤ δ) (hδ : δ ≤ 1 / 2) :
 set of the auditor's copies `h`: A3 at the coins' bytes (`callsUniform`, at both stages), the code's facts
 (`RegMatchesTwo`, `Code.RefusesTwo`, `Code.ReplayCap` at the replay cap `SpotFlock.cap`, `Code.InteriorFixed`), the
 sessions' runs one way (an accepted run at coins that check a unit is Flock's masked verifier accepting the unit's
-template's session at the statement the run states for it) and their scope at each unit's `N₀` (`SessionsIn`); with the sessions'
-openings (`SessionOpensTwo`), `CompiledTwo.KS` at Flock's masked record and SHA-512, at
-`κ_δ ≤ (1 + 2^{−9})·δ + 2^{−125}` at every statement and `δ ≥ 0`; and a prover is accepted on a positive share of the
-coins wherever Flock's masked verifier accepts one at each template's session statement of a session statements' message the
-check passes (`accepts_seq`). -/
+template's session at the statement the run states for it) and their scope at each unit's `N₀` (`SessionsIn`); with the
+sessions' openings (`SessionOpensTwo`), `CompiledTwo.KS` at Flock's masked record and SHA-512, at `κ_δ ≤ (1 + 2^{−9})·δ
++ 2^{−125}` at every statement and `δ ≥ 0`; and a prover is accepted on a positive share of the coins wherever Flock's
+masked verifier accepts one at each template's session statement of a session statements' message the check passes
+(`accepts_seq`). -/
 theorem accepting
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
