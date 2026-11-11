@@ -76,7 +76,7 @@ def test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolcha
     (home / "rustc").rename(rustc)
     key = CHECK.rust_tests_key(e)
     assert key, "the key's rustc runs under the script's pin, and never installs it"
-    (flock / "verifier" / "ci.py").write_text("changed")
+    (flock.parent / "agreement" / "ci.py").write_text("changed")
     (flock / "README.md").write_text("changed")
     assert CHECK.rust_tests_key(e) == key
     (flock / "live" / "src" / "lib.rs").write_text("fn b() {}")
@@ -792,11 +792,11 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
         "from research.store.tool import Tool\nCHECK = Tool(name='check', version='1', command=['true'], "
         "merge_requires={'lean-agreement': ['verity/protocols/flock/prover/', '!README.md']})\n")
     (tmp_path / "verity" / "protocols" / "flock" / "prover").mkdir(parents=True)
-    (tmp_path / "verity" / "ml" / "flock" / "verify.rs").write_text("fn main() {}\n")
+    (tmp_path / "verity" / "protocols" / "flock" / "prover" / "verify.rs").write_text("fn main() {}\n")
     git("init", "-q", "-b", "main")
     git("add", "-A")
     git("commit", "-q", "-m", "base")
-    git("mv", "verity/ml/flock/verify.rs", "verify.rs")
+    git("mv", "verity/protocols/flock/prover/verify.rs", "verify.rs")
     git("commit", "-q", "-m", "move")
     (tmp_path / "upstream.json").write_text(json.dumps({"upstream": {"art": "art:u", "sha256": "a" * 64},
                                                         "inputs": {"art": "art:i", "sha256": "b" * 64}}))
@@ -1045,8 +1045,8 @@ def test_the_agreement_is_not_required_for_docs_alone():
     rule = tool.CHECK.merge_requires["lean-agreement"]
     docs = ["verity/protocols/flock/prover/live/PROTOCOL.md", "verity/protocols/flock/agreement/README.md", "verity/protocols/flock/prover/README.md", "AGENTS.md"]
     assert rule_touches(rule, docs) == []
-    assert rule_touches(rule, [*docs, "verity/protocols/flock/agreement/ci.py"]) == ["verity/protocols/flock/prover/", "verity/protocols/flock/agreement/"]
-    assert rule_touches(rule, ["verity/protocols/flock/agreement/DESIGN.md"]) == ["verity/protocols/flock/prover/", "verity/protocols/flock/agreement/"]  # only the two names are left out
+    assert rule_touches(rule, [*docs, "verity/protocols/flock/agreement/ci.py"]) == ["verity/protocols/flock/agreement/"]
+    assert rule_touches(rule, ["verity/protocols/flock/agreement/DESIGN.md"]) == ["verity/protocols/flock/agreement/"]  # only the two names are left out
     for f in ("ci.py", "agree.py", "fuzz.py", "redigest.py", "transcript_check.py", "selftest_records.py"):   # cited, never read
         reads = [line for line in (ROOT / "verity" / "protocols" / "flock" / "agreement" / f).read_text().splitlines()
                  if any(r in line for r in ("open(", "read_text", "read_bytes")) and any(d in line for d in ("README", "PROTOCOL"))]
@@ -1747,7 +1747,7 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     git("add", "-A")
     git("commit", "-q", "-m", "base")
     (tmp_path / "verity" / "protocols" / "flock" / "prover").mkdir(parents=True)
-    (tmp_path / "verity" / "ml" / "flock" / "é.py").write_text("x = 1\n")
+    (tmp_path / "verity" / "protocols" / "flock" / "prover" / "é.py").write_text("x = 1\n")
     git("checkout", "-q", "-b", "pr")
     git("add", "-A")
     git("commit", "-q", "-m", "é")
