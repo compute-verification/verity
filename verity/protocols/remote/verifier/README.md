@@ -22,7 +22,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v0`);
 - PoUB, an onsite subprotocol whose code names still say "remote" until they are renamed: its package
   `verity/protocols/poub/verifier/`, its Lean verifier `RemoteAudit`, its Lean vocabulary `Accounting.Remote`
-  (`Security/Definitions/Accounting/Remote.lean`) and `Accounting.Guarantees.Remote*`, its id `verity/remote-bandwidth/v0`,
+  (`security/Definitions/Accounting/Remote.lean`) and `Accounting.Guarantees.Remote*`, its id `verity/remote-bandwidth/v0`,
   its whole-node benchmark `benchmarks/remote_session/`, and serve-openai's `--remote-verifier`, the address of PoUB's
   verifier;
 - `RemoteChallenger` (`verity/protocols/spot/device/remote.py`), the client of a challenger on another host;
@@ -50,7 +50,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   network certifier anywhere, is specified yet.
 - **No auditor devices at the site.** There are no network certifiers or memory challengers. So network certification,
   PoUS and PoUB are onsite's, not remote's, and memory wipes are neither composite's yet. For network certification,
-  see `Security/Definitions/NetworkCertifier` and its `Guarantees`.
+  see `security/Definitions/NetworkCertifier` and its `Guarantees`.
 
 ## Subprotocols
 
@@ -67,7 +67,7 @@ remote whatever the subprotocols answer (`Core.Composition.same`). The period's 
 the record, so it joins through a tie (`Core.Remote.windows`): every window of the period must name the policy's record
 as its Commit record (`windowRecords`, which `PouwCheck.Credit.commitOf?` reads), and a window on another record
 rejects remote unless it rejects already. Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
-(`RemoteMain.lean`). The Lake package `core_remote` is code: it has no Mathlib and nothing of `Security/`
+(`RemoteMain.lean`). The Lake package `core_remote` is code: it has no Mathlib and nothing of `security/`
 (`lean-audit.json`). The product's rule and its difftest are the composition's ([README](remote/verifier/composition/README.md),
 `verity/protocols/remote/verifier/composition/tests/test_composition_difftest.py`).
 
@@ -124,14 +124,14 @@ consumes part 1's theorem for PoUW's proofs. The links that are missing are list
 what it establishes, what it assumes, its Lean and that Lean's status:
 
 - **proved**: its proof is in a lock (`<Area>.SecurityProofs.G : <Area>.Guarantees.G` in
-  `Security/lean-audit.json`, or a property's proof in `Security/Properties/lean-audit.json`);
+  `security/lean-audit.json`, or a property's proof in `security/Properties/lean-audit.json`);
 - **stated**: its statement is in a lock, with no proof yet;
 - **open**: not in Lean.
 
-Flock's guarantee statements (`Flock.Guarantees.*`) are in `Security/Proofs/Flock/`, not `Definitions/`: its spec
+Flock's guarantee statements (`Flock.Guarantees.*`) are in `security/Proofs/Flock/`, not `Definitions/`: its spec
 isn't extracted yet.
 
-The derivations are in `Security/README.md`'s security argument, whose own four parts are cited as "`Security/README.md`,
+The derivations are in `security/README.md`'s security argument, whose own four parts are cited as "`security/README.md`,
 part N". Assumptions, by name, below, lists the named `Prop`s these statements read; each theorem's full hypotheses
 are its Lean.
 
@@ -261,7 +261,7 @@ expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerThreaded` 
 **Assumes.** The data the registration names was public, not computed off the books before
 (`Nci.Assumptions.ThetaRegistered`; only part 6 reads its Lean form); the verifier's copy of the registration log
 is the deployment's; that the registered roots bind their data (`Nci.Assumptions.RootsBind`, named in
-`Security/Properties/Nci/Baseline.lean`, not yet stated); and, once the policy is composed, SHA-512 collision resistance
+`security/Properties/Nci/Baseline.lean`, not yet stated); and, once the policy is composed, SHA-512 collision resistance
 for its tie to one registration. Nothing about learning: the policy restricts the shape of the registered circuit, and
 part 6's premises say why that shape trains little.
 
@@ -272,7 +272,7 @@ part 6's premises say why that shape trains little.
    property, `Properties.Composition.AcceptMeans`, makes a composite accept each subprotocol's accept, so this link
    needs the policy among remote's subprotocols, with that tie.
 2. *The policy's check accepts ⇒ `Baseline.evaluate` complies ⇒ `Desc.evaluate` complies.* The bridge `baseline_desc`
-   is a proof lemma (`Security/Proofs/Nci/Cover/Checked.lean`), not a locked property, and the policy's check has no
+   is a proof lemma (`security/Proofs/Nci/Cover/Checked.lean`), not a locked property, and the policy's check has no
    `AcceptMeans`: **open** as a property. θ's provenance: `NciCheck.Properties.SecurityProofs.BaselineProvenance`,
    **proved**.
 3. *A compliance verdict of `Desc.evaluate` ⇒ `Nci.CompliesRate Γ α_f` of the laid-out `Verity.RegisteredCircuit`, on every
@@ -318,7 +318,7 @@ $$ \rho(\mathcal G, \eta) \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\ze
 times the fleet-time the reference training algorithm takes with no protocol (fleet-time: elapsed time times the whole
 fleet's capacity, registered and unregistered hardware). It holds except with the total failure probability below,
 η + δ + …: an accepted run reaches the target in less fleet-time at most that often. **This is the argument's one
-endpoint.** No Lean states it: it is derived in prose (`Security/README.md`, part 4) from the local bounds,
+endpoint.** No Lean states it: it is derived in prose (`security/README.md`, part 4) from the local bounds,
 `Verity.Guarantees.Counting` and `Nci.Guarantees.CapabilityFloor`. The Lean bound `DampenerRemote` is a different,
 older formula (below), and the Results table comes from a third route, the calculator's.
 
@@ -368,15 +368,15 @@ premise lets a block hold (not a storage bound), the cap falls to k.
 
 **Assumes.** The learning rows of the table above, the hardware rows, and parts 1 to 5. Further premises can strengthen
 the local bound (an activation price, a joint price, a recoverable source), each a new hypothesis to earn;
-`Security/README.md`, part 2, lists them.
+`security/README.md`, part 2, lists them.
 
 **Lean.**
 
 - The local bounds' caps `Nci.Guarantees.HeldBudget` (or, statistically, `Nci.Guarantees.StatHeldBudget`),
   `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates` and `Nci.Guarantees.RecomputeByState`, and the
   floor `Nci.Guarantees.CapabilityFloor`: **proved**
-  (`Security/Proofs/Nci/Capability/`, `Security/Proofs/Accounting/Coverage.lean`), each from its premises. Every premise,
-  structure and bound is surveyed in `Security/Definitions/Nci/Capability/README.md`.
+  (`security/Proofs/Nci/Capability/`, `security/Proofs/Accounting/Coverage.lean`), each from its premises. Every premise,
+  structure and bound is surveyed in `security/Definitions/Nci/Capability/README.md`.
 - Their premises, `Nci.Assumptions.CoversEfficientMethods`, `Nci.Assumptions.DescriptionHard` (or
   `Nci.Assumptions.MinEntropyHard`) and the wiring property `Nci.Capability.Consumers.Upstream`, are named assumptions in
   the lock, which those proofs take as hypotheses; none is tested yet: no price is measured at a decoder budget, and the
@@ -389,11 +389,11 @@ Sampled proofs' accept rule and theorems, the Lean slowdown bounds, and the comp
 
 | Piece | Lean declaration | Lock | End to end |
 |---|---|---|---|
-| Sampled proofs' accept rule | `Properties.Spot.AcceptMeans` (`Security/Properties/Spot.lean`; proof `acceptMeans`) | **proved** | — |
-| A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
-| Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
-| The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`Security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `Security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
+| Sampled proofs' accept rule | `Properties.Spot.AcceptMeans` (`security/Properties/Spot.lean`; proof `acceptMeans`) | **proved** | — |
+| A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `security/Proofs/Flock/Bridge/ScopeGate.lean`, proved in `security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
+| Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
+| The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
+| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
 | The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee (the open gap, above) | **open** | — |
 
 `DampenerRemote` is the slowdown bound ρ = max(1, 1/(s + x/MFU₀)) (`Nci.Dampener.remoteDampener`; MFU₀ divides only
@@ -445,12 +445,12 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 
 The next steps test or strengthen part 6's premises: one instance meeting the local premises at once, attacks on
 update prices, the certificate checked on a training circuit, a use's import cost, weights by linear programming, and
-coverage tested directly. Each is in `Security/Definitions/Nci/Capability/README.md` ("How to test each premise", "The
-frontier"); how the execution's boundaries fix what a block's c and k count is in `Security/README.md`, part 2.
+coverage tested directly. Each is in `security/Definitions/Nci/Capability/README.md` ("How to test each premise", "The
+frontier"); how the execution's boundaries fix what a block's c and k count is in `security/README.md`, part 2.
 
 ## Assumptions, by name
 
-Each is a named `Prop` in a lock's `assumptions` (`Security/lean-audit.json`, and `Security/Properties/lean-audit.json`
+Each is a named `Prop` in a lock's `assumptions` (`security/lean-audit.json`, and `security/Properties/lean-audit.json`
 for the `Properties.*` ones), one line in plain words, except `CoinsAfterCommitment` (prose only). These are the named `Prop`s the statements above
 read; each theorem's full hypotheses are its Lean, among them `TagsOkZHJ`, `Built`, `StrictCR.Finder.CR`,
 `SampledLayer.JointSound` and `.Pins` (which `CircuitCredit` also reads), and the local bounds' structural
@@ -473,7 +473,7 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
   (`Pouw.Assumptions.CoinsConfidential`, which `Pouw.Guarantees.Dither.FleetSound` takes) is another premise: a
   replica's coins reach no machine outside its certifier's boundary before it has them.
 
-PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/PeriodJ10R.lean`):
+PoUW, as `H1J10RCheckedCreditPeriod` takes them (`security/Properties/Pouw/PeriodJ10R.lean`):
 
 - `Properties.Pouw.PeriodJ10R.TileServiceSound`: the proof system is sound against `Credit.window` at each sampled
   proof block, Flock's soundness under live coins. It is a named assumption: no theorem discharges it yet.
@@ -484,7 +484,7 @@ PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/Perio
   deployed path doesn't do yet.
 - `Properties.Pouw.Period.SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet
   it: the loop is given its salt before it serves, and nothing in the challenger's record binds the salt to a live coin
-  (`Security/Properties/Pouw/Period.lean`, `SaltIsLiveCoin`'s docstring).
+  (`security/Properties/Pouw/Period.lean`, `SaltIsLiveCoin`'s docstring).
 - `Properties.Pouw.PeriodJ10R.SharedNoiseLucks`: the Duo receipts' lucks (H-μ⁺, `OperandHMu`, with `ReceiptLuckAt`
   and `GuessLuckAt`) at J10-R's shared noise, one computational claim over a call's joint coins.
 - `Accounting.Assumptions.TS.UnitFixed`: the run's fixed and folded words are at least those of the units it didn't
@@ -502,14 +502,14 @@ PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/Perio
 
 The slowdown, `DampenerRemote`:
 
-- In `Security/Definitions/Nci/Assumptions/Remote.lean`, three:
+- In `security/Definitions/Nci/Assumptions/Remote.lean`, three:
   - `Nci.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p. What backs p is
     the time credit `CircuitCredit`, which reads the data sheet; no PoUW guarantee instantiates it yet.
   - `Nci.Assumptions.SampledDetection`: sampled proofs catch each incorrect proof block with probability at least q,
     whatever came before.
   - `Nci.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
-- (H) and (E), `Nci.Cut.Assumptions.Hardness` and `Exports` (`Security/Definitions/Assumptions.lean`), on the declared
-  work, and the count's verdict `Nci.CompliesAtMost c k n` (`Security/Definitions/Nci.lean`), a hypothesis until
+- (H) and (E), `Nci.Cut.Assumptions.Hardness` and `Exports` (`security/Definitions/Assumptions.lean`), on the declared
+  work, and the count's verdict `Nci.CompliesAtMost c k n` (`security/Definitions/Nci.lean`), a hypothesis until
   `DescCountsCK` is proved (part 4, link 7).
 
 The local bounds (part 6):
@@ -576,7 +576,7 @@ is its Lean check, through its difftest against the Python (`lake exe pouw-check
 
 ## Read next
 
-- `Security/README.md`: the definitions, properties and proofs trees, the locks, and the remote protocol in Lean.
+- `security/README.md`: the definitions, properties and proofs trees, the locks, and the remote protocol in Lean.
 - `benchmarks/prove_path/README.md` and `benchmarks/prove_path/e2e_chains/README.md`: what an accepted audit means, and
   each protocol's end-to-end chain.
 - `ARCHITECTURE.md` (with the Glossary) and `GLOSSARY.md`: the architecture, the terms, the notation and the older names.
