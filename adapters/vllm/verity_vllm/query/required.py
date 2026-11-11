@@ -545,15 +545,23 @@ def population(P: ProgramView, corr: Correspondence, *, return_slots: bool = Tru
     return Population(P, corr, return_slots=return_slots, tp=tp, query=query)
 
 
+def _declared_target(res: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The target a Build's `result.json` declares (`target.declared`); an empty one where the Build declared none."""
+    target = res.get("target")
+    declared = None if target is None else target.get("declared")
+    return {} if declared is None else declared
+
+
 def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | None]:
     fa = None
-    for v in (res.get("attention_impls_observed") or {}).values():
+    observed = res.get("attention_impls_observed")             # a trace's; predict's Build records none under this name
+    for v in () if observed is None else observed.values():
         fa = v.get("vllm_flash_attn_version")
         break
     if profile is None:
         from verity_vllm.program.frontend.target_profile import TargetProfile
 
-        cc = ((res.get("target") or {}).get("declared") or {}).get("compute_capability") or [8, 9]
+        cc = _declared_target(res).get("compute_capability") or [8, 9]
         fa3 = TargetProfile(compute_capability=(int(cc[0]), int(cc[1]))).effective_flash_attn_version() == 3
         profile = "hopper" if (fa == 3 or (fa is None and fa3)) else "ampere"
     return profile, fa
@@ -643,15 +651,14 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     prog_world, prog_rank = int(tpinfo.get("world") or 1), int(tpinfo.get("rank") or 0)
     if (prog_world > 1 or ranks > 1) and (int(ranks) != prog_world or int(rank) != prog_rank):
         raise ValueError(f"rank Program mismatch: Program is rank {prog_rank} of world {prog_world}, manifest requested rank {rank} of {ranks}")
-    sweep = (workload or {}).get("sweep") or {}
-    wr = (workload or {}).get("requests") or []
+    sweep, wr = fmt.sweep_and_requests(workload)
     workload_request_id = wr[0].get("request_id") if wr and isinstance(wr[0], dict) else None
     request_id = fmt.request_label(request_id, workload)
     k_req = int(request_id[1:])                            # `request_label` answers `r<k>` or refuses
     if wr and k_req < len(wr) and isinstance(wr[k_req], dict) and str(wr[k_req].get("request_id")) != str(workload_request_id):
         workload_request_id = wr[k_req].get("request_id")
-    arr = sweep.get("arrive_steps") or []
-    arrive = int(arr[k_req] if k_req < len(arr) else (arr[0] if arr else 0)) if sweep else 0
+    arr = sweep.get("arrive_steps")                        # this request's, the first where the sweep lists fewer, step 0 where it lists none
+    arrive = int(arr[k_req] if k_req < len(arr) else arr[0]) if arr else 0
     n_seq = 1
     # --- the query and the policy ---------------------------------------------------------------------------------------------------
     pop = (norm_scales.population if norm_scales else population)(P, corr, return_slots=return_slots, tp=({"world": prog_world, "rank": prog_rank} if prog_world > 1 else None), query=query)
@@ -757,7 +764,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
            "correspondence": corr.provenance(),                 # which reader gave the owning modules: the runtime-correspondence/v1 record or the v1 annotations
            "workload": {"row_id": sweep.get("row_id"), "batch": sweep.get("batch"), "request_id": request_id, "workload_request_id": workload_request_id,
                         "arrive_step": arrive} if workload else None,
-           "query": reduce(lambda h, ts: ts[0].header(h, ts[1]), tapped, norm_scales.header(q, scales) if norm_scales else q), "wrapper_prefix": corr.prefix, "op_path_aliases": alias_out, "target": ((res.get("target") or {}).get("declared") or {}),
+           "query": reduce(lambda h, ts: ts[0].header(h, ts[1]), tapped, norm_scales.header(q, scales) if norm_scales else q), "wrapper_prefix": corr.prefix, "op_path_aliases": alias_out, "target": _declared_target(res),
            "flash_attn_version": fa, "ranks": ranks, "rank": rank,
            "steps": list(range(len(events))), "engine_steps": [arrive + s for s in range(len(events))], "requests": [request_id],
            "populations": {"identities": len(identities), "by_family": dict(fam_counts), "steps": len(events),
