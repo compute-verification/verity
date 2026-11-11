@@ -9,12 +9,13 @@ and hands `a5.audit` the members, each proved by C-Flock's prover (`flock-circui
   holds both proof blocks, one a member, and the audit runs two sessions.
 * **The coins** are a challenger's: ``--challenger local`` starts a development session of the auditor host's own
   service on this machine (`a5_coins.Local`: `benchmarks/live_challenger`'s reserve, admit, run and `serve.py`), pinned on
-  this checkout's first-parent line, as `test_a5_reserve` opens one. Its key is the session's own, so its coins show the
-  path and are no auditor's.
+  this checkout's first-parent line. `test_a5_reserve` opens one the same way under a stub of the Lean verifier's coins;
+  here its `serve.py` runs the Lean (`sampled-proofs-verifier`). Its key is the session's own, so its coins show the path
+  and are no auditor's.
 * **The binaries.** `flock-verify` and `flock-firewall` are what check's lean-build step builds before this suite
   (`AFTER_LEAN`, the suite's ``artifacts``), and the tests skip without them. `flock-circuit` is built by
-  `check_build.sh bin` on the checkout check's flock-circuit-build step keeps, and the tests skip where the machine has
-  no `cargo`.
+  `check_build.sh bin` on the checkout check's flock-circuit-build step keeps, which that script clones, with its Rust
+  toolchain, on a machine that has neither.
 
 Slow, and past a minute in `check`: every other test of the audit gives `a5.audit`, the prover or the verifier a
 stand-in, so none sees what only the real ones refuse: a rule the stream's service doesn't take, a statement the prover
@@ -25,7 +26,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -52,9 +52,10 @@ TEMPLATES = tuple(bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in 
 LAW = "stratified:1"
 RULE = "stratified-rate:1/2"
 RUN = "ab" * 64
-#: what the steps after a served window's audit read of its record (`served_verdicts.sh`'s hand-off and its period)
-RECORD = ("summary.json", "window/audit.json", "window/registration.json", "window/program.json", "window/case.json",
-          "window/receipt.json", "window/draw.json", "window/segment.json")
+#: what the steps after a served window's audit read of its record (`served_verdicts.sh`'s hand-off, `records_audit.period`)
+RECORD = ("summary.json", "window/audit.json", "window/registration.json", "window/program.json", "window/case.json")
+#: a member's verdicts in the audit record: the prover's own verifier's, Lean's of the session, and Lean's of its sample
+VERDICTS = ("m0-verifier", "lean-verify", "lean-draw")
 
 pytestmark = pytest.mark.slow
 
@@ -82,8 +83,6 @@ def binaries(tmp_path_factory) -> dict[str, Path]:
     lean = {"lean": LEAN / "flock-verify", "firewall": LEAN / "flock-firewall"}
     if not all(p.is_file() for p in lean.values()):
         pytest.skip(f"no {' or '.join(p.name for p in lean.values())} under {LEAN}: check's lean-build step builds them")
-    if shutil.which("cargo") is None and not (Path.home() / ".cargo" / "bin" / "cargo").is_file():
-        pytest.skip("no cargo: flock-circuit is built by verity/ml/flock/check_build.sh bin, minutes on a cold checkout")
     prover = tmp_path_factory.mktemp("flock-circuit") / "flock-circuit"
     p = subprocess.run(["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh"), "bin", str(prover)],
                        capture_output=True, text=True)
@@ -112,19 +111,22 @@ def _audit(tmp: Path, window: Path, binaries: dict[str, Path], *flags: str) -> t
 
 def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_path, binaries):
     """Both members are sampled, each one's session is accepted by the prover's own verifier and by Lean's, the audit
-    record accepts with every negative refused, the stream's rule is the rate of the window's design, which the service
-    takes where it refuses the design's fixed count, and the record holds the files the later steps read."""
+    record accepts with every negative refused, and the record holds the files the later steps read. The stream's rule is
+    the rate the audit makes of the window's design (`records_audit.rule_of`), which the service takes where it refuses the
+    design's fixed count, and the stream sampled by it accepts its outcome on the challenger's coins."""
     window = _window(tmp_path / "window")
     assert RA.rule_of(D.parse_design(LAW), len(TEMPLATES)) == RULE and S.Law(RULE).text == RULE
     with pytest.raises(ValueError, match="a fixed count"):
         S.Law(LAW)
     rc, row, out, said = _audit(tmp_path, window, binaries)
     assert rc == 0 and row.get("ok") is True, said
-    assert row["population"] == 2 and row["draw"] == [0, 1], row
+    assert row["refused"] is None and row["population"] == 2 and row["draw"] == [0, 1], row
     assert [(m["template"], m["n"]) for m in row["members"]] == [(descriptor_id(t), 1) for t in TEMPLATES]
     assert row["audit"]["accepted"] is True, row["audit"]
-    assert row["audit"]["verdicts"] == {f"{v}/m{k}": True for v in ("m0-verifier", "lean-verify") for k in (0, 1)}
+    assert row["audit"]["verdicts"] == {f"{v}/m{k}": True for v in VERDICTS for k in (0, 1)}
     assert row["negatives"] and all(row["negatives"].values()), row["negatives"]
+    outcome = row["coins"]["outcome"]
+    assert (outcome["accepted"], outcome["codes"], row["coins"]["coins_reason"]) == (True, [], None), row["coins"]
     assert row["coins_session"]["error"] is None and row["coins_session"]["trusted"]["pinned_session"] is None
     assert row["fixed_before_draw"]["ok"] is True
     for k in range(len(TEMPLATES)):
@@ -137,13 +139,17 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
 
 def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
     """One bit of one member's committed output flipped, committed as consistently as an honest window (the prover's
-    self-check off, ``--forged``): every check before the sample passes, both members are sampled, and Lean refuses the
-    changed member's session and accepts the other's, so the audit record rejects."""
+    self-check off, ``--forged``): every check before the sample passes, both members are sampled, the changed member's
+    session ends with no proof and each of its verdicts refuses, the other member's accept, and the audit record
+    rejects."""
     window = _window(tmp_path / "window", flipped=True)
-    rc, row, _out, said = _audit(tmp_path, window, binaries, "--forged")
+    rc, row, out, said = _audit(tmp_path, window, binaries, "--forged")
     assert rc == 0 and row.get("ok") is True, said
-    assert row["forged"] == {"ok": True, "checks": {"checks_before_draw": True, "rejected": True, "lean_refused": True},
-                             "why": row["forged"]["why"]}, row["forged"]
+    assert row["forged"]["checks"] == {"checks_before_draw": True, "rejected": True, "lean_refused": True}, row["forged"]
     assert row["draw"] == [0, 1] and row["audit"]["accepted"] is False
-    verdicts = row["audit"]["verdicts"]
-    assert (verdicts["m0-verifier/m0"], verdicts["lean-verify/m0"], verdicts["lean-verify/m1"]) == (True, True, False), verdicts
+    assert row["audit"]["verdicts"] == {f"{v}/m{k}": k == 0 for v in VERDICTS for k in (0, 1)}, row["audit"]
+    assert sorted(row["audit"]["why"]) == sorted(f"{v}/m1" for v in VERDICTS), row["audit"]["why"]
+    for k, proofs in ((0, True), (1, False)):
+        session, = sorted((out / "window" / f"session-m{k}" / "sessions").glob("*/session.json"))
+        record = json.loads(session.read_text())
+        assert (record["verdict"]["accepted"], bool(record["proof_sha512"])) == (proofs, proofs), session
