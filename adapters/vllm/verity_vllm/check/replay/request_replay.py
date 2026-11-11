@@ -1,13 +1,13 @@
 """One request's values replayed on the CPU from its Program, evaluating only what a read reaches.
 
 `Replay` answers `CommittedStore.words` for one request: its Program's rows are evaluated by the replay's row kernels
-(`evaluate.evaluated`) on its replayed inputs, its certified prompt ids, the registered weights, and whatever else
-``given`` supplies. A row is evaluated only when a read reaches it, so what it evaluates is its readers' cone and never
-the request's batch-mates: a request's Program is its rows alone at its launch shapes. A request served from the prefix
-cache is replayed from its Program compiled with its hit recomputed (`program.predict.steps.compile_steps`'s
-``recompute_hits``), which prefills the hit from its own prompt; a Program that reads a cached prefix is refused. Its
-``arrive`` is the engine step of its Program's first step, so where that Program runs its hit's chunks in steps ahead of
-the request's own (class G, `RequestUnit.hit_steps`), it is the request's first served step less their number.
+(`evaluate.evaluated`) on its replayed inputs, its certified prompt ids and the registered weights. A row is evaluated
+only when a read reaches it, so what it evaluates is its readers' cone and never the request's batch-mates: a
+request's Program is its rows alone at its launch shapes. A request served from the prefix cache is replayed from its
+Program compiled with its hit recomputed (`program.predict.steps.compile_steps`'s ``recompute_hits``), which prefills
+the hit from its own prompt; a Program that reads a cached prefix is refused. Its ``arrive`` is the engine step of its
+Program's first step, so where that Program runs its hit's chunks in steps ahead of the request's own (class G,
+`RequestUnit.hit_steps`), it is the request's first served step less their number.
 """
 from __future__ import annotations
 
@@ -30,23 +30,20 @@ from verity_vllm.query.manifest import format as RM
 
 __all__ = ["Replay"]
 
-Given = Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
-
 
 class Replay:
     """Request ``rid``'s values replayed from its Program ``pi`` at engine step ``arrive``: ``prompt`` its certified ids,
-    ``weights(field, lo, hi)`` the registered weights, ``given(step, op_path, member, lo, hi)`` (request-local step) any
-    other input its rows read that no row of it computes (a sampler seed, a run value). `words` answers a read of
+    ``weights(field, lo, hi)`` the registered weights. `words` answers a read of
     ``(rid, engine step, op_path, member, [lo, hi))`` as `CommittedStore.words` does, evaluating the rows that produce
-    it and, first, every row of theirs not yet evaluated, in Program order. ``seconds`` is the evaluation time by row
-    family and ``rows`` the rows evaluated."""
+    it and, first, every row of theirs not yet evaluated, in Program order; an input its rows read that no row of it
+    computes (a sampler seed, a run value) is not answered, by name. ``seconds`` is the evaluation time by row family and
+    ``rows`` the rows evaluated."""
 
-    def __init__(self, pi: ProgramIndex, rid: str, prompt: Sequence[int], weights: Callable, *, arrive: int = 0,
-                 given: Given | None = None) -> None:
+    def __init__(self, pi: ProgramIndex, rid: str, prompt: Sequence[int], weights: Callable, *, arrive: int = 0) -> None:
         if pi.kv_prefix:
             raise ValueError(f"request {rid} reads a cached prefix another request computed: a span is replayed from its "
                              "Program with the hit recomputed (compile_steps(..., recompute_hits=True))")
-        self.pi, self.rid, self.arrive, self.weights, self.given = pi, str(rid), int(arrive), weights, given
+        self.pi, self.rid, self.arrive, self.weights = pi, str(rid), int(arrive), weights
         self.ids = np.asarray(list(prompt), dtype=np.uint32)
         self.embed = pi.embed_op_path()
         self.at: dict[tuple[int, str, str], tuple[int, str, dict[int, int]]] = {}
@@ -76,8 +73,6 @@ class Replay:
             return self.ids[elo:ehi].copy(), "i32"
         at = self.at.get((s, op_path, member))
         if at is None:
-            if self.given is not None:
-                return self.given(s, op_path, member, elo, ehi)
             return None, f"no row of request {rid} commits ({op_path}/{member}) at its step {s}, and nothing gives it"
         width, dtype, by = at
         if ehi <= elo or elo < 0:
