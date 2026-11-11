@@ -8,14 +8,15 @@
 # scratch directory removed on exit, unless P2_LIB names one; and the two Lean verifiers that decide, pous-run-protocol
 # (PoUS's case) and remote-audit-p2-protocol (PoUB-P2's), built in a scratch copy of verity/, never in this tree's .lake,
 # which served_verdicts.sh's Lean builds write meanwhile, unless POUS_EXE and BW_CASE_EXE name ones built already. Under
-# one lease of the card (gpu-lease, at most LEASE_MIN minutes, default 60, and MEM_GB GiB of host memory, default 72; in
+# one lease of the card (gpu-lease, at most LEASE_MIN minutes, default 90, and MEM_GB GiB of host memory, default 72; in
 # the caller's lease when GPU_LEASE_UUID is set): served_piece.py with vLLM's venv (PY, default
 # /workspace/cp/venv312/bin/python), the snapshot under HF_HOME (default /workspace/hf) and the memory challenger on
 # vy-auditor-2, its case answered by pous-run-protocol, which must agree with the Python. MEM_GB's default is
 # served_case.sh's, by its estimate: about 4 times the case's line while the Lean answers it, beside the snapshot's table
-# and the card's runtime. Once PoUS's session completes, the same process runs PoUB-P2's session over the store it holds,
-# against vy-auditor-2's bandwidth party for at most BW_PARTY_MIN minutes (default 10, the gate's cap), the case answered
-# by remote-audit-p2-protocol; its answer goes to DIR's sibling bandwidth, which BANDWIDTH_CMD collects
+# and the card's runtime; LEASE_MIN's leaves the Lean's answer its time between the two sessions. Once PoUS's session
+# completes and its case is answered, the same process runs PoUB-P2's session over the store it holds, against
+# vy-auditor-2's bandwidth party for at most BW_PARTY_MIN minutes (default 10, the gate's cap), the case answered by
+# remote-audit-p2-protocol; its answer goes to DIR's sibling bandwidth, which BANDWIDTH_CMD collects
 # (served_bandwidth.py collect), and its case to SERVE_DIR/private/bandwidth. The session it asks for is the auditor's
 # (p2_party.SESSION), which the party holds every request to: with another value in POUS_ARGS's --bw-* the party refuses
 # it and the bandwidth answer is undecided. POUS_ARGS adds served_piece.py's options (--node, --private, --rounds,
@@ -60,7 +61,7 @@ if [ -n "${GPU_LEASE_UUID:-}" ] || ! command -v gpu-lease > /dev/null 2>&1; then
   "$PY" "${ARGS[@]}" 2>> "$DIR/pous.log"
 else
   # shellcheck disable=SC2016
-  GPU_LEASE_WHO=${GPU_LEASE_WHO:-memory-accounting} gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" --mem-gb "${MEM_GB:-72}" -- \
+  GPU_LEASE_WHO=${GPU_LEASE_WHO:-memory-accounting} gpu-lease 1 --wait --max-min "${LEASE_MIN:-90}" --mem-gb "${MEM_GB:-72}" -- \
     bash -c 'echo "leased $GPU_LEASE_UUID at $(date -u +%H:%M:%SZ)" >&2; export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID; exec "$@"' \
     _ "$PY" "${ARGS[@]}" 2>> "$DIR/pous.log"
 fi

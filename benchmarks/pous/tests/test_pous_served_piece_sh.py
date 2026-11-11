@@ -85,7 +85,7 @@ def test_the_two_leans_are_built_in_a_scratch_copy_before_the_card_is_asked_for(
     assert run == ["build", RUN_EXE, "package"] and bw == ["build", BW_EXE, "package"]
     scratch = Path(check[:-len(CHECK)])
     assert check.endswith("/" + CHECK) and audit == str(scratch / AUDIT) and ROOT not in scratch.parents
-    assert lease[:6] == ["lease", "1", "--wait", "--max-min", "60", "--mem-gb"] and lease[6] == "72"
+    assert lease[:7] == ["lease", "1", "--wait", "--max-min", "90", "--mem-gb", "72"]
     assert piece == ["piece", "GPU-own0"]
     argv = Path(node["FAKE_ARGV"]).read_text().splitlines()
     exes = [str(scratch / CHECK / ".lake/build/bin" / RUN_EXE), str(scratch / AUDIT / ".lake/build/bin" / BW_EXE)]
@@ -126,6 +126,23 @@ def test_a_lean_that_does_not_build_is_no_answer_and_starts_neither_the_card_nor
     log = _log(node)
     assert [line[0] for line in log] == ["lake"] * builds and not Path(node["FAKE_ARGV"]).exists()
     assert not Path(log[0][1][:-len(CHECK)]).exists() and not (d / "answer.json").exists()
+
+
+@pytest.mark.parametrize("env, want", [
+    ({}, "120m"), ({"PIECE_TIMEOUT": "45m"}, "45m"), ({"POUS_TIMEOUT": "3h", "PIECE_TIMEOUT": "45m"}, "3h"),
+    ({"POUS_CMD": ""}, "")])
+def test_the_composed_run_gives_the_piece_time_for_its_leans(tmp_path, env, want):
+    """`onsite_piece_commands` sets the piece's limit with its command, exported for `served_verdicts.py pieces`:
+    POUS_TIMEOUT where set, else PIECE_TIMEOUT's, else its own default; with no PoUS piece it sets none."""
+    tree, home = tmp_path / "tree", tmp_path / "home"
+    (tree / "benchmarks/pous").mkdir(parents=True)
+    (tree / "benchmarks/pous/served_piece.sh").write_text("")
+    (home / ".ssh").mkdir(parents=True)
+    (home / ".ssh/vy-auditor2-pous").write_text("")
+    got = subprocess.run(["bash", "-uc", f'. {SCRIPT.parent / "onsite_pieces.sh"}; onsite_piece_commands; '
+                          'exec env'], env={"PATH": os.defpath, "HOME": str(home), "TREE": str(tree)} | env,
+                         check=True, capture_output=True, text=True).stdout.splitlines()
+    assert [line for line in got if line.startswith("POUS_TIMEOUT=")] == ([f"POUS_TIMEOUT={want}"] if want else [])
 
 
 def test_the_scratch_copy_holds_every_package_the_two_leans_require():

@@ -8,6 +8,8 @@
 #                      challenger's key (~/.ssh/vy-auditor2-pous); that piece runs the bandwidth session over the store it
 #                      holds and writes its answer where the bandwidth piece's goes, and each of the two cases is
 #                      answered by its Lean (pous-run-protocol, remote-audit-p2-protocol), which the piece builds
+#       POUS_TIMEOUT   with POUS_CMD, that piece's limit: PIECE_TIMEOUT's where set, else 120m, which leaves the Lean
+#                      builds and pous-run-protocol's answer on a served case their time beside the two sessions
 #       BANDWIDTH_CMD  once POUS_CMD is set, '"$PY" benchmarks/one_stage/served_bandwidth.py collect ...', which collects
 #                      it; with no PoUS piece, 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"' where the
 #                      tree has it and this node holds the bandwidth verifier's key (~/.ssh/vy-auditor2-bw) and its
@@ -28,6 +30,7 @@ onsite_piece_commands() {
     && POUS_CMD=${POUS_CMD-'bash benchmarks/pous/served_piece.sh "$@"'}
   # shellcheck disable=SC2016
   if [ -n "${POUS_CMD:-}" ]; then
+    export POUS_TIMEOUT=${POUS_TIMEOUT:-${PIECE_TIMEOUT:-120m}}
     BANDWIDTH_CMD=${BANDWIDTH_CMD-'"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'}
   elif [ -f "$TREE/benchmarks/one_stage/served_bandwidth.sh" ] && [ -f "$HOME/.ssh/vy-auditor2-bw" ] \
     && [ -f "${BW_STORE:-/workspace/research/pous-store/mem69-v2}/setup.json" ]; then
