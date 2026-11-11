@@ -1,12 +1,16 @@
 """research.retention: the `research/retention/v0` record, implicit records from `.custody`, the report, and gc's default policy.
-Pure Python over tmp trees; the clock, the disk, the remote check and the in-use check are fakes (an fs remote for the real check)."""
+Pure Python over tmp trees; the clock, the disk, the remote check and the in-use check are fakes (an fs remote for the real check,
+whose manifests' ages a test sets)."""
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 import socket
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -14,8 +18,11 @@ import pytest
 from research import retention as R
 from research.cli import main as research_main
 from research.store import custody as CU
+from research.store import remote as RM
+from research.store import vocab
 from research.store.local import LocalStore
 
+REPO = Path(__file__).resolve().parents[3]
 NOW = datetime(2026, 10, 1, 19, 30, tzinfo=timezone.utc)
 PAST, FUTURE = "2026-09-25T00:00:00Z", "2026-10-08T00:00:00Z"
 NODE = "vy-test"
@@ -77,8 +84,11 @@ def never_in_use(_path: Path) -> None:
     return None
 
 
-def preserved_ok(_art: str, _path: Path) -> None:
-    return None
+VERIFIED = R.Stored("verified", "verified on the remote")
+
+
+def preserved_ok(_art: str, _path: Path) -> R.Stored:
+    return VERIFIED
 
 
 def run_gc(root: Path, disk: Disk, **kw):
@@ -300,9 +310,9 @@ def test_gc_deletes_only_what_a_valid_expired_collectable_recoverable_unused_rec
     (queue / "job-1.sh").write_text(f"#!/bin/bash\n# fill: owner=bc-1\npython verify.py --passes {root}/pouw/named/blob.bin\n")
     checked = []
 
-    def remote(art: str, path: Path) -> str | None:
+    def remote(art: str, path: Path) -> R.Stored:
         checked.append(path.name)
-        return "objects/sha256/…: absent"
+        return R.Stored("mismatch", "objects/sha256/…: absent")
 
     plan = run_gc(root, Disk(100 * UNIT, 99 * UNIT, []), apply=True, force=True, low_pct=0, remote_check=remote,
                   in_use=R.JobScripts([queue], root))
@@ -367,14 +377,14 @@ def test_a_dry_run_deletes_nothing_and_reads_no_remote(tmp_path):
     b = kept(tmp_path, "pouw/b")
     run_dir(tmp_path, "research/runs/r1")
 
-    def remote(_art: str, _path: Path) -> str | None:
+    def remote(_art: str, _path: Path) -> R.Stored:
         raise AssertionError("a dry run reads no remote")
 
     plan = run_gc(tmp_path, Disk(20 * UNIT, 15 * UNIT, [a, b]), remote_check=remote, low_pct=0)
     deletes = [x for x in plan["actions"] if x["action"] == "delete"]
     assert {x["path"] for x in deletes} == {"pouw/a", "pouw/b", "research/runs/r1"} and not plan["apply"]
     assert all(x["reason"].startswith("would delete: ") for x in deletes)
-    assert "re-verified on the remote just before an --apply deletes it" in by_path(plan)["pouw/a"]["reason"]
+    assert "checked on the remote just before an --apply deletes it" in by_path(plan)["pouw/a"]["reason"]
     assert a.exists() and b.exists() and (tmp_path / "research/runs/r1").exists()
 
 
@@ -386,10 +396,11 @@ def test_gc_deletes_a_recorded_file_with_its_sidecar_and_an_expired_implicit_run
     r1 = run_dir(tmp_path, "research/runs/r1")
     seen = []
     plan = run_gc(tmp_path, Disk(20 * UNIT, 18 * UNIT, []), apply=True, force=True, low_pct=0,
-                  remote_check=lambda art, p: seen.append((art, p)) or None)
+                  remote_check=lambda art, p: seen.append((art, p)) or VERIFIED)
     assert not f.exists() and not R.sidecar(f).exists() and not r1.exists()
-    assert seen == [(ART, r1)], "the run record is what is re-verified"
-    assert by_path(plan)["research/runs/r1"]["reason"].startswith("deleted: normal, expired 2026-09-23T00:00:00Z, preserved art:")
+    assert seen == [(ART, r1)], "the run record is what is checked"
+    assert by_path(plan)["research/runs/r1"]["reason"] == f"deleted: normal, expired 2026-09-23T00:00:00Z, preserved {ART} (verified on the remote)"
+    assert plan["stored"] == {**dict.fromkeys(R.STORED, 0), "verified": 1}, "a regenerable path asks no remote"
 
 
 def test_gc_skips_a_path_a_job_queued_during_gc_names(tmp_path):
@@ -433,6 +444,168 @@ def vault_store(tmp_path, monkeypatch) -> Path:
     return tmp_path / "store"
 
 
+def aged(vault: Path, art: str, *, days: float) -> None:
+    """Make `art`'s manifest on the fs remote `days` old at NOW: its age is what the store's time to live counts from."""
+    t = (NOW - timedelta(days=days)).timestamp()
+    os.utime(vault / "manifests" / f"{art.removeprefix('art:')}.json", (t, t))
+
+
+def stored_run(root: Path, st: LocalStore, name: str, *, push: bool = True) -> tuple[Path, str]:
+    """An expired run dir under `root` whose run record custody put in `st` (and pushed, a day before NOW), as its marker says.
+    `out/result.txt` is the one file only this run holds, so its blob is the one only its record holds."""
+    d = run_dir(root, f"research/runs/{name}", extra={"out/result.txt": name.encode() * 64})
+    art = CU.put_run_record(st, d, name)
+    (d / CU.MARKER).write_text(json.dumps({**json.loads((d / CU.MARKER).read_text()), "run_record": art}))
+    assert CU.marker_problem(d) is None
+    if push:
+        assert st.push(art, preserve=True)["preserved"]
+        aged(Path(st.remote.root), art, days=1)
+    return d, art
+
+
+def dropped(vault: Path, d: Path, art: str, *, days: float) -> None:
+    """Leave of `art` on the fs remote what the store's gc or a withdrawal leaves: its manifest, `days` old at NOW, and the blobs
+    another artifact holds; the blob only it holds is gone."""
+    (vault / "objects" / "sha256" / hashlib.sha256((d / "out/result.txt").read_bytes()).hexdigest()).unlink()
+    aged(vault, art, days=days)
+
+
+def collect(root: Path, store: Path, **kw) -> dict:
+    """One forced --apply over `root` with the real remote check against `store`."""
+    return run_gc(root, Disk(20 * UNIT, 18 * UNIT, []), apply=True, force=True, low_pct=0, remote_check=R.store_check(str(store), clock), **kw)
+
+
+def stored(**counts: int) -> dict[str, int]:
+    return {**dict.fromkeys(R.STORED, 0), **counts}
+
+
+def test_gc_deletes_a_run_whose_stored_copy_the_remote_holds(tmp_path, vault_store):
+    d, art = stored_run(tmp_path / "ws", LocalStore(vault_store), "r-held")
+    plan = collect(tmp_path / "ws", vault_store)
+    a = by_path(plan)["research/runs/r-held"]
+    assert not d.exists() and (a["action"], a["stored"]) == ("delete", "verified") and plan["stored"] == stored(verified=1)
+    assert a["reason"] == f"deleted: normal, expired 2026-09-23T00:00:00Z, preserved {art} (verified on the remote)"
+
+
+def test_gc_deletes_a_run_whose_stored_copy_expired_on_the_remote_but_not_one_too_young_to_have(tmp_path, vault_store):
+    """The store drops an uncited run record's blobs once its manifest is 7 days old and keeps the manifest. Its copy gone that way
+    was given up by the store's own rule, so the node's goes too; a blob gone from a younger record is not that rule's doing."""
+    st, vault = LocalStore(vault_store), tmp_path / "vault"
+    old, old_art = stored_run(tmp_path / "ws", st, "r-old")
+    young, young_art = stored_run(tmp_path / "ws", st, "r-young")
+    dropped(vault, old, old_art, days=7)
+    dropped(vault, young, young_art, days=6.9)
+    plan = collect(tmp_path / "ws", vault_store)
+    acts = by_path(plan)
+    assert not old.exists() and young.exists() and plan["stored"] == stored(expired=1, mismatch=1)
+    assert acts["research/runs/r-old"]["reason"] == (f"deleted: normal, expired 2026-09-23T00:00:00Z, preserved {old_art} (expired on the "
+                                                     "remote: a run-record/v1 lives 7 d there, and its manifest is 7.0 d old)")
+    assert acts["research/runs/r-young"]["reason"].endswith(": absent, which neither a withdrawal nor its kind's time to live explains")
+
+
+def test_gc_deletes_a_run_whose_stored_copy_was_withdrawn(tmp_path, vault_store):
+    """`research data withdraw` deletes an artifact's blobs whatever its age and labels it; the label reaches this store from the
+    remote, where another machine put it."""
+    st, vault = LocalStore(vault_store), tmp_path / "vault"
+    d, art = stored_run(tmp_path / "ws", st, "r-withdrawn")
+    dropped(vault, d, art, days=1)
+    elsewhere = LocalStore(tmp_path / "elsewhere")
+    elsewhere.add_label(art, vocab.WITHDRAWN, "values that must not be shared", "bc-elsewhere", ts="2026-09-30T00:00:00Z")
+    assert not elsewhere.push_labels([art])["failed"] and st.withdrawn(art) is None
+    plan = collect(tmp_path / "ws", vault_store)
+    a = by_path(plan)["research/runs/r-withdrawn"]
+    assert not d.exists() and plan["stored"] == stored(withdrawn=1)
+    assert a["reason"].endswith(f"preserved {art} (withdrawn from the remote: 'values that must not be shared', by bc-elsewhere)")
+
+
+def test_gc_keeps_and_counts_a_run_the_remote_never_stored(tmp_path, vault_store):
+    """A marker that says preserved, for a record the remote has no manifest of: nothing says the data was ever stored, so the
+    node's copy may be the only one."""
+    d, art = stored_run(tmp_path / "ws", LocalStore(vault_store), "r-never", push=False)
+    plan = collect(tmp_path / "ws", vault_store)
+    a = by_path(plan)["research/runs/r-never"]
+    assert d.exists() and (a["action"], a["stored"]) == ("skip", "unknown") and plan["stored"] == stored(unknown=1)
+    assert a["reason"] == (f"preserved {art} is not verified on the remote: fs:{tmp_path / 'vault'} has no manifest for it, so it "
+                           "never stored it")
+
+
+def test_a_pass_that_cannot_ask_the_remote_keeps_the_run_and_exits_1(tmp_path, vault_store, monkeypatch, capsys):
+    monkeypatch.setattr(R, "utc_now", clock)
+    monkeypatch.setattr(R, "DEFAULT_JOBS_DIRS", ())
+    root = tmp_path / "ws"
+    d, art = stored_run(root, LocalStore(vault_store), "r-asked")
+    (root / "research/runs/r-asked" / CU.MARKER).write_text((d / CU.MARKER).read_text().replace(NODE, socket.gethostname()))
+    regenerable = data(root, "pouw/regenerable")
+    R.keep(regenerable, root=root, owner="@pouw", expires=PAST, priority="low", regenerate="make it", now=clock)
+    argv = ["retention", "gc", "--root", str(root), "--force", "--low-pct", "0", "--apply"]
+
+    def refused(_self, key: str):
+        raise ConnectionError(f"HEAD {key}: connection refused")
+
+    with monkeypatch.context() as m:
+        m.setattr(RM.FsRemote, "head", refused)
+        assert research_main([*argv, "--store", str(vault_store)]) == 1
+    out = capsys.readouterr().out
+    assert d.exists() and not regenerable.exists(), "what needs no remote still goes"
+    assert f"preserved {art} is not verified on the remote: ConnectionError: HEAD manifests/{art[4:]}.json: connection refused" in out
+    assert out.splitlines()[-1] == ("stored copies of the preserved paths it asked about: 0 verified, 0 expired, 0 withdrawn (deleted); "
+                                    "0 uncovered, 0 mismatch, 0 unknown, 1 unreachable (kept); a copy that could not be asked about fails "
+                                    "the pass")
+
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))           # a node: no store key, so no remote
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "empty-store"))                 # and not the node's store
+    assert research_main([*argv, "--json"]) == 1
+    plan = json.loads(capsys.readouterr().out)
+    a = by_path(plan)["research/runs/r-asked"]
+    assert d.exists() and a["stored"] == "unreachable" and plan["stored"] == stored(unreachable=1)
+    assert a["reason"].endswith(f"no remote can be asked from here, and the store at {tmp_path / 'empty-store'} doesn't vouch for it "
+                                "(on a node, --store or RESEARCH_STORE names the node's store, /workspace/research/store)")
+    assert research_main([*argv, "--store", str(vault_store)]) == 0, "the node's store vouches for it: custody verified the replica"
+    assert not d.exists() and "1 verified, 0 expired" in capsys.readouterr().out
+
+
+def test_inode_pressure_alone_starts_a_pass_through_research(tmp_path, monkeypatch, capsys):
+    """A volume at a third of its blocks and 96% of its inodes refuses writes as a full one does: the pass the timer runs
+    (`research retention gc --apply`, no --force) acts on it, and stops once the inodes are under --low-pct."""
+    monkeypatch.setattr(R, "utc_now", clock)
+    monkeypatch.setattr(R, "DEFAULT_JOBS_DIRS", ())
+    monkeypatch.setattr(R, "store_check", lambda _root, _now: preserved_ok)
+    a, b = (kept(tmp_path, f"pouw/{x}", node=socket.gethostname(), expires=e) for x, e in (("a", "2026-09-01T00:00:00Z"), ("b", PAST)))
+    monkeypatch.setattr(R, "disk_usage", lambda _p: (300, 100, 200))
+    argv = ["retention", "gc", "--root", str(tmp_path), "--apply"]
+    monkeypatch.setattr(R, "inode_usage", lambda _p: (1000, 790))
+    assert research_main(argv) == 0 and "not over 80%: nothing to do" in capsys.readouterr().out and a.exists() and b.exists()
+    monkeypatch.setattr(R, "inode_usage", lambda _p: (1000, 730 + 220 * a.exists() + 10 * b.exists()))
+    assert research_main(argv) == 0
+    out = capsys.readouterr().out
+    assert f"applying: {tmp_path} at 96.0% (acts over 80%; deletes until under 75%)" in out and "deleted 1 path(s)" in out
+    assert not a.exists() and b.exists() and "not needed: the filesystem is at 74.0%, under 75%" in out, "the oldest expiry sufficed"
+
+
+def test_a_pass_deletes_at_most_max_paths_and_the_next_takes_the_rest(tmp_path, monkeypatch, capsys):
+    paths = [kept(tmp_path, f"pouw/{i}", expires=f"2026-09-0{i}T00:00:00Z") for i in (1, 2, 3)]
+    disk = Disk(20 * UNIT, 15 * UNIT, paths)
+    plan = run_gc(tmp_path, disk, apply=True, force=True, low_pct=0, max_paths=2)
+    assert [p.exists() for p in paths] == [False, False, True] and (plan["capped"], plan["max_paths"]) == (1, 2)
+    assert by_path(plan)["pouw/3"]["reason"] == "left for the next pass: this one has its 2 path(s) (--max-paths)"
+    dry = run_gc(tmp_path, disk, force=True, low_pct=0, max_paths=0)
+    assert dry["capped"] == 1 and paths[2].exists(), "a cap of none deletes none"
+    assert run_gc(tmp_path, disk, apply=True, force=True, low_pct=0, max_paths=2)["capped"] == 0 and not paths[2].exists()
+
+    monkeypatch.setattr(R, "utc_now", clock)
+    monkeypatch.setattr(R, "DEFAULT_JOBS_DIRS", ())
+    monkeypatch.setattr(R, "MAX_PATHS", 1)
+    for i in (1, 2):
+        kept(tmp_path, f"pouw/{i}", expires=f"2026-09-0{i}T00:00:00Z", node=socket.gethostname())
+    argv = ["retention", "gc", "--root", str(tmp_path), "--force", "--low-pct", "0", "--json"]
+    assert research_main([*argv, "--max-paths", "-1"]) == 2 and "give a count, or 0 for no cap" in capsys.readouterr().err
+    assert research_main(argv) == 0
+    assert json.loads(capsys.readouterr().out)["capped"] == 1, "the command's default cap is MAX_PATHS"
+    assert research_main([*argv, "--max-paths", "0"]) == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert (plan["capped"], plan["max_paths"]) == (0, None), "0 lifts the cap"
+
+
 def test_the_default_check_needs_the_artifact_to_hold_the_paths_files_and_be_preserved(tmp_path, vault_store):
     root = tmp_path / "ws"
     d = data(root, "research/runs/r1")
@@ -441,18 +614,21 @@ def test_the_default_check_needs_the_artifact_to_hold_the_paths_files_and_be_pre
     assert st.push(art, preserve=True)["preserved"]
     (d / CU.MARKER).write_text("{}")                                          # custody's marker and the sidecar are not data
     R.keep(d, root=root, owner="@x", expires=PAST, priority="low", preserved=art, now=clock, node=NODE)
-    check = R.store_check(str(vault_store))
-    assert check(art, d) is None
+    check = R.store_check(str(vault_store), clock)
+    assert check(art, d) == VERIFIED
     (d / "late.bin").write_bytes(b"l")
-    assert check(art, d) == "1 file(s) under it are not in the artifact at their size, e.g. late.bin"
+    assert check(art, d) == R.Stored("uncovered", "1 file(s) under it are not in the artifact at their size, e.g. late.bin")
     (d / "late.bin").unlink()
     (d / "blob.bin").write_bytes(b"x" * (UNIT - 1))
-    assert "e.g. blob.bin" in check(art, d)
+    assert check(art, d).state == "uncovered" and "e.g. blob.bin" in check(art, d).why
     (d / "blob.bin").write_bytes(b"x" * UNIT)
-    blob = hashlib.sha256(b"x" * UNIT).hexdigest()
-    (tmp_path / "vault" / "objects" / "sha256" / blob).unlink()
-    assert check(art, d) == f"objects/sha256/{blob}: absent"
-    assert R.store_check(str(vault_store))("art:" + "f" * 64, d).startswith("NotFound")
+    aged(tmp_path / "vault", art, days=0)
+    blob = tmp_path / "vault" / "objects" / "sha256" / hashlib.sha256(b"x" * UNIT).hexdigest()
+    blob.write_bytes(b"z" * UNIT)
+    assert check(art, d).state == "mismatch" and "!= local MD5" in check(art, d).why
+    blob.unlink()
+    assert check(art, d) == R.Stored("mismatch", f"objects/sha256/{blob.name}: absent, which neither a withdrawal nor its kind's "
+                                                 "time to live explains"), "the manifest is younger than a run record lives"
 
 
 def test_without_a_remote_the_check_trusts_the_catalogs_verified_replica(tmp_path, vault_store, monkeypatch):
@@ -465,9 +641,10 @@ def test_without_a_remote_the_check_trusts_the_catalogs_verified_replica(tmp_pat
     unpushed = st.put_artifact("run-record/v1", {"run_id": "r2"}, tree=e)
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
     assert LocalStore(vault_store).remote is None
-    check = R.store_check(str(vault_store))
-    assert check(art, d) is None
-    assert "no verified remote replica recorded in the local catalog" in check(unpushed, e)
+    check = R.store_check(str(vault_store), clock)
+    assert check(art, d) == R.Stored("verified", "verified on the remote when custody pushed it, by this store's catalog")
+    found = check(unpushed, e)
+    assert found.state == "unreachable" and "no verified remote replica recorded in the local catalog" in found.why
 
 
 def test_a_run_dir_whose_record_custody_trimmed_is_never_deleted(tmp_path, vault_store, monkeypatch):
@@ -516,11 +693,14 @@ def test_keep_preserve_then_show_then_gc_through_research(tmp_path, vault_store,
     plan = json.loads(capsys.readouterr().out)
     assert by_path(plan)["pouw/gpu3-fp8/bitsets"]["action"] == "delete" and d.exists(), "a dry run by default"
     real = R.store_check
-    monkeypatch.setattr(R, "store_check", lambda store: lambda art, p: "unreachable" if p.name == "r1" else real(store)(art, p))
+    monkeypatch.setattr(R, "store_check", lambda store, now: lambda art, p: (R.Stored("unknown", "no manifest for it") if p.name == "r1"
+                                                                             else real(store, now)(art, p)))
     assert research_main(["retention", "gc", "--root", str(root), "--store", str(vault_store), "--apply"]) == 0
     out = capsys.readouterr().out
     assert not d.exists() and (root / "research/runs/r1").exists()
-    assert "DELETE" in out and "pouw/gpu3-fp8/bitsets" in out and "is not verified on the remote: unreachable" in out
+    assert "DELETE" in out and "pouw/gpu3-fp8/bitsets" in out and "is not verified on the remote: no manifest for it" in out
+    assert out.splitlines()[-1] == ("stored copies of the preserved paths it asked about: 1 verified, 0 expired, 0 withdrawn (deleted); "
+                                    "0 uncovered, 0 mismatch, 1 unknown, 0 unreachable (kept)")
 
 
 def test_keep_refuses_a_bad_owner_and_a_bad_expiry_and_report_prints_a_table(tmp_path, monkeypatch, capsys):
@@ -659,16 +839,17 @@ def test_rm_deletes_passes_only_once_their_record_names_an_artifact_verified_on_
         assert a["reason"].startswith("it holds retained passes and pouw/mvp-e2e is kept by @compute-accounting")
     passes(root)
     seen = []
-    plan = R.rm([p0], apply=True, remote_check=lambda art, p: seen.append((art, p)) or "404 on the remote", **kw)
+    plan = R.rm([p0], apply=True, remote_check=lambda art, p: seen.append((art, p)) or R.Stored("expired", "404 on the remote"), **kw)
     a = plan["actions"][0]
     assert a["action"] == "failed" and p0.exists() and seen == [(ART, root / "pouw/mvp-e2e")], "the record's whole tree is checked"
+    assert a["error"].endswith("404 on the remote"), "retained passes go only while the remote holds them: an expired copy refuses"
     assert a["error"] == f"it holds retained passes, and preserved {ART} is not verified on the remote: 404 on the remote"
     assert R.rm([p0], remote_check=lambda *_: pytest.fail("a dry run reads no remote"), **kw)["actions"][0]["action"] == "delete"
 
 
 def test_rm_through_research(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(R, "utc_now", clock)
-    monkeypatch.setattr(R, "store_check", lambda _root: preserved_ok)
+    monkeypatch.setattr(R, "store_check", lambda _root, _now: preserved_ok)
     monkeypatch.setattr(R, "DEFAULT_JOBS_DIRS", ())
     monkeypatch.delenv("RESEARCH_AGENT_URL", raising=False)
     root = tmp_path / "ws"
@@ -685,6 +866,83 @@ def test_rm_through_research(tmp_path, monkeypatch, capsys):
     assert research_main([*base, "--approved-by", "@compute-accounting", "--apply"]) == 0
     assert not p0.exists() and not p1.exists() and "deleted 2 of 2 path(s)" in capsys.readouterr().out
     assert [x["by"] for x in log_lines(root)][-2:] == [BY, BY]
+
+
+WHO = "r20261109-000500-ab12 (pid 4242)"
+
+
+def lean_tree(tree: Path, who: str | None = WHO) -> Path:
+    """A Lean records tree as `lean_changed.hold_tree` leaves it: its `.lock`, the `.who` naming the run, and a build."""
+    (tree / "pkg/.lake/build/lib/lean").mkdir(parents=True)
+    (tree / "pkg/.lake/build/lib/lean/Pkg.olean").write_bytes(b"olean")
+    (tree / R.LEAN_LOCK).touch()
+    if who is not None:
+        (tree / R.LEAN_WHO).write_text(who + "\n")
+    return tree
+
+
+@contextlib.contextmanager
+def held(tree: Path):
+    """A run working in `tree`: its `.lock` held, as `hold_tree` holds it."""
+    with open(tree / R.LEAN_LOCK, "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+
+
+def test_rm_refuses_a_lean_records_tree_a_run_holds_naming_the_run_and_deletes_it_once_free(tmp_path):
+    """Retention deleting a slot's records tree under its build crashed the run (FileNotFoundError on its .olean files): a path
+    that is, lies in or holds a tree whose lock a run holds is refused, the link to a tree on a larger volume and that volume's
+    directory alike, and deleted once the run ends."""
+    root = tmp_path / "ws"
+    kept(root, "research/home-cache", owner="@lean", expires=FUTURE)
+    kept(root, "research/cache", owner="@lean", expires=FUTURE)
+    records = root / "research/home-cache/verity-check" / R.LEAN_RECORDS
+    slot = lean_tree(records / "build-0")
+    volume = lean_tree(root / "research/cache/verity-check-root/lean-records_build-1")
+    (records / "build-1").symlink_to(volume, target_is_directory=True)
+    paths = [slot, slot / "pkg/.lake/build/lib/lean/Pkg.olean", records, records / "build-1", volume]
+    kw = {"approved_by": "@lean", "ref": REF, "root": root, "by": BY, "in_use": never_in_use, "now": clock, "node": NODE}
+    with held(slot), held(volume):
+        plan = R.rm(paths, apply=True, **kw)
+    assert all(p.exists() for p in paths) and plan["freed_bytes"] == 0
+    why = [a["reason"] for a in plan["actions"]]
+    assert [a["action"] for a in plan["actions"]] == ["refuse"] * 5
+    assert why[0] == why[1] == why[2] == (f"{slot} is a Lean records tree, and {WHO} holds its lock ({slot / '.lock'}): deleting it "
+                                          f"would crash that build; retry when the run ends")
+    assert why[3].startswith(f"{records / 'build-1'} is a Lean records tree, and {WHO} holds its lock"), "the link names it"
+    assert why[4].startswith(f"{volume} is a Lean records tree, and {WHO} holds its lock"), "its `.who` marks the link's target"
+    (slot / R.LEAN_WHO).unlink()
+    with held(slot):
+        assert "and a run its .who does not name holds its lock" in R.rm([slot], **kw)["actions"][0]["reason"]
+    assert [a["action"] for a in R.rm([records, volume], apply=True, **kw)["actions"]] == ["delete", "delete"]
+    assert not records.exists() and not volume.exists()
+
+
+def test_gc_skips_a_lean_records_tree_a_run_holds_and_takes_it_once_free(tmp_path):
+    root = tmp_path / "ws"
+    tree = kept(root, "research/home-cache/verity-check/lean-records")
+    lean_tree(tree / "build-0")
+    with held(tree / "build-0"):
+        plan = run_gc(root, Disk(100 * UNIT, 99 * UNIT, [tree]), force=True, low_pct=0, apply=True)
+    (a,) = plan["actions"]
+    assert a["action"] == "skip" and tree.exists()
+    assert a["reason"].startswith(f"in use: {tree / 'build-0'} is a Lean records tree, and {WHO} holds its lock")
+    plan = run_gc(root, Disk(100 * UNIT, 99 * UNIT, [tree]), force=True, low_pct=0, apply=True)
+    assert plan["actions"][0]["action"] == "delete" and not plan["actions"][0]["error"] and not tree.exists()
+
+
+def test_a_lean_records_tree_is_in_use_exactly_when_lean_audits_prune_keeps_it(tmp_path):
+    """Retention reads the lock `lean_audit.prune_records` takes (and `lean_changed.hold_tree` holds): a tree it would keep for a
+    run, retention leaves; one it would remove, retention may delete."""
+    spec = importlib.util.spec_from_file_location("lean_audit_for_retention", REPO / "tools/verity/lean/lean_audit.py")
+    la = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(la)
+    store = tmp_path / R.LEAN_RECORDS
+    busy, idle = lean_tree(store / "busy"), lean_tree(store / "idle", who=None)
+    with held(busy):
+        assert R.lean_in_use(busy, tmp_path).startswith(f"{busy} is a Lean records tree") and R.lean_in_use(idle, tmp_path) is None
+        assert la.prune_records(store, kept=0, slots=0) == 1
+    assert busy.exists() and not idle.exists()
 
 
 def test_expires_now_is_what_rm_tells_an_owner_to_record():

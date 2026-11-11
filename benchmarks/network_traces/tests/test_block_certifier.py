@@ -24,13 +24,13 @@ import pytest
 from verity.ml.circuits.codec import canonical_json
 
 HERE = Path(__file__).resolve().parents[1]
-ROOT = HERE.parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(HERE))
 import block_certifier as BC  # noqa: E402
 
 ANSWERS = json.loads((Path(__file__).parent / "fixtures" / "certifier-period-answers.json").read_text())
 CLOCK_RUN, ROWS_RUN = "r20261025-213746-7692", "r20261025-235229-305e"
-E2E = ROOT / "examples" / "h200" / "interfaces"
+E2E = ROOT / "examples/h200/interfaces"
 BLOCK_SCHEMA = E2E / "verity_e2e_demo" / "schemas" / "block-record.v2.schema.json"
 
 
