@@ -1,5 +1,5 @@
 """A window's ``cols`` units in chunks (`pipeline.serving_rows`, ``CHUNKED``): the column blocks of MoeSum, the MNNVL
-all-reduce and the fused norm row's residual part (``COLS``) are consecutive chunks of at most the partition's ``chunk_cap``,
+all-reduce, the gated activation and the fused norm row's residual part (``COLS``) are consecutive chunks of at most the partition's ``chunk_cap``,
 each a member on the bit rows Flock's `UnitStager` stages (`chunk_rows.unit_rows`: ``in<g>`` per parameter, ``o0``), and the
 chunks are the template's blocks read once, so that the Definition on each chunk's rows, parsed as the stager parses them, is
 the rows' committed columns, and a flipped word is not."""
@@ -16,21 +16,28 @@ from verity_flock.class_statement import UnitStager
 from verity.commitments.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
+from verity.definitions.registry import act as ACT
 from verity.definitions.registry import boolean_moe as BMOE
 from verity.definitions.registry import boolean_sigma as SG
+from verity.definitions.registry import boolean_silu as BSL
 from verity.definitions.registry import boolean_tp_allreduce as BTA
 from verity.definitions.registry import moe as M
 from verity.definitions.registry import tp_allreduce as TA
 
 TOPK, WORLD, W, w = 3, 4, 8, 2
 NH, CAP = W // w, 3
-OPS = {"MoeSum_v1": "model.layers.{}.mlp.experts", "AllReduceMnnvl_v1": "model.layers.{}.mlp"}
+OPS = {"MoeSum_v1": "model.layers.{}.mlp.experts", "AllReduceMnnvl_v1": "model.layers.{}.mlp", "SiluMul_v2": "model.layers.{}.mlp.act_fn"}
+#: each family's rows W wide in its one argument group, and its statics at that width
+LEAD = {"MoeSum_v1": TOPK, "AllReduceMnnvl_v1": WORLD, "SiluMul_v2": 2}
+STATICS = {"MoeSum_v1": {"TOPK": TOPK, "H": W}, "AllReduceMnnvl_v1": {"WORLD": WORLD, "N": W, "SHOT": 1}, "SiluMul_v2": {"I": W}}
 FAMILIES = list(OPS)
 
 
 def defn(family: str, width: int, boolean: bool = False):
     if family == "MoeSum_v1":
         return bind(BMOE.MoeSumV3 if boolean else M.MoeSum, TOPK=TOPK, H=width)
+    if family == "SiluMul_v2":
+        return bind(BSL.SiluMulExpf if boolean else ACT.SiluMul, I=width)
     return bind(BTA.AllReduceMnnvl if boolean else TA.AllReduceMnnvl, WORLD=WORLD, N=width, SHOT=1)
 
 
@@ -43,10 +50,10 @@ def rows(monkeypatch):
     """Two rows of one family W wide, in layers 3 and 5, and the store of their committed outputs."""
     def make(family: str):
         rng = np.random.default_rng(3)
-        lead = TOPK if family == "MoeSum_v1" else WORLD
+        lead = LEAD[family]
         xs = [(rng.standard_normal(lead * W).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16) for _ in range(2)]
         ys = [np.asarray(evaluate_batch(defn(family, W), x.astype(np.uint64).reshape(1, -1))).reshape(-1).astype(np.uint16) for x in xs]
-        statics = {"TOPK": TOPK, "H": W} if family == "MoeSum_v1" else {"WORLD": WORLD, "N": W, "SHOT": 1}
+        statics = STATICS[family]
         out = []
         for p, layer in enumerate((3, 5)):
             r = {"i": 7 + p, "spec": descriptor_id(defn(family, W)), "args": [[["x", p, 0, xs[p].size]]]}

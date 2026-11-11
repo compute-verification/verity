@@ -83,7 +83,7 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    key blocks, ends, column ends and combines (``CHAINS``) and the top-p select's stages
                                    (``STAGES``), laid out by `kchunk_rows`, `chain_rows`, `stage_rows` and `chunk_rows.reads`;
                                    always chunked, v2 bit rows, one index entry per row
-  ``MoeSum_v1{H=w,..}``, ``AllReduceMnnvl_v1{N=w,..}``, ``ResidualAdd_v1{N=w}``  every block j of w columns of the rows of that
+  ``MoeSum_v1{H=w,..}``, ``AllReduceMnnvl_v1{N=w,..}``, ``ResidualAdd_v1{N=w}``, ``SiluMul_v2{I=w}``  every block j of w columns of the rows of that
                                    Definition W wide, W / w a power of two (``COLS``): ``in<g>`` per argument group, each of its
                                    rows' columns [jw, jw + w) in order -> ``out.<member>``, the row's output columns [jw, jw + w);
                                    one index entry per row;

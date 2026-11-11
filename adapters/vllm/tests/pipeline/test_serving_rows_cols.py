@@ -1,5 +1,5 @@
 """The elementwise rows split into column blocks (`pipeline.serving_rows`' ``cols`` layout, ``COLS``): a ``MoeSum_v1{TOPK,H}``,
-``AllReduceMnnvl_v1{WORLD,N,SHOT}`` or ``ResidualAdd_v1{N}`` row W wide holds W / w units of its Definition at width w, for every
+``AllReduceMnnvl_v1{WORLD,N,SHOT}``, ``ResidualAdd_v1{N}`` or ``SiluMul_v2{I}`` row W wide holds W / w units of its Definition at width w, for every
 halving w of W, unit j reading columns [jw, jw + w) of each row of each of its argument groups and returning the row's output
 columns [jw, jw + w).  The units cover the row's outputs with nothing left over (W / w units under one index entry, their outputs
 the row's output in order) and compute them: the Definition at w on each unit's committed rows is the row's Definition's
@@ -15,20 +15,23 @@ from verity.circuits.evaluation import evaluate_batch
 
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
+from verity.definitions.registry import act as ACT
 from verity.definitions.registry import b1 as B1
 from verity.definitions.registry import boolean_moe as BMOE
 from verity.definitions.registry import boolean_sigma as SG
+from verity.definitions.registry import boolean_silu as BSL
 from verity.definitions.registry import boolean_tp_allreduce as BTA
 from verity.definitions.registry import moe as M
 from verity.definitions.registry import tp_allreduce as TA
 
 TOPK, WORLD, W = 3, 4, 8
-OPS = {"MoeSum_v1": "model.layers.3.mlp.experts", "AllReduceMnnvl_v1": "model.layers.6.mlp", "ResidualAdd_v1": "model.layers.5.self_attn"}
+OPS = {"MoeSum_v1": "model.layers.3.mlp.experts", "AllReduceMnnvl_v1": "model.layers.6.mlp", "ResidualAdd_v1": "model.layers.5.self_attn",
+       "SiluMul_v2": "model.layers.4.mlp.act_fn"}
 #: each family's argument groups, as the rows W wide each holds (MoeSum's top-k outputs, the all-reduce's ranks' partials, the
-#: residual add's x and r)
-GROUPS = {"MoeSum_v1": (TOPK,), "AllReduceMnnvl_v1": (WORLD,), "ResidualAdd_v1": (1, 1)}
+#: residual add's x and r, the gated activation's gate and up)
+GROUPS = {"MoeSum_v1": (TOPK,), "AllReduceMnnvl_v1": (WORLD,), "ResidualAdd_v1": (1, 1), "SiluMul_v2": (2,)}
 STATICS = {"MoeSum_v1": {"TOPK": TOPK, "H": W}, "AllReduceMnnvl_v1": {"WORLD": WORLD, "N": W, "SHOT": 1},
-           "ResidualAdd_v1": {"N": W}}
+           "ResidualAdd_v1": {"N": W}, "SiluMul_v2": {"I": W}}
 #: the families that are rows of their own and elementwise at every statics (a part's blocks: test_serving_rows_parts.py; torch's
 #: multimem all-reduce, whose blocks `cols_refused` restricts: test_serving_rows_multimem.py)
 FAMILIES = [f for f in SRW.COLS if f not in SRW.PART_OF and f != "AllReduceMultimem_v1"]
@@ -39,6 +42,8 @@ def defn(family: str, w: int, boolean: bool = False):
         return bind(BMOE.MoeSumV3 if boolean else M.MoeSum, TOPK=TOPK, H=w)
     if family == "ResidualAdd_v1":
         return bind(SG.ResidualAdd if boolean else B1.ResidualAdd, N=w)
+    if family == "SiluMul_v2":
+        return bind(BSL.SiluMulExpf if boolean else ACT.SiluMul, I=w)
     return bind(BTA.AllReduceMnnvl if boolean else TA.AllReduceMnnvl, WORLD=WORLD, N=w, SHOT=1)
 
 

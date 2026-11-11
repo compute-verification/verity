@@ -54,5 +54,5 @@ def test_a_row_whose_output_widths_are_not_the_member_s_is_refused(words):
     _gu, _out, _reads, store = words
     rows = [row(0, "out", "model.layers.3.mlp.shared_experts.act_fn"), row(1, "act", "model.layers.3.mlp.experts", width=I // 2)]
     (m,) = SRW.members([T], [rows], [2])
-    with pytest.raises(ValueError, match=r"row 1 \(model.layers.3.mlp.experts\): inputs \[8\] and outputs \[2\] words"):
+    with pytest.raises(ValueError, match=r"row 1 \(model.layers.3.mlp.experts\): inputs and outputs of \[8, 2\] words are not 1 of member"):
         SRW.read(m, rows, store, None)
