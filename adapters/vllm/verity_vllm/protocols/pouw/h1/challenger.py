@@ -85,6 +85,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.commitments.crypto import lms
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import salt as PS
@@ -178,8 +179,6 @@ def carried(given: Mapping[str, Any]) -> dict[str, Any]:
 
 def lms_verify(key: ChallengerKey, message: bytes, signature: bytes) -> bool:
     """`challenger.Verify`: LMS over SHA-512 at the verifier's challenger key's (64, W, H)."""
-    from verity.commitments.crypto import lms
-
     p = lms.Params(64, key.W, key.H)
     try:
         return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
@@ -604,8 +603,6 @@ def manifest_reason(record: Mapping[str, Any]) -> str | None:
 
 def program_salt_of(c: Mapping[str, Any]) -> bytes:
     """The window's Program salt, from its H1 commitment `c`'s salt coin over its weights' root."""
-    from verity.protocols.pouw.verifier.audit import salt_of
-
     from verity_vllm.protocols.pouw import h1 as PH
     return PH.program_salt(salt_of(LiveCommitment.from_json(c.get("coins")), LiveOpening.from_json(c.get("salt_opening")).coin,
                                    bytes.fromhex(c["weights_root"])))

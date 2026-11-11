@@ -48,6 +48,7 @@ from verity.protocols.spot.device.challenger import LiveRecord
 
 from verity_vllm.engine import int8_ranks  # noqa: F401  (a worker registers the int8 parts before it builds its model)
 from verity_vllm.engine.hooks import Hooks
+from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import commit as CT
 from verity_vllm.protocols.pouw.h1 import hooks as PHK
@@ -178,7 +179,6 @@ class RankExtension:
     def h1rank_layout(self) -> dict[str, Any]:
         """This worker's (pp, tp) rank, its linears' shard shapes and module names (local ordinals) in module order, and its
         runner's decode_query_len."""
-        from verity_vllm.protocols import pouw
         model, layers = self._h1rank_layers()
         pp, tp = self._h1rank_rank()
         return {"pp": pp, "tp": tp, "shapes": [[int(d) for d in m.weight.shape] for m in layers],

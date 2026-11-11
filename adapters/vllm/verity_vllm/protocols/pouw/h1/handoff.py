@@ -38,6 +38,7 @@ from typing import Any
 
 from verity.protocols.spot.device import remote
 from verity.protocols.spot.device.challenger import LiveCommitment, LiveRecord
+from verity.protocols.spot.verifier.one_stage import partition as P
 
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import requests as RQ
@@ -179,7 +180,6 @@ def resume(directory: str | Path, fd: int, gate: PHW.Gate | None = None) -> tupl
 def _declare(served: SV.Served, run: PH.H1Run) -> None:
     """The resumed window's Program, declared again from the run's public shapes and the period's prefix: the saved state
     holds its digest, not the Program (whose Definitions don't pickle)."""
-    from verity.protocols.spot.verifier.one_stage import partition as P
     served.program = None
     if served.program_digest is not None:
         served.program = SV.declared(run.shapes_, run.modules, run.rows, run.steps, served.tile, served.blocks,

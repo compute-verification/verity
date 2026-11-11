@@ -11,6 +11,7 @@ from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.pouw.verifier.coins import Challenger
 from verity.protocols.spot.device.challenger import LiveRecord
 
+from verity_vllm.engine import handle
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
@@ -108,8 +109,7 @@ def from_engine(scheme: str, settings: Mapping[str, Any], llm: Any, epoch: int =
     keys = fills(scheme, settings)
     out: dict[str, Any] = {}
     if "runner" in keys:
-        from verity_vllm.engine.handle import model_runner
-        out["runner"] = model_runner(llm)
+        out["runner"] = handle.model_runner(llm)
     if "coins" in keys:
         out["coins"] = Challenger(epoch, verifier.coins)
     if "rounds" in keys:

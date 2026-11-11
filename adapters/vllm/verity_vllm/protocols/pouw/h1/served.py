@@ -110,6 +110,7 @@ from verity.protocols.spot.verifier.one_stage import registered as G
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import live as LV
 from verity_vllm.protocols.pouw.h1 import registered as NR
+from verity_vllm.protocols.pouw.h1 import registered_device as D
 from verity_vllm.protocols.pouw.h1 import tables_device as TD
 from verity_vllm.protocols.pouw.h1.model_key import ModelKey, model_key
 from verity_vllm.protocols.pouw.h1.names import (
@@ -661,8 +662,6 @@ class Served:
         `registered_file` builds it (`h1window.public_table`). Its rows and salts are built again on read (`PublicRows`,
         `pouw_h1_registered.PublicSalts`); on the GPU its rows are built on the hash's stream and hashed there, its root
         put in ``out`` by `settle` (`_register_later`)."""
-        from verity_vllm.protocols.pouw.h1 import registered_device as D
-
         units, ks, j10r = HW.call_units(self.program), {name: (k, n) for name, k, n in self.linears}, HW.is_j10r(self.program)
         ctx = _now(self.root, "open root").encode()
         head = CC.PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx
