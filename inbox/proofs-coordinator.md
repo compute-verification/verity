@@ -35969,3 +35969,33 @@ Each fact [run] by me now unless marked.
 - **Launched 01:35Z: `r20261111-013519-eb3d` (vy-nebius-cpu-1)**, the rehearsal tree's records: `lean_changed.py --records verity/circuits/base --update --moved MOVES.json`, the same map `dafa` took. It shows ahead of the move whether condition 1 holds on the moved tree with `main`'s newer Lean (18 changed `.lean` files and `Security`'s two locks since the cut's base). If `main`'s Lean after the move is what #8769's branch has, the locks it writes are the rebuilt head's and the run after the rebuild only confirms them [guess]. ETA 03:25Z [guess: `dafa` took 107 min].
 
 What is left: as entry 11's list (1 the PR, 2 push the two commits, 3 the crossing when the move is on `main`, 4 the follow-ups). Runs to read when I am resumed: `5df3`, `f129`, `5b02`, `eb3d`.
+
+## PRF-516 REGX, Wed 11 Nov 01:51Z: part 2 (items 13 to 17) is stated and proved on `cursor/proofs-regx2-78c4` at `fe391c772c`, on #8512's head with part 1 merged; part 1's records run is still in flight, so no PR yet; one statement differs from the plan so that the lock gets no new premise
+
+**State.** \[run\] unless marked.
+
+* Part 1: unchanged since 00:48Z. Branch `cursor/proofs-regx-efe1` at `e291286c28`. Records run `r20261111-004547-2aea` (`vy-nebius-cpu-1`) was still running at 01:49Z. The suites run `r20261111-004725-9c09` ended: 6 suites passed, 2 failed (`verity/core/protocols/pouw`, `verity-pouw-benchmarks`), both on `KeyError: 'signature'`, because the lock at that head lists the three new guarantees as stubs with no record. \[guess\] They pass once the records are committed; I rerun them at that head before the PR.
+* Part 2: branch `cursor/proofs-regx2-78c4`, head `fe391c772cfad82de8c38ec1d819fef865c3952d`. It is #8512's head `a4916e0142` with `cursor/proofs-regx-efe1` merged (one docstring conflict in the aggregator, both sentences kept), then six commits. Nothing is pushed to #8512.
+* Items 13 and 14 (`Security/Definitions/Claims/SamplingTwoRegX.lean`): `CompiledTwo.FregTwoX`, `εregTwoX`, `KSRegTwoX`, `HeadlineTwoX`, `MissTwoX`, `CompilerKSRegTwoX`, `CompilerMissTwoX`, `CompilerHeadlineTwoX`.
+* Items 15 to 17 (`Security/Proofs/Flock/SamplingGeneric/TwoRegX.lean`): `eventTwoX_le`, `missTwoX`, `ksRegTwoX_of_event`, `headlineTwoX_of`, `compilerKSRegTwoX`, `compilerMissTwoX`, `compilerHeadlineTwoX`. Try `r20261111-010617-767a` (`vy-nebius-cpu-1`): lean exit 0, 8 theorems probed, only `propext`, `Classical.choice`, `Quot.sound`; the sibling check passed (2,000 modules imported).
+* Witnesses (`Security/Proofs/Flock/Claims/Witnesses/SamplingTwoRegX.lean`): `CompiledTwo.KSRegTwoX_fails`, `HeadlineTwoX_fails`, `MissTwoX_fails`, and `compilerKSRegTwoX_nontrivial`, `compilerHeadlineTwoX_nontrivial`, `compilerMissTwoX_nontrivial`, all at `sksLTwo`. Try `r20261111-013619-87fb`: exit 0, 11 theorems probed, sibling check passed. The honest lemmas are the existing `compilerKSTwo_honest` and `compilerMissTwo_honest`.
+* The aggregator with `TwoRegX.lean` imported: try `r20261111-011550-534c` (`vy-nebius-cpu-9`), lean exit 0, 13 theorems probed. Its sibling stub failed on `unknown module prefix 'Base'` in that slot's tree, so the run's exit is 1. Not a clash: the two files' own sibling checks passed on `vy-nebius-cpu-1`.
+* The lock lists the nine new names as stubs. \[guess\] No records run for part 2 yet: its base is #8512's older `main`, so the records would be rewritten after #8512 lands. I launch one when part 1's shows the listing is accepted.
+
+**How part 2 is built, and what it changes in #8512's files.** \[read: the diffs\]
+
+* Nothing of the two-stage argument is copied. `TwoReg.lean` and `TwoRegMiss.lean` now read the boundary trace as a parameter: `regTwo_split`, `eventTwo_split`, `pr_missTwo_fork_le`, `pr_missTwo_le_Pa`, and three new lemmas `pr_missTwo_le_pow`, `threshold_of_event`, `headline_of_event`. `eventTwo_le`, `missTwo`, `ksRegTwo_of_event`, `headlineTwo_of` and the three `compiler…Two` keep their statements, as the instance at the committed boundary trace (`FregTwo_eq`). `TwoRegX.lean` is the instance at `regValX`, 137 lines, most of them statements.
+* Deleted from #8512's `TwoReg.lean`: `Compiled.selIn`, `selIn_some` (they equal `Reg.lean`'s `selOf`, `selOf_some`) and `fregTwo_lt` (one use, now `wrongAllAt_subset`). Nothing outside the two files used them, and no lock names them.
+* `RegX.lean` gains `ex_offRegX_le` (the rewinding lemma averaged over the tape), factored out of `ksRegX_of_sessionKS`. It is on the part-2 branch only; part 1's branch proves it inline.
+* For TWOPROVE: if #8512 changes `TwoReg.lean` or `TwoRegMiss.lean` before it lands, my branch conflicts there and I redo the generalization on the new text. Tell me rather than work around it.
+
+**Where the plan was wrong (part 2).**
+
+* Item 17 and the lock. `compilerHeadlineTwo` takes `CompiledTwo.KSRegTwo` as a hypothesis, which the lock holds as a `domain` premise. Its mirror would take `KSRegTwoX`, a premise name the lock does not have. A new premise is yours to decide, so I did not take it: `CompilerHeadlineTwoX` is stated at `CompilerKSRegTwo`'s premises (`A.KS`, `Binds`, `Sessions`) and concludes `HeadlineTwoX`. \[guess\] Its record then has `compilerKSRegTwo`'s premises and no new one. The step from `KSRegTwoX` is still there as the lemma `CompiledTwo.headlineTwoX_of`. If you want the mirrored statement, it is one line and one `domain` entry.
+* Item 14, `HeadlineTwoX`. `HeadlineTwo` bounds by `Ex pb`, an expectation over the tape of a per-tape bound on P̄_a. At `regValX` the footprint is the same at every tape, so `HeadlineTwoX` takes one number `pb`. Same strength; it is the simpler statement.
+* Item 15, "`eventTwo_le` with `Compiled.ex_offReg_le` replaced by item 8". Two more things change. `pr_inConf_le` becomes `pr_inConfX_le` (your ruling on item 4). And #8512's `regTwo_split` and `eventTwo_split` are fixed to `regVal` and `FregTwo`, as `reg_split` was in part 1, so they had to take the trace first.
+* Item 16, "`TwoRegMiss`'s proof without its per-tape step". There is no per-tape step to drop. The miss is at one tape throughout, because the interior is per tape; the boundary values enter only as an argument of `wrongInAt` and `footprintAt`. So `missTwoX` is the same proof at other boundary values, not a shorter one.
+
+**Runs in flight.** `r20261111-004547-2aea`, part 1's records, `vy-nebius-cpu-1`, launched 00:45Z. \[guess\] done by 02:30Z.
+
+**Next.** Part 1: commit the records, check that no existing record moved, rerun the suites, open the PR unmarked. Part 2: a records run; its PR waits for #8512 to land and for the branch to hold `main`.
