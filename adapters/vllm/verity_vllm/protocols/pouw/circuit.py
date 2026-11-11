@@ -24,10 +24,11 @@ two commit the same leaves, and the tests hold them to the same roots.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, Mapping, Protocol, Sequence
+from typing import Any, Protocol
 
 import numpy as np
 from verity.protocols.pouw.prover import circuit as C
@@ -144,7 +145,7 @@ class Group:
     def __init__(self, size: int, dtype: str) -> None:
         self.h, self.dtype = hashlib.sha256(size.to_bytes(8, "little")), dtype
 
-    def update(self, values: np.ndarray) -> "Group":
+    def update(self, values: np.ndarray) -> Group:
         self.h.update(np.ascontiguousarray(values, dtype=self.dtype).reshape(-1).tobytes())
         return self
 

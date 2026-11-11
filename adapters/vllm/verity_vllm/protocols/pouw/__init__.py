@@ -116,9 +116,9 @@ TAMPERS = ("tile", "bias")
 DEVICES = ("cuda",)
 PLACEHOLDER = (
     "a forward's weight is not re-checked against the root committed at install",
-    "not auditable yet: one epoch per install (no rotation), activation rows kept only in memory for the last "
-    "`retain_steps` units (0 by default) and never persisted, no opener, and the transcript's leaves grow without bound "
-    "for the life of the install",
+    ("not auditable yet: one epoch per install (no rotation), activation rows kept only in memory for the last "
+     "`retain_steps` units (0 by default) and never persisted, no opener, and the transcript's leaves grow without bound "
+     "for the life of the install"),
     "the executor runs on the host in numpy, not a native route-U kernel",
 )
 #: The transforms Pearl-C's executor applies to a checkpoint's weights before committing them: none.  The keyed 8-block
@@ -652,9 +652,9 @@ def challenged(settings: Mapping[str, Mapping[str, Any]], enabled: Any, epoch: i
     served); a config's own ``coins``, or its auditor host's ``challenger`` (the coins' one source), is kept alone. The
     lead takes no salt coin (its coins come off its coin link), so under it nothing is added."""
     out = {k: dict(v) for k, v in settings.items()}
-    if any(str(e).partition(":")[0] == NAME and str(e).partition(":")[2] != PL.SCHEME for e in (enabled or ())):
-        if not {"coins", "challenger"} & set(out.get(NAME, {})):
-            out.setdefault(NAME, {})["coins"] = Challenger(epoch, verifier.coins)
+    takes_salt = any(str(e).partition(":")[0] == NAME and str(e).partition(":")[2] != PL.SCHEME for e in (enabled or ()))
+    if takes_salt and not {"coins", "challenger"} & set(out.get(NAME, {})):
+        out.setdefault(NAME, {})["coins"] = Challenger(epoch, verifier.coins)
     return out
 
 

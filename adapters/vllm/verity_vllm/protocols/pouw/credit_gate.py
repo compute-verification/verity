@@ -25,9 +25,10 @@ y is dq of their z and the served y is theirs.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cache
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 #: the matmul family: a call of any of these is a GEMM
 GEMMS = frozenset({"aten::_int_mm", "aten::mm", "aten::addmm", "aten::addmm_", "aten::_addmm_activation", "aten::bmm",
