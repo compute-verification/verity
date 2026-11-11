@@ -48,7 +48,6 @@ ENV.update(GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="merge.vllm-allowlist.driver",
            GIT_CONFIG_VALUE_0='f=adapters/vllm/tests/lint/merge_allowlist.py; [ -f "$f" ] || '
                               'f=integrations/vllm/tests/lint/merge_allowlist.py; python3 "$f" %O %A %B %P')
 OUT = os.environ.get("OUT") or "out"
-PARENT_LOCKS: dict[str, threading.Lock] = {}
 LOCK = threading.Lock()
 T0 = time.time()
 
@@ -279,7 +278,9 @@ def main() -> int:
         name, _, rest = spec.partition("=")
         rest, _, how = rest.partition(":")
         commit, _, parent = rest.partition("@")
-        specs.append({"name": name, "commit": git("rev-parse", f"{commit}^{{commit}}"), "parent": parent or None, "how": how})
+        after = [x["name"] for x in specs if parent and not how and x["parent"] == parent and not x["how"]]
+        specs.append({"name": name, "commit": git("rev-parse", f"{commit}^{{commit}}"), "parent": parent or None, "how": how,
+                      "after": after[-1] if after else None})
     all_moves = moves_of(main_sha, git("rev-parse", f"{a.below}^{{commit}}") if a.below else specs[0]["commit"])
     base1 = git("rev-parse", f"{all_moves[0][0]}^") if all_moves else main_sha
     uv = subprocess.run(["uv", "--version"], capture_output=True, text=True).stdout.strip()
@@ -300,9 +301,11 @@ def main() -> int:
         try:
             if s["parent"]:
                 events[s["parent"]].wait()
-            # one child of a parent at a time (the first pays the check of the parent's script steps, the next read it); a
-            # spec with a parent and a `how` only waits for the parent to end
-            with PARENT_LOCKS.setdefault(s["parent"] if s["parent"] and not s["how"] else s["name"], threading.Lock()), gate:
+            # one child of a parent at a time, in the order given (the first pays the check of the parent's script steps, the
+            # next read it); a spec with a parent and a `how` only waits for the parent to end
+            if s.get("after"):
+                events[s["after"]].wait()
+            with gate:
                 if s["how"] == "named":
                     rec = named(s["name"], s["commit"], main_sha, [m[0] for m in all_moves])
                 elif s["how"] == "pins":
