@@ -9,6 +9,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # figures.py reads the census's reference fleets, the monitoring periods (core's reporting grid, `reporting.PERIODS`) and
 # the session's steps (rec_profile.SESSION_STEPS).
 inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "benchmarks/recursion_e2e/rec_profile.py",
-          "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/protocols/reporting.py",
+          "verity/protocols/reporting.py",
           "verity/__init__.py", "verity/errors.py", "verity/settings.py",
           "verity/protocols/__init__.py"]
