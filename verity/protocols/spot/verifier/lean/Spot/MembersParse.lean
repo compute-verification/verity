@@ -1,6 +1,6 @@
 /-
-`sampled-proofs-one-stage-zk members PARAMS EVIDENCE`: what the per-member form's parsers read of a case's parameters
-and evidence, and nothing of the audit.
+`members PARAMS EVIDENCE`, a command of the one-stage v2 executable (`ZkMain`): what the per-member form's parsers
+read of a case's parameters and evidence, and nothing of the audit.
 
 It runs the form's two parsers (`membersParamsOfJson`, `membersEvidenceOf`) and the statements' public structure
 (`membersHeld`). It reads no registration, no blob and no coin, and it never runs the form's check (`checkMembersAt`),
