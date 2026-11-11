@@ -58,7 +58,8 @@ def run(tmp_path_factory) -> tuple[Path, Path, dict]:
     tmp = tmp_path_factory.mktemp("lean")
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(PV, "coins", lambda n: SOURCE[:n])
-        mp.setattr(SP, "CLOCK", iter(VERIFY_CLOCK).__next__)
+        # `served_verify` runs the module under this name now, another object than `SP` once a test file loaded it again
+        mp.setattr(sys.modules[SP.__name__], "CLOCK", iter(VERIFY_CLOCK).__next__)
         for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
             mp.delenv(k, raising=False)
         a, b = (T.proved_pass(tmp / name, H100, ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
