@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -206,3 +207,16 @@ def test_the_isa_reference_tables_are_whole():
     assert {k: len(v) for k, v in t.items()} == {"hopper": 199, "blackwell": 253, "ampere": 166, "turing": 160}
     assert "DMMA" in t["hopper"] and "UTCIMMA" in t["blackwell"]
     assert diff_menu.isa_vocab("sm_90") is t["hopper"] or diff_menu.ISA_TABLE["sm_90"] == "hopper"
+
+
+# ---- the runner --------------------------------------------------------------------------------------------------------
+
+
+def test_run_sh_names_every_job_of_the_directory_and_the_readme_lists_them():
+    """`run.sh` starts a job by its name: its case holds each job script beside it and no other, and the README's table
+    has a row a job."""
+    jobs = {p.stem for p in SC.glob("*.sh")} - {"run"}
+    case = re.search(r'^case "\$job" in ([\w|]+)\)$', (SC / "run.sh").read_text(), re.M)
+    assert case and set(case.group(1).split("|")) == jobs
+    readme = (SC / "README.md").read_text()
+    assert all(f"| `{job}.sh" in readme for job in jobs)

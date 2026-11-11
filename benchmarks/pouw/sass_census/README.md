@@ -10,6 +10,8 @@ PTX form to, and what `multimem` does on a card with no NVLink. The opcode table
 ## Jobs
 
 Each is the command of a `research run`, from a pushed commit; its header has the full command and its knobs.
+`run.sh JOB [ARGS...]` is the directory's runner: it starts the job's script, named without `.sh`, with the rest of
+its arguments and the environment as they are.
 
 | Job | Runs on | What it does | Writes under `$OUT` |
 | --- | --- | --- | --- |
@@ -20,7 +22,8 @@ Each is the command of a `research run`, from a pushed commit; its header has th
 | `eps_counts.sh` | a CPU node with the CUDA toolkit | builds the kernels ε_skip's per-instruction counts came from, out of the source trees sent with the run (`src-TAG.tar`), for sm_120a, sm_90a and sm_100a with line info, and dumps each cubin's SASS for `eps_counts.py` | `toolkit.txt`, `TAG/ARCH/`: `build.log`, `apv.gi.sass.gz`, `apv.sass.gz`, `lineinfo.txt` |
 
 ~~~text
-research run --on MACHINE --cwd source -- bash benchmarks/pouw/sass_census/dump.sh [ROOT ...]
+research run --on MACHINE --cwd source -- bash benchmarks/pouw/sass_census/run.sh dump [ROOT ...]
+research run --on MACHINE --cwd source -- bash benchmarks/pouw/sass_census/dump.sh [ROOT ...]     # the same job
 research run --on MACHINE --project verity --source <tree> --cwd source --timeout 30m \
   --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/sass_census/rates.sh
 ~~~
