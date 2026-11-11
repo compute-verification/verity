@@ -179,8 +179,9 @@ same staged statement (stmt-base.jsonl).
 core, against the statement's blocks. `flock_sessions.py stage` stages the type's flat statement at `full` as
 `served_units/stage.py` stages a census type, and from the same lowering its first N blocks for each N. Per N, the CPU
 prover proves one loopback `--zk` session sampling all N blocks, and `verify --zk` checks it as the proof server's
-verdict pool calls it, pinned to one core. A proof server's saved sessions of the full statement, sent as
-`sessions.tar` (one directory a session), are handed to one `verify` together. `verify` reads the statement once a call
+verdict pool calls it, pinned to one core; for the first N one more call takes that session twice. A proof server's
+saved sessions of the full statement, sent as `sessions.tar` (one directory a session), are handed to one `verify`
+together. `verify` reads the statement once a call
 (its `inputs:` line) and then sets up and checks each session it was handed, so `summary.json`
 (`verity/flock-sessions/v1`) splits a call into the read, paid once a circuit, and each session's seconds, with their
 median at each block count and the line through them: the seconds a session pays whatever its blocks, and the seconds

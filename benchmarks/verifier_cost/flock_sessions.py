@@ -73,11 +73,17 @@ def call(out: Path, tag: str) -> dict | None:
     read = [s for k, s in ms if k == "inputs"]
     if not read:
         return None
-    setups = [s for k, s in ms if k.startswith("setup")]
-    whole = [s for k, s in ms if k != "inputs" and not k.startswith("setup")]
+    # a session's own line follows its setup line, where the verifier printed one
+    whole, setup = [], None
+    for k, s in ms:
+        if k.startswith("setup"):
+            setup = s
+        elif k != "inputs":
+            whole.append((s, setup))
+            setup = None
     verdicts = [json.loads(x.split(" ", 1)[1]) for x in (out / f"{tag}.out").read_text().splitlines() if x.startswith("VERDICT ")]
     sessions = [{"blocks": (v.get("unit_draw") or {}).get("k"), "session_s": s, "setup_s": u, "accepted": v.get("accepted") is True,
-                 "why": v.get("why")} for s, u, v in zip(whole, setups, verdicts)]
+                 "why": v.get("why")} for (s, u), v in zip(whole, verdicts, strict=True)]
     return {"tag": tag, "read_s": read[0], "sessions": sessions, **timed(out / f"{tag}.time")}
 
 

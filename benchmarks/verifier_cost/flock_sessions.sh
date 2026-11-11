@@ -6,7 +6,8 @@
 #      and from the same lowering the statement's first N blocks for each N given
 #   3. per N: one loopback --zk session of the CPU prover sampling all N blocks (job.sh's `session`), then
 #      `flock-verify verify --zk` on it FS_REPS times, as the proof server's verdict pool calls it (the statement and
-#      the public file by their archive keys), pinned to one core under /usr/bin/time -v
+#      the public file by their archive keys), pinned to one core under /usr/bin/time -v; for the first N, one more
+#      `verify` handed that session twice, a call of two sessions
 #   4. sessions.tar, where it is sent: a proof server's saved sessions of the full statement (one directory a session),
 #      all handed to one `verify` FS_REPS times, then the first of them alone
 #   5. flock-read on the circuit (the read's phases), one `verify` under `perf record` where the node has perf, and
@@ -21,7 +22,7 @@
 # N...: the block counts (default 1 2 4; one at or above `full` is left out).
 # env: FS_MEM_GB (the job's --mem-gb)  FS_REPS=2  FS_CORE (the core every verify is pinned to; default the last one this
 #      process may run on)  FS_PIN (a prefix the staged circuit's SHA-512 must have)  FS_CACHE (job.sh's HZ_CACHE)
-# $OUT gets stage.json and pin.txt (stage.py's), per call TAG.{err,out,time} (TAG nN-repI, saved-repI or saved-one), per N
+# $OUT gets stage.json and pin.txt (stage.py's), per call TAG.{err,out,time} (TAG nN-repI, nN-twice, saved-repI or saved-one), per N
 # nN/ (job.sh's session files and session.json), phases.jsonl, perf-symbols.txt and summary.json.
 set -uo pipefail
 SPEC=${1:?usage: flock_sessions.sh census:NAME [N...]}
@@ -70,12 +71,12 @@ CK=$(awk 'NR == 1 {print $1}' "$OUT/archive-put.out")
 log "archive-put of the circuit on core $CORE: $(spent "$OUT/archive-put.time")"
 
 verify() {   # verify TAG PUB SESSION...: one `verify` of the sessions on CORE, its phase lines and verdicts to the log
-  local tag=$1 pub=$2 pk d s=()
+  local tag=$1 pub=$2 pk
   shift 2
   pk=$(taskset -c "$CORE" "$LEAN" archive-put "$A" "$pub" | awk 'NR == 1 {print $1}')
-  for d in "$@"; do s+=(--session "$d"); done
+  # every argument after --session is a session's directory
   /usr/bin/time -v -o "$OUT/$tag.time" taskset -c "$CORE" "$LEAN" verify --statement verity/flock-circuit --archive "$A" \
-    --circuit "$CK" --public "$pk" --zk "${s[@]}" > "$OUT/$tag.out" 2> "$OUT/$tag.err"
+    --circuit "$CK" --public "$pk" --zk --session "$@" > "$OUT/$tag.out" 2> "$OUT/$tag.err"
   log "$tag exit $?: $(grep -E ' ms$' "$OUT/$tag.err" | sed 's|^/.*/||' | tr '\n' ';') $(spent "$OUT/$tag.time")"
 }
 
@@ -100,6 +101,7 @@ for N in $NS; do
   cp "$s/session.json" "$O/"
   log "n$N: proved: $(cat "$O/prove.time")"
   for i in $(seq 1 "$REPS"); do verify "n$N-rep$i" "$d/pub.bin" "${s%/}"; done
+  [ -n "$FIRST" ] || verify "n$N-twice" "$d/pub.bin" "${s%/}" "${s%/}"
   [ -n "$FIRST" ] || FIRST="$d/pub.bin ${s%/}"
 done
 
