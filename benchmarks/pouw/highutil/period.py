@@ -122,14 +122,14 @@ def lowering(card: dict | None) -> str:
 
 def load_card(spec: str) -> dict:
     """The card's numbers (verity/hardware's card file, one TOML a SKU): a path to the file, or a SKU that
-    `verity.hardware.load` reads."""
+    `verity.hardware.cards.load` reads."""
     if Path(spec).is_file():
         import tomllib
         return tomllib.loads(Path(spec).read_text(encoding="utf-8"))
     try:
-        from verity.hardware import load
+        from verity.hardware.cards import load
     except ImportError:
-        raise SystemExit(f"card {spec!r}: no such file, and verity.hardware isn't in this tree; pass --card with the "
+        raise SystemExit(f"card {spec!r}: no such file, and verity.hardware.cards isn't in this tree; pass --card with the "
                          "card file (verity/hardware/cards/<sku>.toml)") from None
     return load(spec)
 
@@ -1179,7 +1179,7 @@ def main(argv: list[str]) -> int:
     p.add_argument("lib", help="libv31.so (v31lib.build_lib), or `ref`: v31.py's reference on the CPU")
     p.add_argument("out")
     p.add_argument("--coins", default="local", help="local (development, not of record) or gate:USER@HOST")
-    p.add_argument("--card", help="θ's card: verity/hardware's card file, or its SKU (verity.hardware.load)")
+    p.add_argument("--card", help="θ's card: verity/hardware's card file, or its SKU (verity.hardware.cards.load)")
     p.add_argument("--main", required=True, help="the verifier's copy of main's first-parent line (git rev-list --first-parent)")
     p.add_argument("--peer")
     p.add_argument("--challenger-key")

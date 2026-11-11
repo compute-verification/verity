@@ -17,7 +17,7 @@ through an opened reader, registered weights for weight slices), committed in M0
 
 The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": <a rate> | "subset:K" | "stratified:K" |
 "work:K" | {...}, "query"?: "Q_template_instance" | "Q_template_instances", "scope"?: {"op_path_prefix", "steps"}, "chunk_cap"?:
-{<descriptor id>: cap}, "row_tables"?: true, "dsa_table_reads"?: true, "partition_digest"?}``, a rate (`law_of`) resolved over the window's population
+{<descriptor id>: cap}, "row_tables"?: true, "partition_digest"?}``, a rate (`law_of`) resolved over the window's population
 (`service.params_law`).  A ``work`` window samples by the work table `work_table_of` derives from the registered compiler's
 transfer-gate templates (`pipeline.advice_windows`): every unit of those is proved (an All stratum), the rest sampled as the
 stratified sampling design samples it.  The members are its templates in order, each instance count read off the Build's Programs;
@@ -33,9 +33,7 @@ a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk, a ``CHAINS``
 whole ``PARTS`` part the file's ``chunk_cap`` names, its rows its Definition's own ports, `chunked`) are split
 into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes
 it; ``chunk_caps`` writes the entry), each chunk a member on Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
-``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``); ``dsa_table_reads``
-(the registration's `Registered.dsa_table_reads`) commits a chunked ``DsaLatentRow`` row's output under ``hm96-sha512/row-seg/v1``,
-the rows of its request's history table that the long rows' reads open (`chunk_rows.TABLE_ROWS`).
+``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
 
 A template is read through its word link (:func:`template`): a Boolean Definition (the definition) names the word Definition it
 computes (`verity.circuits.boolean.trace.word_of`, held equal to it by circuit-check's word check), and a word Definition is its
@@ -299,16 +297,13 @@ def chunked(t: str, caps: Mapping[str, int] | None) -> bool:
 
 
 def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[int] | None = None,
-            caps: Mapping[str, int] | None = None, seg: Collection[str] = (), table_reads: bool = False) -> list[CS.Member]:
+            caps: Mapping[str, int] | None = None, seg: Collection[str] = ()) -> list[CS.Member]:
     """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree.  A
     chunked template's units (`chunked`: a ``CHUNKED`` layout's, or a row template's that ``caps`` names) are consecutive chunks of
-    at most its ``caps`` entry, one member each, on its `chunk_rows.unit_rows` (under ``table_reads``, a history table row's
-    output row-seg: `chunk_rows.TABLE_ROWS`, which must be chunked then); a window always names the caps (`population`).
+    at most its ``caps`` entry, one member each, on its `chunk_rows.unit_rows`; a window always names the caps (`population`).
     With no ``caps`` at all (a tool reading one Call's units, ``benchmarks/one_stage/m1_unit.py``), a ``COORDS`` or ``COLS``
     template is one member of word rows.  A chunked template ``seg`` names (`history_rows.seg`: a history table's writer)
     commits its output rows as ``hm96-sha512/row-seg/v1``, its table's leaves, every other one's as ``hm96-sha512/row/v2``."""
-    from verity_vllm.query.program_view import spec_base
-
     out, base = [], 0
     for k, (t, rs) in enumerate(zip(tmpls, rows, strict=True)):
         _rid, _pi, r, d = rs[0]
@@ -321,14 +316,10 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
                                  f"chunk_cap (pipeline.serving_rows.chunk_caps)")
             if counts is not None and counts[k] != n:
                 raise ValueError(f"{t}: {n} units read off the rows, {counts[k]} in their Definitions")
-            out += [CR.unit_member(template(t), min(cap, n - lo), base + lo, f"{t}/c{j}", seg=t in seg, table_reads=table_reads)
+            out += [CR.unit_member(template(t), min(cap, n - lo), base + lo, f"{t}/c{j}", seg=t in seg)
                     for j, lo in enumerate(range(0, n, cap))]
             base += n
             continue
-        if table_reads and spec_base(template(t).word) in CR.TABLE_ROWS:
-            raise ValueError(f"{t}: under dsa_table_reads its output rows are its history table's row-seg rows, which only a "
-                             f"bit-row member commits: chunk it in the partition file, at the size chunk_rows gives it with "
-                             f"table_reads=True")
         if layout == "rope":
             D = int(d["statics"]["D"])
             m = CS.Member(t, (("x", D), ("cs", D)), (("out", D),), n, base)
@@ -410,10 +401,8 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     each template's rows; refused when the file names a ``partition_digest`` that is not the window's, or a ``query`` other than the
     template queries.  ``row_tables: true`` in the file: the ``ScaledMmS8Coordinate`` chunks in the row-table layout
     (`with_row_tables`, its engine steps the requests' ``arrivals`` plus their steps), under ``context`` (hex: the live coin
-    commitment's root serving committed its step roots under).  ``dsa_table_reads: true``: the registration's DSA long rows read
-    by table (`Registered.dsa_table_reads`), so a ``DsaLatentRow`` chunk's output rows are row-seg (`members`).  ``reuse``:
-    `member_rows`'.  ``transfer_gates``: the registered compiler's transfer-gate templates, whose units a ``work:K`` window
-    proves every one of (`work_table_of`)."""
+    commitment's root serving committed its step roots under).  ``reuse``: `member_rows`'.  ``transfer_gates``: the registered
+    compiler's transfer-gate templates, whose units a ``work:K`` window proves every one of (`work_table_of`)."""
     tmpls, law = list(partition["templates"]), law_of(partition["law"])
     q = partition.get("query")
     if q is not None and q not in TEMPLATE_QUERIES:
@@ -425,8 +414,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     scope = partition.get("scope") or {}
     rows, defs, counts = member_rows(programs, tmpls, scope.get("op_path_prefix"), program_dirs, index, scope.get("steps"), reuse)
     plan, hp = EX.Plan(tmpls, rows), HR.Plan(tmpls, rows, HR.on(partition))
-    ms = EX.wire(EX.cut(members(tmpls, rows, counts, partition.get("chunk_cap") or {}, HR.seg(tmpls, HR.on(partition)),
-                                bool(partition.get("dsa_table_reads"))), plan), plan)
+    ms = EX.wire(EX.cut(members(tmpls, rows, counts, partition.get("chunk_cap") or {}, HR.seg(tmpls, HR.on(partition))), plan), plan)
     ms = HR.cut(ms, hp)
     ms = ST.wire(CH.wire(KC.wire(ms, tmpls, rows), tmpls, rows), tmpls, rows)
     ms = PR.wire(ms, tmpls, rows, row_units)
@@ -454,7 +442,6 @@ def partition_doc(window: CS.Binding, partition: Mapping[str, Any]) -> dict[str,
             "query": window.query["name"], "scope": partition.get("scope"), "members": [[m.key, m.n] for m in window.members],
             **({"chunk_cap": partition["chunk_cap"]} if partition.get("chunk_cap") else {}),
             **({"row_tables": [t.port for t in window.row_tables]} if window.row_tables else {}),
-            **({"dsa_table_reads": True} if partition.get("dsa_table_reads") else {}),
             **({"histories": True} if HR.on(partition) else {}),
             **({"work_table": window.work_table} if window.work_table is not None else {}), "partition": window.partition,
             "partition_digest": window.partition_digest, "population": window.population}
@@ -479,14 +466,14 @@ def merged(*regs: IF.Registered | None) -> IF.Registered | None:
 
 
 def circuit_record(window: CS.Binding, rows: Sequence[list[Row]], arrivals: Mapping[str, int] | None = None,
-                   histories: IF.Registered | None = None, table_reads: bool = False) -> dict[str, Any]:
+                   histories: IF.Registered | None = None) -> dict[str, Any]:
     """The window's ``circuit.json`` (`interface.circuit_record`): each chunked template's statement its `chunk_rows.unit_rows`
-    (under ``table_reads``, the partition file's ``dsa_table_reads``) and `chunk_rows.statement`, as ``compose_circuit.py
-    --template`` composes it (a template of word rows has none: the verifier's input set lowers it), its ``rows``' window
-    ingress under ``arrivals`` and registered reads (`ingress_rows`, `registered`, its ``histories`` among them)."""
+    and `chunk_rows.statement`, as ``compose_circuit.py --template`` composes it (a template of word rows has none: the
+    verifier's input set lowers it), its ``rows``' window ingress under ``arrivals`` and registered reads (`ingress_rows`,
+    `registered`, its ``histories`` among them)."""
     sts = {}
     for t in dict.fromkeys(m.template for m in window.members if m.schemas):
-        in_rows, out_rows = CR.unit_rows(template(t), table_reads)
+        in_rows, out_rows = CR.unit_rows(template(t))
         sts[t] = {"in_rows": in_rows, "out_rows": out_rows, **CR.statement(template(t))}
     got, reg = IR.ingress(window, rows, row_units, arrivals), registered(window.members, rows, histories)
     return IF.circuit_record(window, CIRCUIT_NAME, IF.templates_of(window), sts, declared={
@@ -776,7 +763,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     (Path(out_dir) / "partition.json").write_text(json.dumps(partition_doc(window, pf), indent=1) + "\n")
-    body = IF.circuit_bytes(circuit_record(window, rows, arrivals, hreg, bool(pf.get("dsa_table_reads"))))
+    body = IF.circuit_bytes(circuit_record(window, rows, arrivals, hreg))
     (Path(out_dir) / "circuit.json").write_bytes(body)
     prov["circuit"] = hashlib.sha512(body).hexdigest()
     res = CS.write(c, out_dir, prov, IX.index_doc(ms, idx, window.run), kind="stand-in" if stand_in else "served",

@@ -66,6 +66,21 @@ def test_the_checked_in_config_loads_and_each_credential_comes_from_a_file_on_th
     assert cfg["dir"] == "/data/watchers" and lp.env["PYTHONPATH"].startswith("/data/watchers/src/")
 
 
+def test_the_labels_pack_loop_republishes_hourly_from_a_store_on_the_pods_own_disk():
+    """The labels pack is as fresh as this loop keeps it: it runs the deployed tree's `research data labels-pack`, repeating
+    hourly, with the store's credential alone and a store off the NFS volume, where a catalog is too slow."""
+    from research.store.cli import COMMANDS
+
+    _, loops = W.load(CONTROL / "watchers.toml")
+    (lp,) = [lp for lp in loops if lp.name == "labels-pack"]
+    assert lp.argv == ["python3.12", "-s", "-m", "research", "data", "labels-pack", "--every", "3600"]
+    assert lp.argv[5] in COMMANDS, "the loop's command is one `research data` has"
+    assert lp.env["PYTHONPATH"].split(":")[0] == "/data/watchers/src/tools/research/src", "`-m research` is the deployed tree's"
+    assert lp.env_files == ["/root/.config/verity/r2.env"] and not lp.needs
+    store = lp.env["RESEARCH_STORE"]
+    assert store.startswith("/root/") and store not in {o.env.get("RESEARCH_STORE") for o in loops if o is not lp}, "a store of its own"
+
+
 def test_a_loop_that_exits_starts_again_after_restart_s_and_every_loop_up_marks_all_up(tmp_path):
     beats = []
     sup, clock, started = supervisor(tmp_path, [W.Loop("a", ["a"]), W.Loop("b", ["b"])], beats)

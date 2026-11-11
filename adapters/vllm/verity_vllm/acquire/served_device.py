@@ -11,7 +11,7 @@ A Build vouches for its own device only.  What the served Program binds is the d
   * the Triton kernels' compile target (`inductor_templates.FLAGS`).
 
 A device without one of them is refused with every missing binding by name (`device_of`), never bound to another device's.  A served
-target is held to its card file first (`card_of`: `engine.profiles.devices.CARD`, `verity.hardware`): a device whose compute
+target is held to its card file first (`card_of`: `engine.profiles.devices.CARD`, `verity.hardware.cards`): a device whose compute
 capability or SM count is not its card's is refused, naming each field, both values and the card file.  Only a target
 `engine.profiles.devices.NO_CARD` lists is held to none, and any other is refused.
 
@@ -35,7 +35,7 @@ from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.engine.profiles.devices import CARD, NO_CARD
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget, gemm_target_for
-from verity.hardware import load
+from verity.hardware.cards import load
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import fa3_model as FA3
 from verity.definitions.registry import attention_vocab

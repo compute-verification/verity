@@ -245,4 +245,5 @@ def main(a: Options) -> int:
     return 0
 
 
-__all__ = ["Day", "Options", "declaration", "fresh", "gates", "judge", "judgment", "main", "session", "write_private"]
+__all__ = ["Day", "Options", "declaration", "fresh", "gates", "judge", "judgment", "main", "resolve", "session",
+           "write_private"]

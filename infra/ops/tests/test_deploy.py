@@ -397,6 +397,29 @@ def test_an_admin_only_node_is_read_only_when_named(world, capsys):
         deploy.load(manifest, manifest.read_text().replace("admin = true", 'admin = "yes"'))
 
 
+def test_install_and_attic_reach_a_node_as_the_login_they_are_given(world, monkeypatch, capsys):
+    """A node whose lock-out took root from research takes an install only from vy-admin's login, on the same machine entry."""
+    from research import remote
+
+    monkeypatch.setattr(remote, "resolve_machine", lambda name, project: {"name": name, "provider": "ssh", "host": "node.example",
+                                                                         "port": 22, "user": "research"})
+    seen: list[str] = []
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, **kw: seen.append(ssh[-1]) or local("n", argv, kw.get("stdin")))
+    deploy.ssh_runner()("n", ["true"], None)
+    deploy.ssh_runner(login="vy-admin")("n", ["true"], None)
+    assert seen == ["research@node.example", "vy-admin@node.example"]
+    logins: list[str | None] = []
+    monkeypatch.setattr(deploy, "ssh_runner", lambda project=deploy.PROJECT, login=None: logins.append(login) or local)
+    kw = dict(manifest=world["manifest"], repo=world["repo"])
+    assert deploy.main(["install", "n", "--by", "lane-x", "--no-fetch", "--login", "vy-admin"], **kw) == 0
+    assert deploy.main(["attic", "n", "--by", "lane-x", "--no-fetch", "--backups", "--login", "vy-admin"], **kw) == 0
+    assert deploy.main(["install", "n", "--by", "lane-x", "--no-fetch"], **kw) == 0
+    assert logins == ["vy-admin", "vy-admin", None]
+    with pytest.raises(SystemExit):
+        deploy.main(["drift", "--no-fetch", "--login", "vy-admin"], **kw)
+    capsys.readouterr()
+
+
 def test_a_node_no_machine_entry_names_is_that_nodes_error_not_the_whole_drift(world, monkeypatch, capsys):
     """A node added to deploy.toml before its VM is registered failed every relay drift with Refused."""
     from research import remote

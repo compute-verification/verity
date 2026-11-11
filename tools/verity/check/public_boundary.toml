@@ -46,7 +46,7 @@ ml = [
     "verity/commitments/randomness/{__init__.py,pyproject.toml,tests}",
     "verity/commitments/{__init__.py,advice.py,coin_tree.py,crypto,domains.py,frame_v3,gates,history.py,hm96}",
     "verity/commitments/{identity.py,indexed.py,layout.py,limits.py,merkle.py,multiproof.py,pyproject.toml}",
-    "verity/commitments/{row_table.py,rowleaf.py,scheme.py,tests,window.py,windows}",
+    "verity/commitments/{pool_row.py,row_table.py,rowleaf.py,scheme.py,tests,window.py,windows}",
     "verity/protocols/poub/verifier/commitments/gates",
     "verity/{circuits,definitions}",
 ]

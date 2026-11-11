@@ -1,8 +1,8 @@
-# The card files (`verity.hardware`)
+# The card files (`verity.hardware.cards`)
 
-One TOML file per SKU in `cards/`, the one source of that card's numbers. A card is a GPU's (`kind = "gpu"`) or a
-host's (`kind = "host"`: a server's CPUs and DRAM, apart from the GPUs it carries, so the same GPU in another host needs
-no second card). Each number is an entry `{ value, unit, mark, source }`:
+One TOML file per SKU in `cards/`, beside their loader (`cards/__init__.py`), the one source of that card's numbers. A
+card is a GPU's (`kind = "gpu"`) or a host's (`kind = "host"`: a server's CPUs and DRAM, apart from the GPUs it carries,
+so the same GPU in another host needs no second card). Each number is an entry `{ value, unit, mark, source }`:
 
 - `mark` is `ceiling` (no program on that SKU and firmware exceeds it: what the model's premises need), `measurement`
   (a measured value, so only a lower bound on the ceiling) or `placeholder` (neither: open);
@@ -25,10 +25,19 @@ code space). A host card's are `cpu` (sockets and cores), `clock`, `rate` (AMX M
 the host's on-chip bytes in S_chip).
 
 ~~~python
-from verity.hardware import load, skus
+from verity.hardware.cards import load, skus
 skus("host")                                    # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
 load("xeon-6776p-2s")["rate"]["ops"]            # {'value': 1045299200000000.0, 'unit': 'op/s', 'mark': 'ceiling', ...}
 ~~~
+
+**The interface.** Other code reads a card through `verity.hardware.cards` and imports from nowhere else: the functions
+`load`, `skus`, `rate` and `number` (an entry's value as an exact `Fraction`), and the constants `KINDS` (a card's
+kinds), `MARKS` (an entry's marks), `ENTRY` (an entry's keys), `WORD` (the bytes in a 32-bit word) and `CARDS` (the
+directory the card files are in). The module imports the standard library and `verity.errors` only. The package file,
+`verity/hardware/__init__.py`, holds a docstring and nothing else: no import and no re-export. The record
+(`verity.hardware.record`), the registration log (`verity.hardware.registration`) and the Site (`verity.hardware.site`)
+share the package, so importing one of them, in a verifier too, runs no card-loading code; `tests/test_package.py` holds
+both.
 
 `load(sku) -> dict` returns the parsed file and refuses a number without its unit, mark and source, and a card without
 its kind. `skus(kind=None)` lists the cards, or those of one kind.

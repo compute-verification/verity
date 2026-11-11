@@ -11,8 +11,11 @@
 # sm_90 taps under /workspace/research/vllm-composed-h200int8 and gpu-lease (the row leases the GPU for
 # its Match capture and its Commit's engine only). The uv venv, Lean's verifiers and M0's flock-circuit build in the background
 # while the GPU stages run (M0 in A5_ROOT/flock-work, kept for a rerun). The row dir and the window stay on the node, kept
-# there; $OUT keeps the row's records, the window's public files, a5.sh's out ($OUT/a5) and summary.txt, whose A5 line
-# is the audit's verdict and whose REGISTERED line the window's kind, commitment and run root length.
+# there; $OUT, published as the run's record, keeps the row's top-level records and logs, the window's public files, a5.sh's
+# out ($OUT/a5) and summary.txt, whose A5 line is the audit's verdict and whose REGISTERED line the window's kind, commitment
+# and run root length. No file of commit/ goes to $OUT: the Commit's records there hold values (the token record
+# tokens_p<pair>.json, the sampled replays' served lists), and so do the bundle and the slim keep (the committed store with its
+# salts, the weights key, the opened weights, the requests and served tokens).
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 ROW=${ROW:-llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
@@ -68,13 +71,9 @@ row() {  # NAME ARGS...: one `verity-vllm row run` of the row dir, its output in
   tail -5 "$OUT/$name.out"
   return $rc
 }
-records() {  # the row's records into $OUT (never the bundle, the store or the capture)
+records() {  # the row's records into $OUT, which the run publishes: never a file of commit/ (values), nor the capture
   for f in stages.txt row.log verdict.json build_summary.json manifest.json config_record.json gpu_lease.json effective_config.json \
     commit.log match.log build.log replay.log manifest.log; do cp "$D/$f" "$OUT/" 2>/dev/null; done
-  mkdir -p "$OUT/commit"
-  find "$D/commit" -maxdepth 1 -type f -size -50M -exec cp {} "$OUT/commit/" \; 2>/dev/null
-  [ -d "$D/commit/replay_bundle_p0" ] && mkdir -p "$OUT/commit/replay_bundle_p0" \
-    && cp "$D/commit/replay_bundle_p0/MANIFEST.json" "$D/commit/replay_bundle_p0/context.json" "$OUT/commit/replay_bundle_p0/" 2>/dev/null
   du -sh "$D" "$D"/* "$WD" 2>/dev/null > "$OUT/sizes.txt"
 }
 window_off() {  # the Commit's window out of the run dir (custody uploads it), its public files and error into $OUT

@@ -11,7 +11,7 @@ the figures the prover states for an SKU: its compute figures (`DeviceFigures`: 
 rate of each operand class) and its memory figures (bits from device memory to the chip a tick, bits of on-chip state and
 bytes of device memory). The auditor's data sheets, public and looked up by SKU, are sheets too, whose figures are its
 estimate of the SKU's (`Auditor.estimate`); they come from the card files (`verity/hardware/cards/<sku>.toml`):
-`Sheet.of_file` reads one as `verity.hardware.load(sku)` returns it.
+`Sheet.of_file` reads one as `verity.hardware.cards.load(sku)` returns it.
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
 before it (`Entry.previous`), the digest of its last entry or, for an empty log, its composite's genesis. `Site.of_log`
@@ -243,7 +243,7 @@ class Sheet:
 
     @classmethod
     def of_file(cls, card: Mapping[str, Any], tick: Fraction = TICK) -> Sheet:
-        """The sheet a card file gives (`verity.hardware.load(sku)`'s table). Its figures: the SKU, the SM clock in Hz,
+        """The sheet a card file gives (`verity.hardware.cards.load(sku)`'s table). Its figures: the SKU, the SM clock in Hz,
         and as every operand class's peak rate the card's s8 MACs a SM-clock (`rate.tensor`; every class is int8) over
         its SMs at that clock. Its memory figures at ticks of `tick` seconds, as `Accel.Card.toDevice` reads the card:
         the bandwidth a ceiling rounded up, and the stores' sizes exact."""
@@ -424,7 +424,7 @@ class Auditor:
     @classmethod
     def of_files(cls, cards: Iterable[Mapping[str, Any]], tolerance: Fraction = Fraction(0),
                  keys: Mapping[str, str] | None = None, tick: Fraction = TICK) -> Auditor:
-        """The auditor whose data sheets come from these card files (`verity.hardware.load(sku)` each), at this
+        """The auditor whose data sheets come from these card files (`verity.hardware.cards.load(sku)` each), at this
         tolerance, and its devices' keys."""
         return cls(tuple(Sheet.of_file(c, tick) for c in cards), tolerance, tuple((keys or {}).items()))
 

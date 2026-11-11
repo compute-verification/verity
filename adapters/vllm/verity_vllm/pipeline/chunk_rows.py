@@ -32,7 +32,9 @@ SLOT_ROWS = ("Attention_v5", "Attention_v18", "AttnBlockFirst_v1", "AttnBlock_v5
 
 
 def reads(tp: Any) -> str:
-    """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: in lookup slots (`read_slots`, each table folded
+    """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: flat for a ``STAGES`` stage on bits (its Boolean
+    version, `boolean_topp_stages`: its MUFU operations are gates, so it reads no table and its unit returns its own outputs,
+    the one form `verify --zk` takes, `one_stage.proofs.ks_form_why`); else in lookup slots (`read_slots`, each table folded
     once per statement) for a ``CHAINS`` key block of a whole block (NVIS = BN: inline, step 16's 64-key split part's EX2 reads
     were 4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots) and for a whole attention row (``SLOT_ROWS``:
     inline, the 1B decode row ``Attention_v5{T=1,NH=32,KVH=8,D=64,..}``'s 64 reads make 6.35e9 nonzeros for its 10.2M ANDs,
@@ -45,6 +47,8 @@ def reads(tp: Any) -> str:
     from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_base, spec_statics
 
+    if tp.layout == "stage" and tp.id != tp.word:
+        return "inline"
     if tp.layout == "row":
         return "slots" if spec_base(tp.id) in SLOT_ROWS else "inline"
     if tp.layout == "stage":
@@ -68,20 +72,16 @@ def statement(tp: Any) -> dict[str, Any]:
 #: among its template's units of an instance), by family, and the row format they are committed in, the one place that names it
 INDEX_ROWS = {"DsaPositionsChunk_v1": "c", "DsaPositionsSlot_v1": "j"}
 INDEX_SCHEMA = IF.V2
-#: the row templates whose output row is a row of a request's history table under table reads (`Registered.dsa_table_reads`):
-#: DSA's latent row, the row a long row's `DsaHistoryReads` reads open (`EmbeddingRead_v1`), committed as the table's rows are
-TABLE_ROWS = ("DsaLatentRow_v1",)
 
 
-def unit_rows(tp: Any, table_reads: bool = False) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
+def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
     """Chunked template ``tp``'s rows as `UnitStager` stages them, ``(in_rows, out_rows)``: its Definition's bit rows
     (`interface.unit_rows`) under its cuts (`chain_rows.cuts`, a ``CHAINS`` combine's), parameter g's row ``in<g>``, or
     ``in<g>.<s>`` for its row s when cut, a ``bits`` template's ``INDEX_ROWS`` row in `INDEX_SCHEMA`. The one exception is a
     ``ScaledMmS8Coordinate``'s A6 rows, ``x`` (the token's s8 codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then
     ``sw[c]``, v2), then the v2 output row ``o0``: each operand packed with its scale in one row is the layout serving
     commits (`serving_rows`' s8 row tables), where
-    `interface.unit_rows` would give ``x``, ``sx``, ``wrow`` and ``sw`` a row each.  Under ``table_reads`` (the partition
-    file's ``dsa_table_reads``) a ``TABLE_ROWS`` template's output rows are row-seg, its history table's leaves."""
+    `interface.unit_rows` would give ``x``, ``sx``, ``wrow`` and ``sw`` a row each."""
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_base, spec_statics
@@ -99,33 +99,30 @@ def unit_rows(tp: Any, table_reads: bool = False) -> tuple[list[tuple[str, str, 
         return f"in{g[nm]}" + (f".{s}" if s else "")
 
     in_rows, out_rows = IF.unit_rows(tp.fn, CH.cuts(tp) if tp.layout == "chain" else None)
-    if table_reads and spec_base(tp.word) in TABLE_ROWS:
-        out_rows = [(SEG, ps) for _s, ps in out_rows]
     index = INDEX_ROWS.get(spec_base(tp.id)) if tp.layout == "bits" else None
     return [(port(p), INDEX_SCHEMA if p == index else schema, *rest) for p, schema, *rest in in_rows], out_rows
 
 
-def unit_member(tp: Any, n: int, base: int = 0, name: str = "", seg: bool = False, table_reads: bool = False) -> CS.Member:
+def unit_member(tp: Any, n: int, base: int = 0, name: str = "", seg: bool = False) -> CS.Member:
     """``n`` units of chunked template ``tp`` from unit ``base`` on bit rows, as `UnitStager` stages a unit: its `unit_rows`
-    (under ``table_reads``) in and out, or, ``seg`` (a history table's writer), its outputs its table's
-    ``hm96-sha512/row-seg/v1`` leaves."""
-    in_rows, out_rows = unit_rows(tp, table_reads)
+    in, its outputs' v2 rows out, or, ``seg`` (a history table's writer), its table's ``hm96-sha512/row-seg/v1`` leaves."""
+    in_rows, _outs = unit_rows(tp)
     outs = (("o0", 1),) if tp.layout == "s8" else IF.layout(tp.fn).outs
-    schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple(
-        (p, CS.SCHEMA_HM96_SHA512_ROW_SEG if seg else s) for (p, _w), (s, _ps) in zip(outs, out_rows, strict=True))
+    out_schema = CS.SCHEMA_HM96_SHA512_ROW_SEG if seg else CS.SCHEMA_HM96_SHA512_ROW_V2
+    schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, out_schema) for p, _w in outs)
     return CS.Member(tp.id, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, n, base, name=name, schemas=schemas)
 
 
-def chunk_cap(tp: Any, table_reads: bool = False) -> int:
+def chunk_cap(tp: Any) -> int:
     """The most instances of chunked template ``tp`` one flock-circuit statement holds, as ``benchmarks/one_stage/a6.py``'s
-    ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`, under ``table_reads``) as its
-    `statement`, then ``vus_per_block`` blocks of ``2^(M_MAX - k_log)``.  Builds the circuit (seconds to minutes; a 64-key
-    ``SparseMlaSplitPart`` about 36 min at 71 GB): a partition file pins it as ``chunk_cap``."""
+    ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`) as its `statement`, then
+    ``vus_per_block`` blocks of ``2^(M_MAX - k_log)``.  Builds the circuit (seconds to minutes; a 64-key ``SparseMlaSplitPart``
+    about 36 min at 71 GB): a partition file pins it as ``chunk_cap``."""
     import tempfile
 
     from verity_flock.class_statement import UnitStager
 
-    in_rows, out_rows = unit_rows(tp, table_reads)
+    in_rows, out_rows = unit_rows(tp)
     with tempfile.TemporaryDirectory() as d:
         st = UnitStager(tp.fn, "unit/serving-rows-cap", in_rows, out_rows, circuit=Path(d) / "circuit.txt",
                         bind={"partition": "0" * 128, "program": "0" * 128}, **statement(tp))

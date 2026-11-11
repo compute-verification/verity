@@ -1726,6 +1726,24 @@ def test_review_without_sha_refuses_a_head_pushed_since_the_sync_and_takes_a_sho
     assert Q.review(h.q, world.store, labels, 1, "land", None, "lane-9", sha=new) == 0
 
 
+def test_under_land_into_main_review_reads_no_next_and_records_on_the_open_head(world, monkeypatch):
+    """Drive's frozen `next` can hold a PR at an older head than GitHub's.  Under `land_into = "main"` written in drive.toml the
+    verified queue lands on `main` and nothing reads `next`, so a verdict without --sha goes on the open head."""
+    world.with_store_remote()
+    h = Review(world, monkeypatch)
+    _move_main(world, {Q.DRIVE_FLAGS: 'land_into = "main"\n'})
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.d.review = False
+    h.q.sync()
+    old = world.gh.prs[1].head
+    assert [m.head for m in h.q.chain() if m.pr == 1] == [old]
+    world.gh.put(1, new := world.change({"a.txt": "2\n"}))
+    labels = StoreLabels(world.store, log=lambda s: None)
+    assert Q.review(h.q, world.store, labels, 1, "land", None, "lane-9") == 0
+    assert [lab.value for lab in world.store.labels(label_target(1, new), key=vocab.REVIEWED)] == ["land"]
+    assert not world.store.labels(label_target(1, old), key=vocab.REVIEWED)
+
+
 def test_the_owner_of_an_unmarked_pr_marked_ones_wait_for_is_told_once_with_theirs_until_its_head_changes(world, monkeypatch):
     """A marked PR can wait on another's unmarked commits, and that one's owner is told, in one post with every marked PR it takes
     out and their owners.  It is told again when its head moves, not when a PR it takes out moves, and not at all for a waiting PR

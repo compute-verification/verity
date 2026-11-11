@@ -1,0 +1,200 @@
+"""`verity bench inference_only`: the served policy's file against the tree, a policy's number against the bound's own
+count, the divisions on a small record, and the report of a refused policy."""
+from __future__ import annotations
+
+import dataclasses
+import importlib.util
+import json
+
+import built as B
+import policy as P
+import pytest
+import report
+from rho import min_cut
+from verity_vllm.check.weights_of_record import PARAM
+from verity_vllm.program.predict import block_counts as BC
+
+from verity.commitments.windows import interface as IF
+
+ROPE, SILU = "RoPEHead_v1{D=16}", "SiluMul_v2{I=8}"
+NORM = 'RMSNormTriton_v5{N=8,EPS={"f64":"0x1.4f8b588e368f1p-17"}}'
+#: the small record's class: 2 slots of 2 + 2 - 1 = 3 positions
+CLASS = (2, 2, 2)
+
+
+def small() -> IF.Circuit:
+    """A record of three catalog templates over 2 slots of 3 steps, a unit a slot a step: the head (its inputs registered
+    weights), the product reading its own head, and the norm reading the product two units back, which is its slot's at
+    the step before (so its first step's units read a registered row outside θ instead, one row a slot)."""
+    fns = {t: BC.resolve(t) for t in (ROPE, SILU, NORM)}
+    r, s, n = (IF.descriptor_id(fn) for fn in fns.values())
+    reads = (IF.Read(r, "x", f"{PARAM}/x", 0, (6,), 0, (0,)), IF.Read(r, "cs", f"{PARAM}/cs", 0, (6,), 0, (0,)),
+             IF.Read(n, "w", f"{PARAM}/norm", 0, (2,), 0, (0,)), IF.Read(n, "x", "state", 0, (2,), 0, (8,)))
+    return IF.Circuit(
+        "test/small", tuple((fn, 6) for fn in fns.values()),
+        wires=(IF.Wire(s, "gu", r, "o0", 0, (6,), 0, (1,)), IF.Wire(n, "x", s, "o0", 2, (4,), 0, (1,)),
+               IF.Wire(n, "w", s, "o0", 2, (4,), 0, (1,))),
+        registered=IF.Registered({f"{PARAM}/x": 16, f"{PARAM}/cs": 16, f"{PARAM}/norm": 8, "state": 16}, reads=reads),
+        blocks=IF.Blocks(slots=2, steps=3, inference=tuple(IF.InferenceEntry(t, 0, (3, 2), ("step", "slot"), 0)
+                                                           for t in (r, s, n))))
+
+
+@pytest.fixture(autouse=True)
+def no_out(monkeypatch) -> None:
+    """The command writes its JSON to `$OUT` by default; a test names its own directory or none."""
+    monkeypatch.delenv("OUT", raising=False)
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+
+
+def reference(inst: dict) -> dict:
+    """The count's Python reference, which the count's difftest holds the Lean to, as `built.lean_count`."""
+    spec = importlib.util.spec_from_file_location("nci_reference", B.PACKAGE / "scripts" / "nci_reference.py")
+    ref = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ref)
+    return {"verdict": ref.check_count_detail(inst), "cost": {}}
+
+
+@pytest.fixture(scope="module")
+def counted() -> tuple[dict, dict, dict]:
+    doc, pins = B.record(small())
+    pol = B.policy(doc, pins)
+    return doc, pol, B.divisions(doc, pins, pol["gates"])
+
+
+def test_the_served_file_is_what_the_tree_computes_of_its_class() -> None:
+    """The stated policy's work is the class's fixed load priced as a served step, its model's shape is the declared
+    one, and its k is the outside linears' outputs and the scan state row, with nothing left over."""
+    import served_shares as SS
+    import served_verdicts as SV
+
+    p, sh = P.stated(), P.shape(P.stated().model)
+    assert p.label == "served" and p.check["verdict"] == "not run"
+    assert p.work == B.block_work(p.cls, B.MODEL)
+    layers, linears = SV.DECLARED[B.MODEL]
+    assert (sh.layers, [x[1:] for x in sh.linears]) == (layers, [x[1:] for x in linears])
+    assert sh.head == (SS.MODELS[B.MODEL]["vocab"], SS.MODELS[B.MODEL]["hidden"])
+    assert p.unexplained == 0 and p.outside == p.k - P.scan_state_bits(p.cls) > 0
+
+
+def test_a_policy_file_that_misstates_its_work_is_refused(tmp_path) -> None:
+    text = P.SERVED.read_text().replace("total = 36241670144", "total = 36241670145")
+    assert text != P.SERVED.read_text()
+    (tmp_path / "p.toml").write_text(text)
+    with pytest.raises(ValueError, match="is not linears"):
+        P.stated(tmp_path / "p.toml")
+    (tmp_path / "q.toml").write_text(P.SERVED.read_text().replace("k = 422197408\n", ""))
+    with pytest.raises(ValueError, match="has no 'k'"):
+        P.stated(tmp_path / "q.toml")
+
+
+@pytest.mark.parametrize("k", [145_568, 8_000_000, 422_197_408])
+def test_the_number_is_the_bounds(k: int) -> None:
+    """A policy's number is `min_cut.bound`'s slowdown on one block's work: where it is over 1, that many blocks of the
+    policy finish exactly the block's work by the count (`min_cut.macs_at_most`, HE's right side), and where the count
+    lets one block finish the work it is 1."""
+    p, sh = dataclasses.replace(P.stated(), k=k), P.shape(P.stated().model)
+    row = report.priced(p, sh)
+    bd, N = row["bound"], p.work[P.TOTAL]
+    assert (bd["N"], bd["size"], bd["O"]) == (N, p.c, N * sh.outputs * 16 / sh.macs)
+    q = bd["beta_w"] * bd["beta_x"]
+    if min_cut.macs_at_most(1, k, bd["O"], q, bd["b"]) >= N:
+        assert row["value"] == 1 and k == P.stated().k
+    else:
+        assert row["value"] > 1
+        assert min_cut.macs_at_most(row["value"], k, bd["O"], q, bd["b"]) == pytest.approx(N, rel=1e-9)
+        assert row["value"] == pytest.approx(N / bd["macs_a_block"], rel=1e-12)
+
+
+def test_the_divisions_count_a_block_gates_and_each_row_it_reads_once(counted) -> None:
+    doc, pol, div = counted
+    gates = [pol["gates"][t] for t, _ in doc["templates"]]
+    assert [div[d]["blocks_a_session"] for d in B.DIVISIONS] == [1, 3, 9]
+    # a session holds every template at each of its 3 steps, a position one unit of each, a proof block one unit
+    assert [div[d]["c"] for d in B.DIVISIONS] == [3 * sum(gates), sum(gates), max(gates)] and pol["c"] == 3 * sum(gates)
+    # a session reads its one state row (the norm's 8 words); the wires stay inside it
+    assert div["session"]["k"] == pol["k"] == 8 * 16
+    assert div["session"]["k_by_kind"] == [("registered state, read by RMSNormTriton_v5.x", 128)]
+    # a position after the first reads the product of the step before, one row though two ports read it
+    assert div["position"]["k"] == 8 * 16
+    # the product's unit reads its head's 16 words from another proof block
+    assert div["proof block"]["k"] == 16 * 16
+    assert div["proof block"]["k_by_kind"] == [("RoPEHead_v1.o0, read by SiluMul_v2.gu", 256)]
+
+
+def test_the_count_refuses_the_session_program_on_k(counted) -> None:
+    """The count is given the session Definition with no θ and no wires, so it counts every input row of every unit,
+    the weights too, and refuses the record's k."""
+    _, pol, _ = counted
+    check = B.judged(reference(B.instance(pol, pol["c"], pol["k"], 5)), pol["c"], pol["k"], 5)
+    assert (check["verdict"], check["complies"], check["failed"]) == ("refused", False, "k")
+    assert check["counted"]["c"] == pol["c"] and check["counted"]["k"] > pol["k"] and check["counted"]["n"] == 2
+    assert B.judged(reference(B.instance(pol, pol["c"], check["counted"]["k"], 5)), pol["c"], 0, 5)["verdict"] == "accepted"
+    few = B.judged(reference(B.instance(pol, pol["c"], check["counted"]["k"], 1)), pol["c"], 0, 1)
+    assert (few["verdict"], few["failed"]) == ("refused", "n")
+
+
+def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(capsys, tmp_path) -> None:
+    """The command on the served file and a small built record: the served number is first and is the JSON's value, the
+    built class is labelled as not served, its refusal prints the verdict and what failed, and its number is the
+    bound's and is labelled as resting on the Python count."""
+    doc = report.main(["--class", ",".join(map(str, CLASS)), "--out", str(tmp_path)], check=reference, circuit=small(),
+                      commit=lambda: "0" * 40)
+    out = capsys.readouterr().out
+    lines = out.splitlines()
+    assert json.loads(lines[-1]) == doc == json.loads((tmp_path / "inference_only.json").read_text())
+    assert lines[2] == "AS SERVED: 1" and "outside the circuit" in lines[4] and "Not checked here" in lines[6]
+    assert out.index("AS SERVED: 1") < out.index("The class this tree builds: NOT SERVED")
+    assert B.EXECUTABLE[1:] == ("--count", "--detail") and B.RULE.endswith(".Count: CompliesAtMost c k n")
+    assert f"{' '.join(B.EXECUTABLE)} ({B.RULE}): complies: false, k failed" in out
+    assert "the registered Program has no θ and no dataflow" in out
+    assert "the Lean counts c's Boolean gates a block exactly, and " in out
+    served, built = doc["policies"]
+    assert served["units"] == built["units"] == P.UNITS and f"{served['c']:,} Boolean gates a block" in out
+    assert (doc["value"], doc["check"], doc["rests_on"]) == (served["value"], served["check"], served["rests_on"])
+    assert doc["value"] == 1 and doc["check"]["verdict"] == "not run" and "run" not in doc and doc["commit"] == "0" * 40
+    assert "nothing on this tree builds or checks" in doc["rests_on"]
+    assert (built["label"], built["check"]["verdict"], built["check"]["failed"]) == ("built", "refused", "k")
+    assert built["rests_on"].startswith("the Python count of what a block reads") and "does not establish" in built["rests_on"]
+    assert built["rests_on"] in out
+    sh = P.shape(B.MODEL)
+    N = B.block_work(CLASS, B.MODEL)[P.TOTAL]
+    want = min_cut.bound(built["c"], built["k"], built["n"], N=N, O=N * sh.outputs * 16 / sh.macs, size=built["c"])
+    assert built["value"] == want.slowdown > 1 and f"number    {report._n(want.slowdown)} = max(1, N / limit)" in out
+    assert [d["division"] for d in doc["divisions"]] == list(B.DIVISIONS) and doc["divisions"][0] == built
+    assert [d["check"]["verdict"] for d in doc["divisions"]] == ["refused", "not run", "not run"]
+    # each policy over each fleet and monitoring period: a share of the compute, and the blocks' training at most
+    assert len(doc["periods"]) == 2 * 2 * 3 and {r["policy"] for r in doc["periods"]} == {"served", "built"}
+    for r in doc["periods"]:
+        of = served if r["policy"] == "served" else built
+        assert r["share"] == pytest.approx(1 / of["value"])
+        assert r["training_macs"] == pytest.approx(r["share"] * r["blocks"] * of["work"]["N"])
+    for word in ("proved", "premise", "scaled", "the two thirds", "BF16", report.CALCULATOR):
+        assert word in out
+
+
+def test_stated_only_builds_nothing_and_another_division_is_the_built_number(capsys) -> None:
+    def never(*_a, **_k):
+        raise AssertionError("built")
+
+    doc = report.main(["--stated-only"], check=never, commit=lambda: None)
+    assert len(doc["policies"]) == 1 and doc["divisions"] == [] and "NOT SERVED" not in capsys.readouterr().out
+    doc = report.main(["--class", ",".join(map(str, CLASS)), "--division", "proof block"], check=reference,
+                      circuit=small(), commit=lambda: None)
+    assert doc["policies"][1] == doc["divisions"][2] and doc["policies"][1]["division"] == "proof block"
+    assert doc["policies"][1]["n"] == 9 * doc["divisions"][0]["n"]
+
+
+def test_a_class_the_integration_refuses_is_an_error_that_says_why(monkeypatch, capsys) -> None:
+    from verity_vllm.program.predict import window_circuit
+    from verity_vllm.program.predict.common import Unexpressible
+
+    def refuse(*_a, **_k):
+        raise Unexpressible("a template the composer wouldn't prove")
+
+    monkeypatch.setattr(window_circuit, "class_circuit", refuse)
+    monkeypatch.setattr(B, "registered", lambda _model: None)
+    with pytest.raises(SystemExit) as e:
+        report.main(["--class", "2,8,2"], check=reference, commit=lambda: None)
+    out, err = capsys.readouterr()
+    assert e.value.code == 2 and "AS SERVED: 1" in out and "NOT SERVED" not in out
+    assert "the integration lowers no circuit of class 2,8,2" in err and "a template the composer wouldn't prove" in err

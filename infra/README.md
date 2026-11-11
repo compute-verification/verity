@@ -29,7 +29,7 @@ subdirectory has its own README with the detail; this page maps each machine and
 | The agent watch: frees held runs, records idle workers and run ends | `infra/ops/verity_ops/agent_watch.py`, run by `infra/control/agent_watch.sh` |
 | The agent watch's relay to Slack | `infra/control/agent_watch_relay.py` |
 | The cloud watch: loop health, R2, Neon, spend against budgets | `infra/control/cloud_watch.py` and `cloud_watch.toml` |
-| The watchers supervisor and its loops (VM stops and deadlines, fleet, monitors, top's asks relay) | `infra/control/watchers.py`, `watchers.toml`, `vm_stop.py`, `top_watch.py` |
+| The watchers supervisor and its loops (VM stops and deadlines, fleet, monitors, top's asks relay, the nightly uncached check of `main`) | `infra/control/watchers.py`, `watchers.toml`, `vm_stop.py`, `top_watch.py`, `nightly_check.py` |
 | The control disk alert and the notes sync check | `infra/control/control_disk_alert.py`, `control_disk.sh` |
 | Store index, garbage collection and fixture export | `infra/control/store_index.sh`, `store_gc.sh`, `fixtures_export.sh` |
 | The resource steward | `infra/control/steward-run.sh` |
