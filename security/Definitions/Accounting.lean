@@ -25,7 +25,6 @@ public import Definitions.Accounting.Joint
 public import Definitions.Accounting.JointBlocks
 public import Definitions.Accounting.JointPeriod
 public import Definitions.Accounting.JointBridge.CreditedWords
-public import Definitions.Accounting.JointBridge.H200
 public import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
 public import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
 public import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
