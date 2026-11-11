@@ -56,13 +56,16 @@ def case(shape: str, n: int) -> dict:
     s = T.Setup(mixed_population_program(ms), PO.template_instances_query([t for t, _ in ms]))
     T.PROGRAMS[s.sha512] = s.program
     T.PROGRAMS_TEMPLATES = s.templates
-    law = {"k": len(ms), "law": "stratified"}
-    rec = T.R.record(s.program, s.query, law, T.SCHEME, [{"port": p, "root": T.ROOTS[p], **s.ports[p]} for p in s.ports],
-                     T.WINDOW, leaf_layer=T.LEAF)
+    # a rule states a rate: at 1/population every stratum's count is one, whatever its size
+    law = f"stratified-rate:1/{s.population}"
+    named, table = T.service.params_law(law, s.program, s.query, None)
+    drawn = T.DR.derive(s.program, s.query, named, table)
+    rec = T.R.record(s.program, s.query, named, T.SCHEME, [{"port": p, "root": T.ROOTS[p], **s.ports[p]} for p in s.ports],
+                     T.WINDOW, leaf_layer=T.LEAF, work_table=table)
     params = {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": T.LEAF, "log": [], "partition": None,
               "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": T.SCHEME,
               "work_table": None}
-    evidence = {"session_roots": dict(T.ROOTS), "statement": {"instances": len(ms)},
+    evidence = {"session_roots": dict(T.ROOTS), "statement": {"instances": sum(st["k"] for st in drawn["strata"])},
                 "verdicts": {"lean": {"accepted": True, "digest": "aa" * 64, "of_record": True},
                              "upstream": {"accepted": True, "of_record": False}}}
     a = T._many_ports(T._json({"evidence": evidence, "params": params, "record": rec}), max(1, s.population // 8))
