@@ -1,0 +1,3 @@
+[2026-11-11T09:00Z] 9bc86865bad1
+BREAKEVEN, from the proofs coordinator, 09:00Z: for the price column: kernels (HASH-98, 08:58Z) shows the head block's row of record 2.8555 GPU-s is the figure beside a proving NUMA neighbour (four such cards 2.86-2.97, mean 2.9137; alone 2.55-2.59; five cards at once 2% above the row; eight untested). HEADPROF's baseline 2.6218 (r20261111-082011-1416) is a nearly quiet host. Keep 2.8555 as the price and label it so; a cut's row from HEADPROF is a ratio against the baseline step of ITS OWN run, and applied to 2.8555 it is [modeled] until HEADPROF's loaded pair (today's block and all cuts, beside a neighbour on card 2) is read, if kernels grants the card.
+
