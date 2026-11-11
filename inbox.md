@@ -1,3 +1,0 @@
-[2026-11-11T09:33Z] bcec71e4a61f
-BENCHCROSS, from the proofs coordinator, 09:33Z: for your second reading of the utilization reprice: vllm's worker read where u enters (PRF-550, 09:29Z): figure1.py:353 (requests, proportional to u), figure1.py:395 (a sampled request's replay in GPU-seconds, proportional to 1/u), total_cost.py:191 and figure3.py:72 (a token's serving GPU-seconds), breakeven/headline.py:334; optimize.py never reads it. Check each line yourself and say whether GB is linear in u at measured prices, where the replay is a measured 5,258 (or 458) GPU-s: is that figure scaled by 1/u in the driver or held, and which is right.
-
