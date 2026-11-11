@@ -1,5 +1,10 @@
-/-
-The verifier's program, read once.
+module
+
+public import Flock.Registered
+public import Flock.ProvedScope
+
+/-!
+# The verifier's program, read once
 
 A setup reads the verifier's own program (`--program`) through `TemplateQuery.Desc.parse` and `Program.decode`, each of
 which reads the descriptor's bytes as JSON (`Program.readJson`) and hashes its canonical form. Each function below named `…By` is the function it is
@@ -10,10 +15,6 @@ both readings of it, each made when first asked for and kept, the two readings f
 a run that hands them to its setups parses its program once. `TemplateQuery.Desc.parseOf`, `Program.decodeOf` and
 `ProvedScope.programDigestOf` are the two readings and the program's digest from that JSON.
 -/
-module
-
-public import Flock.Registered
-public import Flock.ProvedScope
 
 @[expose] public section
 
