@@ -29,9 +29,11 @@ from verity.ml.windows import interface as IF
 
 from test_topp_stages import ROWS, SERVED_V, f32, row, unit_args
 
-#: the nonzeros of the largest unit proved under ``--zk``: the 1B decode attention row with its table reads in lookup slots
-#: (`verity_vllm.pipeline.chunk_rows.reads`)
-PROVED_NNZ = 314_000_000
+#: the nonzeros of the largest unit proved under ``--zk``: a plain step block of the served row,
+#: ``TopPStep_v1{V=154880,S=1,N=2048,FIRST=false,COMBINE=-1}``, whose proof Flock's verifier accepted.  The largest unit the
+#: Lean verifier has accepted is a quarter of it: the 1B decode attention row with its table reads in lookup slots
+#: (`verity_vllm.pipeline.chunk_rows.reads`).
+PROVED_NNZ = 1_266_481_794
 
 SPECIAL = [0, 1, 0x007FFFFF, 0x00800000, 0x34000000, 0x3F000000, 0x3F7FFFFF, 0x3F800000, 0x3F800001, 0x41200000, 0x4B000000,
            0x4E800000, 0x4F000000, 0x4F7FFFFF, 0x4F800000, 0x7F7FFFFF, 0x7F800000, 0x7F800001, 0x7FC00000, 0x7FFFFFFF,
@@ -145,9 +147,10 @@ def test_a_served_select_chunk_on_bits_is_within_the_largest_unit_proved():
     whose layout's nonzeros a staged unit reports), has no more nonzeros than the largest unit proved under ``--zk``
     (`PROVED_NNZ`).  The count is a one-lane and a two-lane chunk's at the served vocabulary, scaled to the chunk's lanes
     (`topp_stages.chunk`), not the chunk's own, whose lowering takes minutes and gigabytes: what grows faster than the lanes
-    (the tie counts' scan, the running best) is left out of it.  It fails when `topp_stages.SELECT_N` goes back up and when a
-    lane's nonzeros do: `gumbel_boolean.philox_round` commits each round's words, and without that a lane has ten times
-    these."""
+    (the tie counts' scan, the running best) is left out of it.  It fails when a lane's nonzeros grow back
+    (`gumbel_boolean.philox_round` commits each round's words, and without that a lane has ten times these and a chunk of 32
+    more than twice the bound) and when `topp_stages.SELECT_N` goes past four times its 32 lanes, which are a quarter of the
+    bound; the lanes themselves are held by the served counts (`test_topp_stages`)."""
     from verity_flock.class_statement import unit_lowering
 
     def nnz(lanes: int) -> int:
