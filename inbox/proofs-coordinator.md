@@ -49114,3 +49114,22 @@ For BREAKEVEN:
 For the table:
 - Head block at four provers a card (1.731 GPU-s, measured, one pair, `db9a`): (iii) reads 5,220 GB at modeled 0.4 with the Lean verify at its measured 250 core-s (187 to 201 at the measured engine rate, a floor; stops at 287 tokens a GPU-second). With the width plan and the cut as well: 2,141 (76 to 82), the cut at four provers unmeasured.
 - Second readings that hold: HEADPROF's `db9a` rows, FUSED's `a3e0` / `7268`, #8907 at `14643669694c` (six cells by hand), #8904's planner part at `f1e9d625dd77`.
+
+## TWOWITNESS, Wed 11 Nov 10:42Z: b6e9 passes, so the merged tree builds; the by-stratum count is #8919, first try clean; code_hKs and code_hKm both take it
+
+- **b6e9 passes [run: `r20261111-094227-b6e9` stdout.log].** The tree is `main` `0a722c6ec984` merged with the eight marked heads (#8539, #8781, #8785, #8820, #8827, #8828, #8354, #8368), then #8870 `e7d354135fbb`, #8889 `50b06ae65a` and #8892 `5bbe4bd228`. It reads "Build completed successfully (12362 jobs)", `security/Proofs` exit 0 in 2372 s, `failed {}`, `skipped {}`. So #8870's ready line merges with the marked heads at `r20261111-094227-b6e9` [run].
+- **#8919 [run]** is `cursor/proofs-secondstrata-aa90` at `b216b224234117057de707ac363ca7c84d9e259b`, on #8870's head `e7d354135fbb`, unmarked, linked to PRF-533. It is one file, `Claims/Sampling/Select/SecondStrata.lean`, with 15 theorems and no definition, guarantee or premise.
+- **The statement [read: SecondStrata.lean]:** `RegTwo.sum_checked_le_strata (hsel : selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) (w M : ℕ → ℕ) (hM : ∀ ρ t i, t < g.ns.size → i < g.ns.getD t 0 → w (g.blockOf ρ t i) ≤ M t) (hK : (g.sample src₁).size ≤ K0) : ((g.checked N src₁ src₂).map w).sum ≤ (((List.range N).filter g.always).map w).sum + K0 * Σ_{t < ns.size} ks[t] * M t`. Its right-hand side is SCALE's by-stratum column: the always term plus K0·Σ_t k_t·M_t. At a registration with no always-checked block, which is where every bits line is, the always term is 0 [read].
+- **Try `r20261111-103636-3998` [run]:** lean exit 0 in 58 s. All 15 theorems use only `propext`, `Classical.choice` and `Quot.sound`, no sibling clash, no warning in the file.
+- **Which take it [read: Counts.lean at `5e1baad461`]:** both `code_hKs` and `code_hKm`.
+  - Each integrand is at most Σ_{u ∈ checked} |needs u|: `card_filter_needs_le` for K_s and `sum_first_sessNeeds_le` for K_m. So w u = |needs u|, and M_t is the most gates a block of template t needs.
+  - `code_hNs` keeps w = 1 and K0·Σ_t k_t.
+- **Counts [run]:** `cursor/proofs-codecounts-9e41` is at `5e1baad461`, which merges #8919's head. `code_hKs` and `code_hKm` now take `hM` by template, through `code_ex_le_strata`. That is `RegTwo.ex_checked_le` with `sum_checked_le_strata`, and SCALE's `sample_size_le` for K0. No PR, not tried.
+- **The always/hit split is in #8919 and #8892 [read].** In #8919 it is a local `have`, the same step as #8892's `sum_filter_or_le`, because #8892 is on a newer `main`. Once both land, one copy goes [guess].
+- **In flight [run]:** #8889's records `r20261111-100009-a542` (since about 10:20Z) and #8892's records `r20261111-104111-22bc` (launched 10:41Z). Next: #8889's quick tier, #8892's quick tier, then #8919's records and quick tier [guess].
+
+For SCALE: your by-stratum column is `RegTwo.sum_checked_le_strata`'s right-hand side, the always term plus `K0 * Σ_{t<ns.size} ks[t] * M t`. `hK` is your `RegTwo.sample_size_le hK0 src₁`, and `hM` is per template: `w (g.blockOf ρ t i) ≤ M t` for `t < ns.size` and `i < ns[t]`.
+
+For the table:
+- b2 and k (counts by template): #8919 is open and unmarked at `b216b22423`; try 3998 is clean; K_s and K_m read K0·Σ_t k_t·M_t.
+- Merged tree with #8870, #8889 and #8892: builds, `r20261111-094227-b6e9`.
