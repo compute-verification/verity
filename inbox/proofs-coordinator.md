@@ -58325,3 +58325,47 @@ For the table: the head block cut into scores + values costs the same seconds as
 
 For the table:
 - RELAX | the adapter draft `cursor/proofs-recut-c2b3` at `20ac4fee7711`, unmarked | quick tier green at the head [run `c5a0`: 23 passed (2 cached), 0 failed]; lists eleven widths and the select's split | the census needs eleven pins and its sizer on staged rows (the select's units 2^27 each [run], read 22 and 26)
+
+## DRAFT-CORE (PRF-540), Wed 11 Nov 15:46Z: FINAL. #8896 and #8946 landed; #8914, #8934, #8940 unmarked for Daniel; #8940 at 131a557ffc03 with its records run out; the note a fresh worker starts from
+
+I stop at 16:00Z. #8914, #8934 and #8940 are unmarked, for Daniel. Nothing here is a bits line; every stream length is the formula's on the priced design's rows [run: `draftcore_coin.py`, modeled], none measured.
+
+**1. PRs and heads**
+
+| PR | head | state |
+|---|---|---|
+| #8819, #8888, #8896, #8946 | on `main` (`493f49485e50`) | landed: lemmas only |
+| #8914, the caps | `3f10472f19634dfdf7bcd8460ade2981e9daabf8` | unmarked, Daniel's (`MAX_COINS`, `MAX_TREE_LINES`: definitions the locks read) |
+| #8934, the layer | `70f018e3125778c361c255e6e35be88f10ecad9d` | unmarked, Daniel's (restates `SampledKSTwo`) |
+| #8940, SPOT[Flock]'s code at the stage, on #8934 | `131a557ffc03a0267eb78bef7da114ce3b2cfd0a` | unmarked, Daniel's (what `SpotKSTwo`, `SpotExfilTwo` read; the text of `Addresses`). Moved 15:34Z; its records run is out |
+
+- **#8940 at the new head:** `main` `493f49485e50` merged, `OpensWhole.lean` and `Opens.lean` restated (the hwit branch's blobs). The try of `FirstHitClassAt.lean` with `OpensClass`, `OpensWhole`, `RevealsOpen` under it passes [run `r20261111-153509-6c51`: lean exit 0 in 260 s, 2 theorems, axiom probe clean]. **Out:** `--records security --update` [`r20261111-153509-69de`, cpu-8, about 16:25Z] and the quick tier [`r20261111-153523-73d5`, cpu-1]. If `69de` keeps a lock under `lean-audit/record/security/`, it has to be committed to the branch; if none, the head is final.
+- **#8914 and #8934 did not move.** Each builds with `main` at `72e4d46d9209` on a scratch merge, no lock regenerated [runs `r20261111-135759-77b9` (all four packages), `r20261111-131757-5148`]. #8914 with `main` at `d2a045c04e8e`: the Spot verifier's package passes (5,621 declarations in 50 modules) and the requirers are out [`r20261111-152014-b708`, cpu-8, about 16:20Z]. Neither is built with `main` at `493f49485e50`; #8934 is in #8940's records run there.
+- **Not checked on any of the three:** a second reader; the kernel replay (the candidate's check).
+
+**2. The stream lengths and the `MAX_COINS` D*1 needs** (a stratum's first read is `2·k·width(size) + 64` bytes, `width n = (bitlength(n) + 71)/8`)
+
+- At one sampled request, by strata / as one subset: row (ii) = D*1 139,548,510 / 143,623,700 bytes (least power of two 2^28 bytes, `MAX_COINS` 2^22); (iii) warm 279,095,824 / 287,247,076 (2^29, 2^23); (i) 165,024,308 / 166,131,328 (2^28). 2^28 does not cover all three; 2^29 does.
+- By the second stage's cells D*1 reads 138,580,196 bytes a sampled replay block: 554,320,784 at K = 4 and **831,481,176 at K = 6 sampled replay blocks a registration, so `MAX_COINS` 2^24 (2^30 bytes)**, which is #8914's value, with `MAX_PATH` 24, `DRAW_ROUNDS` 1024 and `MAX_TREE_LINES` 2^23 (the hiding term 2^-210 to 2^-207). K = 6 is n ≤ 6/q; no line of `main` holds n to it.
+- In 64-byte coins: 2,165,316 / 8,661,263 / 12,991,894 at K = 1 / 4 / 6, over `main`'s 2^20 and inside 2^24. In the model's 2^20-byte rounds: a stage of at least 133 / 529 / 793 rounds. At the model's one round the largest second stage is 41,415 / 40,259 / 39,489 proof blocks a run, so the model's verifier accepts no run at D*1's sizes on `main`.
+- Largest k_d the subset law's hypothesis covers (width 13): 2,581,107 at 2^26 bytes; 5,162,217 at 2^27; 10,324,438 at 2^28; 20,648,878 at 2^29; 41,297,760 at 2^30.
+- The row of record (κ 2^-6, margin 0.03) reads 0.48 of 2^30 bytes at K = 6 [relayed: HARMSEARCH]; a row at κ 2^-4 or wider needs 2^25 to 2^26 coins there [derived from relayed counts].
+- The served challenger opens `⌈read/64⌉` coins a second stage [read: `service.py:2180-2203`, `device/coins.py`]; no second stage has been served at any cap [relayed].
+
+**3. Lock records that move**
+
+- **#8914** [run `r20261111-091201-9878`]: no guarantee's statement. Eight `reads` values, the same in `security/lean-audit.json` and `security/Properties/lean-audit.json`: the definitions `Spot.Challenger.MAX_COINS`, `MAX_PATH`, `MAX_TREE_LINES`, `Verity.maxTreeLines`, and the module digests `Spot.Challenger`, `Spot.ChallengerCoins`, `Spot.ChallengerSession`, `Properties.Verity.Game`. Readers: one guarantee in `security` (`Flock.SecurityProofs.RecursiveAuditC3`, not deployed), 50 in `security/Properties`, two deployed (`Verity.remote_soundness_of_subprotocols`, `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod`).
+- **#8934** [run `r20261111-110705-dae6`]: the definition `Flock.Guarantees.SampledKSTwo` (the statement that moves); the signature and type hash of `Flock.SecurityProofs.SampledKSTwo_honest`; ten definitions newly read (`StageOrder`, `StageOrder.toOrder`, `StageOrder.round`, `Order.stage`, `orderOf`, `bytesStage`, `codeTwoStage`, `StageUniform`, `toyStage`, `toyStageBytes`); three module digests; two prose lines (the `frozen` reason and the `trees` exception). No premise added or dropped.
+- **#8940** [runs `r20261111-112540-5d43`, `r20261111-122911-f861`, at the earlier head]: no guarantee's signature or type hash. The open premise `SpotFlock.Addresses` changes its statement (digest `381dddf63ad1` to `5a41733162d8`). Definitions read: 44 changed, 8 added, 2 no longer read, in six modules' entries (`SpotFlock.Code`, `RevealAt`, `SlotsAt`, `FrameIsAt`, `Opens`, `Claims.Sampling.Reg`). Whether the new head's lock regenerates is `69de`'s to say.
+- #8946, #8896, #8888, #8819: none.
+
+**4. The stratified `Q_s`**: landed. #8888 (the run-out half: a sample on strata fails to end with probability at most k_d·2^-64 on a stream that holds every stratum's first read), #8896 (`Q_s` by the rows and public gates a sample reads, at V5's value binding and a design on strata) and #8946 (`sampledKSLiveV5_rows`: `SampledKSLiveV5`'s statement with its third term by rows) are on `main`. The stream-length hypothesis is a hypothesis of lemmas and enters no guarantee: that is Daniel's.
+
+**5. What a fresh worker starts from**: the note `lanes/proofs/20261111T1517Z-report-draft-core-final.md` (synced). In order:
+
+1. Read `69de`'s verdict; commit a regenerated lock to #8940's branch if it kept one; refile the body's runs paragraph.
+2. When #8931, #8941, #8874 or #8871 lands, #8940 takes that PR's restated file from `cursor/proofs-spot-stage-hwit-9e41` at `1fe91d1e9cd7be1961f369a5de99fcd00913edc1` (the whole stack built there: `r20261111-133404-a382`).
+3. Not started: a bound on `Pr[refused]` at the stage layer. `units_error_le` exists; missing are `LawOn` of the second stage's law (100 to 150 lines), the sample `drawFirstRead` builds passing `Draw.checkDraw` (300 to 500), the transfer to the code (80 to 150) [guesses; sketches in the note, not compiled].
+4. Open and not mine to decide: `Held.more` is not tied to the device; no theorem says an honest staged run is accepted; `Addresses` is neither repaired nor worsened, and its repair will touch `SlotsAt.lean` and `RevealAt.lean`, which #8940 changes.
+
+For the table: #8896 and #8946 landed (the stratified `Q_s` and `SampledKSLiveV5`'s bound by rows, lemmas). The caps (#8914) and the model's second stage as several 2^20-byte rounds (#8934, #8940) are built and unmarked; the by-class stack builds on the stage [run `r20261111-133404-a382`, no kernel replay, no second reader]; under the stage `Pr[refused]` at D*1 is positive and no lemma bounds it.
