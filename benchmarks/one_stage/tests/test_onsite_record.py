@@ -2618,6 +2618,74 @@ def test_a_report_stating_no_servers_reads_accept_from_none_of_its_rows(tmp_path
     assert {k: v[k] for k in ROW_READ} == {k: off_node(base, k, unserved(key)) for k, key in ROW_READ.items()}
 
 
+#: the record's figures read from a row of the window report beyond its verdict, by the row each reads
+FIGURES = {"sampled proofs' δ": "integrity", "PoUW's δ": "work", "the placement": "communication",
+           "sampled proofs' guarantee": "integrity", "the bound": "communication"}
+
+
+def figures(rec: dict) -> dict:
+    """Each of `FIGURES` as ``rec`` states it; a δ is its term of the composite's error."""
+    terms = {t["subprotocol"]: t for t in rec["composite_error"]["terms"]}
+    return {"sampled proofs' δ": terms["sampled proofs"], "PoUW's δ": terms["PoUW"], "the placement": rec["placement"],
+            "sampled proofs' guarantee": rec["sampled_proofs"], "the bound": rec["bound"]}
+
+
+def as_missing(out: Path, key: str, why: str) -> Path:
+    """``out`` with its window report's row ``key`` a missing row saying ``why``, about no server."""
+    f = out / "record" / "verdicts.json"
+    report = json.loads(f.read_text())
+    report["protocols"][key], report["servers"][key] = {"verdict": "missing", "why": why}, None
+    f.write_text(json.dumps(report))
+    return out
+
+
+@pytest.mark.parametrize("figure, key", list(FIGURES.items()))
+@pytest.mark.parametrize("where", list(WHERE))
+def test_a_row_that_is_no_answer_about_the_node_gives_the_record_no_figure(tmp_path, figure, key, where):
+    """Each figure the record reads from a row, its row accepting: sampled proofs' and PoUW's δ in the composite's
+    error, the network certifier's placement and bound, and sampled proofs' guarantee. About the node the figure is the
+    row's; about another server, or naming none, it is what the record states where that row is missing: no δ, which
+    the composite's stated sum then leaves out, no placement, no bound and no guarantee. The window report's writer
+    always names its node for the integrity row, so that row's cases here are a hand-made report."""
+    out = with_deltas(every_row_accepting(tmp_path), integrity="1/2", work=2.0 ** -20)
+    base = record(out)
+    stated = {"integrity": Fraction(1, 2), "work": Fraction(1, 2 ** 20), "communication": Fraction(PUBLIC["eps"])}
+    assert base["composite_error"]["stated"] == str(sum(stated.values()))
+    assert all("delta" in figures(base)[x] for x in ("sampled proofs' δ", "PoUW's δ"))
+    assert figures(base)["the placement"] and "per_window" in base["sampled_proofs"] and base["bound"]["K"] == K
+    rec = record(about(out, {key: WHERE[where]}))
+    if where == "the node":
+        assert rec == base
+        return
+    got = figures(rec)[figure]
+    why = unserved(key) if where == "no server" else elsewhere(key, "accept")
+    assert got == figures(record(as_missing(out, key, why)))[figure] != figures(base)[figure]
+    if figure.endswith("δ"):
+        assert got == {"subprotocol": SV.NAMES[key], "from": figures(base)[figure]["from"],
+                       "missing": "its row states no δ"}
+        assert rec["composite_error"]["stated"] == str(sum(stated.values()) - stated[key])
+    elif figure == "the placement":
+        assert got is None
+    elif figure == "the bound":
+        assert set(got) == {"missing"} and why in got["missing"]
+        assert rec["composite_error"]["stated"] == str(sum(stated.values()) - stated[key])
+    else:
+        assert "per_window" not in got and "pooled" not in got
+
+
+@pytest.mark.parametrize("key", list(OR.ROWS.values()))
+@pytest.mark.parametrize("where", ["another server", "no server"])
+def test_the_record_of_a_row_that_is_no_answer_about_the_node_is_the_record_of_that_row_missing(tmp_path, key, where):
+    """One place decides it: with any of the six rows accepting about another server, or naming none, the whole record,
+    every verdict and every figure, is the record of the same run with that row missing and saying why. The integrity
+    row's cases are a hand-made report, the writer always naming its node for that row."""
+    out = with_deltas(every_row_accepting(tmp_path), integrity="1/2", work=2.0 ** -20)
+    base = record(out)
+    rec = record(about(out, {key: WHERE[where]}))
+    why = unserved(key) if where == "no server" else elsewhere(key, "accept")
+    assert rec == record(as_missing(out, key, why)) != base
+
+
 @pytest.mark.parametrize("run", ["of record", "of record without PoUW"])
 @pytest.mark.parametrize("key", list(OR.ROWS.values()))
 @pytest.mark.parametrize("where", ["another server", "no server"])
@@ -2842,7 +2910,8 @@ def test_the_period_checks_answer_a_remote_run_takes_is_held_to_the_server_its_p
     assert main([str(out)]) == 0
     rec = json.loads((out / "record" / "onsite.json").read_text())
     src = "pieces/certifier/answer.json"
-    here = {"protocol": OR.NETWORK, "verdict": verdict, "from": src, **({"reason": REFUSAL} if verdict == "reject" else {})}
+    here = {"protocol": OR.NETWORK, "verdict": verdict, "from": src}
+    here |= {"reason": REFUSAL} if verdict == "reject" else {}
     off = {"verdict": "missing", "from": src}
     expect = (here if names.startswith("the node") or (names, verdict) == ("no server", "reject") else
               off | {"why": unserved("communication", src) if names == "no server" else
