@@ -9,6 +9,9 @@ public import Proofs.WeightSecurity.Stop
 public import Proofs.WeightSecurity.Theft
 public import Proofs.WeightSecurity.Tied
 public import Proofs.WeightSecurity.Two
+public import Proofs.WeightSecurity.TwoReg
+public import Proofs.WeightSecurity.TwoRegPeriod
+public import Proofs.WeightSecurity.TwoRegWitnesses
 
 /-!
 # Model weight security's proofs
@@ -21,6 +24,11 @@ blocks a period leaves undetected, over SPOT's period machinery. `Deployed`: `Th
 `Two`: `TheftServed` at a two-stage audit (`TheftServedTwo`), its budget `T·(K − 1) + 1` from the cap `WindowCap`.
 `Tied`: `TheftServedReq` at a checked population whose run records each window's trace (`TheftServedTied`), its bound
 ending in the probabilities that a release isn't its trace's outputs or a trace doesn't hold its window's inputs.
+`TwoReg`: a period of two-stage windows at the committed traces, the
+statement `PeriodTwoReg` in `period_undetected`'s form. `TwoRegPeriod`: `PeriodTwoReg` from each window's committed
+form and miss bound (`periodTwoReg_of`), so **`CompilerPeriodTwoReg` is proved** (`compilerPeriodTwoReg`).
+`TwoRegWitnesses`: its premises hold together at `twoLTwo` (`periodTwoReg_honest`), and `PeriodTwoReg` fails at
+`sksLTwo` (`periodTwoReg_nontrivial`).
 `Faulted`: the leakage lemma with the audit's incorrect proof blocks as inputs
 to a faulted circuit rather than overwrites of releases, `WeightSecurity.Guarantees.TheftFaulted`, with its witnesses at
 the toy deployment, the releases' faithfulness from a checked dataflow, and the range clamp. `Cut`: `Theft` at an honest
