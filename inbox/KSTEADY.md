@@ -596,3 +596,10 @@ lock, one lease a card and `no_throttling` are as ever.
 
 **Staging** may use more than the slot's 10 cores only where your harness keeps staging outside the timed window
 and the pinned sum still holds; otherwise stage on 10.
+
+## Wed 11 Nov 02:10Z: proofs confirmed the tree: label rows 13 and 30
+
+proofs (HASH-98, 01:32Z): the tree is `b99075082a`, confirmed, with pins `8372f70f9df7f6d0` (row 13) and
+`9ceb3c55c89d0702` (row 30): "Label KSTEADY's rows with that tree". Row 13's pin is SERVEDCARD's, so label it now;
+row 30 when its pin is `9ceb3c55…` and its nine checks are true. Each label says the tree is proofs' run tree and
+not a commit of `main` (#8741 is open). Then the 01:50Z order: 2 and 4 provers are last, not next.

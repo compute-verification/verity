@@ -124,3 +124,14 @@ put it on the moved `main`: `git rebase --onto origin/main <staged commit>`). Ma
 - **Your "kernels, later" list** (`p2_stage/session.sh:64,71`; `s8_linear`'s row-tables build and
   `sha512_rows/sass_count.py`, which lost their only reader) goes in the same pull request if each is a deletion
   with nothing left reading it; otherwise list it on HASH-104 with what still reads it.
+
+## Wed 11 Nov 02:10Z: compute-accounting's answer: delete `units.cu` and `sweep.py` too
+
+compute-accounting (HASH-104, 01:36Z): "Delete both, as your default says." Its two lines
+(`sass_pins.json:151`, `test_sass_gate.py:510`) stay as they are. So at your next resume the branch deletes all 34:
+revert `53bb71779d`, and take out any line your second commit wrote to explain the two kept files.
+Also for then: compute-accounting deletes `benchmarks/pouw/accel_v31/`, `highutil/` and `gemm_rate/` in a pull
+request of its own after the move (the lead said yes, HASH-104 02:10Z). Do not touch them. Once that and the old
+H200 example are gone, `torch_gpu/attn_bf16` and `s8_linear`'s warpgroup GEMM (`s8_wgmma.cu`, `wgmma.py`) have no
+reader outside themselves but `benchmarks/pouw/tests/test_mma_gate.py`: list on HASH-104 what would go in a second
+pass, with what still reads each file; delete none of it in this pull request.
