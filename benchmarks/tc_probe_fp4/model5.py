@@ -149,7 +149,7 @@ def tile_eval(A: np.ndarray, Bt: np.ndarray, SFA: np.ndarray, SFB: np.ndarray, C
     b = E2M1_NUM[Bt.astype(np.int64) & 0xF].reshape(8, ng, group)
     gd = np.einsum("igk,jgk->ijg", a, b)  # exact: |gd| <= 16*144
     live = np.einsum("igk,jgk->ijg", (a != 0).astype(np.int64), (b != 0).astype(np.int64)) > 0
-    def dec(code: int):
+    def dec(code: int) -> tuple[int, int] | None:
         try:
             return SCALE_DECODE[scale_kind](code)
         except AssertionError:  # an invalid scale code (UE8M0 0xFF): outside the model, for the elements that read it
