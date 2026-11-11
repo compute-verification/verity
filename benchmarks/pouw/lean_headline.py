@@ -464,18 +464,18 @@ def render(i: Instance) -> str:
         f"{len(i.classes)}` indexes them." + (
             f" `{CATCH_ALL[f.key]}` is A2's catch-all: every warp instruction no other class names counts there, "
             f"at its issue slot alone." if f.key in CATCH_ALL else ""),
-        f"`{f.device.replace('-', '').lower()}`, `sheet`: the {f.gpu}'s data sheet ({f.device}): f_max {f.fmax} MHz "
-        f"({f.fmax_src}); each tensor class's dense MACs a warp instruction (`m·n·k`, a 2:4 sparse form's dense "
-        f"equivalent) and its operand type's dense MACs an SM clock; the Nsight Compute pipes "
-        f"{', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()} with their Programming Guide widths; 128 B "
-        f"for every shared-memory class. Its machine reproduces every {f.device} coefficient.",
-        f"`{f.dvar}`, `model`: {f.title} (`{f.design}`) as a TS model on the sheet's machine: writer kinds {menu}; "
-        f"the vector classes CUDA's lane classes and the 64-bit ones ({', '.join(k for k in i.vec if k in VEC_64)}); "
-        f"{f.fold}; A6's floors `q = q_T = ½`, `b_T = 0`; {i.Nw} committed "
-        f"words a unit of honest work ({f.honest}).",
-        f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no "
-        f"filler, and ε_skip's skippable work at {f.skip}'s price, {float(i.eps_skip):.6%} of ♭'s bound "
-        f"(`eps_budget.design_skip` on {f.device}).",
+        (f"`{f.device.replace('-', '').lower()}`, `sheet`: the {f.gpu}'s data sheet ({f.device}): f_max {f.fmax} MHz "
+         f"({f.fmax_src}); each tensor class's dense MACs a warp instruction (`m·n·k`, a 2:4 sparse form's dense "
+         f"equivalent) and its operand type's dense MACs an SM clock; the Nsight Compute pipes "
+         f"{', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()} with their Programming Guide widths; 128 B "
+         f"for every shared-memory class. Its machine reproduces every {f.device} coefficient."),
+        (f"`{f.dvar}`, `model`: {f.title} (`{f.design}`) as a TS model on the sheet's machine: writer kinds {menu}; "
+         f"the vector classes CUDA's lane classes and the 64-bit ones ({', '.join(k for k in i.vec if k in VEC_64)}); "
+         f"{f.fold}; A6's floors `q = q_T = ½`, `b_T = 0`; {i.Nw} committed "
+         f"words a unit of honest work ({f.honest})."),
+        (f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no "
+         f"filler, and ε_skip's skippable work at {f.skip}'s price, {float(i.eps_skip):.6%} of ♭'s bound "
+         f"(`eps_budget.design_skip` on {f.device})."),
         f"`piStar`: π*, the facet ({i.pistar}) the machine model's LP certificate sits on at q* = ½" + (
             f", with {', '.join(f'{i.cert[r].numerator}/{i.cert[r].denominator} moved onto {r}' for r in moved)}: the "
             f"least weight there at which each bulk-reduction floor (the exporter's `BULK_FLOORS`, A5b) costs at least "
