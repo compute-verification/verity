@@ -49416,3 +49416,43 @@ For the table: in compressions over a year the sessions' share alone is 2^-90.10
 The sentence under the table left out the 2,647 GB plan's cell [run: the same output]. By gates in compressions, summed over a year of runs: record 2^-73.65, the 2,647 GB plan 2^-71.81, width κ 2^-6 2^-75.31, width κ 2^-7 2^-76.31. The table's cells and both `For the table:` lines stand.
 
 For the table: nothing new; the year lines of my entry above stand.
+
+## FUSED, Wed 11 Nov 10:48Z: CORRECTION to my 10:26Z guess, and `9c37` is cancelled. The `_v2` head block HAS a small template (about 2% of its rows, measured at small statics). But Lean's own timers on the fused blocks put 57 to 72 s of each 110 in the per-session setup, which is the same in either form; the template only shortens the parse. So on a traced block the lever is its description in the program, not the statement's form. The served 16-key head block is running in both forms to say it on a head block
+
+**1. Withdrawn: "a template of it has nothing to share"** (my 10:26Z, section 2). Measured [run: `m1_unit.py --structural iv/hybrid/4` on this VM, source `8201dacff26e`, no proof; the first row again on cpu-1 in `r20261111-103330-0163`]:
+
+| `SparseMlaHeadBlock_v2`, `FIRST=false` | word gates | template: Definitions / rows / references | the unit's rows | ANDs, templated (flat) |
+|---|---|---|---|---|
+| DR=16, DV=16, BN=16 | 1,488,807 | 5,235 / 14,757 / 70,389 | 666,288 | 656,240 (476,025) |
+| DR=16, DV=16, BN=32 | 2,801,495 | 5,271 / 22,977 / 87,129 | 1,250,776 | 1,232,536 |
+| DR=16, DV=64, BN=16 | 3,855,255 | 5,235 / 32,421 / 108,069 | 1,720,608 | 1,694,432 |
+
+The template is the block's I/O rows plus about 6,500 rows, whatever the size: about 2% of the unit. The templated lowering has 38% more ANDs than the flat at the first row.
+
+**2. `r20261111-085259-9c37` cancelled by me at 10:40:32Z** [run]. It could not reach a verify line inside its slot (12:00:52Z): the structural build costs 58 to 74 µs a word gate (the three rows above, and `0163`'s first block on cpu-1: 110.7 s), linear, so its 96.6M word gates would be built between 11:18Z and 11:43Z, and staging about 43M rows takes 21 to 39 minutes more [guess from those rates]. It left its bind line only (96,641,015 word gates, 155 GB) and freed a 200 GB reservation on cpu-11.
+
+**3. Where Lean's seconds are** [run: Lean's own timer lines in the three runs; read: `FlockVerify.lean` prints `inputs` once a call, after the circuit's parse, and `setup (drawn)` once a session, at that session's own sample, never cached (lines 1117 to 1135); wall seconds, three runs each].
+
+| block | form | inputs | setup (drawn) | the session's proof check | run |
+|---|---|---|---|---|---|
+| fused, K=6144 | flat | 30.0, 34.0, 29.9 | 56.7, 56.6, 60.2 | 20.5, 20.5, 22.0 | `7268` |
+| the same | templated | 28.2, 22.2, 21.3 | 72.3, 66.4, 62.4 | 21.9, 23.6, 21.4 | `a3e0` |
+| fused, K=256, N=32 | flat | 31.3, 31.3, 31.8 | 57.8, 57.7, 57.0 | 22.3, 22.4, 21.8 | `7268` |
+| the same | templated | 23.5, 20.8, 22.4 | 63.7, 58.1, 59.2 | 22.9, 22.2, 22.2 | `a3e0` |
+| head block at DR=16, DV=16, BN=16 | templated | 7.8, 7.7, 7.8 | 12.2, 12.2, 12.1 | 17.8, 17.9, 18.1 | `0163` |
+
+- On the fused blocks the template takes about 8 s off the parse and adds 3 to 10 s to setup. That is why the ratio is 0.93 to 1.01.
+- Setup is paid by every sampled session and it reads the program: #8520 measured it at 0.35 to 0.38 s a MB of program on five traced programs [read]. The 64-key later block's description is 2.35 GB [run: `9c37` wrote 2.35 GB after its bind and before staging; read: #8520 gives 2,228 MB for the first block]. So its setup is about 850 s a sampled session in either form [guess: that law times that size], against the 60.56 core-s a 256-block statement the planner holds [read: `5ce0`'s strata]. FLOCKPKG's `d4ef` measures it on the served staging; my slope of 09:05Z (12.0 GB a core-second a statement) prices whatever it reads.
+- **So the templated check, as a shorter statement, is not a lever on a `_v2` block.** A lever on these blocks is the size of what the program holds for them (the word body is 136 KB [read: #8520], but its table reads need lookup slots in the `--zk` form: #8451 and a Lean change), or a setup that is not repeated for every sampled session [guess: no code read beyond the lines above; it is trusted code].
+
+**4. Running** [run, 10:46Z]: `r20261111-103330-0163` (templated, cpu-1): the small block is in (38.4, 38.3, 38.6 core-s, 2.0 GB, accepted 3 of 3); the served 16-key block `SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=16,FIRST=true,BN=64}` is binding. `r20261111-103344-cd4c` (the same two blocks flat): **blocked since 10:33Z on a check slot's memory on cpu-1, held by other lanes' runs**; a second launch on cpu-11 was refused (`r20261111-104422-fe47`, 100 GB asked, none free). No GB figure of mine changes: the lever row with the head and fused blocks flat stays 3,710.4 (modeled 0.4; 132.2 to 142.7 at the measured floor by proportion).
+
+For BREAKEVEN:
+- Withdrawn: my 10:26Z expectation that a head block's template is as long as its body. Its template is small; what does not shrink is Lean's per-session setup, which reads the program.
+- Measured split of Lean's seconds on a fused block (`7268`, `a3e0`): parse 21 to 34 s a call, setup 57 to 72 s a session, proof check 20 to 24 s a session, in either form.
+
+For FLOCKPKG: in your head block rows, print Lean's own three timers (`inputs`, `setup (drawn)`, the session's line) and the program's bytes beside the core-seconds; the setup line is the one a sampled session pays again.
+
+For the table:
+- Templated check on the head block: its template is about 2% of the block (measured at small statics), but on traced blocks Lean's time is the per-session setup over the program, not the statement; the served 16-key block in both forms is out (`0163`; `cd4c` waits for a slot).
+- `9c37` cancelled (could not finish inside its slot); no head block figure from it.
