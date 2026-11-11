@@ -25,7 +25,9 @@ a directory's):
   process was on it (the two `card_file`s).
 - `level`: the window the row rates, cut into three equal counts of sessions by their filing times, takes at most
   `LEVEL` times as long a statement in its slowest third as in its fastest (`sessions_file`). The window is rebuilt as
-  the script cuts it, and must be the row's own: its `window_sessions` and `window_s`.
+  the script cuts it, and must be the row's own: its `window_sessions` and `window_s`. A row whose sessions file in
+  bursts declares the `period` they repeat over (`PERIOD`), and its window is cut at whole bursts instead
+  (`burst_parts`): a third that cuts a burst reads the burst's phase and not a drift.
 - `every_prover_warmed`: each of the row's provers finished a warm session before any timed one was submitted, and none
   filed nothing in the window (the row's `warm_per_prover` and `idle_provers`).
 
@@ -48,6 +50,9 @@ from typing import Any
 PASS, FAIL, CANNOT_TELL = "pass", "fail", "cannot tell"
 #: the window's thirds: the slowest's seconds a statement over the fastest's, at most
 LEVEL = 1.25
+#: the row's field for the sessions a prover's filings repeat over, where the row's sessions file in bursts: a burst is
+#: that many sessions a prover. A row without it, or with None, declares none
+PERIOD = "period"
 #: `sessions.jsonl` rounds each filing to a millisecond and the row rounds its window to ten: the window rebuilt from the
 #: one is the other's when their seconds agree within this
 WINDOW_SLACK_S = 0.011
@@ -340,10 +345,26 @@ def thirds(times: Sequence[float]) -> list[float]:
     return [(times[b] - times[a]) / (b - a) for a, b in zip(cuts, cuts[1:]) if b > a]
 
 
+def burst_parts(times: Sequence[float], burst: int) -> list[float]:
+    """Seconds a statement in each part of a window whose sessions file in bursts of `burst`: its whole bursts, from the
+    window's start, in parts of a third of them each, rounded down to whole bursts, with a last shorter part for the
+    bursts left over. So a window of three, six or nine bursts gives its thirds, and one of four gives each burst. The
+    sessions after the last whole burst are in no part (fewer than three figures for a window of under three bursts)."""
+
+    whole = (len(times) - 1) // burst
+    part = max(whole // 3, 1) * burst
+    cuts = [*range(0, whole * burst, part), whole * burst]
+    return [(times[b] - times[a]) / (b - a) for a, b in zip(cuts, cuts[1:])]
+
+
 def level(row: Mapping[str, Any], files: Files) -> Check:
     name = "level"
     if unread := _unread(name, row, ("provers", "warm", "sessions", "window_sessions"), ("type", "window_s")):
         return unread
+    period = row.get(PERIOD)
+    if period is not None and not (_count(period) and period >= 1):
+        return Check(name, CANNOT_TELL, f"`{PERIOD}` ({period!r}) of its row isn't a count of sessions a prover, at least 1")
+    burst = None if period is None else period * max(row["provers"], 1)
     if not _seconds(row["window_s"]):
         return Check(name, CANNOT_TELL, f"`window_s` ({row['window_s']!r}) of its row isn't a window's seconds")
     path = sessions_file(row)
@@ -363,13 +384,14 @@ def level(row: Mapping[str, Any], files: Files) -> Check:
     if len(times) - 1 != row["window_sessions"] or abs(span - row["window_s"]) > WINDOW_SLACK_S:
         return Check(name, CANNOT_TELL, f"the window `{path}` gives ({max(len(times) - 1, 0)} sessions over {span:.2f} s) "
                      f"isn't its row's ({row['window_sessions']} over {row['window_s']} s)")
-    took = thirds(times)
-    if len(took) != 3 or min(took) <= 0:
-        return Check(name, CANNOT_TELL, f"its window of {len(times) - 1} sessions can't be cut into three thirds that each "
+    took, parts = (thirds(times), "thirds") if burst is None else (
+        burst_parts(times, burst), f"parts of whole bursts of {burst} sessions")
+    if len(took) < 3 or min(took) <= 0:
+        return Check(name, CANNOT_TELL, f"its window of {len(times) - 1} sessions can't be cut into three {parts} that each "
                      "took time")
     if max(took) > LEVEL * min(took):
         return Check(name, FAIL, "its window isn't level: a statement took " + ", ".join(f"{t:.4g}" for t in took)
-                     + f" s in its thirds, the slowest over {LEVEL} times the fastest")
+                     + f" s in its {parts}, the slowest over {LEVEL} times the fastest")
     return Check(name, PASS)
 
 

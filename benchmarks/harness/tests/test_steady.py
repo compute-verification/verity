@@ -1,6 +1,7 @@
 """`verity_bench.steady` on made-up files: a run whose files show all nine checks, each check failing alone, each check the
 files can't show, a run's rows read from its rate file and from a directory, the window and its thirds on stated numbers,
-and the four conditions the reader of these rows still holds itself."""
+a window cut at whole bursts where a row declares its sessions' period, and the four conditions the reader of these rows
+still holds itself."""
 
 from __future__ import annotations
 
@@ -89,6 +90,9 @@ FAILS = [
      "GPU 3 wasn't its own: at its end, a compute process (pid 14 2048MiB)"),
     ("level", {"gaps": (2.0,) * 9 + (2.75,) * 6},
      "its window isn't level: a statement took 2, 2, 2.75 s in its thirds, the slowest over 1.25 times the fastest"),
+    ("level", {"changes": {"period": 2}, "gaps": (2.0,) * 9 + (2.75,) * 6},
+     "its window isn't level: a statement took 2, 2, 2.75 s in its parts of whole bursts of 4 sessions, the slowest "
+     "over 1.25 times the fastest"),
     ("every_prover_warmed", {"changes": {"warm_per_prover": {"prover-gpu3-0": 4}}},
      "1 of its 2 provers finished a warm session before the timed ones"),
     ("every_prover_warmed", {"changes": {"idle_provers": 1}}, "1 of its 2 provers filed no session in the window"),
@@ -131,6 +135,10 @@ UNTOLD = [
     ("level", {"changes": {"window_sessions": 11}},
      "the window `out/rate/gemm64-k2/sessions.jsonl` gives (12 sessions over 24.00 s) isn't its row's (11 over 24.0 s)"),
     ("level", {"changes": {"window_s": DROP}}, "its row lacks `window_s`"),
+    ("level", {"changes": {"period": 0}}, "`period` (0) of its row isn't a count of sessions a prover, at least 1"),
+    ("level", {"changes": {"period": 4.0}}, "`period` (4.0) of its row isn't a count of sessions a prover, at least 1"),
+    ("level", {"changes": {"period": 4}},
+     "its window of 12 sessions can't be cut into three parts of whole bursts of 8 sessions that each took time"),
     ("every_prover_warmed", {"changes": {"warm_per_prover": DROP}}, "its row lacks `warm_per_prover`"),
     ("every_prover_warmed", {"changes": {"idle_provers": DROP}}, "its row lacks `idle_provers`"),
 ]
@@ -226,6 +234,78 @@ def test_the_slowest_third_may_take_level_times_the_fastest_and_no_more():
     got = S.verdict(short, {SESSIONS: "\n".join(lines[:7]) + "\n"}.get)
     assert got.checks[S.CHECKS.index("level")] == S.Check(
         "level", S.CANNOT_TELL, "its window of 2 sessions can't be cut into three thirds that each took time")
+
+
+#: two provers that each file in a cycle of four sessions with one long gap a cycle, so a burst is eight sessions: the 36
+#: gaps of a window, in seconds. Both provers keep the cycle, and a third of twelve gaps holds one long gap or two
+KEPT = (1.07, 0.69, 4.08, 0.2, 1.0, 0.42, 10.43, 1.17, 0.11, 0.58, 4.08, 0.37,
+        0.89, 0.52, 10.73, 0.05, 1.66, 0.03, 2.57, 1.55, 0.01, 1.32, 9.26, 1.73,
+        0.41, 0.49, 4.06, 0.0, 0.3, 1.35, 8.62, 1.74, 0.49, 1.51, 2.05, 1.57)
+#: the same two provers where one leaves the cycle halfway: the window's last burst comes in about half the others' time
+LEFT = (0.34, 0.04, 8.59, 0.17, 1.25, 0.06, 18.09, 0.67, 0.09, 1.57, 5.68, 0.45,
+        7.32, 0.08, 11.22, 2.61, 4.06, 0.1, 0.28, 6.75, 1.42, 5.87, 2.24, 13.59,
+        0.04, 2.1, 0.01, 5.19, 1.35, 5.24, 0.0, 4.74, 7.53, 5.25, 0.77, 1.48)
+
+
+def around(window: tuple[float, ...]) -> tuple[float, ...]:
+    """The gaps of a made-up run of two provers whose window's gaps are `window`: one filing before it and two after."""
+
+    return (1.0, *window, 1.0, 1.0)
+
+
+def spread(row: dict, files: S.Files, burst: int | None = None) -> float:
+    """The slowest part of a row's window over its fastest: its thirds, or its parts of whole bursts of `burst`."""
+
+    lines = [json.loads(line) for line in files(SESSIONS).splitlines()]
+    times = S.window(sorted(line["filed"] for line in lines if line["i"] >= K * WARM), K)
+    took = S.thirds(times) if burst is None else S.burst_parts(times, burst)
+    return max(took) / min(took)
+
+
+def test_a_row_that_declares_its_period_has_its_window_cut_at_whole_bursts():
+    # no period: thirds, as ever. They cut a burst of eight, and the middle one holds two long gaps where the others hold one
+    row, files = made(gaps=around(KEPT))
+    assert row["window_sessions"] == 36 and spread(row, files) == pytest.approx(1.342, abs=0.001)
+    cut = S.verdict(row, files)
+    assert [(c.name, c.status) for c in cut.checks if not c.ok] == [("level", S.FAIL)]
+    assert cut.why.endswith("s in its thirds, the slowest over 1.25 times the fastest")
+    assert S.verdict(row | {"period": None}, files).record() == cut.record()
+    # a period of four sessions a prover: the window's four whole bursts, each a part, are within the line
+    row, files = made({"period": 4}, gaps=around(KEPT))
+    assert spread(row, files, 8) == pytest.approx(1.123, abs=0.001) and S.verdict(row, files).passed
+    # a row that isn't level by whole bursts fails with its period declared as it does without
+    row, files = made({"period": 4}, gaps=around(LEFT))
+    assert spread(row, files) == pytest.approx(1.648, abs=0.001) and spread(row, files, 8) == pytest.approx(1.838, abs=0.001)
+    left = S.verdict(row, files)
+    assert [(c.name, c.status) for c in left.checks if not c.ok] == [("level", S.FAIL)]
+    assert left.why.endswith("s in its parts of whole bursts of 8 sessions, the slowest over 1.25 times the fastest")
+    assert not S.verdict(*made(gaps=around(LEFT))).passed
+
+
+def test_the_parts_of_a_window_cut_at_whole_bursts_are_a_third_of_its_bursts_each():
+    def times(*bursts: float, burst: int = 4, odd: int = 0) -> list[float]:
+        """Filing times of a window whose bursts take the given seconds a statement, with `odd` sessions after them."""
+        out = [0.0]
+        for took in (*[t for t in bursts for _ in range(burst)], *[100.0] * odd):
+            out.append(out[-1] + took)
+        return out
+
+    # three, six and nine bursts: the window's thirds
+    assert S.burst_parts(times(1.0, 2.0, 3.0), 4) == [1.0, 2.0, 3.0]
+    assert S.burst_parts(times(1.0, 3.0, 2.0, 2.0, 3.0, 5.0), 4) == [2.0, 2.0, 4.0]
+    nine = times(1.0, 2.0, 3.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0)
+    assert S.burst_parts(nine, 4) == S.thirds(nine) == [2.0, 2.0, 3.0]
+    # four or five bursts: each burst; seven: three parts of two and the one left over
+    assert S.burst_parts(times(1.0, 2.0, 3.0, 4.0), 4) == [1.0, 2.0, 3.0, 4.0]
+    assert S.burst_parts(times(1.0, 2.0, 3.0, 4.0, 5.0), 4) == [1.0, 2.0, 3.0, 4.0, 5.0]
+    assert S.burst_parts(times(1.0, 3.0, 2.0, 2.0, 3.0, 5.0, 7.0), 4) == [2.0, 2.0, 4.0, 7.0]
+    # the sessions after the last whole burst are in no part, and a window of under three bursts gives under three figures
+    assert S.burst_parts(times(1.0, 2.0, 3.0, odd=3), 4) == [1.0, 2.0, 3.0]
+    assert S.burst_parts(times(1.0, 2.0, odd=3), 4) == [1.0, 2.0] and S.burst_parts(times(odd=3), 4) == []
+    # a window that is whole bursts, a multiple of three of them, reads the same by its thirds and by its bursts
+    for provers, period, bursts in ((1, 4, 30), (2, 4, 3), (4, 4, 9), (3, 5, 6)):
+        window = times(*[1.0 + (i * 7 % 5) / 10 for i in range(bursts)], burst=period * provers)
+        assert S.burst_parts(window, period * provers) == pytest.approx(S.thirds(window))
 
 
 def test_the_reader_holds_four_of_the_checks_itself_and_gives_the_same_reasons():
