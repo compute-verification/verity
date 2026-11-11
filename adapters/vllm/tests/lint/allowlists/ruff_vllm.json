@@ -2125,7 +2125,7 @@
     {"file": "verity_vllm/pipeline/commit.py", "kind": "SIM115", "symbol": "binding_record", "detail": "Use a context manager for opening files"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "SIM115", "symbol": "main", "detail": "Use a context manager for opening files", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "T201", "symbol": "binding_record", "detail": "`print` found", "count": 2},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 79},
+    {"file": "verity_vllm/pipeline/commit.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 78},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "T201", "symbol": "staging_environ", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "T201", "symbol": "stop_rule_of_record", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "T201", "symbol": "tensor_digests", "detail": "`print` found", "count": 2},
