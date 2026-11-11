@@ -2,8 +2,8 @@
 `undetermined_words`), `SparseMlaSplitEnd_v1` (`split_end_rows`), `SparseMlaCombine_v1` (`combine_rows`), `SparseMlaCombineLse_v1`
 (`combine_lse_rows`),
 `SparseMlaSplitPart_v1` (`part_rows`, one split's partial and lse), `SparseMlaHeadSplit_v1` (`head_split_rows`, which at NS = 1
-is `SparseMlaHead_v1`), a head's `SparseMlaHeadBlock_v1` chain (`chain_rows`, each block's state) and its end
-`SparseMlaHeadEnd_v1` (`head_end_rows`).  The blocks are `derived_rows.attn_block` over
+is `SparseMlaHead_v1`), a head's `SparseMlaHeadBlock_v1` chain (`chain_rows`, each block's state; `split_chain_rows`, a chain
+per split) and its end `SparseMlaHeadEnd_v1` (`head_end_rows`).  The blocks are `derived_rows.attn_block` over
 q = [q_rope | q_nope], k = [k_pe | kv_c] and v = [kv_c | 0] (`AttnBlock_v4`'s steps, which `SparseMlaBlock_v1` restates), the step
 `tc_dot16_hopper` and the inverse `fa3_inv_sum`; the captures' fast path, checked word for word against the Definitions in
 `tests/program/test_sparse_mla_split.py`.  A row whose dot reads a non-finite operand is flagged and never claimed exact
@@ -157,6 +157,25 @@ def chain_rows(q_nope, q_rope, kv, *, T: int, DR_: int = 64, DV: int = 512, BN: 
         states.append((m, l, o[:, :DV]))
         nf |= f
     return states, nf
+
+
+def split_chain_rows(q_nope, q_rope, kv, *, T: int, NS: int, DR_: int = 64, DV: int = 512, BN: int = W.BLOCK_N, scale: float,
+                     dot16=DR.tc_dot16_hopper) -> tuple[list[list[tuple[np.ndarray, np.ndarray, np.ndarray]]], np.ndarray]:
+    """A head's `SparseMlaHeadBlock_v1` chains over its NS splits (`sparse_mla_split.split_blocks`), each split's blocks as
+    `chain_rows` visits a head's: `chain_rows`' operands -> (per non-empty split, each block's returned (m, l, o) in visit
+    order, nonfinite (R,)).  `split_end_rows` of a split's last state is its `SparseMlaSplitEnd_v1` (whose columns
+    [C G, (C + 1) G) and lse are `SparseMlaSplitEndCols_v1{G, C}`'s), and at NS = 1 the one chain is `chain_rows`'."""
+    W.check_split_statics(T, NS)
+    q, kb, vb = _operands("split_chain_rows", q_nope, q_rope, kv, T, DR_, DV)
+    sbits = M.scale_log2_bits(scale)
+    nf, out = np.zeros(q.shape[0], dtype=bool), []
+    for b0, b1 in W.split_blocks(T, NS, BN):
+        states = []
+        for (m, l, o), f in _blocks(q, kb, vb, b0, b1, T=T, BN=BN, sbits=sbits, dot16=dot16):
+            states.append((m, l, o[:, :DV]))
+            nf |= f
+        out.append(states)
+    return out, nf
 
 
 def head_end_rows(l, o, *, inv=DR.fa3_inv_sum) -> np.ndarray:
