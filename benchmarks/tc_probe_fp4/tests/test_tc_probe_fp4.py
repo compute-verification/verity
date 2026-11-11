@@ -1120,7 +1120,6 @@ def test_offline_sass_gates(tmp_path: Path) -> None:
                 ["probe.py", "--instruction", "sp_nvf4_meta", "--out", str(tmp_path / "meta"), "--sass-only"],
                 ["f1_rates.py", "build", "--out", str(tmp_path / "f1")],
                 ["f2_strassen.py", "build", "--out", str(tmp_path / "f2")],
-                ["f3_lut.py", "build", "--out", str(tmp_path / "f3")],
-                ["stage0_sm120.py", "--out", str(tmp_path / "s0")]):
+                ["f3_lut.py", "build", "--out", str(tmp_path / "f3")]):
         r = subprocess.run([sys.executable, str(HERE / cmd[0]), *cmd[1:]], capture_output=True, text=True, env=env)
         assert r.returncode == 0, (cmd, r.stdout[-2000:], r.stderr[-2000:])

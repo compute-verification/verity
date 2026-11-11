@@ -4,6 +4,25 @@ One harness and one dataset for every implementation of proof of useful space (P
 weight bandwidth (EWB): the plaintext weight bytes that one pass decodes from `C`, per second. Every weight is decoded
 on every pass, at the scheme's certified parameters.
 
+## Interface
+
+What code outside this directory may use. Everything else here is internal.
+
+| Entry point | What it is |
+|---|---|
+| `uv run tools/verity/check/suites.py benchmarks/pous` | The suite, on the CPU: `bench.py` and the harness, the explorer's data, P2 (its reference, wire, store and bandwidth session), the served pieces and cases, and the wipe's resume. It writes no result. |
+| `python benchmarks/pous/bench.py --impl IMPL --weight-set ID --hardware ID --out DIR [--scheme NAME] [--max-segments N]` | The harness: one command per scheme, implementation, weight set and hardware. It writes `bench-result.json` (`verity-pous/bench-result/v1`) to `--out`, and `result.json` to `$RESEARCH_RUN_DIR` when that is set. |
+| `bash benchmarks/pous/pod.sh IMPL=NAME [WS=ID] [OPTIONS]` | The harness on a GPU pod as one Attempt: it builds the implementation's kernels and runs `bench.py`. It writes to `$RESEARCH_RUN_DIR`. |
+| `bash benchmarks/pous/served_piece.sh SERVE_DIR WINDOW DIR` | PoUS's piece of the composed served run (`served_piece.py`): one run of PoUS over the served checkpoint's linear weights, held as P2's `C*` on the card that served, with the memory challenger on the auditor's host. It writes its core answer to `DIR/answer.json`. |
+| `bash benchmarks/pous/streamed_wipe/served_wipe.sh SERVE_DIR WINDOW DIR` | The wipe's piece of the same run: one streamed wipe of the card before its engine loads (`streamed_wipe/demo.sh`). It writes its core answer, `verity/wipe/v0`'s, to `DIR/answer.json`. |
+| `bash benchmarks/pous/served_case.sh PIECES` | PoUS's and the wipe's cases for the composite, built after a served run from what it kept (`served_case.py`). `PIECES` is the run's public pieces directory, and each piece's `case.json` and `answer.json` go to its private directory. |
+| `onsite_pieces.sh`, sourced | Two shell functions: `onsite_piece_commands` sets the two pieces above as a served run's defaults, each kept where its variable is already set, and `onsite_cases` runs `served_case.sh` and writes each case's protocol and verdict to the run's `verdicts.txt`. |
+
+Read from outside `benchmarks/`: P2's reference, wire and store layout (`p2_v1/reference.py`, `p2_v1/wire.py`,
+`p2_v1/store.py`), imported with this directory on `sys.path`; `band_gpu/harness.py`, imported by a test; and
+`served_piece.sh`, `streamed_wipe/served_wipe.sh` and `onsite_pieces.sh`, named by their paths where a served run is
+configured.
+
 - `weight_sets.json` (`pous-weight-sets/v1`) is the dataset. It holds the weight sets as the serving engine holds them,
   with their checkpoint pins:
   - Qwen2.5-0.5B: every linear weight and the tied head, 15,075 blocks of 64 KiB;
@@ -19,12 +38,6 @@ on every pass, at the scheme's certified parameters.
     - `certificate`: the scheme's certificate covers the audit's k and deadline.
   - Each run reports the storage profile the certificate gives the accepted audit, gaps included.
 - `pod.sh` runs it on a pod as a research Attempt.
-- `lateness/` measures how late honest answers to timed challenges arrive, on-node and from another machine, quiet and
-  under load, and the wire's floor, with the tree's only UDP challenger and responder (its README).
-- `explorer.py` builds the average-memory explorer's data file (`pous-explorer/v1`): the certified average-ε bound's
-  reference math, the honest-latency presets as survival curves, the schemes' serving overhead, ε_proof by in-degree, and
-  test vectors the console page reproduces. `--histograms` pools the vLLM e2e series' `verify-honest.json` histograms
-  into the `measured` preset. Publish with `research data put --kind pous-explorer/v1 --file F --preserve`.
 
 Implementations:
 
@@ -96,10 +109,7 @@ Implementations:
     salt from the auditor's coin and encodes C* on every GPU of a node (`pod.sh IMPL=p2-store ... -- encode ...`), as
     canonical segment files a rerun resumes; `--segments LO:HI --order down` encodes a part and `finish` joins the
     parts. `verify --decode` rereads a store and decodes it into the commitment, `spot` decodes random blocks against W
-    regenerated from the seed, and `tie` binds the store to the weights' registration digest. `p2_v1/parts/` moves
-    parts between machines without an agent VM: `part-out.sh` publishes a node's segments through its run's custody,
-    and `fetch-records.sh` fetches those records into another machine's store, checking every file against its
-    segment's digests (`join.py`).
+    regenerated from the seed, and `tie` binds the store to the weights' registration digest.
 
 A new one is a class in `bench.py`'s `IMPLS`.
 

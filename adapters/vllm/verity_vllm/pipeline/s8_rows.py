@@ -2,12 +2,14 @@
 (token row ``x`` with scale ``sx``, weight rows ``W`` with scales ``sw``) is ``x`` = the codes' bytes then ``sx``'s, ``w`` =
 ``W[c]``'s bytes then ``sw[c]``'s (u16 little-endian words, as A6 stages them), ``o0`` = ``y[c]``; units go row by row, then
 coordinate.  A linked chunk (the row-table layout, `serving_rows.with_row_tables`) reads its ``x`` table, the distinct token
-rows its units read, and refs: unit ``i`` reads ``x`` row ``ref`` and its own ``w`` row."""
+rows its units read, and refs: unit ``i`` reads ``x`` row ``ref`` and its own ``w`` row; `one_table_chunks` cuts a template's
+units into them."""
 from __future__ import annotations
 
 import json
 import re
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from typing import Any
 
 import numpy as np
@@ -16,6 +18,25 @@ from verity.commitments.windows import rows as CS
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 Row = tuple[str, Any, dict, dict]
+
+
+def one_table_chunks(first: CS.Member, segs: Sequence[tuple[int, int, int, int]]) -> list[CS.Member]:
+    """A template's linked chunks over its units ``segs`` (each token row's units ``[a, b)``, its row table and rank, in
+    unit order), from its first chunk ``first``: at most ``first.n`` units each, every one reading one row table."""
+    chunks: list[tuple[int, list[tuple[int, int]], list[int]]] = []
+    for a, b, k, rank in segs:
+        at = a
+        while at < b:
+            if not chunks or chunks[-1][1][-1][0] != k or sum(chunks[-1][2]) == first.n:
+                chunks.append((at, [], []))
+            take = min(b - at, first.n - sum(chunks[-1][2]))
+            chunks[-1][1].append((k, rank))
+            chunks[-1][2].append(take)
+            at += take
+    return [replace(first, name=f"{first.template}/c{j}", base=base, n=sum(units), tables=((CS.LINKED, len(links)), ("w", sum(units))),
+                    links=tuple(links), link_units=tuple(units))
+            for j, (base, links, units) in enumerate(chunks)]
+
 
 
 def _as(a: np.ndarray, itemsize: int, n: int, what: str) -> np.ndarray:

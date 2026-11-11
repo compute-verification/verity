@@ -5,7 +5,8 @@ rank widened to words).
 * Every unit of the long row's check template (`long_row.units`) but its table read is a ``bits`` template, at the served
   statics too: `chunk_rows.unit_rows` gives it `interface.unit_rows`' rows, one a parameter and one a return field,
   `chunk_rows.statement` keeps its reads inline, and the rows the verifier supplies (a chunk's ``c``, a slot's ``j``) are in
-  `chunk_rows.INDEX_SCHEMA`. A served row's reader (`serving_rows.row_units`) refuses such a template by name.
+  `chunk_rows.INDEX_SCHEMA`. A served row's reader (`serving_rows.row_units`) refuses such a template by name. Its table
+  read is a ``read``, and at a history table's capacity, the served statics', a ``history`` read (`serving_templates.history_read`).
 * At small statics each unit but the pick is staged by `UnitStager` on those rows in the form the sampled audit's knowledge
   soundness covers (`one_stage.proofs.ks_form_why`), inside Flock's range (k_log, and a region a row against
   `REGIONS_MAX`), on random rows (slow).
@@ -86,7 +87,9 @@ def test_every_unit_of_the_long_row_but_its_read_is_a_bits_template_on_its_defin
     assert {spec_base(x) for x in _templates(t)} == {
         "DsaTopKDigitCount_v1", "DsaTopKDigitPick_v1", "DsaTopKMaskBlock_v1", "DsaMaskPositions_v1", "DsaPositionsMerge_v1",
         "DsaPositionsChunk_v1", "DsaPositionsSlot_v1"}
-    assert ST.template(descriptor_id(t.bindings["READ"])).layout == "read"
+    read = descriptor_id(t.bindings["READ"])
+    assert ST.template(read).layout == ("history" if ST.history_read(read) else "read")
+    assert ST.history_read(descriptor_id(LR.served().bindings["READ"]))
     assert [nm for tid in _templates(t) for nm, _ty in ST.template(tid).fn.signature()[0]
             if nm == CR.INDEX_ROWS.get(spec_base(tid))] == ["c", "j"]
 
