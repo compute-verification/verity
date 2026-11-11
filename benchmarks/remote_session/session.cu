@@ -447,7 +447,24 @@ __global__ void __launch_bounds__(8 * R) chain_prepare_kernel(unsigned pass, con
     sha512_bytes(m, kChainPass.row_len, h, out);
   }
   __syncthreads();
-  for (int q = tid; q < SK16_PACK; q += 8 * R) pack_bits<R>(bits, q, pk);
+  if constexpr (R == SK_ROWS) {
+    // pack_bits at 16 rows, written out as it was before the kernel took R: through pack_bits ptxas allocates two
+    // registers the other way round, and the kernel's code at 16 rows would no longer be the one that has run.
+    for (int q = tid; q < SK16_PACK; q += 8 * R) {
+      const int p = q >> 5, g = (q & 31) >> 2, t = q & 3;
+      u32 w = 0;
+#pragma unroll
+      for (int r = 0; r < 8; ++r) {
+        const int nt = r >> 2, s = (r >> 1) & 1, b = r & 1, u = 64 * p + 16 * t + 8 * s + 4 * b;
+#pragma unroll
+        for (int x = 0; x < 4; ++x)
+          w |= (u32)((bits[8 * nt + g][(u + x) >> 3] >> ((u + x) & 7)) & 1) << (8 * x + r);
+      }
+      pk[q] = w;
+    }
+  } else {
+    for (int q = tid; q < SK16_PACK; q += 8 * R) pack_bits<R>(bits, q, pk);
+  }
 }
 
 __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_receipts_kernel(const uint4 *__restrict__ data, u64 j0,

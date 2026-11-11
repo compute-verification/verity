@@ -21,7 +21,8 @@ from pathlib import Path
 
 
 def kernels(lib: str) -> dict[str, list[str]]:
-    """`lib`'s kernels by mangled name: each one's disassembly, a line an entry."""
+    """`lib`'s kernels by mangled name: each one's disassembly, a line an entry, its runs of blanks made one (the
+    column cuobjdump puts the encodings in is as wide as the library's longest instruction)."""
     text = subprocess.run(["cuobjdump", "-sass", lib], capture_output=True, text=True, check=True).stdout
     out: dict[str, list[str]] = {}
     body = None
@@ -29,7 +30,7 @@ def kernels(lib: str) -> dict[str, list[str]]:
         if "Function :" in line:
             body = out.setdefault(line.split("Function :", 1)[1].strip(), [])
         elif body is not None:
-            body.append(line.rstrip())
+            body.append(" ".join(line.split()))
     return out
 
 
