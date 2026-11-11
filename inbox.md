@@ -15,3 +15,88 @@ REMOTEPY, NET-314, Tue 10 Nov 4:11 PM PST, to your 4:05 and 4:07 PM PST. **Items
 
 Least sure: that taking item 4 back by a revert is what you meant by "drop". If you want the commit out of the history, that is a new branch cut from the base, and you say so.
 
+[2026-11-11T00:18Z] 1a9f9d45a8b6
+LINKSMODEL (NET-322): done. A to E are all in the note.
+
+**Commit read:** `2b869ed35db5d0efdb844a5f684e6fecbe658114` (`origin/main` when I started, and the commit vllm's
+draft names). Every path and line in the note is that commit's.
+
+**Note:** `lanes/network-accounting/20261111T0009Z-report-net322-linksmodel.md` (synced). It opens with ten findings,
+then A to E, your guesses, where I did not look, and the commands.
+
+**I changed nothing:** no tree file, branch, pull request, build or `research run`. Nothing posted on NET-317.
+
+## Draft comment for NET-317 (498 words)
+
+Read at `main` `2b869ed35d`. Note: `lanes/network-accounting/20261111T0009Z-report-net322-linksmodel.md`.
+
+**1. Our rows.** Every cited name exists [read].
+
+- *Network certifier.* `PeriodLeakAccepted` is not about the compiled `step`. Its program is `recordingCode`, a Lean
+  definition deployed as Python [read]. Your row's three assumptions are premises of `B4` and `B4Covered` only [run].
+  `Interaction` has no capacity, delay or clock [read].
+- *NCI.* Not a check inside a proof: `verity/inference-only/v0` is its own protocol and publishes the division [read].
+- *Registration.* Right, note c too [read]. That the registered links are all the links is an open premise [run].
+- *Onsite.* The composite check takes one link of one node and does not run the registration log's check
+  [read, run]. Note d is right [run].
+
+**2. The two-link sentence loses five things.**
+
+- The certifier is a proxy: it originates every bit it sends. It also has links to the challenger, the verifier
+  and the prover [read].
+- "No other link" is a premise of `B4Covered` only, not of the deployed guarantee [run].
+- The claim's clause "with its parameters fixed before the run" [read].
+- Send time. The deployed bound counts only runs with jitter under `Dj`, which the check takes as the auditor's
+  parameter, from no record [read, run].
+- A sum over certifiers. Each deployed statement is for one device [read].
+
+**3. Question 4.** Today the certifier and the challenger share one auditor host [read]. If only the developer
+carries its messages, no soundness check we read breaks: each public one is signed and bound to its window, and a
+missing one rejects [read, argued]. Three things change [argued]. The auditor cannot tell fault from withholding.
+The record of its key, session and run id leaves the auditor's custody. The certificates leave through the ZK
+server. One thing does not fit. Live coins reach a server only through the certifier's coin link to the challenger,
+and a coin channel may pass no developer machine [read]. So picks 4 and 5 agree only with the challenger at the
+site, and then the certifier has three links [argued]. The certifier's code emits no liveness record [run].
+
+**4. Section 6.** `PeriodLeakAccepted` takes neither `DeviceIntact` nor `TrustedUnits`. Its premises are
+`TrustedHost`, `Binds`, `Compiled.KS`, `CertifierRegisters` and `ScopeAcc` [run]. `TrustedHost`'s statement is
+already "runs its program" [read]. Key secrecy is not lost: no premise says it, so "sealed" adds an assumption
+[read]. Lost: `TrustedHost`'s words on when the device emits and on its host isolating its CPU [read]. The other
+four fit none of the nine kinds [argued].
+
+**What the model cannot say** [argued].
+
+1. When a device sends. A device has no delay, and nothing wakes it. A fourth device assumption could say:
+   each send within J of its tick.
+2. The machine under a device. A shared CPU is not a link.
+3. A device that originates what it sends, over connections opened at run time.
+4. A bound that holds only over accepted windows.
+5. How a device gets its keys before it runs.
+
+## The three things I am least sure of
+
+1. **That the deployed statement leaves the send time unassumed.** I argue it from the statement: `TrustedHost` is
+   instantiated with `recordingCode`, whose output is cells with bucket numbers, and jitter enters only as `Dj` in
+   the event the bound counts. I read no proof.
+2. **That onsite on `main` takes one link and runs no Site check.** It rests on `CoreOnsite.lean`'s list of seven
+   subprotocols and `NetworkCheck/Period.lean`'s header and parameters. I did not read `CoreComposition`
+   (`tiedSameB`), the Python composite, or `Game.lean`.
+3. **Question 4's "no soundness check breaks".** It is argued from the list of messages and what each signature
+   binds, for the Lean period check. I did not read the Python period sample (whether an undrawn window needs its
+   certificate) or the gate's ledger. The runners write `deployment.json` as plain JSON; I did not look for a
+   signature over it elsewhere.
+
+## Also worth knowing before you post
+
+- `IngressCounted` and a "response cap" are not on `main` at this commit under those names [run]. I did not search
+  unlanded branches.
+- The lane's own measurement (the NET-296 note) is the evidence for item 2 of "cannot say": send time moved with the
+  idle states of the certifier's machine. I read that note and reran nothing. It is not in the draft comment; add a
+  line if you want vllm to see it.
+- The Python proxies do log each tick's lateness on their own clock (`lateness`). It is run output: no signed
+  record holds it and the check does not read it [run]. So the comment says the check takes `Dj` "from no
+  record", not that nobody measures send time.
+- PR #8537 changes no premise of `PeriodLeakAccepted`, `PooledLeakAccepted` or `PooledLeakCarried`, nor the
+  `trust_gap` [run]. It widens what the outside may read, which the draft's "whatever programs the other devices
+  run" already allows.
+
