@@ -54239,3 +54239,54 @@ Tags: [read] a file I read now, [run] a command I ran now. Times from `date -u`.
 - **#8853 stays at `9c9da7466a`.** Its runs are done at that head and its ready line is written, so by your 11:58Z rule I merge nothing in [read: the ORDER's 11:58Z; run: `gh pr view`].
 
 For the table: line (a) is out of BREAKEVEN's rows; every bits line there is (b), "modeled; no Lean statement at the code is behind it".
+
+## MEMBERS, Wed 11 Nov 12:23Z: ready to mark #8927, every run read after it ended (this entry is the line of record; it replaces my 12:05Z and 12:08Z ones). One gap named: the head is untested on a tree that holds #8539, and a run for it is out
+
+No claim moves: #8927 has no `.lean` file and no lock in its diff [run: `git diff --name-only` over #8898's head]. The form stays refused and nothing reads the file the writer writes. No head moved and `main` was not merged in [run: `gh pr view`, 12:21Z].
+
+### `ready to mark #8927 at 403c8aed979c8753794d3d7a296c1f8e9742fcdf`
+
+- **Quick tier at the head:** `r20261111-103646-64c5`, `suites.py --changed 5c095bb4ab70 --quick`, source `403c8aed979c8753794d3d7a296c1f8e9742fcdf`: **70 suites: 70 passed (1 cached), 0 failed** [run: its own `stdout.log`, line 157, refetched 12:16Z]. No `failed` row. `verity-core-sampled-proofs`: 247 passed, 2 skipped. `benchmarks/one_stage`: 498 passed. The cached suite is `verity/commitments`.
+- **Quick tier on the head merged onto `main` 8f5d3c3823f0:** `r20261111-110651-a480`, `suites.py --changed 8f5d3c3823f0 --quick` with `main`'s `suites.py`, at scratch `797c8c3e53ad5697c5bfb630acba336a2d2a41a4` (pushed nowhere): **71 suites: 71 passed (0 cached), 0 failed** [run: line 162]. Its state is `done 0 SUCCESS`, ended 12:02Z; it is not running. It ran whole, slow tests included, the three test modules the change reaches: `test_a5_case_v2.py`, `test_difftest.py`, `test_harm_bound.py`.
+- **The suite alone at the head:** `r20261111-103615-5605`, `suites.py verity-core-sampled-proofs --quick`: 1 suite, 247 passed, 2 skipped, 0 failed [run].
+- **What the diff is** [run]: three commits over #8898's head 9d9adf6fe723, five files, +381 −37. `one_stage/proofs.py` (`members_v2`, `members_parsed`), `benchmarks/one_stage/a5.py`, four lines of the verifier's README, and two test files: five new tests in `test_a5_case_v2.py` (12 in all) and one new row in `test_difftest.py`, `test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks`.
+- **What merges, by `git merge-tree`** [run, 12:17Z]:
+  - exit 0 with `main` 86c03d1840cb, whose landings since 5c095bb4ab70 change none of the five files;
+  - exit 0 with the two commits next in the chain, 847136846dae and 967b722429f3;
+  - exit 0 with #8425 d4967690acd5 and #8771 4b3b557b8c46 (`a5.py`), #8458 81c162ded6fa and #8730 f612d5d5897d (`test_difftest.py`), #8539 984a73968ccd (`test_difftest.py`, the README), and #8226, #8368, #8764, #8836, which share no file with it.
+  - `origin/checked` and `origin/next` are refs of Mon 9 Nov that `main` has passed (`main` itself conflicts with `next`), so I merged against neither.
+- **Locks:** none in the diff, so no records run [run].
+- **Body:** replaced at 12:21Z; it holds the three runs' counts, the closing round's section and the gap below; the head did not move [run].
+- For CAPS: none. #8927 adds no `.lean` file: no module and no declaration under `security/Proofs/Flock` or anywhere else.
+- It lands after #8898 (marked), whose head is its base. It does not depend on #8921.
+
+### The one gap: not tested on a tree that holds #8539
+
+- 967b722429f3, the chain's fourth commit, holds #8539. Besides `test_difftest.py` and the README, #8539 changes five Lean files of the Spot package and the one-stage verifier's Python (`verifier.py`, `registration.py`, `registered.py`, `partition.py`, `verdict.py`), and my new difftest row runs an audit through that Python [run: `git diff --stat`]. `64c5` and `a480` ran on trees without #8539. #8898's merged tree held it, but that run built Lean and ran no Python suite.
+- What I have without a run: the merge is clean by git, and the merged `test_difftest.py` parses (52 tests) with no top-level name defined twice beyond the three `main` already has (`_held`, `_registered`, `_entry`) [run: `ast`]. A name defined twice is what failed `c6ae`.
+- **Run out: `r20261111-122032-494b`**, `suites.py verity-core-sampled-proofs benchmarks/one_stage --quick` at scratch `943a7b8326bfa1d96867019e740673fa23eda300` (= 967b722429f3 + this head, clean, pushed nowhere), on vy-nebius-cpu-1's research pool; `waiting` for a slot at 12:23Z [run]. ETA about 12:55Z [guess: `5605` took 26 minutes with its wait].
+- The ready line stands on the tier at the head. Whether you mark before `494b` ends is yours. If `494b` fails, #8927 would go red on a `main` that holds #8539, and the fix is mine on this branch.
+
+### The closing round, in three lines (the same text is in the body)
+
+1. **What it is** [read: `Spot/ChallengerTrees.lean`, `Spot/OneStageZk.lean` at #8862's head]: in the per-member form each sampled member's session ends with one more round of its coin tree's `session` stream (round 1), of no coins, opened after the SHA-512 of the session's evidence (its record's bytes, then each rep file's name and bytes, each under an 8-byte length: `sessionEvidence`). The challenger's log then holds a member's files before the next member's coins. The check refuses a tree whose last opening is not that round (`memberTreeReason`, `NO_CLOSING`) and a log that opens one tree's round before the closing round of the tree before it (`membersOrder`).
+2. **What a run of the writer without it does not check** [read]: the writer and the `members` command read no coin, no log and no blob. A written case shows that the form's keys, the members' units and the statements' order are what the Lean parsers read. It shows nothing about the sessions' coins, their order in the log, or whether a session's files were fixed before the next member's coins. The driver's sessions open no closing round, so the form's check would refuse every case written here, were the form accepted.
+3. **What the follow-up would change** [read for the files; guess for the lock; nothing built]:
+   - Rust: the prover's session loop that asks the challenger for a tree's rounds, `serve --tree-from` (`verity/protocols/flock/prover/live/src/bin/flock-circuit.rs`, `src/tree_from.rs`): one closing round after a session's files are written.
+   - Python: the driver `benchmarks/one_stage/a5.py` (the sampled members' sessions one after another, in the members' order), and mirrors of `sessionEvidence` (`one_stage/proofs.py`) and of `membersTreeReason` (beside `sessions_tree_reason` in `verity/protocols/spot/device/challenger.py`), each with a difftest row.
+   - Lean: only a difftest command for those two in the Spot package's executable; they have `#guard`s alone today. No definition a lock reads changes, so no lock record should move.
+   - It touches Flock's prover, so it is not a proofs-only change.
+
+### The four checks, counted
+
+- **0 of 4: none applies to this diff.** No `.lean` file is in it, so there is nothing to elaborate, scan for axioms or replay through the kernel, and no second reader has read the Python. Nothing in #8927 is called proved.
+- What its rows are evidence of: the Python writer's file is what #8898's Lean parsers read, on an audit of the difftest's own and on stand-in files. That is a difftest of an honest writer; it says nothing about a cheating prover. Not run: the driver on a served window (it needs a card).
+- The Lean it calls is #8898's `members` command (marked): elaborates yes, axioms clean yes, not replayed, no second reader; definitions and `#guard`s, no theorem (my 10:46Z entry, line 49243).
+
+### What I wait on
+
+- `r20261111-122032-494b`, ETA about 12:55Z [guess]. I end my turn here. When resumed I post its verdict and put it in the body. `a480` is done; nothing else is out.
+- My VM was reset a second time, at about 12:15Z. The scratch files and worktrees were rebuilt from the branches and the three runs refetched; nothing of record was lost.
+
+For the table:
+- #8927 `403c8aed979c`: ready to mark; quick tier at the head `64c5` 70/70, on the head merged onto `main` 8f5d3c3823f0 `a480` 71/71, suite `5605` passes; merges clean with `main` 86c03d1840cb and the chain's 967b722429f3; no Lean, no lock, 0 of 4 checks apply; untested with #8539 until `494b` ends.
