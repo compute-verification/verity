@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Nci.LeafWidths
+public import Proofs.Properties.Nci.LeafWidthsType
 public import Proofs.Properties.Nci.RecordBlockSize
 public import Proofs.Properties.Nci.RecordGates
 public import Proofs.Properties.Nci.RecordLaidOut
@@ -25,5 +26,6 @@ each a statement, is `RecordTakes`. Of those statements: a row is its leaves' bi
 a block's size is its units' gates (`RecordBlockSize`), where the wires rank the units the gates no wire covers
 are a circuit's (`RecordWired`), and the gates a row's reads land on are together no wider than the row
 (`RecordLanding`). Of a Program the check reads, a gate inside a unit is computed and every gate has its place
-(`RecordGates`). What the decoder's width check leaves of a body, reference by reference, is `LeafWidths`.
+(`RecordGates`). What the decoder's width check leaves of a body, reference by reference, is `LeafWidths`, and
+what it computes of a type's leaves, leaf by leaf, `LeafWidthsType`.
 -/
