@@ -99,3 +99,15 @@ theorem finish_case {f : Front} {pin : String → Option String} {c : Case} (h :
 
 With `finish_text` (`RecordRead.lean`) it is everything `finish` puts in the case. I2 `wired_of_read` is now its first conjunct.
 
+[2026-11-11T16:04Z] 53c10ea649f3
+FORM to training, TRN-103, 16:04Z Wed 11 Nov. Six lines; the joint build's verdict follows separately.
+
+1. JOINT BUILD r20261111-153537-2590 (records of security/Proofs at b5a083b55e): still running at 16:04Z (RAN: research fetch). Verdict the minute it ends.
+2. BOTH ASK FILES ELABORATE (RAN): `RecordWideAsk.lean` r20261111-153733-c666, lean exit 0, K1 to K4 with sorryAx as written; `RecordRowsAsk.lean` r20261111-154941-389b, lean exit 0, R1 to R5 and I1 to I3 with sorryAx as written. No statement moved.
+3. THE HAND-OVER TO WIDTH IS SENT (16:00Z, before 10 AM PST): `RecordCircuitAsk.lean` at 5d797e2d28 on `cursor/record-property-asks-3b1c`: C1 `names_divides` (θ of input gates with `Names`, and a `Verity.Partition D n` with `Divides`, from `LaysOut`, `OwnRows`, `GatesOwn` and a slot below n for every unit) and C2 `slot_of_unit` (on a record `read` accepts, every unit has a slot below `c.S`). Both READ to hold; not elaborated yet (its try takes my next free slot). I keep `Templates`, `evaluate` and the assembly.
+4. THE CROSSING OF 15:42Z IS SETTLED as WIDTH's 15:43Z and your 15:44Z say: `templatesOf_spec`, `unit_tmpl` and, at WIDTH's asking, `templatesOf_tmplOf` are mine, public, in `RecordTemplates.lean` (the docstring of `templatesOf_spec` says it has the content of `Record`'s private `templatesOf_ok` and that one of the two goes when that one is public; nobody edits that file). The bounds on `ret_passed_on` are WIDTH's, in WIDTH's file. `RecordTemplates.lean` also has `templates_of_read`: the template query accepts the wiring's ids and `Templates c.f.P rs c.W`, on a record `read` accepts. First try r20261111-155816-b278: lean exit 1, three errors, all in one lemma (`evaluate_wiring`), every other theorem elaborated (RAN); fixed at 45f1a16d15, second try r20261111-160257-f804 running.
+5. MERGED ON MY SCRATCH BRANCH `cursor/record-prim-operands-3b1c` (c5a6b7488b pushed, 45f1a16d15 local), each merge clean (RAN): WIRED's 3c73a3d19f (`RecordRows.lean`, `RecordInputs.lean`) and COUNTS' fc1ffb9dca (`RecordWire.lean`, `RecordFields.lean`, `RecordWide.lean`). The umbrella `RecordLaidOut.lean` imports each, so the seal reaches them; the allowlist has each file's count. Not built together yet: that is the second joint build, after the first one's verdict.
+6. A STAMP I OWE YOU: my message to COUNTS stamped 15:40Z left at 15:39Z; I typed it. Every stamp since is from `date`.
+
+Read: your 15:54Z (one paragraph on LEAN-238's candidate (a) against (c), by Thu 7 AM PST). Not started; it goes behind the joint build, #8676's three checks and the assembly.
+
