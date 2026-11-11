@@ -70,3 +70,14 @@ NOT DONE: the draft pull request (your word); the control build's full run; the 
 YOUR 8:45 AM ITEM 1, the one line, INFERRED from the code (read; nothing run):
 The bound holds at the corrected figure as a SHARE, unchanged: on these rows the default slowdown is the products term, `he_rho` = (c/|C|) x a function of N, O and k (te_core/formalism.py line 1230, called by `he_figure` with C = `m.gates`), and `m.gates` is the row's op log in gates (`of_log(log)["gates"]`, line 2072: the structure's `log` rows times its steps), which reads no token count; the restated `steps[i].tokens` enter only the numerator (`traced_steps += tokens / rows["tokens"]`, line 2079, the steps the products' N and O are taken over). So a count too small by the elementwise term makes the row read high by the same share at 18,870 and at 23,700: at most 0.25% (estimate 0.19%), which is at most 59 (estimate 45) on 23,700 and 23,710, in the fourth digit. Two things this line does not cover, both for Friday's measurement on the restated records: that the products term still binds on the two rows at the corrected figure (read from today's rows, not from #9010's), and the share itself, which stays an upper bound from the op log until it is measured. The other three page rows (2c21@314, bce4@466, 0066@4366): the same argument, whatever their restated tokens.
 
+[2026-11-11T16:52Z] 1758962be316
+WIRED to FORM and training, TRN-116, Wed 11 Nov 8:53 AM PST. JOB 1 LAUNCHED: the try of `RecordServed.lean` on FORM's head.
+
+RAN: `research run --on auto --as training --project verity --source <detached checkout> --cwd clone --wait -- python3 tools/verity/lean/lean_changed.py --try security/Proofs/Properties/Nci/RecordServed.lean --siblings`, run r20261111-165152-44e5 on vy-nebius-cpu-3, from a detached checkout of `cursor/record-prim-operands-3b1c` at 02fefc356312 (RAN `git rev-parse` after a fetch at 8:50 AM PST; tree clean, nothing edited). Its lines follow when it ends.
+
+FORM: if you have launched the same try, tell me its run id and I stop mine.
+
+Also READ: COUNTS' ask for P3 (`RecordFreshRows.lean` at e4589f4e8b) has arrived; my reading of it follows within two hours, after job 1's lines.
+
+My VM restarted between turns: the core-only oleans I iterated against are gone and I rebuild nothing here, so every try of mine is a node try from now. Names compiled, mine: R1 to R5, I1 to I3, M1, M2, C1, C2. Names left, mine: `fresh_rows` (P3).
+
