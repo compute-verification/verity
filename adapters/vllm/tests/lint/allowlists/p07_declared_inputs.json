@@ -20,7 +20,6 @@
     {"file": "verity_vllm/check/replay/driver.py", "kind": "seed-default", "symbol": "sampled_replay", "detail": "seed_challenge"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "seed-default", "symbol": "sampled_replay", "detail": "seed_source"},
     {"file": "verity/definitions/numerics/twins.py", "kind": "seed-default", "symbol": "admit", "detail": "seed"},
-    {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "environ", "symbol": "decompose", "detail": "os.environ"},
     {"file": "verity_vllm/check/match/projection.py", "kind": "seed-default", "symbol": "Projection.__init__", "detail": "seed_node"},
     {"file": "verity_vllm/program/frontend/emit.py", "kind": "broad-except", "symbol": "_view", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/report.py", "kind": "broad-except", "symbol": "log_header", "detail": "except Exception"},
