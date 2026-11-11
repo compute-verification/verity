@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import runpy
 import shlex
 import socket
@@ -96,6 +97,13 @@ def _wipe(env: dict[str, str], d: Path, *args: str) -> subprocess.CompletedProce
                           env=env, capture_output=True, text=True, cwd=d.parent)
 
 
+def _stamps(d: Path) -> list[str]:
+    """The events of the piece's timeline, ``d``'s ``stamps.txt``, in order: each line a UTC second, then the event."""
+    lines = (d / "stamps.txt").read_text().splitlines()
+    assert all(re.match(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ ", line) for line in lines), lines
+    return [line.split(" ", 1)[1] for line in lines]
+
+
 def _is_core_answer(a: dict) -> None:
     """`Core.Answer.ofJson`'s shapes (`pouw.core_check.answer_of`): an accept has no reason and both its public outputs
     and its profile, a refusal a reason and neither, and nothing else."""
@@ -167,6 +175,7 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
         "fill_GBps": None, "t0": None, "t1": None, "server": "vy-dc-h200", "card": CARD, "exit": 0}
     assert all(f"-i {CARD}" in line for line in (tmp_path / "smi.log").read_text().splitlines())
     assert not (tmp_path / "lease.log").exists() and not (d / "refused.txt").exists()
+    assert _stamps(d) == ["start", "the wipe exit 0", "exit 0"]
 
 
 def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
@@ -185,6 +194,7 @@ def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
     demo = json.loads((d / "demo-argv.json").read_text())
     assert demo["lease"] == "GPU-own0" and demo["argv"][-2:] == ["--wipe-protocol", str(judge)]
     assert not (d / "lake-build.log").exists()
+    assert _stamps(d) == ["start", "asked for the card", "leased the card", "the wipe exit 0", "exit 0"]
 
 
 @pytest.mark.parametrize("apps, used", [("4242, 70212 MiB", "70300"), ("", "2048")])
@@ -199,7 +209,7 @@ def test_a_card_that_isnt_idle_is_refused(node, tmp_path, apps, used) -> None:
     refused = (d / "refused.txt").read_text()
     assert refused.startswith(f"WIPE REFUSED: the card {CARD} isn't idle: ") and "kills nothing" in refused
     assert ("pid 4242, 70212 MiB on it" if apps else "2048 MiB of its memory in use, past WIPE_IDLE_MIB 1024") in refused
-    assert r.stdout.strip().splitlines()[-1] == refused.strip()
+    assert r.stdout.strip().splitlines()[-1] == refused.strip() and _stamps(d) == ["start", "refused"]
     assert not any((d / f).exists() for f in ("answer.json", "demo-argv.json", "served.json"))
 
 
