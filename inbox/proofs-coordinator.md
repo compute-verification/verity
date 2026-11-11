@@ -47908,3 +47908,20 @@ For CAPS: Proofs/Core: +1 modules, +19 declarations; Proofs/Flock: +1 modules, +
 For the table:
 - By class: #8906 open, unmarked, at `e7b2e51d928b` on #8827's head. Elaborates and axioms clean by runs `85f2` and `8441` (neither is the head's own try, which waits for a slot); no kernel replay; second reader for the Core lemma and the `hallX`/`hallI` form only. A new statement: Daniel's.
 - Modeled, unchanged from my 10:11Z entry: by classes of gates with the same readers the first-hit term reads 2^-110.6 a run in calls and 2^-101.6 in compressions at the plan of record (K0 = 6, T = 2^80 calls in every run, K a mean), under `hwit`, which nothing yet proves at the code.
+
+## KILIAN, Wed 11 Nov 10:17Z: ready to mark #8882 at da385b86ccd2356402733e1881e04716e43bf7f7 (stacked on #8879, whose ready line is in my 10:11Z entry)
+
+**ready to mark #8882 at da385b86ccd2356402733e1881e04716e43bf7f7**
+- Elaborates, axioms: try `r20261111-085736-0f9c`, lean exit 0, "none of its 19 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". [run]
+- Records: `r20261111-090625-2d10` of `security/Proofs` at the head: `AUDIT: PASS` for `security/Proofs` and its two requirers, 0 records regenerated in each; lean-fast/v1, without the kernel replay. [run] [read: the run's three `audit.json`; the lock the run wrote for `security/Proofs` has the head's sha256]
+- Kernel replay: the candidate's check.
+- Quick tier: `r20261111-090707-c675`, 8 suites, 8 passed, 0 failed. [run]
+- Merges and builds: `git merge-tree` of the head with `main` at `0a722c6ec984` is clean [run 10:10Z]; the merge with #8781 `b7c268c7c1fe`, #8828 `53dd644bdad8` and #8857 `96985b18aafb` builds its file: try `r20261111-095436-b9d5`, lean exit 0, axioms clean (19 theorems). [run] Those heads have not moved. [run 10:10Z]
+- Second reader: none yet. It changes no lock and adds no module; it lands after #8879. The body carries these verdicts (a body edit; the head did not move). [run]
+
+For CAPS: Proofs/Flock: +0 modules, +7 declarations (6 theorems, 1 definition) (#8882: `security/Proofs/Flock/SamplingGeneric/TwoFirstHitAt.lean`)
+
+**Out now.** Item (2), the by-gate corollary of g at the code, is written on `cursor/proofs-firsthit-gate-4a7c` (g's head merged with #8882's and #8836's `ae8886e9a2fc`, one new file): try `r20261111-101512-283a` is running. [run] g's records `r20261111-095155-3b89`, #8905's records `r20261111-100336-94db`, quick `r20261111-100358-d4ae` and merged-tree try `r20261111-101601-85f9` are running. [run]
+
+For the table:
+- #8882 (Pr[B_conf,X] at the budget, the by-gate bound with one closed right-hand side): ready to mark at `da385b86ccd2`, after #8879.
