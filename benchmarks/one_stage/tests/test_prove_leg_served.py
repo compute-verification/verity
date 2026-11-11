@@ -58,7 +58,7 @@ ROWS = ("4c4c22b639378c9002541c62fb178fa6e87380cc45f35ddb9041ace9b879b201"
 
 @pytest.mark.parametrize("shape,want", SERVED)
 def test_a_served_shape_binds_a_served_template_with_values_for_every_parameter(shape, want):
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
     from verity_vllm.pipeline import serving_rows as SRW
 
     fn, gen = L.served(shape)
@@ -106,8 +106,8 @@ def test_an_embedding_read_is_the_windows_unit_with_a_token_inside_the_vocabular
     """``embedding-read`` is the window's `EmbeddingRead_v1{V, H}` (no serving row commits its one-bit leaves): its words are
     its arguments' bits, little-endian, the token's below V. (Each stand-in row opens at its token: the generator holds
     `embedding.reference` to it, and the bit-sliced evaluator gives ok = 1 on these words, too slow for a test.)"""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.windows import interface as IF
+    from verity.circuits.codec import descriptor_id
+    from verity.commitments.windows import interface as IF
 
     fn, gen = L.served("embedding-read:1b:300")
     assert descriptor_id(fn) == descriptor_id(IF.resolve("EmbeddingRead_v1{V=300,H=2048}")) == "EmbeddingRead_v1{V=300,H=2048}"
