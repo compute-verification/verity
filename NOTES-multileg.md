@@ -125,7 +125,10 @@ LmsUnforgeable remote only. Nothing else is introduced.
    roots, and at `ad6e765e05` still refuses a window with row tables and two-stage's shared rows; the rows link
    (Flock's several-member `EndToEndRegisteredRows`, proofs' piece (1)) is named open. Nothing changes in
    `MemberSteps`.
-4. **Records.** The fast path for Security and Security/Proofs at the final head.
+4. **Records.** `Security/Proofs` passes at `a1f057c487`; `Security/Properties` and `Security` fail on the base's
+   own guarantees (the runs table), which the port fixes when the one-member guarantee's definitions move to the
+   definitions tree and its records are regenerated. Nothing of this branch is in a lock: the window's guarantee
+   enters with the port.
 5. `Window.hcls` stays a field of `Window` (`JointAuditV5.hcls_of_bounds` discharges it from bounds).
 6. Bookkeeping: `tests/test_lean_vocabulary.py` warns that `Verity.Sampled.Window` declares `Window` again
    (`Accounting.Window` is the device model's); a rename is the port's to choose.
@@ -160,6 +163,16 @@ LmsUnforgeable remote only. Nothing else is introduced.
 | `r20261111-041449-343d` | `Window/Read.lean` | `e5aad38d65` | 0 | 7 theorems, standard axioms |
 | `r20261111-043407-3b49` | `Window/Instance.lean` | `38b78daff7` | 0 | 14 theorems, standard axioms (`remote_soundness_window` among them) |
 | `r20261111-051805-5fe9` | `Properties/Verity/WindowFiles.lean` | `41e2d5a6bb` | cancelled | superseded before its check started (`beside` made reducible) |
+| `r20261111-052756-d9a8` | `Properties/Verity/WindowFiles.lean` | `55b900da74` | 0 | 4 theorems, standard axioms |
+| `r20261111-052756-c92d` | `Proofs/Properties/Verity/WindowFiles.lean` | `55b900da74` | 2 | infra: no dependencies on the node, nothing ran |
+| `r20261111-053108-072a` | `Proofs/Properties/Verity/WindowFiles.lean` | `a1f057c487` | 0 | 34 theorems, standard axioms |
+
+Records (`lean_changed.py --records Security/Properties --update`, the fast path: no kernel replay):
+
+| Run | Tree | rc | Per package |
+|---|---|---|---|
+| `r20261110-191204-f7c8` | `ece623c082` | 1 | `Security/Proofs` pass; the base's own failures elsewhere |
+| `r20261111-053739-8e18` | `a1f057c487` | 1 | `Security/Proofs` **pass** (193583 declarations in 3823 modules, standard axioms, the package's roots built: no name clash). `Security/Properties` fail: its build passes; the 4 findings are `trees:` on the base's `remote_soundness_deployedReady` and `_honest`, whose statements read `Proofs.Properties.Verity.Sampled*` definitions. `Security` fail: the base's `Flock.SecurityProofs.SampledKSLive*` records (`guarantees:` restated, `witnesses:`). No finding names a module of this branch; against the base branch this branch changes only `Properties/Verity/WindowFiles.lean` and the two root lists outside `Security/Proofs`. No record was kept, so there is none to commit. |
 
 Earlier rows (the layers up to `Window/Assembled.lean`, and the failed tries fixed forward) are in the git history of
 this file.
