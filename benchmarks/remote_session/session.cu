@@ -21,6 +21,11 @@
 //                    last leaf short and the padding to the tree's width included (`rs_mapped_pass`); an opening's
 //                    subtree is its receipts (`rs_mapped_receipts`) and reader.cu's leaves and levels
 //
+//   rows             the registration's k_s, 16 or 64 (`rs_rows`, 16 until it is called): the pass, the in-place pass,
+//                    the subtrees and the chained signs run their 64-row forms at 64 (the receipt kernels and tiles
+//                    named 64, on reader.cu's 64-row sketch and its three-compression receipt) and the 16-row ones
+//                    otherwise. The leaves and the tree are the same at either
+//
 // A store spans the visible GPUs, a contiguous shard of whole chunks on each, and the receipt tree is the one over the
 // whole store in block order (`receipts.tree`): every position, leaf and node index is the store's. One library serves
 // every GPU, each with its own copy of the constants (__constant__ is per device; the runtime follows the caller's
@@ -234,18 +239,137 @@ __device__ __forceinline__ void sk16_prologue(u32 *sg, const u32 *__restrict__ p
   __syncthreads();
 }
 
-// A pass's signs from its key on the device, packed as pack16_kernel packs them: row c of S is the first 512 bytes of
-// the key's counter-mode stream at index ("row", c) (`verity.commitments.randomness`'s Key.stream: block k is
-// SHA512(head ‖ u64be k), head = stream tag ‖ key ‖ frames(("row", c)), whose last byte is c for c < 256), bit u of
-// the row (byte u / 8, LSB first) 1 where S[c][u] = −1. head is row 0's (at most 103 bytes, so a block is one
-// compression). A thread a (row, block) of the stream, then the 2048 words from shared memory.
+// --- 64 rows -----------------------------------------------------------------------------------------------------
+//
+// The 16-row tile at k_s = 64: reader.cu's 64-row sketch (8 n-tiles a block where 16 rows are 2, `sk64_tile`'s loop
+// over a load of the caller's) and its receipt (`sk64_receipt`, three compressions from the seed block's midstate
+// where 16 rows are one). The packed signs are reader.py's `pack64`, 32 KiB: lane (g, t)'s four words at p, word w
+// holding n-tiles 2 w and 2 w + 1 as a 16-row word holds n-tiles 0 and 1. A warp stages its 32 blocks' σ as
+// sketch64_receipts_kernel does, a block's row r at r ^ 8 (block & 3), and each lane hashes one. A receipt CTA's
+// signs and staging are 96 KiB (SK64R_SMEM), dynamic shared memory its launcher asks the device for (`shared64`).
+constexpr int SK64_PACK = 4 * SK64_SIGNS;   // the packed signs' words
+
+// sk16_tile_of at 64 rows: S the warp's staging (32 · SK64_ROWS int32) and sg the packed signs, in shared memory or,
+// for a consumer's own tile, where the pass keeps them.
+template <class Load, class Index>
+__device__ __forceinline__ void sk64_tile_of(Load load, Index index, u64 n, u64 b0, const uint4 *sg, int *S,
+                                             u64 *__restrict__ ys, int lane) {
+  const int g = lane >> 2, t = lane & 3;
+  int acc[2][8][4];
+#pragma unroll
+  for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+    for (int nt = 0; nt < 8; ++nt) acc[mt][nt][0] = acc[mt][nt][1] = acc[mt][nt][2] = acc[mt][nt][3] = 0;
+  uint4 cur[2][2], nxt[2][2];
+  load(cur, 0);
+#pragma unroll 1
+  for (int p = 0; p < SK64_P; ++p) {
+    if (p + 1 < SK64_P) load(nxt, p + 1);
+    const uint4 w = sg[p * 32 + lane];
+    const u32 ws[4] = {w.x, w.y, w.z, w.w};
+#pragma unroll
+    for (int nt = 0; nt < 8; ++nt) {
+      const u32 word = ws[nt >> 1];
+      const int r = 4 * (nt & 1);
+      const u32 b00 = sign_reg(word, r), b01 = sign_reg(word, r + 1);
+      const u32 b10 = sign_reg(word, r + 2), b11 = sign_reg(word, r + 3);
+#pragma unroll
+      for (int mt = 0; mt < 2; ++mt) {
+        const uint4 &lo = cur[mt][0], &hi = cur[mt][1];
+        imma16832(acc[mt][nt], lo.x, hi.x, lo.y, hi.y, b00, b01);
+        imma16832(acc[mt][nt], lo.z, hi.z, lo.w, hi.w, b10, b11);
+      }
+    }
+#pragma unroll
+    for (int mt = 0; mt < 2; ++mt) cur[mt][0] = nxt[mt][0], cur[mt][1] = nxt[mt][1];
+  }
+#pragma unroll
+  for (int mt = 0; mt < 2; ++mt) {
+    const int blk = 16 * mt + g;
+#pragma unroll
+    for (int nt = 0; nt < 8; ++nt) {
+      const int r = (8 * nt + 2 * t) ^ (8 * (g & 3));
+      *(int2 *)(S + blk * SK64_ROWS + r) = make_int2(acc[mt][nt][0], acc[mt][nt][1]);
+      *(int2 *)(S + (blk + 8) * SK64_ROWS + r) = make_int2(acc[mt][nt][2], acc[mt][nt][3]);
+    }
+  }
+  __syncwarp();
+  const u64 q = b0 + lane;
+  if (q < n) {
+    const uint4 *V = (const uint4 *)(S + lane * SK64_ROWS);
+    const int x = 2 * (lane & 3);
+    sk64_receipt([&](int i) { return V[i ^ x]; }, index(q), ys + 8 * q);
+  }
+  __syncwarp();
+}
+
+// sk16_tile at 64 rows.
+__device__ __forceinline__ void sk64_data_tile(const uint4 *__restrict__ data, u64 j0, u64 n, u64 b0,
+                                               const uint4 *sg, int *S, u64 *__restrict__ ys, int lane) {
+  const int g = lane >> 2, t = lane & 3;
+  sk64_tile_of([&](uint4 (&d)[2][2], int p) { sk64_load<false, 2>(d, data, nullptr, b0, n, p, g, t); },
+               [&](u64 q) { return j0 + q; }, n, b0, sg, S, ys, lane);
+}
+
+// sk16_mapped_tile at 64 rows.
+__device__ __forceinline__ void sk64_mapped_tile(const u64 *__restrict__ addrs, const u64 *__restrict__ js, u64 n,
+                                                 u64 b0, const uint4 *sg, int *S, u64 *__restrict__ ys, int lane) {
+  const int g = lane >> 2, t = lane & 3;
+  const u64 q = b0 + lane, mine = q < n ? __ldg(addrs + q) : 0;
+  const uint4 *at[2][2];
+#pragma unroll
+  for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+    for (int hi = 0; hi < 2; ++hi)
+      at[mt][hi] = reinterpret_cast<const uint4 *>(__shfl_sync(~0u, mine, 16 * mt + 8 * hi + g));
+  sk64_tile_of([&](uint4 (&d)[2][2], int p) {
+#pragma unroll
+    for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+      for (int hi = 0; hi < 2; ++hi)
+        d[mt][hi] = at[mt][hi] ? ld_l2_256(at[mt][hi] + 4 * p + t) : make_uint4(0, 0, 0, 0);
+  }, [&](u64 x) { return __ldg(js + x); }, n, b0, sg, S, ys, lane);
+}
+
+// A 64-row receipt CTA's shared memory: the packed signs from pk, then a warp's staging.
+__device__ __forceinline__ int *sk64_prologue(uint4 *smem, const uint4 *__restrict__ pk) {
+  for (int i = threadIdx.x; i < SK64_SIGNS; i += blockDim.x) smem[i] = __ldg(pk + i);
+  __syncthreads();
+  return (int *)(smem + SK64_SIGNS) + (threadIdx.x >> 5) * 32 * SK64_ROWS;
+}
+
+// A pass's signs from its key on the device, packed as pack16_kernel packs them (at R = 64 rows as reader.py's pack64
+// does): row c of S is the first 512 bytes of the key's counter-mode stream at index ("row", c)
+// (`verity.commitments.randomness`'s Key.stream: block k is SHA512(head ‖ u64be k), head = stream tag ‖ key ‖
+// frames(("row", c)), whose last byte is c for c < 256), bit u of the row (byte u / 8, LSB first) 1 where
+// S[c][u] = −1. head is row 0's (at most 103 bytes, so a block is one compression). A thread a (row, block) of the
+// stream, 8 R of them, then the 2048 R / 16 words from shared memory.
 struct StreamHead {
   uint8_t b[104];
   int n;
 };
 
-__global__ void __launch_bounds__(128) signs16_kernel(const StreamHead h, u32 *__restrict__ pk) {
-  __shared__ uint8_t bits[SK_ROWS][BLOCK / 8];
+// The R / 16 words of lane (g, t) at p, q = 32 p + 4 g + t, from the R rows' bits: word w's bit 8 i + r is the bit of
+// row 8 (2 w + r / 4) + g at 64 p + 16 t + 8 (r / 2 mod 2) + 4 (r mod 2) + i.
+template <int R>
+__device__ __forceinline__ void pack_bits(uint8_t (*bits)[BLOCK / 8], int q, u32 *__restrict__ pk) {
+  const int p = q >> 5, g = (q & 31) >> 2, t = q & 3;
+#pragma unroll
+  for (int v = 0; v < R / 16; ++v) {
+    u32 w = 0;
+#pragma unroll
+    for (int r = 0; r < 8; ++r) {
+      const int nt = 2 * v + (r >> 2), s = (r >> 1) & 1, b = r & 1, u = 64 * p + 16 * t + 8 * s + 4 * b;
+#pragma unroll
+      for (int i = 0; i < 4; ++i) w |= (u32)((bits[8 * nt + g][(u + i) >> 3] >> ((u + i) & 7)) & 1) << (8 * i + r);
+    }
+    pk[q * (R / 16) + v] = w;
+  }
+}
+
+template <int R>
+__global__ void __launch_bounds__(8 * R) signs_kernel(const StreamHead h, u32 *__restrict__ pk) {
+  __shared__ uint8_t bits[R][BLOCK / 8];
   {
     const int c = threadIdx.x >> 3, k = threadIdx.x & 7;
     uint8_t m[256];
@@ -256,17 +380,7 @@ __global__ void __launch_bounds__(128) signs16_kernel(const StreamHead h, u32 *_
     sha512_bytes(m, h.n + 8, st, &bits[c][64 * k]);
   }
   __syncthreads();
-  for (int q = threadIdx.x; q < SK16_PACK; q += blockDim.x) {
-    const int p = q >> 5, g = (q & 31) >> 2, t = q & 3;
-    u32 w = 0;
-#pragma unroll
-    for (int r = 0; r < 8; ++r) {
-      const int nt = r >> 2, s = (r >> 1) & 1, b = r & 1, u = 64 * p + 16 * t + 8 * s + 4 * b;
-#pragma unroll
-      for (int i = 0; i < 4; ++i) w |= (u32)((bits[8 * nt + g][(u + i) >> 3] >> ((u + i) & 7)) & 1) << (8 * i + r);
-    }
-    pk[q] = w;
-  }
+  for (int q = threadIdx.x; q < SK16_PACK; q += blockDim.x) pack_bits<R>(bits, q, pk);
 }
 
 // A chained pass derives everything whose input is the previous pass's root on the device.  The host sets the
@@ -277,9 +391,7 @@ __global__ void __launch_bounds__(128) signs16_kernel(const StreamHead h, u32 *_
 // the sketch-sign key and row streams, and the sketch receipt's first-block midstate.  `rb_chain` (reader.cu)
 // completes the receipt tree's constants from that seed.  Thus no seed, sign key, or tree constant crosses the host
 // between passes.  The 64-byte seed is retained with the pass because the opener's second library uses it to restore
-// that pass's constants.
-constexpr int CHAIN_THREADS = 128;
-
+// that pass's constants.  At R rows the kernel is 8 R threads, one a (row, block) of the row streams.
 struct ChainPass {
   uint8_t seed[160], derive[256], receipt[128], row[128];
   int seed_len, seed_i, seed_root, derive_len, derive_seed, receipt_seed;
@@ -293,10 +405,10 @@ struct ChainPassState {
 __constant__ ChainPass kChainPass;
 __device__ ChainPassState gChainPass;
 
-__global__ void __launch_bounds__(CHAIN_THREADS) chain_prepare_kernel(unsigned pass, const u64 *__restrict__ previous,
-                                                                      uint8_t *__restrict__ seed_out,
-                                                                      u32 *__restrict__ pk) {
-  __shared__ uint8_t seed[64], key[32], bits[SK_ROWS][BLOCK / 8];
+template <int R>
+__global__ void __launch_bounds__(8 * R) chain_prepare_kernel(unsigned pass, const u64 *__restrict__ previous,
+                                                              uint8_t *__restrict__ seed_out, u32 *__restrict__ pk) {
+  __shared__ uint8_t seed[64], key[32], bits[R][BLOCK / 8];
   const int tid = threadIdx.x;
   uint8_t m[256];
   u64 h[8];
@@ -334,18 +446,7 @@ __global__ void __launch_bounds__(CHAIN_THREADS) chain_prepare_kernel(unsigned p
     sha512_bytes(m, kChainPass.row_len, h, out);
   }
   __syncthreads();
-  for (int q = tid; q < SK16_PACK; q += CHAIN_THREADS) {
-    const int p = q >> 5, g = (q & 31) >> 2, t = q & 3;
-    u32 w = 0;
-#pragma unroll
-    for (int r = 0; r < 8; ++r) {
-      const int nt = r >> 2, s = (r >> 1) & 1, b = r & 1, u = 64 * p + 16 * t + 8 * s + 4 * b;
-#pragma unroll
-      for (int x = 0; x < 4; ++x)
-        w |= (u32)((bits[8 * nt + g][(u + x) >> 3] >> ((u + x) & 7)) & 1) << (8 * x + r);
-    }
-    pk[q] = w;
-  }
+  for (int q = tid; q < SK16_PACK; q += 8 * R) pack_bits<R>(bits, q, pk);
 }
 
 __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_receipts_kernel(const uint4 *__restrict__ data, u64 j0,
@@ -410,6 +511,19 @@ __global__ void __launch_bounds__(32 * SK16_WARPS, 2) mapped16_receipts_kernel(c
     sk16_mapped_tile(addrs, js, n, tile * 32, sg, st[warp], ys, lane);
 }
 
+// mapped16_receipts_kernel at 64 rows.
+__global__ void __launch_bounds__(32 * SK64R_WARPS, 1) mapped64_receipts_kernel(const u64 *__restrict__ addrs,
+                                                                                const u64 *__restrict__ js, u64 n,
+                                                                                const uint4 *__restrict__ pk,
+                                                                                u64 *__restrict__ ys) {
+  extern __shared__ uint4 smem[];
+  int *st = sk64_prologue(smem, pk);
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+  const u64 tiles = (n + 31) / 32;
+  for (u64 tile = blockIdx.x * (u64)SK64R_WARPS + warp; tile < tiles; tile += (u64)gridDim.x * SK64R_WARPS)
+    sk64_mapped_tile(addrs, js, n, tile * 32, smem, st, ys, lane);
+}
+
 // reader.cu's read_kernel through the map: every byte of positions 0 … n − 1 once, where addrs puts it.
 __global__ void __launch_bounds__(256) mapped_read_kernel(const u64 *__restrict__ addrs, u64 n,
                                                           unsigned long long *xr) {
@@ -456,6 +570,33 @@ __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_pass_kernel(const
   }
 }
 
+// pass_tile and sketch16_pass_kernel at 64 rows.
+__device__ __forceinline__ void pass64_tile(const uint4 *__restrict__ data, u64 n, u64 base, const uint4 *sg, int *S,
+                                            u64 *ys, unsigned *ready, unsigned tile, unsigned tiles_per, int lane) {
+  sk64_data_tile(data, base, n, (u64)tile * 32, sg, S, ys, lane);
+  __threadfence();
+  __syncwarp();
+  if (!lane) atomicAdd(ready + tile / tiles_per, 1u);
+}
+
+__global__ void __launch_bounds__(32 * SK64R_WARPS, 1) sketch64_pass_kernel(const uint4 *__restrict__ data, u64 n,
+                                                                            u64 base, const uint4 *__restrict__ pk,
+                                                                            u64 *__restrict__ ys, unsigned *ctr,
+                                                                            unsigned tiles_per, unsigned *started) {
+  extern __shared__ uint4 smem[];
+  if (!threadIdx.x) atomicExch(started, 1u);
+  int *st = sk64_prologue(smem, pk);
+  const int lane = threadIdx.x & 31;
+  const u64 tiles = (n + 31) / 32;
+  for (;;) {
+    unsigned tile = 0;
+    if (!lane) tile = atomicAdd(ctr, 1u);
+    tile = __shfl_sync(~0u, tile, 0);
+    if (tile >= tiles) break;
+    pass64_tile(data, n, base, smem, st, ys, ctr + 1, tile, tiles_per, lane);
+  }
+}
+
 // One thread waiting until *flag reaches want, so what follows on its stream reads what the counted tiles wrote.
 __global__ void wait_kernel(const unsigned *flag, unsigned want) {
   while (*(volatile const unsigned *)flag < want) __nanosleep(256);
@@ -489,6 +630,15 @@ __device__ __noinline__ void help_tile(const uint4 *__restrict__ data, u64 n, u6
   if (tile < n / 32) pass_tile(data, n, base, pk, S, ys, ctr + 1, tile, tiles_per, lane);
 }
 
+// help_tile at 64 rows.
+__device__ __noinline__ void help64_tile(const uint4 *__restrict__ data, u64 n, u64 base, const uint4 *pk, int *S,
+                                         u64 *ys, unsigned *ctr, unsigned tiles_per, int lane) {
+  unsigned tile = 0;
+  if (!lane) tile = atomicAdd(ctr, 1u);
+  tile = __shfl_sync(~0u, tile, 0);
+  if (tile < n / 32) pass64_tile(data, n, base, pk, S, ys, ctr + 1, tile, tiles_per, lane);
+}
+
 // A shard's receipt tree behind its receipts, by persistent grids of CONSUMER_THREADS-thread CTAs sharing ctr
 // (rs_pass's layout): the next tile, each group's counted tiles, each chunk's completed subtrees, the next subtree to
 // claim and the receipt grid's started flag. A CTA claims the next 2^h0-leaf subtree in order, waits until the group
@@ -502,9 +652,13 @@ __device__ __noinline__ void help_tile(const uint4 *__restrict__ data, u64 n, u6
 // tiles until none is left); otherwise it takes the next tile and computes it itself (`help_tile`, the signs read from
 // pk). So no wait depends on a CTA that isn't resident, whatever the stream priorities, the order the grids are placed
 // in or what a co-tenant holds, and a pass whose receipt grid never gets an SM still completes.
+//
+// R is the pass's rows: its own tiles are help_tile's at 16 and help64_tile's at 64, staged 32 · R int32 a warp.
 constexpr int CONSUMER_THREADS = 128;
 constexpr size_t CONSUMER_STAGING = (size_t)CONSUMER_THREADS / 32 * 32 * SK_ROWS * sizeof(int);
+constexpr size_t CONSUMER_STAGING64 = (size_t)CONSUMER_THREADS / 32 * 32 * SK64_ROWS * sizeof(int);
 
+template <int R>
 __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const uint4 *__restrict__ data, u64 n,
                                                                          u64 base_leaf, const u32 *__restrict__ pk,
                                                                          u64 *ys, unsigned *ctr, u64 *__restrict__ kept,
@@ -540,7 +694,9 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const u
         __nanosleep(256);
         continue;
       }
-      help_tile(data, n, base, pk, reinterpret_cast<int *>(scratch) + warp * 32 * SK_ROWS, ys, ctr, tiles_per, lane);
+      int *S = reinterpret_cast<int *>(scratch) + warp * 32 * R;
+      if (R == SK_ROWS) help_tile(data, n, base, pk, S, ys, ctr, tiles_per, lane);
+      else help64_tile(data, n, base, reinterpret_cast<const uint4 *>(pk), S, ys, ctr, tiles_per, lane);
     }
     __threadfence();
     __syncthreads();   // the staging the warps computed tiles in is the leaves' buffer
@@ -635,6 +791,43 @@ __device__ __noinline__ void mapped_help_tile(const u64 *__restrict__ addrs, con
   if (tile < (n + 31) / 32) mapped_pass_tile(addrs, js, n, pk, S, ys, ctr + 1, tile, lane);
 }
 
+// mapped_pass_tile, mapped16_pass_kernel and mapped_help_tile at 64 rows.
+__device__ __forceinline__ void mapped_pass64_tile(const u64 *__restrict__ addrs, const u64 *__restrict__ js, u64 n,
+                                                   const uint4 *sg, int *S, u64 *ys, unsigned *ready, unsigned tile,
+                                                   int lane) {
+  sk64_mapped_tile(addrs, js, n, (u64)tile * 32, sg, S, ys, lane);
+  __threadfence();
+  __syncwarp();
+  if (!lane) atomicAdd(ready + tile / MAPPED_READY_TILES, 1u);
+}
+
+__global__ void __launch_bounds__(32 * SK64R_WARPS, 1) mapped64_pass_kernel(const u64 *__restrict__ addrs,
+                                                                            const u64 *__restrict__ js, u64 n,
+                                                                            const uint4 *__restrict__ pk,
+                                                                            u64 *__restrict__ ys, unsigned *ctr,
+                                                                            unsigned *started) {
+  extern __shared__ uint4 smem[];
+  if (!threadIdx.x) atomicExch(started, 1u);
+  int *st = sk64_prologue(smem, pk);
+  const int lane = threadIdx.x & 31;
+  const u64 tiles = (n + 31) / 32;
+  for (;;) {
+    unsigned tile = 0;
+    if (!lane) tile = atomicAdd(ctr, 1u);
+    tile = __shfl_sync(~0u, tile, 0);
+    if (tile >= tiles) break;
+    mapped_pass64_tile(addrs, js, n, smem, st, ys, ctr + 1, tile, lane);
+  }
+}
+
+__device__ __noinline__ void mapped_help64_tile(const u64 *__restrict__ addrs, const u64 *__restrict__ js, u64 n,
+                                                const uint4 *pk, int *S, u64 *ys, unsigned *ctr, int lane) {
+  unsigned tile = 0;
+  if (!lane) tile = atomicAdd(ctr, 1u);
+  tile = __shfl_sync(~0u, tile, 0);
+  if (tile < (n + 31) / 32) mapped_pass64_tile(addrs, js, n, pk, S, ys, ctr + 1, tile, lane);
+}
+
 // Leaf c of a pass of n positions from its receipts at Y (leaves_kernel's digest, the last leaf short), or past the
 // last leaf the padding leaf c (pads_kernel's). Y is read through the non-coherent cache, as pass_leaf reads it.
 __device__ __forceinline__ void mapped_leaf(const u64 *__restrict__ Y, u64 c, u64 n, u64 (&d)[8]) {
@@ -656,7 +849,8 @@ __device__ __forceinline__ void mapped_leaf(const u64 *__restrict__ Y, u64 c, u6
 // the next 2^h0-leaf subtree, the padding's first (they wait on nothing), waits as pass_consumer_kernel does until the
 // group holding it is counted, hashes its leaves (`mapped_leaf`) and its levels below h0 in shared memory and keeps
 // its root; then one thread climbs, hashing each node whose other child is done, up to the root. kept is level h at
-// the sum of 2^(H − g) over h0 <= g < h, the root last.
+// the sum of 2^(H − g) over h0 <= g < h, the root last. R is the pass's rows, as pass_consumer_kernel's.
+template <int R>
 __global__ void __launch_bounds__(CONSUMER_THREADS) mapped_consumer_kernel(const u64 *__restrict__ addrs,
                                                                            const u64 *__restrict__ js, u64 n,
                                                                            const u32 *__restrict__ pk, u64 *ys,
@@ -691,7 +885,9 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) mapped_consumer_kernel(const
           __nanosleep(256);
           continue;
         }
-        mapped_help_tile(addrs, js, n, pk, reinterpret_cast<int *>(scratch) + warp * 32 * SK_ROWS, ys, ctr, lane);
+        int *S = reinterpret_cast<int *>(scratch) + warp * 32 * R;
+        if (R == SK_ROWS) mapped_help_tile(addrs, js, n, pk, S, ys, ctr, lane);
+        else mapped_help64_tile(addrs, js, n, reinterpret_cast<const uint4 *>(pk), S, ys, ctr, lane);
       }
     }
     __threadfence();
@@ -806,6 +1002,22 @@ __global__ void __launch_bounds__(32 * SK16_WARPS, 2) subtree_receipts_kernel(co
             ys + (q << (h0 + PER_LEAF_LOG2)) * 8, lane);
 }
 
+// subtree_receipts_kernel at 64 rows.
+__global__ void __launch_bounds__(32 * SK64R_WARPS, 1) subtree64_receipts_kernel(const uint4 *__restrict__ data,
+                                                                                 u64 base, const u64 *__restrict__ c,
+                                                                                 int h0, const uint4 *__restrict__ pk,
+                                                                                 u64 *__restrict__ ys, u64 tiles) {
+  extern __shared__ uint4 smem[];
+  int *st = sk64_prologue(smem, pk);
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+  const u64 tile = blockIdx.x * (u64)SK64R_WARPS + warp;
+  if (tile >= tiles) return;
+  const int per_log2 = h0 + PER_LEAF_LOG2 - 5;   // tiles a subtree
+  const u64 q = tile >> per_log2, b0 = (tile & ((1ULL << per_log2) - 1)) * 32, j0 = c[q] * PER_LEAF;
+  sk64_data_tile(data + (j0 - base) * (BLOCK / 16), j0, (u64)PER_LEAF << h0, b0, smem, st,
+                 ys + (q << (h0 + PER_LEAF_LOG2)) * 8, lane);
+}
+
 __global__ void __launch_bounds__(128) subtree_leaves_kernel(const u64 *__restrict__ ys, const u64 *__restrict__ c,
                                                              int h0, u64 n, u64 *__restrict__ nodes) {
   const u64 tid = blockIdx.x * (u64)blockDim.x + threadIdx.x, t = tid < n ? tid : n - 1;
@@ -858,13 +1070,39 @@ int rs_gather64(const uint64_t *addrs, uint64_t n, uint64_t *out, cudaStream_t s
   return cudaGetLastError() ? 4 : 0;
 }
 
-// A receipts grid over n blocks: ctas CTAs of kernel k, or with ctas 0 as many as are resident at once, and no more
-// than the blocks fill.
-static int receipts_grid(const void *k, uint64_t n, int ctas, unsigned *g) {
+// The registration's k_s this copy of the library runs at (`rs_rows`).
+static int gRows = SK_ROWS;
+
+// The pass, the in-place pass, the subtrees and the chained signs at `rows` (16 or 64) from here on, for every GPU
+// this copy of the library serves. The packed signs (pk) are then SK16_PACK words at 16 rows and SK64_PACK at 64;
+// set it before `rs_chain_set`, which frames it into the sign key.
+int rs_rows(int rows) {
+  if (rows != SK_ROWS && rows != SK64_ROWS) return 1;
+  gRows = rows;
+  return 0;
+}
+
+// A 64-row receipt kernel's dynamic shared memory (SK64R_SMEM is past the default limit), asked once a device.
+enum { K64_PASS, K64_MAPPED_PASS, K64_MAPPED_RECEIPTS, K64_SUBTREES, K64_KERNELS };
+static int shared64(const void *k, int id) {
+  constexpr int DEVICES = 64;
+  static bool opted[K64_KERNELS][DEVICES];
+  int dev;
+  if (cudaGetDevice(&dev) || dev < 0 || dev >= DEVICES) return 4;
+  if (!opted[id][dev]) {
+    if (cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, SK64R_SMEM)) return 4;
+    opted[id][dev] = true;
+  }
+  return 0;
+}
+
+// A receipts grid over n blocks: ctas CTAs of kernel k (256 threads, `shared` bytes of dynamic shared memory), or with
+// ctas 0 as many as are resident at once, and no more than the blocks fill.
+static int receipts_grid(const void *k, size_t shared, uint64_t n, int ctas, unsigned *g) {
   if (!ctas) {
     int dev, sms, per;
     if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
-        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, k, 32 * SK16_WARPS, 0))
+        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, k, 32 * SK16_WARPS, shared))
       return 4;
     ctas = sms * per;
   }
@@ -879,7 +1117,7 @@ static int sketch16_receipts(const void *data, uint64_t j0, uint64_t n, const ui
                              cudaStream_t s) {
   if (!data || !pk || !ys || n < 1 || ctas < 0) return 1;
   unsigned g;
-  if (receipts_grid((const void *)sketch16_receipts_kernel, n, ctas, &g)) return 4;
+  if (receipts_grid((const void *)sketch16_receipts_kernel, 0, n, ctas, &g)) return 4;
   sketch16_receipts_kernel<<<g, 32 * SK16_WARPS, 0, s>>>((const uint4 *)data, j0, n, pk, ys);
   return cudaGetLastError() ? 4 : 0;
 }
@@ -891,19 +1129,29 @@ int rs_pack16(const void *signs, uint32_t *pk, cudaStream_t s) {
   return cudaGetLastError() ? 4 : 0;
 }
 
-// The packed signs of a pass from its stream head (`signs16_kernel`): SK16_PACK words into pk.
-int rs_signs16(const uint8_t *head, int head_len, uint32_t *pk, cudaStream_t s) {
+// The packed signs of a pass from its stream head (`signs_kernel`), the head of the key derived at `rows`: SK16_PACK
+// words into pk at 16 rows, SK64_PACK at 64.
+static int pass_signs(int rows, const uint8_t *head, int head_len, uint32_t *pk, cudaStream_t s) {
   StreamHead h{};
   if (!head || !pk || head_len < 1 || head_len > (int)sizeof h.b || head_len + 8 + 17 > 128) return 1;
   memcpy(h.b, head, head_len);
   h.n = head_len;
-  signs16_kernel<<<1, 128, 0, s>>>(h, pk);
+  if (rows == SK64_ROWS) signs_kernel<SK64_ROWS><<<1, 8 * SK64_ROWS, 0, s>>>(h, pk);
+  else signs_kernel<SK_ROWS><<<1, 8 * SK_ROWS, 0, s>>>(h, pk);
   return cudaGetLastError() ? 4 : 0;
 }
 
-// The fixed messages for `chain_prepare_kernel`, at one window's challenge.  The framing is
-// `verity.commitments.randomness` v2, exactly as `benchmarks/codec_tensor/wt.cu::wt_set_pass` constructs it for
-// WT_RECEIPT=1.
+int rs_signs16(const uint8_t *head, int head_len, uint32_t *pk, cudaStream_t s) {
+  return pass_signs(SK_ROWS, head, head_len, pk, s);
+}
+
+int rs_signs64(const uint8_t *head, int head_len, uint32_t *pk, cudaStream_t s) {
+  return pass_signs(SK64_ROWS, head, head_len, pk, s);
+}
+
+// The fixed messages for `chain_prepare_kernel`, at one window's challenge and the library's rows (`rs_rows`), which
+// the sign key binds.  The framing is `verity.commitments.randomness` v2, exactly as
+// `benchmarks/codec_tensor/wt.cu::wt_set_pass` constructs it for WT_RECEIPT=1.
 int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
   if (!challenge) return 1;
   ChainPass P{};
@@ -942,7 +1190,7 @@ int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
   uint8_t ctx[128];
   int c = 0;
   frame(ctx, c, 's', "k", 1);
-  frame_int(ctx, c, SK_ROWS);
+  frame_int(ctx, c, gRows);
   frame(ctx, c, 's', "n", 1);
   frame_int(ctx, c, BLOCK);
   frame(ctx, c, 's', "tag", 3);
@@ -976,7 +1224,8 @@ int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
 // receipt and receipt-tree constants on this stream.
 int rs_chain_prepare(unsigned i, const uint64_t *previous, uint8_t *seed, uint32_t *pk, cudaStream_t s) {
   if (!previous || !seed || !pk) return 1;
-  chain_prepare_kernel<<<1, CHAIN_THREADS, 0, s>>>(i, previous, seed, pk);
+  if (gRows == SK64_ROWS) chain_prepare_kernel<SK64_ROWS><<<1, 8 * SK64_ROWS, 0, s>>>(i, previous, seed, pk);
+  else chain_prepare_kernel<SK_ROWS><<<1, 8 * SK_ROWS, 0, s>>>(i, previous, seed, pk);
   void *state = nullptr;
   if (cudaGetLastError() || cudaGetSymbolAddress(&state, gChainPass)) return 4;
   uint8_t *p = static_cast<uint8_t *>(state);
@@ -1003,12 +1252,20 @@ int rs_map(const uint64_t *runs, uint64_t nruns, const uint64_t *regions, int nr
   return cudaGetLastError() ? 4 : 0;
 }
 
-// rs_sketch16_receipts over n positions, each read where rs_map's addrs puts it and hashed at its js.
+// rs_sketch16_receipts over n positions, each read where rs_map's addrs puts it and hashed at its js, at the library's
+// rows (`rs_rows`).
 int rs_mapped_receipts(const uint64_t *addrs, const uint64_t *js, uint64_t n, const uint32_t *pk, uint64_t *ys,
                        int ctas, cudaStream_t s) {
   if (!addrs || !js || !pk || !ys || n < 1 || ctas < 0) return 1;
   unsigned g;
-  if (receipts_grid((const void *)mapped16_receipts_kernel, n, ctas, &g)) return 4;
+  if (gRows == SK64_ROWS) {
+    if (shared64((const void *)mapped64_receipts_kernel, K64_MAPPED_RECEIPTS) ||
+        receipts_grid((const void *)mapped64_receipts_kernel, SK64R_SMEM, n, ctas, &g))
+      return 4;
+    mapped64_receipts_kernel<<<g, 32 * SK64R_WARPS, SK64R_SMEM, s>>>(addrs, js, n, (const uint4 *)pk, ys);
+    return cudaGetLastError() ? 4 : 0;
+  }
+  if (receipts_grid((const void *)mapped16_receipts_kernel, 0, n, ctas, &g)) return 4;
   mapped16_receipts_kernel<<<g, 32 * SK16_WARPS, 0, s>>>(addrs, js, n, pk, ys);
   return cudaGetLastError() ? 4 : 0;
 }
@@ -1036,15 +1293,15 @@ static uint64_t kept_at(uint64_t nl, int h0, int h) {
 }
 
 // The consumer CTAs of a pass beside a receipt grid of ctas CTAs, by both kernels' occupancy (an SM holds occ_p receipt
-// CTAs of `producer` or occ_c CTAs of `consumer`): `side` as many as fit in what the receipt grid leaves of the device,
-// at least one an SM, and `tail` the rest of a full device, which take the slots the receipt grid frees when it ends.
-// Neither count bounds progress (`pass_consumer_kernel`); together they are what the device holds once the reads are
-// done.
-static int pass_consumers(const void *producer, const void *consumer, int ctas, size_t shared, uint64_t subtrees,
-                          uint64_t *side, uint64_t *tail) {
+// CTAs of `producer`, each with producer_shared bytes of dynamic shared memory, or occ_c CTAs of `consumer`): `side`
+// as many as fit in what the receipt grid leaves of the device, at least one an SM, and `tail` the rest of a full
+// device, which take the slots the receipt grid frees when it ends. Neither count bounds progress
+// (`pass_consumer_kernel`); together they are what the device holds once the reads are done.
+static int pass_consumers(const void *producer, size_t producer_shared, const void *consumer, int ctas, size_t shared,
+                          uint64_t subtrees, uint64_t *side, uint64_t *tail) {
   int dev, sms, occ_p, occ_c;
   if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
-      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_p, producer, 32 * SK16_WARPS, 0) ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_p, producer, 32 * SK16_WARPS, producer_shared) ||
       cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_c, consumer, CONSUMER_THREADS, shared) ||
       occ_p < 1 || occ_c < 1)
     return 4;
@@ -1057,7 +1314,8 @@ static int pass_consumers(const void *producer, const void *consumer, int ctas, 
 }
 
 // One shard's part of a pass: the n blocks at data, the store's blocks base … base + n − 1 (both whole chunks). Its
-// receipts by one persistent grid of ctas CTAs on sa (`sketch16_pass_kernel`, tensor cores; 0: one an SM), and for
+// receipts by one persistent grid of ctas CTAs on sa (`sketch16_pass_kernel`, or at the library's 64 rows (`rs_rows`)
+// `sketch64_pass_kernel`, pk then the 64-row signs; tensor cores; 0: one an SM), and for
 // h0 <= 8 persistent consumer grids (`pass_consumer_kernel`, `pass_consumers`), one on sb beside the receipt grid and
 // one behind it on sa, that build each 2^h0-leaf subtree as soon as the receipt grid counts its group's tiles done and
 // each chunk's levels up to its root at hc once its subtrees are, so the shard's tree follows the reads without a leaf
@@ -1099,15 +1357,21 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
   const uint64_t ready_blocks = chunk < CONSUMER_READY_BLOCKS ? chunk : CONSUMER_READY_BLOCKS;
   const uint64_t ready_groups = n / ready_blocks;
   if (!ctas && cudaDeviceGetAttribute(&ctas, cudaDevAttrMultiProcessorCount, dev)) return 4;
+  const bool wide = gRows == SK64_ROWS;
+  using Consumer = void (*)(const uint4 *, u64, u64, const u32 *, u64 *, unsigned *, u64 *, u64, u64, int, int, u64);
+  const Consumer consumer = wide ? pass_consumer_kernel<SK64_ROWS> : pass_consumer_kernel<SK_ROWS>;
+  const void *producer = wide ? (const void *)sketch64_pass_kernel : (const void *)sketch16_pass_kernel;
   const size_t tree_shared = 2 * (1ULL << h0) * 8 * sizeof(uint64_t);
-  const size_t shared = tree_shared > CONSUMER_STAGING ? tree_shared : CONSUMER_STAGING;
+  const size_t staging = wide ? CONSUMER_STAGING64 : CONSUMER_STAGING;
+  const size_t shared = tree_shared > staging ? tree_shared : staging;
   uint64_t side = 0, tail = 0;
   int rc;
+  if (wide && shared64(producer, K64_PASS)) return 4;
   if (fused) {
     if (consumers)
       side = (uint64_t)consumers < groups ? (uint64_t)consumers : groups;
-    else if ((rc = pass_consumers((const void *)sketch16_pass_kernel, (const void *)pass_consumer_kernel, ctas, shared,
-                                  groups, &side, &tail)))
+    else if ((rc = pass_consumers(producer, wide ? SK64R_SMEM : 0, (const void *)consumer, ctas, shared, groups, &side,
+                                  &tail)))
       return rc;
     if (groups + side + tail >= (1ULL << 32)) return 1;
   }
@@ -1116,8 +1380,12 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
       cudaStreamWaitEvent(sb, go[dev], 0))
     return 4;
   const unsigned ready_tiles = (unsigned)((fused ? ready_blocks : chunk) / 32);
-  sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, base, pk, ys, ctr, ready_tiles,
-                                                         started);
+  if (wide)
+    sketch64_pass_kernel<<<ctas, 32 * SK64R_WARPS, SK64R_SMEM, sa>>>((const uint4 *)data, n, base, (const uint4 *)pk,
+                                                                     ys, ctr, ready_tiles, started);
+  else
+    sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, base, pk, ys, ctr, ready_tiles,
+                                                           started);
   if (cudaGetLastError()) return 4;
   // These nodes depend on this pass's seed, but not on its receipts: hashed at the start, under the reads.
   if (pad_n) {
@@ -1134,13 +1402,11 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
   // h0 <= 8 fits the consumer's two 2^h0-digest reduction buffers in CUDA's default dynamic-shared-memory limit. Keep the old exact path
   // for diagnostic configurations with larger retained subtrees.
   if (fused) {
-    pass_consumer_kernel<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>((const uint4 *)data, n, base_leaf, pk, ys,
-                                                                           ctr, kept, chunk, ready_blocks, h0, hc,
-                                                                           chunks);
+    consumer<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>((const uint4 *)data, n, base_leaf, pk, ys, ctr, kept,
+                                                               chunk, ready_blocks, h0, hc, chunks);
     if (tail)
-      pass_consumer_kernel<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>((const uint4 *)data, n, base_leaf, pk, ys,
-                                                                             ctr, kept, chunk, ready_blocks, h0, hc,
-                                                                             chunks);
+      consumer<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>((const uint4 *)data, n, base_leaf, pk, ys, ctr, kept,
+                                                                 chunk, ready_blocks, h0, hc, chunks);
   } else {
     for (uint64_t k = 0; k < chunks; ++k) {
       const int slot = k & 1;
@@ -1164,9 +1430,10 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
 
 // The in-place pass (`InPlace.run_pass`) as rs_pass runs a shard's: positions 0 … n − 1, each read where rs_map's
 // addrs puts it and hashed at its js, their receipts into ys (n × 8 words) by one persistent grid of ctas CTAs on sa
-// (`mapped16_pass_kernel`; 0: one an SM), and the receipt tree behind them by persistent consumer grids
-// (`mapped_consumer_kernel`, `pass_consumers`), one on sb beside the receipt grid and one behind it on sa, so the tree
-// follows the reads with no kernel boundary. The tree is `receipts.tree`'s under the pass's constants set: ⌈n / 16⌉
+// (`mapped16_pass_kernel`, at 64 rows `mapped64_pass_kernel`; 0: one an SM), and the receipt tree behind them by
+// persistent consumer grids (`mapped_consumer_kernel`, `pass_consumers`), one on sb beside the receipt grid and one
+// behind it on sa, so the tree follows the reads with no kernel boundary. The tree is `receipts.tree`'s under the
+// pass's constants set: ⌈n / 16⌉
 // leaves, the last short, padded to 2^H leaves (H the least that holds them). Its levels h0 … H (h0 <= min(H, 8)) go
 // to kept, 2^(H − h0 + 1) − 1 digests, level h at the sum of 2^(H − g) over h0 <= g < h, the root last; levels below
 // h0 are not kept. ctr is scratch of ctr_words >= 2 + ⌈n / CONSUMER_READY_BLOCKS⌉ + 2^(H − h0) words. sa waits for the
@@ -1195,20 +1462,28 @@ int rs_mapped_pass(const uint64_t *addrs, const uint64_t *js, uint64_t n, const 
   const uint64_t words = 2 + groups + subtrees;
   if (ctr_words < words) return 1;
   if (!ctas && cudaDeviceGetAttribute(&ctas, cudaDevAttrMultiProcessorCount, dev)) return 4;
+  const bool wide = gRows == SK64_ROWS;
+  using Consumer = void (*)(const u64 *, const u64 *, u64, const u32 *, u64 *, unsigned *, u64 *, int, int);
+  const Consumer consumer = wide ? mapped_consumer_kernel<SK64_ROWS> : mapped_consumer_kernel<SK_ROWS>;
+  const void *producer = wide ? (const void *)mapped64_pass_kernel : (const void *)mapped16_pass_kernel;
   const size_t tree_shared = 2 * (1ULL << h0) * 8 * sizeof(uint64_t);
-  const size_t shared = tree_shared > CONSUMER_STAGING ? tree_shared : CONSUMER_STAGING;
+  const size_t staging = wide ? CONSUMER_STAGING64 : CONSUMER_STAGING;
+  const size_t shared = tree_shared > staging ? tree_shared : staging;
   uint64_t side, tail;
   int rc;
-  if ((rc = pass_consumers((const void *)mapped16_pass_kernel, (const void *)mapped_consumer_kernel, ctas, shared,
-                           subtrees, &side, &tail)))
+  if (wide && shared64(producer, K64_MAPPED_PASS)) return 4;
+  if ((rc = pass_consumers(producer, wide ? SK64R_SMEM : 0, (const void *)consumer, ctas, shared, subtrees, &side,
+                           &tail)))
     return rc;
   unsigned *started = ctr + 2 + groups;
   if (cudaMemsetAsync(ctr, 0, 4 * words, sa) || cudaEventRecord(go[dev], sa) || cudaStreamWaitEvent(sb, go[dev], 0))
     return 4;
-  mapped16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>(addrs, js, n, pk, ys, ctr, started);
-  mapped_consumer_kernel<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>(addrs, js, n, pk, ys, ctr, kept, h0, H);
-  if (tail)
-    mapped_consumer_kernel<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>(addrs, js, n, pk, ys, ctr, kept, h0, H);
+  if (wide)
+    mapped64_pass_kernel<<<ctas, 32 * SK64R_WARPS, SK64R_SMEM, sa>>>(addrs, js, n, (const uint4 *)pk, ys, ctr, started);
+  else
+    mapped16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>(addrs, js, n, pk, ys, ctr, started);
+  consumer<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>(addrs, js, n, pk, ys, ctr, kept, h0, H);
+  if (tail) consumer<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>(addrs, js, n, pk, ys, ctr, kept, h0, H);
   if (cudaGetLastError() || cudaEventRecord(end[dev], sb) || cudaStreamWaitEvent(sa, end[dev], 0)) return 4;
   return 0;
 }
@@ -1263,7 +1538,8 @@ int rs_enable_peers(void) {
 // What the openings of a pass need below its kept levels, recomputed from the store under the pass constants set: for
 // each first leaf c[q] (a multiple of 2^h0, c on the device), the subtree's 16 · 2^h0 receipts into
 // ys + q · 16 · 2^h0 · 8 and its levels 0 … h0 − 1 into nodes + q · (2^(h0+1) − 2) · 8, level 0 first, in one launch for
-// the receipts, one for the leaves and one a level; pk is the pass's packed signs. Every leaf of the pass must be whole
+// the receipts, one for the leaves and one a level; pk is the pass's packed signs at the library's rows. Every leaf of
+// the pass must be whole
 // (positions a multiple of 16). data is a shard whose first block is the store's block base, which holds every
 // subtree in c.
 int rs_subtrees(const void *data, uint64_t base, const uint32_t *pk, const uint64_t *c, uint64_t count, int h0,
@@ -1271,8 +1547,14 @@ int rs_subtrees(const void *data, uint64_t base, const uint32_t *pk, const uint6
   if (!data || !pk || !c || !ys || !nodes || h0 < 1 || h0 > 20 || h0 + 1 > NODE_LEVELS) return 1;
   if (!count) return 0;
   const uint64_t tiles = count << (h0 + PER_LEAF_LOG2 - 5);
-  subtree_receipts_kernel<<<grid(tiles, SK16_WARPS) , 32 * SK16_WARPS, 0, s>>>((const uint4 *)data, base, c, h0,
-                                                                               pk, ys, tiles);
+  if (gRows == SK64_ROWS) {
+    if (shared64((const void *)subtree64_receipts_kernel, K64_SUBTREES)) return 4;
+    subtree64_receipts_kernel<<<grid(tiles, SK64R_WARPS), 32 * SK64R_WARPS, SK64R_SMEM, s>>>(
+        (const uint4 *)data, base, c, h0, (const uint4 *)pk, ys, tiles);
+  } else {
+    subtree_receipts_kernel<<<grid(tiles, SK16_WARPS) , 32 * SK16_WARPS, 0, s>>>((const uint4 *)data, base, c, h0,
+                                                                                 pk, ys, tiles);
+  }
   subtree_leaves_kernel<<<grid(count << h0, 128), 128, 0, s>>>(ys, c, h0, count << h0, nodes);
   for (int h = 0; h + 1 < h0; ++h)
     subtree_level_kernel<<<grid(count << (h0 - h - 1), 128), 128, 0, s>>>(nodes, c, h0, h, count << (h0 - h - 1));
