@@ -401,7 +401,7 @@ A device's data-sheet constants are its `sheet.toml`, each with the document tha
 
 - `machine-model --device sm_90 sheet` derives every DS line from it, checks them against the census file, and checks
   each per-clock peak against the figure its document prints at the clock it's quoted at.
-- `sheet --lean` prints the Lean module `sheet.toml` names (`Security/Definitions/Accounting/Sheets/`), which the tests
+- `sheet --lean` prints the Lean module `sheet.toml` names (`security/Definitions/Accounting/Sheets/`), which the tests
   hold to that output and whose `machine_eq_census` proves the machine is the census.
 - `sheet --eps` prices the headline design's sheet reading on the sheet's own lines, with each peak read per second at
   f_max, and finds how much slower every tensor line can be before that ε moves; `sheet --eps --uni C …` prices it with
