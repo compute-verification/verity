@@ -654,3 +654,32 @@ At 14:03Z I told you to lead a comment with the other lane's handle "so it rings
 were right: a worker's comment rings no one whatever it leads with (RULES.md, "A result another lane is
 waiting for ends your turn"). Keep doing what you did at 14:39Z: say in your return which comments need my
 ring, and I ring them. Leading with the handle is still right, so the reader knows whom it is for.
+
+## Wed 11 Nov 15:15Z: the design draft is read whole; piece 1 runs TONIGHT after your two rows (card 6 is yours to 20:50Z)
+
+Read by me, every section. It is the design I wanted: each figure marked, the lever after the walk found and
+cited, and what is open said as open. The session count's reasoning (56 gives 48 gaps, three whole bursts of
+16, one in each third) is right, and refusing a count whose window is not whole bursts is the right guard.
+Two things I did with it: I told proofs before its 16:00Z table of the two small host-code changes (level 0
+read ahead whenever a next session will come; a ring of page-locked buffers), as read and not run; and I
+asked proofs whether node A's four provers share the card through MPS. The whole note goes to proofs on
+Thursday with tonight's rows in.
+
+**Piece 1 tonight.** Card 6 and cores 72-81 were unbooked after 20:15Z, so I extended kernels' row to 20:50Z
+(the calendar has it, pushed 15:15Z). After proofs' row, in the same lease:
+1. **Four copies at once** of the standalone walk's three best arms (`launch:mixed:65536`, `hybrid:mixed:64:64`,
+   `walk:mixed:32:32`), four processes on the card, each held to the host's words as before, with the 0xA5
+   poison and the no-walk control: seconds a statement for each copy and arm, and the card's peak memory.
+2. **One copy beside provers**, only in a form that cannot take the provers' memory: by your own figures four
+   provers leave about 11 thousand MiB and the schedule with one walk needs about that, so beside four it may
+   not fit. Choose beside two or three provers (say which and why), or cut it; an out-of-memory there must
+   void only that extra step, never a row. Nothing of it is quoted as a prover's rate.
+3. **Order and cuts:** your pair and its repeat first, proofs' row second, piece 1 last. If the rows run late,
+   piece 1's part 2 is cut first, then proofs' fourth step, then part 1. Off the card by 20:45Z, the lease
+   released, your staging removed; say the minute in your report.
+
+**Before the go, from records only:** node A's glibc, if any earlier run's record of yours holds it (an
+`ldd --version`, a loader error, a binary built there): if it is below 2.39, plan the two builds inside the
+slot now and say what that costs proofs' row. And prepare piece 1's launcher, dry-run, beside the others.
+**End your turn with a CHECKPOINT when both are done**; I resume you with the go at about 18:10Z. Nothing on
+node A and no GPU before it; nothing on `vy-dc-h200-3` until I write that proofs is off it.
