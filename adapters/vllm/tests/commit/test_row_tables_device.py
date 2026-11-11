@@ -6,6 +6,7 @@ C++ compiler; the device tests need CUDA and nvcc, and skip elsewhere.  What a b
 compiler that only records it, on every machine."""
 from __future__ import annotations
 
+import tempfile
 from collections import deque
 from pathlib import Path
 
@@ -94,8 +95,9 @@ def test_a_build_hands_its_compiler_no_path_in_the_tree(tmp_path, monkeypatch):
     out = argv[argv.index("-o") + 1]
     assert argv == [*flags, "-o", out, "row_table.cu"] and not any("/" in a for a in argv if a != out)
     assert Path(out).parent == lib.parent and lib.parent.parent == tmp_path / "built" and lib.stat().st_size > 0
-    cwd = (rec / "cwd").read_text().strip()
-    assert cwd.startswith("/tmp/verity-build.") and len(cwd) == len("/tmp/verity-build.XXXXXXXX") and not Path(cwd).exists()
+    stage = Path((rec / "cwd").read_text().strip())
+    assert stage.name.startswith("verity-build.") and stage.parent.resolve() == Path(tempfile.gettempdir()).resolve()
+    assert not stage.exists()
     assert set((rec / "files").read_text().split()) == {Path(s).name for s in sources} | {p.name for p in D.SHARED}
     (rec / "argv").unlink()
     assert D.built(tool, sources, flags, "librow_table_cuda.so", D.SHARED) == lib and not (rec / "argv").exists()

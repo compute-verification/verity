@@ -66,7 +66,7 @@ class Args(ctypes.Structure):
 def built(tool: str, sources: Sequence[str], flags: Sequence[str], name: str, headers: Sequence[Path] = ()) -> Path:
     """``sources``' last (of `CUDA_DIR`) compiled by ``tool`` with ``flags`` into ``name``, keyed by the sources, the
     ``headers`` it includes from elsewhere, the flags and the compiler's version.  It compiles a flat copy of the sources and
-    headers in a fresh directory at a path of one length, each file under its base name and the last source named by it, so
+    headers in a fresh directory of the system's temporary one, each file under its base name and the last source named by it, so
     the compiler is handed no path in the tree, and ``sources`` and ``headers`` are every file the build reads: an include
     they leave out isn't found.  Two different files with one base name are refused (a file named twice is one file)."""
     files: dict[str, Path] = {}
@@ -86,7 +86,7 @@ def built(tool: str, sources: Sequence[str], flags: Sequence[str], name: str, he
     if not lib.exists():
         lib.parent.mkdir(parents=True, exist_ok=True)
         tmp = lib.with_suffix(f".{os.getpid()}.tmp")
-        stage = Path(tempfile.mkdtemp(prefix="verity-build.", dir="/tmp"))
+        stage = Path(tempfile.mkdtemp(prefix="verity-build."))
         try:
             for p in files.values():
                 shutil.copy(p, stage)
