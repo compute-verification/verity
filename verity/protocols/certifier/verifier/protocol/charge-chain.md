@@ -207,9 +207,12 @@ and the window difftest holds them to it: the certifier program's `NetworkCertif
 (`CodeChargesWhole`), gives what `reference_window` gives on 4,000 instances (`device/program/lean/scripts/window_vectors.py`), among
 them a window whose length terms charge 2^20 − 1 bits and one charging 2^20, which it refuses.
 
-**The slice.** The compile slice's class runs with the network certifier's ingress, so its windows send no order
-entries, and v1's windows send no hits. `CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-charge` as above, which counts no
-length terms. `CompileSlice_v7` (`compile_slice_v7`, the served windows' slice) charges them with
+**The slice.** The compile slice's class runs inside the pool bound with the network certifier's ingress, so its
+windows send no order entries, and v1's windows send no hits. A session where the pool's eviction changed a hit is
+outside the class: the slice's cache never evicts, so its rows aren't the served ones and ``rows`` refuses. Such a
+session needs a pool slice (`CompileSlice_v2` on, `compile_slice_v2`), and no pool slice charges the length terms yet.
+`CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-charge` as above, which counts no length terms.
+`CompileSlice_v7` (`compile_slice_v7`, the served windows' slice) charges them with
 `ChargeLink_v2{D, 0, 0, K}`: a length slot for each of ``cert``'s K arrival slots, qen its ``a_valid``, mt its certified
 max_tokens ``a_mt`` and olen its certified output length, so no slot is free witness. What holds ``cert`` to the
 certified record is a stand-in, the honest cert row under the certifier's salt, until max_tokens is read from the
