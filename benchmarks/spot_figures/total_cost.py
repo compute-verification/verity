@@ -17,9 +17,9 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
   two-stage one.  `tokens_bi` replays a request alone, which needs batch-invariant kernels and pays their tax, the
   comparison.  Exfiltration is its patterns' form
   (`card_influenceTwo_le_patterns`), never above the scope's served bits (`card_influenceTwo_le_two_pow_outs`), at
-  one machine's registration and, as `tokens_pod` and `tokens_datacenter`, at a pod's and a datacenter's
-  (`REGISTRATIONS`); `tokens_sets` is the capped sets' form (`card_influenceTwo_le_served_min`, at most the served bits
-  by `card_influenceTwo_le_min`) at one machine's, the comparison.  Infiltration is its write form (`write_form`) at a
+  a verification phase of one machine's window and, as `tokens_pod` and `tokens_datacenter`, of a pod's and a
+  datacenter's (`REGISTRATIONS`); `tokens_sets` is the capped sets' form (`card_influenceTwo_le_served_min`, at most
+  the served bits by `card_influenceTwo_le_min`) at one machine's, the comparison.  Infiltration is its write form (`write_form`) at a
   footprint of a request's served bits: an incorrect request is charged at most the cheapest explanation of what it
   serves.
 * `layer_of_token` (B): serving also commits each layer's residual stream, K/V and indexer keys; the audit samples a
@@ -27,7 +27,7 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
   batch at that layer.  Exfiltration is the planner's design on that grain in the capped sets' form, each sampled
   layer charged at most its request's served bits, which is at least the lemma's charge because min(·, S) is
   subadditive, and never above the scope's served bits.  Infiltration is its write form at a footprint of the layer's boundary bits.
-* `per_expert` (A′): (A)'s serving, tax, forms and registrations on another cut of the circuit, the model's
+* `per_expert` (A′): (A)'s serving, tax, forms and verification phases on another cut of the circuit, the model's
   `partition` card `per-expert` (the MoE cut per expert: the router's slots, table reads at each slot's expert and
   per-expert GEMMs), labelled with the card's `label`; lines only for a model with that card.
 * `every_block` (C): serving commits every proof block's outputs, and the audit samples them one-stage; its tax is a
@@ -45,8 +45,12 @@ error.
 
 Each configuration's two panels read one design, the one with the least exfiltration bound at β; skipped work is
 planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A
-two-stage statement holds one Definition's sampled proof blocks of a sampled request, or of a registration's sampled
-requests, its sessions padded to a public cap that every registration pays (`optimize.two_stage_statements`), each
+two-stage line's first stage is the one the verifier runs: a verification phase (`REGISTRATIONS`) samples a whole count
+K of its requests, at least one (`optimize.two_stage_design`'s `registration`), so each point is priced and bounded
+at K over the phase's requests, and a β that does not pay for one sampled request a verification phase has no design:
+the line is at the scope's served bits there, with what one sampled request costs against the phase's budget
+(`sample_budgets`).  A two-stage statement holds one Definition's sampled proof blocks of a sampled request, or of the
+verification phase's K sampled requests (`optimize.two_stage_statements`), each
 Definition taking whichever costs less.  `breakeven` gives each patterns'-form
 line's marginal overhead and β at which its bound reaches the weights, at FP8 and FP4, each certified by Lean unless
 `lean` is off (`certify`: at the β it gives, the bits Lean certifies for the planner's design are at most the weights).
@@ -72,7 +76,7 @@ from textwrap import fill
 import cards as spot_cards
 import figure1 as f1
 from verity.protocols.spot import plancheck
-from verity.protocols.spot.optimize import Cell, leak_count, two_stage_design, two_stage_price
+from verity.protocols.spot.optimize import Cell, leak_count, two_stage_design, two_stage_exfil, two_stage_price
 
 SCHEMA = "spot-figure1/v2"
 #: β, the share of compute for replays and proofs, from 0.01% to 1,000% at four points a decade, and the design card's:
@@ -110,8 +114,9 @@ STATEMENT_BITS = 2 ** 35
 class Configuration:
     """A line: its label, what serving commits, its replay block and design, and the panels it bounds; the `partition`
     card it cuts the circuit by (else the `workload` card's cut) and the configuration whose serve tax it pays (else
-    its own).  A two-stage line charges each request in the capped sets' or patterns' `form` and shares statements
-    within its `registration` (`REGISTRATIONS`); a variant of another line (`variant_of`) differs from it only there.
+    its own).  A two-stage line charges each request in the capped sets' or patterns' `form`; its `registration` is
+    its verification phase's size (`REGISTRATIONS`), of which the first stage samples a whole count and within which
+    statements are shared; a variant of another line (`variant_of`) differs from it only there.
     Its `replay` is what a sampled replay block re-runs (`REPLAYS`)."""
 
     label: str
@@ -134,25 +139,28 @@ class Configuration:
 REPLAYS = ("block", "step", "request")
 
 
-#: a 64-machine pod: one committer gathering its machines' boundary rows into one registration
+#: a 64-machine pod: one committer gathering its machines' boundary rows into one committed trace
 POD = 64
-#: an interior registration's span over the census window: one machine, a pod or every machine of the census
-#: datacenter; its sampled requests fill each Definition's statements together, up to the cap
+#: a verification phase's size, the machines whose census window one committed trace and its sample cover: one
+#: machine, a pod or every machine of the census datacenter.  The first stage samples a whole count of its requests,
+#: and they fill each Definition's statements together
 REGISTRATIONS = {"machine": "one machine's", "pod": f"a {POD}-machine pod's", "datacenter": "a datacenter's"}
-#: a two-stage design's registration: the requests it samples (Q), its public cap (K0), and the shares of proving in
-#: its statements and on their padding
-REG = ("registration_sample", "registration_cap", "shared", "padding")
+#: a two-stage point's verification phase: the requests it samples (K, 0 where no design is within the budget), the
+#: shares of proving in its statements and on their padding, and what one sampled request costs over the phase's
+#: budget (`sample_budgets`: under the point's design at K = 1, so the design fits a phase that many times this
+#: one's size; with no design, under the planner's least one, a single proof block proved)
+REG = ("registration_sample", "shared", "padding", "sample_budgets")
 
 
 def registration_gpu_seconds(name: str, c: dict[str, f1.InputCard]) -> float:
-    """A registration's GPU-seconds: its machines' GPUs over the census window."""
+    """A verification phase's GPU-seconds: its machines' GPUs over the census window."""
     machines = {"machine": 1, "pod": POD, "datacenter": c["datacenter_machines"].value}[name]
     return machines * c["machine_gpus"].value * c["window"].value
 
 
 def _spans(name: str, line: Configuration) -> dict[str, Configuration]:
-    """A request-grain line at every registration in the patterns' form, and at its own in the capped sets' form, the
-    comparison, for exfiltration only."""
+    """A request-grain line at every size of verification phase in the patterns' form, and at its own in the capped
+    sets' form, the comparison, for exfiltration only."""
     other = {f"{name}_{r}": replace(line, registration=r, serve=line.serve or name, variant_of=name)
              for r in REGISTRATIONS if r != line.registration}
     return {name: line} | other | {f"{name}_sets": replace(line, form="sets", panels=("exfiltration",),
@@ -400,7 +408,7 @@ def computed_proving(cells: list[Cell], row: dict, computed: tuple[bool, ...]) -
     samples a few blocks of a type pays its statement's fixed cost on them, so this can be far above the type's share
     of the marginal."""
     split = f1.split_cells(cells, row["merged"])
-    at = (row["k"], row["q"], row["registration"])
+    at = (row["k"], row["registration_sample"])
     whole = two_stage_price(split, *at)[2]
     measured = two_stage_price([replace(c, prove=0.0, fixed=0.0) if x else c
                                 for c, x in zip(split, computed, strict=True)], *at)[2]
@@ -440,9 +448,12 @@ def _plan(row: dict | None) -> dict | None:
 
 def _point(job: tuple) -> dict:
     """One configuration's bounds at one budget, in GPU-seconds: each panel's, with the plan and, for the capped
-    exfiltration, which of the count and the served bits binds, the requests a registration samples and its cap (`REG`),
-    and the computed share of its design's proving.  A two-stage line's `form` and its registration's replay blocks
-    (`span`) come with it; with `lean`, Lean's check of each line's designs (`figure1.lean_check`, `figure1.lean_two`)."""
+    exfiltration, which of the count and the served bits binds, the requests a verification phase samples and what one
+    costs (`REG`), and the computed share of its design's proving.  A two-stage line's `form` and its verification
+    phase's replay blocks (`span`) come with it; with `lean`, Lean's check of each line's designs
+    (`figure1.lean_check`, `figure1.lean_two`).  Where the budget pays for no sampled replay block of a verification
+    phase there is no design: the point is the trivial one, every replay block charged whole, with nothing for Lean to
+    check."""
     name, m, g, budget, computed, form, span, lean = job
     served = f1.served_total(m)
     if name == "every_block":
@@ -462,15 +473,29 @@ def _point(job: tuple) -> dict:
                 "infiltration": {"y": written, "plan": _plan(leak["row"]), **checked["leak"]},
                 "skipped_work": {"y": work["bound"], "binds": "trivial" if work["capped"] else "count",
                                  "plan": _plan(work["row"]), **checked["work"]}}
-    row = two_stage_design(g.cells, g.replay_blocks, m.delta, budget=budget, replay=g.replay, h=m.byte_s,
+    cells = list(g.cells)
+    row = two_stage_design(cells, g.replay_blocks, m.delta, budget=budget, replay=g.replay, h=m.byte_s,
                            served=m.served, union=form == "patterns", registration=span)
-    count, checked = (f1.lean_two(g.cells, g.replay_blocks, row, m.delta, m.served, form == "patterns") if lean
+    one = g.replay + sum(x.n * x.commit_bytes for x in cells) * m.byte_s
+    phase = budget / g.replay_blocks * span
+    if row is None:
+        count = two_stage_exfil(cells, {x.stratum: 1 for x in cells}, g.replay_blocks, 0.0, m.delta, m.served,
+                                form == "patterns")
+        top = min(g.footprint, sum(x.n * x.bits for x in cells))
+        one += two_stage_price([replace(x, stratum=0) for x in cells], {0: 1}, 1)[2]
+        return {"exfiltration": {"y": min(count, served), "count": count, "binds": "served", "plan": None,
+                                 **({"lean": None, "planner": None, "theta": None} if lean else {}),
+                                 "registration_sample": 0, "shared": 0.0, "padding": 0.0,
+                                 "sample_budgets": one / phase, "computed_proving": None},
+                "infiltration": {"y": g.replay_blocks * top, "plan": None}}
+    count, checked = (f1.lean_two(cells, g.replay_blocks, row, m.delta, m.served, form == "patterns") if lean
                       else (row["bound"], {}))
+    one += two_stage_price(f1.split_cells(cells, row["merged"]), row["k"], 1)[2]
     return {"exfiltration": {"y": min(count, served), "count": count,
                              "binds": "served" if served <= count else "count", "plan": _plan(row), **checked,
-                             **{k: row[k] for k in REG},
-                             "computed_proving": computed_proving(list(g.cells), row, computed)},
-            "infiltration": {"y": write_form(list(g.cells), row, g.replay_blocks, m.delta, g.footprint),
+                             **{k: row[k] for k in REG if k in row}, "sample_budgets": one / phase,
+                             "computed_proving": computed_proving(cells, row, computed)},
+            "infiltration": {"y": write_form(cells, row, g.replay_blocks, m.delta, g.footprint),
                              "plan": _plan(row)}}
 
 
@@ -512,14 +537,22 @@ def captions(out: dict, scope: str) -> dict[str, str]:
     at = out["betas"].index(f1.RATIO_BUDGET) if f1.RATIO_BUDGET in out["betas"] else None
 
     def at_ratio(name: str) -> str:
-        """A two-stage line at β = `RATIO_BUDGET`: its bound, its statements' sharing and its computed proving."""
+        """A two-stage line at β = `RATIO_BUDGET`: its bound, the requests its verification phase samples, its
+        statements' sharing, its computed proving and the least verification phase its design fits; or that no design
+        is within the budget, and what one sampled request costs against it."""
         if at is None:
             return ""
         s = lines["exfiltration"][name]
-        shared = (f"{_share(s['shared'][at])} of its proving in the registration's statements, "
+        if not s["registration_sample"][at]:
+            return (" no design within the budget: one sampled replay block costs "
+                    f"{s['sample_budgets'][at]:,.3g} budgets;")
+        shared = (f"{_share(s['shared'][at])} of its proving in the verification phase's statements, "
                   f"{_share(s['padding'][at])} padding" if s["shared"][at] else "its own statements")
-        return (f" {_size(s['y'][at])}; Q = {s['registration_sample'][at]:.2g}, K0 = {s['registration_cap'][at]:,}: "
-                f"{shared}; {_share(s['computed_proving'][at])} of its sampled request's proving computed;")
+        least = s["sample_budgets"][at] * regs[conf[name]["registration"]]["machines"]
+        return (f" {_size(s['y'][at])}; K = {s['registration_sample'][at]:,} sampled: "
+                f"{shared}; {_share(s['computed_proving'][at])} of its sampled request's proving computed; one "
+                f"sampled request of this design costs the budget of {least:,.3g} machines' {window:g} s, the least "
+                f"verification phase it fits (one machine's {least * window / 3600:,.3g} hours);")
 
     head = (f"{f1.ROLES} {f1.TRUST} "
             "x is the serve tax, what each configuration's change to the production server costs on every token, plus "
@@ -536,17 +569,22 @@ def captions(out: dict, scope: str) -> dict[str, str]:
             "serving's busy GPU-seconds (0.97× to 1.02× measured), and a sampled layer of one token its engine step's "
             "whole batch at that layer.")
     regs, window = out["registrations"], out["inputs"]["window"]["value"]
-    head += (f" A two-stage statement holds one Definition's sampled proof blocks of a sampled request (of (B), a "
-             f"sampled layer of one token) or of a registration's: a registration spans the {window:g} s window on one machine "
+    head += (f" A two-stage line's first stage is the one the verifier runs. A verification phase, one committed "
+             f"trace and the sample over it, spans the {window:g} s window on one machine "
              f"({out['inputs']['machine_gpus']['value']:g} GPUs), on a {POD}-machine pod or on a datacenter's "
-             f"{regs['datacenter']['machines']:,.0f} machines, its statements' sessions padded to a public cap of K0 "
-             "sampled requests' blocks, the least with P(K > K0) ≤ 2^−40 at the Q it samples, a sample past it refused; "
-             "every registration proves its padding, whatever it samples, and each Definition takes the "
-             "registration's statements only where they cost less than its own. The registration and its statements' "
-             "split are the protocol's, fixed before any coin, never the prover's. Each two-stage line gives at "
-             f"β = {_share(f1.RATIO_BUDGET)} its bound, Q and K0, the shares of its proving in the registration's "
-             "statements and on padding, and the share of its sampled request's proving, the statements' fixed "
-             "costs included, that is computed.")
+             f"{regs['datacenter']['machines']:,.0f} machines, and its first stage samples a whole number K of its "
+             "requests (of (B), its layers of one token), never fewer than one: each point is priced and bounded at "
+             "K over the phase's requests, and where β does not pay for one of them no design is within the budget "
+             "and the line is at everything the scope serves. No code builds a verification phase of a datacenter's "
+             "size, one committer over every machine's boundary rows: that line is the cost model's. A two-stage "
+             "statement holds one Definition's sampled proof blocks of a sampled request or of the verification "
+             "phase's K, its sessions padded to one size, and each Definition takes the phase's statements only "
+             "where they cost less than its own. The verification phase, its K and its statements' split are the "
+             "protocol's, fixed before any coin, never the prover's. Each two-stage line gives at "
+             f"β = {_share(f1.RATIO_BUDGET)} its bound and K, the shares of its proving in the phase's statements "
+             "and on padding, the share of its sampled request's proving, the statements' fixed costs included, "
+             "that is computed, and the least verification phase its design fits; or that no design is within "
+             "the budget, and what one sampled replay block costs against it.")
     a, b, c = CONFIGURATIONS["tokens"], CONFIGURATIONS["layer_of_token"], CONFIGURATIONS["every_block"]
     short = a.label.split(" ")[0]
     served, betas = out["served_bits_request"], out["betas"]
@@ -574,7 +612,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         own = [n for n in variants(name, "patterns") if n in lines["exfiltration"]]
         spans = [REGISTRATIONS[conf[n]["registration"]] for n in own]
         text = (f" {conf[name]['label']} ({style}, dark to light: {', '.join(spans[:-1])} and {spans[-1]} "
-                f"registration): {what}" + "".join(span(n) for n in own))
+                f"verification phase): {what}" + "".join(span(n) for n in own))
         for n in variants(name, "sets"):
             r = regs[conf[n]["registration"]]["label"]
             text += (f" {conf[n]['label']} in the capped sets' form (dashed, thin; {r}), for comparison: "
@@ -592,7 +630,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
                                 f"cut ({k['label']}), its marginal proof overhead {conf[n]['overhead']:.3g}×, "
                                 f"{_share(conf[n]['computed_share'])} of it computed; the same forms.")
                          for n, k in cuts.items())
-    infil_cuts = "".join(f" {conf[n]['label']} (dash-dot, the same registrations): {short}'s footprint at its own "
+    infil_cuts = "".join(f" {conf[n]['label']} (dash-dot, the same verification phases): {short}'s footprint at its own "
                          "designs." for n in cuts)
     trivial = [tag(n) for n, s in lines["exfiltration"].items()
                if at is not None and s["binds"][at] == "served"]
@@ -623,7 +661,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
               + f": {_binds(betas, lines['exfiltration']['every_block']['binds'])}.")
     infil = (f" The write form: the bits the incorrect proof blocks write, each sampled request or layer charged at "
              f"most its footprint, at the design its exfiltration line plans. {a.label} (solid, dark to light: its "
-             f"registrations): a footprint of a request's {served:,.0f} served bits, the cheapest explanation of what "
+             f"verification phases): a footprint of a request's {served:,.0f} served bits, the cheapest explanation of what "
              f"it serves (the served form).{infil_cuts} {b.label} ({regs[b.registration]['label']}): a footprint of "
              f"its {out['footprint_bits'][1]:,.0f} boundary bits, written wherever they sit. {c.label} (dashed): the K "
              "incorrect blocks the plan detects, each the widest block's bits. The two-stage write forms need a harm "
@@ -715,7 +753,7 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
                            "ands": f1.cap(bases[s.name], "work") * c["ands_per_mac"].value / 2} for s in chosen}
     used = {conf.partition: cuts[conf.partition] for conf in confs.values() if conf.partition}
     per_gpu_s = chosen[0].requests / chosen[0].gpu_seconds
-    registrations = {r: {"label": f"{label} {c['window'].value:g} s registration",
+    registrations = {r: {"label": f"{label} {c['window'].value:g} s verification phase",
                          "machines": registration_gpu_seconds(r, c) / (c["machine_gpus"].value * c["window"].value),
                          "gpu_seconds": registration_gpu_seconds(r, c),
                          "requests": per_gpu_s * registration_gpu_seconds(r, c)} for r, label in REGISTRATIONS.items()}
@@ -879,7 +917,7 @@ def breakeven_table(be: dict) -> str:
     point Lean certifies, marked "(served)" where the served bits bind there, and "uncertified" where Lean's bits stay
     above the target."""
     names, lean = list(be["targets"]), be.get("lean") is not None
-    head = (["line", "registration", "scope", "h", "floor"] + [f"h for {n} at β = {_share(be['beta'])}" for n in names]
+    head = (["line", "verification phase", "scope", "h", "floor"] + [f"h for {n} at β = {_share(be['beta'])}" for n in names]
             + [f"β for {n}" for n in names])
 
     def fmt(v: float | None, end: float) -> str:
@@ -926,7 +964,7 @@ PRIMARY, SECONDARY = f1.PRIMARY, f1.SECONDARY
 SECONDARY_LINE, SECONDARY_STYLE = "tokens", ("#6A51A3", (0, (5, 2)), 2.0)
 #: references closer than this factor stagger their labels: the lowest below its line, the rest alternating sides
 CROWDED = 2.5
-#: each configuration's colour, line style and width: a line's registrations dark to light, each narrower so that one
+#: each configuration's colour, line style and width: a line's verification phases dark to light, each narrower so that one
 #: plotted over another shows; the sets' form thin and dashed; (C) dashed, its tax a lower bound
 CUT, SETS = (0, (7, 2, 1.5, 2)), (0, (3, 2))
 STYLE = {"tokens": ("#08306B", "-", 4.2), "tokens_pod": ("#2171B5", "-", 2.8),
@@ -1024,7 +1062,7 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
 
 
 def legend(out: dict, name: str) -> str:
-    """A line's legend entry: its label, its registration and form where its line has variants, and a cut's label on
+    """A line's legend entry: its label, its verification phase and form where its line has variants, and a cut's label on
     the cut's own line."""
     k = out["configurations"][name]
     if name == "every_block":

@@ -443,10 +443,10 @@ def reading(sc: dict, c: dict[str, InputCard], part: TokenBlocks) -> dict:
             "assumed_tokens_per_gpu_second": c["mfu_serve"].value * c["peak_flops"].value / (2 * part.served_macs)}
 
 
-#: where a bound priced at a sampling rate holds, said in every caption that prints a bound beside the measured rate
-REGISTRATION_NOTE = ("A bound priced at a sampling rate q holds at a registration of 1/q requests: the plan counts q·n "
-                     "sampled of a registration's n, and the first stage draws at least ⌈q·n⌉, never fewer than one. "
-                     "No bound here is what serving costs at a smaller registration.")
+#: the verification phase a two-stage bound holds at, said in every caption that prints a bound beside the measured rate
+REGISTRATION_NOTE = ("A two-stage bound holds at its verification phase's size: the first stage samples a whole "
+                     "number of the phase's requests, never fewer than one, and the plan is priced and bounded at "
+                     "that count. No bound here is what serving costs at a smaller verification phase.")
 
 
 def outdir(out: Path, serving: str) -> Path:
@@ -457,7 +457,7 @@ def outdir(out: Path, serving: str) -> Path:
 
 def reading_note(serving: dict) -> str:
     """What every caption at the measured reading carries: the rate the figure was planned at, whether it is a floor
-    (and that its bounds then are), what it stands in place of, and the registration its bounds hold at
+    (and that its bounds then are), what it stands in place of, and the verification phase its bounds hold at
     (`REGISTRATION_NOTE`)."""
     rate, assumed = serving["tokens_per_gpu_second"], serving["assumed_tokens_per_gpu_second"]
     what = ("above which the engine computed no more" if serving["saturated"]

@@ -279,7 +279,7 @@ def test_a_computed_types_fixed_cost_counts_in_its_share_of_proving():
     """Two of a hundred narrow blocks sampled pay their statement's whole fixed cost, so a computed type at 2 of a
     sampled replay block's 3 marginal seconds is 52 of its 53."""
     cells = [Cell(100, 16, prove=1.0, fixed=50.0, cap=1000), Cell(1, 64, stratum=64, prove=1.0, cap=10)]
-    row = {"merged": 16, "k": {0: 2, 64: 1}, "q": .5, "registration": 0.0}
+    row = {"merged": 16, "k": {0: 2, 64: 1}, "registration_sample": 0}
     assert t.computed_proving(cells, row, (True, False)) == pytest.approx(52 / 53, rel=1e-12)
     assert (t.computed_proving(cells, row, (False, False)), t.computed_proving(cells, row, (True, True))) == (0, 1)
     with pytest.raises(ValueError):
@@ -309,8 +309,9 @@ def measured(tmp_path_factory) -> dict:
 @pytest.mark.slow
 def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     """The planned scope: each line's x is its tax plus β, a measured tax as it comes; the exfiltration lines never
-    above the served bits, saying which term binds, a wider registration never above a narrower one, sampling more
-    requests under a cap past them, and the patterns' form below the sets' wherever it doesn't reach the served bits;
+    above the served bits, saying which term binds, a wider verification phase never above a narrower one, sampling
+    a whole count of its requests or, where one is over the budget, none, at the served bits with no plan, and the
+    patterns' form below the sets' wherever it doesn't reach the served bits;
     both infiltration lines plotted, and (C)'s falling with β; skipped work only for (C); the captions name what each
     rests on and the lines the served bits bound at β = 1%; and it renders.  It plans every
     configuration at four shares, about a minute on four workers, the only test of the series end to end."""
@@ -344,19 +345,25 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
         patterns, sets = lines[name]["y"][at], lines[f"{name}_sets"]["y"][at]
         assert patterns <= sets and (patterns < sets or lines[name]["binds"][at] == "served"), name
         for n in (name, f"{name}_pod", f"{name}_datacenter"):
-            assert all(k >= 1 and k >= q for q, k in zip(lines[n]["registration_sample"], lines[n]["registration_cap"]))
-            assert all(0 <= p <= s <= 1 for s, p in zip(lines[n]["shared"], lines[n]["padding"]))
+            s = lines[n]
+            assert all(0 <= p <= x <= 1 for x, p in zip(s["shared"], s["padding"]))
+            for k, one, binds, plan, share in zip(s["registration_sample"], s["sample_budgets"], s["binds"], s["plan"],
+                                                  s["computed_proving"], strict=True):
+                assert isinstance(k, int) and k >= 0 and (one <= 1) == (k >= 1), n
+                assert (binds, plan, share) == ("served", None, None) if k == 0 else 0 < share < 1, n
         samples = [lines[n]["registration_sample"][at] for n in (name, f"{name}_pod", f"{name}_datacenter")]
         assert samples == sorted(samples), name
-    assert "sessions padded to a public cap" in caps["exfiltration"]
+    assert "samples a whole number K of its requests" in caps["exfiltration"]
     assert all(f"{f1.ROLES} {f1.TRUST}" in c for c in caps.values())
     served_at = [n for n, s in lines.items() if s["binds"][at] == "served"]
-    assert served_at and "tokens" not in served_at
+    assert "tokens" in served_at and "tokens_datacenter" not in served_at
+    assert lines["tokens"]["registration_sample"][at] == 0 < lines["tokens_datacenter"]["registration_sample"][at]
+    assert (f"no design within the budget: one sampled replay block costs "
+            f"{lines['tokens']['sample_budgets'][at]:,.3g} budgets;") in caps["exfiltration"]
     assert caps["exfiltration"].count("bounded here only by everything the scope serves") == 1
-    for name in ("tokens", "per_expert", "layer_of_token"):
-        s = lines[name]
-        assert all(0 < v < 1 for v in s["computed_proving"])
-        assert f"{t._share(s['computed_proving'][at])} of its sampled request's proving" in caps["exfiltration"]
+    s = lines["tokens_datacenter"]
+    assert f"{t._share(s['computed_proving'][at])} of its sampled request's proving" in caps["exfiltration"]
+    assert f"K = {s['registration_sample'][at]:,} sampled" in caps["exfiltration"]
     assert "everything the scope serves (" not in caps["infiltration"]
     assert "priced, not measured, a lower bound: the hashing alone" in caps["skipped_work"]
     assert "Replay is full-batch" in caps["exfiltration"] and "batch-invariant kernels (dotted" in caps["exfiltration"]
