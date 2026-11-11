@@ -32,6 +32,12 @@ calls SHA-512 at most `T` times, both parties':
   (`slot_exp_le_weighted`, `ex_weighted_runs_le`): the gates the session needs at a further run, and `1` at the first
   run.
 
+The gates a finder pays for at a further run need not be every gate the sample needs: `ex_calls_le_at_in` is the same
+bound at any set of gates of the sample, with `K_s` the expected size of the set and `K_m` the expected number of its
+gates the sample's sessions need, session by session (`Compiled.sessCountIn`, `sum_runExtAt_runs_le_in`), and
+`ex_calls_le_at_cls` reads it at the representatives of the classes of the gates the sample needs, the set a by-class
+first-hit finder pays for.
+
 `CompiledTwo.eventTwoX_le_at` is the event's bound at that right-hand side, and `eventTwoX_le_at_cap` the same at one
 cap on each finder's waits, with the caps' terms. `B_conf,X`'s cost is its two runs' calls, so under the linear
 expected-time bound at it `Pr[B_conf,X] ≤ 2·(T·(1 + e_s·N_s) + n_PU·openCalls)/2^256` (`Compiled.runCost`,
@@ -115,6 +121,14 @@ def firstSlots (L : Compiled Coin A) (x : Msg) (l : List ℕ) : Finset (Fin (L.n
 first slot, the number of gates the session needs (`sessNeeds`). A gate two sessions need counts twice. -/
 def sessCount (L : Compiled Coin A) (x : Msg) (needs : ℕ → Finset ℕ) (l : List ℕ) : ℕ :=
   ∑ i ∈ L.firstSlots x l, (L.sessNeeds x needs l i.val).card
+
+/-- **The gates of a set a sample's sessions need, session by session**: over the sessions of the sample `l`, each at
+its first slot, the number of gates of the set `G l` that the session's proof blocks need. A gate two sessions need
+counts twice. -/
+def sessCountIn (L : Compiled Coin A) (x : Msg) (needs : ℕ → Finset ℕ) (G : List ℕ → Finset (Fin (L.nG x)))
+    (l : List ℕ) : ℕ :=
+  ∑ i ∈ L.firstSlots x l,
+    ((G l).filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.sessBlocks x l i.val, g.val ∈ needs u)).card
 
 /-- **A run's expected calls at a budget `T`**, in closed form: `T·(1 + e_s·N_s) + n_PU·openCalls`, the run with
 every session of its sample extracted, where `N_s` bounds the expected number of sessions in a run's sample. -/
@@ -218,6 +232,59 @@ theorem sum_runExtAt_runs_le (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (
       simp only [Option.map_some, Option.getD_some]
       refine mul_le_mul_of_nonneg_right (Nat.cast_le.2 (Finset.card_le_card
         (Finset.filter_subset_filter _ (Finset.subset_univ _)))) ?_
+      split
+      · exact Nat.cast_nonneg _
+      · exact le_rfl
+
+/-- **The reruns of a run's extractions at the gates of a set, summed, counted in the set**: each slot's reruns
+(`slotRuns`), once for each gate of the set that its session's proof blocks need. `sum_runExtAt_runs_le` counts every
+gate the session needs, in the set or not. -/
+theorem sum_runExtAt_runs_le_in (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
+    (run' : (Fin (L.V.k x) → Coin) → Transcript) (needs : ℕ → Finset ℕ) (S : Finset (Fin (L.nG x)))
+    (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
+    ((∑ g ∈ S, ((L.runExtAt x s needs g.val r (run' r).seen c).eval H run').2.2 : ℕ) : ℝ) ≤
+      ∑ i : Fin (L.nPU x),
+        (((S.filter fun g : Fin (L.nG x) =>
+            decide (∃ u ∈ L.sessBlocks x (L.checked x r) i.val, g.val ∈ needs u)).card : ℕ) : ℝ) *
+          L.slotRuns H x s run' i r (c i) := by
+  have hmid := sum_filter_map_card S
+    (fun (g : Fin (L.nG x)) (iu : Fin (L.nPU x) × ℕ) =>
+      decide (∃ u ∈ L.sessBlocks x (L.checked x r) iu.1, g.val ∈ needs u))
+    (fun iu : Fin (L.nPU x) × ℕ =>
+      ((if hu : iu.2 < L.nPU x ∧ (L.sessSlots x (L.checked x r) iu.1).head? = some iu.1.val then
+          L.sessExt x s (L.sessBlocks x (L.checked x r) iu.1) iu.2 r (run' r).seen (c iu.1 ⟨iu.2, hu.1⟩)
+        else .ret []).eval H run').2.2)
+    ((List.finRange (L.nPU x)).zip (L.checked x r))
+  have hsum : ∑ g ∈ S, ((L.runExtAt x s needs g.val r (run' r).seen c).eval H run').2.2 =
+      (((List.finRange (L.nPU x)).zip (L.checked x r)).map fun iu : Fin (L.nPU x) × ℕ =>
+        (S.filter fun g : Fin (L.nG x) =>
+            decide (∃ u ∈ L.sessBlocks x (L.checked x r) iu.1, g.val ∈ needs u)).card *
+          ((if hu : iu.2 < L.nPU x ∧ (L.sessSlots x (L.checked x r) iu.1).head? = some iu.1.val then
+              L.sessExt x s (L.sessBlocks x (L.checked x r) iu.1) iu.2 r (run' r).seen (c iu.1 ⟨iu.2, hu.1⟩)
+            else .ret []).eval H run').2.2).sum := by
+    refine Eq.trans (Finset.sum_congr rfl fun g _ => ?_) hmid
+    unfold runExtAt
+    exact flatMapRP_runs H run' _ _
+  rw [hsum, Nat.cast_list_sum, List.map_map]
+  refine le_of_eq_of_le (Eq.trans ?_ (sum_zip_finRange (L.nPU x) (fun iu : Fin (L.nPU x) × ℕ =>
+    (((S.filter fun g : Fin (L.nG x) =>
+        decide (∃ u ∈ L.sessBlocks x (L.checked x r) iu.1, g.val ∈ needs u)).card : ℕ) : ℝ) *
+      if hu : iu.2 < L.nPU x ∧ (L.sessSlots x (L.checked x r) iu.1).head? = some iu.1.val then
+        (((L.sessExt x s (L.sessBlocks x (L.checked x r) iu.1) iu.2 r (run' r).seen (c iu.1 ⟨iu.2, hu.1⟩)).eval H
+          run').2.2 : ℝ)
+      else 0) (L.checked x r))) (Finset.sum_le_sum fun i _ => ?_)
+  · refine congrArg List.sum (List.map_congr_left fun iu _ => ?_)
+    simp only [Function.comp_apply, Nat.cast_mul]
+    congr 1
+    split
+    · rfl
+    · exact Nat.cast_zero
+  · unfold slotRuns
+    cases hl : (L.checked x r)[i.val]? with
+    | none => simp
+    | some u =>
+      simp only [Option.map_some, Option.getD_some]
+      refine mul_le_mul_of_nonneg_right le_rfl ?_
       split
       · exact Nat.cast_nonneg _
       · exact le_rfl
@@ -544,6 +611,117 @@ theorem ex_calls_le_at (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Ms
     (mul_le_mul_of_nonneg_left hD hT0)).trans (le_of_eq ?_)
   unfold firstHitCost
   ring
+
+/-- **The first-hit bound's expected calls at any set of gates of the sample, at a budget `T` a run, in closed
+form.** `ex_calls_le_at` with the gates a finder pays for at a further run a set `G` of the run's sample, where that
+lemma has every gate the sample needs: the expectation of a run's calls with every session extracted and, for each
+gate of `G`, its calls with only the sessions needing the gate extracted, is at most `firstHitCost` at any `N_s` at
+least the expected number of sessions in a run's sample, any `K_s` at least the expected number of gates in `G` and
+any `K_m` at least the expected number of them its sessions need, session by session (`sessCountIn`). -/
+theorem ex_calls_le_at_in (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
+    (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (G : List ℕ → Finset (Fin (L.nG x))) (T : ℕ)
+    (hT : ∀ ω r, (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length ≤ T) {Ns Ks Km : ℝ}
+    (hNs : Ex (fun r : Fin (L.V.k x) → Coin => ((L.firstSlots x (L.checked x r)).card : ℝ)) ≤ Ns)
+    (hKs : Ex (fun r : Fin (L.V.k x) → Coin => ((G (L.checked x r)).card : ℝ)) ≤ Ks)
+    (hKm : Ex (fun r : Fin (L.V.k x) → Coin => (L.sessCountIn x needs G (L.checked x r) : ℝ)) ≤ Km) :
+    Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+        ((L.callsAt H P x s q.1 q.2.1 q.2.2 +
+          ∑ g ∈ G (L.checked x q.2.1),
+            L.callsBy H P x s needs g.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) ≤ L.firstHitCost x T Ns Ks Km := by
+  have he0 : 0 ≤ L.es x := maxBelow_nonneg _ _
+  have hT0 : (0 : ℝ) ≤ T := Nat.cast_nonneg _
+  have hN0 : (0 : ℝ) ≤ (L.nPU x : ℝ) * L.openCalls x := mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
+  have hpt : ∀ q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x),
+      ((L.callsAt H P x s q.1 q.2.1 q.2.2 +
+        ∑ g ∈ G (L.checked x q.2.1),
+          L.callsBy H P x s needs g.val q.1 q.2.1 q.2.2 : ℕ) : ℝ) ≤
+        ((T : ℝ) + (L.nPU x : ℝ) * L.openCalls x) +
+          (T : ℝ) *
+            (((L.runExt x s q.2.1 (run H P L.V x q.1 q.2.1).seen q.2.2).eval H (run H P L.V x q.1)).2.2 : ℝ) +
+          ((T : ℝ) + (L.nPU x : ℝ) * L.openCalls x) * ((G (L.checked x q.2.1)).card : ℝ) +
+          (T : ℝ) * ∑ i : Fin (L.nPU x), (((G (L.checked x q.2.1)).filter fun g : Fin (L.nG x) =>
+              decide (∃ u ∈ L.sessBlocks x (L.checked x q.2.1) i.val, g.val ∈ needs u)).card : ℝ) *
+            L.slotRuns H x s (run H P L.V x q.1) i q.2.1 (q.2.2 i) := by
+    rintro ⟨ω, r, c⟩
+    have h1 : (L.callsAt H P x s ω r c : ℝ) ≤ (T : ℝ) +
+        ((ownLog H (run H P L.V x ω) (L.runExt x s r (run H P L.V x ω r).seen c)).length : ℝ) +
+        (T : ℝ) * (((L.runExt x s r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).2.2 : ℝ) := by
+      exact_mod_cast L.callsAt_le_at H P x s T ω (hT ω) r c
+    have hown := runExt_own_le hS hopen hs P ω r c
+    have hownr : ((ownLog H (run H P L.V x ω) (L.runExt x s r (run H P L.V x ω r).seen c)).length : ℝ) ≤
+        (L.nPU x : ℝ) * L.openCalls x := by exact_mod_cast hown
+    have h4 : ∑ g ∈ G (L.checked x r), L.callsBy H P x s needs g.val ω r c ≤
+        (G (L.checked x r)).card * (T + L.nPU x * L.openCalls x) +
+          T * ∑ g ∈ G (L.checked x r),
+            ((L.runExtAt x s needs g.val r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).2.2 := by
+      refine (Finset.sum_le_sum fun g _ => (L.callsBy_le_at H P x s needs T ω (hT ω) g.val r c).trans
+        (Nat.add_le_add_right (Nat.add_le_add_left hown T) _)).trans_eq ?_
+      rw [Finset.sum_add_distrib, Finset.sum_const, smul_eq_mul, Finset.mul_sum]
+    have h4r : ((∑ g ∈ G (L.checked x r), L.callsBy H P x s needs g.val ω r c : ℕ) : ℝ) ≤
+        ((G (L.checked x r)).card : ℝ) * ((T : ℝ) + (L.nPU x : ℝ) * L.openCalls x) +
+          (T : ℝ) * ((∑ g ∈ G (L.checked x r),
+            ((L.runExtAt x s needs g.val r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).2.2 : ℕ) : ℝ) := by
+      exact_mod_cast h4
+    have h3 := mul_le_mul_of_nonneg_left (L.sum_runExtAt_runs_le_in H x s (run H P L.V x ω) needs
+      (G (L.checked x r)) r c) hT0
+    show ((L.callsAt H P x s ω r c +
+        ∑ g ∈ G (L.checked x r), L.callsBy H P x s needs g.val ω r c : ℕ) : ℝ) ≤
+      ((T : ℝ) + (L.nPU x : ℝ) * L.openCalls x) +
+        (T : ℝ) * (((L.runExt x s r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).2.2 : ℝ) +
+        ((T : ℝ) + (L.nPU x : ℝ) * L.openCalls x) * ((G (L.checked x r)).card : ℝ) +
+        (T : ℝ) * ∑ i : Fin (L.nPU x), (((G (L.checked x r)).filter fun g : Fin (L.nG x) =>
+              decide (∃ u ∈ L.sessBlocks x (L.checked x r) i.val, g.val ∈ needs u)).card : ℝ) *
+          L.slotRuns H x s (run H P L.V x ω) i r (c i)
+    rw [Nat.cast_add]
+    linarith
+  have hB := ex_runExt_runs_le hS s P hNs
+  have hC : Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      ((G (L.checked x q.2.1)).card : ℝ)) ≤ Ks :=
+    (Ex_coins fun r : Fin (L.V.k x) → Coin => ((G (L.checked x r)).card : ℝ)).trans_le hKs
+  have hD : Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      ∑ i : Fin (L.nPU x), (((G (L.checked x q.2.1)).filter fun g : Fin (L.nG x) =>
+              decide (∃ u ∈ L.sessBlocks x (L.checked x q.2.1) i.val, g.val ∈ needs u)).card : ℝ) *
+        L.slotRuns H x s (run H P L.V x q.1) i q.2.1 (q.2.2 i)) ≤ L.es x * Km := by
+    refine (Verity.FirstHit.ex_tape fun (ω : Ω) (p : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      ∑ i : Fin (L.nPU x), (((G (L.checked x p.1)).filter fun g : Fin (L.nG x) =>
+              decide (∃ u ∈ L.sessBlocks x (L.checked x p.1) i.val, g.val ∈ needs u)).card : ℝ) *
+        L.slotRuns H x s (run H P L.V x ω) i p.1 (p.2 i)).trans_le ?_
+    refine (Ex_mono fun ω => ex_weighted_runs_le hS P ω s
+      (fun i l => (((G l).filter fun g : Fin (L.nG x) =>
+        decide (∃ u ∈ L.sessBlocks x l i.val, g.val ∈ needs u)).card : ℝ)) fun _ _ => Nat.cast_nonneg _).trans ?_
+    rw [Ex_const]
+    refine mul_le_mul_of_nonneg_left (le_of_eq_of_le ?_ hKm) he0
+    refine congrArg Ex (funext fun r => ?_)
+    unfold sessCountIn firstSlots
+    rw [Nat.cast_sum]
+  refine (Ex_mono hpt).trans ?_
+  rw [Ex_add, Ex_add, Ex_add, Ex_const, Ex_mul_left, Ex_mul_left, Ex_mul_left]
+  refine (add_le_add (add_le_add (add_le_add (le_refl ((T : ℝ) + (L.nPU x : ℝ) * L.openCalls x))
+    (mul_le_mul_of_nonneg_left hB hT0)) (mul_le_mul_of_nonneg_left hC (add_nonneg hT0 hN0)))
+    (mul_le_mul_of_nonneg_left hD hT0)).trans (le_of_eq ?_)
+  unfold firstHitCost
+  ring
+
+/-- **The first-hit bound's expected calls by class of gates, at a budget `T` a run, in closed form**:
+`ex_calls_le_at_in` at the representatives of the classes of the gates a run's sample needs, the set a by-class
+first-hit finder pays for at a further run. `K_s` is at least the expected number of classes of the gates the sample
+needs, and `K_m` at least the expected number of their representatives its sessions need, session by session. -/
+theorem ex_calls_le_at_cls (hS : L.CostContract H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement}
+    (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (cls : Fin (L.nG x) → Fin (L.nG x)) (T : ℕ)
+    (hT : ∀ ω r, (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length ≤ T) {Ns Ks Km : ℝ}
+    (hNs : Ex (fun r : Fin (L.V.k x) → Coin => ((L.firstSlots x (L.checked x r)).card : ℝ)) ≤ Ns)
+    (hKs : Ex (fun r : Fin (L.V.k x) → Coin =>
+      (((L.sampleNeeds x needs (L.checked x r)).image cls).card : ℝ)) ≤ Ks)
+    (hKm : Ex (fun r : Fin (L.V.k x) → Coin =>
+      (L.sessCountIn x needs (fun l => (L.sampleNeeds x needs l).image cls) (L.checked x r) : ℝ)) ≤ Km) :
+    Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+        ((L.callsAt H P x s q.1 q.2.1 q.2.2 +
+          ∑ c ∈ (Finset.univ.filter (fun g : Fin (L.nG x) =>
+              decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u))).image cls,
+            L.callsBy H P x s needs c.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) ≤ L.firstHitCost x T Ns Ks Km :=
+  ex_calls_le_at_in hS hopen hs P needs (fun l => (L.sampleNeeds x needs l).image cls) T hT hNs hKs hKm
 
 end Compiled
 
