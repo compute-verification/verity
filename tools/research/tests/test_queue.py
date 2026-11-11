@@ -515,9 +515,9 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
 
 POUS = "verity/protocols/pous/lean"
 TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json"
-UP = posixpath.relpath("Security/Proofs/lakefile.toml", POUS)
+UP = posixpath.relpath("security/Proofs/lakefile.toml", POUS)
 #: what `_pin_main`'s pins record: PoUS's, relative to its directory, and the JSON pin's
-MAIN_TRUSTED, MAIN_EXFIL = ["lean-toolchain", "lakefile.toml", "Old.lean", UP], ["Security/Proofs/lakefile.toml", "x.lean"]
+MAIN_TRUSTED, MAIN_EXFIL = ["lean-toolchain", "lakefile.toml", "Old.lean", UP], ["security/Proofs/lakefile.toml", "x.lean"]
 VECTORS = ('{"a": 1}', '{"b": 2}')
 
 
@@ -540,7 +540,7 @@ def _pinned(world: World, tree: dict[str, str], trusted: list[str], exfil: list[
 def _pin_main(world: World) -> dict[str, str]:
     """`main` with the real pins tool and both pins over a few inputs; returns those inputs."""
     tree = {f"{POUS}/lakefile.toml": "l0\n", f"{POUS}/lean-toolchain": "t0\n", f"{POUS}/Old.lean": "o0\n",
-            "Security/Proofs/lakefile.toml": "s0\n", "x.lean": "x0\n"}
+            "security/Proofs/lakefile.toml": "s0\n", "x.lean": "x0\n"}
     pins = (Path(__file__).resolve().parents[2] / "verity" / "check" / "pins.py").read_text()
     base = _pinned(world, {**tree, "tools/verity/check/pins.py": pins}, MAIN_TRUSTED, MAIN_EXFIL)
     _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
@@ -552,14 +552,14 @@ def test_prs_whose_only_conflicts_are_in_pins_merge_with_each_pin_rebuilt_from_t
     order, then THEIRS's new ones) that the merged tree still holds, at their digests there, and a JSON pin keeps the rest of
     its text byte for byte."""
     tree = _pin_main(world)
-    one = {**tree, f"{POUS}/lakefile.toml": "l1\n", "Security/Proofs/lakefile.toml": "s1\n", f"{POUS}/New1.lean": "n1\n",
+    one = {**tree, f"{POUS}/lakefile.toml": "l1\n", "security/Proofs/lakefile.toml": "s1\n", f"{POUS}/New1.lean": "n1\n",
            "y.lean": "y\n"}
     world.gh.put(1, _pinned(world, one, ["lean-toolchain", "lakefile.toml", "Old.lean", UP, "New1.lean"],
-                            ["Security/Proofs/lakefile.toml", "x.lean", "y.lean"]))
+                            ["security/Proofs/lakefile.toml", "x.lean", "y.lean"]))
     two = {**tree, f"{POUS}/lean-toolchain": "t1\n", f"{POUS}/Old.lean": None, f"{POUS}/New2.lean": "n2\n", "x.lean": "x1\n",
            "z.lean": "z\n"}
     world.gh.put(2, _pinned(world, two, ["lean-toolchain", "lakefile.toml", UP, "New2.lean"],
-                            ["Security/Proofs/lakefile.toml", "x.lean", "z.lean"]))
+                            ["security/Proofs/lakefile.toml", "x.lean", "z.lean"]))
     raw = subprocess.run(["git", "merge-tree", "--write-tree", "--name-only", "--no-messages", world.gh.prs[1].head,
                           world.gh.prs[2].head], cwd=world.dev, capture_output=True, text=True)
     assert sorted(raw.stdout.splitlines()[1:]) == sorted([TRUSTED, EXFIL])
@@ -569,7 +569,7 @@ def test_prs_whose_only_conflicts_are_in_pins_merge_with_each_pin_rebuilt_from_t
     members, entries = q.sync()
     assert [m.pr for m in members] == [1, 2], entries[2].why
     assert f"research queue: #2 conflicts only in pins: {', '.join(sorted([TRUSTED, EXFIL]))} rebuilt from the merged tree" in world.logs
-    merged = {k: v for k, v in {**one, **two, f"{POUS}/lakefile.toml": "l1\n", "Security/Proofs/lakefile.toml": "s1\n"}.items()
+    merged = {k: v for k, v in {**one, **two, f"{POUS}/lakefile.toml": "l1\n", "security/Proofs/lakefile.toml": "s1\n"}.items()
               if v is not None}
     assert all(_git(world.origin, "show", f"refs/heads/next:{p}") + "\n" == t for p, t in merged.items())
     def show(p: str) -> str:
@@ -577,7 +577,7 @@ def test_prs_whose_only_conflicts_are_in_pins_merge_with_each_pin_rebuilt_from_t
                               text=True).stdout
 
     assert show(TRUSTED) == _trusted(["lean-toolchain", "lakefile.toml", UP, "New1.lean", "New2.lean"], merged)
-    assert show(EXFIL) == _exfil(["Security/Proofs/lakefile.toml", "x.lean", "y.lean", "z.lean"], merged)
+    assert show(EXFIL) == _exfil(["security/Proofs/lakefile.toml", "x.lean", "y.lean", "z.lean"], merged)
     tip = _git(world.origin, "rev-parse", "refs/heads/next")
     assert _git(world.origin, "rev-parse", f"{tip}^2") == world.gh.prs[2].head
     assert _git(world.origin, "log", "-1", "--format=%B", tip) == f"Queue: #2 change 2\n\nPR: #2\nHead: {world.gh.prs[2].head}\nOwner: lane-2"
@@ -2881,7 +2881,7 @@ def test_the_preflight_merges_with_the_drivers_of_next_not_those_of_the_older_ch
     caps = "tests/test_lean_packages.py"
 
     def counts(sec: int, props: int) -> str:
-        return f'UNWITNESSED = {{"Security": {sec}, "Security/Properties": {props}}}\n'
+        return f'UNWITNESSED = {{"security": {sec}, "security/Properties": {props}}}\n'
 
     lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
     world.with_store_remote()
@@ -2913,7 +2913,7 @@ def test_the_sync_merges_onto_each_tip_with_that_tips_drivers_not_those_of_its_c
     caps = "tests/test_lean_packages.py"
 
     def counts(sec: int, props: int) -> str:
-        return f'UNWITNESSED = {{"Security": {sec}, "Security/Properties": {props}}}\n'
+        return f'UNWITNESSED = {{"security": {sec}, "security/Properties": {props}}}\n'
 
     lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
     _move_main(world, {caps: counts(354, 184), ".gitattributes": f"{caps} merge=lean-caps\n",
@@ -3155,7 +3155,7 @@ def test_the_preflight_refuses_a_head_that_merged_next_carrying_a_pr_head_its_pr
 
 
 #: Lake packages as the Lean step reads them: `lean/a` (library `A`), `lean/a/Proofs` nested in it with `srcDir = ".."` and its
-#: library's roots listed (as Security/Proofs'), `lean/b` requiring `lean/a` by path, and `lean/c`, which doesn't
+#: library's roots listed (as security/Proofs'), `lean/b` requiring `lean/a` by path, and `lean/c`, which doesn't
 LEAN_TREE = {
     "lean/a/lakefile.toml": 'name = "a"\n\n[[lean_lib]]\nname = "A"\n',
     "lean/a/lean-audit.json": "{}\n",
