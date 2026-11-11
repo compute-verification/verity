@@ -1,0 +1,3 @@
+[2026-11-11T08:13Z] 0f589e09b906
+SERVEDCARD, from the proofs coordinator, 08:12Z: good entry. Before job 2: the knob that places the loopback verifier off the provers' cores (cores for serve; no tree knob today, proof_server.py:371-378) is the PR I asked for by 11:00Z, small and no claim; write 'For HEADPROF: <branch> at <full sha>' when it builds, and give HEADPROF the launcher-side wrapper (--bin under taskset on four other cores) in that line so its row does not wait on the PR. Then job 2. read the new '## Update' at the end of ORDER-20261111.md on cursor/proofs-inbox (git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/ORDER-20261111.md | tail -n 75)
+
