@@ -51967,3 +51967,19 @@ For the table:
 
 For the table: #7109 (network-accounting, marked) adds at most +2 / +30 under `Proofs/Flock`, probably +0; lookup running [derived]. At worst the chain's open PRs still fit #8890's caps exactly (267 / 2,192).
 For the table: #8932 waits for TWOPROVE's `For CAPS:` line; pair then 269 / 2,182 + n (271 / 2,212 + n if #7109 counts), declarations lowered from 2,217 unless you write "leave 2,217".
+
+## CROSS, Wed 11 Nov 11:46Z: `515d` PASSED: the Lean of `86c03d1840cb` builds and every lock record is `pass`, none regenerated (run with the Lean tools of `main` before #8515)
+
+**`r20261111-103626-515d`** (vy-nebius-cpu-12, `lean_changed.py --records security --update`) [run: its `result.json`, `stdout.log` and `events.jsonl`, fetched 11:45Z]: done 11:43:45Z, exit 0, `SUCCESS`, outcome `pass`.
+- Records: `security` `pass`, `security/Proofs` `pass`, `security/Properties` `pass`. None `regenerated`.
+- `security`: PASS, 27,069 declarations in 718 modules, 1,106 guarantees. `security/Proofs`: PASS, 194,182 declarations in 3,846 modules. `security/Properties`: PASS, 3,088 declarations in 94 modules, 463 guarantees. Axioms `propext`, `Classical.choice`, `Quot.sound`.
+- `check.py` exit 0 in 3,474 s (`security` with `security/Proofs`) and 522 s (`security/Properties`). The fast path: no kernel replay, no unread facts.
+
+**What it built** [run]: scratch `4a655bc8410730626241d15fa4bf97ac87e88d64` (the run's `commit`), whose `.lean` files, locks, lakefiles, manifests, toolchain and `unread-caps.json` are those of `86c03d1840cb` (my 10:39Z entry). It holds the sixteen of ours in the first two candidates: #8877, #8819, #8841, #8857, #8866, #8888, #8354, #8536, #8890 (in `ee28015ba726`, with #8517, which changes no Lean) and #8785, #8820, #8827, #8788, #8828, #8781 (in `86c03d1840cb`).
+
+**Its limit, as I wrote at 11:33Z** [run]: the scratch is on `main` `0a722c6ec984`, so the run executed the Lean tools from before #8515, #8617 and #8627. It shows the candidate's Lean compiles and its lock records pass; it puts no pass under the candidate's own inputs keys. `r20261111-113118-d12b` (the records run at `967b722429f3`'s own commit, which holds all of `86c03d1840cb`'s Lean on the candidates' tools) still waits for a slot on vy-nebius-cpu-12, which `515d` has just freed.
+
+**Still out** [run 11:45Z]: `53eb` (records on `allm`, running since 10:49:56Z), `8342` (the build for #8905, #8896 and #8873, at module 11,462 of 11,675), `d12b` (waiting).
+
+For the table:
+- `r20261111-103626-515d` passed (11:43:45Z, exit 0): the Lean of `86c03d1840cb` (the sixteen of ours in `ee28015ba726` and `86c03d1840cb`) builds; `security`, `security/Proofs`, `security/Properties` records all `pass`, none regenerated; no kernel replay; run on the Lean tools of `main` `0a722c6ec984`.
