@@ -52,7 +52,7 @@ At each outcome where the Lean verifier accepts the record's session (so the tra
 receipts' sketch holds and the trace's wrong receipts are at most the session's pooled bound at the line's `δ`
 (`holdsAnd` of `SketchBound`, from `SketchBoundAt` and `NoOutsideCompute` by `sketchBound_of_noOutside`, and
 `Draw.pooledSample` at the records read through the coin commitment, `recordCommitted`, so at most the W the line reads:
-`LineCoversSession` at the record's draws, whose receipts on an accepted record are `recordSample`'s sizes,
+`LineCoversRun` at the record's draws, whose receipts on an accepted record are `recordSample`'s sizes,
 `receipts_of_line`, and the line's check of their draws, `incorrect_le_line`), every stretch of the line read off the
 record credits what the trace held (`heldAt_of`), its groups one for each of the session's windows and its registered
 blocks the node's (`record_summary`: `Shared.run` at any windows a draw keeps the parameters and registration,
@@ -489,7 +489,7 @@ theorem receiptMax_lt : receiptMax < 2 ^ 448 := by
     (Nat.pow_le_pow_right (by norm_num) (by norm_num))
 
 /-- On an accepted record, the trace's wrong receipts below the record's draw's pooled bound at the line's `δ` are
-below the W every line of the record reads (`LineCoversSession`): the line reads each draw's receipts and draws off
+below the W every line of the record reads (`LineCoversRun`): the line reads each draw's receipts and draws off
 the record and refuses any draws but `min(s, U_c)`, the draw's at the session's `samples`, and the receipts are the
 draw's sizes (`receipts_of_line`). -/
 theorem incorrect_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (Coins node.samples κ X)}
@@ -508,7 +508,7 @@ theorem incorrect_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (Coins 
     Array.map_ofFn (f := fun t => ((recordSample node rec correct).size t ω : ℕ))
       (g := fun u => (u, min node.params.samples u))
   rw [hws, hR, e2] at hl
-  have hc := Properties.RemoteAudit.lineCoversSession node.samples receiptMax _ κ X (recordSample node rec correct) ω
+  have hc := Properties.RemoteAudit.lineCoversRun node.samples receiptMax _ κ X (recordSample node rec correct) ω
     node.delta _ _ _ _ _ _ _ l hl
   rw [Rat.cast_nnratCast] at hc
   exact hw.trans hc

@@ -205,7 +205,7 @@ with the change that ties a compute audit sampled in part and lifts that refusal
   unit is sampled, `drawn` its sample's `Σ k`, and `faulty_sets` every set of at most `b` of its 2T units, which holds the
   sets a stratified sample leaves possible too.
 * `eps` is the scans' δ summed, `m · δ`: the δ part of the union over the monitoring period's windows that
-  `CommOfPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors.
+  `CommOfMonitoringPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors.
 
 **Profile**: the link and `m`.
 

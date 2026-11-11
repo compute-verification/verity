@@ -232,7 +232,7 @@ def test_the_links_form_is_what_windows_proves():
     r = envelopes.regime(REG, "onsite-links")
     loc = ctx.location
     assert r.budget(ctx).inputs == pytest.approx(loc.hosts * loc.server_memory + loc.links * r.wipe.wipe_s)
-    assert "Accounting.Guarantees.Actual.Windows" in r.cites()
+    assert "Accounting.Guarantees.Actual.ServerBlocks" in r.cites()
     assert lean.weakest(r.cites()) == "conditional"
     assert lean.weakest(envelopes.regime(REG, "onsite").cites()) == "draft"
 

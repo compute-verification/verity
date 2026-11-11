@@ -74,7 +74,7 @@ over its span, and `max(0, w − lost)` weights bytes a tick, `w` the weights bl
 * **LineHeldIdentity** (time-held, `forms[0]`): the same under Identity, no block coming in over the links.
 
 They follow from the model's argument for `Accounting.Guarantees.Remote.HeldOverTimeLinksSampled`, the line's W covering
-the session's pooled bound (`Properties.RemoteAudit.LineCoversSession`, at the record's draws, whose draws the line
+the session's pooled bound (`Properties.RemoteAudit.LineCoversRun`, at the record's draws, whose draws the line
 holds to `min(s, U_c)` and whose receipts on an accepted record are `recordSample`'s sizes: the reached state is the
 run's, a window's receipts are below `RECEIPT_LIMIT`, `Properties.RemoteAudit.ReceiptsBelowLimit`, and the line refuses
 a draw of `g` > 1 windows with `RECEIPT_LIMIT` or more, `RemoteAudit.Line.ofSummaryAt`), the line's groups being one

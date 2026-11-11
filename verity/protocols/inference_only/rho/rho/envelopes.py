@@ -536,11 +536,11 @@ class Onsite(Remote):
     form: str = "certified"
 
     #: `Windows` as proved: memory and line rate, on the physical annotation's four constraints
-    LINKS = ("Accounting.Guarantees.Actual.Windows", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
+    LINKS = ("Accounting.Guarantees.Actual.ServerBlocks", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
              "Accounting.Placed.Memory", "Accounting.Placed.Links")
-    #: `WindowsAt` at the wipes, its state term from the wipe and its binding error from the certifier's ingress, which
-    #: bounds information where `WindowsAt` reads width at line rate: the information form is a draft
-    SERVING = ("Accounting.Guarantees.Actual.WindowsAt", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
+    #: `ServerBlocksAt` at the wipes, its state term from the wipe and its binding error from the certifier's ingress, which
+    #: bounds information where `ServerBlocksAt` reads width at line rate: the information form is a draft
+    SERVING = ("Accounting.Guarantees.Actual.ServerBlocksAt", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
                "Accounting.Placed.Links", "draft:windows-information-form")
     PHYSICAL = tuple(dict.fromkeys(LINKS + SERVING + Wipe.SERVER + Wipe.DEVICE + Certifier.CITES + Certifier.INTAKE
                                    + Certifier.DECLARED))

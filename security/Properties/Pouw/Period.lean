@@ -27,13 +27,13 @@ them: `H1CheckedCreditPeriod` is H1's tile unit on the torch loop (below).
   service's answer on the period's coins; it and every earlier window accepted; the number of such windows, the
   windows before the first refusal; their live tiles' words.
 * `checkedRun`, `checkedLayer`: the period's proofs with the check's verdict as every sampled proof's acceptance, each
-  sampled tile's opening the service's opening of that unit; `Declared.periodLayer` at that run.
+  sampled tile's opening the service's opening of that unit; `Declared.monitoringPeriodLayer` at that run.
 * `SampleIsCoin`, `ServiceSound`: on every window the check accepts, the units it publishes as sampled (`Public.drawn`) are
   the model's sample at the window's sampling coin (`drawOf`), of the population `N_p`, `K_d` of them; and the service's
   soundness against the check: a window is accepted with a published unit whose opening fails its relation with
   probability at most `δ_ks`.
 * `RegisteredBeforeDraw`: each window's registration is fixed before the window's sampling coin.
-* `CheckedWorkPeriod`, `CheckedCreditPeriod`: `CircuitWorkMonitoringPeriod`'s and `CircuitCreditPeriod`'s conclusions at the
+* `CheckedWorkPeriod`, `CheckedCreditPeriod`: `CircuitWorkMonitoringPeriod`'s and `CircuitCreditMonitoringPeriod`'s conclusions at the
   check's accepted prefix, under their premises at `checkedRun`, with `JointSound` replaced by `SampleIsCoin` and
   `ServiceSound`, and with `RegisteredBeforeDraw`.
 * `SaltIsLiveCoin`, `StagedPins`, `stagedAt`, `flatAtCoin`, `H1CheckedCreditPeriod`: H1's instance. Each window's salt
@@ -53,7 +53,7 @@ check doesn't discharge it:
   the live schedule, a coin a round after its root (`PouwCheck.roundsCheck`, `PouwCheck.saltCheck`), which
   `protocol.check` doesn't read: under PoUW's seeded salt-and-draw schedule it fails on every circuit an activation
   feeds (`Properties.Served.SeededScheduleNotLive`, proved).
-* The game identity (`Pl.game = periodGame …`) and `PrefixOf`: protocol structure, the play's ideal game and its pass at
+* The game identity (`Pl.game = monitoringPeriodGame …`) and `PrefixOf`: protocol structure, the play's ideal game and its pass at
   the sampled tiles' rightness, held by construction of the play.
 * `MovedIn ≤ δ_bind` in each window: binding of the service's openings to the values committed before each position's
   cut, which the proof reads. It is SHA-512's binding at the trees' sizes (`Accounting.Guarantees.Compose.BindingOfECR`)
@@ -76,7 +76,7 @@ check doesn't discharge it:
   fact of that statement and the tile's Definition, with `UnitsOfLayout`'s tie of `Cd` to it. Where the service proves
   a statement other than the registered tile's (H1's leg proves the window's staged statement), this is the link
   between the two, and H1's instance splits it into `StagedPins` and `SaltIsLiveCoin`.
-* `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt` per live tile, and `UnitFixed` at `periodMode`: the named claims, as in
+* `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt` per live tile, and `UnitFixed` at `monitoringPeriodMode`: the named claims, as in
   `CircuitWorkMonitoringPeriod`. On H1's unit they are (H-μ) at `μ = 3/4`, B′ at `r_B = 1/2` and the guess bound at
   `1/2`; ncp-v2 has no Compose `Scheme`, and its receipt bound is a time-tradeoff form
   (`Accounting.Guarantees.TileUnpredictableOfNCPU`), not lucks.
@@ -162,10 +162,10 @@ noncomputable def prefixLen (ws : Executions Ω n) (p : Params) (x : Paths Ω n)
 end Executions
 
 open Classical in
-/-- **The accepted prefix's live words**: the words of each window's live tiles (`WindowPlay.liveAt`), over the windows
+/-- **The accepted prefix's live words**: the words of each window's live tiles (`ExecutionPhasePlay.liveAt`), over the windows
 before the check's first refusal. `creditedLive` with the check's prefix for the run's. -/
 noncomputable def checkedLive {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (p : Params)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (p : Params)
     (ws : Executions (Paths C Cd.rounds × B) n) (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if ws.AcceptedUpTo p x w then ∑ t : Fin Np, (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ) else 0
 
@@ -185,13 +185,13 @@ def checkedRun {C Ξ V : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (p : Params)
   rel := rel
   right := right
 
-/-- **The period's proofs as the IR defines them, under the check**: `Declared.periodLayer` at `checkedRun`. -/
+/-- **The period's proofs as the IR defines them, under the check**: `Declared.monitoringPeriodLayer` at `checkedRun`. -/
 def checkedLayer {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (p : Params)
     (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop) :
     SampledLayer C (Equiv.Perm (Fin Np) × Ξ) n Cd.rounds Kd (Fin Np) ℕ (Fin n × ℕ) V :=
-  Cd.periodLayer hr hK (checkedRun hK p ws opened rel right)
+  Cd.monitoringPeriodLayer hr hK (checkedRun hK p ws opened rel right)
 
 /-- **The check's sample is the period's sampling coin**: on every path and every window the check accepts, the window's
 level has the population `N_p` and the sample size `K_d`, and the units it publishes as sampled (`Public.drawn`, the
@@ -248,7 +248,7 @@ def CheckedWorkPeriod : Prop :=
     (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
-    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n K T L U)
     (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → ℝ) (ρ p p0 a b wmax Λ δs δbind δks : ℝ),
     Scope Sc Cd δs →
@@ -256,7 +256,7 @@ def CheckedWorkPeriod : Prop :=
     (∀ j, stageShare (tileStage Cd Np) (shareCone Sc Cd Np) j ≤ wmax) →
     (∀ t : Fin Np, 0 < shareCone Sc Cd Np t → tileLuck Sc Cd Np t ≤ p ∧ tileLuck0 Sc Cd Np t ≤ p0) →
     0 ≤ a → 0 ≤ b → 0 < Λ → SplitRate Kd ρ p p0 a b wmax Λ →
-    Pl.game = periodGame (tileStage Cd Np) (liveCone Sc Cd Np) 1 1 Kd Wp →
+    Pl.game = monitoringPeriodGame (tileStage Cd Np) (liveCone Sc Cd Np) 1 1 Kd Wp →
     Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd Np live) →
     PrefixOf (checkedLayer Cd hr hK prm ws opened rel right) Pl.game →
     (∀ w, prob (fun x => (checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) ≤ δbind) →
@@ -266,7 +266,7 @@ def CheckedWorkPeriod : Prop :=
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
     UnitFixed Pl (checkedLayer Cd hr hK prm ws opened rel right)
-      (periodMode Cd Wp (checkedRun hK prm ws opened rel right)) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
+      (monitoringPeriodMode Cd Wp (checkedRun hK prm ws opened rel right)) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧
       ¬ LiveWorkAt (checkedLive Sc Cd Wp prm ws x) (wordsOf Sc Cd : ℝ) a b
         (rOfPrefix Sc Cd Np (ws.prefixLen prm x) a b Λ δs) (n * (Pl.run x).fixed) (n * folded x)) ≤
@@ -275,7 +275,7 @@ def CheckedWorkPeriod : Prop :=
 /-- **(L)'s credit in live words over the windows the deployed check accepts**: `CheckedWorkPeriod`'s premises at
 `a, b > 0` give, except with probability `δ_s + n·(δ_bind + δ_ks)`, an accepted period's fixed words at least
 `(1 − ε(j))₊` of the live words of the windows before the check's first refusal (`creditPrefix` at `Executions.prefixLen`
-and `checkedLive`), `CircuitCreditPeriod`'s conclusion at the check's prefix. -/
+and `checkedLive`), `CircuitCreditMonitoringPeriod`'s conclusion at the check's prefix. -/
 def CheckedCreditPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
@@ -283,7 +283,7 @@ def CheckedCreditPeriod : Prop :=
     (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
-    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n K T L U)
     (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → ℝ) (ρ p p0 a b wmax Λ δs δbind δks : ℝ),
     Scope Sc Cd δs →
@@ -291,7 +291,7 @@ def CheckedCreditPeriod : Prop :=
     (∀ j, stageShare (tileStage Cd Np) (shareCone Sc Cd Np) j ≤ wmax) →
     (∀ t : Fin Np, 0 < shareCone Sc Cd Np t → tileLuck Sc Cd Np t ≤ p ∧ tileLuck0 Sc Cd Np t ≤ p0) →
     0 < a → 0 < b → 0 < Λ → SplitRate Kd ρ p p0 a b wmax Λ →
-    Pl.game = periodGame (tileStage Cd Np) (liveCone Sc Cd Np) 1 1 Kd Wp →
+    Pl.game = monitoringPeriodGame (tileStage Cd Np) (liveCone Sc Cd Np) 1 1 Kd Wp →
     Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd Np live) →
     PrefixOf (checkedLayer Cd hr hK prm ws opened rel right) Pl.game →
     (∀ w, prob (fun x => (checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) ≤ δbind) →
@@ -301,7 +301,7 @@ def CheckedCreditPeriod : Prop :=
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
     UnitFixed Pl (checkedLayer Cd hr hK prm ws opened rel right)
-      (periodMode Cd Wp (checkedRun hK prm ws opened rel right)) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
+      (monitoringPeriodMode Cd Wp (checkedRun hK prm ws opened rel right)) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
       creditPrefix Sc Cd Np (ws.prefixLen prm x) (checkedLive Sc Cd Wp prm ws x) a b Λ δs) ≤ δs + n * (δbind + δks)
 
@@ -357,14 +357,14 @@ def H1CheckedCreditPeriod : Prop :=
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (salt : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → Fin n → ByteArray) (enc : C → ByteArray)
     (staged flat : ByteArray → Fin 144 → (ℕ → V) → Prop)
-    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) (Fin 144) Cd.rounds n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) (Fin 144) Cd.rounds n)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n K T L U)
     (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ) (δs δbind δks : ℝ),
     Scope Sc Cd δs →
     (∀ t : Fin 144, (8 / 9 : ℝ) * (144 : ℕ) * shareCone Sc Cd 144 t ≤ 1) →
     (∀ j, stageShare (tileStage Cd 144) (shareCone Sc Cd 144) j ≤ 1) →
     (∀ t : Fin 144, 0 < shareCone Sc Cd 144 t → tileLuck Sc Cd 144 t ≤ 7 / 8 ∧ tileLuck0 Sc Cd 144 t ≤ 1 / 2) →
-    Pl.game = periodGame (tileStage Cd 144) (liveCone Sc Cd 144) 1 1 24 Wp →
+    Pl.game = monitoringPeriodGame (tileStage Cd 144) (liveCone Sc Cd 144) 1 1 24 Wp →
     Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd 144 live) →
     PrefixOf (checkedLayer Cd hr hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat)) Pl.game →
     (∀ w, prob (fun x =>
@@ -375,7 +375,7 @@ def H1CheckedCreditPeriod : Prop :=
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
     UnitFixed Pl (checkedLayer Cd hr hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat))
-      (periodMode Cd Wp (checkedRun hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat)))
+      (monitoringPeriodMode Cd Wp (checkedRun hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat)))
       (fun _ t => (tileWords Sc Cd 144 t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
       creditPrefix Sc Cd 144 (ws.prefixLen prm x) (checkedLive Sc Cd Wp prm ws x) 1 1 (67 / 8) δs) ≤

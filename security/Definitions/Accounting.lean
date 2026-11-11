@@ -28,7 +28,7 @@ public import Definitions.Accounting.JointBridge.CreditedWords
 public import Definitions.Accounting.JointBridge.H200
 public import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
 public import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
-public import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
+public import Definitions.Accounting.JointBridge.CommOfMonitoringPeriodLeakAccepted
 public import Definitions.Accounting.JointLive
 public import Definitions.Accounting.Memory
 public import Definitions.Accounting.PerRun
@@ -108,7 +108,7 @@ named.
   period, over `m` periods and over `B` server blocks with the memory wipes that open them, as one causal game over the
   five subprotocols' per-period guarantees.
 * `ComputeOfPouw` (`Pouw.lean`): PoUW's guarantee is the compute guarantee, at certificate `(1 − γ)(1 − εs)·W`.
-* `Compose.CircuitCredit` (`Compose.lean`) and `ComposeMonitoringPeriod.CircuitCreditPeriod` (`ComposeMonitoringPeriod.lean`): PoUW's
+* `Compose.CircuitCredit` (`Compose.lean`) and `ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` (`ComposeMonitoringPeriod.lean`): PoUW's
   credit on a registered circuit it compiles, over one execution phase and over a monitoring period's accepted prefix.
 * `TS.Sm90SheetHeadline` (`HeadlineDc.lean`, proved in `HeadlineDc/Sm90.lean`) and `TS.Sm120SheetHeadline`
   (`Headline.lean`, proved in `Headline/Sm120.lean`): the headline at H200's and sm_120's data sheets.

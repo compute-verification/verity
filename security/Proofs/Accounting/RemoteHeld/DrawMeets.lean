@@ -101,7 +101,7 @@ theorem openings_zero_subset {m U k : ℕ} (b : Blocks m) (hk : k ≤ U) :
 variable {n m : ℕ} {k : Fin n → ℕ} {κ : ℕ} {X : Type}
 
 /-- **The honest session**: window `t` registers `U t` receipts, every one correct, whatever the coins. -/
-def honest (k : Fin n → ℕ) (κ : ℕ) (X : Type) (U : Fin n → Fin (m + 1)) : Remote.Draw.Session n m k κ X where
+def honest (k : Fin n → ℕ) (κ : ℕ) (X : Type) (U : Fin n → Fin (m + 1)) : Remote.Draw.Run n m k κ X where
   size t _ := U t
   correct t _ := range (U t)
 
@@ -196,7 +196,7 @@ theorem heldOverTimeLinksSampled_honest [Fintype X] (U : Fin n → Fin (m + 1)) 
 /-! ## The toy that an audit accepting everything gets wrong -/
 
 /-- One window of one receipt, none correct, sampled once. -/
-def toy : Remote.Draw.Session 1 1 (fun _ => 1) 1 Unit where
+def toy : Remote.Draw.Run 1 1 (fun _ => 1) 1 Unit where
   size _ _ := ⟨1, by norm_num⟩
   correct _ _ := ∅
 
@@ -317,7 +317,7 @@ theorem toy_advantage (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (δ : ℝ) (t :
   exact le_antisymm (tsub_le_self.trans ((Bandwidth.pr_mono (Q := fun _ => False) fun _ hx => h0 _ hx).trans
     (le_of_eq pr_false))) zero_le
 
-theorem unsalted_binding (D : Remote.Draw.Session 1 1 (fun _ => 1) 1 Unit) (prf : Fin 1 → Pous.Bits 1 → Blocks 1)
+theorem unsalted_binding (D : Remote.Draw.Run 1 1 (fun _ => 1) 1 Unit) (prf : Fin 1 → Pous.Bits 1 → Blocks 1)
     (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ) : unsalted.binding D prf rest = 0 := by
   refine le_antisymm ((Bandwidth.pr_mono (Q := fun _ => False) fun ω hω => ?_).trans (le_of_eq pr_false)) zero_le
   obtain ⟨t, p, -, hmv⟩ := hω

@@ -19,11 +19,11 @@ public import Proofs.Accounting.Joint
 public import Proofs.Accounting.JointBridge.WorkOfCreditedWords
 public import Proofs.Accounting.JointBridge.SpaceOfPeriodHeld
 public import Proofs.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
-public import Proofs.Accounting.JointBridge.CommOfPeriodLeakAccepted
+public import Proofs.Accounting.JointBridge.CommOfMonitoringPeriodLeakAccepted
 public import Proofs.Accounting.JointLive
-public import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
+public import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod
 public import Proofs.Accounting.JointBridge.HonestH200
-public import Proofs.Accounting.JointBridge.IntegrityOfIntegrityPeriod
+public import Proofs.Accounting.JointBridge.IntegrityOfIntegrityMonitoringPeriod
 public import Proofs.Accounting.JointBridge.IntegrityOfIntegrityBlock
 public import Proofs.Accounting.Pouw
 public import Proofs.Accounting.PouwWork
@@ -49,7 +49,7 @@ public import Proofs.Accounting.RegisteredCircuit
 public import Proofs.Accounting.RegisteredCircuit.Tiles
 public import Proofs.Accounting.RegisteredCircuit.Credit
 public import Proofs.Accounting.RegisteredCircuit.Slack
-public import Proofs.Accounting.RegisteredCircuit.Session
+public import Proofs.Accounting.RegisteredCircuit.Run
 public import Proofs.Accounting.RegisteredCircuit.Requirement
 public import Proofs.Accounting.RegisteredCircuit.Scheduled
 public import Proofs.Accounting.Remote
@@ -135,7 +135,7 @@ change to the guarantee, or to a definition it reads, changes its record.
 
 * `Joint`, `CovertResidual`: `Joint.lean`; `JointPerRun`: `PerRunJoint.lean`.
 * `JointPeriodLive`, `JointPooledLive`, `JointPooledBlocksLive`: `JointLive.lean`.
-* `ComputeOfPouw`: `Pouw.lean`; `Compose.CircuitCredit`: `Compose.lean`; `ComposeMonitoringPeriod.CircuitCreditPeriod`:
+* `ComputeOfPouw`: `Pouw.lean`; `Compose.CircuitCredit`: `Compose.lean`; `ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod`:
   `ComposeMonitoringPeriod.lean`.
 * `TS.Sm90SheetHeadline`: `HeadlineDc/Sm90.lean`; `TS.Sm120SheetHeadline`: `Headline/Sm120.lean`.
 * `CapacityOfStateBound`: `Capacity.lean`; `Memory.Adds`: `Memory.lean`.
