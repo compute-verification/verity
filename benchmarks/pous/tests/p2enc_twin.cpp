@@ -212,7 +212,7 @@ static struct {
 
 static void kernel() { encode_sq_kernel(args.chain, args.m, args.c, args.k, args.t, args.n, args.c0, args.flags); }
 
-// p2v1_encode_sq's arguments on one thread block; squarings gets how many the kernel ran. -1 when the chain doesn't fit
+// p2enc.cu's p2enc_encode's arguments on one thread block; squarings gets how many the kernel ran. -1 when the chain doesn't fit
 extern "C" int twin_encode(const uint32_t *m, uint32_t *c, const uint32_t *k, const uint32_t *t, uint32_t n, uint32_t c0,
                            uint32_t ea, uint32_t en, uint32_t er, uint32_t *flags, uint64_t *squarings) {
   if (!p2sq::chain_for(ea, en, er, args.chain)) return -1;

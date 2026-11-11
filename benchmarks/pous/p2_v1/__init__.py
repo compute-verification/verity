@@ -4,8 +4,8 @@
 - `wire.py`: `p2-audit-wire/v4`'s frames and its reference verifier, pinned by `audit-vectors.json` and
   `audit-negative-vectors.json`; `vectors.py` writes all three files (and the package's keys fixture) in one command.
 - `p2v1.cu`, `Makefile`: the GPU library (decode on `../p2_gpu/p2dec.cu`'s tuned squaring, encode by two roots).
-  `p2enc.cuh` is a second encoder, the roots on the decode's squaring, which a caller asks for by name
-  (`gpu.ENCODERS`); `encode_bench.py` and `encode_rate.sh` time the two side by side on one card.
+  `p2enc.cuh` is a second encoder, the roots on the decode's squaring, in a library of its own (`p2enc.cu`), which a
+  caller asks for by name (`gpu.ENCODERS`); `encode_bench.py` and `encode_rate.sh` time the two side by side on one card.
 - `gpu.py`: the library through ctypes, with the keys expanded on the device.
 - `harness.py`: P2's arm of the harness (`bench.py --impl p2-v1-gpu`); `memory_challenger.py`: its memory challenger process, k = 105.
 - `store.py`: the encoded weights store's layout (the MQA16K INT8 weights block-aligned in W; `store.py layout` writes

@@ -4,19 +4,15 @@
 # ARCH is the device's: sm_89 for the RTX 4090 and the L40S, sm_120 for the RTX PRO 6000.
 # FAST selects the decode: p2sq.cuh's Karatsuba squaring and p2keys4.cuh's v4 key expansion (counter-mode SHA-512,
 # reference.keys) by default; v1's SHAKE256 keys (-DP2_KEYS, p2keys.cuh) are retired, and gpu.Kernels refuses them.
-# With it the library also holds the encode on that squaring (p2enc.cuh, p2v1_encode_sq) beside p2v1_encode.
-# REGS, when set, caps every kernel's registers (nvcc's -maxrregcount): a build to measure, never the default.
 NVCC ?= nvcc
 CGBN ?= CGBN
 BIN ?= bin
 ARCH ?= sm_89
 INC ?=
 FAST ?= -DP2_FAST -DP2_KEYS4 -DP2SQ_KARA
-REGS ?=
-FLAGS = -O3 -arch=$(ARCH) -std=c++17 -DP2_BITS=16448 -DP2_TPI=32 -DXMP_WMAD -DP2_PARTS=2 -DP2_SYM -DP2_TPB=64 -DP2_LIBRARY $(FAST) \
-	$(if $(REGS),-maxrregcount=$(REGS))
+FLAGS = -O3 -arch=$(ARCH) -std=c++17 -DP2_BITS=16448 -DP2_TPI=32 -DXMP_WMAD -DP2_PARTS=2 -DP2_SYM -DP2_TPB=64 -DP2_LIBRARY $(FAST)
 
 all: $(BIN)/libp2v1.so
 
-$(BIN)/libp2v1.so: p2v1.cu ../p2_gpu/p2dec.cu p2sq.cuh p2enc.cuh p2keys.cuh p2keys4.cuh ../../../verity/definitions/kernels/sha512.cuh Makefile
+$(BIN)/libp2v1.so: p2v1.cu ../p2_gpu/p2dec.cu p2sq.cuh p2keys.cuh p2keys4.cuh ../../../verity/definitions/kernels/sha512.cuh Makefile
 	@mkdir -p $(BIN); $(NVCC) $(FLAGS) -Xcompiler -fPIC -shared $(INC) -I $(CGBN)/include -o $@ $< -Xptxas -v 2> $@.ptxas

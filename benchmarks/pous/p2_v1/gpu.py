@@ -17,15 +17,15 @@ LIB = "libp2v1.so"
 CUDA_LIB = Path(__file__).resolve().parents[2] / "word_codec" / "cuda_lib.py"
 _v, _u, _q = ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint64
 ABI = {"p2v1_decode": [_v, _v, _v, _v, _u, _u, _v, _v], "p2v1_encode": [_v, _v, _v, _v, _u, _u, _u, _u, _u, _v, _v]}
-BUILT = {   # each where the build has it: P2_FUSED's, P2_KEYS's or P2_KEYS4's, and P2_FAST's encode
+BUILT = {   # each where the build has it: P2_FUSED's, and P2_KEYS's or P2_KEYS4's
     "p2v1_decode_fused": [_v, _v, ctypes.c_char_p, ctypes.c_int, _q, _u, _q, _u, _v, _v],
     "p2v1_keys": [ctypes.c_char_p, ctypes.c_int, _q, _u, _q, _v, _v, _v],
-    "p2v1_encode_sq": ABI["p2v1_encode"],
-    "p2v1_encode_ctas_per_sm": [ctypes.c_int],
 }
-ENCODERS = {"cgbn": "p2v1_encode", "p2sq": "p2v1_encode_sq"}
-"""The library's encoders, each giving the same rows: `cgbn`, CGBN's root, which every caller gets unless it asks; and
-`p2sq`, the root on the decode's squaring (`p2enc.cuh`)."""
+ENC_LIB = "libp2enc.so"
+ENC_ABI = {"p2enc_encode": ABI["p2v1_encode"], "p2enc_ctas_per_sm": []}
+ENCODERS = ("cgbn", "p2sq")
+"""The encoders, each giving the same rows: `cgbn`, the library's (CGBN's root), which every caller gets unless it asks;
+and `p2sq`, the root on the decode's squaring, in a library of its own beside it (`p2enc.cu`, `ENC_LIB`)."""
 
 
 def exponent_split(params: reference.Params) -> tuple[int, int, int]:
@@ -55,7 +55,8 @@ class Kernels:
         import torch
 
         self.torch = torch
-        self.lib = _cuda_lib().load(Path(lib_dir) / LIB, ABI, BUILT)
+        self.lib_dir, self._enc = Path(lib_dir), None
+        self.lib = _cuda_lib().load(self.lib_dir / LIB, ABI, BUILT)
         if self.lib.p2v1_width_bits() != params.w:
             raise RuntimeError(f"{LIB} is built for {self.lib.p2v1_width_bits()} bits, not {params.w}")
         self.fused = hasattr(self.lib, "p2v1_decode_fused")
@@ -103,20 +104,28 @@ class Kernels:
             raise RuntimeError(f"p2v1_decode: CUDA error {rc}")
         return m
 
+    def enc_lib(self) -> Any:
+        """`ENC_LIB` in the library's directory, loaded on first use."""
+        if self._enc is None:
+            if not (self.lib_dir / ENC_LIB).exists():
+                raise RuntimeError(f"no {self.lib_dir / ENC_LIB}: p2enc.cu's first lines say how it is built")
+            self._enc = _cuda_lib().load(self.lib_dir / ENC_LIB, ENC_ABI)
+        return self._enc
+
     def encode(self, m: Any, first: int = 0, encoder: str = "cgbn", out: Any = None) -> Any:
         """`c` rows of the `m` rows of labels `first ..`, by one of `ENCODERS`, into `out` when given."""
-        name = ENCODERS[encoder]
-        if not hasattr(self.lib, name):
-            raise RuntimeError(f"{LIB} has no {name}: build it with FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA'")
+        if encoder not in ENCODERS:
+            raise ValueError(f"encoder is one of {ENCODERS}, not {encoder!r}")
+        name, fn = ("p2v1_encode", self.lib.p2v1_encode) if encoder == "cgbn" else ("p2enc_encode", self.enc_lib().p2enc_encode)
         k, t = self.keys(first, m.shape[0])
         c = self.torch.empty_like(m) if out is None else out
         if c.shape != m.shape or c.dtype != m.dtype or not c.is_contiguous():
             raise ValueError("out is rows like m's")
         a, n, r = self.split
-        rc = getattr(self.lib, name)(m.data_ptr(), c.data_ptr(), k.data_ptr(), t.data_ptr(), m.shape[0], self.params.c0, a, n, r,
-                                     self.flags.data_ptr(), self._stream())
+        rc = fn(m.data_ptr(), c.data_ptr(), k.data_ptr(), t.data_ptr(), m.shape[0], self.params.c0, a, n, r,
+                self.flags.data_ptr(), self._stream())
         if rc:
-            raise RuntimeError(f"{name}: error {rc}")
+            raise RuntimeError(f"{name}: CUDA error {rc}" if rc > 0 else f"{name}: the exponent's steps don't fit its chain")
         return c
 
     def raised(self) -> int:

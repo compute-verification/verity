@@ -83,8 +83,9 @@ Implementations:
     `wire.py` is `p2-audit-wire/v4` with its reference verifier, and `vectors.py` regenerates every vector file in one command;
   - `p2v1.cu`: decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring (keys expanded on the device just before
     use), and encode by two roots (an addition chain for `(p + 1)/4` on CGBN's generic squaring, reduced by `2^W ≡ c0`);
-    `p2enc.cuh` is a second encoder with the same bytes, the same chain on the decode's squaring, which a caller asks
-    for by name (`gpu.ENCODERS`; `encode_rate.sh` times the two side by side on one card);
+    `p2enc.cuh` is a second encoder with the same bytes, the same chain on the decode's squaring, in a library of its
+    own (`p2enc.cu`), which a caller asks for by name (`gpu.ENCODERS`; `encode_rate.sh` times the two side by side on
+    one card);
   - the kernel gates: the pinned vector through the device (keys, encode, decode), the round trip, sampled blocks against the
     reference's decode and keys, no kernel flag; a failed gate stops the run;
   - audits at k = 105 (`p2_v1/memory_challenger.py`: v4 leaves, `verity/pous/p2-audit-challenge/v4`), against a limit fixed before load (spec

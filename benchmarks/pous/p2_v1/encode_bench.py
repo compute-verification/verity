@@ -1,16 +1,17 @@
 """P2's two encoders on one GPU, side by side, on one segment of fixed payloads under a fixed setup's keys: the library's
-default (`p2v1_encode`, CGBN's root; `cgbn` in `gpu.ENCODERS`) and the root on the decode's squaring (`p2v1_encode_sq`,
-`p2enc.cuh`; `p2sq`). `encode_rate.sh` runs the three commands in this order.
+(`libp2v1.so`'s `p2v1_encode`, CGBN's root; `cgbn` in `gpu.ENCODERS`) and the root on the decode's squaring
+(`libp2enc.so`'s `p2enc_encode`, `p2enc.cuh`; `p2sq`). `encode_rate.sh` runs the three commands in this order.
 
     encode_bench.py build --lib NAME=DIR ... --out build.json
     encode_bench.py reference --out reference.json
     encode_bench.py run --lib DIR --reference reference.json --out DIR [--a NAME=DIR ...] [--decode-bench]
 
-`build` reads no GPU and imports only the standard library. Of each build (a DIR holding the Makefile's `libp2v1.so`
-and `libp2v1.so.ptxas`): every kernel's registers, stack and spilled bytes as ptxas said them, and the SHA-256 of its
-disassembly (`cuobjdump -sass`, split at its `Function :` lines). When one build is named `base` and one `default`, it
-says which of `base`'s kernels `default` holds instruction for instruction, so a build that adds an encoder shows it
-left the others as they were.
+`build` reads no GPU and imports only the standard library. Of each library of each build (a DIR holding `libp2v1.so`,
+and `libp2enc.so` where the build has it, each beside its `.ptxas`, nvcc's `-Xptxas -v` report): the file's SHA-256,
+every kernel's registers, stack and spilled bytes as ptxas said them, and the SHA-256 of its disassembly
+(`cuobjdump -sass`, split at its `Function :` lines). When one build is named `base` and one `default`, it says which
+of `base`'s `libp2v1.so`'s kernels `default`'s holds instruction for instruction: a tree that adds an encoder shows
+it left the library as it was.
 
 `reference` reads no GPU either: `reference.encode` of `--picks` of the segment's blocks under `reference.keys`, on
 every CPU the process may use. The first blocks are edge payloads, one of them the block whose first root is of zero.
@@ -54,6 +55,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
+LIB = "libp2v1.so"
 SALT = hashlib.sha256(b"verity-pous/bench/p2-v1/encode-bench/salt").digest()
 MODEL = hashlib.sha512(b"verity-pous/bench/p2-v1/encode-bench/model").digest()
 SEED = 20261111
@@ -113,28 +115,35 @@ def sass(lib: str) -> dict[str, str]:
 
 
 def build(a: argparse.Namespace) -> int:
-    doc: dict[str, dict] = {"ptxas": {}, "sass_sha256": {}}
+    doc: dict[str, dict] = {"sha256": {}, "ptxas": {}, "sass_sha256": {}}
     hashes: dict[str, dict[str, str]] = {}
     for name, d in (x.split("=", 1) for x in a.lib):
-        doc["ptxas"][name] = ptxas(Path(d) / "libp2v1.so.ptxas")
-        for kernel, v in sorted(doc["ptxas"][name].items()):
-            if "encode" in kernel or "decode_sq" in kernel:
-                print(f"{name}: {kernel}: {v.get('registers')} registers, {v.get('spill_store_bytes')} bytes spill stores, "
-                      f"{v.get('spill_load_bytes')} bytes spill loads, {v.get('stack_bytes')} bytes stack")
-        try:
-            hashes[name] = sass(str(Path(d) / "libp2v1.so"))
-        except (RuntimeError, OSError) as e:
-            doc["sass_sha256"][name] = {"error": str(e)}
-            print(f"{name}: no disassembly: {e}")
-        else:
-            doc["sass_sha256"][name] = {stem(k): v for k, v in sorted(hashes[name].items())}
-    if "base" in hashes and "default" in hashes:
-        base, new = hashes["base"], hashes["default"]
-        changed = sorted(stem(k) for k, v in base.items() if new.get(k) != v)
-        doc["same"] = {"base_kernels": len(base), "default_kernels": len(new), "changed": changed,
-                       "unchanged": sorted(stem(k) for k, v in base.items() if new.get(k) == v),
-                       "only_default": sorted(stem(k) for k in new if k not in base)}
-        print(f"{len(base) - len(changed)} of base's {len(base)} kernels are in default instruction for instruction; changed: "
+        for lib in sorted(Path(d).glob("*.so")):
+            key = f"{name}/{lib.name}"
+            doc["sha256"][key] = hashlib.sha256(lib.read_bytes()).hexdigest()
+            doc["ptxas"][key] = ptxas(lib.with_name(lib.name + ".ptxas"))
+            for kernel, v in sorted(doc["ptxas"][key].items()):
+                if "encode" in kernel or "decode_sq" in kernel:
+                    print(f"{key}: {kernel}: {v.get('registers')} registers, {v.get('spill_store_bytes')} bytes spill stores, "
+                          f"{v.get('spill_load_bytes')} bytes spill loads, {v.get('stack_bytes')} bytes stack")
+            try:
+                hashes[key] = sass(str(lib))
+            except (RuntimeError, OSError) as e:
+                doc["sass_sha256"][key] = {"error": str(e)}
+                print(f"{key}: no disassembly: {e}")
+            else:
+                doc["sass_sha256"][key] = {stem(k): v for k, v in sorted(hashes[key].items())}
+    old, new = f"base/{LIB}", f"default/{LIB}"
+    if old in doc["sha256"] and new in doc["sha256"]:
+        doc["same"] = {"file": doc["sha256"][old] == doc["sha256"][new]}
+        print(f"{new} is {'' if doc['same']['file'] else 'not '}{old}, byte for byte")
+    if old in hashes and new in hashes:
+        base, head = hashes[old], hashes[new]
+        changed = sorted(stem(k) for k, v in base.items() if head.get(k) != v)
+        doc["same"].update(base_kernels=len(base), default_kernels=len(head), changed=changed,
+                           unchanged=sorted(stem(k) for k, v in base.items() if head.get(k) == v),
+                           only_default=sorted(stem(k) for k in head if k not in base))
+        print(f"{len(base) - len(changed)} of {old}'s {len(base)} kernels are in {new} instruction for instruction; changed: "
               f"{', '.join(changed) or 'none'}; only in default: {', '.join(doc['same']['only_default']) or 'none'}")
     Path(a.out).write_text(json.dumps(doc, indent=1))
     return 0
@@ -246,15 +255,9 @@ def run(a: argparse.Namespace) -> int:
     out.mkdir(parents=True, exist_ok=True)
     prefix = R.expand_prefix(SALT, P, MODEL)
     kern = Kernels(a.lib, a.lib, P, prefix)
-    missing = [name for name in ENCODERS.values() if not hasattr(kern.lib, name)]
-    if missing:
-        print(f"{a.lib} has no {', '.join(missing)}", file=sys.stderr)
-        return 2
-    ctas = None
-    if hasattr(kern.lib, "p2v1_encode_ctas_per_sm"):
-        ctas = {e: kern.lib.p2v1_encode_ctas_per_sm(int(e == "p2sq")) for e in ENCODERS}
     doc: dict[str, object] = {
-        "device": torch.cuda.get_device_name(dev), "uuid": uuid, "sms": props.multi_processor_count, "ctas_per_sm": ctas,
+        "device": torch.cuda.get_device_name(dev), "uuid": uuid, "sms": props.multi_processor_count,
+        "p2sq_ctas_per_sm": kern.enc_lib().p2enc_ctas_per_sm(),
         "torch": torch.__version__, "blocks": n, "block_bytes": nb, "lib": a.lib, "passed": False, "ended": None,
         "pass": "gpu.Kernels.encode: the key expansion, then the kernel; seconds between two CUDA events"}
     sampler = Sampler(out / "smi.csv", uuid)
@@ -445,7 +448,7 @@ def main() -> int:
     r.add_argument("--picks", type=int, default=57)
     r.add_argument("--out", required=True)
     g = sub.add_parser("run")
-    g.add_argument("--lib", required=True, help="the directory of the libp2v1.so that holds both encoders")
+    g.add_argument("--lib", required=True, help="the directory that holds libp2v1.so and libp2enc.so")
     g.add_argument("--a", action="append", default=[], metavar="NAME=DIR", help="another build of the default encoder")
     g.add_argument("--a-blocks", type=int, default=16384)
     g.add_argument("--reference", required=True)

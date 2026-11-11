@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# P2's encode on the decode's squaring (p2enc.cuh, p2v1_encode_sq) beside the library's default encoder, on one card
-# of one node. cwd = the tree, into which it writes nothing (`research run --cwd source`). The whole script runs under
-# `taskset -c CORES` when CORES is given.
+# P2's encode on the decode's squaring (p2enc.cu's libp2enc.so) beside the library's encoder (libp2v1.so's), on one
+# card of one node. cwd = the tree, into which it writes nothing (`research run --cwd source`). The whole script runs
+# under `taskset -c CORES` when CORES is given.
 #
 # First, unless BUILD_ONLY: CARD must be free (free()): its lease free, no compute process on it and under a GiB of
 # its memory in use, and the time not past NOT_AFTER (`date -d` syntax). Else it exits 75 (11 past NOT_AFTER) with
 # nothing started. The same check runs again just before the lease.
 #
-# The builds, holding no card, in a directory of its own that goes at exit: libp2v1.so for ARCH (90a, 120a; the card's
-# when not given) with the Makefile's defaults (`default`: both encoders), with REGS=R for each R of A_REGS (`regsR`:
-# the default encoder with at most R registers a thread), and from BASE_REV's sources (`base`; default: the commit this
-# branch left origin/main at). CGBN at ../p2_gpu/CGBN.commit is the run's inputs/cgbn.tar (`git archive` of that
-# commit) when the run was sent one, else GitHub's; gmp.h is the system's, else the run's inputs/gmp.h, else gmpy2's
-# wheel's. TOOLKIT=1 assembles CUDA 12.9's nvcc first (`benchmarks/pouw/harness/jobs/toolkit.sh`), for a machine with
-# none. out/libs.tar holds the libraries with ptxas's reports. A run that was sent one (inputs/libs.tar) compiles
-# nothing and measures those. Either way `encode_bench.py build` writes out/build.json: ptxas's registers and spills
-# of every kernel of every build, each kernel's disassembly's SHA-256, and which of base's kernels default holds
+# The builds, holding no card, in a directory of its own that goes at exit, for ARCH (90a, 120a; the card's when not
+# given): `default`, libp2v1.so by the Makefile as it is and libp2enc.so by p2enc.cu's command; `regsR` for each R of
+# A_REGS, libp2v1.so with at most R registers a thread (-maxrregcount=R after the Makefile's FAST; the Makefile is
+# not changed); and `base`, libp2v1.so from BASE_REV's sources (default: the commit this branch left origin/main at).
+# CGBN at ../p2_gpu/CGBN.commit is the run's inputs/cgbn.tar (`git archive` of that commit) when the run was sent
+# one, else GitHub's; gmp.h is the system's, else the run's inputs/gmp.h, else gmpy2's wheel's. TOOLKIT=1 assembles
+# CUDA 12.9's nvcc first (`benchmarks/pouw/harness/jobs/toolkit.sh`), for a machine with none. out/libs.tar holds the
+# libraries with ptxas's reports. A run that was sent one (inputs/libs.tar) compiles nothing and measures those.
+# Either way `encode_bench.py build` writes out/build.json: each library's SHA-256, ptxas's registers and spills of
+# every kernel, each kernel's disassembly's SHA-256, and whether default's libp2v1.so is base's, byte for byte and
 # instruction for instruction. BUILD_ONLY=1 ends here, so a machine with no GPU builds what a card's run measures.
 #
 # Then, still holding no card, the reference's rows on the cores (`encode_bench.py reference`), and under one lease of
@@ -80,8 +81,15 @@ done
   cat /sys/fs/cgroup/cpu.max; nvidia-smi -L; command -v "${NVCC:-nvcc}" cuobjdump nvdisasm
 } > "$O/machine.txt" 2>&1
 
-compile() {  # the builds into $B/NAME, their names into builds, what they were made with into $B/toolchain.txt
-  local pin from inc='' gmp base r i b rc pids=() files
+files() {  # every build's libraries and ptxas's reports, as paths under $B
+  local d f
+  for d in "$B"/*/; do
+    [ -f "$d/libp2v1.so" ] || continue
+    for f in "$d"*.so "$d"*.so.ptxas; do echo "${f#"$B"/}"; done
+  done
+}
+compile() {  # the builds into $B/NAME, with what they were made with in $B/toolchain.txt, and out/libs.tar of them
+  local pin from inc='' gmp base fast r i b rc pids=() list
   [ -n "$NVCC" ] || { say "PREFLIGHT: no nvcc (CUDA_HOME, /usr/local/cuda-12.9, -13.0)"; return 3; }
   if [ -z "${ARCH:-}" ]; then
     case $(nvidia-smi --query-gpu=name --format=csv,noheader -i "$CARD" 2> /dev/null) in
@@ -116,41 +124,50 @@ compile() {  # the builds into $B/NAME, their names into builds, what they were 
     local name=$1 root=$2; shift 2
     make -C "$root/$D" NVCC="$NVCC" CGBN="$B/CGBN" BIN="$B/$name" ARCH="sm_$ARCH" ${inc:+"INC=$inc"} "$@" > "$B/$name.make" 2>&1
   }
-  builds=(default)
+  enc() {  # libp2enc.so and ptxas's report into $B/default
+    mkdir -p "$B/default"
+    "$NVCC" -O3 -arch="sm_$ARCH" -std=c++17 -DP2SQ_KARA -Xcompiler -fPIC -shared -o "$B/default/libp2enc.so" \
+      "$TREE/$D/p2enc.cu" -Xptxas -v 2> "$B/default/libp2enc.so.ptxas"
+  }
+  fast=$(sed -n 's/^FAST ?= //p' "$TREE/$D/Makefile")
+  builds=(default default)
   mk default "$TREE" & pids+=($!)
-  for r in ${A_REGS-200 168}; do builds+=("regs$r"); mk "regs$r" "$TREE" REGS="$r" & pids+=($!); done
+  enc & pids+=($!)
+  for r in ${A_REGS-200 168}; do builds+=("regs$r"); mk "regs$r" "$TREE" "FAST=$fast -maxrregcount=$r" & pids+=($!); done
   [ -z "$base" ] || { builds+=(base); mk base "$B/base-src" & pids+=($!); }
   for i in "${!builds[@]}"; do
     b=${builds[$i]}
     wait "${pids[$i]}"; rc=$?
     if [ $rc != 0 ]; then
-      cp "$B/$b/libp2v1.so.ptxas" "$O/ptxas/$b.txt" 2> /dev/null
-      tail -n 5 "$B/$b.make"; grep -n -m 20 -A 3 -i 'error' "$O/ptxas/$b.txt"
+      cp "$B/$b"/*.ptxas "$O/ptxas/" 2> /dev/null
+      tail -n 5 "$B/$b.make"; grep -n -m 20 -A 3 -i 'error' "$B/$b"/*.ptxas
       say "BUILD: $b does not build for sm_$ARCH"; return 4
     fi
   done
   { echo "sm_$ARCH, at $(git -C "$TREE" rev-parse HEAD), on $(hostname)"; "$NVCC" --version | tail -n 2
     echo "CGBN $pin from $from; gmp.h: ${inc:-of the system}; base ${base:-none}"; } > "$B/toolchain.txt"
-  files=(toolchain.txt); for b in "${builds[@]}"; do files+=("$b/libp2v1.so" "$b/libp2v1.so.ptxas"); done
-  tar -cf "$O/libs.tar" -C "$B" "${files[@]}"
+  mapfile -t list < <(files)
+  tar -cf "$O/libs.tar" -C "$B" toolchain.txt "${list[@]}"
 }
 
-builds=()
 if [ -f "$IN/libs.tar" ]; then
-  tar -xf "$IN/libs.tar" -C "$B" && [ -f "$B/default/libp2v1.so" ] && [ -f "$B/toolchain.txt" ] \
+  tar -xf "$IN/libs.tar" -C "$B" && [ -f "$B/toolchain.txt" ] \
     || { say "PREFLIGHT: inputs/libs.tar is not another run's out/libs.tar"; exit 3; }
-  for d in "$B"/*/; do d=${d%/}; [ -f "$d/libp2v1.so" ] && builds+=("${d##*/}"); done
   echo "from inputs/libs.tar, sha256 $(sha256sum < "$IN/libs.tar" | cut -c1-64)" >> "$B/toolchain.txt"
 else
   compile || exit $?
 fi
+[ -f "$B/default/libp2v1.so" ] && [ -f "$B/default/libp2enc.so" ] \
+  || { say "PREFLIGHT: no default/libp2v1.so and default/libp2enc.so among the libraries"; exit 3; }
 cp "$B/toolchain.txt" "$O/toolchain.txt"
-(cd "$B" && sha256sum -- */libp2v1.so) > "$O/libs.sha256"
-libs=(); a=()
-for b in "${builds[@]}"; do
-  cp "$B/$b/libp2v1.so.ptxas" "$O/ptxas/$b.txt"
-  libs+=(--lib "$b=$B/$b")
-  case $b in default | base) ;; *) a+=(--a "$b=$B/$b") ;; esac
+(cd "$B" && files | grep '\.so$' | xargs sha256sum) > "$O/libs.sha256"
+builds=(); libs=(); a=()
+for d in "$B"/*/; do
+  d=${d%/}; b=${d##*/}
+  [ -f "$d/libp2v1.so" ] || continue
+  for f in "$d"/*.ptxas; do cp "$f" "$O/ptxas/$b-${f##*/}"; done
+  builds+=("$b"); libs+=(--lib "$b=$d")
+  case $b in default | base) ;; *) a+=(--a "$b=$d") ;; esac
 done
 python3 $D/encode_bench.py build "${libs[@]}" --out "$O/build.json" > "$O/build.txt" 2>&1 \
   || { cat "$O/build.txt"; say "BUILD: no record of the builds (out/build.txt)"; exit 4; }
