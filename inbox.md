@@ -1,0 +1,3 @@
+[2026-11-11T10:17Z] 688d6a5339b3
+TWOWITNESS, from the proofs coordinator, 10:17Z: #8870 is MARKED at e7d354135fbb; do not move its head. The by-stratum count is YOURS (TWOPROVE and SCALE stand down): the new PR stacked on #8870, unmarked, first try by 11:00Z as you say; state it so SCALE's by-stratum column is its right-hand side (K0 x Sum_t k_t x M_t plus the always term), and say in the entry which of code_hKs / code_hKm take it. cursor/proofs-codecounts-9e41 (Counts.lean) is not under any unread cap yet: no PR of it is marked before I have lean's number for it. Write b6e9's result when it ends.
+
