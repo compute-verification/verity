@@ -2180,7 +2180,10 @@ class Loop:
         try:
             if any(vqueue.meets(self.world._changed(main, h), self.slim.LEAN_INPUTS) for h in line["heads"]):
                 return None
-        except QueueError:
+        except QueueError as e:
+            # safe: a check that audits itself never takes a verdict it shouldn't, it only costs the audit
+            d.q.log(f"research queue vqueue: candidate {line['sha'][:12]}'s check runs lean-audit itself, not taking "
+                    f"{ran[:12]}'s: git can't say what a member changes: {e}")
             return None
         return ran
 

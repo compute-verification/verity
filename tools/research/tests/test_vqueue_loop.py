@@ -3188,6 +3188,21 @@ def test_under_gate_check_a_candidate_changing_no_lean_input_takes_lean_audit_fr
     assert loop.world._changed(main, readme) == {"security/README.md"}
 
 
+def test_under_gate_check_a_candidate_changing_only_the_task_graph_s_contract_audits_itself(env, monkeypatch):
+    """The task graph's contract is in every audit's key (`lean_audit.CONTRACT`): the candidate on a Lean one in flight
+    whose member changes only it runs lean-audit itself, its record naming no check whose verdict it takes."""
+    from research.drive import AFTER_LANDING
+
+    env.put(1, {"Security/Proofs/A.lean": "-- a\n"})
+    env.put(2, {"tools/verity/graph/verity_graph/contract.py": "CONTRACT = 2\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=2)
+    _, built, _ = loop.tick()
+    lean, top = built["sha"], loop.tick()[0]["sha"]
+    assert [_steps(runs, c) for c in (lean, top)] == [[",".join(AFTER_LANDING)] * 3] * 2
+    started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started"}
+    assert started[top]["base"] == lean and started[top]["record"].get("lean_audit_from") is None
+
+
 @pytest.mark.parametrize("first", ["its base's check", "its own"])
 def test_under_gate_check_a_candidate_that_took_lean_audit_from_its_base_passes_only_on_its_base_s_verdict_on_it(
         env, monkeypatch, first):

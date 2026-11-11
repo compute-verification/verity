@@ -111,12 +111,17 @@ AUDIT_SAYS = ("closure:", "staged:", "trust gap:", "heartbeats:")
 #: the audit's scratch tree, which each run names anew
 SCRATCH_RE = re.compile(r"\S*?/lean-audit-scratch-[^/\s]+/")
 #: the Lean inputs, as `vqueue.meets` reads them: a candidate one of whose members changes any of them runs lean-audit itself
-#: rather than take its base's verdict on it (`start`'s ``audit_from``).  A superset of what the audit reads, which nothing
-#: declares yet (`reads` keys lean-audit on the whole tree): every Lean source and Lake file, any lock, the Lean check's code
-#: and check's own, and the Lean tree whole, its READMEs too (`security/`, and `Security/`, its name before, which a member
-#: branched then still changes), so no change it leaves out can change the audit's verdict
+#: rather than take its base's verdict on it (`start`'s ``audit_from``): every Lean source and Lake file, any lock, the Lean
+#: check's code and check's own, the task graph's contract (`lean_audit.CONTRACT`, in every audit's key), and the Lean tree
+#: whole, its READMEs too (`security/`, and `Security/`, its name before, which a member branched then still changes).  It
+#: leaves out two kinds of file the audit reads: the Lean packages' other files that `lean_audit.inputs` declares (one a
+#: module reads with `include_str`, as pouw's `check/models.json`, a package's README, `TRUSTED.sha256` or `check.sh`), and
+#: what the unread ratchet reads outside Lean after the audits (`lean_audit.unread_ratchet`: code and pyproject.toml naming an
+#: analysis declaration or module, the docs a lock names).  A change touching only those takes its base's verdict on
+#: lean-audit, until this set holds every file `lean_audit.inputs` declares
 LEAN_INPUTS = ("**/*.lean", "**/lakefile.lean", "**/lakefile.toml", "**/lake-manifest.json", "**/lean-toolchain",
-               "**/lean-audit.json", "tools/verity/lean", "tools/verity/check", "security", "Security")
+               "**/lean-audit.json", "tools/verity/lean", "tools/verity/check", "tools/verity/graph/verity_graph/contract.py",
+               "security", "Security")
 
 
 def shard_count(shards: int | str) -> tuple[int, bool]:
