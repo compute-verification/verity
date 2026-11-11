@@ -46427,3 +46427,44 @@ For the table:
 For the table:
 - The waits' cap is `2^192·k`, in #8885 at `6d4878d5670e`. It is ready to mark once Daniel rules.
 - The term goes from `2^-126.0` to `2^-183.65` an audit, and from `2^-82.6` to `2^-140.25` a world year.
+
+## ATTACK, Wed 11 Nov 09:55Z: two closing lemmas read. REGX's `ksTwo_noAlways` says what REGX says and loses nothing: at the two-stage code no proof block is proved in every replay block, with `always` or without. CONCRETE's #8873 is arithmetic only and its caps fit no row of the table at K0 = 6: N_s ≤ 2^24 holds for a run only at width κ 2^-7, and K ≤ 2^42 only by classes
+
+**1. REGX's `ksTwo_noAlways`** [read: `NoAlways.lean` on `cursor/proofs-noalways-b7d2` at `7517af48adb5`, whole; run: its try `r20261111-084520-5fd7` ended rc 0 at that tree, by `research inspect`, the log not read].
+
+In plain words: for every `h`, if `h`'s frame is SPOT's own (`Built h`) and every gate has an address (`Addresses h`), the two-stage verifier is knowledge sound with `checked` the drawn proof blocks alone and the inner count `min(nBlocks, K·perBlock)`.
+
+- **It is the same verifier.** `V`, `parse`, `partition`, `two`, `session` and `base` at `h.noAlways` equal those at `h` by `rfl` (`:92-103`), so nothing the verifier runs reads the field. Only `checked` and the cap differ.
+- **REGX's question: does it weaken what `KS` says of a block the design means to prove on every request? No**, for three reasons.
+  - At `h` with `always ≠ ∅`, what `KS` says of an always-checked block comes from the premise, not from a check: `Addresses h` ranges over runs where `u ∈ h.reg.checked` (`RevealAt.lean:291-296`), so it asks an address that holds for an always-checked block the second stage did not draw. [guess] No such address can hold, so at `always ≠ ∅` the premise is false and the theorem says nothing; I did not read `AddressHolds` to the end.
+  - At the code there is no block for `always` to name: a slot of the first stage's layout that is not a replay block has empty cells (`regMatchesTwo`'s statement, `Facts.lean:367-380`: "an input slot's cells are empty").
+  - A template with k_t = n_t is proved whole, as REGX reads (`Select.lean:282-292`: counts from 1 to n_t, refused only when every cell is whole). That is whole **in each sampled replay block** (K0 of them), not on every request of the run. Nothing at the two-stage code proves a block in every replay block.
+- **Two cautions.** The premises are at `h`, not at `h.noAlways`: `Built h` fixes the frame to `h`'s address map, which is chosen over `h`'s own checked runs (`SlotsAt.lean:322-330`). Applied at an `h` whose `always` is already empty it is `ksTwo_spot` there, and that is the form to cite. And `checked` is still every block below N where the second draw is refused, at `h.noAlways` as at `h` (gap c is untouched).
+- **Is a line of the bits table read at `always ≠ ∅`?** The K count is: #8874's `code_card_biUnion_le_count` carries `Σ_{v always} |needs v|`, and every figure of SCALE's takes it as 0. So each line is at a registration with no always-checked block, and should say so until `h.noAlways` is the registration a guarantee names.
+
+**2. CONCRETE's #8873** [read: `NumbersFinder.lean` at `3b134fb24872`, whole; the values by exact rationals, mine]. No run of mine; its checks are CONCRETE's to report.
+
+- **What it is**: three statements about real numbers, none about a game. It imports only `Claims.Numbers` and is not stacked on #8827 [run: `git merge-base --is-ancestor`], so nothing in Lean ties them to `eventTwoX_le_at_budget` yet.
+  - `real_table1_le`: `4·(T·(1 + e·N_s + K_s + e·K_m) + (1 + K_s)·c)/2^256 ≤ 2^-100` for T ≤ 2^80, e ≤ 2,592,237,061, **N_s ≤ 2^24, K_s ≤ 2^42, K_m ≤ 2^42**, c ≤ 2^80. The value at the caps is 2^-100.73. The expression is KILIAN's `4·firstHitCost/2^256` term by term.
+  - `sqrt_term_le_strict`: `√(k·γ·p) ≤ 2^-131` for k ≤ 4 + 4,402·2^24, γ ≤ 2^51, q ≤ 2·2^80 and **p ≤ q²/2^513 taken as a hypothesis**. The value at the caps is 2^-131.95.
+- **The caps against the table's rows**, a run at K0 = 6 [derived; Σ_t k_t and K relayed from SCALE 09:52Z; N_s is the sample's size, the only bound a lemma gives (`card_firstSlots_le`)]:
+
+| design | N_s a run | against 2^24 | K by gates, mean / count × max | against 2^42 | K by reader sets |
+|---|---|---|---|---|---|
+| the record | 2^25.85 | over | 2^44.39 / 2^45.11 | over | 2^32.07 |
+| the 2,647 GB plan | 2^27.94 | over | 2^46.23 / 2^47.21 | over | 2^33.86 |
+| width κ 2^-6 | 2^24.44 | over | 2^42.73 / 2^43.71 | over | 2^30.36 |
+| width κ 2^-7 | 2^23.44 | within | 2^41.73 / 2^42.71 | within / over | 2^29.36 |
+
+  - So "at most 2^-100 at sessions of one table" (the PR's title) is true at its caps and applies to **one** row, width κ 2^-7 with K the mean; by classes every row fits K but three of four miss N_s.
+  - The fix is arithmetic. With N_s ≤ 2^30: the term is ≤ 2^-100 in calls up to K = 2^42.73 a run, and ≤ 2^-100 converted to compressions up to **K = 2^33.62 a run**. An instance at (N_s ≤ 2^30, K ≤ 2^33) reads 2^-109.56 in calls, 2^-100.56 in compressions; the 2,647 GB plan by reader sets (2^33.86) is over it, as SCALE found.
+- **What the √ lemma still needs**: `StrictBirthday` at `B` as a premise beside `SHA512CRExpected` (neither gives the other, `Assumptions/Flock.lean:16`); that `B`'s declared cost is at most q on every coin (from `hT`); γ_s ≤ 2^51, which is `γ_le_51` at a session of at most 4,402 rounds and weight 2^33, so one table a session, PARAMS' unbuilt split; and the run's rounds ≤ 4 + 4,402·2^24, where the sessions are the members, not the checked blocks.
+- It leaves out `2·runCost/2^256` (`B_conf,X` at the budget), about 2^-118 at the record [derived]; nothing turns on it.
+
+For REGX: nothing to change in the statement. Cite it at an `h` with `always` empty; your by-class report can take "each sampled replay block" where the design says "every request".
+
+For CONCRETE: raise `N_s` to 2^30 (free), and add the instance the compressions column needs, K_s, K_m ≤ 2^33. Say in the body which rows of the table each instance covers; today's covers width κ 2^-7 only.
+
+For the table:
+- #8873 proves the arithmetic at caps (N_s ≤ 2^24, K ≤ 2^42 a run), not that a design meets them: of the four rows only width κ 2^-7 does, by gates with K the mean. The by-classes rows need an instance at N_s ≤ 2^30; 2^-100 in compressions needs K ≤ 2^33.62 a run.
+- `ksTwo_noAlways` is the same verifier with the drawn blocks alone; every bits line is at a registration with no always-checked block, and no block is proved on every request, only in each sampled replay block.
