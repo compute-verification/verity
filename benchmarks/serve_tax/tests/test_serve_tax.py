@@ -92,10 +92,16 @@ def test_plugin_site_declares_the_arms_plugins_the_tick_after_this_one(tmp_path:
 
 
 def test_the_two_stage_arm_is_the_serves_launch_line_and_nothing_else(tmp_path: Path):
-    """The serve's line as data: prefix caching off, the step record and the boundary commitment with the model's
-    check template and one attention layer's tables, and the canonical top-k on the path and switched on."""
+    """The serve's line as data: prefix caching off, no sampling default from the checkpoint's generation config, the
+    step record and the boundary commitment with the model's check template and one attention layer's tables, and the
+    canonical top-k on the path and switched on. Only the two arms that commit the boundary take vLLM's own sampling
+    defaults: every other arm's engine keeps the checkpoint's."""
     glm, two, rows = S.MODELS["glm53"], S.ARMS["two-stage"], S.ARMS["boundary-rows"]
     assert S.server_argv(two, glm, Path("/ck"), 8000) == S.server_argv(rows, glm, Path("/ck"), 8000)
+    for name, arm in S.ARMS.items():
+        argv = S.server_argv(arm, glm, Path("/ck"), 8000)
+        mine = [argv[i + 1] for i, x in enumerate(argv) if x == "--generation-config"]
+        assert mine == (["vllm"] if name in ("boundary-rows", "two-stage") else []), name
     assert (two.parent, two.plugin, S.ARMS["canonical-topk"].parent) == ("boundary-rows", rows.plugin, "compiled")
     private = tmp_path / "private"
     env = S.server_env(two, tmp_path, tmp_path / "site", None, 3600.0, 600.0, check=glm.check, private=private)
@@ -238,7 +244,8 @@ def test_the_boundary_rows_arm_holds_the_server_until_its_commits_account_for_ev
 def test_the_boundary_rows_arm_turns_prefix_caching_off_and_hands_the_plugin_its_object(tmp_path: Path):
     m = S.MODELS["glm53"]
     argv = S.server_argv(S.ARMS["boundary-rows"], m, Path("/ck"), 8000)
-    assert argv == S.server_argv(S.ARMS["record"], m, Path("/ck"), 8000) + ["--no-enable-prefix-caching"]
+    assert argv == S.server_argv(S.ARMS["record"], m, Path("/ck"), 8000) + ["--no-enable-prefix-caching",
+                                                                            "--generation-config", "vllm"]
     # the object is the arm's own with the model's check template; a model that names none needs one given
     kept = tmp_path / "kept"
     for missing in (None, {}, {"per_output": 1}):

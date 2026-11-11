@@ -513,10 +513,19 @@ class BoundaryWindows:
         """Wrap ``sched``'s ``add_request``, ``update_from_output``, ``finish_requests`` and ``schedule`` through ``hooks``
         (an `engine.hooks.Hooks`), and stop at the process's exit: at exit and at a `multiprocessing` child's, which runs
         no `atexit` hook (vLLM's engine core is one). Refused while the scheduler caches prefixes: a hit would read
-        another request's rows, across the replay blocks' boundary."""
+        another request's rows, across the replay blocks' boundary. Refused too where the engine takes sampling defaults
+        from a file (the checkpoint's generation config, or an override of it): a request that leaves a field out would
+        be sampled at the file's value, where `verity-vllm serve-openai` samples it at vLLM's own. An honest serve's
+        guard, which no verifier relies on: the row holds what the engine got either way."""
         if getattr(getattr(sched, "cache_config", None), "enable_prefix_caching", False):
             raise ValueError("the boundary commitment needs prefix caching off (--no-enable-prefix-caching): a cache hit "
                              "reads another request's rows")
+        config = getattr(getattr(sched, "vllm_config", None), "model_config", None)
+        defaults = dict(config.get_diff_sampling_param()) if config is not None else {}
+        if defaults:
+            raise ValueError(f"the boundary commitment needs an engine with vLLM's own sampling defaults "
+                             f"(--generation-config vllm, and no --override-generation-config): this one takes "
+                             f"{defaults} from a file, which a request that leaves the field out would be sampled at")
 
         def add_request(orig: Callable[..., Any]) -> Callable[..., Any]:
             def wrapped(request: Any, *a: Any, **kw: Any) -> Any:
