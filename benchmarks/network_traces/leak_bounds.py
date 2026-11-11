@@ -43,8 +43,8 @@ is behind one network certifier. Over a monitoring period a scope serves GPU-sec
 `COUNTS`, and every row names its one: by default the sampling plan's (`plan`), so that the rows count the requests
 the compute audit's plan prices; the census's where a caller asks; or none, where a caller gives the world's requests
 a year. No run has certified a class for that model, so the class is assumed (`Assumed`): the most ids a response
-holds, an id's bits, and an execution phase's buckets. `table` counts each of `ROWS` by its check's own rule, and
-never by requests what a check counts by capacity:
+holds, an id's bits, and an execution phase's buckets. `table` counts each of the eight `ROWS` by its check's own
+rule, and never by requests what a check counts by capacity:
 
 * the scan, `rowsTerms`'s terms (`terms`). The network certifier's own are the schedules and the fail cells,
   ⌈log2(egress_cells + 1)⌉ each a connection of the period's parameters, counted by request, and the jitter,
@@ -59,8 +59,13 @@ never by requests what a check counts by capacity:
   its Program's output count, so that the schedules are 0 and the connections that fail are charged pooled over the
   period (`failed`); the release times taken once, by the compute side's tick, so that the jitter is 0; and the
   entries charged through the compute audit, whose own bound then stands in their place and is not counted here;
-* the design, head checks and a lengths unit on the network certifier's records, which no run has behind it: the
-  lengths are held and the entries are the compute audit's, so its term is the jitter and the pooled failures.
+* the design, which no run has behind it: head checks, a lengths unit on the network certifier's records, and a stop
+  block, a proof block that checks where a response's ids stop, sampled on a served audit. The lengths unit holds a
+  response's length to its Program's output count and the stop block holds that count to the ids, so the lengths are
+  held; the entries are the compute audit's; and its term is the jitter and the pooled failures;
+* the design with no stop block, the same before a stop block has been sampled on a served audit: nothing holds the
+  output count to the ids, so the server picks it and each connection is still charged its schedule, as the scan
+  charges it. Its failed connections, jitter and entries are the design's.
 
 `inputs` marks each input measured, modeled or assumed (`MARKS`) with its source, and `main` prints the table and
 its JSON.
@@ -179,13 +184,15 @@ def _jitter(dj: int, steps: int) -> int:
 
 
 def terms(connections: Any, scans: Any, *, cells: int, steps: int, dj: int = 1, entries: Any = 0,
-          changes: Iterable[str] = (), failures: Any = 0) -> Terms:
+          changes: Iterable[str] = (), failures: Any = 0, stop: bool = True) -> Terms:
     """`rowsTerms`'s terms over ``connections`` connections of at most ``cells`` egress cells, each charged
     ⌈log2(cells + 1)⌉ bits for its schedule and again for its fail cell, and ``scans`` scans of ``steps`` buckets
     each at the jitter bound ``dj`` (⌈log2 dj^steps⌉ a scan), with ``entries`` the tied audits' free inputs. Under
     ``changes`` (`CHANGES`): with the lengths held the schedules are 0 and the ``failures`` failed connections are
     charged pooled (`failed`), with the timing taken once the jitter is 0, and with the entries charged through the
-    compute audit they are None."""
+    compute audit they are None. ``stop`` is whether a stop block holds a response's output count to its ids, which
+    only the lengths' change reads: without one the server picks the count the length is held to, so the schedules
+    stay each connection's, and only the fail cells give way to the pooled charge."""
     changes = frozenset(changes)
     if changes - CHANGES.keys():
         raise ValueError(f"a change is one of {', '.join(CHANGES)}, not {', '.join(sorted(changes - CHANGES.keys()))}")
@@ -195,7 +202,7 @@ def terms(connections: Any, scans: Any, *, cells: int, steps: int, dj: int = 1, 
         raise ValueError(f"connections and scans are at least 0 and the failed connections among them, not "
                          f"{connections!r}, {scans!r} and {failures!r} failed")
     held, cell, jitter = "lengths" in changes, cells.bit_length(), _jitter(dj, steps)
-    return Terms(0 if held else connections * cell,
+    return Terms(0 if held and stop else connections * cell,
                  failed(connections, failures, cells) if held else connections * cell,
                  0 if "timing" in changes else scans * jitter, None if "entries" in changes else entries)
 
@@ -448,15 +455,16 @@ REQUESTS = ("plan", "census")
 
 class Kind(NamedTuple):
     """One of `ROWS`: where it stands (a check on main, a change to the scan's check, or a design), the changes it
-    makes to the scan's check (`CHANGES`; None for the clock form, which is another check), and what it counts and
-    by which rule."""
+    makes to the scan's check (`CHANGES`; None for the clock form, which is another check), what it counts and by
+    which rule, and whether a stop block holds a response's output count to its ids (`terms`' ``stop``)."""
     standing: str
     changes: tuple[str, ...] | None
     counts: str
+    stop: bool = True
 
 
-#: a scope's rows over a monitoring period: the two checks on main, the scan under each of `CHANGES` and under all
-#: three, and the design
+#: a scope's eight rows over a monitoring period: the two checks on main, the scan under each of `CHANGES` and under
+#: all three, and the design, without its stop block and with it
 ROWS = {
     "scan": Kind("on main", (),
                  "the rows form on the network certifier's own run, as the check charges it: a schedule and a fail "
@@ -468,10 +476,18 @@ ROWS = {
                "link's execution phase"),
     **{name: Kind("a change to the scan", (name,), what) for name, what in CHANGES.items()},
     "all three": Kind("a change to the scan", tuple(CHANGES), "the three changes together"),
+    "design, no stop block": Kind(
+        "a design with no run behind it", ("lengths", "entries"),
+        "the design before a stop block, a proof block that checks where a response's ids stop, has been sampled on "
+        "a served audit: the lengths unit holds a response's length to its Program's output count, but nothing "
+        "holds that count to the ids, so the server picks it and each connection is still charged its schedule, as "
+        "the scan charges it; its failed connections' pooled charge, its jitter and its entries are the design's",
+        stop=False),
     "design": Kind("a design with no run behind it", ("lengths", "entries"),
-                   "head checks and a lengths unit on the network certifier's records: the lengths are held and the "
-                   "entries are the compute audit's, so its term is the jitter and the failed connections' pooled "
-                   "charge"),
+                   "head checks, a lengths unit on the network certifier's records, and a stop block sampled on a "
+                   "served audit: the lengths are held, the stop block holding a response's output count to its "
+                   "ids, and the entries are the compute audit's, so its term is the jitter and the failed "
+                   "connections' pooled charge"),
 }
 
 
@@ -695,7 +711,8 @@ def table(inp: Mapping[str, Input]) -> list[Row]:
                     at = {dj: clock_terms(links, each, syncs=syncs, steps=cls.T, dj=dj) for dj in JITTERS}
                 else:
                     at = {dj: terms(connections, phases, cells=cls.cells, steps=cls.T, dj=dj, entries=entries,
-                                    changes=kind.changes, failures=failing * connections) for dj in JITTERS}
+                                    changes=kind.changes, failures=failing * connections, stop=kind.stop)
+                          for dj in JITTERS}
                 rows.append(Row(scope, period, name, requests, phases, at, phases * scan_delta))
     return rows
 
@@ -865,7 +882,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         description=f"The network certifier's term for {MODEL} at the load of a node, the census's reference "
                     "datacenter and the world, over a week, a month and a year, in bits and GB: as each check on "
                     "main charges it by its own rule, under each of three changes to the scan's check, and for the "
-                    "design that has no run behind it.")
+                    "design that has no run behind it, without its stop block and with it: eight rows a scope and "
+                    "monitoring period.")
     ap.add_argument("--json", action="store_true", help="print the document (value, unit, commit, run, inputs, rows)")
     ap.add_argument("--response-ids", type=int, default=RESPONSE_IDS, metavar="N",
                     help=f"the most ids a response holds (default {RESPONSE_IDS})")

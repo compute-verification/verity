@@ -5,6 +5,8 @@ load of a node, the reference datacenter and the world, each check's by its own 
   execution phase, and the table to a hand-worked world of three machines, in exact arithmetic;
 - each of the three changes zeroes what it should and leaves the rest, the failed connections' pooled charge bounds
   the count it states, and the design's term is the jitter and that charge;
+- the design with no stop block is charged the scan's schedules and is the design's otherwise, and no other row
+  reads the stop block;
 - nothing a check counts by capacity scales with the requests;
 - the world, the datacenter, the requests and the weights are read from the files, each input marked with its source;
 - the world's requests are by default the sampling plan's, the break-even planner's own count; the census's where
@@ -13,6 +15,7 @@ load of a node, the reference datacenter and the world, each check's by its own 
 
 from __future__ import annotations
 
+import itertools
 import json
 import math
 import runpy
@@ -31,7 +34,9 @@ from verity.protocols.certifier.prover import ingress_scan as IS  # noqa: E402
 
 #: a link's execution phases of 128 s over a week, a month and a year
 PHASES = {"week": 4_725, "month": 20_250, "year": 246_375}
-NAMES = ("scan", "N2", "lengths", "timing", "entries", "all three", "design")
+#: the design before its stop block has been sampled, the one row with no stop block
+NO_STOP = "design, no stop block"
+NAMES = ("scan", "N2", "lengths", "timing", "entries", "all three", NO_STOP, "design")
 
 
 def clog2(x: int) -> int:
@@ -117,7 +122,7 @@ def test_the_table_on_a_hand_worked_world():
     """10 requests a link's execution phase, 10 bits a connection, 18,048 bits a slot entry, 32 buckets a phase, 7
     bits of N2's schedules a phase."""
     got = rows(small())
-    assert len(got) == 3 * 3 * 7 and tuple(LB.ROWS) == NAMES and {k[2] for k in got} == set(NAMES)
+    assert len(got) == 3 * 3 * 8 and tuple(LB.ROWS) == NAMES and {k[2] for k in got} == set(NAMES)
     for scope, machines in (("node", 1), ("datacenter", 2), ("world", 3)):
         for period, n in PHASES.items():
             r, n2 = got[scope, period, "scan"], got[scope, period, "N2"]
@@ -162,15 +167,66 @@ def test_the_failed_connections_are_charged_pooled_only_where_the_lengths_are_he
         f = failing[key]
         assert (f.requests, f.phases) == (r.requests, r.phases)
         for dj in LB.JITTERS:
-            if key[2] in ("lengths", "all three", "design"):
+            if key[2] in ("lengths", "all three", NO_STOP, "design"):
                 charge = LB.failed(r.requests, r.requests / 1_000, 1_001)
-                assert f.terms[dj] == r.terms[dj]._replace(cells=charge) and f.terms[dj].schedules == 0
+                assert f.terms[dj] == r.terms[dj]._replace(cells=charge)
+                assert (f.terms[dj].schedules == 0) == (key[2] != NO_STOP)
                 assert charge == pytest.approx(float(r.requests) / 1_000 * math.log2(1_000 * math.e * 1_002))
             else:
                 assert f.terms[dj] == r.terms[dj]
     design, each = failing["world", "year", "design"].terms, math.log2(1_000 * math.e) + math.log2(1_002)
     assert 21.37 < each < 21.38 and design[1].certifier == pytest.approx(7_391.25 * each)
     assert design[2].certifier == pytest.approx(23_652_000 + 7_391.25 * each)
+
+
+def test_the_design_with_no_stop_block_is_charged_the_scans_schedules_and_is_the_designs_otherwise():
+    """Until a stop block holds a response's output count to its ids, the server picks the count the lengths unit
+    holds a length to. So the row's schedules are the scan's, and its failed connections' pooled charge, its jitter
+    and its entries are the design's: at every scope, monitoring period and jitter bound, with failures and without,
+    on the hand-worked world, at the command's defaults and at a given count of a smaller class. It stands where
+    the design stands, just before it."""
+    names = list(LB.ROWS)
+    bare, design = LB.ROWS[NO_STOP], LB.ROWS["design"]
+    assert names.index(NO_STOP) + 1 == names.index("design") == len(names) - 1
+    assert (bare.standing, bare.changes) == (design.standing, design.changes) and bare.counts != design.counts
+    assert "stop block" in bare.counts and "stop block" in design.counts
+    assert [name for name, kind in LB.ROWS.items() if not kind.stop] == [NO_STOP]
+    rate = Fraction(1, 10 ** 6)
+    for inp in (small(), small(failure_rate=Fraction(1, 1_000)), LB.inputs(), LB.inputs(failure_rate=rate),
+                LB.inputs(world_requests=1.778e16, response_ids=1_024),
+                LB.inputs(world_requests=1.778e16, response_ids=1_024, failure_rate=rate)):
+        got = rows(inp)
+        for scope in LB.SCOPES:
+            for period in LB.PERIODS:
+                scan, whole, row = (got[scope, period, name] for name in ("scan", "design", NO_STOP))
+                assert (row.requests, row.phases, row.eps) == (whole.requests, whole.phases, whole.eps)
+                for dj in LB.JITTERS:
+                    t = row.terms[dj]
+                    assert t.schedules == scan.terms[dj].schedules > 0 == whole.terms[dj].schedules
+                    assert (t.cells, t.jitter, t.entries) == (whole.terms[dj].cells, whole.terms[dj].jitter, None)
+                    assert t == whole.terms[dj]._replace(schedules=scan.terms[dj].schedules)
+                    more = float(whole.terms[dj].certifier + scan.terms[dj].schedules)
+                    assert float(t.certifier) == pytest.approx(more, rel=1e-12)
+                    assert (t.cells > 0) == bool(inp["failure_rate"].value)
+
+
+def test_only_the_lengths_change_reads_the_stop_block():
+    """Under every set of the three changes, `terms` with a stop block is `terms` as it is called without the
+    argument, and with none it differs only where the lengths are held, and there only in the schedules, which are
+    each connection's as under no change. So the rows that have a stop block, every row but one, are not moved by
+    the one that has none."""
+    given = {"cells": 65, "steps": 32, "dj": 2, "entries": 9_088, "failures": 1}
+    scan = LB.terms(4, 1, **given)
+    for size in range(len(LB.CHANGES) + 1):
+        for changes in itertools.combinations(LB.CHANGES, size):
+            held, bare = LB.terms(4, 1, changes=changes, **given), LB.terms(4, 1, changes=changes, stop=False, **given)
+            assert held == LB.terms(4, 1, changes=changes, stop=True, **given)
+            if "lengths" in changes:
+                assert held.schedules == 0 < scan.schedules and bare == held._replace(schedules=scan.schedules)
+                assert bare.cells == held.cells == LB.failed(4, 1, 65) != scan.cells
+            else:
+                assert bare == held
+    assert LB.Kind("on main", (), "a row").stop
 
 
 def test_the_scale_is_read_from_the_files_and_every_input_is_marked():
@@ -256,11 +312,11 @@ def test_every_row_names_its_request_count():
         assert name != "given" or (inp["world_requests"].value, inp["world_requests"].mark) == (1e16, "assumed")
         doc = LB.document(inp)
         assert doc["request_count"] == doc["inputs"]["request_count"]["value"] == name
-        assert len(doc["rows"]) == 63 and {r["request_count"] for r in doc["rows"]} == {name}
+        assert len(doc["rows"]) == 72 and {r["request_count"] for r in doc["rows"]} == {name}
         text = LB.render(doc).splitlines()
         assert sum(line.startswith(f"Request count {name}: {LB.COUNTS[name]}. Every row names") for line in text) == 1
         body = [line.split("|") for line in text if line.startswith(("| node ", "| datacenter ", "| world "))]
-        assert len(body) == 9 + 63 + 63 and all(name in (c.strip() for c in cells[3:5]) for cells in body)
+        assert len(body) == 9 + 72 + 72 and all(name in (c.strip() for c in cells[3:5]) for cells in body)
         heads = [line for line in text if line.startswith("| scope ")]
         assert len(heads) == 3 and all("| request count |" in line for line in heads)
     assert list(LB.COUNTS) == [*LB.REQUESTS, "given"] and LB.REQUESTS[0] == "plan"
@@ -313,10 +369,10 @@ def test_the_document_names_its_value_unit_commit_and_run(capsys):
                                                       for i in doc["inputs"].values())
     assert list(doc["legend"]) == list(NAMES) and all(set(k) == {"standing", "counts"} for k in doc["legend"].values())
     assert [k["standing"] for k in doc["legend"].values()] == [
-        "on main", "on main", *["a change to the scan"] * 4, "a design with no run behind it"]
+        "on main", "on main", *["a change to the scan"] * 4, *["a design with no run behind it"] * 2]
     assert "by request" in doc["legend"]["scan"]["counts"] and "by link" in doc["legend"]["N2"]["counts"]
     by = {(r["scope"], r["period"], r["row"]): r for r in doc["rows"]}
-    assert len(by) == 63 and all(r["covers"] == 1.0 and r["standing"] == doc["legend"][r["row"]]["standing"]
+    assert len(by) == 72 and all(r["covers"] == 1.0 and r["standing"] == doc["legend"][r["row"]]["standing"]
                                  for r in by.values())
     r = by["world", "year", "scan"]
     assert (r["machines"], r["gpu_seconds"], r["requests"], r["phases"]) == (3, 24 * 31_536_000, 7_391_250, 739_125)
@@ -326,20 +382,26 @@ def test_the_document_names_its_value_unit_commit_and_run(capsys):
                               "of_target": 171_477_000 / (300 * LB.GB), "of_weights": 171_477_000 / LB.WEIGHTS.bits,
                               "bits_a_phase": 232.0, "bits_a_request": 23.2}
     assert r["entries"]["bits"] == 18_048 * 7_391_250
-    assert all(by["world", "year", name]["entries"] is None for name in ("entries", "all three", "design", "N2"))
+    assert all(by["world", "year", name]["entries"] is None
+               for name in ("entries", "all three", NO_STOP, "design", "N2"))
     assert by["world", "year", "N2"]["term"]["2"]["bits_a_phase"] == 39.0
     assert by["world", "year", "design"]["term"]["2"]["bits"] == 23_652_000
+    bare = by["world", "year", NO_STOP]
+    assert bare["schedules"] == r["schedules"] and bare["cells"] == by["world", "year", "design"]["cells"]
+    assert bare["term"]["2"]["bits"] == r["schedules"]["bits"] + by["world", "year", "design"]["term"]["2"]["bits"]
     assert r["eps"] == 739_125 / 2 ** 20
     json.dumps(doc)
     few = LB.document(small(), only=["world"], periods=["year", "week"])
-    assert [(x["scope"], x["period"]) for x in few["rows"]] == [("world", "week")] * 7 + [("world", "year")] * 7
+    assert [(x["scope"], x["period"]) for x in few["rows"]] == [("world", "week")] * 8 + [("world", "year")] * 8
     assert few["value"] == doc["value"]
     text = LB.render(doc)
     assert "commit c0ffee, run r1" in text and "## The terms in GB" in text and "## The terms in bits" in text
-    assert "the compute side's" in text and "| world      | year   | all three |" in text
+    assert "the compute side's" in text and "| world      | year   | all three " in text
+    assert f"| world      | year   | {NO_STOP} |" in text
     assert "- design (a design with no run behind it): " in text and "- N2 (on main): " in text
+    assert f"- {NO_STOP} (a design with no run behind it): " in text
     assert "| lanes " in text and "| none " in text
-    assert "| world | year   | all three |" in LB.render(few) and "| node" not in LB.render(few)
+    assert "| world | year   | all three " in LB.render(few) and "| node" not in LB.render(few)
     assert LB.render(LB.document(small())).splitlines()[2] == "commit unknown, run none"
     slots = LB.document(small(lanes=4))
     assert "4 lanes x 2 strides" in slots["entries_rule"] and "by capacity" in slots["entries_rule"]
@@ -349,7 +411,7 @@ def test_the_command_prints_the_table_and_its_json(capsys, monkeypatch):
     assert LB.main(["--json", "--commit", "c0ffee", "--run", "r1", "--world-requests", "1e16"]) == 0
     doc = json.loads(capsys.readouterr().out)
     assert doc == json.loads(json.dumps(LB.document(LB.inputs(world_requests=1e16), commit="c0ffee", run="r1")))
-    assert doc["value"] == 2 * 13 * 1e16 / LB.GB and len(doc["rows"]) == 63
+    assert doc["value"] == 2 * 13 * 1e16 / LB.GB and len(doc["rows"]) == 72
     assert doc["target"]["bits_a_phase"] == pytest.approx(300 * LB.GB / (46_870_000 * 246_375))
     rate = doc["failure_rate_at_target"]
     assert 1e-6 < rate < 1e-5 and LB.failed(1e16, 1e16 * rate, 4_097) == pytest.approx(300 * LB.GB)

@@ -23,7 +23,7 @@ commit: `--run "$RESEARCH_RUN_ID" --commit "$RESEARCH_SOURCE_SHA"`. Without `--c
 A scope is a node (one machine), the reference datacenter or the world, each machine behind one network certifier.
 Over a week, a month and a year it serves its GPU-seconds × the serving MFU × a GPU's peak FLOP/s / (a request's
 tokens × 2 × the served MACs a token) requests, each on one connection. Which request that is is the row's request
-count, which every row names (Where the scale comes from, below). Each scope and monitoring period has seven rows,
+count, which every row names (Where the scale comes from, below). Each scope and monitoring period has eight rows,
 and each row says where it stands:
 
 - `scan` (on main): the rows form, the scan on the network certifier's own run, as the check charges it today. A
@@ -34,8 +34,14 @@ and each row says where it stands:
 - `lengths`, `timing`, `entries` (each a change to the scan's check) and `all three`: the scan with a response's
   length held to its Program's output count, with the release times taken once by the compute side's tick, and with
   the entries charged through the compute audit.
-- `design` (no run behind it): head checks and a lengths unit on the network certifier's records. The lengths are
-  held and the entries are the compute audit's, so its term is the jitter and the failed connections' charge.
+- `design, no stop block` (no run behind it): the design, below, before a stop block has been sampled on a served
+  audit. A stop block is a proof block that checks where a response's ids stop. The lengths unit holds a response's
+  length to its Program's output count, but until a stop block holds that count to the ids the server picks it, so
+  each connection is still charged its schedule, as the scan charges it. Its failed connections' charge, its jitter
+  and its entries are the design's.
+- `design` (no run behind it): head checks, a lengths unit on the network certifier's records, and a stop block
+  sampled on a served audit. The lengths are held, the stop block holding a response's output count to its ids, and
+  the entries are the compute audit's, so its term is the jitter and the failed connections' charge.
 
 Nothing a check counts by capacity is scaled by requests: twice the requests are twice the scan's schedules and fail
 cells, and nothing else.
@@ -43,12 +49,12 @@ cells, and nothing else.
 ## The terms
 
 - **schedules**: for the scan, ⌈log2(cells + 1)⌉ bits a connection, where cells is the most cells a response takes,
-  one more than the most ids it holds; 0 where the lengths are held. For N2, ⌈log2 #Σ_sync^m⌉ over a link's m
-  execution phases (`--syncs`).
-- **cells**: the fail cells, the same bits again a connection. Where the lengths are held it is the failed
-  connections' charge instead, pooled over the period: which connections failed and where each one's stream ended,
-  at most F·(log2(e·N / F) + log2(cells + 1)) bits for F failures among N connections, and 0 with none
-  (`--failure-rate`, the share that fail, which no run has measured).
+  one more than the most ids it holds; 0 where the lengths are held, but for `design, no stop block`, which is
+  charged the scan's. For N2, ⌈log2 #Σ_sync^m⌉ over a link's m execution phases (`--syncs`).
+- **cells**: the fail cells, the same bits again a connection. Where the lengths are held, with a stop block or
+  without, it is the failed connections' charge instead, pooled over the period: which connections failed and where
+  each one's stream ended, at most F·(log2(e·N / F) + log2(cells + 1)) bits for F failures among N connections, and
+  0 with none (`--failure-rate`, the share that fail, which no run has measured).
 - **jitter**: ⌈log2 D_j^T⌉ bits for each execution phase of T buckets on each link. At D_j = 1 it is 0; at D_j = 2 it
   is a bit a bucket. Both are printed; where the timing is taken once it is 0.
 - **term**: the three summed, the network certifier's own term, at each D_j.
