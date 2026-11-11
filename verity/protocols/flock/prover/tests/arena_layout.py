@@ -36,6 +36,9 @@ LIGERITO = {
     36: (6, (1, 2, 3, 4, 5, 6, 7), (4, 4, 4, 4, 4, 4), (241, 148, 121, 110, 105, 103, 102)),
     37: (6, (1, 2, 3, 4, 5, 6, 7, 8), (4, 4, 4, 4, 4, 4, 4), (241, 148, 121, 110, 105, 103, 102, 101)),
 }
+#: the wide level-0 leaf's ladders (`flock_live::wide_leaf`, the Lean `Flock.fast100Wide`): m = 31's with ``m - 25`` lanes
+#: at level 0, so 2^19 leaves at every size
+WIDE = {m: (m - 25,) + LIGERITO[31][1:] for m in range(32, 36)}
 F128, F256, HB = 16, 32, 64
 SALT = 192  # an hm96-sha512 leaf's salt
 BLOCKS = 2048  # ZT_MAX_BLOCKS, LC_MAX_BLOCKS, SMC_MAX_BLOCKS, LF_MAX_BLOCKS
@@ -62,9 +65,11 @@ class Shape:
     #: before keep-L0, a keeping rep 0 held a and b through Ligerito and a copy of z from its witness on
     keep_ab: bool = False
     ligerito: tuple = field(default=None, compare=False)
+    #: the wide level-0 leaf's statement version: `WIDE`'s ladder where it has one, else `LIGERITO`'s
+    wide: bool = False
 
     def lig(self) -> tuple:
-        return self.ligerito or LIGERITO[self.m]
+        return self.ligerito or (WIDE.get(self.m) if self.wide else None) or LIGERITO[self.m]
 
     @property
     def types(self) -> tuple[int, ...]:
@@ -380,13 +385,15 @@ def need(events: list[tuple], hi: int) -> int:
 
 def shapes(ms=range(21, 38), k_logs=range(20, 28)) -> Iterator[Shape]:
     """Every shape the prover accepts in the grid (fc_bad_shape: 20 <= k_log <= 27; the lincheck's eight-row stripes: m - k_log
-    >= 3), under M1 and M0."""
+    >= 3), under M1 and M0, and in the wide level-0 leaf's version where its ladder is its own."""
     for m in ms:
         for k_log in k_logs:
             if m - k_log < 3:
                 continue
             for zk in (True, False):
                 yield Shape(m, k_log, zk)
+                if m in WIDE:
+                    yield Shape(m, k_log, zk, wide=True)
 
 
 def worst(s: Shape) -> list[Shape]:
