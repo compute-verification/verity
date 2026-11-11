@@ -55372,3 +55372,69 @@ For the table: #8139 conflicts with `main` `967b722429f3` in four Lean files and
 For the table: #8789: merge with `main` (`8f5d3c3823f0`) passes `--records` in all five packages, `r20261111-104934-a770`; head `5124b2689c75` unchanged; clean against `967b722429f3` by `git merge-tree`, not built.
 For the table: #8949 (hoist, unmarked) head `c14e4bd284b1`, twins in `Flock/ProgramRead.lean`; tries `e4ef`, `69d8` pass; records `260d`, tier and lean-agreement running; old head's tier was red on `test_no_long_module_grows` (mine, fixed).
 For BREAKEVEN: no new seconds. The hoist, built, unmarked (12:27Z's figures, `744d`): 0.29 to 0.30 s a MB of program once a call and 0.004 s a MB a further session, against 0.40 to 0.42 s a MB every session as `main` is. By stage at 152 MB (`e806`, measured): `Desc.parse` 17.4 s (0.115 s/MB), `Program.decode` about 28 s (0.18 s/MB); the one-parse step is unbuilt on the new shape and unmeasured.
+
+## BENCHCROSS, Wed 11 Nov 12:51Z: second reading of #8950 at f8b6e599b19b (with #8904's `kappas`) and of HARMSEARCH's 12:17Z and 12:35Z rows (`8e11`, `87c2`, `3bf0`): holds (the twelve printed rows are in the record to the digit, 67 GB cells within 0.16% of my path, 9 bits cells within 0.02, quick tier passed, 57 suites). ONE figure of the order's 12:40Z is off by one: width 2^-4 holds 2^-100 under one M up to 170 once the conflict term is added (171 by the first-hit term alone). My 12:37Z final-recut cells gain the 12:40Z line
+
+Tags: [run] a command I ran now, [read] a file or record I read now (place given), [relayed] another lane's statement I did not check, [guess] mine, unchecked. Times from `date -u`; this entry's last command ended 12:50Z. Order read through its 12:40Z section, mailbox through its 12:45Z section (#8926's read is taken, entry by 14:10Z).
+
+**second reading of #8950 at `f8b6e599b19b7802eed13126355b6f96a3a65cc6` (with #8904's `kappas` commit `f1e9d625dd77`) and of HARMSEARCH's 12:17Z and 12:35Z tables (runs `8e11`, `87c2`, `3bf0`): holds: `8e11`'s twelve rows are in its record to the digit, 67 GB cells recomputed on my path are each within 0.16%, 9 bits cells by hand within 0.02. One thing off by one in the order's 12:40Z: with the conflict term added, width 2^-4 holds 2^-100 under one M up to 170, not 171.**
+
+**0. Correction to my 12:37Z entry, by the order's 12:40Z.** Every final-recut bits cell I wrote there (2^-100.79, 2^-100.24, 2^-100.29, 2^-99.74) carries this line: "M = 145 over the kinds the plan prices [SCALE's run; ATTACK's second tool agrees]; the token select is in no stratum and uncounted (442 or more at the plan's LM-head cut [derived]: the record 2^-99.18); per-rank windows". No figure of mine moves.
+
+**1. The order's 12:40Z cells, by hand** [run: my arithmetic; line (b), over the served wiring; modeled; no Lean statement at the code is behind it; compressions, K0 = 6, T = 2^80 calls a run; Σk SCALE's, relayed: record 9,384,740, width 2^-4 13,733,766]
+- M = 442: the record 2^-99.188 (the order's −99.18): holds. M = 161: 2^-100.639 and width 2^-4 2^-100.090 (−100.64, −100.09): holds. M = 193: 2^-100.379 and 2^-99.830 (−100.38, −99.83): holds.
+- "The record holds 2^-100 under one M up to M = 250": holds (250 reads 2^-100.004 with all three terms, 251 reads 2^-99.9986).
+- **"Width 2^-4 up to 171": 171 holds by the first-hit term alone (2^-100.0032); with the conflict term added it reads 2^-99.9990, so the sum holds up to 170** (2^-100.0074). A difference of 0.004 bit; say 170, or say "first-hit term".
+
+**2. #8950, read as a soundness-path change** [read: `git diff 07ec8b509c f8b6e599b1` for its own two commits; `git show f1e9d625dd` for #8904's; `git diff origin/main...f8b6e599b1`]
+- **What lands with it.** Against `main` `967b722429f3` it is seven files, +987 −27: #8853's driver (`breakeven/headline.py`, its test, `pyproject.toml`), #8904's planner change (`verity/protocols/spot/optimize.py` +60 with its test, `figure1.py`), which itself holds #8878 and #8893, and HARMSEARCH's own 60 lines in `headline.py` and `test_headline.py`. It merges with `main` `967b722429f3` with no conflict [run: `git merge-tree --write-tree`]. Unmarked, no label; #8853 and #8904 are open and unmarked too [run: `gh pr view`].
+- **Does it change what any guarantee rests on: no.** Its own lines give a row a `plan` (keywords passed to `two_stage_design`) and print the design's `kappa` and `k_sum`; `plan()` takes the strata from the planner's own `two_stage_strata` in place of an inline copy. #8904's `kappas` keyword only drops designs from the family the planner searches (`if kappas is not None and kappa not in kappas: continue`) and refuses a κ off `KAPPAS`; every design that remains is bounded by the same function as before. So a held κ can only read the same or a larger GB than the planner's own pick, and the three rows of record keep their keywords (the empty plan).
+- **The hiding argument: untouched.** No prover, commitment or coin code is in the diff.
+- **Does the printed figure match its run: yes.** `r20261111-121250-8e11` (done rc 0, source `f8b6e599b19b` not dirty, vy-nebius-cpu-6): its `out/figure.txt` holds the twelve rows of HARMSEARCH's 12:17Z table to the digit (14,228.6; 11,338.8; 12,592.3; 8,686.3; 5,568.6; 2,447.5; 1,585.8; 1,634.4; 1,730.7; 1,920.6; 2,358.3; 3,224.5; GB × 1.05, world year, modeled 0.4, at the tree's own cards and prices: neither the head's 250.0 nor `main`'s setup on every session is in them). Its λ = 1 and floor columns follow by arithmetic (14,228.6 / 1.05 = 13,551.0; × 0.0143 / 0.4 to × 0.0154 / 0.4 = 484 to 522).
+- **The quick tier has ended and passes:** `r20261111-121123-87c2`, done rc 0, source `f8b6e599b19b` not dirty: "57 suites: 57 passed (0 cached), 0 failed" [read: its `stdout.log`]. HARMSEARCH's entries have it still running.
+- Its bits columns at M = 2,049 and 139 are struck by the order's 12:24Z; as arithmetic they were right (`(i) honest`, Σk 9,326,621: 2^-96.986; `(iii) honest, by width, kappa 2^-8`, Σk 1,080,722: 2^-100.096 and 2^-103.968).
+
+**3. HARMSEARCH's `3bf0` (Lean's check of ten designs with the setup in the cells)** [read: `r20261111-115045-3bf0`, done rc 0, source `f1e9d625dd77` not dirty, `out/lean.log`; run: the ten planner cells on my path, `plan_levers.py` over `3db1`'s dump]
+
+| cut | head block | plan | reading | planner GB: its / mine | Lean certifies GB (its record) |
+|---|---|---|---|---:|---:|
+| the plan's | whole | size classes | as `main` is (+783) | 16,682.9 / 16,682.5 | 16,634.5 |
+| the plan's | whole | width + margin, κ 2^-3 | as `main` is | 10,358.2 / 10,358.4 | 10,292.0 |
+| the plan's | whole | width + margin, κ 2^-8 | as `main` is | 12,331.3 / 12,328.2 | 12,331.4 |
+| recut A | whole | width + margin, κ 2^-4 | as `main` is | 10,587.7 / 10,587.8 | 10,443.7 |
+| recut A | whole | width + margin, κ 2^-4 | the shared parse, unbuilt (+373) | 7,065.1 / 7,065.2 | 6,969.0 |
+| recut A | #8917's cut, G = 64 (key rows unwritten) | width + margin, κ 2^-6 | as `main` is | 3,888.0 / 3,887.2 | 3,881.9 |
+| recut A | #8917's cut, G = 64 | width + margin, κ 2^-6 | the shared parse, unbuilt | 2,637.7 / 2,637.4 | 2,633.6 |
+| recut A | #8917's cut, G = 32 | width + margin, κ 2^-4 | as `main` is | 3,030.6 / 3,030.4 | 3,030.6 |
+| recut A | #8917's cut, G = 32 | width + margin, κ 2^-4 | the shared parse, unbuilt | 1,956.3 / 1,956.2 | 1,956.3 |
+| the plan's | #8917's cut, G = 32 | width + margin, κ 2^-3 | as `main` is | 2,792.5 / 2,792.5 | 2,792.5 |
+
+- The record's Lean bits over its planner bits give its Lean column (0.9971, 0.9936, 0.9864 on the first, second and fourth rows); the largest shortfall is 1.36% and Lean is above the planner by at most 0.055 GB (the third row). Its line "within 1.4%, never above by more than 0.1 GB": holds.
+- The label on its "+373" rows: by SERVEDCARD's 12:11Z that figure is the shared parse, unbuilt, and not #8949's cut; the built cut at one session a call is +554 to +563 (my 12:44Z).
+
+**4. HARMSEARCH's 12:35Z table 1** [run: 57 cells on my path, with recut A where it has the final recut, which it prices within 1 GB of A]
+- Every cell is within 0.16% of mine. The rows it names for BREAKEVEN, its / mine, world year, modeled 0.4, nothing built:
+
+| writers' cut, head block, plan | no program (not what `main` verifies) | as `main` is (+783) | the shared parse, unbuilt (+373) | a window in one process, unbuilt (+1.4) |
+|---|---:|---:|---:|---:|
+| the plan's, whole, width + margin κ 2^-6 | 4,069 / 4,069.2 | 10,571 / 10,570.0 | 7,166 / 7,166.1 | 4,081 / 4,080.8 |
+| the plan's, whole, width + margin κ 2^-9 | 7,209 / 7,209.5 | 14,593 / 14,586.0 | 10,727 / 10,723.5 | 7,223 / 7,222.7 |
+| the recut, whole, width + margin κ 2^-4 | 3,861 / 3,860.3 | 10,593 / 10,587.8 | 7,068 / 7,065.2 | 3,873 / 3,872.3 |
+| the recut, whole, width + margin κ 2^-5 | 3,937 / 3,936.4 | 10,635 / 10,629.9 | 7,128 / 7,125.1 | 3,949 / 3,948.4 |
+| the recut, whole, size classes (the record's plan) | 6,360 / 6,360.4 | 16,851 / 16,864.2 | 11,394 / 11,393.4 | 6,379 / 6,379.3 |
+| the recut, #8917's cut G = 128, κ 2^-4 | 1,617 / 1,616.6 | 4,713 / 4,707.7 | 3,092 / 3,089.1 | 1,623 / 1,622.1 |
+| the recut, #8917's cut G = 64, κ 2^-6 | 1,501 / 1,500.3 | 3,891 / 3,887.2 | 2,639 / 2,637.4 | 1,505 / 1,504.6 |
+| the recut, #8917's cut G = 32, κ 2^-4 | 980 / 979.0 | 3,035 / 3,030.4 | 1,959 / 1,956.2 | 983 / 982.7 |
+| the recut, #8917's cut G = 32, κ 2^-5 | 1,085 / 1,084.5 | 3,159 / 3,154.1 | 2,073 / 2,070.4 | 1,089 / 1,088.2 |
+| the recut, #8917's cut G = 32, κ 2^-7 | 1,769 / 1,769.6 | 4,015 / 4,011.6 | 2,841 / 2,839.3 | 1,773 / 1,773.8 |
+
+- Every #8917 row is "units' prices by size, none proved; key rows unwritten". Its section 2 (the values units at 2^26) I did not rerun; it reads 0.2% to 1.8% under my 12:02Z rows, and BREAKEVEN's one 2^26 cell reads 1.2% under mine (my 12:37Z). Three paths, mine the highest, no cause found by any of us. The GB of a 2^26 row is good to about 2% until one is.
+- Its one-M bits cells, by hand at my own Σk for recut A [run]: width + margin κ 2^-4 at M = 145 (Σk 14,729,547) 2^-100.139 (its −100.15); κ 2^-5 at M = 205 (7,364,810) 2^-100.642 (−100.65); the planner's own κ 2^-3 (29,459,021) 2^-99.139 (−99.15): does not hold, as it says; the plan's cut κ 2^-9 at M = 4,130 (473,528) 2^-100.275 (−100.28); G = 64 κ 2^-6 at M = 588 (3,617,957) 2^-100.152 (−100.16); G = 128 κ 2^-6 at M = 332 (3,588,798) 2^-100.986 (−101.00); G = 32 κ 2^-7 at M = 1,100 (2,060,828) 2^-100.061 (−100.07); G = 32 κ 2^-5 at M = 145 and 205 (8,243,090) 2^-100.976 and 2^-100.479 (−100.99, −100.49). All hold within 0.02. Each carries the order's 12:40Z line: with the token select at 442, width + margin κ 2^-4 reads about 2^-98.5 under one M [run: 2^-100.139 less log2(443/146)], so "holds 2^-100 under one M at κ 2^-4" stands only over the kinds the plan prices.
+- Its "by stratum" bits column, its section 3 (the floor, by proportion) and section 4 (what the final recut costs) are not recomputed.
+
+**5. Not read yet:** HEADPROF's 12:35Z (`5832`), WITNESS's 12:33Z (`9ad6`), CONCRETE's 12:31Z and 12:44Z, HARMSEARCH's `1da8`, BREAKEVEN's next entry. Next after those: #8926 for vllm.
+
+For BREAKEVEN: (1) HARMSEARCH's rows hold on my path, so the plan to price at the recut is width + margin held at κ 2^-4 (3,861 no program; 10,593 as `main` is); add the order's 12:40Z line to each of its bits cells. (2) #8950's quick tier `87c2` has passed at `f8b6e599b19b` (57 suites, none failed); its ready line is HARMSEARCH's to write. (3) the "+373" column is the shared parse, unbuilt; the built cut (#8949) at `main`'s one session a call is +554 to +563.
+
+For the table: second reading of #8950 at `f8b6e599b19b` and of HARMSEARCH's `8e11` / `3bf0` / 12:35Z rows: holds (`8e11`'s twelve rows in its record to the digit, 67 GB cells within 0.16% of my path, 9 bits cells within 0.02; quick tier `87c2` passed, 57 suites; the planner's `kappas` only narrows the family searched; merges with `main` `967b722429f3`).
+For the table: the order's 12:40Z cells hold by hand, but width 2^-4 holds 2^-100 under one M up to 170 once the conflict term is added (171 by the first-hit term alone).
