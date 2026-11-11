@@ -1968,6 +1968,68 @@ sys.exit(1)
         "audit inputs and the cases written here from it, not from the parties that produced them")
 
 
+#: onsite's own protocols: the piece's private directory, its public summary, its Lean, and a directory that isn't its
+ONSITE_OWN = {"verity/pous/p2/v4/run": ("pous/w0", "pous/pous.json", "pous-run-protocol", "pous/w1"),
+              "verity/wipe/v0": ("wipe", "wipe/summary.json", "wipe-protocol", "earlier/wipe")}
+
+
+@pytest.mark.parametrize("protocol", list(ONSITE_OWN))
+@pytest.mark.parametrize("killed", [True, False])
+def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and_composes_the_rest(tmp_path, protocol,
+                                                                                                    killed):
+    """served_composite.sh with onsite_pieces.sh's `onsite_cases` and a stand-in lake and composite.py, its serve dir
+    named through a link. A piece killed once it wrote its case and its answer and before it published its summary
+    (PoUS's pous.json, the wipe's summary.json): the protocol is NOT_WRITTEN and its directory LEFT_OUT, handed to
+    neither product; the other protocol's case is composed as written, remote gets its own case, and the exit is as
+    composite.py's answers have it. A case of the protocol in another directory beside the piece's own (a second
+    window's; the wipe's left by an earlier run): the piece's own is composed and the other is not. No path reaches
+    OUT/verdicts.txt."""
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "link", tmp_path / "out"
+    (tmp_path / "serve").mkdir()
+    d.symlink_to(tmp_path / "serve", target_is_directory=True)
+    _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
+        (tree / "verity" / pkg).mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+
+    def case(where: str, of: str) -> str:
+        (d / "private" / where).mkdir(parents=True)
+        (d / "private" / where / "case.json").write_text(json.dumps({"evidence": "beef"}))
+        (d / "private" / where / "answer.json").write_text(json.dumps({"protocol": of, "verdict": "accept"}))
+        return str(d / "private" / where)
+
+    own = {}
+    for p, (where, summary, lean, _) in ONSITE_OWN.items():
+        own[p] = case(where, p)
+        (out / "pieces" / summary).parent.mkdir(parents=True)
+        (out / "pieces" / summary).write_text(json.dumps(
+            {"window": 0, "verdict": "accept", "decided_by": {"program": lean, "host": "the-served-node"}}))
+    v2 = case("spot-v2", "verity/sampled-proofs/one-stage/v2")
+    if killed:
+        (out / "pieces" / ONSITE_OWN[protocol][1]).unlink()
+    else:
+        case(ONSITE_OWN[protocol][3], protocol)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+           "ONSITE_PIECES": str(ONSITE_PIECES)}
+    r = subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
+                       check=False, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    said = (out / "verdicts.txt").read_text()
+    lines = {p: [f"COMPOSITE NOT_WRITTEN {p}" if killed and p == protocol else f"COMPOSITE CASE {p} accept"]
+             for p in ONSITE_OWN}
+    lines[protocol].append(f"COMPOSITE LEFT_OUT {protocol}: a case under the serve dir's private that is not its "
+                           "piece's with its Lean's answer (onsite_cases.log on the node)")
+    assert said.splitlines()[:4] == [
+        *lines["verity/pous/p2/v4/run"], *lines["verity/wipe/v0"],
+        "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here"]
+    assert str(tmp_path) not in said
+    handed = {x: json.loads((d / "private" / "composite" / x / "private" / "argv.json").read_text())
+              for x in ("remote", "onsite")}
+    assert handed == {"remote": [v2], "onsite": [own[x] for x in ONSITE_OWN if not (killed and x == protocol)]}
+
+
 DIGEST = "5e" * 64
 
 

@@ -170,7 +170,9 @@ served_verdicts.py) from what a served window kept: `case.json`, the subprotocol
 on it, whose commitment is the digest the composite binds. Both go to the window's private directory (0700), never
 beside the public answer. `served_piece.py` and `streamed_wipe/served_wipe.sh` write that piece through it while they
 run, and the composite takes each as written: `onsite_pieces.sh`'s `onsite_cases` names the two cases, each beside its
-Lean's answer, takes no card and makes neither, and says `NOT_WRITTEN` for a piece that left no case or no such answer
+Lean's answer, takes no card and makes neither, says `NOT_WRITTEN` for a piece that left no case or no such answer, and
+has the composite leave out (`LEFT_OUT`, its `ONSITE_SKIP`) any other case of the two protocols under the serve dir's
+private directory, such as one whose piece was killed before it published its summary
 (`tests/test_pous_onsite_cases.py`). Run by hand after a run, from the kept outputs alone, it encodes PoUS's `C*` again
 from the served snapshot at the kept salt and holds each kept output to the others before anything is written.
 `tests/test_pous_served_case.py` runs both on a CPU.

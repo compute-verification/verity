@@ -21,13 +21,17 @@
 #                           piece's public summary (OUT/pieces/pous/pous.json, OUT/pieces/wipe/summary.json: the
 #                           window, the verdict and who decided) and the answer beside the case, never the case.
 #                           OUT/verdicts.txt gets `COMPOSITE CASE PROTOCOL VERDICT` for a case served_composite.sh then
-#                           composes, and `COMPOSITE NOT_WRITTEN PROTOCOL` where the piece wrote no case, no answer
-#                           beside it, or an answer that isn't its Lean's or isn't of the verdict it published; why
-#                           stays in SERVE_DIR/private/composite/onsite_cases.log. served_composite.sh composes every
-#                           directory under SERVE_DIR/private that holds a case beside an answer, so where one of these
-#                           two protocols' is not the case named here (another window's, one left from an earlier run,
-#                           one answered by the Python alone), this says `COMPOSITE: not run` and exits 1 before any
-#                           product is composed: of each protocol at most one case reaches composite.py, its piece's.
+#                           composes, and `COMPOSITE NOT_WRITTEN PROTOCOL` where the piece published no summary or wrote
+#                           no case, no answer beside it, or an answer that isn't its Lean's or isn't of the verdict it
+#                           published. served_composite.sh composes each directory under SERVE_DIR/private that holds a
+#                           case beside an answer, so this sets the array ONSITE_SKIP to those of these two protocols
+#                           that are not the case named here (one whose piece was killed before it published, another
+#                           window's, one left from an earlier run, one answered by the Python alone), each named as
+#                           that script's scan names it, and the script hands no product any of them: of each protocol
+#                           at most one case reaches composite.py, its piece's. Each is a `COMPOSITE LEFT_OUT PROTOCOL`
+#                           line, and the composite goes on without it. Why, and which directory, stay in
+#                           SERVE_DIR/private/composite (onsite_cases.log, onsite_cases.skip). Only where the cases
+#                           can't be read does this say `COMPOSITE: not run` and exit 1, before any product is composed.
 
 onsite_piece_commands() {
   # shellcheck disable=SC2016
@@ -48,12 +52,14 @@ onsite_piece_commands() {
 }
 
 onsite_cases() {
-  local rc
+  local rc dir
+  ONSITE_SKIP=()
   "$PY" - "$D/private" "$OUT/pieces" "$P" 2> "$P/onsite_cases.log" <<'EOF' | tee -a "$OUT/verdicts.txt"
-import json, sys
+import json, os, sys
 from pathlib import Path
 
-private, pieces, skip = (Path(a).resolve() for a in sys.argv[1:4])
+# unresolved, as served_composite.sh's scan names a directory: it leaves one out where its own name for it is a skip
+private, pieces, composite = (Path(a) for a in sys.argv[1:4])
 VERDICTS = ("accept", "reject", "undecided")
 
 
@@ -81,10 +87,10 @@ OWN = {"verity/pous/p2/v4/run": ("pous-run-protocol", "pous/pous.json", pous),
 composed = {}  # what served_composite.sh composes: each directory holding a case beside an answer, by its protocol
 for f in sorted(private.rglob("case.json")):
     d = f.parent
-    if d != skip and skip not in d.parents and (d / "answer.json").is_file():
+    if d != composite and composite not in d.parents and (d / "answer.json").is_file():
         composed.setdefault(str(read(d / "answer.json").get("protocol")), []).append(d)
 
-refused = {}
+left_out = []
 for protocol, (lean, name, where) in OWN.items():
     summary = read(pieces / name)
     own = where(summary) if summary else None
@@ -93,7 +99,7 @@ for protocol, (lean, name, where) in OWN.items():
     by = by.get("program") if isinstance(by, dict) else None
     why = None
     if not summary:
-        why = f"the run has no piece of it: no {name} under {pieces}"
+        why = f"the run published no piece of it: no {name} under {pieces}"
     elif own is None:
         why = f"{name} names no window"
     elif not (own / "case.json").is_file():
@@ -112,19 +118,21 @@ for protocol, (lean, name, where) in OWN.items():
     else:
         log("NOT_WRITTEN", protocol=protocol, reason=why)
         print("COMPOSITE NOT_WRITTEN", protocol)
-    others = [str(d) for d in composed.get(protocol, []) if why or d != own]
-    if others:
-        refused[protocol] = others
-for protocol, others in refused.items():
-    log("REFUSED", protocol=protocol, pieces=others)
-    print(f"COMPOSITE: not run, the serve dir's private holds a case of {protocol} that is not its piece's with its "
-          "Lean's answer, and every case there is composed (onsite_cases.log on the node)")
-sys.exit(3 if refused else 0)
+    for d in composed.get(protocol, []):
+        if d == own and why is None:
+            continue
+        reason = why if own in (d, None) else f"it is not in its piece's directory, {own}"
+        log("LEFT_OUT", piece=str(d), protocol=protocol, reason=reason)
+        print(f"COMPOSITE LEFT_OUT {protocol}: a case under the serve dir's private that is not its piece's with its "
+              "Lean's answer (onsite_cases.log on the node)")
+        left_out.append(d)
+(composite / "onsite_cases.skip").write_bytes(b"".join(os.fsencode(d) + b"\0" for d in left_out))
 EOF
   rc=${PIPESTATUS[0]}
-  case $rc in
-    0) say "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here" ;;
-    3) exit 1 ;;
-    *) say "COMPOSITE: not run, onsite's own cases weren't read (exit $rc, onsite_cases.log on the node)"; exit 1 ;;
-  esac
+  if [ "$rc" = 0 ]; then
+    while IFS= read -r -d '' dir; do ONSITE_SKIP+=("$dir"); done < "$P/onsite_cases.skip" || rc=$?
+  fi
+  [ "$rc" = 0 ] \
+    || { say "COMPOSITE: not run, onsite's own cases weren't read (exit $rc, onsite_cases.log on the node)"; exit 1; }
+  say "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here"
 }

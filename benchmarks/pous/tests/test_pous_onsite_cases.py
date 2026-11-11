@@ -3,9 +3,10 @@
 it. It names each piece's case beside its Lean's answer and makes neither: no card is asked for and no Lean is built
 (`gpu-lease`, `nvidia-smi`, `lake` and served_composite.sh's `exe` are stand-ins that record a call), no encoder or
 script is run (the encoder's build and the old case step are stand-ins too, and its Python runs only its own lines),
-and nothing under the private directory changes but its own log. A piece that left no case or no answer is
-``NOT_WRITTEN`` by its protocol and the composite goes on; a case served_composite.sh would compose that is not its
-piece's with its Lean's answer stops the step before any product is composed."""
+and nothing under the private directory changes but its own log and its list of what it left out. A piece that left no
+case or no answer is ``NOT_WRITTEN`` by its protocol; a case served_composite.sh would compose that is not its piece's
+with its Lean's answer is ``LEFT_OUT`` and its directory goes into ``ONSITE_SKIP``, named as that script's scan names
+it; either way the step goes on to the products. Only cases it can't read stop it."""
 
 from __future__ import annotations
 
@@ -22,15 +23,19 @@ ONSITE_PIECES = ROOT / "benchmarks" / "pous" / "onsite_pieces.sh"
 POUS, WIPE, BANDWIDTH = "verity/pous/p2/v4/run", "verity/wipe/v0", "verity/remote-bandwidth/p2/v0"
 LEAN = {POUS: "pous-run-protocol", WIPE: "wipe-protocol"}
 WHERE = {POUS: "pous/w3", WIPE: "wipe"}
+#: a directory that is not the piece's: PoUS's of another window, the wipe's of an earlier run (its name holds a space)
+ELSEWHERE = {POUS: "pous/w4", WIPE: "earlier run/wipe"}
 SUMMARY = {POUS: "pous/pous.json", WIPE: "wipe/summary.json"}
 NONE_MADE = "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here"
-#: served_composite.sh up to its composing: its settings, `say` and `exe`, this file sourced, the call, then the products
+#: served_composite.sh up to its composing: its settings, `say` and `exe`, this file sourced, the call, then the products,
+#: which are handed no directory of ONSITE_SKIP (its `skips`)
 STEP = """set -uo pipefail
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
 exe() { echo "exe $*" >> "$CALLS"; return 1; }
 . "$ONSITE_PIECES"
 onsite_cases
 echo composed
+for s in ${ONSITE_SKIP[@]+"${ONSITE_SKIP[@]}"}; do echo "skip $s"; done
 """
 
 
@@ -46,8 +51,19 @@ def _write(path: Path, doc: object) -> None:
     path.write_text(json.dumps(doc, sort_keys=True))
 
 
+def _case(directory: Path, protocol: str, verdict: str = "accept") -> None:
+    _write(directory / "case.json", {"commitment": "c0", "evidence": "beef", "params": {}})
+    _write(directory / "answer.json", {"commitment": "d1", "protocol": protocol, "verdict": verdict})
+
+
 def _files(root: Path) -> dict[Path, bytes]:
     return {f: f.read_bytes() for f in sorted(root.rglob("*")) if f.is_file()}
+
+
+def _own(d: Path) -> dict[Path, bytes]:
+    """The step's own two files under the private directory, the only ones it writes."""
+    return {f: f.read_bytes() for f in (d / "private" / "composite" / "onsite_cases.log",
+                                        d / "private" / "composite" / "onsite_cases.skip")}
 
 
 @pytest.fixture
@@ -58,14 +74,11 @@ def served(tmp_path) -> tuple[Path, Path]:
     d, out = (tmp_path / "serve").resolve(), (tmp_path / "out").resolve()
     private = d / "private"
     for protocol in (POUS, WIPE):
-        _write(private / WHERE[protocol] / "case.json", {"commitment": "c0", "evidence": "beef", "params": {}})
-        _write(private / WHERE[protocol] / "answer.json", {"commitment": "d1", "protocol": protocol, "verdict": "accept"})
+        _case(private / WHERE[protocol], protocol)
         _write(out / "pieces" / SUMMARY[protocol], {"decided_by": {"host": "node", "program": LEAN[protocol]},
                                                      "verdict": "accept", "window": 3})
-    _write(private / "bandwidth" / "case.json", {"commitment": "c0", "evidence": "beef", "params": {}})
-    _write(private / "bandwidth" / "answer.json", {"commitment": "d1", "protocol": BANDWIDTH, "verdict": "accept"})
-    _write(private / "composite" / "onsite" / "private" / "case.json", {"evidence": "beef"})
-    _write(private / "composite" / "onsite" / "private" / "answer.json", {"protocol": POUS, "verdict": "reject"})
+    _case(private / "bandwidth", BANDWIDTH)
+    _case(private / "composite" / "onsite" / "private", POUS, "reject")
     return d, out
 
 
@@ -88,95 +101,130 @@ def _step(tmp_path: Path, d: Path, out: Path, python: str | None = None) -> tupl
             argv.read_text().splitlines() if argv.exists() else [], lines)
 
 
+def _went_on(r: subprocess.CompletedProcess) -> list[str]:
+    """The step returned to the script, which went on to the products: the directories of its ONSITE_SKIP."""
+    said = r.stdout.splitlines()
+    assert r.returncode == 0 and "composed" in said, r.stdout + r.stderr
+    after = said[said.index("composed") + 1:]
+    assert all(line.startswith("skip ") for line in after), after
+    return [line.removeprefix("skip ") for line in after]
+
+
 def _said(out: Path) -> list[str]:
     return (out / "verdicts.txt").read_text().splitlines()
 
 
-def _stopped(protocol: str) -> str:
-    return (f"COMPOSITE: not run, the serve dir's private holds a case of {protocol} that is not its piece's with its "
-            "Lean's answer, and every case there is composed (onsite_cases.log on the node)")
+def _left_out(protocol: str) -> str:
+    return (f"COMPOSITE LEFT_OUT {protocol}: a case under the serve dir's private that is not its piece's with its "
+            "Lean's answer (onsite_cases.log on the node)")
 
 
 def test_each_pieces_case_is_taken_as_written_with_no_card_asked_for_and_no_encoder_run(served, tmp_path):
     """Given each piece's case and its Lean's answer, the step says each case's protocol and verdict and goes on to the
-    products. It asks for no card, builds no Lean, runs no encoder and no script, and writes only its log, which names
-    the one directory of each protocol that served_composite.sh then composes."""
+    products, leaving none out. It asks for no card, builds no Lean, runs no encoder and no script, and writes only
+    its log, which names the one directory of each protocol that served_composite.sh then composes, and its empty
+    list."""
     d, out = served
     before = _files(d / "private")
     r, calls, pythons, lines = _step(tmp_path, d, out)
-    assert r.returncode == 0 and r.stdout.splitlines()[-1] == "composed", r.stdout + r.stderr
+    assert _went_on(r) == []
     assert _said(out) == [f"COMPOSITE CASE {POUS} accept", f"COMPOSITE CASE {WIPE} accept", NONE_MADE]
     assert calls == [] and pythons == ["-"]
     assert lines == [("CASE", {"piece": str(d / "private" / WHERE[p]), "protocol": p, "verdict": "accept"})
                      for p in (POUS, WIPE)]
-    log = d / "private" / "composite" / "onsite_cases.log"
-    assert _files(d / "private") == before | {log: log.read_bytes()}
+    assert _files(d / "private") == before | _own(d)
 
 
 @pytest.mark.parametrize("protocol", [POUS, WIPE])
 @pytest.mark.parametrize("missing", [("answer.json",), ("case.json",), ("case.json", "answer.json")])
 def test_a_piece_that_left_no_answer_or_no_case_is_not_written_and_none_is_made(served, tmp_path, protocol, missing):
     """A missing answer, a missing case, or neither there: ``NOT_WRITTEN`` by the protocol, the other piece's case as
-    written, and the composite goes on without it. No card, no Lean and no encoder make the missing file, and why
-    stays in the private log: the public lines hold no path and no reason."""
+    written, and the composite goes on without it, with nothing to leave out: served_composite.sh composes no
+    directory that lacks either file. No card, no Lean and no encoder make the missing file, and why stays in the
+    private log: the public lines hold no path and no reason."""
     d, out = served
     for name in missing:
         (d / "private" / WHERE[protocol] / name).unlink()
     before = _files(d / "private")
     r, calls, pythons, lines = _step(tmp_path, d, out)
-    assert r.returncode == 0 and r.stdout.splitlines()[-1] == "composed", r.stdout + r.stderr
+    assert _went_on(r) == []
     want = {p: f"COMPOSITE NOT_WRITTEN {p}" if p == protocol else f"COMPOSITE CASE {p} accept" for p in (POUS, WIPE)}
     assert _said(out) == [want[POUS], want[WIPE], NONE_MADE]
     assert calls == [] and pythons == ["-"]
-    log = d / "private" / "composite" / "onsite_cases.log"
-    assert _files(d / "private") == before | {log: log.read_bytes()}
+    assert _files(d / "private") == before | _own(d)
     (reason,) = [doc["reason"] for head, doc in lines if head == "NOT_WRITTEN" and doc["protocol"] == protocol]
     assert ("no case" if "case.json" in missing else "no answer") in reason
     assert str(d) not in (out / "verdicts.txt").read_text() and reason not in (out / "verdicts.txt").read_text()
 
 
-def _python_decided(d: Path, out: Path) -> None:
-    summary = out / "pieces" / SUMMARY[POUS]
+def _killed(d: Path, out: Path, protocol: str) -> None:
+    """The piece wrote its case and its answer and was killed before it published its summary."""
+    (out / "pieces" / SUMMARY[protocol]).unlink()
+
+
+def _python_decided(d: Path, out: Path, protocol: str) -> None:
+    summary = out / "pieces" / SUMMARY[protocol]
     _write(summary, json.loads(summary.read_text()) | {"decided_by": {"host": "node", "program": "python"}})
 
 
-def _another_verdict(d: Path, out: Path) -> None:
-    _write(d / "private" / WHERE[POUS] / "answer.json", {"commitment": "d1", "protocol": POUS, "verdict": "reject"})
+def _another_verdict(d: Path, out: Path, protocol: str) -> None:
+    _case(d / "private" / WHERE[protocol], protocol, "reject")
 
 
-def _another_window(d: Path, out: Path) -> None:
-    _write(d / "private" / "pous" / "w4" / "case.json", {"commitment": "c0", "evidence": "beef", "params": {}})
-    _write(d / "private" / "pous" / "w4" / "answer.json", {"commitment": "d1", "protocol": POUS, "verdict": "accept"})
+def _elsewhere(d: Path, out: Path, protocol: str) -> None:
+    _case(d / "private" / ELSEWHERE[protocol], protocol)
 
 
-def _no_summary(d: Path, out: Path) -> None:
-    (out / "pieces" / SUMMARY[POUS]).unlink()
+def _killed_with_another(d: Path, out: Path, protocol: str) -> None:
+    _killed(d, out, protocol)
+    _elsewhere(d, out, protocol)
 
 
-@pytest.mark.parametrize("change, written, others", [
-    (_python_decided, False, ["pous/w3"]),
-    (_another_verdict, False, ["pous/w3"]),
-    (_no_summary, False, ["pous/w3"]),
-    (_another_window, True, ["pous/w4"]),
+@pytest.mark.parametrize("protocol", [POUS, WIPE])
+@pytest.mark.parametrize("change, written, where, why", [
+    (_killed, False, [WHERE], "published no piece"),
+    (_python_decided, False, [WHERE], "not its Lean's"),
+    (_another_verdict, False, [WHERE], "its piece published accept"),
+    (_elsewhere, True, [ELSEWHERE], "not in its piece's directory"),
+    (_killed_with_another, False, [ELSEWHERE, WHERE], "published no piece"),
 ])
-def test_a_case_that_is_not_its_pieces_with_its_leans_answer_stops_the_composite(served, tmp_path, change, written,
-                                                                                 others):
-    """served_composite.sh composes every case under the private directory, so a PoUS case there that the step can't
-    name as its piece's with its Lean's answer (answered by the Python alone, of another verdict than the piece
-    published, of a piece with no summary, or a second window's beside the piece's own) ends the step with exit 1
-    before any product is composed. The public line names the protocol; the directories stay in the private log."""
+def test_a_case_that_is_not_its_pieces_with_its_leans_answer_is_left_out_and_the_composite_goes_on(
+        served, tmp_path, protocol, change, written, where, why):
+    """served_composite.sh composes each case under the private directory, so one of PoUS's or the wipe's that the
+    step can't name as its piece's with its Lean's answer (of a piece killed before it published its summary, answered
+    by the Python alone, of another verdict than the piece published, or in another directory beside the piece's own:
+    a second window's, one an earlier run left) goes into ONSITE_SKIP, which that script hands no product, and the
+    step goes on: the other protocol's case is taken as written. The piece's own case is ``NOT_WRITTEN`` where it is
+    the one left out. One public line for each says the protocol; the directory and why stay in the private log."""
     d, out = served
-    change(d, out)
+    change(d, out, protocol)
     before = _files(d / "private")
     r, calls, pythons, lines = _step(tmp_path, d, out)
-    assert r.returncode == 1 and "composed" not in r.stdout.splitlines(), r.stdout + r.stderr
-    assert _said(out) == [f"COMPOSITE CASE {POUS} accept" if written else f"COMPOSITE NOT_WRITTEN {POUS}",
-                          f"COMPOSITE CASE {WIPE} accept", _stopped(POUS)]
+    skipped = [str(d / "private" / w[protocol]) for w in where]
+    assert _went_on(r) == sorted(skipped)
+    want = {p: [f"COMPOSITE CASE {p} accept"] if p != protocol or written else [f"COMPOSITE NOT_WRITTEN {p}"]
+            for p in (POUS, WIPE)}
+    want[protocol] += [_left_out(protocol)] * len(skipped)
+    assert _said(out) == [*want[POUS], *want[WIPE], NONE_MADE]
     assert calls == [] and pythons == ["-"]
-    assert lines[-1] == ("REFUSED", {"pieces": [str(d / "private" / o) for o in others], "protocol": POUS})
-    log = d / "private" / "composite" / "onsite_cases.log"
-    assert _files(d / "private") == before | {log: log.read_bytes()}
-    assert str(d) not in (out / "verdicts.txt").read_text()
+    left = [doc for head, doc in lines if head == "LEFT_OUT"]
+    assert [(doc["piece"], doc["protocol"]) for doc in left] == [(s, protocol) for s in sorted(skipped)]
+    assert all(why in doc["reason"] for doc in left), left
+    assert _files(d / "private") == before | _own(d)
+    public = (out / "verdicts.txt").read_text()
+    assert str(d) not in public and not any(doc["reason"] in public for doc in left)
+
+
+def test_a_directory_left_out_is_named_as_the_script_was_given_the_serve_dir_not_as_it_resolves(served, tmp_path):
+    """served_composite.sh leaves a directory out where its own name for it, under the SERVE_DIR it was given, is one
+    of its skips: through a link to the serve dir, ONSITE_SKIP names the directory through the link."""
+    d, out = served
+    _elsewhere(d, out, POUS)
+    link = tmp_path / "link"
+    link.symlink_to(d, target_is_directory=True)
+    r, _, _, lines = _step(tmp_path, link, out)
+    assert _went_on(r) == [f"{link}/private/{ELSEWHERE[POUS]}"]
+    assert lines[0] == ("CASE", {"piece": f"{link}/private/{WHERE[POUS]}", "protocol": POUS, "verdict": "accept"})
 
 
 def test_cases_that_could_not_be_read_stop_the_composite(served, tmp_path):
