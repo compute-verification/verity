@@ -44260,3 +44260,58 @@ For the table:
 For BREAKEVEN: nothing measured yet. The head block's host witness is 8.7 CPU-s a statement [relayed, HASH-114]; the
 two cuts' sum is 1 to 3 CPU-s [guess] until 8868, 6294 or HEADPROF's rows say.
 For the table: head block, host witness: two bit-identical cuts built at `88f0665ab6` (ask ahead; kept row vectors), CPU-seconds saved not measured yet.
+
+## DRAFT-CORE, Wed 11 Nov 09:05Z: Pr[refused] for D*1 is at most 2^-41.6 at 2^28 and 2^29 bytes only if an audit samples ONE replay block; at the padded first stage of 4 to 6 the draw is refused at every coin at both (it reads 554 to 831 MB), and an audit of D*1 needs 2^30 bytes (`MAX_COINS` 2^24). The caps are claims, Daniel's, built unmarked; the branch stands at 2^23 until you say
+
+**1. What `selectSecond` reads** [read]. Its law is one work stratum a cell, template `t` in sampled replay block `i`, `ks[t]` of `ns[t]` (`Spot/Select.lean:262-276`), sampled from ONE source in order (`Draw.drawFirstRead`). Each stratum reads `2·k·width(n) + 64` bytes before it samples (`Flock/Draw.lean:172, 413-432`; `Spot/Draw.lean:253-257` refuses when fewer are left). So the first read of an audit's second stage is `K0 · Σ_t (2·k_t·width(n_t) + 64)`, K0 the replay blocks the first stage sampled. My 08:40Z figures were one sampled replay block, by size class. Below they are cell by cell (151 and 155 cells), each class's k split among its cells by size.
+
+**2. The stream, cell by cell** [run on my VM: `tools/draftcore_coin_cells.py` in the lane's notes, on REPBREAK's rows of record rerun with each cell's size].
+
+| row | k_d a replay block | first read, one replay block | K0 = 1 | K0 = 4 | K0 = 5 | K0 = 6 | least power of two at K0 = 1 / 4 to 6 |
+|---|---|---|---|---|---|---|---|
+| (ii) = D*1, κ = 2^-5 | 5,523,986 | 138,580,196 (132.2 MiB) | 2^27.05 | 554,320,784 | 692,900,980 | 831,481,176 | 2^28 / **2^30** |
+| (iii) warm, κ = 2^-4 | 11,047,962 | 277,150,498 (264.3 MiB) | 2^28.05 | 1,108,601,992 | 1,385,752,490 | 1,662,902,988 | 2^29 / **2^31** |
+| (i), κ = 2^-6 | 6,389,664 | 164,482,274 (156.9 MiB) | 2^27.29 | 657,929,096 | 822,411,370 | 986,893,644 | 2^28 / **2^30** |
+
+- The by-class figures of 08:40Z (139,548,510 / 279,095,824 / 165,024,308) were 0.3% to 0.7% high; no power of two moves at K0 = 1.
+- Replay blocks an audit that each coin length covers: (ii) 1 at 2^28, 3 at 2^29, 7 at 2^30, 15 at 2^31; (iii) 0, 1, 3, 7; (i) 1, 3 (2 with one rerun's room), 6, 13 (12).
+
+**3. Pr[refused] for D*1** (your 08:52Z question).
+- **Below the first read the draw is refused at every coin: Pr = 1** [read: `take` throws]. That is D*1 at 2^26 and 2^27 for any K0, at 2^28 for K0 ≥ 2, at 2^29 for K0 ≥ 4.
+- **At or above the first read: at most k·2^-64 = 2^-41.6 a sampled replay block** [the lemma `Properties.Spot.SecurityProofs.units_error_le`, `security/Proofs/Flock/Bridge/QsRows/FirstReads.lean` at `746c43e0c8`; try passed, also in the merged tree, `r20261111-084225-26be`]. It is stated for `Spot.Draw.drawUnits` at any law on strata (`LawOn`), which is what `selectSecond` runs on `secondLaw`; nothing yet states it AT `selectSecond` (TWOWITNESS's lemma). At K0 replay blocks it is K0·k·2^-64: 2^-39.0 at K0 = 6.
+- **On paper it is far smaller: at most 2^-650 a replay block** [derived; the script]. A word is rejected with probability below 2^-64 (`width` adds 64 bits), a stratum's stream holds `2k + ⌊64/w⌋` words, and it runs out only if more than `k + ⌊64/w⌋` are rejected: `C(2k+e, k+e+1)·2^(-64(k+e+1))`, largest at the cell of least k (2 for D*1). The rerun's margin (`a5_coins.py:96-114`, the first read plus the longest stream once more: 167,207,352 bytes for D*1 at K0 = 1) then needs two run-outs; it fits 2^28 at K0 = 1 and 2^30 at K0 ≤ 7.
+- So: **K0 = 1: at most 2^-41.6 (Lean) at 2^28 and at 2^29. K0 = 4 to 6: 1 at 2^28 and at 2^29; at most 2^-39.0 (Lean) at 2^30.**
+
+**4. What this does to the PR's value** (priced; yours and Daniel's to choose).
+
+| `MAX_COINS` (bytes) | covers | `MAX_PATH` | `DRAW_ROUNDS` | `readsAt LIMITS` | device's coins and salts |
+|---|---|---|---|---|---|
+| 2^22 (2^28) | D*1 and (i) at K0 = 1 | 22 | 256 | 2^27.1 | 1 GiB |
+| 2^23 (2^29), **the branch now** | all three at K0 = 1; D*1 and (i) at K0 ≤ 3 | 23 | 512 | 2^28.1 | 2 GiB |
+| 2^24 (2^30) | D*1 at K0 ≤ 7, (i) at K0 ≤ 6, (iii) at K0 ≤ 3 | 24 | 1024 | 2^29.1 | 4 GiB |
+| 2^25 (2^31) | all three at K0 ≤ 7 | 25 | 2048 | 2^30.1 | 8 GiB |
+
+- Moving the branch is four literals; its records run is about 70 minutes. **Tell me the value and I move it; until then it stays at 2^23**, with this table in the body.
+- The other way to cover a padded first stage is to shrink it: the stream is linear in K0·k.
+
+**5. The branch: `cursor/proofs-max-coins-5b1e` at `4473a05f43af72a1fb6b50889118b75ca9822a06`, two commits, no PR yet.**
+- `003eebc622`: `MAX_COINS` 2^23, `MAX_PATH` 23, the Python's `MAX_COINS`, `DRAW_ROUNDS` 512 (4 files).
+- `4473a05f43`, on your 08:52Z word ("both caps ... built unmarked together"): `MAX_TREE_LINES` 2^23 in the Lean code and the Python, and the game's `maxTreeLines` (`security/Properties/Verity/Game.lean:354`). **That one moves a term of the live guarantee:** `Live.hidingTerm = 2·maxLeaves/2^257` with `maxLeaves = maxTreeLines·maxTreeCoins` goes from 2^-210 to 2^-207 [read: `Sampled.lean:266`, `Game.lean:379`], and `frames` grows with it.
+- 2^23 tree lines hold D*1 at K0 ≤ 6 (2,893 sessions · 322 lines · 6 = 5.6 M of 8.4 M) and row (i) only at K0 = 1 (5.05 M; 10.1 M at K0 = 2) [derived from PARAMS's 08:46Z counts, relayed].
+- Runs: at `003eebc622` records `r20261111-083231-0523` (the Spot verifier's package: AUDIT PASS, 69 s; the three security packages running) and quick tier `r20261111-083231-2fdc`; at `4473a05f43` records `r20261111-085807-fbd3` and quick tier `r20261111-085807-c161`, both launched 08:58Z. The PR opens when the records run names the records that move.
+
+**6. Jobs 3 and 4.** Job 3: both files also elaborate in the tree of `main` + #8819 + `746c43e0c8` + #8827 (with #8820) + #8781 + #8828 + #8857 merged (`76da20dfdd`, not #8836): `FirstReads.lean` `r20261111-084225-26be`, `PublicRows.lean` `r20261111-084704-65b1`, axioms clean in both; its records run `r20261111-084119-e9ca` and quick tier `r20261111-084119-8e2d` are out. Job 4: `security/Proofs/Flock/Bridge/V5/QsRows.lean` is written (5 declarations) on `cursor/proofs-qs-strata-a91c`; the first try had one error, fixed; the second is out. One finding: at V5 the rows a proof block's commitments read are its ports AND its public gates, so the count is `k_d·(n_p + pubBits)`, not `k_d·n_p`.
+
+For TWOWITNESS:
+- `units_error_le` (above) is your "`.ok` except with a stated probability" for `drawUnits`: hypotheses `LawOn law ns kd`, `ns.sum = n`, `firstRead law n ≤ L`; conclusion `≤ kd·2⁻⁶⁴`. `firstRead (secondLaw sample ns ks)` is `sample.size · Σ_t (2·ks[t]·width(ns[t]) + 64)`.
+- The hypothesis at the model's stage is `firstRead ≤ 2^20`, false for every priced row; at `cursor/proofs-max-coins-5b1e` the commitment holds 2^29 bytes but the model's stage (`SpotFlock.Code.L = 65536·16`, one round's coin) is unchanged. That is the second half, in my PR's paragraph on the 9 signatures: a stage that reads several rounds changes `SamplingDeploy.Order`, `bytesSecond`, `CallsUniform` and `codeTwoAt`, which the locked `SampledKSTwo` reads, and none of the 9 signatures naming `FlockDeploy.Coin`.
+
+For SCALE:
+- The coin column is per sampled replay block. An audit at the padded first stage reads K0 times it: D*1 554 to 831 MB (2^30), (iii) 1.11 to 1.66 GB (2^31), (i) 658 to 987 MB (2^30).
+
+For CONCRETE:
+- Largest `K0·k_d` the first read fits, at D*1's mix of widths (25.09 bytes a sampled block): 2^28: 10.70 M; 2^29: 21.40 M; 2^30: 42.80 M; 2^31: 85.60 M [derived: L/25.09].
+
+For the table:
+- The coin: an audit of D*1 reads 139 MB of coin a sampled replay block, 554 to 831 MB at a padded first stage of 4 to 6 [run on VM, modeled from the rows of record]; `MAX_COINS` is 2^26 bytes today. Built, unmarked, Daniel's: a branch at 2^29 bytes with `MAX_TREE_LINES` 2^23 (`4473a05f43`; records and quick tier running). 2^30 covers D*1 at the padded cap. Not built: the model's stage, still one 2^20-byte round.
+- Under a coin that holds the first read the draw is refused with probability at most 2^-41.6 a sampled replay block [Lean lemma, try passed, not on `main`].
