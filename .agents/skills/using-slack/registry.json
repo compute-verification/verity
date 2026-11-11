@@ -139,6 +139,13 @@
         "integrations/vllm/verity_vllm/protocols/spot.py",
         "Security/Definitions/Hash/",
         "Security/Proofs/Hash/",
+        "verity/core/primitives/world/",
+        "verity/core/protocols/record.py",
+        "verity/core/protocols/registration.py",
+        "verity/core/site/",
+        "benchmarks/flock_kernels/",
+        "benchmarks/two_stage/",
+        "verity/ml/definitions/numerics/cuda/",
         "verity/core/protocols/interface/"
       ],
       "branch_suffixes": [
@@ -235,6 +242,7 @@
         "Security/Definitions/Nci/",
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
+        "benchmarks/pouw/clear/",
         "benchmarks/pouw/machine_model/",
         "benchmarks/pouw/receipts/",
         "benchmarks/numerical/",
@@ -334,18 +342,17 @@
         "benchmarks/codec_tensor/",
         "benchmarks/kv_filler/",
         "benchmarks/live_verifier/",
+        "benchmarks/memory/",
         "benchmarks/pous/",
         "benchmarks/property_redteam/",
         "benchmarks/rate_squaring/",
         "benchmarks/remote_session/",
-        "benchmarks/resource_accounting/",
         "benchmarks/stacked_share/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
         "examples/onsite_served/",
         "integrations/vllm/verity_vllm/protocols/pous.py",
         "verity/core/devices/memory_challenger/",
-        "verity/core/protocols/bandwidth/",
         "verity/core/protocols/pous/",
         "verity/ml/protocols/pous/",
         "verity/core/protocols/remote_bandwidth/",
@@ -594,7 +601,8 @@
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
-        ".gitignore"
+        ".gitignore",
+        "archive/"
       ]
     },
     {

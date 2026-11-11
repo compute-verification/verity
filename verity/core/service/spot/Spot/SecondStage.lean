@@ -43,11 +43,14 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   - `second-read`: a port's registered read (`readOk`) is not, for a port a link names, the boundary port it names,
     each slot reading only its unit's row of its cell's replay block's (`S[i]·r + ρ(j)`, `r` the port's rows a block
     and `ρ` its units' rows, the port's `Rows`, `j` the slot's unit in its cell, the port's leaves the boundary
-    population's `r` each); for a port a wire names, its writer's output port of the interior record, each slot of
-    replay block `S[i]` reading only its writer unit's row there (`i·n_w + ρ(j)`, the port's leaves the writer's
-    `Q·n_w` slots'); else its own port of the interior record, each slot `u` reading only its own first row
-    (`(u - off_t)·r`, `r` the port's leaves over the part's `Q·n_t` slots), or a value either registration registers;
-    each at its root, domain and leaves, at most `2^64` of them (`MAX_LEAVES`). Or a port a link or a wire names is
+    population's `r` each), or, where the interior registration registers a value of the link's name, that value,
+    never the boundary port, each slot of replay block `S[i]` reading only its unit's row there (`i·r + ρ(j)`, the
+    value's leaves the `Q` sampled blocks' `r` each); for a port a wire names, its writer's output port of the
+    interior record, each slot of replay block `S[i]` reading only its writer unit's row there (`i·n_w + ρ(j)`, the
+    port's leaves the writer's `Q·n_w` slots'); else its own port of the interior record, each slot `u` reading only
+    its own first row (`(u - off_t)·r`, `r` the port's leaves over the part's `Q·n_t` slots), or a value either
+    registration registers; each at its root, domain and leaves, at most `2^64` of them (`MAX_LEAVES`). Or a port a
+    link or a wire names is
     not read.
   - `second-refs`: its header shares rows (`shared_rows`: tables whose rows its instances read by the refs in its public
     file's body) at a port it doesn't read registered (`refsOk`). At a port it reads registered, the session's verifier
@@ -802,7 +805,9 @@ def wiredRow (p : Part) (r : Rows) (u : Nat) : Option Nat := do
 
 /-- Template `p.template`'s session port `port` may read registered-reads entry `e`: a port a link names, only the
 boundary port it names, of its rows' `per` a replay block, each slot only its unit's row of its cell's replay block's
-(`linkedRow`); a port a wire names, only its writer's output port of the interior record, of the writer's units a
+(`linkedRow`), or, where the interior registration registers a value of the link's name, only that value and never the
+boundary port, of its rows' `per` a sampled block, each slot only its unit's row of its cell's (`wiredRow`); a port a
+wire names, only its writer's output port of the interior record, of the writer's units a
 block, each slot only its unit's writer unit's row in its cell's replay block (`wiredRow`); any other, its own port of
 the interior record, each slot only its own first row, or a value either registration registers, never a boundary
 port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them. -/
@@ -810,10 +815,14 @@ def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bo
   let q := own.sample.size
   match getD e "value", linkOf own p.template port, wireOf own p.template port with
   | .str v, some l, _ =>
-    v == l.value && match (Record.byPort own.boundary).find? (·.1 == v), nat? (getD own.boundary "population"),
-        rowsOf own p.template port with
-      | some (_, b), some m, some r => sameAt e b && placedOk q p e (m * r.per) (linkedRow own p r)
-      | _, _, _ => false
+    v == l.value && match registeredEntry own.interior v, rowsOf own p.template port with
+      | some x, some r => sameAt e x && placedOk q p e (q * r.per) (wiredRow p r)
+      | some _, none => false
+      | none, _ =>
+        match (Record.byPort own.boundary).find? (·.1 == v), nat? (getD own.boundary "population"),
+            rowsOf own p.template port with
+          | some (_, b), some m, some r => sameAt e b && placedOk q p e (m * r.per) (linkedRow own p r)
+          | _, _, _ => false
   | .str v, none, some w =>
     v == portOf named w.writer w.wport && match (Record.byPort own.interior).find? (·.1 == v), writerOf own w,
         rowsOf own p.template port with
@@ -868,12 +877,13 @@ where the run places them (`runPlacesRows`). -/
 def READ_ROW_FIELDS : List String := ["reads", "reads_from"]
 
 /-- Template `t`'s session port `port` reads registered-reads entry `e` at rows the run places, which `second-read`
-holds to the run (`placedOk`, `rowsOk`): a port a link names, each slot at its unit's row of its cell's replay block's,
-or one reading a port of the interior record, its own port each slot at its own rows or, at a port a wire names, its
-writer's at its writer unit's row (`readOk`'s first three cases). Any other port reads a value a
-registration registers, which `second-read` holds only to the value's root, domain and leaves (`sameAt`), so
-`second-values` holds its rows to the reference statement's, the same rows in every run. A workload whose rows there
-depend on the sampled block (a positional table) would need a rule of its own. -/
+holds to the run (`placedOk`, `rowsOk`): a port a link names, each slot at its unit's row of its cell's replay block's
+(in the boundary port, or in the interior's value of the link's name), or one reading a port of the interior record,
+its own port each slot at its own rows or, at a port a wire names, its writer's at its writer unit's row (`readOk`'s
+first three cases). Any other port reads a value a registration registers, which `second-read` holds only to the
+value's root, domain and leaves (`sameAt`), so `second-values` holds its rows to the reference statement's, the same
+rows in every run. A workload whose rows there depend on the sampled block (a positional table) would need a rule of
+its own. -/
 def runPlacesRows (own : Own) (t port : String) (e : Json) : Bool :=
   (linkOf own t port).isSome ||
     match getD e "value" with
@@ -972,6 +982,26 @@ def statementReads (ss : List Json) : Array (String × Json) :=
       | _ => acc) acc
     | none => acc) #[]
 
+/-- The reads of statements `ss` that `readOk` takes at a value only the interior registration registers: at a port a
+link names, of the link's value where the interior registers it (never the boundary port then); or at a port no link
+or wire names, of a value that is no port of either record and that the boundary doesn't register. Each is
+`{"template", "port", "value"}`, in statement and port order. These reads rest on the interior's own values (a history
+table the interior registers, or a value its verifier supplies, say), and the attached record names them (`attach`). -/
+def interiorReads (own : Own) (ss : List Json) : Array Json :=
+  ss.foldl (fun acc j => match Stmt.ofJson? j with
+    | some s => (entries (getD s.registered "ports")).foldl (fun acc (port, e) => match getD e "value" with
+      | .str v =>
+        let onInterior := match linkOf own s.template port with
+          | some l => l.value == v && (registeredEntry own.interior v).isSome
+          | none => (wireOf own s.template port).isNone &&
+              !(Record.byPort own.interior).any (·.1 == v) && !(Record.byPort own.boundary).any (·.1 == v) &&
+              (registeredEntry own.boundary v).isNone && (registeredEntry own.interior v).isSome
+        if onInterior then
+          acc.push (Json.mkObj [("template", .str s.template), ("port", .str port), ("value", .str v)])
+        else acc
+      | _ => acc) acc
+    | none => acc) #[]
+
 /-- `second-reported` when the reads the verifiers of record report are not those statements `ss` state. -/
 def reportedFailures (own : Own) (ss : List Json) : List (String × Json) :=
   if Record.sameDict (own.reported.getD #[]) (statementReads ss) then [] else [("second-reported", Json.str REPORTED_WHY)]
@@ -1028,11 +1058,13 @@ def check (allow : Bool) (own : Own) (stmts : Option (Array Json)) : Check :=
 -- without this, whichever of them asks first decides the module's `.olean`.
 example := @check.eq_1
 
-/-- The interior registration's audit record `rec` with round 2's check `c` as `checks.statements`, failing where `c`
-does as a failed check of its own fails it (`Record.record`): not accepted, and no profile, integrity profile or wrong
-units. -/
-def attach (rec : Json) (c : Check) : Json :=
+/-- The interior registration's audit record `rec` with round 2's check `c` as `checks.statements`, and the reads
+`reads` that rest on the interior's own values (`interiorReads`) as `interior_reads` where there are any. It fails where
+`c` does, as a failed check of its own fails it (`Record.record`): not accepted, and no profile, integrity profile or
+wrong units. -/
+def attach (rec : Json) (c : Check) (reads : Array Json := #[]) : Json :=
   let r := rec.setObjVal! "checks" ((getD rec "checks").setObjVal! "statements" c.toJson)
+  let r := if reads.isEmpty then r else r.setObjVal! "interior_reads" (.arr reads)
   if c.codes.isEmpty then r
   else (((r.setObjVal! "accepted" (.bool false)).setObjVal! "profile" .null).setObjVal! "integrity_profile" .null).setObjVal!
     "wrong_units" .null

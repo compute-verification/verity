@@ -14,8 +14,12 @@
 when_closed = ["tests"]
 # fetched fixtures (entries of fixtures/artifacts.json git doesn't track) the export ships as tracked files, so the public
 # tree's tests read them with no store: each public, and each of its files at most a tracked file's limit
-# (tests/test_repository.py). vLLM's stored workloads: every row file the integration's tests and stages read
-fixtures = ["integrations/vllm/workloads"]
+# (tests/test_repository.py). vLLM's stored workloads: every row file the integration's tests and stages read; and the
+# vectors the network certifier's encodings are held to
+fixtures = [
+    "integrations/vllm/workloads",
+    "verity/core/protocols/certifier/tests/fixtures/{arith_encode,cache_step,cache_step_v2,replay_step}_vectors.json",
+]
 
 [public]
 # SPOT: the generic sampling claim, its proofs, and sampled proofs' protocol and service
@@ -41,6 +45,15 @@ pouw = [
     "Security/*/Pouw{,.lean}",
     "Security/Proofs/Properties/Pouw{,.lean}",
     "Security/Definitions/Assumptions/Pouw.lean",
+]
+# the network certifier: the protocol, its Lean program, the certificate's and the records' checks, its prover's units, the
+# device, and its part of the security analysis
+certifier = [
+    "verity/core/protocols/{certifier,network}",
+    "verity/ml/protocols/certifier",
+    "verity/core/devices/certifier",
+    "Security/*/NetworkCertifier{,.lean}",
+    "Security/Proofs/Properties/NetworkCertifier{,.lean}",
 ]
 # the firewall (the ZK server's release side) and the recursion
 firewall = [
@@ -102,14 +115,18 @@ pouw_tests = [
     "verity/core/protocols/pouw/lean/window/tests/test_known_rows.py",
 ]
 protocols = [
-    "verity/core/protocols/{pous,bandwidth,remote_bandwidth,network}",
-    # the network certifier: all but the advice format (`advice.py`, public with the integration) and its package's files
-    "verity/core/protocols/certifier/{lean,protocol,tests,README.md,PROTOCOL.md}",
-    "verity/core/protocols/certifier/{active,arith_encode,audit,blocks,boundary,cache_step,calibration,capacity,certificate}*",
-    "verity/core/protocols/certifier/{charge_chain,coin_link,commitment,compile_slice,grid,head_check,io_request,io_tie}*",
-    "verity/core/protocols/certifier/{lean_audit,online,out_commit,pacer,release,replay_chain,replay_step,schedule}*",
-    "verity/core/protocols/certifier/{served,service,tie_service,transfer_rows,warden}*",
-    "verity/ml/protocols/{pous,certifier}",
+    "verity/core/protocols/{pous,remote_bandwidth}",
+    # the inference-only policy, and its tests in the network checks' suite
+    "verity/core/protocols/network/nci",
+    "verity/core/protocols/network/tests/test_{inference_only_protocol,nci_*}.py",
+    # the network certifier's period check, which reads a scan's layout with the inference-only policy's check
+    # (`NciCheck.Desc`): the check, the library root and the executables that import it (`network-period`, and
+    # `network-records` for its clock openings), its Python mirror, and the tests that run either executable
+    "verity/core/protocols/network/lean/NetworkCheck{.lean,/Period.lean,/PeriodMain.lean,/RecordsMain.lean}",
+    "verity/core/protocols/network/tests/{period_case,test_network_period_protocol,test_slot_entry_pins}.py",
+    "verity/core/protocols/network/tests/test_{lean_audit,network_records_protocol}.py",
+    "verity/core/protocols/network/tests/fixtures/slot_entry.json",
+    "verity/ml/protocols/pous",
     "Security/*/{Nci,NciDesc}{,.lean}",
     "Security/Proofs/Properties/Nci{,.lean}",
     # the table of domain separators' own entries: the other protocols' (its PoUW and shared parts are `needed`)
@@ -129,32 +146,17 @@ protocols = [
     # PoUB's opening unit's test, which holds it to PoUB's Python verifier
     "verity/ml/commitments/tests/test_block_check.py",
 ]
-# vLLM's tests that read a private protocol (the network certifier, NCI, the bandwidth audit, PoUS)
+# vLLM's tests that read a private protocol (NCI, the bandwidth audit, PoUS)
 protocol_tests = [
-    "integrations/vllm/tests/pipeline/test_{advice,advice_commit,advice_windows,serve_advice,memory_map}.py",
-    "integrations/vllm/tests/program/predict/test_{batch,block_counts,node_registration}.py",
-    "integrations/vllm/tests/program/test_io_shell.py",
+    "integrations/vllm/tests/pipeline/test_memory_map.py",
+    "integrations/vllm/tests/program/predict/test_{block_counts,node_registration}.py",
     "integrations/vllm/tests/commit/test_memory_map.py",
     "integrations/vllm/tests/protocols/{remote_bandwidth,test_pous_option.py,pous_gpu.sh,pous_gpu.py}",
     "integrations/vllm/tests/pipeline/test_serve_remote.py",
     "integrations/vllm/tests/engine/int8_store_gpu.py",
 ]
-# the served window: vLLM's server and the window circuit, which read the network certifier's encoding (its ingress scan,
-# blocks, compile slice, served rows and ids protocol), and the tests that import them
-served_window = [
-    "integrations/vllm/verity_vllm/pipeline/serve_{commit,learn,loop,openai,protocol}.py",
-    # the server's seal process, its disk guard and watchdog, and its remote store's options, which only it runs
-    "integrations/vllm/verity_vllm/pipeline/{seal_process,serve_guard,serve_remote}.py",
-    "integrations/vllm/verity_vllm/program/predict/{scan_state,window_circuit,window_class,window_rows,window_weights}.py",
-    "integrations/vllm/tests/pipeline/test_serve_{admit,admit_tick,async,h1,learn,offloop,openai,release,row,seal,tie}.py",
-    "integrations/vllm/tests/pipeline/test_serving_rows_weights.py",
-    "integrations/vllm/tests/program/predict/test_{inference_blocks,window_rows}.py",
-    "integrations/vllm/tests/program/predict/test_window_circuit{,_fa3,_int8,_tables}.py",
-    "integrations/vllm/tests/program/test_{dead_free,fa3_check_inf}.py",
-    "integrations/vllm/tests/protocols/test_pouw_h1_drawn.py",
-    # GLM-5.3's served templates at TP 8, as `benchmarks/one_stage`'s served window records them
-    "integrations/vllm/tests/pipeline/test_served_unit_rows.py",
-]
+# vLLM's test of GLM-5.3's served templates at TP 8, which reads the records `benchmarks/one_stage`'s served window wrote
+served_records = ["integrations/vllm/tests/pipeline/test_served_unit_rows.py"]
 # vLLM's test of its int8 attention kernels' PTX and SASS, which runs the PoUW kernels' SASS gate (`benchmarks/pouw/harness`)
 kernel_gates = ["integrations/vllm/tests/engine/{int8_attention_sass,test_int8_attention_sass}.py"]
 # vLLM's adapter of PoUS and driver of the bandwidth audit, which `verity_vllm.protocols.adapter` and `driver` load by name
@@ -277,6 +279,16 @@ from = "*"
 why = "the accounting PoUW needs"
 paths = ["Security/*/Accounting{,.lean}", "Security/Proofs/Properties/Accounting{,.lean}"]
 from = ["pouw"]
+
+[[needed]]
+why = "the world a device runs in (`Core.World`: its clock, coins, links and signer's state), which the network certifier's device's driver reads"
+paths = ["verity/core/primitives/world"]
+from = ["certifier"]
+
+[[needed]]
+why = "the identity hash's properties' proofs, which the network certifier's checks' proofs read"
+paths = ["Security/Proofs/Properties/Hash"]
+from = ["certifier"]
 
 # Known residue: what the export copies knowing it still carries the process's words, each until the change that removes it
 # (`until`). The export reports each entry's sites in what it copies: a line of a copied file under `paths` that `pattern`
