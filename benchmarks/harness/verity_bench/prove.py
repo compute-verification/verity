@@ -319,6 +319,9 @@ class Flock:
     card: str | None = None
     name: str = "flock"
     provers: int = 1
+    #: (staged Definition, staged type) of superseded rows: they price nothing, but a plan's cell may still name a type
+    #: by the staged type only they were staged as
+    aliases: Sequence[tuple[str, str]] = ()
 
     def table(self, census: Census) -> Table:
         measured: dict[str, Steady] = {}
@@ -327,6 +330,9 @@ class Flock:
         held = {definition_id(b.name) for b in census.blocks}
         unread = []
         names: dict[str, set[str]] = {}
+        for definition, type_ in self.aliases:
+            if definition in held:
+                names.setdefault(definition, set()).add(type_)
         for s in self.steady:
             if s.definition not in held:
                 unread.append(s)

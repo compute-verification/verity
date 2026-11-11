@@ -405,6 +405,13 @@ def test_spot_prices_the_blocks_its_plan_samples_and_refuses_another_census_plan
     rows = P.Spot(renamed, got, serving).table(census).rows
     assert (rows[0].block, rows[0].per_token, rows[0].cost.staged, rows[0].cost.seconds) == (GEMM64, 40 / 800, "gemm-k64", 0.5)
     assert rows[0].staged_as == ("gemm-k64", "gemm64")
+    # the old name's only row superseded: it prices nothing, and still ties the plan's cell to the type
+    aliased = P.Flock((steady("gemm-k64", P.definition_id(GEMM64), "r20260103-000000-0003", 8, 4.0),), SESSIONS, "art:card",
+                      aliases=((P.definition_id(GEMM64), "gemm64"),))
+    rows = P.Spot(aliased, got, serving).table(census).rows
+    assert (rows[0].block, rows[0].cost.staged, rows[0].cost.seconds) == (GEMM64, "gemm-k64", 0.5)
+    with pytest.raises(ValueError, match="don't cover each other"):
+        P.Spot(replace(aliased, aliases=()), got, serving).table(census)
 
 
 def test_a_plan_that_states_its_own_prices_gets_both_totals_and_where_they_differ():
