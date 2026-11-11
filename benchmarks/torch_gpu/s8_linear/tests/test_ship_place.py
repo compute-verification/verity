@@ -2,9 +2,9 @@
 (s8_wgmma.cu) compiled as build.sh compiles it (ship.sh's frame, its cubin flags, ship_nvcc.sh) from two copies of the tree
 placed differently is one cubin, byte for byte. In the second copy the tree's root has another length, the kernel's
 directory another name and depth, and its header sits in a directory of its own, with the #include respelled as a move
-respells it. A probe shows the placements are ones nvcc follows: nvcc names a kernel of internal linkage by a hash of
-its source's path, so nvcc itself gives the probe two cubins and ship_nvcc.sh one. And a header that uses __FILE__ is
-refused by name before the device compiler runs.
+respells it. The kernel alone could pass by following no path at all, so a probe shows the comparison can fail: nvcc
+names a kernel of internal linkage by a hash of its source's path, so nvcc itself gives the probe two cubins from the two
+copies and ship_nvcc.sh one. And a header that uses __FILE__ is refused by name before the device compiler runs.
 
 These need what a ship build needs: a kernel that lets a process turn address randomization off, and the toolkit (nvcc
 12.8 or later at $CUDA, /usr/local/cuda-13.0 or /usr/local/cuda, found by ship.sh's own rule). Where either is missing
