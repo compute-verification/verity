@@ -31,6 +31,11 @@ SESSION = "5e" * 64
 NULL = {SA.BOUNDARY_AUDIT, SA.REQUEST_ROW, SA.STOP_RULE}
 
 
+def _resume(stage1: dict, stop: BS.Stop = T.STOP, design: str = DESIGN):
+    """`stop_audit.resume` under the proof deadline the test's first stage ran under."""
+    return SA.resume(stage1, T.PAIR, stop, design, proof_deadline=T.RULE.proof_deadline)
+
+
 def _stage1(tmp_path: Path, monkeypatch, seed: str) -> dict:
     """A stop class's hand-off as `two_stage.py first --stop` writes it, on one session of a test's challenger."""
     pubs = [json.loads(json.dumps(T._stop_class().public()))]
@@ -53,7 +58,7 @@ def _proved(r, file: dict, **lean: object) -> dict:
 
 def _audit(stage1: dict, outcome: dict | None = None, **lean: object) -> tuple[dict, dict]:
     """One audit of the hand-off's stop sample on a stream built again: `decide`'s outcome and its summary."""
-    r = SA.resume(stage1, T.PAIR, T.STOP, DESIGN)
+    r = _resume(stage1)
     file = SA.reads(r)
     got = SA.decide(r, stage1, file, _proved(r, file, **lean), outcome)
     return got, SA.summary_of(r, T.STOP, DESIGN, got)
@@ -72,7 +77,7 @@ def test_the_verifiers_half_is_built_from_the_hand_off_and_the_verifiers_own_cop
         raise AssertionError("the verifier's half called the prover's")
     for owner, name in ((BR, "reopen"), (SA, "opened"), (SA, "staged")):
         monkeypatch.setattr(owner, name, prover)
-    r = SA.resume(stage1, T.PAIR, T.STOP, DESIGN)
+    r = _resume(stage1)
     s = stage1["stop"]
     assert r.registration.digest == s["registration"] and list(r.sample.units) == s["units"]
     assert r.first.registration.digest == stage1["registration"] == s["record"]["previous"]
@@ -86,16 +91,16 @@ def test_the_verifiers_half_is_built_from_the_hand_off_and_the_verifiers_own_cop
     assert all(e["reads"] == list(range(T.N)) for e in file["ports"].values())
 
     with pytest.raises(ValueError, match="not the verifier's own"):
-        SA.resume(stage1, T.PAIR, BS.Stop((7,), 64, 4), DESIGN)
+        _resume(stage1, BS.Stop((7,), 64, 4))
     with pytest.raises(ValueError, match="Spec isn't the one"):
-        SA.resume(stage1, T.PAIR, T.STOP, f"rate:1/{T.N}")
+        _resume(stage1, design=f"rate:1/{T.N}")
     other = [u for u in range(T.N) if u not in s["units"]][:len(s["units"])]
     with pytest.raises(ValueError, match="samples other stop blocks"):
-        SA.resume({**stage1, "stop": {**s, "units": other}}, T.PAIR, T.STOP, DESIGN)
+        _resume({**stage1, "stop": {**s, "units": other}})
     with pytest.raises(ValueError, match="registered or sampled no stop block"):
-        SA.resume({**stage1, "stop": {"error": "refused"}}, T.PAIR, T.STOP, DESIGN)
+        _resume({**stage1, "stop": {"error": "refused"}})
     with pytest.raises(SA.Unlogged, match="no record of the class's boundary stream's log"):
-        SA.resume(SMALL.unlogged(stage1, T.PAIR), T.PAIR, T.STOP, DESIGN)
+        _resume(SMALL.unlogged(stage1, T.PAIR))
 
 
 def test_an_accepted_record_names_what_it_did_not_check_and_is_not_complete(tmp_path, monkeypatch):
@@ -155,7 +160,7 @@ def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path,
 
     _, summary = _audit(stage1, registered_sha512="00" * 64)
     assert summary["accepted"] is False and summary["verdicts"][SA.READS] is False
-    r = SA.resume(stage1, T.PAIR, T.STOP, DESIGN)
+    r = _resume(stage1)
     file = SA.reads(r)
     wrong = {**file["ports"], SA.OUT: {**file["ports"][SA.OUT], "root": "00" * 64}}
     _, summary = _audit(stage1, registered={p: {"value": e["value"], "root": e["root"]} for p, e in wrong.items()})
