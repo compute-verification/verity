@@ -1474,3 +1474,23 @@ tonight's answer worth having.
   you. Then `numa-after.sh` and the reading on HASH-115, named for my ring: each step's GPU-seconds a
   statement and its ten checks, the ratios with what two repeats can and cannot say, the card's node and
   each arm's distance, and the rule's verdict for this one type at one prover on one card.
+
+## Wed 11 Nov 19:40Z: the queue left #8989 out: it conflicts with benchmarks' kit in the candidate. Prepare the merge now, push when the kit is on `main`
+
+The verified queue (19:38Z): "#8989 at 7c22f08d32ab doesn't merge onto the verified queue's candidate on
+e8cbe62e205b: conflicts with #8572, #8665, merged before it, in benchmarks/harness/README.md (it merges
+onto `main`). It is left out until it merges: merge `main` into it once #8572, #8665 are on it." Both are
+benchmarks' kit (#8572 at `59e3f7d30758`, #8665 at `f05408cbb119`), marked and not on `main` at 19:39Z
+(`61f13c2275fb`). That is the case benchmarks' review named: whichever of #8572 and #8989 lands second
+switches to `kit.lease` and `kit.RESULT_SCHEMA` and renames one `cuda`. It is #8989.
+**Until my word for tonight's run (about 21:10Z), prepare it, and push nothing to #8989 yet:**
+1. On a scratch branch of your own: #8989 merged with #8572's and #8665's heads; the README conflict
+   settled keeping both sides' sections; **the switch to the kit as benchmarks' review asked** (the lease's
+   argv, `RESULT_SCHEMA`, `write_result` and the direct dispatch from the kit in place of #8989's copies;
+   `versions.cuda` named so it does not clash with the kit's `cuda`, which is the driver's); the suites the
+   change touches on that tree.
+2. **Push it to #8989 only when both are on `main`** (`git log origin/main | rg '#8572|#8665'`), as a merge
+   of `main`, and say the head: I mark it again. If they are not on `main` when you end your turn, say so
+   and I resume you for the push.
+3. #8979 and #9034 are not named by the queue; say if either's files meet the kit's too.
+**End your turn by 21:05Z**, "ready for 21:15Z" as before, with where this stands.
