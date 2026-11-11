@@ -180,4 +180,90 @@ theorem stop_wfSizeArr : depthProbe3 (.arr #[.null]) = 1 := by decide +kernel
 
 theorem stop_wfSizeStr : depthProbe3 (.arr #[.str "a", .arr #[.null]]) = 2 := by decide +kernel
 
+/-! ### The decoder's two bodies, their order stated as the text's size -/
+
+/-- `domainError`'s lines, by well-founded recursion on the text's size. -/
+def domainErrorS (j : Json) (path : String := "$") : Option String :=
+  match j with
+  | .null | .bool _ => none
+  | .num n =>
+    if n.exponent != 0 then some s!"{path}: a float is not a JSON integer, string, boolean, null, array or object"
+    else if n.mantissa.natAbs > MAX_SAFE_INT then some s!"{path}: integer {n.mantissa} exceeds 2^53 - 1 in magnitude"
+    else none
+  | .str s => if s.toList.all (fun c : Char => c.toNat < 0x7f) then none
+    else some s!"{path}: string is not ASCII without DEL"
+  | .arr a => (Array.range a.size).attach.findSome? fun i =>
+    domainErrorS (a[i.1]'(Array.mem_range.1 i.2)) s!"{path}[{i.1}]"
+  | .obj kvs => kvs.toArray.attach.findSome? fun x =>
+    if x.1.1.toList.all (fun c : Char => c.toNat < 0x7f) then domainErrorS x.1.2 s!"{path}.{x.1.1}"
+    else some s!"{path}.<key>: string is not ASCII without DEL"
+termination_by sizeOf j
+decreasing_by
+  · exact sizeOf_lt_of_mem_arr (Array.getElem_mem _)
+  · exact sizeOf_lt_of_mem_obj x.2
+
+/-- `Ty.ofJson`'s lines, by well-founded recursion on the text's size. -/
+def tyOfJsonS (j : Json) : V Ty := do
+  let bad := fun (why : String) => (throw s!"type {j.compress}: {why}" : V Ty)
+  match j with
+  | .arr a =>
+    match (a[0]? : Option Json) with
+    | some (.str "Value") =>
+      match (a[1]? : Option Json).bind natJ?, a.size with
+      | some w, 2 => if w > 0 then pure (.value w) else bad "Value<w> needs a positive int width"
+      | _, _ => bad "Value<w> needs a positive int width"
+    | some (.str "Array") =>
+      match (a[1]? : Option Json).bind natJ?, h : (a[2]? : Option Json), a.size with
+      | some n, some e, 3 => pure (.array n (← tyOfJsonS e))
+      | _, _, _ => bad "Array<n,T> needs a non-negative int length and an element type"
+    | some (.str "Tuple") =>
+      match h : (a[1]? : Option Json), a.size with
+      | some (.arr fs), 2 => pure (.tuple (← fs.attach.mapM fun f => tyOfJsonS f.1))
+      | _, _ => bad "a Tuple's fields are a list"
+    | some (.str "Record") =>
+      match h : (a[1]? : Option Json), a.size with
+      | some (.arr fs), 2 => do
+        let fs ← fs.attach.mapM fun f => match hf : f.1 with
+          | .arr ys =>
+            if hy : ys.size = 2 then
+              match ys[0] with
+              | .str k => do pure (k, ← tyOfJsonS ys[1])
+              | _ => throw s!"type {j.compress}: a Record field is [name, type]"
+            else throw s!"type {j.compress}: a Record field is [name, type]"
+          | _ => throw s!"type {j.compress}: a Record field is [name, type]"
+        if (List.range fs.size).any (fun i => (fs.extract 0 i).any (·.1 == fs[i]!.1)) then
+          throw s!"type {j.compress}: duplicate record field names"
+        pure (.record fs)
+      | _, _ => bad "a Record's fields are a list"
+    | _ => bad "unknown type tag"
+  | _ => bad "not a list"
+termination_by sizeOf j
+decreasing_by
+  · exact sizeOf_lt_of_getElem?_arr h
+  · exact Nat.lt_trans (sizeOf_lt_of_mem_arr f.2) (sizeOf_lt_of_getElem?_arr h)
+  · have h1 := sizeOf_lt_of_mem_arr (Array.getElem_mem (xs := ys) (i := 1) (by omega))
+    rw [← hf] at h1
+    exact Nat.lt_trans h1 (Nat.lt_trans (sizeOf_lt_of_mem_arr f.2) (sizeOf_lt_of_getElem?_arr h))
+
+theorem stop_domainS : (domainErrorS docProbe).isNone = true := by decide +kernel
+
+theorem stop_domainSLeaf : (domainErrorS (.str "a")).isNone = true := by decide +kernel
+
+theorem stop_tyS : (tyOfJsonS (.arr #[.str "Tuple", .arr #[]])).toOption.isSome = true := by decide +kernel
+
+theorem stop_tySValue : (tyOfJsonS (.arr #[.str "Value", .num ⟨16, 0⟩])).toOption.isSome = true := by
+  decide +kernel
+
+/-! ### What `recordPairs` and `composite` read of an id -/
+
+theorem stop_contains : ("Root_v1".contains '{') = false := by decide +kernel
+
+theorem stop_endsWith : ("Root_v1".endsWith "}") = false := by decide +kernel
+
+theorem stop_toList : "Root_v1".toList.length = 7 := by decide +kernel
+
+theorem stop_splitOn : ("Root_v1".splitOn "_v").length = 2 := by decide +kernel
+
+theorem stop_toNat : "1".toNat! = 1 := by decide +kernel
+
 end Flock.Program.Closed
