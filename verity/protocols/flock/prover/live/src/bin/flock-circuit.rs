@@ -396,8 +396,9 @@ fn zk_identity(c: &Composite) -> Value {
            "ligerito_level0": "veil figs. 8-9: every lane padded by (W_n + c) mu with t_pad = 2 q_0 uniform coefficients (c = x); four padded \
                                uniform lanes, rep r folding its own pair 2r, 2r + 1 after its lane rounds (rho_0, rho_1 F128-independent); the ood \
                                value, the lane-round messages and the pair's sums padded; T' and ybar sent (uniform)",
-           "ligerito_level0_queries": "q_0 = 277, 242, 229 at m = 25, 26, 27, else the least q_0 >= fast100's with q_0 log2(1/(sqrt(rho') + 1/50)) >= 100; \
-                                       rho' = (L + 2 q_0) / 2L; refused below 100 bits and at m <= 24",
+           "ligerito_level0_queries": wide_leaf::level0_queries(
+               "q_0 = 277, 242, 229 at m = 25, 26, 27, else the least q_0 >= fast100's with q_0 log2(1/(sqrt(rho') + 1/50)) >= 100; \
+                rho' = (L + 2 q_0) / 2L; refused below 100 bits and at m <= 24", wide_mode()),
            "refused_coins": ["beta = 0", "mask-slot weights of rank < 128 k over the claims so far", "rho_0, rho_1 dependent over F128",
                              "a zerocheck outer coin r_j = 1"],
            "not_yet_masked": []})

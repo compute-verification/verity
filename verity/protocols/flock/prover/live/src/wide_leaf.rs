@@ -11,16 +11,26 @@ use flock_core::pcs::ligerito::{LigeritoProfile, embedded_initial_k_or_default, 
 /// fast100's `profile`, in a statement's identity and a session's Hello.
 pub const FAST100_PROFILE: &str = "fast100";
 /// The wide version's `profile` there.
-pub const PROFILE: &str = "fast100-wide";
+pub const PROFILE: &str = "fast100-wide-leaf";
 /// The part of a statement's domain tag (`circuit::Tags::domain`) that names fast100's version, and the wide version's.
 const FAST100_DOMAIN: &str = "/fast100x2/";
-pub const DOMAIN: &str = "/fast100-widex2/";
+pub const DOMAIN: &str = "/fast100-wide-leafx2/";
 /// `PcsParams.profile` of the wide version's proofs: fast100's own, the wide config being the one at its `log_batch_size`.
 pub const LIGERITO: LigeritoProfile = LigeritoProfile::Fast100;
+
+/// What the wide version's `--zk` identity says of level 0's query count after fast100's own text
+/// (`hooks.ligerito_level0_queries`).
+pub const LEVEL0_QUERIES: &str = "; wide leaf: level 0 of 2^19 symbols at m = 32..35 (k_0 = m - 25, L = 2^18), where q_0 = 219";
 
 /// `profile` of a statement's identity and Hello in a version.
 pub fn profile(wide: bool) -> &'static str {
     if wide { PROFILE } else { FAST100_PROFILE }
+}
+
+/// `hooks.ligerito_level0_queries` of a `--zk` statement's identity in a version: fast100's `text`, as it is or with
+/// [`LEVEL0_QUERIES`] after it.
+pub fn level0_queries(text: &str, wide: bool) -> String {
+    if wide { format!("{text}{LEVEL0_QUERIES}") } else { text.to_string() }
 }
 
 /// A statement's domain tag in a version: `tag`, fast100's, as it is, or with the wide version's name in fast100's place.
@@ -107,7 +117,12 @@ mod tests {
     /// The wide version's names are its own: neither is fast100's, and its domain tags keep the form a rep's index follows.
     #[test]
     fn the_wide_versions_names_are_its_own() {
-        assert_ne!(profile(true), profile(false));
+        assert_eq!((profile(true), profile(false)), ("fast100-wide-leaf", "fast100"));
+        assert_eq!(domain(TAGS.domain, true), "flock-circuit/fast100-wide-leafx2/rep");
+        assert_eq!(domain(TMPL_TAGS.domain, true), "flock-circuit-tmpl/fast100-wide-leafx2/rep");
+        assert_eq!(bincode::serialize(&LIGERITO).unwrap(), bincode::serialize(&1u32).unwrap());
+        assert_eq!(level0_queries("q_0", false), "q_0");
+        assert_eq!(level0_queries("q_0", true), "q_0; wide leaf: level 0 of 2^19 symbols at m = 32..35 (k_0 = m - 25, L = 2^18), where q_0 = 219");
         let mut seen = std::collections::BTreeSet::new();
         for tags in [&TAGS, &TYPED_TAGS, &TMPL_TAGS] {
             let wide = domain(tags.domain, true);
