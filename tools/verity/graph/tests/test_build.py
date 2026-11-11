@@ -64,15 +64,17 @@ def test_the_build_family_is_check_s_steps_with_the_inputs_check_keys_them_by(do
 
 
 def test_lean_suites_is_check_s_lean_suites_step_a_suite_or_a_part_a_task(doc):
-    """Each suite check's lean-suites step runs is one task, or one a part of `build.PARTS`, in check's order: every suite once,
-    every part of a split one once; a parallel suite takes a slot and another one process, each at its own timeout."""
+    """Each suite check's lean-suites step runs is one task, or one a part: of the parts by test id it declares, else of
+    `build.PARTS`, in check's order: every suite once, every part of a split one once; a parallel suite takes a slot and
+    another one process, each at its own timeout."""
+    suites = CHECK.SUITES.discover()
+    split = {**build.PARTS, **{k: s.parts for s in suites if s.parts for k in (s.name, s.path)}}
+    assert not {s.name for s in suites if s.parts} & set(build.PARTS), "a suite in parts by test id isn't in PARTS too"
     ran = [(t["vars"]["suites"], t["vars"].get("files")) for t in sorted(_suites(doc), key=lambda t: t["id"])]
-    want = [(s, f"{k}/{build.PARTS[s]}" if s in build.PARTS else None) for s in CHECK.SUITES.AFTER_LEAN
-            for k in range(1, build.PARTS.get(s, 1) + 1)]
+    want = [(s, f"{k}/{split[s]}" if s in split else None) for s in CHECK.SUITES.AFTER_LEAN for k in range(1, split.get(s, 1) + 1)]
     assert sorted(ran, key=str) == sorted(want, key=str) and len(ran) == len(set(ran))
     assert FLOCK_PART in {t["id"] for t in _suites(doc)}, "the Flock suite, which runs for hours on one slot, is in parts"
     fam = graph.spec(ROOT)["family"]["build"]
-    suites = CHECK.SUITES.discover()
     for t in _suites(doc):
         s = next(x for x in suites if t["vars"]["suites"] in (x.name, x.path))
         one = {"cores": 1, "mem_gb": s.worker_gb or CHECK.SUITES.TEST_PROCESS_GB, "disk_gb": build.SUITES_DISK_GB}
@@ -192,19 +194,25 @@ def test_a_tree_without_the_verifier_lists_none_of_its_lean_tasks(tmp_path, monk
         "the agreement and the partition check need flock-verify among the executables"
     (tmp_path / build.LEAN / "lakefile.toml").write_text('defaultTargets = ["flock-verify"]\n[[lean_exe]]\nname = "flock-verify"\n')
     pytest_ = "[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n"
-    for f, text in ((build.UNIT_CUT, "import json\n"), (build.SUITES, 'AFTER_LEAN = ("a", "b/c", "gone")\nTEST_PROCESS_GB = 9\n'),
+    for f, text in ((build.UNIT_CUT, "import json\n"),
+                    (build.SUITES, 'AFTER_LEAN = ("a", "b/c", "d", "gone")\nTEST_PROCESS_GB = 9\n'),
                     ("pyproject.toml", '[project]\nname = "toy"\n'),
                     ("pkg/a/pyproject.toml", f'[project]\nname = "a"\n{pytest_}[tool.verity.tests]\nworker_gb = 3\n'),
-                    ("b/c/pyproject.toml", f"{pytest_}[tool.verity.tests]\nparallel = true\ntimeout_s = 99.5\n")):
+                    ("b/c/pyproject.toml", f"{pytest_}[tool.verity.tests]\nparallel = true\ntimeout_s = 99.5\n"),
+                    ("pkg/d/pyproject.toml", f'[project]\nname = "d"\n{pytest_}[tool.verity.tests]\nparts = 3\n')):
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / f).write_text(text)
-    files = [*lean, build.UNIT_CUT, build.SUITES, "b/c/pyproject.toml", "pkg/a/pyproject.toml", "pyproject.toml"]
-    monkeypatch.setattr(build, "PARTS", {"a": 2})
+    files = [*lean, build.UNIT_CUT, build.SUITES, "b/c/pyproject.toml", "pkg/a/pyproject.toml", "pkg/d/pyproject.toml",
+             "pyproject.toml"]
+    monkeypatch.setattr(build, "PARTS", {"a": 2, "d": 2})
     got = {t["id"]: t for t in build.tasks(tmp_path, files)}
-    parts = ["lean-suites:a:1/2", "lean-suites:a:2/2"]
-    assert list(got) == [BUILD, UNIT, *parts, "lean-suites:b/c", "lean-suites:gone"] and got[UNIT]["inputs"] == [build.UNIT_CUT]
+    parts, by_id = ["lean-suites:a:1/2", "lean-suites:a:2/2"], [f"lean-suites:d:{k}/3" for k in (1, 2, 3)]
+    assert list(got) == [BUILD, UNIT, *parts, "lean-suites:b/c", *by_id, "lean-suites:gone"]
+    assert got[UNIT]["inputs"] == [build.UNIT_CUT]
     assert [got[p]["vars"] for p in parts] == [{"suites": "a", "files": f"{k}/2", "bin": f"{build.LEAN}/.lake/build/bin"}
                                                for k in (1, 2)]
+    assert [got[p]["vars"]["files"] for p in by_id] == ["1/3", "2/3", "3/3"] and all("by id" in got[p]["about"] for p in by_id), \
+        "a suite that declares parts is in those parts by test id, as check runs it, whatever PARTS says"
     assert all(got[p]["resources"] == {"cores": 1, "mem_gb": 3, "disk_gb": 60} and "timeout_s" not in got[p] for p in parts), \
         "one process at the suite's worker_gb, at the family's timeout"
     assert got["lean-suites:b/c"]["resources"] == {"disk_gb": 60} and got["lean-suites:b/c"]["timeout_s"] == 100, \
