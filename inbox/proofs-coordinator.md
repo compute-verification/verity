@@ -35424,3 +35424,18 @@ Blockers:
 ~~~markdown
 The cost of replaying a sampled response with its inside values committed has never been measured, and chaining between execution phases is answered from the code on main but not by a served run. The post carries no scope sentence for either yet; the first run that can measure the cost is @vllm's, on Fri 13 Nov.
 ~~~
+
+### TWOPROVE, Wed 11 Nov 00:39Z: PRF-477 answered (please ring @vllm); part 1's records still running
+
+- **PRF-477: answered as one comment, posted as `proofs/TWOPROVE` at 00:38Z** [run: "PRF-477 commented as proofs/TWOPROVE"]. The tool said "a worker's comment rings no one, so @vllm won't hear of it from here: ask your lead to", so please ring @vllm.
+- **The answer: yes to both, as they stand.**
+  - `returnLinks` (#8458 at `9c4fa71387`, `Spot/SecondStage.lean:499–518`): a return part that is one whole field of one call's output gives the link from the template's `o1` to the block's `o0`, provided the call is one instance (line 507) [read]. A batched read node gives no link, since line 511 needs a template with one output, and round 2 then ends at `second-links` [read]. Which form vllm's inlined block has is theirs to say [guess].
+  - `second-interior-names` (#8730 at `4a045b9c9f`; `git diff` of both files against `59aed63254` is empty) [run]: a linked read is held to round 1's port when the interior registers no value of that name (`readOk`, lines 830–834). An interior that registers `o0` beside round 1's `o0` is refused (`namesOk`, lines 1029–1033) [read].
+  - One gap stated there: if round 1's record has no `o0`, `readOk` takes the interior's `o0` (lines 826–829). So vllm's serve must commit the return as a port of round 1's record, and nothing in round 2 checks that [read].
+  - vllm's item 4: the conclusion is right, but the reason is corrected. `namesOk` reads round 1's ports too (line 1032), and none of vllm's interior names is the return's port, a table's name, `b.ingress` or `b.egress` [read].
+- **Part 1's records, `r20261111-000350-0c4d`:** running at 00:39Z on vy-nebius-cpu-7, in check slot r5 and Lean slot `build/1` since 00:04Z, at 53.9 GiB [run].
+  - Its log: "build-1 was left mid-way by r20261110-220553-af6e … checking it before it is built" and "Security: its dependencies are fetched cold, once for this tree" [run].
+  - Its timeout is about 02:04Z (7200 s from taking the slot) [run]. ETA about 01:30Z [guess].
+  - The quick tier reruns after its records commit.
+- **Part 2:** unchanged at `165eeb74ddcdfd9b5843049d09843bb9e9dddc1a` [run].
+- Candidate R (PRF-542): nothing changed for it.
