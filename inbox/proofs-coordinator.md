@@ -58420,3 +58420,34 @@ CPU-seconds and the card's busy share for each row are in the entry that reporte
 For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64, node A, four provers: 2.4302 s a statement today; 2.031 s with salts `all`; 1.731 s (against 2.417 s) with the check on four other cores; 1.3574 s quiet and 1.4023 s loaded with every cut (measured, `r20261111-102210-ee70`, `r20261111-093701-db9a`).
 For BREAKEVEN: the same block on vy-dc-h200-3, two provers, six cores: 3.023 to 3.128 s today; 2.554 s salts `all`; 2.1425 s the follow-up with salts `all`; 1.314 to 1.373 s with no walk at all, a floor and not a served figure (measured, `af1d`, `5832`, `r20261111-135122-c736`).
 For the table: the head block's seconds today 2.43 (four provers, node A) and 1.36 with the cuts built tonight (0.56; 1.40 loaded, 0.59); the cut into scores + values costs the same seconds as the head block at G = 32 to 128 once the host walks the values unit (1.00 to 1.05), and 1.02 to 1.39 as the code walks today.
+
+## V2CASE (LEAN-277), Wed 11 Nov 15:48Z: #9007 open at `e4a196030a7c`, not marked: the Site's `_rat_json` reads a rational of any length, as `Core.Ratio.ofString` does, and its writer writes one; quick tier 61 of 61 suites passed, the 4,301-digit difftest case passed against the Lean binary
+
+Tags: [read] a file and line, [run] a run I read with `research status`, [local] one test file on the agent VM, [guess]. Times from `date -u`.
+
+**The function and the set** [read].
+- The Site's Lean reads every figure, tolerance and tick with `Core.Site.Figure.ofJson` (`CoreProtocol/Site.lean:619-622`), which calls `Core.Ratio.ofString` (`CoreProtocol/Ratio.lean:41-50`, digits by `natOf`, `:35-37`).
+- **Accepted set, in one sentence:** `n`, or `n/d` with `d ≥ 2` and `gcd(n, d) = 1`, where `n` and `d` are each `0` or ASCII digits with no leading zero, of any length; so `n/1`, `n/0`, `0/d`, a leading zero, a sign, a space, an underscore, a second slash, an empty side and a non-ASCII digit are all refused.
+- **#8942's size refusal reaches it, and is not in this PR.** `main`'s `Ratio.ofString` has no bound. #8942 (open, head `131c1e7058`) refuses a string of 2^32 bytes or more inside `Ratio.ofString`, and `Figure.ofJson` calls that function. I mirrored `main`. Whichever of #8942 and #9007 lands second owes one condition in `_rat_json`, `len(v) < 2 ** 32`, as #8942 adds to `core_check.ratio`. Say if you want it in #9007 now.
+
+**The change** (3 files, +99 −8) [read: `git diff --shortstat 1a59728741 e4a196030a`].
+- `_rat_json` (`verity/hardware/site/__init__.py:161-170`): the same regular expression, digits to `int` in pieces of at most 512 by divide and conquer (`_nat_of`), lowest terms by `d > 1 and math.gcd(n, d) == 1`, `Fraction(n, d)` from the integers. No `int(str)`, `Fraction(str)` or `str(int)` on a long number, no interpreter setting. The `Malformed` text is unchanged.
+- **Beyond the brief: the writer too** (`_rat_str`, `:173-176`, replacing three `str(Fraction)` calls at `:228-229` and `:475`). A sheet read with a long figure raised the same plain `ValueError` at its digest, which the Lean computes by writing the sheet back (`Site.lean:566`, `:596`). Without it the fault moves one call later and the difftest case cannot build its sheet. It is two small functions and three call sites; say if you want it split out.
+- 512 is under 640, the lowest limit the interpreter takes, so it holds under every setting.
+- Old against new reader on all 1,111,111 strings of length 0 to 6 over `0123/ -+`, a line end and an Arabic-Indic digit, and on 20,000 random `n/d`: no difference [local: a scratch script, not in the tree].
+
+**Tests.**
+- `verity/hardware/site/tests/test_site.py`, two tests run at a limit of 640 (a fixture sets and restores it): a 4,301-digit numerator, a 4,301-digit denominator, both at once and a 4,301-digit tolerance read, written back and digested; 20 spellings refused as `Malformed`, the long ones not in lowest terms, with a leading zero, over 1, over 0, and zero over a denominator. 80 passed; on `main`'s `__init__.py` the two fail with the plain `ValueError` [local].
+- `test_site_difftest.py::test_a_rational_of_4301_digits`: a clock, a tolerance and a tick of 4,301 digits over 4,301 digits; `site_check` and `site_views` give the same output on both sides.
+
+**Runs at `e4a196030a7c`.**
+- `r20261111-145730-abcb`: done, rc 0 [run]. `suites.py --changed 1a59728741f9 --quick`: 61 suites, 61 passed, 0 failed, 0 from the cache. `verity/hardware/site` 80 passed; `verity-core-sampled-proofs` 249 passed, 2 skipped.
+- `r20261111-154152-d029`: done, rc 0 [run]. That suite with `-k "4301 or sample_site" -v`, after `lake build`: `test_a_rational_of_4301_digits PASSED`, 2 passed, 249 deselected.
+- **Not run:** the full check, `circuit-check`, the Lean check (no Lean changed).
+
+**The two other readers: not in scope, not changed** [read].
+- Spot's reference decoder, `test_difftest.py:431` (`int(m[1])` at `:436`): same limit; the Site's reader does not call it.
+- compute-accounting's `core_check.ratio`, `core_check.py:222` (`int(s)` at `:218`): theirs.
+- **One more of the same kind, not looked into:** a JSON *number* past 4,300 digits (a sheet's `bw`, a location's `bytes`). Python's `json` refuses to parse or print it, and the Site's messages `repr` the value they refuse. Whether the Lean reads one is unchecked [guess: it does].
+
+For the table: #9007 at `e4a196030a7c`, LEAN-277, open and unmarked; quick tier 61/61 [run `abcb`], the 4,301-digit difftest case passed [run `d029`]; the 2^32-byte bound waits on #8942; the writer is in it beyond the brief.
