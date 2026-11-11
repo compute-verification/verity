@@ -37889,3 +37889,46 @@ To lean's 6:42 PM PST (02:42Z). **The `whole_run.py` commit is run. Take `efc525
 
 - \#8788: I take no further action unless its quick tier fails. When it passes I append its verdict line here.
 - R3.4: when `ba02` ends I read it and name what it regenerates. Then I cross the move with `tools/move/restack.py` and run its records and quick tier on the moved tree.
+
+## PRF-516 REGX, Wed 11 Nov 03:22Z: part 2 is at `840c899e7eb2cdfdd4d2dc8e7e75ec73e504204f` (`e41d`'s record committed, then #8512's head `75bdbe8965` merged clean); records `r20261111-031944-3981` and the quick tier `r20261111-031949-3f78` wait for a slot on vy-nebius-cpu-1; keeping `acc` in the off terms is a change inside the proof
+
+Your message of this hour is read and done as far as the runs. I pushed nothing to `cursor/proofs-regx-efe1`.
+
+**1. `r20261111-015223-e41d`, read** (result, job, stdout, the record):
+
+- [run] rc 0, result `lean-fast/v1`, outcome `regenerated`, at commit `fe391c772c`. AUDIT PASS for `Security` (1,094 guarantees, 26,992 declarations in 714 modules), `Security/Proofs` (193,240 declarations in 3,822 modules) and `Security/Properties` (463 guarantees); axioms `propext`, `Classical.choice`, `Quot.sound`. No kernel replay: it is the fast path.
+- [run] The record against the lock at `fe391c772c`, compared as JSON: the twelve stubs are filled (nine two-stage, three one-stage) and two `reads` entries are added (`Definitions.Claims.SamplingGenericX`, `Definitions.Claims.SamplingTwoRegX`). No other entry differs.
+- [run] Premises, as data. No assumption and no new premise name:
+
+| guarantee | domain | open | equal to |
+|---|---|---|---|
+| `Claims.SamplingGeneric.compilerKSRegTwoX` | `Claims.Sampling.CommitmentScheme.Binds` | `Claims.SamplingGeneric.Arg.KS`, `CompiledTwo.Scope`, `CompiledTwo.Sessions` | `compilerKSRegTwo`'s |
+| `Claims.SamplingGeneric.compilerHeadlineTwoX` | the same | the same | `compilerKSRegTwo`'s |
+| `Claims.SamplingGeneric.compilerMissTwoX` | `Claims.Sampling.Design.Two.FirstRate`, `SecondRate` | `CompiledTwo.Scope`, `CompiledTwo.Sessions` | `compilerMissTwo`'s |
+
+- [run] Part 1's three records on this branch equal those on `cursor/proofs-regx-efe1`, entry for entry.
+- [run] Committed as `46748df19a`: the run's file byte for byte (sha256 `2eaad753a827…`), one commit, nothing else in it.
+
+**2. The merge of #8512's head `75bdbe8965e14bfe51297446fc40a507939f63b9`:** head `840c899e7eb2cdfdd4d2dc8e7e75ec73e504204f`, pushed.
+
+- [run] Clean. Git merged `Security/Definitions.lean` and `Security/lean-audit.json` by their drivers, with no `merge.py:` warning. It touches neither `TwoReg.lean` nor `TwoRegMiss.lean`: under the paths my branch changes, #8512's old head to its new one differs in those two files only.
+- [run] The merged lock against #8512's head's, as JSON: 26 entries added (12 guarantees, 4 `claims.generic`, 4 `claims.witnesses`, 4 `witnesses`, 2 `reads`), none changed, none removed. The tree differs from #8512's head in 14 files, all mine.
+- [run] The head holds `main`'s tip `a930252c49`. The layout move was not on `origin/main` when I launched.
+- [read] Both sides changed `Security/Definitions.lean` and the lock, so by your rule 3 nothing below this merge vouches for it: the records run is at the merge itself.
+
+**3. Runs, both at `840c899e7e`, both on vy-nebius-cpu-1's research pool, both waiting for a slot** (every slot was held at launch; each waits up to 240 min):
+
+- records `r20261111-031944-3981` (`lean_changed.py --records Security --update`). ETA [guess] 05:15Z if a slot frees within half an hour; `e41d` took 55 min once it ran.
+- quick tier `r20261111-031949-3f78` (`suites.py --changed a930252c4993 --quick`, 8 suites). ETA [guess] 04:30Z.
+
+**The reading question.** Only a change inside the proof.
+
+- [read] `KSRegTwoX` (`SamplingTwoRegX.lean:72-79`) already has `acc` in its event, and its error names the finders' success (`BconfX`, `BconfTwo`), never the off events. Those occur only in `eventTwo_split` (`TwoReg.lean:466-469`, a proof lemma in no lock), whose three off cases (`:488-490`) return `h` and drop the `hacc` in scope since `:482`. Returning `⟨hacc, h⟩` is the `acc`-kept split, and since Pr[acc and off] ≤ Pr[off], today's bounds still close it. ATTACK's line numbers are right.
+- [derived] What would restate it is the finder's number, not `acc`: putting `K·Pr[finder]` where `εregTwoX` (`:61-63`) has `N·√Pr[B_conf,2]` changes a definition the claim unfolds to, so it is a changed record or a new claim beside this one. The traces stay as they are (`iregVal` and `regValX` are pluralities over all forks, acceptance not required).
+
+**Left:**
+
+- When the two runs end: read them; if the record differs from the lock at `840c899e7e` in bytes, commit exactly it as one commit and merge nothing after; rerun the quick tier at that commit if the JSON changed.
+- If the layout move lands on `main` first: `tools/move/restack.py`, then the records and the quick tier on the moved tree.
+- [guess] At PR time, after #8512 lands, the merge of `main` will again change `Security/Definitions.lean` and the lock on both sides, so the records run once more after it, before "ready to mark".
+- The VM restarted before this turn; the worktrees were rebuilt from the pushed branches and nothing was lost.
