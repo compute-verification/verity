@@ -1,8 +1,9 @@
 """`replay_bundle.defer` at the C2 site of a deferred run: the slim bundle of a planned replay's reads, a plan that fails, a store
-over the cap and a write that was started beside the checks, with the line each prints.  CPU only; sealing and opening a
+over the cap and a write that was started beside the checks, with the line each logs.  CPU only; sealing and opening a
 bundle are `test_replay_bundle.py`."""
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -23,14 +24,10 @@ Lines = Callable[[], list[str]]
 
 
 @pytest.fixture
-def printed(capsys: pytest.CaptureFixture[str]) -> Lines:
-    """The lines `replay_bundle` has printed so far in this test."""
-    seen: list[str] = []
-
-    def lines() -> list[str]:
-        seen.extend(capsys.readouterr().out.splitlines())
-        return seen
-    return lines
+def logged(caplog: pytest.LogCaptureFixture) -> Lines:
+    """The lines `replay_bundle` has logged so far in this test."""
+    caplog.set_level(logging.INFO, logger=RB.__name__)
+    return lambda: [r.getMessage() for r in caplog.records if r.name == RB.__name__]
 
 
 class Site:
@@ -60,7 +57,7 @@ class Site:
                                       ("end", "validate.replay_bundle", {"pair": 1, "ok": False})])
 
 
-def test_a_planned_replay_defers_to_a_slim_bundle_of_the_reads_it_made(tmp_path: Path, printed: Lines) -> None:
+def test_a_planned_replay_defers_to_a_slim_bundle_of_the_reads_it_made(tmp_path: Path, logged: Lines) -> None:
     site, full = Site(tmp_path / "slim"), Site(tmp_path / "full", replay_deferred="full")
 
     def plan() -> dict[str, Any]:
@@ -74,36 +71,36 @@ def test_a_planned_replay_defers_to_a_slim_bundle_of_the_reads_it_made(tmp_path:
     assert full.deferred[1]["slim"] is None
     assert (site.row["commit"]["sampled_replay"], site.row["commit"]["boundary_linkage"]) == RB.deferred_records(RB.path(site.out, 1))
     assert site.tl.calls == [("start", "validate.replay_bundle", {"pair": 1}), ("end", "validate.replay_bundle", {"pair": 1})]
-    planned, deferred, deferred_full = printed()
+    planned, deferred, deferred_full = logged()
     assert re.fullmatch(rf"\[delta\] REPLAY BUNDLE \(pair 1\): slim -- 1 picks \+ linkage read {slim['bytes'] >> 20} MiB of the store in "
                         r"[0-9.e-]+ s \(unresolved 0\)", planned), planned
     assert deferred == f"[delta] C2 SAMPLED REPLAY + LINKAGE (pair 1): DEFERRED -- store and weights tree written to {RB.partial(site.out, 1)}"
     assert deferred_full == deferred.replace(str(site.out), str(full.out))
 
 
-def test_a_plan_that_fails_defers_nothing_and_the_replay_runs_in_process(tmp_path: Path, printed: Lines) -> None:
+def test_a_plan_that_fails_defers_nothing_and_the_replay_runs_in_process(tmp_path: Path, logged: Lines) -> None:
     site = Site(tmp_path)
 
     def plan() -> dict[str, Any]:
         raise RuntimeError("no Programs of record")
     assert site.defer(plan=plan) is False and site.nothing_deferred()
-    assert printed() == ["[delta] REPLAY BUNDLE (pair 1): no plan (RuntimeError('no Programs of record')); the C2 replay runs in this process"]
+    assert logged() == ["[delta] REPLAY BUNDLE (pair 1): no plan (RuntimeError('no Programs of record')); the C2 replay runs in this process"]
 
 
-def test_a_store_over_the_cap_defers_nothing_and_the_replay_runs_in_process(tmp_path: Path, printed: Lines) -> None:
+def test_a_store_over_the_cap_defers_nothing_and_the_replay_runs_in_process(tmp_path: Path, logged: Lines) -> None:
     site = Site(tmp_path, replay_deferred="full", replay_bundle_cap_gb=0)
     assert site.defer() is False and site.nothing_deferred()
-    assert printed() == [("[delta] REPLAY BUNDLE (pair 1): REFUSED -- 0.0 GB is over the 0 GB cap (--replay-bundle-cap-gb); the C2 replay runs "
+    assert logged() == [("[delta] REPLAY BUNDLE (pair 1): REFUSED -- 0.0 GB is over the 0 GB cap (--replay-bundle-cap-gb); the C2 replay runs "
                           "in this process")]
 
 
-def test_a_write_started_beside_the_checks_is_the_one_defer_takes(tmp_path: Path, printed: Lines) -> None:
+def test_a_write_started_beside_the_checks_is_the_one_defer_takes(tmp_path: Path, logged: Lines) -> None:
     site = Site(tmp_path, replay_deferred="full", replay_bundle_overlap=1)
     started = RB.start(site.out, 1, site.com, site.rc, site.args, None)
     assert started is not None and site.defer(started=started)
     assert site.deferred[1]["engine_of_record"] == started.engine and site.deferred[1][RB.HASHED] == started.hashed and site.store_bytes() > 0
     assert RB.start(site.out, 1, site.com, site.rc, site.args, SimpleNamespace(entries=["pouw:ncp-v2"])) is None, "a live-only run defers nothing"
-    taken, deferred = printed()
+    taken, deferred = logged()
     assert re.fullmatch(r"\[delta\] REPLAY BUNDLE \(pair 1\): store written in [0-9.]+ s beside the checks before the C2 site "
                         r"\(waited [0-9.]+ s here\)", taken), taken
     assert deferred == f"[delta] C2 SAMPLED REPLAY + LINKAGE (pair 1): DEFERRED -- store and weights tree written to {RB.partial(site.out, 1)}"

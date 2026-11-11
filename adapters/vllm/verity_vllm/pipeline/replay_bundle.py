@@ -153,8 +153,8 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
     if started is not None:
         t0 = time.perf_counter()
         write_s, hashed = started.future.result(), started.hashed
-        print(f"[delta] REPLAY BUNDLE (pair {pair}): store written in {write_s:.1f} s beside the checks before the C2 site "
-              f"(waited {time.perf_counter() - t0:.1f} s here)", flush=True)
+        logger.info("[delta] REPLAY BUNDLE (pair %s): store written in %.1f s beside the checks before the C2 site (waited %.1f s here)", pair,
+                    write_s, time.perf_counter() - t0)
     else:
         if plan is not None:
             t0 = time.perf_counter()
@@ -163,18 +163,18 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
                     planned = plan()
             except Exception as e:  # noqa: BLE001  -- no plan, no slim bundle: the replay runs in this process
                 tl.end("validate.replay_bundle", pair=pair, ok=False)
-                print(f"[delta] REPLAY BUNDLE (pair {pair}): no plan ({e!r:.300}); the C2 replay runs in this process", flush=True)
+                logger.warning("[delta] REPLAY BUNDLE (pair %s): no plan (%.300r); the C2 replay runs in this process", pair, e)
                 return False
             sr_p, read = planned.get("replay") or {}, t.nbytes()
             slim = {"bytes": read, "picked": sr_p.get("picked"), "unresolved_n": sr_p.get("unresolved_n"), "unresolved": sr_p.get("unresolved"),
                     "linkage": planned.get("linkage"), "plan_s": round(time.perf_counter() - t0, 3)}
-            print(f"[delta] REPLAY BUNDLE (pair {pair}): slim -- {slim['picked']} picks + linkage read {read >> 20} MiB of the store "
-                  f"in {slim['plan_s']} s (unresolved {slim['unresolved_n']})", flush=True)
+            logger.info("[delta] REPLAY BUNDLE (pair %s): slim -- %s picks + linkage read %s MiB of the store in %s s (unresolved %s)", pair,
+                        slim["picked"], read >> 20, slim["plan_s"], slim["unresolved_n"])
         size, cap = t.nbytes() if t is not None else SD.nbytes(com), float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9
         if size > cap:
             tl.end("validate.replay_bundle", pair=pair, ok=False)
-            print(f"[delta] REPLAY BUNDLE (pair {pair}): REFUSED -- {size / 1e9:.1f} GB is over the {cap / 1e9:.0f} GB cap (--replay-bundle-cap-gb); "
-                  "the C2 replay runs in this process", flush=True)
+            logger.warning("[delta] REPLAY BUNDLE (pair %s): REFUSED -- %.1f GB is over the %.0f GB cap (--replay-bundle-cap-gb); the C2 replay "
+                           "runs in this process", pair, size / 1e9, cap / 1e9)
             return False
         hashed = {}
         write_store(out, pair, com, rc, digests=hashed, touched=t)
@@ -192,7 +192,7 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
     row["commit"]["sampled_replay"], row["commit"]["boundary_linkage"] = deferred_records(path(out, pair))
     deferred[pair] = ctx
     tl.end("validate.replay_bundle", pair=pair)
-    print(f"[delta] C2 SAMPLED REPLAY + LINKAGE (pair {pair}): DEFERRED -- store and weights tree written to {partial(out, pair)}", flush=True)
+    logger.info("[delta] C2 SAMPLED REPLAY + LINKAGE (pair %s): DEFERRED -- store and weights tree written to %s", pair, partial(out, pair))
     return True
 
 
