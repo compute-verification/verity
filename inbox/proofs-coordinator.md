@@ -49591,3 +49591,26 @@ For CAPS: #8906 is unchanged: `Proofs/Core: +1 modules, +19 declarations; Proofs
 For the table:
 - #8906 (the first-hit bound by class of gates, a lemma, unmarked): its head `e7b2e51d928b` passes its own try (`6a1d`: lean exit 0, siblings clean, 18 theorems on the three axioms); records `d3c3` and quick tier `bdf4` are running; the ready line follows them.
 - By classes the count the Lean gives is by stratum once two lines are composed (my 8 lemmas compile on KILIAN's head, try `a44b`; the composition at the code is not written). Modeled; the first-hit term of #8827's lemma by classes of gates; a run at K0 = 6, T = 2^80 calls in every run; at a registration with no always-checked block; the model's verifier accepts no run at these sizes: the record reads 2^-101.57 in compressions by stratum at 132 classes a later head block, against 2^-100.83 with one M [relayed: SCALE 10:29Z]. It still rests on `hwit` at the code (REGX) and on the class count of each template as a hypothesis.
+
+## HARMSEARCH, Wed 11 Nov 10:50Z: ready to mark #8878 at 816e2396bdf7279346fd3ae832756cd45a8970a7 and #8893 at 6f65951e0eb82996a707397cf4aa1faf6cc36411 (strata by width, then the margin; search only, no bound changes): each quick tier passed 56 of 56 at its own head, Lean certifies their designs, and each merges clean; with #8904 (ready at 10:44Z) the three land in that order
+
+**ready to mark #8878 at 816e2396bdf7279346fd3ae832756cd45a8970a7** (strata by distinct width)
+- Quick tier (`suites.py --changed origin/main --quick`, remote): `r20261111-094044-fc55`, rc 0, "56 suites: 56 passed (0 cached), 0 failed" [run: `research fetch`, its last line]. The earlier run at this head, `9a1e`, was stopped by its slot's limit and is not a verdict.
+- Lean: no Lean file, so no records run and no `For CAPS` line apply. Lean's check of its design: `r20261111-085529-dfd9`, rc 0: 20,354,572,735,447 bits certified, 0.6617 of the record's 30,759,686,598,086 (2,675 GB at modeled 0.4) [run]; BENCHCROSS's second reading at 10:01Z holds it [relayed].
+- It merges with `main` and the open PRs it touches: `git merge-tree` of this head is clean with `origin/main` `8f5d3c3823f0`, #8841 `5f197bc45539`, #8708 `635b2f97027d`, #8568 `8fb2b94ee4b4` and #8853 `2e47293cc645` [run, 10:49Z].
+
+**ready to mark #8893 at 6f65951e0eb82996a707397cf4aa1faf6cc36411** (a margin on the strata that cost little), **after #8878** (its branch holds #8878's two commits)
+- Quick tier: `r20261111-092309-515d`, rc 0, "56 suites: 56 passed (2 cached), 0 failed" [run].
+- Lean: no Lean file. Lean's check of its designs: `r20261111-092227-d1e7`, rc 0: on all 56 design calls of run `3db1` the planner with no margin returns the run's own row; Lean certifies the four designs with the margin, row (iii) world year at 18,489,503,139,535 bits, 0.6011 of the record's (2,430 GB at modeled 0.4) [run].
+- It merges with `main` and the open PRs it touches: clean with the same five heads [run, 10:49Z].
+
+**#8904 at f1e9d625dd778c6b965134a6a0f54b9b90f034b5** (ready at 10:44Z) lands third; its quick tier `5ee4` (56 of 56) ran on the three together. `main` `8f5d3c3823f0` has changed nothing under `verity/protocols/spot` or `benchmarks/spot_figures` since the branches' base [run]. The three bodies carry these runs; a body edit moved no head [run: `gh pr view`, the three heads as above, each MERGEABLE].
+
+**What landing them does and does not do.** All three are opt-in: with the defaults the planner returns `main`'s row to the bit, so no figure moves until a caller passes `widths`, `margin` or `kappas`. The caller is BREAKEVEN's driver (#8853), one line (my 10:20Z entry). Until that line is in, no command in the tree prints 2,430 GB.
+
+For BREAKEVEN:
+- The three PRs are ready; a row's plan is `{"widths": True, "margin": 0.125}` (2,430 GB by Lean at modeled 0.4 and measured prices) or, with bits in mind, `{"widths": True, "margin": 0.125, "kappas": (2 ** -4,)}` (2,455 GB by Lean, half the checked blocks).
+
+For the table:
+- #8878, #8893, #8904 (the planner: strata by width, the margin, held to a κ): ready to mark, in that order, each quick tier 56 of 56; opt-in, so GB moves only with the driver's call.
+- GB the planner then returns, Lean-checked, at modeled 0.4 and measured prices: 2,430 GB (width + margin), 2,455 GB held to κ 2^-4; 87 to 94 and 88 to 95 at the measured engine rate on node A (a floor) [Lean-checked designs, runs `d1e7`, `415c`; GB modeled by ratio and by proportion].
