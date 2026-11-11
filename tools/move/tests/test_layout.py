@@ -299,7 +299,7 @@ def test_uv_lock_names_a_moved_distribution_by_its_new_directory(tmp_path):
     assert git(r, "status", "--porcelain") == ""
 
 
-def test_a_failed_uv_lock_fails_the_move(tmp_path):
+def test_a_failed_uv_lock_fails_the_move(tmp_path, monkeypatch):
     """A move whose `uv lock` failed left a lock `uv sync` fails on, and exited 0, so `stage.py` certified a commit no suite
     could start on. It exits 1 with uv's reason, which `stage.py` and `restack.py` refuse on."""
     r = tmp_path / "repo"
@@ -316,8 +316,9 @@ def test_a_failed_uv_lock_fails_the_move(tmp_path):
     git(r, "init", "-q", "-b", "main")
     git(r, "add", "-A")
     git(r, "commit", "-q", "-m", "old")
+    monkeypatch.setenv("PATH", str(uv.parent), prepend=os.pathsep)
     p = subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml")], capture_output=True,
-                       text=True, env={**os.environ, "PATH": f"{uv.parent}{os.pathsep}{os.environ['PATH']}"})
+                       text=True)
     assert p.returncode == 1, p.stderr
     assert "Distribution not found at: old" in p.stdout and "`uv sync` fails on it" in p.stderr
 
