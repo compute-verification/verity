@@ -14,15 +14,19 @@ and hands `a5.audit` the members, each proved by C-Flock's prover (`flock-circui
   and are no auditor's.
 * **The binaries.** `flock-verify` and `flock-firewall` are what check's lean-build step builds before this suite
   (`AFTER_LEAN`, the suite's ``artifacts``), and the tests skip without them. `flock-circuit` is built by
-  `check_build.sh bin` on the checkout check's flock-circuit-build step keeps, which that script clones, with its Rust
-  toolchain, on a machine that has neither. The stream's and the challenger's Lean (`sampled-proofs-verifier`) is its
-  own package's, which the audit builds with `lake` on first use (`one_stage.verifier.executable`): a checkout's first
-  audit pays that build.
+  `check_build.sh bin` on the Flock checkout check's flock-circuit-build step leaves on a machine. That build fetches
+  nothing: on a machine with no checkout or not its Rust toolchain the tests skip, saying so. The stream's and the
+  challenger's Lean (`sampled-proofs-verifier`) is its own package's, which the audit builds with `lake` on first use
+  (`one_stage.verifier.executable`): a checkout's first audit pays that build.
 
-Slow, and past a minute in `check`: every other test of the audit gives `a5.audit`, the prover or the verifier a
-stand-in, so none sees what only the real ones refuse: a rule the stream's service doesn't take, a statement the prover
-can't stage or the Lean verifier won't set up, a session the ZK server stops, or a record a later step can't read. A
-served window's audit finds those hours in."""
+Slow, and past a minute in `check`: about 150 s on a node, about 210 s where the audit builds the coins' Lean first,
+and about 5 GB at its peak. Of it the changed member's audit is about 50 s: it alone shows a false member stopped (the
+ZK server lets no proof of it out, and the Lean verifier refuses its session), where the audit's own negatives change
+the record around honest sessions. A pass is reused while the suite's inputs are unchanged, so it reruns only on a
+change to what `benchmarks/one_stage` reads. Every other test of the audit gives `a5.audit`, the prover or the verifier
+a stand-in, so none sees what only the real ones refuse: a rule the stream's service doesn't take, a statement the
+prover can't stage or the Lean verifier won't set up, a session the ZK server stops, or a record a later step can't
+read. A served window's audit finds those hours in."""
 from __future__ import annotations
 
 import hashlib
@@ -49,6 +53,8 @@ sys.path.insert(0, str(HERE.parent / "prove_path"))
 import records_audit as RA  # noqa: E402
 
 LEAN = ROOT / "verity" / "core" / "service" / "flock" / ".lake" / "build" / "bin"
+#: `check_build.sh bin`'s exit where the machine has no Flock checkout or not its toolchain
+NOTHING_TO_BUILD_ON = 3
 KS = (128, 256)
 TEMPLATES = tuple(bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in KS)
 LAW = "stratified:1"
@@ -88,6 +94,8 @@ def binaries(tmp_path_factory) -> dict[str, Path]:
     prover = tmp_path_factory.mktemp("flock-circuit") / "flock-circuit"
     p = subprocess.run(["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh"), "bin", str(prover)],
                        capture_output=True, text=True)
+    if p.returncode == NOTHING_TO_BUILD_ON:
+        pytest.skip(p.stderr.strip())
     assert p.returncode == 0 and prover.is_file(), f"check_build.sh bin: {p.stdout[-2000:]}\n{p.stderr[-4000:]}"
     return {"bin": prover, **lean}
 
@@ -138,7 +146,9 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
         assert json.loads(session.read_text())["verdict"]["accepted"] is True
     missing = [f for f in RECORD if not (out / f).is_file()]
     assert not missing, missing
-    assert (out / "window" / "case-v2.json").is_file() or (out / "window" / "case-v2-error.txt").is_file()
+    # v2's case is one table's session, so an audit of two members writes why it has none, which sampled proofs' row reads
+    assert not (out / "window" / "case-v2.json").exists()
+    assert "this audit drew 2 members" in (out / "window" / "case-v2-error.txt").read_text()
 
 
 def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):

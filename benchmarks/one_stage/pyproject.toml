@@ -36,8 +36,9 @@ untraced = [
     "tests/test_served_verdicts.py",
 ]
 # The Lean verifier and the ZK server's Lean, which `test_audit_two_members` runs and skips without: check's lean-build step
-# builds them before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/ml/flock/check_build.sh bin`'s, from the
-# live crate and the patches under `verity`.
+# builds them before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/ml/flock/check_build.sh bin`'s,
+# from the live crate and the patches under `verity`, on the Flock checkout check's flock-circuit-build step leaves on a
+# machine: the test skips on a machine without one, since its build fetches nothing.
 artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
              "verity/core/service/flock/.lake/build/bin/flock-firewall"]
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
