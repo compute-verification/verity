@@ -39454,3 +39454,109 @@ and 04:27Z entries.
 - None of the eight clean ones changes a `TRUSTED.sha256`, so none needs the pins step `[read]`.
 - A dry result's id lives only on this VM. Whoever pushes one runs the recipe again and pushes that run's id.
 - "Plain merge clean" is not "safe to merge plainly": #8454's and #8568's were clean and kept dead imports.
+
+## BREAKEVEN 05:36Z: ready to mark #8568 at 8fb2b94ee4b4c686cd8e67085e95b9aaedc53543; the h8lin-only run is r20261111-053021-49a8
+
+**ready to mark #8568 at 8fb2b94ee4b4c686cd8e67085e95b9aaedc53543** (quick tier r20261111-051405-2392; slow tests
+r20261111-051448-c485) [run]
+
+- It is my fix commit on CROSS's crossed head: its one parent is `e2d439de8706`, and its merge base with main is
+  `5c095bb4ab70` [read].
+- The quick tier, `suites.py --changed 5c095bb4ab70 --quick` on vy-nebius-cpu-9, ran the three suites the change
+  touches. None were cached and none failed [run]:
+  - `benchmarks/spot_figures`: 95 passed in 470 s;
+  - `repository`: 280 passed in 259 s. This is the root suite, which catches a retired path;
+  - `verity-graph`: 181 passed in 16 s.
+- `suites.py benchmarks/spot_figures`, with slow tests and so the new LINEARS test: r20261111-051448-c485 on vy-nebius-cpu-6, 101 passed in 1,098 s, none failed or cached, the LINEARS test among them [run].
+- ruff on the planner and its test: no findings [run].
+- No Lean lock changes: the 8 files touch no `.lean`, `lean-audit.json` or lake file [read].
+- Both of #8568's problems are fixed at this head [read]:
+  - the dead import: `common.py:10` is `from verity.protocols.spot import optimize as opt`, which main holds. The
+    crossing fixed this;
+  - `LINEARS` names `MoeExpertFp8CoordinateChunk` and `MoeExpertFp8Gemm`. My commit fixed this.
+- The body: replaced for the crossed head with `research queue edit 8568 --body-file` at 05:36Z (6,476 bytes). It now covers the head and its one fix, main's layout, the LINEARS fix and its test, these checks at `8fb2b94ee4`, and the plan-of-record finding below [run]. I ran no label.
+
+**Something the crossing changes, which you or benchmarks should decide on.** At this head, the plan of record's run
+(r20261111-052405-181d) no longer reproduces art:2ea6f506…3c65 [run]:
+- One cell is cheaper: `FlashInferFp8Linear_v1{K=6144,N=1}`. Main's GLM-5.3 workload card (`f750ac091d`, "as built in
+  lookup slots") now states it at 13,300,905 ANDs and k_log 25, where the planner's branch has 22,055,981 at 26 [read].
+  So a statement holds 1,024 of the block rather than 512 [run].
+- Every other cell's price, and every cell's blocks taken, are equal. The request count is equal too (1.7784e16).
+- q is 0.85% higher and the bound 0.85% lower: 10.927e12 bits, against 11.020e12.
+- The same card moves (i)'s h8lin headline from 14,239.8 to 14,228.6 GB at the world's year (−0.08%). That is
+  r20261111-052546-d670, on 8fb2b94ee4 [run].
+- #8568 doesn't cause either change. Both come from main.
+- My view [guess]: label the run on the tree benchmarks will read once #8568 lands. On that tree it is d670's
+  14,228.6 GB, and the plan of record should be re-put from 181d. Until benchmarks moves its check, 49a8 is the run
+  that prints 14,239.8.
+
+**The h8lin-only run: r20261111-053021-49a8** [run]
+- On a5e4e56a11, the planner's branch, which is ce3c's tree: 54 rows, all `h8lin` and all `(i) honest`, six scopes ×
+  nine βs, no errors.
+- `out/rows.jsonl` sha256: `06350cc7247533ce2a20662386e88749146d47ebc1e58d73a1b83c7d49f146b8`.
+- Its rows equal ce3c's h8lin rows (the world's and the datacenter's year × nine βs) in every field outside the
+  fields fixed below [run].
+- The command that prints 14,239.8 GB:
+
+      research fetch r20261111-053021-49a8 --all && python3 ~/.research/notes/lanes/proofs/tools/breakeven_at_target.py ~/.research/runs/r20261111-053021-49a8/out/rows.jsonl
+
+  It prints one line a scope, at the 10% point ×1.05 [run]:
+
+  | scope | GB |
+  |---|---:|
+  | world week | 13,972.3 |
+  | world month | 14,070.8 |
+  | world year | 14,239.8 |
+  | datacenter week | 13,439.1 |
+  | datacenter month | 13,538.1 |
+  | datacenter year | 13,707.9 |
+
+  For ce3c's own file, keep only the `"h8": "h8lin"` rows first. The tool keys rows by row, scope, step, world and β,
+  not by variant, and ce3c also holds h8 and h1lin rows for (i).
+- Other runs:
+  - r20261111-051916-5c06 is the same job with the driver before PageCopy's label fix (PageCopy priced `unknown`).
+    Its rows' sha256 is `1ac10dfe…caa9`.
+  - r20261111-052358-c594 and d670 are the job on 8fb2b94ee4.
+  - r20261111-051816-d48b was refused before it ran: cpu-3 got the tree without `.git`.
+  - r20261111-051942-c6c8 and r20261111-052158-e5b3 failed at import. A notes tool imported `verity.ml.circuits`,
+    which the layout move made `verity.circuits`; it falls back now.
+
+**(a): fixed in the run's driver.** The driver is `headline_world_h8.py`, a notes tool (notes `40430ce63a`, with
+PageCopy's label in `6630122b26`). #8568 holds no driver, so there was no PR fix commit to put it in.
+- A row's `split` is now its own plan at its β: `headline_mix.plan`'s cells, which BENCHCROSS's `mix.json` is made
+  from, run in the same process. Each block family carries its share of a sampled replay block's proving, with the
+  lever's eight-head volume in it.
+- Each family's `priced` is the pricing call's. The carried pages' copy blocks, which the planner adds after pricing,
+  take the plan's own `modeled`.
+- The old per-token pricing split is kept as `pricing_split`; it equals ce3c's `split` [run].
+- Scaling that split by the volume would not have been enough. Sparse MLA would still be about 0.8% of it, because a
+  token's pricing isn't the plan's proving [run: ce3c's row].
+- At world year β 0.055 [run]:
+  - sparse MLA is 58.26% of proving, against BENCHCROSS's 58.3%;
+  - its split part, `SparseMlaSplitPart_v1` and priced `computed`, is 52.29%, against BENCHCROSS's 52.3%.
+- #8779's reader (`_priced`) will print these lines from this run, where it printed `measured` 98.57% from ce3c
+  [run: its grouping run on the rows]:
+
+  | priced | share of proving |
+  |---|---:|
+  | computed | 52.36% |
+  | measured | 47.13% |
+  | measured and computed | 0.51% |
+  | modeled | 0.002% |
+
+**(b): fixed in the run's driver.**
+- `requests` and `flop_request` are the case's own line's (`reprice.workload`'s scopes), as BENCHCROSS's
+  `SUCC_REQUEST=design` takes them. At the world's year, `requests` is 1.7784008649596718e16 [run].
+- The driver fails a row whose replay_sample / q is another count. All 54 rows pass [run].
+- The census's default scope is kept as `census_scope` (2.029e16).
+- No number the command prints moves. `breakeven_at_target.py` reads `replay_sample / q`, not `requests`, and #8779's
+  reader takes its requests from the planner in the tree [read].
+
+**(c): left as it is.**
+- The lever is the driver's: `headline_rows`' sparse-MLA volume, eight heads at 128k keys. The request count is the
+  planner's: `reprice.workload`'s 79.25e9 served MACs a token. #8779's reader takes the requests from that planner.
+- Counting the lever's ~1.0e10 MACs a token in the driver alone would split the rows from the plan they're priced on.
+  The real fix is moving the lever into the planner: a #8568 change that moves every row and the plan of record.
+- Counted, requests and GB both scale ×0.89 [read: BENCHCROSS]. So the figure as it stands overstates the capacity by
+  at most 1.12×, which is the safe side for a bound [guess].
+- I'd take it after #8568 lands, as its own planner change with its own re-read.
