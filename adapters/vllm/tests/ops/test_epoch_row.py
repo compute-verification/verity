@@ -12,10 +12,8 @@ import shutil
 import signal
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-
-import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
 SCRIPT = VLLM / "verity_vllm" / "ops" / "epoch_row.sh"
@@ -23,7 +21,7 @@ BASH = shutil.which("bash") or "/bin/bash"
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager"
 ART = "art:" + "ab" * 32
 #: the job's start, and the "now" the script measures its deadlines from (EPOCH_NOW): no test reads the wall clock
-START = datetime(2026, 1, 1, tzinfo=timezone.utc)
+START = datetime(2026, 1, 1, tzinfo=UTC)
 
 STAGE = """#!/bin/bash
 # stand-in for the `verity-vllm` launcher: `row run ROW ROLE REPO REV --stages S` is a stage whose behaviour FAKE_<S> names (ok | sleep:
@@ -48,10 +46,10 @@ CLI = """#!/bin/bash
 echo "$*" >> "$CALLS"
 if [ "$1 $2" = "data put" ]; then
   [ -n "${FAKE_PUT_S:-}" ] && echo $(( $(cat "${EPOCH_NOW#@}") + FAKE_PUT_S )) > "${EPOCH_NOW#@}"
-  echo '{"artifact": "%s"}'
+  echo '{"artifact": "ARTIFACT_ID"}'
 fi
 exit 0
-""" % ART
+""".replace("ARTIFACT_ID", ART)
 PY = """#!/bin/bash
 # stand-in for $PY: the record stage (`-m tests.regression.rebaseline run ...`) is logged and passes; everything else is the real python
 [ "$1 $2" = "-m tests.regression.rebaseline" ] && { echo "record $*" >> "$CALLS"; echo "1 passed"; exit 0; }
