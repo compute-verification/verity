@@ -467,9 +467,9 @@ class _Model:
         C, M = self.C, len(x)
         QL, KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("Q_LORA", "KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         IH, ID, TOPK = int(C["INDEX_HEADS"]), int(C["INDEX_HEAD_DIM"]), int(C["INDEX_TOPK"])
-        D, indexer = NOPE + R, L in self.net.indexers
+        D, indexer, E = NOPE + R, L in self.net.indexers, self.launch.entry(M)
         w = lambda f: self.w[(L, f)]  # noqa: E731
-        prefills = self.launch.prefills((M, pos0), DECODE_THRESHOLD.get(NH, DECODE_THRESHOLD_DEFAULT))
+        prefills = self.launch.prefills((E, pos0), DECODE_THRESHOLD.get(NH, DECODE_THRESHOLD_DEFAULT))
         dense = prefills if prefills and max(n + p for n, p in prefills) <= TOPK else []
         logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
         keys = [len(logs["latent"]) + i + 1 for i in range(M)]
@@ -497,7 +497,7 @@ class _Model:
         context = len(logs["latent"])
         for i in range(M):
             logs["latent"].append(concat([kvc[i], kpe[i]]))
-        own = (M, pos0) in dense
+        own = (E, pos0) in dense
         mqa = self.launch.keys([] if own else keys, without=dense)
         if indexer:
             fn = self.k("dsa_indexer_q", H=IH, D=ID, ROPE=R)
@@ -535,7 +535,7 @@ class _Model:
                 for i, m in zip(rows, masks):
                     self.topk[pos0 + i] = self.call(fs, m)
         if own:
-            return self.fp8_linear(self._dense_prefill(L, qb, qpe, kvc, kpe, context, pos0, dense), w("o_w"), w("o_ws"))
+            return self.fp8_linear(self._dense_prefill(L, qb, qpe, kvc, kpe, context, pos0, dense, E), w("o_w"), w("o_ws"))
         G = FA3_SPARSE_GEOMETRY[(R, KVL)]
         batch = [min(n, TOPK) for n in mqa]
         by_keys = dict(zip(batch, launch_num_splits(batch, int(self.net.tp.num_sms), TOPK, 0)))
@@ -562,9 +562,10 @@ class _Model:
         return self.fp8_linear(self.absorb(att, w("w_uv"), NH, KVL, VH), w("o_w"), w("o_ws"))
 
     def _dense_prefill(self, L: int, qb: list[Refs], qpe: list[Refs], kvc: list[Refs], kpe: list[Refs], context: int, pos0: int,
-                       dense: list[tuple[int, int]]) -> list[Refs]:
+                       dense: list[tuple[int, int]], entry: int) -> list[Refs]:
         """The rows' attention by dense MHA (`MLACommonBaseImpl.forward_mha`, `FlashAttnPrefillBackend`), the step's prefills `dense`
         (rows, start) all of at most TOPK keys (`use_dense_mha`), this request's `context` history rows before them -> rows [NH * VH].
+        `entry`: its sequence's rows in the launch, of which the call computes the first.
 
         kv_b_proj over the prefills' latent rows (eager, at their row count), then per row i and head h FA3's causal varlen self-attention
         over the request's own rows 0..i (`run_prefill_new_tokens`), bound per head as `DsaDenseMhaRule` binds it, at the split count
@@ -576,7 +577,8 @@ class _Model:
         C, M = self.C, len(qb)
         KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         D, KW = NOPE + R, NOPE + VH
-        plan = self.net.dense_plan(self.k, M, pos0, context, dense)
+        plan = self.net.dense_plan(self.k, entry, pos0, context, dense)
+        plan = plan._replace(heads=plan.heads[:M])
 
         def w(f: str):
             return self.w[(L, f)]
