@@ -166,3 +166,92 @@ LEANMERGE to network-accounting's coordinator, Wed 11 Nov 2:04 PM PST. Job 5: th
 - The comment on NET-332 went at 2:02 PM PST as `network-accounting/LEANMERGE`; the tool rings no one, so lean is yours to ring.
 - One correction to my first word, if it said "six comparisons": they are six lines in six functions and seven `==`, since `holds`' line compares twice. The old branch was the same.
 
+[2026-11-11T22:04Z] a976b8fa4c74
+CROSSTICK to network-accounting, LEAN-249, Wed 11 Nov 2:04 PM PST.
+
+**Our four files that stop against `main` are closed, each whole, in one commit: `a4e1d7e04617988a7eda7f3a99985740f0ecb4e9` on `cursor/na-cross-main-closes-84ef`. No hunk is stopped on. Every lookup of ours on the crossed head resolves. Two tests of ours fail there that are not renames, and I left both for your word.**
+
+Marks: [ran] run by me, [read] read in a file, [argued] reasoned and not run.
+
+## The branch and commits
+
+- `cursor/na-cross-main-closes-84ef`, cut from the crossed head `5ed73f44105644916caa957e2a94abaa8e1bd012`, remote head `33360da0a08889ad1a61edc6a144b63d7013b92e`. [ran]
+- `a4e1d7e04617988a7eda7f3a99985740f0ecb4e9`: the four files and nothing else. [ran]
+- `33360da0a08889ad1a61edc6a144b63d7013b92e`: two path renames, one line each (Job B). [ran]
+- `main` when I started: `75ef75838f9932bfb7e339a2b000ca4f96a6ae39`, not the `61f13c2275fb` of the brief. It is there still. [ran]
+- The crossed branch moved while I worked, to `3ff11d118f93` (LEANMERGE's mend on top). None of our six files differs, the merge with `main` stops on the same 24 files, and the second commit picks clean onto it. [ran]
+
+## Job A: the table
+
+24 files stop; ours are the same four, no new one. [ran]
+
+| file | hunk | the crossed head had | `main` had | what stands |
+|---|---|---|---|---|
+| `benchmarks/network_traces/leak_bounds.py` | 1 of 2: constants after `SCAN_DELTA` | `JITTER_BOUND = 2`, `JITTER`, the base's `CENSUS` | `ROOT`, `CENSUS` from it, the scale's files, `MODEL`, `WORLD`, `PEAK`, `GB`, `FP4` | the branch's six jitter lines, then `main`'s twelve |
+| same | 2 of 2: `LinkLoad.bits` | K summed in place, with `self.jitter` | `t = self.terms(period, reading)`; K from `t` | `main`'s two lines; the jitter reaches K through `LinkLoad.terms` passing `dj=JITTER_BOUND` (one line outside the hunk) |
+| `…/tests/test_leak_bounds.py` | 1 of 2: docstring | the jitter bullet; the old world's wording | rho's world fleet; the FP4 weights | the branch's jitter bullet, then `main`'s four lines |
+| same | 2 of 2: pooled datacenter | `faulty > LB.WEIGHTS.bits`; bits `faulty + jitter`; a period's bits `jitter` | `floor.share == floor.bits / LB.WEIGHTS.bits`; bits without jitter; a period's bits 0 | `main`'s first assertion, the branch's `faulty`, `jitter` and its two bit counts |
+| `…/tests/test_chain_record.py` | 1 | the jitter assertion `(2, 32)`; world 18,550,229; "BF16" | world 46,870,000; "GLM-5.3 in FP4"; the condition on `at_link_rate` | the branch's assertion, then `main`'s three lines |
+| `verity/protocols/certifier/device/README.md` | 1: whole file, added on both sides | the outline of the executable Lean | the Interface section | `main`'s file whole, then the branch's text under `## Overview`; `Record` is `BlockGrid` |
+
+- `main`'s term calculator is whole in `leak_bounds.py` (`table`, `document`, `render`, `ROWS` and the rest): the diff with `main` is +20 −4. [ran]
+- The branch's `faulty > LB.WEIGHTS.bits` is false at `main`'s weights (3.4 GB against 376.66 GB), so `main`'s assertion stands there. `main` changed the figure, so I did not stop. [ran]
+- The scratch merge (our four closed; the other owners' 20 files from `main`'s side; not pushed): `test_leak_bounds.py` 9 passed, `test_chain_record.py` 23 passed, `test_certifier_term.py` 13 passed. Ruff: no error; four `E731` in `test_chain_record.py` that `main` and the crossed head have too. [ran]
+
+## Job B: the name check on the crossed head
+
+- 14,112 lookups in 329 files of ours: all resolve, 0 do not, no module unparsed. [ran]
+- The modules that were marked, read in full now: `scan_zk.py` 396 lookups, the registered module 123, the registration module 38, `profile.py` 1, `period_case.py` 106. [ran]
+- The check finds a missing name where there is one: three at our first closes' head, the three the rename commit mended. [ran]
+- Two pure renames, fixed in the second commit: `benchmarks/network_traces/tests/test_wipe_gate.py:148` and `benchmarks/prove_path/tests/test_records_audit.py:883` joined `benchmarks/live_challenger`, now `verity/composite/device/live_challenger`. [ran]
+- Listed and left by the name check: nothing.
+
+## Job C: runs at the crossed head `5ed73f441056`, all `--on auto`
+
+| run | tree | suites | tier | read |
+|---|---|---|---|---|
+| `r20261111-210245-b0d0` | the head | `verity-network-traces` | quick | 544 passed; the guard fails the suite |
+| `r20261111-210326-ca88` | the head | sim, e2e | quick | 21 passed; 70 passed |
+| `r20261111-210341-7377` | the head | the certifier's two | quick | 76 passed; 1,236 passed, 1 failed, 1 skipped |
+| `r20261111-212633-2569` | the head | sim, e2e | full | 21 passed; 70 passed |
+| `r20261111-212645-fe5f` | the head | the certifier's two | full | 89 passed; 1,257 passed, 1 failed, 1 skipped |
+| `r20261111-212605-fa8e` | the head | `verity-network-traces` | full | 547 passed, 1 failed; the guard too |
+| `r20261111-214606-52cd` | the head | the traces' four slow tests, by `pytest -m slow` | slow | 3 passed, 1 failed |
+| `r20261111-212459-b800` | the head | `benchmarks/prove_path` | quick | 153 passed, 5 failed |
+| `r20261111-212427-7d90` | the head and the renames | `verity-network-traces` | quick | 544 passed, the guard quiet |
+| `r20261111-212529-1b46` | the head and the renames | `benchmarks/prove_path` | quick | 158 passed |
+| `r20261111-214538-aaac` | the head and the renames | `verity-network-traces` | full | 547 passed, 1 failed (failure 4), the guard quiet |
+
+The network period check's difftest is `test_network_period_protocol.py`, in the period check's suite: it passes in both tiers. [ran]
+
+The failures, all ours; none waits on LEANMERGE's mend or on another owner's file:
+
+1. `verity-network-traces`, the guard, no test: "its tests read 1 files outside its inputs, for example benchmarks/live_challenger". A pure rename, mended in the second commit. [ran]
+2. `benchmarks/prove_path`, five tests of `test_records_audit.py`: `AttributeError: module 'a5_auditor' has no attribute 'RESERVED'`. The same rename, mended. [ran]
+3. `verity/protocols/certifier/verifier/tests/test_network_certifier_lengths_row.py::test_the_blocks_ands`: `TypeError: ands() takes 1 positional argument but 2 were given`. Not a rename, left. The branch's `head_check.ands` takes one argument and `main`'s test passes a `memo` at lines 222 and 223. With the `memo` dropped the branch's `ands` gives the pinned counts. [ran]
+4. `benchmarks/network_traces/tests/test_scan_zk_challenger.py::test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_form_and_draws`, slow tier only: `assert (True and ['prog0', 'prog1'] == ['prog']`, line 88. Not a pure rename, left. `main`'s test expects `rests_on_period_check` to be `["prog"]`; the branch's scan names one `prog<j>` a lane. [ran]
+
+Failures 3 and 4 hold after the merge with `main` too: each test is `main`'s and each function is the branch's. [read]
+
+## To lean
+
+One comment on LEAN-249 as `lean/CROSSTICK` at 1:32 PM PST, read back from Linear. [ran] lean had not said how it wants the four files; its 1:01 PM comment says they are closed when the branch takes `main` and only its worker pushes there. [read] The tool says a worker's comment rings no one: lean hears of it from you. The comment names failure 3 and not failure 4, which I read after posting.
+
+## Read on LEAN-249 after my comment, for you [read]
+
+- vllm's worker (2:01 PM PST) says its own `f1aeb56c8c01` and our `33360da0a088` change the same line 883 of `test_records_audit.py`, and that ours alone is the one to take. lean's worker (1:53 PM PST) lists both as offered and not picked, having no word of lean's.
+- lean's worker's 1:53 PM comment says `security/Proofs` does not build at the crossed head, and one of the four failing modules is ours by its table: `security/Proofs/NetworkCertifier/WitnessToys.lean`, "261:43: Type mismatch", the branch's `PooledGood` against the `op` of `main`'s `PooledLeak.lean`. Behind it, not built: `NetworkCertifier/CountWitnesses` and `NetworkCertifier/PeriodWitnesses`. It is Lean and not in my job; I have not looked at it.
+- The same comment says its own suites run at `5ed73f441056` has 9 of 126 suites failed, with the detail to come in its next comment. I have not read which are ours beyond the ones above.
+
+## Not done, and least sure of
+
+- **Least sure: the one line outside a hunk.** `LinkLoad.terms` is `main`'s new method and it now charges the jitter at D_j = 2. The other way keeps `terms` at D_j = 1 and adds the jitter in `bits`.
+- `main`'s calculator headline still says K is charged "today at D_j = 1" (`document`), while the branch charges at D_j = 2. I left `main`'s text. Which it should say is yours to decide.
+- `jitter_bits` (the branch's) and `_jitter` (`main`'s) are two definitions of one term, both kept.
+- The README's combined form is my reading of `main`'s rule for a README that existed.
+- Failures 3 and 4 are unmended.
+- The closes are against `main` `75ef75838f99`. If `main` changes these files before lean's merge, they are redone.
+- Not run: the Lean check, `check.py`, the whole merge with the other owners' real closes.
+
+Note: `lanes/network-accounting/20261111T2133Z-report-lean249-crosstick-main-closes.md`, synced.
+
