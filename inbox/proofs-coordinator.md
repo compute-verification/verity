@@ -64186,3 +64186,69 @@ Mailbox: absent at 20:27Z, so nothing new [run: `git show origin/cursor/proofs-i
 - Still in the queue [run: `research status`, 20:31Z]: `r20261111-200328-7b04` (sizes, since 20:03Z), `r20261111-200827-97a9` (the card, since 20:08Z), `r20261111-202242-4977` (the adapter's three files and the design-check test, since 20:22Z).
 
 I end my turn here. What I wait on is your ruling, A or B, in my 20:26Z entry's section 3.
+
+## STOPDRIVER, Wed 11 Nov 20:38Z: the reader's three answers checked. 1 agree; 2 wrong in its first sentence (the driver's record has three null entries, not one), its bullets agree; 3 agree on all six, and the stop word's width is settled at 16 bits. The driver is written and pushed; its accept and three refusals are one queued run, r20261111-202956-b7ce, not started yet. The accept needs no second round
+
+**Marks.** "main" is `61f13c2275fb`, read in a worktree of it. "#9028" is its head `23baf41620ff`. "mine" is `cursor/proofs-stopdriver-034c` at `be201dbfec`: #9028 plus three files, in no pull request. A [run] marked local ran on my VM, which has no Lean verifier and no flock-circuit.
+
+### 1. The three answers (`inbox/briefs/net297-three-answers.md` at `e433dd4edb`)
+
+**What I opened.** Every `path:line` below, on main unless marked, says what the reader says it says [read]:
+- `registration.py:21-26`, `:86-91`; `Spot/Registration.lean:309-320`, `:352-361`; `service.py:303-305`, `:691-707`, `:1547-1549`, `:1591`, `:1638`, `:1873-1880`, `:2488-2497`;
+- `tie_service.py:367-372`, `:381-382`, `:552-558`, `:593-626`; `registered.py:34-37`, `:389`; `served.py:39-44`; `Flock/Registered.lean:262-264`, `:286-294`, `:364-375`;
+- `Spot/TwoStageCheck.lean:48-59`, `:85-88`, and `checkTwoStage`'s one caller outside the proofs, `Spot/PlanCheckMain.lean:85` (search of `*.lean` and `*.py`); `Spot/SecondStage.lean:43-55`, `:61-76`, `:134-139`; `second_stage.py:83-84`; `Spot/Run.lean:161-164`, `:259-260`; `Spot/Record.lean:380`, `:431`; `one_stage/audit.py:147`, `:155`;
+- `security/Properties/Spot/TwoStageCheck.lean:49-51`, `:63-64`, `:69-73`, `:78-85`, `:89-95`, `:100-107`; `security/Proofs/Properties/Spot/TwoStageCheck.lean:312`; `security/Definitions/Assumptions/WeightSecurity.lean:25-31`; `security/Definitions/WeightSecurity/Guarantees.lean:164-169`;
+- `boundary_rows.py:67-68`, `:262-266`; `benchmarks/one_stage/two_stage.py` (307 lines, `:22-24`, `:95-106`); `total_cost.py:18-21`; the card and `leak_bounds.py` (searches, no hit);
+- the inbox at `:26986-26990`, `:28528`, `:28555`, `:28559-28564`, `:29261-29276`, `:29470-29477`, `:47330`, `:49291`, `:62778`; network accounting's note `:149-155`; the proofs note `:106`;
+- #9028's `two_stage.py:334-348`, `:351-373`, `:376-415`, `:852`, `:892`.
+
+Not opened: Linear; `Joint/Statement.lean:270-292`; `registered.py:382-441` beyond `:389`; `Flock/Registered.lean:266-283`.
+
+**Answer 1, where the two ties sit: agree.** A record of their own beside the stop record; the request tie reads `b.request` and cannot write it; the pooled count has no statement on main [read: the places above]. Its "my reading" lines I cannot tell: whether a tie record at the first stage's rate counts as one more class of a point (the reader's own open item 5 settles it).
+
+**Answer 2, `complete`: wrong in its first sentence; every bullet under it agrees.**
+- The sentence says `complete` "turns true when the driver gives the stop record's request entry a verdict". `complete` is true only when every entry of the record's `verdicts` has a verdict (`one_stage/audit.py:147`, `:155`; `Spot/Record.lean:380`, `:431`) [read], and the driver's record has three entries with none today, not one [read: mine, `benchmarks/one_stage/stop_audit.py`, `verdicts_of`]:
+  1. `request-row`: null until a tie's stream gives it one.
+  2. `boundary-audit`: null until the driver is handed the class's boundary stream's outcome. That stream is two-stage, and on main the verifier refuses every two-stage run last (`Spot/SecondStage.lean:139`, `FORM : Bool := false`; `second_stage.py:83`) [read]. So no such outcome accepts today, whatever the ties do.
+  3. `stop-rule`: null, with soundness's sentence "stop rule: the driver's parameter, not held to the pinned checkpoint" as its premise. Making it an entry with no verdict is my choice of how to write that premise [guess]; if soundness meant a sentence in the record and no entry, I drop the entry and this item goes.
+- **A sentence you can post instead:** "`complete` is computed by the verifier, never written: it is true when every entry of the stop record's audit record has a verdict. Three entries have none today: the request row (until a tie's audit gives it one), the boundary stream's audit (until a two-stage run accepts, which `main`'s verifier refuses today) and the stop rule (until something holds it to the pinned checkpoint). The request tie's class being in the audit's population is needed and is not enough."
+- For network accounting's calculator this means the count stays charged for as long as any of the three is null, not only until the first tie audit.
+
+**Answer 3, the six asks: agree on each as the reader reports it.**
+1. **The Spec:** agree. Drafted at inbox `:28555`, not on main (`two_stage.py:95-106`) [read].
+2. **The stratum:** agree, and one of its open items is settled. The stop word is 16 bits: `StopRule16_v1` on main returns one u16 (`verity/definitions/registry/stop_rule.py:28`, `:37`) [read], and on #9028 `b.stop` is one 16-bit word a span [run local: `Layout.words("b.stop")` is 1; the registered file's `word_bits` is 16]. The ask's "at least 64 bits wide" was about Tuesday's block of two 32-bit words. In a record of its own the stop block is in no stratum of the replay block. "When does the lemma cover those sets": the capped statement on main sums over every admissible set (`security/Properties/Spot/TwoStageCheck.lean:100-107`) [read]; whether its premise `ServedCover` holds for served rows is open, with COUNT.
+3. **The charge:** agree with the report (inbox `:26986-26990`) [read]. Whether a wrong tie block is a fault in `TheftFaulted`'s sense: open, with COUNT.
+4. **The pooled statement:** agree: drafted (inbox `:28559-28564`), not on main [read]. It now has to count one-stage records beside a two-stage design. Open, with FRAME and WIRED.
+5. **The workload card:** agree (inbox `:29261-29272`; the card names no tie or stop block) [read]. One correction to the drafted answer: its stop block figure (107,862 ANDs, two 32-bit words) is Tuesday's `StopRule_v1`. The block on #9028 is `EgressStop_v1` over `StopRule16_v1`: 1,541 ANDs a block at 32 outputs and one stop id, lowered on my branch [run local: `stop_audit.staged`]. Not lowered by me at the cap's class of 1,024 outputs.
+6. **Which form:** agree (inbox `:29470-29477`; `total_cost.py:18-21`; `TwoStageCheck.lean:63-64`) [read].
+
+**The order check with one more reader: agree.** The same comparison run once more, with the stop registration as the earlier record and the tie's as the later [read: #9028 `two_stage.py:376-415`]. One thing it rests on that the answer does not say is in section 2, item 4.
+
+### 2. What the answers miss that network accounting builds on
+
+1. **A tie block's output row must be a registered read too.** With `--registered`, Lean refuses a statement unless every port of the circuit, each input port and each output row, is a port of the verifier's file (`Flock/Registered.lean:364-375`) [read]. So "reads and checks" has one form: the block computes a row, and that row opens at a registered root. The stop block does this: its output opens at the stop record's own `b.stop` root, read under the name `committed/b.stop` (`verity/commitments/windows/rows.py:927-931`) [read; run local: staged at 32 outputs, 6 spans, every port a registered read, the outputs equal to the committed words]. For a tie this is network accounting's own form (e): its output is the certifier's signed row, the tie record's own port.
+2. **A row must be 112 bytes or more somewhere in the statement.** Flock's circuit file takes a statement only when one row has a compression before its last block (`verity_flock/circuit.py:808-809`, `Port.comps` at `:253-261`) [read; run local: the stop block at 4 outputs is refused there, at 32 it is taken]. `b.request` is 56 bytes and `b.stop` is 2. A request tie is fine once the prompt row holds 28 ids; a response tie once the egress row holds 28.
+3. **How a record beside the stop record chains.** R6 holds `previous` to the digest of the prover's last record in the stream's log, and refuses a window an earlier record has (`registration.py:25-26`) [read]. A tie stream whose log is the boundary record then the stop record has `previous` equal to the stop record's digest, and needs a window of its own; #9028's stop record gets one by naming its population in the window [read: #9028 `boundary_stop.py:194-206`]. Two tie records are two streams, or one record holds both ties.
+4. **The order is read from one challenger session's signed log.** `stop_order` looks for both registrations' coins in the log of the stop sample's own session (#9028 `two_stage.py:401-414`) [read]. So a tie's stream has to be one more rank of the window's session, planned before the session opens, as the stop blocks are (#9028 `two_stage.py:847`) [read]. A tie sampled on a session of its own has no log that shows the stop record received first.
+5. **How the population learns the tie's class, and what is Lean.** Inside the tie's stream it is Lean: the tie record's registered values name the class's boundary record by digest and port, and R7 holds that to the log (`Spot/Registration.lean:352-361`) [read]. From the stop record's audit it is Python: the driver carries the tie stream's outcome, as it carries the boundary stream's [read: mine, `boundary_entry`].
+6. **Not shown yet:** any accept of a block in a record of its own that reads another record's ports. My queued run is the first attempt (section 3). The reader's open item 2, one record with a port under the certifier's domain and output values, stays open after it.
+
+### 3. The driver (job 2)
+
+- **On my branch at `be201dbfec`** [read]: `benchmarks/one_stage/stop_audit.py` (the driver), `stop_audit_small.py` (a stop class at small statics and the three wrong responses) and `stop_audit_small.sh` (the run). No test file yet.
+- **Does the accept need a second round: no.** The stop population is a one-stage stream of its own; the driver reads the first stage's `stage1.json` and the session's public files. The two stops in front of the second round (`Spot/SecondStage.lean:831-842`, `two_stage.py:555-558` on #9028) stop only the boundary stream's own audit, which is the `boundary-audit` entry, null in the accept [relayed: your 19:58Z message, for the two places; read: mine, for the entry].
+- **The class.** At the class the vLLM lane's tests build (4 outputs) the statement cannot be written: `verity_flock/circuit.py:809`, no row reaches 112 bytes [run local]. The smallest class that works is 32 outputs; the run uses 32 outputs and 6 spans, where the statement is the smallest `--zk` takes (block log 22 plus 3) [run local]. If the Thu 06:00Z accept must be at 4 outputs, that line is what stops it.
+- **What ran** [run local, no Lean]: the honest class and the wrong one both stage (outputs `8195, 16388, ...` honest and `8194, 16389, ...` wrong, the wrong tree's root equal to the wrong class's `commit.json`); the verifier's own circuit file equals the prover's by pin and SHA-512; `boundary_entry` gives null, false and true as it should. **What did not run:** `resume`, `reads`, the session, Lean's verdict, `decide`. They need SPOT's Lean verifier and flock-circuit, which only the run builds.
+- **The run:** `r20261111-202956-b7ce`, launched 20:30Z on vy-nebius-cpu-2, waiting for a slot (two ahead, about 19 min by the launcher's own estimate), then about 30 to 40 min of builds and four audits [guess]. It exits 0 only if the accept accepts and each of the three refusals is refused for its own reason (`stop_audit_small.py expect`).
+- **The three wrong responses in it** [read: mine]: a class registered with every stop word's bit 0 flipped, proved with the prover's self-check skipped (Lean's verdict on the session must refuse); a stop record built on a boundary record the boundary stream never logged (refused as case 2 before any session); a boundary stream's outcome that did not accept (the `boundary-audit` entry refuses the record). The third's outcome record is written by the fixture, not by a stream: no two-stage stream reaches an outcome today.
+- **Two facts for whoever stages a stop block next:** the block lowers only with `verity.definitions.registry.boolean_stop_rule` imported (`verity_flock/ir_lower.py:259` otherwise: no piece for `I32Sub_v1`) [run local]; and the proof deadline counts on the stream the driver builds again, from its own sample read again, so nothing holds the time between `two_stage.py first` and the audit [read: mine, module docstring].
+- **What the verifier's half reads:** `stage1.json`, its own check template, stop rule and sampling design, and the session's public files. It lowers its own circuit and holds the prover's file to it. It recomputes the order from the challenger's signed log and never copies `stage1.json`'s `order` [read: mine].
+
+### 4. Job 3, one line now
+
+The Lean function will take the records as a chain of pairs (an earlier record and a later one that reads its ports), so the response tie is one more pair and no fourth case [guess; the statement comes in its own entry after the run reports].
+
+### 5. Asks
+
+- **Soundness:** is the stop rule's premise an entry with no verdict (it keeps `complete` false) or a sentence only?
+- **You:** say if the Thu 06:00Z accept may be at 32 outputs.
