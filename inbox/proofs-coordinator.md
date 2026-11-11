@@ -50287,3 +50287,25 @@ Tags: [run] a command I ran now, [read] a file I read now (place given), [relaye
 - **Node A's dependencies at 10:55Z** [run: `/tmp/sc/nodea.sh`, `main` `08ad61db9432`]: #8454, #8520, #8741, #8425 and #8771 are all open, none on `main`. CROSS has #8454 merged with `main` at `f95f042a4411` [relayed: CROSS 11:04Z].
 
 For the table: no change.
+
+## KILIAN, Wed 11 Nov 11:09Z: ready to mark #8905 at 40b8e7d04736dc84ab8ad215e9afd75cb684d3c2 (the cost by class; on #8882 and #8879, both marked); #8916's head has not moved
+
+**ready to mark #8905 at 40b8e7d04736dc84ab8ad215e9afd75cb684d3c2**
+- Elaborates, axioms: try `r20261111-095808-2009`, lean exit 0, "none of its 22 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". [run]
+- Records: `r20261111-100336-94db` of `security/Proofs` at the head: `AUDIT: PASS` for `security/Proofs` and its two requirers (`security`, `security/Properties`), 0 records regenerated in each; lean-fast/v1, without the kernel replay. [run] [read: the run's three `audit.json`]
+- Kernel replay: the candidate's check.
+- Quick tier: `r20261111-100358-d4ae`, 8 suites, 8 passed (4 cached), 0 failed. [run]
+- Merges and builds: `git merge-tree` of the head with `main` at `08ad61db9432` is clean [run 11:08Z]; `main` moved from `0a722c6ec984` with only five README files changed under `security/`, no Lean [run: `git diff --stat`]. The merge with #8781 `b7c268c7c1fe`, #8828 `53dd644bdad8` and #8857 `96985b18aafb` builds its file: try `r20261111-101601-85f9`, lean exit 0, axioms clean (22 theorems). [run] Those heads, #8879's `9eb9f26cea4a` and #8882's `da385b86ccd2` have not moved. [run 11:08Z]
+- Second reader: none yet. It changes no lock and adds no module; it lands after #8882. The body carries these verdicts (a body edit; the head did not move). [run]
+
+For CAPS: Proofs/Flock: +0 modules, +4 declarations (3 theorems, 1 definition) (#8905: `security/Proofs/Flock/SamplingGeneric/TwoFirstHitAt.lean`)
+
+**#8916 (your 10:46Z).** It is open, unmarked, at `8784a105de5bd0567a89b6e85e98d7145468232a`, stacked on #8905 and #8906 (`e7b2e51d928b`); the statement of `eventTwoX_le_cls_at_budget` is fixed and the head has not moved since I opened it. [run] The try that passed (`85f2`) ran at `c6412ff63497`, whose tree is the head's (`62a51a231123`). [run] The merge with #8781, #8828 and #8857 builds its file: try `r20261111-104424-2a6c`, lean exit 0, axioms clean. [run] Records `r20261111-104057-df65` and quick `r20261111-104130-7011` are running; its ready line follows them. [run] I tell you if the head moves; it moves only if #8906's does and you say to follow it.
+
+**#8915 (g).** Quick tier `r20261111-103835-c8cb` is running. Nothing else is out for it. [run]
+
+**For REGX** (it writes the instance of `eventTwoX_le_cls_at_budget` at the code): `cursor/proofs-firsthit-clsks-8d21` at `818e4e130b5d` already has the g-form's instance at the code with `hallX`, `hallI` as hypotheses (`SpotFlock.firstHitTwo_cls_at`, try `b50a`), and `SpotFlock.twoZk h` as the name of the code's compiled two-stage verifier; it may take either or neither. [read] I do not develop that branch further unless you say so.
+
+For the table:
+- #8905 (the first-hit cost by class of gates, K_s the sample's classes, K_m the (session, class) pairs): ready to mark at `40b8e7d04736`, after #8882.
+- #8916 (the by-class bound with one closed right-hand side, `εclsAt`): open, unmarked, compiles alone and merged; records and quick tier out.
