@@ -107,7 +107,7 @@ theorem queries0_ge {m : ℕ} (h : 36 ≤ m) : ∃ e, _root_.Flock.Zk.queries0 w
   exact ⟨_, rfl⟩
 
 theorem schedule_ge {m : ℕ} (h : 36 ≤ m) : ∃ e, _root_.Flock.Zk.schedule wideLeaf m = .error e := by
-  obtain ⟨e, he⟩ := queries0_ge h
+  obtain ⟨e, he⟩ := queries0_ge (wideLeaf := wideLeaf) h
   unfold _root_.Flock.Zk.schedule
   rw [he]
   exact ⟨_, rfl⟩

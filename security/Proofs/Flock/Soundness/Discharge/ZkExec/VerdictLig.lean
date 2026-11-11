@@ -85,10 +85,10 @@ def ZkLigAccepts : Prop :=
 theorem zk_schedule_pad (m : ℕ) (sch : Flock.Schedule) (tPad : ℕ) (h : Zk.schedule wideLeaf m = .ok (sch, tPad)) :
     (sch.levels.getD 0 default).rate = 1 ∧ tPad ≤ 2 ^ (sch.levels.getD 0 default).cols := by
   obtain ⟨-, h35, -⟩ := zk_schedule_seams _ _ _ _ h
-  have key : ∀ m : Fin 40, ∀ x ∈ (Zk.schedule wideLeaf m.val).toOption,
+  have key : ∀ (w : Bool) (m : Fin 40), ∀ x ∈ (Zk.schedule w m.val).toOption,
       decide ((x.1.levels.getD 0 default).rate = 1 ∧ x.2 ≤ 2 ^ (x.1.levels.getD 0 default).cols) = true := by
     decide +kernel
-  exact of_decide_eq_true (key ⟨m, by omega⟩ (sch, tPad) (by rw [h]; rfl))
+  exact of_decide_eq_true (key wideLeaf ⟨m, by omega⟩ (sch, tPad) (by rw [h]; rfl))
 
 /-- **`repProg`'s run accepts the proof's rows** (`zk_rep_plays` with its Ligerito verdict): the run of the compiled rep
 that `zk_rep_plays` builds has a Ligerito verdict that accepts openings whose rep-`r` rows are the proof's. -/
