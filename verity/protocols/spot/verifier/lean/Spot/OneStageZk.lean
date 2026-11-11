@@ -86,7 +86,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   registration (`Member.slice`, `headerHeld`): the window's scheme, the member's roots and their domains under their
   bare ports, and the member's count of units as its instances. A member may read registered values, with its own
   registered file as the one statement's, and a value is one tree for every member (`classHeld`): two members' ports of
-  one value that differ in its root, leaves, row width, domain or leaf schema refuse, whether or not either is drawn.
+  one value that differ in its root, leaves, row width, domain or leaf schema refuse, whether or not either is drawn,
+  and so does a port of a value the registration registers that is not its entry there (its root, leaves, row width,
+  leaf width and domain), so every member reads each of the registration's values at the registration's root.
 
 Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file.
 -/
@@ -1025,13 +1027,54 @@ def classTwo (first second value diff : String) : String :=
   s!"registered: members {first} and {second} read the registered value {value} as two ({diff}): a value the " ++
     "window registers is one tree, read by every member at one root"
 
+/-- The refusal of a member's port that is not the registration's entry of its value (`classHeld`): `diff` is the
+first field they differ in (`entryDiff?`). -/
+def classEntry (name value diff : String) : String :=
+  s!"registered: member {name} reads the registered value {value} as another than the registration registers " ++
+    s!"({diff}): every member reads a value the registration registers as its entry there"
+
+/-- The registration's registered entries by value, each value's last entry, the one whose root
+`Record.registeredRoots` reads. -/
+def entriesOf (rec : Json) : Std.HashMap String Json :=
+  (match getD rec "registered" with | .arr es => es | _ => #[]).foldl (fun acc e =>
+    match getD e "value" with
+    | .str v => acc.insert v e
+    | _ => acc) {}
+
+/-- The first field in which the port `q` is not the registration's entry `e` of its value, with both: the root, the
+count of leaves, the row width where the port names one, the leaf width (an entry names 16 by leaving `word_bits`
+out) and the domain; none where the port is the entry in each. -/
+def entryDiff? (q : Flock.Registered.Port) (e : Json) : Option String :=
+  let str := fun (j : Json) => match j with | .str s => s | _ => "none"
+  let num := fun (j : Json) => ((nat? j).map toString).getD "none"
+  let bits := match field? e Flock.Registered.WIDTH_KEY with
+    | none => some Flock.Registered.WORD_BITS
+    | some j => nat? j
+  if str (getD e "root") != Flock.hexOf q.root then
+    some s!"root {Flock.hexOf q.root}, against {str (getD e "root")}"
+  else if nat? (getD e "leaves") != some q.leaves then
+    some s!"leaves {q.leaves}, against {num (getD e "leaves")}"
+  else if !(q.words.all fun w => nat? (getD e "words") == some w) then
+    some s!"words {(q.words.map toString).getD "none"}, against {num (getD e "words")}"
+  else if bits != some q.wordBits then
+    some s!"word_bits {q.wordBits}, against {(bits.map toString).getD "none"}"
+  else if str (getD e "domain") != Flock.hexOf q.domain then
+    some s!"domain {Flock.hexOf q.domain}, against {str (getD e "domain")}"
+  else none
+
 /-- The member `name`'s registered port `q` after the ports before it: `acc` holds, for each value read so far, the
-first port of it and its member's name. A port of a value `acc` holds must be that port in the value's root, leaves,
-row width, domain and leaf schema (`Flock.RecVStar.portDiff?`, without the units' reads). -/
-def classPort (name : String) (acc : Std.HashMap String (String × Flock.Registered.Port))
-    (q : Flock.Registered.Port) : V (Std.HashMap String (String × Flock.Registered.Port)) :=
+first port of it and its member's name. The first port of a value the registration registers (`entries`,
+`entriesOf`) must be its entry there (`entryDiff?`), and a port of a value `acc` holds must be that first port in the
+value's root, leaves, row width, domain and leaf schema (`Flock.RecVStar.portDiff?`, without the units' reads), so
+every port of the value is the registration's entry. -/
+def classPort (entries : Std.HashMap String Json) (name : String)
+    (acc : Std.HashMap String (String × Flock.Registered.Port)) (q : Flock.Registered.Port) :
+    V (Std.HashMap String (String × Flock.Registered.Port)) :=
   match acc.get? q.value with
-  | none => pure (acc.insert q.value (name, q))
+  | none =>
+    match (entries.get? q.value).bind (entryDiff? q) with
+    | none => pure (acc.insert q.value (name, q))
+    | some diff => throw (classEntry name q.value diff)
   | some (first, q0) =>
     match Flock.RecVStar.portDiff? q0 q false with
     | none => pure acc
@@ -1039,19 +1082,23 @@ def classPort (name : String) (acc : Std.HashMap String (String × Flock.Registe
 
 /-- One member's registered ports after the members before it (`classPort` on each); a member whose registered file
 is no registered reads refuses, and one with none reads nothing. -/
-def classStep (acc : Std.HashMap String (String × Flock.Registered.Port)) (m : Member) :
-    V (Std.HashMap String (String × Flock.Registered.Port)) :=
+def classStep (entries : Std.HashMap String Json) (acc : Std.HashMap String (String × Flock.Registered.Port))
+    (m : Member) : V (Std.HashMap String (String × Flock.Registered.Port)) :=
   match m.own.registered with
   | none => pure acc
   | some j =>
-    (Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}") >>= fun own => own.foldlM (classPort m.name) acc
+    (Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}") >>= fun own =>
+      own.foldlM (classPort entries m.name) acc
 
-/-- **A registered value is one tree for every member**: over the parameters' members, drawn or not, every port of
-one value names one root, one count of leaves, one row width, one domain and one leaf schema (`classStep`), so the
-values the members read are a function of the parameters, each with one root. It is one pass over the parameters'
-members, each member's registered file read once, and it reads no blob. -/
-def classHeld (ms : Array Member) : V Unit :=
-  ms.foldlM classStep {} >>= fun _ => pure ()
+/-- **A registered value is one tree for every member, the registration's where it registers the value**: over the
+parameters' members, drawn or not, every port of one value names one root, one count of leaves, one row width, one
+domain and one leaf schema, and a port of a value the registration `rec` registers is its entry there in its root,
+leaves, row width, leaf width and domain (`classStep`). So every member reads each value the registration registers
+at the registration's root, whether or not a session of it is drawn. A port of a value the registration does not
+register is held to the members' other ports of it alone. It is one pass over the parameters' members and the
+registration's entries, each member's registered file read once, and it reads no blob. -/
+def classHeld (ms : Array Member) (rec : Json) : V Unit :=
+  ms.foldlM (classStep (entriesOf rec)) {} >>= fun _ => pure ()
 
 /-- **A member's population check**, in the place of the one statement's `FilePart.check` and `publicHeld`
 (`Member.heldAt` at the strata of the member's query over its program, as `FilePart.check` reads them, then
@@ -1225,8 +1272,9 @@ evidence `e` and its statements `sts`: the statements' structure (`membersHeld`)
 sessions' coins held to the trees the challenger logged in the order it must release them, each tree closed after its
 session's evidence before the next is opened (`treesOf`, `orderHeld`, `membersTreesHeld`), the registration's
 population held to the program (`popHeld`) and the members laid over it (`laidHeld`), each registered value the
-members read one tree (`classHeld`), the registration's roots each one member's (`rootsOf`), then each statement's
-session on the blobs, at its member's slice of the registration (`Member.slice`, `runMembers`). -/
+members read one tree, the registration's entry where it registers the value (`classHeld`), the registration's roots
+each one member's (`rootsOf`), then each statement's session on the blobs, at its member's slice of the registration
+(`Member.slice`, `runMembers`). -/
 def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence) (sts : Array StatementFiles)
     (bs : Core.Blobs) : V Run := do
   let held ← membersHeld ms sts
@@ -1237,7 +1285,7 @@ def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : E
   membersTreesHeld ts (← linesOf e) (sts.zip held) bs
   popHeld p.base.verifier c.record
   laidHeld ms c.record
-  classHeld ms
+  classHeld ms c.record
   let roots ← rootsOf ms c.record
   runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs
 
@@ -1622,17 +1670,45 @@ private def regT (ports : List (String × String × Char × Nat)) : Json :=
 private def readerT (name : String) (reg : Json) : Member :=
   { memberT name #[(0, 1)] with own := { sharedT with registered := some reg } }
 
-#guard refusal (classHeld keyedT) == ""
+/-- A registration's entry of `value`: the hex digit its root repeats, its leaves, and the fields given beside them. -/
+private def entryT (value : String) (c : Char) (leaves : Nat) (more : List (String × Json) := []) : Json :=
+  Json.mkObj ([("domain", Json.str ("".pushn 'd' 128)), ("leaves", Lean.toJson leaves),
+    ("root", Json.str ("".pushn c 128)), ("value", Json.str value), ("words", Lean.toJson 4)] ++ more)
+
+/-- A registration that registers the entries given. -/
+private def registeredT (entries : List Json) : Json := Json.mkObj [("registered", Json.arr entries.toArray)]
+
+#guard refusal (classHeld keyedT Json.null) == ""
 #guard refusal (classHeld #[readerT "a" (regT [("p", "w", 'a', 2)]), memberT "b" #[(1, 2)],
-  readerT "c" (regT [("q", "w", 'a', 2), ("r", "v", 'b', 2)])]) == ""
+  readerT "c" (regT [("q", "w", 'a', 2), ("r", "v", 'b', 2)])] Json.null) == ""
 #guard whyT (classHeld #[readerT "a" (regT [("p", "w", 'a', 2)]), memberT "b" #[(1, 2)],
-  readerT "c" (regT [("q", "w", 'b', 2)])]) ==
+  readerT "c" (regT [("q", "w", 'b', 2)])] Json.null) ==
   classTwo "a" "c" "w" ("root " ++ "".pushn 'a' 128 ++ ", against " ++ "".pushn 'b' 128)
-#guard whyT (classHeld #[readerT "a" (regT [("p", "w", 'a', 2)]), readerT "c" (regT [("q", "w", 'a', 3)])]) ==
-  classTwo "a" "c" "w" "leaves 2, against 3"
-#guard whyT (classHeld #[readerT "a" (regT [("p", "w", 'a', 2), ("q", "w", 'b', 2)])]) ==
+#guard whyT (classHeld #[readerT "a" (regT [("p", "w", 'a', 2)]), readerT "c" (regT [("q", "w", 'a', 3)])]
+  Json.null) == classTwo "a" "c" "w" "leaves 2, against 3"
+#guard whyT (classHeld #[readerT "a" (regT [("p", "w", 'a', 2), ("q", "w", 'b', 2)])] Json.null) ==
   classTwo "a" "a" "w" ("root " ++ "".pushn 'a' 128 ++ ", against " ++ "".pushn 'b' 128)
-#guard (whyT (classHeld #[memberT "a" #[(0, 1)], readerT "c" Json.null])).startsWith "member c: "
+#guard (whyT (classHeld #[memberT "a" #[(0, 1)], readerT "c" Json.null] Json.null)).startsWith "member c: "
+-- a port of a value the registration registers is its entry there: the last entry of the value, whichever member reads
+-- it, and a value the registration does not register is held to the members' ports alone
+#guard refusal (classHeld #[readerT "a" (regT [("p", "w", 'a', 2)]), readerT "c" (regT [("q", "w", 'a', 2),
+  ("r", "v", 'b', 2)])] (registeredT [entryT "w" 'a' 2, entryT "u" 'c' 9])) == ""
+#guard refusal (classHeld #[readerT "a" (regT [("p", "w", 'a', 2)])]
+  (registeredT [entryT "w" 'b' 2, entryT "w" 'a' 2])) == ""
+#guard whyT (classHeld #[memberT "b" #[(1, 2)], readerT "a" (regT [("p", "w", 'a', 2)])]
+  (registeredT [entryT "w" 'a' 2, entryT "w" 'b' 2])) ==
+  classEntry "a" "w" ("root " ++ "".pushn 'a' 128 ++ ", against " ++ "".pushn 'b' 128)
+#guard whyT (classHeld #[readerT "a" (regT [("p", "w", 'a', 2)])] (registeredT [entryT "w" 'a' 3])) ==
+  classEntry "a" "w" "leaves 2, against 3"
+#guard whyT (classHeld #[readerT "a" (regT [("p", "w", 'a', 2)])]
+  (registeredT [entryT "w" 'a' 2 [("word_bits", Lean.toJson 32)]])) == classEntry "a" "w" "word_bits 16, against 32"
+#guard whyT (classHeld #[readerT "a" (regT [("p", "w", 'a', 2)])]
+  (registeredT [Json.mkObj [("domain", Json.str ("".pushn 'e' 128)), ("leaves", Lean.toJson 2),
+    ("root", Json.str ("".pushn 'a' 128)), ("value", Json.str "w")]])) ==
+  classEntry "a" "w" ("domain " ++ "".pushn 'd' 128 ++ ", against " ++ "".pushn 'e' 128)
+#guard whyT (classHeld #[readerT "a" (regT [("p", "w", 'a', 2)])]
+  (registeredT [Json.mkObj [("value", Json.str "w")]])) ==
+  classEntry "a" "w" ("root " ++ "".pushn 'a' 128 ++ ", against none")
 
 /-- The slice `rootsOf` and `Member.slice` give the member `name` of `keyedT` on the roots given. -/
 private def sliceT (roots : List (String × String)) (name : String) : Json :=
