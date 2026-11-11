@@ -39,8 +39,25 @@ class TreeNode:
         return isinstance(self.enter, TritonLaunch)
 
     @property
+    def triton(self) -> TritonLaunch:
+        """The Triton launch this node is (`is_triton`); a dispatcher call has none."""
+        e = self.enter
+        if not isinstance(e, TritonLaunch):
+            raise TypeError(f"event {e.id} is the dispatcher call {e.op}, not a Triton launch")
+        return e
+
+    @property
+    def dispatch(self) -> DispatchEnter:
+        """The dispatcher call this node is; a Triton launch has none."""
+        e = self.enter
+        if isinstance(e, TritonLaunch):
+            raise TypeError(f"event {e.id} is the Triton launch {e.fn}, not a dispatcher call")
+        return e
+
+    @property
     def op(self) -> str:
-        return self.enter.fn if self.is_triton else self.enter.op
+        e = self.enter
+        return e.fn if isinstance(e, TritonLaunch) else e.op
 
     @property
     def phase(self) -> str:
@@ -48,13 +65,15 @@ class TreeNode:
 
     @property
     def args(self) -> list:
-        if self.is_triton:
-            return list(self.enter.args.values())
-        return self.enter.args
+        e = self.enter
+        if isinstance(e, TritonLaunch):
+            return list(e.args.values())
+        return e.args
 
     @property
     def kwargs(self) -> dict:
-        return self.enter.args if self.is_triton else self.enter.kwargs
+        e = self.enter
+        return e.args if isinstance(e, TritonLaunch) else e.kwargs
 
     @property
     def outs(self):
@@ -82,11 +101,11 @@ class TreeNode:
 
     def render(self, depth: int = 0, max_depth: int = 8) -> str:
         pad = "  " * depth
-        if self.is_triton:
-            e = self.enter
+        e = self.enter
+        if isinstance(e, TritonLaunch):
             s = f"{pad}Triton {e.fn} grid={e.grid} const={e.constexprs}"
         else:
-            s = f"{pad}{self.enter.op}  in={[repr(v) for v in self.input_views()]} out={[repr(v) for v in self.output_views()]}"
+            s = f"{pad}{e.op}  in={[repr(v) for v in self.input_views()]} out={[repr(v) for v in self.output_views()]}"
         if depth < max_depth:
             for c in self.children:
                 s += "\n" + c.render(depth + 1, max_depth)
@@ -118,6 +137,7 @@ def build_trees(events: list[Event]) -> tuple[list[TreeNode], list[Event]]:
     roots: list[TreeNode] = []
     other: list[Event] = []
     open_stack: list[TreeNode] = []
+    node: TreeNode | None
     for ev in events:
         if isinstance(ev, DispatchEnter):
             node = TreeNode(ev)
@@ -162,7 +182,7 @@ def step_events(step_slice: list[Event]) -> StepEvents:
     sample = next((e for e in other if isinstance(e, SampleEnd)), None)
     links = [e for e in other if isinstance(e, StepLink)]
     end = next((e for e in other if isinstance(e, StepEnd)), None)
-    rest = [e for e in other if not isinstance(e, (SampleEnd, StepLink, StepEnd))]
+    rest: list[Event] = [e for e in other if not isinstance(e, (SampleEnd, StepLink, StepEnd))]
     return StepEvents(start, roots, sample, links, end, rest)
 
 

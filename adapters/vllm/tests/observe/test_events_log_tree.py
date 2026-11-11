@@ -118,6 +118,28 @@ def test_split_steps_and_trees():
     assert se1.links[0].value == 42 and se1.roots == []
 
 
+def test_a_node_gives_the_launch_or_the_call_it_is_and_refuses_the_other():
+    """`verity_vllm.observe.fold.tree.TreeNode.triton` and `.dispatch`: a node's event under its own type."""
+    attn = step_events(next(iter(split_steps(_sample_events())))[1]).roots[0]
+    cache, launch = attn.children
+    assert launch.triton is launch.enter and launch.triton.num_warps == 8 and launch.triton.constexprs == {"BLOCK_K": 32}
+    assert attn.dispatch is attn.enter and cache.dispatch.schema == "sig"
+    with pytest.raises(TypeError, match=r"event 12 is the Triton launch \S+matmul_kernel_persistent, not a dispatcher call"):
+        _ = launch.dispatch
+    with pytest.raises(TypeError, match=r"event 11 is the dispatcher call _C\.reshape_and_cache_flash\.default, not a Triton launch"):
+        _ = cache.triton
+
+
+def test_a_tree_renders_a_line_a_node_down_to_the_depth_asked():
+    attn = step_events(next(iter(split_steps(_sample_events())))[1]).roots[0]
+    lines = attn.render().split("\n")
+    assert len(lines) == 3 and lines[0].startswith("vllm.unified_attention_with_output.default  in=[")
+    assert lines[0].endswith(f" out={[repr(v) for v in attn.output_views()]}")
+    assert lines[1] == f"  _C.reshape_and_cache_flash.default  in={[repr(_view()), repr(_view(a=2))]} out=[]"
+    assert lines[2] == "  Triton vllm.model_executor.layers.batch_invariant.matmul_kernel_persistent grid=[4, 1, 1] const={'BLOCK_K': 32}"
+    assert attn.render(max_depth=0) == lines[0] and attn.children[1].render(depth=2) == "  " + lines[2]
+
+
 def test_build_trees_rejects_dangling_parent():
     from verity_vllm.observe.fold.tree import TreeError
     with pytest.raises(TreeError):

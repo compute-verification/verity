@@ -93,6 +93,7 @@ from verity_vllm.observe.fold.resolver import (
     StepContext,
     Transparent,
     Unsupported,
+    whole_view,
 )
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program.frontend import targets as T
@@ -160,7 +161,7 @@ def scope_hidden(node: TreeNode, ctx: StepContext, H: int) -> tuple[ViewDesc, li
     row-major bf16 [M,H] view over exactly the step's token rows; and its (shared, routed) outputs."""
     sa = bound_args(node)
     hidden, logits, sx = sa.get("hidden_states"), sa.get("router_logits"), sa.get("shared_experts_input")
-    if not all(isinstance(v, ViewDesc) for v in (hidden, logits, sx)) or not (_same(logits, hidden) and _same(sx, hidden)):
+    if not (isinstance(hidden, ViewDesc) and isinstance(logits, ViewDesc) and isinstance(sx, ViewDesc)) or not (_same(logits, hidden) and _same(sx, hidden)):
         return unsupported(node, "moe_forward_shared does not take the hidden states as router_logits and shared_experts_input (the runner "
                                  "holds the gate)", args={k: repr(v) for k, v in sa.items()})
     M = hidden.shape[0]
@@ -189,22 +190,22 @@ def shared_expert(node: TreeNode, ctx: StepContext, mms: tuple[TreeNode, TreeNod
             if not isinstance(sr, Compute) or sr.rows != len(ctx.start.rows) or any(sr.spec.bindings.get(k) != v for k, v in want.items()):
                 return unsupported(node, f"the shared expert's {aop} did not resolve as {act_pattern.kind}{want} on the token rows",
                                    child_id=act.id, child_reason=getattr(sr, "reason", None), want=want)
-            if not _same(sr.operands[0].view, prev):
+            if not _same(whole_view(sr.operands[0]), prev):
                 return unsupported(node, f"the shared expert's {aop} does not read the gate_up GEMM's output",
                                    act_input=repr(sr.operands[0].view), gate_up=repr(prev))
             out.append((act.id, dataclasses.replace(sr, spec=spec or sr.spec, hint=f"{hint}/shared/{aop}", pattern=pattern)))
-            prev = sr.outputs[0].view
+            prev = whole_view(sr.outputs[0])
         mr = DynamicDeepGemmFp8Linear().match(mm, ctx)
         if not isinstance(mr, Compute):
             return unsupported(node, f"the shared expert's {what} {K_DYN_MM} did not resolve", child_id=mm.id,
                                child_reason=getattr(mr, "reason", None), child_detail=getattr(mr, "detail", None))
-        if not _same(mr.operands[0].view, prev):
+        if not _same(whole_view(mr.operands[0]), prev):
             return unsupported(node, f"the shared expert's {what} GEMM does not read its input", gemm_input=repr(mr.operands[0].view),
                                expected=repr(prev))
         if mr.spec.bindings.get("K") != K or mr.spec.bindings.get("N") != N:
             return unsupported(node, f"the shared expert's {what} GEMM is not [K={K}, N={N}]", bindings=dict(mr.spec.bindings))
         out.append((mm.id, dataclasses.replace(mr, hint=f"{hint}/shared/{what}", pattern=pattern)))
-        prev = next(o for o in mr.outputs if o is not None).view
+        prev = whole_view(next(o for o in mr.outputs if o is not None))
     if prev.alloc != out0.alloc:
         return unsupported(node, "the shared expert's down GEMM does not write the op's first output", down=repr(prev), shared=repr(out0))
     return out
@@ -416,16 +417,16 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
                 return unsupported(node, f"the {'w2' if routed else 'w13'} launch's A is not written by the routed "
                                          f"{'SiLU output' if routed else 'input'} quant", writer=s.quant.id)
             try:
-                c = launch.enter.constexprs
+                c = launch.triton.constexprs
                 spec = T.moe_expert_fp8_gemm_spec(tp, E, K, N, G, s.KB, bool(c.get("SWAP_AB")),
                                                   BM=c.get("BLOCK_SIZE_M"), BN=c.get("BLOCK_SIZE_N"),
-                                                  WARPS=launch.enter.num_warps, routed=routed)
+                                                  WARPS=launch.triton.num_warps, routed=routed)
             except T.UnregisteredTarget as e:
                 return unsupported(node, f"target has no registered block-FP8 fused-MoE binding: {e}")
             launched[routed] = (s, r[2], spec)
         (s_up, c1, up_spec), (s_dn, c3, dn_spec) = launched[False], launched[True]
         qr = PerTokenGroupFp8Quant(group=G).match(s_up.quant, ctx)
-        if not isinstance(qr, Compute) or (qr.operands[0].view, qr.outputs[0].view, qr.outputs[1].view) != (s_up.source, s_up.a, s_up.a_s):
+        if not isinstance(qr, Compute) or (whole_view(qr.operands[0]), whole_view(qr.outputs[0]), whole_view(qr.outputs[1])) != (s_up.source, s_up.a, s_up.a_s):
             return unsupported(node, f"the routed input {K_QUANT} did not resolve to the w13 launch's A and a_scale", child_id=s_up.quant.id,
                                child_reason=getattr(qr, "reason", None))
         if not _same(s_up.source, hidden) or not s_up.quant.id < sc.up.id:
@@ -468,15 +469,15 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
         if not isinstance(sr, Compute) or sr.rows != P or sr.spec.bindings.get("I") != INTER:
             return unsupported(node, "the routed silu_and_mul did not resolve as SiluMul{I} on the pair rows", child_id=sc.rsilu.id,
                                child_reason=getattr(sr, "reason", None), I=INTER, P=P)
-        x = sr.operands[0].view
+        x = whole_view(sr.operands[0])
         if (x.alloc, x.offset) != (c1.alloc, c1.offset) or x.shape[-1] != 2 * INTER:
             return unsupported(node, "the routed silu_and_mul does not read the w13 output as [P, 2I]", input=repr(x), cache1=repr(c1))
         q = sc.quants[1]
         qr = PerTokenGroupFp8Quant(group=G).match(q, ctx)
-        if not isinstance(qr, Compute) or (qr.outputs[0].view, qr.outputs[1].view) != (s_dn.a, s_dn.a_s):
+        if not isinstance(qr, Compute) or (whole_view(qr.outputs[0]), whole_view(qr.outputs[1])) != (s_dn.a, s_dn.a_s):
             return unsupported(node, f"the routed SiLU output's {K_QUANT} did not resolve to the w2 launch's A and a_scale", child_id=q.id,
                                child_reason=getattr(qr, "reason", None))
-        if not _same(qr.operands[0].view, sr.outputs[0].view) or not (sc.up.id < sc.rsilu.id < q.id < sc.down.id):
+        if not _same(whole_view(qr.operands[0]), whole_view(sr.outputs[0])) or not (sc.up.id < sc.rsilu.id < q.id < sc.down.id):
             return unsupported(node, f"the routed {K_QUANT} does not read the SiLU output between the two launches",
                                quant_input=repr(qr.operands[0].view), silu_output=repr(sr.outputs[0].view))
         return [(sc.rsilu.id, dataclasses.replace(sr, spec=bind(_ACT.SiluMul, I=INTER), hint=f"{hint}/silu_and_mul", pattern=self.name)),

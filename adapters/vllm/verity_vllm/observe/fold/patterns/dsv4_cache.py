@@ -107,7 +107,7 @@ def fp8_rows(cache: ViewDesc, slots, bs: int, DN: int, DR: int, QB: int) -> list
     return out
 
 
-def runs(keys: list) -> list[tuple[object, int, int]]:
+def runs[K](keys: list[K]) -> list[tuple[K, int, int]]:
     """(key, first row, end row) of each run of consecutive rows with one key."""
     out: list[list] = []
     for i, k in enumerate(keys):

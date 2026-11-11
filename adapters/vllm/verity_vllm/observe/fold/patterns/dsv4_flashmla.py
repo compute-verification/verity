@@ -174,7 +174,7 @@ class SparseDecode:
         q, kv, xkv, out = (a.get(k) for k in ("q", "kv", "extra_kv", "out_"))
         if len(rows) != 1:
             return unsupported(node, "a launch of more than one decode token: the batch's FlashMLA schedule is not folded yet", T=len(rows))
-        if not all(isinstance(v, ViewDesc) for v in (q, kv, out)) or q.rank != 4 or q.shape[:2] != (1, 1) or q.dtype != "bfloat16" \
+        if not (isinstance(q, ViewDesc) and isinstance(kv, ViewDesc) and isinstance(out, ViewDesc)) or q.rank != 4 or q.shape[:2] != (1, 1) or q.dtype != "bfloat16" \
                 or q.strides[-1] != 1 or not _is(out, q.shape, "bfloat16") or out.strides[-1] != 1:
             return unsupported(node, "q and out are not bf16 [1,1,NHP,D] over one token, or the window cache is no view", q=repr(q), out=repr(out))
         (req, p), D = rows[0], q.shape[3]
@@ -233,7 +233,7 @@ class SparsePrefill:
         a, rows = bound_args(node), tuple(ctx.start.rows)
         q, wsv, out = (a.get(k) for k in ("q", "kv", "out_"))
         T, req, pos = len(rows), rows[0][0], [p for _, p in rows]
-        if not all(isinstance(v, ViewDesc) for v in (q, wsv, out)) or q.rank != 3 or q.shape[0] != T or q.dtype != "bfloat16" \
+        if not (isinstance(q, ViewDesc) and isinstance(wsv, ViewDesc) and isinstance(out, ViewDesc)) or q.rank != 3 or q.shape[0] != T or q.dtype != "bfloat16" \
                 or q.strides[-1] != 1 or not _is(out, q.shape, "bfloat16") or out.strides[-1] != 1:
             return unsupported(node, "q and out are not bf16 [T,NHP,D] over the step's tokens, or the workspace is no view", q=repr(q), out=repr(out))
         if any(r != req for r, _ in rows) or pos != list(range(pos[0], pos[0] + T)):

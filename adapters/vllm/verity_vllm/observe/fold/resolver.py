@@ -192,6 +192,13 @@ def operand_rows(op: Operand) -> int | None:
     return None
 
 
+def whole_view(op: Operand) -> ViewDesc:
+    """The device view an operand names whole (`Shared`, `PerRow`, `Gather`, `GatherMany`); no other operand has one."""
+    if not isinstance(op, (Shared, PerRow, Gather, GatherMany)):
+        raise TypeError(f"a {type(op).__name__} operand names no one view")
+    return op.view
+
+
 def operand_view(op: Operand, i: int) -> ViewDesc | None:
     """Row i's device view of an operand; None for a Program constant, a declared parameter or several pieces."""
     if isinstance(op, (Const, Param, Supplied, Pieces, WeightField, WitnessParam)):

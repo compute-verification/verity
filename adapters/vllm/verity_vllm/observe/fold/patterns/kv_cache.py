@@ -107,7 +107,7 @@ def _kv_moves(rc: TreeNode, ctx: StepContext, pattern: str, consumed: tuple[int,
     kc, vc = a.get("key_cache", a.get("arg2")), a.get("value_cache", a.get("arg3"))
     sm = a.get("slot_mapping", a.get("arg4"))
     dt = a.get("kv_cache_dtype", a.get("arg5"))
-    if not all(isinstance(v, ViewDesc) for v in (key, value, kc, vc, sm)):
+    if not (isinstance(key, ViewDesc) and isinstance(value, ViewDesc) and isinstance(kc, ViewDesc) and isinstance(vc, ViewDesc) and isinstance(sm, ViewDesc)):
         return unsupported(rc, "reshape_and_cache_flash arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
     if dt not in ("auto", "bfloat16"):
         return unsupported(rc, "KV cache dtype is not bf16 (`auto`)", kv_cache_dtype=dt)

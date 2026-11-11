@@ -99,7 +99,7 @@ class TokenSelectGumbelTwoStage:
         if why is not None:
             return unsupported(node, f"_gumbel_sample_kernel outside greedy sampling: {why}")
         a = bound_args(node)
-        consts = dict(node.enter.constexprs)
+        consts = dict(node.triton.constexprs)
         flags = {k: first(consts.get(k), a.get(k)) for k in ("IS_DRAFTING", "APPLY_TEMPERATURE", "PER_TOKEN_COL")}
         if any(bool(v) for v in flags.values()):
             return unsupported(node, "_gumbel_sample_kernel with drafting / temperature / per-token-column flags", **flags)
@@ -109,7 +109,7 @@ class TokenSelectGumbelTwoStage:
         logits = a.get("logits_ptr")
         local_argmax = a.get("local_argmax_ptr")
         local_max = a.get("local_max_ptr")
-        if not all(isinstance(v, ViewDesc) for v in (logits, local_argmax, local_max)):
+        if not (isinstance(logits, ViewDesc) and isinstance(local_argmax, ViewDesc) and isinstance(local_max, ViewDesc)):
             return unsupported(node, "_gumbel_sample_kernel pointers not bound as expected", args={k: _fmt(v) for k, v in a.items()})
         if logits.rank != 2 or logits.strides[1] != 1 or logits.dtype != "bfloat16":
             return unsupported(node, "TokenSelect_v1 is defined over row-contiguous bf16 [R,V] logits", logits=repr(logits))
@@ -451,7 +451,7 @@ class TokenSelectGumbelTopP:
 
     def _stage1(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         a = bound_args(node)
-        consts = dict(node.enter.constexprs)
+        consts = dict(node.triton.constexprs)
         flags = {k: first(consts.get(k), a.get(k)) for k in ("IS_DRAFTING", "APPLY_TEMPERATURE", "PER_TOKEN_COL", "USE_FP64")}
         if any(bool(v) for v in flags.values()):
             return unsupported(node, "_gumbel_sample_kernel with drafting / in-kernel temperature / per-token-column / fp64 flags", **flags)
@@ -460,7 +460,7 @@ class TokenSelectGumbelTopP:
         logits = a.get("logits_ptr")
         local_argmax = a.get("local_argmax_ptr")
         local_max = a.get("local_max_ptr")
-        if not all(isinstance(v, ViewDesc) for v in (logits, local_argmax, local_max)):
+        if not (isinstance(logits, ViewDesc) and isinstance(local_argmax, ViewDesc) and isinstance(local_max, ViewDesc)):
             return unsupported(node, "_gumbel_sample_kernel pointers not bound as expected", args={k: _fmt(v) for k, v in a.items()})
         rec = self._row_state(node, ctx, logits)
         if isinstance(rec, Unsupported):

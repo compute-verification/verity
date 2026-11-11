@@ -89,7 +89,7 @@ class GemmLaunchTuned:
             return None
         a = bound_args(launch)
         M, N, K = a.get("M"), a.get("N"), a.get("K")
-        if not all(isinstance(v, int) for v in (M, N, K)):
+        if not (isinstance(M, int) and isinstance(N, int) and isinstance(K, int)):
             return None
         table, name = self.table, self.name
         if table is None:

@@ -102,7 +102,7 @@ class PerTokenGroupFp8Quant:
         eps = as_float(_arg(a, "eps", pos=4))
         lo, hi = as_float(_arg(a, "fp8_min", "min_8bit", pos=5)), as_float(_arg(a, "fp8_max", "max_8bit", pos=6))
         ue8m0 = _arg(a, "scale_ue8m0", "use_ue8m0", pos=7)
-        if not all(isinstance(v, ViewDesc) for v in (x, xq, xs)) or not isinstance(G, int) or eps is None or lo is None or hi is None:
+        if not (isinstance(x, ViewDesc) and isinstance(xq, ViewDesc) and isinstance(xs, ViewDesc)) or not isinstance(G, int) or eps is None or lo is None or hi is None:
             return unsupported(node, "per_token_group_fp8_quant arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
         if self.group != G:
             return unsupported(node, "group size differs from the group this pattern resolves", group_size=G, pinned=self.group)
@@ -151,7 +151,7 @@ class CutlassScaledMmFp8Block:
         xs = _arg(a, "a_scales", pos=3)
         bs = _arg(a, "b_scales", pos=4)
         bias = _arg(a, "bias", pos=5)
-        if not all(isinstance(v, ViewDesc) for v in (out, xq, b, xs, bs)):
+        if not (isinstance(out, ViewDesc) and isinstance(xq, ViewDesc) and isinstance(b, ViewDesc) and isinstance(xs, ViewDesc) and isinstance(bs, ViewDesc)):
             return unsupported(node, "cutlass_scaled_mm arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
         if bias is not None:
             return unsupported(node, "bias epilogue: ScaledMmFp8Block_v1 has none", bias=repr(bias) if isinstance(bias, ViewDesc) else bias)
@@ -211,7 +211,7 @@ class DynamicDeepGemmFp8Linear:
         x, w, ws = _arg(a, "input", pos=0), _arg(a, "weight", pos=1), _arg(a, "weight_scale", pos=2)
         group, ue8m0 = _arg(a, "group_size", pos=3), _arg(a, "use_deep_gemm_e8m0", pos=4)
         outs = node.output_views()
-        if not all(isinstance(v, ViewDesc) for v in (x, w, ws)) or len(outs) != 1:
+        if not (isinstance(x, ViewDesc) and isinstance(w, ViewDesc) and isinstance(ws, ViewDesc)) or len(outs) != 1:
             return unsupported(node, "dynamic FP8 linear arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
         out = outs[0]
         if group != 128 or ue8m0 is not True:

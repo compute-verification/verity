@@ -138,7 +138,7 @@ class TokenSampleGumbel:
         if s.get("greedy") is True:
             return None                                        # the registered greedy recognizer's case
         a = bound_args(node)
-        consts = dict(node.enter.constexprs)
+        consts = dict(node.triton.constexprs)
         flags = {k: first(consts.get(k), a.get(k)) for k in ("IS_DRAFTING", "APPLY_TEMPERATURE", "PER_TOKEN_COL", "USE_FP64")}
         if any(bool(v) for v in flags.values()):
             return unsupported(node, "_gumbel_sample_kernel with drafting / in-kernel temperature / per-token-column / fp64 flags", **flags)
@@ -152,7 +152,7 @@ class TokenSampleGumbel:
         logits = a.get("logits_ptr")
         local_argmax = a.get("local_argmax_ptr")
         local_max = a.get("local_max_ptr")
-        if not all(isinstance(v, ViewDesc) for v in (logits, local_argmax, local_max)):
+        if not (isinstance(logits, ViewDesc) and isinstance(local_argmax, ViewDesc) and isinstance(local_max, ViewDesc)):
             return unsupported(node, "_gumbel_sample_kernel pointers not bound as expected", args={k: _fmt(v) for k, v in a.items()})
         if logits.rank != 2 or logits.strides[1] != 1:
             return unsupported(node, "logits are not a row-contiguous [R,V] view", logits=repr(logits))

@@ -150,6 +150,7 @@ from verity_vllm.observe.fold.resolver import (
     parts_of,
     resolve_step,
     spec_label,
+    whole_view,
 )
 from verity_vllm.observe.fold.summary import REFERENCE_INTEGRITY_RULE, summarize  # noqa: F401  (re-exported: fold_compare, tests)
 from verity_vllm.observe.fold.supplied import SuppliedInputs
@@ -1022,7 +1023,7 @@ class _Fold:
             n = operand_rows(op)
             if n is not None and n < t.rows:
                 raise FoldError(f"move: {type(op).__name__} covers {n} rows, the move has {t.rows}")
-        if t.src.view.bits != t.dst.view.bits:
+        if whole_view(t.src).bits != whole_view(t.dst).bits:
             raise FoldError(f"move between widths {t.src.view.dtype} -> {t.dst.view.dtype} ({t.hint})")
         return [self._read_operand(t.src, i) for i in range(t.rows)]
 

@@ -123,7 +123,7 @@ class AttentionScope:
                 return moves
             before.extend(moves)
         q, k, v, out = a.get("q"), a.get("k"), a.get("v"), a.get("out")
-        if not all(isinstance(x, ViewDesc) for x in (q, k, v, out)):
+        if not (isinstance(q, ViewDesc) and isinstance(k, ViewDesc) and isinstance(v, ViewDesc) and isinstance(out, ViewDesc)):
             return unsupported(node, "FA2 op arguments q/k/v/out not bound by name (schema unrecognised)",
                                schema=fa.enter.schema, names=list(a)[:24], views=[repr(x) for x in fa.input_views()][:8])
         causal = first(a.get("is_causal"), a.get("causal"))

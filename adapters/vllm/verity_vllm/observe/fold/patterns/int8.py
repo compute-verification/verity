@@ -126,7 +126,7 @@ class Int8ScaledMm:
         a = bound_args(node)
         xq, s_a, w, sw = a.get("xq"), a.get("s_a"), a.get("w"), a.get("s_w")
         outs = list(node.outs or ()) if isinstance(node.outs, (list, tuple)) else [node.outs]
-        if not all(isinstance(v, ViewDesc) for v in (xq, s_a, w, sw)) or len(outs) != 1 or not isinstance(outs[0], ViewDesc):
+        if not (isinstance(xq, ViewDesc) and isinstance(s_a, ViewDesc) and isinstance(w, ViewDesc) and isinstance(sw, ViewDesc)) or len(outs) != 1 or not isinstance(outs[0], ViewDesc):
             return unsupported(node, "verity_int8::scaled_mm arguments / result not bound as expected", args=list(a), outs=len(outs))
         (y,) = outs
         if xq.rank != 2 or not is_row_major(xq):
@@ -243,7 +243,7 @@ class Int8AttentionScope:
         computes: list[Compute] = []
         hint = hint_of(node, str(layer) or "attn")
         qa, scale, kouts = a.get("query"), as_float(a.get("scale")), list(kvn.outs or ())
-        if not all(isinstance(v, ViewDesc) for v in (qa, kc, vc)) or scale is None or len(kouts) != 4:
+        if not (isinstance(qa, ViewDesc) and isinstance(kc, ViewDesc) and isinstance(vc, ViewDesc)) or scale is None or len(kouts) != 4:
             return unsupported(node, "kv_quant_batch / window_rows_batch arguments not bound as expected", kv_quant=list(ka), window_rows=list(a))
         if not all(_same(a.get(nm), o) for nm, o in zip(("kq", "vq", "sv", "v0"), kouts)):
             return unsupported(node, "window_rows_batch does not read its kv_quant_batch's results", kv_quant=[repr(o) for o in kouts])
@@ -311,7 +311,7 @@ def _credited_window(scope: TreeNode, cws: list[TreeNode]) -> tuple[ViewDesc, Vi
         return unsupported(scope, "kv_quant_window_batch without exactly one credited_window in the scope", credited_window=len(cws))
     a = bound_args(cws[0])
     kv, k, v = a.get("kv_cache"), a.get("k"), a.get("v")
-    if not all(isinstance(x, ViewDesc) for x in (kv, k, v)) or kv.rank != 4 or kv.shape[3] % 2 or k.rank != 3 or k.shape != v.shape:
+    if not (isinstance(kv, ViewDesc) and isinstance(k, ViewDesc) and isinstance(v, ViewDesc)) or kv.rank != 4 or kv.shape[3] % 2 or k.rank != 3 or k.shape != v.shape:
         return unsupported(scope, "credited_window's kv_cache / k / v are not [pages, G, slots, 2D] / [rows, G, D] views",
                            kv_cache=repr(kv), k=repr(k), v=repr(v))
     P, Gk, S, D2 = kv.shape

@@ -40,9 +40,10 @@ from verity_vllm.observe.fold.tree import TreeNode
 
 def _rewrite_args(fa: TreeNode, updates: dict[str, Any]) -> TreeNode:
     """A copy of the FA2 launch node with the named schema arguments replaced (positional or keyword, whichever bound them)."""
-    names = schema_param_names(fa.enter.schema)
-    args = list(fa.enter.args)
-    kwargs = dict(fa.enter.kwargs)
+    call = fa.dispatch
+    names = schema_param_names(call.schema)
+    args = list(call.args)
+    kwargs = dict(call.kwargs)
     for key, val in updates.items():
         if key in kwargs:
             kwargs[key] = val
@@ -50,7 +51,7 @@ def _rewrite_args(fa: TreeNode, updates: dict[str, Any]) -> TreeNode:
             args[names.index(key)] = val
         else:
             raise KeyError(key)
-    return TreeNode(enter=dataclasses.replace(fa.enter, args=args, kwargs=kwargs), exit=fa.exit, children=fa.children)
+    return TreeNode(enter=dataclasses.replace(call, args=args, kwargs=kwargs), exit=fa.exit, children=fa.children)
 
 
 def _replace_descendant(node: TreeNode, old_id: int, new: TreeNode) -> TreeNode:
