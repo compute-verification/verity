@@ -75,7 +75,7 @@ theorem Compiled.sessWit_some {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Ru
   refine ⟨xS, _, hsess, ?_⟩
   unfold Compiled.sessWit at hw
   simp only [hsess] at hw
-  rw [dif_pos hshape, L.served_eval H P ω P' r r hcard (fun r' hr' => (hview r' hr').1) fun _ _ => rfl] at hw
+  rw [dite_eq_left hshape, L.served_eval H P ω P' r r hcard (fun r' hr' => (hview r' hr').1) fun _ _ => rfl] at hw
   exact Arg.ext_some H xS _ _ _ hw
 
 end Claims.SamplingGeneric
@@ -187,14 +187,14 @@ theorem session_acc_msg {u : ℕ} {v : Seen} {xS : Msg} {vS : Seen} (hsess : ses
       (v.msgs.take (off h (templateOf h.ms u))).all (answered ·.2) = true
   · by_cases hok : sessionOk h (templateOf h.ms u)
         (stmtAt h (v.msgs.getD 2 ([], .rej)).1 (templateOf h.ms u)) = true
-    · rw [session, if_pos hans, if_pos hok] at hsess
+    · rw [session, ite_eq_left hans, ite_eq_left hok] at hsess
       have e := Prod.mk.inj (Option.some.inj hsess)
       exact ⟨answered_two (three_le_off h _) hans.1 hans.2, e.1.symm⟩
-    · rw [session, if_pos hans, if_neg hok] at hsess
+    · rw [session, ite_eq_left hans, ite_eq_right hok] at hsess
       have e := Prod.mk.inj (Option.some.inj hsess)
       rw [← e.2] at hacc
       simp [refusedSeen] at hacc
-  · rw [session, if_neg hans] at hsess
+  · rw [session, ite_eq_right hans] at hsess
     have e := Prod.mk.inj (Option.some.inj hsess)
     rw [← e.2] at hacc
     simp [refusedSeen] at hacc
