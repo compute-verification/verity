@@ -1,0 +1,31 @@
+[project]
+name = "verity-core-sampled-proofs"
+version = "0.0.0"
+description = "The difftest of sampled proofs' one-stage audit in Lean (core_spot) against one_stage's Python."
+requires-python = ">=3.12"
+# `verity` and `verity-difftest` come from the workspace environment, which the tests run in.
+dependencies = ["hypothesis>=6.100"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_challenger_difftest.py",
+    "tests/test_difftest.py",
+    "tests/test_harm_bound.py",
+    "tests/test_history_difftest.py",
+    "tests/test_wires_difftest.py",
+]
+# Test-only: `lake` builds this package and, through its path requires, the core protocol interface, the difftest
+# harness's Lean, Flock's verifier library and the LMS verifier; the tests import the harness's Python and the
+# reference, one_stage with the profile, and what they import of verity.ml (the circuits, the partition object, the
+# commitments' domains, and LMS for the challenger's signed record).
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/protocols",
+          "verity/core", "verity/protocols/flock/verifier"]
