@@ -256,9 +256,10 @@ def cpu_list(cpus) -> str:
 
 
 def cores(cpus=None, nodes: Path | None = None) -> dict:
-    """The CPUs a row's processes can run on: this process's own (its affinity; the server's provers and verifiers
-    inherit it, and none sets its own), as their count, their list and the NUMA nodes that hold any of them
-    (`NODES`' ``nodeN/cpulist``; none on a machine that lists no nodes)."""
+    """The CPUs a row's processes can run on: this process's own (its affinity; every process of the row runs within
+    it: unplaced, each inherits it; with ``FC_VERIFIER_CPUS``, the verifiers run on ``verifier_cpus`` and the provers on
+    the rest), as their count, their list and the NUMA nodes that hold any of them (`NODES`' ``nodeN/cpulist``; none on a
+    machine that lists no nodes)."""
     mine, held = set(os.sched_getaffinity(0) if cpus is None else cpus), []
     for f in (nodes or NODES).glob("node[0-9]*/cpulist"):
         parts = f.read_text().strip().split(",")
