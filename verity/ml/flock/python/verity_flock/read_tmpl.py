@@ -21,7 +21,7 @@ READ = "EmbeddingRead_v1"
 #: the executable a caller names (a test's stand-in, a job's own build); None: `BUILT`, else the path's
 EXE: str | None = None
 #: where ``lake build flock-read-tmpl`` puts the executable in this tree's Flock package
-BUILT = Path(__file__).resolve().parents[4] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-read-tmpl"
+BUILT = Path(__file__).resolve().parents[5] / "verity/core/service/flock/.lake/build/bin/flock-read-tmpl"
 
 
 def executable() -> str:
