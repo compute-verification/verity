@@ -5,10 +5,13 @@
 # the signal so the cleanup still has somewhere to write, and the exit status is the harness's.
 #
 #   rehearsal.sh check    any CPU node, in the tree: what the verbs below read that needs no card and no gate, at the
-#                         serve's settings. Each step's log is $OUT/logs/STEP.log, its exit status and seconds a line of
+#                         serve's settings and at their class (V3C_CLASS, which CLASSES holds; the harness's 4,32,4
+#                         where they name none; a CLASS the caller gives must be that one). Each step's log is
+#                         $OUT/logs/STEP.log, its exit status and seconds a line of
 #                         $OUT/steps.txt, and the exit status is 0 only where every step's is. The steps: this tree's
 #                         environment (uv sync); the filter around a stand-in harness (a made-up secret, an exit status
-#                         carried, a TERM waited out); the settings file as `serve` holds it; `serve` around a stand-in
+#                         carried, a TERM waited out); the settings file as `serve` holds it (a one-output class needs
+#                         its own PP_PARTITION: its window has no step 1); `serve` around a stand-in
 #                         harness (the deferral's copy asked once, only after a serve that exited 0); the class's
 #                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
 #                         reads the card: the H200's compute capability and SMs); the harness's own policy step,
@@ -32,7 +35,9 @@
 #                         file. MAIN_FILE and PP_CHALLENGER_KEY default to the run's sent main.txt and
 #                         challenger-key.json, V3C_AUDIT_TIMEOUT to 60h (its sessions run one at a time), and
 #                         V3C_ARCHIVE_LINK to 1: each member's circuit file is linked into its archive, not copied
-#                         (`a0.lean_verify`). PREFLIGHT_ONLY=1 stops after the harness's preflight.
+#                         (`a0.lean_verify`). The harness's own V3C_WARM_JOBS=N composes the window's templates N at a
+#                         time before the audit; without it the audit composes them itself, one at a time, inside its
+#                         limit. PREFLIGHT_ONLY=1 stops after the harness's preflight.
 #   rehearsal.sh compose  a node that holds the compose hand-off alone, D its copy: `served_verdicts.sh compose` inside
 #                         one memory scope of its own (COMPOSE_MEM_GB, default 64, no swap). Each Lean check it starts
 #                         runs in a scope of its own and is not started past its blob limit (`served_cases.py`:
@@ -69,7 +74,8 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     set +a
     bad=0
     no() { echo "SETTINGS refused: $*"; bad=3; }
-    for want in POUW=pearlplus PEARLPLUS_TIE=1 PRODUCT=remote; do
+    # WC_RECORD=0: the class of record's measurement, which gates nothing and nothing reads, is left out of the serve
+    for want in POUW=pearlplus PEARLPLUS_TIE=1 PRODUCT=remote WC_RECORD=0; do
       v=${want%%=*}
       [ "${!v-}" = "${want#*=}" ] || no "$v is ${!v-unset}, and the rehearsal serves at $want"
     done
@@ -82,10 +88,31 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     for v in MAIN_FILE PP_CHALLENGER_KEY DAY_PARAMS; do
       [ -z "${!v-}" ] || [ -s "${!v}" ] || no "$v names ${!v}, which is missing or empty: send it with the run"
     done
-    [ "$bad" != 0 ] || echo "SETTINGS held: Pearl+ tied to the window, product remote, limits $ALPHA and $GAMMA with their" \
-      "unit and what they prove, day $DAY at program ${DAY_PROGRAM:0:16}…"
+    # the class the window is committed at, the harness's default where the settings name none
+    cls=${V3C_CLASS-4,32,4}
+    if [[ $cls =~ ^[1-9][0-9]*,[1-9][0-9]*,([1-9][0-9]*)$ ]]; then
+      case " ${CLASSES-4,32,4} " in
+        *" $cls "*) ;;
+        *) no "V3C_CLASS is $cls and CLASSES is '${CLASSES-4,32,4}': the harness commits the window at V3C_CLASS, one of" \
+          "the classes it counts the window's circuit at, so CLASSES names it" ;;
+      esac
+      [ "${BASH_REMATCH[1]}" != 1 ] || [ -n "${PP_PARTITION-}" ] \
+        || no "V3C_CLASS $cls has one output, so its window is the prefill step alone, and step 3's partition of record" \
+          "proves at step 1 (llama32_1b_tg_l0_step1.json): set PP_PARTITION to a partition at step 0"
+    else
+      no "V3C_CLASS is '$cls', and the tied window is committed at a class SLOTS,PROMPT,OUTPUTS"
+    fi
+    # `check` builds and profiles the settings' class and no other
+    [ -z "${WANT_CLASS-}" ] || [ "$WANT_CLASS" = "$cls" ] \
+      || no "CLASS is $WANT_CLASS and the settings serve $cls: name the class in the settings (V3C_CLASS and CLASSES)"
+    [ "$bad" != 0 ] || echo "SETTINGS held: Pearl+ tied to the window at class $cls, product remote, limits $ALPHA and" \
+      "$GAMMA with their unit and what they prove, day $DAY at program ${DAY_PROGRAM:0:16}…"
     exit "$bad"
   )
+}
+
+settings_class() {  # $1, the settings file: the class its serve commits the window at
+  bash -c 'set -a; . "$0" > /dev/null 2>&1; set +a; printf %s "${V3C_CLASS-4,32,4}"' "$1"
 }
 
 serve() {
@@ -315,10 +342,12 @@ check() {
     fi
     echo "memory scope: NONE (this node makes no user scope): the audit's and the compose's node must" > "$OUT/scope.txt"
   fi
-  local TREE S=$OUT/steps.txt failed=0 scratch PY D CLASS=${CLASS:-4,32,4} SCHEME=${SCHEME:-pearl-c-h100-v1-h3}
+  local WANT_CLASS=${CLASS:-}  # a class the caller names, which the settings must serve
+  local TREE S=$OUT/steps.txt failed=0 scratch PY D CLASS SCHEME=${SCHEME:-pearl-c-h100-v1-h3}
   TREE=$(cd "$HERE/../.." && pwd)
   cd "$TREE" || exit 3
   SETTINGS=${SETTINGS:-${RESEARCH_RUN_DIR:-.}/inputs/record.env}
+  CLASS=$(settings_class "$SETTINGS")
   step() {  # NAME LIMIT CMD...
     local name=$1 limit=$2 t rc
     shift 2
@@ -340,7 +369,7 @@ check() {
   mkdir -p "$scratch/filter"
   step filter 2m bash "$SELF" filter-test "$scratch/filter"
   cp "$OUT/logs/filter.log" "$OUT/filter.txt"
-  step settings 1m bash "$SELF" settings "$SETTINGS"
+  step settings 1m env WANT_CLASS="$WANT_CLASS" bash "$SELF" settings "$SETTINGS"
   step serve-copy 1m env SETTINGS="$SETTINGS" bash "$SELF" serve-test "$scratch/serve-copy"
   step gate-probe 2m env SETTINGS="$SETTINGS" PY="$PY" bash "$SELF" probe-test "$scratch/probe"
 
