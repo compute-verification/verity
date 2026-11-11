@@ -41,7 +41,7 @@ def test_ordered_is_the_fast_kernels_key():
 
 
 def registered():
-    from verity.ml.definitions.registry import dsa_topk as T
+    from verity.definitions.registry import dsa_topk as T
 
     return T
 

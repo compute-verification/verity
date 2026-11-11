@@ -449,7 +449,7 @@ def test_untouched_is_suites_saying_the_change_touches_none(monkeypatch):
         monkeypatch.setattr(PT.subprocess, "run", lambda argv, **_k: subprocess.CompletedProcess(argv, rc, out, ""))
     fake("suites: the change from 1a2b3c4d5e6f touches 0: none\n")
     assert PT.untouched(ROOT, "HEAD^1")
-    fake("suites: the change from 1a2b3c4d5e6f touches 1: verity-vllm\nverity-vllm  integrations/vllm  not cached\n")
+    fake("suites: the change from 1a2b3c4d5e6f touches 1: verity-vllm\nverity-vllm  adapters/vllm  not cached\n")
     assert not PT.untouched(ROOT, "HEAD^1")
     fake("suites: the change from 1a2b3c4d5e6f touches 0: none\n", rc=2)
     assert not PT.untouched(ROOT, "HEAD^1")
@@ -464,5 +464,5 @@ def test_the_job_pins_the_rebuilds_to_the_cores_it_is_given_at_nice_19():
     tier = 'bash ../../tools/verity/check/neutrality_tier.sh fast "$out/neutrality"'
     assert f"nice -n 19 taskset -c 96-127 {tier}" in pinned and f"nice -n 19 {tier}" in free
     assert pinned.index("pytest.log") < pinned.index(tier), "after the rebuilds, whatever they found"
-    assert (ROOT / "integrations" / "vllm" / "../../tools/verity/check/neutrality_tier.sh").is_file(), "run from integrations/vllm"
+    assert (ROOT / "adapters" / "vllm" / "../../tools/verity/check/neutrality_tier.sh").is_file(), "run from adapters/vllm"
     assert str(PT.NEUTRALITY) == "neutrality/neutrality.json"
