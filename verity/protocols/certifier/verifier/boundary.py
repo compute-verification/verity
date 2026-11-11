@@ -1,5 +1,5 @@
 """The run's boundary in a window's circuit: which units' rows hold each step's egress and ingress
-(`NetTiming.BoundaryGates`, `Security/Definitions/NetworkCertifier/SampledAudit.lean`), as a window's circuit record
+(`NetTiming.BoundaryGates`, `security/Definitions/NetworkCertifier/SampledAudit.lean`), as a window's circuit record
 declares them, and the verifier's check, before it samples, that the layout fits the circuit
 (`NetTiming.BoundaryGates.Fits`, the half of the sampled audit's scope `NetTiming.ScopeAcc` that isn't sampling's). The
 record is ``circuit.json``, `verity/window-circuit/v1` (`verity.commitments.windows.interface.circuit_record`), whose SHA-512 the

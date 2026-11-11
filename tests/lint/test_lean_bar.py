@@ -1,7 +1,7 @@
 """Mathlib's bar for the tree's Lean, held to ``allowlists/lean_bar.json``: what Mathlib's style linters refuse of a file
 (its ``header``, ``longFile`` and ``maxHeartbeats`` linters), found here by reading the text, with no Lean and no build.
 
-Read: every ``.lean`` file under ``Security/`` (the security analysis) and ``verity/core/`` (the code packages), found by a
+Read: every ``.lean`` file under ``security/`` (the security analysis) and ``verity/core/`` (the code packages), found by a
 walk that leaves out ``.lake`` (``BUILT``: Lake's build trees and the packages it fetches, which git never tracks), so in a
 clean checkout the tracked ones.  The walk starts no program, so the suite's read guard traces all this lint reads.  The
 Lean check's own fixtures (``tools/verity/lean/tests/fixtures``) lie outside both trees, as do the Lean tools' files, the
@@ -66,7 +66,7 @@ NAME = "lean_bar"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 #: the trees held: the security analysis and the code packages
-TREES = ("Security", "verity/core")
+TREES = ("security", "verity/core")
 #: the directories a walk leaves out: Lake's build trees and fetched packages, Mathlib's sources among them
 BUILT = (".lake",)
 #: the lines a file may run to, Mathlib's ``linter.style.longFile``
@@ -297,8 +297,8 @@ def test_it_reads_comments_and_strings_as_lean_does() -> None:
 
 
 def _tree(root: Path) -> None:
-    for path, src in (("Security/Proofs/A.lean", "set_option maxHeartbeats 0 in\ntheorem a : True := trivial\n"),
-                      ("Security/Proofs/B.lean", "/-! # B -/\n" + "x\n" * LONG),
+    for path, src in (("security/Proofs/A.lean", "set_option maxHeartbeats 0 in\ntheorem a : True := trivial\n"),
+                      ("security/Proofs/B.lean", "/-! # B -/\n" + "x\n" * LONG),
                       ("verity/core/c/C.lean", "/-! # C -/\n-- the table is large\nset_option maxHeartbeats 9 in\ndef c := 1\n"),
                       ("verity/core/c/.lake/packages/m/M.lean", "set_option maxHeartbeats 0\n"),
                       ("verity/ml/D.lean", "set_option maxHeartbeats 0\n"),
@@ -309,7 +309,7 @@ def _tree(root: Path) -> None:
 
 def test_an_unlisted_finding_is_reported_a_listed_one_passes_and_a_stale_entry_only_warns(tmp_path: Path) -> None:
     _tree(tmp_path)
-    a, b = "Security/Proofs/A.lean", "Security/Proofs/B.lean"
+    a, b = "security/Proofs/A.lean", "security/Proofs/B.lean"
     assert files(tmp_path) == [a, b, "verity/core/c/C.lean"]
     exact = Counter({(a, "module-doc"): 1, (a, "heartbeats-unlimited"): 1, (a, "heartbeats-uncommented"): 1, (b, "long-file"): 1})
     assert found(tmp_path) == exact
@@ -342,13 +342,13 @@ def test_an_unlisted_finding_is_reported_a_listed_one_passes_and_a_stale_entry_o
     assert f"    {b}:{LONG + 1} {LONG + 1} lines, 1 past {LONG}" in fails(exact - Counter({(b, "long-file"): 1}), SOFT)
 
     loose = exact + Counter({(a, "heartbeats-uncommented"): 2, ("verity/core/c/C.lean", "module-doc"): 1,
-                             ("Security/Gone.lean", "long-file"): 1})
+                             ("security/Gone.lean", "long-file"): 1})
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         held(scan(tmp_path), loose)
     (w,) = caught
     assert w.category is Stale and str(w.message).splitlines()[1:] == [
-        "  Security/Gone.lean [long-file]: 1 allowed, 0 found: delete the entry",
+        "  security/Gone.lean [long-file]: 1 allowed, 0 found: delete the entry",
         f"  {a} [heartbeats-uncommented]: 3 allowed, 1 found: lower its count to 1",
         "  verity/core/c/C.lean [module-doc]: 1 allowed, 0 found: delete the entry"], str(w.message)
     assert f"test_{NAME}.py --prune" in str(w.message)

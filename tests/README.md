@@ -21,7 +21,7 @@ table in the boundary, wall-clock, retired-term, seed and verifier-cost tests).
 `lint/` holds six kinds of finding to a list in `lint/allowlists/`, counted per file: environment reads
 (`test_repo_env_reads.py`), lane text in prose (`test_repo_lane_text.py`), retired terms (`test_repo_retired_terms.py`),
 ruff's findings (`test_repo_ruff.py`), except handlers that swallow what they catch (`test_repo_silent_excepts.py`), and
-what Mathlib's style linters refuse of a Lean file under `Security/` or `verity/core/` (`test_lean_bar.py`, per file and
+what Mathlib's style linters refuse of a Lean file under `security/` or `verity/core/` (`test_lean_bar.py`, per file and
 rule: no `/-!` module docstring, more than 1,500 lines, a `maxHeartbeats` of 0, one with no comment saying why). A file
 with more findings than its entry allows, or with findings and no entry, fails, except that lane text, retired terms,
 ruff's style findings and three of the Lean bar's rules (the module docstring, the length, the uncommented override) are
