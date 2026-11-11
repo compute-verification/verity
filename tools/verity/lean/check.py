@@ -4257,10 +4257,21 @@ SAMPLED_OUTPUTS = ("olean", "ilean", "olean.server", "olean.private", "ir", "ir.
 SAMPLED_BESIDE = ("trace", "setup.json", *(f"{o}.hash" for o in SAMPLED_OUTPUTS))
 #: the outputs that keep the path of the module's source (a message's), compared as object graphs when their bytes differ
 PATH_PARTS = ("olean.server", "olean.private")
-#: (its package's build, module) of each module a build of this process compiled (`sampled_recompile`): a dependent's
-#: build reuses what its path dependencies' audits compiled, which without the sandbox is as cold as its own
+#: (its package's build, module) of each module a build step of this process compiled (`note_compiled`): another
+#: package's build reuses what this run compiled into a path dependency's build, which without the sandbox is as cold as
+#: its own (`sampled_recompile`)
 RUN_COMPILED: set[tuple[Path, str]] = set()
 _RUN_COMPILED_LOCK = threading.Lock()
+
+
+def note_compiled(keyed: dict, log: Path) -> None:
+    """Add each module of ``keyed`` (`module_keys.keys`) that the build step whose output is ``log`` compiled
+    (`build_seconds`) to `RUN_COMPILED`, a failed step's too. The caller still holds the step's `writing`, so once it is
+    released the set holds every module this run compiled into those builds, before another package's build can find
+    them up to date and compile nothing."""
+    got = {(keyed[m].package.build().resolve(), m) for m in build_seconds([log]) if m in keyed}
+    with _RUN_COMPILED_LOCK:
+        RUN_COMPILED.update(got)
 
 
 def sampled_file(mk, build: Path, mod: str, ext: str) -> Path:
@@ -4300,7 +4311,6 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     s = time.monotonic()
     keyed = mk.keys(pkg, roots)
     with _RUN_COMPILED_LOCK:
-        RUN_COMPILED.update((k.package.build().resolve(), m) for m, k in keyed.items() if m in built)
         cold = set(RUN_COMPILED)
     pop = sorted(m for m, k in keyed.items()
                  if m not in built and sampled_file(mk, k.package.build(), m, "trace").is_file())
@@ -5309,6 +5319,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         if n is not None:
             rep["build_threads"] = n
         staged: dict[tuple[str, str], str] = {}
+        keyed: dict | None = None
         pipe = Pipeline(pkg, policy, rep["toolchain"], work, replay_cache, closure, log=log) \
             if pipelined(pkg, build, replay, replay_cache, lifts) else None
         try:
@@ -5325,11 +5336,17 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                     continue
                 if callable(argv) and not (argv := argv()):
                     continue
+                if argv is not None and keyed is None:
+                    keyed = sibling("module_keys").keys(pkg, policy["roots"])
                 with contextlib.nullcontext() if argv is None else writing(pkg, log):
                     s = time.monotonic()
-                    rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else \
-                        run(argv, pkg, work / f"{step}.log") if pipe is None else \
-                        run(argv, pkg, work / f"{step}.log", on_line=pipe.line)
+                    try:
+                        rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else \
+                            run(argv, pkg, work / f"{step}.log") if pipe is None else \
+                            run(argv, pkg, work / f"{step}.log", on_line=pipe.line)
+                    finally:
+                        if argv is not None:
+                            note_compiled(keyed, work / f"{step}.log")
                     rep["seconds"][step] = round(time.monotonic() - s, 1)
                 if rc:
                     rep["failures"].append(Failure(step, None, f"{step}: exit {rc}\n{text[-3000:]}"))

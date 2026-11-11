@@ -28,7 +28,7 @@ MADE_AT = {
 PACKAGE = ROOT / "integrations/vllm/verity_vllm"
 
 
-@pytest.mark.parametrize("name,kind", [("prompt", "certified"), ("seed", "certified"), ("prefix_ik", "block"),
+@pytest.mark.parametrize("name,kind", [("prompt", "certified"), ("seed", "witness"), ("seed_salt", "certified"), ("prefix_ik", "block"),
                                        ("peers_12", "block"), ("weights", "registered"), ("rank3.weights[7]", "registered")])
 def test_a_declared_parameter_has_its_kind(name, kind):
     assert IN.parameter(name).kind == kind

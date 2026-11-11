@@ -2,13 +2,15 @@
 infiltration panel from its card, and the JSON and renders the console and the post read."""
 import json
 import shutil
+from dataclasses import replace
 from fractions import Fraction
-from math import log, log1p
+from math import ceil, log, log1p
 
 import cards
 import figure1 as f
 import pytest
 from render import _fit, _lines, _zeros, appendix_stem, render, render_appendix, stem
+from verity.core.protocols.spot.optimize import Cell
 
 SCOPES = ("world year", "datacenter week")
 #: the designs every bit charged, which plan in about a second; the capped ones take seconds a point
@@ -265,6 +267,104 @@ def test_a_one_stage_or_request_point_is_what_lean_certifies(world, monkeypatch)
     monkeypatch.setattr(f.plancheck, "check", lambda ds: [None if d["kind"] == "leak" else True for d in ds])
     with pytest.raises(f.plancheck.LeanError, match="refuses the planner's one-stage design"):
         f.lean_check(pts)
+
+
+def test_lean_two_sends_the_planners_design_in_each_form(monkeypatch):
+    """`lean_two` sends the planner's design to Lean's checker (`plancheck.two` of its cells in the row's strata, its
+    replay blocks and the planner's θ): every bit charged, or each replay block at most the bits it serves in the
+    capped sets' form or the patterns'.  The count is the bits Lean certifies, rounded up to a float, with the
+    planner's bits and Lean's θ beside it; a point Lean refuses is an error.  The checker is stubbed here; the
+    sampled-proofs suite runs it."""
+    cells = (Cell(3, 16), Cell(1, 64, stratum=64))
+    row = {"merged": 64, "k": {0: 1}, "q": .5, "theta": 2.0, "bound": 50.0}
+    seen = []
+    monkeypatch.setattr(f.plancheck, "check", lambda ds: seen.extend(ds) or [(Fraction(10**6, 7), Fraction(3))])
+    want = (f.plancheck.upper(Fraction(10**6, 7)), {"lean": True, "planner": 50.0, "theta": 3.0})
+    for served, union, form in ((None, False, "sets"), (80.0, False, "capped"), (80.0, True, "patterns")):
+        seen.clear()
+        assert f.lean_two(cells, 4, row, .01, served, union) == want
+        assert seen == [f.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, served, union, 2.0)]
+        assert seen[0]["form"] == form
+    monkeypatch.setattr(f.plancheck, "check", lambda ds: [(None, Fraction(0))])
+    with pytest.raises(f.plancheck.LeanError, match="refuses the planner's two-stage point"):
+        f.lean_two(cells, 4, row, .01, 80.0, True)
+
+
+#: the bits the stubbed checker certifies for a two-stage point, and the θ it finds
+LEAN_BITS, LEAN_THETA = Fraction(10**9, 7), Fraction(3)
+
+
+def lean_in_range(seen: list):
+    """A stub of Lean's checker on two-stage points: it refuses a point out of range, as `TwoStageCheck.Point.valid`
+    does (q outside [0, 1] or δ at most 0: test_plancheck.py's out-of-range test runs the checker on them), and
+    certifies `LEAN_BITS` at `LEAN_THETA` otherwise."""
+    def check(designs):
+        seen.extend(designs)
+        return [(None, Fraction(d["theta"])) if not (0 <= Fraction(d["q"]) <= 1 and Fraction(d["delta"]) > 0)
+                else (LEAN_BITS, LEAN_THETA) for d in designs]
+    return check
+
+
+def test_a_two_stage_point_is_what_lean_certifies_and_a_tampered_design_is_refused(world, monkeypatch):
+    """A two-stage point's bound is the bits Lean certifies for the planner's design, not the planner's own bits, at
+    most its trivial bound, with `lean`, the planner's bits and Lean's θ beside it; each design goes to Lean in its own
+    form, with the bits a request serves under a capped one.  A point at the trivial bound has no design to check.  A
+    design tampered out of Lean's range (a first-stage rate above 1, or δ = 0) is refused, and a refusal is an error."""
+    c, part, fill, s = world
+    m = f.model(c, part, s, c["proof_overhead"].value, fill)
+    p = f.point(m, "two-stage", "leak", 0.01 * s.gpu_seconds)
+    row, seen = p["row"], []
+    monkeypatch.setattr(f.plancheck, "check", lean_in_range(seen))
+    lean = f.plancheck.upper(LEAN_BITS)
+    assert not p["capped"] and p["bound"] != lean
+    served = str(ceil(m.served))
+    forms = {None: ("sets", "0"), "sets": ("capped", served), "patterns": ("patterns", served)}
+    for design, (_, form) in f.TWO_STAGE.items():
+        seen.clear()
+        got = f.lean_point(m, design, p)
+        top = f.two_stage_top(m, design)
+        assert (got["bound"], got["capped"]) == (min(lean, top), lean >= top), design
+        assert (got["lean"], got["planner"], got["theta"]) == (True, row["bound"], float(LEAN_THETA)), design
+        assert seen == [f.plancheck.two(f.split_cells(m.cells, row["merged"]), row["k"], m.replay.replay_blocks,
+                                        row["q"], m.delta, None if form is None else m.served, form == "patterns",
+                                        row["theta"])]
+        assert (seen[0]["form"], seen[0]["S"]) == forms[form], design
+    seen.clear()
+    assert f.lean_point(m, "two-stage", p | {"capped": True}) == p | {"capped": True, "lean": None,
+                                                                    "planner": row["bound"], "theta": None}
+    assert f.lean_point(m, "two-stage", p | {"row": None})["lean"] is None and not seen
+    for tampered, at in ((p | {"row": row | {"q": 1.5}}, m), (p, replace(m, delta=0.0))):
+        with pytest.raises(f.plancheck.LeanError, match="refuses the planner's two-stage point"):
+            f.lean_point(at, "two-stage", tampered)
+
+
+def test_a_two_stage_series_carries_lean_and_no_lean_plans_without_it(monkeypatch, out):
+    """With Lean on, each two-stage series' points are Lean's (`lean_point`): `lean` for each, beside the planner's
+    bits and Lean's θ, the trivial bound's unchecked, and the JSON says how Lean searched.  Without it (`--no-lean`),
+    a series is the planner's and carries none of them.  The planner is stubbed here, its first point at the trivial
+    bound and every other one row, since the planner's own points are the test above's."""
+    seen, rows = [], iter([None])
+    row = {"merged": 1 << 18, "k": {0: 1}, "q": .5, "theta": 2.0, "bound": 50.0}
+    monkeypatch.setattr(f.plancheck, "check", lean_in_range(seen))
+    monkeypatch.setattr(f, "two_stage", lambda m, design, budget: next(rows, row))
+    checked = f.run("GLM-5.3", 2, ("world year",), designs=("two-stage",), lean=True)
+    assert checked["lean"] == {"exe": f.plancheck.EXE, "slack": str(f.plancheck.SLACK), "search": f.plancheck.SEARCH,
+                               "precision": f.plancheck.TWO_P}
+    series = checked["panels"]["exfiltration"]["series"]
+    assert len(series) == len(checked["budgets"]) and not checked["panels"]["skipped_work"]["series"]
+    lean = f.plancheck.upper(LEAN_BITS)
+    for s in series:
+        assert len(s["lean"]) == len(s["planner"]) == len(s["theta"]) == len(s["x"])
+        for y, on, planner, theta, capped in zip(s["y"], s["lean"], s["planner"], s["theta"], s["capped"]):
+            if on:
+                assert (on, y, planner, theta, capped) == (True, lean, row["bound"], float(LEAN_THETA), False)
+            else:
+                assert (on, planner, theta, capped) == (None, None, None, True)
+    assert [s["lean"].count(None) for s in series] == [1] + [0] * (len(series) - 1)
+    assert len(seen) == sum(s["lean"].count(True) for s in series) > 0 and {d["form"] for d in seen} == {"sets"}
+    assert out["lean"] is None
+    for s in out["panels"]["exfiltration"]["series"] + out["panels"]["skipped_work"]["series"]:
+        assert not {"lean", "planner", "theta"} & set(s), s["design"]
 
 
 def test_an_incorrect_block_leaks_the_widest_blocks_output(world):

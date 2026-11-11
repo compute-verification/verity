@@ -37,18 +37,14 @@ import Proofs.Flock.Claims.Prob
 import Proofs.NetworkCertifier.Checked
 
 /-!
-# The nontrivial lemmas of the leak bounds with checked inputs
+# The nontrivial lemma of the leak bound with checked inputs
 
-* `SampledLeakChecked`. Its acceptance conclusion fails at the accepting compiled verifier `leakL`, as
-  `SampledLeakAccepted`'s does, at the check every run passes, where the check misses with probability `0`
-  (`checkedWitness_true`): a witness in `RLeakChecked` is in `RLeak` (`rLeak_of_rLeakChecked`), and none is
-  (`leakL_noRLeak`).
-* `PooledLeakChecked`. At one window whose audit always accepts, `q = 1`, `Fmax = 1` and no error, its observations empty
-  where the horizon is one step, no window meets its leak relation, and the escape bound reads `1 ≤ 0`.
+`SampledLeakChecked`'s acceptance conclusion fails at the accepting compiled verifier `leakL`, as `SampledLeakAccepted`'s
+does, at the check every run passes, where the check misses with probability `0` (`checkedWitness_true`): a witness in
+`RLeakChecked` is in `RLeak` (`rLeak_of_rLeakChecked`), and none is (`leakL_noRLeak`).
 
-`SampledLeakChecked`'s honest lemma is `SampledAuditAccepted_honest`, at its one stated premise `Compiled.KS`.
-`CheckedUnique` and `CheckedWitness` are open premises of both bounds, discharged by a deployed check that pins its
-checked inputs and bounds its miss; `PooledLeakChecked`'s honest lemma waits on that check.
+Its honest lemma is `SampledAuditAccepted_honest`, at its one stated premise `Compiled.KS`. `CheckedUnique` and
+`CheckedWitness` are open premises, discharged by a deployed check that pins its checked inputs and bounds its miss.
 -/
 
 @[expose] public section
@@ -57,7 +53,7 @@ namespace NetTiming.Witness
 
 open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
 open Claims.SamplingGeneric (Arg Compiled)
-open Claims.Witness.SamplingGeneric (notStmt notPart leakL)
+open Claims.Witness.SamplingGeneric (leakL)
 
 /-- **A check every run passes misses with probability `0`**, at every compiled sampled verifier and statement. -/
 theorem checkedWitness_true {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
@@ -85,21 +81,5 @@ theorem SampledLeakChecked_nontrivial :
   refine leakL_bound_fails FlockDeploy.sha512 _ ((leakL Bool).κ 0 [] + 0) [] ?_
     (by linarith [leakL_κ (Coin := Bool) []]) hb
   exact fun w hw => leakL_noRLeak FlockDeploy.sha512 _ [] w (rLeak_of_rLeakChecked hw)
-
-/-- **`PooledLeakChecked`'s escape bound fails at an audit that always accepts**: one window, `q = 1`, `Fmax = 1`, no
-error, and the window's observations empty where its horizon is one step, so its good event fails at every sample. -/
-theorem PooledLeakChecked_nontrivial :
-    ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
-        ¬PooledGoodChecked (K := 1) (fun _ => notLay) (fun _ => 1) (fun _ => ∅) (fun _ _ => True) 1
-          (fun _ : Fin 1 => notStmt) (fun _ => notPart) (fun _ _ => false) (fun _ _ _ => [false]) 1 (fun _ => ∅)
-          (fun _ => [])) ≤
-      (1 - 1 : ℝ) ^ 1 + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) := by
-  have hp : (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
-      ¬PooledGoodChecked (K := 1) (fun _ => notLay) (fun _ => 1) (fun _ => ∅) (fun _ _ => True) 1
-        (fun _ : Fin 1 => notStmt) (fun _ => notPart) (fun _ _ => false) (fun _ _ _ => [false]) 1 (fun _ => ∅)
-        (fun _ => [])) = fun _ => True :=
-    funext fun _ => propext (iff_true_intro ⟨fun _ => trivial, fun h => absurd (h.2 0).2.2.1 (by simp)⟩)
-  rw [hp]
-  simp [Pr, Claims.prUniform]
 
 end NetTiming.Witness

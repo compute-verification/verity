@@ -15,11 +15,15 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
+if TYPE_CHECKING:
+    from types import ModuleType
 
-def load(path: str | None):
+
+def load(path: str | None) -> ModuleType:
     if path is None:
         try:
             from verity.ml.definitions.numerics import int8_rows
@@ -32,7 +36,7 @@ def load(path: str | None):
     return mod
 
 
-def check(ev, f: Path) -> dict:
+def check(ev: ModuleType, f: Path) -> dict:
     d = np.load(f)
     x, xq, s, w, sw, y = (d[k] for k in ("x", "xq", "s", "w", "sw", "y"))
     m, k = x.shape

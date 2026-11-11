@@ -427,7 +427,8 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
                # Q(P) of record: the replay's reach is reconciled against it identity by identity
                manifest=(s.manifest if isinstance(s.manifest, dict) else None),
                worker_peak=getattr(args, "replay_worker_peak", None),
-               program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")}, cached_prefixes=cached_prefixes(reqs, _rl), **_sr_kw)
+               program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")}, cached_prefixes=cached_prefixes(reqs, _rl),
+               certified={w["request_id"]: {"request_id": str(r.get("request_id")), "seed": w["seed"]} for r, w in zip(s.reqs, _wreq)}, **_sr_kw)
     if planner is not None:
         t0 = time.perf_counter()
         got = planner.plan({"binding_map": str(s.out / f"binding_map_p{pair}.json"), "arrivals": _arr, "seed": _seed, "seed_source": _seed_src,

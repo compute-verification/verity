@@ -61,8 +61,18 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                inputs (CheckedUnique) and misses at most εchk (CheckedWitness), and the monitoring
                                period's good event and named inputs (PooledGoodChecked, PeriodChannel, PeriodAdaptive,
                                PeriodEscapes, PeriodLeaksChecked)
-../../Definitions/NetworkCertifier/Guarantees/Checked.lean  trusted: the leak bounds with checked inputs
-                               (SampledLeakChecked, PooledLeakChecked)
+../../Definitions/NetworkCertifier/Guarantees/Checked.lean  trusted: the leak bound with checked inputs
+                               (SampledLeakChecked)
+../../Definitions/NetworkCertifier/Carried.lean  trusted: runs chained through the pool's root: the record rule over a
+                               period's runs (poolOpen, PoolChained), a check that pins the closing row
+                               (CheckedClosing), the sequences accepted from an opened row (AcceptedCarried,
+                               LeakAtCarried), accepted runs opening the roots the record rule names (CarriedRoots),
+                               the restarts serving picks among registered patterns (ResetsIn),
+                               and the period's good event and named input (PooledGoodCarried, PeriodLeaksCarried,
+                               PoolColl); one run: the sequences accepted from an opened row (AccSeqsCarried) and
+                               the leak relation at the rows its trace holds (OpensAtInputs, RLeakCarried)
+../../Definitions/NetworkCertifier/Guarantees/Carried.lean  trusted: the leak bounds over a carried pool
+                               (SampledLeakCarried, PooledLeakCarried)
 ../../Definitions/NetworkCertifier/Witness.lean  trusted: the layouts and openings the nontrivial lemmas fail at
                                (trivLay, notLay, certOps)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
@@ -112,19 +122,40 @@ PooledLeak.lean  the leak through the network certifier over a monitoring period
                                          under `Fmax` units (exists_famOf_eq), and the secrets the client's cells
                                          decode to at each draw, read back from the certifier's record
                                          (encard_pooledGood_le, pooledLeak), each over any per-window event
-                                         (encard_pooledFam_le, pr_pooled_le)
-Checked.lean    the leak bounds with checked inputs: a sequence accepted with a valid run is fixed by its
+                                         (encard_pooledFam_le, pr_pooled_le), the count also over any event on the
+                                         whole period (encard_pooledJoint_le)
+Checked.lean    the leak bound with checked inputs: a sequence accepted with a valid run is fixed by its
                                          inputs off the registered and checked ones, the held bits and its jitter
                                          (encard_acceptedChecked_le, through rows_full), and RAcc gives the leak
                                          relation with a valid run except where the check misses
-                                         (ksLinOn_rLeakChecked); sampledLeakChecked, pooledLeakChecked
+                                         (ksLinOn_rLeakChecked); sampledLeakChecked
+Carried.lean    the leak bounds over a carried pool: one run's relation at the rows its extracted trace
+                                         holds (rLeakCarried_of, ksLinOn_rLeakCarried) and its count from a fixed
+                                         opened row (encard_accSeqsCarried_le); by induction over the runs, a period's
+                                         observations are fixed by each run's inputs off its registered, checked and
+                                         opening gates, the held bits and its jitter, since each run opens the row the
+                                         run before left and reads only the runs before it (runsBefore_congr,
+                                         carried_step, encard_carried_le), and an opened row whose root matches but
+                                         whose bits don't is a collision (rowSeg_bind); restarts serving picks
+                                         from a registered set where every audit accepts multiply the count by its
+                                         size (encard_pooledCarried_le); sampledLeakCarried, pooledLeakCarried; at
+                                         the empty pool, the period's bound with checked inputs over windows that
+                                         each hold a pool of their own (pooledLeakChecked_of_carried)
+PoolRoots.lean  the opened rows' roots, a lemma: a run's check that holds its opened and left rows to the roots it
+                                         registers (CheckedRoots) and its leak relation give them those roots
+                                         (digests_of_leakAt), and the record rule registers at a run's opening the root
+                                         of the row poolOpen names (digest_open_of_leakAt), so CarriedRoots holds
+                                         (rootsOfChecked)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
                                          record, and `G_nontrivial`, its conclusion false at a verifier
                                          that accepts everything
-WitnessesChecked.lean  the nontrivial lemmas of SampledLeakChecked and PooledLeakChecked; PooledLeakChecked's
-                                         honest lemma waits on a deployed check
+WitnessesChecked.lean  the nontrivial lemma of SampledLeakChecked; its honest lemma is
+                                         SampledAuditAccepted_honest
+WitnessesCarried.lean  SampledLeakCarried's honest lemma, at the toy code with a run that opens its row
+                                         at its input gates, and the nontrivial lemmas of SampledLeakCarried and
+                                         PooledLeakCarried; PooledLeakCarried's honest lemma waits on a deployed check
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: six theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
@@ -312,16 +343,24 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   assumption is `trusted-host`. Over live audits the two inputs are `Flock.Guarantees.SampledKSLive` at each window's
   history and the live `SampledLeakAccepted` (P2), neither discharged, so it is not the deployed system's bound over a
   monitoring period until they are.
-- **The leak bounds with checked inputs** (`Checked.lean`): inputs a check pins cost no advice bits. A check `valid`
-  over a run's values pins the inputs `chk` where a valid run's values there are a function of the ingress, the other
-  inputs and the incorrect proof blocks' held values (`CheckedUnique`), and misses an invalid accepted run with
-  probability at most `εchk` (`CheckedWitness`, a scope). `SampledLeakChecked` is `SampledLeakAccepted` with the
-  leak relation and the count taken over valid runs only, at `κ + εchk`: the count charges `freeInputs \ (reg ∪ chk)`.
-  `PooledLeakChecked` is `PooledLeakAccepted` with each window's leak relation so taken (`LeakAtChecked`), one pool per
-  window, its period inputs named (`PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes`, `PeriodLeaksChecked`), and the
-  escape at `(1 − q)^Fmax`. `SampledLeakChecked`'s honest lemma is `SampledAuditAccepted_honest`, at its one stated
-  premise `Compiled.KS`. `CheckedUnique` and `CheckedWitness` are open premises of both bounds: a deployed check
-  proved to pin its inputs and bound its miss discharges them, and `PooledLeakChecked`'s honest lemma waits on it.
+- **The leak bounds with checked inputs** (`Checked.lean`, `Carried.lean`): inputs a check pins cost no advice bits. A
+  check `valid` over a run's values pins the inputs `chk` where a valid run's values there are a function of the
+  ingress, the other inputs and the incorrect proof blocks' held values (`CheckedUnique`), and misses an invalid
+  accepted run with probability at most `εchk` (`CheckedWitness`, a scope).
+  - `SampledLeakChecked` is `SampledLeakAccepted` with the leak relation and the count taken over valid runs only, at
+    `κ + εchk`: the count charges `freeInputs \ (reg ∪ chk)`. Its honest lemma is `SampledAuditAccepted_honest`, at
+    its one stated premise `Compiled.KS`.
+  - `SampledLeakCarried` is `SampledLeakChecked` for a run that opens a row at its opening gates (`OpensAtInputs`)
+    and leaves one at its closing gates. Its count charges `freeInputs \ (reg ∪ chk ∪ prow)` at a fixed opened row.
+  - `PooledLeakCarried` is `PooledLeakAccepted` with each run's leak relation so taken (`LeakAtCarried`), over runs
+    that open the row the run before left (`PoolChained`). Its period inputs are named (`PeriodChannel`,
+    `PeriodAdaptive`, `PeriodEscapes`, `PeriodLeaksCarried`), and the escape is at `(1 − q)^Fmax` plus a collision
+    term per opening. At the empty pool it gives the bound over windows that each hold a pool of their own, at their
+    leak relations with a valid run (`LeakAtChecked`, `PeriodLeaksChecked`; `pooledLeakChecked_of_carried`).
+  - `CheckedUnique` and `CheckedWitness` are open premises of all three: a deployed check proved to pin its inputs and
+    bound its miss discharges them. `SampledLeakCarried`'s honest lemma is its premises at the toy code, with a run
+    that opens its row at its circuit's input gates (`SampledLeakCarried_honest`). `PooledLeakCarried`'s waits on the
+    pool circuit, which pins its closing row (`CheckedClosing`), and on its period's inputs.
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references

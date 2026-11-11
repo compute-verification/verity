@@ -24,6 +24,7 @@ module
 public import Flock.With.Hashes
 public import Flock.HmRow
 public import Flock.ByteLines
+public import Flock.TmplLines
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -920,18 +921,19 @@ def parseCommitWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : 
     M Circuit :=
   if tags.isTmpl then parseTmplWith hs tags bytes tables else parseWith hs tags bytes tables
 
-/-- `parseTmplWith` in `V` over the file's view `v`, read once, with the class digest from the task `cls`, which hashes
-beside the template's parse, and the template's checks made once (`TmplUnit.readParsed`; `parseTmplWithV_eq`). Not
-inlined, so its caller spawns `cls` before the parse. -/
+/-- `parseTmplWith` in `V` over the file's view `v`, read once: the template's parse reads its lines and each row's
+numbers through the view (`HmOut.tmplCountView`, `ByteLines.View.parseAt_tmpl`), the class digest comes from the task
+`cls`, which hashes beside the template's parse, and the template's checks are made once (`TmplUnit.readParsedAt`;
+`parseTmplWithV_eq`). Not inlined, so its caller spawns `cls` before the parse. -/
 @[noinline] def parseTmplWithVT (hs : Hashes V) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
     (v : ByteLines.View) (cls : Task (V ByteArray)) : V Circuit := do
   let mj ← metaOf bytes
   if J.has mj "definition" then throw "META definition: a unit class has no templated statement"
   let ctx := "templated statement META"
-  let lines ← tmplOf bytes
+  let k ← tmplCountView v
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
     | throw "META: layout is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)"
-  let tu ← TmplUnit.readParsed lines mode
+  let tu ← TmplUnit.readParsedAt k (v.tmplLine k) (v.tmplNums k) mode
   let c ← HmRow.parseWithVT hs tags bytes tables v cls #[("unit", tu.net)]
   if (c.nets.extract 1 c.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") then
     throw "circuit: a templated statement carries no unit rows; the verifier reads them from its template"
@@ -955,7 +957,8 @@ theorem parseTmplWithV_eq (hs : Hashes V) (tags : Tags) (bytes : ByteArray) (tab
   · rfl
   · rename_i v hv
     unfold parseTmplWithVT parseTmplWith
-    simp only [HmRow.parseWithVT_eq hs tags bytes tables hv, TmplUnit.readParsed_eq, bind_assoc]
+    simp only [HmRow.parseWithVT_eq hs tags bytes tables hv, TmplUnit.readParsedAt_eq, bind_assoc,
+      ← HmOut.tmplOfView_eq hv, HmOut.tmplOfView_count, monadLift_self, bind_map_left, ByteLines.View.parseAt_tmpl hv]
     try rfl
 
 /-- `parseCommitWith` in `V`, a templated statement's through `parseTmplWithV` (`parseCommitWithV_eq`). -/

@@ -6,8 +6,8 @@ and the Programs.
 
 The precommitted compiler (committed Programs = compile(advice) under the advice's hiding root, total, refusing every
 ill-formed advice up to the cap ℓ) need not read the schedule from the advice: vLLM's scheduler is
-replayed step for step from the certified I/O and a residual of a few bits per certifier window
-(`benchmarks/network_e2e/encodings/replay.py`). This Definition is one step of that replay, `reference` its
+replayed step for step from the certified I/O and a residual of a few bits per certifier window (the vLLM
+integration's `verity_vllm.pipeline.advice_code.replay`). This Definition is one step of that replay, `reference` its
 specification in Python, and the replay's own steps are its difftest (`benchmarks/network_e2e/encodings/replay_vectors.py`).
 
 **What it models.** vLLM v1's `Scheduler.schedule` and `update_from_output` (the pinned 0.28.1rc1.dev472) under

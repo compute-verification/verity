@@ -42,14 +42,22 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import probe as P
+
+# isort: split
+# k32 (which imports verity) and verity_config are importable once probe has put the tree and tools/config on sys.path
+from verity_config.settings import SHARED
+
 import k32
 
-from verity_config.settings import SHARED
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
+    from multiprocessing.pool import Pool
 
 SCHEMA = "pouw-rtxpro/tc-sparse-e4m3/v1"
 INSTRUCTION_ID = "sm120.mma.sp.m16n8k64.e4m3"
@@ -103,7 +111,7 @@ def pack_a(A: np.ndarray, k0: int = 0) -> np.ndarray:
     return _words(A[:, rows, cols])
 
 
-def _pack_b(B: np.ndarray, kmap) -> np.ndarray:
+def _pack_b(B: np.ndarray, kmap: np.ndarray) -> np.ndarray:
     nreg = kmap.shape[1]
     return _words(B[:, np.broadcast_to(_G[:, None, None], (32, nreg, 4)), kmap])
 
@@ -169,7 +177,7 @@ def candidates() -> dict:
 TWIN_MODEL = {"dense_two_atoms": "two_atoms", "dense_two_atoms_swapped": "two_atoms_swapped", "dense_on_compressed": "gather_g32"}
 
 
-def model_words(models: dict, As, META, B, C) -> tuple[dict, dict]:
+def model_words(models: dict, As: np.ndarray, META: np.ndarray, B: np.ndarray, C: np.ndarray) -> tuple[dict, dict]:
     n = As.shape[0]
     cols = logical_columns(META).tolist()
     Al, Bl, Cl = As.tolist(), B.tolist(), np.asarray(C, np.uint32).tolist()
@@ -198,11 +206,12 @@ def _init() -> None:
     _CTX["models"] = candidates()
 
 
-def _eval_chunk(args):
+def _eval_chunk(args: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]) -> tuple[dict, dict]:
     return model_words(_CTX["models"], *args)
 
 
-def evaluate(pool, As, META, B, C, procs: int):
+def evaluate(pool: Pool | None, As: np.ndarray, META: np.ndarray, B: np.ndarray, C: np.ndarray,
+             procs: int) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     if pool is None:
         return model_words(candidates(), As, META, B, C)
     idx = np.array_split(np.arange(As.shape[0]), max(1, min(As.shape[0] // 16 + 1, procs * 8)))
@@ -217,7 +226,7 @@ def evaluate(pool, As, META, B, C, procs: int):
 class ProbeModule:
     tcgen05 = False
 
-    def __init__(self, so: Path):
+    def __init__(self, so: Path) -> None:
         self.lib = ctypes.CDLL(str(so))
         V = ctypes.c_void_p
         self.lib.sp_e4m3_tiles.restype = ctypes.c_int
@@ -242,7 +251,8 @@ class ProbeModule:
         self.lib.set_kernel_launch(1 if on else 0)
         return int(self.lib.d_poison_byte())
 
-    def sparse(self, As, B, META, C, meta_reading: str, b_reading: str) -> np.ndarray:
+    def sparse(self, As: np.ndarray, B: np.ndarray, META: np.ndarray, C: np.ndarray, meta_reading: str,
+               b_reading: str) -> np.ndarray:
         n, D = As.shape[0], np.zeros((As.shape[0], 16, 8), np.uint32)
         for s in range(0, n, MAX_TILES_PER_CALL):
             e = min(n, s + MAX_TILES_PER_CALL)
@@ -257,7 +267,7 @@ class ProbeModule:
             D[s:e] = unpack_d(rd)
         return D
 
-    def dense(self, A, B, C, order) -> np.ndarray:
+    def dense(self, A: np.ndarray, B: np.ndarray, C: np.ndarray, order: Sequence[int]) -> np.ndarray:
         """``order``: the 32-column slices of A (n, 16, 32 len(order)) / B (n, 8, ...) the chain's atoms take, in order."""
         n, L, D = A.shape[0], len(order), np.zeros((A.shape[0], 16, 8), np.uint32)
         for s in range(0, n, MAX_TILES_PER_CALL):
@@ -277,7 +287,7 @@ class FakeProbeModule:
     """CPU stand-in (``--fake-silicon MODEL``): the sparse words are MODEL's, the dense twins the dense atom's model; a dry run,
     refused with ``RESEARCH_RUN_ID`` set."""
 
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str) -> None:
         models = candidates()
         if model_name not in models:
             raise SystemExit(f"--fake-silicon: {model_name!r} is not a candidate ({sorted(models)})")
@@ -287,17 +297,18 @@ class FakeProbeModule:
         return {"device": f"FAKE SILICON ({self.model_name})", "compute_capability": "fake", "driver": None, "gpu_uuid": "GPU-fake",
                 "backend": "fake", "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
-    def clocks(self, uuid):
+    def clocks(self, uuid: str | None) -> None:
         return None
 
     def set_launch(self, on: bool) -> int:
         return 0xA5
 
-    def sparse(self, As, B, META, C, meta_reading: str, b_reading: str) -> np.ndarray:
+    def sparse(self, As: np.ndarray, B: np.ndarray, META: np.ndarray, C: np.ndarray, meta_reading: str,
+               b_reading: str) -> np.ndarray:
         words, errs = model_words({self.model_name: candidates()[self.model_name]}, As, META, B, C)
         return np.where(errs[self.model_name], np.uint32(0x7FFFFFFF), words[self.model_name])
 
-    def dense(self, A, B, C, order) -> np.ndarray:
+    def dense(self, A: np.ndarray, B: np.ndarray, C: np.ndarray, order: Sequence[int]) -> np.ndarray:
         dense = k32.GroupSumCandidate("dense", "e4m3", "e4m3", (32,), 26, -133)
         n, D = A.shape[0], np.asarray(C, np.uint32).copy()
         Al, Bl = A.tolist(), B.tolist()
@@ -313,7 +324,7 @@ class FakeProbeModule:
 # --- the layout check ------------------------------------------------------------------------------------------------------------
 
 
-def layout_check(dev, debug_dir: Path | None) -> dict:
+def layout_check(dev: ProbeModule | FakeProbeModule, debug_dir: Path | None) -> dict:
     """Exact integer tiles (every sum exact in FP32): the sparse packing that reproduces C + A.B on every word, and the dense chain."""
     rng = np.random.default_rng(1)
     n = 64
@@ -343,22 +354,23 @@ def layout_check(dev, debug_dir: Path | None) -> dict:
 # --- families --------------------------------------------------------------------------------------------------------------------
 
 
-def families(seed: int, n_random: int, fixed_mult: int = 1):
+def families(seed: int, n_random: int,
+             fixed_mult: int = 1) -> Iterator[tuple[str, np.ndarray, np.ndarray, np.ndarray, np.ndarray, bool]]:
     """Yield (name, As (n,16,32) stored E4M3 codes, META (n,16,16), B (n,8,64), C (n,16,8), shared).  ``shared``: the tile's rows
     share one metadata row (so one dense atom on the compressed operands is its twin).  ``fixed_mult`` multiplies ``signed_zero``."""
     rng = np.random.default_rng(seed)
 
-    def codes(shape, nonzero=False):
+    def codes(shape: int | tuple[int, ...], nonzero: bool = False) -> np.ndarray:
         return k32._codes(rng, "e4m3", shape, nonzero)
 
-    def meta(n, shared=False):
+    def meta(n: int, shared: bool = False) -> np.ndarray:
         m = META_VALID[rng.integers(0, len(META_VALID), (n, 1 if shared else 16, GROUPS))]
         return np.repeat(m, 16, axis=1) if shared else m
 
-    def acc_random(n, lo=-30, hi=40):
+    def acc_random(n: int, lo: int = -30, hi: int = 40) -> np.ndarray:
         return k32._f32((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(lo, hi, (n, 16, 8)))).astype(np.float32))
 
-    def zeros(n):
+    def zeros(n: int) -> np.ndarray:
         return np.zeros((n, 16, 8), np.uint32)
 
     n = n_random // 2
@@ -433,7 +445,7 @@ def families(seed: int, n_random: int, fixed_mult: int = 1):
     yield "signed_zero", As, meta(n), B, C, False
 
 
-def twins(As, M, B, C, shared: bool) -> dict:
+def twins(As: np.ndarray, M: np.ndarray, B: np.ndarray, C: np.ndarray, shared: bool) -> dict:
     """label -> (A, B, C, order) for the dense chain on the same operands."""
     A = expand(As, M)
     out = {"dense_two_atoms": (A, B, C, (0, 1)), "dense_two_atoms_swapped": (A, B, C, (1, 0))}
@@ -452,7 +464,7 @@ def sass_gate(sass: dict) -> tuple[dict, list[str]]:
     return {k: (r or {}).get("opcodes") for k, r in mine.items()}, bad
 
 
-def operands_sha256(*arrays) -> str:
+def operands_sha256(*arrays: np.ndarray) -> str:
     h = hashlib.sha256()
     for a in arrays:
         h.update(np.ascontiguousarray(a).tobytes())
@@ -475,7 +487,7 @@ def _save(path: Path, D: np.ndarray) -> str:
 # --- capture (a fill chunk) ------------------------------------------------------------------------------------------------------
 
 
-def capture(args) -> int:
+def capture(args: argparse.Namespace) -> int:
     t_all = time.time()
     root = Path(os.path.expandvars(args.out))
     root.mkdir(parents=True, exist_ok=True)
@@ -552,7 +564,8 @@ def capture(args) -> int:
 # --- verify (CPU) ----------------------------------------------------------------------------------------------------------------
 
 
-def _first(mask, As, M, B, C, D, other, n=5) -> list:
+def _first(mask: np.ndarray, As: np.ndarray, M: np.ndarray, B: np.ndarray, C: np.ndarray, D: np.ndarray,
+           other: np.ndarray, n: int = 5) -> list:
     out = []
     for t, i, j in list(zip(*np.nonzero(mask)))[:n]:
         out.append({"tile": int(t), "i": int(i), "j": int(j), "acc": f"{int(C[t, i, j]):08x}", "sparse": f"{int(D[t, i, j]):08x}",
@@ -561,7 +574,7 @@ def _first(mask, As, M, B, C, D, other, n=5) -> list:
     return out
 
 
-def verify(args) -> int:
+def verify(args: argparse.Namespace) -> int:
     t_all = time.time()
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)

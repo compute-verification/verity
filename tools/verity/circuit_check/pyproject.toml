@@ -55,7 +55,7 @@ worker_gb = 8
 # sidecar anywhere else is read outside these and fails the guard), and the modules they import. Test-only:
 # test_sampled_replay.py (test_circuit_check.py's request Program), with verity_vllm/records, which its replay modules import.
 # verity_vllm/engine/spec.py: what the package's lazy `EngineSpec` (in its `__all__`) imports when a session fixture resolves
-# the package's names. verity_vllm/engine/__init__.py and served_seed.py: program/predict/seed_rule.py's sidecar builds the
+# the package's names. verity_vllm/engine/__init__.py and served_seed.py: program/frontend/seed_rule.py's sidecar builds the
 # served seed rule, whose domain tag and derivation are served_seed's.
 # Read only to check the catalog's records (conftest.py):
 # pouw/window.py and spot/service.py, which the records digest as import sites of the PoUW modules they hold

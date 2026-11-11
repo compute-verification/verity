@@ -71,7 +71,7 @@ def case_of(d: Path) -> dict:
     attn = next(k for k, v in sorted(names.items()) if "[t=" in v)
     return {"trace": f"{'int8' if target.get('int8_exact') else 'bf16'}-{d.name.removeprefix('build_request_')}",
             "model": r["model_pin"]["model"], "revision": r["model_pin"]["revision"], "target": target,
-            "sampling": {"kind": "greedy"} if s["kind"] == "greedy" else {k: s[k] for k in ("kind", "temperature", "top_p", "top_k", "seeded", "splits")},
+            "sampling": {"kind": "greedy"} if s["kind"] == "greedy" else {k: s[k] for k in ("kind", "temperature", "top_p", "top_k", "seeded", "splits", "rid") if k in s},
             "LP": r["LP"], "T": r["T"], "C": r.get("C") or 0, "digest": r["program"]["digest"],
             "names": {str(k): names[k] for k in (0, attn, max(names))},
             "pins": pins(names, inst["params"], ann["correspondence"], json.loads(pc.read_text()) if pc.exists() else None),

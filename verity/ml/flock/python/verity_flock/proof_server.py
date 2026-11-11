@@ -7,8 +7,9 @@
   types. A prover loads each circuit and builds each population's statement once, and its witness pipeline, statement
   cache and ``FC_VERIFY_AHEAD`` (``verify_ahead``, default 2) span every statement it proves. Provers that share the node
   (more than one in all, ``devices`` × ``provers``) split its threads evenly: each one's ``RAYON_NUM_THREADS`` is its share
-  of the server's (the server's own ``RAYON_NUM_THREADS``, else the CPUs it may run on), so each sizes its work, its host
-  witness's lane groups a pass among it, for the cores it has rather than for every core.
+  of the server's (the server's own ``RAYON_NUM_THREADS``, else rayon's default: the CPUs it may run on, within its cgroup's
+  CPU quota), so each sizes its work, its host witness's lane groups a pass among it, for the cores it has rather than for
+  every core.
 * **Verifiers.** One a type and prover: `serve --zk --queue -`, its circuit loaded once, each session's public file and
   sample taken from the line `submit` writes for it, its record filed under the session's ``out`` (else the verifier's own
   directory). A verifier serves its queue in the order its connections arrive, so it takes one prover's sessions, and
@@ -115,11 +116,58 @@ class Session:
             self._judged.set()
 
 
+#: Where `_quota` reads the process's cgroup (``proc/self/cgroup``) and the cgroup filesystem (``sys/fs/cgroup``).
+_ROOT = Path("/")
+
+
 def _threads(env: Mapping[str, str]) -> int:
-    """The threads a server's provers share: ``RAYON_NUM_THREADS`` in its environment, which rayon takes when it is a
-    positive count, else the CPUs this process may run on, rayon's own default."""
+    """The threads a server's provers share, as rayon sizes its pool: ``RAYON_NUM_THREADS`` in the server's environment
+    when it is a positive count, else rayon's default, Rust's `available_parallelism`: the CPUs this process may run on
+    (its affinity), at most its cgroups' CPU quota (`_quota`)."""
     v = env.get("RAYON_NUM_THREADS", "")
-    return int(v) if v.isdigit() and int(v) > 0 else len(os.sched_getaffinity(0))
+    if v.isdigit() and int(v) > 0:
+        return int(v)
+    n, q = len(os.sched_getaffinity(0)), _quota(_ROOT)
+    return n if q is None else min(n, q)
+
+
+def _quota(root: Path) -> int | None:
+    """The whole CPUs this process's cgroups allow, as Rust's `available_parallelism` reads them: the least quota over
+    period, rounded down, of its own cgroup (``/proc/self/cgroup``; a v1 line with the cpu controller over the v2 line)
+    and each one above it, from ``cpu.max`` (v2) or ``cpu.cfs_quota_us`` and ``cpu.cfs_period_us`` (v1, at the standard
+    mounts ``cpu`` and ``cpu,cpuacct`` only, not Rust's search of other mounts); at least one, and None where no cgroup
+    sets one. A cgroup without the file sets none; a file that is there but doesn't parse raises, where Rust skips it."""
+    cgroup = root / "proc/self/cgroup"
+    if not cgroup.is_file():
+        return None
+    own = None
+    for f in (line.split(":", 2) for line in cgroup.read_text().splitlines()):
+        if len(f) == 3 and (f[1] == "" and own is None or "cpu" in f[1].split(",")):
+            own = (f[1] == "", f[2].lstrip("/"))
+    if own is None:
+        return None
+    v2, path = own
+    cg = root / "sys/fs/cgroup"
+    if v2:
+        mounts = [cg] if (cg / path / "cgroup.controllers").exists() else []
+    else:
+        mounts = [cg / "cpu", cg / "cpu,cpuacct"]
+    mount = next((m for m in mounts if (m / path).is_dir()), None)
+    if mount is None:
+        return None
+    quotas = []
+    for d in [mount / path, *(mount / path).parents]:
+        if d != mount and mount not in d.parents:
+            break
+        if v2 and (d / "cpu.max").is_file():
+            q, p = (d / "cpu.max").read_text().split()[:2]
+            if q != "max":
+                quotas.append(int(q) // int(p))
+        elif not v2 and (d / "cpu.cfs_quota_us").is_file():
+            q, p = (int((d / f"cpu.cfs_{k}_us").read_text()) for k in ("quota", "period"))
+            if q >= 0:
+                quotas.append(q // p)
+    return max(1, min(quotas)) if quotas else None
 
 
 class _Process:

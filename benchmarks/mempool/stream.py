@@ -1,5 +1,5 @@
 """`CacheStep_v3`'s specification (`verity.ml.protocols.certifier.cache_step_v3.Stream`) held to the RAM pool (`pool_ram`,
-itself held to vLLM's `_KV`) after every pool call, over the encodings' traces and synthetic ones: the two pools' states
+itself held to vLLM's `BlockPool`) after every pool call, over the encodings' traces and synthetic ones: the two pools' states
 agree (but for the memo's stamps, which the RAM pool doesn't have), and so do each call's results, every memoized hit's
 among them. The stream is cut into windows of about ``--window`` slots, the pool carried from one to the next, and each
 window passes its memory check (R = W, every read's t below its now). ``--vectors`` writes each trace's first windows

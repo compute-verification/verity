@@ -35,14 +35,21 @@ import platform
 import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "tools" / "config"))
-import f8_model as FM  # noqa: E402
 from verity_config.settings import SHARED  # noqa: E402
+
+import f8_model as FM  # noqa: E402
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
+
+    from verity.ml.circuits.silicon.term import Format
 
 M_T, N_T, K_STEP = 128, 32, 32
 SEED = 20261019
@@ -66,7 +73,7 @@ RECORD_ONLY = {"specials"}
 # --- formats ---------------------------------------------------------------------------------------------------------------
 
 
-def _fmt_info(fmt: str):
+def _fmt_info(fmt: str) -> tuple[Format, np.ndarray, np.ndarray]:
     F = FM.FORMATS[fmt]
     vals = np.full(256, np.nan)
     finite = np.zeros(256, bool)
@@ -87,20 +94,20 @@ def finite_codes(fmt: str) -> np.ndarray:
     return np.flatnonzero(INFO[fmt][2]).astype(np.uint8)
 
 
-def codes(rng, fmt: str, shape, nonzero: bool = False) -> np.ndarray:
+def codes(rng: np.random.Generator, fmt: str, shape: tuple[int, ...], nonzero: bool = False) -> np.ndarray:
     pool = finite_codes(fmt)
     if nonzero:
         pool = pool[(pool & 0x7F) != 0]
     return pool[rng.integers(0, len(pool), shape)]
 
 
-def code_of(fmt: str, sign, e_field, mant) -> np.ndarray:
+def code_of(fmt: str, sign: ArrayLike, e_field: ArrayLike, mant: ArrayLike) -> np.ndarray:
     F = FM.FORMATS[fmt]
     c = (np.asarray(sign, np.int64) << 7) | (np.asarray(e_field, np.int64) << F.man_bits) | np.asarray(mant, np.int64)
     return c.astype(np.uint8)
 
 
-def value(fmt: str, c) -> np.ndarray:
+def value(fmt: str, c: ArrayLike) -> np.ndarray:
     return INFO[fmt][1][np.asarray(c, np.int64)]
 
 
@@ -108,11 +115,11 @@ def max_e_field(fmt: str) -> int:
     return 15 if fmt == "e4m3" else 30
 
 
-def f32(x) -> np.ndarray:
+def f32(x: ArrayLike) -> np.ndarray:
     return np.asarray(x, dtype=np.float32).view(np.uint32)
 
 
-def acc_near(rng, p: np.ndarray, d_lo: int, d_hi: int) -> np.ndarray:
+def acc_near(rng: np.random.Generator, p: np.ndarray, d_lo: int, d_hi: int) -> np.ndarray:
     """FP32 words +-(1.f) 2^(floor(log2|p|) + d), d uniform in [d_lo, d_hi], mantissa 0 / all ones / random in thirds."""
     lp = np.floor(np.log2(np.where(p == 0, 1.0, np.abs(p)))).astype(np.int64)
     e = np.clip(lp + rng.integers(d_lo, d_hi + 1, p.shape) + 127, 1, 254).astype(np.uint32)
@@ -122,14 +129,14 @@ def acc_near(rng, p: np.ndarray, d_lo: int, d_hi: int) -> np.ndarray:
     return (s << 31) | (e << 23) | f
 
 
-def uniform_acc(rng, shape, e_lo: int = 0, e_hi: int = 254) -> np.ndarray:
+def uniform_acc(rng: np.random.Generator, shape: tuple[int, ...], e_lo: int = 0, e_hi: int = 254) -> np.ndarray:
     e = rng.integers(e_lo, e_hi + 1, shape).astype(np.uint32)
     m = rng.integers(0, 1 << 23, shape).astype(np.uint32)
     s = rng.integers(0, 2, shape).astype(np.uint32)
     return (s << 31) | (e << 23) | m
 
 
-def acc_random(rng, shape, lo=-30, hi=40) -> np.ndarray:
+def acc_random(rng: np.random.Generator, shape: tuple[int, ...], lo: int = -30, hi: int = 40) -> np.ndarray:
     return f32(rng.standard_normal(shape) * np.exp2(rng.integers(lo, hi, shape)))
 
 
@@ -140,7 +147,7 @@ class Tiles(dict):
     """A family's arrays: A (n,128,32S) u8, B (n,32,32S) u8, SFA (n,128,S) u8, SFB (n,32,S) u8, C (n,128,32) u32, EN (n,) u8."""
 
 
-def blank(n: int, steps: int = 1, scaled: bool = False, rng=None) -> Tiles:
+def blank(n: int, steps: int = 1, scaled: bool = False, rng: np.random.Generator | None = None) -> Tiles:
     K = K_STEP * steps
     t = Tiles(A=np.zeros((n, M_T, K), np.uint8), B=np.zeros((n, N_T, K), np.uint8),
               SFA=np.full((n, M_T, steps), 127, np.uint8), SFB=np.full((n, N_T, steps), 127, np.uint8),
@@ -165,28 +172,28 @@ def prod_max(t: Tiles, fa: str, fb: str, s: int = 0) -> np.ndarray:
     return pm * sa[:, :, None] * sb[:, None, :]
 
 
-def _pmax_loop(pa, pb):
+def _pmax_loop(pa: np.ndarray, pb: np.ndarray) -> np.ndarray:
     out = np.zeros((pa.shape[0], M_T, N_T))
     for i in range(0, pa.shape[0], 64):
         out[i:i + 64] = np.einsum("nik,njk->nijk", pa[i:i + 64], pb[i:i + 64]).max(-1)
     return out
 
 
-def fam_random_zero_acc(rng, n, fa, fb, scaled):
+def fam_random_zero_acc(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = blank(n, scaled=scaled, rng=rng)
     t["A"], t["B"] = codes(rng, fa, t["A"].shape), codes(rng, fb, t["B"].shape)
     t["C"][n // 2:] = 0x80000000
     return t
 
 
-def fam_random_random_acc(rng, n, fa, fb, scaled):
+def fam_random_random_acc(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = blank(n, scaled=scaled, rng=rng)
     t["A"], t["B"] = codes(rng, fa, t["A"].shape), codes(rng, fb, t["B"].shape)
     t["C"] = acc_near(rng, prod_max(t, fa, fb), -30, 30)
     return t
 
 
-def fam_uniform_bits(rng, n, fa, fb, scaled):
+def fam_uniform_bits(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = blank(n, scaled=scaled, rng=rng)
     t["A"], t["B"] = codes(rng, fa, t["A"].shape), codes(rng, fb, t["B"].shape)
     if scaled:
@@ -199,7 +206,7 @@ def fam_uniform_bits(rng, n, fa, fb, scaled):
     return t
 
 
-def _one_hot(rng, t, fa, fb, nprod):
+def _one_hot(rng: np.random.Generator, t: Tiles, fa: str, fb: str, nprod: int) -> None:
     n = t["A"].shape[0]
     ks = np.stack([rng.permutation(K_STEP)[:nprod] for _ in range(n * M_T)]).reshape(n, M_T, nprod)
     for j in range(nprod):
@@ -207,14 +214,14 @@ def _one_hot(rng, t, fa, fb, nprod):
     t["B"] = codes(rng, fb, t["B"].shape, nonzero=True)
 
 
-def fam_acc_walk(rng, n, fa, fb, scaled):
+def fam_acc_walk(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = blank(n, scaled=scaled, rng=rng)
     _one_hot(rng, t, fa, fb, 1)
     t["C"] = acc_near(rng, prod_max(t, fa, fb), -45, 30)
     return t
 
 
-def fam_two_product_walk(rng, n, fa, fb, scaled):
+def fam_two_product_walk(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = blank(n, scaled=scaled, rng=rng)
     _one_hot(rng, t, fa, fb, 2)
     t["C"] = acc_near(rng, prod_max(t, fa, fb), -40, 10)
@@ -222,7 +229,7 @@ def fam_two_product_walk(rng, n, fa, fb, scaled):
     return t
 
 
-def fam_spread(rng, n, fa, fb, scaled):
+def fam_spread(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     """Largest-exponent spread: each row's top code at k0, the others 0..(range) binades below it; B random nonzero."""
     t = blank(n, scaled=scaled, rng=rng)
     F = FM.FORMATS[fa]
@@ -244,7 +251,7 @@ def fam_spread(rng, n, fa, fb, scaled):
     return t
 
 
-def fam_cancellation(rng, n, fa, fb, scaled):
+def fam_cancellation(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = blank(n, scaled=scaled, rng=rng)
     A = codes(rng, fa, (n, M_T, 16), nonzero=True)
     B = codes(rng, fb, (n, N_T, 16), nonzero=True)
@@ -270,11 +277,11 @@ def fam_cancellation(rng, n, fa, fb, scaled):
     return t
 
 
-def fam_subnormal_operands(rng, n, fa, fb, scaled):
+def fam_subnormal_operands(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = blank(n, scaled=scaled, rng=rng)
     Fa, Fb = FM.FORMATS[fa], FM.FORMATS[fb]
 
-    def low(fmt, F, shape):
+    def low(fmt: str, F: Format, shape: tuple[int, ...]) -> np.ndarray:
         e = np.where(rng.random(shape) < 0.6, 0, rng.integers(1, 3, shape))
         c = code_of(fmt, rng.integers(0, 2, shape), e, rng.integers(0, 1 << F.man_bits, shape))
         mix = rng.random(shape) < 0.25
@@ -287,7 +294,7 @@ def fam_subnormal_operands(rng, n, fa, fb, scaled):
     return t
 
 
-def fam_acc_only(rng, n, fa, fb, scaled):
+def fam_acc_only(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     """Zero products (A codes +-0) against every FP32 accumulator class: subnormal, tiny normal, uniform, LSB patterns."""
     t = blank(n, scaled=scaled, rng=rng)
     t["A"] = np.where(rng.random(t["A"].shape) < 0.5, 0, 0x80).astype(np.uint8)
@@ -301,7 +308,7 @@ def fam_acc_only(rng, n, fa, fb, scaled):
     return t
 
 
-def fam_tiny_acc_products(rng, n, fa, fb, scaled):
+def fam_tiny_acc_products(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = blank(n, scaled=scaled, rng=rng)
     t["A"], t["B"] = codes(rng, fa, t["A"].shape), codes(rng, fb, t["B"].shape)
     sparse = rng.random(t["A"].shape) < 0.9
@@ -310,7 +317,7 @@ def fam_tiny_acc_products(rng, n, fa, fb, scaled):
     return t
 
 
-def fam_signed_zero(rng, n, fa, fb, scaled):
+def fam_signed_zero(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = blank(n, scaled=scaled, rng=rng)
     t["A"] = np.where(rng.random(t["A"].shape) < 0.5, 0, 0x80).astype(np.uint8)
     t["B"] = codes(rng, fb, t["B"].shape)
@@ -326,14 +333,14 @@ def fam_signed_zero(rng, n, fa, fb, scaled):
     return t
 
 
-def fam_enable0(rng, n, fa, fb, scaled):
+def fam_enable0(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = fam_random_random_acc(rng, n, fa, fb, scaled)
     t["C"] = uniform_acc(rng, t["C"].shape)
     t["EN"][:] = 0
     return t
 
 
-def _chain(rng, n, fa, fb, scaled, steps):
+def _chain(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool, steps: int) -> Tiles:
     t = blank(n, steps, scaled=scaled, rng=rng)
     t["A"], t["B"] = codes(rng, fa, t["A"].shape), codes(rng, fb, t["B"].shape)
     h = n // 2
@@ -348,19 +355,19 @@ def _chain(rng, n, fa, fb, scaled, steps):
     return t
 
 
-def fam_chain2(rng, n, fa, fb, scaled):
+def fam_chain2(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     return _chain(rng, n, fa, fb, scaled, 2)
 
 
-def fam_chain4(rng, n, fa, fb, scaled):
+def fam_chain4(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     return _chain(rng, n, fa, fb, scaled, 4)
 
 
-def fam_chain8(rng, n, fa, fb, scaled):
+def fam_chain8(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     return _chain(rng, n, fa, fb, scaled, 8)
 
 
-def fam_specials(rng, n, fa, fb, scaled):
+def fam_specials(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = blank(n, scaled=scaled, rng=rng)
     t["A"], t["B"] = codes(rng, fa, t["A"].shape), codes(rng, fb, t["B"].shape)
     nan_a = (0x7F, 0xFF) if fa == "e4m3" else (0x7C, 0xFC, 0x7D, 0xFE)
@@ -376,7 +383,7 @@ def fam_specials(rng, n, fa, fb, scaled):
     return t
 
 
-def fam_scale_sweep(rng, n, fa, fb, scaled):
+def fam_scale_sweep(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = blank(n, scaled=True, rng=rng)
     t["A"], t["B"] = codes(rng, fa, t["A"].shape), codes(rng, fb, t["B"].shape)
     sa = ((np.arange(n)[:, None] * M_T + np.arange(M_T)[None, :]) % 255).astype(np.int64)
@@ -389,7 +396,7 @@ def fam_scale_sweep(rng, n, fa, fb, scaled):
     return t
 
 
-def fam_scale_extremes(rng, n, fa, fb, scaled):
+def fam_scale_extremes(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     """Products pushed toward 2^-254: sums below the subnormal grid, the adder's floor, subnormal accumulators."""
     t = blank(n, scaled=True, rng=rng)
     t["A"], t["B"] = codes(rng, fa, t["A"].shape), codes(rng, fb, t["B"].shape)
@@ -403,7 +410,7 @@ def fam_scale_extremes(rng, n, fa, fb, scaled):
     return t
 
 
-def fam_scale_floor_walk(rng, n, fa, fb, scaled):
+def fam_scale_floor_walk(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     """One product per output, its scale pair walked so the product's exponent sweeps -180..-110, against +0 / subnormal acc."""
     t = blank(n, scaled=True, rng=rng)
     _one_hot(rng, t, fa, fb, 1)
@@ -421,7 +428,7 @@ def fam_scale_floor_walk(rng, n, fa, fb, scaled):
     return t
 
 
-def pow2_code(fmt: str, p) -> np.ndarray:
+def pow2_code(fmt: str, p: ArrayLike) -> np.ndarray:
     """The code of +2^p (subnormal codes below the normal range), p in [min subnormal, max power of two]."""
     F = FM.FORMATS[fmt]
     p = np.asarray(p, np.int64)
@@ -436,7 +443,7 @@ def pow2_range(fmt: str) -> tuple[int, int]:
     return 1 - F.bias - F.man_bits, max_e_field(fmt) - F.bias
 
 
-def fam_scale_floor_probe(rng, n, fa, fb, scaled):
+def fam_scale_floor_probe(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     """The adder's floor: products only (acc +-0), n_i equal powers of two 2^m (m = p_i + s, the top exponent, swept
     -165..-110) against one tiny product of the opposite sign 2^(m - d).  The tiny one moves the RZ result down one 2^-149 step
     iff it is kept, which is iff m - d >= max(m, floor) - (width - 1): the floor shows where the threshold stops following m."""
@@ -466,7 +473,7 @@ def fam_scale_floor_probe(rng, n, fa, fb, scaled):
     return t
 
 
-def fam_scale_overflow(rng, n, fa, fb, scaled):
+def fam_scale_overflow(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = blank(n, scaled=True, rng=rng)
     t["A"], t["B"] = codes(rng, fa, t["A"].shape), codes(rng, fb, t["B"].shape)
     t["SFA"] = rng.integers(200, 255, t["SFA"].shape).astype(np.uint8)
@@ -476,7 +483,7 @@ def fam_scale_overflow(rng, n, fa, fb, scaled):
     return t
 
 
-def fam_scale_random(rng, n, fa, fb, scaled):
+def fam_scale_random(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = blank(n, scaled=True, rng=rng)
     t["A"], t["B"] = codes(rng, fa, t["A"].shape), codes(rng, fb, t["B"].shape)
     t["SFA"] = rng.integers(60, 200, t["SFA"].shape).astype(np.uint8)
@@ -511,7 +518,7 @@ FAMILIES = {
 }
 
 
-def fam_bulk(rng, n, fa, fb, scaled):
+def fam_bulk(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool) -> Tiles:
     t = blank(n, scaled=scaled, rng=rng)
     t["A"], t["B"] = codes(rng, fa, t["A"].shape), codes(rng, fb, t["B"].shape)
     if scaled:
@@ -535,7 +542,7 @@ def _path(scratch: Path, kind: str, fam: str) -> Path:
     return scratch / f"{kind}__{fam}"
 
 
-def save_set(scratch: Path, kind: str, fam: str, t) -> None:
+def save_set(scratch: Path, kind: str, fam: str, t: Tiles) -> None:
     d = _path(scratch, kind, fam)
     d.mkdir(parents=True, exist_ok=True)
     for k in ARRAYS:
@@ -553,7 +560,7 @@ def load_set(scratch: Path, kind: str, fam: str) -> dict:
     return z
 
 
-def gen(args) -> int:
+def gen(args: argparse.Namespace) -> int:
     scratch = Path(args.scratch)
     scratch.mkdir(parents=True, exist_ok=True)
     plan = []
@@ -582,7 +589,7 @@ def gen(args) -> int:
 
 
 class Lib:
-    def __init__(self, path: str):
+    def __init__(self, path: str) -> None:
         self.lib = ctypes.CDLL(path)
         f = self.lib.tcgen05_f8_tiles
         f.restype = ctypes.c_int
@@ -596,7 +603,7 @@ class Lib:
         rc = self.lib.device_identity(ctypes.byref(major), ctypes.byref(minor), name, 256)
         return {"rc": rc, "cc": f"{major.value}.{minor.value}", "name": name.value.decode()}
 
-    def run(self, kind: str, t, batch: int = 2048) -> np.ndarray:
+    def run(self, kind: str, t: Tiles, batch: int = 2048) -> np.ndarray:
         kk, fa, fb = KINDS[kind]
         idesc = self.lib.tcgen05_f8_idesc(kk, FM.IDESC_FORMAT[fa], FM.IDESC_FORMAT[fb])
         n, steps = t["A"].shape[0], int(t["steps"])
@@ -612,7 +619,7 @@ class Lib:
         return D
 
 
-def _small_ints(rng, fmt, shape):
+def _small_ints(rng: np.random.Generator, fmt: str, shape: int | tuple[int, ...]) -> tuple[np.ndarray, np.ndarray]:
     vals = {"e4m3": {0: 0, 1: 0x38, 2: 0x40, 3: 0x44, 4: 0x48, 6: 0x4C, 8: 0x50},
             "e5m2": {0: 0, 1: 0x3C, 2: 0x40, 3: 0x42, 4: 0x44, 6: 0x46, 8: 0x48}}[fmt]
     keys = np.array(sorted(vals))
@@ -624,7 +631,7 @@ def _small_ints(rng, fmt, shape):
     return v.astype(np.float64), c.astype(np.uint8)
 
 
-def layout_gate(lib: Lib, rng) -> dict:
+def layout_gate(lib: Lib, rng: np.random.Generator) -> dict:
     """Small exact integers (and for mxf8f6f4 scales 2^-2..2^2): every output must equal the exact A.B + C, for each kind at
     steps 1, 2 and 8.  This catches a misrouted row, column, K chunk, step or scale before any capture is believed."""
     out = {}
@@ -653,7 +660,7 @@ def layout_gate(lib: Lib, rng) -> dict:
     return out
 
 
-def capture(args, lib=None) -> int:
+def capture(args: argparse.Namespace, lib: Lib | None = None) -> int:
     scratch, out = Path(args.scratch), Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     lib = lib or Lib(args.lib)
@@ -684,7 +691,7 @@ def capture(args, lib=None) -> int:
 # --- eval ---------------------------------------------------------------------------------------------------------------
 
 
-def expand(z: dict, i: int, j: int):
+def expand(z: dict, i: int, j: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Tiles i..j -> per-output arrays: c (n,), a (n, K), b (n, K), sa (n, S), sb (n, S), en (n,)."""
     A, B = z["A"][i:j], z["B"][i:j]
     nt, K = A.shape[0], A.shape[2]
@@ -698,7 +705,7 @@ def expand(z: dict, i: int, j: int):
     return c, a, b, sa, sb, en
 
 
-def _eval_job(job):
+def _eval_job(job: tuple[Path, str, str, int, int, list[str]]) -> tuple[str, str, dict]:
     scratch, kind, fam, i, j, names = job
     kk, fa, fb = KINDS[kind]
     z = load_set(scratch, kind, fam)
@@ -727,7 +734,7 @@ def _eval_job(job):
     return kind, fam, res
 
 
-def _merge(acc, res):
+def _merge(acc: dict, res: dict) -> dict:
     if not acc:
         return res
     for k in ("outputs", "unwritten", "neg_zero", "subnormal", "inf", "nan", "asserted"):
@@ -740,7 +747,7 @@ def _merge(acc, res):
     return acc
 
 
-def fixture_records(scratch: Path, kind: str, fam: str, rng, per: int) -> list[dict]:
+def fixture_records(scratch: Path, kind: str, fam: str, rng: np.random.Generator, per: int) -> list[dict]:
     z = load_set(scratch, kind, fam)
     D = z["D"]
     nt = z["A"].shape[0]
@@ -755,7 +762,7 @@ def fixture_records(scratch: Path, kind: str, fam: str, rng, per: int) -> list[d
     return recs
 
 
-def evaluate(args) -> int:
+def evaluate(args: argparse.Namespace) -> int:
     scratch, out = Path(args.scratch), Path(args.out)
     plan = json.loads((scratch / "plan.json").read_text())
     plan["families"] = [p for p in plan["families"] if (_path(scratch, p["kind"], p["family"]) / "D.npy").exists()]
@@ -826,7 +833,7 @@ def replay(rec: dict, cand: "FM.Candidate") -> tuple[int, bool]:
     return int(w[0]), bool(d[0])
 
 
-def pin(args) -> int:
+def pin(args: argparse.Namespace) -> int:
     src = Path(args.run_out)
     summary = json.loads((src / "summary.json").read_text())
     uniform_recs = json.loads((src / "fixture.json").read_text())["records"]
@@ -874,7 +881,7 @@ def pin(args) -> int:
     return 0
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("phase", choices=("gen", "capture", "eval", "pin"))
     ap.add_argument("--scratch")

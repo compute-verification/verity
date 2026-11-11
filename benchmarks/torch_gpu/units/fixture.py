@@ -33,11 +33,14 @@ import multiprocessing as mp
 import os
 import sys
 import time
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+from verity_config.settings import of  # noqa: E402
+
 import add as AD  # noqa: E402
 import argmax as AM  # noqa: E402
 import quant as Q  # noqa: E402
@@ -46,7 +49,13 @@ import rmsnorm as RN  # noqa: E402
 import softmax as SM  # noqa: E402
 import sweep as SW  # noqa: E402
 import words as W  # noqa: E402
-from verity_config.settings import of  # noqa: E402
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from types import ModuleType
+    from typing import Any
+
+    from numpy.typing import ArrayLike
 
 settings = of(__file__)
 SEED = 20261026
@@ -65,32 +74,32 @@ ADD_N = 16384
 ADD_KINDS = ("normal", "cancel", "scaled", "tiny", "huge", "specials", "uniform")
 
 
-def bf16(v) -> np.ndarray:
+def bf16(v: ArrayLike) -> np.ndarray:
     """Finite float32 values rounded to bf16 words (nearest, ties to even; overflow to infinity)."""
     u = np.asarray(v, np.float32).view(np.uint32).astype(np.uint64)
     return (((u + 0x7FFF + ((u >> 16) & 1)) >> 16) & 0xFFFF).astype(np.uint16)
 
 
-def sprinkle(rng, a: np.ndarray, p: float, pool: np.ndarray = SPECIALS) -> np.ndarray:
+def sprinkle(rng: np.random.Generator, a: np.ndarray, p: float, pool: np.ndarray = SPECIALS) -> np.ndarray:
     hit = rng.random(a.shape) < p
     a = a.copy()
     a[hit] = rng.choice(pool, int(hit.sum()))
     return a
 
 
-def words_with(rng, shape, exps) -> np.ndarray:
+def words_with(rng: np.random.Generator, shape: int | tuple[int, ...], exps: ArrayLike) -> np.ndarray:
     """Words of random sign and mantissa whose exponent fields are sampled from ``exps``."""
     e = rng.choice(np.asarray(exps), size=shape)
     return ((rng.integers(0, 2, size=shape) << 15) | (e << 7) | rng.integers(0, 128, size=shape)).astype(np.uint16)
 
 
-def uniform(rng, shape) -> np.ndarray:
+def uniform(rng: np.random.Generator, shape: int | tuple[int, ...]) -> np.ndarray:
     return rng.integers(0, 1 << 16, size=shape).astype(np.uint16)
 
 
 # ---- pools ----------------------------------------------------------------------------------------------------------------
 
-def rms_row(N: int, kind: str, rng) -> np.ndarray:
+def rms_row(N: int, kind: str, rng: np.random.Generator) -> np.ndarray:
     normal = rng.standard_normal(N).astype(np.float32)
     if kind == "normal":
         return bf16(normal)
@@ -128,7 +137,7 @@ def rms_pool(N: int) -> dict:
             "rs": t[0]["rs"], "kind": np.array(kinds)}
 
 
-def quant_row(N: int, kind: str, rng) -> np.ndarray:
+def quant_row(N: int, kind: str, rng: np.random.Generator) -> np.ndarray:
     normal = rng.standard_normal(N).astype(np.float32)
     if kind == "normal":
         return bf16(normal)
@@ -168,7 +177,7 @@ def quant_pool(N: int, relu: bool) -> dict:
     return {"x": x, **Q.twin(x, relu), "kind": np.array(kinds)}
 
 
-def sm_row(kind: str, rng) -> np.ndarray:
+def sm_row(kind: str, rng: np.random.Generator) -> np.ndarray:
     L = SM.LMAX
     normal = rng.standard_normal(L).astype(np.float32)
     if kind == "scores":
@@ -212,7 +221,7 @@ def sm_pool() -> dict:
             "kind": np.array(kinds)}
 
 
-def am_row(V: int, kind: str, rng) -> np.ndarray:
+def am_row(V: int, kind: str, rng: np.random.Generator) -> np.ndarray:
     normal = rng.standard_normal(V).astype(np.float32)
     if kind == "logits":
         return bf16(normal * 3)
@@ -267,7 +276,7 @@ def relu_pool() -> dict:
     return {"x": x, "y": RL.twin(x)}
 
 
-def add_rows(N: int, kind: str, rng) -> tuple[np.ndarray, np.ndarray]:
+def add_rows(N: int, kind: str, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
     a, b = rng.standard_normal(N).astype(np.float32), rng.standard_normal(N).astype(np.float32)
     if kind == "normal":
         return bf16(a), bf16(b * np.float32(rng.choice([1 / 64, 1, 64])))
@@ -301,7 +310,7 @@ def add_pool(N: int = ADD_N) -> dict:
 
 # ---- the replay cross-check -----------------------------------------------------------------------------------------------
 
-def load_replay(path: str):
+def load_replay(path: str) -> ModuleType:
     spec = importlib.util.spec_from_file_location("units_replay", path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules["units_replay"] = mod
@@ -309,20 +318,20 @@ def load_replay(path: str):
     return mod
 
 
-def _cmp(ref, got) -> list[int]:
+def _cmp(ref: ArrayLike, got: ArrayLike) -> list[int]:
     ref, got = np.asarray(ref).reshape(-1).astype(np.int64), np.asarray(got).reshape(-1).astype(np.int64)
     if ref.shape != got.shape:
         return [int(got.size), int(got.size)]
     return [int(got.size), int((ref != got).sum())]
 
 
-def _joined(R, half_of, *arrays) -> np.ndarray:
+def _joined(R: ModuleType, half_of: Callable[[int], Any], *arrays: np.ndarray) -> np.ndarray:
     """The 32-bit words whose two 16-bit halves the units ``half_of(0)`` and ``half_of(1)`` output."""
     lo, hi = (half_of(h).reference(*arrays)[:, 0] for h in (0, 1))
     return R.join16(lo, hi)
 
 
-def replay_rms(R, d: dict) -> dict:
+def replay_rms(R: ModuleType, d: dict) -> dict:
     x = d["x"]
     P, N = x.shape
     C, nc, G, ng = RN.forms(N)
@@ -334,7 +343,7 @@ def replay_rms(R, d: dict) -> dict:
             "out": _cmp(np.stack(out), d["out"])}
 
 
-def replay_quant(R, d: dict, relu: bool) -> dict:
+def replay_quant(R: ModuleType, d: dict, relu: bool) -> dict:
     x = d["x"]
     P, N = x.shape
     tree, level, first = [], x, True
@@ -349,7 +358,7 @@ def replay_quant(R, d: dict, relu: bool) -> dict:
     return {"tree": _cmp(np.concatenate(tree, 1), d["tree"]), "scale": _cmp(scale, d["scale"]), "codes": _cmp(codes, d["codes"])}
 
 
-def replay_softmax(R, d: dict) -> dict:
+def replay_softmax(R: ModuleType, d: dict) -> dict:
     x = d["x"]
     P, L = x.shape
     res = {"m": [0, 0], "r": [0, 0], "p": [0, 0]}
@@ -364,7 +373,7 @@ def replay_softmax(R, d: dict) -> dict:
     return res
 
 
-def replay_argmax(R, d: dict) -> dict:
+def replay_argmax(R: ModuleType, d: dict) -> dict:
     x = d["x"]
     P, V = x.shape
     C = min(AM.CHUNK, V)
@@ -380,7 +389,7 @@ def replay_argmax(R, d: dict) -> dict:
 ROWS = "verity.ml.circuits.ops.rows"
 
 
-def load_rows(path: str | None):
+def load_rows(path: str | None) -> tuple[ModuleType | None, str | None]:
     """`ops.rows` and where it came from: the installed module, else the file at ``path`` loaded in its place in
     `verity.ml.circuits.ops` (its relative imports read main's fp32, prims and scalar), else (None, None)."""
     try:
@@ -398,7 +407,7 @@ def load_rows(path: str | None):
     return mod, path
 
 
-def rows_check(Rw, am: dict, ad: dict) -> dict:
+def rows_check(Rw: ModuleType, am: dict, ad: dict) -> dict:
     res = {f"argmax {V}": {"token": _cmp([Rw.argmax(row.tolist()) for row in d["x"]], d["token"])} for V, d in am.items()}
     res["add"] = {"y": _cmp(np.stack([Rw.add_row(a.tolist(), b.tolist()) for a, b in zip(ad["a"], ad["b"])]), ad["y"])}
     return res

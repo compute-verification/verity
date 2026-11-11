@@ -9,6 +9,7 @@ from __future__ import annotations
 import functools
 import gc
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -60,15 +61,18 @@ def _ptypes(spec) -> tuple:
     return tuple(t for _, t in params)
 
 
-def with_checks(model, out: Coll, B=None, stop: dict | None = None) -> tuple[Coll, dict | None]:
+def with_checks(model, out: Coll, B=None, stop: dict | None = None, sampled: Sequence | None = None) -> tuple[Coll, dict | None]:
     """`out`, then `derive`'s checks output where the model made any (`model.checks`: (one bit, what it checks) each, which the
-    verifier requires to be 1) or a request's length rule follows them (`stop`: `frontend.stop_rule.check` over `out`, the next
-    Call of the Builder `B`), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks). Each is
-    refused unless a declared relation computes it (`program.inputs.check`)."""
+    verifier requires to be 1), a stochastic request's seed rule follows them (`sampled`: its sampler's seed, then its
+    `seed_rule.PARAMS` Inputs; `seed_rule.check`'s Calls next on the Builder `B`) and its length rule last (`stop`:
+    `frontend.stop_rule.check` over `out`), and what `derive`'s provenance says of them: the Program returns the tuple (out,
+    checks). Each is refused unless a declared relation computes it (`program.inputs.check`)."""
     from verity.ml.circuits.types import Tuple
     from verity_vllm.program import inputs
     from verity_vllm.program.frontend import stop_rule as SR
-    checks = [*(getattr(model, "checks", None) or ()), *([] if stop is None else [SR.check(B, out, stop)])]
+    from verity_vllm.program.frontend import seed_rule as SEED
+    checks = [*(getattr(model, "checks", None) or ()), *([] if sampled is None else [SEED.check(B, sampled[0], sampled[1:])]),
+              *([] if stop is None else [SR.check(B, out, stop)])]
     if not checks:
         return out, None
     for c, what in checks:

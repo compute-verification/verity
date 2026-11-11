@@ -36,8 +36,7 @@ def main(argv=None) -> None:
                     help="a request's tokens: the census's mean, or the workload card's request")
     ap.add_argument("--workers", type=int, default=os.cpu_count(), help="processes planning Figure 1's curves")
     ap.add_argument("--no-lean", dest="lean", action="store_false",
-                    help="plan Figure 1 without Lean's check of its one-stage and request-level designs and "
-                         "without the break-even's certificate")
+                    help="plan Figure 1 without Lean's check of its designs and without the break-even's certificate")
     args = ap.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
     from render import render, render_appendix

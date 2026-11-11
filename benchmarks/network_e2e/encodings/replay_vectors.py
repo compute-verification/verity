@@ -4,7 +4,7 @@
 with its scheduler instrumented, and returns each executed step as the step circuit sees it (under async scheduling a
 step is one schedule and the update of the step before it): the state after the step before
 (running, waiting, free blocks), the next A arrivals, the step's decisions, the prefix layer's counts (each candidate's
-hit and evictable blocks, as `_KV.hit` found them; each leaving request's returned blocks, as `_KV.free_request`
+hit and evictable blocks, as `BlockPool.hit` found them; each leaving request's returned blocks, as `BlockPool.free_request`
 freed them) and what the replay did (rows, next state, arrivals taken, decisions read). It also checks the one fact the
 circuit's state rests on, that a running request holds ⌈computed / B⌉ blocks.
 
@@ -12,7 +12,7 @@ circuit's state rests on, that a running request holds ⌈computed / B⌉ blocks
 
 checks `replay_step.reference` on every step that fits the size class (the rest are counted, out of class), and with
 `--circuit` the Definition on them too; with `--EW` each step's `looked` against the lookups the scheduler made (the
-candidates whose `_KV.hit` it called), which is what v1 sends a shortfall for past the pool bound; `--fixture N` writes each trace's N consecutive fitting steps with the most
+candidates whose `BlockPool.hit` it called), which is what v1 sends a shortfall for past the pool bound; `--fixture N` writes each trace's N consecutive fitting steps with the most
 preemptions, cache hits, admissions and stops (`window`) as the vectors the certifier's test reads
 (`verity/core/protocols/certifier/tests/fixtures/replay_step_vectors.json`).
 
@@ -54,19 +54,19 @@ class _Recorder:
         self.asked_pending = False
         self.in_schedule = False
         self.open: dict[str, Any] | None = None             # the unit not yet closed
-        self.hits: list[tuple[int, int, int]] = []          # (request, hit blocks, evictable) per `_KV.hit`
+        self.hits: list[tuple[int, int, int]] = []          # (request, hit blocks, evictable) per `BlockPool.hit`
         self.frees: dict[int, int] = {}                      # request -> blocks returned
         self.asked: list[int] = []                           # the step's decisions, in order
         self.units: list[dict[str, Any]] = []
 
-    def close(self, s: RP._Sched) -> None:
+    def close(self, s: RP.Scheduler) -> None:
         if self.open is not None:
             self.units.append({**self.open, "frees": dict(self.frees), "hits": list(self.hits), "adds": self.adds,
                                "next": _snap(s)})
             self.open = None
 
 
-def _snap(s: RP._Sched) -> RS.State:
+def _snap(s: RP.Scheduler) -> RS.State:
     """The scheduler's state as the step circuit carries it. Under async scheduling a running request's outputs count
     its placeholder (the output its last row samples, which vLLM appends at that step's update), `fin` says that output
     is its last, and `cap` that its output length is its max_tokens."""
@@ -82,7 +82,7 @@ def _snap(s: RP._Sched) -> RS.State:
         if r.num_computed or s.kv.req_blocks.get(r.i) or r.placeholders or r.stale:
             raise AssertionError(f"waiting request {r.i}: {r.num_computed} computed")
 
-    def cap(r: RP._R) -> int:
+    def cap(r: RP.RequestState) -> int:
         return int(asy and r.io.output_len >= r.io.max_tokens)
 
     return RS.State(tuple(RS.Req(r.i, r.P, r.io.output_len, r.n_out + r.placeholders, r.num_computed, cap(r),
@@ -92,7 +92,7 @@ def _snap(s: RP._Sched) -> RS.State:
 
 @contextmanager
 def _instrumented(rec: _Recorder):
-    S, K = RP._Sched, RP._KV
+    S, K = RP.Scheduler, RP.BlockPool
     orig = {"add": S.add, "schedule": S.schedule, "update": S.update, "hit": K.hit, "free_request": K.free_request}
 
     def add(self, i):
@@ -146,7 +146,7 @@ def _instrumented(rec: _Recorder):
 def vectors(trace: RP.Trace, *, R: int, W: int, A: int, EW: int = 0) -> tuple[dict, list[tuple[RS.State, RS.Inputs, RS.Out]]]:
     """The binding for `trace`'s engine at (R, W, A), and every unit of the scan as (state, inputs, the replay's
     outputs): each `schedule()`, empty ones included, since under async scheduling one still updates the step before.
-    With EW the outputs carry `looked`, the candidates whose `_KV.hit` the step called (the walk entries stay 0)."""
+    With EW the outputs carry `looked`, the candidates whose `BlockPool.hit` the step called (the walk entries stay 0)."""
     e = trace.engine
     n = len(trace.requests)
     st = RS.statics(R, W, A, dict(e.__dict__), max(n - 1, 1).bit_length(), EW)
@@ -345,7 +345,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument("--R", type=int, default=16)
     ap.add_argument("--W", type=int, default=64)
     ap.add_argument("--A", type=int, default=16)
-    ap.add_argument("--EW", type=int, default=0, help="walk entries of this width, and `looked` checked against `_KV.hit`")
+    ap.add_argument("--EW", type=int, default=0, help="walk entries of this width, and `looked` checked against `BlockPool.hit`")
     ap.add_argument("--circuit", action="store_true", help="evaluate the Definition on the fitting steps too")
     ap.add_argument("--fixture", type=int, default=0, help="keep the first N fitting steps of each trace")
     ap.add_argument("--slice", type=int, metavar="WINDOW", help="write CompileSlice_v1's inputs for this served window of "

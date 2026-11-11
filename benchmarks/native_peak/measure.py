@@ -33,9 +33,16 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "config"))
 from verity_config.settings import SHARED
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import numpy as np
+    import torch
 
 RESULT_SCHEMA = "research/result/v0.1"
 KIND = "native-peak/v1"
@@ -99,7 +106,7 @@ def parse_sizes(text: str) -> list[int]:
 class SmiSampler:
     """`nvidia-smi --query-gpu=... -lms 100` in the background; `window(t0, t1)` summarises the samples between two wall-clock times."""
 
-    def __init__(self, path: Path, interval_ms: int = 100):
+    def __init__(self, path: Path, interval_ms: int = 100) -> None:
         self.path = path
         self.interval_ms = interval_ms
         self.proc: subprocess.Popen | None = None
@@ -147,7 +154,7 @@ def parse_smi_csv(text: str) -> list[dict]:
         parts = [p.strip() for p in line.split(",")]
         if len(parts) < 4:
             continue
-        def num(s):
+        def num(s: str) -> float | None:
             try:
                 return float(s)
             except ValueError:
@@ -158,7 +165,7 @@ def parse_smi_csv(text: str) -> list[dict]:
 
 
 def summarize_samples(rows: list[dict]) -> dict:
-    def stats(key):
+    def stats(key: str) -> dict | None:
         vals = [r[key] for r in rows if r.get(key) is not None]
         if not vals:
             return None
@@ -173,7 +180,7 @@ def summarize_samples(rows: list[dict]) -> dict:
 CHECK_BLOCK = 256
 
 
-def _make_operands(n: int, dtype: str, device: str):
+def _make_operands(n: int, dtype: str, device: str) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """(a, b, ref_a, ref_b): the operands in `dtype` and fp32 copies of the rows of a / columns of b the check needs (same rounding)."""
     import torch
 
@@ -190,14 +197,14 @@ def _make_operands(n: int, dtype: str, device: str):
     return a, b, ref_a, ref_b
 
 
-def _gemm_fn(dtype: str, a, b, device: str):
+def _gemm_fn(dtype: str, a: torch.Tensor, b: torch.Tensor, device: str) -> Callable[[], torch.Tensor]:
     import torch
 
     if dtype == "bf16":
         return lambda: torch.matmul(a, b)
     one = torch.ones((), device=device, dtype=torch.float32)
 
-    def fn():
+    def fn() -> torch.Tensor:
         out = torch._scaled_mm(a, b, scale_a=one, scale_b=one, out_dtype=torch.float32)
         return out[0] if isinstance(out, tuple) else out
     return fn
@@ -214,7 +221,7 @@ def check_text(c: dict) -> str:
     return f"max_rel_err {c['max_rel_err']:.2e} (tol {c['tolerance']:.0e})"
 
 
-def _check(out, ref_a, ref_b, dtype: str, block: int = CHECK_BLOCK) -> dict:
+def _check(out: torch.Tensor, ref_a: torch.Tensor, ref_b: torch.Tensor, dtype: str, block: int = CHECK_BLOCK) -> dict:
     """max relative error of the `block x block` corner of `out` against an FP32 product of the same rounded operands."""
     ref = ref_a @ ref_b                          # fp32 on the device (TF32 is off)
     got = out[:block, :block].float()
@@ -229,7 +236,7 @@ def _check(out, ref_a, ref_b, dtype: str, block: int = CHECK_BLOCK) -> dict:
             "what": "out[:block,:block] vs fp32 (a[:block] @ b[:, :block]) computed on the device"}
 
 
-def kernel_names(fn) -> list[str]:
+def kernel_names(fn: Callable[[], object]) -> list[str]:
     """The CUDA kernels one call launches, by `torch.profiler` (cuBLAS's kernel name encodes the arch/dtype/tile, e.g. sm80_xmma_gemm_bf16bf16_bf16f32_f32...)."""
     import torch
     from torch.profiler import ProfilerActivity, profile
@@ -336,7 +343,7 @@ def nvfp4_sass(so: Path) -> dict:
             "per_opcode": ops, "error": None if ops else "no MMA opcode in cuobjdump -sass"}
 
 
-def nvfp4_fragments(nwarps: int, words_per_lane: int, seed: int = 20260922):
+def nvfp4_fragments(nwarps: int, words_per_lane: int, seed: int = 20260922) -> np.ndarray:
     """Random register fragments per lane: E2M1 nibbles for a[4] / b[2] (every code, both signs), UE4M3 scale bytes for sfa / sfb
     sampled from the finite codes around 1 (0x30..0x47: 2^-3 .. 2^4 x mantissa) -- toggling operand bits, as a GEMM would, and
     accumulators that stay finite over any run length this tool uses."""

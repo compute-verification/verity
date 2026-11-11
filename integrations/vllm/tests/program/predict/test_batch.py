@@ -17,6 +17,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Tuple, Value
 from verity_vllm.check.batch import BATCH, SHARED, check, own, report
+from verity_vllm.program.frontend.seed_rule import rid_of
 from verity_vllm.program.predict.batch import BatchDependent, check_compiled, registered_phi, templates, workload_labels
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.phi import Phi
@@ -151,7 +152,7 @@ def plan(registered, advice, ingress, *, seed_of=lambda advice, body: body.get("
         body, (s0, row0) = ingress[q.id], first[i]
         t = body["temperature"]
         policy = {"kind": "greedy"} if t == 0 else {"kind": "stochastic", "temperature": t, "top_p": body["top_p"], "top_k": 0,
-                                                    "seeded": True, "splits": body.get("splits", 32)}
+                                                    "seeded": True, "splits": body.get("splits", 32), "rid": rid_of(q.id)}
         units.append(Unit(i, "", q.prompt_len, q.output_len - 1, policy, None if t == 0 else seed_of(advice, body), s0, q.id,
                           C_of(advice, row0)))
     steps, discarded = [], []
@@ -430,5 +431,5 @@ def test_compile_steps_passes_its_own_rule():
         check_compiled(reg, adv, ing, c, lambda *a: steps.plan_steps(*a, salt=salt))
         if b1["temperature"]:
             assert c.requests[1].policy == {"kind": "stochastic", "temperature": 0.8, "top_p": b1["top_p"], "top_k": 0, "seeded": True,
-                                            "splits": registered_splits(RTX["num_sms"])}
+                                            "splits": registered_splits(RTX["num_sms"]), "rid": 2}
             assert c.requests[1].seed == derived(salt, "q1")

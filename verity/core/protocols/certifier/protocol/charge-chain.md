@@ -86,12 +86,13 @@ charges only a window that sends decisions alone. Advice v1 sends two of them:
 - **n_order** counts the order entries: one for each arrival that deviates from release order, under the client's
   ingress.
 
-The other two are always 0 under v1. The replay derives preemptions and the certified O forces each lag row, so `v1.py`
-refuses a window that sends resumes or lag bits. `ChargeCount_v2{N, H, O}` charges the whole window, its decisions and
-both counts with their values, as one `code_v1` segment with one count and one finish. With H = O = 0 its charge, counts
+The other two are always 0 under v1. The replay derives preemptions and the certified O forces each lag row, so the
+advice code (`advice_code.codec`) refuses a window that sends resumes or lag bits. `ChargeCount_v2{N, H, O}` charges the
+whole window, its decisions and both counts with their values, as one `window_code` segment with one count and one
+finish. With H = O = 0 its charge, counts
 and run are `ChargeCount_v1{N}`'s; the tests check this on the fixture's windows and on random ones.
 
-**The symbols**, in `code_v1._window`'s order. Each is a (cum, freq, total) step of code.py's 32-bit `ArithEncoder`,
+**The symbols**, in `window_code.code_window`'s order. Each is a (cum, freq, total) step of code.py's 32-bit `ArithEncoder`,
 counted by `ArithCountStep_v1{18, BIN, 20}`:
 1. n_arrived = a, then each decision's KT bit at context min(run, 2) (BIN = 1), as in v1.
 2. n_hits = h, then each hit's value s ∈ [0, 2^16].
@@ -107,7 +108,7 @@ counted by `ArithCountStep_v1{18, BIN, 20}`:
 6. `ArithCountFinish_v1{20}`.
 
 The window's charge is the bits counted, the length of `code_v1`'s segment for the window. pos and rank are
-`code_v1._State`'s step and index, each + 1, so they start at 0.
+`window_code.CoderState`'s step and index, each + 1, so they start at 0.
 
 **An integer** v ∈ [0, hi] under its table's frequencies f is `code.Binned.put(v, 0, hi)` (`binned_symbols`):
 - **The bin.** Let j = bitlen(v), with bitlen(0) = 0, and top = bitlen(hi). The table is restricted to bins 0 … top,
@@ -185,7 +186,7 @@ premise (`hAs` in `Security/Definitions/NetworkCertifier/Guarantees/SampledCharg
   - each value's range is a constant;
   - a uniform step's total is fixed by its bin.
 
-  So `code_v1._window` decodes the symbols back one by one, and no window's sequence is a proper prefix of another's.
+  So `window_code.code_window` decodes the symbols back one by one, and no window's sequence is a proper prefix of another's.
   At each step the coder splits its interval among the alphabet in proportion to the frequencies, which sum to at most
   the total: bins 0 … bitlen(S) of a count's table reach at most T.
 

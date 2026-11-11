@@ -50,7 +50,8 @@ A move lands alone, as one commit per map on the commit it was made on. Its lead
        python3 tools/move/stage.py tools/move/NAME.toml [tools/move/MORE.toml...] --branch BRANCH --push --certificate cert.json
 
    For each map in order, on `origin/main` (fetched first; `--base REF` names another) or on the commit the map before it
-   made, it runs the base's own `rename.py` (a map with `[words]`) or `layout.py` (a map with `[paths]`; `--no-lock` skips
+   made, it runs the base's own `rename.py` (a map with `[words]` or `[[words_in]]`, under a `[words]` table that may be
+   empty) or `layout.py` (a map with `[paths]`; `--no-lock` skips
    `uv lock`) at the root of a fresh worktree, commits what that changed as one commit whose message names the command and
    ends in its move line, `Move: MAP` or `Layout-move: MAP`, certifies it with the base's `move_check.py PARENT COMMIT`,
    and runs the map again to check that changes nothing. Nothing in the checkout changes but the new branch, pushed and never forced.
@@ -75,7 +76,8 @@ its move on the tip below it with `checked`'s scripts, as `stage.py` does with i
 landed outside the queue leaves each open branch, `next`'s members among them, to cross it with `restack.py`.
 
 `stage.py` refuses (exit 1) a map outside this directory or missing at the commit it would run on, a map with both
-`[words]` and `[paths]` or neither (a move that needs both stages two maps), a script that fails, a map that changes
+`[words]` and `[paths]` or neither (a move that needs both stages two maps), a map with `[[words_in]]` and no `[words]`
+table, a script that fails, a map that changes
 nothing, a commit `move_check.py` doesn't certify, and a move whose second run changes anything. `move_check.py` refuses,
 with each path's first offending hunk, every change its docstring doesn't list as part of a pure move. Among them:
 - a file's text changed beyond its moved paths, module names and the words of the word maps at the base, as `rename.py`

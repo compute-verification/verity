@@ -55,8 +55,9 @@ refuses (`MalformedAdvice`) anything that isn't a schedule vLLM could have run. 
 connectors and external hits (`num_external_computed_tokens`), cascade attention (`num_common_prefix_blocks`; set
 `disable_cascade_attn`), pipeline and data parallelism (tensor parallelism is in scope, since every rank runs the same
 `SchedulerOutput`), n > 1 and best_of, stop strings (a finish other than `eos` or `length` is refused), aborts and
-client disconnects, unseeded stochastic sampling, CUDA-graph padding (the advice names the rows that ran, not padding,
-so either the runner is eager or the compiler models the padding), and Mamba or hybrid models.
+client disconnects, CUDA-graph padding (the advice names the rows that ran, not padding, so either the runner is eager
+or the compiler models the padding), and Mamba or hybrid models. An unseeded stochastic request is in scope: its seed is
+derived from its certified id and the window's seed salt, and its Program's seed rule holds its sampler to it.
 
 **Fields.** Each field's chooser and bit cost are below; w_req = bitlen(#requests − 1), and the widths w_len, w_rel and
 w_src are the least that hold their largest values. A **determined** field is fixed by the certified I/O, the

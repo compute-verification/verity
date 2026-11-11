@@ -2,7 +2,6 @@ module
 
 public import Definitions.NetworkCertifier.Checked
 public import Definitions.NetworkCertifier.Guarantees.SampledAudit
-public import Definitions.Core.Assumptions
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,19 +35,17 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The leak bounds with checked inputs
+# The leak bound with checked inputs
 
-`SampledLeakAccepted` and `PooledLeakAccepted` with each statement's checked inputs `chk` left out of the count: the free
-inputs a check on the whole run pins (`Definitions.NetworkCertifier.Checked`). Each statement's check pins its checked
-inputs (`CheckedUnique`), and the trace's run is valid except with probability `εchk` (`CheckedWitness`), so a run
-whose observations the bound counts is a valid run, whose checked inputs the rest of the run fixes: they cost no advice
-bits. The incorrect proof blocks' committed bits are charged at the most any possible incorrect set commits, rather than
-at a bound the statement takes.
+`SampledLeakAccepted` with each statement's checked inputs `chk` left out of the count: the free inputs a check on the
+whole run pins (`Definitions.NetworkCertifier.Checked`). Each statement's check pins its checked inputs
+(`CheckedUnique`), and the trace's run is valid except with probability `εchk` (`CheckedWitness`), so a run whose
+observations the bound counts is a valid run, whose checked inputs the rest of the run fixes: they cost no advice bits.
+The incorrect proof blocks' committed bits are charged at the most any possible incorrect set commits, rather than at a
+bound the statement takes.
 
-The monitoring period's statement takes its inputs as `PooledLeakAccepted` does, named (`PeriodChannel`,
-`PeriodAdaptive`, `PeriodEscapes`, `PeriodLeaksChecked`), and bounds the escape by `(1 - q)^Fmax` itself, which is at most
-`δ` at `Fmax ≥ ln(1/δ)/q`. It is conditional as `PooledLeakAccepted` is: its inputs are `Flock.Guarantees.SampledKSLive`
-and the live `SampledLeakChecked` at each window's history, neither discharged yet.
+A monitoring period's bound with checked inputs is `PooledLeakCarried` (`Guarantees.Carried`), over runs that carry the
+pool; at the empty pool it bounds windows that each hold a pool of their own.
 -/
 
 @[expose] public section
@@ -93,53 +90,5 @@ def SampledLeakChecked : Prop :=
               2 ^ ((faultySets s.design P δ).sup (faultyBits s.prog P)) * Dj ^ k s : ℕ) : ℕ∞)
 
 end Sampled
-
-section Pooled
-
-open Claims Claims.Sampling Finset
-
-/-- **The leak through the network certifier over a monitoring period, with the checked inputs left out** (conditional on
-its named inputs). Over `m` windows on independent live coins, window `i` registered as `sw i` (partition `Pw i`, values
-`ρ i` at the registered inputs, operator `op i`), with `n i` proof blocks, each window's check pinning its checked inputs
-(`CheckedUnique`); with the network certifier running its code by `trusted-host`, its one run giving the cells the client
-receives and its record of them, the windows' observations; a covert sender's channel (`PeriodChannel`), each window's
-acceptance and incorrect set reading only the earlier windows' coins (`PeriodAdaptive`), the conditional escape
-(`PeriodEscapes`) and the leak relation with a valid run at each window's own incorrect set (`PeriodLeaksChecked`):
-
-* for every secret, every audit accepts and the good event fails (`PooledGoodChecked`) with probability at most
-  `(1 - q)^Fmax + Σ e + Σ e'`;
-* at every sample of the coins, the secrets that meet the good event number at most
-  `#Ss · ∏_c (cap c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ (reg_i ∪ chk_i)) · Dj^k_i`,
-  `N = Σ_i n i` and `b` the most committed bits of one of the period's proof blocks. -/
-def PooledLeakChecked : Prop :=
-  ∀ {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg chk : AuditStatement → Finset ℕ)
-    (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ) {m : ℕ} (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)
-    (ρ : Fin m → ℕ → Bool) (op : Fin m → ℕ → List (Obs L K S) → List Bool) (n : Fin m → ℕ)
-    (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i)) (valid (sw i)))
-    {Ω : Type} [Fintype Ω] [Nonempty Ω] {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
-    (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
-    (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
-    (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z)
-    (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
-    (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
-    (hch : PeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
-    (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
-    (had : PeriodAdaptive n acc W) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
-    (hesc : PeriodEscapes Zs acc W q e)
-    (hleak : PeriodLeaksChecked lay k reg valid Dj sw Pw ρ op Zs acc W
-      (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) e')
-    (Fmax : ℕ),
-    (∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧
-        ¬PooledGoodChecked lay k reg valid Dj sw Pw ρ op Fmax (W z ω) (run tap (schedOf z ω, srvOf z ω)).2) ≤
-        (1 - q) ^ Fmax + ∑ i, e i + ∑ i, e' i) ∧
-      ∀ ω, {z | z ∈ Zs ∧
-          PooledGoodChecked lay k reg valid Dj sw Pw ρ op Fmax (W z ω) (run tap (schedOf z ω, srvOf z ω)).2}.encard ≤
-        Ss.encard * (((∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax *
-          2 ^ ((univ.sup fun i => (range (n i)).sup fun v => faultyBits (sw i).prog (Pw i) {v}) * Fmax) *
-          ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ (reg (sw i) ∪ chk (sw i))).card *
-            Dj ^ k (sw i)) : ℕ) : ℕ∞)
-
-end Pooled
 
 end NetTiming.Guarantees

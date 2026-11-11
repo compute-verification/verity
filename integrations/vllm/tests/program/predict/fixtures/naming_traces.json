@@ -169,7 +169,7 @@
    "slow": false
   },
   {
-   "trace": "int8-LP3_T1_t0.7-p0.9",
+   "trace": "int8-LP3_T1_t0.7-p0.9-r4",
    "model": "verity-int8/Llama-3.2-1B-INT8",
    "revision": "15b0976d400d796ee589e7737d03a919526bf800",
    "target": {
@@ -189,22 +189,23 @@
     "top_p": 0.9,
     "top_k": 0,
     "seeded": true,
-    "splits": 32
+    "splits": 32,
+    "rid": 4
    },
    "LP": 3,
    "T": 1,
    "C": 0,
-   "digest": "0e92c4dcf6b63e6997de9dc14a2857eaab48850930fdcfe1bf155d39006690627985631712d37f25266e985035bf44890c81278128d248a5873d5f4fcfe3bcaa",
+   "digest": "206a89a01830e017daf1cc66c3ac1d6c1adeaf8c6f3723eded881d17509b97f984a74705fb77ca44eda39e022b673913bb8e2dff18c74cf35d4d1bbacad22733",
    "names": {
     "0": "model.model.embed_tokens/embedding[0]",
     "18": "model.model.layers.0.self_attn.attn/unified_attention_with_output[t=0]",
-    "893": "gumbel_topp_token_select_1[0]"
+    "894": "seed_rule"
    },
    "pins": {
-    "names": "56bbdf4c0e4ea4cba0cefa446d5c83655f7017632e796cc5337c6b79dc5699a0",
-    "params": "e444f366afba113e8fa6682923c5ab56a83774d80d5235357719843671c55c20",
-    "recorded": "18aca4de2e842a9be1597e71d2dc9292c5c1c2576bfe752b2ca89f6ffb592da1",
-    "record": "ac764ced47b27d2257dab56be44ea954a4d676a7bce477b03ec6cbc47daaf14b",
+    "names": "42051a0848edcb5a7f0dc66331e155ac598290e46d0aa42072a4793f20cf0034",
+    "params": "6b1dea34d406c45fa1e75a18a6d6317cc2a88175c47fcaf335ac0ad06c639b85",
+    "recorded": "f064b91d30728bc86d5c4ad992623f543e2f7bfa225720c282b314f4e64e3c51",
+    "record": "7936d40789f493c103e5dae4603ab1584c75dc4c76167e0dbffa2f51175be4a9",
     "prefix": null
    },
    "slow": true

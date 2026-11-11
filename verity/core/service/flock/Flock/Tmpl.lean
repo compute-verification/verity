@@ -263,21 +263,22 @@ def parse (lines : Array String) : V Tmpl := do
   if !t.wellFormed then throw s!"{FORMAT}: a definition has 2^64 columns or calls, or a call the fold's proof does not cover"
   return t
 
-/-- Row `i` of definition `d`, the line `s`, as numbers, as `parse` reads it (`rowNums_eq`): `Net.lineNums`, which
-compiled code reads off the line's bytes (`Net.lineNums_eq_fast`). -/
-def rowNums (d i : Nat) (s : String) : V (Array Nat) :=
-  match Net.lineNums s with
+/-- Row `i` of definition `d`, numbers `o`, as `parse` reads its line `s` when `o` is `Net.lineNums s` (`rowNums_eq`). -/
+def rowNums (d i : Nat) (o : Option (Array Nat)) : V (Array Nat) :=
+  match o with
   | some v => pure v
   | none => throw s!"{FORMAT}: definition {d}: row {i} is not numbers"
 
-theorem rowNums_eq (d i : Nat) (s : String) : rowNums d i s = (tokens s).mapM fun t => match t.toNat? with
+theorem rowNums_eq (d i : Nat) (s : String) : rowNums d i (Net.lineNums s) = (tokens s).mapM fun t => match t.toNat? with
     | some n => pure n
     | none => throw s!"{FORMAT}: definition {d}: row {i} is not numbers" :=
   (Net.mapM_toNat_arr (tokens s) s!"{FORMAT}: definition {d}: row {i} is not numbers").symm
 
-/-- `parse`, each row's numbers read by `rowNums` and its A and B checked in place. -/
-def parseFast (lines : Array String) : V Tmpl := do
-  let h := tokens (lines.getD 0 "")
+/-- `parse` over its lines' accessors (`parseFast` passes an array's): `n` lines, line `k` being `line k` and its
+numbers, when it is a row, `nums k` (`Net.lineNums` of it), each row's A and B checked in place. A line view reads a
+row's numbers off the file's bytes, so a row makes no `String`. -/
+def parseAt (n : Nat) (line : Nat → String) (nums : Nat → Option (Array Nat)) : V Tmpl := do
+  let h := tokens (line 0)
   if h[0]? != some FORMAT then throw s!"not a {FORMAT} unit"
   let name := h.getD 1 ""
   let root ← num h 2 "header"
@@ -287,11 +288,11 @@ def parseFast (lines : Array String) : V Tmpl := do
   let mut defs : Array Def := #[]
   let mut leaves := none
   let mut at_ := 1
-  while at_ < lines.size do
-    if at_ + 1 == lines.size && lines[at_]!.startsWith "LEAVES " then
-      leaves := some lines[at_]!
+  while at_ < n do
+    if at_ + 1 == n && (line at_).startsWith "LEAVES " then
+      leaves := some (line at_)
       break
-    let dh := tokens lines[at_]!
+    let dh := tokens (line at_)
     if dh.size != 5 || dh[0]! != "DEF" then throw s!"{FORMAT}: line {at_} is not a DEF line"
     let cols ← num dh 1 "DEF"
     let ins ← num dh 2 "DEF"
@@ -300,7 +301,7 @@ def parseFast (lines : Array String) : V Tmpl := do
     let refs := cols + ins + 1
     let mut rows := #[]
     for i in [0:nrows] do
-      let v ← rowNums defs.size i (lines.getD (at_ + 1 + i) "")
+      let v ← rowNums defs.size i (nums (at_ + 1 + i))
       let na := v.getD 1 0
       let nb := v.getD (2 + na) 0
       if v.size < 2 || v.size != 3 + na + nb then throw s!"{FORMAT}: definition {defs.size}: row {i} is malformed"
@@ -311,7 +312,7 @@ def parseFast (lines : Array String) : V Tmpl := do
       rows := rows.push (col, a, b)
     let mut calls := #[]
     for i in [0:ncalls] do
-      let ct := tokens (lines.getD (at_ + 1 + nrows + i) "")
+      let ct := tokens (line (at_ + 1 + nrows + i))
       if ct[0]? != some "CALL" then throw s!"{FORMAT}: definition {defs.size}: call {i} is not a CALL line"
       let e ← num ct 1 "CALL"
       let count ← num ct 2 "CALL"
@@ -342,23 +343,30 @@ def parseFast (lines : Array String) : V Tmpl := do
   if !t.wellFormed then throw s!"{FORMAT}: a definition has 2^64 columns or calls, or a call the fold's proof does not cover"
   return t
 
+/-- `parse`, each row's numbers read by `Net.lineNums`, which compiled code reads off the line's bytes
+(`Net.lineNums_eq_fast`), and its A and B checked in place. -/
+def parseFast (lines : Array String) : V Tmpl :=
+  parseAt lines.size (fun k => lines.getD k "") fun k => Net.lineNums (lines.getD k "")
+
 /-- Compiled code runs `parseFast`; the kernel and every proof see `parse`. `@[csimp]` rewrites only code compiled after
 it, so it stays directly below `parse`. -/
 @[csimp] theorem parse_eq_fast : @parse = @parseFast := by
   funext lines
-  unfold parse parseFast
-  simp only [rowNums_eq, Array.any_append]
+  unfold parse parseFast parseAt
+  have hl : ∀ k, lines[k]! = lines.getD k "" := fun k => by
+    rw [getElem!_def, Array.getD_eq_getD_getElem?]; rfl
+  simp only [hl, Array.any_append, rowNums_eq]
   all_goals rfl
 
-/-- A template `parse` returns passed its last two checks (`TmplUnit.readParsed` reads them). -/
-theorem parse_checked {lines : Array String} {t : Tmpl} (h : parse lines = .ok t) :
-    t.ordered = true ∧ t.wellFormed = true := by
+/-- A template `parseAt` returns passed its last two checks (`TmplUnit.readParsedAt` reads them). -/
+theorem parseAt_checked {n : Nat} {line : Nat → String} {nums : Nat → Option (Array Nat)} {t : Tmpl}
+    (h : parseAt n line nums = .ok t) : t.ordered = true ∧ t.wellFormed = true := by
   have bind_eq_ok {α β : Type} {x : V α} {f : α → V β} {b : β} :
       (x >>= f) = .ok b ↔ ∃ a, x = .ok a ∧ f a = .ok b := by
     cases x <;> simp [bind, Except.bind]
   -- the body from the outside in, each join point unfolded once its branch is taken (inlining them all copies the rest
   -- of the body into every check), each check's other branch a `throw`
-  unfold parse at h
+  unfold parseAt at h
   extract_lets at h
   split at h
   · cases h

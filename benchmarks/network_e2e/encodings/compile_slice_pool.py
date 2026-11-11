@@ -3,15 +3,15 @@ the replay over whole traces.
 
 `check_trace` replays a trace as ReplayStep_v1 sees each unit (`replay_vectors.vectors`) and runs each unit's
 CacheStep_v2 calls from the empty pool, every lookup's hit and evictable count, every free's returns and every compute's
-threshold derived from the pool (the prover's run). It holds them to `_KV`'s: each hit and evictable count ReplayStep_v1
-reads (`_KV.hit`'s), each slot's returns (`_KV.free_request`'s), and at every unit the state's free count to the pool's
+threshold derived from the pool (the prover's run). It holds them to `BlockPool`'s: each hit and evictable count ReplayStep_v1
+reads (`BlockPool.hit`'s), each slot's returns (`BlockPool.free_request`'s), and at every unit the state's free count to the pool's
 hashless free count plus its queued copies, the equality CompileSlice_v2's ``cache`` checks. It also holds `pool_step`'s
 copy of ReplayStep_v1's wires (`compile_slice_v2.tap`) to the step's rows, and the calls the slice checks (the
 witness the prover's run derived) to the prover's pool.
 
 `check_trace_v4` runs each unit's calls in vLLM's order as CompileSlice_v4 makes them, on one CacheStep_v3 stream
 (`cache_step_v3.Stream`) from the empty pool over the whole trace, every request numbered by its id and its block keys
-printed into RK: each hit, evictable count and return a call derives is `_KV`'s.
+printed into RK: each hit, evictable count and return a call derives is `BlockPool`'s.
 
     python3 compile_slice_pool.py tests/fixtures/async-prefix-cache.jsonl tests/fixtures/async-crush.json.gz \\
         tests/fixtures/sync-crush.json.gz [--R 16 --W 64 --A 16] [--v4] [--out REPORT.json]
@@ -76,9 +76,9 @@ def check_trace(path: Path, *, R: int, W: int, A: int, CD: int = 4, SW: int = 20
         for c in got.looked:
             if (got.hit[c], got.ev[c]) != (inp.hit[c], inp.evict[c]):
                 raise AssertionError(f"{where}: candidate {c}'s hit and evictable count {got.hit[c], got.ev[c]}, "
-                                     f"_KV's {inp.hit[c], inp.evict[c]}")
+                                     f"BlockPool's {inp.hit[c], inp.evict[c]}")
         if tuple(got.ret) != tuple(inp.ret):
-            raise AssertionError(f"{where}: returns {got.ret}, _KV's {inp.ret}")
+            raise AssertionError(f"{where}: returns {got.ret}, BlockPool's {inp.ret}")
         if out.state.free != got.pool.pool.hf + V2.queued(got.pool.pool):
             raise AssertionError(f"{where}: next free {out.state.free}, the pool's "
                                  f"{got.pool.pool.hf} + {V2.queued(got.pool.pool)}")
@@ -121,9 +121,9 @@ def check_trace_v4(path: Path, *, R: int, W: int, A: int) -> dict[str, Any]:
         for kind, i in got.order:
             if kind == "c" and (got.hit[i], got.ev[i]) != (inp.hit[i], inp.evict[i]):
                 raise AssertionError(f"{where}: candidate {i}'s hit and evictable count {got.hit[i], got.ev[i]}, "
-                                     f"_KV's {inp.hit[i], inp.evict[i]}")
+                                     f"BlockPool's {inp.hit[i], inp.evict[i]}")
             if kind == "p" and got.ret[i] != inp.ret[i]:
-                raise AssertionError(f"{where}: slot {i}'s returns {got.ret[i]}, _KV's {inp.ret[i]}")
+                raise AssertionError(f"{where}: slot {i}'s returns {got.ret[i]}, BlockPool's {inp.ret[i]}")
         counts["hits"] += sum(got.hit[c] > 0 for kind, c in got.order if kind == "c")
         counts["lookups"] += sum(kind == "c" for kind, _ in got.order)
         counts["frees"] += sum(kind == "p" for kind, _ in got.order)

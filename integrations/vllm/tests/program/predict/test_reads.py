@@ -15,6 +15,7 @@ from dataclasses import fields, replace
 
 import pytest
 
+from verity.ml.circuits.refs import Affine
 from verity.ml.circuits.types import Array, field_types
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program.predict import reads as R
@@ -84,6 +85,38 @@ def test_a_field_the_accounting_cant_take_is_refused_by_name(field, why):
     assert R.refusals(R.READS + R.READS[:1]) == ["advice.requests: declared twice"]
 
 
+@pytest.mark.slow
+def test_a_seed_is_charged_nothing_only_where_the_program_returns_its_seed_rule():
+    """Each stochastic request Program the compiler builds returns its seed rule (`SEED_RULE`, an output) as its first check, the
+    `SeedCheck_v2` Call over its sampler's seed and certified parameters, and no greedy one does; a table that reads a seed but
+    doesn't declare that output is refused by name, and the gate refuses a seed read from the advice by name."""
+    from verity_vllm.program.frontend import seed_rule as SEED
+    assert R.SEED_RULE == ("program", SEED.NAME)
+    reg = _registered()
+    c = compile_steps(reg, *_mixed())
+    assert sorted(u.policy["kind"] for u in c.requests) == ["greedy", "greedy", "stochastic"]
+    for u in c.requests:
+        body, of = c.programs[u.digest].fn.body, request_program(reg, u).checks["of"]
+        calls = [n for n in body.nodes if n.name == SEED.NAME]
+        if u.policy["kind"] == "stochastic":
+            assert [n.fn.id for n in calls] == ["SeedCheck_v2{COIN=64,RID=2}"] and of[0].startswith("the seed rule")
+            params, at = dict(body.params), [n for n, _ in body.params]
+            assert [repr(a.refs) for a in calls[0].args] == [repr(Affine("p", at.index(n), 0, params[n].leaves))
+                                                             for n in ("seed", *SEED.PARAMS)]
+        else:
+            assert not calls and not any(w.startswith("the seed rule") for w in of)
+    unchecked = tuple(f for f in R.READS if (f.record, f.name) != R.SEED_RULE)
+    assert [m.split(":")[0] for m in R.refusals(unchecked)] == ["program.seed_rule"]
+    assert R.refusals(unchecked)[0].startswith("program.seed_rule: not a declared output, so a seed read from body.seed, "
+                                               "window.seed_salt holds nothing the sampler reads, which is 64 bits a request")
+    assert R.refusals(tuple(f for f in unchecked if (f.record, f.name) not in R.SEED)) == []
+    g = R.gate(A_WHOLE)
+    for read, at in ((lambda: g.requests[0].seed, "request.seed"), (lambda: g.seed_salt, "advice.seed_salt")):
+        with pytest.raises(R.UndeclaredRead, match=re.escape(f"the compiler reads the advice's {at}: a stochastic request's seed is "
+                                                             f"certified")):
+            read()
+
+
 def test_the_gate_refuses_a_field_reads_doesnt_declare_by_name():
     g = R.gate(A_WHOLE)
     for read, at in ((lambda: g.release, "advice.release"), (lambda: g.version, "advice.version"),
@@ -99,12 +132,12 @@ def test_the_gate_refuses_a_field_reads_doesnt_declare_by_name():
 
 def test_the_table_is_the_compilers_read_path(monkeypatch):
     """Without its declaration a field the planner reads fails it by name, and the planner's body roles are the table's."""
-    from verity_vllm.program.predict import steps
+    from verity_vllm.program.predict import ingress_policy as IP
     monkeypatch.setattr(R, "_DECLARED", R._DECLARED - {("request", "finish")})
     with pytest.raises(R.UndeclaredRead, match=re.escape("the compiler reads request.finish")):
         plan_steps(_registered(), *_mixed())
-    assert steps._INERT == {f.name: f.inert for f in R.READS if f.role == "inert"}
-    assert set(steps._KNOWN) | set(steps._TRANSPORT) == {f.name for f in R.READS if f.record == "body"}
+    assert IP._INERT == {f.name: f.inert for f in R.READS if f.role == "inert"}
+    assert set(IP._KNOWN) | set(IP._TRANSPORT) == {f.name for f in R.READS if f.record == "body"}
 
 
 def test_the_compiler_reads_every_field_the_gate_passes(monkeypatch, tmp_path):
@@ -223,8 +256,9 @@ def _prefix_stable(reg: Registered, advice, ingress: dict) -> set[str]:
 
 
 def _calls(program) -> list[str]:
-    """``program``'s calls but its length rule's (`RequestUnit.stop`), the last call, whose config `READS` charges as advice."""
-    return [n.fn.id for n in program.fn.body.nodes if not n.fn.id.startswith("StopCheck_")]
+    """``program``'s calls but its length rule's (`RequestUnit.stop`), the last call, whose config `READS` charges as advice, and
+    a stochastic request's seed rule's (`reads.SEED_RULE`), which reads no output."""
+    return [n.fn.id for n in program.fn.body.nodes if not n.fn.id.startswith(("StopCheck_", "SeedCheck_"))]
 
 
 def _members(program) -> list[str]:
@@ -243,8 +277,8 @@ def test_a_batch_invariant_plan_is_prefix_stable_and_a_length_sets_only_its_t():
 @pytest.mark.slow
 def test_a_batch_invariant_program_is_prefix_stable_in_its_length():
     """At every cut each request compiles to the Program it has whole, and its Programs at each length its body allows are,
-    call for call but its length rule's check, prefixes of one another, returning its token ids first, ``Array(L, I32)``: its
-    length sizes only its later decodes and its length rule (about 6 s)."""
+    call for call but its length rule's and seed rule's checks, prefixes of one another, returning its token ids first,
+    ``Array(L, I32)``: its length sizes only its later decodes and its length rule (about 6 s)."""
     reg = _registered()
     advice, ingress = _mixed()
     whole = compile_steps(reg, advice, ingress)

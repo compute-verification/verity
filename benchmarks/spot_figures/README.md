@@ -3,9 +3,11 @@
 The SPOT post's Figures 1-4 for one model, derived from the sampled-proofs planner
 (`verity.core.protocols.spot.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
-plotted series. Lean checks every one-stage and request-level design the figures plot (`plancheck`, which builds
-`sampled-proofs-plancheck` with `lake` on first use; `--no-lean` plans without it): a point plots what Lean certifies,
-and a design Lean refuses is an error. The two-stage designs are the planner's alone.
+plotted series. Lean checks the design behind every exfiltration and skipped-work point of both forms of Figure 1
+(`plancheck`, which builds `sampled-proofs-plancheck` with `lake` on first use; `--no-lean` plans without it): a point
+plots what Lean certifies, a two-stage one the bits at the θ Lean finds, with the planner's bits beside them
+(`figure1.lean_two`, which both forms call), and a design Lean refuses is an error. Which design a budget buys is the
+planner's pricing of the cards, and the infiltration panels' write forms are the planner's.
 
 ~~~sh
 uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,1_overhead,2,3}.json, PNGs, SVGs
@@ -116,8 +118,9 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     one replay block's sampled proof blocks of one Definition, up to the `proof_overhead` card's `statement_blocks`,
     so each design pays at its own fill: one block under one-stage, the k it samples in a request under two-stage, a
     request's blocks under request-level sampling. A one-stage or request-level curve's point is the least target the
-    planner's cheapest plan certifies within the budget, and a two-stage one is the planner's design with the least
-    bound at the budget (`optimize.two_stage_design`).
+    planner's cheapest plan certifies within the budget, and a two-stage one is the bits Lean certifies for the
+    planner's design with the least bound at the budget (`optimize.two_stage_design`, `figure1.lean_point`), each
+    series giving the planner's bits and Lean's θ beside them.
   - Each design's serve-time hashing is in its caption and in the table at the vertical line: every proof block's
     outputs under one-stage, outside the budget; the token ids under two-stage and request-level, inside it.
   - Every caption says who the deployment's parties are and what its bounds rest on (`ROLES`, `TRUST`). Its parties
