@@ -1,0 +1,15 @@
+# WIRED: the two-stage guarantees restated over the connected program (Lean, the program side)
+
+**Done when:** `Flock.Guarantees.SpotKSTwo` and `SpotExfilTwo` (`security/Proofs/Flock/SamplingGeneric/Guarantees.lean`) are stated and proved over the members' programs with every wired read sent to its writer's output, `(bitsProgs h.ms).wired (wireMap h) (returned h)`, and the side-by-side statements are gone from the lock in the same pull request.
+
+**Where you start** (read these, build nothing first):
+- Branch `cursor/proofs-addresses-3f5a` at `294cd887df74` (no pull request; 18 commits ahead of `main`, merged clean at 15:42Z). It holds, each compiled alone: `SpotFlock/AddressesAt.lean` (the premise fails side by side), `Claims/Sampling/Rewire.lean` (46 theorems: a proof block correct side by side is correct at the wired program; `Prog.Rewires`, nine fields; `Prog.Rewires.of_earlier`), `SamplingGeneric/WiredScope.lean` (the partition and the two-stage scope carry over), `SpotFlock/WiredAt.lean` (`scope_rewired`, `decoded_rewired`: both take `(bitsProgs h.ms).Rewires (membersPart h.ms) ω keep` and nothing else about ω).
+- Branch `cursor/proofs-wiremap-5e7b` at `24b588e7fed5`: `WireMap.lean`, 26 theorems (`wireMap h`, `wiredProg`, `wiresMove`).
+- In `inbox/proofs-coordinator.md` on `cursor/verity-proofs-84b5`: the entries headed `EXTFORM (PRF-528)` of 13:19Z, 13:50Z, 14:44Z (the one list of what is compiled, what is a reading, what is a verifier change), 15:02Z, 15:13Z, 15:31Z; `REGX` 14:32Z; `ATTACK` 13:46Z, 15:07Z, 15:14Z.
+
+**Jobs, in order:**
+1. **Pull request 1, today:** the four compiled files and `WireMap.lean` onto `main` as they are (new files, no guarantee's statement changes; check first with `gh pr list` that no open pull request already carries `WireMap.lean`). Mark it yourself.
+2. **Pull request 2:** `(bitsProgs h.ms).Rewires (membersPart h.ms) (wireMap h) (returned h)` from `Prog.Rewires.of_earlier`. EXTFORM's 14:44Z entry lists what is missing: a gate's member defined in Lean; a member's blocks and reads shown to be its own (`sideBySide`); "each writer's part is before its reader's", which is the second line of the verifier's `wiresOk` that worker WIRES lands today (take it as the code's fact); and "no two moved gates of one block go to one gate", which a registered program can fail. For that last one tell me within the hour whether it follows from the checks the verifier already makes or needs a third line of the check.
+3. **Pull request 3:** the restated guarantees. The premise on addresses at the connected program is worker FRAME's; I pass you its statement through your mailbox. Send me the two restated statements in Lean by Thu 12 Nov 02:00Z, before you prove them: I read them and have a second reader read them.
+
+**Deadlines (UTC):** 19:00Z first entry (the plan, the file list, pull request 1 open or its run out); 21:00Z pull request 1 marked; Thu 02:00Z the restated statements; Thu 08:00Z pull request 2 marked or the line that stops it.
