@@ -13,9 +13,9 @@ description: >
 
 # Team shapes
 
-A shape is who works on a piece of work and how they coordinate. A lead picks one when it plans a goal, names it in the
-goal, and records afterwards what it took. How lanes, workers, briefs and landing work is the team skill's; where asks,
-issues and results go, the coordinating skill's.
+A shape is who works on a piece of work and how they coordinate. A lead picks one when it plans a goal, says which in
+the goal, and records afterwards what it took. How lanes, workers, briefs and landing work is the team skill's; where
+asks, issues and results go, the coordinating skill's.
 
 **The record** is `~/.research/notes/kb/team-shapes.md`: every use, with the PR, issue or run it is checked against and
 who read it, and links to the trials issue and the trials table. A record line below gives its number as of the last
@@ -23,8 +23,8 @@ review: [read] from the merge, the command or the issue's comments; [report] as 
 
 ## How to pick
 
-Start from a lane: a change that stays in files one lane owns needs no other shape, and every PR gets the reviewer pool
-anyway. Add a shape for one of these reasons only:
+Start from a lane: a change that stays in files one lane owns needs no other shape, and a PR that needs a land verdict
+gets it from the reviewer pool anyway. Add a shape for one of these reasons only:
 
 - **The change crosses most lanes and can't land in pieces** (a move of the tree, a format every party speaks): a
   quarterback.
@@ -60,8 +60,9 @@ One lead owns one change across lanes and decides; each lane it crosses supplies
 rehearses the assembled tree. One issue holds the plan, the hour and each lane's part as a comment. The change is one
 PR, which the lead opens unmarked, reads and then marks.
 
-- **Fails when:** every open branch must cross the change afterwards. Ship the tool that carries a branch across with
-  it, and have the queue refuse a head that hasn't crossed: in the record it first built such heads.
+- **Fails when:** its cost lands on every open branch, which must cross the change afterwards. Ship the tool that
+  carries a branch across with it, and have the queue refuse a head that hasn't crossed: in the record it first built
+  such heads.
 - **Record:** the tree's move, with parts from six lanes: 11,302 files (9,981 renames) in one change, on `main` about
   six and a half hours after the go-ahead, passing every step on the merge gate at its first check, 91 minutes in check
   [read: the merge; the hours are the issue's and @ci's]. One step off the gate compared nothing [read: the second
@@ -145,17 +146,16 @@ DATE WHAT: SHAPE, SIZE; planned TIME, took TIME; WHAT BROKE; THE NUMBER. PR, ISS
 ~~~
 
 `[the lane's report]` tags a number nobody else read. A line with no number, or nothing to check it against, is not a
-record. The goal's description names its shape in plain words, by the writing-goals skill's rules: "one lead owns the
-change and every lane supplies its part by 5 PM", never this skill's name for it. A block here changes when its record
-changes what the block says, by any agent's PR.
+record. A goal of the top two tiers says its shape in its description in plain words, by the writing-goals skill's
+rules: "one lead owns the change and every lane supplies its part by 5 PM", never this skill's name for it. A block
+here changes when its record changes what the block says, by any agent's PR.
 
 ## Trials
 
-Every norm here is a trial that kept its number, and any agent may change one:
+These norms are the team's to change, and any agent may start:
 
 - **Inside your own lane**, try a different practice with nobody's yes. First post one line on the trials issue, which
-  the record's head names (`research msg linear comment ISSUE 'TEXT' --worker NAME`): what changes, the number it
-  should move, and when it ends, in hours (the friction skill).
+  the record's head names: what changes, the number it should move, and when it ends, in hours (the friction skill).
 - **Across lanes**, get the other lead's yes first, then post the same line.
 - @top enters each trial in the trials table and brings its number to the review, Tuesdays and Fridays at 6 PM PST. A
   practice with no number by then is dropped.
