@@ -18,8 +18,8 @@ def test_ladder_runs_over_powers_of_two():
 
 
 def test_the_population_is_n_max_independent_instances_of_the_vu(monkeypatch):
-    from verity.ml.circuits import partition_object as PO
-    from verity.ml.circuits.codec import program_digest
+    from verity.circuits import partition_object as PO
+    from verity.circuits.codec import program_digest
 
     from verity_proof_throughput import population as POP
 

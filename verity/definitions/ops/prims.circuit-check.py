@@ -1,0 +1,21 @@
+"""circuit-check's bindings of `verity.definitions.ops.prims`'s Definitions, in `circuit_check.targets`' forms (`circuit_check.sidecars`)."""
+from __future__ import annotations
+
+from typing import Any
+
+
+def _core_roots() -> list[Any]:
+    from verity.definitions.ops import prims as P
+
+    return [
+        P.BlackwellE4m3QmmaDot32,
+        P.BlackwellE5m2QmmaDot32,
+        P.HopperE4m3MmaV2Dot32,
+        P.BlackwellNvf4OmmaDot64,
+        P.BlackwellMxf4OmmaDot64,
+        P.F32ToE2m1Sat,
+        P.E4m3ToF32,
+        P.BlackwellS8ImmaDot32,
+        P.BlackwellU8S8ImmaDot32,
+        P.S32ToF32Rn,
+    ]
