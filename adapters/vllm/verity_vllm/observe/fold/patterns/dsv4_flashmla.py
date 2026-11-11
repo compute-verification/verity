@@ -10,18 +10,45 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 import re
 from dataclasses import dataclass
 
+from verity.definitions.numerics.flashmla_twin import (
+    num_sm_parts,
+    request_splits,
+    sched_meta,
+)
+from verity.definitions.registry import dsv4_compressor as C
+
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.dsv4_cache import _entry_slots, _is, _module, _row, _weights, block_bytes, fp8_rows, runs, state_row, swa_block
+from verity_vllm.observe.fold.patterns.dsv4_cache import (
+    _entry_slots,
+    _is,
+    _module,
+    _row,
+    _weights,
+    block_bytes,
+    fp8_rows,
+    runs,
+    state_row,
+    swa_block,
+)
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, sub_rows
 from verity_vllm.observe.fold.patterns.ops import as_float, base_op, bound_args
 from verity_vllm.observe.fold.patterns.resolutions import unsupported
 from verity_vllm.observe.fold.patterns.target import target_of, vocab_kind
-from verity_vllm.observe.fold.resolver import Compute, Const, Gather, Group, PerRow, Pieces, Resolution, Shared, StepContext, Unsupported
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Const,
+    Gather,
+    Group,
+    PerRow,
+    Pieces,
+    Resolution,
+    Shared,
+    StepContext,
+    Unsupported,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program.frontend.dsv4_leaves import FP8_DS_MLA_QB
 from verity_vllm.program.frontend.rules.vllm_dsv4 import COMPRESSORS, FLASHMLA_GEOMETRY
-from verity.definitions.numerics.flashmla_twin import num_sm_parts, request_splits, sched_meta
-from verity.definitions.registry import dsv4_compressor as C
 
 SPARSE_DECODE_OP = "_flashmla_C.sparse_decode_fwd"
 SPARSE_PREFILL_OP = "_flashmla_C.sparse_prefill_fwd"

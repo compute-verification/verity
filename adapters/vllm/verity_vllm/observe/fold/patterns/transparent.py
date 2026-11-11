@@ -8,9 +8,21 @@ from collections.abc import Iterator
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, is_row_major, sub_rows
-from verity_vllm.observe.fold.patterns.ops import base_op, bound_args, op_name, triton_name
+from verity_vllm.observe.fold.patterns.ops import (
+    base_op,
+    bound_args,
+    op_name,
+    triton_name,
+)
 from verity_vllm.observe.fold.patterns.resolutions import hint_of, unsupported
-from verity_vllm.observe.fold.resolver import PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
+from verity_vllm.observe.fold.resolver import (
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+    Transparent,
+    Unsupported,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 ALIAS_OPS = frozenset({

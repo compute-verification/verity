@@ -13,11 +13,32 @@ from verity.definitions.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, sub_rows
-from verity_vllm.observe.fold.patterns.ops import base_op, bound_args, first, triton_name
-from verity_vllm.observe.fold.patterns.resolutions import ComputeGroup, _fmt, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.ops import (
+    base_op,
+    bound_args,
+    first,
+    triton_name,
+)
+from verity_vllm.observe.fold.patterns.resolutions import (
+    ComputeGroup,
+    _fmt,
+    hint_of,
+    unsupported,
+)
 from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.patterns.transparent import widened_source
-from verity_vllm.observe.fold.resolver import Compute, Const, Gather, Param, PerRow, Resolution, StepContext, Supplied, Transparent, Unsupported
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Const,
+    Gather,
+    Param,
+    PerRow,
+    Resolution,
+    StepContext,
+    Supplied,
+    Transparent,
+    Unsupported,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 SCRATCH_TOKEN_SELECT = "token_select"  # ctx.scratch key: two-stage greedy sampler state (TokenSelectGumbelTwoStage)

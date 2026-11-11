@@ -21,18 +21,67 @@ from verity_vllm.observe.fold.patterns.activations import SiluAndMulWithClamp
 from verity_vllm.observe.fold.patterns.attention import FA2_OP_NAMES, AttentionScope
 from verity_vllm.observe.fold.patterns.embedding import Embedding
 from verity_vllm.observe.fold.patterns.gemm import BiasAdd, GemmLaunch, fuse_bias_adds
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_slot_rows, as_weight_view, is_int, is_row_major, split_heads, sub_rows
-from verity_vllm.observe.fold.patterns.kv_cache import KVCacheUpdate, kv_group_of, kv_layer_of, kv_slots
+from verity_vllm.observe.fold.patterns.geometry import (
+    GeometryError,
+    as_slot_rows,
+    as_weight_view,
+    is_int,
+    is_row_major,
+    split_heads,
+    sub_rows,
+)
+from verity_vllm.observe.fold.patterns.kv_cache import (
+    KVCacheUpdate,
+    kv_group_of,
+    kv_layer_of,
+    kv_slots,
+)
 from verity_vllm.observe.fold.patterns.norms import FusedAddRMSNorm, RMSNormTritonLaunch
-from verity_vllm.observe.fold.patterns.ops import as_float, base_op, bound_args, first, op_name, schema_param_names, triton_name
-from verity_vllm.observe.fold.patterns.resolutions import (ComputeGroup, TransparentGroup, _check_pins, _fmt, _group_compute, attribution_for,
-                                                           hint_of, members, unsupported)
+from verity_vllm.observe.fold.patterns.ops import (
+    as_float,
+    base_op,
+    bound_args,
+    first,
+    op_name,
+    schema_param_names,
+    triton_name,
+)
+from verity_vllm.observe.fold.patterns.resolutions import (
+    ComputeGroup,
+    TransparentGroup,
+    _check_pins,
+    _fmt,
+    _group_compute,
+    attribution_for,
+    hint_of,
+    members,
+    unsupported,
+)
 from verity_vllm.observe.fold.patterns.rotary import RotaryEmbedding as RotaryEmbedding
 from verity_vllm.observe.fold.patterns.rotary import _positions_ok
-from verity_vllm.observe.fold.patterns.sampling import LogitsGather, TokenSelectArgmax, TokenSelectGumbelTopP, TokenSelectGumbelTwoStage
-from verity_vllm.observe.fold.patterns.target import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, gemm_target_of, target_of, vocab_kind
-from verity_vllm.observe.fold.patterns.transparent import (ALIAS_OPS, SCRATCH_INT_FILLS, TransparentAten, TransparentTritonMetadata,
-                                                           classify_transparent, find_descendants, scope_transparents, widened_source)
+from verity_vllm.observe.fold.patterns.sampling import (
+    LogitsGather,
+    TokenSelectArgmax,
+    TokenSelectGumbelTopP,
+    TokenSelectGumbelTwoStage,
+)
+from verity_vllm.observe.fold.patterns.target import (
+    GEMM_TARGET_SCRATCH_KEY,
+    X01_SCRATCH_KEY,
+    gemm_target_of,
+    target_of,
+    vocab_kind,
+)
+from verity_vllm.observe.fold.patterns.transparent import (
+    ALIAS_OPS,
+    SCRATCH_INT_FILLS,
+    TransparentAten,
+    TransparentTritonMetadata,
+    classify_transparent,
+    find_descendants,
+    scope_transparents,
+    widened_source,
+)
 
 # The package's names.  `RotaryEmbedding` and `SiluAndMul` are exported as the two `import X as X` lines above, since a
 # string naming a vLLM layer class is a model fact, which lives in the profiles.

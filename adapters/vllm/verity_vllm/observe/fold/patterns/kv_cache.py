@@ -5,11 +5,31 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_slot_rows, is_int, split_heads
+from verity_vllm.observe.fold.patterns.geometry import (
+    GeometryError,
+    as_slot_rows,
+    is_int,
+    split_heads,
+)
 from verity_vllm.observe.fold.patterns.ops import bound_args, op_name
-from verity_vllm.observe.fold.patterns.resolutions import _fmt, _group_transparent, hint_of, unsupported
-from verity_vllm.observe.fold.patterns.transparent import find_descendants, scope_transparents
-from verity_vllm.observe.fold.resolver import Gather, PerRow, Resolution, StepContext, Transparent, Unsupported
+from verity_vllm.observe.fold.patterns.resolutions import (
+    _fmt,
+    _group_transparent,
+    hint_of,
+    unsupported,
+)
+from verity_vllm.observe.fold.patterns.transparent import (
+    find_descendants,
+    scope_transparents,
+)
+from verity_vllm.observe.fold.resolver import (
+    Gather,
+    PerRow,
+    Resolution,
+    StepContext,
+    Transparent,
+    Unsupported,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 

@@ -19,17 +19,32 @@ model is a configuration record, not a second profile implementation.
 from __future__ import annotations
 
 import re
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
-from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
 from verity.definitions.registry import b1
 
 from verity_vllm.observe.events import RunHeader
-from verity_vllm.observe.fold.patterns import (AttentionScope, BiasAdd, Embedding, FusedAddRMSNorm, GemmLaunch, KVCacheUpdate, LogitsGather,
-                        RMSNormTritonLaunch, RotaryEmbedding, SiluAndMul, TokenSelectArgmax, TokenSelectGumbelTopP, TokenSelectGumbelTwoStage,
-                        TransparentAten, TransparentTritonMetadata, fuse_bias_adds)
+from verity_vllm.observe.fold.patterns import (
+    AttentionScope,
+    BiasAdd,
+    Embedding,
+    FusedAddRMSNorm,
+    GemmLaunch,
+    KVCacheUpdate,
+    LogitsGather,
+    RMSNormTritonLaunch,
+    RotaryEmbedding,
+    SiluAndMul,
+    TokenSelectArgmax,
+    TokenSelectGumbelTopP,
+    TokenSelectGumbelTwoStage,
+    TransparentAten,
+    TransparentTritonMetadata,
+    fuse_bias_adds,
+)
 from verity_vllm.observe.fold.resolver import Profile
+from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
 
 PROFILE_ID = "vllm-d9105ea80-sm89-eager-bf16"
 
@@ -231,12 +246,19 @@ def make_patterns(C: dict[str, Any]) -> list:
     if C.get("FP8_BLOCK"):
         # the block-scaled FP8 linear (vLLM Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel, VLLM_USE_DEEP_GEMM=0): the
         # dynamic per-token-group activation quant and the blockwise CUTLASS scaled GEMM, each ONE registered family (registry.fp8)
-        from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
+        from verity_vllm.observe.fold.patterns.fp8 import (
+            CutlassScaledMmFp8Block,
+            PerTokenGroupFp8Quant,
+        )
         fp8 = [PerTokenGroupFp8Quant(group=int(C["FP8_BLOCK"])), CutlassScaledMmFp8Block(group=int(C["FP8_BLOCK"]))]
     if C.get("INT8_EXACT"):
         # the exact-int8 profile's named ops (engine.int8_ops), each one registered Definition (registry.int8_exact); the attention
         # scope first, so a layer on the int8 backend never reaches the FA2 scope
-        from verity_vllm.observe.fold.patterns.int8 import Int8AttentionScope, Int8RowQuant, Int8ScaledMm
+        from verity_vllm.observe.fold.patterns.int8 import (
+            Int8AttentionScope,
+            Int8RowQuant,
+            Int8ScaledMm,
+        )
         fp8 = [Int8RowQuant(), Int8ScaledMm(), Int8AttentionScope()]
     return [
         *fp8,

@@ -10,12 +10,27 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from verity.circuits.defs import bind
+
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major
+from verity_vllm.observe.fold.patterns.geometry import (
+    GeometryError,
+    as_weight_view,
+    is_row_major,
+)
 from verity_vllm.observe.fold.patterns.ops import base_op, bound_args
-from verity_vllm.observe.fold.patterns.resolutions import attribution_for, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.resolutions import (
+    attribution_for,
+    hint_of,
+    unsupported,
+)
 from verity_vllm.observe.fold.patterns.target import _targets, target_of, vocab_kind
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 
@@ -75,7 +90,9 @@ class CublasMmF32Out:
         tp, _recorded = target_of(ctx)
         if tp.batch_invariant or tuple(tp.compute_capability) != (9, 0):
             return None
-        from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import f32out_route
+        from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import (
+            f32out_route,
+        )
 
         a = bound_args(node)
         x, wt, outs = a.get("self", a.get("arg0")), a.get("mat2", a.get("arg1")), node.output_views()

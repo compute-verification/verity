@@ -4,9 +4,9 @@ specialization of that target, and how often the fold issues a weight-only Call 
 from __future__ import annotations
 
 from verity.circuits.refs import runs
-from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
 from verity_vllm.observe.fold.resolver import Shared, StepContext, spec_label
+from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
 X01_SCRATCH_KEY = "x01_num_sms"
 

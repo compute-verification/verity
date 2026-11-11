@@ -24,15 +24,31 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
 from verity.circuits.defs import bind
 from verity.definitions.registry import b1
-import numpy as np
-
 from verity.definitions.registry.sampling import GumbelArgmaxBf16, GumbelArgmaxTempBf16
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns import ComputeGroup, _fmt, bound_args, first, hint_of, is_int, sub_rows, triton_name, unsupported, widened_source
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, StepContext, Transparent
+from verity_vllm.observe.fold.patterns import (
+    ComputeGroup,
+    _fmt,
+    bound_args,
+    first,
+    hint_of,
+    is_int,
+    sub_rows,
+    triton_name,
+    unsupported,
+    widened_source,
+)
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Resolution,
+    StepContext,
+    Transparent,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 SCRATCH_OV = "ov_sampling_token_sample"

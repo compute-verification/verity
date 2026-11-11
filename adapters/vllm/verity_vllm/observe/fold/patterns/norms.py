@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-
 from verity.circuits.defs import bind
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P
@@ -14,10 +13,30 @@ from verity.definitions.registry import value_inputs as VI
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
-from verity_vllm.observe.fold.patterns.ops import as_float, base_op, bound_args, first, op_name, triton_name
-from verity_vllm.observe.fold.patterns.resolutions import _check_pins, _fmt, attribution_for, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.ops import (
+    as_float,
+    base_op,
+    bound_args,
+    first,
+    op_name,
+    triton_name,
+)
+from verity_vllm.observe.fold.patterns.resolutions import (
+    _check_pins,
+    _fmt,
+    attribution_for,
+    hint_of,
+    unsupported,
+)
 from verity_vllm.observe.fold.patterns.target import _targets, target_of
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext, Supplied
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+    Supplied,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 

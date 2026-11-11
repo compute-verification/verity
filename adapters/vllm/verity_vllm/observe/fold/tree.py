@@ -7,11 +7,21 @@ consumes a whole subtree (or is explicitly asked to descend), so that no event i
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from collections.abc import Iterator
+from dataclasses import dataclass, field
 
-from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Event, SampleEnd, StepEnd, StepLink, StepStart, TritonLaunch,
-                     ViewDesc, views_in)
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Event,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+    views_in,
+)
 
 
 @dataclass

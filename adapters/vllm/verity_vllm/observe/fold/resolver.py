@@ -21,11 +21,19 @@ resolution's `consumed` set (no silent, unaccounted children) and that no id is 
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
-from collections.abc import Callable
 
-from verity_vllm.observe.events import Note, Root, RunHeader, SampleEnd, StepLink, StepStart, ViewDesc
+from verity_vllm.observe.events import (
+    Note,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepLink,
+    StepStart,
+    ViewDesc,
+)
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode
 from verity_vllm.observe.fold.views import row_view, rows_view
 

@@ -13,31 +13,60 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 import re
 from dataclasses import dataclass
 
-from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.collectives import ALL_REDUCE_OP
-from verity_vllm.observe.fold.patterns.cublas import CublasLinear, CublasMmF32Out
-from verity_vllm.observe.fold.patterns.dsv4_cache import _is, _module, _slots, _weights, block_runs, state_block, swa_block
-from verity_vllm.observe.fold.patterns.dsv4_flashmla import SparseDecode, SparsePrefill
-from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, sub_rows
-from verity_vllm.observe.fold.patterns.norms import CudaRmsNorm
-from verity_vllm.observe.fold.patterns.ops import as_float, base_op, bound_args, op_name, triton_name
-from verity_vllm.observe.fold.patterns.resolutions import attribution_for, unsupported
-from verity_vllm.observe.fold.patterns.rotary import step_positions
-from verity_vllm.observe.fold.patterns.target import target_of, vocab_kind
-from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
-from verity_vllm.observe.fold.tree import TreeNode
-from verity_vllm.program.frontend.dsv4_leaves import FP8_DS_MLA_QB
-from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import FP8_QUANT_PINS
-from verity_vllm.program.frontend.rules.vllm_bindings.pins import QKV_RMS_PINS
-from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import QKV_ARGS, TRITON_DIVISIBILITY, qkv_rms_launch
-from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY, post_pre_path
 from verity.definitions.numerics.mhc_twin import tf32_num_split
 from verity.definitions.registry import dsv4_compressor as C
 from verity.definitions.registry import dsv4_indexer as I
 from verity.definitions.registry import dsv4_qnorm_insert as Q
 from verity.definitions.registry.dsa_norm import check_block
 from verity.definitions.registry.fp8 import weight_blocks
+
+from verity_vllm.observe.events import ViewDesc
+from verity_vllm.observe.fold.patterns.collectives import ALL_REDUCE_OP
+from verity_vllm.observe.fold.patterns.cublas import CublasLinear, CublasMmF32Out
+from verity_vllm.observe.fold.patterns.dsv4_cache import (
+    _is,
+    _module,
+    _slots,
+    _weights,
+    block_runs,
+    state_block,
+    swa_block,
+)
+from verity_vllm.observe.fold.patterns.dsv4_flashmla import SparseDecode, SparsePrefill
+from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
+from verity_vllm.observe.fold.patterns.geometry import GeometryError, sub_rows
+from verity_vllm.observe.fold.patterns.norms import CudaRmsNorm
+from verity_vllm.observe.fold.patterns.ops import (
+    as_float,
+    base_op,
+    bound_args,
+    op_name,
+    triton_name,
+)
+from verity_vllm.observe.fold.patterns.resolutions import attribution_for, unsupported
+from verity_vllm.observe.fold.patterns.rotary import step_positions
+from verity_vllm.observe.fold.patterns.target import target_of, vocab_kind
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    Group,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+    Transparent,
+    Unsupported,
+)
+from verity_vllm.observe.fold.tree import TreeNode
+from verity_vllm.program.frontend.dsv4_leaves import FP8_DS_MLA_QB
+from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import FP8_QUANT_PINS
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import QKV_RMS_PINS
+from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import (
+    QKV_ARGS,
+    TRITON_DIVISIBILITY,
+    qkv_rms_launch,
+)
+from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY, post_pre_path
 
 LAYER = re.compile(r"model\.layers\.(\d+)")
 QNORM_INSERT_OP = "_C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert"

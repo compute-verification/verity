@@ -9,12 +9,40 @@ from verity.circuits.defs import bind
 from verity.definitions.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major
-from verity_vllm.observe.fold.patterns.ops import base_op, bound_args, first, triton_name
-from verity_vllm.observe.fold.patterns.resolutions import _check_pins, _fmt, _group_compute, attribution_for, hint_of, unsupported
-from verity_vllm.observe.fold.patterns.target import _targets, gemm_target_of, pinned_num_sms, target_of
+from verity_vllm.observe.fold.patterns.geometry import (
+    GeometryError,
+    as_weight_view,
+    is_row_major,
+)
+from verity_vllm.observe.fold.patterns.ops import (
+    base_op,
+    bound_args,
+    first,
+    triton_name,
+)
+from verity_vllm.observe.fold.patterns.resolutions import (
+    _check_pins,
+    _fmt,
+    _group_compute,
+    attribution_for,
+    hint_of,
+    unsupported,
+)
+from verity_vllm.observe.fold.patterns.target import (
+    _targets,
+    gemm_target_of,
+    pinned_num_sms,
+    target_of,
+)
 from verity_vllm.observe.fold.patterns.transparent import scope_transparents
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext, Transparent
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+    Transparent,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 

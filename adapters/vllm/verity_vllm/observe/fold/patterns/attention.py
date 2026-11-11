@@ -10,13 +10,37 @@ from dataclasses import dataclass
 from verity.definitions.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_slot_rows, rows_operand
+from verity_vllm.observe.fold.patterns.geometry import (
+    GeometryError,
+    as_slot_rows,
+    rows_operand,
+)
 from verity_vllm.observe.fold.patterns.kv_cache import _kv_moves, kv_layer_of, kv_slots
-from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, first, op_name, op_parts
-from verity_vllm.observe.fold.patterns.resolutions import _group_compute, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.ops import (
+    as_float,
+    bound_args,
+    first,
+    op_name,
+    op_parts,
+)
+from verity_vllm.observe.fold.patterns.resolutions import (
+    _group_compute,
+    hint_of,
+    unsupported,
+)
 from verity_vllm.observe.fold.patterns.target import _targets, target_of
-from verity_vllm.observe.fold.patterns.transparent import find_descendants, scope_transparents
-from verity_vllm.observe.fold.resolver import Compute, GatherMany, Resolution, StepContext, Supplied, Unsupported
+from verity_vllm.observe.fold.patterns.transparent import (
+    find_descendants,
+    scope_transparents,
+)
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    GatherMany,
+    Resolution,
+    StepContext,
+    Supplied,
+    Unsupported,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 FA2_OP_NAMES = frozenset({"varlen_fwd", "flash_attn_varlen_func", "fwd"})

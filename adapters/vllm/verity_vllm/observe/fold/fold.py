@@ -92,13 +92,11 @@ from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Refs, array_of, concat, runs, tuple_of
-from verity_vllm.program import sampling_event as SE
-from verity.definitions.registry import b1
-from verity.definitions.replay import replayer
 from verity.circuits.types import Array, RecordType, Type, Value
 from verity.circuits.types import Tuple as TupleT
+from verity.definitions.registry import b1
+from verity.definitions.replay import replayer
 
-from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import (
     DispatchEnter,
     DispatchExit,
@@ -116,10 +114,16 @@ from verity_vllm.observe.events import (
     TritonLaunch,
     ViewDesc,
 )
-from verity_vllm.observe.log import split_steps
 from verity_vllm.observe.fold.memory import MemoryModel, Unresolved, compact_refs
-from verity_vllm.observe.fold.patterns.collectives import FUSED_KIND as FUSED_COLLECTIVE_KIND, KINDS as COLLECTIVE_KINDS
-from verity_vllm.observe.fold.patterns.target import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, WeightOnlyCalls
+from verity_vllm.observe.fold.patterns.collectives import (
+    FUSED_KIND as FUSED_COLLECTIVE_KIND,
+)
+from verity_vllm.observe.fold.patterns.collectives import KINDS as COLLECTIVE_KINDS
+from verity_vllm.observe.fold.patterns.target import (
+    GEMM_TARGET_SCRATCH_KEY,
+    X01_SCRATCH_KEY,
+    WeightOnlyCalls,
+)
 from verity_vllm.observe.fold.resolver import (
     Collective,
     Compute,
@@ -149,10 +153,13 @@ from verity_vllm.observe.fold.resolver import (
 )
 from verity_vllm.observe.fold.summary import REFERENCE_INTEGRITY_RULE, summarize  # noqa: F401  (re-exported: fold_compare, tests)
 from verity_vllm.observe.fold.supplied import SuppliedInputs
-from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
 from verity_vllm.observe.fold.token_select import token_select_output
+from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
 from verity_vllm.observe.fold.views import row_view
 from verity_vllm.observe.fold.witnesses import WitnessInputs
+from verity_vllm.observe.log import split_steps
+from verity_vllm.program import model as analytic
+from verity_vllm.program import sampling_event as SE
 
 I32 = Value(32)
 

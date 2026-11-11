@@ -40,22 +40,57 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import dataclasses
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Callable
 
 from verity.circuits.defs import bind
 from verity.definitions.registry import act as _ACT
 from verity.definitions.registry import moe as _MOE
-from verity_vllm.program.frontend import targets as T
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns import (GeometryError, SiluAndMul, as_float, as_weight_view, base_op, bound_args, classify_transparent,
-                                               find_descendants, is_row_major, op_name, target_of, triton_name, unsupported)
-from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
+from verity_vllm.observe.fold.patterns import (
+    GeometryError,
+    SiluAndMul,
+    as_float,
+    as_weight_view,
+    base_op,
+    bound_args,
+    classify_transparent,
+    find_descendants,
+    is_row_major,
+    op_name,
+    target_of,
+    triton_name,
+    unsupported,
+)
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (
+    K_ALIGN_KERNELS,
+    K_FUSED,
+    K_QUANT,
+    K_SUM,
+    TRITON_EXPERTS,
+    MoEFusedExpertsFp8,
+    _as_rows,
+    _contig,
+    _flat,
+    _root_name,
+    _same,
+    header_moe_experts_class,
+)
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    Group,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+    Transparent,
+    Unsupported,
+)
 from verity_vllm.observe.fold.tree import TreeNode
-from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (K_ALIGN_KERNELS, K_FUSED, K_QUANT, K_SUM, TRITON_EXPERTS, MoEFusedExpertsFp8,
-                                                             _as_rows, _contig, _flat, _root_name, _same, header_moe_experts_class)
+from verity_vllm.program.frontend import targets as T
 
 SHARED_OP = "moe_forward_shared"
 K_DYN_MM = "dynamic_flashinfer_deepgemm_blockscale_gemm"
@@ -139,7 +174,9 @@ def shared_expert(node: TreeNode, ctx: StepContext, mms: tuple[TreeNode, TreeNod
     """The shared expert: two dynamic block-FP8 linears (`fp8.DynamicDeepGemmFp8Linear`) around its activation `act`, which
     `act_pattern` resolves on the token rows at the statics `want` (I the shared intermediate), as `spec` when given; the down linear
     writes the op's first output `out0`."""
-    from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear  # registry.deepgemm on use
+    from verity_vllm.observe.fold.patterns.fp8 import (
+        DynamicDeepGemmFp8Linear,  # registry.deepgemm on use
+    )
     SI = want["I"]
     out: list[tuple[int, Any]] = []
     prev = hidden

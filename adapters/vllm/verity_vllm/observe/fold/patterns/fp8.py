@@ -34,11 +34,26 @@ from verity.circuits.defs import bind
 from verity.definitions.registry import fp8
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major
+from verity_vllm.observe.fold.patterns.geometry import (
+    GeometryError,
+    as_weight_view,
+    is_row_major,
+)
 from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, first, op_name
-from verity_vllm.observe.fold.patterns.resolutions import _fmt, attribution_for, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.resolutions import (
+    _fmt,
+    attribution_for,
+    hint_of,
+    unsupported,
+)
 from verity_vllm.observe.fold.patterns.target import _targets, target_of
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 QUANT_EPS = 1e-10
@@ -106,7 +121,9 @@ class PerTokenGroupFp8Quant:
         if not (x.dtype == "bfloat16" and xq.dtype == E4M3 and xs.dtype == "float32"):
             return unsupported(node, "Fp8GroupQuant_v1 is bf16 -> (e4m3, f32)", dtypes=[x.dtype, xq.dtype, xs.dtype])
         if bool(ue8m0):
-            from verity.definitions.registry import deepgemm  # loaded only on the ue8m0 branch
+            from verity.definitions.registry import (
+                deepgemm,  # loaded only on the ue8m0 branch
+            )
             spec = bind(deepgemm.Fp8GroupQuantUe8m0, K=K, G=G)
         else:
             spec = bind(fp8.Fp8GroupQuant, K=K, G=G)
