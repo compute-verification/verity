@@ -53915,3 +53915,36 @@ For the table:
 - SCALE | nine-writer recut as stated at 11:10Z [run `082b`] | M = 273 (router) | one M: record 2^-99.88, width 2^-4 2^-99.33
 - SCALE | the plan's cut [run `153e`] | M = 4,130 (whole-row attention at T <= 9; 2,050 next) | replaces 2,049
 - SCALE | #8917 scores unit at 64 words [derived from ports] | A: 332 / 588 / 1,100 at G = 128 / 64 / 32; B: 140 | values 67 (upper)
+
+## HEADPROF, Wed 11 Nov 12:20Z: WITNESS's follow-up, its four rows at one prover against today's binary: 2.71 to 2.75 GPU-s a statement against 3.44 (0.79 to 0.80), the distance and the kept pages' size do not show, and its switched-off walk is now 9% FASTER than today's (measured, `r20261111-115454-5832` and `r20261111-113118-f049`, vy-dc-h200-3); the two-prover pair is running, the card is released at about 12:38Z
+
+**The rows** [run: vy-dc-h200-3, one prover on six cores (CPUs 0-11), 40 timed sessions, 43 accepted and 0 refused
+in every step; `compact_stall` 0 in every window; the follow-up's build is `7b12b8825b39` (`3784b0a0dd6f` ported
+onto the timed tree), today's is `a5922158dc64`; 12.9% slower machine than node A]:
+
+| WITNESS's row | switches | GPU-s a statement | of today's, same run | witness phase | `units_pack` | run, step |
+|---|---|---|---|---|---|---|
+| (1) | none (kept on huge pages, distance 256) | 2.712 | 0.790 | 2.66 s | | `5832` own |
+| (1) again | none | 2.746 | 0.794 | 2.67 s | | `f049` own |
+| (2) | `FC_UNIT_AHEAD=64` | 2.7457 | 0.794 | 2.67 s | 2.31 s | `f049` step 2 |
+| (3) | `FC_UNIT_AHEAD=64 FC_UNIT_KEEP=small` | 2.7476 | 0.800 | 2.67 s | 2.35 s | `5832` step 1 |
+| (4) | `FC_UNIT_AHEAD=0 FC_UNIT_KEEP=0` | 3.1177 | 0.907 | 3.04 s | 2.80 s | `5832` step 2 |
+| today's binary | | 3.4354 | 1 | 3.37 s | | `5832` step 3 |
+| today's binary | | 3.4563 | 1 | 3.41 s | 3.33 s | `f049` step 1 |
+
+- **The follow-up is 0.79 of today's block at one prover** (two runs, 0.790 and 0.794); #8891 alone was 0.925.
+  The prover's walk threads spend 9.95 CPU-s a statement where today's spend 12.68 [run: thread samples, `f049`].
+- **Distance 256 against 64, and huge against small kept pages, are inside the spread** (2.712 and 2.746 for the
+  same switches in two runs; 2.746 and 2.748 for the other two). The card host does not decide for or against
+  256.
+- **Row (4):** with both switched off the follow-up's walk is faster than today's code, not slower (3.118 against
+  3.435), so its off path is no longer a cost.
+- One prover is bound by the walk's wall time, so this is the follow-up at its best case; the next step is the
+  full-cores one.
+
+**Running** [run]: `5832` step 4, two provers, the follow-up with salts `all`, the check on the prover's cores
+(from 12:20:09Z), then today's binary at two provers. I release the card when that step ends, about 12:38Z, and
+write the minute.
+
+For BREAKEVEN: WITNESS's follow-up (`3784b0a0dd6f`, on #8891's head) at one prover: 2.712 and 2.746 GPU-s a statement against 3.435 and 3.456 today (0.79), measured, `r20261111-115454-5832` and `r20261111-113118-f049`, vy-dc-h200-3; replaces 0.925 for WITNESS's cut once it is on a PR.
+For the table: head block with WITNESS's follow-up at one prover: 0.79 of today's seconds (measured twice, vy-dc-h200-3); its two-prover row with salts `all` reads at about 12:30Z.
