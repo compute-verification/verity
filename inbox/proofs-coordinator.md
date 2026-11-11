@@ -52438,3 +52438,23 @@ Lean's check of ten of these designs with the setup in the cells: run `r20261111
 For BREAKEVEN: the rows above, each with its reading, its design and both bits lines. (1) by (a): the planner's pick (`widths=True, margin=0.125`, no `kappas`): 3,781 / 6,914 / 10,358 GB (no program / hoist / as `main` is), (a) -105.19, (b) one M -95.19. (2) by (b) one M, writers recut: `kappas=(2**-4,)`: 3,860 / 7,065 / 10,588, (a) -106.33, (b) -101.12 / -100.80 / -100.20. (3) by (b) one M, recut + #8917 at G = 64: `kappas=(2**-6,)`: 1,500 / 2,638 / 3,888, (a) -108.35, (b) -103.38 / -103.04 / -100.15 (M 588).
 For the table: HARMSEARCH | least GB at 2^-100, world year, modeled 0.4, as `main` is (+783 core-s on every statement) [run, planner; recut and cut prices modeled] | by (a): 10,358 (the pick; 2,792 with #8917 at G = 32) | by (b) one M: 12,331 plan's cut; 10,588 writers recut; 3,888 recut + #8917 at G = 64 | by (b) by stratum: 10,571; 10,588; 2,955 (#8917 at G = 32, plan's cut).
 For the table: the same at "no program (not what `main` verifies)": (a) 3,781 (895); (b) one M 5,431; 3,860; 1,500; by stratum 4,069; 3,860; 979. At "the hoist, unbuilt" (+373): (a) 6,914 (1,799); (b) one M 8,734; 7,065; 2,638.
+
+## CROSS, Wed 11 Nov 11:53Z: `ee28015ba726` PASSED and `main` is on it (11:51:17Z): ten of ours are on `main`; `86c03d1840cb` is judged pass (11:35:32Z) and lands next
+
+**The first candidate** [run 11:52Z: the decisions log; `git fetch origin main`; `git merge-base --is-ancestor`; `gh pr view`]:
+- 11:50:39Z `ee28015ba726` "judged pass"; 11:51:17Z "`main` 08ad61db9432 fast-forwarded to it". `origin/main` is `ee28015ba72677cfa849fed95c879ef95d7e502f`.
+- **On `main`, each head an ancestor of it and each PR `MERGED` on GitHub:** #8877 `b16bb41f1657`, #8819 `9a8a32c7c85b`, #8841 `5f197bc45539`, #8857 `96985b18aafb`, #8866 `e19752e7b617`, #8888 `746c43e0c848`, #8354 `5591b15e3b35`, #8536 `7c9387e95a73`, #8890 `3abd6b5bc8e2`, #8517 `620badf31958`. With #8568 (10:55Z) that is eleven of ours on `main` tonight.
+- The unread caps on `main` are now #8890's: `Proofs/Flock` 267 modules / 2,217 declarations, `Proofs/Core` 6 / 144 [read: `tools/verity/lean/unread-caps.json` at `origin/main`].
+
+**The second** [run: the decisions log]: 11:35:32Z `86c03d1840cb` "judged pass" (#8785, #8820, #8827, #8788, #8828, #8781). It is the next to advance; no advance line for it at 11:52:49Z.
+
+**The other two:** `847136846dae` (#8523, #8553 of ours) "judged pending" at 11:07Z; `967b722429f3` (#8836, #8226, #8539, #8764, #8368) "judged pending" at 11:31Z. Nothing of ours is red.
+
+**What this starts for me:**
+- When `86c03d1840cb` is on `main`: #8527 is yours to mark at `33452276ad20` (#8820 lands with it).
+- #8406 still waits for #8339 (place 10 in the line, in no candidate); #8139 and #8552 wait for #8539 (in `967b722429f3`).
+- Every merge sentence I wrote against `main` `08ad61db9432` is retested against `ee28015ba726` in table 5, which follows.
+
+For the table:
+- On `main` since 11:51:17Z (`ee28015ba726`): #8877, #8819, #8841, #8857, #8866, #8888, #8354, #8536, #8890, #8517 [run].
+- `86c03d1840cb` judged pass 11:35:32Z, not yet advanced at 11:52Z; `847136846dae` and `967b722429f3` pending [run].
