@@ -146,6 +146,79 @@ def test_exec_runs_a_command_in_one_loops_environment_and_refuses_before_its_cre
     assert out[0] == f"a has no {key} yet" and out[1] == f"{tmp_path}/x b {tmp_path}" and out[2].startswith("no loop 'nope'")
 
 
+def config(tmp_path, name, *loops):
+    """A watchers config at tmp_path/name holding `loops`, each the TOML lines of one [[loop]] after its name."""
+    path = tmp_path / name
+    path.write_text(f'dir = "{tmp_path}"\nsrc = "{tmp_path}/src"\n[env]\nPATH = "/usr/bin:/bin"\n'
+                    + "".join(f'[[loop]]\nname = "{n}"\n{body}\n' for n, body in loops))
+    return path
+
+
+def test_check_refuses_a_config_that_lacks_a_loop_the_live_one_runs_and_says_how_to_keep_it(tmp_path, capfd):
+    """A loop added to the pod's config by hand and never to the master: copying the master over it stops the loop at the
+    supervisor's next start, with nothing said."""
+    kept, added = ("kept", 'argv = ["true"]'), ("added-on-the-pod", 'argv = ["sh", "/data/elsewhere/loop.sh"]')
+    live, new = config(tmp_path, "live.toml", kept, added), config(tmp_path, "new.toml", kept)
+    assert W.main(["check", "--config", str(new), "--replaces", str(live)]) == 1
+    out = capfd.readouterr().out
+    assert f"replacing {live}:\n    added-on-the-pod: dropped\n        live  sh /data/elsewhere/loop.sh\n" in out
+    assert out.splitlines()[-1] == (
+        f"refused: {new} lacks added-on-the-pod, which {live} runs: copied over it, the supervisor's next start stops that loop. "
+        "To keep a loop, add it to infra/control/watchers.toml in a PR and deploy that commit; to stop one on purpose, pass "
+        "--allow-drop added-on-the-pod")
+    assert W.main(["check", "--config", str(new), "--replaces", str(live), "--allow-drop", "added-on-the-pod"]) == 0
+    out = capfd.readouterr().out
+    assert "    added-on-the-pod: dropped (--allow-drop)\n" in out and "refused" not in out
+    assert W.main(["check", "--config", str(live), "--replaces", str(live), "--allow-drop", "kept", "--allow-drop", "gone"]) == 0
+    assert capfd.readouterr().out.endswith(f"replacing {live}:\n    --allow-drop gone: the live config has no such loop\n"
+                                           "    --allow-drop kept: the config keeps that loop\n")
+    assert W.main(["check", "--config", str(new), "--replaces", str(tmp_path / "none.toml")]) == 2
+    assert f"{tmp_path}/none.toml can't be read as a watchers config (FileNotFoundError" in capfd.readouterr().out
+    with pytest.raises(SystemExit) as e:
+        W.main(["check", "--config", str(new), "--allow-drop", "kept"])
+    assert e.value.code == 2 and "--allow-drop goes with --replaces" in capfd.readouterr().err
+
+
+def test_check_prints_a_loop_that_is_new_or_differs_from_the_live_one_without_failing_and_no_environment_value(tmp_path, capfd):
+    same = ("same", 'argv = ["true"]\nenv_files = ["/k.env"]\nneeds = ["/seed"]\nenv = { A = "1" }')
+    live = config(tmp_path, "live.toml", same, ("moved", 'argv = ["true", "--on", "n2"]\nenv_files = ["/a.env"]\n'
+                                                         'env = { STORE = "/live-value", GONE = "x" }'))
+    new = config(tmp_path, "new.toml", same, ("moved", 'argv = ["true", "--on", "cpu1"]\nenv_files = ["/a.env", "/b.env"]\n'
+                                                       'needs = ["/seed"]\nenv = { STORE = "/new-value", MORE = "y" }'),
+                 ("brand-new", 'argv = ["true", "new"]'))
+    assert W.main(["check", "--config", str(new), "--replaces", str(live)]) == 0
+    out = capfd.readouterr().out
+    assert out.endswith(f"replacing {live}:\n"
+                        "    moved: argv differs\n        live  true --on n2\n        new   true --on cpu1\n"
+                        "    moved: env_files differs\n        live  /a.env\n        new   /a.env /b.env\n"
+                        "    moved: needs differs\n        live  (none)\n        new   /seed\n"
+                        "    moved: env differs in GONE, MORE, STORE\n"
+                        "    brand-new: new\n        new   true new\n")
+    assert "-value" not in out, "an environment's values are never printed"
+    assert W.main(["check", "--config", str(new), "--replaces", str(new)]) == 0
+    assert capfd.readouterr().out.endswith(f"replacing {new}:\n    the same loops, none of them changed\n")
+    other = tmp_path / "other.toml"
+    other.write_text(new.read_text().replace(f'dir = "{tmp_path}"', f'dir = "{tmp_path}"\nlock = "/elsewhere.lock"'))
+    assert W.main(["check", "--config", str(new), "--replaces", str(other)]) == 0
+    assert capfd.readouterr().out.endswith(f"replacing {other}:\n    settings differ: lock\n")
+
+
+def test_the_relay_runs_every_relay_side_monitor_but_the_one_that_reads_the_node_side_monitors():
+    """The relay runs only what its `--only` lists, so a relay-side monitor added to research.monitors and not to the loop
+    never runs. `node-heartbeat` alone stays out: it reads the node-side monitors' last pass on the `--on` host, and no
+    machine runs them."""
+    from research import monitors
+
+    _, loops = W.load(CONTROL / "watchers.toml")
+    (lp,) = [lp for lp in loops if lp.name == "monitors-relay"]
+    first = lp.argv.index("--only") + 1
+    only = lp.argv[first:next(i for i in range(first, len(lp.argv)) if lp.argv[i].startswith("--"))]
+    relay_side = {m.id for m in monitors.MONITORS if m.where == "relay"}
+    assert relay_side - set(only) == {"node-heartbeat"} and set(only) <= relay_side, \
+        "infra/control/watchers.toml's monitors-relay runs only what its --only lists: list each relay-side monitor there"
+    assert len(only) == len(set(only))
+
+
 def test_an_extra_job_that_exits_0_is_done_and_one_that_fails_starts_again(tmp_path):
     extra = tmp_path / "extra.d"
     extra.mkdir()
