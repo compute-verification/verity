@@ -24,13 +24,16 @@ tests hold a line to it.
 A byte string is an ``Array<n, Value<8>>`` in byte order, an index a ``Value<32>``. Each Definition has a word form (``_v1``)
 and a Boolean version (``_v2``) whose word view it is; on bits a byte is 8 bits, least significant first.
 
-Each hash is one compression of its message from its label's midstate, a constant (`PearlCRowSeed` is two), written with
-`verity.commitments.gates.sha512`: `compress_gadget` on bits, `compress_ref` on words. A word gate returns one value, so a
-hash's word form is 32 gates of one primitive, byte ``at`` of the hash (``PearlCSeedBByte_v1`` and its like), each fed its
-index as a constant; no Boolean version computes one byte alone.
+On bits each hash is one compression of its message from its label's midstate, a constant (`PearlCRowSeed` is two),
+written with `verity.commitments.gates.sha512`'s `compress_gadget`. A word gate returns one value, so a hash's word form is
+32 gates of one primitive, byte ``at`` of the hash (``PearlCSeedBByte_v1`` and its like), each fed its index as a constant; no
+Boolean version computes one byte alone. That primitive's evaluator is `hashlib`'s SHA-512 of the label's block and the
+message: it reads no table by index and keeps no memo, so it declares none (`PrimitiveDefinition.tables`), where one written
+with `compress_ref` would reach SHA-512's round constants as a table.
 """
 from __future__ import annotations
 
+import hashlib
 import math
 from functools import lru_cache
 from typing import Callable
@@ -46,7 +49,7 @@ from verity.definitions.ops.prims import Bf16ToF32, F2fpBf16, F32ToE4m3Sat, S32T
 from verity.circuits.refs import array_of
 from verity.definitions.silicon import fp
 from verity.circuits.types import Array, Value
-from verity.commitments.gates.sha512 import compress_gadget, compress_ref, midstate, pad_tail, words_be
+from verity.commitments.gates.sha512 import compress_gadget, midstate, pad_tail
 from verity.definitions.boolean import sigma_lift
 
 __all__ = ["BYTES32", "BYTES64", "NORM_E", "NORM_F", "ROLES", "PearlCLineCode", "PearlCLineCodeV2", "PearlCLineCodes",
@@ -84,19 +87,14 @@ def _midstate(role: str) -> tuple[int, ...]:
     return tuple(midstate(label(role)))
 
 
-@lru_cache(maxsize=4096)
 def s512(role: str, message: bytes) -> bytes:
-    """-h3's labelled hash: the first 32 bytes of SHA-512(``label(role)`` ‖ ``message``), from the label's midstate."""
-    data = message + pad_tail(128 + len(message))
-    cv = list(_midstate(role))
-    for i in range(0, len(data), 128):
-        cv = compress_ref(cv, words_be(data[i:i + 128]))
-    return b"".join(w.to_bytes(8, "big") for w in cv[:4])
+    """-h3's labelled hash: the first 32 bytes of SHA-512(``label(role)`` ‖ ``message``)."""
+    return hashlib.sha512(label(role) + message).digest()[:32]
 
 
 def _s512_bits(C, role: str, message: list[list]) -> list[list]:
-    """`s512` over bytes of circuit bits: its 32 bytes. A block's words are big-endian, so a word's low bits are its last
-    byte's."""
+    """`s512` over bytes of circuit bits, from the label's midstate: its 32 bytes. A block's words are big-endian, so a
+    word's low bits are its last byte's."""
     data = list(message) + [const_bits(b, 8) for b in pad_tail(128 + len(message))]
     cv = [const_bits(v, 64) for v in _midstate(role)]
     for i in range(0, len(data), 128):
