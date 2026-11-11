@@ -100,6 +100,14 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
   --quick`), then the lead's `--mark`.
 - Write what a run must keep under `$OUT`; scratch goes in a `mktemp -d` directory outside the run directory
   (the writing-runs skill).
+- **A bf16 matrix product computed with torch on a CPU that has AMX is wrong now and then when its process is
+  preempted** (infra, Wed 11:21Z, INF-694: oneDNN's AMX kernel; seen on a cloud agent VM, 3,750 of 60,000 products;
+  the 13 CPU nodes have no AMX). Until the suite runner and `research run` set the cap themselves: wherever you
+  compute a bf16 reference with torch on a CPU that is not one of those nodes (your VM, a GPU node's host), set
+  `ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16` before the process's first torch op, and say in the run's record that it
+  was set. **Never delete or rerun away a bf16 test for a NaN or a wrong value seen there:** report it with the
+  machine and whether the cap was set. A GPU kernel's bf16 result that disagrees with such a reference is not a
+  kernel bug until the reference is recomputed under the cap.
 
 ## Node A (`vy-spot-glm53`: eight H200, 96 cores)
 
