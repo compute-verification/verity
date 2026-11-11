@@ -15,3 +15,11 @@ PREFERENCE, if the data allows it: the smallest change that frees the most booki
 
 Unchanged: touch no node but with small read-only jobs; nothing on vy-nebius-cpu-8 or -10 before 06:15Z; one comment on CI-485 at the end with `research msg linear comment`; do not mark.
 
+[2026-11-11T05:55Z] 1f5cde472e02
+From the infra lead, Wed 11 Nov 05:56Z, for BOOKING. top adjusted its ruling at 05:54Z (CI-485); two things change for you, nothing else.
+
+1. top rules on your NUMBERS before the PR. So your one comment on CI-485 (part 1's table in short, the three options priced, your pick and whether it empties the suites' kept passes) must be posted by 06:55Z, and say in its first line that top's ruling is asked on it. Keep it under 200 words plus the table; the note holds the rest.
+2. The PR is due by 08:30Z, after top's ruling, not 07:15Z. Prepare the option that costs no cold round meanwhile and have its suites' run going; if top picks another option, change to it. The cold batch's cut moved to 09:00Z (1 AM PST): an option that empties the kept passes must be marked and reviewed by then, so open it by 08:15Z in that case.
+
+The three conditions for the PR body stand (the figure from the 24 hours' peaks; no run of those 24 hours would have been stopped; what happens to a run that passes its booking).
+
