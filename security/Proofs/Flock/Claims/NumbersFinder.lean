@@ -26,7 +26,9 @@ arithmetic, and its value at two session sizes:
   `K̄ = 227711235758` gates, the most that keeps it (`firstHitBound_tables32_tight`);
 * `real_le_firstHitBound`, `real_le_two_rpow_neg_100`, `real_table1_le`, `real_tables32_le`: the same expression over
   the reals, at any reals within a design's numbers, with `2^256` and `2^-100` real powers as the finder's
-  statements write them.
+  statements write them;
+* `calls_table1_le`, `calls_tables32_le`: the finder's term `4·E/2^256` itself, at expected compressions
+  `E ≤ T·(1 + n·e + (1 + e)·K̄)` within those numbers.
 -/
 
 @[expose] public section
@@ -191,5 +193,28 @@ theorem real_tables32_le {T n e K : ℝ} (hn0 : 0 ≤ n) (he0 : 0 ≤ e) (hK0 : 
     exact he
   · push_cast
     exact hK
+
+/-! ## The finder's term at a bound on its expected compressions -/
+
+/-- `4·E/2^256` at expected compressions `E ≤ T·(1 + n·e + (1 + e)·K)` is at most the expression. -/
+theorem four_mul_div_le {E T n e K : ℝ} (hE : E ≤ T * (1 + n * e + (1 + e) * K)) :
+    4 * E / 2 ^ (256 : ℝ) ≤ 4 * T * (1 + n * e + (1 + e) * K) / 2 ^ (256 : ℝ) := by
+  have h256 : (0 : ℝ) ≤ 2 ^ (256 : ℝ) := by positivity
+  have h4 : 4 * E ≤ 4 * T * (1 + n * e + (1 + e) * K) := by linarith
+  exact div_le_div_of_nonneg_right h4 h256
+
+/-- **The finder's term is at most `2^-100` at sessions of one table**: its expected compressions `E` at most
+`T·(1 + n·e + (1 + e)·K)` at the numbers of `real_table1_le`. -/
+theorem calls_table1_le {E T n e K : ℝ} (hn0 : 0 ≤ n) (he0 : 0 ≤ e) (hK0 : 0 ≤ K) (hT : T ≤ 2 ^ 80)
+    (hn : n ≤ 2 ^ 24) (he : e ≤ 1 + 210 * 12343986) (hK : K ≤ 2 ^ 42)
+    (hE : E ≤ T * (1 + n * e + (1 + e) * K)) : 4 * E / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ)) :=
+  (four_mul_div_le hE).trans (real_table1_le hn0 he0 hK0 hT hn he hK)
+
+/-- **The finder's term is at most `2^-100` at sessions of at most `32` tables**: its expected compressions `E` at
+most `T·(1 + n·e + (1 + e)·K)` at the numbers of `real_tables32_le`. -/
+theorem calls_tables32_le {E T n e K : ℝ} (hn0 : 0 ≤ n) (he0 : 0 ≤ e) (hK0 : 0 ≤ K) (hT : T ≤ 2 ^ 80)
+    (hn : n ≤ 5523986) (he : e ≤ 1 + 210 * 395007543) (hK : K ≤ 227711235758)
+    (hE : E ≤ T * (1 + n * e + (1 + e) * K)) : 4 * E / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ)) :=
+  (four_mul_div_le hE).trans (real_tables32_le hn0 he0 hK0 hT hn he hK)
 
 end Claims.Flock.Numbers
