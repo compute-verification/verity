@@ -156,7 +156,7 @@ from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
 from .queue import (LEAN_SOURCES, PR, WORKDIR, Entry, Member, Queue, QueueError, StoreLabels, _git, _out, _who, base_drivers,
                     conflicting_files, flags_at, forces_cold, label_verifier, lean_change, lowrisk, merged_tree,
-                    priority_list, queue_commit, review_owners, rules_at, touched_by, unreviewed)
+                    moves_between, priority_list, queue_commit, review_owners, rules_at, touched_by, unreviewed)
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
                      Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict, _inherited)
@@ -728,6 +728,12 @@ class World:
                           and self._frozen_out(below, n, entries[n].pr.head, specs)]
                 left.update((n, (entries[n].pr.head, f"it waits for the freeze to end ({self.frozen_file})")) for n in frozen)
                 took, pulled = [n for n in took if n not in frozen], pulled | set(frozen)
+            # a plain merge of a head below a move leaves its own lines naming the paths the move retired: it lands crossed
+            lacks = dict(zip(took, pool.map(lambda n: moves_between(self.repo, main, entries[n].pr.head), took)))
+            left.update((n, (entries[n].pr.head, f"it lacks the move {m[-1][0][:12]} `main` landed: cross it with "
+                                                 "`tools/move/restack.py` and push the crossed head, as a merge of `main` "
+                                                 "doesn't rewrite its own lines")) for n, m in lacks.items() if m)
+            took = [n for n in took if not lacks[n]]
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
                 chosen = {n: (files[n], *j)
@@ -2604,7 +2610,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--depth", type=int, default=DEPTH, help=f"the most candidates stacked at once, each with the run beside "
                                                              f"its check (default {DEPTH})")
     ap.add_argument("--lean", type=int, default=LEAN, help=f"the most members of a candidate whose Lean change compiles: a "
-                                                           f"spec's or a Lean source's, not a lock's alone (default {LEAN})")
+                                                           f"spec's or a Lean source's, not a lock's alone; none while a PR "
+                                                           f"with no Lean change waits (default {LEAN})")
     ap.add_argument("--wide-file", type=Path, default=WIDE,
                     help=f"the PRs whose Lean change is wide, one number a line, read each tick as --priority-file is: a "
                          f"candidate taking one takes no other member --lean counts, and one stacked on a candidate holding "

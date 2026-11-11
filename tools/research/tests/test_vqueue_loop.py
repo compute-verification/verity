@@ -500,6 +500,25 @@ def test_a_move_pr_with_a_land_verdict_is_built_by_its_merge_and_advances_main_a
     assert _acts(loop.tick()) == ["advance", "on_main"] and env.main() == sha
 
 
+def test_a_head_below_a_move_main_landed_is_left_out_until_it_is_crossed(env):
+    """A merge of a head based below a layout move leaves its own lines naming the paths the move retired, however clean: the
+    loop takes only a head that holds every move `main` landed, and tells the rest to cross."""
+    base = env.main()
+    renamed = env.o.change({"c.txt": None, "moved/c.txt": "c\n"})
+    tree = _git(env.o.dev, "rev-parse", f"{renamed}^{{tree}}")
+    move = _git(env.o.dev, "commit-tree", tree, "-p", base, "-m", "move c\n\nLayout-move: tools/move/x_map.toml")
+    _git(env.o.dev, "push", "-q", "origin", f"{move}:refs/dev/{move}")
+    _git(env.o.origin, "update-ref", "refs/heads/main", move)
+    env.listed(move, {})
+    below = env.o.change({"b.txt": "below\n"}, base=base)
+    env.o.gh.put(1, below)
+    crossed = env.put(2, {"d.txt": "crossed\n"})
+    loop = env.loop(policy)
+    builds = [r for r in loop.tick() if r["action"] == "build"]
+    assert [(r["members"], r["heads"]) for r in builds] == [([2], [crossed])], builds
+    assert loop.world.left[1][0] == below and loop.world.left[1][1].startswith(f"it lacks the move {move[:12]} "), loop.world.left
+
+
 @pytest.mark.parametrize("lowrisk", [False, True])
 def test_a_move_pr_without_a_land_verdict_is_not_built_even_where_the_low_risk_rule_builds_another_on_its_mark(env, lowrisk):
     if lowrisk:
@@ -1585,7 +1604,7 @@ def test_the_wide_file_is_read_each_tick_as_the_priority_file_is_and_a_line_that
     """`--wide-file` (`World.wide`) is read into `Snapshot.wide` each tick with the priority file's parsing
     (`queue.priority_list`): one PR number a line, none while the file is missing or empty, so the `lean` cap alone makes the
     batch, and a line that isn't a PR number is refused, naming the file and the line, so the tick fails until it is fixed.
-    A wide PR fills its batch's cap."""
+    A wide PR fills its batch's cap, once the PR with no Lean change has gone in a batch of its own."""
     _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
     env.put(1, {"pkg/A.lean": "-- b\n"})
     env.put(2, {"Security/Definitions/D.lean": "-- d\n"})
@@ -1598,10 +1617,12 @@ def test_the_wide_file_is_read_each_tick_as_the_priority_file_is_and_a_line_that
     loop.tick()
     assert [s.wide for s in seen] == [frozenset(), frozenset()]
     assert [(r.number, r.lean) for r in seen[-1].ready] == [(1, True), (2, True), (3, False)]
-    assert vqueue.decide(seen[-1]) == [Build((1, 2, 3), seen[-1].main, L.DEPTH)]
+    assert vqueue.decide(seen[-1]) == [Build((3,), seen[-1].main, L.DEPTH)]
+    leans = replace(seen[-1], ready=seen[-1].ready[:2])
+    assert vqueue.decide(leans) == [Build((1, 2), seen[-1].main, L.DEPTH)]
     wide.write_text("1\n\n1\n")
     loop.tick()
-    assert seen[-1].wide == {1} and vqueue.decide(seen[-1]) == [Build((1, 3), seen[-1].main, L.DEPTH)]
+    assert seen[-1].wide == {1} and vqueue.decide(replace(leans, wide=seen[-1].wide)) == [Build((1,), leans.main, L.DEPTH)]
     wide.write_text("1\n#2\n")
     with pytest.raises(Q.QueueError) as e:
         loop.tick()
@@ -2753,7 +2774,7 @@ def test_the_loop_s_batch_depth_and_lean_default_to_16_3_and_3_on_the_command_an
     with pytest.raises(SystemExit):
         Q.main(["vqueue", "--help"])
     said = " ".join(capsys.readouterr().out.split())
-    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("a lock's alone", 3))), said
+    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("no Lean change waits", 3))), said
     loop = Loop(None, tmp_path / "log")
     assert (loop.batch, loop.depth, loop.lean) == (L.BATCH, L.DEPTH, L.LEAN) == (16, 3, 3)
 

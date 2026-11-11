@@ -41,6 +41,9 @@ it reaches `main` or is ejected.
 A candidate in flight lands as built: a member whose owner withdrew its mark, pushed a new head or closed it stays in it,
 its new head waits for the next batch, and a fail blames it by its files as built without ejecting it.  Only a red or a
 member others took from the queue (`Snapshot.pulled`) drops a candidate, with every one above it.
+
+Changes with no Lean go in batches of their own: while a batch's pool holds a PR with no Lean change (`Ready.lean` false)
+that it may take, it takes no Lean PR, so no Lean failure drops them.  With none left, Lean PRs go under the `lean` cap.
 """
 from __future__ import annotations
 
@@ -62,7 +65,7 @@ class Ready:
     head: str
     files: frozenset[str]          # the paths its change touches, against its merge base with `main`
     lean: bool = False             # its Lean change compiles (a spec's or a Lean source's, not a lock's alone): a batch holds
-                                   # at most `Snapshot.lean` such members
+                                   # at most `Snapshot.lean` such members, and none while a PR with none waits
     rank: int = 0                  # the queue's order, lowest first (drive's priority file, then mark time)
     conflict: bool = False         # it doesn't merge onto `main`: the queue skips it until its head changes
 
@@ -225,7 +228,7 @@ def decide(s: Snapshot) -> list[Action]:
     word on each of its own failures is known; until then nothing, and nothing is built above it), then, while the chain is
     shorter than `depth`, one batch built on its top: one a tick, since the batch above it would sit on the sha the loop gives
     this one.  While the chain holds a wide member (`Snapshot.wide`), the batch takes no Lean member: built on it, a Lean
-    change would build again what the wide one built.
+    change would build again what the wide one built.  Nor does it while a PR with no Lean change waits (`_batch`).
 
     A candidate already on `main` (the loop advanced to it and stopped before its drop, or `main` was moved to it) is dropped
     `on main`, with a pass outcome when its verdict passed, and its members stay out of the next batch, as does a PR whose
@@ -565,10 +568,13 @@ def _wide(r: Ready, wide: frozenset[int]) -> bool:
 
 def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int, wide: frozenset[int]) -> tuple[int, ...]:
     """The next batch from ``pool`` (in rank order): each PR whose cap allows it, while the batch is under its limit, with at
-    most ``lean`` Lean PRs, and a wide one (`_wide`) only as its first Lean PR, which fills that cap.  A suspect's cap is half
-    the suspects of the newest outcome holding it at its head, at least 1; a PR set aside (`infra`) comes after every other,
-    alone, the longest set aside first."""
+    most ``lean`` Lean PRs, and a wide one (`_wide`) only as its first Lean PR, which fills that cap; none while ``pool``
+    holds a PR with no Lean change that the batch may take (no pass or infra outcome holds it at its head).  A suspect's cap
+    is half the suspects of the newest outcome holding it at its head, at least 1; a PR set aside (`infra`) comes after every
+    other, alone, the longest set aside first."""
     newest = _newest(outcomes, {r.number: r.head for r in pool})
+    if any(not r.lean and ((o := newest.get(r.number)) is None or o.state not in (PASS, INFRA)) for r in pool):
+        lean = 0
     at = {id(o): i for i, o in enumerate(outcomes)}
     batch: list[int] = []
     limit, leans = size, 0
