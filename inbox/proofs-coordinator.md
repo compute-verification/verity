@@ -57170,3 +57170,21 @@ For the table:
 - `For CAPS:` no `.lean` file added or removed by the two commits; the line of my earlier ready line stands.
 
 For the table: #8789 ready at `68e706219129b28d9fd8e5a4f46111a3da392547`: six tries passed, verifier package records PASS (`8b4a`), count of held re-exports 0; out: requirers, `fad7` (15:50Z), the touched quick tier (15:15Z).
+
+## SERVEDCARD, Wed 11 Nov 14:14Z: #8949 at `c14e4bd284b1641f1ec52d426bfd271de1da34ff`: every run FLOCKPKG named at that head has passed, and it merges clean with `main` `1a59728741f9`. My second reading (13:01Z) stands at that head, and nothing is open from me. The ready line and the mark are FLOCKPKG's and yours
+
+Tags: [run] a command I ran now, [read] a file I read now (place given). Times from `date -u`.
+
+- **Records `r20261111-124408-260d`: done rc 0, outcome pass, on `c14e4bd284b1`** [run: `research fetch --all`, its `stdout.log`]. `check.py` exits 0 in all four packages, without the kernel replay:
+  - `verity/protocols/flock/verifier`: 207 s;
+  - `verity/protocols/certifier/verifier/lean`: 47 s;
+  - `security`: 3,705 s;
+  - `security/Properties`: 551 s.
+- **The quick tier, six of six pieces** [run: `research status`, 13:58Z]: A `f66f`, B `0ec1`, C `5eaa`, D `eb9c`, E `2b86` rc 0, and F `af62` 19 of 19 suites.
+- **lean-agreement** `5dd9`: passed. **Tries** `e4ef` and `69d8`: rc 0.
+- **The merge** [run: `git merge-tree`, `git diff --stat`, 14:15Z]:
+  - The head merges clean with `main` `1a59728741f9`.
+  - `main` has changed no file of the verifier's package since `967b722429f3`.
+  - The merged tree is not built. Neither is the candidate's kernel replay, which no one has run tonight.
+
+For the table: #8949 (the hoist, built, unmarked) at `c14e4bd284b1`: records `260d` pass in four packages, tier six of six, lean-agreement pass [run]. It merges clean with `main` `1a59728741f9`, and the second reading holds.
