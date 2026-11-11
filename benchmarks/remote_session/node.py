@@ -7,8 +7,9 @@ checks.
 arenas     each engine exports its arena over CUDA IPC (`engine.<g>.json` in --engines-dir); once every engine has run
            its plain baseline (status baseline), the prover opens each in its GPU's context and takes it as that GPU's
            HBM shard (`device.DeviceStore`'s `hbm`): the store's chunks are the arenas' in GPU order, then the host
-           tier's, and the hello's layout labels each arena's weights chunks weights and the rest filler. With
-           --model-dir each arena is first held to the checkpoint's (`held_to_checkpoint`)
+           tier's, and the hello's layout labels each arena's weights chunks weights and the rest filler, the host
+           tier one region of it (`regions`). With --model-dir each arena is first held to the checkpoint's
+           (`held_to_checkpoint`)
 register   the payload tree over the plain weights as served, salted under the verifier's payload key (its first
            message); at the registration the engines pause (ctl.json's
            pause), the device gates run, the arenas are encoded in place at the key, and the engines get the key and
@@ -150,6 +151,22 @@ def key_json(key) -> dict:
             "mask": word(key.mask) if key.codec.masked else None}
 
 
+def regions(n: list[int], base: list[int], on_host: list[bool], weights: list[int]) -> list[dict]:
+    """The hello's layout of a store in segments (`device.DeviceStore`'s `n`, `base` and `on_host`), an arena a GPU with
+    `weights` blocks of weights each and then the host tier's segments: each arena's weights and its filler, then the
+    host tier as one region however many segments hold it. That is the store as the verifier's binding lays it out
+    (`rstore.Store.regions`), and the binding refuses any other layout, a region a host segment among them."""
+    out = []
+    for q, w in enumerate(weights):
+        out.append({"kind": "weights", "tier": "hbm", "first": base[q], "blocks": w})
+        if n[q] > w:
+            out.append({"kind": "filler", "tier": "hbm", "first": base[q] + w, "blocks": n[q] - w})
+    host = [q for q in range(len(n)) if on_host[q]]
+    if host:
+        out.append({"kind": "filler", "tier": "host", "first": base[host[0]], "blocks": sum(n[q] for q in host)})
+    return out
+
+
 class ServingNode(device.GpuBackend):
     """`device.GpuBackend` over the engines' arenas (`open_arena`, one a GPU in GPU order), pausing them for the
     encode and handing them the key (`encode`), and naming each phase to them."""
@@ -161,16 +178,8 @@ class ServingNode(device.GpuBackend):
         self.bases = {e["uuid"]: self.store.base[g] for g, e in enumerate(exports)}
 
     def layout(self) -> list[dict]:
-        s, out = self.store, []
-        for q in range(len(s.n)):
-            if s.on_host[q]:
-                out.append({"kind": "filler", "tier": "host", "first": s.base[q], "blocks": s.n[q]})
-                continue
-            w = self.exports[q]["weights_blocks"]
-            out.append({"kind": "weights", "tier": "hbm", "first": s.base[q], "blocks": w})
-            if s.n[q] > w:
-                out.append({"kind": "filler", "tier": "hbm", "first": s.base[q] + w, "blocks": s.n[q] - w})
-        return out
+        s = self.store
+        return regions(s.n, s.base, s.on_host, [e["weights_blocks"] for e in self.exports])
 
     def encode(self, registration) -> dict:
         self.engines.ctl(phase="encode", pause=True)
