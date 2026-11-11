@@ -63629,3 +63629,65 @@ Every shape below went through `main`'s design check unchanged (`second_stage.li
 - `r20261111-195905-146c`, the planner's card rebuilt at `d012feea83` from the census's families (`art:cdef90831b5f…`), vy-nebius-cpu-1: waiting for a slot since 19:59Z; the run of record took two minutes [run; read: `r20261110-030244-56f1`].
 
 **Next, in order.** The pins commit when the two runs return; `a5_sparse_mla.py --units` and the small one-stage audit on CPUs; the spot_figures partition card and the figure; the suites on the merge with `main`; the pull request, unmarked.
+
+## COUNT, Wed 11 Nov 20:10Z: beside 20,114 GB the binding error is 2^-95.65 and beside 5,202 GB it is 2^-94.14 (a datacenter's 600 s, each at its own sampled proof blocks); the caps are below; and the planner's design is not one `main`'s verifier takes: it is about 155,000 statements a verification phase where `main` takes one session a template (193), and at the statement sizes that were measured `main`'s form bounds 7.9 million GB or more at every size I ran
+
+Every figure here is the cost model's (the plan of record's inputs: the design calls dumped by run `r20261111-163515-2cd7`), GLM-5.3, a world year, utilization 0.4, δ = 0.01, S = 28,000 bits a request unless a row says otherwise, the 10% point's budget, GB = bits × 1.05 / 8e9. None ran on the served engine. No code builds a verification phase of a datacenter's size (one committer over 12,500 machines' boundary rows); on the vLLM lane's branch a verification phase is one class of requests of one window [read: `benchmarks/one_stage/two_stage.py first --boundary` at #8875's head `092004fade`, "each class's directory (w<window>/p<P>-o<O>/), one window's"]. Every GB figure spends δ once over the year, which no statement on `main` allows for the two-stage design over more than one verification phase (my 19:40Z entry).
+
+**1. The table for the pull request** [run `r20261111-200232-e76d`, rc 0, `vy-nebius-cpu-3`, tree `6423adca64`; the 1,536, datacenter and whole-year rows repeat runs `r20261111-183916-abb5` and `r20261111-192953-c6dc` to the digit]. K is the replay blocks the first stage samples of the verification phase; the binding error is at that row's own K and its own sampled proof blocks a sampled replay block, at 4,130 classes of gates a proof block (section 2).
+
+| a verification phase of | the partition `main` defines | the best designed configuration |
+|---|---|---|
+| one machine's 600 s | no design within the budget: one sampled replay block of the datacenter's design costs 486.7 budgets | no design within the budget: 256.5 budgets |
+| a 64-machine pod's 600 s | K 2, 1.84 billion GB (one proof block a stratum, 12 a sampled replay block: the only kind of design that fits) | no design within the budget: 4.0 budgets |
+| one machine for 43 hours (257 times 600 s) | K 3, 28,361 GB, 2^-101.58 | K 1, 5,455.0 GB, 2^-99.81 |
+| one machine for 81 hours (487 times 600 s) | K 1, 20,375.1 GB, 2^-100.35 | K 1, 10,336.9 GB, 2^-99.81 |
+| 1,536 machines' 600 s | K 6, 21,204.2 GB, 2^-98.58 | K 6, 5,433.8 GB, 2^-97.23 |
+| **a datacenter's 600 s (12,500 machines)** | **K 26, 20,114.4 GB, 2^-95.65** (2,702,103 proof blocks a sampled replay block) | **K 51, 5,202.4 GB, 2^-94.14** (3,920,384) |
+| the whole year as one verification phase | K 2.66 billion, 19,507.4 GB, 2^-68.14 | K 10.1 billion, 5,153.2 GB, 2^-66.57 |
+
+- The sentence: the datacenter's design does not fit the 10% budget below 487 (the partition `main` defines) and 257 (the best designed configuration) machines' 600 s, or one machine for 81 and 43 hours [run `e76d`: one sampled replay block of that design costs 486.7 and 256.5 budgets of one machine's 600 s]. At one machine's 600 s no design fits at all: replaying one sampled replay block alone is 22 budgets [derived: 5,960 GPU-seconds against 266].
+- A whole count is not smooth: the best designed configuration at 487 machines' 600 s bounds 10,336.9 GB, twice its 257-machine figure, because K stays 1 until 512 [run `e76d`].
+- The binding error is the first-hit bound by classes, in compressions, a run, the rewinding term under `StrictBirthday`. `main`'s evaluator gives the same: `binding.py --K 11159685390 --classes 11159685390 --sessions 2702103 --symbols 2^23 --first-stage 26` prints 2^-95.64 a run [run: that command on my VM at `6423adca64`, not a `research run`; its 11,159,685,390 is 4,130 × 2,702,103]. In calls, as the Lean counts, the same line prints 2^-104.64.
+
+**2. The classes of gates a proof block.**
+- The script is `tools/exact_classes.py` in the lane's notes. It counts over rank 0's Program wiring at a named configuration of the partition, and it has seven [read: its `CFGS`].
+- The partition `main` defines: 4,130, counted [relayed: run `r20261111-120402-153e`, the 12:21Z entry; the whole-row attention rows at T ≤ 9 bind].
+- The best designed configuration: not counted. None of the seven is #8917's units (a head's key block as a scores unit and values units on G columns) [read: `CFGS`], and its inputs (rank 0's wiring, the members file) are on `vy-nebius-cpu-2` [relayed]. So its figures read "at 4,130 classes, assumed". Each doubling of the classes costs one bit [derived: the term e·M·N dominates].
+- I did not add the configuration: it needs the partition's units written into the script's reader signatures, which I have not read. Say if you want it before the pull request; otherwise the body prints "assumed".
+
+**3. The caps on the bits a request returns, both configurations, a datacenter's 600 s, same budget** [run `r20261111-192953-c6dc`, rc 0, tree `9ac6befc87`].
+
+| bits a request | the partition `main` defines | the best designed configuration |
+|---|---|---|
+| 15,750 | K 13, 11,601.6 GB, 2^-95.33 at 6,736,137 blocks | K 31, 4,882.0 GB, 2^-94.07 at 6,775,021 |
+| 18,468 | K 13, 13,545.4 GB, 2^-95.35 at 6,635,862 | K 36, 4,921.4 GB, 2^-94.07 at 5,821,343 |
+| 28,000 | K 26, 20,114.4 GB, 2^-95.65 at 2,702,103 | K 51, 5,202.4 GB, 2^-94.14 at 3,920,384 |
+| 32,832 | K 26, 23,586.5 GB, 2^-95.75 at 2,524,209 | K 58, 5,338.3 GB, 2^-94.17 at 3,373,289 |
+
+**4. `main`'s form, priced** [run `e76d`; the lines of code read at `6423adca64`].
+- What `main` runs. I take each of the cost model's proof-block types (193, and 258 at the best designed configuration) as one template [guess: the census's block types, not the check's descriptor ids, which I have not listed]. Each template of the check is one stratum in each sampled replay block, with a whole count k_t of at least one (`Spot/Select.lean:108-142`, `Counts`; `:289`). A verification phase has one second-stage session a template: round 2 refuses a statement whose template an earlier statement names (`second-template`, `Spot/SecondStage.lean:965`) and a session set up as more than one table (`second-tables`, `:877`).
+- What the planner prices. Its strata are public size classes (13) or widths (78), each holding several templates with one count for the stratum, so a template's count is a mean and not a whole number. Its statements hold at most the blocks the type's statement was measured at (256 to 32,768, the `proof_overhead` card's `statement_blocks`) [read: `figure1.py:327-328`, `:426`]. At the datacenter's design that is about 155,000 statements a verification phase over 193 templates (161,000 over 258), and their fixed costs are 95% of proving [run: a command on my VM over the same dump, not a `research run`].
+- The table, a datacenter's 600 s:
+
+| | the partition `main` defines | the best designed configuration |
+|---|---|---|
+| the planner's design | K 26, 20,114.4 GB | K 51, 5,202.4 GB |
+| one stratum a template with whole counts, the planner's statements | K 21, 12,684.1 GB, 2^-95.47 | K 51, 5,209.0 GB, 2^-94.14 |
+| `main`'s form, each session at most the blocks its statement was measured at | K 2, 1.55 billion GB | K 2, 386 million GB |
+| `main`'s form, a session of any size at the measured price a block (not measured) | K 25, 752.1 GB, 2^-91.22 | K 65, 287.1 GB, 2^-89.79 |
+
+- The strata are not the difference. One stratum a template with whole counts costs nothing, and at the partition `main` defines it is better than the planner's own strata (12,684 GB against 20,114).
+- The sessions are the difference. With one session a template, a session holds every sampled block of its template in the verification phase: up to 612 million blocks at the partition `main` defines (1.6 billion at the best designed configuration), 2.4 million (1.6 million) times the largest statement of that type that was measured. Priced as if the measured price a block held at any size, the figures are 752 and 287 GB, lower than the planner's because a template pays its statement's fixed cost once. Nothing measured says a session of that size can be proved.
+- Held to the measured statement sizes, a verification phase samples at most 515,840 proof blocks in all (666,368 at the best designed configuration), whatever its size: K·k_t is at most 256 to 32,768 a template [derived: the sum of the types' `statement_blocks`]. So the bound grows with the verification phase: 7.9 million GB at 64 machines' 600 s, 190 million at 1,536, 1.55 billion at a datacenter's (2.0 million, 47 million and 386 million at the best designed configuration). These are the least my search found (K a power of two, the counts by the planner's rule and then held to the statement sizes). A verification phase smaller than a pod's fits down to about 35 machines' 600 s (40 at the best designed configuration) and would bound less in proportion; I did not run one. Everything served is 62.2 billion GB.
+- So the 20,114 and 5,202 GB price a second stage `main`'s verifier refuses. Two things would close it, neither built: the verifier takes several sessions a template (a form it gains, so its proof first), or a statement is measured at the size one session would hold.
+
+**5. On the branch** `cursor/proofs-count-71ac` at `6423adca64` (pushed; `origin/main` `61f13c2275` merged in). No pull request is open yet.
+- The planner: the first stage samples a whole count K of a verification phase, no public cap and no padding to it; a size at which one sampled replay block is over the budget has no design (`optimize.registration_sample`, `two_stage_design`).
+- The figures' drivers (`total_cost.py`, `breakeven/zkstack.py`, `breakeven/sweep.py`, `figure1.py`) and the README read it. A point with no design is at the scope's served bits and prints "no design within the budget: one sampled replay block costs N budgets"; a point with one prints K and the least verification phase its design fits. The caption says no code builds a verification phase of a datacenter's size.
+- The tree's own figure under it (S = 144,000 bits a request, a datacenter week) [run: `total_cost.run` on my VM, Lean off]: one machine's 600 s has no design at any β from 0.1% to 100%; a pod's has none below β = 10%; a datacenter's at β = 1% is K 8 and 371 TB of 1.87 PB served.
+- The suite run is `r20261111-195707-fe29` (`suites.py --changed origin/main --quick`), running at 20:08Z. The three test files I changed pass on my VM: 39 quick, 4 slow.
+
+**6. Open, and what I do next.**
+- Which second stage the plan of record states. The planner's design cannot be written as the per-template counts `main` registers, because a stratum's count is shared by its templates. The design with one stratum a template can (12,684 and 5,209 GB with the planner's statements). Unless you say otherwise I make the planner design by template, write that design's counts to a file keyed by the census's block type, and re-put the plan of record from it at a datacenter's 600 s, with one line in the body that `main` runs one session a template and what that costs (the table above).
+- Not done: the plan of record's re-put and `verity bench prove --system spot` on it; the verdict's field with `e` and the leading constant as arguments.
