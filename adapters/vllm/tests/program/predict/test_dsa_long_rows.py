@@ -313,26 +313,32 @@ def _step(*rows: tuple[int, int, int, int]):
     return WA.StepAdvice(tuple(WA.Row(i, "decode" if n == 1 and s >= lp else "prefill", s, n, 0, False, ()) for i, lp, s, n in rows))
 
 
-@pytest.mark.slow
-def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_path):
-    """Class G (about 40 s): A (a 3-token prompt, 5 outputs: its rows past INDEX_TOPK from position 4) and B (2 and 3, within it)
-    whole in one window are, call for call, their Programs across three, each with its own pad constants and length rule: the first leaves A at position 6 and B at 3, the second
-    runs B's last row with A carried through it idle, and the third runs A's last.  A's rows read the indexer's keys and scales
-    past INDEX_TOPK, so the edges carry them for A alone: the first window's A returns its samples, then every layer's latent rows,
-    index-K slots and scales so far, out-ports `edge.kv`, `edge.ik`, `edge.iks` and `edge.last`, while B's index-K history stays
-    its own unread Inputs; the idle window passes A's fields through to its own edge, and the third reads them as A's history,
-    `edge.ik` and `edge.iks` one field each.  Each window's Program selects the top-k of the rows it computes past INDEX_TOPK, and
-    the advice's side (`pipeline.edge.fields`) holds each port's members as each window's Program returns them.  What no cheaper
-    test can: that a window's edges carry a request past INDEX_TOPK whole, through a window it idles in."""
-    from verity.circuits.types import field_types
-    from verity_vllm.pipeline import edge as E
-    from verity_vllm.pipeline import window_advice as WA
-    from verity_vllm.program.predict.steps import Registered, compile_steps
-    from verity_vllm.program.workload import EDGE_PORTS
+def _short_class_g(tmp_path):
+    from verity_vllm.program.predict.steps import Registered
     from tests.program.predict.test_steps import CACHE_ON
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     reg = _class_g(tmp_path, engine=CACHE_ON, model={"hf_config": hf})
-    reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
+    return Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
+
+
+@pytest.mark.slow
+def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_path):
+    """Class G (about 40 s): A (a 3-token prompt, 5 outputs: its rows past INDEX_TOPK from position 4) and B (2 and 3, within it)
+    whole in one window are, call for call, their Programs across three, each with its own pad constants and length rule: the
+    first leaves A at position 6 and B at 3, the second runs B's last row with A carried through it idle, and the third runs A's
+    last. A's rows read the indexer's keys and scales past INDEX_TOPK, so the edges carry them for A alone: the first window's A
+    returns its samples and its length rule, then every layer's normed kv_c and roped k_pe rows, index-K slots and scales so far,
+    out-ports `edge.kv_c`, `edge.kv_pe`, `edge.ik`, `edge.iks` and `edge.last`, while B's index-K history stays its own unread
+    Inputs; the idle window passes A's fields through to its own edge, and the third reads them as A's history, `edge.ik` and
+    `edge.iks` one field each. Each window's Program selects the top-k of the rows it computes past INDEX_TOPK, and the advice's
+    side (`pipeline.edge.fields`) holds each port's members as each window's Program returns them. What no cheaper test can: that
+    a window's edges carry a request past INDEX_TOPK whole, through a window it idles in."""
+    from verity.circuits.types import field_types
+    from verity_vllm.pipeline import edge as E
+    from verity_vllm.pipeline import window_advice as WA
+    from verity_vllm.program.predict.steps import compile_steps
+    from verity_vllm.program.workload import EDGE_PORTS
+    reg = _short_class_g(tmp_path)
     a, b = WA.RequestAdvice("a", 3, 5, "length"), WA.RequestAdvice("b", 2, 3, "length")
     steps = [_step((0, 3, 0, 3), (1, 2, 0, 2)), _step((0, 3, 3, 1), (1, 2, 2, 1)), _step((0, 3, 4, 1)), _step((0, 3, 5, 1)),
              _step((1, 2, 3, 1)), _step((0, 3, 6, 1))]
@@ -354,24 +360,26 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
 
     for r in (0, 1):
         assert calls(prog[0][r]) == [i for p in prog[1:] if r in p for i in calls(p[r])]
-    assert [u.edge for u in cs[1].requests] == [("prefix", "prefix_ik", "prefix_iks"), ("prefix",)]
+    latent, caps = ("prefix_kv_c", "prefix_kv_pe"), {q: body["max_tokens"] for q, body in ingress.items()}
+    assert [u.edge for u in cs[1].requests] == [(*latent, "prefix_ik", "prefix_iks"), latent]
     ret = field_types(prog[1][0].fn.signature()[1])
     assert ret[:2] == (Array(4, I32), Array(1, Value(1))) and ret[2:] == (
-        Array(4, Array(6, Array(576, Value(16)))), Array(3, Array(6, Array(128, Value(8)))), Array(3, Array(6, Value(32))))
+        Array(4, Array(6, Array(512, Value(16)))), Array(4, Array(6, Array(64, Value(16)))), Array(3, Array(6, Array(128, Value(8)))),
+        Array(3, Array(6, Value(32))))
     wls = [c.workload for c in cs]
     assert field_types(wls[1].fn.signature()[1])[0] == TupleT(*ret[:2])
     assert wls[1].edge.outs == wls[2].edge.ins and [[g for g, _, _ in gs] for _, gs in wls[2].edge.ins] == [
-        ["prefix", "prefix_ik", "prefix_iks", "last_token"], ["prefix", "last_token"]]
+        [*latent, "prefix_ik", "prefix_iks", "last_token"], [*latent, "last_token"]]
     assert wls[2].edge.outs == wls[2].edge.ins[:1] == wls[3].edge.ins, "the idle window hands A's fields on as they came in"
     for adv, wl in ((out, wls[1]), (idle, wls[2]), (into, wls[3])):
-        assert E.fields(adv, TOPK) == {p: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if g in [h for h, _, _ in gs])
-                                       for p, g in EDGE_PORTS}, "the advice's side holds the fields the Program's edge returns"
+        assert E.fields(adv, TOPK, latent, caps) == {p: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if g in [h for h, _, _ in gs])
+                                               for p, g in EDGE_PORTS if g != "prefix"}, "the advice's side holds the fields the Program's edge returns"
     rids = {w: [r.request_id for r in wls[w].requests] for w in (2, 3)}
-    for w, held in ((2, [2, 1, 1, 2]), (3, [1, 1, 1, 1])):
+    for w, held in ((2, [2, 2, 1, 1, 2]), (3, [1, 1, 1, 1, 1])):
         params = dict(wls[w].fn.signature()[0])
-        assert wls[w].ports == ("edge.kv", "edge.ik", "edge.iks", "edge.last")
+        assert wls[w].ports == ("edge.kv_c", "edge.kv_pe", "edge.ik", "edge.iks", "edge.last")
         assert [len(field_types(params[p])) for p in wls[w].ports] == held
-        assert [t.leaves for t in field_types(params["edge.ik"])] == [ret[3].leaves]
+        assert [t.leaves for t in field_types(params["edge.ik"])] == [ret[4].leaves]
     names = [n for n, _ in wls[2].fn.signature()[0] if n.startswith("request[") and ".peers_" not in n]
     assert names == [f"request[{rids[2][0]}].{g}" for g in ("prompt", "prefix_ik", "prefix_iks")], "B's index-K history is its own"
     assert [n for n, _ in wls[3].fn.signature()[0] if n.startswith("request[") and ".peers_" not in n] == [f"request[{rids[3][0]}].prompt"]
@@ -381,15 +389,46 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
 
 
 @pytest.mark.slow
+def test_class_g_keys_the_indexer_edge_on_max_tokens_never_on_the_output_length(tmp_path):
+    """Class G (about 25 s): e and f, prompts of 2 and max_tokens 4, admitted together and left by the window after two outputs
+    each; e stops at its 3rd output (its last row reads 4 keys, within INDEX_TOPK) and f runs to its 4th (5 keys, past it). The
+    window can't know which stops first, so both edges carry the indexer's keys and scales for both, as the advice's side
+    (`pipeline.edge.fields` at their caps) holds: the first window's Programs return them and the next reads them as e's and f's
+    history, e's Program selecting no top-k. What no cheaper test can: that a request whose rows never read past INDEX_TOPK
+    compiles carrying its indexer history across a window."""
+    from verity_vllm.pipeline import edge as E
+    from verity_vllm.pipeline import window_advice as WA
+    from verity_vllm.program.predict.steps import compile_steps
+    from verity_vllm.program.workload import EDGE_PORTS
+    reg = _short_class_g(tmp_path)
+    e, f, g = WA.RequestAdvice("e", 2, 3, "eos"), WA.RequestAdvice("f", 2, 4, "length"), WA.RequestAdvice("g", 2, 1, "eos")
+    w = WA.Advice((e, f, g), (_step((0, 2, 0, 2), (1, 2, 0, 2)), _step((0, 2, 2, 1), (1, 2, 2, 1)), _step((2, 2, 0, 2))), (0,) * 5)
+    at = WA.Carried(0, 3, 2, ((0, 3),))
+    into = WA.Advice((e, f), (_step((0, 2, 3, 1), (1, 2, 3, 1)), _step((1, 2, 4, 1))), (0,) * 3, (at, at))
+    assert WA.follows(w, into) == [(0, 0), (1, 1)]
+    ingress = {"e": {**GREEDY, "max_tokens": 4, "prompt": [1, 2]}, "f": {**GREEDY, "max_tokens": 4, "prompt": [3, 4]},
+               "g": {**GREEDY, "max_tokens": 1, "prompt": [5, 6]}}
+    cs = [compile_steps(reg, adv, {q.id: ingress[q.id] for q in adv.requests}) for adv in (w, into)]
+    latent, caps = ("prefix_kv_c", "prefix_kv_pe"), {q: body["max_tokens"] for q, body in ingress.items()}
+    assert all(c.batch_rule is None for c in cs)
+    assert [u.edge for u in cs[0].requests] == [(*latent, "prefix_ik", "prefix_iks")] * 2 + [()]
+    out = cs[0].workload.edge.outs
+    assert [i for i, _ in out] == [0, 1] and out[0][1] == out[1][1] and out == cs[1].workload.edge.ins
+    assert cs[1].workload.ports == ("edge.kv_c", "edge.kv_pe", "edge.ik", "edge.iks", "edge.last")
+    assert E.fields(w, TOPK, latent, caps) == {p: (0, 1) for p, g in EDGE_PORTS if g != "prefix"}
+    assert _members(cs[1].programs[cs[1].requests[0].digest].fn.body.nodes, COUNTED) == 0, "e's rows read no key past INDEX_TOPK"
+
+
+@pytest.mark.slow
 def test_class_g_compiles_a_prompt_whose_prefill_spans_two_window_edges(tmp_path):
-    """Class G as served, the prefix cache off, its long-prefill threshold cut to 4 (about 6 s): a 10-token prompt prefilled 4, 4
-    and 2 rows a step, then decoded twice, its rows past INDEX_TOPK from position 4, in three Commit windows whose two edges fall
-    inside the prompt.  Each window compiles: the first leaves the request mid-prompt with its latent rows, index-K slots and
-    scales as out-ports, the second carries it in at 4 positions and out at 8, the third carries it in and finishes it, and the
-    three windows' calls are the whole window's, each window selecting the top-k of the rows it computes past INDEX_TOPK.  A
-    request left mid-prompt has no `edge.last`.  What no cheaper test can: that a served class G prefill, the 131,072-token
-    prompt's shape, spans window edges in the compiler, which `engine.class_admission` refuses only because the served Commit
-    doesn't commit the edge."""
+    """Class G as served, the prefix cache off, its long-prefill threshold cut to 4 (about 6 s): a 10-token prompt prefilled
+    4, 4 and 2 rows a step, then decoded twice, its rows past INDEX_TOPK from position 4, in three Commit windows whose two
+    edges fall inside the prompt.  Each window compiles: the first leaves the request mid-prompt with its latent rows' two
+    halves, index-K slots and scales as out-ports, the second carries it in at 4 positions and out at 8, the third carries it
+    in and finishes it, and the three windows' calls are the whole window's, each window selecting the top-k of the rows it
+    computes past INDEX_TOPK.  A request left mid-prompt has no `edge.last`.  What no cheaper test can: that a served class G
+    prefill, the 131,072-token prompt's shape, spans window edges in the compiler, which `engine.class_admission` refuses only
+    because the served Commit doesn't commit the edge."""
     from verity.circuits.types import field_types
     from verity_vllm.pipeline import edge as E
     from verity_vllm.pipeline import window_advice as WA
@@ -406,10 +445,11 @@ def test_class_g_compiles_a_prompt_whose_prefill_spans_two_window_edges(tmp_path
     assert WA.follows(*windows[:2]) == WA.follows(*windows[1:]) == [(0, 0)]
     ingress = {"a": {**GREEDY, "max_tokens": 3, "prompt": list(range(1, 11))}}
     cs = [compile_steps(reg, adv, ingress) for adv in (WA.Advice((a,), tuple(steps), (0,) * 3), *windows)]
+    latent, caps = ("prefix_kv_c", "prefix_kv_pe"), {"a": ingress["a"]["max_tokens"]}
+    edge = (*latent, "prefix_ik", "prefix_iks")
     units = [u for c in cs for u in c.requests]
     assert [(u.LP, u.C, u.carried_in, u.carried_out, u.edge) for u in units] == [
-        (10, 0, False, False, ()), (10, 0, False, True, ("prefix", "prefix_ik", "prefix_iks")),
-        (10, 4, True, True, ("prefix", "prefix_ik", "prefix_iks")), (10, 8, True, False, ())]
+        (10, 0, False, False, ()), (10, 0, False, True, edge), (10, 4, True, True, edge), (10, 8, True, False, ())]
     assert units[0].chunks == (4, 4, 2) and units[0].T == units[3].T == 2
 
     def calls(c) -> list[str]:
@@ -420,13 +460,15 @@ def test_class_g_compiles_a_prompt_whose_prefill_spans_two_window_edges(tmp_path
     assert [_members(next(iter(c.programs.values())).fn.body.nodes, COUNTED) for c in cs] == [3 * 8, 0, 3 * 4, 3 * 4]
     wls = [c.workload for c in cs]
     assert wls[1].edge.outs == wls[2].edge.ins and wls[2].edge.outs == wls[3].edge.ins and not wls[3].edge.outs
-    assert [[g for g, _, _ in gs] for _, gs in wls[2].edge.ins] == [["prefix", "prefix_ik", "prefix_iks"]]
-    assert wls[2].ports == wls[3].ports == ("edge.kv", "edge.ik", "edge.iks")
-    assert [[t.leaves for t in field_types(dict(wls[w].fn.signature()[0])["edge.kv"])] for w in (2, 3)] == [
-        [4 * 4 * 576], [4 * 8 * 576]], "every layer's latent rows so far"
+    assert [[g for g, _, _ in gs] for _, gs in wls[2].edge.ins] == [list(edge)]
+    assert wls[2].ports == wls[3].ports == ("edge.kv_c", "edge.kv_pe", "edge.ik", "edge.iks")
+    for port, width in (("edge.kv_c", 512), ("edge.kv_pe", 64)):
+        assert [[t.leaves for t in field_types(dict(wls[w].fn.signature()[0])[port])] for w in (2, 3)] == [
+            [4 * 4 * width], [4 * 8 * width]], f"every layer's {port} rows so far"
     for adv, wl in zip(windows, wls[1:]):
-        assert E.fields(adv, TOPK) == {p: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if g in [h for h, _, _ in gs])
-                                       for p, g in EDGE_PORTS}, "the advice's side holds the fields the Program's edge returns"
+        assert E.fields(adv, TOPK, latent, caps) == {
+            p: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if g in [h for h, _, _ in gs]) for p, g in EDGE_PORTS
+            if g != "prefix"}, "the advice's side holds the fields the Program's edge returns"
 
 
 @pytest.mark.slow

@@ -32,16 +32,15 @@ A field is read ``ahead`` where it shapes a request's unit (`steps.RequestUnit`,
 the part of y it fixes. Such a field is advice, its bits charged whatever the circuit does with it. Read from y instead, as a
 checked output, it would need prefix stability: changing y at or after a step changes nothing the circuit computes before it
 (the plan's rows and launches up to there, and its Programs' calls). `test_reads` holds the plan prefix stable at every step of
-its windows, and the Programs too but in one read: a batch-invariant Program's length sizes only its later decodes, but in
-class G a request's Program computes its indexer's keys and scales for the rows it runs before the window's close only where
-the close returns them, where its last row, after the close, reads past INDEX_TOPK keys. y's parts:
+its windows, and the Programs too: a batch-invariant Program's length sizes only its later decodes, and in class G a window's
+close returns a request's indexer keys and scales where its prompt and certified ``max_tokens`` reach past INDEX_TOPK keys
+(`segment.edge_groups`), whatever its length. y's parts:
 - its token ids: each kept output is a token select's sampled id in its request's Program (`steps.EGRESS`), an output the
   compiler never reads;
 - which response a token belongs to: the request's id, certified (the body it names is the request's, by its `user`);
-- each response's length, where its terminator goes: ``output_len``, advice, read ahead three times: on a batch-invariant
-  target a request's Program is its whole request's (T = ``output_len`` − 1) in every window; in class G a window's close
-  returns a request it leaves with outputs to keep with its indexer's keys and scales on its edge where its last row reads past
-  INDEX_TOPK keys (`segment.edge_groups`); and it sets the request's length rule (`steps.stop_of`, `RequestUnit.stop`);
+- each response's length, where its terminator goes: ``output_len``, advice, read ahead twice: on a batch-invariant target a
+  request's Program is its whole request's (T = ``output_len`` − 1) in every window, and it sets the request's length rule
+  (`steps.stop_of`, `RequestUnit.stop`);
 - each response's finish reason: ``finish``, advice, read ahead to set the request's length rule (`RequestUnit.stop`), and to
   refuse a record its body contradicts (`ingress_policy.request_of`);
 - the outputs a request kept before the window opened: its carried ``kept``, advice, held to the last window's close
@@ -50,8 +49,8 @@ the close returns them, where its last row, after the close, reads past INDEX_TO
 
 **y as the request Programs return it.** A request Program returns its kept outputs' token ids first, ``Array(n, I32)`` in
 output order, n the outputs its rows keep in the window (``output_len`` for a request whole in one), and on a batch-invariant
-target nothing else; in class G then, for its rows past INDEX_TOPK keys, the bits that their top-k orders are the canonical
-ones, and for a request the window leaves with outputs to keep, its edge (`build.build_program`'s ``edge``). It returns no
+target nothing else; in class G then, for a request the window leaves with outputs to keep, its edge
+(`build.build_program`'s ``edge``). It returns no
 terminator and no finish reason: its ids end where its shape does, at ``output_len``, which its length rule
 (`RequestUnit.stop`: `StopCheck_v1` over `StopRule_v1`) checks against the ids (no stop token before the last output, which
 is a stop token or the cap's); a finish reason is the advice's, eos or length held by the same rule to the ids and the cap,
@@ -84,8 +83,9 @@ _SEED_WHY = ("a stochastic request's seed is certified, its body's seed or deriv
 #: the registration's switch the prefix-cache hit's fields are under
 PREFIX_CACHE = "enable_prefix_caching"
 #: a certified body's field roles: the prompt (read apart, `ingress_policy.request_of`); how the response travels, which computes
-#: nothing; what only finishes a request (its T, which the advice's rows carry; `max_tokens` and `ignore_eos` hold its `output_len`
-#: and `finish`); what the sampling policy reads (`ingress_policy.policy_of`); and a parameter refused off its inert values
+#: nothing; what finishes a request (its T, which the advice's rows carry; `max_tokens` and `ignore_eos` hold its `output_len`
+#: and `finish`, and in class G `max_tokens` keys its edge, `segment.edge_groups`); what the sampling policy reads
+#: (`ingress_policy.policy_of`); and a parameter refused off its inert values
 ROLES = ("prompt", "transport", "finish", "policy", "inert")
 
 
@@ -110,7 +110,7 @@ READS: tuple[Field, ...] = (
     *(Field("advice", n, "advice") for n in ("requests", "steps", "carried")),
     Field("request", "id", "certified", y="the response a token belongs to"),
     Field("request", "prompt_len", "certified"),
-    Field("request", "output_len", "advice", y="a response's length", ahead=("T", "edge", "stop")),
+    Field("request", "output_len", "advice", y="a response's length", ahead=("T", "stop")),
     Field("request", "finish", "advice", y="a response's finish reason", ahead=("stop",)),
     Field("step", "rows", "advice"),
     *(Field("row", n, "advice", switch=PREFIX_CACHE if n in ("cache_hit", "sources") else "")
@@ -168,6 +168,28 @@ def hits_off(advice: Any, engine: Mapping[str, Any]) -> list[tuple[int, str]]:
                             f"the prefix cache on") for r in step.rows if r.cache_hit and ("row", "cache_hit") in gone]
     return out + [(i, f"request {i}: carried in on a prefix-cache hit of {c.C} tokens, and the registration states the prefix "
                       f"cache off ({PREFIX_CACHE} False)") for i, c in enumerate(advice.carried) if c.C and ("carried", "C") in gone]
+
+
+def check_sources(s: int, row: Any, prompts: Mapping[int, tuple[int, ...]]) -> None:
+    """A cache hit's sources hold the KV of the request's own tokens: through each run, the source's certified prompt equals the
+    hitting request's (the KV at a position reads every token up to it). Refused otherwise, or where a run leaves a prompt. A
+    resume's run of its own KV is its own by I1's replay (the request computed those positions), past its prompt too."""
+    r, at = row.request, 0
+    for src in row.sources:
+        end, a, b = at + src.n, prompts.get(row.request), prompts.get(src.request)
+        if src.request == r and row.preempted:
+            at = end
+            continue
+        if a is None or b is None:
+            raise Unexpressible(f"request {r}: step {s}'s cache hit reads request {src.request}'s KV, and one of the two has no certified "
+                                f"prompt")
+        if end > min(len(a), len(b)):
+            raise Unexpressible(f"request {r}: step {s}'s cache hit reads request {src.request}'s KV at positions {at} … {end - 1}, past "
+                                f"a certified prompt (v0 checks sources against prompts only)")
+        if a[:end] != b[:end]:
+            raise Unexpressible(f"request {r}: a forged cache hit at step {s}: request {src.request}'s certified prompt differs from its "
+                                f"own before position {end}, so that KV isn't its own")
+        at = end
 
 
 def refusals(table: tuple[Field, ...] = READS) -> list[str]:

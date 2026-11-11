@@ -139,7 +139,7 @@ from verity_vllm.commit import index as IX, row_tables as RTB, step_rows
 from verity.commitments.windows import interface as IF
 from verity.commitments.windows import rows as CS
 from verity_vllm.pipeline import chain_rows as CH, chunk_rows as CR, ingress_rows as IR
-from verity_vllm.pipeline import expert_rows as EX
+from verity_vllm.pipeline import edge_rows as ER, expert_rows as EX
 from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
 from verity_vllm.pipeline import s8_rows as S8, slice_rows as SL
 from verity_vllm.pipeline import stage_rows as ST, weight_rows as WT
@@ -179,7 +179,7 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
             after_commit(req["dir"], partition_file=req["partition"], programs=programs, bmap=bmap, committed=OpenedReader(com, rc),
                          weights=weights, manifest=manifest if isinstance(manifest, dict) else None, run_root=rc.run_root, run=req.get("run"),
                          row=row or None, arrivals=arrivals, program_dirs={k: v.get("dir") for k, v in loaded.items()},
-                         digests=digests, committer=req.get("committer"), tables=EX.of_request(req.get("tables")))
+                         digests=digests, committer=req.get("committer"), tables=EX.of_request(req.get("tables")), edge=req.get("edge"))
         except Exception as e:  # noqa: BLE001
             Path(req["dir"]).mkdir(parents=True, exist_ok=True)
             (Path(req["dir"]) / "error.txt").write_text(traceback.format_exc())
@@ -409,13 +409,15 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
 def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any], run_root: str,
                program_dirs: dict[str, str] | None = None, index: Mapping[str, Any] | None = None,
                arrivals: Mapping[str, int] | None = None, context: str = "",
-               reuse: Sequence[ProgramIndex] = (), transfer_gates: Sequence[str] = ()) -> tuple[CS.Binding, list[list[Row]]]:
+               reuse: Sequence[ProgramIndex] = (), transfer_gates: Sequence[str] = (),
+               values: Sequence[tuple[str, int, int]] = ()) -> tuple[CS.Binding, list[list[Row]]]:
     """The verifier's window over the run's Programs (``partition``: the partition file's ``templates``, ``law`` and ``scope``) and
     each template's rows; refused when the file names a ``partition_digest`` that is not the window's, or a ``query`` other than the
     template queries.  ``row_tables: true`` in the file: the ``ScaledMmS8Coordinate`` chunks in the row-table layout
     (`with_row_tables`, its engine steps the requests' ``arrivals`` plus their steps), under ``context`` (hex: the live coin
     commitment's root serving committed its step roots under).  ``reuse``: `member_rows`'.  ``transfer_gates``: the registered
-    compiler's transfer-gate templates, whose units a ``work:K`` window proves every one of (`work_table_of`)."""
+    compiler's transfer-gate templates, whose units a ``work:K`` window proves every one of (`work_table_of`).  ``values``: the
+    values its program takes, the history the last window left it (`edge_rows.values`)."""
     tmpls, law = list(partition["templates"]), law_of(partition["law"])
     q = partition.get("query")
     if q is not None and q not in TEMPLATE_QUERIES:
@@ -435,7 +437,8 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     if partition.get("row_tables"):
         ms, tables = with_row_tables(ms, tmpls, rows, arrivals)
     n_of = {t: sum(m.n for m in ms if m.template == t) for t in tmpls}
-    program, query = CS.population_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], several=q == TEMPLATE_QUERIES[1])
+    program, query = CS.population_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], several=q == TEMPLATE_QUERIES[1],
+                                           values=values)
     table = work_table_of(law, n_of, transfer_gates)
     if table is not None:
         table = {P.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
@@ -724,7 +727,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  index: Mapping[str, Any] | None = None, row_tables: Mapping[str, Any] | None = None,
                  reuse: Sequence[ProgramIndex] = (), binding: Mapping[str, Any] | None = None,
                  transfer_gates: Sequence[str] = (), weight_values: Mapping[str, Any] | None = None,
-                 tables: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                 tables: Mapping[str, Any] | None = None, edge: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Commit the verifier's partition's units of a run whose roots are final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the scheme the values were read
     under (``commitment``, rows-sha512), the research run ``run``, the row, the committer and the served Programs' ``digests``),
@@ -740,12 +743,15 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     {engine step: root}}`` (`commit.row_tables.step_roots`), which the window's step roots must be.  It reads the committed values
     and writes only ``out_dir``, ``circuit.json`` among its files: the window's circuit record (`circuit_record`), whose SHA-512
     the provenance carries as ``circuit``.  For Programs a registered compiler made from advice, the provenance also carries ``binding``: the
-    compiler's digest and the advice's hiding root (`pipeline.advice_windows.binding`)."""
+    compiler's digest and the advice's hiding root (`pipeline.advice_windows.binding`).  ``edge`` (the served request's, `edge_rows`):
+    the edge ports of the requests the window leaves, wired from the units that output them, committed and named among its roots,
+    and the history the last window left registered under that window's roots, the record chained after its (`edge_rows.served`)."""
     t0 = time.perf_counter()
     dirs = {str(k): v for k, v in (program_dirs or {}).items()}
-    pf, rt = json.loads(Path(partition_file).read_text()), row_tables or {}
+    pf, rt, ed = json.loads(Path(partition_file).read_text()), row_tables or {}, ER.of_request(edge)
+    hist = ER.last(ed)
     window, rows = population(programs, pf, run_root if isinstance(run_root, str) else bytes(run_root).hex(), dirs, index, arrivals,
-                              rt.get("context", ""), reuse, transfer_gates)
+                              rt.get("context", ""), reuse, transfer_gates, ER.values(hist.doc if hist else None))
     ms = window.members
     store = CommittedStore.of_record(bmap, committed, manifest)
     plan, values = EX.Plan(list(dict.fromkeys(m.template for m in ms)), rows), dict(weight_values or {})
@@ -760,6 +766,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     t_read = time.perf_counter()
     c = CS.commit(window, data, row_salt_key=rt.get("key"), segment_roots=rt.get("step_roots"),
                   workers=workers or min(16, os.cpu_count() or 1), salts_of=salts_of)
+    carried = ER.served(ed, hist, c, rows, programs, out_dir)
     prov = {"commitment": step_rows.NAME, "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
             **({"tp": dict(tp)} if tp else {}), **(stand_in or {}), **(binding or {}), **({"registered_roots": roots} if roots else {})}
@@ -770,7 +777,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     (Path(out_dir) / "circuit.json").write_bytes(body)
     prov["circuit"] = hashlib.sha512(body).hexdigest()
     res = CS.write(c, out_dir, prov, IX.index_doc(ms, [g[1] for g in got], window.run), kind="stand-in" if stand_in else "served",
-                   registered=entries, registrar=R)
+                   registered=entries, registrar=R, previous=carried.previous, entries=carried.entries, outputs=carried.outputs)
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (Path(out_dir) / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     print(f"[serving-rows] {window.population} units in {len(ms)} members committed ({CS.SCHEME}): "

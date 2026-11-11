@@ -46,16 +46,17 @@ its account in the output accounting (the advice through `reads.gate`):
   Program's boundary inputs (`build.build_program`'s C): a cache hit's C rows, the producers', which GP-01 records per block; or,
   for a request the window carries in, its own rows up to where it continues (its carried `computed`), from its prompt's end on
   with its last kept output (`last_token`, from which it resumes at decode C), which GP-01 reads from the last window's edge
-  values (`segment.edge_of`, `workload.Edge`): registered parameters `edge.kv` (the latent rows), `edge.ik` and `edge.iks` (the
-  indexer's keys and scales, of a request whose rows read past INDEX_TOPK keys in some window) and `edge.last`, each the carried
-  requests' fields of one group in the last window's `close` order, that window's output ports; a history group no edge carries
-  stays an Input of the request's own, which no row reads. A request the window leaves with outputs to keep reaches as far as
-  its rows go, inside its prompt too (sampling nothing), and returns its rows so far and its last kept output
-  (`build_program(edge=)`), which GP-01 composes into this window's edge ports in its `close` order; the next window carries its
-  state. One whose rows here are all past its last kept output has no Program here. The launch and the chunks are the advice's
-  schedule, never a batch-mate's value; requests of one (LP, T, C, policy, chunks, launch, edge) share one Program. Its Program
-  reads every launch its rows ran in, so a recompute after preemption has no Program there. A launch the kernels' captured
-  statics don't cover is the build's refusal, by name: today a step of more than 2,048 tokens (the all-reduce and cuBLAS
+  values (`segment.edge_of`, `workload.Edge`): registered parameters `edge.kv_c` and `edge.kv_pe` (the latent rows' normed kv_c
+  and roped k_pe, each its writer's output; a decoder with one latent group `edge.kv`), `edge.ik` and `edge.iks` (the indexer's
+  keys and scales, of a request whose prompt and certified `max_tokens`, never its output length, reach past INDEX_TOPK keys) and
+  `edge.last`, each the carried requests' fields of one group in the last window's `close` order, that window's output ports; a
+  history group no edge carries stays an Input of the request's own, which no row reads. A request the window leaves with outputs
+  to keep reaches as far as its rows go, inside its prompt too (sampling nothing), and returns its rows so far and its last kept
+  output (`build_program(edge=)`), which GP-01 composes into this window's edge ports in its `close` order; the next window
+  carries its state. One whose rows here are all past its last kept output has no Program here. The launch and the chunks are the
+  advice's schedule, never a batch-mate's value; requests of one (LP, T, C, policy, chunks, launch, edge) share one Program. Its
+  Program reads every launch its rows ran in, so a recompute after preemption has no Program there. A launch the kernels'
+  captured statics don't cover is the build's refusal, by name: today a step of more than 2,048 tokens (the all-reduce and cuBLAS
   captures). A row of more than INDEX_TOPK keys computes its top-k from its logits in the Program (`dsa._Model.attention`).
 - At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
@@ -83,11 +84,11 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
   own KV: through each run, the source's certified prompt must equal the request's (the KV at a position reads every token up to
   it), in whole blocks of the engine's block size where the Program reads the hit (a resume's run of its own KV is I1's replay's);
 - what v0 doesn't compile: on a batch-invariant target, a prefix-cache hit on a stochastic request (the cached stochastic wrapper
-  isn't ported), or on a request a window carries in (its prefix's producers are the admitting window's requests); positions
-  past the model's (in class G, past the registered `max_model_len` too); in class G, a request whose Program wouldn't hold every
-  launch it ran in (`launch_of`), one the window leaves somewhere its Program doesn't reach (`edge_of`), and a hit on a request
-  with no Program in the window; sampling other than greedy or seeded top-p with top_k 0 (min_p, the penalties, logit_bias,
-  min_tokens, n > 1, or a parameter this compiler doesn't know);
+  isn't ported), or on a request a window carries in (its prefix's producers are the admitting window's requests); positions past
+  the model's (in class G, past the registered `max_model_len` too); in class G, a request whose Program wouldn't hold every
+  launch it ran in (`launch_of`), one the window leaves somewhere its Program doesn't reach or carries idle with no body
+  (`edge_of`), and a hit on a request with no Program in the window; sampling other than greedy or seeded top-p with top_k 0
+  (min_p, the penalties, logit_bias, min_tokens, n > 1, or a parameter this compiler doesn't know);
 - a request Program with a dead unit (`program.prune`: a node no output reads), whose fix is in the lowering, never the advice;
 - a compilation `predict.batch.check_compiled` refuses (`BatchDependent`): one where a request's outputs could read its
   batch-mates (R2 a request planned differently alone, which keeps a cache hit on another request's KV only when its tokens are
@@ -336,28 +337,6 @@ def stop_of(i: int, q: I1.RequestAdvice, T: int, ids: tuple[int, ...], max_token
         raise Unexpressible(f"request {i}: {e}") from None
 
 
-def check_sources(s: int, row: I1.Row, prompts: Mapping[int, tuple[int, ...]]) -> None:
-    """A cache hit's sources hold the KV of the request's own tokens: through each run, the source's certified prompt equals the
-    hitting request's (the KV at a position reads every token up to it). Refused otherwise, or where a run leaves a prompt. A
-    resume's run of its own KV is its own by I1's replay (the request computed those positions), past its prompt too."""
-    r, at = row.request, 0
-    for src in row.sources:
-        end, a, b = at + src.n, prompts.get(row.request), prompts.get(src.request)
-        if src.request == r and row.preempted:
-            at = end
-            continue
-        if a is None or b is None:
-            raise Unexpressible(f"request {r}: step {s}'s cache hit reads request {src.request}'s KV, and one of the two has no certified "
-                                f"prompt")
-        if end > min(len(a), len(b)):
-            raise Unexpressible(f"request {r}: step {s}'s cache hit reads request {src.request}'s KV at positions {at} … {end - 1}, past "
-                                f"a certified prompt (v0 checks sources against prompts only)")
-        if a[:end] != b[:end]:
-            raise Unexpressible(f"request {r}: a forged cache hit at step {s}: request {src.request}'s certified prompt differs from its "
-                                f"own before position {end}, so that KV isn't its own")
-        at = end
-
-
 Rows = list[tuple[int, int, I1.Row]]  # a request's rows as (step, index in the step, row), in step order
 Placed = tuple[tuple[int, int, int] | None, list[tuple[int, int]]]  # a row's part its Program holds, and its parts none holds
 
@@ -451,6 +430,7 @@ class Plan:
     discarded: list[tuple[int, int, int, int]]
     refused: dict[int, str]
     idle: tuple[int, ...] = ()
+    caps: dict[int, int] = field(default_factory=dict)   # each request's certified max_tokens, which keys its edge (`segment.edge_of`)
 
     def distinct(self) -> list[RequestUnit]:
         """The first request of each (LP, T, policy), in request order: one Program each."""
@@ -478,7 +458,7 @@ class Plan:
             raise Unexpressible(f"every request is refused, request {min(refused)} first: {refused[min(refused)]}")
         gone = refused.keys() - self.refused.keys()
         return Plan(units, [[row for row in rows if row[0] not in gone] for rows in self.steps],
-                    [d for d in self.discarded if d[1] not in gone], dict(sorted(refused.items())), self.idle)
+                    [d for d in self.discarded if d[1] not in gone], dict(sorted(refused.items())), self.idle, self.caps)
 
 
 def request_program(registered: Registered, unit: RequestUnit, named: bool = False) -> Any:
@@ -536,7 +516,7 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, salt: by
         programs[r.digest], digests[u.key()] = r.program, r.digest
         comps[u.key()] = request_component(r)
     units = [None if u is None else replace(u, digest=digests[u.key()]) for u in plan.requests]
-    edge = None if registered.phi.target_profile().batch_invariant else edge_of(registered.phi, adv, units, plan.idle)
+    edge = None if registered.phi.target_profile().batch_invariant else edge_of(registered.phi, adv, units, plan.idle, plan.caps)
     wl = W.WorkloadProgram([W.WorkloadRequest(request_id_of(u.request), u.request, u.LP, u.events(), u.first_step, comps[u.key()],
                                               T=u.events() - 1, prefix=u.prefix())
                             for u in units if u is not None], manifest_digest=None, lag=int(registered.phi.target_profile().lag()),
@@ -614,7 +594,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
     left = {c.request for c in WA.close(adv) if c.must}
     prompts, params, wired = {}, {}, set()
     for i, q in enumerate(adv.requests):
-        if i in idle:
+        if i in idle and q.id not in ingress:
             continue
         try:
             body = ingress.get(q.id)
@@ -626,11 +606,13 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
             refuse(i, str(e))
     for i, why in reads.hits_off(adv, phi0.engine or {}):
         refuse(i, why)
+    caps = {i: p["max_tokens"] for i, p in params.items()}
+    prompts = {i: b for i, b in prompts.items() if i not in idle}   # an idle request's body gives only its cap
     for s, step in enumerate(adv.steps):
         for row in step.rows:
             if row.sources:
                 try:
-                    check_sources(s, row, prompts)
+                    reads.check_sources(s, row, prompts)
                 except Unexpressible as e:
                     refuse(row.request, str(e))
     bs = int((phi0.engine or {}).get("block_size") or PP.DEFAULT_BLOCK_SIZE)
@@ -656,7 +638,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
                     units.append(None)
                     continue
                 chunks, launch = ((), None) if bi else launch_of(i, LP, T, C, rows[i], adv.steps)
-                edge = edge_groups(decoder(phi0, 1, 0), q) if i in left and launch is not None else ()
+                edge = edge_groups(decoder(phi0, 1, 0), q.prompt_len, caps[i]) if i in left and launch is not None else ()
                 policy, seed = policy_of(i, params[i], phi0.target_profile().num_sms, request_id=q.id, salt=salt,
                                          carried=carry is not None)
                 if bi and C and policy["kind"] != "greedy":
@@ -703,7 +685,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
                 live.append((row.request, *held))
             discarded += [(s, row.request, start, n) for start, n in past]
         steps.append(live)
-    return Plan(units, steps, discarded, dict(sorted(refused.items())), idle)
+    return Plan(units, steps, discarded, dict(sorted(refused.items())), idle, caps)
 
 
 # ------------------------------------------------------------------------------------------------------------- the traced side

@@ -11,7 +11,8 @@ untraced = ["tests/test_census_and_memory_map.py", "tests/test_requirement_difft
 # builder (`verity_vllm.protocols.remote_bandwidth.commit_map`) on request Programs `verity_vllm.program.predict.build`
 # builds, whose imports reach most of
 # `verity_vllm` and, through it and the builder, PoUB's record (`Replay`, `codec`), PoUW's
-# circuits, SPOT's service (`pipeline.serving_rows` resolves a rate law by it), the commitments and the hashes; `lake` builds this package against the difftest harness's Lean and these
+# circuits, SPOT's service (`pipeline.serving_rows` resolves a rate law by it), the certifier's advice (the serving rows'
+# edge reads a window's advice), the commitments and the hashes; `lake` builds this package against the difftest harness's Lean and these
 # files of Flock's verifier (`Flock.Canon` and what it imports, and the package's configuration), both required by
 # path.
 inputs = ["verity/circuits", "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "verity/__init__.py", "verity/settings.py",
@@ -25,6 +26,8 @@ inputs = ["verity/circuits", "verity/definitions/kernels/__init__.py", "verity/d
           "verity/protocols/spot/device/remote.py", "verity/protocols/spot/verifier/one_stage",
           "verity/protocols/spot/verifier/service.py", "verity/protocols/spot/device/coins.py",
           "verity/protocols/spot/verifier/second_stage.py", "verity/protocols/spot/verifier/schedule.py",
+          "verity/protocols/certifier/__init__.py", "verity/protocols/certifier/verifier/__init__.py",
+          "verity/protocols/certifier/verifier/advice.py",
           "verity/commitments/windows", "verity/commitments",
           "verity/commitments/crypto", "verity/commitments/randomness",
           "verity/protocols/flock/verifier/lakefile.toml", "verity/protocols/flock/verifier/lake-manifest.json",

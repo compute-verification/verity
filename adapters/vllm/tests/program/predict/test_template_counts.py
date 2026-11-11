@@ -23,7 +23,7 @@ from tests.program.predict.test_node import _first_layers
 from tests.program.predict.test_steps import _b8_window, _class_g, _spec
 
 GREEDY = {"kind": "greedy"}
-EDGE = ("prefix", "prefix_ik", "prefix_iks")
+EDGE = ("prefix_kv_c", "prefix_kv_pe", "prefix_ik", "prefix_iks")
 
 
 def _phi(tmp_path, layers: int = 4, topk: int | None = None) -> Phi:
@@ -64,7 +64,7 @@ SERVED = {
     "beside-decodes": dict(LP=3, T=2, batch=[[[3, 0]], [[1, 3], [1, 9]], [[1, 4], [1, 10]]]),
     "chunks": dict(LP=6, T=1, chunks=(4, 2), batch=[[[4, 0], [1, 7]], [[2, 4]], [[1, 6]]]),
     "history": dict(LP=6, T=2, C=4, batch=[[[2, 4]], [[1, 6]], [[1, 7]]]),
-    "edge-in-prompt": dict(LP=6, T=-2, edge=("prefix",), batch=[[[4, 0]]]),
+    "edge-in-prompt": dict(LP=6, T=-2, edge=EDGE[:2], batch=[[[4, 0]]]),
     "resumed": dict(LP=6, T=3, C=7, batch=[[[1, 7]], [[1, 8]]]),
     "unfused": dict(LP=5, T=1, batch=[[[5, 0], [40, 0]], [[1, 5], [1, 40]]]),
     "stop": dict(LP=3, T=2, stop=_spec(3, 2, 3), batch=_decodes(3, 2, [[3, 0]])),

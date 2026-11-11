@@ -7,8 +7,8 @@ and all-reduce routes (`registry.bf16_gemm_check`, `registry.tp_allreduce`), vLL
 (`engine.profiles.devices`) and FA3's split count (`registry.sparse_mla_split`).  The configuration is the generic profile's
 (`generic.derive_config` at the rank) and the weights record its map (`generic._mla_weight_field`) in the family's module order.
 A request after a history of C positions (`build.build_program`'s C: a prefix-cache hit, or where a Commit window carries it in)
-reads each layer's history as Inputs (`Net.prefix_params`): every layer's latent rows and every indexer layer's keys and scales,
-which open its layers' logs (`_Model.open_with`) before its first call.
+reads each layer's history as Inputs (`Net.prefix_params`): every layer's normed kv_c and roped k_pe rows and every indexer layer's
+keys and scales, which open its layers' logs (`_Model.open_with`) before its first call.
 The compiled execution is the target's compilation "breakable": vLLM serves `glm_moe_dsa` without torch.compile
 (`VLLM_USE_BREAKABLE_CUDAGRAPH`, config/vllm.py:721-737), the same kernels replayed from CUDA graphs: a uniform decode step's FULL
 graph, another step's PIECEWISE graphs (`targets.graph_launch`).  Both pad alike, so every selection a launch reads is at the step's
@@ -197,18 +197,20 @@ class Net:
         return [(r, H)] * (1 + 2 * self.NL) + [(1, int(self.C["V"]))]
 
     def edge_groups(self, keys: int) -> tuple[str, ...]:
-        """The history groups of a request whose rows read up to `keys` keys that some row of it reads, which a Commit window's edge
-        carries (`segment.edge_of`): the latent rows, and the indexer's keys and scales where a row reads past INDEX_TOPK (below, its
-        top-k selection keeps every key and reads no logit: `past_topk`)."""
-        return ("prefix", *(("prefix_ik", "prefix_iks") if self.past_topk(keys) else ()))
+        """The history groups a Commit window's edge carries (`segment.edge_of`) of a request whose rows may read up to `keys` keys
+        (at its certified max_tokens, `segment.edge_groups`): the latent rows' two halves, and the indexer's keys and scales where a
+        row may read past INDEX_TOPK (below, its top-k selection keeps every key and reads no logit: `past_topk`)."""
+        return ("prefix_kv_c", "prefix_kv_pe", *(("prefix_ik", "prefix_iks") if self.past_topk(keys) else ()))
 
     def prefix_params(self, C: int) -> list[tuple[str, Type]]:
         """The Inputs a request's history of its first C positions opens with (`_Model.open_with`), as `vllm_dsa` keeps it: every
-        layer's latent rows `prefix` (bf16 [NL, C, KV_LORA + QK_ROPE]: the normed kv_c, then the roped k_pe), and the indexer
-        layers', in layer order, index-K slots `prefix_ik` (e4m3 [NI, C, INDEX_HEAD_DIM]) and their scales `prefix_iks` (f32 [NI, C])."""
-        NI, row = len(self.indexers), int(self.C["KV_LORA"]) + int(self.C["QK_ROPE"])
-        return [("prefix", _arr((self.NL, C, row), 16)), ("prefix_ik", _arr((NI, C, int(self.C["INDEX_HEAD_DIM"])), 8)),
-                ("prefix_iks", _arr((NI, C), 32))]
+        layer's latent rows as their two writers output them, since an edge row takes its writer's grain: the normed kv_c
+        `prefix_kv_c` (bf16 [NL, C, KV_LORA], DsaRMSNorm_v1's) and the roped k_pe `prefix_kv_pe` (bf16 [NL, C, QK_ROPE],
+        RoPEHeadGptJ_v2's); and the indexer layers', in layer order, index-K slots `prefix_ik` (e4m3 [NI, C, INDEX_HEAD_DIM]) and
+        their scales `prefix_iks` (f32 [NI, C])."""
+        NL, NI = self.NL, len(self.indexers)
+        return [("prefix_kv_c", _arr((NL, C, int(self.C["KV_LORA"])), 16)), ("prefix_kv_pe", _arr((NL, C, int(self.C["QK_ROPE"])), 16)),
+                ("prefix_ik", _arr((NI, C, int(self.C["INDEX_HEAD_DIM"])), 8)), ("prefix_iks", _arr((NI, C), 32))]
 
     def model(self, B: Builder, W: Coll, peers: _Peers) -> "_Model":
         return _Model(self, B, W, peers)
@@ -316,6 +318,16 @@ class _Model:
     def call(self, fn, *refs: Refs) -> Coll:
         return self.B.call(fn, *(Coll(t, r) for t, r in zip(_ptypes(fn), refs)))
 
+    def _logs(self, L: int) -> dict[str, PartLog]:
+        """Layer L's histories: the latent rows the attention reads (kv_c then k_pe), each half as its writer outputs it, and the
+        indexer's keys and scales."""
+        return self.logs.setdefault(L, {"latent": PartLog(), "kv_c": PartLog(), "kv_pe": PartLog(), "ik": PartLog(), "iks": PartLog()})
+
+    def _latent(self, logs: dict[str, PartLog], kv_c: Refs, kv_pe: Refs) -> None:
+        logs["latent"].append(concat([kv_c, kv_pe]))
+        logs["kv_c"].append(kv_c)
+        logs["kv_pe"].append(kv_pe)
+
     def pad(self, w: int, bits: int, words: int, count: int) -> Refs:
         """``count`` words of ``bits``: a slice of the Program's one block of them (`vllm_dsa.pad_words`), as `vllm_dsa` pads."""
         if (w, bits) not in self._pads:
@@ -323,15 +335,15 @@ class _Model:
         return self._pads[(w, bits)].slice(0, count)
 
     def open_with(self, prefix: list[Coll], C: int) -> None:
-        """Every layer's history opens with its C rows of `prefix` (`Net.prefix_params`: the latent rows, then the indexer layers'
-        index-K slots and scales), read and never computed: the request's own rows follow at positions C.."""
-        latent, ik, iks = prefix
+        """Every layer's history opens with its C rows of `prefix` (`Net.prefix_params`: the normed kv_c and roped k_pe rows, then the
+        indexer layers' index-K slots and scales), read and never computed: the request's own rows follow at positions C.."""
+        kv_c, kv_pe, ik, iks = prefix
         for L in range(self.net.NL):
-            logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
+            logs = self._logs(L)
             if len(logs["latent"]):
                 raise AssertionError(f"layer {L}'s history opens once, before its first call")
             for j in range(C):
-                logs["latent"].append(latent[L][j].refs)
+                self._latent(logs, kv_c[L][j].refs, kv_pe[L][j].refs)
         for n, L in enumerate(sorted(self.net.indexers)):
             for j in range(C):
                 self.logs[L]["ik"].append(ik[n][j].refs)
@@ -341,7 +353,7 @@ class _Model:
         """Every layer's rows so far of each history group in `groups` (`Net.edge_groups`), its history's and its own, as
         `Net.prefix_params` lays out a history of them: wires and no gates."""
         E, net = len(self.logs[0]["latent"]), self.net
-        logs = {"prefix": [self.logs[L]["latent"] for L in range(net.NL)],
+        logs = {**{g: [self.logs[L][h] for L in range(net.NL)] for g, h in (("prefix_kv_c", "kv_c"), ("prefix_kv_pe", "kv_pe"))},
                 **{g: [self.logs[L][h] for L in sorted(net.indexers)] for g, h in (("prefix_ik", "ik"), ("prefix_iks", "iks"))}}
         if any(len(log) != E for g in groups for log in logs[g]):
             raise AssertionError(f"every layer's history holds the {E} rows of layer 0's")
@@ -471,7 +483,7 @@ class _Model:
         w = lambda f: self.w[(L, f)]  # noqa: E731
         prefills = self.launch.prefills((M, pos0), DECODE_THRESHOLD.get(NH, DECODE_THRESHOLD_DEFAULT))
         dense = prefills if prefills and max(n + p for n, p in prefills) <= TOPK else []
-        logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
+        logs = self._logs(L)
         keys = [len(logs["latent"]) + i + 1 for i in range(M)]
         cs = [self.w["cos_sin"].refs.slice((pos0 + i) * R, (pos0 + i + 1) * R) for i in range(M)]
         qkv = self.fp8_linear(x, w("qkv_a_w"), w("qkv_a_ws"))
@@ -496,7 +508,7 @@ class _Model:
         qpe = [concat([self.call(qr, q.slice(h * D + NOPE, (h + 1) * D), c).refs for h in range(NH)]) for q, c in zip(qb, cs)]
         context = len(logs["latent"])
         for i in range(M):
-            logs["latent"].append(concat([kvc[i], kpe[i]]))
+            self._latent(logs, kvc[i], kpe[i])
         own = (M, pos0) in dense
         mqa = self.launch.keys([] if own else keys, without=dense)
         if indexer:

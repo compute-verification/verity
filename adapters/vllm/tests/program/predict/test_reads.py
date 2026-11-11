@@ -3,9 +3,9 @@ each a checked circuit output, certified or committed advice, and reads the advi
 name; and prefix stability, changing y at or after a step changing nothing the circuit computes before it. A window cut after
 any step plans and compiles those steps as the whole does, and another length for a request in flight moves only the unit
 fields `READS` declares its length read ahead for: `T` on a batch-invariant target, which sizes only its Program's later
-decodes, `stop`, its length rule (`RequestUnit.stop`, whose config holds how many outputs its Program has), and `edge` in
-class G, what the window's close returns, for which the Program also computes its indexer's keys and scales for the rows it
-ran, the one read ahead that isn't prefix stable (accounted only as the advice it is)."""
+decodes, and `stop`, its length rule (`RequestUnit.stop`, whose config holds how many outputs its Program has). In class G
+what the window's close returns (`edge`) is keyed on the request's certified cap, never its length, so its Programs are prefix
+stable too."""
 from __future__ import annotations
 
 import json
@@ -320,27 +320,27 @@ def _running_on(cut: WA.Advice, r: int, L: int) -> WA.Advice:
     return replace(cut, requests=tuple(replace(q, output_len=L) if i == r else q for i, q in enumerate(cut.requests)))
 
 
-def test_a_class_g_length_past_index_topk_sizes_only_what_the_windows_close_returns(tmp_path):
+def test_a_class_g_edge_past_index_topk_is_keyed_on_the_cap_so_no_length_moves_it(tmp_path):
     """At INDEX_TOPK 4, a window's close returns a request it leaves with outputs to keep with its indexer's keys and scales on
-    its edge where its last row reads past INDEX_TOPK keys: its length, read ahead of its stop, sets its edge and nothing else."""
+    its edge where its prompt and certified ``max_tokens`` reach past INDEX_TOPK keys: b, whose rows stay within INDEX_TOPK at its
+    length of 3 but not at its cap of 5, carries them whatever its length, which moves nothing in the plan."""
     reg, advice, ingress = _past_topk(tmp_path)
-    assert _prefix_stable(reg, advice, ingress) == {"edge"}
-    cut = _cut(advice, 1)
-    assert [u.edge for u in plan_steps(reg, cut, ingress).requests] == [("prefix", "prefix_ik", "prefix_iks"), ("prefix",)]
-    assert plan_steps(reg, _running_on(cut, 1, 4), ingress).requests[1].edge == ("prefix", "prefix_ik", "prefix_iks")
+    assert _prefix_stable(reg, advice, ingress) == set()
+    cut, edge = _cut(advice, 1), ("prefix_kv_c", "prefix_kv_pe", "prefix_ik", "prefix_iks")
+    assert [u.edge for u in plan_steps(reg, cut, ingress).requests] == [edge, edge]
+    assert plan_steps(reg, _running_on(cut, 1, 4), ingress).requests[1].edge == edge
 
 
 @pytest.mark.slow
-def test_a_class_g_program_is_prefix_stable_at_every_cut_but_for_its_edges_indexer_history(tmp_path):
+def test_a_class_g_program_is_prefix_stable_at_every_cut_and_every_length(tmp_path):
     """Class G at INDEX_TOPK 4 on GLM-5.3's first four layers (about 35 s). A (3 prompt tokens, 4 outputs, prefilled in chunks
     of 2 and 1, its rows at positions 4 and 5 past INDEX_TOPK) compiled in a window cut after each step is, call for call, its
     whole Program up to there, and its edge carries its indexer's history from the first cut on, before any row has read past
-    INDEX_TOPK. But b, left after two outputs, computes its indexer's keys for the 3 rows it ran (a key row and its projection
-    in each of the 3 indexer layers) only where it runs on to 4 outputs, so that the close returns them, its calls stopping at
-    3 a subsequence of those: the one read of y ahead that isn't prefix stable, accounted as the advice ``output_len`` is.
-    What no cheaper test can: that the Programs built from the units are prefix stable but there, a request's Program at a step
-    making the calls it makes whole whatever y holds after it; the split tests hold one cut a session, and the plan-level tests
-    the units, not the Programs built from them."""
+    INDEX_TOPK. And b, left after two outputs, computes its indexer's keys for the 3 rows it ran (a key row and its projection
+    in each of the 3 indexer layers) whether it stops at 3 outputs or runs on to 4, its cap reaching past INDEX_TOPK either
+    way: one Program at both lengths but for its length rule's check. What no cheaper test can: that the Programs built from
+    the units are prefix stable, a request's Program at a step making the calls it makes whole whatever y holds after it; the
+    split tests hold one cut a session, and the plan-level tests the units, not the Programs built from them."""
     reg, advice, ingress = _past_topk(tmp_path)
     calls, edges = [], []
     for s in range(len(A_CHUNKED.steps)):
@@ -350,12 +350,9 @@ def test_a_class_g_program_is_prefix_stable_at_every_cut_but_for_its_edges_index
         calls.append(_calls(p))
         edges.append(c.requests[0].edge)
     assert all(cut == calls[-1][:len(cut)] for cut in calls) and len({len(cut) for cut in calls}) == len(calls)
-    assert edges == [("prefix", "prefix_ik", "prefix_iks")] * (len(calls) - 1) + [()]
+    assert edges == [("prefix_kv_c", "prefix_kv_pe", "prefix_ik", "prefix_iks")] * (len(calls) - 1) + [()]
     cut = _cut(advice, 1)
     stops, runs = (request_program(reg, plan_steps(reg, a, ingress).requests[1]).program for a in (cut, _running_on(cut, 1, 4)))
-    left = iter(_calls(runs))
-    assert all(f in left for f in _calls(stops))
-    assert Counter(_members(runs)) - Counter(_members(stops)) == Counter(
-        {"CublasSplitKGemm_v1{K=6144,N=160,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v1}": 9, "DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}": 9})
-    ret = [field_types(p.fn.signature()[1]) for p in (stops, runs)]
-    assert ret[1][:len(ret[0])] == ret[0] and len(ret[1]) == len(ret[0]) + 2
+    assert Counter(_members(stops))["DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}"] == 9
+    assert _members(runs) == _members(stops)
+    assert field_types(runs.fn.signature()[1]) == field_types(stops.fn.signature()[1])

@@ -82,7 +82,7 @@ def with_checks(model, out: Coll, B=None, stop: dict | None = None, sampled: Seq
 
 def edge_config(edge: tuple[str, ...]) -> dict:
     """What a request Program's SRC config, and its unit's key, say of its `edge` (`with_edge`): nothing where it has none, True
-    where it returns the latent rows alone, else its groups."""
+    where it returns the one latent group `prefix` alone, else its groups."""
     return {"edge": True if tuple(edge) == ("prefix",) else list(edge)} if edge else {}
 
 

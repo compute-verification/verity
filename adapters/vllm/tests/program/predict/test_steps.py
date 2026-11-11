@@ -1177,7 +1177,8 @@ def test_a_request_in_flight_compiles_to_its_whole_program_split_at_the_window(b
         wls.append(c.workload)
     C = split[2].carried[0].computed
     own = [("prompt", 3)] + [("seed", 1), ("seeded", 1), ("body_seed", 64), ("seed_salt", 512), ("user", 8)] * (body is not GREEDY)
-    assert params == [own, own, own + [("prefix", 4 * C * 576), ("prefix_ik", 3 * C * 128), ("prefix_iks", 3 * C)] + [("last_token", 1)] * (C >= 3)]
+    assert params == [own, own, own + [("prefix_kv_c", 4 * C * 512), ("prefix_kv_pe", 4 * C * 64), ("prefix_ik", 3 * C * 128),
+                                       ("prefix_iks", 3 * C)] + [("last_token", 1)] * (C >= 3)]
     stop, M = SR.stop_ids(reg.phi.hf_config), min(int(reg.phi.hf_config["max_position_embeddings"]), reg.phi.engine["max_model_len"])
 
     def rule(T: int, m: int, p: int, f: int) -> str:
@@ -1190,7 +1191,7 @@ def test_a_request_in_flight_compiles_to_its_whole_program_split_at_the_window(b
     sig = [w.fn.signature() for w in wls]
     assert wls[0].edge is None and wls[1].edge.outs == wls[2].edge.ins and wls[2].ports == wls[2].registered[-len(wls[2].ports):]
     assert [t for n, t in sig[2][0] if n in wls[2].ports] == list(field_types(sig[1][1])[1:])
-    assert wls[2].ports == ("edge.kv", "edge.last")[:1 + (C >= 3)]
+    assert wls[2].ports == ("edge.kv_c", "edge.kv_pe", "edge.last")[:2 + (C >= 3)]
     assert [n for n, _ in sig[2][0] if n.startswith("request[") and ".peers_" not in n] == [
         f"request[{wls[2].requests[0].request_id}].{g}" for g in [*(g for g, _ in own), "prefix_ik", "prefix_iks"]]
 
@@ -1205,8 +1206,8 @@ def test_a_class_g_cache_hit_reads_its_cached_rows_as_inputs(tmp_path):
     c = compile_steps(reg, *_hit(16))
     assert c.batch_rule is None and [(u.LP, u.T, u.C) for u in c.requests] == [(24, 3, 0), (24, 2, 16)]
     assert [r.prefix for r in c.workload.requests] == [None, {"rows": 16, "producers": [0]}]
-    assert _history_params(c.programs[c.requests[1].digest]) == [("prompt", 24), ("prefix", 4 * 16 * 576), ("prefix_ik", 3 * 16 * 128),
-                                                                 ("prefix_iks", 3 * 16)]
+    assert _history_params(c.programs[c.requests[1].digest]) == [("prompt", 24), ("prefix_kv_c", 4 * 16 * 512), ("prefix_kv_pe", 4 * 16 * 64),
+                                                                 ("prefix_ik", 3 * 16 * 128), ("prefix_iks", 3 * 16)]
     assert c.requests[1].launch[0] == ((1, 24), (8, 16))
 
 

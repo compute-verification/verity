@@ -264,13 +264,18 @@ class WorkloadRequest:
                 "arrive_step": self.arrive_step, "fn": self.component.fn, **({"prefix": self.prefix} if self.prefix else {})}
 
 
+#: a Commit window's edge values (`Edge`) and the history group each holds, member by member: every layer's latent rows (an
+#: `EDGE_LATENT` layout), the indexer layers' index-K slots and their scales (`predict.dsa.Net.prefix_params`), and the last kept token
+EDGE_PORTS = (("edge.kv", "prefix"), ("edge.kv_c", "prefix_kv_c"), ("edge.kv_pe", "prefix_kv_pe"), ("edge.ik", "prefix_ik"),
+              ("edge.iks", "prefix_iks"), ("edge.last", "last_token"))
+#: the latent rows' layouts, one group or the sparse-attention decoder's two writers' halves (normed kv_c, roped k_pe)
+EDGE_LATENT = (("prefix",), ("prefix_kv_c", "prefix_kv_pe"))
 # request-LOCAL wrapper parameter groups: a component's own inputs, positions may differ per component (TP rank Programs carry
 # `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape); a stochastic
 # wrapper's `seed` and its seed rule's inputs (`seed_rule.PARAMS`, the window's salt each request's own copy) are its request's
-# own, like the prompt, and so are a warm request's cached `prefix` (on the sparse-attention decoder with its index-K slots
-# `prefix_ik` and scales `prefix_iks`), and a resumed request's `last_token`
-_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "seeded", "body_seed", "seed_salt", "user", "prefix", "prefix_ik", "prefix_iks",
-                         "last_token")
+# own, like the prompt, and so are a warm or carried request's history (`EDGE_PORTS`' groups: its latent rows, on the
+# sparse-attention decoder with its index-K slots and scales) and a resumed request's `last_token`
+_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "seeded", "body_seed", "seed_salt", "user", *(g for _, g in EDGE_PORTS))
 _REQUEST_LOCAL_PREFIXES = ("peers",)
 
 
@@ -291,12 +296,6 @@ def _shared_positions(S) -> list[tuple[int, ...]]:
     if sh and isinstance(sh[0], (tuple, list)):
         return [tuple(int(j) for j in x) for x in sh]
     return [tuple(int(j) for j in sh)] * len(S.requests)
-
-
-#: a Commit window's edge values (`Edge`) and the history group each holds, member by member: every layer's latent rows, the
-#: indexer layers' index-K slots and their scales (`predict.dsa.Net.prefix_params`), and the last kept token
-EDGE_PORTS = (("edge.kv", "prefix"), ("edge.ik", "prefix_ik"), ("edge.iks", "prefix_iks"), ("edge.last", "last_token"))
-_ROWS = ("prefix", "prefix_ik", "prefix_iks")   # an edge request Program's returns after its outputs (`build_program(edge=)`)
 
 
 @dataclass(frozen=True)
@@ -327,7 +326,7 @@ def edge_ports(members) -> list[tuple[str, str, TupleT, list[int]]]:
 
 def _check_edge(edge: Edge, comps: dict[int, RequestComponent]) -> None:
     """Refuse an edge whose groups aren't its members' Programs': an in-member's history Inputs, an out-member's returns after
-    its outputs (`_outputs`: `_ROWS`, then a last token it samples), or an idle out-member's in-port fields."""
+    its outputs (`_outputs`: an `EDGE_LATENT` layout, the indexer's, then a last token), or an idle out-member's in-port fields."""
     ins = {int(i): tuple(map(tuple, gs)) for i, gs in edge.ins}
     for side, members in (("in", edge.ins), ("out", edge.outs)):
         for i, gs in members:
@@ -343,7 +342,8 @@ def _check_edge(edge: Edge, comps: dict[int, RequestComponent]) -> None:
             elif side == "out":
                 ret = comps[i].fn.signature()[1]
                 rows = [g for g in types if g != "last_token"]
-                if (not isinstance(ret, TupleT) or rows != list(_ROWS[:len(rows)]) or _outputs(ret, gs)[0] not in (1, 2)
+                if (not isinstance(ret, TupleT) or _outputs(ret, gs)[0] not in (1, 2)
+                        or rows and not any(rows == [*a, "prefix_ik", "prefix_iks"][:max(len(a), len(rows))] for a in EDGE_LATENT)
                         or [t.leaves for t in field_types(ret)[_outputs(ret, gs)[0]:]] != [types[g].leaves for g in rows]
                         or "last_token" in types and not field_types(ret)[0].leaves):
                     raise ValueError(f"edge: request {i}'s Program doesn't return its samples (and checks), then its rows {gs}")
@@ -415,7 +415,7 @@ def _workload_body(B, S, *args):
                 samples = _field(called[i], 0)
                 parts.append(Coll(ft, samples.refs.slice(samples.type.leaves - 1, samples.type.leaves)))
             else:
-                parts.append(Coll(ft, _field(called[i], _outputs(called[i].type, leaving[i])[0] + _ROWS.index(g)).refs))
+                parts.append(Coll(ft, _field(called[i], _outputs(called[i].type, leaving[i])[0] + [h for h, _, _ in leaving[i]].index(g)).refs))
         outs.append(coll_concat(t, parts))
     _, ret = _workload_signature(S)
     return coll_concat(ret, outs)
