@@ -8,14 +8,29 @@ from dataclasses import dataclass, field
 from typing import Any, Sequence
 
 import torch
-
 from verity.circuits.defs import Builder
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Type
+
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.minted_ops import _OPINFO
-from verity_vllm.program.frontend.strided_views import _dim_len, _expand, _norm_dim, _permute, _select, _slice, _stack
-from verity_vllm.program.frontend.value_types import flat_types, join_coll, shape_of, split_coll, type_of_tensor, width_of
+from verity_vllm.program.frontend.strided_views import (
+    _dim_len,
+    _expand,
+    _norm_dim,
+    _permute,
+    _select,
+    _slice,
+    _stack,
+)
+from verity_vllm.program.frontend.value_types import (
+    flat_types,
+    join_coll,
+    shape_of,
+    split_coll,
+    type_of_tensor,
+    width_of,
+)
 
 
 @dataclass

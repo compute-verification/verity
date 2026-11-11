@@ -30,21 +30,24 @@ from __future__ import annotations
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.ops.prims import (BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16,
-                                          HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32)
 from verity.definitions.numerics import fa3_model as FA3
-from verity.definitions.registry import b1
-from verity.definitions.registry import fa2_check_inf as F2
-from verity.definitions.registry import attention_vocab
+from verity.definitions.ops.prims import (
+    BlackwellE4m3QmmaDot32,
+    BlackwellNvf4OmmaDot64,
+    HopperBF16WgmmaDot16,
+    HopperE4m3MmaV2Dot32,
+    HopperE4m3QgmmaDot32,
+)
+from verity.definitions.registry import attention_vocab, b1, fp8, fp8_vocab, nvfp4
 from verity.definitions.registry import cuda_rmsnorm as CR
-from verity.definitions.registry import value_inputs as VI
+from verity.definitions.registry import fa2_check_inf as F2
 from verity.definitions.registry import fa3_check_inf as F3
-from verity.definitions.registry import fp8, nvfp4
-from verity.definitions.registry import fp8_vocab
 from verity.definitions.registry import gemm_bias as GB
 from verity.definitions.registry import prims as P
-from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
+from verity.definitions.registry import value_inputs as VI
 from verity.definitions.registry.hopper import Fa3InvSum
+
+from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
 
 
 class UnregisteredTarget(ValueError):
@@ -652,7 +655,8 @@ def softcapped(spec, cap: float):
     """The softcapped chain of a plain attention row's Definition `spec`, with the same statics and `CAP = cap`: `AttentionSoftcap_v1`
     for `Attention_v3` (the accepted target), `AttentionSoftcap_v2` for `Attention_v5` (FA2's per-iteration `Check_inf`).  No other
     chain has a registered softcapped form (UnregisteredTarget)."""
-    from verity.definitions.registry import dense as DN, fa2_softcap as F2S
+    from verity.definitions.registry import dense as DN
+    from verity.definitions.registry import fa2_softcap as F2S
     body = {"Attention_v3": DN.AttentionSoftcap, "Attention_v5": F2S.AttentionSoftcapV2}.get(spec.base_id)
     if body is None:
         raise UnregisteredTarget(f"{spec.base_id} has no registered softcapped chain: a softcapped row is registered on the accepted target "

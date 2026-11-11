@@ -8,8 +8,11 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from verity.circuits.types import Array, Tuple as TupleT, Type, Value
+from verity.circuits.types import Array, Type, Value
+from verity.circuits.types import Tuple as TupleT
+
 from verity_vllm.program.frontend.errors import FrontendError
+
 
 @dataclass(frozen=True)
 class _ArrSchema:

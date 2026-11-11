@@ -20,11 +20,11 @@ import re
 from typing import Any
 
 import torch
-
 from verity.circuits.refs import Affine, Coll, Concat, Strided, prefix_runs
 from verity.circuits.types import RecordType
-from verity_vllm.program.frontend.value_types import flat_types
+
 from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA, correspondence_digest
+from verity_vllm.program.frontend.value_types import flat_types
 from verity_vllm.program.prune import kept_records
 
 _ROW_RE = re.compile(r"\[(\d+)\]")
@@ -302,7 +302,10 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
             field_names.append(fname)
             field_starts.append(off)
             off += ft.leaves
-    from verity_vllm.program.frontend.derive import _mutates, fx_arg_nodes  # local: derive imports this module
+    from verity_vllm.program.frontend.derive import (  # local: derive imports this module
+        _mutates,
+        fx_arg_nodes,
+    )
 
     def field_of(leaf: int) -> str | None:
         j = bisect.bisect_right(field_starts, leaf) - 1

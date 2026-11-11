@@ -16,8 +16,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from verity_vllm.program.frontend.rules.vllm_iface import iface  # registers the stand-in ops
-
+from verity_vllm.program.frontend.rules.vllm_iface import (
+    iface,  # registers the stand-in ops
+)
 
 # ---------------------------------------------------------------------------------------------------------
 # S1: plain f32 modules
