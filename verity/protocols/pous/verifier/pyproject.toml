@@ -1,0 +1,27 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_pous_wipe_store.py", "tests/test_pous_wipe_stream.py"]
+# What the tests import of `verity`, and PoUS's statements in Security with the lock and the pins they check them against,
+# and the rest of the trusted layer's import closure that ../lean/TRUSTED.sha256 hashes (Core's Game): test_pous_trusted fails
+# while a file it hashes is outside these, naming the lines to add.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/claims/__init__.py",
+          "verity/core/protocols/__init__.py",
+          "verity/protocols/reporting.py", "verity/ml/__init__.py", "verity/circuits",
+          "verity/ml/protocols/__init__.py", "verity/protocols/pous/prover",
+          "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/configuration/wire", "verity/configuration/deploy",
+          "verity/core/devices/__init__.py", "verity/protocols/pous/device/__init__.py",
+          "verity/protocols/pous/device/challenger_party.py",
+          "Security/Definitions/Pous.lean", "Security/Definitions/Pous", "Security/Proofs/Pous",
+          "Security/Definitions/Core/Game.lean", "Security/Proofs/Core/Game/Basic.lean",
+          "Security/lean-audit.json", "Security/lakefile.toml", "Security/lake-manifest.json", "Security/lean-toolchain",
+          "Security/Proofs/lakefile.toml", "Security/Proofs/lake-manifest.json",
+          "verity/protocols/pous/lean/README.md",
+          # the grader's package and the memory challenger's modules, each by its own path: the tests read them wherever
+          # they are, in this suite's directory or outside it
+          "verity/protocols/pous/lean", "verity/protocols/pous/device/memory_challenger.py",
+          "verity/protocols/pous/device/challenger_session.py"]

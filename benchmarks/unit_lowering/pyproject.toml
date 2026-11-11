@@ -8,16 +8,16 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_unit_lowering.py"]
-# The lowering the guard runs, in a child: `pouw_h1_circuits --lower` (integrations/vllm, its tests package's two
+# The lowering the guard runs, in a child: `pouw_h1_circuits --lower` (adapters/vllm, its tests package's two
 # __init__.py on the way), h1_prove's h1unit and hidden_zk's fast_stage, and `verity` (verity_flock's ir_lower and
 # class_statement under it), which the AND-row test reads too; run.py reads the run's commit through verity_config.settings.
-inputs = ["verity", "benchmarks/pouw/h1_prove", "benchmarks/pouw/hidden_zk", "integrations/vllm/tests/__init__.py",
-          "integrations/vllm/tests/protocols/__init__.py", "integrations/vllm/tests/protocols/pouw_h1_circuits.py",
-          "tools/config/verity_config"]
+inputs = ["verity", "benchmarks/pouw/h1_prove", "benchmarks/pouw/hidden_zk", "adapters/vllm/tests/__init__.py",
+          "adapters/vllm/tests/protocols/__init__.py", "adapters/vllm/tests/protocols/pouw_h1_circuits.py",
+          "verity/configuration/config/verity_config"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_unit_lowering.py"]
-paths = ["benchmarks/pouw/hidden_zk", "integrations/vllm/tests"]
+paths = ["benchmarks/pouw/hidden_zk", "adapters/vllm/tests"]
