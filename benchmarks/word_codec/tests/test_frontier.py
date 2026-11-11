@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import frontier as F  # noqa: E402
+import frontier as F
 
 
 def point(**kw):

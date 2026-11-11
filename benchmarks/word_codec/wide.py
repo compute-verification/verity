@@ -45,7 +45,7 @@ from verity.protocols.poub.verifier import codec as RB
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import codec  # noqa: E402
+import codec
 
 DOMAIN = b"verity/word-codec/wide/v0\0"
 SEED_BYTES = 32
