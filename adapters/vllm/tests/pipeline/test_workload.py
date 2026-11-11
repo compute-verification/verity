@@ -158,6 +158,21 @@ def test_a_tp_workload_requires_the_batch_invariance_its_target_declares(tmp_pat
     assert doc["engine"]["env"] == {"VLLM_BATCH_INVARIANT": "0"} and doc["engine"]["target"]["batch_invariant"] is False
 
 
+@pytest.mark.parametrize("row_id, rc", [
+    ("x__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", 0),
+    ("x__fp8__h200__tp8__b1__i256__o32__mixed__greedy___eager", 0),    # the label is what follows the id's last `__`
+    ("x__fp8__h200__tp8__b1__i256__o32__mixed__greedy__bi-eager", 3),
+    ("eager", 0),                                                       # an id without `__` is its own label
+    ("x-eager", 3),
+])
+def test_a_target_is_refused_unless_the_row_ids_execution_label_is_its_own(tmp_path, row_id, rc):
+    """`--target` on a row whose id ends in another execution label exits 3.  The label is `config.row_execution`'s, the
+    field after the id's last `__`, which is how the generator reads it for the row's `engine.env` too."""
+    target = json.dumps({"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False})
+    doc = _generate(tmp_path, row_id, rc=rc, target=target)
+    assert rc or doc["sweep"]["execution"] == "eager"
+
+
 class _CharTok:
     path, sha256 = Path("chars.json"), "0" * 64
 

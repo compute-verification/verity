@@ -54,7 +54,6 @@ from verity_vllm.config import (
     RowConfig,
     option,
     row_execution,
-    row_tokens,
     row_world,
     rows_of_record,
 )
@@ -484,7 +483,8 @@ def main(a: Options) -> int:
         if "env" in doc["engine"]:
             doc["engine"]["env"].update(profile.env())
         doc["sweep"]["execution"] = profile.execution_label
-        exec_suffix = row_tokens(a.row_id)[-1]
+        label = row_execution(a.row_id)
+        exec_suffix = a.row_id if label is None else label
         if exec_suffix != profile.execution_label:
             print(f"[error] row id execution suffix {exec_suffix!r} != the target's execution label {profile.execution_label!r}", file=sys.stderr)
             return 3
