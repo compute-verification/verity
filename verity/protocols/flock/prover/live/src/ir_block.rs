@@ -10,7 +10,7 @@
 //! each opened at two verifier points sampled after the commitment (both reps). The verifier computes their values from its
 //! own instance file, so the statement is the relation on public inputs and outputs (no commitment scheme binds them).
 
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock, PoisonError, atomic::{AtomicBool, Ordering}};
 
 use flock_core::{
     lincheck::{CscCircuit, LincheckCircuit, SparseMatrixCircuit, pack_z_lincheck_from_packed},
@@ -235,10 +235,78 @@ pub trait RowWord: Copy + PartialEq + std::fmt::Debug + Send + Sync {
     fn set(&mut self, g: usize, w: u64);
     fn xor(self, o: Self) -> Self;
     fn and(self, o: Self) -> Self;
+    /// `n` rows of zero, an empty vector with room for `n` rows, and a vector a walk is done with: a `u64` row's are the
+    /// kept ones ([`keep_rows`]).
+    fn zeroed(n: usize) -> Vec<Self> {
+        vec![Self::splat(0); n]
+    }
+    fn take(n: usize) -> Vec<Self> {
+        Vec::with_capacity(n)
+    }
+    fn give(_: Vec<Self>) {}
+}
+
+/// Row vectors walks are done with, kept for the walks after them. A statement's walk writes z, a and b for every lane
+/// group, each as long as the unit has rows. On a large unit each is a mapping of its own, which the kernel faults in a
+/// page at a time (the device prover's pages are small ones, [`crate::huge_pages`]) and takes back when the vector is
+/// dropped, statement after statement. A kept vector is faulted in once.
+static KEPT: Mutex<Vec<Vec<u64>>> = Mutex::new(Vec::new());
+/// The most vectors kept: z, a and b of eight lane groups, the most a pass walks.
+const KEPT_MAX: usize = 24;
+static KEEP: OnceLock<AtomicBool> = OnceLock::new();
+
+fn keep() -> &'static AtomicBool {
+    KEEP.get_or_init(|| AtomicBool::new(std::env::var("FC_UNIT_KEEP").as_deref() != Ok("0")))
+}
+
+/// Whether walks keep their row vectors for the walks after them; `FC_UNIT_KEEP=0`: none is kept, each walk maps its own.
+pub fn keep_rows() -> bool {
+    keep().load(Ordering::Relaxed)
+}
+
+/// Sets [`keep_rows`]; turned off, the kept vectors are dropped.
+pub fn set_keep_rows(on: bool) {
+    keep().store(on, Ordering::Relaxed);
+    if !on {
+        let kept = std::mem::take(&mut *KEPT.lock().unwrap_or_else(PoisonError::into_inner));
+        drop(kept);
+    }
+}
+
+/// The smallest kept vector with room for `n` rows, empty.
+fn kept(n: usize) -> Option<Vec<u64>> {
+    let mut kept = KEPT.lock().unwrap_or_else(PoisonError::into_inner);
+    let best = kept.iter().enumerate().filter(|(_, v)| v.capacity() >= n).min_by_key(|(_, v)| v.capacity()).map(|(i, _)| i);
+    best.map(|i| kept.swap_remove(i))
 }
 
 impl RowWord for u64 {
     const N: usize = 1;
+    fn zeroed(n: usize) -> Vec<u64> {
+        match kept(n) {
+            Some(mut v) => {
+                v.resize(n, 0);
+                v
+            }
+            None => vec![0; n],
+        }
+    }
+    fn take(n: usize) -> Vec<u64> {
+        kept(n).unwrap_or_else(|| Vec::with_capacity(n))
+    }
+    /// Kept where it is a mapping of its own (glibc's largest mmap threshold); past [`KEPT_MAX`] it takes the place of a
+    /// smaller one.
+    fn give(mut v: Vec<u64>) {
+        v.clear();
+        if keep_rows() && v.capacity() * 8 >= crate::huge_pages::MIN_BYTES {
+            let mut kept = KEPT.lock().unwrap_or_else(PoisonError::into_inner);
+            if kept.len() < KEPT_MAX {
+                kept.push(v);
+            } else if let Some(small) = kept.iter_mut().min_by_key(|k| k.capacity()).filter(|k| k.capacity() < v.capacity()) {
+                std::mem::swap(small, &mut v);
+            }
+        }
+    }
     #[inline(always)]
     fn splat(w: u64) -> Self {
         w
@@ -297,9 +365,47 @@ fn own_row<R: RowRead + ?Sized>(rows: &R, i: usize) -> bool {
     rows.row_len(i) == 1 && rows.row_cols(i).next() == Some(i)
 }
 
-/// Row `i`'s XOR over `z`, whose entry `i` is still 0, and all ones where it reads column `i` an odd number of times.
-fn fold_own<W: RowWord>(row: &[u32], i: usize, z: &[W]) -> (W, W) {
-    let (x, o) = row.iter().fold((W::splat(0), 0u64), |(x, o), &c| (x.xor(z[c as usize]), o ^ 0u64.wrapping_sub(u64::from(c as usize == i))));
+/// How many column indices before it reads z at one a walk ([`IrUnitNet::eval_wide`]) asks the cache for it, unless
+/// `FC_UNIT_AHEAD` says.
+pub const AHEAD: usize = 64;
+
+/// The walk's distance: `FC_UNIT_AHEAD` column indices when set (0: it never asks), else [`AHEAD`]. A walk's words are the
+/// same at every distance.
+pub fn unit_ahead() -> usize {
+    static N: OnceLock<usize> = OnceLock::new();
+    *N.get_or_init(|| std::env::var("FC_UNIT_AHEAD").ok().map_or(AHEAD, |v| {
+        v.parse().unwrap_or_else(|_| panic!("FC_UNIT_AHEAD={v}: a number of column indices"))
+    }))
+}
+
+/// Asks the cache for `z[c]` before it is read: no value depends on it.
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+#[allow(unused_unsafe)]
+fn ask<W>(z: &[W], c: u32) {
+    use std::arch::x86_64::{_MM_HINT_T0, _mm_prefetch};
+    // SAFETY: a prefetch reads nothing and faults at no address, and the address is computed without a dereference
+    unsafe { _mm_prefetch::<{ _MM_HINT_T0 }>(z.as_ptr().wrapping_add(c as usize) as *const i8) }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+#[inline(always)]
+fn ask<W>(_: &[W], _: u32) {}
+
+/// Row `i` of `rows`' XOR over `z`, whose entry `i` is still 0, and all ones where it reads column `i` an odd number of
+/// times. With `ahead` > 0 each read is asked of the cache `ahead` column indices before it. A side's indices are one array
+/// in row order, so the ask runs past the row's end into the rows after it, where the processor's own lookahead stops at
+/// the branch that ends a row. A walk of a large net waits on these reads, not on its arithmetic.
+#[inline(always)]
+fn fold_own<W: RowWord>(rows: &Rows, i: usize, z: &[W], ahead: usize) -> (W, W) {
+    let (s, e) = (rows.off[i] as usize, rows.off[i + 1] as usize);
+    let far = if ahead == 0 { &[][..] } else { &rows.cols[s.saturating_add(ahead).min(rows.cols.len())..] };
+    let (x, o) = rows.cols[s..e].iter().enumerate().fold((W::splat(0), 0u64), |(x, o), (k, &c)| {
+        if let Some(&f) = far.get(k) {
+            ask(z, f);
+        }
+        (x.xor(z[c as usize]), o ^ 0u64.wrapping_sub(u64::from(c as usize == i)))
+    });
     (x, W::splat(o))
 }
 
@@ -454,12 +560,18 @@ impl IrUnitNet {
     /// rows once for all of them. None: the net has no one-pass form ([`IrUnitNet::one_pass`]). Every row is written in order
     /// and read only by later rows (and the constant's, set first), so only z is initialized.
     pub fn eval_wide<W: RowWord>(&self, input: impl Fn(usize) -> W) -> Option<(Vec<W>, Vec<W>, Vec<W>)> {
+        self.eval_wide_ahead(input, unit_ahead())
+    }
+
+    /// [`IrUnitNet::eval_wide`] asking the cache for z `ahead` column indices before each read (0: never). Its rows are the
+    /// same at every `ahead`.
+    pub fn eval_wide_ahead<W: RowWord>(&self, input: impl Fn(usize) -> W, ahead: usize) -> Option<(Vec<W>, Vec<W>, Vec<W>)> {
         if !self.one_pass() {
             return None;
         }
         let (u, cp, first) = (self.useful, self.const_pos, self.in_words * WORD);
         let (zero, one) = (W::splat(0), W::splat(!0));
-        let (mut z, mut a, mut b) = (vec![zero; u], Vec::with_capacity(u), Vec::with_capacity(u));
+        let (mut z, mut a, mut b) = (W::zeroed(u), W::take(u), W::take(u));
         for i in 0..first {
             let (oa, ob) = (own_row(&self.a, i), own_row(&self.b, i));
             if oa {
@@ -470,8 +582,8 @@ impl IrUnitNet {
         }
         z[cp] = one;
         for i in first..cp {
-            let (x, oa) = fold_own(self.a.row(i), i, &z);
-            let (y, ob) = fold_own(self.b.row(i), i, &z);
+            let (x, oa) = fold_own(&self.a, i, &z, ahead);
+            let (y, ob) = fold_own(&self.b, i, &z, ahead);
             let zi = x.and(y);
             z[i] = zi;
             a.push(x.xor(zi.and(oa)));
@@ -1123,14 +1235,19 @@ mod tests {
     fn eval_wide_is_eval64_per_group() {
         fn check<W: RowWord>(net: &IrUnitNet, k: u64) {
             let input = |g: usize, col: usize| (col as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15 ^ k).rotate_left(7 * g as u32 + 1) ^ g as u64;
-            let (z, a, b) = net.eval_wide(|col| {
+            let wide = |col: usize| {
                 let mut w = W::splat(0);
                 (0..W::N).for_each(|g| w.set(g, input(g, col)));
                 w
-            }).expect("a one-pass net");
+            };
+            let (z, a, b) = net.eval_wide(&wide).expect("a one-pass net");
             for g in 0..W::N {
                 let word = |v: &[W]| v.iter().map(|w| w.word(g)).collect::<Vec<u64>>();
                 assert!((word(&z), word(&a), word(&b)) == net.eval64(|col| input(g, col)), "{} groups, inputs {k}: group {g}", W::N);
+            }
+            // asking ahead changes no word: never, the next index, past a row, past the net
+            for ahead in [0, 1, 7, AHEAD, usize::MAX] {
+                assert!(net.eval_wide_ahead(&wide, ahead) == Some((z.clone(), a.clone(), b.clone())), "{} groups, inputs {k}: asking {ahead} ahead", W::N);
             }
         }
         assert_eq!([align_of::<Row2>(), align_of::<Row4>(), align_of::<Row8>()], [16, 32, 64]);
@@ -1148,6 +1265,46 @@ mod tests {
         fwd.a = appended(&fwd.a, WORD + 3, WORD + 8);
         assert!(fwd.eval_wide(|_| Row2::splat(1)).is_none(), "a row reading a later column has no one-pass form");
     }
+
+    /// A walk's words are a function of the net and its inputs alone: the digest (SHA-512's first 16 bytes) of z, a and b on
+    /// a fixed net and fixed inputs, eight lane groups in one pass and each of the eight alone. A change to the walk that
+    /// changes a word fails here, even one that changes `eval64` with it.
+    #[test]
+    fn the_walk_words_are_pinned() {
+        fn pin(words: impl Iterator<Item = u64>) -> String {
+            let mut h = sha2::Sha512::new();
+            words.for_each(|w| h.update(w.to_le_bytes()));
+            crate::hex(&h.finalize()[..16])
+        }
+        let net = random_net(99, 3, 40_000);
+        let input = |g: usize, col: usize| (col as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15).rotate_left(7 * g as u32 + 1) ^ g as u64;
+        let (z, a, b) = net.eval_wide(|col| Row8(std::array::from_fn(|g| input(g, col)))).expect("a one-pass net");
+        let wide = pin([&z, &a, &b].into_iter().flat_map(|v| (0..8).flat_map(move |g| v.iter().map(move |w| w.word(g)))));
+        let flat: Vec<[Vec<u64>; 3]> = (0..8).map(|g| net.eval64_flat(|col| input(g, col)).into()).collect();
+        let alone = pin((0..3).flat_map(|v| flat.iter().flat_map(move |t| t[v].iter().copied())));
+        assert_eq!((wide.as_str(), alone.as_str()), (WALK_PIN, WALK_PIN), "the walk's z, a and b words: eight groups a pass, each alone");
+    }
+
+    /// A kept vector comes back clean: z all zero, a and b empty, whatever the walk before left in it. Vectors large enough
+    /// to be kept are given back full of ones, and the walks after them (this test's and, in the same process, every other
+    /// test's) must still write `eval64`'s words.
+    #[test]
+    fn a_kept_vector_comes_back_clean() {
+        let n = crate::huge_pages::MIN_BYTES / 8;
+        (0..6).for_each(|_| u64::give(vec![!0u64; n]));
+        let net = random_net(7, 2, 30_000);
+        let input = |col: usize| (col as u64 + 5).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        for _ in 0..3 {
+            let (z, a, b) = net.eval_wide(input).expect("a one-pass net");
+            assert!((z.clone(), a.clone(), b.clone()) == net.eval64(input), "a walk on kept vectors");
+            [z, a, b].into_iter().for_each(u64::give);
+        }
+        let (z, a) = (u64::zeroed(n), u64::take(n));
+        assert!(z.len() == n && z.iter().all(|&w| w == 0), "a kept z is zero");
+        assert!(a.is_empty() && a.capacity() >= n, "a kept a is empty and holds the rows");
+    }
+
+    const WALK_PIN: &str = "c084c17e7a051c6e213039b613738958";
 
     #[test]
     fn csc_reads_the_rows_in_place() {
