@@ -1147,6 +1147,12 @@ def test_a_module_file_above_a_private_import_is_stored_and_another_tree_restore
     assert not (store / MK.UNSTORED).exists()
 
 
+def reading(e: dict) -> dict:
+    """A developer's `lake build` reading the cache `get` restored to ``e``'s: `LAKE_ARTIFACT_CACHE` unset, whatever the run's
+    (an uncached check runs the suites with it off)."""
+    return {k: v for k, v in os.environ.items() if k != "LAKE_ARTIFACT_CACHE"} | {"LAKE_CACHE_DIR": e["LAKE_CACHE_DIR"]}
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_lake_restores_a_build_published_from_another_path(s3, tmp_path):
@@ -1166,8 +1172,7 @@ def test_lake_restores_a_build_published_from_another_path(s3, tmp_path):
     assert C.publish(r, rev, tmp_path / "out", ["pkg"], client(url), print) == 0
     e = {**env(url, tmp_path), "PATH": f"{Path(LAKE).parent}{os.pathsep}{os.environ.get('PATH', '')}"}
     assert C.get(dev, ["pkg"], e, print, fetch_state=lambda u: ON) == 0
-    out = subprocess.run([LAKE, "build"], cwd=dev / "pkg", env={**os.environ, "LAKE_CACHE_DIR": e["LAKE_CACHE_DIR"]},
-                         capture_output=True, text=True)
+    out = subprocess.run([LAKE, "build"], cwd=dev / "pkg", env=reading(e), capture_output=True, text=True)
     assert out.returncode == 0, out.stdout + out.stderr
     assert "Unpacked" in out.stdout and "Built Control" not in out.stdout, out.stdout
 
@@ -1215,8 +1220,7 @@ def test_lake_restores_a_git_dependencys_build_with_the_package(s3, tmp_path):
     lines = []
     assert C.get(dev, ["pkg"], e, lines.append, fetch_state=lambda u: ON) == 0
     assert "with 1 dependencies (dep)" in lines[-1], lines
-    out = subprocess.run([LAKE, "build"], cwd=dev / "pkg", env={**os.environ, "LAKE_CACHE_DIR": e["LAKE_CACHE_DIR"]},
-                         capture_output=True, text=True)
+    out = subprocess.run([LAKE, "build"], cwd=dev / "pkg", env=reading(e), capture_output=True, text=True)
     assert out.returncode == 0, out.stdout + out.stderr
     assert "Built Dep" not in out.stdout and "Built App" not in out.stdout, out.stdout
 
