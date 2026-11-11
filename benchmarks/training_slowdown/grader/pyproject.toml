@@ -15,4 +15,5 @@ untraced = ["tests/test_slowdown_code.py"]
 # `benchmarks/training_slowdown/training_slowdown`: training's slowdown code, which the cross-check reads where it sits when
 # VERITY_GRADER_SLOWDOWN_CODE names this tree's.
 inputs = ["verity", "adapters/vllm/verity_vllm", "adapters/vllm/tests/program/train_step_lf.py",
-          "verity/configuration/config/verity_config", "benchmarks/training_slowdown/training_slowdown"]
+          "verity/configuration/config/verity_config", "benchmarks/training_slowdown/training_slowdown",
+          "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/program/__init__.py"]

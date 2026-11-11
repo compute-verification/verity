@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCANNED = ROOT / "verity"
 #: The integrations' import packages, from each distribution's wheel configuration (a virtual member, such as the Slack
 #: events service, has none to import).
-INTEGRATIONS = frozenset(Path(p).name for pyproject in sorted((ROOT / "integrations").glob("*/pyproject.toml"))
+INTEGRATIONS = frozenset(Path(p).name for pyproject in sorted((ROOT / "adapters").glob("*/pyproject.toml"))
                          for p in tomllib.loads(pyproject.read_text()).get("tool", {}).get("hatch", {}).get("build", {})
                          .get("targets", {}).get("wheel", {}).get("packages", []))
 SKIP_DIRS = {"target", "node_modules", "__pycache__"}
