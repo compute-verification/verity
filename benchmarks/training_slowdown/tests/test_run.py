@@ -1,21 +1,19 @@
 import hashlib
 import json
-from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 import torch
 import torch.nn.functional as F
-from synthetic import run_job, tiny_data, tiny_registry, tiny_start, write_config
+from synthetic import JOBS, LORA, job_counted, run_job, tiny_data, tiny_registry, tiny_start, write_config
 from torch import nn
-from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from training_slowdown import VERSION, config, flops, formalism, grade, policy, run, starts, work
 from training_slowdown.capture import products
 from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, derive_seed
 from training_slowdown.counterexample import check
-from training_slowdown.data import Data, Stream
+from training_slowdown.data import Stream
 from training_slowdown.evaluate import Evaluator
 from training_slowdown.flops import gather_macs
 from training_slowdown.model import LM
@@ -361,32 +359,7 @@ def test_a_weight_is_passed_at_the_updates_width_only_among_the_runs_first_steps
     assert read and all(w == [32, width] for w in read)
 
 
-LORA = {"targets": "blocks.0.wq.weight,blocks.0.w_up.weight", "rank": 2, "alpha": 4.0, "lr": 1e-2}
-#: the whole model, one block, LoRA's adapters, one block's average, and one block under Muon in two micro-batches
-JOBS = {"whole": {"dials": {"trainable": "*", "lr": 1e-2}},
-        "block": {"dials": {"trainable": "blocks.0.*,norm", "lr": 1e-2}},
-        "lora": {"route": "lora", "dials": LORA},
-        "ema": {"route": "ema", "dials": {"trainable": "blocks.0.*,norm", "lr": 1e-2, "ema_decay": 0.5}},
-        "muon": {"dials": {"trainable": "blocks.0.*,norm", "opt": "muon", "lr": 1e-2, "micro_batches": 2}}}
 COUNTS = ("tokens", "matmul_macs", "elementwise_macs", "macs")
-
-
-def job_counted(root: Path, steps: int, math: bool = False, **over):
-    """A job's steps through the harness's own loop (`run.train` under `run.Harness`), in this process, under the
-    attention kernel torch picks as a job runs (a fused one) or under the math kernel: the counter's record, and what
-    the job's trace is taken from (its config, route, model and optimizers)."""
-    reg = tiny_registry(root / "reg")
-    registry = starts.registry(reg)
-    cfg = config.load(write_config(root / "a.toml", budget={"steps": steps, "batch": 4}, **over), registry)
-    te = run.Harness(starts.load(cfg.start, reg.parent / "starts"), root / "out", start=cfg.start.entry(),
-                     clock=lambda: 0.0)
-    route = config.route(cfg.route)
-    torch.manual_seed(0)
-    with sdpa_kernel([SDPBackend.MATH]) if math else nullcontext(), te.counter:
-        model, optimizers = route.build(cfg.start.shape, cfg.dials)
-        stream = Stream(Data.of(cfg.start.data, registry), 0, ctx=int(cfg.start.shape["ctx"]))
-        run.train(te, cfg, route, stream, model, optimizers)
-    return te.finish({}), (cfg, route, model, optimizers)
 
 
 def counted_and_traced(root: Path, steps: int, **over):
