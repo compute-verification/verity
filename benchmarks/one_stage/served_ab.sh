@@ -10,11 +10,20 @@
 #   pearl   the Commit and Pearl+ under it (--protocols pouw:pearl-c-h100-v1-h3 on Pearl-C's sm_90 cubin), each window's
 #           salt coin an in-process challenger's (served_verdicts.sh's PEARLPLUS_TIE=1 with PEARLC_CHALLENGER_GATE empty)
 #   live    pearl with each window's salt coin a live session's on the auditor host (--challenger-gate GATE --challenger-peer
-#           PEER --challenger-lane GATE_LANE): the remote demo's serve. It needs the lane's gate key on this node, this node
-#           among the gate's peers, and the lane's Pearl-C period open (served_verdicts.sh's pearl_period), which this
-#           script doesn't open; without GATE the preflight refuses the arm. Not run yet on any node from this script.
+#           PEER --challenger-lane GATE_LANE): the remote demo's serve. It needs the lane's gate key on this node and this
+#           node among the gate's peers; without GATE the preflight refuses the arm. Each lifetime opens the lane's Pearl-C
+#           period before its endpoint starts and closes it once the endpoint has stopped (`served_verdicts.py
+#           pearlplus-period`, as served_verdicts.sh's pearl_period, on the scheme's and the cubin's descriptor). The
+#           period's cap is one window, so a run with a live arm takes LOADS=1. While it is open the period refuses the
+#           lane's every other reserve, and a reserve of the lane's after another run's period closes and before that
+#           run's draw is the first after its close, which that run's rule holds to its draw: GATE_LANE is a lane no
+#           other run is using meanwhile. A run killed inside a live lifetime can leave its period open (served_ab.txt's
+#           PERIOD line has its name; the gate's `period-close --name` closes it). Not run yet on any node from this script.
+#   ahead   live with each window's salt session reserved and opened ahead of the window (--challenger-ahead): the first
+#           window's before the endpoint listens
 # Pearl+ refuses --no-commit and a live session is Pearl+'s, so neither is served alone: the Commit's cost is commit less
-# stock, Pearl+'s pearl less commit, the live session's live less pearl.
+# stock, Pearl+'s pearl less commit, the live session's live less pearl, and what a session made ahead saves live less
+# ahead.
 #
 # Rounds are interleaved: WARM warm rounds, then REPS rounds, each round one lifetime of every arm in ARMS, the order rotated
 # by one a round, under one lease of the card (LEASE_MIN minutes at most; the builds below hold no card). A lifetime takes
@@ -83,6 +92,7 @@ say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/served_ab.txt"; }
 count() { cat "$1" 2>/dev/null | grep -c .; }
 throttled() { awk '$1 == "nr_throttled" { print $2 }' /sys/fs/cgroup/cpu.stat 2>/dev/null; }
 has() { case " $ARMS " in *" $1 "*) return 0 ;; esac; return 1; }
+live_arm() { [ "$1" = live ] || [ "$1" = ahead ]; }
 
 serve_args() {  # arm $1's serve-openai arguments beyond the engine's, one a line
   local arm=$1
@@ -93,21 +103,42 @@ serve_args() {  # arm $1's serve-openai arguments beyond the engine's, one a lin
   [ "$arm" = commit ] && return
   printf '%s\n' --protocols "$PEARL_ARM" --protocols-config \
     "$(python3 -c 'import json, sys; print(json.dumps({"pouw": {"device": "cuda", "kernel": sys.argv[1], "cubin": sys.argv[2]}}))' "$PEARLC_KERNEL" "$PEARLC_CUBIN")"
-  [ "$arm" = live ] && printf '%s\n' --challenger-gate "$GATE" --challenger-peer "$PEER" --challenger-lane "$GATE_LANE"
+  live_arm "$arm" && printf '%s\n' --challenger-gate "$GATE" --challenger-peer "$PEER" --challenger-lane "$GATE_LANE"
+  [ "$arm" = ahead ] && printf '%s\n' --challenger-ahead
+}
+
+period() {  # in life(), a live arm's: $1 opens or closes the lane's Pearl-C period the lifetime's one window's salt session
+  # joins, named after the run, the round and the arm; the close waits for the gate to end that session and closes either way
+  local out rc
+  if [ "$1" = open ]; then
+    out=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" pearlplus-period open "$D/pearlplus" --gate "$GATE" \
+      --name "served-ab-${RESEARCH_RUN_ID:-local}-$name-$arm" --cubin "$PEARLC_CUBIN" 2>&1)
+  else
+    out=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" pearlplus-period close "$D/pearlplus" --gate "$GATE" \
+      --lane "$GATE_LANE" --windows "$D/pearl" --wait "${CLOSE_WAIT:-300}" 2>&1)
+  fi
+  rc=$?
+  say "$name $arm: $(tail -1 <<< "$out" | cut -c1-600)"
+  return "$rc"
 }
 
 life() {  # under the lease: round $1's lifetime of arm $2: the endpoint, its LOADS loads, the endpoint stopped, its record
-  local name=$1 arm=$2 D=$RUNS/$1/$2 srv up=0 rc=0 j release args w s t0=$SECONDS started
+  local name=$1 arm=$2 D=$RUNS/$1/$2 srv up=0 rc=0 j release args w s t0=$SECONDS started opened=
   mkdir -p "$D" "$OUT/$name"
   mapfile -t args < <(serve_args "$arm")
   cd "$TREE/integrations/vllm" || return 9
+  if live_arm "$arm"; then  # before the endpoint starts, so a session made ahead of the first request has a period to join
+    opened=1
+    trap 'period close; exit 143' TERM INT
+    period open || { trap - TERM INT; say "$name $arm: its period didn't open, so nothing is served"; return 10; }
+  fi
   started=$(date +%s.%N)   # the record's listen_s runs from here to the server's own time as it begins to listen
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}-$name-$arm" --max-num-batched-tokens "$T" \
     --admit release-order --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" "${args[@]}" \
     > "$D/serve.log" 2>&1 &
   srv=$!
-  trap 'kill -TERM "$srv" 2>/dev/null; wait "$srv"; exit 143' TERM INT
+  trap 'kill -TERM "$srv" 2>/dev/null; wait "$srv"; [ -z "$opened" ] || period close; exit 143' TERM INT
   for _ in $(seq 1 900); do
     grep -q "SERVE-OPENAI listening" "$D/serve.log" && { up=1; break; }
     kill -0 "$srv" 2>/dev/null || break
@@ -116,7 +147,7 @@ life() {  # under the lease: round $1's lifetime of arm $2: the endpoint, its LO
   if [ "$up" != 1 ]; then
     tail -60 "$D/serve.log" > "$OUT/$name/$arm.serve.tail"
     say "$name $arm: not listening: $(grep -m1 -E 'UsageError|Error|refus' "$D/serve.log" | cut -c1-400)"
-    kill -TERM "$srv" 2>/dev/null; wait "$srv"; trap - TERM INT; return 10
+    kill -TERM "$srv" 2>/dev/null; wait "$srv"; [ -z "$opened" ] || period close; trap - TERM INT; return 10
   fi
   local listening=$((SECONDS - t0))
   for j in $(seq 1 "$LOADS"); do
@@ -131,9 +162,10 @@ life() {  # under the lease: round $1's lifetime of arm $2: the endpoint, its LO
       sleep 0.5
     done
   done
-  trap - TERM INT
   kill -TERM "$srv" 2>/dev/null; wait "$srv"
   local stopped=$?
+  [ -z "$opened" ] || period close || rc=13
+  trap - TERM INT
   "$PY" "$AB" life "$D" --arm "$arm" --round "$name" --started "$started" > "$OUT/$name/$arm.json" 2> "$D/life.err" \
     || { rm -f "$OUT/$name/$arm.json"; tail -60 "$D/serve.log" > "$OUT/$name/$arm.serve.tail"; rc=12; }
   say "$name $arm: listening after $listening s, loads exit $rc, stopped (exit $stopped), $(count "$D/windows.jsonl") window(s)" \
@@ -178,7 +210,7 @@ prep() {  # on CORES, no card held: the Build of record, the taps, the cubin, th
   rc=$?
   say "PREP norm tap (exit $rc): $(tail -1 "$OUT/prep/norm_tap.log" | cut -c1-300)"
   [ "$rc" = 0 ] && [ -f "$NORM_TAP_SO" ] || { cp "$STAGE/norm_tap/logs/build.log" "$OUT/prep/norm_tap_build.log" 2>/dev/null; return 5; }
-  has pearl || has live || return 0
+  has pearl || has live || has ahead || return 0
   ( export RESEARCH_RUN_DIR=$STAGE/pearlplus-cubin VERITY_BENCH_VENV=$VENV CUDA_HOME=$CUBIN_CUDA
     if [ ! -x "$CUBIN_CUDA/bin/nvdisasm" ]; then  # cuobjdump -sass runs nvdisasm, which node A's 12.9 lacks: the venv's Triton's
       for d in "$VENV"/lib/python*/site-packages/triton/backends/nvidia/bin; do [ -x "$d/nvdisasm" ] && PATH=$PATH:$d; done
@@ -203,9 +235,12 @@ if [ "${1:-}" = round ]; then round "$2" "$3"; exit $?; fi
 for f in "$PY" "$TAP_CUDA/bin/nvcc" "$HF_HOME"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
 for a in $ARMS; do
   case $a in stock | commit | pearl) ;;
-    live) [ -n "${GATE:-}" ] && [ -n "${PEER:-}" ] && [ -n "${GATE_LANE:-}" ] \
-            || { say "PREFLIGHT: the live arm needs GATE (the lane's gate command), PEER (this node's name among the gate's peers) and GATE_LANE, with the lane's Pearl-C period open"; exit 3; } ;;
-    *) say "PREFLIGHT: an arm is stock, commit, pearl or live, not $a"; exit 3 ;;
+    live | ahead)
+      [ -n "${GATE:-}" ] && [ -n "${PEER:-}" ] && [ -n "${GATE_LANE:-}" ] \
+        || { say "PREFLIGHT: the $a arm needs GATE (the lane's gate command), PEER (this node's name among the gate's peers) and GATE_LANE"; exit 3; }
+      [ "$LOADS" = 1 ] \
+        || { say "PREFLIGHT: the $a arm's lifetime is one window, its period's cap, and a second window's reserve is refused: run it with LOADS=1, not $LOADS"; exit 3; } ;;
+    *) say "PREFLIGHT: an arm is stock, commit, pearl, live or ahead, not $a"; exit 3 ;;
   esac
 done
 LEASE=$TREE/tools/research/src/research/pods/sh/gpu_lease.sh

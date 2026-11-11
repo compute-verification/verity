@@ -1,9 +1,11 @@
 """`served_ab.py` on toy serve dirs and records: a lifetime's record keeps the aggregate, each load's step times and only the
 numbers of a window's and a seal's parts; `table` takes each rep round's first load apart from its warm ones, leaves a warm
-round out, gives each part as its arm's median less the arm before's, and refuses loads of different shapes."""
+round out, gives each part as its arm's median less the arm before's, and refuses loads of different shapes. And
+`served_ab.sh`'s live arms on the CPU, with a stub interpreter: the lane's period around each lifetime."""
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -146,3 +148,89 @@ def test_the_table_refuses_no_record_and_loads_of_different_shapes(tmp_path):
     with pytest.raises(ValueError, match="different"):
         AB.table(out)
     assert AB.main(["table", str(out)]) == 1
+
+
+STUB_PY = """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$ARGV_LOG"
+case "$*" in
+  "-c "*) echo 0123456789abcdef ;;
+  *" serve-openai "*)
+    [ -z "${NO_LISTEN:-}" ] || { echo "Error: refused"; exit 2; }
+    while [ $# -gt 1 ]; do [ "$1" = --out ] && out=$2; shift; done
+    echo '{}' > "$out/windows.jsonl"; echo '{}' > "$out/seals.jsonl"
+    echo "SERVE-OPENAI listening on 127.0.0.1"; exec tail -f /dev/null ;;
+  *"pearlplus-period open"*) [ -z "${NO_PERIOD:-}" ] || { echo "PERIOD refused: the gate"; exit 1; }
+    echo "PERIOD opened p: Pearl-C, cap 1" ;;
+  *"pearlplus-period close"*) echo "PERIOD closed p: its reserves held" ;;
+  *"served_ab.py life"*) echo '{}' ;;
+esac
+"""
+
+
+def _ab(tmp_path: Path, *args: str, **env: str) -> tuple[subprocess.CompletedProcess, list[str], str]:
+    """`served_ab.sh` on the CPU, already pinned, with a stub interpreter that logs each argv, answers serve-openai's
+    listening line with a window closed and sealed and holds it until the script's TERM, and stands in for the load, the
+    period's open and close and `served_ab.py life`: the run, the argv lines and ``served_ab.txt``."""
+    venv = tmp_path / "venv" / "bin"
+    venv.mkdir(parents=True)
+    for name in ("python", "python3"):
+        (venv / name).write_text(STUB_PY)
+        (venv / name).chmod(0o755)
+    (tmp_path / "cuda" / "bin").mkdir(parents=True)
+    (tmp_path / "cuda" / "bin" / "nvcc").write_text("")
+    log, out = tmp_path / "argv.log", tmp_path / "out"
+    base = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "VENV": str(tmp_path / "venv"), "ARGV_LOG": str(log), "OUT": str(out),
+            "SERVE_ROOT": str(tmp_path / "root"), "STAGE": str(tmp_path / "stage"), "HF_HOME": str(tmp_path),
+            "TAP_CUDA": str(tmp_path / "cuda"), "CUBIN_CUDA": str(tmp_path / "cuda"), "RESEARCH_RUN_ID": "t",
+            "SERVED_AB_PINNED": "1", "GATE": "the-gate", "PEER": "the-peer", "GATE_LANE": "the-lane", "LOADS": "1"}
+    p = subprocess.run(["bash", str(HERE.parent / "served_ab.sh"), *args], cwd=HERE.parents[2], env=base | env,
+                       capture_output=True, text=True)
+    said = out / "served_ab.txt"
+    return p, log.read_text().splitlines() if log.exists() else [], said.read_text() if said.exists() else ""
+
+
+def _at(lines: list[str], what: str) -> int:
+    (i,) = [i for i, x in enumerate(lines) if what in x]
+    return i
+
+
+def test_a_live_arms_lifetime_opens_the_lanes_period_before_its_endpoint_and_closes_it_after(tmp_path):
+    """The live arms' lifetimes each open the lane's Pearl-C period before serve-openai starts, so a session made ahead
+    of the first request has a period to join, and close it once the endpoint has stopped, before the record is read;
+    `ahead` is `live` with --challenger-ahead, and the record is asked for with the time the server was started."""
+    p, lines, said = _ab(tmp_path, "round", "rep-1", "0", ARMS="live ahead")
+    assert p.returncode == 0, p.stdout + p.stderr
+    for arm in ("live", "ahead"):
+        mine = [x for x in lines if f"rep-1/{arm}" in x or f"rep-1-{arm}" in x]
+        opened, serve, closed, life = (_at(mine, w) for w in ("pearlplus-period open", " serve-openai ", "pearlplus-period close",
+                                                              "served_ab.py life"))
+        assert opened < serve < closed < life
+        name = f"served-ab-t-rep-1-{arm}"
+        assert f"--gate the-gate --name {name} --cubin {tmp_path}/stage/pearlplus-cubin/" in mine[opened]
+        assert mine[closed].split("--gate ")[1] == f"the-gate --lane the-lane --windows {tmp_path}/root/runs/t/rep-1/{arm}/pearl --wait 300"
+        words = mine[serve].split()
+        assert words[words.index("--challenger-gate"):][:6] == ["--challenger-gate", "the-gate", "--challenger-peer", "the-peer",
+                                                               "--challenger-lane", "the-lane"]
+        assert ("--challenger-ahead" in words) == (arm == "ahead")
+        assert "--started" in mine[life].split()
+        assert f"rep-1 {arm}: PERIOD opened p" in said and f"rep-1 {arm}: PERIOD closed p" in said
+    assert not (tmp_path / "root" / "runs" / "t" / "rep-1" / "live").exists()
+
+
+def test_a_live_arm_whose_endpoint_does_not_come_up_closes_its_period_and_one_with_no_period_serves_nothing(tmp_path):
+    p, lines, said = _ab(tmp_path / "a", "round", "rep-1", "0", ARMS="live", NO_LISTEN="1")
+    assert p.returncode == 10 and "rep-1 live: not listening" in said
+    assert _at(lines, "pearlplus-period open") < _at(lines, " serve-openai ") < _at(lines, "pearlplus-period close")
+    p, lines, said = _ab(tmp_path / "b", "round", "rep-1", "0", ARMS="ahead", NO_PERIOD="1")
+    assert p.returncode == 10 and "rep-1 ahead: PERIOD refused: the gate" in said and "nothing is served" in said
+    assert not [x for x in lines if " serve-openai " in x or "pearlplus-period close" in x]
+
+
+def test_a_run_with_a_live_arm_is_refused_more_than_one_load_a_lifetime(tmp_path):
+    """A live arm's period has a cap of one window, so its lifetime takes one load: the preflight says so before any
+    build or lease, and without the gate's words it refuses the arm."""
+    p, lines, said = _ab(tmp_path / "a", ARMS="pearl ahead", LOADS="3")
+    assert p.returncode == 3 and "the ahead arm's lifetime is one window" in said and "LOADS=1, not 3" in said
+    p, lines, said = _ab(tmp_path / "b", ARMS="live", GATE="")
+    assert p.returncode == 3 and "the live arm needs GATE" in said
+    assert not [x for x in lines if "serve-openai" in x or "pearlplus-period" in x]

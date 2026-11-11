@@ -22,8 +22,9 @@ listens and for the later, warm loads apart, gives each arm's median, least and 
 Beside the first loads it gives ``listen_s`` over the arm's lifetimes, where every one recorded it: a cost moved from a
 load to the server's start shows there.
 
-Arms are ordered stock, commit, pearl, live, each one part more than the one before (`PARTS`), so a part's cost is its
-arm's median less the arm before's: in seconds, as a share of the last arm's wall, and over stock's. `table` writes
+Arms are ordered stock, commit, pearl, live, ahead, each one part more than the one before (`PARTS`), so a part's cost is
+its arm's median less the arm before's (less than nothing where the part saves): in seconds, as a share of the last arm's
+wall, and over stock's. `table` writes
 ``table.json`` and ``table.md`` to ``--out`` and prints the Markdown.
 """
 from __future__ import annotations
@@ -37,10 +38,11 @@ from typing import Any
 
 LIFE = "verity-bench/served-ab-life/v0"
 TABLE = "verity-bench/served-ab-table/v0"
-ORDER = ("stock", "commit", "pearl", "live")
+ORDER = ("stock", "commit", "pearl", "live", "ahead")
 #: what each arm serves beyond the arm before it
 PARTS = {"commit": "the Commit", "pearl": "Pearl+ under the Commit, its coins in-process",
-         "live": "each window's salt coin from a live session"}
+         "live": "each window's salt coin from a live session",
+         "ahead": "that session reserved and opened ahead of its window"}
 MEASURES = ("wall_s", "first_token_s", "decode_step_s", "close_after_s")
 HEADS = {"wall_s": "window wall, s", "first_token_s": "to the first token, s", "decode_step_s": "a decode step, s",
          "close_after_s": "on-loop close after, s"}
