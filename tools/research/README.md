@@ -153,8 +153,8 @@ regression's manifest rebuilds, which label the landing's check attempt.
 
 `research queue` is the merge queue. Its loop, the verified queue (`research queue vqueue`, ci's: `vqueue_loop.py`, whose
 policy is `vqueue.py`), merges the PRs ready to land onto `main` as candidates (`queue/<sha12>`, one `Queue: #N` merge each),
-checks each (`check.py --record`, in shards), and fast-forwards `main` only to a candidate that passed every step on the
-merge gate; a failure its base doesn't share ejects its lone suspect or bisects several, and the candidate is built again
+checks each (graph2's tasks by default), and fast-forwards `main` only to a candidate with no new failure; a failure its
+base doesn't share ejects its lone suspect or bisects several, and the candidate is built again
 without them. A PR is ready to land when it's open against `main` (drafts too), names its owner (a `Lane {name}` line, else
 its Cursor agent id), has no hold label, is marked ready at its head by that owner (`research queue ready PR --mark --by
 LANE`, or `--on auto` to run the quick tier first, or a `ready` label on `pr:{n}@{head}`), and has a reviewer's land verdict
