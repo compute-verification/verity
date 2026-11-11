@@ -50765,3 +50765,36 @@ card 2 and cores 24-33.
 For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, FOUR provers on one H200, LOADED (a neighbour proving the same block on card 2, same NUMA node): today's block 2.382 GPU-s a statement, every cut built tonight together 1.402, both measured, `r20261111-102210-ee70` steps 4 and 3; the cut row uses 14 cores a card and `all` is unmarked.
 For BREAKEVEN: the same QUIET: today's block 2.430, every cut 1.357, measured, `r20261111-102210-ee70` steps 2 and 1.
 For the table: head block's seconds a statement at four provers a card, measured on node A: today 2.43 quiet and 2.38 loaded; with every cut built tonight 1.36 quiet and 1.40 loaded (14 cores a card; `all` unmarked).
+
+
+## EXTFORM, Wed 11 Nov 11:21Z: ready to mark #8906 at e7b2e51d928b1b02e63531c2b849493c6abd2367, with ONE item open: the merged tree's build `e606` has no verdict yet (it took its Lean slot at 11:19Z). The head's own try, the records run and the quick tier pass; no lock record changes; a lemma PR whose two modules are wholly unread, so CAPS's third number comes first
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another worker's statement I did not check, [derived] my arithmetic. Times from `date -u`.
+
+**ready to mark #8906 at e7b2e51d928b1b02e63531c2b849493c6abd2367** (open, unmarked, `MERGEABLE` [run: `gh pr view`, 11:19Z]), when `e606` passes.
+
+- **Quick tier** `r20261111-094939-bdf4` [run: its `stdout.log`]: rc 0, "8 suites: 8 passed (0 cached), 0 failed". The suites: verity-pouw-benchmarks 1216 passed and 21 skipped; verity/protocols/pouw/verifier 1844; repository 280; verity/protocols/pous/verifier 536 and 12 skipped; verity/definitions/ops 949 and 2 skipped; verity/protocols/inference_only/nci 137; verity/protocols/inference_only/rho 602; verity-graph 181. It ran `suites.py --changed 0a722c6ec984 --quick`, so the change it sees holds #8827's too.
+- **Records run** `r20261111-094935-d3c3` (`lean_changed.py --records security/Proofs --update`) [run: its `stdout.log`]: rc 0, `OUTCOME` `pass` for `security/Proofs`, `security` and `security/Properties`.
+  - `security/Proofs`: "PASS 193835 declarations in 3833 modules; axioms propext, Classical.choice, Quot.sound", check.py exit 0 in 2928 s. On the fast path, without the kernel replay.
+  - The outcome is `pass`, not `regenerated`: **no lock record changes.**
+- **The four checks** at this head:
+  - elaborates: `r20261111-094823-6a1d`, the file's try at the head's own tree, rc 0, lean exit 0 [run];
+  - axioms clean: `6a1d`'s probe (18 theorems on the three), siblings clean, and `d3c3`'s audit of the package [run];
+  - kernel replay: the candidate's check;
+  - read by a second reader: ATTACK, both files whole, 10:25Z; "second reader done" in your 10:46Z word [relayed].
+- **The merged tree: NOT YET BUILT.** `r20261111-105440-e606` [run: `research inspect`, 11:19Z]: in line since 10:55Z, its Lean slot taken at 11:19Z.
+  - The tree: `main` `8f5d3c3823f0` merged with the marked heads that touch #8906's two aggregators or a file under `SamplingGeneric/` (#8827 `946b7b72`, #8781 `b7c268c7`, #8828 `53dd644b`, #8836 `ae8886e9`, #8857 `96985b18`, #8871 `2d4670d6`, #8874 `b3fb5853`, #8882 `da385b86`, which hold #8785, #8820 and #8879), then #8906's head. Every `git merge` is clean. Scratch commit `006505edad95`, on no branch.
+  - The command: `lean_changed.py --build security/Proofs/Flock.lean security/Proofs/Core.lean`, a whole-package build; TWOWITNESS's `b6e9` took 2,372 s for the like.
+  - Until it ends, what is built is narrower [run]: both modules build under #8905's files, and so with #8882 and #8879, in `85f2` and `3aba`; and under REGX's `code_hwit` in `99d2` (rc 0 at `5b37c49d6a5c`).
+  - I post its verdict when it ends. Mark on that line, not on this one, if you hold to the 08:29Z rule.
+- **The body** is in the order's order and current [run: `research queue edit`, 11:17Z; the head did not move]: the change, the four checks with their runs, no lock record, the runs at the head, the merged tree, the modules, what the Lean says and does not say. It names the key (the needing proof blocks, the writer among them), says 643 is a count of it and 132 is not, and quotes no bits.
+- **What kind of PR** [read: the diff over #8827's head, four files, 944 lines added, none removed]: no file under `Definitions/` or `Properties/`, no `lean-audit.json`, no guarantee, no named premise added. Its theorems take the expected-time premise (`ExpectedCR`) at two new finders as a hypothesis, which no guarantee names; a by-class line that quotes it has to say so.
+- **Stacks on this head** [relayed]: REGX's #8922 and #8924, KILIAN's #8905 and `c6412ff63497`, TWOPROVE's counts. The head does not move.
+
+For CAPS: `Proofs/Core: +1 modules, +19 declarations; Proofs/Flock: +1 modules, +21 declarations (#8906: Core/SamplingGeneric/FirstHitClass.lean, Flock/SamplingGeneric/TwoRegFirstHitClass.lean)`, both wholly unread. `d3c3` and the repository suite pass at the head on #8827's base; that says nothing of the caps on `main` with the other marked heads in.
+
+**Next, mine:** REGX's #8924 as its second reader, as you asked at 11:10Z: one paragraph on whether `hpos`, `hrep`, `hallX` and `hallI` are discharged as REGX says. Then `e606`'s verdict.
+
+For the table:
+- #8906 (the first-hit bound by class of gates; a lemma PR): its own try, records run (`d3c3`, pass, no record regenerated) and quick tier (`bdf4`, 8 of 8) pass at `e7b2e51d928b`; the merged tree's build `e606` is running; unmarked until it passes and the unread caps hold its two modules.
+- No number changes: by classes at the needing proof blocks (643 a later head block [relayed: ATTACK, derived]) the record reads 2^-108.41 a run in calls and 2^-99.41 in compressions with K a mean [derived]. Modeled; the first-hit term of #8827's lemma by classes; a run at K0 = 6, T = 2^80 calls in every run; at a registration with no always-checked block; it rests on the expected-time premise at two finders no guarantee names.
