@@ -20,3 +20,11 @@ def test_the_fold_worker_compresses_the_journal_by_the_rows_match_pipeline(tmp_p
     monkeypatch.setattr(RC, "fold_summary_result", lambda *args, **kw: (dict(doc), None))
     monkeypatch.setattr(RC, "persist_program", lambda result, run_dir, **kw: seen.update(kw) or {})
     assert RC.fold_worker(a) == 0 and seen["journal_level"] == level
+    assert (seen["profile_name"], seen["log_path"]) == ("p", "l")
+
+
+@pytest.mark.parametrize("given, missing", [(("--profile", "p", "--out", "s.json"), "log"), (("--log", "l", "--out", "s.json"), "profile"),
+                                            (("--log", "l", "--profile", "p"), "out"), (("--out", "s.json"), "log")])
+def test_the_fold_worker_names_the_first_option_it_lacks(given, missing):
+    with pytest.raises(SystemExit, match=f"--worker fold needs --{missing}$"):
+        RC.fold_worker(cli.parse("match", ["--worker", "fold", *given], {}))

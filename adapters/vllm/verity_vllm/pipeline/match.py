@@ -101,7 +101,7 @@ class Plan:
 
     def __init__(self, a: Options) -> None:
         self.a = a
-        self.run = Path(a.out)
+        self.run = Path(required(a, "out"))
         self.py_gpu = a.python_gpu or sys.executable
         self.py_cpu = a.python_cpu or sys.executable
         if str(a.snapshot_steps).strip().lower() == "all":
@@ -363,7 +363,7 @@ def _engine_arg_dict(items: list[str]) -> dict:
 
 def write_manifest(plan: Plan, a: Options) -> dict:
     from verity_vllm.pipeline.report import workload_summary
-    C = profile_config(a.profile)
+    C = profile_config(required(a, "profile"))
     man = {
         "schema": "verity-gen/run/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "config_id": a.config_id,
         "profile": a.profile, "case": a.case, "workload_path": a.workload, "workload": workload_summary(a.workload),
@@ -375,7 +375,7 @@ def write_manifest(plan: Plan, a: Options) -> dict:
         "declared_execution": _workload_execution(a.workload),
         "engine_args_required_by_workload": _workload_engine_args(a.workload),     # merged into engine_args_requested
         "snapshot_max_bytes": a.snapshot_max_bytes if a.snapshot_max_bytes is not None else 32 << 20,
-        "snapshot_cap_derivation": getattr(a, "snapshot_cap_derivation", None),   # None = an explicit CLI cap
+        "snapshot_cap_derivation": a.snapshot_cap_derivation,   # None = an explicit CLI cap
         "snapshot_max_bytes_op": a.snapshot_max_bytes_op,       # cov-moe: lower cap at dispatcher-call events (None = the cap above)
         "checkpoints": a.checkpoints, "checkpoint_dir": a.checkpoint_dir, "artifacts": plan.artifacts_override(),
         "skip": sorted(plan.skip), "argv": sys.argv[1:], "family": a.family, "mechanism_notes": [], "notes": [],
@@ -408,7 +408,7 @@ def write_spec_for(plan: Plan, a: Options, man: dict) -> dict | None:
         except (OSError, ValueError, AttributeError, TypeError):   # no manifest on this host, or not one: the checkpoint_dir still identifies the weights
             pass
         wl_doc = _workload_doc(a.workload)
-        spec = EXP.build_spec(config_id=a.config_id, case=a.case, profile=a.profile, workload_path=a.workload, workload_doc=wl_doc,
+        spec = EXP.build_spec(config_id=required(a, "config_id"), case=required(a, "case"), profile=a.profile, workload_path=a.workload, workload_doc=wl_doc,
                               checkpoint=ck, checkpoint_dir=a.checkpoint_dir, hf_config=man.get("hf_config"),
                               engine_args=_engine_arg_dict(plan.engine_args()), max_num_seqs=a.max_num_seqs,
                               sampling={}, tp=int(getattr(a, "tp", 1) or 1), dtype=None, snapshot_steps=plan.steps,
@@ -443,9 +443,9 @@ def write_realized(plan: Plan) -> dict | None:
         ctl = json.loads(ctl_p.read_text()) if ctl_p.exists() else None
     except (OSError, ValueError):
         ctl = None
-    if cap is None and ctl is None:
-        return None
     src = cap or ctl
+    if src is None:
+        return None
     reqs = []
     for r in src.get("requests", []):
         reqs.append({"request_id": r.get("request_id"), "prompt_len": r.get("prompt_len", len(r.get("prompt_token_ids") or [])),
@@ -475,8 +475,13 @@ def write_realized(plan: Plan) -> dict | None:
 
 def _max_concurrent(reqs: list[dict]) -> int | None:
     """Peak number of requests active in one engine step, from the realized first/finish steps."""
-    spans = [(r.get("first_step"), r.get("finish_step")) for r in reqs]
-    if not spans or any(a is None or b is None for a, b in spans):
+    spans: list[tuple[int, int]] = []
+    for r in reqs:
+        first, finish = r.get("first_step"), r.get("finish_step")
+        if first is None or finish is None:
+            return None
+        spans.append((first, finish))
+    if not spans:
         return None
     hi = max(b for _, b in spans)
     return max(sum(1 for a, b in spans if a <= s <= b) for s in range(hi + 1))
@@ -547,6 +552,8 @@ class Options:
     engine_arg: list[str] = option("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value) for every GPU stage, repeatable; e.g. max_num_batched_tokens=64, enable_prefix_caching=true")
     max_tokens: int | None = option("--max-tokens", type=int, default=None, help="override the workload's max_tokens (passed to the GPU stages)")
     snapshot_max_bytes: int | None = option("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; a prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
+    #: how `main` derived the cap (run.json's snapshot_cap_derivation); None under a --snapshot-max-bytes given; no flag sets it
+    snapshot_cap_derivation: dict | None = field(default=None, init=False)
     snapshot_max_bytes_op: int | None = option("--snapshot-max-bytes-op", type=int, default=None, help="(capture) lower per-tensor cap at dispatcher-call events; Triton launch events keep --snapshot-max-bytes, so a large launch output is copied once (cov-moe: the fused-MoE intermediates of a 2048-token prefill otherwise exceed the pod's pinned host memory; the run.json records the value)")
     checkpoints: str = option("--checkpoints", default=DEFAULT_CHECKPOINTS)
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="HF snapshot dir or model*.safetensors glob (compare --safetensors)")
@@ -592,10 +599,8 @@ def main(a: Options) -> int:
     # no explicit --snapshot-max-bytes: derive the cap from the workload's largest forward and the checkpoint's widths
     # (snapshot_cap_bytes) instead of m1_capture's fixed 32 MiB, which leaves the prefill MLP rows of every 1024-class workload without
     # snapshot evidence.  An explicit value still wins; the run.json records the derivation either way.
-    if not hasattr(a, "snapshot_cap_derivation"):
-        a.snapshot_cap_derivation = None          # an explicit CLI cap (or --run-dir already carried the capture's)
     if a.snapshot_max_bytes is None:
-        C0 = profile_config(a.profile)
+        C0 = profile_config(required(a, "profile"))
         cap, why = snapshot_cap_bytes(_workload_doc(a.workload), _hf_config_of(a, C0), _engine_arg_dict(a.engine_arg))
         a.snapshot_max_bytes, a.snapshot_cap_derivation = cap, why
         if why["raised"]:
@@ -615,7 +620,7 @@ def main(a: Options) -> int:
                 continue
             if st == "gates":
                 print(f"[gates] in-process: gates.evaluate_gates({plan.run}) -> {plan.p('gates')}; card -> {plan.p('card')}, {plan.run / 'CARD.md'}, "
-                      f"{Path(a.cards_dir) / (a.config_id + '.json')}")
+                      f"{Path(a.cards_dir) / (required(a, 'config_id') + '.json')}")
                 continue
             cmd = plan.cmd(st)
             if cmd is None:
@@ -683,7 +688,7 @@ def main(a: Options) -> int:
 
 def _defaults_from_run_dir(a: Options) -> None:
     """Fill unset arguments from RUN_DIR/run.json (the manifest the GPU phase wrote)."""
-    run = Path(a.run_dir)
+    run = Path(required(a, "run_dir"))
     man_p = run / G.ARTIFACTS.get("run", "run.json")
     if not man_p.exists():
         raise UsageError(f"--run-dir {run}: no {man_p.name} (the GPU phase writes it)")
@@ -775,7 +780,7 @@ def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | No
             if isinstance(v, (int, float)) and int(v) > 0:
                 widths[k] = int(v)
     if widths:
-        wk = max(widths, key=widths.get)
+        wk = max(widths, key=widths.__getitem__)
         row_bytes, width_src = widths[wk] * 2, f"hf config {wk}={widths[wk]} x bf16"
     else:
         row_bytes, width_src = SNAPSHOT_ROW_BYTES_FALLBACK, "no HF config: 64 KiB per row"
@@ -814,7 +819,9 @@ def fold_construction_args(workload: str | None, program_dirs) -> list[str]:
 
 def _workload_execution(path: str | None) -> str | None:
     doc = _workload_doc(path) or {}
-    sw = doc.get("sweep") if isinstance(doc.get("sweep"), dict) else {}
+    sw = doc.get("sweep")
+    if not isinstance(sw, dict):
+        sw = {}
     for v in (doc.get("execution"), sw.get("execution")):
         if isinstance(v, str) and v:
             return v
@@ -965,7 +972,7 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
         if type(v) is ViewDesc:
             return {"alloc": int(v.alloc), "offset": int(v.offset), "shape": [int(s) for s in v.shape], "strides": [int(s) for s in v.strides],
                     "dtype": v.dtype, "device": v.device}
-        return _jsonable(dataclasses.asdict(v)) if dataclasses.is_dataclass(v) else _jsonable(v)
+        return _jsonable(dataclasses.asdict(v)) if dataclasses.is_dataclass(v) and not isinstance(v, type) else _jsonable(v)
 
     def run_items(rs):      # runs(): [(space, idx, lo, hi), ...] -> the stored lists, ints coerced exactly as _jsonable's tolist() did
         return [[r[0], int(r[1]), int(r[2]), int(r[3])] for r in rs]
@@ -1062,17 +1069,17 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
 
 
 def fold_worker(a: Options) -> int:
-    for req in ("log", "profile", "out"):
-        if getattr(a, req) is None:
-            raise SystemExit(f"--worker fold needs --{req}")
+    log, profile, summary = a.log, a.profile, a.out
+    if log is None or profile is None or summary is None:
+        raise SystemExit(f"--worker fold needs --{next(req for req in ('log', 'profile', 'out') if getattr(a, req) is None)}")
     # process-level; content-neutral (VERITY_GC_THRESHOLDS)
     from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
     _gc_tune()
-    doc, result = fold_summary_result(a.log, a.profile, with_program=not a.no_program, moe_construction=getattr(a, "moe_construction", None), sampler_construction=getattr(a, "sampler_construction", None), registered_values=bool(getattr(a, "registered_values", False)))
-    out = Path(a.out)
+    doc, result = fold_summary_result(log, profile, with_program=not a.no_program, moe_construction=getattr(a, "moe_construction", None), sampler_construction=getattr(a, "sampler_construction", None), registered_values=bool(getattr(a, "registered_values", False)))
+    out = Path(summary)
     out.parent.mkdir(parents=True, exist_ok=True)
-    if getattr(a, "persist_dir", None):
-        doc["persisted"] = persist_program(result, Path(a.persist_dir), profile_name=a.profile, log_path=a.log,
+    if a.persist_dir:
+        doc["persisted"] = persist_program(result, Path(a.persist_dir), profile_name=profile, log_path=log,
                                            journal_level=1 if a.match_pipeline == "shared" else 9)
     out.write_text(json.dumps(_jsonable(doc), indent=1) + "\n")
     print(f"{out}  digest={doc['digest'][:16]}  instances={doc['n_instances']}  steps={doc['n_steps']}  unresolved={doc['unresolved']}  "
