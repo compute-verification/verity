@@ -18,7 +18,7 @@ registrations the verifier pins each load value from (`blocks.pins`).
     python benchmarks/network_traces/load_relay.py sink --listen HOST:PORT --weights PATH --witness PATH [--streams 4]
 
 The demo's load is the gate's (``vy-challenger-gate weights-write`` and ``load-relay``,
-``benchmarks/live_challenger/auditor.py``), in three parts:
+``verity/composite/device/live_challenger/auditor.py``), in three parts:
 
 * **The store** (`write_store`, ``write``): interface 1's public weights stream under `DEMO_SEED`, generated once on
   the auditor's store disk as ``<shape>.bin`` with its record ``<shape>.json``, kept only when its tensors' SHA-256
@@ -92,15 +92,15 @@ from typing import Any, BinaryIO
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from verity.ml.commitments import hm96  # noqa: E402
-from verity.ml.commitments.hm96 import batch as HB  # noqa: E402
-from verity.ml.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain, _uint, merkle_depth  # noqa: E402
-from verity.ml.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix  # noqa: E402
-from verity.ml.crypto import chacha20  # noqa: E402
-from verity.core.protocols.certifier import transfer_rows as TR  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction, Issuer  # noqa: E402
-from verity.core.protocols.pous.schemes import p2 as P2  # noqa: E402
-from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
+from verity.commitments import hm96  # noqa: E402
+from verity.commitments.hm96 import batch as HB  # noqa: E402
+from verity.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain, _uint, merkle_depth  # noqa: E402
+from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix  # noqa: E402
+from verity.commitments.crypto import chacha20  # noqa: E402
+from verity.protocols.certifier.verifier import transfer_rows as TR  # noqa: E402
+from verity.protocols.certifier.verifier.certificate import Direction, Issuer  # noqa: E402
+from verity.protocols.pous.verifier.schemes import p2 as P2  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
 
 FORMAT = "verity-network-certifier/load/v1"
 LINK, KIND, WINDOW = "s0/uplink", "load", 0
@@ -111,7 +111,7 @@ SALT_BYTES = _INST.salt_bytes
 #: a chunk's bytes are at most this many
 CHUNK_BYTES = 1 << 23
 READ_BYTES = 1 << 23
-#: the seeded weights' seeds (`e2e_h200.served_weights`): the demo's public one and its fixture's
+#: the seeded weights' seeds (`benchmarks.torch_gpu.p2_stage.served_weights`): the demo's public one and its fixture's
 DEMO_SEED, TEST_SEED = b"verity/cmp92/h200/weights/v1", b"verity/seeded-weights/test-seed"
 
 
@@ -119,7 +119,7 @@ DEMO_SEED, TEST_SEED = b"verity/cmp92/h200/weights/v1", b"verity/seeded-weights/
 
 @dataclass(frozen=True)
 class Shape:
-    """Interface 1's `Shape` (``e2e_h200.served_weights``)."""
+    """Interface 1's `Shape` (``benchmarks.torch_gpu.p2_stage.served_weights``)."""
 
     name: str
     width: int
