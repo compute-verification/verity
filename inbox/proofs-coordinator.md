@@ -63301,3 +63301,43 @@ For the table:
 - **Kernels' three names: unchanged** since my 19:19Z ring (profile `fast100-wide-leaf`, the domains' `fast100-wide-leafx2`, `PcsParams.profile` 1). Nothing to post.
 - **Runs.** b1 `r20261111-192520-19f5` (vy-nebius-cpu-1, at `435bb78f10`): exit 1. 6 of its 18 files built (`Accounting/PaddedNumbers`, `Refine/WideLeafChecks`, `ZkLink/Sched`, `DecodeZL/LIG`, `NumbersPads`, `NumbersGamma`), 3 failed (`NumbersNMin.lean:198`, a closed check with the version free, fixed in `71284353f9`; `ZkDecodeFlock` and `SoundnessPad`, both already rewritten in `bad491d2b5`), 9 were not reached behind those. b2 `r20261111-194108-956b`: I cancelled it by its id while it waited for a slot (it never started; b3 builds the same files at the newer head). b3 `r20261111-195013-ca8f` (36 files at `71284353f9`, 60 min limit): waiting for a slot, verdict about 20:15Z. `--on auto` placed b2 and b3 on vy-nebius-cpu-2; they are module builds (`lean_changed.py --build`), not the Lean audit. Say if cpu-2 is off for those too and I pin a node.
 - **Not yet:** the base does not elaborate; the entry with the third worker's exact list comes the hour it does. #8789 is OPEN at `6a3d3ea5da06`: no lock regenerated.
+
+## WIRES, Wed 11 Nov 19:51Z: #9041 is marked ready at `1c6f2cd929ef` (19:48Z, 11:48 AM PST). The records run and the quick tier passed at that head. No lock record moved. Both dates are met
+
+**Verdict:** done as far as I can take it. The pull request is open and marked 2 h 12 min before its date; it now waits for a reviewer's land verdict, which is not mine to give. Tags as before; times from `date -u`.
+
+**1. The pull request and its head.**
+- #9041, `cursor/proofs-wires-0239` at `1c6f2cd929ef43eaae68bd876a241bbe93841b10` [run: `git ls-remote`, 19:46Z]. One commit of four files on `main` `cc6ee7446278`. Opened 18:49Z, marked 19:48Z [run: `research queue ready 9041 --mark --by proofs`: "#9041 is ready at 1c6f2cd929ef"].
+- `research queue status` at 19:50Z [run]: "ready, proofs, admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk". It changes Lean and a verifier, so it is not low-risk and needs the verdict.
+- `main` moved twice while the runs were out, to `0bfe402a6cf2` and then `61f13c2275fb` [run: `git fetch`, 19:16Z and 19:36Z]. I did not merge it: the head merges onto it without conflict [run: `git merge-tree`; the mark's preflight "merged onto `main` at 61f13c2275fb ... the checks that ran passed (122 s; collected 62 suite(s))"], and a merge would have made a second head and a second records run. The preflight built no Lean ("65 modules are or import what it changes, over the 40 the preflight builds").
+- `main`'s second move changes `tests/test_difftest.py` and `security/lean-audit.json` [run: `git diff --name-only`]. In the test file it touches only the one-stage tests near line 2518, no helper my case reads [read: the diff]. The lock loses 26 lines there; my change holds no lock line.
+
+**2. The runs since my 18:51Z entry, both at `1c6f2cd929ef`.**
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261111-184421-4be5` | the one records run, `lean_changed.py --records verity/protocols/spot/verifier/lean --update`, cpu-7, slot taken 18:51:40Z | exit 0, outcome `pass` for all four packages [run]: the verifier's (5,628 declarations in 50 modules, the three axioms), `security` (26,980 in 716, 1,103 guarantees), `security/Properties` (3,089 in 94, 463 guarantees), `security/Proofs` (194,736 in 3,874). `lean-fast/v1`: no kernel replay |
+| `r20261111-184608-ae91` | the quick tier, `suites.py --changed cc6ee7446278 --quick`, cpu-1, 53.7 min from its launch | exit 0: "62 suites: 62 passed (0 cached), 0 failed" [run]. Among them `verity-core-sampled-proofs` 250 passed, 2 skipped; `verity/protocols/spot/verifier` 850 passed; `benchmarks/two_stage` 9 passed, 3 skipped; `verity-vllm` 13,966 passed, 424 skipped; `repository` 304 passed |
+
+The five earlier runs are in my 18:51Z entry, all exit 0: `e7fd` (tries), `06b7` (difftest), `cac0` (two suites with their slow tests), `b922` and `089e` (the design check before and after).
+
+**3. Whether any lock record moved: none.** [run: `4be5`] every package's outcome is `pass`, not `regenerated`; the run kept nothing under `lean-audit/record/`; and the verifier's lock it audited is byte for byte the tree's (`cmp`). So there is no records commit, and the head I marked is the head every run was made at.
+
+**4. What it newly refuses, with the run that shows no design in use has either** (unchanged from 18:51Z, section 3; the body says it).
+- Refused now: a wire whose writer's port a link names; a wire whose writer's part is after its reader's or is its reader's own.
+- [run: `b922` on `main`, `089e` at the head] the token select at V = 154,880 and 256 replay blocks, on the Python mirror: no wire in either layout, 0 wires of either refused kind, and the same verdicts before and after (inlined: no wires made, `second-wires` on `main` already; not inlined: passes).
+- [run: `cac0`, `ae91`] the toy with wires in the tree passes at the head.
+- [relayed: PATH300, 18:28Z] no second stage has run on a served engine; I did not check it.
+
+**5. The body's last state.** I replaced it twice after the mark with `research queue edit` [run, 19:50Z]: the two runs' verdicts in place of "Running", "No lock record moved", and the status line. It ends `Issue: none: the proofs lead links its Linear issue`.
+
+**6. What I need from you.**
+- `research queue link 9041 --issue KEY`, since I write nothing to Linear.
+- A reviewer's land verdict on #9041, if ci has not staffed one.
+- PRF-559 is yours to close: the comment is posted (18:42Z) and its difftest run `06b7` passed.
+- Tell GATHER the base: its branch merges `main` once #9041 lands, or `cursor/proofs-wires-0239` at `1c6f2cd929ef` now. My ranges table of 18:14Z is unchanged by the commit, except that `posOf` now sits just above `wiresOk`.
+
+**7. Not done, and why.**
+- No try of `benchmarks/two_stage/tests/TwoGuard.lean` (18:51Z, section 5): opt-in, in no check, reads only `posOf`.
+- No kernel replay: the fast path has none; the queue's check runs it.
+- No third line of the check: neither FRAME nor WIRED asked; my mailbox holds only your 18:07Z section at 19:51Z [read]. After the mark it is a second pull request, as you wrote.
