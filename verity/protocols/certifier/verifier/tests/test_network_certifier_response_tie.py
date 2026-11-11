@@ -264,10 +264,9 @@ def test_the_blocks_ands():
         for stop in (1, 0):
             sh = RT.Shape(O, stop)
             assert HC.ands(RT.block(sh), memo) == sh.ands, (O, stop)
-    assert [RT.Shape(O, stop).ands for O, stop in ((16, 1), (16, 0), (1024, 1))] == \
-        [ANDS_STOP_16, ANDS_FAILED_16, ANDS_STOP_1024]
+    assert {shape: RT.Shape(*shape).ands for shape in ANDS} == ANDS
     assert RT.Shape(1024, 1).ands - 33 * 1024 == 2 * 32 - 10 + 48
 
 
-#: `ResponseTie_v1{O=16,STOP=1}`'s, `ResponseTie_v1{O=16,STOP=0}`'s and `ResponseTie_v1{O=1024,STOP=1}`'s
-ANDS_STOP_16, ANDS_FAILED_16, ANDS_STOP_1024 = 580, 564, 33_894
+#: the ANDs of `ResponseTie_v1{O, STOP}` at each binding circuit-check pins, by (O, STOP)
+ANDS = {(16, 1): 580, (16, 0): 564, (1024, 1): 33_894, (2, 0): 99, (4096, 1): 135_331}

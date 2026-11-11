@@ -11,7 +11,8 @@ def _network_response_tie_roots() -> list[Any]:
     of 16 ids in each form, a stop class's and a failed class's; at a stop class's row of 1,024 ids; and at the two
     sizes whose gates those lack: a failed class's row of 2 ids, the smallest, whose count has one bit below O's so
     one half of the comparison reads none, and a stop class's of 4,096, the largest, where the stop word has no bit
-    past the count's."""
+    past the count's. The largest is past the default whole-lowering budget: its correspondence and pin are checked
+    with ``--lower-max-ands 200000``."""
     from verity.circuits.defs import bind
     from verity.protocols.certifier.prover.response_tie import ResponseTie
 
