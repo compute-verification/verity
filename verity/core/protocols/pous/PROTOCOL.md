@@ -215,6 +215,25 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
    about 1.5% of honest 132-answer audits fail on the host clock (POUS `docs/p3-gpu-measurements.md`). The network
    allowance defaults to 0 until the memory challenger's RTT is measured.
 
+   On the deployed path the memory challenger (`memory_challenger`, its party and `challenger_session`) runs the
+   session in this order. Nothing that commits to a coin no round has revealed leaves the device before the last answer
+   is in: the server's commitment, `W` and `C*` under the setup's published root, is in before the first round, and the
+   coin root comes after the last.
+
+   | Step | From, to | What |
+   |---|---|---|
+   | coins | challenger | the session id, claimed in its `SessionLog`; the `k` indices from its own secret, committed in its coin tree (root and hm96 key), all kept on the device |
+   | warm-up | challenger, server | `WARMUPS` frames on the public `WARMUP_INDEX`, untimed and unrecorded |
+   | round `j` | challenger, server | index `j` alone (`u64be`); the send time is read |
+   | answer `j` | server, challenger | the whole block; the receipt time is read before it is hashed; the first late answer ends the session |
+   | end | challenger, server | `u64be 2^64 − 1` |
+   | sign | challenger | one LMS signature over the header (the `SessionCommitment`'s fields and how the session ended) and the round records' root |
+   | release | challenger, verifier | the `SessionCommitment` (the coin tree's root and key, the session id and parameters, the setup's root), the signed session and every revealed coin's opening; `commitment` and `openings()` refuse before the signature |
+
+   The verifier checks each round's index against its opening under the released root (`verdict`). The challenger is
+   bound to its coins by being an auditor-trusted device that runs its stated code (`pous-ring-device`,
+   `trusted-host`), not by an early commitment, so no guarantee reads the coin tree's hiding.
+
 ## Public outputs
 
 Under the proof system, an
@@ -224,7 +243,8 @@ audit makes public its verdict and nothing about a single round:
 - the salted roots of `W` and of the encoding `C`;
 - the salt;
 - the setup's sample and its profile;
-- the openings of the memory challenger's coin tree, once the session has closed.
+- the memory challenger's session commitment (its coin tree's root and key) and the openings of its coin tree, both
+  released once the session is signed.
 
 Everything else is witness. The per-round on-time bits stay in the memory challenger's signed record, so a server can't
 steer what the auditor sees round by round. The memory challenger reveals each index from its coin tree, receives the
@@ -953,12 +973,12 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   (`PousCheck.Properties.SecurityProofs.acceptsDecodes` and `publishesRoot`, guarantees), and `periodHeld` reads it; no
   guarantee states it alone (`unstated`).
 - `Pous.EndToEnd.EndToEndRing`, **in the ring model, with ω uniform**: a server holding at most `⌊ρ·|C|⌋` bits
-  between setup, the session and its rounds, each answer `(D, Q, L)`-bounded (`Server S D Q L`), shown the session
-  commitment the code builds, with the memory challenger's coins flipped online by the code's own sampler and coin tree,
-  passes with probability at most `1% + 2^-128`. It is proved (`Pous.EndToEnd.SecurityProofs.endToEndRing`) from two
-  named assumptions: `P2RingAuditSecure D Q L` (open), and `CoinCommitHides` at `2^-131` (`statistical-hiding`: the
-  coin tree's root and hm96 key hide the indices; the leftover-hash argument is in its docstring, and Lean has no
-  leftover hash lemma to prove it with). The budget is `2^-129 + 2^-130 + 2^-131 + ε_rs ≤ 2^-128`, with `ε_rs = 0`
+  between setup, the session and its rounds, each answer `(D, Q, L)`-bounded (`Server S D Q L`), shown each index as
+  its round opens and nothing else of the memory challenger's coins (the coin tree's root and key leave the device only
+  after the last answer), with the coins flipped online by the code's own sampler and committed in the code's coin tree,
+  passes with probability at most `1% + 2^-128`. It is proved (`Pous.EndToEnd.SecurityProofs.endToEndRing`) from one
+  named assumption, `P2RingAuditSecure D Q L` (open); it takes no hiding premise on the coin tree. The budget is
+  `2^-129 + 2^-130 + ε_rs ≤ 2^-128`, with `ε_rs = 0`
   proved (`DrawExact`: `uniformOn` reads 11 bytes at `2^19` blocks and `2^19` divides `2^88`, so no word is rejected).
   `EndToEndRingDeployed` is it at one root's depth, `D = 16,446`, about half of `RingTight`'s falsification at
   32,894, with `Q = 2^20` and `L = 2^64` (the truncation attack passes `k = 105` only at about `2^168`). In the ring
@@ -969,7 +989,11 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   cooperating squaring, 16,447 rounds take 1,704 µs, 1.995× `Δ + RTT`, and 1.64× and 1.25× under the red team's sync
   model. `HonestPassesRing` and
   `HonestPassesAccepts` prove that the honest full-state server passes P2's ring audit, and the end-to-end event, with
-  probability 1.
+  probability 1. Beside each ring-game and period guarantee sit its honest and nontrivial lemmas
+  (`endToEndRing_honest` and `endToEndRing_nontrivial`, likewise for `endToEndRingAt`, `periodHeld`, `periodHeldAt`,
+  `periodCapacity`, `obligationHeld` and `SpaceOfPeriodHeld`; `periodHeldHonest` and `periodHeldNontrivial` for
+  `periodHeldDeployed`): the first shows the premises hold at an instance, the second that the bound fails for a
+  verifier that accepts everything.
 
 `P2RingAuditSecure` is also derived from the per-round conjecture `P2RingRoundSecure p ε₀ D Q L`:
 at every block count from `2^19` to `2^25`, at a boundary where the server holds at most `⌊ρ·|C|⌋`

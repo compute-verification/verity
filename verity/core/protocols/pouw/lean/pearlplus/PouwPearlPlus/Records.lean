@@ -2,7 +2,7 @@ module
 
 public import PouwCommit.Rows
 public import PouwCommit.Draws
-public import Identity.Domains
+public import Identity.Domains.Pouw
 
 /-!
 # A pass's records and give-up (`pearl_c_work`, `clear_work.check_records`)

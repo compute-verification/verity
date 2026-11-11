@@ -7,7 +7,9 @@ file's units), which the setup reads already.
 -/
 module
 
+public import Flock.JsonParse
 public import Spot.Json
+meta import Flock.JsonParse
 meta import Spot.Json
 
 @[expose] public section
@@ -25,10 +27,11 @@ def headerLine (b : ByteArray) : ByteArray := Id.run do
     if b[i]! == 10 then return b.extract 0 i
   return b
 
-/-- The public file's `units.indices`, from its header line. -/
+/-- The public file's `units.indices`, from its header line, parsed by the verifier's total parser
+(`Flock.JsonParse.parse`). -/
 def unitIndices (pubB : ByteArray) : V (Array Nat) := do
   let some text := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
-  let .ok j := Json.parse text | throw "the public file's header is not JSON"
+  let .ok j := Flock.JsonParse.parse text | throw "the public file's header is not JSON"
   let .arr is := getD (getD j "units") "indices"
     | throw "the public file's header names no units.indices"
   is.mapM fun i => match nat? i with

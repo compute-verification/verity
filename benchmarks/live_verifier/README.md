@@ -65,8 +65,10 @@ hand-offs), and the compose itself runs as `auditor`, and the sender is
 `served_verdicts.sh gate-compose`, which runs:
 
 ~~~sh
-tar --create --files-from=private/compose/inputs.txt --file=- | ssh -i ~/.ssh/vllm_gate_ed25519 research@204.12.191.199 compose
+tar --create --files-from=private/compose/inputs.txt --file=- | $COMPOSE_GATE compose
 ~~~
+
+`COMPOSE_GATE` is the sender's setting: `ssh` with the lane's gate key, as `research` on that address.
 
 At pin time, as `auditor`, infra builds the tree's venv (`uv sync --all-packages --extra torch-cpu`) and the Lean
 packages the compose runs (`verity/core/service/vstar/recursive`, whose `vstar-recursive` the record runs, and the
