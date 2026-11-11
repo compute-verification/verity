@@ -136,9 +136,10 @@ builds no Definition.
 Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.json``; there is no expiry and no path or time
 shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
 
-A run's reads, declared as the inputs of a task keyed on them (`declared`: a catalog binding's, `cli.READS`), are the paths of
-the tree whose bytes, listing or kind `lookup` takes of them, a kind under a path that is no directory as that path's
-(`probed`), and, for reads of what the registries registered, every module the registries import (`registry_inputs`).
+A run's reads, declared as the inputs of a task keyed on them (`declared`: a catalog binding's, in its report's ``reads``),
+are the paths of the tree whose bytes, listing or kind `lookup` takes of them, a kind under a path that is no directory as
+that path's (`probed`), and, for reads of what the registries registered, every module the registries import
+(`registry_inputs`).
 """
 from __future__ import annotations
 
@@ -2645,18 +2646,6 @@ def registry_inputs(root: Path) -> dict[str, list[str]]:
         _INTERNAL.pop()
     got = declared(root, {"modules": mods})
     return {"files": got["files"], "listed": got["listed"], "probes": sorted((set(got["probes"]) | sidecars) - set(got["files"]))}
-
-
-def undeclared(now: dict[str, Any], was: dict[str, Any] | None) -> dict[str, Any]:
-    """What read set ``now`` (`declared`) holds beyond the declared ``was``: each kind's paths ``was`` lacks (a probe's, where
-    ``was`` holds the path as no file or listing either, whose bytes or listing hold its kind), ``registry`` when ``now`` reads
-    the registries and ``was`` doesn't, and every library git doesn't have (``untracked``)."""
-    was = was or {}
-    out: dict[str, Any] = {k: sorted(set(now.get(k, ())) - set(was.get(k, ()))) for k in DECLARED}
-    out["probes"] = sorted(set(out["probes"]) - set(was.get("files", ())) - set(was.get("listed", ())))
-    out["untracked"] = list(now.get("untracked", ()))
-    out["registry"] = bool(now.get("registry")) and not was.get("registry")
-    return {k: v for k, v in out.items() if v}
 
 
 def unit_reads(units: Iterable[str], roots: Iterable[Any]) -> dict[str, list[str]]:
