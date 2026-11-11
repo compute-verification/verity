@@ -22,8 +22,10 @@ another template reads that writer's output port for the field, one value the in
 body order; each port a link or a wire names reads, unit by unit, the row its caller names (`replay_rows`,
 `SecondStage.replayRows`), summarized once per Definition as runs (`Run`) and never unrolled. A port a link names reads
 the boundary port the link names or, where the interior registration registers a value of the link's name (a value its
-verifier supplies, say), that value and never the boundary port, at its unit's row of its cell's sampled block
-(`_read_ok`).
+verifier supplies, say), that value, at its unit's row of its cell's sampled block (`_read_ok`). Each name is one
+registration's: an interior registration that registers a value of a name the boundary registration's record has, a
+port or a registered value, is refused (``second-interior-names``, `names_ok`), so the interior's value of a name never
+stands in for one round 1 committed.
 
 Each statement's header is held to the reference header the auditor's params give its template (`Own.refs`, from
 ``proofs.templates``: `service.template_circuits`), the registered reference statement's, fixed before the run, placed
@@ -54,8 +56,10 @@ run: ``second-read`` alone lets a port no link or wire names read any value eith
 
 The interior record names the replay sample it lays out (``window.replay_sample``, which the proof server writes), and
 ``second-interior-order`` fails unless it is the verifier's own, in its order (`interior_order_ok`), checked before any
-statement is read. With it, ``second-schedule`` fails where the boundary registration's record commits a schedule
-(``window.schedule``) that is no schedule of its replay blocks (`schedule.failure`); a record that commits none passes.
+statement is read. With it, ``second-interior-names`` fails where the interior record registers a value of a name the
+boundary registration's record has (`names_ok`), and ``second-schedule`` where the boundary registration's record
+commits a schedule (``window.schedule``) that is no schedule of its replay blocks (`schedule.failure`); a record that
+commits none passes.
 
 `FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
 (``two-stage-form``), and the Python flipped alone disagrees with the run of record."""
@@ -91,6 +95,8 @@ WIRES_WHY = ("the replay block's Definition reads a node other than as a templat
              "instance of another template, alike at every caller, or a wire names a template of no part, or its rows "
              "don't place its part's units or its writer's")
 INTERIOR_ORDER_WHY = "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
+NAMES_WHY = ("the interior registration registers a value of a name the boundary registration's record has, a port or a "
+             "registered value")
 STMT_KEYS = ["draw", "header", "registered", "template"]
 #: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
 MAX_LEAVES = 2 ** 64
@@ -918,8 +924,8 @@ def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
     """`SecondStage.readOk`: template ``p.template``'s session port `port` may read registered-reads entry `e`: a port a
     link names, only the boundary port it names, of its rows' `per` a replay block, each slot only its unit's row of its
     cell's replay block's (`_linked_row`), or, where the interior registration registers a value of the link's name,
-    only that value and never the boundary port, of its rows' `per` a sampled block, each slot only its unit's row of
-    its cell's (`_wired_row`); a port a wire names, only its writer's output port of the interior record, of
+    one the boundary registration's record has no port or value of (`names_ok`), only that value, of its rows' `per` a
+    sampled block, each slot only its unit's row of its cell's (`_wired_row`); a port a wire names, only its writer's output port of the interior record, of
     the writer's units a block, each slot only its unit's writer unit's row in its cell's replay block (`_wired_row`);
     any other, its own port of the interior record, each slot only its own first row, or a value either registration
     registers, never a boundary port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them."""
@@ -1120,12 +1126,23 @@ def interior_order_ok(own: Own) -> bool:
             and all(_nat(b) and b == u for b, u in zip(bs, own.sample)))
 
 
+def names_ok(own: Own) -> bool:
+    """`SecondStage.namesOk`: no value the interior registration registers (its ``registered`` entries' values) is of a
+    name the boundary registration's record has, a port (`_by_port`) or a registered value (`_registered_entry`), so
+    each name a session reads is one registration's."""
+    ports, es = _by_port(own.boundary), _get(own.interior, "registered")
+    return not any(isinstance(v := _get(e, "value"), str)
+                   and (v in ports or _registered_entry(own.boundary, v) is not None)
+                   for e in (es if isinstance(es, list) else ()))
+
+
 def _interior_failures(own: Own) -> list[tuple[str, Any]]:
-    """`SecondStage.interiorFailures`: ``second-interior-order`` unless `interior_order_ok`, then ``second-schedule``
-    where the schedule the boundary registration's record commits is not one of its replay blocks
-    (`schedule_failure`)."""
+    """`SecondStage.interiorFailures`: ``second-interior-order`` unless `interior_order_ok`, then
+    ``second-interior-names`` unless `names_ok`, then ``second-schedule`` where the schedule the boundary registration's
+    record commits is not one of its replay blocks (`schedule_failure`)."""
     why = schedule_failure(own.boundary)
     return (([] if interior_order_ok(own) else [("second-interior-order", INTERIOR_ORDER_WHY)])
+            + ([] if names_ok(own) else [("second-interior-names", NAMES_WHY)])
             + ([] if why is None else [("second-schedule", why)]))
 
 
