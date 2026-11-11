@@ -420,7 +420,8 @@ RESTS_ON = {
                 "width as the circuit passes it, at most the run record's code bits a trained weight (β_w "
                 "from the run record's code size), an activation's at most a uniform β(k) (β(k) per "
                 "the red-team of (H): 15.9 up to k = 145,568, 15.3 at 8e5, 10.8 at 8e6, 2.7 at 8e7, "
-                "0.37 at 8e8, linear in log k, none past it), and β_eff = β/(1 + (K*/r)²), K* = ½√(k/β), for "
+                "0.37 at 8e8, between two of them the next one's, none past it), and β_eff = β/(1 + (K*/r)²), "
+                "K* = ½√(k/β), for "
                 "an operand the update reaches only through a bottleneck of rank r a row or column (an "
                 "adapter's Ax, a broadcast vector, a frozen edge); each product of M has β_w·β_x at most its "
                 "two operands' product, and a product below it is left out of M; (E) exports are wide: every "
@@ -672,7 +673,8 @@ SIDES = (("batch", "m", "k"), ("batch", "k", "n"))
 
 
 #: β(k), the β a derived activation's word holds at k as the red-team of (H) finds it on the traced s-t20 step
-#: over every set it built: its first β up to its first k, linear in log k between its points, none past its last. A
+#: over every set it built: its first β up to its first k, between two points the next one's (a point is the least it
+#: found up to its k, which only falls as k rises, so the points allow no more between them), none past its last. A
 #: source activation (a norm's output, a layer's output gradient) holds at least as much, so every activation takes it
 BETA_K = ((145_568, 15.9), (800_000, 15.3), (8e6, 10.8), (8e7, 2.7), (8e8, 0.37))
 BETA_K_LABEL = "β(k) per the red-team of (H)"
@@ -689,15 +691,8 @@ HE_HEAD = (f"unmeasured: from k = {HEAD_K:.0e} M leaves out the head's input and
 
 
 def beta_k(k: float) -> float | None:
-    """`BETA_K` at k: an activation's β(k), None past its last k."""
-    if k <= BETA_K[0][0]:
-        return BETA_K[0][1]
-    for (k0, b0), (k1, b1) in zip(BETA_K, BETA_K[1:]):
-        if k == k1:
-            return b1
-        if k < k1:
-            return b0 + (b1 - b0) * math.log(k / k0) / math.log(k1 / k0)
-    return None
+    """`BETA_K` at k: an activation's β(k), the β of its first point at or past k, None past its last k."""
+    return next((b for point_k, b in BETA_K if k <= point_k), None)
 
 
 def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: float | None = None) -> dict | None:

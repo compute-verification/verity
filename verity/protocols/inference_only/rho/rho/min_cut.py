@@ -31,7 +31,6 @@ nothing.
 import math
 import tomllib
 from dataclasses import dataclass
-from itertools import pairwise
 from pathlib import Path
 
 PREMISES = Path(__file__).resolve().parent.parent / "data" / "premises.toml"
@@ -95,14 +94,12 @@ def macs_a_block(k: float, o: float, q: float, b: float, F: float = 1.0) -> floa
 
 
 def beta(k: float) -> float | None:
-    """(H)'s `β` for an activation at a block of `k` bits (`BETA`): the first row's up to its `k`, between two rows
-    linear in `log k`, and `None` past the last row's `k`, where there is none and the bound says nothing."""
-    if k <= BETA[0][0]:
-        return BETA[0][1]
-    for (k0, b0), (k1, b1) in pairwise(BETA):
-        if k <= k1:
-            return b1 if k == k1 else b0 + (b1 - b0) * math.log(k / k0) / math.log(k1 / k0)
-    return None
+    """(H)'s `β` for an activation at a block of `k` bits (`BETA`): the `β` of the first row whose `k` is at least
+    this one, so between two rows the next row's, and `None` past the last row's `k`, where there is none and the
+    bound says nothing. A row is the least ratio found over the sets with a cut of at most its `k`, and that least
+    only falls as `k` rises: between two rows it is at least the next row's and at most the one before's, and the
+    rows say nothing more. The next row's is the largest `β` no set behind the rows refutes anywhere between them."""
+    return next((b for row_k, b in BETA if k <= row_k), None)
 
 
 @dataclass(frozen=True)
