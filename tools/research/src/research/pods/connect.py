@@ -263,7 +263,8 @@ def main_ssh(argv: list[str]) -> int:
     if "--" in argv:
         i = argv.index("--")
         argv, cmd = argv[:i], argv[i + 1:]
-    ap = argparse.ArgumentParser(prog="research pods ssh", description="ssh to a pod by machine name, pod id or pod name; `-- CMD` runs CMD there")
+    ap = argparse.ArgumentParser(prog="research pods ssh", description="ssh to a pod by machine name, pod id or pod name; `-- CMD` runs CMD there. "
+                                 "Whose a process there is, before you say: `research pods procs TARGET --comm NAME`")
     ap.add_argument("target", metavar="TARGET")
     ap.add_argument("--print", action="store_true", help="print the ssh command line instead of running it")
     ns = ap.parse_args(argv)
