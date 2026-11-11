@@ -57145,3 +57145,28 @@ For the table:
 - BREAKEVEN | each cell's registration | the row of record N = R = 197 / 586 / 496 to 500 / 371 to 372 machine-windows; 6/q 1,183 / 3,518 / 2,977 to 2,999 / 2,227 to 2,234 [run]; the record row's q switches between two near-tied plans (its N is not monotone across the columns).
 - BREAKEVEN | the factor to 300 GB, best row | 3.56 / 12.30 / 10.28 to 10.36 / 7.47 to 7.50 at modeled 0.4 [derived]; node A's rate is a floor.
 - BREAKEVEN | the digest's reading | neither step removes it; it adds 16.1% to the row of record as `main` is and 28.1% with the one parse [derived].
+
+## FLOCKPKG, Wed 11 Nov 14:13Z: ready to mark #8789 at `68e706219129b28d9fd8e5a4f46111a3da392547`, on the tries and the verifier package's records run you named; the requirers, the five-package run on the merge and the quick tier of the 91 suites the two commits touch are out and named below
+
+**What moved since `5124b2689c75`** (review-20's verdict): two commits, 9 files, +12/−12, no file added [run: `git diff --shortstat`]. `dd430aa4cecf`: `Flock/With/Deployed.lean:22` imports `Base.Sizes`; two comments' paths; two doc sentences. `68e706219129`: four files under `security/Proofs` import `Base.Sizes`. No declaration changes.
+
+| check | run | verdict |
+|---|---|---|
+| elaborates: `Deployed` | `r20261111-133645-3bff` at `dd430aa4cecf` | exit 0 |
+| elaborates: the whole verifier package (`FlockVerify.lean` after `lake build` of its imports, `Flock.With.Deployed` and `Flock` among the 156 modules rebuilt) | `r20261111-134302-e280` at `dd430aa4cecf` | exit 0 |
+| elaborates: the four proofs files | `r20261111-134858-9bd7`, `r20261111-135401-f854`, `r20261111-134916-22ca`, `r20261111-134925-153a` at `68e706219129` | each exit 0 |
+| axioms clean | the six tries' probes (11, 7, 61, 0, 28, 16 theorems) and `8b4a`'s AUDIT lines | `propext`, `Classical.choice`, `Quot.sound` only |
+| records, the verifier's package | `r20261111-134112-8b4a` at `dd430aa4cecf` | PASS: 18,003 declarations in 252 modules, 11 guarantees, `regenerated {}` (no lock record changes); the same counts as `a770`'s. Its requirer the certifier's verifier: PASS, 1,503 declarations, 4 guarantees |
+| kernel replay | the candidate's check | not run by me (order, 09:42Z) |
+| second reader | review-20 at `5124b2689c75`; the two commits are unread by a second reader as far as I know | yours to ask |
+
+- **Why `dd430aa4cecf` is enough for the verifier's package** [run: `git diff --stat dd430aa4cecf 68e706219129`]: the second commit changes four files, all under `security/Proofs`, none under `verity/`.
+- **The fault itself** [run, the tool's `keys` and `loads` on the VM]: modules loading a re-export below its public part: 115 at `5124b2689c75` (`security/Proofs`'s build), 4 at `dd430aa4cecf`, 0 at `68e706219129` over all 41 directories with a lock.
+- **Merges** [run]: with `main` `72e4d46d9209` cleanly, tree `0b3216c01864` (`git merge`, no hand edit). Of the 361 open PRs, only #8789 and my #8814 have a hunk in any of the seven Lean files the two commits edit. #8949's head merged with `dd430aa4cecf` builds (`r20261111-134516-2f03`, exit 0, tree `f94324000032`), and merges cleanly with `68e706219129` (tree `8e8551ab751c`, not built: the difference is the four proofs lines).
+- **Still out** [run]:
+  - `8b4a`'s requirers `security` and `security/Properties`, at `dd430aa4cecf`, to about 15:25Z. They do not cover the four proofs lines; the four tries and `fad7` do.
+  - `r20261111-135017-fad7`: the five-package records run on the merge with `main` (`726a4d983785`), ETA about 15:50Z. A confirmation, as you said.
+  - the quick tier at `68e706219129` of what the two commits touch (`--changed 5124b2689c75 --quick`): 91 suites, because `AGENTS.md` and `verity/README.md` are inputs of most. Six runs: `r20261111-141137-fe15` (verity-vllm alone, about 55 min), `r20261111-141151-caac`, `r20261111-141205-5912`, `r20261111-141219-64e5`, `r20261111-141233-adda`, `r20261111-141247-7673`; ETA about 15:15Z. (`r20261111-135959-7992` was the same in one run, cancelled by me as too slow; it had passed its first 8 suites.) On the VM at `68e706219129`: `tests/test_lean_packages.py` and `tests/test_lean_vocabulary.py`, 45 passed; at `dd430aa4cecf`: the layer, move, doc-path, repository and JSON tests, 61 passed, and the Markdown caps gate.
+- `For CAPS:` no `.lean` file added or removed by the two commits; the line of my earlier ready line stands.
+
+For the table: #8789 ready at `68e706219129b28d9fd8e5a4f46111a3da392547`: six tries passed, verifier package records PASS (`8b4a`), count of held re-exports 0; out: requirers, `fad7` (15:50Z), the touched quick tier (15:15Z).
