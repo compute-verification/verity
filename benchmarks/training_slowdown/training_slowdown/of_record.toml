@@ -64,6 +64,48 @@ art = "art:aa227b76ec6b95d26d8a608375aec0014bb1a1e3da7b1251d86d363904316c42"
 path = "out/run/run.json"
 sha256 = "ee3a333586d25cd7a60585071efd97a9d7a83e39b4863d5c7852741cb42f643f"
 
+[held."m-t20-1.1x-shallow-depthshare-8"]
+run = "r20261104-012613-4882"
+art = "art:73c4e846d2892000be8dd7667b19a34e7eb32bf7487ef654d203bbb07c0f418f"
+path = "out/run/run.json"
+sha256 = "2b5a54fe9b475a937c412638864dc3168f81340a34ce7730b565d2aa67780827"
+
+[held."m-t20-1.1x-shallow-depthshare-4"]
+run = "r20261104-061136-1a68"
+art = "art:5c9aa61bbe9098f83156a01aff8dd30199b5f210b660fa9474a99615ec4564ed"
+path = "out/run/run.json"
+sha256 = "e26823d5bd6c9f52a7951b1acb47c4c8aa3b1c7b54f11a01ea5fb62d264905e0"
+
+[held."l16-t20-1.1x-ref-optim-fullmuon-fe-wsd"]
+run = "r20261103-132106-82a6"
+art = "art:e72d1439f85c5050a0a975555f0a6d8b0f1eb4715bc64de80c0a3dadb07c6ea1"
+path = "out/run/run.json"
+sha256 = "7c5b8089d9c47f51da3040ae3e324780506b06063af4ce37f0db5889f749bd42"
+
+[held."s-t20-1.1x-ref-optim-747"]
+run = "r20261103-073437-3edd"
+art = "art:05afacd6ecd0829636d735ccb30e41ee326fc940379a752bc1cd76ba8e204a1d"
+path = "out/run/run.json"
+sha256 = "de7171c364eb604c4a39899e06a32cca62d538b3b7a5abf26388eee319f8fa84"
+
+[held."s-t20-1.1x-ref-optim-1027"]
+run = "r20261103-065809-0030"
+art = "art:ecf28a2946a707bb3f5174ff4bb880ab4485dcdd496246bf2bdd4615c5fe7de4"
+path = "out/run/run.json"
+sha256 = "22ddb0f826519c8051cab4a4283c83d6223d8c2f411ab4804470286f9677a565"
+
+[held."m-t20-1.1x-ref-optim-1372"]
+run = "r20261103-102938-6ef4"
+art = "art:cf2c2e293aced0d30b3534dfd7c18bf7da5820ac0532416dc29cdd09479f8383"
+path = "out/run/run.json"
+sha256 = "eda8a6bcbc0beb6f603b27999a4ae7a0900928a2b88492a407f938e252bfa2a5"
+
+[held."l16-t20-1.1x-ref-optim-fullmuon-wsd"]
+run = "r20261103-095000-6998"
+art = "art:d9d953b50ca3922b5f0859f06bab1417713b841796d7fa23834d06c42d3dc80d"
+path = "out/run/run.json"
+sha256 = "7c7db29b8a3341a4a3709d0d9b6f07731835384791348c97e38ccaeabeb6b528"
+
 [held."s-t20-1.1x-fullmuon"]
 run = "r20261103-093153-fdcf"
 art = "art:0ef194ec05f3fd07574f8db047eee2f0d5d769b255f32327e2aec81d06b7dcf3"
