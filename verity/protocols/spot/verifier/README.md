@@ -57,8 +57,8 @@ Its guarantee is soundness, and it rests on:
 
 The guarantee is knowledge soundness of the sampled audit: except with a bounded probability, when the verifier
 accepts, at most the profile's count of proof blocks are incorrect. Its top statement is Flock's
-`Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/ScopeGate.lean` and proved in
-`Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
+`Flock.Guarantees.SampledKSLiveV3`, stated in `security/Proofs/Flock/Bridge/ScopeGate.lean` and proved in
+`security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
 that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
 covers sessions of non-templated statements, as `Flock.Desc.parse` reads a flat file. The V5 guarantees
 (`Bridge.SampledKSLiveV5` and those behind it) read the file through `Flock.Desc.parseStmt`, so they also cover templated
@@ -69,7 +69,7 @@ builds. The top statement rests on these named assumptions:
   idealized; its docstring says what that leaves out).
 - `RecordCustodyZKJPLaw` (read as `RecordCustodyZKJ`): the record `flock-verify --zk` reads is the one the challenger
   wrote for the live session, and its sample file is the one `flock-verify draw` printed for the verifier's own sample.
-- `SHA512CRStrict` (`cr/sha-512`) and `SHA512CRExpected` (`ecr/sha-512`), in `Security/Definitions/Assumptions/Flock.lean`:
+- `SHA512CRStrict` (`cr/sha-512`) and `SHA512CRExpected` (`ecr/sha-512`), in `security/Definitions/Assumptions/Flock.lean`:
   SHA-512's collision resistance, taken at the collision finders the proof builds from the prover (`TableCRZAt` and
   `LinkCRZCAt`, which unfold to them).
 
@@ -133,7 +133,7 @@ template-major, so each cell is a range of the interior's proof blocks and the s
 `C(n − w, k) / C(n, k)`, a replay block's cells independently; the profile at the footprint reads a replay block as
 `Subset(min k_t)` over `T·n_max` proof blocks, which bounds that product. The verifier samples both stages
 (`Select.select`, `Select.selectSecond`), and the two-stage certificate's knowledge soundness at Flock's masked record
-holds of that code (`SamplingDeploy.ksTwo_code`, `Security/Proofs/Flock/SamplingGeneric/TwoCode.lean`). Its premises
+holds of that code (`SamplingDeploy.ksTwo_code`, `security/Proofs/Flock/SamplingGeneric/TwoCode.lean`). Its premises
 are that the registration is the design's (`RegMatchesTwo`), that each stage's coin bytes are uniform and the sessions'
 rounds don't move them, and the refusals, interior roots and sessions that one-stage's `SamplingDeploy.ks_masked` takes.
 Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
@@ -153,7 +153,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 
 ## Where things are
 
-- **The Lean.** Today it sits in Flock's soundness package, `Security/Proofs/Flock/Soundness/Audit/`,
+- **The Lean.** Today it sits in Flock's soundness package, `security/Proofs/Flock/Soundness/Audit/`,
   whose `README.md` lists every theorem; `Audit/Flock*.lean` instantiate them for Flock.
   The two-stage design's certificate is `Claims.SamplingGeneric.compilerKSTwo` (`Claims.SamplingTwo`). The challenger's
   coins are the named assumption `Assumptions.UniformRandomBytes`.
@@ -179,7 +179,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `Spot/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters, evidence, refusals
   and check are in the module's docstring. It reads the
-  sample's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `Security/Properties/Challenger.lean`) and holds
+  sample's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `security/Properties/Challenger.lean`) and holds
   the session's record to the coin trees the signed release log shows the challenger sampled and opened
   (`Spot/ChallengerTrees.lean`, `challenger.sessions_tree_reason`, `order_why`).
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
@@ -189,14 +189,14 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   machine only through that machine's certifier coin link (`verity/composite/device/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
   as the far end of that coin link (`verity/composite/device/live_challenger/coin_link.py`).
-  - **Remote's coin path in Lean** (`Security/Definitions/Core/Challenger.lean`, assumptions in its `Assumptions/`, in the
+  - **Remote's coin path in Lean** (`security/Definitions/Core/Challenger.lean`, assumptions in its `Assumptions/`, in the
     lock): `ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`. Under them
     a logged coin's sample misses a set fixed before it at most as the sampling design allows (`SampleAfterRecorded`, proved).
     None mentions a network certifier.
 
   Onsite, the challenger rests on two more premises about where it runs, which the network certifier's spec and
   ACCEL's cite by name:
-  - `CoinsConfidential` is `Pouw.Assumptions.CoinsConfidential` (`Security/Definitions/Pouw/Assumptions/Dither.lean`,
+  - `CoinsConfidential` is `Pouw.Assumptions.CoinsConfidential` (`security/Definitions/Pouw/Assumptions/Dither.lean`,
     in the lock), whose docstring is its statement, and ACCEL's pooled guarantee
     `Pouw.Guarantees.Dither.FleetSound` takes it. A path across a host the developer controls would need an encrypted,
     authenticated channel, which the challenger doesn't have. Deployed, one auditor host runs the challenger and the
@@ -493,14 +493,14 @@ Pinned by `tests/test_consumers.py` and the Lean-generated vectors, each regener
 - **Sessions over several rounds** (`Stream(rounds=R)`, `Stream.session`), which Flock's verifier refuses
   (`Flock.ProvedScope`, `Draw.tablesWhy`).
 - **The salt and the registration deadline**: one salt an epoch, and a late registration ends the epoch. This is PoUW's
-  `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`).
+  `Pouw.AcceptsBy` (`security/Definitions/Pouw/Game/Deadline.lean`).
 - **The stream's rules** (budget, open registrations, salt, deadlines, once-only steps), decided op by op by the verifier
   (`verifier.stream`: `Spot/Stream.lean` beside `service._step`) on the counts and entries the op reads. A
   disagreement stops the stream.
 - **The fleet's halt (R5-all)** (`service.Fleet`): at the failure that brings any stream of an operator to its budget,
   every stream of the operator halts, each outcome not yet final ends as `halted`, never `accept`, and nothing of the
   operator registers again. Decided by the verifier (`verifier.fleet`: `Spot/Fleet.lean` beside
-  `service._fleet_step`, and `Stream.lean`'s `halt`), whose properties are `Security/Properties/Spot/Halt.lean`.
+  `service._fleet_step`, and `Stream.lean`'s `halt`), whose properties are `security/Properties/Spot/Halt.lean`.
 - **No retries**, **the failure budget**, **the log's history** (a check reads a few records, with the whole log's
   verdict), **the records** (`verity/proof-service/stream/v0` and `outcome/v0`) and what a stream refuses until it is
   built.
