@@ -7,7 +7,7 @@ it a served token takes and log2 of its witness bits (k_log), and the MACs a ser
 card) replaces the block types of the served rows it recuts.
 
 **A proof system** (`ProofSystem`) turns a census into a `Table`: a row a block type with the blocks of it proved a
-served token, the prover's GPU-seconds a block and where that figure is from (`SOURCES`, best first):
+served token, the prover GPU-seconds a block and where that figure is from (`SOURCES`, best first):
 
 - `steady`: a proof server's report, statements of the type proved back to back until its statement cache's hit rate is
   flat, every one accepted;
@@ -20,10 +20,13 @@ served token, the prover's GPU-seconds a block and where that figure is from (`S
 `Flock` proves every block: its row counts are the census's. `Spot` wraps a proof system with a sampling plan: the
 same costs, and the blocks the plan samples a served token.
 
-**The totals** (`report`) are the same for every system: the prover's GPU-seconds a served token, the served tokens a
+**The totals** (`report`) are the same for every system: the prover GPU-seconds a served token, the served tokens a
 prover GPU covers a second (its inverse) and the prover GPUs a serving GPU needs (over a served token's GPU-seconds,
 `Serving`, a stated and modeled input), with the share of the proving time each source covers. Their range's other end
-prices every type not measured at steady state at the steady-state types' median seconds a witness bit.
+prices every type not measured at steady state at the steady-state types' median seconds a witness bit. The totals are
+`measured` only when every block type is measured at steady state, `partial` when a type has no figure (they leave its
+proving out, so they name each such type with its share of the blocks, and of the MACs where the census holds them: a
+type with no time has no share of the proving time), and `modeled` otherwise.
 """
 
 from __future__ import annotations
@@ -54,12 +57,14 @@ VERIFIER = ("the proof server's own verifier (`flock-circuit serve --zk`), its w
 @dataclass(frozen=True)
 class Block:
     """A block type of a census: a Definition at its statics as the census spells it, the served rows it is cut from
-    (`kind`, which a cut replaces by), the proof blocks of it a served token takes, and log2 of its witness bits."""
+    (`kind`, which a cut replaces by), the proof blocks of it a served token takes, log2 of its witness bits, and a
+    block's served MACs where the census holds them."""
 
     name: str
     kind: str
     per_token: float
     k_log: int | None = None
+    macs: float | None = None
 
 
 @dataclass(frozen=True)
@@ -83,7 +88,7 @@ class Census:
         """The census of a `block-census/v1` record's `census.json`, one request's counts over its tokens."""
 
         tokens = sum(doc["tokens"].values())
-        blocks = tuple(Block(name, ", ".join(sorted(d["of"])), count / tokens, d.get("k_log"))
+        blocks = tuple(Block(name, ", ".join(sorted(d["of"])), count / tokens, d.get("k_log"), d.get("macs"))
                        for name, d in doc["definitions"].items() if (count := d["prefill"] + d["decode"]))
         return cls(blocks, doc["per_request"]["circuit_macs"] / tokens, doc["per_request"]["macs"] / tokens)
 
@@ -96,7 +101,8 @@ class Census:
             raise ValueError(f"the cut `{card['name']}` replaces {', '.join(absent)}, which the census doesn't hold: it is "
                              "another census's cut")
         kept = tuple(b for b in self.blocks if b.kind not in replaced)
-        cut = tuple(Block(x["block"], x["kind"], x["per_token"], x.get("k_log")) for x in card["strata"] if x["per_token"])
+        cut = tuple(Block(x["block"], x["kind"], x["per_token"], x.get("k_log"), x.get("macs"))
+                    for x in card["strata"] if x["per_token"])
         return replace(self, blocks=kept + cut, cut=card["name"])
 
 
@@ -118,7 +124,7 @@ class Serving:
 
 @dataclass(frozen=True)
 class Cost:
-    """What proving one block of a type costs, and where each figure is from: the prover's GPU-seconds (None when
+    """What proving one block of a type costs, and where each figure is from: the prover GPU-seconds (None when
     `missing`), the run or art that holds it, the staged type that measured it as its record names it (a sampling plan
     names its cells' the same way), the same block at the steady-state types' median seconds a witness bit (the range's
     other end; None for a type measured at steady state), and the verifier's seconds and the proof's bytes where a record
@@ -136,12 +142,14 @@ class Cost:
 
 @dataclass(frozen=True)
 class Row:
-    """A block type's row: the blocks of it proved a served token, and a block's cost."""
+    """A block type's row: the blocks of it proved a served token, a block's cost, and a block's served MACs where the
+    census holds them."""
 
     block: str
     k_log: int | None
     per_token: float
     cost: Cost
+    macs: float | None = None
 
 
 @dataclass(frozen=True)
@@ -155,7 +163,7 @@ class Table:
     verifier_basis: str | None = None
 
     def gpu_seconds_per_token(self) -> float:
-        """The prover's GPU-seconds a served token, over the rows that have a figure."""
+        """The prover GPU-seconds a served token, over the rows that have a figure."""
 
         return sum(r.per_token * r.cost.seconds for r in self.rows if r.cost.seconds is not None)
 
@@ -281,7 +289,7 @@ class Flock:
                     cost = replace(cost, staged=s.type, note="; ".join(filter(None, [cost.note, why])))
                 if steady_rate is not None and b.k_log is not None and cost.seconds is not None:
                     cost = replace(cost, at_steady_rate=steady_rate * 2**b.k_log)
-            rows.append(Row(b.name, b.k_log, b.per_token, cost))
+            rows.append(Row(b.name, b.k_log, b.per_token, cost, b.macs))
         basis = (None if steady_rate is None else
                  f"every type not measured at steady state priced at the full-statement steady-state types' median, "
                  f"{steady_rate:.3g} GPU-seconds a witness bit")
@@ -369,7 +377,7 @@ class Spot:
                 bare.append(r.block)
                 continue
             used.add(cell)
-            rows.append(Row(r.block, r.k_log, self.plan.sampled[cell] / tokens, r.cost))
+            rows.append(replace(r, per_token=self.plan.sampled[cell] / tokens))
         unread = sorted(set(self.plan.sampled) - used)
         if bare or unread:
             raise ValueError(
@@ -389,7 +397,9 @@ def _some(names: Sequence[str]) -> str:
 
 def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     """A table's rows, the share of the proving time each source covers, and the totals, given a served token's
-    GPU-seconds. A figure is `measured` only when steady-state measurements cover all of its proving time."""
+    GPU-seconds. The totals are `measured` only when every block type is measured at steady state, and `partial` when a
+    type has no figure: `missing` then names each such type, the most blocks first, with its share of the blocks, and
+    of the MACs where every row holds them (a type with no time has no share of the proving time)."""
 
     total = table.gpu_seconds_per_token()
     blocks = sum(r.per_token for r in table.rows)
@@ -413,10 +423,18 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     verified = [r for r in table.rows if r.cost.verifier_seconds is not None]
     sized = [r for r in table.rows if r.cost.proof_bytes is not None]
     steady = sources[0]["time_share"] or 0.0
+    macs = None if any(r.macs is None for r in table.rows) else sum(r.per_token * r.macs for r in table.rows)
+    missing = [{"block": r.block, "per_token": r.per_token, "block_share": share(r.per_token, blocks),
+                "mac_share": None if macs is None else share(r.per_token * r.macs, macs)}
+               for r in sorted(table.rows, key=lambda r: -r.per_token) if r.cost.seconds is None]
+    if missing:
+        status = "partial"
+    else:
+        status = "measured" if table.rows and all(r.cost.source == STEADY for r in table.rows) else "modeled"
     return {
         "system": table.system, "rows": sorted(rows, key=lambda r: -(r["time_share"] or 0.0)), "sources": sources,
         "totals": {
-            "status": "measured" if steady == 1.0 else "modeled", "steady_time_share": steady,
+            "status": status, "steady_time_share": steady, "missing": missing,
             "blocks_per_token": blocks, "gpu_seconds_per_token": total, "gpu_seconds_per_token_range": [low, high],
             "tokens_per_gpu_second": share(1.0, total),
             "tokens_per_gpu_second_range": [share(1.0, high), share(1.0, low)],

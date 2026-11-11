@@ -45,6 +45,8 @@ REPORTS, TYPES = "*/server-k*/server.json", "types.json"
 #: each fleet's assumed serving MFU
 FLEETS = Path("verity/protocols/inference_only/rho/data/reference.toml")
 SYSTEMS = ("flock", "spot")
+#: the block types with no figure the rendered table names, the most blocks first; `--json` names every one
+MISSING_NAMED = 8
 CENSUS, CUT, STEADY, SINGLE, SAMPLING = "census", "cut", "flock-steady", "flock-single", "spot-sampling"
 
 
@@ -264,7 +266,7 @@ def build(system: str, workload: str, *, sampling: str | None = None, store: Any
 
 
 def _periods(root: Path, rate: P.Serving, ratio: float, sampled: P.SamplingPlan | None) -> dict:
-    """The totals a monitoring period over all compute. With every block proved the prover's GPUs a serving GPU hold for
+    """The totals a monitoring period over all compute. With every block proved the prover GPUs a serving GPU hold for
     any compute and period, so the census's datacenter and the world's serving each get a week, a month and a year; a
     sampling plan is sized for one compute and period, and only that one is given."""
 
@@ -310,6 +312,13 @@ def _short(text: str | None, width: int = 64) -> str:
     return text if len(text) <= width else text[:width - 1] + "…"
 
 
+def _missing_share(m: Mapping[str, Any]) -> str:
+    """The share of a block type with no figure: of the blocks, and of the MACs where the census holds them."""
+
+    blocks = f"{m['block_share']:.2%} of the blocks"
+    return blocks if m["mac_share"] is None else f"{blocks}, {m['mac_share']:.2%} of the blocks' MACs"
+
+
 def _record(target: str | None) -> str:
     return "—" if target is None else target[:16] if target.startswith("art:") else target
 
@@ -341,7 +350,13 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
               f"- {'served tokens covered' if spot else 'tokens proved'} per second per prover GPU: "
               f"{_n(t['tokens_per_gpu_second'])}{_range(t['tokens_per_gpu_second_range'])}",
               f"- prover GPUs per serving GPU: {_n(t['gpus_per_serving_gpu'])}{_range(t['gpus_per_serving_gpu_range'])}, "
-              f"{t['status']}: steady-state measurements cover {t['steady_time_share']:.1%} of its proving time"]
+              f"{t['status']}: steady-state measurements cover {t['steady_time_share']:.1%} of "
+              f"{'the proving time it prices' if t['missing'] else 'its proving time'}"]
+    if t["missing"]:
+        named = "; ".join(f"`{_short(m['block'])}` ({_missing_share(m)})" for m in t["missing"][:MISSING_NAMED])
+        more = len(t["missing"]) - MISSING_NAMED
+        lines.append(f"- partial: {len(t['missing'])} block type(s) with no figure, whose proving every total here leaves "
+                     f"out: {named}" + (f"; and {more} more, which `--json` names" if more > 0 else ""))
     if t["range_basis"]:
         lines.append(f"- each range's other end: {t['range_basis']}")
     lines.append(f"- served MACs inside a proof block: {doc['macs_in_blocks']:.1%}; the rest are served rows no cut fits, "
@@ -353,10 +368,6 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
             basis = f" ({t['verifier_basis']})" if key.startswith("verifier") and t["verifier_basis"] else ""
             lines.append(f"- {name} per token: {_n(v['value'])} on the {v['block_types']} block types a record holds them "
                          f"for, {v['block_share']:.1%} of the blocks{basis}; the rest: not measured")
-    missing = doc["sources"][-1]
-    if missing["block_types"]:
-        lines.append(f"- {missing['block_types']} block types ({missing['block_share']:.2%} of the blocks) have no figure: the "
-                     "totals leave them out")
     lines += ["", "Share of the proving time each source covers:", "",
               "| source | block types | blocks per token | share of blocks | prover GPU-seconds per token | "
               "share of proving time |", "| --- | --- | --- | --- | --- | --- |"]
@@ -365,7 +376,7 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
               f"{'—' if x['time_share'] is None else format(x['time_share'], '.2%')} |" for x in doc["sources"]]
     p = doc["periods"]
     lines += ["", f"Per monitoring period, over all compute ({p['gates_basis']}); every total is the table's ratio scaled, "
-              "not measured at that size:", "",
+              f"not measured at that size{', and partial as that ratio is' if t['missing'] else ''}:", "",
               "| compute | period | serving GPUs | served AND gates | prover GPUs | prover GPU-seconds |",
               "| --- | --- | --- | --- | --- | --- |"]
     lines += [f"| {x['compute']} | {x['period']} | {_n(x['serving_gpus'])} | {_n(x['served_gates'])} | {_n(x['prover_gpus'])} | "
