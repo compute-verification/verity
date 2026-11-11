@@ -37098,3 +37098,26 @@ Next I do C, the two HASH-112 readings, by 22:00Z. I'll also check that proofs' 
 **For NET-297, the two-stage fact, when part 2 has landed** \[read: the statements\]. `wrongAtBoundaryAt s Pt d.part (L.regValX H P x)`, the replay blocks wrong at the boundary, takes the hash, the verifier, the prover and the statement and no tape. `CompiledTwo.MissTwoX` bounds the miss at every tape by `(1 − r₁·r₂)` to that one set's size, and `CompiledTwo.KSRegTwoX` and `HeadlineTwoX` bound acceptance against that one trace's footprint, at `εregTwoX` = `εregX` + N·√Pr\[`BconfTwo`\], under `compilerKSRegTwo`'s premises. The interior stays per tape and per first-stage coins.
 
 **Next.** Nothing on part 1 unless you or TWOPROVE ask for a change. Part 2: read its records run when it ends, commit what it kept, then merge #8512's new head or cross the layout move, whichever is on `main` first.
+
+## PRF-522 PUBUNITS, Wed 11 Nov 02:44Z: your steps 1 and 2 are started: the cures branch is at `efc525cff78f` on the base `cff6e6fb8909` with `whole_run.py` cured, and its run `r20261111-024311-997a` is on vy-nebius-cpu-3
+
+**Not ready to name yet: the head's run is not read.** `cursor/proofs-remote-cures-dac3` is at `efc525cff78f8aaaf167c0afa0b7062f5e70b8ea`, pushed as a fast-forward of `0d3b99b9ee21`, nothing forced [run]. Mailbox read at 02:39Z (your four steps). This replaces "Next" in my 02:36Z entry: I post nothing on LEAN-249; the text for the new head comes in the entry after the run.
+
+**Step 1, done** [run]:
+
+- **The merge** is `c172f33d192e`, of the base's head `cff6e6fb89099ec71d6bf0ae430f3ef6d3751ecb`, no conflict. The base moved past your `e6cbb1ad5801` at about 02:37Z: four lock commits of lean's, three files (`Security/lean-audit.json`, `Security/Properties/lean-audit.json`, `Security/README.md`), none ours. The branch holds `e6cbb1ad5801` too.
+- **The cure** is `efc525cff78f`, one file, `benchmarks/verifier_cost/whole_run.py`. Its message says what you asked:
+  - Old: `stratified:K` at K = the number of strata. Each stratum drew max(1, round(K size / N)): 1, 2, 1 on toy (4 units) and 1, 2, 1, 2, 1, 1, 1 on l5 (9 units), at each N the runner's header names [run, `draw.stratum_k` on those sizes]. Its statement said K instances.
+  - New: `stratified-rate:1/population`. K = 1 and every stratum draws one unit: 3 on toy, 7 on l5, at every N. It is the design the file's docstring names. A rate fixed across N would grow the sample with N.
+  - The sizes `whole_run` times do not change: the program, the query, the population and the ports at each N are the old ones. The sample is one unit smaller on toy, two on l5.
+  - I did not take lean's way in `5f791630fee`, the rate that gives the old K. On l5 no rate gives K = 7: the rates reach K = 1, 5, 8. On toy K = 3 is reached, at a rate that depends on N [run, `draw.strat_k` over the rates NUM/population at 146 to 50,000 on toy and 146 to 373,792 on l5].
+  - **Yours to overrule:** a rate of 3 over twice the largest stratum gives the old draws at every one of those sizes, 4 units on toy (K = 3) and 9 on l5 (K = 5) [run, same script]. I chose 1/population because it is the docstring's design and needs no rule about the largest stratum. If rows must compare with ones timed before the law became a rate, say so and I change the one line.
+- **It runs** [run, `r20261111-022949-e2c1`, cpu-1, rc 0, at the same `whole_run.py` on the old head]: the Python reference accepts at 146 and 1000; `whole_run.sh run toy 146 1000` gives 40 rows, both runs `accept`, 20 steps each, no timeout; `whole_run.sh desc l5 146` gives 18 rows, no timeout.
+- The same `whole_run.py` is on `main`, and `main`'s `service.py:285` has the same refusal text [read], so I expect it to fail there too [guess, not run]. The cure reaches `main` with the remote merge.
+
+**Step 2, running:** `r20261111-024311-997a` on vy-nebius-cpu-3, launched 02:43Z at `efc525cff78f`. It is `curescheck3.sh` with `whole_run.sh run toy 146 1000`: the three suites `--quick`, the edges as committed and with the proposal, `tests/test_public_boundary.py` on the proposal, the slow policy test. ETA 7:05 PM PST (03:05Z) [guess, from `bd1b`'s 19 minutes].
+
+- Already run on the merge with `e6cbb1ad5801` (`r20261111-023214-b44a`, my 02:36Z entry): with the proposal the tool counts 0 edges and `tests/test_public_boundary.py` is 43 passed.
+- `r20261111-023822-27c6` is cancelled by me, by id, after 4 minutes: it was this job at the cure's first commit, before your message.
+
+**Left:** read `997a`; the entry with the head, the counts and the LEAN-249 text (your step 3); ci's answer, none on LEAN-249 at 02:33Z [read]; after the move is on `main` (`main` is `a930252c4993`, no move, 02:44Z): TRN-83's line as its own PR.
