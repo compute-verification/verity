@@ -142,7 +142,7 @@ def test_a_row_at_the_measured_reading_names_the_rate_and_the_rate_at_the_goal()
     assert rows
     for r in rows:
         assert (r["tokens_per_gpu_second"], r["saturated"]) == (rate, card["value"]["saturated"])
-        assert r["tokens_per_gpu_second_at_goal"] == rate * f.SERVING_GOAL / r["bound"]
+        assert r["tokens_per_gpu_second_at_goal_by_proportion"] == rate * f.SERVING_GOAL / r["bound"]
     assert not any("tokens_per_gpu_second" in r for r in f.at_overhead(out) if r["panel"] != "exfiltration")
 
 
@@ -153,7 +153,7 @@ def test_figure_1s_rows_at_its_budgets_name_the_rate_only_under_the_measured_rea
     assert all("tokens_per_gpu_second" not in r for r in t.at_budgets(out))
     exfil, work = t.at_budgets(out | {"serving": {"tokens_per_gpu_second": 180.0, "saturated": False}})
     assert exfil["tokens_per_gpu_second"] == 180.0 and exfil["saturated"] is False
-    assert exfil["tokens_per_gpu_second_at_goal"] == 180.0 * f.SERVING_GOAL / 1.2e12 == 360.0
+    assert exfil["tokens_per_gpu_second_at_goal_by_proportion"] == 180.0 * f.SERVING_GOAL / 1.2e12 == 360.0
     assert "tokens_per_gpu_second" not in work
 
 
@@ -191,3 +191,10 @@ def test_figure_4_carries_the_reading_figure_1_was_planned_at():
 def test_a_measured_reading_is_written_beside_the_default_never_over_it(tmp_path):
     assert f.outdir(tmp_path, "assumed") == tmp_path
     assert f.outdir(tmp_path, "measured") == tmp_path / "measured"
+
+
+def test_a_floors_caption_says_its_bounds_are_floors_and_a_saturated_rates_does_not():
+    said = {"tokens_per_gpu_second": 180.0, "assumed_tokens_per_gpu_second": 7200.0, "saturated": False}
+    floor, most = f.reading_note(said), f.reading_note(said | {"saturated": True})
+    assert floor.endswith("one under 300 GB does not show that 300 GB is met.")
+    assert "lower bound" not in most and most.endswith("0.025 of that reading's.")

@@ -451,9 +451,12 @@ def reading_note(serving: dict) -> str:
     rate, assumed = serving["tokens_per_gpu_second"], serving["assumed_tokens_per_gpu_second"]
     what = ("above which the engine computed no more" if serving["saturated"]
             else "a lower bound: no rate above it was served")
+    goal = f"{SERVING_GOAL / 8e9:,.0f} GB"
+    floor = ("" if serving["saturated"] else f" Each bound here is then a lower bound on the bound at the engine's own "
+             f"rate: one under {goal} does not show that {goal} is met.")
     return (f"Serving is planned at the measured {rate:,.5g} computed tokens a GPU-second ({what}), not at rho's "
             f"fleet utilization, {assumed:,.5g} on this circuit: the scope's GPUs are the same, and its requests "
-            f"{rate / assumed:.2g} of that reading's.")
+            f"{rate / assumed:.2g} of that reading's.{floor}")
 
 
 def at_reading(serving: dict | None, bound: float) -> dict:
@@ -464,7 +467,7 @@ def at_reading(serving: dict | None, bound: float) -> dict:
         return {}
     rate = serving["tokens_per_gpu_second"]
     return {"tokens_per_gpu_second": rate, "saturated": serving["saturated"],
-            "tokens_per_gpu_second_at_goal": rate * SERVING_GOAL / bound if bound > 0 else None}
+            "tokens_per_gpu_second_at_goal_by_proportion": rate * SERVING_GOAL / bound if bound > 0 else None}
 
 
 def _priced(g: Grain, fill: float) -> Grain:

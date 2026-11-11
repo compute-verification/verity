@@ -63,8 +63,10 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   `saturated` false on a provisional card, and `bound` says what held the rate (compute, the KV pool, or unknown). No
   figure reads it by its presence. `--serving measured` plans every scope at it: a scope's requests are its
   GPU-seconds times the rate over a request's tokens, a replay takes its request's tokens over the rate, the scope's
-  GPUs stay rho's, and each exfiltration row names the rate and the rate at which its bound would reach 300 GB, by
-  proportion. Every JSON that read the rate names it under `serving` (Figure 1's two forms, Figure 3, Figure 4 and
+  GPUs stay rho's, and each exfiltration row names the rate and the rate at which its bound would reach 300 GB by
+  proportion (`tokens_per_gpu_second_at_goal_by_proportion`: the bound is taken to go as the requests, which a
+  line planned again at that rate need not do). Under a rate that is a lower bound each caption says its bounds are
+  lower bounds too. Every JSON that read the rate names it under `serving` (Figure 1's two forms, Figure 3, Figure 4 and
   the break-even, whose table starts with the same sentence), and `figures.py` and `total_cost.py breakeven` write a
   measured reading into `measured/` under `--out`, never over the default's files. Without it every figure is planned
   at rho's fleet utilization, as before the card. The `serve_tax` card stays as priced; `total_cost.py priced-card
