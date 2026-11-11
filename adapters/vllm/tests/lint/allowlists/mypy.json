@@ -2553,7 +2553,6 @@
     {"file": "verity_vllm/pipeline/tp/commit_replay.py", "kind": "arg-type", "symbol": "replay_rank", "detail": ""},
     {"file": "verity_vllm/pipeline/tp/commit_replay.py", "kind": "attr-defined", "symbol": "_of_record", "detail": ""},
     {"file": "verity_vllm/pipeline/tp/match.py", "kind": "assignment", "symbol": "_check_main", "detail": ""},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "arg-type", "symbol": "TP2CaptureWorkerExtension._tp2_attribution", "detail": ""},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "arg-type", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "", "count": 5},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "assignment", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": ""},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "attr-defined", "symbol": "TP2CaptureWorkerExtension.tp2_close", "detail": "", "count": 5},
