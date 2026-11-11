@@ -60,7 +60,7 @@ def test_a_reds_kind_is_read_from_its_failed_tasks():
     assert qt.red_kind("failed: step preflight-fixtures", []) == "preflight"
     assert qt.red_kind("x's check ended in infra errors", []) == "infrastructure"
     assert qt.red_kind("#7 isn't taken now: held by top (red in candidate c, repository suite): tests/test_x.py::test_y fails: "
-                       "Security/lean-audit.json is unwitnessed", []) == "test"         # a test that names a Lean file
+                       "security/lean-audit.json is unwitnessed", []) == "test"         # a test that names a Lean file
 
 
 def test_the_check_nodes_are_the_loops_on_flag():
@@ -311,7 +311,7 @@ def test_the_long_window_is_the_last_day_and_a_shard_still_running_is_never_outs
 
 def test_a_change_of_the_lean_checks_own_code_is_a_lean_change():
     rule = qt.LEAN_FILE
-    for f in ("Security/Proofs/A.lean", "x/lakefile.toml", "lake-manifest.json", "a/lean-toolchain", "Security/lean-audit.json",
+    for f in ("security/Proofs/A.lean", "x/lakefile.toml", "lake-manifest.json", "a/lean-toolchain", "security/lean-audit.json",
               "tools/verity/lean/check.py", "tools/verity/check/common.py"):
         assert rule.search(f), f
     for f in ("tools/verity/check/suites.py", "verity/ml/circuits/lean.py", "docs/tools/verity/lean/x.md", "a/leanish.py",
