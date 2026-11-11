@@ -47925,3 +47925,36 @@ For CAPS: Proofs/Flock: +0 modules, +7 declarations (6 theorems, 1 definition) (
 
 For the table:
 - #8882 (Pr[B_conf,X] at the budget, the by-gate bound with one closed right-hand side): ready to mark at `da385b86ccd2`, after #8879.
+
+## DRAFT-CORE (PRF-540), Wed 11 Nov 10:19Z: ready to mark #8896; the coin PR opens (unmarked) when its last record regenerates, about 10:30Z; the stage layer elaborates; the SpotFlock half is 8 files written, none compiled
+
+**1. `ready to mark #8896 at 6128ce8267e3bd4ac0a6a50f68c717cc46405cb0`** (job 4's assembly, stacked on #8888, which is marked at `746c43e0c848`). One new file, `security/Proofs/Flock/Bridge/V5/QsRows.lean`: lemmas only, no lock record, no guarantee, no file under `Definitions/` or `Models/`, no edit to `unread-caps.json`.
+- Quick tier: `r20261111-090742-8dce`, 4 of 4 suites pass [run].
+- Records of the package touched: `r20261111-090742-a755` on vy-nebius-cpu-1, outcome pass [run]: `security/Proofs` check.py exit 0 in 1,724 s, its requirers `security` exit 0 in 747 s and `security/Properties` exit 0 in 671 s, 0 record differences in the three locks.
+- Elaborates, axioms clean (only propext, Classical.choice, Quot.sound): `r20261111-085733-4ec5` [run]. Kernel replay: the candidate's check (the 09:42Z rule). Read by a second reader: no.
+- Merges: `git merge-tree --write-tree` of the head with `main` `0a722c6ec984` and with each of #8827 `946b7b72f26d`, #8836 `ae8886e9a2fc`, #8820 `f1a8ef0141ff`, #8781 `b7c268c7c1fe`, #8828 `53dd644bdad8`, #8857 `96985b18aafb` is clean [run on my VM, 10:14Z]. Builds: the file elaborates with clean axioms over the merged tree `00851aa76c39` (`main` `8201dacff26e`, which differs from `0a722c6ec984` in no file under `security/`, + #8819 + #8888 + this head + #8827, which holds #8820, + #8781 + #8828 + #8857), `r20261111-090742-5513` [run]: a try of the file over the merged tree's build of what it imports, not a build of every module. #8836 is not in that tree: it adds files this head neither imports nor changes.
+- For CAPS: Proofs/Flock: +1 module, +6 declarations (#8896: security/Proofs/Flock/Bridge/V5/QsRows.lean)
+
+**2. The coin's PR is not open yet: it waits on one record, due about 10:30Z.** Records run `r20261111-091201-9878` (vy-nebius-cpu-4, head `a17597b1b368`: `MAX_COINS` 2^24, `MAX_PATH` 24, `DRAW_ROUNDS` 1024, `MAX_TREE_LINES` 2^23) [run]:
+- `verity/protocols/spot/verifier/lean`: check.py exit 0 in 252 s, 5,322 declarations in 49 modules, its six executables built.
+- `security`: `--update` exit 0 in 2,850 s. **8 values of `security/lean-audit.json`'s `reads` move, and nothing else**: `Spot.Challenger.MAX_COINS` and `Spot.Challenger`'s digest; `Spot.Challenger.MAX_PATH` and `Spot.ChallengerCoins`' digest; `Spot.Challenger.MAX_TREE_LINES` and `Spot.ChallengerSession`'s digest; `Verity.maxTreeLines` and `Properties.Verity.Game`'s digest. No guarantee's `type_hash` or `unfolded_hash` moves. Committed on the branch as `f46061a07911`.
+- `security/Properties`: its audit fails on record differences only (the four modules above are read by its guarantees), and its `--update` is running; I commit its record and open the PR, unmarked, when it ends.
+- Quick tier `r20261111-091201-b46c`: 35 suites passed, none failed so far, still running.
+
+**3. The layer under the code** (`cursor/proofs-stage-rounds-e4b7` at `2b56fccd31e6`, on #8827's head; unmarked when it opens: it restates the locked `Flock.Guarantees.SampledKSTwo` at the stage order, Daniel's). `Claims/Sampling/Reg.lean` (`StageOrder`, `bytesStage`, `codeTwoStage`) and `SamplingGeneric/TwoAt.lean` (`ksTwo_stage`, `sessionsTwo_stage`, the honest witness) elaborate, 21 theorems, axioms clean: `r20261111-095647-6887` [run]. `SamplingGeneric/Guarantees.lean` and `SpotFlock/Coins.lean` are queued on the same node's one Lean slot (`r20261111-095647-19fc`, `-5a43`). Then the records run with `--update` and the quick tier, then the PR.
+
+**4. The SpotFlock half** (`cursor/proofs-spot-stage-7c3d` at `e7cb3a6ebd1f`, on the layer's branch; unmarked, Daniel's: `SpotKSTwo` and `SpotExfilTwo` read `SpotFlock.code`). Nothing of it has compiled yet; the first try (`Code.lean`, `r20261111-095647-09e2`) holds the slot since 10:11Z.
+- The design: `Held` gets one field, `more`, and `Held.stage = more + 1` is the second stage's round count. Round 0 answers `c₀`; rounds 1 to `stage` answer the stage's coins, the prover sending the interior record in round 1 and `[]` after it (anything else is refused); round `stage + 1` is the statement check, at `stageSrc`, the `stage · 2^20` bytes of those coins in order; the sessions start at `stage + 2`. `code h` is `codeTwoStage … (stageOrder h) stageByte`. At `more = 0` it is today's verifier, round for round.
+- Files written, 8 of 33 (477 lines in, 319 out): `Code`, `Coins`, `Facts`, `Sessions`, `Cap`, `KS`, `Pin`, `Honest`.
+- Files left that I know need edits, 10: `Opens` (`seenAt`, `run_seenAt`: a run's first `stage + 2` rounds in place of three), `RevealAt` (`addressOp` reads the statements' message at `stage + 1`), `Frame`, `FrameIsAt`, `EntriesAt`, `RowsOpen`, `Format`, `Depths`, `LayoutAt`, `Placement` (their coins' binders and `src c₁`). The other 15 name none of what moved; the build says which of them break.
+
+**5. INF-689.** `a755` took Lean slot build/0 on vy-nebius-cpu-1 and built there: `security/Proofs` passed (193,469 declarations in 3,825 modules), then `security` and `security/Properties`. The Spot verifier's own records run is `r20261111-101616-f880`, launched 10:16Z on vy-nebius-cpu-1 through `--pool proofs`; whether its six executables link there goes in my next entry.
+
+**6. A correction to my 09:33Z entry.** "About 41,800 proof blocks a run" was from memory. By script [derived, `tools/draftcore_coin_cells.py`]: the largest second stage one 2^20-byte coin holds at D*1's mix is 41,415 proof blocks a run at a first stage of 1, 40,259 at 4 and 39,489 at 6. The coin PR's body carries these.
+
+**7. Job 4.** The assembly is #8896 (above). The public statement is not started: your 09:39Z order puts the SpotFlock half ahead of it, and I expect the half to take the rest of my time.
+
+For the table: stratified `Q_s` by the rows a sample reads, at any sampling design on strata: built as lemmas, #8888 (marked) and #8896 (ready line above), elaborated and axiom-clean in runs `4ec5`, `5513`, records `a755`; rests on nothing new, changes no statement.
+For the table: the coin (MAX_COINS 2^24, MAX_TREE_LINES 2^23): built, unmarked, PR number in my next entry; 8 `reads` values move in `security`'s lock and no guarantee's hash; at the model a stage's coin stays 2^20 bytes, so the model's verifier accepts no run at D*1's sizes until the stage (items 3 and 4, both unmarked, the second not yet compiled) lands.
+For CAPS: Proofs/Flock: +1 module, +6 declarations (#8896: security/Proofs/Flock/Bridge/V5/QsRows.lean)
+For TWOWITNESS: on `cursor/proofs-stage-rounds-e4b7`, `SamplingDeploy.ksTwo_stage` is `ksTwo_atOrder` with `R` rounds in the second stage (`StageOrder`, `bytesStage`); at `R = 1` `codeTwoAt_eq_stage` is `rfl`, so nothing stated at `codeTwoAt` moves.
