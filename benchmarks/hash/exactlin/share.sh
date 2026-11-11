@@ -40,14 +40,14 @@ echo "compute_cap $CC python $PY" > "$OUT/env/node.txt"
 export VLLM_CACHE_ROOT=$S/vllm-cache TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache TRITON_CACHE_DIR=$S/triton
 export VLLM_DISABLE_COMPILE_CACHE=1 HF_HOME=${HF_HOME:-/workspace/hf}
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH
-export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/benchmarks/hash/dither
+export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/verity/configuration/config:$ROOT/benchmarks/hash/dither
 SHARE=$ROOT/benchmarks/hash/exactlin/share.py
 q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
 nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$OUT/clocks.before.csv"
 nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu \
   --format=csv -l 2 > "$OUT/smi.csv" 2>/dev/null &
 smi=$!
-cd "$ROOT/integrations/vllm"
+cd "$ROOT/adapters/vllm"
 rc=0
 for arm in ${SHARE_ARMS:-exact-fused exact}; do
   mkdir -p "$OUT/$arm" "$S/$arm"
