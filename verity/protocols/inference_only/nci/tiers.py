@@ -75,7 +75,7 @@ REFERENCE_THREADED = (10.0, 37248.0)
 
 #: the ACCEL model's card table, the one hardware source for the GPUs here: the RTX PRO 6000 Server Edition at its
 #: firmware's maximum (``Verity.Accel.Sm120.card``, 188 SMs, 1024 tensor units an SM clock, a FP8 E4M3 MAC one unit,
-#: the clock's ceiling 2430 MHz), pinned from Security/Definitions/Core/Accel/Sm120.lean;
+#: the clock's ceiling 2430 MHz), pinned from security/Definitions/Core/Accel/Sm120.lean;
 #: tests/test_tiers.py holds the pin to the file
 CARD = {"sms": 188, "tensor": 1024, "clock_hz": 2430e6}
 #: the clock PoUW credits on sm_120 (H1's SM120 record, verity/protocols/pouw/prover/circuit/h1device.py: 2430 MHz)
