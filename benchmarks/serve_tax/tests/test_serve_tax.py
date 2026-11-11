@@ -681,6 +681,47 @@ def test_loads_are_named_with_their_rungs_and_the_engines_context_fits_them():
     assert int(args["--random-input-len"]) + int(args["--random-output-len"]) + 64 <= S.LOADS["long"].context
 
 
+def test_the_load_that_repeats_a_prefix_is_four_planned_requests_sent_one_at_a_time(tmp_path: Path):
+    """Two prompts near the context limit, each sent again with another ending. The client's file gives each request
+    its lengths and an id a block, and the second of a pair carries the first's ids for the blocks they share, so the
+    client draws both the same tokens there and no others. One request in flight: a second request starts when the
+    prompt it repeats has been computed."""
+    load, plan = S.LOADS["prefix"], S.PAIRS
+    assert (load.plan, load.prompts, load.rungs, load.number, load.file) == (plan, 4, (1,), False, None)
+    assert [n for n, x in S.LOADS.items() if x.number] == ["chat", "long"]
+    assert S.planned(plan) == {"requests": 4, "prompt_tokens": 519647, "repeated_tokens": 259712}
+    # every request with its output fits the context the load names, and a pair shares whole blocks both prompts have
+    assert all(r.prompt + r.output <= load.context for r in plan)
+    assert [(r.after, r.blocks * S.BLOCK) for r in plan] == [(None, 0), (0, 130752), (None, 0), (2, 128960)]
+    f = Path(S.write_trace(tmp_path / "prefix.trace.jsonl", plan))
+    lines = [json.loads(x) for x in f.read_text().splitlines()]
+    assert lines == S.trace_lines(plan) and all(set(x) == {"timestamp", "input_length", "output_length", "hash_ids"} for x in lines)
+    assert [(x["input_length"], x["output_length"]) for x in lines] == [(r.prompt, r.output) for r in plan]
+    a, b, c, d = (x["hash_ids"] for x in lines)
+    assert [len(x) for x in (a, b, c, d)] == [2044, 2044, 2016, 2016]         # an id a block, the last block short
+    assert b[:2043] == a[:2043] and d[:2015] == c[:2015]                      # the blocks a pair shares
+    assert len({*a, *b[2043:], *c, *d[2015:]}) == 2044 + 1 + 2016 + 1         # and no other block is shared
+    for bad in ((S.Planned(0.0, 640, 8, after=0, blocks=1),), (plan[0], S.Planned(0.0, 640, 8, after=0, blocks=11)),
+                (plan[0], S.Planned(0.0, 640, 8, after=0))):
+        with pytest.raises(ValueError, match="an earlier request"):
+            S.trace_lines(bad)
+    # the client sends the file's lines in its order, one in flight, each prompt as token ids of its planned length
+    argv = S.bench_argv(S.MODELS["glm53"], Path("/ck"), 1, load, 1, tmp_path, "prefix@1-r1", dataset=str(f))
+    at = argv.index("--dataset-name")
+    assert argv[at:at + 12] == ["--dataset-name", "timed_trace", "--timed-trace-chunk-hash-size", "64", "--no-self-timed",
+                                "--dataset-path", str(f), "--num-prompts", "4", "--seed", "0", "--request-rate"]
+    assert argv[argv.index("--max-concurrency") + 1] == "1" and argv[argv.index("--goodput") + 1:][:2] == [
+        "tpot:80", "--percentile-metrics"]
+    # its engine's context is its own, so it is served in a run of its own
+    assert S.context_of(S.parse_loads("prefix"), None) == 131072
+    # and at its own concurrency: with more in flight a repeat would arrive before the prompt it repeats is computed
+    assert S.parse_loads("prefix") == {"prefix": (1,)}
+    with pytest.raises(SystemExit, match="'prefix=2': prefix's requests are sent as planned, at concurrency 1"):
+        S.parse_loads("prefix=2")
+    with pytest.raises(SystemExit, match="prefix is served in a run of its own"):
+        S.parse_loads("chat,prefix")
+
+
 @pytest.fixture
 def pinned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[S.Dataset, bytes, Path]:
     """Chat's dataset pinned to a few bytes, under a node's Hugging Face cache in ``tmp_path``: the pin, the bytes,
@@ -770,14 +811,15 @@ def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp
 def test_the_pinned_dataset_is_a_whole_sha512_and_a_commit_of_its_repository():
     ds = S.LOADS["chat"].file
     assert re.fullmatch(r"[0-9a-f]{128}", ds.sha512) and re.fullmatch(r"[0-9a-f]{40}", ds.revision) and ds.size > 0
-    assert [n for n, load in S.LOADS.items() if load.file] == ["chat"] and list(S.LOADS) == ["chat", "long"]
+    assert [n for n, load in S.LOADS.items() if load.file] == ["chat"] and list(S.LOADS) == ["chat", "long", "prefix"]
 
 
 def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp_path: Path):
-    now, calls = [0.0], []
+    now, calls, seeds = [0.0], [], []
 
-    def run(argv, stdout, stderr):
+    def run(argv, stdout, stderr, env):
         calls.append(argv)
+        seeds.append((env.get("PYTHONHASHSEED"), "PATH" in env))
         stdout.write(b"Starting main benchmark run...\n")
         d = Path(argv[argv.index("--result-dir") + 1])
         (d / argv[argv.index("--result-filename") + 1]).write_text(json.dumps(result(completed=197, failed=3)))
@@ -789,12 +831,14 @@ def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp
     assert (m["requests"], m["unfinished"], m["unserved"], m["concurrency"], m["rate"]) == (200, 3, 3, 8, None)
     assert (m["wall_s"], m["t0_unix"], m["client"], m["tag"]) == (64.25, 1700.0, "vllm-bench", "long@8-r1")
     assert calls == [S.bench_argv(S.MODELS["glm53"], Path("/ck"), 8000, S.LOADS["long"], 8, tmp_path / "rep-1", "long@8-r1")]
+    assert seeds == [("0", True)]        # the job's environment, with the seed a planned load's tokens are drawn under
     assert json.loads((tmp_path / "rep-1" / "meta.json").read_text()) == m
     assert (tmp_path / "rep-1" / "bench.log").read_bytes() == b"Starting main benchmark run...\n"
     for rc, why in ((1, "exited 1"), (0, "saved no result")):
         with pytest.raises(RuntimeError, match=why):
             S.drive_bench(8000, S.MODELS["glm53"], Path("/ck"), S.LOADS["long"], 8, "x", tmp_path / f"bad-{rc}",
-                          run=lambda argv, stdout, stderr, rc=rc: NS(returncode=rc), clock=lambda: 0.0, now=lambda: 0.0)
+                          run=lambda argv, stdout, stderr, env, rc=rc: NS(returncode=rc), clock=lambda: 0.0,
+                          now=lambda: 0.0)
 
 
 def test_a_pass_metrics_are_the_clients_own_figures():
@@ -927,7 +971,7 @@ def test_an_arm_that_meets_the_slo_for_no_request_has_a_cost_and_none_within_the
     c = S.serving_cost(ref, none, "chat")
     # the cost reads no SLO; with no goodput anywhere the arm's best pass within the SLO is its fastest
     assert c["value"] == pytest.approx(0.5) and c["within"]["value"] is None and c["within"]["arm"]["concurrency"] == 16
-    r = S.cost_report([ref, none], arm="boundary-rows", target=5.0)
+    r = S.cost_report(rowed([ref, none]), arm="boundary-rows", target=5.0)
     assert (r["value"], r["ci95"], r["verdict"]) == (50.0, None, "cannot tell")          # two reps have no interval
     assert ("no finite cost (boundary-rows met it for 0 of 400 requests at its best rung, compiled for 200 of 400)"
             in S.cost_text(r))
@@ -937,7 +981,7 @@ def test_an_arm_that_meets_the_slo_for_no_request_has_a_cost_and_none_within_the
     # an arm that served no token has no finite cost, and its verdict cannot be told
     dead = S.serving_cost(ref, cost_arm("boundary-rows", {16: [0.0] * 6}), "chat")
     assert dead["value"] is None and S.verdict(dead, 0.05) == "cannot tell"
-    r = S.cost_report([ref, cost_arm("boundary-rows", {16: [0.0] * 6})], arm="boundary-rows", target=5.0)
+    r = S.cost_report(rowed([ref, cost_arm("boundary-rows", {16: [0.0] * 6})]), arm="boundary-rows", target=5.0)
     assert (r["value"], r["verdict"]) == (None, "cannot tell")
     assert "no finite cost: a side served no token at concurrency 16" in S.cost_text(r)
 
@@ -976,13 +1020,37 @@ def both(name: str, chat: list[float], long: list[float]) -> dict:
     return a
 
 
+#: what an arm's directory says of the load that repeats a prefix: its plan's counts and its file's digest
+PLANNED = {"prefix": S.planned(S.PAIRS) | {"sha256": "5" * 64}}
+
+
+def repeats(a: dict, rate: list[float], cached: float | None = None, ttft: float | None = None,
+            gap: float | None = None) -> dict:
+    """``a`` with the load that repeats a prefix served too, one request in flight: a rep each value of ``rate``, the
+    requests a second it served, 4 a rep; the share of the prompt tokens its prefix cache served; its time to the
+    first token and its 99th-percentile gap between tokens."""
+    served = cost_arm(a["arm"], {1: rate}, load="prefix")["loads"]
+    for r in served["prefix@1"]:
+        r |= {"sent": 4, "ok": 4, "prompt_cached_share": cached, "ttft_p50_s": ttft, "itl_p99_s": gap}
+    return a | {"loads": a["loads"] | served, "planned": PLANNED}
+
+
+def rowed(arms: list[dict]) -> list[dict]:
+    """``arms`` with the load that repeats a prefix served by each, so a report of them gives the number: stock at
+    twice the others' rate."""
+    return [repeats(a, [0.02 if a["arm"] == "compiled" else 0.01] * 6) for a in arms]
+
+
 def cost_arms() -> list[dict]:
-    """Stock, stock again, and one arm for each change up to the two-stage serve's launch line."""
-    return [both("compiled", [2.0, 2.0, 2.0], [1.0, 1.0, 1.0]), both("compiled-again", [1.98, 2.0, 2.02], [1.0, 1.0, 1.0]),
-            both("record", [1.98, 1.99, 2.0], [0.99, 0.985, 0.98]), both("no-prefix-cache", [2.0, 1.99, 2.0], [1.0, 0.99, 1.0]),
+    """Stock, stock again, and one arm for each change up to the two-stage serve's launch line. Stock, stock with its
+    prefix cache off and the launch line served the load that repeats a prefix too."""
+    return [repeats(both("compiled", [2.0, 2.0, 2.0], [1.0, 1.0, 1.0]), [0.02] * 6, 0.4998, 45.0, 0.05),
+            both("compiled-again", [1.98, 2.0, 2.02], [1.0, 1.0, 1.0]),
+            both("record", [1.98, 1.99, 2.0], [0.99, 0.985, 0.98]),
+            repeats(both("no-prefix-cache", [2.0, 1.99, 2.0], [1.0, 0.99, 1.0]), [0.0104] * 6, 0.0, 87.3, 0.05),
             both("boundary-rows", [1.96, 1.97, 1.98], [0.96, 0.955, 0.95]),
             both("canonical-topk", [2.0, 2.0, 1.99], [0.98, 0.975, 0.97]),
-            both("two-stage", [1.95, 1.96, 1.97], [0.94, 0.935, 0.93])]
+            repeats(both("two-stage", [1.95, 1.96, 1.97], [0.94, 0.935, 0.93]), [0.0101, 0.01, 0.0102] * 2, 0.0, 90.0, 0.051)]
 
 
 #: an arm with every change the model's target has a part for and no other: stock with the tick, the canonical top-k
@@ -1053,7 +1121,10 @@ def test_a_cost_has_a_verdict_against_the_models_target_only_where_its_arm_is_of
     assert "0.42" not in text and "0.25%)" not in text.split("\n\n")[0].replace("0.25% (modelled)", "")
     # one load alone is not comparable either, and neither is a result's entry
     alone = S.cost_report([a for a in cost_arms() if a["arm"] in ("compiled", "two-stage")])
-    assert alone["verdict"] == "not comparable" and {m["verdict"] for m in S.result_of(r)[3]} == {"not comparable"}
+    assert alone["verdict"] == "not comparable"
+    # the row on a repeated prefix has no target, so its entry has no verdict of any kind
+    assert {m["name"]: m["verdict"] for m in S.result_of(r)[3]} == {
+        "chat": "not comparable", "long": "not comparable", "prefix": None, "vllm/serving-cost-glm53": "not comparable"}
     # an arm with every part on and nothing else has one of the three, the largest load's: here it misses
     r = S.cost_report(whole, arm=WHOLE)
     assert not any(p["off"] for p in r["target_parts"]) and r["not_in_target"] == []
@@ -1109,7 +1180,7 @@ def test_each_arms_row_says_what_its_step_turns_on_and_the_targets_part_for_it()
 def test_the_cost_report_is_the_largest_loads_cost_with_the_consoles_keys_first(whole: list[dict]):
     arms = whole
     r = S.cost_report(arms, arm=WHOLE)
-    assert list(r)[:4] == ["value", "unit", "commit", "run"]
+    assert list(r)[:6] == ["value", "unit", "commit", "run", "prefix", "label"] and r["label"] == "no repeated prefix"
     assert (r["unit"], r["commit"], r["run"], r["metric"], r["better"]) == (
         "percent of stock's serving compute", "c" * 40, "r-1", "serving_cost", "lower")
     # long context costs more than chat, so it is the number; the model's target applies where none is given
@@ -1151,8 +1222,11 @@ def test_the_cost_report_is_the_largest_loads_cost_with_the_consoles_keys_first(
     table = S.cost_text(ours)
     assert "| two-stage | 6.95% " in table and "| boundary-rows | 2.14% " in table and "| record | 3.14% " in table
     lines = S.cost_text(r).splitlines()
-    assert lines[:3] == [
-        "serving cost, glm-5.3, whole over compiled: 6.95% [6.38%, 7.53%]   target ≤ 2.05% (modelled)   verdict: misses",
+    assert lines[0] == ("serving cost, no repeated prefix, glm-5.3, whole over compiled: 6.95% [6.38%, 7.53%]   "
+                        "target ≤ 2.05% (modelled)   verdict: misses")
+    # the row on a repeated prefix is directly under the number, before anything else of the report
+    assert lines[1].startswith("  on a repeated prefix, scaled down, ") and lines[4].startswith("    no-prefix-cache, ")
+    assert lines[5:7] == [
         "  the largest of the costs of its loads (chat, long), load long's",
         "  in percent of stock's serving compute, lower is better: how much more GPU time whole needs a token than "
         "compiled, an engine on 8 GPUs, both serving the same tokens at the concurrency, of those both served, where "
@@ -1178,9 +1252,10 @@ def test_the_cost_report_is_the_largest_loads_cost_with_the_consoles_keys_first(
     arms = cost_arms()
     two = S.cost_report([arms[0], arms[-1]], target=10.0)
     assert (two["target"], two["target_basis"], two["verdict"], two["noise_floor"]) == (10.0, "given", "meets", None)
+    assert two["prefix"]["cache_off"] is None                       # stock with its prefix cache off did not serve
     assert [(x["arm"], x["over"], x["share"]) for x in two["arms"]] == [("two-stage", "compiled", 1.0)]
     assert "noise floor: not measured" in S.cost_text(two) and "target ≤ 10.00% (given)   verdict: meets" in S.cost_text(two)
-    assert S.cost_report([arms[0], arms[2]], arm="record", target=0.1)["verdict"] == "misses"
+    assert S.cost_report(rowed([arms[0], arms[2]])[:2], arm="record", target=0.1)["verdict"] == "misses"
 
 
 @pytest.mark.usefixtures("whole")
@@ -1188,17 +1263,20 @@ def test_one_load_alone_is_named_and_never_meets_the_target_for_the_number():
     """The number is the largest of both loads' costs: a line from one load says which, and that it is not the number
     yet; it can miss on one load, and cannot meet."""
     chat = [cost_arm(name, {8: gs * 2}) for name, gs in (("compiled", [2.0, 2.0, 2.0]), (WHOLE, [1.95, 1.96, 1.97]))]
-    r = S.cost_report(chat, arm=WHOLE)
+    # a job of its own served the load that repeats a prefix, whose row every line of the number stands over
+    row = rowed([cost_arm(name, {}) for name in ("compiled", WHOLE)])
+    r = S.cost_report([*chat, *row], arm=WHOLE)
     assert (r["load"], r["value"], r["not_run"], r["verdict"]) == ("chat", 2.04, ["long"], "cannot tell")
-    assert S.cost_report(chat, arm=WHOLE, target=3.0)["loads"][0]["verdict"] == "meets"       # chat's own cost is within 3%,
-    assert S.cost_report(chat, arm=WHOLE, target=3.0)["verdict"] == "cannot tell"             # and the number still waits for long
-    assert S.cost_text(r).splitlines()[:2] == [
-        "serving cost, glm-5.3, whole over compiled, load chat alone: 2.04% [1.52%, 2.56%]"
-        "   target ≤ 2.05% (modelled)   verdict: cannot tell",
-        "  not the number yet: it is the largest of the costs of its loads (chat, long), and load long has not run"]
+    assert S.cost_report([*chat, *row], arm=WHOLE, target=3.0)["loads"][0]["verdict"] == "meets"       # chat's own cost is within 3%,
+    assert S.cost_report([*chat, *row], arm=WHOLE, target=3.0)["verdict"] == "cannot tell"             # and the number still waits for long
+    lines = S.cost_text(r).splitlines()
+    assert lines[0] == ("serving cost, no repeated prefix, glm-5.3, whole over compiled, load chat alone: 2.04% [1.52%, "
+                        "2.56%]   target ≤ 2.05% (modelled)   verdict: cannot tell")
+    assert lines[1].startswith("  on a repeated prefix, scaled down, ") and lines[4] == (
+        "  not the number yet: it is the largest of the costs of its loads (chat, long), and load long has not run")
     long = [cost_arm(name, {4: gs * 2}, load="long")
             for name, gs in (("compiled", [1.0, 1.0, 1.0]), (WHOLE, [0.94, 0.935, 0.93]))]
-    r = S.cost_report(long, arm=WHOLE)
+    r = S.cost_report([*long, *row], arm=WHOLE)
     assert (r["load"], r["value"], r["not_run"], r["verdict"]) == ("long", 6.95, ["chat"], "misses")
     assert ", load long alone: 6.95% [" in S.cost_text(r) and "and load chat has not run" in S.cost_text(r)
     # two jobs' directories of an arm, each a load of its own, are one arm: the number is then the larger of the two,
@@ -1206,19 +1284,96 @@ def test_one_load_alone_is_named_and_never_meets_the_target_for_the_number():
     commits = {"spans": 600, "finished": 600, "failed": 0, "tables": 600}
     chat[1]["boundary_commits"] = commits
     long = [a | {"run_id": "r-2", "commit": "d" * 40, "boundary_commits": commits | {"spans": 72, "finished": 80}} for a in long]
-    r = S.cost_report([*chat, *long], arm=WHOLE)
+    row = [a | {"run_id": "r-3"} for a in row]
+    r = S.cost_report([*chat, *long, *row], arm=WHOLE)
     assert [(c["load"], c["value"], c["run"]) for c in r["loads"]] == [("chat", 2.04, "r-1"), ("long", 6.95, "r-2")]
+    assert (r["prefix"]["run"], r["prefix"]["commit"]) == ("r-3", "c" * 40)
     assert (r["load"], r["not_run"], r["verdict"], r["run"], r["commit"]) == ("long", [], "misses", "r-2", "d" * 40)
     assert r["commitment"] == {"finished": 680, "committed": 672, "failed": 0, "tables": 1200, "tables_asked": False,
                                "window_s": None}
     text = S.cost_text(r)
-    assert text.splitlines()[1] == "  the largest of the costs of its loads (chat, long), load long's"
-    assert f"load chat: commit {'c' * 40}, run r-1\nload long: commit {'d' * 40}, run r-2\nvLLM 0.1+gd9105ea8\n" in text
+    assert text.splitlines()[4] == "  the largest of the costs of its loads (chat, long), load long's"
+    assert (f"load chat: commit {'c' * 40}, run r-1\nload long: commit {'d' * 40}, run r-2\n"
+            f"load prefix: commit {'c' * 40}, run r-3\nvLLM 0.1+gd9105ea8\n") in text
     assert S.cost_report([*long, *chat], arm=WHOLE)["loads"][0]["load"] == "chat"          # in the loads' order, whichever came first
     for twice, why in (([*chat, *chat], "two directories of arm compiled both served chat: give one of them"),
                        ([*chat, *(a | {"vllm": "0.2"} for a in long)], "two directories of arm compiled differ in vllm")):
         with pytest.raises(SystemExit, match=why):
             S.cost_report(twice)
+
+
+def test_the_row_under_the_number_is_the_cost_on_a_repeated_prefix_with_no_target_and_no_verdict():
+    """The number's loads repeat no prefix, so it says nothing of what serving without the prefix cache costs: the row
+    under it does, on the load that repeats one, for the arm and for stock with its prefix cache off alone."""
+    r = S.cost_report(cost_arms())
+    row = r["prefix"]
+    assert (row["load"], row["label"], row["scaled_down"], row["rung"], row["reps"]) == (
+        "prefix", "on a repeated prefix", True, 1, 6)
+    assert "target" not in row and "verdict" not in row
+    # the cost: with one request in flight, stock's output tokens a second over the arm's, less one
+    assert (row["value"], row["ci95"]) == (98.02, [96.08, 100.0])
+    assert (row["reference"]["output_tok_per_s"], row["arm"]["output_tok_per_s"]) == (pytest.approx(3.0), pytest.approx(1.515))
+    # beside it, how much longer the first token and the 99th-percentile gap between tokens take
+    assert (row["ttft"], row["itl_p99"]) == ({"value": 100.0, "ci95": [100.0, 100.0]}, {"value": 2.0, "ci95": [2.0, 2.0]})
+    slow = [{"ttft_p50_s": x} for x in (3.0, 3.0, 3.3, 3.0, 2.7, 3.0)]
+    assert S.latency_cost([{"ttft_p50_s": 2.0}] * 6, slow, "ttft_p50_s") == {
+        "value": pytest.approx(0.5), "ci95": [pytest.approx(0.35), pytest.approx(0.65)]}
+    assert S.latency_cost([{"ttft_p50_s": 2.0}, {}], slow[:2], "ttft_p50_s") == {"value": None}
+    # the share planned to repeat is the load's own; the share each side's prefix cache served is its engine's count
+    assert row["planned"] == PLANNED["prefix"] | {"repeated_share": 49.98}
+    assert [(row[k]["arm"], row[k]["cached_share"], row[k]["served_all"]) for k in ("reference", "arm")] == [
+        ("compiled", 49.98, True), ("two-stage", 0.0, True)]
+    # stock with its prefix cache off, over stock: what the cache alone is worth on this load
+    off = row["cache_off"]
+    assert (off["arm"]["arm"], off["value"], off["ttft"]["value"], off["itl_p99"]["value"], off["arm"]["cached_share"]) == (
+        "no-prefix-cache", 92.31, 94.0, 0.0, 0.0)
+    assert S.cost_text(r).splitlines()[1:5] == [
+        "  on a repeated prefix, scaled down, two prompts near the context limit, each sent again with another ending, "
+        "of synthetic token ids (vLLM's timed_trace dataset); no target, and it judges nothing: 98.02% [96.08%, 100.00%] "
+        "over 6 reps, one request in flight, where the cost is compiled's output tokens a second over two-stage's, less "
+        "one: compiled 3.0 output tokens/s, two-stage 1.5",
+        "    4 requests, 49.98% of their prompt tokens planned to repeat; the prefix cache served 49.98% (compiled) and "
+        "0.00% (two-stage); every request served",
+        "    two-stage over compiled: the time to the first token 100.00% [100.00%, 100.00%] longer, the 99th-percentile "
+        "gap between tokens 2.00% [2.00%, 2.00%] longer",
+        "    no-prefix-cache, compiled with its prefix cache off: 92.31% [92.31%, 92.31%] over 6 reps, 1.6 output "
+        "tokens/s; the time to the first token 94.00% [94.00%, 94.00%] longer, the 99th-percentile gap between tokens "
+        "0.00% [0.00%, 0.00%] longer; its prefix cache served 0.00%; every request served"]
+    # the number and its verdict read nothing of the row: the same costs with another row under them
+    arms = cost_arms()
+    for x in arms[-1]["loads"]["prefix@1"]:
+        x["output_tok_per_s"] /= 4
+    worse = S.cost_report(arms)
+    assert worse["prefix"]["value"] > 600 and {k: worse[k] for k in ("value", "ci95", "verdict", "loads")} == {
+        k: r[k] for k in ("value", "ci95", "verdict", "loads")}
+    # a rep that left a request unfinished and a rep whose engine's counters were not read are both said
+    arms = cost_arms()
+    arms[-1]["loads"]["prefix@1"][2]["ok"] = 3
+    del arms[0]["loads"]["prefix@1"][0]["prompt_cached_share"]
+    text = S.cost_text(S.cost_report(arms))
+    assert ("the prefix cache served not recorded (compiled) and 0.00% (two-stage); two-stage did not serve every "
+            "request\n") in text
+    # the arms of a row served one plan: the same requests, from the same file
+    arms = cost_arms()
+    arms[-1]["planned"] = {"prefix": PLANNED["prefix"] | {"sha256": "6" * 64}}
+    with pytest.raises(SystemExit, match="compiled and two-stage served load prefix from different plans"):
+        S.cost_report(arms)
+    arms = cost_arms()
+    del arms[3]["planned"]
+    with pytest.raises(SystemExit, match="compiled and no-prefix-cache served load prefix from different plans, or "
+                                         "no-prefix-cache's directory names none"):
+        S.cost_report(arms)
+    arms = cost_arms()
+    del arms[0]["planned"]
+    with pytest.raises(SystemExit, match="compiled's directory that served load prefix names no plan"):
+        S.cost_report(arms)
+    # a row of another plan than the four requests is not labelled scaled down, and its share is its own
+    other = {"prefix": {"requests": 4, "prompt_tokens": 1000000, "repeated_tokens": 250000, "sha256": "7" * 64}}
+    longer = S.cost_report([a | {"planned": other} if "planned" in a else a for a in cost_arms()])["prefix"]
+    assert (longer["scaled_down"], longer["planned"]["repeated_share"]) == (False, 25.0)
+    assert S.prefix_text(longer)[0].startswith("  on a repeated prefix, two prompts near")
+    # with the reference's cache off as the arm, no second line repeats it
+    assert S.cost_report(cost_arms(), arm="no-prefix-cache")["prefix"]["cache_off"] is None
 
 
 def test_the_cost_says_what_the_arms_boundary_commitment_did_and_whether_its_tables_were_built():
@@ -1248,9 +1403,9 @@ def test_the_cost_needs_both_arms_and_a_load_they_share():
     ref = cost_arm("compiled", {8: [2.0, 2.0]})
     with pytest.raises(SystemExit, match="no directory of arm two-stage"):
         S.cost_report([ref])
-    with pytest.raises(SystemExit, match=r"share no load \(chat, long\) sent by vLLM's client"):
+    with pytest.raises(SystemExit, match=r"share no load \(chat, long, prefix\) sent by vLLM's client"):
         S.cost_report([ref, cost_arm("two-stage", {8: [1.9, 1.9]}, load="long")])
-    with pytest.raises(SystemExit, match=r"share no load \(chat, long\) sent by vLLM's client"):       # the corpus client's fixed rates
+    with pytest.raises(SystemExit, match=r"share no load \(chat, long, prefix\) sent by vLLM's client"):       # the corpus client's fixed rates
         S.cost_report([arm("compiled", None, [1000.0]) | {"model_id": "glm53"},
                        arm("two-stage", "boundary-rows", [900.0]) | {"model_id": "glm53"}])
 
@@ -1260,9 +1415,28 @@ def test_the_cost_command_prints_the_number_or_its_json_alone(tmp_path: Path, ca
     dirs = [bench_arm(tmp_path, "compiled", {"chat@8": [result(good=g, tok=2 * g) for g in (150.0, 152.0, 151.0) * 2]}),
             bench_arm(tmp_path, "two-stage", {"chat@8": [result(good=g, tok=2 * g) for g in (147.0, 149.0, 148.0) * 2]},
                       boundary_commits=commits, boundary_rows={"check": "t", **S.ARMS["two-stage"].rows})]
+    # without the row on a repeated prefix no number is printed, as text or as JSON: chat's cost is on its own line
+    assert S.main(["cost", *map(str, dirs)]) == 0
+    text = capsys.readouterr().out
+    assert text.startswith("serving cost, no repeated prefix, glm-5.3, two-stage over compiled, load chat alone: not "
+                           "given without the row on a repeated prefix under it, and load prefix has not run   target")
+    assert "  load chat, ShareGPT's first turns" in text and ": 2.03% [2.01%, 2.04%] over 6 reps" in text
+    assert S.main(["cost", *map(str, dirs), "--json"]) == 0
+    bare = json.loads(capsys.readouterr().out)
+    assert (bare["value"], bare["ci95"], bare["prefix"], bare["loads"][0]["value"]) == (None, None, None, 2.03)
+    # a job of its own served that load, four requests a rep and one in flight; its row is given without the number
+    row = [bench_arm(tmp_path / "row", name, {"prefix@1": [result(completed=4, duration=400.0, tok=t)] * 6}, planned=PLANNED)
+           for name, t in (("compiled", 3.0), ("two-stage", 1.5))]
+    assert S.main(["cost", *map(str, row)]) == 0
+    first, under = capsys.readouterr().out.splitlines()[:2]
+    assert first.startswith("serving cost, no repeated prefix, glm-5.3, two-stage over compiled: none of its loads has run")
+    assert under.startswith("  on a repeated prefix, scaled down, two prompts near the context limit")
+    dirs += row
     assert S.main(["cost", *map(str, dirs), "--out", str(tmp_path / "out")]) == 0
     text = capsys.readouterr().out
-    assert text.startswith("serving cost, glm-5.3, two-stage over compiled, load chat alone: 2.03% [2.01%, 2.04%]")
+    assert text.startswith("serving cost, no repeated prefix, glm-5.3, two-stage over compiled, load chat alone: 2.03% "
+                           "[2.01%, 2.04%]")
+    assert text.splitlines()[1].startswith("  on a repeated prefix, scaled down, ") and ": 100.00% [100.00%, 100.00%] over 6 reps" in text
     assert "1,200 of 1,200 finished requests committed, 0 failed, 1,200 of them with their history tables\n" in text
     assert text == (tmp_path / "out" / "serving_cost.txt").read_text()
     assert S.main(["cost", *map(str, dirs), "--json", "--target", "3"]) == 0
@@ -1270,6 +1444,7 @@ def test_the_cost_command_prints_the_number_or_its_json_alone(tmp_path: Path, ca
     r = json.loads(line)
     # chat's cost is within the target, and the number's verdict waits for the load that has not run
     assert (r["value"], r["target"], r["verdict"], r["load"], r["not_run"]) == (2.03, 3.0, "cannot tell", "chat", ["long"])
+    assert list(r)[:6] == ["value", "unit", "commit", "run", "prefix", "label"] and r["prefix"]["value"] == 100.0
     assert r["loads"][0]["verdict"] == "meets" and r["commitment"]["tables"] == 1200
     # what was saved is against the model's target, whose parts the arm leaves off: the same costs, not comparable
     saved = json.loads((tmp_path / "out" / "serving_cost.json").read_text())
@@ -1289,11 +1464,17 @@ def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load
     job that ran one load writes that load's cost and no such entry, so one load's cost is never read as the number."""
     r = S.cost_report(whole, arm=WHOLE)
     ok, detail, what, ms = S.result_of(r)
-    assert ok and detail == S.cost_text(r).splitlines()[0] and what["loads"] == ["chat", "long"]
-    assert [m["name"] for m in ms] == ["chat", "long", "vllm/serving-cost-glm53"]
-    chat, long, number = ms
+    assert ok and detail == S.cost_text(r).splitlines()[0] and what["loads"] == ["chat", "long", "prefix"]
+    assert [m["name"] for m in ms] == ["chat", "long", "prefix", "vllm/serving-cost-glm53"]
+    chat, long, under, number = ms
     about = {"unit": "percent of stock's serving compute", "target": 2.05, "target_basis": "modelled", "better": "lower"}
-    assert all(m | about == m and m["commit"] == "c" * 40 and m["run"] == "r-1" for m in ms)
+    assert all(m | about == m and m["commit"] == "c" * 40 and m["run"] == "r-1" for m in (chat, long, number))
+    # the row on a repeated prefix is a measurement with no target and no verdict, and the number's entry carries it
+    assert under | about | {"target": None, "target_basis": None} == under and under["verdict"] is None
+    assert (under["value"], under["ci95"], under["label"], under["scaled_down"], under["reps"], under["rung"]) == (
+        98.02, [96.08, 100.0], "on a repeated prefix", True, 6, 1)
+    assert number["label"] == "no repeated prefix" and number["prefix"].items() <= under.items()
+    assert number["prefix"]["value"] == 98.02 and list(number["prefix"])[:3] == ["load", "label", "scaled_down"]
     assert (chat["value"], chat["ci95"], chat["verdict"], chat["reps"]) == (2.04, [1.52, 2.56], "cannot tell", 6)
     assert (number["value"], number["ci95"], number["verdict"], number["load"]) == (6.95, [6.38, 7.53], "misses", "long")
     # the number names the loads it is the largest of, each with its cost beside it, and its target's parts
@@ -1305,21 +1486,34 @@ def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load
     assert [(c["rung"], c["saturated"]) for c in number["loads"]] == [(8, False), (4, False)]
     # the launch line's own result carries the fourth verdict, with the changes it leaves off, and still stands
     ours = S.result_of(S.cost_report(cost_arms()))
-    assert ours[0] and {m["verdict"] for m in ours[3]} == {"not comparable"}
+    assert ours[0] and {m["verdict"] for m in ours[3] if m["name"] != "prefix"} == {"not comparable"}
     assert [p["off"] for p in ours[3][-1]["target_parts"]] == [["admission on the certified tick"], [], ["the edge snapshot"]]
     assert ours[3][-1]["not_in_target"] == ["the step record", "prefix caching off", "the two-stage boundary commitment",
                                             "the history tables"] and number["not_in_target"] == []
     # one load alone: its cost, and no entry under the metric's id
     alone = S.cost_report([cost_arm(name, {8: gs * 2}) for name, gs in (("compiled", [2.0] * 3), ("two-stage", [1.95, 1.96, 1.97]))])
     assert [m["name"] for m in S.result_of(alone)[3]] == ["chat"] and S.result_of(alone)[0]
+    # every load of the number and no row under it: each load's cost, and no entry under the metric's id either
+    bare = S.cost_report([a | {"loads": {k: v for k, v in a["loads"].items() if not k.startswith("prefix@")}} for a in whole],
+                         arm=WHOLE)
+    assert (bare["value"], bare["ci95"], bare["not_run"], bare["verdict"]) == (None, None, [], "misses")
+    assert [m["name"] for m in S.result_of(bare)[3]] == ["chat", "long"] and S.result_of(bare)[0]
+    assert "whole over compiled: not given without the row on a repeated prefix under it" in S.result_of(bare)[1]
+    # the row alone: its measurement, and no number
+    only = S.cost_report([a | {"loads": {k: v for k, v in a["loads"].items() if k.startswith("prefix@")}} for a in whole],
+                         arm=WHOLE)
+    assert (only["value"], only["load"], only["loads"], only["arms"], only["not_run"]) == (None, None, [], [], ["chat", "long"])
+    assert [m["name"] for m in S.result_of(only)[3]] == ["prefix"] and S.result_of(only)[0]
+    assert S.result_of(only)[2]["loads"] == ["prefix"] and "noise floor" not in S.cost_text(only)
     # a cost with no finite value, or a boundary commitment that left a finished request out, is not a passed result
     none = cost_arm("two-stage", {8: [0.0] * 6})
     assert not S.result_of(S.cost_report([cost_arm("compiled", {8: [2.0] * 6}), none]))[0]
     arms = [cost_arms()[0], cost_arms()[-1] | {"boundary_commits": {"spans": 90, "finished": 100, "failed": 0}}]
     assert not S.result_of(S.cost_report(arms))[0]
     # the command writes it through the kit's writer, in the run's directory, citing the report beside it
-    dirs = [bench_arm(tmp_path, name, {f"{load}@8": [result(good=g, tok=2 * g) for g in gs * 2] for load in ("chat", "long")})
-            for name, gs in (("compiled", (150.0, 152.0, 151.0)), ("two-stage", (147.0, 149.0, 148.0)))]
+    dirs = [bench_arm(tmp_path, name, {f"{load}@8": [result(good=g, tok=2 * g) for g in gs * 2] for load in ("chat", "long")}
+                      | {"prefix@1": [result(completed=4, duration=400.0, tok=t)] * 6}, planned=PLANNED)
+            for name, gs, t in (("compiled", (150.0, 152.0, 151.0), 3.0), ("two-stage", (147.0, 149.0, 148.0), 1.5))]
     out = tmp_path / "run" / "out"
     with pytest.raises(SystemExit, match="with --out DIR"):
         S.main(["cost", *map(str, dirs), "--result"])
@@ -1334,9 +1528,11 @@ def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load
     assert saved["validation"]["evidence"] == saved["measurement_files"] == ["out/serving_cost.json"]
     assert saved["validation"]["detail"] == capsys.readouterr().out.splitlines()[0]
     assert [(m["name"], m["value"], m["unit"]) for m in saved["measurements"]] == [
-        (name, 2.03, "percent of stock's serving compute") for name in ("chat", "long", "vllm/serving-cost-glm53")]
+        (name, cost, "percent of stock's serving compute")
+        for name, cost in (("chat", 2.03), ("long", 2.03), ("prefix", 100.0), ("vllm/serving-cost-glm53", 2.03))]
     assert saved["workload_fingerprint"] == {"benchmark": "serve_tax", "model": "glm-5.3", "arm": "two-stage",
-                                             "reference": "compiled", "loads": ["chat", "long"], "vllm": "0.1+gd9105ea8"}
+                                             "reference": "compiled", "loads": ["chat", "long", "prefix"],
+                                             "vllm": "0.1+gd9105ea8"}
 
 
 def test_only_an_arm_that_loads_a_plugin_has_this_tree_on_its_servers_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

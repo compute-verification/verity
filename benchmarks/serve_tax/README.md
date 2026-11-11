@@ -73,7 +73,8 @@ of the corpus's. `verity bench serve_tax` is `run.sh`, here with the flags of it
 research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model glm53
 ~~~
 
-- **A load** (`serve_tax.LOADS`) is one of the client's datasets with its flags, and there are two. `chat` is the load
+- **A load** (`serve_tax.LOADS`) is one of the client's datasets with its flags. The number has two, and a third,
+  `prefix`, has the row under it (below). `chat` is the load
   of vLLM's standing serving tests: ShareGPT's first turns, 200 prompts, each decoding its recorded answer's length.
   `long` is long context: the client's synthetic dataset at one long length (8,192 tokens in, 128 out), which stands
   until a plan of recorded long requests replaces it; the output says which it was. Its first token takes seconds on
@@ -120,8 +121,29 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   between passes, where no request waits on them, and the cost would leave them out. A short window counts a window's
   fixed work more often than a long one does, so the cost errs high; the commitment's line names the window.
 - **The number** is the larger of the two loads' costs, each load's cost printed beside it. Where only one load has
-  run, the first line names it (`load chat alone`) and the second says the number waits for the other: one load's
-  cost is not the number.
+  run, the first line names it (`load chat alone`) and a later line says the number waits for the other: one load's
+  cost is not the number. Its loads repeat no prefix, so it is labelled `no repeated prefix` and is never given
+  without the row on a repeated prefix under it: where load `prefix` has not run, the first line says so in place of
+  the number and the JSON's `value` is null, while each load's own cost is still printed.
+- **The row on a repeated prefix** (`serve_tax.prefix_row`) is directly under the number's line and directly after
+  the JSON's `run` (`prefix`): what the arm costs over stock on load `prefix`, which the number's loads say nothing
+  of, since stock serves a repeated prefix from its cache and an arm with the cache off computes it again. It has no
+  target and no verdict. The load is four planned requests (`serve_tax.PAIRS`): two prompts near the engines' context
+  limit of 131,072 tokens, each sent again with another ending, so half of the prompt tokens repeat, all of them on
+  the second and fourth request. The client's `timed_trace` dataset sends them from a file of lengths and block ids
+  that the arm writes (`<arm>/prefix.trace.jsonl`; a block is 64 tokens, and two prompts share the tokens of the
+  blocks whose ids they share), each prompt as the synthetic token ids the client draws for its blocks, in the
+  file's order with one request in flight, so each repeat follows the request it repeats (`--loads` takes no rungs
+  for it). The row is labelled `scaled down` while the load is those four requests alone: half of their prompt
+  tokens repeat, which is this load's share and no serve's, where such pairs arrive among requests that repeat
+  nothing.
+  With one request in flight the cost is stock's output tokens a second over the arm's, less one, by the same paired
+  ratio; beside it the row gives how much longer the arm's time to the first token and its 99th-percentile gap
+  between tokens are, the share of the prompt tokens each side's prefix cache served by the engine's own counters
+  beside the share planned to repeat, whether each side served every request, and the same for `no-prefix-cache`
+  over stock where that arm served the load: what the cache alone is worth there. The load is served in a job of
+  its own (`--loads prefix`), since one engine serves a job's loads and this one's context limit would be the others'
+  too; that job's cost is the row alone, and `WITH=` joins it to the number's job.
 - **The verdict** of a load against the model's target (`Model.target`, or `--target PERCENT`) is `meets` where the
   whole interval is at or under the target, `misses` where all of it is over, else `cannot tell`. The output says
   what the target rests on (`Model.target_basis`: `modelled` for a cost model's share, `given` for `--target`).
@@ -142,9 +164,9 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
 - **Stock has vLLM's prefix cache on,** its default at the pin for a model that generates text, and the arms from
   `boundary-rows` down turn it off, since the boundary commitment needs it off. Neither load repeats a prefix
   (chat's requests are different conversations' first turns, long context's are random tokens, and the cache is
-  emptied before every pass), so the cost here does not hold what the cache is worth on a load that does.
-  `no-prefix-cache` is stock with the cache off alone, and each rep's `meta.json` records the prompt tokens the
-  cache served (`schedule.prompt_tokens_cached`).
+  emptied before every pass), so the number does not hold what the cache is worth on a load that does: the row on
+  a repeated prefix does. `no-prefix-cache` is stock with the cache off alone, and each rep's `meta.json` records
+  the prompt tokens the cache served (`schedule.prompt_tokens_cached`).
 - **The arms** are by default `compiled`, `compiled-again` and `two-stage`, and the cost is of the last one named.
   `--arms all` adds one arm for each change in between (`record`, `no-prefix-cache`, `boundary-rows`) and the canonical
   top-k's own (`canonical-topk`). Each arm's cost is printed over stock and over the nearest arm above it that ran,
@@ -162,17 +184,19 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   prints it under the number, which counts none of it. The arms that need the corpus's client (the tick's, fed by the
   stand-in certifier, and the restore arms' seeded sampling) aren't served by vLLM's.
 
-It writes `serving_cost.txt`, whose first line is the number with its interval, target and verdict, and
-`serving_cost.json`, one object whose first keys are `value`, `unit`, `commit` and `run` (`not_run` names the loads
-that have not run). `--json` prints the object last, and `serve_tax.py cost ARM_DIR... --json` prints it alone from a
+It writes `serving_cost.txt`, whose first line is the number with its label, interval, target and verdict and whose
+next lines are the row on a repeated prefix, and `serving_cost.json`, one object whose first keys are `value`, `unit`,
+`commit` and `run`, then `prefix` (the row, or null) and `label` (`not_run` names the number's loads that have not
+run). `--json` prints the object last, and `serve_tax.py cost ARM_DIR... --json` prints it alone from a
 finished job's arm directories, which may be of more than one job: a load served by a later job joins the number
 (`WITH="OUT_DIR ..."` gives `run.sh` the earlier jobs').
 
 The run's `result.json` (`serve_tax.result_of`, written by the kit's writer) holds each load's cost as a measurement
 named by the load, and the number as one named by the model's metric id (`Model.metric`), with `ci95`, `target`,
 `target_basis`, `target_parts` (each part with the changes the arm left off), `verdict` (one of the three, or `not
-comparable`), `better`, `load`, and `loads`, each load's cost beside it. A job in which a load has not run writes no
-entry under the metric's id. `gpus.csv` names the cards the job measured on.
+comparable`), `better`, `load`, and `loads`, each load's cost beside it, with its `label` and the row (`prefix`). The
+row is also a measurement of its own, named `prefix`, with no target and no verdict. A job in which a load of the
+number or load `prefix` has not run writes no entry under the metric's id. `gpus.csv` names the cards the job measured on.
 
 ## Running it
 

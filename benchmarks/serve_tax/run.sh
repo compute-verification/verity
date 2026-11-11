@@ -29,6 +29,8 @@
 # load's cost a measurement, and the number one under the model's metric id once every load has run); --json prints the
 # JSON object last. In this form REPS is 6 and WINDOW_S 30 by default, and OUT/gpus.csv names the cards.
 # WITH="OUT_DIR ..." adds earlier jobs' arms to the cost: a load they served and this job didn't joins the number.
+# The number is not given without the row on a repeated prefix under it, which is load prefix's, served in a job of its
+# own (--loads prefix --arms "compiled no-prefix-cache two-stage": its cost is the row alone) and joined with WITH.
 # PRIVATE is where the arms keep what never leaves the node, each in PRIVATE/<arm>: a boundary commitment's classes, whose
 # files hold the requests' tokens and the salts (OUT keeps each class's public commit.json, a line of
 # <arm>/server/boundary.PID.jsonl), the history tables and the top-k's counters. It is a directory outside every run's.
