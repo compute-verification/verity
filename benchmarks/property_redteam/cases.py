@@ -1,7 +1,7 @@
 """The property red team's refusal suite: Programs a stacking property (property/v1, a closed free set with its family and
 limb rules) must refuse or fully budget, and the honest steps.py shapes it must pass.
 
-A check is any function from a `verity.ml.circuits.program.Program` to a verdict, a mapping ``{"refused": bool, "charged":
+A check is any function from a `verity.circuits.program.Program` to a verdict, a mapping ``{"refused": bool, "charged":
 {class: units}}`` over `CLASSES`: ``roundings`` (casts, special functions, FP arithmetic, integer floors, mods and wraps, carries
 and limb splits), ``compare_select`` (comparisons, clamps, selects), ``gathers`` (in fresh runtime index bits), ``products``
 (products of two runtime values) and ``other``.
@@ -15,7 +15,7 @@ pun). Refusing an attack is always sound. An honest case's ``allow`` is the most
 Primitives are main's registry, with two steps registered under their ids only where absent, each with the signature and
 silicon model of the branch that defines it: `BlackwellS8ImmaDot32_v1` (the census branch's exact s8 IMMA step) and
 `BlackwellU8S8ImmaDot32_v1` (the s8 family's u8·s8 step without .satfinite). A case that binds the s8 family
-(`verity.ml.circuits.ops.s8`: `S8Dot_v1`, `S8Matmul_v1`, `LimbSplit_v1`) names it in ``needs`` and is skipped where the
+(`verity.definitions.ops.s8`: `S8Dot_v1`, `S8Matmul_v1`, `LimbSplit_v1`) names it in ``needs`` and is skipped where the
 family is absent. Every honest case does, since property/v1 refuses a bare IMMA. The receipt fold (`PouwDuoAbsorb_v1`) is
 registered nowhere yet, so ``fold-reused`` uses its LOP3+IMAD step (`benchmarks/pouw/edited_gemm/receipt_folds_r9.py`) as a
 Definition of its own.
@@ -27,28 +27,28 @@ import struct
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
-from verity.ml.circuits.ops import prims
-from verity.ml.circuits.ops import scalar  # noqa: F401  (I32Add, SelectI32, F32Fmaxf, F32Fminf register on import)
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
-from verity.ml.circuits.silicon.integer import (BLACKWELL_SM120_S8_M16N8K32, IntegerMma, S32_MAX, S32_MIN, s32_value,
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity.definitions.ops import prims
+from verity.definitions.ops import scalar  # noqa: F401  (I32Add, SelectI32, F32Fmaxf, F32Fminf register on import)
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, array_of, concat, tuple_of
+from verity.definitions.silicon.integer import (BLACKWELL_SM120_S8_M16N8K32, IntegerMma, S32_MAX, S32_MIN, s32_value,
                                                  s32_word)
-from verity.ml.circuits.types import Array, Tuple as TupleT, Value
+from verity.circuits.types import Array, Tuple as TupleT, Value
 
-import verity.ml.protocols.pouw.circuit.words  # noqa: F401  (PouwNoiseByte)
-from verity.ml.definitions.registry import dsa, dsv4_qnorm_insert, flashmla, marlin_moe, topp_word_gates  # noqa: F401
-from verity.ml.definitions.registry.ref_prims import gather_f32
+import verity.protocols.pouw.prover.circuit.words  # noqa: F401  (PouwNoiseByte)
+from verity.definitions.registry import dsa, dsv4_qnorm_insert, flashmla, marlin_moe, topp_word_gates  # noqa: F401
+from verity.definitions.registry.ref_prims import gather_f32
 
 try:
-    FAMILY: Any = importlib.import_module("verity.ml.circuits.ops.s8")
+    FAMILY: Any = importlib.import_module("verity.definitions.ops.s8")
 except ModuleNotFoundError as e:
-    if e.name != "verity.ml.circuits.ops.s8":
+    if e.name != "verity.definitions.ops.s8":
         raise
     FAMILY = None
 
 CLASSES = ("roundings", "compare_select", "gathers", "products", "other")
-NEEDS_FAMILY = "verity.ml.circuits.ops.s8"
+NEEDS_FAMILY = "verity.definitions.ops.s8"
 M32 = (1 << 32) - 1
 S8, S32, F32 = Value(8), Value(32), Value(32)
 A32 = Array(32, S8)
@@ -306,7 +306,7 @@ def gather_table(V: int = 128) -> Program:
     return Program(_fn("RedteamGatherTable", [("i", S32)], F32, body))
 
 
-# ---- the s8 family (verity.ml.circuits.ops.s8) ----------------------------------------------------------------------------
+# ---- the s8 family (verity.definitions.ops.s8) ----------------------------------------------------------------------------
 
 
 def _dot(**kw: Any) -> Any:

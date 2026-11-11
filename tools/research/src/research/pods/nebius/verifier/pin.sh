@@ -9,7 +9,7 @@
 # /opt/vy-verifier/current -> COMMIT. A run runs from the tree it was requested at: host.py refuses one whose pin moved. Rerunning
 # it for an installed COMMIT skips the unpack and reads no TAR, and logs the pin again.
 #
-#   git archive COMMIT verity benchmarks/remote_session benchmarks/live_verifier tools/research/src/research \
+#   git archive COMMIT verity benchmarks/remote_session verity/protocols/poub/device/live_verifier tools/research/src/research \
 #     tools/research/store.pod.toml | ssh vy-admin@HOST sudo vy-verifier-pin COMMIT
 set -euo pipefail
 die() { echo "vy-verifier-pin: $*" >&2; exit "${2:-1}"; }
@@ -24,14 +24,14 @@ install -d -m 0755 -o root -g root "$O"
 if [ ! -d "$T" ]; then
   tmp=$(mktemp -d "$O/.pin.XXXXXX")
   tar -x -C "$tmp" --no-same-owner --no-same-permissions
-  for f in benchmarks/live_verifier/host.py benchmarks/remote_session/verifier_process.py tools/research/src/research/store/cli.py; do
+  for f in verity/protocols/poub/device/live_verifier/host.py verity/protocols/poub/verifier/remote_session/verifier_process.py tools/research/src/research/store/cli.py; do
     [ -f "$tmp/$f" ] || { rm -rf "$tmp"; die "the archive has no $f"; }
   done
   chown -R root:root "$tmp"
   chmod -R u+rwX,go+rX,go-w "$tmp"
   mv "$tmp" "$T"
 fi
-pkg=$T/verity/core/protocols/remote_bandwidth/lean
+pkg=$T/verity/protocols/poub/verifier/lean
 tc=$(tr -d '[:space:]' < "$pkg/lean-toolchain")
 [[ $tc =~ ^leanprover/lean4:v[0-9A-Za-z.-]+$ ]] || die "$pkg/lean-toolchain: $tc"
 if [ ! -x "$ELAN_HOME/bin/elan" ]; then
@@ -57,8 +57,8 @@ find "$T" \( -name lakefile.toml -o -name lakefile.lean \) -printf '%h\n' | whil
 done
 runuser -u auditor -- env -i HOME=/var/lib/vy-verifier PATH="$T/.lean-bin:/usr/bin:/bin" \
   sh -c "cd '$pkg' && lake build remote-audit-verifier remote-audit-difftest &&
-         cd '$T/verity/core/service/spot' && lake build sampled-proofs-verifier" | tail -1
-/usr/bin/python3 -I "$T/benchmarks/live_verifier/host.py" pinned "$c"
+         cd '$T/verity/protocols/spot/verifier/lean' && lake build sampled-proofs-verifier" | tail -1
+/usr/bin/python3 -I "$T/verity/protocols/poub/device/live_verifier/host.py" pinned "$c"
 ln -sfn "$c" "$O/current.tmp"
 mv -Tf "$O/current.tmp" "$O/current"
 echo "pinned: $O/current -> $c"

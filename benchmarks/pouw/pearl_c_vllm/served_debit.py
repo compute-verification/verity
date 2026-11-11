@@ -44,7 +44,7 @@ with one BLAS thread a worker (``--jobs`` defaults to the CPUs this process may 
   research run --on MACHINE --queue --phase cpu --cpus 44 --mem-gb 64 --preemptible --custody-r2 --custody-ttl 8h \\
       --project verity --campaign pouw --question Q --declared-output 'out/*' -- bash -c \\
       'export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \\
-         PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+         PYTHONPATH=$PWD:$PWD/verity/configuration/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw
        P=/workspace/pouw/mvp-e2e/passes/RUN_ID
        exec nice -n 19 /workspace/pouw/mvp-e2e/venv312/bin/python -u benchmarks/pouw/pearl_c_vllm/served_debit.py \\
          $P/decode/manifest.json $P/prefill/manifest.json --tiles 64 128 --out $RESEARCH_RUN_DIR/out'
@@ -74,19 +74,19 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks/pouw/clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/pouw/clear"))
 import fast_tile as FT  # noqa: E402
 import run_result  # noqa: E402
 import verify_run as VR  # noqa: E402
-from verity.ml.commitments import Commitment  # noqa: E402
-from verity.ml.commitments import verify_opening  # noqa: E402
-from verity.ml.randomness import derive  # noqa: E402
-from verity.core.protocols.pouw.audit import (ROW_SCHEMA, activation_binding, opened_value, rows_domain,  # noqa: E402
+from verity.commitments import Commitment  # noqa: E402
+from verity.commitments import verify_opening  # noqa: E402
+from verity.commitments.randomness import derive  # noqa: E402
+from verity.protocols.pouw.verifier.audit import (ROW_SCHEMA, activation_binding, opened_value, rows_domain,  # noqa: E402
                                               weight_binding)
 from clear_audit import Transcript, Verifier, commitment_hash  # noqa: E402
-from verity.core.protocols.pouw.coins import CoinCommitment  # noqa: E402
-from verity.core.protocols.pouw.protocol import Context, Matmul, Shape  # noqa: E402
-from verity.ml.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
+from verity.protocols.pouw.verifier.coins import CoinCommitment  # noqa: E402
+from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape  # noqa: E402
+from verity.protocols.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
 import clear_work as CW  # noqa: E402
 from verity_vllm.protocols.pouw import pearl_c as PD  # noqa: E402
 from verity_config.settings import of  # noqa: E402
@@ -609,7 +609,7 @@ def write_inputs(rows: list[dict], seed: int, census_max: int, draws: int, out_d
                            "points of its own)", "inputs": rows}
     if fresh:
         doc |= fresh | {"independence": "each trial is a work-weighted draw of the input's tiles under a salt of its own, both "
-                                        "derived from fresh_source after the pass (verity.ml.randomness.derive, " + FRESH + "): "
+                                        "derived from fresh_source after the pass (verity.commitments.randomness.derive, " + FRESH + "): "
                                         "independent Bernoulli trials of the input's rate, the activations fixed"}
     path = out_dir / "inputs.json"
     path.write_text(json.dumps(doc, indent=1) + "\n")

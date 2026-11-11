@@ -333,7 +333,7 @@ def test_a_killed_lock_run_runs_again_once_and_one_lost_past_the_bound_too(world
 @pytest.mark.parametrize("part, files, lock_run", [
     ("proofs", {"Security/Proofs/Y.lean": "theorem Y : True := trivial\n"}, False),
     ("spec", {"Security/Definitions/Claims/Sampling.lean": "def s := 1\n"}, True),
-    ("code", {"verity/core/service/flock/Flock/X.lean": "def x := Nat.gcd 4 6\n"}, True)])
+    ("code", {"verity/protocols/flock/verifier/Flock/X.lean": "def x := Nat.gcd 4 6\n"}, True)])
 def test_a_two_demos_lean_change_lands_on_its_verdict_and_a_lock_run_follows_it_unless_it_is_proofs_alone(
         world, monkeypatch, part, files, lock_run):
     """A "two demos" PR lands on its verdict as any other, its title exempting nothing: one that changes the spec, or Lean that

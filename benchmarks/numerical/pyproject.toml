@@ -28,8 +28,8 @@ untraced = ["tests/bench/test_input_sets.py", "tests/bench/test_lowerings.py", "
 # tests/bench/test_bench_judge.py runs benchmarks/judge.py; test_unit_costs_menu.py
 # holds the Lean menu (VStar.Menu.Pinned) to the pinned menu.json it is generated from; test_census_data.py reads each census
 # workload's regression expectations, most of them fetched fixtures.
-inputs = ["verity/core/service/flock/VStar/Menu/Pinned.lean", "verity/ml/flock", "benchmarks/judge.py", "benchmarks/census", "fixtures",
-          "integrations/vllm/tests/regression/expected"]
+inputs = ["verity/protocols/flock/verifier/VStar/Menu/Pinned.lean", "verity/protocols/flock/prover", "benchmarks/judge.py", "benchmarks/census", "fixtures",
+          "adapters/vllm/tests/regression/expected"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -37,7 +37,7 @@ parallel = true
 
 [[tool.verity.tests.reads]]
 tests = ["tests/bench/test_bench_contract.py"]
-paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/ml/flock/python/verity_flock"]
+paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/protocols/flock/prover/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -46,8 +46,8 @@ tests = [
     "tests/bench/test_subcircuit_catalog.py",
     "tests/bench/test_unit_costs.py",
 ]
-paths = ["verity/ml/flock/python/verity_flock/templates"]
+paths = ["verity/protocols/flock/prover/python/verity_flock/templates"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/bench/test_lowerings.py"]
-paths = ["verity/ml/commitments", "verity/ml/crypto", "verity/ml/flock/python/verity_flock"]
+paths = ["verity/commitments", "verity/commitments/crypto", "verity/protocols/flock/prover/python/verity_flock"]

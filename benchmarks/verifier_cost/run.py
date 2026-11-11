@@ -33,7 +33,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-NCI = ROOT / "verity/core/protocols/network/nci/lean"
+NCI = ROOT / "verity/protocols/inference_only/verifier/nci/lean"
 EXE = NCI / ".lake/build/bin/nci-check"
 SCHEMA = "verity/verifier-cost/v1"
 
@@ -65,7 +65,7 @@ def serve(name: str, ir: str):
     """Serve_v1 at config `name` as a Program, word-level or on bits."""
     from workload.served import Config, _derive
 
-    from verity.ml.circuits.program import Program
+    from verity.circuits.program import Program
 
     c = CONFIGS[name]
     cfg = Config.b0(layers=c[1]) if isinstance(c, tuple) else Config(**c)
@@ -78,7 +78,7 @@ def serve(name: str, ir: str):
 
 
 def text_of(prog) -> str:
-    from verity.ml.circuits import codec
+    from verity.circuits import codec
 
     return codec.canonical_json(codec.encode_program(prog)).decode()
 
@@ -192,7 +192,7 @@ def measure(args) -> int:
     return 0
 
 
-PIECES = ROOT / "verity/core/service/spot/.lake/build/bin/sampled-proofs-difftest"
+PIECES = ROOT / "verity/protocols/spot/verifier/lean/.lake/build/bin/sampled-proofs-difftest"
 PARTITION_SCHEMA = "verity/verifier-cost-partition/v1"
 POPULATION = (1, 30, 1000, 1_000_000)
 
@@ -206,7 +206,7 @@ def _partition_case(desc: dict, query: dict) -> dict:
 
 def _partition_row(exe: Path, tmp: str, prog, query: dict, repeat: int) -> dict:
     """The `partition` piece on `prog` under `query`, best of `repeat`, with the sizes it is measured against."""
-    from verity.ml.circuits import partition_object as PO
+    from verity.circuits import partition_object as PO
 
     text = text_of(prog)
     path = Path(tmp) / "case.jsonl"
@@ -224,8 +224,8 @@ def _partition_row(exe: Path, tmp: str, prog, query: dict, repeat: int) -> dict:
 
 
 def partition(args) -> int:
-    from verity.core.protocols.spot.one_stage import partition as P
-    from verity.ml.circuits import partition_object as PO
+    from verity.protocols.spot.verifier.one_stage import partition as P
+    from verity.circuits import partition_object as PO
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

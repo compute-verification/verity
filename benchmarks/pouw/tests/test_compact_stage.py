@@ -14,7 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hidden_zk"))
 
 import compact_stage as CST
-from verity.ml.circuits.boolean import forms
+from verity.circuits.boolean import forms
 from verity_flock import ir_lower as IL
 
 IN = {"in0": 5, "in1": 130, "in2": 7}
@@ -99,10 +99,10 @@ def test_a_circuit_compact_stage_does_not_lay_out_reads_back_as_the_library_circ
 
 
 def _chain():
-    from verity.ml.circuits.boolean import BIT
-    from verity.ml.circuits.boolean.trace import definition
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.types import Array
+    from verity.circuits.boolean import BIT
+    from verity.circuits.boolean.trace import definition
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.types import Array
 
     w, n = 12, 6
     add = definition("CompactStageToyAdd", 1, lambda C, a, b: forms.add(C, a, b, width=w), (("a", Array(w, BIT)),

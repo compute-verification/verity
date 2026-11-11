@@ -15,7 +15,7 @@ VENV=${VENV:-/workspace/venv312}
 PY=${PY:-$VENV/bin/python}
 mkdir -p "$OUT"
 if ! "$PY" -c "import vllm, torch, triton" 2>/dev/null; then
-  BOOT=$ROOT/integrations/vllm/verity_vllm/ops/pod_bootstrap.sh
+  BOOT=$ROOT/adapters/vllm/verity_vllm/ops/pod_bootstrap.sh
   eval "$(grep -E '^(W|WSHA|TORCHCODEC)=' "$BOOT")"
   URL=$(grep -o 'https://wheels.vllm.ai/[^"]*' "$BOOT")
   command -v uv > /dev/null || { python3 -m pip install -q uv; export PATH=$HOME/.local/bin:$PATH; }
@@ -26,7 +26,7 @@ if ! "$PY" -c "import vllm, torch, triton" 2>/dev/null; then
     --index-strategy unsafe-best-match "$wheels/$W" "$TORCHCODEC" "numpy>=1.26" > "$OUT/pip.log" 2>&1 || exit 3
   rm -rf "$wheels"
 fi
-export PYTHONPATH=$ROOT:$ROOT/integrations/vllm
+export PYTHONPATH=$ROOT:$ROOT/adapters/vllm
 run() { local name=$1; shift; "$@" > "$OUT/$name.log" 2>&1 || echo "$name" >> "$OUT/failed"; }
 nvidia-smi --query-gpu=name,driver_version,clocks.max.sm --format=csv > "$OUT/gpu.csv"
 "$PY" -c "import torch, triton, vllm; print(torch.__version__, triton.__version__, vllm.__version__)" > "$OUT/versions.txt"

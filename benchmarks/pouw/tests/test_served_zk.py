@@ -21,26 +21,26 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.ml.commitments.merkle import tree_levels
-from verity.ml.crypto import lms
-from verity.core.protocols.certifier import active
-from verity.core.protocols.certifier.active import Proxy
-from verity.core.protocols.certifier.certificate import LmsKey, LmsSigner
-from verity.core.protocols.certifier.grid import GridParams
-from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
-from verity.ml.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.coins import Challenger as Coins
-from verity.core.protocols.pouw.coins import CoinOpening, coin_reason
-from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.ml.protocols.pouw.schemes import pearl_c as C
-from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import registration as R
+from verity.commitments.merkle import tree_levels
+from verity.commitments.crypto import lms
+from verity.protocols.certifier.verifier import active
+from verity.protocols.certifier.verifier.active import Proxy
+from verity.protocols.certifier.verifier.certificate import LmsKey, LmsSigner
+from verity.protocols.certifier.verifier.grid import GridParams
+from verity.protocols.certifier.verifier.schedule import ClockSync, SyncSet
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.audit import Epoch, Workload, weights_root
+from verity.protocols.pouw.prover.circuit import leaves as L
+from verity.protocols.pouw.verifier.coins import Challenger as Coins
+from verity.protocols.pouw.verifier.coins import CoinOpening, coin_reason
+from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.pouw.prover.schemes import pearl_c as C
+from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.spot.device import challenger as Ch
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import registration as R
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
 import served_commit as SC  # noqa: E402
@@ -167,7 +167,7 @@ def test_rows_are_the_schemes_operands(served):
     none of the call's kept rows."""
     scheme, ctx, noise, words = served
     assert words["a"][M] is None and all(w is not None for w in words["a"][:M] + words["b"])
-    from verity.core.protocols.pouw.protocol import Tile
+    from verity.protocols.pouw.verifier.protocol import Tile
     ops = scheme.encode(ctx, noise, _rows(1, M)[1:2], _rows(2, N)[3:4], Tile((1,), (3,)))
     assert words["a"][1] == L.words_fp8_p(ops.a.codes[0], ops.pa[0])
     assert words["b"][3] == L.words_fp8_p(ops.b.codes[0], ops.pb[0])
@@ -1298,7 +1298,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
         src = "resalt.json" if case == "resalted" else "manifest.json"
         assert SC.main(["coin-variant", f"{t}/{src}", f"{t}/coins.json", f"{t}/opening.json", f"{t}/coin-{case}.json", case]) == 0
     lean = tmp_path / "lean"
-    lean.write_text(f"#!{sys.executable}\nimport json, sys\nfrom verity.core.protocols.pouw.core_check import stream_subset\n"
+    lean.write_text(f"#!{sys.executable}\nimport json, sys\nfrom verity.protocols.pouw.verifier.core_check import stream_subset\n"
                     "a = sys.argv\np, k = int(a[a.index('--population') + 1]), int(a[a.index('--k') + 1])\n"
                     "w = (p.bit_length() + 64 + 7) // 8\nsrc = bytes.fromhex(a[a.index('--stream') + 1])\n"
                     "sys.exit(1) if len(src) != 2 * k * w + 64 else None\n"

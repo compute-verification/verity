@@ -1,0 +1,70 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity` and `verity_difftest`.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_binding.py",
+    "tests/test_drawn.py",
+    "tests/test_line.py",
+    "tests/test_p2.py",
+    "tests/test_p2_party.py",
+    "tests/test_pooled.py",
+    "tests/test_protocol.py",
+    "tests/test_registry.py",
+    "tests/test_replay.py",
+    "tests/test_schedule.py",
+    "tests/test_session.py",
+    "tests/test_units.py",
+]
+# The references: the audit, its codec, receipts and coins, the store binding, the memory line and its pooled bound, on
+# the commitments, the randomness and the profile; core's pin (models.json),
+# which the binding's test reads as a pin; the difftest's Python half; and what `lake` builds: this package and,
+# through its path requires, Flock's verifier's Lean, core's randomness, the difftest server and the core protocol
+# interface (`RemoteAudit.Protocol`, which `test_protocol.py` holds to the period hook, `period.py`). The schedule check
+# (`schedule.py`) is a reference too.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/hardware/record.py",
+          "verity/protocols/spot/verifier/profile.py", "verity/protocols/poub/verifier/__init__.py",
+          "verity/protocols/poub/verifier/audit.py", "verity/protocols/poub/verifier/codec.py",
+          "verity/protocols/poub/verifier/wire.py",
+          "verity/protocols/poub/verifier/coins.py", "verity/protocols/poub/verifier/receipts.py",
+          "verity/protocols/poub/verifier/store.py", "verity/protocols/poub/verifier/line.py",
+          "verity/protocols/poub/verifier/pooled.py", "verity/protocols/poub/verifier/schedule.py",
+          "verity/protocols/poub/verifier/period.py", "verity/protocols/interface",
+          "verity/protocols/pouw/verifier/lean/check/models.json",
+          "verity/claims/__init__.py",
+          "verity/protocols/spot/verifier/__init__.py", "verity/protocols/spot/device/challenger.py",
+          "verity/protocols/spot/device/remote.py", "verity/ml/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+          "verity/commitments/randomness", "verity/difftest/python",
+          "verity/protocols/flock/verifier/Flock", "verity/protocols/flock/verifier/lakefile.toml",
+          "verity/protocols/flock/verifier/lake-manifest.json", "verity/protocols/flock/verifier/lean-toolchain",
+          "verity/commitments/randomness", "verity/difftest/lean",
+          # the P2 store (`p2.py`, `RemoteAudit.P2`): PoUS's setup, P2 and vk, whose Lean leaf and path check
+          # (`pous/check`'s `PousCheck.Merkle`) `lake` builds; its sessions' party (`p2_party.py`), whose books
+          # test_p2.py holds to `RemoteAudit.P2Session` and whose sessions test_p2_party.py runs on the Lean of record
+          # (`p2_lean.py`), and their core case (`p2_case.py`), which test_p2_case.py holds to the session's answer and
+          # to PoUS's store; the configurations of pous_check's other requires, which `lake` reads to resolve them; and
+          # the committed C*, whose registration, openings and a session test_p2.py replays
+          "verity/protocols/poub/verifier/p2.py", "verity/protocols/poub/verifier/p2_party.py",
+          "verity/protocols/poub/verifier/p2_lean.py", "verity/protocols/poub/verifier/p2_case.py",
+          "verity/protocols/pous",
+          "verity/ml/protocols/__init__.py", "verity/protocols/pous/prover",
+          "verity/commitments/identity/lakefile.toml",
+          "verity/commitments/identity/lake-manifest.json", "verity/commitments/identity/lean-toolchain",
+          # the memory challenger's party, whose kept setup (`keep`) test_p2_party.py registers a store from
+          "verity/core/devices/__init__.py", "verity/protocols/pous/device/__init__.py",
+          "verity/protocols/pous/device/challenger_party.py",
+          "verity/protocols/pous/device/lean/lakefile.toml",
+          "verity/protocols/pous/device/lean/lake-manifest.json",
+          "verity/protocols/pous/device/lean/lean-toolchain", "verity/commitments/attest/lean/lakefile.toml",
+          "verity/commitments/attest/lean/lake-manifest.json", "verity/commitments/attest/lean/lean-toolchain",
+          "verity/commitments/lms/lean/lakefile.toml",
+          "verity/commitments/lms/lean/lake-manifest.json", "verity/commitments/lms/lean/lean-toolchain",
+          "verity/protocols/poub/verifier/tests/fixtures/p2-c-star.bin",
+          "verity/protocols/poub/verifier/tests/fixtures/p2-store.json",
+          # the deployment layer and its wire, which the period hook's verifier side is started through
+          # (`deploy.stream.Side`)
+          "verity/configuration/deploy", "verity/configuration/wire"]

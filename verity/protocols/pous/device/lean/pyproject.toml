@@ -1,0 +1,33 @@
+[project]
+name = "memory-challenger-lean"
+version = "0.0.0"
+description = "The differential tests of the memory challenger's and the streamed wipe's verdicts in Lean (this directory's Lake package) against verity.protocols.pous.device.memory_challenger and streamed_wipe; verdict.py, the Lean verdict behind memory_challenger.verdict's signature; and wipe_verdict.py, the streamed wipe's verdict decided by the Lean."
+requires-python = ">=3.12"
+dependencies = ["verity", "verity-difftest", "hypothesis>=6.100"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_attest.py",
+    "tests/test_formats.py",
+    "tests/test_protocol.py",
+    "tests/test_verdict.py",
+    "tests/test_wipe_protocol.py",
+    "tests/test_wipe_verdict.py",
+]
+# Test-only: `lake` builds this package and, through its path requires, C-Flock's verifier's Lean, core's randomness, LMS,
+# the auditor parties' period checks, the protocol interface and the difftest server; the sessions are signed by the PoUS
+# tests' test signer, read by path.
+inputs = ["verity/protocols/flock/verifier/Flock", "verity/protocols/flock/verifier/lakefile.toml",
+          "verity/protocols/flock/verifier/lake-manifest.json", "verity/protocols/flock/verifier/lean-toolchain",
+          "verity/commitments/randomness", "verity/commitments/lms/lean", "verity/commitments/attest/lean",
+          "verity/protocols/interface",
+          "verity/difftest/lean", "verity/protocols/pous/verifier/tests/pous_test_signer.py"]

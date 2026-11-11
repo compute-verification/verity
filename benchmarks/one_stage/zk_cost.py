@@ -72,9 +72,9 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, partition as P  # noqa: E402
-from verity.core.protocols.spot.optimize import SHA512_ANDS  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
+from verity.protocols.spot.optimize import SHA512_ANDS  # noqa: E402
 
 #: ANDs of the pieces of a unit with its rows' openings (benchmarks/sampling_plan's inputs: its pins, hm96 PROTOCOL §5)
 S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, SHA512_ANDS, 116_240
