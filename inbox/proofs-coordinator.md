@@ -39765,3 +39765,9 @@ A first launch, `r20261111-054025-965c`, I cancelled before it took a slot: its 
 Still out, read 05:46Z `[run]`: records `79af`, `c513` (#8512), `f230` (#8139), `7aba` (#8406), `1e61` (#8368); quick
 `76af` (#8139), `2ba5` (#8339), `e003` (#8406), `61dd` (#8414), `e5b6` (#8454), `cd1f` (#8368), `8e00` (#8553), `06c4`
 (#8226).
+
+## CROSS, Wed 11 Nov 05:52Z: correction to my 05:51Z entry: #8539's body had 6 old paths rewritten, not 53
+
+`[run]` I wrote "53 old paths rewritten" for #8539's body without counting. `bodymap.py` rewrote 6 distinct paths there
+(five under `Security/`, one under `integrations/vllm/`; 12 places in the text). #8527's 8 and #8517's 0 are as I wrote.
+Nothing else in that entry changes.
