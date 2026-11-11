@@ -78,3 +78,39 @@ FAILFORMS, NET-200. Tue 10 Nov 8:13 PM PT. **Head `1358bfbdd1b0`, pushed: the to
 6. For you and top [argued]: NET-293's own branch will likely cross with the same loss (its lock is 4,170,695 bytes before the merge of the move's base; the limit is 4,194,304). My branch now holds NET-293's commits crossed by my restack. Friction note `20261111T0409Z-friction-restack-clean-skips-big-lock`, synced. I changed nothing under `tools/`.
 7. Not looked at: `tools/move/` beyond the lines on locks and the limit; how drive treats a branch holding restack commits. State note synced; no PR, no mark.
 
+[2026-11-11T04:16Z] 35aa43663aea
+From CROSS (NET-311 job 4), Tue 10 Nov 8:16 PM PST, to your 8:14 PM. Read: I push nothing to #8405's branch and wait for its crossed head's id, then merge it into `5ce145013557` and compare trees. **Meanwhile: the evidence for #8499 and #8708, a ready head for #7109 that needs your word, the locks you asked for, and #8415's report.**
+
+**The locks** (`security/lean-audit.json`: bytes, lines with `Security/`; main 4,175,579 and 6) [run]:
+- #8690 `6cd3c7527f94`: 4,177,397 and 6. #8702 `f113af6d595f`: 4,177,397 and 6. #8459 does not change it.
+- #8499 `5ce145013557`: 4,178,289 and 6. #8708 `635b2f97027d`: 4,177,627 and 6.
+- **#7109 as the tool crossed it, `68d86350489e`: 4,206,183 and 333.** With the 11 test paths the first move rewrites, 344 lines hold pre-move text; 340 of them are entries that are not its own.
+
+**#7109: a ready head on my branch, not pushed to the pull request.** `cursor/net-cross-7109-a9af` at `dbf5daaa36e111cefc239b88f6b7715fd1c2f495`: the tool's result `68d86350489e` and one commit, the lock only, 344 lines.
+- The commit rewrites each path in the lock by the two moves' maps, read by the moves' own `layout.py` (`Layout.file`), then `Security/` to `security/`. **The rule is checked against the script itself** [run]: applied to main's lock before the first move it gives main's lock after the second, byte for byte (the script changed 340 lines, the rule the same 340).
+- After it [run]: the lock against main's is +499 −30, the branch's own change as before the crossing; 340 of the rewritten lines are main's own lines, 4 are the branch's frozen reasons; `guarantees` and `reads` are unchanged by the commit; the lock is 4,206,250 bytes with 6 lines of `Security/`.
+- The mend before the crossing, `fb8af76df2bf`, is a merge, not a rename: one file by hand, `tools/verity/check/public_boundary.toml`, as in my first message.
+- Evidence at `dbf5daaa36e1` [run]: `53f2a6bfd010`, the merge and `main` are its ancestors. Patch-id before, `git diff a930252c4993...fb8af76df2bf`: `79dcedec8b62…`; after, `git diff 5c095bb4ab70...dbf5daaa36e1`: `00e262cec09d…`. Files 25 and 25, all at their moved place with the same letter and line counts (+5332 −503 both). Added lines naming `Security/`, `verity/core/protocols/`, `integrations/`, `e2e_h200`: 0. `pins.py --stale`: exit 0.
+- **`public_equal.py fb8af76df2bf dbf5daaa36e1`: `public_equal: EQUAL: 0 became public, 0 became private`**, exit 0 (8,135 public before, 8,145 after: 8,131 carried, 4 dropped, 14 created) [run]. The same line at `68d86350489e`. `public_boundary.py` there: exit 0.
+- **Say "push" and I push `dbf5daaa36e1` to `cursor/net169-tally-061a` and launch its run.** If you want the tool fixed and the crossing run again instead, say that. I launch no run on it before your word.
+
+**#8499, the other lines** [run]:
+- `858eb03d0acd` and `main` are ancestors of `5ce145013557`. No mend.
+- Patch-id of the whole stack over `main`, before `git diff a930252c4993...858eb03d0acd`: `ba18dcc7d48c…`; after `git diff 5c095bb4ab70...5ce145013557`: `28ae24b34916…`. They differ as they must: the diff holds each file's path. Files 23 and 23, all at their moved place with the same letter; 22 with the same line counts. The 23rd is the lock (+54 −10, then +66 −22): the merge driver wrote 12 lines of main's at another position. Read as JSON the lock's change is the same 40 leaves with the same values.
+- Its own change over #8405: before `git diff ca7d59c951 858eb03d0a`, after against a dry crossing of #8405 of mine (`5edd99b0274d`, not pushed): 11 files, +358 −81 both.
+- Added lines naming a retired place: 1, `security/Proofs/NetworkCertifier/ResponseCap.lean:18`, a comment in #8405's file. The script never rewrites a `.lean` file (`[rewrite] exclude` holds `**/*.lean`) [read], which is also why job 3's finding 3 stayed.
+- The four Lean names on its added lines: 0 (its last merge with `main` is Mon 9 Nov 5:12 AM PST, before the rename). `pins.py --stale`: exit 0.
+- Over my dry crossing of #8405 landed `--no-ff`, it merges clean with its own tree `212bd1f43409`. Yours will have other ids; I compare trees when you name it.
+
+**#8708, the other lines** [run]:
+- `41a78d81cfe3` and `main` are ancestors of `635b2f97027d`. No mend.
+- Patch-id before `git diff a930252c4993...41a78d81cfe3`: `20c4f4110d2b…`; after `git diff 5c095bb4ab70...635b2f97027d`: `da29a1f92059…`. Files 46 and 46, all at their moved place with the same letter; 45 with the same line counts. The 46th is `verity/protocols/spot/verifier/tests/test_two_stage.py` (−4, then −3): the script splits an import line the branch changed, and the half main also has leaves the diff. Both imports resolve to files in the tree.
+- Added lines naming a retired place: 0. The four Lean names: 0. `pins.py --stale`: exit 0.
+
+**#8415, report only, nothing pushed** [run]:
+- A merge of `a930252c4993` into `720ef04b33` conflicts in **nothing**: `git merge-tree` exits 0. The break is not textual.
+- #8303 is on `main`: landed as `e2a3ba123e` on Tue 10 Nov 1:54 AM PST, its head `2335e8227659` an ancestor of `a930252c4993`.
+- In the merged tree `verity/ml/protocols/certifier/compile_slice_v6.py:120` imports `cache_step_v2`, and #8415 deletes `cache_step_v2.py`. The tool crosses the branch `clean` too (dry run, `4e72982d5156`), with the same import at `verity/protocols/certifier/prover/compile_slice_v6.py:121` and no `cache_step_v2.py`.
+
+**Runs**, both running at 8:14 PM PST, none failed: `r20261111-040706-0481` (#8499, 10 suites passed), `r20261111-040706-dcf5` (#8708, 9 passed). Not run on the VM: any test.
+
