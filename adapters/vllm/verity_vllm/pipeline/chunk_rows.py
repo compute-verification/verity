@@ -1,13 +1,13 @@
 """A chunked serving-rows template's units (`serving_rows.chunked`) on the bit rows Flock's `UnitStager` stages: their rows
-(`unit_rows`), table reads (`reads`) and statement (`statement`), why ``verify --zk`` refuses that statement's form
-(`zk_refusal`, a partition file's ``zk``), the most of them one flock-circuit statement holds
+(`unit_rows`), table reads (`reads`) and statement (`statement`), the most of them one flock-circuit statement holds
 (`chunk_cap`, a partition file's ``chunk_cap``), and a template's units read once cut into its chunks (`split`).  The window's
 chunks (`serving_rows.members`) are laid out by `unit_rows`, and the verifier's circuit
 (``benchmarks/one_stage/compose_circuit.py --template``) by `unit_rows` and `statement`.  Each function takes the template as
-`serving_rows.template` reads it."""
+`serving_rows.template` reads it.  `zk_refusal` is why ``verify --zk`` refuses a statement's form, and `zk_check` refuses a
+partition file whose ``zk`` says its window is for such sessions and that names a template of that form."""
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -130,6 +130,17 @@ def zk_refusal(tp: Any) -> str | None:
         fix = "no Boolean version of it is registered"
     return (f"{tp.id}: its statement reads {', '.join(tables)} in lookup slots and returns its outputs from a tail stage, a "
             f"form `verify --zk` refuses (`ProvedScope.scopeOkH`); {fix}")
+
+
+def zk_check(partition: Mapping[str, Any], tps: Iterable[Any]) -> None:
+    """A partition file's ``zk: true`` says its window is for ``verify --zk`` sessions: of the window's chunked templates
+    ``tps``, the first whose statement is a form ``--zk`` refuses (its table reads in lookup slots, `zk_refusal`) is refused
+    by name (ValueError), with the Boolean version to name in its place.  `serving_rows.population` calls it before any row
+    is read."""
+    if partition.get("zk"):
+        for tp in tps:
+            if (why := zk_refusal(tp)) is not None:
+                raise ValueError(f"a partition for --zk sessions names {why}")
 
 
 def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:

@@ -33,9 +33,7 @@ a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk, a ``CHAINS``
 whole ``PARTS`` part the file's ``chunk_cap`` names, its rows its Definition's own ports, `chunked`) are split
 into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes
 it; ``chunk_caps`` writes the entry), each chunk a member on Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
-``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).  ``zk: true`` says the
-window is for ``verify --zk`` sessions: a chunked template whose statement is a form ``--zk`` refuses (its table reads in lookup
-slots, `chunk_rows.zk_refusal`) is refused by name before any row is read, with the Boolean version to name in its place.
+``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``); ``zk`` is `chunk_rows.zk_check`'s.
 
 A template is read through its word link (:func:`template`): a Boolean Definition (the definition) names the word Definition it
 computes (`verity.circuits.boolean.trace.word_of`, held equal to it by circuit-check's word check), and a word Definition is its
@@ -414,8 +412,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
                reuse: Sequence[ProgramIndex] = (), transfer_gates: Sequence[str] = ()) -> tuple[CS.Binding, list[list[Row]]]:
     """The verifier's window over the run's Programs (``partition``: the partition file's ``templates``, ``law`` and ``scope``) and
     each template's rows; refused when the file names a ``partition_digest`` that is not the window's, or a ``query`` other than the
-    template queries, or says ``zk: true`` and names a template whose statement ``verify --zk`` refuses for its form
-    (`chunk_rows.zk_refusal`).  ``row_tables: true`` in the file: the ``ScaledMmS8Coordinate`` chunks in the row-table layout
+    template queries, or fails `chunk_rows.zk_check`.  ``row_tables: true`` in the file: the ``ScaledMmS8Coordinate`` chunks in the row-table layout
     (`with_row_tables`, its engine steps the requests' ``arrivals`` plus their steps), under ``context`` (hex: the live coin
     commitment's root serving committed its step roots under).  ``reuse``: `member_rows`'.  ``transfer_gates``: the registered
     compiler's transfer-gate templates, whose units a ``work:K`` window proves every one of (`work_table_of`)."""
@@ -428,10 +425,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
         raise ValueError(f"partition query {q!r}: the serving rows' window is the template instances' partition "
                          f"({' / '.join(TEMPLATE_QUERIES)}), never a word partition")
     caps = partition.get("chunk_cap") or {}
-    if partition.get("zk"):
-        for t in tmpls:
-            if chunked(t, caps) and (why := CR.zk_refusal(template(t))) is not None:
-                raise ValueError(f"a partition for --zk sessions names {why}")
+    CR.zk_check(partition, (template(t) for t in tmpls if chunked(t, caps)))
     scope = partition.get("scope") or {}
     rows, defs, counts = member_rows(programs, tmpls, scope.get("op_path_prefix"), program_dirs, index, scope.get("steps"), reuse)
     plan = EX.Plan(tmpls, rows)
