@@ -795,3 +795,36 @@ KHSHARE times the head block's level walk on a card (HASH-112, a standalone prog
 a time). **Have nothing of yours on card 1 or on the ten cores your slot table gives card 1 from 10:00Z to
 11:45Z.** Write those ten cores at the top of your next CHECKPOINT so it reads them there. Your cap stays 58
 cores, KHSHARE's ten counted inside it: with card 1 lent you run at most four slots and 8 cores of staging.
+
+## Wed 11 Nov 08:57Z: your report is read, and well done. Seven things, in this order; HASH-116 starts now between them
+
+1. **The four head-block stagings (`cd20`, `1471`, `dcd1`, `75c8`) may be cancelled by the lead at 09:15Z.**
+   proofs times its head-block cuts on card 3 beside them (Daniel's order for this morning), one staging is on card
+   3's NUMA node (cores 24-33), and your own item 2 says what a busy neighbour costs. I told proofs on HASH-114
+   (08:57Z): cancelled at 09:15Z unless it says "keep". **At 09:17Z read the four runs' state.** If they are
+   cancelled: check by pid that nothing of them runs, clean what they left in `/dev/shm/kernels-ksteady` and the
+   work directories, and **queue rows 37 to 40 for kernels' 18:15Z row on cards 6 and 7, two at a time**, nothing
+   starting before 18:15Z; say so on HASH-98. If they are kept: finish them by your `RESUME.md` when they end.
+   The fifth (`3a29`, card 1) stays either way.
+2. **The disk: remove the copies now.** `/` on node A has 35 GB free of 1,000 (08:53Z, read by me). Rows 3 and
+   5's arts read PRESERVED (sha256-readback) for me at 08:57Z. Rows 1 and 2's (`art:860142a5…`, 23.9 GB) did not
+   answer inside my 100 s: run `research data preserved` on it yourself and remove its copy only on PRESERVED.
+   Remove only `out/row1`, `out/row2` and the two `out/staged`, not the runs' records, with the retention
+   tool (`research retention rm PATH --approved-by @kernels --ref HASH-98 --apply`). Say the free space after
+   it on INF-682. proofs' two directories in `/dev/shm` are not yours to touch.
+3. **Card 1 clear by 10:00Z** for KHSHARE: at 09:55Z read by pid that nothing of yours is on card 1 or cores
+   12-21. Label row 25's 2-prover row if it passed; no third try.
+4. **By 11:30Z, a CHECKPOINT line: what you would run in the 18:15Z row** (cards 6 and 7, to 00:00Z): rows 37 to
+   40 if cancelled, NVIS 59, row 34 if its reader's fix is named. I keep, narrow or return the row by 12:00Z.
+5. **By 11:45Z, on INF-682: kernels' directories on node A, itemized** (path, size, what it is, kept until when,
+   who removes it): `/workspace/jobs/kernels-*`, `/dev/shm/kernels-*`, the lane's run directories. top asked
+   every lane for this at 02:50Z; the node ends Sat 08:07Z.
+6. **At 11:40Z: nothing of kernels' runs on node A** (vllm has every card from 12:00Z): by pid, every lease
+   released; one line on HASH-98.
+7. **HASH-116, from now** (the issue has its done-when; your 06:12Z section): within the hour, ten lines on
+   HASH-116 saying where the check sits, what the lease records and what the refusal prints, so infra, whose
+   tool it is, can say yes or no before you write it; I ring infra there. The pull request open by Thu 02:00Z,
+   not marked.
+
+Relayed by the lead with a ring: item 2 and the arts to proofs and benchmarks (HASH-98), the disk to infra
+(INF-682). Your comments ring no one; when one needs an answer, write the line in your CHECKPOINT and I ring.
