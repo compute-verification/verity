@@ -33,27 +33,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, Model, cap, leaf_chain,  # noqa: E402
                     observations, s8_coord_ands, serve_rows, tree_chain)
 
-<<<<<<< 99c8914848
-from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, pressure  # noqa: E402
-from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import (SHA512_ROWS, Candidate, TensorCommit, CostModel,  # noqa: E402
-                                                           Objective, ReplayDomain, for_budget, for_target, frontier,
-                                                           needs_benchmark, overlaps, perturb, structure, weigh)
-||||||| merged common ancestors
-from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, pressure  # noqa: E402
-from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
-                                                           ReplayDomain, for_budget, for_target, frontier,
-                                                           needs_benchmark, overlaps, perturb, row_ands, structure,
-                                                           weigh)
-=======
 from verity.core.protocols.spot.candidates import Shape, cuts, pressure  # noqa: E402
 from verity.core.protocols.spot.costfit import Fitted, fit  # noqa: E402
-from verity.core.protocols.spot.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
-                                                           ReplayGrain, for_budget, for_target, frontier,
-                                                           needs_benchmark, overlaps, perturb, row_ands, structure,
-                                                           weigh)
->>>>>>> 7af4d24fca3e
+from verity.core.protocols.spot.optimize import (SHA512_ROWS, Candidate, TensorCommit, CostModel,  # noqa: E402
+                                                           Objective, ReplayGrain, for_budget, for_target, frontier,
+                                                           needs_benchmark, overlaps, perturb, structure, weigh)
 
 DELTA = 2.0 ** -40
 CHUNKS = (2048, 1024, 512, 256, 128, 64, 32)
@@ -164,13 +148,7 @@ def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -
     return tuple(out)
 
 
-<<<<<<< 99c8914848
-def model(v: dict, fit_: Fitted, replay_units: int, *, commitments: tuple[TensorCommit, ...] = (), commit: float = 1.0,
-||||||| merged common ancestors
-def model(v: dict, fit_: Fitted, replay_units: int, *, commitments: tuple[Commitment, ...] = (), commit: float = 1.0,
-=======
-def model(v: dict, fit_: Fitted, requests: int, *, commitments: tuple[Commitment, ...] = (), commit: float = 1.0,
->>>>>>> 7af4d24fca3e
+def model(v: dict, fit_: Fitted, requests: int, *, commitments: tuple[TensorCommit, ...] = (), commit: float = 1.0,
           statement: float = 1.0) -> CostModel:
     """The fit with the commitment rate, the serve-time commitments and the `request` replay grain: each of the window's
     requests re-run whole, its `context` tokens at `tokens_per_s`."""

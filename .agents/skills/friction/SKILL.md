@@ -137,37 +137,11 @@ Keys and access:
 
 Landing:
 
-<<<<<<< 99c8914848
 - Lint ratchets are no-growth, and a change to a lint is judged like source; cleanup lanes pay the exceptions down and a
   feature PR owes none. `integrations/vllm/tools/ratchet_gate.py`'s docstring states the rules (the integration's ratchets
-  and `noqa` count, `tests/lint/`'s lists, each changed file's lint). Fix the code, never the list: a rename moves its
-  entries (`--move OLD NEW`), an environment read goes through the area's settings registry, and a swallowing handler
-  re-raises, records the outcome, or narrows.
-||||||| merged common ancestors
-- The vLLM integration's lint ratchets are no-growth: no change adds an
-  exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
-  cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).
-- A `# noqa` is an exception too: in `integrations/vllm`, no
-  change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
-  retirement. The ratchet gate counts them, with no allowlist.
-- Outside `integrations/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each PR's changed Python,
-  as drive lands on `checked` before the suites run: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
-  list may catch up to what its base's lint finds in its tree, no further. Ruff: the root `ruff.toml`, per (file, rule),
-  `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at
-  the PR's base). No new swallowing handler: re-raise, record, or test first.
-=======
-- The vLLM integration's lint ratchets are no-growth: no change adds an
-  exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
-  cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).
-- A `# noqa` is an exception too: in `integrations/vllm`, no
-  change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
-  retirement. The ratchet gate counts them, with no allowlist.
-- Outside `integrations/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each landing's changed Python
-  after it lands, ringing its owner, never reverting: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
-  list may catch up to what its base's lint finds in its tree, no further. Ruff: the root `ruff.toml`, per (file, rule),
-  `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at
-  the PR's base). No new swallowing handler: re-raise, record, or test first.
->>>>>>> 7af4d24fca3e
+  and `noqa` count, `tests/lint/`'s lists, each landing's changed Python, checked after it lands, ringing its owner,
+  never reverting). Fix the code, never the list: a rename moves its entries (`--move OLD NEW`), an environment read
+  goes through the area's settings registry, and a swallowing handler re-raises, records the outcome, or narrows.
 
 Protocols and claims:
 
@@ -185,15 +159,13 @@ Protocols and claims:
 - Network accounting is two things for each execution block. First, its consistency with the network certificates: its
   committed inputs and outputs are what they say crossed the wire, pass or fail, with no sampling requirement. Second,
   from the sampled proofs, its transfers' covert capacity, in three terms reported apart: side channels, the timing
-  channel (which the network certifier, as an active warden, mostly fixes) and what the sampled proofs fail to check;
+  channel (which the network certifier mostly fixes) and what the sampled proofs fail to check;
   at full sampling only the first two remain.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
   both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
 - `WitnessPathPrivate c` is the per-channel premise, beside the per-party and site premises. The imprint key is a key
-  class of its own: an onsite device's root, set over the cable once per device, then a SHA-512 ratchet. ML-KEM-1024
-  is the one-hash rule's exception for transport only: a cableless remote party's, its secret always XORed with a
-  SHA-512 one and never on pair links (`ind-cca/ml-kem-1024`).
+  class of its own: an onsite device's root, set over the cable once per device, then a SHA-512 ratchet.
 - θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
 - A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the
@@ -214,14 +186,8 @@ Protocols and claims:
   are for the whole node. PoUB treats the developer's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
-<<<<<<< 99c8914848
 - PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next. See `verity/core/protocols/pouw/README.md`.
-- PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
-||||||| merged common ancestors
-- PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
-=======
 - PoUW's guarantees, and only PoUW's, may rest on random-oracle assumptions for SHA-512
->>>>>>> 7af4d24fca3e
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.
 - The deployed recursion's bound record states its inner claim at IVStar at the weight
@@ -232,10 +198,7 @@ Protocols and claims:
 - A guarantee's checked family may fold in a check the compiled verifier already runs, or a new fail-closed
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
   decidable at any literal instantiation, discharged by computation at use, never a listed assumption.
-- Sampling is one design, two-stage in general: serving commits the replay blocks' boundaries, the first stage samples
-  replay blocks, the prover commits their interiors, and the second stage samples k proof blocks in each on fresh coins.
-  Harm is read at a replay block's footprint, the fewest incorrect proof blocks of any interior its boundary allows
-  (compute credit charges it whole). One-stage is the case where each replay block is one proof block.
+- Harm is read at a replay block's footprint (GLOSSARY.md, "Two-stage design"), and compute credit charges it whole.
 - The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
   checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts

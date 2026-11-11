@@ -7,13 +7,12 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from research.clone import RECORD_DRIVER
 
 from . import _ratchet as R
 from . import merge_allowlist as MA
 
 KEEP = R.ROOT / "tests" / "dead_code_keep.json"
-#: the driver as the merging clones register it (`tests/test_merge_drivers.py` holds their registration to this script)
-DRIVER = "python3 integrations/vllm/tests/lint/merge_allowlist.py %O %A %B %P"
 
 
 def _entry(file: str, count: int = 1) -> dict:
@@ -154,6 +153,8 @@ def test_git_merges_two_branches_that_each_retire_a_neighbouring_entry_with_the_
     assert _git(repo, "diff", "--name-only", "--diff-filter=U").stdout.split() == [
         "integrations/vllm/tests/lint/allowlists/p10_size.json"]
     _git(repo, "merge", "--abort")
-    _git(repo, "config", "merge.vllm-allowlist.driver", DRIVER)
+    for k, v in RECORD_DRIVER.items():
+        if k.startswith("merge.vllm-allowlist."):
+            _git(repo, "config", k, v)
     _git(repo, "merge", "--no-edit", "b")
     assert m.read_text() == MA.dump(_doc(A, D))

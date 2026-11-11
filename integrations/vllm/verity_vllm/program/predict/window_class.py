@@ -36,7 +36,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.core.protocols.pouw.schemes import SCHEMES
+from verity.ml.protocols.pouw.schemes import SCHEMES
 
 from verity_vllm.protocols.pouw.pearl_c import ROW_ALIGN
 from verity_vllm.protocols.pouw.pearl_c import window as PWR
