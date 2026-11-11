@@ -10,6 +10,7 @@ import hashlib
 import itertools
 import json
 import struct
+import sys
 import types
 from pathlib import Path
 from typing import Any
@@ -17,15 +18,31 @@ from typing import Any
 import numpy as np
 import pytest
 
+from tests.check.opened import commit_steps
+from tests.pipeline.test_config_run import _tp
+from tests.pipeline.test_row import TP_DENSE, _opts
+from verity_vllm.check import fp8_ue8m0 as FU
+from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.check.replay import driver as SR
 from verity_vllm.commit import step_rows
+from verity_vllm.commit import store_dump as SD
+from verity_vllm.config import UsageError
+from verity_vllm.engine import engine_profile, vllm_adapter
+from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
+from verity_vllm.pipeline import row_records as R_
 from verity_vllm.pipeline.research_outputs import KEPT_APART
+from verity_vllm.pipeline.row import run_row
+from verity_vllm.pipeline.row_driver import Stop
+from verity_vllm.pipeline.row_tp import TpRow
 from verity_vllm.pipeline.tp import c2 as C2
 from verity_vllm.pipeline.tp import commit as TC
 from verity_vllm.pipeline.tp import commit_replay as TPR
+from verity_vllm.pipeline.tp import lease
 from verity_vllm.pipeline.tp import rank_replay as RR
+from verity_vllm.pipeline.tp import rank_worker as W
 from verity_vllm.pipeline.tp import run_root as RT
 from verity_vllm.program.frontend import collective_kinds as CK
 
@@ -142,7 +159,6 @@ def test_a_ranks_deepgemm_linears_and_absorbed_kv_b_open_as_vllm_rewrites_them_a
     every registered tensor of the rank opens against the committed root; without the roles the four requantised fields differ from
     the checkpoint's words and the absorbed two have no checkpoint tensor (GLM-5.3 B1 TP8's rank 0: 978 and 156 of 2275)."""
     from tests.pipeline.test_cpu_replay import weights_tree
-    from verity_vllm.check import fp8_ue8m0 as FU
 
     G, NH, DN, DV, L, Q, rank = 128, 2, 128, 128, 256, 256, 1
     rng = np.random.default_rng(5)
@@ -306,8 +322,6 @@ def _seal_deferred(tmp_path):
     sealed (a real dumped store of one committed run, its binding map, its weights tree), `replay_deferred.json` naming them.  Every
     rank commits under rows-sha512 and the TP run root is its v2 form."""
     pytest.importorskip("torch")
-    from tests.check.opened import commit_steps
-    from verity_vllm.commit import store_dump as SD
 
     out = tmp_path / "commit"
     out.mkdir()
@@ -464,8 +478,6 @@ def stubbed(monkeypatch):
 
 
 def test_a_rank_replays_its_bundle_with_the_commits_seed_against_its_own_shards(deferred, stubbed):
-    from verity_vllm.check import oracle_compare as OC
-
     d = deferred
     o = TPR.Options(commit_out=str(d.out), checkpoint_dir="/ck", ranks="1")
     assert TPR.main(o) == 4, "rank 0 is still to replay"
@@ -547,8 +559,6 @@ def test_a_commit_that_deferred_nothing_is_refused(tmp_path):
 # ------------------------------------------------------------------------------------------------ the rank's process
 
 def _worker(tmp_path, cfg, bmap):
-    from verity_vllm.pipeline.tp import rank_worker as W
-
     class Stub:
         _tp2_commit: dict[str, Any]
         _deferred_replay = W.TP2CaptureWorkerExtension._deferred_replay
@@ -569,8 +579,6 @@ def _program(tmp_path, digest, rank=1):
 
 
 def test_a_rank_defers_its_replay_into_a_partial_bundle(tmp_path, monkeypatch):
-    from verity_vllm.check.replay import driver as SR
-
     out = tmp_path / "out"
     monkeypatch.setattr(SR, "ProgramIndex", lambda *a, **k: types.SimpleNamespace(rows=[], prefix=""))
 
@@ -607,9 +615,6 @@ def test_a_rank_without_a_binding_map_defers_nothing(tmp_path):
 # ------------------------------------------------------------------------------------------------ the row
 
 def test_a_tp_row_defers_its_replay_and_tp_commit_takes_the_flag(tmp_path):
-    from tests.pipeline.test_config_run import _tp
-    from verity_vllm.pipeline import cli
-
     for argv in ((), ("--config-run", "1")):
         t = _tp(tmp_path / str(len(argv)), *argv, "--replay-deferred", "1")
         cmd = t.commit_cmd([])
@@ -619,10 +624,6 @@ def test_a_tp_row_defers_its_replay_and_tp_commit_takes_the_flag(tmp_path):
 
 @pytest.mark.parametrize("world", [None, 8])
 def test_a_tp_row_refuses_a_slim_bundle_by_name(tmp_path, world):
-    from tests.pipeline.test_row import TP_DENSE, _opts
-    from verity_vllm.config import UsageError
-    from verity_vllm.pipeline.row import run_row
-
     o = _opts(tmp_path, "--replay-deferred", "slim", *(("--world", str(world)) if world else ()), row=TP_DENSE)
     with pytest.raises(UsageError, match="slim plan is a single-GPU"):
         run_row(o, o.stages)
@@ -630,10 +631,6 @@ def test_a_tp_row_refuses_a_slim_bundle_by_name(tmp_path, world):
 
 @pytest.mark.parametrize("rc_replay", [0, 3])
 def test_a_pending_tp_commit_waits_for_the_replay_stage_which_decides_it(tmp_path, monkeypatch, rc_replay):
-    from tests.pipeline.test_config_run import _tp
-    from verity_vllm.pipeline import row_records as R_
-    from verity_vllm.pipeline.row_driver import Stop
-
     t = _tp(tmp_path, "--config-run", "1", "--replay-deferred", "1")
     (Path(t.d) / "commit").mkdir()
     bundles: list[dict[str, Any]] = [{"pair": 0, "rank": r, "path": f"{t.d}/commit/replay_bundle_p0_rank{r}", "manifest_sha256": "ab" * 32}
@@ -677,12 +674,6 @@ def test_a_tp_commit_at_an_unproven_world_drops_the_deferral_before_it_takes_its
     the flag is gone by then, so no rank's finalize defers and nothing is sealed, and the Commit's log says why; worlds 2 and 8, where
     deferral is proven, still defer."""
     pytest.importorskip("torch")
-    import sys
-
-    from tests.pipeline.test_config_run import _tp
-    from verity_vllm.engine import engine_profile, vllm_adapter
-    from verity_vllm.pipeline import cli
-    from verity_vllm.pipeline.tp import lease
 
     t = _tp(tmp_path, "--config-run", "1", "--replay-deferred", "1")
     t.W = world
@@ -708,9 +699,6 @@ def test_a_tp_commit_at_an_unproven_world_drops_the_deferral_before_it_takes_its
 def test_a_tp_commit_that_replayed_in_process_at_an_unproven_world_leaves_the_replay_stage_nothing_to_do(tmp_path, monkeypatch):
     """World 4 under REPLAY_DEFERRED=1: the Commit is decided, not PENDING, and the dispatcher's `row stage replay` runs no CPU replay and
     does not fail (its world-2 control is `test_a_pending_tp_commit_waits_for_the_replay_stage_which_decides_it`)."""
-    from tests.pipeline.test_config_run import _tp
-    from verity_vllm.pipeline import row_records as R_
-
     t = _tp(tmp_path, "--config-run", "1", "--replay-deferred", "1")
     t.W = 4
     (Path(t.d) / "commit").mkdir()
@@ -736,12 +724,6 @@ def test_a_tp_commit_that_replayed_in_process_at_an_unproven_world_leaves_the_re
 
 
 def test_a_slim_bundle_at_an_unproven_world_is_not_refused_and_reaches_tp_commit_as_its_flag(tmp_path, monkeypatch):
-    from tests.pipeline.test_config_run import _tp
-    from tests.pipeline.test_row import TP_DENSE, _opts
-    from verity_vllm.pipeline import cli
-    from verity_vllm.pipeline.row import run_row
-    from verity_vllm.pipeline.row_tp import TpRow
-
     worlds = []
 
     def run(self):

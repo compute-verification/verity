@@ -2,19 +2,24 @@
 that is not the manifest's.  CPU only; the store dump itself is `tests/commit/test_store_dump.py`."""
 from __future__ import annotations
 
+import hashlib
 import json
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
+from tests.check.opened import commit_steps
 from tests.check.test_commit_verdict_hopper_no_evaluator_gap import (
     BASE,
     SR_HOPPER,
     _bnd,
 )
 from verity_vllm.check.commit_pass import commit_verdict
+from verity_vllm.check.replay import driver
+from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
+from verity_vllm.pipeline.timeline import Timeline
 
 DEFERRED, _ = RB.deferred_records(RB.path("/o", 1))
 
@@ -69,7 +74,6 @@ def test_a_sealed_bundle_opens_and_its_partial_is_gone(tmp_path):
 
 
 def test_a_digest_taken_as_the_file_was_written_is_the_manifest_s_and_is_checked_on_opening(tmp_path):
-    import hashlib
     p = RB.partial(tmp_path, 1)
     (p / "store" / "raw").mkdir(parents=True)
     (p / "store" / "raw" / "s0.bin").write_bytes(bytes(range(256)))
@@ -101,9 +105,7 @@ def _deferred(out, keys=None, **kw):
     """`defer` of a small committed store (under `keys`, another commit's step keys, when given), its write started beside the checks
     (`start`) unless `replay_bundle_overlap=0`; with the committer's step keys."""
     torch = pytest.importorskip("torch")
-    from tests.check.opened import commit_steps
     from tests.commit.test_store_dump import STEPS
-    from verity_vllm.pipeline.timeline import Timeline
 
     com, rc = commit_steps(STEPS, row_keys=keys)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
@@ -129,10 +131,7 @@ def test_the_bundle_reads_the_models_tensors_and_the_engines_facts_before_start_
     """A leased Commit gives its GPU back right after `start` (`gpu_lease.release`): nothing the bundle carries is read from the
     model or the engine after it returns."""
     torch = pytest.importorskip("torch")
-    from tests.check.opened import commit_steps
     from tests.commit.test_store_dump import STEPS
-    from verity_vllm.check.replay import driver
-    from verity_vllm.pipeline.timeline import Timeline
 
     com, rc = commit_steps(STEPS)
     com.model = torch.nn.Module()
@@ -156,7 +155,6 @@ def test_the_bundle_reads_the_models_tensors_and_the_engines_facts_before_start_
                                 {"replay_bundle_cap_gb": 0}])
 def test_the_store_is_written_beside_the_checks_only_where_defer_writes_it_in_full(kw):
     pytest.importorskip("torch")
-    from tests.check.opened import commit_steps
     from tests.commit.test_store_dump import STEPS
 
     com, rc = commit_steps(STEPS)
@@ -167,8 +165,6 @@ def test_the_store_is_written_beside_the_checks_only_where_defer_writes_it_in_fu
 def test_serving_rows_defer_in_full_and_a_slim_bundle_with_them_is_refused_by_name():
     """A full deferral takes ``--serving-rows`` (its C2 site commits the window, `c2_replay.serving_rows`), and the bundle's CPU
     replay commits none over it; a slim one, whose plan would commit the window and seal every unit it reads, is refused."""
-    from verity_vllm.pipeline import cpu_replay as CPU
-
     def args(**kw):
         return SimpleNamespace(**{"replay_deferred": "full", "program_dir": "/p", "programs_root": None, "arms": None, "only_arm": None,
                                   "compiled_taps": "off", "vu_export_dir": None,

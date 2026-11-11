@@ -110,9 +110,6 @@ def test_experiment_index_separates_records(tmp_path: Path):
 def test_realized_consistency_names_the_phase_that_ignored_the_arrivals(tmp_path):
     """Spec §5 of the campaign runner: the same spec digest does not prove every phase honoured the arrivals; the check compares each
     phase's own realized record with the capture's and names the phase + request that differ."""
-    import json
-
-    from verity_vllm.pipeline import experiment as EXP
     run = tmp_path / "run"
     (run / "capture").mkdir(parents=True)
     (run / "control").mkdir()
@@ -171,9 +168,6 @@ def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_g
     EXPORT.json with the shipped commit): the first pod records carried code null.  Now: EXPORT.json's commit first
     (code_source 'EXPORT.json', the dirty-patch digest named when present), git HEAD in a git tree, null only when neither exists.
     The git tree's git is a stand-in (`experiment.code_version`'s own git is the tests above)."""
-    import subprocess
-
-    import verity_vllm.pipeline.experiment as EX
     root = os.path.abspath(os.path.join(os.path.dirname(WR.__file__), "..", ".."))
     exp = os.path.join(root, "EXPORT.json")
     if os.path.exists(exp):
@@ -182,7 +176,7 @@ def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_g
     def git(cmd, **kw):
         assert cmd[0] == "git", cmd
         return subprocess.CompletedProcess(cmd, 0, stdout="d" * 40 + "\n" if cmd[1] == "rev-parse" else "", stderr="")
-    monkeypatch.setattr(EX.subprocess, "run", git)
+    monkeypatch.setattr(EXP.subprocess, "run", git)
     dv = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
     assert dv["code"] == "d" * 40 and dv["code_source"] == "git"
     try:
