@@ -36455,3 +36455,110 @@ Per monitoring period [derived]:
 **Sources** [read]: `origin/main` `a930252c49`; SCALE's branch at `db65e96678`; SCALE's note `20261111T0120Z-finding-bind100-scale` (its section 1 is the PRF-533 final); EXTFORM's note `20261111T0131Z-finding-extform-w-count`; the mailbox's entries to 01:52Z; ATTACK's 02:09Z entry above this one, read after my answers were drafted, which agrees on items 1 to 4 and adds the coin's cap, `p_ref` and the period. SCALE has no entry in `inbox/proofs-coordinator.md` at `af71ac0c26`. My two scripts, `kt.py` (`main`'s rule on the card) and `figures.py` (the cells), and their outputs are in this run's artifacts, and item 5 says enough to rerun them [derived]. Nothing here needed Lean, so no run was launched [derived].
 
 **For Daniel** [derived; quotable as it stands]: The targeted-rerun argument holds, though neither it nor its count is in Lean yet: SPOT's binding miss in one audit is at most `4K*T*(1 + d*e_s)/2^256`, where `K` is the committed bits that audit's sample opens, provided the reruns keep refused second stages. At `T = 2^80` this reaches `2^-100` whenever one sample opens at most `2^35.3` bits, which holds for the one-block run of record (`2^20` bits) and for a 154- to 167-block GLM-5.3 sample (`2^24.7` to `2^25.6`), but not for the 10^5 to 10^6 blocks that `main`'s own design rule gives B and A under the served-output cap (`2^37` to `2^40` bits), which also overflow the challenger's `2^20`-byte coin. Even at that coin's limit of about 58,000 blocks the worst corner misses by half a bit an audit, and if `2^80` is allowed in every run, a week to a year of 10-minute runs costs 10 to 16 bits more, so the design must fix the sample size and every number must name it.
+
+### TWOPROVE, Wed 11 Nov 02:13Z: #8781 opened (PRF-517 part 1), C5's module for KILIAN, R3.4 written and in two tries, route 3's records running
+
+ready to mark #8781 at 1081b1f735c72ebd9c7ca4c219073ca6faa95e09
+
+**1. Part 1 (PRF-517): [#8781](https://github.com/compute-verification/verity/pull/8781)**
+
+- [run] I opened it with `research queue open --head cursor/proofs-bconf-cost-5987 --sha 1081b1f735c72ebd9c7ca4c219073ca6faa95e09 --title … --body-file … --issue PRF-517 --by proofs`. `gh pr view 8781` reads OPEN, MERGEABLE, no labels, head `1081b1f735c72ebd9c7ca4c219073ca6faa95e09`. Its body starts `Lane proofs` / `Goal proofs/spot-bind-term` and lists the lock records it changes.
+- [run] `open` warned twice, verbatim:
+  - "no label of it names a live goal of the Goals page (its labels: from:proofs)";
+  - "the body's `Goal proofs/spot-bind-term` names a goal no label of PRF-517 names".
+  PRF-517 needs that goal's label, and I can't write Linear.
+- [run] **The regenerated record** is `Security/lean-audit.json`, committed as `1081b1f735`. It is the records run `r20261111-000350-0c4d`'s `lean-audit/record/Security/lean-audit.json` (sha256 `9f024fd4affa673104bd20b74d095ca9bec08927077780f0603696a402fea3da`), copied unedited. It changed for two reasons:
+  - the three guarantees I had listed by hand with owners only got their statements, premises and hashes: `compilerKSRegAt`, `Compiled.KSRegAt_fails` and `compilerKSRegAt_nontrivial`;
+  - `reads` of `Definitions.Claims.SamplingGeneric` gained the five new definitions' hashes, and the module's digest changed.
+  Compared leaf by leaf, 0 leaves were removed, 1 changed (that digest) and 27 were added. No existing statement or premise changed.
+- [read: the record] `compilerKSRegAt`'s premises are domain `Claims.Sampling.CommitmentScheme.Binds`, and open `Claims.ExpectedCR`, `Arg.KS`, `Compiled.OpenCallsLe`, `Compiled.Scope` and `Compiled.Sessions`. The two witnesses' premises are open `Claims.ExpectedCR` and `Compiled.Scope`.
+- [run] Its checks:
+  - the try `r20261110-232734-0713` at `be19220288`: lean exit 0 in 720 s, siblings clean, and only the three standard axioms;
+  - the records run `0c4d`: rc 0, res ok;
+  - the quick tier `r20261111-015011-9852` (vy-nebius-cpu-1) at `1081b1f735`: "8 suites: 8 passed (0 cached), 0 failed".
+  Only the lock has changed since the try.
+- [run] One bookkeeping item warns. The retired-terms lint counts five new uses of the existing field `stage2` in `Efficient.lean` and one prose "caps" in the Definitions file. R3.4's branch rewords the "caps".
+
+**2. What another branch can import from part 1** [read at `1081b1f735`; every module is `@[expose] public section`]
+
+C5 is in module `Proofs.Flock.SamplingGeneric.RegAt` (the new file `Security/Proofs/Flock/SamplingGeneric/RegAt.lean`), in namespace `Claims.SamplingGeneric.Compiled`. It has two declarations:
+- `runCostAt`, a def at line 61;
+- `runCostAt_exp`, at line 68:
+  `theorem runCostAt_exp {H} {L : Compiled Coin A} (hS : L.CostContract H) (hopen : L.OpenCallsLe H) (T : ℕ) {x} {s} (hs : L.parse x = some s) {Ω} (P : Prover Ω) (ω : Ω) : Ex (fun rc => L.runCostAt H T x s P ω rc) ≤ L.nPU x * L.openCalls x + T * (L.nSess x * L.es x)`.
+  `hS` comes from `Compiled.Sessions.toCostContract`, which is already on `main`.
+
+The rest of part 1, by module:
+
+| Module | Declarations (line) |
+|---|---|
+| `Proofs.Flock.SamplingGeneric.RegAt` | `Claims.SamplingGeneric.Ex_two_runs` (27); in `Compiled`: `BconfAt_pr` (46), `bconfCost_nonneg` (53), `BconfAt_cost_le` (81), `BconfAt_cost_strict` (102, C6), `ksRegAt_of_ksReg` (119); `Claims.SamplingGeneric.compilerKSRegAt_of` (137) |
+| `Definitions.Claims.SamplingGeneric` | in `Compiled`: `BconfAt` (618), `bconfCost` (646), `εregAt` (652), `KSRegAt` (677); `CompilerKSRegAt` (918) |
+| `Proofs.Flock.SamplingGeneric.Efficient` | `Compiled.slot_exp_le_un` (683), `Compiled.runExt_runs_exp` (782); `slot_exp_le` (759) with its statement unchanged |
+| `Proofs.Flock.SamplingGeneric` | `Claims.SamplingGeneric.compilerKSRegAt` (135) |
+| `Proofs.Flock.Claims.Witnesses.SamplingGenericKSRegAt` | `Compiled.KSRegAt_fails`, `compilerKSRegAt_nontrivial` and the `sksL_*` lemmas |
+
+Two constraints on importing them:
+- [read: AGENTS.md, Lean] `RegAt` and `Efficient` are in the proofs tree, so no Definitions or Properties module may import them. KILIAN's bridge has to sit under `Proofs/`.
+- Until #8781 lands, a branch gets them by merging `cursor/proofs-bconf-cost-5987` at `1081b1f735`. I won't force-push it. The module names survive the layout move (section 3), so the imports are the same before and after it.
+
+**3. The layout move** [run: `git fetch -q origin cursor/top-layout-staged-6581` reads `178f49c90c89734ea185f01496a7b6fbbd90b88c`]
+
+- It renames every file #8781 touches (R100) and `Security/lean-audit.json` (R099) into `security/`.
+- [read] Lean module names don't change. `security/lakefile.toml` keeps the lib `Definitions`, and the moved `Efficient.lean` still imports `Proofs.Flock.…`.
+- If #8781 isn't admitted before the move lands (about 03:45Z), I'll replay the branch with `python3 tools/move/restack.py cursor/proofs-bconf-cost-5987 --push-to <new branch> --kept` on a node through `research run`. Then I'll rerun the Lean check of what it touches and name the new head.
+- [guess] The move's `layout.py` carries the branch's added files (`RegAt.lean` and the witnesses file) into `security/`.
+
+**4. Route 3 (`cursor/proofs-capped-extractor-acc7` at `ad3db50852`)**
+
+- [run] The try `r20261111-005526-bfcf` (vy-nebius-cpu-2) passed:
+  - `ZkExtend`: lean exit 0 in 1,162 s. Its 15 theorems use only the three standard axioms, among them `zk_KS_untrim_at` (both the Gen and root forms) and `zk_oneWait_untrim`.
+  - `Numbers`: lean exit 0 in 17 s, 10 theorems, among them `κ_le_sum_cap`.
+  - The build of `KS.lean` and `Masked.lean`: exit 0 in 1,455 s.
+- [run] Its records run `r20261111-015243-3500` (vy-nebius-cpu-7) was still running at 02:10Z: 22.8 GiB now, 27.6 GiB at peak. [guess] It ends at 02:40–03:00Z. Then I commit any record, naming it and why, and stop here if a statement or premise changed. After that come the quick tier and the PR.
+- [run] Bookkeeping: route 3 adds 16 uses of "cap"/"Cap" to `DeployCode.lean` (7), `Numbers.lean` (6) and `TrimBridge.lean` (3). They mean `E^rep`'s truncation, the existing field `Deploy.cap`, but the lint reads them as the retired PoUW word. They warn. I'm keeping route 3's names as tried and listing the warnings in its PR body.
+
+**5. Route 3's terms at the swarm's 01:39Z sizes** [run: `/tmp/r2m/route3_numbers.py`, the formulas of my 01:13Z entry, with `Q = N`]
+
+The columns are ecr, capped (`StrictBirthday`, R3.4) and S1, as log₂ of each binding term at T = 2^80 and 210 waits, with K₀ chosen to minimise each. The terms read no m.
+- At B, N is 2^59.0 low and 2^59.8 high, and n_PU = 2^36.4. At A, N is 2^69.9 to 2^70.7, and n_PU = 2^47.3.
+- K₀ is given at N low.
+- The plan of record's instance is n_sess = n_PU. The rows at n_sess = 30 and 1 need a new instance (one session is a template).
+
+| point, k, n_sess | N low: ecr / capped / S1 | N high: ecr / capped / S1 | K₀ (capped, S1) |
+|---|---|---|---|
+| B, 1507, n_PU | −0.2 / −28.9 / −39.3 | 0.6 / −28.5 / −38.8 | 2^41.5, 2^52.5 |
+| B, 1507, 30 | −15.9 / −44.7 / −60.3 | −15.1 / −44.3 / −59.8 | 2^57.2, 2^73.5 |
+| B, 1507, 1 | −18.4 / −47.1 / −63.6 | −17.6 / −46.7 / −63.0 | 2^59.6, 2^76.7 |
+| B, 12,343,986, n_PU | 6.3 / −22.4 / −30.6 | 7.1 / −22.0 / −30.1 | 2^48.0, 2^56.8 |
+| B, 12,343,986, 30 | −9.4 / −38.2 / −51.6 | −8.6 / −37.8 / −51.1 | 2^63.7, 2^77.8 |
+| B, 12,343,986, 1 | −11.9 / −40.6 / −54.9 | −11.1 / −40.2 / −54.4 | 2^66.2, 2^81.0 |
+| A, 1507, n_PU | 16.2 / −18.0 / −24.8 | 17.0 / −17.6 / −24.2 | 2^30.6, 2^37.9 |
+| A, 1507, 30 | −5.0 / −39.2 / −53.0 | −4.2 / −38.8 / −52.5 | 2^51.8, 2^66.2 |
+| A, 1507, 1 | −7.5 / −41.7 / −56.3 | −6.7 / −41.3 / −55.8 | 2^54.2, 2^69.5 |
+| A, 12,343,986, n_PU | 22.7 / −11.5 / −16.1 | 23.5 / −11.1 / −15.6 | 2^37.0, 2^42.2 |
+| A, 12,343,986, 30 | 1.5 / −32.7 / −44.4 | 2.3 / −32.3 / −43.8 | 2^58.2, 2^70.5 |
+| A, 12,343,986, 1 | −1.0 / −35.2 / −47.6 | −0.2 / −34.8 / −47.1 | 2^60.7, 2^73.8 |
+
+- At the plan's instance at B with k = 1507, R3.4's term is 2^−28.9 to 2^−28.5, S1's is 2^−39.3 to 2^−38.8, and ecr says nothing. R3.4 is a theorem only once its tries pass (section 6), and S1 isn't written yet.
+- At A, ecr says nothing at n_sess = n_PU. Nothing reaches 2^−100.
+- [read] These are the theorem's terms evaluated at the quoted sizes; the arithmetic is computed, not proved.
+
+**6. R3.4 (`cursor/proofs-bind-strict-aa8f`, pushed; cut from `1081b1f735`, merging route 3's `ad3db50852`)**
+
+- [run] The generic part is commit `37404ff90b`:
+  - definitions: `Compiled.bconfCostStrict`, which is q_T = 2T(1 + n_sess·ρ_s) + 2·n_PU·openCalls; `Compiled.εregSB`, which reads Pr[B_conf] at q_T²/2^513; `Compiled.KSRegAtSB`, which is `KSRegAt` with `StrictBirthday` at `BconfAt T` in place of `ExpectedCR`; and `CompilerKSRegAtSB`;
+  - proofs: `Compiled.ksRegAtSB_of_ksReg`, `compilerKSRegAtSB_of` and `compilerKSRegAtSB`;
+  - witnesses at `sksL` at T = 0: `Compiled.KSRegAtSB_fails` and `compilerKSRegAtSB_nontrivial`;
+  - lock entries by hand, as part 1 had them: `claims.generic`, `claims.witnesses`, `witnesses`, and three `guarantees` with owners only.
+- [run] The instance is commit `ca25f11624`, the new file `Security/Proofs/Flock/SamplingGeneric/MaskedTrunc.lean`:
+  - `SamplingDeploy.deployTrunc K₀ c` is `deployOf` at `deployZkAt K₀`, with `innerCap := fun _ => K₀`, and `compiledTrunc` is the compiled verifier over it;
+  - `ρs_compiledTrunc_le` proves ρ_s ≤ 1 + `Numbers.waits`·K₀, where `Numbers.waits` is 210 [read: `DeployEfficient.lean:28`];
+  - `sessions_compiledTrunc` carries the deployed record's runs, scope and openings over, since `SessionRuns` and `SessionOpens` don't read the truncation;
+  - `ksRegAtSB_maskedTrunc (hK₀ : 0 < K₀) … : (compiledTrunc K₀ c iroots).KSRegAtSB sha512` takes what `ksReg_masked` takes, plus `RevealsLe c`.
+- No locked statement changes. [run: no match in the lock] The lock doesn't list `ksReg_masked`, and it doesn't list the instance either.
+- [run] Two tries are in flight:
+  - `r20261111-020114-a7de` (vy-nebius-cpu-1) at `37404ff90b`: the try of the witnesses file, then the build of `SamplingGeneric.lean` and `Witnesses.lean`. [guess] It ends at 02:35–02:50Z.
+  - `r20261111-021047-b33e` (vy-nebius-cpu-3) at `ca25f11624`: the try of `MaskedTrunc.lean`. [guess] It ends at 02:50–03:15Z, longer if `ZkExtend` builds from scratch (1,162 s).
+- Its due date stays Fri 13 Nov 18:00Z. Its PR comes after #8781 and route 3, and it needs the move's replay if it lands after the move.
+
+**7. Next:** route 3's records, then its commit, quick tier and PR; R3.4's two tries, then its records. If the move lands first, I replay #8781 at 03:45Z. S1 and part 2 are unchanged from 01:13Z.
