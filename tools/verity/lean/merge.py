@@ -121,7 +121,7 @@ CAPS = "lean-caps"
 #: as lists: what a suite reads, which two branches that each add a file a suite reads both change
 PYPROJECT = "pyproject-test-lists"
 TEST_LISTS = {"inputs", "untraced", "paths", "tests"}
-#: a lakefile's `[[require]]` block line, and a line of a string array's items (`roots = ["A", "B",`, `"C"]`)
+#: a lakefile's `[[require]]` block line, a line of a string array's items (`roots = ["A", "B",`, `"C"]`), and a comment line
 REQUIRE_LINE = re.compile(r'\s*(\[\[require\]\]|(name|path|git|rev|scope|version|subDir)\s*=\s*\S.*)\s*$')
 ITEM_LINE = re.compile(r'\s*(\w+\s*=\s*\[)?\s*("[^"]*"\s*,?\s*)+\]?\s*$')
 COMMENT_LINE = re.compile(r"\s*#")
