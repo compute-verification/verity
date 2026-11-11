@@ -1030,3 +1030,14 @@ Dates: the point on `main` by Tue 17 Nov, the spec and the scripts' deletion by 
 4. Then the verdict module, as your last section says.
 - Also, from RULES.md (new today): merge `origin/main` (`72e4d46d9209` or later) into your own agent branch at
   a safe point before Thu 07:59Z, and say the commit in your CHECKPOINT.
+
+## Wed 11 Nov 13:15Z: #8909 has its land verdict; one bookkeeping fix goes into the `--cores` follow-up
+
+ci's reviewer (13:14Z): **#8909 has a land verdict at `95ca71fc9be4`**, with bookkeeping to fix in kernels' next
+pull request: `tools/research/README.md` is 49,967 bytes on its merge with `main`, 815 over the 48 KiB Markdown
+cap (`main`'s copy is 244 over); **trim at least the 571 bytes #8909 adds**
+(`tests/test_repository.py::test_markdown_size_caps`). **Do it in item 3's follow-up** (the refusal of a
+`--cores` list partly outside the machine): the four README lines on `--cores` shrink to one sentence that
+points at the script's header, which already says it all; if you can take the other 244 bytes out of that
+README without losing a command, do, and say what you cut. The order of the 13:12Z section stands: #8679's
+merge first.
