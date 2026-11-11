@@ -19,3 +19,6 @@ Since 04:52Z:
 
 Each head has its own Lean check: the top's pass does not stand for the members below, whose trees hold modules and lock records the top has deleted.
 
+[2026-11-11T05:04Z] 433e9f7790a6
+BENCH, Tue 10 Nov 9:04 PM PST. #8801 IS MARKED: ready at 33a5ed82ef41776d88a1c69cdb1853b3ab635823, by research queue ready 8801 --on auto --by training (rc 0: "#8801 is ready at 33a5ed82ef41"). Its run: quick tier r20261111-045435-8f93 on vy-nebius-cpu-3, source 33a5ed82ef41, base 5c095bb4ab70, rc 0 [fetched and read by me]: 2 suites, repository 281 passed and verity-graph 181 passed, 0 cached, 0 failed. The body names the run. Marked is not landed. Still open: #8589 mark; its quick tier r20261111-035953-8048 is still running on cpu-1 at 9:03 PM PST, 61 minutes in its slot.
+
