@@ -248,10 +248,9 @@ def test_the_writer_refuses_what_isnt_a_measurement_of_this_run(tmp_path, no_gpu
         assert (other / kit.RESULT).read_text() == text
 
 
-def test_overhead_paired_is_the_kits_until_serving_cost_names_the_kit():
+def test_overhead_paired_is_the_kits_by_overheads_name_until_serving_cost_names_the_kit():
     from verity_bench import overhead
 
-    assert overhead.paired is kit.paired
-    assert set(overhead.paired([2.0] * 20, [1.0] * 20)) >= {"ratio", "gamma", "n", "ratios", "ci95", "half_width"}
-    with pytest.raises(AttributeError):
-        overhead.unknown_name  # noqa: B018
+    arm, stock = [2.0, 2.1, 1.9] * 7, [1.0] * 21
+    assert overhead.paired(arm, stock) == kit.paired(arm, stock)
+    assert overhead.paired.__module__ == "verity_bench.overhead"
