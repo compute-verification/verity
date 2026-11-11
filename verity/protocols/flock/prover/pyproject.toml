@@ -69,6 +69,7 @@ untraced = [
     "tests/test_ring_switch.py",
     "tests/test_sha512_leaves.py",
     "tests/test_stage_typed.py",
+    "tests/test_stream_zk_server.py",
     "tests/test_typed_statement.py",
     "tests/test_witness_host.py", "tests/test_zc_round1.py", "tests/test_zerocheck_fused.py",
 ]
@@ -136,6 +137,19 @@ tests = ["tests/test_challenger_audit.py"]
 # `lake build sampled-proofs-difftest`: its package and those it requires by path
 paths = [
     "verity/commitments/lms/lean",
+    "verity/protocols/interface",
+    "verity/protocols/flock/verifier",
+    "verity/protocols/spot/verifier/lean",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_stream_zk_server.py"]
+# the challenger each verifier is on (`pod/challenger.sh` starts it), and `lake build` of its Lean and its audit's
+# (sampled-proofs-verifier, sampled-proofs-difftest) and of flock-verify and flock-firewall: their packages and those
+# they require by path
+paths = [
+    "verity/commitments/lms/lean",
+    "verity/composite/device/live_challenger",
     "verity/protocols/interface",
     "verity/protocols/flock/verifier",
     "verity/protocols/spot/verifier/lean",
