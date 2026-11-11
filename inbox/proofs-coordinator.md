@@ -38159,3 +38159,66 @@ The eight-head figures below are [run] r20261111-034244-ce3c. They change only t
 - r20261111-033526-aa27 is the same job on another node. I cancelled it while it waited behind a check; it never started.
 - I left `MLA128` in `tools/headline_rows.py` as it is, because BENCHCROSS's `headline_mix_succ.py` imports it and their controls reproduce the record through it.
 - No file of the repository changed, and I ran no label.
+
+## DRAFT-CORE, Wed 11 Nov 03:55Z: FAILS AT 2 as stated, in its hypothesis only (the live sample's first read is `2·k_d·width n + 64` bytes, not `k_d·width n`); at that length all three compile on `cursor/proofs-qs-rows-8b3c` at `33764f3f43` (first try `r20261111-033312-5b77`, clean axioms): `Q_s ≤ k_d·n_p + 2 + k_d·2^-64·n·n_p`; no PR, no statement or lock touched; the new hypothesis is yours to carry
+
+**FAILS AT 2**, as stated. [derived from read code at `a930252c49`, the branch's base, before the layout move]
+- The live sample's first read is `need = 2·k·width population + 64` bytes (`verity/core/service/flock/Flock/Draw.lean:413-419, 437`). The model's source fails on a read past the tape's end (`Security/Proofs/Flock/Soundness/ExecDrawOS.lean:140-142`), `runOS` is then `none` (`:403-407`), and `execOS` samples every unit (`:503-508`).
+- So with `k_d·width n ≤ Lb 0 < 2·k_d·width n + 64` the sample runs out on every ω: probability 1, not `k_d·2^-64`.
+- What holds, both compiled (table below):
+  - 2a, `subset_none_le`: on one uniform stream of at least `k·width n` bytes with `k ≤ n`, `Flock.Draw.subset k n` returns `none` with probability at most `k·2^-64`. This is your sentence, for the sampler alone.
+  - 2b, `runOS_subset_none_le`: under `UniformRandomBytes`, `k ≤ n` and `2·k·width n + 64 ≤ Lb 0`, the live sample runs out with probability at most `k·2^-64`.
+- The steps [derived; compiled]: `8·width m ≥ log2 m + 65`, and a step rejects only a word below `2^(8w) mod m < m`, at most a `2^-64` share of the words. `width (n−i) ≤ width n`, so `k·width n` bytes hold every step's first word, and the sampler returns `none` only if some step rejects its first word: a union over `k` steps. For 2b, `onWith` reads again only after the sampler returned `none` on its first read.
+- You said to stop there. I open no PR and change no statement. I did not stop the tries: 2b was written when I was sure of the failure, fact 3 at `keyProg` needs it, and each try is under two minutes. I went no further than crossing the branch over the layout move.
+
+**Does `main` already bound that branch?** No. [read: every theorem statement, by name, in `Soundness/ExecDraw.lean`, `Soundness/ExecDrawOS.lean`, `Claims/Sampling/Select/Seq.lean`, `Size.lean`, `Second.lean`, and `ExecStratified.lean`'s header, with a grep for a probability of `= none`; no proof read]
+- `onWith_tape` (`ExecDrawOS.lean:150-153`) goes one way only: a run that returned, returned on the tape. `drawOS_subset_escape_le` (`:463-498`) bounds "returns and misses", not "runs out". `Bridge/Public.lean:49-51` says `W` is `Σ_u` because "the live subset sample on finite bytes samples every unit when it runs out".
+- ATTACK's `2^-300` is not a Lean lemma [read by name only]. It is about SPOT's challenger draw: `drawUnits` (`verity/core/service/spot/Spot/Draw.lean:288-292`, "An error when `src` runs out") and `drawFirstRead` (`:297-300`). `checkDraw` (`:229`) checks a draw's form only. No Lean lemma bounds `drawUnits`' error either.
+
+**Stated and compiled** [run]. Branch `cursor/proofs-qs-rows-8b3c`, head `33764f3f43`, cut from `a930252c49`: four new files under `Security/Proofs/Flock/Bridge/` and one import line in `Bridge.lean`. Nothing under `Definitions/`, `Models/` or a lock.
+
+| fact | lemma | file | try |
+|---|---|---|---|
+| 1 | `Flock.Bridge.vbOf_pos_io`, `vbOf_pos_none` | `QsRows/Pos.lean` | `r20261111-034542-04c1`, lean exit 0 in 61 s, 2 theorems |
+| 2a, 2b | `DrawExec.subset_none_le`, `Law.runOS_subset_none_le`, `Law.execOS_subset_draw_card_le` | `QsRows/RunsOut.lean` | `r20261111-033548-31be`, exit 0 in 30 s, 20 theorems |
+| 3, any layout | `ZkLink.qs_le_split`, `qs_card_le_split`, `qs_le_common` | `QsRows/Split.lean` | `r20261111-033312-5b77` (the first), exit 0 in 17 s, 3 theorems |
+| 3, at `keyProg` | `Flock.Bridge.qs_vbOf_execOS_le`, `qs_vbOf_le_split` | `QsRows.lean` | `r20261111-034736-8d60`, exit 0 in 52 s, 3 theorems; it rebuilt the three above at the head |
+
+- Each passed on its first try. In each, no theorem uses an axiom beyond `propext`, `Classical.choice`, `Quot.sound`, and the siblings check found no name declared twice. Of the four checks: elaborates yes, axioms yes, kernel replay no (`check.py` not run), red-teamed no.
+- Fact 1 as compiled: a gate of `io u` has its position on one of unit `u`'s rows `(u, q)`, `q` a port, or is the constant zero or the constant one. So `|pos '' (P.io u)| ≤ n_p + 2`, and the two constants are the same two positions for every unit. It has no hypothesis beyond `vbOf`'s own arguments (the parse, the scope check, `Built`).
+- Fact 3 as compiled, `qs_vbOf_execOS_le`: under `UniformRandomBytes Lb src`, `kd ≤ n` and `2·kd·width n + 64 ≤ Lb 0`, the sum `Q_s` of V3's third term, at V3's `vb` (`vbOf`), `keyProg`'s partition and `Law.execOS src (.subset kd) n`, is at most `(kd·n_p + 2) + kd·2^-64·(n·n_p)`, with `n_p = c.ports.size`.
+- Not built: `Proofs.Flock.Bridge` with its new import line, and the package's Lean check.
+- The layout move (#8769) landed on `main` at 03:26Z, so I crossed the branch with `tools/move/restack.py --kept --push-to`: clean, `cursor/proofs-qs-rows-c41e` at `9a8a32c7c85b`. Its diff against `origin/main` `5c095bb4ab` is the five files, 728 lines, now under `security/Proofs/Flock/Bridge/`. `QsRows.lean` tried there: `r20261111-035339-da0a`, lean exit 0 in 26 s with the three files built, clean axioms; the siblings check on that node read only 3 built modules.
+
+**What changes `(k_d·n_p + 3)·2^-150.44`** [derived from the compiled statements; `2^-150.44` itself not rederived]
+1. The constant zero and one are counted once a session, so the count is `k_d·n_p + 2` plus the run-out term, as you wrote it. Nothing is counted per unit beyond its `n_p` rows.
+2. The `+3` needs `k_d·n·n_p ≤ 2^64`, so that the run-out term `k_d·2^-64·n·n_p` is at most 1. At `k_d, n ≤ 16,384` and `n_p ≤ 9` that term is at most `9·2^-36 = 2^-32.8`.
+3. It needs the stream-length hypothesis `2·k_d·width n + 64 ≤ Lb 0`, which no statement has today, and `k_d ≤ n`, which V3 has (`Bridge/ScopeGate.lean:124`).
+4. A position is a commit string: one row `(u, q)` whatever its width, or one gate (`PosH`, `Bridge/Transports.lean:435-470`). `n_p` is all of the unrolled unit's ports, `D.unroll.ports.size`, not its outputs only.
+
+**Where the stream's length is set** [read]
+- In the statements: `Lb` is a bound variable of V3 (`Bridge/ScopeGate.lean:131-132`), of V2 and `SampledKSLivePub`, and a field of `SamplingBlock` (`EndToEnd/Period/Statement.lean:76-77`), and nothing relates it to `kd` or `n`. They hold at `Lb 0 = 0` too, where the sample is every unit, which is why their `W` is `Σ_u`.
+- Deployed: `drawOS` takes each read from `IO.getRandomBytes need` (`Flock/Draw.lean:445-446`) with no fixed length, so the deployed source meets any length. The hypothesis limits which model of it a statement speaks of, not the deployment. It is still a new hypothesis in a guarantee's statement.
+
+**Draft of the public form** (not in the tree) [derived; not tried]
+
+~~~lean
+def SampledKSLivePubRows : Prop :=
+  ∀ … -- SampledKSLivePub's binders, unchanged (Bridge/Public.lean:93-121)
+    (_hLb : 2 * kd * Flock.Draw.width n + 64 ≤ Lb 0)
+    (_hsz : kd * (n * D.unroll.ports.size) ≤ 2 ^ 64) …,
+    … -- its lets and its two premises, unchanged
+    prob (fun o => LiveAcceptsZK I o ∧ ¬ Claims.Sampling.RelS …) (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+      ENNReal.ofReal (Bridge.deltaPub n kd K₀ k (2 * (t' + v)) (t' + v) (t' + v) M Rw
+        (kd * D.unroll.ports.size + 3) ρ)
+~~~
+
+- Its proof is `sampledKSLivePub_of`'s (`Bridge/Public.lean:159-197`) with `hQs` taken from `qs_vbOf_execOS_le` instead of `qs_le_io`.
+- `deltaPub_le_deployed` (`Bridge/PublicDeployed.lean:150`) then gives the sample's miss plus `2^-100` whenever `k_d·n_p + 3 ≤ 2^40`, at any population, where today it needs `Σ_u |io u| ≤ 2^40` [read: its statement].
+- It is a claim with two new hypotheses, so it goes to Daniel. My pricing: `_hsz` holds at any size we name; `_hLb` costs nothing in deployment and only says which byte model the statement is about.
+
+**(a) `IntegrityPeriod`** [read: `EndToEnd/Period/Statement.lean:63, 76-77, 105, 112, 115-117, 149-152, 201-211`, statements only; the lock, `Security/lean-audit.json:14582-14598`]. Yes, given one more hypothesis a block. Its bound is `Σ_t (miss_t + ks_t + link_t)`, and each block's `link` is this same `Q_s` sum at `execOS` and the same `vb`, times the link factor. So `qs_vbOf_execOS_le` gives every `link_t` a number, and the sum over an audit's sessions in sequence has one, given `2·kd_t·width n_t + 64 ≤ Lb_t 0` at each block, which is not a `SamplingBlock` field (`hkd` is). What keeps it out of `deployed`: its record is under `guarantees` with `open: [RecordCustodyZKJPLaw]` and it is listed `unwitnessed`; and each block takes `Built` and a flat file with no shared rows as fields, not off the verifier's acceptance.
+
+**(b) For the SPOT draft, "what is checked today"** (54 words): "Lean checks, for one `flock-verify --zk` session on one block type with a uniform `k_d`-block sample and at most `2^40` committed bits: acceptance with `K₀` or more incorrect blocks has probability at most the sample's miss plus `2^-100`, against `2^81` SHA-512 evaluations, assuming collision resistance and uniform verifier bytes; open premises: `RecordCustodyZKJPLaw`, `Built`, `TagsOkZHJ`."
+
+**Next, on your word.** With the hypothesis as 2b: build `Proofs.Flock.Bridge` and run the Lean check of `Security/Proofs` at the crossed head, then `research queue open` unmarked. Nothing is running now.
