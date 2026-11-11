@@ -955,24 +955,24 @@ def runMembers (ms : Array Member) (sts : Array StatementFiles) (want : Array Na
     | true => provedHeld r.proved want
     | false => pure ()) >>= fun _ => pure r
 
-/-- **The bytes a closing round's digest is of**: the number of `parts` in an 8-byte little-endian word, then each
-part's length in such a word and its bytes. `evidenceParts` reads the parts back, so the digest fixes each part's
-bytes, not a digest of them. -/
+/-- **The bytes a closing round's digest is of**: the number of `parts` in an 8-byte big-endian word, then each
+part's length in such a word and its bytes, as a frame holds its parts (`Flock.FV3.input`). `evidenceParts` reads the
+parts back, so the digest fixes each part's bytes, not a digest of them. -/
 def evidenceBytes (parts : Array ByteArray) : ByteArray :=
-  parts.foldl (fun acc p => acc ++ Flock.le64 p.size.toUInt64 ++ p) (Flock.le64 parts.size.toUInt64)
+  parts.foldl (fun acc p => acc ++ Flock.be64 p.size.toUInt64 ++ p) (Flock.be64 parts.size.toUInt64)
 
 /-- `n` parts of `b` from offset `o` to its end, each an 8-byte length and its bytes; none where `b` is not that. -/
 def partsFrom (b : ByteArray) : Nat → Nat → Option (List ByteArray)
   | 0, o => if o == b.size then some [] else none
   | n + 1, o =>
     if o + 8 ≤ b.size then
-      let stop := o + 8 + (Flock.u64OfLE b o).toNat
+      let stop := o + 8 + Flock.Draw.beNat b o 8
       if stop ≤ b.size then (partsFrom b n stop).map (b.extract (o + 8) stop :: ·) else none
     else none
 
 /-- **The decoder of `evidenceBytes`**: the parts `b` holds, none where `b` is not some parts' bytes. -/
 def evidenceParts (b : ByteArray) : Option (Array ByteArray) :=
-  if 8 ≤ b.size then (partsFrom b (Flock.u64OfLE b 0).toNat 8).map (·.toArray) else none
+  if 8 ≤ b.size then (partsFrom b (Flock.Draw.beNat b 0 8) 8).map (·.toArray) else none
 
 /-- The refusal of a session's evidence `evidenceBytes` can't hold. -/
 def EVIDENCE_FITS : String :=
@@ -1260,7 +1260,7 @@ private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [
   "the units the sessions proved are not the evidence's proved_units"
 #guard (whyT (runMembers membersT #[statementT "m2"] #[] ⟨#[]⟩)).startsWith "member m2: circuit: "
 
-#guard Flock.hexOf (evidenceBytes #["ab".toUTF8]) == "0100000000000000" ++ "0200000000000000" ++ "6162"
+#guard Flock.hexOf (evidenceBytes #["ab".toUTF8]) == "0000000000000001" ++ "0000000000000002" ++ "6162"
 #guard (evidenceParts (evidenceBytes #["ab".toUTF8, .empty, "c".toUTF8])).map (·.map Flock.hexOf) ==
   some #["6162", "", "63"]
 #guard (evidenceParts (evidenceBytes #[])).map (·.size) == some 0
