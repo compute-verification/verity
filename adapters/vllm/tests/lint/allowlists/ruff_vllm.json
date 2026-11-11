@@ -1766,7 +1766,6 @@
     {"file": "verity_vllm/commit/memory_map.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/commit/memory_map.py", "kind": "SIM300", "symbol": "_cached", "detail": "Yoda condition detected"},
     {"file": "verity_vllm/commit/merkle.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/commit/partition.py", "kind": "T201", "symbol": "require_partition", "detail": "`print` found"},
     {"file": "verity_vllm/commit/row_tables_device.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/commit/row_tables_device.py", "kind": "UP033", "symbol": "<module>", "detail": "Use `@functools.cache` instead of `@functools.lru_cache(maxsize=None)`"},
     {"file": "verity_vllm/correspondence/capture_identities.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},

@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import ctypes
 import errno
+import mmap
 import os
+import sys
 import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -73,8 +75,6 @@ def _populate(ranges: list[tuple[int, int]], threads: int, times: dict[str, floa
 
 def _shared_map(nbytes: int) -> tuple[Any, Any]:
     """A fresh MAP_SHARED|MAP_ANONYMOUS mapping of the page-rounded size and its uint8 view (see `_pinned_block` for why shared)."""
-    import mmap
-
     import torch
 
     mm = mmap.mmap(-1, _page_round(nbytes), flags=mmap.MAP_SHARED | mmap.MAP_ANONYMOUS)
@@ -218,8 +218,6 @@ class PinnedPool:
         self._ready = []
         self._returned.clear()
         self.deferred_unmaps = 0
-        import sys
-
         for o in owners:
             if hasattr(o, "close"):
                 # torch.frombuffer holds ONE reference to the mmap object from the tensor's storage (every view shares it) and no buffer

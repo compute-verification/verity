@@ -48,6 +48,7 @@ PROTOCOL SUMMARY (Commit phase: the execution extent check (`executed_prefix`) -
 """
 from __future__ import annotations
 
+import inspect
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -213,7 +214,6 @@ def executed_prefix_facts(epr: dict[str, Any], binding: CommitBinding | Mapping[
 def facts_accepted_by(fn, facts: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """The facts a consumer's signature accepts (keyword-only parameters): a tree whose `executed_prefix_of_record` predates `served=` /
     `eos_ids=` still receives the arithmetic's facts; a newer one receives the served list too.  Never a TypeError."""
-    import inspect
     params = inspect.signature(fn).parameters
     if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
         return facts

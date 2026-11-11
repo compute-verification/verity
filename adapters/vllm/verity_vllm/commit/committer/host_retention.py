@@ -3,11 +3,12 @@ value families excluded (`--retain-exclude`), byte ranges of its stream (`_HostR
 
 from __future__ import annotations
 
+import bisect
 from typing import Any
 
 import torch
 
-from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES
+from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, value_family
 from verity_vllm.commit.committer.plan_cache import PlanMetas
 
 
@@ -93,7 +94,6 @@ class _HostRanges:
 
     def _cover(self, lo: int, hi: int) -> list[tuple[int, int, Any]] | None:
         """The consecutive retained ranges covering [lo, hi) with no gap, or None."""
-        import bisect
         i = bisect.bisect_right(self._lows, lo) - 1
         if i < 0:
             return None
@@ -155,7 +155,6 @@ def _excluded_chunk_ranges(metas: list, exclude: set[str], chunk: int = GPU_CHUN
     """The chunk-aligned INTERIOR [lo, hi) of every tensor of an excluded value family in step-stream order (merged when adjacent): the
     bytes retain=host + exclude does not copy off the staging window.  Boundary chunks shared with a neighbouring tensor are retained
     (the neighbour opens from host); a tensor shorter than one chunk contributes nothing."""
-    from verity_vllm.commit.committer.native_host import value_family
     out: list[tuple[int, int, str]] = []
     spans = zip(metas.names, metas.offsets, metas.sizes) if isinstance(metas, PlanMetas) else (   # name, byte offset in the step stream, nbytes
         (m.name, int(m.dev_off) if int(getattr(m, "dev_off", -1)) >= 0 else int(m.stream_off), int(m.nbytes)) for m in metas)
