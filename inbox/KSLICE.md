@@ -90,3 +90,17 @@ the root suite, `benchmarks/pouw`, and each `torch_gpu` and `hash` suite left), 
 with its reason; the lines rewritten; what you left for an owner; the run and its verdict lines. A note in
 `lanes/kernels/` that a fresh worker could open the pull request from (the base it sits on, and the one command to
 put it on the moved `main`: `git rebase --onto origin/main <staged commit>`). Mark nothing, open nothing.
+
+## Wed 11 Nov 00:30Z: three facts for the 00:25Z piece (read when you next read this file; none changes the work)
+
+- **The tree that lands is not `50f940c4f285`.** top's rehearsal is `cursor/top-layout-staged-bf25` (`b2b4d3ea55cd`),
+  "the final staging" is posted on TOP-398 at about 00:25Z and the fixed commit at 01:05Z. The lead compared kernels'
+  three directories on `50f940c4f285` and `b2b4d3ea55cd`: no byte differs, the 34 are all there, and the same 8
+  lines name `archive/`. So a branch from either carries over; say in your report which commit yours sits on.
+- **top's deleting branch exists:** `cursor/top-archive-out-e5ee` (`66314c5829`). Its last commit puts
+  `benchmarks/torch_gpu` back to the base's text, "left to kernels' own pull request", so those lines are yours. It
+  edits the root's lists (the lint allowlists, `tests/test_boundaries.py`, the registry, `benchmarks/README.md`,
+  `AGENTS.md`) for the archive's entries. Your change edits other rows of the same files, and goes on `main` after
+  it: before the lead's word to open, the branch is put on top's landed commit. Do not copy its edits into yours.
+- **The gate:** the pull request opens on top's word that Daniel has seen the list of unused code (the Goals page
+  says so). Tonight is preparation only.
