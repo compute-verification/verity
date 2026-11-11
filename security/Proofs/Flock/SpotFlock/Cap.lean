@@ -223,10 +223,10 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
     rw [← hr'] at hacc
     obtain ⟨as, has, hne⟩ := run_acc_coins H P ((base h).atOrder (order h)).V x ω r' (h.stage + 2) (Nat.succ_pos _)
       (fun as cs hl h3 => next_short h H x as cs hl h3) hacc
-    have hcl : ((List.range (h.stage + 2)).map (coinSeq r')).length = as.length := by
+    have hcsl : ((List.range (h.stage + 2)).map (coinSeq r')).length = as.length := by
       rw [List.length_map, List.length_range, has]
     change ((next h x as ((List.range (h.stage + 2)).map (coinSeq r'))).eval H).1 ≠ .rej at hne
-    rw [next_stmt h x hcl has] at hne
+    rw [next_stmt h x hcsl has] at hne
     have hg0 : ((List.range (h.stage + 2)).map (coinSeq r')).getD 0 default = coinSeq r' 0 := by
       rw [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range (show 0 < h.stage + 2 by omega)]
       rfl
