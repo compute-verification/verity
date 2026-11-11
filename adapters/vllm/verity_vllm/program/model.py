@@ -525,7 +525,7 @@ def _inv_freq(C: dict[str, Any]) -> np.ndarray:
     # 198 words of the captured table (positions t with t * inv_freq_k near a zero of cos / sin).
     exps = (np.arange(0, D, 2, dtype=np.float32) * (np.float32(1.0) / np.float32(D))).astype(np.float32)
     inv = (np.float32(1.0) / np.power(base, exps, dtype=np.float32)).astype(np.float32)
-    rs = C.get("rope_scaling") or {}
+    rs = C.get("rope_scaling")
     rtype = (rs.get("rope_type") or rs.get("type") or "").lower() if isinstance(rs, dict) else ""
     if rtype == "llama3":
         # vLLM Llama3RotaryEmbedding._compute_inv_freq (fp32): blend between inv_freq and inv_freq / factor by wavelength
