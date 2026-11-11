@@ -392,6 +392,33 @@ def classes(spans: Sequence[Span]) -> dict[tuple[int, int], list[Span]]:
     return out
 
 
+#: the most instances of the check template the replay blocks one serve keeps hold in all, and the most counts of spans
+#: one of them keeps its program for (`_built`)
+KEEP, COUNTS = 1 << 12, 64
+
+
+def _built(layout: Layout, kept: dict[int, tuple[SpecializedDefinition, dict[int, tuple]]]) -> Layout:
+    """``layout`` holding the parts of it that read no run, from ``kept`` where an earlier layout built them: its replay
+    block, which reads its class through ``n_rho`` alone, by ``n_rho``; and its program, grain and partition, by that and
+    its count of spans. So only the run and what binds it (each value's domain) are a window's own. ``kept`` is one
+    serve's, whose layouts differ in class, spans and run alone. It holds the replay blocks used last whose instances
+    sum to `KEEP` at most, the least recently used leaving first, and for each its programs at the `COUNTS` counts of
+    spans used last; a replay block of more than `KEEP` instances is built for its layout alone."""
+    if layout.n_rho > KEEP:
+        return layout
+    replay, counts = kept.pop(layout.n_rho, None) or (layout.replay, {})
+    kept[layout.n_rho] = replay, counts
+    while sum(kept) > KEEP:
+        del kept[next(iter(kept))]
+    vars(layout)["replay"] = replay
+    parts = counts.pop(layout.spans, None) or (layout.program, layout.grain, layout.partition)
+    counts[layout.spans] = parts
+    while len(counts) > COUNTS:
+        del counts[next(iter(counts))]
+    vars(layout).update(zip(("program", "grain", "partition"), parts))
+    return layout
+
+
 #: vLLM's RequestStatus names (past ``finished_``) for a `FINISH` name; its FinishReason names are `FINISH`'s own
 _STATUS = {"stopped": "stop", "length_capped": "length", "aborted": "abort"}
 
@@ -494,12 +521,13 @@ class BoundaryWindows:
         self.thread.join()
 
     def _run(self) -> None:
+        kept: dict = {}
         while (job := self.jobs.get()) is not None:
             window, opened, closed, carried, spans = job
             for (p, o), mine in classes(spans).items():
                 try:
-                    layout = Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
-                                    run_root(self.serve, window), self.inline)
+                    layout = _built(Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
+                                           run_root(self.serve, window), self.inline), kept)
                     c = commit(mine, layout, window)
                     write(c, self.out / f"w{window}" / f"p{p}-o{o}")
                     line = {**c.public(), "serve": self.serve, "open_s": opened, "close_s": closed, "carried": carried}
