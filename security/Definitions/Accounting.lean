@@ -86,9 +86,9 @@ The lock's `deployed` guarantees for the area, the bandwidth audit's and PoUB's,
 * `Accounting.Guarantees.Remote.SketchBoundDeployed` (`Definitions.Accounting.Guarantees.RemoteSketch`): the sketch
   bound at the deployed receipts.
 * `Bandwidth.Guarantees.AuditRO` (`Definitions.Accounting.Guarantees.Bandwidth`): the bandwidth audit in the
-  random-oracle model. It is the bandwidth audit's row in `Security/README.md`.
+  random-oracle model. It is the bandwidth audit's row in `security/README.md`.
 * `Properties.RemoteAudit.Line.LineHeld` (`Properties.Accounting.Remote.Line`): the memory line of record,
-  link-charged. It is PoUB's row in `Security/README.md`.
+  link-charged. It is PoUB's row in `security/README.md`.
 
 The area's other guarantees are `Accounting.Guarantees.X`, stated in the module named under
 `Definitions.Accounting.Guarantees` and proved under `Proofs.Accounting`:
@@ -146,12 +146,12 @@ This module imports the area's definitions; the lock's `layers` lists what they 
 
 ## Where to look
 
-* Guarantees: `Security/Definitions/Accounting/Guarantees.lean` and `Guarantees/`. Premises:
-  `Security/Definitions/Accounting/Assumptions/`.
-* Properties of the code: `Security/Properties/Accounting/`. Proofs: `Security/Proofs/Accounting.lean` and
-  `Security/Proofs/Accounting/`.
-* Locks: `Security/lean-audit.json` (the guarantees) and `Security/Properties/lean-audit.json` (the properties).
-* Which of these statements protocol soundness rests on: `Security/README.md`.
+* Guarantees: `security/Definitions/Accounting/Guarantees.lean` and `Guarantees/`. Premises:
+  `security/Definitions/Accounting/Assumptions/`.
+* Properties of the code: `security/Properties/Accounting/`. Proofs: `security/Proofs/Accounting.lean` and
+  `security/Proofs/Accounting/`.
+* Locks: `security/lean-audit.json` (the guarantees) and `security/Properties/lean-audit.json` (the properties).
+* Which of these statements protocol soundness rests on: `security/README.md`.
 -/
 
 @[expose] public section

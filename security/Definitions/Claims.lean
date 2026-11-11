@@ -17,7 +17,7 @@ stated over Core's interaction model (`Definitions.Core.Interaction`, with the s
 
 * `Flock.Guarantees.SampledKSLiveV3` (`Proofs.Flock.Bridge.ScopeGate`): the live verifier accepts a statement outside
   the sampling compiler's relation `Claims.Sampling.RelS` (`Definitions.Claims.Sampling`) only with bounded
-  probability. It is SPOT's row in `Security/README.md`.
+  probability. It is SPOT's row in `security/README.md`.
 * `Flock.Guarantees.SampledKSLiveV5` (`Proofs.Flock.Bridge.V5.Statement`): the same at the verifier's public inputs,
   under the sampling design. Both are in the lock's `deployed`.
 * `Flock.Guarantees.ClaimsStated` (`Definitions.Flock.Guarantees.Claims`) reads every claim here but `Flock.ZK`, and
@@ -54,10 +54,10 @@ Names here are relative to the namespace `Claims`; Flock's claims are under `Cla
   at the encoded length of the word it decodes (`Flock.wordLen`); `Flock.Efficient` bounds them.
 * Nontriviality (`Flock.Nontrivial`) is a test's to establish, not a Lean proof's, since Lean's kernel can't evaluate
   SHA-512 over real proofs. `check`'s `lean-agreement` job (`tools/verity/check/ci.toml`) holds the compiled
-  verifier's checks on recorded honest sessions to upstream's verdicts (`verity/ml/flock/verifier/agree.py`).
+  verifier's checks on recorded honest sessions to upstream's verdicts (`verity/protocols/flock/agreement/agree.py`).
 
 The module is Mathlib only, as `Definitions/` is, so every claim is parametric in the deployed verifier, its parser and
-the hash. Binding them to the compiled verifier (`verity/core/service/flock/`) is the code side's.
+the hash. Binding them to the compiled verifier (`verity/protocols/flock/verifier/`) is the code side's.
 
 ## Submodules
 

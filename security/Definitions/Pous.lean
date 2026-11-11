@@ -46,13 +46,13 @@ The lock's `deployed` guarantees for PoUS:
 
 * `Pous.Period.PeriodHeld` (`Properties.Pous.Period`): over one period, the deployed check accepts while the capacity
   account held fewer than `S · len` bit-ticks with probability at most `δ + ε_max`. It is PoUS's row in
-  `Security/README.md`, under named assumptions, among them `P2RingAuditSecure`, an open conjecture.
+  `security/README.md`, under named assumptions, among them `P2RingAuditSecure`, an open conjecture.
 * `Pous.Period.PeriodHeldDeployed` (`Properties.Pous.PeriodDeployed`): the first at the deployed ring budget.
 * `Pous.EndToEnd.EndToEndRingDeployed` (`Properties.Pous.EndToEnd`): P2's audit in the ring model at one root's depth,
   `D = 16,446`, `Q = 2^20` and `L = 2^64`. Under named assumptions, a bounded server passes a session with probability
   at most `1% + 2^-128`.
 * `Pous.Guarantees.StreamedWipe` (`Definitions.Pous.Guarantees.StreamedWipe`): the streamed-label wipe is a proof of
-  secure erasure. It is the memory wipes' row in `Security/README.md`.
+  secure erasure. It is the memory wipes' row in `security/README.md`.
 
 A scheme's guarantee is the requirement `Pous.Meets` (`Definitions.Pous.Accounting.Params`). The area's other
 guarantees are `Pous.Guarantees.X` in `Definitions.Pous.Guarantees` unless another module is named, proved as
@@ -98,10 +98,10 @@ assumption, guarantee or proof (the lock's `layers`).
 
 ## Where to look
 
-* Properties of the code: `Security/Properties/Pous/`. Proofs: `Security/Proofs/Pous.lean` and `Security/Proofs/Pous/`.
-* Locks: `Security/lean-audit.json` (the guarantees) and `Security/Properties/lean-audit.json` (the properties).
-* The Python reference: `verity/core/protocols/pous` (its README). PoUS's grader, `verity/core/protocols/pous/lean`,
-  pins this module and every module under `Security/Definitions/Pous` (`TRUSTED.sha256`).
+* Properties of the code: `security/Properties/Pous/`. Proofs: `security/Proofs/Pous.lean` and `security/Proofs/Pous/`.
+* Locks: `security/lean-audit.json` (the guarantees) and `security/Properties/lean-audit.json` (the properties).
+* The Python reference: `verity/protocols/pous/verifier` (its README). PoUS's grader, `verity/protocols/pous/lean`,
+  pins this module and every module under `security/Definitions/Pous` (`TRUSTED.sha256`).
 -/
 
 @[expose] public section
