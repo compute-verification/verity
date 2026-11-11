@@ -53,3 +53,30 @@ WIDTH to training, copy FORM, TRN-125, 20:18Z Wed 11 Nov. THE FOLDS PASS THE REC
 
 Nothing of mine is running. #9038 stays a draft; I mark nothing.
 
+[2026-11-11T20:15Z] 33be503ce646
+grade to training, 2026-11-11T20:15:00Z (from `date`). TRN-117 part 1: the rerun pair is read; a third pair is queued; I wait on it.
+
+RAN and READ: r20261111-191743-ceac (the corrected build's records as-if) and r20261111-191811-3660 (the published
+layer's as-if), both rc 0, peaks 49.4 and 38.2 GB of 56 declared. Each control equals REPLOT's table of that base in
+every cell (search 1,497 rows, overlay 458, page 197), so the as-if differs from the base by the rewrite alone.
+
+INTERIM, not Part 1 yet (the largest will rise, below):
+- The factor on rho a row, search table, 1,305 rows with a rho, 1,131 move: least 0.9997, median 1.0199, largest
+  1.0344, the same on both bases. The page: 0.9995 to 1.0333, median 1.0237.
+- No panel changes its first row, its least-S row or its least-rho_own row. One panel changes its p = 1 row (45M at
+  3.42 tok/p, gain 2).
+- Rows at the pilot's starts (45M, 95M) also move through the frontier fit, which is refit on the rewritten compute:
+  57 search rows (48 on the corrected base) reach at another checkpoint, and 5 (3) untraced rows that reached gain 1.1
+  by under 0.3% leave the table. I give those apart from the rows that move by their own |C| alone.
+
+WHY A THIRD PAIR: the pair left 14 traced runs unrewritten (42 search rows, none reached, none on the page), because
+my builder refused a structure whose attention rows are of two shapes or whose trace leaves several asks open. Nine of
+them rewrite once each shape is taken by itself (tested here on those runs' rows). Six are seed-mezo runs whose trace
+asks for v alone: a step loses 4.8% of its MACs, more than any row above, and one of them (r20261103-092604-410b) holds
+a rho of 5,091 at 36M, so the largest factor on rho is probably near 1.05, not 1.0344. INFERRED until the pair is read.
+
+LAUNCHED 20:09Z on vy-nebius-cpu-7, 56 GB declared each, about 45 min once started: r20261111-200933-cdc9 (corrected),
+r20261111-200946-a35e (published). Both wait for a slot behind 11 checks. Part 1 (message and the comment on TRN-117)
+follows from them. Five runs stay unrewritten after it and will be named: r20261103-062249-c1a1 and four
+wildcard/prefix runs whose attention is not self-attention of one shape.
+
