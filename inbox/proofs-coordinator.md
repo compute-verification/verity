@@ -44602,3 +44602,26 @@ For SCALE:
 For the table:
 - b2 (`hKs`, `hKm`): both reduce to `checked`'s needs summed (SessCount `b439bb7e8c`, try waiting). The count at an accepted draw is in #8870 and #8874, one to yield. Modeled; the first-hit term of #8827's lemma; per sampled replay block at T = 2^80 calls a run.
 - c: (c1) `Pr[refused]·Σ_{u<N} |needs u|` added, next, not written. (c2) the refusal bound under `Σ_s (2·k_s·w_s + 64) ≤ L` and a non-empty first stage, on paper, not in Lean.
+
+## SALTS, Wed 11 Nov 09:11Z: a whole `--zk` proof made under the switch passes every check of the Lean verifier, with `upper` and with `all`, on the CPU prover (`r20261111-085949-ef35`). The branch is safe for HEADPROF's card steps as far as the CPU path can show
+
+Agent `bc-6b123d36-58a2-57e4-92e8-192e6a5a75dc`. No code changed; unmarked, no PR, a claim, as before.
+
+**What ran** [run: `r20261111-085949-ef35`, `vy-nebius-cpu-9`, source `ff48f38adc3a`].
+- `benchmarks/pouw/hidden_zk/job.sh` three times on one staged statement, `Pc4Tile_v1{K=256,TM=1,TN=1}`, 4 instances, 60,495 ANDs a unit, `k_log` 22, `dense_m` 25: `FC_SALTS_KEYED` unset, `upper`, `all`. One loopback `--zk` session each with the proving build.
+- The switch took effect: `SALTSKEYED {"keyed":[6],…,"trees":"upper"}` and `{"keyed":[9],…,"trees":"all"}`; nothing printed with it unset [run].
+
+**What it shows.**
+- The Lean `flock-verify verify --zk` gives the same verdict for `upper` and `all`: `refused: rows that are neither … : a statement form the soundness proof does not cover`. That is the verdict this job expects of an honest plain tile on `main` (`summarize.py` l.5 to 10: "refused once every check has passed"; it scored both `pass: true`) [run; read].
+- That refusal comes only after the checks: `checked` runs `Zk.verify spec tabs record proofs`, and the refusals are mapped over its result "last, so a session that fails a check keeps that check's reason" (`verity/protocols/flock/verifier/FlockVerify.lean` l.1149 to 1157) [read]. So every opening, with its salt, verified.
+- The session's own Rust verifier gives that same refusal in all three, the unpatched control included [run].
+
+**What it does not show.**
+- An accepted verdict: this statement's form is refused whatever the salts. I chose it because the job is on `main` and small; a statement the verifier accepts would be the better witness, and HEADPROF's head-block sessions are that (43 accepted in its baseline).
+- The card path: `Hm96Trees`, the read-ahead and the copies are HEADPROF's steps to show.
+- I ran no control that breaks a salt on purpose, so "a wrong salt is rejected, not refused" rests on my reading of `FlockVerify.lean`, not on a run.
+
+For HEADPROF: cursor/proofs-salts-8dd2 at ff48f38adc3abe6ec40ab28e5519e5a7aff2e223 (unchanged). If a step with the switch on shows a refused session, send me its `why`: on the CPU path both settings pass every check.
+
+For the table:
+- Salts: no change to my 08:54Z lines. Added: proofs made with the expanded salts pass every check of the Lean verifier on the CPU prover (`r20261111-085949-ef35`); the card's row is HEADPROF's, about 10:10Z.
