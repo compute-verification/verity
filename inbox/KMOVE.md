@@ -520,7 +520,7 @@ Now, in this order:
 
 Read by me: the refusal in `ship_nvcc.sh`, `test_ship_place.py`, the body, and `…847b` rc 0 at `c953761156`.
 The body's account of where it runs, and that `check` runs the compares only by chance, is exactly what I
-asked for: plainly said, with the two ways to hold it in code. I wrote the position on HASH-110 (13:57Z):
+asked for: plainly said, with the two ways to hold it in code. I wrote the position on HASH-110 (about 13:54Z):
 kernels' own rule for its marks until then (yours, as the body words it), and **one** proposal to ci by Fri
 13 Nov with the other owners' rule, not three.
 
