@@ -40766,3 +40766,49 @@ This is preparation for the merge you set for after #8539 lands. Nothing of #813
 **#8406:** its records run `r20261111-051724-7aba` passed `[run]` (`security: check.py exit 0 in 3528 s`,
 `security/Properties: check.py exit 0 in 772 s`, three packages `pass`). Its guard `r20261111-061321-6e01` has built
 the guard's modules and is in its three tests. Its ready line follows when that ends.
+
+## PRF-547 HARMSEARCH, Wed 11 Nov 07:24Z: ready to mark #8841 at 5f197bc45539b2b856337cb4afe9b8bf6fafceee (I have not marked it); its quick tier passed 68 of 68; no published figure moves; the same reading found the location term wrong past 1e17 blocks, fixed in the same PR
+
+**1. Published figures: none is affected.**
+
+- The search: unchanged from my 05:10Z entry. No published figure went through it [run: a counter on `Stratum._risk` under `figure1.run`, 0 calls; read: the figures' closure in `optimize.py`]. Demo A's plan of record did, on the summed branch, and its pinned `free_compute` is bit-identical under the fix [run: locally and in the Lean suite].
+- The location term (new, below): the published two-stage numbers never call it [read: in `optimize.py` only `leak_count` reads `loc_bits` and only `leak_draws` calls `leak_count`; no `two_stage_*` function calls either]. Figure 1's one-stage leak points carry Lean's exact bits wherever Lean checks the design, which is the default [read: `figure1.lean_check`]. With Lean off, `figure1.run` at 3 points a curve over the world year and the datacenter year gives 86 of 12,216 values that differ between the old term and the new, the largest by 1.7e-7 relative [run `r20261111-070927-08c7`]. In that run the term is asked at up to 6.8e27 blocks, where the old form is 2.6% under the new at K = 3.8e11 [run]; since no output moves by more than 1.7e-7, those calls are search steps and no reported value sits there [derived]. Not run by me: the figure at its default 57 points, and `total_cost.py`, whose one-stage infiltration line reads the float `leak_count`.
+- The planner's miss probability (`_log_miss`): it prices plans and steers `max_harm`'s search; no bound reads it [read]. Demo A's output moves in one float's last place [run].
+
+**2. Training's lines: as at 05:10Z.** I agree with each but "audits already proved", which I did not check. Nothing since changes that. One thing their comment does not say: under 2^14 samples `main` raises `math domain error` near 1e18 units, so the wrong range is not only "over 16,384 samples" [run].
+
+**3. The fix: PR #8841 is open, unmarked, at `5f197bc455` on `cursor/proofs-harmsearch-c7e2`. It is right in that range, not refused.**
+
+- Error bound, in the docstring: a float risk is never above the exact one by more than 2^-38 of it at any size, and the closed form past 2^14 terms is under it by at most 2^-35 of it. A risk that is too low only raises the bound. `HARM_MARGIN` (2^-20) is unchanged.
+- Test that fails without it: `test_harm_bound_holds_at_large_populations`, 20 cases against a closed-form bracket in exact decimals, among them n = 1e18 with k = 1e7 (the size your 04:18Z comment promised) and the first-stage sizes. On `main`'s search 16 of the 20 fail; on the branch none [run].
+- Quick tier on that head: run `r20261111-055146-6ce8`, 68 suites, 68 passed, 0 failed, none cached [run]. It includes the Lean suite with the difftests and Demo A's pin (`verity-core-sampled-proofs`, 246 passed), `verity/protocols/spot/verifier` (843), `verity/protocols/tests` (312), `benchmarks/sampling_plan` (52), `benchmarks/spot_figures` (95) and `repository` (280).
+- Two earlier quick-tier runs, `r20261111-052506-8213` and `r20261111-054207-2838`, I cancelled as superseded when the head moved. They give no verdict.
+- The branch merges cleanly with `main` at `5c8c343f19f0` [run: `git merge-tree`]; `main` has not touched its files since `5c095bb4ab70`.
+
+**New finding, fixed in the same PR: the location term.** `consumers.location_bits`, `optimize.loc_bits` and Demo A's copy took `n H2(K/n)` with the float `1 - K/n`, which drops `K/n`'s digits.
+
+- [run] It is wrong by up to `n · 8e-17` bits either way, and where `K/n` is under 2^-53 its second term, 1.44 K bits, is gone (2.6% of the term).
+- [run] Against the exact number of sets it is under by 6.0 bits of 349 at 1e18 blocks (K = 6), 12.8 of 742 at 1e21 (K = 11) and 25.4 of 1,369 at 3.3e21 (K = 20). `leak_count` at 3.3e21 blocks and a 1e7-bit target admits K = 142,070 where the exact bound allows 139,159.
+- [run] At the published first-stage size (1.78e16 blocks) it is still at or above the count: by 1.8, 4.9 and 14.4 bits at K = 2, 1,000 and 3.3e7.
+- [derived] In a profile the 2.6% case needs more than about 4e16 samples (K/n is about ln(1/δ) over the samples). In the planner it needs only a small leak target at a large population: figure 1's search asks it at 6.8e27 blocks [run].
+- The three copies now read one `consumers.entropy_bits`, good to a few units in the last place at any size, with tests against the exact count of sets.
+
+**Also in the PR**, one commit each: Demo A's `_Memo` loses its two workarounds (its test expected core to raise at 2^60 units), and `optimize._log_miss` becomes minus core's risk. `main`'s `_log_miss` said "within about 1e-7 relative" and was 7e-4 off at 2^25 blocks with 65 sampled and 65 missed [run].
+
+**Reported only (another lead's files).**
+
+- PoUS `streamed_wipe._log2_choose` is a three-`lgamma` difference: +7e-5 bit at 4.06e10 labels, -0.4 bit at 1e14, -47 to +125 bits of 1e13 to 1e15 at 1e16 labels [run]. Either sign, and `retained_bits` takes its `ceil`.
+- PoUB `audit.named_bits` and `timing.py` read one `lgamma` each, the first already rounded down by 2^-40 [read].
+
+**Left.**
+
+- Your mark, and the review a soundness-path change needs.
+- PRF-547 has no goal label (`research queue open` warned: its labels are `from:training` only).
+- Not changed, and said so in the PR: harms whose threshold lies outside the search's range (2^-148 to 2^60 a unit of risk) are still taken one block at a time, as on `main` (right, slow); `plan_of_record.json`'s `leak`, which no test reads, is 2e-16 above what the branch computes.
+- Whether "audits already proved" (training's line) holds: unchecked by me.
+
+**Draft reply for PRF-547** (yours to post or change):
+
+> No published figure went through the search, and none moves: the figures use the two-stage closed form (0 calls to the search under `figure1.run`). At deployment sizes the wrong range is reachable through `IntegrityProfile.harm_bound` and its consumers, `optimize.certify`, `transformer.py` and `h200.py --share`; no configuration the tree sets reaches it. The fix is #8841: the search is now right at any population rather than refused, with a float risk never above the exact one by more than 2^-38. Its test at n = 1e18, k = 1e7 and at the first-stage sizes fails on `main` in 16 of 20 cases. The same PR fixes the location term, which was under the count of sets past about 1e17 blocks (6 bits of 349 at 1e18).
+
+Logs are on my VM under `/opt/cursor/artifacts/prf547/`; the checkpoint notes of 05:43Z and 06:41Z are in the notes repository.
