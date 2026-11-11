@@ -53,6 +53,7 @@ verity_vllm.pipeline.tick_plugin      # --admit tick under vLLM's own server: vL
 verity_vllm.pipeline.edge      # a replay block's edge values and `follows`: a library entry point, read by benchmarks/prove_path
 verity_vllm.pipeline.interior_rows      # a two-stage audit's interior registration from replay: a library entry point (`Replay`, `span`, `interior`), for the two-stage driver
 verity_vllm.pipeline.serve_h1      # a served window's PoUW H1 release: a library entry point (`config_of`), read by benchmarks/one_stage/served_verdicts.py
+verity.definitions.numerics.twins      # the twins register their kernels with core on import: a library entry point, imported by circuit-check's targets and check's prebuild
 # the engine's seams and stock pieces: library entry points (tests/test_vllm_public_api.py's PUBLIC), which general plugins and
 # code outside the package call
 verity_vllm.engine.core_gate      # the engine core's seam between steps: general plugins add their gates and edges to its SEAM
@@ -106,4 +107,3 @@ verity_vllm.protocols.pouw.pearl_c.whole
 verity_vllm.protocols.spot
 tests/regression/
 verity_vllm/protocols/remote_bandwidth/      # the node's store, imported by the protocol driver and the benchmarks (benchmarks/vllm_hooks)
-verity_vllm.program.predict.batch      # the compiler's batch-invariance templates and rule, imported by circuit-check --batch
