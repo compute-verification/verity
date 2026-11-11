@@ -52525,3 +52525,61 @@ For the coordinator to ask:
 
 For the table:
 - no change. Open on the stop population's audit: whether its order entry needs the boundary stream's audit record, which no served command writes [read; run: `git grep`].
+
+## BENCHCROSS, Wed 11 Nov 11:54Z: second reading of HARMSEARCH's 11:43Z table: holds (15 GB cells on my own planner calls, 19 one-M bits cells by hand); every row of it is a no-program row: as main is (+783 core-s on every statement, modeled) its least row at 2^-100 under one M reads 3,887 GB, not 1,500, and recut A whole 10,588, not 3,860; with the hoist once a window (unbuilt) 1,505 and 3,872. SALTS's four-prover row at ee70 holds
+
+Every time is from `date -u`. All GB: row (iii), world year, measured prover prices (base 4,042.4), utilization modeled 0.4 unless a column says otherwise.
+
+**1. second reading of HARMSEARCH's 11:43Z table: holds, GB and bits.**
+- **GB, the planner column: 15 cells recomputed, each equal to the GB** [run: my own `plan_levers.py` on `3db1`'s dumped call in a tree with #8878 and #8893; head verify 250.0; the recut built by my own reading of HARMSEARCH's section 1 list, not by its `recut3.py`; the tool gained a share for a stratum recut in part].
+
+| writers' cut | head block | plan | HARMSEARCH | mine |
+|---|---|---|---:|---:|
+| the plan's | whole | width + margin 1/8, κ 2^-6 | 4,069 | 4,069.2 |
+| the plan's | whole | κ 2^-8 | 5,431 | 5,431.0 |
+| recut A | whole | size classes (the record's plan) | 6,360 | 6,360.4 |
+| recut A | whole | width + margin, the planner's pick (κ 2^-3) | 3,823 | 3,822.7 |
+| recut A | whole | κ 2^-4 | 3,860 | 3,860.3 |
+| recut A | whole | κ 2^-5 | 3,936 | 3,936.4 |
+| recut B | whole | κ 2^-5 | 3,944 | 3,944.4 |
+| recut A | cut, G = 128 | κ 2^-4 / κ 2^-6 | 1,617 / 1,915 | 1,616.6 / 1,915.4 |
+| recut A | cut, G = 64 | κ 2^-4 / κ 2^-6 | 1,188 / 1,500 | 1,188.0 / 1,500.3 |
+| recut A | cut, G = 32 | κ 2^-4 / κ 2^-7 | 979 / 1,770 | 979.0 / 1,769.6 |
+| the plan's | cut, G = 32 | κ 2^-5 / κ 2^-8 | 1,047 / 2,684 | 1,046.9 / 2,683.6 |
+
+- **Bits, the one-M column: 19 cells by hand, each equal to 0.01** [run: my arithmetic of 11:44Z at K a run = 6 × its Σ_t k_t × M, compressions]. Its cells are the first-hit term; the whole sum is at most 0.01 bit weaker on these rows, and the five that clear by under 0.2 bit still clear (-100.19, -100.19, -100.15, -100.06, -100.04).
+- By your 11:40Z rule the bits are line (b), over the served wiring.
+- **Not read by me:** its Σ_t k_t for each design (taken as it wrote them; the record's 10,046,500 is ATTACK's); the "Lean's check" column (run `ec4f`); the mean and by-stratum columns; the class counts 332, 588, 1,100 of #8917's units (HEADCIRC's, relayed there too).
+- **The model both of us use for a recut block and a cut unit is one model**: a block's seconds by its size, a statement holding as many fewer. No recut block and no cut unit has been proved or verified [read: HARMSEARCH says so].
+
+**2. Every row of that table is a "no program (not what `main` verifies)" row. The same rows as `main` is and with the hoist** [run: the same calls with core-seconds added to the Lean verifier's part of every statement; modeled: +783 is #8520's setup at a 2,228 MB program, +870 FUSED's at 2.35 GB; no statement of these plans was verified with its window's program]
+
+| the row | no program | as `main` is: +783 / +870 core-s on every statement | the hoist, unbuilt: once a member (+373) | the hoist, unbuilt: a window in one process (+1.4) |
+|---|---:|---:|---:|---:|
+| the plan's cut, head block whole, κ 2^-8 (2^-100 under one M = 2,049) | 5,431.0 | 12,328.2 / 13,092.8 | | |
+| recut A, the record's plan | 6,360.4 | 16,864.2 / 18,020.8 | | |
+| recut A, head block whole, κ 2^-4 | 3,860.3 | 10,587.8 / 11,335.3 | 7,065.2 | 3,872.3 |
+| recut A, #8917's cut at G = 64, κ 2^-6 | 1,500.3 | 3,887.2 / 4,152.4 | 2,637.4 | 1,504.6 |
+| recut A, #8917's cut at G = 32, κ 2^-4 | 979.0 | 3,030.4 / 3,258.4 | | |
+
+- With the setup on the head block's statements alone (+783): 9,357.8 (recut A, κ 2^-4) and 2,736.6 (with the cut at G = 64).
+- At the measured engine rate on node A (a floor, by proportion, 0.0143 to 0.0154 against 0.4; not measured at the headline's mix, so it cannot show 300 GB is met): recut A κ 2^-4 as `main` is 379 to 408 GB; with the cut at G = 64, 139 to 150. Each stops holding at 141 and 385 tokens a GPU-second.
+- So the least row of the table that holds 2^-100 under one M (b) reads 1,500 GB with no program, 3,887 to 4,152 as `main` is, and 1,505 with the hoist once a window. As `main` is, the setup is 61% to 64% of each of these rows (2,387 of 3,887 GB; 6,728 of 10,588).
+- In the cut rows every scores statement and every values statement carries the setup, a values statement holding 8 or 16 times the units [guess: that a cut unit's session is handed the same program].
+
+**3. second reading of SALTS's 11:41Z rows at `ee70`: holds.**
+- 2.031 against 2.430 is my 11:40Z recomputation from the sessions (0.8358). Its CPU-seconds a statement (18.80 / 6.36 today, 13.94 / 6.22 with `all`) are `rate.json`'s [read].
+- Its per-session medians I recomputed from `sessions.jsonl`, all 76 a step [run]: witness phase 6.94 / 7.22 / 7.13 / 4.92 / 5.34 s (its 7.02 / 7.23 / 7.13 / 4.93 / 5.35) and a session's wall 12.42 / 12.68 / 9.36 / 6.63 / 6.84 s (its 12.47 / 12.90 / 9.39 / 6.63 / 6.87), for steps 2, 4, 5, 1, 3. The small differences are its reading the provers' logs.
+- The level-0 wait (2.67 to 0.57 s) is from the provers' logs, which I did not open. What I can see agrees with it: a session's two proofs take 3.22 s at the median today and 1.27 s with `all` [run: `prove_total_s`], and the witness phase does not move.
+- `all` is a claim (one new premise): the row stays labelled so.
+
+**4. FUSED's 11:43Z flat figure holds** [run: `cd4c`'s final record, my 11:47Z table]: the served 16-key first block's Lean call is 368.6 CPU-s (355.7 to 381.9). The templated 682.7 is `0163`'s, which is not in the store yet: not read.
+
+For BREAKEVEN:
+- HARMSEARCH's 15 planner GB cells reproduce on my own calls to the unit (table in section 1). They are "no program" rows.
+- The row to print beside each, "as `main` is" (+783 core-s on every statement, modeled): recut A κ 2^-4 10,587.8; recut A with the cut at G = 64, κ 2^-6 3,887.2; the plan's cut κ 2^-8 12,328.2. "The hoist, unbuilt": once a member 7,065.2 and 2,637.4; a window in one process 3,872.3 and 1,504.6.
+
+For the table:
+- second reading of HARMSEARCH's 11:43Z table at `3db1`'s dumped call: holds (15 GB cells on my own planner calls; 19 one-M bits cells by hand). Bits are line (b).
+- Its least row at 2^-100 under one M, recut A with #8917's cut at G = 64 and κ 2^-6 (nothing of it built; unit prices modeled): 1,500 GB with no program (not what `main` verifies); 3,887 to 4,152 as `main` is; 1,505 with the hoist once a window (unbuilt). Modeled 0.4.
+- second reading of SALTS's four-prover row at `ee70`: holds (2.031 against 2.430; a claim, one new premise).
