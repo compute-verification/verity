@@ -387,6 +387,7 @@
   },
   "Verity.Accel.NaiveStrassen.Packed.Dom": {
    "owner": "@compute-research",
+   "digest": "658c2a33b9540fca2752f9944999299ebbbf10701e3f067f0845af8532604c39",
    "why": "A scope: the lower bound is stated for an atom table that the RTX PRO 6000's data sheet dominates, one none of whose atoms is cheaper where it holds than the sheet's lightest atom there. (met by `NaiveBeatsStrassenAny_honest` and `NaiveBeatsStrassenAnySize_honest`)"
   },
   "Verity.Assumptions.GemmAmpereStep": {
@@ -6855,7 +6856,7 @@
    "signature": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial :",
     "  Not",
-    "    (Accounting.NetWitness.acceptAllNet.Sound { ε := 0, W := 1, S := 0, Q := 0, K := 0 } (Accounting.h200S8Price 0 0)",
+    "    (Accounting.NetWitness.acceptAllNet.Sound { ε := 0, W := 1, S := 0, Q := 0, K := 0 } (fun x => 1)",
     "      Accounting.Audit.network (1 / 2))"
    ],
    "assumptions": [],
@@ -6865,7 +6866,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "c1b7923fe9ff1dfff3cbf7b4d6a79d0cf258959cd51aa8320806b66047fbf9e3"
+   "type_hash": "9fd1aac2c6225bcbee98539ae68a3b69e01c23b3e9a464a4bdc7b7fcc8b01c1c"
   },
   "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": {
    "owner": "@lean",
@@ -25867,22 +25868,119 @@
    "type_hash": "d21255e817f90bf794af5cade4d50ca9367901f165cbd2d41aa9b6887680f6da"
   },
   "Verity.SecurityProofs.NaiveBeatsStrassenAny": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": ["Verity.SecurityProofs.NaiveBeatsStrassenAny : Verity.Guarantees.NaiveBeatsStrassenAny"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Verity.Accel.NaiveStrassen.Packed.Dom"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "ff392bb34263096cc8a70cba2f6641b14a892eeaceba797a81a3af4f18c251bd",
+   "unfolded_hash": "be33e89539da11607f117dd661b3059718c0d5c63d0d6f78d2d539687ba07196"
   },
   "Verity.SecurityProofs.NaiveBeatsStrassenAnySize": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": ["Verity.SecurityProofs.NaiveBeatsStrassenAnySize : Verity.Guarantees.NaiveBeatsStrassenAnySize"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Verity.Accel.NaiveStrassen.Packed.Dom"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d94deec4fd126f4e42e265bf78e22ad4f2f7c627a7563771357ffa6b21b6a6cc",
+   "unfolded_hash": "8ebe34caf9084bbc0f43f206993fbd64b9f0fbfc68c7c6ceee203b0b32257410"
   },
   "Verity.SecurityProofs.NaiveBeatsStrassenAnySize_honest": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": [
+    "Verity.SecurityProofs.NaiveBeatsStrassenAnySize_honest :",
+    "  And (Verity.Accel.NaiveStrassen.Packed.Dom Verity.Accel.NaiveStrassen.h200Sheet)",
+    "    (And",
+    "      (Eq",
+    "        (Verity.Accel.NaiveStrassen.Sched.valid Verity.Accel.NaiveStrassen.h200Sheet Verity.Accel.NaiveStrassen.schemes",
+    "          0 1 256 256 Verity.Accel.NaiveStrassen.winogradOnce)",
+    "        Bool.true)",
+    "      (And (Eq Verity.Accel.NaiveStrassen.winogradOnce.fast Bool.true)",
+    "        (instLTNat.lt (instHMul.hMul 8 (instHPow.hPow 1 3))",
+    "          (instHMul.hMul (instHPow.hPow 1 3)",
+    "            (Verity.Accel.NaiveStrassen.Sched.cost 1 Verity.Accel.NaiveStrassen.winogradOnce)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "e8a4566a09276009aea603faaad3afc846609e78184608c4a8e38154b446e08f"
   },
   "Verity.SecurityProofs.NaiveBeatsStrassenAnySize_nontrivial": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": [
+    "Verity.SecurityProofs.NaiveBeatsStrassenAnySize_nontrivial :",
+    "  And",
+    "    (Not",
+    "      (Verity.Accel.NaiveStrassen.Packed.Dom",
+    "        (List.cons { weight8 := 0, cap := 4097, coupling := Option.none } List.nil)))",
+    "    (Not",
+    "      (Verity.Accel.NaiveStrassen.NaiveBeatsStrassenUpTo",
+    "        (List.cons { weight8 := 0, cap := 4097, coupling := Option.none } List.nil) 4096))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "1e8aab6868e9c33ab0154cc9de000e30a9a18fcadedcc6ea39de4828c6cd709a"
   },
   "Verity.SecurityProofs.NaiveBeatsStrassenAny_honest": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": [
+    "Verity.SecurityProofs.NaiveBeatsStrassenAny_honest :",
+    "  And (Verity.Accel.NaiveStrassen.Packed.Dom Verity.Accel.NaiveStrassen.h200Sheet)",
+    "    (And",
+    "      (Eq",
+    "        (Verity.Accel.NaiveStrassen.Sched.valid Verity.Accel.NaiveStrassen.h200Sheet Verity.Accel.NaiveStrassen.schemes",
+    "          0 1 256 256 Verity.Accel.NaiveStrassen.winogradOnce)",
+    "        Bool.true)",
+    "      (And (Eq Verity.Accel.NaiveStrassen.winogradOnce.fast Bool.true)",
+    "        (Eq (Verity.Accel.NaiveStrassen.Sched.cost 1 Verity.Accel.NaiveStrassen.winogradOnce)",
+    "          (instHAdd.hAdd (instHPow.hPow 8 (instHAdd.hAdd 1 1)) 32))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a8cc3652adce494565fc97fe83338313f5f7673275d87be29259f4b3a3079397"
   },
   "Verity.SecurityProofs.NaiveBeatsStrassenAny_nontrivial": {
-   "owner": "@compute-research"
+   "owner": "@compute-research",
+   "signature": [
+    "Verity.SecurityProofs.NaiveBeatsStrassenAny_nontrivial :",
+    "  And",
+    "    (Not",
+    "      (Verity.Accel.NaiveStrassen.Packed.Dom",
+    "        (List.cons { weight8 := 0, cap := 4097, coupling := Option.none } List.nil)))",
+    "    (Not",
+    "      (Verity.Accel.NaiveStrassen.NaiveBeatsStrassen",
+    "        (List.cons { weight8 := 0, cap := 4097, coupling := Option.none } List.nil) 12))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "cc3caf2398efae991a17f18860aa19386e7a6d5eaa6b6d6f44091047d5e25723"
   },
   "Verity.SecurityProofs.PackSoundComplete": {
    "owner": "@proofs",
@@ -28898,8 +28996,8 @@
     "∀ (z : Z) (i : Fin m) (ω ω' : Fin m → Ω), (∀ (j : Fin m), instLTFin.lt j i → Eq (ω j) (ω' j)) → Eq (W z ω i) (W z ω' i)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z) (ω : Fin m → Ω) (i : Fin m), Finset.instPartialOrder.le (W z ω i) (Finset.range (n i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m) (ω : Fin m → Ω), Real.instLE.le (Claims.Pr (acc z i ω)) (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 q) (W z ω i).card) (e i))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
     "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -31403,13 +31501,6 @@
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.stmt": "17977ef04eaff3e7ae9b9fd090e9e318574d119b34ddac9a54ad20dbf384f2fa",
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.tapeFintype": "89a6cb6fa17c08421df2c8da2cf26f0d6c1706385461e5866d0c48893267937a",
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.tops": "a9df0f43400422aa420c7a4f55693c9608bedd5edb487c5b0dcf883a58ae3c7e"
-   }
-  },
-  "Definitions.Accounting.JointBridge.H200": {
-   "digest": "6fb4f3e08031f3a9152d263c6f73120d9e0f843b12bb9df0dc108dd895393ac7",
-   "definitions": {
-    "Accounting.h200S8Price": "592cbafc27f2291319e0f402eedd833e87c083f08cb74f918728436133354e89",
-    "Accounting.w1Price": "07ca6f4e3e44e9f73c4422a678964efc754c8fc3b0547b67f85b0642f0cdcf4b"
    }
   },
   "Definitions.Accounting.JointLive": {
@@ -34420,10 +34511,10 @@
    }
   },
   "Definitions.Core.Guarantees.NaiveStrassen": {
-   "digest": "0f2986f521d2f0ef964691ab822e09c526f44c454c4216fe1ae5ce6a8e7e302a",
+   "digest": "c0af5a775a834f392352807492a1fa85313515f87100429918649aa01e4f0cac",
    "definitions": {
-    "Verity.Guarantees.NaiveBeatsStrassenServed": "2bdd40bb2cd8a841c349071fc071ca32d82a8fdf98629f6e2c56693deb4e8226",
-    "Verity.Guarantees.NaiveBeatsStrassenServedSize": "4805bae99988d38bdb49800e1e5b401acb29311b40556fd336b7bde0d69d1679"
+    "Verity.Guarantees.NaiveBeatsStrassenAny": "dbc19044174f371569245c0d159d86794ee9df5298139b4de58c62a2c9d5c487",
+    "Verity.Guarantees.NaiveBeatsStrassenAnySize": "ef074782528e6bd90ae76b4bd3e81ad69a6ada4698e91388cad3561160cb8f2b"
    }
   },
   "Definitions.Core.Guarantees.PrivatePartition": {
@@ -34640,7 +34731,7 @@
    }
   },
   "Definitions.Core.NaiveStrassen": {
-   "digest": "6372a4b7ebcedb7c87f55cce4e8bf738c8e963b5eba0e8865bbdcc11378420b7",
+   "digest": "b842c0faf77db1c4ad65f6c09522a642796ece193c8f5c6d2227cb2216c185a0",
    "definitions": {
     "Verity.Accel.NaiveStrassen.Atom": "6a9df6699894d136083f709de65eb24b31a0d806094f46ea952f55ab026aef2a",
     "Verity.Accel.NaiveStrassen.Atom.cap": "7aabd194bdd49d07f8835ab68ab7b40edf643f747fa609addb4f28c2586f336d",
@@ -34651,6 +34742,9 @@
     "Verity.Accel.NaiveStrassen.Atom.weight8": "addfd168cf5b297337150886387b53a720724d06038de7a86242a602265f8044",
     "Verity.Accel.NaiveStrassen.NaiveBeatsStrassen": "e280c3b3137a64ca870916a4e935cd2a6e7140e88bc19bd3871036ad2b7ab80f",
     "Verity.Accel.NaiveStrassen.NaiveBeatsStrassenUpTo": "f96d82422b78584d4795cd2f11b376499839a26bc6da26870118b7eb9ace46c7",
+    "Verity.Accel.NaiveStrassen.Packed.BIG": "0655dac97da92e9e81c6a45124a70db5479247d6d19462fa91f07ab4cfd54fe6",
+    "Verity.Accel.NaiveStrassen.Packed.Dom": "658c2a33b9540fca2752f9944999299ebbbf10701e3f067f0845af8532604c39",
+    "Verity.Accel.NaiveStrassen.Packed.atomMin": "36a91809e4f080bb7cd40d7b2dacd7174ac11cca1c05c604b52f2eecab889854",
     "Verity.Accel.NaiveStrassen.Sched": "5b0f7ab94ca92f7e09ad79b02e17e098d0cdeb2d6f6769b4f879913cc13aba89",
     "Verity.Accel.NaiveStrassen.Sched.atom": "87afc4f58467b6bcc784131e02a9e42120b2382754d1a575fdb90303c839306c",
     "Verity.Accel.NaiveStrassen.Sched.below": "2988ca7659307de8c7e67d0f02623128797c870bbae7add665ca3f4d5f6fe4e0",
@@ -34671,7 +34765,6 @@
     "Verity.Accel.NaiveStrassen.Scheme.u": "d8eb1ccc002dfa75817f64f5faba85c3607d7fdad0e5a56863e5be71d5ec61d1",
     "Verity.Accel.NaiveStrassen.Scheme.v": "2f43f8a2ca4e7cb1370790885bd28148f0334b8e64764109c5a0f1fd816bb7eb",
     "Verity.Accel.NaiveStrassen.b1": "05fad3760ec645390838af11af2b4fa4ecaaef642f52bf4357e6f81fa1467690",
-    "Verity.Accel.NaiveStrassen.h200Measured": "f02e3d249abc87a06ae29614264878439d7d55cb95f7007f67434ef76e97b087",
     "Verity.Accel.NaiveStrassen.h200Sheet": "a5215349caf4a76b9c5ff182b48ad0e4371282ce0b430dcecb700676dacf128c",
     "Verity.Accel.NaiveStrassen.instBEqAtom": "2f29f8a9451eaf27ce27b39522e8527958118509b8784c9ad4adda6501f085e7",
     "Verity.Accel.NaiveStrassen.instBEqAtom.beq": "d9cfa30213ccdba508dcd342e4538d5f987ec27f0f11583c2db15967e4fd746e",
@@ -34679,13 +34772,13 @@
     "Verity.Accel.NaiveStrassen.instBEqScheme.beq": "abf24fb9582d48fb65b0472e079871be65cad320f6f8ae498b19cf52bb5fb622",
     "Verity.Accel.NaiveStrassen.l1": "f6c08fb0fdac8e291c96943566024633324c5ad44b3c52c7bc59ef5f29e248fa",
     "Verity.Accel.NaiveStrassen.range": "2d70cbce5ab678e255ab3e4d18958f61a6bcb8a442080e2a5b565d9fce5cb0a0",
-    "Verity.Accel.NaiveStrassen.rtx6000Measured": "cfa85cd90dc50fa4077fa6fa81c3d5e971d2d10e1b25a160412456d75502f5b5",
     "Verity.Accel.NaiveStrassen.rtx6000Sheet": "454c84cd318462dd6d0261b50a470c28d01dce98384003b3193c1b284a14fa8e",
     "Verity.Accel.NaiveStrassen.s8": "01e6e7a2c2e8197737a7f3d50ab691122170efe43de978ec4f2fe603c2c5f52c",
     "Verity.Accel.NaiveStrassen.schemes": "6a789cd6ffc86c01e33e290aa2296759092afb9904689eaf0a6469048a0b4c55",
     "Verity.Accel.NaiveStrassen.strassen": "56267aa5b73ff766a66c8da8be2b7488734a572361e5bdbf611a6f0375623d56",
     "Verity.Accel.NaiveStrassen.trivial": "d84e6de122f1dc1be3463db0fbda379ba48e299800a68e9dcc318772a63968ed",
-    "Verity.Accel.NaiveStrassen.winograd": "d74510582f946f857e9060affda05a512ca37f732bb344bce5003ef019ae9983"
+    "Verity.Accel.NaiveStrassen.winograd": "d74510582f946f857e9060affda05a512ca37f732bb344bce5003ef019ae9983",
+    "Verity.Accel.NaiveStrassen.winogradOnce": "b58915e34cfe930e48ce4a38dd37b1e5d72e5b34462a44104cad25bc76fabaa6"
    }
   },
   "Definitions.Core.Partition": {
@@ -39787,7 +39880,7 @@
    }
   },
   "Definitions.Pouw.PearlC.W1": {
-   "digest": "ba6db26493df4efa3572f6190bd6171a03f06b2b39dff2a2cd37c264ab6c33b3",
+   "digest": "674cf55f9170743ab66e58aede0990ed5942054eaa860f25f4bbfd601ebd712b",
    "definitions": {
     "Pouw.PearlC.W1.Addr": "f874d9f13c441c566c9eb13426b94122d70bc31ea9e1d646825e675de38e9c30",
     "Pouw.PearlC.W1.Addr.off": "55814166b9f20bad081bb03f147091dee7afcfb346d37f30c4beea6d432a3704",
@@ -39886,8 +39979,6 @@
     "Pouw.PearlC.W1.W1Device.h100At": "5eb0e996a6e380b3198b0fadd5d32d6966c16e50e2e2cbd497b6320e61c6e9aa",
     "Pouw.PearlC.W1.W1Device.has": "166d9aac4c2896bdaf18f658d538fa61080babd63f651a4f92e3d5acb5bc4281",
     "Pouw.PearlC.W1.W1Device.prices": "c1d76fa7b3c71c021b7d908ca28b7ebfa3b47c20f191a06e03083d8e9f78ee7a",
-    "Pouw.PearlC.W1.W1Device.s8H100": "22d639b96490f475d64f92831071a72c5c8fefaf2006a1dd7162efc1cd9e2ec1",
-    "Pouw.PearlC.W1.W1Device.s8H100At": "b8756492bacdeba83527637058a342527429182a4d5ae24a1aadce51bf140e17",
     "Pouw.PearlC.W1.W1Device.sm120": "b6c2e3b7e130758d5f07928e43ec6a24241f847e8c165351a97980a011b6252f",
     "Pouw.PearlC.W1.W1Device.sm120At": "19918e107d38a42e531e594770615d5c8188c6a3321fa2662bf3db8914139d5a",
     "Pouw.PearlC.W1.W1Device.sm120Loop": "268947dfd9f2596bd5e05387b8fa2161fc0fe10f113408fe78402646449bfc60",
@@ -39910,7 +40001,6 @@
     "Pouw.PearlC.W1.field": "5a34513a6efe273245594bc96b2173f00a581c1fcc4aba122914c0f8b509b9ad",
     "Pouw.PearlC.W1.final": "b7d138c25657c1e76d031c9743a6551b61178322b7d7e3af553046fa5d662f77",
     "Pouw.PearlC.W1.h100Frags": "a6a43a2e8add496ea0eb9bba66be067d15b50e82ab62272fe9805bb0ca3dafcf",
-    "Pouw.PearlC.W1.h100S8Frags": "91c907525637a5e7c40e84c0918dd6c00addcc691c7174279c531fa351e4aba8",
     "Pouw.PearlC.W1.init": "245874b06495d624dd5d2b1927ac919035d58d4541abdbd4e12d4593d6ac2cb5",
     "Pouw.PearlC.W1.instDecidableEqFmt": "a6920800a55fe1bc0609ecd6c25c6c5e09a05cf34cee4d8a246aca24772c8e5c",
     "Pouw.PearlC.W1.instDecidableEqFrag": "265e3aaba85cb63c012baa40b1e3c0169c0e49c04a4664d8b55a4b1023d49091",

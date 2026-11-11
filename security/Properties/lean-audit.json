@@ -12883,21 +12883,12 @@
    }
   },
   "Definitions.Accounting.JointBridge.CreditedWords": {
-   "digest": "9bf7c536f7985c01ad566ea5969516e96c43122d0708713cd2d9bace611b7e87",
+   "digest": "7fd687868a58eaa8d98dd036fe6c1099a5b72671bea6867d53ce49f0c91f48ec",
    "definitions": {
     "Accounting.Certificates.helpUnits": "c2978d0581af901f4228bf512b479443221f324b3833cd4bcf44d9e581121165",
     "Accounting.Compose.minWordMacs": "c1f2018ca09c2aeab805566f47f6aacbce4bee4f86c7f3597489c24bd1ccc183",
     "Accounting.RealizesCreditedWords": "af59771ec494ede21224508dc988a22e8f5e0405395f4e64e50ba0afbe6ed8c6",
-    "Accounting.RealizesCreditedWords.coin": "212259de447d68b59105491fcb4f1cbacd803c9fa68375e4c5dee28be8110463",
-    "Accounting.receiptUnitMacs": "9f89508d13e14b41233771401a6799f0a70eb4b2f5b192db4488fc4fa4bce71f",
-    "Accounting.receiptWordMacs": "44df6624365f084f5e004a624955b45347baa7b9d7a634b7cf1e547cc6da2f80"
-   }
-  },
-  "Definitions.Accounting.JointBridge.H200": {
-   "digest": "6fb4f3e08031f3a9152d263c6f73120d9e0f843b12bb9df0dc108dd895393ac7",
-   "definitions": {
-    "Accounting.h200S8Price": "592cbafc27f2291319e0f402eedd833e87c083f08cb74f918728436133354e89",
-    "Accounting.w1Price": "07ca6f4e3e44e9f73c4422a678964efc754c8fc3b0547b67f85b0642f0cdcf4b"
+    "Accounting.RealizesCreditedWords.coin": "212259de447d68b59105491fcb4f1cbacd803c9fa68375e4c5dee28be8110463"
    }
   },
   "Definitions.Accounting.JointBridge.SpaceOfPeriodHeld": {
@@ -14568,29 +14559,6 @@
     "Pouw.Dither.Period.value": "caf38c15514a505918eaa227960de6ca24a8f3fc303bb2eef524e01ad1908332"
    }
   },
-  "Definitions.Pouw.Fp8Atom.Atom": {
-   "digest": "13359af1b64028c1735edf53d7f7c3ddea98d34cff543707054914503b868bf0",
-   "definitions": {
-    "Pouw.Fp8Atom.Pipeline": "c75752881f5ce873a09a8de3f9a564ac5a782dcb4f75daebc5962428e7d1aa08",
-    "Pouw.Fp8Atom.hopperE4m3K32": "f3e6e14d9556060100c3afb55692f97984074525bb011f51506f68700d7d8a29"
-   }
-  },
-  "Definitions.Pouw.PearlC.Fp4": {
-   "digest": "617667cbb058464d56490b8d38a425f4e9f7b6196c9de03db3e8c8ebb3a5b6de",
-   "definitions": {
-    "Pouw.PearlC.Fp4.Fp4Atom": "93635dd9e60f2c0736894c086b60c67946221b8cbb550348d006b71f619a5f46",
-    "Pouw.PearlC.Fp4.ScaleFmt": "69ce4289e3394a1e14fb12287e0a1bdea3d40e3fdef57630378f1fea8f8328e9",
-    "Pouw.PearlC.Fp4.ScaleFmt.ue4m3": "17af9ca5630e8deb0dd66fee5b99e1cc9fb2a6b02c2915187213802dda392231",
-    "Pouw.PearlC.Fp4.ScaleFmt.ue8m0": "b8a41918c1c6f89f3f05857819b97d2a6962e50e0059c726f89d6921925e53f3",
-    "Pouw.PearlC.Fp4.sm120Nvf4": "773875f64e14fce8908939999e37f67d93f73e8fcdfc1b8911e63c7105220c39"
-   }
-  },
-  "Definitions.Pouw.PearlC.PeelExact": {
-   "digest": "08240a1c9e9f31f01a51c63fc8c061a03027f9c241e71112036cb49b8fd9fd94",
-   "definitions": {
-    "Pouw.PearlC.PeelExact.hopperBf16K16": "d7d075ddff41ed23854c24e6894b4d0e56123cbd6ec09cbf128d18c6f5bd5a6f"
-   }
-  },
   "Definitions.Pouw.PearlC.Sha512": {
    "digest": "bc2d519de945ba18ec9452456f4442b351c0f93719f12590ce6462f13c9d3639",
    "definitions": {
@@ -14626,31 +14594,6 @@
     "Pouw.PearlC.Sha512.schedule": "bc3e623eee378450288734fd5163941f08959c7d366508e8291a0e7a24c27046",
     "Pouw.PearlC.Sha512.ssig0": "0bf48aa35b6f2c55c3c0ff981d8c614c8325442bbd60d88299dcb36ba0baafce",
     "Pouw.PearlC.Sha512.ssig1": "83559e2ac05eda653e1c0059e5939d92fb58105db8b7676f36c02405157f2226"
-   }
-  },
-  "Definitions.Pouw.PearlC.W1": {
-   "digest": "c9e7ac0965fd555cf263fda0a7f9b8895089e787936900e52d827f61a4398816",
-   "definitions": {
-    "Pouw.PearlC.W1.Fmt": "90751949d9ced8d44d438acc9c56111cf5d8277b9b3f630c62928eb0eb3ba01f",
-    "Pouw.PearlC.W1.Fmt.bf16": "ff3b4b7a2f4de3f5f91bc581622e1d32c9358b3de560db3817206489f2d74c90",
-    "Pouw.PearlC.W1.Fmt.casesOn": "114b684184866973208307a1f9b96d7f51b5c31db00ff739dfc23b87850d9c93",
-    "Pouw.PearlC.W1.Fmt.e2m1": "fda96f2369634a5ded3f85966224fe3e2eaab2be7ca73f2a0ffbc816707a8806",
-    "Pouw.PearlC.W1.Fmt.e4m3": "6b86e62df41421e85714b83a62d67ef5c03d6d396cb02a831b475a2099bf52a5",
-    "Pouw.PearlC.W1.Fmt.rec": "01ab82d78c166eac668b2e037a5aa0f05b29769dba424fe7ce62a8f4a1755196",
-    "Pouw.PearlC.W1.Fmt.s8": "e410b96a36fdea94750d0b54527432e5d9c18bd4163ecde10f51a71c345a63d2",
-    "Pouw.PearlC.W1.Frag": "5e8f94470f086fbbb2dc598c988b60d299ebe581d8c1c54dff92a0f859a3e164",
-    "Pouw.PearlC.W1.W1Device": "0cb483f5d20d395fe958b90acff472f0210f750522bf2cedf2920249c9974ea3",
-    "Pouw.PearlC.W1.W1Device.prices": "c1d76fa7b3c71c021b7d908ca28b7ebfa3b47c20f191a06e03083d8e9f78ee7a",
-    "Pouw.PearlC.W1.W1Device.s8H100": "22d639b96490f475d64f92831071a72c5c8fefaf2006a1dd7162efc1cd9e2ec1",
-    "Pouw.PearlC.W1.W1Device.s8H100At": "b8756492bacdeba83527637058a342527429182a4d5ae24a1aadce51bf140e17",
-    "Pouw.PearlC.W1.W1Prices": "3419694a372d74999ebf68a8236af94ee5470cbeed15e84627c63f244790bd52",
-    "Pouw.PearlC.W1.W1Prices.fp32": "cf0cced6538038df65423a289b211163e6c19ae268b12085bb5345d25d456094",
-    "Pouw.PearlC.W1.W1Prices.h100": "12f7d46475640f769f1f1c4fe8e147e320b438c79b282a1f755202f0fbe38232",
-    "Pouw.PearlC.W1.W1Prices.int32": "9c7f3a6f9decc4fb3791972b1a8499d221a2707abc4057862756c020aece2a96",
-    "Pouw.PearlC.W1.W1Prices.mac": "a2f761e8bfd914c9738487f9e5816cd94be9d08047104b636a3f69bcb8ef60af",
-    "Pouw.PearlC.W1.W1Prices.sha512": "2633f80140bc6878792de4d5dd656ed7362e3beb85a8f06730d0b73e97d63e04",
-    "Pouw.PearlC.W1.h100Frags": "a6a43a2e8add496ea0eb9bba66be067d15b50e82ab62272fe9805bb0ca3dafcf",
-    "Pouw.PearlC.W1.h100S8Frags": "91c907525637a5e7c40e84c0918dd6c00addcc691c7174279c531fa351e4aba8"
    }
   },
   "Definitions.Pouw.RelativeSecurity": {
@@ -20782,11 +20725,10 @@
    }
   },
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
-   "digest": "955c927fc583b252c6751fe0ddef5ec89652183b6b4ca775aad9ba781704e976",
+   "digest": "17cfffc2415bf04819091405ecc1f109b0e19d75a64844fd3146918363a07be3",
    "definitions": {
     "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": "7c58cc81b691e9ec820fb94f4210285efb1c39550afbd56296b5477c8580c762",
-    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodAt": "27266fc99be26d34e557e1bba2eb785400300802cc58926601d3ac82aec47cab",
-    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodH200": "a762552b60a5c45f1c73049a7cc13cfea07447cb5b027de1c6edfc29fe0bf90c"
+    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodAt": "27266fc99be26d34e557e1bba2eb785400300802cc58926601d3ac82aec47cab"
    }
   },
   "Properties.Accounting.RegisteredCircuit": {
