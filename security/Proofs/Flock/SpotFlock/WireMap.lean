@@ -21,11 +21,13 @@ is the one an accepted run's registered reads are held to.
   block's rows; `wireCell` sends a reading cell position to its writer's template, output port and cell position, and
   `linkCell` to the boundary port the link names, its rows a replay block and the row among them.
 * **A member's unit** `u` of template `t` is position `u % n_t` of replay block `u / n_t`'s cell (`filesBlockOf`).
-  `wireUnit` sends it to its writer's unit in the same replay block, and `linkUnit` to the boundary port's row.
+  `wireUnit` sends it to its writer's unit in the same replay block, and `linkUnit` to the boundary port's row
+  (`wireUnit_block`, `linkUnit_block`).
 * **The gates** (`wireMap`): a source bit at a wired port goes to the gate on the same bit of its writer unit's output
   row, where the writer's key program has one and no link names the writer's output port; every other gate to
   itself. A linked port's source bits stay: the boundary port is no gate of the members' programs, and the auditor's
-  copies name no unit that writes it. `wiredProg` is the members' programs read through that map (`Prog.rewire`).
+  copies name no unit that writes it. `wiredProg` is the members' programs read through that map (`Prog.rewire`),
+  and `returned` the written bits the boundary record holds: those at an output port a link names.
 * **A returned output wired inside** (`noReturnedWired`, `writer_not_linked`): where a link names a wire's writer's
   output port, round 2 holds the writer's session to the link's record there and the wired reader to the interior
   record's port, and holds neither entry to the other; the map keeps the two gates apart, and the condition that
@@ -135,6 +137,26 @@ block's rows from `(u / n_t) · per`. -/
 def linkUnit (t : ℕ) (port : String) (u : ℕ) : Option (String × ℕ) :=
   (linkCell h t port (u % h.reg.ns.getD t 0)).map fun y => (y.1, u / h.reg.ns.getD t 0 * y.2.1 + y.2.2)
 
+/-- **A unit's writer, by replay block**: unit `c + ρ · n_t` of member `t`, position `c < n_t` of replay block `ρ`'s
+cell, reads its writer's unit of the same replay block, `ρ · n_w` plus the writer's position `wireCell` gives `c`. -/
+theorem wireUnit_block {t : ℕ} (port : String) (ρ : ℕ) {c : ℕ} (hc : c < h.reg.ns.getD t 0) :
+    wireUnit h t port (c + ρ * h.reg.ns.getD t 0) =
+      (wireCell h t port c).map fun y => (y.1, y.2.1, ρ * h.reg.ns.getD y.1 0 + y.2.2) := by
+  have hpos : 0 < h.reg.ns.getD t 0 := Nat.lt_of_le_of_lt (Nat.zero_le c) hc
+  unfold wireUnit
+  rw [Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hc, Nat.add_mul_div_right _ _ hpos, Nat.div_eq_of_lt hc,
+    Nat.zero_add]
+
+/-- **A unit's boundary row, by replay block**: unit `c + ρ · n_t` of member `t` reads, at a linked port, row
+`ρ · per` plus the row `linkCell` gives `c`. -/
+theorem linkUnit_block {t : ℕ} (port : String) (ρ : ℕ) {c : ℕ} (hc : c < h.reg.ns.getD t 0) :
+    linkUnit h t port (c + ρ * h.reg.ns.getD t 0) =
+      (linkCell h t port c).map fun y => (y.1, ρ * y.2.1 + y.2.2) := by
+  have hpos : 0 < h.reg.ns.getD t 0 := Nat.lt_of_le_of_lt (Nat.zero_le c) hc
+  unfold linkUnit
+  rw [Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hc, Nat.add_mul_div_right _ _ hpos, Nat.div_eq_of_lt hc,
+    Nat.zero_add]
+
 /-! ## Gates -/
 
 /-- **Every source bit**: each source gate a unit reads that has a commitment position (`Bits.rowBit`), with its
@@ -188,6 +210,11 @@ def wireMap (x : ℕ) : ℕ :=
           y.2.1 == tw && y.2.2 == Spot.Bits.RowPos.mk wport u r.bit).map (·.1)).getD x
       | none => x)
   | none => x
+
+/-- **A gate the boundary record holds**: a written bit at an output port a link names for its template, which its
+replay block returns. Every other written bit is one the interior record alone holds. -/
+def returned (x : ℕ) : Bool :=
+  (writtenBits h.ms).any fun y => y.1 == x && (heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome
 
 /-- **The members' programs read through the wiring map.** -/
 def wiredProg : Prog := (bitsProgs h.ms).rewire (wireMap h)
