@@ -1,14 +1,17 @@
 # `verity graph`
 
 The fine-grained check: Verity's checks as a graph of tasks that depends only on the commit. An executor runs any part of it
-with one result cache, one artifact store and one event stream; drive only reads results. This package is Verity's side:
+with one result cache, one artifact store and one event stream; the verified queue only reads results. This package is Verity's side:
 the listing (graph/v2), one task's run (result/v1) and a serial reference executor. `verity tasks` (`tools/verity/check/
 tasks.py`, tasks/v1) is the coarse graph `check` runs today.
 
 ~~~sh
-verity graph [--json] [--family F ...] [--root DIR]   # the graph; --json prints its canonical bytes
+verity graph [--json [--packed]] [--family F ...] [--root DIR]
+                                                       # the graph; --json prints its canonical bytes, --packed packed (below)
+verity graph unpack [FILE]                             # the canonical bytes of the graph/v2 a packed listing packs
 verity graph run ID --work DIR [--graph FILE]          # run task ID in DIR, print its result/v1 (exit 0 pass, 1 fail, 3 error);
-                                                       # FILE: a listing of this checkout or ID's part of it: no lister runs
+                                                       # FILE: a listing of this checkout, packed or not, or ID's part of
+                                                       # it: no lister runs
 verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events FILE]
                                                        # every task, serially, in order, uncached (exit 0: all passed);
                                                        # events/v1 to FILE (default DIR/events.jsonl), DIR/results.json
@@ -20,9 +23,9 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 
 1. Keys come from declared inputs, not traced reads. A sandbox enforces the declaration: an undeclared read is an error.
 2. Keys include repository paths. A pure move reruns what it moved, once.
-3. Runners report facts. What gates, what may stay red and what a red triggers is drive's configuration, never a runner's.
+3. Runners report facts. What gates, what may stay red and what a red triggers is the verified queue's configuration, never a runner's.
 4. `tasks.toml` holds families (tens of entries), not one row per task.
-5. No `owner` field anywhere in the graph, results or events: who is paged is drive's policy, from paths. The listing
+5. No `owner` field anywhere in the graph, results or events: who is paged is the verified queue's policy, from paths. The listing
    refuses one in a table or a task, and `contract.result_errors` in a result.
 
 ## Layout
@@ -30,7 +33,7 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 | path | what |
 | --- | --- |
 | `verity_graph/contract.py` | schema names, `canonical`, `file_digest`, `env_digest`, `key`, `result_errors` |
-| `verity_graph/graph.py` | the listing: `tasks.toml`, the tree's files, each family's tasks completed and checked, digests, keys; a task's part (`part`, `given`) |
+| `verity_graph/graph.py` | the listing: `tasks.toml`, the tree's files, each family's tasks completed and checked, digests, keys; a task's part (`part`, `given`); the packed listing (`pack`, `unpack`) |
 | `verity_graph/families/<family>.py` | a family's lister, `tasks(root: Path, files: list[str]) -> list[dict]` |
 | `verity_graph/runners/<kind>.py` | a kind's runner, `run(task: dict, work: Path) -> dict` |
 | `verity_graph/runners/__init__.py` | dispatch by kind, `call` (a command, logged and bounded by the task's timeout) and `execute` |
@@ -84,6 +87,18 @@ lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits 
   claims one of the highest `priority` first, ahead of any order of its own (`timeout_s`, ids), so a chain never waits behind
   the tasks off it. In a task's graph (`graph.task_graph`), which holds none of the tasks that read it, a priority counts the
   chains that graph holds.
+
+### Packed
+
+Most of a listing's bytes are paths and ids it repeats: the test files of a suite share most of their thousands of inputs,
+and a Lean module reads the `olean` and `axioms` of each of the hundreds of modules its compile loads.
+`verity graph --json --packed` prints the listing as `verity-graph/v2-packed` (`graph.pack`), the same document but for
+each task's `inputs` and `reads`: its inputs are runs of indices into `files`' paths in order, and its reads, under each
+output name it reads, runs of indices into `tasks`. A run is two integers, how far past the previous run's end it starts
+(the first, past 0) and how many consecutive indices it holds, so `[0, 3, 2, 1]` is indices 0, 1, 2 and 5. Unpacking
+(`graph.unpack`, `verity graph unpack`) gives back the graph/v2 document, its canonical bytes `verity graph --json`'s: each
+task's inputs in order and its reads sorted by task and output, as graph/v2 has them. `verity graph run --graph` takes a
+packed listing as it takes graph/v2.
 
 ## The key rule
 
@@ -181,7 +196,7 @@ runs them, one task a step:
 `lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`). A part's task
 (its var `files`) hands suites.py a timing record with none of the suite's files (`--timings`), so part K is every M-th test
 file by path from the K-th, the same wherever it runs, and the M parts hold each file once. A lean-suites fail names each
-failed suite with its failed tests (`detail.failed`), which drive names, allows and blames as that suite's red. A
+failed suite with its failed tests (`detail.failed`), which the verified queue names, allows and blames as that suite's red. A
 run that ran nothing is no pass: ci.py skipping every set of the agreement, a partition check that compared no cut, a suite
 suites.py didn't run. Each is an error, so no result. The agreement fetches the upstream
 build and inputs `upstream.json` pins (`research data fetch`, as ci.py fetches what it pins) and holds them to the pin's
@@ -189,9 +204,9 @@ sha256, so the store and its client are no input. Those fetches and ci.py's read
 environment names: a `research run` job on a node with no store config of its own gets one with `--store-read`, and without
 one the task is an error that says so. Each runner reports a fail only for the tree's fault and an error for the
 machine's: a toolchain that didn't set up, a pin that didn't fetch, check.py's `cannot run here`, a command a signal killed,
-and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile. Drive counts no
-lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a train.sh run beside
-the executor's check (`research.drive.SLIM_STEPS`).
+and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile. The verified
+queue's loop counts no lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a
+train.sh run beside the executor's check (`research.landing.SLIM_STEPS`, `research.vqueue_slim`).
 
 ## Writing a family
 

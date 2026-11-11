@@ -380,8 +380,9 @@ class Stalled(ValueError):
 
 def _need(slot: dict, mem_gb: float) -> int:
     """The GiB a run asking ``mem_gb`` GB reserves in ``slot``: slot.py raises a slot's mem= to the run's ask (its `asking`: GB
-    as GiB, rounded up) and one without mem= to that ask."""
-    return max(slot.get("mem") or 0, -(-int(mem_gb * 1e9) // 2 ** 30) if mem_gb > 0 else 0)
+    as GiB, rounded up) and one without mem= to that ask. A slot with book= reserves the larger of that and the ask, in place
+    of its mem= (slot.py's `booked`)."""
+    return max(slot.get("book") or slot.get("mem") or 0, -(-int(mem_gb * 1e9) // 2 ** 30) if mem_gb > 0 else 0)
 
 
 def _blocked(slot: dict, free_gb: Any, mem_gb: float) -> str | None:
