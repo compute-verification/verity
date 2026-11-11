@@ -40,8 +40,10 @@ load("xeon-6776p-2s")["rate"]["ops"]            # {'value': 1045299200000000.0, 
 `load`, `skus`, `rate` and `number` (an entry's value as an exact `Fraction`), and the constants `KINDS` (a card's
 kinds), `MARKS` (an entry's marks), `ENTRY` (an entry's keys), `WORD` (the bytes in a 32-bit word) and `CARDS` (the
 directory the card files are in). The module imports the standard library and `verity.errors` only. The package file,
-`verity/hardware/__init__.py`, holds a docstring and nothing else: no import and no re-export, so importing
-`verity.hardware` runs no card-loading code; `tests/test_package.py` holds both.
+`verity/hardware/__init__.py`, holds a docstring and nothing else: no import and no re-export. The record
+(`verity.hardware.record`), the registration log (`verity.hardware.registration`) and the Site (`verity.hardware.site`)
+share the package, so importing one of them, in a verifier too, runs no card-loading code; `tests/test_package.py` holds
+both.
 
 `load(sku) -> dict` returns the parsed file and refuses a number without its unit, mark and source, and a card without
 its kind. `skus(kind=None)` lists the cards, or those of one kind.
