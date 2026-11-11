@@ -74,9 +74,9 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, partition as P  # noqa: E402
-from verity.core.protocols.spot.optimize import SHA512_ANDS  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
+from verity.protocols.spot.optimize import SHA512_ANDS  # noqa: E402
 
 #: a templated statement's id (`verity_flock.circuit.TMPL_STATEMENT`): its prover and server read the placed unit
 TMPL_STATEMENT = "verity/flock-circuit/tmpl"
