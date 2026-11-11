@@ -4,6 +4,7 @@ te_core and priced by te_core.formalism at its own session (the headline), the c
 serving block, beside the workloads no run here measures, each priced on te_core.workloads' model of it (`MODELLED`).
 
     python islands/standard-workloads/standard_workloads.py --out DIR [--rows FILE] [--served FILE] [--base REV]
+                                                            [--branch NAME]
                                                             [--restated PLAN.json]
     python islands/standard-workloads/standard_workloads.py --put DIR/console/standard-workloads.json --served FILE
                                                             [--dry]
@@ -92,7 +93,8 @@ changed since `--served` was read, where the build would drop a row or the route
 where its note cites no stored tables; then it GETs the panel and compares it with the body. The panel's source names
 the command at this checkout's commit and the integrator's commit it builds on (`commits`: `--base`, else their merge
 base on origin, which a node's checkout hasn't), refused where te_core or the island has uncommitted changes, which
-neither commit holds.
+neither commit holds. Where the checkout builds on another branch than the integrator's, `--branch` names it: the
+source then names that branch, which must hold this checkout's commit, and with no `--base` no commit under it.
 
 `--restated PLAN.json` (the scorer's restate.py plan) reads each run the plan restates with its record's tokens a step
 restated (`restated`): the record is restate.py's, refused unless it is the record the plan read and its restating the
@@ -233,14 +235,23 @@ def traces(arts: list[str]) -> dict[str, dict[int, dict]]:
     return out
 
 
-def commits(base: str | None = None) -> tuple[str, str, str]:
+def commits(base: str | None = None, branch: str | None = None) -> tuple[str, str, str]:
     """This checkout's commit, the integrator's branch (pin.py's `BRANCH`) and its commit this one builds on (`base`,
     an ancestor of this one, else their merge base on origin), the commits at 10 characters, which the panel's source
-    names; refused where te_core or the island has uncommitted changes, which neither commit holds."""
+    names; refused where te_core or the island has uncommitted changes, which neither commit holds. With `branch`, the
+    branch is that one, refused unless it (here or on origin) holds this checkout's commit, and with no `base` the
+    commit under it is this checkout's own."""
     from pin import BRANCH, git
 
     head = git("rev-parse", "HEAD")
-    on = git("rev-parse", "--verify", f"{base}^{{commit}}") if base else git("merge-base", "HEAD", f"origin/{BRANCH}")
+    if branch:
+        if all(git("merge-base", "--is-ancestor", "HEAD", ref).returncode
+               for ref in (f"refs/heads/{branch}", f"refs/remotes/origin/{branch}")):
+            raise SystemExit(f"{PANEL}: --branch {branch} doesn't hold this checkout's commit, here or on origin: "
+                             f"push it there, or name the branch that does")
+        BRANCH = branch
+    on = git("rev-parse", "--verify", f"{base}^{{commit}}") if base else head if branch else \
+        git("merge-base", "HEAD", f"origin/{BRANCH}")
     if head.returncode or on.returncode:
         raise SystemExit(f"{PANEL}: no commit of {BRANCH} to build on: give --base, or git fetch origin {BRANCH} and "
                          f"build again")
@@ -679,10 +690,11 @@ def compact(d: dict) -> str:
 
 
 def source(revs: tuple[str, str, str]) -> str:
-    """The panel's source: the command at this checkout's commit, and the integrator's branch and commit it builds on
-    (`revs`, `commits`'s)."""
+    """The panel's source: the command at this checkout's commit, and the branch and commit it builds on (`revs`,
+    `commits`'s); the branch alone where that commit is this checkout's own."""
     head, branch, base = revs
-    return f"python islands/{NAME}/{Path(__file__).name} at {head} (te_core {VERSION}, on {branch} at {base})"
+    on = branch if base == head else f"{branch} at {base}"
+    return f"python islands/{NAME}/{Path(__file__).name} at {head} (te_core {VERSION}, on {on})"
 
 
 def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None,
@@ -893,6 +905,8 @@ def main(argv=None) -> int:
                     help="the panels the route served when the build launched (te_core.console.served()'s, as JSON)")
     ap.add_argument("--base", help="the commit of the integrator's branch this checkout builds on (default: their "
                                    "merge base on origin)")
+    ap.add_argument("--branch", help="the branch this checkout builds on, where it isn't the integrator's: it must hold "
+                                     "this checkout's commit, and the source names it")
     ap.add_argument("--restated", type=Path, metavar="PLAN",
                     help="read each run this plan restates (the scorer's restate.py plan) with its record's tokens a "
                          "step restated, and its stored traces against the restated count")
@@ -904,7 +918,7 @@ def main(argv=None) -> int:
             raise SystemExit(f"{PANEL}: --put needs --served, the panels the route served when the build launched")
         return put(a.put, sent, a.dry)
     plan = json.loads(a.restated.read_text())["restated"] if a.restated else None
-    p, details = build(json.loads(a.rows.read_text()), commits(a.base), plan=plan)
+    p, details = build(json.loads(a.rows.read_text()), commits(a.base, a.branch), plan=plan)
     q = p | {"note": note(p, cite(a.out), details)}
     if bad := refused(q):
         raise SystemExit(f"{PANEL}: the panels route refuses it: {'; '.join(bad[:5])}")
