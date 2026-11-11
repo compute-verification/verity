@@ -29,14 +29,14 @@ echo "compute_cap $CC python $PY" > "$OUT/env/node.txt"
 export VLLM_CACHE_ROOT=$S/vllm-cache TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache TRITON_CACHE_DIR=$S/triton
 export VLLM_DISABLE_COMPILE_CACHE=1 HF_HOME=${HF_HOME:-/workspace/hf}
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH
-export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config
+export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/verity/configuration/config
 DITHER=$ROOT/benchmarks/hash/dither; [ -d "$DITHER" ] && PYTHONPATH=$PYTHONPATH:$DITHER
 NSYS=()
 if [ "${DITHER_NSYS:-}" = 1 ]; then
   NSYS=("$CUDA/bin/nsys" profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none
         --capture-range=cudaProfilerApi --capture-range-end=stop -o "$S/gate" --force-overwrite true)
 fi
-cd integrations/vllm
+cd adapters/vllm
 MAX_MIN=${SERVED_MAX_MIN:-25}
 # an exact-fused arm is timed only after kgate.py's bitwise gate passes on this GPU, in the same lease (OUT/kgate)
 case " $* " in *exact-fused*) KGATE=1 ;; *) KGATE=0 ;; esac
