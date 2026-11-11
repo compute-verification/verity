@@ -1,0 +1,9 @@
+# The served Commit's benchmark arms: not a package. Its arms and runners run in a node's pinned vLLM venv; the served arm's
+# (`served_arm.py`, `served_arm.sh`) run here as a suite over stand-ins for the arms they build on
+# (`uv run tools/verity/check/suites.py benchmarks/served_commit`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_served_arm.py"]

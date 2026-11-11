@@ -179,7 +179,6 @@
         "benchmarks/served_units/",
         "benchmarks/unit_block/",
         "benchmarks/served_commit/",
-        "benchmarks/g2/",
         "benchmarks/compile_cost/",
         "tools/verity/circuit_check/",
         "benchmarks/native_peak/",
