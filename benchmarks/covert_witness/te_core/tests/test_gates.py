@@ -6,13 +6,13 @@ import pytest
 
 from te_core import gates
 
-ML = Path(__file__).resolve().parents[4] / "verity" / "ml"
+VERITY = Path(__file__).resolve().parents[4] / "verity"
 
 
 def test_each_and_count_is_circuit_checks_pin():
     for name, (module, ands, _, _) in gates.DEFINITIONS.items():
-        pins = json.loads(ML.joinpath(*module.split(".")).with_suffix(".circuit-check.json").read_text())["definitions"]
-        assert pins[name]["and"] == ands, name
+        pins = VERITY.joinpath(*module.split(".")).with_suffix(".circuit-check.json")
+        assert json.loads(pins.read_text())["definitions"][name]["and"] == ands, name
 
 
 def test_each_count_is_the_definitions():
