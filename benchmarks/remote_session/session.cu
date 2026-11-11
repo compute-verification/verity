@@ -1336,7 +1336,8 @@ static int pass_consumers(const void *producer, size_t producer_shared, const vo
 
 // One shard's part of a pass: the n blocks at data, the store's blocks base … base + n − 1 (both whole chunks). Its
 // receipts by one persistent grid of ctas CTAs on sa (`sketch16_pass_kernel`, or at the library's 64 rows (`rs_rows`)
-// `sketch64_pass_kernel`, pk then the 64-row signs; tensor cores; 0: one an SM), and for
+// `sketch64_pass_kernel`, pk then the 64-row signs; tensor cores; 0: one an SM; −1, for h0 <= 8: no receipt grid, so
+// the consumers compute every tile themselves, which a gate runs to check their own tile), and for
 // h0 <= 8 persistent consumer grids (`pass_consumer_kernel`, `pass_consumers`), one on sb beside the receipt grid and
 // one behind it on sa, that build each 2^h0-leaf subtree as soon as the receipt grid counts its group's tiles done and
 // each chunk's levels up to its root at hc once its subtrees are, so the shard's tree follows the reads without a leaf
@@ -1366,13 +1367,16 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
     made[dev] = true;
   }
   if (!data || !pk || !ctr || !ys || !dig || !up || !kept || !n || n % PER_LEAF || chunk % 32 || chunk % PER_LEAF ||
-      !chunk || n % chunk || base % chunk || ctas < 0 || consumers < 0)
+      !chunk || n % chunk || base % chunk || ctas < -1 || consumers < 0)
     return 1;
   const uint64_t lc = chunk / PER_LEAF, chunks = n / chunk, base_leaf = base / PER_LEAF, nl = n / PER_LEAF;
   const int hc = log2_exact(lc);
   if (hc < 0 || h0 < 1 || h0 > hc || n / 32 >= (1ULL << 32)) return 1;
   if (pad_n && (!pad || !pad_out || pad_n % lc || pad_r0 % lc)) return 1;
   const bool fused = h0 <= 8;
+  // Only the persistent consumers compute tiles of their own; the chunk-by-chunk tree waits on the receipt grid.
+  const bool receipts = ctas >= 0;
+  if (!receipts && !fused) return 1;
   const uint64_t group_blocks = (uint64_t)PER_LEAF << h0;
   const uint64_t groups = n / group_blocks;
   const uint64_t ready_blocks = chunk < CONSUMER_READY_BLOCKS ? chunk : CONSUMER_READY_BLOCKS;
@@ -1391,8 +1395,8 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
   if (fused) {
     if (consumers)
       side = (uint64_t)consumers < groups ? (uint64_t)consumers : groups;
-    else if ((rc = pass_consumers(producer, wide ? SK64R_SMEM : 0, (const void *)consumer, ctas, shared, groups, &side,
-                                  &tail)))
+    else if ((rc = pass_consumers(producer, wide ? SK64R_SMEM : 0, (const void *)consumer, receipts ? ctas : 0, shared,
+                                  groups, &side, &tail)))
       return rc;
     if (groups + side + tail >= (1ULL << 32)) return 1;
   }
@@ -1401,10 +1405,10 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
       cudaStreamWaitEvent(sb, go[dev], 0))
     return 4;
   const unsigned ready_tiles = (unsigned)((fused ? ready_blocks : chunk) / 32);
-  if (wide)
+  if (receipts && wide)
     sketch64_pass_kernel<<<ctas, 32 * SK64R_WARPS, SK64R_SMEM, sa>>>((const uint4 *)data, n, base, (const uint4 *)pk,
                                                                      ys, ctr, ready_tiles, started);
-  else
+  else if (receipts)
     sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, base, pk, ys, ctr, ready_tiles,
                                                            started);
   if (cudaGetLastError()) return 4;

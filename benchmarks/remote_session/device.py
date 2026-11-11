@@ -41,7 +41,8 @@ and rejected at a receipt, and with a host tier one with only host blocks droppe
 receipt; then in calibration, the chained pass against the plain pass at every kept level over the whole store, and its
 seed and signs against the reference's. Every buffer a gate store's pass or opening writes holds 0xA5 before it
 (`DeviceStore.poison`), and the first pass is a control that launches nothing, whose receipts and root the gate must
-refuse (`no_write`): so what the gates accept, the pass they ran wrote.
+refuse (`no_write`): so what the gates accept, the pass they ran wrote. At 64 rows one more pass has no receipt grid
+(`rs_pass` at −1 CTAs), so every tile is a consumer's own (`consumer_tiles`), which no other pass is sure to run.
 """
 from __future__ import annotations
 
@@ -1432,10 +1433,22 @@ class GpuBackend:
         got, _ = small.run_pass(seed)
         out["rows"] = small.rows
         out["pass_receipts"], out["pass_root"] = small.receipts() == ys, got == ref.commitment.root
+        out["ok"] = (out["payload_root"] and out["encode"] and out["decode"] and not any(out["no_write"].values())
+                     and out["pass_receipts"] and out["pass_root"])
+        if small.rows == skr.ROWS64:
+            # A consumer warp computes a tile itself only where it is on an SM before any receipt CTA
+            # (`help64_tile`), which no pass can be counted on to do. With no receipt grid every tile is a consumer's.
+            ctas, small.sketch_ctas = small.sketch_ctas, -1
+            got, _ = small.run_pass(seed)
+            small.sketch_ctas = ctas
+            out["consumer_tiles"] = {"receipts": small.receipts() == ys, "root": got == ref.commitment.root,
+                                     "receipt_ctas_started": sum(int(x["ctr"][-1]) for q, x in enumerate(small.seg_ring)
+                                                                 if not small.on_host[q])}
+            out["ok"] = out["ok"] and out["consumer_tiles"] == {"receipts": True, "root": True,
+                                                                "receipt_ctas_started": 0}
         out["session_honest"] = self.gate_session(small, reg, set())
         out["session_skip_sixteenth"] = self.gate_session(small, reg, set(range(0, small.blocks, 16)))
-        out["ok"] = (out["payload_root"] and out["encode"] and out["decode"] and not any(out["no_write"].values())
-                     and out["pass_receipts"] and out["pass_root"] and out["session_honest"]["accepted"]
+        out["ok"] = (out["ok"] and out["session_honest"]["accepted"]
                      and out["session_skip_sixteenth"]["failure"] == "receipt")
         if small.hbm_blocks < small.blocks:
             out["session_skip_host"] = self.gate_session(small, reg, set(range(small.hbm_blocks, small.blocks, 4)))
