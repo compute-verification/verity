@@ -28,6 +28,13 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
   share of the proving time). Otherwise a total is modeled. The verifier's seconds and the proof's bytes are given
   where a record holds them, and "not measured" where none does. The served MACs the census holds in no proof block
   are in no figure, and the totals give their share.
+- **Under a sampling plan that states its own prices, both totals.** A plan's sample is sized by its planner at the
+  planner's price of each block, which the plan's record may state (`prove_s` a cell: its seconds for the blocks the
+  cell takes). The table prices the same blocks from its own sources, so the two totals differ wherever those prices
+  do. The command prints the prover GPUs per serving GPU at each, the plan's ms per block beside the table's on every
+  row, each source's proving time at the table's prices over the plan's, and the block type that holds most of the
+  difference. The plan's prices are its record's: they are no measurement the table reads, and they hold whatever its
+  planner counts in a block's price. A plan that prices only some of its cells is refused.
 - **The share of the proving time each source covers.**
 - **The totals per monitoring period over all compute:** with every block proved, the census's datacenter and the
   world's serving for a week, a month and a year; under a sampling plan, the compute and period the plan is sized for.

@@ -319,6 +319,24 @@ def _missing_share(m: Mapping[str, Any]) -> str:
     return blocks if m["mac_share"] is None else f"{blocks}, {m['mac_share']:.2%} of the blocks' MACs"
 
 
+def _planned_lines(planned: Mapping[str, Any]) -> list[str]:
+    """The same blocks at the sampling plan's own prices, and where they leave the table's: each source's GPU-seconds
+    at the table's prices over the plan's, and the block type that holds most of the difference."""
+
+    lines = [f"- the same blocks at the sampling plan's own prices: {_n(planned['gpus_per_serving_gpu'])} prover GPUs per "
+             "serving GPU. Its planner sized the sample at them; they are the plan's record's, no source this table "
+             "reads, and hold whatever its planner counts in a block's price. Every other figure here prices a block "
+             "from this table's sources"]
+    ratios = ", ".join(
+        f"{P.SOURCES[x['source']]} {x['gpu_seconds_per_token'] / x['planned_gpu_seconds_per_token']:.3g}x "
+        f"({x['block_types']} block types)" for x in planned["sources"] if x["planned_gpu_seconds_per_token"])
+    if top := planned["largest"]:
+        lines.append(f"- where the two differ, this table's proving time over the plan's by this table's source: {ratios}; "
+                     f"`{_short(top['block'])}` alone is {top['difference_share']:.1%} of the difference, "
+                     f"{_n(1e3 * top['seconds'])} ms per block here and {_n(1e3 * top['planned_seconds'])} ms in the plan")
+    return lines
+
+
 def _record(target: str | None) -> str:
     return "—" if target is None else target[:16] if target.startswith("art:") else target
 
@@ -327,23 +345,26 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
     """The table as Markdown; `rows`: only the block types that take the most proving time, the rest in one row."""
 
     t, spot = doc["totals"], doc["system"].startswith("spot")
+    planned = t.get("planned")
     lines = [f"# verity bench prove: {doc['system']} on {doc['workload']} ({doc['model']})", "",
              f"Inputs, each a labelled record of the store (`{RUN_OF_RECORD}`):", ""]
     lines += [f"- {i['slot']}: {', '.join(i['targets']) or 'none'} (`{i['record']}`): {i['what']}" for i in doc["inputs"]]
     s = doc["serving"]
     lines += [f"- serving rate ({s['status']}, a stated input, not a record): {_n(s['gpu_seconds_per_token'])} GPU-seconds a "
               f"served token, {_n(1 / s['gpu_seconds_per_token'])} tokens a serving GPU-second: {s['basis']}", "",
-              f"| block type | k_log | blocks {'proved ' if spot else ''}per token | ms per block | source | record | "
-              "share of proving time | note |", "| --- | --- | --- | --- | --- | --- | --- | --- |"]
+              f"| block type | k_log | blocks {'proved ' if spot else ''}per token | ms per block | "
+              f"{'ms per block in the plan | ' if planned else ''}source | record | share of proving time | note |",
+              "| --- | --- | --- | --- | --- | --- | --- | --- |" + (" --- |" if planned else "")]
     shown = doc["rows"] if rows is None else doc["rows"][:rows]
     for r in shown:
         ms = "—" if r["seconds"] is None else _n(1e3 * r["seconds"])
         share = "—" if r["time_share"] is None else f"{r['time_share']:.2%}"
+        its = f"{_n(1e3 * r['planned_seconds'])} | " if planned else ""
         lines.append(f"| `{_short(r['block'])}` | {'—' if r['k_log'] is None else r['k_log']} | {_n(r['per_token'])} | {ms} | "
-                     f"{P.SOURCES[r['source']]} | {_record(r['record'])} | {share} | {r['note'] or ''} |")
+                     f"{its}{P.SOURCES[r['source']]} | {_record(r['record'])} | {share} | {r['note'] or ''} |")
     if rest := doc["rows"][len(shown):]:
-        lines.append(f"| {len(rest)} more block types | | {_n(sum(r['per_token'] for r in rest))} | | | | "
-                     f"{sum(r['time_share'] or 0.0 for r in rest):.2%} | |")
+        lines.append(f"| {len(rest)} more block types | | {_n(sum(r['per_token'] for r in rest))} | | "
+                     f"{'| ' if planned else ''}| | {sum(r['time_share'] or 0.0 for r in rest):.2%} | |")
     lines += ["", "## At the sampling plan" if spot else "## Every block proved", "",
               f"- blocks {'proved ' if spot else ''}per token: {_n(t['blocks_per_token'])}",
               f"- prover GPU-seconds per token: {_n(t['gpu_seconds_per_token'])}{_range(t['gpu_seconds_per_token_range'])}",
@@ -357,6 +378,8 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
         more = len(t["missing"]) - MISSING_NAMED
         lines.append(f"- partial: {len(t['missing'])} block type(s) with no figure, whose proving every total here leaves "
                      f"out: {named}" + (f"; and {more} more, which `--json` names" if more > 0 else ""))
+    if planned:
+        lines += _planned_lines(planned)
     if t["range_basis"]:
         lines.append(f"- each range's other end: {t['range_basis']}")
     lines.append(f"- served MACs inside a proof block: {doc['macs_in_blocks']:.1%}; the rest are served rows no cut fits, "

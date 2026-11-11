@@ -18,7 +18,9 @@ served token, the prover GPU-seconds a block and where that figure is from (`SOU
 - `missing`: neither a measurement nor a k_log, so no figure, and the totals leave the type out and say so.
 
 `Flock` proves every block: its row counts are the census's. `Spot` wraps a proof system with a sampling plan: the
-same costs, and the blocks the plan samples a served token.
+same costs, and the blocks the plan samples a served token. A plan that states the prices its own planner sized the
+sample at gets a second total beside the table's, the same blocks at those prices (`planned`), with where the two
+differ: a plan's sample fits its planner's prices, and the table's sources may hold others.
 
 **The totals** (`report`) are the same for every system: the prover GPU-seconds a served token, the served tokens a
 prover GPU covers a second (its inverse) and the prover GPUs a serving GPU needs (over a served token's GPU-seconds,
@@ -33,7 +35,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from statistics import linear_regression, median
 from typing import Any, Protocol
 
@@ -142,14 +144,16 @@ class Cost:
 
 @dataclass(frozen=True)
 class Row:
-    """A block type's row: the blocks of it proved a served token, a block's cost, and a block's served MACs where the
-    census holds them."""
+    """A block type's row: the blocks of it proved a served token, a block's cost, a block's served MACs where the
+    census holds them, and the GPU-seconds a block its sampling plan's own planner priced it at, where the plan states
+    them."""
 
     block: str
     k_log: int | None
     per_token: float
     cost: Cost
     macs: float | None = None
+    planned: float | None = None
 
 
 @dataclass(frozen=True)
@@ -332,8 +336,9 @@ class Flock:
 @dataclass(frozen=True)
 class SamplingPlan:
     """A sampling plan: over `period_s` seconds of `scope`'s serving (`serving_gpu_seconds` in all) at sampling rate
-    `q`, the proof blocks it samples of each block type (`sampled`, by the plan's name of the type), and the staged
-    type of each (`staged`), where it names one."""
+    `q`, the proof blocks it samples of each block type (`sampled`, by the plan's name of the type), the staged type
+    of each (`staged`), where it names one, and the GPU-seconds a block its own planner priced each type at
+    (`priced`), where the plan states them: every cell's, or none."""
 
     name: str
     scope: str
@@ -343,15 +348,24 @@ class SamplingPlan:
     sampled: Mapping[str, float]
     staged: Mapping[str, str]
     record: str
+    priced: Mapping[str, float] = field(default_factory=dict)
 
     @classmethod
     def of(cls, doc: Mapping[str, Any], record: str) -> SamplingPlan:
-        """The plan of a record's `mix.json`: each cell takes `taken` blocks of every sampled replay block."""
+        """The plan of a record's `mix.json`: each cell takes `taken` blocks of every sampled replay block, and may
+        state its planner's GPU-seconds for them (`prove_s`, a statement's fixed seconds included)."""
 
         cells = doc["cells"]
+        priced = {c["block"]: c["prove_s"] / c["taken"] if c["taken"] else 0.0
+                  for c in cells if c.get("prove_s") is not None}
+        bare = [c["block"] for c in cells if c["block"] not in priced]
+        if priced and bare:
+            raise ValueError(f"the sampling plan {record} states its planner's seconds (`prove_s`) for {len(priced)} "
+                             f"cell(s) and not for {len(bare)}{_some(bare)}: a total at its prices would leave those "
+                             "out. A plan prices every cell or none")
         return cls(doc["case"], doc["scope"], doc["period_s"], doc["q"], doc["gpu_seconds"],
                    {c["block"]: doc["replay_sample"] * c["taken"] for c in cells},
-                   {c["block"]: c["type"] for c in cells if c.get("type")}, record)
+                   {c["block"]: c["type"] for c in cells if c.get("type")}, record, priced)
 
 
 @dataclass(frozen=True)
@@ -359,7 +373,8 @@ class Spot:
     """SPOT over a proof system: `prover`'s cost of each block type, at the blocks `plan` samples a served token. A
     plan's cell is a row's by the block type's name, else by the staged type that measured or tried the row (a plan
     names a block type no served run has taken by its staged type alone); a plan and a census that don't cover each
-    other are refused, since the total would price another workload."""
+    other are refused, since the total would price another workload. Each row keeps its cell's price in the plan
+    (`Row.planned`), where the plan states one."""
 
     prover: ProofSystem
     plan: SamplingPlan
@@ -377,7 +392,7 @@ class Spot:
                 bare.append(r.block)
                 continue
             used.add(cell)
-            rows.append(replace(r, per_token=self.plan.sampled[cell] / tokens))
+            rows.append(replace(r, per_token=self.plan.sampled[cell] / tokens, planned=self.plan.priced.get(cell)))
         unread = sorted(set(self.plan.sampled) - used)
         if bare or unread:
             raise ValueError(
@@ -399,7 +414,8 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     """A table's rows, the share of the proving time each source covers, and the totals, given a served token's
     GPU-seconds. The totals are `measured` only when every block type is measured at steady state, and `partial` when a
     type has no figure: `missing` then names each such type, the most blocks first, with its share of the blocks, and
-    of the MACs where every row holds them (a type with no time has no share of the proving time)."""
+    of the MACs where every row holds them (a type with no time has no share of the proving time). `planned` is the
+    same blocks at their sampling plan's own prices, where the plan states them (`_planned`)."""
 
     total = table.gpu_seconds_per_token()
     blocks = sum(r.per_token for r in table.rows)
@@ -409,7 +425,7 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
         return part / whole if whole else None
 
     rows = [{"block": r.block, "k_log": r.k_log, "per_token": r.per_token, "seconds": r.cost.seconds,
-             "source": r.cost.source, "record": r.cost.record, "note": r.cost.note,
+             "planned_seconds": r.planned, "source": r.cost.source, "record": r.cost.record, "note": r.cost.note,
              "verifier_seconds": r.cost.verifier_seconds, "proof_bytes": r.cost.proof_bytes,
              "time_share": None if r.cost.seconds is None else share(r.per_token * r.cost.seconds, total)}
             for r in table.rows]
@@ -443,7 +459,31 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
             "range_basis": table.range_basis, "verifier_basis": table.verifier_basis,
             "verifier_seconds_per_token": _covered(verified, lambda r: r.cost.verifier_seconds, blocks),
             "proof_bytes_per_token": _covered(sized, lambda r: r.cost.proof_bytes, blocks),
+            "planned": _planned(table, serving_seconds),
         },
+    }
+
+
+def _planned(table: Table, serving_seconds: float) -> dict[str, Any] | None:
+    """The table's blocks at their sampling plan's own prices, None unless the plan prices every row: the totals, and
+    where they leave the table's. Over the rows the table prices, each source's GPU-seconds a served token at both
+    prices, and the row that holds most of the difference, with its share of it."""
+
+    if not table.rows or any(r.planned is None for r in table.rows):
+        return None
+    total = sum(r.per_token * r.planned for r in table.rows)
+    both = [r for r in table.rows if r.cost.seconds is not None]
+    gap = sum(r.per_token * (r.cost.seconds - r.planned) for r in both)
+    top = max(both, key=lambda r: abs(r.per_token * (r.cost.seconds - r.planned)), default=None)
+    return {
+        "gpu_seconds_per_token": total, "gpus_per_serving_gpu": total / serving_seconds,
+        "sources": [{"source": source, "block_types": len(mine),
+                     "gpu_seconds_per_token": sum(r.per_token * r.cost.seconds for r in mine),
+                     "planned_gpu_seconds_per_token": sum(r.per_token * r.planned for r in mine)}
+                    for source in SOURCES if (mine := [r for r in both if r.cost.source == source])],
+        "largest": None if top is None or not gap else {
+            "block": top.block, "seconds": top.cost.seconds, "planned_seconds": top.planned,
+            "difference_share": top.per_token * (top.cost.seconds - top.planned) / gap},
     }
 
 
