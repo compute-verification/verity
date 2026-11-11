@@ -515,8 +515,9 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     assert doc["widths"] == {"NS": 149_648, "NE": 1_136, "entries": 8, "NV": 4_832, "egress_row": 65_536}
     assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
     assert doc["terms"]["schedules_per_request"] == doc["terms"]["cells_per_request"] == 7
-    assert doc["links"] == {"link": 1, "datacenter": 12_500, "world": 18_550_229}
-    assert "BF16" in doc["weights"]["label"] and "BF16" in cr.leak_markdown(doc)
+    assert doc["links"] == {"link": 1, "datacenter": 12_500, "world": 46_870_000}
+    assert doc["weights"]["label"] == "GLM-5.3 in FP4" and "GLM-5.3 in FP4" in cr.leak_markdown(doc)
+    assert any("leak_bounds.at_link_rate" in c and "not the scope's K" in c for c in doc["conditions"])
     json.dumps(doc)
     rows = {(r["period"], r["scope"], r["prog"]): r for r in doc["rows"]}
     week = {p: rows["week", "link", p] for p in ("registered", "anchors")}

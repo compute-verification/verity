@@ -4,6 +4,7 @@ public import Proofs.Nci.Inequalities
 public import Proofs.Nci.LoomisWhitney
 public import Proofs.Nci.Cut
 public import Proofs.Nci.CutWitness
+public import Proofs.Nci.CutCharged
 public import Proofs.Core
 public import Proofs.Nci.Chain
 public import Proofs.Nci.Throttling
@@ -22,7 +23,6 @@ public import Proofs.Nci.FitRate
 public import Proofs.Nci.FitWitness
 public import Proofs.Nci.Dampener
 public import Proofs.Nci.Info
-public import Proofs.Nci.Transfers
 public import Proofs.Nci.Fmt
 public import Proofs.Nci.Fmt2
 public import Proofs.Nci.Training
