@@ -17,7 +17,8 @@ same script rather than by rename detection:
    before the move: the owner merges main first, as without the move.
 2. check that merge out in a scratch worktree, run B's `tools/move/layout.py` at its root, and commit what it changed. Files
    the branch added are moved and rewritten too, which rename detection can't do. Where the branch edited `tools/move/`
-   itself, B's copy runs and the branch's is put back before the commit.
+   itself, B's copy runs and the branch's is put back before the commit. B's script runs with no limit on the text it
+   reads (its `TEXT_LIMIT`), so a file the move rewrote is rewritten here too when the branch grew it past the limit.
 3. merge `--onto` (default M; the moved main once M has landed, which must contain M), with M as the merge base. M is the
    script run on B, so against it the branch's side holds only the branch's own changes, in moved paths and names, and the
    other side only what landed after the move: what conflicts here is real content. (Against B instead, a line the script
@@ -69,6 +70,10 @@ SCRIPT_ARGS: tuple[str, ...] = ()
 #: splits instead of failing on them (they're its owner's to check, and the move's commit is the same either way)
 BRANCH_ARGS = {"tools/move/layout.py": ("--report-splits",)}
 SCRIPT_DIR = "tools/move"
+#: the mover's limit on the text files it reads, in the file every move script reads it from. A crossing runs the script with
+#: none: a file under the limit on the move's base was rewritten by the move, and the branch's copy, grown past it, must be
+#: too (a Lean lock that crossed with every old path in it). `check_generated` holds the script so run to the move itself
+LIMIT_IN, LIMIT, NO_LIMIT = "tools/move/layout.py", re.compile(rb"^TEXT_LIMIT = .*$", re.M), b"TEXT_LIMIT = 1 << 62"
 TRAILER_MOVE, TRAILER_OF = "Restack-move", "Restack-of"
 #: a move commit's line naming its map, and so its script (`stage.py` writes both kinds, drive's queue `Move:`)
 MOVE_LINE = re.compile(r"^(Move|Layout-move): (tools/move/[\w.-]+\.toml)((?: --no-lock)?)$", re.M)
@@ -261,27 +266,40 @@ def pinned_uv_env(base: str, tmp: str, cwd: str | None) -> dict[str, str] | None
     return {**os.environ, "PATH": shim + os.pathsep + os.environ.get("PATH", "")}
 
 
+def swap(path: str, old: bytes, new: bytes) -> None:
+    with open(path, "rb") as f:
+        text = f.read()
+    with open(path, "wb") as f:
+        f.write(text.replace(old, new))
+
+
 def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[str, list[str], list[str]]:
-    """Check `merged` out in a scratch worktree, run `base`'s layout script at its root, and return the tree it leaves (every
-    change staged, ignored files left out), the `tools/move/` paths whose branch copy was put back, and the tail of the
-    script's output."""
+    """Check `merged` out in a scratch worktree, run `base`'s layout script at its root with no limit on the text it reads
+    (`LIMIT`), and return the tree it leaves (every change staged, ignored files left out), the `tools/move/` paths whose
+    branch copy was put back, and the tail of the script's output."""
     script, mine = blobs_under(base, SCRIPT_DIR, cwd), blobs_under(merged, SCRIPT_DIR, cwd)
     if SCRIPT not in script:
         raise SystemExit(f"the move's base {base[:12]} has no {SCRIPT}")
     restored = sorted(p for p in script.keys() | mine.keys() if script.get(p) != mine.get(p))
+    limit = LIMIT.search(git("show", f"{base}:{LIMIT_IN}", cwd=cwd, ok=(0, 128)).stdout)
     with tempfile.TemporaryDirectory(prefix="restack-", ignore_cleanup_errors=True) as tmp:
         wt = os.path.join(tmp, os.path.basename(tmp))  # a unique worktree name, so restacks can run side by side
         add_worktree(wt, merged, cwd)
         try:
-            if restored:
+            if restored or limit:
                 # committed, so that the script sees a clean checkout (layout.py refuses a dirty one)
                 git("checkout", base, "--", SCRIPT_DIR, cwd=wt)
+                if limit:
+                    swap(os.path.join(wt, LIMIT_IN), limit[0], NO_LIMIT)
+                    git("add", "--", LIMIT_IN, cwd=wt)
                 overlay = commit_tree(out("write-tree", cwd=wt), [merged], f"restack: {SCRIPT_DIR}/ as at {base}\n", wt)
                 git("reset", "-q", "--soft", overlay, cwd=wt)
             p = subprocess.run([python, SCRIPT, *BRANCH_ARGS.get(SCRIPT, ()), *SCRIPT_ARGS], cwd=wt, capture_output=True, env=pinned_uv_env(base, tmp, cwd))
             output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
             if p.returncode:
                 raise ScriptFailed(f"exit {p.returncode}: " + "\n".join(output))
+            if limit and os.path.exists(os.path.join(wt, LIMIT_IN)):
+                swap(os.path.join(wt, LIMIT_IN), NO_LIMIT, limit[0])    # the script's file as it left it, with its limit again
             git("add", "-A", cwd=wt)
             for path in restored:
                 if path in mine:
@@ -405,7 +423,9 @@ def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
                 keep_generated(full, want)
     if _GENERATED[key] != tree_of(move, cwd):
         raise SystemExit(f"--move-commit {move[:12]} isn't what {SCRIPT} writes on {base[:12]}: pass the commit the script "
-                         "generated, and a later commit on the move's branch as --onto")
+                         "generated, and a later commit on the move's branch as --onto (the script runs here with no limit "
+                         f"on the text it reads: a text file of {base[:12]} over the script's own limit, which the move left "
+                         "as it was, is one more cause)")
 
 
 def based_after(head: str, base: str, refs: list[str], cwd: str | None) -> str | None:
