@@ -26,6 +26,9 @@ from collections.abc import Mapping
 from typing import Any
 
 from verity_vllm.engine import hooks
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 KBLOCK_N = 128          # hd 64 (legacy constant; use fa2_kblock_n)
 KBLOCK_M = 64           # every split-KV kernel (flash_fwd_launch_template.h: kBlockM = 64 fixed for all head dims)
@@ -501,7 +504,7 @@ def require_hidden_on_every_rank(made: list[dict[str, Any]], required_classes: t
     if out != required_classes:
         versions["required_classes"] = list(out)
         versions["required_classes_source"] = f"{versions.get('required_classes_source', '')} + attention hidden class {fam or 'none'} ({states[min(states)]['why']})"
-        print(f"[tp2commit] attention hidden class {fam or 'none'} on every rank ({states[min(states)]['why']}); required classes {list(out)}", flush=True)
+        logger.info("[tp2commit] attention hidden class %s on every rank (%s); required classes %s", fam or "none", states[min(states)]["why"], list(out))
     return out
 
 

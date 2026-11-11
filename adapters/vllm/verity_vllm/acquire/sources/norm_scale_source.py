@@ -28,7 +28,10 @@ from typing import Any
 from verity_vllm.acquire.norm_tap_src.build_ext import NAME as TAP_NS
 from verity_vllm.acquire.norm_tap_src.build_ext import TAP_VERSION
 from verity_vllm.engine import hooks
+from verity_vllm.log import init_logger
 from verity_vllm.query import norm_scales as NS
+
+logger = init_logger(__name__)
 
 
 def kernel_source_sha256(kernel: Any) -> str:
@@ -247,13 +250,13 @@ def attach(com: Any, so: str | None, manifest: Mapping[str, Any] | None, require
         return required_classes, None
     modules = NS.manifest_modules(manifest)
     if not modules:
-        print("[delta] REFUSE: --norm-tap-so but the required-value manifest names no norm_scales identity (manifest build --norm-scales)", flush=True)
+        logger.error("[delta] REFUSE: --norm-tap-so but the required-value manifest names no norm_scales identity (manifest build --norm-scales)")
         raise SystemExit(3)
     src = NormScaleSource(com, model if model is not None else getattr(com, "model", None), modules, so,
                           words_per_token=NS.words_per_token(manifest) or None)
     com.attach_source(src)
-    print(f"[delta] norm-scale source attached: {len(modules)} norm modules (sites {', '.join(src.kinds)}), {src.words_per_token} words per "
-          f"token, tap {so} -> committer {com.name}", flush=True)
+    logger.info("[delta] norm-scale source attached: %d norm modules (sites %s), %s words per token, tap %s -> committer %s",
+                len(modules), ", ".join(src.kinds), src.words_per_token, so, com.name)
     if not explicit_classes and NS.FAMILY not in required_classes:
         return (*required_classes, NS.FAMILY), src
     return required_classes, src

@@ -31,10 +31,13 @@ from verity_vllm.acquire.sources import (attention_source, call_boundary_source,
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.acquire.sources import moe_source
 from verity_vllm.config import option
+from verity_vllm.log import init_logger
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
+
+logger = init_logger(__name__)
 
 #: (the TapSources field, the rank result's key, the source module, the manifest family, the source's class)
 SOURCES = (("norm_tap_so", "norm_scale_source", norm_scale_source, NS.FAMILY, norm_scale_source.NormScaleSource),
@@ -192,7 +195,7 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
             required_classes = (*required_classes, fam)
         versions[key] = states
         versions["required_classes"] = list(required_classes)
-        print(f"[tp2commit] {fam} source attached on every rank ({states[min(states)]}); required classes {list(required_classes)}", flush=True)
+        logger.info("[tp2commit] %s source attached on every rank (%s); required classes %s", fam, states[min(states)], list(required_classes))
     return required_classes
 
 

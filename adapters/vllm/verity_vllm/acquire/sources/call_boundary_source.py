@@ -31,6 +31,9 @@ import numpy as np
 from verity_vllm.acquire.sources import call_boundary_plan as CP
 from verity_vllm.acquire.sources import int8_source
 from verity_vllm.acquire.sources.call_boundary_plan import FAMILY, WORD_DTYPES, Body, Plan
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 _SIGNED = {1: "uint8", 2: "int16", 4: "int32", 8: "int64"}
 WARMUP_ID = re.compile(r"warmup-(\d+)(?:-[0-9a-f]{8})?")
@@ -324,17 +327,17 @@ def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required
     if not enabled:
         return required_classes, None
     if not manifest_sites(manifest):
-        print("[delta] REFUSE: the call-boundary source but the required-value manifest names no call_boundaries identity", flush=True)
+        logger.error("[delta] REFUSE: the call-boundary source but the required-value manifest names no call_boundaries identity")
         raise SystemExit(3)
     plan = plan if plan is not None else plan_of(manifest or {}, *programs)
     if plan.uncovered or not plan.bodies:
-        print(f"[delta] REFUSE: call boundaries: {len(plan.uncovered)} of {plan.identities} identities have no host evaluation "
-              f"(--program-dir / --programs-root {list(programs)}): {plan.uncovered[:4]}", flush=True)
+        logger.error("[delta] REFUSE: call boundaries: %d of %s identities have no host evaluation (--program-dir / --programs-root %s): %s",
+                     len(plan.uncovered), plan.identities, list(programs), plan.uncovered[:4])
         raise SystemExit(3)
     src = CallBoundarySource(com, model if model is not None else getattr(com, "model", None), plan)
     com.attach_source(src)
-    print(f"[delta] call-boundary source attached: {plan.covered} identities in {len(src.modules)} module bodies of {len(plan.program_dirs)} "
-          f"request Programs, {plan.bytes_per_token} bytes per token -> committer {com.name}", flush=True)
+    logger.info("[delta] call-boundary source attached: %s identities in %d module bodies of %d request Programs, %s bytes per token -> "
+                "committer %s", plan.covered, len(src.modules), len(plan.program_dirs), plan.bytes_per_token, com.name)
     if not explicit_classes and FAMILY not in required_classes:
         return (*required_classes, FAMILY), src
     return required_classes, src
