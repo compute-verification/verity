@@ -5,9 +5,9 @@ fixed and pass.  The exploits run on `test_remote_bandwidth`'s store and drivers
 from __future__ import annotations
 
 import pytest
-
 from remote_bandwidth_fakes import Clock, Entropy
-from test_remote_bandwidth import N, SCHEDULE, drive, finish, params, store  # noqa: F401
+from test_remote_bandwidth import SCHEDULE, N, drive, finish, params, store  # noqa: F401
+
 from verity.protocols.poub.verifier import audit, codec, coins, receipts, timing
 from verity.protocols.poub.verifier.audit import AuditRun
 

@@ -304,9 +304,9 @@ def test_slope_seven_refuted_below_the_floor() -> None:
         assert folded_sums(d + [0] * (N_LIMBS - positions), P) == list((a * a % P).to_bytes(N_LIMBS, "little"))
     log2_members = t + math.log2((len(hits) - 3 * math.sqrt(len(hits))) / draws)
     assert log2_members > 159.4
-    assert 7 * (N_LIMBS - D0) > math.log2(P) - log2_members
+    assert math.log2(P) - log2_members < 7 * (N_LIMBS - D0)
     assert N_LIMBS - (math.log2(P) - log2_members) / 8 > 19.9
-    assert P > 2 ** FLOOR * 13 ** positions
+    assert 2 ** FLOOR * 13 ** positions < P
 
 
 def test_rho_pairs_at_p1024() -> None:
