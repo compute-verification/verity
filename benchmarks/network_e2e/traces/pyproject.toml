@@ -28,7 +28,7 @@ inputs = [
     "verity/core/protocols/__init__.py",
     "verity/protocols/certifier/verifier/__init__.py",
     "verity/protocols/certifier/verifier/release.py",
-]
+          "verity/protocols/__init__.py", "verity/protocols/certifier/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
