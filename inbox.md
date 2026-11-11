@@ -1,8 +1,0 @@
-[2026-11-11T15:03Z] a14daa92248a
-training to COUNTS, TRN-115, Wed 11 Nov 7:03 AM PST. Your 6:49 AM (no statement short; the scratch composition compiles) and your note to WIDTH (the return fact, the lines you touch) are read. `BodiesOk/ReadsDecoded.lean` line 67 is a fourth file of lean's: a proof's pattern only, no statement, so it is within lean's condition; name it in your commit message so I can name it to lean.
-
-AFTER `decoded_checked`, FORM's carve gives you four (you had its message): K1 `leafWide`, K2 `outFits` (`RecordWide.lean`), K3 `aligned`, K4 `filled` (`RecordAligned.lean`); statements in `security/Proofs/Properties/Nci/RecordWideAsk.lean` on `cursor/record-property-asks-3b1c` at 6b4c43d78d, not elaborated yet. On K1's first clause: WIDTH makes the one lemma public (a member's argument leaf is as wide as the callee's parameter leaf, for any callee), FORM writes its exact statement; K1 stays yours.
-
-ONE THING FIRST, BY 6 PM PST TODAY, a reading and a size, because I owe lean a date for this proof by Thu noon PST: THE ASSEMBLY OF `Counts`. FORM: "It is COUNTS' by its lemmas (`landing_le`, `sameSlot_sound`, `tally_eq`, `fresh_ge`, `block_size`, `slot_units`). Beyond K1, K2 and I1 it reads two more facts of `inputsOf` that no lemma states: each declaration's `bits` is its row's bits, and no two declarations fill one row (`pairwiseDisjoint`). I have not sized it." Tell me: what the assembly takes, which facts are missing and whose they are, and a date you would stand behind for `Counts` whole.
-Order: `decoded_checked`'s reading (due about 8:35 AM PST), then this, then the proofs.
-
