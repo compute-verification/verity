@@ -86,11 +86,11 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   last unit's o1, S_{G·T−1}, which no state leaf holds, is a member's own rows (`Frame`), committed and never opened.
   Leaf 0 is opened by
   no unit, and the entries boundary 0's Programs write on it are read by none: bucket 0 reads the empty state, in
-  which no slot is live, so none is due. Accepted: every o0 opens to 1. Its registration names ``prog`` tied, which
-  R8 lets through though `EVERY` units read each slot entry, and both verifiers' verdict publishes it
-  (``rests_on_period_check: ["prog"]``): the acceptance rests on a period check, `NetworkCheck.Period`'s `wired`, which
-  ties ``prog``'s rows to the audit that registered them and refuses this run's stand-in block, no pinned
-  `SlotEntry_v1` (`period_case.UNWIRED`). The registration's roots also name, as
+  which no slot is live, so none is due. Accepted: every o0 opens to 1. Its registration names each lane's
+  ``prog<j>`` tied, which R8 lets through though `EVERY` units read each slot entry, and both verifiers' verdict
+  publishes them (``rests_on_period_check``, the lanes' ``prog<j>``): the acceptance rests on a period check,
+  `NetworkCheck.Period`'s `wired`, which ties each ``prog<j>``'s rows to the audit that registered them and refuses
+  this run's stand-in block, no pinned `SlotEntry_v1` (`period_case.UNWIRED`). The registration's roots also name, as
   ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
   reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **Every port registered**: the verifier's registered reads name every port of every member's circuit, inputs and
@@ -1142,20 +1142,13 @@ def entry_reads(prog: Program, query: dict, members: list[SimpleNamespace], cls:
 def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: Path) -> SimpleNamespace:
     """A round's Program and partition (`members_of`'s templates and counts) and each template's stager, every output
     its own row. The scan's three templates' (`TEMPLATES`) is the generator form (`scan_root`), its one-stage reads
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-    of the slot entries each unit's (`entry_reads`); every other round's a population of its templates."""
+    of the slot entries each unit's (`entry_reads`), and its ``prog<j>``, one a lane, the values it names tied
+    (``tied``): every `EVERY` units read one slot entry of each lane, the output of the block that registered it,
+    which `NetworkCheck.Period`'s rows form ties to the scan (`progTied`, `wired`), so R8 lets them through and the
+    registration verdict publishes them (`rests_on_period_check`): the round's acceptance rests on that period
+    check, which refuses the block round's stand-in; every other round's a population of its templates, which names
+    none."""
     defs, members = _defs(cls), members_of(templates, G, T, entries=entries_of(cls, G, T), lanes=cls.NR)
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    of the slot entries each unit's (`entry_reads`); every other round's a population of its templates."""
-    defs, members = _defs(cls), members_of(templates, G, T, entries=entries_of(cls, G, T))
-=======
-    of the slot entries each unit's (`entry_reads`), and its ``prog`` the one value it names tied (``tied``): every
-    `EVERY` units read one slot entry, the output of the block that registered it, which `NetworkCheck.Period`'s rows
-    form ties to the scan (`progTied`, `wired`), so R8 lets it through and the registration verdict publishes it
-    (`rests_on_period_check`): the round's acceptance rests on that period check, which refuses the block round's
-    stand-in; every other round's a population of its templates, which names none."""
-    defs, members = _defs(cls), members_of(templates, G, T, entries=entries_of(cls, G, T))
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
     counts = counts_of(members)
     nb = G * T // cls.EVERY
     prog = scan_root([(defs[tp], counts[tp], FIXED[tp]) for tp in templates], nb, cls.EVERY) \
@@ -1184,7 +1177,7 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: P
                                       lower_s=round(time.time() - t, 1))
     return SimpleNamespace(program=prog, query=query, templates=templates, members=members, stagers=stagers,
                            units=sum(counts.values()), partition_file=out / "partition.json",
-                           program_file=out / "program.json", tied=("prog",) if templates == TEMPLATES else ())
+                           program_file=out / "program.json", tied=lane_kinds(cls) if templates == TEMPLATES else ())
 
 
 def port_prefix(defn, mr: SimpleNamespace) -> str:
