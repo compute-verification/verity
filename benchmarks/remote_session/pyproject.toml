@@ -1,4 +1,5 @@
-# The remote bandwidth audit's sessions end to end: the verifier's process (`verifier_process.py`, which runs
+# The remote bandwidth audit's sessions end to end: the verifier's process
+# (`verity/protocols/poub/verifier/remote_session/verifier_process.py`, which runs
 # `verity/protocols/poub/verifier/session/verifier.py`, their wire `wire.py` beside it) and the prover's
 # (`prover.py`, its GPU backend `device.py` and `session.cu`, and `inplace.py`, its pass over vLLM's tensors where they
 # are). Not a package: `run.sh` runs both on a GPU node (`inplace.sh` gates the in-place pass), and the suite
