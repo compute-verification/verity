@@ -2,7 +2,6 @@
 it established and what it found -- ONE document (`<row>/verdict.json`) beside the files it is derived from.
 
     verity-vllm verdict from-record <row_dir> [--out PATH]      rebuild the record from a row's evidence
-    verity-vllm verdict mapping                                  the old -> new check-name table (markdown)
 
 WHY.  The v1 Commit records its decision three times over: `commit/verdict.json` (`commit_pass`, one `first_fail_reason` string: the FIRST
 rule that failed, the others silent), `commit/runs.jsonl` (per instrumented run, every rule's own block under `commit.*`, the check

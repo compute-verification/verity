@@ -27,7 +27,7 @@ from verity_vllm.check.commit_pass import commit_verdict
 from verity_vllm.check.commit_rules import REJECT
 from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp
 from verity_vllm.check.result import MISSING_INPUT, CheckResult, code_of, outcome_of
-from verity_vllm.check.verdict_names import OLD_TO_NEW, mapping_markdown
+from verity_vllm.check.verdict_names import OLD_TO_NEW
 from verity_vllm.pipeline import cli
 from verity_vllm.properties.record import REGISTRY, PropertyRecord, digest_of, seal
 
@@ -201,7 +201,6 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
     # every group has at least one rule check and a one-sentence claim
     for g, spec in V.GROUPS.items():
         assert spec["claim"].endswith(".") and any(c.name.startswith(g + "/") for c in checks), g
-    assert "| `commit_pass` |" in mapping_markdown()
 
 
 # ---------------------------------------------------------------------------------------------------------------- (3) equivalence
