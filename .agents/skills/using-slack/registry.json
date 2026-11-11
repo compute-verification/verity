@@ -90,7 +90,7 @@
         "9e59",
         "98f5"
       ],
-      "demos": [
+      "examples": [
         "Which machines do we have right now, and what is each one busy with?",
         "I want to run a long job on a GPU tonight. Where can it go, and how do I start it?",
         "My run failed or was killed. Why, and where are its logs?",
@@ -154,7 +154,7 @@
         "f39a",
         "11bd"
       ],
-      "demos": [
+      "examples": [
         "What exactly have you proved about the proof system, and what do you still assume?",
         "If a server cheats on only a small part of its work, how likely is a sampled check to catch it?",
         "Does checking a proof reveal anything about the model's weights or the user's data?",
@@ -215,7 +215,7 @@
         "c491",
         "6f04"
       ],
-      "demos": [
+      "examples": [
         "How do you turn a model like GLM or DeepSeek into a circuit, and how big is that circuit?",
         "How many gates does one decoding step of a large model take, and which parts of the model dominate?",
         "How do you know the circuit computes exactly what the GPU kernel actually computed, bit for bit?",
@@ -304,7 +304,7 @@
         "ea24",
         "1de3"
       ],
-      "demos": [
+      "examples": [
         "How do you prove a GPU actually did the matrix multiplies it claims, rather than something cheaper?",
         "What stops a datacenter from counting work done by its host CPU or a spare GPU as the audited GPU's work?",
         "Where do the peak-throughput numbers for H200, B200 and RTX PRO 6000 come from, and how are they checked?",
@@ -424,7 +424,7 @@
         "b0c1",
         "93c1"
       ],
-      "demos": [
+      "examples": [
         "How do you know the weights were actually held in GPU memory the whole time, and not reloaded from disk when you checked?",
         "What stops a node from rebuilding the blocks you ask for on the fly instead of storing them?",
         "How fast can the node pull data in from its disks or the network, and how does that change the memory number?",
@@ -443,7 +443,7 @@
       ],
       "linear": "NET",
       "owns": [
-        "verity/protocols/",
+        "verity/protocols/inference_only/verifier/nci/",
         "verity/protocols/certifier/",
         "verity/protocols/certifier/prover/",
         "verity/protocols/certifier/device/",
@@ -460,7 +460,7 @@
         "a190",
         "061a"
       ],
-      "demos": [
+      "examples": [
         "How do you stop a GPU node from secretly sending data out over the network?",
         "What does the network certifier record about each link, and who has to trust it?",
         "How many bits could a cheating machine leak just through when it sends packets?",
@@ -484,7 +484,7 @@
       "remit": "Daniel's dashboards on the console: the Goals page and live plots of running experiments. Asks wait until Daniel opens it; nothing wakes it.",
       "charter": "Daniel, 2026-11-02 11:24 AM PST",
       "linear": "CON",
-      "demos": [
+      "examples": [
         "How do I put my goals on Daniel's Goals page?",
         "How do I publish a live plot of my runs to the console?"
       ],
@@ -515,7 +515,7 @@
         "2a98",
         "1518"
       ],
-      "demos": [
+      "examples": [
         "When will my pull request land on main, and what is it waiting for?",
         "Why did my PR get taken out of the merge queue?",
         "A check failed on my change but I don't think I broke it. Can you look?",
@@ -541,7 +541,7 @@
         "6f1e",
         "fc8d"
       ],
-      "demos": [
+      "examples": [
         "How do I know the Lean proofs actually check, with no sorry or extra axioms?",
         "What does a security guarantee in Lean assume, and where is that written down?",
         "My Lean build or proof check runs out of memory or takes hours. What should I do?",
@@ -570,7 +570,7 @@
         "38e0",
         "e34f"
       ],
-      "demos": [
+      "examples": [
         "Who should I ask about something, and how do I reach them here?",
         "My question got no answer. Who saw it, and what happens next?",
         "How do I get my own chat channel, or add someone to it?"
@@ -625,7 +625,7 @@
         "718d",
         "49ab"
       ],
-      "demos": [
+      "examples": [
         "How do you check that a model served with vLLM computed exactly what it claims to?",
         "Does verification slow down serving, and by how much?",
         "Which models and quantizations (like int8 Llama) can you serve under verification today?",
@@ -654,7 +654,7 @@
         "47e4",
         "6193"
       ],
-      "demos": [
+      "examples": [
         "How much slower does serving a model get when you add verification, and how did you measure that?",
         "What's the overhead of the bandwidth audit (or PoUW, or the commitment) compared with plain vLLM?",
         "Can I rerun one of your benchmark numbers myself, and how?",
@@ -677,7 +677,7 @@
       "branch_suffixes": [
         "15ad"
       ],
-      "demos": [
+      "examples": [
         "How much slower is serving with the commitments on, compared with plain vLLM at full load?",
         "Why is the proof-of-work matmul so much slower than a normal int8 matmul, and what would make it faster?",
         "Is the exact int8 path supposed to be slower than ordinary int8 serving?",
@@ -700,7 +700,7 @@
       "branch_suffixes": [
         "4207"
       ],
-      "demos": [
+      "examples": [
         "How much more hardware would someone need to secretly train a frontier model under your verification scheme?",
         "Could a lab hide training inside work it declares and proves as inference?",
         "Which parts of the training-slowdown claim are proved, and which are still assumptions?",
@@ -722,7 +722,7 @@
       "branch_suffixes": [
         "9c4d"
       ],
-      "demos": [
+      "examples": [
         "Is there one theorem that says the whole verifier is sound, and what does it still assume?",
         "Which subprotocols of the soundness theorem are proved, and which are still premises?",
         "If the verifier accepts a period, what exactly does that guarantee about the work, memory and network claims?",
