@@ -5,8 +5,8 @@ during development. One installable package, one CLI (`research`), stdlib
 only. It runs commands and records what happened; it imports nothing from
 Verity's packages (enforced by `tests/test_cli.py::test_no_packages_import`).
 
-How to use it is in the skills (`writing-runs`, `team`); this file is for people
-changing the tool.
+This file is for people changing the tool; its users read the `team` and
+`writing-runs` skills.
 
 ## Layout and provenance
 
@@ -22,7 +22,8 @@ src/research/
 ├── cores.py        --cpus (--queue): a queued run's whole cores, claimed on the machine
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
 ├── auto.py         --on auto: a CPU node's research pool or node 2's queue, and when the run should start there
-├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit
+├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit; it makes no namespace but those
+│                   --job-namespaces lists (of user, mnt, net), where the workload holds capabilities
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── merge.py, queue.py, vqueue.py   landing: the merge gate, the merge queue and the verified queue, which
 │                   tools/verity/landq replays
