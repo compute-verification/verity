@@ -4088,7 +4088,8 @@ mod tests {
             let (full, cut) = (schedule(net), schedule_seeded(net, seeds));
             assert!(cut.levels() <= full.levels() && (k != 3 || cut.levels() < full.levels()), "net {k}: {} levels after the cut, {} before", cut.levels(), full.levels());
             if k == 4 {
-                assert_eq!((full.levels(), cut.levels()), (blocks * per, per), "the blocks in series: a block's levels after the cut");
+                // a block's rows before its seeds, one level each, and its first seed; a later seed reads the seed before it
+                assert_eq!((full.levels(), cut.levels()), (blocks * per, per - waist + 1), "the blocks in series: a block's levels after the cut");
             }
             let uw = 1usize << (net.unit_log - 7);
             for slots in [1, 32, 33, 100] {
