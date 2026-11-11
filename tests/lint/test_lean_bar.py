@@ -7,7 +7,7 @@ git never tracks), so in a clean checkout the tracked ones.  The walk starts no 
 all this lint reads.  The Lean check's own fixtures (``tools/verity/lean/tests/fixtures``) lie outside both trees, as do
 the Lean tools' files and the benchmarks'; under the two trees nothing is left out, a package's test modules included.
 A tree with no ``.lean`` file under it fails (``test_every_tree_holds_lean``): a walk of a directory that was moved away
-finds nothing there, so the rules would hold none of its Lean while every test above passed.
+finds nothing there, so the rules would hold none of its Lean while the two tests of new findings passed.
 
 The rules, each a finding in code only, never in a comment or a string literal:
 
@@ -392,8 +392,9 @@ def test_an_unlisted_finding_is_reported_a_listed_one_passes_and_a_stale_entry_o
 
 
 def test_only_the_soft_rules_are_bookkeeping() -> None:
-    """`tests/conftest.py` lists `test_no_new_findings` and not `test_no_new_unlimited_heartbeats`: a `maxHeartbeats 0`
-    the list doesn't have fails the suite."""
+    """`tests/conftest.py` lists `test_no_new_findings` and no other test of this module: a `maxHeartbeats 0` the list
+    doesn't have fails the suite (`test_no_new_unlimited_heartbeats`), and so does a tree with no Lean under it
+    (`test_every_tree_holds_lean`)."""
     import importlib.util
     spec = importlib.util.spec_from_file_location("lean_bar_conftest", ROOT / "tests" / "conftest.py")
     conftest = importlib.util.module_from_spec(spec)
