@@ -89,19 +89,18 @@ noncomputable def selfSFinderZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs
 /-- **`SHA512CRStrict` for a `--zk` table's finders in a session**: the rewinding finders at budget `qF`, the self-clash
 finder at budget `qS`.
 
-Assumption record. Claim: `cr/sha-512` (`Claims.StrictBirthday`). It assumes that each knowledge finder of one table
-(the rewinding finders at each level, the pads', `τ`'s and level 0's, and the self-clash finder) finds a SHA-512
-collision with probability at most `q²/2^513` at its budget: the generic birthday bound for 512-bit outputs. A hash
-premise: each field is `StrictCR.Finder.CR`, which is `Assumptions.SHA512CRStrict`, so it reduces to `StrictBirthday`
-and asks nothing of the verifier. As `Finder.CR` says, Lean doesn't tie `qF` and `qS` to the finders' real evaluations:
-they must bound them (`qF ≥ 2t′ + 2v`, `qS ≥ t′ + v`, `ASSUMPTIONS.md`). -/
-structure SessCRZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) (qF qS : ℝ) : Prop where
-  fork : ∀ r ∈ Finset.range 2, ∀ ℓ ∈ Finset.Icc 1 T.sch.levels.length,
-    (advRSFinderZ A Hs T pre post cap₀ r ℓ σ).CR Hs.H qF
-  pads : ∀ r ∈ Finset.range 2, (advPadsSFinderZ A Hs T pre post cap₀ r σ).CR Hs.H qF
-  tau : ∀ r ∈ Finset.range 2, (advTauSFinderZ A Hs T pre post cap₀ r σ).CR Hs.H qF
-  level0 : (adv₀SFinderZ A Hs T pre post cap₀ σ).CR Hs.H qF
-  self : (selfSFinderZ A Hs T pre post cap₀ σ).CR Hs.H qS
+It is a conjunction of named assumptions: each conjunct is `StrictCR.Finder.CR`, which is
+`Assumptions.SHA512CRStrict` (`cr/sha-512`), at a knowledge finder of one table (the rewinding finders at each level,
+the pads', `τ`'s and level 0's, then the self-clash finder), so it asks nothing of the verifier. As `Finder.CR` says,
+Lean doesn't tie `qF` and `qS` to the finders' real evaluations: they must bound them (`qF ≥ 2t′ + 2v`, `qS ≥ t′ + v`,
+`ASSUMPTIONS.md`). -/
+def SessCRZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) (qF qS : ℝ) : Prop :=
+  (∀ r ∈ Finset.range 2, ∀ ℓ ∈ Finset.Icc 1 T.sch.levels.length,
+      (advRSFinderZ A Hs T pre post cap₀ r ℓ σ).CR Hs.H qF) ∧
+    (∀ r ∈ Finset.range 2, (advPadsSFinderZ A Hs T pre post cap₀ r σ).CR Hs.H qF) ∧
+    (∀ r ∈ Finset.range 2, (advTauSFinderZ A Hs T pre post cap₀ r σ).CR Hs.H qF) ∧
+    (adv₀SFinderZ A Hs T pre post cap₀ σ).CR Hs.H qF ∧
+    (selfSFinderZ A Hs T pre post cap₀ σ).CR Hs.H qS
 
 theorem advRSZ_le_strict (r ℓ : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) {q : ℝ}
     (h : (advRSFinderZ A Hs T pre post cap₀ r ℓ σ).CR Hs.H q) :
@@ -158,12 +157,12 @@ theorem epsSZ_le_strict (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap�
         qS ^ 2 / 2 ^ (513 : ℝ) :=
   add_le_add (add_le_add (add_le_add (add_le_add le_rfl
       (Finset.sum_le_sum fun r hr => Finset.sum_le_sum fun ℓ hℓ => Real.sqrt_le_sqrt
-        (mul_le_mul_of_nonneg_left (advRSZ_le_strict A Hs T pre post cap₀ r ℓ σ (h.fork r hr ℓ hℓ))
+        (mul_le_mul_of_nonneg_left (advRSZ_le_strict A Hs T pre post cap₀ r ℓ σ (h.1 r hr ℓ hℓ))
           (by positivity))))
       (Finset.sum_le_sum fun r hr => Real.sqrt_le_sqrt
-        (mul_le_mul_of_nonneg_left (advPadsSZ_le_strict A Hs T pre post cap₀ r σ (h.pads r hr)) (by positivity))))
-      (Finset.sum_le_sum fun r hr => Real.sqrt_le_sqrt (advTauSZ_le_strict A Hs T pre post cap₀ r σ (h.tau r hr))))
-    (selfSZ_le_strict A Hs T pre post cap₀ σ h.self)
+        (mul_le_mul_of_nonneg_left (advPadsSZ_le_strict A Hs T pre post cap₀ r σ (h.2.1 r hr)) (by positivity))))
+      (Finset.sum_le_sum fun r hr => Real.sqrt_le_sqrt (advTauSZ_le_strict A Hs T pre post cap₀ r σ (h.2.2.1 r hr))))
+    (selfSZ_le_strict A Hs T pre post cap₀ σ h.2.2.2.2)
 
 end Session
 
@@ -205,7 +204,7 @@ theorem ksBoundAccZ_le_strict (ts : List (TabZK F mPts)) (j : Fin ts.length) (k 
       (stratZ A Hs ts j τ) h)
     (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
       (adv₀SZ_le_strict A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j)
-        (stratZ A Hs ts j τ) h.level0)
+        (stratZ A Hs ts j τ) h.2.2.2.1)
       (Nat.cast_nonneg k)))
 
 /-- **The compiled knowledge term under `SHA512CRStrict`**: `ksAvgZC` at the knowledge bound `ksBoundAccZ` is at most
@@ -272,7 +271,7 @@ theorem ksAvgStrictZ_le_m1 (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : Type
 
 section Count
 
-variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
@@ -339,7 +338,7 @@ end Count
 
 section CountPlace
 
-variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 

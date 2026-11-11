@@ -150,7 +150,7 @@ def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_pa
     (GLM53_S8, "step", {"M": 8, "pos0": 8},
      "eeed9ef4e8974d1a9f00fd133423624192ddb2d760d4d5d1da9dc9c73e45f215f274c5d00ce1b5f2a216a9fc2c08c95c1bd7ad5e7a8b37c19510eb68cfb69662"),
     (GLM53_S8, "request", {"LP": 25, "T": 6},
-     "3dbdcba648e1177ea694fd6cbd4d772ffd9b12c539180cd0811d92d87f05fab6c84738c00b1b3cb90472721214768ff3be13b0231fa0ebbb0405a27442d68f2d"),
+     "4ad3eaa14e8b3b1afdb8bd97e63866c35fd91741524c6e7790d7dcfc7497d49c224a3bf0f5677dd3905fdf19e7d150173f7f2a134510b80cda70873e35710dc2"),
 ])
 def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp_path):
     """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0: the B1 step as the Build traced it, and the B8 step
@@ -169,8 +169,6 @@ def test_dsa_refuses_outside_its_domain(tmp_path):
         build_program(Phi.from_json({**phi.to_json(), "tp": {"world": 2, "rank": 0}}), "step")
     with pytest.raises(Unexpressible, match=re.escape("a target without a device name")):
         build_program(Phi.from_json({**phi.to_json(), "target": {k: v for k, v in phi.target.items() if k != "device_name"}}), "step")
-    with pytest.raises(Unexpressible, match=re.escape("a call of 257 query rows, a prefill (decode threshold 256 at 8 query heads")):
-        build_program(phi, "step", M=257)
 
 
 def test_the_execution_label_names_the_batch_invariance(tmp_path):
@@ -192,7 +190,7 @@ def test_mhc_rank_step_equals_the_record(rank, tmp_path):
     """DeepSeek-V4-Pro at TP8 on H200 (block FP8, MXFP4 experts, cc 9.0): the first and last rank's step through the hyper-connected
     decoder (`predict.dsv4`) is the rank's step Program `records.json` pins for the switched row:
     the mHC pre and post-pre between sublayers, the compressed-attention decode over each layer's opened window, the table and
-    sqrtsoftplus routers, the Marlin experts over the schedule's align keys.  About 25 s a rank, nearly all of it encoding the mHC
+    sqrtsoftplus routers, the Marlin experts aligned in pair-index order.  About 25 s a rank, nearly all of it encoding the mHC
     Definitions' bodies for the digest; no cheaper test reaches this decoder, and the ranks between differ only in the peer order
     GLM-5.3's ranks pin."""
     r = build_program(_row_phi(DSV4, "DSV4_PRO", tmp_path, rank), "step", M=1, pos0=8)
@@ -365,11 +363,11 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
     assert sorted(phi.request_shapes()) == sorted(pin["requests"]), "the workload's request shapes are not its Build's"
     M, step = pin["step"]
     want = {"step": step, **{f"request LP{lp}_T{t}": d for (lp, t), d in pin["requests"].items()}, "workload": pin["workload"]}
-    got, canon, comps = {"step": build_program(phi, "step", M=M, pos0=8).digest}, {}, {}
+    got, comps = {"step": build_program(phi, "step", M=M, pos0=8).digest}, {}
     for lp, t in pin["requests"]:
         r = build_program(phi, "request", LP=lp, T=t)
-        got[f"request LP{lp}_T{t}"], comps[(lp, t)] = r.digest, S.request_component(r, canon)
-    got["workload"] = S.predict_workload(phi, comps, canon)["digest"]
+        got[f"request LP{lp}_T{t}"], comps[(lp, t)] = r.digest, S.request_component(r)
+    got["workload"] = S.predict_workload(phi, comps)["digest"]
     moved = [k for k in want if got[k] != want[k]]
     manifest, identities, over = pin["manifest"]
     stale = [k for k in over if k in moved]

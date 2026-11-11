@@ -73,9 +73,10 @@ def OutsourceWithinEgressServed {C B I St : Type} (O : Type) {m n : ℕ} (hm : 0
 /-- `pouw-certified-exchange` (proposed; the network certifier's count at the served check). **The certifier
 accepts a period that exchanged more than `K` bits but with probability `δ`**: the probability over the period's coins
 that the certifier's check `cert` accepts while the period's window programs exchanged `ext > K` bits with machines
-outside the registered devices is at most `δ`. The served form of `Pouw.Assumptions.CertifiedImport`; the certifier's
-guarantee (`NetTiming.Guarantees.PeriodLeakAccepted`) bounds the information an accepted period carries out, and the
-step from it to this count is open. It is falsified by a strategy whose periods the certifier accepts, with
+outside the registered devices is at most `δ`. The served form of the certifier's count, which
+`Pouw.Assumptions.CertifierSeesImports` states surely for the onsite guarantee; the certifier's guarantee
+(`NetTiming.Guarantees.PeriodLeakAccepted`) bounds the information an accepted period carries out, and the step from it
+to this count is open. It is falsified by a strategy whose periods the certifier accepts, with
 probability more than `δ`, after its window programs exchanged more than `K` bits. -/
 def CertifiedExchange {Ω : Type} [Fintype Ω] (cert : Ω → Prop) (ext : Ω → ℝ) (K δ : ℝ) : Prop :=
   prob (fun x => cert x ∧ K < ext x) ≤ δ
@@ -120,7 +121,7 @@ def ServedFreed : Prop :=
       (j10rAtCoin hr enc place tile)) Pl.game →
     (∀ w, prob (fun x => (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
       (j10rAtCoin hr enc place tile)).MovedIn x w) ≤ δbind) →
-    RegisteredBeforeDraw ws → TileDrawIsCoin σ k hk sT unitOf ws →
+    RegisteredBeforeDraw ws → TileSampleIsCoin σ k hk sT unitOf ws →
     TileServiceSound σ sT unitOf ws opened (pinnedAt (saltOf ws) place tile) δks →
     Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
     UnitFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)

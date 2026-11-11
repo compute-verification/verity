@@ -24,7 +24,7 @@ install -d -m 0755 -o root -g root "$O"
 if [ ! -d "$T" ]; then
   tmp=$(mktemp -d "$O/.pin.XXXXXX")
   tar -x -C "$tmp" --no-same-owner --no-same-permissions
-  for f in benchmarks/live_verifier/host.py benchmarks/remote_session/verifier.py tools/research/src/research/store/cli.py; do
+  for f in benchmarks/live_verifier/host.py benchmarks/remote_session/verifier_process.py tools/research/src/research/store/cli.py; do
     [ -f "$tmp/$f" ] || { rm -rf "$tmp"; die "the archive has no $f"; }
   done
   chown -R root:root "$tmp"
@@ -57,7 +57,7 @@ find "$T" \( -name lakefile.toml -o -name lakefile.lean \) -printf '%h\n' | whil
 done
 runuser -u auditor -- env -i HOME=/var/lib/vy-verifier PATH="$T/.lean-bin:/usr/bin:/bin" \
   sh -c "cd '$pkg' && lake build remote-audit-verifier remote-audit-difftest &&
-         cd '$T/verity/core/service/sampled_proofs' && lake build sampled-proofs-verifier" | tail -1
+         cd '$T/verity/core/service/spot' && lake build sampled-proofs-verifier" | tail -1
 /usr/bin/python3 -I "$T/benchmarks/live_verifier/host.py" pinned "$c"
 ln -sfn "$c" "$O/current.tmp"
 mv -Tf "$O/current.tmp" "$O/current"

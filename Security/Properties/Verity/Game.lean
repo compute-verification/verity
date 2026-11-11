@@ -14,6 +14,7 @@ public import Flock.CoinTree
 public import Flock.Hash
 public import Flock.Hm96
 public import Lms.Verify
+public import Properties.Verity.Sha512
 
 /-!
 # Soundness as a causal game at a composite's compiled verifier, and each subprotocol's target
@@ -27,7 +28,7 @@ the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAud
 
 | subprotocol | `Audit` | onsite's compiled check | remote's compiled check |
 | --- | --- | --- | --- |
-| sampled proofs | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) | the same |
+| SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | the same |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | the same |
 | the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` | |
@@ -68,10 +69,10 @@ The statement's form is the causal game, the committed files, one fixed extracto
 * **One adversary form: every prover, and collisions a fixed finder outputs.** There is no strategy class and no break
   in the event. The finder `B` (`finder a`, a `Claims.Finder`) is a fixed construction applied to the strategy whose
   SHA-512 calls are at most `c · calls(τ) + d` (`finder_calls`). Subprotocol `a`'s error at a strategy (`error`) is,
-  where `B^τ` outputs a SHA-512 collision with probability at most the published `ε_cr` at the strategy's calls
-  (`FinderCR`, quantitative), its published `δ` at those calls plus its loss at `Pr[B^τ]`, the form of
-  `Accounting.PeriodLive.error`; elsewhere `⊤`. That admits Flock's conditional bound (`loss = 0`) and the additive
-  one (`crBound = 1`). A bound that reads further finders built from the strategy lists them (`finders`, each a
+  where `B^τ` meets `ecr/sha-512` (`FinderCR`, `Claims.ExpectedCR` at the finder), its published `δ` at the strategy's
+  calls plus its loss at `Pr[B^τ]`, the form of `Accounting.PeriodLive.error`; elsewhere `⊤`. There `B^τ` outputs a
+  SHA-512 collision with probability at most its budget over `2^256` (`crBound`), which a bound reads as `ε_cr`. That
+  admits Flock's conditional bound (`loss = 0`). A bound that reads further finders built from the strategy lists them (`finders`, each a
   `FinderSpec`: the finder, and its budget as a function of the strategy's calls that bounds its calls), and the error
   is `⊤` where one of them outputs a collision with probability above its budget over `2^256` (`finderCR`, built by
   `finderCROf`), the bound `ecr/sha-512` gives it. Two openings of one position
@@ -96,7 +97,7 @@ The statement's form is the causal game, the committed files, one fixed extracto
 * **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
   (`computed`), with no pricing.
 
-Each subprotocol's target (`SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
+Each subprotocol's target (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`) is `Target k a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s
 verdict at `k` accepts while its claim fails is at most its error there. `Verity.Soundness` and `Verity.RemoteSoundness`
 (`Properties.Verity.Soundness`) compose them, onsite's seven and remote's three.
@@ -360,7 +361,7 @@ def treeCoins (spec : Flock.CoinTree.Spec) : ℕ := spec.streams.size * 2 ^ spec
 
 /-- **The specs the device samples a coin tree of**: a coin or more a round, and at most `maxTreeCoins` coins. The
 deployed device refuses every other spec: `LiveChallenger.sample_tree`
-(`verity/core/protocols/sampled_proofs/challenger.py`) refuses a spec `tree_spec_reason` refuses, a round of no coin
+(`verity/core/protocols/spot/challenger.py`) refuses a spec `tree_spec_reason` refuses, a round of no coin
 among them, and then a tree of more than `MAX_TREE_COINS` coins. So a tree the device samples holds at most
 `maxTreeCoins` leaves: a leaf is a round, of a coin or more. -/
 def TreeSpecOk (spec : Flock.CoinTree.Spec) : Prop := 1 ≤ spec.block ∧ treeCoins spec ≤ maxTreeCoins
@@ -395,7 +396,7 @@ the device refuses (a family with no coin left, a `Hello` whose spec it doesn't 
 its log holds `maxTreeLines` coin-tree lines (`treeLines`), no `i`-th tree, or `OpenTree.next`'s refusal) ends its
 releases, as a refused frame ends the challenger's session, and so does the prover's close. The output is the device's
 log. The two caps are the deployed device's own refusals (`LiveChallenger.sample_tree` and `LiveChallenger._tree_line`
-in `verity/core/protocols/sampled_proofs/challenger.py`), so a play here samples at most `maxLeaves` leaves.
+in `verity/core/protocols/spot/challenger.py`), so a play here samples at most `maxLeaves` leaves.
 
 The challenger refuses further frames this device serves (a spec past its other limits, a nonce or a root of another
 length, a tree's root or key sampled twice), so each of its sessions, a refused frame read as the prover's close, is a
@@ -520,9 +521,6 @@ def requestThen (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : A
     (t : Game.Strategy (finish D θ F c a [])) : Game.Strategy (play fs D θ F c) :=
   ⟨a, closeThen (finish D θ F c a) t (frames fs) fs []⟩
 
-/-- SHA-512, the compiled one (`Flock.Sha512.hash`), as a 64-byte digest. -/
-def sha512 (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
-
 /-- SHA-512, the compiled one, as the message-to-message hash `Claims.Finder.Pr` and `ecr/sha-512`
 (`Claims.ExpectedCR`) read. -/
 def sha512Msg (m : Claims.Msg) : Claims.Msg := (Flock.Sha512.hash ⟨m.toArray⟩).data.toList
@@ -633,8 +631,8 @@ each with its budget in the strategy's calls (`finders`); the committed circuit'
 their window's coin; the world each play realizes; the declaration's registered inputs and the inference-only policy's
 budgets; the wipe that opens the period, at a boundary of a schedule of the committed circuit's blocks, and each play
 read at that boundary as the wipe's game;
-the deployment's honest prover; and the certificates, survivor threshold, errors, collision and forgery bounds and
-losses the composite publishes, from the parameters and the strategy's SHA-512 calls alone.
+the deployment's honest prover; and the certificates, survivor threshold, errors, forgery bounds and losses the
+composite publishes, from the parameters and the strategy's SHA-512 calls alone.
 
 `cost θ F c σ` is the strategy's SHA-512 calls in one run (`t' τ`): `Verity.Game` has no call model of
 strategies, so it is declared, as `Claims.Finder.cost` is. -/
@@ -656,7 +654,7 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   check reads none -/
   coinsRead : Subprotocol → Sent → Option (List Release)
   extract : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
-    Game.Strategy (play (families θ) (signer θ) θ F c) → (read θ F).circuit.Transcript
+    Game.Strategy (play (families θ) (signer θ) θ F c) → (read θ F).circuit.Trace
   finder : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Game.Strategy (play (families θ) (signer θ) θ F c) → Claims.Finder
   cost : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
@@ -723,7 +721,6 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   honest : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Game.Strategy (play (families θ) (signer θ) θ F c)
   certOf : ByteArray → Certificates
-  crBound : ByteArray → Subprotocol → ℕ → ℝ
   delta : ByteArray → Subprotocol → ℕ → ℝ≥0∞
   /-- **The published `ε_forge(t, Q)`**: the bound `Hash.Assumptions.LmsUnforgeable` gives a forger of at most `t`
   SHA-512 calls that has at most `Q` of the device's messages signed on each of its coins -/
@@ -815,7 +812,7 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
 /-- **The log subprotocol `a`'s check read is the device's whole log**: every release, in order, and no other
 (`coinsRead`; a check that reads none binds nothing). The device signs its log's line count and the lines' SHA-512 chain
 at its close (`close_session`), and v2 refuses a session whose signed close is missing or doesn't match its log
-(`SampledProofs.Challenger.sessionOf`), so any other log a check read is a forgery of the device's LMS signature, on a
+(`Spot.Challenger.sessionOf`), so any other log a check read is a forgery of the device's LMS signature, on a
 message the device didn't sign in the play (`Exchange.signed`), which `a`'s error bounds where its forger meets
 `Hash.Assumptions.LmsUnforgeable` (`Vocab.Unforgeable`, `Vocab.epsForge`), or a SHA-512 collision of the chain, which
 its finder outputs. -/
@@ -836,12 +833,24 @@ the strategy's calls (`finderCROf`); `True` where the bound reads only `finder`.
 def finderCR (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
   finderCROf (V.finders a θ F c) σ
 
-/-- **`B^τ`'s collision premise, quantitative**: subprotocol `a`'s finder applied to the strategy outputs a SHA-512
-collision with probability at most the published bound at the strategy's SHA-512 calls (`ε_cr`). `ecr/sha-512` is asked
-at the finder's budget, `callsMul θ a * cost θ F c σ + callsAdd θ a` calls (`finder_calls`), a defined function of the
-strategy's `cost` as `qF`/`qS` are of `t'`. -/
+/-- **Subprotocol `a`'s finder with its budget** (`finder_calls`): `callsMul θ a * t + callsAdd θ a` SHA-512 calls at
+the strategy's `t`, a defined function of the strategy's `cost` as `qF`/`qS` are of `t'`. -/
+def finderSpec (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
+    FinderSpec (V.game θ F c) (V.cost θ F c) where
+  finder := V.finder a θ F c
+  budget t := V.callsMul θ a * t + V.callsAdd θ a
+  calls σ x := V.finder_calls a θ F c σ x
+
+/-- **`ε_cr`, subprotocol `a`'s finder's collision bound at `t` calls**: its budget over `2^256`, what `ecr/sha-512`
+gives a finder of that many calls. -/
+noncomputable def crBound (θ : ByteArray) (a : Subprotocol) (t : ℕ) : ℝ :=
+  ((V.callsMul θ a * t + V.callsAdd θ a : ℕ) : ℝ) / 2 ^ (256 : ℝ)
+
+/-- **`B^τ`'s collision premise**: `ecr/sha-512` (`Claims.ExpectedCR`) at subprotocol `a`'s finder applied to the
+strategy. Its calls are within its budget on every coin (`finderSpec`), so it outputs a SHA-512 collision with
+probability at most `crBound` at the strategy's calls. -/
 def FinderCR (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
-  (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ)
+  Claims.ExpectedCR sha512Msg (V.finder a θ F c σ)
 
 /-- **`B^τ`'s forgery premise**: subprotocol `a`'s forger applied to the strategy meets
 `Hash.Assumptions.LmsUnforgeable` at the compiled LMS verifier, at the finder's budget of SHA-512 calls
@@ -855,8 +864,7 @@ def Unforgeable (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : By
 and its forger its forgery premise (`Unforgeable`), its published `δ` at the strategy's SHA-512 calls, plus the published
 `ε_forge(t, Q)` at the forger's budget and the device's signatures (`epsForge`), plus its loss at the probability that
 the finder outputs a collision, the form of `Accounting.PeriodLive.error` with the forgery term beside `δ`; elsewhere no
-bound (`⊤`), as `Accounting.condError` reads it. Flock's conditional bound is the case `loss = 0`, the additive one
-the case `crBound = 1`. -/
+bound (`⊤`), as `Accounting.condError` reads it. Flock's conditional bound is the case `loss = 0`. -/
 noncomputable def error (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
   condError (fun σ => V.finderCR a θ F c σ ∧ V.FinderCR a θ F c σ ∧ V.Unforgeable a θ F c σ)
     (fun σ => V.delta θ a (V.cost θ F c σ) +
@@ -884,7 +892,7 @@ def Target (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
     Game.prob (fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ
 
 /-- **Sampled proofs' target**: at most an `ε` share of the units unbound in the extractor's transcript. -/
-def SampledProofsSound (k : Verity.Registration.Composite) : Prop := V.Target k .sampled
+def SpotSound (k : Verity.Registration.Composite) : Prop := V.Target k .sampled
 
 /-- **PoUW's target**: at least `W` gates of the committed circuit computed after their window's coin. -/
 def PouwSound (k : Verity.Registration.Composite) : Prop := V.Target k .pouw

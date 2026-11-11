@@ -12,8 +12,8 @@ is no hold to a bucket boundary (the boundary saves no step bits).
 order of its run (the certifier's ``Proxy.requests_released`` before the release counts it): dense, each N once, every
 released request numbered, a request a fault drops before its release unnumbered. With ``x-verity-release-run: ID`` (the
 certifier run's id, hex) the numbering is per run: a new ID starts a new order at 0, and what the old run still held is
-forwarded at once. The network certifier's shim (`benchmarks/network_traces/active_replay.LiveServer`) copies both onto the POST it
-sends the endpoint; it doesn't today, so ``release-order`` holds nothing until it does. The network certifier also sends
+forwarded at once. The network certifier copies both onto the POST it sends the endpoint (`benchmarks/network_traces/
+active_replay.LiveServer`, and `warden_serve.py serve --watermark` beside it). The network certifier also sends
 ``x-verity-release-bucket: A``, the release's bucket counted from 0 at the run's origin, and the watermark: one
 ``POST /verity/watermark`` a run, naming it, whose chunked body has the line ``t n`` (`watermark_line`) once bucket t has
 closed, the releases of buckets up to t being exactly those numbered below n; its end ends the run.
@@ -47,7 +47,7 @@ once it holds the watermark's line for the last bucket closed by T_k and every r
 rest of each step is vLLM's own scheduler, unpatched: the gate holds a numbered request outside it until its step
 (`install`, on the scheduler's ``add_request``, ``schedule`` and ``finish_requests``), so the scheduler sees each request
 from its admission on, and the batches are a function of the certified releases and the registered τ, which the encoder's
-replay recomputes (`benchmarks/network_e2e/encodings/replay.py`, ``tick``) without timing advice. What isn't certified is
+replay recomputes (`advice_code.replay`, ``tick``) without timing advice. What isn't certified is
 added at once and counted (`TickGate.summary`): a request without the header (``unordered``), one of an older run
 (``stale``), one that comes after it was skipped (``late``). A released request that doesn't reach the engine holds the
 later ones ``hold_s``, then is skipped; a watermark the gate has waited on ``hold_s`` without a new line, or that breaks,

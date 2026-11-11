@@ -357,7 +357,7 @@ theorem namedFinder_collides {h : Option Hash.Digest} {F R : Array ByteArray} (h
       ∃ u v, (namedFinder h F R).out s = some (u, v) ∧ Claims.Collision sha512Msg u v :=
     fun _ => ⟨_, _, by simp only [namedFinder, if_neg hne], hl, hd⟩
   classical
-  unfold Claims.Finder.Pr Claims.Pr
+  unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   rw [Finset.filter_true_of_mem fun s _ => hs s, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
 
@@ -386,6 +386,14 @@ theorem finderCROf_of_expectedCR {G : Game Exchange} {cost : Game.Strategy G →
   unfold finderCROf
   exact List.forall_iff_forall_mem.2 fun f hf => f.cr_of_expectedCR σ (h f hf)
 
+/-- **`B^τ`'s collision premise gives its bound**: where subprotocol `a`'s finder meets `Claims.ExpectedCR`
+(`Vocab.FinderCR`), its calls within its budget (`Vocab.finderSpec`) put its collision probability at most `crBound`
+at the strategy's calls. -/
+theorem Vocab.finderPr_le_crBound {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α) {a : Subprotocol}
+    {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
+    (h : V.FinderCR a θ F c σ) : (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ) :=
+  (V.finderSpec a θ F c).cr_of_expectedCR σ h
+
 namespace Idle
 
 /-- At `unbounded`, every subprotocol's error is `⊤`. -/
@@ -402,7 +410,7 @@ theorem target_unbounded (k : Verity.Registration.Composite) (a : Subprotocol) :
 
 /-- The idle finder outputs no collision. -/
 theorem finder_pr (H : Claims.Msg → Claims.Msg) : finder.Pr H = 0 := by
-  unfold Claims.Finder.Pr Claims.Pr
+  unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   simp [finder]
   exact Or.inl rfl
 
@@ -416,7 +424,8 @@ theorem forger_pr (verify : Hash.Msg → Hash.Msg → Hash.Msg → Bool) : forge
 theorem error_exact (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (exact.game θ F c)) :
     exact.error a θ F c σ = 0 := by
   unfold Vocab.error Accounting.condError
-  rw [if_pos ⟨trivial, le_of_eq (finder_pr _), fun _ _ => le_of_eq (forger_pr _)⟩]
+  rw [if_pos ⟨trivial, (finder_pr _).trans_le
+    (div_nonneg (Claims.Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)), fun _ _ => le_of_eq (forger_pr _)⟩]
   simp [exact, vocab]
 
 /-- At `exact`, PoUW's claim fails on every play: it certifies one gate computed, and no play computes one. -/
@@ -457,7 +466,7 @@ theorem soundness_at_of_targets_nontrivial : ¬ Idle.exact.SoundnessFor .onsite 
 
 /-- **`Soundness`'s honest lemma**: its seven hypotheses hold at the idle deployment's compiled onsite composite. -/
 theorem soundness_of_subprotocols_honest :
-    Idle.unbounded.SampledProofsSound .onsite ∧ Idle.unbounded.PouwSound .onsite ∧
+    Idle.unbounded.SpotSound .onsite ∧ Idle.unbounded.PouwSound .onsite ∧
       Idle.unbounded.InferenceOnlySound .onsite ∧ Idle.unbounded.PousSound .onsite ∧
       Idle.unbounded.BandwidthAuditSound .onsite ∧ Idle.unbounded.NetworkCertifierSound .onsite ∧
       Idle.unbounded.WipeSound .onsite :=
@@ -472,7 +481,7 @@ theorem soundness_of_subprotocols_nontrivial : ¬ Idle.exact.SoundnessFor .onsit
 /-- **`RemoteSoundness`'s honest lemma**: its three hypotheses hold at the idle deployment's compiled remote
 composite. -/
 theorem remote_soundness_of_subprotocols_honest :
-    Idle.unbounded.SampledProofsSound .remote ∧ Idle.unbounded.PouwSound .remote ∧
+    Idle.unbounded.SpotSound .remote ∧ Idle.unbounded.PouwSound .remote ∧
       Idle.unbounded.InferenceOnlySound .remote :=
   ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
 

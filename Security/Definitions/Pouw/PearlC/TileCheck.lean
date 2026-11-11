@@ -29,7 +29,7 @@ by a `Verity.Partition`), with
   plain Program, whose checked words are registered wires. The hiding Program registers a tile by its TurboSHAKE128 leaf
   (`pouw/tile-h0/v1`), so there it is the circuit's words differing from `c`'s under the same leaf.
 
-The check also asks each of the tile's weight rows to pass the protocol's `weightOK`, as `check_tile`'s `admissible`
+The check also asks each of the tile's weight rows to pass the protocol's `fixedOK`, as `check_tile`'s `admissible`
 does and as `TileGood` asks. It decides that on the rows it opens against the weight's root, which are `U`'s, so no
 prover supplies it.
 
@@ -37,7 +37,7 @@ The cap, `TileGood`'s first conjunct, reads only the committed activations; its 
 own last conjunct; the words read the circuit's outputs. So L3 is the cap and the words (`TileCheck.Computes`,
 `TileCheck.ComputesCap`, `TileCheck.ComputesWords`). L3 is exact: the Program
 recomputes A′, B̃, P_A, P_B, C̃ and U from the anchors and checks no projection, so the tile check has no soundness error
-of its own (L7). `εPearlC` stays TT_OUT's, and a proof system's error stays in its `η`.
+of its own (L7). `δPearlC` stays TT_OUT's, and a proof system's error stays in its `δzk` (`GGapHidden`).
 
 A tile check says something only when it is the deployed Program: a circuit nobody tied to the Program meets L3 with
 any `op`s. The tie is the Program's descriptor digest and a test against `verity.ir`, beside the instance.
@@ -62,15 +62,15 @@ structure TileCheck (Q R S : Type) where
   out : (sh : Shape) → Finset ℕ → Finset ℕ → Finset (Fin (C sh).N)
   pub : (sh : Shape) → Finset (Fin (C sh).N)
   reg : (sh : Shape) → Finset (Fin (C sh).N)
-  anchorsOf : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes → (C (U.layout.shape u)).Transcript
+  anchorsOf : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes → (C (U.layout.shape u)).Trace
   anchorsOK : (Q → R) → S → Workload → ℕ → Codes → Prop
-  rowsOf : (U : Workload) → (u : ℕ) → Commit → (C (U.layout.shape u)).Transcript
-  Collides : (U : Workload) → (u : ℕ) → Finset ℕ → Finset ℕ → Commit → (C (U.layout.shape u)).Transcript → Prop
+  rowsOf : (U : Workload) → (u : ℕ) → Commit → (C (U.layout.shape u)).Trace
+  Collides : (U : Workload) → (u : ℕ) → Finset ℕ → Finset ℕ → Commit → (C (U.layout.shape u)).Trace → Prop
 
 /-- The registered values of unit `u` in `τ`: its commitment's, and zero for a blank unit, whose tiles are never
 checked. -/
 def TileCheck.valueAt (TC : TileCheck Q R S) (U : Workload) (τ : Transcript) (u : ℕ) :
-    (TC.C (U.layout.shape u)).Transcript :=
+    (TC.C (U.layout.shape u)).Trace :=
   match τ u with
   | some c => TC.rowsOf U u c
   | none => fun _ => 0
@@ -78,17 +78,17 @@ def TileCheck.valueAt (TC : TileCheck Q R S) (U : Workload) (τ : Transcript) (u
 /-- **Tile `g`'s check accepts `X`** for the commitment `c` of its unit: every unit of the cone of the tile's checked
 wires is correct in `X`, `X` holds the anchors on the public wires, the anchors pass the verifier's check
 (`TC.anchorsOK`), `X` holds `c`'s values on the registered wires, and each of the tile's weight rows passes the rules
-(`P.weightOK`). The check decides the anchors' check from the public seeds and the last from the weight rows it opens,
+(`P.fixedOK`). The check decides the anchors' check from the public seeds and the last from the weight rows it opens,
 which are `U`'s, never from `X`. -/
 def TileCheck.Accepts (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (H : Q → R) (s : S)
-    (U : Workload) (g : ℕ) (c : Commit) (X : (TC.C (U.layout.shape ((TR.tiling U.layout).unit g))).Transcript) : Prop :=
+    (U : Workload) (g : ℕ) (c : Commit) (X : (TC.C (U.layout.shape ((TR.tiling U.layout).unit g))).Trace) : Prop :=
   (∀ v ∈ (TC.part _).cone (TC.out _ ((TR.tiling U.layout).rows g) ((TR.tiling U.layout).cols g)),
       (TC.part _).Correct X v) ∧
     (∀ w ∈ TC.pub _, X w = TC.anchorsOf H s U ((TR.tiling U.layout).unit g) c.act w) ∧
     TC.anchorsOK H s U ((TR.tiling U.layout).unit g) c.act ∧
     (∀ w ∈ TC.reg _, X w = TC.rowsOf U ((TR.tiling U.layout).unit g) c w) ∧
     ∀ j ∈ (TR.tiling U.layout).cols g,
-      P.weightOK (U.layout.shape ((TR.tiling U.layout).unit g)) (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j
+      P.fixedOK (U.layout.shape ((TR.tiling U.layout).unit g)) (U.fixed (U.layout.fixedId ((TR.tiling U.layout).unit g))) j
 
 /-- The words of a good tile: each ticket and useful word of a credited row has the reference value. `TileGood` is the
 cap, the tile's weight rows and these. -/

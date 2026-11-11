@@ -4,9 +4,7 @@ public import Proofs.Flock.Soundness.Audit.FlockBatched
 public import Proofs.Flock.Soundness.SessionBatchAcc
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The batched Flock audit with the expected-time extractor (DESIGN.md §3)
@@ -27,7 +25,7 @@ $$\varepsilon\le\varepsilon\Pr[\text{fails}]+\varepsilon\Pr[\text{link}]\le a+r\
 
 At `k = cN₀/e`, `1/(1 − r) = c/(c−1)`, which is `2` at the record's `c = 2`. The knowledge term is
 its own bound averaged over the sample (`flock_batched_knowledgeSoundE`), with no named assumption.
-The binding error stays named (`LinkSound`), for the link theorem under expected-time collision
+The binding error stays named (`BindSound`), for the link theorem under expected-time collision
 resistance (`Assumptions.SHA512CRExpected`).
 -/
 
@@ -43,7 +41,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
@@ -138,7 +136,7 @@ theorem flock_batched_countE
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {k : ℕ}
     (hk : 1 ≤ k) (hr : ∀ S R j, rateB (plan S R) j k < 1) (hlow : P.LoweringSoundB plan tab decode)
     {δlink : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisBE H E plan tab decode Xc k hk hr hlow).LinkSound δlink) (K : ℕ)
+    (hlink : (P.analysisBE H E plan tab decode Xc k hk hr hlow).BindSound δlink) (K : ℕ)
     (σ : Strategy (audit L Reg (batchedSession H E plan))) :
     prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
@@ -153,7 +151,7 @@ theorem flock_batched_drawnE
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {k : ℕ}
     (hk : 1 ≤ k) (hr : ∀ S R j, rateB (plan S R) j k < 1) (hlow : P.LoweringSoundB plan tab decode)
     {δlink : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisBE H E plan tab decode Xc k hk hr hlow).LinkSound δlink)
+    (hlink : (P.analysisBE H E plan tab decode Xc k hk hr hlow).BindSound δlink)
     (σ : Strategy (audit L Reg (batchedSession H E plan))) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤

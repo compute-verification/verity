@@ -158,6 +158,30 @@ def test_the_report_joins_each_relied_on_targets_verdict(declare, sidecar):
     assert CK.summarize(out)["by_calls"] == {root.id: sorted([a2.id, b2.id, bind(Same).id])}
 
 
+def test_a_callee_whose_one_failure_is_a_held_block_passes_its_root(declare, sidecar, monkeypatch):
+    """A relied-on target whose only failure is ``block/past-range`` on a Definition `block_held.HELD` holds passes the
+    by-calls root, as `checks.summarize` holds it for the target itself; any other failure of that target still fails it."""
+    from circuit_check import block_held
+
+    root = bind(Root, N=LARGE)
+    declare(root)
+    a2, _a3, b2 = _small()
+    sidecar(*_small())
+    e = BC.check(root)
+    monkeypatch.setitem(block_held.HELD, b2.id, "held for the test")
+    past = CK.Findings()
+    past.fail("block", "past-range", b2.id)
+    entries = [e, {"definition": a2.id, "failures": []}, {"definition": b2.id, "failures": past.failures},
+               {"definition": bind(Same).id, "failures": []}]
+    out = BC.joined(entries)
+    assert out[0]["failures"] == []
+    assert {r["callee"]: r["verdict"] for r in out[0]["by_calls"]["callees"]}[bind(Leaf, N=LARGE, MODE="b").id] == "passed"
+    other = CK.Findings()
+    other.fail("boolean", "x", b2.id)
+    entries[2] = {"definition": b2.id, "failures": past.failures + other.failures}
+    assert [f["code"] for f in BC.joined(entries)[0]["failures"]] == ["callee-failed"]
+
+
 def test_the_catalog_its_records_and_its_key_never_build_a_by_calls_root(declare):
     root = bind(Root, N=LARGE)
     declare(root)

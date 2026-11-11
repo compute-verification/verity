@@ -32,8 +32,8 @@
                     atomically renamed into place carrying READY.json (identity, archive sha256, file count, shipped_at, launcher).
                     A failed or truncated ship removes its partial directory and refuses the run (SourceNotReady); the machine side
                     (`launch-request`) refuses to execute from any source directory without a READY.json naming the requested identity.
-                    The archive is STREAMED, never held in the launcher's memory (0.55-0.69 GB launchers were killed by the laptop's
-                    guardian 2026-09-23): one `git archive` pass computes the digest and manifest, a second is piped through ssh
+                    The archive is STREAMED, never held in the launcher's memory (a laptop's memory guardian kills a launcher of
+                    half a GB or more): one `git archive` pass computes the digest and manifest, a second is piped through ssh
                     (compressed) in 1 MiB chunks and hashed again as it goes.  A launcher killed mid-ship leaves a short stream: the machine
                     finds the digest wrong, extracts nothing and removes the partial directory itself; partial directories untouched for
                     30 min are removed by the next ship.  The timeout grows with the archive (64 KiB/s floor, >= 600 s).
@@ -90,8 +90,8 @@
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
     adopt           a run another VM launched has no local dir: `research inspect|fetch|status RUN` (a full run id) finds
-                    <root>/runs/<id> on `--on NAME`, else on each ssh machine (a pod belongs to the VM that made it), writes the
-                    remote.json launch would have and fetches it as above (`adopt`).
+                    <root>/runs/<id> on `--on NAME`, else on each ssh machine but the auditor hosts (`restricted`; a pod belongs to
+                    the VM that made it), writes the remote.json launch would have and fetches it as above (`adopt`).
     preservation    --all verifies every file's sha256 against the machine and writes preserved.json LAST.  Until then the only copy
                     is on the machine; this is stated, not hidden.  Then it writes <run>/.fetched ON THE MACHINE (research/fetched/v0.1:
                     verified_from = the machine's clock before hashing, file count, bytes, manifest sha256), which the guard requires.
@@ -146,7 +146,7 @@ READY_FILE = "READY.json"                     # the only marker that makes <root
 _DIRT_MARK = "RESEARCH-TRACKED-DIRT"              # _probe_source: what follows it is `git status` of a READY checkout
 LEGACY_COMPLETE = ".complete"                 # the pre-verification marker: never sufficient on its own
 SHIP_SOURCE_TIMEOUT_S = 600                   # the floor; a big archive gets size / SHIP_MIN_BYTES_PER_S
-SHIP_MIN_BYTES_PER_S = 64 * 1024              # the slowest link a ship is allowed to be (laptop -> pod measured 130-220 KB/s, 2026-09-24)
+SHIP_MIN_BYTES_PER_S = 64 * 1024              # the slowest link a ship is allowed to be (a laptop -> pod link can run at 130-220 KB/s)
 SHIP_CHUNK = 1 << 20                          # the launcher never holds more of the archive than this
 STALE_PARTIAL_MIN = 30                        # a <root>/src/*.partial-* directory with nothing written for this long belongs to a dead ship
 _RC_DIGEST = 75                               # the ship script's exit when the received archive is not the launcher's (nothing extracted)
@@ -233,6 +233,19 @@ def load_machines(path: Path | None = None) -> dict[str, dict[str, Any]]:
 
 #: a machine's runs root when its entry names none (a pod `research pods register` wrote without --root)
 DEFAULT_ROOT = "/workspace/research"
+#: infra's manifest of the Nebius nodes, beside this package wherever it is installed: its `admin = true` nodes are the auditor hosts
+DEPLOY_MANIFEST = Path(__file__).resolve().parent / "pods" / "nebius" / "deploy.toml"
+
+
+def restricted(machines: dict[str, dict[str, Any]]) -> set[str]:
+    """The auditor hosts among `machines`: an entry that names its gate (`auditor`), or a node DEPLOY_MANIFEST marks `admin = true`
+    (reached only by an admin login, which is why `research deploy drift` reads one only when --on names it). They refuse lanes'
+    keys by design, so a search over every machine (`adopt`, `research doctor`) leaves them out before any ssh rather than leave a
+    refused login in their auth logs; `--on NAME` still asks one, for whoever holds its key. Without the manifest the entries'
+    `auditor` alone tells."""
+    nodes = tomllib.loads(DEPLOY_MANIFEST.read_text()).get("nodes", {}) if DEPLOY_MANIFEST.is_file() else {}
+    admin = {n for n, c in nodes.items() if isinstance(c, dict) and c.get("admin") is True}
+    return {n for n, m in machines.items() if isinstance(m, dict) and (m.get("auditor") or n in admin)}
 
 
 def resolve_machine(name: str, project: str | None, machines: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -304,8 +317,8 @@ def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
     if not pod or (pod.get("desiredStatus") or "").upper() != "RUNNING":
         raise Refused(f"{who} is {pod.get('desiredStatus') if pod else 'not found'}; no implicit provisioning")
     tgt = runpod.ssh_target(pod)
-    # The REST API intermittently answers a RUNNING pod's GET with publicIp="" / portMappings=None (observed 2026-09-22 on
-    # s00kzu0nisihgr: alternating answers within seconds while ssh worked throughout).  Re-read a few times before refusing;
+    # The REST API intermittently answers a RUNNING pod's GET with publicIp="" / portMappings=None (alternating answers within
+    # seconds while ssh works throughout).  Re-read a few times before refusing;
     # a mapping that never appears is still refused, by the same name.
     for _ in range(POD_TARGET_RETRIES):
         if tgt is not None:
@@ -327,7 +340,7 @@ def ssh_argv(host: str, port: int, *, user: str = "root", connect_timeout: int =
 
 
 def sender(environ: dict[str, str] | None = None) -> str | None:
-    """Who sends a run, recorded in its request (`submitted_by`), where the node's alerts read it (INF-50): the sending agent's own
+    """Who sends a run, recorded in its request (`submitted_by`), where the node's alerts read it: the sending agent's own
     Cursor conversation (`CURSOR_CONVERSATION_ID`, which every agent's shell carries, a worker its own rather than its
     coordinator's), else $RESEARCH_AGENT_URL."""
     env = os.environ if environ is None else environ
@@ -365,7 +378,7 @@ def wake_on_control(iid: str, *, run=None) -> str | None:
 
 
 def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, control=None, sleep=time.sleep, clock=time.monotonic) -> str | None:
-    """Start a stopped Nebius VM before a run and wait for its ssh (INF-58: the H200s stop after 2 h idle, disks kept): a machine
+    """Start a stopped Nebius VM before a run and wait for its ssh (the H200s stop after 2 h idle, disks kept): a machine
     whose registry entry names its `nebius_instance_id` and whose ssh doesn't answer is started through the Nebius API, then waited
     for up to WAKE_WAIT_S. With no Nebius key here (a lane's VM), the control pod starts it (`wake_on_control`, or `control`).
     Returns what it did, None when the machine answered at once or names no instance."""
@@ -887,7 +900,7 @@ def require_ready_source(path: Path | str, identity: str) -> dict[str, Any]:
 
 
 def tracked_dirt(path: Path) -> list[str]:
-    """The tracked paths of a shipped checkout that differ from its commit (INF-225: one run's edit to the shared per-commit tree would
+    """The tracked paths of a shipped checkout that differ from its commit (one run's edit to the shared per-commit tree would
     otherwise reach every later run of that commit).  Untracked and ignored build output is not dirt; a tree shipped as an archive, with
     no .git, has nothing to compare and gives none."""
     if not (Path(path) / ".git").exists():
@@ -903,7 +916,7 @@ def _ready_doc(identity: str, tree: str | None, man: dict[str, Any], verified: s
 
 def _probe_source(ssh: list[str], dest: str) -> tuple[str, dict[str, Any] | None]:
     """(`ready` | `dirty` | `legacy` | `absent`, READY.json doc when ready or dirty).  `dirty`: READY, but a checkout whose tracked files
-    no longer match its commit (INF-225); the doc then carries the first such paths under `dirt`."""
+    no longer match its commit; the doc then carries the first such paths under `dirt`."""
     q = shlex.quote(dest)
     r = ssh_run(ssh, ["sh", "-c", f"if [ -f {q}/{READY_FILE} ]; then cat {q}/{READY_FILE}; echo; echo {_DIRT_MARK}; "
                                   f"if [ -e {q}/.git ]; then git -C {q} status --porcelain --untracked-files=no 2>/dev/null | head -5; fi; "
@@ -1120,7 +1133,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path, *, checkout: bool = Fa
 
     Identity: the commit sha (a dirty tree is refused; there is no patch digest to name).  Protocol:
       1. probe <root>/src/<identity>/: READY.json naming this identity -> done, unless it is a checkout whose tracked files an earlier
-         run edited (INF-225), which is moved to <root>/src/.quarantine/ and shipped afresh; a foreign READY.json -> SourceNotReady (never touched);
+         run edited, which is moved to <root>/src/.quarantine/ and shipped afresh; a foreign READY.json -> SourceNotReady (never touched);
          a directory without READY.json (legacy `.complete`, or an interrupted ship) -> per-file sha256 against the archive: identical
          -> adopted (READY.json written, `verified: legacy-sha256-per-file`); otherwise moved to <root>/src/.quarantine/<identity>-<nonce>/
          (kept for inspection, never executable by name) and shipped afresh;
@@ -1595,7 +1608,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     if mem_rec:
         remote["mem"] = mem_rec
         env["RESEARCH_MEM_RESERVATION"] = mem_rec["reservation"]      # the runner removes it at exit and does not pass it on
-        env["RESEARCH_RUN_MEM_GB"] = f"{float(req['mem_gb']):g}"       # the workload's: a reservation is no cgroup cap (CI-99)
+        env["RESEARCH_RUN_MEM_GB"] = f"{float(req['mem_gb']):g}"       # the workload's: a reservation is no cgroup cap
     cpus = direct_cpus()
     if cpus:
         remote["cpus"] = f"{format_cpus(cpus)}: {os.environ.get('DIRECT_CPUS_FILE') or DIRECT_CPUS_FILE} (a command may pin itself elsewhere)"
@@ -1754,7 +1767,7 @@ def _runner_failed(req: dict[str, Any], request_path: Path, run_dir: Path, proc:
 
 def _research_bin(tool: str, runs_root: Path) -> Path:
     """<root>/cache/bin/<snapshot>/, holding a `research` that runs the run's shipped tool (`python -m research` with it on
-    PYTHONPATH), so a workload's `research data put` is the launcher's research and not whatever the machine's PATH has (INF-102)."""
+    PYTHONPATH), so a workload's `research data put` is the launcher's research and not whatever the machine's PATH has."""
     d = runs_root.parent / "cache" / "bin" / Path(tool).name
     text = f'#!/bin/sh\nPYTHONPATH={shlex.quote(tool)}${{PYTHONPATH:+:$PYTHONPATH}} exec {shlex.quote(sys.executable)} -m research "$@"\n'
     shim = d / "research"
@@ -1777,7 +1790,7 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
     env = dict(os.environ)
     env.update({k: str(v) for k, v in (req.get("env") or {}).items()})
     if remote.get("source_sha"):
-        # [R19 tele] a tree the archive stream shipped has no .git: the workload's source-identity precheck reads the tree's sha from
+        # a tree the archive stream shipped has no .git: the workload's source-identity precheck reads the tree's sha from
         # here (research.result.ENV_SOURCE_SHA) when neither --sha nor EXPORT.json names it
         env["RESEARCH_SOURCE_SHA"] = str(remote["source_sha"])
         env.setdefault("PYTHONPYCACHEPREFIX", str(runs_root.parent / "cache" / "pycache"))   # imports from the shared tree do not write into it
@@ -1804,7 +1817,7 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
         env["CUDA_VISIBLE_DEVICES"] = ""
         remote["gpus"] = f"none: {DIRECT_GPUS_FILE} says every GPU is Kueue's (CUDA_VISIBLE_DEVICES='')"
     elif _lease_owns_every_gpu() and not req.get(QUEUE_WRAP):
-        # whatever its --env says: a job that opened CUDA outside the lease took GPUs the lease then handed to others (INF-55)
+        # whatever its --env says: a job that opened CUDA outside the lease takes GPUs the lease then hands to others
         env["CUDA_VISIBLE_DEVICES"] = ""
         remote["gpus"] = (f"{gpus} through `gpu-lease {gpus} --wait` (CUDA_VISIBLE_DEVICES names them)" if gpus else
                           f"none: gpu-lease hands out every GPU here ({GPU_LEASE_HOST_FILE}), so CUDA_VISIBLE_DEVICES=''; declare "
@@ -2132,10 +2145,11 @@ ADOPT_CONNECT_S, ADOPT_PROBE_S, ADOPT_JOBS = 5, 20, 16
 
 def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict[str, dict[str, Any]] | None = None,
           unique: bool = False) -> Path:
-    """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine, write
-    the remote.json `launch` would have (phase `adopted`), and fetch its records.  Refused when the id is not a full run id, when no
-    machine holds it (each machine's answer in the reason), or when the local dir already exists; with `unique` (a cancel), every
-    machine is asked and an id more than one holds is refused rather than taken from the first."""
+    """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine but the
+    auditor hosts (`restricted`: never asked unless `on` names one), write the remote.json `launch` would have (phase `adopted`), and
+    fetch its records.  Refused when the id is not a full run id, when no machine holds it (each machine's answer in the reason), or
+    when the local dir already exists; with `unique` (a cancel), every machine is asked and an id more than one holds is refused
+    rather than taken from the first."""
     from .store import ids
 
     if not ids.is_run_id(run_id):
@@ -2144,7 +2158,11 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
     if local.exists():
         raise Refused(f"{local} exists already")
     ms = load_machines() if machines is None else machines
-    names = [on] if on else sorted(n for n, m in ms.items() if m.get("provider") == "ssh")
+    ssh = {n: m for n, m in ms.items() if isinstance(m, dict) and m.get("provider") == "ssh"}
+    skipped = [] if on else sorted(restricted(ssh))
+    names = [on] if on else sorted(n for n in ssh if n not in skipped)
+    not_asked = (f"; not asked: the auditor hosts {', '.join(skipped)}, which refuse lanes' keys (--on NAME asks one)"
+                 if skipped else "")
     answers: dict[str, str] = {}
     targets = []
     for name in names:
@@ -2158,8 +2176,9 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
             continue
         m = {**m, "root": m.get("root") or DEFAULT_ROOT}
         targets.append((name, m, tgt, f"{m['root']}/runs/{run_id}"))
-    if len(targets) > 1:
-        print(f"research: looking for {run_id} on {len(targets)} machines (--on NAME skips this)", file=sys.stderr, flush=True)
+    if len(targets) > 1 or skipped:
+        print(f"research: looking for {run_id} on {len(targets)} machine{'s' if len(targets) != 1 else ''} (--on NAME skips this)"
+              f"{not_asked}", file=sys.stderr, flush=True)
 
     def probe(t: tuple) -> str | None:
         name, _, tgt, rd = t
@@ -2199,8 +2218,8 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
             "remote_run_dir": rd})
         fetch(local)
         return local
-    raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers[n] for n in sorted(answers))})" if answers
-                                                       else " (no ssh machine is registered)"))
+    why = "; ".join(answers[n] for n in sorted(answers)) or ("" if skipped else "no ssh machine is registered")
+    raise Refused(f"no machine holds run {run_id}" + (f" ({why})" if why else "") + not_asked)
 
 
 def _runner_gone(ssh: list[str], local_dir: Path, pid: int, *, timeout: float = 120) -> str | None:
@@ -2224,6 +2243,17 @@ def _runner_gone(ssh: list[str], local_dir: Path, pid: int, *, timeout: float = 
     if host == env.get("hostname") and alive == "gone":
         return f"its runner (pid {pid}) is gone without recording an end"
     return None
+
+
+def _remote_status(ssh: list[str], rd: str, *, timeout: float = 120) -> dict[str, Any]:
+    """The run's status.json as it is on the machine now; {} when it isn't there, and {"unreadable": why} when it can't be
+    read."""
+    try:
+        probe = ssh_run(ssh, ["sh", "-c", f"cat {shlex.quote(rd)}/status.json"], timeout=timeout)
+        doc = json.loads(probe.stdout.decode(errors="replace")) if probe.returncode == 0 else {}
+    except (subprocess.TimeoutExpired, ValueError) as e:
+        return {"unreadable": f"{type(e).__name__}: {e}"}
+    return doc if isinstance(doc, dict) else {}
 
 
 def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = (), timeout: float | None = None) -> dict[str, Any]:
@@ -2273,7 +2303,14 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     rec.pop("runner_gone", None)
     if st.get("state") not in TERMINAL and isinstance(st.get("pid"), int):
         if why := _runner_gone(ssh, local_dir, st["pid"], timeout=within(120)):
-            rec["runner_gone"] = {"at_utc": rec["observed_utc"], "runner_pid": st["pid"], "why": why}
+            # the run may have ended between the copy above and the probe: its runner exits after writing a terminal status
+            again = _remote_status(ssh, rd, timeout=within(120))
+            if again.get("state") in TERMINAL:
+                write_json_atomic(local_dir / "status.json", again)
+                rec["last_observed"] = {"state": again["state"], "rc": again.get("rc"), "at_utc": rec["observed_utc"]}
+            else:
+                rec["runner_gone"] = {"at_utc": rec["observed_utc"], "runner_pid": st["pid"], "why": why,
+                                      **({"recheck": again["unreadable"]} if "unreadable" in again else {})}
     pid = (_read_json(local_dir / "launch.json") or {}).get("runner_pid")
     if not st and isinstance(pid, int):
         # launched, no status.json: the runner either has not written it yet or exited before it could (an argv it rejected)
@@ -2392,7 +2429,7 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     """`research cancel`: SIGTERM to the workload's process group on the machine (status.json `pgid`), its intent recorded first in the
     run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  The SIGTERM reaches every process
     of the run's own cgroup scopes and the run's processes outside its group too, and CANCEL_GRACE_S later the runner SIGKILLs what is
-    left of them, confirms they are gone and records it (status.json `scope_end`; telemetry.scope, INF-93); when the runner had
+    left of them, confirms they are gone and records it (status.json `scope_end`; telemetry.scope); when the runner had
     recorded the workload's exit already or is gone, the cancel on the machine does, and this call waits the grace.  Never the runner: it
     records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody.  A run whose
     shipped tool predates the scope end gets the SIGTERM to its group and run-dir processes alone, and the result says so (`scope`).

@@ -1,14 +1,13 @@
-"""The agent watch (INF-69): free a cloud agent whose run is held, and record what it sees, from the control pod.
+"""The agent watch: free a cloud agent whose run is held, and record what it sees, from the control pod.
 
     python3 agent_watch.py loop --log /data/agent-watch/events.jsonl     $CURSOR_API_KEY set; standard library only
 
-An agent hears Slack, Linear and timer events only between runs, and a run can hang after a tool call returns: proofs from
-05:29 to 15:33Z and circuits from 09:49Z on 18 Oct, three coordinators at once about 15:26Z on 15 Oct. Until now only Daniel
-pressing Stop freed one. Every `POLL_S` the watch lists the agents (`GET /v1/agents`, which shows every agent on the account:
+An agent hears Slack, Linear and timer events only between runs, and a run can hang after a tool call returns, for hours and for several coordinators at once, and without the watch only a
+person pressing Stop frees one. Every `POLL_S` the watch lists the agents (`GET /v1/agents`, which shows every agent on the account:
 it keeps those whose `repos` name compute-verification/verity; ACTIVE ones, and IDLE ones changed in the last `IDLE_RECENT_S`,
 since an ERROR leaves an agent IDLE). For each ACTIVE agent it lists its runs (`GET .../runs`),
 page by page back to the newest that started: its `latestRunId` is often a run cancelled on arrival, created and cancelled
-within half a second while the run doing the work is older (memory-accounting, 19:32Z 18 Oct; 52 such runs in 50 min by 20:40Z). It follows the event stream (`GET .../runs/{run}/stream`,
+within half a second while the run doing the work is older (one agent had 52 such runs in 50 min). It follows the event stream (`GET .../runs/{run}/stream`,
 server-sent events) of the agent's newest run that is RUNNING or WAITING_FOR_BACKGROUND_WORK, until that run ends or another
 takes its place. Events carry no time, so it times them as they arrive. A heartbeat counts as nothing, and so does the `status`
 the API re-sends on every reconnection. Each simple event (`assistant`, `thinking`, `tool_call`) has an `interaction_update`
@@ -30,19 +29,18 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   suspended VM, which the API doesn't show. It is cancelled and continued as a held
   run is, under the same once-an-hour limit; a quiet stream alone, while the agent's `updatedAt` moves, is a broken stream,
   not a stall. A followed background wait is stalled the same way after `STUCK` (2 h) with nothing streamed and the agent's
-  `updatedAt` still: cancelling a wait may take its local subagents, but a suspended VM has lost them already (compute-accounting's
-  research lane sat in one from 05:26 to 23:40Z on 23 Oct, INF-192);
+  `updatedAt` still: cancelling a wait may take its local subagents, but a suspended VM has lost them already (a lane has sat
+  in one for 18 hours);
 - **held unread** when the agent is any holder a registry handle's `holder` names (its lanes that post as it included,
   `all_holders`), its run RUNNING or waiting on background work, and it has done nothing itself for `UNREAD_S` (1 h) while a
   worker it waits on streamed within `WORKER_LIVE_S`: a resumed worker streaming in the foreground hides it from every rule
-  above, and its follow-ups sit unread (compute-accounting's research lane 17:25-21:45Z, network-accounting 11:30-13:36Z, 24
-  Oct). For the handle's inbox holder a doorbell must have rung after its last own event an hour ago, or its timer lapsed; a
+  above, and its follow-ups sit unread for hours. For the handle's inbox holder a doorbell must have rung after its last own event an hour ago, or its timer lapsed; a
   lane's subscriptions the watch can't see, so the hour alone. It is cancelled and continued as a held run is (the worker, a
-  cloud agent, runs on), owner top, under the same once-an-hour limit (top, 24 Oct 21:50Z);
+  cloud agent, runs on), owner top, under the same once-an-hour limit;
 - **in a long call** when a tool call the parent waits on has been running for `LONG_CALL_S` (recorded, never cancelled: a
   build or a wait may be legitimate, unless it is a holder's held unread);
 - **crashed** when the agent's latest run ended in ERROR: the watch starts a new run, at most once every `RESTART_S` and
-  `MAX_RESTARTS` times in a row (vllm's runs errored within a minute, run after run, on 18 Oct), then records it as
+  `MAX_RESTARTS` times in a row (a run can error within a minute, run after run), then records it as
   **erroring**, for a person. A latest run that FINISHED ends the row, and so does a coordinator back from ERROR for
   `STICK_S` (a restarted run reads RUNNING for a while before it errors again, so seeing it running is not enough). When
   `OUTAGE_MIN` or more coordinators are down at once, it is the platform's failure: each is restarted every `OUTAGE_RETRY_S`,
@@ -54,19 +52,19 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   reads FINISHED, so the restart above never sees it. Recorded once per `updatedAt`, rung to its owner.
 
 A run among an agent's newest left in CREATING for 10 min by the API's own `updatedAt` with no newer run started (only ones
-cancelled on arrival) and no run followed (a run queued behind a followed one waits its turn, and that one is judged), or a followed background wait with nothing at all streamed for 2 h while its agent's `updatedAt` moves, is recorded once as **stuck**: on 18 Oct proofs' and circuits' runs sat in CREATING behind a
-held one while every later one was cancelled on arrival, network-accounting's behind a goal run from 18:27Z, and the API refuses
+cancelled on arrival) and no run followed (a run queued behind a followed one waits its turn, and that one is judged), or a followed background wait with nothing at all streamed for 2 h while its agent's `updatedAt` moves, is recorded once as **stuck**: runs sit in CREATING behind a
+held one or a goal run while every later one is cancelled on arrival, and the API refuses
 to cancel a CREATING run. A goal run (`run-goal-...`) can't be read or streamed on its own (400), so it is never followed; an
 agent whose latest run the API won't read is recorded once as unreadable, and again, with `since`, once it has been for
 `UNREADABLE_S`.
 
 A coordinator holds a handle of `--registry` (the Slack registry): the holder of the handle's open inbox in `--routes` (the notes'
-`routes.d`, which a handover moves first; on 18 Oct the registry still named vllm's predecessor), else the first agent id in the
+`routes.d`, which a handover moves before the registry), else the first agent id in the
 handle's `holder`. Its inbox thread rings it for each doorbell, and it may run a recurring duty timer, which it declares in
 `--timers` (`infra/control/agent_watch_timers.json`, deployed as `/data/agent-watch/timers.json`: `{handle: interval_s}`; comms
 has none by design, waking on its inbox, issue events and one-shot timers). It is judged by the run the
 sweep judges it by (the run followed, else its newest that started: a doorbell mid-turn leaves a run cancelled on arrival as its
-`latestRunId`, vllm at 20:23Z 18 Oct). One whose run's turn is
+`latestRunId`). One whose run's turn is
 over (FINISHED, EXPIRED, or WAITING_FOR_BACKGROUND_WORK, where coordinators mostly sit between wakes) is **ready to wake** when
 a doorbell for its handle rang after its last activity and `DOORBELL_S` has passed with nothing run (its subscription didn't),
 or, for a handle that declares a timer, when nothing has run for twice its interval since then (its timer didn't fire); a
@@ -77,20 +75,18 @@ doorbell as a Slack ts), which infra's relay writes, since only it reads Slack; 
 watch records it at most once per agent an hour, kept in `state.json`, and with `--wake` starts a run that says so; a wake
 refused with 409 agent_busy is recorded and counts as the hour's (zombie CREATING runs kept memory-accounting busy for hours),
 except that one whose run is WAITING_FOR_BACKGROUND_WORK has that run cancelled and the wake started again: Cursor refuses
-any run on an agent waiting on background work, and proofs' wakes were refused so hourly from 10:46 to 16:12Z on 19 Oct.
+any run on an agent waiting on background work, so otherwise every such wake is refused.
 `--wake` stays off by default.
 
 A cloud worker (a coordinator's Task subagent) is not in `GET /v1/agents`, lists no runs, and can't be started (POST runs:
-400 legacy workflow), so only its coordinator can resume it; on 18 Oct all 20 of proofs' workers stopped mid-step 20:06-20:47Z
-and nobody noticed until 23:08Z. The watch finds workers in the `origin:` of the notes (`--notes`, a research-notes clone)
+400 legacy workflow), so only its coordinator can resume it, and a lane's workers can all stop mid-step unnoticed for hours. The watch finds workers in the `origin:` of the notes (`--notes`, a research-notes clone)
 under `lanes/` modified in the last `WORKER_NOTES_S`, and in `workers.d/*.json` beside `--log` (`{agent_id, lane,
 launched_by}`, for a coordinator that registers its workers), and in the `task` tool calls of every run it follows (the
-call's `args.agentId` is the worker launched or resumed: on 19 Oct 16:49-17:03Z 14 of proofs' workers, named only in a
-handover note's body, stopped mid-step and none was watched), minus the coordinators and every agent the list has. Each sweep
+call's `args.agentId` is the worker launched or resumed, so a worker named nowhere else is still watched), minus the coordinators and every agent the list has. Each sweep
 it reads each one once (`GET /v1/agents/{id}`; `WORKERS_NEW` first reads a sweep; one IDLE for `WORKER_IDLE_S` only when a
 note of its changes; a 404 never again), and records **worker_idle** when it went from ACTIVE to IDLE (once per transition,
 at its `updatedAt`, which moves on a status change and not during work), unless its parent's Task call completed as it
-stopped (`reported_back`: it reported back, INF-277), and **worker_long** once when it has been ACTIVE for
+stopped (`reported_back`: it reported back), and **worker_long** once when it has been ACTIVE for
 `--worker-long-h` (6). It records only; the relay rings the lane's handle. A worker's worker_idle and idle_after_run are
 held with its parent's others (`bursts` in `state.json`) and posted once none has joined for `BURST_QUIET_S`, or `BURST_S`
 after the first: one alone as itself, several as one **workers_failed** naming them all. Each names the wake-up the worker
@@ -112,10 +108,9 @@ after a second window (`SILENT_RINGS`), then not until one of those moves; the r
 worker's launcher's). A silent agent still showing nothing `NO_STEP_S` (6 h) after its last activity is recorded once more:
 a worker is archived (`POST /v1/agents/{id}/archive`, which stops it and frees its slot) and recorded as **archived**, rung to
 its lane, which relaunches it from its last note or drops it; a coordinator, or a worker the API won't archive, is recorded as
-**no_step**, rung to @top.
+**no_step**, rung to top.
 Its last activity there also counts its agent's own `updatedAt` and, for a coordinator, its judged run's `updatedAt` and last
-stream event, since no_step advises stopping and archiving it: on 26 Oct at 21:05Z it said so of compute-accounting's and
-network-accounting's coordinators, each working in Slack within two minutes, with no note or push for 6 h.
+stream event, since no_step advises stopping and archiving it, and a coordinator working only in Slack makes no note or push for hours.
 Without `--notes` and heads read in the last `HEADS_STALE_S`, nobody is judged.
 
 When a `research run` on a node ends, its sender learns of it only by polling, and a worker that ended its turn to wait never
@@ -127,7 +122,7 @@ lane): a coordinator's own handle, or a former one's (`lineage`), a worker's lau
 Cursor refuses a run on a worker), or its parent's when the watch learned it from a Task call, else the lane's (`--by`, the
 job's lane, or a handle `submitted_by` names) when that is a handle, else the handle of the branch whose head the run's tree was
 (`branch_handle`: the registry's `branch_suffixes`, or `cursor/<handle>-...`). The runs of one read whose sender no handle owns are one
-`run_ended` with role `unknown`, each run with its `sender`, for the relay to ring @infra once; a run whose handle
+`run_ended` with role `unknown`, each run with its `sender`, for the relay to ring infra once; a run whose handle
 `quiet_handles` lists (ci: drive reads its own train checks' ends) is skipped. `run_ends.json` keeps each node's last read and the runs
 seen (`RUN_ENDS_KEEP_S`); runs that ended before the first read are never rung. `agent_watch.py runs` prints what it would read.
 
@@ -136,8 +131,7 @@ worker that sent it, else the coordinator of the lane's handle. An agent whose t
 the run ended is **idle_after_run** `RESUME_S` after it: the watch starts a run on it that carries the run's result (with
 the background wait cancelled, as for a wake, when that is what refuses it), and a refused one is tried again each sweep as
 a continue run is. A worker can't be started, so its coordinator is rung (the record's `owner`) and, if the worker is still
-idle `WORKER_RELAUNCH_S` later, with its task unfinished, it is **relaunch**ed (INF-141; 19 Oct, three that had reported back
-were relaunched within a minute): never while its coordinator (its parent, or a holder of its handle) is ACTIVE, never on a
+idle `WORKER_RELAUNCH_S` later, with its task unfinished, it is **relaunch**ed: never while its coordinator (its parent, or a holder of its handle) is ACTIVE, never on a
 conversation the API won't read, and once per idle at most. Unfinished is a last message that doesn't read as a report back
 (`reported`) and either a newest run that failed (a run its own lane cancelled with `research cancel`, its reason or BY naming
 the sender, or its BY the handle or an agent of it, is posted quietly and starts no clock at all) or a stop mid-step
@@ -199,10 +193,10 @@ WORKER_LIVE_S = 15 * 60     # ... a worker counts as streaming when its progress
 RECANCEL_S = 3600
 RESTART_S = 10 * 60         # an ERROR run is restarted at most this often
 AGENTS_PAGE = 10            # GET /v1/agents page size, halved on each 503 down to AGENTS_PAGE_MIN for the process's life: the
-AGENTS_PAGE_MIN = 2         # largest page Cursor answers keeps shrinking (100 and 50 503'd from 26 Oct 16:25Z, 25 from 27 Oct
-#                             ~00:00Z, which blinded the watch for 3.5 h; 10 answers)
+AGENTS_PAGE_MIN = 2         # largest page Cursor answers keeps shrinking (100, 50 and 25 have each 503'd for hours, blinding
+#                             the watch; 10 answers)
 SWEEP_READS_S = 12 * 60     # a sweep's reads stop after this long (a sweep takes ~6 min; with reads near their 60 s timeout, one
-#                             took 24 min, 26 Oct, and the cloud watch alerts after 20 min without a finished sweep)
+#                             took 24 min, and the cloud watch alerts after 20 min without a finished sweep)
 RESUME_S = 10 * 60          # idle this long after a research run it must act on ended, with nothing run since: resumed
 WORKER_RELAUNCH_S = 20 * 60 # a worker still idle this long after its coordinator was rung for it: relaunched fresh
 RELAUNCH_EVERY_S = 6 * 3600 # an agent is relaunched at most once in this long
@@ -221,7 +215,7 @@ UNREADABLE_S = 3600         # a latest run the API won't read this long is recor
 IDLE_RECENT_S = 6 * 3600    # an IDLE agent is read only if it changed this recently (an ERROR leaves an agent IDLE)
 DROPPED_S = 5 * 60          # an IDLE agent changed this long after its latest run ended, with none newer, was dropped
 RUNS_PAGE = 50              # an ACTIVE agent's runs are read a page at a time, back to the newest that started
-RUNS_PAGES = 10             # (memory-accounting had 52 runs cancelled on arrival in 50 min, 18 Oct), at most this many pages
+RUNS_PAGES = 10             # (an agent can have 52 runs cancelled on arrival in 50 min), at most this many pages
 FOLLOW = {"RUNNING": HELD_S, "WAITING_FOR_BACKGROUND_WORK": HELD_BG_S}
 TERMINAL = {"FINISHED", "ERROR", "CANCELLED", "EXPIRED"}
 # recorded once, never cancelled: a run CREATING this long by its `updatedAt`, a followed background wait with nothing streamed
@@ -264,15 +258,16 @@ NOTE_CHARS = 30_000             # a note given to a relaunched agent is cut to t
 #: a branch a note names, `cursor/...` in backticks: a relaunched worker with no recorded branch is told these, the first first
 NOTE_BRANCH_RE = re.compile(r"`(cursor/[A-Za-z0-9._/-]+)`")
 ENV_NAME = "Verity compute-verification"     # the one-repo environment every coordinator and worker runs on
-MODEL = {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "high"}]}
+MODEL = {"id": "claude-fable-5-2", "params": [{"id": "effort", "value": "high"}]}
 COORDINATORS = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/compute-verification/verity/coordinators")  # launch_coordinator's
 DOORBELL_S = 10 * 60
 BELLS_STALE_S = 30 * 60
-# a run whose turn is over; coordinators mostly sit in background work between wakes (12 of 14 at 19:38Z, 18 Oct). CANCELLED is a
+# a run whose turn is over; coordinators mostly sit in background work between wakes. CANCELLED is a
 # person's stop or the watch's own; ERROR is `restart`'s
 IDLE_DONE = {"FINISHED", "EXPIRED", "WAITING_FOR_BACKGROUND_WORK"}
 AGENT_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 SHORT_AGENT_RE = re.compile(r"\b(bc-[0-9a-f]{8})\b(?!-[0-9a-f]{4}-)")
+LANE_LINE_RE = re.compile(r"^Lane ([A-Za-z0-9_-]+)", re.M)
 
 
 def short_id(agent: str) -> str:
@@ -316,10 +311,10 @@ WORKER_LONG_S = 6 * 3600        # ACTIVE this long is recorded once (--worker-lo
 WORKER_KEEP_S = 2 * 86400       # a worker idle or gone this long, and in no recent note, is forgotten
 WORKERS_NEW = 20                # workers read for the first time per sweep: a fresh notes clone names hundreds
 SILENT_S = 90 * 60              # ACTIVE with no note of its and no push to its branches this long: rung, again a window later
-COORD_SILENT_S = 60 * 60        # ... a coordinator's window, rung to @top (TOP-90 row 37: memory-accounting hung 01:47-04:39Z)
+COORD_SILENT_S = 60 * 60        # ... a coordinator's window, rung to top (a coordinator can hang for hours)
 SILENT_RINGS = 2                # rings per silent spell; then none until it shows activity
-NO_STEP_S = 6 * 3600            # ... and still nothing this long: one `no_step`, rung to @top (top, 26 Oct: nine workers ACTIVE
-                                # with no step for 30-64 h, each rung twice as silent and then by no one)
+NO_STEP_S = 6 * 3600            # ... and still nothing this long: one `no_step`, rung to top (workers sat ACTIVE
+                                # with no step for days, each rung twice as silent and then by no one)
 HEADS_EVERY_S = 5 * 60          # the branch heads (`git ls-remote --heads`) are read this often
 HEADS_STALE_S = 3 * HEADS_EVERY_S   # heads older than this tell no push apart from none: nobody is judged silent
 RUN_ENDS_EVERY_S = 5 * 60       # the nodes' ended runs are read this often (nodes.json `every_s`)
@@ -382,7 +377,7 @@ def all_holders(registry: Path | None, routes: Path | None) -> dict[str, str]:
 
 def lineage(registry: Path | None, coords: dict[str, str], agent: str) -> str | None:
     """The handle `agent` coordinates, or coordinated before a handover moved its inbox: the watch's coordinators (`holders`),
-    else the first agent id in a registry handle's `holder` (proofs' generation 3 after generation 4 took the inbox, 19 Oct),
+    else the first agent id in a registry handle's `holder` (an older generation after a newer one took the inbox),
     else a generation `launch_coordinator.py` made of a registry handle."""
     if agent in coords:
         return coords[agent]
@@ -416,9 +411,10 @@ def front_matter(p: Path) -> dict[str, str]:
 
 
 def recent_notes(notes: Path | None, t: float) -> Iterator[tuple[Path, float, dict[str, str]]]:
-    """(path, mtime, front-matter) of each note under `notes/lanes/` modified in the last `WORKER_NOTES_S`. The notes clone is
-    synced every 2 min, and git gives a file it adds or changes the time it did so, so a note's mtime is when it arrived."""
-    for p in sorted((notes / "lanes").glob("*/*.md")) if notes else []:
+    """(path, mtime, front-matter) of each note under `notes/lanes/`, at any depth (`lanes/ci/reviewers/review-1.md`), modified in
+    the last `WORKER_NOTES_S`. The notes clone is synced every 2 min, and git gives a file it adds or changes the time it did so,
+    so a note's mtime is when it arrived."""
+    for p in sorted((notes / "lanes").glob("*/**/*.md")) if notes else []:
         try:
             heard = p.stat().st_mtime
         except OSError:
@@ -427,9 +423,14 @@ def recent_notes(notes: Path | None, t: float) -> Iterator[tuple[Path, float, di
             yield p, heard, front_matter(p)
 
 
+def note_lane(notes: Path, p: Path) -> str:
+    """The lane whose directory under `notes/lanes/` holds note `p`, however deep."""
+    return p.relative_to(notes / "lanes").parts[0]
+
+
 def lane_handle(lane: str, names: set[str]) -> str | None:
     """The handle a lane belongs to: the lane itself when it is one, else the longest handle it extends with a `-`
-    (`kernels-hashproof` is @kernels'), else None."""
+    (`kernels-hashproof` is kernels'), else None."""
     if lane in names:
         return lane
     return max((h for h in names if h and lane.startswith(h + "-")), key=len, default=None)
@@ -458,7 +459,7 @@ def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: 
             handle = (lineage(registry, coords, by[0]) if by else None) or lane_handle(lane, names)
             add(m[0], lane, handle, p.stat().st_mtime, (str(d["branch"]),) if d.get("branch") else (), by[0] if by else None)
     for p, heard, fm in recent_notes(notes, t):
-        ids, lane = AGENT_RE.findall(fm.get("origin", "")), fm.get("lane") or p.parent.name
+        ids, lane = AGENT_RE.findall(fm.get("origin", "")), fm.get("lane") or note_lane(notes, p)
         launcher = next((i for i in ids if i in coords), None)
         for agent in ids:
             if agent not in coords:
@@ -479,7 +480,7 @@ def note_times(notes: Path | None, t: float) -> tuple[dict[str, float], dict[str
         for agent in set(AGENT_RE.findall(origin)) | set(SHORT_AGENT_RE.findall(origin)):
             heard[agent] = max(heard.get(agent, mtime), mtime)
             named.setdefault(agent, set()).update(BRANCH_RE.findall(origin))
-        for lane in {p.parent.name, fm.get("lane", "")} - {""}:
+        for lane in {note_lane(notes, p), fm.get("lane", "")} - {""}:
             lanes[lane] = max(lanes.get(lane, mtime), mtime)
     return heard, named, lanes
 
@@ -636,7 +637,7 @@ HEADS_SHA_KEEP_S = 2 * 86400
 
 
 def branch_handle(branch: str, registry: Path | None, handles: set[str]) -> str | None:
-    """The handle a branch belongs to, for a run whose sender no route knows (TOP-90 row 21, 25 Oct: seven workers traced by
+    """The handle a branch belongs to, for a run whose sender no route knows (otherwise traced by
     hand from tree to branch to lane): the registry's `branch_suffixes` of a handle naming the branch's last `-` part, else a
     handle the branch's name starts with after `cursor/` (`cursor/kernels-kp2s8-8c40`), the longest such."""
     if not branch:
@@ -873,6 +874,7 @@ class Watch:
         self.api, self.log, self.clock, self.wake, self.publish = api, log, clock, wake, publish
         self.open_prs, self.prs_read = open_prs, -float("inf")
         self.pr_branches: dict[str, set[str]] = {}  # agent id (full or short) an open PR's body names -> that PR's branches
+        self.pr_lanes: dict[str, set[str]] = {}     # lane an open PR's `Lane NAME` line names -> that PR's branches
         self.notes, self.worker_long_s = notes, worker_long_s
         self.git_remote, self.nodes, self.sh = git_remote, nodes, sh
         self.launch_env, self.launcher, self.launch, self.launch_api = log.with_name("launch.env"), launcher, launch, launch_api
@@ -997,7 +999,7 @@ class Watch:
 
     def reported_back(self, agent: str, idle_t: float) -> bool:
         """Whether `agent`'s parent got its Task result as it stopped (`TASK_DONE_SLACK_S` either side of its IDLE read): it
-        reported back. A Task call that completed earlier is no report: INF-126's 14 workers had theirs complete, then stopped
+        reported back. A Task call that completed earlier is no report: workers have had theirs complete, then stopped
         mid-step."""
         with self.kids_lock:
             done = (self.children.get(agent) or {}).get("done")
@@ -1279,8 +1281,7 @@ class Watch:
     def unread(self, r: Run, t: float, bell: float | None, every: float | None) -> str | None:
         """Why a holder's run (`holders_all`) is held while a worker streams: RUNNING or waiting on background work, it has done
         nothing itself for `UNREAD_S` while a worker it waits on streamed within `WORKER_LIVE_S`, so it reads no follow-ups
-        (compute-accounting's research lane 17:25-21:45Z, network-accounting 11:30-13:36Z, 24 Oct: a resumed worker streamed
-        in the foreground, no rule fired). For the handle's inbox holder, a doorbell rang after its last own event `UNREAD_S`
+        (a resumed worker streaming in the foreground hides it from every other rule). For the handle's inbox holder, a doorbell rang after its last own event `UNREAD_S`
         ago or its timer lapsed; a lane that posts as the handle has subscriptions the watch can't see, so the hour alone."""
         if r.ended or r.status not in FOLLOW or r.agent not in self.holders_all:
             return None
@@ -1510,6 +1511,9 @@ class Watch:
             if status == "ACTIVE":
                 if prev != "ACTIVE":                            # updatedAt moves on a status change, not during work
                     w["since"], w["long"] = updated, False
+                if (not w.get("no_runs") and (latest := info.get("latestRunId"))
+                        and (x := self.read({**info, "id": agent}, latest)) and x.get("status") == "FINISHED"):
+                    w["no_runs"] = True                         # it works with its latest API run finished: a Task worker
                 if not w["long"] and t - w["since"] >= self.worker_long_s:
                     w["long"] = True
                     self.record("worker_long", r, since=iso(w["since"]), hours=int((t - w["since"]) // 3600), **detail)
@@ -1522,7 +1526,11 @@ class Watch:
                     self.hold("worker_idle", r, t, w, at=iso(updated), since=iso(updated), **detail)
             elif status == "ARCHIVED":
                 w["gone"] = True
-            if status == "IDLE" and (latest := info.get("latestRunId")):
+            # a Task worker's runs aren't the API's, so its `latestRunId` never moves (one kept a week-old id through ten runs):
+            # only a worker whose runs the API lists can drop a message, and an IDLE read right after an ACTIVE one is a run that
+            # ended
+            if (status == "IDLE" and not w.get("no_runs") and w.get("idle_at") != updated
+                    and (latest := info.get("latestRunId"))):
                 self.dropped({**info, "id": agent}, self.read({**info, "id": agent}, latest), t, role="worker", **detail)
         for agent in [a for a, w in self.workers.items() if (w.get("gone") or w.get("status") == "IDLE")
                       and t - max(w.get("updated", t), w["heard"]) >= WORKER_KEEP_S]:
@@ -1544,11 +1552,14 @@ class Watch:
             self.say("prs", f"open PRs unreadable ({type(e).__name__}: {e}); the last read's PR branches still count", t)
             return
         named: dict[str, set[str]] = {}
+        lanes: dict[str, set[str]] = {}
         for pr in prs:
             body, branch = str(pr.get("body") or ""), str(pr.get("branch") or "")
             for agent in {*AGENT_RE.findall(body), *SHORT_AGENT_RE.findall(body)} if branch else ():
                 named.setdefault(agent, set()).add(branch)
-        self.pr_branches = named
+            for lane in LANE_LINE_RE.findall(body) if branch else ():
+                lanes.setdefault(lane, set()).add(branch)
+        self.pr_branches, self.pr_lanes = named, lanes
 
     def read_heads(self, t: float) -> None:
         """Every `HEADS_EVERY_S`, Verity's branch heads (`git ls-remote --heads`, the deploy key fixtures_export.sh fetches with):
@@ -1576,7 +1587,8 @@ class Watch:
         """Record `silent` for each agent in `known` (agent -> {name, handle, lane, run, since: ACTIVE since, branches}) with no
         note of its (`note_times`), no push to its branches (its own, the ones its notes name, those of open PRs whose body names
         it, every head ending in its id's last four characters, as a coordinator's `cursor/...-1037`, and the heads `same_task`
-        finds for any of these) and no start or end of a research run it sent (`run_ends`' `ran`) for `SILENT_S`, counted from
+        finds for any of these; with none of these, its lane's: `cursor/<lane>-*` and open PRs whose `Lane NAME` line is it, and
+        its lane's agents' runs) and no start or end of a research run it sent (`run_ends`' `ran`) for `SILENT_S`, counted from
         the latest of those, its ACTIVE spell's start and the first heads read; again after a second window, then not until one
         of those moves. Needs
         `--notes` and heads read in the last `HEADS_STALE_S`."""
@@ -1596,10 +1608,21 @@ class Watch:
                     *self.pr_branches.get(agent, ()), *self.pr_branches.get(short_id(agent), ()),
                     *(b for b in heads if b.endswith("-" + agent[-4:]))}
             mine |= {h for h in heads if any(same_task(h, b) for b in mine)}
+            by_lane = not mine and bool(k.get("lane"))
+            if by_lane:
+                # nothing names its branches (a Task-launched worker: no `git.branches`, a PR body naming only its lane): its
+                # lane's pushes and runs stand in, since archiving one at work loses it (one was archived 40 min after a push,
+                # its runs filed under its coordinator's id)
+                mine = {b for b in heads if b.startswith(f"cursor/{k['lane']}-")} | self.pr_lanes.get(k["lane"], set())
             pushed = max((heads[b][1] for b in mine if b in heads), default=None)
-            # a coordinator signs its notes with its lane, not its id (top, 27 Oct: four false silent rings in 70 min)
+            # a coordinator signs its notes with its lane, not its id, so its id alone rings it falsely as silent
             lane_note = max((lanes[x] for x in (k["handle"], k["lane"]) if x and x in lanes), default=None) if coord else None
-            ran = (self.ends.get("ran") or {}).get(agent)
+            ran_by = self.ends.get("ran") or {}
+            ran = ran_by.get(agent)
+            if by_lane:
+                ran = max((x for a, x in ran_by.items() if x is not None and (a == agent or (known.get(a) or {}).get("lane") == k["lane"]
+                                                                              or (known.get(a) or {}).get("handle") == k["lane"])),
+                          default=ran)
             last = max(x for x in (k["since"], heard.get(agent), heard.get(short_id(agent)), lane_note, pushed, ran,
                                    self.heads["t0"]) if x is not None)
             s = self.silent.get(agent)
@@ -1639,8 +1662,7 @@ class Watch:
     def learn(self, agent: str, coords: dict[str, str], t: float) -> dict:
         """A sender no route knows, learned from its brief (its conversation's first user message): a worker of the first
         agent id there that is a coordinator (`lineage`: WIDTHS' "a cloud worker of the circuits coordinator (agent bc-...)"),
-        else of the current coordinator of the first registry handle it names (ZKS10's "a worker for the proofs lane
-        (@proofs)"), kept in `children` as a Task call's worker is; {} when it names neither, read again `LEARN_RETRY_S` later."""
+        else of the current coordinator of the first registry handle it names ("a worker for the proofs lane"), kept in `children` as a Task call's worker is; {} when it names neither, read again `LEARN_RETRY_S` later."""
         if t - self.learn_tried.get(agent, -LEARN_RETRY_S) < LEARN_RETRY_S:
             return {}
         self.learn_tried[agent], self.learn_left = t, self.learn_left - 1
@@ -1750,7 +1772,7 @@ class Watch:
     def ring_run(self, node: str, row: dict, coords: dict[str, str], handles: set[str], ended: float,
                  quiet: set[str] = frozenset()) -> dict | None:
         """Record `row`'s end for its sender's handle; a run whose sender no handle owns is returned instead, for `run_ends` to
-        record with the read's others as one (93 such senders sent 753 runs in 14 h on 19 Oct: one ring each would bury @infra)."""
+        record with the read's others as one (a day's unowned senders can send hundreds of runs: one ring each would bury infra)."""
         sent = str(row.get("submitted_by") or "")
         by = AGENT_RE.search(sent)
         agent = by[0] if by else ""

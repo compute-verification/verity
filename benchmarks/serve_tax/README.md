@@ -16,6 +16,9 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `tick` | admission on the certified tick (`verity_vllm.pipeline.tick_plugin`), τ calibrated on `record` | `record` |
 | `tokens` | each window's tokens, 4 bytes each, committed in `rows-sha512` rows off the engine loop | `tick` |
 | `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
+| `tokens-only` | each Commit period's tokens committed as `tokens` commits them, without the tick | `record` |
+| `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
+| `boundary-rows` | prefix caching off, and the two-stage audit's boundary commitment at serve: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), its check template and the template's instances a prompt row and an output in `BOUNDARY_ROWS` (JSON) | `record` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -27,7 +30,13 @@ It starts from an empty engine. `restore.py` starts mid-traffic instead: it puts
 edge into a fresh engine (the KV bytes into the same block ids, then the state, `boundary.restore`), replays to a later
 edge, adding each request that arrived in between before the step it arrived before, and compares every step's
 schedule, every sampled token and its logprob's bits, and at the far edge the KV pool's root, each block's fingerprint,
-the block pool and every dumped leaf (`boundary.py`'s docstring says what an edge takes and how).
+the block pool and every dumped leaf (`boundary.py`'s docstring says what an edge takes and how). `rebuild.py` starts from
+less, only what a host copy of the K/V pages and the step record hold: it adds each request held at the edge to a fresh
+engine as a new request with its outputs so far, copies its computed prefix's pages from the edge's KV file into blocks
+the fresh engine allocates, as a KV connector's load does, and compares the replay the same way, with each request's K/V
+over its computed tokens as a SHA-512 root at both edges (``--tail`` sets what a partial block holds past its prefix).
+With `--at-step S --mirror-out DIR`, then `--from-mirror DIR`, it starts at an arbitrary step inside the replay block
+instead, from per-step copies of the slots each step wrote (its docstring says how).
 
 The workload is the trace corpus's (`benchmarks/network_e2e/traces`: C4 prompts of 16 to 1,024 tokens, about 60% behind
 one of eight shared prefixes, caps of 64 or 256 tokens) under Poisson arrivals, every request decoding to its cap
@@ -58,6 +67,24 @@ client raises its open-file limit to the hard limit first.
 On one GPU, `MODEL_ID` is `moonlight` (the default), `llama8b` or `qwen3-30b`, the last two read from their pinned
 snapshots under `HF_HOME` (`serve_tax.py checkpoint --model-id ID` prints the path).
 
+Under a deployment's traffic, the job serves the replay ladder's plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,
+multi-turn and 8k-32k-token prompts, half of them sampled at temperature 0.7 under the public seed rule, each stopping at
+its end of text or its cap), sent as `plan.jsonl` or named by `PLAN_FILE` (then no C4 shard is needed), with FlashInfer on:
+
+~~~text
+research run --on NODE --source . --cwd source --send plan.jsonl [--send fi_smoke.py] \
+  --env MODEL_ID=glm53 --env 'ARMS=compiled record tokens-only boundary' --env RATES=light=R1,medium=R2,saturated=R3 \
+  --env EDGES_EVERY_S=30 --env KV_COPY=first --env MAX_MODEL_LEN=40960 --env FLASHINFER=1 --env CUDA_HOME=DIR \
+  --env BUDGET_MIN=M -- bash benchmarks/serve_tax/run.sh
+~~~
+
+At TP > 1 the boundary arm's engine core drains and takes its own state, and each rank takes its part where it lies
+through `collective_rpc` (`boundary.rank_pool` once, `boundary.rank_take` at each edge): its KV pool hashed and, on the
+ranks `KV_COPY` names, copied to pinned host memory, then its runner rows and generators, all kept in the rank's process
+until the next edge. Every rank hashes under the edge's one key, so ranks that hold the same bytes give the same root, and
+the edge's record says whether all did. Each load's `meta.json` has the GPUs' busy seconds over it (`gpu`: NVML's
+utilization integrated), and `table.md` lays them out per thousand output tokens beside each arm's edges.
+
 ## What it writes
 
 Under the job's `out/`: `plan.jsonl` (the requests), one directory per arm with its `meta.json` (the server's command,
@@ -74,7 +101,9 @@ its wall time beside the served window's, and `replay_tokens.jsonl.gz` its token
 schedule doesn't depend on the tokens: a replay with no differing step can still sample other tokens. A mode listed twice
 in `REPLAY_MODES` replays again and compares its tokens with the first replay's too, which tells a replay that differs from
 serving from one that differs from itself; `REPLAY_FROM` with no `ARMS` replays an earlier job's window alone, reading
-that job's run directory where it lies on the node. `REPLAY_LOGPROBS=1` records each sampled token's logprob too
+that job's run directory where it lies on the node. A replay runs at the model's GPUs as its tensor-parallel width, and
+`REPLAY_CAPTURE=ID,...` takes those engine ids' logits rows and ids at every rank's sampler into the replay's `capture/`
+(`replay.py --capture`), a token select's span each. `REPLAY_LOGPROBS=1` records each sampled token's logprob too
 (`replay_logprobs.jsonl.gz`), and a repeated mode compares them with the first replay's bit for bit, naming each request's
 first differing step: a one-ulp change anywhere in a logits row shows there even when no token flips. Every engine
 `run.sh` starts, served or replayed, runs with `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`. Without it, each process times a

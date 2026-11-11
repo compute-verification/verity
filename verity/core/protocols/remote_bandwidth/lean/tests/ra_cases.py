@@ -29,12 +29,12 @@ from verity_difftest import protocol as P
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, wire
 from verity.core.protocols.remote_bandwidth.audit import AuditRun, Params, SessionError
 from verity.core.protocols.remote_bandwidth.receipts import Plan
-from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES as LIVE_COIN_BYTES, HM96, LiveChallenger
+from verity.core.protocols.spot.challenger import COIN_BYTES as LIVE_COIN_BYTES, HM96, LiveChallenger
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
 EXE = "remote-audit-difftest"
-#: The ports' side of record (`verity_difftest`): the Lean, the verifier `benchmarks/remote_session/verifier.py` runs.
+#: The ports' side of record (`verity_difftest`): the Lean, the verifier `verity/core/protocols/remote_bandwidth/session/verifier.py` runs.
 OF_RECORD = "lean"
 #: What the Python raises where the Lean refuses: a decoder's `Reject`, and the Python's own refusals, `ValueError`
 #: (`verity.errors.ProtocolError` and `InvalidArtifact` among them), `TypeError` and `IndexError`.

@@ -1,4 +1,4 @@
-# The cloud watch's config (infra/control/cloud_watch.py, INF-73): thresholds, prices and paths, as on vy-control-verity.
+# The cloud watch's config (infra/control/cloud_watch.py): thresholds, prices and paths, as on vy-control-verity.
 # Budget lines are not copied here: spend is compared with budgets.toml's live lines, read from the steward's notes clone (the
 # file the budgets guard reads), so a renewed or raised line needs no change here.
 
@@ -8,7 +8,7 @@ digest_hour_utc = 15                 # 08:00 PDT, the hour fleet.py's daily comp
 unreadable_passes = 3                # a check that fails this many passes in a row opens `<check>|unreadable`
 clear_passes = 2                     # an anomaly clears once it has been gone this many passes in a row
 channel = "C0C5Q30MCNA"              # #agent-alerts (.agents/skills/using-slack/registry.json)
-mention = "S0CA15YVA0P"              # @infra's user group, named in each anomaly's post
+mention = "S0CA15YVA0P"              # infra's user group, named in each anomaly's post
 username = "infra"
 
 # Each loop post_start.sh starts, and its success marker: a log line whose first group is its time (`pattern`), a JSON file's
@@ -81,8 +81,8 @@ period_s = 660                       # a pass may run to its 600 s timeout, then
 name = "Agent watch"
 started_by = "/data/infra/agent_watch.sh"
 file = "/data/agent-watch/status.json"
-json = "t"                           # each sweep (60 s) rewrites it
-period_s = 480                       # twice this must exceed a sweep whose reads take agent_watch.SWEEP_READS_S (12 min)
+json = "t"                           # each sweep rewrites it when it ends, with the time it started
+period_s = 900                       # twice this must exceed two back-to-back sweeps whose reads take agent_watch.SWEEP_READS_S (12 min)
 also_mention = ["S0C977GL9R7"]       # the top coordinator's group: with the watch down, nobody's held or crashed run is freed
 page_user = "U0BEN96ES8Y"            # the person who runs the project, once it has stayed down this much longer than the alert
 page_after_s = 3600
@@ -124,7 +124,7 @@ secret_env = "AWS_SECRET_ACCESS_KEY" # read-only RESEARCH_EXPORT_ACCESS_KEY_ID g
 
 [[r2.bucket]]
 label = "lean cache"
-bucket_env = "LEAN_CACHE_BUCKET"     # a name, not a secret: r2.env's pair lists it (same account and endpoint, 18 Oct)
+bucket_env = "LEAN_CACHE_BUCKET"     # a name, not a secret: r2.env's pair lists it (same account and endpoint)
 endpoint_env = ["LEAN_CACHE_R2_ENDPOINT", "R2_ENDPOINT"]
 key_env = "AWS_ACCESS_KEY_ID"
 secret_env = "AWS_SECRET_ACCESS_KEY"
@@ -135,7 +135,7 @@ writer = "Publisher: `vy-lean-cache-daily` on vy-nebius-cpu-4 (lean)."
 url_env = "STORE_INDEXER_DATABASE_URL"
 schemas = ["store_private"]
 report_schemas = ["store_public"]    # store_index.sh builds it only once /root/.config/verity/store-export.env exists
-size_alert_gib = 8                   # the plan's storage limit isn't recorded anywhere this lane reads; 1.25 GB on 18 Oct
+size_alert_gib = 8                   # the plan's storage limit isn't recorded anywhere infra reads
 connections_share = 0.8
 index_stale_s = 1800                 # the store index writes `listings` every pass (~6 min)
 
@@ -169,14 +169,14 @@ key = "CURSOR_ADMIN_API_KEY"
 closes = "Cursor's team spend on cloud agents (the Admin API's spend and daily usage); /data/agent-watch/cursor.env's key runs agents only"
 
 [prices]
-# Cloudflare R2 list price (developers.cloudflare.com/r2/pricing, read 18 Oct 2026): storage $0.015/GB-month past 10 GB,
+# Cloudflare R2 list price (developers.cloudflare.com/r2/pricing): storage $0.015/GB-month past 10 GB,
 # class A $4.50/million past 1 million a month. Counted in 10^9-byte GB, the larger count of the two readings of GB.
 r2_storage_usd_per_gb_month = 0.015
 r2_free_gb = 10
 r2_class_a_usd_per_million = 4.50
 r2_class_a_free_million = 1
 r2_gb_bytes = 1e9
-# Only when the steward's log has no ACCOUNT line: RunPod's account rate it read on 18 Oct 19:31Z (the control pod, $0.06/h,
+# Only when the steward's log has no ACCOUNT line: RunPod's account rate as last read (the control pod, $0.06/h,
 # and the volumes), which the guard's rate_now leaves out
 runpod_control_usd_per_hour = 0.23
 
@@ -194,7 +194,7 @@ remaining_share = 0.1
 url = "https://website-docs-sage.vercel.app"   # research.jobs.client's DEFAULT_URL
 token_env = "JOBS_TOKEN"             # `research jobs`' token (read here, never written)
 limit = 200
-stale_queued_h = 24                  # 18 Oct: 20 of audit-main's daily cron jobs queued, none ever claimed
+stale_queued_h = 24                  # a job queued this long with no claim is stale
 
 # Public endpoints, unauthenticated: an answer of 500 or more, or none, is an anomaly.
 [[http]]

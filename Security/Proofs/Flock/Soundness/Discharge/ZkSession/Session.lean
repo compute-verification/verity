@@ -34,17 +34,17 @@ averaged over the sample (`ksAvgZK`). The lowering comes from each sampled proof
 `Pr[accept ∧ at least K wrong units] ≤ miss(K) + ε_ks^zk + δ_link`, with
 * `miss(K)`: `Law.stratified`'s count curve at the live sample, under A3 (`uniform/io-getrandombytes`);
 * `ε_ks^zk = ksAvgZK`: per table `padLinkError + (padRepError + εInner)²`, proved here;
-* `δ_link`: the named `LinkSound` hypothesis, as `Audit.flock_batched_count` leaves it without `--zk`.
+* `δ_link`: the named `BindSound` hypothesis, as `Audit.flock_batched_count` leaves it without `--zk`.
 
 **Open guarantees** (what this statement does not cover, each a separate piece of work):
 * *The compiled `--zk` layer.* Here every oracle is a message. Under `--zk` the level-0 table, the pads (`Ch, Cμ`), the
   inner proof's `τ` and the coin tree are Merkle commitments with salted leaves, so the headline's `ε_ks` (knowledge
   extraction from caps, `ksAvgStrict` under `cr/sha-512`), `δ_link` (`LinkCR`, under `ecr/sha-512`) and `δ_tree`
-  (`TreeRewind`, under `cr/sha-512`) need a `--zk` compiled table and session. [e2e-exec]'s salted session
+  (`TreeRewind`, under `cr/sha-512`) need a `--zk` compiled table and session. The salted session
   (`Discharge/Exec/SessionL.lean`) fixes the table's openings to `Opens × Salts`; a version generic over the per-table
   game would carry `TabZK.after`'s compiled form.
-* *The `--zk` executable refinement*: that the executable verifier's `--zk` path runs this protocol (for [e2e-exec],
-  as `verify_refines_hm96` does without `--zk`), and with it the headline's `execAccept`.
+* *The `--zk` executable refinement*: that the executable verifier's `--zk` path runs this protocol (as
+  `verify_refines_hm96` does without `--zk`), and with it the headline's `execAccept`.
 * *`final_c'`'s place.* The protocol as Lean defines it receives `final_c'` before the inner proof (`restZK`); the live
   verifier never absorbs it, and a prover that picks it after the inner proof's batching coins can cancel the batched
   constraint. This statement describes the live verifier once it absorbs `final_c'` before the inner proof's label.
@@ -190,7 +190,7 @@ theorem sessionZK_sound_any (A : Arith F K) (hA : A.Correct) (ts : List (TabZK F
 
 section Audit
 
-variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
@@ -296,7 +296,7 @@ theorem zk_flock_count (hA : A.Correct) (place : ∀ S R u, u ∈ S → UnitPlac
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZK A planZ) R → (Fin C.N → Bool))
     {δlink : (R : Reg) → Cont L Reg (batchedSessionZK A planZ) R → ℝ≥0∞}
     (hlink : (analysisZK A P planZ tab (decodeOfPlace A P planZ tab place) Xc
-      (loweringSoundZK_of_place A P planZ tab place)).LinkSound δlink)
+      (loweringSoundZK_of_place A P planZ tab place)).BindSound δlink)
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSessionZK A planZ))) :
     prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card) (audit L Reg (batchedSessionZK A planZ)) σ ≤
       L.miss K + ksAvgZK planZ L (reg σ) + δlink (reg σ) (cont σ) :=
@@ -317,7 +317,7 @@ theorem zk_flock_count_execOS (hA : A.Correct)
     {δlink : (R : Reg) → Cont (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ) R → ℝ≥0∞}
     (hlink : (analysisZK A P planZ tab (decodeOfPlace A P planZ tab place) Xc
-      (loweringSoundZK_of_place A P planZ tab place)).LinkSound δlink)
+      (loweringSoundZK_of_place A P planZ tab place)).BindSound δlink)
     (K : ℕ)
     (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ))) :

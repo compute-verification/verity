@@ -37,7 +37,7 @@ Implementations (`IMPLS`), each adding one class:
   counter-mode SHA-512 keys, its 24-byte salt and leaves) and `p2-16448/v2` (ChaCha8 keys).
 * `p2-v3-gpu`: the same kernels and steps, under the registered P2's framing (`p2-16448/v4`: its commitment, salt, key prefix and leaves,
   `p2_v1/harness.py`'s `V3`), so the device serves its blocks, and its audits go through `protocol.TimedAudit` with its
-  certificate (`band_gpu/memory_challenger.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover.
+  certificate (`verity/core/devices/memory_challenger/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover.
 * `p2-v3-mc-gpu`: `p2-v3-gpu` audited by the memory challenger (`memory_challenger/live.py`, `p2_v1/harness.py`'s `MC`) at
   `Δ + RTT_ALLOWANCE_CAP_NS`, with a tampered-block and a bad-signature control beside the others.  Its sessions are signed
   with S1's LMS key in `--mc-lms-key DIR`, every session's id in the session log `--mc-session-log FILE` (a file of its
@@ -259,7 +259,7 @@ class VllmGpu:
         impl_out = out / "impl"
         impl_out.mkdir(parents=True, exist_ok=True)
         paths = [tree / "integrations" / "vllm", tree, tree / "verity" / "core" / "protocols" / "pous",
-                 tree / "verity" / "core" / "protocols" / "sampled_proofs", tree / "tools" / "research" / "src"]
+                 tree / "verity" / "core" / "protocols" / "spot", tree / "tools" / "research" / "src"]
         env = {**os.environ, "PYTHONPATH": ":".join(map(str, paths)), "VLLM_ENABLE_V1_MULTIPROCESSING": "0"}
         cmd = [a.python, "-m", "verity_vllm.pipeline.cli", "pous-dense-bench", "--codec", a.scheme, "--out", str(impl_out),
                "--shapes", str(tree / "integrations/vllm/workloads/dense_decode_shapes.json"), "--build-dir", a.build_dir,
@@ -431,11 +431,6 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     ap.add_argument("--mc-lms-key", default="",
                     help="p2-v3-mc-gpu: sign the memory challenger's sessions with S1's LMS key in this directory (made "
                          "there when absent); without one they are test-signed and the verdict rejects them all")
-    ap.add_argument("--bandwidth-salt", default="",
-                    help="p2-v3-gpu, p2-v3-mc-gpu, joint runs only: set C up under the bandwidth audit's salt for this GPU (as "
-                         "nvidia-smi's -i takes it), bandwidth.audit.draw_salt over W's commitment and the id the challenger "
-                         "reads (audit.read_device), so the bandwidth verifier accepts C as the device's store; without it, "
-                         "PoUS's own salt (protocol.draw_salt)")
     ap.add_argument("--mc-session-log", default="",
                     help="p2-v3-mc-gpu with --mc-lms-key: the memory challenger's used-session log, a file of its own outside "
                          "the key's directory (made with a new key; for a key that exists, a missing log is refused)")

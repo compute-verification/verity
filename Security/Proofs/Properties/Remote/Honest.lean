@@ -89,13 +89,13 @@ theorem policy_of {b : ByteArray} {c : NciCheck.Protocol.Commitment} (h : NciChe
   exact ⟨rfl, hd⟩
 
 /-- The one-stage audit's commitment: the record its bytes are, and `Registration.digest` of it. -/
-theorem stage_of {b : ByteArray} {c : SampledProofs.OneStage.Commitment}
-    (h : SampledProofs.OneStage.commitmentOf b = .ok c) :
-    canonicalJson b = .ok c.record ∧ SampledProofs.Registration.digest c.record = .ok c.digest := by
-  unfold SampledProofs.OneStage.commitmentOf at h
+theorem stage_of {b : ByteArray} {c : Spot.OneStage.Commitment}
+    (h : Spot.OneStage.commitmentOf b = .ok c) :
+    canonicalJson b = .ok c.record ∧ Spot.Registration.digest c.record = .ok c.digest := by
+  unfold Spot.OneStage.commitmentOf at h
   rcases hj : canonicalJson b with e | j
   · simp [hj, Bind.bind, Except.bind] at h
-  rcases hg : SampledProofs.Registration.digest j with e | d
+  rcases hg : Spot.Registration.digest j with e | d
   · cases j <;> simp [hj, hg, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   cases j <;> simp [hj, hg, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   subst h
@@ -103,8 +103,8 @@ theorem stage_of {b : ByteArray} {c : SampledProofs.OneStage.Commitment}
 
 /-- **One record, one digest**: bytes that the policy's and one-stage v1's commitment decoders both accept decode to
 one digest under each. -/
-theorem one_digest {b : ByteArray} {cI : NciCheck.Protocol.Commitment} {cS : SampledProofs.OneStage.Commitment}
-    (hI : NciCheck.Protocol.commitmentOf b = .ok cI) (hS : SampledProofs.OneStage.commitmentOf b = .ok cS) :
+theorem one_digest {b : ByteArray} {cI : NciCheck.Protocol.Commitment} {cS : Spot.OneStage.Commitment}
+    (hI : NciCheck.Protocol.commitmentOf b = .ok cI) (hS : Spot.OneStage.commitmentOf b = .ok cS) :
     cS.digest = cI.digest := by
   obtain ⟨hjI, hdI⟩ := policy_of hI
   obtain ⟨hjS, hdS⟩ := stage_of hS
@@ -117,15 +117,15 @@ sampled proofs' cases committing to one record's bytes, which both commitment de
 the components remote's check compares on any blobs `bs` (`remote_check_ids`), and both digests are the policy's
 record's. -/
 theorem acceptInferenceOnly_honest (bs : Blobs) {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment}
-    {cS : SampledProofs.OneStage.Commitment} (hS' : kS.commitment = kI.commitment)
+    {cS : Spot.OneStage.Commitment} (hS' : kS.commitment = kI.commitment)
     (hI : NciCheck.Protocol.commitmentOf kI.commitment = .ok cI)
-    (hS : SampledProofs.OneStage.commitmentOf kI.commitment = .ok cS) :
+    (hS : Spot.OneStage.commitmentOf kI.commitment = .ok cS) :
     strays [NciCheck.Protocol.protocol.id, (VStar.Recursive.Sampled.protocol.onBlobs bs).id]
         [NciCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol.onBlobs bs]
         [kI, kW, kS] = none ∧
       Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment =
         some (NciCheck.Protocol.protocol.digest cI) ∧
-      Properties.Composition.digestOf SampledProofs.OneStage.protocol kS.commitment =
+      Properties.Composition.digestOf Spot.OneStage.protocol kS.commitment =
         some (NciCheck.Protocol.protocol.digest cI) := by
   have dS := one_digest hI hS
   have hcI : NciCheck.Protocol.protocol.commitment kI.commitment = .ok cI := hI

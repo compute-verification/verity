@@ -39,13 +39,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs import remote
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot import remote
 from verity.ml import randomness as R
 
 sys.path[:0] = [str(Path(__file__).resolve().parent), str(Path(__file__).resolve().parent / "interfaces")]
 import m3reg as REG  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registration as OR  # noqa: E402
+from verity.core.protocols.spot.one_stage import registration as OR  # noqa: E402
 from verity_e2e_demo import replay_bundle as RB  # noqa: E402
 
 SCHEME = "verity/e2e-h200-m3/coins/v1"

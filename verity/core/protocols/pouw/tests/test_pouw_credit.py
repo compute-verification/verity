@@ -25,9 +25,9 @@ from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
 from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.ml.protocols.pouw.circuit import plan
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import gemm as BG
@@ -260,6 +260,19 @@ def test_llama32_1b_int8_and_its_k2048_role_pin_one_checkpoint():
     assert e["checkpoint_sha512"] == hashlib.sha512(codec.canonical_json(e["files"])).hexdigest()
     assert doc["LLAMA32_1B_INT8_K2048"] == e
     assert Cr.PINNED_MODELS["LLAMA32_1B_INT8_K2048"] == e["checkpoint_sha512"]
+
+
+def test_llama32_1b_bf16_pins_the_upstream_checkpoint():
+    """LLAMA32_1B_BF16 is unsloth/Llama-3.2-1B as upstream holds it (`upstream-bf16`, snapshot 9535bd9b), the checkpoint
+    LLAMA32_1B_INT8 is made from: the 6 files a served engine reads, each by SHA-512. It is the role a remote memory audit
+    serves Llama 3.2 1B under, since its store's layout covers BF16 weights; credit counts none of its weights."""
+    e = json.loads(Cr.MODELS.read_text())["LLAMA32_1B_BF16"]
+    assert (e["repo"], e["revision"], e["recipe"]) == (
+        "unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "upstream-bf16")
+    assert set(e["files"]) == {"config.json", "generation_config.json", "model.safetensors", "special_tokens_map.json",
+                               "tokenizer.json", "tokenizer_config.json"}
+    assert e["checkpoint_sha512"] == hashlib.sha512(codec.canonical_json(e["files"])).hexdigest()
+    assert Cr.PINNED_MODELS["LLAMA32_1B_BF16"] == e["checkpoint_sha512"]
 
 
 def test_glm53_int8_pins_the_v3_checkpoint():
@@ -886,7 +899,7 @@ def test_each_live_unit_reads_the_public_max_tokens_as_its_caps(seed):
 def test_the_commit_record_is_bound_under_calls_root():
     """The Commit record's digest is its format's tagged SHA-512 of its bytes (`registration.digest`), and `calls_root`
     binds it after the manifest and the served trees' digest, as vllm's `pouw_h1.calls_root` must, byte for byte."""
-    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+    from verity.core.protocols.spot.one_stage import registration as R
     d = cases.window_instance(random.Random("honest/bound"))
     raw = bytes.fromhex(d["commit"])
     (digest, _reg), _ = Cr.commit_of(d["commit"])

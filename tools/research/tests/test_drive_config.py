@@ -24,6 +24,8 @@ verdict_first = false
 stale_days = 3
 stale_close_days = 7
 close_unlandable = "log"
+bottom_ring = ["@ci"]
+bottom_wait_min = 45
 """
 
 
@@ -73,8 +75,9 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
     f = DriveFlags.parse(FLAGS)
     assert f == DriveFlags(on="m1,m2", marked_after="2026-10-12T06:00:00Z", regenerate_locks=True,
                            land="review", after_landing_no_cache=True, landing_gates=("gates/g.py",), verdict_first=False,
-                           stale_days=3, stale_close_days=7, close_unlandable="log")
+                           stale_days=3, stale_close_days=7, close_unlandable="log", bottom_ring=("@ci",), bottom_wait_min=45)
     assert DriveFlags.parse("") == DriveFlags() == DriveFlags(None, None, False, "review", None, False)
+    assert (DriveFlags().bottom_ring, DriveFlags().bottom_wait_min) == (("@ci", "@top"), 30)
     assert DriveFlags.parse("after_landing_shards = 3\n").after_landing_shards == 3
     assert DriveFlags.parse("restack_jobs = 1\n").restack_jobs == 1
     assert DriveFlags.parse('warn_steps = ["ratchet-gate"]\n').warn_steps == ("ratchet-gate",)
@@ -82,11 +85,14 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
     assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
                         "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= warn_steps= verdict_first=False "
                         "stale_days=3 stale_close_days=7 stale_keep= close_unlandable=log after_landing_shards=1 command_line=on lowrisk_lane=True "
-                        "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue= signed_verdicts=False restack_jobs=3")
+                        "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue= verdict_carry=off bottom_ring=@ci "
+                        "bottom_wait_min=45 signed_verdicts=False restack_jobs=3")
     assert [DriveFlags.parse(f'executor = "{v}"\n').executor for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
+    assert [DriveFlags.parse(f'verdict_carry = "{v}"\n').verdict_carry for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
     assert [DriveFlags.parse(f'close_unlandable = "{v}"\n').close_unlandable for v in ("off", "log", "on")] == ["off", "log", "on"]
     for text, why in (('on = "m1,m2"', 'on = \'m1,m2\': a list of names, as ["a", "b"]'),
                       ('executor = "yes"', "executor = 'yes': one of off, shadow, on"),
+                      ("verdict_carry = true", "verdict_carry = True: one of off, shadow, on"),
                       ('close_unlandable = "yes"', "close_unlandable = 'yes': one of off, log, on"),
                       ("on = []", "on = []: at least one machine"),
                       ("after_landing_shards = 0", "after_landing_shards = 0: a whole number, 1 or a shard plan's N"),
@@ -103,8 +109,17 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ('lowrisk_excludes = ["/verity/core/"]', "lowrisk_excludes = ['/verity/core/']: a non-empty list"),
                       ('lowrisk_excludes = ["../x/"]', "lowrisk_excludes = ['../x/']: a non-empty list"),
                       ('lowrisk_excludes = ["verity/*/x.py"]', "lowrisk_excludes = ['verity/*/x.py']: a non-empty list"),
+                      ("bottom_ring = []", "bottom_ring = []: a non-empty list of handles, each `@` and its lower-case name, "
+                                           "as [\"@ci\"]"),
+                      ('bottom_ring = "@ci"', "bottom_ring = '@ci': a non-empty list of handles"),
+                      ('bottom_ring = ["ci"]', "bottom_ring = ['ci']: a non-empty list of handles"),
+                      ('bottom_ring = ["@ci @top"]', "bottom_ring = ['@ci @top']: a non-empty list of handles"),
+                      ('bottom_ring = ["@CI"]', "bottom_ring = ['@CI']: a non-empty list of handles"),
+                      ("bottom_wait_min = 0", "bottom_wait_min = 0: a whole number of minutes, 1 or more"),
+                      ("bottom_wait_min = 0.5", "bottom_wait_min = 0.5: a whole number of minutes"),
+                      ('bottom_wait_min = "30"', "bottom_wait_min = '30': a whole number of minutes"),
                       ('land = "fast"', "land = 'fast': one of review"),
-                      ('land = "check"', "land = 'check': train landing was deleted with its code (#5070): drive lands on "
+                      ('land = "check"', "land = 'check': train landing was deleted with its code: drive lands on "
                                          "review only"),
                       ('land_into = "next"', "land_into = 'next': \"checked\" (main follows it to fully checked commits) or "
                                              "\"main\""),
@@ -140,7 +155,8 @@ def test_drive_refuses_an_unknown_key_naming_the_keys_it_reads_and_the_one_it_li
                             "marked_after, regenerate_locks, land, land_into, after_landing_no_cache, landing_gates, "
                             "warn_gates, warn_steps, verdict_first, stale_days, stale_close_days, stale_keep, close_unlandable, "
                             "after_landing_shards, command_line, lowrisk_lane, "
-                            "lowrisk_per_tick, lowrisk_excludes, executor, executor_enqueue, signed_verdicts, restack_jobs; "
+                            "lowrisk_per_tick, lowrisk_excludes, executor, executor_enqueue, verdict_carry, bottom_ring, "
+                            "bottom_wait_min, signed_verdicts, restack_jobs; "
                             "rename or remove it, or update this research")
 
 
@@ -164,7 +180,7 @@ def test_drive_ignores_a_key_whose_code_was_deleted_so_it_runs_on_a_main_that_st
 FROM_FLAGS = {"verdict_first": False, "restack_jobs": 3, "on": "m1,m2", "regenerate_locks": True, "after_landing_no_cache": True,
               "stale_days": 3, "stale_close_days": 7, "stale_keep": (), "close_unlandable": "log", "after_landing_shards": 1,
               "lowrisk_lane": True, "lowrisk_per_tick": 20, "lowrisk_excludes": (), "executor": "off", "executor_enqueue": (),
-              "warn_steps": ()}
+              "warn_steps": (), "verdict_carry": "off", "bottom_ring": ("@ci",), "bottom_wait_min": 45}
 
 
 def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_takes_a_new_main_without_a_restart(world, driven, monkeypatch, capsys):
@@ -180,7 +196,8 @@ def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_t
                      "marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
                      "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= warn_steps= verdict_first=False "
                      "stale_days=3 stale_close_days=7 stale_keep= close_unlandable=log after_landing_shards=1 command_line=on lowrisk_lane=True "
-                     "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue= signed_verdicts=False restack_jobs=3"]
+                     "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue= verdict_carry=off bottom_ring=@ci "
+                     "bottom_wait_min=45 signed_verdicts=False restack_jobs=3"]
     assert drive(world, "--config", DRIVE_FLAGS) == 0 and driven[-1] == FROM_FLAGS
 
     on_main(world, FLAGS.replace("stale_days = 3", "stale_days = 6"))
@@ -242,6 +259,28 @@ def test_the_command_line_overrides_only_the_keys_drive_toml_lets_it(world, driv
     assert drive(world, "--on", "m9") == 1 and "set only nothing (its `command_line`)" in capsys.readouterr().err
 
 
+def test_without_marked_after_in_drive_toml_the_tick_takes_the_rules_cutoff(world, monkeypatch):
+    """The ready-mark cutoff is set once, in the rules at `main` (queue.toml), which every VM's queue reads: a drive.toml that
+    sets none leaves drive's tick that cutoff."""
+    cutoffs: list[str | None] = []
+
+    class Driver:
+        def __init__(self, q, **kw):
+            cutoffs.append(q.before_cutoff.__self__.since)
+
+        def tick(self, dry_run=False):
+            return ""
+
+    monkeypatch.setattr(D, "Driver", Driver)
+    sha = world.change({DRIVE_FLAGS: FLAGS.replace('marked_after = "2026-10-12T06:00:00Z"\n', ""),
+                        "gates/g.py": "import sys\nsys.exit(0)\n",
+                        "ci/queue.toml": 'hold_label = "hold"\nmarked_after = "2026-10-20T06:00:00Z"\n'})
+    _git(world.dev, "push", "-q", "origin", f"{sha}:refs/heads/main")
+    monkeypatch.chdir(world.dev)
+    assert drive(world) == 0
+    assert cutoffs == ["2026-10-20T06:00:00Z"]
+
+
 def test_without_drive_toml_at_main_drive_takes_the_defaults_and_its_on(world, driven, monkeypatch, capsys):
     rules = world.tmp / "rules.toml"
     rules.write_text('hold_label = "hold"\nmarked_after = "2026-10-12T06:00:00Z"\n')
@@ -250,8 +289,8 @@ def test_without_drive_toml_at_main_drive_takes_the_defaults_and_its_on(world, d
     assert driven[-1] == {"verdict_first": True, "restack_jobs": 3, "on": "m1", "regenerate_locks": False,
                           "after_landing_no_cache": False, "stale_days": 0, "stale_close_days": 0,
                           "stale_keep": (), "close_unlandable": "off", "after_landing_shards": 1, "lowrisk_lane": True,
-                              "lowrisk_per_tick": 20, "lowrisk_excludes": (), "executor": "off", "executor_enqueue": (),
-                              "warn_steps": ()}
+                          "lowrisk_per_tick": 20, "lowrisk_excludes": (), "executor": "off", "executor_enqueue": (),
+                          "warn_steps": (), "verdict_carry": "off", "bottom_ring": ("@ci", "@top"), "bottom_wait_min": 30}
     assert f"flags from the defaults ({DRIVE_FLAGS} isn't at main " in capsys.readouterr().out
     assert drive(world, "--on", "m1", "--rules", str(rules), "--regenerate-locks") == 1
     assert "--regenerate-locks: the defaults" in capsys.readouterr().err
@@ -331,7 +370,7 @@ def test_the_deleted_train_flags_parse_and_are_ignored_with_a_note(world, driven
     assert "ignored" not in capsys.readouterr().out
     assert drive(world, "--on", "m1", "--rules", str(rules), "--max-running", "10", "--train-size", "4") == 0
     assert driven[-1] == plain
-    assert ("research queue drive: --max-running and --train-size ignored: train landing was deleted (#5070); drop them from "
+    assert ("research queue drive: --max-running and --train-size ignored: train landing was deleted; drop them from "
             "drive's args") in capsys.readouterr().out
     assert drive(world, "--on", "m1", "--rules", str(rules), "--max-running", "10") == 0
     assert driven[-1] == plain and "drive: --max-running ignored: " in capsys.readouterr().out

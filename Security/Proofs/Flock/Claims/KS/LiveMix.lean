@@ -34,7 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Bridge.Hm96Tree
-import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game
 import VCVio.Prelude.Core
 
 /-!
