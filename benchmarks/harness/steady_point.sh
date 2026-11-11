@@ -8,9 +8,16 @@
 # benchmarks/one_stage/server_rate.py need to run (the CUDA toolkit first on PATH, their PYTHONPATH and libraries).
 set -euo pipefail
 ROOT=$PWD
-: "${VERITY_BENCH_SETUP:?a steady-state point runs in the environment its spec's setup leaves: launch it with verity-bench run SPEC --direct NODE}"
+if [ -z "${VERITY_BENCH_SETUP:-}" ]; then
+  echo "steady_point.sh: no VERITY_BENCH_SETUP: a steady-state point runs in the environment the setup of its spec leaves; launch it with verity-bench run SPEC --direct NODE" >&2
+  exit 2
+fi
 # shellcheck source=/dev/null
 . "$ROOT/$VERITY_BENCH_SETUP"
-: "${VERITY_BENCH_STEADY_PY:?$VERITY_BENCH_SETUP exported no VERITY_BENCH_STEADY_PY, the Python the point runs under}"
-export PYTHONPATH=$ROOT/benchmarks/harness:$ROOT/verity/configuration/config${PYTHONPATH:+:$PYTHONPATH}
+if [ -z "${VERITY_BENCH_STEADY_PY:-}" ]; then
+  echo "steady_point.sh: $VERITY_BENCH_SETUP exported no VERITY_BENCH_STEADY_PY, the Python the point runs under" >&2
+  exit 2
+fi
+# the harness, and what its settings registry imports (verity_config, and verity.settings from the tree's root)
+export PYTHONPATH=$ROOT/benchmarks/harness:$ROOT/verity/configuration/config:$ROOT${PYTHONPATH:+:$PYTHONPATH}
 exec "$VERITY_BENCH_STEADY_PY" -m verity_bench.steady_node "$@"

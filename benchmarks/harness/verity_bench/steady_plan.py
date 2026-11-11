@@ -133,9 +133,10 @@ class SteadyCompletion:
         if self._pulled or self.local_only:
             return
         self._pulled = True
+        since = self._since() if self._since is not None else None
         self._base.pull_labels()
-        if self._since is not None:
-            self._base.pull_since(self._since())
+        if since is not None:
+            self._base.pull_since(since)
 
     def _own(self, identity: str) -> list[str]:
         """The runs of the point that ran to their end from a clean tree, the newest first."""
@@ -191,8 +192,8 @@ def make_plan(source: str | Path, *, root: Path | None = None, lookup: Lookup | 
     root = root or jobs.repository_root()
     spec = steady_spec.load_spec(source, root=root)
     if spec.workload not in prove_records.WORKLOADS:
-        raise ValueError(f"spec {spec.id!r}'s `workload` {spec.workload!r} has no steady-state record: the workloads are "
-                         f"{', '.join(prove_records.WORKLOADS)} (`prove_records.WORKLOADS`)")
+        raise ValueError(f"the `workload` of spec {spec.id!r}, {spec.workload!r}, has no steady-state record: the "
+                         f"workloads are {', '.join(prove_records.WORKLOADS)} (`prove_records.WORKLOADS`)")
     files = steady_spec.closure(root, spec)
     digest = sha256(files)
     if lookup is None:

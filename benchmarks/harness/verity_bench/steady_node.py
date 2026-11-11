@@ -49,6 +49,8 @@ RESULT_SCHEMA = "research/result/v0.1"
 KIND = "verity-steady-point/v1"
 POINT_FILE, VERDICT_FILE, TIMED_FILE = "out/point.json", "out/verdict.json", "out/timed.json"
 REFUSED = 4
+#: the files of a staged statement the node side reads; the prover reads the rest
+STAGED = ("stage.json", "circuit.txt", "pin.txt")
 #: the bytes kept of each of the server's logs, from its end
 KEPT_LOG_BYTES = 200_000
 
@@ -105,8 +107,8 @@ def own_cores(spec: steady_spec.SteadySpec, cpus: Sequence[int]) -> list[int]:
     """The run's CPUs, which are the spec's `cores` exactly: with fewer or more the row is another point's."""
 
     if len(cpus) != spec.cores:
-        raise Refused(f"the run has {len(cpus)} CPUs ({_spans(cpus)}); spec {spec.id!r}'s `cores` is {spec.cores}: launch "
-                      "it through a slot of the node whose line gives that many")
+        raise Refused(f"the run has {len(cpus)} CPUs ({_spans(cpus)}), and the `cores` of spec {spec.id!r} is {spec.cores}: "
+                      "launch it through a slot of the node whose line gives that many")
     return sorted(cpus)
 
 
@@ -128,21 +130,24 @@ def statement(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner)
     stage.parent.mkdir(parents=True)
     if row.staged is not None:
         given = Path(row.staged)
-        if not all((given / name).is_file() for name in ("stage.json", "circuit.txt", "pin.txt")):
-            raise Refused(f"row {row.type!r}'s `staged` {row.staged} holds no staged statement on this node (stage.json, "
-                          "circuit.txt, pin.txt)")
+        if not all((given / name).is_file() for name in STAGED):
+            raise Refused(f"the `staged` of row {row.type!r}, {row.staged}, holds no staged statement on this node "
+                          f"({', '.join(STAGED)})")
         shutil.copytree(given, stage)
     else:
         rc = run([sys.executable, steady_spec.STAGER, row.type, str(row.n), str(stage)], out / "stage.log")
-        if rc or not (stage / "stage.json").is_file() or not (stage / "circuit.txt").is_file():
+        if rc or not all((stage / name).is_file() for name in STAGED):
             raise Refused(f"staging {row.type!r} at {row.n} units failed (exit {rc}): out/stage.log")
     pin = _digest(stage / "circuit.txt", "sha512")
     if pin != row.pin:
-        raise Refused(f"the statement's circuit has SHA-512 {pin[:16]}..., and row {row.type!r}'s `pin` is "
+        raise Refused(f"the statement's circuit has SHA-512 {pin[:16]}..., and the `pin` of row {row.type!r} is "
                       f"{row.pin[:16]}...: another circuit takes no GPU time")
+    if (said := (stage / "pin.txt").read_text().strip()) != pin:
+        raise Refused(f"the statement's pin.txt, which the timing script writes in the row, says {said[:16]}..., and its "
+                      f"circuit has SHA-512 {pin[:16]}...")
     record = json.loads((stage / "stage.json").read_text())
     if record.get("n") != row.n:
-        raise Refused(f"the statement holds {record.get('n')!r} units, and row {row.type!r}'s `n` is {row.n}")
+        raise Refused(f"the statement holds {record.get('n')!r} units, and the `n` of row {row.type!r} is {row.n}")
     return {"from": row.staged or steady_spec.STAGER, "pin": pin, "n": row.n,
             "stage": {key: record.get(key) for key in ("definition", "word", "k_log", "vus_per_block", "circuit_bytes")}}
 
@@ -207,17 +212,13 @@ def snapshot(path: Path, run_id: str, ask: Asker, now: Callable[[], float]) -> N
 
 
 def keep(scratch_rate: Path, out_rate: Path, item: steady_spec.SteadyPoint, read: Mapping[str, str]) -> int:
-    """The step's records under `out/rate/`: the script's rows with the versions read on the node, the sessions'
-    record, the device's samples and the end of each log. The verifiers' session files stay in the scratch. How many
-    rows it kept."""
+    """The step's records under `out/rate/`: the script's rows, each with the versions this step read on the node, the
+    sessions' record, the device's samples and the end of each log. The verifiers' session files stay in the scratch.
+    How many rows it kept."""
 
     out_rate.mkdir(parents=True, exist_ok=True)
     rates = scratch_rate / "rate.json"
-    rows = json.loads(rates.read_text()) if rates.is_file() else []
-    for row in rows:
-        if row.setdefault(steady_spec.VERSIONS, dict(read)) != dict(read):
-            raise RuntimeError(f"the script's row says the node's versions are {row[steady_spec.VERSIONS]!r}; this step "
-                               f"read {dict(read)!r}")
+    rows = [{**row, steady_spec.VERSIONS: dict(read)} for row in (json.loads(rates.read_text()) if rates.is_file() else [])]
     _write(out_rate / "rate.json", rows)
     step = scratch_rate / f"{item.row.name}-k{item.provers}"
     kept = out_rate / step.name
@@ -244,7 +245,7 @@ def timed(spec: steady_spec.SteadySpec, item: steady_spec.SteadyPoint, scratch: 
         read = {"driver": card["driver"], "cuda": toolkit_on_node(ask)}
         record |= {"device": device, "card": {"name": card["name"], "uuid": card["uuid"]}, steady_spec.VERSIONS: read}
         if GPUS[spec.card].nvidia_smi_name not in card["name"]:
-            raise Refused(f"the lease's card is a {card['name']}, not spec {spec.id!r}'s `card` ({spec.card}: "
+            raise Refused(f"the lease's card is a {card['name']}, not the `card` of spec {spec.id!r} ({spec.card}: "
                           f"{GPUS[spec.card].nvidia_smi_name})")
         if read != steady_spec.versions(spec):
             raise Refused(f"the node's driver and CUDA toolkit are {read}, and spec {spec.id!r} says "

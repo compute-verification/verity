@@ -114,6 +114,10 @@ inputs = [
     # door's runner, which a test runs
     "verity/protocols/inference_only/rho/data/reference.toml",
     "benchmarks/prove/run.py",
+    # a steady-state point's node side runs the stager and the timing script by their paths in the tree, which a test
+    # checks are there and in the point's tool's closure
+    "benchmarks/served_units/stage.py",
+    "benchmarks/one_stage/server_rate.py",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
