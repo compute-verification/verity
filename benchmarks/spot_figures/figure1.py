@@ -424,7 +424,7 @@ def model(c: dict[str, InputCard], part: TokenBlocks, s: Scope, overhead: float,
 
     cells = tuple(Cell(x["per_token"] * tokens, x["out_bits"], prove=overhead * 2 * price(x) / peak,
                        fixed=ratio * overhead * 2 * price(x) / peak, cap=statement,
-                       commit_bytes=x.get("commit_bytes", x["out_bits"] / 8))
+                       commit_bytes=x.get("commit_bytes", x["out_bits"] / 8), table=x.get("table_blocks", inf))
                   for x, (_, _, ratio, statement) in zip(c["partition"].value["strata"], fill.types)
                   if x["per_token"] > 0)
     return Model(s, dot(part.macs_by_count), dot(part.macs_by_work),

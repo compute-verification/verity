@@ -53,10 +53,12 @@ the line is at the scope's served bits there, with what one sampled request cost
 block type of the cut samples its own whole count, at least one, of a sampled request's proof blocks, and `counts`
 writes a point's design as that rule takes it.  A two-stage statement holds one Definition's sampled proof blocks of
 a sampled request, or of the verification phase's K sampled requests (`optimize.two_stage_statements`), each
-Definition taking whichever costs less, and no statement is larger than the `proof_overhead` card measures one.  The
-verifier's second stage reads one session for each template of a verification phase (`Spot.SecondStage`), so a point
-with more `sessions` than block types prices sessions it refuses: each point carries the count, and no card prices a
-session of the size one a template would need.  `breakeven` gives each patterns'-form
+Definition taking whichever costs less, and no statement is larger than its type's on the `proof_overhead` card.  The
+verifier's second stage reads one session of one table for each template of a verification phase (`Spot.SecondStage`;
+a table holds at most `STATEMENT_BITS`, `table_blocks`), so a point with more `sessions` than block types prices
+sessions it refuses: each point carries the count, and at β = `RATIO_BUDGET` the designs beside it, each modeled
+(`session_designs`): the two with one session a block type, and those with sessions of at most 1, 16 and 200 tables
+(`TABLES`; a session of the proof system holds at most `SESSION_TABLES`).  `breakeven` gives each patterns'-form
 line's marginal overhead and β at which its bound reaches the weights, at FP8 and FP4, each certified by Lean unless
 `lean` is off (`certify`: at the β it gives, the bits Lean certifies for the planner's design are at most the weights).
 Only that side is Lean's: Lean bounds a design's bits from above, so nothing certifies that a smaller β can't reach the
@@ -74,7 +76,7 @@ import argparse
 import json
 import re
 from dataclasses import dataclass, replace
-from math import expm1, floor, inf, log, log1p, log10
+from math import ceil, expm1, floor, inf, log, log1p, log10
 from pathlib import Path
 from statistics import linear_regression, median
 from textwrap import fill
@@ -112,9 +114,16 @@ TOPK_SHARE = 0.0025
 #: (Qwen3-30B-A3B), the least (Moonlight, dense MLA) and the most (Llama-3.1-8B, dense); GLM-5.3's sparse MLA has no
 #: batch-invariant backend on the H200
 BATCH_INVARIANT = (0.237, 0.141, 0.311)
-#: the witness bits a full statement holds: the H200's ceiling, at which the `proof_overhead` card's statements are
-#: proved
+#: the witness bits one table of the proof system holds, its limit (Flock's `M_MAX`), at which a full statement of the
+#: `proof_overhead` card is proved
 STATEMENT_BITS = 2 ** 35
+
+
+def table_blocks(k_log: int) -> int:
+    """The proof blocks of 2^`k_log` witness bits one table holds (`STATEMENT_BITS`): 32,768 at 2^20 bits, 256 at
+    2^27.  The verifier's second stage reads one session of one table a template (`Spot.SecondStage`,
+    `second-tables`)."""
+    return max(1, STATEMENT_BITS >> k_log)
 
 
 @dataclass(frozen=True)
@@ -359,17 +368,19 @@ def priced(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
     for x in part.value["strata"]:
         if b := by_name.get(x["block"]):
             strata.append(x | {k: b[k] for k in ("seconds_per_block", "fixed_seconds", "statement_blocks")}
-                          | {"priced": "measured"})
+                          | {"priced": "measured", "table_blocks": table_blocks(x.get("k_log", b["k_log"]))})
         elif b := types.get(_definition(x["block"])):
             b, k = held.get(_definition(x["block"]), (b, b["k_log"]))
             dk = x["k_log"] - k if "k_log" in x else 0
             cap = b["statement_blocks"] << -dk if dk < 0 else max(1, b["statement_blocks"] >> dk)
             strata.append(x | {"seconds_per_block": b["seconds_per_block"] * 2.0 ** dk, "fixed_seconds": b["fixed_seconds"],
-                               "statement_blocks": cap, "priced": "measured"})
+                               "statement_blocks": cap, "priced": "measured",
+                               "table_blocks": table_blocks(x.get("k_log", k))})
         elif "k_log" in x:
             strata.append(x | {"seconds_per_block": rate * 2 ** x["k_log"],
                                "fixed_seconds": max(0.0, intercept + slope * x["k_log"]),
-                               "statement_blocks": max(1, STATEMENT_BITS >> x["k_log"]), "priced": "computed"})
+                               "statement_blocks": table_blocks(x["k_log"]), "priced": "computed",
+                               "table_blocks": table_blocks(x["k_log"])})
         else:
             raise ValueError(f"{x['block']}: the proof_overhead card doesn't measure its type, and it gives no k_log "
                              "to compute its proving from")
@@ -465,7 +476,8 @@ def _point(job: tuple) -> dict:
     (`figure1.lean_check`, `figure1.lean_two`).  Where the budget pays for no sampled replay block of a verification
     phase there is no design: the point is the trivial one, every replay block charged whole, with nothing for Lean to
     check."""
-    name, m, g, budget, computed, form, span, lean = job
+    name, m, g, budget, computed, form, span, lean, *rest = job
+    beside = bool(rest and rest[0])
     served = f1.served_total(m)
     if name == "every_block":
         total_bits = m.scope.requests * sum(c.n * c.bits for c in m.cells)
@@ -489,6 +501,7 @@ def _point(job: tuple) -> dict:
                            stratify=STRATA, served=m.served, union=form == "patterns", registration=span)
     one = g.replay + sum(x.n * x.commit_bytes for x in cells) * m.byte_s
     phase = budget / g.replay_blocks * span
+    forms = {"forms": session_designs(cells, g, m, budget, form, span, served)} if beside and span else {}
     if row is None:
         count = two_stage_exfil(cells, {x.stratum: 1 for x in cells}, g.replay_blocks, 0.0, m.delta, m.served,
                                 form == "patterns")
@@ -497,7 +510,7 @@ def _point(job: tuple) -> dict:
         return {"exfiltration": {"y": min(count, served), "count": count, "binds": "served", "plan": None,
                                  **({"lean": None, "planner": None, "theta": None} if lean else {}),
                                  "registration_sample": 0, "shared": 0.0, "padding": 0.0, "sessions": 0.0,
-                                 "sample_budgets": one / phase, "computed_proving": None},
+                                 "sample_budgets": one / phase, "computed_proving": None, **forms},
                 "infiltration": {"y": g.replay_blocks * top, "plan": None}}
     count, checked = (f1.lean_two(cells, g.replay_blocks, row, m.delta, m.served, form == "patterns") if lean
                       else (row["bound"], {}))
@@ -505,9 +518,75 @@ def _point(job: tuple) -> dict:
     return {"exfiltration": {"y": min(count, served), "count": count,
                              "binds": "served" if served <= count else "count", "plan": _plan(row), **checked,
                              **{k: row[k] for k in REG if k in row}, "sample_budgets": one / phase,
-                             "computed_proving": computed_proving(cells, row, computed)},
+                             "computed_proving": computed_proving(cells, row, computed), **forms},
             "infiltration": {"y": write_form(cells, row, g.replay_blocks, m.delta, g.footprint),
                              "plan": _plan(row)}}
+
+
+#: the tables one session of the proof system holds at most, the scope its sessions' knowledge error is proved in
+SESSION_TABLES = 200
+#: the two designs with one session a template of a verification phase, printed beside a line's own, which has
+#: several: whatever the session holds, and at most one table of the template's proof blocks
+ONE_SESSION = {"template": "one session a block type, whatever it holds",
+               "table": "one session of one table a block type"}
+#: the tables a session holds at most in the designs with several sessions a template printed beside them
+TABLES = (1, 16, SESSION_TABLES)
+
+
+def session_designs(cells: list, g: Grain, m: f1.Model, budget: float, form: str, span: float, served: float) -> dict:
+    """The line's bound under each design printed beside its own, whose sessions are the cost model's statements:
+    one session a block type of a verification phase (`ONE_SESSION`, `optimize.SESSIONS`), and under `tables` sessions
+    of at most J tables of the type, as many as hold its sampled proof blocks, for each J of `TABLES`.  Each is the
+    planner's bits, at most the scope's served bits, with the requests the verification phase samples, its sessions,
+    the largest in proof blocks and in tables of its type, and the block types with a session of more than one table;
+    None where no such design is within the budget.  All are modeled, at the seconds a proof block the line's own
+    statements are priced at.  The verifier's second stage reads one session of one table a template, and a session of
+    the proof system holds at most `SESSION_TABLES` tables: `held` says whether the design with one session whatever it
+    holds stays within that."""
+    def design(of: list, sessions: str) -> dict | None:
+        row = two_stage_design(of, g.replay_blocks, m.delta, budget=budget, replay=g.replay, h=m.byte_s,
+                               stratify=STRATA, served=m.served, union=form == "patterns", registration=span,
+                               sessions=sessions)
+        return None if row is None else {
+            "y": min(row["bound"], served), "count": row["bound"], "registration_sample": row["registration_sample"],
+            "sessions": row["sessions"], "largest": row["largest"], "tables": row["tables"], "over": row["over"],
+            "status": "modeled"}
+
+    out = {sessions: design(cells, sessions) for sessions in ONE_SESSION}
+    if out["template"] is not None:
+        out["template"]["held"] = out["template"]["tables"] <= SESSION_TABLES
+    out["tables"] = {str(j): design([replace(c, cap=j * c.table if c.table < inf else c.cap) for c in cells],
+                                    "statements") for j in TABLES}
+    return out
+
+
+def beside_parts(got: dict, window: float) -> list[str]:
+    """`session_designs`' designs as a caption and `counts` print them, one phrase each: the bound, the requests
+    sampled and the largest session in proof blocks and in tables; for one session whatever it holds, no bound where
+    its largest session is more tables than a session of the proof system holds; for sessions of at most J tables,
+    the sessions a verification phase of `window` seconds has and the seconds between them if they run one at a
+    time."""
+    parts = []
+    for sessions, what in ONE_SESSION.items():
+        f = got[sessions]
+        if f is None:
+            parts.append(f"{what}, no design within the budget")
+            continue
+        if not f.get("held", True):
+            parts.append(f"{what}, out of reach: its largest session is {f['largest']:,} proof blocks and its largest "
+                         f"in tables {ceil(f['tables']):,} of its type, and a session of the proof system holds at "
+                         f"most {SESSION_TABLES}")
+            continue
+        size = f"{f['largest']:,} proof blocks" + (
+            f", {f['over']:,} block types' sessions more than one table and the largest of them "
+            f"{ceil(f['tables']):,} tables of its type" if f["over"] else ", within one table")
+        parts.append(f"{what}, {_size(f['y'])} at K = {f['registration_sample']:,}, its largest session {size}")
+    for j, f in got["tables"].items():
+        what = f"sessions of at most {j} table{'s' if j != '1' else ''} a block type"
+        parts.append(f"{what}, no design within the budget" if f is None else
+                     f"{what}, {_size(f['y'])} at K = {f['registration_sample']:,} in {f['sessions']:,.0f} sessions, "
+                     f"one each {window / f['sessions']:.3g} s if they run one at a time")
+    return parts
 
 
 def _share(v: float) -> str:
@@ -555,9 +634,16 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         if at is None:
             return ""
         s = lines["exfiltration"][name]
+
+        def beside() -> str:
+            got = (s.get("forms") or [None] * (at + 1))[at]
+            if not got:
+                return ""
+            return " beside it, modeled at the same seconds a proof block: " + "; ".join(beside_parts(got, window)) + ";"
+
         if not s["registration_sample"][at]:
             return (" no design within the budget: one sampled replay block costs "
-                    f"{s['sample_budgets'][at]:,.3g} budgets;")
+                    f"{s['sample_budgets'][at]:,.3g} budgets;{beside()}")
         shared = (f"{_share(s['shared'][at])} of its proving in the verification phase's statements, "
                   f"{_share(s['padding'][at])} padding" if s["shared"][at] else "its own statements")
         least = s["sample_budgets"][at] * regs[conf[name]["registration"]]["machines"]
@@ -565,7 +651,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
                 f"{s['sessions'][at]:,.0f} sessions a verification phase for {len(s['plan'][at]['k']):,} block "
                 f"types: {shared}; {_share(s['computed_proving'][at])} of its sampled request's proving computed; one "
                 f"sampled request of this design costs the budget of {least:,.3g} machines' {window:g} s, the least "
-                f"verification phase it fits (one machine's {least * window / 3600:,.3g} hours);")
+                f"verification phase it fits (one machine's {least * window / 3600:,.3g} hours);{beside()}")
 
     head = (f"{f1.ROLES} {f1.TRUST} "
             "x is the serve tax, what each configuration's change to the production server costs on every token, plus "
@@ -593,11 +679,20 @@ def captions(out: dict, scope: str) -> dict[str, str]:
              "stage samples each block type at its own whole count of a sampled request's proof blocks, at least "
              "one, the strata the verifier's two-stage rule registers. A two-stage "
              "statement holds one Definition's sampled proof blocks of a sampled request or of the verification "
-             "phase's K, its sessions padded to one size and none larger than a measured one, and each Definition "
-             "takes the phase's statements only "
-             "where they cost less than its own. The verifier's second stage reads one session for each template "
-             "of a verification phase, so a line with more sessions than block types prices sessions the verifier "
-             "refuses, and no measurement prices a session of the size one a template would need. "
+             "phase's K, its sessions padded to one size and none larger than its type's statement on the "
+             "proof_overhead card, and each Definition takes the phase's statements only "
+             "where they cost less than its own. The verifier's second stage reads one session of one table for "
+             "each template of a verification phase, a table holding at most 2^35 witness bits (32,768 proof blocks "
+             "of 2^20 bits, 256 of 2^27), so a line with more sessions than block types prices sessions the verifier "
+             "refuses. Beside each such line's bound are the designs it could be instead, all modeled at the "
+             "seconds a proof block the line's own statements are priced at. Two have one session a block type: one "
+             "whose session holds whatever the design samples, which the verifier refuses where it is more than one "
+             f"table and no session of the proof system holds past {SESSION_TABLES} tables, so it is printed only "
+             "where every session is within that; and one whose sessions are each at most one table, the form the "
+             f"verifier's second stage reads. The others have sessions of at most {', '.join(map(str, TABLES[:-1]))} "
+             f"and {TABLES[-1]} tables of the type, as many as hold its sampled proof blocks, each with its sessions "
+             "a verification phase and the seconds between them if they run one at a time; the verifier's second "
+             "stage refuses more than one session a template. "
              "The verification phase, its K and its statements' split are the "
              "protocol's, fixed before any coin, never the prover's. Each two-stage line gives at "
              f"β = {_share(f1.RATIO_BUDGET)} its bound, K and its sessions a verification phase beside its block "
@@ -752,8 +847,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
             g = None if name == "every_block" else grain(m, name, layers, boundary, tokens, batch(conf, s, c))
             span = 0.0 if g is None or conf.registration is None else (
                 g.replay_blocks * registration_gpu_seconds(conf.registration, c) / s.gpu_seconds)
-            plans.append((s, name, conf, [(name, m, g, beta * s.gpu_seconds, computed[name], conf.form, span, lean)
-                                          for beta in betas]))
+            plans.append((s, name, conf, [(name, m, g, beta * s.gpu_seconds, computed[name], conf.form, span, lean,
+                                           beta == f1.RATIO_BUDGET) for beta in betas]))
         bases[s.name] = base
     points = iter(list(each(_point, [job for *_, jobs in plans for job in jobs])))
     for s, name, conf, jobs in plans:
@@ -765,6 +860,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
                                   **{k: [r[k] for r in rows]
                                      for k in ("binds", "count", *REG, "computed_proving", "lean", "planner", "theta")
                                      if k in rows[0]},
+                                  **({"forms": [r.get("forms") for r in rows]}
+                                     if any("forms" in r for r in rows) else {}),
                                   "plan": [r["plan"] for r in rows]})
     out_scopes = {s.name: {"who": s.who, "period": s.period, "gpus": c[f"{s.who}_gpus"].value,
                            "gpu_seconds": s.gpu_seconds, "requests": s.requests,
@@ -813,8 +910,9 @@ def counts(model_name: str = "GLM-5.3", line: str = "tokens_datacenter", scope: 
     """A two-stage line's design at β on `scope` (default the first) as the verifier's two-stage rule takes it
     (`optimize.two_stage_counts`): `sampled`, the requests the first stage samples of a verification phase, and `k`,
     each block type's whole count of a sampled request's proof blocks, by the cut's name of the type; with the phase's
-    size, the design's sessions a verification phase and the planner's bound in bits.  A β that pays for no sampled
-    request of the line's verification phase has no design and no counts (`ValueError`)."""
+    size, the design's sessions a verification phase, its largest session in proof blocks and in tables of its type,
+    and the planner's bound in bits.  `beside` holds the designs beside it (`session_designs`), each modeled.  A β that pays for no sampled request of the line's verification phase has no
+    design and no counts (`ValueError`)."""
     sc, c, _, confs, inputs, lines, _ = _lines(model_name, request, serving=serving)
     conf = confs[line]
     if conf.registration is None:
@@ -836,7 +934,10 @@ def counts(model_name: str = "GLM-5.3", line: str = "tokens_datacenter", scope: 
     return {"schema": COUNTS_SCHEMA, "model": model_name, "line": line, "scope": s.name, "beta": beta,
             "verification_phase": {"machines": gpu_s / (c["machine_gpus"].value * c["window"].value),
                                    "seconds": c["window"].value, "replay_blocks": row["registration"]},
-            **two_stage_counts(row, names), "sessions": row["sessions"], "bound_bits": row["bound"]}
+            **two_stage_counts(row, names), "sessions": row["sessions"], "largest": row["largest"],
+            "tables": row["tables"], "bound_bits": row["bound"],
+            "beside": session_designs(list(g.cells), g, m, beta * s.gpu_seconds, conf.form, row["registration"],
+                                      f1.served_total(m))}
 
 
 def weights(c: dict[str, f1.InputCard]) -> dict[str, float]:
@@ -1204,7 +1305,11 @@ def main(argv=None) -> None:
         args.out.write_text(json.dumps(out, indent=1, allow_nan=False) + "\n")
         print(f"{args.out}: {out['line']} on {out['scope']} at β = {out['beta']:g}: {out['sampled']:,} of a "
               f"verification phase's {out['verification_phase']['replay_blocks']:,.0f} replay blocks, "
-              f"{len(out['k']):,} block types, {out['sessions']:,.0f} sessions")
+              f"{len(out['k']):,} block types, {out['sessions']:,.0f} sessions, the largest "
+              f"{out['largest']:,} proof blocks and none more than {out['tables']:,.3g} tables of its type; "
+              f"{_size(out['bound_bits'])}")
+        for part in beside_parts(out["beside"], out["verification_phase"]["seconds"]):
+            print(f"  beside it, modeled: {part}")
         return
     if args.cmd == "priced-card":
         args.out.write_text(json.dumps(priced_card(args.model, args.serving), indent=1) + "\n")

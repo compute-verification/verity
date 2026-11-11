@@ -302,19 +302,53 @@ def test_a_by_template_designs_strata_are_its_cells():
     assert f1._plan(width)["k"] == {"<=16": 2, "64": 1}
 
 
+def test_the_designs_beside_a_line_say_what_no_session_holds():
+    """`beside_parts` prints one session whatever it holds with its bound only while its largest session is within
+    the tables a session of the proof system holds, and says so past it; a design with several sessions a block type
+    comes with its sessions and the seconds between them over the verification phase; one with no design says so."""
+    row = {"y": 8e12, "count": 8e12, "registration_sample": 4, "sessions": 3.0, "largest": 512, "tables": 2.0,
+           "over": 1, "status": "modeled"}
+    got = {"template": row | {"held": True}, "table": None, "tables": {"1": row | {"sessions": 120.0}, "16": None}}
+    held, table, one, sixteen = t.beside_parts(got, 600.0)
+    assert held == (f"{t.ONE_SESSION['template']}, 1 TB at K = 4, its largest session 512 proof blocks, 1 block "
+                    "types' sessions more than one table and the largest of them 2 tables of its type")
+    assert table == f"{t.ONE_SESSION['table']}, no design within the budget"
+    assert one == ("sessions of at most 1 table a block type, 1 TB at K = 4 in 120 sessions, one each 5 s if they "
+                   "run one at a time")
+    assert sixteen == "sessions of at most 16 tables a block type, no design within the budget"
+    past = t.beside_parts(got | {"template": row | {"held": False, "tables": 200.5, "largest": 51_328}}, 600.0)[0]
+    assert past == (f"{t.ONE_SESSION['template']}, out of reach: its largest session is 51,328 proof blocks and its "
+                    f"largest in tables 201 of its type, and a session of the proof system holds at most "
+                    f"{t.SESSION_TABLES}")
+    assert "TB" not in past
+
+
 def test_a_lines_counts_are_one_whole_count_a_block_type(tmp_path):
     """`counts` writes a two-stage line's design as the verifier's two-stage rule takes it: the whole count of a
     verification phase's requests the first stage samples and one whole count, at least one, for each block type of
     the line's cut, by the cut's names in its order, with the phase's size and the sessions the design prices, more
-    than one a block type.  A β that pays for no sampled request of the line's verification phase has no counts, and
-    neither has (C), which samples one-stage."""
+    than one a block type.  Beside it are the two designs with one session a block type: the one whose session holds
+    whatever it samples bounds less in sessions of many tables, more than a session of the proof system holds, and
+    the one held to one table a session, the form the verifier's second stage reads, bounds more; and the designs
+    with sessions of at most 1, 16 and 200 tables, fewer sessions and a smaller bound as a session holds more.  A β that pays for no sampled request of the line's verification
+    phase has no counts, and neither has (C), which samples one-stage."""
     out = t.counts("GLM-5.3", "tokens_datacenter", "world year", 0.1)
     strata = t._lines("GLM-5.3", "census")[4]["tokens_datacenter"]["partition"].value["strata"]
     assert list(out["k"]) == [x["block"] for x in strata if x["per_token"] > 0]
     assert all(isinstance(k, int) and k >= 1 for k in (out["sampled"], *out["k"].values()))
     phase = out["verification_phase"]
     assert phase["machines"] > t.POD and out["sampled"] <= phase["replay_blocks"]
-    assert out["sessions"] > len(out["k"]) and out["bound_bits"] > 0
+    assert out["sessions"] > len(out["k"]) and out["bound_bits"] > 0 and out["largest"] >= 1
+    whole, table = (out["beside"][x] for x in t.ONE_SESSION)
+    assert whole["sessions"] == pytest.approx(len(out["k"])) == pytest.approx(table["sessions"])
+    assert whole["over"] >= 1 and whole["tables"] > t.SESSION_TABLES and not whole["held"]
+    assert table["over"] == 0 and table["tables"] <= 1
+    assert whole["count"] < out["bound_bits"] < table["count"]
+    several = out["beside"]["tables"]
+    assert list(several) == [str(j) for j in t.TABLES] == ["1", "16", "200"]
+    assert several["1"]["over"] == 0 and all(several[str(j)]["tables"] <= j for j in t.TABLES)
+    assert several["1"]["sessions"] > several["16"]["sessions"] > several["200"]["sessions"] > len(out["k"])
+    assert table["count"] > several["1"]["count"] > several["16"]["count"] > several["200"]["count"] > whole["count"]
     assert (out["schema"], out["line"], out["scope"], out["beta"]) == (t.COUNTS_SCHEMA, "tokens_datacenter",
                                                                       "world year", 0.1)
     t.main(["counts", "--scope", "world year", "--beta", "0.1", "--out", str(tmp_path / "counts.json")])
@@ -408,7 +442,22 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     assert (f"K = {s['registration_sample'][at]:,} sampled, in {s['sessions'][at]:,.0f} sessions a verification "
             f"phase for {len(s['plan'][at]['k']):,} block types") in caps["exfiltration"]
     assert s["sessions"][at] > len(s["plan"][at]["k"])
-    assert "reads one session for each template of a verification phase" in caps["exfiltration"]
+    assert "reads one session of one table for each template of a verification phase" in caps["exfiltration"]
+    forms = s["forms"]
+    assert [f is not None for f in forms] == [b == f1.RATIO_BUDGET for b in out["betas"]]
+    whole, table = (forms[at][x] for x in t.ONE_SESSION)
+    assert whole["status"] == table["status"] == "modeled" and whole["y"] <= served
+    assert whole["sessions"] == pytest.approx(len(s["plan"][at]["k"])) == pytest.approx(table["sessions"])
+    assert whole["over"] >= 1 and whole["tables"] > 1 and table["over"] == 0 and table["tables"] <= 1
+    assert whole["count"] < s["count"][at] < table["count"]
+    assert whole["held"] == (whole["tables"] <= t.SESSION_TABLES)
+    assert all(f["status"] == "modeled" for f in forms[at]["tables"].values())
+    parts = t.beside_parts(forms[at], out["inputs"]["window"]["value"])
+    assert len(parts) == len(t.ONE_SESSION) + len(t.TABLES)
+    assert " beside it, modeled at the same seconds a proof block: " + "; ".join(parts) + ";" in caps["exfiltration"]
+    assert (f"{t.ONE_SESSION['table']}, {t._size(table['y'])} at K = {table['registration_sample']:,}, its largest "
+            f"session {table['largest']:,} proof blocks, within one table") in parts
+    assert "forms" in lines["tokens"] and "forms" not in lines.get("every_block", {})
     assert all(c["design"] == "two-stage, by template" for n, c in out["configurations"].items() if n != "every_block")
     assert "everything the scope serves (" not in caps["infiltration"]
     assert "priced, not measured, a lower bound: the hashing alone" in caps["skipped_work"]

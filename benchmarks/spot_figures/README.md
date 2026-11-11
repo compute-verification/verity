@@ -130,11 +130,22 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     design at a β as the rule takes it, the first stage's count and each block type's by the cut's name
     (`optimize.two_stage_counts`). A statement holds one Definition's sampled proof blocks of a sampled replay block,
     or of the verification phase's K, its shape fixed before any coin because K is, its sessions padded to one size
-    and none larger than the `proof_overhead` card measures one, and each Definition takes the phase's statements
-    only where they cost less than its own (`optimize.two_stage_statements`). The verifier's second stage reads one
-    session for each template of a verification phase (`Spot.SecondStage`), so a point with more sessions than block
-    types (`sessions`, in each series and caption) prices sessions the verifier refuses, and no card prices a
-    session of the size one a template would need. (A) and (A′) are plotted at each of the three sizes, dark to
+    and none larger than its type's statement on the `proof_overhead` card (`statement_blocks`), and each Definition
+    takes the phase's statements only where they cost less than its own (`optimize.two_stage_statements`). The
+    verifier's second stage reads one session of one table for each template of a verification phase
+    (`Spot.SecondStage`: `second-template`, `second-tables`), and a table holds at most 2^35 witness bits
+    (`total_cost.table_blocks`: 32,768 proof blocks of 2^20 bits, 256 of 2^27), so a point with more sessions than
+    block types (`sessions`, in each series and caption) prices sessions the verifier refuses. Beside each such
+    line's bound at β = 1%, and in `total_cost.py counts` at any β, are the designs it could be instead
+    (`total_cost.session_designs`), all modeled at the seconds a proof block the line's own statements are priced
+    at. Two have one session a block type (`optimize.SESSIONS`): one whose session holds whatever the design
+    samples, which the verifier refuses where it is more than one table and which is printed with its bound only
+    where every session is within the tables a session of the proof system holds (`SESSION_TABLES`, 200), and
+    otherwise with its largest session in proof blocks and in tables; and one whose sessions are each at most one
+    table, the form the verifier's second stage reads, which samples far fewer proof blocks and bounds far more. The
+    others have sessions of at most 1, 16 and 200 tables of the type (`TABLES`), as many as hold its sampled proof
+    blocks, each with its sessions a verification phase and the seconds between them if they run one at a time; the
+    verifier's second stage refuses more than one session a template. (A) and (A′) are plotted at each of the three sizes, dark to
     light, and (B) at one machine's; each series gives K, its sessions and the shares of its proving in the phase's
     statements and on padding. No code builds a verification phase of a datacenter's size, one committer over every
     machine's boundary rows: that line is the cost model's.
@@ -301,9 +312,10 @@ Limits of the model:
   replay block are its own count, and its sessions' padding to one size within a statement, not to one size across
   Definitions. A pod-wide or datacenter-wide verification phase needs one committer over its machines' boundary rows.
 - A total-cost line's design has the counts the verifier's two-stage rule registers and more sessions than its
-  second stage reads: one session a template of a verification phase would hold every sampled proof block of the
-  template, far past the statements the `proof_overhead` card measures, and the planner prices no session it has
-  no measurement of. Figure 1's own panels (`figure1.py`) still plot the planner's width-stratified and uniform
+  second stage reads. One session a template of a verification phase would hold every sampled proof block of the
+  template, many tables of it, where a table is the proof system's limit and the verifier reads one; held to one
+  table a session, the design samples far fewer proof blocks. Both are printed beside the line, modeled, and
+  neither is the line. Figure 1's own panels (`figure1.py`) still plot the planner's width-stratified and uniform
   designs over one verification phase holding every replay block, which the verifier's rule registers neither.
 - A two-stage bound spends δ once over the scope's replay blocks and counts them as one population, each
   verification phase's sample taken to miss its incorrect replay blocks independently of the others'. Lean checks
