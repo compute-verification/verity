@@ -52,7 +52,7 @@
  "domain": {
   "Accounting.JointBridge.PhaseLeaks": {
    "owner": "@lean",
-   "digest": "635427c5425f51a5f943ee237bd56f2ad1abb9a0c6e8da402361d861b4f3860d",
+   "digest": "937bce3d120eb67c95c25010a046778163f84256a3da9ae4111bf840c669b50b",
    "why": "The layer below's guarantee at each execution phase: the leak relation (LeakAt) at the incorrect set of the witness computed before the sample, which a live sampled leak guarantee would give, as PooledLeakAccepted takes it."
   },
   "Claims.Complete": {
@@ -5430,6 +5430,12 @@
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": "4c1965a5e2a5e713ecff8b0684b90ccb00b7f75cab2d0552c2fb38625f4bfb8e",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": "98c1037729d6fbf9d9c120ea1fb9b3799f98cfba802df100bb262266102f1cb4",
   "NetTiming.SecurityProofs.HorizonLeakAccepted": "42d2a4cd8f85bfae4af68ef6494ced78b576913d56207b74ad57533b9beafae2",
+  "NetTiming.SecurityProofs.PooledLeakCarried": {
+   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
+   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
+  },
   "Pous.SecurityProofs.BandPubMeets14": {
    "type_hash": "cc0a571f0b841ecb8d43acbf6b871e6cc71d9c7f83d30199fc0e717b117175f9",
    "unfolded_hash": "8f6522076956b9aaec905dfd60718ee9c736ab517c760a58d222cc468a2b172d"
@@ -5616,19 +5622,13 @@
    "type_hash": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
    "unfolded_hash": "edcf280a29bc4ea8fadd07e37edb897784d1e87a921f26547ed9ef8583b5e40a"
   },
-  "Verity.SecurityProofs.ServingBlockSum": {
-   "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
-   "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
-  },
-  "NetTiming.SecurityProofs.PooledLeakCarried": {
-   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
-   "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
-   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
-  },
   "Verity.SecurityProofs.RefineIncorrect": {
    "type_hash": "f002a79b8c5c0755db0aaa9574d5a115e090df1033aa688adadab139a6b4fead",
    "unfolded_hash": "9eb08e5560e18e47ac928a89e057971d0a2163e6394c4cecb743c4bbd61b3a91"
+  },
+  "Verity.SecurityProofs.ServingBlockSum": {
+   "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
+   "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
   }
  },
  "witnesses_assumed": {
@@ -29353,6 +29353,9 @@
     "∀ (s : g.Strategy), Cls s → ENNReal.instLE.le (Verity.Game.prob Q g s) ε": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : g.Strategy), g.InducedAt post pre σ s → Cls s": "g.InducedAt taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Verity.SecurityProofs.RefineIncorrect": {
+    "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Verity.SecurityProofs.ServingBlockSum": {
     "Finset.instPartialOrder.le V C.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Fin B), SetLike.instMembership.mem S u → Real.instLE.le ((Finset.instInter.inter V (P.gates u)).sum fun v => ω v) (qS u)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -29362,9 +29365,6 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Verity.SecurityProofs.RefineIncorrect": {
-    "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -31484,10 +31484,10 @@
    }
   },
   "Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted": {
-   "digest": "2be7ee95c210921462a3943550851d1de9a316f1e0eb45a428ceeb81417550c5",
+   "digest": "d11f6cf4549326be42fb91b0d25f4a987ce008ad5f3a568757cd9d0f91139b57",
    "definitions": {
-    "Accounting.JointBridge.PhaseLeaks": "635427c5425f51a5f943ee237bd56f2ad1abb9a0c6e8da402361d861b4f3860d",
-    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted": "09890d853187fee363501248707dadb16d0e3e216b82ce62d46e1b24996aa1b1",
+    "Accounting.JointBridge.PhaseLeaks": "937bce3d120eb67c95c25010a046778163f84256a3da9ae4111bf840c669b50b",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted": "ac7648f40e05586d661d093a6c9b457cd3f83ae981af36d16386944044859267",
     "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.Cell": "2baaa3faf94482a65957296038ba8db7384e8c7ddbc457b50ea5ecff4fd6062c",
     "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.Coin": "a0bf1ebfb2162d89a1c8aebd18c68ac4d030d587777ebc57a860708d1f9472ec",
     "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.Conn": "38dfba569783b23f47ba2933662d20e6aa27489cdc9a377034b81b609ecddb16",
@@ -31499,7 +31499,7 @@
     "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.coinFintype": "8037d035e70f4bfe438128ad5b1c658e85b5328bd5786e91b42c40e98a06eedf",
     "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.coins": "a83e7ac5fab5a8e386557597f66f5cb29513b2ef2419a4db816525b737661785",
     "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.device": "1fba36b8b9b827e63f2bafd5f2d6a00786c5f3d6762ab8258f52008c70c8c0ea",
-    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.op": "e590c57e39a01175cb65badda4c3c64f269ddf3fa0a4e7aeef191a1288540828",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.op": "558faca90cf57cb845b278d1b8cafd2cdc1d634301383030a75040cd5cd28226",
     "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.record": "233ade81cee4a3626952dc10cb99651242d1954ea5b14b576c3d4c1418edfced",
     "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.run": "7a6cfc025b0a913d60aef28cd9ca322b5b472c8a1b3436c1711dc5355d451dc3",
     "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.sched": "b03210acc3ded7f947816ee05d78b82c0a6065e927f64010f624918524713c44",
@@ -31509,13 +31509,13 @@
    }
   },
   "Definitions.Accounting.JointBridge.CommOfPooledLeakAcceptedWitness": {
-   "digest": "7a19d3b94cca07088b9eff436826d36fe878be14fd34e869ee7166d60c2e5e1e",
+   "digest": "ea4622447dc0c048521df18fc5ec785108a0279efd30190950b32507c002255a",
    "definitions": {
     "Accounting.NetWitness.frameObs": "713d1e76a7db869e76b74ade72bc1ccea6b9c5f3fad5b12df1838d609b66a48d",
     "Accounting.NetWitness.frameRecord": "9320a460210b563cdaa43be45d9a18465045b5d3466c7bbef8e11ecd08c6157a",
     "Accounting.NetWitness.honestFmt": "16a76270a9981241a8d084f6a35fef628be420d6b9df80bf93dd1a7cc7e4f3be",
-    "Accounting.NetWitness.honestNet": "c213ab7876c7d70313f5e30026e5c1512a3523a8f005cbdcb4d4185cf8b4aef5",
-    "Accounting.NetWitness.honestPooled": "556c83ab9a3a1e055d22d7836fba41197256b68436e13293ab63f81aee6b12fa",
+    "Accounting.NetWitness.honestNet": "37f0f1129c00985d04db1bcf2ec4fc747225c20f776de410c942d6e8e200216f",
+    "Accounting.NetWitness.honestPooled": "270090d112e7d9c48eab443f5a8e4fbbdf1a266597454f547245fcbb98504734",
     "Accounting.NetWitness.negPart": "ded8d495bfd4edc0d51829cbb4013054e22009e0b19dee74507457bb89ec1b05",
     "Accounting.NetWitness.negStmt": "04c46931a2c2d6560393b3d6898417d4c0fc39bc0896109a709c9afbe1b4e2c3"
    }
