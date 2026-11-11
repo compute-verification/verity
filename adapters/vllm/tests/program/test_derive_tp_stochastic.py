@@ -125,6 +125,7 @@ def test_a_stochastic_rank_program_takes_the_tp1_inputs_then_the_peers(kind, for
     assert rank.program.fn.bindings["SRC"]["class"] == f"verity-vllm/with-peers/v1[{type(wrapped.inner).DERIVE_SOURCE}]"
 
 
+@pytest.mark.slow
 def test_the_seed_is_an_input_on_every_rank():
     """Two seeds are one Program on a rank as on TP1 (the seed is bound at run time); the two ranks' Programs differ only where
     their collectives place their own partials."""
