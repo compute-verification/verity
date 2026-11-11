@@ -1,11 +1,13 @@
 """Mathlib's bar for the tree's Lean, held to ``allowlists/lean_bar.json``: what Mathlib's style linters refuse of a file
 (its ``header``, ``longFile`` and ``maxHeartbeats`` linters), found here by reading the text, with no Lean and no build.
 
-Read: every ``.lean`` file under ``security/`` (the security analysis) and ``verity/core/`` (the code packages), found by a
-walk that leaves out ``.lake`` (``BUILT``: Lake's build trees and the packages it fetches, which git never tracks), so in a
-clean checkout the tracked ones.  The walk starts no program, so the suite's read guard traces all this lint reads.  The
-Lean check's own fixtures (``tools/verity/lean/tests/fixtures``) lie outside both trees, as do the Lean tools' files, the
-benchmarks' and ``verity/ml``'s; under the two trees nothing is left out, a package's test modules included.
+Read: every ``.lean`` file under ``security/`` (the security analysis) and ``verity/`` (the code, each package's Lean
+beside it), found by a walk that leaves out ``.lake`` (``BUILT``: Lake's build trees and the packages it fetches, which
+git never tracks), so in a clean checkout the tracked ones.  The walk starts no program, so the suite's read guard traces
+all this lint reads.  The Lean check's own fixtures (``tools/verity/lean/tests/fixtures``) lie outside both trees, as do
+the Lean tools' files and the benchmarks'; under the two trees nothing is left out, a package's test modules included.
+A tree with no ``.lean`` file under it fails (``test_every_tree_holds_lean``): a walk of a directory that was moved away
+finds nothing there, so the rules would hold none of its Lean while the two tests of new findings passed.
 
 The rules, each a finding in code only, never in a comment or a string literal:
 
@@ -65,8 +67,8 @@ from pathlib import Path
 NAME = "lean_bar"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
-#: the trees held: the security analysis and the code packages
-TREES = ("security", "verity/core")
+#: the trees held: the security analysis, and the code with each package's Lean beside it
+TREES = ("security", "verity")
 #: the directories a walk leaves out: Lake's build trees and fetched packages, Mathlib's sources among them
 BUILT = (".lake",)
 #: the lines a file may run to, Mathlib's ``linter.style.longFile``
@@ -171,17 +173,33 @@ def findings(src: str) -> list[tuple[str, int, str]]:
     return out
 
 
-def walk(root: Path) -> Iterator[tuple[str, list[str]]]:
-    """(directory, its files' names) of each directory under ``TREES`` in ``root``, outside ``BUILT``, from ``root``."""
-    for tree in TREES:
+def walk(root: Path, trees: tuple[str, ...] = TREES) -> Iterator[tuple[str, list[str]]]:
+    """(directory, its files' names) of each directory under ``trees`` in ``root``, outside ``BUILT``, from ``root``."""
+    for tree in trees:
         for d, dirs, names in os.walk(root / tree):
             dirs[:] = sorted(x for x in dirs if x not in BUILT)
             yield Path(d).relative_to(root).as_posix(), names
 
 
-def files(root: Path = ROOT) -> list[str]:
-    """Each ``.lean`` file under ``TREES`` in ``root``, outside ``BUILT``."""
-    return sorted(f"{d}/{n}" for d, names in walk(root) for n in names if n.endswith(".lean"))
+def files(root: Path = ROOT, trees: tuple[str, ...] = TREES) -> list[str]:
+    """Each ``.lean`` file under ``trees`` in ``root``, outside ``BUILT``."""
+    return sorted(f"{d}/{n}" for d, names in walk(root, trees) for n in names if n.endswith(".lean"))
+
+
+def unread(root: Path = ROOT, trees: tuple[str, ...] = TREES) -> list[str]:
+    """The trees of ``trees`` with no ``.lean`` file under them in ``root``: a directory that was moved away or renamed
+    is walked as an empty one, so every rule finds nothing there."""
+    return [tree for tree in trees if not files(root, (tree,))]
+
+
+def lost(empty: list[str], have: Counter, trees: tuple[str, ...] = TREES) -> str:
+    """What to do about the trees ``empty`` (`unread`), and where the list ``have``'s entries outside ``trees`` lie."""
+    outside = Counter("/".join(f.split("/")[:2]) for f, _ in have if not any(f.startswith(f"{tree}/") for tree in trees))
+    return (f"the Lean bar holds no Lean under {', '.join(empty)}: no `.lean` file is there, so its rules find nothing, the "
+            f"tests of new findings pass and the list's entries for the files that were there only warn as stale. Name in "
+            f"`TREES` (tests/lint/test_{NAME}.py) the directory that Lean now lives under, and never `--prune` those "
+            f"entries away. The list's entries under no tree of `TREES`, by directory: "
+            + (", ".join(f"{d} ({n})" for d, n in sorted(outside.items())) or "none") + ".")
 
 
 @lru_cache(maxsize=None)
@@ -248,6 +266,11 @@ def test_no_new_unlimited_heartbeats() -> None:
     held(scan(), allowed(), (HARD,))
 
 
+def test_every_tree_holds_lean() -> None:
+    """Not bookkeeping: with a tree of ``TREES`` empty the two tests above pass on what is left."""
+    assert not (empty := unread()), lost(empty, allowed())
+
+
 def _rules(src: str) -> list[tuple[str, int]]:
     return [(rule, line) for rule, line, _ in findings(src)]
 
@@ -299,20 +322,27 @@ def test_it_reads_comments_and_strings_as_lean_does() -> None:
 def _tree(root: Path) -> None:
     for path, src in (("security/Proofs/A.lean", "set_option maxHeartbeats 0 in\ntheorem a : True := trivial\n"),
                       ("security/Proofs/B.lean", "/-! # B -/\n" + "x\n" * LONG),
-                      ("verity/core/c/C.lean", "/-! # C -/\n-- the table is large\nset_option maxHeartbeats 9 in\ndef c := 1\n"),
-                      ("verity/core/c/.lake/packages/m/M.lean", "set_option maxHeartbeats 0\n"),
-                      ("verity/ml/D.lean", "set_option maxHeartbeats 0\n"),
-                      ("verity/core/c/README.md", "set_option maxHeartbeats 0\n")):
+                      ("verity/protocols/c/C.lean",
+                       "/-! # C -/\n-- the table is large\nset_option maxHeartbeats 9 in\ndef c := 1\n"),
+                      ("verity/protocols/c/.lake/packages/m/M.lean", "set_option maxHeartbeats 0\n"),
+                      ("tools/verity/lean/tests/fixtures/D.lean", "set_option maxHeartbeats 0\n"),
+                      ("verity/protocols/c/README.md", "set_option maxHeartbeats 0\n")):
         (root / path).parent.mkdir(parents=True, exist_ok=True)
         (root / path).write_text(src, encoding="utf-8")
 
 
 def test_an_unlisted_finding_is_reported_a_listed_one_passes_and_a_stale_entry_only_warns(tmp_path: Path) -> None:
     _tree(tmp_path)
-    a, b = "security/Proofs/A.lean", "security/Proofs/B.lean"
-    assert files(tmp_path) == [a, b, "verity/core/c/C.lean"]
+    a, b, c = "security/Proofs/A.lean", "security/Proofs/B.lean", "verity/protocols/c/C.lean"
+    assert files(tmp_path) == [a, b, c]
     exact = Counter({(a, "module-doc"): 1, (a, "heartbeats-unlimited"): 1, (a, "heartbeats-uncommented"): 1, (b, "long-file"): 1})
     assert found(tmp_path) == exact
+    # a tree whose Lean moved away is reported, with where the list's entries for it now lie
+    old = ("security", "verity/gone")
+    assert unread(tmp_path) == [] and unread(tmp_path, old) == ["verity/gone"]
+    why = lost(["verity/gone"], exact + Counter({(c, "module-doc"): 1, (c, "long-file"): 1}), old)
+    assert "no Lean under verity/gone:" in why and "Name in `TREES`" in why and why.endswith(": verity/protocols (2)."), why
+    assert lost(["verity/gone"], exact, old).endswith(": none.")
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         held(scan(tmp_path), exact)
@@ -341,8 +371,7 @@ def test_an_unlisted_finding_is_reported_a_listed_one_passes_and_a_stale_entry_o
     assert f"    {a}:1 maxHeartbeats 0" in fails(exact - Counter({(a, HARD): 1}), (HARD,))
     assert f"    {b}:{LONG + 1} {LONG + 1} lines, 1 past {LONG}" in fails(exact - Counter({(b, "long-file"): 1}), SOFT)
 
-    loose = exact + Counter({(a, "heartbeats-uncommented"): 2, ("verity/core/c/C.lean", "module-doc"): 1,
-                             ("security/Gone.lean", "long-file"): 1})
+    loose = exact + Counter({(a, "heartbeats-uncommented"): 2, (c, "module-doc"): 1, ("security/Gone.lean", "long-file"): 1})
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         held(scan(tmp_path), loose)
@@ -350,7 +379,7 @@ def test_an_unlisted_finding_is_reported_a_listed_one_passes_and_a_stale_entry_o
     assert w.category is Stale and str(w.message).splitlines()[1:] == [
         "  security/Gone.lean [long-file]: 1 allowed, 0 found: delete the entry",
         f"  {a} [heartbeats-uncommented]: 3 allowed, 1 found: lower its count to 1",
-        "  verity/core/c/C.lean [module-doc]: 1 allowed, 0 found: delete the entry"], str(w.message)
+        f"  {c} [module-doc]: 1 allowed, 0 found: delete the entry"], str(w.message)
     assert f"test_{NAME}.py --prune" in str(w.message)
     assert loose & found(tmp_path) == exact, "--prune leaves what the tree holds"
 
@@ -363,8 +392,9 @@ def test_an_unlisted_finding_is_reported_a_listed_one_passes_and_a_stale_entry_o
 
 
 def test_only_the_soft_rules_are_bookkeeping() -> None:
-    """`tests/conftest.py` lists `test_no_new_findings` and not `test_no_new_unlimited_heartbeats`: a `maxHeartbeats 0`
-    the list doesn't have fails the suite."""
+    """`tests/conftest.py` lists `test_no_new_findings` and no other test of this module: a `maxHeartbeats 0` the list
+    doesn't have fails the suite (`test_no_new_unlimited_heartbeats`), and so does a tree with no Lean under it
+    (`test_every_tree_holds_lean`)."""
     import importlib.util
     spec = importlib.util.spec_from_file_location("lean_bar_conftest", ROOT / "tests" / "conftest.py")
     conftest = importlib.util.module_from_spec(spec)
