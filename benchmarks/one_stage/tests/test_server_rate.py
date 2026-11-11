@@ -5,7 +5,8 @@ filed one second after the last (its mtime), so a clean row's rate is exactly on
 prices it: the devices its provers held, the proved statement's proof blocks beside the most its circuit holds, the
 verifier's mean seconds over the window, and whether the provers' statement caches had stopped filling (``flat``, with the
 quarters' hit rates and the rule), which a prover still building statements in its last quarter fails without voiding the
-row."""
+row; and the CPUs its processes could run on (``cores``: this process's affinity as a count, a list and the NUMA nodes
+that hold them, on a made-up node directory)."""
 from __future__ import annotations
 
 import json
@@ -131,6 +132,29 @@ def test_a_prover_still_building_statements_is_not_flat_and_keeps_its_rate(monke
     rc, row = run(monkeypatch, tmp_path, built=(0, 7, 8))
     assert (rc, row["statements_per_s"], row["flat"], "void" in row) == (0, 1.0, False, False)
     assert [q["hit_rate"] for q in row["cache"]["provers"]["prover-gpu0-0"]["quarters"]] == [1.0, 1.0, 1.0, 0.0]
+
+
+def nodes(tmp_path: Path, **cpulists: str) -> Path:
+    """A made-up node directory: each ``nodeN``'s ``cpulist``."""
+    for name, cpus in cpulists.items():
+        (tmp_path / "node" / name).mkdir(parents=True)
+        (tmp_path / "node" / name / "cpulist").write_text(cpus + "\n")
+    return tmp_path / "node"
+
+
+def test_a_row_says_the_cpus_its_processes_could_run_on(monkeypatch, tmp_path):
+    monkeypatch.setattr(SR, "NODES", nodes(tmp_path, node7="0-4095"))
+    mine = os.sched_getaffinity(0)
+    rc, row = run(monkeypatch, tmp_path)
+    assert (rc, row["cores"]) == (0, {"count": len(mine), "list": SR.cpu_list(mine), "numa_nodes": [7]})
+
+
+def test_cores_are_a_count_a_list_as_the_kernel_writes_one_and_the_numa_nodes_that_hold_them(tmp_path):
+    d = nodes(tmp_path, node0="0-23", node1="24-47", node2="", node3="72-95", node10="96,98-99")
+    assert SR.cores(range(72, 82), d) == {"count": 10, "list": "72-81", "numa_nodes": [3]}
+    assert SR.cores({30, 20, 21, 22, 23, 24, 99}, d) == {"count": 7, "list": "20-24,30,99", "numa_nodes": [0, 1, 10]}
+    assert SR.cores({97}, d) == {"count": 1, "list": "97", "numa_nodes": []}              # a CPU no node lists
+    assert SR.cores({5, 7}, tmp_path / "none") == {"count": 2, "list": "5,7", "numa_nodes": []}   # a machine that lists no nodes
 
 
 def counters(lookups, held=None):
