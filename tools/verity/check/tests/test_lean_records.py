@@ -290,7 +290,7 @@ def test_a_links_file_left_empty_by_a_failed_write_is_no_links(repo, tmp_path, c
 
 
 def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tmp_path, monkeypatch, capsys):
-    """`--records Security` left `Security/Properties`' records, which read `Security`'s build, unchecked, and an unintended
+    """`--records Security` left `security/Properties`' records, which read `security`'s build, unchecked, and an unintended
     change to three of them surfaced only at a train's check. `a` requires `p` by path and lists a guarantee, so
     `--records p` audits `a` after it, never with `--update`; `c`, which doesn't require `p`, and a package that lists no
     guarantee are not audited."""
@@ -502,9 +502,9 @@ def test_the_record_update_wrote_is_kept_so_its_commit_runs_nothing_and_requirer
 
 
 def test_a_package_that_reads_the_same_files_as_one_that_passed_still_runs(reuse, tmp_path, monkeypatch, capsys):
-    """`Security` and `Security/Properties` are each in the other's `closure`, so their records read the same files. A pass of
-    `--records Security`, whose requirer `Security/Properties` failed, is not that requirer's: taken as its, `--records
-    Security/Properties --update` would run nothing and write no record. Here `a` requires `p` by
+    """`security` and `security/Properties` are each in the other's `closure`, so their records read the same files. A pass of
+    `--records Security`, whose requirer `security/Properties` failed, is not that requirer's: taken as its, `--records
+    security/Properties --update` would run nothing and write no record. Here `a` requires `p` by
     path and `p` is proved in `a`."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     (reuse / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')

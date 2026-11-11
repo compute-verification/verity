@@ -1,4 +1,4 @@
-"""The falsification tests of `Accounting.Assumptions.SquaringFloor` and `ChainSum` (Security/Definitions/Accounting/
+"""The falsification tests of `Accounting.Assumptions.SquaringFloor` and `ChainSum` (security/Definitions/Accounting/
 Assumptions/SquaringChain.lean), which replace the falsified `EncodeChainHardness` (EncodeChain.lean, refuted by
 `Accounting.SecurityProofs.Gates.EncodeChainRefuted`): every known construction of a squaring mod p1024 in the circuit
 model costs at least `e = (2L − 1) + (L − d(ε))` nonlinear units, `L = n/8` and `d(ε) = d₀ + log₂(1/ε)/8` with
@@ -23,7 +23,7 @@ squares' column sums don't carry, the column sums (s8-family steps, folded mod `
 team's families and a sampled one at p1024 are kept here as
 regressions the stated form must survive: each refutes the form with no floor, and sits below the floor `2^−64`.
 
-The model's codec is held to this one: `codecRows` (Security/Proofs/Accounting/Gates.lean) are `codec.encode_word`'s
+The model's codec is held to this one: `codecRows` (security/Proofs/Accounting/Gates.lean) are `codec.encode_word`'s
 words at toy fields, which the Lean check evaluates `Accounting.Gates.encodeWord` on in the kernel
 (`encodeWord_codecRows`), and `test_encode_word_agrees_with_lean` recomputes each here. `RhoPairs`, proved there for
 every prime `p ≡ 3 mod 4`, is sampled on `codec.rho` at p1024.
@@ -39,7 +39,7 @@ from pathlib import Path
 
 from verity.protocols.poub.verifier import codec
 
-LEAN_GATES = Path(__file__).resolve().parents[5] / "Security" / "Proofs" / "Accounting" / "Gates.lean"
+LEAN_GATES = Path(__file__).resolve().parents[5] / "security" / "Proofs" / "Accounting" / "Gates.lean"
 ROW = re.compile(r"\((\d+), (\d+), \[(\d+(?:, \d+)*)\], (\d+), (\d+), (\d+), (\d+), (\d+)\)")
 
 F = codec.P1024

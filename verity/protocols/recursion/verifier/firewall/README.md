@@ -14,7 +14,7 @@ Its Lean is two packages, code and not analysis:
   `Flock.Firewall.Contract`, that decision as a core protocol (`core-firewall`), and the release side around the session
   loop on the record's files (`core-firewall session`, which `flock-circuit`'s `--firewall-state` runs). Its tests hold
   it to Python's `verity_flock.firewall` and to the frozen cases of the Rust reference it replaced, and the rules it
-  runs are proved properties (`Security/Properties/Firewall.lean`).
+  runs are proved properties (`security/Properties/Firewall.lean`).
 
 ## The reference deployment
 
@@ -48,7 +48,7 @@ GPU servers ──data diode──▶ CPU servers ──releases──▶ verifi
   VMs, that run nothing else, with as many instances side by side as keep up with the windows (Its size, below).
   *Realizes:* A3's scope (`FlockSoundness.Assumptions.UniformRandomBytesTest` doesn't cover a VM whose memory is
   restored more than once:
-  [A3's note](../../../../../Security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md)), and §10.5's public
+  [A3's note](../../../../../security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md)), and §10.5's public
   release times for honest sessions: on cores of its own, no co-tenant's load can turn one into a missed time and
   spend the stream's failure budget. The other vendor realizes none: no statement names the ZK server's hardware,
   which the developer trusts outside the model.

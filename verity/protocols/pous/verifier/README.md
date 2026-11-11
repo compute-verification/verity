@@ -67,9 +67,9 @@ used. `verdict` checks a signed session in the clear and publishes only the verd
 `lms.DEPLOYED` (`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused.
 `verity.protocols.pous.prover.verdict_circuit`'s `PousVerdict_v1{K, M, LIMIT}` is the verdict over the rounds as one proof
 block, its one output bit the public verdict: 1 iff at most `M` of the `K` rounds miss, a round hitting when its record
-names it, is on time within `LIMIT` and holds the expected digest of its block (`PousVerdict.verdictProg_accepts`, `Security/Proofs/Pous/Continuous/Verdict.lean`).
+names it, is on time within `LIMIT` and holds the expected digest of its block (`PousVerdict.verdictProg_accepts`, `security/Proofs/Pous/Continuous/Verdict.lean`).
 Its gates as Lean code, `PousCheck.Verdict.prog` (`check/PousCheck/Verdict.lean`), are `verdictProg` gate for gate
-(`Security/Proofs/Pous/Continuous/VerdictCode.lean`), and `check/tests/test_verdict_difftest.py` holds the Definition's
+(`security/Proofs/Pous/Continuous/VerdictCode.lean`), and `check/tests/test_verdict_difftest.py` holds the Definition's
 compiled circuit to that code.
 
 ~~~python
@@ -185,7 +185,7 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   `RunProtocol.check` (a recorded run, whole). Its executables are `pous-setup`, `pous-timed-audit`, `pous-run` and
   `pous-run-protocol`, and the difftests `pous-setup-difftest`, `pous-audit-difftest` and `pous-verdict-difftest`;
   `check/interop.py --all` holds it to `wire.py` byte for byte on every vector.
-- **Guarantees** (`Security/Definitions/Pous/Guarantees/P2.lean`): `P2SlackFamilyUncond` (abstract M1 on `[0, p)`, the
+- **Guarantees** (`security/Definitions/Pous/Guarantees/P2.lean`): `P2SlackFamilyUncond` (abstract M1 on `[0, p)`, the
   `λ = 128` row at `k = 105` for every block count from `2^8` to `2^23`: the certificate), `P2SlackB19Uncond`,
   `P2ErrorSplitB19Uncond`, `P2MeetsM1pB19Uncond`, `P2MeetsM1pFamilyUncond`, `P2MeetsM1pW8192Uncond`,
   `P2SlackFamilyFreeBlocks`, `P2SlackFamilyWide`, `P2SlackFamilyFreeBlocksWide`, and the ring-model forms

@@ -80,7 +80,7 @@ def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_o
 
 needs_h1 = pytest.mark.skipif(importlib.util.find_spec("verity.protocols.pouw.prover.circuit.segment") is None,
                               reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
-ROWS = Path(__file__).resolve().parents[3] / "Security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
+ROWS = Path(__file__).resolve().parents[3] / "security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
 
 
 def h1_rows() -> dict[tuple[int, int, int], int]:

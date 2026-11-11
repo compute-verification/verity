@@ -1,5 +1,5 @@
 """The Site in code: the registered hardware, folded from the registration log, the check each entry passes, and the
-views the protocols read. It mirrors the spec's `Verity.Site` (`Security/Definitions/Core/Site.lean`): its sheets, locations,
+views the protocols read. It mirrors the spec's `Verity.Site` (`security/Definitions/Core/Site.lean`): its sheets, locations,
 links and log, `Site.ofLog`, and `Registration.Entry.refusal`, check for check and in the same order.
 
 The Site is a tree of locations, each with its owner: the site at the root, its hosts, a host's devices, memory leaves

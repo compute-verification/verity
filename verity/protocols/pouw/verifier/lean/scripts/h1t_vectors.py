@@ -318,7 +318,7 @@ def parts(name: str, typ: str, items: list[str], doc: str, size: int = PART):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("h1_dir")
-    ap.add_argument("--out", default=str(Path(__file__).resolve().parents[6] / "Security"))
+    ap.add_argument("--out", default=str(Path(__file__).resolve().parents[6] / "security"))
     args = ap.parse_args()
     sys.path.insert(0, args.h1_dir)
     import h1_tagged as h1t  # noqa: E402

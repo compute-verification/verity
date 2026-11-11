@@ -1,7 +1,7 @@
 [kinds.lean-audit]
 phase = "cpu-xl"
-max_wall_min = 180    # `check.py --build --update Security/Proofs`: ~260 GB, ~150 min cold
+max_wall_min = 180    # `check.py --build --update security/Proofs`: ~260 GB, ~150 min cold
 question = "Do core's Lean proofs (Security) still check, with only the allowed axioms, no sorry, and every guarantee's record unchanged?"
-inputs = ["Security", "tools/verity/lean"]
+inputs = ["security", "tools/verity/lean"]
 outputs = ["$RESEARCH_RUN_DIR/lean-audit"]
 restart = "idempotent"
