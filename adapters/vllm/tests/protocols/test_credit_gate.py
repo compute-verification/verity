@@ -1034,8 +1034,8 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
         "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: {LC.NO_PINS}")
     off_main = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN[:1])
     assert PHC.period_credit(off_main, PERIOD, [evidence], run=_verifier(drawn))[1] == (
-        "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: "
-                   f"{LC.first_parent_reason(auditor.session_id, CH.PINNED, list(CH.MAIN[:1]))}")
+        "circuit", (f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: "
+                    f"{LC.first_parent_reason(auditor.session_id, CH.PINNED, list(CH.MAIN[:1]))}"))
     assert PHC.period_credit(ledger, PERIOD, [{**evidence, "descriptor": other.hex()}], run=_verifier(drawn))[1][0] == \
         "circuit"
     b = SV.register_weights(_circuit(), [(64, K)], {0: _rows("s_w")}, _model_key().key).registered[K].entry()

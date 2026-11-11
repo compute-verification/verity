@@ -179,7 +179,7 @@ def test_each_install_is_an_epoch_of_its_own_under_a_fresh_hm96_key_and_over_one
         with PO.install(model, _served(hosts[-1].open)) as comp:
             cs.append(comp.get("pouw").commitment())
         assert hosts[-1].ended() is None and RUNS[k].finished
-    assert [c["pass_index"] for c in cs] == [0, 1] and PHW.EPOCHS == {w.hex(): 2}
+    assert [c["pass_index"] for c in cs] == [0, 1] and {w.hex(): 2} == PHW.EPOCHS
     assert [h.window for h in hosts] == [{"root": PS.epoch_open_root(w, k).hex()} for k in range(2)]
     assert [c["session"]["root"] for c in cs] == [PS.epoch_open_root(w, k).hex() for k in range(2)]
     assert len(keys) == 2 and keys[0] != keys[1] and all(len(k) == 32 for k in keys) and pouw._SALT_KEYS[ENTRY] == keys[1]
@@ -203,8 +203,8 @@ def test_pearl_c_takes_its_coins_from_one_live_session_or_is_refused_before_any_
     assert "which it opens on its salt epoch's root (salt.epoch_open_root, over the weights' root)" in refused(
         session=None)
     opened = {"session": SID, "seq": 3, "root": "ca" * 64, "commitment": "c0" * 64}
-    assert "opens its session itself, on its salt epoch's root (salt.epoch_open_root, over the weights' root), " \
-        "committed before its salt" in refused(session=opened)
+    assert ("opens its session itself, on its salt epoch's root (salt.epoch_open_root, over the weights' root), "
+            "committed before its salt") in refused(session=opened)
     assert "opens its session itself, on its salt epoch's root" in refused(gate=None)
     assert "the window's coins come from one source" in refused(coins=Challenger(0, random.Random(0).randbytes))
     capture = PO.Context(stage="capture", enabled=(ENTRY,), settings={"pouw": {
@@ -328,8 +328,8 @@ def test_a_salt_only_session_is_refused_by_name_while_the_lanes_open_period_is_h
         _untouched(model)
         return str(e.value)
     assert f"{SCHEME}: {H1_REFUSED}" in refused(session=reserved, period=period)
-    assert f"{SCHEME}: the gate's reserve answer joined period p-h1, but the lane's open period read from the auditor's " \
-        "ledger (the pouw setting 'period', pouw_h1_window.open_period) is none" in refused(session=reserved)
+    assert (f"{SCHEME}: the gate's reserve answer joined period p-h1, but the lane's open period read from the auditor's "
+            "ledger (the pouw setting 'period', pouw_h1_window.open_period) is none") in refused(session=reserved)
     assert f"{SCHEME}: pouw setting 'period' is the lane's open period, its period-open body" in refused(
         session=reserved, period={"lane": "vllm"})
     assert _kinds(gate) == ["period-open", "reserve"] and RUNS == []
@@ -345,7 +345,7 @@ def test_a_salt_only_session_is_refused_by_name_while_the_lanes_open_period_is_h
         g = CH.Gate(PRIVATE, KEY)
         for name, lane, fields in opens:
             g.period_open(name, lane, by=lane, **fields)
-        answer, period = PHW.reserve_salt(_reserving(g), lambda: g.lines, "vllm", "vy-nebius-1", 0)
+        answer, period = PHW.reserve_salt(_reserving(g), lambda g=g: g.lines, "vllm", "vy-nebius-1", 0)
         joined = "p-pc" if opens and opens[0][1] == "vllm" else None
         assert answer["period"] == (period and period["period"]) == joined and _kinds(g)[-1] == "reserve"
         assert PO.refusals(_served(lambda *a: None, session=answer, period=period)) == ()

@@ -437,7 +437,7 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
             return step(k)
 
         for k in range(run_steps):
-            lock.step(lambda: run(k))
+            lock.step(lambda k=k: run(k))
         rec = cs.end()
     except BaseException:
         # a run that fails ends its audit run, so the verifier's thread ends with it and reaps its process
@@ -527,7 +527,7 @@ def test_a_commits_session_that_fails_is_recorded_rejected_and_its_run_goes_on_u
     cs.store, cs.binder = store(), Stats()
     lock, steps = cs.begin(), []
     for k in range(4):
-        lock.step(lambda: steps.append(k))
+        lock.step(lambda k=k: steps.append(k))
     rec = cs.end()
     assert rec["accepted"] is False and rec["error"] == "ConnectionRefusedError: no verifier" and rec["memory_map"] is None
     assert steps == [0, 1, 2, 3] and rec["run"] == {"steps": 4, "audited": 0, "unaudited": 4}

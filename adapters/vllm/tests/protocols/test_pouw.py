@@ -297,8 +297,8 @@ def test_a_scheme_that_keeps_weight_state_is_refused_beside_pous(monkeypatch, sc
     assert PO.refusals(_serve(f"pouw:{scheme}", settings=settings)) == ()
     got = PO.refusals(_serve(f"pouw:{scheme}", "pous:band-chain/d12/v1", settings=settings))
     assert [r for r in got if "weight-derived copy" in r] == [
-        f"pouw:{scheme}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read what "
-        "POUS stores (prepare its weight operands per forward from the weight it is handed)"]
+        (f"pouw:{scheme}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read what "
+         "POUS stores (prepare its weight operands per forward from the weight it is handed)")]
 
 
 def test_kernel_directories_load_as_their_own_modules_named_by_their_sources(tmp_path, monkeypatch):

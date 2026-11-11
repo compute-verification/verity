@@ -103,8 +103,8 @@ class Model(nn.Module):
         self.model.layers = nn.ModuleList([Linear(64, 1, Arm(edit, calls), ks[0]), Linear(32, 2, Arm(edit, calls), ks[1])])
 
 
-#: the MoE layer's experts and intermediate width: gate_up [2I, K], down [K, I], so its downs are the calls of K = I
-EXPERTS, I = 3, 32
+#: the MoE layer's experts and intermediate width I: gate_up [2I, K], down [K, I], so its downs are the calls of K = I
+EXPERTS, INTERMEDIATE = 3, 32
 MOE = "model.layers.1.experts"
 #: each step's top-1 expert per batch row: expert 2 gets no row at step 0, expert 0 none at step 1
 ROUTES = ([0, 1, 0, 1, 1], [2, 1])
@@ -117,8 +117,8 @@ class MoE(nn.Module):
     def __init__(self, seed):
         super().__init__()
         g = torch.Generator().manual_seed(seed)
-        w13, w2 = (torch.randint(-127, 128, s, generator=g, dtype=torch.int8) for s in ((EXPERTS, 2 * I, K), (EXPERTS, K, I)))
-        s13, s2 = ((torch.rand(*s, generator=g) * 0.01 + 1e-4).float() for s in ((EXPERTS, 2 * I, 1), (EXPERTS, K, 1)))
+        w13, w2 = (torch.randint(-127, 128, s, generator=g, dtype=torch.int8) for s in ((EXPERTS, 2 * INTERMEDIATE, K), (EXPERTS, K, INTERMEDIATE)))
+        s13, s2 = ((torch.rand(*s, generator=g) * 0.01 + 1e-4).float() for s in ((EXPERTS, 2 * INTERMEDIATE, 1), (EXPERTS, K, 1)))
         self.quant_method, self.step = Experts(X.sites(MOE, w13, s13, w2, s2)), 0
 
     def forward(self, x):
@@ -679,7 +679,7 @@ def test_each_routed_expert_calls_rows_are_the_commits_and_an_idle_experts_its_z
                                                                       for p in X.PROJECTIONS)]
     sites = ["model.layers.0", *_experts(X.GATE_UP), *_experts(X.DOWN)]
     for s, rows in ((0, [2, 3, 0]), (1, [0, 1, 1])):
-        assert tap.where[CR.commit_rows(s, I)] == {"round": s, "calls": [7 * s + 2, 7 * s + 4, 7 * s + 6],
+        assert tap.where[CR.commit_rows(s, INTERMEDIATE)] == {"round": s, "calls": [7 * s + 2, 7 * s + 4, 7 * s + 6],
                                                    "steps": [FIRST + s] * 3, "sites": [CT.site(n) for n in _experts(X.DOWN)],
                                                    "rows": rows}
         assert tap.where[CR.commit_rows(s, K)]["calls"] == [7 * s, 7 * s + 1, 7 * s + 3, 7 * s + 5]
@@ -699,11 +699,11 @@ def test_one_expert_calls_rows_off_the_commits_are_refused_by_core(tmp_path, mon
     record, run, tap = _window(tmp_path, monkeypatch, model=MoEModel(), lie=lambda orig: G.edited(orig, ed))
     assert ed.at == f"{MOE}.0.down" and tap.own == 1
     assert run.details["roots1"]["reason"].startswith(
-        f"roots1: round 0's A table h1/a/{I}@0 of calls [2, 4, 6] is not the Commit's row-table/0/k{I} ")
+        f"roots1: round 0's A table h1/a/{INTERMEDIATE}@0 of calls [2, 4, 6] is not the Commit's row-table/0/k{INTERMEDIATE} ")
     assert {v["reason"] for v in run.gated().values()} == {CT.UNTIED}
     a_link, arow = _core(record, run)
     assert a_link is None and arow[0] == "arow" and arow[1].startswith(
-        f"round 0's A table of K = {I} h1/a/{I}@0 is not the Commit's row-table/0/k{I}"), arow
+        f"round 0's A table of K = {INTERMEDIATE} h1/a/{INTERMEDIATE}@0 is not the Commit's row-table/0/k{INTERMEDIATE}"), arow
     v = G.negative_verdict({"core": G.core_tie(record, run.served.program, tmp_path / "ev"),
                             "roots1": run.details["roots1"], "edited": ed.at})
     assert v["refused"] and v["edited"] == f"{MOE}.0.down", v

@@ -139,9 +139,8 @@ def test_a_forward_that_raises_still_ends_at_the_source_and_its_pass_is_ended_un
 def test_arms_switch_only_between_passes_and_name_the_stacks_executor():
     stack = Stack(SITES, Executor())
     stack.activate(PEARLC)
-    with stack.pass_():
-        with pytest.raises(RuntimeError, match="arms switch between passes"):
-            stack.activate(None)
+    with stack.pass_(), pytest.raises(RuntimeError, match="arms switch between passes"):
+        stack.activate(None)
     stack.activate(Arm("bf16", "bf16"))
     assert stack.apply(SITES[0], Layer(), "x", None, original)[0] == "stock"
     with pytest.raises(ValueError, match="this stack's executor is pouw:pearl-c-sm120-v1-h3"):
