@@ -67,8 +67,9 @@ def test_the_unpruned_request_in_the_compilers_form_is_the_builds_request_progra
 @pytest.mark.parametrize("compact", [False, True])
 def test_a_changed_views_positions_are_its_new_sequences(descriptors, compact):
     """A view compared, put in the compiler's form and compared again reads its new steps' positions, also where the second
-    comparison's list of sequences is allocated at the address the first one's had: the first is freed just before the
-    second is made, and the operands are those of a view that was never compared before."""
+    comparison's list of sequences would be allocated at the address the first one's had.  The first list is dropped just
+    before the second is made, with the interpreter's spare list objects all taken (``spare``), so a list that is freed
+    there is the next one handed out; the operands are those of a view never compared before."""
     def seqs(P):
         return [list(idxs) for idxs in P.steps if idxs]
 
@@ -77,10 +78,11 @@ def test_a_changed_views_positions_are_its_new_sequences(descriptors, compact):
     canon_step_relative(B, first[0][0], first, False)
     B.to_compiler_form()
     fresh.to_compiler_form()
+    want = seqs(fresh)
+    spare = [[] for _ in range(256)]
     del first
     again = seqs(B)
-    want = seqs(fresh)
-    assert again == want
+    assert again == want and len(spare) == 256
     assert [canon_step_relative(B, i, again, False) for idxs in again for i in idxs] == [
         canon_step_relative(fresh, i, want, False) for idxs in want for i in idxs]
 
