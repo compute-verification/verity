@@ -403,3 +403,56 @@ say what it found); the ship `…fce6` at this head.
   HH:MMZ" first in your return**: KSTEADY has the card next and I mark #8662.
 - If it fails, say what failed and whether the merge with `main` could have caused it; do not rerun without
   my word.
+
+## Wed 11 Nov 20:55Z: #8662 is marked. A new order from top: you OWN the first of memory-accounting's two kernel changes (HASH-120), from now; and your Thursday measurements may run tonight
+
+**#8662:** marked by me at 20:33Z at `0662aa2a4fe9`, on your H200 run and the two reads. If `main` moves under
+it and the queue leaves it out, I resume you for the merge. Nothing else is owed on it.
+
+**The order (TOP-402, top at 20:28Z; Daniel wants every agent and machine used, and goals pulled earlier):**
+memory-accounting's off-track goal (the uncertified memory share at 0.10, Wed 18 Nov) waits on two kernel
+changes that had no owner. I named the owners at 20:42Z:
+1. **The pass's receipts: kernels', and yours. HASH-120**, goal `kernels/poub-pass-near-plain-read`, due
+   Fri 13 Nov 6 PM PST (Sat 02:00Z). In memory-accounting's words: "`rs_pass` in
+   `benchmarks/remote_session/session.cu` reads a card's store and computes a receipt for every 4 KiB
+   block. It takes 1.055 to 1.061 times a bare read (65.237 against 61.503 ms over 751.62 GB, 15 Oct).
+   Bring it to 1.02 with every receipt's bytes unchanged. Start from a profile of the pass against the bare
+   read on one RTX PRO 6000 card: no record says where the time goes."
+2. **The host's read inside a pass (211.4 GB/s to about 448): memory-accounting's worker writes it; you
+   read its pull request before its mark**, to the kernel bar, as you read the 64-row kernels. Your sweep
+   is its start. I have asked memory-accounting to say who the worker is.
+
+**Why Friday 6 PM PST is hard:** the eight-card node takes sessions on Thu at commits before the move only,
+then on Mon 16 Nov, and memory-accounting names Monday's commit to infra by Fri 6 PM PST. So Thursday's
+window is the one place a candidate can be timed on those cards before the commit is named. A candidate
+that is not built and held to today's receipts before that window cannot be in Monday's commit.
+
+**So, from now:**
+1. **Candidates before the profile.** You have read `rs_pass` and the consumer and receipt kernels. Write
+   down, as attempts with their hypotheses (the kernel-engineering skill: check what has been tried first),
+   where a pass can lose 5% against a read, and build the two or three candidates worth a card: each on a
+   branch off `5444b0d5fdbb` for the node, and carried to `main` for the pull request. Your own finding
+   stands first: October's ratios compare two different read kernels on two grids, so say how much of the
+   5.5% is the comparison's before anyone spends a kernel on it. That number alone changes
+   memory-accounting's arithmetic, and it is worth saying the hour you have it.
+2. **The guard, before any timing:** a candidate's receipts equal today's byte for byte on the same store
+   and keys (a CPU reference or today's kernel as the reference, said which), with 0xA5 poisoning and a
+   no-write control. A faster kernel with one changed byte is not a candidate. No SASS claim without the
+   gate.
+3. **Tonight, perhaps:** I asked memory-accounting (TOP-402, 20:42Z) for 1.4 hours of tonight's unplanned
+   hours on `vy-nebius-2` for your four leases at `5444b0d5fdbb`, so that both writers have their tables
+   Thursday morning and Thursday's 21:00Z to 23:30Z times candidates. **It is not granted yet.** The node
+   is up from 01:30Z; its probe answers (`sudo` into the slice, `nsys`) come on HASH-113 by 03:00Z.
+   **Send nothing to `vy-nebius-2` without my word**: I resume you with memory-accounting's yes and the
+   hour. Say in your return whether your jobs are ready to run tonight as they stand, what each lease
+   needs that is still unknown, and what you would cut if only an hour is given.
+4. **Thursday 21:00Z to 23:30Z:** if the tables ran tonight, the window is candidates against today's
+   pass, alternating in one lease, yours and the host change's if memory-accounting's worker has a build
+   by then (say on HASH-120 by when you need it). If they did not, the window is as planned, with as many
+   candidates after the tables as fit.
+5. **Still yours, unchanged:** the 64-row review's findings by Thu 20:00Z; HASH-117 by Tue 17 Nov.
+
+**Write on HASH-120** (worker comments, named for my ring where a lead must act). **End your turn** when the
+candidates' list and the guard exist and you have said what tonight needs, or at the first thing that
+needs memory-accounting. Checkpoint in your note at each step: two workers' turns were cut by the platform
+at 20:44:39Z tonight.
