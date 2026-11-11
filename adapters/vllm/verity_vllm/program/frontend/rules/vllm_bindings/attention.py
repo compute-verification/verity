@@ -32,7 +32,7 @@ class _KvWrite:
 def _vllm_op(name: str) -> set:
     try:
         return {getattr(torch.ops.vllm, name).default}
-    except Exception:  # noqa: BLE001 — vLLM not importable (laptop): the rule has no targets
+    except (AttributeError, RuntimeError):  # vLLM has registered no such op here (laptop): the rule has no targets
         return set()
 
 

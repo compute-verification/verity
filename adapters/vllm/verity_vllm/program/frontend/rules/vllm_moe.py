@@ -50,6 +50,7 @@ import torch
 
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array
+from verity_vllm.log import init_logger
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
@@ -59,6 +60,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import active
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import moe_expert_refusal, moe_expert_role
 
 aten = torch.ops.aten
+logger = init_logger(__name__)
 
 #: the fused_moe_kernel launch fields pinned to the bf16 unquantized path the Definitions model.  `src_sha256` is the kernel body of the
 #: pinned vLLM (recorded from the cp-moe export; another body with the same name refuses).  Tile constexprs are geometry the f32 accumulator
@@ -107,7 +109,8 @@ def _moe_C_op(name: str) -> set:
     try:
         import vllm  # noqa: F401
         return {getattr(torch.ops._moe_C, name).default}
-    except Exception:  # noqa: BLE001 — vLLM not importable: no targets
+    except Exception as e:  # noqa: BLE001 — vLLM not importable: no targets
+        logger.debug_once("no rule targets torch.ops._moe_C.%s: %s", name, repr(e))
         return set()
 
 

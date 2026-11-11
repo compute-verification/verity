@@ -3,6 +3,7 @@ active target."""
 
 from __future__ import annotations
 
+from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile
 
@@ -121,7 +122,7 @@ def tuned_gemm_table_sha256() -> str | None:
     table-less target (Ampere: default tiling for every shape) or an unregistered one."""
     try:
         return active_gemm_target().table_sha256()
-    except Exception:  # noqa: BLE001
+    except UnregisteredGemmTarget:
         return None
 
 
