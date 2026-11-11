@@ -42307,3 +42307,37 @@ For the table:
 For the table:
 - PRF-477: yes to the port of ids and to a second session; split members at registration (38 for `p256-o256`) rather than raise m; the made-up-spans record is a fixture at the served statics. The wires and the auditor's params are ours, with no date from me.
 - Job 1: probe `0229` passed; records run `140a` is running.
+
+## WITNESS, Wed 11 Nov 08:27Z: the 8.7 CPU-s are one call, `unit_ab_into`: four single-thread walks of the same 1.37 G column indices a statement, memory-bound; nothing built yet; `FC_UNIT_WIDE=4` is on kernels' tree and `main` today and reads the indices once, so HEADPROF can time it with no build
+
+For HEADPROF: no branch yet. With no build, on `c6cadd0e325f` as it is: the row at K = 1, 2, 4 with `FC_UNIT_WIDE=4`, and with `=2`, in the provers' environment (`unit_width`, `verity/ml/flock/live/src/circuit.rs:2840` there, same code as `main`) [read; that the variable reaches the prover through `server_rate.py` is a guess]. A branch on that tree's paths follows when my cut builds.
+
+**Where the 8.7 CPU-s go** [read: `flock-circuit.rs` `witness`, `gpu_circuit.rs` `HostSlots::pack_units`, `circuit.rs` `unit_ab_into_wide`, `ir_block.rs` `IrUnitNet::eval_wide`, all under `verity/protocols/flock/prover/live/src/`; kernels' `r20261111-061047-6773`, its `WITNESS` lines and `stage.json`]:
+- All of it is the `units_pack` lap: 3.0 to 3.2 s of wall a statement; the witness's other laps (`rowin`, `rows`, `hm96`, `unit_inputs`) are under 0.17 s together [run 6773].
+- The path: `witness` → `HostSlots::pack_units` → `unit_ab_into` → for each lane group of 64 units (a statement is 256 units, 4 groups): `bit_rows` (inputs to bit-sliced words), `IrUnitNet::eval_wide::<u64>` (one pass over the unit's rows: z[i] = (XOR of z over row i of A) AND (XOR over row i of B)), then `lanes_into` twice (a and b transposed back, 64×64 bits at a time, into the mapped buffer).
+- **Threads:** rayon, one task a lane group, each single-threaded: 4 tasks on the ten-thread pool, because `width_for(4, 10)` = 1. So about 2.2 CPU-s a group [8.7 / 4, from kernels' figure].
+- **The same for every statement, redone for every statement:** the unit is 31,981,569 rows with 1,368,418,074 column indices (42.8 a row; 5.5 GB of u32) [read: stage.json]. Each group reads all of them, so a statement reads the indices four times: 5.5 G index reads and 5.5 G loads of z at those indices, about 1.6 ns each [8.7 s / 5.5 G], which is memory latency and not arithmetic. Also per index, per statement: the test "does this row read its own column", which is a property of the template.
+- **Copies and allocation:** z, a and b of 256 MB each a group, 3 GB a statement, allocated per statement and freed off the path; about 2 GiB written to the mapped a, b buffer.
+- **Bit packing:** `bit_rows` and `lanes_into`. Their share is not measured yet (the `UNITPROF` lines of my runs, below).
+
+**What I tried on a small instance** [run, on this VM: the Definition at DR=16, DV=16, NVIS=16, BN=16, 493,569 rows, 21.8 M indices]: computing a row's XOR from an earlier row's leaves 0.78 of the reads with the previous row as the base, 0.60 with any earlier equal sum, prefix or neighbour found by hashing (190,728 of 968,384 sums equal an earlier one); classes of columns always read together leave 1.00. So sharing sums is worth at most 40% of the reads there, for a plan built once a template and a second copy of the rows: not tonight's small diff.
+
+**Candidates, sized** [guess unless tagged]:
+1. **The fold's memory waits** (`fold_own` in `ir_block.rs`): prefetch z at the indices a fixed distance ahead in the row arrays, across row ends, and take the own-column test out of the loop. No value changes, so bit-identical by construction. 2 to 4 CPU-s if the walk is memory-bound as the 1.6 ns says. **This is what I build first.**
+2. **A wider pass** (`width_for` in `circuit.rs`, or `FC_UNIT_WIDE`): width 4 reads the indices once a statement. kernels measured CPU falling 2.6× at width 8 on another type [relayed, #8314]; here maybe 8.7 → 4 to 5 CPU-s, but the witness's wall becomes one thread's pass, so it helps where the ten cores are full (K ≥ 2) and may hurt at K = 1. A policy change, a few lines; it needs HEADPROF's numbers to choose.
+3. **Shared sums** (above): 2 to 3 CPU-s, about 200 lines and GBs of plan. Sized only.
+4. `lanes_into`: waits for its measured share.
+
+**Files I would touch** (all host-side Rust; nothing under `cuda/`, no `cuda_circuit_patch.py`, no kernel, no device call in `gpu_circuit.rs`):
+- `verity/protocols/flock/prover/live/src/ir_block.rs`: `fold_own`, `IrUnitNet::eval_wide`, and their tests.
+- `verity/protocols/flock/prover/live/src/circuit.rs`: only if 2 or 4 is taken: `width_for`, `unit_width`, `lanes_into`, and their tests.
+- `verity/protocols/flock/prover/live/src/bin/flock-circuit.rs`: `unit_walk` only (a digest of the packed words on its `WALK` line, so two builds are compared on the same inputs).
+kernels' unmerged `cursor/kernels-witness-card-43ee` touches the first two; you wrote it yields.
+
+**Runs** [run]: `r20261111-081159-b494` (cpu-7): a small head block (NVIS=16, BN=16) staged and walked at widths 1, 2, 4 with `main`'s CPU build, still staging. `r20261111-082259-03a4` (cpu-12): the served head block itself, same walk, then each new head of my branch on the same circuit if the node reads GitHub; waiting for a slot with 215 GB. Mine, lost 12 minutes: `r20261111-080849-3d2a` died in its first second (`/workspace/jobs` is not writable from a pool slot on a CPU node) and I saw it late.
+
+Branch `cursor/proofs-witness-9dbc` at `8201dacff26e50e4b9ea73e6ec98986e200428d9` (`main`, nothing changed yet).
+
+For BREAKEVEN: 0 CPU-s saved so far [measured: nothing]. Candidates 1 and 2 are guesses of 2 to 4 CPU-s each of the 8.7, not to be priced until a run id stands beside them.
+
+For the table: WITNESS | host witness 8.7 CPU-s = `unit_ab_into`, 4 walks of 1.37 G indices | no cut measured yet; `FC_UNIT_WIDE=4` testable today with no build | prefetch cut next, PR by 11:30Z or a sized list
