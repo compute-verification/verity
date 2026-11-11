@@ -259,6 +259,82 @@ pub fn tape<S: Sink>(slot: Slot, inp: &[u64], t: &mut Tape<S>) {
     }
 }
 
+/// An addition's rows where neither operand is a constant (`_add2`): bits 0 to 62's carry rows, the carry committed after
+/// every fifth bit (the pinned circuits' spacing).
+const ADD_ROWS: usize = 75;
+/// The most rows between a round's committed `a` and the next round's committed `e`: `Ch`, `t1`'s four additions, `Maj`,
+/// `t2`'s addition and `d + t1`'s.
+const ROUND_ROWS: usize = 2 * 64 + 6 * ADD_ROWS;
+
+/// A SHA-512 compression among a unit's rows (`compress_gadget`'s, where a Definition hashes inside the unit), found by
+/// the rows' shape ([`unit_compressions`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnitComp {
+    /// the rounds found: 80, or fewer where the builder folded the first rounds' rows (a constant chaining value)
+    pub rounds: usize,
+    /// the first rows of the committed `a, b, c, d, e, f, g, h` after the last round, 64 rows each
+    pub state: [u32; 8],
+    /// the feed-forward's rows `[start, end)`: its eight additions' carry rows and committed carries
+    pub ff: (u32, u32),
+}
+
+impl UnitComp {
+    /// The rows every later row reads the next chaining value through (its bits are XORs of them and of the chaining value
+    /// before): the committed state and the feed-forward's rows. Their z are bits of [`compression`]'s tape words.
+    pub fn seeds(&self) -> impl Iterator<Item = u32> + '_ {
+        self.state.iter().flat_map(|&w| w..w + 64).chain(self.ff.0..self.ff.1)
+    }
+}
+
+/// The compressions among `net`'s rows, in row order, by shape alone. A committed word is 64 rows in a row whose B is the
+/// constant column, with none before or after; a round ends in two of them, `e` then `a`, an addition's rows apart; a
+/// compression's rounds follow each other within a round's rows, and its last four rounds' words are the state its
+/// feed-forward adds to the chaining value, an addition a word, right after the last. Rounds the builder folded (the
+/// first rounds over a constant chaining value) are not found, and need not be: nothing past the compression reads them.
+pub fn unit_compressions(net: &IrUnitNet) -> Vec<UnitComp> {
+    let (cp, first) = (net.const_pos, net.in_words * WORD);
+    let commit = |i: usize| (first..cp).contains(&i) && net.b.row_is(i, &[cp]) && net.a.row_len(i) > 0;
+    let mut words = Vec::new();
+    let mut i = first;
+    while i < cp {
+        let s = i;
+        while commit(i) {
+            i += 1;
+        }
+        if i - s == 64 {
+            words.push(s);
+        }
+        i += usize::from(i == s);
+    }
+    let add = |s: usize| (0..ADD_ROWS).all(|k| commit(s + k) == (k < 72 && k % 6 == 5));
+    let rounds: Vec<(usize, usize)> = words.windows(2).filter(|w| w[1] == w[0] + 64 + ADD_ROWS && add(w[0] + 64)).map(|w| (w[0], w[1])).collect();
+    let reads = |r: usize, c: usize| net.a.row(r).contains(&(c as u32)) || net.b.row(r).contains(&(c as u32));
+    let mut out = Vec::new();
+    let mut k = 0;
+    while k < rounds.len() {
+        let s = k;
+        while k + 1 < rounds.len() && rounds[k + 1].0 - (rounds[k].1 + 64) <= ROUND_ROWS {
+            k += 1;
+        }
+        if k - s >= 3 {
+            let state = [rounds[k].1, rounds[k - 1].1, rounds[k - 2].1, rounds[k - 3].1, rounds[k].0, rounds[k - 1].0, rounds[k - 2].0, rounds[k - 3].0];
+            let start = rounds[k].1 + 64;
+            // each word's addition: bit i's carry row reads the state word's bit i (a bit folded with a constant chaining
+            // value has no row), and a committed carry reads rows of the last four rounds and the feed-forward only
+            let mut p = start;
+            for w in state {
+                for i in 0..63 {
+                    p += usize::from(p < cp && !commit(p) && reads(p, w + i));
+                    p += usize::from(i % 5 == 4 && commit(p) && net.a.row(p).iter().all(|&c| c as usize >= state[7] || c as usize == cp));
+                }
+            }
+            out.push(UnitComp { rounds: k + 1 - s, state: state.map(|w| w as u32), ff: (start as u32, p as u32) });
+        }
+        k += 1;
+    }
+    out
+}
+
 /// 64 lanes' tapes, bit-sliced: `bits[64 w + i]` is bit `i` of tape word `w` (lane `l` in bit `l`).
 fn sliced_tapes(slot: Slot, lanes_in: &[Vec<u64>]) -> Vec<u64> {
     let tapes: Vec<Vec<u64>> = lanes_in.iter().map(|inp| {
@@ -708,6 +784,65 @@ mod tests {
             let (_, circuit, digest) = PINS.iter().find(|p| p.0 == net.name).expect("a pinned slot circuit");
             assert_eq!((hex(&net.sha256), plan_digest(plan)), (circuit.to_string(), digest.to_string()),
                        "{}: the pinned slot circuit or its plan changed", net.name);
+        }
+    }
+
+    /// The compressions found by shape in the pinned slot circuits are the plan's: each one's state rows are its last four
+    /// rounds' committed words and its feed-forward rows are all of the plan's, so their z are the native tape's bits. With
+    /// those given as seeds (from `slot_zab`, SHA-512 in 64-bit words), the level walk on the cut schedule packs
+    /// `unit_ab_into`'s words, and hm96, whose salt hash is two compressions in series, is one compression deep.
+    #[test]
+    fn a_cut_at_the_chaining_values_is_one_compression_deep() {
+        use crate::circuit::{unit_ab_into, unit_ab_seeded};
+        use crate::ir_block::{schedule, schedule_seeded};
+        for (net, plan) in plans(5) {
+            let comps = unit_compressions(&net);
+            let found: Vec<(usize, u32)> = comps.iter().map(|c| (c.rounds, c.ff.1 - c.ff.0)).collect();
+            assert_eq!(comps.len(), 3, "{}: three compressions, found {found:?}", net.name);
+            match plan.slot {
+                Slot::Sha512x3 => assert_eq!(found, [(80, 600); 3], "sha512x3: (rounds, feed-forward rows)"),
+                // the salt's first compression starts from a constant midstate: its first rounds and feed-forward bits fold
+                Slot::Hm96 => assert!(found[0] == (80, 600) && found[2] == (80, 600) && found[1].0 >= 76 && found[1].1 <= 600,
+                                      "hm96: (rounds, feed-forward rows) {found:?}"),
+            }
+            for (k, c) in comps.iter().enumerate() {
+                let role = |r: u32| *plan.role(plan.rows[r as usize].0).unwrap_or_else(|| panic!("{}: row {r} reads no tape word", net.name));
+                for (j, &w) in c.state.iter().enumerate() {
+                    for r in w..w + 64 {
+                        let x = role(r);
+                        assert_eq!((plan.kind(r as usize), x.comp as usize, x.part), ("committed word", k, Part::Round(79 - (j % 4) as u8)),
+                                   "{}: compression {k}'s state word {j}, row {r}", net.name);
+                    }
+                }
+                assert!((c.ff.0..c.ff.1).all(|r| role(r).comp as usize == k && role(r).part == Part::FeedForward),
+                        "{}: compression {k}'s feed-forward rows", net.name);
+                let all = (plan.in_bits..plan.out_start).filter(|&r| plan.role(plan.rows[r].0).is_some_and(|x| x.comp as usize == k && x.part == Part::FeedForward)).count();
+                assert_eq!(all, (c.ff.1 - c.ff.0) as usize, "{}: compression {k}'s feed-forward rows, all of them", net.name);
+            }
+            let seeds: Vec<u32> = comps.iter().flat_map(|c| c.seeds()).collect();
+            let (full, cut) = (schedule(&net), schedule_seeded(&net, &seeds));
+            eprintln!("{}: {} levels, {} after the cut at {} seed rows", net.name, full.levels(), cut.levels(), seeds.len());
+            assert!(cut.levels() <= full.levels());
+            if plan.slot == Slot::Hm96 {
+                assert!(20 * cut.levels() < 11 * full.levels(), "hm96: {} levels after the cut, {} before", cut.levels(), full.levels());
+            }
+            let ins: Vec<Vec<F128>> = random_lanes(plan.slot, plan.in_words, 91).iter().take(45).map(|v| v.chunks(2).map(|p| F128::new(p[0], p[1])).collect()).collect();
+            let native: Vec<Vec<F128>> = ins.iter().map(|w| plan.slot_zab(w).0).collect();
+            let bit = |z: &[F128], r: usize| (if r % WORD < 64 { z[r / WORD].lo } else { z[r / WORD].hi } >> (r % 64)) as u32 & 1;
+            let seed_z = |g: usize| -> Vec<u32> {
+                seeds.iter().map(|&r| native[32 * g..].iter().take(32).enumerate().fold(0u32, |x, (l, z)| x | (bit(z.as_slice(), r as usize) << l))).collect()
+            };
+            let (mut want, mut got) = (vec![0u64; 4 * plan.uw * ins.len()], vec![!0u64; 4 * plan.uw * ins.len()]);
+            assert!(unit_ab_into(&net, 0, plan.uw, &ins, &mut want), "{}: z = a & b", net.name);
+            assert_eq!(unit_ab_seeded(&net, &cut, &seeds, seed_z, plan.uw, &ins, &mut got), Some(true), "{}: the cut walk on native seeds", net.name);
+            assert!(got == want, "{}: the cut walk's packed a, b words", net.name);
+            // one seed off in one slot of the second lane group
+            let off = |g: usize| {
+                let mut z = seed_z(g);
+                z[seeds.len() / 2] ^= u32::from(g == 1) << 3;
+                z
+            };
+            assert_eq!(unit_ab_seeded(&net, &cut, &seeds, off, plan.uw, &ins, &mut got), Some(false), "{}: a seed that is not its row's z", net.name);
         }
     }
 
