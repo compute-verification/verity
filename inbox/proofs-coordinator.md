@@ -37121,3 +37121,72 @@ Next I do C, the two HASH-112 readings, by 22:00Z. I'll also check that proofs' 
 - `r20261111-023822-27c6` is cancelled by me, by id, after 4 minutes: it was this job at the cure's first commit, before your message.
 
 **Left:** read `997a`; the entry with the head, the counts and the LEAN-249 text (your step 3); ci's answer, none on LEAN-249 at 02:33Z [read]; after the move is on `main` (`main` is `a930252c4993`, no move, 02:44Z): TRN-83's line as its own PR.
+
+## TWOPROVE, Wed 11 Nov 02:46Z: the sentence for Daniel, corrected; R3.4's two tries pass and the κ_s bound is added; three runs in flight
+
+**For Daniel, corrected:** "The capped extractor bounds each session's knowledge error by 2^-203 + 2^-210 + 2k/K₀ + 2^-250. At B (k = 1,507, n_sess = n_PU, one audit, T = 2^80 SHA-512 compressions) its binding term is about 2^-30.4 at the best K₀, or 2^-29.4 counted with the 2k/K₀ it trades against, so it does not reach 100 bits. It lets the binding term use SHA-512's strict birthday bound in place of the expected-time one, and it does not shrink the sizes that term grows with." \[read: the statements; numbers run from the theorem's terms\]
+
+**I read your 2^-28.9 differently, so that comes first.** It was not R3.4's binding term. It was the sum of 2k/K₀ and twice that term, because my 02:13Z column carried a factor 2 that `εregSB` does not have.
+
+- \[read\] The definitions say so:
+  - `εregSB` = κ_s + √(k·γ_s·Pr[B]) + N·√(q_T²/2^513) + q_T²/2^513;
+  - `bconfCostStrict` = 2T(1 + n_sess·ρ_s) + 2·n_PU·openCalls, where the 2 is `B_conf`'s two runs.
+- \[run\] At the theorem's own terms, with N = 2^59.0 to 2^59.8 gates and openCalls left out:
+  - the binding term is 2^-30.4 to 2^-30.0;
+  - the sum with 2k/K₀ is 2^-29.4 to 2^-29.0;
+  - the best K₀ is 2^42.0 to 2^41.6.
+- \[run, same script\] Other readings of the same sum:
+  - at the card's N = 2^61.1 gates (ATTACK's item 7), 2^-28.4;
+  - with T counted in calls on 64 KiB rows, 2^-24.9 to 2^-24.5;
+  - over a period of one stream of 600 s audits: a week 2^-19.4 to 2^-19.0, a month 2^-17.3 to 2^-16.9, a year 2^-13.7 to 2^-13.3;
+  - at B with n_sess = 30, 2^-45.2; with n_sess = 1, 2^-47.6.
+- Design: the one-stage sample at k = 1,507. These terms read no m, K or d.
+
+**The other two words I changed:**
+
+1. **"knowledge error" became "each session's knowledge error".**
+   - The bound 2^-203 + 2^-210 + 2k/K₀ + 2^-250 is κ_s, the largest proof block's Flock κ at the truncation.
+   - It holds at one table a session, and is t·2^-203 at t tables. It needs waits ≥ 210 and N₀ ≥ 2^10 \[read: `Claims.Flock.Numbers.κ_le_sum_cap`\].
+   - The audit's error `εregSB` adds √(k·γ_s·Pr[B]) and the binding term, and its δ form adds δ.
+2. **"fixes the strict-time gap" became "lets the binding term use the strict birthday bound".**
+   - "Fixes" is right only if the gap means a binding term read at the expected-time bound. It is wrong if it means a premise removed.
+   - \[read: `Security/lean-audit.json`\] `Claims.StrictBirthday` and `Claims.ExpectedCR` are both in `trust.base`, and both are open under LEAN-186, so R3.4 removes no premise.
+   - What R3.4 changes is that the finder's cost is bounded on every coin: q_T, from ρ_s ≤ 1 + 210·K₀. The strict bound needs that, and the deployed 2^256 reruns don't give it.
+   - In the term N·q_T/2^256.5, q_T is linear in T·n_sess·K₀, so N, n_sess and T stay as they are.
+
+**What R3.4's two tries proved** \[run: their logs\]. Nothing differs from my statements on paper: every proof went through as first written.
+
+- **`r20261111-020114-a7de`** (vy-nebius-cpu-1, at `37404ff90b`, the generic part):
+  - `lean-try` on the witnesses file exited 0 in 648 s.
+  - The axiom probe says none of its 10 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. The five new ones are `sksL_strictBirthday_bconfAt`, `sksL_εregSB`, `compiledKSRegAtSB_fails`, `Compiled.KSRegAtSB_fails` and `compilerKSRegAtSB_nontrivial`.
+  - `lean-build +Proofs.Flock.SamplingGeneric +Proofs.Flock.Claims.Witnesses` exited 0 in 130 s. So `Compiled.ksRegAtSB_of_ksReg`, `compilerKSRegAtSB_of` and `compilerKSRegAtSB : CompilerKSRegAtSB` elaborate. Their axioms are for the records run to check.
+- **`r20261111-021047-b33e`** (vy-nebius-cpu-3, at `ca25f11624`, the instance):
+  - `lean-try` on `Security/Proofs/Flock/SamplingGeneric/MaskedTrunc.lean` exited 0 in 1,261 s, with no warning.
+  - It probed seven theorems, each using only the three standard axioms: `maxBelowN_le` (only `propext` and `Quot.sound`), `ρs_compiledTrunc_le`, `innerNumbers_deployTrunc`, `sessionRuns_deployTrunc`, `sessionOpens_deployTrunc`, `sessions_compiledTrunc` and `ksRegAtSB_maskedTrunc`.
+- **One gap the tries left open:** no Lean tied the instance's κ_s to the numbers, and change 1 needs that tie.
+  - `κs_compiledTrunc_le`, pushed in `fd3c8b79ad` on `cursor/proofs-bind-strict-aa8f`, closes it: κ_s ≤ t·2^-203 + 2^-210 + 2k/K₀ + 2^-250 at t = the statement's tables, k = ⌈4N₀/e⌉ and N₀ ≥ 2^10.
+  - Its try is in flight.
+- \[run\] The first two tries ran without `--siblings`. The third passes it.
+
+**PRF-516: I read #8785's statements once at `d3f5de9591` and ask no change** \[read: `Security/Definitions/Claims/SamplingGenericX.lean`\].
+
+- `regValX` reads no tape.
+- `FregX` is one set for each statement and strategy.
+- `BconfX` counts both runs' calls and both extractions'.
+- `CompilerKSRegX` takes `CompilerKSReg`'s premises exactly.
+- \[guess\] A strict form of R3.4 at X would keep q_T, because `BconfX` costs two runs' calls just as `Bconf` does.
+
+**Runs in flight** \[run: `research status`, ETAs guessed\]:
+
+- **`r20261111-015243-3500`** (route 3's records, vy-nebius-cpu-7):
+  - It was running at 02:44Z, at 27.4 GiB with a 41.3 GiB peak. Its memory has gone both down and up since your 22 GiB reading, and stdout has one line.
+  - Its Lean slot times out 9,000 s after 01:53Z, about 04:23Z.
+  - ETA \[guess\] 03:15–03:45Z.
+- **`r20261111-024117-ba02`** (R3.4's records at `ca25f11624`, vy-nebius-cpu-7): launched at 02:41Z, ETA \[guess\] 04:00–04:30Z.
+  - \[read\] The lock records no proofs-tree module: no `RegAt` appears in it. So `fd3c8b79ad`'s lemma leaves those records as they are.
+- **`r20261111-024409-8b37`** (the try of `MaskedTrunc.lean` with `--siblings`, at `fd3c8b79ad`, vy-nebius-cpu-1): ETA \[guess\] 03:10–03:20Z.
+
+**Next, and the move.** #8781 stays untouched.
+
+- **Route 3:** when `3500` ends, I read it and name any record it regenerates, commit it, run the quick tier, write the body and open the PR unmarked. If the move lands first, I cross with `tools/move/restack.py` and rerun the records there.
+- **R3.4:** the same, after route 3. It crosses the move stacked on #8781.
