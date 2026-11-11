@@ -66,7 +66,7 @@ noncomputable def baseWired (ok : Bool) : Code :=
     rounds := fun _ u => univ.filter fun t =>
       off h (templateOf h.ms u) ≤ t.val ∧ t.val < off h (templateOf h.ms u) + k₀ h (templateOf h.ms u)
     session := fun _ u v => session h u v
-    reveal := fun s u v wF => revealWired h ω keep h.frame { s with prog := bitsProgs h.ms } u v wF
+    reveal := revealWired h ω keep h.frame
     reveals := Reveal.reveals (partition h) (parse h)
     sessions := fun _ => h.ms.length
     tables := fun _ => ((List.range (h.ms.length + 1)).map fun t => (shapeOf (h.xS₀ t)).length).foldr max 0
@@ -76,11 +76,15 @@ noncomputable def baseWired (ok : Bool) : Code :=
 /-- The run's round order at the wired code: `order h`, the gated verifier having `V h`'s rounds. -/
 def orderWired (ok : Bool) (x : Msg) : Order ((baseWired h ω keep ok).V.k x) := order h x
 
-/-- **The two-stage code at the wired program, behind a check's verdict**: `baseWired` at its round order, its
-checked units the two stages' on the auditor's registration, each stage's bytes its own coin's (`code h`'s shape). -/
+/-- The run's stage order at the wired code: `stageOrder h`. -/
+def stageOrderWired (ok : Bool) (x : Msg) : StageOrder ((baseWired h ω keep ok).V.k x) h.stage := stageOrder h x
+
+/-- **The two-stage code at the wired program, behind a check's verdict**: `baseWired` at its stage order, its
+checked units the two stages' on the auditor's registration, the first stage's bytes round 0's coin's and the second
+stage's those of its rounds' coins (`code h`'s shape). -/
 noncomputable abbrev codeWired (ok : Bool) : Code :=
-  codeTwoAt (baseWired h ω keep ok) (reg h) (fun _ => L) (fun _ => L) (orderWired h ω keep ok) (fun _ => coinByte)
-    (fun _ => coinByte)
+  codeTwoStage (baseWired h ω keep ok) (reg h) (fun _ => L) (fun _ => h.stage * L) (fun _ => coinByte)
+    (fun _ => h.stage) (stageOrderWired h ω keep ok) fun _ => stageByte
 
 /-- **The replay sample of record at the wired code**: the first stage's checked slots on the replay layout
 (`rs h`'s shape). -/

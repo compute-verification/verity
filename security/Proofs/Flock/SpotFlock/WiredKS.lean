@@ -183,9 +183,9 @@ theorem sessionsIn_wired : SamplingDeploy.SessionsIn (codeWired h ω keep true) 
 /-! ## The sessions' openings -/
 
 /-- **An accepted run that checks a unit and shows its session passed the session statements' check at the unit's
-statement**: its transcript is `seenAt` of its first three messages and the coins of rounds 0 and 1, `stmtOk` held at
-them, the session's statement is the unit's as round 2 states it, and the unit is one the two stages check on those
-coins. -/
+statement**: its transcript is `seenAt` of its messages of rounds 0, 1 and `stage + 1`, round 0's coin and the second
+stage's, `stmtOk` held at them, the session's statement is the unit's as round `stage + 1` states it, and the unit is
+one the two stages check on those coins. -/
 theorem run_checked {Ω : Type} (P : Prover Ω) (x : Msg) (w : Ω)
     (r : Fin ((deploy _root_.Flock.Readable.relation (code h)).V.k x) → FlockDeploy.Coin) {s : AuditStatement}
     (hx : parse h x = some s) {u : ℕ} {xS : Msg} {vS : Seen}
@@ -196,23 +196,23 @@ theorem run_checked {Ω : Type} (P : Prover Ω) (x : Msg) (w : Ω)
       (run FlockDeploy.sha512 P (deploy _root_.Flock.Readable.relation (code h)).V x w r).seen = some (xS, vS)) :
     ∃ m₀ m₁ m₂ rest,
       (run FlockDeploy.sha512 P (deploy _root_.Flock.Readable.relation (code h)).V x w r).seen =
-        seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest ∧
-      stmtOk h x m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) = true ∧ xS = unitStmt h m₂ u ∧
-      u ∈ h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (src (r ⟨1, one_lt_k h x⟩)) := by
+        seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest ∧
+      stmtOk h x m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) = true ∧ xS = unitStmt h m₂ u ∧
+      u ∈ h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (stageSrc (stageCoins h x r)) := by
   obtain ⟨m₀, m₁, m₂, rest, hseen, hok⟩ := run_seenAt h FlockDeploy.sha512 P x w r hacc
   obtain ⟨ms, rest', hms, hlen, hses⟩ := (seq h _root_.Flock.Readable.relation).session_acc FlockDeploy.sha512 x P w
     r u ((seq h _root_.Flock.Readable.relation).idx_lt x r u hu) hacc
-  have h3 : (ms.take 3).map Prod.fst = [m₀, m₁, m₂] := by
-    have hl : 3 ≤ ms.length := hlen ▸ three_le_off h _
+  have h3 : ((ms.take (h.stage + 2)).map Prod.fst).getD (h.stage + 1) [] = m₂ := by
+    have hl : h.stage + 2 ≤ ms.length := hlen ▸ stage_le_off h _
     have hms' : (run FlockDeploy.sha512 P (V h) x w r).msgs = ms ++ rest' := hms
     have hm : (run FlockDeploy.sha512 P (V h) x w r).msgs =
-        (seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest).msgs := congrArg Seen.msgs hseen
-    rw [← List.take_append_of_le_length hl (l₂ := rest'), ← hms', hm]
-    all_goals rfl
+        (seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest).msgs := congrArg Seen.msgs hseen
+    rw [← getD_fst_pre h ms rest' (by omega), ← hms', hm]
+    exact seenAt_stmts h
   have hxS : xS = unitStmt h m₂ u := by
     have e : (deploy _root_.Flock.Readable.relation (code h)).session x u
         (run FlockDeploy.sha512 P (deploy _root_.Flock.Readable.relation (code h)).V x w r).seen =
-          some (stmtAt h (((ms.take 3).map Prod.fst).getD 2 []) (templateOf h.ms u),
+          some (stmtAt h (((ms.take (h.stage + 2)).map Prod.fst).getD (h.stage + 1) []) (templateOf h.ms u),
             cutSeen [] (k₀ h (templateOf h.ms u)) rest') := hses
     rw [hsess, h3] at e
     exact (Prod.mk.inj (Option.some.inj e)).1
@@ -238,36 +238,30 @@ theorem sessionOpensTwo_wired (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) 
   obtain ⟨m₀, m₁, m₂, rest, hseen, hok, hxS, hum⟩ :=
     run_checked h P x w r hx0 hacc (checked_slot_wired h ω keep _root_.Flock.Readable.relation hu) hsess
   have hseen' : (run FlockDeploy.sha512 P (deploy _root_.Flock.Readable.relation (codeWired h ω keep true)).V x w
-      r).seen = seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest := hseen
+      r).seen = seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest := hseen
   rw [hxS] at hck
   obtain ⟨b, ρ, rb, hb, hρ, hrb, hcor⟩ := hs x s (membersPart h.ms) d m₀ m₁ m₂ (r ⟨0, k_pos h x⟩)
-    (r ⟨1, one_lt_k h x⟩) rest wF u hx0 rfl h2 hin hok hum hck
-  have hseq : ({ s with prog := bitsProgs h.ms } : AuditStatement) = s :=
-    congrArg (fun p => ({ s with prog := p } : AuditStatement)) (parse_prog h hx0).symm
+    (stageCoins h x r) rest wF u hx0 rfl h2 hin hok hum hck
   refine ⟨cutBlock ω b, ρ, cutBlock ω rb,
     (Partition.cut_getElem? (membersPart h.ms) ω u).trans (congrArg (Option.map (cutBlock ω)) hb),
     replayOf_cut ω hin.2.2.1 hW.stays hρ,
     (Partition.cut_getElem? d.part ω ρ).trans (congrArg (Option.map (cutBlock ω)) hrb), fun val ι hv => ?_⟩
   rw [hseen'] at hv
-  have e := hcor val ι fun q hq hop => by
-    have hq' : q ∈ revealWired h ω keep h.frame { s with prog := bitsProgs h.ms } u
-        (seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest) wF := by
-      rw [hseq]
-      exact hq
-    exact hv q hq' hop
+  have e := hcor val ι hv
   rw [parse_prog h hx0] at e
   exact e
 
 /-! ## Knowledge soundness -/
 
-/-- **Two-stage knowledge soundness at the wired code, where the check passes**: `ksTwo_atOrder` at
+/-- **Two-stage knowledge soundness at the wired code, where the check passes**: `ksTwo_stage` at
 `codeWired h ω keep true`, from the map's rewiring the members' programs and the session statements' openings at the
 wired program. -/
 theorem ksTwo_wired (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) ω keep) (hs : StmtOpensWired h ω keep) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeWired h ω keep true) iroots
       (twoGated h ω true) (rsWired h ω keep true) (cap h)).KS FlockDeploy.sha512 :=
-  SamplingDeploy.ksTwo_atOrder (baseWired h ω keep true) (reg h) (twoGated h ω true) (fun _ => L) (fun _ => L)
-    (orderWired h ω keep true) (fun _ => coinByte) (fun _ => coinByte) iroots (cap h) callsUniform callsUniform
+  SamplingDeploy.ksTwo_stage (baseWired h ω keep true) (reg h) (twoGated h ω true) (fun _ => L)
+    (fun _ => h.stage * L) (fun _ => coinByte) (fun _ => h.stage) (stageOrderWired h ω keep true)
+    (fun _ => stageByte) iroots (cap h) callsUniform (stageUniform h.stage)
     (regMatchesTwo_wired h hW) (refusesTwo_wired h hW _) (replayCap_wired h hW _) (interiorFixed h _)
     (sessionRunsTo_wired h ω keep _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_wired h ω keep)
     (sessionOpensTwo_wired h hW hs)

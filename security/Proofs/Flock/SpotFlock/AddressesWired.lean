@@ -11,20 +11,20 @@ an accepted run (`AddressesAt.lean`): every gate a proof block needs is committe
 under the statement's roots, while round 2 reads a session's own ports, and a wired read, off the interior record.
 
 `AddressesWired h ω keep` is the same property read at the members' programs wired by `ω`, returning `keep`
-(`Prog.wired`), each proof block and replay block cut to the gates `ω` leaves alone (`cutBlock`). A run and its
-checked unit are the verifier's own, side by side (`CheckedRun.Ok`): the verifier's checks don't change. What changes
-is which gates a unit needs and which roots each is opened under.
+(`Prog.wired`), each proof block and replay block without the gates `ω` moves (`cutBlock`). A run and its checked
+unit are the verifier's own, side by side (`CheckedRun.Ok`): the verifier's checks don't change. What changes is
+which gates a unit needs and which roots each is opened under.
 
-* **The gates.** A cut block needs gate `g` at the wired program only where the block needs, side by side, a gate
+* **The gates.** A proof block needs gate `g` at the wired program only where it needs, side by side, a gate
   `i` with `ω i = g` (`Prog.needs_wired`): `g` itself where the unit writes it or reads it as a block input, and the
   unit's own source gate `i` where the unit reads `g` through a wire. The unit's session holds `i`, so an address is
   a side-by-side gate's: its row is read at `i` (`RowAt` at `i`), in the port that holds `i`, and its place and slot
   are those of `ω i`. Two gates of one unit that the wiring sends to one gate each have their own port and the one
   place and slot.
-* **The roots** (`CheckedRun.rootsWired`): the replay block's, where `g` is a gate of the replay block, cut, that the
-  wired program doesn't commit as that block sees it; else the statement's. A written bit that only units of its own
-  replay block read through wires, and that the wired program doesn't return, is such a gate; an input no wire moves
-  and a returned output are not.
+* **The roots** (`CheckedRun.rootsWired`): the replay block's, where `g` is a gate of the replay block that `ω`
+  leaves alone and the wired program doesn't commit as that block sees it; else the statement's. A written bit that
+  only units of its own replay block read through wires, and that the wired program doesn't return, is such a gate;
+  an input no wire moves and a returned output are not.
 * **The slot.** One slot a gate serves every unit that needs it, the unit that writes it and each unit that reads
   it, so an address's slot is held to the entry round 2 reads, not to the way a session names it: under the gate's
   roots the slot names the entry the read's key names (`entryAt … = keyAt …`), with the read's leaf count
@@ -45,11 +45,12 @@ variable (h : Held) (ω : ℕ → ℕ) (keep : ℕ → Bool)
 
 namespace CheckedRun
 
-variable (r : CheckedRun)
+variable (r : CheckedRun h.stage)
 
+variable {h} in
 /-- **The roots the wired program opens gate `g` of the unit under**: its replay block's, where `g` is a gate of the
-replay block, cut, that the wired program doesn't commit as that block sees it; the statement's otherwise
-(`Reveal.rootsAt`, at the wired program and the cut replay block). -/
+replay block that `ω` leaves alone and the wired program doesn't commit as that block sees it; the statement's
+otherwise (`Reveal.rootsAt`, at the wired program and the replay block without the gates `ω` moves). -/
 def rootsWired (g : ℕ) : List Msg :=
   if g ∈ cutBlock ω r.rb ∧ (r.s.prog.wired ω keep).Boundary (cutBlock ω r.rb) g = false then
     iroots r.x r.seen r.ρ
@@ -75,8 +76,8 @@ def ReadsRegisteredWired (S : Address) (g : ℕ) : Prop :=
           positions.getD (_root_.Flock.Registered.ref t r.sts[0]!.c.ports.size (S.port r.u) (r.n h)) 0
 
 /-- **The address's port reads the interior record, at the wired program's gate `g`**: no registered read is named
-like the unit's port, the session has one table, `g` is a gate of the unit's replay block, cut, that the wired
-program doesn't commit as that block sees it, and under the replay block's roots the address's slot names the
+like the unit's port, the session has one table, `g` is a gate of the unit's replay block that `ω` leaves alone and
+the wired program doesn't commit as that block sees it, and under the replay block's roots the address's slot names the
 template's port of the interior record; over any population the session's public file loads, the slot has the
 published tree's schema, its leaf count is the tree's and its leaf (`leafAt`) the drawn unit's row. -/
 def ReadsInteriorWired (S : Address) (g : ℕ) : Prop :=
@@ -112,7 +113,7 @@ place and slot; so has a unit that reads it and the unit that writes it. -/
 def AddressesWired : Prop :=
   ∃ addr : ℕ → Address,
     (∀ i, (addr i).place = (addr (ω i)).place ∧ (addr i).slot = (addr (ω i)).slot) ∧
-      ∀ r : CheckedRun, r.Ok h → ∀ i, r.s.prog.Needs r.b i → r.AddressHoldsWired h ω keep (addr i) i (ω i)
+      ∀ r : CheckedRun h.stage, r.Ok h → ∀ i, r.s.prog.Needs r.b i → r.AddressHoldsWired h ω keep (addr i) i (ω i)
 
 /-! ## The entry a writer and its readers name -/
 
@@ -141,7 +142,7 @@ def fanWire (i : ℕ) : ℕ := if i = 4 then 1 else if i = 5 then 3 else if i = 
 /-- What the wired program returns: the reader's output. -/
 def fanKeep (g : ℕ) : Bool := g == 7
 
-/-- **What the three cut blocks need at the wired program**: each writer its input and its output, the reader its
+/-- **What the three proof blocks need at the wired program**: each writer its input and its output, the reader its
 output and the two writers' outputs, the first's twice, once for each of its own gates wired to it. -/
 theorem fanProg_needs :
     (fanProg.wired fanWire fanKeep).needsList (cutBlock fanWire [0, 1]) = [0, 1] ∧
@@ -149,7 +150,7 @@ theorem fanProg_needs :
       (fanProg.wired fanWire fanKeep).needsList (cutBlock fanWire [4, 5, 6, 7]) = [7, 1, 3, 1] := by
   decide
 
-/-- **Which of them the cut replay block commits at the wired program**: the writers' inputs and the reader's
+/-- **Which of them the replay block commits at the wired program**: the writers' inputs and the reader's
 output; the two wired gates, the writers' outputs, it does not, so every unit that needs one opens it under the
 replay block's roots. -/
 theorem fanProg_boundary :
@@ -172,7 +173,8 @@ theorem fanProg_sideBySide :
 /-- **The roots at the instance**: at a run whose statement's program is the three members' and whose unit's replay
 block holds them, the wired program opens the two wired gates under the replay block's roots, and the writers'
 inputs and the reader's output under the statement's. -/
-theorem rootsWired_fanProg (r : CheckedRun) (hp : r.s.prog = fanProg) (hrb : r.rb = [0, 1, 2, 3, 4, 5, 6, 7]) :
+theorem rootsWired_fanProg (r : CheckedRun h.stage) (hp : r.s.prog = fanProg)
+    (hrb : r.rb = [0, 1, 2, 3, 4, 5, 6, 7]) :
     r.rootsWired fanWire fanKeep 1 = iroots r.x r.seen r.ρ ∧ r.rootsWired fanWire fanKeep 3 = iroots r.x r.seen r.ρ ∧
       r.rootsWired fanWire fanKeep 0 = r.s.roots ∧ r.rootsWired fanWire fanKeep 2 = r.s.roots ∧
       r.rootsWired fanWire fanKeep 7 = r.s.roots := by
