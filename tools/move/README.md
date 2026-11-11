@@ -6,7 +6,7 @@ root, and refuses a dirty worktree; a second run changes nothing.
 
 | Tool | What it does |
 |---|---|
-| `stage.py` | Stages a move on a base: one commit per map, each certified by `move_check.py` and rerun to check it changes nothing, for its lander (`MAP...`, `--base`, `--branch`, `--push`, `--certificate`). |
+| `stage.py` | Stages a move on a base: one commit per map, each certified by `move_check.py` and rerun to check it changes nothing, for its PR (`MAP...`, `--base`, `--branch`, `--push`, `--certificate`). |
 | `layout.py` | Moves the paths a layout map names and rewrites every path, module name, import, pyproject and anchor that pointed at them (`--dry-run`, `--modules`, `--resolve M`). |
 | `layout_maps.py` | Writes the layout as one map, `layout_one_map.toml` (or, by `--form moves`, as one map a move in the order they run, `layout_NN_NAME_map.toml`), from `layout_maps.json` (each moved component's new directory and files) and the files HEAD tracks; it fails on a tracked file with no destination, so it is the one rerun when `main` moves (`--form`, `--ref`, `--targets`, `--created`). |
 | `rename.py` | Renames the words a word map names, in paths, modules, Lean names and prose, leaving the Lean locks' records for `tools/verity/lean/check.py --update --moved` and sorting again a sorted JSON object whose keys it renames (`--map MAP`, `--dry-run`, `--moves`). |
@@ -57,8 +57,8 @@ A move lands alone, as one commit per map on the commit it was made on. Its lead
    ends in its move line, `Move: MAP` or `Layout-move: MAP`, certifies it with the base's `move_check.py PARENT COMMIT`,
    and runs the map again to check that changes nothing. Nothing in the checkout changes but the new branch, pushed and never forced.
    `--certificate` writes each commit's `move_check.py --json` report;
-3. hands the lander the branch and the command `stage.py` printed for each commit, `verity check move PARENT COMMIT`
-   (`move_check.py`, which exits 0 on a pure move, 1 naming what isn't).
+3. opens the move's PR from the branch, naming in its body the command `stage.py` printed for each commit, `verity check
+   move PARENT COMMIT` (`move_check.py`, which exits 0 on a pure move, 1 naming what isn't).
 
 Over the whole tree `rename.py` and `move_check.py` each run for minutes, so the lead stages on a node, from a checkout at
 the window's base. The node's clone can't push and its git has no identity (`stage.py` refuses before running), so the
@@ -71,10 +71,8 @@ run names one and bundles the branch into its outputs, and the lead pushes it fr
     research fetch RUN --all && git fetch ~/.research/runs/RUN/out/move.bundle BRANCH:BRANCH && git push -u origin BRANCH
 
 If `main` moves before the move lands, the lead stages it again on the new `main`: the map reruns over whatever landed
-since. A word map can also go through the queue, as a PR whose body says `Move: tools/move/NAME.toml`: drive regenerates
-its move on the tip below it with `checked`'s scripts, as `stage.py` does with its base's, lands it only if certified
-(the team skill's "Landing"), and restacks `next`'s members across it. Drive knows only the moves it regenerated: a move
-landed outside the queue leaves each open branch, `next`'s members among them, to cross it with `restack.py`.
+since. A move's PR, whose body says `Move: tools/move/NAME.toml`, goes through the queue as any PR does, on a land
+verdict (the team skill's "Landing"); once it lands, each open branch crosses it with `restack.py`.
 
 `stage.py` refuses (exit 1) a map outside this directory or missing at the commit it would run on, a map with both
 `[words]` and `[paths]` or neither (a move that needs both stages two maps), a map with `[[words_in]]` and no `[words]`
