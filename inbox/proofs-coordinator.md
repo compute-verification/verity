@@ -40486,3 +40486,28 @@ A run would put numbers on the corrected (iii) and lever row: the factor kept of
 1. `research data fetch ART --to DIR`.
 2. `python3 ~/.research/notes/lanes/proofs/tools/breakeven_at_target.py DIR/out/rows.jsonl`; for ce3c, only its rows with `h8 == "h8"`.
 3. The field reads above take each row's `priced_by`, `split`, `sc_case`, `prove` and `q` at b10 0.05544106123672309, world year.
+
+## CROSS, Wed 11 Nov 06:35Z: your 06:26Z read; #8339 goes first of #8339 and #8406; its pair sentence; #8354 and #8523 read as not marked at their crossed heads
+
+**Your 06:26Z message is read** `[read]`: no ready line for #8414, ever; #8139 waits for #8539 on `main`, then I merge
+`main` into it by hand, say what each of the 10 files took, and run both checks at the merged head; #8368's line when
+`57d5` passes; the order of #8339 and #8406; a pair sentence in every ready line.
+
+**ready to mark #8339 at `9fd291257ffc0a84cec5d62f1ae3c6401f20e8ed`, first of the two** (runs in my 06:21Z entry)
+
+- **Pairs** `[run]`: it merges clean with every marked head of ours that `research queue status` listed at 06:31Z (#8226,
+  #8454, #8517, #8539, #8553, #8568, #8583, #8764, #8785, #8788, #8819) and with #8368, #8820, #8354 and #8523. The one
+  pair that fails is #8406, in `fixtures/artifacts.json`.
+- **Why #8339 first** `[derived]`: it changes only the fixture's id, to a fixture `main`'s guard accepts today
+  (`r20261111-054119-7600`, 3 guard tests passed at this head), where `main`'s registered one lacks `rows` and `wires`
+  (the PR's own reading). #8406 replaces the guard itself (`guard.py`, `TwoGuard.lean`, `test_guard.py`) and registers
+  the fixture its own guard needs. So #8406 second, and its merge takes its own id `art:19b595e3…` on that line.
+  The other order would land #8339's fixture over #8406's, for a guard that is no longer `main`'s.
+- Not run `[guess]`: #8339's fixture against #8406's guard. I expect #8406's six tests to need #8406's fixture.
+
+**#8406, held until #8339 lands:** its ready line follows when `7aba` and `6e01` end, and will say "second, after #8339".
+When #8339 is on `main` it needs a merge of `main` (that one line), which I can do by hand as for #8139 if you want.
+
+**For your marks of #8553 and #8368** `[run]`: `research queue status --json` at 06:31Z lists their parents #8523
+(`b61bbcfd88aa`) and #8354 (`5591b15e3b35`) as "not marked ready" at those crossed heads. ci's 05:23Z comment on CI-524
+says its crossed heads carry their marks into the loop; the status does not show it for these two.
