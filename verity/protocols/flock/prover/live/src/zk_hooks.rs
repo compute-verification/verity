@@ -18,7 +18,8 @@
 //!
 //! The Merkle leaf salts of `hm96-sha512/v1` are [`LeafSalts`]'s: the OS's bytes too, read tree by tree (decision 4(a)). With an
 //! injected seed they are a ChaCha20 expansion of that seed instead, so a test proof is reproducible. The hm96 key is not prover
-//! randomness at all: it is the statement's constant (`circuit::leaf_scheme`).
+//! randomness at all: it is the statement's constant (`circuit::leaf_scheme`). The one exception a session can ask for is a
+//! tree whose leaves hide nothing ([`LeafSalts::expand_from_key`]): its salts are a ChaCha20 expansion of a key read from the OS.
 //!
 //! [`Hooks`] is where M1's masking goes: a sumcheck round hook (`+ρ·g`), the Reed–Solomon padding `t_pad` of each Ligerito
 //! level, a permutation of the claim points, and the mask slot's fill. [`NoMask`] implements them as the identity, and
@@ -81,9 +82,18 @@ impl ProverSeed {
 /// until the device's tree takes them (zeroed if dropped first). Salts are never written to a record. An
 /// injected seed (a test harness only) expands them with ChaCha20 instead, leaf `i` of tree `id` being blocks
 /// `3i, 3i + 1, 3i + 2` under its `STREAM_SALT` key with nonce `id` ([`chacha20_block`]), so a test proof repeats.
+///
+/// A session can name trees whose samples expand a key ([`LeafSalts::expand_from_key`]): each sample of such a tree reads one
+/// 32-byte key from the OS and expands it as an injected seed's key is expanded, so the tree costs the OS 32 bytes where every
+/// other tree costs 192 a leaf. A rep's Ligerito levels after level 0 commit functions of the restarted table, which is
+/// uniform, so their leaves hide nothing and naming them changes no hiding argument; the unopened leaves of level 0's tree and
+/// of a pads tree hide their columns, so naming one of those makes its hiding rest on the expansion. No session names a tree
+/// unless asked to: the statement's `leaf_scheme` says every tree's salts are the OS's bytes.
 pub struct LeafSalts {
     /// an injected seed's salt key (on the heap, so moving a `LeafSalts` copies no key byte); `None` in every proving build
     key: Option<Box<[u8; 32]>>,
+    /// the trees whose samples expand a key of their own, read from the OS
+    keyed: std::sync::Arc<std::collections::BTreeSet<u64>>,
     /// the trees kept
     kept: std::sync::Arc<std::sync::Mutex<Kept>>,
     /// the trees read ahead
@@ -94,6 +104,8 @@ pub struct LeafSalts {
 
 /// Bytes per `getrandom` call when [`LeafSalts`] reads a tree's salts.
 pub const OS_PIECE: usize = 1 << 16;
+/// Leaves per piece when a key's salts are expanded on rayon's threads.
+pub const KEY_PIECE: usize = 1 << 10;
 
 #[derive(Default)]
 struct Kept {
@@ -145,7 +157,14 @@ impl LeafSalts {
             r.fill_bytes(&mut key[..]);
             key
         });
-        LeafSalts { key, kept: Default::default(), ahead: Default::default(), next: 1, level0: 0 }
+        LeafSalts { key, keyed: Default::default(), kept: Default::default(), ahead: Default::default(), next: 1, level0: 0 }
+    }
+
+    /// Names `trees` (ids): from here each sample of one reads a 32-byte key from the OS and expands it (leaf `i` is ChaCha20
+    /// blocks `3i, 3i + 1, 3i + 2` under the key with nonce the tree's id), in place of reading its leaves' bytes. Handles made
+    /// before this call ([`Self::ahead`]) keep the trees named before it.
+    pub fn expand_from_key(&mut self, trees: impl IntoIterator<Item = u64>) {
+        self.keyed = std::sync::Arc::new(trees.into_iter().collect());
     }
 
     /// Table `table`'s salts in a session of several tables: the level-0 tree `table << TABLE_SHIFT` and every later tree the
@@ -153,7 +172,8 @@ impl LeafSalts {
     pub fn table(&self, table: u64) -> LeafSalts {
         assert!(table < 1 << TABLE_SHIFT, "a table index below 2^{TABLE_SHIFT}");
         let level0 = table << TABLE_SHIFT;
-        LeafSalts { key: self.key.clone(), kept: Default::default(), ahead: Default::default(), next: level0 + 1, level0 }
+        LeafSalts { key: self.key.clone(), keyed: Default::default(), kept: Default::default(), ahead: Default::default(), next: level0 + 1,
+                    level0 }
     }
 
     /// The level-0 tree's id (both reps of a table bind its one root).
@@ -194,7 +214,7 @@ impl LeafSalts {
     /// Writes tree `id`'s salts into `b`, whole leaves, from the source its sample reads, on the current rayon pool: a tree
     /// read before its session samples it (level 0's, for [`Self::set_level0`]).
     pub fn fill(&self, id: u64, b: &mut [u8]) {
-        fill_salts(self.key.as_deref(), id, b)
+        fill_salts(self.key.as_deref(), self.keyed.contains(&id), id, b)
     }
 
     /// The salts of the next trees from here, sampled elsewhere (the Lean finish's for a firewalled rep's levels ≥ 1,
@@ -233,33 +253,43 @@ impl LeafSalts {
     }
 
     fn draw(&self, id: u64, leaves: usize) -> Vec<u8> {
-        draw_salts(self.key.as_deref(), id, leaves)
+        let mut b = vec![0u8; leaves * SALT_BYTES];
+        self.fill(id, &mut b);
+        b
     }
 
     /// A handle that reads this table's trees ahead of their first sample, from another thread ([`SaltsAhead::draw`]).
     pub fn ahead(&self) -> SaltsAhead {
-        SaltsAhead { key: self.key.clone(), kept: self.kept.clone(), ahead: self.ahead.clone(), level0: self.level0 }
+        SaltsAhead { key: self.key.clone(), keyed: self.keyed.clone(), kept: self.kept.clone(), ahead: self.ahead.clone(), level0: self.level0 }
     }
 }
 
-fn draw_salts(key: Option<&[u8; 32]>, id: u64, leaves: usize) -> Vec<u8> {
-    let mut b = vec![0u8; leaves * SALT_BYTES];
-    fill_salts(key, id, &mut b);
-    b
-}
-
-/// Writes every byte of `b`, whole leaves: tree `id`'s salts, on the current rayon pool.
-fn fill_salts(key: Option<&[u8; 32]>, id: u64, b: &mut [u8]) {
-    use rayon::prelude::{IndexedParallelIterator, ParallelIterator, ParallelSliceMut};
+/// Writes every byte of `b`, whole leaves: tree `id`'s salts, on the current rayon pool. `keyed`: a proving build reads one
+/// 32-byte key from the OS for this sample and expands it ([`LeafSalts::expand_from_key`]).
+fn fill_salts(key: Option<&[u8; 32]>, keyed: bool, id: u64, b: &mut [u8]) {
     assert_eq!(b.len() % SALT_BYTES, 0, "a tree's salts are whole {SALT_BYTES}-byte leaves");
     match key {
-        Some(key) => b.par_chunks_mut(SALT_BYTES).enumerate().for_each(|(i, s)| {
-            for j in 0..3 {
-                s[64 * j..64 * j + 64].copy_from_slice(&chacha20_block(key, 3 * i as u64 + j as u64, id));
-            }
-        }),
+        Some(key) => expand_salts(key, id, b),
+        None if keyed => {
+            let mut key = [0u8; 32];
+            os_fill(&mut key);
+            expand_salts(&key, id, b);
+            zero(&mut key);
+        }
         None => os_fill(b),
     }
+}
+
+/// Tree `id`'s salts under `key`: leaf `i` is ChaCha20 blocks `3i, 3i + 1, 3i + 2` with nonce `id` ([`chacha20_block`]), bytes
+/// `[192 i, 192 i + 192)` of the key's stream `id`, written in [`KEY_PIECE`]-leaf pieces on rayon's threads.
+fn expand_salts(key: &[u8; 32], id: u64, b: &mut [u8]) {
+    use rayon::prelude::{IndexedParallelIterator, ParallelIterator, ParallelSliceMut};
+    b.par_chunks_mut(KEY_PIECE * SALT_BYTES).enumerate().for_each(|(p, piece)| {
+        let mut r = ChaCha20Rng::from_seed(*key);
+        r.set_stream(id);
+        r.set_word_pos((p * KEY_PIECE * SALT_BYTES / 4) as u128);
+        r.fill_bytes(piece);
+    });
 }
 
 /// Reads a table's trees before the prover samples them ([`LeafSalts::ahead`]), so the device's tree callbacks find their salts
@@ -269,6 +299,7 @@ fn fill_salts(key: Option<&[u8; 32]>, id: u64, b: &mut [u8]) {
 /// ahead, so the tap's reads keep the prover's order.
 pub struct SaltsAhead {
     key: Option<Box<[u8; 32]>>,
+    keyed: std::sync::Arc<std::collections::BTreeSet<u64>>,
     kept: std::sync::Arc<std::sync::Mutex<Kept>>,
     ahead: std::sync::Arc<Ahead>,
     level0: u64,
@@ -290,7 +321,7 @@ impl SaltsAhead {
             if drawn.contains_key(&t) || !planned().contains(&t) {
                 continue;
             }
-            let b = buf(t.1 * SALT_BYTES, &mut |b| fill_salts(self.key.as_deref(), t.0, b));
+            let b = buf(t.1 * SALT_BYTES, &mut |b| fill_salts(self.key.as_deref(), self.keyed.contains(&t.0), t.0, b));
             assert_eq!(b.len(), t.1 * SALT_BYTES, "a tree's buffer holds its leaves");
             drawn.insert(t, b);
         }
@@ -324,10 +355,18 @@ pub fn os_source_set() -> bool {
     OS_SOURCE.get().is_some()
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The bytes this thread has asked the OS for ([`os_fill`]'s callers), for a test's count of what a sample reads.
+    static OS_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// `out` read from the OS: from [`set_os_source`]'s source if one is set, else `getrandom` in [`OS_PIECE`]-byte pieces on
 /// rayon's threads.
 fn os_fill(out: &mut [u8]) {
     use rayon::prelude::{ParallelIterator, ParallelSliceMut};
+    #[cfg(test)]
+    OS_BYTES.with(|n| n.set(n.get() + out.len()));
     if let Some(s) = OS_SOURCE.get() {
         return (s.lock().unwrap_or_else(std::sync::PoisonError::into_inner))(out);
     }
@@ -674,6 +713,54 @@ mod tests {
         }
         assert_eq!(LeafSalts::for_seed(&seed).expand(7, 5), all);
         assert_eq!(*s.level0(3), LeafSalts::for_seed(&seed).expand(0, 3));
+    }
+
+    /// A key's salts written in pieces are the leaf-by-leaf ones: leaf `i` of tree `id` is blocks `3i..3i+2` under the key with
+    /// nonce `id`, at a piece's first and last leaves and in a last piece that is not whole.
+    #[test]
+    fn a_key_expands_in_pieces_as_leaf_by_leaf() {
+        let key: [u8; 32] = std::array::from_fn(|i| 3 * i as u8 + 1);
+        let leaves = 2 * KEY_PIECE + 3;
+        let id: u64 = 5 | 2 << TABLE_SHIFT;
+        let mut b = vec![0u8; leaves * SALT_BYTES];
+        expand_salts(&key, id, &mut b);
+        for i in [0, 1, KEY_PIECE - 1, KEY_PIECE, 2 * KEY_PIECE - 1, 2 * KEY_PIECE, leaves - 1] {
+            let want: Vec<u8> = (0..3).flat_map(|j| chacha20_block(&key, 3 * i as u64 + j, id)).collect();
+            assert_eq!(b[SALT_BYTES * i..SALT_BYTES * (i + 1)], want, "leaf {i}");
+        }
+    }
+
+    /// A tree a session names ([`LeafSalts::expand_from_key`]) costs the OS one 32-byte key a sample, whatever its leaves, read
+    /// ahead or not, where every other tree costs 192 bytes a leaf; two samples of it take two keys, so they share no salt.
+    #[test]
+    fn a_keyed_tree_reads_one_key_from_the_os() {
+        let os_bytes = || OS_BYTES.with(|n| n.get());
+        let leaves = KEY_PIECE + 3;
+        let mut s = LeafSalts::for_seed(&ProverSeed::from_os());
+        let (pads, upper, ahead) = (s.next_id(), s.next_id(), s.next_id());
+        s.expand_from_key([upper, ahead]);
+        let mut seen = std::collections::BTreeSet::new();
+        let mut read = |tree: &dyn Fn() -> Vec<u8>, want: usize, what: &str| {
+            let at = os_bytes();
+            let b = tree();
+            assert_eq!(os_bytes() - at, want, "{what}");
+            assert_eq!(b.len(), leaves * SALT_BYTES);
+            assert!(b.chunks(SALT_BYTES).all(|c| seen.insert(c.to_vec())), "a salt read twice");
+        };
+        read(&|| s.expand(upper, leaves), 32, "a keyed tree reads its key");
+        read(&|| s.expand(upper, leaves), 32, "its second sample reads another key");
+        let read_ahead = || {
+            s.ahead().draw(&[(ahead, leaves)], &mut fresh);
+            s.expand(ahead, leaves)
+        };
+        read(&read_ahead, 32, "a keyed tree read ahead reads its key");
+        read(&|| s.expand(pads, leaves), leaves * SALT_BYTES, "a tree not named reads its leaves");
+        read(&|| s.level0(leaves).to_vec(), leaves * SALT_BYTES, "level 0 reads its leaves");
+        let mut t = s.table(3);
+        let other = t.next_id();
+        read(&|| t.expand(other, leaves), leaves * SALT_BYTES, "another table names its own trees");
+        t.expand_from_key([t.level0_id()]);
+        read(&|| t.level0(leaves).to_vec(), 32, "level 0 named reads its key");
     }
 
     /// Table 0 of a session of several tables reads a one-table session's words and salts; every other table reads none of
