@@ -22783,11 +22783,12 @@
    }
   },
   "PouwPearlPlus.Open": {
-   "digest": "caa78fe3e7fe32821562f62330754fb66ac5e7b6e9cc29bd57aed94c73f8ecd1",
+   "digest": "122460cf8f9a74c60862415b2559d64d690d9d0f7391ff030ee6473b6e320cc8",
    "definitions": {
     "PouwCheck.PearlPlus.f32Row": "ebafc87193fd06ce5495cb0f7947b5a862c6f3382f9b8381d1692a03b8545c2a",
+    "PouwCheck.PearlPlus.f32Slice": "3eaa72f6fd9c168a4e7cfb9c91f2bfc993d1a99a9ef1d64a415ca514b919cec3",
     "PouwCheck.PearlPlus.held": "b49af1ddce11d61c2db098e685217fe9cf262f557482599864bf2e9c056d70aa",
-    "PouwCheck.PearlPlus.opening": "eedd88b1e95263050df29ffdb61c48dec16399d603a34232ea825988ed4d2cd3",
+    "PouwCheck.PearlPlus.opening": "57c5c98269bb019609a5791222955a6e8e0b20756a73354b98180c48f2331e1c",
     "PouwCheck.PearlPlus.pathOf": "b44bf063c726f336a16d78e056f31ba86fadd781a3326a63d32aef0ed7e69974",
     "PouwCheck.PearlPlus.pow2": "333d09a1ef4fc3f2c31534f8c02852d1ceed5822b77bc0a9382503030c7a25e2",
     "PouwCheck.PearlPlus.str?": "159a502acca88c21397ca6e3532231dfb8d859b23dfbf92c8c8cb406297270ab",
@@ -22895,7 +22896,7 @@
    }
   },
   "PouwPearlPlus.Rule": {
-   "digest": "c008668f821e8b336649cf8a27fffc23ba0550d0de88d8dc0fca2aed44c51df3",
+   "digest": "04adf3501d37ff1c50fecf17fc430e2c2580edfe2fcdb45a575dbf87379e650a",
    "definitions": {
     "PouwCheck.PearlPlus.Rule.CAP_DEN": "99dcb14c409cf24823be6faeb0ce2eb4a67dd8441c5a8815c2dcf0cabe8d06f9",
     "PouwCheck.PearlPlus.Rule.CAP_NUM": "471ae5289d0a8b40f7bccbe5a2dd8b12ad09bbeb273613eded437d14b08ee837",
@@ -22943,7 +22944,7 @@
     "PouwCheck.PearlPlus.Rule.wordFlags": "6a3b9e1d4f134c1fdc245627f0825e007db0f90fa4ef721e1b5651adcd073270",
     "PouwCheck.PearlPlus.Rule.wordOf": "59f22e81d7759763b8a444399cc4be5098945d4d66510ff3e383824b31a0ddfd",
     "PouwCheck.PearlPlus.Rule.yOf": "6c59b7797b83c9805b27efd1f6181366fecbb3c8404e716ded32b4c1b3ad20f6",
-    "PouwCheck.PearlPlus.Rule.yReason": "5bcacbae442983aeaee5585e03be9e591f130905fb012b0a1121e377607b153f"
+    "PouwCheck.PearlPlus.Rule.yReason": "7c76a9273dd746d0df2950c69117e311011942e6c4f11cbe13094c913fe71409"
    }
   },
   "PouwPearlPlus.Run": {
