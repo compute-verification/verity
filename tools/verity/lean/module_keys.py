@@ -437,7 +437,8 @@ def step(level: int, how: How) -> int:
 def loads(mod: str, keyed: dict[str, Key]) -> dict[str, int]:
     """{module: its level} for each workspace module the compile of ``mod`` loads: every module a legacy file imports,
     transitively, at ALL, since Lean loads a legacy file's imports at the private level, and a `module` file's as `step`
-    walks them from it."""
+    walks them from it over `keys`' folded imports (`How`), which may hold a module for its code that Lean loads no
+    code of (`indexable`)."""
     k = keyed[mod]
     if not k.module:
         return dict.fromkeys(k.closure, ALL)
@@ -682,11 +683,18 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package],
               owners: dict[tuple[str, str], str | None] | None = None) -> str | None:
     """Why ``mod``'s build may not be indexed under its key, or None: Lake read its header as `keys` did. Its
     `<module>.setup.json` names it and the package `keys` found it in, and the workspace modules there (`importArts`, an
-    `.olean` under the build of one of ``pkgs``, the workspace's packages) are the modules its key reads (`loads`), each
-    built in the package `keys` found it in. Lake hands a compile the modules Lean will load (`fetchTransImportArts`,
-    `Lake/Build/Module.lean`): every module a legacy file imports, transitively, and of a `module` file's imports
-    those its own imports and their `public import`s reach, with all that a `meta import` or an `import all` needs
-    below them. What an import of a `module` file imports privately is not among them, and the key doesn't read it.
+    `.olean` under the build of one of ``pkgs``, the workspace's packages) are modules its key reads (`loads`), each
+    built in the package `keys` found it in, and every module its key reads but one it reads for its code alone. Lake
+    hands a compile the modules Lean will load (`fetchTransImportArts`, `Lake/Build/Module.lean`; `importModulesCore`,
+    `Lean/Environment.lean`): every module a legacy file imports, transitively, and of a `module` file's imports those
+    its own imports and their `public import`s reach, every import below one loaded for its code, private ones
+    included, and every import of one an `import all` reaches. `loads` reads no less but may read more code, since
+    `keys` folds a module's imports of one module into one (`How`): a `public import M` beside a private `meta import M`
+    reads as `public meta import M`, so what M imports privately is read for its code, which Lean loads only where that
+    `meta import` is the compiled module's own. Stepping each import alone would read what Lean loads exactly, and move
+    the key of every module above such a pair. Lean reads the IR of a module it needs and wasn't handed from
+    `LEAN_PATH`, the build's own (`loadIR`), as it does where Lake's walk reaches a module it took through an `import
+    all` again through a `meta import` and leaves out what that needs: the key reads that IR either way.
     Every other module there is a fetched package's, one the module's own package fetches, read where the key's root
     pins it (`pinned_as`, ``pkgs[0]`` being the root's package). ``owners`` holds, for one build's calls and by the
     module's package, the package whose build holds each directory an
@@ -723,10 +731,11 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package],
             return owner.removeprefix(REFUSED)
         if owner is not None:
             built[name(i)] = owner
-    want = set(loads(mod, keyed))
-    if set(built) != want:
-        return f"Lake imports {sorted(set(built) - want)[:3]} and not {sorted(want - set(built))[:3]} of the workspace"
-    if bad := sorted(i for i in want if built[i] != keyed[i].package.name):
+    want = loads(mod, keyed)
+    extra, unhanded = set(built) - set(want), {i for i, level in want.items() if i not in built and level != CODE}
+    if extra or unhanded:
+        return f"Lake imports {sorted(extra)[:3]} and not {sorted(unhanded)[:3]} of the workspace"
+    if bad := sorted(i for i in built if built[i] != keyed[i].package.name):
         return f"{bad[0]} is built in {built[bad[0]]}, not {keyed[bad[0]].package.name}"
     return None
 

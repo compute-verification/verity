@@ -800,9 +800,9 @@ TOY = {"lakefile.toml": 'name = "toy"\ndefaultTargets = ["Toy", "toy"]\n\n[[lean
        "Main.lean": "import Toy\n\ndef main : IO Unit := IO.println (Toy.word 1)\n"}
 
 
-def toy(pkg: Path) -> Path:
-    """`TOY` at ``pkg``, on the fixtures' toolchain."""
-    for name, text in TOY.items():
+def toy(pkg: Path, files: dict[str, str] = TOY) -> Path:
+    """``files`` (`TOY`) at ``pkg``, on the fixtures' toolchain."""
+    for name, text in files.items():
         (pkg / name).parent.mkdir(parents=True, exist_ok=True)
         (pkg / name).write_text(text)
     shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg / "lean-toolchain")
@@ -956,6 +956,61 @@ def test_a_copied_kept_build_the_cache_lacks_is_compiled_once_and_indexed_with_t
     assert json.loads((top / ".lake" / "build" / "lib" / "lean" / "Top.trace").read_text())["synthetic"], "`Top` is restored"
     assert not (store / MK.UNSTORED).exists()
 
+
+#: the smallest shape whose key reads a module for its code that Lake doesn't hand its compile (`module_keys.indexable`):
+#: `Fold.Protocol` imports `Fold.Deployed` by a `public import` and by a private `meta import`, which `keys` folds into one
+#: `public meta import`, and `Fold.Deployed` imports `Fold.Sizes` privately; `Fold` imports `Fold.Protocol`
+FOLD = {"lakefile.toml": 'name = "fold"\ndefaultTargets = ["Fold"]\n\n[[lean_lib]]\nname = "Fold"\n',
+        "lake-manifest.json": json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": [],
+                                          "name": "fold", "lakeDir": ".lake", "fixedToolchain": False}),
+        "Fold.lean": "module\n\npublic import Fold.Protocol\n",
+        "Fold/Protocol.lean": "module\n\npublic import Fold.Deployed\nmeta import Fold.Deployed\n",
+        "Fold/Deployed.lean": "module\n\nimport Fold.Sizes\n\npublic def Fold.deployed : Nat := 1\n",
+        "Fold/Sizes.lean": "module\n\npublic def Fold.size : Nat := 64\n"}
+
+
+def _fold_builds(tmp_path: Path, monkeypatch, tag: str):
+    """(check, lean_audit, the store, `build`): `build(pkg, edit)` is `check.py`'s build of ``pkg`` (staged and settled,
+    built in the sandbox, then put), with ``edit`` run between Lake's build and `put`, and returns (the modules Lake
+    compiled, the stage step's report, the module versions new in the cache, what `put` logged)."""
+    LC, LA = (_load(f"{tag}_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    store = tmp_path / "artifacts"
+    monkeypatch.setattr(LC, "ARTIFACTS", store)
+    n = iter(range(99))
+
+    def build(pkg: Path, edit=lambda: None) -> tuple[set[str], dict, int, list[str]]:
+        cache = store / LA.MK.STAGE / f"test-{next(n)}"
+        got, said = LC.stage_build(LA.MK, pkg, ["Fold"], cache)
+        r = subprocess.run(LC.in_sandbox(pkg, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"]),
+                           cwd=pkg, check=True, capture_output=True, text=True, env=LC.lake_env())
+        assert LA.MK.misrestored(got, pkg) == []
+        shutil.rmtree(cache)
+        edit()
+        logged: list[str] = []
+        new = LA.LakeArtifacts(store).put({pkg: {"sandbox": True}}, log=logged.append)
+        return {m for m, *_ in LC.BUILT.findall(r.stdout + r.stderr)}, said, new, logged
+
+    return LC, LA, store, build
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_module_whose_key_reads_code_lake_did_not_hand_its_compile_is_indexed_and_a_second_tree_compiles_nothing(
+        tmp_path, monkeypatch):
+    """`Fold`'s key reads `Fold.Sizes` for its code, and Lake, which reads `Fold.Protocol`'s `meta import` as Lean does,
+    hands `Fold`'s compile no `Fold.Sizes`. Refused for that and recorded nowhere, `Fold` was compiled in every build of
+    every tree; indexed, a second tree restores every module and compiles none."""
+    LC, LA, store, build = _fold_builds(tmp_path, monkeypatch, "fold")
+    trees = [toy(tmp_path / n / "fold", FOLD) for n in ("build-0", "build-1")]
+    assert LA.MK.loads("Fold", LA.MK.keys(trees[0]))["Fold.Sizes"] == LA.MK.CODE
+    compiled, said, new, logged = build(trees[0])
+    assert (compiled, said["took"], new, logged) == ({"Fold", "Fold.Protocol", "Fold.Deployed", "Fold.Sizes"}, {}, 4, [])
+    ir = trees[0] / ".lake" / "build" / "ir"
+    assert "Fold.Sizes" not in json.loads((ir / "Fold.setup.json").read_text())["importArts"]
+    assert "Fold.Sizes" in json.loads((ir / "Fold" / "Protocol.setup.json").read_text())["importArts"], \
+        "`Fold.Protocol`'s own `meta import` loads `Fold.Deployed`'s code, and so `Fold.Sizes`'"
+    compiled, said, new, logged = build(trees[1])
+    assert (compiled, said["modules"], said["keyed"], new) == (set(), 4, 4, 0)
+    assert not (store / LA.MK.UNSTORED).exists()
 
 #: `Toy.Word` with a function the other versions lack, and the `Main` that calls it
 EXTRA = ('@[noinline] def Toy.extra (n : Nat) : Nat := n + 41\n'

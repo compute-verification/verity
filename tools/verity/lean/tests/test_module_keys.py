@@ -688,6 +688,30 @@ def test_a_module_file_is_indexed_where_lake_handed_its_compile_the_modules_lean
     assert "and not ['R.Q']" in MK.indexable("R.L", keyed, pkgs), "a legacy file loads everything it imports, transitively"
 
 
+#: `R.F` imports `R.D` by a `public import` and by a private `meta import`, which `keys` folds into one `public meta
+#: import`; `R.D` imports `R.S` privately, and `R.T` imports `R.F`
+FOLD = {"r/R/T.lean": "module\n\npublic import R.F\n", "r/R/F.lean": "module\n\npublic import R.D\nmeta import R.D\n",
+        "r/R/D.lean": "module\n\nimport R.S\n", "r/R/S.lean": "module\n"}
+
+
+def test_a_build_lake_handed_less_than_its_key_reads_is_indexed_where_the_rest_is_read_for_its_code_alone(tmp_path):
+    """`R.T`'s key reads `R.S`'s code through the fold, where Lean loads `R.D`'s code only for `R.F`'s own compile, so Lake
+    hands `R.T` no `R.S`. Refused for that, `R.T` would be compiled in every build: a key that reads more than its compile
+    is indexed. One that left out a module the key reads more than the code of, or handed one it doesn't read, is not."""
+    root = _workspace(tmp_path, FOLD)
+    pkgs, keyed = MK.workspace(root)[0], MK.keys(root, ["R.T"])
+    lib = root / ".lake" / "build" / "lib" / "lean"
+
+    def handed(*ms: str) -> str | None:
+        _setup(root, "R.T", "r", {m: lib / MK.path_of(m, ".olean") for m in ms})
+        return MK.indexable("R.T", keyed, pkgs)
+
+    assert MK.loads("R.T", keyed) == {"R.F": MK.PUBLIC, "R.D": MK.PUBLIC | MK.CODE, "R.S": MK.CODE}
+    assert handed("R.F", "R.D") is None and handed("R.F", "R.D", "R.S") is None
+    assert handed("R.F", "R.S") == "Lake imports [] and not ['R.D'] of the workspace"
+    assert handed("R.F", "R.D", "R.A") == "Lake imports ['R.A'] and not [] of the workspace"
+
+
 def _entry(store: Path, key: str, scope: str, mod: str, h: str, files: dict[str, bytes], inputs: dict | None = None) -> dict:
     """``mod``'s index entry under ``key``, with its artifacts, as `LakeArtifacts.put` writes it: with what its key read
     (``inputs``), it is also the entry the module was last indexed under."""
