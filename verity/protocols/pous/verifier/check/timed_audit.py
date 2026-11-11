@@ -48,7 +48,6 @@ from verity.protocols.pous.verifier.verifier import VerifierKey, leaf_hash
 log = logging.getLogger(__name__)
 
 HERE = Path(__file__).resolve().parent
-ROOT = Path(__file__).resolve().parents[5]
 EXE = "pous-timed-audit"
 
 
