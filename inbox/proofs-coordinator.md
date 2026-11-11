@@ -51845,3 +51845,45 @@ For FLOCKPKG: `cd4c` is a head-block session Lean accepts with `--program` and `
 For the table:
 - Templated check, head block: measured at the served 16-key block, 1.85× the flat for Lean and a size class more for the prover (`0163`, `cd4c`). Not a lever; the lever row's verifier part stays 21 GB.
 - Lean's setup over the program: measured on a head block at 0.39 to 0.42 s a MB a sampled session (`cd4c`); the 250.0 core-s row has no program in it.
+
+## CONCRETE, Wed 11 Nov 11:43Z: THE BY-CLASS BOUND AT THE CAPS compiles on its first try, and the SUM fits: `eventTwoX_le_cls_table1_513` reads κ_s + √(k·γ_s·Pr[B]) + 2^-100 at K ≤ 2^33 (the sum's value 2^-100.47). PR #8939 open UNMARKED at 6b2922ce5b5e61b3140ef8568c1cd215c6dc25fb. No ready line yet: its records run and quick tier are running. At the plan's cut no row is inside `K ≤ 2^33` under one M
+
+Tags as before; times from `date -u`. Nothing here is a bits line: it is arithmetic at caps, and every cap is a hypothesis.
+
+**1. The theorem** [read: the pushed file; run: the tries below]. `Claims.SamplingGeneric.CompiledTwo.eventTwoX_le_cls_table1_513`, in the new `security/Proofs/Flock/SamplingGeneric/TwoFirstHitClassCaps.lean`: for any compiled two-stage sampled verifier `L`, under every hypothesis of KILIAN's `eventTwoX_le_cls_at_budget` (verbatim, in its order) and `T ≤ 513·2^80`, `L.toCompiled.es x ≤ 2592237061`, `Ns ≤ 2^30`, `Ks ≤ 2^33`, `Km ≤ 2^33`, `L.toCompiled.nPU x * L.toCompiled.openCalls x ≤ 513·2^80`, an accepted run samples a proof block of `FregTwoX` with probability at most `L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + 2 ^ (-(100 : ℝ))`.
+- It bounds the SUM: `hashBound T e Ns Ks Km c := (2·(T·(1 + e·Ns) + c) + 4·firstHitCalls T e Ns Ks Km c)/2^256` is `εclsAt`'s third summand after unfolding `runCost` and `firstHitCost`, and `hashBound_table1_513 : hashBound (513·2^80) 2592237061 (2^30) (2^33) (2^33) (513·2^80) ≤ 1/2^100` is `norm_num`, checked by Lean, not by hand. ATTACK's 2^-100.48 is right: the exact value is 2^-100.47 (4 firstHitCost 2^-100.55, 2 runCost 2^-104.72) [run `r20261111-113702-e9d1`].
+- It is generic: `εclsAt_le_of_caps` bounds `L.εclsAt H x P T Ns Ks Km` itself by `κ_s + √(k·γ_s·Pr[B]) + b` for any `H`, `L`, `x`, `P` and any rational caps at which `hashBound ≤ b`. REGX's `code_eventTwoX_le_cls_at_budget` (#8924 at `d025f81332e674746d26e91dea64f5166cb64f7f`) concludes `≤ L.εclsAt FlockDeploy.sha512 x P T Ns Ks Km` [read at that head], so `εclsAt_le_table1_513 FlockDeploy.sha512 L x P …` is its next step by `.trans`, with nothing of REGX's or mine changed. NOT yet compiled together: a scratch try in the merged tree is my next step.
+- 1 definition and 16 theorems; all 16 on `propext`, `Classical.choice`, `Quot.sound`. No file under `Definitions/` or `Properties/`, no lock record, no guarantee, no named premise.
+
+**2. The other instances** [Lean: try `f082`; values: run `e9d1`, exact rationals]. All at T and `n_PU·openCalls` ≤ 513·2^80 and e_s ≤ 2592237061 unless said:
+
+| instance | N_s ≤ | K_s, K_m ≤ | Lean proves ≤ | the sum's value |
+|---|---|---|---|---|
+| `εclsAt_le_table1` (calls: T, c ≤ 2^80) | 2^30 | 2^42 | 2^-100 | 2^-100.72 |
+| `εclsAt_le_table1_513`, `eventTwoX_le_cls_table1_513` | 2^30 | 2^33 | 2^-100 | 2^-100.47 |
+| `εclsAt_le_table1_513_narrow` | 2^27 | 14·10^9 (2^33.70) | 2^-100 | under 2^-100 by under 0.001 bit |
+| `εclsAt_le_table1_513_k35` | 2^30 | 2^35 | 2^-98 | 2^-98.65 |
+| `hashBound_table1_513_k36` | 2^30 | 2^36 | 2^-97 | 2^-97.69 |
+| `hashBound_table1_513_k37` | 2^30 | 2^37 | 2^-96 | 2^-96.70 |
+
+- Your remark on width 2^-4 at K 2^33.48: at `K ≤ 2^34` the sum is 2^-99.59, so an instance at 2^34 does not close at 2^-100. At N_s ≤ 2^30 the most K at 2^-100 is 12,593,941,139 (2^33.55), at N_s ≤ 2^27 14,003,227,282 (2^33.70) [run `e9d1`]; `_narrow` is that second one, rounded down.
+- Your 11:00Z ask, the instance the record needs at 643: by the mean (2^34.31) it is `K ≤ 2^35` and closes at 2^-98.65 (Lean: ≤ 2^-98); under one M (2^35.17) it is `K ≤ 2^36`, 2^-97.69.
+- At your 11:15Z counts [run `e9d1`; the table is section 7 of my 11:38Z entry]: at the plan's cut (2,049) `K ≤ 2^33` covers widths κ 2^-6 and 2^-7 by stratum or the mean and NOTHING under one M; the record needs `K ≤ 2^35` by the mean (2^34.44; 2^-98.65) and `K ≤ 2^37` by stratum (2^36.08) or one M (2^36.84): 2^-96.70. At the recut (139, PageCopy 97) `K ≤ 2^33` covers the record under every count (one M 2^32.96, by 0.04 bit) and `_narrow` adds width 2^-4 under one M (2^33.55); at PageCopy 205 the record's one M (2^33.52) is outside `K ≤ 2^33` and inside `_narrow`.
+- `eventTwoX_le_cls_of_caps` is KILIAN's theorem at any caps and any `b`, so a new row is one `norm_num` line on `hashBound` and no new proof.
+
+**3. `n_PU·openCalls`: exactly the quantity I need** [read: `Definitions/Claims/SamplingGeneric.lean`, `TwoFirstHitAt.lean`]. `L.toCompiled.nPU x * L.toCompiled.openCalls x`, a natural number, per RUN (not per session), at the statement `x` of the audited execution phase and the compiled code `L` (REGX's `compiledTwo … (code h) …`):
+- `nPU x` = the number of proof blocks of the statement's registered partition: ALL of them, not the sampled ones (0 if `x` does not parse);
+- `openCalls x` = the calls of SHA-512, one call a whole message whatever its length, of checking what ONE session's witness reveals (the `Compiled.openCalls` field, which `OpenCallsLe` bounds the opening check by);
+- units: calls. The instance takes the product ≤ 513·2^80 (2^89.0), i.e. ≤ 2^80 calls each charged as 513. It is far from binding: at the 513 / 2^33 caps the sum stays ≤ 2^-100 for it up to 2^119.17 [derived on my VM, exact rationals]. So the number SCALE and PARAMS give only has to be under 2^89 for the instance as written.
+
+**4. Branch, head, PR** [run: git, `research queue open`]. Branch `cursor/proofs-firsthit-cls-caps-1fe2`, head `6b2922ce5b5e61b3140ef8568c1cd215c6dc25fb`, PR #8939, open, UNMARKED, `Lane proofs`, linked to PRF-523 (the opener warns again that PRF-523 carries no goal label: yours). It stacks on #8916's head `8784a105de5bd0567a89b6e85e98d7145468232a` (KILIAN; you named `c6412ff63497`, which that head holds with the merge of #8906's `e7b2e51d928b` and #8905's `40b8e7d04736`) merged with #8873's `676a777193e2` (marked); its own change is one commit, two files (the module and its import line in `SamplingGeneric.lean`). The body tells KILIAN's and REGX's heads and which rows each instance covers.
+
+**5. Checks** [run]:
+- elaborates, axioms: `verity lean try` `r20261111-113645-f082` (cpu-11) at the head's text: lean exit 0 in 21 s, no warning in the file, none of its 16 theorems beyond the three axioms. The first try, `r20261111-113035-a3a2` (cpu-11, 11:30Z), passed too (lean exit 0 in 133 s), with warnings only for fallback tactics I then removed. The copy I launched at 11:16Z, `r20261111-111639-55af` (cpu-9), ran no Lean: it left its line after 20 min without a slot (`exit 79 in 1210 s wall` in the try's log).
+- records run of `security/Proofs` at the head: `r20261111-113928-b556` (cpu-1), launched 11:39Z, running. Quick tier of the head: `r20261111-113939-3bb2` (cpu-1), launched 11:39Z, running. Kernel replay: the candidate's check.
+- CAPS will need room under `Proofs/Flock` for 1 module and 17 declarations (#8890's list read 0 modules of room at 10:44Z); the `For CAPS:` line comes with the ready line.
+
+**What I could not establish.** The records run's and the quick tier's verdicts (running). The merged tree with REGX's #8924: not built. That any design is within the caps: the counts by class at the code are TWOPROVE's #8931 and the class counts SCALE's, both hypotheses here. A second reader of the module.
+
+For the table: the by-class bound's whole hash part at caps is in Lean: `eventTwoX_le_cls_table1_513` gives κ_s + √(k·γ_s·Pr[B]) + 2^-100 at T, n_PU·openCalls ≤ 513·2^80, e_s ≤ 2592237061, N_s ≤ 2^30, K_s, K_m ≤ 2^33 (the sum 2^-100.47); #8939 at `6b2922ce5b5e`, open, unmarked; try `f082` exit 0 on the three axioms; records and quick tier running.
+For the table: at the plan's cut (one M 2,049) no row is inside `K ≤ 2^33`; the record's own instance is `K ≤ 2^37` and closes at 2^-96.70, by the mean `K ≤ 2^35` at 2^-98.65 [run `e9d1`, modeled]. At the recut (139) the record is inside `K ≤ 2^33` under every count.
