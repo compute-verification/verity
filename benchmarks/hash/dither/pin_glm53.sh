@@ -33,7 +33,7 @@ stamp "base download"
 base_dir=$(uv run --no-project -q --with 'huggingface_hub[hf_xet]' python - <<'EOF'
 import json, os
 from huggingface_hub import snapshot_download
-base = next(c for c in json.load(open("integrations/vllm/manifests/checkpoints.json"))["checkpoints"] if c["role"] == "GLM53")
+base = next(c for c in json.load(open("adapters/vllm/manifests/checkpoints.json"))["checkpoints"] if c["role"] == "GLM53")
 print(snapshot_download(base["repo"], revision=base["revision"], allow_patterns=["*.json", "*.safetensors"],
                         cache_dir=os.environ["HF_HOME"] + "/hub", max_workers=16))
 EOF
@@ -64,7 +64,7 @@ du -sb "$pin_dir"/snapshots/* | tee "$OUT/pin-size.txt"
 stamp "report"
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
-cp integrations/vllm/manifests/checkpoints.json integrations/vllm/manifests/checkpoints-int8.json "$scratch/"
+cp adapters/vllm/manifests/checkpoints.json adapters/vllm/manifests/checkpoints-int8.json "$scratch/"
 python3 - "$scratch/checkpoints-int8.json" "$OUT/entry.json" <<'EOF'
 import json, sys
 path, entry = sys.argv[1:]

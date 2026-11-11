@@ -12,12 +12,12 @@ from circuit_check import structural_slots as SSC
 from circuit_check import targets as TG
 from verity_flock import struct_slots as SS
 
-from verity.ml.circuits.defs import CompositeDefinition
-from verity.ml.circuits.evaluation.reference import resolve
-from verity.ml.circuits.ops.fp32 import F32AddFtz
-from verity.ml.circuits.ops.mufu import MufuEx2Ftz, MufuRcpFtz
-from verity.ml.circuits.refs import array_of
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import CompositeDefinition
+from verity.circuits.evaluation.reference import resolve
+from verity.definitions.ops.fp32 import F32AddFtz
+from verity.definitions.ops.mufu import MufuEx2Ftz, MufuRcpFtz
+from verity.circuits.refs import array_of
+from verity.circuits.types import Array, Value
 
 F32 = Value(32)
 

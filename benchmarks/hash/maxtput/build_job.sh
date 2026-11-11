@@ -12,7 +12,7 @@ S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 ROOT=$PWD
 I="$RESEARCH_RUN_DIR/inputs"; O="$RESEARCH_RUN_DIR/out"; mkdir -p "$O" "$S/bin"
 export HF_HOME=${HF_HOME:-/workspace/hf}
-export PYTHONPATH=$ROOT/integrations/vllm:$ROOT/tools/config:$ROOT/tools/research/src:$ROOT HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false
+export PYTHONPATH=$ROOT/adapters/vllm:$ROOT/verity/configuration/config:$ROOT/tools/research/src:$ROOT HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} TMPDIR=$S OMP_NUM_THREADS=${OMP_NUM_THREADS:-8}
 export VERITY_RETAIN=host VERITY_WINDOW_MB=256 VERITY_WINDOW_SLOTS=8
 VENV=${VERITY_BENCH_VENV:?}

@@ -13,9 +13,9 @@ export HZ_CONFIGS=a6 HZ_MEM_GB=${A6_MEM_GB:?}
 [ -n "${A6_CACHE:-}" ] && export HZ_CACHE=$A6_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 log "a6: members ${A6_MEMBERS:-default}, k ${A6_K:-default}"
 "$PY" benchmarks/one_stage/a6.py --bin "$BIN" --lean "$LEAN" --out "$W/a6" ${A6_MEMBERS:+--members "$A6_MEMBERS"} \
