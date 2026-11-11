@@ -60782,3 +60782,53 @@ Tags: [run] a command I ran in this turn, [read] a file or record I read in this
 - Ended: HARMSEARCH (step 7), HEADPROF (step 10), RELAX (the wider widths; your mailbox says it goes on to PRF-558 after #9023), BREAKEVEN (the figures). kernels' KHSHARE (step 10, running). circuits' NORMCALLS (step 13, running).
 
 **Not checked yet, for the 20:15Z table.** Whether vLLM's second-stage command can take step 7's design. Who holds proofs' half of step 13. The kept process's measured seconds (`9a4b`). The agent list again at 20:00Z.
+
+## REFUSE, Wed 11 Nov 18:30Z: the statements elaborate, each still `sorry`; the piece on the critical path is (c), that the second stage accepts the sample it builds, and it carries a fourth piece the note does not list: that `Draw.flockLaw` parses the second stage's law at all
+
+**Where it is.** Branch `cursor/proofs-refuse-a2c0`, from #8940's head `195bbae4ef`, pushed at `b3bb6589cc`: one file, `security/Proofs/Flock/SpotFlock/Refused.lean`, statements only [run: `git push`, this VM]. They elaborate at that tree, six theorems, every one `sorryAx` [run r20261111-181510-a5b7 on vy-nebius-cpu-11, exit 0, 618 s wall]. Both briefs and the note `20261111T1517Z-report-draft-core-final` were read; this VM has `~/.research/notes` [run: `research notes sync`]. The mailbox holds only the 18:07Z item [read: `inbox/bc-df9ee5c5-a4a5-5bb2-9d6e-e9a15f150879.md` at 18:28Z].
+
+**The statements, as I state them now** (namespace `SpotFlock.Refused`; `secondRead q ns ks = q · Σ_t (2·k_t·width n_t + 64)` bytes, `cellSizes q ns` the cells' sizes in the second stage's order) [read: the file at `b3bb6589cc`]:
+
+```lean
+-- (b) the second stage's law is a sampling design on the cells that samples |sample|·Σ k_t proof blocks
+theorem lawOn_second {sample ns ks : Array ℕ} (hp : Spot.Select.secondProblem sample ns ks = none) {m : ℕ}
+    {parsed : Flock.Draw.Law} (h : Spot.Draw.flockLaw (Spot.Select.secondLaw sample ns ks) m = .ok parsed) :
+    Flock.Bridge.LawOn parsed (cellSizes sample.size ns) (sample.size * ks.toList.sum)
+
+-- (c) a second stage whose sample ends is accepted: the object drawFirstRead builds passes checkDraw
+theorem flockLaw_second_ok {sample ns ks : Array ℕ} (hp : Spot.Select.secondProblem sample ns ks = none) :
+    ∃ parsed, Spot.Draw.flockLaw (Spot.Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) = .ok parsed
+theorem selectSecond_of_drawUnits {sample ns ks : Array ℕ} (hp : Spot.Select.secondProblem sample ns ks = none)
+    {parsed : Flock.Draw.Law}
+    (hl : Spot.Draw.flockLaw (Spot.Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) = .ok parsed)
+    {src : ByteArray} {units : Array ℕ} {read : ℕ}
+    (hu : Spot.Draw.drawUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read)) :
+    ∃ draw, Spot.Select.selectSecond sample ns ks src = .ok (draw, read)
+
+-- (b) + (c) + units_error_le: the bound on one uniform stream
+theorem selectSecond_refused_le {sample ns ks : Array ℕ} (hp : Spot.Select.secondProblem sample ns ks = none)
+    (len : ℕ) (hlen : secondRead sample.size ns ks ≤ len) :
+    prCoin (fun f : Fin len → Fin 256 => (Spot.Select.selectSecond sample ns ks (bytesOf f)).isOk = false) ≤
+      ((sample.size * ks.toList.sum : ℕ) : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹
+
+-- (d) the same at the code, on its `stage` coins of 2^20 bytes each
+theorem secondDraw_refused_le (h : Held) (c₀ : FlockDeploy.Coin)
+    (hp : Spot.Select.secondProblem (h.reg.sample (src c₀)) h.reg.ns h.reg.ks = none)
+    (hlen : secondRead (h.reg.sample (src c₀)).size h.reg.ns h.reg.ks ≤ h.stage * L) :
+    prCoin (fun c₁ : Stage h => secondDraw h c₀ c₁ = none) ≤
+      (((h.reg.sample (src c₀)).size * h.reg.ks.toList.sum : ℕ) : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹
+```
+
+**Which is on the critical path: (c).**
+
+- (b) is short [guess]. `flockLaw_second` (`Select/Second.lean:141`) gives each parsed cell's units and count only; `LawOn` also reads its work and floor, so I strengthen the private `stratum_cell` (`:82`) to the whole stratum [read]. Then `workK 1 1 n_t W k_t = k_t` from `1 ≤ k_t ≤ n_t ≤ W`, and `positions_second`, `sizes_second` give `StrataOn` [read: `Second.lean:274,292`]. With it `units_error_le` (`Bridge/QsRows/FirstReads.lean:352`) bounds Pr[`drawUnits` returns no sample] by `k_d·2⁻⁶⁴` [read].
+- (c) is an iff away from `Properties.Spot.Drawn` of the built object (`checkDraw_nil`, `Proofs/Properties/Spot.lean:1225`) [read]. `Drawn` (`Properties/Spot.lean:326`) has three kinds of clause [read]:
+  - about the units: strictly ascending, inside `[0, m)`, and each cell's `k` the number of sampled units in it. No lemma gives the count in one cell today: `drawUnits_seq` (`Select/Take.lean`) says each cell's sampled units are in the sample and `drawUnits_size` (`Bridge/Draw.lean:583`) that the sample holds `k_d` units [read]. I get the rest by counting: the cells' images are disjoint and add to `k_d`, so the sample is exactly their union and has no repeat [guess: not compiled].
+  - `Draw.strataMessage draw m = none`. `security/` has no lemma about `Spot.Draw.strataMessage` or `Spot.Draw.strataProblem` beyond `checkDraw_nil` taking the first as given [run: `rg` over `security/`, this VM]. It is proved forward through its two loops: distinct templates `s!"{r}/{t}"`, which needs the replay sample strictly ascending (`secondProblem` checks it), and the tiling, where `Verity.QSort.qsort_sorted` leaves the cells' ranges in order [read: `Spot/Draw.lean`, `Proofs/Core/QSort.lean:131`]. Its desugared form is printed [run r20261111-182338-a44c on vy-nebius-cpu-7, exit 1 on other probes, 71 s wall].
+  - `jeq (lawOf draw) law`: `jeq a a` holds only where `Flock.canon a` succeeds (`Spot/Json.lean:26`); `canon_mkObj`, `canon_arr`, `canon_nat`, `canon_str` (`Proofs/Properties/NetworkCertifier/Check/LinkWindow.lean:271-302`) give it [read].
+- **The fourth piece.** `selectSecond` also refuses where `Draw.flockLaw` does not parse `secondLaw` (its keys, `Spot.Draw.strataProblem`, `Flock.Draw.workProblem`), and that does not read the coins: were it to fail, the second stage would refuse every honest run at that replay sample [read: `Spot/Select.lean:298`, `Spot/Draw.lean`]. `flockLaw_second` only says what a parsed law is [read]. So the bound needs `flockLaw_second_ok`, forward from `secondProblem = none`, through `workProblem`'s loops too. The note's sketch takes the parse as a hypothesis and stops there [read: the note's section "Not started"].
+- (d) is short [guess]: `stageUniform h.stage` (`SpotFlock/Coins.lean:75`) and the calc of `execSel_error_le` (`FirstReads.lean`) [read]. It is stated at one first-stage coin `c₀` whose replay sample `secondProblem` passes. Whether that holds at every `c₀` the first stage accepts (a replay sample nonempty and ascending, and `ns`, `ks` the registration's) I have not looked for a lemma on [guess].
+
+**If the forward proofs of the checks that don't read the coins run late.** They are the two-loop proofs above (`strataMessage`, `strataProblem` with `workProblem`) and are where the lines go [guess: 400 to 600 lines; the note's 300 to 500 for (c) did not count the parse]. The same bound holds under the premise that the second stage accepts some stream at that replay sample and those cells, since those checks never read the units; `secondMisses_honest` (`Select/SecondWitness.lean`) is an instance of it, at one cell of two proof blocks [read]. That form does not rule out a configuration the second stage always refuses, so it is not what you asked for and I would land it only with your word; the unconditional form is the target.
+
+**Next.** (b) and the units' clauses of (c), then the two loops, then (d); the evaluation at the served sizes (a function in the tree mirroring `secondRead` and `k_d·2⁻⁶⁴`; `⌈138,580,196 / 2^20⌉ = 133` coins a sampled replay block is the note's figure [relayed: the brief]) after the Lean. A try of one file takes about 75 s where the machine's tree is warm and about 10 min where it is not [run r20261111-182338-a44c; run r20261111-181510-a5b7].
