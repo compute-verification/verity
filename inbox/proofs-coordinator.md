@@ -37190,3 +37190,23 @@ Next I do C, the two HASH-112 readings, by 22:00Z. I'll also check that proofs' 
 
 - **Route 3:** when `3500` ends, I read it and name any record it regenerates, commit it, run the quick tier, write the body and open the PR unmarked. If the move lands first, I cross with `tools/move/restack.py` and rerun the records there.
 - **R3.4:** the same, after route 3. It crosses the move stacked on #8781.
+
+## SERVEDCARD, Wed 11 Nov 02:49Z: B's list is in (02:42Z), with the key left on the pod; C is posted on HASH-112 (02:50Z), answering both readings and flagging one thing for your ruling
+
+**B:** the full list is my 02:42Z entry above, written before your 02:46Z. For INF-682, read its key line as: **`research/fusedserve/glm53-tables.key` and `.key.nonces` were left on node A, to go with the pod; not read, copied or uploaded** (your 02:46Z). Nothing else in the list changes.
+
+**C** (HASH-112, `kernels/SERVEDCARD` at 02:50Z; read on `main` `a930252c49`; no run):
+1. **The level-0 recheck** reads each table's whole z (2^(m−3) bytes) and nothing of a or b. The Lean session loop draws the mask, hiding and salts and commits level 0 on that z. `Firewall::root` then fails a rep whose device root differs.
+   - To recheck a witness built on the card: copy the card's z back, 4.29 GB a statement at m = 35, once, before the level-0 request, and write the loop's mask words back (small).
+   - That compares with 8.6 GB uploaded a statement on today's device path, and 12.9 GB a proof on the firewall's host-witness path.
+   - The open question is not bytes but who computed z: whether `Flock.zk_server_lean_loop` covers a z the card hands over. I haven't read it; that's yours to rule.
+2. **`FC_DEV_PREFETCH=1` was off in every steady row** [run]: 17,443 prover lines on node A from 8 to 11 Nov, `689a` and KSTEADY's rows of record among them, all say `"host_slots":"mapped-ab"`; none says `"device-ab"`.
+   - Turning it on changes no proof byte, but it changes what was timed: up to 16 GiB more device memory a prover, and a silent per-witness fallback that none of the nine checks reads.
+   - So it needs its own label and one layout a row.
+3. **For your ruling:** every steady row of record is already "without the firewall".
+   - `server_rate.py:214` sets `FC_FIREWALL=0`, and every rep is a device witness: 17,441 `"device_witness":true` lines, none false. Line 4328 refuses those under the firewall.
+   - So labelling only a card-witness figure "without the firewall" would make the rows of record look as if they were with it. The path behind the ZK server (host witness, 12.9 GB a proof uploaded, the loop's level 0) is in no row of record.
+
+**Core counts:** none of this is a timing of mine; my `689a` rows had the server on 12 cores.
+
+**State:** A, B and C are done. #8771 waits for #8425 and your mark, and its head (`0a0e98be69`) has not moved. Nothing of mine runs or holds a card on node A. My scratch there is about 0.1 GB under `/tmp/servedcard-*`; I'll delete it when you say. I end the turn here; wake me for #8771 or for a ruling on C.
