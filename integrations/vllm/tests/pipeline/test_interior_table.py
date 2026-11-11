@@ -256,16 +256,20 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
                        supplied=IR.sources(LINKS, Q, names), schemas=formats).digest
 
 
+@pytest.mark.slow
 def test_round_2_derives_no_links_from_a_block_that_returns_a_read_of_two_outputs(staged):
     """A block's links are all or none (`second_stage.link_runs`), and its return links take a template of one output:
     the read returns its row and `ok`, so round 2 derives none for the block of reads, and `interior_rows.links` refuses
-    rather than give the parameters' alone."""
+    rather than give the parameters' alone. Slow by `staged` and the boundary's program: it is the reads' own block
+    under the record a stream registered, so it catches the day round 2 derives links for a table read, when this
+    module's by-hand `LINKS` must give way to them."""
     _stream, _reg, _first_, rec, _tables_ = staged
     with pytest.raises(ValueError, match="makes no links"):
         IR.links(_boundary().program, descriptor_id(BLOCK), rec, MEMBER, CELLS, dict.fromkeys(IR.TABLE))
 
 
-def test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give_their_links(staged):
+@pytest.mark.slow
+def test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give_their_links(staged, honest):
     """Round 2's read check (`second_stage._read_ok`) on the reads' ``root`` and ``domain`` ports, under a round-1 record
     whose ports are named as the serve names them: `boundary_rows.PORTS`, bare, then each span's table, whose name has
     a ``/``. Round 2 names a link ``<block>/<parameter>`` where any port of that record has a ``/``, so the links carry
@@ -273,9 +277,11 @@ def test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give
     another leaf count, of the bare parameter or of the interior's own port is refused. Under the two values' names
     alone the link is the bare parameter and the same read is refused. The block's return makes no links yet (the
     read's two outputs), so the links here are the ones its nodes make for its parameters
-    (`second_stage._node_links`), gathered as `link_runs` gathers them."""
-    _stream, reg, first, rec, tables = staged
-    it = _interior(reg, first, rec, [tables[u] for u in first.units])
+    (`second_stage._node_links`), gathered as `link_runs` gathers them. Slow: the entries round 2 reads are the ones
+    the reads' interior registered over a registered round 1, and the links the reads' own block's, so it catches the
+    interior and round 2 naming a table read's ``root`` or ``domain`` apart, which entries written by hand would not show."""
+    _stream, _reg, first, rec, _tables_ = staged
+    it = honest
     key, rd, m = descriptor_id(BLOCK), P.template_id(RD), _boundary().members[0]
     names = dict(zip((m.port("ingress"), m.port("egress")), BR.PORTS, strict=True))
     served = {**rec, "roots": [{**r, "port": names.get(r["port"], r["port"])} for r in rec["roots"]]}
