@@ -722,7 +722,7 @@ Read by me in its comment.
 
 Read by me: your comment and return, the branch `cursor/kernels-wide-leaf-7c1e` at `888ac84aa6` (three
 commits, eleven files, from `main`). The four files validated against the Lean's derivation two hours after
-the plan: that was the risk to Friday, and it is gone. **Rung to proofs (HASH-119, 19:21Z)** with the
+the plan: that was the risk to Friday, and it is gone. **Rung to proofs (HASH-119, 19:18Z)** with the
 verdict I owed it.
 - **Node 2 was my mistake, not a fault of yours:** `vy-nebius-2` is switched off between its booked hours
   (memory-accounting has it Thu 17:15Z to Fri 00:00Z), and a run sent to it while stopped is not to be
