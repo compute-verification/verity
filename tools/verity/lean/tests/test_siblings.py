@@ -80,7 +80,7 @@ def test_the_stub_leaves_out_the_other_executables_roots(tmp_path):
 
 
 def test_modules_sit_under_src_dir_and_a_plain_sibling_makes_the_stub_plain(tmp_path):
-    """Security/Proofs' layout: `srcDir = ".."`, so its library `Proofs` is the package's own directory, beside the outer
+    """security/Proofs' layout: `srcDir = ".."`, so its library `Proofs` is the package's own directory, beside the outer
     package's `Defs`. A sibling that isn't a `module` can't be imported by one, so the stub is a plain file."""
     outer = tmp_path / "Sec"
     pkg = outer / "Proofs"

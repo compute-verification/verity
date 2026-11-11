@@ -76,11 +76,11 @@ uv run python verity/protocols/inference_only/rho/periods.py --bounds min-cut --
   block size, and holds (H)'s `β` for an activation by block size (`premise.training-cut-hardness.beta`);
   `data/circuits.toml` holds training steps measured as Boolean circuits (the census's gates, ANDs and
   counted products, and `circuit_properties`' `s_×`, `a_out` and `a_in`).
-- The Lean locks (`Security/lean-audit.json`, `Security/Properties/lean-audit.json`), which `lean.py` reads for each
+- The Lean locks (`security/lean-audit.json`, `security/Properties/lean-audit.json`), which `lean.py` reads for each
   citation's status.
 - `benchmarks/census` (devices, the reference datacenter and the world) and `verity/protocols/inference_only/nci` (the remote regime's
   terms in `tiers.py`, its algorithms and their traits), which the tests hold the data to;
-  `Security/Definitions/Nci/Remote.lean`, whose
+  `security/Definitions/Nci/Remote.lean`, whose
   `remoteDampener` `tests/test_envelopes.py` holds `theorem.multiple_bound` to; and the Lean files that define the
   min-cut bound's `alphaHE` and `shareF` and state its `HE` and `HEShared`, found through the lock, which
   `tests/test_min_cut.py` holds `min_cut.py` to.

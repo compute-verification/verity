@@ -125,12 +125,12 @@ def test_an_auto_plan_of_this_tree_runs_each_gated_part_in_one_shard_and_a_stale
     assert [p for p in want if S.suite_part(p)[1] == "verity-core-composition"] == [
         f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2, 3)], "a suite that declares parts by test id is those parts"
     needs = CHECK.shard_needs()
-    specs = [f"lean-audit:{p}" for p in ("Security", "Security/Properties")]
+    specs = [f"lean-audit:{p}" for p in ("security", "security/Properties")]
     for spec in specs:
-        assert needs[spec] == ["lean-audit:Security/Proofs"], "a spec's audit audits its provers beside it"
+        assert needs[spec] == ["lean-audit:security/Proofs"], "a spec's audit audits its provers beside it"
     for proofs in (S.CHEAP_S * 2, S.CHEAP_S / 2):
-        got = CHECK.auto_plan(({}, {"Security/Proofs": proofs, "Security": 1.0, "Security/Properties": 1.0}, {}), 4, n=3)
-        [s] = [s for s in got["shards"] if "lean-audit:Security/Proofs" in s["parts"]]
+        got = CHECK.auto_plan(({}, {"security/Proofs": proofs, "security": 1.0, "security/Properties": 1.0}, {}), 4, n=3)
+        [s] = [s for s in got["shards"] if "lean-audit:security/Proofs" in s["parts"]]
         assert set(specs) <= set(s["parts"]), "held on its shard, not built again"
         assert not any(b.startswith("lean-audit:") for s in got["shards"] for b in s["builds"])
     f = _write(tmp_path, doc)

@@ -65,7 +65,7 @@ inputs = [".agents/skills/using-slack/registry.json", "READY.json", "tools/move/
           "verity/protocols/flock/prover/flock-sha512-b684b12.patch", "verity/protocols/flock/prover/flock-vtime-b684b12.patch",
           "verity/protocols/flock/prover/flock-zk-b684b12.patch", "verity/protocols/flock/agreement", "verity/protocols/flock/verifier",
           "tests/test_no_wall_clock.py", "tests/test_repository.py",
-          "tools/verity/lean", "tools/verity/graph/verity_graph/contract.py", "Security/Proofs/lake-manifest.json", "Security/Proofs/lean-audit.json",
+          "tools/verity/lean", "tools/verity/graph/verity_graph/contract.py", "security/Proofs/lake-manifest.json", "security/Proofs/lean-audit.json",
           "tools/research/src/research/checkview.py", "tools/research/src/research/store/custody.py", "tools/research/src/research/store/evict.py",
           "tools/research/src/research/store/fetchset.py", "tools/research/src/research/store/fixtures.py",
           "tools/research/src/research/store/labels_sync.py", "tools/research/src/research/executor.py",
