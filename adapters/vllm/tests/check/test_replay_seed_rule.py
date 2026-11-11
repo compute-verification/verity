@@ -6,10 +6,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from verity.definitions.numerics.rows import SAMPLED_MEMBER
 
 from tests.program.predict import test_steps as ST
-from verity.definitions.numerics.rows import SAMPLED_MEMBER
-from verity_vllm.check.replay import checks as CK, index as IX
+from verity_vllm.check.replay import checks as CK
+from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay.index import SAMPLER_OP, SEED_PARAM
 from verity_vllm.engine.served_seed import derived
 from verity_vllm.program.instances_file import read_instances
