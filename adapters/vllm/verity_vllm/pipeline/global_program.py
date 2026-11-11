@@ -30,7 +30,6 @@ from dataclasses import dataclass
 
 from verity.circuits.codec import canonical_json, descriptor_size
 from verity.circuits.defs import REGISTRY
-from verity_vllm import settings
 from verity_vllm.config import RowEngine, done_source_refusal, option, workload_arg, workload_file
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import prefix_plan as PP, workload as W
@@ -380,16 +379,6 @@ def component_sampling(d: str) -> dict:
     return {}
 
 
-def declared_live_counts(reqs: list[dict]) -> list[int]:
-    """The DECLARED chronology's live count per engine step: n_live(e) = #{r : arrive_r <= e < arrive_r + cap_r} (every request to its cap)."""
-    horizon = max((int(r["arrive_step"]) + int(r["cap"]) for r in reqs), default=0)
-    n = [0] * horizon
-    for r in reqs:
-        for e in range(int(r["arrive_step"]), int(r["arrive_step"]) + int(r["cap"])):
-            n[e] += 1
-    return n
-
-
 def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     """The workload Program's declaration of the top-p split geometry: every launch runs at the registered split count S =
     `topp_geometry.registered_splits(num_SMs)` whatever the live batch (`engine.topp_pin`), num_SMs the components' agreed target
@@ -405,7 +394,7 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     if nsm is None:
         nsm = (samp.get("geometry") or {}).get("num_sms") if isinstance(samp.get("geometry"), dict) else None
     out = {"schema": "verity/workload-program/v1/sampler-geometry", "relation": "registered", "num_sms": nsm,
-           "rule": "S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs) at every launch, whatever the live batch (engine.topp_pin); "
+           "rule": "S = registered_splits(num_SMs) at every launch, whatever the live batch (engine.topp_pin); "
                    "every top-p TokenSelect of the fold carries it (its launch S); GM-01 fails by name otherwise",
            "source": "verity.definitions.registry.topp_geometry.registered_splits; num_SMs = applicability.components.num_sms",
            "component_splits": samp.get("splits")}
@@ -418,43 +407,6 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     if samp.get("splits") != S:
         out["refusal"] = (f"the components declare splits {samp.get('splits')!r}, not the registered split count {S} of num_SMs={nsm}: "
                           f"rebuild them (`pipeline.build.sampler_geometry`)")
-    return out
-
-
-def sampler_schedule_binding(reqs: list[dict], shapes: dict[tuple[int, int], str]) -> dict:
-    """A stochastic component whose sampler split count S is a per-EVENT schedule computed from
-    the declared chronology (derive_step `sampling.geometry.request` = the arrival it was computed for, `sampling.splits` = [S_0..S_T]) is
-    the Program of ONE request: compose must not reuse it for a request with the same shape (LP, T) but another arrival (its S-schedule
-    differs and its Match would fail for the wrong reason).  Checked here per binding: (a) every request bound to the component arrives
-    at the step the component declares; (b) a list schedule has T+1 entries; (c) the component's declared live counts are the manifest's
-    (a component derived against another manifest of the same shape does not compose).  Refusal is named; greedy components and those
-    at the registered S (an int, held to the registered split count by `sampler_geometry`) bind by shape."""
-    out = {"checked": {}, "refusal": None}
-    for s, d in shapes.items():
-        samp = component_sampling(d)
-        geom, splits = samp.get("geometry") or {}, samp.get("splits")
-        req = geom.get("request")
-        if not req and not isinstance(splits, list):
-            continue
-        bound = [r for r in reqs if shape_of(r) == s]
-        rec = {"component": d, "declared_arrive_step": (req or {}).get("arrive_step"), "bound_requests": [r["request_id"] for r in bound],
-               "splits": splits if not isinstance(splits, list) else f"schedule[{len(splits)}]"}
-        out["checked"][PP.shape_key(s)] = rec
-        if req is not None:
-            for r in bound:
-                if int(r["arrive_step"]) != int(req.get("arrive_step", -1)):
-                    out["refusal"] = (f"component (LP={s[0]}, T={s[1]}) {d} declares its per-event S-schedule for the request arriving at engine "
-                                      f"step {req.get('arrive_step')} but the manifest binds {r['request_id']} (arrive_step {r['arrive_step']}) to it: "
-                                      f"the same shape with another arrival has another S-schedule; one component per request here")
-                    return out
-        if isinstance(splits, list) and len(splits) != s[1] + 1:
-            out["refusal"] = f"component (LP={s[0]}, T={s[1]}) {d}: S-schedule has {len(splits)} entries, the request has T+1 = {s[1] + 1} sampling events"
-            return out
-        dl = geom.get("declared_live_counts")
-        if dl is not None and [int(x) for x in dl] != (n_live := declared_live_counts(reqs)):
-            out["refusal"] = (f"component (LP={s[0]}, T={s[1]}) {d}: its S-schedule was computed from live counts {list(dl)[:12]}... but this "
-                              f"manifest's declared chronology has {n_live[:12]}...: the component was derived against another workload")
-            return out
     return out
 
 
@@ -621,21 +573,6 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "applicability", "message": app["refusal"], "applicability": app,
                "manifest_sha256": mdigest}
         return _refused(out, res)
-    # a component carrying a per-request S-schedule (stochastic top-p) binds only to the
-    # request whose declared arrival it was computed for; a shape shared by two arrivals does not compose with one component
-    sched = sampler_schedule_binding(reqs, {s: shapes[s] for s in need})
-    # a component derived under stoch's EXPERIMENTAL per-event S (STOCH_DECLARED_CHRONOLOGY_S=1, sampling.geometry.experimental)
-    # never composes into a canonical workload Program: refused unless this compose is itself marked experimental by the same variable
-    exp = {PP.shape_key(s): (component_sampling(shapes[s]).get("geometry") or {}).get("experimental") for s in need}
-    exp = {k: v for k, v in exp.items() if v}
-    if exp and not settings.STOCH_DECLARED_CHRONOLOGY_S:
-        sched["refusal"] = (f"components {sorted(exp)} were derived under the EXPERIMENTAL per-event split schedule "
-                            f"(STOCH_DECLARED_CHRONOLOGY_S=1; S is a workload-level derived value, not built yet): "
-                            f"not composable into a canonical workload Program -- set the same variable to compose mechanism evidence")
-    if sched["refusal"]:
-        res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "sampler_schedule", "message": sched["refusal"], "sampler_schedule": sched,
-               "manifest_sha256": mdigest}
-        return _refused(out, res)
     # LAG: the REQUIRED specialization parameter, declared from the row's target (the resolved async-scheduling
     # configuration of the serving profile, implementation pinned) BEFORE the Program is composed -- it is a static of Workload_v1 and
     # enters the digest; the components' derive-time targets must resolve to the same value (fail closed, named)
@@ -693,8 +630,6 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     art["request_ids"] = {"convention": "r<k>, k = 0-based position in the workload manifest",
                           "workload_request_ids": wrids}
     art["applicability"] = app
-    if exp:
-        art["experimental"] = {"reason": "per-event split schedule from the DECLARED chronology; mechanism evidence, not canonical", "components": exp}
     # the weights of record per component (per rank for TP), carried, never recomputed here
     wor = weights_of_record_binding({k: {"dir": v["dir"], "recorded_digest": v.get("recorded_digest")} for k, v in comp_provenance.items()})
     if wor["refusal"]:
@@ -731,7 +666,6 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     art["inputs"] = {"manifest": workload_path, "manifest_sha256": mdigest, "derived": {PP.shape_key(k): v for k, v in shapes.items() if k in comps},
                      # per component: the descriptor's recomputed digest == the derive's recorded program_digest (checked above), descriptor sha
                      "component_provenance": comp_provenance,
-                     "sampler_schedule": sched["checked"] or None,   # per-request S-schedule components and their bound request
                      "execution_record_read": False}
     # layout 1.1: the same paths relative to the artifact root, so a fetched Build resolves its components wherever it lands
     art["layout"] = build_paths.layout_block(artifact_root, workload_path, art["inputs"]["derived"])

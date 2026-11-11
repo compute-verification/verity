@@ -40,7 +40,8 @@ content and order. Conventions follow POUS's package (`verity/protocols/pous/lea
 ../../Definitions/NetworkCertifier/SampledCharge.lean  trusted: what the faulty proof blocks add under a sampled audit: their
                                committed bits (faultyBits), the possible faulty sets at δ (faultySets), the
                                sequences accepted with one (AcceptedFaulty, AccSeqsSampled), and what an accepted
-                               audit gives that count (AdviceIn, freeInputs, AsReg, RLeak)
+                               audit gives that count (AdviceIn, freeInputs, AsReg, RLeak); the runs before a
+                               run, which a period's operator reads (runsBefore)
 ../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean  trusted: the leak bound under a sampled audit, and what
                                an accepted one establishes (SampledLeakAccepted)
 ../../Definitions/NetworkCertifier/TapRows.lean  trusted: the network certifier's rows: its registration at the
@@ -91,7 +92,9 @@ Warden.lean     the warden's code is the client view: its lane is the client vie
                                          cell (certifierLane_eq), and so are its code's cells (certifierCode_eq), which
                                          Tap reads the network certifier's cells from
 SampledCharge.lean  the leak bound under a sampled audit: by the layout's causality, holding each faulty
-                                         committed gate at one bit leaves every step's egress as it was
+                                         committed gate at one bit leaves every step's egress as it was; a period
+                                         whose window's set the windows before it fix (runsBefore_congr) numbers at
+                                         most the product of the windows' bounds (encard_chain_le)
 SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (RAcc) gives the leak
                                          relation (rLeak_of_rAcc), composed with SampledAuditAccepted as a
                                          hypothesis (sampledLeak; sampledLeak_reg at the registered inputs pinned)
@@ -110,7 +113,9 @@ Period.lean     the leak through the network certifier over a monitoring period:
                                          registered observations are among AccSeqsSampled at its registration
                                          (mem_accSeqsSampled_of_windowGood), and the secrets the network certifier's
                                          cells decode to, read back from those observations and counted over the
-                                         windows (encard_periodGood_le, periodLeak)
+                                         windows over any sets of accepted sequences (encard_periodSeqs_le;
+                                         encard_periodGood_le, periodLeak; periodLeak_fixed at operators fixed before
+                                         the period)
 PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
                                          period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
 Pooled.lean     the wrong units over a monitoring period: a uniform draw misses `f` units with probability at most
@@ -122,7 +127,8 @@ PooledLeak.lean  the leak through the network certifier over a monitoring period
                                          Periods.prCoin_forall_prod_le at bounds capped at 1), the families of faulty sets
                                          under `Fmax` units (exists_famOf_eq), and the secrets the client's cells
                                          decode to at each draw, read back from the certifier's record
-                                         (encard_pooledGood_le, pooledLeak), each over any per-window event
+                                         (encard_pooledGood_le, pooledLeak; pooledLeak_fixed at operators fixed
+                                         before the period), each over any per-window event
                                          (encard_pooledFam_le, pr_pooled_le), the count also over any event on the
                                          whole period (encard_pooledJoint_le)
 Checked.lean    the leak bound with checked inputs: a sequence accepted with a valid run is fixed by its
@@ -303,7 +309,13 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   under the statement's roots), the secrets of a covert sender whose every window meets its good event (`WindowGood`)
   number at most `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each
   window's audit fails the leak relation at the network certifier's rows (`RLeakCertifier`) with probability at most
-  `δ + ε_ks + ε_bind + Pr[B_tap]`. Every proof block outside the incorrect set is correct, so the extracted trace opens every
+  `δ + ε_ks + ε_bind + Pr[B_tap]`. The period's operator is fixed before the period and the secrets, a function of the
+  observations: window `i`'s operator reads only the windows before `i`, closed by then (`runsBefore`), and its own
+  window only through the observations before each step. What it reads the count already charged to the earlier
+  windows, so the windows' bounds still multiply, by induction over the windows (`SampledCharge.lean`'s
+  `encard_chain_le`); `PooledLeakAccepted` takes the same operator, and at operators that read no earlier window
+  each is the statement with one operator a window (`periodLeak_fixed`, `pooledLeak_fixed`).
+  Every proof block outside the incorrect set is correct, so the extracted trace opens every
   transfer gate there, at the network certifier's value unless the two openings collide (`B_tap`, under
   `CommitmentScheme.Binds`); filled in with the network certifier's values, it carries its records, and the incorrect proof blocks'
   gates are the advice the count already charges, so the count is unchanged. The network certifier is one device on

@@ -92,13 +92,11 @@ def compare_steps(A: RootView, B: RootView, unfold_a: bool = False, *, canon_ste
     sa, sb = seq(A, unfold_a), seq(B, False)
     def _side(P: RootView, seqs):
         d = {"label": P.label, "digest": P.digest, "instances": len(P.inst), "steps": len(seqs), "inputs": len(P.inputs)}
-        # the derived split count binding, when present on this side (fold: bound Const32[S] per select; Program: splits input)
+        # the split count binding, when present on this side (a bound Const32[S] per select)
         sv = getattr(P, "splits_values", {})
         if sv:
             d["splits_bound"] = {"form": "Const32[S] per top-p select (removed from the sequence, value kept)", "selects": len(sv),
                                  "values": sorted(set(sv.values()))}
-        elif getattr(P, "splits_nodes", ()):
-            d["splits_bound"] = {"form": "request-owned `splits` Input read per event", "nodes": sorted(P.splits_nodes)}
         return d
 
     res = {"a": _side(A, sa), "b": _side(B, sb), "steps": [], "totals": collections.Counter()}
