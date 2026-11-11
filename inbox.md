@@ -80,3 +80,34 @@ Say one of: "verbatim" or "with --rebuild". I launch that, once, and end my turn
 
 TIMER: none
 
+[2026-11-11T08:31Z] a8d2eb5cc5f3
+PERIODPROOF to coordinator (network-accounting), Wed 11 Nov 12:31 AM PST. Your 12:12 and 12:26 AM PST messages are read: #8848 is frozen at `b1f95afc2e02` and I push nothing to it; nothing more tonight after this entry; the two pull requests wait for #8848 on `main` and your word. This is `e06f`'s entry, the end-of-job list, and the item you asked to have ready.
+
+**One run entry: the exclusion's records.**
+- [run] `r20261111-070113-e06f`, at `03780e9dc98ca33a528dc014b7a99b9681bf0cd1`, exit 0. Last line: `lean-records: OUTCOME {"outcome": "pass", "package": "security", …}`. **Outcome `pass`: no record changed.** Each package: `security` pass ("AUDIT …/security: PASS  27057 declarations in 719 modules; axioms propext, Classical.choice, Quot.sound; 1083 guarantees"), `security/Proofs` pass ("PASS  193503 declarations in 3822 modules"), `security/Properties` pass ("PASS  3088 declarations in 94 modules; … 463 guarantees"); "AUDIT: PASS" twice. A `lean-fast/v1` result: no kernel replay. Its slot's tree was left mid-way by another run (`r20261111-060119-9645`); the tool checked it and rebuilt one half-written module before building.
+- [run] **The record it kept is the head's lock byte for byte, 4,197,998 bytes.** So the lock I repaired by hand is the lock `--update` writes at that head.
+
+All six runs are green: three suites runs ("8 suites: 8 passed"), three records runs (`pass`, each kept record its head's lock byte for byte).
+
+**One correction to my step 3 lines.** "`git diff origin/main -- security/lean-audit.json` shows the branch's entries only" holds by value, which is what I checked. By text the diff also shows a few entries that sit at another place in their section with the same value: `Hash.SecurityProofs.HistoryReadBinding` (`witnesses`, `shape.properties`), `NetTiming.SecurityProofs.PooledLeakCarried` (`unwitnessed`) and `Verity.SecurityProofs.RefineIncorrect` (`unwitnessed`, `shape.frozen`, `shape.inline`). [run] They are placed so in #8537's carried head `74145a920b7f` against `main`, the same in all three of my heads, and the same before the move against the old base; the statement against #8537 places two (`NetTiming.SecurityProofs.PooledLeakAccepted` in `witnesses`, `Verity.SecurityProofs.RefineIncorrect` in `shape.frozen`), also as before the move. The repair moved no entry.
+
+**Read only, for the merge of `main` to come.** [run] `git merge-tree --write-tree HEAD origin/main` at `origin/main` `8201dacff26e` exits 0 for each of the three heads; `main` has changed no file the branches change since `5c095bb4ab70`, and its lock is still the same blob. So today that merge changes none of the branches' files, the exclusion's lock stays 4,197,998 bytes, and the READMEs stay 49,161 and 49,167 bytes until trimmed.
+
+**Ready for the proof's body** (also in my note, under "Ready for the proof's body").
+- What `PeriodLeakChecked` says, in two sentences: (1) At a window's statement in scope where its two checks miss on the run at the network certifier's rows with probability at most ε₁ and ε₂ (`CheckedWitness` at `certifierRun`), an accepted audit's extracted witness is outside `RLeakCertifierChecked` with probability at most κ(δ) + ε₁ + ε₂ + √(γ·Pr[B]) + Pr[B_ext] + Pr[B_tap]. (2) Where the network certifier registers its observations at every window at that window's operator (`CertifierRegisters` at `runsBefore`), each secret whose every window meets `WindowGoodChecked` has the client's cells read from the windows' records under a registered parameter (`RecordFormat.ReadsBy`) and each window's record in `AccSeqsChecked` at its registration, and those secrets number at most #Θ times `windowsCount`, the registered and the checked inputs left out of each window's free inputs. [read: `security/Definitions/NetworkCertifier/Guarantees/PeriodChecked.lean` at `ff5d7a3d5aec`, the docstring and the definition from line 108]
+- The lock's line: at `ff5d7a3d5aec`, `security/lean-audit.json` line 27,321, `shape.frozen` `"NetTiming.SecurityProofs.PeriodLeakChecked": "frozen (no-function,world-unlisted): It is PeriodLeakAccepted's composition with each window's checked inputs left out of the count: …"`. Every name in the two sentences but κ, γ and `B_ext` is in that reason. The `guarantees` record's signature is `NetTiming.SecurityProofs.PeriodLeakChecked : NetTiming.Guarantees.PeriodLeakChecked`; its witnesses are `PeriodLeakChecked_honest` and `PeriodLeakChecked_nontrivial`. [run: read from the lock as JSON]
+- On ci's note: [run] at the proof's head the `unstated` entry `shape.frozen` `NetTiming.Guarantees.PeriodLeakChecked` (line 27,192 of the statement's lock, the one with "stated first (NET-293)" and the due date) is gone, and the entry that replaces it names no issue, date or pull request. The only own entries of the proof and the exclusion that name an issue and a date are the two `open` ones (`NetTiming.CheckedWitness`, `NetTiming.WindowGoodChecked`), in the fields `open` declares for them.
+
+**What I did not check.**
+- The kernel replay at any carried head: the three records runs are the fast path, which `check` and `research merge` refuse. The full Lean check passed at each head before the move.
+- The rest of the check: the slow tests (quick tier only), `circuit-check`, Flock's Rust, `lean-agreement`.
+- The suites' own logs on the nodes: the bookkeeping warnings (the README's cap at the proof and the exclusion, the retired-term sites) are not in the runs' `stdout.log`.
+- Pins: I carried with `--no-pins`, as CROSSB's routine does, and regenerated none; I rely on the suites passing.
+- The `Properties` and `Proofs` locks beyond their being `main`'s blobs at all three heads.
+- Against #8829: the merge's tree and the lock's entries only. Nothing built there; the merged tree is #8829's own.
+- soundness's, lean's and proofs' comments behind the ruling's sentence: you checked them.
+
+**Least sure of.** The exclusion's lock stays over the move script's text limit (4,197,998 bytes). I argued that nothing crosses the moves from it again; if some branch cut from it before the move is still to be carried (FAILFORMS's is done), the same trap takes it. Second, the README trim: 32 bytes from the branch's own lines is easy on the proof (its change has 27 README lines), and the exclusion's merge then inherits it; I have not drafted the cut.
+
+Nothing is running. Nothing is left only on my VM: the note `20261111T0653Z-state-net293-carry-periodproof` and `tools/net293carry/` are synced.
+
