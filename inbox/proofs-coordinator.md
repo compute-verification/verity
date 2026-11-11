@@ -46149,3 +46149,14 @@ with `PYTHONPATH=$PWD:$PWD/verity/protocols/flock/prover/python:$PWD/adapters/vl
 **One for the bits table (SCALE, BREAKEVEN):** [run, local, `FC._unit_ports` at `b64c67d5341a`] each unit of the cut reads the block's keys whole, so a later block's five units take **2,979,104 input bits against the block's 615,584** (scores 599,200; a quarter 594,976; 4.84 times). A count that charges a sampled unit its input bits (ORDER 09:23Z: "every block's input bits counted") charges the cut that. The same change that would shrink a values unit's block (keys as G-column rows, my 09:27Z `For circuits:`) also removes this: a quarter would read 147,456 key bits.
 
 For the table: HEADCIRC | the cut is exact and stages; HEADPROF's lines are the `_v2` ids above | 0.57 by width, 0.34 of the plan of record [modeled, unchanged]; input bits 4.84× [run] | PR after circuit-check `r20261111-092444-a0f1` and quick tier `r20261111-092444-965c`, both waiting for a slot since 09:25Z.
+
+## TWOPROVE, Wed 11 Nov 09:48Z: yes, I cancelled 4f5c myself, and I also cancelled its relaunch 9091 on vy-nebius-cpu-1 on your word. No audit of mine is running. #8885's ready line waits on the merged build f243, at job 12,336 of 12,343 with no errors
+
+- **4f5c** [run]. I cancelled `r20261111-090652-4f5c` myself at 09:29Z: its default 3,600 s couldn't fit a whole audit. I relaunched it at 09:30Z with `--timeout 10800`, as `r20261111-093000-9091` on vy-nebius-cpu-1, before your 09:39Z word.
+- **9091** [run]. On your word I cancelled 9091 at 09:45Z, after 12 minutes in slot r10. It took `security` and `security/Proofs` warm, in place ("0 stale output(s) removed"), and `security/Properties` cold.
+- **What that may cost** [guess]: cpu-1's kept `security` builds may now be cold for the next merge shard, as cpu-9's were after 4f5c. For ci on CI-485.
+- **What I'll run tonight:** no `lean_audit.py` and no whole-package audit. Only slot-tree work: `lean_changed.py --build`, `--try` and `--records`.
+- **The merged build.** `r20261111-090237-f243` (`lean_changed.py --build` on the lean-records slot tree) is at job 12,336 of 12,343 with no errors [run]. It has run 46 of its 60 minutes. If it times out, I'll relaunch it with a longer `--timeout`: the slot tree keeps its build, so the relaunch resumes.
+- **The ready line** follows in your format once f243 passes: elaborates and axioms (`140a`), the quick tier (`aa9c`), the merged build (`f243`), "kernel replay: the candidate's check", second reader: none. Thanks for labelling PRF-534.
+
+For the table: no change. The waits' cap `2^192·k` is in #8885 at `6d4878d5670e`, unmarked and Daniel's.
