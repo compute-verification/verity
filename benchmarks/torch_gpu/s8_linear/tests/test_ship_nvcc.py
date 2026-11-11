@@ -2,7 +2,9 @@
 toolkit whose nvcc prints a dry run of nvcc's shape and whose gcc, cicc and ptxas record what they are given. What cicc is
 handed for one source at two places in a tree is the same to the byte, and a dry run the wrapper can't follow, or a text
 that names the file it is in, is refused before cicc runs. job_nvcc.sh (the nvcc a job's own libraries compile with) is that
-wrapper in a directory of the call's own."""
+wrapper in a directory of the call's own. And ship_probe.sh, which a ship build runs before it compiles: with a stand-in
+nvcc whose cubin follows its source's path it passes, and it refuses, saying which comparison failed, an nvcc whose cubin
+follows no path and a toolkit that hands cicc something of a file's place the wrapper doesn't fix."""
 from __future__ import annotations
 
 import os
@@ -13,6 +15,7 @@ import pytest
 
 SHIP_NVCC = Path(__file__).resolve().parents[2] / "ship_nvcc.sh"
 JOB_NVCC = SHIP_NVCC.with_name("job_nvcc.sh")
+SHIP_PROBE = SHIP_NVCC.with_name("ship_probe.sh")
 TEMP = "tmpxft_0000aaaa_00000000"
 
 #: nvcc's dry run for a cubin: its variables, then the preprocessor, cicc, ptxas and an rm of a file it never wrote
@@ -176,3 +179,61 @@ def test_job_nvcc_is_the_wrapper_in_a_directory_of_the_calls_own(tmp: Path) -> N
     r = subprocess.run(["bash", str(JOB_NVCC), "-cubin", "t.cu"], env=dict(os.environ, CUDA=""), capture_output=True, text=True,
                        check=False)
     assert r.returncode != 0 and "the toolkit whose nvcc builds" in r.stderr
+
+
+#: an nvcc for the probe. Asked for a dry run, it prints DRY for its source and its -o; else it writes a cubin that is
+#: @PLAIN@, or fails where that is empty
+PROBE_NVCC = """#!/bin/bash
+src=; out=; dry=
+while [ $# -gt 0 ]; do case $1 in -o) out=$2; shift ;; -dryrun) dry=1 ;; *.cu) src=$1 ;; esac; shift; done
+if [ -n "$dry" ]; then sed -e "s|@SRC@|$src|g" -e "s|@OUT@|$out|g" "$(dirname "$0")/dry.txt" >&2; exit 0; fi
+[ -n "@PLAIN@" ] || { echo "no such architecture" >&2; exit 1; }
+echo "@PLAIN@" > "$out"
+"""
+
+#: a preprocessor for the probe: a line marker that names the source by its path, the program, and @MORE@
+PROBE_GCC = """#!/bin/bash
+src=; out=
+while [ $# -gt 0 ]; do case $1 in -o) out=$2; shift ;; *.cu) src=$1 ;; esac; shift; done
+{ echo "# 1 \\"$src\\""; echo "int probe;"; @MORE@; } > "$out"
+"""
+#: what nvcc hashes a source's path into, in the program's own text, where no line marker holds it
+OF_THE_PLACE = 'echo "int at_$(dirname "$src" | cksum | cut -d " " -f 1);"'
+
+
+def probe(tmp: Path, plain: str = "$src", more: str = "true") -> subprocess.CompletedProcess:
+    """ship_probe.sh with a stand-in toolkit whose nvcc's own cubin is `plain` and whose preprocessor adds `more`."""
+    kit = tmp / "kit"
+    for tool, text in (("nvcc", PROBE_NVCC.replace("@PLAIN@", plain)), ("gcc", PROBE_GCC.replace("@MORE@", more))):
+        (kit / "bin" / tool).write_text(text)
+    (kit / "bin/dry.txt").write_text(DRY.format(kit=kit, tmp=tmp / "tmp", temp=TEMP, ii=tmp / "tmp" / f"{TEMP}-5_t.cpp1.ii",
+                                                src="@SRC@", out="@OUT@", more="", s=" "))
+    env = dict(os.environ, CUDA=str(kit), TMPDIR=str(tmp / "tmp"))
+    return subprocess.run(["bash", str(SHIP_PROBE)], env=env, capture_output=True, text=True, check=False)
+
+
+def test_the_probe_passes_where_nvcc_follows_the_path_and_the_wrapper_does_not(tmp: Path) -> None:
+    r = probe(tmp)
+    assert (r.returncode, r.stderr) == (0, "")
+    assert given(tmp, "cicc")["input"] == '# 1 "probe.cu"\nint probe;\n'
+    assert not list((tmp / "tmp").iterdir()), "the probe's two places are removed"
+
+
+def test_the_probe_refuses_an_nvcc_whose_cubin_follows_no_path(tmp: Path) -> None:
+    r = probe(tmp, plain="one cubin wherever")
+    assert r.returncode != 0 and "the first comparison failed" in r.stderr and "second" not in r.stderr
+    assert "nvcc itself gives the probe one cubin at two places" in r.stderr
+    assert not list((tmp / "tmp").iterdir())
+
+
+def test_the_probe_refuses_a_wrapper_whose_cubin_follows_the_path(tmp: Path) -> None:
+    r = probe(tmp, more=OF_THE_PLACE)
+    assert r.returncode != 0 and "the second comparison failed" in r.stderr and "first" not in r.stderr
+    assert "ship_nvcc.sh gives the probe two cubins at two places" in r.stderr
+    assert not list((tmp / "tmp").iterdir())
+
+
+def test_the_probe_refuses_a_toolkit_that_does_not_build_it(tmp: Path) -> None:
+    r = probe(tmp, plain="")
+    assert r.returncode != 0 and "no such architecture" in r.stderr
+    assert "nvcc doesn't build the probe" in r.stderr and "comparison" not in r.stderr
