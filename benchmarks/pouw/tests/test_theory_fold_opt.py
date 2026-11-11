@@ -11,7 +11,7 @@ import pytest
 
 THEORY = Path(__file__).resolve().parents[1] / "theory"
 SCRIPT = THEORY / "fold_opt.py"
-RECEIPTS = Path(__file__).resolve().parents[1] / "receipts"
+RECEIPTS = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "receipts"
 
 
 def test_fold_step_matches_receipts():
