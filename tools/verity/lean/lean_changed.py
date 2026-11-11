@@ -17,7 +17,9 @@ cleanly that Lean doesn't) fails the run in minutes rather than when the audit's
 the axiom probe appended (`axiom_probe.py`: its last line names each theorem whose axioms go beyond the standard three,
 `sorryAx` among them, or says none do), and exits with lean's
 status on FILE's own lines (with `--siblings`, that copy's build then goes through the sibling check, `siblings.py`, whose
-status it takes); when that status is an import clash (an
+status it takes: its stub imports no module whose build, or the build of anything it imports in any package of the
+closure, is not of its source as it is, as a tree synced across a move of names holds them, and counts those it left
+out); when that status is an import clash (an
 import declaring what an earlier one did), the two modules it names lose their traces (`clashed`), so the next try rebuilds
 them against the outputs in place. It never runs check.py, so it reads and writes
 no record; where the node grants no `build` slot it refuses, naming the machines whose Lean slots file has that pool (each
@@ -40,7 +42,9 @@ reports, record keep and kind; that path builds in this checkout, so a run takes
 path it took, and a recorded run's `result.json` names it (`path`: `slot` or `dev-cache`). Slot `build/I`'s slot tree is
 `lean-records/build-I` under the check cache, whoever holds that slot's lock owns it, and check.py inherits the lock's
 descriptor, so the slot is held until check.py exits; with no SLOTS (a laptop) it is `lean-records/local`. `--tree` names
-another, only under `lean-records/`. A slot tree's fetched dependencies are its own copy of the audit's (taken once per
+another, only under `lean-records/` (a slot's tree there that is a link out of the check cache, onto another volume,
+too: `kept_tree`). A slot
+tree's fetched dependencies are its own copy of the audit's (taken once per
 manifest and toolchain, else fetched cold), never links (the step tree's are links, below), so what Lake writes there stays
 out of what the audit keeps. That bounds Lake's own writes, not compile-time code: check.py builds in its sandbox only where the
 machine allows one, and without it that code can write anything this user can, the audit's kept dependencies and passes
@@ -235,7 +239,10 @@ def requirers(pkg: str, pkgs: list[str]) -> list[str]:
 
 
 def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
-    """Make ``tree``'s copy of ``pkgs`` this checkout's tracked files, leaving each `.lake`; the number of files written."""
+    """Make ``tree``'s copy of ``pkgs`` this checkout's tracked files, leaving each `.lake`; the number of files written.
+    The product of a source it unlinks, or rewrites, stays: a tree serves several branches, and Lake replays the product
+    when one of them brings that source back as it was built from. Until then neither Lake nor a sibling check's stub
+    loads it: each reads in the module's trace which source it was built from (`siblings.py`)."""
     tracked, n = set(files), 0
     for p in pkgs:
         for d, dirs, names in os.walk(tree / p):
@@ -709,6 +716,16 @@ def made(tree: Path) -> Path:
     again, where `mkdir` on the link raises FileExistsError and fails every run handed that slot."""
     tree.resolve().mkdir(parents=True, exist_ok=True)
     return tree
+
+
+def kept_tree(tree: Path) -> bool:
+    """Whether ``tree`` is one of the trees `--records` and `--try` keep: a directory under `RECORDS` in the check cache, or
+    a link in `RECORDS` onto another volume, as a node makes a slot's (`made`). Such a link leads out of the check cache;
+    one that leads to another part of it is not kept, check's own `lean-changed` tree among them, whose dependencies are
+    links to the audit's."""
+    cache, at, to = LA.COMMON.cache_dir().resolve(), Path(os.path.abspath(tree)), tree.resolve()
+    base = (cache / RECORDS).resolve()
+    return base in to.parents or (at.parent.resolve() == base and cache != to and cache not in to.parents)
 
 
 #: `--records`' kept passes, beside its trees: `<inputs_key>.json` for each package whose records passed on those inputs, the
@@ -1186,10 +1203,9 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             log(f"lean-records: {why}")
         return finish(pkg, REFUSED, 2, out, update, "slot", {}, log)
 
-    base = (LA.COMMON.cache_dir() / RECORDS).resolve()
-    if tree is not None and base not in tree.resolve().parents:
-        return refused(f"{tree} is not under {base}: the fast path builds only on its own trees, never on check's "
-                       "(lean-changed), whose dependencies are links to the audit's")
+    if tree is not None and not kept_tree(tree):
+        return refused(f"{tree} is not under {(LA.COMMON.cache_dir() / RECORDS).resolve()}: the fast path builds only on its "
+                       "own trees, never on check's (lean-changed), whose dependencies are links to the audit's")
     files = LA.COMMON.tracked_files(ROOT)
     if files is None:
         return refused("the tree's files cannot be listed")
@@ -1414,9 +1430,9 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
     or the tree's dependencies can't be had. Never check.py. What the build compiled in the sandbox goes into the node's
     artifact cache (`put_built`); nothing is restored from it here, which only check.py does, with its sampled recompile."""
     file = file.removeprefix("./")
-    base = (LA.COMMON.cache_dir() / RECORDS).resolve()
-    if tree is not None and base not in tree.resolve().parents:
-        log(f"lean-try: {tree} is not under {base}, where the trees `--records` and `--try` keep are")
+    if tree is not None and not kept_tree(tree):
+        log(f"lean-try: {tree} is not under {(LA.COMMON.cache_dir() / RECORDS).resolve()}, where the trees `--records` and "
+            "`--try` keep are")
         return 2
     files = LA.COMMON.tracked_files(ROOT)
     if files is None:
