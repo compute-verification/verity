@@ -22,7 +22,8 @@ what the layout's design has and the tree does not.
     (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`). The inference-only
     policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which no unit rule reads yet:
-    `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `inference_only/nci/` and `inference_only/rho/`.
+    `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
+    `inference_only/nci/` and `inference_only/rho/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). `verity/definitions/`: the circuits
     written in it: `ops` (the primitive circuits' Definitions), `silicon` (the GPUs' exact semantics), `kernels`,
     `private_circuits` (the universal circuit), the served workloads' Definitions, and the evaluator and a circuit's
@@ -63,16 +64,17 @@ the Python that mirrors the Lean for speed; `PLACE` says where each unit's files
 code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into ml that `CORE_ML_EDGES` lists,
 and the units it reads are on the soundness path: `ml.circuits` (`verity/circuits/`), `ml.commitments`
 (`verity/commitments/`), `ml.crypto` (its `crypto/`) and `ml.randomness` (its `randomness/`) (`SOUNDNESS_PATH`, which
-only shrinks); core reaches neither the catalog (`ml.circuits.ops`, `ml.circuits.silicon`: `verity/definitions/ops/`
-and `silicon/`) nor the kernels. The rest can't affect soundness. ml never imports core (`ML_IMPORTS_CORE` names the
-exceptions). Inside `verity` each unit imports only what `ALLOWED` lists, and `verity` imports no other distribution of
-the workspace. Nothing outside `infra/` imports it (`INFRA_IMPORTERS`), and nothing under `verity/` imports an adapter
-(`KNOWN` in `tests/test_integration_boundaries.py`). `benchmarks/` is measurement only: nothing outside it imports its
-code, by package name or by a path put on `sys.path` or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a
-number a protocol uses reaches it through a card file citing an `art:` id. Target, not yet enforced: the layout's own
-rules. The runtime imports no protocol, and no protocol or adapter imports it; `circuits/` imports nothing and
-`commitments/` only `circuits/`; no code imports `security/` or the hardware data; inside `verity/protocols/`, flock is
-at the bottom, spot and recursion on it, the audits on those, and remote and onsite on top.
+only shrinks; `PLACE` gives the first two a few files outside those directories too); core reaches neither the catalog
+(`ml.circuits.ops`, `ml.circuits.silicon`: `verity/definitions/ops/` and `silicon/`) nor the kernels. The rest can't
+affect soundness. ml never imports core (`ML_IMPORTS_CORE` names the exceptions). Inside `verity` each unit imports only
+what `ALLOWED` lists, and `verity` imports no other distribution of the workspace. Nothing outside `infra/` imports it
+(`INFRA_IMPORTERS`), and nothing under `verity/` imports an adapter (`KNOWN` in `tests/test_integration_boundaries.py`).
+`benchmarks/` is measurement only: nothing outside it imports its code, by package name or by a path put on `sys.path`
+or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a number a protocol uses reaches it through a card
+file citing an `art:` id. Target, not yet enforced: the layout's own rules. The runtime imports no protocol, and no
+protocol or adapter imports it; `circuits/` imports nothing and `commitments/` only `circuits/`; no code imports
+`security/` or the hardware data; inside `verity/protocols/`, flock is at the bottom, spot and recursion on it, the
+audits on those, and remote and onsite on top.
 
 `verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|demo NAME`, `verity --help`.
 
