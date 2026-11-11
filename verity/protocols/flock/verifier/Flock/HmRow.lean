@@ -2700,12 +2700,13 @@ theorem Stmt.setupTables_eq (tags : Tags) (circuitFile publicFile : ByteArray) (
 /-! ## The verifier's program, read once
 
 A setup reads the verifier's own program (`--program`) through `TemplateQuery.Desc.parse` and `Program.decode`, each of
-which parses the descriptor's JSON and hashes its canonical form. `ProgramRead` holds the program with both readings, each
-made when a setup first asks for it and kept, so every setup of one run and every reader in a setup share them. Each
-function below is the function it is named after with the program's bytes replaced by a `ProgramRead`, and at
-`ProgramRead.of` of those bytes it is that function (`Stmt.setupHiddenOf_eq`, `Stmt.setupTablesOf_eq`). -/
+which parses the descriptor's JSON and hashes its canonical form. Each function below named `…By` is the function it is
+named after with those two readings as its parameters `readDesc` and `readProg`, and at the readings themselves it is that
+function (`Stmt.setupHiddenOf_eq_by`, `Stmt.setupTablesOf_eq_by`). `ProgramRead` holds a program with both readings of it,
+each made when first asked for and kept; its `descAt` and `progAt` are the two readings on every input
+(`ProgramRead.descAt_of`, `ProgramRead.progAt_of`), so a run that hands them to its setups reads its program once. -/
 
-/-- The verifier's own program and its two readings, `TemplateQuery.Desc.parse` and `Program.decode` of `bytes`. -/
+/-- A program and its two readings, `TemplateQuery.Desc.parse` and `Program.decode` of `bytes`. -/
 structure ProgramRead where
   bytes : ByteArray
   desc : Thunk (V TemplateQuery.Desc)
@@ -2715,25 +2716,46 @@ structure ProgramRead where
 def ProgramRead.of (program : ByteArray) : ProgramRead :=
   ⟨program, Thunk.mk fun _ => TemplateQuery.Desc.parse program, Thunk.mk fun _ => Program.decode program⟩
 
-theorem ProgramRead.desc_of (program : ByteArray) : (ProgramRead.of program).desc.get = TemplateQuery.Desc.parse program :=
-  rfl
+/-- `TemplateQuery.Desc.parse`: on `r`'s own bytes the reading `r` keeps, elsewhere made anew. -/
+def ProgramRead.descAt (r : ProgramRead) (b : ByteArray) : V TemplateQuery.Desc :=
+  match withPtrEqDecEq b r.bytes (fun _ => inferInstance) with
+  | isTrue _ => r.desc.get
+  | isFalse _ => TemplateQuery.Desc.parse b
 
-theorem ProgramRead.prog_of (program : ByteArray) : (ProgramRead.of program).prog.get = Program.decode program := rfl
+/-- `Program.decode`: on `r`'s own bytes the reading `r` keeps, elsewhere made anew. -/
+def ProgramRead.progAt (r : ProgramRead) (b : ByteArray) : V Program.Prog :=
+  match withPtrEqDecEq b r.bytes (fun _ => inferInstance) with
+  | isTrue _ => r.prog.get
+  | isFalse _ => Program.decode b
 
-theorem ProgramRead.bytes_of (program : Option ByteArray) : (program.map ProgramRead.of).map (·.bytes) = program := by
-  cases program <;> rfl
+theorem ProgramRead.descAt_of (program : ByteArray) : (ProgramRead.of program).descAt = TemplateQuery.Desc.parse := by
+  funext b
+  unfold ProgramRead.descAt
+  split
+  · rename_i h _
+    exact congrArg TemplateQuery.Desc.parse (Eq.symm h)
+  · rfl
+
+theorem ProgramRead.progAt_of (program : ByteArray) : (ProgramRead.of program).progAt = Program.decode := by
+  funext b
+  unfold ProgramRead.progAt
+  split
+  · rename_i h _
+    exact congrArg Program.decode (Eq.symm h)
+  · rfl
 
 namespace HmRow
 
-/-- `deriveTemplateUnits` on the program as read. -/
-def deriveTemplateUnitsOf (c : Circuit) (obj : Json) (read : ProgramRead) (indices : Array Nat) : V String := do
+/-- `deriveTemplateUnits`, the program read by `readDesc`. -/
+def deriveTemplateUnitsBy (readDesc : ByteArray → V TemplateQuery.Desc)
+    (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
   let q := (obj.getObjVal? "query").toOption.getD Json.null
   let name := (q.getObjValAs? String "name").toOption.getD ""
   let version := (q.getObjValAs? Nat "version").toOption.getD 0
   let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
     | throw s!"partition: {name} v{version} is not a template query"
   let ts ← ts
-  let d ← read.desc.get
+  let d ← readDesc program
   if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
     throw "partition: the verifier's program is not the one the partition object names"
   let rs ← match TemplateQuery.evaluate d ts with
@@ -2749,18 +2771,15 @@ def deriveTemplateUnitsOf (c : Circuit) (obj : Json) (read : ProgramRead) (indic
   let of := if cls then s!" (META definition of the unit class {(circuitTemplate c).getD ""}; that the class circuit lowers it is not checked)" else ""
   return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}{of}"
 
-theorem deriveTemplateUnits_eq (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) :
-    deriveTemplateUnits c obj program indices = deriveTemplateUnitsOf c obj (ProgramRead.of program) indices :=
-  rfl
-
-/-- `deriveQwordUnits` on the program as read. -/
-def deriveQwordUnitsOf (c : Circuit) (obj : Json) (read : ProgramRead) (indices : Array Nat) : V String := do
+/-- `deriveQwordUnits`, the program read by `readProg`. -/
+def deriveQwordUnitsBy (readProg : ByteArray → V Program.Prog)
+    (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
   let q := (obj.getObjVal? "query").toOption.getD Json.null
   let version := (q.getObjValAs? Nat "version").toOption.getD 0
   let ps := (q.getObjVal? "params").toOption.getD Json.null
   let X := (ps.getObjValAs? Nat "X").toOption.getD 0
   let W := (ps.getObjValAs? Nat "W").toOption.getD 0
-  let P ← read.prog.get
+  let P ← readProg program
   if (obj.getObjValAs? String "program").toOption != some (hexOf P.sha512) then
     throw "partition: the verifier's program is not the one the partition object names"
   let calls ← match Extract.evaluate P X with
@@ -2777,11 +2796,12 @@ def deriveQwordUnitsOf (c : Circuit) (obj : Json) (read : ProgramRead) (indices 
   | .ok note => return s!"units derived: Q_word v{version} {"{"}X: {X}, W: {W}{"}"} over the verifier's program ({note}); every Call's cut holds the partition invariant and the width rule{across}"
   | .error e => throw s!"partition: {e}"
 
-/-- `deriveQcallUnits` on the program as read. -/
-def deriveQcallUnitsOf (c : Circuit) (obj : Json) (read : ProgramRead) (indices : Array Nat) : V String := do
+/-- `deriveQcallUnits`, the program read by `readProg`. -/
+def deriveQcallUnitsBy (readProg : ByteArray → V Program.Prog)
+    (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
   let q := (obj.getObjVal? "query").toOption.getD Json.null
   let X := ((q.getObjVal? "params").toOption.getD Json.null |>.getObjValAs? Nat "X").toOption.getD 0
-  let P ← read.prog.get
+  let P ← readProg program
   if (obj.getObjValAs? String "program").toOption != some (hexOf P.sha512) then
     throw "partition: the verifier's program is not the one the partition object names"
   let calls ← match Qcall.evaluate P X with
@@ -2801,31 +2821,29 @@ def deriveQcallUnitsOf (c : Circuit) (obj : Json) (read : ProgramRead) (indices 
   | .ok note => return s!"units derived: Q_call v1 {"{"}X: {X}{"}"} over the verifier's program ({note}); every Call's cut holds the partition invariant and the width rule; values computed in two units, reported, not refused: {across} pair(s) over its Definitions"
   | .error e => throw s!"partition: {e}"
 
-/-- `qwordFinding` on the program as read. -/
-def qwordFindingOf (c : Circuit) (pub : Public) (obj : Json) (read : ProgramRead) (f : PartitionFinding) :
+/-- `qwordFinding`, the program read by `readProg`. -/
+def qwordFindingBy (readProg : ByteArray → V Program.Prog)
+    (c : Circuit) (pub : Public) (obj : Json) (program : ByteArray) (f : PartitionFinding) :
     V (Option PartitionFinding) := do
   let q := (obj.getObjVal? "query").toOption.getD Json.null
   if EVALUABLE.contains ((q.getObjValAs? String "name").toOption.getD "", (q.getObjValAs? Nat "version").toOption.getD 0) then
     let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
-    pure (some { f with derived := true, note := ← deriveQwordUnitsOf c obj read indices })
+    pure (some { f with derived := true, note := ← deriveQwordUnitsBy readProg c obj program indices })
   else if ((q.getObjValAs? String "name").toOption.getD "", (q.getObjValAs? Nat "version").toOption.getD 0) == Q_CALL then
     let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
-    pure (some { f with derived := true, note := ← deriveQcallUnitsOf c obj read indices })
+    pure (some { f with derived := true, note := ← deriveQcallUnitsBy readProg c obj program indices })
   else pure (some f)
 
-theorem qwordFinding_eq (c : Circuit) (pub : Public) (obj : Json) (program : ByteArray) (f : PartitionFinding) :
-    qwordFinding c pub obj program f = qwordFindingOf c pub obj (ProgramRead.of program) f :=
-  rfl
-
-/-- `templateStrata` on the program as read. -/
-private def templateStrataOf (law : String) (obj : Json) (read : ProgramRead) :
+/-- `templateStrata`, the program read by `readDesc`. -/
+private def templateStrataBy (readDesc : ByteArray → V TemplateQuery.Desc)
+    (law : String) (obj : Json) (program : ByteArray) :
     V (Array (String × Array (Nat × Nat)) × Nat) := do
   let (name, version) ← checkPartitionObject obj
   let q := (obj.getObjVal? "query").toOption.getD Json.null
   let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
     | throw s!"{law}: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
   let ts ← ts
-  let d ← read.desc.get
+  let d ← readDesc program
   if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
     throw "partition: the verifier's program is not the one the partition object names"
   let rs ← match TemplateQuery.evaluate d ts with
@@ -2833,27 +2851,21 @@ private def templateStrataOf (law : String) (obj : Json) (read : ProgramRead) :
     | .error e => throw s!"partition: {e}"
   return (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)), TemplateQuery.population rs)
 
-/-- `stratifiedLaw` on the program as read. -/
-def stratifiedLawOf (obj : Json) (read : ProgramRead) (k : Nat) : V (Draw.Law × Nat) := do
-  let (strata, population) ← templateStrataOf "stratified" obj read
+/-- `stratifiedLaw`, the program read by `readDesc`. -/
+def stratifiedLawBy (readDesc : ByteArray → V TemplateQuery.Desc)
+    (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × Nat) := do
+  let (strata, population) ← templateStrataBy readDesc "stratified" obj program
   match Draw.derive k strata with
   | .ok law => return (law, population)
   | .error e => throw s!"stratified: {e}"
 
-theorem stratifiedLaw_eq (obj : Json) (program : ByteArray) (k : Nat) :
-    stratifiedLaw obj program k = stratifiedLawOf obj (ProgramRead.of program) k :=
-  rfl
-
-/-- `workLaw` on the program as read. -/
-def workLawOf (obj : Json) (read : ProgramRead) (k : Nat) (table : Array (String × Nat × Nat)) : V (Draw.Law × Nat) := do
-  let (strata, population) ← templateStrataOf "work" obj read
+/-- `workLaw`, the program read by `readDesc`. -/
+def workLawBy (readDesc : ByteArray → V TemplateQuery.Desc)
+    (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) : V (Draw.Law × Nat) := do
+  let (strata, population) ← templateStrataBy readDesc "work" obj program
   match Draw.deriveWork k strata table with
   | .ok law => return (law, population)
   | .error e => throw s!"work: {e}"
-
-theorem workLaw_eq (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
-    workLaw obj program k table = workLawOf obj (ProgramRead.of program) k table :=
-  rfl
 
 end HmRow
 
@@ -2861,22 +2873,20 @@ namespace HmLinks
 
 open HmRow
 
-/-- `check` on the program as read. -/
-def checkOf (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (read : ProgramRead) : V Nat := do
+/-- `check`, the program read by `readProg`. -/
+def checkBy (readProg : ByteArray → V Program.Prog)
+    (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) : V Nat := do
   let links ← parse c
-  let P ← read.prog.get
+  let P ← readProg program
   let ns := nodes P
   checkAt c pop P links (unitAt ns) (ownerAt ns) (count ns) readers
 
-theorem check_eq (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) :
-    check c pop readers program = checkOf c pop readers (ProgramRead.of program) :=
-  rfl
-
 end HmLinks
 
-/-- `Stmt.setupHiddenOf` on the program as read (`read`), which the caller reads once (`Stmt.setupHiddenOf_eq`). -/
-def Stmt.setupHiddenRead (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (coins : Coins)
-    (draw : Option Json := none) (partition : Option Json := none) (read : Option ProgramRead := none)
+/-- `Stmt.setupHiddenOf`, the program read by `readDesc` and `readProg` (`Stmt.setupHiddenOf_eq_by`). -/
+def Stmt.setupHiddenBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg : ByteArray → V Program.Prog)
+    (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (coins : Coins)
+    (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none)
     (publicInputs : Option ByteArray := none) : V Stmt := do
   let c ← parsed
   let pi ← HmIn.parse c
@@ -2890,23 +2900,23 @@ def Stmt.setupHiddenRead (parsed : V Circuit) (tags : Tags) (publicFile : ByteAr
     | none => pure pop
   if let some d := draw then
     if let (Except.ok (Draw.Law.stratified k strata), some obj, some prog) :=
-        ((Draw.UnitDraw.ofJson d).map (·.law), partition, read) then
-      let (law, _) ← HmRow.stratifiedLawOf obj prog k
+        ((Draw.UnitDraw.ofJson d).map (·.law), partition, program) then
+      let (law, _) ← HmRow.stratifiedLawBy readDesc obj prog k
       if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmOut.checkPublic c pub
   let linked := J.has c.metaJ "links"
-  let finding ← match finding0, partition, read with
+  let finding ← match finding0, partition, program with
     | some f, some obj, some prog =>
       let q := (obj.getObjVal? "query").toOption.getD Json.null
       if (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "") ((q.getObjValAs? Nat "version").toOption.getD 0) Json.null).isSome then
         let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
-        let note ← HmRow.deriveTemplateUnitsOf c obj prog indices
-        let wires ← HmLinks.checkOf c pop (HmLinks.readersOf draw) prog
+        let note ← HmRow.deriveTemplateUnitsBy readDesc c obj prog indices
+        let wires ← HmLinks.checkBy readProg c pop (HmLinks.readersOf draw) prog
         let linking := if wires == 0 && !linked then "; no cut wire between the statement's units"
           else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}, each reader's link row the writer's committed output row"
         pure (some { f with derived := true, note := note ++ linking })
       else if linked then throw "META links: Linking is checked under a template query (Q_template_instance v0, Q_template_instances v0) only"
-      else HmRow.qwordFindingOf c pub obj prog f
+      else HmRow.qwordFindingBy readProg c pub obj prog f
     | f, _, _ =>
       if linked then throw "META links: Linking needs the verifier's own program and partition (--program, --partition)"
       pure f
@@ -2938,11 +2948,12 @@ def Stmt.setupHiddenRead (parsed : V Circuit) (tags : Tags) (publicFile : ByteAr
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
            hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
-/-- `Stmt.setupTablesOf` on the program as read (`read`), which the caller reads once: a one-table session with hidden
-outputs sets up on it, any other on its bytes (`Stmt.setupTablesOf_eq`). -/
-def Stmt.setupTablesRead (parsed : V Circuit) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
+/-- `Stmt.setupTablesOf`, the program read by `readDesc` and `readProg` where a one-table session with hidden outputs sets up
+(`Stmt.setupTablesOf_eq_by`). -/
+def Stmt.setupTablesBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg : ByteArray → V Program.Prog)
+    (parsed : V Circuit) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
-    (read : Option ProgramRead := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
+    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
     (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none)
     (publicInputs : Option ByteArray := none) : V (SessionSpec × Array Stmt) := do
   -- a closure sample proves more units than it samples, so what it adds must be the verifier's own closure of the sample
@@ -2958,40 +2969,40 @@ def Stmt.setupTablesRead (parsed : V Circuit) (tags : Tags) (circuitFile publicF
   -- a stratified sample's K and strata set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
     if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
-      let (some obj, some prog, some K) := (partition, read, stratified)
+      let (some obj, some prog, some K) := (partition, program, stratified)
         | throw "U2: a stratified draw needs the verifier's own K, program and partition (--stratified, --program, --partition)"
       if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
-      let (law, _) ← HmRow.stratifiedLawOf obj prog K
+      let (law, _) ← HmRow.stratifiedLawBy readDesc obj prog K
       if law != Draw.Law.stratified k strata then
         throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
   -- a work sample's K and stated work set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
     if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
-      let (some obj, some prog, some (K, table)) := (partition, read, work)
+      let (some obj, some prog, some (K, table)) := (partition, program, work)
         | throw "U2: a work draw needs the verifier's own K, work table, program and partition (--work, --work-table, --program, --partition)"
       if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
-      let (law, _) ← HmRow.workLawOf obj prog K table
+      let (law, _) ← HmRow.workLawBy readDesc obj prog K table
       if law != Draw.Law.work k strata then
         throw "U2: the draw's work law is not the verifier's own (its K, program, query and work table)"
   if publicInputs.isSome && !tags.hiddenOutputs then
     throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
   let setup := fun (t : Tags) (d : Option Json) => do
     if tags.hiddenOutputs then
-      let st ← Stmt.setupHidden t circuitFile publicFile coins tables d partition (read.map (·.bytes)) publicInputs
+      let st ← Stmt.setupHidden t circuitFile publicFile coins tables d partition program publicInputs
       if HmRow.pinnedCount st.c.metaJ != 0 then throw s!"{tags.name}: refused: {HmRow.pinnedWhy}"
       pure st
     else
-      let st ← Stmt.setupH t circuitFile publicFile coins tables d partition (read.map (·.bytes))
+      let st ← Stmt.setupH t circuitFile publicFile coins tables d partition program
       if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then
         throw s!"META: public_inputs, shared_reads: a {tags.name} statement has no public input ports or shared reads (only a statement with hidden outputs has them)"
       pure st
   let setupOne := fun (d : Option Json) => do
     if tags.hiddenOutputs then
-      let st ← Stmt.setupHiddenRead parsed tags publicFile coins d partition read publicInputs
+      let st ← Stmt.setupHiddenBy readDesc readProg parsed tags publicFile coins d partition program publicInputs
       if HmRow.pinnedCount st.c.metaJ != 0 then throw s!"{tags.name}: refused: {HmRow.pinnedWhy}"
       pure st
     else
-      let st ← Stmt.setupH tags circuitFile publicFile coins tables d partition (read.map (·.bytes))
+      let st ← Stmt.setupH tags circuitFile publicFile coins tables d partition program
       if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then
         throw s!"META: public_inputs, shared_reads: a {tags.name} statement has no public input ports or shared reads (only a statement with hidden outputs has them)"
       pure st
@@ -3032,21 +3043,22 @@ def Stmt.setupTablesRead (parsed : V Circuit) (tags : Tags) (circuitFile publicF
             unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
 set_option maxRecDepth 20000 in
-theorem Stmt.setupHiddenOf_eq (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (coins : Coins)
+theorem Stmt.setupHiddenOf_eq_by (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (coins : Coins)
     (draw partition : Option Json) (program publicInputs : Option ByteArray) :
     Stmt.setupHiddenOf parsed tags publicFile coins draw partition program publicInputs
-      = Stmt.setupHiddenRead parsed tags publicFile coins draw partition (program.map ProgramRead.of) publicInputs := by
-  cases program <;> rfl
+      = Stmt.setupHiddenBy TemplateQuery.Desc.parse Program.decode parsed tags publicFile coins draw partition program
+          publicInputs :=
+  rfl
 
 set_option maxRecDepth 20000 in
-theorem Stmt.setupTablesOf_eq (parsed : V Circuit) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
+theorem Stmt.setupTablesOf_eq_by (parsed : V Circuit) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
     (count : Nat) (tables : List (String × ByteArray)) (draw partition : Option Json) (program : Option ByteArray)
     (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
     (closure : Option (Std.HashMap Nat (Array Nat))) (publicInputs : Option ByteArray) :
     Stmt.setupTablesOf parsed tags circuitFile publicFile coins count tables draw partition program work stratified closure
         publicInputs
-      = Stmt.setupTablesRead parsed tags circuitFile publicFile coins count tables draw partition
-          (program.map ProgramRead.of) work stratified closure publicInputs := by
-  cases program <;> rfl
+      = Stmt.setupTablesBy TemplateQuery.Desc.parse Program.decode parsed tags circuitFile publicFile coins count tables
+          draw partition program work stratified closure publicInputs :=
+  rfl
 
 end Flock

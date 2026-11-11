@@ -642,13 +642,14 @@ def namesOnce (c : Circuit) : V Unit :=
   | some q => throw s!"registered reads: the circuit names port {c.ports[q]!.name} twice, and a registered read names one port"
   | none => pure ()
 
-/-- `checkProgram` on the program as read (`ProgramRead`). -/
-def checkProgramOf (read : Option ProgramRead) (registered : Bool) : V Unit :=
-  match read, registered with
+/-- `checkProgram`, the program read by `readDesc`. -/
+def checkProgramBy (readDesc : ByteArray → V TemplateQuery.Desc)
+    (program : Option ByteArray) (registered : Bool) : V Unit :=
+  match program, registered with
   | none, _ => .ok ()
   | some _, true => .ok ()
-  | some r, false =>
-    match r.desc.get with
+  | some b, false =>
+    match readDesc b with
     | .error e => .error e
     | .ok d =>
       match (programInputs d)[0]? with
@@ -656,16 +657,17 @@ def checkProgramOf (read : Option ProgramRead) (registered : Bool) : V Unit :=
       | some id =>
         .error s!"registered reads: the verifier's program reads a registered value ({id}), and the verifier holds no registered roots (--registered): its rows would be committed afresh, whatever the statement's public file names"
 
-theorem checkProgram_eq (program : Option ByteArray) (registered : Bool) :
-    checkProgram program registered = checkProgramOf (program.map ProgramRead.of) registered := by
-  cases program <;> rfl
+theorem checkProgram_eq_by (program : Option ByteArray) (registered : Bool) :
+    checkProgram program registered = checkProgramBy TemplateQuery.Desc.parse program registered :=
+  rfl
 
-/-- `checkCover` on the program as read (`ProgramRead`). -/
-def checkCoverOf (c : Circuit) (read : Option ProgramRead) (partition : Option Json) (own : Option (Array Port))
+/-- `checkCover`, the program read by `readProg`. -/
+def checkCoverBy (readProg : ByteArray → V Program.Prog)
+    (c : Circuit) (program : Option ByteArray) (partition : Option Json) (own : Option (Array Port))
     (params : Array String) : V Unit :=
-  match read, own with
-  | some r, some _ =>
-    match r.prog.get with
+  match program, own with
+  | some b, some _ =>
+    match readProg b with
     | .error e => .error e
     | .ok P =>
       if !regRoots P then .ok ()
@@ -678,10 +680,10 @@ def checkCoverOf (c : Circuit) (read : Option ProgramRead) (partition : Option J
           | some (name, _) => .error s!"registered reads (cover): parameter {name} of {t} reads a registered input of the verifier's program, and no port of the verifier's registered reads reads it: its rows would be committed afresh"
   | _, _ => .ok ()
 
-theorem checkCover_eq (c : Circuit) (program : Option ByteArray) (partition : Option Json) (own : Option (Array Port))
+theorem checkCover_eq_by (c : Circuit) (program : Option ByteArray) (partition : Option Json) (own : Option (Array Port))
     (params : Array String) :
-    checkCover c program partition own params = checkCoverOf c (program.map ProgramRead.of) partition own params := by
-  cases program <;> rfl
+    checkCover c program partition own params = checkCoverBy Program.decode c program partition own params :=
+  rfl
 
 end Registered
 

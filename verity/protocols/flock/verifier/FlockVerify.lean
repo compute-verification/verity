@@ -286,39 +286,64 @@ theorem buildSessionOf_eq (tags : Tags) (circuitB pubB compB : ByteArray) (coins
   unfold buildSession
   simp only [hr, ↓reduceIte, ProvedScope.circuitOf, hh, Stmt.setupTables_eq]
 
-/-- `buildSessionOf` on the verifier's program as read (`read`, `ProgramRead`), which `verifyCmd` reads once for every
-setup: a statement with hidden outputs sets up on it (`Stmt.setupTablesRead`), any other on its bytes
-(`buildSessionOf_eq_read`). -/
-def buildSessionRead (parsed : V Circuit) (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+/-- `buildSessionOf`, the verifier's program read by `readDesc` and `readProg` where a statement with hidden outputs sets up
+(`Stmt.setupTablesBy`); any other sets up as `buildSession` does (`buildSessionOf_eq_by`). -/
+def buildSessionBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg : ByteArray → V Program.Prog)
+    (parsed : V Circuit) (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
     (tables : List (String × ByteArray)) (count : Nat) (draw : Option Lean.Json := none) (partition : Option Lean.Json := none)
-    (read : Option ProgramRead := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
+    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
     (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none)
     (registered : Option (Array Registered.Port) := none) (publicInputs : Option ByteArray := none)
     (identifier : Option String := none) : V (SessionSpec × Array Stmt) :=
   if tags.hiddenOutputs && tags.hm96Rows then do
-    let (spec, sts) ← Stmt.setupTablesRead parsed tags circuitB pubB coins count tables draw partition read work stratified
-      closure publicInputs
+    let (spec, sts) ← Stmt.setupTablesBy readDesc readProg parsed tags circuitB pubB coins count tables draw partition
+      program work stratified closure publicInputs
     for st in sts do
       checkRegistered st registered
       checkIdentifier st identifier
     Registered.checkFull registered draw
     return (spec, sts)
-  else buildSession tags circuitB pubB compB coins tables count draw partition (read.map (·.bytes)) work stratified closure
-    registered publicInputs identifier
+  else buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure registered
+    publicInputs identifier
 
-/-- **`verifyCmd`'s one reading of its program sets up what `buildSessionOf` sets up**: `buildSessionRead` on
-`ProgramRead.of` of the program's bytes is `buildSessionOf` on those bytes. -/
-theorem buildSessionOf_eq_read (parsed : V Circuit) (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+theorem buildSessionOf_eq_by (parsed : V Circuit) (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
     (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Lean.Json) (program : Option ByteArray)
     (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
     (closure : Option (Std.HashMap Nat (Array Nat))) (registered : Option (Array Registered.Port))
     (publicInputs : Option ByteArray) (identifier : Option String) :
     buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
         registered publicInputs identifier
-      = buildSessionRead parsed tags circuitB pubB compB coins tables count draw partition (program.map ProgramRead.of)
-        work stratified closure registered publicInputs identifier := by
-  unfold buildSessionOf buildSessionRead
-  rw [Stmt.setupTablesOf_eq, ProgramRead.bytes_of]
+      = buildSessionBy TemplateQuery.Desc.parse Program.decode parsed tags circuitB pubB compB coins tables count draw
+        partition program work stratified closure registered publicInputs identifier := by
+  unfold buildSessionOf buildSessionBy
+  rw [Stmt.setupTablesOf_eq_by]
+
+/-- **`verifyCmd`'s one reading of its program sets up what `buildSessionOf` sets up**: `buildSessionBy` at the readings a
+`ProgramRead` keeps, of whatever bytes, is `buildSessionOf`. -/
+theorem buildSessionBy_read (read : ByteArray)
+    (parsed : V Circuit) (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Lean.Json) (program : Option ByteArray)
+    (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
+    (closure : Option (Std.HashMap Nat (Array Nat))) (registered : Option (Array Registered.Port))
+    (publicInputs : Option ByteArray) (identifier : Option String) :
+    buildSessionBy (ProgramRead.of read).descAt (ProgramRead.of read).progAt parsed tags circuitB pubB compB coins tables
+        count draw partition program work stratified closure registered publicInputs identifier
+      = buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
+        registered publicInputs identifier := by
+  rw [ProgramRead.descAt_of, ProgramRead.progAt_of, buildSessionOf_eq_by]
+
+/-- `Registered.checkProgramBy` at the reading a `ProgramRead` keeps is `Registered.checkProgram`. -/
+theorem checkProgramBy_read (read : ByteArray) (program : Option ByteArray) (registered : Bool) :
+    Registered.checkProgramBy (ProgramRead.of read).descAt program registered
+      = Registered.checkProgram program registered := by
+  rw [ProgramRead.descAt_of, Registered.checkProgram_eq_by]
+
+/-- `Registered.checkCoverBy` at the reading a `ProgramRead` keeps is `Registered.checkCover`. -/
+theorem checkCoverBy_read (read : ByteArray) (c : Circuit) (program : Option ByteArray) (partition : Option Lean.Json)
+    (own : Option (Array Registered.Port)) (params : Array String) :
+    Registered.checkCoverBy (ProgramRead.of read).progAt c program partition own params
+      = Registered.checkCover c program partition own params := by
+  rw [ProgramRead.progAt_of, Registered.checkCover_eq_by]
 
 /-- The SHA-512 of a JSON value's canonical JSON (`canon`), as `Spot.canonSha512` digests one. -/
 def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← canon j).toUTF8)
@@ -1115,20 +1140,20 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
   -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
   let scope := if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
-  -- the program read once, for every setup and every reader in one (`ProgramRead`): each setup is what it is on the
-  -- program's bytes (`Registered.checkProgram_eq`, `buildSessionOf_eq_read`, `Registered.checkCover_eq`)
-  let read := program.map ProgramRead.of
+  -- the program read once, for every setup and every reader in one: each setup is what it is with the program read
+  -- anew (`checkProgramBy_read`, `buildSessionBy_read`, `checkCoverBy_read`)
+  let read := ProgramRead.of (program.getD ByteArray.empty)
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
-        Registered.checkProgramOf read registered.isSome
+        Registered.checkProgramBy read.descAt program registered.isSome
         RecSetup.checkInner recInner recCoins recBound
         RecLinkPart.checkShape recInner recLinks
         RecBudget.regs recInner registered
         RecBudget.statements recInner
-        let r ← buildSessionRead parsed tags circuitB pubB compB coins tables count draw partition read work stratified closure
-          registered publicInputs (identifier.map Prod.snd)
+        let r ← buildSessionBy read.descAt read.progAt parsed tags circuitB pubB compB coins tables count draw partition
+          program work stratified closure registered publicInputs (identifier.map Prod.snd)
         if let some own := registered then r.2.forM fun (st : Stmt) => Registered.checkComplete st.c own
-        r.2.forM fun (st : Stmt) => Registered.checkCoverOf st.c read partition registered params
+        r.2.forM fun (st : Stmt) => Registered.checkCoverBy read.progAt st.c program partition registered params
         r.2.forM fun (st : Stmt) => KnownRead.check st.c known
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows
