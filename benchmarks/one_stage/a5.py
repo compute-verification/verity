@@ -843,7 +843,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         counts[m.template] = counts.get(m.template, 0) + sum(1 for u in local if m.base + u in drawn_units)
         if local:
             drawn.append((mm, local))
-    archived: dict = {}     # the members' circuit, archived once for every Lean verify (`a0.lean_verify`)
+    archived: dict = {}     # the window's files, archived once for every Lean verify (`a0.archive_put`)
     for mm in members:
         mm["st"]["archived"] = archived
 
@@ -937,9 +937,16 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # every member's statement is staged before any session flips a coin, and outer proofs run one at a time
     # (`ONE_AT_A_TIME`): the sessions run in the members' order, on the proof server's one prover or each as its own process
     # pair, and only Lean's checks, outside any ZK server, overlap the next member's session. A server's challengers audit
-    # its sessions at its close, each member's audit then a verdict.
+    # its sessions at its close, each member's audit then a verdict. What Lean's verify reads of the window (each sampled
+    # member's circuit, public file, tables and registered reads, the partition and the program) is fixed once staged, so
+    # one process archives it all before the first session (``lean-verify/archive``) and a member's own archive links it.
     try:
         statements = [staged(mm, local) for mm, local in drawn]
+        if statements:
+            (out / "lean-verify").mkdir(exist_ok=True)
+            a0.archive_put(a.lean, out / "lean-verify" / "archive",
+                           [f for s in statements for f in a0.archive_files(s["mm"]["st"], s["mm"]["m"].n)],
+                           out / "lean-verify" / "archive-put.log", archived)
         with ThreadPoolExecutor(1) as lean:
             checks = [lean.submit(member_checks, member_session(i, s)) for i, s in enumerate(statements)]
             done = [c.result() for c in checks]

@@ -20,7 +20,8 @@ session behind the ZK server (``--firewall``) or not.
   prover's exit is counted before the clock. Each side's load is its ``statement ... built in`` line.
 * **Lean** (`lean`), per member: the draw check, ``archive-put``, and ``verify`` split by its own lines (``inputs:``, the
   files read by key and the circuit parsed; ``setup (drawn):``; the session's line, whose remainder is the check).
-  Before the first check is ``archive-put`` and ``verify`` less the check.
+  Before the first check is the member's own ``archive-put`` and ``verify`` less the check. The audit's one
+  ``archive-put`` of the window's files before its sessions is the window's (`window`), counted once.
 * **Each reader alone** (`alone`, unless ``--no-alone``), from the member's stamped commands on the member's files, the
   median of ``--reps``: the verifier's and the prover's load (`flock-circuit statement` on the public file and on the
   prover's file), the Lean loop's start to ``LISTENING`` with and without the window's partition and program, its setup at
@@ -96,8 +97,8 @@ def ended(log: Path) -> int | None:
 
 
 def last(found: list[dict], by: int | None) -> dict | None:
-    """The latest of ``found`` started by ``by``: the process a log written at ``by`` records."""
-    found = [s for s in found if by is None or s["ns"] <= by]
+    """The latest of ``found`` started by ``by``: the process a log written at ``by`` records; none where there is no log."""
+    found = [s for s in found if by is not None and s["ns"] <= by]
     return max(found, key=lambda s: s["ns"]) if found else None
 
 
@@ -173,11 +174,23 @@ def lean(audit: Path, k: int, at: dict) -> dict:
     s = audit / f"session-m{k}"
     ns = {name: x and x["ns"] for name, x in at.items()}
     put, whole = sub(ended(s / "archive-put.log"), ns["archive-put"]), sub(ended(s / "lean-verify.log"), ns["verify"])
+    # a member whose files the window archived (`window`) puts nothing, and has no log of a put
+    own = 0.0 if not (s / "archive-put.log").exists() else put
     lines = lean_lines(text(s / "lean-verify.log"), at["verify"] and flag(at["verify"]["argv"], "--session"))
     return {"waited_s": sub(ns["draw-test"], ended(s / "prove.log")),
             "draw_test_s": sub(ended(s / "u1-u3.lean.log"), ns["draw-test"]), "archive_put_s": put, "verify_s": whole, **lines,
             "verify_rest_s": less(whole, lines["inputs_s"], lines["session_s"]),
-            "before_first_check_s": less(None if put is None or whole is None else put + whole, lines["check_s"])}
+            "before_first_check_s": less(None if own is None or whole is None else own + whole, lines["check_s"])}
+
+
+def window(audit: Path, all_stamps: list[dict]) -> dict:
+    """What Lean does once for the window: `a5.audit`'s one ``archive-put`` of every sampled member's files, before the
+    first session; no figure for an audit whose members each put their own."""
+    d = audit / "lean-verify"
+    end = ended(d / "archive-put.log")
+    at = last([x for x in all_stamps if x["program"] == "flock-verify" and x["argv"][0] == "archive-put" and len(x["argv"]) > 1
+               and same(x["argv"][1], d / "archive")], end)
+    return {"archive_put_s": sub(end, at and at["ns"]), "files": at and len(at["argv"]) - 2}
 
 
 def sizes(audit: Path, k: int) -> dict:
@@ -317,7 +330,7 @@ def measure(audit: Path, all_stamps: list[dict]) -> dict:
     for a, b in zip(members, members[1:]):
         a["to_next_member_s"] = sub(b["starts_ns"]["serve"], a["ends_ns"]["prove"])
     return {"audit": audit.name, "firewall": bool(summary.get("firewall")), "stamped": bool(all_stamps),
-            "staging": summary.get("staging"), "members": members}
+            "staging": summary.get("staging"), "window": window(audit, all_stamps), "members": members}
 
 
 def readers(audit: Path, got: dict, all_stamps: list[dict], real: dict, reps: int) -> bool:
@@ -362,7 +375,7 @@ def main(argv=None) -> int:
         if real is not None:
             ok = readers(audit, got, all_stamps, real, a.reps) and ok
             (audit / "member-seconds.json").write_text(json.dumps(got, indent=1, sort_keys=True))
-        print("MEMBER-SECONDS " + json.dumps({"audit": audit.name, "members": [
+        print("MEMBER-SECONDS " + json.dumps({"audit": audit.name, "window_archive_put_s": got["window"]["archive_put_s"], "members": [
             {"k": r["k"], "template": r["template"], "before_clock_s": r["session"]["before_clock_s"],
              "verifier_ahead_s": r["session"]["verifier_ahead_s"], "e2e_s": r["session"]["e2e_s"],
              "before_first_check_s": r["lean"]["before_first_check_s"], "check_s": r["lean"]["check_s"]} for r in got["members"]]}))

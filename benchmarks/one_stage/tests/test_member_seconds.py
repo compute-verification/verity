@@ -1,8 +1,9 @@
 """`member_seconds.py` on a planted audit: two members' logs, records and stamps at fixed times. Each member's seconds
 before its prover's clock and before Lean's first check come out exactly, a negative's later processes on the same member
-are not the member's, a member with no Lean loop or no setup line has those parts absent rather than zero, a wrapper
-stamps its start and execs its binary under its own pid, and each reader run alone is the member's own command on the
-member's files (on stand-in binaries, under an injected clock)."""
+are not the member's, a member with no Lean loop or no setup line has those parts absent rather than zero, the window's
+one put before its sessions is the window's and no member's, a wrapper stamps its start and execs its binary under its
+own pid, and each reader run alone is the member's own command on the member's files (on stand-in binaries, under an
+injected clock)."""
 from __future__ import annotations
 
 import json
@@ -101,8 +102,9 @@ def plant(tmp_path: Path) -> tuple[Path, Path]:
 def test_a_members_seconds_are_its_own_processes(tmp_path):
     audit, d = plant(tmp_path)
     got = MS.measure(audit, MS.stamps((d / MS.STAMPS).read_text()))
-    assert {x: got[x] for x in ("audit", "firewall", "stamped", "staging")} == {
-        "audit": "rank0", "firewall": True, "stamped": True, "staging": {"drawn_s": 1.5}}
+    assert {x: got[x] for x in ("audit", "firewall", "stamped", "staging", "window")} == {
+        "audit": "rank0", "firewall": True, "stamped": True, "staging": {"drawn_s": 1.5},
+        "window": {"archive_put_s": None, "files": None}}
     m0, m1 = got["members"]
     assert (m0["k"], m0["template"], m0["n"], m0["to_next_member_s"]) == (0, "T0", 8, 1.0) and "alone" not in m0
     ns = T * 10**9
@@ -126,11 +128,30 @@ def test_a_members_seconds_are_its_own_processes(tmp_path):
                           "setup_s": None, "session_s": None, "check_s": None, "verify_rest_s": None, "before_first_check_s": None}
 
 
+def test_an_audit_that_archived_its_window_once_counts_the_put_once(tmp_path):
+    """`a5.audit` puts every sampled member's files before its sessions (``lean-verify/archive``): the put is the window's,
+    a member has none of its own (a negative's later put into its archive is not its), and what it spends before Lean's
+    first check is its verify less the check."""
+    audit, d = plant(tmp_path)
+    for k in (0, 1):
+        (audit / f"session-m{k}" / "archive-put.log").unlink()
+    (audit / "lean-verify").mkdir()
+    run_log(audit / "lean-verify" / "archive-put.log", -0.6)
+    with open(d / MS.STAMPS, "a") as f:
+        f.write(stamp("flock-verify", 90, 1, -1, "archive-put", audit / "lean-verify" / "archive", "a", "b", "c"))
+    got = MS.measure(audit, MS.stamps((d / MS.STAMPS).read_text()))
+    assert got["window"] == {"archive_put_s": 0.4, "files": 3}
+    m0, m1 = got["members"]
+    assert m0["starts_ns"]["archive-put"] is None and m0["ends_ns"]["archive-put"] is None
+    assert (m0["lean"]["archive_put_s"], m0["lean"]["before_first_check_s"]) == (None, 2.25)
+    assert (m1["lean"]["archive_put_s"], m1["lean"]["before_first_check_s"]) == (None, None)
+
+
 def test_measure_writes_each_audit_under_the_root(tmp_path, capsys):
     audit, d = plant(tmp_path)
     assert MS.main(["measure", str(tmp_path / "scratch"), "--stamped", str(d), "--no-alone"]) == 0
     line = json.loads(capsys.readouterr().out.removeprefix("MEMBER-SECONDS "))
-    assert line == {"audit": "rank0", "members": [
+    assert line == {"audit": "rank0", "window_archive_put_s": None, "members": [
         {"k": 0, "template": "T0", "before_clock_s": 6.5, "verifier_ahead_s": 3.0, "e2e_s": 10.0, "before_first_check_s": 3.25,
          "check_s": 0.75},
         {"k": 1, "template": "T1", "before_clock_s": 2.0, "verifier_ahead_s": 1.0, "e2e_s": 6.0, "before_first_check_s": None,

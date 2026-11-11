@@ -307,15 +307,69 @@ def prover_env(firewall: str | None, st: dict) -> dict:
     return dict(DIRECT)
 
 
+def identity(f: Path) -> tuple | None:
+    """File ``f``'s identity, the same for every link of one file; None for a file that is not there."""
+    try:
+        s = f.stat()
+    except OSError:
+        return None
+    return (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
+
+
+def archive_files(st: dict, n: int) -> list[Path]:
+    """What `lean_verify` archives for statement ``st`` on ``n`` units: the circuit, the public file, the tables, and the
+    statement's partition, program and registered reads where it has them."""
+    d = st["dir"]
+    return [d / "circuit.txt", d / f"pub-{n}.bin", *sorted(f for f in (d / "tables").glob("*") if f.is_file()),
+            *(Path(st[f"{x}_file"]) for x in ("partition", "program", "registered") if st.get(f"{x}_file"))]
+
+
+def archive_put(lean: str, archive: Path, files: Sequence[Path], log: Path, held: dict | None = None) -> dict[Path, str]:
+    """Each of ``files`` in ``archive`` under its SHA-512 (`flock-verify archive-put`, its log ``log``), and each one's
+    key there; a file Lean could not put has none. ``held``, a dict a run's archives share: a file archived once, by its
+    identity (`identity`), is linked into a later archive rather than read again, and a call whose every file is held
+    starts no process. Lean holds an object to its key when it reads it (`archiveGet`)."""
+    ids = {f: identity(f) if held is not None else None for f in files}
+
+    def known(f: Path) -> tuple[str, Path] | None:
+        pre = held.get(ids[f]) if ids[f] is not None else None
+        return pre if pre is not None and pre[1].exists() else None
+
+    new, seen = [], set()
+    for f in files:
+        if ids[f] is None or (known(f) is None and ids[f] not in seen):
+            new.append(f)
+            seen.add(ids[f])
+    put = {}
+    if new:
+        p = run([lean, "archive-put", str(archive), *map(str, new)], log)
+        put = {x[1]: x[0] for x in (line.split() for line in p.stdout.splitlines()) if len(x) == 2}
+        for f in new:
+            if ids[f] is not None and str(f) in put:
+                held[ids[f]] = (put[str(f)], archive / "sha512" / put[str(f)])
+    keys = {}
+    for f in files:
+        pre = known(f)
+        if pre is None:
+            if str(f) in put:
+                keys[f] = put[str(f)]
+            continue
+        keys[f] = pre[0]
+        if not (archive / "sha512" / pre[0]).exists():
+            (archive / "sha512").mkdir(parents=True, exist_ok=True)
+            os.link(pre[1], archive / "sha512" / pre[0])
+    return keys
+
+
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
                 flags: Sequence[str] = ()) -> dict:
     """The verifier: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
     `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
     `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins tree
-    --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
-    identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again;
-    Lean holds the object to its key when it reads it (`archiveGet`). ``st["statement"]``: the statement `verify` sets up
+    --stratified K``). ``st["archived"]``, a dict a run's members share (`archive_put`'s ``held``): a file archived once,
+    the members' circuit or a file the run put before its sessions, is linked into every later archive rather than put
+    again. ``st["statement"]``: the statement `verify` sets up
     (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
     public file's header, the registered reads, the sample and the tables it checked the session against
     (``public_header_sha512``, ``registered_sha512``, ``unit_draw``, ``session_tables``), which the second stage's audit
@@ -323,33 +377,15 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
-    archive = out / "archive"
-    tables = sorted(str(f) for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
-    part = [str(st["partition_file"])] if st.get("partition_file") else []
-    prog = [str(st["program_file"])] if st.get("program_file") else []
-    reads = [str(st["registered_file"])] if st.get("registered_file") else []
-    circuit, held = st["dir"] / "circuit.txt", st.get("archived")
-    s = circuit.stat()
-    ident = (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
-    pre = held.get(ident) if held is not None else None
-    if pre is not None:
-        (archive / "sha512").mkdir(parents=True, exist_ok=True)
-        if not (archive / "sha512" / pre[0]).exists():
-            os.link(pre[1], archive / "sha512" / pre[0])
-    p = run([lean, "archive-put", str(archive), *([] if pre else [str(circuit)]), str(st["dir"] / f"pub-{n}.bin"), *tables, *part,
-             *prog, *reads], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
-    keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
-    if pre is not None:
-        keys["circuit.txt"] = pre[0]
-    elif held is not None and "circuit.txt" in keys:
-        held[ident] = (keys["circuit.txt"], archive / "sha512" / keys["circuit.txt"])
-    bound = ["--partition", keys.get(Path(part[0]).name, "")] if part else []
-    bound += ["--program", keys.get(Path(prog[0]).name, "")] if prog else []
-    bound += ["--registered", keys.get(Path(reads[0]).name, "")] if reads else []
+    archive, files = out / "archive", archive_files(st, n)
+    keys = archive_put(lean, archive, files, out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"),
+                       st.get("archived"))
+    bound = [y for x in ("partition", "program", "registered") if st.get(f"{x}_file")
+             for y in (f"--{x}", keys.get(Path(st[f"{x}_file"]), ""))]
     t = time.time()
-    p = run([lean, "verify", "--statement", st.get("statement", STATEMENT_ID), "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
-             "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)],
-            out / f"{log}.log")
+    p = run([lean, "verify", "--statement", st.get("statement", STATEMENT_ID), "--archive", str(archive),
+             "--circuit", keys.get(files[0], ""), "--public", keys.get(files[1], ""), *bound,
+             *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)], out / f"{log}.log")
     line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
