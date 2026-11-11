@@ -23,8 +23,8 @@ paths = ["verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_population_recorded.py"]
-paths = ["verity/errors.py", "verity/circuits", "verity/definitions/kernels"]
+paths = ["verity/errors.py", "verity/circuits", "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon", "verity/definitions/kernels"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_settings.py"]
-paths = ["verity/circuits"]
+paths = ["verity/circuits", "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon"]
