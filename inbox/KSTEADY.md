@@ -558,3 +558,41 @@ rows, 46 types. So:
   `SparseMlaSplitEndCols_v1`, `FlashInferFp8Quant1x128_v1`, `SparseMlaHeadEnd_v1`, `AllReduceMnnvl_v1{…N=96}`) have
   a labelled steady row, by row number, and which have none. The lead found rows 1, 2, 37 to 40, 35 and 26 and
   none under the names of the second and third.
+
+## Wed 11 Nov 01:50Z: THE ORDER NOW (benchmarks' answer). It replaces the order and the label rule of 01:30Z and 01:40Z
+
+benchmarks answered on HASH-98 at 01:27Z. Read it there. What it changes:
+
+**Labels.** A row carries a `cores` field: the CPU cores its provers held for its card, beside `provers` and
+`gpus`. A row without it reads as 24, which is right for every row so far. **Label 10-core rows into the same set,
+the moment they exist** (this replaces 01:30Z's "do not label them"). Until benchmarks' follow-up to the reader
+lands, the reader takes the fullest statement, then the newest run, so a 10-core row replaces its 24-core row in
+the command's figure: that is benchmarks' decision, not an accident. The 24-core rows keep their labels.
+
+**Every row from now is timed at 10 cores for its card** (the host's share: 81.6 cores over eight cards), except
+the two table reads now timing at 24. One prover a card is the count of record (proofs' rule), so:
+
+1. **Rows 13 and 30** at one prover, as they are running (24 cores), tree `b99075082a`, held from the label until
+   the pins match and proofs confirms the tree.
+2. **The heaviest types at 10 cores, one prover:** row 2 (head block, `FIRST=false`), row 1, row 3, row 5,
+   `DsaMqaLogits_v3`, the RMSNorm row, the group quant at K=6144; then rows 13 and 30 at 10 cores. About 60% of
+   SPOT's proving.
+3. **The head block's ladder below NVIS 61**, at 10 cores, one prover, `FIRST=false`: one NVIS for each k_log the
+   family has below 64's, and a second NVIS inside one of those k_logs. It tests the 2^Δk family rule, which prices
+   13% of SPOT and has never been checked against a measurement. Say on HASH-98, before you stage, which NVIS you
+   picked and each one's k_log.
+4. **The new census's types with no steady row** (`RoPEHeadGptJ_v2{D=64}`, the `SparseMlaSplitEndCols_v1` columns,
+   `FlashInferFp8Quant1x128_v1`'s other statics), at 10 cores, one prover.
+5. **Last: 2 and 4 provers at 10 cores.** They price nothing today.
+
+**Slots.** At 10 cores a slot the quota is no longer what binds: you may use **cards 1, 2, 4, 5, 6, 7 until
+04:00Z; cards 1, 2, 3, 5, 6, 7 from 04:00Z to 08:00Z; cards 1, 2, 6, 7 from 08:00Z to 10:00Z; cards 1, 2, 3, 5,
+6, 7 from 10:00Z to 11:45Z** (the calendar's rows, pushed 01:50Z; card 0 is never yours, card 3 is KHSHARE's
+until 03:30Z, card 4 and cores 12-23 are KMOVE's from 04:00Z). Each slot's 10 cores come out of kernels' own
+cores (12-95 until 04:00Z, 24-95 after, 48-95 from 08:00Z to 10:00Z), no two slots sharing a core. Keep the sum of
+what is pinned on the node at or under 80 with the hour's neighbour (KHSHARE 12, KMOVE 12, vllm 24). Host memory
+decides how many slots stage at once: say on HASH-98 how many you ran and what bounded it. The start check, the
+lock, one lease a card and `no_throttling` are as ever.
+
+**Staging** may use more than the slot's 10 cores only where your harness keeps staging outside the timed window
+and the pinned sum still holds; otherwise stage on 10.
