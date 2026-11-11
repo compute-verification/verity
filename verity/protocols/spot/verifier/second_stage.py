@@ -18,7 +18,10 @@ difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never suppli
 `SecondStage.replayWires`): a template's parameter that is, at each of its callers, one field of one instance of
 another template reads that writer's output port for the field, one value the interior commits once, so
 ``second-read`` holds a wired port to its writer's port at its writer unit's row and `at_run` binds it by that port
-(`_held_port`). A template may have several callers in the body, a batch's members among them, its units theirs in
+(`_held_port`). No wire reads an output the replay block returns, a writer's port a link names: the boundary commits
+that output, and the interior's port of it is another tree, which nothing holds to the first. And each wire's writer's
+part is before its reader's (``second-wires``, `_wires_ok`).
+A template may have several callers in the body, a batch's members among them, its units theirs in
 body order; each port a link or a wire names reads, unit by unit, the row its caller names (`replay_rows`,
 `SecondStage.replayRows`), summarized once per Definition as runs (`Run`) and never unrolled. A port a link names reads
 the boundary port the link names or, where the interior registration registers a value of the link's name (a value its
