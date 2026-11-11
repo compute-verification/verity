@@ -3006,6 +3006,32 @@ def test_under_gate_check_a_suite_failed_while_the_shards_run_ejects_its_lone_su
     assert rebuilt["members"] == [2] and rebuilt["base"] == main
 
 
+def test_under_gate_check_an_early_red_is_compared_with_nothing_and_its_drop_cancels_graph2_s_check(env, monkeypatch):
+    """graph2's check, in shadow, ended before the check that gates, which then fails a suite while its other shards run: that
+    check hasn't ended, so graph2's verdict is logged as the one that came first and no line compares it with the fail so
+    far, and the drop cancels graph2's check, as every drop but one on `main` does."""
+    main = env.main()
+    env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    loop, runs = _check(env, monkeypatch)
+    script = env.graph2_script(loop, {"state": FAIL, "pending": 0})
+    _, built, _ = loop.tick()
+    sha = built["sha"]
+    runs.end(main)
+    keys = env.listed(sha, {"pytest:a": ["pkg/tests/test_x.py"]})
+    env.result(keys["pytest:a"], "pytest:a", "fail")
+    runs.fail(sha, 2, rows=(_row(NEW),), at=T0 + 60)
+    env.clock = T0 + 300
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim", "graph2", "eject", "drop"]
+    first, drop = logged[2], logged[-1]
+    assert first["why"] == "graph2, in shadow, ended before the check: fail (pytest:a)" and first["graph2"] == FAIL
+    assert "early_red" in drop and (drop["cancel"], drop["graph2"]) == ("cancelled", FAIL) and "follow" not in drop
+    assert Path(f"{script}.cancel").read_text() == f"ready:{sha}\n"
+    env.clock += 600
+    loop.tick()
+    assert not [r for r in env.lines() if r["action"] == "compare"]
+
+
 def test_under_gate_check_a_red_above_a_running_candidate_drops_the_stack_above_it_once_its_base_has_said(env, monkeypatch):
     """Four candidates stacked, one PR each: the third one's check fails a suite while those below it still run.  It waits
     while its base's check runs, which may yet fail the same; in the tick that check passes, while the lowest's still runs,
