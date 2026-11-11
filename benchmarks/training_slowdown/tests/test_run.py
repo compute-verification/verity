@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from synthetic import JOBS, LORA, job_counted, run_job, tiny_data, tiny_registry, tiny_start, write_config
 from torch import nn
 
-from training_slowdown import VERSION, config, flops, formalism, grade, policy, run, starts, work
+from training_slowdown import VERSION, config, flops, formalism, gates, grade, policy, run, starts, work
 from training_slowdown.capture import products
 from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, derive_seed
 from training_slowdown.counterexample import check
@@ -369,7 +369,13 @@ def counted_and_traced(root: Path, steps: int, **over):
     return rec, *run.traced_step(cfg, route, model, optimizers, "cpu"), model
 
 
-@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("ema", 3), ("muon", 3)])
+#: the dtype a job's optimizer computes its products in, and their kind: Muon casts its Newton-Schulz to bf16, and
+#: Shampoo's factors and roots stay in the weights' f32
+OPTIMIZER_PRODUCTS = {"muon": ("bfloat16", "gemm/bf16"), "shampoo": ("float32", "gemm/f32")}
+
+
+@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("ema", 3), ("muon", 3),
+                                        ("shampoo", 3)])
 def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, steps):
     """What a job's trace says of a step (`run.traced_step`: the capture's graph of it, from shapes alone) against
     what the job's counter recorded of that same step as it ran: the step's tokens, its GEMMs' MACs, its elementwise
@@ -380,6 +386,10 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     step on the counter holds it at the gather Definition's multiplexers, which |C| counts and no product is, so the
     counter's forward is the trace's forward GEMMs, that lookup and the forward's elementwise work.
 
+    In gates too: the counted step's, each op at the price of the dtype its row names with no assumption made
+    (`gates.of_log`), are the traced circuit's, whose nodes are priced by the same rule. An optimizer's products are
+    in the dtype it ran them in, whatever the forward's: Muon's in bf16, Shampoo's in f32, with its roots.
+
     As a job runs: under torch's fused attention kernel, which the counter counts as the ops the math kernel computes
     attention by (`flops.Counter._attention`), the ones the trace holds.
 
@@ -389,6 +399,16 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     assert rec["invalid"] == [] and tr["step"] == min(1, steps - 1)
     step = rec["steps"][tr["step"]]
     assert [step[k] for k in COUNTS] == [g.tokens, g.macs, g.elementwise_macs, g.c_macs]
+    ops = {gates.op_key(r): r[4:6] for r in rec["structures"][step["struct"]]["log"]}
+    counted = gates.of_log({"by": step["by"], "ops": ops})
+    assert counted["assumed"] == {} and counted["gates"] == pytest.approx(tr["circuit"]["gates"], rel=1e-12)
+    if job in OPTIMIZER_PRODUCTS:
+        dtype, kind = OPTIMIZER_PRODUCTS[job]
+        products = {k: v for k, v in ops.items() if k.startswith("other param mm ")}
+        macs = sum(m for _, m in products.values())
+        assert macs and {gates.split_key(k)[4] for k in products} == {dtype}
+        assert gates.of_log({"ops": products})["kinds"] == {kind: {"macs": macs, "gates": macs * gates.per_mac(kind)}}
+        assert (step["approx_macs"] > 0) == (job == "shampoo")
     rows = work.priced(tr)["rows"]
     assert tr["tokens"] == step["tokens"] and sum(r["count"] * r["macs"] for r in rows) == step["matmul_macs"]
     log = [r for r in rec["structures"][step["struct"]]["log"] if r[0] == "fwd"]
