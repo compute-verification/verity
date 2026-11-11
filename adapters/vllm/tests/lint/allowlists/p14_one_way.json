@@ -41,7 +41,6 @@
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "vllm-LLM", "symbol": "main", "detail": "vllm.LLM"},
     {"file": "verity_vllm/pipeline/tp/commit_replay.py", "kind": "refusal-class", "symbol": "<module>", "detail": "Refused"},
     {"file": "verity_vllm/pipeline/tp/match.py", "kind": "vllm-LLM", "symbol": "_engine_main", "detail": "vllm.LLM"},
-    {"file": "verity_vllm/program/predict/node_registration.py", "kind": "refusal-class", "symbol": "<module>", "detail": "Refused"},
     {"file": "verity_vllm/program/frontend/outcomes.py", "kind": "refusal-class", "symbol": "<module>", "detail": "Refuse"},
     {"file": "verity_vllm/program/frontend/relabel.py", "kind": "refusal-class", "symbol": "<module>", "detail": "RelabelRefused"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "canonical-json", "symbol": "canonical_bytes", "detail": "verity.circuits.codec.canonical_json"},
