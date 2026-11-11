@@ -13,7 +13,12 @@ Deterministic: inputs come from numpy PCG64(seed); no torch, no GPU.  All words 
 bf16: 4 digits); ints `n_block`, `nvis`, `M`, `T`, `D`, `BN` are decimal.
 """
 from __future__ import annotations
-import argparse, json, sys
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
 import numpy as np
 from verity.definitions.registry import prims as P  # PYTHONPATH=.
 
@@ -124,7 +129,7 @@ def attention_head(q, K, V, T, D, sl2, BN, limit, nb, softcap_bits=0, left=0):
     if (limit + BN - 1) // BN != nb:
         raise SystemExit("row-level schedule != kernel tile schedule (a row with no visible key in the tile's last "
                          "block): outside AttentionHead_v3's domain -- pick M, T so every row sees >= 1 key there")
-    m = l = o = None
+    m = lanes = o = None
     blocks = []
     for b in range(nb - 1, -1, -1):
         lo, nvis = b * BN, min(limit, (b + 1) * BN) - b * BN
@@ -132,10 +137,10 @@ def attention_head(q, K, V, T, D, sl2, BN, limit, nb, softcap_bits=0, left=0):
         vb = [V[j] if j < T else [0] * D for j in range(lo, lo + BN)]
         first = b == nb - 1
         rec = {"n_block": b, "nvis": nvis, "is_first": first}
-        m, l, o = attn_block(q, kb, vb, nvis, first, 0 if first else m, [0] * 4 if first else l, [0] * D if first else o, sl2, D, BN, rec,
+        m, lanes, o = attn_block(q, kb, vb, nvis, first, 0 if first else m, [0] * 4 if first else lanes, [0] * D if first else o, sl2, D, BN, rec,
                              softcap_bits)
         blocks.append(rec)
-    total = P.F32AddFtz.evaluate(P.F32AddFtz.evaluate(l[0], l[2]), P.F32AddFtz.evaluate(l[1], l[3]))
+    total = P.F32AddFtz.evaluate(P.F32AddFtz.evaluate(lanes[0], lanes[2]), P.F32AddFtz.evaluate(lanes[1], lanes[3]))
     inv = P.Fa2InvSum.evaluate(total)
     y = [P.F32MulFtz.evaluate(o[d], inv) for d in range(D)]
     out = [P.F2fpBf16.evaluate(x) for x in y]
@@ -171,7 +176,7 @@ def run_case(name):
 
 
 def hexify(x, bf=False):
-    if isinstance(x, bool) or isinstance(x, (float, str)):
+    if isinstance(x, (bool, float, str)):
         return x
     if isinstance(x, int):
         return f"{x:04x}" if bf else f"{x:08x}"
@@ -220,11 +225,11 @@ if __name__ == "__main__":
     ap.add_argument("--compare", nargs=2, metavar=("REF_JSON", "DUMP_JSON"))
     a = ap.parse_args()
     if a.compare:
-        ref, dump = (unhex(json.load(open(f))) for f in a.compare)
+        ref, dump = (unhex(json.loads(Path(f).read_text())) for f in a.compare)
         sys.exit(1 if compare(ref, dump) else 0)
     res = run_case(a.case)
     if a.out:
-        open(a.out, "w").write(json.dumps(hexify(res)))
+        Path(a.out).write_text(json.dumps(hexify(res)))
     r0 = res["rows"][-1]
     print(f"{a.case}: M={res['M']} T={res['T']} BN={res['BN']} sl2={res['scale_softmax_log2']:08x} blocks/row={len(r0['blocks'])}; "
           f"last row: m={r0['blocks'][-1]['m_new']:08x} sum={r0['sum']:08x} inv={r0['inv_sum']:08x} out[0..3]="

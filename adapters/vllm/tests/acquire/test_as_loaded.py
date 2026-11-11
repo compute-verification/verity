@@ -15,12 +15,6 @@ import numpy as np
 import pytest
 import torch
 from torch import nn
-from verity_vllm.acquire import as_loaded as AL
-from verity_vllm.check import weights_of_record as WR
-from verity_vllm.check.replay.opening import model_weights_provider
-from verity_vllm.pipeline.tp import commit as TPC
-from verity_vllm.program.frontend import marlin_moe_leaf as mml
-from verity_vllm.protocols import WeightsView
 
 from tests.check.test_weights_of_record_dsv4_experts import (  # noqa: F401  (dsv4: the checkpoint fixture)
     EX,
@@ -32,6 +26,12 @@ from tests.check.test_weights_of_record_dsv4_experts import (  # noqa: F401  (ds
     dsv4,
 )
 from tests.check.test_weights_of_record_routed_experts import _program
+from verity_vllm.acquire import as_loaded as AL
+from verity_vllm.check import weights_of_record as WR
+from verity_vllm.check.replay.opening import model_weights_provider
+from verity_vllm.pipeline.tp import commit as TPC
+from verity_vllm.program.frontend import marlin_moe_leaf as mml
+from verity_vllm.protocols import WeightsView
 
 
 class _Mxfp4Method:

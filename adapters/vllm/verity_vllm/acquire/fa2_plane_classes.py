@@ -30,8 +30,9 @@ import json
 import os
 import re
 from collections import Counter
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 PLANES = ("S", "P", "RP", "ROW", "O", "FIN")          # native_collect.cpp `name_id_seq` planes[6]; hidden_stream.StreamLayout order
 PLANES_MS = PLANES + ("MS",)                           # a build that writes the MS class (`LayoutPolicy.ms`): the seventh plane
@@ -146,12 +147,12 @@ class StepSequences:
         return tuple(i for i, sl in enumerate(self.seqlen_q) if sl > 0)
 
     @classmethod
-    def from_rows(cls, rows: Iterable[tuple[Any, int, int]]) -> "StepSequences":
+    def from_rows(cls, rows: Iterable[tuple[Any, int, int]]) -> StepSequences:
         """From the collector's `step_rows[step]` = [(request_id, row_lo, row_hi), ..] (launch order)."""
         return cls(tuple(int(hi) - int(lo) for _rid, lo, hi in rows), exact=True)
 
     @classmethod
-    def from_counts(cls, n_seq: int, tokens: int) -> "StepSequences":
+    def from_counts(cls, n_seq: int, tokens: int) -> StepSequences:
         """From (co-scheduled sequences, token rows) only: all-ones when tokens == n_seq (a pure decode step), else an inexact split
         (one sequence carries the surplus) -- enough to decide every layer's class, not its per-sequence geometry."""
         n_seq, tokens = int(n_seq), int(tokens)
@@ -297,7 +298,7 @@ def _layer_diffs(decl: AttnLayerDecl, exp: PlaneClass, obs: ObservedLayer | None
         d.append(f"count {obs.count} observed, {exp.count} expected")
     if exp.kind == WHOLE and obs.whole:
         for HB, M, _NB, _BN, D in obs.whole:
-            if (HB, M) != (exp.slabs, exp.rows):
+            if (exp.slabs, exp.rows) != (HB, M):
                 d.append(f"whole geometry g{HB}x{M} observed, g{exp.slabs}x{exp.rows} expected")
             if D is not None and D != decl.D:
                 d.append(f"head_dim {D} in the name, {decl.D} declared")

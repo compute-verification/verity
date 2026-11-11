@@ -24,8 +24,26 @@ from typing import Any
 import pytest
 import torch
 
-from tests.acquire.dsv4_model import (CMAP, CSA, CSA_R, ENV, HCA_R, HD_S, IKB, L, LONG, NHL, NHP, SW, SWAB, TOPK, _paged, dsv4_model,
-                                      metadata, run_step)
+from tests.acquire.dsv4_model import (
+    CMAP,
+    CSA,
+    CSA_R,
+    ENV,
+    HCA_R,
+    HD_S,
+    IKB,
+    LONG,
+    NHL,
+    NHP,
+    SW,
+    SWAB,
+    TOPK,
+    L,
+    _paged,
+    dsv4_model,
+    metadata,
+    run_step,
+)
 from tests.acquire.test_dsv4_route_source import COUNTED, Run, map_names
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import dsv4_attention_source as DS

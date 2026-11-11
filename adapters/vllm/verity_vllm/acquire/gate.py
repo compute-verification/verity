@@ -21,16 +21,20 @@ import glob
 import json
 import os
 import time
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
-from verity_vllm.config import option
-from verity_vllm.correspondence.reader_for_acquire import AcquireCorrespondence, RuntimeTree
 from verity_vllm.acquire.plan import AcquisitionPlan, acquisition_plan
 from verity_vllm.acquire.sources import call_boundary_source as CB
-from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.acquire.sources import taps
+from verity_vllm.acquire.sources.call_boundary_plan import Plan
+from verity_vllm.config import option
+from verity_vllm.correspondence.reader_for_acquire import (
+    AcquireCorrespondence,
+    RuntimeTree,
+)
 
 PLAN_COMPARE_SCHEMA = "verity-vllm/acquisition-plan-compare/v1"
 CALL_BOUNDARIES_SCHEMA = "verity-vllm/call-boundaries-gate/v1"

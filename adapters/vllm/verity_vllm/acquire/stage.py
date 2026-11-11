@@ -10,14 +10,15 @@ Writes DIR/runtime_tree.json (always: the CPU gate's off-pod input), and with a 
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
-from verity_vllm.observe.runtime_tree import RuntimeTree, runtime_tree_of
 from verity_vllm.acquire.gate import run as gate_run
 from verity_vllm.acquire.install import IncompletePlan
 from verity_vllm.acquire.plan import AcquisitionPlan
+from verity_vllm.observe.runtime_tree import RuntimeTree, runtime_tree_of
 
 MANIFEST_ENV = "ACQUIRE_MANIFEST"       # the row's required-value manifest path when the stage's CLI has no flag for it
 
