@@ -5,6 +5,7 @@ from __future__ import annotations
 import collections
 import dataclasses
 import functools
+from typing import Any
 
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import global_match_fast as GMF
@@ -302,7 +303,7 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
     """The request's projection against its component over the executed steps: the leg's G3/G4 facts and the canonical address of
     every executed fold instance."""
     rid, fails = g["request_id"], out["fails"]
-    if not cd:
+    if not cd or A is None:
         fails.append((SUBCIRCUITS, f"{rid}: no component Program in the global Program for shape (LP {LP}, T_bound {g.get('T_bound')})"))
         return out
     ent["component"] = {"dir": cd, "digest": A.digest, "steps": len(A.steps), "instances": len(A.inst),
@@ -337,13 +338,15 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
     local_addr: list[list[int | None]] = []
     if within_step == "dag":
         ha, hb = ops.dag_hashes(A), ops.dag_hashes(P)
-        bad_dag, dag_info = [], []
+        bad_dag: list[dict[str, Any]] = []
+        dag_info: list[dict[str, Any]] = []
         for s in range(min(n_exec, len(A.steps))):
             by_hash: dict[str, list[int]] = collections.defaultdict(list)
             for j, ia in enumerate(A.steps[s]):
                 by_hash[ha[ia]].append(j)
             classes_gt1 = sum(1 for v in by_hash.values() if len(v) > 1)
-            addr, unmatched = [], []
+            addr: list[int | None] = []
+            unmatched: list[int] = []
             for il in P.steps[s]:
                 js = by_hash.get(hb[il])
                 if js:
