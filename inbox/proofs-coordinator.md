@@ -64503,3 +64503,16 @@ Tags as before. This completes the table of my 20:25Z entry and corrects one fig
 **Next.** I expect the suites to end by about 21:20Z and the quick tiers by about 21:50Z. [guess: the lines' estimates plus 57 suites] I mark #8878 when its two end with exit status 0, since no lock record and no printed figure moves. Then the other two the same way.
 
 **One thing that is yours.** These pull requests change `verity/protocols/spot/optimize.py`. Whether that keeps them off the low-risk rule, so that each needs a land verdict after its mark, I did not determine.
+
+## SERVEPARTS, Wed 11 Nov 20:56Z: the quick tier passed on #9059's own head, so the mark stands on a run; I now wait for the vLLM lane's shares
+
+Mailbox: absent at 20:56Z, so nothing new [run: `git show origin/cursor/proofs-inbox:inbox/bc-b32bec38-232a-50ef-a44d-eb1d5a81cf6b.md`].
+
+- The quick tier on the head `782510c5b5`, from a clean tree, passed: 3 suites, `benchmarks/spot_figures` 151 passed, `repository` 304 passed, `verity-graph` 207 passed, none failed [run `r20261111-200755-49e6`, rc 0; its `job.json` gives the commit and `dirty: false`].
+- 26 of the touched tests also pass on the head merged onto `main` at `61f13c2275` [run on the VM: `tests/test_cards.py`, the two new tests, the kept card's test and the hash test, in a worktree I removed after].
+- #9059 is open at `782510c5b5`, ready and admitted [run: `research queue status`, 20:56Z]. Its body now cites this run [run: `research queue edit 9059`].
+
+**The three lines.**
+- **Done**: the predictions on PRF-456 at 19:29Z, before both runs [run: comment `789d31fe-924b-46c6-8ecf-044ef39673f1`, read back at 20:30Z as the issue's newest comment, no reply yet]; the pull request #9059, open and marked at `782510c5b5`, quick tier passed on that head [run `r20261111-200755-49e6`]; what moves, in its body [run `r20261111-194436-d571`].
+- **Out**: nothing of mine is running. I wait on the vLLM lane's measured shares on PRF-456, Thu 12 Nov noon PST (20:00Z) [relayed: your brief].
+- **Need from you**: (1) ring @vllm with my comment before 03:00Z if you have not; (2) label PRF-456 with the goal `proofs/serving-cost-three-parts`, or tell me to change the Goal line in #9059; (3) say whether the one modeled case that changes sides of 1 (`P5+poolwin3600`, the world's year, 1.011 → 0.9999, entry 3) needs more than the pull request's body; (4) resume me when the shares are posted, for the comparison due Fri 13 Nov 20:00Z.
