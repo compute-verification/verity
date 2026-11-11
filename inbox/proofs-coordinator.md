@@ -40736,3 +40736,33 @@ None of the tie's code is on `main` [run: `git grep 'pearl-a/' origin/main` at `
 - The 6 Nov audit's own published ε at δ: I did not read its record.
 - Whether the demos' audit would run v1's staged path (where `Properties.Spot.acceptMeans` is the statement) or the per-member form (refused today; its guarantee is not stated, so which conjunct it carries is still open). [guess: this decides whether (b′) is a change to a locked statement only, or also a choice in a statement not yet written.]
 - σ and the per-kind time savings are compute-accounting's [relayed]; I checked neither.
+
+## CROSS, Wed 11 Nov 07:15Z: #8139's merge with #8539 needs an eleventh file, a new lemma git can't see; a draft is on a node, nothing pushed
+
+This is preparation for the merge you set for after #8539 lands. Nothing of #8139's is pushed or changed.
+
+- **The draft.** `[run]` In a scratch worktree I merged #8539's marked head `984a73968ccd` into #8139's head
+  `c274cac9c132` by hand: the 10 files, 32 hunks, each hunk taking both changes (the table is ready for the real
+  merge's entry). The scratch commit is `cfa606dc5595`, on no branch, never pushed. `pins.py --stale` exits 0 there
+  and its `security/lean-audit.json` is 4,177,607 bytes (6 and 0 on the two counts).
+- **Its records run failed, on one module.** `[run]` `r20261111-064522-a64c` at `cfa606dc5595`: `outcome failed`.
+  `security/Proofs`' build names one failed target, `Proofs.Properties.Spot.AcceptHonest`, at line 307 (`theorem
+  registered`): the witness gives `Registered` seven parts, and it now ends `∧ R8 verifier`. The modules I merged by
+  hand built: `Proofs.Properties.Spot` (`registration_nil`), `Proofs.Flock.Claims.Sampling.Select.Code`, and the
+  verifier's Lean under them.
+- **What it means.** `[read]` `AcceptHonest.lean` is #8139's own new file, `AcceptMeans`' honest witness. #8539 adds
+  R8 to `Registered`. Git merges the file clean, so it was not among the 10. The merged tree builds only with a new
+  lemma, `R8 Honest.verifier`: the honest query is a template query, so it says the honest program's one range reads no
+  run Input twice (`Partition.sharedInputs … = #[]`). `[derived]` True by reading: the root's one node has no
+  arguments. It is a new proof, not a choice between two sides.
+- **Whose fault.** `[read]` Not the crossing and not the moved `main`: the old heads had it too (old #8139 has
+  `AcceptHonest.lean`, old #8539 has `∧ R8 v`). It is the pair, and whichever of the two lands second carries it.
+- **What I am doing.** Writing that lemma in the draft and trying it on a node with the edit loop
+  (`lean_changed.py --try`), unpushed. If you would rather #8139's author wrote it, say so and I stop; the draft and
+  the error are here either way.
+- The draft's quick tier `r20261111-064611-5fe4` at `cfa606dc5595` is still running; it says whether the Python side
+  of the merge holds.
+
+**#8406:** its records run `r20261111-051724-7aba` passed `[run]` (`security: check.py exit 0 in 3528 s`,
+`security/Properties: check.py exit 0 in 772 s`, three packages `pass`). Its guard `r20261111-061321-6e01` has built
+the guard's modules and is in its three tests. Its ready line follows when that ends.
