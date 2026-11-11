@@ -46,8 +46,8 @@ from narrow_u import NarrowBlock, planes  # noqa: E402
 INSTANCES = ("zero", "P = 0", "V = 0", "one-hot P", "uniform P", "random")
 #: SHA-512's output bits a compression in counter mode (one block a counter value).
 SHA_BITS = 8 * hashlib.sha512().digest_size
-#: The NS 1 patch: 4 rows × 128 columns of 1-bit noise a compression (sha_noise.cuh, cgemm_ref.patch_bits).
-PATCH_ROWS, PATCH_COLS = 4, 128
+#: The NS 1 patch's columns: 4 rows × 128 columns of 1-bit noise a compression (sha_noise.cuh, cgemm_ref.patch_bits).
+PATCH_COLS = 128
 #: A sampled proof block's seed: 2 compressions (SHA-512 of the window coin and the two roots).
 SEED = 2
 
