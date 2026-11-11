@@ -10,8 +10,6 @@ candidate mode with attempt ids (`VERITY_REGRESSION_CANDIDATE=r2026…,…`); a 
 """
 from __future__ import annotations
 
-import json
-
 from .. import resolver
 
 NAME = "attempt_provenance"
@@ -47,7 +45,7 @@ def applies(row: resolver.Row) -> str | None:
 
 
 def expected(row: resolver.Row) -> dict:
-    wl = json.load(open(row.workload()))
+    wl = resolver.read_json(row.workload())
     cfg = row_config(row.key)
     out = {"row": row.key, "model": wl.get("model"), "revision": (wl.get("engine") or {}).get("revision"), "query": DEFAULT_QUERY, **cfg}
     if row.spec.get("tp") is not None:

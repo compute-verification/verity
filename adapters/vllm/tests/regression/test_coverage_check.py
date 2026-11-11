@@ -75,7 +75,8 @@ class _Row:
         return self.reference / rel
 
     def jsonl(self, rel):
-        return [json.loads(line) for line in open(self.path(rel)) if line.strip()]
+        with open(self.path(rel)) as f:
+            return [json.loads(line) for line in f if line.strip()]
 
 
 def test_the_candidates_norm_scales_are_covered_by_the_candidates_own_layouts(tmp_path):

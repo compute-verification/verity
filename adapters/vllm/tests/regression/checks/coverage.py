@@ -14,7 +14,6 @@ source into the candidate's own layouts.
 """
 from __future__ import annotations
 
-import gzip
 import json
 from pathlib import Path
 
@@ -49,7 +48,9 @@ def applies(row: resolver.Row) -> str | None:
 def _recorded_coverage(runs: Path | None) -> dict | None:
     if runs is None:
         return None
-    for r in (json.loads(line) for line in open(runs) if line.strip()):
+    with open(runs) as f:
+        records = [json.loads(line) for line in f if line.strip()]
+    for r in records:
         if r.get("arm") == "control" or r.get("committer") in (None, "control"):
             continue
         b = (r.get("commit") or {}).get("binding") if isinstance(r.get("commit"), dict) else None
@@ -82,9 +83,7 @@ def actual(row: resolver.Row) -> dict:
         lacks = [rel for rel, p in (("manifest.json", man_path), (LAYOUTS, lay_path)) if p is None]
         raise resolver.NotResolvable(f"{row.key}: the {'candidate' if cand else 'reference'} lacks {', '.join(lacks)}: its coverage is not "
                                      "recomputed from the other side's files")
-    man = json.load(open(man_path))
-    with gzip.open(lay_path, "rt") as f:
-        lay = json.load(f)
+    man, lay = resolver.read_json(man_path), resolver.read_json(lay_path)
     res = coverage_check(man, lay)
     out = _scalars(res)
     out["recorded"] = _recorded_coverage(_side(row, "commit/runs.jsonl")) is not None

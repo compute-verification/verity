@@ -8,7 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 from verity_vllm import target_family as tf
 
 TREE = Path(__file__).resolve().parents[1]

@@ -17,7 +17,6 @@ p0 on the B=1 rows (the same run root, seed and code): the partition is p0's; th
 """
 from __future__ import annotations
 
-import gzip
 import json
 import os
 from collections import Counter
@@ -73,18 +72,15 @@ def expected(row: resolver.Row) -> dict:
     return out
 
 
-def _load_program(p: str) -> dict:
-    with gzip.open(p, "rt") as f:
-        return json.load(f)
-
-
 def recompute(sr: dict, programs: dict[str, dict], program_dirs: dict[str, str] | None = None) -> dict:
     """The partition over `programs` (request label -> Program instances doc) with the record's stated parameters -- `sampled_replay`'s
     population / split / sample, without the evaluations, under the v2 query's address rule (`program_dirs` = the Build dirs whose
     correspondence the manifest is built with).  A record that predates the v2 rule (no `addresses.rule`: every reference record) was
     addressed by the retired v1 rule; its partition is recomputed under v2 here (decision `retire-v1` where that moves a count).  Returns a
     `sampled_replay`-shaped document (`lift` reads it)."""
-    from verity_vllm.check.replay import index as IX, population as POP, sample as SM
+    from verity_vllm.check.replay import index as IX
+    from verity_vllm.check.replay import population as POP
+    from verity_vllm.check.replay import sample as SM
     smp, sk = sr.get("sample") or {}, sr.get("strata_keys") or {}
     seed, per_stratum = int(smp["seed"]), int(smp.get("per_stratum") or 2)
     max_evaluate = int(smp.get("max_evaluate") or 2000)
@@ -133,7 +129,7 @@ def recompute(sr: dict, programs: dict[str, dict], program_dirs: dict[str, str] 
 def actual(row: resolver.Row) -> dict:
     cand = row.candidate("commit/sampled_replay_p0.json")
     if cand is not None:
-        sr = _body(json.load(open(cand)))
+        sr = _body(resolver.read_json(cand))
         out = lift(sr)
         out["record"] = {"result": sr.get("result"), "grade": sr.get("grade")}
         out["source"] = "candidate"
@@ -151,7 +147,7 @@ def actual(row: resolver.Row) -> dict:
         if not os.path.isfile(p):
             raise resolver.NotResolvable(f"{row.key}: request {rid}'s Program {base}/instances.json.gz not under {progs_root}")
         if p not in loaded:
-            loaded[p] = _load_program(p)
+            loaded[p] = resolver.read_json(p)
         programs[str(rid)] = loaded[p]
         dirs[str(rid)] = str(progs_root / base)
     doc = recompute(sr, programs, dirs)
@@ -173,7 +169,8 @@ def main(argv: list[str] | None = None) -> int:
     act = actual(row)
     diff = resolver.diff(exp, act)
     if a.out:
-        json.dump({"row": row.key, "equal": not diff, "differences": diff, "actual": act, "expected": exp}, open(a.out, "w"), indent=1, default=str)
+        with open(a.out, "w") as f:
+            json.dump({"row": row.key, "equal": not diff, "differences": diff, "actual": act, "expected": exp}, f, indent=1, default=str)
     print(json.dumps({"row": row.key, "equal": not diff, "n_differences": len(diff), "differences": diff[:30], "source": act.get("source"),
                       "population": (act.get("population") or {}).get("vus"), "strata_n": (act.get("population") or {}).get("strata_n"),
                       "picked": (act.get("sample") or {}).get("picked")}, default=str))

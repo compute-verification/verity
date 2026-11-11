@@ -12,8 +12,6 @@ inputs are.  A v2 that changes the rule for EOS stops will pass this check and m
 """
 from __future__ import annotations
 
-import json
-
 from .. import resolver
 
 NAME = "executed_prefix"
@@ -43,7 +41,7 @@ def _order(fx: dict) -> dict[str, str]:
 
 
 def _facts(row: resolver.Row) -> tuple[dict, dict, dict, list, dict]:
-    fx = json.load(open(row.workload()))
+    fx = resolver.read_json(row.workload())
     order = _order(fx)
     caps = {order[str(r["request_id"])]: int(r["max_tokens"]) for r in fx["requests"]}
     tok = row.json(_tokens_rel(row))

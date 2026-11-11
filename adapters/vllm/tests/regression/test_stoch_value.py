@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import copy
 
-from .checks import stoch_value as SV
 from . import resolver
+from .checks import stoch_value as SV
 
 
 def _doc(n: int = 3) -> dict:

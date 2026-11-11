@@ -93,7 +93,8 @@ def oracle() -> str:
 def record_result(row_key: str, check: str, exp: Any, act: Any, problems: list[str]) -> Path | None:
     """When `$VERITY_REGRESSION_RECORD_ACTUAL` names a directory, write the check's result document to `<dir>/<row>/<check>.json`:
     `{expected, actual, problems, matched, engine, oracle}` (canonical JSON) -- the input `rebaseline.py` merges into expected/.
-    Never raises (a recording failure is not a test failure)."""
+    A document that can't be written (the directory, a value JSON can't hold, an unknown oracle) is not recorded and returns None:
+    a recording failure is not a test failure."""
     d = os.environ.get(RECORD_ACTUAL_ENV)
     if not d:
         return None
@@ -104,7 +105,7 @@ def record_result(row_key: str, check: str, exp: Any, act: Any, problems: list[s
                "problems": list(problems), "matched": matched(act, problems), "engine": ENGINE, "oracle": oracle()}
         p.write_text(canonical(doc) + "\n")
         return p
-    except Exception:
+    except (OSError, TypeError, ValueError):
         return None
 
 
@@ -128,6 +129,15 @@ def load_files() -> dict[str, dict[str, Any]]:
                             f"{registered(FILES)}; `research data fetch-fixtures` fetches it (suites.py does before the suite runs)")
     with open(FILES, "rb") as f:
         return {k: v.get("files") or {} for k, v in (tomllib.load(f).get("rows") or {}).items()}
+
+
+def read_json(p: str | os.PathLike[str]) -> Any:
+    """The JSON document in the file `p` (gzip when its name ends `.gz`)."""
+    if str(p).endswith(".gz"):
+        with gzip.open(p, "rt") as f:
+            return json.load(f)
+    with open(p) as f:
+        return json.load(f)
 
 
 def sha256_file(p: Path) -> str:
@@ -266,12 +276,7 @@ class Row:
             return False
 
     def json(self, rel: str) -> Any:
-        p = self.path(rel)
-        if rel.endswith(".gz"):
-            with gzip.open(p, "rt") as f:
-                return json.load(f)
-        with open(p) as f:
-            return json.load(f)
+        return read_json(self.path(rel))
 
     def jsonl(self, rel: str) -> list[Any]:
         with open(self.path(rel)) as f:
@@ -384,10 +389,7 @@ class Row:
 
     def expected(self) -> dict[str, Any]:
         p = self.expected_path()
-        if not p.is_file():
-            return {}
-        with open(p) as f:
-            return json.load(f)
+        return read_json(p) if p.is_file() else {}
 
     def decisions(self, check: str) -> list[dict[str, Any]]:
         """The labelled decisions on this row for `check` (`[[rows.<row>.decisions]]` in fixtures.toml, design rule Draft 3 §7: a

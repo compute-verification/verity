@@ -229,7 +229,7 @@ def main(argv=None) -> int:
     ap.add_argument("--append", action="store_true", help="add the index's rows to fixtures.toml and files.toml (existing text untouched), lift expected/ for them")
     ap.add_argument("--roles", default="record,manifest,program", help="roles to index (default: record,manifest,program; fold adds the multi-GB pins)")
     a = ap.parse_args(argv)
-    index = json.load(open(a.index))
+    index = resolver.read_json(a.index)
     oracle = Path(a.oracle)
     if a.append:
         dup = sorted(set(index["rows"]) & set(existing_rows()))

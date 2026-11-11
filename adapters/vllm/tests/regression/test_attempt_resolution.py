@@ -252,6 +252,6 @@ def test_row_config_grammar_matches_the_tool_declaration():
     from adapters.vllm.verity_vllm.pipeline import research_tools as RT
     for rid in (ROW, "mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager", "gemma2-2b__bf16__h100__tp1__b1__i512__o64__burst__stochastic__bi-graph", "bad"):
         assert AP.row_config(rid) == RT.row_config(rid), rid
-    assert AP.CONFIG_KEYS == ("row", "model", "revision", "query", *AP.ROW_FIELDS)
+    assert ("row", "model", "revision", "query", *AP.ROW_FIELDS) == AP.CONFIG_KEYS
     assert set(AP.CONFIG_KEYS) <= set(RT.ROW_KEY_PARAMS)
     assert AP.DEFAULT_QUERY == RT.DEFAULT_QUERY

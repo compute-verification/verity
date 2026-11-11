@@ -16,9 +16,7 @@ ending at a sampling event -- what a correct segmentation of a one-token-per-ste
 """
 from __future__ import annotations
 
-import gzip
 import hashlib
-import json
 import os
 
 from .. import resolver
@@ -93,7 +91,9 @@ def expected(row: resolver.Row) -> dict:
 def recompute(desc: dict) -> dict:
     """`request_component` (current code) over one component descriptor: its segmentation and the sampling events in its body."""
     from verity.circuits.codec import descriptor_id
-    from verity_vllm.pipeline import global_program as GP  # the registry set build_workload decodes components with
+
+    # the registry set build_workload decodes components with
+    from verity_vllm.pipeline import global_program as GP
     from verity_vllm.program import sampling_event as SE
     from verity_vllm.program import workload as W
     comp = W.request_component(desc, GP.REGISTRY, None, canon={})
@@ -113,20 +113,19 @@ def actual(row: resolver.Row) -> dict:
         wp_p, ch_p = row.candidate("build_workload/workload_program.json"), row.candidate("build_workload/chronology.json")
         if wp_p is None or ch_p is None:
             return {"source": "candidate", **{k: resolver.not_applicable("the candidate has no build_workload/ documents") for k in _KEYS}}
-        wp = json.load(open(wp_p))
+        wp = resolver.read_json(wp_p)
 
         def read(rel):
             p = row.candidate(rel)
-            return json.load(open(p)) if p is not None else None
-        out = lift(wp, json.load(open(ch_p)), _histograms(read, component_dirs(wp).values()))
+            return resolver.read_json(p) if p is not None else None
+        out = lift(wp, resolver.read_json(ch_p), _histograms(read, component_dirs(wp).values()))
         out["consistent"] = _consistent(out["requests"], {})
         return dict(out, source="candidate")
     wp = row.json("build_workload/workload_program.json")
     dirs = component_dirs(wp)
     comps: dict[str, dict] = {}
     for d in sorted(set(dirs.values())):
-        with gzip.open(row.path(f"{d}/descriptor.json.gz"), "rt") as f:
-            comps[d] = recompute(json.load(f))
+        comps[d] = recompute(row.json(f"{d}/descriptor.json.gz"))
     reqs = {}
     for r in wp["requests"]:
         d = _dir_of(r, dirs)

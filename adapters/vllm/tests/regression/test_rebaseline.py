@@ -100,5 +100,5 @@ def test_write_main_dry_run_touches_nothing(monkeypatch, tmp_path):
     assert rc == 0 and not list(exp_dir.iterdir())
     rc = RB.main(["write", "--record", str(rec), "--commit", "abc", "--branch", "b", "--release", "r", "--run-id", "r2026-1"])
     assert rc == 0
-    out = json.load(open(exp_dir / f"{ROW}.json"))
+    out = resolver.read_json(exp_dir / f"{ROW}.json")
     assert out["executed_prefix"] == {"a": 2} and out["reference"]["runs"] == ["r2026-1"] and out["row"] == 57
