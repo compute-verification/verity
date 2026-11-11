@@ -78,7 +78,9 @@ Every path git sees changed must be one of:
   a directory the map splits may go where its `[tokens]` row sends it, or stay, when the range bears the row out (part of
   the directory is now below the row's): the directory itself (`verity/ml/flock/`, also as a pathlib chain or a quoted
   relative path), a pattern below it, and a path below it that names nothing at BASE; a path below it that BASE has
-  follows only its own move. On such a line a moved path, or such a reference, is also read after each prefix
+  follows only its own move. In a `*.py` file an anchor that names the directory (`Path(__file__).parents[1]`) may be
+  recounted to name, from where the file now is, where the row sends it. On such a line a moved path, or such a
+  reference, is also read after each prefix
   `tools/move/layout.py` reads as the root (its `ROOT_PREFIX`: `<tree>/`, `{r}/`, `$T/wt-$c/`, `~/verity/`, a pod's
   `/workspace/`; and as a shell variable's default, `${TESTS:-verity/x.py}`), one pattern for both, and after each prefix
   the map lists for the root (`[rewrite] root_prefixes`: a pod's install directory). A file the map lists
@@ -560,6 +562,17 @@ def anchor_rewrite(old: str, new: str, at_old, at_new, pmap: dict[str, str]) -> 
         if x.group("head") != y.group("head") or dx is None or dy is None or map_path(dx, pmap) != dy:
             return False
     return True
+
+
+def anchor_rows(line: str, at_old, rows: Rows) -> dict[str, str]:
+    """Each directory an anchor of `line` names that the range splits, to where its `[tokens]` row sends a reference to
+    it (`Rows.went`): what `anchor_rewrite` may recount such an anchor by, beside the path map."""
+    out = {}
+    for x in ANCHOR.finditer(line):
+        d = anchored(x, at_old(x.group("mod")))
+        if d is not None and (to := rows.went(d))[1]:
+            out[d] = to[0]
+    return out
 
 
 def rebinds(text: str, v: str) -> int:
@@ -1068,8 +1081,9 @@ def layout_maps(base: Tree, head: str, cwd: str | None) -> list[dict]:
 
 class Rows:
     """What the move's maps (`layout_maps`) say beyond the renames, read for a line nothing else explains and never added to
-    the path map, so no rename is paired and no anchor recounted by it; and for such a line, a moved path after each
-    prefix the mover reads as the root (`pattern`).
+    the path map, so no rename is paired by it, and an anchor is recounted by it only where the directory it names is a
+    `[tokens]` row's own (`anchor_rows`); and for such a line, a moved path after each prefix the mover reads as the
+    root (`pattern`).
 
     `[tokens]`: where a reference to a directory the map splits goes. A row counts only where the range bears it out: a
     directory of BASE that didn't move whole, part of it now below the row's directory; two maps that disagree on a
@@ -1885,7 +1899,9 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             sh_here = _rename().L.sh_here_names(a) & _rename().L.sh_here_names(b) if sh else frozenset()
 
             def pair(x: str, y: str, at_old=at(B, old, a), at_new=at(H, new, b)) -> bool:  # noqa: B008  (this pair's, bound now)
-                return any((py and (import_rewrite(z, y, modules, old, new) or anchor_rewrite(z, y, at_old, at_new, pmap)))
+                return any((py and (import_rewrite(z, y, modules, old, new) or anchor_rewrite(z, y, at_old, at_new, pmap)
+                                    or ((by := anchor_rows(z, at_old, rows)) and anchor_rewrite(
+                                        z, y, at_old, at_new, {**pmap, **by}) and not took.add("tokens"))))
                            or (sh and sh_anchor_rewrite(z, y, old, new, *sh_names, pmap))
                            or (sh_here and sh_anchor_rewrite(z, y, old, new, *sh_names, pmap, sh_here) and not took.add("anchor"))
                            or dotted_rewrite(z, y, modules) or registry_pair(new, z, y)

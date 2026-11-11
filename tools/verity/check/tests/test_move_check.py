@@ -1756,6 +1756,27 @@ def test_a_path_below_a_split_directory_that_the_tree_has_follows_only_its_own_m
         assert "SKILL.md" not in r["rules"]["tokens"], case
 
 
+def test_an_anchor_that_names_a_split_directory_is_recounted_to_where_its_row_points(tmp_path):
+    """A test of `verity/ml/flock/` names that directory by counting up from its own file. The directory goes two ways and
+    its `[tokens]` row says a reference to it means the prover, so from the file's new place the anchor counts up to
+    there. Refused: a count that names another directory, and the same recount where no row names the directory."""
+    body = "".join(f"V{i} = {i}\n" for i in range(30)) + "sys.path.insert(0, str(Path(__file__).resolve().parents[{n}]))\n"
+    for case, n, rows in (("row", 2, FLOCK[LAYOUT_MAP]), ("other", 3, FLOCK[LAYOUT_MAP]),
+                          ("no row", 2, '[tokens]\n"verity/ml/" = "verity/elsewhere/"\n')):
+        repo, base = _repo(tmp_path / case, {**FLOCK, LAYOUT_MAP: rows, "verity/ml/flock/tests/test_x.py": body.format(n=1)})
+        for old, new in (("verity/ml/flock/tool.py", "verity/flock/prover/tool.py"), ("verity/ml/flock/pod", "verity/flock/pod"),
+                         ("verity/ml/flock/tests/test_x.py", "verity/flock/prover/unit/tests/test_x.py")):
+            _move(repo, old, new)
+        _write(repo, {**(FLOCK_MOVED if case != "no row" else {}), "verity/flock/prover/unit/tests/test_x.py": body.format(n=n)})
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", LAYOUT_MSG)
+        r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+        if case == "row":
+            assert r["certified"] and "verity/flock/prover/unit/tests/test_x.py" in r["rules"]["tokens"], r["refusals"]
+        else:
+            assert "verity/flock/prover/unit/tests/test_x.py" in [f["path"] for f in r["refusals"]], case
+
+
 def test_a_cover_may_hold_an_entry_its_tokens_row_sends(tmp_path):
     """A list names the split `verity/ml/flock` beside its own `pod/`, where the mover writes it as its `[tokens]` row
     says, and `lib/a/`, which goes two ways with no row and is covered. The certificate takes the row's entry in the
