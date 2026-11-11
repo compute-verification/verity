@@ -14,6 +14,7 @@ public import Proofs.Pouw.Eps1
 public import Proofs.Pouw.Dither
 public import Proofs.Pouw.DitherWitness
 public import Proofs.Pouw.DitherInstance
+public import Proofs.Pouw.DitherInstanceWitness
 public import Proofs.Pouw.SakLb
 public import Proofs.Pouw.Dimension.CausalProofs
 public import Proofs.Pouw.Dimension.EmbedProofs
