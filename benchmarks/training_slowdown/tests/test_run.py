@@ -146,6 +146,26 @@ def test_tokens_outside_a_step_make_the_run_invalid(tmp_path, theta):
     assert any("outside a step" in p for p in rec["invalid"])
 
 
+def test_an_output_that_computes_on_tokens_with_an_updated_weight_makes_the_unbroken_job_invalid(tmp_path, theta):
+    """A route's `output` at a job's last checkpoint is counted after the last step, in the tail. So an output that
+    takes a forward product of token data with an updated weight puts updated MACs outside a step in every job of
+    its route, stopped or not: a job continued after a stop, which holds its stopped checkpoint's output outside its
+    steps too (`run.joined`), is not invalid for that where the unbroken job is valid."""
+    def train(te):
+        m = te.load(Small())
+        te.plan(2)
+        opt = torch.optim.SGD(m.parameters(), lr=0.1)
+        te.output(lambda: m.state_dict() | {"w1.weight": m.w1.weight + 0 * m(batch(0)).sum()})
+        for t in range(2):
+            with te.step():
+                loss_of(m, batch(t)).backward()
+                opt.step()
+                opt.zero_grad()
+    rec = counted(tmp_path, theta, train)
+    assert len(rec["steps"]) == 2 and rec["tail"]["by"]["fwd/updated"] > 0
+    assert rec["invalid"] == ["tokens or updated MACs outside a step (tail)"]
+
+
 def one_step(plan):
     def train(te):
         m = te.load(Small())
@@ -563,10 +583,11 @@ def test_a_job_whose_routes_process_ends_as_it_takes_the_trace_writes_its_record
     assert sorted(p.name for p in out.iterdir()) == ["e", "run.json"]
 
 
-def test_a_job_on_a_cpu_limits_onednn_in_each_of_its_processes_before_either_does_anything(ran, tmp_path, monkeypatch):
+def test_a_job_on_a_cpu_limits_onednn_in_each_of_its_processes_before_inside_or_outside_is_entered(
+        ran, tmp_path, monkeypatch):
     """The record of a job on a CPU names the limit its route's process set. Each of the job's processes sets it
-    itself, over whatever it was started with, before it does anything else, and changes nothing else of its
-    environment; on a GPU neither changes anything, and the record's field is null."""
+    itself, over whatever it was started with, before `inside` or `outside` is entered, and changes nothing else of
+    its environment; on a GPU neither changes anything, and the record's field is null."""
     name, limit = run.CPU_ISA
     assert (name, limit) == ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16") and ran[0]["cpu_isa"] == {name: limit}
     entered = []

@@ -119,8 +119,12 @@ continues from no other state (a state on a node's disk has no such copy, and no
 the segments
 the job ran in, and its count is their sum: every step once, and each segment's `build`. What a stopped segment
 computed after its last kept checkpoint is run again and is in no record. A route's `output` at the checkpoint a job
-stopped at is counted outside the steps (`setup`), where an unbroken job counts it in the step after. A state is a
-cache: the command keeps it with the stopped run's output on the store, the next run fetches it on whichever machine it gets (`NODE_STATE` in
+stopped at is counted outside the steps (`setup`), where an unbroken job counts it in the step after. A job with
+updated MACs or tokens outside a step is invalid, so an `output` that computed on token data with an updated weight
+would make a continued job invalid: it makes the unbroken job invalid too, whose last checkpoint's output is counted
+after its last step, unless it computes so at an earlier checkpoint and not at the last. That is a limit, and no
+route here meets it: `ema`'s output computes nothing and `lora`'s multiplies each adapter's two matrices. A state is
+a cache: the command keeps it with the stopped run's output on the store, the next run fetches it on whichever machine it gets (`NODE_STATE` in
 `run.py` here places it on the node's disk instead), and losing it costs a start from θ. The state directory is
 hidden from the route's process as a final set is, and only the job's own process writes it. A state is at most three
 times its model (the weights and two buffers of the optimizer for each), and a run holds three states at once while

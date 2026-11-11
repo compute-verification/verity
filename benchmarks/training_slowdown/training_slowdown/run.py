@@ -950,8 +950,13 @@ def joined(prior: dict | None, rec: dict) -> dict:
     (`outside_steps`), so a segment's own setup is counted, and the steps a stopped segment ran after its last kept
     checkpoint, which the next one ran again, are not. What a stopped segment counted after its last kept step is
     its route's `output` at that checkpoint, which an unbroken job counts in the step after it: here it is in
-    `setup`, and that step, the next segment's first, is short of it. `segments` lists each one's first step, its
-    steps, its count and its commit, and of one that was continued the digests of the state it kept last
+    `setup`, and that step, the next segment's first, is short of it. A job is invalid for updated MACs or tokens
+    outside a step (`Harness.so_far`), so an output that computes on token data with an updated weight would make
+    the continued job invalid; it makes the unbroken job invalid too, whose last checkpoint's output is counted
+    after its last step, unless it computes so at an earlier checkpoint and not at the last. No route here has such
+    an output (`ema`'s computes nothing, `lora`'s multiplies each adapter's two matrices), and one that had would
+    find its stopped jobs invalid, never valid where the unbroken job is not. `segments` lists each one's first
+    step, its steps, its count and its commit, and of one that was continued the digests of the state it kept last
     (`Kept.write`). Of a job served fresh windows (`windows`), the windows served are every segment's in order and
     the times their order started again add up. A segment whose record names another job than the kept one's, or
     leaves other parts out of the fresh windows, is refused."""
