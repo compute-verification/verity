@@ -11,10 +11,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import reference
+from verity.protocols.pous.verifier.p2_v1 import reference
 
 LIB = "libp2v1.so"
-CUDA_LIB = Path(__file__).resolve().parents[2] / "word_codec" / "cuda_lib.py"
+CUDA_LIB = Path(__file__).resolve().parents[4] / "poub" / "prover" / "word_codec" / "cuda_lib.py"
 _v, _u, _q = ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint64
 ABI = {"p2v1_decode": [_v, _v, _v, _v, _u, _u, _v, _v], "p2v1_encode": [_v, _v, _v, _v, _u, _u, _u, _u, _u, _v, _v]}
 BUILT = {   # each where the build has it: P2_FUSED's, and P2_KEYS's or P2_KEYS4's
@@ -34,7 +34,7 @@ def exponent_split(params: reference.Params) -> tuple[int, int, int]:
 
 
 def _cuda_lib() -> Any:
-    """`benchmarks/word_codec/cuda_lib.py` by its path: the vLLM integration loads this package with `sys.path` as it is."""
+    """`verity/protocols/poub/prover/word_codec/cuda_lib.py` by its path: the vLLM integration loads this package with `sys.path` as it is."""
     if "wc_cuda_lib" not in sys.modules:
         spec = importlib.util.spec_from_file_location("wc_cuda_lib", CUDA_LIB)
         mod = sys.modules["wc_cuda_lib"] = importlib.util.module_from_spec(spec)

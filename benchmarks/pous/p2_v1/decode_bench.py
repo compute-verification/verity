@@ -32,10 +32,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str((HERE.parents[2] / "benchmarks/pous/p2_v1/gpu.py").parents[1]))
+sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/pous/prover/p2/p2_store/gpu.py").parents[1]))
 
-from p2_v1 import reference as R  # noqa: E402
-from p2_v1.gpu import Kernels  # noqa: E402
+from verity.protocols.pous.verifier.p2_v1 import reference as R  # noqa: E402
+from p2_store.gpu import Kernels  # noqa: E402
 from p2_v1.harness import KEYS  # noqa: E402
 
 SALT = hashlib.sha256(b"verity-pous/bench/p2-v1/decode-bench/salt").digest()

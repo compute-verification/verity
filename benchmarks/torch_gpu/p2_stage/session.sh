@@ -4,7 +4,7 @@
 # and its toy, `p2_v1/store-toy/`); cwd = the source tree's root:
 #
 #   tar -C BUILD_RUN/out -cf /tmp/p2lib.tar .
-#   tar -C benchmarks/pous/p2_v1/store-toy -cf /tmp/store-toy.tar toy.json spot.json c-star.bin spot-c.bin
+#   tar -C verity/protocols/pous/prover/p2/p2_store/store-toy -cf /tmp/store-toy.tar toy.json spot.json c-star.bin spot-c.bin
 #   research run --on H200_NODE --project verity --source . --cwd source --timeout 240m \
 #     [--env ENCODED=1] [--env STEPS=toy,stage,gemm,check] \
 #     --send /tmp/p2lib.tar --send benchmarks/torch_gpu/p2_stage/served_weights.py --send h200-manifest.json \

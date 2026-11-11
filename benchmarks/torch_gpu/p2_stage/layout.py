@@ -1,7 +1,7 @@
 """Where a layer's matrices lie in the P2-encoded weights store, where their plaintext comes from, and P2's decode of one
 block on the CPU (the check's reference). No torch.
 
-The store's layout is p2_v1's fixture (`benchmarks/pous/p2_v1/store.py`, schema
+The store's layout is p2_v1's fixture (`verity/protocols/pous/prover/p2/p2_store/store.py`, schema
 `verity-pous/p2-store-layout/v1`): `store_layout` reads its JSON, the real store's (`store.py layout`, pinned by its
 `LAYOUT_SHA512`) or the toy's (`store-toy/toy.json`'s `layout`), with the key prefix:
 
@@ -20,7 +20,7 @@ at its stream offset, QKV being wq, wk and wv one after another, each with its f
 `head` (`Tensor.stream_names`). `payloads` lays it out as the store's W.
 
 `check_blocks` holds rows to W's payloads by memory-accounting's reference decode of one block (`p2_v1/store.py`'s
-`decode_block`: `p2_v1.reference.decode` under `reference.keys_after`), which refuses a row not below p, or a decode
+`decode_block`: `verity.protocols.pous.verifier.p2_v1.reference.decode` under `reference.keys_after`), which refuses a row not below p, or a decode
 wider than the payload.
 """
 from __future__ import annotations
@@ -37,8 +37,8 @@ from pathlib import Path
 from verity.protocols.pous.verifier.schemes import p2 as S
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str((ROOT / "benchmarks/pous/p2_v1/store.py").parents[1]))
-from p2_v1 import reference as R  # noqa: E402
+sys.path.insert(0, str((ROOT / "verity/protocols/pous/prover/p2/p2_store/store.py").parents[1]))
+from verity.protocols.pous.verifier.p2_v1 import reference as R  # noqa: E402
 
 PARAMS = S.P2Params(*S.POINT)
 SPEC = R.DEPLOYMENT
@@ -339,7 +339,7 @@ def check_blocks(params: S.P2Params, prefix: bytes, first: int, rows: bytes | me
                  payloads: bytes | memoryview) -> list[tuple[int, str]]:
     """The blocks `first ..` of `rows` (2,056 bytes each) whose reference decode (`p2_v1/store.py`'s `decode_block`) is
     refused or differs from their 2,054 bytes of `payloads`, with why."""
-    from p2_v1.store import decode_block
+    from p2_store.store import decode_block
 
     n = len(rows) // ROW
     if len(rows) != n * ROW or len(payloads) != n * PAYLOAD:

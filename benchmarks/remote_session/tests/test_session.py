@@ -18,7 +18,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str((HERE.parents[2] / "benchmarks/remote_session/prover.py").parent))
+sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/poub/prover/remote_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
 from verity.protocols.poub.verifier import audit, coins, ledger, receipts as rb, timing  # noqa: E402

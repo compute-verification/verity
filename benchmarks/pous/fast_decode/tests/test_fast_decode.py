@@ -3,7 +3,7 @@
 the Karatsuba plan is the one the kernel's constexpr digits, offsets and arena slots encode; the fold reduces every limb-sum
 form the kernels produce to z^2 mod p within the bounds its 64-bit arithmetic needs; the NTT as the kernel orders it gives
 the convolution; and the widths are the primes named. The device kernels are gated byte-exact against
-`p2_v1.reference` at run time (`bench.py`), before anything is timed."""
+`verity.protocols.pous.verifier.p2_v1.reference` at run time (`bench.py`), before anything is timed."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import algo as A  # noqa: E402
 import model as M  # noqa: E402
-from p2_v1 import reference as R  # noqa: E402
+from verity.protocols.pous.verifier.p2_v1 import reference as R  # noqa: E402
 
 SMALL_PRIMES = [p for p in range(3, 2000) if all(p % d for d in range(2, int(p ** 0.5) + 1))]
 

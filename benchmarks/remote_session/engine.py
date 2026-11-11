@@ -46,7 +46,7 @@ import time
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "benchmarks/word_codec/cuda_lib.py").parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/poub/prover/word_codec/cuda_lib.py").parent))
 
 import cuda_lib  # noqa: E402
 

@@ -45,7 +45,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((HERE.parents[1] / "benchmarks/vllm_encoded/paged.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/poub/prover/word_codec/paged.py").parent))
 sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "verity" / "protocols" / "poub" / "verifier" / "tests")]
 
 import paged as P  # noqa: E402

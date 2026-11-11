@@ -26,7 +26,7 @@
 #define FD_MINB 8
 #endif
 #define P2_BITS (32 * (32 * FD_PER + 2))
-#include "../p2_v1/p2keys4.cuh"
+#include "../../../verity/protocols/pous/prover/p2/p2_store/p2keys4.cuh"
 
 namespace fd {
 

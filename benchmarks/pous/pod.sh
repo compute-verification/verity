@@ -229,19 +229,19 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
   fi
   CG=$W/CGBN
   [ -d "$CG/.git" ] || git clone -q https://github.com/NVlabs/CGBN "$CG" || exit 3
-  git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
+  git -C "$CG" checkout -q "$(cat verity/protocols/pous/prover/p2/p2_gpu/CGBN.commit)" || exit 3
   NVCC_REL=$(nvcc_release "$CUDA_HOME" | tr ' ' .)
   [ -n "$NVCC_REL" ] || { echo "no nvcc under CUDA_HOME=$CUDA_HOME"; exit 3; }
   # keyed by the nvcc and the sources' bytes: a .so another toolkit or source built is never adopted, and every checkout of the
   # same sources adopts it rather than rebuilding (make goes by mtimes, and each run's source tree is a fresh checkout);
   # and by P2FAST, the Makefile's FAST when it is set: '-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' expands the v4 keys
-  P2KEY=$({ cat benchmarks/pous/p2_v1/Makefile benchmarks/pous/p2_v1/p2v1.cu benchmarks/pous/p2_v1/p2keys.cuh \
-              benchmarks/pous/p2_v1/p2keys4.cuh benchmarks/pous/p2_v1/p2sq.cuh benchmarks/pous/p2_gpu/p2dec.cu \
-              benchmarks/pous/p2_gpu/CGBN.commit
+  P2KEY=$({ cat verity/protocols/pous/prover/p2/p2_store/Makefile verity/protocols/pous/prover/p2/p2_store/p2v1.cu verity/protocols/pous/prover/p2/p2_store/p2keys.cuh \
+              verity/protocols/pous/prover/p2/p2_store/p2keys4.cuh verity/protocols/pous/prover/p2/p2_store/p2sq.cuh verity/protocols/pous/prover/p2/p2_gpu/p2dec.cu \
+              verity/protocols/pous/prover/p2/p2_gpu/CGBN.commit
             [ -z "${P2FAST+x}" ] || echo "FAST=$P2FAST"; } | sha256sum | cut -c1-12)
   P2LIB=$W/p2v1bin-$ARCH-cuda$NVCC_REL-$P2KEY
   if [ -f "$P2LIB/libp2v1.so" ]; then echo "adopted $P2LIB/libp2v1.so" > "$O/p2v1-make.log"
-  else make -C "$(dirname benchmarks/pous/p2_v1/Makefile)" NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} \
+  else make -C "$(dirname verity/protocols/pous/prover/p2/p2_store/Makefile)" NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} \
     ${P2FAST+"FAST=$P2FAST"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
   fi
   cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
@@ -249,7 +249,7 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
     while [ $# -gt 0 ] && [ "$1" != -- ]; do shift; done
     [ $# -ge 2 ] || { echo "p2-store runs p2_v1/store.py's command after a literal --"; exit 2; }
     shift
-    "$PY" benchmarks/pous/p2_v1/store.py "$1" --out "${OUT:-$O/bench}" --p2-lib "$P2LIB" "${@:2}"; RC=$?
+    "$PY" verity/protocols/pous/prover/p2/p2_store/store.py "$1" --out "${OUT:-$O/bench}" --p2-lib "$P2LIB" "${@:2}"; RC=$?
     clocks after
     exit $RC
   fi
