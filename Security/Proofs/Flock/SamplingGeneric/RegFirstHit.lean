@@ -50,8 +50,8 @@ waits for. A finder that extracts by position pays less at a further run; it is 
 
 **What the bound is small under.** Three premises: the linear expected-time bound at the first-hit finder
 (`ExpectedCR`, a hypothesis of each statement here); the same at `B_conf`, whose success `Pr[B_conf]` is a term of the
-bound; and the strict birthday bound at `B`, whose success is under the square root `√(k·γ_s·Pr[B])`, where the linear
-bound leaves the square root of a linear term. The expectation `E[(1 + |sample|)·c]` is joint: a bound on a run's
+bound; and the strict birthday bound (`StrictBirthday`) at `B`, whose success is under the square root
+`√(k·γ_s·Pr[B])`, where the linear bound leaves the square root of a linear term. The expectation `E[(1 + |sample|)·c]` is joint: a bound on a run's
 mean calls at each coins bounds it by one more than the mean sample times that bound, and a bound on the mean over
 all coins does not.
 
@@ -525,7 +525,7 @@ trace's incorrect set with probability at most
   bound on the mean over all coins does not, since a prover may make its calls where the sample is large.
 * The bound is small under three premises: the linear expected-time bound at this finder, a hypothesis here; the same
   at `B_conf`, whose success is the last term; and at `B`, whose success is under the square root, the strict
-  birthday bound, the linear one leaving the square root of a linear term. -/
+  birthday bound (`StrictBirthday`), the linear one leaving the square root of a linear term. -/
 theorem pr_regHit_le_needs_ex_cap {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
     (hS : L.Sessions H) (hSK : L.SessionKS H) {x : Msg} (hsc : L.Scope x) (Ω : Type) [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) {s : AuditStatement} (hs : L.parse x = some s) (needs : ℕ → Finset ℕ)
