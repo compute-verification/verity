@@ -38,9 +38,9 @@ from fractions import Fraction
 from pathlib import Path
 
 import certifier_serve as cs
-from verity.core.protocols.certifier.certificate import Direction
-from verity.core.protocols.certifier.warden import WardenParams
-from verity.core.protocols.pous import streamed_wipe as sw
+from verity.protocols.certifier.verifier.certificate import Direction
+from verity.protocols.certifier.verifier.warden import WardenParams
+from verity.protocols.pous.verifier import streamed_wipe as sw
 
 FORMAT = "wipe-egress/v1"
 #: how far the wipe challenger host's clock and the network certifier host's may disagree
