@@ -7,6 +7,8 @@
 * a select chunk of `SELECT_N` lanes that a slice ends inside counts its ties as the row does, on rows where that count
   decides the Call's token, and gives a lane past the end its new slice's warp half, on a row where a tie's probability is
   its half's;
+* every select chunk of a served row gives its lanes their own slice's positions (`topp_stages.positions`), at every split
+  count that has slices, and the next chunk its first lane's;
 * the twin's keep bits are `topp_keep`'s at every split count on the edge rows (NaN and +inf lanes, a few finite lanes, a
   uniform row, p = 0 and 1);
 * `plan` wires each parameter to an earlier unit's output of its type and `cut` counts its units, at small and served statics;
@@ -27,6 +29,7 @@ from verity.ml.definitions.numerics import topp_stage_twins as TW
 from verity.ml.definitions.registry import sampling as SA
 from verity.ml.definitions.registry import topp_keep_builder as K
 from verity.ml.definitions.registry import topp_stages as T
+from verity.ml.definitions.registry.topp_word_gates import CW
 
 OPERANDS = ("top_p", "seed", "pos", "temp", "splits")
 SERVED_V = 154880
@@ -150,6 +153,42 @@ def test_a_lane_past_a_slice_s_end_inside_a_chunk_takes_its_new_slice_s_warp_hal
         bad = [u.key for u in sel if [int(v) for v in evaluate(u.defn, *unit_args(u, lg, {**ops, "splits": S}, outs))]
                != [int(v) for f in outs[u.key] for v in f]]
         assert bad == [], S
+
+
+def test_every_served_select_chunk_s_lanes_take_their_own_slice_s_positions():
+    """At GLM-5.3's vocabulary, `topp_stages.positions` on the first lane's position of every select chunk, at every split
+    count that has slices: each lane's warp half, whether a mask block of its slice starts at it (its tie count restarts) and
+    whether it is past a slice's end are those of its own offset in its own slice, counted along the row as the twin counts
+    them, and the position of the lane past the chunk is the next chunk's first.  A slice ends inside 8 chunks at S = 16 and
+    24 at S = 32, and inside none at a smaller split count.  At S = 32 each of the 384 lanes past such an end is in the other
+    half than its offset would have in the slice that ended, so a chunk that took those lanes' half from the slice they left
+    is wrong in all 24; at S = 16 the two halves are one, and the row of 1,000 lanes above holds that split count.  The
+    chunks are the rows of one engine, the twin's, which runs one row."""
+    V, n = SERVED_V, T.chunk(SERVED_V)
+    assert n == T.SELECT_N and V % n == 0
+    first = np.arange(0, V, n)
+    lanes = first[:, None] + np.arange(n)
+    E = TW.ArrayEngine()
+    E.T = len(first)
+
+    def pos(geo, lane):
+        off = lane % geo.L
+        return np.stack([off, off % K.MASK_BLOCK, off % geo.P, lane // geo.L], 1)
+
+    def words(v):
+        return np.where(v.k, v.kv, v.d)
+
+    inside, other = {}, {}
+    for S in K.SPLIT_COUNTS[1:]:
+        geo = T.Geo(V, S)
+        h1, reset, wr, nxt = T.positions(E, geo, n, tuple(E.free(1, CW, w) for w in pos(geo, first).T))
+        off, past = lanes % geo.L, lanes // geo.L != first[:, None] // geo.L
+        want = {"h1": geo.h1(off), "reset": off % K.MASK_BLOCK == 0, "past": past, "next": pos(geo, first + n)}
+        got = {"h1": words(h1), "reset": words(reset), "past": words(wr), "next": np.concatenate([words(w) for w in nxt], 1)}
+        bad = {name: np.nonzero((got[name] != want[name]).any(1))[0].tolist() for name in want}
+        assert not any(bad.values()), (S, {name: (len(ks), ks[:4]) for name, ks in bad.items() if ks})
+        inside[S], other[S] = int(past.any(1).sum()), int((past & (geo.h1(off) != geo.h1(off + geo.L))).sum())
+    assert len(first) == 4840 and inside == {2: 0, 4: 0, 8: 0, 16: 8, 32: 24} and other == {2: 0, 4: 0, 8: 0, 16: 0, 32: 384}
 
 
 EDGE = ["ties", "nan", "few", "uniform", "posinf", "plain", "neginf"]
