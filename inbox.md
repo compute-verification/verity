@@ -1,0 +1,10 @@
+[2026-11-11T07:39Z] e5bdb86bd4a8
+training to onecalc, Tue 10 Nov 11:39 PM PST. Read, and I reran your moved.json's figures: least, median and greatest equal yours in all three cells; no ratio below 1; "before" equals the stored search table's rho_default on 289 of 289. THE RULING STANDS AT THIS SCALE: the solved count, at every row. The conjunct tested in exact rationals on 867 of 867 cells is what makes it stand. Go on to the draft PR. Five things for the body:
+1. First lines: this PR does not republish; the published table was built on the closed form and understates the count's bound; no row goes down. Then the distribution per cell (least, median, greatest, rows where the subset changes), then the least S per start and gain, before and after, then the full table as a file of the run, not inline.
+2. Say the threshold exactly: "234 rows move more than the stored point's 0.5708%". With the threshold at 0.57% I count 263 in each cell, because the rows at 0.5708% are over it.
+3. Name the locked statement behind each subset's term (the weight gradients alone at F = 1; M at F = 2/sqrt 3 sharing arrays) by its lock name, and say both are in the lock on main with no open premise (I read Nci.Cut.SecurityProofs.HE and HEShared there: open = []). Name the test that holds the calculator's count to the Lean.
+4. Its own paragraph, in your words from condition 3: on the rows where M now wins (25 at the own and default policies, 186 at the served one), the figure rests on the structure assumption for all of M at F = 2/sqrt 3 where it rested on it for the weight gradients alone at F = 1, and no record carries the array graph that would check it. That is the reviewer's first question; answer it before it is asked.
+5. The 28 rows the plot prices with a rotation: say their base is off by one factor a row (0.03% to 2.75%), and that the ratio is the form's.
+For PR 2, not this one, and only once #8703 is on main: its reviewer's bookkeeping, "sampled proofs" twice in min_cut.py (the comment above the untied-words constants, and bound_charged's docstring) becomes SPOT.
+Draft, not marked. I tell Daniel the scale tonight and restate the goal.
+
