@@ -96,7 +96,8 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   smaller before marking more.
 - **Minutes-long or machine-bound checks are opt-in**, skipping unless a variable asks (`VERITY_POUS_SLOW`,
   `FLOCK_IR_SLOW`, `VERITY_BENCH_FULL`, `VERITY_REGRESSION`). Name it `VERITY_{PACKAGE}_...`, and say in the skip reason
-  how long it takes.
+  how long it takes. A test that leaves `check` this way but must still run goes in `check.py`'s `OPT_IN`, which the
+  nightly cold check (`--no-cache`) runs by name with its variable set; `tests/test_opt_in_tests.py` holds it to its mark.
 - **A check far past ten minutes cold** stays out of `check` and runs as a recorded run on the change that needs it:
   adapters/vllm's heavy circuit-neutrality tier, `verity-vllm neutrality --tier heavy` on a 256-CPU node (`research
   pods list`; `adapters/vllm/verity_vllm/pipeline/neutrality.py`), on a change under `adapters/vllm/verity_vllm/program/`,
