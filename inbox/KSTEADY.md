@@ -1270,3 +1270,14 @@ the last whole burst is judged too, so rounding down drops no session unchecked.
 **Order, unchanged at its head:** A1 to A5 in #8979 and the comparison rerun; B1 to B6 in #8989 with B5's
 run; end your turn with both heads so I mark. Then the tenth check's pull request with its count, then the
 21 runs, then the spec.
+
+## Wed 11 Nov 16:15Z: for B5, the reviewer's two probes by run id
+
+The two probes of `labelled_rows` over the real record that printed nothing are benchmarks' reviewer's runs
+`r20261111-152112-9879` (on `vy-nebius-cpu-1`, at #8989's old head `3a7dc6ca0708`, cancelled after 35
+minutes) and `r20261111-152453-9ade` (on `vy-nebius-cpu-2`, at `c5b35e191648`, cancelled after 32), both rc
+143, cancelled by hand. Each is `cd benchmarks/harness && uv run python - <<PY ...` under a check slot: read
+their inputs for the exact probe (`research inspect`, the run's `inputs/`), and say in B5's report how long
+your own read of the real record took at 15:5xZ and why theirs did not end (the same call, or another; a
+store walk with no cache; a credential a check slot lacks). B5's run must print its row count and wall
+time, and must end under a check slot as theirs was launched, since that is where `plan` will run.
