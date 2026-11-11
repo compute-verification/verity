@@ -13,7 +13,7 @@ from research import velocity as V
 
 FIX = Path(__file__).parent / "fixtures" / "velocity"
 A, B = FIX / "goals-20261109T2000Z.json", FIX / "goals-20261110T0200Z.json"
-NOW = datetime(2026, 11, 10, 2, 0, tzinfo=UTC)       # when B was taken: Mon 9 Nov 6:00 PM PST
+NOW = datetime(2026, 11, 10, 2, 0, tzinfo=UTC)       # when B was taken, 6 PM Pacific
 REG = {"handles": [{"handle": "top", "linear": "TOP"}, {"handle": "kernels", "linear": "HASH"},
                    {"handle": "compute-accounting", "linear": "CMP"},
                    {"handle": "compute-research", "linear": "CMP", "linear_label": "lane:compute-research"}]}
@@ -74,7 +74,7 @@ def test_agents_are_counted_by_lane_from_their_names():
               ("verity: kernels", "RUNNING"), ("top", "RUNNING"), ("CERTNEG: negative tests (NET-340)", "RUNNING"),
               ("XYZ-1 a team with no lane", "RUNNING"), ("TOP-9 stopped", "IDLE")]
     text = "Listing cloud agents: 8 shown.\n" + json.dumps({"hasMore": False, "agents": [{"name": n, "status": s} for n, s in listed]})
-    assert V.agents(text, REG) == {"running": 7, "cap": 100, "more": False,
+    assert V.agents(text, REG) == {"running": 7, "limit": 100, "more": False,
                                    "lanes": {"kernels": 2, "top": 2, "unnamed": 2, "compute-accounting": 1}}
     with pytest.raises(V.Unread, match="list-cloud-agents"):
         V.agents("no listing here", REG)

@@ -14,7 +14,7 @@ with its source:
             stalls: a goal with a step past its hour and not updated since, or with no step due within STEP_H hours
             (`stalls`). Two columns: the window, and since the baseline.
   LANDING   the share of marked changes on `main` within two hours of the mark, and the median (`research queue stats`).
-  AGENTS    the agents running against CAP, by lane, from --agents FILE.json, the saved output of the cursor-cloud
+  AGENTS    the agents running against LIMIT, by lane, from --agents FILE.json, the saved output of the cursor-cloud
             `list-cloud-agents` tool: a worker's name starts with its issue key, whose team's lane it is, a coordinator's
             is its handle, and the rest are `unnamed`.
   MACHINES  the dollars spent and the idle dollars in the window, from the fleet's samples (pods/nebius/fleet.py's report).
@@ -51,7 +51,7 @@ WINDOW_H = 6
 STEP_H = 24                 # a goal's next step is due within this
 GRACE_H = 1                 # and a step is dead this long past its hour: a reading on the hour meets steps due that hour
 SLACK_S = 900               # readings drift by minutes: a dump taken this long after a time still stands for it
-CAP = 100                   # the agents that may run at once
+LIMIT = 100                 # the agents that may run at once
 KIND = "goals-dump/v1"
 CONTROL = "vy-control-verity"
 SWEEP_GOALS = "/data/watchers/goals"        # where the hourly sweep saves the page on the control pod
@@ -281,7 +281,7 @@ def agents(text: str, reg: dict) -> dict:
         name = str(a.get("name") or "")
         key, plain = ISSUE_KEY.match(name), name.removeprefix("verity: ").strip()
         by[owners[key[1]] if key and key[1] in owners else plain if plain in handles else UNNAMED] += 1
-    return {"running": sum(by.values()), "cap": CAP, "lanes": dict(sorted(by.items(), key=lambda kv: (-kv[1], kv[0]))),
+    return {"running": sum(by.values()), "limit": LIMIT, "lanes": dict(sorted(by.items(), key=lambda kv: (-kv[1], kv[0]))),
             "more": bool(doc.get("hasMore"))}
 
 
@@ -406,7 +406,7 @@ def _rest(r: dict) -> list[tuple[str, str]]:
     return [
         ("LANDING", cell("landing", lambda x: f"{x['share']}; mark to `main` {x['mark_to_main']} (`research queue stats`, the "
                                               f"{x['hours']} h to {pst(r['until'])})")),
-        ("AGENTS", cell("agents", lambda x: f"{x['running']}{' or more' if x['more'] else ''} running of {x['cap']}: "
+        ("AGENTS", cell("agents", lambda x: f"{x['running']}{' or more' if x['more'] else ''} running of {x['limit']}: "
                                             + ", ".join(f"{k} {n}" for k, n in x["lanes"].items()) + f" ({x['source']})")),
         ("MACHINES", cell("machines", lambda x: f"${x['usd']:,} spent, ${x['idle_usd']:,} of it on idle hours, {x['vms']} VMs, {hours}"
                                                 + (f"; no rate registered for {', '.join(x['no_rate'])}" if x["no_rate"] else "")
@@ -462,7 +462,7 @@ def line(r: dict) -> str:
                  f"{'stalls not read' if 'not_read' in s else str(len(s['goals'])) + ' stalled'}"
                  + ("" if "not_read" in g["baseline"] else f". Since the baseline ({pst(d['baseline']['taken'])}): {score(g['baseline'])}"))
     rest = [short("landing", lambda x: f"landing: {x['share']}"),
-            short("agents", lambda x: f"{x['running']}{' or more' if x['more'] else ''} of {x['cap']} agents running"),
+            short("agents", lambda x: f"{x['running']}{' or more' if x['more'] else ''} of {x['limit']} agents running"),
             short("machines", lambda x: f"machines ${x['usd']:,}, ${x['idle_usd']:,} of it idle"),
             short("asks", lambda x: f"{x['off_track']} of {x['open']} asks off track")]
     return f"Velocity, {span(r['since'], r['until'])}. {goals}. {'; '.join(rest).capitalize()}."
