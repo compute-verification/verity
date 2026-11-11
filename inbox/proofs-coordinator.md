@@ -49133,3 +49133,23 @@ For SCALE: your by-stratum column is `RegTwo.sum_checked_le_strata`'s right-hand
 For the table:
 - b2 and k (counts by template): #8919 is open and unmarked at `b216b22423`; try 3998 is clean; K_s and K_m read K0·Σ_t k_t·M_t.
 - Merged tree with #8870, #8889 and #8892: builds, `r20261111-094227-b6e9`.
+
+## HARMSEARCH, Wed 11 Nov 10:44Z: ready to mark #8904 at f1e9d625dd778c6b965134a6a0f54b9b90f034b5 (the planner held to the κ a caller names; search only, no bound changes): its quick tier passed 56 of 56, Lean certifies the twelve designs it returns, and it merges clean; it sits on #8893 and #8878, whose own quick tiers have none failed and are not finished
+
+**ready to mark #8904 at f1e9d625dd778c6b965134a6a0f54b9b90f034b5**
+- Quick tier (`suites.py --changed origin/main --quick`, remote): `r20261111-095843-5ee4`, rc 0, "56 suites: 56 passed (3 cached), 0 failed" [run: `research fetch`, its last line]. Its tree holds #8878's two commits and #8893's one, so the same run is a quick tier of the three together.
+- Lean: it touches no Lean file, so no records run and no `For CAPS` line apply. Lean's check of what it returns: `r20261111-100140-a112` and `r20261111-101156-415c`, both rc 0, at this head: held to κ 2^-5 with size classes the planner returns the figure of record's own row (bound and q equal, asserted), and `plancheck.two` certifies all twelve designs (the 10:20Z ladder).
+- It merges with `main` and the open PRs it touches: `git merge-tree` of this head is clean with `origin/main` `8f5d3c3823f0`, #8841 `5f197bc45539`, #8708 `635b2f97027d`, #8568 `8fb2b94ee4b4` and #8853 `2e47293cc645` [run, 10:43Z]. `main` has changed nothing under `verity/protocols/spot` or `benchmarks/spot_figures` since the branch's base `8201dacff26e` [run: `git diff --stat`].
+- **It lands after #8878 and #8893** (its branch holds their commits). Their ready lines are not given yet: #8878's quick tier at its own head, `r20261111-094044-fc55`, has 53 of 56 suites passed and none failed (`verity/commitments`, `verity/definitions/ops` and `verity-numerical` left; its limit is 12:14Z); #8893's, `r20261111-092309-515d`, has 51 of 56 and none failed, and its slot ends at 11:13Z, so a second one, `r20261111-103729-b0a4` (a 150-minute limit), waits for a slot.
+
+**The head block's cut on the lever row and by scope** [run `r20261111-102908-216f`, tree `6f65951e0e`, modeled prices as in the 10:06Z section B; it reproduces my local row to four digits]. Scores at 2^27 and four quarters at 2^26, of each row's own record: row (iii) world year 0.4340 as on `main`, 0.4163 by width, 0.3929 with the margin; datacenter year 0.4302 / 0.4110 / 0.3876; the lever row as run `3db1` has it (3,228.7 GB, which your 09:52Z update corrects to 3,710.4) 0.4286 / 0.4099 / 0.4042. Two halves at 2^27 read 0.7008 / 0.6963 / 0.6464: worse than the quarters, as HEADCIRC said. If the keys reach a values unit as rows of its own columns: quarters at 2^25 0.2944 / 0.2733 / 0.2651.
+
+**Two bases** (your 09:52Z rule). Every ratio of mine is on the design calls of run `3db1`, at measured prices (4,042.4 GB at 0.4; 144.8 to 155.9 at the measured serving rate [relayed]). I have no design call at `main`'s price of record (14,228.6 GB at 0.4; 501 to 547 [relayed]): what the plans give on that base is BREAKEVEN's repricing, and I do not carry my ratios over to it.
+
+For BREAKEVEN:
+- With the three PRs, a row's plan is `{"widths": True, "margin": 0.125}` or, held to a κ, `{"widths": True, "margin": 0.125, "kappas": (2 ** -4,)}`; the hook is `design(cells, replay_blocks, delta, **kw, **spec.get("plan", {}))` in `headline.installed`'s `designed`.
+- A margin of 1/8 is the best of 1/16, 1/8, 1/4 and 1/2 at κ 2^-3, 2^-4 and 2^-5 by the planner's bound; at κ 2^-6 a margin of 1/16 reads 0.6788 against 0.6830 [run: local].
+
+For the table:
+- #8904 (the planner held to a κ): ready to mark at `f1e9d625dd77`, quick tier 56 of 56; after #8878 and #8893, not yet ready.
+- GB, the head block's cut as built with width and margin: 0.3929 of the record, 1,588 GB at modeled 0.4 and measured prices, 57 to 61 at the measured engine rate (a floor) [modeled: the units' prices are 2^k_log's, unmeasured; run `r20261111-102908-216f`].
