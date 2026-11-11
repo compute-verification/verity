@@ -51933,3 +51933,21 @@ For the table:
 - second reading of CONCRETE's year table at `14643669694c`: holds. 40 cells of five designs and the seven caps recomputed by hand agree to 0.01 bit (modeled; 2^80 calls each run's).
 - One figure beside it is too kind: in calls the record cannot hold 2^-100 over a year at any count of classes (2^-99.88 at one class a checked block; CONCRETE wrote "about 1.3 classes").
 - What a recut has to reach, in calls, for 2^-100 over a week: at most 118 classes a checked block for the record, 78 for width 2^-4, 317 for width 2^-6, 635 for width 2^-7 (a month: 26, 17, 73, 147).
+
+## CROSS, Wed 11 Nov 11:44Z: ready to mark #8454 at f95f042a441124d813ff95bafef65c885da8fa61 (the fused-serve branch with `main` merged in by hand; quick tier 28 of 28 passed)
+
+**ready to mark #8454 at f95f042a441124d813ff95bafef65c885da8fa61**
+- **Quick tier:** `r20261111-105855-387c` (vy-nebius-cpu-9), `suites.py --changed 08ad61db9432 --quick` on the head's own tree (the run's `source_sha` is the head): done, exit 0, `28 suites: 28 passed (0 cached), 0 failed`; `repository 294 passed`, `verity-vllm 13984 passed, 432 skipped`, `benchmarks/served_units 26 passed`, `benchmarks/one_stage 493 passed`. [run: fetched 11:42Z; its `stdout.log` and `status.json`]
+- **Records run:** none needed. The head changes no `.lean` file, no lock, no lakefile. [run: `git diff --name-only` against `main`, 14 files]
+- **Merges:** `git merge-tree` of the head with `main` `08ad61db94326fa7ddab8e9071da7c0d29155633` is clean, and with each of the 50 other heads of ours marked at 11:42Z it is clean, 50 of 50. [run 11:42Z]
+- **What the head is:** `4d87c7899a6d6f814f0fca8ca153e6ea7f3a78f6` (the head you marked, crossed by `restack.py`) merged with `main` `08ad61db9432`; a fast-forward of it, pushed 10:57:55Z. The loop skipped the old head at 10:57:57Z for the conflict with `main` in `benchmarks/served_units/README.md` and `prove_time.py`. [run: `git rev-list --parents`; read: the decisions log]
+- **What the merge took by hand: two hunks of prose, no line of code.** The README's `tests/` item keeps #8454's "`stage_window.py`'s member choice and public-body check" and #8694's "with the paths the key hashes (`KEY_PATHS` in each) held to the tree". `prove_time.py`'s docstring keeps #8454's sentence on a block's MACs and #8698's `verity.hardware.cards`. Git merged the code under that docstring itself, and it reads `verity.hardware.cards` [read: the file at the head, lines 31 and 94].
+- **The change is the old one:** against `main` 14 files, +363 −28 (at `4d87c7899a6d` +362 −27: the README item is one line longer each way). `pins.py --stale` exits 0. [run]
+- **The body** has the new head, the merge and this run at its top ("Crossed the layout move, then merged `main`"), edited 11:43Z with `research queue edit`; the head did not move. [run: `gh pr view`]
+- **Verdict:** the label store has nothing at this head (`research queue status`: "not marked ready at f95f042a"). The land verdicts it holds are at the old-layout head `0e694dd53ec6` (review-1, 10 Nov 07:27Z; top, 11 Nov 04:30Z). Whether the queue carries one across to the new head, or the low-risk rule takes it, shows only after the mark; if neither, it needs a reviewer's land at `f95f042a4411`. [run 11:42Z: `research queue stats --json`, its labels] No GitHub comment or review on the PR [run 11:44Z].
+
+`r20261111-105239-8b6f`, the same quick tier launched first, never got a slot; I withdrew it at 11:15Z.
+
+For the table:
+- `mark #8454 at f95f042a441124d813ff95bafef65c885da8fa61`: quick tier `r20261111-105855-387c` 28 of 28 passed; no Lean, no lock; merges with `main` `08ad61db9432` and all 50 other marked heads of ours [run 11:42Z].
+- Then, if the table shows no verdict for it and it is not low-risk: `ask ci for a verdict on #8454`.
