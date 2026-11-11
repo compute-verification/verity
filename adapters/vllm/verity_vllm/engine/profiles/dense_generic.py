@@ -65,8 +65,8 @@ def checkpoint_entry(role: str) -> dict[str, Any] | None:
         if e.get("role") == role:
             return e
     from verity_vllm.engine.profiles.cases import CASES
-    repo = (CASES.get(role) or {}).get("repo")
-    if repo:
+    if role in CASES:
+        repo = CASES[role]["repo"]
         for e in entries:
             if e.get("repo") == repo:
                 return e

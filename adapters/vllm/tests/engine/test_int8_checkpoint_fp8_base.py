@@ -334,3 +334,12 @@ def test_recipe_of_names_v3_and_report_refuses_other_recipes():
     assert I.recipe_of({"recipe": {"id": I.RECIPE_V3}}) is I.INT8_V3 and I.INT8_V3.lm_head
     with pytest.raises(F.UsageError, match="reads a v3 pin"):
         I.report({"role": "X", "recipe": {"id": I.RECIPE}}, [], None)
+
+
+def test_fp8_base_names_a_config_without_a_quantization_config():
+    """An absent block is refused as absent; an empty one, by the fields it lacks."""
+    cfg = {"vocab_size": 8, "tie_word_embeddings": False}
+    with pytest.raises(ValueError, match="reads a block-FP8 base .*; this one has no quantization_config$"):
+        I.fp8_base(cfg, I.INT8_V3)
+    with pytest.raises(ValueError, match="reads a block-FP8 base .*; this one has quant_method None, fmt None, weight_block_size None$"):
+        I.fp8_base({**cfg, "quantization_config": {}}, I.INT8_V3)

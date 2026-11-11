@@ -150,6 +150,14 @@ def test_base_entry_refuses_another_recipe():
         F.base_entry(entry, [], I.INT8)
 
 
+@pytest.mark.parametrize("entry", [{"role": "X"}, {"role": "X", "recipe": None}, {"role": "X", "recipe": {}}])
+def test_an_entry_without_a_recipe_is_refused_by_its_role(entry):
+    with pytest.raises(F.UsageError, match="^X: recipe None is not 'verity-int8-channel127/v1'$"):
+        F.base_entry(entry, [], I.INT8)
+    with pytest.raises(F.UsageError, match="^X: recipe None is none of the int8 recipes "):
+        I.recipe_of(entry)
+
+
 # ---------------------------------------------------------------- v2: the LM head too
 
 def _untied_base(d: Path) -> Path:

@@ -319,3 +319,12 @@ def test_olmoe_rank_record_holds_the_whole_all_heads_qk_norm():
     f, r = layer(full.C), layer(rank.C)
     assert rank.C["NH"] * 2 == full.C["NH"] and r["o_w"] * 2 == f["o_w"]
     assert r["q_norm"] == f["q_norm"] == full.C["NH"] * full.C["D"] and r["k_norm"] == f["k_norm"] == full.C["KVH"] * full.C["D"]
+
+
+def test_header_checks_hold_a_family_s_header_keys_and_only_where_it_declares_them():
+    """GPT-NeoX declares `header_keys` (`layer_norm_eps` is the profile's `EPS`); a family that declares none checks none."""
+    assert [f for f, facts in FF.FAMILY_FACTS.items() if "header_keys" in facts] == ["gpt_neox"]
+    neox, C = {"model_type": "gpt_neox"}, {"EPS": 1e-5}
+    assert FF.header_checks(neox, C, {"layer_norm_eps": 1e-5}) == []
+    assert FF.header_checks(neox, C, {"layer_norm_eps": 1e-6}) == ["layer_norm_eps=1e-06 != C[EPS]=1e-05"]
+    assert FF.header_checks({"model_type": "llama"}, C, {"layer_norm_eps": 1e-6}) == []
