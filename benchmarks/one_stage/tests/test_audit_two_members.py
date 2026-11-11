@@ -103,8 +103,10 @@ def _audit(tmp: Path, window: Path, binaries: dict[str, Path], *flags: str) -> t
             "--challenger", "local", "--main", str(main), "--m0-pythonpath", m0, *(x for k, p in binaries.items()
                                                                                     for x in (f"--{k}", str(p))),
             "--ports", "2", "--out", str(out), *flags]
+    # no setting of the prover's or the sessions' that the caller's environment happens to hold (FC_*, FLOCK_CHALLENGER)
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("FC_", "FLOCK_"))}
     p = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True,
-                       env={**os.environ, "RAYON_NUM_THREADS": "4", "RUST_MIN_STACK": str(64 << 20)})
+                       env={**env, "RAYON_NUM_THREADS": "4", "RUST_MIN_STACK": str(64 << 20)})
     summary = json.loads((out / "summary.json").read_text()) if (out / "summary.json").is_file() else {}
     return p.returncode, summary, out, f"{p.stdout[-6000:]}\n{p.stderr[-6000:]}"
 
