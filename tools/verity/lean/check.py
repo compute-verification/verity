@@ -1431,6 +1431,61 @@ def own_modules(facts: dict) -> set[str]:
             if "/.lake/build/" in (o := str(g.get("olean", ""))) and "/.lake/packages/" not in o}
 
 
+def orphan_failures(policy: dict, files: dict[str, str], modules: set[str]) -> list[Failure]:
+    """`orphan.file` for each of the package's ``files`` that is neither one of ``modules`` (those its roots import) nor
+    under `exempt`, and `orphan.stale-exempt` for each `exempt` entry that matches no file."""
+    fails, exempt = [], policy.get("exempt", {})
+    for m, rel in sorted(files.items()):
+        if m not in modules and not under(exempt, m):
+            fails.append(Failure("orphan.file", rel, f"orphan: {rel} is not imported by the roots "
+                                 f"({', '.join(policy['roots'])}) nor under `exempt`: nothing builds or audits it"))
+    for p in sorted(exempt):
+        if not any(under([p], m) for m in files):
+            fails.append(Failure("orphan.stale-exempt", p, f"orphan: `exempt` lists {p}, which matches no file; remove the entry"))
+    return fails
+
+
+def layer_failures(policy: dict, modules: set[str], imports: dict[str, list[str]], graph: dict[str, list[str]] | None,
+                   own: set[str]) -> list[Failure]:
+    """The `layers` rules over ``modules`` and each one's direct ``imports``: an entry that matches no module, an `except`
+    that names none of its modules, and an import from outside the layer.  An import of one of ``own`` (a module this
+    repository builds) is outside unless the rule admits it; any other is outside only when what the rule admits doesn't
+    already reach it in ``graph`` ({module: its imports}, the dependencies' included), which only a build gives.  With
+    ``graph`` None (`sources_judge`, before the build) such an import is left to the audit of the build."""
+    fails, layers = [], policy.get("layers", {})
+    sealed = sorted(k for k, r in layers.items() if r.get("sealed"))
+
+    def admits(prefixes: list[str], i: str) -> bool:
+        return any(under([p], i) and not any(s != p and under([p], s) and under([s], i) for s in sealed) for p in prefixes)
+
+    def reached(start: list[str]) -> set[str]:
+        seen, stack = set(), list(start)
+        while stack:
+            if (x := stack.pop()) not in seen:
+                seen.add(x)
+                stack += graph.get(x, [])
+        return seen
+    for layer, rule in sorted(layers.items()):
+        inside = [m for m in sorted(modules) if under([layer], m)
+                  and not any(under([s], m) and not under([s], layer) for s in sealed)]
+        if not inside:
+            fails.append(Failure("layers.empty", layer, f"layers: {layer} matches no audited module; remove the entry"))
+        for m in rule.get("except", []):
+            if m not in inside:
+                fails.append(Failure("layers.stale-except", layer, f"layers: {layer}'s `except` lists {m}, which is not one "
+                                     f"of its modules"))
+        for m in inside:
+            if m in rule.get("except", []):
+                continue
+            held = [i for i in imports.get(m, []) if admits(rule["imports"], i) or i == "Init"]
+            reach = None if graph is None else reached(held)
+            for i in imports.get(m, []):
+                if i not in held and (i in own or (reach is not None and i not in reach)):
+                    fails.append(Failure("layers.import", m, f"layers: {m} imports {i}, outside {layer}'s layer "
+                                         f"({', '.join(rule['imports'])})"))
+    return fails
+
+
 def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False, owner: str | None = None,
           ticket: dict | None = None) -> tuple[list[str], dict]:
     """(failures, the policy with guarantees and reads as the build has them).  A pure function of the facts: the tests run
@@ -1468,46 +1523,8 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     fails += claim_failures(policy, facts) + witness_failures(policy, facts, own)
     fails += four_name_failures(policy, facts)
     modules = set(facts["modules"])
-    exempt = policy.get("exempt", {})
-    for m, rel in sorted(files.items()):
-        if m not in modules and not under(exempt, m):
-            fails.append(Failure("orphan.file", rel, f"orphan: {rel} is not imported by the roots "
-                                 f"({', '.join(policy['roots'])}) nor under `exempt`: nothing builds or audits it"))
-    for p in sorted(exempt):
-        if not any(under([p], m) for m in files):
-            fails.append(Failure("orphan.stale-exempt", p, f"orphan: `exempt` lists {p}, which matches no file; remove the entry"))
-    layers = policy.get("layers", {})
-    sealed = sorted(k for k, r in layers.items() if r.get("sealed"))
-
-    def admits(prefixes: list[str], i: str) -> bool:
-        return any(under([p], i) and not any(s != p and under([p], s) and under([s], i) for s in sealed) for p in prefixes)
     graph = {m: g["imports"] for m, g in facts.get("graph", {}).items()}
-
-    def reached(start: list[str]) -> set[str]:
-        seen, stack = set(), list(start)
-        while stack:
-            if (x := stack.pop()) not in seen:
-                seen.add(x)
-                stack += graph.get(x, [])
-        return seen
-    for layer, rule in sorted(layers.items()):
-        inside = [m for m in sorted(modules) if under([layer], m)
-                  and not any(under([s], m) and not under([s], layer) for s in sealed)]
-        if not inside:
-            fails.append(Failure("layers.empty", layer, f"layers: {layer} matches no audited module; remove the entry"))
-        for m in rule.get("except", []):
-            if m not in inside:
-                fails.append(Failure("layers.stale-except", layer, f"layers: {layer}'s `except` lists {m}, which is not one "
-                                     f"of its modules"))
-        for m in inside:
-            if m in rule.get("except", []):
-                continue
-            held = [i for i in facts["imports"].get(m, []) if admits(rule["imports"], i) or i == "Init"]
-            reach = reached(held)
-            for i in facts["imports"].get(m, []):
-                if i not in held and (i in own or i not in reach):
-                    fails.append(Failure("layers.import", m, f"layers: {m} imports {i}, outside {layer}'s layer "
-                                         f"({', '.join(rule['imports'])})"))
+    fails += orphan_failures(policy, files, modules) + layer_failures(policy, modules, facts["imports"], graph, own)
     if conflicts := facts.get("moved_conflicts"):
         more = f" and {len(conflicts) - 8} more" if len(conflicts) > 8 else ""
         clash = "; ".join(f"{c['name']} would be {c['as']}, and so would {c['with']}" for c in conflicts[:8])
