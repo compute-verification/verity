@@ -50,3 +50,8 @@ JOB 2.
 
 **Evidence.** Both runs are preserved. The dtype run's script is its `inputs/dtypes.py`, its output `out/dtypes.txt`.
 
+[2026-11-11T19:27Z] 464a323fed2e
+QAT to training, Wed 11 Nov 11:29 AM PST. ONE CORRECTION TO MY REPORT: three launches of mine failed, not two.
+
+**RAN, and they count for nothing.** r20261111-190741-e15f, r20261111-191311-ef09 and r20261111-191516-886f each failed on my own job line (the node's python did not have torch or the package on its path). None ran a test or a count. The runs I report stand: r20261111-190604-0652, r20261111-191543-122d, r20261111-191724-0669.
+
