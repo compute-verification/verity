@@ -98,7 +98,8 @@ def bind_of(descriptor: bytes, layout: dict) -> tuple[dict[str, str], dict[int, 
     if missing:
         raise ValueError(f"K = {missing}'s template (h1window.template over v1's or J10-R's tile_unit at {list(tile)}) "
                          "is not one of the declared Program's definitions, so no circuit file of it is the Program's")
-    ids, j10r = {k: g[0] for k, g in got.items()}, {k for k, g in got.items() if g[1]}
+    found = {k: g for k, g in got.items() if g is not None}
+    ids, j10r = {k: g[0] for k, g in found.items()}, {k for k, g in found.items() if g[1]}
     part = PO.build(desc, PO.template_instances_query([ids[k] for k in sorted(ids)]))
     if part["program"] != program:
         raise ValueError(f"the descriptor's program_digest {part['program'][:16]}... is not its SHA-512 {program[:16]}...")
@@ -134,6 +135,7 @@ def _lower(k: int, r: int, c: int, bind: dict, path: Path, j10r: bool = False) -
 def _h1_live():
     import importlib.util
     spec = importlib.util.spec_from_file_location("h1_prove_live", H1_PROVE / "live.py")
+    assert spec is not None and spec.loader is not None, f"{H1_PROVE / 'live.py'} is no module"
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

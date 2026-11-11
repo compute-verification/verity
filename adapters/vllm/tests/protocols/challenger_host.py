@@ -49,7 +49,9 @@ TREE = Path(__file__).resolve().parents[4]
 @functools.cache
 def models():
     """Infra's model registry, ``verity/composite/device/live_challenger/models.py``, as a module of its own."""
-    spec = importlib.util.spec_from_file_location("live_challenger_models", TREE / "verity/composite/device/live_challenger/models.py")
+    path = TREE / "verity/composite/device/live_challenger/models.py"
+    spec = importlib.util.spec_from_file_location("live_challenger_models", path)
+    assert spec is not None and spec.loader is not None, f"{path} is no module"
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -156,7 +158,9 @@ class Gate:
 
     def __init__(self, private: lms.PrivateKey, key: LC.ChallengerKey, leaf: int = 0,
                  registry: Registry | None = None) -> None:
-        self.private, self.key, self._leaf, self.lines, self._opens = private, key, leaf, [], {}
+        self.private, self.key, self._leaf = private, key, leaf
+        self.lines: list[str] = []
+        self._opens: dict[str, dict] = {}
         self.registry = registry or Registry()
         self.pins = list(PINS)
         self._reserves: dict[str, dict] = {}
@@ -325,7 +329,8 @@ class Ledger:
 
     def __init__(self, path: Path, seed: int, leaves: Iterator[int] | None = None,
                  named: LC.ChallengerKey | None = None, H: int = 5, registry: Registry | None = None) -> None:
-        self.path, self.lines = path, []
+        self.path = path
+        self.lines: list[str] = []
         self.registry = registry or Registry()
         self.pins_path = write_pins(path.parent / f"{path.stem}.pins.jsonl")
         self.private, self.key = challenger_key(seed, H)
@@ -334,10 +339,10 @@ class Ledger:
         self._reserves: dict[str, int] = {}
         self._period: str | None = None
         self._windows: list[str] = []
-        self._roots: dict[str, str] = {}
+        self._roots: dict[str, str | None] = {}
         self._complete: dict[str, bool] = {}
 
-    def append(self, kind: str, session: str, body: dict, leaf: int | None = None) -> None:
+    def append(self, kind: str, session: str | None, body: dict, leaf: int | None = None) -> None:
         q = next(self.leaves) if leaf is None else leaf
         sign = lambda m: lms.sign_at(self.private, q, m).encode()  # noqa: E731
         self.lines.append(LC.ledger_line(self.lines, kind, session, body, self.key.public[:16], sign))
@@ -414,7 +419,8 @@ class Host:
                  leaves: Iterator[int] | None = None, ledger: Ledger | None = None, window: dict | None = None,
                  gated: bool = False, reserved: bool = True, withhold: bool = False) -> None:
         self.directory, self.challenger, self.session_id = directory, challenger, session
-        self.seed, self.withhold, self.draw = seed, withhold, None
+        self.seed, self.withhold = seed, withhold
+        self.draw: Host | None = None
         directory.mkdir()
         private, self.key = challenger_key(seed)
         leaves = self.leaves = itertools.count() if leaves is None else leaves
@@ -453,10 +459,10 @@ class Host:
         """The gate's open of the window's sample session `session` on its sample root `root`, withheld unless not
         `withhold`: reserved in this host's ledger, served by a `Host` of its own (`draw`) over a sample session's coins
         (`window.draw_challenger`), and reached at `DRAW_PORT` (the answer's ``port``)."""
-        self.draw = Host(self.directory.parent / f"{self.directory.name}-draw",
-                         Wd.draw_challenger(0, entropy(self.seed + 0x100)), self.seed, session, self.leaves, self.ledger,
-                         gated=True, withhold=withhold)
-        return {**self.draw.open(session, root), "port": DRAW_PORT}
+        draw = self.draw = Host(self.directory.parent / f"{self.directory.name}-draw",
+                                Wd.draw_challenger(0, entropy(self.seed + 0x100)), self.seed, session, self.leaves,
+                                self.ledger, gated=True, withhold=withhold)
+        return {**draw.open(session, root), "port": DRAW_PORT}
 
     def ended(self) -> str | None:
         """Join the session once its client has ended it, and the ledger ends it, then its sample session's (`draw`), if
