@@ -38602,3 +38602,30 @@ research queue open: warning: --issue PRF-517: the body's `Goal proofs/spot-bind
 - `cursor/proofs-n2-table-root-5b1e` (#8731, open, unmarked, at `3cb71ba0758c`):
   - not crossed. It holds #8448's `1113b8a6675c`, and #8448 (`cursor/vllm-twostage-table-0f24`, now at `b78474741d61`) is open and not on `main`;
   - it crosses after #8448's crossed head is named, over that head.
+
+## CROSS, Wed 04:25Z: all five heads I take to the mark have their records run and quick tier launched; #8539's README stays 169 bytes over, untrimmed
+
+- **#8539's README, left as crossed.** `verity/protocols/spot/verifier/README.md` is 49,321 bytes at `984a73968ccd`, 169
+  over the 49,152 cap; `main`'s is 49,176 (24 over) and the pull request adds 145. [run: `markdown_caps.py origin/main
+  HEAD` says "1 put over the cap … (169 over)" and exits 0, a warning] Tightening the two-stage paragraph it edits gives
+  about 34 bytes with no fact dropped; the other 135 would be rewording paragraphs it does not touch, among them the
+  ones #8552 cuts by 2,707 bytes, so a trim here would only add a conflict with #8552. [read] No commit; the head stands
+  at `984a73968ccdd00ccbcbee982fbe2a11aa8048ef`. Once #8552 lands the file is under the cap with #8539's 145 bytes in it
+  (49,176 − 2,707 + 145 = 46,614). [derived]
+- **Runs, each launched from a clean worktree at the pushed head** [run]; none read yet:
+
+| PR | head | records run | quick tier (`suites.py --changed 5c095bb4ab70 --quick`) |
+|---|---|---|---|
+| #8512 | `815b893acd23` | `r20261111-041418-c513` | `r20261111-041947-fb67` |
+| #8527 | `33452276ad20` | `r20261111-041459-b16d` | `r20261111-042025-0550` |
+| #8785 | `e7b741b17e53` | `r20261111-041534-8439` | `r20261111-042041-3741` |
+| #8226 | `354f604cfdd1` | `r20261111-041602-67ce` | `r20261111-042123-14c5` |
+| #8539 | `984a73968ccd` | `r20261111-042342-57e5` | `r20261111-042416-5ab4` |
+
+- The quick tier names `main`'s tip by its id because a node's clone may not have `origin/main`; every crossed head
+  holds that commit, so it is the same comparison. [derived] ETA: quick tiers about 04:50Z, records runs 05:15Z to
+  05:45Z. [guess] A head whose records run regenerates its lock gets the quick tier again at the record's commit.
+- **Second list, so far** [run]: #8139 `clean 0a03af0cb29f [plain merge conflicted (3)]`, #8339 `clean a6242e6fd612
+  [plain merge clean]`; unmarked #8120 `clean 1bc34a35ce89 [plain merge clean]`, #8177 `clean 003c110293ad [plain merge
+  clean]`. The other twelve are running, about 2 minutes each, two at a time. No `conflicted` or `script-failed` yet.
+- Checkpoint note: `lanes/proofs/20261111T0424Z-checkpoint-cross-move.md`, synced. [run]
