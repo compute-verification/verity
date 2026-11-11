@@ -59612,6 +59612,8 @@ For the table:
 
 Tags: [run] a command I ran now, [read] a file or diff I read now. Times from `date -u`. "The branch" is the remote merge's branch (`c08d034460b0`), `main` is `493f49485e50`, "the crossed tree" is `c094f1ef8a0f`. Written to paste to the lean lane as it is.
 
+Revised 17:31Z: the block "The four Lean files" is rewritten. Its first version said all 19 of those hunks are both sides adding at one place; the nine proof hunks are not. Nothing else changed.
+
 **The closes.** Branch `cursor/proofs-crossread-closes-7c3e` at `115b297b8c19cbe5e426283003d052065f44d90b`: one commit on `c094f1ef8a0f`, the 12 files below and nothing else. Take files from it by `git checkout 115b297b8c19 -- <path>`; never merge it. By word: `main` 1, the branch 0, both 14. All 15 are [sure].
 
 **The list against the branch** [run: `git grep -c '^<<<<<<<'` at `c094f1ef8a0f`]. The 12 files hold 15 hunks, each file's count as listed. Not on the list: four conflicted Lean files whose `main` side is proofs' #8539 (R8) and no other PR: `verity/protocols/spot/verifier/lean/Spot/Registration.lean` (6 hunks), `Spot/Partition.lean` (1), `security/Properties/Spot.lean` (3) and `security/Proofs/Properties/Spot.lean` (9). I closed none of them, since they need a Lean build. What I read of them is under "The four Lean files" below.
@@ -59732,10 +59734,11 @@ Tags: [run] a command I ran now, [read] a file or diff I read now. Times from `d
 
 **(z) `a5_llama1b_h200.sh`: right, take `main`'s deletion of all four lines.** It is #8566's rule: no file of `commit/` goes to `$OUT`, which the run publishes. The branch's two remaining lines copy `commit/`'s top-level files there. I ran `main`'s own test's steps (`test_commit_records.py`, in the crossed tree) on both closings: with `main`'s deletion no file holding a planted value reaches `$OUT`; with the branch's two lines `commit/tokens_p0.json` and `commit/sampled_replay_p0.json` do [run].
 
-**The four Lean files** (a reading, nothing built; they are yours to close).
-- Every one of their 19 hunks is both sides adding at one place: the branch adds the per-member form's link points (`members`, `linkRefused`, `RL`, `unitGatesFast`), `main` adds R8 (`tied`, `r8Codes`, `R8`, `once`, `runs`, `fanout`).
-- For hunk 11's order: in `Spot/Registration.lean`, `check` and `checkRef` end `c := r8Codes v c` then `return if linkRefused v then addCode c "link-points" else c`, and the docstring reads "R1–R8 in order, then `link-points`". In `security/Properties/Spot.lean` the conjunction ends `… ∧ R8 v ∧ RL v`.
-- `check_eq_checkRef`'s `simp` step limit (the branch's 800000, `main`'s 400000) only a build can settle.
+**The four Lean files** (a reading of all 19 hunks, nothing built; they are yours to close).
+- **None of the 19 closes to one side.** The branch adds the per-member form's link points (`members`, `linkRefused`, `RL`, `unitGatesFast`) and `main` adds R8 (`tied`, `r8Codes`, `R8`, `once`, `runs`, `fanout`). The crossed tree needs both. `main`'s side alone drops the `link-points` check or its proof, so the cut-off's default is wrong for every one of them.
+- **Nine close as the two texts together**: `Spot/Partition.lean`'s one (the branch's `unitGatesFast`, then `main`'s definitions), the first five of `Spot/Registration.lean` and the three of `security/Properties/Spot.lean`. For hunk 11's order: `check` and `checkRef` end `-- R8`, `c := r8Codes v c`, then `return if linkRefused v then addCode c "link-points" else c`; the docstrings read "R1–R8 in order, then `link-points`" and "after R8"; `Registered`'s conjunction ends `… ∧ R8 v ∧ RL v`.
+- **The nine of `security/Proofs/Properties/Spot.lean` are not a union.** They are the lines of `registration_nil`'s proof that each side rewrote for its own last conjunct (`hrl` on the branch, `h8` on `main`). Neither side's line proves the crossed statement. The proof needs both conjuncts carried through: `h14` for `r8Codes` and then the `link-points` branch, and both `h8` and `hrl` in each tuple. That is a few lines of new Lean, which only a build checks.
+- **`check_eq_checkRef`'s `simp` step limit** (`Spot/Registration.lean`'s sixth hunk: the branch's 800000, `main`'s 400000): only a build can settle it. I expect it to need the branch's figure or more, since the branch's own comment says the `link-points` step makes `simp` rewrite the steps before it twice, and R8 is now one of those steps. That is my inference, not a measurement.
 
 **One more file, not proofs' and not asked.** `demos/vllm/commit.sh`'s four hunks decide README line 80's dropped clause. `main`'s `test_commit_records.py` reads that script's function named `records`; the branch's side names it `publish`.
 
