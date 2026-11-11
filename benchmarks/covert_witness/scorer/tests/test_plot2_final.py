@@ -29,7 +29,6 @@ def route(tmp_path, monkeypatch):
     """A built overlay directory and a route that records what it is sent: `cut` gives one body whatever the rows,
     with the note it is handed, else the builder's own, naming the art."""
     (tmp_path / "tables").mkdir()
-    (tmp_path / "console").mkdir()
     (tmp_path / "tables" / f"{ap.NAME}.json").write_text(json.dumps(panel(ap.PANEL, "")))
     (tmp_path / "tables" / "final.json").write_text(json.dumps({"cells": []}))
     seen = {"stored": [], "put": [], "served": {}}
