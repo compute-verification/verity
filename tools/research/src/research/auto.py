@@ -18,7 +18,7 @@ memory slot.py finds free there (`free_gb`, read once a pool). `choose` then tak
     launches of one half minute read the same lines, and sent to one place all but one of them wait;
   - else node 2's share when it can start the job now, with no one waiting there (a run once queued 100 min behind cpu-6's 8
     held slots and 9 waiters while node 2's 48 CPUs sat free);
-  - else the pool with the shortest wait, as the waiters the job stays behind per slot that runs, leaving out a pool whose
+  - else the pool with the shortest wait, as the waiters that stay in its line per slot that runs, leaving out a pool whose
     line is stalled on memory (`STALL_MIN`): a job placed there waits with it, however short the line;
   - node 2 only when no pool fits the job or none can be read, and node 2 itself can be. Node 2 is the only GPU node,
     and CPU work there has held its GPUs at 0% under a load of 235 on 120 cores while cpu-5 ran at 8 of 192. A node 2
@@ -408,16 +408,20 @@ def _behind(ahead: list[dict], mem_gb: float, free_gb: float) -> list[dict]:
 
 
 def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
-    """A pool as a job joining its line now finds it: the slots that run, the places it has for this job, the waiters the job
-    stays behind, and how to say it; ValueError when no slot of it fits the job. A slot fits by its CPUs: slot.py gives a job
-    any slot and raises its memory to the job's ask, so a slot's mem= rules none out (`_blocked`).
+    """A pool as a job joining its line now finds it: the slots that run, the places it has for this job, the waiters it waits
+    behind where it has none, and how to say it; ValueError when no slot of it fits the job. A slot fits by its CPUs: slot.py
+    gives a job any slot and raises its memory to the job's ask, so a slot's mem= rules none out (`_blocked`).
 
     A place is an idle slot with the memory free for what this job reserves there, after the line ahead has taken its own,
     as slot.py admits it: each waiter in turn takes the first idle slot whose reservation (`_need`, by the ask its ticket
     names) fits the memory left, which its reservation then leaves smaller; one that can't stays, and so does every waiter
     behind it but those that pass it (`_behind`). The job has a place for each idle slot it could then take, the memory left
     counted down with each, and none while a waiter it can't pass stays. So ten idle slots beside memory for two runs are
-    two places, and none once two waiters have taken them."""
+    two places, and none once two waiters have taken them.
+
+    A job with no place waits behind every waiter that stays, those it would pass now too: it passes a waiter only while
+    memory is short for that one, and the memory or the slot the job itself waits for goes first to the earlier waiters it
+    fits. Counted without them, a pool out of memory with a line of small runs read as the shortest line there was."""
     if not isinstance(doc, dict) or "error" in doc:
         raise ValueError(doc.get("error") if isinstance(doc, dict) else doc or "not read")
     if not doc.get("slots"):
@@ -468,12 +472,12 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
            f"{len(waiters)} waiting" + (f", {places} place{'' if places == 1 else 's'} for this job" if places != len(free) else ""))
     # the line drains through the slots that run: one left idle, or blocked on memory or disk, adds no throughput until it clears
     running = sum(s.get("holder") is not None for s in open_) + started
-    return max(running, 1), places, len(ahead), why
+    return max(running, 1), places, 0 if places else len(stay), why
 
 
 def _ahead(fit: int, free: int, waiting: int) -> float:
     """A pool's line as a run joining it sees it (`_pool`'s numbers): 0 while it has a place for this run, else the waiters it
-    stays behind and this run, per slot that runs. `choose` ranks the pools by it and `expect` turns it into minutes."""
+    waits behind and this run, per slot that runs. `choose` ranks the pools by it and `expect` turns it into minutes."""
     return 0 if free else (waiting + 1) / fit
 
 

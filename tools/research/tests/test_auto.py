@@ -340,9 +340,9 @@ def test_idle_slots_are_places_only_as_far_as_the_free_memory_goes_once_the_line
     target, why = auto.choose(docs, 4, 16)
     assert target == (CPU5, "research") and why.endswith(f"{CPU5}'s research pool has the most places for it (1): a slot is free there now")
     assert "r20 free; 4 waiting, 0 places for this job; " in why, "the reason says why 13 free slots took no job"
-    assert auto._pool(docs[CPU1]["research"], 4, 16)[:3] == (9, 0, 0), \
-        "the head takes 60 of the 70 GiB free; the 10 left start nobody, and the job passes the waiters it can't start"
-    assert auto.expect(docs, (CPU1, "research"), 4, 16).minutes == pytest.approx(auto.HOLD_MIN / 9), "there it would wait"
+    assert auto._pool(docs[CPU1]["research"], 4, 16)[:3] == (9, 0, 3), \
+        "the head takes 60 of the 70 GiB free; the 10 left start nobody, so the job has no place and waits behind the three"
+    assert auto.expect(docs, (CPU1, "research"), 4, 16).minutes == pytest.approx(4 * auto.HOLD_MIN / 9), "there it would wait"
     assert auto._pool(cpu1(70)["research"], 4, 16)[1] == 1, "with nobody in line: 70 GiB is one slot's 40, not thirteen"
     assert auto._pool(cpu1(70, waiters=1)["research"], 4, 16)[1:3] == (0, 0), "and that one is the waiter's"
     assert auto._pool(cpu1(400, asks=(64, 64, 16, 16))["research"], 4, 16)[:3] == (12, 5, 0), \
@@ -356,6 +356,25 @@ def test_idle_slots_are_places_only_as_far_as_the_free_memory_goes_once_the_line
         "and the line ahead takes what it books there too: 15 each of the 60, where their mem= of 40 would start one and no job"
     assert auto._pool(pool(*booked, free_gb=60, asks=(64,))["research"], 4, 16)[:3] == (1, 0, 0), \
         "a waiter asking over book= takes its ask, 60: it starts, and nothing is left for the job"
+
+
+def test_a_job_with_no_place_waits_behind_every_waiter_that_stays_those_it_would_pass_now_too():
+    """A machine with its memory reserved kept an idle slot while runs asking 32 GB waited in its line for memory. A run
+    asking as much passes each of them while memory is short for that one, so counted by the waiters it can't pass now it
+    was behind nobody, and that pool, with eleven slots running, read as the shortest line there was: the job went to the
+    machine with the least memory and its launch said it would start in two minutes. What frees there goes first to the
+    earlier waiters it fits."""
+    starved = pool(*_held(11, mem=None), slot("r11", mem=None), asks=(32, 32, 32, 32, 60), minutes=15, free_gb=-20)
+    docs = {N2: DOWN, CPU1: starved, CPU5: pool(*_held(2))}
+    assert auto._pool(starved["research"], 4, 32)[:3] == (11, 0, 5), "no place for it, and five ahead for the eleven slots that run"
+    target, why = auto.choose(docs, 4, 32)
+    assert target == (CPU5, "research") and why.endswith(f"the shortest line per run that fits is {CPU5}'s research pool"), \
+        "one run's wait for two slots is shorter than six runs' for eleven"
+    assert auto.expect(docs, (CPU1, "research"), 4, 32).minutes == pytest.approx(6 * auto.HOLD_MIN / 11)
+    assert auto._pool(pool(*_held(8), asks=(448,), free_gb=100)["research"], 4, 16)[1:3] == (0, 1), \
+        "so too behind a head it would pass once a slot frees: with no place, every waiter that stays is counted"
+    with pytest.raises(auto.Stalled, match="a run has waited 15 min while slot r11 is free, for more memory than the -20 GB free there"):
+        auto._pool(starved["research"], 4, 64)                               # a run that passes nobody: stalled behind them
 
 
 def test_the_pool_with_the_most_places_takes_the_job_not_the_first_that_has_one():
@@ -421,7 +440,8 @@ def test_the_placer_counts_the_line_ahead_as_slot_py_does(tmp_path, monkeypatch)
     doc = pool(slot("r0", mem=None), slot("r1", mem=None), free_gb=100)["research"]
     assert auto._pool({**doc, "waiters": line[1:2]}, 4, 16)[1:3] == (2, 0), "a 448 GB head that 100 GiB can't start is passed"
     assert auto._pool({**doc, "waiters": line[1:2]}, 4, 64)[1:3] == (0, 1), "not by a run that asks over BACKFILL_MAX_GB"
-    assert auto._pool({**doc, "waiters": line[:2]}, 4, 16)[1:3] == (0, 1), "a priority waiter is never passed"
+    assert auto._pool({**doc, "waiters": line[:2]}, 4, 16)[1:3] == (0, 2), \
+        "a priority waiter is never passed, and with no place the job waits behind both that stay"
     assert auto._pool({**doc, "waiters": line[3:4]}, 4, 16)[1:3] == (1, 0), "a waiter with no ask takes the first slot; the next is free"
 
 
