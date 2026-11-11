@@ -1,4 +1,4 @@
-"""The rules for a steady-state row of the proof server: the nine checks a row of `benchmarks/one_stage/server_rate.py`
+"""The rules for a steady-state row of the proof server: the ten checks a row of `benchmarks/one_stage/server_rate.py`
 passes before its rate is a steady-state measurement, as a function of the run's own files. Standard library only, as
 `overhead` is: a node and the store side can both read it.
 
@@ -34,10 +34,14 @@ a directory's):
   are.
 - `every_prover_warmed`: each of the row's provers finished a warm session before any timed one was submitted, and none
   filed nothing in the window (the row's `warm_per_prover` and `idle_provers`).
+- `one_numa_node`: the CPUs the row's processes could run on are all on one NUMA node (the row's `cores.numa_nodes`:
+  the nodes that hold any CPU of the script's affinity, which every process of the row runs within). So a row whose
+  verifiers are placed on another node than its provers fails. It reads the CPUs alone: the row doesn't say which node
+  its card is on.
 
 **Each check answers** `PASS`, `FAIL` or `CANNOT_TELL` (`Check`), the last where the run's files don't show it: a file
 the run doesn't hold, a field the row lacks, a record that can't be read. Only a pass counts: a row passed
-(`RowVerdict`) when all nine did, failed when any failed, and otherwise can't be told. `verdict` judges one row against
+(`RowVerdict`) when all ten did, failed when any failed, and otherwise can't be told. `verdict` judges one row against
 a run's files, and `verdicts` every row of a run's `RATES`. A number is a finite one: NaN and the infinities, which
 JSON's readers let through, are no seconds and no rate.
 """
@@ -110,7 +114,7 @@ class Check:
 
 @dataclass(frozen=True)
 class RowVerdict:
-    """A row's nine answers, in `CHECKS`' order."""
+    """A row's ten answers, in `CHECKS`' order."""
 
     type: Any
     provers: Any
@@ -304,6 +308,22 @@ def every_prover_warmed(row: Mapping[str, Any]) -> Check:
     return Check(name, PASS)
 
 
+def one_numa_node(row: Mapping[str, Any]) -> Check:
+    name = "one_numa_node"
+    if unread := _unread(name, row, others=("cores.numa_nodes",)):
+        return unread
+    nodes = row["cores"]["numa_nodes"]
+    if not isinstance(nodes, (list, tuple)) or not all(_count(node) for node in nodes):
+        return Check(name, CANNOT_TELL, f"`cores.numa_nodes` ({nodes!r}) of its row isn't a list of NUMA nodes")
+    if not nodes:
+        return Check(name, CANNOT_TELL, "`cores.numa_nodes` of its row names no NUMA node: its machine listed none")
+    if len(held := sorted(set(nodes))) > 1:
+        cpus = row["cores"].get("list")
+        return Check(name, FAIL, f"its CPUs{f' ({cpus})' if isinstance(cpus, str) else ''} are on {len(held)} NUMA nodes "
+                     f"({', '.join(map(str, held))})")
+    return Check(name, PASS)
+
+
 # ---- the checks that read the run's other files -----------------------------------------------------------------------------
 
 
@@ -454,15 +474,15 @@ def level(row: Mapping[str, Any], files: Files) -> Check:
 # ---- a row's verdict, and a run's -------------------------------------------------------------------------------------------
 
 CHECKS = ("accepted", "exits", "not_void", "flat", "no_throttling", "one_lease_own_card", "card_clear_start_end", "level",
-          "every_prover_warmed")
+          "every_prover_warmed", "one_numa_node")
 
 
 def verdict(row: Mapping[str, Any], files: Files) -> RowVerdict:
-    """A row's verdict from a run's files: the nine checks, in `CHECKS`' order. `row` is the run's own (`verdicts`), or
+    """A row's verdict from a run's files: the ten checks, in `CHECKS`' order. `row` is the run's own (`verdicts`), or
     the same row as completed or corrected after the run, judged against the files of the run that measured it."""
 
     checks = (accepted(row), exits(row), not_void(row), flat(row), no_throttling(row), one_lease_own_card(row, files),
-              card_clear_start_end(row, files), level(row, files), every_prover_warmed(row))
+              card_clear_start_end(row, files), level(row, files), every_prover_warmed(row), one_numa_node(row))
     return RowVerdict(row.get("type"), row.get("provers"), checks)
 
 
