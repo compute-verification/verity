@@ -15,8 +15,8 @@ cleanly that Lean doesn't) fails the run in minutes rather than when the audit's
 `lake build +MODULE:deps` (FILE's imports; Lake rebuilds only what changed since the slot's last build) and then
 `lake env lean` with the package's `[leanOptions]` (`siblings.options`) in that package's directory on a copy of FILE with
 the axiom probe appended (`axiom_probe.py`: its last line names each theorem whose axioms go beyond the standard three,
-`sorryAx` among them, or says none do; where lean fails on a theorem's own lines it names that theorem as failed, and
-`#print axioms`' answer for it is not shown), and exits with lean's
+`sorryAx` among them, or says none do; where lean fails on FILE's own lines it shows no answer of `#print axioms`, and
+names each theorem with an error on its own lines as failed), and exits with lean's
 status on FILE's own lines (with `--siblings`, that copy's build then goes through the sibling check, `siblings.py`, whose
 status it takes); when that status is an import clash (an
 import declaring what an earlier one did), the two modules it names lose their traces (`clashed`), so the next try rebuilds

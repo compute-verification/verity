@@ -3,10 +3,11 @@ resting on `sorry` (`sorryAx`) or an `axiom` elaborates too.  So `try` elaborate
 appended for each of its top-level theorems (`theorems`: a scan of its code, comments and strings aside, that tracks
 `namespace`, `section`, `mutual` and `end`), in one elaboration, and its last line (`summary`) names each theorem whose
 axioms go beyond `propext`, `Classical.choice` and `Quot.sound`, or says none do.  An error on an appended line is the
-probe's own (`own_rc`): the file's status is lean's on its own lines.  A theorem with an error of Lean's on its own lines
-(`spans`) failed: the line names it, and `#print axioms`' answer for it is not shown (`probe`).  That answer is no
-report on it: `#print axioms` takes a name the elaborator knows and reads its axioms from what the kernel holds, so for
-a theorem the kernel never got (a `rfl` that ran out of recursion depth, say) it says "does not depend on any axioms".
+probe's own (`own_rc`): the file's status is lean's on its own lines.  Where those fail, none of `#print axioms`' answers
+is shown (`probe`), and the line names each theorem with an error of Lean's on its own lines (`spans`, `failed`).  An
+answer is no report on a theorem of a file lean refuses: `#print axioms` takes a name the elaborator knows and reads its
+axioms from what the kernel holds, so for a theorem the kernel never got (a `rfl` that ran out of recursion depth, say) it
+says "does not depend on any axioms".
 Stdlib only: `lean_changed.py --try` and the CLI's local `verity lean try` both load it."""
 from __future__ import annotations
 
@@ -79,7 +80,10 @@ def spans(text: str) -> list[tuple[str, int, int]]:
     lines start under the last line of code above it that isn't an attribute, a `… in` or a modifier alone on its line
     (`OPENS`), so its docstring is among them: Lean puts an error on the whole declaration at its first line.  They end
     at its last line of code before the next theorem, `namespace`, `section`, `mutual` or `end`, or before a line at its
-    indent or left of it that doesn't continue it (`CONTINUES`)."""
+    indent or left of it that doesn't continue it (`CONTINUES`).  This scans the text and is not Lean's parse: an error Lean
+    puts on a line the scan gives no theorem (the first line of an attribute list that runs over several lines, say) names
+    none.  That costs the theorem's name in the probe's line and nothing else: no answer is shown for a file that fails
+    (`probe`)."""
     scopes: list[list[str]] = []
     found = []
     raw, lines = text.splitlines(), code(text).splitlines()
@@ -137,9 +141,9 @@ def failed(found: list[tuple[str, int, int]], output: str, copy: str) -> list[st
     return list(dict.fromkeys(name for name, first, last in found if any(first <= n <= last for n in at)))
 
 
-def shown(output: str, without: list[str]) -> str:
-    """``output`` less `#print axioms`' answer for each theorem of ``without``."""
-    return ANSWER.sub(lambda m: "" if PRIVATE.sub("", m.group(1)) in without else m.group(0), output)
+def unanswered(output: str) -> str:
+    """``output`` less every answer of `#print axioms`."""
+    return ANSWER.sub("", output)
 
 
 def axioms(output: str) -> dict[str, list[str]]:
@@ -156,8 +160,8 @@ def summary(names: list[str], output: str, failures: list[str] | None = None) ->
     if failures:
         one = len(failures) == 1
         return (f"axiom probe: {len(failures)} of its {len(names)} theorems failed, with Lean's error{'' if one else 's'} "
-                f"above on {'its' if one else 'their'} own lines, and {'is' if one else 'are'} not read for axioms: "
-                f"{', '.join(failures)}")
+                f"above on {'its' if one else 'their'} own lines: {', '.join(failures)}; no axioms are shown for a file "
+                f"lean refuses")
     got = axioms(output)
     beyond = {n: [a for a in got[n] if a not in STANDARD] for n in names if n in got}
     bad = [f"{n} ({', '.join(a)})" for n, a in beyond.items() if a]
@@ -175,9 +179,10 @@ def probe(pkg: Path, rel: str, text: str,
     """(the file's status, the probe's line, lean's output) for ``text``, the file at ``rel`` in package ``pkg``: its copy
     with the probe appended, written at `COPIES`/``rel`` under ``pkg`` and elaborated by ``lean`` (given that path from
     ``pkg`` and where to hand each line of lean's output as it comes; lean's (status, output)), then removed.  It prints
-    lean's lines as they come up to `#print axioms`' first answer, and the rest once lean is done, less the answer for
-    each theorem that failed (`failed`).  When the file's own lines fail, the line names the theorems that failed, and
-    there is none when no theorem did: the errors are the report."""
+    lean's lines as they come up to `#print axioms`' first answer, and the rest once lean is done: as it is when the file's
+    own status is 0, and less every answer when its own lines fail, since an answer for a theorem of a file lean refuses
+    can read as clean and mean nothing.  The line then names the theorems that failed (`failed`), and there is none when
+    the scan finds no such theorem: the errors are the report."""
     found = spans(text)
     names = list(dict.fromkeys(name for name, _, _ in found))
     copy = COPIES / rel
@@ -197,5 +202,6 @@ def probe(pkg: Path, rel: str, text: str,
         (pkg / copy).unlink(missing_ok=True)
     rc = own_rc(rc, output, len(text.splitlines()), str(copy))
     failures = failed(found, output, str(copy))
-    print(shown("".join(answers), failures), end="", flush=True)
+    rest = "".join(answers)
+    print(unanswered(rest) if rc else rest, end="", flush=True)
     return rc, summary(names, output, failures) if failures or not rc else "", output

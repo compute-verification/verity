@@ -140,18 +140,17 @@ REFUSED_SAID = [
     "'P.after' does not depend on any axioms\n"]
 
 
-def test_a_theorem_failed_when_lean_has_an_error_on_its_own_lines_and_its_answer_is_not_shown():
+def test_a_theorem_failed_when_lean_has_an_error_on_its_own_lines():
     said = "".join(REFUSED_SAID)
     bad = AP.failed(AP.spans(REFUSED), said, COPY)
     assert bad == ["P.refused", "P.wrong"], "the error at 10 is a def's, on no theorem's lines"
     assert AP.failed(AP.spans(REFUSED), said.replace(COPY, "Other.lean"), COPY) == [], "an error elsewhere is no theorem's"
-    assert AP.shown(said, bad) == "".join(REFUSED_SAID[:6] + REFUSED_SAID[9:])
-    assert AP.shown(said, []) == said
+    assert AP.unanswered(said) == "".join(REFUSED_SAID[:5]), "every answer goes, one over two lines whole"
 
 
-def test_the_probe_prints_leans_lines_as_they_come_and_the_answers_last_without_a_failed_theorems(tmp_path, capsys):
+def test_the_probe_prints_leans_lines_as_they_come_and_no_answer_when_the_files_own_lines_fail(tmp_path, capsys):
     """`#print axioms` answers "does not depend on any axioms" for a theorem Lean refused: the probe's line names it as
-    failed, and nothing printed can be read as clean for it."""
+    failed, and no answer is printed, for it or for a theorem beside it."""
     seen = []
 
     def lean(copy, show):
@@ -161,24 +160,55 @@ def test_the_probe_prints_leans_lines_as_they_come_and_the_answers_last_without_
         return 1, "".join(REFUSED_SAID)
 
     rc, said, output = AP.probe(tmp_path, "X.lean", REFUSED, lean)
-    assert (rc, said) == (1, "axiom probe: 2 of its 4 theorems failed, with Lean's errors above on their own lines, and "
-                             "are not read for axioms: P.refused, P.wrong")
+    assert (rc, said) == (1, "axiom probe: 2 of its 4 theorems failed, with Lean's errors above on their own lines: "
+                             "P.refused, P.wrong; no axioms are shown for a file lean refuses")
     assert seen == REFUSED_SAID[:5] + [""] * 5, "each of lean's lines as it comes, up to the first answer"
-    assert capsys.readouterr().out == REFUSED_SAID[5] + REFUSED_SAID[9]
+    assert capsys.readouterr().out == ""
     assert output == "".join(REFUSED_SAID), "the caller gets all lean said"
 
 
-def test_no_line_when_the_file_fails_on_no_theorems_lines_and_every_answer_is_shown(tmp_path, capsys):
+def said_by(lines, rc):
+    """A stand-in for lean that hands on ``lines`` and exits ``rc``."""
+    def lean(copy, show):
+        for line in lines:
+            show(line)
+        return rc, "".join(lines)
+    return lean
+
+
+def test_no_line_and_no_answer_when_the_file_fails_on_no_theorems_lines(tmp_path, capsys):
     said = [f"{COPY}:3:20: error(lean.unknownIdentifier): Unknown identifier `missing`\n",
             "'t' does not depend on any axioms\n"]
+    assert AP.probe(tmp_path, "X.lean", "theorem t : True := trivial\n\ndef broken : Nat := missing\n",
+                    said_by(said, 1)) == (1, "", "".join(said))
+    assert capsys.readouterr().out == said[0]
 
-    def lean(copy, show):
-        for line in said:
-            show(line)
-        return 1, "".join(said)
 
-    assert AP.probe(tmp_path, "X.lean", "theorem t : True := trivial\n\ndef broken : Nat := missing\n", lean) == (
-        1, "", "".join(said))
+#: a theorem under an attribute list over several lines: Lean puts an error on the whole declaration at the list's first
+#: line, which the scan gives no theorem
+SPREAD = "theorem clean : True := trivial\n\n@[\n  simp\n]\ntheorem spread : way 100000 = 100000 := rfl\n"
+
+
+def test_a_refused_theorem_the_scan_does_not_find_shows_no_answer(tmp_path, capsys):
+    """The scan's limit costs the theorem's name in the line and never a clean answer for it: Lean's error for `spread` is
+    at line 3, above the lines the scan gives it, so no theorem is named as failed, and still none of the answers shows,
+    "does not depend on any axioms" for the refused one among them."""
+    said = [f"{COPY}:3:0: error: maximum recursion depth has been reached\n",
+            "use `set_option maxRecDepth <num>` to increase limit\n",
+            "'clean' does not depend on any axioms\n", "'spread' does not depend on any axioms\n"]
+    assert AP.spans(SPREAD) == [("clean", 1, 1), ("spread", 6, 6)]
+    assert AP.probe(tmp_path, "X.lean", SPREAD, said_by(said, 1)) == (1, "", "".join(said))
+    assert capsys.readouterr().out == "".join(said[:2])
+
+
+def test_every_answer_shows_when_the_only_errors_are_on_the_probes_own_lines(tmp_path, capsys):
+    """A file whose own lines elaborate is not refused: an error on a `#print axioms` line (a name the scan got wrong) is
+    the probe's, the status is 0, and the answers lean gave show as they are."""
+    text = "theorem t : True := trivial\n\ntheorem u : True := trivial\n"
+    said = ["'t' does not depend on any axioms\n", f"{COPY}:6:14: error: Unknown constant `u`\n"]
+    rc, line, _ = AP.probe(tmp_path, "X.lean", text, said_by(said, 1))
+    assert (rc, line) == (0, "axiom probe: none of the 1 it read uses an axiom beyond propext, Classical.choice and "
+                             "Quot.sound; no answer for 1 (an error on its `#print axioms` line above): u")
     assert capsys.readouterr().out == "".join(said)
 
 
@@ -196,8 +226,8 @@ def test_the_line_names_each_theorem_beyond_the_standard_axioms_and_each_it_got_
         "on its `#print axioms` line above): A.gone")
     assert AP.summary([], "") == "axiom probe: no theorems in it"
     assert AP.summary(["A.holey", "A.hidden", "A.cls"], out, ["A.cls"]) == (
-        "axiom probe: 1 of its 3 theorems failed, with Lean's error above on its own lines, and is not read for axioms: "
-        "A.cls"), "of a file lean refuses, the theorems that failed and no axioms"
+        "axiom probe: 1 of its 3 theorems failed, with Lean's error above on its own lines: A.cls; no axioms are shown for "
+        "a file lean refuses"), "of a file lean refuses, the theorems that failed and no axioms"
 
 
 @pytest.fixture(scope="module")
@@ -264,6 +294,11 @@ theorem wrong : (1 : Nat) = 2 := rfl
 
 theorem uses : way 100000 = 100000 := refused
 
+@[
+  simp
+]
+theorem spread : way 100000 = 100000 := rfl
+
 def broken : Nat := missing
 
 theorem after : True := trivial
@@ -274,18 +309,23 @@ end Probe
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 @pytest.mark.parametrize("head", ["import Control.Defs\n\n", "module\n\n"], ids=["plain", "module"])
-def test_on_the_controls_fixture_a_theorem_lean_refuses_is_named_failed_and_no_answer_for_it_is_shown(control, capsys, head):
+def test_on_the_controls_fixture_a_theorem_lean_refuses_is_named_failed_and_no_answer_is_shown(control, capsys, head):
     """A term-mode `rfl` that runs out of recursion depth, bare and under a docstring, an attribute, an `open … in` and a
-    match, a type mismatch, and a theorem using a refused one: lean exits 1 with its errors on their lines, and the
-    theorems it accepts beside them keep their answers.  Nothing printed says a failed one's axioms."""
+    match, a type mismatch, and a theorem using a refused one: lean exits 1 with its errors on their lines, and the line
+    names each.  One more is refused under an attribute list over several lines, where the scan does not find Lean's
+    error: the line leaves it out.  Lean answers "does not depend on any axioms" for the refused ones; nothing printed
+    says any theorem's axioms."""
     pkg, lean = control
     rel, text = "Control/Refused.lean", head + LEAN_REFUSES
     (pkg / rel).write_text(text)
     rc, said, output = AP.probe(pkg, rel, text, lean)
     bad = ["refused", "documented", "attributed", "opened", "cases", "wrong", "uses"]
-    assert (rc, said) == (1, "axiom probe: 7 of its 9 theorems failed, with Lean's errors above on their own lines, and "
-                             "are not read for axioms: " + ", ".join(f"Probe.{n}" for n in bad))
+    assert (rc, said) == (1, "axiom probe: 7 of its 10 theorems failed, with Lean's errors above on their own lines: " +
+                             ", ".join(f"Probe.{n}" for n in bad) + "; no axioms are shown for a file lean refuses")
     out = capsys.readouterr().out
-    assert AP.axioms(out) == {"Probe.clean": [], "Probe.after": []}, out
-    assert out.count("maximum recursion depth has been reached") >= 5 and "(kernel) unknown constant '" in out
-    assert AP.axioms(output)["Probe.refused"] == [], "lean's own answer for the theorem it refused, which reads as clean"
+    assert AP.axioms(out) == {} and "axioms" not in out, out
+    assert out.count("maximum recursion depth has been reached") >= 6 and "(kernel) unknown constant '" in out
+    got = AP.axioms(output)
+    assert got["Probe.refused"] == got["Probe.spread"] == [], "lean's own answers for theorems it refused: they read as clean"
+    first = {name: first for name, first, _ in AP.spans(text)}["Probe.spread"]
+    assert (str(AP.COPIES / rel), first - 3) in AP.errors(output), "lean's error for it, three lines above the scan's first"

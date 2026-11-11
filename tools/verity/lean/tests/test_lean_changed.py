@@ -899,9 +899,9 @@ def test_try_elaborates_the_files_probed_copy_and_ends_with_the_theorems_beyond_
         "and Quot.sound: F.holey (sorryAx); no answer for 1 (an error on its `#print axioms` line above): F.clean")
 
 
-def test_try_names_a_theorem_lean_fails_on_and_echoes_no_axioms_answer_for_it(trying, tmp_path, monkeypatch, capsys):
+def test_try_names_a_theorem_lean_fails_on_and_echoes_no_axioms_answer(trying, tmp_path, monkeypatch, capsys):
     """`#print axioms` answers "does not depend on any axioms" for a theorem Lean refused (here a `rfl` out of recursion
-    depth, as Lean prints it): the try's last line names it as failed, and lean's lines are echoed without that answer."""
+    depth, as Lean prints it): the try's last line names it as failed, and lean's lines are echoed without an answer."""
     tree, calls = trying
     x = LC.ROOT / "Sec" / "Proofs" / "Flock" / "X.lean"
     x.write_text("namespace F\ntheorem clean : True := trivial\ntheorem refused : way 100000 = 100000 := rfl\nend F\n")
@@ -922,10 +922,10 @@ def test_try_names_a_theorem_lean_fails_on_and_echoes_no_axioms_answer_for_it(tr
     monkeypatch.setattr(LC, "build", build)
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1
-    assert capsys.readouterr().out == "".join(lines[:3])
+    assert capsys.readouterr().out == "".join(lines[:2])
     assert "lean exit 1" in said[-2] and said[-1] == (
         "lean-try: Sec/Proofs/Flock/X.lean: axiom probe: 1 of its 2 theorems failed, with Lean's error above on its own "
-        "lines, and is not read for axioms: F.refused")
+        "lines: F.refused; no axioms are shown for a file lean refuses")
 
 
 def test_try_forgets_both_modules_an_import_clash_names_so_the_next_try_rebuilds_them(trying, tmp_path):

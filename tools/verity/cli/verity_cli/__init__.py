@@ -176,8 +176,9 @@ def _lean(args: list[str]) -> int:
                                  "imports (`lake build` there first) and with its `[leanOptions]`, as `lake build` gives "
                                  "them, exiting with lean's status; its last line, the "
                                  "axiom probe's, names each theorem whose axioms go beyond propext, Classical.choice and "
-                                 "Quot.sound (sorryAx too), or says none do; where lean has an error on a theorem's own "
-                                 "lines, it names that theorem as failed, and `#print axioms`' answer for it is not shown.")
+                                 "Quot.sound (sorryAx too), or says none do; where lean has an error on FILE's own lines, "
+                                 "no answer of `#print axioms` is shown, and it names each theorem with an error on its own "
+                                 "lines as failed.")
     ap.add_argument("file", metavar="FILE", help="the .lean file: a path from here, or from the root of "
                     "the checkout you're in, which is the tree it elaborates")
     ap.add_argument("--siblings", action="store_true", help="once it elaborates, import its build beside every built module "
