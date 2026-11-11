@@ -245,6 +245,7 @@ public import Proofs.Flock.Claims.Recursion.VStarTrace
 public import Proofs.Flock.Claims.Recursion.HpLast
 public import Proofs.Flock.Claims.Recursion.VStarTraceOk
 public import Proofs.Flock.Claims.Recursion.VStarNets
+public import Proofs.Flock.Claims.Recursion.VStarNetsStaged
 public import Proofs.Flock.Claims.Recursion.VStarDeployed
 public import Proofs.Flock.Claims.Recursion.HpEarly
 public import Proofs.Flock.Claims.Recursion.SlotsOk
