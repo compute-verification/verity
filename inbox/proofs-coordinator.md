@@ -35814,3 +35814,24 @@ Nothing of mine is running. No repository file changed; I posted nothing on Slac
 - Not done and not ours to cure here: `benchmarks/one_stage/pyproject.toml:51` lists the census as an input for the block record, which goes stale once compute-accounting's `520bddc6137` is in the base. It is harmless; one line later.
 
 Mailbox read at 00:48Z: no file for me on `cursor/proofs-inbox`. Next entry when the runs end, or by 02:00Z.
+
+## PRF-522 PUBUNITS, Wed 11 Nov 01:01Z: both runs ended and show what I expected: at `936925ccb14d` the dead input and our six addresses are gone, 9 of our 11 edges are left, and nothing else moved
+
+Both runs ended rc 0 after 8 minutes; each step's own result is in its `out/verdicts.txt` [run, each log read by me].
+
+| step | the base `f63a7b76334d`, `r20261111-005228-184a` (vy-nebius-cpu-3) | the head `936925ccb14d`, `r20261111-005227-31bb` (vy-nebius-cpu-1) |
+|---|---|---|
+| `tests/test_gate_paths.py` | 1 failed, 7 passed: `benchmarks/live_challenger/pyproject.toml` names `sampled_proofs/coins.py` | **8 passed** |
+| `tests/test_literal_addresses.py` | 1 failed: seven lines, six of them ours | 1 failed: **one line, `benchmarks/live_verifier/README.md:68`**, memory-accounting's |
+| `tests/test_public_boundary.py` | 1 failed, 42 passed | 1 failed, 42 passed |
+| the tool's edges | 29, of them 11 under `benchmarks/one_stage` | **27, of them 9** |
+| `benchmarks/one_stage`, `-k test_served_verdicts` | 392 passed | 392 passed |
+| `benchmarks/live_challenger` suite | 654 passed | 654 passed |
+
+- **The 9 left are the table of my 00:58Z entry**, line for line: `served_pearlplus.sh:112,113,145,283`, `inference_only.py:93,94,219`, `served_compare.py:59`, `served_cases.py:128`.
+- **The trial, on a copy of the list in the head's clone:** with `served_pearlplus.sh`, `inference_only.py` and `served_compare.py` out of the public group, the tool reports 19 edges, one under `benchmarks/one_stage` (`served_cases.py:128`). The diff is the run's `out/trial.diff`.
+- **One more fact for the call on the three** [read]: the list's own comment on this group says the launcher `served_verdicts.sh` is left out because it "runs the private served window and `benchmarks/prove_path`". `inference_only.py` and `served_compare.py` run `benchmarks/prove_path`, and `served_pearlplus.sh` runs Pearl-C's private served passes. So the list's reason for the launcher is true of all three.
+- **`coin`'s new default is covered:** `test_the_coin_command_says_where_the_verifiers_coin_went` calls `main(["coin", ...])`, which hands no command, so it reads the setting. It is in the 392.
+- **Not run:** a served run. No GPU node ran `served_verdicts.sh` or `served_composite.sh` at this head; their tests use stand-ins.
+
+**Now:** I start the `served_cases.py` cut, as the 00:58Z entry says, on the same branch. Nothing is running. The three asks of 00:58Z stand. Mailbox read at 01:01Z: no file for me. The base is still `f63a7b76334d`. Next entry at the cut's first result, or by 02:00Z.
