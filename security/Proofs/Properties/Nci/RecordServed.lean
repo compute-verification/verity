@@ -91,7 +91,9 @@ end NciCheck.Properties.Record.SecurityProofs
 namespace NciCheck.Record.SecurityProofs
 
 /-- **The record check's own form lays out a circuit** (`Properties.Record.LaidOut`). -/
-theorem form_laidOut : Properties.Record.LaidOut form :=
-  fun _ _ _ h => Properties.Record.SecurityProofs.served_of_read h
+theorem form_laidOut : Properties.Record.LaidOut form := by
+  intro j tr c h
+  have h' : read j tr = .ok c := h
+  exact Properties.Record.SecurityProofs.served_of_read h'
 
 end NciCheck.Record.SecurityProofs
