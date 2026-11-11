@@ -420,7 +420,7 @@ def counted_and_traced(root: Path, steps: int, **over):
 OPTIMIZER_PRODUCTS = {"muon": ("bfloat16", "gemm/bf16"), "shampoo": ("float32", "gemm/f32")}
 
 
-@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("ema", 3), ("muon", 3),
+@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("ema", 3), ("muon", 2),
                                         ("shampoo", 3)])
 def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, steps):
     """What a job's trace says of a step (`run.traced_step`: the capture's graph of it, from shapes alone) against
