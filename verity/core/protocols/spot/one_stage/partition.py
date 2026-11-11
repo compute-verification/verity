@@ -293,7 +293,7 @@ def fanout(program: Program, query: Mapping[str, Any]) -> int:
     at least the most proof blocks one group holds, two proof blocks joined when one reads part of the other's result and
     the groups closed under joining. F is 1 when no proof block reads another's result, as in every population program,
     whose instances each read only their own share of each Input node; the requests a group's proof blocks serve then
-    read in no other group's, so a served cap of S bits per proof block bounds each group's served bits by F S (the
+    read in no other group's, so a bound of S served bits per proof block holds each group's served bits to F S (the
     capped form at N = F, `plancheck.two`'s `fanout`). The summary joins root nodes, not proof blocks: a node reading
     any part of another's result joins the two, and F is the most proof blocks the nodes of one joined set hold, so it
     is the group's size exactly where every joined node is a call, and at least it where a joined batch's members read
