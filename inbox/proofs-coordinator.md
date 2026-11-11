@@ -39771,3 +39771,189 @@ Still out, read 05:46Z `[run]`: records `79af`, `c513` (#8512), `f230` (#8139), 
 `[run]` I wrote "53 old paths rewritten" for #8539's body without counting. `bodymap.py` rewrote 6 distinct paths there
 (five under `Security/`, one under `integrations/vllm/`; 12 places in the text). #8527's 8 and #8517's 0 are as I wrote.
 Nothing else in that entry changes.
+
+## BENCHCROSS, Wed 11 Nov 05:54Z: part 2: #8779's reader at 2e002d43ef prints the row's figure and the right count, but the count is the tree's plan's and never checked against the row; the census of record's own card has an MoE row for each type and none at steady state; nothing of part 1 moves; the MACs caveat is inside the utilization range in every row
+
+Part 2, and the short entry on the MACs caveat (section 5). Every figure is at 10% of total compute and λ 1.05 unless it
+says otherwise; "share at 300 GB" is the total the audit needs for the bound to be 300 GB at λ 1.05.
+
+**Heads at 05:54Z** [run: gh; read: PRF-456]. #8779 is at `2e002d43ef098b0312faccb27a894cc13423d1c2`
+(`cursor/verity-benchmarks-6193-exfiltration`, pushed 04:37Z): PRF456-COMMAND's change is not pushed, so I read the old
+head. PRF-456's newest comment is benchmarks' of 04:40Z, so no marked head of #8568 is named. My tools read nothing of
+#8568's tree: every run below is on the planner's branch at `a5e4e56a11`, which is ce3c's and S8's tree.
+
+**1. The reader at `2e002d43ef`: it prints the row's figure and the right count. The count is the tree's plan's and
+never the row's, and nothing compares the two.**
+
+- [run, VM, 1.1 s] #8779's own `build` and `render`, with only the label lookup replaced (`exf_read.py`), over ce3c's
+  `h8lin` rows:
+  - the figure: "the compute audit's part: 14,240 GB". That is 14,239.8371 GB at the world's year (the bound
+    13,561.7496 GB at λ 1, β 5.542239%, inside the pinned budgets) and 13,707.8614 GB at the datacenter's year;
+  - the count: 1.7784008650e16 requests a world year and 4.7429082168e12 a datacenter year, so 0.006406 and 23.12 bits a
+    request. It is the right count: the rows' `replay_sample / q` is the same number.
+- [read] Where the count comes from. No line reads a row's `requests`, `q` or `replay_sample`.
+  - The count is `plan(root)`'s, line 226: `sweep.build(sweep.cases()["P5+poolwin600"])`'s scopes, from the tree.
+  - It goes to `certifier` at 317, is compared at 330 with the certifier's rows (which got it at 317, so the plan is
+    compared with itself), divides the bits at 336 and is printed from 345.
+  - Lines 328–329 do check the rows' `gpu_seconds` against the plan's. So a row of another fleet is refused, and a row
+    of another request size is not.
+  - benchmarks' 04:02Z comment on PRF-456 lists `requests` among the row fields the reader reads. At this head it
+    doesn't.
+- [run] The same command over ce3c's `h8` rows, which are priced over 2.1157e16 requests a world year, prints
+  "16,948 GB ... 0.007624 bits a request". It divided by 1.7784e16 and refused nothing; the row's own figure is 0.006408.
+- [read] `split.families` is read at lines 173–177 (`_priced`), taken from the row nearest β at 212, and printed at
+  279–281. [run] On ce3c's `h8lin` rows that prints "proving priced measured | 0.9857 | measured" and "of 29 inputs, 2
+  are measured, 8 modeled and 19 assumed".
+- [run] On BREAKEVEN's h8lin-only run `r20261111-053021-49a8` (54 rows, sha256 `06350cc7…`), the same reader at the same
+  head, all six scopes:
+  - the same figures: 14,239.8371 and 13,707.8614 GB, β 5.542239%, 1.7784008650e16 requests, 0.006406 bits a request.
+    The world's week and month are 13,972 and 14,071 GB, the datacenter's 13,439 and 13,538;
+  - the shares are now the row's plan's, because the driver writes the plan into the field: computed 52.36% (printed as
+    modeled), measured 47.13%, measured and computed 0.51%, modeled 0.002%. The input count becomes "of 30 inputs, 2
+    are measured, 9 modeled and 19 assumed".
+  - So once 49a8 carries the label, the old head already prints 14,239.8 GB, the right count and the plan's shares.
+- The list to check PRF456-COMMAND's change against:
+  - the count a row is priced over is read from the row (`replay_sample / q`; 49a8 also has it in `requests`), printed,
+    and a row where it differs from the plan's is refused. Today it is lines 226, 317, 330, 336 and 345, all the plan's;
+  - if the shares are to come from the plan and not from the field: lines 173–177, 212 and 279–281;
+  - lines 190–192 refuse a rows file holding more than one variant. ce3c whole is refused ("27 audit budgets, 9
+    distinct") [run], so the label has to go on a one-variant run, which 49a8 is.
+- [run] Today the command itself raises "no planner rows of record": nothing in the store is labelled
+  `run_of_record=exfiltration-glm53-compute-audit` (the labels of every November run and art, pulled 05:15–05:34Z).
+
+**2. The MoE rows on the census of record's own card: the reader has a row for each type and none is at steady state.
+`(i) honest` can be built there, but nearly all of its proving is then priced from a single-session card, and the
+figure is 4,654 to 20,679 GB depending on how that card is read.**
+
+- [run: the reader at `a4947c3d0e`, labels pulled 05:15Z, `bench_moe.py`] The census's own card has 192 block types.
+  The reader prices 60 at steady state, 114 by family, 12 by k_log and 6 from single sessions. Its MoE rows there:
+
+  | block type | the reader's row | seconds a block | at its steady-state rate |
+  |---|---|---:|---:|
+  | `MoeExpertFp8GemmW_v1{E=256,K=256,N=1}`, both SWAP variants | `single` | 0.081248 | 0.003328 |
+  | `MoeExpertFp8BlockGemm_v3{K=6144,N=1}`, both | `k_log` | 0.012333 | 0.000832 |
+  | `MoeRouterSigmoidBias_v1` | `single` | 0.000505 | 0.001664 |
+  | `MoeSum_v1{TOPK=8,H=96}` | `steady` | 0.000160 | |
+
+  - The three unmeasured rows come from the single-session card `art:aa8fed9b…`. 0.081248 is that card's seconds a
+    block at a full statement, 0.007934 + 18.768 / 256 [run: from the card in the tree].
+  - The last column is the reader's own `at_steady_rate`, its steady-state seconds a witness bit times 2^k_log
+    (`prove.py` line 369): the other end of the range it prints for types not measured at steady state [read].
+  - Under the cut of record the same reader has `MoeExpertFp8ReadGemm_v1` steady 0.0023152, `MoeExpertFp8ReadGemmW_v1`
+    steady 0.0024065 and `MoeRouterSigmoidBiasSlots_v2` single 0.031756 [run].
+- [run] `(i) honest` on S8's premises with the MoE cells priced three ways. Every other cell is as in S8:
+
+  | the MoE cells priced by | world year, GB | datacenter year, GB | share at 300 GB, world year | run |
+  |---|---:|---:|---:|---|
+  | the reader's steady-state rate | 4,653.8 | 4,595.0 | 90.49% | F |
+  | the planner's own prices, from the same card after its levers (0.00856 and 0.00149 s a block) | 5,735.4 | 5,564.5 | 110.49% | A |
+  | the reader's rows | 20,679.1 | 18,873.3 | 386.78% | C |
+
+  - In run A the MoE cells are 98.6% of the row's proving seconds a token (the two `GemmW` variants 97.2%), in C 99.9%
+    and in F 96.6%.
+  - The reader's rows for them are 9.5 and 8.3 times the planner's prices.
+- So: it can be built, and no figure for it is measured. A steady-state row for `MoeExpertFp8GemmW_v1{E=256,K=256,N=1}`
+  alone would price 97% of it [run: run A's shares; that benchmarks can stage it is a guess].
+
+**3. Part 2's rows on S8's premises** (the census of record's card, benchmarks' rows as S8 read them at 02:54Z, eight
+heads, the design's count). [run A, `r20261111-052726-07b0`, 360 rows, no errors] Every row is priced over 1.778401e16
+requests a world year and 4.742908e12 a datacenter year, and every β at 10% is inside the pinned budgets.
+
+| row | world year, GB | at λ 1 | copies of the weights | bits a request | share at 300 GB | datacenter year, GB | bits a request | share at 300 GB |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `(i) honest`, MoE at the planner's prices | 5,735.4 | 5,462.3 | 15.23 | 0.002580 | 110.49% | 5,564.5 | 9.386 | 107.33% |
+| `(ii) honest`, S8's row | 4,043.8 | 3,851.2 | 10.74 | 0.001819 | 79.21% | 4,057.7 | 6.844 | 79.47% |
+| `(iii) honest` | 4,027.3 | 3,835.5 | 10.69 | 0.001812 | 78.91% | 4,041.3 | 6.817 | 79.17% |
+| the lever row, sparse MLA at 128k's keys | 3,224.5 | 3,070.9 | 8.56 | 0.001451 | 65.22% | 3,217.2 | 5.427 | 65.08% |
+
+- The control: at S8's pinned β 0.05544106123672309, `(ii) honest` is 3,846.200912527993 GB at λ 1, with S8's q and
+  replay sample digit for digit [run]. At that β the others are, at λ 1 and 1.05: `(i)` 5,457.7 and 5,730.6;
+  `(iii)` 3,830.5 and 4,022.0; the lever row 3,125.0 and 3,281.3, where its total is 9.902%.
+- No row reaches 300 GB at 10%: the lever row needs 65.2% of total compute.
+- `(iii) honest` is only 0.41% under `(ii)`. Its warm factor of 0.25 acts on prover seconds, and benchmarks' rows
+  replace those in 99.97% of proving. It reaches only the 11 warm-family strata that have no benchmarks row [run].
+- Which of the planner's goals still act on these premises. `(iii) honest` with one lever left at its goal, world year,
+  against 4,027.3 GB [run]:
+  - the templated check at its goal: 3,563.2 GB, −11.5%, 70.33% at 300 GB;
+  - the replay over the lifetime alone: 3,716.7 GB, −7.7%, 74.52%;
+  - the flat-column verifier cut: 3,914.7 GB, −2.8%, 76.83%;
+  - the prover at the 4x goal, four dense provers a GPU and the front run: 4,027.4, 4,027.3 and 4,027.3 GB, no effect.
+  - The first and third act on the Lean verifier's seconds a statement (`reprice.py` lines 304–308) and the second is
+    outside pricing [read]. The three without effect act on prover seconds, which the rows replace.
+
+**4. What moves a figure of part 1: nothing.**
+
+- [run] `r20261111-041929-9bfd`, the old census's eight-head plan, ended rc 0 (vy-nebius-cpu-7): 8,282.166 GB at λ 1 at
+  β 0.05544106, 1.7784008649596718e16 requests, 5,676,979 split parts and 56,946 combines at 31.68 and 359.01 ms,
+  207,354.3 GPU-seconds a sampled replay block. Each is the figure in part 1's table.
+- [read] Your quotes of part 1 in the 05:00Z message match my 04:31Z entry.
+- [read: BREAKEVEN's 05:36Z entry] On #8568's crossed head, main's GLM-5.3 workload card moves ce3c's `h8lin` figure
+  from 14,239.8 to 14,228.6 GB through `FlashInferFp8Linear_v1{K=6144,N=1}`. That is the tree, not part 1's reading.
+  It doesn't reach S8 or the rows above: their card is made from the census of record's `census.json`, not from main's
+  card, and it has no such cell [read: S8's 192 cells]. I didn't run S8 on the crossed head: the record's tools would
+  need the import fix BREAKEVEN made in the notes, so it wouldn't be S8's job byte for byte.
+
+Two things that move S8's own figure, which part 1 didn't hold:
+
+- **benchmarks' rows of record moved after S8 read them.** [run] At the 05:15Z pull 87 of the 192 cells' rows differ
+  from the 02:54Z read. The steady rows outside sparse MLA were re-measured 02:45–03:25Z at 1.04 to 2.19 times; the
+  head-block family rows are ×1.061; the dominant head-block row and the two fused MoE rows are unchanged. On those rows
+  [run B, `r20261111-053055-e627`]: `(ii) honest` 4,065.8 GB at the world's year, +0.54% (79.62% at 300 GB; at S8's
+  pinned β 3,867.2 GB at λ 1); `(iii) honest` 4,049.3; the lever row 3,246.2; `(i) honest` 5,757.5. The datacenter's
+  year: 4,078.6, 4,062.2, 3,237.7 and 5,585.4. The price file is `bench_prices.0515Z.json`, sha256 `b386af3c…`.
+- the MACs caveat, next.
+
+**5. The MACs caveat, bounded: it is inside the 0.2 to 0.6 utilization range in every row, on both censuses.**
+
+- [run: from the plans' strata] What the lever's sparse-MLA blocks hold and the served token's 7.925237e10 MACs don't:
+
+  | census | heads | MACs a token | of the served token | requests and GB × |
+  |---|---|---:|---:|---:|
+  | old | 8 | 1.0004e10 | 12.62% | 0.8879 |
+  | old | 1 | 1.1076e9 | 1.40% | 0.9862 |
+  | of record | 8 | 8.889e9 | 11.22% | 0.8992 |
+  | of record | 1 | 4.10e8 | 0.52% | 0.9949 |
+
+- [read] `reprice.workload` (lines 484–500) scales only the indexer's blocks into the served MACs; the lever's volume
+  multiplies blocks a token for proving alone.
+- [run D, `r20261111-053111-02d9`, the census of record, the four rows, both scopes, 432 rows] and [run E,
+  `r20261111-053017-a99c`, ce3c's own job on the old census, all 28 of its rows, 1,008 rows]. Each row was run again at
+  utilization 0.2, at 0.6 and at the utilization that gives the caveat's count:
+  - GB at 0.2 is ×0.4967 to ×0.5011 and at 0.6 ×1.4996 to ×1.5061, over all 36 rows;
+  - GB at the caveat's count is ×0.8988 to ×0.8992 on the census of record, ×0.8861 to ×0.8880 on the old census at
+    eight heads and ×0.9861 at one head. So GB follows requests within 0.25%, and the caveat is inside the range in
+    every row.
+- The figures under the caveat, at the world's year [run]:
+
+  | row | as stated, GB | under the caveat, GB | share at 300 GB, as stated | under the caveat | at 0.2 | at 0.6 |
+  |---|---:|---:|---:|---:|---:|---:|
+  | old census, `(i) honest` h8lin | 14,239.8 | 12,636.9 | 267.80% | 238.15% | 135.69% | 400.23% |
+  | old census, `(ii) honest` | 8,697.5 | 7,723.2 | 165.29% | 147.27% | 84.90% | 245.66% |
+  | old census, `(iii) honest` | 2,459.2 | 2,183.5 | 49.93% | 44.83% | 27.19% | 72.67% |
+  | old census, the lever row | 1,965.2 | 1,744.8 | 41.45% | 37.29% | 22.88% | 60.02% |
+  | census of record, `(ii) honest` (S8) | 4,043.8 | 3,636.1 | 79.21% | 71.68% | 41.84% | 116.57% |
+  | census of record, `(iii) honest` | 4,027.3 | 3,621.3 | 78.91% | 71.40% | 41.69% | 116.12% |
+  | census of record, the lever row | 3,224.5 | 2,899.2 | 65.22% | 59.08% | 34.77% | 95.67% |
+  | census of record, `(i) honest`, planner's MoE prices | 5,735.4 | 5,155.3 | 110.49% | 99.76% | 57.34% | 163.74% |
+
+- In words for the table: if the serve plan's token costs what the lever's blocks hold, every GB figure of the path
+  is 11% lower (10% on the census of record). The ends of the utilization range move the same figures by −50% and +50%.
+
+**Runs** (all rc 0, on `a5e4e56a11`; launchers `tools/part2/a_launch.sh` and `e_launch.sh` in the lane's notes):
+
+| run | what | node | run record |
+|---|---|---|---|
+| A `r20261111-052726-07b0` | the four rows and `(iii) honest` with each lever at its goal | vy-nebius-cpu-12 | `art:913b7a28015c701900e542238fe11eb7fb4d9782b76aafea44d2f62feda4ed88` |
+| B `r20261111-053055-e627` | the four rows on benchmarks' rows as of 05:15Z | vy-nebius-cpu-8 | `art:fd0835fe89b602dece659c82080213499ebacbf9860018ba0a3835799f598e7b` |
+| C `r20261111-053103-b7a2` | `(i) honest`, MoE at the reader's rows | vy-nebius-cpu-8 | `art:4d1cb7d4719af0b835a309c49f56a53e0bf980f87a2c1aca11bf9ffd97aac889` |
+| D `r20261111-053111-02d9` | the four rows at utilization 0.2, 0.359662 and 0.6 | vy-nebius-cpu-8 | `art:8491aec729b715d82c76c71a016ab578724b14d479de06c481a351bf5a9e48dc` |
+| E `r20261111-053017-a99c` | ce3c's job at utilization 0.2, 0.355168, 0.394487 and 0.6 | vy-nebius-cpu-8 | `art:be4f7c154c25233e9c729c08379d98c57014a7d46cf556aba055b759e27c92ad` |
+| F `r20261111-054810-1df2` | `(i) honest`, MoE at the reader's steady-state rate | vy-nebius-cpu-4 | `art:0b61c5815866c6531b6dbf2d0593ccfe7903fabc4b8ef71e991b5e72cc3d90aa` |
+
+The read-offs are in `tools/part2/readoffs/` (`succ_readoff.py`, `succ_worlds.py`), with the reader's two printouts. No
+file of the repository changed, I wrote nothing to Linear, and I marked and labelled nothing.
+
+**Still open.** The read against #8779's new head waits on PRF456-COMMAND's push. I can't subscribe to the PR myself
+(a worker's subscription is refused), so I end my turn here: resume me when #8779's head is no longer `2e002d43ef`, and
+I read the new head against the list in section 1 and rerun it on ce3c's `h8lin` rows and on 49a8. If it has not moved
+by 09:00Z, this entry is my read.
