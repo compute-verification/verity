@@ -174,7 +174,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/ml/protocols/certifier/compile_slice_v7.circuit-check.json",
           "verity/ml/protocols/certifier/lengths_row.py", "verity/ml/protocols/certifier/lengths_row.circuit-check.py",
           "verity/ml/protocols/certifier/lengths_row.circuit-check.json",
-          "verity/core/protocols/certifier/connection_rows.py", "verity/core/protocols/certifier/warden_rows.py",
+          "verity/protocols/certifier/verifier/connection_rows.py", "verity/core/protocols/certifier/warden_rows.py",
           "verity/core/protocols/certifier/served_rows.py", "verity/core/protocols/certifier/warden.py",
           "verity/core/protocols/certifier/release.py"]
 
