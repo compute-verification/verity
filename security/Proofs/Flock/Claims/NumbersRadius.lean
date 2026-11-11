@@ -120,7 +120,7 @@ theorem radius_half_bounds :
 
 /-! ## The masked code -/
 
-/-- **The masked table's level 0 is the masked code's**: at every `m` the masked verifier serves, `m1Schedule`'s level 0
+/-- **The masked table's level 0 is the masked code's**: at every table the masked verifier serves, `m1Schedule`'s level 0
 and `m1Pad` have the masked code's lanes, columns, length, padding and level-0 query count. -/
 theorem zk_level₀ : ∀ i : ZkIdx,
     (m1Schedule i.wideLeaf i.m).k0 = zkLanes i ∧ (m1Schedule i.wideLeaf i.m).level₀.logCols = zkCols i ∧
@@ -145,12 +145,11 @@ theorem m1SqrtUp_le : ∀ m, 25 ≤ m → m ≤ 35 → m1SqrtUp wideLeaf m ≤ 3
   cases wideLeaf <;> interval_cases m <;> decide +kernel
 
 theorem zk_radius_ge (i : ZkIdx) : (241 : ℝ) / 1000 ≤ (m1Schedule i.wideLeaf i.m).level₀.padRadius (m1Pad i.wideLeaf i.m) := by
-  have h1 : 25 ≤ i.m := by unfold ZkIdx.m; omega
-  have h2 : i.m ≤ 35 := by have := i.isLt; unfold ZkIdx.m; omega
+  obtain ⟨h1, h2⟩ := ZkIdx.m_range i
   have hp := m1_padNumOK (wide := i.wideLeaf) i.m h1 h2
   have hs : Real.sqrt ((m1Schedule i.wideLeaf i.m).level₀.padRate (m1Pad i.wideLeaf i.m)) ≤ (m1SqrtUp i.wideLeaf i.m : ℝ) :=
     Real.sqrt_le_iff.2 ⟨by exact_mod_cast hp.h0, hp.hs⟩
-  have hu := (Rat.cast_le (K := ℝ)).2 (m1SqrtUp_le i.m h1 h2)
+  have hu := (Rat.cast_le (K := ℝ)).2 (m1SqrtUp_le (wideLeaf := i.wideLeaf) i.m h1 h2)
   push_cast at hu
   rw [Level.padRadius, eta]
   linarith

@@ -385,15 +385,15 @@ theorem good_of_committed_zk (rel : Readable.Parsed → Readable.Relation)
 
 /-- **At table 0's index**, masked: the word is `2^d` long and a column has the `2^lanes` witness lanes. -/
 theorem zk_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt}
-    (h : (tables true x).head? = some (spec, st)) {i : ZkIdx} (hi : i.m = st.m) :
+    (h : (tables true x).head? = some (spec, st)) {i : ZkIdx} (hi : i.At st.wideLeaf st.m) :
     wordLen true x = 2 ^ zkLen i ∧ ∀ u, wide true x u ↔ u.length = 2 ^ zkLanes i := by
   refine ⟨?_, fun u => ?_⟩
   · unfold wordLen
     rw [h]
-    simp [zkLen, hi]
+    simp [zkLen, hi.level0]
   · unfold wide zeroCol
     rw [h]
-    simp [zkLanes, hi]
+    simp [zkLanes, hi.level0]
 
 /-- **An uncommitted old table**, at the masked record: a table of witness-lane columns that does not extract has an
 oracle that is not `CommittedPad` at the deployed masked schedule, for an old statement whose satisfying witnesses read
@@ -401,7 +401,7 @@ as witnesses of table 0's statement. -/
 theorem not_committed_zk (rel : Readable.Parsed → Readable.Relation)
     (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x 0 = some s) {spec : SessionSpec}
     {st : _root_.Flock.Stmt}
-    (hst : (tables true x).head? = some (spec, st)) (i : ZkIdx) (hi : i.m = st.m)
+    (hst : (tables true x).head? = some (spec, st)) (i : ZkIdx) (hi : i.At st.wideLeaf st.m)
     (C : Fin (wordLen true x) → List 𝔽) (hw : ∀ q, wide true x (C q)) (S : Statement)
     (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
       S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →

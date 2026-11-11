@@ -238,13 +238,10 @@ theorem k_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg
   obtain ⟨s, spec, sts, record, proofs, hs, hv⟩ := acc_verdict (zk := true) hacc
   obtain ⟨h0, hm⟩ := served_zk (by simpa using hv)
   obtain ⟨h25, h35⟩ := hm 0 h0
-  have hd := zkLen_ge ⟨sts[0].m - 25, by omega⟩
-  have hi : Claims.Flock.ZkIdx.m ⟨sts[0].m - 25, by omega⟩ = sts[0].m := by
-    simp only [Claims.Flock.ZkIdx.m]
-    omega
+  have hd := zkLen_ge (Claims.Flock.ZkIdx.of sts[0].wideLeaf sts[0].m)
   have hlen : 10 ≤ (Claims.Flock.zkLevel0 sts[0].wideLeaf sts[0].m).d := by
     unfold Claims.Flock.zkLen at hd
-    rw [hi] at hd
+    rw [(Claims.Flock.ZkIdx.of_at sts[0].wideLeaf h25 h35).level0] at hd
     exact hd
   refine .inl (eight_le_k ?_)
   show 2 ^ 10 ≤ N₀ true x
