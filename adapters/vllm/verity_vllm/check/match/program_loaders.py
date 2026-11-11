@@ -10,7 +10,8 @@ import os
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.instance_sequence import RootView
-from verity_vllm.program.compact import p_item_indices as _p_indices, p_item_weight_span as _p_w_span  # [GLM-5.3 "P"]
+from verity_vllm.program.compact import p_item_indices as _p_indices  # [GLM-5.3 "P"]
+from verity_vllm.program.compact import p_item_weight_span as _p_w_span
 
 
 def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bool = False) -> RootView:

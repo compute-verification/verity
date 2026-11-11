@@ -9,13 +9,16 @@ import sys
 from collections.abc import Iterable
 
 from verity.circuits.program import RUN, input_id
-from verity_vllm.check.match import compiler_form
+
+from verity_vllm.check.match import compiler_form, split_selects
 from verity_vllm.check.match import prefix_reads as PX
-from verity_vllm.check.match import split_selects
 from verity_vllm.check.match import supplied_inputs as SI
-from verity_vllm.check.match.canonical_operands import as_progression as _asP, weight_field_name as _field_name
+from verity_vllm.check.match.canonical_operands import as_progression as _asP
+from verity_vllm.check.match.canonical_operands import weight_field_name as _field_name
 from verity_vllm.check.match.peer_reads import PeerReads
-from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # the step-boundary families
+
+# the step-boundary families
+from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event
 
 PAD_SPECS = ("Const", "I32Eq_v1", "BitNot_v1", "BitAnd_v1", "SelectI32_v1", "SelectBf16_v1")
 # the top-p split count S: the fold and the Program both emit it as `Const32[S]` "splits", the 6th operand (index 5) of the top-p

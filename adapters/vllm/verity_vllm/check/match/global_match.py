@@ -86,17 +86,29 @@ from dataclasses import dataclass
 from verity_vllm import settings
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import compiler_form as CF
-from verity_vllm.config import UsageError, option, workload_arg
-from verity_vllm.check.match import global_match_fast as GMF  # MATCH_IMPL=fast: compute-once memo of the pure per-request work; inert without the flag
+
+# MATCH_IMPL=fast: compute-once memo of the pure per-request work; inert without the flag
+from verity_vllm.check.match import global_match_fast as GMF
 from verity_vllm.check.match import instance_sequence as SEQ
 from verity_vllm.check.match import program_loaders as PL
 from verity_vllm.check.match.attribution import attribute_instances, requests_observed
 from verity_vllm.check.match.chronology import chronology
-from verity_vllm.check.match.declaration import GP_SCHEMA, from_gprog, mock_global_program, requests_declared, sha256_file
+from verity_vllm.check.match.declaration import (
+    GP_SCHEMA,
+    from_gprog,
+    mock_global_program,
+    requests_declared,
+    sha256_file,
+)
 from verity_vllm.check.match.engine_steps import vu_population, within_step_order
 from verity_vllm.check.match.match_run import MatchRun
 from verity_vllm.check.match.per_request import check_requests
-from verity_vllm.check.match.record import canonicalize_record, read_record, request_aliases
+from verity_vllm.check.match.record import (
+    canonicalize_record,
+    read_record,
+    request_aliases,
+)
+from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
 COMPARATOR = "cb_a.global_match/v1"
@@ -361,7 +373,8 @@ class Options:
 
 
 def main(a: Options) -> int:
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
     _gc_tune()
     if a.decomp_out and a.no_x09:
         raise UsageError("--decomp-out needs the X-09 run (drop --no-x09)")

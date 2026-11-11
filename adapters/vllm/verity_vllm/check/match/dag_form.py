@@ -7,7 +7,8 @@ import collections
 import json
 
 from verity_vllm.check.match import program_compare as C
-from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  #
+from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event
+
 
 def _producer(P: C.RootView, t) -> int | None:
     if t[0] != "N":

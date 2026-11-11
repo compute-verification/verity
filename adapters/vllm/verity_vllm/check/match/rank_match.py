@@ -25,7 +25,6 @@ recorded partials; TP-12 at Commit from the committed partials).  The checks FAI
 from __future__ import annotations
 
 import json
-
 from pathlib import Path
 from typing import Any
 
@@ -129,7 +128,8 @@ def own_producers(result: Any) -> dict[tuple[int, int], list[str]]:
 def own_producers_from_record(instances_path: str | Path) -> dict[tuple[int, int], list[str]]:
     """The same from a persisted record: `instances.jsonl` rows carrying `collective` + `operand_refs` (node-space runs kept in the file);
     the producer's spec is read from the row whose `node` the own run names."""
-    from verity_vllm.program.compact import runs_from_file_items   # v2 files hold node-space progressions
+    # v2 files hold node-space progressions
+    from verity_vllm.program.compact import runs_from_file_items
     spec_of: dict[int, str] = {}
     step_of: dict[int, Any] = {}
     args_of: dict[int, list] = {}

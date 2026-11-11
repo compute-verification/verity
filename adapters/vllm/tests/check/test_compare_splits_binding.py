@@ -134,7 +134,8 @@ def test_a_single_request_programs_constant_S_must_equal_the_folds_at_every_even
 def test_gm01_fails_a_component_whose_constant_S_is_not_the_folds(within_step):
     """GM-01's per-request comparison (G3) decides from the per-step sequences or the DAG hashes, where a bound `Const32[S]` carries no
     value: a single-request component's constant must still equal the fold's S at every event, under either criterion."""
-    from verity_vllm.check.match import batch_decomp as BD, per_request as PR
+    from verity_vllm.check.match import batch_decomp as BD
+    from verity_vllm.check.match import per_request as PR
 
     A = _prog("program", splits_form="const", S=[32, 32, 32], weights=2)
 

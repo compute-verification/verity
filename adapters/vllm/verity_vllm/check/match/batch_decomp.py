@@ -56,21 +56,32 @@ from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
-from verity_vllm.observe.capture_log import read_steps, request_params
-from verity_vllm.check.match.dag_form import dag_hashes, live_cone
-from verity_vllm.check.match.decomp_profile import (FORCE_DAG_ENV, PROFILE_ENV, _memo_stats, _install_profile_counters, _n_runs_of, _NoPhase,
-                                                    _Phase, _profile_on)
+
+# Imported from here by a test an open PR edits (tests/pipeline/test_global_program_regress.py); it moves to dag_form after that lands.
+from verity_vllm.check.match.dag_form import (
+    dag_hashes,
+    dag_multiset,  # noqa: F401
+    live_cone,
+)
+from verity_vllm.check.match.decomp_profile import (
+    FORCE_DAG_ENV,
+    PROFILE_ENV,
+    _install_profile_counters,
+    _memo_stats,
+    _n_runs_of,
+    _NoPhase,
+    _Phase,
+    _profile_on,
+)
 from verity_vllm.check.match.derived_index import derived_shape
 from verity_vllm.check.match.input_layout import request_inputs, weights_input_nodes  # noqa: F401  (weights_input_nodes re-exported: tests)
 from verity_vllm.check.match.occurrence import SHARED, attribute, shared_legs
 from verity_vllm.check.match.projection import Projection, engine_steps_of
 from verity_vllm.check.program_ops import Ops
 from verity_vllm.config import option
+from verity_vllm.observe.capture_log import read_steps, request_params
 from verity_vllm.program import prefix_plan as PP
-from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  #
-# Imported from here by a test an open PR edits (tests/pipeline/test_global_program_regress.py); it moves to dag_form after that lands.
-from verity_vllm.check.match.dag_form import dag_multiset  # noqa: F401
-
+from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event
 
 # the within-step criterion of record: `dag` accepts a request whose projection
 # is the same live-cone DAG multiset as its Program although the fold's emission SEQUENCE differs (a co-scheduled prefill displaced
@@ -435,7 +446,8 @@ class Options:
 
 
 def main(a: Options) -> int:
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
     _gc_tune()
     res = decompose(a.oracle, a.derived, within_step=a.within_step)
     json.dump(res, open(a.out, "w"), indent=1, default=str)

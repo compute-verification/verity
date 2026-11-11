@@ -11,10 +11,10 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from verity_vllm.config import workload_file
-from verity_vllm.observe import capture_log as CL
 from verity_vllm.check.match import derived_index as DI
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
+from verity_vllm.config import workload_file
+from verity_vllm.observe import capture_log as CL
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.workload import Workload

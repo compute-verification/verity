@@ -7,6 +7,7 @@ import os
 
 from verity_vllm.program import prefix_plan as PP
 
+
 def derived_shape(d: str) -> tuple[int, ...] | None:
     """(LP, T) of a derived request-wrapper dir, (LP, T, C) for a cached prefix of C rows (`program.prefix_plan.shape`): derive_step's
     construction_manifest.json `structural_inputs`."""

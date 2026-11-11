@@ -10,7 +10,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from tests.pipeline.test_single_request_build_path import _compose, _derive, _write_request
+from tests.pipeline.test_single_request_build_path import (
+    _compose,
+    _derive,
+    _write_request,
+)
 from verity_vllm.check.match.per_request import addressed_instances
 from verity_vllm.check.match.program_compare import load_derived
 from verity_vllm.records import workload as WL

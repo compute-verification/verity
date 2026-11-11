@@ -277,7 +277,6 @@ def check_picks(dumps: dict[int, dict[str, Any]], world: int = 2) -> dict[str, A
     """Driver side.  `dumps[rank]` = torch.load(xrank_rank<r>.pt): {"rank", "picks": [{step, site, kind, family, stratum, rows, part: Tensor|None,
     recv: Tensor|None, recv_member, why}]}.  Same pick order on every rank (same seed, same layout names).  Bit-exact rules per kind."""
     import torch
-
     from verity.definitions.registry.b1_tp2 import allreduce_order
 
     res: dict[str, Any] = {"result": None, "world": world, "picks": 0, "equal": 0, "mismatches": [], "missing": [], "by_family": {}, "by_stratum": {},

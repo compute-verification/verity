@@ -141,6 +141,7 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     fails closed.  Without `scheduled` the SampleEnd batch is held to the observed logits rows."""
     from verity.definitions.registry.sampling_vocab import SHARED_GREEDY
     from verity.definitions.registry.topp_geometry import registered_splits
+
     from verity_vllm.program.sampling_event import family_of
     topp = (_TOPP_FAMILY, SHARED_GREEDY[_TOPP_FAMILY].id)   # either `sampler_construction`
     per_step: dict[int | None, set[int | None]] = collections.defaultdict(set)

@@ -13,7 +13,8 @@ from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import projection as PJ
 from verity_vllm.check.match.attribution import Attribution
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
-from verity_vllm.program.compact import n_max_producer as _n_max_producer, n_producers as _n_producers
+from verity_vllm.program.compact import n_max_producer as _n_max_producer
+from verity_vllm.program.compact import n_producers as _n_producers
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event
 
 # A leg can run in a forked worker (`GMF.request_legs`), so each problem it returns names its check by role, never by the NamedCheck.

@@ -18,22 +18,69 @@ import itertools
 import json
 
 import pytest
-
-from verity_vllm.pipeline.match import persist_program
-from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc,
-                                   TritonLaunch, ViewDesc)
-from verity_vllm.check.match import batch_decomp as bd
-from verity_vllm.check.match.program_compare import compare_steps, load_oracle
-from verity_vllm.observe.log import dumps as log_dumps
-from verity_vllm.observe.fold.fold import fold
-from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, WitnessParam
-from tests.observe import test_fold_synthetic as toy
-from tests.observe.test_fold_synthetic import (A_COS, A_DOWN_W, A_EMBED, A_GU_W, A_LN1, A_LN2, A_NORM, A_O_W, A_QKV_W, BF, BN, C, I32D, I64D,
-                                                      W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM, W_O, W_QKV, Ids, V, _kv_flat,
-                                                      _slot, memory)  # noqa: F401 - `memory` is the fixture
 from verity.circuits.defs import bind
 from verity.definitions.registry import b1
 from verity.definitions.registry import value_inputs as VI
+
+from tests.observe import test_fold_synthetic as toy
+from tests.observe.test_fold_synthetic import (
+    A_COS,
+    A_DOWN_W,
+    A_EMBED,
+    A_GU_W,
+    A_LN1,
+    A_LN2,
+    A_NORM,
+    A_O_W,
+    A_QKV_W,
+    BF,
+    BN,
+    I32D,
+    I64D,
+    W_COS,
+    W_DOWN,
+    W_EMBED,
+    W_GU,
+    W_LN1,
+    W_LN2,
+    W_NORM,
+    W_O,
+    W_QKV,
+    C,
+    Ids,
+    V,
+    _kv_flat,
+    _slot,
+    memory,  # noqa: F401 - the fixture
+)
+from verity_vllm.check.match import batch_decomp as bd
+from verity_vllm.check.match.program_compare import compare_steps, load_oracle
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    StorageAlloc,
+    TritonLaunch,
+    ViewDesc,
+)
+from verity_vllm.observe.fold.fold import fold
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    GatherMany,
+    Group,
+    PerRow,
+    Profile,
+    Shared,
+    WitnessParam,
+)
+from verity_vllm.observe.log import dumps as log_dumps
+from verity_vllm.pipeline.match import persist_program
 
 BS = 4
 A_IDS, A_POS, A_KC, A_VC = 10, 11, 12, 13

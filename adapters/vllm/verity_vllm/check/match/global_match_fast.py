@@ -699,7 +699,8 @@ def check(gp: dict, oracle_dir: str, log_path: str | None = None, tokens_path: s
     `tokens_optional` (CLI --tokens-optional) forwarded unchanged so the CLI's `mod.check(...)` call has one
     signature for both implementations."""
     global _force
-    from verity_vllm.check.match import global_match as _record  # deferred: global_match imports this module at load
+    # deferred: global_match imports this module at load
+    from verity_vllm.check.match import global_match as _record
     prev = _force
     _force = True
     try:

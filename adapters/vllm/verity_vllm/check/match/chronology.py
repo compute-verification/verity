@@ -8,7 +8,10 @@ import os
 
 from verity_vllm.check.match.declaration import eos_lag_rows
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
-from verity_vllm.check.match.sampler_geometry import sampler_geometry_check, scheduled_live_counts
+from verity_vllm.check.match.sampler_geometry import (
+    sampler_geometry_check,
+    scheduled_live_counts,
+)
 from verity_vllm.records.declared_stop import DeclaredStop
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.served_tokens import ServedRequest, ServedTokens
