@@ -1,100 +1,207 @@
 #!/usr/bin/env bash
-# The certified tick's network certifier side: warden_serve.py rehearse --watermark on this host, in front of vllm's
-# GLM-5.3 endpoint (serve-openai --admit tick, τ_b equal to BUCKET_MS, the recorder) on the serving node's loopback, reached through an
-# ssh local forward. A `research run` job from the shipped tree's root (--cwd source); tick-sunday/launch.sh launches it:
-#   PEER=USER@HOST PORT=P [SSH_PORT=22] [KEY=FILE] [RATE=1.67] [REQUESTS=3000] [SEED=0] [REACH_ONLY=1 | FAKE=1] bash tick-sunday/job.sh
-# 1. Reach, in under a minute, before anything is sent: KEY readable, the tunnel up (ssh -N -L 127.0.0.1:LOCAL to the peer's
-#    127.0.0.1:PORT), the endpoint's /v1/models answered through it, each GET's round trip timed: $OUT/reach.json, and
-#    the peer's host key the tunnel met: $OUT/peer-known-hosts. A failure says which of those it was and exits 3.
-#    REACH_ONLY=1 stops here.
-# 2. The rehearsal, into $OUT/warden: RATE Poisson arrivals a second for REQUESTS requests of warden_serve's varied traffic
-#    (`varied_traffic`: prompts of 16-1024 tokens of filler words and a question, max_tokens 16-1024 under EOS, both
-#    log-uniform), greedy, top_p the endpoint's own, the model the endpoint's one (/v1/models), at SCHEDULE below.
-#    warden.json holds each connection's release N and release bucket (`release`, `ingress_end`), the watermark's last
-#    line, lost releases and error; beside it the records, their certificates, the cell rows and check.json.
-# 3. warden_serve.py check on $OUT/warden, from its files alone: $OUT/check.txt; then $OUT/summary.json.
-# FAKE=1 runs 2 and 3 against warden_serve's fake endpoint (FIRST_MS, TOKEN_MS) with no tunnel: the dry run.
+# The network certifier's side of a served run in the token-id form with a response cap: warden_serve.py rehearse --ids
+# --watermark --max-tokens-cap on this node, in front of the serving node's id-form endpoint (the id front: it takes the
+# certifier's id request and answers one io_tie.id_event an output id, then io_tie.TRAILER, and closes), which listens
+# on the serving node's loopback and is reached through one ssh local forward. A `research run` job from the shipped
+# tree's root (--cwd source); certside/launch.sh launches it:
+#   PEER=USER@HOST PORT=P [SSH_PORT=22] [KEY=FILE] [MODEL=NAME] [ID_BOUND=N] [schedule and traffic, below]
+#     [REACH_ONLY=1 | FAKE=1 [FIRST_MS=2000] [TOKEN_MS=220]] bash certside/job.sh
+# 1. Reach, in under a minute, before anything is sent: KEY readable, the forward up (ssh -N, one -L from this node's
+#    127.0.0.1:LOCAL to the serving node's 127.0.0.1:PORT, and nothing else asked of the serving node: no command, no
+#    second forward), then the endpoint through it: $OUT/reach.json.
+#    - MODEL unset: GET /v1/models, five times, each round trip timed; the endpoint lists one model, the run's.
+#    - MODEL=NAME: the endpoint needn't answer /v1/models. Two TCP connects through the forward, nothing sent: ssh
+#      accepts a local connect whatever the far end, and closes it at once when the far port refuses, so a connect
+#      still open after 3 s, with no refusal in ssh's log, is a listener. No round trip is timed.
+#    The exit says which it was: 0 reached; 3 not reached (no key, the key refused, the forward forbidden, no ssh);
+#    4 the key is accepted and the forward opens, and nothing listens on PORT yet; 5 reached, and the run can't be
+#    sent (the model's name is past the 64 bytes an id request holds for it as JSON). REACH_ONLY=1 stops here.
+# 2. The rehearsal, into $OUT/warden: REQUESTS id requests (`id_traffic`: Poisson arrivals at RATE a second, prompts of
+#    16..PROMPT_MAX token ids and max_tokens of 1..MAX_TOKENS, both log-uniform, each prompt id uniform below 128,256,
+#    the temperature sampled from 0, 0.7 and 1, top_p 1, a seed on each, all fixed by SEED), the model MODEL or the
+#    endpoint's one, at the schedule below, with the watermark stream sent to the same port. ID_BOUND=N (at most
+#    128,256) scales every prompt id below N and changes nothing else (certside/bounded.py).
+# 3. warden_serve.py check on $OUT/warden, from its files alone: $OUT/check.txt; $OUT/summary.json; then the record's
+#    reading, certside/report.py: $OUT/report.txt and $OUT/report.json.
+# 4. The guard, on every exit: nothing this job keeps or prints names the serving node. ssh's log and its known-hosts
+#    file stay in the job's temporary directory, which is deleted; everything the job prints is also $OUT/job.log; and
+#    the job fails (exit 9), naming the file, if any file of $OUT holds an IPv4 address other than loopback's, an `@`
+#    before a name, or the serving node's host as PEER gave it.
+# FAKE=1 is the dry run: no ssh; the job starts warden_serve's fake endpoint on this node's loopback, in the id form at
+# the schedule's P, and then does 1 to 4 against it as against a forward. The fake answers a request whole, FIRST_MS
+# after it is released; in the id form it has no time a token, so TOKEN_MS changes nothing there.
 #
-# SCHEDULE, for GLM-5.3 at TP8 eager under the tick and the recorder, through a tunnel of up to about 150 ms round trip
-# (reach.json times it):
-# - B = 256, r = 1: r·P = 247 bytes a bucket each way. A streamed /v1/completions token is about 200-280 bytes (its
-#   event and chunk framing), so at BUCKET_MS 250 egress drains about 4 tokens a second, under the 4.5 GLM-5.3 streams
-#   under this load (at 100 ms it asked 10, and streams fell late); the server is read eagerly, so this pacing never slows it, and what it streams faster waits in the buffer.
-# - D = 150 buckets (37.5 s at 250 ms) from admission: ingress of the largest request (about 5 KB, 21 buckets at r·P), the release's
-#   bucket close, the tunnel's one-way trip, the tick gate's wait for the watermark line, a queued prefill, the first P
-#   bytes back. What the server streams before D is a head start that covers a slower stretch later.
-# - LANES 512, queue 256: a connection lives D plus its response's cells, about 2.5 min on average and 6 min at most
-#   (1,024 tokens at 4 a second), so about 240 are open at once at 1.67 a second; 512 lanes keep bursts from queueing.
-# - ingress 96 cells within 100 buckets, egress 4096 cells: above the largest request (21) and response (about 1,200).
-# - tail 360 s: the last arrival's D and longest response (about 1,200 cells at 4 a second is about 300 s); windows of 600
-#   buckets (150 s at 250 ms).
+# THE SCHEDULE, each number a variable, for GLM-5.3 behind the id front under a 220 ms tick:
+# - CELL_BYTES 4096, SLOTS 1 (r): in the id form a response is one id event a DATA cell, so r = 1 at BUCKET_MS 250
+#   releases 4 ids a second on a connection. The server ticks every 220 ms, above that, so a stream whose first id is
+#   in time stays ahead of its cells. BUCKET_MS is also the server's bucket: the tick admits by the release bucket.
+# - INGRESS_CELLS 4 within INGRESS_BUCKETS 16: an id request's fields but the prompt are in its first cell and each
+#   prompt id takes 11 bytes, so PROMPT_MAX 1024 ids are 3 cells, 3 buckets at r = 1.
+# - DELAY 60 (D, 15 s) from admission to the first egress cell's bucket: the request's ingress, its release at the
+#   bucket's close, the forward's trip, the tick's wait for the watermark's line, the prefill and the first id back.
+# - LANES 8, QUEUE 64: a connection holds its lane from admission to its END's bucket, D + its ids + 1 buckets, at
+#   most 317 (79 s) at MAX_TOKENS 256. An arrival with every lane taken waits in the queue, before its admission, so
+#   that wait is in no D and makes nothing late; past QUEUE waiting it is refused, and its window is not certified.
+# - CAP 256 (the response cap; `none`: no cap): a request whose max_tokens is past it is refused (cap) and each
+#   response is held to its request's max_tokens (limit). MAX_TOKENS equals it, so this traffic has no cap refusal.
+# - EGRESS_CELLS 4096: above the cap's 256 ids and the END. WINDOW 600 buckets a record (150 s).
+# - RATE 0.2, REQUESTS 240, SEED 0: 20 minutes of arrivals. TAIL 120 s after the last arrival: its wait for a lane,
+#   D (15 s) and its longest response (257 cells, 64 s).
 set -uo pipefail
-D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out; mkdir -p "$OUT"
-SRC=$PWD
-RATE=${RATE:-1.67}; REQUESTS=${REQUESTS:-3000}; SEED=${SEED:-0}
-SCHEDULE=(--cell-bytes 256 --slots 1 --bucket-ms "${BUCKET_MS:-250}" --delay 150 --lanes "${LANES:-512}" --queue 256 --window 600
-          --ingress-cells 96 --ingress-buckets 100 --egress-cells 4096 --every 1)
-TRAFFIC=(--rate "$RATE" --requests "$REQUESTS" --seed "$SEED" --temperature 0 --prompt-max 1024 --max-tokens 1024
-         --tail "${TAIL:-360}")
-W=$(mktemp -d); export TMPDIR=$W
-TUN=
-cleanup() { [ -n "$TUN" ] && kill "$TUN" 2>/dev/null; rm -rf "$W"; }
-trap cleanup EXIT
-log() { echo "$(date -u +%H:%M:%SZ) tick: $*" | tee -a "$OUT/job.log"; }
+RUN=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$RUN/out; mkdir -p "$OUT"
 
-if [ -z "${FAKE:-}" ]; then
-  PEER=${PEER:?PEER: USER@HOST, the serving node}; PORT=${PORT:?PORT: the endpoint port on 127.0.0.1 of the peer}
-  SSH_PORT=${SSH_PORT:-22}
-  KEY=${KEY:-$HOME/.ssh/vy-tick-tunnel}
-  LOCAL=${LOCAL:-$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')}
-  log "reach: $PEER (ssh port $SSH_PORT)'s 127.0.0.1:$PORT from $(hostname) as 127.0.0.1:$LOCAL, key $KEY"
-  if [ ! -r "$KEY" ]; then
-    log "UNREACHED: no key $KEY on $(hostname): the tunnel key @infra makes here and authorizes on the peer (KEY=FILE)"
-    echo '{"reached": false, "why": "no key"}' > "$OUT/reach.json"; exit 3
+if [ -z "${CERTSIDE_INNER:-}" ]; then
+  # The job proper runs below, as a child whose every line, stdout and stderr, is also job.log; then the guard.
+  host=; [ -n "${PEER:-}" ] && host=${PEER#*@}
+  trap : TERM INT   # the child ends on the signal; this shell stays for the guard
+  CERTSIDE_INNER=1 bash "$0" "$@" 2>&1 | (trap '' TERM INT; exec tee "$OUT/job.log")
+  rc=${PIPESTATUS[0]}
+  found=$({ grep -rIlE '@[A-Za-z0-9]' "$OUT"
+            grep -rIHoE '([0-9]{1,3}\.){3}[0-9]{1,3}' "$OUT" | grep -vE ':127(\.[0-9]{1,3}){3}$' | sed 's/:[^:]*$//'
+            [ -n "$host" ] && grep -rlaF -e "$host" "$OUT"; } 2>/dev/null | sort -u)
+  if [ -n "$found" ]; then
+    echo "certside: GUARD FAILED: an address or an @name is in what this job keeps, in:" | tee -a "$OUT/job.log" >&2
+    echo "$found" | sed "s|^$OUT/|  out/|" | tee -a "$OUT/job.log" >&2
+    echo "certside: (job rc $rc) exit 9: read that file on the node before anyone cites or fetches this run" >&2
+    exit 9
   fi
-  # a known_hosts of the run's own: RunPod hands a gone pod's IP and port to a new pod, whose host key a shared file refuses
-  ssh -N -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$W/known_hosts" \
-      -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o IdentitiesOnly=yes -p "$SSH_PORT" -i "$KEY" \
-      -L "127.0.0.1:$LOCAL:127.0.0.1:$PORT" "$PEER" 2> "$OUT/tunnel.log" &
-  TUN=$!
-  timeout 50 python3 - "$TUN" "$LOCAL" "$OUT/reach.json" "$OUT/tunnel.log" "$PEER" "$PORT" "$SSH_PORT" <<'EOF'
+  echo "certside: guard: no address in out/ ($(find "$OUT" -type f | wc -l) files); exit $rc" | tee -a "$OUT/job.log"
+  exit "$rc"
+fi
+
+SRC=$PWD; HERE=$(dirname "$0")
+CELL_BYTES=${CELL_BYTES:-4096}; SLOTS=${SLOTS:-1}; BUCKET_MS=${BUCKET_MS:-250}; DELAY=${DELAY:-60}
+LANES=${LANES:-8}; QUEUE=${QUEUE:-64}; WINDOW=${WINDOW:-600}; INGRESS_CELLS=${INGRESS_CELLS:-4}
+INGRESS_BUCKETS=${INGRESS_BUCKETS:-16}; EGRESS_CELLS=${EGRESS_CELLS:-4096}; CAP=${CAP:-256}
+RATE=${RATE:-0.2}; REQUESTS=${REQUESTS:-240}; SEED=${SEED:-0}; PROMPT_MAX=${PROMPT_MAX:-1024}
+MAX_TOKENS=${MAX_TOKENS:-256}; TAIL=${TAIL:-120}
+SCHEDULE=(--cell-bytes "$CELL_BYTES" --slots "$SLOTS" --bucket-ms "$BUCKET_MS" --delay "$DELAY" --lanes "$LANES"
+          --queue "$QUEUE" --window "$WINDOW" --ingress-cells "$INGRESS_CELLS" --ingress-buckets "$INGRESS_BUCKETS"
+          --egress-cells "$EGRESS_CELLS")
+[ "$CAP" = none ] || SCHEDULE+=(--max-tokens-cap "$CAP")
+TRAFFIC=(--ids --requests "$REQUESTS" --rate "$RATE" --seed "$SEED" --prompt-max "$PROMPT_MAX"
+         --max-tokens "$MAX_TOKENS" --tail "$TAIL")
+MODEL=${MODEL:-}
+peer=${PEER:-}; unset PEER   # the serving node's address: ssh's config file below holds it, and nothing else does
+W=$(mktemp -d); export TMPDIR=$W
+TUN=; FAKED=
+cleanup() { [ -n "$TUN" ] && kill "$TUN" 2>/dev/null; [ -n "$FAKED" ] && kill "$FAKED" 2>/dev/null; rm -rf "$W"; }
+trap cleanup EXIT
+trap 'exit 143' TERM INT
+log() { echo "$(date -u +%H:%M:%SZ) certside: $*"; }
+
+venv() {
+  if [ -n "${PY:-}" ]; then log "python: PY, as given"; return; fi
+  command -v uv > /dev/null || { log "no uv on this node (PY=PYTHON with numpy)"; exit 2; }
+  uv venv -q --python 3.12 "$W/venv" && uv pip install -q --python "$W/venv/bin/python" numpy==2.5.3 \
+    || { log "couldn't make the venv"; exit 2; }
+  PY=$W/venv/bin/python
+}
+
+# reach PID: the endpoint at 127.0.0.1:$LOCAL, behind the forward ssh process PID holds (0: no forward, the fake's own
+# port); writes reach.json and prints one line, REACHED or UNREACHED and the reason's class in words. Exits 0, 3, 4, 5.
+reach() {
+  timeout 50 python3 - "$1" "$LOCAL" "$OUT/reach.json" "$W/tunnel.log" "$PORT" "$MODEL" <<'EOF'
 import http.client, json, os, socket, sys, time
-pid, local, out, tlog, peer, port, ssh_port = (int(sys.argv[1]), int(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5],
-                                               sys.argv[6], int(sys.argv[7]))
+pid, local, out, tlog, port, model = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]
+where = "the serving node" if pid else "this node (the fake endpoint)"
+# ssh's log names the serving node, so none of its lines is printed or kept: only the class of the first needle found.
+CLASSES = (
+    ("administratively prohibited", "forward forbidden", 3,
+     "the key is accepted, and the serving node forbids a forward to this port: its authorized_keys line must permit "
+     "127.0.0.1:PORT"),
+    ("open failed", "nothing listens", 4, "the key is accepted and the forward opens; nothing listens on the port yet"),
+    ("Permission denied", "key refused", 3,
+     "the serving node refuses the key: infra authorizes its public half there (a pod's restart drops it)"),
+    ("UNPROTECTED PRIVATE KEY", "key unusable", 3, "ssh won't use the key file: its permissions are too open"),
+    ("invalid format", "key unusable", 3, "ssh can't read the key file"),
+    ("Address already in use", "local port taken", 3, "this node's local port was taken before ssh bound it: run again"),
+    ("timed out", "no tcp", 3,
+     "no TCP to the serving node's ssh port: the address or port is stale, or it doesn't admit this node"),
+    ("Connection refused", "ssh refused", 3, "the serving node's ssh port refuses: no sshd there, or a stale address or port"),
+    ("No route", "no route", 3, "no route to the serving node"),
+    ("Network is unreachable", "no route", 3, "no route to the serving node"),
+    ("Could not resolve", "no name", 3, "the serving node's name doesn't resolve"),
+    ("Connection closed", "ssh closed", 3, "the serving node's sshd closed the connection before the forward"),
+    ("Connection reset", "ssh closed", 3, "the serving node's sshd reset the connection before the forward"),
+)
 
-def done(reached, why, **kw):
-    json.dump({"reached": reached, "why": why, "peer": peer, "ssh_port": ssh_port, "port": int(port), "local": local, **kw},
-              open(out, "w"), indent=1)
-    print(("REACHED: " if reached else "UNREACHED: ") + why, flush=True)
-    sys.exit(0 if reached else 3)
 
-def ssh_said():
-    text = open(tlog, errors="replace").read()
-    for needle, why in (("administratively prohibited", "the peer forbids this forward (permitopen must name the port)"),
-                        ("open failed", "the tunnel is up but nothing listens on the peer's 127.0.0.1:PORT (is vllm's "
-                                        "endpoint up?)"),
-                        ("Permission denied", "the peer refuses the key: @infra authorizes its public half for PEER's user"),
-                        ("timed out", "no TCP to the peer's ssh port (SSH_PORT): its security group must admit this host"),
-                        ("Connection refused", "the peer's ssh port refuses: no sshd there, or the wrong address or SSH_PORT"),
-                        ("No route", "no route to the peer"), ("Could not resolve", "the peer's name doesn't resolve")):
-        if needle in text:
-            return why
-    return text.strip().splitlines()[-1] if text.strip() else "ssh said nothing"
+def done(code, why, cls, **kw):
+    json.dump({"reached": code == 0, "exit": code, "class": cls, "why": why, "port": int(port), "local": local,
+               "by": "connect" if model else "/v1/models", **kw}, open(out, "w"), indent=1)
+    print(("REACHED: " if code == 0 else "UNREACHED: ") + why, flush=True)
+    sys.exit(code)
+
+
+def ssh_said(wait=1.5):
+    """(exit, class, words) of the first needle in ssh's log, read for up to `wait` seconds (a refusal reaches the log
+    as the connection it refused closes, not before), or None: no line this check knows."""
+    end = time.monotonic() + wait
+    while pid:
+        try:
+            text = open(tlog, errors="replace").read()
+        except OSError:
+            text = ""
+        for needle, cls, code, why in CLASSES:
+            if needle in text:
+                return code, cls, why
+        if time.monotonic() >= end:
+            break
+        time.sleep(0.1)
+    return None
+
+
+def failed(what, cls, **kw):
+    """ssh's reason if its log has one, else `what`, of class `cls` (exit 3)."""
+    said = ssh_said()
+    if said is None:
+        done(3, what, cls, **kw)
+    done(said[0], said[2], said[1], **kw)
+
+
+UNKNOWN = ("; ssh's log has no line this check knows, and it names the serving node, so it is not printed: run the "
+           "job's ssh by hand on this node")
+
 
 start = time.monotonic()
 while True:
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        done(False, f"ssh exited: {ssh_said()}")
+    if pid:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            failed("ssh exited before the forward was up" + UNKNOWN, "unclassified")
     try:
         socket.create_connection(("127.0.0.1", local), timeout=1).close()
         break
     except OSError:
         if time.monotonic() - start > 25:
-            done(False, f"no tunnel within 25 s: {ssh_said()}")
+            failed("no forward within 25 s" + (UNKNOWN if pid else ": the fake endpoint isn't listening"), "unclassified")
         time.sleep(0.2)
-up_s, gets, models = time.monotonic() - start, [], None
+up = {"tunnel_s": round(time.monotonic() - start, 3)}
+if model:
+    for _ in range(2):
+        s = socket.create_connection(("127.0.0.1", local), timeout=5)
+        s.settimeout(3)
+        try:
+            closed = s.recv(1) == b""
+        except socket.timeout:
+            closed = False
+        except OSError:
+            closed = True
+        s.close()
+        if closed:
+            failed("the forward is up, and a connect that sent nothing was closed within 3 s", "endpoint", **up)
+    said = ssh_said(0.5)
+    if said is not None:
+        done(said[0], said[2], said[1], **up)
+    size = len(json.dumps(model).encode())
+    if size > 64:
+        done(5, f"a listener is behind the port, and MODEL is {size} bytes as JSON, past the 64 an id request holds: "
+                "every connection would fail in the client", "model name", **up)
+    done(0, f"a listener at 127.0.0.1:{port} of {where} held two connects open 3 s each (nothing sent, no round trip "
+            f"timed); the model is MODEL, {model}", "reached", model=model, **up)
+gets, models = [], None
 for _ in range(5):
     t = time.monotonic()
     try:
@@ -104,48 +211,105 @@ for _ in range(5):
         body = r.read()
         c.close()
     except (OSError, http.client.HTTPException) as e:
-        done(False, f"tunnel up, /v1/models failed ({e!r}): {ssh_said()}", tunnel_s=round(up_s, 3))
+        failed(f"the forward is up and GET /v1/models failed ({type(e).__name__}): if the endpoint doesn't answer it, "
+               "give MODEL=NAME", "endpoint", **up)
     gets.append(round((time.monotonic() - t) * 1000, 1))
     if r.status != 200:
-        done(False, f"/v1/models answered HTTP {r.status}", tunnel_s=round(up_s, 3))
-    models = [m.get("id") for m in json.loads(body).get("data", [])]
-if len(models) != 1:
-    done(False, f"/v1/models lists {models}, not one model (MODEL is the endpoint's one)", tunnel_s=round(up_s, 3))
-done(True, f"{models[0]} at {peer}'s 127.0.0.1:{port}, GET round trips {gets} ms", tunnel_s=round(up_s, 3),
-     get_ms=gets, model=models[0])
+        done(3, f"GET /v1/models answered HTTP {r.status}: if the endpoint doesn't serve it, give MODEL=NAME",
+             "endpoint", **up)
+    try:
+        models = [m.get("id") for m in json.loads(body).get("data", [])]
+    except (ValueError, AttributeError):
+        done(3, "GET /v1/models answered 200 with no model list: give MODEL=NAME", "endpoint", **up)
+if len(models) != 1 or not isinstance(models[0], str):
+    done(3, f"GET /v1/models lists {len(models)} models, not one: give MODEL=NAME", "endpoint", **up)
+size = len(json.dumps(models[0]).encode())
+if size > 64:
+    done(5, f"the endpoint's model name is {size} bytes as JSON, past the 64 an id request holds: every connection "
+            "would fail in the client", "model name", get_ms=gets, **up)
+done(0, f"{models[0]} at 127.0.0.1:{port} of {where}, GET round trips {gets} ms", "reached", get_ms=gets,
+     model=models[0], **up)
 EOF
-  rc=$?
-  cp "$W/known_hosts" "$OUT/peer-known-hosts" 2>/dev/null
-  [ "$rc" = 124 ] && { log "UNREACHED: the reach check took over 50 s"; exit 3; }
-  [ "$rc" = 0 ] || exit 3
-  [ -n "${REACH_ONLY:-}" ] && exit 0
-  UPSTREAM=(--upstream "127.0.0.1:$LOCAL")
-else
-  UPSTREAM=(--fake --first-ms "${FIRST_MS:-800}" --token-ms "${TOKEN_MS:-60}")
-fi
+  local rc=$?
+  [ "$rc" = 124 ] && { log "UNREACHED: the reach check took over 50 s"; rc=3; }
+  return "$rc"
+}
 
-if [ -n "${PY:-}" ]; then
-  log "python: $PY"
+if [ -z "${FAKE:-}" ]; then
+  [ -n "$peer" ] && [ "$peer" != "${peer#*@}" ] || { log "PEER: USER@HOST, the serving node"; exit 2; }
+  PORT=${PORT:?PORT: the endpoint port on 127.0.0.1 of the serving node}
+  KEY=${KEY:-$HOME/.ssh/vy-tick-tunnel}
+  LOCAL=${LOCAL:-$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')}
+  how="GET /v1/models"; [ -n "$MODEL" ] && how="a connect (MODEL given)"
+  log "reach: the serving node's 127.0.0.1:$PORT through one ssh forward, here 127.0.0.1:$LOCAL, key $(basename "$KEY")," \
+      "by $how"
+  if [ ! -r "$KEY" ]; then
+    log "UNREACHED: no key $(basename "$KEY") on this node: the tunnel key infra keeps here (KEY=FILE)"
+    echo '{"reached": false, "exit": 3, "class": "no key", "why": "the key file is not readable on this node"}' > "$OUT/reach.json"
+    exit 3
+  fi
+  # ssh's whole configuration, so that the address is on no command line. A known-hosts file of the run's own: RunPod
+  # hands a gone pod's address and port to a new pod, whose host key a shared file refuses.
+  cat > "$W/ssh_config" <<EOF
+Host serving-node
+  HostName ${peer#*@}
+  User ${peer%%@*}
+  Port ${SSH_PORT:-22}
+  IdentityFile $KEY
+  IdentitiesOnly yes
+  BatchMode yes
+  ConnectTimeout 10
+  StrictHostKeyChecking accept-new
+  UserKnownHostsFile $W/known_hosts
+  ExitOnForwardFailure yes
+  ServerAliveInterval 15
+  RequestTTY no
+  ForwardAgent no
+  ForwardX11 no
+  ControlPath none
+EOF
+  ssh -F "$W/ssh_config" -N -L "127.0.0.1:$LOCAL:127.0.0.1:$PORT" serving-node 2> "$W/tunnel.log" &
+  TUN=$!
+  reach "$TUN" || exit
+  [ -n "${REACH_ONLY:-}" ] && exit 0
+  venv
 else
-  command -v uv > /dev/null || { log "no uv on $(hostname) (PY=PYTHON with numpy)"; exit 2; }
-  uv venv -q --python 3.12 "$W/venv" && uv pip install -q --python "$W/venv/bin/python" numpy==2.5.3 \
-    || { log "couldn't make the venv"; exit 2; }
-  PY=$W/venv/bin/python
+  venv
+  payload=$(PYTHONPATH=$SRC "$PY" -c "import sys
+from verity.protocols.certifier.verifier.warden import WardenParams
+print(WardenParams(cell_bytes=int(sys.argv[1])).payload)" "$CELL_BYTES") || { log "couldn't read the schedule's P"; exit 2; }
+  PYTHONPATH=$SRC "$PY" benchmarks/network_traces/warden_serve.py fake --listen 127.0.0.1:0 \
+    --first-ms "${FIRST_MS:-2000}" --token-ms "${TOKEN_MS:-220}" --id-payload "$payload" > "$W/fake.out" 2> "$W/fake.err" &
+  FAKED=$!
+  for _ in $(seq 100); do [ -s "$W/fake.out" ] && break; sleep 0.1; done
+  LOCAL=$("$PY" -c 'import json, sys; print(json.loads(open(sys.argv[1]).readline())["listening"][1])' "$W/fake.out") \
+    || { log "the fake endpoint didn't start: $(tail -c 300 "$W/fake.err")"; exit 2; }
+  PORT=$LOCAL
+  log "fake: warden_serve's fake endpoint at 127.0.0.1:$LOCAL, the id form at P = $payload, each answer whole" \
+      "${FIRST_MS:-2000} ms after its release"
+  reach 0 || exit
+  [ -n "${REACH_ONLY:-}" ] && exit 0
 fi
 export PYTHONPATH=$SRC
 
-log "rehearse: ${UPSTREAM[*]}, ${TRAFFIC[*]}, ${SCHEDULE[*]}, watermark"
-"$PY" benchmarks/network_traces/warden_serve.py rehearse "${UPSTREAM[@]}" --watermark --out "$OUT/warden" \
-  "${TRAFFIC[@]}" "${SCHEDULE[@]}" 2>&1 | tee "$OUT/rehearse.log"
+REHEARSE=("$PY" benchmarks/network_traces/warden_serve.py)
+[ -n "${ID_BOUND:-}" ] && REHEARSE=("$PY" "$HERE/bounded.py" "$ID_BOUND")
+UPSTREAM=(--upstream "127.0.0.1:$LOCAL")
+[ -n "$MODEL" ] && UPSTREAM+=(--model "$MODEL")
+log "rehearse: ${UPSTREAM[*]}, ${TRAFFIC[*]}, ${SCHEDULE[*]}, watermark${ID_BOUND:+, prompt ids below $ID_BOUND}"
+"${REHEARSE[@]}" rehearse "${UPSTREAM[@]}" --watermark --out "$OUT/warden" "${TRAFFIC[@]}" "${SCHEDULE[@]}" 2>&1 \
+  | tee "$OUT/rehearse.log"
 rehearsed=${PIPESTATUS[0]}
 if [ -n "$TUN" ]; then
-  if kill -0 "$TUN" 2>/dev/null; then log "tunnel: up to the end"; else log "tunnel: gone before the end (tunnel.log)"; fi
+  if kill -0 "$TUN" 2>/dev/null; then log "forward: up to the end"; else log "forward: gone before the end"; fi
 fi
 log "rehearse: rc $rehearsed"
+SECONDS=0
 "$PY" benchmarks/network_traces/warden_serve.py check --run "$OUT/warden" > "$OUT/check.txt" 2>&1
 checked=$?
-log "check: rc $checked: $(head -c 600 "$OUT/check.txt")"
-"$PY" - "$OUT" <<'EOF'
+check_s=$SECONDS
+log "check: rc $checked in $check_s s: $(head -c 600 "$OUT/check.txt")"
+"$PY" - "$OUT" "$rehearsed" "$checked" "$check_s" <<'EOF'
 import json, pathlib, sys
 out = pathlib.Path(sys.argv[1])
 w = json.loads((out / "warden" / "warden.json").read_text())
@@ -159,9 +323,14 @@ for _, step in events:
 size = sum(p.stat().st_size for p in out.rglob("*") if p.is_file())
 summary = {"accepted": check["accepted"], "problems": check["problems"][:10], "summary": check["summary"],
            "released": sum(c.get("release") is not None for c in w["connections"]), "peak_open": peak,
-           "watermark": w.get("watermark"), "out_bytes": size}
+           "watermark": w.get("watermark"), "out_bytes": size,
+           "exit": {"rehearse": int(sys.argv[2]), "check": int(sys.argv[3])}, "check_s": int(sys.argv[4]),
+           "max_rss_mb": {"certifier": (w.get("usage") or {}).get("max_rss_mb"),
+                          "publisher": (w.get("publisher_usage") or {}).get("max_rss_mb")}}
 (out / "summary.json").write_text(json.dumps(summary, indent=1))
-print(json.dumps({k: summary[k] for k in ("accepted", "released", "peak_open", "watermark", "out_bytes")}))
+print(json.dumps({k: summary[k] for k in ("accepted", "released", "peak_open", "watermark", "out_bytes", "check_s",
+                                          "max_rss_mb")}))
 EOF
-log "done: rehearse rc $rehearsed, check rc $checked"
+"$PY" "$HERE/report.py" "$OUT" | tee "$OUT/report.txt"
+log "done: rehearse rc $rehearsed, check rc $checked, report rc ${PIPESTATUS[0]}"
 [ "$rehearsed" = 0 ] && [ "$checked" = 0 ]
