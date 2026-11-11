@@ -36,6 +36,11 @@ their count moves with training_slowdown.flops' version.
 
 The console's dials move the reference model over `REFERENCE_SIZES` (20M to 1B at vocab 50,304, each a shape `SHAPES`
 states) and k over `K_GRID`, a session's input ids at each of `DIAL_IN_TOKENS` input tokens (16,384 to 524,288 bits).
+
+A config names its policy, and `named` is the one place a name becomes (c, k): `console` is the rule relative to the
+start (`own_session`: one console session of the reference model of the start's own size, k the console's), and any
+other name is a fixed policy of the slowdown calculator's registry (training_slowdown.calculator), which holds its
+numbers. No other module holds a policy's (c, k).
 """
 from __future__ import annotations
 
@@ -123,6 +128,42 @@ CONSOLE = (session_gates(REFERENCE_PARAMS, *CONSOLE_SESSION),
 #: vocabulary's 16 bits, so k from 16,384 to 524,288 bits, the console's 65,536 among them (`K_GRID`)
 DIAL_IN_TOKENS = (1024, 2048, 4096, 8192, 16_384, 32_768)
 K_GRID = tuple(n * id_bits(SHAPES[REFERENCE_PARAMS]["vocab"]) for n in DIAL_IN_TOKENS)
+
+
+def own_session(shape: dict) -> tuple[float, float]:
+    """The console's rule at a start, (c gates, k bits): c one full session (`CONSOLE_SESSION`) of the reference model
+    of the start's own size, at the shape `SHAPES` states for it, else the start's own; k the console's, the
+    session's input ids at 16 bits each."""
+    p = shape["parameters"]
+    return session_gates(p, *CONSOLE_SESSION, None if p in SHAPES or "d_ff" not in shape else shape), CONSOLE[1]
+
+
+#: what a named policy is (`named`): a rule this module states relative to the start, or a fixed policy of the
+#: slowdown calculator's registry
+RULE, FIXED = "rule relative to the start", "fixed policy in the calculator's registry"
+
+
+def named(name: str, shape: dict) -> dict:
+    """The policy `name` at a start of `shape`, the one place a name becomes (c, k): its `kind` (`RULE` or `FIXED`),
+    `c_gates`, `k_bits` and `why`. `console` is this module's rule relative to the start (`own_session`). Any other
+    name is a fixed policy of the slowdown calculator's registry (training_slowdown.calculator), its Γ in FLOP as
+    Γ/2 MACs at the served precision's GEMM price and its K in bits; a name that is neither is refused."""
+    if name == "console":
+        c, k = own_session(shape)
+        tokens = " in, ".join(f"{n:,}" for n in CONSOLE_SESSION)
+        return {"name": name, "kind": RULE, "c_gates": c, "k_bits": k,
+                "why": f"c one session ({tokens} out) of the reference model of the start's {shape['parameters']:,} "
+                       f"parameters; k the session's input ids, {id_bits(SHAPES[REFERENCE_PARAMS]['vocab'])} bits each"}
+    from . import calculator
+
+    fixed = calculator.policy(name)
+    if fixed is None:
+        raise ValueError(f"training_slowdown.policy: no policy named {name!r}: a config's policy is `console`, the "
+                         f"{RULE}, or a {FIXED} ({', '.join(calculator.policies())})")
+    return {"name": name, "kind": FIXED, "c_gates": fixed["gamma_flop"] / 2 * per_mac(f"gemm/{SERVED_PRECISION}"),
+            "k_bits": fixed["k_bits"], "gamma_flop": fixed["gamma_flop"],
+            "why": f"the registry's Γ, {fixed['gamma_flop']:.4g} FLOP, as Γ/2 MACs at the {SERVED_PRECISION} GEMM "
+                   f"price; its K in bits"}
 
 
 def c0(shape: dict) -> tuple[float, str]:
