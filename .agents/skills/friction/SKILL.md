@@ -46,7 +46,7 @@ in-flight files, or deletes others' work. If `AGENTS.md`, the owning skill or a 
 follow it. Otherwise ask the owner of what the change touches, or your coordinator when owners disagree or you can't tell
 (a handle holder: `research msg send --to @HANDLE`; a worker: its report), with the case, the change and your
 recommendation in a few lines, and prepare the change meanwhile. Nothing waits on Daniel: a claim (what a guarantee says
-or rests on) goes to him decided provisionally, and a click only he can make gets a workaround where one exists
+or rests on) is the lane's to decide, and a click only he can make gets a workaround where one exists
 (`.agents/skills/asking-daniel/SKILL.md`). Spend, a short budget line included, is the call of the lead whose line pays.
 
 For a new rule, gate or required review, price it first with `.agents/skills/process-design/SKILL.md`.
