@@ -212,7 +212,7 @@ def missing(ex: Demo, axis: str, step: str, root: Path) -> list[str]:
             out.append(f"{head}: guarantee {g!r} is listed in no lean-audit.json (its proof's signature, a guarantees key or a "
                        "claim): list it with `tools/verity/lean/check.py --update`")
         for key, what in (("honest", "its hypotheses hold at the honest deployed instance"),
-                          ("nontrivial", "its conclusion fails for a verifier that accepts everything")):
+                          ("nontrivial", "its conclusion fails at an instance of the guarantee it builds")):
             names = _names(ev.get(key))
             if not names:
                 out.append(f"{head}: add [evidence] {key}, the lemma that {what}")
