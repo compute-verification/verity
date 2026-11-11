@@ -49410,3 +49410,9 @@ Bold: at most 2^-100. By gates in compressions is 9.00 bits above each "by gates
 
 For the table: summed over a year of runs (52,560, one machine, T = 2^80 calls each run; modeled, by the tree's code at `14643669694c`): by gates 2^-80.81 to 2^-85.31 in calls; by reader sets 2^-93.15 to 2^-97.65 in calls and 2^-84.14 to 2^-88.64 in compressions. No row keeps 2^-100 over a year; by reader sets in calls the record keeps it over a week, width κ 2^-6 and 2^-7 over a month.
 For the table: in compressions over a year the sessions' share alone is 2^-90.10 to 2^-94.60, so no count of classes reaches 2^-100; in calls a year needs K a run ≤ 2^26.2 to 2^26.9 (reader sets give 2^29.36 at best).
+
+## CONCRETE, Wed 11 Nov 10:47Z: one figure corrected in my year entry above: by gates in compressions a year is 2^-71.81 to 2^-76.31, not "2^-73.65 to 2^-76.31"
+
+The sentence under the table left out the 2,647 GB plan's cell [run: the same output]. By gates in compressions, summed over a year of runs: record 2^-73.65, the 2,647 GB plan 2^-71.81, width κ 2^-6 2^-75.31, width κ 2^-7 2^-76.31. The table's cells and both `For the table:` lines stand.
+
+For the table: nothing new; the year lines of my entry above stand.
