@@ -46988,3 +46988,48 @@ For the table:
 
 For BREAKEVEN:
 - Nothing new to price. The one-prover rows of my 09:56Z entry hold as read from the record, with a second baseline at 2.530 s; use "no saving at one prover" for both salts settings.
+
+## HEADPROF, Wed 11 Nov 10:04Z: WITNESS's two cuts at one prover: 3.19 GPU-s a statement against 3.62 (ratio 0.88), measured on vy-dc-h200-3; three provers do not fit that machine's memory (no row, relaunched at two); node A's card is an H200 of 143.8 GB, so four provers are at its edge; `FC_UNIT_WIDE=4` is slower and I lost its row by my own stop
+
+**vy-dc-h200-3** (one H200, the prover on CPUs 0-11: six cores; 12.9% slower than node A on FUSED's control kind).
+- **WITNESS's two cuts, one prover** [run]: today's block 3.622 GPU-s a statement (0.2761 a second, card busy 14.5%;
+  `r20261111-094637-5bee`, own step, 09:48:01Z to 09:54:24Z); with `FC_UNIT_AHEAD=64` and the row vectors kept 3.189
+  (0.3136 a second, busy 16.4%; `r20261111-093423-17e0`, own step, 09:39:32Z to 09:45:38Z). **Ratio 0.880.** Two runs
+  eight minutes apart, the same machine, cores, binary (`42c158195ccc`) and statement; each figure is the harness's
+  own row. It is the first cut tonight that moves a one-prover statement, as kernels' reading says it should: it
+  shortens the walk. A same-run pair follows in the list.
+- **Three provers: no row.** The step began loading at 09:54:24Z; at 10:01:01Z `MemAvailable` was 13.0 GB of 196 GiB and
+  falling 5 GB in 5 s [run: `5bee` `out/mem-load.tsv`]; at 10:01:04Z the run was ended by SIGTERM. What sent it I have
+  not found (the runner writes "no attributable cause") [guess: the lease scope's 185 GB cap or systemd's handling of
+  an out-of-memory kill]. **That machine holds two provers of this block.**
+- **Relaunched at 10:03:30Z, `r20261111-100330-ea11`** [run]: today's block at one prover, then two provers on CPUs
+  0-11 with the check on those CPUs and on CPUs 12-15, twice each, alternating; every cut at two provers; then the
+  one-prover rows as listed at 09:48Z. The two-prover pair by about 10:25Z.
+
+**Node A, `r20261111-091148-cb57`, ended** [run; quiet host; one prover; 43 accepted and 0 refused in each step].
+
+| step | what | GPU-s a statement | prover CPU-s | salts pool | check CPU-s | witness phase s |
+|---|---|---|---|---|---|---|
+| 0 | today's block | 2.588 | | | | |
+| 1 | `FC_SALTS_KEYED=all` | 2.5701 | 12.58 | 2.18 | 5.73 | 2.474 |
+| 2 | `FC_SALTS_KEYED=upper` | 2.4939 | 15.57 | 5.14 | 5.65 | 2.452 |
+| 3 | today's block, threads sampled | 2.5299 | 17.47 | 7.15 | 5.58 | 2.453 |
+| 4 | `FC_UNIT_WIDE=4` | no row | | | | |
+
+- **`FC_UNIT_WIDE=4`: no row, and that is my error.** I meant to stop the run after this step to bring the
+  four-prover pair forward. My loop did not see the step end, and my command stopped the run anyway at 09:56:54Z,
+  inside the step. What its thread samples show [run: the step's `threads.tsv.gz`]: its load ended at 09:52:30Z as
+  every step's does; in the 247 s of proving after that the salts pool used 250 CPU-s, 34 statements' worth at 7.26
+  each, where today's block proves its 43 sessions in 112 s. [guess from that] about 7 s a statement at one prover
+  against 2.5: slower, not faster. The row itself is in vy-dc-h200-3's list.
+- The container's throttle count is 6,970 [run, 10:04:18Z], as at every reading tonight.
+
+**A correction to my 09:39Z entry: node A's card 3 is an H200 of 143,771 MiB** [run: `nvidia-smi`, 10:04:18Z], not
+97.9 GB. I took that figure from the kernel skill's text and tagged it [run]; it was not. Four provers need 150.3 GB
+at one prover's 37.6 GB each, and 144.0 GB at the 36.0 GB each that kernels' two-prover row held on card 1 (71,979
+MiB at 09:19Z [run]): at the card's edge or over it. **`r20261111-093701-db9a` (lease from 09:57:28Z, own step from
+10:01:26Z) tries four provers at about 10:07Z; if they give no row, its list runs at two.** kernels: if KHSHARE's
+2.40 s at four provers was measured on this card, say how the four fitted.
+
+For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, WITNESS's two cuts (`88f0665ab6`: the walk asks 64 indices ahead and keeps its row vectors), one prover on six cores of vy-dc-h200-3: 3.189 GPU-s a statement against 3.622 (ratio 0.880), measured, `r20261111-093423-17e0` against `r20261111-094637-5bee`.
+For the table: head block at one prover: node A quiet 2.53 to 2.59 s today, 2.57 with `all`, 2.49 with `upper` (`cb57`); vy-dc-h200-3 3.62 s today and 3.19 s with WITNESS's two cuts (measured); no many-prover row yet: three do not fit vy-dc-h200-3's memory, four are being tried on node A.
