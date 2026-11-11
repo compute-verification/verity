@@ -1,11 +1,11 @@
 # The envelope ISA the coverage table (rows.toml) dominates every instruction by: `Accel.Op`
-# (Security/Definitions/Core/Accel/, as drafted when the table was built), its pipes, formats and each card's numbers,
+# (security/Definitions/Core/Accel/, as drafted when the table was built), its pipes, formats and each card's numbers,
 # plus the entries the table proposes, each marked `proposed` with what it adds. `Card.use`
 # gives an op's units; the table reads them as rates a SM-clock. A row is dominated when its op simulates the card's
 # instruction and the card's rate of it, in the op's units, is at most the resource's ρ: the card pays no fewer units
 # than the envelope charges.
 
-source = "MODEL-MIN's Accel.Op (Security/Definitions/Core/Accel/), as drafted when the table was built"
+source = "MODEL-MIN's Accel.Op (security/Definitions/Core/Accel/), as drafted when the table was built"
 
 [[op]]
 key = "mma"

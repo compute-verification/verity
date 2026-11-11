@@ -2,7 +2,7 @@
 of leaving the next reader a path to nowhere.
 
 A document is a tracked `*.md`, `CHANGELOG.md` aside (history names the paths things had then), or a `.lean` file under
-`Security/`, of which only the comments and docstrings are read (`--`, `/- -/`, `/-- -/`, as the lane-text lint reads
+`security/`, of which only the comments and docstrings are read (`--`, `/- -/`, `/-- -/`, as the lane-text lint reads
 them). A path is a relative markdown link target, or a backticked token with a `/` in it; neither may
 carry a URL scheme or a glob or template character (`* < > { } $ | @ \\`), and a trailing `#anchor`, `::symbol`, `:LINE`
 or punctuation is dropped. It is checked when its first segment is a top-level entry of the tree or a retired one
@@ -30,7 +30,7 @@ from lint.test_repo_lane_text import lean_prose
 from test_repository import REGISTRY, ROOT, _tracked
 
 #: The Lean whose comments are documents.
-LEAN_DOCS = "Security/"
+LEAN_DOCS = "security/"
 #: Top-level names the tree had before a move, so a mention of one is still read as a path.
 RETIRED = frozenset({"packages", "protocols", "pods", "census", "security_proofs", "frontends", "archive", "glossary"})
 #: (document, token as written) that reads as a repository path but names something else, each with why.
@@ -39,8 +39,8 @@ NOT_PATHS = {
     ("tools/research/README.md", ".cursor/mcp.json"): "the Cursor config the reader writes in their own checkout",
     (".agents/skills/kernel-engineering/SKILL.md", "panel.py"): "the kernel panel, kept in an agent store",
     ("benchmarks/pouw/harness/README.md", "panel.py"): "the kernel panel, kept in an agent store",
-    ("Security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md", "io.cpp"): "the Lean runtime's source",
-    ("Security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md", "random.c"): "the Lean runtime's source",
+    ("security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md", "io.cpp"): "the Lean runtime's source",
+    ("security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md", "random.c"): "the Lean runtime's source",
     ("benchmarks/numerical/README.md", "tc.rs"): "SP1's guest, deleted with the archive",
     ("benchmarks/numerical/README.md", "TCB.lean"): "the archived tables' Lean, outside this tree",
     ("benchmarks/numerical/README.md", "TCTotal.lean"): "the archived tables' Lean, outside this tree",
@@ -54,46 +54,46 @@ NOT_PATHS = {
     ("verity/protocols/pous/verifier/PROTOCOL.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
     ("verity/protocols/pous/verifier/PROTOCOL.md", "BandEncDec.lean"): "the band chain's Lean, outside this tree",
     ("verity/protocols/pous/verifier/PROTOCOL.md", "regate.py"): "the timing red team's script",
-    ("Security/Definitions/Pous/Model/BandChain.lean", "SpongeDense.lean"): "the band chain's Lean, outside this tree",
-    ("Security/Definitions/Pous/Model/BandChain.lean", "BandChainModel.lean"): "the band chain's Lean, outside this tree",
-    ("Security/Definitions/Pous/Model/BandChain.lean", "BandMultiModel.lean"): "the band chain's Lean, outside this tree",
-    ("Security/Proofs/Pous/Chain/Family.lean", "BandMultiFamilyFinal.lean"): "the band chain's Lean, outside this tree",
-    ("Security/Proofs/Pous/Chain/Family.lean", "flatten_family_chain.py"): "the band chain's flattener, outside this tree",
-    ("Security/Proofs/Pous/Chain/Family.lean", "flatten_chain.py"): "the band chain's flattener, outside this tree",
-    ("Security/Proofs/Pous/Chain/Flat.lean", "flatten_chain.py"): "the band chain's flattener, outside this tree",
-    ("Security/Proofs/Pous/Chain/Flat.lean", "Birthday.lean"): "the band chain's Lean, outside this tree",
-    ("Security/Proofs/Pous/Chain/Flat.lean", "P3MeetsLucky.lean"): "the band chain's Lean, outside this tree",
-    ("Security/Proofs/Pous/Chain/Flat.lean", "P3MeetsFinal.lean"): "the band chain's Lean, outside this tree",
-    ("Security/Definitions/Hash/Guarantees.lean", "EmbeddingRead.h"): "a Lean name, the read's row `h`",
-    ("Security/Proofs/Flock/Claims/Recursion/DecodeTies.lean", "DecAt.sh"): "a Lean name, `DecAt`'s shape `sh`",
-    ("Security/Proofs/Flock/Claims/Recursion/VerdictRowRDeployed.lean", "DecAt.sh"): "a Lean name, `DecAt`'s shape `sh`",
-    ("Security/Proofs/Flock/Claims/ZK/FrameOpenLive.lean", "d.h"): "a Lean name, the frame's pads",
-    ("Security/Proofs/Flock/Recursive/HPortTie.lean", "lc.h"): "a Lean name, a field of `holoRep_refines`' output",
-    ("Security/Proofs/Flock/Soundness/Discharge/Composed/Inner.lean", "l.c"): "a Lean name, `verifyInner`'s target",
+    ("security/Definitions/Pous/Model/BandChain.lean", "SpongeDense.lean"): "the band chain's Lean, outside this tree",
+    ("security/Definitions/Pous/Model/BandChain.lean", "BandChainModel.lean"): "the band chain's Lean, outside this tree",
+    ("security/Definitions/Pous/Model/BandChain.lean", "BandMultiModel.lean"): "the band chain's Lean, outside this tree",
+    ("security/Proofs/Pous/Chain/Family.lean", "BandMultiFamilyFinal.lean"): "the band chain's Lean, outside this tree",
+    ("security/Proofs/Pous/Chain/Family.lean", "flatten_family_chain.py"): "the band chain's flattener, outside this tree",
+    ("security/Proofs/Pous/Chain/Family.lean", "flatten_chain.py"): "the band chain's flattener, outside this tree",
+    ("security/Proofs/Pous/Chain/Flat.lean", "flatten_chain.py"): "the band chain's flattener, outside this tree",
+    ("security/Proofs/Pous/Chain/Flat.lean", "Birthday.lean"): "the band chain's Lean, outside this tree",
+    ("security/Proofs/Pous/Chain/Flat.lean", "P3MeetsLucky.lean"): "the band chain's Lean, outside this tree",
+    ("security/Proofs/Pous/Chain/Flat.lean", "P3MeetsFinal.lean"): "the band chain's Lean, outside this tree",
+    ("security/Definitions/Hash/Guarantees.lean", "EmbeddingRead.h"): "a Lean name, the read's row `h`",
+    ("security/Proofs/Flock/Claims/Recursion/DecodeTies.lean", "DecAt.sh"): "a Lean name, `DecAt`'s shape `sh`",
+    ("security/Proofs/Flock/Claims/Recursion/VerdictRowRDeployed.lean", "DecAt.sh"): "a Lean name, `DecAt`'s shape `sh`",
+    ("security/Proofs/Flock/Claims/ZK/FrameOpenLive.lean", "d.h"): "a Lean name, the frame's pads",
+    ("security/Proofs/Flock/Recursive/HPortTie.lean", "lc.h"): "a Lean name, a field of `holoRep_refines`' output",
+    ("security/Proofs/Flock/Soundness/Discharge/Composed/Inner.lean", "l.c"): "a Lean name, `verifyInner`'s target",
 }
 #: (document, token as written): a dead path left as `main` writes it because a demo branch rewrites those lines, and a
 #: file a demo branch edits isn't rewritten until it lands. Unlike `NOT_PATHS` it has no currency check, so the demo
 #: branch's landing, which drops the mention, needs no edit here; the entry leaves after it.
 WAITING = {
-    ("Security/Definitions/NetworkCertifier/Schedule.lean", "verity/protocols/accounting/communication/certifier/schedule.py"):
+    ("security/Definitions/NetworkCertifier/Schedule.lean", "verity/protocols/accounting/communication/certifier/schedule.py"):
         "the `remote` demo branch rewrites this docstring",
-    ("Security/Definitions/Accounting/Guarantees/Headline.lean", "fixtures/fold_bulk_loops.json"): "both demo branches edit the file",
-    ("Security/Definitions/Accounting/Guarantees/Headline.lean", "fold_bulk.cu"): "both demo branches edit the file",
-    ("Security/Definitions/Accounting/Sheets/B200.lean", "census/DS-100.csv"): "both demo branches edit the file",
-    ("Security/Definitions/Accounting/Sheets/H200.lean", "census/DS-90.csv"): "both demo branches edit the file",
-    ("Security/Definitions/Core/TC/Pipeline.lean", "relation.py"): "both demo branches edit the file",
-    ("Security/Definitions/Core/TC/Relation.lean", "relation.py"): "both demo branches edit the file",
-    ("Security/Definitions/Pouw.lean", "verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py"):
+    ("security/Definitions/Accounting/Guarantees/Headline.lean", "fixtures/fold_bulk_loops.json"): "both demo branches edit the file",
+    ("security/Definitions/Accounting/Guarantees/Headline.lean", "fold_bulk.cu"): "both demo branches edit the file",
+    ("security/Definitions/Accounting/Sheets/B200.lean", "census/DS-100.csv"): "both demo branches edit the file",
+    ("security/Definitions/Accounting/Sheets/H200.lean", "census/DS-90.csv"): "both demo branches edit the file",
+    ("security/Definitions/Core/TC/Pipeline.lean", "relation.py"): "both demo branches edit the file",
+    ("security/Definitions/Core/TC/Relation.lean", "relation.py"): "both demo branches edit the file",
+    ("security/Definitions/Pouw.lean", "verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py"):
         "both demo branches edit the file",
-    ("Security/Definitions/Pouw.lean", "verity/protocols/accounting/work/pouw/lean/scripts/h1t_vectors.py"):
+    ("security/Definitions/Pouw.lean", "verity/protocols/accounting/work/pouw/lean/scripts/h1t_vectors.py"):
         "both demo branches edit the file",
-    ("Security/Definitions/Pouw/DitherInstance.lean", "benchmarks/pouw/theory/d5_v2.py"): "both demo branches edit the file",
-    ("Security/Definitions/Pouw/PearlC/RowCircuit.lean", "tests/test_circuit_row_lean.py"): "both demo branches edit the file",
-    ("Security/Definitions/Pouw/PearlC/Tile4Circuit.lean", "tests/test_circuit_tile_lean.py"): "both demo branches edit the file",
-    ("Security/Definitions/Pouw/PearlC/TileCircuit.lean", "tests/test_circuit_tile_lean.py"): "both demo branches edit the file",
-    ("Security/Definitions/Pouw/PearlC/WholeCircuit.lean", "tests/test_circuit_whole_lean.py"): "both demo branches edit the file",
-    ("Security/Proofs/Pouw/Period/Accept.lean", "benchmarks/all_protocols/legs/pouw.py"): "both demo branches edit the file",
-    ("Security/Proofs/Pouw/TileBound/WinogradStrassen.lean", "winograd_strassen_check.py"): "both demo branches edit the file",
+    ("security/Definitions/Pouw/DitherInstance.lean", "benchmarks/pouw/theory/d5_v2.py"): "both demo branches edit the file",
+    ("security/Definitions/Pouw/PearlC/RowCircuit.lean", "tests/test_circuit_row_lean.py"): "both demo branches edit the file",
+    ("security/Definitions/Pouw/PearlC/Tile4Circuit.lean", "tests/test_circuit_tile_lean.py"): "both demo branches edit the file",
+    ("security/Definitions/Pouw/PearlC/TileCircuit.lean", "tests/test_circuit_tile_lean.py"): "both demo branches edit the file",
+    ("security/Definitions/Pouw/PearlC/WholeCircuit.lean", "tests/test_circuit_whole_lean.py"): "both demo branches edit the file",
+    ("security/Proofs/Pouw/Period/Accept.lean", "benchmarks/all_protocols/legs/pouw.py"): "both demo branches edit the file",
+    ("security/Proofs/Pouw/TileBound/WinogradStrassen.lean", "winograd_strassen_check.py"): "both demo branches edit the file",
 }
 
 _TOKEN = re.compile(r"`([^`\s]+)`|\]\(([^)\s]+)\)")
@@ -202,7 +202,7 @@ def test_not_paths_are_current():
 def test_the_scan_reads_each_form_and_catches_a_dead_path():
     """The rules above, on a toy tree."""
     files = frozenset({"README.md", "tools/x/README.md", "tools/x/tests/test_a.py", "verity/primitives/b.py",
-                       "tools/x/CHANGELOG.md", "fixtures/artifacts.json", "tests/test_r.py", "Security/A.lean",
+                       "tools/x/CHANGELOG.md", "fixtures/artifacts.json", "tests/test_r.py", "security/A.lean",
                        "verity/primitives/B.lean"})
     dirs = frozenset({"tools", "tools/x", "tools/x/tests", "verity", "verity/primitives", "fixtures", "tests"})
     tree = (files, dirs, frozenset({"tools/x/tests/fixtures/big"}))
@@ -214,15 +214,15 @@ def test_the_scan_reads_each_form_and_catches_a_dead_path():
         "tools/x/README.md": ("`tests/test_a.py` `tests/test_b.py` [e](tests/test_a.py) [f](../../README.md) [g](gone.md) "
                               "`tools/x/tests/fixtures/big/a.bin` `test_a.py:3` `b.py::f` `gone.sh`, `out.json` `x`"),
         "tools/x/CHANGELOG.md": "`tools/gone.py`",
-        "Security/A.lean": ('def s := "`tools/gone.py`"\n/-- `tools/x/` and\n`tools/lean_gone.py` -/\n'
+        "security/A.lean": ('def s := "`tools/gone.py`"\n/-- `tools/x/` and\n`tools/lean_gone.py` -/\n'
                             "def t := 1 -- `x.lean`, `Loop.RepSrc.h`, `coin_tree.Rules.h`, `Gone.lean`, `a.b.h`, `σ.c`\n"),
     }
-    assert documents(files) == ["README.md", "Security/A.lean", "tools/x/README.md"]
+    assert documents(files) == ["README.md", "security/A.lean", "tools/x/README.md"]
     assert dead_paths(tree, read=docs.__getitem__) == [
         ("README.md", 1, "verity/moved/c.py"),
         ("README.md", 1, "tools/gone.py"), ("README.md", 1, "tools/x/gone.md"), ("README.md", 1, "pods/nebius/"),
-        ("README.md", 1, "verity/primitives/gone.py"), ("Security/A.lean", 3, "tools/lean_gone.py"),
-        ("Security/A.lean", 4, "x.lean"), ("Security/A.lean", 4, "Gone.lean"), ("Security/A.lean", 4, "a.b.h"),
+        ("README.md", 1, "verity/primitives/gone.py"), ("security/A.lean", 3, "tools/lean_gone.py"),
+        ("security/A.lean", 4, "x.lean"), ("security/A.lean", 4, "Gone.lean"), ("security/A.lean", 4, "a.b.h"),
         ("tools/x/README.md", 1, "tests/test_b.py"),
         ("tools/x/README.md", 1, "gone.md"),
         ("tools/x/README.md", 1, "gone.sh")]

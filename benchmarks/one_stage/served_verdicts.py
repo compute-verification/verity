@@ -86,7 +86,7 @@ is one manifest under them; core's credit refuses the window and is shown beside
 declared Program serve-openai wrote (``h1/window-program.json.gz``), the period ``period open`` opened, and, when given,
 the sampled calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
 ``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`). The verdict says whether the
-window meets the two premises of `Security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
+window meets the two premises of `security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
 (`premises`): each ``{met, why}``, met only where this run's checks show it.
 
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under

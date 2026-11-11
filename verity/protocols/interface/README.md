@@ -131,7 +131,7 @@ composition suite's difftest (`../remote/verifier/composition/tests/test_registr
 
 ## Properties
 
-A protocol's properties go in `Security/Properties/<Protocol>.lean`, stated against `P.check` (or `P.Accepts`) with its
+A protocol's properties go in `security/Properties/<Protocol>.lean`, stated against `P.check` (or `P.Accepts`) with its
 actual parameters, every input covered and assumptions as named `Prop`s. They, not the
 port, are what makes a verifier proven. All protocols share one Lake package for them, `security_properties`, with the statements in
 `Properties.<Protocol>` and the proofs in `Proofs.Properties.<Protocol>`:

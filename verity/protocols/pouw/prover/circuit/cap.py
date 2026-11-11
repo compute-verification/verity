@@ -39,7 +39,7 @@ split's reference.
 support's two ends agree (`words.PouwBlackwellE4m3SaltDead`, `PouwHopperE4m3SaltDead`: the codes e4m3(atom(f32(α·x),
 [c_β]^32, [±0x43]^32)) are equal or both zeros), on the forming's own accumulator f32(α·x) and the row's flat code
 c_β = e4m3(f32(β·44)).  On a one-group step (sm_120's and the H100's atoms) that count is P3's `saltDeadP` count:
-`Security/Proofs/Pouw/PearlC/Cap/SaltDead.lean`'s (E) `saltDeadP_iff_ends` and (C) `saltDeadP_card_ends`, with no hypothesis on α, x or β.  Nothing here reads the code's
+`security/Proofs/Pouw/PearlC/Cap/SaltDead.lean`'s (E) `saltDeadP_iff_ends` and (C) `saltDeadP_card_ends`, with no hypothesis on α, x or β.  Nothing here reads the code's
 order in the signed count, which is monotone only for β >= 0 and antitone for β <= 0.
 
 **The word** (`Pc8CapWord`) is `pearl_c_debit.word_flags` and rev1's `laterZeroPromos` on the chain the tile already

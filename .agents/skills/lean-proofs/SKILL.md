@@ -100,7 +100,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 ## Assumptions and guarantees
 
 - **An assumption** (AGENTS.md "Lean") is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`
-  (a module or a list of them: `Security/Properties` also lists `Properties/Assumptions.lean`, for one stated over the
+  (a module or a list of them: `security/Properties` also lists `Properties/Assumptions.lean`, for one stated over the
   code, which the spec can't import), or in a module under it when the public export copies its area (`Assumptions/Flock.lean`, since the root module
   reads Nci); an area's other premises live in its `Definitions/<Area>/Assumptions` (Flock's in
   `Proofs/Flock/Soundness/Assumptions` for now), each owner in the lock. Its docstring opens with its claim id
@@ -185,7 +185,7 @@ Their history is in the decisions log.
   false in Lean: state it over random inputs or as a reduction. A claim resting on a falsified premise says nothing.
 - Probability and games are our own minimal definitions over Mathlib's `PMF`; soundness bridges to VCVio where needed.
 - What a physical region reads is not a premise: it follows from the circuit's regions and causality
-  (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
+  (`width_into_region_le`; `Links`, `Covered` in `security/Definitions/Accounting/Physical.lean`). A bound per
   server block is stated on `Accounting.Placed` with `WindowsAt`.
 - Verifier code compares `Json` by a match the kernel reduces, never by `BEq Json`'s `==`, a `partial def` no proof can
   read. A string is compared by `Spot.jsonStrIs`, which `Properties.Pouw.LiveSalt.jsonStrIs_eq` reads back.

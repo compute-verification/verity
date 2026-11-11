@@ -187,7 +187,7 @@ MEASURED: dict[str, str] = {
     "PROVE_RUN": "the prove run's id",
     "FLIP_VERDICT": "the flipped-bit run: the Lean verifier's verdict with one committed bit flipped",
     "FLIP_RUN": "the flipped-bit run's id",
-    "JOINT_LOCKED": "true once `Flock.Guarantees.JointStratified` is in the lock (`Security/lean-audit.json`) on main",
+    "JOINT_LOCKED": "true once `Flock.Guarantees.JointStratified` is in the lock (`security/lean-audit.json`) on main",
     "EPS_KS": "the bound's knowledge-soundness term for C-Flock --zk at the block's sessions",
     "EPS_BIND": "the bound's binding term for the block's hm96-sha512 commitments",
     "H_A": "the bound (BOUND_CITATION) at δ = 1/100 on the block's draw, harm in ANDs: "

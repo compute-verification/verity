@@ -51,7 +51,7 @@ declares one, so an undeclared Definition's entry, id and digests are what they 
   noise and no receipt key from it. Each leaf a noise primitive returns, its noise, is read at most once (by one operand
   of one instance, or once by the outputs): no two copies, and no noise shared across rows, matmuls, batch members or
   scan steps (`E_COIN_REUSE`). A coin only receipt folds read may key any number of them. With coin flow, each noise's
-  coins reach nothing but its one reader's forward cone (`Accounting.Guarantees.CoinFlow` in `Security/`). A coin seeds read
+  coins reach nothing but its one reader's forward cone (`Accounting.Guarantees.CoinFlow` in `security/`). A coin seeds read
   is read by seeds alone, any number of them, and no position leaf is read by two seeds, so each (coin, position) seeds
   one unit (`E_COIN_REUSE`).
 * **Seeds.** A seed's output and every value computed from it (the unit's noise) are values no rule here follows: they may

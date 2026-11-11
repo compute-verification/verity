@@ -539,7 +539,7 @@ def test_the_reads_check_leaves_the_proofs_tree_to_the_trees_check():
 def test_the_record_follows_a_statement_through_the_modules_the_trees_except(tmp_path, monkeypatch):
     """`trees`' `except` exempts a module from the trees rule, not from the record: `Facts.lean` walks a guarantee's
     statement through `record_scope` (`meaning`, then the excepted prefixes), for a package's own guarantees and for those
-    a `proved_in` package proves, as `Security`'s are. The witnesses rule reads what the record holds: a claim, or a
+    a `proved_in` package proves, as `security`'s are. The witnesses rule reads what the record holds: a claim, or a
     verifier's acceptance, read only through an excepted module holds the guarantee to witnesses as one under `meaning`
     does."""
     why = "C-Flock is excepted until its spec is extracted"
@@ -1275,7 +1275,7 @@ def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
 
 def test_facts_names_a_module_without_listing_every_module():
     """`EnvironmentHeader.moduleNames` maps over every imported module on each call. Indexed once per constant a
-    guarantee's reads reach, it takes nearly all of `Security`'s audit."""
+    guarantee's reads reach, it takes nearly all of `security`'s audit."""
     for tool in ("Facts.lean", "Upstream.lean"):
         assert "moduleNames[" not in (HERE.parent / tool).read_text(), \
             f"{tool}: name a module by `env.header.modules[i].module` (`moduleName env i`), not `env.header.moduleNames[i]`"
@@ -1611,7 +1611,7 @@ def test_facts_cache_stores_the_sealed_document_under_its_build_s_key_and_judges
 
 
 def test_the_facts_are_kept_only_gzipped_as_the_program_wrote_them(tmp_path, monkeypatch):
-    """A recorded run publishes the work directory, where `Facts.lean`'s document is hundreds of MB for `Security`: it is
+    """A recorded run publishes the work directory, where `Facts.lean`'s document is hundreds of MB for `security`: it is
     kept there only as `facts.json.gz`, its bytes gzipped with no timestamp (equal facts are equal bytes, which the store
     keeps once), and the facts the audit judges are that document's. A `.gz` an earlier run left is gone before it runs."""
     doc = {"pins": {"C.g": {"kind": "theorem", "reads": [{"name": "C.d"}]}}, "modules": ["C"], "note": "é"}
@@ -1640,7 +1640,7 @@ def test_the_facts_are_kept_only_gzipped_as_the_program_wrote_them(tmp_path, mon
 
 
 def test_the_program_writes_the_facts_outside_the_audit_s_output_and_they_are_kept_only_when_asked(tmp_path, monkeypatch):
-    """`Facts.lean` writes its document and canonical forms (hundreds of MB for `Security`) in a directory of their own
+    """`Facts.lean` writes its document and canonical forms (hundreds of MB for `security`) in a directory of their own
     outside the work directory a recorded run publishes, under `SCRATCH` when it is set (`lean_changed.records`' sandbox
     shows only the package's `.lake`), and that directory is gone once they are read, or the program failed. Without
     ``keep`` the work directory keeps no document, and none an earlier run left there, gzipped or plain."""
@@ -2345,7 +2345,7 @@ def test_a_plugin_two_libraries_load_is_linked_alone_first_so_the_build_links_it
 
 
 def test_update_refuses_a_shared_shipped_tree(tmp_path, capsys):
-    pkg = tmp_path / "Security"
+    pkg = tmp_path / "security"
     pkg.mkdir()
     (tmp_path / "READY.json").write_text("{}\n")
     with pytest.raises(SystemExit):
@@ -4770,7 +4770,7 @@ def test_a_named_assumption_may_sit_in_a_module_under_assumptions_module():
 
 
 def test_assumptions_module_may_list_several_homes():
-    """`assumptions_module` may list modules (`Security/Properties` lists `Properties.Assumptions` beside the spec's, for an
+    """`assumptions_module` may list modules (`security/Properties` lists `Properties.Assumptions` beside the spec's, for an
     assumption stated over the code, which the spec can't import): one declared in any of them is a named assumption, one
     declared outside them all fails naming each, and every listed home is a module the build has. The string form is
     one home, as the one-element list."""
@@ -4809,7 +4809,7 @@ def test_an_assumption_is_listed_by_name_with_its_record():
     """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
     record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read
     there, owned by the owner of the guarantees that read them. A named assumption is declared in `assumptions_module`,
-    a module the build or a package it requires has (`Security/Properties` names `Security`'s, which none of its modules
+    a module the build or a package it requires has (`security/Properties` names `security`'s, which none of its modules
     may import): one declared elsewhere fails until a person moves it or lists it as open, and one premise listed under
     both kinds fails."""
     assert [x.code for x in A.judge({**POLICY, "assumptions_module": "P.Nowhere"}, facts(), FILES, update=True)[0]] == [
@@ -5010,15 +5010,15 @@ def test_package_files_stop_at_nested_packages_and_lake(tmp_path):
 
 
 def test_module_names_follow_src_dir(tmp_path):
-    """A nested package with `srcDir = ".."` (`Security/Proofs` under `Security`) names its modules from the directory
+    """A nested package with `srcDir = ".."` (`security/Proofs` under `security`) names its modules from the directory
     above it, as Lake does; a library's own `srcDir` is under the package's; a file outside every source directory keeps
     its name from the package."""
-    proofs = tmp_path / "Security" / "Proofs"
+    proofs = tmp_path / "security" / "Proofs"
     for rel, text in {"lakefile.toml": 'name = "proofs"\nsrcDir = ".."\n[[lean_lib]]\nname = "Proofs"\n',
                       "Proofs.lean": "", "Pouw/End.lean": ""}.items():
         (proofs / rel).parent.mkdir(parents=True, exist_ok=True)
         (proofs / rel).write_text(text)
-    (tmp_path / "Security" / "Spec.lean").write_text("")
+    (tmp_path / "security" / "Spec.lean").write_text("")
     assert A.lean_modules(proofs) == {"Proofs.Proofs": "Proofs.lean", "Proofs.Pouw.End": "Pouw/End.lean"}
     pkg = tmp_path / "p"
     for rel, text in {"lakefile.toml": 'name = "p"\n[[lean_lib]]\nname = "P"\nsrcDir = "src"\n',
@@ -7132,11 +7132,11 @@ def test_a_dev_cache_run_restores_dependencies_and_is_never_a_verdict(monkeypatc
 
 
 def test_a_dev_cache_setup_restores_the_packages_required_by_path_too(monkeypatch, tmp_path):
-    """Restoring only Security/Proofs' own build with `--dev-cache` would rebuild most of its modules: Security and Flock,
+    """Restoring only security/Proofs' own build with `--dev-cache` would rebuild most of its modules: Security and Flock,
     which it requires by path, would be built again, not byte-identically, and everything above them would compile. With `--dev-cache`, setup restores each path dependency's build too, lending one with no fetched dependencies of its own the root's for the restore; without it, or
     after a failed setup.sh, it restores nothing more."""
     calls, seen = [], []
-    deps = [tmp_path / "Security", tmp_path / "flock"]
+    deps = [tmp_path / "security", tmp_path / "flock"]
     (tmp_path / "Proofs" / ".lake" / "packages" / "mathlib").mkdir(parents=True)
     (tmp_path / "flock" / ".lake" / "packages").mkdir(parents=True)
 
@@ -7150,7 +7150,7 @@ def test_a_dev_cache_setup_restores_the_packages_required_by_path_too(monkeypatc
     monkeypatch.setattr(A, "DEV_CACHE", True)
     assert A.dev_restore(tmp_path / "Proofs", 0, "", tmp_path / "setup.log") == (0, "")
     assert calls == [[A.sys.executable, str(A.TOOL / "cache.py"), "get", *map(str, deps)]]
-    assert seen == [{"Security": True, "flock": False}] and not (deps[0] / ".lake" / "packages").exists()
+    assert seen == [{"security": True, "flock": False}] and not (deps[0] / ".lake" / "packages").exists()
     calls.clear()
     assert A.dev_restore(tmp_path / "Proofs", 2, "x", tmp_path / "setup.log") == (2, "x") and calls == []
     monkeypatch.setattr(A, "DEV_CACHE", False)

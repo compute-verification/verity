@@ -66,8 +66,8 @@ already moved, so none below it is merged again.
 
 Lock records are regenerated after landing (drive.toml's `regenerate_locks`).  While what `checked` holds since its newest
 commit whose records are the regenerated ones (`postland["fresh"]`, `_fresh`) changes Lean, a lock or the spec
-(`queue.lean_change`: a lock, the spec, `Security/`'s Definitions and its package's Lake files, or a Lean source
-outside `Security/` of a package that has a lock; Lean proofs alone don't), drive launches one lock run of `checked`'s tip
+(`queue.lean_change`: a lock, the spec, `security/`'s Definitions and its package's Lake files, or a Lean source
+outside `security/` of a package that has a lock; Lean proofs alone don't), drive launches one lock run of `checked`'s tip
 (`train.sh TIP MACHINES --deferred lean-audit`, which regenerates them: `_start_locks`), ahead of the rest of the
 after-landing check, one at a time, and not again on a tip whose lock run failed.  Passed, the records it regenerated are
 committed on its tip as `Lock records regenerated for #N...` (`Checked:` the run, `Regenerated:` the files), which the merge
