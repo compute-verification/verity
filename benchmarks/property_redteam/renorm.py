@@ -39,7 +39,7 @@ import numpy as np
 
 from gates import Builder, is_charged, op_affine, op_mma, proven
 
-P1024 = 2 ** 1024 - 105  # p1024 (verity.core.protocols.remote_bandwidth.codec, Field("p1024", 1024, 105))
+P1024 = 2 ** 1024 - 105  # p1024 (verity.protocols.poub.verifier.codec, Field("p1024", 1024, 105))
 
 
 # ---- the model's restriction: Codec.lean's `FanIn`, `Width`, `budgeted` and `Restricted` over a gates.Builder -------------
