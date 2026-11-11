@@ -48,9 +48,9 @@ def _chain(T, DR, DV, BN, scale, qn, qr, kv) -> tuple[np.ndarray, list[tuple]]:
 def test_the_end_is_the_dense_heads_end() -> None:
     """`SparseMlaHeadEnd_v1{DV, INV}` is `AttnHeadEnd_v1{D = DV, INV}` word for word, on `_inputs`' words with specials."""
     end = bind(M.SparseMlaHeadEnd, DV=16, INV=FA3["INV"])
-    l, o = _inputs(end, 400, 7)
-    want = _flat(E.evaluate_batch(bind(DF.AttnHeadEndV1, D=16, INV=FA3["INV"]), l, o))
-    assert all(np.array_equal(g, w) for g, w in zip(_flat(E.evaluate_batch(end, l, o)), want, strict=True))
+    l_sum, o = _inputs(end, 400, 7)
+    want = _flat(E.evaluate_batch(bind(DF.AttnHeadEndV1, D=16, INV=FA3["INV"]), l_sum, o))
+    assert all(np.array_equal(g, w) for g, w in zip(_flat(E.evaluate_batch(end, l_sum, o)), want, strict=True))
 
 
 def test_a_heads_blocks_are_visited_last_to_first() -> None:
@@ -106,8 +106,8 @@ def test_the_twin_is_each_unit(T: int) -> None:
     got, states = _chain(T, DR, DV, BN, 0.0625, qn, qr, kv)
     tw, nf = TW.chain_rows(qn[None], qr[None], kv, T=T, DR_=DR, DV=DV, BN=BN, scale=0.0625)
     assert not nf.any() and len(tw) == len(states)
-    for (m, l, o), (wm, wl, wo) in zip(tw, states):
-        assert int(m[0]) == wm and np.array_equal(l[0], np.asarray(wl, U32)) and np.array_equal(o[0], np.asarray(wo, U32))
+    for (m, l_sum, o), (wm, wl, wo) in zip(tw, states):
+        assert int(m[0]) == wm and np.array_equal(l_sum[0], np.asarray(wl, U32)) and np.array_equal(o[0], np.asarray(wo, U32))
     assert np.array_equal(TW.head_end_rows(tw[-1][1], tw[-1][2])[0].astype(U32), got)
 
 

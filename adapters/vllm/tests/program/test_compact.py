@@ -470,7 +470,7 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     assert IF.instances_form_of(i1) == "runs" and IF.instances_form_of(i2) == "progressions"
     rows1, rows2 = _text(i1).split("\n")[1:], _text(i2).split("\n")[1:]
     assert rows1 != rows2 and len(rows1) == len(rows2)
-    assert any('"N",' in l for l in rows2) and any('["p",' in l for l in rows2)   # (the toy's gathers are short: the size win is the real fold's)
+    assert any('"N",' in row for row in rows2) and any('["p",' in row for row in rows2)   # (the toy's gathers are short: the size win is the real fold's)
     # (1) lossless both ways, byte for byte on the rows
     c12, c21 = str(tmp_path / "v1_as_v2.jsonl"), str(tmp_path / "v2_as_v1.jsonl")
     r = IF.convert_instances(i1, c12, "progressions")
@@ -567,7 +567,7 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
         with gzip.open(os.path.join(d, "accesses.jsonl.gz"), "rt") as fh:
             lines = fh.read().split("\n")[:-1]
         assert lines == generic_journal(form) and len(lines) == len(res.accesses)
-        assert any('"operand_views":[{"alloc":' in r for r in rows) and any('"view":{"alloc":' in l for l in lines)   # the shape path ran
+        assert any('"operand_views":[{"alloc":' in r for r in rows) and any('"view":{"alloc":' in line for line in lines)   # the shape path ran
 
 
 def test_lean_root_reads_definitions_with_decode_programs_reader_and_refuses_what_it_refuses():

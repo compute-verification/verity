@@ -141,7 +141,7 @@ def test_strict_payload_agreement_bot_and_inv(p):
     ws = _widths(p)
     assert lp.id == f"Lifted[{p.id}]_v1" and lp.ret == Value(p.ret.w + 1)
     assert [t for _, t in lp.params] == [L.lift_type(t) for _, t in p.params]
-    assert getattr(lp, "lift_class") == "strict" and lp.lifted_from is p
+    assert lp.lift_class == "strict" and lp.lifted_from is p
     bot_out, inv_out = L.enc_bot(p.ret.w), L.inv(p.ret.w)
     special = {16: [0x0000, 0x3F80, 0x7FFF, 0x7FC0, 0x8000, 0xFF80], 32: [0, 1, 0x3F800000, 0x7F800000, 0x7FC00000, 0x80000000, 0xFFFFFFFF, 7], 1: [0, 1]}
     for trial in range(12):
@@ -173,7 +173,7 @@ def test_enabled_lift_is_the_relation_at_enable_1_bot_at_enable_0_whatever_the_o
     ws = _widths(p)
     assert lp.id == f"Lifted[{p.id}]_v2" and lp.ret == Value(p.ret.w + 1) and lp is L.lifted_prim(p)
     assert lp.params[:-1] == lv1.params and lp.params[-1] == (L.ENABLE_PARAM, Value(2)) and L.has_enable(lp) and not L.has_enable(lv1)
-    assert getattr(lp, "lift_class") == "strict" and lp.lifted_from is p and lp.lifted_v1 is lv1
+    assert lp.lift_class == "strict" and lp.lifted_from is p and lp.lifted_v1 is lv1
     bot_out, inv_out = L.enc_bot(p.ret.w), L.inv(p.ret.w)
     for trial in range(8):
         ops = [_rand(w, 1)[0] for w in ws]
@@ -254,7 +254,7 @@ def test_lis_active_and_lbot():
     assert ia.evaluate(INV32) == 0b11 and ia.evaluate(_bad(32)) == 0b11  # negative: INV_1
     for w in (1, 16, 32):
         bp = L.l_bot(w)
-        assert bp.id == f"LBot{w}_v1" and bp.evaluate() == L.enc_bot(w) and bp.params == () and getattr(bp, "family") == "Const"
+        assert bp.id == f"LBot{w}_v1" and bp.evaluate() == L.enc_bot(w) and bp.params == () and bp.family == "Const"
     assert L.l_bot(32).evaluate() != b1.const(33, 0).evaluate()  # ⊥ is not Active(0)
 
 
@@ -873,7 +873,7 @@ def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_n
         fs = L.l_fixed_select(E, w)
         assert fs.id == f"LFixedSelect{E}x{w}_v1" and fs is L.l_fixed_select(E, w) and fs.id in L.specified_ids()
         assert [t for _, t in fs.params] == [Value(33), Array(E, Value(w + 1))] and fs.ret == Value(w + 1)
-        assert getattr(fs, "lift_class") == "specified" and "named failure" in getattr(fs, "lift_reason")
+        assert fs.lift_class == "specified" and "named failure" in fs.lift_reason
         bot, inv_ = L.enc_bot(w), L.inv(w)
         z = _rand(w, E)
         for r in range(E):  # (b) every admitted route: z_r bit for bit; the SAME object (a)
@@ -889,7 +889,7 @@ def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_n
         assert fs.evaluate(L.enc_bot(32), *([bot] * E)) == bot
         for oor in (E, E + 1, 0xFFFFFFFF, 0x80000000, 0x7FFFFFFF):  # (c) out of range: NAMED, not z[oor % E], not a default
             assert fs.evaluate(oor, *z) == inv_ and fs.evaluate_lazy(lambda i, _o=oor, _z=z: _o if i == 0 else _z[i - 1]) == inv_
-        assert not hasattr(fs, "oor_payload") and getattr(fs, "oor_named") == "INV"  # no registered extension VALUE (unlike LGatherRow)
+        assert not hasattr(fs, "oor_payload") and fs.oor_named == "INV"  # no registered extension VALUE (unlike LGatherRow)
         # INV anywhere -> INV: the route, a selected row, an unselected row, a bot route beside an INV row
         assert fs.evaluate(L.inv(32), *z) == inv_ and fs.evaluate(_bad(32), *z) == inv_
         zi = list(z)

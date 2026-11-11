@@ -329,12 +329,12 @@ def _combine_word(NSPLIT: int, DV: int):
 @pytest.mark.parametrize("scale", [0.0625, 576 ** -0.5])
 def test_the_split_end_twin_is_the_word(scale: float) -> None:
     word = _end_word(16, scale)
-    m, l, o = _inputs(word, 400, 17)
+    m, l_sum, o = _inputs(word, 400, 17)
     rng = np.random.default_rng(18)
     m[:100] = (rng.standard_normal(100).astype(np.float32) * np.float32(40)).view(U32)    # the running max: any sign
-    l[:50] = 0                                                                              # an empty sum
-    part, lse = TW.split_end_rows(m, l, o, scale=scale)
-    want = _flat(E.evaluate_batch(word, m, l, o))[0]
+    l_sum[:50] = 0                                                                              # an empty sum
+    part, lse = TW.split_end_rows(m, l_sum, o, scale=scale)
+    want = _flat(E.evaluate_batch(word, m, l_sum, o))[0]
     assert np.array_equal(np.concatenate([part, lse[:, None]], axis=1).astype(np.uint64), want)
     assert (lse[:50] == W.NEG_INF).all()
 

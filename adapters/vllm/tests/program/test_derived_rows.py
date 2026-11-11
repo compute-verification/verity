@@ -671,11 +671,11 @@ def test_attn_block_vs_gates(D_, NVIS, FIRST):
     args = ([int(v) for v in q] + [int(v) for v in kb.ravel()] + [int(v) for v in vb.ravel()]
             + [int(m_prev)] + [int(v) for v in l_prev] + [int(v) for v in o_prev])
     ret = evaluate_call(prog.circuit, call, args)
-    m, l, o, nf = D.attn_block(q[None], kb[None], vb[None], np.array([m_prev]), l_prev[None], o_prev[None],
+    m, l_next, o, nf = D.attn_block(q[None], kb[None], vb[None], np.array([m_prev]), l_prev[None], o_prev[None],
                                D=D_, NVIS=NVIS, FIRST=FIRST)
     assert not nf[0]
     assert int(m[0]) == ret[0]
-    assert [int(v) for v in l[0]] == list(ret[1:5])
+    assert [int(v) for v in l_next[0]] == list(ret[1:5])
     assert [int(v) for v in o[0]] == list(ret[5:])
 
 
@@ -738,11 +738,11 @@ def test_attn_block_v3_vs_gates(D_, NVIS, FIRST):
     args = ([int(v) for v in q] + [int(v) for v in kb.ravel()] + [int(v) for v in vb.ravel()]
             + [int(m_prev)] + [int(v) for v in l_prev] + [int(v) for v in o_prev])
     ret = evaluate_call(prog.circuit, call, args)
-    m, l, o, nf = D.attn_block(q[None], kb[None], vb[None], np.array([m_prev]), l_prev[None], o_prev[None],
+    m, l_next, o, nf = D.attn_block(q[None], kb[None], vb[None], np.array([m_prev]), l_prev[None], o_prev[None],
                                D=D_, NVIS=NVIS, FIRST=FIRST)
     assert not nf[0]
     assert int(m[0]) == ret[0]
-    assert [int(v) for v in l[0]] == list(ret[1:5])
+    assert [int(v) for v in l_next[0]] == list(ret[1:5])
     assert [int(v) for v in o[0]] == list(ret[5:])
 
 

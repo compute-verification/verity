@@ -40,7 +40,7 @@ def _f32_bits(x: float) -> int:
 
 
 def cases(rng, i: int) -> dict:
-    E, TOPK, H, I, M = SHAPES[i % len(SHAPES)]
+    E, TOPK, H, inter, M = SHAPES[i % len(SHAPES)]
     ids = [e for _ in range(M) for e in rng.sample(range(E), TOPK)]
     g = []
     for _ in range(M):
@@ -48,10 +48,10 @@ def cases(rng, i: int) -> dict:
         g += [_f32_bits(v / sum(w)) for v in w] if i % 7 else [_f32_bits(1.0)] + [_f32_bits(0.0)] * (TOPK - 1)
     kx = KINDS[i % len(KINDS)]
     kw = "random" if i % 4 else KINDS[(i // 4) % len(KINDS)]
-    return {"statics": {"E": E, "TOPK": TOPK, "H": H, "I": I, "M": M},
+    return {"statics": {"E": E, "TOPK": TOPK, "H": H, "I": inter, "M": M},
             "inputs": [{"shape": [M * H], "dtype": "bfloat16", "kind": kx},
-                       {"shape": [E * 2 * I * H], "dtype": "bfloat16", "kind": kw},
-                       {"shape": [E * H * I], "dtype": "bfloat16", "kind": kw},
+                       {"shape": [E * 2 * inter * H], "dtype": "bfloat16", "kind": kw},
+                       {"shape": [E * H * inter], "dtype": "bfloat16", "kind": kw},
                        {"shape": [M * TOPK], "dtype": "int32", "kind": "topk_ids", "words": ids},
                        {"shape": [M * TOPK], "dtype": "float32", "kind": "topk_weights", "words": g}],
             "edge": kx != "random"}

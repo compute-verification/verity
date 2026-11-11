@@ -79,12 +79,12 @@ def _end(D: int):
 
 def test_the_split_end_twin_is_the_word() -> None:
     word = _end(16)
-    m, l, o = _inputs(word, 400, 17)
+    m, l_sum, o = _inputs(word, 400, 17)
     rng = np.random.default_rng(18)
     m[:100] = _f32(rng, 100, 40.0)                                 # the running max: any sign
-    l[:50] = 0                                                     # an empty sum: inv 1, lse -inf
-    part, lse = SMT.split_end_rows(m, l, o, scale=16 ** -0.5, inv=DR.fa2_inv_sum, scale_bits=F.scale_bits(16 ** -0.5))
-    want = _flat(E.evaluate_batch(word, m, l, o))[0]
+    l_sum[:50] = 0                                                     # an empty sum: inv 1, lse -inf
+    part, lse = SMT.split_end_rows(m, l_sum, o, scale=16 ** -0.5, inv=DR.fa2_inv_sum, scale_bits=F.scale_bits(16 ** -0.5))
+    want = _flat(E.evaluate_batch(word, m, l_sum, o))[0]
     assert np.array_equal(np.concatenate([part, lse[:, None]], axis=1).astype(np.uint64), want)
     assert (lse[:50] == NEG_INF).all()
 

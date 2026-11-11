@@ -183,8 +183,8 @@ def test_the_scan_slots_read_is_its_reference_and_reads_each_field_where_it_is_p
     for lp0, lp1 in ((3, 0), (1, 1 << 31), (X.M32, 2)):
         lanes = [(1, lp0, 64, [5, (1 << IDB) - 1, 0, 77]), (0, lp1, 9, [0, 0, 0, 0])]
         x = 0
-        for (occ, lp, m, ids), o, l, mx, at in zip(lanes, OCC, LP, MAX, IDS):
-            x |= occ << o | lp << l | m << mx
+        for (occ, lp, m, ids), o, lp_at, mx, at in zip(lanes, OCC, LP, MAX, IDS):
+            x |= occ << o | lp << lp_at | m << mx
             x |= sum(v << at + IDB * X.position(K0, K, p) for p, v in enumerate(ids))
         words = [[x >> 16 * k & 0xFFFF for k in range(NS)]]
         out = [int(v) for v in np.asarray(evaluate_words(fn, np.array(words, dtype=np.uint32)), dtype=np.uint64).reshape(-1)]

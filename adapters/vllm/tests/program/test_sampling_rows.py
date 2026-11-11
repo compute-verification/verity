@@ -200,12 +200,12 @@ def test_nv_log1pf_exhaustive_over_every_fp32_word_the_rn_model_and_the_true_rz_
 def test_nv_logf_and_nv_log1pf_are_word_equal_to_the_libdevice_transcriptions_on_every_non_nan_word():
     a = _words(40000, 3)
     vl, vl1, vl2 = SR.nv_logf(a), SR.nv_log1pf(a), SR.nv_log1pf_v1_model(a)
-    for x, l, l1, l2 in zip(a.tolist(), vl.tolist(), vl1.tolist(), vl2.tolist()):
+    for x, lg, l1, l2 in zip(a.tolist(), vl.tolist(), vl1.tolist(), vl2.tolist()):
         rl, rl1, rl2 = SP.nv_logf(x), SP.nv_log1pf(x), sampling_twins.nv_log1pf_v1_model(x)
         if _is_nan(x):
-            assert _is_nan(l) == _is_nan(rl) and _is_nan(l1) == _is_nan(rl1)   # NaN payloads are not modelled (unreachable in the chain)
+            assert _is_nan(lg) == _is_nan(rl) and _is_nan(l1) == _is_nan(rl1)   # NaN payloads are not modelled (unreachable in the chain)
         else:
-            assert l == rl, ("nv_logf", hex(x), hex(l), hex(rl))
+            assert lg == rl, ("nv_logf", hex(x), hex(lg), hex(rl))
             assert l1 == rl1, ("nv_log1pf", hex(x), hex(l1), hex(rl1))
             assert l2 == rl2, ("nv_log1pf v1 model", hex(x), hex(l2), hex(rl2))
 
