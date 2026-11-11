@@ -37932,3 +37932,26 @@ Your message of this hour is read and done as far as the runs. I pushed nothing 
 - If the layout move lands on `main` first: `tools/move/restack.py`, then the records and the quick tier on the moved tree.
 - [guess] At PR time, after #8512 lands, the merge of `main` will again change `Security/Definitions.lean` and the lock on both sides, so the records run once more after it, before "ready to mark".
 - The VM restarted before this turn; the worktrees were rebuilt from the pushed branches and nothing was lost.
+
+## TWOWITNESS, Wed 11 Nov 03:33Z: `af16` stopped in `setup_X` on a decision on the free class digest `C`, as `6bdc` did in `setup_stX`; fixed in `f2275f8cf3`, relaunched as `r20261111-032635-da65` on vy-nebius-cpu-7, ETA about 04:15Z
+
+- What failed [run]: `Security/Proofs/Flock/SpotFlock/InstanceStmt/InsSetup.lean:139:0`, the `fwd_def` of `setup_X`, first error `fwd: no value for (Std.TreeMap.Raw.ofList (if C.isEmpty = true then … else … ++ₕ [("classes", …)]) compare).get? "indices"`. The `Unknown identifier setup_X` at 159:13 and the unsolved `setupOf_x` goal at 158:62 follow from it.
+- How far the walk got [run]: through `Read.setup`, `checkRegistered`'s `namesOnce`, and `Registered.check`'s loop over the header's registered names and its tables, to `Registered.unitIndices`, which looks up `units.indices` in the drawn header. `HmRow.unitsEntry` builds that object's keys under `if c.classSha.isEmpty`, so the lookup decides on `C` [read].
+- The fix [read]: `setup_X` takes `hCe : C.isEmpty = false` as a hypothesis and a rule, as `setup_stX` does, and `setupOf_x` passes `classOfB_isEmpty (HmNets.shaLaid ()) (HmNets.hmLaid ())`, which `SetupAt` already proves. Commit `f2275f8cf3`.
+- The try in flight [run]: `r20261111-032635-da65`, `lean_changed.py --try` on `InstanceStmt/Scope.lean`, slot build/2 on vy-nebius-cpu-7 (130 files changed there), started 03:26Z. ETA about 04:05Z for `InsSetup`'s verdict and 04:15Z for `Scope.lean`'s, from `af16`'s module times [guess].
+- A probe beside it [run]: `r20261111-032952-6351`, slot build/3 on cpu-7, the same commit with two files sent with the run and never committed. One is `InsSetup` cut before `setup_X`; the other is `Scope.lean` importing that cut, without the four theorems that read `setupOf_x` (`zkOk_x`, `shape_x`, `templateOk_x`, `sessionOk_x`). It elaborates the rest of `Scope.lean` (`scopeCheck_x` with its own `load_pubO` walk, `zkBody_tabX`, `stmtOf_x`, `parseStmt_x`, `v2_cO`), which no try has reached yet, so its errors come back no later than `da65`'s. ETA about 03:50Z [guess].
+- The rest of `setup_X`'s walk, read from the callees [read]:
+  - `checkPort` over `regPorts`: `entry` reads the closed `regHdrJ`. `badRow` opens one-leaf registered roots (`regRoot`) through empty paths, and `badInstance` reads position 0 at the drawn unit. All of it is honest at this instance.
+  - `checkFull` and `ProvedScope.drawLaw` are closed computations on `drawJ` and `regPorts`.
+  - `RecSetup.checks` with no inner shape refuses only a V* name.
+  - `RecCoins.check` returns early for `copy16`.
+  - `checkPubRows` returns early: `i0` and `o0` are no `fixedRow` value, and `claimPorts` is empty.
+  - Of these, I see no other decision on a free variable. The next risk is whether the walker evaluates `checkPort`'s pure helpers by kernel whnf, which needs the drawn public's terms untainted under `setup_X`'s block list [guess].
+- Also [run]: `checkPartition_X`'s walk loses its `trace` in `a26a76a029`, which neither run carries.
+- Branch head [run]: `cursor/proofs-twowitness-0d28` at `a26a76a029`.
+- (A) [guess]: Thu 12 Nov 18:00Z holds. This stop was of a known kind and needed one hypothesis, and a further stop costs about 40 to 60 minutes on a warm slot of cpu-7. It moves only if `da65` and `6351` between them show more than three more stops; I would say so with the new date.
+- What is left after this stop, so a fresh worker can continue:
+  1. Read `da65` and `6351` (`research fetch RUN --all`, then grep `~/.research/runs/RUN/stdout.log` for `^error|fwd:|TRY `), fix on `cursor/proofs-twowitness-0d28`, and relaunch `--try` on `InstanceStmt/Scope.lean` on cpu-7 (with the probe again if `InsSetup` still stops).
+  2. Once `Scope.lean` elaborates: cross the layout move with `tools/move/restack.py`, then a records run after that last merge, then `--try --siblings`, then the lock's entries, including the stale unwitnessed why of `SpotKSTwo` and `SpotExfilTwo`.
+  3. (D): the witness `wF` with `Claims.Flock.check … xS wF = true`, by `relS_relation` along Concrete's Live/Trace/Regions route. Then the `HonestSession` fields: `small` from Sizes, `rounds` by `rfl`, `sess` from `sessionOk_x` and `setup` from `setupOf_x`.
+  4. `Ref.scope` with TWOINSTANCE.
