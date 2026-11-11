@@ -2546,7 +2546,7 @@ STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key
 
 def agreement_closure(files: list[str]) -> list[str]:
     """The tracked files the agreement job can read: verity/protocols/flock/agreement/, the verifier's Lean package and the
-    packages of the tree it requires by path (`required_in_tree`), which `flock-verify` is built from; less any Lake package
+    packages of the tree it requires by path (`required_in_tree`), which its executable is built from; less any Lake package
     nested in the verifier's (Flock's proofs are under `security/Proofs/`), which it is not built from as long as the Lean
     package requires nothing (a `require` in its lakefile keeps them all in), and less each of those packages'
     `lean-audit.json`, which only `tools/verity/lean/check.py` reads (a test fails if the agreement's scripts or the
