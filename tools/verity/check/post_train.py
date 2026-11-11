@@ -10,8 +10,8 @@ this, detached, after each push it lands (`after_land` in `tool.py`); run it by 
 After the rebuilds the same run rebuilds the fast rows of record's Programs and compares them with their pins (`verity-vllm
 neutrality --tier fast`, by `neutrality_tier.sh` beside this, minutes a row), so a landing that moves a
 fast row's Program without re-pinning it is a red: each row that moved or didn't build is named in the label beside the
-rebuilds' rows (`regression fail:<row>`), and @vllm, which owns the rows of record, is rung at once in the merge thread, as ci,
-with the run to read.  A carried verdict rings no one: the run it carries from rang.
+rebuilds' rows (`regression fail:<row>`), and the owner of the rows of record (`OWNER`) is rung at once in the merge thread,
+as ci, with the run to read.  A carried verdict rings no one: the run it carries from rang.
 
 COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in, or, for a train
 `research queue drive` fast-forwarded main to, the store's passing check of that commit does.  Drive passes the check it landed

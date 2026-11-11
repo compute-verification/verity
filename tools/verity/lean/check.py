@@ -1503,11 +1503,16 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         fails.append(Failure("assumptions.modules", None, f"assumptions: the policy lists assumption modules "
                              f"({', '.join(prefixes)}); list the assumptions by name instead, each with its record: "
                              f"`check.py --update` converts the list"))
-    if (home := policy.get("assumptions_module")) is not None and home not in set(facts["modules"]) | set(
-            facts.get("graph") or {}) | set(facts.get("source_modules") or ()):
-        fails.append(Failure("assumptions.module", None, f"assumptions: `assumptions_module` names {home!r}, which "
-                             f"neither the build nor the packages it requires has a module of; name the one module the "
-                             f"named assumptions are declared in"))
+    if (home := policy.get("assumptions_module")) is not None and not (isinstance(home, str) or (
+            isinstance(home, list) and home and all(isinstance(h, str) for h in home))):
+        fails.append(Failure("assumptions.module-form", None, "assumptions: `assumptions_module` is the module the named "
+                             "assumptions are declared in, or a list of such modules"))
+    built = set(facts["modules"]) | set(facts.get("graph") or {}) | set(facts.get("source_modules") or ())
+    for home in assumption_homes(policy):
+        if home not in built:
+            fails.append(Failure("assumptions.module", None, f"assumptions: `assumptions_module` names {home!r}, which "
+                                 f"neither the build nor the packages it requires has a module of; name the modules the "
+                                 f"named assumptions are declared in"))
     cited = stated_by(policy, facts)
     kept, premised, unfolds, recorded, compared, homes = {}, {}, {}, set(), set(), {}
     listed = listed_premises(policy) | dict.fromkeys(cited)
@@ -2059,14 +2064,22 @@ def listed_premises(policy: dict, domain: bool = True) -> dict:
     return (d if isinstance(d, dict) else {}) | (o if isinstance(o, dict) else {}) | (a if isinstance(a, dict) else {})
 
 
+def assumption_homes(policy: dict) -> list[str]:
+    """The modules `assumptions_module` names, where a named assumption is declared (or in a module under one): one
+    module, or a list of them, as in `Security/Properties`, whose assumptions stated over the code can't sit in the
+    spec's."""
+    home = policy.get("assumptions_module")
+    return [home] if isinstance(home, str) else [h for h in home if isinstance(h, str)] if isinstance(home, list) else []
+
+
 def read_props(pin: dict, policy: dict) -> set[str]:
-    """The `Prop`s of `assumptions_module`, of an `Assumptions` module or of one under `shape.premises` that a statement
-    reads (``pin``'s `reads`): what its `premises.reads` record holds, less what it takes. Each is recorded with its
-    digest there, so a statement may take one inside a definition, and a conjecture may be one a guarantee refutes."""
-    home, held = policy.get("assumptions_module"), (policy.get("shape") or {}).get("premises")
+    """The `Prop`s of an `assumptions_module` module, of an `Assumptions` module or of one under `shape.premises` that a
+    statement reads (``pin``'s `reads`): what its `premises.reads` record holds, less what it takes. Each is recorded with
+    its digest there, so a statement may take one inside a definition, and a conjecture may be one a guarantee refutes."""
+    declared_in, held = assumption_homes(policy), (policy.get("shape") or {}).get("premises")
     held = [m for m in held if isinstance(m, str)] if isinstance(held, list) else []
     return {e["name"] for e in pin.get("reads") or [] if e.get("name") and (
-        (m := e.get("module") or "") == home or "Assumptions" in m.split(".") or under(held, m))}
+        (m := e.get("module") or "") in declared_in or "Assumptions" in m.split(".") or under(held, m))}
 
 
 def stated_by(policy: dict, facts: dict) -> dict[str, str]:
@@ -2749,8 +2762,8 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     """The `assumptions` and `open` records as the build has them, the failures, {premise: the guarantees that take it}
     (``premised`` with each alias of listed premises as those), {premise: its kind, `assumptions`, `domain` or `open`},
     which each guarantee's record lists as its `premises`, and the `domain` records.
-    A named assumption is declared in the module `assumptions_module` names or one under it (`Definitions.Assumptions`, the real
-    ones: a hash's collision resistance, the auditor's devices).  A domain hypothesis is part of what its guarantee says
+    A named assumption is declared in a module `assumptions_module` names (one, or a list of them) or one under it
+    (`Definitions.Assumptions`, the real ones: a hash's collision resistance, the auditor's devices).  A domain hypothesis is part of what its guarantee says
     (a domain or scope, an event a lemma conditions on, a specification the deployed instance meets), listed under
     `domain` with `why`, one line naming what it restricts, and owing no issue; one that is another listed guarantee's
     statement (``cited``, `stated_by`) is one citing it (`cites`), which an update writes.  Where a guarantee that takes
@@ -2781,7 +2794,8 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     premised in its place.  Under an update, a premise that doesn't unfold counts as listed, since the update adds it."""
     assumed, opened, fails, out, opens = policy.get("assumptions", {}), policy.get("open", {}), [], {}, {}
     domained, domains, cited, cover = policy.get("domain", {}), {}, cited or {}, cover or {}
-    home, seed = policy.get("assumptions_module"), policy.get("open_seed")
+    declared_in, seed = assumption_homes(policy), policy.get("open_seed")
+    home = " or ".join(declared_in)
     if not isinstance(opened, dict):
         fails.append(Failure("open.form", None, "open: `open` is {premise: {owner, digest[, issue], due}}"))
         opened = {}
@@ -2830,7 +2844,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
         return read[d][0] if d in read else walked[d][0] if d in walked else (homes or {}).get(d)
 
     def real(d: str) -> bool:
-        return home is not None and (m := module(d)) is not None and under([home], m)
+        return (m := module(d)) is not None and under(declared_in, m)
 
     moved = sorted(a for a in assumed if (a in opened or a in domained) and not real(a))
     if not update:
@@ -2926,8 +2940,9 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                                      f"or move its entry to `open` with the issue that discharges it and its due date, or "
                                      f"to `domain` with a one-line `why` if it is part of what the guarantee says"))
             elif kind == "assumptions":
-                fails.append(Failure(f"{section}.declared", a, f"{section}: {a} is declared in {home}, so it is a named "
-                                     f"assumption: run `check.py --update`, which moves its entry to `assumptions`"))
+                fails.append(Failure(f"{section}.declared", a, f"{section}: {a} is declared in "
+                                     f"{' or '.join(h for h in declared_in if under([h], m))}, so it is a named assumption: run "
+                                     f"`check.py --update`, which moves its entry to `assumptions`"))
             else:
                 fails.append(Failure("open.cited", a, f"open: {a} is the statement of {cited[a]}, another listed "
                                      f"guarantee, so it is a domain hypothesis citing it: run `check.py --update`, which "
@@ -3114,9 +3129,16 @@ def repaired(policy: dict, facts: dict, files: dict[str, str], fails: list[str],
     return out
 
 
-def bookkeeping_warnings(fails: list[str], lock: dict, ticket: dict, was: dict | None = None) -> list[str]:
-    """One line for each repair `repaired` made of ``fails`` (their codes in `BOOKKEEPING`) in ``lock``: the entry, its owner,
-    what the repair did and the failure's code; a premise dropped from `trust_gap` is named from ``was``, the lock before."""
+def handles(*owners) -> list[str]:
+    """Those of ``owners`` that are handles (`OWNER`), each once, sorted: a report's `owners` holds nothing else."""
+    return sorted({o for o in owners if isinstance(o, str) and OWNER.fullmatch(o)})
+
+
+def bookkeeping_repairs(fails: list[str], lock: dict, ticket: dict, was: dict | None = None) -> list[dict]:
+    """Each repair `repaired` made of ``fails`` (their codes in `BOOKKEEPING`) in ``lock``, as the report lists it (`repairs`)
+    for whoever rings its owner: the `entry` (None: the lock), the failure's `code`, its `owners` (the handle its line
+    names, none for an entry without an owner), and the `line` the audit prints: the entry, its owner, what the repair did
+    and the code; a premise dropped from `trust_gap` is named from ``was``, the lock before."""
     def dropped(g: str) -> str:
         before, now = ((x.get("trust_gap") or {}).get(g) or [] for x in (was or {}, lock))
         return ", ".join(sorted(set(before) - set(now))) or "what it no longer rests on"
@@ -3149,8 +3171,14 @@ def bookkeeping_warnings(fails: list[str], lock: dict, ticket: dict, was: dict |
             what = "dropped: no guarantee has it"
         else:
             what = f"owner set to {owner(e)}"
-        out.append(f"bookkeeping: {e or 'the lock'} ({owner(e)}): {what} ({c})")
+        out.append({"entry": e, "code": c, "owners": handles(owner(e)),
+                    "line": f"bookkeeping: {e or 'the lock'} ({owner(e)}): {what} ({c})"})
     return out
+
+
+def bookkeeping_warnings(fails: list[str], lock: dict, ticket: dict, was: dict | None = None) -> list[str]:
+    """One line for each repair `repaired` made of ``fails`` (`bookkeeping_repairs`' lines)."""
+    return [r["line"] for r in bookkeeping_repairs(fails, lock, ticket, was)]
 
 
 #: the premises of a guarantee's record its trust gap counts: the named assumptions and the open premises it takes. A domain
@@ -3928,6 +3956,25 @@ MOVED_READS = "definitions read in another module or under another name: the sam
 OWNED = "who answers for it, not what it says"
 
 
+class Change(str):
+    """A line of a review (`review`) that heads one change to what a guarantee says: its text as the review prints it, with
+    the lock's section the change is in (``kind``: `guarantees`; `reads`, a definition the guarantees read; `assumptions`,
+    `domain` or `open`, a listed premise; `verifier`), the ``entry`` it is about, and the guarantees that read a
+    definition in the build (``readers``).  The report's `changes` reads these, never the text (as what a Lean check
+    settles reads a `Failure`'s code), so a reworded line names the same owners."""
+    kind: str
+    entry: str
+    readers: tuple[str, ...]
+
+    def __new__(cls, kind: str, entry: str, text: str, readers=()) -> Change:
+        self = super().__new__(cls, text)
+        self.kind, self.entry, self.readers = kind, entry, tuple(readers)
+        return self
+
+    def __reduce__(self):
+        return Change, (self.kind, self.entry, str(self), self.readers)
+
+
 def four_name_failures(policy: dict, facts: dict) -> list[Failure]:
     """The four-name rule, for a lock that lists `four_names`: it lists the namespace root of every guarantee, and each
     guarantee is `X.SecurityProofs.G : X.Guarantees.G` (`four_named`) but a witness (`claim_witnesses`), a generic claim's
@@ -4046,7 +4093,8 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
             how = ", ".join([f"moved from {o}"] * (o != name) + [f"lifted into {head}"] * bool(head))
             out.append(f"guarantee {name}: {how + ': ' if how else ''}{MOVED if mv else LIFTED}")
             continue
-        out.append(f"guarantee {name}: {'new' if not a else 'removed' if not b else 'changed'}" + (f" (moved from {o})" if o != name else ""))
+        out.append(Change("guarantees", name, f"guarantee {name}: {'new' if not a else 'removed' if not b else 'changed'}"
+                          + (f" (moved from {o})" if o != name else "")))
         out += ["  before:", *(f"    {s}" for s in a.get("signature", []))] if a else []
         out += ["  after:", *(f"    {s}" for s in b.get("signature", []))] if b else []
         if a and b and a.get("assumptions") != b.get("assumptions"):
@@ -4095,8 +4143,9 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
             continue
         state = "new" if not x else "gone" if not y else "changed" if x["hash"] is not None else "in a changed module"
         z = y or x
-        out.append(f"definition {y['name'] if y else d} ({z['module']})" + (f", was {d} ({x['module']})" if away else "") +
-                   (f", read by {', '.join(y['guarantees'])}" if y else "") + f": {state}")
+        out.append(Change("reads", y["name"] if y else d,
+                          f"definition {y['name'] if y else d} ({z['module']})" + (f", was {d} ({x['module']})" if away else "")
+                          + (f", read by {', '.join(y['guarantees'])}" if y else "") + f": {state}", y["guarantees"] if y else ()))
         span, src = (spans.get(y["name"]), sources.get(y["module"])) if y else (None, None)
         if span and src is not None and src.exists():
             text = src.read_text().splitlines()[span[0] - 1:span[1]]
@@ -4110,9 +4159,9 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     out += assumption_changes(old, new)
     before, after = ((d.get("verifier") or {}).get("allow", []) for d in (old, new))
     where = {e["name"]: f" (@[{kind}], in {e.get('module')})" for kind, e in compiled(facts.get("verifier") or {})}
-    out += [f"verifier: allowed {a}{where.get(a, '')}: compiled code no proof sees, now on the verifier's path"
-            for a in after if a not in before]
-    out += [f"verifier: no longer allowed {a}: off the verifier's path" for a in before if a not in after]
+    out += [Change("verifier", a, f"verifier: allowed {a}{where.get(a, '')}: compiled code no proof sees, now on the "
+                   f"verifier's path") for a in after if a not in before]
+    out += [Change("verifier", a, f"verifier: no longer allowed {a}: off the verifier's path") for a in before if a not in after]
     return out
 
 
@@ -4137,20 +4186,20 @@ def assumption_changes(old: dict, new: dict) -> list[str]:
         k = kind(new, a)
         what = {"assumptions": "assumption", "domain": "domain hypothesis", "open": "open premise"}[k]
         if a in was and h and h != before and a not in held:
-            out.append(f"{what} {a}: " + ("changed (its statement or a definition it reads)" if before else
-                                          "recorded: its statement and the definitions it reads, digested"))
+            out.append(Change(k, a, f"{what} {a}: " + ("changed (its statement or a definition it reads)" if before else
+                                                       "recorded: its statement and the definitions it reads, digested")))
         if a in was and k != (b := kind(old, a)):
             now_is = f"open, {rec.get('issue') or 'no issue'} due {rec.get('due')}" if k == "open" else names[k] + (
                 f": {rec.get('why')}" if k == "domain" else "")
-            out.append(f"{what} {a}: {now_is} (was {names[b]})")
+            out.append(Change(k, a, f"{what} {a}: {now_is} (was {names[b]})"))
         elif k == "domain" and a in was and ((rec or {}).get("why"), (rec or {}).get("cites")) != (
                 (was[a] or {}).get("why"), (was[a] or {}).get("cites")):
-            out.append(f"domain hypothesis {a}: {rec.get('why')}" + (f", citing {rec['cites']}" if rec.get("cites") else "")
-                       + f" (was {(was[a] or {}).get('why')})")
+            out.append(Change(k, a, f"domain hypothesis {a}: {rec.get('why')}"
+                              + (f", citing {rec['cites']}" if rec.get("cites") else "") + f" (was {(was[a] or {}).get('why')})"))
         elif a in opened and a in before_open and (rec.get("issue"), rec.get("due")) != (
                 (was[a] or {}).get("issue"), (was[a] or {}).get("due")):
-            out.append(f"open premise {a}: {rec.get('issue') or 'no issue'} due {rec.get('due')} (was "
-                       f"{(was[a] or {}).get('issue') or 'no issue'} due {(was[a] or {}).get('due')})")
+            out.append(Change("open", a, f"open premise {a}: {rec.get('issue') or 'no issue'} due {rec.get('due')} (was "
+                              f"{(was[a] or {}).get('issue') or 'no issue'} due {(was[a] or {}).get('due')})"))
     return out
 
 
@@ -4159,6 +4208,25 @@ def statement_changes(notes: list[str]) -> list[str]:
     definitions are unchanged (printed differently, rehashed with SHA-256 while the 32-bit hashes still match, moved or
     lifted), and a changed owner."""
     return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, REGROUPED_OWN, MOVED, LIFTED, MOVED_READS, OWNED))]
+
+
+def changes(notes: list[str], old: dict, new: dict) -> list[dict]:
+    """The lines of a review of ``old`` against ``new`` that head a statement change (`statement_changes`, each a `Change`),
+    as the report lists them (`changes`) for whoever rings their owners, in the review's order: the `entry`, its `kind`
+    (`Change`), its `owners` and the `line`.  The owners are the handles the lock names: a guarantee's or a listed
+    premise's `owner` in ``new``, else in ``old`` (an entry ``new`` drops), and a definition's are its readers' (one that
+    is gone has no reader).  An entry with none of those has the lock's `default_owner`, else no owner."""
+    def owner(name: str):
+        for lock in (new, old):
+            for section in ("open", "assumptions", "domain", "guarantees"):
+                held = lock.get(section)
+                if isinstance(rec := held.get(name) if isinstance(held, dict) else None, dict) and rec.get("owner"):
+                    return rec["owner"]
+        return None
+
+    return [{"entry": n.entry, "kind": n.kind,
+             "owners": handles(*map(owner, n.readers if n.kind == "reads" else (n.entry,))) or handles(new.get("default_owner")),
+             "line": str(n)} for n in statement_changes(notes) if isinstance(n, Change)]
 
 
 def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
@@ -4275,10 +4343,21 @@ SAMPLED_OUTPUTS = ("olean", "ilean", "olean.server", "olean.private", "ir", "ir.
 SAMPLED_BESIDE = ("trace", "setup.json", *(f"{o}.hash" for o in SAMPLED_OUTPUTS))
 #: the outputs that keep the path of the module's source (a message's), compared as object graphs when their bytes differ
 PATH_PARTS = ("olean.server", "olean.private")
-#: (its package's build, module) of each module a build of this process compiled (`sampled_recompile`): a dependent's
-#: build reuses what its path dependencies' audits compiled, which without the sandbox is as cold as its own
+#: (its package's build, module) of each module a build step of this process compiled (`note_compiled`): another
+#: package's build reuses what this run compiled into a path dependency's build, which without the sandbox is as cold as
+#: its own (`sampled_recompile`)
 RUN_COMPILED: set[tuple[Path, str]] = set()
 _RUN_COMPILED_LOCK = threading.Lock()
+
+
+def note_compiled(keyed: dict, log: Path) -> None:
+    """Add each module of ``keyed`` (`module_keys.keys`) that the build step whose output is ``log`` compiled
+    (`build_seconds`) to `RUN_COMPILED`, a failed step's too. The caller still holds the step's `writing`, so once it is
+    released the set holds every module this run compiled into those builds, before another package's build can find
+    them up to date and compile nothing."""
+    got = {(keyed[m].package.build().resolve(), m) for m in build_seconds([log]) if m in keyed}
+    with _RUN_COMPILED_LOCK:
+        RUN_COMPILED.update(got)
 
 
 def sampled_file(mk, build: Path, mod: str, ext: str) -> Path:
@@ -4318,7 +4397,6 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     s = time.monotonic()
     keyed = mk.keys(pkg, roots)
     with _RUN_COMPILED_LOCK:
-        RUN_COMPILED.update((k.package.build().resolve(), m) for m, k in keyed.items() if m in built)
         cold = set(RUN_COMPILED)
     pop = sorted(m for m, k in keyed.items()
                  if m not in built and sampled_file(mk, k.package.build(), m, "trace").is_file())
@@ -5291,7 +5369,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     `--bookkeeping warn`, drive's lock run) regenerates a failing package's lock with its bookkeeping repaired (`repaired`,
     on `bookkeeping_ticket`) and judges the policy's checks again on that lock: the package fails on what fails there and
     on every failure those checks don't make (the build, the replay, the scans, the tests), else its report names the lock
-    (`regenerated`) and its repairs (`bookkeeping`, `bookkeeping_warnings`).  ``facts_out`` writes the stage-A facts
+    (`regenerated`) and its repairs (`bookkeeping`, their lines; `repairs`, each with its entry, code and owners:
+    `bookkeeping_repairs`).  A report that names a regenerated lock, repaired or not, lists what it changes in what a
+    guarantee says with each entry's owners (`changes`).  ``facts_out`` writes the stage-A facts
     document there (`facts_document`, `write_facts_document`): the facts and the source and dependency findings a later
     `--facts-from` (`audit_from_facts`) judges from, so the two give the same verdict and record.  ``facts_cache`` (a
     directory, `--facts-only` with the replay and the tests off) writes it instead under its content address
@@ -5327,6 +5407,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         if n is not None:
             rep["build_threads"] = n
         staged: dict[tuple[str, str], str] = {}
+        keyed: dict | None = None
         pipe = Pipeline(pkg, policy, rep["toolchain"], work, replay_cache, closure, log=log) \
             if pipelined(pkg, build, replay, replay_cache, lifts) else None
         try:
@@ -5343,11 +5424,17 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                     continue
                 if callable(argv) and not (argv := argv()):
                     continue
+                if argv is not None and keyed is None:
+                    keyed = sibling("module_keys").keys(pkg, policy["roots"])
                 with contextlib.nullcontext() if argv is None else writing(pkg, log):
                     s = time.monotonic()
-                    rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else \
-                        run(argv, pkg, work / f"{step}.log") if pipe is None else \
-                        run(argv, pkg, work / f"{step}.log", on_line=pipe.line)
+                    try:
+                        rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else \
+                            run(argv, pkg, work / f"{step}.log") if pipe is None else \
+                            run(argv, pkg, work / f"{step}.log", on_line=pipe.line)
+                    finally:
+                        if argv is not None:
+                            note_compiled(keyed, work / f"{step}.log")
                     rep["seconds"][step] = round(time.monotonic() - s, 1)
                 if rc:
                     rep["failures"].append(Failure(step, None, f"{step}: exit {rc}\n{text[-3000:]}"))
@@ -5588,8 +5675,9 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
             dump(work, fixed)
             notes = review(policy, fixed, facts, sources())
             (work / "review.txt").write_text("\n".join(notes) + "\n")
+            repairs = bookkeeping_repairs(fails, fixed, ticket, policy)
             rep |= {"review": notes, "statement_changes": bool(statement_changes(notes)), "regenerated": str(work / POLICY),
-                    "bookkeeping": bookkeeping_warnings(fails, fixed, ticket, policy)}
+                    "changes": changes(notes, policy, fixed), "bookkeeping": [r["line"] for r in repairs], "repairs": repairs}
             log(f"audit: {pkg}/{POLICY}: passes on its lock with the bookkeeping repaired, {work / POLICY}, which drive "
                 f"commits: {len(rep['bookkeeping'])} repairs, each a warning")
     elif update:
@@ -5598,7 +5686,8 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
         dump(work, regen)
         notes = review(policy, regen, facts, sources())
         (work / "review.txt").write_text("\n".join(notes) + "\n")
-        rep |= {"review": notes, "statement_changes": bool(statement_changes(notes)), "regenerated": str(work / POLICY)}
+        rep |= {"review": notes, "statement_changes": bool(statement_changes(notes)), "regenerated": str(work / POLICY),
+                "changes": changes(notes, policy, regen)}
         log(f"audit: {pkg}/{POLICY}: every failure is a record difference; {work / POLICY} is the record `--update` writes")
     if update and new != policy:
         dump(pkg, new)

@@ -140,6 +140,11 @@ def check {W R : Type} (S : ZkServer W R) (x : Msg) (j s : ℕ) (w : W) (ρ : R)
   | .masked, some v => S.rel x j s w ρ h cp κ v
   | .masked, none => false
 
+-- `check`'s equation lemmas are made here, on the command thread: Lean names a binder of theirs in the hygiene context
+-- of the declaration that first asks for them, and the theorems below that unfold `check` elaborate in parallel, so
+-- without this, whichever of them asks first decides the module's `.olean`.
+example := @check.eq_1
+
 /-- The server does not refuse the round after `h`, and every slot of it passes its check. -/
 def pass {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
     (h : List (Msg × Msg)) : Bool :=

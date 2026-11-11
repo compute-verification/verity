@@ -65,6 +65,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import probe as P  # noqa: E402
 import sparse as S  # noqa: E402
+
+# isort: split
+# verity_config is importable once probe has put tools/config on sys.path
 from verity_config.settings import SHARED  # noqa: E402
 
 SOURCE = "w1_price.cu"
@@ -140,7 +143,7 @@ def flop_per_mma(row: str) -> int:
     return 2 * 16 * 8 * ROWS[row][1]
 
 
-def _bytes(rng, fmt: str, shape) -> np.ndarray:
+def _bytes(rng: np.random.Generator, fmt: str, shape: int | tuple[int, ...]) -> np.ndarray:
     if fmt == "e2m1":  # a code at bits [2,6) of its 8-bit container
         return rng.integers(0, 16, size=shape, dtype=np.uint32) << 2
     if fmt == "e4m3":
@@ -177,7 +180,7 @@ def fragments(row: str, nwarps: int, seed: int) -> np.ndarray:
     return f
 
 
-def _f32_words(rng, shape, lo: int, hi: int, signed: bool) -> np.ndarray:
+def _f32_words(rng: np.random.Generator, shape: int | tuple[int, ...], lo: int, hi: int, signed: bool) -> np.ndarray:
     v = rng.uniform(1.0, 2.0, size=shape) * np.exp2(rng.integers(lo, hi, size=shape))
     if signed:
         v *= rng.choice([-1.0, 1.0], size=shape)
@@ -220,7 +223,7 @@ def loops_of(text: str) -> dict:
     out: dict = {}
     fn, ins = None, []
 
-    def flush():
+    def flush() -> None:
         if fn is None:
             return
         at = {a: i for i, (a, _) in enumerate(ins)}
@@ -294,7 +297,7 @@ def sass_gate(so: Path, rows: list[str], scale_update: bool) -> dict:
 
 
 class W1Device:
-    def __init__(self, so: Path):
+    def __init__(self, so: Path) -> None:
         self.lib = lib = ctypes.CDLL(str(so))
         V, I, L = ctypes.c_void_p, ctypes.c_int, ctypes.c_longlong
         lib.w1_device.argtypes = [ctypes.POINTER(I)] * 4
@@ -337,7 +340,8 @@ class W1Device:
         if rc:
             raise RuntimeError(f"w1_setup rc={rc}")
 
-    def run(self, kind: int, mode: int, slot: int, nblocks: int, wpb: int, iters: int, want: bool = False):
+    def run(self, kind: int, mode: int, slot: int, nblocks: int, wpb: int, iters: int,
+            want: bool = False) -> tuple[float, np.ndarray | None, np.ndarray]:
         ms = ctypes.c_float()
         sink = np.zeros(nblocks * wpb * 32 * 4, np.float32) if want else None
         cyc = np.zeros(nblocks, np.int64)
@@ -346,7 +350,7 @@ class W1Device:
             raise RuntimeError(f"w1_run(kind={kind}, mode={mode}) rc={rc}")
         return ms.value, sink, cyc
 
-    def latency(self, kind: int, slot: int, iters: int):
+    def latency(self, kind: int, slot: int, iters: int) -> tuple[np.ndarray, int]:
         sink = np.zeros(32 * 4, np.float32)
         cyc = np.zeros(1, np.int64)
         rc = self.lib.w1_latency(kind, slot, iters, sink.ctypes.data, cyc.ctypes.data)
@@ -367,7 +371,8 @@ class W1Device:
         if rc:
             raise RuntimeError(f"w1_cvt_setup rc={rc}")
 
-    def cvt_run(self, op: int, slot: int, nblocks: int, tpb: int, iters: int, want: bool = False):
+    def cvt_run(self, op: int, slot: int, nblocks: int, tpb: int, iters: int,
+                want: bool = False) -> tuple[float, np.ndarray | None, np.ndarray]:
         ms = ctypes.c_float()
         sink = np.zeros(nblocks * tpb, np.uint32) if want else None
         cyc = np.zeros(nblocks, np.int64)
@@ -391,22 +396,23 @@ class FakeW1:
         return {"device": "FAKE SILICON", "compute_capability": "12.0", "driver": None, "gpu_uuid": "GPU-fake", "backend": "fake",
                 "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
-    def clocks(self, uuid):
+    def clocks(self, uuid: str | None) -> None:
         return None
 
     def device(self) -> dict:
         return {"sms": self.SMS, "max_threads_per_sm": 1536, "cc": "12.0"}
 
-    def occupancy(self, kind, mode, wpb) -> int:
+    def occupancy(self, kind: int, mode: int, wpb: int) -> int:
         return 4
 
-    def setup(self, frags, nwarps, nslots, nblocks) -> None:
+    def setup(self, frags: np.ndarray, nwarps: int, nslots: int, nblocks: int) -> None:
         self._frags = frags
 
     def _cpm(self, kind: int) -> int:
         return 16 if kind in (9, 10) else 8 if kind in (0, 1) else 4
 
-    def run(self, kind, mode, slot, nblocks, wpb, iters, want=False):
+    def run(self, kind: int, mode: int, slot: int, nblocks: int, wpb: int, iters: int,
+            want: bool = False) -> tuple[float, np.ndarray | None, np.ndarray]:
         warps_per_sm = nblocks * wpb / self.SMS
         cycles = iters * BODY * warps_per_sm * self._cpm(kind) * (1.01 if mode else 1.0)
         ms = cycles / (self.MHZ * 1e3)
@@ -418,16 +424,17 @@ class FakeW1:
         """Blocks sharing an SM finish at different times, as on silicon: only the longest span is the launch's."""
         return (np.linspace(0.6, 1.0, nblocks) * cycles).astype(np.int64)
 
-    def latency(self, kind, slot, iters):
+    def latency(self, kind: int, slot: int, iters: int) -> tuple[np.ndarray, int]:
         return np.zeros(128, np.float32), iters * LAT_UNROLL * (20 if kind in (0, 1) else 16)
 
-    def cvt_occupancy(self, op, tpb) -> int:
+    def cvt_occupancy(self, op: int, tpb: int) -> int:
         return 6
 
-    def cvt_setup(self, init, nthreads, nslots, nblocks) -> None:
+    def cvt_setup(self, init: np.ndarray, nthreads: int, nslots: int, nblocks: int) -> None:
         self._init = init
 
-    def cvt_run(self, op, slot, nblocks, tpb, iters, want=False):
+    def cvt_run(self, op: int, slot: int, nblocks: int, tpb: int, iters: int,
+                want: bool = False) -> tuple[float, np.ndarray | None, np.ndarray]:
         per_clk = 16.0 if op in (0, 1, 2, 3, 4, 7) else 64.0  # thread-ops per SM per clock (invented)
         steps = iters * CV_CHAINS * CV_UNROLL * nblocks * tpb / self.SMS
         cycles = steps / per_clk
@@ -439,7 +446,7 @@ class FakeW1:
         pass
 
 
-def _median(xs):
+def _median(xs: list[float]) -> float | None:
     return statistics.median(xs) if xs else None
 
 
@@ -537,7 +544,8 @@ def main(argv: list[str] | None = None) -> int:
         record["op_inputs_sha256"] = hashlib.sha256(init.tobytes()).hexdigest()
         dev.cvt_setup(init, op_blocks * tpb, len(ops), op_blocks)
 
-    def launch(item, iters, want=False):
+    def launch(item: tuple[str, str, int | None], iters: int,
+               want: bool = False) -> tuple[float, np.ndarray | None, np.ndarray]:
         kind, name, mode = item
         if kind == "mma":
             return dev.run(ROWS[name][0], mode, slot[name], nblocks, wpb, iters, want=want)
@@ -628,7 +636,7 @@ def main(argv: list[str] | None = None) -> int:
     return finish(out, record, failures, args, per_variant, t_all)
 
 
-def item_key(item) -> str:
+def item_key(item: tuple[str, str, int | None]) -> str:
     return f"{item[1]}/{MODES[item[2]]}" if item[0] == "mma" else f"op/{item[1]}"
 
 
@@ -658,7 +666,8 @@ def fp8_prices(per_variant: dict, per_op: dict) -> dict:
     return out
 
 
-def finish(out: Path, record: dict, failures: list[str], args, per_variant: dict | None, t_all: float) -> int:
+def finish(out: Path, record: dict, failures: list[str], args: argparse.Namespace, per_variant: dict | None,
+           t_all: float) -> int:
     record["failures"] = failures
     record["elapsed_s"] = time.time() - t_all
     (out / "w1_price.json").write_text(json.dumps(record, indent=1, default=str) + "\n")

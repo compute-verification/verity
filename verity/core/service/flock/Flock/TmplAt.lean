@@ -143,16 +143,17 @@ theorem TmplUnit.readKnown_eq (t : Tmpl.Tmpl) (mode : Tmpl.Mode) (wf : t.wellFor
   unfold readKnown read
   simp only [dite_eq_left wf, Tmpl.unrollOk_eq_rest wf ord]
 
-/-- `TmplUnit.read` of the template `Tmpl.parse` reads off `lines`, without repeating the checks the parse ends with
-(`Tmpl.parse_checked`, `readParsed_eq`). -/
-def TmplUnit.readParsed (lines : Array String) (mode : Tmpl.Mode) : V TmplUnit :=
-  match h : Tmpl.parse lines with
-  | .ok t => TmplUnit.readKnown t mode (Tmpl.parse_checked h).2 (Tmpl.parse_checked h).1
+/-- `TmplUnit.read` of the template `Tmpl.parseAt` reads off its lines' accessors, without repeating the checks the parse
+ends with (`Tmpl.parseAt_checked`, `readParsedAt_eq`). -/
+def TmplUnit.readParsedAt (n : Nat) (line : Nat → String) (nums : Nat → Option (Array Nat)) (mode : Tmpl.Mode) :
+    V TmplUnit :=
+  match h : Tmpl.parseAt n line nums with
+  | .ok t => TmplUnit.readKnown t mode (Tmpl.parseAt_checked h).2 (Tmpl.parseAt_checked h).1
   | .error e => throw e
 
-theorem TmplUnit.readParsed_eq (lines : Array String) (mode : Tmpl.Mode) :
-    TmplUnit.readParsed lines mode = (do TmplUnit.read (← Tmpl.parse lines) mode) := by
-  unfold readParsed
+theorem TmplUnit.readParsedAt_eq (n : Nat) (line : Nat → String) (nums : Nat → Option (Array Nat)) (mode : Tmpl.Mode) :
+    TmplUnit.readParsedAt n line nums mode = (do TmplUnit.read (← Tmpl.parseAt n line nums) mode) := by
+  unfold readParsedAt
   split
   · rename_i t h
     rw [readKnown_eq, h]
