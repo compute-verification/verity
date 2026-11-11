@@ -27,6 +27,7 @@ public import Proofs.Flock.SamplingGeneric.Complete
 public import Proofs.Flock.SamplingGeneric.TwoRankin
 public import Proofs.Flock.SamplingGeneric.TwoReg
 public import Proofs.Flock.SamplingGeneric.TwoRegMiss
+public import Proofs.Flock.SamplingGeneric.TwoRegX
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -99,7 +100,10 @@ coin (`SamplingGeneric/TwoCap.lean`: `CompiledTwo.FregTwo_eq`, `CompiledTwo.Freg
 `r₂` the run's sample misses it with probability at most `(1 − r₁·r₂)^{|W|}`, `W` the replay blocks wrong at the
 committed boundary trace, and the committed form's event gives its threshold form and the headline
 (`SamplingGeneric/TwoRegMiss.lean`: **`CompilerKSRegTwo`**, **`CompilerMissTwo`** and **`CompilerHeadlineTwo`** are
-proved, `CompiledTwo.ksRegTwo_of_event`).
+proved, `CompiledTwo.ksRegTwo_of_event`). Those lemmas read the boundary trace as a parameter, so the same three hold
+with the boundary read at the statement, where the replay blocks wrong at the boundary are one set at every tape
+(`SamplingGeneric/TwoRegX.lean`: **`CompilerKSRegTwoX`**, **`CompilerMissTwoX`** and **`CompilerHeadlineTwoX`** are
+proved).
 -/
 
 @[expose] public section
