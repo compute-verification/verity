@@ -29,10 +29,13 @@ A scratch file, never merged, beside `Proofs.Properties.Nci.RecordAttack`.
   compute: the decoder keeps its definitions in a hash map. Every other clause of `Served` is proved.
 * **One unit.** `served_one`: the record of no wire over a Program of one input gate and one unit that reads it lays
   out the circuit of those two gates, given that the wires check passes the unit's wiring (`check_one`, through the
-  kernel) and given the decoder's output on that Program as `OneUnit` states it, gate by gate. With the unit's row
-  held, θ is the input gate (`served_one_held`) and the block reads no fresh bit (`fresh_one_held`); with nothing
-  held it reads sixteen (`served_one_fresh`, `fresh_one`). The record's text is the same in both, and registers
-  nothing.
+  kernel, its order stated: the kernel does not unfold the order the check makes where none is stated) and given the
+  decoder's output on that Program as `OneUnit` states it, gate by gate. With the unit's row held, θ is the input
+  gate (`served_one_held`) and the block reads no fresh bit (`fresh_one_held`); with nothing held it reads sixteen
+  (`served_one_fresh`, `fresh_one`). The record's text is the same in both, and registers nothing.
+* **What the summary counts.** `counts_one_checked`: on that one text, the check that holds the row counts every
+  block at no fresh bit, in every circuit the record lays out (`served_one_shape`), and the check that holds nothing
+  does not.
 -/
 
 @[expose] public section
@@ -310,8 +313,8 @@ abbrev dOne : Verity.RegisteredCircuit := .ofPartition circuitOne ∅ (by decide
 abbrev dOneHeld : Verity.RegisteredCircuit := .ofPartition circuitOne {0} (by decide) 1 blocksOne
 
 /-- A check that reads every instance as the record of no wire over `programOne`, every unit in block 0, holding
-every row for the reason `hd`, or none. -/
-def formOne (hd : Option Held) : Form where
+every row for the reason `hd`, or none, its summary one gate and `fresh` fresh bits. -/
+def formOne (hd : Option Held) (fresh : ℕ) : Form where
   Case := Unit
   read := fun _ _ => .ok ()
   inst := fun _ =>
@@ -319,7 +322,7 @@ def formOne (hd : Option Held) : Form where
   wiring := fun _ => wiringOne
   slot := fun _ _ _ => some 0
   held := fun _ _ => hd
-  summarize := fun _ => ⟨1, 16⟩
+  summarize := fun _ => ⟨1, fresh⟩
   rate := fun _ _ _ _ => none
   layout := fun _ => none
 
@@ -562,27 +565,27 @@ theorem names_held {P : Prog} (h : OneUnit P) :
 
 /-- **One unit served, but for the decoder.** Given the decoder's output on `programOne` as `OneUnit` states it,
 the record of no wire lays out `circuitOne` in one block, θ the gates of the rows the check holds. -/
-theorem served_one (hd : Option Held) (θ : Finset (Fin circuitOne.N)) (hθ : ∀ g ∈ θ, circuitOne.isInput g = true)
-    {P : Prog} (hcheck : Spot.Wires.check wiringOne = .ok ⟨[], []⟩)
+theorem served_one (hd : Option Held) (n : ℕ) (θ : Finset (Fin circuitOne.N))
+    (hθ : ∀ g ∈ θ, circuitOne.isInput g = true) {P : Prog} (hcheck : Spot.Wires.check wiringOne = .ok ⟨[], []⟩)
     (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P)
     (hnames : Names P rsOne wiringOne (fun _ => hd.isSome) (D := circuitOne) (fun x => x.val) θ) :
-    Served (formOne hd) () (.ofPartition circuitOne θ hθ 1 blocksOne) := by
+    Served (formOne hd n) () (.ofPartition circuitOne θ hθ 1 blocksOne) := by
   obtain ⟨doc, hparse, hof⟩ := tie_of tie_empty
   exact ⟨P, doc, ⟨[], [], [], none⟩, ⟨[], []⟩, rsOne, fun x => x.val, hdec, hparse, hof, rfl, rfl, hcheck,
     h.ranges, templates_one h, ownRows_one h, aligned_none _ _ _, filled_none _ _ _, fun _ _ => rfl, laysOut_one h,
     hnames, divides_one h⟩
 
 /-- Nothing held: θ is empty. -/
-theorem served_one_fresh {P : Prog} (hcheck : Spot.Wires.check wiringOne = .ok ⟨[], []⟩)
-    (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P) : Served (formOne none) () dOne :=
-  served_one none ∅ (by decide) hcheck hdec h names_fresh
+theorem served_one_fresh (n : ℕ) {P : Prog} (hcheck : Spot.Wires.check wiringOne = .ok ⟨[], []⟩)
+    (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P) : Served (formOne none n) () dOne :=
+  served_one none n ∅ (by decide) hcheck hdec h names_fresh
 
 /-- The unit's row held as a registered read: θ is the input gate. The record's text is the one `served_one_fresh`
 reads, and registers nothing. -/
-theorem served_one_held {P : Prog} (hcheck : Spot.Wires.check wiringOne = .ok ⟨[], []⟩)
+theorem served_one_held (n : ℕ) {P : Prog} (hcheck : Spot.Wires.check wiringOne = .ok ⟨[], []⟩)
     (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P) :
-    Served (formOne (some (.read "w"))) () dOneHeld :=
-  served_one (some (.read "w")) {0} (by decide) hcheck hdec h (names_held h)
+    Served (formOne (some (.read "w")) n) () dOneHeld :=
+  served_one (some (.read "w")) n {0} (by decide) hcheck hdec h (names_held h)
 
 /-- Nothing held: the block reads sixteen fresh bits. -/
 theorem fresh_one : ∀ u, Nci.novelReads dOne (dOne.𝓘.gates u) = 16 := by decide
@@ -604,17 +607,114 @@ theorem not_meets_one (u : Fin dOne.n) : ¬ Meets dOne dOne.𝓘 1 0 u := by
   rw [fresh_one u] at h
   norm_num at h
 
+/-! ### What every circuit of the one unit's record is, and what its summary counts -/
+
+/-- Every circuit the one unit's record lays out: a computed gate is the Program's gate 1 and reads only its gate
+0, and θ is the gates of the rows the check holds. -/
+theorem served_one_shape (hd : Option Held) (n : ℕ) {P : Prog}
+    (hcheck : Spot.Wires.check wiringOne = .ok ⟨[], []⟩)
+    (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P) {d : Verity.RegisteredCircuit}
+    (hs : Served (formOne hd n) () d) :
+    ∃ at_ : Fin d.D.N → ℕ, Function.Injective at_ ∧ (∀ x, d.D.isInput x = false → at_ x = 1) ∧
+      (∀ x a, d.D.isInput x = false → a ∈ d.D.reads x → at_ a = 0) ∧
+      Names P rsOne wiringOne (fun _ => hd.isSome) at_ d.θ := by
+  obtain ⟨P', doc, W, S, rs, at_, hdec', -, -, -, -, hcheck', hev, -, -, -, -, -, hlay, hnames, -⟩ := hs
+  have hP : P' = P := Except.ok.inj (hdec'.symm.trans hdec)
+  subst hP
+  have hS : S = ⟨[], []⟩ := Except.ok.inj (hcheck'.symm.trans hcheck)
+  subst hS
+  have hrs : rs = rsOne := Except.ok.inj (hev.symm.trans h.ranges)
+  subst hrs
+  obtain ⟨hinj, hran, hgates⟩ := hlay
+  have key : ∀ x, d.D.isInput x = false → at_ x = 1 ∧ ∀ a, a ∈ d.D.reads x → at_ a = 0 := by
+    intro x hx
+    have hlt : at_ x < 2 := by
+      have hlt' := ((hran (at_ x)).1 ⟨x, rfl⟩).1
+      rw [h.rootGates] at hlt'
+      exact hlt'
+    obtain ⟨p, ops, sc, hgate, -, hin, hreads⟩ := hgates x
+    obtain ⟨p0, sc0, hgate0, -, hin0⟩ := h.gate0
+    obtain ⟨p1, sc1, hgate1, -, -⟩ := h.gate1
+    have h01 : at_ x = 0 ∨ at_ x = 1 := by omega
+    rcases h01 with h0 | h1
+    · rw [h0, hgate0] at hgate
+      have hp : p0 = p := (Prod.mk.inj (Except.ok.inj hgate)).1
+      subst hp
+      exact absurd ((hin.trans hin0).symm.trans hx) (by decide)
+    · refine ⟨h1, fun a ha => ?_⟩
+      rw [h1, hgate1] at hgate
+      have hops : (#[0, 0] : Array ℕ) = ops := (Prod.mk.inj (Prod.mk.inj (Except.ok.inj hgate)).2).1
+      subst hops
+      obtain ⟨o, ho, hl⟩ := (hreads a).1 ha
+      have ho0 : o = 0 := by simpa using ho
+      exact (lands_eq_of_not_wired (not_wired_none _ _ _ _) hl).trans ho0
+  exact ⟨at_, hinj, fun x hx => (key x hx).1, fun x a hx ha => (key x hx).2 a ha, hnames⟩
+
+/-- A gate of a block is computed. -/
+theorem computed_of_gates {d : Verity.RegisteredCircuit} {u : Fin d.n} {g : Fin d.D.N} (hg : g ∈ d.𝓘.gates u) :
+    d.D.isInput g = false := by
+  have hu : d.𝓘.unit g = some u := by simpa [Verity.Partition.gates] using hg
+  cases hi : d.D.isInput g with
+  | false => rfl
+  | true =>
+    have hnone := (d.𝓘.input_iff g).2 hi
+    rw [hnone] at hu
+    exact absurd hu (by simp)
+
+/-- **The summary counts every block, at no fresh bit**, where the check holds the unit's row: in every circuit the
+record lays out, the block reads no bit outside θ. The record's text registers nothing. -/
+theorem counts_one_held {P : Prog} (hcheck : Spot.Wires.check wiringOne = .ok ⟨[], []⟩)
+    (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P) :
+    Counts (formOne (some (.read "w")) 0) := by
+  intro j tr c _ d hs u
+  obtain ⟨at_, hinj, hcomp, hreads, hnames⟩ := served_one_shape _ _ hcheck hdec h hs
+  have hempty : d.D.into (d.𝓘.gates u) \ d.θ = ∅ := by
+    refine Finset.eq_empty_of_forall_notMem fun a ha => ?_
+    obtain ⟨hinto, hnot⟩ := Finset.mem_sdiff.1 ha
+    have hinto' : a ∉ d.𝓘.gates u ∧ ∃ g ∈ d.𝓘.gates u, a ∈ d.D.reads g := by
+      simpa [Verity.Circuit.into] using hinto
+    obtain ⟨-, g, hg, hag⟩ := hinto'
+    have ha0 : at_ a = 0 := hreads g a (computed_of_gates hg) hag
+    refine hnot ((hnames a).2 ⟨⟨"Copy_v1", 0, "x", 0⟩, 0, 0, 16, rfl, ?_⟩)
+    rw [ha0]
+    exact (rowLeaf_one h).2 ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  refine ⟨?_, ?_⟩
+  · have hzero : Nci.novelReads d (d.𝓘.gates u) = 0 := by
+      unfold Nci.novelReads
+      rw [hempty]
+      simp [Verity.Circuit.width]
+    exact (Nat.le_of_eq hzero).trans (Nat.zero_le _)
+  · rcases Finset.eq_empty_or_nonempty (d.𝓘.gates u) with he | ⟨g, hg⟩
+    · exact Or.inr he
+    · have hone : d.𝓘.gates u = {g} :=
+        Finset.eq_singleton_iff_unique_mem.2 ⟨hg, fun g' hg' =>
+          hinj ((hcomp g' (computed_of_gates hg')).trans (hcomp g (computed_of_gates hg)).symm)⟩
+      have hcard : (d.𝓘.gates u).card = 1 := by
+        rw [hone]
+        exact Finset.card_singleton g
+      exact Or.inl hcard
+
+/-- The check that holds nothing does not count at no fresh bit: the block reads sixteen. -/
+theorem not_counts_one {P : Prog} (hcheck : Spot.Wires.check wiringOne = .ok ⟨[], []⟩)
+    (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P) : ¬ Counts (formOne none 0) := by
+  intro hC
+  have h16 := (hC Json.null Json.null () rfl dOne (served_one_fresh 0 hcheck hdec h) ⟨0, Nat.zero_lt_one⟩).1
+  rw [fresh_one] at h16
+  exact absurd h16 (by decide)
+
 /-! ### The wires check on the one unit's wiring, through the kernel -/
 
 theorem check_one : Spot.Wires.check wiringOne = .ok ⟨[], []⟩ := ok_of_toOption (by decide +kernel)
 
-/-- The same wiring with no order stated. -/
-theorem check_one_default :
-    Spot.Wires.check { wiringOne with order := none } = .ok ⟨[], []⟩ := ok_of_toOption (by decide +kernel)
-
 /-- So one unit is served, given only the decoder's output. -/
 theorem served_one_checked {P : Prog} (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P) :
-    Served (formOne none) () dOne ∧ Served (formOne (some (.read "w"))) () dOneHeld :=
-  ⟨served_one_fresh check_one hdec h, served_one_held check_one hdec h⟩
+    Served (formOne none 16) () dOne ∧ Served (formOne (some (.read "w")) 0) () dOneHeld :=
+  ⟨served_one_fresh 16 check_one hdec h, served_one_held 0 check_one hdec h⟩
+
+/-- One Program and one record's text, which registers nothing: the check that holds the unit's row counts every
+block at no fresh bit, and the check that holds nothing does not. -/
+theorem counts_one_checked {P : Prog} (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P) :
+    Counts (formOne (some (.read "w")) 0) ∧ ¬ Counts (formOne none 0) :=
+  ⟨counts_one_held check_one hdec h, not_counts_one check_one hdec h⟩
 
 end NciCheck.Properties.Record.Attack
