@@ -16,9 +16,9 @@ What code outside this directory may use. Everything else here is internal.
 | `bash benchmarks/codec_tensor/step.sh`, with `MODEL` and `BATCH` | One decode step at HBM exhaustion on one GPU (`step.py`), after the codecs' tests and `reader.cu`'s gate. It writes its gates and timings as JSON to `$RESEARCH_RUN_DIR/out`. |
 
 Nothing outside `benchmarks/` reads this directory by its path. `reader.cu` leaves it inside
-`benchmarks/remote_session/session.cu`'s build.
+`verity/protocols/poub/prover/remote_session/session.cu`'s build.
 
-**Status: active.** `benchmarks/remote_session/session.cu` includes `reader.cu`; `benchmarks/kv_filler`,
+**Status: active.** `verity/protocols/poub/prover/remote_session/session.cu` includes `reader.cu`; `benchmarks/kv_filler`,
 `benchmarks/vllm_encoded` and `benchmarks/harness` build `wt.cu` and `reader.cu`; `benchmarks/pouw/served_h1` includes
 `sha512.cuh`; and the audit's `PROTOCOL.md` and vectors test name `sketch_receipt.py`. Decided by `rg codec_tensor` over
 `verity/`, `benchmarks/`, `demos/`, `tests/` and `adapters/`.

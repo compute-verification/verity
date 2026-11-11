@@ -59,7 +59,7 @@ import stage as S
 
 # isort: split
 # the store's package is importable once layout has put its import root on sys.path
-from p2_v1 import gpu
+from p2_store import gpu
 
 LAYERS = 52
 DEVICE = torch.device("cuda")

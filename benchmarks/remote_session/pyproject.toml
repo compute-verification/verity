@@ -30,8 +30,8 @@ untraced = [
     "tests/test_session.py",
     "tests/test_store_layout.py",
 ]
-inputs = ["benchmarks/remote_session/prover.py", "benchmarks/remote_session/device.py",
-          "benchmarks/remote_session/session.cu", "verity/__init__.py", "verity/settings.py", "verity/errors.py",
+inputs = ["verity/protocols/poub/prover/remote_session/prover.py", "verity/protocols/poub/prover/remote_session/device.py",
+          "verity/protocols/poub/prover/remote_session/session.cu", "verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/poub/verifier",
           "verity/hardware/record.py",
           "verity/circuits", "verity/commitments/crypto", "verity/commitments", "verity/commitments/randomness",
@@ -46,7 +46,7 @@ inputs = ["benchmarks/remote_session/prover.py", "benchmarks/remote_session/devi
           # a transcript replayed through both verifiers (the remote audit's lean/tests/replay.py, over the difftest)
           "verity/difftest/python",
           # engine.py's kv.so (test_store_layout imports it) opens through the benchmarks' one loader
-          "benchmarks/word_codec/cuda_lib.py",
+          "verity/protocols/poub/prover/word_codec/cuda_lib.py",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit
           "verity/protocols/spot",
           # auditor_line.py --boundary: the network certifiers' records of the gate node's boundary and their audit

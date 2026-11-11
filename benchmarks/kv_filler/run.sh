@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The KV filler's benchmark on one GPU (cwd = the source tree): builds the top-up (topup.cu, which includes fill.cu,
-# readers.cu and ../codec_tensor/sha512.cuh) and the KV codec at p512 (../word_codec/kv.cu) outside the lease, runs the
+# readers.cu and ../../verity/protocols/poub/prover/codec_tensor/sha512.cuh) and the KV codec at p512 (../../verity/protocols/poub/prover/word_codec/kv.cu) outside the lease, runs the
 # tests, then SCRIPT (default bench.py) under one gpu-lease 1 --wait --max-min MAXMIN (default 25) with ARGS. Results go
 # to $RESEARCH_RUN_DIR/out.
 #
@@ -31,7 +31,7 @@ FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -
 { nvcc --version; echo "flags: ${FLAGS[*]}"; } > "$O/build.txt"
 nvcc "${FLAGS[@]}" -o "$B/libtopup.so" $KF/topup.cu > "$O/topup.ptxas" 2>&1 &
 P1=$!
-nvcc "${FLAGS[@]}" -DKV_FIELD=512 -o "$B/libkv-p512.so" benchmarks/word_codec/kv.cu > "$O/kv-p512.ptxas" 2>&1 &
+nvcc "${FLAGS[@]}" -DKV_FIELD=512 -o "$B/libkv-p512.so" verity/protocols/poub/prover/word_codec/kv.cu > "$O/kv-p512.ptxas" 2>&1 &
 P2=$!
 STACK_ARGS=()
 if [ -n "${STACK:-}" ]; then
@@ -40,17 +40,17 @@ if [ -n "${STACK:-}" ]; then
   SF=${KV_FIELD:-1024}
   nvcc "${FLAGS[@]}" -DWT_FIELD="$SF" -DWT_MASK=1 -DWT_FOLD6=1 -DWT_RECEIPT=1 -o "$B/wt.so" benchmarks/codec_tensor/wt.cu \
     > "$O/wt.ptxas" 2>&1 || { tail -30 "$O/wt.ptxas"; exit 4; }
-  nvcc "${FLAGS[@]}" -o "$B/reader.so" benchmarks/codec_tensor/reader.cu > "$O/reader.ptxas" 2>&1 \
+  nvcc "${FLAGS[@]}" -o "$B/reader.so" verity/protocols/poub/prover/codec_tensor/reader.cu > "$O/reader.ptxas" 2>&1 \
     || { tail -30 "$O/reader.ptxas"; exit 4; }
   nvcc "${FLAGS[@]}" -DKV_FIELD="$SF" -DKV_MASK=1 -DKV_FOLD6=1 -DKV_QHEADS=32 -o "$B/paged.so" \
     benchmarks/vllm_encoded/paged.cu > "$O/paged.ptxas" 2>&1 || { tail -30 "$O/paged.ptxas"; exit 4; }
-  sha256sum benchmarks/codec_tensor/wt.cu benchmarks/codec_tensor/reader.cu benchmarks/vllm_encoded/paged.cu >> "$O/build.txt"
+  sha256sum benchmarks/codec_tensor/wt.cu verity/protocols/poub/prover/codec_tensor/reader.cu benchmarks/vllm_encoded/paged.cu >> "$O/build.txt"
   STACK_ARGS=(--stack "$STACK" --stack-k "${K:-3}" --wt-lib "$B/wt.so" --reader-lib "$B/reader.so" --paged-lib "$B/paged.so")
 fi
 wait $P1 || { tail -30 "$O/topup.ptxas"; exit 4; }
 wait $P2 || { tail -30 "$O/kv-p512.ptxas"; exit 4; }
 if grep -E "[1-9][0-9]* bytes spill" "$O/topup.ptxas"; then echo "REFUSED: a top-up kernel spills"; exit 4; fi
-sha256sum $KF/topup.cu $KF/fill.cu $KF/readers.cu benchmarks/codec_tensor/sha512.cuh benchmarks/word_codec/kv.cu "$B"/*.so >> "$O/build.txt"
+sha256sum $KF/topup.cu $KF/fill.cu $KF/readers.cu verity/protocols/poub/prover/codec_tensor/sha512.cuh verity/protocols/poub/prover/word_codec/kv.cu "$B"/*.so >> "$O/build.txt"
 if [ -d $KF/tests ] && "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $KF/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 fi

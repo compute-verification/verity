@@ -35,8 +35,10 @@ def _bench():
 
 def _p2():
     sys.path.insert(0, str(BENCH))
-    sys.path.insert(0, str((ROOT / "benchmarks/pous/p2_v1/gpu.py").parents[1]))
-    from p2_v1 import gpu, harness, reference
+    sys.path.insert(0, str((ROOT / "verity/protocols/pous/prover/p2/p2_store/gpu.py").parents[1]))
+    from p2_store import gpu
+    from p2_v1 import harness
+    from verity.protocols.pous.verifier.p2_v1 import reference
     return reference, harness, gpu
 
 

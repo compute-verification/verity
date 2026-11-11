@@ -72,7 +72,7 @@ ROOT = HERE.parents[2]
 STAGE = ROOT / "benchmarks" / "torch_gpu" / "p2_stage"
 if __package__ in (None, ""):
     sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str((ROOT / "benchmarks/pous/p2_v1/store.py").parents[1]))
+sys.path.insert(0, str((ROOT / "verity/protocols/pous/prover/p2/p2_store/store.py").parents[1]))
 sys.path.insert(0, str(STAGE))
 
 from verity.protocols.pous.verifier import verifier as V
@@ -266,7 +266,7 @@ class Sketch:
 
 
 class RefDecode:
-    """P2's reference decode (`reference.decode` under `reference.keys_after`) behind `p2_v1.gpu.Kernels`, on the CPU:
+    """P2's reference decode (`reference.decode` under `reference.keys_after`) behind `p2_store.gpu.Kernels`, on the CPU:
     for a toy store where no GPU or library is."""
 
     def __init__(self, lib_dir: Any, build_dir: Any, params: Any, prefix: bytes) -> None:
@@ -648,7 +648,7 @@ def toy(out: Path) -> p2.Registration:
     and `out/layout.json`, with the verifier's registration of it (PoUS's setup decoding C* to the committed W) and its
     tensors' plan in `out/registration.json`: what `session --ref-decode` serves at fixture scale."""
     from p2_v1 import serve as SV
-    from p2_v1 import store as ST
+    from p2_store import store as ST
 
     s, doc, c_star = SV.toy()
     reg = SV.registration(s, doc, c_star, SV.NODE)

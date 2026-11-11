@@ -51,7 +51,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((HERE.parents[1] / "benchmarks/word_codec/kv.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/poub/prover/word_codec/kv.py").parent))
 
 import kv as K  # noqa: E402
 import kv_bench as B  # noqa: E402

@@ -20,7 +20,7 @@ What code outside this directory may use. Everything else here is internal.
 | `bash benchmarks/word_codec/encode_rate.sh` | `kv.cu`'s encode throughput on one GPU (`encode_rate.py`), beside `benchmarks/rate_squaring/sq.cu` gated and timed on the same GPU. It writes to `$RESEARCH_RUN_DIR/out`. |
 
 Read from outside `benchmarks/`: `kv.cu`'s build, taken by its path, and `kv.py` and `kv_bench.py`, reached as
-`benchmarks/vllm_encoded/paged.py`'s `K` and `KB`.
+`verity/protocols/poub/prover/word_codec/paged.py`'s `K` and `KB`.
 
 **Status: active.** `kv.cu` is the store's encode on the GPU: `benchmarks/remote_session/run.sh` builds it, the vLLM
 integration calls it (`adapters/vllm/verity_vllm/protocols/remote_bandwidth/remote.py`), and `benchmarks/vllm_encoded`

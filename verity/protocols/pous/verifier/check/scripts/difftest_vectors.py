@@ -43,7 +43,7 @@ from types import SimpleNamespace
 
 def _python(repo: Path):
     sys.path.insert(0, str(repo / "benchmarks" / "pous"))
-    from p2_v1 import reference, wire
+    from verity.protocols.pous.verifier.p2_v1 import reference, wire
     from verity.protocols.pous.verifier import verifier
     return reference, wire, verifier
 

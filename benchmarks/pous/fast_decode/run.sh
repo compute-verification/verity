@@ -15,7 +15,7 @@ ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
 PY=$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python
 CG=$ENV_DIR/CGBN
 [ -x "$PY" ] || { echo "no torch venv at $PY"; exit 3; }
-[ "$(git -C "$CG" rev-parse HEAD)" = "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" ] || { echo "CGBN is not at the pinned commit"; exit 3; }
+[ "$(git -C "$CG" rev-parse HEAD)" = "$(cat verity/protocols/pous/prover/p2/p2_gpu/CGBN.commit)" ] || { echo "CGBN is not at the pinned commit"; exit 3; }
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bin:$(dirname "$PY"):$PATH
 export PYTHONPATH=$(pwd):${PYTHONPATH:-}
 GMPINC=$("$PY" -c 'import gmpy2, os; print(os.path.dirname(gmpy2.__file__))')
@@ -37,10 +37,10 @@ done
 [ "${NTT:-1}" = 1 ] && build ntt-p16 lib $FD/nttsq.cu -DFD_PER=16
 CGF="-DP2_TPI=32 -DXMP_WMAD -DP2_PARTS=2 -DP2_SYM -DP2_TPB=64 -DP2_LIBRARY -I $GMPINC -I $CG/include"
 # shellcheck disable=SC2086
-build cgbn-fast-16448 cgbn benchmarks/pous/p2_v1/p2v1.cu $CGF -DP2_BITS=16448 -DP2_FAST -DP2_KEYS4 -DP2SQ_KARA
+build cgbn-fast-16448 cgbn verity/protocols/pous/prover/p2/p2_store/p2v1.cu $CGF -DP2_BITS=16448 -DP2_FAST -DP2_KEYS4 -DP2SQ_KARA
 for w in $CGBN_WIDTHS; do
   # shellcheck disable=SC2086
-  build "cgbn-generic-$w" cgbn benchmarks/pous/p2_v1/p2v1.cu $CGF -DP2_BITS="$w" -DP2_KEYS4
+  build "cgbn-generic-$w" cgbn verity/protocols/pous/prover/p2/p2_store/p2v1.cu $CGF -DP2_BITS="$w" -DP2_KEYS4
 done
 ARGS=()
 for i in "${!PIDS[@]}"; do

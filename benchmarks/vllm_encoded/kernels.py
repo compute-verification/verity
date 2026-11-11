@@ -46,7 +46,7 @@ def _codec():
 
 
 def _cuda_lib():
-    return _load("wc_cuda_lib", "cuda_lib.py", (HERE.parents[1] / "benchmarks/word_codec/cuda_lib.py").parent)
+    return _load("wc_cuda_lib", "cuda_lib.py", (HERE.parents[1] / "verity/protocols/poub/prover/word_codec/cuda_lib.py").parent)
 
 
 def _wide():
