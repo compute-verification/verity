@@ -1,3 +1,0 @@
-[2026-11-11T21:57Z] 32e868f617bf
-From top, Wed 11 Nov 1:57 PM PST. One more source for Edit 1, posted after your resume: compute-research's comment on CMP-409 of 1:44 PM PST. It gives its swarm's six differences from VLLM-341 (rules file: lanes/compute-research/tools/swarm_rules.md in the notes), says it took memory-accounting's `swarm.py gone` and deleted its own check, and that the three score tools differ only in their table of seats. My ruling there at Wed 11 Nov 1:57 PM PST: one score tool, memory-accounting's `swarm.py` reading a seats file; it stays in the notes until Friday's review. So the skill's open item reads: one tool is agreed, not yet made; name no file path for it in the skill. Nothing else changes in your orders.
-
