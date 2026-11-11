@@ -31,5 +31,5 @@ def test_a_text_that_starts_with_a_label_is_that_label(text):
 def test_any_other_text_is_refused_with_the_fix(text):
     for make in (_prim, _comp):
         with pytest.raises(ValueError, match=r"ConfProbe_v1: conformance .* doesn't start with a label of "
-                                             r"verity\.ml\.circuits\.defs\.CONFORMANCE .*add a new label to CONFORMANCE"):
+                                             r"verity\.circuits\.defs\.CONFORMANCE .*add a new label to CONFORMANCE"):
             make(text)
