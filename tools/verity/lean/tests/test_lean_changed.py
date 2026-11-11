@@ -474,6 +474,38 @@ def test_a_run_whose_only_failures_are_record_differences_exits_0_as_regenerated
     assert {p: (r["outcome"], "reused" in r) for p, r in doc["records"].items()} == {S: (LC.PASS, True), P: (LC.PASS, True)}
 
 
+def test_a_records_run_names_at_launch_the_packages_it_audits_in_order_before_it_takes_a_slot(pair, tmp_path, monkeypatch):
+    """One line, said before the run waits for a `build` slot, names what it audits: PKG, then each package whose records
+    read PKG's build, and with each the package its `proved_in` names, which its check.py audits beside it. A run for
+    `s/props` or `s/proofs` beside a run for `s` is thereby seen to audit what that run already does. A package whose
+    records need no run is not named, and a run that runs nothing says no such line."""
+    _, calls, _ = pair
+    said, held = [], []
+    monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: held.append((list(said), list(calls))))
+    line = "lean-records: this run audits {}: a `--records` run for any of them beside this one audits it again"
+
+    def launched() -> list[str]:
+        return [s for s in said if "this run audits" in s]
+
+    assert LC.audit_records(S, tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
+    assert launched() == [line.format(f"{S} (with s/proofs), then {P}")]
+    assert held == [(launched(), [])], "it is the only line said before the slot is asked for, and nothing has run"
+    said.clear()
+    assert LC.audit_records(P, tmp_path / "deps", out=tmp_path / "out2", log=said.append, rebuild=True) == 0
+    assert launched() == [line.format(f"{P}, then {S} (with s/proofs)")], "a requirer's run audits PKG's records too"
+    assert LC.audits(["s/proofs", S, P]) == f"s/proofs, then {S} (with s/proofs), then {P}", \
+        "a prover's own run audits it once more beside each package that names it"
+    monkeypatch.setattr(LC, "reused", lambda todo, files, log: {S: ("its records ran on these inputs", None)})
+    said.clear()
+    assert LC.audit_records(S, tmp_path / "deps", out=tmp_path / "out3", log=said.append) == 0
+    assert launched() == [line.format(P)], "a package whose records need no run is not audited, so not named"
+    monkeypatch.setattr(LC, "reused", lambda todo, files, log: {p: ("its records ran on these inputs", None) for p in todo})
+    said.clear()
+    del held[:]
+    assert LC.audit_records(S, tmp_path / "deps", out=tmp_path / "out4", log=said.append) == 0
+    assert launched() == [] and held == [] and any("nothing to build" in s for s in said)
+
+
 def test_a_requirer_that_differs_beside_another_package_is_regenerated_too(pair, tmp_path):
     """`settles` re-audits a requirer with `--update` only when it alone failed; when a package audited beside it (its
     `proved_in` one) differs too, both records check.py wrote are kept, and the run still ends `regenerated`."""

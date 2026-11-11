@@ -238,6 +238,13 @@ def requirers(pkg: str, pkgs: list[str]) -> list[str]:
     return sorted((q for q in pkgs if q != pkg and pkg in closure(q) and lists_guarantees(q)), key=lambda p: (rank(p), p))
 
 
+def audits(todo: list[str]) -> str:
+    """The packages a `--records` run of ``todo`` audits, in its order, as its line at launch names them: each of ``todo``,
+    and with it those its `proved_in` names (`provers`), which its check.py audits beside it, once more for each package
+    of ``todo`` that names them."""
+    return ", then ".join(f"{p} (with {', '.join(qs)})" if (qs := provers(p)) else p for p in todo)
+
+
 def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
     """Make ``tree``'s copy of ``pkgs`` this checkout's tracked files, leaving each `.lake`; the number of files written.
     The product of a source it unlinks, or rewrites, stays: a tree serves several branches, and Lake replays the product
@@ -1190,7 +1197,8 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     exits 0 on `PASS` and on `REGENERATED`, check.py's first failing status on `FAILED`, and 2 on `REFUSED`, when ``tree`` is
     not under `RECORDS`, ``name`` matches no single package, the memory refusal stops it or another run holds the tree past
     `TREE_WAIT_S`. A package whose records need no run (`reused`) is skipped, and with none left nothing runs and no slot is
-    taken; ``rebuild`` and ``moved`` run them all. Each package whose records passed or were regenerated is kept (`passed`).
+    taken; ``rebuild`` and ``moved`` run them all. Before it takes a slot, one line names the packages it audits, in
+    order (`audits`). Each package whose records passed or were regenerated is kept (`passed`).
     What each check.py's builds compiled goes into the node's artifact cache when it ends, whatever its exit (`put_built`: the
     package's, and those of the provers it audits), and what a run that was killed left goes in when the next run takes
     the tree (`put_left`). In a run, the module versions it added go into ``out``
@@ -1223,6 +1231,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     audited = [here, *(q for _, q in AUDIT.provers(here, AUDIT.load(here)))] if (here / AUDIT.POLICY).is_file() else [here]
     if why := AUDIT.memory_refusal(audited, AUDIT.memory_gib()):
         return refused(why, pkg)
+    log(f"lean-records: this run audits {audits(todo)}: a `--records` run for any of them beside this one audits it again")
     if dev_cache:
         return dev_records(pkg, todo, update, moved, out, "--dev-cache asks for it", log, files, skip)
     os.environ.pop(LEAN_SLOT.HELD, None)
