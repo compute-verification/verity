@@ -44625,3 +44625,108 @@ For HEADPROF: cursor/proofs-salts-8dd2 at ff48f38adc3abe6ec40ab28e5519e5a7aff2e2
 
 For the table:
 - Salts: no change to my 08:54Z lines. Added: proofs made with the expanded salts pass every check of the Lean verifier on the CPU prover (`r20261111-085949-ef35`); the card's row is HEADPROF's, about 10:10Z.
+
+## SCALE, Wed 11 Nov 09:20Z: WRONG, mine: D*'s 2^-105.0 counted K without the head block's 615,584 input bits; with K as an upper bound the plan of record's first-hit term is 2^-100.9 a sampled replay block and 2^-98.9 to 2^-98.3 a run at 4 to 6 replay blocks, so it misses 2^-100; counted by rows (K_cls ≤ 2^26.24, 7.8 rows a block) it reads 2^-113.9 a run in calls and 2^-104.9 in compressions; #8874 restacked on #8870, which declared two of its names
+
+Clock: `date -u` read 09:15Z before writing. Tags as the order asks. This answers your 08:52Z (items d, 2, 3), 09:04Z (K_cls) and 09:10Z (gap j) messages.
+
+**Daniel's, first:** nothing here changes a statement, a premise or a lock. Every bits figure below is modeled: the fourth (first-hit) term of #8827's lemma `eventTwoX_le_firstHit_at`, evaluated outside Lean, at T = 2^80 SHA-512 calls in every run, one 2^35-bit table a session.
+
+**1. Gap j: K_mean and K_cls as upper bounds.**
+- **What was wrong.** My 07:59Z table took K_mean = 2^37.69 from REPBREAK's row (ii), which leaves out input bits [read: its `in_bits_known: false`].
+  - The head block `SparseMlaHeadBlock_v1{…NVIS=64,FIRST=false…}` needs 615,584 input bits against 16,544 output bits [run: its signature]. The inputs are `q_nope` 8,192, `q_rope` 1,024, `kv` 589,824, and `m`, `l`, `o` 16,544.
+  - The head block alone is 90.6% of K_mean at the plan of record, with the 5 unknown cells at zero [run].
+  - So 2^37.69 was an under-count by about 4 bits, not a bound. REPBREAK's row (i), the one with input bits, read 2^41.82 at its own design (6,389,664 blocks, κ 2^-6).
+- **How the bound is made** [run: `lanes/proofs/tools/scale_kbound.py`].
+  - Inputs: HARMSEARCH's run 1, `r20261111-080601-3db1`, `rows.jsonl`, row "(iii) honest [base]", world year, β 0.0554: the plan of record, 4,042.4 GB, κ 2^-5, Σ k_t = 10,046,500.
+  - Rows (ii) and (iii) honest of that run hold the same cells and k; only the prices differ [run]. So one table serves both.
+  - Each cell's needs are its Definition's parameter bits plus its returned fields' bits (`serving_rows._bind`, `fn.signature()`, as `m1_families.block` reads them). This equals the dump's `in_bits` on all 187 cells that have one [run].
+  - The 5 cells the dump lacks:
+    - `EmbeddingRead_v1{V, H}` exactly, from its signature in `verity/commitments/gates/embedding.py` [read]: 8,224 and 6,752 input bits.
+    - The router `MoeRouterSigmoidBiasSlots_v2`: 16,384 input bits.
+    - The two fused blocks at most the sum of their parts, 157,216 and 139,968 input bits, since fusing removes only internal wires.
+    - `PageCopy` (2 blocks a sampled request) with every bit its own row.
+  - Rows: one a parameter and one a returned field [read: `m1_families.block`, "a row/v2 bit row per parameter, an output row per returned field"; `block_census.py`, "a row per parameter and per returned field"].
+    - The head block has 9 rows (EXTFORM's 9), `FIRST=true` 6 and the router 18.
+    - The mean is 7.8 rows a block at the plan of record [run].
+  - K_cls is an upper bound on the classes only under EXTFORM's `hall` (each row is one class). If a row had readers of its parts, it would not be a bound.
+- **The table, headed per run** [run: `scale_kbound.py`].
+  - "a run" is a padded first stage of K0 replay blocks: K = K0·K_mean and n_sess = K0·15,694 (PARAMS' most members).
+  - "compressions" counts 64 KiB calls at 513 compressions, +9.00 bits.
+  - e_max = 1 + 210·12,343,986 = 2^31.27. The GB ratio is HARMSEARCH's planner bound against its record of 4,042.4 GB [modeled].
+
+| design (rows (ii) and (iii) honest) | GB ratio | Σ k_t a sampled request | K_mean ≤ | a sampled replay block | **a run, K0 = 4 to 6** | a run, K0 = 6, compressions | K_cls ≤ | by rows, **a run, K0 = 6** | by rows, K0 = 6, compressions |
+|---|---|---|---|---|---|---|---|---|---|
+| size classes, κ 2^-5 (the record; D*1's design) | 1.000 | 10,046,500 | 2^41.81 | −100.92 | **−98.92 to −98.34** | −89.34 | 2^26.24 | **−113.90** | −104.90 |
+| size classes, κ 2^-8 (D*2) | 1.344 | 1,255,819 | 2^38.81 | −103.92 | −101.92 to −101.34 | −92.33 | 2^23.24 | −116.90 | −107.90 |
+| width, κ 2^-2.5 (HARMSEARCH's 2,647 GB plan) | 0.655 | 42,855,252 | 2^43.65 | −99.08 | −97.08 to −96.50 | −87.49 | 2^28.31 | −111.84 | −102.83 |
+| width, κ 2^-5 | 0.687 | 7,575,841 | 2^41.15 | −101.58 | −99.58 to −99.00 | −89.99 | 2^25.81 | −114.34 | −105.33 |
+| width, κ 2^-6 | 0.690 | 3,787,940 | 2^40.15 | −102.58 | −100.58 to −100.00 | −90.99 | 2^24.81 | −115.33 | −106.33 |
+| width, κ 2^-7 | 0.798 | 1,893,988 | 2^39.15 | −103.58 | **−101.58 to −101.00** | −91.99 | 2^23.83 | −116.31 | −107.31 |
+| width, κ 2^-8 (D*2 by width) | 1.011 | 947,015 | 2^38.15 | −104.58 | −102.58 to −102.00 | −92.99 | 2^22.88 | −117.26 | −108.25 |
+
+**2. What it changes** [derived from the table].
+- **ATTACK's verbatim line no longer holds.** "2^-105.0 per sampled replay block, 2^-103.0 to 2^-102.4 a run" should read "2^-100.9 per sampled replay block, 2^-98.9 to 2^-98.3 a run at 4 to 6 replay blocks, K an upper bound (every block's input bits counted)". Its clause "K at row (ii) omits 5 strata's input bits" is closed.
+- **Counted by gates (#8827 as it is), in calls**, 2^-100 a run needs one of these:
+  - strata by width at κ ≤ 2^-7: −101.6 to −101.0, at 0.798 of the record's GB;
+  - strata by width at κ 2^-6 with K0 ≤ 5: −100.6 to −100.3; at K0 = 6 it is −100.00, no room. That costs 0.690 of the GB.
+  - D*2 as I wrote it (size classes, κ 2^-8) also holds, −101.9 to −101.3, but at 1.344 of the GB. By width it holds at 1.011.
+  - So HARMSEARCH's "D*2 costs a third more GB under today's strata and nothing by width" holds on these rows [run].
+- **Counted by gates, in compressions:** no design here reaches 2^-100. The best is −93.0, width at κ 2^-8.
+- **Counted by rows** (EXTFORM's form; its Core lemma and `hall` at the code are unbuilt): every design here reaches 2^-100 a run, in calls and in compressions.
+  - At the GB plan's strata by width (κ 2^-2.5), it reads −111.8 a run in calls and −102.8 in compressions at K0 = 6.
+  - At the record it reads −105.5 to −104.9 in compressions at K0 = 4 to 6.
+  - So the route your 09:10Z update names holds with K bounded. Its "2^-106 to 2^-105.4 a run before gap j" becomes 2^-105.5 to 2^-104.9 at the record, and 2^-103.4 to 2^-102.8 at the 2,647 GB plan, in compressions.
+- **D\*1 and D\*2 repriced by width** (your item 3):
+  - D*1's κ 2^-5 by width costs 0.687 of the GB and misses (−99.6 to −99.0 a run).
+  - D*2 by width costs 1.011 and holds (−102.6 to −102.0).
+  - Between them, κ 2^-7 by width is the cheapest gate-counted design with a bit of room.
+
+**3. Coin, with DRAFT-CORE's correction taken** [relayed: DRAFT-CORE 08:40Z; derived].
+- My column is replaced by DRAFT-CORE's: (ii) 139.5 to 143.6 MB (2^28), (iii) warm 279.1 to 287.2 MB (2^29), (i) 165.0 to 166.1 MB (2^28), each a sampled replay block.
+- A run at K0 replay blocks draws K0 times that. At 26 bytes a block plus 64 a stratum, the by-width designs read:
+  - κ 2^-7: 295.5 MB a run at K0 = 6 (2^29 bytes, `MAX_COINS` 2^23);
+  - κ 2^-8: 147.8 MB (2^28, `MAX_COINS` 2^22);
+  - κ 2^-6: 591 MB (2^30, `MAX_COINS` 2^24).
+
+**4. #8874 restacked on #8870** [run].
+- TWOWITNESS's #8870 (`e7d354135fbb`) proves `size_proved_selectSecond`, the same statement as my `selectSecond_proved_size`. It also declares `Properties.Spot.SecurityProofs.getD_draw_closure` and `drawUnits_work_size`, two names #8874 declared in the same namespace [read]. The aggregator imports both modules, so the two PRs could not build in one tree.
+- I merged #8870's head into #8874's branch (a plain merge, clean) and deleted my seven duplicate theorems.
+- `Drawn.lean` now holds four theorems, reading the count from #8870's `size_proved_selectSecond`: `RegTwo.sample_size_le`, `RegTwo.proved_size_le`, `RegTwo.card_biUnion_checked_le_count` and `SpotFlock.code_card_biUnion_le_count`.
+- Head `b3fb5853faf88d60f9945379689990c2c1bde6ab` is pushed.
+  - Try `r20261111-085732-f5d6`: exit 0, 10,926 jobs, 4 theorems axiom-clean, no built module declares a name it does.
+  - Records `r20261111-091422-a581` and quick tier `r20261111-091429-6f84` are queued.
+  - It lands after #8836, #8820 and #8870.
+- #8870 also brings `main`'s commits from `5c095bb4ab70` to `8201dacff26e`, so #8874's diff over `main` is now only its own file, one import line and the PRs below it.
+
+**5. #8836** [run].
+- The records run is `r20261111-085254-6161`, running since 08:53Z. The first one, `r20261111-083941-db31`, named `Security/Proofs` for `security/Proofs` and would have refused (#8874's did, `r20261111-084512-3cc3`, "matches 0 packages"). I cancelled it before its check began.
+- The quick tier `r20261111-084047-e971` has run since 08:40Z.
+- The combined builds already passed:
+  - #8836's head `ae8886e9a2fc` with #8827 `946b7b72f26d` and #8781 `b7c268c7c1fe` in one tree, `2bc9818dfa`: `Proofs/Flock.lean` try `r20261111-083302-33c3` (12,358 jobs, siblings clean) and `Proofs/WeightSecurity.lean` try `r20261111-083302-134b`.
+- The ready line follows in its own entry when both runs end.
+- The lock after #8820's merge is #8820's, byte for byte: 4,198,676 bytes [run: `stat`]. `tools/move/layout.py`'s old limit of 4,194,304 no longer binds on `main`: #8818 (`970b273dc1`, "The mover reads a Lean lock whatever its size") [read: its subject and stat].
+
+For CAPS:
+- `Proofs/Flock`: +2 modules, +25 declarations (#8836: `SpotFlock/RevealsOpen.lean` 18, `SamplingGeneric/RegCanon.lean` 7).
+- `Proofs/Core`: +1 module, +10 declarations (#8836: `Game/RewindingCanon.lean`).
+- `Proofs/Flock`: +1 module, +4 declarations (#8874: `SpotFlock/Drawn.lean`, stacked on #8836 and #8870).
+- No lock changes. The counts are a grep of declaring keywords [run].
+
+For CONCRETE: these are the inputs as upper bounds, per sampled replay block, at the plan of record (κ 2^-5, size classes):
+- K_mean ≤ 2^41.81 and K_cls ≤ 2^26.24;
+- Σ k_t = 10,046,500, e_max = 2,592,237,061 and n_sess ≤ 15,694;
+- a run multiplies K and n_sess by K0 (4 to 6).
+- By width at κ 2^-7: K_mean ≤ 2^39.15 and K_cls ≤ 2^23.83.
+- Tool: `lanes/proofs/tools/scale_kbound.py`, which needs a tree at `8201dacff2` on `PYTHONPATH`.
+
+For BREAKEVEN: the bits side's GB rows, each modeled (HARMSEARCH's planner bound on `r20261111-080601-3db1`, ratio to 4,042.4 GB):
+- strata by width at κ 2^-7: 0.798, about 3,226 GB. This is the cheapest gate-counted design at 2^-100 a run with a bit of room.
+- κ 2^-6: 0.690, about 2,789 GB, holding at K0 ≤ 5.
+- κ 2^-8: 1.011, about 4,087 GB.
+- By rows, the 2,647 GB plan (κ 2^-2.5) itself holds.
+
+For the table:
+- Bits, corrected (gap j, K as an upper bound): the first-hit term of #8827's lemma at the plan of record is 2^-100.9 per sampled replay block and 2^-98.9 to 2^-98.3 a run at 4 to 6 replay blocks, at T = 2^80 calls, not 2^-103.0 to 2^-102.4. It is modeled [run: `scale_kbound.py` on `r20261111-080601-3db1`].
+- Counted by all-or-nothing rows (K_cls ≤ 2^26.24, 7.8 rows a block; EXTFORM's form and `hall`, unbuilt): 2^-113.9 a run in calls and 2^-104.9 in compressions at the record; 2^-111.8 and 2^-102.8 at the 2,647 GB plan's strata by width.
+- Counted by gates, 2^-100 a run in calls needs strata by width at κ ≤ 2^-7 (0.798 of the GB) or κ 2^-6 at K0 ≤ 5 (0.690). In compressions, nothing counted by gates reaches it.
