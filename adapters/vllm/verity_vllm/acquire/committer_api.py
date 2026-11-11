@@ -19,7 +19,7 @@ the run — so a fast subset cannot be reported as the full interface.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Protocol
 
 from verity_vllm.commit.run_roots import RunRoots, StepRoot
 
