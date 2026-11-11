@@ -132,15 +132,20 @@ def test_of_two_candidates_on_one_base_the_one_whose_members_come_first_in_rank_
                          Drop("a2", "its base was dropped"), Build((3, 5), "b", 1)]
 
 
-@pytest.mark.parametrize(("ready", "why"), [
-    ([pr(1, "h1b"), pr(2), pr(3)], "#1's head moved from h1 to h1b"),
-    ([pr(2), pr(3)], "#1's ready mark was withdrawn"),
+@pytest.mark.parametrize(("ready", "left", "why"), [
+    ([pr(1, "h1b"), pr(2), pr(3)], (), "#1's head moved from h1 to h1b"),
+    ([pr(1, "h1b", conflict=True), pr(2), pr(3)], (), "#1's head moved from h1 to h1b, which doesn't merge onto `main`"),
+    ([pr(2), pr(3)], ((1, "h1b", "it isn't marked ready"),), "#1's head moved from h1 to h1b, which isn't taken: it isn't marked ready"),
+    ([pr(2), pr(3)], ((1, "h1", "held by top (no reason)"), (4, "h4", "no land verdict")),
+     "#1 isn't taken now: held by top (no reason)"),
+    ([pr(2), pr(3)], ((1, "h1", "its ready mark was withdrawn by lane-1"),), "#1 isn't taken now: its ready mark was withdrawn by lane-1"),
+    ([pr(2), pr(3)], (), "#1 isn't an open PR into `main` now"),
 ])
-def test_a_chain_candidate_whose_member_moved_or_was_unmarked_is_dropped_with_everything_above(ready, why):
-    s = snap(cand("c1", MAIN, 1, 2, state=PASS), cand("c2", "c1", 3), ready=ready)
-    rebuilt = tuple(r.number for r in ready)
+def test_a_chain_candidate_whose_member_moved_or_isnt_taken_is_dropped_with_everything_above_saying_why(ready, left, why):
+    s = snap(cand("c1", MAIN, 1, 2, state=PASS), cand("c2", "c1", 3), ready=ready, left=left)
+    rebuilt = tuple(r.number for r in ready if not r.conflict)
     assert decide(s) == [Drop("c1", why), Drop("c2", "its base was dropped"), Build(rebuilt, MAIN, 2)]
-    s = snap(cand("c1", MAIN, 3), cand("c2", "c1", 1, 2), ready=ready)
+    s = snap(cand("c1", MAIN, 3), cand("c2", "c1", 1, 2), ready=ready, left=left)
     assert decide(s) == [Drop("c2", why), Build(tuple(n for n in rebuilt if n != 3), "c1", 1)]
 
 
@@ -321,6 +326,30 @@ def test_a_lone_member_whose_check_errs_again_after_a_retry_is_rung_to_its_owner
     assert decide(snap(c, ready=prs(3), history=(aside,))) == [Retry("c1"), infra]
     assert decide(snap(c, ready=prs(3, 4), history=(aside,))) == [Drop("c1", why, aside), Build((4,), MAIN, 2)]
     assert decide(snap(c, ready=prs(3, 4), tree_ejects=True)) == [Retry("c1"), infra, Build((4,), "c1", 1)]
+
+
+def test_a_launch_that_outran_its_wait_is_retried_until_launch_tries_then_handled_as_any_other_infra():
+    """A launch that outran its wait or that the pod lost (`Failed.launch`) points at the machines: its candidate is enqueued
+    again and infra is rung from `rings` readings on, no member bisected out, set aside or rung, until `launch_tries`
+    readings.  Then, as at once for a launcher that exited without a run (it ran the candidate's own check.py, so the tree may
+    be why), the members are suspects: a batch is bisected, and a lone member set aside behind the PRs waiting."""
+    err = (Failed("the run beside its check registered no run: shard 2/3: no run launched in the wait", "c1:no run",
+                  frozenset(), launch=True),)
+    exited = (replace(err[0], task="the run beside its check registered no run: shard 2/3: Traceback ... no run launched",
+                      launch=False),)
+    infra = Ring("c1", "c1's check ended in infra errors: the run beside its check registered no run: shard 2/3: no run "
+                       "launched in the wait")
+    pair = Candidate("c1", MAIN, (1, 2), heads(1, 2), Verdict(INFRA, (), err))
+    lone = Candidate("c1", MAIN, (3,), heads(3), Verdict(INFRA, (), err))
+    assert decide(snap(pair, cand("c2", "c1", 4), ready=prs(1, 2, 4))) == [Retry("c1")]
+    for tries, on in ((2, {}), (4, {"launch_tries": 5})):
+        assert decide(snap(replace(pair, tries=tries), cand("c2", "c1", 4), ready=prs(1, 2, 4), **on)) == [Retry("c1"), infra]
+        assert decide(snap(replace(lone, tries=tries), ready=prs(3, 4), **on)) == [Retry("c1"), infra, Build((4,), "c1", 1)]
+    for c in (replace(pair, tries=3), replace(pair, verdict=Verdict(INFRA, (), exited), tries=2)):
+        assert kinds(decide(snap(c, cand("c2", "c1", 4), ready=prs(1, 2, 4)))) == [Ring, Drop, Drop, Build], c
+    for c in (replace(lone, tries=3), replace(lone, verdict=Verdict(INFRA, (), exited), tries=2)):
+        acts = decide(snap(c, ready=prs(3, 4)))
+        assert kinds(acts) == [Ring, Ring, Drop, Build] and acts[2].outcome.state == INFRA, (c, acts)
 
 
 def test_a_pr_set_aside_is_batched_after_every_other_and_alone():
