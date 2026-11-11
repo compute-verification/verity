@@ -112,29 +112,24 @@ def test_the_cpus_norm_is_expected_where_the_step_trains_no_gain_and_the_record_
     assert got["expected"] == [] and got["differences"] == []
 
 
-def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding():
-    """A record's `quant` is deltas in codes with a scale a group: a rounding of the trained delta, or the ternary
-    codes the run trained. A plan of either, or of both, is that kind; one that keeps a tensor whole is not, and
-    neither is any plan beside a format this table doesn't know."""
-    for kinds in (["scaledquant"], ["sparseternary"], ["scaledquant", "sparseternary"]):
+def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding(monkeypatch):
+    """A record's format may have several codec kinds (here a made-up second one for `quant`). A plan of either, or
+    of both, is that kind; one that keeps a tensor whole is not, and neither is any plan beside a format this table
+    doesn't know."""
+    assert of_record.e_kind(["scaledquant"], "quant") == [] == of_record.e_kind(["identity"], "full")
+    monkeypatch.setitem(of_record.E_KINDS, "quant", ("scaledquant", "coded"))
+    for kinds in (["scaledquant"], ["coded"], ["scaledquant", "coded"]):
         assert of_record.e_kind(kinds, "quant") == []
-    assert of_record.e_kind(["identity"], "full") == []
-    assert of_record.e_kind(["identity", "sparseternary"], "quant") == [
-        "E's kind: the config's plan is identity, sparseternary, the record's format quant (scaledquant or "
-        "sparseternary)"]
-    assert of_record.e_kind(["sparseternary"], "full") == [
-        "E's kind: the config's plan is sparseternary, the record's format full (identity)"]
+    assert of_record.e_kind(["identity", "coded"], "quant") == [
+        "E's kind: the config's plan is identity, coded, the record's format quant (scaledquant or coded)"]
+    assert of_record.e_kind(["coded"], "full") == [
+        "E's kind: the config's plan is coded, the record's format full (identity)"]
     assert of_record.e_kind(["identity"], "model") == [
         "E's kind: the config's plan is identity, the record's format model (none known here)"]
     assert of_record.e_kind([], "full") == ["E's kind: the config's plan is empty, the record's format full (identity)"]
-    # the sizes are printed and not compared; a codec that packs the same encoding another way is named as that
-    last = {"format": "quant", "e_bytes": 1000}
-    assert of_record.e_sizes(["scaledquant"], 1200, last, 30) == (
+    # the sizes are printed and not compared
+    assert of_record.e_sizes(["scaledquant"], 1200, {"format": "quant", "e_bytes": 1000}, 30) == (
         "scaledquant, 1,200 B after 2 steps; the record's quant, 1,000 B after 30")
-    assert of_record.e_sizes(["sparseternary"], 1200, last, 30) == (
-        "sparseternary, 1,200 B after 2 steps; the record's quant, 1,000 B after 30; expected to differ in size by "
-        "the packing too: sparseternary is one xz stream a matrix at one setting, where the record's program kept "
-        "the smallest of several settings' streams of all its matrices")
 
 
 def unfused(params: list, times: int = 1) -> tuple:
