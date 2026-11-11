@@ -64,7 +64,73 @@ theorem card_opensSet_le (s : AuditStatement) :
       ∑ u ∈ Finset.range (((part s).map fun P => P.blocks.length).getD 0), (needs part s u).length :=
   Finset.card_biUnion_le.trans (Finset.sum_le_sum fun u _ => List.toFinset_card_le _)
 
+/-- A gate's roots are the statement's or some replay block's interior roots. -/
+theorem rootsAt_cases (s : AuditStatement) (u : ℕ) (v : Seen) (g : ℕ) :
+    rootsAt part two ir s u v g = s.roots ∨ ∃ ρ, rootsAt part two ir s u v g = ir v ρ := by
+  unfold rootsAt
+  split <;> (try split) <;> (try split) <;> (try split) <;> first | exact Or.inl rfl | exact Or.inr ⟨_, rfl⟩
+
 end SpotFlock.Reveal
+
+namespace SamplingDeploy
+
+theorem card_biUnion_toFinset_le (l : List ℕ) (f : ℕ → Finset ℕ) :
+    (l.toFinset.biUnion f).card ≤ (l.map fun a => (f a).card).sum := by
+  induction l with
+  | nil => simp
+  | cons a l ih =>
+    rw [List.toFinset_cons, Finset.biUnion_insert, List.map_cons, List.sum_cons]
+    exact (Finset.card_union_le _ _).trans (Nat.add_le_add_left ih _)
+
+/-- Where the second stage draws, the checked proof blocks are the always-checked ones and the drawn ones. -/
+theorem RegTwo.checked_subset (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) {draw : Lean.Json} {n : ℕ}
+    (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) :
+    (g.checked N src₁ src₂).toFinset ⊆ (Finset.range N).filter (fun v => g.always v = true) ∪
+      ((Spot.Draw.proved draw).toList.map fun j => g.blockAt (g.sample src₁) j.toNat).toFinset := by
+  intro v hv
+  rw [List.mem_toFinset] at hv
+  simp only [RegTwo.checked, hsel] at hv
+  obtain ⟨hvN, hor⟩ := List.mem_filter.1 hv
+  rcases Bool.or_eq_true_iff.1 hor with hal | hany
+  · exact Finset.mem_union_left _ (Finset.mem_filter.2 ⟨Finset.mem_range.2 (List.mem_range.1 hvN), hal⟩)
+  · obtain ⟨j, hj, hjv⟩ := Array.any_eq_true'.1 hany
+    exact Finset.mem_union_right _
+      (List.mem_toFinset.2 (List.mem_map.2 ⟨j, Array.mem_toList_iff.2 hj, beq_iff_eq.1 hjv⟩))
+
+/-- **The gates the checked proof blocks need, counted**: where the second stage draws, at most the always-checked
+blocks' needs plus each drawn block's. -/
+theorem RegTwo.card_biUnion_checked_le (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) {draw : Lean.Json} {n : ℕ}
+    (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) (needs : ℕ → Finset ℕ) :
+    ((g.checked N src₁ src₂).toFinset.biUnion needs).card ≤
+      ∑ v ∈ (Finset.range N).filter (fun v => g.always v = true), (needs v).card +
+        ((Spot.Draw.proved draw).toList.map fun j => (needs (g.blockAt (g.sample src₁) j.toNat)).card).sum := by
+  refine (Finset.card_le_card
+    (Finset.biUnion_subset_biUnion_of_subset_left needs (g.checked_subset N src₁ src₂ hsel))).trans ?_
+  rw [Finset.biUnion_union]
+  refine (Finset.card_union_le _ _).trans (Nat.add_le_add Finset.card_biUnion_le ?_)
+  have := card_biUnion_toFinset_le
+    ((Spot.Draw.proved draw).toList.map fun j => g.blockAt (g.sample src₁) j.toNat) needs
+  rwa [List.map_map] at this
+
+/-- With no always-checked block, at most the drawn blocks' count times the most gates a block needs. -/
+theorem RegTwo.card_biUnion_checked_le_mul (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) {draw : Lean.Json} {n : ℕ}
+    (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) (needs : ℕ → Finset ℕ)
+    (hal : ∀ v, g.always v = false) (M : ℕ) (hM : ∀ u, (needs u).card ≤ M) :
+    ((g.checked N src₁ src₂).toFinset.biUnion needs).card ≤ (Spot.Draw.proved draw).size * M := by
+  have h0 : (Finset.range N).filter (fun v => g.always v = true) = ∅ :=
+    Finset.filter_false_of_mem fun v _ => by simp [hal v]
+  have hb := g.card_biUnion_checked_le N src₁ src₂ hsel needs
+  rw [h0, Finset.sum_empty, Nat.zero_add] at hb
+  refine hb.trans ?_
+  have hs := List.sum_le_card_nsmul
+    ((Spot.Draw.proved draw).toList.map fun j => (needs (g.blockAt (g.sample src₁) j.toNat)).card) M
+    (by
+      intro y hy
+      obtain ⟨j, _, rfl⟩ := List.mem_map.1 hy
+      exact hM _)
+  simpa only [List.length_map, Array.length_toList, smul_eq_mul] using hs
+
+end SamplingDeploy
 
 namespace SpotFlock
 
@@ -88,14 +154,59 @@ theorem code_reveal_at (x : Msg) (s : AuditStatement) (u : ℕ) (v : Seen) (w : 
   obtain ⟨g, hg, rfl⟩ := (Reveal.mem_reveal (partition h) (two h) (iroots []) (Reveal.frameAt h.frame)).1 hp
   exact ⟨hg, rfl⟩
 
-/-- **The deployed two-stage verifier's reveal opens, under the statement's roots, only gates the unit's proof block
-needs**: the per-unit position hypothesis `hpos` of the sample's first-hit bounds, at SPOT[Flock]'s compiled verifier,
-with `needs u` the gates `Reveal.needs` lists. It holds under every root. -/
+/-- **The deployed two-stage verifier's reveal opens only gates the unit's proof block needs**, under every root, at
+SPOT[Flock]'s compiled verifier, with `needs u` the gates `Reveal.needs` lists. -/
+theorem reveal_needs_spot {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T)
+    (s : AuditStatement) :
+    ∀ u v w, ∀ p ∈ (compiledTwo F (code h) iroots (two h) (rs h) (cap h)).toCompiled.reveal s u v w,
+      p.2.pos ∈ (Reveal.needs (partition h) s u).toFinset :=
+  fun u v w p hp => List.mem_toFinset.2 (code_reveal_at h [] s u v w p hp).1
+
+/-- **`reveal_needs_spot` under the statement's roots**: the per-unit position hypothesis `hpos` of the sample's
+first-hit bounds, at SPOT[Flock]'s compiled verifier. -/
 theorem hpos_spot {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T)
     (s : AuditStatement) :
     ∀ u v w, ∀ p ∈ (compiledTwo F (code h) iroots (two h) (rs h) (cap h)).toCompiled.reveal s u v w,
       p.1 = s.roots → p.2.pos ∈ (Reveal.needs (partition h) s u).toFinset :=
-  fun u v w p hp _ => List.mem_toFinset.2 (code_reveal_at h [] s u v w p hp).1
+  fun u v w p hp _ => reveal_needs_spot h F s u v w p hp
+
+/-- **The deployed code's checked proof blocks are its registration's**, on the bytes of the two stages' coins. -/
+theorem code_checked_sub (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) :
+    ∀ u ∈ (code h).checked x r, u ∈ h.reg.checked (SamplingDeploy.units ((base h).atOrder (order h)) x)
+      (src (r (order h x).first)) (src (r (order h x).second)) := by
+  intro u hu
+  change u ∈ ((reg h x).map fun g => g.checked (SamplingDeploy.units ((base h).atOrder (order h)) x)
+    (src (r (order h x).first)) (src (r (order h x).second))).getD [] at hu
+  cases hd : decode x with
+  | none => simp [reg, hd] at hu
+  | some _ => simpa [reg, hd] using hu
+
+/-- **K at the deployed code**: where the second stage draws, the gates the checked proof blocks need number at most
+the always-checked blocks' needs plus each drawn block's. -/
+theorem code_card_biUnion_le (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) (needs : ℕ → Finset ℕ)
+    {draw : Lean.Json} {n : ℕ}
+    (hsel : Spot.Select.selectSecond (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks
+      (src (r (order h x).second)) = .ok (draw, n)) :
+    (((code h).checked x r).toFinset.biUnion needs).card ≤
+      ∑ v ∈ (Finset.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).filter
+          (fun v => h.reg.always v = true), (needs v).card +
+        ((Spot.Draw.proved draw).toList.map fun j =>
+          (needs (h.reg.blockAt (h.reg.sample (src (r (order h x).first))) j.toNat)).card).sum :=
+  (Finset.card_le_card (Finset.biUnion_subset_biUnion_of_subset_left needs fun u hu =>
+    List.mem_toFinset.2 (code_checked_sub h x r u (List.mem_toFinset.1 hu)))).trans
+    (h.reg.card_biUnion_checked_le _ _ _ hsel needs)
+
+/-- **K at the deployed code with no always-checked block**: at most the drawn blocks' count times the most gates a
+block needs. -/
+theorem code_card_biUnion_le_mul (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) (needs : ℕ → Finset ℕ)
+    {draw : Lean.Json} {n : ℕ}
+    (hsel : Spot.Select.selectSecond (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks
+      (src (r (order h x).second)) = .ok (draw, n))
+    (hal : ∀ v, h.reg.always v = false) (M : ℕ) (hM : ∀ u, (needs u).card ≤ M) :
+    (((code h).checked x r).toFinset.biUnion needs).card ≤ (Spot.Draw.proved draw).size * M :=
+  (Finset.card_le_card (Finset.biUnion_subset_biUnion_of_subset_left needs fun u hu =>
+    List.mem_toFinset.2 (code_checked_sub h x r u (List.mem_toFinset.1 hu)))).trans
+    (h.reg.card_biUnion_checked_le_mul _ _ _ hsel needs hal M hM)
 
 /-- **An opening under the statement's roots is at a gate `u`'s proof block needs, and at an interior gate of `u`'s
 replay block only where that block's interior roots are the statement's.** -/
