@@ -36,11 +36,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.check.replay.driver import SCHEMA as SAMPLED_REPLAY_SCHEMA
+from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay.linkage import LINKAGE_SCHEMA
+from verity_vllm.check.verdict import _after_release_verdict, _c1_verdict
+from verity_vllm.check.weights_of_record import ENGINE_CONSTANT_RE
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import c2_replay as C2
+from verity_vllm.pipeline.replay_plan import Planner
 
 logger = init_logger(__name__)
 
@@ -68,7 +71,7 @@ def partial(out: str | os.PathLike, pair: int, *, rank: int | None = None) -> Pa
 def deferred_records(bundle: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     """The Commit's sampled-replay and boundary-linkage records while their replay is deferred: not evaluated, named, with the bundle."""
     why = f"deferred: the C2 replay runs on CPU from the replay bundle {bundle} (`verity-vllm row stage replay`)"
-    return ({"schema": SAMPLED_REPLAY_SCHEMA, "method": "sampled-exact-replay", "result": None, "grade": "deferred", "why": why,
+    return ({"schema": SR.SCHEMA, "method": "sampled-exact-replay", "result": None, "grade": "deferred", "why": why,
              "deferred": {"bundle": str(bundle)}},
             {"schema": LINKAGE_SCHEMA, "result": None, "why": why, "pairs": 0, "linked": 0, "deferred": {"bundle": str(bundle)}})
 
@@ -105,14 +108,13 @@ def start(out: Path, pair: int, com: Any, rc: Any, args: Any, protocols: Any) ->
             or C2.live_only_entry(protocols) or C2.retention_of(com, args) != "host"
             or SD.nbytes(com) > float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9):
         return None
-    from verity_vllm.check.replay.driver import engine_facts_of_record
 
     hashed: dict[str, str] = {}
     try:
         extras: Any = weights_extra(com, rc)
     except ValueError as e:                          # raised where the write is taken (`defer`), as before
         extras = e
-    engine = engine_facts_of_record()
+    engine = SR.engine_facts_of_record()
     pool = ThreadPoolExecutor(1, thread_name_prefix="replay-bundle")
 
     def write() -> float:
@@ -132,7 +134,6 @@ def prepare(args: Any) -> Any:
     refuse(args)
     if args.replay_deferred != "slim":
         return None
-    from verity_vllm.pipeline.replay_plan import Planner
 
     return Planner(args)
 
@@ -146,8 +147,6 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
     final, after the weights pin and the openings).  ``plan`` makes the replay's committed reads (`c2_replay.plan`); with it the store is
     SLIM: only the ranges and tree nodes they opened.  False, with nothing written, when the store would exceed
     `args.replay_bundle_cap_gb`: the replay then runs in process."""
-    from verity_vllm.check.replay.driver import engine_facts_of_record
-
     tl.start("validate.replay_bundle", pair=pair)
     slim, t = None, None
     if started is not None:
@@ -187,7 +186,7 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
            "retention": C2.retention_of(com, args),
            "required_manifest_sha256": hashlib.sha256(Path(args.required_manifest).read_bytes()).hexdigest() if args.required_manifest else None,
            "declaration": declaration, "required_classes": list(required_classes), "min_openings": min(64, args.openings),
-           "vc_result": vc_result, "engine_of_record": started.engine if started is not None else engine_facts_of_record(), "slim": slim,
+           "vc_result": vc_result, "engine_of_record": started.engine if started is not None else SR.engine_facts_of_record(), "slim": slim,
            HASHED: hashed}
     row["commit"]["sampled_replay"], row["commit"]["boundary_linkage"] = deferred_records(path(out, pair))
     deferred[pair] = ctx
@@ -204,8 +203,6 @@ def pending_verdict(commit: dict, tokens_equal: bool | None, *, min_openings: in
     """The verdict of an instrumented run whose C2 replay is deferred: (False, reason) when a check the Commit ran itself fails -- C1, a
     failing value-correspondence component (oracle compare, weights of record), the openings after release -- else (None, PENDING):
     `check.verdict.commit_verdict` decides once the replay is on the record."""
-    from verity_vllm.check.verdict import _after_release_verdict, _c1_verdict
-
     wp, vc = commit.get("weights_pin"), commit.get("value_correspondence")
     fail = (_c1_verdict(commit, tokens_equal, min_openings, declaration, required_classes)
             or ((False, f"weights of record: {wp.get('why') or 'served weights differ from the checkpoint of record'}")
@@ -262,8 +259,6 @@ def weights_extra(com: Any, rc: Any, extra_names: set[str] | None = None) -> tup
     name, bytes)`, read from where they live (the device).  `extra_names`: those tensors (default: the registered buffers and engine
     constants, which no checkpoint holds)."""
     import torch
-
-    from verity_vllm.check.weights_of_record import ENGINE_CONSTANT_RE
 
     tree = getattr(com, "weights_tree", None)
     if not tree or (rc.weight_registration or {}).get("root") != tree.get("root"):

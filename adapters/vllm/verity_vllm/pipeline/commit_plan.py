@@ -22,8 +22,12 @@ import time
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.check import oracle_compare as OC
 from verity_vllm.config import option, workload_arg
 from verity_vllm.log import init_logger
+from verity_vllm.pipeline import source_identity as SI
+from verity_vllm.query.manifest import format as MF
+from verity_vllm.query.required import QUERIES
 
 logger = init_logger(__name__)
 
@@ -35,9 +39,6 @@ def oracle_producers_of_record(args: Any, required_manifest: dict[str, Any] | No
     """The oracle's producer facts from the Programs of record (`oracle_compare.producers_of_programs`, under the manifest's query) for a
     manifest the query path built (`query.query_id` in `required.QUERIES`), which carries none: (facts | None, record).  The Programs are
     the replay's (same lookup, same of-record digest check); None + the named reason for any other manifest, no Program dir or one not of record."""
-    from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.query.manifest import format as MF
-    from verity_vllm.query.required import QUERIES
     q = required_manifest.get("query") if isinstance(required_manifest, dict) else None
     if not (isinstance(q, dict) and q.get("query_id") in QUERIES):
         return None, {"used": False, "why": "manifest is not the query path's: its rows carry the producer annotations"}
@@ -91,8 +92,6 @@ def key(args: Any) -> dict[str, Any]:
     """What the producer facts are a function of, as the Commit with `args` would read it: the Program digest of record, the bytes of
     the required manifest and of the workload, which Programs are read (the dir or the root, resolved), the executing code (the code
     identity over the integration and core, `source_identity.code_identity`) and the vLLM version of this interpreter."""
-    from verity_vllm.pipeline import source_identity as SI
-
     def real(p: str | None) -> str | None:
         return os.path.realpath(p) if p else None
 
