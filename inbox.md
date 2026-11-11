@@ -93,3 +93,61 @@ The one choice inside it, yours to overrule: **exactly the list, in order** (wha
 
 Item 2 [read]: PRF-504's fix is not on `main` (`75ef75838f99`) nor on the crossed head. `Spot.OneStage.Public` is `{drawn, proved, bound, perTemplate}` and `publicJson` writes no `rests_on_period_check`; PRF-504 is in Backlog. So the test of a `need` on a Lean-computed answer is left out.
 
+[2026-11-11T21:25Z] e503d313adb4
+TERMGB to coordinator (network-accounting). Job 7, #8777. Written Wed 11 Nov, 1:25 PM PST (read from the clock).
+
+**Head: `f28f4e4acc2de821ea2d4d13fae0ef7aba50fa7c`** [run]. Three plain commits on `7b314b7dcaca`, one fast-forward push to my branch only. PR open, no mark, no label [read].
+
+| commit | change | size |
+| --- | --- | --- |
+| `0012fd4c3668` | the rows that rest on the card carry the label | 3 files, 94 added, 25 removed |
+| `19e0d35a2ba8` | the term of record's columns come first | 3 files, 57 added, 14 removed |
+| `f28f4e4acc2d` | the schema is `certifier-term/v2` | 2 files, 2 added, 1 removed |
+
+**The diff's size** [run]: against `7b314b7dcaca`, 3 files, 149 added, 36 removed. Against `main` (merge base `219763135681`), 5 files, 558 added, 115 removed.
+
+**1. The label on the rows** [run].
+- Document: every row has `with_set_time_card`. It is `"with a set-time card (not yet tested)"` on the rows whose changes include `timing` (`timing`, `all three`), and null on every other row. I picked null over leaving the field off, so every row has the same keys, as `entries` is null where it does not apply. `row` is unchanged.
+- Print: those rows' names read `timing, set-time card (not yet tested)` and `all three, set-time card (not yet tested)` in both tables, and one line above the tables states the rule.
+- Test, `test_a_row_that_rests_on_the_set_time_card_carries_the_label`, at six sets of inputs: the rows that carry the label are exactly those whose changes include the timing's; a row has a jitter of 0 at D_j = 2 exactly when it carries the label, in the document and in each table.
+
+**2. The term of record first** [run]. In both tables each D_j = 2 column stands before its D_j = 1 column: jitter, term with `x target` and `x weights`, a link's phase, a request. The line on a link's execution phase now reads "the jitter is 1,280 bits at D_j = 2, and 0 at D_j = 1 with a set-time card (not yet tested)". The label on that 0 is mine, not asked: it is a figure at D_j = 1. The document's keys and their order stand. Test, `test_the_term_of_record_comes_first_in_both_tables`: both header rows in order, and every cell read back from the document by its header.
+
+**3. The schema** [run]: `certifier-term/v2`, one literal, one assertion.
+
+**What the grep for `v1` found** [read]: one occurrence of `certifier-term` in the whole tree, `document`'s own line in `benchmarks/network_traces/leak_bounds.py`. That holds at my branch before the change (line 782), at `main` `75ef75838f99` (line 705) and at #8779's head `9b5d80511bdf` (line 705). No reader:
+- No test read this document's `schema`; `test_certifier_term.py` had no assertion on it.
+- The harness's and the `verity` command's schema checks each compare with their own constant, none with this name.
+- #8779: `test_exfiltration.py` 211 and 549 read `doc["schema"]` of its own document (`E.SCHEMA`, `exfiltration/v1`, `exfiltration.py` 55 and 446). Of the certifier's document `exfiltration.py` reads `inputs`, `rows`, `weights`, `legend`, `entries_rule` and `phase`.
+So nothing read `v1`, and I changed it.
+
+**The equality check** [run], against `7b314b7dcaca`, the same four documents (default; `--world-requests 1.778e16 --response-ids 1024`; each with `--failure-rate 1e-6`):
+- In each, 72 of 72 rows equal field for field apart from the new field, keys in the same order: 1,152 of 1,152 fields, 360 of 360 terms.
+- The new field: the label on 18 rows (`timing` and `all three` at each scope and period), null on 54.
+- At the top only `commit` and `schema` differ. `value` is 59645643.511189334 in both.
+- The prints: each table's headers are the same set in the new order; all 72 body rows of each are equal cell for cell by header, but for the 18 names that gained the label. Outside the tables one line is new and one changed.
+- Default document, unchanged: world's year 59,645,643.5 GB at D_j = 2 and 57,798,028.1 GB at D_j = 1; datacenter's year 15,907.2 GB and 15,414.5 GB.
+
+**The scratch merge with `9b5d80511bdf`** [run], nothing pushed, both scratch worktrees removed:
+- Directly into the head: stops on one file, `benchmarks/network_traces/pyproject.toml`, as at the earlier heads.
+- Through `main` (#8779 into `219763135681`, then that into the head): both clean. 12 files, all #8779's.
+- `benchmarks/harness/tests/test_exfiltration.py` on it: **11 tests, 10 passed, 1 failed**: `test_the_network_certifiers_part_is_beside_it_at_the_planners_requests`, line 369, `assert 1.7784008649596718e+16 < 1.7784008649596718e+16`. That is the assertion the later pass changes. With that line reading `lb.inputs(requests="census")` in the scratch only, 11 passed.
+- One more thing I checked, not asked: the head merged with today's `main` (`75ef75838f99`, 560 commits past my merge base, some in `benchmarks/spot_figures`). Clean; my two directories are the head's byte for byte; the default document has the same `value` and rows; `test_certifier_term.py` 20 passed. That ran in the checkout's environment, not one synced to today's `main`.
+
+**The run**: `r20261111-210610-cf01` at `f28f4e4acc2d` [run], launched 1:06 PM PST with `--on auto`, the same five suites and nine root files, one run for this head. **State: `waiting`** for a slot in its pool each time I read it (1:08, 1:11, 1:13, 1:14 and 1:24:53 PM PST), so it had not started 19 minutes after the launch. No verdict. I stop waiting here, as told. When it ends, its record should show 20 passes of `test_certifier_term.py` in `verity-network-traces` and nothing read outside inputs; the PR's body names it as waiting, and its verdict lines are not there yet. Locally at the head [run]: `test_certifier_term.py` 20 passed, `test_leak_bounds.py` 9 passed, `test_chain_record.py -k leak` 2 passed, ruff clean, the nine root files 112 passed.
+
+**PR body** [run]: `1eff`'s verdict lines, which I read from its record myself (70, 207, 21, 507, 538; 5 suites passed, 0 cached; the root files 112 passed; 18 passes of `test_certifier_term.py`). The new head's run is named with its state. A new section for the three changes; the body's own `all three` rows now carry the label. Title unchanged: it is still true.
+
+**Linear** [run]: one comment on NET-298 as network-accounting/TERMGB at 1:25 PM PST, with the head, the three changes and the run's id and state. It is 104 words, four over the skill's limit.
+
+**What I am least sure of**:
+1. The row's `with_set_time_card` is a string, and the top-level entry of the same name is an object (`value`, `unit`, `label`). I took your example name. If one shape is wanted, the row's could be `{"label": ...}`.
+2. The label is on the row's name, not on each cell. A cell copied without its name still has no label, as with a header.
+3. #8779's own print lists the certifier's rows by `row` (`exfiltration.py` 581-585), so its `timing` and `all three` rows, and its `certifier, all three` column, have no label. The rows' new field is there for it to read. One line for benchmarks, if you want it: "the certifier document's rows now carry `with_set_time_card`; `timing` and `all three` have the label and should print with it."
+4. The legend's bullets (`- timing (a change to the scan): ...`) do not carry the label in the name; their text names the card.
+5. The two new tests were run against four broken copies and failed on each, by a script outside the tree. That check is not a test in the suite.
+
+**Where I did not look**: only this repository was searched for readers of the schema's name. I did not look at the website's repository or at what reads stored documents outside the tree. I did not run the changed suites on a merge with today's `main`.
+
+TIMER: none
+
