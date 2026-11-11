@@ -1387,3 +1387,17 @@ statement (medians where several rows), their ratio, that type's own repeat spre
 of the rule for that cell. Then the rule's verdict overall, and what else differs inside the pairs. **Do not
 add the card's node to #8953**: that is a further field in proofs' script and waits for the rule's verdict
 and proofs' word.
+
+## Wed 11 Nov 18:08Z: two marks, and one of yours no longer merges: #8976's README (after the pairs table)
+
+- **Marked by me at 18:03Z: #9034 at `c9a5a45a33a1` and #8953 at `9f24efb08bca`.** The landing rules changed
+  on `main` today (the team skill): the verified queue builds a stack's bases first, so a pull request on
+  another's head may be marked before its base lands. So from now, say "ready for the mark" when a stacked
+  one is, and I mark it without waiting for its base.
+- **#8976 at `d23558d78962` conflicts with `main` (`cc6ee7446278`) in `tools/research/README.md`** (read by me
+  with `git merge-tree` at 18:04Z): infra's own changes to that README landed. **After the pairs summary:**
+  merge `origin/main` into #8976, keep infra's new text, redo your trim on what is there now (the `--cores`
+  lines as one sentence; the two passages infra agreed to cut, if `main` still has them), hold the file under
+  its cap on the merge, the touched suites, and say the new head: I mark it then. Infra said its own
+  correction trims that README elsewhere, so look at what it already cut before you cut again.
+- #8989's fixes are still to be read by me; I mark it after that.
