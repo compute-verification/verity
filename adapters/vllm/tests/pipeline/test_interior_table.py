@@ -76,15 +76,14 @@ NAMES = tuple(BT.name(RUN, PROMPT, OUTPUTS, s, LAYER) for s in range(SPANS))
 UNREAD = "c5" * 64
 
 
-def _opt_in(takes: str) -> pytest.MarkDecorator:
-    """The skip of a test that runs only under ``VERITY_VLLM_INTERIOR_TABLE=1``; its reason says how long it ``takes``."""
-    return pytest.mark.skipif(os.environ.get("VERITY_VLLM_INTERIOR_TABLE") != "1",
-                              reason=f"VERITY_VLLM_INTERIOR_TABLE=1: {takes}")
+def _opt_in(var: str, takes: str) -> pytest.MarkDecorator:
+    """The skip of a test that runs only under ``var``=1; its reason says how long it ``takes``."""
+    return pytest.mark.skipif(os.environ.get(var) != "1", reason=f"{var}=1: {takes}")
 
 
 #: a test on the module's one round 1 (`staged`) or its interior (`honest`)
-SHARED = _opt_in("about 5 minutes on a CPU to build the module's round 1 and interior over the table reads once, then up to "
-                 "2 minutes a test")
+SHARED = _opt_in("VERITY_VLLM_INTERIOR_TABLE", "about 5 minutes on a CPU to build the module's round 1 and interior over the "
+                 "table reads once, then up to 2 minutes a test")
 
 
 @functools.cache
@@ -158,7 +157,7 @@ def _first(tables):
 @pytest.fixture(scope="module")
 def staged():
     """Round 1's tables and `_first`'s stream once for the module, for the tests that read its record, digest and
-    sampled units. None has its stream accept an interior: a stream takes one a first-stage sample, so the test that does
+    sampled proof blocks. None has its stream accept an interior: a stream takes one a first-stage sample, so the test that does
     stages its own."""
     tables = _tables()
     return (*_first(tables), tables)
@@ -195,8 +194,8 @@ def _history(rec, first, it) -> dict:
     return IR.history(rec, [NAMES[u] for u in first.units], 2, C, it.published, bodies)
 
 
-@_opt_in("about 12 minutes on a CPU, the verifier checking the reads' interior program three times on a stream of "
-         "the test's own")
+@_opt_in("VERITY_VLLM_INTERIOR_TABLE", "about 12 minutes on a CPU, the verifier checking the reads' interior program three "
+         "times on a stream of the test's own")
 @pytest.mark.slow
 def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them():
     """Slow, on a stream of its own (a stream takes one interior a first-stage sample, and this test's accepts one): it
