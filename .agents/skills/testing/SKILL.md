@@ -30,7 +30,7 @@ $R "$S flock verity"            # these suites (a package name, a directory, or 
 $R "$S flock -- -k tanh -x"     # arguments after -- go to pytest
 $R "$S --quick"                 # without the tests marked slow
 $R "$S --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"   # the pre-mark run; the mark's tier runs it on the head merged onto main
-$R "$S --fresh"                 # ignore the cache
+$R "$S --fresh"                 # ignore the cache, Lake's artifact cache too: what the suites test is compiled
 uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
 
@@ -48,12 +48,13 @@ A pass is cached under a hash of the suite's inputs (its directory, its workspac
 the lock and installed distributions, the environment), uncommitted edits included; a passing test is also cached alone,
 under its module's key, which leaves out the test modules it can't reach (`suites.py`'s docstring has both keys). So a
 test depends on another test module only by importing or naming it, never through what that module does at import. The
-nightly `audit-main` job (`check.py --no-cache`) names any cached pass a fresh run contradicts. `suites.py --explain
+nightly `audit-main` job (`check.py --no-cache`) names any cached pass a fresh run contradicts, among every pass the commit's
+recorded checks hold, which it imports first. `suites.py --explain
 SUITE` says why a suite would run, and `lean_audit.py --explain PKG` the same for a Lean package.
 
 A failed test is reported failed, whoever is fixing it: no runner tolerates a red. To let one stand while its fix lands, add
 an allowance to `tools/verity/check/policy.toml` (`suite NAME::TEST`, the owner's handle, a UTC expiry and a reason) in a
-reviewed change: drive and the quick tier take that failure as not red until it expires, then ring its owner.
+reviewed change: the verified queue and the quick tier take that failure as not red until it expires.
 
 ## Where a test goes
 
@@ -132,7 +133,10 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   open: `tools/research/tests/waits.py`), and inject the clock the code measures with (`monkeypatch.setattr(mod,
   "clock", ...)`). No result may depend on load, a shared machine or what holds it (GPU leases, check slots, pods), ports
   and sockets, a race between processes, or an outside service. `suites.py` reports a test that passed and failed under
-  one key as `nondeterministic`: it is deleted, not fixed or rerun.
+  one key as `nondeterministic`: it is deleted, not fixed or rerun. On a CPU with AMX (a cloud VM), oneDNN's AMX kernel
+  now and then returns a preempted bf16 matrix product wrong, so the runner starts every suite's process, and `research
+  run` every job, with `ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16` unless the environment already names it (`ONEDNN_ISA`). A
+  script run outside both sets it itself, before torch's first primitive, which is when oneDNN reads it.
 - **Isolated:** write only under `tmp_path`, and change the environment, `sys.path` or a module only through
   `monkeypatch`; the runner fails a run whose tests changed a repository file, naming it.
 - **Exact:** compare bit-exact code's words, digests and pinned vectors, not approximations; a negative checks that the
@@ -143,7 +147,7 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
 - **Fixtures:** small ones sit in the suite's own `fixtures/`, shared ones under the root `fixtures/`, registered in
   `fixtures/artifacts.json`. One over the 256 KiB cap is registered there and gitignored instead: `research data put
   --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry and its path into `.gitignore`.
-  The control pod exports `next`'s registry every 5 minutes, so the fixture needs no ask. `suites.py` fetches it before the suites that read it (`research data fetch-fixtures` by hand, as before
+  The control pod exports `main`'s registry every 5 minutes, so the fixture needs no ask. `suites.py` fetches it before the suites that read it (`research data fetch-fixtures` by hand, as before
   `cargo test`), checks every byte against its id, and keys the suite on the id. A verifier's fixtures are the prover's
   bytes, never regenerated in its test; when a test can recompute an expected output, pin its digest, not the file. A
   fixture its test module rewrites from the tree (``python MODULE --write``) is a `Writer` in `tools/verity/check/pins.py`,

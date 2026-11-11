@@ -249,6 +249,7 @@ FLAGS = ["--build", "--closure"]
 #: the files of `tools/verity/lean/` no audit reads, each with what does: out of every key, and of the scratch tree, where a
 #: read of one fails the audit
 NOT_READ = {
+    "axiom_probe.py": "the axiom probe of `verity lean try`, which `lean_changed.py` and the CLI load",
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
     "lean_changed.py": "check's lean-changed step and the Lean fast path, which run beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
@@ -832,9 +833,10 @@ class WarmBuilds:
     """Each package's own `.lake/build`, kept under its `build_key` by the last run whose audit of it passed, so an auditor
     change, or a change to one module, doesn't rebuild every module. An audited package's is moved in and back only when its
     audit passed: its compile-time code may write in it. A package in the tree only as a path dependency gets a copy, which
-    never comes back. The audit still checks every statement against these `.olean` files and replays every declaration
-    through the kernel, and compiles a random sample of the modules its build kept again (`check.sampled_recompile`). The
-    newest `kept` by use stay (`evict`)."""
+    never comes back; a module of it that the artifact cache lacks is compiled by the first build that reaches it, and
+    indexed with that build's (`module_keys.settle`). The audit still checks every statement against these `.olean`
+    files and replays every declaration through the kernel, and compiles a random sample of the modules its build kept
+    again (`check.sampled_recompile`). The newest `kept` by use stay (`evict`)."""
 
     def __init__(self, store: Path, kept: int = BUILDS_KEPT, max_gb: float | None = BUILDS_MAX_GB):
         self.store, self.kept, self.max_gb = store, kept, max_gb
@@ -1033,18 +1035,21 @@ ARTIFACT = MK.ARTIFACT
 MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|" + MK.INDEX + r"/[0-9a-f]{128}\.json")
 #: what one run's bundle (`LakeArtifacts.bundle`) holds at most, uncompressed: a run's files over 4 GiB upload without resume
 BUNDLE_CAP = 3 << 30
-#: a key of `lean-deps-urls.json` naming a recorded check's bundle by its sha256 (`shared_bundles`)
+#: a key of `lean-deps-urls.json` naming a bundle of one of `PUBLISHERS`' runs by its sha256 (`shared_bundles`)
 SHARED = "lean-artifacts/"
 #: a bundle's name in the directory its audit writes it in (`LakeArtifacts.bundle_into`)
 BUNDLE_NAME = r"lean-artifacts(-\d+)?\.tar\.gz"
-#: a recorded check's file that is a bundle, in the run's `lean-audit/`
+#: a recorded check's or a records run's file that is a bundle, in the run's `lean-audit/`
 BUNDLE_FILE = re.compile("lean-audit/" + BUNDLE_NAME)
+#: the store's attempts of records runs (`lean_changed.py --records`), by the command `research run` recorded
+RECORDS_RUNS = "manifest_json LIKE '%tools/verity/lean/lean_changed.py%--records%'"
 #: the runs `shared_bundles` lists bundles of, each kind as (the store's attempts of it, a bundle's path among its files,
 #: which of the attempt's outputs list its files): a recorded check lists its own among its run's files; the audit of a
 #: ready mark's merge (`warm.py`) leaves its in the `--out` its caller gave it, which a caller that doesn't list its files
-#: still has in its run record
+#: still has in its run record; a records run writes its where a recorded check does (`lean_changed.audit_records`)
 PUBLISHERS = ((COMMON.RECORDED_CHECKS, BUNDLE_FILE, ("run_files",)),
-              (COMMON.MARK_AUDITS, re.compile(re.escape(COMMON.MARK_AUDIT_OUT) + BUNDLE_NAME), ("run_files", "run_record")))
+              (COMMON.MARK_AUDITS, re.compile(re.escape(COMMON.MARK_AUDIT_OUT) + BUNDLE_NAME), ("run_files", "run_record")),
+              (RECORDS_RUNS, BUNDLE_FILE, ("run_files",)))
 #: how many of the newest bundles of each kind of run the launcher sends: a candidate's shards end by the dozen, and counted
 #: with them a mark's bundle would be gone before the candidate that holds its change is built. The marks of the PRs the
 #: launcher's tree holds are sent beside these, however old (`shared_bundles`' ``heads``)
@@ -1077,9 +1082,9 @@ class LakeArtifacts:
     output that differs (`check.sampled_recompile`), which is what binds a restored `.olean` to its source.
 
     Between nodes, the module versions a recorded check's audit added travel as one bundle in its run's files (`bundle`), as
-    do those the audit of a ready mark's merge added (`warm.py`); the launcher sends a URL for each of the newest of each
+    do those the audit of a ready mark's merge added (`warm.py`) and those a records run added (`lean_changed.py
+    --records`); the launcher of a check, and `research run` for a records run, sends a URL for each of the newest of each
     and for those of the marks of the PRs its tree holds (`shared_bundles`), and a node takes in each it hasn't yet (`take`).
-    A records run (`lean_changed.py --records`) bundles what it added the same way, which `shared_bundles` doesn't list yet.
     A bundle is trusted as far as its source, as a verdict pack is (`verdicts.py`): a recorded run."""
 
     def __init__(self, store: Path, cap: int = ARTIFACTS_CAP):
@@ -1099,6 +1104,9 @@ class LakeArtifacts:
         one Lake restored) under its key; the number of entries new to the index. Whether the run passed is not read: a
         key names what a compile read, and a failed or killed run's compile of those is the compile a passing run's is,
         given the two things a passing audit said of the build, which are asked here of every build instead.
+        Of a build that names the modules Lake said it built (`"compiled"`: one that read Lake's own cache, where an
+        archive of main's published build unpacks to outputs, fresh `.hash` files and the publisher's trace, which nothing
+        in the build tells from a compile), only those go in.
         Only a build that says it ran in the sandbox (`"sandbox": true`) goes in: outside it, compile-time
         code runs as the user and could leave any outputs, traces and `setup.json` it chose in the build, each then indexed
         as its module's. And only a build none of whose sources runs code while it compiles, outside a reviewed listing
@@ -1131,6 +1139,9 @@ class LakeArtifacts:
                 keyed, owners = MK.keys(pkg, MK.policy_roots(pkg)), {}
                 with ThreadPoolExecutor(max_workers=8) as ex:
                     built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners), keyed)))
+                if isinstance(only := rep.get("compiled"), list):
+                    built = {m: b if isinstance(b, str) or m in only else "not compiled by this run: Lake didn't say it built it"
+                             for m, b in built.items()}
                 need, todo = set(), [m for m, b in built.items() if not isinstance(b, str)]
                 while todo:
                     if (m := todo.pop()) not in need:
@@ -1875,7 +1886,7 @@ def _run(out: Path, cache: Path, deps: Path, fresh: bool, log, urls: dict[str, s
     failed += [p for p in pkgs if p not in reports and p not in failed]
     regenerated = {p: reports[p]["regenerated"] for p in pkgs if reports.get(p, {}).get("settled")}
     for p, f in regenerated.items():
-        log(f"lean-audit: {p}: passed on its regenerated record ({f}), which drive commits over {p}/lean-audit.json")
+        log(f"lean-audit: {p}: passed on its regenerated record ({f}), which the queue commits over {p}/lean-audit.json")
     for rep in reports.values():                        # a pass cached before check.py reported codes has none to list
         rep.setdefault("failure_codes", [None] * len(rep.get("failures", [])))
     for p in UNREAD_FACTS:
@@ -1980,7 +1991,8 @@ def shared_bundles(store=None, limit: int = SHARED_LIMIT, heads: list[str] | tup
 
 
 def url_file(dest: Path, ttl_s: int = URL_TTL_S) -> Path | None:
-    """`presigned` written as ``dest/lean-deps-urls.json`` (mode 600), the name `check.py` looks for among a run's inputs."""
+    """`presigned` written as ``dest/lean-deps-urls.json`` (mode 600), the name `check.py` and a records run
+    (`lean_changed.sent_urls`) look for among a run's inputs."""
     if not (urls := presigned(ttl_s)):
         return None
     p = dest / URLS
