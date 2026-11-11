@@ -8,7 +8,8 @@ public import Proofs.Core.Game.RewindingCanon
 
 `pr_offReg_le` at `Verity.Rewinding.prBad_le_canon` in place of `prBad_le`: a run's extractions open a gate of the
 program off the committed trace with probability at most `√(N·Pr[conflict])`, `N` the program's gates, where
-`pr_offReg_le` gives `N·√Pr[conflict]`.
+`pr_offReg_le` gives `N·√Pr[conflict]`; `pr_regHit_le_canon` carries it through `ksReg_of_sessionKS`'s first half,
+so `εreg`'s `N·√Pr[B_conf]` can read `√(N·Pr[B_conf])`.
 -/
 
 @[expose] public section
@@ -16,6 +17,7 @@ program off the committed trace with probability at most `√(N·Pr[conflict])`,
 namespace Claims.SamplingGeneric
 
 open Claims Finset
+open Claims.Sampling (AuditStatement InScope)
 
 namespace Compiled
 
@@ -76,6 +78,56 @@ theorem pr_offReg_le_canon (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (
     _ = Real.sqrt (L.nG x * Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
           ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.Conflict H P x ω rr) := by
       rw [Fintype.card_fin, hconf]
+
+set_option synthInstance.maxSize 1024 in
+/-- `KSReg`'s first half from the sessions' bound, at `√(N·Pr[B_conf])` where `εreg` has `N·√Pr[B_conf]`: the
+proof of `ksReg_of_sessionKS` with `pr_offReg_le_canon` in place of `pr_offReg_le`. -/
+theorem pr_regHit_le_canon {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
+    (hSK : L.SessionKS H) {x : Msg} (hsc : L.Scope x) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.Freg H P x p.1) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + Real.sqrt (L.nG x * (Bconf H L Ω P x).Pr H) +
+        (Bconf H L Ω P x).Pr H := by
+  obtain ⟨s, Pt, hs, hPt, hin⟩ := hsc
+  obtain ⟨β, hβ0, hβ, hκ⟩ := hSK x Ω P
+  have hFlt : ∀ ω, ∀ v ∈ L.Freg H P x ω, v < L.nPU x := by
+    intro ω v hv
+    simp only [Freg, hs, mem_filter, mem_range] at hv
+    simp only [Compiled.nPU, hs]
+    exact hv.1
+  have hn : (0 : ℝ) ≤ L.nG x := Nat.cast_nonneg _
+  have hper : ∀ ω, Pr (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
+      ∃ u ∈ L.checked x r, u ∈ L.Freg H P x ω) ≤
+      Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
+        ∃ i, L.leadSel x (L.selReg H P x ω) (L.checked x rc.1) = some i ∧
+          ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
+            ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) +
+      (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) +
+        Real.sqrt (L.nG x) * Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
+          ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.Conflict H P x ω rr)) := by
+    intro ω
+    have hIO := (Sampling.Pr_union_le
+      (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2)
+      (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2)).trans
+        (add_le_add le_rfl ((L.pr_offReg_le_canon H P x ω).trans_eq (Real.sqrt_mul hn _)))
+    refine (Pr_fst (β := L.SlotEC x) (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
+      ∃ u ∈ L.checked x r, u ∈ L.Freg H P x ω)).symm.trans_le (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl hIO)
+    obtain ⟨hacc, v, hvl, hvF⟩ := hrc
+    obtain ⟨i, hi, u, hiu, huF⟩ := L.selReg_some H P x ω (hS.slots x rc.1) (hFlt ω) hvl hvF
+    obtain ⟨i₀, u₀, hlead, hu₀⟩ := leadOf_some hiu u.isLt
+    rcases reg_split hS hs hPt hin P ω rc.1 rc.2 hacc i u hiu huF i₀ u₀ hlead hu₀ with h | h | h
+    · exact Or.inl ⟨hacc, i₀, by rw [leadSel, hi, Option.bind_some, hlead], u₀, hu₀, h⟩
+    · exact Or.inr (Or.inl h)
+    · exact Or.inr (Or.inr h)
+  have hT := L.pr_unfound_le H P β hβ0 hβ (fun ω => L.leadSel x (L.selReg H P x ω))
+    fun ω r => hκ ω r (L.leadSel x (L.selReg H P x ω))
+  have hI := pr_inConf_le hbind hs P
+  have hC : Ex (fun ω : Ω => Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
+      ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.Conflict H P x ω rr)) ≤ Real.sqrt ((Bconf H L Ω P x).Pr H) :=
+    (Ex_sqrt_le _ fun _ => Pr_nonneg _).trans (Real.sqrt_le_sqrt (pr_conflict_le hbind hs P))
+  refine (Sampling.Pr_prod_eq_Ex _).trans_le ((Ex_mono hper).trans ?_)
+  rw [Ex_add, Ex_add, Ex_mul_left, Real.sqrt_mul hn]
+  linarith [mul_le_mul_of_nonneg_left hC (Real.sqrt_nonneg (L.nG x : ℝ))]
 
 end Compiled
 
