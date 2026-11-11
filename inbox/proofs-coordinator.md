@@ -43003,3 +43003,98 @@ For CONCRETE:
 For BREAKEVEN:
 - The split at registration: 0 GB [derived: a statement is already priced as one table]. Not priced: at most one short statement a block type a sampled request, at most 154 of 15,694 (row (i)) and 192 of 2,893 (row (ii)) [derived].
 - Lever "one salt a block of 16 columns at level 0" (SALTS's, unbuilt, Daniel's): at m = 35 it costs 1 query in 218 at level 0 or 0.25 bit of that term [modeled]; SALTS's seconds stand as SALTS gave them.
+
+## SERVEDCARD, Wed 11 Nov 08:46Z: #8859 fixed for the env-read lint (new head, quick tier running); PRF-548 question 2: Lean's setup a member is the window's 299 MB program parsed three or four times, not the member
+
+**1. #8859: not ready yet; my fix is pushed.**
+- [run] The quick tier at `f458b7ba94` (`r20261111-080116-0667`) failed one test of the root suite:
+  `tests/lint/test_repo_env_reads.py::test_no_new_reads`. It flagged `server_rate.py:262`, my direct read of `FC_VERIFIER_CPUS`.
+- The fix: a row now takes `ProofServer.verifier_cpus`, the placement the server actually made, so the file has no environment read.
+  The first fix (`92cd8713cf`) conflicted with #8679 in `test_server_rate.py`. The second keeps clear of #8679's lines.
+- The head is now `cursor/proofs-verifier-cpus-5d1e` at `563d9b20e91ee808eb619bdefc59b2e9d1373d50`.
+- [run] It merges clean in git with `main` `8201dacff26e`, #8679 `9a8abc0814b8`, #8771 `4b3b557b8c46` and #8425 `d4967690acd5`.
+  On the merges with #8679 and #8771, both test files and the env-read lint pass (21 and 20 tests passed).
+- Quick tier `r20261111-084145-8741` (cpu-11) launched at 08:41Z. I cancelled the one at `92cd8713` before it took a slot.
+  The ready line comes when it passes [guess: 09:30Z to 10:00Z]. The body is rewritten in the 08:37Z order and goes up with the
+  ready line. No Lean in it, so no CAPS line.
+- HEADPROF's branch `cursor/proofs-verifier-cpus-headprof-5d1e` at `5c12d7d4e86a232bfee39f292d41f3dc188340b7` measures the same
+  thing: the lint was about where the row reads the list, not about what it records. No change for HEADPROF.
+
+**2. The 08:19Z ask: what the lever row's "templated check −11.5%" is taken on.**
+[read: `benchmarks/spot_figures/breakeven/reprice.py` on `cursor/proofs-breakeven-be7a`, lines 92-93, 132-136, 218-226, 302-309.
+That branch's tip is from 8 Nov, so BREAKEVEN's current copy may differ; BREAKEVEN's entry cites the same lines, 304-305.]
+- It acts only on the planner's Lean verifier core-seconds a statement (`fixed += verify * v / CORE_PER_GPU`), never on a row's
+  GPU-seconds.
+- Each type's `v` becomes `min(v, goal)`. `goal` is the lesser of two figures:
+  - the fast column times the family's measured templated/flat ratio (FlashInfer K2048 31.1/304.3, RMSNorm N6144 96.1/138.9;
+    no ratio for any other type);
+  - 125/2100 = 5.95% of today's column: quant K6144's estimate, "taken for every type (assumed)". RMSNorm's families are left out.
+- So for every type but RMSNorm, the −11.5% assumes a templated check at 5.95% of today's flat seconds. Two families are
+  measured.
+- The head block `SparseMlaHeadBlock_v2` has no Lean row on `main`'s card, so `verifier_seconds` falls back to the column's
+  median, marked "assumed" [read: `benchmarks/spot_figures/cards/verifier_cost.glm-5.3.json` on `main` names only
+  `SparseMlaCombine_v1` of the sparse-attention types; `reprice.py:357-371`]. Under the lever it falls to 5.95% of that median.
+- #8771's templated check cannot reach the head block while it is staged flat as one net. It reaches no other type that is
+  staged flat either.
+
+**3. PRF-548 question 2, first of the three as asked: Lean's setup a member.**
+- [run `r20261111-082113-e93c`] The audit's own tree `4f816e9da631` on m12 (`LinearARow_v1`, the audit's files on cpu-3):
+  inputs 39.8 s, `setup (drawn)` 181.2 s, wall 224.6 s, accepted, peak 11.5 GB. That reproduces the audit's 177.5 s.
+- [run `r20261111-082428-c8f6`] `main`'s Lean verifier on the same member: inputs 30.3 s, setup 79.4 s, wall 110.5 s.
+  `registered.json` is given without `bound`, a key `main` refuses; the verdict is false for that reason only.
+- [run, perf call graph at 99 Hz with DWARF] On `main`, 96% of m12's wall goes to the window's program. It is parsed in full,
+  canonicalized and hashed three times:
+  - `ProvedScope.programDigest` (`ProvedScope.lean:443`, called at `FlockVerify.lean:1113`, during inputs): about 28 s.
+  - `HmRow.deriveTemplateUnits` (`HmRow.lean:1197`) calls `TemplateQuery.Desc.parse` (`TemplateQuery.lean:48-81`): about 33 s.
+  - `HmLinks.check` (`HmRow.lean:2552`) calls `Program.decode` (`Program.lean:956`): about 46 s.
+  - The last two run inside `Stmt.setupHiddenOf` (`HmRow.lean:2526`) under `Stmt.setupTablesOf` (`HmRow.lean:2591`).
+  - SHA-512 itself is 2.5% of the wall; the rest is JSON parsing, `canon`, allocation and page faults.
+- [run `r20261111-083727-58d8`] The control on another kind: m89948, `AttnBlockFirst_v1` NVIS=1, a 644 MB circuit.
+  - Inputs 35.2 s, setup 115.2 s, wall 156.7 s, accepted.
+  - The same three functions take about 142 s (91%).
+  - `Desc.parse` runs a fourth time there (about 33 s), outside `setupTablesOf` [guess: the sample's stratified-law check;
+    the report doesn't name the caller].
+  - Parsing the member's own circuit takes about 5 s.
+- What it reads: the window's `program.json`, 299,118,875 bytes [run: `ls` on cpu-3], and the 27 KB partition object.
+  The member enters only through its template's name, its unit indices and its links.
+- So the cost depends on the window, not on the member: the same 299 MB gives the same answer 561 times [read + run].
+- Audit totals [run: the audit's `lean-verify.log`s at `4f816e9da631`]: 13.8 h of inputs and 30.8 h of setup over 559 members.
+- What "once a window" would take [guess, unbuilt]: parse the program once and pass the parsed `Desc`, `Prog` and digest into
+  `setupHiddenOf`, and verify a window's members in one process (today `a5.py` starts one `flock-verify` a member).
+  - It is a Lean change in `verity/protocols/flock/verifier` only, not `security/`.
+  - The checks are the same, run on the same bytes, evaluated once. Nothing a guarantee says changes.
+  - On `main`, the per-member remainder is the wall minus the program's functions: about 4 s (m12) and 14 s (m89948) [run].
+
+**4. Question 1, so far: the 97 s between proofs is most likely the same program, in the ZK server.**
+- [run: the audit's 554 prove logs] The prover processes took 36.01 h in all:
+  - 2.61 h before the prover's clock starts, 1.49 h of it Rust's statement build;
+  - 17.61 h between `Register` and `Hello`, a median 83.5 s a member;
+  - 0.12 h of witness;
+  - 15.67 h from `Hello` to the end, 15.17 h of it proving.
+- [read at `4f816e9da631`: `firewall.rs:364-385`, `flock-circuit.rs:1209-1245`, `a5.py:738-739,848`, `a0.py:235-239`] Between
+  `Register` and `Hello` the prover waits in `LeanFinish::connect`.
+  - That call returns once the ZK server's Lean loop has set the statement up at the sample (`Setup.setup` calls
+    `Stmt.setupTablesOf`, `Hello.lean:116-117`).
+  - The audit passed that loop `--partition` and `--program`.
+  - So the ZK server parses the same window program for every member, each in a new process: the loop is held in a process
+    static, and each member is its own prover process.
+- [guess] Most of the 83.5 s is that setup; no log times it apart from the whole span.
+- A kept prover-verifier pair alone does not remove it. Parsing the program once a window removes it, for the ZK server and for
+  the verifier of record.
+
+**Next:** #8859's ready line. Then question 1's split measured: the ZK server's setup timed on m12 under `main`. Then question 3.
+Job C stays as planned.
+
+For the table:
+- Lean's 181 s of setup a member is the window's 299 MB program parsed three or four times, not the member. On `main` that is
+  106 of 110 s (m12) and 142 of 157 s (m89948) [run]. Parsed once a window, a member's Lean check would be about 4 to 14 s
+  [guess].
+- #8859 (the verifier cut) is at `563d9b20e9`; quick tier `r20261111-084145-8741` is running.
+
+For BREAKEVEN: the templated check's −11.5% takes every type but RMSNorm at 5.95% of today's Lean seconds, from quant K6144's
+estimate; two families are measured. It acts only on the planner's Lean verifier term. Rerun the lever row with the templated
+check left off `SparseMlaHeadBlock_v2`, which is staged flat, to get the share that can be reached today.
+
+For vllm: the 97 s between proofs and the 181 s of Lean setup look like one cost twice: the window's 299 MB program, parsed for
+every member by the ZK server and by the verifier of record. Is there a reason `a5` starts one `flock-verify` a member rather than
+one a window?
