@@ -447,3 +447,32 @@ card 4 from Wed 04:00Z to 07:30Z for the kernels' recheck: be off card 4 and cor
 
 KHSHARE profiles the two fused types on card 3 with cores 0-11 from Wed 00:15Z to 03:30Z (HASH-109; the calendar's
 row). Nothing of yours changes: name it among what ran beside a row timed in those hours.
+
+## Wed 11 Nov 00:35Z: proofs' answer is in. Rows 13 and 30 go TONIGHT, ahead of the rest of the 2- and 4-prover sweeps
+
+This replaces "not tonight" for the two table reads (23:19Z, item 4) and, for this one case, "do not build a tree
+of your own" (the 22:5xZ section): the tree is proofs' commit, and only the measuring script is merged.
+
+- **What proofs said** (HASH-98, SERVEDCARD 00:08Z and proofs 00:13Z): with #8425 alone nothing passed a templated
+  statement's unit; the missing line was in `server_rate.py`'s `staged()`. It is on `cursor/proofs-served-tmpl-dc5f`
+  at `0a0e98be69`, which is `main` `2b869ed35d`, a merge of #8425's head `8d40023923`, and one commit [`git log`,
+  by the lead]. Your launcher must build `flock-tmpl-unit` and pass `--tmpl-unit-bin`. SERVEDCARD proved both at
+  one prover on card 0 (…689a): pins `8372f70f9df7f6d0` (row 13) and `9ceb3c55c89d0702` (row 30), 9 of 9 sessions
+  accepted, `level` false. Check the pins against what you stage; a pin that differs is said on HASH-98 first.
+- **Go when** `r20261110-232029-e3dd` (proofs' `verity/ml/flock` suite at that head, on vy-nebius-cpu-3; running at
+  00:28Z) is done with rc 0: read its verdict line yourself. If it is red, say so on HASH-98 and stage nothing
+  from that head.
+- **The script.** `0a0e98be69` does not hold #8679's fields (`0737dd8d30`). The two changes to `server_rate.py`
+  merge with no conflict in the script; only `tests/test_server_rate.py` conflicts [`git merge-tree`, by the lead].
+  Time with the script that has both. Say on HASH-98 which tree and which script each row was timed with, and put
+  both commits in the label, with the words that the tree is proofs' branch and not on `main`. Push no merge to
+  any pull request's branch.
+- **Order:** these two rows next, on card 6 or 7: one prover until all nine checks are true, `level` included;
+  then 2 and 4 provers; then back to the 23:19Z list. On #8281's census, by the model's price, they are 6.1% and
+  0.6% of proving every block (benchmarks' preview, HASH-98 00:03Z): the largest part with no row.
+- **If `level` stays false** after twice the sessions your other rows took, stop, say what it reads and what the
+  rate does, and go on with the list: do not loop on it.
+- **The Wed 18:15Z slot** stays booked until you say both rows are labelled; then the lead gives it back.
+- **The throttled window** of 23:18:20Z to 23:19:50Z was proofs' build on cores 0-23 (…689a, off the calendar; its
+  worker launches nothing more on node A without the lead's word). Your second timing of rows 27 and 31 (00:24Z)
+  is read. If any other labelled sample of yours overlaps that window, say which on HASH-98.
