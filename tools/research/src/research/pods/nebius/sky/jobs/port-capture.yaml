@@ -52,7 +52,7 @@ setup: |
   SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
   [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
   cd "$SRC"
-  cd integrations/vllm
+  cd adapters/vllm
   bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cpu --out /workspace/jobs/bootstrap/capture-cpu     # skipped, without the lock, once this tree, role and venv passed
 
 run: |

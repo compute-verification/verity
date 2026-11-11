@@ -24,7 +24,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, seed replay and their composition |
 | `starts.py` | a start's entry in the starts registry the run command reads |
 
-The reference shapes are the lf model's (`integrations/vllm/tests/program/train_step_lf.py`), which the suite checks.
+The reference shapes are the lf model's (`adapters/vllm/tests/program/train_step_lf.py`), which the suite checks.
 
 ## Running a program
 
@@ -59,7 +59,7 @@ The suite: `uv run tools/verity/check/suites.py benchmarks/training_slowdown`.
 ## The grader
 
 `grader/grader.py` reads a run's training step off the Program the training-step frontend derives for it
-(`step_program`, in `integrations/vllm/verity_vllm/program/frontend/train_step.py`), beside this package's trace of the
+(`step_program`, in `adapters/vllm/verity_vllm/program/frontend/train_step.py`), beside this package's trace of the
 same step. From `grader/`:
 
 ~~~text
@@ -77,7 +77,7 @@ this package's capture beside them. It computes no ρ. Its tests are a suite of 
 
 - **Reads.** Each suite names what it reads outside its directory among its `inputs` (`pyproject.toml`,
   `grader/pyproject.toml`). From `verity`: the circuits' Definitions the gate prices compile, and the codec, the census
-  and the Boolean prices the grader reads with. From `integrations/vllm/verity_vllm`: the frontend, onto whose
+  and the Boolean prices the grader reads with. From `adapters/vllm/verity_vllm`: the frontend, onto whose
   reference Definitions `capture.lower` lowers a traced step, and its training-step module, which derives the steps the
   grader reads. From the frontend's tests, by path: the lf model. A run also reads what the tree doesn't hold: the
   program it is given and the start's θ.

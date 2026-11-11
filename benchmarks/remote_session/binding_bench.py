@@ -41,10 +41,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import store  # noqa: E402
+from verity.protocols.poub.verifier import store  # noqa: E402
 
-from verity.core.protocols.remote_bandwidth.session import lean_verifier as lv  # noqa: E402
-from verity.core.protocols.remote_bandwidth.session import verifier as V  # noqa: E402
+from verity.protocols.poub.verifier.session import lean_verifier as lv  # noqa: E402
+from verity.protocols.poub.verifier.session import verifier as V  # noqa: E402
 
 ROLE = "SYNTHETIC_BF16"
 NODE = b"binding-bench-node"
