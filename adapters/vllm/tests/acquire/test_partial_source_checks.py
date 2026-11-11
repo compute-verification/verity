@@ -1,8 +1,8 @@
 """The value checks of `verity_vllm.acquire.sources.partial_source` that no other CPU test enters: the re-execution half of
-`TPPartialSource.compare` (the rank-local GEMM run again on the tapped module input) and the capture's align witness of a step the oracle
-compare never reached.  The rank's members are committed by the CPU committer of `tests.check.opened` and read through
-`oracle_compare.OpenedReader`, opened and verified against the run root, as a rank worker reads them.  The late-read detector's verdicts are
-`tests/engine/test_tp2_t6_4_check.py`'s."""
+`TPPartialSource.compare` (the rank-local GEMM run again on the tapped module input), the capture's align witness of a step the oracle
+compare never reached, and the late-read detector's refusal of a received output that is in no decoder layer.  The rank's members are
+committed by the CPU committer of `tests.check.opened` and read through `oracle_compare.OpenedReader`, opened and verified against the run
+root, as a rank worker reads them.  The late-read detector's verdicts are `tests/engine/test_tp2_t6_4_check.py`'s."""
 from __future__ import annotations
 
 import json
@@ -112,3 +112,11 @@ def test_a_witness_the_capture_recorded_at_a_step_the_commit_never_reached_is_un
     assert res["witnesses"]["unpaired"] == [{"step": 2, "module": MOE, "in_commit": False, "in_capture": True}]
     assert res["witness_counts"] == {"equal": 0, "differs": 0, "unpaired": 1} and res["verdict"] == "FAIL"
     assert (res["steps_compared"], res["tensors"], res["equal"], res["mismatch_n"], res["missing_n"]) == (1, 1, 1, 0, 0)
+
+
+# --- the late-read detector ------------------------------------------------------------------------------------------------------------------
+
+def test_a_received_output_of_no_decoder_layer_is_refused_by_name():
+    com, run = commit_steps({0: [("model.mlp.experts/out", b"a" * 8), ("model.norm/0", b"b" * 8)]})
+    with pytest.raises(ValueError, match=r"^model\.mlp\.experts/out: a fused-MoE received output of no decoder layer"):
+        P.late_read_check(com, run, 0)
