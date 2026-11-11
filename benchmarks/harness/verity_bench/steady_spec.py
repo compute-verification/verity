@@ -40,7 +40,7 @@ toolkit are the spec's because the node can't be asked before the run: the node 
 node whose versions aren't the spec's, and writes them in the row (`VERSIONS`).
 
 **A passed point** (`point_why`): a row whose `pin`, `provers` and `cores.count` are the point's and its spec's, and
-that passes `steady`'s nine checks against the files of the run that measured it. A row of a run of the point itself
+that passes `steady`'s ten checks against the files of the run that measured it. A row of a run of the point itself
 also holds the point's load (its timed and warm sessions, its period) and the versions read on the node.
 """
 
@@ -318,7 +318,7 @@ def own_row(files: steady.Files, item: SteadyPoint) -> Mapping[str, Any] | str:
 def point_why(row: Mapping[str, Any], files: steady.Files, spec: SteadySpec, item: SteadyPoint, *,
               own: bool = False) -> str | None:
     """Why a row of a run isn't a passed point of the spec, or None when it is one: its `pin`, `provers` and
-    `cores.count` are the point's, and it passes the nine checks against the run's `files`. `own`: the row is a run of
+    `cores.count` are the point's, and it passes the ten checks against the run's `files`. `own`: the row is a run of
     the point's own identity, so it also holds the point's load (its timed and warm sessions, its period) and the
     versions the node side read, the spec's."""
 

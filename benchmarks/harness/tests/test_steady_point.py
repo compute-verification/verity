@@ -34,7 +34,8 @@ RECORD = "prove-glm53-flock-steady"
 #: the made-up run of `test_steady.made`: two provers of `gemm64` on GPU 3, in the run `r-own`
 POINT, RUN = "gemm64-k2", "r-own"
 #: what a row of a run of the point holds beyond the script's own fields
-OWN = {"pin": PIN, "cores": {"count": 10, "list": "0-9"}, SP.VERSIONS: {"driver": DRIVER, "cuda": CUDA}}
+OWN = {"pin": PIN, "cores": {"count": 10, "list": "0-9", "numa_nodes": [0]},
+       SP.VERSIONS: {"driver": DRIVER, "cuda": CUDA}}
 #: the made-up tree's files beside its spec: the prover's source, its tests and its document, a build script, the timing
 #: script and the spec's setup
 FILES = {
@@ -447,8 +448,13 @@ NOT_IT = [
     ({}, {"leases": None}, "cannot tell: `one_lease_own_card` (cannot tell): the run holds no `gpu-lease-usage.jsonl`"),
     ({}, {"start": None}, "cannot tell: `card_clear_start_end` (cannot tell): the run holds no record of its card at the row's start"),
     ({}, {"changes": {"flat": DROP}}, "cannot tell: `flat` (cannot tell): "),
-    ({}, {"changes": {"cores": {"count": 8, "list": "0-7"}}}, "fail: it ran on 8 cores; the spec's `cores` is 10"),
+    ({}, {"changes": {"cores": {"count": 8, "list": "0-7", "numa_nodes": [0]}}},
+     "fail: it ran on 8 cores; the spec's `cores` is 10"),
     ({}, {"changes": {"cores": DROP}}, "cannot tell: its row doesn't say which cores it ran on"),
+    ({}, {"changes": {"cores": {"count": 10, "list": "0-9"}}},
+     "cannot tell: `one_numa_node` (cannot tell): its row lacks `cores.numa_nodes`"),
+    ({}, {"changes": {"cores": {"count": 10, "list": "0-4,24-28", "numa_nodes": [0, 1]}}},
+     "fail: `one_numa_node` (fail): its CPUs (0-4,24-28) are on 2 NUMA nodes (0, 1)"),
     ({}, {"changes": {"pin": "cd" * 64}}, "fail: its `pin` is another circuit's (cdcdcdcdcdcdcdcd...)"),
     ({}, {"changes": {SP.VERSIONS: {"driver": "570.86.16", "cuda": CUDA}}}, "cannot tell: its row's `versions`"),
     ({}, {"changes": {SP.VERSIONS: DROP}}, "cannot tell: its row's `versions` (None) aren't the spec's"),
@@ -520,7 +526,10 @@ def test_a_labelled_row_is_a_passed_point_only_when_its_pin_count_and_cores_are_
 #: a labelled row at the point's pin and count that isn't a passed point, and what `plan` says of it
 LABELLED_NOT_IT = [
     ({"cores": DROP}, {}, "cannot tell: its row doesn't say which cores it ran on"),
-    ({"cores": {"count": 16, "list": "0-15"}}, {}, "fail: it ran on 16 cores; the spec's `cores` is 10"),
+    ({"cores": {"count": 16, "list": "0-15", "numa_nodes": [0]}}, {}, "fail: it ran on 16 cores; the spec's `cores` is 10"),
+    ({"cores": {"count": 10, "list": "0-9"}}, {}, "cannot tell: `one_numa_node` (cannot tell): its row lacks `cores.numa_nodes`"),
+    ({"cores": {"count": 10, "list": "0-4,24-28", "numa_nodes": [0, 1]}}, {},
+     "fail: `one_numa_node` (fail): its CPUs (0-4,24-28) are on 2 NUMA nodes (0, 1)"),
     ({"flat": DROP}, {}, "cannot tell: `flat` (cannot tell): "),
     ({}, {"leases": None}, "cannot tell: `one_lease_own_card` (cannot tell): "),
     ({"accepted": 19}, {}, "fail: `accepted` (fail): 19 of its 20 sessions accepted"),
@@ -1249,8 +1258,12 @@ def test_main_ends_on_a_signal_and_a_command_it_waits_for_is_ended_first(tmp_pat
 #: a point that was timed and isn't a passed point: the stand-in's change and what the verdict says
 TIMED_NOT_PASSED = [
     ({"row": {"flat": False}}, "fail: `flat` (fail): its statement cache's hit rate wasn't flat"),
-    ({"row": {"cores": {"count": 8, "list": "0-7"}}}, "fail: it ran on 8 cores; the spec's `cores` is 10"),
+    ({"row": {"cores": {"count": 8, "list": "0-7", "numa_nodes": [0]}}}, "fail: it ran on 8 cores; the spec's `cores` is 10"),
     ({"row": {"cores": DROP}}, "cannot tell: its row doesn't say which cores it ran on"),
+    ({"row": {"cores": {"count": 10, "list": "20-29"}}},
+     "cannot tell: `one_numa_node` (cannot tell): its row lacks `cores.numa_nodes`"),
+    ({"row": {"cores": {"count": 10, "list": "20-23,24-29", "numa_nodes": [0, 1]}}},
+     "fail: `one_numa_node` (fail): its CPUs (20-23,24-29) are on 2 NUMA nodes (0, 1)"),
     ({"row": {"flat": DROP}}, "cannot tell: `flat` (cannot tell): "),
     ({"leases": None}, "cannot tell: `one_lease_own_card` (cannot tell): the run holds no `gpu-lease-usage.jsonl`"),
     ({"leases": lease(0)}, "fail: `one_lease_own_card` (fail): its lease held GPU 0; its provers ran on GPU 3"),

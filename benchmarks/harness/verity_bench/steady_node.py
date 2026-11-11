@@ -308,7 +308,7 @@ def write_result(run_dir: Path, identity: str, item: steady_spec.SteadyPoint, wh
         "schema": RESULT_SCHEMA, "kind": KIND, "run_id": settings.RESEARCH_RUN_ID,
         "workload_fingerprint": {"identity": identity, "point": item.to_json()},
         "validation": {"status": "passed" if why is None else "failed", "checker": "verity_bench.steady_spec.point_why",
-                       "detail": why or f"{item.id}: the nine checks pass", "evidence": evidence},
+                       "detail": why or f"{item.id}: the ten checks pass", "evidence": evidence},
         "measurements": [] if rate is None else [{"name": "statements_per_s", "value": rate, "unit": "1/s"}],
         "measurement_files": [steady.RATES] if (run_dir / steady.RATES).is_file() else [], "artifacts": kept(run_dir)})
 

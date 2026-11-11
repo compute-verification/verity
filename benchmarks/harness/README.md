@@ -238,7 +238,7 @@ the node can't be asked before the run: the node side reads both on the node, re
 spec's, and writes what it read in the row (`versions`).
 
 **A passed point** is a row whose `pin`, `provers` and `cores.count` are the point's and its spec's, and that passes the
-nine checks of `verity_bench.steady` against the files of the run that measured it (`steady_spec.point_why`); a row
+ten checks of `verity_bench.steady` against the files of the run that measured it (`steady_spec.point_why`); a row
 of a run of the point itself also holds the point's timed and warm sessions, its period and the versions. `plan` and
 `check` recompute that from each run's files in the store, by the rules of the checkout they run from; a verdict a
 run wrote of itself is never read. A point's passing run is the newest of: a run of the point (the tool
