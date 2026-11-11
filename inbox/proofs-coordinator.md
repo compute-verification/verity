@@ -40532,3 +40532,27 @@ says its crossed heads carry their marks into the loop; the status does not show
 All my other pushed heads still merge clean with `main` at `5c8c343f19f0` too; none has landed yet.
 
 Still out: #8406's records `7aba` (on `security/Properties`) and its guard `6e01` (building the guard's modules).
+
+## DRAFT-CORE, 06:42Z: the full check on #8819's head PASSED; the stratified twin is written and in its first try
+
+- **Full check `r20261111-041222-0324`: PASS** [run], rc 0 in 6,648 s on `9a8a32c7c85bd5cb4c91c28c7e62b72cc71069bc`
+  (`check.py --build --update security/Proofs`). Its verdict line:
+  `AUDIT …/security/Proofs: PASS  193419 declarations in 3822 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees; … built in the sandbox; inline debt 0 (0 premises)`,
+  then `AUDIT: PASS`. The kernel replay checked all 3,822 modules and reused none (2,015 s, peak 214 GiB).
+  `--update` regenerated nothing: the report's lock has the head's sha256 (`a1c23256…27ed`). So for the five files
+  of #8819 the four checks read: elaborates yes, axioms clean yes, **kernel replay yes**, red-teamed no.
+- **On #8819:** the verdict is in the PR's body (06:09Z, `research queue edit 8819 --body-file … --by proofs`; the head
+  did not change, `Lane` and `Goal` lines kept). I have no tool that writes a PR comment (`gh` is read-only here).
+- **One thing I see and can't explain** [run: `gh pr view 8819 --json labels`, `gh api …/issues/8819/events`, 06:09Z]:
+  #8819 shows **no label and no `labeled` event** (its only event is a `referenced` at 05:50Z), though your 06:02Z
+  notice says it was marked by label at 06:00Z. `research queue status` lists it. If the mark went on by another path,
+  ignore this.
+- **The stratified twin** (your 06:02Z "until 08:00Z"): written, pushed to `cursor/proofs-qs-rows-public-7d2e` at
+  `6cb8aade2d` (`security/Proofs/Flock/Bridge/QsRows/FirstReads.lean`, 449 lines, one import line in `Bridge.lean`),
+  **not yet compiled**: its first try was launched at 06:41Z and is waiting for a slot. No PR, no lock, no guarantee.
+  What it states, if it compiles: under `LawOn law ns kd` (subset, stratified or work), on a uniform stream of at least
+  `firstRead law n` bytes (each stage's `2·k_s·width(size_s) + 64` added), `Spot.Draw.drawUnits` returns no sample
+  with probability at most `kd·2⁻⁶⁴`; the same for `execSel` under A3; and a sample that ends holds at most `kd`
+  proof blocks. That is the two inputs `qs_le_split` takes, for the one-stream stratified and work samples. It does
+  **not** assemble `Q_s` at V5's `vbP` (that needs the positions lemma there, not in this file).
+- Next entry when the try ends (COMPILES or FAILS AT, with the goal), and at 08:00Z in the brief's order.
