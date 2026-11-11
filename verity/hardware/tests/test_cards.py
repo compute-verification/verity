@@ -104,6 +104,15 @@ def test_derived_host_numbers(sku: str) -> None:
     assert value(card, "store.chip") == sockets * per_socket + sockets * cores * per_core
 
 
+@pytest.mark.parametrize("sku", skus("host"))
+def test_a_vm_gives_a_gpu_no_more_cores_than_the_server_has(sku: str) -> None:
+    """`cpu.vm_cores`, the cores a GPU that a node's VM gives, is a measured share of the server's cores, so it is a
+    measurement and no larger than them."""
+    card = load(sku)
+    assert card["cpu"]["vm_cores"]["mark"] == "measurement"
+    assert 0 < value(card, "cpu.vm_cores") <= value(card, "cpu.sockets") * value(card, "cpu.cores")
+
+
 def test_the_quoted_numbers() -> None:
     """The firmware ceilings, host peaks and bandwidths already quoted outside this package, pinned so that a change to
     one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host card states."""

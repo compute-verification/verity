@@ -14,6 +14,8 @@ nodes = "two H200 nodes, each VM carrying one h200-sxm-141gb card and seeing 1 x
 sockets = { value = 2, unit = "socket", mark = "ceiling", source = "the 8468 is a 2S part (Intel ARK 231735, Scalability 2S), and HGX H200 hosts are dual-socket; the VMs can't see the server's socket count" }
 cores = { value = 48, unit = "core/socket", mark = "ceiling", source = "Intel ARK 231735 (Xeon Platinum 8468: 48 cores)" }
 priority_cores = { value = 0, unit = "core/socket", mark = "ceiling", source = "Sapphire Rapids has no Priority Core Turbo" }
+# What a node's VM gives each GPU it carries: a measurement of our nodes, not a number of the server.
+vm_cores = { value = 8, unit = "core/GPU", mark = "measurement", source = "the cores a GPU an H200 node's VM gives, not the server's: lscpu on one of the two shows 1 socket x 8 cores x 2 threads, and the VM carries one H200 (art:2b19fdd166a7); the server has cpu.sockets x cpu.cores, 96, and a VM can't see how many GPUs it carries" }
 
 [clock]
 turbo = { value = 3.8, unit = "GHz", mark = "ceiling", source = "Intel ARK 231735: max turbo 3.8 GHz (all-core turbo 3.1); Intel publishes no AMX clock, so the ceiling takes max turbo on every core" }
