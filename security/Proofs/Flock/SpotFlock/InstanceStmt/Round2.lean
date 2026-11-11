@@ -84,7 +84,7 @@ theorem stmt_ofJson (r : Run) (circ cls t : String) :
   have hd : FlockComplete.JsonRT.Distinct
       [("draw", drawJ), ("header", hdrJ r circ cls), ("registered", regJ), ("template", Json.str t)] := by simp
   unfold Spot.SecondStage.Stmt.ofJson?
-  rw [keys_stmt r circ cls t, bne_self_eq_false, if_neg Bool.false_ne_true,
+  rw [keys_stmt r circ cls t, bne_self_eq_false, ite_eq_right Bool.false_ne_true,
     SpotFlock.getD_mkObj hd (k := "template") (v := .str t) (by simp),
     SpotFlock.getD_mkObj hd (k := "header") (v := hdrJ r circ cls) (by simp),
     SpotFlock.getD_mkObj hd (k := "draw") (v := drawJ) (by simp),

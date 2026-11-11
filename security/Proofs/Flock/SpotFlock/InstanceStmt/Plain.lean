@@ -44,12 +44,14 @@ theorem plain_rowJ (p : Port) : plain (rowJ p) = true := by
   refine FlockSoundness.Discharge.Recursion.FirewallObj.plain_mkObj (by simp) ?_
   simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
   exact ⟨⟨by simp [plainStr, String.all_bool_eq], plain_arr_map _ _ fun w => plainStr_hex16 w⟩,
-    ⟨by simp [plainStr, String.all_bool_eq], plainStr_hexOf _⟩, ⟨by simp [plainStr, String.all_bool_eq], plainStr_hexOf _⟩⟩
+    ⟨by simp [plainStr, String.all_bool_eq], plainStr_hexOf _⟩,
+    ⟨by simp [plainStr, String.all_bool_eq], plainStr_hexOf _⟩⟩
 
 /-- `plain` of a value written with `Json.mkObj`, `ja`, `js` and `jn`, once its other definitions are unfolded. Each
 object's members are its side goals, so the discharge depth bounds how deep objects nest. -/
 macro "plain_json" : tactic =>
-  `(tactic| simp (maxDischargeDepth := 16) [FlockSoundness.Discharge.Recursion.FirewallObj.plain_mkObj, plain, plainList,
-    plainStr, String.all_bool_eq, jn, js, ja, plain_rowJ, ↓plainStr_hexOf, ↓plainStr_keyHex, ↓plainStr_hex16])
+  `(tactic| simp (maxDischargeDepth := 16) [FlockSoundness.Discharge.Recursion.FirewallObj.plain_mkObj, plain,
+    plainList, plainStr, String.all_bool_eq, jn, js, ja, plain_rowJ, ↓plainStr_hexOf, ↓plainStr_keyHex,
+    ↓plainStr_hex16])
 
 end SpotFlock.InstanceStmt

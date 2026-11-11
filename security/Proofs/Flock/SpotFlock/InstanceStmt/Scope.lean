@@ -126,7 +126,7 @@ theorem publicOf_cO (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B'
     (hd : canonUtf8 (hdrJ r (hexOf H) (hexOf C)) = .ok s4) :
     ProvedScope.publicOf tz (cO ls lh H C A B A' B' s1) (pubOf r (hexOf H) (hexOf C)) =
       .ok (pubO r ls lh H C A B A' B' s1 s3 s4) := by
-  rewrite [ProvedScope.publicOf, if_pos hidden_tzX]
+  rewrite [ProvedScope.publicOf, ite_eq_left hidden_tzX]
   exact load_pubO r ls lh H C A B A' B' s1 s3 s4 hr hCe hu1 hu2 hd
 
 /-- **The circuit and public file pass `check`'s circuit rules**: a shared-row public file under the verifier's own
@@ -307,7 +307,7 @@ theorem stmtOf_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : SpotFlock.stmt
 theorem parseStmt_x (hn : FixedNetsBuild) (r : Run) :
     _root_.Flock.Desc.parseStmt tz (ins r).read.I.circuitFile (ins r).read.I.tables = .ok (.single cF) := by
   unfold _root_.Flock.Desc.parseStmt
-  rewrite [if_neg (by rw [tmpl_tzX]; decide)]
+  rewrite [ite_eq_right (by rw [tmpl_tzX]; decide)]
   exact _root_.Flock.Desc.parse_single (parseOut_x hn)
 
 theorem unitLog_cO (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
@@ -331,14 +331,13 @@ theorem templateOk_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) (h : SpotFlo
   unfold SpotFlock.templateOk
   rewrite [h0, readOf_x hn hr, shape_x hn hr]
   simp only [tags_ins, stmt_ins hn r, parseStmt_x hn r, hidden_tzX, typed_tzX, unitLog_cO, v2_cO, beq_self_eq_true,
-    Bool.not_false, Bool.and_self, Bool.true_and, Bool.and_true]
+    Bool.not_false, Bool.and_self]
 
 /-- **A session statement that is the reference statement is in scope** (`sessionOk`), at a registration whose reference
 statement is `x r`. -/
 theorem sessionOk_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) (h : SpotFlock.Held) (h0 : h.xS₀ 0 = x r) :
     SpotFlock.sessionOk h 0 (x r) = true := by
   unfold SpotFlock.sessionOk
-  simp only [h0, zkOk_x hn hr, scopeCheck_x hn hr, hiddenOf_x hn hr, beq_self_eq_true, Bool.and_self, Bool.true_and,
-    Bool.and_true]
+  simp only [h0, zkOk_x hn hr, scopeCheck_x hn hr, hiddenOf_x hn hr, beq_self_eq_true, Bool.and_self]
 
 end SpotFlock.InstanceStmt

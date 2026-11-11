@@ -34,8 +34,8 @@ sample and its registered reads (`FlockDeploy.jsonOf`). For a run `r` whose stri
   `hdrJ r circ cls` (`parse_hdr`);
 * `jsonOf_draw`, `jsonOf_reg`: the sample and the registered reads parse back to `drawJ` and `regJ`.
 
-`InstanceStmt.Round2` makes round 2's statement of them. Each object's members are its list in key order (`*_model`, by `kernel_rfl`, the run's strings left as variables), so
-`plain` reads it member by member (`Concrete.plain_obj_of`).
+`InstanceStmt.Round2` makes round 2's statement of them. Each object's members are its list in key order (`*_model`,
+by `kernel_rfl`, the run's strings left as variables), so `plain` reads it member by member (`Concrete.plain_obj_of`).
 -/
 
 @[expose] public section
@@ -184,7 +184,7 @@ theorem findByte_nl (A B : ByteArray) (hA : (10 : UInt8) ∉ A.data.toList) :
   have h10 : "\n".toUTF8.data.toList = [10] := by decide +kernel
   rw [findByte_eq, ByteArray.data_append, ByteArray.data_append, Array.toList_append, Array.toList_append, h10,
     List.drop_zero, List.findIdx?_append, hn, Option.none_or, List.cons_append, List.findIdx?_cons, beq_self_eq_true,
-    if_pos rfl, Option.map_some, Option.map_some, Nat.zero_add, Nat.add_zero, Array.length_toList]
+    ite_eq_left rfl, Option.map_some, Option.map_some, Nat.zero_add, Nat.add_zero, Array.length_toList]
   rfl
 
 /-- The public file's first newline ends the header's text. -/

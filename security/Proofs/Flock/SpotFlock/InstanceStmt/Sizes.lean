@@ -109,7 +109,8 @@ theorem icl_le : ∀ L : List (List Char), ([','].intercalate L).length ≤ (L.m
     simp only [List.length_append, List.length_singleton, List.map_cons, List.sum_cons] at ih ⊢
     omega
 
-theorem mem_len (e : (_ : String) × Json) : (memberChars e).length = e.1.toList.length + 3 + (jsonChars e.2).length := by
+theorem mem_len (e : (_ : String) × Json) :
+    (memberChars e).length = e.1.toList.length + 3 + (jsonChars e.2).length := by
   simp only [memberChars, List.length_append, List.length_cons, List.length_nil]
 
 theorem str_len (s : String) : (jsonChars (.str s)).length = s.toList.length + 2 := by
@@ -125,7 +126,8 @@ theorem obj_le {t : Impl String (fun _ => Json)} {L : List ((_ : String) × Json
   simp only [List.length_cons, List.length_append, List.length_nil]
   omega
 
-theorem arr_le (l : List Json) : (jsonChars (.arr l.toArray)).length ≤ (l.map fun j => (jsonChars j).length + 1).sum + 2 := by
+theorem arr_le (l : List Json) :
+    (jsonChars (.arr l.toArray)).length ≤ (l.map fun j => (jsonChars j).length + 1).sum + 2 := by
   have h := icl_le (l.map jsonChars)
   simp only [List.map_map, Function.comp_def] at h
   show ('[' :: [','].intercalate (jsonCharsList l) ++ [']']).length ≤ _
@@ -225,8 +227,8 @@ theorem name_size : NAME.toUTF8.size < 2 ^ 12 := by decide +kernel
 
 theorem raw_fits (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : (raw r).Fits where
   statement := Nat.lt_trans name_size (by decide)
-  circuit := Nat.lt_of_le_of_lt (circuit_le _ _ hn.1.2.2.2 hn.2.2.2.2 (FlockDeploy.sha_lines hn) (FlockDeploy.hm_lines hn))
-    (by decide)
+  circuit := Nat.lt_of_le_of_lt
+    (circuit_le _ _ hn.1.2.2.2 hn.2.2.2.2 (FlockDeploy.sha_lines hn) (FlockDeploy.hm_lines hn)) (by decide)
   publicFile := Nat.lt_trans (public_lt hr) (by decide)
   tables := by simp [raw, rawOf]
   tableItems := by simp [raw, rawOf]

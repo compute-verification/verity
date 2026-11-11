@@ -76,7 +76,8 @@ def progJ : Json := Json.mkObj [("annotations", Json.mkObj []), ("callees", ja [
         ("params", ja []), ("ret", Json.mkObj [("affine", ja [js "n", jn 0, jn 0, jn 2])]),
         ("ret_type", ja [js "Array", jn 2, ja [js "Value", jn 16]])]),
       ("form", js "composite"), ("id", js "Root[Two_v1]_v1")]),
-    ("T_v1", Json.mkObj [("form", js "primitive"), ("id", js "T_v1"), ("params", ja []), ("ret", ja [js "Value", jn 16])])]),
+    ("T_v1", Json.mkObj [("form", js "primitive"), ("id", js "T_v1"), ("params", ja []),
+      ("ret", ja [js "Value", jn 16])])]),
   ("program_fn", js "Two_v1"), ("root", js "Root[Two_v1]_v1"), ("schema", js "verity-ir/descriptor/v1"),
   ("types", ja [ja [js "Value", jn 16], ja [js "Array", jn 2, ja [js "Value", jn 16]]])]
 def progText : String := printJson progJ
@@ -98,7 +99,8 @@ def partHex : String :=
 
 def rng (net : String) (sl p0 n : Nat) : Json := Json.mkObj [("count", jn n), ("net", js net), ("pos0", jn p0),
   ("slot_log", jn sl), ("type", js "unit")]
-def mrng (sl p0 n : Nat) : Json := Json.mkObj [("count", jn n), ("pos0", jn p0), ("slot_log", jn sl), ("type", js "mask")]
+def mrng (sl p0 n : Nat) : Json :=
+  Json.mkObj [("count", jn n), ("pos0", jn p0), ("slot_log", jn sl), ("type", js "mask")]
 
 /-- The leaf scheme `Tags.circuit` pins (`Tags.leafSchemeHm96Os`), its members in key order. -/
 def lsM : Json := Json.mkObj [("id", js "hm96-sha512/v1"), ("inner", js "sha512 column digest"),

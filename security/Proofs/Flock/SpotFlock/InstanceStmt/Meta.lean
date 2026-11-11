@@ -99,7 +99,8 @@ theorem head_none : ("flock-circuit " ++ "copy16").toByteArray.data.toList.findI
   decide +kernel
 
 theorem bytes_cons (a : String) (L : List String) :
-    (joinNl (a :: L)).toByteArray.data.toList = a.toByteArray.data.toList ++ 10 :: (joinNl L).toByteArray.data.toList := by
+    (joinNl (a :: L)).toByteArray.data.toList =
+      a.toByteArray.data.toList ++ 10 :: (joinNl L).toByteArray.data.toList := by
   rw [joinNl_cons, String.toByteArray_append, String.toByteArray_append, ByteArray.data_append, ByteArray.data_append,
     Array.toList_append, Array.toList_append, nl_bytes, List.append_assoc, List.singleton_append]
 

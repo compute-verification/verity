@@ -109,40 +109,50 @@ section
 variable (ls lh : HmNets.Laid) (hls : VStar.netLines ls = 256002) (hlh : VStar.netLines lh = 246786)
 include hls hlh
 
-theorem line_unit (i : Nat) (hi : i = 2) : (lines ls lh).getD i "" = "CIRCUIT" ++ " " ++ "unit" ++ " " ++ toString 258 := by
-  have e : lines ls lh = PL ++ (cU :: netLs "copy16" unitLaid) ++ ((cS :: netLs "sha512x3" ls) ++ (cH :: netLs "hm96" lh)) := by
+theorem line_unit (i : Nat) (hi : i = 2) :
+    (lines ls lh).getD i "" = "CIRCUIT" ++ " " ++ "unit" ++ " " ++ toString 258 := by
+  have e : lines ls lh =
+      PL ++ (cU :: netLs "copy16" unitLaid) ++ ((cS :: netLs "sha512x3" ls) ++ (cH :: netLs "hm96" lh)) := by
     rw [lines_eq ls lh hls hlh]; simp
   rw [e]; exact (getD_mid _ _ _ _ _ i (by simp [hi])).trans circuit_unit
 
 theorem line_sha (i : Nat) (hi : i = 261) :
     (lines ls lh).getD i "" = "CIRCUIT" ++ " " ++ "sha512x3" ++ " " ++ toString 256002 := by
-  have e : lines ls lh = (PL ++ (cU :: netLs "copy16" unitLaid)) ++ (cS :: netLs "sha512x3" ls) ++ (cH :: netLs "hm96" lh) := by
+  have e : lines ls lh =
+      (PL ++ (cU :: netLs "copy16" unitLaid)) ++ (cS :: netLs "sha512x3" ls) ++ (cH :: netLs "hm96" lh) := by
     rw [lines_eq ls lh hls hlh]
   rw [e]; exact (getD_mid _ _ _ _ _ i (by simp [hi, netLs_length, unit_lines])).trans circuit_sha
 
 theorem line_hm (i : Nat) (hi : i = 256264) :
     (lines ls lh).getD i "" = "CIRCUIT" ++ " " ++ "hm96" ++ " " ++ toString 246786 := by
-  have e : lines ls lh = (PL ++ (cU :: netLs "copy16" unitLaid) ++ (cS :: netLs "sha512x3" ls)) ++ (cH :: netLs "hm96" lh) ++ [] := by
+  have e : lines ls lh =
+      (PL ++ (cU :: netLs "copy16" unitLaid) ++ (cS :: netLs "sha512x3" ls)) ++ (cH :: netLs "hm96" lh) ++ [] := by
     rw [lines_eq ls lh hls hlh, List.append_nil]
   rw [e]; exact (getD_mid _ _ _ _ _ i (by simp [hi, netLs_length, unit_lines, hls])).trans circuit_hm
 
 theorem ext_unit (a b : Nat) (ha : a = 3) (hb : b = 261) :
     (lines ls lh).toArray.extract a b = (netLs "copy16" unitLaid).toArray := by
-  have e : lines ls lh = (PL ++ [cU]) ++ netLs "copy16" unitLaid ++ ((cS :: netLs "sha512x3" ls) ++ (cH :: netLs "hm96" lh)) := by
+  have e : lines ls lh =
+      (PL ++ [cU]) ++ netLs "copy16" unitLaid ++ ((cS :: netLs "sha512x3" ls) ++ (cH :: netLs "hm96" lh)) := by
     rw [lines_eq ls lh hls hlh]; simp
   rw [e]; exact extract_mid _ _ _ a b (by simp [ha]) (by simp [hb, netLs_length, unit_lines])
 
 theorem ext_sha (a b : Nat) (ha : a = 262) (hb : b = 256264) :
     (lines ls lh).toArray.extract a b = (netLs "sha512x3" ls).toArray := by
-  have e : lines ls lh = (PL ++ (cU :: netLs "copy16" unitLaid) ++ [cS]) ++ netLs "sha512x3" ls ++ (cH :: netLs "hm96" lh) := by
+  have e : lines ls lh =
+      (PL ++ (cU :: netLs "copy16" unitLaid) ++ [cS]) ++ netLs "sha512x3" ls ++ (cH :: netLs "hm96" lh) := by
     rw [lines_eq ls lh hls hlh]; simp
-  rw [e]; exact extract_mid _ _ _ a b (by simp [ha, netLs_length, unit_lines]) (by simp [hb, netLs_length, unit_lines, hls])
+  rw [e]
+  exact extract_mid _ _ _ a b (by simp [ha, netLs_length, unit_lines]) (by simp [hb, netLs_length, unit_lines, hls])
 
 theorem ext_hm (a b : Nat) (ha : a = 256265) (hb : b = 503051) :
     (lines ls lh).toArray.extract a b = (netLs "hm96" lh).toArray := by
-  have e : lines ls lh = (PL ++ (cU :: netLs "copy16" unitLaid) ++ (cS :: netLs "sha512x3" ls) ++ [cH]) ++ netLs "hm96" lh ++ [] := by
+  have e : lines ls lh =
+      (PL ++ (cU :: netLs "copy16" unitLaid) ++ (cS :: netLs "sha512x3" ls) ++ [cH]) ++ netLs "hm96" lh ++ [] := by
     rw [lines_eq ls lh hls hlh]; simp
-  rw [e]; exact extract_mid _ _ _ a b (by simp [ha, netLs_length, unit_lines, hls]) (by simp [hb, netLs_length, unit_lines, hls, hlh])
+  rw [e]
+  exact extract_mid _ _ _ a b (by simp [ha, netLs_length, unit_lines, hls])
+    (by simp [hb, netLs_length, unit_lines, hls, hlh])
 
 end
 
@@ -181,10 +191,10 @@ fwd_def cX parse_cX (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse)
       HmNets.check c = .ok ()) :
     HmRow.parse tz (bytesOf ls lh) [] by
   [hH, hcl, prog_hex, part_hex, hutf ls lh, hsplit ls lh, lines_if _, getD_toArray, getElem!_toArray, lines1,
-    trim_meta, starts_meta, drop_meta, parse_meta, trim_of, size_lines ls lh hls hlh, line_unit ls lh hls hlh, line_sha ls lh hls hlh,
-    line_hm ls lh hls hlh, tokens3, getD3, toNat?_toString, ext_unit ls lh hls hlh, ext_sha ls lh hls hlh,
-    ext_hm ls lh hls hlh, parse_unit, hps, hph, forIn_yield, forIn_done, hc1, hc2, bne_self, hck, unit_eq, open_none,
-    res_none, sparse_none, opening_none]
+    trim_meta, starts_meta, drop_meta, parse_meta, trim_of, size_lines ls lh hls hlh, line_unit ls lh hls hlh,
+    line_sha ls lh hls hlh, line_hm ls lh hls hlh, tokens3, getD3, toNat?_toString, ext_unit ls lh hls hlh,
+    ext_sha ls lh hls hlh, ext_hm ls lh hls hlh, parse_unit, hps, hph, forIn_yield, forIn_done, hc1, hc2, bne_self,
+    hck, unit_eq, open_none, res_none, sparse_none, opening_none]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
     HmRow.classOf]
   shallow [metaText]
