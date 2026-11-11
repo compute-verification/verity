@@ -42,8 +42,6 @@ open FlockSoundness FlockSoundness.Model
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {wideLeaf : Bool}
-
 /-- **The masked verifier's schedule at `m`**: `Zk.schedule`'s schedule and padding `t = 2·q₀`; the default where the
 verifier refuses `m`. -/
 def zkSched (wideLeaf : Bool) (m : ℕ) : Flock.Schedule × ℕ :=
@@ -74,9 +72,10 @@ theorem schedule_norm (w : Bool) (m : ℕ) :
   · rfl
   · by_cases h : 32 ≤ m
     · rw [show (true && decide (32 ≤ m)) = true by simp [h]]
-    · rw [show (true && decide (32 ≤ m)) = false by simp [h]]
+    · have hm : m ≤ 31 := by omega
+      rw [show (true && decide (32 ≤ m)) = false by simp [h]]
       unfold Flock.Zk.schedule
-      rw [queries0_of_le (by omega), fast100At_of_le (by omega)]
+      rw [queries0_of_le hm, fast100At_of_le hm]
 
 theorem zkSched_norm (w : Bool) (m : ℕ) : zkSched (w && decide (32 ≤ m)) m = zkSched w m := by
   unfold zkSched

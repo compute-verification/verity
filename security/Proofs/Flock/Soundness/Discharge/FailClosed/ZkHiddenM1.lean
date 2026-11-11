@@ -316,7 +316,7 @@ theorem ksStrictZm1_le_closed (ts : List (TabZK F mPts)) (j : Fin ts.length) (hT
       Real.sqrt (2 ^ (lvOf (ts.get j).sch ℓ).logLen * (lvOf (ts.get j).sch ℓ).queries * x) ≤
         2 * 25638 * Real.sqrt x := by
     rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul, hsch]
-    have := hashSum_le_m1 m h1 h2 x
+    have := hashSum_le_m1 (wideLeaf := wideLeaf) m h1 h2 x
     push_cast
     linarith
   have hNt : ∑ _r ∈ Finset.range 2, Real.sqrt ((ts.get j).N * (ts.get j).N * x) ≤ 2 ^ 14 * Real.sqrt x := by
@@ -337,7 +337,7 @@ theorem ksStrictZm1_le_closed (ts : List (TabZK F mPts)) (j : Fin ts.length) (hT
 theorem rateZ_le_m1w (ts : List (TabZK F mPts)) (j : Fin ts.length) (hT : (ts.get j).M1W) (k : ℕ) :
     rateZ ts j k ≤ rateM1 k := by
   obtain ⟨wideLeaf, m, h1, h2, hsch, -⟩ := hT
-  have hc := (m1Ks_all m h1 h2).2.2
+  have hc := (m1Ks_all (wideLeaf := wideLeaf) m h1 h2).2.2
   unfold rateZ rateM1
   rw [hsch]
   exact div_le_div_of_nonneg_right (pow_le_pow_right₀ (by norm_num) hc) (by positivity)
