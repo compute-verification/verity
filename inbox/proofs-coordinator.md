@@ -45052,3 +45052,54 @@ For CAPS: Proofs/Flock: +2 modules, +18 declarations (#8888: `security/Proofs/Fl
 For the table:
 - Lemmas, ready to mark: #8888 at `746c43e0c8` (the public error by the rows a sample reads; the deployed sample's run-out at a design on strata, at most `k_d·2^-64`) [runs above]. They rest on the stream-length hypothesis, which no guarantee takes yet.
 - The coin: built, unmarked, Daniel's: `MAX_COINS` 2^24 (2^30 bytes) and `MAX_TREE_LINES` 2^23 on `cursor/proofs-max-coins-5b1e` at `a17597b1b3`; records run out, PR to follow. Not built: the model's stage, one 2^20-byte round; about 25 files, 4 locked records, none deployed.
+
+## ATTACK, Wed 11 Nov 09:26Z: the bound from the other side, at toy sizes: nothing beats it and nothing beats the line. The lemma's 2 is met (1.79 simulated, 1.99 exact, no tie needed); the cost lemma has no room at all (declared cost = its bound, to 3 digits, under every strategy); the only room a proof can take is K, and the Lean already says a checked block's gates open together or not at all, at every run, accepted or not (`Reveals`, under `Built` and `Addresses`): EXTFORM's (ii) is answered no
+
+Deliverable 3. The toy is `lanes/proofs/tools/attack_firsthit_toy.py` in the notes (output beside it, `.out.txt`): 46 s, one core, no hash in it [run: on my VM, 09:20Z]. A prover that opens one gate to two values is taken to hold the collision, so the toy measures the reduction (the event against the finder's success) and the finder's calls, never SHA-512. It has SPOT's shape: 6 replay blocks of 4 proof blocks, 5 gates a block (one shared with each neighbour), a first stage of K0 = 2 replay blocks, 2 blocks drawn in each, every checked block its own session (the model's `skey`), T = 1 a run, a session's extraction e/a calls when it accepted with probability a (mean e = 8). The finder is the Lean's: `need` is what the first run opened; a further run pays for the gates of `need` its sample holds and drops those it opens.
+
+**1. The event against the finder: `Pr[acc ∧ off] ≤ 2·Pr[found] + N/(K+1)` held in all 20 rows** [run; 12,000 trials a row, cap 5,000]. The six that say something:
+
+| strategy | off | found | off/found |
+|---|---|---|---|
+| one gate held two ways on half the tapes | 0.080 | 0.082 | 0.98 |
+| the same on a tenth of the tapes | 0.016 | 0.028 | 0.56 |
+| reopening different positions across sessions (a session flips one of its gates, probability 0.2) | 0.599 | 0.821 | 0.73 |
+| many sessions sharing one gate (two blocks open their shared gate to 1 on 0.3 of the tapes) | 0.078 | 0.114 | 0.69 |
+| steering which session is waited on (the session opening the plural value accepts with probability 0.03) | 0.0037 | 0.0050 | 0.75 |
+| **three tape types on two gates of one block, masses 0.48, 0.48, 0.04** | 0.161 | 0.090 | **1.79** |
+
+- **The 2 is met at SPOT's shape, without a tie** [exact, fractions]: types of mass 1/2 − ε, 1/2 − ε, 2ε opening two gates to (1,0), (0,1), (0,0). Both big types are off (each at the gate where it alone opens 1) and the finder finds only when the next run is of another type: off/found = 1.25, 1.89, 1.99 at ε = 0.1, 0.01, 0.001. Every run opens both gates, so a fixed sample does not help. One gate with two values never passes 1 (0.83 at 0.4/0.6). So the first 2 of the 4 is not slack, for this event.
+- Steering does not help the prover: making the plural value's session rarely accept lowers the off value's allowed mass in step (it must stay under half of the gate's openers).
+
+**2. The finder's calls: the lemma's bound is an equality.** [run] In every row the declared cost, the lemma's `E[c + Σ_{g ∈ sample} c_g]` and KILIAN's closed form `T(1 + e·N_s + K_s + e·K_m)` agree to three digits (211.6, 211.7, 211.7), whatever the prover does. [derived] It is Wald's identity: a gate is waited for with the probability a run opens it and then for one over that probability, so the two cancel. **There is no room in the cost lemma, in `callsBy`'s form or in the mean of K**; the room is between the declared cost and what a finder needs to run.
+
+**3. Where the room is, and how much.**
+
+| factor | room | by what | status |
+|---|---|---|---|
+| K, a gate at a time | toy: declared/real = 3.1, 7.9, 26.8 at 5, 14, 50 gates a block (none shared) [run]. At the record, per sampled replay block of 5,523,986 blocks: −117.0 at 9 classes a block, −118.3 at 3, −119.3 at 1 [derived]; with SCALE's two bounds of 09:20Z (K_mean ≤ 2^41.81 by gates, K_cls ≤ 2^26.24 by rows) the factor is 15.6 bits [relayed] | a further run is run once and a session extracted once, not once a gate | **holds only if a block's gates open together.** Toy: a prover whose extraction keeps one gate of a block at a time costs a by-block finder 2.7, 5.1, 8.1 times the by-block bound at 5, 14, 50 gates [run]. At the code that prover does not exist: section 4 |
+| the 4 | 0 in the first 2; 1 bit in the second, conditional (EXTFORM's 2c) | | section 5 |
+| e = 1 + 210k | not tried here | EXTFORM's (d) | open |
+| the premise, linear in T | 176.5 bits against the best attack I know (a collision among the prover's own calls, T²/2^513 = 2^-353) | none: rewinding gives the linear form | not slack by proof |
+
+- [derived] The whole distance from the line to that attack is 248 bits: 177 the linear premise, 31.3 e, 37.7 K, 2 the 4. No strategy came near the bound's right-hand side in calls; the bound is far from tight and none of what I ran says it is wrong.
+- **The second moment** [run]: when every session accepts with probability a, `E[cost²]/E[cost]²` is 1.0, 3.3, 25, 242 at a = 1, 0.1, 0.01, 0.001, growing as 1/a, while `E[cost]` does not move. So `E[cost(cost−1)]/2^513`, the form of the provisional `AdaptiveBirthday`, has no bound uniform in the prover at this finder: it would need the event bounded by the acceptance as well, or a truncated wait. It is in no Lean; I would not plan on it.
+
+**4. For EXTFORM, (ii): at the code an extraction cannot keep one gate of a checked block and drop another.** [read, #8827's head]
+- `Reveals h dec` (`SpotFlock/Opens.lean:377-387`): at a statement in the two-stage scope, **`stmtOk h x m₁ m₂ c₀ c₁ = true`**, `u` checked at those coins, and **a witness the session statement's relation accepts**, for each gate `g` the block needs the code's reveal holds an opening at `g` that **passes** (`commit.Opens … = true`). It has no hypothesis that the run was accepted. It is proved at the code: `frameIs_built (Built h) (Addresses h)` (`FrameIsBuilt.lean:34`) → `frameRows_of_frameIs` (`Frame.lean:125`) → `reveals_of_frameRows` (`RowsOpen.lean:262`); the passing is `rows_open` (`RowsOpen.lean:120`: in Flock's scope, a witness in the relation commits each row to what its registered read opens).
+- Its two premises hold wherever an extraction keeps anything: `firstWait` returns only a candidate `check` accepts (`Interaction.lean:241-248`), and a session's view is the refused one unless every earlier round was answered with a message (`Code.lean:575-581`), round 2 answering one only where `stmtOk` holds (`Code.lean:536`).
+- So at every run, accepted or not, a slot's extraction opens **every** gate its block needs or none. With gates two blocks share, a class is a set of gates that the same blocks need: in the toy, with one gate shared with each neighbour, a count by blocks is passed by 1.3 by the honest prover [run], and the count by such classes is 139.7 against the 89.3 it runs [derived]. `hall` is then a corollary of a theorem at #8827 under the two premises `SpotKSTwo` already takes, not a new premise. `Reveals`' statement is `unitStmt h m₂ u`, which is `stmtAt h m₂ (templateOf h.ms u)` (`Opens.lean:185`), the statement `session` gives the slot (`Code.lean:577-578`). What is not written: the wiring from `sessExt` to `Reveals`' premises, the three reads above as one lemma.
+
+**5. For EXTFORM, (i) and (iii).** (i) Yes: section 1's three types; the 2 stands at fixed-size samples. (iii) [read] `irootsOf m₁ ρ` is `natMsg i :: natMsg n :: portRoots rec` (`Code.lean:196`), so it equals `s.roots` only at a statement whose own roots list begins with those two naturals' encodings. I read nothing in `stmtOk` that refuses such a statement (not opened: `parse h`, `natMsg`, `readsOk`). One bit; I agree with leaving it.
+
+**6. The first stage** [run; honest prover, the counts only]. K0 = 1, 2, 4: K_m = 10, 20, 40, so the line per sampled replay block is K0 times too low for a run. Bernoulli at the same mean with an empty sample checking nothing: the same K. With an empty sample checking every block, as the model's refusal does: K_m = 30 against 20 at mean 2, and 52 against 10 at mean 1. At D*1 the planner's Q is 0.0025 to 0.033 [relayed: SCALE], so nearly every run's first stage is empty and the model's term is at K = every gate, about 2^-85 [derived; K = 2^57.6 relayed]: gap c, unchanged.
+
+**7. What I did not try.** The interior finder (a kept tape and first stage) is the same Core lemma with a kept part; the toy runs only the boundary's. No real hash at any size: with a b-bit hash the bound's right-hand side is above 1 well before an attack succeeds, since it is linear where the attack is quadratic [derived]. No strategy on E^rep's 210 waits.
+
+For KILIAN: the cost lemma is an equality (section 2): nothing to gain there, and `hKs`, `hKm`, `hNs` are the only places a count can be wrong.
+
+For TWOWITNESS: where a refused run's sessions cannot accept, the refused coins weigh in `K_s` (times T) and not in `K_m` (times e·T), and then even `Pr[refused] = 1` adds 2^57.6 against 2^68.96, nothing. `session` returns the refused view where a round before the session's was not answered (`Code.lean:575-581`); whether a refused draw stops round 2 I did not read. KILIAN's `sessCount` counts every slot, refused or not, so this would be a sharper cost lemma, not a count.
+
+For the table:
+- Nothing found against the bound or the line by a prover strategy at toy sizes: 20 rows hold; the finder's 2 is met (1.99), its cost bound is an equality, so the 4 and the form of the term stand as stated.
+- The one factor a proof can still take is K. The fact the by-class form needs at the code, that every gate a checked block needs opens whenever its session's extraction keeps anything, at every run, is `Reveals` at #8827 under `Built` and `Addresses` (for REGX: `Opens.lean:377`, `RowsOpen.lean:262`, `Code.lean:536, 575-581`, `Interaction.lean:241-248`). I read EXTFORM's theorem against it next (entry by 10:30Z).
