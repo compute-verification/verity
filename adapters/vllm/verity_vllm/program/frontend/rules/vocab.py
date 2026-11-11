@@ -13,35 +13,46 @@ from typing import Callable
 
 from verity.circuits.defs import bind as ir_bind
 from verity.definitions.registry import act as _act
-from verity.definitions.registry import b1, gemm_bias as _gemm_bias
-from verity.definitions.registry import dsa as _dsa, dsa_norm as _dsa_norm, dsa_topk_mask as _dsa_topk_mask
-from verity.definitions.registry import dsv4_indexer as _dsv4_indexer, dsv4_qnorm_insert as _dsv4_qnorm
-from verity.definitions.registry import dsv4_compressor as _dsv4_compressor, dsv4_moe as _dsv4_moe
-from verity.definitions.registry.dsv4_decode_indices import gather_i32
-from verity.definitions.registry import flashmla as _flashmla, flashmla_prefill as _flashmla_prefill
-from verity.definitions.registry import deepgemm as _deepgemm
+from verity.definitions.registry import b1
+from verity.definitions.registry import b1_tp2 as TP2
 from verity.definitions.registry import boolean_rope as _rope
-from verity.definitions.registry import cublas_bf16 as _cublas_bf16, ll_bf16 as _ll_bf16
+from verity.definitions.registry import cublas_bf16 as _cublas_bf16
 from verity.definitions.registry import cuda_rmsnorm as _cuda_rmsnorm
-from verity.definitions.registry import sparse_mla as _sparse_mla, sparse_mla_split as _sparse_mla_split
-from verity.definitions.registry import tp_allreduce as _tp_allreduce
+from verity.definitions.registry import deepgemm as _deepgemm
+from verity.definitions.registry import dsa as _dsa
+from verity.definitions.registry import dsa_norm as _dsa_norm
+from verity.definitions.registry import dsa_topk_mask as _dsa_topk_mask
+from verity.definitions.registry import dsv4_compressor as _dsv4_compressor
+from verity.definitions.registry import dsv4_indexer as _dsv4_indexer
+from verity.definitions.registry import dsv4_moe as _dsv4_moe
+from verity.definitions.registry import dsv4_qnorm_insert as _dsv4_qnorm
 from verity.definitions.registry import fa2_check_inf as _f2
 from verity.definitions.registry import fa3_check_inf as _f3
+from verity.definitions.registry import flashmla as _flashmla
+from verity.definitions.registry import flashmla_prefill as _flashmla_prefill
 from verity.definitions.registry import fp8 as _fp8
 from verity.definitions.registry import fp8_vocab as _fp8_vocab
+from verity.definitions.registry import gemm_bias as _gemm_bias
+from verity.definitions.registry import layer_norm as _LN
+from verity.definitions.registry import ll_bf16 as _ll_bf16
 from verity.definitions.registry import marlin_moe as _marlin
 from verity.definitions.registry import mhc as _mhc
 from verity.definitions.registry import moe as _moe
-from verity.definitions.registry import pouw_rows as _pouw_rows
-from verity_vllm.program.frontend import targets as _targets
-from verity.definitions.registry import value_inputs as _vi
-from verity_vllm.program.frontend.rules import ref_kinds as R
-from verity.definitions.registry import ref_prims as RP
-from verity.definitions.registry import b1_tp2 as TP2
 from verity.definitions.registry import pad_prims as PP
+from verity.definitions.registry import pouw_rows as _pouw_rows
 from verity.definitions.registry import prims as P
-from verity.definitions.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
-from verity.definitions.registry import layer_norm as _LN
+from verity.definitions.registry import ref_prims as RP
+from verity.definitions.registry import sparse_mla as _sparse_mla
+from verity.definitions.registry import sparse_mla_split as _sparse_mla_split
+from verity.definitions.registry import (
+    topp_words as _topp_words,  # the keep word as word gates at a constant S
+)
+from verity.definitions.registry import tp_allreduce as _tp_allreduce
+from verity.definitions.registry import value_inputs as _vi
+from verity.definitions.registry.dsv4_decode_indices import gather_i32
+
+from verity_vllm.program.frontend import targets as _targets
+from verity_vllm.program.frontend.rules import ref_kinds as R
 
 
 @dataclass

@@ -6,7 +6,6 @@ from contextlib import contextmanager
 
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
-
 # -- fields observed on the construction host (derived, not declared) --------------------------------------------------------
 #
 # CB-C's validation found three Definition-selection fields both builder bets *declared*: the attention backend, the
@@ -169,6 +168,7 @@ def launch_keys_of(node, own: list[int]) -> list[int]:
     if not launch_batch_declared():
         return list(own)
     from collections import Counter
+
     from verity_vllm.program.frontend import targets as T
     from verity_vllm.program.frontend.outcomes import refuse
     keys = _launch_of(node, lambda step, _sampled: T.launch_keys(step, active_launch_context()))
