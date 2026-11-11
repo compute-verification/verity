@@ -24,11 +24,10 @@ from verity.circuits import Program, bind
 from verity.circuits.codec import decode_program, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, composite
 from verity.definitions.registry import b1, lifted as L, moe_pad as MP
-from verity.definitions.numerics import serve3_reference as ref
 from verity.definitions.registry.prims import BF16
 from verity.circuits.types import Array
 
-from tests.program.test_moe_pad_stage2 import (BOT16, BOT32, OFF, ON, E, H, I, VPT, W13_T, W2_T, WG_T, X_T, MoeIndexedReadRef, run, token_for_route,
+from tests.program.test_moe_pad_stage2 import (BOT16, BOT32, OFF, ON, E, H, I, VPT, W13_T, W2_T, X_T, MoeIndexedReadRef, run, token_for_route,
                                   unlifted_inputs, weights)  # noqa: F401  (weights: the shared fixture)
 
 LOGITS_T = Array(E, BF16)
@@ -98,7 +97,7 @@ def test_2_the_lift_of_record_is_the_hand_authored_lmoeffnl_on_both_paths_disabl
         _, _, y_pad = run(padded_l, lifted_inputs_l(x, weights))
         assert y_pad == y_fixed                                                           # Active words: payload == word
         _, _, rec = run(block_l, lifted_inputs_l(x, weights))
-        y, ids, alpha, s, g, z, u, a_e = (rec[:H], rec[H:H + TOPK], rec[H + TOPK:H + 2 * TOPK], rec[H + 2 * TOPK:H + 2 * TOPK + E],
+        y, ids, _alpha, s, g, z, _u, a_e = (rec[:H], rec[H:H + TOPK], rec[H + TOPK:H + 2 * TOPK], rec[H + 2 * TOPK:H + 2 * TOPK + E],
                                           rec[H + 2 * TOPK + E:H + 2 * TOPK + 2 * E], rec[H + 2 * TOPK + 2 * E:H + 2 * TOPK + 2 * E + E * H],
                                           None, rec[-E:])
         assert y == y_fixed and [L.payload(32, w) for w in ids] == list(route)

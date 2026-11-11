@@ -246,7 +246,7 @@ def test_an_expert_row_unpacks_the_checkpoint_s_bytes() -> None:
     assert list(evaluate(row, [E], packed.ravel().tolist())) == [0] * K
     assert [evaluate(bind(MM.E2m1x2Codes), [b]) for b in (0x00, 0x8F, 0x1E)] == [(0, 0), (0xF, 0x8), (0xE, 0x1)]
     with pytest.raises(ValueError):
-        bind(MM.MoeExpertE2m1Row, E=E, K=63).body
+        _ = bind(MM.MoeExpertE2m1Row, E=E, K=63).body
 
 
 def test_a_cold_decode_resolves_the_expert_gathers_by_id() -> None:

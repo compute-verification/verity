@@ -21,7 +21,7 @@ registered program family's expanded body).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Iterable
+from typing import TYPE_CHECKING, Any, Iterable
 
 if TYPE_CHECKING:  # pragma: no cover
     from verity_vllm.program.frontend.derive import Ctx
