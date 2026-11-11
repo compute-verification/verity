@@ -21,7 +21,7 @@ inputs = ["verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_nci_baseline_difftest.py"]
-paths = ["verity/ml"]
+paths = ["verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/certifier/prover", "verity/protocols/pous/prover", "verity/protocols/pouw/prover", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows"]
 
 [[tool.verity.tests.reads]]
 tests = [
