@@ -55,6 +55,7 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "infra/control/top_watch.py", "infra/control/deadman/api/deadman.py", "infra/control/deadman/vercel.json",
           # drive's loop, whose checkout per verb is tested here
           "infra/control/drive.sh",
+          "tools/research/src/research/__init__.py", "tools/research/src/research/telemetry/__init__.py",
           # the nightly check's loop, tested here: it reads a run as the dispatcher reads a check's, writes the state the
           # monitors' nightly-check reads, and pushes its label as the queue pushes a ready mark
           "infra/control/nightly_check.py", "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",
