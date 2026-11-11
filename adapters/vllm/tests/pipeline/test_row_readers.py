@@ -4,7 +4,7 @@
 the workload's (`is_stochastic`, `tp_world`), the run store's job (`verity_vllm.pipeline.research`: `job_input`, `preserve`), a
 manifest build that fails (`verity_vllm.pipeline.row_build.required_manifest`), the launch contexts a workload's shapes are built
 under (`verity_vllm.pipeline.launch_context`: `main`, `batch_dispatch_of`, `bad_chunks`), the card's line for a stage that is not ok
-(`verity_vllm.pipeline.report.summarize_md`), the timeline report's window (`verity_vllm.pipeline.timeline.report`) and the
+(`verity_vllm.pipeline.report.summarize_md`) and its reading of a log's first record (`log_header`), the timeline report's window (`verity_vllm.pipeline.timeline.report`) and the
 experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`).
 
 Each reads the document a stage wrote and gives a word, a line or a default; a document that is absent or does not parse gives the
@@ -12,6 +12,7 @@ default its docstring names, never an error.
 """
 from __future__ import annotations
 
+import gzip
 import json
 import sys
 from pathlib import Path
@@ -276,3 +277,33 @@ def test_the_experiment_index_lifts_the_query_use_documents_verdict():
         "verdict_status": None, "binding": {"checked": False}, "gate": None}
     assert EXP.vu_partition_index({"verdict": "not a verdict"}, {}) == empty
     assert EXP.vu_partition_index({"verdict": {"partition": [], "width": None, "count": 1}}, None) == {**empty, "count": 1}
+
+
+def test_the_card_reads_a_logs_first_record_when_it_is_the_run_header(tmp_path):
+    header = {"$e": "RunHeader", "model": "m"}
+    lines = json.dumps(header) + "\n" + json.dumps({"$e": "Step"}) + "\n"
+    plain = _put(tmp_path / "log.jsonl", lines)
+    packed = tmp_path / "log.jsonl.gz"
+    packed.write_bytes(gzip.compress(lines.encode()))
+    assert CARD.log_header(plain) == header and CARD.log_header(packed) == header
+    assert CARD.log_header(tmp_path / "absent.jsonl.gz") is None
+    (tmp_path / "a-directory.jsonl").mkdir()
+    assert CARD.log_header(tmp_path / "a-directory.jsonl") is None
+
+
+@pytest.mark.parametrize("first", [b"", b"\n", b"not json\n", b'["RunHeader"]\n', b'"RunHeader"\n', b"7\n", b'{"$e": "Step"}\n', b"{}\n",
+                                   b"\xff\xfe{}\n"])
+def test_the_card_has_no_run_header_for_a_first_line_that_is_not_one(tmp_path, first: bytes):
+    (tmp_path / "log.jsonl").write_bytes(first)
+    (tmp_path / "log.jsonl.gz").write_bytes(gzip.compress(first))
+    assert CARD.log_header(tmp_path / "log.jsonl") is None and CARD.log_header(tmp_path / "log.jsonl.gz") is None
+
+
+def test_the_card_has_no_run_header_for_a_packed_log_that_does_not_unpack(tmp_path):
+    whole = gzip.compress((json.dumps({"$e": "RunHeader", "pad": "x" * 4000}) + "\n").encode())
+    packed = tmp_path / "log.jsonl.gz"
+    for raw in (whole[: len(whole) // 2], b"plain text, no gzip\n", whole[:10] + b"\xff" * 40):    # cut short, not packed, a bad stream
+        packed.write_bytes(raw)
+        assert CARD.log_header(packed) is None
+    packed.write_bytes(whole)
+    assert CARD.log_header(packed) == {"$e": "RunHeader", "pad": "x" * 4000}
