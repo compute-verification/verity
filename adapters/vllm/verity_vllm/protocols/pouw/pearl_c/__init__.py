@@ -101,10 +101,10 @@ from verity_vllm.protocols.pouw.pearl_c.host import (
     _Uploads,
     _write,  # noqa: F401 - kept importable here, as the tests read it
     _zeros,
-    call_keys,  # noqa: F401 - kept importable here, as the tests read it
+    call_keys,
     epoch_of,
     memmove,
-    write_manifest,  # noqa: F401 - kept importable here, as the tests read it
+    write_manifest,
 )
 from verity_vllm.protocols.pouw.pearl_c.kernel import (
     Kernel,
@@ -138,6 +138,11 @@ from verity_vllm.protocols.pouw.pearl_c.screen import (
     screen,
     screen_into,
 )
+
+__all__ = ["CALL_CAPACITY", "CALL_STEPS", "EPOCH_STEPS", "FLAG_ROWS", "GRAPH_ROWS", "JOB_STEPS", "Kernel",
+           "LEAF_CAPACITY", "PearlCDeviceRun", "PearlCExecutor", "ROW_ALIGN", "SCHEDULES", "SCHEMES", "SERIAL",
+           "call_index", "call_keys", "epoch_of", "excluded", "manifest_epoch", "manifest_schema", "new_salt_key",
+           "refusals", "rotated", "schedule_of", "scheme_of", "screen_into", "splits", "weight_roots", "write_manifest"]
 
 #: the Pearl-C schemes this device path runs, by name (`verity.protocols.pouw.verifier.serving.SchemeId`: forming, device record, hashing format);
 #: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is

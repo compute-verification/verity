@@ -468,8 +468,8 @@ def lower(inst: dict[str, Any], sites: Mapping[str, str]) -> dict[str, Any]:
     return dict(inst, rows=rows)
 
 
-__all__ = ["CALLS_DATA_FILE", "CALLS_DOMAIN_TAG", "CALLS_FILE", "Call", "CallRecord", "Compiled", "Group", "LOWERED", "Quantized",
-           "ROW_BIAS_FAMILY", "ROW_FAMILY", "Read", "Rows", "RowsDigest", "WeightRecord", "call_leaf", "calls_root", "commit_call_ir",
-           "commit_weight_ir", "evaluate_ir", "evaluate_weight_ir", "inputs_digest", "int7_bytes", "kind_of", "load_calls", "lower",
-           "program", "save_calls", "sides", "summary", "unit_leaf", "units_root", "weight_inputs_digest", "weight_leaf",
-           "weight_summary"]
+__all__ = ["C", "CALLS_DATA_FILE", "CALLS_DOMAIN_TAG", "CALLS_FILE", "Call", "CallRecord", "Compiled", "Group", "LOWERED",
+           "Quantized", "ROW_BIAS_FAMILY", "ROW_FAMILY", "Read", "Rows", "RowsDigest", "UNIT_TAG", "WeightRecord", "call_leaf",
+           "calls_root", "commit_call_ir", "commit_weight_ir", "evaluate_ir", "evaluate_weight_ir", "inputs_digest", "int7_bytes",
+           "kind_of", "load_calls", "lower", "program", "save_calls", "sides", "summary", "unit_leaf", "units_root",
+           "weight_inputs_digest", "weight_leaf", "weight_summary"]

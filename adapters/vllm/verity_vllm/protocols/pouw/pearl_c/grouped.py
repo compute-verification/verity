@@ -55,6 +55,8 @@ from verity_vllm.protocols.pouw.pearl_c.kernel import _load
 from verity_vllm.protocols.pouw.pearl_c.passes import call_index
 from verity_vllm.protocols.pouw.pearl_c.screen import scatter_into, screen_into
 
+__all__ = ["ROTATED", "gemm_grouped", "group", "module"]
+
 #: the call buffers' least rows
 MIN_ROWS = 1024
 #: the call's buffers a pass poisons (`PearlCDeviceRun.poison`): all but A's words, y, pd_commit's counters and the table

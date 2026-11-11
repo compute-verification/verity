@@ -85,9 +85,12 @@ from verity_vllm.protocols.pouw.h1 import hooks as PHK
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import settings as PHS
 from verity_vllm.protocols.pouw.h1 import window as PHW
-from verity_vllm.protocols.pouw.h1.settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
+from verity_vllm.protocols.pouw.h1.settings import fills, from_engine
 from verity_vllm.protocols.pouw.operands import Operands, ncp_tiles, quantize, stack_y
 from verity_vllm.protocols.pouw.pearl_c import passes as PP
+
+__all__ = ["EXECUTES", "NAME", "Settings", "challenged", "circuit_run", "commit_weights", "executes", "fills", "from_engine",
+           "h1_run", "install", "keeps_weight_copy", "linear_types", "quantize", "refusals", "requires_build", "schemes"]
 
 NAME = "pouw"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
@@ -119,8 +122,7 @@ PLACEHOLDER = (
     ("not auditable yet: one epoch per install (no rotation), activation rows kept only in memory for the last "
      "`retain_steps` units (0 by default) and never persisted, no opener, and the transcript's leaves grow without bound "
      "for the life of the install"),
-    "the executor runs on the host in numpy, not a native route-U kernel",
-)
+    "the executor runs on the host in numpy, not a native route-U kernel")
 #: The transforms Pearl-C's executor applies to a checkpoint's weights before committing them: none.  The keyed 8-block
 #: rotation (`registration.ROTATION_8`) is not built on the device, so served FP8 registers only a curated unrotated
 #: checkpoint, and no curated list is wired here.

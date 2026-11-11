@@ -13,6 +13,8 @@ from verity.protocols.spot.device.challenger import LiveCommitment, LiveOpening
 
 from verity_vllm.protocols.pouw.pearl_c.host import epoch_of
 
+__all__ = ["manifest_epoch", "session_head"]
+
 #: what a live pass's manifest names of its session: the gate's open answer's session, ledger seq, root (its salt execution phase's
 #: execution phase root, `salt.epoch_open_root`) and coin commitment's root (`pouw_h1_challenger.SESSION_FIELDS`), never its hello's
 #: secret

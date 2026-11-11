@@ -29,6 +29,8 @@ from typing import Any
 from verity_vllm.protocols.pouw.pearl_c import ROW_ALIGN
 from verity_vllm.protocols.pouw.pearl_c.graphs import GRAPH_ROWS
 
+__all__ = ["WholeStep"]
+
 #: the key of vLLM's own graphs, captured at start
 VLLM = ("vllm",)
 
