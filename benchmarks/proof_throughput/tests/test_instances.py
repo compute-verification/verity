@@ -2,7 +2,7 @@ import hashlib
 import json
 
 import pytest
-from verity.ml.circuits.codec import program_digest
+from verity.circuits.codec import program_digest
 
 from verity_proof_throughput import cli
 from verity_proof_throughput import instances as I

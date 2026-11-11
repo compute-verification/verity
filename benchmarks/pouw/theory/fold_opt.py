@@ -1,7 +1,7 @@
 """FOLD-OPT, mechanically: no program on sm_120 computes a committed word's duo receipt fold in fewer instructions than
 honest's 3.
 
-The duo step (benchmarks/pouw/receipts/receipt_folds.py, `duo_word`) absorbs one committed word d into the running state
+The duo step (verity/protocols/pouw/receipts/receipt_folds.py, `duo_word`) absorbs one committed word d into the running state
 (y, z) with public per-position keys (k, a, r), a odd and `key_ok_r9`:
 
     u  = y ^ d ^ k            # one LOP3 (a 3-input bitwise XOR)
