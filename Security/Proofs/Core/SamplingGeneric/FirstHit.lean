@@ -36,9 +36,21 @@ of the first further tape that opens the node (`firstHit`), and it finds a pair 
   under the linear expected-time bound at the finder of every cap the term goes and the bound is
   `2·(1 + w)·E[c]/2^256` (`pr_off_le_of_forall_expectedCR`).
 
-`finder` takes its output `out` as a function of the whole seed and charges the runs the loop makes. The statements
-under `ExpectedCR` say what they read when `out` reads only those runs, which is all `Found` reads: the first run and
-each further tape up to the first that opens each node the first run opened.
+* **The output** (`outOf`, `outOf_collision`): from a function `coll` of two runs that outputs a pair wherever they
+  open a node to two values, and only collisions of `H`, the finder outputs a collision whenever it finds a pair, and
+  reads only the first run and a further run that is the first to open a node the first run opened, which the loop
+  charges (`le_loopCost`).
+* **The prover's tape** (`tapeFinder`, `pr_off_tape_le_of_expectedCR`): the table and its plurality depend on a tape
+  that the finder draws once, keeps in its seed and never redraws. The bounds hold on average over the tape under the
+  linear expected-time bound at that one finder, with `w` the number of nodes.
+* **The sample** (`sampleFinder`, `pr_off_sample_le_of_expectedCR`, `pr_off_sample_le_of_coll`): `chk` reads a run's
+  coins and says which nodes its sample holds, and a run opens only nodes of its sample. The finder makes a further
+  run only when its sample holds a node still waited for (`loopCostOn`), and `w` is then a bound on the size of one
+  run's sample, over all coins (`ex_costOn_le`): for each node, the wait's runs are the tapes whose sample holds it.
+
+`finder`, `tapeFinder` and `sampleFinder` take their output `out` as a function of the whole seed and charge the runs
+the loop makes. The statements under `ExpectedCR` say what they read when `out` reads only those runs, as `outOf`
+does (`le_loopCost`, `le_loopCostOn`).
 -/
 
 @[expose] public section
