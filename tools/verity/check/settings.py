@@ -78,8 +78,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("CHECK_PEERS", str, None, WHERE, "the ssh names of the machines a twin claims on; unset, /etc/vy/peers (slot.py, "
       "pod_setup.sh)", "placement: where a twin's claim is made"),
     S("CHECK_RUN_MEM_GB", str, None, WHERE, "the memory a `research run --mem-gb` run asks of a slot (research's cli sets it): "
-      "slot.py raises each slot's mem= to it", "placement: which slot a run waits for"),
-    S("CHECK_SCOPE_UNIT", str, None, WHERE, "the check's own systemd scope, which slot.py sets on a scope=1 slot: the spans read "
+      "slot.py raises each slot's mem= to it, and gives the run no slot whose cap= is under it", "placement: which slot a run waits for"),
+    S("CHECK_SCOPE_UNIT", str, None, WHERE, "the check's own systemd scope, which slot.py sets on a slot with scope=1 or cap=: the spans read "
       "its memory (`spans.check_memory`)", "telemetry: the memory a check took"),
     S("CHECK_SLOT", str, None, WHERE, "the check slot this process holds (slot.py sets it for CMD)", "placement: the slot held"),
     S("CHECK_SLOTS", str, None, WHERE, "the machine's slots file; unset, /workspace/research/locks/slots (slot.py, "
