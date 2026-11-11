@@ -87,6 +87,14 @@ def test_shared_memory_alone_is_part_of_its_pool(sku: str) -> None:
     assert 0 < value(card, "store.smem_carveout") <= value(card, "store.smem")
 
 
+@pytest.mark.parametrize("sku", skus("gpu"))
+def test_an_add_in_a_loop_costs_no_less_than_the_add_alone(sku: str) -> None:
+    """`price.fp32_loop` is an FP32 add's price in a timed loop, so it is at least the add's price at the card's
+    ceilings: a SM-clock's tensor units over the adds it issues, 32 lanes a warp instruction."""
+    card = load(sku)
+    assert value(card, "price.fp32_loop") >= value(card, "rate.tensor") / (32 * value(card, "rate.issue"))
+
+
 @pytest.mark.parametrize("sku", skus("host"))
 def test_derived_host_numbers(sku: str) -> None:
     """A host's ops are its cores' AMX MACs at their clocks, two ops a MAC; its DRAM's bandwidth is its channels'

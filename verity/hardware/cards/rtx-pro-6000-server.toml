@@ -64,6 +64,11 @@ nvf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "whit
 mxf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "as nvf4 (OMMA.SF.16864)" }
 f64 = { value = 32, unit = "tensor unit/MAC", mark = "measurement", source = "no document gives sm_120's DMMA rate; measured 1.75 MACs a SM-clock (DMMA.8x8x4, art:ecfc88319554), and the 32 MACs a SM-clock this weight allows is 18 times that" }
 
+# What an operation costs in tensor units (rate.tensor's unit) in a timed loop. A measured price is that loop's, at or
+# above the operation's price at the card's ceilings, which the rates above give.
+[price]
+fp32_loop = { value = 8.376, unit = "tensor unit/add", mark = "measurement", source = "an FP32 add (FADD) in a loop of 64 adds and 3 loop instructions, measured against the E4M3 MAC with the SM clock locked at 2100 MHz: 8.3757 in each of two runs on one card (art:72a1cf64686a, art:887b4b2c911b: 122.26 adds and 1023.98 MACs a SM-clock), here to three decimals; at the ceilings the same loop is rate.tensor / (32 x rate.issue) x 67 / 64 = 8.375, and the add alone 8" }
+
 # The model's own ranges (Accel.Card's exact and text).
 [model]
 exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 mma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (models.BLACKWELL_SM120_S8_M16N8K32, _WRAP)" }

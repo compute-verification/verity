@@ -64,6 +64,11 @@ nvf4 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e2m
 mxf4 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e2m1: no FP4 MMA on the card" }
 f64 = { value = 29.5, unit = "tensor unit/MAC", mark = "ceiling", source = "H200 data sheet: 'FP64 Tensor Core 67 TFLOPS', which over 132 SMs at the 1980 MHz boost clock the H100 whitepaper V1.04 Table 3 gives FP64 tensor operations is 128.2 DMMA MACs a SM-clock there (the whitepaper's own 'Peak FP64 Tensor TFLOPS' 66.9 is 128.0); 128 a SM-clock there is, at clock.tensor, 4096 / 128 x 1830 / 1980 = 29.58 units a MAC, rounded down so the table's FP64 rate, 67.08 TFLOPS, stays at or above both figures; 32 at clock.sm's 1980 MHz" }
 
+# What an operation costs in tensor units (rate.tensor's unit) in a timed loop. A measured price is that loop's, at or
+# above the operation's price at the card's ceilings, which the rates above give.
+[price]
+fp32_loop = { value = 33.5, unit = "tensor unit/add", mark = "placeholder", source = "no run read times an FP32 add in a loop on this card: this is the loop of 64 adds and 3 loop instructions at the card's ceilings, rate.tensor / (32 x rate.issue) x 67 / 64, a SM-clock each, and the add alone is 32; a run of that loop on an H200 closes it" }
+
 # The model's own ranges (Accel.Card's exact and text).
 [model]
 exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 mma and wgmma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (silicon.integer.HOPPER_SM90_S8_K32, art:74353cac67fb, 0 mismatches)" }

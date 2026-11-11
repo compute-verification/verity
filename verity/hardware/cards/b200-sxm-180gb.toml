@@ -63,6 +63,11 @@ nvf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "the 
 mxf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "as nvf4 (kind::mxf4, measured at the same rate, unpriced_fp4.cu)" }
 f64 = { value = 128, unit = "tensor unit/MAC", mark = "ceiling", source = "the data sheets' FP64 Tensor Core 37 teraFLOPS over 148 SMs at 1965 MHz is 63.6 DMMA MACs a SM-clock; measured 64 (DMMA.8x8x4, benchmarks/pouw/sass_census/unpriced.cu), sharing the tensor pipe's time with the other formats; 8192 / 64" }
 
+# What an operation costs in tensor units (rate.tensor's unit) in a timed loop. A measured price is that loop's, at or
+# above the operation's price at the card's ceilings, which the rates above give.
+[price]
+fp32_loop = { value = 67, unit = "tensor unit/add", mark = "placeholder", source = "no run read times an FP32 add in a loop on this card: this is the loop of 64 adds and 3 loop instructions at the card's rates, rate.tensor / (32 x rate.issue) x 67 / 64, a SM-clock each, and the add alone is 64; a run of that loop on a B200 closes it" }
+
 # The model's own ranges (Accel.Card's exact and text).
 [model]
 exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 tcgen05.mma and mma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (silicon.integer.BLACKWELL_SM100_S8_K32, art:1015987ce8db, 0 mismatches)" }
