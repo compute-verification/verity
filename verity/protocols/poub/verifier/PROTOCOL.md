@@ -1090,7 +1090,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   `Plan` on tuples, more than a 7–120 ms pass, and as `Plan.from_array` on the store's (R, 2) array about 55 ms in
   store order and 150 ms shuffled, with about 5 ms more for the digest. `Plan.from_array`
   reads the array through the buffer protocol and checks it column by column in the standard library, since a
-  protocol imports no third-party package and a verifier no `verity.ml` code, and the suite holds it to `Plan`'s
+  protocol imports no third-party package and a verifier no ml code (`tests/test_boundaries.py`), and the suite holds it to `Plan`'s
   digests and refusals on the same rows. `AuditRun.receive` takes any of the three.
 - **What the plan shows.** v0's plans are in the clear, so the verifier sees which KV pages were live in each pass: the
   batch's shape and context lengths over time, not their contents. Hiding them goes with the zero-knowledge openings:

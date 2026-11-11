@@ -6,8 +6,9 @@ evaluates or checks a circuit: this package and its subpackages, the served work
 words mean, names the one front door for each job, and links each part's README.
 
 Everything in this package is on the soundness path (`SOUNDNESS_PATH` in `tests/test_boundaries.py`): the verifiers in
-`verity.core` read Programs, their digests and these semantics. The descriptor format, its canonical bytes and its
-digests are specified in [`PROTOCOL.md`](PROTOCOL.md), and `tests/format_vectors.json` pins them.
+`verity/protocols/` (each protocol's `verifier/`) read Programs, their digests and these semantics. The descriptor
+format, its canonical bytes and its digests are specified in [`PROTOCOL.md`](PROTOCOL.md), and
+`tests/format_vectors.json` pins them.
 
 ## Terms
 
