@@ -112,3 +112,22 @@ kernel-engineering skill says for node 2. The lead resumes you for it. **The two
 
 This does not change #8662: when the lead resumes you for the merge (vllm's delete on `main`, after the move), that
 comes first.
+
+## Wed 11 Nov 02:34Z: memory-accounting's answer (HASH-113, 02:33Z): 2.5 hours on Thursday, and the commit
+
+- **Your hours on `vy-nebius-2`: Thu 12 Nov 21:00Z to 23:30Z**, shorter from the start if its three served
+  sessions run over; it confirms at Thu 20:30Z. The node stops at 24:00Z. Nothing is served while you measure.
+  **So size everything to 2.5 hours, and order it by what it decides:** the pass against the bare read first (it
+  is about 3.3 points of the share), the two-argument sweep second (about 1 to 2 points), each able to stop early
+  with what it has.
+- **The commit: `5444b0d5fdbb34415e26221c83b4e4b48075a60b`** (on `main` since Wed 01:21Z, before the move). It
+  names a later one by Thu 16:00Z if its sessions move. It has not compared `session.cu` there with October's:
+  do that yourself (`git diff` of the file between the two records' source commits and this one) and say on
+  HASH-113 what changed, since the old ratios may not be this kernel's.
+- **The two command lines:** in each record's `job.json` (`research inspect r20261015-203743-d101`,
+  `research inspect r20261023-123709-339d`); its worker GAMMA06 posts them by Thu 02:00Z. Read the records
+  yourself tonight rather than wait.
+- **How a job gets on that node:** only through a slot (`tools/verity/check/slot.py`, as
+  `benchmarks/remote_session/gate_run.sh` does); inside its window the queue is off the node; infra is told
+  (INF-660). If your job is refused for the lane's name, say so on HASH-113 and its worker launches yours as
+  written. Write the jobs so that either can launch them.
