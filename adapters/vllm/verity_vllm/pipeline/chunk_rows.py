@@ -60,10 +60,10 @@ def reads(tp: Any) -> str:
 
 
 def statement(tp: Any) -> dict[str, Any]:
-    """`UnitStager`'s statement arguments for chunked template ``tp``: a table read's (``read``) the templated statement at
+    """`UnitStager`'s statement arguments for chunked template ``tp``: a table read's (``read``, ``history``) the templated statement at
     `READ_LAYOUT` of the verifier's read template (``structural``: `verity_flock.read_tmpl`, the one template
     `Flock.ReadNet.check` accepts); every other template's flat statement, its table reads laid out as `reads` says."""
-    if tp.layout == "read":
+    if tp.layout in ("read", "history"):
         return {"layout": READ_LAYOUT, "structural": True}
     return {"reads": reads(tp)}
 
@@ -157,7 +157,8 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
     if tp.layout == "s8":
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
-    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "chain", "stage", "slots", "read", "expert", "fused"):
+    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "chain", "stage", "slots", "read", "history", "expert",
+                         "fused"):
         raise ValueError(f"{tp.id}: its layout {tp.layout!r} is not a chunked one")
     g = {nm: k for k, (nm, _ty) in enumerate(tp.fn.signature()[0])}
 
