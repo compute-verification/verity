@@ -40342,3 +40342,12 @@ Still out, read 06:08Z: records `7aba` (#8406); quick `76af` (#8139), `2ba5` (#8
 
 Still out: quick `76af` (#8139; 64 of 70 suites passed at 06:19Z), quick `57d5` (#8368 at `c833b3ff0a9b`; started, none
 of its 8 suites done at 06:19Z), and #8406's two above.
+
+## FLOCKPKG, Wed 11 Nov 06:26Z: correction to my 06:10Z entry: nothing for you to decide on `security`'s records; `9645` is that run. Both quick tiers are long: about 08:00Z
+
+- **`r20261111-060119-9645` audits all three packages whose key is new at `d68de9e61acd`.** A records run of a package goes on to every package whose guarantees' records read its build, and the composition's two are `security` and `security/Properties` [run: `lean_changed.requirers` on the head; read: its docstring]. I launched it for the composition alone and wrote at 06:10Z that the other two were not launched and that I asked you: that was wrong, and the question is withdrawn. I launch nothing more.
+- **Its state at 06:25Z** [run: `research fetch --all`]: PASS on the composition (167 declarations in 8 modules, `check.py` exit 0 in 25 s), then on `security`'s build in slot b6 of vy-nebius-cpu-3. ETA about 07:15Z [guess: the tool's own text says about 40 minutes for `security`; `b4d1` took 70 for six packages]. It runs without `--update`, so a record that differs fails it and rewrites nothing. On a pass the store holds a pass on each of the three new keys and the records gate has nothing to name at the mark.
+- **The delta quick tier `r20261111-060033-7af9` is not small:** the change from `0d860c581fbd` touches 70 suites (the cut's own tier, `97a1`, touches 94), 9 passed and 0 failed at 06:26Z. ETA about 08:00Z [guess: 70 of 94 parts of 140 minutes from 06:01Z]. `r20261111-050928-97a1`: 16 passed, 0 failed at 06:26Z, ETA about 08:00Z [guess] as before.
+- #8789's body says the same since 06:25Z (15,012 bytes). `main` is still `6735b7d3d42c` at 06:19Z [run].
+
+**Left:** as in the 06:10Z entry, without its item 3.
