@@ -155,8 +155,9 @@ def xrank_facts(st: dict[str, Any], p: Loaded) -> None:
 
 
 def seed_of(cfg: dict[str, Any], run_root: bytes) -> tuple[int, str]:
-    """[O6] seed from the rank's run root AFTER commitment unless the driver targets one; under a
-    VERIFIER-ISSUED post-commitment challenge the seed is sha256(challenge | this rank's run root)[:8] (no grind by recommitting)."""
+    """[O6] the seed and its source text: the driver's targeted one, else sha256(`--replay-challenge` | this rank's run root)[:8], else the
+    rank's run root's first 8 bytes.  That last form has no coin (a prover steers the sample by committing again, in about the lesser of 1/p
+    and 2^64 tries): a measurement.  The rank replays before the pair's coins exist, so a challenger gate's coin does not reach this seed."""
     from verity_vllm.check.replay import driver as SR
 
     if cfg.get("seed") is not None:
@@ -219,7 +220,7 @@ def evaluate(p: Loaded, cfg: dict[str, Any], *, bmap: dict[str, Any], committed:
     arr = p.arrivals
     wreq = [{"request_id": str(r["request_id"]), "arrive_step": arr[str(r["request_id"])], "prompt_token_ids": list(r.get("prompt_token_ids") or []), "seed": r.get("seed"),
              "steps": list(range(arr[str(r["request_id"])], arr[str(r["request_id"])] + int(r.get("max_tokens") or 1)))} for r in p.reqs]
-    lk = SR.boundary_linkage(bmap, committed, wreq, embed_op_path=p.index.embed_op_path(), splits_of_record=SR.splits_of_record(p.loaded))
+    lk = SR.boundary_linkage(bmap, committed, wreq, embed_op_path=p.index.embed_op_path())
     lk["rank"] = rank
     sr["value_source"] = dict(committed.record(), forked_children=sr.pop("value_reads_in_children", None))
     return sr, lk
