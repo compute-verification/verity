@@ -102,6 +102,25 @@ def test_alias_splices_the_aliased_operand_like_the_codec():
             assert K.from_json(j, alias=lambda k, a_: node0) == K.from_runs(runs(refs_from_json(plain)))
 
 
+def _rle_runs(mapped_runs: list[tuple], n_base: int) -> list[tuple]:
+    """Reference for `rle_mapped`: greedy RLE (no contiguity merge) of a mapped run list whose last `n_base` fields are the integers."""
+    out: list[tuple] = []
+    for t in mapped_runs:
+        head, v = t[:-n_base], t[-n_base:]
+        if out:
+            p = out[-1]
+            ph, pb, pd, pc = p[:-3], p[-3], p[-2], p[-1]
+            if ph == head:
+                if pc == 1:
+                    out[-1] = head + (pb, tuple(x - y for x, y in zip(v, pb)), 2)
+                    continue
+                if v == tuple(b + pc * d for b, d in zip(pb, pd)):
+                    out[-1] = head + (pb, pd, pc + 1)
+                    continue
+        out.append(head + (v, (0,) * n_base, 1))
+    return out
+
+
 def test_rle_of_mapped_progressions_equals_rle_of_the_mapped_runs():
     rng = random.Random(99)
     for _ in range(6000):
@@ -113,7 +132,7 @@ def test_rle_of_mapped_progressions_equals_rle_of_the_mapped_runs():
             delta = (rng.choice([0, 1]), rng.choice([0, 1, 3, -2]), rng.choice([0, 1, 3, -2])) if c > 1 else (0, 0, 0)
             items.append(head + (base, delta, c))
         m = K.rle_mapped(items)
-        assert m == K.rle_runs(K.expand(items), 3), (items, m)
+        assert m == _rle_runs(K.expand(items), 3), (items, m)
         assert K.expand(m) == K.expand(items)
 
 

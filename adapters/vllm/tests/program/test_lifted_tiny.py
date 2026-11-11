@@ -552,10 +552,6 @@ def test_lserve_prefix_property_gate_for_gate(n):
     assert [L.payload(32, x) for x in out[:n + 1]] == y1
 
 
-def fid_is_strict(prim) -> bool:
-    return getattr(prim, "lift_class", None) == "strict"
-
-
 def _is_const(prim) -> bool:
     return getattr(prim, "family", None) == "Const"
 
