@@ -280,9 +280,9 @@ owner = "infra"
 
 # ---- the auditor host: no `research run` (/etc/vy/auditor lists no command: research.remote refuses every one, and slot_only.py
 # --auditor stops one from an older tree); after installing, `sudo systemctl enable --now vy-auditor-only.timer`. The challenger runs
-# through vy-challenger-gate (benchmarks/live_challenger/auditor.py): once installed, `sudo vy-challenger-setup GATE_KEYS --lock`
+# through vy-challenger-gate (verity/composite/device/live_challenger/auditor.py): once installed, `sudo vy-challenger-setup GATE_KEYS --lock`
 # (GATE_KEYS: `LANE TYPE BASE64 [COMMENT]` a line, each lane's own key, LANE `-` for a key that reads only; setup.sh), then
-# `git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces integrations/vllm/manifests/checkpoints-int8.json
+# `git archive COMMIT verity verity/composite/device/live_challenger benchmarks/network_traces adapters/vllm/manifests/checkpoints-int8.json
 # | ssh vy-admin@HOST sudo
 # vy-challenger-pin COMMIT`, then `sudo runuser -u
 # auditor -- python3 -I /opt/vy-challenger/current/benchmarks/live_challenger/auditor.py keygen` once.
@@ -351,10 +351,10 @@ nodes = ["vy-challenger-1"]
 owner = "infra"
 
 # ---- the verifier's auditor host, vy-auditor-1, an auditor host as above (/etc/vy/auditor, vy-auditor-only.timer). The verifier runs
-# through vy-verifier-gate (benchmarks/live_verifier/host.py): once installed, `sudo vy-verifier-setup GATE_KEYS TUNNEL_KEYS --lock`
+# through vy-verifier-gate (verity/protocols/poub/device/live_verifier/host.py): once installed, `sudo vy-verifier-setup GATE_KEYS TUNNEL_KEYS --lock`
 # (GATE_KEYS: `LANE TYPE BASE64 [COMMENT]` a line, LANE `-` for a key that reads only; TUNNEL_KEYS: `prover|challenger ADDRESS TYPE
 # BASE64 [COMMENT]`, the audited node's tunnel key and vy-challenger-1's; setup.sh), `sudo systemctl reload ssh`, then
-# `git archive COMMIT verity benchmarks/remote_session benchmarks/live_verifier tools/research/src/research
+# `git archive COMMIT verity benchmarks/remote_session verity/protocols/poub/device/live_verifier tools/research/src/research
 # tools/research/store.pod.toml | ssh vy-admin@HOST sudo vy-verifier-pin COMMIT`. /etc/vy/verifier.json is the host's challenger
 # and each audited node's capacities; the store's credential is infra's, in /etc/vy/verifier-store.env (root's, 0600).
 
