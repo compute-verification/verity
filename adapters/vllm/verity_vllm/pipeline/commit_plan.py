@@ -23,6 +23,9 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import option, workload_arg
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 SCHEMA = "verity-vllm/commit-plan/v1"
 
@@ -177,8 +180,9 @@ def producer_facts(args: Any, required_manifest: dict[str, Any] | None, reqs: li
     tl.start("prep.producer_facts")
     got, rec = use(args.plan, args) if getattr(args, "plan", None) else (None, None)
     if rec is not None:
-        print(f"[delta] plan {args.plan}: " + (f"producer facts from the plan ({rec['members']} members, planned {rec.get('planned_utc')})"
-                                               if rec["used"] else f"plan_recomputed: {rec['why']}"), flush=True)
+        logger.info("[delta] plan %s: %s", args.plan,
+                    f"producer facts from the plan ({rec['members']} members, planned {rec.get('planned_utc')})" if rec["used"]
+                    else f"plan_recomputed: {rec['why']}")
     got = got if got is not None else derived(args, required_manifest, reqs, sampling)
     tl.end("prep.producer_facts", source="plan" if (rec or {}).get("used") else "derived", members=len(got[0] or {}))
     return got, rec

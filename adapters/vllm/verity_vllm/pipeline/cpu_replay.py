@@ -60,9 +60,12 @@ from verity_vllm.commit import step_rows
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.config import option
 from verity_vllm.errors import Refused
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.program.compiled_relations import warm_vml
+
+logger = init_logger(__name__)
 
 ATTESTS = ("every weight field the replay consumed, composed from the checkpoint (or carried in the bundle), has the committed tensor root, "
            "and the tensor roots fold to the committed weights root")
@@ -513,8 +516,8 @@ def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched
     sr = c.get("sampled_replay") or {}
     picked = (sr.get("sample") or {}).get("picked")
     if not plan.get("plan") or picked is None or plan.get("picked") != picked or len(plan.get("picks") or ()) != picked:
-        print(f"[replay] SLIM KEEP (pair {pair}): NOT WRITTEN -- the replay picked {picked}, its reads were re-made for {plan.get('picked')}",
-              flush=True)
+        logger.warning("[replay] SLIM KEEP (pair %s): NOT WRITTEN -- the replay picked %s, its reads were re-made for %s", pair, picked,
+                       plan.get("picked"))
         return None
     final = slim_path(out, pair)
     p = final.with_name(final.name + ".partial")
@@ -540,8 +543,8 @@ def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched
     if final.exists():
         shutil.rmtree(final)
     os.replace(p, final)
-    print(f"[replay] SLIM KEEP (pair {pair}): {final} -- {picked} picks, {doc['bytes'] >> 20} MiB in {len(files)} files, dump sha256 "
-          f"{doc['dump_sha256'][:16]}, run root {doc['run_root'][:16]}", flush=True)
+    logger.info("[replay] SLIM KEEP (pair %s): %s -- %s picks, %s MiB in %s files, dump sha256 %s, run root %s", pair, final, picked,
+                doc["bytes"] >> 20, len(files), doc["dump_sha256"][:16], doc["run_root"][:16])
     return doc
 
 

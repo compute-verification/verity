@@ -38,7 +38,10 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm.commit import store_dump as SD
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline import c2_replay as C2
+
+logger = init_logger(__name__)
 
 SCHEMA = "verity-vllm/replay-bundle/v1"
 MANIFEST = "MANIFEST.json"
@@ -241,7 +244,8 @@ def seal_all(out: Path, deferred: dict[int, dict], rows: list[dict], verdict: di
         with tl.span("closure.replay_bundle", pair=p):
             m = seal(out, p, ctx | {"row": row, "verdict": verdict}, Path(out) / f"binding_map_p{p}.json", hashed=hashed)
         bundles.append({"pair": p, "path": m["path"], "manifest_sha256": m["sha256"], "bytes": m["bytes"], "files": len(m["files"])})
-        print(f"[delta] REPLAY BUNDLE (pair {p}): {m['path']} sealed, {len(m['files'])} files, {m['bytes'] >> 20} MiB, manifest sha256 {m['sha256'][:16]}", flush=True)
+        logger.info("[delta] REPLAY BUNDLE (pair %s): %s sealed, %s files, %s MiB, manifest sha256 %s", p, m["path"], len(m["files"]),
+                    m["bytes"] >> 20, m["sha256"][:16])
     verdict["replay_deferred"] = {"pending_pairs": pending, "bundles": bundles}
 
 
