@@ -6,7 +6,7 @@ chunks (`serving_rows.members`) are laid out by `unit_rows`, and the verifier's 
 `serving_rows.template` reads it."""
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -64,10 +64,13 @@ def statement(tp: Any) -> dict[str, Any]:
     return {"reads": reads(tp)}
 
 
-def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
+def unit_rows(tp: Any, seg: Collection[str] = ()) -> tuple[list[tuple[str, str, int, list[str]]],
+                                                           list[tuple[str, tuple[int, ...]]]]:
     """Chunked template ``tp``'s rows as `UnitStager` stages them, ``(in_rows, out_rows)``: its Definition's bit rows
     (`interface.unit_rows`) under its cuts (`chain_rows.cuts`, a ``CHAINS`` combine's), parameter g's row ``in<g>``, or
-    ``in<g>.<s>`` for its row s when cut. The one exception is a ``ScaledMmS8Coordinate``'s A6 rows, ``x`` (the token's s8
+    ``in<g>.<s>`` for its row s when cut; a row ``seg`` names by its port, output j's ``o<j>``, is
+    ``hm96-sha512/row-seg/v1`` (the window's `history_rows.seg` rows of ``tp``) and every other ``hm96-sha512/row/v2``. The
+    one exception is a ``ScaledMmS8Coordinate``'s A6 rows, ``x`` (the token's s8
     codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2), then the v2 output row ``o0``: each operand
     packed with its scale in one row is the layout serving commits (`serving_rows`' s8 row tables), where
     `interface.unit_rows` would give ``x``, ``sx``, ``wrow`` and ``sw`` a row each."""
@@ -76,6 +79,8 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
     from verity_vllm.query.program_view import spec_statics
 
     if tp.layout == "s8":
+        if set(seg) - {"x"}:
+            raise ValueError(f"{tp.id}: its A6 rows are x row-seg and w and o0 v2, not {sorted(seg)} row-seg")
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
     if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "chain", "stage", "slots", "read", "history", "expert",
@@ -87,20 +92,25 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
         nm, _, s = row.partition("#")
         return f"in{g[nm]}" + (f".{s}" if s else "")
 
-    in_rows, out_rows = IF.unit_rows(tp.fn, CH.cuts(tp) if tp.layout == "chain" else None)
+    lay, cuts = IF.layout(tp.fn), CH.cuts(tp) if tp.layout == "chain" else None
+    named = {port(p): p for p, _w, _ps in lay.cut(cuts)} | {o: o for o, _w in lay.outs}
+    if set(seg) - set(named):
+        raise ValueError(f"{tp.id}: {sorted(set(seg) - set(named))} is no row of its {sorted(named)}")
+    in_rows, out_rows = IF.unit_rows(tp.fn, cuts, {named[p] for p in seg})
     return [(port(p), *rest) for p, *rest in in_rows], out_rows
 
 
-def chunk_cap(tp: Any) -> int:
+def chunk_cap(tp: Any, seg: Collection[str] = ()) -> int:
     """The most instances of chunked template ``tp`` one flock-circuit statement holds, as ``benchmarks/one_stage/a6.py``'s
-    ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`) as its `statement`, then
+    ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`, ``seg`` its row-seg ones: a
+    row-seg row has more compressions than the same row v2) as its `statement`, then
     ``vus_per_block`` blocks of ``2^(M_MAX - k_log)``.  Builds the circuit (seconds to minutes; a 64-key ``SparseMlaSplitPart``
     about 36 min at 71 GB): a partition file pins it as ``chunk_cap``."""
     import tempfile
 
     from verity_flock.class_statement import UnitStager
 
-    in_rows, out_rows = unit_rows(tp)
+    in_rows, out_rows = unit_rows(tp, seg)
     with tempfile.TemporaryDirectory() as d:
         st = UnitStager(tp.fn, "unit/serving-rows-cap", in_rows, out_rows, circuit=Path(d) / "circuit.txt",
                         bind={"partition": "0" * 128, "program": "0" * 128}, **statement(tp))

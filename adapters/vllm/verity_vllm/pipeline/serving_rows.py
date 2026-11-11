@@ -279,9 +279,11 @@ def row_units(t: str, d: Mapping[str, Any]) -> int:
     raise ValueError(f"{t}: a {tp.layout} row's units are its group's, not its own (`gemm_rows.grid`)")
 
 
-def chunk_caps(tmpls: Sequence[str]) -> dict[str, int]:
-    """`chunk_rows.chunk_cap` of each chunked template (``CHUNKED``), for a partition file's ``chunk_cap``."""
-    return {t: CR.chunk_cap(template(t)) for t in tmpls if template(t).layout in CHUNKED}
+def chunk_caps(tmpls: Sequence[str], histories: bool = False) -> dict[str, int]:
+    """`chunk_rows.chunk_cap` of each chunked template (``CHUNKED``), for a partition file's ``chunk_cap``, on the rows a
+    window of ``tmpls`` commits under the file's ``histories`` (`history_rows.seg`)."""
+    seg = HR.seg(tmpls, histories)
+    return {t: CR.chunk_cap(template(t), [p for w, p in seg if w == t]) for t in tmpls if template(t).layout in CHUNKED}
 
 
 def chunked(t: str, caps: Mapping[str, int] | None) -> bool:
@@ -293,24 +295,30 @@ def chunked(t: str, caps: Mapping[str, int] | None) -> bool:
             or (layout in ("row", "part") and t in (caps or {})))
 
 
-def unit_member(t: str, n: int, base: int = 0, name: str = "", seg: bool = False) -> CS.Member:
-    """``n`` units of template ``t`` from unit ``base`` on bit rows, as Flock's `UnitStager` stages a unit: its
-    `chunk_rows.unit_rows` in, its outputs' v2 rows out, or, ``seg`` (a history table's writer), its table's row-seg leaves."""
-    in_rows, _outs = CR.unit_rows(template(t))
+def unit_member(t: str, n: int, base: int = 0, name: str = "", seg: Collection[str] = ()) -> CS.Member:
+    """``n`` units of template ``t`` from unit ``base`` on bit rows, as Flock's `UnitStager` stages a unit: each port under
+    the schema of its row of `chunk_rows.unit_rows`, ``seg`` its row-seg rows (a history table's writer's output, its
+    table's leaves), which its statement states likewise (`circuit_record`)."""
+    in_rows, out_rows = CR.unit_rows(template(t), seg)
     outs = (("o0", 1),) if template(t).layout == "s8" else IF.layout(template(t).fn).outs
-    out_schema = CS.SCHEMA_HM96_SHA512_ROW_SEG if seg else CS.SCHEMA_HM96_SHA512_ROW_V2
-    schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, out_schema) for p, _w in outs)
+    schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((outs[j][0], s) for s, js in out_rows for j in js)
     return CS.Member(t, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, n, base, name=name, schemas=schemas)
 
 
+def row_seg(m: CS.Member) -> list[str]:
+    """The ports member ``m`` commits as ``hm96-sha512/row-seg/v1`` rows."""
+    return [p for p, s in m.schemas if s == CS.SCHEMA_HM96_SHA512_ROW_SEG]
+
+
 def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[int] | None = None,
-            caps: Mapping[str, int] | None = None, seg: Collection[str] = ()) -> list[CS.Member]:
+            caps: Mapping[str, int] | None = None, seg: Collection[tuple[str, str]] = ()) -> list[CS.Member]:
     """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree.  A
     chunked template's units (`chunked`: a ``CHUNKED`` layout's, or a row template's that ``caps`` names) are consecutive chunks of
     at most its ``caps`` entry, one member each, on its `chunk_rows.unit_rows`; a window always names the caps (`population`).
     With no ``caps`` at all (a tool reading one Call's units, ``benchmarks/one_stage/m1_unit.py``), a ``COORDS`` or ``COLS``
-    template is one member of word rows.  A chunked template ``seg`` names (`history_rows.seg`: a history table's writer)
-    commits its output rows as ``hm96-sha512/row-seg/v1``, its table's leaves, every other one's as ``hm96-sha512/row/v2``."""
+    template is one member of word rows.  A chunked template's row ``seg`` names (``(template, row)``, `history_rows.seg`: a
+    history table's writer's output, its table's leaves) is committed as ``hm96-sha512/row-seg/v1``, every other row of its
+    Definition as ``hm96-sha512/row/v2`` (`unit_member`)."""
     out, base = [], 0
     for k, (t, rs) in enumerate(zip(tmpls, rows, strict=True)):
         _rid, _pi, r, d = rs[0]
@@ -323,7 +331,8 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
                                  f"chunk_cap (pipeline.serving_rows.chunk_caps)")
             if counts is not None and counts[k] != n:
                 raise ValueError(f"{t}: {n} units read off the rows, {counts[k]} in their Definitions")
-            out += [unit_member(t, min(cap, n - lo), base + lo, f"{t}/c{j}", seg=t in seg) for j, lo in enumerate(range(0, n, cap))]
+            mine = [p for w, p in seg if w == t]
+            out += [unit_member(t, min(cap, n - lo), base + lo, f"{t}/c{j}", mine) for j, lo in enumerate(range(0, n, cap))]
             base += n
             continue
         if layout == "rope":
@@ -494,12 +503,22 @@ def circuit_record(window: CS.Binding, rows: Sequence[list[Row]], arrivals: Mapp
     """The window's ``circuit.json`` (`interface.circuit_record`): each chunked template's statement its `chunk_rows.unit_rows`
     and `chunk_rows.statement`, as ``compose_circuit.py --template`` composes it (a template of word rows has none: the
     verifier's input set lowers it), its ``rows``' window ingress under ``arrivals`` and registered reads (`ingress_rows`,
-    `registered`, its ``histories`` among them)."""
-    sts = {}
-    for t in dict.fromkeys(m.template for m in window.members if m.schemas):
-        in_rows, out_rows = CR.unit_rows(template(t))
+    `registered`, its ``histories`` among them). A statement states each row under the schema the template's members
+    commit it under (`row_seg`), so the circuit composed from it hashes the rows the window committed; refused
+    (ValueError) where two members of a template commit a row under two schemas, or a declared history's writer's row
+    (`interface.seg_rows`) is not committed row-seg."""
+    sts, segs = {}, {}
+    for m in window.members:
+        if m.schemas and segs.setdefault(m.template, row_seg(m)) != row_seg(m):
+            raise ValueError(f"{m.template}: its members commit {segs[m.template]} and {row_seg(m)} as row-seg rows, and a "
+                             f"template has one statement; commit every member's rows under one schema (`members`' seg)")
+    for t, seg in segs.items():
+        in_rows, out_rows = CR.unit_rows(template(t), seg)
         sts[t] = {"in_rows": in_rows, "out_rows": out_rows, **CR.statement(template(t))}
     got, reg = IR.ingress(window, rows, row_units, arrivals), registered(window.members, rows, histories)
+    if lost := sorted(IF.seg_rows(reg) - {(t, p) for t, seg in segs.items() for p in seg}):
+        raise ValueError(f"the declared history tables' writers' rows {lost} are not committed row-seg; build the window's "
+                         f"members with the partition file's histories (`population`, `history_rows.seg`)")
     return IF.circuit_record(window, CIRCUIT_NAME, IF.templates_of(window), sts, declared={
         **({IF.WINDOW_INGRESS: [g.doc() for g in got]} if got else {}), **({"registered": reg.doc()} if reg else {})} or None)
 

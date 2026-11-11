@@ -21,7 +21,7 @@ def test_the_served_templates_statements_are_the_bytes_vllm_s_own_rows_gave(monk
     monkeypatch.setattr(IF, "templates_of", lambda _w: [])
     monkeypatch.setattr(WT, "reads", lambda _ms, _rows, _units: None)
     monkeypatch.setattr(IF, "circuit_record", lambda _w, _name, _templates, sts, **_kw: sts)
-    members = [SimpleNamespace(template=t, schemas=True) for t in tmpls]
+    members = [SRW.unit_member(t, 1) for t in tmpls]
     sts = SRW.circuit_record(SimpleNamespace(members=members, row_tables=()), [])
     got = hashlib.sha512(IF.circuit_bytes(sts)).hexdigest()
     assert len(sts) == 35 and got == STATEMENTS, got
