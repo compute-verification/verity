@@ -39,7 +39,8 @@ def test_the_request_wrappers_dead_units_are_the_last_layers_rows_before_the_pre
     """TINY's request of 8 prompt rows: the last layer's attention, o projection, MLP and their norms on rows 0-6 (and the rotary
     of their queries) reach no sample; the build drops those 56 units and nothing else, as pruning the unpruned body does, swaps
     the rest's Definitions with dead gates (`swapped`) and narrows the linears read in part (`narrowed`). A body handed over
-    (`consume`, as the build hands its Builder's) gives the same form and is emptied; one with nothing to drop is the form, kept."""
+    (`consume`, as the build hands its Builder's) gives the same form, without dead units in its own lists, and is emptied by
+    `batched_form`; one with nothing to drop is the form, kept."""
     pruned = PB.build_program(PHI, "request", LP=8, T=3)
     monkeypatch.setattr(PB, "dead_free_form", lambda b, **_: (b, list(range(len(b.nodes)))))
     full = PB.build_program(PHI, "request", LP=8, T=3)
@@ -53,8 +54,16 @@ def test_the_request_wrappers_dead_units_are_the_last_layers_rows_before_the_pre
     form, form_kept = dead_free(body)
     assert form_kept == kept and _shape(form) == _shape(narrowed(swapped(again))[0]) == _shape(pruned.program.fn.body)
     held = Body(body.params, body.ret_type, list(body.nodes), body.ret, list(body.offsets))
+    in_place, in_place_kept = without_dead_units(held, consume=True)
+    assert in_place.nodes is held.nodes and in_place.offsets is held.offsets and in_place_kept == kept
+    assert _shape(in_place) == _shape(again) and in_place.offsets == again.offsets
+    held = Body(body.params, body.ret_type, list(body.nodes), body.ret, list(body.offsets))
     consumed, consumed_kept = dead_free(held, batched=True, consume=True)
     assert consumed_kept == kept and _shape(consumed) == _shape(batched_form(form)[0]) and held.nodes == held.offsets == []
+    batched = batched_form(form)[0]
+    handed = Body(form.params, form.ret_type, list(form.nodes), form.ret, list(form.offsets))
+    from_handed = batched_form(handed, consume=True)[0]
+    assert _shape(from_handed) == _shape(batched) and from_handed.offsets == batched.offsets and handed.nodes == handed.offsets == []
     assert dead_units(pruned.program.fn.body) == [] and dead_free(pruned.program.fn.body)[0] is pruned.program.fn.body
     kept_body = pruned.program.fn.body
     assert dead_free(kept_body, consume=True)[0] is kept_body and len(kept_body.nodes) == len(kept_body.offsets) - 1 > 0
