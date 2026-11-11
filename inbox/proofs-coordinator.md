@@ -58219,3 +58219,35 @@ For the table: no-walk floor of the head block 0.54 of today's seconds at one pr
 - #8934 and #8914 did not move.
 
 For the table: #8896 and #8946 landed (the stratified `Q_s` by rows and `SampledKSLiveV5`'s bound by rows, lemmas; the stream-length hypothesis enters no guarantee). #8940 (unmarked) is at `131a557ffc03` on `main` `493f49485e50`; its build there is not shown yet [runs `6c51`, `69de`, `73d5` out].
+
+## FLOCKPKG, Wed 11 Nov 15:43Z: #8789's quick tier is 91 of 91 at `68e706219129` (verity-vllm passed); the digest's read is 15.0 to 16.5 s by four pairs (mean 15.5, against 14.4 by `b5e9`'s two noisy pairs; the +16.1% line reads +17.4%); the allocator setting is PR #9005 at `accab1a9bc51`, unmarked, 25 of 63 suites passed and four tier runs out
+
+**1. #8789's quick tier, complete** [run: `research status`, `research fetch --all`, `out/suites.log`, 15:38Z]. `r20261111-141137-fe15`: done, rc 0; `verity-vllm` passed: 13,929 tests passed, 483 skipped, in 3,055 s; "1 suites: 1 passed (0 cached), 0 failed". With the five runs of my 14:39Z entry (90 passed) the tier at `68e706219129b28d9fd8e5a4f46111a3da392547` reads **91 of 91 passed, 0 failed, 0 cached**.
+
+**2. The digest's read, four pairs** [run: `r20261111-150802-f068`, vy-nebius-cpu-3, done rc 0; `out/job.log`; #8949's binary, fused MoE block K = 6144, program 152 MB, one core (31), a with-program call (accepted, rc 0) beside a no-program call (refused at the setup, rc 1), `inputs` each]:
+
+| pair | `inputs` with `--program` | without | the digest's read | ratio |
+|---|---|---|---|---|
+| 1 | 35.43 s | 18.92 s | 16.51 s | 1.873 |
+| 2 | 34.24 s | 19.09 s | 15.15 s | 1.794 |
+| 3 | 33.87 s | 18.87 s | 15.00 s | 1.795 |
+| 4 | 34.26 s | 18.81 s | 15.45 s | 1.821 |
+
+- Mean 15.53 s, 15.0 to 16.5: 0.102 s a MB (0.099 to 0.109). The four no-program calls agree to 1.5%, the four with-program calls to 4.6%; `b5e9`'s two pairs gave 9.9 and 19.0. [run] One more with-program call, the run's first, by the staging driver and not pinned to the core: `inputs` 30.77 s, so 11.8 s over the no-program mean; it is outside the pairs.
+- **What it does to the +16% line** [derived by proportion; +207 core-s a statement was 14.4 s, and the cells are a line in that term; BREAKEVEN recomputes]: +207 (+141 to +272) becomes **+223 (+216 to +237)**; "as `main` is" +990 (+924 to +1,055) becomes **+1,006 (+999 to +1,020)**; the digest's share of the row of record, +16.1% as `main` is, becomes **+17.4% (+16.8% to +18.5%)**, and with the one parse +28.1% becomes +30.3% (+29.3% to +32.2%); the row of record as `main` is 12,443 becomes about 12,580 GB (12,510 to 12,700). The figure moves 8% up and its spread shrinks from ±32% to ±5%. Nothing built changes; no row's order changes.
+
+**3. The allocator setting is PR [#9005](https://github.com/compute-verification/verity/pull/9005)**, unmarked, at `accab1a9bc512eeeaa8fbab01ddb460b21c40d94` on `cursor/proofs-allocenv-e779`, from `origin/main` `d2a045c04e8e` [run: `research queue open … --issue PRF-550 --by proofs`, 15:40Z; it warns that no label of PRF-550 names a live goal: the label is yours to set].
+- **What it is** [run]: one constant, `VERIFIER_ENV = {"MIMALLOC_PURGE_DELAY": "-1"}`, and `verifier_env()` (the caller's environment over it, so a caller's own value wins) in `verity/protocols/spot/verifier/one_stage/proofs.py`; `proofs.verify`, `a0.lean_verify` and `server_rate.Lean` pass it to the `flock-verify verify` child. 5 files, +121/−5; no Lean, no lock. Tests: `benchmarks/one_stage/tests/test_verifier_env.py` (new, the two benchmark sites) and one test in `verity/protocols/spot/verifier/tests/test_proofs.py`; each holds the environment a stand-in child was given to the caller's, with the variable at `-1` when unset and at the caller's value when set; no clock, no sleep, no process started. With `env=verifier_env()` removed from the three sites all six cases fail [run on the VM].
+- **Not touched** [read]: `benchmarks/one_stage/zk_cost.py:478,526` and `benchmarks/private_circuit/universal.py:119` also start `verify`; your message named three places, so these two keep their environment. Say if they should take it.
+- **Its tier** (`suites.py SUITES --changed d2a045c04e8e --quick`, 63 suites, six runs) [run: `research status`, `out/suites.log`, 15:41Z]: `r20261111-152504-3d72` 12 of 12 passed; `r20261111-152450-13a0` 13 of 13 passed; running: `r20261111-152422-c4a2` (verity-vllm alone, ETA about 16:25Z), `r20261111-152436-a5cd`, `r20261111-152518-7292`, `r20261111-152532-bf90` (ETA about 16:00Z).
+- **Merges** [run: `git merge-tree --write-tree`]: with `main` `493f49485e50` (tree `287bd7ace0bf`, no conflict); with #8953 `cab7eb5382a0`, #8927 `403c8aed979c`, #8679 `26b5ddf7cb6e`, the open PRs near `main` with a hunk in its files, each no conflict. #8656, #8705, #8503, #8460, #8179 edit `a0.py` or `server_rate.py` from bases 2,800 to 15,300 commits behind `main`; not merged.
+- **Left for its ready line:** the four runs. The measured figures in its body are those of 14:18Z, with "one run, loaded node" on the head row; nothing was measured through the three call sites.
+
+**4. The lock-only PR after #8789** [run: `git merge-base --is-ancestor 68e706219129 origin/main`, 15:36Z: not yet on `main` `493f49485e50`]. Prepared: branch `cursor/proofs-8789-locks-<hex>` from `origin/main` at the landing; the records run of the five packages as `fad7` ran it, on that tree, `--cwd clone`, `--on auto`; the two locks from its `lean-audit/record/`; then the same run at the PR's head, which must end `pass` for both. Two runs of about 75 minutes each [guess, from `fad7`'s 75 minutes]. I launch nothing of it before #8789 is on `main`.
+
+**My VM was reset at 15:35Z** [run: `uptime`, `/tmp` empty]. Every branch was pushed; `research doctor`: one finding (the notes clone, re-cloned by `research notes sync`), the rest ok; `research` runs `origin/main` `493f49485e50`.
+
+**Left:** #9005's four tier runs, then its ready line; the lock-only PR once #8789 is on `main`; the allocator's quiet-node rerun after the lock run; #8789's PR body rows that read "out when this was written" (a body edit only, say if you want it); (B) #8814 and M6 after #8789.
+
+For BREAKEVEN: the program's digest read in `inputs`: 15.5 s at 152 MB (15.0 to 16.5 by four pairs; 0.102 s a MB) [measured, `r20261111-150802-f068`, one block, one core]; in the planner's term +223 core-s a statement (+216 to +237) in place of +207 (+141 to +272) [derived by proportion]. Fixed seconds of every column that reads the program; "no program" does not change.
+For the table: #8789 at `68e706219129`: quick tier 91 of 91 passed (`fe15` the last). The digest's read: 15.5 s at 152 MB by four pairs (15.0 to 16.5), so "as `main` is" +1,006 (+999 to +1,020) and its share of the row of record +17.4% [measured `f068`; the GB by proportion]. The allocator setting: PR #9005 at `accab1a9bc51`, unmarked; tier 25 of 63 passed, four runs out; head check 0.55 to 0.63 (one run, loaded node), fused call 0.91, +6% to +11% peak memory.
