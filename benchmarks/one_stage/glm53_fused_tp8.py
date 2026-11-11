@@ -31,9 +31,9 @@ def row(proj: str, swap: bool, dot: str) -> str:
 def templates() -> list[str]:
     """Each projection's scale-row read, then its fused blocks on each kernel: of the pair row's unit templates
     (`serving_rows.unit_templates`), its fused block of n rows."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.commitments.gates.embedding import read
-    from verity.ml.definitions.call_scope import spec_base, spec_statics
+    from verity.circuits.codec import descriptor_id
+    from verity.commitments.gates.embedding import read
+    from verity.definitions.call_scope import spec_base, spec_statics
     from verity_vllm.pipeline import serving_rows as SRW
 
     out = []
