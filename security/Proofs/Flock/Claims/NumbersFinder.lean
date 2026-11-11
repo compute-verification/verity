@@ -23,6 +23,8 @@ arithmetic, and its value at sessions of one table:
   table, at most `2^23` level-0 symbols), `N_s = 2^24`, `K_s = K_m = 2^42` and `c = 2^80`;
 * `real_le_firstHitBound`, `real_le_two_rpow_neg_100`, `real_table1_le`: the same expression over the reals, at any
   reals within a design's numbers, with `2^256` and `2^-100` real powers as the finder's statements write them;
+* `firstHitBound_table1_513`, `real_table1_513_le`: the same at `513·2^80` in place of `2^80`, every call charged as
+  the `513` compressions of SHA-512 on a row of `2^16` bytes, at `K_s = K_m = 2^33`;
 * `sqrt_term_le_strict`: the rewinding term `√(k·γ·p)` beside it is at most `2^-131` at `k ≤ 4 + 4402·2^24` rounds,
   `γ ≤ 2^51` and `p ≤ q²/2^513` at `q ≤ 2·2^80`, the strict birthday bound at a finder of two runs.
 -/
@@ -119,6 +121,39 @@ theorem real_table1_le {T e Ns Ks Km c : ℝ} (hT0 : 0 ≤ T) (he0 : 0 ≤ e) (h
     exact hKm
   · rw [Rat.cast_pow, Rat.cast_ofNat]
     exact hc
+
+/-! ## With every call charged at its longest
+
+A finder's cost counts calls. Charged instead by compressions, a call of SHA-512 on at most `2^16` bytes is at most
+`513` of them, and the expression then reads `513·T` where it read `T` and `513·c` where it read `c`. No premise here
+counts compressions: these are the expression's values at those numbers. -/
+
+/-- **At most `2^-100` with every call charged as `513`**: the expression at `513·2^80` in place of a run's `2^80`
+calls and of its own opening checks', at `e = 1 + 210·12343986`, `2^24` sessions and `2^33` in place of the gates,
+counted either way. -/
+theorem firstHitBound_table1_513 :
+    firstHitBound (513 * 2 ^ 80) 2592237061 (2 ^ 24) (2 ^ 33) (2 ^ 33) (513 * 2 ^ 80) ≤ 1 / 2 ^ 100 := by
+  norm_num [firstHitBound, firstHitCalls]
+
+/-- **The first-hit term is at most `2^-100` at sessions of one table with every call charged as `513`**: at
+`T ≤ 513·2^80`, sessions extracted in `e ≤ 2592237061` expected reruns, `N_s ≤ 2^24` sessions, `K_s ≤ 2^33` and
+`K_m ≤ 2^33`, and `c ≤ 513·2^80`. -/
+theorem real_table1_513_le {T e Ns Ks Km c : ℝ} (hT0 : 0 ≤ T) (he0 : 0 ≤ e) (hNs0 : 0 ≤ Ns) (hKs0 : 0 ≤ Ks)
+    (hKm0 : 0 ≤ Km) (hc0 : 0 ≤ c) (hT : T ≤ 513 * 2 ^ 80) (he : e ≤ 2592237061) (hNs : Ns ≤ 2 ^ 24)
+    (hKs : Ks ≤ 2 ^ 33) (hKm : Km ≤ 2 ^ 33) (hc : c ≤ 513 * 2 ^ 80) :
+    4 * (T * (1 + e * Ns + Ks + e * Km) + (1 + Ks) * c) / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ)) := by
+  refine real_le_two_rpow_neg_100 (T' := 513 * 2 ^ 80) (e' := 2592237061) (Ns' := 2 ^ 24) (Ks' := 2 ^ 33)
+    (Km' := 2 ^ 33) (c' := 513 * 2 ^ 80) hT0 he0 hNs0 hKs0 hKm0 hc0 ?_ ?_ ?_ ?_ ?_ ?_ firstHitBound_table1_513
+  · exact hT.trans (le_of_eq (by norm_num))
+  · rw [Rat.cast_ofNat]
+    exact he
+  · rw [Rat.cast_pow, Rat.cast_ofNat]
+    exact hNs
+  · rw [Rat.cast_pow, Rat.cast_ofNat]
+    exact hKs
+  · rw [Rat.cast_pow, Rat.cast_ofNat]
+    exact hKm
+  · exact hc.trans (le_of_eq (by norm_num))
 
 /-! ## The rewinding term beside it -/
 
