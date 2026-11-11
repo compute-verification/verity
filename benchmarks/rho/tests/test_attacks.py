@@ -1,5 +1,6 @@
 """The constructions: the shard port against `benchmarks/nci/slowdown.py`'s `search`, the tile against a brute-force
-search, and measured executions extended monotonically. Every allowance must be achieved, never an estimate."""
+search, held layers against E1's Proposition 3 on its activation rate, and measured executions extended monotonically.
+Every allowance must be achieved, never an estimate."""
 
 import importlib.util
 import itertools
@@ -150,6 +151,15 @@ def test_held_layers_breaks_the_activation_rate_from_one_layer_and_its_tokens_en
     last = (p.layers - 1) * p.layer_bits
     assert classes.expensive_share(last, p.layer_bits, p.layers) == 0
     assert all(over(least * (last / least) ** (i / 500)) > 1 for i in range(1, 501))
+
+
+def test_held_layers_finishes_nothing_where_no_layer_fits():
+    """`onsite-w63`'s serving block is past the activation rate's credible size and smaller than one layer's update:
+    the construction finishes nothing there, and the rate is unbroken at that size."""
+    s, p, _, over = _held("onsite-w63")
+    k = s.regime.budget(s.context).inputs
+    assert s.premises["draft:E1-activation-rate"]["credible_bits"] < k < p.layer_bits
+    assert over(k) == 0
 
 
 def test_a_measured_execution_extends_monotonically_and_never_beyond_what_it_ran():

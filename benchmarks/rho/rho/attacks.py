@@ -150,7 +150,8 @@ def held_layers(k: float, layer_bits: float, products: float, entry: float, step
     residual width): `max_n n P min((k − n · layer_bits) / entry, T_step)`, with `P` a layer's forward products a
     token. The block computes the layers' activations itself, so it reads none of them: E1's Proposition 3 on its
     activation rate (`classes.fanout_priced`) allows a block `aOut k / β_x` forward products, which one held layer
-    exceeds from `layer_bits / (1 − aOut d / P)` bits where `P > aOut d`. 0 below one layer's update."""
+    exceeds from `layer_bits / (1 − aOut d / P)` bits where `P > aOut d`. 0 below one layer's update. It counts
+    forward products against that limit alone, so it is no entry of `ATTACKS`."""
     best = 0.0
     for n in range(1, layers + 1):
         room = k - n * layer_bits
