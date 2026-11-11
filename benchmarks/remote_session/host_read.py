@@ -31,7 +31,7 @@ seconds, and the record says what was cut. Exits 0 when every row passed its gat
 were refused, 6 when not.
 
     python host_read.py --lib session.so --kv kv.so --out OUT --gib 32 --host-gib 1 --gpus 1 --chunk-blocks 65536 \\
-        --names ahead1 ahead2 ahead3 ahead3+keep ahead2+prefetch feed8+keep feed8
+        --names ahead1 ahead2 ahead3 ahead3-keep ahead2-prefetch feed8-keep feed8
 """
 from __future__ import annotations
 

@@ -19,11 +19,11 @@ from device import HOST_FORMS, HostRead, host_read_plan  # noqa: E402
 
 @pytest.mark.parametrize("name, plan", [
     ("ahead1", HostRead(1, HOST_FORMS["load"], 0, 0)),
-    ("ahead3+keep", HostRead(3, HOST_FORMS["keep"], 0, 0)),
-    ("prefetch+ahead2", HostRead(2, HOST_FORMS["prefetch"], 0, 0)),
+    ("ahead3-keep", HostRead(3, HOST_FORMS["keep"], 0, 0)),
+    ("prefetch-ahead2", HostRead(2, HOST_FORMS["prefetch"], 0, 0)),
     ("feed4", HostRead(0, HOST_FORMS["load"], 4, 128)),
-    ("feed2+lead8+keep", HostRead(0, HOST_FORMS["keep"], 2, 8)),
-    ("ahead1+feed4+lead32", HostRead(1, HOST_FORMS["load"], 4, 32)),
+    ("feed2-lead8-keep", HostRead(0, HOST_FORMS["keep"], 2, 8)),
+    ("ahead1-feed4-lead32", HostRead(1, HOST_FORMS["load"], 4, 32)),
 ])
 def test_a_name_is_its_terms(name, plan):
     assert host_read_plan(name) == plan
@@ -34,8 +34,9 @@ def test_pass_is_no_plan():
 
 
 @pytest.mark.parametrize("name", [
-    "", "ahead", "ahead0", "ahead4", "ahead2+ahead1", "feed0", "feed", "lead8", "ahead1+lead8", "keep", "prefetch",
-    "feed4+prefetch", "keep+prefetch+ahead1", "pass+ahead1", "ahead1+", "ahead-1", "feed4+lead0", "Ahead1", "keep2+ahead1",
+    "", "ahead", "ahead0", "ahead4", "ahead2-ahead1", "feed0", "feed", "lead8", "ahead1-lead8", "keep", "prefetch",
+    "feed4-prefetch", "keep-prefetch-ahead1", "pass-ahead1", "ahead1-", "ahead-1", "ahead--1", "ahead1+keep",
+    "ahead1.keep", "ahead1 keep", "feed4-lead0", "Ahead1", "keep2-ahead1",
 ])
 def test_a_name_outside_the_grammar_is_refused(name):
     with pytest.raises(ValueError, match="host read"):
@@ -90,9 +91,9 @@ def test_pass_is_rs_pass_as_a_shard_calls_it():
 
 @pytest.mark.parametrize("name, tail", [
     ("ahead2", (2, HOST_FORMS["load"], 60, 0, 0)),
-    ("ahead1+prefetch", (1, HOST_FORMS["prefetch"], 60, 0, 0)),
-    ("feed4+lead8+keep", (0, HOST_FORMS["keep"], 60, 4, 8)),
-    ("ahead3+feed2", (3, HOST_FORMS["load"], 60, 2, 128)),
+    ("ahead1-prefetch", (1, HOST_FORMS["prefetch"], 60, 0, 0)),
+    ("feed4-lead8-keep", (0, HOST_FORMS["keep"], 60, 4, 8)),
+    ("ahead3-feed2", (3, HOST_FORMS["load"], 60, 2, 128)),
 ])
 def test_a_plan_is_rs_host_pass_with_its_terms(name, tail):
     s = store(name)

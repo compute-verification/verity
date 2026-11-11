@@ -174,7 +174,7 @@ def run(tmp_path, monkeypatch, backend: Backend) -> tuple[int, dict]:
     monkeypatch.setattr(torch.cuda, "Event", Event)
     monkeypatch.setattr(torch.cuda, "get_device_name", lambda index: "no device")
     monkeypatch.setattr(sys, "argv", ["host_read.py", "--lib", "session.so", "--kv", "kv.so", "--out", str(tmp_path),
-                                      "--host-gib", "1", "--names", "ahead2", "feed4+keep@8", "--reps", "2",
+                                      "--host-gib", "1", "--names", "ahead2", "feed4-keep@8", "--reps", "2",
                                       "--chain-passes", "4", "--budget-s", "1e9"])
     rc = host_read.main()
     return rc, json.loads((tmp_path / "host_read.json").read_text())
@@ -184,8 +184,8 @@ def test_every_row_is_gated_and_held_to_pass_then_timed(tmp_path, monkeypatch):
     backend = Backend()
     rc, doc = run(tmp_path, monkeypatch, backend)
     assert rc == 0 and doc["ok"] and doc["cut"] == []
-    assert list(doc["rows"]) == ["pass", "ahead2", "feed4+keep@8"] and all(r["ok"] for r in doc["rows"].values())
-    assert backend.gated == [("pass", 16), ("ahead2", 16), ("feed4+keep", 8)]
+    assert list(doc["rows"]) == ["pass", "ahead2", "feed4-keep@8"] and all(r["ok"] for r in doc["rows"].values())
+    assert backend.gated == [("pass", 16), ("ahead2", 16), ("feed4-keep", 8)]
     assert doc["rows"]["pass"]["equal"]["host_receipts_reference"] == [True]
     assert doc["rows"]["ahead2"]["equal"] == {"plain_root": True, "plain_levels": True, "root": True, "top": True,
                                               "receipts": [True, True], "kept": [True, True],
@@ -202,7 +202,7 @@ def test_every_row_is_gated_and_held_to_pass_then_timed(tmp_path, monkeypatch):
         16, 16 * BLOCK, 16 * BLOCK, 32 * BLOCK)
     assert doc["host_segments"][0]["bytes"] == 16 * BLOCK and not doc["encoded"]
     # a timed rep runs the row's own read at the row's own CTA count
-    assert set(backend.store.host_calls[-3:]) == {("pass", 16), ("ahead2", 16), ("feed4+keep", 8)}
+    assert set(backend.store.host_calls[-3:]) == {("pass", 16), ("ahead2", 16), ("feed4-keep", 8)}
 
 
 def test_a_row_with_one_wrong_receipt_is_named_and_not_timed(tmp_path, monkeypatch):
@@ -211,7 +211,7 @@ def test_a_row_with_one_wrong_receipt_is_named_and_not_timed(tmp_path, monkeypat
     bad = doc["rows"]["ahead2"]
     assert not bad["ok"] and bad["equal"]["receipts"] == [True, False] and bad["equal"]["kept"] == [True, False]
     assert not bad["equal"]["plain_root"] and not bad["equal"]["root"]
-    assert doc["rows"]["feed4+keep@8"]["ok"] and list(doc["alone"]) == ["pass", "feed4+keep@8"] == list(doc["chain"])
+    assert doc["rows"]["feed4-keep@8"]["ok"] and list(doc["alone"]) == ["pass", "feed4-keep@8"] == list(doc["chain"])
 
 
 def test_a_pass_that_is_wrong_itself_times_nothing(tmp_path, monkeypatch):

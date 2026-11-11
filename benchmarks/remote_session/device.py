@@ -369,21 +369,21 @@ class HostRead:
 
 
 def host_read_plan(name: str) -> HostRead | None:
-    """A host segment's read by name. `pass` is None: `rs_pass`, as it reads a shard. Otherwise terms joined by `+`:
+    """A host segment's read by name. `pass` is None: `rs_pass`, as it reads a shard. Otherwise terms joined by `-`:
     `aheadA` (A = 1 … 3), `feedF` (F feed CTAs) with `leadT` (T tiles, 128 unless given), and one of `keep` and
-    `prefetch` for how what is ahead is asked for (`prefetch` only with `aheadA`). `ahead2`, `ahead2+keep`,
-    `feed4+lead8`, `ahead1+feed4`."""
+    `prefetch` for how what is ahead is asked for (`prefetch` only with `aheadA`). `ahead2`, `ahead2-keep`,
+    `feed4-lead8`, `ahead1-feed4`. A name is one word of letters, digits and `-`, so it can be a field of a list."""
     if name == "pass":
         return None
     got: dict = {}
-    for term in name.split("+"):
+    for term in name.split("-"):
         key, digits = term.rstrip("0123456789"), term[len(term.rstrip("0123456789")):]
         if key in ("keep", "prefetch") and not digits:
             key, value = "form", HOST_FORMS[term]
         elif key in ("ahead", "feed", "lead") and digits:
             value = int(digits)
         else:
-            raise ValueError(f"a host read is `pass` or terms aheadA, feedF, leadT, keep, prefetch joined by +, not "
+            raise ValueError(f"a host read is `pass` or terms aheadA, feedF, leadT, keep, prefetch joined by -, not "
                              f"{name!r} (at {term!r})")
         if key in got:
             raise ValueError(f"the host read {name!r} gives {key} twice")
@@ -1484,7 +1484,7 @@ def add_arguments(ap) -> None:
     ap.add_argument("--host-consumers", type=int, default=8, help="a host segment's consumer CTAs")
     ap.add_argument("--host-read", default="pass",
                     help="how a host segment's bytes are asked for (`host_read_plan`): pass, as a shard's; aheadA, "
-                         "feedF, leadT, keep, prefetch joined by +")
+                         "feedF, leadT, keep, prefetch joined by -")
 
 
 def from_arguments(a, log=print) -> GpuBackend:
