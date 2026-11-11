@@ -1,5 +1,4 @@
-"""verity_vllm.pipeline.telemetry.admission — synthetic-interval unit tests.  The recorded attempts as a regression fixture are
-`test_admission_telemetry_of_record`."""
+"""verity_vllm.pipeline.telemetry.admission — synthetic-interval unit tests of the sweep, the model and the plan document."""
 from __future__ import annotations
 
 import json
@@ -177,24 +176,3 @@ def test_plan_row_writes_the_document_and_names_what_a_limit_would_refuse(tmp_pa
     # a model with no calibration: the dense default, named in the line; no limit, no refusal
     line = adm.plan_row(adm.row_config_from_workload(_workload("granite-3b__bf16__h100__tp1__b2__i64__o8__mixed__t1__eager")), None)["line"]
     assert "no calibration for model 'granite-3b'" in line and "no cgroup limit read" in line and "WARN" not in line
-
-
-# ---- increment A path ------------------------------------------------------------------------------------------------
-def test_observe_increment_a_named_allocs(tmp_path):
-    ev = [
-        {"kind": "span_start", "stage": "stage.commit", "id": "c", "t_mono": 0.0, "t_utc": "2026-09-21T00:00:00.000Z", "stream": "s", "seq": 1},
-        {"kind": "mark", "name": "alloc", "obj": "commit.pinned_pool", "bytes": 100 * MiB, "alloc_id": "pool", "stage": "stage.commit", "t_mono": 1.0, "t_utc": "2026-09-21T00:00:01.000Z", "stream": "s", "seq": 2},
-        {"kind": "mark", "name": "alloc", "obj": "commit.c2.match_oracle", "bytes": 20 * MiB, "alloc_id": "o0", "stage": "stage.commit", "t_mono": 2.0, "t_utc": "2026-09-21T00:00:02.000Z", "stream": "s", "seq": 3},
-        {"kind": "mark", "name": "free", "obj": "commit.c2.match_oracle", "alloc_id": "o0", "stage": "stage.commit", "t_mono": 3.0, "t_utc": "2026-09-21T00:00:03.000Z", "stream": "s", "seq": 4},
-        {"kind": "mark", "name": "alloc", "obj": "commit.c2.programs", "bytes": 30 * MiB, "alloc_id": "p0", "stage": "stage.commit", "t_mono": 3.5, "t_utc": "2026-09-21T00:00:03.500Z", "stream": "s", "seq": 5},
-        {"kind": "span_end", "stage": "stage.commit", "id": "c", "t_mono": 5.0, "t_utc": "2026-09-21T00:00:05.000Z", "stream": "s", "seq": 6},
-    ]
-    (tmp_path / "events.jsonl").write_text("".join(json.dumps(r) + "\n" for r in ev))
-    res = [{"kind": "cgroup", "t_mono": 3.6, "cgroup": {"memory_current_bytes": 140 * MiB, "memory_stat": {"anon": 130 * MiB, "shmem": 0}}},
-           {"kind": "process", "t_mono": 3.7, "processes": [{"pid": 1, "rss_bytes": 120 * MiB, "rss_anon_bytes": 110 * MiB}, {"pid": 2, "rss_bytes": 5 * MiB, "rss_anon_bytes": 5 * MiB}]}]
-    (tmp_path / "resources.jsonl").write_text("".join(json.dumps(r) + "\n" for r in res))
-    obs = adm.observe_increment_a(str(tmp_path))
-    c = obs["stages"]["commit"]
-    assert c["named_peak_mib"] == 130 and c["live_at_peak"] == {"commit.pinned_pool": 100, "commit.c2.programs": 30}
-    assert c["cgroup_mib"] == 140 and c["anon_shmem_mib"] == 130 and c["rss_max_mib"] == 120 and c["rss_sum_mib"] == 115
-    assert any("never freed" in n for n in obs["notes"])

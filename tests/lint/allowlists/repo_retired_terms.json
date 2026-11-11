@@ -4331,7 +4331,7 @@
     {"file": "adapters/vllm/verity_vllm/pipeline/serve_tie.py", "count": 2},
     {"file": "adapters/vllm/verity_vllm/pipeline/served_match.py", "count": 1},
     {"file": "adapters/vllm/verity_vllm/pipeline/serving_rows.py", "count": 77},
-    {"file": "adapters/vllm/verity_vllm/pipeline/telemetry/admission.py", "count": 13},
+    {"file": "adapters/vllm/verity_vllm/pipeline/telemetry/admission.py", "count": 5},
     {"file": "adapters/vllm/verity_vllm/pipeline/tp/commit.py", "count": 6},
     {"file": "adapters/vllm/verity_vllm/pipeline/tp/fold_match.py", "count": 25},
     {"file": "adapters/vllm/verity_vllm/pipeline/tp/match.py", "count": 11},
