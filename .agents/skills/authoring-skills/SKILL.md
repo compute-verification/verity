@@ -22,7 +22,7 @@ enforced mechanically is code, a test, a schema or a lint.
 Put it at the narrowest scope it applies to: work in one package, `<package>/.agents/skills/`, routed from that package's
 `AGENTS.md` (Cursor scopes a nested `.agents/skills/` to its subtree, with no configuration); work anywhere, the root
 `.agents/skills/`, routed from the root `AGENTS.md` (running research jobs is repo-level; proof benchmarks belong under
-`verity/protocols/flock/prover/`).
+`verity/protocols/flock/`).
 
 ## The file
 

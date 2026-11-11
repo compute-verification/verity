@@ -9,4 +9,5 @@ untraced = ["tests/test_row_commit.py", "tests/test_sha512.py"]
 # Test-only: test_row_commit holds row_commit.cuh to verity.commitments' frame-v3 and hm96 references, vectors and gates,
 # which import verity.circuits, verity.commitments.crypto and verity.errors.
 inputs = ["verity/__init__.py", "verity/ml/__init__.py", "verity/errors.py", "verity/commitments", "verity/circuits",
-          "verity/commitments/crypto"]
+          "verity/commitments/crypto",
+          "verity/definitions/__init__.py"]
