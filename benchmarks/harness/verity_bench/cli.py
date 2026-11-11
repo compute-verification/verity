@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from verity_bench import breakdown, jobs, overhead, overhead_records, prove_records, served_table, settings
+from verity_bench import breakdown, jobs, lean_verify, overhead, overhead_records, prove_records, served_table, settings
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
@@ -248,6 +248,11 @@ def _prove_parser(commands: Any) -> None:
     prove.add_argument("--json", action="store_true", help="the table as JSON, every row whole")
     prove.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
     prove.set_defaults(run=_prove, command_parser=prove)
+
+    timed = commands.add_parser("lean-verify", help="the Lean verifier's seconds on one kept proof and the proof's bytes, "
+                                                    "as the record `prove` reads")
+    lean_verify.add_arguments(timed)
+    timed.set_defaults(run=lean_verify.run, command_parser=timed)
 
 
 def _parser() -> argparse.ArgumentParser:

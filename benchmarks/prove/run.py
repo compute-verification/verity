@@ -7,6 +7,8 @@ file).
     verity bench prove --system flock --workload glm53 --provers 2   each type priced at two provers (default: one)
     verity bench prove --system flock --workload glm53 --rows 12     the 12 costliest block types, the rest in one row
     verity bench prove --system flock --workload glm53 --json        the table as JSON
+    verity bench prove lean-verify --lean flock-verify --proof TREE  the Lean verifier timed on one kept proof, as the
+                                                                     record the table's Lean verifier figures read
 """
 
 from __future__ import annotations
@@ -16,4 +18,4 @@ import sys
 from verity_bench.cli import main
 
 if __name__ == "__main__":
-    sys.exit(main(["prove", *sys.argv[1:]]))
+    sys.exit(main(sys.argv[1:] if sys.argv[1:2] == ["lean-verify"] else ["prove", *sys.argv[1:]]))
