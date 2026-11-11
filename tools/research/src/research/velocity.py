@@ -342,6 +342,9 @@ def read(ns: argparse.Namespace, since: datetime | None, until: datetime | None,
     end = until or (later.get("taken") if ns.later else None) or now
     earlier = row(lambda: load(ns.earlier or pick(since or end - timedelta(hours=WINDOW_H))))
     start = since or (earlier.get("taken") if ns.earlier else None) or end - timedelta(hours=WINDOW_H)
+    if "taken" in earlier and (ahead := (start - earlier["taken"]).total_seconds()) > SLACK_S:
+        notes.append(f"the goals' first column starts {ahead / 3600:.1f} h before the window, at its dump: none nearer "
+                     f"{pst(start)} is known")
     base = row(lambda: load(ns.baseline or json.loads(DATA.read_text())["baseline"]))
 
     def change(before: dict, scope: str) -> dict:

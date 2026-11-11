@@ -181,5 +181,9 @@ def test_a_reading_now_saves_the_page_and_starts_from_the_newest_known_dump_at_t
     assert V.main(["--since", "2026-11-09T06:00-08:00", "--until", "2026-11-09T12:05-08:00", "--json"], now=NOW) == 0
     r = json.loads(capsys.readouterr().out)
     assert (r["dumps"]["earlier"]["source"], r["dumps"]["later"]["source"]) == (old, first) and "art" not in r["dumps"]["later"]
+    assert not any("before the window" in n for n in r["notes"])
+    assert V.main(["--since", "2026-11-09T10:00-08:00", "--until", "2026-11-09T12:05-08:00"], now=NOW) == 0     # no dump near 10 AM
+    assert ("note: the goals' first column starts 4.0 h before the window, at its dump: none nearer Mon 9 Nov 10:00 AM PST is known"
+            in capsys.readouterr().out)
     assert V.main(["--since", "2026-11-08T06:00-08:00", "--until", "2026-11-08T12:00-08:00"], now=NOW) == 0
     assert "GOALS     not read: no dump of the Goals page is known at or before Sun 8 Nov 12:00 PM PST" in capsys.readouterr().out
