@@ -215,7 +215,7 @@ class Dsv4AttentionSource:
             return m
 
         #: (role, layer) -> tap; role -> layer -> the committed name (the target_only ones on the target only)
-        self.taps: dict[tuple[str, int], Mapping[str, Any]] = {}
+        self.taps: dict[tuple[str, int], dict[str, Any]] = {}
         self.names: dict[str, dict[int, str]] = {}
         #: (cache, layer) -> the module holding the cache (its `kv_cache` read at the call, its `prefix` the metadata key)
         self.owners: dict[tuple[str, int], Any] = {}
@@ -276,8 +276,8 @@ class Dsv4AttentionSource:
             missing = [f for f in (FORWARD, PROJECTIONS, INSERT, ATTEND, *set(CALLER.values())) if not callable(getattr(m, f, None))]
             if missing or int(getattr(m, "n_local_heads", self.heads)) != self.heads:
                 raise ValueError(f"capture map {cid}: attention layer {i} has no {missing} or not {self.heads} local heads")
-            for f, roles in GLOBALS.items():
-                if not any(r in self.names for r in roles):
+            for f, bound in GLOBALS.items():
+                if not any(r in self.names for r in bound):
                     continue
                 home = sys.modules.get(inspect.unwrap(getattr(type(m), CALLER[f])).__module__)
                 if f in (INV_ROPE, EINSUM):

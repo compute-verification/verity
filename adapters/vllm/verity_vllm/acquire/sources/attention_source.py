@@ -159,7 +159,7 @@ class AttentionSource:
         self.names = {tid: {i: CM.at_layer(t["commit"]["name"], i) for i in CM.tap_layers(self.cmap, t, self.env)}
                       for tid, t in self.taps.items() if self.on_target or not t.get("target_only")}
         self.width = {tid: CM.dim(t["shape"][-1], self.env, free) for tid, t in self.taps.items()}
-        self.homes = []
+        self.homes: list[Any] = []
         for i, m in sorted(self.layers.items()):
             impl = getattr(m, "impl", None)
             if not callable(getattr(m, ATTEND, None)) or not all(callable(getattr(impl, f, None)) for f in (MQA, MHA)):
