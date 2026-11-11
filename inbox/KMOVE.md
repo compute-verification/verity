@@ -601,3 +601,49 @@ can follow.
 its suites, your cubin compare again with the three additions in (the same 22 cubins), the body saying who
 reads and marks it (circuits) and that kernels marks nothing in it; then Pearl-C's branch prepared and not
 opened. End your turn with what is open and what needs my ring: I ring circuits with the number.
+
+## Wed 11 Nov 17:27Z: a new issue for you after today's pieces: HASH-119, Flock's wide level-0 leaf (proofs' ask; Daniel approved it this morning)
+
+**Not before** the probe in #8980, #8993's restack, circuits' pull request and Pearl-C's branch. Then this is
+your main work to Tue 17 Nov. Goal `kernels/wide-leaf-measured`, under proofs' `proofs/spot-bind-term`.
+
+**What proofs asks (HASH-119, 17:22Z; its words, shortened by me):** for tables of 2^32 to 2^35 bits
+(32 <= m <= 35) the wide-leaf version commits level 0 as 2^(m-25) witness lanes plus 4, so 132 to 1,028
+symbols a leaf where it is 68 today; the codeword length is 2^19 where it is 2^20 to 2^23; level 0 takes 219
+queries (218 today) and 438 padding words a lane (436 today); the later levels are those of m = 31; tables of
+m <= 31 do not change. It is a statement version of its own beside today's: its own `profile` in the
+identity and Hello, its own domain tag. **Read the numbers from the Lean, not from this text:**
+`Flock.fast100Wide` and its level-0 query count, on branch `cursor/proofs-wideleaf-782c`; the module arrives
+with proofs' first pull request (Thu 06:00Z) and its name is in that body.
+- **On the host:** the table entry for these sizes (`embedded_initial_k_or_default`, `zk_queries0` in
+  `flock-circuit`), the `profile` in the identity and Hello, the domain tag, the arena replica's table
+  (`arena_layout.py`).
+- **On the card:** the level-0 leaf kernel hashes a 16,448-byte row (1,028 x 16) and its 192-byte salt per
+  leaf over 2^19 leaves; the row encode runs 1,028 codewords of length 2^19; level 0's partial sumcheck
+  folds 10 rounds where it folds 6.
+- **To measure on a card at m = 35, both versions interleaved:** prover seconds a statement, salt bytes,
+  peak device arena and host memory, proof bytes, the Lean verifier's seconds on the run's own transcript.
+- **Done when** a wide session at m = 35 is accepted by the Lean verifier at the wide version and those five
+  figures are in a run for both versions. Until a card has measured it, it is "built, not measured".
+
+**Where to start:** KHSHARE read part of it today for proofs (note
+`kernels/20261111T1140Z-report-khshare-no-walk`, "PARAMS' question"; lines on `main` at `72e4d46d9209`,
+under `verity/protocols/flock/prover/`): 1,028 lanes is `initial_k` = 10 (`cuda/prove_circuit.cuh:1372`);
+`sha512_staged_merkle_leaves` takes the leaf's size at run time, no bound (`cuda/sha512.cuh:56-95`,
+`:507-512`); the finish sees only digest and salt (`:295`); the host takes `initial_k` from the embedded
+table (`flock-core/src/pcs/ligerito.rs:775`). **Not read by anyone of ours: the verifier and every host path
+at 10.** Read those first.
+
+**Dates I gave proofs:** (1) by **Fri 13 Nov 6 PM PST (Sat 02:00Z)**: the host and card changes written
+against the Lean's numbers, the leaf kernel's roots at the wide row held bit for bit to a CPU reference
+with the 0xA5 poison and a no-write control, the row encode and the ten-round fold held to the host's; no
+verifier and no H200 needed. (2) by **Tue 17 Nov 6 PM PST**: the measurement at m = 35 on a card, which
+needs proofs' second pull request (the masked verifier at the wide version, Fri 22:00Z, a target) and
+`vy-dc-h200-3` on Mon or Tue, which I ask for. The prover is proofs': your pull request is for proofs'
+review and mark. I asked proofs which statement is the m = 35 one and at how many provers, and whether you
+branch from `cursor/proofs-wideleaf-782c` or `main`; I pass the answer on.
+
+**Your first return on it, tonight or Thu morning:** a plan on HASH-119 under 150 words (named for my ring):
+what you read on the verifier's and the host's paths at the wide entry, what each change touches (file and
+line), what waits for the Lean's module, which card the bit-for-bit check needs and for how long, and what
+could make Friday slip. Follow the kernel-engineering skill for the card check. No GPU without my go.
