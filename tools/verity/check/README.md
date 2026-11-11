@@ -197,8 +197,9 @@ over recent recorded checks, and its reds so far. What isn't recorded shows as u
 PRs land through the verified queue (`research queue vqueue`): its flags are `drive.toml` and its admission rules are
 `queue.toml`. A PR's ready mark runs the landing gates `drive.toml` names on its head, and its warn gates
 (`gates/markdown_caps.py`) too, whose failure only warns. The loop merges the marked PRs that are reviewed or low-risk onto
-`main` as a candidate, checks it with every job, those off the gate too (`train.sh --deferred`, in shards), and moves
-`main` only to a candidate whose check passed every step on the gate; `post_train.py` then runs the vLLM regression's
+`main` as a candidate, checks it (by default graph2's tasks, with `lean-agreement` and `ratchet-gate` run beside them; under
+`--gate check`, every job, those off the gate too, in shards: `train.sh --deferred`), and moves `main` only to a candidate
+with no new failure, each gating task passed or failing on its base too; `post_train.py` then runs the vLLM regression's
 rebuilds and fast neutrality tier. A failure the candidate's base shares blames no PR; any other's suspects are the PRs
 whose change touches what it names: a lone one is ejected, several are bisected. A red job off the gate holds nothing. The
 team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its body) lands as any PR does,
