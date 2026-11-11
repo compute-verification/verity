@@ -358,6 +358,7 @@
         "verity/protocols/pous/device/",
         "verity/protocols/pous/",
         "verity/protocols/pous/prover/",
+        "verity/protocols/poub/prover/",
         "verity/protocols/poub/verifier/",
         "verity/definitions/requirement/",
         "security/Definitions/Accounting/Bandwidth.lean",
