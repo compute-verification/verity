@@ -110,6 +110,47 @@ def test_a_run_whose_rows_say_no_arguments_is_read_from_its_record(tmp_path, mon
     assert out["runs"] == {} and out["no_arguments"] == ["r-rot"] and out["counts"]["rows linked"] == 2
 
 
+def no_torch(name="torch"):
+    def lookups():
+        raise ModuleNotFoundError(f"No module named '{name}'", name=name)
+    return lookups
+
+
+def test_rows_ingested_with_their_rotations_named_are_kept_and_priced_as_the_rewritten_ones(tmp_path, monkeypatch):
+    runs = {"r-rot": record(["--rotate", "--group", "64"]) | {"te_core": "3.5"}, "r-plain": record(["--group", "64"])}
+    K, new = scorer_state(tmp_path, monkeypatch, runs)
+    monkeypatch.setattr(ledger, "lookup_tables", no_torch())
+    was = replot.reprice(tmp_path / "measured", tmp_path / "priced", K)
+    out = replot.reprice(tmp_path / "new", tmp_path / "priced-new", K)
+    assert was["counts"] == {"rows rewritten": 2, "rows linked": 2, "other files": 1} and was["named"] == []
+    assert out["counts"] == {"rows named when ingested": 2, "rows linked": 2} and out["rewritten"] == []
+    assert sorted(out["named"]) == sorted(f"records/a/{w['id']}.json" for w in new["r-rot"]) and out["unread"] == {}
+    kept = {p.name: p for p in (tmp_path / "priced-new" / "records" / "a").glob("*.json")}
+    assert all(p.stat().st_ino == (tmp_path / "new" / "records" / "a" / n).stat().st_ino for n, p in kept.items())
+    assert replot.priced_rows(out) == replot.priced_rows(was) and sorted(replot.priced_rows(out)) == ["r-rot@4", "r-rot@9"]
+    then, now = was["runs"]["r-rot"]["checkpoints"], out["runs"]["r-rot"]["checkpoints"]
+    assert {k: (v["C_after"], v["gates_added"]) for k, v in now.items()} == {
+        k: (pytest.approx(v["C_after"]), v["gates_added"]) for k, v in then.items()}
+    assert all(v["C_before"] is None for v in now.values())
+
+
+def test_rows_only_the_lookups_could_give_are_kept_where_the_interpreter_holds_no_torch(tmp_path, monkeypatch):
+    K, _ = scorer_state(tmp_path, monkeypatch, {"r-rot": record(["--rotate", "--group", "64"]) | {"te_core": "3.5"}})
+    for p in (tmp_path / "measured" / "records" / "a").glob("*.json"):
+        r = json.loads(p.read_text())
+        r["macs_log"]["ops"] = {k + " as another ingest wrote it": v for k, v in r["macs_log"]["ops"].items()}
+        p.chmod(0o644)
+        p.write_text(json.dumps(r))
+    monkeypatch.setattr(ledger, "lookup_tables", no_torch())
+    out = replot.reprice(tmp_path / "measured", tmp_path / "priced", K)
+    assert out["runs"] == {} and "torch" in out["unread"]["r-rot"]
+    assert out["counts"] == {"rows linked": 2, "other files": 1}
+    assert replot.priced_rows(out) == {"r-rot": "unread"}
+    monkeypatch.setattr(ledger, "lookup_tables", no_torch("prepare"))
+    with pytest.raises(ModuleNotFoundError, match="prepare"):
+        replot.reprice(tmp_path / "measured", tmp_path / "priced-2", K)
+
+
 def panel(rows, **more):
     return {"id": "training/algorithm-policy", "updated_at": "t", "source": "s", "note": "n",
             "columns": ["record", "gain_target", "C_gates", "p", "rho_own", "te_core"], "rows": rows} | more
@@ -170,8 +211,10 @@ def rebuilt(root, builds, layers, publish="fixed"):
         replot.dump(root / "search" / n / name, whole(rows))
         replot.dump(root / "search" / n / replot.TABLES[4], {"rows": [["other@3", "refused"]]})
         replot.dump(root / ("overlay" if n == publish else f"overlays/{n}") / "tables" / name, whole(rows))
-        replot.dump(root / "rotations" / f"{n}.json", {"runs": {"rot": {}}, "unread": {}, "no_record": ["gone"],
-                                                        "no_arguments": [], "unknown_program": {}})
+        replot.dump(root / "rotations" / f"{n}.json", {
+            "runs": {"rot": {"checkpoints": {"40": {"rotation_macs": 7, "C_before": None if n == "fixed" else 1.0}}}},
+            "counts": {"rows named when ingested" if n == "fixed" else "rows rewritten": 1},
+            "unread": {}, "no_record": ["gone"], "no_arguments": [], "unknown_program": {}})
     replot.dump(root / "published" / "search" / name, whole(builds["control"]))
     replot.dump(root / "published" / "overlay.json", whole(builds["control"]))
     same = {"rows": True, "columns": True}
@@ -225,3 +268,13 @@ def test_a_traced_runs_row_moves_only_in_the_leaves_expected_and_no_other_row_mo
     assert v["checks"]["search: the control is the published table in every cell"]
     with pytest.raises(SystemExit, match="--same nope"):
         replot.verdict(tmp_path / "b", ("nope",), expect)
+    # a build that prices a rotating row otherwise than the control, or leaves a run apart, is named with the row
+    assert v["checks"]["every build prices the same rotating rows"]
+    f = tmp_path / "b" / "rotations" / "fixed.json"
+    rot = json.loads(f.read_text())
+    rot["runs"]["rot"]["checkpoints"]["40"]["rotation_macs"] = 8
+    replot.dump(f, rot | {"unread": {"lost": "why"}})
+    v = replot.verdict(tmp_path / "b", ("old",), expect)
+    assert not v["checks"]["every build prices the same rotating rows"]
+    assert v["lists"]["rotating rows a build prices otherwise than the control"] == {
+        "old": {}, "fixed": {"rot@40": {"control": 7, "fixed": 8}, "lost": {"control": None, "fixed": "unread"}}}
