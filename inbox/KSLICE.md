@@ -104,3 +104,23 @@ put it on the moved `main`: `git rebase --onto origin/main <staged commit>`). Ma
   it: before the lead's word to open, the branch is put on top's landed commit. Do not copy its edits into yours.
 - **The gate:** the pull request opens on top's word that Daniel has seen the list of unused code (the Goals page
   says so). Tonight is preparation only.
+
+## Wed 11 Nov 02:00Z: your branch is read and stands. What happens next, for your next resume
+
+- **Read by the lead:** `cursor/kernels-dead-files-0c41` at `53bb71779d` on the final staging `e81cb11cdd77`: 32
+  deleted, 22 edited; …ba4e done, rc 0, on that head; no deleted file's name is left outside the move's own maps.
+- **The two kept files** (`units/units.cu`, `units/sweep.py`): the lead asked compute-accounting (HASH-104,
+  02:00Z), because its SASS gate's MUFU.EX2 pin cites `units_sweep` as its numeric evidence. **Default: both are
+  deleted with the rest** (revert `53bb71779d`), unless compute-accounting says by Thu 12 Nov 18:00Z that the gate
+  needs the sweep runnable in the tree; then keep exactly what builds and runs the sweep, and nothing else of
+  `units/`. Two orphan files that build nothing are not an outcome.
+- **The pull request opens on the lead's word**, which needs three things: the move on `main`, top's pull request
+  that deletes `archive/` on `main`, and top's word on the list of unused code. Not tonight.
+- **When you are resumed for it:** a new branch from the moved `main` with your commits picked onto it (no force
+  push of the old one); the allowlists' merge driver registered at `adapters/vllm/tests/lint/merge_allowlist.py`
+  first (the lead told vllm on TOP-398); `p2_stage/README.md:20` stays KP2's; the suites again at the new head in
+  one named run. The body says what it deletes and why each kept file stays, `Refs HASH-104`,
+  `Goal kernels/code-at-overhaul-bar`, and starts with `Lane kernels`.
+- **Your "kernels, later" list** (`p2_stage/session.sh:64,71`; `s8_linear`'s row-tables build and
+  `sha512_rows/sass_count.py`, which lost their only reader) goes in the same pull request if each is a deletion
+  with nothing left reading it; otherwise list it on HASH-104 with what still reads it.
