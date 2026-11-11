@@ -57,35 +57,51 @@ import re
 import sys
 import time
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable
 
 import numpy as np
-
 from verity.commitments.randomness import Key
+from verity.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
 
 from verity_vllm import settings
 from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.check.replay import fork as FK
 from verity_vllm.check.replay import recomputed_prefix as RP
 from verity_vllm.check.replay import replay_record as RR
-from verity_vllm.check.replay.checks import checks_of, fold as fold_checks
+from verity_vllm.check.replay.checks import checks_of
+from verity_vllm.check.replay.checks import fold as fold_checks
+from verity_vllm.check.replay.coverage import (
+    _uncovered_mechanisms,
+    controller_rows_of,
+    query_population,
+)
+from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu
 from verity_vllm.check.replay.fork import WorkerDied
-from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT
-from verity_vllm.commit.opened import opened_in_children
-from verity.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
 from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, node_runs
+from verity_vllm.check.replay.linkage import (
+    arrivals_of_record,
+    boundary_linkage,
+    linkage_horizon,
+)
+from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
+from verity_vllm.check.replay.population import (
+    executed_prefix_of_record,
+    moe_plane_alias_check,
+    phase_anchor,
+    population,
+    split_not_executed,
+)
+from verity_vllm.check.replay.replay_codes import (
+    NOT_YET,
+    WHY_CLASSES_BY_NAME,
+    WHY_CLASSES_FAULT,
+)
+from verity_vllm.check.replay.sample import _catch_probability, challenge_seed, sample
+from verity_vllm.commit.opened import opened_in_children
 from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
-from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
-from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu
-from verity_vllm.check.replay.population import (executed_prefix_of_record, moe_plane_alias_check, phase_anchor, population,
-                                                split_not_executed)
-from verity_vllm.check.replay.coverage import _uncovered_mechanisms, controller_rows_of, query_population
-from verity_vllm.check.replay.sample import _catch_probability, challenge_seed, sample
-from verity_vllm.check.replay.linkage import arrivals_of_record, boundary_linkage, linkage_horizon
-
 
 __all__ = ["arrivals_of_record", "boundary_linkage", "challenge_seed", "engine_facts_of_record", "executed_prefix_of_record",
            "linkage_horizon", "model_weights_provider", "ProgramIndex", "sampled_replay", "SCHEMA", "V2_QUERY"]
@@ -370,7 +386,7 @@ def _cublas_facts(env: dict[str, Any]) -> dict[str, Any]:
     `bf16_gemm_check.ROUTE_CONDITIONS`), with the cuBLASLt version and the library's path beside them."""
     out: dict[str, Any] = {}
     try:
-        import torch                                                                 # type: ignore
+        import torch  # type: ignore
     except Exception as e:                                                          # noqa: BLE001
         return {"torch": _unavailable(e)} | cublas_versions() | {"env": env}
     m = torch.backends.cuda.matmul
@@ -393,12 +409,12 @@ def engine_facts_of_record() -> dict[str, Any]:
     `cublas`, what the route pin's routes were conditioned on (`_cublas_facts`)."""
     facts: dict[str, Any] = {k: settings.raw(k) for k in ("VLLM_BATCH_INVARIANT", *CUBLAS_ENV)}
     try:
-        from vllm.model_executor.determinism import batch_invariant as bi          # type: ignore
+        from vllm.model_executor.determinism import batch_invariant as bi  # type: ignore
         facts["vllm_batch_invariant_mode"] = bool(bi.vllm_is_batch_invariant()) if hasattr(bi, "vllm_is_batch_invariant") else "unavailable: no vllm_is_batch_invariant()"
     except Exception as e:                                                          # noqa: BLE001 -- named, never guessed
         facts["vllm_batch_invariant_mode"] = f"unavailable: {type(e).__name__}"
     try:
-        import torch                                                                 # type: ignore
+        import torch  # type: ignore
         bf16 = torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction   # (allow, allow for split-K) once set as a pair
         facts["torch_allow_bf16_reduced_precision_reduction"] = bool(bf16[0] if isinstance(bf16, tuple) else bf16)
         try:
