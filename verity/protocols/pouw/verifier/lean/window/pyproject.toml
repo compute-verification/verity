@@ -26,14 +26,14 @@ untraced = ["tests/test_difftest.py", "tests/test_known_rows.py", "tests/test_la
 # requires: PoUW's commitments (`pouw_commit`, in PoUW's tree), the proof system's Lean (`core_spot`) with the
 # core protocol interface and the LMS verifier, core's identity and randomness, and Flock's verifier with its
 # configuration.
-inputs = ["verity/difftest", "verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+inputs = ["verity/difftest", "verity/__init__.py", 
           "verity/hardware/record.py",
           "verity/claims/__init__.py",
-          "verity/protocols/pouw/verifier", "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover",
+          "verity/protocols/pouw/verifier", "verity/protocols/pouw/prover",
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/spot",
           "benchmarks/pouw/h1_lanes/run.py", "benchmarks/pouw/h1_prove/h1unit.py",
           "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "verity/protocols/flock/prover/python", "verity/commitments/windows",
-          "verity/errors.py", "verity/ml/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+          "verity/errors.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/commitments/randomness", "verity/commitments/identity", "verity/commitments/randomness",
           "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/protocols/spot/verifier/lean/lake-manifest.json",
           "verity/protocols/spot/verifier/lean/lean-toolchain", "verity/protocols/spot/verifier/lean/Spot.lean",

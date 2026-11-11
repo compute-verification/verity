@@ -52,9 +52,12 @@ PLAIN = {"AllReduceMultimem_v1{": 0.35, "AllReduceResidualMnnvl": 0.35, "AllRedu
          "Fp8GroupQuantUe8m0_v1{K=1536,": 0.11, "Fp8GroupQuantUe8m0_v1{K=2048,": 0.08, "SparseMlaCombine_v1{": 0.08}
 #: the dense types whose host witness dominates their fixed cost after the cache
 DENSE = ("Fp8GroupQuantUe8m0_v1", "FlashInferFp8Linear_v1")
-#: the linear layers' blocks, against which the indexer's MACs at 128k are stated
-LINEARS = ("Fused[", "MoeExpertFp8BlockGemm", "FlashInferFp8Linear", "ScaledMmFp8", "BatchedGemm", "CublasSplitKGemm",
-           "LlBf16DotprodGemm", "Gemm_v2")
+#: the linear layers' blocks, against which the indexer's MACs at 128k are stated: every cut's MoE expert GEMMs among
+#: them (the served cut's `MoeExpertFp8CoordinateChunk_v1` and `MoeExpertFp8GemmW_v1`, the per-expert cuts' BlockGemm and
+#: ReadGemm), since `indexer_factor` refuses an MoE expert block with MACs that no entry names
+LINEARS = ("Fused[", "MoeExpertFp8BlockGemm", "MoeExpertFp8ReadGemm", "MoeExpertFp8CoordinateChunk", "MoeExpertFp8Gemm",
+           "FlashInferFp8Linear", "ScaledMmFp8", "BatchedGemm", "CublasSplitKGemm", "LlBf16DotprodGemm", "Gemm_v2")
+MOE_EXPERT = "MoeExpert"
 INDEXER = "DsaMqaLogits_v3"
 #: the DSA indexer's MACs a decode token at 131,072 keys over the linears'
 INDEXER_AT_MAX = 2.2
@@ -475,7 +478,13 @@ def mix(plan_path: str, meta_path: str, within: int = 651) -> dict:
 
 def indexer_factor(strata, rho: float) -> float:
     """How many times the census request's indexer blocks a token the 128k mix reads: the indexer's MACs a token at
-    `INDEXER_AT_MAX` times the linears' at 131,072 keys, in proportion to the keys read, over the census's."""
+    `INDEXER_AT_MAX` times the linears' at 131,072 keys, in proportion to the keys read, over the census's.  An MoE
+    expert block with MACs (by its block or its kind) that no entry of `LINEARS` names is refused by name: its MACs would
+    drop out of the linears."""
+    if missed := sorted({x["block"].split("{")[0] for x in strata if x.get("macs") and not x["block"].startswith(LINEARS)
+                         and (x["block"].startswith(MOE_EXPERT) or str(x.get("kind") or "").startswith(MOE_EXPERT))}):
+        raise ValueError(f"indexer_factor: the MoE expert blocks {', '.join(missed)} match no entry of reprice.LINEARS, so "
+                         "the 128k indexer would be stated without their MACs; add each one's prefix to LINEARS")
     linears = sum(x["per_token"] * x["macs"] for x in strata if x["block"].startswith(LINEARS))
     census = sum(x["per_token"] * x["macs"] for x in strata if x["block"].startswith(INDEXER))
     return INDEXER_AT_MAX * rho * linears / census
