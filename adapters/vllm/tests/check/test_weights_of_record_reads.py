@@ -17,6 +17,7 @@ import os
 import numpy as np
 import pytest
 
+from verity_vllm import config
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check import checkpoint_index as CI
 from tests.check.test_weights_of_record import write_safetensors
@@ -243,6 +244,15 @@ def test_built_record_reads_the_program_header_and_is_the_full_load_record(ckpt,
     assert f"no shard pin of {tmp_path / 'absent'} was taken" in caplog.text and "FileNotFoundError" in caplog.text
     with pytest.raises(FileNotFoundError):
         WR.build_record(write_program_dir(tmp_path, 1, 0), str(tmp_path / "absent"), checkpoints_manifest=man, shard_pin=None)
+
+
+def test_the_default_manifest_is_the_trees_pins_whatever_the_working_directory(tmp_path, monkeypatch):
+    (tmp_path / "manifests").mkdir()
+    (tmp_path / "manifests" / "checkpoints.json").write_text("{}")
+    monkeypatch.chdir(tmp_path)
+    assert WR._default_manifest() == str(config.CHECKPOINTS) and config.CHECKPOINTS.is_file()
+    monkeypatch.setattr(config, "CHECKPOINTS", tmp_path / "pins" / "checkpoints.json")
+    assert WR._default_manifest() is None
 
 
 def test_program_head_is_the_loaded_program_with_its_rows_as_stored(tmp_path):

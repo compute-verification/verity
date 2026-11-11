@@ -6,7 +6,6 @@
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "silent-except", "symbol": "_spec_id_memo", "detail": "except (AttributeError, KeyError): pass"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "silent-except", "symbol": "_spec_id_memo", "detail": "except AttributeError: pass"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "silent-except", "symbol": "request_legs", "detail": "except OSError: pass"},
-    {"file": "verity_vllm/check/oracle_compare.py", "kind": "silent-except", "symbol": "MatchOracle._view_bytes_range", "detail": "except (KeyError, TypeError, ValueError): return None"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "silent-except", "symbol": "_cgroup_memory", "detail": "except OSError: return None"},
     {"file": "verity_vllm/check/replay/fork.py", "kind": "silent-except", "symbol": "oom_kills", "detail": "except (OSError, StopIteration, ValueError, IndexError): return None"},
     {"file": "verity_vllm/check/replay/population.py", "kind": "silent-except", "symbol": "_stratum_spec", "detail": "except (TypeError, ValueError): return spec"},
