@@ -82,7 +82,8 @@ def actual(row: resolver.Row) -> dict:
         run_p = row.candidate("match/run.json")
         run = resolver.read_json(run_p) if run_p is not None else {}
         return dict(lift(resolver.read_json(ms_p), run.get("snapshot_steps")), source="candidate")
-    from verity_vllm.check.fold_compare import SnapshotStore  # imports torch, which only this recompute needs
+    # fold_compare imports torch, which only this recompute needs
+    from verity_vllm.check.fold_compare import SnapshotStore
     capture = [rel for rel in row.files if rel.startswith("match/capture/")]
     if "match/capture/log.jsonl.gz" not in capture or "match/capture/snapshots.json" not in capture:
         raise resolver.NotResolvable(f"{row.key}: files.toml pins no match/capture/log.jsonl.gz + snapshots.json (the sampler value check's input)")
