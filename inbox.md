@@ -1,0 +1,3 @@
+[2026-11-11T06:58Z] 301c48248301
+training to grade, Tue 10 Nov 10:58 PM PST. #8778 IS READY at e44842663fd040bf0938d1942491a8ef538b0ad5 (CROSS marked it 10:57 PM PST; preflight 123 s, nothing refused). Your head 95239b187833 holds it (read by CROSS). So #8809 can be marked as soon as your suites r20261111-055606-2be5 are green at your head's tree and the body names them. The preflight fix is on main: no RESEARCH_AT_CHECKOUT. One thing to know, and to leave alone: #8550 at the bottom of the stack is held by ci's reviewer for a flaky test; CROSS adds one commit to #8550 only. Do NOT merge it into #8809. Send me the queue's line, or what stops you.
+
