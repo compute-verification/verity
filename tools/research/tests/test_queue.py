@@ -3437,7 +3437,7 @@ def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_it
     rid = "r20261026-120000-abcd"
     line = "lean-build: " + json.dumps({"built": {"lean/b": 1}, "failed": {"lean/b/B/Use.lean": "error: B/Use.lean:2:0: x"},
                                         "skipped": {}})
-    tail = ["--as", "ci", "--project", "verity", "--source", str(tmp_path / "wt"), "--cwd", "clone", "--timeout", "90", "--wait",
+    tail = ["--as", "ci", "--project", "verity", "--source", str(tmp_path / "wt"), "--cwd", "clone", "--timeout", "90s", "--wait",
             "--wait-every", "5", "--wait-max", "90", "--", "python3", LEAN_BUILDER, "--build", "lean/b/B/Use.lean"]
     for pool, flags in ((None, []), ("research", ["--pool", "research", "--pool-wait", "90"])):
         argvs = []
@@ -3455,6 +3455,26 @@ def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_it
         (launch, left), (fetch, _) = argvs
         assert left == 100 and fetch == ["fetch", rid, "--on", node, "--all"]
         assert launch == ["run", "--on", node, *flags, *tail]
+
+
+def test_the_lean_step_s_run_is_one_research_run_takes_on_a_node(tmp_path):
+    """The step's whole budget is under five minutes, and `research run` refuses a bare `--timeout` that short on a machine (it
+    reads as minutes meant): the launch states its seconds with a unit, so neither build node refuses the run unbuilt."""
+    from research import queue as Q
+    from research.cli import SHORT_TIMEOUT_S, _normalize_timeout, _short_bare_timeout
+
+    assert Q.PREFLIGHT_LEAN_S < SHORT_TIMEOUT_S
+    (tmp_path / Q.LEAN_BUILDER).parent.mkdir(parents=True)
+    (tmp_path / Q.LEAN_BUILDER).write_text("")
+    argvs = []
+    Q.LakeBuild(on=Q.PREFLIGHT_LEAN_ON, slots=tmp_path / "absent", run=lambda argv, cwd, left: argvs.append(argv[4:]) or (2, ""),
+                clock=lambda: 0.0)(tmp_path, ["lean/b/B/Use.lean"], Q.PREFLIGHT_LEAN_S)
+    assert len(argvs) == len(Q.PREFLIGHT_LEAN_ON)
+    for argv in argvs:
+        opts = argv[:argv.index("--")]
+        assert _short_bare_timeout(opts) is None, _short_bare_timeout(opts)
+        sent = _normalize_timeout(opts)
+        assert float(sent[sent.index("--timeout") + 1]) == Q.PREFLIGHT_LEAN_S - 10
 
 
 def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):
