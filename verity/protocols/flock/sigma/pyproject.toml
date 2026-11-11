@@ -10,9 +10,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # the difftest harness, both required by path, and `flock-verify sigma-check` is Flock's verifier.
 inputs = ["verity/definitions", "adapters/vllm/verity_vllm", "verity/circuits", "verity/definitions/kernels",
           "verity/commitments/randomness",
-          "verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/ml/__init__.py", "verity/core/__init__.py",
-          "verity/core/protocols/__init__.py", "verity/protocols/pouw/verifier/__init__.py", "verity/protocols/pouw/verifier/protocol.py",
-          "verity/protocols/pouw/verifier/live_reads.py", "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover/__init__.py",
+          "verity/__init__.py", "verity/settings.py", "verity/errors.py", 
+          "verity/protocols/pouw/verifier/__init__.py", "verity/protocols/pouw/verifier/protocol.py",
+          "verity/protocols/pouw/verifier/live_reads.py", "verity/protocols/pouw/prover/__init__.py",
           "verity/protocols/pouw/prover/circuit", "verity/protocols/pouw/prover/schemes", "verity/protocols/flock/verifier",
           "verity/difftest",
           "verity/commitments/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py"]
