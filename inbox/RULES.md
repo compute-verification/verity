@@ -137,3 +137,25 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 - Launch with `research run --on vy-spot-glm53 --project verity ...`. Touch nothing shared in the node's caches or
   other lanes' directories. Leave no process behind: check by pid when a run ends.
 - A timed number needs what the kernel-engineering skill says a timed run must pass. Read the skill before timing.
+- **Wed 11 Nov 22:17Z, a stopgap while RunPod's API refuses (429, the account's daily limit; INF-712):** a new
+  `research run --on vy-spot-glm53` asks RunPod for the pod's address and fails. Infra's way round, tested by
+  infra at 22:14Z: on the VM that launches, append to `~/.research/machines.toml` (make the file if there is
+  none):
+
+  ```toml
+  [machines.vy-spot-glm53]
+  provider = "ssh"
+  host = "213.181.104.57"
+  port = 12250
+  user = "root"
+  pod_id = "10khharm1q39bu"
+  rate_usd_per_hour = 42.32
+  project = "verity"
+  ```
+
+  The address and the pod's id are the ones kernels' own runs recorded tonight (`remote.json` of
+  `r20261111-195910-303a` and `…f16e`, compared by the lead), so the entry points where your runs already
+  went. A run already launched is read with `research fetch` and `research status` as before. If a launch
+  then fails to connect, the pod has restarted and its address changed: stop and say so; do not guess one.
+  Take the table out when the lead says RunPod answers again. The control pod's entry, if you need
+  `research pods ssh vy-control`, is in infra's comment on INF-712.

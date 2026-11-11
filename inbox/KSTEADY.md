@@ -1567,3 +1567,18 @@ art as `research data put --kind flock-proof --tree DIR --preserve` gives it.
   its `stage/`). Say where the rows' server reads its program and partition from. If neither file exists
   for this statement, put the proof and the statement without them and say so plainly: I then ask proofs.
   Do not make them yourself tonight.
+
+## Wed 11 Nov 22:17Z: before your next launch on node A: RunPod's API refuses, and `inbox/RULES.md` has the way round
+
+Since about 21:24Z RunPod answers 429 to every call (INF-712), so a new `research run --on vy-spot-glm53`
+fails at the address lookup. Your run `…08f9` is not touched and is read as before. **Before
+`proof-look.py`, the put, or any other new run on the node, add the table in the newest bullet of
+`inbox/RULES.md`'s node A section to `~/.research/machines.toml` on your VM.** It is infra's stopgap; the
+address is the one your own runs recorded tonight.
+- Your 21:42Z checkpoint is read: the staged statement has no `program.json` or `partition.json` and the
+  server reads neither. That is said to benchmarks and asked of proofs (HASH-115, 22:14Z). Put the proof
+  without them, as you planned, and say so in your comment.
+- Your lease ends 22:38:01Z and vllm has every card at 22:50Z: nothing of yours on a card after 22:40Z.
+  What reads files and holds no card (the proof's look, the put) may run after it on a core of kernels'
+  row until 22:45Z, and after that only if it touches no card and no core vllm's row names; vllm's row is
+  all cores, so past 22:45Z do it from the store and your VM, not on the node.
