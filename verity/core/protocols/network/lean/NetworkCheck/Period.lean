@@ -136,14 +136,15 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   `scan/prog<j>` entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SlotEntry_v1`
   or `SelectEntry_v1` template's entries port's (`<descriptor id>/c<j>/o0`, `entriesPortName`) in the `roots` of an
   audit's registration, so a scan whose `prog` the prover committed alone is refused; and the answer is one-stage's
-  for that registration's digest, accepted with one level of the scan's 2T units sampled `subset:k` or stratified, and
-  its `bound`;
+  for that registration's digest, accepted with one level of the scan's 2T units sampled `subset:k` or stratified,
+  sampling no more than the level holds (`factsOf` refuses a profile that names more), and its `bound`;
 * in the rows form, every accepted link-window's scan is at one δ, `PeriodLeakAccepted`'s;
 * audit `i`: its registration names its Program (the descriptor's SHA-512), and the answer is one-stage's for its
   registration's digest, accepted with one level of its Program's units sampled `subset:k` or stratified (a work sampling design's
-  sample is stratified), and its `bound`, at any sample: this is the consistency check (each audit's answer is its
-  registration's, and in the rows form its outputs are the scan's `prog` and its `SCAN_STATE` the scan's state, below),
-  and what a sample in part leaves unproved is in `K` (in the rows form, a tied audit's `faulty_entries` and δ, below);
+  sample is stratified), sampling no more than the level holds, and its `bound`, at any sample: this is the consistency
+  check (each audit's answer is its registration's, and in the rows form its outputs are the scan's `prog` and its
+  `SCAN_STATE` the scan's state, below), and what a sample in part leaves unproved is in `K` (in the rows form, a tied
+  audit's `faulty_entries` and δ, below);
 * in the rows form, link-window `w`'s scan's Programs' rows are a compute audit's slot entries, a lane a chunk
   (`wired`): for each lane `j`, its `scan/prog<j>` entry names the root and domain of the entries port
   `<descriptor id>/c<j>/o0`, of T / `every` leaves, in the `roots` of one audit's registration, where the descriptor id
@@ -1120,13 +1121,15 @@ def records (link : String) : Array (String × Direction) :=
   #[(link, .ingress), (link, .egress), (link ++ "-fails", .egress)]
 
 /-- An accepted scan's or audit's facts: one level sampled `subset:k` or stratified (a work sample's profile is
-stratified, its `Σ k_s` sampled), and its bound. -/
+stratified, its `Σ k_s` sampled), sampling no more than the level holds (a profile that names more is no sample of
+its level, and is refused), and its bound. -/
 def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts := do
   let #[l] := prof.levels | refuse s!"{what}: profile: not one level"
   let drawn ← match l.draw with
     | some (.subset k) => pure k
     | some (.stratified ss) => pure (ss.foldl (fun n st => n + st.k) 0)
     | _ => refuse s!"{what}: profile: not a subset or stratified draw"
+  unless drawn ≤ l.size do refuse s!"{what}: profile: {drawn} sampled of {l.size} units: more than the level holds"
   match Flock.J.nat pub "bound" "public" with
   | .ok b => pure { units := l.size, drawn, delta := prof.delta, wrong := b }
   | .error e => refuse s!"{what}: {e}"
@@ -1563,6 +1566,21 @@ def clocksFn (j : Json) : Except String Json := do
   let whole : Array (Found Facts) := #[.ok ⟨16, 16, ⟨1, 100⟩, 0⟩]
   tiedIn c.audits c.windows 0 && (chargedOf p c one 0).isSome && faultyEntries p c one scan (at_ (progName 0)) == 896 &&
     (chargedOf p c whole 0).isNone && faultyEntries p c whole scan (at_ (progName 0)) == 0
+-- `factsOf` reads a profile of one level sampled within it, `subset:k` or stratified, whole or in part, and refuses
+-- one that names more sampled than the level has, 3 of 2 or strata of 2 of 1 and 1 of 1, before it reads the bound
+#guard
+  let facts := fun (size : Nat) (d : Core.SamplingDesign) =>
+    match (factsOf "x" ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], ⟨1, 100⟩, #[]⟩
+      (Json.mkObj [("bound", toJson (1 : Nat))])).toOption with
+    | some ⟨units, k, _, b⟩ => some (units, k, b)
+    | none => none
+  facts 2 (.subset 2) == some (2, 2, 1) && facts 2 (.subset 1) == some (2, 1, 1) &&
+    facts 3 (.stratified #[⟨"a", 2, 2⟩, ⟨"b", 1, 0⟩]) == some (3, 2, 1) &&
+    facts 2 (.subset 3) == none && facts 2 (.stratified #[⟨"a", 1, 2⟩, ⟨"b", 1, 1⟩]) == none
+#guard
+  (match factsOf "x" ⟨#[], #[], false, #[], #[⟨"unit", none, 2, some (.subset 3)⟩], ⟨1, 100⟩, #[]⟩ (Json.mkObj []) with
+    | .error (_, r) => r
+    | .ok _ => "") == "x: profile: 3 sampled of 2 units: more than the level holds"
 -- a unit's output port past o0, its index in ASCII digits without a leading zero; never o0, an input, or no unit's
 #guard outputPort "block-3/o1" && outputPort "a/b/o10" && outputPort "/o2"
 #guard !(outputPort "o1" || outputPort "u/o0" || outputPort "u/o01" || outputPort "u/o" || outputPort "u/O1" ||

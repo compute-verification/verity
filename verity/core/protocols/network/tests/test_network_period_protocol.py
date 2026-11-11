@@ -501,6 +501,52 @@ def test_an_audit_is_held_to_its_program(server):
             assert verdict == REJECT and json.loads(out)["reason"].startswith("params:"), (form, bad, out)
 
 
+#: The changes whose answer's profile samples more than its level holds: a compute audit's in each form, the tied
+#: audit's of the aimed scan, and a scan's.
+OVERSAMPLED = ("audit-oversampled", "rows-audit-oversampled", "rows-tied-oversampled", "rows-answer-oversampled")
+
+
+def sampled(level: dict) -> int:
+    """How many of its units a profile's level samples: its `subset`'s k, or its strata's summed."""
+    design = level["draw"]
+    return design["subset"] if "subset" in design else sum(s["k"] for s in design["strata"])
+
+
+def test_a_profile_that_samples_more_than_its_level_holds_is_refused(server):
+    """A profile whose level samples more than it holds is no sample of the level, and the charge of a tied audit
+    sampled in part would miss it: Lean and the mirror each refuse the one answer that carries it, where they read its
+    sample, a compute audit's in either form, tied to a scan or not, and a scan's, sampled `subset:k` or stratified.
+    They refuse it before they read the public's bound (with the bound gone too the reason is still the sample's), and
+    for that alone: with the level sampled whole instead, Lean accepts the period with the mirror's public."""
+    seen = Counter()
+    for m in OVERSAMPLED:
+        for n in range(4):
+            case = build(m, n, small=n % 2 == 0)
+            c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
+            answers = [("audit", x) for x in e["audits"]] + [("scan", w["answer"]) for w in e["windows"]]
+            (i, kind, x), = [(i, kind, x) for i, (kind, x) in enumerate(answers)
+                             if sampled(x["profile"]["levels"][0]) > x["profile"]["levels"][0]["size"]]
+            level, bound = x["profile"]["levels"][0], x["public"]
+            design = level["draw"]
+            tied = kind == "audit" and PC._tied_in(c["audits"], c["windows"], i)
+            assert tied or m != "rows-tied-oversampled", (m, n)
+            seen.update([kind, "subset" if "subset" in design else "stratified",
+                         *(["tied" if tied else "untied"] if kind == "audit" else [])])
+            x["public"] = {}
+            for broken in (case, case | {"evidence": D.canonical(e).encode().hex()}):
+                assert PC.OVERSAMPLED in reference(broken)["reason"], (m, n, reference(broken))
+                verdict, out = D.replay(PORT, broken, server)
+                assert verdict == REJECT and PC.OVERSAMPLED in json.loads(out)["reason"], (m, n, out)
+            x["public"] = bound
+            level["draw"] = {"subset": level["size"]} if "subset" in design else design | {
+                "strata": [s | {"k": s["size"]} for s in design["strata"]]}
+            whole = case | {"evidence": D.canonical(e).encode().hex()}
+            assert reference(whole)["verdict"] == ACCEPT, (m, n, reference(whole))
+            verdict, out = D.replay(PORT, whole, server)
+            assert verdict == ACCEPT and json.loads(out)["public"] == reference(whole)["public"], (m, n, out)
+    assert all(seen[k] for k in ("audit", "scan", "subset", "stratified", "tied", "untied")), seen
+
+
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
     """The rows form's honest registrations are `warden_rows.registration`'s documents, which its own
     `check_registration` reads back under the period's key, session and schedule."""
