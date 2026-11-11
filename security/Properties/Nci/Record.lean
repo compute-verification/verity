@@ -81,11 +81,12 @@ that pin, and the reader has the reference's roles, up to such a collision. It f
 `Provenance` and a layout that reads a Definition's signature alone (`LayoutReads`).
 
 What these do not say: that every row the text declares is held; which leaves of its parameter a declared read
-takes; that the templates the text's readers lay the units out by (`NciCheck.RecordText.templatesOf`) are the
-wiring's (`Templates`), two definitions held to one Program with no lemma between them; anything of SPOT's audit,
-which reads neither reader; that a unit's verdict output is 1 (a statement about the committed values, the proof
-block's); that equal roots hold equal rows, or that the data the log's first record registers was public
-(`Nci.Assumptions.ThetaRegistered`).
+takes; that the rows and outputs of the templates the text's readers lay the units out by
+(`NciCheck.RecordText.templatesOf`) are the wiring's (`Templates`), two definitions held to one Program with no lemma
+between them, though the two number a template's units alike (`unitAt_iff`, `Proofs.Properties.Nci.Record`);
+anything of SPOT's audit, which reads neither reader; that a unit's verdict output is 1 (a statement about the
+committed values, the proof block's); that equal roots hold equal rows, or that the data the log's first record
+registers was public (`Nci.Assumptions.ThetaRegistered`).
 -/
 
 @[expose] public section
@@ -283,9 +284,11 @@ its SHA-512 (`NciCheck.RecordText.templatesOf`), and where neither is, the circu
 
 Not tied to the text: that the check holds every row the text declares (one that holds fewer counts more bits as
 fresh); an opening's pin and its reader's roles, which are the check's (`Good`); which leaves of its parameter a
-declared read takes; and that the templates the two readers lay the units out by
+declared read takes; and that the rows and outputs of the templates the two readers lay the units out by
 (`NciCheck.RecordText.templatesOf`) are this wiring's (`Templates`), two definitions held to one Program with no
-lemma between them. SPOT's audit reads neither reader. -/
+lemma between them. The two number a template's units alike: where the text's reader gives its templates, a template
+has one root node, its units are that node's, and its unit `u` is the node's member `u` (`unitAt_iff`,
+`Proofs.Properties.Nci.Record`). SPOT's audit reads neither reader. -/
 def Served (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) : Prop :=
   ∃ (P : Prog) (doc : Json) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array TRange)
       (at_ : Fin d.D.N → ℕ),
