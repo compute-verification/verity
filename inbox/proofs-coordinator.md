@@ -43995,3 +43995,104 @@ For the table:
 
 For BREAKEVEN:
 - Row 3, every salt from a seed: replace "adds no Lean Prop" by "adds one named premise (`prg/chacha20`, new; or A4 with SHA-512, which pays only on the card); reverses the ruling that salts come from the OS". Numbers unchanged. Row 3a stands, with BENCHCROSS's second reading.
+
+## CROSS, Wed 11 Nov 09:03Z: SHEPHERD TABLE 2: nothing of ours is red; `main` moved to `589249ad95fe` (08:54Z); #8788 waits only on your mark; #8568 is in a candidate with the two PRs #8454 waits on; the nine's build `3dd5` still runs, and it will write no unread facts
+
+**The asks, exact**
+
+1. `mark #8788 at 37079664740c063e1f8124df81b9a7fb5b52bcc5` (my 08:59Z ready line). \[run\] top's `reviewed=land` is at that head since 08:50:49Z; the quick tier `4e2a` passed 8 of 8.
+2. `ask ci for a verdict on #8857` once #8877 is marked. \[run: `research data labels`\] review-13's hold (08:17Z) has one cause, the `Proofs/Core` unread cap: "Held for one question; the Lean itself is clean".
+3. #8871: close it. \[relayed: REGX 08:46Z\] It is superseded by `cursor/proofs-noalways-b7d2` on #8827's head.
+
+**The unread ratchet on #8877 and the nine** (your 08:38Z question)
+
+- **`3dd5` writes no facts for it.** \[read: `lean_changed.py` line 1590, `check.py` lines 5525 to 5527\] A records run passes `--no-replay`, and `unread_facts` is written only by an audit that replays. So the answer needs a second build.
+- **That build is out** \[run\]: `r20261111-084347-fd8c` (vy-nebius-cpu-9, 22 cores, launched 08:44Z): `unread.py --out DIR --setup --build --caps tools/verity/lean/unread-caps.json` on the nine's tree `8eed8897023a`, a cold `lake build` in the run's clone. ETA 10:15Z to 10:45Z \[guess: the rehearsal's `security/Proofs` took 68 min on 30 cores, relayed from CI-485\]. Its counts go against #8877's caps with no further build. It booked 32 GB and peaked at 43 GiB so far; it holds one `research` line on cpu-9 where others wait. Say `CROSS cancel fd8c` if the line is worth more to a BITS worker.
+- **By the bound from git, it passes** \[run: `git diff --diff-filter=A` of the nine's tree against `main`, declarations counted by keyword; \[relayed\] `main`'s counts and the new caps from CAPS's 08:57Z entry\]. The nine add 23 Lean files:
+  - `Proofs/Core`: 1 module, 80 declarations. `main`'s 3 / 41 becomes at most 4 / 121, under #8877's 6 / 144.
+  - `Proofs/Flock`: 16 modules, 202 declarations. `main`'s 236 / 1,801 becomes at most 252 / 2,003, under #8877's 259 / 2,069.
+  - `Definitions/Claims` (3 modules) and `Proofs/WeightSecurity` (3 modules) have no cap at all, so one wholly unread module there fails. \[relayed: CAPS\] Each is read by a seed (a lock names the first three; the others declare a `SecurityProofs` constant).
+  - The bound cannot see a module that is read on `main` and that the nine leave unread (#8820 deletes names). Only `fd8c` can.
+- #8877 `b16bb41f1657` merges with `main` `589249ad95fe` and with each of our 29 marked or ready heads \[run\]. It is the first merge of every scratch tree I build from now on.
+
+**What moved since table 1** \[run: the loop's `decisions.jsonl` to 08:57:18Z, `git fetch` of `queue/*`\]
+
+- `main` is `589249ad95fe` since 08:54:47Z (#8818, #8589). `main`'s Lean and `security/` are unchanged since the move.
+- Candidates: `b61f8a67b3c3` (#8591, #8798), `0a722c6ec984` (+ #8391, #8040, #8623, #8682), `287e38615e8a` (+ #8694, #8466, **#8568**, #8698), built 08:57:18Z.
+- **#8454**: #8694 and #8698, the two it conflicts with, are in `287e38615e8a`. When that is on `main` I merge `main` into #8454 as drafted. The draft's quick tier `r20261111-081728-e226` at `c0672cd3ed78` passed: `76 suites: 76 passed (0 cached), 0 failed`.
+- **#8139's draft**: records `r20261111-073449-ae4e` at `ee38f6f47a52` ended rc 0: `security/Proofs` pass, `security` and `security/Properties` regenerated. It waits for #8539.
+- **ci's pinned candidate** \[read: CI-485, 08:19Z and 08:51Z\]: not built yet. The priority file still has our nine at lines 102 to 191 \[run 08:48Z\], so the pin is ci's by hand at the cut.
+- No comment or review on GitHub on any of our 60 open PRs \[run: `gh pr view`, 09:02Z\]. The one verdict that is not `land` is #8857's hold.
+- 28 marked: 19 with a land verdict at the head, 7 low-risk, #8583 on an older head's labels, #8857 held. One is in a candidate (#8568).
+
+**Tonight's new PRs, test-merged** \[run: `git merge-tree` with `main` `589249ad95fe` and with each marked head of ours\]
+
+- All merge clean: #8859 `563d9b20e91e`, #8862 `23e96bd37477`, #8866 `e19752e7b617`, #8867 `64f7cb635e3d`, #8869 `df881f327aa1`, #8870 `974fe0bec663`, #8873 `92f373e5e539`, #8874 `31a6b65da2cc`, #8877 `b16bb41f1657`, #8879 `9eb9f26cea4a`, and #8836 at its new head `ae8886e9a2fc`.
+- None is built with the marked Lean heads yet. After `3dd5` I build #8877 and every marked Lean head of ours merged (the nine and #8226, #8354, #8368, #8458, #8536, #8539, #8730, #8764) in one run on the same node, and give each new Lean PR its build when its ready line comes.
+
+**The table** \[run: `research queue status`, `review`, `stats` at 08:47Z to 08:49Z; candidates and `main` at 09:00Z\]. "Place" is among the 163 marked heads of every lane that can be built and are in no candidate, by the priority file then mark time.
+
+| PR | head | marked | verdict | in a candidate | place in the line | refused or held | Lean: builds with | ask |
+|---|---|---|---|---|---|---|---|---|
+| #8226 | `f8a3b83aa0f0` | 06:23Z | land (review-17, 06:33Z) | no | 128 of 163 |  | adds 1 Proofs/WeightSecurity; its own records run only | none |
+| #8339 | `9fd291257ffc` | 06:33Z | none; low-risk, needs none | no | 36 of 163 |  |  | none |
+| #8354 | `5591b15e3b35` | 06:40Z | land (review-17, 07:00Z) | no | 119 of 163 |  | adds 1 Proofs/Flock, no lock change; its own records run only | none now; #8877 does not cover its module (CAPS, 08:57Z): it must not land in a span without a lock change before the second caps PR |
+| #8368 | `c833b3ff0a9b` | 06:53Z | land (review-13, 07:01Z) | no | 120 of 163 | lands after #8354 | adds 2 Proofs/Flock; its own records run only | none |
+| #8425 | `d4967690acd5` | 06:49Z | none; low-risk, needs none | no | 43 of 163 |  |  | none |
+| #8454 | `4d87c7899a6d` | 06:22Z | land (review-17, 06:49Z) | no | 27 of 163 |  |  | none yet: the queue leaves it out; #8694 and #8698 are in candidate `287e38615e8a`, and when they land I merge `main` in (drafted) and write its line |
+| #8458 | `81c162ded6fa` | 06:55Z | land (review-17, 07:18Z) | no | 123 of 163 |  | its own records run only | none |
+| #8517 | `620badf31958` | 05:58Z | land (review-16, 06:19Z) | no | 16 of 163 | its candidate was dropped 07:13Z (its base failed) |  | none |
+| #8523 | `b61bbcfd88aa` | 06:37Z | none; low-risk, needs none | no | 37 of 163 | its candidate was dropped 07:13Z (its base failed) |  | none |
+| #8536 | `7c9387e95a73` | 06:57Z | land (review-13, 07:02Z) | no | 122 of 163 |  | adds 5 Proofs/Flock, no lock change; its own records run only | none now; #8877 does not cover its three modules (CAPS, 08:57Z): the same |
+| #8539 | `984a73968ccd` | 05:58Z | land (review-15, 06:50Z) | no | 135 of 163 |  | its own records run only | none |
+| #8540 | `1b0f4f7b64fe` | 06:59Z | none; low-risk, needs none | no | 55 of 163 |  |  | none |
+| #8553 | `650593be39af` | 06:23Z | none; low-risk, needs none | no | 30 of 163 | lands after #8523; its candidate was dropped 07:13Z (its base failed) |  | none |
+| #8568 | `8fb2b94ee4b4` | 05:50Z | none; low-risk, needs none | `287e38615e8a` |  |  |  | none: it is in candidate `287e38615e8a` |
+| #8576 | `d35fd4990def` | 07:01Z | land (review-13, 07:17Z) | no | 59 of 163 |  |  | none |
+| #8583 | `4624bfc6cd0f` | yes, carried | none at this head; an older head's counts | no | 107 of 163 |  |  | none |
+| #8730 | `f612d5d5897d` | 07:03Z | land (review-14, 07:34Z) | no | 129 of 163 |  | its own records run only | none |
+| #8741 | `2e61e09454d2` | 07:04Z | land (review-14, 07:59Z) | no | 60 of 163 |  |  | none |
+| #8764 | `8dfde58665a3` | 05:27Z | land (review-13, 05:39Z) | no | 140 of 163 |  | adds 2 Proofs/Flock; its own records run only | none |
+| #8771 | `4b3b557b8c46` | 06:51Z | none; low-risk, needs none | no | 44 of 163 | lands after #8425 |  | none |
+| #8781 | `b7c268c7c1fe` | 07:04Z | land (review-16, 07:16Z) | no | 133 of 163 |  | adds 2 Proofs/Flock; the nine: `3dd5` running | none: in ci's pinned candidate |
+| #8785 | `e7b741b17e53` | 05:32Z | land (review-15, 05:36Z) | no | 134 of 163 |  | adds 1 Definitions/Claims, 1 Proofs/Flock; the nine on `main`: `3dd5` running | none: first of ci's pinned candidate (CI-485) |
+| #8819 | `9a8a32c7c85b` | 06:00Z | land (review-17, 06:14Z) | no | 163 of 163 |  | adds 4 Proofs/Flock, no lock change; the nine: `3dd5` running | none: in ci's pinned candidate; #8877 covers its four modules |
+| #8820 | `f1a8ef0141ff` | 07:06Z | land (review-13, 07:24Z) | no | 143 of 163 | lands after #8785 | adds 3 Definitions/Claims, 7 Proofs/Flock, 3 Proofs/WeightSecurity; the nine: `3dd5` running | none: in ci's pinned candidate |
+| #8827 | `946b7b72f26d` | 07:41Z | land (review-15, 07:58Z) | no | 145 of 163 | lands after #8785, #8820 | adds 3 Definitions/Claims, 1 Proofs/Core, 9 Proofs/Flock, 3 Proofs/WeightSecurity; the nine: `3dd5` running | none: in ci's pinned candidate |
+| #8828 | `53dd644bdad8` | 07:40Z | land (review-13, 07:48Z) | no | 142 of 163 |  | adds 3 Proofs/Flock; the nine: `3dd5` running | none: in ci's pinned candidate, once #8788 is marked |
+| #8841 | `5f197bc45539` | 07:39Z | land (review-17, 07:54Z) | no | 79 of 163 |  |  | none: in ci's pinned candidate (GB) |
+| #8857 | `96985b18aafb` | 08:09Z | hold (review-13) | no | not in it | no land verdict | adds 1 Proofs/Core, no lock change; the nine: `3dd5` running | `ask ci for a verdict on #8857` once #8877 is marked (review-13 holds it on the unread caps) |
+| #7850 | `ed27bb143d82` | no | none | no |  | stale; conflicts with `main` |  | none |
+| #7952 | `4d3d22fda080` | no | land (review-1) | no |  | stale |  | none |
+| #8120 | `b6e0c1dc5de8` | no | none | no |  | conflicts with `main` |  | none |
+| #8139 | `c274cac9c132` | no | none | no |  |  | adds 1 Proofs/Flock, 1 Proofs/Properties;  | none yet: after #8539 lands (the 11-file merge is drafted; its records `ae4e` passed) |
+| #8177 | `6dd74f50be00` | no | none | no |  |  |  | none |
+| #8363 | `a81a1b11ea1d` | no | none | no |  | conflicts with `main` | adds 9 Proofs/Flock, no lock change;  | none |
+| #8406 | `3d8e9aa8c0af` | no | none | no |  |  |  | none yet: after #8339 lands I merge `main` in and write its line |
+| #8414 | `359724056748` | no | none | no |  |  |  | none, ever (inside #8539) |
+| #8438 | `e04dd44e6ccd` | no | none | no |  | conflicts with `main` |  | none |
+| #8462 | `6f4ffa9e7a6a` | no | none | no |  | conflicts with `main` | adds 2 Definitions/NetworkCertifier, 1 Proofs/NetworkCertifier;  | none |
+| #8512 | `815b893acd23` | no | none | no |  |  | adds 1 Definitions/Claims, 4 Proofs/Flock, 3 Proofs/WeightSecurity;  | none, ever (inside #8820) |
+| #8527 | `33452276ad20` | no | none | no |  |  | adds 1 Definitions/Claims, 4 Proofs/Flock, 6 Proofs/WeightSecurity;  | yours: mark at `33452276ad20` once #8820 is on `main` |
+| #8543 | `2007687fd9b8` | no | none | no |  | conflicts with `main` |  | none |
+| #8552 | `cb416aece716` | no | none | no |  |  |  | none yet: after #8539 lands |
+| #8563 | `80bc72a80541` | no | none | no |  |  | adds 2 Definitions/NetworkCertifier, 19 Proofs/Flock, 3 Proofs/NetworkCertifier;  | none |
+| #8578 | `0a713e7caaf6` | no | none | no |  |  |  | none |
+| #8767 | `d6cf59bccf21` | no | none | no |  |  |  | none |
+| #8788 | `37079664740c` | no | none | no |  |  | the nine: `3dd5` running | `mark #8788 at 37079664740c063e1f8124df81b9a7fb5b52bcc5` (ready line 08:59Z; top's land is at it) |
+| #8789 | `d68de9e61acd` | no | none | no |  |  |  | FLOCKPKG's: not ready (08:58Z) |
+| #8814 | `46df1f88f31e` | no | none | no |  | conflicts with `main` |  | none |
+| #8836 | `ae8886e9a2fc` | no | none | no |  |  | adds 3 Definitions/Claims, 1 Proofs/Core, 9 Proofs/Flock, 3 Proofs/WeightSecurity; SCALE's tries with #8827 and #8781 are out [relayed: SCALE 08:38Z] | SCALE's: unmarked at its new head on #8820; mark on SCALE's ready line |
+| #8859 | `563d9b20e91e` | no | none | no |  |  |  | none |
+| #8862 | `23e96bd37477` | no | none | no |  |  | adds 3 Proofs/Properties;  | none |
+| #8866 | `e19752e7b617` | no | none | no |  |  |  | none |
+| #8867 | `64f7cb635e3d` | no | none | no |  |  |  | none |
+| #8869 | `df881f327aa1` | no | none | no |  |  |  | none |
+| #8870 | `974fe0bec663` | no | none | no |  |  | adds 1 Proofs/Flock, no lock change;  | none |
+| #8871 | `f2b8eb2ba4e1` | no | none | no |  |  | adds 1 Proofs/Core, 3 Proofs/Flock, no lock change;  | close it: REGX superseded it (08:46Z) by `cursor/proofs-noalways-b7d2` |
+| #8873 | `92f373e5e539` | no | none | no |  |  | adds 1 Proofs/Flock, no lock change;  | none |
+| #8874 | `31a6b65da2cc` | no | none | no |  |  | adds 3 Definitions/Claims, 1 Proofs/Core, 10 Proofs/Flock, 3 Proofs/WeightSecurity;  | none |
+
+For the table:
+- Landing: `main` `589249ad95fe` (08:54Z). 28 proofs PRs marked, none red; #8568 is in candidate `287e38615e8a`; ci's pinned candidate of our nine is not built yet and needs #8788's mark at `37079664740c` (ready 08:59Z).
+- The nine merged on `main` in ci's order: Lean build `r20261111-083411-3dd5` running; the unread count on that tree is `r20261111-084347-fd8c` (ETA about 10:30Z \[guess\]); by the bound from git it stays under #8877's caps.
