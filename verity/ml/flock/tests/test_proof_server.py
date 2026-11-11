@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from verity_flock import proof_server as PS
 from verity_flock.proof_server import ProofServer, ProofServerError, Statement
 
 #: a stand-in for flock-circuit. ``serve --queue -``: SERVING, then for each queue line one accepted connection, whose
@@ -138,10 +139,25 @@ def test_provers_a_device_each_with_its_own_verifier_of_a_type(binary, tmp_path)
         ProofServer(binary, tmp_path / "ps0", provers=0)
 
 
-def test_provers_that_share_the_node_split_its_threads(binary, tmp_path, monkeypatch):
+@pytest.fixture
+def node(tmp_path, monkeypatch):
+    """A planted node for the provers' thread split: 12 CPUs of affinity, and a cgroup v2 hierarchy with the process in
+    ``pod/job`` and no quota. Returns its root and ``cpu_max(level, text)``, which writes a level's ``cpu.max``."""
+    root = tmp_path / "root"
+    (root / "proc/self").mkdir(parents=True)
+    (root / "proc/self/cgroup").write_text("0::/pod/job\n")
+    (root / "sys/fs/cgroup/pod/job").mkdir(parents=True)
+    (root / "sys/fs/cgroup/pod/job/cgroup.controllers").write_text("cpu\n")
+    monkeypatch.setattr(PS, "_ROOT", root, raising=False)
+    monkeypatch.setattr(os, "sched_getaffinity", lambda pid: set(range(12)))
+    return root, lambda level, text: (root / "sys/fs/cgroup" / level / "cpu.max").write_text(text + "\n")
+
+
+def test_provers_that_share_the_node_split_its_threads(binary, tmp_path, monkeypatch, node):
     """More than one prover in all (``devices`` × ``provers``): each prover's ``RAYON_NUM_THREADS`` is its even share of the
-    server's threads (the server's ``RAYON_NUM_THREADS``, else the CPUs it may run on), at least one, so each prover sizes
-    its host witness's passes for its own cores and not for every core. A lone prover's environment is the server's."""
+    server's threads (the server's ``RAYON_NUM_THREADS``, else rayon's default, here the planted node's 12 CPUs), at least
+    one, so each prover sizes its host witness's passes for its own cores and not for every core. A lone prover's
+    environment is the server's."""
     pins = ["66" * 64, "77" * 64]
 
     def pools(name: str, rayon: str | None, **kw) -> set[str | None]:
@@ -155,14 +171,45 @@ def test_provers_that_share_the_node_split_its_threads(binary, tmp_path, monkeyp
         assert all(s.accepted for s in got)
         return {record(s)["proved"]["threads"] for s in got}
 
-    cpus = len(os.sched_getaffinity(0))
     assert pools("two-devices", "16", devices=[0, 1], provers=2) == {"4"}
     assert pools("one-device", None, devices=[3], provers=2, env={"RAYON_NUM_THREADS": "7"}) == {"3"}
-    assert pools("cpus", None, devices=[3], provers=2) == {str(max(1, cpus // 2))}
-    assert pools("unset-is-cpus", "0", devices=[0, 1]) == {str(max(1, cpus // 2))}
+    assert pools("cpus", None, devices=[3], provers=2) == {"6"}
+    assert pools("unset-is-cpus", "0", devices=[0, 1]) == {"6"}
     assert pools("at-least-one", "1", devices=[0, 1], provers=2) == {"1"}
     assert pools("lone", "16") == {"16"}
     assert pools("lone-unset", None, devices=[5]) == {None}
+
+
+def test_a_cgroup_quota_bounds_the_threads_the_provers_split(binary, tmp_path, monkeypatch, node):
+    """With ``RAYON_NUM_THREADS`` unset, the provers split rayon's default pool, Rust's `available_parallelism`: the
+    affinity, at most the least whole-CPU quota of the process's cgroup or any above it, and at least one. The quota is v2's
+    ``cpu.max``, or v1's ``cpu.cfs_quota_us`` over ``cpu.cfs_period_us``, a v1 cpu line taking precedence over the v2 one; a
+    quota file that is there but doesn't parse raises. Counting the affinity alone, a quota pod's provers would split more
+    threads than the pod gives them."""
+    root, cpu_max = node
+    monkeypatch.delenv("RAYON_NUM_THREADS", raising=False)
+    cpu_max("pod/job", "max 100000")
+    cpu_max("pod", "400000 100000")
+    with ProofServer(binary, tmp_path / "ps", devices=[3], provers=2) as ps:
+        got = [s.result() for s in [ps.submit(statement(tmp_path, "88" * 64), draw([i % 4]), f"s{i}") for i in range(4)]]
+    assert {record(s)["proved"]["threads"] for s in got} == {"2"}
+    for level, text, want in [("pod", "2400000 100000", 12), ("pod", "50000 100000", 1), ("pod", "max 100000", 12),
+                              ("pod/job", "300000 100000", 3)]:
+        cpu_max(level, text)
+        assert PS._threads({}) == want, (level, text)
+    cpu_max("pod", "400000")
+    with pytest.raises(ValueError):
+        PS._threads({})
+    v1 = root / "sys/fs/cgroup/cpu,cpuacct/job"
+    v1.mkdir(parents=True)
+    (v1 / "cpu.cfs_quota_us").write_text("200000\n")
+    (v1 / "cpu.cfs_period_us").write_text("100000\n")
+    (root / "proc/self/cgroup").write_text("4:cpu,cpuacct:/job\n0::/pod/job\n")
+    assert PS._threads({}) == 2
+    (v1 / "cpu.cfs_quota_us").write_text("-1\n")
+    assert PS._threads({}) == 12
+    (root / "proc/self/cgroup").unlink()
+    assert PS._threads({}) == 12
 
 
 def test_one_cpu_prover_without_devices(binary, tmp_path):
