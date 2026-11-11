@@ -81,6 +81,18 @@ LATE_READ_CHECK_SCHEMA = "verity/commit-integ/t6_4-check/v1"
 # --- the engine (`verity_vllm.engine`)
 #: the engine's profile manifest, which `engine.engine_profile.build_manifest` writes and `pipeline.tp.rank_worker` reads
 ENGINE_PROFILE_SCHEMA = "verity-vllm/profile/v1"
+#: the manifest `engine.run_facts.profile_manifest` writes in place of the engine's profile when building that one raises
+PROFILE_FALLBACK_SCHEMA = "verity-capture/profile-fallback/v1"
+#: the record of the served switches (`engine.served.SCHEMA`), which `record` writes, and `require` on a failing summary
+SERVED_SWITCHES_SCHEMA = "verity-vllm/served-switches/v1"
+#: an engine spec (`engine.spec.SCHEMA`); `from_mapping` and `load` refuse any other
+ENGINE_SPEC_SCHEMA = "verity-vllm/engine-spec/v0"
+#: the static schedule's check (`engine.static_schedule.SCHEMA`), which `check` writes
+STATIC_SCHEDULE_SCHEMA = "verity-vllm/static-schedule/v1"
+#: the registered int8 K-scales manifest (`engine.int8_k_scales.SCHEMA`), which `with_entry` writes into a new one
+INT8_K_SCALES_SCHEMA = "verity-vllm/int8-k-scales/v1"
+#: an int8 checkpoint's error report, which `engine.int8_checkpoint.report` writes
+INT8_ERROR_REPORT_SCHEMA = "verity-vllm/int8-error-report/v1"
 
 # --- the ahead-of-time compiler (`verity_vllm.program.predict`)
 #: a phi (`program.predict.phi.PHI_SCHEMA`), which `Phi.from_json` refuses any other than
