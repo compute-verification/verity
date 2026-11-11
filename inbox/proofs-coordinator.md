@@ -49871,3 +49871,26 @@ For the coordinator to ask:
 
 For the table:
 - stop check, the audit side (NET): for the two ties, the word is the stop record's port `b.stop` (root, domain, N leaves of one u16), named in the tie's own `--registered` file; the tie's record names the stop record in `window`, and the order check is the tie's `register` [read, nothing built]. No Lean of record orders a tie against a stop record yet.
+
+## CROSS, Wed 11 Nov 10:56Z: `2b3b` PASSED: the 18 marked Lean heads build together and every lock record is `pass`, none regenerated; the second pinned tree would carry exactly these three locks
+
+**`r20261111-094021-2b3b`** (vy-nebius-cpu-1, `lean_changed.py --records security --update`) [run: its `result.json`, `stdout.log` and status, fetched 10:55Z]: done, exit 0, `SUCCESS`, outcome `pass`.
+- Records: `security` `pass`, `security/Proofs` `pass`, `security/Properties` `pass`. None `regenerated`: the three locks of the merged tree are what the audit writes.
+- `security`: PASS, 27,069 declarations in 718 modules, 1,106 guarantees. `security/Proofs`: PASS, 194,217 declarations in 3,848 modules. `security/Properties`: PASS, 3,089 declarations in 94 modules, 463 guarantees. Axioms `propext`, `Classical.choice`, `Quot.sound` in each.
+- `check.py` exit 0 in 2,350 s for `security` with `security/Proofs`, and in 598 s for `security/Properties`.
+- It is the fast path: a build, the axioms scan and the lock's records. No kernel replay, no unread facts; that is the candidate's check.
+
+**What it built** [run]: scratch `c67d40971eee6a4712e73dc11cae6c77aa40b4e8` = `main` `589249ad95fe` + #8877 `b16bb41f1657`, the nine (#8785 `e7b741b17e53`, #8820 `f1a8ef0141ff`, #8827 `946b7b72f26d`, #8788 `37079664740c`, #8828 `53dd644bdad8`, #8781 `b7c268c7c1fe`, #8819 `9a8a32c7c85b`, #8841 `5f197bc45539`, #8857 `96985b18aafb`), #8354 `5591b15e3b35`, #8368 `c833b3ff0a9b`, #8536 `7c9387e95a73`, #8458 `81c162ded6fa`, #8226 `f8a3b83aa0f0`, #8730 `f612d5d5897d`, #8539 `984a73968ccd`, #8764 `8dfde58665a3`. No `.lean` file, lock, lakefile, toolchain file or caps file differs between `589249ad95fe` and today's `main` `8f5d3c3823f0` (`git diff --name-only`: none).
+
+**Against the second pinned build** (#8836, #8226, #8539, #8764, #8368 above `86c03d1840cb`) [run: that tree made here as scratch `d71b3d372596`, five merges, each exit 0]:
+- **Its three `security` locks are byte for byte `2b3b`'s tree's** (sha256 of `security/lean-audit.json` `05bda00837d2`..., `security/Properties/lean-audit.json` `e58faec210b3`..., `security/Proofs/lean-audit.json` `a1c232565220`... in both).
+- Its Lean differs from `2b3b`'s tree in what `2b3b` lacked: #8836's three modules (`Core/Game/RewindingCanon`, `SamplingGeneric/RegCanon`, `SpotFlock/RevealsOpen`) and their three import lines, #8888's two modules and `Bridge.lean`, #8866's theorem in `SpotFlock/Accepting.lean`; and in #8458's and #8730's two Spot files, which `2b3b` had and the pinned five do not.
+- **So `2b3b` covers the locks and all four lock-changing heads, and does not cover #8836.** `r20261111-101145-dc0b` does: its tree is the second pinned tree plus #8458 and #8730 (two files, `Spot/SecondStage.lean` and `SecondStageExamples.lean`), with the same three locks. It has been building since 10:18Z; ETA 11:15Z to 11:45Z [guess].
+
+**Of ci's three conditions** (CI-489, top 10:13Z): `2b3b` passes [run]; #8836 has review-17's land at `ae8886e9a2fc`, 09:53Z [run: the label store, 10:44Z]; the build above our candidate is ci's.
+
+**Other runs out** [run, 10:50Z]: `r20261111-103626-515d` (the exact Lean tree of `86c03d1840cb`, building since 10:37Z); `r20261111-104748-53eb` (every marked Lean head at 10:45Z on `86c03d1840cb`, with #8862 and its three locks, #8870, #8874, #8879, #8871 and #8882: scratch `3d55ddde270a`, 13 merges each exit 0; one check ahead of it on vy-nebius-cpu-2); `r20261111-105239-8b6f` (the quick tier of #8454's prepared merge with `08ad61db9432`). Table 4 follows.
+
+For the table:
+- CROSS's `r20261111-094021-2b3b` passed (10:54Z): the 18 marked Lean heads, #8226, #8368, #8539 and #8764 among them, build together; `security`, `security/Proofs` and `security/Properties` records all `pass`, none regenerated; 194,217 declarations in 3,848 modules in `security/Proofs`; no kernel replay [run].
+- The second pinned tree (#8836, #8226, #8539, #8764, #8368 on `86c03d1840cb`) carries the same three locks byte for byte; #8836 is covered by `dc0b`, still running [run].
