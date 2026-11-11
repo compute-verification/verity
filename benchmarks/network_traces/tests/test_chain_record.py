@@ -40,11 +40,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.core.protocols.certifier import audit, lean_audit
+from verity.protocols.certifier.verifier import audit, lean_audit
 
 HERE = Path(__file__).resolve().parents[1]
-PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
-BLOCK_SCHEMA = Path(__file__).resolve().parents[3] / "examples/h200/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json"
+PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
+BLOCK_SCHEMA = Path(__file__).resolve().parents[3] / "benchmarks/one_stage/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json"
 
 
 def _load(name: str):
@@ -327,7 +327,7 @@ def _period(d: Path, case: dict, answer: dict) -> str:
 def _chain_of(tmp_path, case: dict) -> SimpleNamespace:
     """An accepted chain whose certifier session, execution phases, N2 registrations and compute audits are
     ``case``'s."""
-    from verity.core.protocols.spot.one_stage import registration as R
+    from verity.protocols.spot.verifier.one_stage import registration as R
     tmp_path.mkdir(parents=True, exist_ok=True)
     steps = _steps(tmp_path, {"profile": "advice", "rc": {"n2": "0", "scan": "0"}, "run": "r-chain"})
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [{"gate_run": "c1"}]}))
@@ -624,10 +624,10 @@ def _gemm_window(external: bool = True) -> dict:
     """A window circuit record of four ``Gemm_v2{K=16, N=16}`` proof blocks (``x`` 256 bits, ``w`` 4,096 a unit), every
     unit's ``w`` a registered read of the 256 leaves of ``weights``: with ``external``, every ``x`` the system's I/O, else
     units 2 and 3 read units 0 and 1's ``o0`` through a wire and units 0 and 1's ``x`` are free."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops import gemm as G
-    from verity.ml.windows import interface as I
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.defs import bind
+    from verity.definitions.ops import gemm as G
+    from verity.commitments.windows import interface as I
 
     gemm = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
     gid = descriptor_id(gemm)
@@ -640,7 +640,7 @@ def _gemm_window(external: bool = True) -> dict:
 def _record(c) -> dict:
     """``c``'s stated record as `chain_record` reads a window's ``circuit.json``: its description, external ports and
     each template's input rows, a cut port's rows ``p#j``."""
-    from verity.ml.windows import interface as I
+    from verity.commitments.windows import interface as I
 
     return {**c.description(), "external": list(c.external),
             "statements": {tid: {"in_rows": [list(r) for r in I.unit_rows(fn, c.cuts.get(tid))[0]]}
@@ -653,10 +653,10 @@ def test_free_inputs_take_out_a_cut_ports_wired_rows_as_the_period_counts_them()
     ``Gemm_v2{K=16, N=16}`` units reading their ``x`` cut in two from six ``N=8`` slices leave none of it free. Matching
     a cut row's element ports ``x[r]`` against the wire's ``x`` took out none. An external cut port stays free, and two
     wires filling one row are refused."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops import gemm as G
-    from verity.ml.windows import interface as I
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.defs import bind
+    from verity.definitions.ops import gemm as G
+    from verity.commitments.windows import interface as I
 
     gemm, g8 = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE), bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
     gid, g8id = descriptor_id(gemm), descriptor_id(g8)
@@ -679,7 +679,7 @@ def test_free_inputs_take_out_a_cut_ports_wired_rows_as_the_period_counts_them()
 
 def test_free_inputs_hold_to_the_period_count_on_wires_and_registered_reads():
     """On the uncut window too, `input_terms` is `interface.input_count`, pinned or not, an external port free."""
-    from verity.ml.windows import interface as I
+    from verity.commitments.windows import interface as I
 
     for doc in (_gemm_window(external=False), _gemm_window()):
         for pins in (None, PIN):
