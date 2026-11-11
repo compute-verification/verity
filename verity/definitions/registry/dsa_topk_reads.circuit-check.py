@@ -40,6 +40,27 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaPositionsSlot_v1-odd", lambda: bind(R.DsaPositionsSlot, K=5, N=12)),
         ("DsaPositionsSlot_v1-served", lambda: bind(R.DsaPositionsSlot, K=R.CHUNK, N=131072)),
         ("DsaTopKReadRows_v1", lambda: bind(R.DsaTopKReadRows, N=12, TOPK=2, BLOCK=4, READ=read(16, 1))),
+        *_merge_calls_roots(),
+    ]
+
+
+def _merge_calls_roots() -> list[tuple[str, Callable[[], Any]]]:
+    """The merge written as Calls at the traced one's bindings (one list, three, and the served 8 blocks of 2,048 slots, held
+    to its digest pin), and its pieces, the two offsets at a small K and the served one."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import dsa_topk_reads as R
+
+    return [
+        ("DsaPositionsMerge_v2", lambda: bind(R.DsaPositionsMergeV2, M=1, K=4)),
+        ("DsaPositionsMerge_v2-blocks", lambda: bind(R.DsaPositionsMergeV2, M=3, K=4)),
+        ("DsaPositionsMerge_v2-served", lambda: bind(R.DsaPositionsMergeV2, M=8, K=2048)),
+        ("DsaPositionsKeep_v1", lambda: bind(R.DsaPositionsKeep)),
+        ("DsaPositionsShift_v1", lambda: bind(R.DsaPositionsShift)),
+        ("DsaPositionsShiftIn_v1", lambda: bind(R.DsaPositionsShiftIn)),
+        ("DsaPositionsFirstOffset_v1", lambda: bind(R.DsaPositionsFirstOffset, K=4)),
+        ("DsaPositionsFirstOffset_v1-served", lambda: bind(R.DsaPositionsFirstOffset, K=2048)),
+        ("DsaPositionsOffset_v1", lambda: bind(R.DsaPositionsOffset, K=4)),
+        ("DsaPositionsOffset_v1-served", lambda: bind(R.DsaPositionsOffset, K=2048)),
     ]
 
 

@@ -133,6 +133,15 @@ def replayed(inner: CompositeDefinition, statics: Sequence[str], signature: Call
     return build
 
 
+def own_gates(part: CompositeDefinition) -> Callable:
+    """A builder for the traced ``part``, its own gates on a circuit: with one, Flock's flat lowering runs each activation of
+    the part (`ir_lower.lower_gates`) and keeps a word for what it returns, not for each of its gates.  The circuit it lowers
+    to is the same.  A part with statics takes them first."""
+    def gates(C, S, *elements):
+        return replay(BS.compile(bind(part, **{k: getattr(S, k) for k in part.statics})), C, [f for e in elements for f in e])
+    return gates if part.statics else lambda C, *elements: gates(C, None, *elements)
+
+
 def flat(name: str, version: int, statics: Sequence[str], signature: Callable, body: Callable, word,
          lifted: Sequence[str] = ()) -> CompositeDefinition:
     """The Boolean Definition ``name_v{version}{statics}`` whose circuit is ``body`` (over Boolean Definitions, as `EW.on_bits`
