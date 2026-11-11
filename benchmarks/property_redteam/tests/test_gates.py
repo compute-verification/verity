@@ -5,20 +5,14 @@ a study's construction moves a digest."""
 from __future__ import annotations
 
 import hashlib
-import sys
-from pathlib import Path
 
+import free_codec as FC
+import gates as G
 import pytest
+import renorm as R
+import squaring as S
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-
-import free_codec as FC  # noqa: E402
-import gates as G  # noqa: E402
-import renorm as R  # noqa: E402
-import squaring as S  # noqa: E402
-
-from verity.circuits.evaluation.reference import evaluate  # noqa: E402
+from verity.circuits.evaluation.reference import evaluate
 
 PINS = {
     "gathers": "eb1a6b31264359d8",
