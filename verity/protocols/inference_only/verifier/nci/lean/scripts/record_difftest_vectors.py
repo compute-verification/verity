@@ -52,7 +52,9 @@ and nothing else, which names no Program, refused with its templates. Then a row
 shape's record with one declaration more, into a row it already declares, a case each pair of a wire, a registered
 read, a table read, an opening's port and ingress, each refused. Then a template with an output that has no bit
 (`BITLESS`): one that returns no field, and one with a field of no bit beside a field of 16, each refused with its
-templates.
+templates. Then a template keyed as an input id (`KEYED`), bound per run and bound at registration: a composite, so
+its gates are computed and a root node of it is no input. The record of that one template, and the served shape's
+record with a unit of it more at the Program's root that the record does not list, each refused with its templates.
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -816,6 +818,13 @@ BITLESS: dict[str, tuple] = {
     "a return field of no bit": ("NoBit", [Value(16), Tuple()], [[("op", 16, [(0, 0)])], []]),
 }
 
+#: a template keyed as an input id (`verity.circuits.program.input_id`), of a width no input of the Program has: a
+#: composite of one gate over its one parameter, a word. Its gates are computed, and a root node of it is no input.
+KEYED: dict[str, str] = {
+    "a template keyed as an input bound per run": "Input7",
+    "a template keyed as an input bound at registration": "RegisteredInput7",
+}
+
 
 def shaped() -> list[dict]:
     """The cases on `lowered` circuits, at two slots and three positions and at four slots and 35, each size under one
@@ -856,7 +865,12 @@ def shaped() -> list[dict]:
 
     Then the accepted case with its Program and record those of one template with an output that has no bit
     (`BITLESS`), a unit a slot: a template that returns no field, and one whose return has a field of no bit beside a
-    field of 16. Each is refused with its templates (`templates`)."""
+    field of 16. Each is refused with its templates (`templates`).
+
+    Then a template keyed as an input id (`KEYED`), a composite of one gate over a word: the accepted case with its
+    Program and record those of that one template, a unit a slot (`_alone`), and the accepted case with a unit of
+    it more at its Program's root, which its record does not list (`_unlisted`). Each is refused with its templates
+    (`templates`): a root node of a composite is no input, whatever its key reads as."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -865,11 +879,12 @@ def shaped() -> list[dict]:
 
         def one(what: str, c: Circuit, seed: int, *, held=WEIGHTS, committed=WEIGHTS, moved=(), beside=False,
                 before=2, policy=policy, pins=pins, n=n, edit=None, pinned=None, broken=None, refused=None,
-                reroot=None, alone=None) -> None:
+                reroot=None, alone=None, unlisted=None) -> None:
             """The case on `c`; with `edit`, its record then edited; with `reroot`, its Program's root then edited;
             with `alone`, its Program and record then those of a circuit of that one template (`_alone`); with
-            `pinned`, its pins then those; `broken`, the stage that refuses it; `refused`, that stage where it
-            refuses the circuit as built."""
+            `unlisted`, its Program's root then with a unit of that template more, which its record does not list
+            (`_unlisted`); with `pinned`, its pins then those; `broken`, the stage that refuses it; `refused`, that
+            stage where it refuses the circuit as built."""
             rng = random.Random(50_000 + 100 * n + seed)
             roots = {p: _hex(rng) for p in c.params}
             order = None
@@ -885,6 +900,8 @@ def shaped() -> list[dict]:
                 _reroot(made, reroot)
             if alone is not None:
                 _alone(made["case"], c, alone)
+            if unlisted is not None:
+                _unlisted(made["case"], c, unlisted)
             if broken in EARLY:
                 made["case"]["spot"] = None
             if pinned is not None:
@@ -988,6 +1005,11 @@ def shaped() -> list[dict]:
     for k, (what, (name, outs, plan)) in enumerate(BITLESS.items()):
         first(f"2x3 {what}", lowered(2, 3), 47 + len(TWICE) + k, broken="templates",
               alone=template(name, [("p", Value(16))], outs, plan))
+    for k, (what, name) in enumerate(KEYED.items()):
+        keyed = template(name, [("p", Value(16))], [Value(16)], [[("op", 16, [(0, 0)])]])
+        seed = 47 + len(TWICE) + len(BITLESS) + 2 * k
+        first(f"2x3 {what}, alone", lowered(2, 3), seed, broken="templates", alone=keyed)
+        first(f"2x3 {what}, unlisted", lowered(2, 3), seed + 1, broken="templates", unlisted=keyed)
     return out
 
 
@@ -1516,6 +1538,16 @@ def _alone(case: dict, c: Circuit, fn) -> None:
                                      "wires": [], "cuts": {}}).decode(), digest)
 
 
+def _unlisted(case: dict, c: Circuit, fn) -> None:
+    """The case's Program replaced by `c`'s with one root node more, a unit of the template `fn` over an input of
+    its own, which the record does not list; the record naming the Program it then is, its other fields kept."""
+    desc = codec.encode_program(mixed_population_program(
+        [*c.templates, (fn, 1)], values=[(v, c.params[v], 16) for v in c.values]))
+    case["instance"]["program"] = codec.canonical_json(desc).decode()
+    digest = codec.program_digest(desc)
+    _commit(case, IF.circuit_bytes({**json.loads(case["instance"]["record"]), "program": digest}).decode(), digest)
+
+
 def _other_width(c: Circuit, w: dict) -> dict | None:
     """Wire `w` reading an output of another width, where its writer has one."""
     fn = next(fn for fn, _ in c.templates if codec.descriptor_id(fn) == w["writer"])
@@ -1551,7 +1583,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 50 + len(TWICE) + len(BITLESS)
+    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED)
 
 
 def results(case: dict) -> dict:
