@@ -1,12 +1,10 @@
 """Stale PRs: an open PR that isn't marked ready at its head and has been idle `stale_days` (drive.toml) is
 stale.  Idle is since the latest of its head commit's date and the ready (an eject's `ready = false` too) and review labels on
-that head.  `research queue status` says so, drive rings its owner once a day, and at `stale_close_days` drive closes it with
-`close_comment` unless it carries the `hold` label, is a draft that says "keep open", or is on `next`; its branch stays
-(`merge.sweep_branches` leaves it, `Driver._sweep`)."""
+that head.  `research queue status` says so (`stale_prs`); `pull_refs` fetches the PRs' pull refs it reads, as the verified
+queue's loop does to find the PRs stacked on one that landed (`landing.Landing._stacked`)."""
 from __future__ import annotations
 
 import calendar
-import re
 import subprocess
 import sys
 import time
@@ -15,17 +13,6 @@ from typing import Callable, Collection, Iterable
 from .queue import PR, Queue, QueueError, _git
 
 DAY_S = 86400
-#: a draft whose title or body says this is never closed for being idle
-KEEP_OPEN_RE = re.compile(r"\bkeep[ -]open\b", re.I)
-
-
-def close_comment(days: int) -> str:
-    return (f"Closed by drive after {days} days unmarked and idle (TOP-90 row 36). The branch stays: reopen the PR, push or mark "
-            "it ready, and it queues again.")
-
-
-def keep_open(pr: PR) -> bool:
-    return pr.draft and bool(KEEP_OPEN_RE.search(f"{pr.title}\n{pr.body}"))
 
 
 def _ts(stamp: str | None) -> float | None:

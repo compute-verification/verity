@@ -197,12 +197,6 @@ def load_request_program(rank: int, path: str, *, acc: PG._Acc, X: int, W: int, 
                         units=np.array([spec_q[s][0] for s in specs], dtype=np.int64),
                         words=np.array([spec_q[s][1] for s in specs], dtype=np.int64), spec=specs, keys=acc.call_keys[-1],
                         inputs={j: q.name for j, q in enumerate(P.params)}, cols=cols, shapes=[shape_of[(m, s)] for m, s in zip(mods, specs)], checks=chk)
-    names = {p.name: p.id for p in P.params}
-    if "splits" in names:
-        pread_off = np.frombuffer(cols.pread_off, dtype=np.int64)
-        pread_call = np.frombuffer(cols.pread_call, dtype=np.int32)
-        readers = [k for k in range(n) if (pread_call[pread_off[k]:pread_off[k + 1]] == names["splits"]).any()]
-        rp.checks["splits_readers_are_the_samplers"] = readers == sorted(samplers)
     off = np.frombuffer(cols.read_off, dtype=np.int64)
     prod = np.frombuffer(cols.read_call, dtype=np.int32).astype(np.int64)
     cons = np.repeat(np.arange(n, dtype=np.int64), np.diff(off))
@@ -573,7 +567,7 @@ RULES = {
                     "Calls it reads of their step, +1 past a sampler; the sampler of step s: the Call producing element s of the request Program's "
                     "return (sampler_rule 'return'), else the s-th Call of a sampling-event Definition (sampler_rule 'sampling-event')",
     "sampler": "the step's sampler Call and its constants (Calls that read no Call and are read by the sampler alone); inputs = the request inputs "
-               "it reads as [lo, hi) leaf runs (splits: the one leaf s)",
+               "it reads as [lo, hi) leaf runs",
     "module": "Correspondence.module_of (the recorded owning module); parent = the nearest enclosing module path (torch named_modules nesting)",
     "rank": "a leaf: one rank's Calls of one module body (or the sampler) at one request step; the leaves partition every request Program's Calls",
     "totals": "calls, gates, units, committed_interior_words of an inner node = the sum over its subtree (body_calls: a module's own Calls)",
