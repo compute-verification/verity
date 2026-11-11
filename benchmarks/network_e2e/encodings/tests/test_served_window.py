@@ -143,7 +143,7 @@ at each power of two to 2^32 − 1."""
                 [r.max_tokens for r in rq] + pad, [r.output_len for r in rq] + pad)
 
     ses = WC.session(D, 0, 0, L, book, [slots(d, rq) for d, rq in zip(per, reqs)])
-    seg = CV.encode([CV.Window(arrived=d) for d in per], CV.Book.from_json(book)).lens
+    seg = CV.encode([CV.Advice(arrived=d) for d in per], CV.Book.from_json(book)).lens
     tails = [sum(width(r.max_tokens + 1) + 1 for r in rq) for rq in reqs]
     assert [s[0] for s in ses] == [a + b for a, b in zip(seg, tails)]
 
