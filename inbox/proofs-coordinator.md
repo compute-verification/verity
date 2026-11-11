@@ -53676,3 +53676,63 @@ Tags for the part above: the totals and "2 / 29 over" are [derived on run]; 236 
 For the table: #8932 `bbf48d9199d7` unmarked, `main` `86c03d1840cb` merged in; `Proofs/Flock` 272 / 2,204 (was 267 / 2,217), Core 6 / 144 untouched; quick tier `r20261111-121121-f441` running (`caf2` on the commit before passed 4 of 4), ready line follows.
 For the table: markable today without #8932, in order, under 267 / 2,217: #8139, #8889, #8892, #8906, #8916, #8912, #8922, #8924, #8919 (265 / 2,162), then two of #8939, #8946 and #8915 (267); #8931 (+3 modules) and #8941 need #8932 [derived on run].
 For the table: holding line's fixes: `Counts` +1 / +7 (267 / 2,172), #8931's total 269 / 2,183, #8941 +1 / +2 (270 / 2,185), #8939 +1 / +17 (271 / 2,202), #8946 +1 / +2 (272 / 2,204); `Proofs/Core` needs group 26 on the list (2 / 29).
+
+## BENCHCROSS, Wed 11 Nov 12:19Z: second readings, all hold: FUSED's templated pair (0163: 705.8 against 368.6 Lean core-s, 1.91x), HEADPROF's af1d rows (0.925; 0.830), DRAFT-CORE's coin table (eleven sums of k equal mine: every row at kappa 2^-4 or wider, the built plan among them, needs more than #8914's MAX_COINS 2^24 at a padded first stage of 6), CONCRETE's line (a) table by hand (out as a bound); FLOCKPKG's cut d302096c54 read once, verdict after its runs
+
+Four second readings from records now in the store, and a first read of FLOCKPKG's cut. Every time is from `date -u`. No wrong number found.
+
+**1. second reading of FUSED's 12:15Z templated pair at `0163` and `cd4c`: holds.**
+
+| served 16-key first head block, Lean, a call of one session | flat `cd4c` | templated `0163` |
+|---|---|---|
+| core-s (user + sys), three runs | 368.6, 355.7, 381.9 | 682.7, 759.3, 705.8 |
+| wall | | 769.4, 1,162.3, 800.4 s |
+| `inputs` | 75.9, 72.9, 75.1 s | 93.9, 193.1, 206.7 s |
+| `setup (drawn)` | 222.0, 211.0, 226.3 s | 220.3, 394.1, 259.4 s |
+| session less setup | 64.9, 65.6, 75.1 s | 453.0, 570.8, 333.2 s |
+| peak | 24.6 GB | 22.66 GB |
+
+- [run: `0163`'s three `.verify-time` files and timer lines, record `art:404568de64d7…`, done rc 0, tree `8201dacff26e`; `cd4c` as I read it at 11:47Z] Every templated cell is the record's; three verdicts accepted. Medians 705.8 against 368.6: 1.915. The range 1.79 to 2.13 is 682.7 / 381.9 and 759.3 / 355.7.
+- "At least 333 s against 65 to 75 s, 4.4× or more" is 333.2 / 75.1 = 4.44: it holds as the least ratio.
+- Not reread: the small head block's rows (`H16S`), the fused pairs, and `5ce0`'s 503 / 460 / 22 GB. Its measured-rate figures follow from those by 0.0143 / 0.4 and 0.0154 / 0.4 [run: arithmetic].
+
+**2. second reading of HEADPROF's `af1d` rows (vy-dc-h200-3): hold.**
+
+| step | provers | what | GPU-s a statement (mine) | HEADPROF's |
+|---|---|---|---:|---:|
+| own, 3 | 1 | today's binary | 3.4164, 3.4160 | 3.416 |
+| 1, 4 | 1 | #8891's two cuts on | 3.1599, 3.1613 | 3.160, 3.161 |
+| 2 | 1 | #8891's binary, cuts off | 3.7129 | 3.713 |
+| 5, 7 | 2 | today's binary | 3.1277, 3.0234 | 3.08 |
+| 6, 8 | 2 | today's, check on CPUs 12-15 | 2.6099, 2.5515 | |
+| 9 | 2 | every cut, check on CPUs 12-15 | 2.6565 | 2.657 |
+| 10 | 2 | salts `all` alone | 2.5537 | 2.554 |
+
+- [run: each step's session times from `r20261111-101057-af1d`'s record by `server_rate.py`'s window; 43 accepted a one-prover step, 54 a two-prover step] 0.925 is 3.160 / 3.416; 0.830 is 2.5537 over the mean of 3.1277 and 3.0234.
+- Step 9 (every cut) reads above step 10 (salts alone) and above steps 6 and 8 (today's binary with the check moved). So on that machine at two provers "every cut" is not a measurement of every cut: HEADPROF says so (the check is bound on two cores).
+
+**3. second reading of DRAFT-CORE's 12:15Z coin table: holds on all eleven rows.**
+- [run: `two_stage_design` on `3db1`'s dumped call, each row's design, Σ of its k] My eleven Σ_t k_t equal HARMSEARCH's as DRAFT-CORE relays them, to the unit: 10,046,500; 32,469,700; 4,058,782; 1,014,756; 9,387,373; 14,729,547; 7,364,810; 15,438,367; 3,617,957; 16,486,108; 2,060,828. The byte ranges (Σk × 6 × 18 and × 26) and the "2^24 covers" column follow.
+- So at a padded first stage of 6 and #8914's 2^30 bytes: the κ 2^-6, 2^-7 and 2^-8 rows fit; the built plan (κ 2^-3, 3,781 GB), every κ 2^-4 row (3,860; 1,188; 979) and the record do not; recut A's record and its κ 2^-5 row (3,936) fit only at 18 bytes a block.
+- One word: at K0 = 4 it says the κ 2^-4 rows "still do not". Recut A's 3,860 row is 1,060,527,384 at 18 bytes a block, under 2^30 by 1.2%: by its own column that is "low end only". At the expected 25 bytes it does not fit.
+- The exact formula by stratum is not rerun by me either.
+
+**4. second reading of CONCRETE's line (a) table (`02c3`, 12:03Z): holds by hand on all 48 cells; it is out as a bound by your 12:06Z.**
+- [run: the three terms by hand, K = N_s = 6 × checked blocks] The evaluator cuts each log to two places toward the weaker side: the record's run in compressions is -106.5585 (its -106.55; my 11:47Z entry rounded it to -106.56), its year in calls -99.8797 (its -99.87).
+
+**5. First read of FLOCKPKG's cut at `d302096c54b2247cfffaff7697baf6b99c87c3a3` (no PR; its runs `744d`, `98a7`, `6afc` not ended): as read it is what it says. The verdict waits for the three runs.**
+- [read: the diff against `main`, three files, +473 −4] It changes the Lean verifier's command, so it is trusted code. `verifyCmd` changes at three call sites: `checkProgram`, `buildSessionOf` and `checkCover` become their `…By` twins at `read.descAt` and `read.progAt`. Each of the three has its theorem (`checkProgramBy_read`, `buildSessionBy_read`, `checkCoverBy_read`) that the twin at those readings equals the old function on every input.
+- `ProgramRead.descAt b` returns the kept parse where `b` equals the kept bytes (`withPtrEqDecEq`: the pointer first, else `ByteArray`'s equality) and parses anew elsewhere; `descAt_of` and `progAt_of` prove each is the parser itself, as a function. `read` is made outside `setupOf`, so a call's sessions share it.
+- The twins are 364 lines that repeat the setup. The `rfl` theorems hold them to the originals, so an edit to one side alone fails the build.
+- To check when `98a7` ends: the verifier lock's allow-list has `Thunk.get`, `Thunk.mk` and `withPtrEq` [run: grep of `lean-audit.json`]; `withPtrEqDecEq` is not there by name.
+- Nothing the prover sends changes; the hiding argument is not touched.
+
+For BREAKEVEN:
+- Templated check on the served 16-key head block: 1.91× the flat's Lean core-seconds, measured (`0163`, `cd4c`), recomputed. The setup over the program is the same in both forms.
+- #8891's two cuts: 0.925 at one prover, measured (`af1d`), recomputed. Salts `all` alone at two provers: 0.830, measured (`af1d`), recomputed.
+- A row at κ 2^-4 or wider needs more coin bytes than #8914's `MAX_COINS` 2^24 allows at a padded first stage of 6. Say so beside 3,781 / 3,860 / 1,188 / 979; the κ 2^-6 rows (4,069; 1,500) fit.
+
+For the table:
+- second reading of FUSED 12:15Z at `0163`, `cd4c`: holds (705.8 against 368.6 core-s, 1.91×).
+- second reading of HEADPROF's `af1d`: holds (0.925 one prover; 0.830 salts alone at two).
+- second reading of DRAFT-CORE 12:15Z: holds (eleven Σ_t k_t equal mine); κ 2^-4 and wider rows do not fit `MAX_COINS` 2^24 at K0 = 6.
