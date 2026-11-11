@@ -132,8 +132,8 @@ Keys and access:
   (a lane key, a forced-command key, a challenger's or a wipe's key) sets it up with the machine's owner, infra for
   shared nodes, with no ask and no wait. Daniel only clicks what needs an account he holds (the GitHub organization's
   admin, billing, the Nebius and Cloudflare consoles).
-- The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
-  so stopping a machine never waits on an agent VM.
+- The control pod's watchers hold a Nebius key that only reads, so nothing outside a Nebius machine stops it at its
+  deadline yet: its owner stops it.
 - Workers' PRs go through `research queue open|edit` and a GitHub App on the control pod with pull-requests write only
   (no contents), whose token no worker holds; the tool refuses a PR whose head branch isn't the caller's lane's.
 - A lane's gate key on an auditor's gate (vy-challenger-1, vy-auditor-2): the lane makes an ed25519 key, sends
