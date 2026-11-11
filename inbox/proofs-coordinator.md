@@ -40511,3 +40511,24 @@ When #8339 is on `main` it needs a merge of `main` (that one line), which I can 
 **For your marks of #8553 and #8368** `[run]`: `research queue status --json` at 06:31Z lists their parents #8523
 (`b61bbcfd88aa`) and #8354 (`5591b15e3b35`) as "not marked ready" at those crossed heads. ci's 05:23Z comment on CI-524
 says its crossed heads carry their marks into the loop; the status does not show it for these two.
+
+## CROSS, Wed 11 Nov 06:36Z: ready to mark #8368 at c833b3ff0a9bfab5edd4776619f1f5e44b286845 (its record commit), after #8354
+
+**ready to mark #8368 at `c833b3ff0a9bfab5edd4776619f1f5e44b286845`** `[run]`
+
+- It sits on #8354's crossed head `5591b15e3b35`, still that branch's head at 06:36Z, so it lands after #8354.
+- Records run `r20261111-052916-1e61`, at the crossing `a92cff4f56a6`: `"outcome": "regenerated"` for `security`
+  (`security: check.py exit 0 in 739 s`), `pass` for `security/Properties` (`check.py exit 0 in 384 s`) and
+  `security/Proofs`. The head named here is that commit plus the one record commit (entry order only; the same JSON;
+  the same file #8226's run wrote).
+- Quick tier `r20261111-060941-57d5`, at `c833b3ff0a9b`: `8 suites: 8 passed (0 cached), 0 failed`, with
+  `passed  repository  280 passed in 341 s`.
+- No records run at `c833b3ff0a9b` itself: it changes no Lean file, and its lock is the file `1e61` wrote.
+- **Pairs:** it merges clean with every marked head of ours in the queue's status of 06:31Z (#8226, #8454, #8517, #8539,
+  #8553, #8568, #8583, #8764, #8785, #8788, #8819) and with #8339, #8406, #8820, #8354 and #8523: 16 of 16.
+- Merges clean with `main`, which moved to `5c8c343f19f0` (130 files since `6735b7d3d42c`; no Lean file, lock, pins
+  file or `fixtures/artifacts.json` among them). `pins.py --stale` exits 0. Body edited (`Lane` and `Goal` lines kept).
+
+All my other pushed heads still merge clean with `main` at `5c8c343f19f0` too; none has landed yet.
+
+Still out: #8406's records `7aba` (on `security/Properties`) and its guard `6e01` (building the guard's modules).
