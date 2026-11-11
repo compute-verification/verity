@@ -16,6 +16,7 @@ import re
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -725,18 +726,19 @@ def _checkpoint(tmp_path, seed: int = 3, flip: str | None = None, quant: dict | 
     first element flipped) and a manifest pinning it at `test_steps._registered`'s model and revision: the checkpoint
     directory and the manifest. With ``quant`` (its config's ``quantization_config``), each linear is an exact-int8 one's,
     ``weight`` I8 [N, K] and ``weight_scale`` F32 [N, 1] (`engine.int8_checkpoint`)."""
-    T, rng = S.TINY, np.random.default_rng(seed)
+    T: dict[str, Any] = S.TINY
+    rng = np.random.default_rng(seed)
     H, INTER, NH, KVH, V = T["hidden_size"], T["intermediate_size"], T["num_attention_heads"], T["num_key_value_heads"], T["vocab_size"]
     D = H // NH
-    t = {"model.embed_tokens.weight": _bf16(rng, V, H), "model.norm.weight": _bf16(rng, H)}
+    w = {"model.embed_tokens.weight": _bf16(rng, V, H), "model.norm.weight": _bf16(rng, H)}
     for i in range(T["num_hidden_layers"]):
         p = f"model.layers.{i}."
-        t |= {p + "self_attn.q_proj.weight": _bf16(rng, NH * D, H), p + "self_attn.k_proj.weight": _bf16(rng, KVH * D, H),
+        w |= {p + "self_attn.q_proj.weight": _bf16(rng, NH * D, H), p + "self_attn.k_proj.weight": _bf16(rng, KVH * D, H),
               p + "self_attn.v_proj.weight": _bf16(rng, KVH * D, H), p + "self_attn.o_proj.weight": _bf16(rng, H, NH * D),
               p + "mlp.gate_proj.weight": _bf16(rng, INTER, H), p + "mlp.up_proj.weight": _bf16(rng, INTER, H),
               p + "mlp.down_proj.weight": _bf16(rng, H, INTER), p + "input_layernorm.weight": _bf16(rng, H),
               p + "post_attention_layernorm.weight": _bf16(rng, H)}
-    t = {n: ("BF16", a) for n, a in t.items()}
+    t: dict[str, tuple[str, np.ndarray]] = {n: ("BF16", a) for n, a in w.items()}
     for n in [n for n in t if quant and n.endswith("_proj.weight")]:
         (N, K), s = t[n][1].shape, n.removesuffix("weight") + "weight_scale"
         t[n], t[s] = ("I8", rng.integers(-127, 128, (N, K), dtype=np.int8)), ("F32", rng.random((N, 1), dtype=np.float32))
