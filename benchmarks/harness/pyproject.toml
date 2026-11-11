@@ -102,7 +102,7 @@ inputs = [
     # a direct point's command must pass a slot-only node's launcher rule (research's slot_only.through_slot), which a
     # test checks
     "tools/research/src/research/pods/nebius/slot_only.py",
-    # the overhead table scales γ by the census's datacenter, world and datasheet rates and rho's FLOP-to-gates conversion,
+    # the overhead table scales γ by the census's datacenter, world and datasheet rates and the slowdown calculator's FLOP-to-gates conversion,
     # and `verity bench overhead` is the door's runner, which a test runs
     "benchmarks/census/deployments.json",
     "benchmarks/census/adversary.json",

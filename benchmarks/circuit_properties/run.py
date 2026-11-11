@@ -4,7 +4,7 @@
 
 For each configuration in `references.configs()`, one b1 layer at T positions on bits (`references.layer`) is measured
 (`measure.measure`) under `references.GEMM_PRODUCTS`, and so is the Boolean GEMM `Gemm_v3{K=32,N=4}`. Beside each layer's
-a_out, a_in and |𝒥| per position: rho's `fanout`, `legs` and active layer products, as recorded for the model in
+a_out, a_in and |𝒥| per position: the slowdown calculator's `fanout`, `legs` and active layer products, as recorded for the model in
 verity/protocols/inference_only/slowdown/data/models.toml when it has a row, and as `derived_fanout` / `derived_legs` derive them from the
 config's own matrices (q, k, v, o, gate, up, down) otherwise and always. Each circuit's products are also checked
 whole-in-block (`measure.whole`) under two partitions: one block per root activation, and the gates cut in half. Writes

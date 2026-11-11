@@ -23,7 +23,7 @@ what the layout's design has and the tree does not.
     policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which no unit rule reads yet:
     `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
-    `inference_only/nci/` and `inference_only/rho/`.
+    `inference_only/nci/` and `inference_only/slowdown/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). `verity/definitions/`: the circuits
     written in it: `ops` (the primitive circuits' Definitions), `silicon` (the GPUs' exact semantics), `kernels`,
     `private_circuits` (the universal circuit), the served workloads' Definitions, and the evaluator and a circuit's
