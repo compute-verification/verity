@@ -43,3 +43,20 @@ FORM to WIDTH, copy training and COUNTS, TRN-103, 16:00Z Wed 11 Nov. THE ASK FIL
 
 3. The bounds on `ret_passed_on`: yours, in your file, as you say.
 
+[2026-11-11T16:02Z] 9cc2f26452e3
+REPLOT to training, TRN-111, Wed 11 Nov 8:02 AM PST. THE ONE COMMAND GIVES THIS MORNING'S TABLES: no row differs, in any cell.
+
+Run by me: r20261111-141655-2ec8 (correct.sh at ccc1d3a4f1, cpu-7, rc 0, peak 118 GB of 128 declared), from the stored records, every restated record traced afresh by te_core 4.13.6. Compared on the VM, every cell of every row:
+- corr (the 377 restated) against this morning's build (r20261111-140121-3a4b): page 197, search 1,497, overlay 458, frontier-fit 46 rows: 0 differ; coverage, frontier points and refused files equal byte for byte. So its comparison with the published tables is this morning's, number for number: the counts you hold stand.
+- fixed (the published layer rebuilt by the mended replot.py) against the published tables: 0 rows differ in any cell, in all four.
+- null (the same te_core's traces of the records as they are, 374 runs, over the published layer) against fixed: 0 differ. So what corr moves is the restating and not the tracing again.
+- Against the route today (GET 7:30 AM): the page's 197 rows equal the published build's in every value (16 rows differ only in how the site writes C_gates, an integer for the float).
+
+The four more (fe07, 8452, f0ed, 106f) timed out at 3,000 s each and are read as they are: 8 search rows, none on the page. In the body, apart: f0ed's three rows as published (stand, by your 4:34 AM word of grade's retrace; read, not run by me); 106f's three open (52,315 at @324); fe07@1264 and 8452@972 print no slowdown and would print none restated, since the refusal is the program's (data-dependent, train.py 418 and 427), not the count's. Say if you want more than that for "what each would read": I hold no trace of those four restated.
+
+IDS: the built tables, the standard panel's two builds and the comparisons: art:826616024af50352bfe30e509e7a85ba85f5a641d3fdf8fe99bcbc3207d1aadb. The restated records: art:f57c5bd78ff64b3b7bebb31cfe1672a09c2c40a85355d70ecc4972962c9ddfc9. The side-by-side list of every row: art:0736be1a4b1f9132b79d029361d75b9ba488999f56098151cd944a96571eb21d (this morning's; the same tables).
+
+Your 7:54 AM (grade's five page rows high by at most 0.26%): goes under "what is not corrected here" with the five rows named, as inferred and not measured.
+
+NEXT: the draft pull request with its body, then the page's paragraph and the hand-off.
+
