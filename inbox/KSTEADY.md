@@ -539,3 +539,22 @@ SPOT's proving, busy 22% and 23% at one prover) and the fused reads (19.9%, busy
 - If benchmarks names another order or core count on HASH-98 before you start, take theirs and say so.
 - KHSHARE has the two fused types on 12 cores (HASH-109, due 04:00Z): if its figures are in before you reach rows
   3 and 5, still time them at 10; say both.
+
+## Wed 11 Nov 01:40Z: the new census is of record. Spend no more slots on types only the old census has
+
+benchmarks (HASH-98, 01:26Z): #8281 landed at 01:23Z and its census (`art:471350fa6bf2…`) is the run of record;
+`main`'s old one is superseded. Flock from the labels alone: 7,470 prover GPU-seconds a token, 92.3% from steady
+rows, 46 types. So:
+
+- **Drop from your queue** every run for a type that only the old census has: item 3 at 2 and 4 provers
+  (`AllReduceResidualMnnvl_v1{WORLD=8,N=3072,SHOT=1}`), and any 2- or 4-prover run of the FlashInfer linears, the
+  N=1 GEMMs, `ResidualAdd_v1` or `SparseMlaCombine_v1` not yet started. Cancel what is queued and not started; let
+  a run that is timing finish. The rows already labelled stay as they are.
+- **Your order now:** (1) rows 13 and 30, as the 01:30Z section says; (2) the 10-core rows of the 01:30Z section;
+  (3) the new census's types with no steady row that you can stage: `RoPEHeadGptJ_v2{D=64}` again (its row was
+  throttled), the `SparseMlaSplitEndCols_v1` columns and `FlashInferFp8Quant1x128_v1`'s other statics, which
+  proofs' planner asked for (HASH-98, 01:19Z); (4) the new census's measured types at 2 and 4 provers.
+- **In your next HASH-98 comment, one line:** which of proofs' five (`SparseMlaHeadBlock_v1`,
+  `SparseMlaSplitEndCols_v1`, `FlashInferFp8Quant1x128_v1`, `SparseMlaHeadEnd_v1`, `AllReduceMnnvl_v1{…N=96}`) have
+  a labelled steady row, by row number, and which have none. The lead found rows 1, 2, 37 to 40, 35 and 26 and
+  none under the names of the second and third.
