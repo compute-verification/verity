@@ -50228,3 +50228,22 @@ For the table:
 - I have no count of my own, by row or by block.
 
 For the table: no number of mine. The class the Lean has is by proof block, the writer's block included; quote the order's 10:59Z count, not 132.
+
+## CROSS, Wed 11 Nov 11:05Z: `dc0b` PASSED: all 21 Lean heads marked at 10:05Z, #8836 with them, build together and every lock record is `pass`; with `2b3b` that is the whole of what the second pinned build holds
+
+**`r20261111-101145-dc0b`** (vy-nebius-cpu-3, `lean_changed.py --records security --update`) [run: its `result.json`, `stdout.log` and status, fetched 11:04Z]: done 11:02:08Z, exit 0, `SUCCESS`, outcome `pass`.
+- Records: `security` `pass`, `security/Proofs` `pass`, `security/Properties` `pass`. None `regenerated`.
+- `security/Proofs`: PASS, 194,332 declarations in 3,853 modules (`2b3b` had 3,848: the five more are #8836's three and #8888's two). `security`: PASS, 27,069 in 718 modules, 1,106 guarantees. `security/Properties`: PASS, 3,089 in 94 modules, 463 guarantees. Axioms `propext`, `Classical.choice`, `Quot.sound` in each.
+- `check.py` exit 0 in 2,213 s (`security` with `security/Proofs`) and 426 s (`security/Properties`). The fast path: no kernel replay, no unread facts.
+
+**What it built** [run]: scratch `44847c1c97ffca321f14501b3c17c4b08f3bda03` = `2b3b`'s tree (`main` `589249ad95fe`, #8877, the nine, #8354, #8368, #8536, #8458, #8226, #8730, #8539, #8764) + #8866 `e19752e7b617` + #8888 `746c43e0c848` + #8836 `ae8886e9a2fc`.
+
+**Against the second pinned build** [run: `git diff --name-status` of scratch `d71b3d372596` = `86c03d1840cb` + #8836, #8226, #8368, #8539, #8764 against `dc0b`'s tree, over `.lean` files, locks, lakefiles, manifests, toolchain]: two files differ, `verity/protocols/spot/verifier/lean/Spot/SecondStage.lean` and `SecondStageExamples.lean`, which are #8458's and #8730's and are in `dc0b`'s tree only. The three `security` locks are the same bytes. `unread-caps.json` differs (`dc0b`'s tree has #8877's caps, the pinned tree #8890's); a records run does not read it.
+- So every Lean file and lock of the second pinned tree was built and audited in `dc0b`, in a tree that also held two changed files of the Spot verifier. **ci's first condition holds for the five with #8836 in.**
+- Unread count on the second pinned tree, by bound [derived, by-hand counts not recounted]: `Proofs/Flock` at most 253 / 2,021 on `86c03d1840cb` (my 10:39Z entry) plus `ScopeDesc` 27, `VStarNetsStaged` 5, `UnitName` 3 and #8836's two Flock modules, whose counts I do not have; CAPS's figure for everything marked before 10:16Z with #8836 in is 257 / 2,066 [relayed, CI-489 10:16Z], under #8890's 267 / 2,217.
+
+**Still out** [run, 11:04Z]: `r20261111-103626-515d` (the exact tree of `86c03d1840cb`, since 10:37Z) and `r20261111-104748-53eb` (every marked Lean head at 10:45Z) are building; `53eb` took its slot at 10:49:56Z, so my 10:56Z and 11:04Z entries' "one check ahead of it" was stale. #8454's quick tiers `387c` and `8b6f` wait for a slot.
+
+For the table:
+- CROSS's `r20261111-101145-dc0b` passed (11:02Z): the 21 Lean heads marked at 10:05Z build together, #8836, #8226, #8368, #8539 and #8764 among them; all three `security` locks' records `pass`, none regenerated; 194,332 declarations in 3,853 modules in `security/Proofs`; no kernel replay [run].
+- Its tree is the second pinned tree plus #8458's and #8730's two Spot files, with the same three locks byte for byte [run].
