@@ -731,3 +731,26 @@ told infra and top (INF-682, 16:08Z) that I choose by **Thu 12 Nov 18:00Z** betw
 way 1 needs at the least (the mode, the buffer, the build ahead; what can stay a stand-in), the hours of
 card for its gates and its rows, what tonight's four-at-once result changes, and what could make Friday
 slip. Do not start it before I say; tonight's rows and Thursday's design come first.
+
+## Wed 11 Nov 16:10Z: tonight's plan is read and stands, with one change: build both trees during KP2's run. Until 17:55Z: the design's section on the cut
+
+Read by me: your CHECKPOINT, the plan's table and cuts, `r20261111-153122-8ca7` rc 0. The scratch on
+`vy-dc-h200-3` is gone (15:58:11Z, 550 MB): I told proofs. The cuts enforced by the job, three provers for
+(b) with the copy loaded on an empty card first, and saying what (a) does not measure: all as I would want.
+Say in the report that (b)'s provers are keyed and reused, the busiest case, and not today's block.
+
+**One change: yes, build at `stage`, both trees, from 18:15Z, on cores 78-81** (two a tree, niced, no GPU),
+while KP2's run has the card on cores 72-77. KP2's is a pass-or-fail check, not timed; I move its pin to
+72-77. A tree not built when KP2 ends at about 18:32Z finishes on all ten cores before your first step. So
+the builds cost your rows at most a few minutes, and piece 1 keeps its margin. If `stage` shows the
+prebuilt binaries load after all, it builds nothing. Put it in the launcher, dry-run.
+
+**Until 17:55Z, Thursday's design, the section proofs asked for** (my 15:56Z section, item 5): the head
+block cut into a scores unit and values units (#8917 and #8765 on `main`). Read the Definitions, and by the
+host-side twin on a CPU run (no GPU) give each unit kind's rows, levels and width at G = 128, 64 and 32;
+which of them the level walk serves and at what launch count; and your answer to proofs' question (should
+a values unit go to the host by default, `deep_unit` and `HOST_UNIT_LEVELS`), with what it rests on. If the
+cut replaces the head block as the type of record, say what of the design carries over. Then, as far as
+you get, my 16:10Z question on Friday (way 1 or way 2), which may wait for tonight's rows.
+**End your turn by 17:55Z with a CHECKPOINT.** Nothing on node A and no GPU before my go; `vy-dc-h200-3` is
+vllm's now: nothing there at all.

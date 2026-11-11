@@ -314,3 +314,12 @@ objects by Thu 00:00Z. HASH-107 is closed.
   and the H200 run is at that head.
 - Also from RULES.md (new today): merge `origin/main` (`72e4d46d9209` or later) into your own agent branch
   before Thu 07:59Z and say the commit in your CHECKPOINT.
+
+## Wed 11 Nov 16:10Z: for the 18:15Z run, one change: your pin is cores 72-77, not 72-81
+
+KHSHARE stages and builds on cores 78-81 from 18:15Z, with no GPU, while your run has card 6: yours is a
+pass-or-fail check and not timed, and its rows need those minutes later. **Pin everything of yours inside
+72-77.** If six cores are too few for the run to end by 18:32Z, say so the moment I resume you (about
+18:08Z) and before you launch; I then give you all ten and KHSHARE waits. vllm's delete is not on `main`
+at 16:12Z (`493f49485e50`), and #8662 at `0b79bdbc5e1b` still merges onto it, so the run is at that head
+unless the delete lands before the go.
