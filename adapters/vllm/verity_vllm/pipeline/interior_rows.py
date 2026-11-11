@@ -51,7 +51,7 @@ import numpy as np
 
 from verity.protocols.spot.verifier.one_stage import registration as R
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
-from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
+from verity.definitions.numerics.token_select_rows import token_select_chunk_bests, token_select_combine
 from verity.definitions.registry.dead_free import CHUNK
 from verity.commitments.windows import rows as CS
 from verity_vllm.check.replay import evaluate as EV
@@ -357,20 +357,6 @@ def captured(directory: Path, rid: str, served: Sequence[int] | None = None) -> 
     return Span(rid, m, data, entries, s["program"])
 
 
-def _bf16(w: np.ndarray) -> np.ndarray:
-    return (np.asarray(w, dtype=np.uint16).astype(np.uint32) << 16).view(np.float32)
-
-
-def _combine(x0: np.ndarray, best: np.ndarray, idx: np.ndarray, c: int) -> np.ndarray:
-    """`TokenSelectCombine_v2{V, C=c}` on each token's logits[0] and its chunks' (best, idx): from (x0, 0), chunk j's
-    (best, j·c + idx) is taken iff its best is strictly greater, so a NaN x0 is never left."""
-    run, tok, fb = _bf16(x0), np.zeros(len(x0), dtype=np.int64), _bf16(best)
-    for j in range(best.shape[1]):
-        take = fb[:, j] > run
-        run, tok = np.where(take, fb[:, j], run), np.where(take, j * c + idx[:, j], tok)
-    return tok
-
-
 def named(m: CS.Member) -> CS.Member:
     """Unit member ``m`` (`serving_rows.unit_member`) with each row named after the parameter it holds (row ``in<g>``,
     parameter g), as the second stage stages an interior member (`class_statement.member_stager`: row r is its
@@ -396,7 +382,7 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
                          "is a third template")
     n, k, x = s.n, V // c, s.data["rows"][port]
     best, idx = token_select_chunk_bests(x.reshape(n * k, c))
-    tok, want = _combine(x[:, 0], best.reshape(n, k), idx.reshape(n, k), c), s.data["outs"][out].view("<u4")[:, 0]
+    tok, want = token_select_combine(x[:, 0], best.reshape(n, k), idx.reshape(n, k), c), s.data["outs"][out].view("<u4")[:, 0]
     if not np.array_equal(tok, want):
         raise ValueError(f"request {s.rid}: its chunks and combine select {tok.tolist()[:8]}..., its span {want.tolist()[:8]}...")
     i32 = idx.astype("<u4").view("<u2")

@@ -79,8 +79,8 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    output words [jc, (j + 1)c)
   ``MoeExpertFp8CoordinateChunk_v1{K=k,..}``, ``SparseMlaHeadBlock_v1{NVIS=k,FIRST=..,..}``, ``SparseMlaHeadEnd_v1{..}``,
   ``SparseMlaSplitEndCols_v1{C=c,..}``, ``SparseMlaCombine_v1{NSPLIT=n,..}``, ``TopPStep_v1{..}``, ..  K-chunks (``KCHUNKS``),
-                                   key blocks, ends, column ends and combines (``CHAINS``) and the top-p select's stages
-                                   (``STAGES``), laid out by `kchunk_rows`, `chain_rows`, `stage_rows` and `chunk_rows.reads`;
+                                   key blocks, ends, column ends and combines (``CHAINS``) and the top-p select's stages and the greedy select's group units and combine
+                                   (``STAGES``), laid out by `kchunk_rows`, `chain_rows`, `stage_rows`, `select_rows` and `chunk_rows.reads`;
                                    always chunked, v2 bit rows, one index entry per row
   ``MoeSum_v1{H=w,..}``, ``AllReduceMnnvl_v1{N=w,..}``, ``ResidualAdd_v1{N=w}``, ``SiluMul_v2{I=w}``  every block j of w columns of the rows of that
                                    Definition W wide, W / w a power of two (``COLS``): ``in<g>`` per argument group, each of its

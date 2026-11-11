@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 import math
 from dataclasses import dataclass
+from functools import cache
 from typing import Any
 
 #: the row Definitions whose Calls are cut into template instances (their bodies batch the template), the rest being the row itself
@@ -115,7 +116,16 @@ CHAIN_OF = {f: CHAIN_ROLES[i] for fs in CHAINS.values() for i, f in enumerate(fs
 #: chunks, each carrying what the stage after it reads; the units are the cut the row's module names (`sampling.CUTS`:
 #: `topp_stages.plan`), which circuit-check holds to the Flock block in the row's place
 _TOPP_STAGES = ("TopPStatsHead_v1", "TopPStatsExp_v1", "TopPProbs_v1", "TopPStep_v1", "GumbelTopPSelect_v1")
-STAGES = {"GumbelTopPTokenSelect_v1": _TOPP_STAGES, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_STAGES}
+#: the greedy select's stages (`select_rows`): the served window's split of it (`tp.wires`' consumer), its group units, each
+#: the first maximum and its index of every group of ``SELECT_GROUP`` logits of its C, and the combine of their bests and
+#: indices (`select_units`); the row computes what they compose to (tests/program/test_dead_free.py).  A template of the two
+#: families is a stage only at a split's statics (`select_cuts`): the combine is also `TokenSelect_v4`'s over its chunks, a
+#: row of its own that an interior piece reads whole, so one of other statics keeps the layout it had
+SELECT_STAGES = ("TokenSelectGroups_v1", "TokenSelectCombine_v2")
+#: a greedy select's group of logits: a word of each `TokenSelectGroups_v1` unit's row of bests
+SELECT_GROUP = 16
+STAGES = {"GumbelTopPTokenSelect_v1": _TOPP_STAGES, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_STAGES,
+          "TokenSelect_v1": SELECT_STAGES}
 STAGE_OF = {f: tuple(row for row, fs in STAGES.items() if f in fs) for fs in STAGES.values() for f in fs}
 #: the row Definitions cut per expert (`expert_rows`), by the row family: its block family, a pair's GEMM over n of its expert's
 #: rows (n a power of two dividing G and N, N / n blocks of the row), each block's rows and its G-block's scale row read at the
@@ -149,7 +159,7 @@ class Template:
     the word Definition it computes (its own for a word Definition), and its member layout (``LAYOUTS``; ``"coord"`` for a
     ``COORDS`` family at N = 1 or a ``WIDE_COORDS`` one at a power of two N dividing its G, ``"cols"`` for a ``COLS`` family, ``"part"`` for any other ``PARTS`` part, ``"slice"`` for a
     ``SLICES`` family at every axis 1 or a ``WIDE_SLICES`` one c wide (`slice_width`), ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"chain"`` for a ``CHAINS`` unit family,
-    ``"stage"`` for a ``STAGES`` stage family, ``"expert"``, ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's
+    ``"stage"`` for a ``STAGES`` stage family (a greedy select's at a split's statics: `select_cuts`), ``"expert"``, ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's
     block GEMMs, fused blocks, table reads and router slots (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``), ``"history"`` for a
     ``HISTORY`` row's history reads (`history_read`); else ``"row"``).
     ``packed``: a row, coordinate, slice, part, K-chunk, chain, stage, expert or slots template with a port that is not 16-bit
@@ -211,7 +221,8 @@ def template(t: str) -> Template:
     layout = ("coord" if coord_width(word) else "cols" if spec_base(word) in COL_AXIS
               else "part" if spec_base(word) in PART_OF else "slice" if slice_width(word)
               else "kchunk" if spec_base(word) in KCHUNKS.values()
-              else "chain" if spec_base(word) in CHAIN_OF else "stage" if spec_base(word) in STAGE_OF
+              else "chain" if spec_base(word) in CHAIN_OF
+              else "stage" if spec_base(word) in STAGE_OF and (spec_base(word) not in SELECT_STAGES or select_cuts(word))
               else "history" if history_read(word) else LAYOUTS.get(spec_base(word), "row"))
     packed = None
     if widths != {16} and layout not in ("s8", "read", "fused", "history"):
@@ -336,6 +347,80 @@ def slice_widths(fam: str, statics: dict[str, Any]) -> list[int]:
     return [1 << j for j in range(N.bit_length() - 1, 0, -1) if N % (1 << j) == 0 and not (whole and 1 << j == N)]
 
 
+def select_width(V: int, w: int, G: int) -> int | None:
+    """The logits a token select's group unit reads (`TokenSelectGroups_v1{C, G}`): the least C of whole groups of ``G`` and
+    whole ``w``-word rows that divides ``V``, with the group unit and the select over the units' bests and indices
+    (`TokenSelectCombine_v2{V, G}`) each within a proof block's rows; None if there is none."""
+    from verity.commitments.windows import interface as IF
+
+    step = math.lcm(w, G)
+    for C in range(step, V + 1, step):
+        if V % C == 0 and C // w + 2 <= IF.MAX_ROWS and 2 * (V // C) + 2 <= IF.MAX_ROWS:
+            return C
+    return None
+
+
+@cache
+def select_split(V: int) -> tuple[int, int] | None:
+    """A greedy select row of V logits' split, (w, C): its group units read C logits each as rows of w words, w the least power
+    of two at which `select_width` has a C (the least whole groups and rows dividing V whose group unit and combine
+    each stay within a proof block's rows).  None when no width has one, or when a unit of it is no proof block
+    (`interface.check_proof_block`: a narrow vocabulary's, no row of which is past a SHA-512 block): the row is not split."""
+    from verity.circuits.defs import bind
+    from verity.commitments.windows import interface as IF
+    from verity.definitions.registry import dead_free as DF
+
+    for j in range(V.bit_length()):
+        if (C := select_width(V, 1 << j, SELECT_GROUP)) is not None:
+            try:
+                IF.check_proof_block(bind(DF.TokenSelectGroupsV1, C=C, G=SELECT_GROUP), {"x": C >> j})
+                IF.check_proof_block(bind(DF.TokenSelectCombineV2, V=V, C=SELECT_GROUP), {"best": V // C, "idx": V // C})
+            except ValueError:
+                return None
+            return 1 << j, C
+    return None
+
+
+def select_units(V: int) -> tuple[tuple[str, int], ...]:
+    """A greedy select row of V logits' units (``SELECT_STAGES``): V / C group units and one combine, at `select_split`'s C; none
+    when it has no split."""
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import dead_free as DF
+
+    if (sp := select_split(V)) is None:
+        return ()
+    return ((descriptor_id(bind(DF.TokenSelectGroupsV1, C=sp[1], G=SELECT_GROUP)), V // sp[1]),
+            (descriptor_id(bind(DF.TokenSelectCombineV2, V=V, C=SELECT_GROUP)), 1))
+
+
+@cache
+def select_cuts(word: str) -> dict[str, int] | None:
+    """A greedy select's stage template's cuts (`interface.RowLayout.cut`): a group unit's logits one row per w of them (w the
+    least power of two at which its C / w rows and two outputs are within a proof block's rows: `select_split`'s), the combine's
+    bests and indices one row per group unit.  None for any other template of the two families (a combine of other chunks, or
+    of a vocabulary with no split, which a row or an interior piece reads whole), so its layout is the one it had."""
+    from verity.circuits.defs import bind
+    from verity.commitments.windows import interface as IF
+    from verity.definitions.registry import dead_free as DF
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
+    S = {k: int(v) for k, v in spec_statics(word).items()}
+    if spec_base(word) == SELECT_STAGES[1]:
+        sp = select_split(S["V"])
+        return {"best": S["V"] // sp[1], "idx": S["V"] // sp[1]} if sp is not None and S["C"] == SELECT_GROUP else None
+    if spec_base(word) != SELECT_STAGES[0] or S["G"] != SELECT_GROUP or S["C"] % S["G"]:
+        return None
+    w = 1
+    while S["C"] // w + 2 > IF.MAX_ROWS:
+        w *= 2
+    try:
+        IF.check_proof_block(bind(DF.TokenSelectGroupsV1, C=S["C"], G=S["G"]), {"x": S["C"] // w})
+    except ValueError:
+        return None
+    return {"x": S["C"] // w} if S["C"] % w == 0 else None
+
+
 def part(word: str, spec: str) -> tuple | None:
     """The ``PARTS`` entry of template word ``word`` on a row of ``spec`` when ``word``'s family is a part of the row's; else None
     (the row is ``word``'s own family)."""
@@ -366,7 +451,7 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     row family, its cut (`sparse_mla.head_chain`: per head the first visited block at its key count, the later blocks at BN and
     the end; `sparse_mla_split.split_chain`: a split row's at NS = 1, else per head and split its blocks so and its end in
     column blocks, and per head the combine of each column block), for a ``STAGES`` row family, its cut (`topp_stages.cut`:
-    each stage Definition and its units in `topp_stages.plan`), for an ``EXPERTS`` row family, at each block of n rows
+    each stage Definition and its units in `topp_stages.plan`; a greedy select's: `select_units`), for an ``EXPERTS`` row family, at each block of n rows
     (`block_rows`), its
     block family at N = n, the read of a block's rows, ``EmbeddingRead_v1{V=E, H=n K / 2}``, and its ``FUSED`` block reading
     them (`fused_block`; N / n of each), and the read of a G-block's scale row, ``EmbeddingRead_v1{V=E, H=2 K / G}`` (N / G of
@@ -427,7 +512,9 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
             from verity.definitions.registry import sparse_mla, sparse_mla_split
 
             hit += tuple((descriptor_id(c), n) for c, n in {**sparse_mla.CUTS, **sparse_mla_split.CUTS}[spec_base(spec)](sp))
-        if spec_base(spec) in STAGES:
+        if STAGES.get(spec_base(spec)) is SELECT_STAGES:
+            hit += select_units(int(spec_statics(spec)["V"]))
+        elif spec_base(spec) in STAGES:
             from verity.definitions.registry.topp_stages import cut
 
             hit += tuple((descriptor_id(c), n) for c, n in cut(sp))

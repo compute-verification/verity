@@ -9,7 +9,10 @@ S among them, and the sampler's committed seed at the row's step, `_operand`), a
 (`topp_stages.Unit.wires`) the output of the unit that writes it, words serving never stores: the reader computes every unit's
 outputs with the twin (`topp_stage_twins.stage_rows`), whose token it holds to the row's served one.  The window wires each such
 row to its writer's output row (`wire`, `commit.wiring`), so a sampled unit's carried words are the committed output of the unit
-that wrote them."""
+that wrote them.
+
+A greedy select's stages (`serving_templates.SELECT_STAGES`: a ``TokenSelect_v1{V}`` row's group units and combine) are
+`select_rows`', which `units`, `read` and `wire` hand them to."""
 from __future__ import annotations
 
 import re
@@ -22,7 +25,7 @@ import numpy as np
 
 from verity.commitments.windows import rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, SEED_PARAM, const_word
-from verity_vllm.pipeline import slice_rows as SL
+from verity_vllm.pipeline import select_rows as SE, slice_rows as SL
 from verity_vllm.pipeline.serving_templates import Template, template
 from verity_vllm.program.compact import runs_from_file_items
 
@@ -51,7 +54,7 @@ def positions(tp: Template, statics: dict[str, Any]) -> tuple[int, ...]:
 
 def units(tp: Template, statics: dict[str, Any]) -> int:
     """A row's units of template ``tp``."""
-    return len(positions(tp, statics))
+    return SE.units(tp, statics) if SE.is_select(tp) else len(positions(tp, statics))
 
 
 def _word(parts: Sequence[np.ndarray], bits: int, what: str) -> int:
@@ -107,6 +110,8 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
     from verity.definitions.registry.topp_stages import plan
 
     tp = template(m.template)
+    if SE.is_select(tp):
+        return SE.read(m, rows, store, weights, arrivals, slices, twins)
     names = [q for q, _ in m.rows + m.outs]
     out = {q: np.empty((m.n, x), dtype=np.uint16) for q, x in m.rows + m.outs}
     entries: list[list[Any]] = []
@@ -172,7 +177,7 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
     the partition."""
     from verity.definitions.registry.topp_stages import plan
 
-    of = {t: rs for t, rs in zip(tmpls, rows, strict=True) if template(t).layout == "stage"}
+    of = {t: rs for t, rs in zip(tmpls, rows, strict=True) if template(t).layout == "stage" and not SE.is_select(template(t))}
     base = {t: min(m.base for m in ms if m.template == t) for t in of}
     unit: dict[tuple[str, int, tuple], int] = {}
     for t, rs in of.items():
@@ -204,4 +209,4 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
             lo = m.base - base[m.template]
             m = replace(m, wired=m.wired + tuple((p, o, tuple(int(x) for x in w[lo:lo + m.n])) for p, o, w in writers[m.template]))
         out.append(m)
-    return out
+    return SE.wire(out, tmpls, rows)

@@ -43,8 +43,6 @@ GATHERS = frozenset({B1T.AllGather2, B1T.AllGather})
 FUSED = frozenset({TA.AllReduceRmsNormMnnvl, TA.AllReduceResidualMnnvl})
 #: the most words of a gathered row: a gather of K one-word rows and its K-word row fill at most 128 hm96 slots
 CHUNK_MAX = 127
-#: a token select's group of logits: a word of each `TokenSelectGroups_v1` unit's row of bests
-GROUP = 16
 
 #: runs of one Definition over consecutive positions: (Definition, units)
 Runs = tuple[tuple[Any, int], ...]
@@ -84,17 +82,6 @@ class Lowering:
 def chunk(words: int) -> int:
     """The words of a gathered row of a token row of ``words``: its largest divisor of at most `CHUNK_MAX`."""
     return max(d for d in range(1, min(words, CHUNK_MAX) + 1) if words % d == 0)
-
-
-def select_width(V: int, w: int, G: int) -> int | None:
-    """The logits a token select's group unit reads (`TokenSelectGroups_v1{C, G}`): the least C of whole groups of ``G`` and
-    whole ``w``-word rows that divides ``V``, with the group unit and the select over the units' bests and indices
-    (`TokenSelectCombine_v2{V, G}`) each within a proof block's rows; None if there is none."""
-    step = math.lcm(w, G)
-    for C in range(step, V + 1, step):
-        if V % C == 0 and C // w + 2 <= I.MAX_ROWS and 2 * (V // C) + 2 <= I.MAX_ROWS:
-            return C
-    return None
 
 
 def _out(fn: Any, f: int) -> tuple[str, int, int]:
