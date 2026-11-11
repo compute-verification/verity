@@ -36935,3 +36935,58 @@ For Daniel: at two stages the 100-bit finder still works, with the same formula 
 - I wrote no 02:17Z entry: what you read of the stand-in `p` was my 02:23Z checkpoint line (`ac82`).
 
 **Left**: read `340b` and say if it shows anything else; the PR body (both terms, the sentence, the two hashes, lean's correction about its branch; a first version goes in now, marked where `main`'s print is still owed); after the layout move is on `main`: the mailbox once more, `tools/move/restack.py`, the records run with `--update` on the moved tree and its lock as one commit, the quick tier, then "ready to mark".
+
+## SERVEDCARD, Wed 11 Nov 02:37Z: node A: one result of ours lived only there and is now preserved (`art:b5eb07ea…`); the 28 GB capture that looked local-only is already in the store; everything else of ours regenerates or is a key I'd drop; nothing touched a card
+
+This answers your 02:24Z, item A. Infra read RunPod's balance rising from $97.93 to $297.93 at 02:17Z, so the top-up fired and no pod ends for the balance tonight [read: INF-682, 02:18Z]. The lease still ends Sat 14 Nov 08:07Z.
+
+**How I read it** [run], 02:21Z to 02:38Z:
+- `ionice -c3 nice -n 19 du -x --max-depth=2 /` and `/dev/shm`, then single directories and the pod store's catalog (read-only). No build and no GPU.
+- The one copy I made ran pinned to core 1. The node was at about 23 of 96 cores busy, with cores 0–11 near idle, and the container's throttle counter was 6,970, the same as at 23:19Z.
+- `/` is 919 GiB by `du` (907 G by `df`). Sizes below are `du`'s, in GiB.
+
+**What of ours lived only on node A and was a result:**
+- **`art:b5eb07ea290bb1e8d0d2345de860261bec634e391f4703c5d4098e99cf9b8503`**, 0.09 GiB: OVERHEADDEF's sampler slice of `r20261107-195440-c0f1` (steps 374 and 16), made for circuits' AOTE.
+  - It was in the pod's store but not on the remote [run: the catalog has it local and not remote, and `research data where` finds no manifest on the remote].
+  - I rebuilt its 26 files from the pod's objects (sha256 checked), copied them here and put them with the same metadata. The id is the same, now PRESERVED [run].
+- **`art:61ef6a61badcee26916580a2b50f53415f2364819092273e41f0090f280843e6`**, 28.05 GB: the TP8 replay capture of `c343` at steps 4,512 and 5,833, made "for NDAUDIT".
+  - This id is not on the remote. But its 3,868 files are the same bytes, by path, sha256 and total size, as `out/capture/` of `r20261108-100548-1ccd`'s run record `art:0482d2bb756f3c54cf6c266777e1212922b5f1b4dcccf8e60c2b21a5fb25d4f1`. The remote holds all 3,883 files of that record [run].
+  - Proofs' note `20261108T1025Z-checkpoint-overheaddef` names that run, so gc keeps it [read: `store/gc.py`'s keep set].
+  - Not pushed again. Fetch it with `research data fetch art:0482d2bb… --path 'out/capture/*'`.
+- Nothing else of ours on the pod is a result.
+
+**Ours that regenerates (staged statements and builds; not uploaded):**
+
+| What | Where, GiB | Pin | Command | Time |
+|---|---|---|---|---|
+| PRF-502 row 1, `SparseMlaHeadBlock_v2{…NVIS=64,FIRST=false…}` | `/dev/shm/proofs-prf502-row1-…` (RAM), 11.4 | `4b31e7caba011398` | `stage.py census:<name> full`, from the spec and commit on HASH-98 (Tue 16:36Z) | 70–81 min and 203 GB RAM [read: PRF-502; `stage.json`'s maxrss] |
+| PRF-502 row 2, the same with `FIRST=true` | `/dev/shm/proofs-prf502-row2-…` (RAM), 10.9 | `be5bca5c30515dc4` | the same | 70–81 min, 195 GB RAM |
+| LEVERS' seven, `jobs/proofs-levers/zk` (the directory is 18.8 with venvs and a uv cache) | 14.8 | armultimem `caf237ce491b9af5`, dsalogitsv3 `609bb5352ae2c2fd`, frw13 `7b149294ec35cb2b`, residualadd `9767ba9f47ccae05`, rmsnormv8 `4905e8c97ccb9ae7`, smfp8k2048 `c6f52ea21c1956fa`, smfp8k6144 `cf773a7138efe319` | each directory's `spec`, `UNIT@full` at `b274008bff` | 68 to 554 s each, 29 min in all [read: each `stage.log`'s total] |
+| FUSEDSERVE's `research/fusedserve` plus `tmp-fusedserve.*` | 1.5 + 0.5 | — | six staged statements, tables, a prover build and logs. G2's record is preserved (`art:f20c78ea…`) | [read: FUSEDSERVE's 09:05Z note] |
+| Builds: `jobs/proofs-servedcard`, `bin/proofs` | 0.3, 0.06 | — | `flock-circuit` and the read-template executables, keyed by commit | minutes |
+
+**A secret of ours:** `research/fusedserve/glm53-tables.key` (32 bytes, mode 600) and `.key.nonces` (165 bytes), from 9 Nov 20:35Z.
+- It is the committer's key FUSEDSERVE's tables were registered under. I haven't read it or uploaded it.
+- Losing it loses only the reopening of those tables. A new key registers them again at about 27 s a rank [read: FUSEDSERVE's 21:15Z note].
+- My reading: drop it with the pod. The alternative is to keep it, like MOESERVE-B's, in a keep directory on a CPU node; that is your word.
+
+**Not results:**
+- **The checkpoint:** `/workspace/fs/glm53/aca966e4…`, 703.8 GiB, is `zai-org/GLM-5.3` at revision `aca966e4e027…`, 141 shards. It is downloaded again. Its directory was written 7 Nov 06:14 to 06:25Z, which suggests about 11 minutes [read: the directory's times; the download time is a guess].
+- **The pod's store,** 50.0 GiB: 2,166 artifacts also on the remote; 26 local-only ones are run telemetry, 3 MB in all.
+- **Runs,** 26.2 GiB: 865 run directories carry a custody marker; the other 40 hold 12 MiB.
+- **The rest:** source trees 38.4, `venv312` 10.6, `/usr/local` 13.4, `/root/.cache` 7.5, `/root/.elan` 2.9, `hf` 3.8, the git mirror 1.6.
+
+**Other lanes'** (sizes; whether any of it is a result is theirs to say):
+- **Kernels':**
+  - `/dev/shm/kernels-ksteady`, 27.6 in RAM (live stagings);
+  - `jobs/kleadc-prf459` 7.4, `jobs/khom-four` 5.0, `jobs/ksha-rs` 4.4, `jobs/proof-throughput` 1.3, `jobs/kernels-ksteady` 0.5, `jobs/kernels-khshare` 0.2.
+
+  Owners are read from kernels' notes; `khom-four` and `ksha-rs` are a guess by name.
+- **vllm's:**
+  - `cp/circuits/glm-v2/rows/glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager`, 14.8: a verity-sweep row of 20 Oct, built and committed for 8 ranks, copied there 9 Nov. That it is vllm's, and probably a copy from the store, is a guess; I didn't check.
+  - `research/vllm-twostage-int`, 0.46 (TWOSTAGE-INT's) [read].
+  - `cp/fa2`, `cp/vllm-flash-attn` and `cp/nc_build` are builds, 0.6 in all.
+
+**Core counts** (your 01:08Z): my rows 13 and 30 were timed with the server on 12 cores (0–11), against KSTEADY's 24 a card and node A's 10.2 a card (INF-659).
+
+**B** needs nothing on node A to end, since the walk is done. I write the full list next, well before 16:00Z, then C. Wake me only if you want B sooner.
