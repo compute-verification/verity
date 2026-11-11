@@ -41,3 +41,17 @@ Read PRF-542's comments of 00:13Z (TAIL), 00:19Z and 00:22Z (TAIL's final) befor
   2. **REPPROVE, REPBREAK (finals by 02:30Z):** the corrected statement in the two-stage game, where the second stage's commitments follow the first sample. Neither comment checked it. And the 00:19Z lever: the least-bad assignment in place of the plurality.
   3. **NFACTOR, KILIAN:** is `N′` (linear in the proof length) the known barrier? TAIL cites Chiesa, Dall'Agnol, Guan, Spooner and Yogev (ePrint 2024/1434): Theorem 1 linear in ℓ, improving it open; Theorem 2 carries the opened count. Say whether anything in the literature gets below linear for a tree commitment under a linear collision premise.
 - **One session an audit** is now worth 16 to 35 bits (the columns above), so TWOPROVE's route 3b and SCALE's answer on `n_sess` matter more than they did.
+
+## Wed 11 Nov 00:32Z, coordinator: where the options stand after six finals (TAIL, COMMIT, WIDEHASH, AUDIT-CRYPTO, AUDIT-RESOURCE, DRAFT-REST)
+
+Nothing below is checked in Lean. "Reaches 100" is at T = 2^80 unless said.
+
+- **Two routes reach 100 at every point, both by changing the protocol:**
+  - **PAD** (COMMIT, PRF-530 final 00:21Z): a leaf that binds statistically (the row XOR a keyed pad, opened in the clear), so the binding finder never extracts: 2^-130.8 / 2^-126.6 / 2^-115.7 at floor / B / A, at every session count and k. Hiding becomes computational. Being checked now: soundness by TAIL, hiding by AUDIT-CRYPTO, cost by WIDEHASH, finals 03:15Z on PRF-530.
+  - **A 1,024-bit digest** (WIDEHASH, PRF-529 final 00:23Z): today's theorem with the exponent moved, worst cell 2^-122.5; 2.2 to 2.4 times the serve-time hashing. 768 bits does not reach it.
+- **Proof-only routes:** Candidate R as corrected reaches 100 only at the floor at one session (2^-103.1 / 2^-99.0 / 2^-88.1). With a 640-bit digest under it, every cell at 30 sessions or fewer. Capping the extractor is dead: while the term is `2N·sqrt(β')` no rewinding extractor passes 79.2 bits (TAIL, PRF-526 final 00:25Z).
+- **Two facts every remaining card must use:**
+  1. **Count T in compressions.** The premises count whole SHA-512 evaluations (`Core/Interaction.lean:262-288`, `Assumptions/Flock.lean:38-78`, read by me), and for an iterated hash the generic bound holds per compression: L-block messages with a common suffix collide L times as often (WIDEHASH's smell, simulated on a toy hash; the argument checked by me). Say what your bound loses with T in compressions at 4 to 64 KiB rows.
+  2. **`main`'s instances have `n_sess = n_PU`** (`SamplingGeneric.lean:250`, `Deployed.lean:124`; TAIL's read). Give that column, and say whether your route needs one session an audit.
+- **A lever two workers found from different sides** (DRAFT-REST's first smell, COMMIT's UNITS): the rewinding lemma proves `sqrt(N·Q·β')` and the proof passes `Q = N` (`Core/Game/Rewinding.lean:175`, `SamplingGeneric/Reg.lean:411`). **NFACTOR: this is yours: the bound with Q the positions one run opens and N the boundary positions, at the three points.**
+- **Still owed from you** (first comment with the lead line if you have not posted one): KILIAN, NFACTOR, ROM, EXTFORM, SCALE, ATTACK, TARGET; AUDIT-SPOT, AUDIT-FLOCK, AUDIT-HEADLINE, AUDIT-TABLE; DRAFT-CORE. ATTACK and SCALE: the question in the entry above (can rare runs open far more than a bad run must) now decides whether Candidate R alone is enough.
