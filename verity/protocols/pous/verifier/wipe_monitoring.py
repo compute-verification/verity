@@ -13,7 +13,7 @@ adaptive prover.
   except with δ at most M − 1 of the T wipes fail their bound.
 - **Per wipe** (`per_wipe`): every one of the T wipes meets its `foreign_bits` at once, except with T·`eps`.
 
-`short_sessions` is PoUB's too (`remote_bandwidth.monitoring`). The periods and δs are the reporting grid's
+`short_sessions` is PoUB's too (`poub.verifier.monitoring`). The periods and δs are the reporting grid's
 (`verity.protocols.reporting`).
 
 A wipe signed `UNCOUNTED` is vacuous until a network certifier counts its egress: `counted` recomputes its bound from a
@@ -154,7 +154,7 @@ def table(answer: Mapping[str, Any], machines: int, cadence_s: int = CADENCE_S, 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m verity.protocols.pous.verifier.wipe_monitoring",
                                  description=__doc__.split("\n\n")[0])
-    ap.add_argument("answer", type=Path, help="the wipe's answer, or a leg's wipe.json carrying it")
+    ap.add_argument("answer", type=Path, help="the wipe's answer, or a run's wipe.json carrying it")
     ap.add_argument("--machines", type=int, required=True)
     ap.add_argument("--cadence-s", type=int, default=CADENCE_S, help="seconds between one machine's wipes")
     ap.add_argument("--egress", type=Path, default=None, help=f"a {EGRESS} record counting an UNCOUNTED wipe's egress")

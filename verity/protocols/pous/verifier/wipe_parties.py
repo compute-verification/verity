@@ -69,11 +69,11 @@ class Challenger:
         self._then: Callable[[], list[Any]] | None = None
 
     def start(self, params: dict[str, Any], identity: Identity) -> list[Any]:
-        caps = identity.capabilities
-        self.signer, self.log = caps["signer"], caps["log"]
-        self.egress_bits = caps.get("egress_bits", WP.UNCOUNTED)
+        given = identity.capabilities
+        self.signer, self.log = given["signer"], given["log"]
+        self.egress_bits = given.get("egress_bits", WP.UNCOUNTED)
         try:
-            self.request, self.wp = dict(params), WP.params_of(params, caps.get("reads", WP.READS))
+            self.request, self.wp = dict(params), WP.params_of(params, given.get("reads", WP.READS))
         except ValueError:
             return self._finish("schema")
         self.phase = Phase("Coins")

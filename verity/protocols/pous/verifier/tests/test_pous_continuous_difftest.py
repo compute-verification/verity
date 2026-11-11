@@ -343,7 +343,7 @@ def _same_index_twice(vk):
         key = challenge_key(b"same-%d" % n, vk)
         if key.uniform(PARAMS.blocks, 0) == key.uniform(PARAMS.blocks, 1):
             return b"same-%d" % n
-    raise AssertionError("no key draws the same index twice in a row")
+    raise AssertionError("no key samples the same index twice in a row")
 
 
 @pytest.mark.parametrize("kind", KINDS[1:])

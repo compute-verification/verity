@@ -6,12 +6,12 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
-import os
 import random
 import re
 from pathlib import Path
 
 import pytest
+import settings
 
 from pous_fakes import Clock
 from verity.claims import get as core_claim
@@ -159,7 +159,7 @@ def test_pinned_scheme_vectors(name):
     import pous_scheme_vectors as sv
 
     pinned = json.loads(sv.path(name).read_text())
-    slow = name in sv.SLOW_ENCODE and not os.environ.get("VERITY_POUS_SLOW")
+    slow = name in sv.SLOW_ENCODE and not settings.SLOW
     assert pinned["name"] == name and pinned == sv.vector(name, sv.pinned_blocks(pinned) if slow else None)
     small = schemes.get(name, params=sv.SMALL[name])
     w, salt = sv.small_inputs(name)
@@ -169,7 +169,7 @@ def test_pinned_scheme_vectors(name):
     assert public.root.hex() == pinned["small"]["root"]
 
 
-@pytest.mark.skipif(not os.environ.get("VERITY_POUS_SLOW"), reason="a whole segment at the registered point: VERITY_POUS_SLOW=1")
+@pytest.mark.skipif(not settings.SLOW, reason="a whole segment at the registered point: VERITY_POUS_SLOW=1")
 def test_band12_segment_at_the_registered_point():
     """One whole 32 MiB band12 segment through the interface equals `band/64kb/segment` (about 25 s)."""
     import pous_vectors

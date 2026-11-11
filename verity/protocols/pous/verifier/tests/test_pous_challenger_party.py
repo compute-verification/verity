@@ -133,12 +133,12 @@ def test_the_runtime_runs_the_same_parties_to_the_same_session() -> None:
     _, point, published, blocks, _ = _in_process()
     sid, old, rounds = _split(point, published.root, lambda i: blocks[i], ts.TestSigner(b"same key", 2),
                               draw=S.SeededCoins(b"hiding").draw)
-    caps = {CS.CHALLENGER: {"signer": ts.TestSigner(b"same key", 2), "log": ts.session_log()},
-            CS.PROVER: {"store": lambda i: blocks[i]}}
+    capabilities = {CS.CHALLENGER: {"signer": ts.TestSigner(b"same key", 2), "log": ts.session_log()},
+                    CS.PROVER: {"store": lambda i: blocks[i]}}
     clock = S.VirtualClock(S.VirtualTime(Clock()()), 1_000)
     r = deploy_run({"protocol": CS.ID, "params": CS.request_of("n0", point, published.root)},
-                   [CS.CHALLENGER, CS.PROVER], "live", None, protocols={CS.ID: CP.PROTOCOL}, capabilities=caps,
-                   authenticate=False,
+                   [CS.CHALLENGER, CS.PROVER], "live", None, protocols={CS.ID: CP.PROTOCOL},
+                   capabilities=capabilities, authenticate=False,
                    sources={CS.CHALLENGER: {"clock": clock, "coins": GivenCoins(S.SeededCoins(b"hiding").draw)}})
     assert r.status == "completed", r.outcomes
     assert r.outcomes[CS.CHALLENGER] == {"outcome": {"session": old.to_json(), "session_id": sid.hex()},
