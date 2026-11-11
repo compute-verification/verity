@@ -125,7 +125,7 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
 
-# cpu-13 (a train slot and a proofs pool): only the verified queue's loop is deploy's there so far
+# cpu-13 (a train slot and a proofs pool): only the verified queue's loop and the retention collector are deploy's there so far
 [nodes.vy-nebius-cpu-13]
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/sbin/vy-vqueue-*", "/usr/local/lib/vy-vqueue/*", "/usr/local/lib/vy-vqueue/bin/*", "/etc/systemd/system/vy-vqueue*"]
@@ -747,7 +747,7 @@ owner = "infra"
 path = "/etc/systemd/system/vy-retention-gc.service"
 src = "tools/research/src/research/pods/nebius/sky/retention_gc.service"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5",
-         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
+         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13"]
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
@@ -755,7 +755,7 @@ owner = "infra"
 path = "/etc/systemd/system/vy-retention-gc.timer"
 src = "tools/research/src/research/pods/nebius/sky/retention_gc.timer"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5",
-         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
+         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13"]
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
