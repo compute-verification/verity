@@ -334,7 +334,7 @@ class H1Run:
         if (salt is None) == (opener is None):
             raise ValueError(f"{entry}: a window's salt is given or opened by its opener, one of the two")
         self.entry, self._salt, self._opener, self.modules, self.commit = entry, salt, opener, dict(modules), commit
-        self.shapes_, self.rows, self.steps = [tuple(map(int, s)) for s in shapes], int(rows), int(steps)
+        self.shapes_, self.rows, self.steps = [(int(n), int(k)) for n, k in shapes], int(rows), int(steps)
         self.offs, self.u_step = layout(self.shapes_, self.rows)
         #: the calls at their indices s·L + w; per step, how many are in; the step's linears as they came; step 0's
         self.calls, self._in, self._came, self._order = list[Call](), Counter[int](), list[int](), None
@@ -347,7 +347,7 @@ class H1Run:
         self._weights: dict[int, tuple[Any, Any]] = {}
         #: each served call's credit verdict (`credit_gate.verdict`), by call index, and the call `record` just made with its z
         self.verdicts: dict[int, dict[str, Any]] = {}
-        self._recorded: tuple[Call, Any] | None = None
+        self._recorded: tuple[Call, Any, tuple[Any, Any, Any] | None] | None = None
         #: why the window's salt opening was refused (also ``details["unopened"]``): a window opens it once
         self._unopened: str | None = None
         self.rounds, self._key, self.served = rounds, key if key is not None else os.urandom(32), served

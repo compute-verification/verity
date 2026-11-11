@@ -268,6 +268,14 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
     return Weights(circuit, reg, at, held)
 
 
+def _now[T](x: T | None, what: str) -> T:
+    """``x``, which the window holds wherever one is read (its Program from `Served.declare`, its open root from
+    `Served.open`, a receipt producer where one is asked): RuntimeError naming it when it doesn't."""
+    if x is None:
+        raise RuntimeError(f"the window holds no {what} where one is read")
+    return x
+
+
 @dataclass
 class Served:
     """How an `H1Run` commits its calls' tables and its weights as the window Program's registered values. ``tile``: the
@@ -306,7 +314,7 @@ class Served:
     #: first handed those calls together (`_prepare`); one with a ``stage`` is handed each served call and its rows ``a``
     #: where they are on a CUDA device, before they're read to the host (it copies them and keeps no reference to ``a``,
     #: which the engine reuses; a ValueError refuses the window)
-    receipts: Callable[[Any, np.ndarray, np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None
+    receipts: Callable[[Any, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None], np.ndarray] | None = None
     #: the serving card's architecture (`card_arch`), whose H1 record bounds each K's tile unit; sm_120 when None
     arch: str | None = None
     #: with ``receipts``, each open step A table's calls, their served codes and s_a, until their step's last call of K
@@ -333,11 +341,12 @@ class Served:
         if self.window is not None:
             return self.window
         session = commits.get("session")
-        need = (commits.get("weights_root"), commits.get("requests_root"), None if session is None else session.get("session"))
-        if None in need:
+        weights, requests = commits.get("weights_root"), commits.get("requests_root")
+        opened = None if session is None else session.get("session")
+        if weights is None or requests is None or opened is None:
             raise ValueError("the window has no key: neither one given nor a window-open root (its weights' root, round 0's "
                              "request table and the session)")
-        return PS.window_open_root(bytes.fromhex(need[0]), bytes.fromhex(need[1]), need[2])
+        return PS.window_open_root(bytes.fromhex(weights), bytes.fromhex(requests), opened)
 
     def declare(self, shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int) -> str:
         """The period's declared Program (`declared` under ``prefix``) and its digest, each unless given (the period's,
@@ -388,12 +397,13 @@ class Served:
     def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
               session: str | None = None, row_salts: bytes | NR.PublicSalts | None = None, later: bool = False,
               rows: Sequence | None = None, also: tuple[bytes, int] | None = None) -> G.Registered | NR.Later:
-        return NR.commit(self.program_digest, value, words, run._key, first, row_salts is not None, row_salts,
-                         later=later, rows=rows, also=also, window=window, session=session)
+        return NR.commit(_now(self.program_digest, "Program digest"), value, words, run._key, first, row_salts is not None,
+                         row_salts, later=later, rows=rows, also=also, window=window, session=session)
 
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
                   row_salts: bytes | None = None) -> str:
-        reg = self.registered[value] = self._tree(run, value, words, first, window, row_salts=row_salts)
+        got = self._tree(run, value, words, first, window, row_salts=row_salts)
+        reg = self.registered[value] = got.result() if isinstance(got, NR.Later) else got
         return reg.root.hex()
 
     def _register_later(self, run: Any, value: str, words: Any, first: int, out: dict[str, str | None],
@@ -471,7 +481,7 @@ class Served:
         """Call ``c``'s receipt table's rows and u16 words a row: one row a proof block of the call, its tile unit's ``receipt``
         (the statement's output row o0, `h1window.RECEIPT_PORT`), as a ``row/v2`` row of its bits; 0 words when they
         are no whole u16 words, which `h1window.table_reads_file` refuses to read."""
-        S = self.program.fn.S()
+        S = _now(self.program, "Program").fn.S()
         k = {name: k for name, k, _n in S.LINEARS}[S.CALLS[c][0]]
         bits = sum(dict(dict(S.TILES)[k].signature()[1].fields)[HW.OUTPUTS[0]].leaf_widths())
         return HW.call_units(self.program)[c][1], bits // 16 if bits % 16 == 0 else 0
@@ -487,7 +497,7 @@ class Served:
         binds the window's open root as a call's tables' do, except round 0's: the open root contains its root
         (`credit.requests_root`), so it binds the window's session (`credit.domain_of`; `LOCAL_SESSION` under
         in-process coins, which credit nothing)."""
-        value = self.program.fn.bindings["PREFIX"] + f"ids@{s}"
+        value = _now(self.program, "Program").fn.bindings["PREFIX"] + f"ids@{s}"
         if s == 0:
             return self._tree(run, value, words, IDS_NONCE, None, run.session or LOCAL_SESSION)
         return self._tree(run, value, words, IDS_NONCE + s, self.root)
@@ -547,7 +557,7 @@ class Served:
             self.refused.append(f"call {call.index}: linear {call.layer}'s weight changed within the window")
 
     def commit(self, run: Any, call: Any, a: Any, s_a: Any, weight: Any, weight_scale: Any,
-               records: Any) -> dict[str, str]:
+               records: Any) -> dict[str, str | None]:
         """Register call ``call``'s z table (its z/y ``records`` over its T slots, `pouw_h1_records`', split back to z and
         y and laid out in the Program's tile, or read where they are when that tile is theirs, `zy_words`), add its A
         rows (its served rows ``a`` [m, K] and scales ``s_a`` [m]) to its
@@ -583,7 +593,8 @@ class Served:
             zy_rows = zy_words(records, call.rows, call.n, self.m, self.tile)
         else:
             zy_rows = self._empty_zy(call.n)
-        out, value, mine = {}, self.a_table(call.index), self.step_calls(call.index)
+        out: dict[str, str | None] = {}
+        value, mine = self.a_table(call.index), self.step_calls(call.index)
         whole = self._a_rows(call, value, mine, codes, scales)
         if whole is not None:
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
@@ -592,7 +603,7 @@ class Served:
                              also=also, into=run._roots[call.index] if also is not None else None)
         if self.tap is not None:
             self.tap.arow(run, self, call, value, whole)
-        b = self.program.fn.bindings["PREFIX"] + f"b/{call.k}"
+        b = _now(self.program, "Program").fn.bindings["PREFIX"] + f"b/{call.k}"
         if b not in self.registered and not self._take_b(run, call, b, out):
             return {}
         if whole is not None and b in self.registered:
@@ -624,7 +635,7 @@ class Served:
         with D.hashing() as device:
             return torch.zeros((shape[0], 2 * shape[1]), dtype=torch.uint8, device=device).view(torch.uint16)
 
-    def _take_b(self, run: Any, call: Any, b: str, out: dict[str, str]) -> bool:
+    def _take_b(self, run: Any, call: Any, b: str, out: dict[str, str | None]) -> bool:
         """Put ``b/<K>`` in ``out`` once K's linears' weights are all held, the period's or the window's own; False when
         the window is refused for them."""
         mine, ks = [w for w, (_n, k) in enumerate(run.shapes_) if k == call.k], sorted({k for _n, k in run.shapes_})
@@ -653,7 +664,7 @@ class Served:
         from verity_vllm.protocols.pouw.h1 import registered_device as D
 
         units, ks, j10r = HW.call_units(self.program), {name: (k, n) for name, k, n in self.linears}, HW.is_j10r(self.program)
-        ctx = self.root.encode()
+        ctx = _now(self.root, "open root").encode()
         head = CC.PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx
         roots = (self.registered[a].root, self.registered[b].root)
         with D.hashing() if NR.path() == "gpu" else contextlib.nullcontext() as device:
@@ -685,7 +696,7 @@ class Served:
         """Call ``call``'s receipts' words (`receipts`, `receipt_words`), refused unless one row a proof block of its tile
         unit's receipt width (`receipt_shape`)."""
         try:
-            got = receipt_words(self.receipts(call, codes, scales, *self._weight_args(call)))
+            got = receipt_words(_now(self.receipts, "receipt producer")(call, codes, scales, *self._weight_args(call)))
         except ValueError as e:
             self.refused.append(f"call {call.index}: {e}")
             return None
@@ -733,13 +744,15 @@ class Served:
             n = sum(k for _u0, k in HW.call_units(self.program))
             self.ok = self._tree(run, self.program.fn.bindings["PREFIX"] + HW.OUTPUTS[1],
                                  np.tile(np.array(CC.OK_ROW, np.uint16), (n, 1)), 0, self.root,
-                                 row_salts=NR.PublicSalts(CC.OK_SALT_TAG + self.root.encode() + b"\0", 0, n, ok=True))
+                                 row_salts=NR.PublicSalts(CC.OK_SALT_TAG + _now(self.root, "open root").encode() + b"\0",
+                                                          0, n, ok=True))
 
     def tables(self) -> list[str]:
         """Every value the Program's proof blocks open at: each K's ``b/<K>``, then each step's A tables, then each call's z
         table, then each call's public table; then, with ``receipts``, each call's receipt table, which its proof blocks'
         receipts are."""
-        pre, ks, cs = self.program.fn.bindings["PREFIX"], sorted({k for _name, k, _n in self.linears}), range(len(self.calls))
+        pre = _now(self.program, "Program").fn.bindings["PREFIX"]
+        ks, cs = sorted({k for _name, k, _n in self.linears}), range(len(self.calls))
         return ([pre + f"b/{k}" for k in ks] + list(dict.fromkeys(self.a_table(c) for c in cs))
                 + [HW.table(self.program, "zy", c) for c in cs] + [self.pub_table(c) for c in cs]
                 + ([self.receipt_table(c) for c in cs] if self.receipts is not None else []))

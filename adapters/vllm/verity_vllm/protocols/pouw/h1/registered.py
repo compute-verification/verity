@@ -310,7 +310,8 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
     public = row_salts if isinstance(row_salts, PublicSalts) else None
     given = None if row_salts is None or public is not None else bytes(row_salts)
     fixed = None if given is None else tuple(given[192 * j:192 * (j + 1)] for j in range(n))
-    if fixed is not None and (len(given) != 192 * n or len(set(fixed)) != n) or public is not None and len(public) != n:
+    if (given is not None and len(given) != 192 * n or fixed is not None and len(set(fixed)) != n
+            or public is not None and len(public) != n):
         raise ValueError(f"one {_INST.salt_bytes}-byte salt per row, never reused")
     if rows is not None and len(rows) != n:
         raise ValueError(f"{len(rows)} rows held for a value of {n}")
