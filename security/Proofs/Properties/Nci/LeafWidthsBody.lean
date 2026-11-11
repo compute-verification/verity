@@ -199,7 +199,7 @@ theorem bodyBad_sound (defs defs' : Array Defn) (i : ℕ) (key : String) (B : Bo
     cases res with
     | some pq => exact absurd (m_pure h).1 (by simp)
     | none =>
-      obtain ⟨hnodes, hrefs, ps, hps, hnn⟩ := hB
+      obtain ⟨hnodes, hrefs, ps, hps, hnn, -⟩ := hB
       refine ⟨fun k hk a ha => ?_, ?_⟩
       · obtain ⟨-, hnode, hargs⟩ := hnodes k hk
         obtain ⟨⟨qs, hqs, hqn⟩, hqr⟩ := hargs a ha
