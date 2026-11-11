@@ -31,8 +31,8 @@ untraced = [
     "tests/test_session.py",
     "tests/test_store_layout.py",
 ]
-inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/protocols/spot/verifier/profile.py", "verity/protocols/poub/verifier", "verity/ml/__init__.py",
+inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", 
+          "verity/protocols/spot/verifier/profile.py", "verity/protocols/poub/verifier", 
           "verity/hardware/record.py",
           "verity/circuits", "verity/commitments/crypto", "verity/commitments", "verity/commitments/randomness",
           # the challenger's coins name their claim instance (spot/challenger.py's `coin_claim`)
@@ -50,7 +50,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit
           "verity/protocols/spot",
           # auditor_line.py --boundary: the network certifiers' records of the gate node's boundary and their audit
-          "verity/protocols/certifier", "verity/ml/protocols/__init__.py", "verity/protocols/certifier/prover",
+          "verity/protocols/certifier", "verity/protocols/certifier/prover",
           # test_challengers.py: challengers.Gate against the auditor host's gate, its sessions served by serve.py
           "verity/composite/device/live_challenger/auditor.py", "verity/composite/device/live_challenger/host.json", "verity/composite/device/live_challenger/serve.py",
           "verity/composite/device/live_challenger/tests/stub_serve.py",
