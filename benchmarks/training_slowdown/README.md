@@ -107,8 +107,9 @@ reads no file of a served run. It prints one block and writes `OUT/slowdown.json
 - **ρ**, the attack's own cost at the config's policy: `formalism.published` at (c, k) on the search record, read
   with its `trace`, whose raw product rows the grade prices with `capture.products.priced` (it holds no price);
 - **the sensitivities** beside ρ and never in it, reduction and update, from the trace's `circuit`, and the version
-  of the code that took the trace. A record whose trace has no `circuit` or no `capture_code` grades all the same,
-  and the block says which of these figures are blank, why, and how the trace is taken again;
+  of the code that took the trace. A record whose trace has no `circuit` or no `capture_code` still grades: ρ reads
+  the rows either way (the circuit's τ stands in for a stub, which moves ρ only where it changes how many steps a
+  block's inputs cover), and the block says which of these figures are blank, why, and how the trace is taken again;
 - **S = p·ρ**, with what each factor rests on, and each seed beside it: whether it reaches the gain, and its |C|;
 - **the bound of record** at the same policy: the least slowdown of any partition of the attack's traced circuit, by
   the theorem's count solved for the fewest blocks (`min_cut.blocks_at_least`, times c/|C|). ρ's products term is the
