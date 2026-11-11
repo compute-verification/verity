@@ -45604,3 +45604,58 @@ For the table:
 - GB, the best plan built (#8893 on #8878, unmarked): width + margin 1/8, 2,430 GB at modeled 0.4 [Lean-checked design, run `r20261111-092227-d1e7`; GB modeled by ratio], 87 to 94 GB at the measured floor [by proportion]; the family's floor is 2,199 GB (1,334 with the three-unit cut) [modeled].
 
 Next: the ready lines for #8878 and #8893 when `9a1e` and `515d` end; the 11:00Z table (the cut with the margin, and each row at both utilization readings).
+
+## MEMBERS, Wed 11 Nov 09:37Z: #8862 has both runs passing at its head and no ready line yet: under your 08:29Z rule it waits on the merged tree's build, which runs; the writer's Lean did not parse at the head I reported, is fixed and tried, and is now a Lean branch and a Python branch with their runs out
+
+Nothing here changes a claim. No premise, no statement and no definition a security lock reads changes beyond what #8862's body already lists [read]; the form stays refused on every branch [read: `protocol` reads `paramsOfJson` and `evidenceOf`; `checkMembersAt_refuses`].
+
+**Correction to my 08:43Z entry.** I wrote there that the writer was "built and pushed unopened, not yet run". Its Lean at `c8fa429920` did not parse: try `r20261111-083540-24d7` failed on two `#guard`s that broke a line inside a structure's fields [run]. Section 3 has the fix.
+
+**1. #8862, head `23e96bd37477a08445bfe1551e2898d75aaa4a16`, open, unmarked.**
+
+- Quick tier `r20261111-080306-3938` at that head: **67 suites: 67 passed (0 cached), 0 failed** [run]. Records `r20261111-080302-a139` at that head: **pass** on the Spot package, `security`, `security/Properties` and `security/Proofs`, nothing regenerated; a `lean-fast/v1` result, no kernel replay [run].
+- **The merged tree's build (your 08:29Z rule): run `r20261111-090307-f4bd`, in a Lean slot since 09:05Z, still running at 09:35Z** [run]. Its tree is a scratch commit, `b2ef567f0dc1db1aa1c88b06b930a38018730acc`, in a detached worktree, pushed nowhere: `main` `589249ad95fe` with these merged in, in this order, every merge clean [run]: #8862 `23e96bd37477`, #8226 `f8a3b83aa0f0`, #8354 `5591b15e3b35`, #8368 `c833b3ff0a9b`, #8458 `81c162ded6fa`, #8536 `7c9387e95a73`, #8539 `984a73968ccd`, #8730 `f612d5d5897d`, #8764 `8dfde58665a3`, #8781 `b7c268c7c1fe`, #8785 `e7b741b17e53`, #8819 `9a8a32c7c85b`, #8820 `f1a8ef0141ff`, #8827 `946b7b72f26d`, #8828 `53dd644bdad8`, #8857 `96985b18aafb`. The command is the records run of `verity/protocols/spot/verifier/lean` with `--update`, which builds that package and its requirers `security`, `security/Properties` and `security/Proofs` [read: `lean_changed.py`'s docstring]. It is a build, the axioms scan and the records; it is no kernel replay [read].
+- **Which heads I took as "the marked Lean heads it touches": every PR of lane proofs that `research queue status` showed marked at 09:00Z and that changes a `.lean` file or a lakefile, fifteen of them** [run]. I did not pick by file: the import closure of #8862's sixteen Lean files is 3,639 files, nearly all of `security/Proofs`, so any Lean head of ours is in what it builds with [run: an import walk over the head's tree, an import matched to a file by its path's end]. #8836 is not in the tree (unmarked since 08:29Z) [relayed: your update; run: the queue shows it waiting].
+- **Other lanes' marked Lean heads are not in the build.** Twenty-one marked PRs of other lanes change Lean [run]. Against each, at 09:15Z: `git merge-tree` exits 0; the only files both change are `security/lean-audit.json` and `security/Properties/lean-audit.json`; none changes a Lean file that reads `Spot.OneStageZk` or `Spot.ChallengerTrees`, the two modules of code #8862 changes [run: the same import walk on each head's tree; it finds #8539's and #8764's readers, so it does find them]. Eight change a file that #8862's new text imports somewhere below it (#7109 `Proofs/Flock/Recursive.lean`; #8499, #8547, #8557, #8686 `NetworkCheck/Period.lean`; #8593, #8595 `Definitions/Nci.lean`; #8677 `Definitions/Pouw/Window.lean` and its `Guarantees`); no declaration on a line they remove is named in the lines #8862 adds [run: a grep of the short names; the three hits, `same`, `exactly`, `split`, are a word, Spot's own private `exactly`, and the tactic] [read]. **No build with those heads ran.** Say if you want one: it is one more records run, about the size of this one.
+- `git merge-tree --write-tree` of the head exits 0 with `main` `589249ad95fe` and with each of your ten heads at 09:10Z, each still its PR's head [run]; the ready line will carry the lines rerun.
+- **The body** is rewritten to the reviewers' layout and I apply it with `research queue edit` when the build's verdict is in: one paragraph; the four checks, each with its run or "not run" (elaborates yes, `a139`; axioms clean yes, `a139`; kernel replay not run; second reader none); the lock records that change, named; the two runs at the head; the merged tree; the modules it adds and that it changes three locks [read: my draft].
+
+For CAPS: Proofs/Properties: +0 modules, +0 declarations (#8862: `security/Proofs/Properties/Verity/Sampled/MemberForm.lean`, `MemberForm/Evidence.lean`, `MemberForm/Order.lean`). The PR adds three modules there (no declaration, 17 and 41), and none can be wholly unread: `unread.py` seeds every declaration of a module under `Proofs.Properties` (`SEEDED_PREFIXES`, the line `if any(mod == p or mod.startswith(p + ".") for p in SEEDED_PREFIXES)`) [read]. The area has no cap in `unread-caps.json` and needs none [read]. #8862 changes three locks, so its landing has a lock run [read: your 08:37Z item 1]. I have not run `unread.py` on it [read].
+
+**2. What the ready line for #8862 waits on, and by whom.** On `f4bd`, my own run; nobody else. If it has not ended by 10:30Z I say so in an entry: its `--max-min 120` counts from 09:05Z [read], and a tree with fifteen PRs' Lean merged rebuilds more of `security/Proofs` than a records run at one head does [guess].
+
+**3. The writer (c): two branches above #8862's head, no PR yet.**
+
+- **The failure.** `Spot/MembersParse.lean` at `c8fa429920`: `.lake/axiom-probe/Spot/MembersParse.lean:68:67: error: unexpected identifier; expected '}'` and the same at 72:54 [run: `24d7`]. A structure's fields continue at or right of its first field's column; the two examples continued at column 4 [read].
+- **The fix**, `9d9adf6fe7`: the examples name their inputs once and keep each structure on one line; one more example reads a member whose parameters name a registered file [read]. Try `r20261111-090901-3704` at `9d9adf6fe72375bdb0d4eeef1537a554a2df1066`: **lean exit 0**; the axiom probe says the file has no theorem [run].
+- **The split** (your 08:19Z update: keep a Python change out of a Lean PR):
+  - Lean: `cursor/proofs-v2-members-parse-9810` at `9d9adf6fe72375bdb0d4eeef1537a554a2df1066`: #8862's head, then `2bfdfdb73a`, `b822ff12c5`, `9d9adf6fe7`. Four files, +96/−3, all in the Spot verifier's package: `Spot/MembersParse.lean` (new), `Spot/ZkMain.lean`, `Spot.lean`, and one line of that package's lock (`exempt`'s text for `Spot.ZkMain`) [run: `git diff --stat`].
+  - Python: `cursor/proofs-v2-members-write-9810` at `df9c13dbe0ab42e586bd22b22c4a43e02560b4cc`: the Lean head, then the two Python commits cherry-picked. Five files, +381/−37, no Lean and no lock [run].
+  - `cursor/proofs-v2-members-writer-9810` at `c8fa429920` is superseded and stays as it is: a pushed branch is not rewritten, and the fix had to sit below the Python commits [read].
+- **Runs.** I cancelled by id the two at the head that does not parse, `r20261111-083613-8494` (quick tier) and `r20261111-083639-88b1` (records), at 09:08Z [run]. Out now: records at the Lean head `r20261111-090947-bb86` (in a Lean slot since 09:19Z); quick tier at the Lean head `r20261111-091308-6ba5`; quick tier at the Python head `r20261111-091338-c6ae`; all running at 09:35Z [run]. ETA 10:10Z to 10:25Z [guess: `3938` took 52 minutes].
+- **Not yet known:** whether the difftest row passes; whether a security lock moves (I expect none: `Spot.OneStageZk` is not in the diff) [guess].
+- **Next:** when they end I open both, unmarked, base `main`, bodies opening "Stacked on #8862" in the 08:37Z layout. Their ready lines need the merged tree's build too; I build it with the Lean head merged into the tree above once `f4bd` has passed [read].
+- Your 08:29Z line "Stack new Lean work on #8827's head": the `members` command reads #8862's parsers, so it stacks on #8862; it touches nothing #8827 touches (four files of the Spot package) [run: `git diff --name-only`].
+- The closing round is still not written by the driver; the Python PR's body says so. My 08:16Z question stands [read].
+
+**4. The held branch**, `cursor/proofs-v2-members-held-9810` at `01d759cdbb4dbcf779f9592e781b26504b135fb0`, unopened: try `r20261111-083908-dd73` **passes** (lean exit 0, axiom probe clean on its 4 theorems) [run]. Its locks are stale by construction [read].
+
+**5. Read this hour:** the order through its 09:23Z update and my mailbox (unchanged since 07:53Z), at 09:25Z [run]. Nothing in 08:51Z, 09:10Z or 09:23Z is addressed to me [read].
+
+| run | what, at which head | verdict at 09:35Z |
+|---|---|---|
+| `r20261111-080306-3938` | quick tier, #8862 `23e96bd374` | 67 passed, 0 failed |
+| `r20261111-080302-a139` | records, #8862 `23e96bd374` | pass, nothing regenerated |
+| `r20261111-090307-f4bd` | records build of the merged tree `b2ef567f0dc1` | running |
+| `r20261111-083540-24d7` | try `Spot/MembersParse.lean`, `c8fa429920` | **failed**: two examples do not parse |
+| `r20261111-090901-3704` | try `Spot/MembersParse.lean`, parse `9d9adf6fe7` | lean exit 0, no theorem |
+| `r20261111-090947-bb86` | records, parse `9d9adf6fe7` | running |
+| `r20261111-091308-6ba5` | quick tier, parse `9d9adf6fe7` | running |
+| `r20261111-091338-c6ae` | quick tier, write `df9c13dbe0` | running |
+| `r20261111-083908-dd73` | try `Spot/OneStageZk.lean`, held `01d759cdbb` | lean exit 0, axioms clean |
+| `r20261111-083613-8494`, `r20261111-083639-88b1` | quick tier and records, `c8fa429920` | cancelled by me: that head does not parse |
+
+For the table:
+- #8862 at `23e96bd37477`: quick tier 67/67 (`r20261111-080306-3938`, measured) and records pass (`r20261111-080302-a139`, measured; no kernel replay); the merged tree with our fifteen marked Lean heads is building (`r20261111-090307-f4bd`); no ready line until it ends.
+- Writer (c): the head I reported at 08:43Z did not parse; fixed, tried (`r20261111-090901-3704`), and split into `cursor/proofs-v2-members-parse-9810` at `9d9adf6fe723` (Lean) and `cursor/proofs-v2-members-write-9810` at `df9c13dbe0ab` (Python); no PR until three runs end. The form stays refused.
+- Held branch at `01d759cdbb4d`: tried, passes; unopened.
