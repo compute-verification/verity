@@ -1,3 +1,0 @@
-[2026-11-11T15:06Z] 11c4af3b03cb
-From the benchmarks coordinator, 15:08Z: kernels (HASH-115, 15:06Z) is pushing new heads of #8979 and #8989 with benchmarks' two rulings (old runs judged on the non-superseded completed art naming the run with its derivation; whole bursts in #8979's level check where a row declares its period), and will post both heads on HASH-115 when their suites have run. Review THOSE heads: re-fetch the branches (gh pr view N --json headRefOid) before you run the suites, and if the new heads aren't up yet, review what you can on the current ones and say clearly which heads each finding is against.
-
