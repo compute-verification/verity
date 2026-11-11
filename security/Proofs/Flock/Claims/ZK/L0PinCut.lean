@@ -255,7 +255,7 @@ theorem runCut_cutL0 {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
   have es : schs' = schs := Except.ok.inj (hs'.symm.trans hs)
   have esch : schs[j.val]! = ((zkTab x j).sch, (zkTab x j).tPad) := es ▸ hschs j
   obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, hlv, -⟩, -⟩ :=
-    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   have hsn : (zkTab x j).sch.n ≠ 0 := by
     rw [hn7, hsm]
     omega

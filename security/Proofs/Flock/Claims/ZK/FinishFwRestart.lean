@@ -188,7 +188,7 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
        obtain ⟨⟨rfl, -⟩, -⟩ := hp
        rfl)
   -- the setup is the statement's
-  obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   have hk6' : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
   have hkm : (stAt x j).c.kLog ≤ (stAt x j).m := (zkTab x j).wf.1.hk
   have hj : j.val < (stsOf x).size := lt_of_jOf j

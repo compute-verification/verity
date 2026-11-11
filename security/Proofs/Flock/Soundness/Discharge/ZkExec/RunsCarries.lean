@@ -324,7 +324,7 @@ theorem zk_lig_carries (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras 
         ([false, false, false, false, true] ++ (pMid ++ pLev (sch.levels.size - 1)))))))))
       (ligFramesZ sch T zp.proof.cap zp.proof.ligerito zp.level0)
       (ligMsgsZ zp.proof.ligerito capDig sch tPad zp.level0) [] := by
-  obtain ⟨h25, h35, hsm, hk0, ht, hdim, -, -, hsmall⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, h35, hsm, hk0, ht, hdim, -, -, hsmall⟩ := zk_schedule_seams _ _ _ _ hsch
   obtain ⟨sch₀, hf, ek0, eext, esz, eget⟩ := zk_schedule_fast100 hsch
   obtain ⟨-, -, hsm₀⟩ := fast100At_small _ _ _ hf
   obtain ⟨hn, h2, -, -, -, -, -⟩ := hdim
@@ -376,7 +376,7 @@ theorem carriesP_of_carries {W : List (List DecodeZL.Wire)} {σ : List Exec.Kind
 
 theorem zk_carries : ZkCarries := by
   intro st sch tPad extras zp T hsch h64 hs hy hyb htau hyl
-  obtain ⟨h25, -, -, hk0, -, hdim, -, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, -, hk0, -, hdim, -, -, -⟩ := zk_schedule_seams _ _ _ _ hsch
   have h1 := zl_tail_carries st.m st.kLog zp.proof.zerocheck zp.proof.lincheck (by omega) hs.r1ab hs.r1c hs.zPartial
   have h2 := op_carries_sizes zp.proof.ringSwitches (2 + extras.size) (by simpa [shapeZK] using hs.rs) (by omega)
     hs.rsEach

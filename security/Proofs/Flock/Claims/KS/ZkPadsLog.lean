@@ -244,7 +244,7 @@ theorem zkVerifyRepWith_inner (hs : Hashes Flock.V) {spec : SessionSpec} {st : S
       st.extra sess.points = .ok extras ∧ Zk.decode (shapeZK st sch extras) bytes = .ok zp ∧
       t.rounds = stream.rounds ∧ t.k + 4 = stream.rounds.size ∧
       Zk.verifyInnerWith hs (layZ st sch) zp.inner finalC cons t = .ok ((), t') := by
-  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ hsch
   obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
   unfold Zk.verifyRepWith at h
   dsimp only at h

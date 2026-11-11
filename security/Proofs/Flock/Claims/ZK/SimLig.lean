@@ -1128,7 +1128,7 @@ least two levels) and the values at the coins. -/
 theorem ligHypE_of (hood : LigOodE) (hmsg : LigMsgE) (hsum : LigSumsE) (hy1 : LigY1E) (hybar : LigYbarE)
     (hsalt : LigSaltE) : LigHypE := by
   intro x hx w hw τ c n hn s spec hs j r extras he
-  obtain ⟨h25, -, hsm, hk0, -, hdim, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨h25, -, hsm, hk0, -, hdim, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   obtain ⟨hn7, h2, -⟩ := hdim
   exact
     { k0 := hk0
@@ -1161,7 +1161,7 @@ theorem ligSrcE_of (h : LigHypE) : LigSrcE := by
   have hr : ∀ k < n, FlockComplete.coinOf (ligRespE c k) = (fun k i => slotAt c k i) k := fun k _ => coinOf_ligRespE c k
   have hp' := FlockComplete.LigLock.piopPZk_cut_ok _ n (ligRespE c) hr _ _ _ _ _ _ _ _ _ hp
   have hst := tabsOf_stAt x j
-  obtain ⟨h25, -, hsm, -, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨h25, -, hsm, -, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   have hm : 14 ≤ (FlockDeploy.tabsOf (stsOf x))[j.val]!.m := by
     rw [hst]
     show 14 ≤ (stAt x j).m
@@ -1295,7 +1295,7 @@ private theorem eqAt_oodPoint {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) 
     FlockSoundness.Model.eqAt (Composed.oodPoint (zkTab x j).table (stAt x j) (czExe PE x c j) r 0) y =
       FlockLevel3.GF128.of (_root_.Flock.eqTable (FlockComplete.LigLock.zS (fun k i => slotAt c k i)
         (repSlot x (2 * j.val + r.val) fun _ => 0) (zkTab x j).sch.n))[y]! := by
-  obtain ⟨h25, -, hsm, -, -, hdim, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨h25, -, hsm, -, -, hdim, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   obtain ⟨hn7, -⟩ := hdim
   have hm : (zkTab x j).table.S.m = (stAt x j).m := rfl
   have h0 : 0 < (Composed.layOf (zkTab x j).table (stAt x j)).nOod0 := by
@@ -1321,7 +1321,7 @@ theorem ligOodE : LigOodE := by
     unfold ligLay layL ligSt
     rw [hst]
     rfl
-  obtain ⟨h25, h35, hsm, hk0, -, hdim, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨h25, h35, hsm, hk0, -, hdim, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   obtain ⟨hn7, -⟩ := hdim
   have hm : (zkTab x j).table.S.m = (stAt x j).m := rfl
   unfold ligSrc ligPad ligTab ligCoin ligP0
@@ -1683,7 +1683,7 @@ theorem ligSaltE (hhi : HiSaltE) : LigSaltE := by
     rw [repSlot_p0 hs j r]
     omega)
   obtain ⟨-, -, -, -, -, -, hseam, -, -⟩ :=
-    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   have hat : HiAt (zkTab x j).table.sch.levels i q := by
     have e : (zkTab x j).table.sch.levels.getD i default =
         FlockSoundness.Refine.levelOf ((zkTab x j).sch.levels.getD i default) := by
@@ -2068,7 +2068,7 @@ theorem laneB_wSOf {x : Msg} (w : Claims.Flock.Wit) (τ : UE.Tape)
     rw [hst]
     rfl
   obtain ⟨-, -, -, -, -, hk7⟩ := zkLevel0 wideLeaf (zkTab x j).hz
-  obtain ⟨-, -, hsm, -, -, hdim, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨-, -, hsm, -, -, hdim, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   obtain ⟨hn7, -⟩ := hdim
   have hm : (zkTab x j).table.S.m = (stAt x j).m := rfl
   have hbsz : (ligBasis x c w τ j r extras).size = 2 ^ ((stAt x j).m - 7) := by

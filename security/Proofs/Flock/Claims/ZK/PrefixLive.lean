@@ -622,7 +622,7 @@ theorem sessionPZk_size (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
     have hm := hsts (k / 2) hi
     rw [← getElem!_pos sts (k / 2) hi] at hm
     obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ :=
-      FlockSoundness.Discharge.ZkExec.zk_schedule_seams sts[k / 2]!.m schs[k / 2]!.1 schs[k / 2]!.2 (hv _ hi)
+      FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ sts[k / 2]!.m schs[k / 2]!.1 schs[k / 2]!.2 (hv _ hi)
     obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
     obtain ⟨hl₂, -⟩ := repPZk_exact (sch := schs[k / 2]!.1) (hm := hm) (hn := by rw [hn7, hsm]; omega)
       (hk0 := hk0) (hL := h2) (hq := fun i hi => (hlv i hi).q_ne_zero) (h := e2)

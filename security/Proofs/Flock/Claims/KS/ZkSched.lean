@@ -131,13 +131,13 @@ theorem zkTabs_facts {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
   unfold zkTabs zkSchT zkTbl
   split_ifs with h
   · rw [getElem!_pos sts j h]
-    obtain ⟨-, -, -, -, -, hdim, -⟩ := ZkExec.zk_schedule_seams _ _ _ (hz j h)
+    obtain ⟨-, -, -, -, -, hdim, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (hz j h)
     refine ⟨rfl, rfl, rfl, ?_, rfl, schedOf_lanes hdim⟩
     rw [dite_eq_left h]
     show (Refine.regionsOf sts[j]).length = sts[j].regions.size
     simp [Refine.regionsOf]
   · rw [getElem!_pos sts 0 h0]
-    obtain ⟨-, -, -, -, -, hdim, -⟩ := ZkExec.zk_schedule_seams _ _ _ (hz 0 h0)
+    obtain ⟨-, -, -, -, -, hdim, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (hz 0 h0)
     refine ⟨rfl, rfl, rfl, ?_, rfl, schedOf_lanes hdim⟩
     rw [dite_eq_right h]
     show (Refine.regionsOf sts[0]).length = sts[0].regions.size

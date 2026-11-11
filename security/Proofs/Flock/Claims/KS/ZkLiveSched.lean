@@ -243,7 +243,7 @@ end Zk
 /-- **A masked rep's rounds are `repRounds`** at the `--zk` schedule. -/
 theorem zkRepNsOf_length {spec : SessionSpec} {st : Stmt} {sch : Flock.Schedule} {tPad : ℕ}
     (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) : (zkRepNsOf spec st).length = repRounds true spec st := by
-  obtain ⟨h25, -, -, -, -, ⟨-, h2, -⟩, -⟩ := ZkExec.zk_schedule_seams _ _ _ hz
+  obtain ⟨h25, -, -, -, -, ⟨-, h2, -⟩, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ hz
   rw [repRounds_zk hz]
   unfold zkRepNsOf zkPre zkLig
   rw [hz]

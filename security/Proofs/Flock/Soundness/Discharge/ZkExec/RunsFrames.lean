@@ -52,7 +52,7 @@ theorem zk_rep_emitted (st : Setup) (sch : Flock.Schedule) (tPad r : ℕ) (extra
     (hrun : (repProg st sch tPad r extras zp).run (Flock.Transcript.init rounds dom) = .ok ((), tr))
     (hret : AllRetained rounds) :
     ∃ T : F128, Emitted ⟨rounds, 0, ByteArray.empty⟩ tr (repFramesZ st sch dom (2 + extras.size) zp T) := by
-  obtain ⟨h25, -, -, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, -, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ _ hsch
   unfold repProg at hrun
   rw [StateT.run] at hrun
   try dsimp only at hrun

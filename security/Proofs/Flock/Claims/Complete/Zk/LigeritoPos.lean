@@ -420,7 +420,7 @@ theorem RunZk.lg_pos (hLg : LigeritoZk H rel) (o : RunZk H rel) {st : Flock.Stmt
       ((o.sw 0 r).2.rounds[(o.sw 0 r).2.k + 2 + v.1.k0]!).n = 2 ∧
       ((o.sw 0 r).2.rounds[(o.sw 0 r).2.k + 3 + v.1.k0]!).n = 2 := by
   have h0 : 0 < o.tabs.size := by rw [htabs]; simp
-  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams st.m v.1 v.2 hv
+  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ st.m v.1 v.2 hv
   obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
   have e := hLg o 0 h0 r hr
   rw [hsch] at e

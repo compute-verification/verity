@@ -320,7 +320,7 @@ theorem Run.inner_kJ (o : Run H rel) {i r : ℕ} {st : Flock.Stmt} (ht : o.tabs[
     (o.inner i r).2.k = (st.m + ((Setup.ofCircuit st).kLog - 6)) + ((2 + (o.extras i).size) + 1) +
         (v.1.k0 + 7 + 11 * (v.1.levels.size - 1)) + 4 ∧
       (o.inner i r).2.k ≤ (o.stream i r).rounds.size := by
-  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams st.m v.1 v.2 hv
+  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ st.m v.1 v.2 hv
   obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
   rw [hsch] at hLg
   obtain ⟨hr₁, hk₁⟩ := replayWith_rounds o.hs (t' := (o.rp i r).2) (rp := (o.rp i r).1)

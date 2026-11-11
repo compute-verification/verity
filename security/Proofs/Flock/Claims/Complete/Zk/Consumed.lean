@@ -110,7 +110,7 @@ theorem RunZk.inner_k (hRp : Replay H rel) (hRS : RingSwitchZk H rel) (hLg : Lig
       (o.inner 0 r).2.k ≤ (o.stream 0 r).rounds.size := by
   have h0 : 0 < o.tabs.size := by rw [htabs]; simp
   have ht0 : o.tabs[0]! = Setup.ofCircuit st := by rw [htabs]; rfl
-  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams st.m v.1 v.2 hv
+  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ st.m v.1 v.2 hv
   obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
   have e₃ := hLg o 0 h0 r hr
   rw [hsch] at e₃

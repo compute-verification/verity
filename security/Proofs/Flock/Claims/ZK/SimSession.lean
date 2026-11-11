@@ -662,7 +662,7 @@ theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (
       (fun k => coinOf_respOf c k) hsE _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (_root_.Flock.Transcript.init #[] _) l _ l3 e3
     rw [htab] at e3' hex
     obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ :=
-      FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hv
+      FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ hv
     obtain ⟨hn7, hL2, -, -, -, -, -⟩ := hdim
     obtain ⟨hl3, -, -, -⟩ := repPZk_exact (hm := hm) (hn := by rw [hn7, hsm]; omega) (hk0 := hk0) (hL := hL2)
       (hq := fun i hi => (hlv i hi).q_ne_zero) (h := e3')

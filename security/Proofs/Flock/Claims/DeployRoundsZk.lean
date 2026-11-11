@@ -386,7 +386,7 @@ theorem zkVerifyRepWith_rounds (hs : Hashes V) {spec : SessionSpec} {st : Setup}
       st.extra sess.points = .ok extras ∧
       stream.rounds.size =
         (st.m + (st.kLog - 6)) + ((2 + extras.size) + 1) + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 4 := by
-  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ _ hsch
   obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
   unfold Zk.verifyRepWith at h
   dsimp only at h

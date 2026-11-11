@@ -611,7 +611,7 @@ theorem zk_rep_reqsL {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (
           (rounds[(st.m + (st.kLog - 6)) + (2 + extras.size + 1) + (sch.k0 + 8)]!).coins).toList ∧
         rest.length = sch.levels.size - 1 ∧
         LaterAt sch rounds ((st.m + (st.kLog - 6)) + (2 + extras.size + 1) + 2) rest := by
-  obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ _ hsch
   have hTm : T.S.m = st.m := hseam.hm
   have h7 : 7 ≤ T.S.m := by omega
   unfold repProg at hrun

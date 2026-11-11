@@ -81,7 +81,7 @@ theorem zkSch_facts {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × �
       (∀ i < v.1.levels.size, (v.1.levels.getD i default).cap ≤ (v.1.levels.getD i default).d) ∧
       v.1.ext = v.1.n - v.1.k0 - 3 * (v.1.levels.size - 1) := by
   obtain ⟨-, -, -, hk0, -, ⟨-, hL, hl0, hc0, hl4, hc, hext⟩, hseam, -, hlv⟩ :=
-    FlockSoundness.Discharge.ZkExec.zk_schedule_seams m v.1 v.2 h
+    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ m v.1 v.2 h
   have hlig := zkSchedule_lig h1 h2 h
   have hcols : ∀ i < v.1.levels.size, (v.1.levels.getD i default).cols = v.1.n - v.1.k0 - 3 * i := by
     intro i hi

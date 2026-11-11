@@ -174,7 +174,7 @@ theorem openP_okW {sh : Shape} {ms : MerkleScheme} {lv : Level} {w : ℕ} {cm : 
 theorem zkSchedule_lig {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     LigSched v.1 := by
   obtain ⟨-, -, hm, hk0, -, ⟨hnm, -, -, -, hl4, -, -⟩, hseam, -, -⟩ :=
-    FlockSoundness.Discharge.ZkExec.zk_schedule_seams m v.1 v.2 h
+    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ m v.1 v.2 h
   obtain ⟨s₀, hf, ek, ee, es, el⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_fast100 h
   obtain ⟨⟨-, h2', hdim, hcap, -, -⟩, hm₀⟩ := fast100_lig m s₀ hf
   have hn₀ := (FlockSoundness.Refine.fast100_dims m s₀ hf).1.1
