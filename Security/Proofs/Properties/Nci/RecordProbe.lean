@@ -234,6 +234,38 @@ def showProg (s : String) (ts : Array String) : IO Unit := do
   IO.println "PROGRAM two units, template Copy_v1"
   showProg programTwo #["Copy_v1"]
 
+/-- The facts about the decoder's output on `programOne` that the one-unit witness takes, each as a Boolean. -/
+def oneUnitFacts (P : Flock.Program.Prog) : List (String × Bool) :=
+  let sc := P.child P.rootScope 1 0
+  let d := P.defs[sc.d]!
+  let isValue16 : Ty → Bool := fun t => match t with
+    | .value 16 => true
+    | _ => false
+  [("ranges", match Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) #["Copy_v1"] with
+      | .ok rs => rs.size == 1 && rs[0]!.node == 1 && rs[0]!.template == "Copy_v1" && rs[0]!.first == 0 &&
+          rs[0]!.count == 1
+      | .error _ => false),
+    ("rootGates", (P.defs[P.root]!).gates == 2),
+    ("gate0", match P.gate 0 with
+      | .ok (p, ops, _) => ops == #[] && isValue16 (P.defs[p]!).ret && Flock.Program.isInputId (P.defs[p]!).key
+      | .error _ => false),
+    ("gate1", match P.gate 1 with
+      | .ok (p, ops, _) => ops == #[0, 0] && isValue16 (P.defs[p]!).ret &&
+          !Flock.Program.isInputId (P.defs[p]!).key
+      | .error _ => false),
+    ("off", sc.off == 1),
+    ("unitGates", d.gates == 1),
+    ("params", d.params.size == 1 && d.params[0]!.1 == "x" && isValue16 d.params[0]!.2),
+    ("ret", isValue16 d.ret),
+    ("port", match Flock.Program.resolve P sc ⟨true, 0, 0⟩ with
+      | .ok g => g == 0
+      | .error _ => false)]
+
+#eval do
+  match Flock.Program.decode programOne.toUTF8 with
+  | .error e => IO.println ("ONEUNIT decode refuses: " ++ e)
+  | .ok P => IO.println s!"ONEUNIT {oneUnitFacts P}"
+
 /-! ### Wirings -/
 
 def copyTemplate (units : Nat) : String × Spot.Wires.Template :=
@@ -248,7 +280,7 @@ def showCheck (W : Spot.Wires.Wiring) (rows : List (String × Nat × String × N
   match Spot.Wires.check W with
   | .error r => s!"refused: {r.code.name}, wire {r.wire}"
   | .ok S => s!"passes: wires {S.wires.length}, rowWords {S.rowWords}, writers " ++
-      toString (rows.map fun (t, u, p, r) => (S.writerOf t u p r).map fun (wt, wu, o) => (wt, wu, o))
+      toString (rows.map fun (t, u, p, r) => S.writerOf t u p r)
 
 #eval do
   IO.println ("CHECK no template, no wire, no order: " ++ showCheck ⟨[], [], [], none⟩ [])

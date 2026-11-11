@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Nci.Record
+public import Proofs.Properties.Nci.RecordAttack
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import all Init.Data.String.Defs
@@ -18,14 +18,21 @@ A scratch file, never merged, beside `Proofs.Properties.Nci.RecordAttack`.
 
 * **The text's tie, through the kernel.** `readTie` is what `Served` reads of a record's text: the parse, then
   `Spot.Wires.Wiring.ofJson` of `wiresOf`. The kernel runs it on texts given as their characters: a text of no wire
-  (`tie_empty`), one of a cut and a wire (`tie_wire`), `wires` given twice (`tie_twice`: the last), `cuts` null and
-  `wires` absent and a text that is a list (`tie_cutsNull`, `tie_noWires`, `tie_list`: refused), `templates` and
-  `order` stated (`tie_dropped`: read as none), and `blocks` and `registered` stated (`tie_rest`: read as the text of
-  no wire is).
+  (`tie_empty`), one of a cut (`tie_cuts`), `wires` given twice (`tie_twice`: the last), `cuts` null and `wires`
+  absent and a text that is a list (`tie_cutsNull`, `tie_noWires`, `tie_list`: refused), `templates` and `order`
+  stated (`tie_dropped`: read as none), and `blocks` and `registered` stated (`tie_rest`: read as the text of no wire
+  is). A text with a wire is not run here: the reading of a wire sorts its keys by a recursion the kernel does not
+  unfold.
 * **A served record, but for the decoder.** `served_empty`: the record of no wire over the Program of no node lays
   out the circuit of no gate, given that `Flock.Program.decode` reads the Program's text, that the template query
   finds no unit in it and that it has no gate. Those three are about the decoder's output, which the kernel does not
   compute: the decoder keeps its definitions in a hash map. Every other clause of `Served` is proved.
+* **One unit.** `served_one`: the record of no wire over a Program of one input gate and one unit that reads it lays
+  out the circuit of those two gates, given that the wires check passes the unit's wiring (`check_one`, through the
+  kernel) and given the decoder's output on that Program as `OneUnit` states it, gate by gate. With the unit's row
+  held, θ is the input gate (`served_one_held`) and the block reads no fresh bit (`fresh_one_held`); with nothing
+  held it reads sixteen (`served_one_fresh`, `fresh_one`). The record's text is the same in both, and registers
+  nothing.
 -/
 
 @[expose] public section
@@ -78,16 +85,10 @@ theorem not_served_of_tie {F : Form} {c : F.Case} {cs : List Char} (hrec : (F.in
 def recordEmpty : List Char :=
   ['{', '"', 'w', 'i', 'r', 'e', 's', '"', ':', '[', ']', '}']
 
-/-- A cut of `B`'s port `x` in two, and one wire of two rows from `A`'s output `o0`: `cuts` is
-`{"B":{"x":2}}`, and the wire has `at` 0, `base` 0, `cut` `[0,2]`, `radix` `[2]` and `step` `[1]`. -/
-def recordWire : List Char :=
+/-- `{"cuts":{"B":{"x":2}},"wires":[]}` -/
+def recordCuts : List Char :=
   ['{', '"', 'c', 'u', 't', 's', '"', ':', '{', '"', 'B', '"', ':', '{', '"', 'x', '"', ':', '2', '}', '}',
-   ',', '"', 'w', 'i', 'r', 'e', 's', '"', ':', '[', '{', '"', 'a', 't', '"', ':', '0', ',', '"', 'b', 'a',
-   's', 'e', '"', ':', '0', ',', '"', 'c', 'u', 't', '"', ':', '[', '0', ',', '2', ']', ',', '"', 'o', 'u',
-   't', '"', ':', '"', 'o', '0', '"', ',', '"', 'p', 'o', 'r', 't', '"', ':', '"', 'x', '"', ',', '"', 'r',
-   'a', 'd', 'i', 'x', '"', ':', '[', '2', ']', ',', '"', 'r', 'e', 'a', 'd', 'e', 'r', '"', ':', '"', 'B',
-   '"', ',', '"', 's', 't', 'e', 'p', '"', ':', '[', '1', ']', ',', '"', 'w', 'r', 'i', 't', 'e', 'r', '"',
-   ':', '"', 'A', '"', '}', ']', '}']
+   ',', '"', 'w', 'i', 'r', 'e', 's', '"', ':', '[', ']', '}']
 
 /-- `wires` given twice: one wire from `A` to `B`, then `[]`. -/
 def recordTwice : List Char :=
@@ -128,9 +129,7 @@ def recordRest : List Char :=
 
 theorem tie_empty : readTie recordEmpty = some ⟨[], [], [], none⟩ := by decide +kernel
 
-theorem tie_wire :
-    readTie recordWire = some ⟨[], [("B", [("x", 2)])], [⟨"B", "x", "A", "o0", 0, [2], 0, [1], 0, 2⟩], none⟩ := by
-  decide +kernel
+theorem tie_cuts : readTie recordCuts = some ⟨[], [("B", [("x", 2)])], [], none⟩ := by decide +kernel
 
 /-- `wires` given twice: the last is read. -/
 theorem tie_twice : readTie recordTwice = some ⟨[], [], [], none⟩ := by decide +kernel
@@ -238,5 +237,384 @@ theorem laidOut_empty {P : Prog} (hdec : Flock.Program.decode programEmpty.toUTF
     (hev : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) #[] = .ok #[])
     (hg : gates P = 0) : LaidOut (formEmpty (some [])) :=
   fun _ _ _ _ => ⟨dEmpty, served_empty_stated hdec hev hg⟩
+
+/-! ### One unit -/
+
+/-- A descriptor of one input gate and one unit: root node 0 is the input gate, root node 1 a call of `Copy_v1` on
+it, and `Copy_v1(x)` is one gate of two operands, both `x`. -/
+def programOne : String :=
+  "{\"annotations\":{},\"callees\":[\"And16_v1\",\"Input16_v1\",\"Copy_v1\"],\"definitions\":{\"And16_v" ++
+  "1\":{\"form\":\"primitive\",\"id\":\"And16_v1\",\"params\":[[\"a\",[\"Value\",16]],[\"b\",[\"Value\"" ++
+  ",16]]],\"ret\":[\"Value\",16]},\"Copy_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs" ++
+  "\":{\"affine\":[\"p\",0,0,1]},\"type\":0},{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0}],\"fn\":0" ++
+  ",\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x\",[\"Value\",16]]],\"ret\":{\"affine\":[\"n\",0" ++
+  ",0,1]},\"ret_type\":[\"Value\",16]},\"form\":\"composite\",\"id\":\"Copy_v1\"},\"Input16_v1\":{\"for" ++
+  "m\":\"primitive\",\"id\":\"Input16_v1\",\"params\":[],\"ret\":[\"Value\",16]},\"Root_v1\":{\"binding" ++
+  "s\":{},\"body\":{\"nodes\":[{\"args\":[],\"fn\":1,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"re" ++
+  "fs\":{\"affine\":[\"n\",0,0,1]},\"type\":0}],\"fn\":2,\"form\":\"call\",\"out\":0}],\"params\":[],\"" ++
+  "ret\":{\"affine\":[\"n\",1,0,1]},\"ret_type\":[\"Value\",16]},\"form\":\"composite\",\"id\":\"Root_v" ++
+  "1\"}},\"program_fn\":\"Root_v1\",\"root\":\"Root_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types" ++
+  "\":[[\"Value\",16]]}"
+/-- What the decoder's output on `programOne` is taken to be: the template query's one range, the root's two gates
+with their primitives and operands, and the unit's activation with its one parameter, its return and where its
+parameter resolves. Each line is evaluated on the decoder's output beside this file; none is proved. -/
+structure OneUnit (P : Prog) : Prop where
+  ranges : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) #["Copy_v1"] =
+    .ok #[⟨1, "Copy_v1", 0, 1⟩]
+  rootGates : NciCheck.Properties.gates P = 2
+  gate0 : ∃ p sc, P.gate 0 = .ok (p, #[], sc) ∧ (P.defs[p]!).ret = .value 16 ∧
+    Flock.Program.isInputId (P.defs[p]!).key = true
+  gate1 : ∃ p sc, P.gate 1 = .ok (p, #[0, 0], sc) ∧ (P.defs[p]!).ret = .value 16 ∧
+    Flock.Program.isInputId (P.defs[p]!).key = false
+  off : (P.child P.rootScope 1 0).off = 1
+  unitGates : (P.defs[(P.child P.rootScope 1 0).d]!).gates = 1
+  params : (P.defs[(P.child P.rootScope 1 0).d]!).params = #[("x", .value 16)]
+  ret : (P.defs[(P.child P.rootScope 1 0).d]!).ret = .value 16
+  port : Flock.Program.resolve P (P.child P.rootScope 1 0) ⟨true, 0, 0⟩ = .ok 0
+
+/-- The template query's one range. -/
+def rsOne : Array TRange := #[⟨1, "Copy_v1", 0, 1⟩]
+
+/-- `Copy_v1`'s template: one unit, one row `x` of one word, one output `o0` of one word. -/
+def templateOne : Spot.Wires.Template :=
+  { units := 1, rows := [("x", { words := 1, outer := 1 })], outs := [("o" ++ toString 0, 1)] }
+
+/-- The wiring of no wire over `Copy_v1`'s one unit, its order stated. -/
+def wiringOne : Spot.Wires.Wiring :=
+  { templates := [("Copy_v1", templateOne)], cuts := [], wires := [], order := some [("Copy_v1", 0, 1)] }
+
+/-- The gates each gate of `circuitOne` reads. -/
+def readsOne : Fin 2 → Finset (Fin 2) := ![∅, {0}]
+
+/-- Two gates of 16 bits: gate 0 an input, gate 1 reading it. -/
+abbrev circuitOne : Verity.Circuit where
+  N := 2
+  w := fun _ => 16
+  isInput := fun g => decide (g.val = 0)
+  reads := readsOne
+  reads_lt := by decide
+  input_reads := by decide
+  op := fun _ _ => 0
+  op_congr := fun _ _ _ _ => rfl
+  outputs := {1}
+
+/-- One block: gate 1. -/
+def blocksOne : Verity.Partition circuitOne 1 where
+  unit := fun g => if g.val = 0 then none else some 0
+  input_iff := by decide
+
+/-- `circuitOne`, nothing registered. -/
+abbrev dOne : Verity.RegisteredCircuit := .ofPartition circuitOne ∅ (by decide) 1 blocksOne
+
+/-- `circuitOne`, its input gate registered. -/
+abbrev dOneHeld : Verity.RegisteredCircuit := .ofPartition circuitOne {0} (by decide) 1 blocksOne
+
+/-- A check that reads every instance as the record of no wire over `programOne`, every unit in block 0, holding
+every row for the reason `hd`, or none. -/
+def formOne (hd : Option Held) : Form where
+  Case := Unit
+  read := fun _ _ => .ok ()
+  inst := fun _ =>
+    { program := programOne, record := String.ofList recordEmpty, gamma := 1, num := 16, den := 1, pins := [] }
+  wiring := fun _ => wiringOne
+  slot := fun _ _ _ => some 0
+  held := fun _ _ => hd
+  summarize := fun _ => ⟨1, 16⟩
+  rate := fun _ _ _ _ => none
+  layout := fun _ => none
+
+theorem unitAt_one {P : Prog} {tid : String} {u : ℕ} {sc : Scope} :
+    UnitAt P rsOne tid u sc ↔ tid = "Copy_v1" ∧ u = 0 ∧ sc = P.child P.rootScope 1 0 := by
+  constructor
+  · rintro ⟨i, m, hi, ht, hm, hu, hsc⟩
+    have hi0 : i = 0 := by
+      have : i < 1 := hi
+      omega
+    subst hi0
+    have hm0 : m = 0 := by
+      have : m < 1 := hm
+      omega
+    subst hm0
+    have ht' : "Copy_v1" = tid := ht
+    subst ht'
+    exact ⟨rfl, hu.trans rfl, hsc⟩
+  · rintro ⟨rfl, rfl, rfl⟩
+    exact ⟨0, 0, by decide, rfl, by decide, rfl, rfl⟩
+
+theorem bits_value : bitsOf (Ty.value 16) = 16 := by
+  unfold bitsOf
+  rw [Flock.Program.Ty.widths] <;> first | rfl | decide
+
+theorem dvd_value : 16 ∣ bitsOf (Ty.value 16) := ⟨1, bits_value⟩
+
+theorem words_value : bitsOf (Ty.value 16) / 16 = 1 := by rw [bits_value] <;> first | rfl | decide
+
+theorem outs_value : (bitsOf (Ty.value 16) + 15) / 16 = 1 := by rw [bits_value] <;> first | rfl | decide
+
+theorem leaves_value : (Ty.value 16).leaves = 1 := by rw [Flock.Program.Ty.leaves] <;> first | rfl | decide
+
+theorem widths_value : (Ty.value 16).widths = #[16] := by rw [Flock.Program.Ty.widths] <;> first | rfl | decide
+
+theorem inRow_value {d : Defn} {t : Ty} (ht : d.params[0]!.2 = t) (hl : t.leaves = 1) (hw : t.widths = #[16]) :
+    inRow d 0 1 0 = (0, #[16]) := by
+  unfold inRow
+  rw [ht, hl, hw] <;> first | rfl | decide
+
+theorem inRow_one {d : Defn} (hp : d.params = #[("x", .value 16)]) : inRow d 0 1 0 = (0, #[16]) :=
+  inRow_value (t := Ty.value 16) (by rw [hp] <;> rfl) leaves_value widths_value
+
+theorem inLeaf_one {P : Prog} (h : OneUnit P) {port : String} {row l g lo hi : ℕ} :
+    InLeaf P (P.child P.rootScope 1 0) 1 port row l g lo hi ↔
+      port = "x" ∧ row = 0 ∧ l = 0 ∧ g = 0 ∧ lo = 0 ∧ hi = 16 := by
+  constructor
+  · rintro ⟨i, hi_, hport, hrow, hl, hres, hlo, hhi⟩
+    rw [h.params] at hi_ hport
+    have hi0 : i = 0 := by
+      have : i < 1 := hi_
+      omega
+    subst hi0
+    have hrow0 : row = 0 := by omega
+    subst hrow0
+    rw [inRow_one h.params] at hl hres hlo hhi
+    have hl0 : l = 0 := by
+      have : l < 1 := hl
+      omega
+    subst hl0
+    have hlo0 : lo = 0 := hlo.trans (by first | rfl | decide)
+    subst hlo0
+    exact ⟨hport.symm, rfl, rfl, Except.ok.inj (hres.symm.trans h.port), rfl, hhi⟩
+  · rintro ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+    refine ⟨0, ?_, ?_, by decide, ?_, ?_, ?_, ?_⟩
+    · rw [h.params] <;> decide
+    · rw [h.params] <;> rfl
+    · rw [inRow_one h.params] <;> decide
+    · rw [inRow_one h.params] <;> exact h.port
+    · rw [inRow_one h.params] <;> first | rfl | decide
+    · rw [inRow_one h.params] <;> first | rfl | decide
+
+theorem rowLeaf_one {P : Prog} (h : OneUnit P) {r : Row} {l g lo hi : ℕ} :
+    RowLeaf P rsOne wiringOne r l g lo hi ↔
+      r.tid = "Copy_v1" ∧ r.unit = 0 ∧ r.port = "x" ∧ r.row = 0 ∧ l = 0 ∧ g = 0 ∧ lo = 0 ∧ hi = 16 := by
+  constructor
+  · rintro ⟨sc, hu, hin⟩
+    obtain ⟨ht, hu0, rfl⟩ := unitAt_one.1 hu
+    have hin' : InLeaf P (P.child P.rootScope 1 0) 1 r.port r.row l g lo hi := hin
+    exact ⟨ht, hu0, (inLeaf_one h).1 hin'⟩
+  · rintro ⟨ht, hu0, hrest⟩
+    exact ⟨_, unitAt_one.2 ⟨ht, hu0, rfl⟩, (inLeaf_one h).2 hrest⟩
+
+theorem writer_none (tid : String) (u : ℕ) (port : String) (row : ℕ) :
+    (⟨[], []⟩ : Spot.Wires.Summary).writerOf tid u port row = none := rfl
+
+theorem not_wired_none (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (g : ℕ) :
+    ¬ Wired P rs W ⟨[], []⟩ g := by
+  rintro ⟨r, l, lo, hi, hw, -⟩
+  rw [writer_none] at hw
+  simp at hw
+
+theorem templateOf_one {d : Defn} (hp : d.params = #[("x", .value 16)]) (hr : d.ret = .value 16) :
+    TemplateOf d templateOne := by
+  unfold TemplateOf
+  rw [hp, hr]
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · intro i i' hi hi' _
+    have h1 : i < 1 := hi
+    have h2 : i' < 1 := hi'
+    omega
+  · intro i hi
+    have hi0 : i = 0 := by
+      have : i < 1 := hi
+      omega
+    subst hi0
+    exact dvd_value
+  · intro p q
+    constructor
+    · intro hpq
+      obtain ⟨rfl, rfl⟩ := Prod.mk.inj (List.mem_singleton.1 hpq)
+      exact ⟨0, by decide, rfl, words_value.symm, rfl⟩
+    · rintro ⟨i, hi, hp', hw, ho⟩
+      have hi0 : i = 0 := by
+        have : i < 1 := hi
+        omega
+      subst hi0
+      have hp2 : p = "x" := hp'
+      have hw2 : q.words = 1 := hw.trans words_value
+      have ho2 : q.outer = 1 := ho
+      obtain ⟨w, o⟩ := q
+      have hw3 : w = 1 := hw2
+      have ho3 : o = 1 := ho2
+      subst hp2 hw3 ho3
+      exact List.mem_singleton.2 rfl
+  · intro o n
+    have e4 : (bitsOf (fieldsOf (Ty.value 16))[0]! + 15) / 16 = 1 := outs_value
+    constructor
+    · intro hon
+      obtain ⟨rfl, rfl⟩ := Prod.mk.inj (List.mem_singleton.1 hon)
+      exact ⟨0, by decide, rfl, e4.symm⟩
+    · rintro ⟨f, hf, ho, hn⟩
+      have hf0 : f = 0 := by
+        have : f < 1 := hf
+        omega
+      subst hf0
+      have hn' : n = 1 := hn.trans e4
+      subst ho hn'
+      exact List.mem_singleton.2 rfl
+
+theorem templates_one {P : Prog} (h : OneUnit P) : Templates P rsOne wiringOne := by
+  intro tid t ht
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (List.mem_singleton.1 ht)
+  refine ⟨fun u => ⟨fun hu => ⟨P.child P.rootScope 1 0, unitAt_one.2 ⟨rfl, ?_, rfl⟩⟩, ?_⟩, fun u sc hu => ?_⟩
+  · have : u < 1 := hu
+    omega
+  · rintro ⟨sc, hsc⟩
+    obtain ⟨-, hu0, -⟩ := unitAt_one.1 hsc
+    subst hu0
+    exact (Nat.zero_lt_one : 0 < 1)
+  · obtain ⟨-, -, rfl⟩ := unitAt_one.1 hu
+    exact templateOf_one h.params h.ret
+
+theorem ownRows_one {P : Prog} (h : OneUnit P) : OwnRows P rsOne wiringOne := by
+  constructor
+  · intro r l g lo hi hleaf
+    obtain ⟨-, -, -, -, -, hg, -, -⟩ := (rowLeaf_one h).1 hleaf
+    obtain ⟨p, sc, hgate, -, hin⟩ := h.gate0
+    subst hg
+    exact ⟨p, #[], sc, hgate, hin⟩
+  · intro r l lo hi r' l' lo' hi' g h1 h2
+    obtain ⟨a1, a2, a3, a4, a5, -⟩ := (rowLeaf_one h).1 h1
+    obtain ⟨b1, b2, b3, b4, b5, -⟩ := (rowLeaf_one h).1 h2
+    obtain ⟨t, u, p, w⟩ := r
+    obtain ⟨t', u', p', w'⟩ := r'
+    have e1 : t = t' := a1.trans b1.symm
+    have e2 : u = u' := a2.trans b2.symm
+    have e3 : p = p' := a3.trans b3.symm
+    have e4 : w = w' := a4.trans b4.symm
+    subst e1 e2 e3 e4
+    exact ⟨rfl, a5.trans b5.symm⟩
+
+theorem aligned_none (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Aligned P rs W ⟨[], []⟩ := by
+  rintro r l' g' lo' hi' ⟨wt, wu, out, sc', hw, -⟩
+  rw [writer_none] at hw
+  simp at hw
+
+theorem filled_none (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Filled P rs W ⟨[], []⟩ := by
+  intro r l g lo hi hw
+  rw [writer_none] at hw
+  simp at hw
+
+theorem reads_zero : ∀ a : Fin circuitOne.N, a ∉ circuitOne.reads 0 := by decide
+
+theorem reads_one : ∀ a : Fin circuitOne.N, a ∈ circuitOne.reads 1 ↔ a = 0 := by decide
+
+theorem laysOut_one {P : Prog} (h : OneUnit P) :
+    LaysOut P rsOne wiringOne ⟨[], []⟩ circuitOne (fun x => x.val) := by
+  refine ⟨fun a b hab => Fin.ext hab, fun g => ⟨?_, ?_⟩, fun x => ?_⟩
+  · rintro ⟨x, rfl⟩
+    refine ⟨?_, not_wired_none _ _ _ _⟩
+    rw [h.rootGates]
+    exact x.isLt
+  · rintro ⟨hlt, -⟩
+    rw [h.rootGates] at hlt
+    exact ⟨⟨g, hlt⟩, rfl⟩
+  · rcases x with ⟨_ | _ | n, hx⟩
+    · obtain ⟨p, sc, hgate, hret, hin⟩ := h.gate0
+      refine ⟨p, #[], sc, hgate, hret, hin.symm, fun a => ⟨fun ha => absurd ha (reads_zero a), ?_⟩⟩
+      rintro ⟨o, ho, -⟩
+      simp at ho
+    · obtain ⟨p, sc, hgate, hret, hin⟩ := h.gate1
+      refine ⟨p, #[0, 0], sc, hgate, hret, hin.symm, fun a => ⟨fun ha => ?_, ?_⟩⟩
+      · have ha0 : a = 0 := (reads_one a).1 ha
+        subst ha0
+        exact ⟨0, by first | simp | decide, Lands.here 0 (not_wired_none _ _ _ _)⟩
+      · rintro ⟨o, ho, hl⟩
+        have ho0 : o = 0 := by simpa using ho
+        have hao : a.val = o := lands_eq_of_not_wired (not_wired_none _ _ _ _) hl
+        exact (reads_one a).2 (Fin.ext (hao.trans ho0))
+    · have hx' : n + 1 + 1 < 2 := hx
+      omega
+
+theorem divides_one {P : Prog} (h : OneUnit P) :
+    Divides P rsOne (fun _ _ => some 0) (D := circuitOne) (fun x => x.val) blocksOne := by
+  intro x hx
+  have hx1 : x = 1 := by
+    revert x
+    decide
+  subst hx1
+  refine ⟨"Copy_v1", 0, P.child P.rootScope 1 0, 0, unitAt_one.2 ⟨rfl, rfl, rfl⟩, ?_, ?_, rfl, by decide⟩
+  · rw [h.off] <;> decide
+  · rw [h.off, h.unitGates] <;> decide
+
+theorem names_fresh {P : Prog} :
+    Names P rsOne wiringOne (fun _ => false) (D := circuitOne) (fun x => x.val) ∅ :=
+  fun x => ⟨fun hx => absurd hx (Finset.notMem_empty x), fun ⟨_, _, _, _, hh, _⟩ => absurd hh (by simp)⟩
+
+theorem names_held {P : Prog} (h : OneUnit P) :
+    Names P rsOne wiringOne (fun _ => true) (D := circuitOne) (fun x => x.val) {0} := by
+  intro x
+  constructor
+  · intro hx
+    have hx0 : x = 0 := Finset.mem_singleton.1 hx
+    subst hx0
+    exact ⟨⟨"Copy_v1", 0, "x", 0⟩, 0, 0, 16, rfl, (rowLeaf_one h).2 ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩⟩
+  · rintro ⟨r, l, lo, hi, -, hleaf⟩
+    obtain ⟨-, -, -, -, -, hg, -, -⟩ := (rowLeaf_one h).1 hleaf
+    exact Finset.mem_singleton.2 (Fin.ext hg)
+
+/-- **One unit served, but for the decoder.** Given the decoder's output on `programOne` as `OneUnit` states it,
+the record of no wire lays out `circuitOne` in one block, θ the gates of the rows the check holds. -/
+theorem served_one (hd : Option Held) (θ : Finset (Fin circuitOne.N)) (hθ : ∀ g ∈ θ, circuitOne.isInput g = true)
+    {P : Prog} (hcheck : Spot.Wires.check wiringOne = .ok ⟨[], []⟩)
+    (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P)
+    (hnames : Names P rsOne wiringOne (fun _ => hd.isSome) (D := circuitOne) (fun x => x.val) θ) :
+    Served (formOne hd) () (.ofPartition circuitOne θ hθ 1 blocksOne) := by
+  obtain ⟨doc, hparse, hof⟩ := tie_of tie_empty
+  exact ⟨P, doc, ⟨[], [], [], none⟩, ⟨[], []⟩, rsOne, fun x => x.val, hdec, hparse, hof, rfl, rfl, hcheck,
+    h.ranges, templates_one h, ownRows_one h, aligned_none _ _ _, filled_none _ _ _, fun _ _ => rfl, laysOut_one h,
+    hnames, divides_one h⟩
+
+/-- Nothing held: θ is empty. -/
+theorem served_one_fresh {P : Prog} (hcheck : Spot.Wires.check wiringOne = .ok ⟨[], []⟩)
+    (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P) : Served (formOne none) () dOne :=
+  served_one none ∅ (by decide) hcheck hdec h names_fresh
+
+/-- The unit's row held as a registered read: θ is the input gate. The record's text is the one `served_one_fresh`
+reads, and registers nothing. -/
+theorem served_one_held {P : Prog} (hcheck : Spot.Wires.check wiringOne = .ok ⟨[], []⟩)
+    (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P) :
+    Served (formOne (some (.read "w"))) () dOneHeld :=
+  served_one (some (.read "w")) {0} (by decide) hcheck hdec h (names_held h)
+
+/-- Nothing held: the block reads sixteen fresh bits. -/
+theorem fresh_one : ∀ u, Nci.novelReads dOne (dOne.𝓘.gates u) = 16 := by decide
+
+/-- The row held: the block reads no fresh bit. -/
+theorem fresh_one_held : ∀ u, Nci.novelReads dOneHeld (dOneHeld.𝓘.gates u) = 0 := by decide
+
+/-- So the block meets the rate rule at `α = 0` where the check holds the row, -/
+theorem meets_one_held (u : Fin dOneHeld.n) : Meets dOneHeld dOneHeld.𝓘 1 0 u := by
+  refine ⟨?_, ?_⟩
+  · revert u
+    decide
+  · rw [fresh_one_held u]
+    simp
+
+/-- and does not where it holds nothing. -/
+theorem not_meets_one (u : Fin dOne.n) : ¬ Meets dOne dOne.𝓘 1 0 u := by
+  rintro ⟨-, h⟩
+  rw [fresh_one u] at h
+  norm_num at h
+
+/-! ### The wires check on the one unit's wiring, through the kernel -/
+
+theorem check_one : Spot.Wires.check wiringOne = .ok ⟨[], []⟩ := ok_of_toOption (by decide +kernel)
+
+/-- The same wiring with no order stated. -/
+theorem check_one_default :
+    Spot.Wires.check { wiringOne with order := none } = .ok ⟨[], []⟩ := ok_of_toOption (by decide +kernel)
+
+/-- So one unit is served, given only the decoder's output. -/
+theorem served_one_checked {P : Prog} (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P) :
+    Served (formOne none) () dOne ∧ Served (formOne (some (.read "w"))) () dOneHeld :=
+  ⟨served_one_fresh check_one hdec h, served_one_held check_one hdec h⟩
 
 end NciCheck.Properties.Record.Attack
