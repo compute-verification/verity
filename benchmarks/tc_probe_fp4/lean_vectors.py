@@ -36,11 +36,20 @@ import os
 import re
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 import probe as P
+
+# isort: split
+# verity_config is importable once probe has put tools/config on sys.path
 from verity_config.settings import SHARED
+
+if TYPE_CHECKING:
+    import argparse
+
+    from verity.ml.circuits.silicon.models import BlockScaledAlignAdd
 
 INSTRUCTIONS = ("nvf4_lean_vectors",)
 ROW = "nvf4"
@@ -92,7 +101,8 @@ def acc_class(word: int) -> str:
     return "NaN" if word & 0x7FFFFF else "inf"
 
 
-def build_tiles(vs: list[dict], place: tuple[int, int], rng, low7: list[bool]):
+def build_tiles(vs: list[dict], place: tuple[int, int], rng: np.random.Generator,
+                low7: list[bool]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """One tile per vector (all of one chain length n), the vector at ``place``."""
     n = vs[0]["n"]
     t = len(vs)
@@ -108,7 +118,8 @@ def build_tiles(vs: list[dict], place: tuple[int, int], rng, low7: list[bool]):
     return A, Bt, SFA, SFB, C
 
 
-def run_both(dev, A, Bt, SFA, SFB, C, n: int) -> tuple[np.ndarray, np.ndarray]:
+def run_both(dev: P.Probe | FakeLow7, A: np.ndarray, Bt: np.ndarray, SFA: np.ndarray, SFB: np.ndarray, C: np.ndarray,
+             n: int) -> tuple[np.ndarray, np.ndarray]:
     """(firing by firing through the tile kernel, D fed back as C; the generic row kernel, the chain in registers)."""
     D = C
     for s in range(n):
@@ -118,7 +129,7 @@ def run_both(dev, A, Bt, SFA, SFB, C, n: int) -> tuple[np.ndarray, np.ndarray]:
     return D, dev.rows(ROW, A, Bt, C, SFA, SFB, steps=n)
 
 
-def model_word(model, v: dict, low7: bool) -> int | None:
+def model_word(model: BlockScaledAlignAdd, v: dict, low7: bool) -> int | None:
     a, b, sa, sb = unpack(v, low7)
     c = v["acc"]
     try:
@@ -130,7 +141,7 @@ def model_word(model, v: dict, low7: bool) -> int | None:
     return c
 
 
-def low7_decode_word(model, v: dict) -> int | None:
+def low7_decode_word(model: BlockScaledAlignAdd, v: dict) -> int | None:
     """What the low-7-bit decode predicts: the pinned model on the twin, or 0x7FFFFFFF for a NaN accumulator (record-only; the
     pinned model refuses it).  None where neither applies."""
     w = model_word(model, v, True)
@@ -151,7 +162,7 @@ def dump_key(n: int, place: tuple[int, int]) -> str:
     return f"n{n}_r{place[0]}_c{place[1]}"
 
 
-def background(model, d: dict, place: tuple[int, int]) -> tuple[int, int]:
+def background(model: BlockScaledAlignAdd, d: dict, place: tuple[int, int]) -> tuple[int, int]:
     """(lanes checked, lanes where the row kernel's word differs from the pinned model's or the model refuses)."""
     Dm, err = P.model_words(model, d["A"], d["Bt"], d["SFA"], d["SFB"], d["C"], K, NBLK)
     bg = np.ones((16, 8), bool)
@@ -161,7 +172,8 @@ def background(model, d: dict, place: tuple[int, int]) -> tuple[int, int]:
     return int(bgm.sum()), int(((Dm != d["D_rows"]) | err)[bgm].sum())
 
 
-def evaluate(lists: dict, groups: list, dumps: dict, nowrite: dict, model) -> tuple[dict, dict, list[str]]:
+def evaluate(lists: dict, groups: list, dumps: dict, nowrite: dict,
+             model: BlockScaledAlignAdd) -> tuple[dict, dict, list[str]]:
     """Every gate from the dumps: (gates, {(list, id, low7): the row kernel's word per placement}, failures)."""
     words: dict[tuple, list[int]] = {}
     misplaced: list[str] = []
@@ -217,7 +229,7 @@ def evaluate(lists: dict, groups: list, dumps: dict, nowrite: dict, model) -> tu
     return gates, words, failures
 
 
-def records(lists: dict, selected: list, words: dict, model) -> list[dict]:
+def records(lists: dict, selected: list, words: dict, model: BlockScaledAlignAdd) -> list[dict]:
     recs = []
     for name, i in selected:
         v = lists[name][i]
@@ -240,7 +252,7 @@ class FakeLow7:
     NaN where it refuses; ``--fake-silicon verity`` is the pinned model as-is, which reads the same
     low 7 bits.  With the launch switched off it returns the poison, as the library does.  Refused with ``RESEARCH_RUN_ID`` set."""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         if name not in ("low7", "verity"):
             raise SystemExit("--fake-silicon: nvf4_lean_vectors takes 'low7' or 'verity'")
         self.name = name
@@ -251,14 +263,15 @@ class FakeLow7:
         return {"device": f"FAKE SILICON ({self.name})", "compute_capability": "fake", "driver": None, "gpu_uuid": "GPU-fake",
                 "backend": "fake", "has_mxf4": True}
 
-    def clocks(self, uuid):
+    def clocks(self, uuid: str | None) -> None:
         return None
 
     def set_launch(self, on: bool) -> int:
         self.launch = on
         return POISON & 0xFF
 
-    def rows(self, instr, A, Bt, C, SFA, SFB, steps: int = 1):
+    def rows(self, instr: str, A: np.ndarray, Bt: np.ndarray, C: np.ndarray, SFA: np.ndarray, SFB: np.ndarray,
+             steps: int = 1) -> np.ndarray:
         if not self.launch:
             return np.full((A.shape[0], 16, 8), POISON, np.uint32)
         mask = 0x7F if self.name == "low7" else 0xFF
@@ -266,11 +279,12 @@ class FakeLow7:
         D[err] = 0x7FFFFFFF
         return D
 
-    def tiles(self, instr, A, Bt, C, SFA=None, SFB=None, steps: int = 1):
+    def tiles(self, instr: str, A: np.ndarray, Bt: np.ndarray, C: np.ndarray, SFA: np.ndarray | None = None,
+              SFB: np.ndarray | None = None, steps: int = 1) -> np.ndarray:
         return self.rows(instr, A, Bt, C, SFA, SFB, steps)
 
 
-def capture(dev, lists: dict, groups: list, seed: int) -> tuple[dict, dict]:
+def capture(dev: P.Probe | FakeLow7, lists: dict, groups: list, seed: int) -> tuple[dict, dict]:
     """(every group's operands and words, the no-write control on the first group's first placement)."""
     rng = np.random.default_rng(seed)
     dumps = {}
@@ -314,7 +328,7 @@ def sha256(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
-def main(args) -> int:
+def main(args: argparse.Namespace) -> int:
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
     t_all = time.time()
