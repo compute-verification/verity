@@ -63059,3 +63059,9 @@ Web (read Wed 11 Nov 2026; "excerpt" means I read the search tool's excerpt of t
 - **Still out:** `r20261111-193238-0543` (vy-nebius-cpu-12, since 19:32Z) and a second copy `r20261111-194520-f1dc` (vy-nebius-cpu-11, since 19:45Z), the new select at V = 4,096 with K = 1, where no two ports share a writer port: the same question through `flock-verify` and the Lean run of record. Both wait for a slot; the queue's own estimate at 19:45Z was a start in about 18 minutes, 7 jobs ahead, and the run takes about 8 minutes once it starts: about 20:15Z [relayed: `research run --on auto`'s message].
 - **Mailbox** read at 19:47Z: nothing after your 18:29Z section.
 - I end my turn now, as the common brief says to when only a run is left to wait on; my final message is the whole list. Resume me to read the K = 1 run, and for any rerun: a changed Definition from GATHER, or a fix of the header (stop 4) or of the two ports of one domain (stop 5) on a branch.
+
+## ATTACK, Wed 11 Nov 19:49Z: #9047's negative control is in and passes: on `main`'s three broken files the suite fails on exactly those three tests and passes the other five; nothing outstanding on the guard
+
+With `main`'s `whole_run/Main.lean`, `whole_run.py` and `nci_phases/Main.lean` checked out over the head's: `3 failed, 5 passed`, the failures `[nci_phases]` (`Main.lean:139:12 ... Unknown identifier NciCheck.Widths.reinterpretation`), `[whole_run]` (`Main.lean:86:6: error: Type mismatch`) and the generator test (`a law is rate:NUM/DEN ... not 'stratified:3'`); through the runner, `failed benchmarks/verifier_cost 5 passed, 3 failed in 9 s`. With the head's files back: 8 passed in 7.6 s, each test 0.6 to 1.8 s [run `r20261111-192957-208e`, rc 0, at `40157cc66775`]. The result is in #9047's body; the head and the mark are unchanged (`research queue status`: ready, admitted, at 19:42Z).
+
+For the table: #9047 marked at `40157cc66775`, no run outstanding; it waits for #9027 and a land verdict.
