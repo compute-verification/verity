@@ -292,6 +292,30 @@ def test_where_the_nodes_vy_sudo_has_the_jobs_forms_every_root_command_goes_thro
     assert stat.S_IMODE(d.stat().st_mode) == stat.S_IMODE((d / "out").stat().st_mode) == 0o750
 
 
+def test_through_vy_sudo_a_unit_keeps_its_namespaces_and_finish_removes_the_store_toml_with_the_env_file(tmp_path, monkeypatch):
+    """Who is asked for root changes nothing a run asked for: the unit's argv differs only in its first words, and both of the
+    runner's files in control/ are gone before job-reclaim, which gives back only what the job user owns."""
+    vy_sudo = tmp_path / "vy-sudo"
+    vy_sudo.write_text('FORMS = ("systemd-run", "systemctl", "job-reclaim")\n')
+    monkeypatch.setattr(jobuser, "VY_SUDO", str(vy_sudo))
+    d = run_dir(tmp_path)
+    u = jobuser.Unit(name="research-job-r1", user="vyjob", run_dir=str(d), cwd=str(d), env_file=f"{d}/control/job.env",
+                     namespaces=("user", "net"))
+    argv = jobuser.unit_argv(u)
+    assert argv == ["sudo", "-n", str(vy_sudo), *jobuser.unit_argv(u, via=False)[2:]]
+    assert [p for p in argv if p.startswith("RestrictNamespaces=")] == ["RestrictNamespaces=net user"]
+    staged = tmp_path / "store.toml"
+    staged.write_text("[remote]\n")
+    jobuser.prepare(str(d), store_config=staged)
+    (d / "control" / "job.env").write_text("X=1\n")
+    assert sorted(p.name for p in (d / "control").iterdir()) == ["job.env", "store.toml"]
+    runs = Runner()
+    jobuser.finish(str(d), "research-job-r1", "vyjob", 2**31 - 2, 0o750, run=runs)
+    assert runs.calls == [["sudo", "-n", str(vy_sudo), "systemctl", "stop", "research-job-r1"],
+                          ["sudo", "-n", str(vy_sudo), "job-reclaim", str(d), "vyjob"]]
+    assert list((d / "control").iterdir()) == [], "neither the env file nor the store.toml copy outlives the unit"
+
+
 def _request(tmp_path, job_user, **more):
     root = tmp_path / "root"
     (root / "requests" / "j1").mkdir(parents=True)

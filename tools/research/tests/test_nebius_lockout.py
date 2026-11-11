@@ -526,6 +526,27 @@ def test_every_root_command_of_a_job_is_one_vy_sudo_takes_and_both_allowlists_na
     assert jobuser.helper(str(LOCKOUT / "vy_sudo.py")), "the helper this tree installs has the job's forms"
 
 
+@pytest.mark.parametrize("listed", [("user",), ("mnt",), ("net",), ("user", "mnt"), ("user", "net"), ("mnt", "net"), ("user", "mnt", "net")])
+def test_vy_sudo_and_both_allowlists_take_a_unit_that_may_make_the_namespaces_its_run_listed(listed, tmp_path):
+    """`research run --job-namespaces LIST` reaches the unit as RestrictNamespaces=<the list>, one argument with spaces in it.
+    vy-sudo passes a property it lists with the value it was given, so which lists a run may give stays research's rule
+    (jobuser.check_namespaces); were the value held to `yes` here, such a run would fail at its unit's start on a locked node."""
+    d = tmp_path / "runs" / "r1"
+    (d / "control").mkdir(parents=True)
+    env = d / "control" / "job.env"
+    env.write_text("A=1\n")
+    os.chown(env, CALLER, CALLER_GID)
+    unit = jobuser.Unit(name="research-job-r1", user="vyjob", run_dir=str(d), cwd=str(d), env_file=str(env), namespaces=listed)
+    argv = [*jobuser.unit_argv(unit, via=True), "true"]
+    prop = "RestrictNamespaces=" + " ".join(sorted(listed))
+    assert argv.count(prop) == 1
+    out = VS.systemd_run(argv[4:], CALLER, CALLER_GID, user=_pw(pw_gid=990))
+    assert [a for a in out if a.startswith("RestrictNamespaces=")] == [prop] and out[out.index(prop) - 1] == "-p"
+    assert out.count("-p") == argv.count("-p"), "every property of the unit reaches systemd-run"
+    for p in LO.PROFILES:
+        assert LO.allowed("research", "root", " ".join(argv[2:]), p), p.file
+
+
 def test_job_user_is_never_root_or_a_privileged_account():
     for name in ("root", "0", "no-such-user-vy"):
         with pytest.raises(VS.Refused):
