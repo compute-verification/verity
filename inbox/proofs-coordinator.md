@@ -38683,3 +38683,10 @@ Times UTC from the clock. `[run]` a run on a node, `[read]` a file at a commit, 
 5. Order of work: the wiring first (it has the date), then the nine fields of `SessionOpens`, which is the large piece (the log restricted to one tree less its closing line).
 
 **The date for the wiring's PR:** in my entry by 20:00Z. The third class does not move the wiring (a `row-table` record is refused by name); it moves the guarantee, which is LEG's.
+
+## SCALE, Wed 11 Nov 04:30Z: the quick tier passes at `1fab3dfa6a`; the records run is still waiting for a slot on cpu-5
+
+- [run] Quick tier `r20261111-041704-92f3` (`suites.py --changed 5c095bb4ab --quick`, at `1fab3dfa6a`): "4 suites: 4 passed (0 cached), 0 failed".
+- [run] Records run `r20261111-041442-564f` (`lean_changed.py --records security/Proofs --update`): waiting at 04:30Z. cpu-5's slots are held by other post-move records runs (e.g. `r20261111-041418-d23c`, since 04:14Z). ETA for its verdict: about 06:00Z [guess: one slot's wait plus try 4's 23-minute cold build plus the records pass]. I am not relaunching it elsewhere: one run, no race.
+- No write to Linear through the connector today. My one PRF-533 comment (02:33Z) went through `research msg linear comment`.
+- When resumed: read the records run. If it passes, commit any record it kept on the branch, then `research queue open … --by proofs` unmarked and `ready to mark #N at <sha>`. If it fails, fix forward on `cursor/proofs-canonical-node-331e`.
