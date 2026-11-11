@@ -53736,3 +53736,182 @@ For the table:
 - second reading of FUSED 12:15Z at `0163`, `cd4c`: holds (705.8 against 368.6 core-s, 1.91×).
 - second reading of HEADPROF's `af1d`: holds (0.925 one prover; 0.830 salts alone at two).
 - second reading of DRAFT-CORE 12:15Z: holds (eleven Σ_t k_t equal mine); κ 2^-4 and wider rows do not fit `MAX_COINS` 2^24 at K0 = 6.
+
+## SCALE, Wed 11 Nov 12:19Z: exact over the served wiring, the final recut's M is 145, so M <= 142 is NO, by 3. The binder is the decode router: 128 GEMM blocks + 1 weight + 16 output fields. Every other block is at most 139. Under (b) at M = 145 the record reads 2^-100.79 and width 2^-4 reads 2^-100.24 (PageCopy at 97). The plan's own M is 4,130, not 2,049.
+
+**Labels for the whole entry.**
+- Every bits line is (b): over the served wiring, rank 0's Program from `r20261111-105348-9d93`, with the classes counted by a run. All are modeled, in compressions, K0 = 6, T = 2^80 calls a run.
+- GB ratios are the planner's, relative to the plan's row of record. They are "no program (not what `main` verifies)" rows, modeled.
+- Runs:
+  - `r20261111-120402-153e`: the final recut and the plan, with whole-row attention at T <= 9 as the census proves it.
+  - `r20261111-114851-082b`: the nine-writer recut, the plan and a first final, with every attention row cut into head blocks.
+
+**1. Exact classes, by a run, per kind [run].**
+
+How the count works:
+- It uses the Lean's key, (the writing block, the reading blocks), on every word of rank 0's Program at the cut.
+- Each word's reader set is hashed: a 64-bit sum of mixed (row, unit) tokens, one per reading row.
+- A block's classes are:
+  - the distinct (writer unit, reader set) pairs among the words it reads, including its own row's internal words (a linear's quant read by its column blocks, a residual sum read by its norm);
+  - the distinct nonempty reader sets of its own outputs;
+  - one per parameter tensor it reads;
+  - its carried state.
+- A hash collision can only merge classes, so a count is exact up to a collision over 2^64 [derived].
+- The tool is `exact_classes.py` in the notes, at `lanes/proofs/tools/`.
+
+At the final recut (section 2), per kind above 64:
+
+| kind | exact | the floor (11:10Z formula, same cut) | what the floor left out |
+|---|---|---|---|
+| router, `MoeRouterSigmoidBias` (proved as `…Slots_v2`) | **145** | 65 | The decode router's GEMM `LlBf16DotprodGemm_v1{N=256,K=6144}` (2,325 rows): 128 writers at N = 2. Also its 16 output classes: slot k's weight and its id are separate fields, read by different blocks [read: `verity/definitions/registry/moe.py:589-608`]. |
+| head block `NVIS=64,FIRST=false` | 139 | 139 | nothing |
+| `RMSNormFusedCudaVector8{N=6144}` | 131 | 129 | the weight, and a second output |
+| `FlashInferCol{K=2048,N=8}` | 130 (upper by 1) | 129 | the weight |
+| `DsaRMSNorm{N=2048}`, `DsaIndexerKRow` | 130 each | 129 | the weight |
+| `SiluMul{I=256}`, DeepGemm `quant{K=2048}` | 129 each | 129 | nothing |
+| `ResidualAdd{384}` | 104 | 101 | three more output reader sets |
+| whole-row attention: `SparseMlaSplit_v1`, NS = 1, T <= 9, which the census proves as rows | 82 to 98 (98 at T = 9) | 10 | the whole kind: q_nope's 64 writers, 8 q_pe RoPE rows, 2T key writers and 8 own |
+| `SiluMul{I=1536}`, cut to I = 192 | 97 | 769 uncut | none: it is the reader-side cut |
+| `DsaMqaLogits{N<=60}` | 92 | 62 at N = 60 | the 32 per-head `DsaIndexerQ` writers (the reader-side cut's knock-on) |
+| `RmsNormMnnvl` | 73 | 65 | the weight, and the 7 other ranks' partials, one class each (an upper bound) |
+| `RMSNormCudaVector8{N=6144}` | 66 | 65 | the weight |
+
+Kinds at or under 64:
+- `DsaIndexerQ`, one head a block: 35.
+- The all-reduces: 32 rank-local. Under a cross-rank Program they would be 8 × 24 + 1 = 193 [derived, upper].
+- `MoeSum`: 25.
+- `AllGather` (19,368) is a gather with no gates and no proof block, so it is in no stratum [derived].
+
+**M per stratum at the final recut [run].**
+- The record's size classes: 145 at 512 bits (the router); 139 at 32,768 (head blocks); 131 at 262,144 (`RMSNormFused` and PageCopy at 97; 205 with PageCopy at 205); 130 at 64, 128 and 2,048; 129 at 4,096; 104 at 8,192; 98 at 65,536; 92 at 32, 256 and 1,024; 73 at 131,072; 10 at 16,384; 3 at 0.
+- The width strata (78 of them): 145 in one (the router's), 139, 131, 130 in five, 129, 104, 98, 97 in two, and 92 or less in the rest.
+- **One M = 145. M <= 142: NO, by 3.** Only the router is over. Without it, M would be 139.
+
+Ways to close the 3:
+- The decode router's GEMM at N = 4: k_log 28, over `K_MAX` [run: the sizing]. Ruled out.
+- Slot k's weight and id written and read as one field: 128 + 1 + 8 = 137 [derived]. This is a change to `MoeRouterSigmoidBiasSlots`'s Definition, and its readers would read both.
+- A router in two blocks (scores, then select). No such Definition exists.
+
+**The nine-writer recut as my 11:10Z entry stated it** (q_nope 64, indexer 64, gate-up 32, embedding 8, router 2) [run `082b`]:
+- M = **273**, at the router: 256 decode writers at N = 1, + 1 + 16.
+- My 139 there was a floor that missed the decode router.
+- Four of its blocks are over `K_MAX` anyway (section 2).
+
+**The plan's cut [run `153e`, plan].** M = **4,130**, at the whole-row attention rows at T <= 9 (`SparseMlaSplit_v1{NS=1}`, 702 blocks in rank 0's Program, 78 a T). Each reads q_nope's 4,096 words from one-word bmm blocks, plus 8 q_pe RoPE rows, 2T key writers and 8 own. Next are `FlashInferCol{K=2048,N=4}` at 2,050 (upper by 1), `quant{K=2048}` at 2,049, `DsaIndexerQ` at 1,058, `SiluMul{I=1536}` at 769, head blocks at 643, `DsaRMSNorm{2048}` at 514, `SiluMul{I=256}` at 513 and the router at 273.
+- By the record's strata: 4,130 at 65,536 bits; 2,050 at 64 and at 32,768; 513 at 4,096; 273 at 512; 131 at 262,144; 130 at 2,048 and 8,192; 73 at 131,072; 61 or less in the rest.
+- This replaces my 11:10Z "M = 2,049", a floor that had no whole rows.
+
+**2. The final recut.** k_log is from the census's own sizing (`m1_families.sized` at the census tree `52da59a`, run here, light, at most 0.7 s a spec). The counts are from run `153e`.
+
+| row | the plan's block today | N today | N new, or the reader-side cut | k_log | the reader's exact classes |
+|---|---|---|---|---|---|
+| W_UV | `BatchedGemm_v1{B=1,K=512}` | 1 | 16 | 25 | `quant{K=2048}` 129; `FlashInferCol{K=2048,N=8}` 130 |
+| q_nope | `BatchedGemm_v1{B=1,K=192}` | 1 | 64 (256 fits at 27; 512 is 28) | 25 | head block 139; whole-row attention at most 98 |
+| indexer `wq_b` | `ScaledMm{K=2048}` | 4 | stays 4. Reader-side cut: `DsaIndexerQ_v1{H=1}`, one head a block | 24; the cut 22 | `DsaIndexerQ` 35; `DsaMqaLogits` 92 |
+| dense gate-up | `ScaledMm{K=6144}` | 4 | stays 4. Reader-side cut: `SiluMul_v2{I=192}`, eight a row | 25; the cut 21 | 97 |
+| q_a | `ScaledMm{K=6144}` | 4 | 16 | 27 | `DsaRMSNorm{2048}` 130 |
+| MoE experts | fused `EmbeddingRead_v1` + `MoeExpertFp8BlockGemm_v4{K=6144}` | 1 | 4 | 27 [derived: 4x the plan's fused 25; bare v4 26], at `K_MAX` | `SiluMul{I=256}` 129 |
+| router | `CublasSplitKGemmF32Out_v1{K=6144}` (prefill) and `LlBf16DotprodGemm_v1{K=6144}` (decode) | 1 and 1 | 4 and 2 (`LlBf16` at 4 is 28) | 26 and 27 | router 145 |
+| o_proj | `ScaledMm{K=2048}` | 4 | 8 | 25 | `RmsNormMnnvl` 73; `AllReduceResidualMnnvl` 14 |
+| embedding | `EmbeddingShard_v1{H=1}` | 1 | 4 (8 is 28); its all-reduce stays at 96 columns | 27 | `RMSNormFused` 131; `RMSNormCudaVector8` 66; all-reduce 32 |
+
+The three rows estimated at 28 [run: the sizing]:
+- Indexer `wq_b`: N = 64 is 28. N = 32 is 27, but it leaves `DsaIndexerQ` at 4096/32 + 32 + 2 = 162. So the reader is cut instead.
+- Dense gate-up: N = 32 is 28. N = 16 is 27, but it leaves `SiluMul{I=1536}` at 193. So the reader is cut instead.
+- Embedding: H = 8 is 28, and H = 4 is 27.
+
+The embedding's all-reduce stays at 96 columns. At 48 columns, `RMSNormFused`, which reads both the embedding's all-reduce and the layer's, is 259 [run `082b`, its first final].
+
+**3. #8917's cut of the head block, by the same key.** This is derived from its ports at `9be3347195219559728580e6d05bfd1c22baeb13` (`sparse_mla.py:27-31`). The Definitions are on that head, but no served Program composes them, so no run counts them. The per-key writers are from the run: two writers a key (the kv_c norm's row and k_pe's RoPE row), and q_rope is one RoPE row a head.
+
+The scores unit (q_nope, q_rope, 64 keys, m and l in; m, l, pb and rescale out):
+- Reading A, where a values unit's keys are the scores unit's committed rows: 512/N_q + 1 + 64 (DV/G + 1) + 1 + 2.
+- Reading B, where each unit's keys are a row of its own: 512/N_q + 1 + 128 + 1 + 2.
+- The own outputs are 2, at most 3. `FIRST` is one less.
+
+| q_nope's writer | A, G = 128 | A, G = 64 | A, G = 32 | B, any G |
+|---|---|---|---|---|
+| the plan's cut (N = 1) | 836 | 1,092 | 1,604 | 644 |
+| **64 words (the recut)** | **332** | **588** | **1,100** | **140** |
+| a head (N = 512, does not fit) | 325 | 581 | 1,093 | 133 |
+| N = 256 (fits at 27) | 326 | 582 | 1,094 | 134 |
+
+The values unit (pb, a G-slice of 64 keys, rescale and o[G] in; o[G] out):
+- Reading A: **67**. That is pb and rescale as one class, 64 key slices, o in and o out. `FIRST` is 66.
+- Reading B: between 4 and 67. **67 is the upper bound.**
+
+So with #8917's cut, M <= 142 holds only under reading B, at 140 with 64 words. The router (145) still binds unless it is closed as in section 1.
+
+**4. PageCopy.** No composed Program with the certifier's compile slice at the served CB can be had this hour. The slice (`verity/protocols/certifier/prover/compile_slice_v6.py`) composes into no Program the plan run serves. It stays bounded at 97 to 205 [derived, 11:10Z]. The recut changes neither the cache's writers nor its readers.
+
+The upper bound a hypothesis can take is **205**: 1 (keyed and fresh) + 87 (wrote: at most 29 entries a block, each from at most 3 writer blocks) + 58 (carried) + 58 (out) + 1 (verdict). Those two numbers, 29 entries and 3 writers, are what the compile slice's form at the served CB must state.
+
+**5. The frontier at the exact counts.** All cells are (b), modeled, compressions, K0 = 6, T = 2^80 calls a run. A cell marked ✓ holds 2^-100. The "one M" columns are at PageCopy 97 and at PageCopy 205. Mean and by stratum move by at most 0.01 bit between 97 and 205, because PageCopy's cell is a negligible share of Σk [run: both printed].
+
+The final recut (M = 145) [run `153e`]:
+
+| design | Σk | GB ratio (no program, modeled) | mean | by stratum | one M, PageCopy 97 | one M, PageCopy 205 |
+|---|---|---|---|---|---|---|
+| record: size classes, its κ | 9,384,740 | 1.014 | -101.27 ✓ | -100.94 ✓ | -100.79 ✓ | -100.29 ✓ |
+| width 2^-4 | 13,733,766 | 0.679 | -100.86 ✓ | -100.50 ✓ | -100.24 ✓ | -99.74 |
+| width 2^-6 | 3,433,471 | 0.701 | -102.86 ✓ | -102.50 ✓ | -102.24 ✓ | -101.74 ✓ |
+| width 2^-7 | 1,716,755 | 0.807 | -103.86 ✓ | -103.50 ✓ | -103.24 ✓ | -102.74 ✓ |
+
+The nine-writer recut (M = 273) [run `082b`]:
+
+| design | GB ratio | mean | by stratum | one M, PageCopy 97 or 205 |
+|---|---|---|---|---|
+| record | 1.016 | -101.34 ✓ | -100.88 ✓ | -99.88 |
+| width 2^-4 | 0.682 | -100.95 ✓ | -100.42 ✓ | -99.33 |
+| width 2^-6 | 0.704 | -102.95 ✓ | -102.42 ✓ | -101.33 ✓ |
+| width 2^-7 | 0.811 | -103.95 ✓ | -103.42 ✓ | -102.33 ✓ |
+
+The plan's cut (M = 4,130) [run `153e`, plan]:
+
+| design | GB ratio | mean | by stratum | one M, PageCopy 97 or 205 |
+|---|---|---|---|---|
+| record | 1.000 | -99.09 | -97.48 | -95.87 |
+| width 2^-4 | 0.665 | -98.67 | -98.29 | -95.28 |
+| width 2^-6 | 0.690 | -100.67 ✓ | -100.29 ✓ | -97.28 |
+| width 2^-7 | 0.798 | -101.67 ✓ | -101.29 ✓ | -98.28 |
+
+So at the plan's cut, no design holds 2^-100 under one M. At the final recut, the record and widths 2^-4, 2^-6 and 2^-7 all do at PageCopy 97, and every one of them except width 2^-4 does at PageCopy 205.
+
+**6. For HARMSEARCH.**
+
+The final recut's cells, in the form `kfix_recut.py` builds:
+
+~~~python
+import kfix_recut as KR, kfix_exact as KE
+KR.WRITERS["ll"] = ("LlBf16DotprodGemm_v1{N=1,", None, 1)
+N = {"uv": 16, "qn": 64, "idx": 4, "gu": 4, "qa": 16, "moe": 4, "rt": 4, "ll": 2, "op": 8, "emb": 4}
+names, cells = KR.recut(names, cells, KR.shares(wiring), N)
+names, cells = KE.reader_cut(names, cells, all_reduce=False)  # SiluMul{I=1536} -> 8 x I=192; DsaIndexerQ -> 32 x H=1
+~~~
+
+The exact widths M_t are from `kfix_exact.py ROWS WIRING exactF.json final2 97 205` (both files are in `lanes/proofs/tools/`; `exactF.json` is run `153e`'s `out/`).
+
+Where the plan's cut is stated today:
+- It is chosen by `benchmarks/one_stage/block_census.py`: `width_pick` takes the least `leak_cost` at 2^22 rows or more (`WIDTH_FLOOR` = 22), and `cut` / `misfit` refuse k_log or rows over `K_MAX`.
+- Its slicing templates are in the adapter: `adapters/vllm/verity_vllm/pipeline/serving_rows.py` (`SLICES` for `BatchedGemm`, `Gemm_v2`, `LlBf16`, `EmbeddingShard`; `WIDE_COORDS` for `ScaledMm`; `COLS`, `PARTS`, `CHAINS`) and `serving_templates.py`.
+- The plan reads the result as its run's `inputs/census.json` (`definitions[spec].of`, `k_log`).
+
+Whose file changes:
+- The census pins each of the nine writers' widths instead of picking by `leak_cost`, which would pick N = 4 for q_nope.
+- The adapter adds two reader-side templates, which do not exist today: `SiluMul_v2` in I-slices, and `DsaIndexerQ_v1` one head a block.
+- Closing the router's 3 classes is a change to the router's Definition, `verity/definitions/registry/moe.py`.
+
+**7. What is not exact.** Each item below is an upper bound or a floor, as marked:
+- The cross-rank reading of the all-reduces, 8x the writers [derived, upper]. The run counts rank 0's Program, where the 7 other ranks' partials are inputs.
+- `FlashInferCol`, an upper model by 1.
+- A parameter tensor counts as one class, on the assumption of one reader set a tensor [derived assumption; it can only overcount].
+- The attention end, column-end and combine units, and `EmbeddingRead`'s table reads, are taken at their bounds 3 / 8 / 8 / 8, not counted.
+- The fused per-expert GEMM cell is floored at 11. Its run kind is 4, and the fused `EmbeddingRead` port is not modeled.
+- PageCopy: 97 to 205.
+- Not counted at all: the scores and values units of #8917, which have no Program.
+
+For the table:
+- SCALE | exact classes, (b) over the served wiring [run `153e`] | final recut M = 145 (decode router; 139 next) | M <= 142 NO by 3 | one M: record 2^-100.79, width 2^-4 2^-100.24 (PageCopy 97); 2^-100.29 and 2^-99.74 at PageCopy 205
+- SCALE | nine-writer recut as stated at 11:10Z [run `082b`] | M = 273 (router) | one M: record 2^-99.88, width 2^-4 2^-99.33
+- SCALE | the plan's cut [run `153e`] | M = 4,130 (whole-row attention at T <= 9; 2,050 next) | replaces 2,049
+- SCALE | #8917 scores unit at 64 words [derived from ports] | A: 332 / 588 / 1,100 at G = 128 / 64 / 32; B: 140 | values 67 (upper)
