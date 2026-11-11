@@ -18,7 +18,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits", "verity/d
           "verity/protocols/spot/verifier/one_stage", "verity/protocols/spot/verifier/service.py",
           "verity/protocols/spot/device/coins.py", "verity/protocols/spot/device/challenger.py",
           "verity/protocols/spot/device/remote.py", "verity/protocols/spot/verifier/second_stage.py",
-          "verity/protocols/spot/verifier/schedule.py", "verity/protocols/certifier/verifier/__init__.py",
+          "verity/protocols/spot/verifier/schedule.py", "verity/protocols/certifier/__init__.py",
+          "verity/protocols/certifier/verifier/__init__.py",
           "verity/protocols/certifier/verifier/advice.py", "adapters/vllm/verity_vllm", "verity/hardware/__init__.py",
           "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py",
           "verity/protocols/spot/device/__init__.py"]
