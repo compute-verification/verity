@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.ml.commitments import advice
+from verity.commitments import advice
 from workload import model as M
 from workload import placement as P
 from workload.hardware import OUTSIDE, mock
