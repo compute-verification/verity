@@ -1,4 +1,4 @@
-"""The synthetic input sets Flock's public tests read (`verity/ml/flock/tests/synthetic_sets.py`):
+"""The synthetic input sets Flock's public tests read (`verity/protocols/flock/prover/tests/synthetic_sets.py`):
 each is the set `verity_flock.synthetic.generate` writes for one (subcircuit, n, seed), with the provenance that names the run
 (:data:`UNRUN`) cleared, so the same code writes the same bytes. A set lives under ``<subcircuit id>/`` in :data:`FIXTURES`,
 and its manifest's recipe is what names it, rewrites it and finds it: the template, its parameters, the samplers (with what
@@ -21,7 +21,7 @@ from typing import Any, Iterable
 from verity_flock import subcircuit_templates as TM
 from verity_flock import synthetic as SY
 
-FIXTURES = Path(__file__).resolve().parents[5] / "verity" / "ml" / "flock" / "tests" / "fixtures" / "synthetic_sets"
+FIXTURES = Path(__file__).resolve().parents[5] / "verity" / "protocols" / "flock" / "prover" / "tests" / "fixtures" / "synthetic_sets"
 #: the provenance fields a run fills in, cleared in a committed set
 UNRUN = {"research_run": None, "versions": None}
 

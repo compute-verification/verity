@@ -13,7 +13,7 @@ git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SH
 PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")} || exit 2
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH
-export PYTHONPATH=$ROOT/integrations/vllm:$ROOT
+export PYTHONPATH=$ROOT/adapters/vllm:$ROOT
 export TRITON_CACHE_DIR=$S/triton
 nvidia-smi --query-gpu=index,uuid,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 1 > "$OUT/smi.csv" 2>/dev/null &
 SMI=$!

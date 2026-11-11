@@ -92,7 +92,7 @@ trap 'git -C "$ROOT" worktree remove --force "$W" > /dev/null 2>&1; rm -rf "$W"'
 git -C "$ROOT" worktree add -q --detach "$W" "$TREE" || exit 3
 read -r REPO REV < <(python3 -c 'import json, sys
 e = json.load(open(sys.argv[1]))[sys.argv[2]]
-print(e["repo"], e["revision"])' "$W/verity/core/protocols/pouw/lean/check/models.json" "$ROLE") \
+print(e["repo"], e["revision"])' "$W/verity/protocols/pouw/verifier/lean/check/models.json" "$ROLE") \
   || { echo "core's pin at $TREE has no role $ROLE"; exit 3; }
 SNAP=/workspace/hf/hub/models--${REPO//\//--}/snapshots/$REV
 echo "period $PERIOD, COMMIT $COMMIT, $ROLE at $SNAP on $PROVER_NODE, gate key on $GATE_ON${DRY:+ (dry run)}"

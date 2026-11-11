@@ -1,4 +1,4 @@
-"""The suite's step: the lf model's tiny training step (`integrations/vllm/tests/program/train_step_lf.py`, loaded by its path)
+"""The suite's step: the lf model's tiny training step (`adapters/vllm/tests/program/train_step_lf.py`, loaded by its path)
 with its log-free loss, derived by the training-step frontend at the step's batch shape and at the structure's, and handed
 over as a lane hands it over (`grader.write_handover`); at a compute capability `cc`, the step's bf16 linears' GEMMs are lowered
 to the routes `ROUTES` stands in for that GPU's cuBLAS, and the structure is derived without it, as its routes don't cover its
@@ -14,10 +14,10 @@ from types import SimpleNamespace
 import pytest
 
 import grader as G
-from verity.ml.definitions.registry import cublas_bf16 as CB
+from verity.definitions.registry import cublas_bf16 as CB
 from verity_vllm.program.frontend.train_step import AdamW, export_step, primitives, step_report
 
-LF_PATH = Path(__file__).resolve().parents[4] / "integrations" / "vllm" / "tests" / "program" / "train_step_lf.py"
+LF_PATH = Path(__file__).resolve().parents[4] / "adapters" / "vllm" / "tests" / "program" / "train_step_lf.py"
 #: the step's batch and the structure Program's, as rows of tokens
 STEP, STRUCTURE = (2, 17), (3, 5)
 #: the compute capability a step's bf16 products may be derived at, and the routes its cuBLAS stands in to take for the tiny

@@ -126,7 +126,7 @@ ITEM_LINE = re.compile(r'\s*(\w+\s*=\s*\[)?\s*("[^"]*"\s*,?\s*)+\]?\s*$')
 #: the ratchet caps of `tests/test_lean_packages.py`, each on one line there
 CAP_NAMES = ("UNWITNESSED", "INLINE", "ROOM", "TREES_EXCEPT", "FOUR_NAMES_EXCEPT", "UNDOCUMENTED", "SPEC_THEOREMS", "OVERLONG",
              "RETIRED_NAMES", "IMPORT_ALL_USES")
-#: a ratchet cap's line (`UNWITNESSED = {"Security": 355, "verity/core/service/flock": 7}`), and one of its entries
+#: a ratchet cap's line (`UNWITNESSED = {"Security": 355, "verity/protocols/flock/verifier": 7}`), and one of its entries
 CAP_LINE = re.compile(rf'(\s*(?:{"|".join(CAP_NAMES)}) = )\{{([^{{}}]*)\}}\s*$')
 CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps

@@ -302,9 +302,9 @@ def test_registry_loads_repo_declarations_and_file_fallback(tmp_path):
 
 
 def test_former_modules_map_a_module_back_through_each_move():
-    moves = [{"verity/ml/flock/verifier/tool.py": "tools/lean_agreement/tool.py", "old/gkr": "attic/gkr"},
+    moves = [{"verity/protocols/flock/agreement/tool.py": "tools/lean_agreement/tool.py", "old/gkr": "attic/gkr"},
              {"tools/lean_agreement/": "tools/agree/"}]
-    assert tools_registry.former_modules("tools.agree.tool", moves) == ["tools.lean_agreement.tool", "verity.ml.flock.verifier.tool"]
+    assert tools_registry.former_modules("tools.agree.tool", moves) == ["tools.lean_agreement.tool", "verity.protocols.flock.agreement.tool"]
     assert tools_registry.former_modules("attic.gkr.gpu.tool", moves) == ["old.gkr.gpu.tool"]
     assert tools_registry.former_modules("attic.gkrx.tool", moves) == []
     assert tools_registry.former_modules("tools.verity.check.tool", moves) == []
@@ -354,8 +354,8 @@ def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_p
     repo = tmp_path / "repo"
     (repo / "tools/agree").mkdir(parents=True)
     (repo / "tools/agree/tool.py").write_text("from research.store.tool import Tool\nAGREE = Tool(name='agree', version='1', "
-                                              "command=['true'], merge_requires={'agreement': ['verity/ml/flock/']})\n")
-    (repo / "verity/ml/flock").mkdir(parents=True)
+                                              "command=['true'], merge_requires={'agreement': ['verity/protocols/flock/prover/']})\n")
+    (repo / "verity/protocols/flock/prover").mkdir(parents=True)
     (repo / "verity/ml/flock/a.py").write_text("x = 1\n")
     git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)  # noqa: E731
     git("init", "-q")
@@ -365,7 +365,7 @@ def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_p
 
     assert tools_registry.locate("agree", repo) == ("tools.agree.tool", "AGREE")
     assert merge.declaration(repo, "agree").name == "agree"
-    assert merge.required_steps(repo, "HEAD~1", "HEAD", "agree") == {"agreement": ["verity/ml/flock/"]}
+    assert merge.required_steps(repo, "HEAD~1", "HEAD", "agree") == {"agreement": ["verity/protocols/flock/prover/"]}
     (repo / "tools/agree/tool.py").unlink()
     with pytest.raises(json.JSONDecodeError):
         tools_registry.locate("agree", repo)
@@ -378,19 +378,19 @@ def test_a_tree_from_before_a_move_still_declares_its_tools(tmp_path, monkeypatc
     from research import merge, remote
 
     moves = tmp_path / "moves.json"
-    moves.write_text(json.dumps({"moves": [{"paths": {"verity/ml/flock/verifier/tool.py": "tools/agree/tool.py"}}]}))
+    moves.write_text(json.dumps({"moves": [{"paths": {"verity/protocols/flock/agreement/tool.py": "tools/agree/tool.py"}}]}))
     monkeypatch.setattr(tools_registry, "MOVES", moves)
     monkeypatch.setitem(tools_registry.REGISTRY, "agree", "tools.agree.tool:AGREE")
     decl = ("from research.store.tool import Tool\nAGREE = Tool(name='agree', version='1', command=['true'], "
             "preflight=['echo', '{tag}'], after_land=['echo', 'landed'])\n")
-    for tree, rel in (("old", "verity/ml/flock/verifier/tool.py"), ("new", "tools/agree/tool.py")):
+    for tree, rel in (("old", "verity/protocols/flock/agreement/tool.py"), ("new", "tools/agree/tool.py")):
         (tmp_path / tree / rel).parent.mkdir(parents=True)
         (tmp_path / tree / rel).write_text(decl.replace("{tag}", tree))
     (tmp_path / "none").mkdir()
 
     old, new, none = tmp_path / "old", tmp_path / "new", tmp_path / "none"
     assert tools_registry.locate("agree", new) == ("tools.agree.tool", "AGREE")
-    assert tools_registry.locate("agree", old) == ("verity.ml.flock.verifier.tool", "AGREE")
+    assert tools_registry.locate("agree", old) == ("verity.protocols.flock.agreement.tool", "AGREE")
     assert tools_registry.locate("agree", none) is None
     assert tools_registry.load("agree", old).name == "agree" and tools_registry.load("agree", old).spec == "tools.agree.tool:AGREE"
     assert remote.tool_preflight(["--tool", "agree"], old) == ["echo", "old"]
@@ -415,7 +415,7 @@ def test_tc_probe_declaration_parses_real_flags_and_optional_instruction():
     _, key2 = tc.resolve_params(argv + ["--instruction", "mma.sync.m16n8k16"], REPO)
     assert key2["instruction"] == "mma.sync.m16n8k16"
     assert D.derivation_id(tc, {}, key, {"hw.family": "rtx4090"}, tc.key_conditions) != D.derivation_id(tc, {}, key2, {"hw.family": "rtx4090"}, tc.key_conditions)
-    _, key3 = tc.resolve_params(argv + ["--replay-golden", "verity/ml/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json"], REPO)
+    _, key3 = tc.resolve_params(argv + ["--replay-golden", "verity/definitions/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json"], REPO)
     assert key3["replay_golden"].startswith("sha256:")
 
 
@@ -711,8 +711,8 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
 
     src_dir = tmp_path / "src"
     src_dir.mkdir()
-    tar = subprocess.run(["git", "archive", "--format=tar", "HEAD", "benchmarks/tc_probe", "verity/ml/circuits/silicon",
-                          "verity/ml/circuits/targets/target.py", ".gitignore", "uv.lock", "pyproject.toml"],
+    tar = subprocess.run(["git", "archive", "--format=tar", "HEAD", "benchmarks/tc_probe", "verity/definitions/silicon",
+                          "verity/definitions/circuits/targets/target.py", ".gitignore", "uv.lock", "pyproject.toml"],
                          cwd=REPO, capture_output=True, check=True).stdout
     subprocess.run(["tar", "-xf", "-", "-C", str(src_dir)], input=tar, check=True)
     assert (src_dir / "benchmarks/tc_probe/tool.py").exists() and not (src_dir / ".git").exists()
@@ -732,7 +732,7 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
     store = json.loads((root / "runs/r1/job.json").read_text())["store"]
     assert "error" not in store, store.get("error")
     assert store["tool"] == {"name": "tc_probe", "version": "1", "spec": "benchmarks.tc_probe.tool:TC_PROBE"}
-    assert "benchmarks/tc_probe/tc_probe.py" in store["closure"] and "verity/ml/circuits/silicon/models.py" in store["closure"]
+    assert "benchmarks/tc_probe/tc_probe.py" in store["closure"] and "verity/definitions/silicon/models.py" in store["closure"]
     assert store["key_params_resolved"]["arch"] == "sm_89" and store["key_params_resolved"]["instruction"] == "mma.x" and "out" not in store["key_params_resolved"]
     c = store["conditions"]
     assert (c["source.commit"], c["source.tree"], c["source.dirty"]) == ("c" * 40, "t" * 40, False), "the control side's hint fills what git cannot say in an archive"

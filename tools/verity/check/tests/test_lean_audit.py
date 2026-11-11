@@ -819,7 +819,7 @@ def test_a_cache_reached_through_a_symlink_keeps_every_report(tmp_path, monkeypa
 
 
 def test_a_packages_test_generates_its_data_from_the_checkout_not_the_scratch_tree(tmp_path, monkeypatch):
-    """A test's `generate` (`runs`) reads fixtures that are no package's input (PoUW's reads `verity/ml/circuits/silicon/captures/vectors`), so the
+    """A test's `generate` (`runs`) reads fixtures that are no package's input (PoUW's reads `verity/definitions/silicon/captures/vectors`), so the
     audit, run from the scratch tree, is told where the checkout is."""
     root = _tree(tmp_path, monkeypatch)
     _run(tmp_path, 1)
@@ -1069,7 +1069,7 @@ def test_the_real_packages_and_their_inputs():
     pkgs = LA.packages(files)
     assert "Security/Proofs" in pkgs and not [p for p in pkgs if p.startswith("tools/verity/lean")]
     got = LA.inputs("Security/Proofs", files)
-    assert "Security/lean-audit.json" in got and "verity/core/service/flock/FlockVerify.lean" in got
+    assert "Security/lean-audit.json" in got and "verity/protocols/flock/verifier/FlockVerify.lean" in got
     assert "tools/verity/lean/check.py" in got and not [f for f in got if "/.lake/" in f]
     assert "tools/verity/lean/Replay.lean" in got and "tools/verity/lean/README.md" not in got
     assert not [f for f in got if f.startswith("tools/verity/lean/tests/")]

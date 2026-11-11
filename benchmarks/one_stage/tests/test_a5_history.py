@@ -14,18 +14,18 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import draw as D, registration as R, verifier as V
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.commitments import history as HT
-from verity.ml.windows import history as HW, interface as I, rows as CS
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import draw as D, registration as R, verifier as V
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.definitions.ops import gemm as G
+from verity.commitments import history as HT
+from verity.commitments.windows import history as HW, interface as I, rows as CS
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "core" / "protocols" / "spot" / "tests"))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "verifier" / "tests"))
 import a5 as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
 

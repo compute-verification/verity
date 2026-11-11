@@ -1,0 +1,56 @@
+[project]
+name = "verity-core-composition"
+version = "0.0.0"
+description = "The difftest of onsite's and remote's Lean (core_composition, core_onsite, core_remote) against the trial's composition rule with reject dominance."
+requires-python = ">=3.12"
+dependencies = ["verity-difftest"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_composition_difftest.py", "tests/test_registration_difftest.py"]
+# its whole run, slow tests included, takes about two hours on a loaded node, past check's default bound per suite
+# (`suites.py`'s SUITE_TIMEOUT_S, one hour), which killed it mid-run
+timeout_s = 10800
+# check runs it as three parts by test id (`lean-suites:verity-core-composition:K/3`, `suites.py`'s `id_part_of`), each
+# collecting every file and running the tests whose node id hashes to K, so that ci.toml's plans spread it over three shards
+parts = 3
+# Test-only: `lake` builds the registration log's check (`core-registration`, the core interface's) and the onsite and
+# remote packages beside this one (each product's executable, whose `serve` the
+# harness drives) and, through their path requires, the core interface, C-Flock's verifier, and the ported components'
+# Lean: sampled proofs (`core_vstar_recursive`: its form's dispatch and the recursive audit) over its one-stage audit
+# (with the LMS verifier and the difftest harness's Lean), PoUW's check (with
+# its window, commitments, and core's identity and randomness), the network certifier's period check (with the
+# certifier program and the LMS verifier), the inference-only policy's check (`nci_check`), PoUS's run check (with the
+# memory challenger's Lean), the PoUB session's and the memory challenger's wipe. The reference runs the
+# subprotocols' Python: PoUW's `core_check` and what it imports, and sampled proofs' one-stage difftest (`one_stage`,
+# the integrity profile, the proof system) with its generators, PoUW's check cases, the network certifier's period
+# difftest (its mirror over the certifier's certificates, LMS and PoUW's reading of one-stage's answers) with its
+# generator, the wipe's protocol (`wipe_protocol_case`, its mirror and signed wipes), and the inference-only policy's
+# difftest (`nci_reference` and θ's provenance difftest's declarations), each from its own suite's tests; and space's
+# and bandwidth's period hooks (`pous.period`, `remote_bandwidth.period`), space's signed by
+# the memory challenger's tests' deployed key (`mc_cases.py`, which reads the PoUS tests' test signer by path); with
+# them what they import of `verity.ml` and `verity.errors`. The configuration's composites (`verity.configuration.deploy.config`)
+# and sampled proofs' parties' subprotocol ids, which `product IDS id` is held to.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/claims",
+          "verity/hardware/record.py",
+          "verity/difftest", "verity/core/protocols/__init__.py", "verity/protocols/spot/verifier/profile.py",
+          "verity/hardware/registration.py", "verity/hardware/site", "verity/configuration/wire",
+          "verity/protocols/onsite/verifier", "verity/protocols/remote/verifier", "verity/protocols/interface",
+          "verity/protocols/pouw/verifier", "verity/protocols/spot",
+          "verity/protocols", "verity/protocols/certifier",
+          "verity/protocols/pous", "verity/protocols/poub/verifier",
+          "verity/protocols/pous/device/lean", "verity/commitments/attest/lean",
+          "verity/protocols/spot/verifier/lean", "verity/protocols/recursion/verifier/recursive", "verity/protocols/flock/verifier",
+          "verity/commitments/lms/lean",
+          "verity/commitments/identity", "verity/commitments/randomness",
+          # the deployment layer and its wire, which space's and bandwidth's challenger-host sides are started through
+          # (`deploy.stream.Side`)
+          "verity/configuration/deploy", "verity/configuration/wire"]

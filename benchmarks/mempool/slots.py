@@ -27,9 +27,9 @@ from typing import Any
 import pool_ram as PR
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from verity.ml.circuits.boolean import forms as F
-from verity.ml.circuits.boolean.forms import NOT, ONE, ZERO, const_bits, mux, or_reduce, sub, add
-from verity.ml.circuits.boolean.gf128 import mul_forms
+from verity.circuits.boolean import forms as F
+from verity.circuits.boolean.forms import NOT, ONE, ZERO, const_bits, mux, or_reduce, sub, add
+from verity.circuits.boolean.gf128 import mul_forms
 
 DESC = {"lookup": (("key", "HW"),), "take": (("rid", "RW"), ("k", "KW"), ("b", "NW")),
         "alloc": (("rid", "RW"), ("k", "KW")), "cache": (("rid", "RW"), ("k", "KW"), ("key", "HW")),

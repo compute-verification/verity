@@ -1,0 +1,235 @@
+"""What this suite's tests share: the paths, the references the Lean is compared with (Python's `verity_flock.firewall`,
+the cases frozen from Rust's `flock_live::release` before the Lean replaced it, in `fixtures/`, and `flock-firewall
+contract` for the send check's verdict), and the strategies that sample records, ops and outer sessions.
+
+Every record sampled is one the ZK server wrote (Python's, from a sampled history of ops, registrations among them), or one
+torn by a crash (its last line cut short), with blank lines in it or without its final newline. Strings are any Unicode but
+lone surrogates, integers are below 2^40, a registration's record is lowercase hex after its number, and a schedule is any
+JSON but floats: outside that domain Python and Rust differed from each other (a budget
+that isn't an integer, statements that aren't strings, integers past u64, lines that are JSON but not the ZK server's,
+`\\r\\n`), and the Lean reads only the ZK server's own lines (`test_the_lean_reads_only_the_firewalls_lines`).
+"""
+
+from __future__ import annotations
+
+import functools
+import importlib.util
+import json
+import tempfile
+from pathlib import Path
+
+from hypothesis import strategies as st
+
+import verity_difftest as D
+from verity_flock import firewall as FW
+
+HERE = Path(__file__).resolve().parent
+PKG = HERE.parent
+ROOT = Path(__file__).resolve().parents[6]
+FLOCK = ROOT / "verity" / "protocols" / "flock" / "prover"
+LEAN_FLOCK = ROOT / "verity" / "protocols" / "flock" / "verifier"
+VECTORS = ROOT / "verity/protocols/flock/prover/live/src/firewall_record_vectors.json"
+FIXTURES = HERE / "fixtures"
+REFUSED = "FIREWALL-REFUSED: "
+
+
+def _op(fw: FW.Firewall, op: list):
+    """One op of the shared vectors on `fw`, its result as they write it (`test_firewall_release`'s `_vector_op`)."""
+    name, *args = op
+    try:
+        if name == "admit":
+            return {"release_ms": fw.admit(*args, timed=True)}
+        if name == "slot":
+            with fw.slot(*args):
+                return None
+        if name == "register":
+            return fw.register(lambda n: n.to_bytes(8, "big") + bytes.fromhex(args[0]))[0]
+        if name == "registrations":
+            return fw.admit_reads(*args)
+        return getattr(fw, name)(*args)
+    except FW.Refused as e:
+        return {"refused": str(e).removeprefix(REFUSED)}
+    except json.JSONDecodeError:
+        raise
+    except ValueError as e:
+        if name == "open":
+            return {"error": str(e)}
+        raise
+
+
+def python_op(value: dict) -> dict:
+    """`{"op", "record"}` through `verity_flock.firewall` on a state directory holding the record: `{"record", "result"}`.
+    A record it can't read is a rejection (json's error is a ValueError, which an open would report as its own)."""
+    with tempfile.TemporaryDirectory() as d:
+        log = Path(d) / "record.jsonl"
+        log.write_bytes(value["record"].encode())
+        try:
+            result = _op(FW.Firewall(Path(d)), value["op"])
+        except json.JSONDecodeError as e:
+            raise D.Reject(f"the record: {e}") from None
+        return {"record": log.read_bytes().decode(), "result": result}
+
+
+def record_of(ops: list[list]) -> str:
+    """The record Python's ZK server writes running `ops` from an empty state."""
+    with tempfile.TemporaryDirectory() as d:
+        fw = FW.Firewall(Path(d))
+        for op in ops:
+            _op(fw, op)
+        log = Path(d) / "record.jsonl"
+        return log.read_bytes().decode() if log.exists() else ""
+
+
+
+E2E = [("r0000", "L0"), ("r0001", "L0"), ("r0000", "L0"), ("r0000", "L1"), ("r0003", "L0"), ("r0002", "L0")]
+
+
+def e2e_record() -> list[str]:
+    """The end-to-end run's record (`fixtures/release-e2e.jsonl`), one line an event: Python's opens and finishes, then
+    its six outer sessions (`E2E`), as Rust's release side wrote them."""
+    return (FIXTURES / "release-e2e.jsonl").read_text().splitlines(keepends=True)
+
+
+@functools.cache
+def firewall_agree():
+    """`verity/protocols/flock/agreement/firewall_agree.py`, the contract check's sessions."""
+    spec = importlib.util.spec_from_file_location("firewall_agree", ROOT / "verity/protocols/flock/agreement/firewall_agree.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+TEXT = st.text(st.characters(exclude_categories=("Cs",)), max_size=4)
+NAMES = ("L0", "L1", "alg")
+SESSION = st.one_of(st.sampled_from(["r0000", "r0001"]), st.sampled_from(["r0000", "r0001", "r0002", "r9999"]), TEXT)
+PART = st.one_of(st.sampled_from(NAMES), st.sampled_from(NAMES), st.sampled_from(["inner", ""]), TEXT)
+STREAM = st.one_of(st.sampled_from(["s", "t"]), st.sampled_from(["s", "t"]), TEXT)
+VALID_PARTS = st.lists(st.sampled_from(NAMES), min_size=1, max_size=3, unique=True)
+PARTS = st.one_of(VALID_PARTS, VALID_PARTS, VALID_PARTS, st.lists(PART, max_size=4))
+BUDGET = st.one_of(st.none(), st.none(), st.integers(0, 3))
+NAT = st.integers(0, 2**40)
+JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 2**40) | TEXT,
+                    lambda inner: st.lists(inner, max_size=3) | st.dictionaries(TEXT, inner, max_size=3), max_leaves=6)
+
+
+def valid_schedule(n: int):
+    return st.builds(lambda s, w: {"start_ms": s, "windows_ms": w}, st.integers(0, 60),
+                     st.lists(st.integers(1, 30), min_size=n, max_size=n))
+
+
+def schedule(n: int):
+    """A release schedule for `n` statements: none, one, or one off by a width, a key or its form."""
+    near = st.builds(lambda s, w: {"start_ms": s, "windows_ms": w}, st.integers(-2, 60) | NAT,
+                     st.lists(st.integers(-1, 30) | NAT | st.booleans(), max_size=4))
+    extra = st.builds(lambda r, k, v: r | {k: v}, valid_schedule(n), TEXT, JSON)
+    return st.one_of(st.none(), st.none(), valid_schedule(n), valid_schedule(n), near, extra, JSON)
+
+
+@st.composite
+def open_op(draw):
+    parts = draw(PARTS)
+    return ["open", draw(STREAM), parts, draw(BUDGET), draw(schedule(len(parts)))]
+
+
+OP = st.one_of(
+    open_op(),
+    st.builds(lambda s: ["finish", s], SESSION),
+    st.builds(lambda s, p, w: ["stop", s, p, w], SESSION, PART, TEXT),
+    st.builds(lambda s, p: ["release", s, p], SESSION, PART),
+    st.builds(lambda s, p: ["admit", s, p], SESSION, PART),
+    st.builds(lambda s: ["failures", s], STREAM),
+    st.builds(lambda s, p: ["slot", s, p], SESSION, PART),
+)
+HEX = st.binary(max_size=3).map(bytes.hex)
+#: the registrations a statement reads, by number, or why its value commitments are none of the server's
+READS = st.one_of(st.lists(st.integers(0, 4), max_size=3), st.lists(st.integers(0, 4), max_size=3),
+                  st.lists(NAT, max_size=2), TEXT)
+#: rule 5's ops, sampled only by `op_input`, so `outer_input`'s samples stay those `fixtures/release-outer.jsonl.gz` was frozen on
+REG_OP = st.one_of(
+    st.builds(lambda h: ["register", h], HEX),
+    st.builds(lambda s, p, r: ["registrations", s, p, r], SESSION, PART, READS),
+)
+
+
+@st.composite
+def torn(draw, text: str) -> str:
+    """`text` as it is (most often), cut short inside its last line, with a blank line after each, or without its final
+    newline."""
+    how = draw(st.sampled_from([0, 0, 0, 0, 0, 1, 2, 3])) if text else 0
+    lines = text.splitlines(keepends=True)
+    if how == 1:
+        keep = draw(st.integers(1, len(lines[-1]) - 2))
+        return "".join(lines[:-1]) + lines[-1][:keep]
+    if how == 2:
+        return text.replace("\n", "\n\n")
+    if how == 3:
+        return text[:-1]
+    return text
+
+
+@st.composite
+def scene(draw, kinds=("served", "budget", "served", "budget", "none", "registered")) -> tuple[str, str, str, list[list]]:
+    """A record, an outer session to ask of it, and the ops aimed at the two, `(record, session, part, aimed)`. Most often
+    a recursive session opened and finished, its first k statements released and the next one asked (sometimes after a
+    slot of it whose holder died); or a stream's sessions stopped up to its budget, or one short of it, and the stream
+    opened again; or registrations numbered and a recursive session's first k statements admitted, each admitting the
+    registrations it reads, and the next one admitted; or nothing; then a few ops of any kind."""
+    ops, ask, again = [], None, None
+    kind = draw(st.sampled_from(kinds))
+    parts, stream = draw(VALID_PARTS), draw(STREAM)
+    if kind == "registered":
+        again = ["open", stream, parts, draw(st.one_of(st.none(), st.integers(1, 2))), None]
+        ops += [again, ["finish", "r0000"]] + [["register", draw(HEX)] for _ in range(draw(st.integers(0, 4)))]
+        k = draw(st.integers(0, len(parts) - 1))
+        for p in parts[:k]:
+            ops += [["admit", "r0000", p], ["registrations", "r0000", p, draw(READS)], ["release", "r0000", p]]
+        ask = ("r0000", parts[k])
+        ops.append(["admit", *ask])
+    elif kind == "served":
+        again = ["open", stream, parts, draw(st.one_of(st.none(), st.integers(1, 3))),
+                 draw(st.one_of(st.none(), valid_schedule(len(parts))))]
+        k = draw(st.integers(0, len(parts)))
+        ops += [again, ["finish", "r0000"]] + [["release", "r0000", p] for p in parts[:k]]
+        ask = ("r0000", parts[k] if k < len(parts) else parts[0])
+        if draw(st.sampled_from([False, False, False, True])):
+            ops.append(["slot", *ask])
+    elif kind == "budget":
+        budget = draw(st.integers(1, 2))
+        again = ["open", stream, parts, budget, None]
+        n = draw(st.integers(budget - 1, budget))
+        for i in range(n):
+            ops += [again, ["finish", f"r{i:04d}"], ["stop", f"r{i:04d}", parts[0], "cut"]]
+        ask = (f"r{max(n - 1, 0):04d}", parts[0])
+    ops += draw(st.lists(st.one_of(OP, REG_OP) if kind == "registered" else OP,
+                         max_size=draw(st.sampled_from([0, 0, 0, 2, 5]))))
+    s, p = ask if ask is not None and draw(st.sampled_from([True, True, True, False])) else (draw(SESSION), draw(PART))
+    aimed = [["admit", s, p], ["slot", s, p], ["release", s, p], ["finish", s], ["stop", s, p, "cut"]]
+    if kind == "budget":
+        aimed = [again, ["admit", s, p], ["failures", stream]]
+    elif kind == "registered":
+        aimed = [["registrations", s, p, draw(READS)], ["registrations", s, p, draw(READS)], ["register", draw(HEX)],
+                 ["release", s, p], ["failures", stream]]
+    elif again is not None:
+        aimed = [["admit", s, p], *aimed, again, ["failures", stream]]
+    return draw(torn(record_of(ops))), s, p, aimed
+
+
+@st.composite
+def op_input(draw) -> dict:
+    """`{"op", "record"}`: one of the ops aimed at the scene, or any op."""
+    text, _, _, aimed = draw(scene())
+    return {"op": draw(st.one_of(st.sampled_from(aimed), OP, REG_OP)), "record": text}
+
+
+PANIC = st.one_of(TEXT, st.builds(lambda c, n: c * n, st.characters(exclude_categories=("Cs",)), st.integers(195, 205)))
+STEP = st.one_of(st.just("ok"), st.just("ok"), st.just("ok"), st.builds(lambda w: {"err": w}, TEXT),
+                 st.builds(lambda m: {"panic": m}, PANIC))
+SEND = st.one_of(st.just(True), st.just(True), st.just(False), st.builds(lambda m: {"panic": m}, PANIC))
+
+
+@st.composite
+def outer_input(draw) -> dict:
+    """`{"now_ms", "part", "prove", "ready", "record", "send", "session"}`: one outer session of a scene."""
+    text, s, p, _ = draw(scene(("served", "served", "served", "budget", "none")))
+    return {"now_ms": draw(st.integers(0, 150)), "part": p, "prove": draw(STEP), "ready": draw(STEP), "record": text,
+            "send": draw(SEND), "session": s}

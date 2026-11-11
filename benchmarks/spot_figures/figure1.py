@@ -79,17 +79,17 @@ from pathlib import Path
 from typing import Callable, Iterator, Sequence
 
 import cards as spot_cards
-from verity.core.protocols.reporting import PERIODS
-from verity.core.protocols.spot import plancheck
-from verity.core.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
+from verity.protocols.reporting import PERIODS
+from verity.protocols.spot import plancheck
+from verity.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design)
-from verity.ml.circuits.partition_v2 import unit_class
+from verity.circuits.partition_v2 import unit_class
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[2]
 ADVERSARY, DEPLOYMENTS, HARDWARE = ("benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
                                     "benchmarks/census/hardware.json")
-RHO, RHO_HARDWARE = "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml"
+RHO, RHO_HARDWARE = "verity/protocols/inference_only/rho/data/reference.toml", "verity/protocols/inference_only/rho/data/hardware.toml"
 WORLD, DATACENTER, CENSUS_WORLD = "world-h200", "dc-12500-machines-600s", "world-inference-2027"
 #: the H200's dense FP8 peak is the H100 SXM5's (one die, one clock)
 PEAK = "h100-sxm5-80gb/e4m3"
@@ -139,7 +139,7 @@ REF_MODEL, RHO_MODEL = "DeepSeek-V4-Pro", "deepseek-v4-pro"
 REFERENCES = {"ref_sparseloco": ("exfil", "sparseloco-1000", "bits"), "ref_rollouts": ("exfil", "rl-rollouts", "bits"),
               "ref_pretrain": ("work", "v4-pretrain", "flops"), "ref_step": ("work", "v4-step", "flops")}
 #: the circuit-check pin a MAC's AND gates are read from: the Hopper dot's FP8 MoE coordinate
-AND_PIN = ("verity/ml/definitions/registry/boolean_fp8_moe.circuit-check.json",
+AND_PIN = ("verity/definitions/registry/boolean_fp8_moe.circuit-check.json",
            "MoeExpertFp8BlockCoordinateW_v4{K=128,G=128,KB=128,SWAP=True,DOT=HopperE4m3MmaV2Dot32_v2}")
 
 

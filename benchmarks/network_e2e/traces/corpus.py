@@ -136,7 +136,7 @@ TRACES |= {name: (["--enable-chunked-prefill", "--max-num-batched-tokens", "8192
                   f"preemptions, hold-backs, order and prefill splits; {CACHE_WHAT[h[0]]})")
            for name, h in HOSTILE.items()}
 #: warden trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
-#: active warden (`verity.core.protocols.certifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
+#: active warden (`verity.protocols.certifier.verifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
 #: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the warden's egress base
 #: (`egress_base`), covers the slowest request's send to last token without the warden (heavy 10.7 s, small KV 55.7 s,
 #: async greedy). Under ``--admit tick`` it is kept, so that a tick trace's network certifier has an arrival trace's
@@ -356,7 +356,7 @@ def stop(server: subprocess.Popen) -> None:
 def tick_modules():
     """The vLLM integration's `serve_admit` (the release headers and the watermark's path) and `tick_plugin` (the server's
     plugin and middleware, and ``VERITY_TICK``), imported only for ``--admit tick``."""
-    p = str(ROOT / "integrations/vllm")
+    p = str(ROOT / "adapters/vllm")
     if p not in sys.path:
         sys.path.insert(0, p)
     from verity_vllm.pipeline import serve_admit, tick_plugin
@@ -528,7 +528,7 @@ def warden_modules():
     for p in (ROOT, ROOT / "benchmarks/network_traces"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
-    from verity.core.protocols.certifier import warden
+    from verity.protocols.certifier.verifier import warden
 
     import warden_serve
     return warden, warden_serve
@@ -784,7 +784,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
             *(["--middleware", TICK_MIDDLEWARE] if tick else [])]
     engine_env = {**ENGINE_ENV, **model.env}
     env = dict(os.environ, **engine_env, **adversary, VERITY_TRACE_DIR=str(d / "raw"),
-               PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT),
+               PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "adapters/vllm"), str(ROOT),
                                            *filter(None, [os.environ.get("PYTHONPATH")])]))
     if tick:
         env[tick_modules()[1].TICK_ENV] = json.dumps({**{k: tick[k] for k in ("bucket_us", "sat_us", "free_us")},

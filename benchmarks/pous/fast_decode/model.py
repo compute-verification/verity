@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 
-from verity.core.protocols.pous.schemes.p2 import DELTA_NS
+from verity.protocols.pous.verifier.schemes.p2 import DELTA_NS
 
 PAYLOAD = 2054
 MAC_PER_MMA = 16 * 8 * 32

@@ -23,7 +23,7 @@ has the same layout. A unit and a slot tree's domain don't name the slot or the 
 slot, and the step domain the step. :func:`commit` is the reference commitment; :func:`open_unit` opens one unit of one slot
 from that slot's rows alone (a replay of its request), and :func:`verify_unit` checks an opening against the step's root.
 
-Parts, rows and groups, with their checks, are ``verity.ml.commitments.layout``'s, which also reads a layout file
+Parts, rows and groups, with their checks, are ``verity.commitments.layout``'s, which also reads a layout file
 (:func:`load`) in the form :func:`_layout_json` writes.
 """
 from __future__ import annotations
@@ -40,15 +40,15 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments import layout as L
-from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512, tagged_sha512_prefix
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.layout import UNIT_MAX_BITS, Group, Part, Row
-from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree, domain_message
-from verity.ml.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, verify_roots
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
-from verity.ml.crypto.chacha20 import keystream
+from verity.commitments import hm96
+from verity.commitments import layout as L
+from verity.commitments.identity import identity_digest_sha512, tagged_sha512, tagged_sha512_prefix
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.layout import UNIT_MAX_BITS, Group, Part, Row
+from verity.commitments.merkle import CommitmentDomain, MerkleTree, domain_message
+from verity.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, verify_roots
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
+from verity.commitments.crypto.chacha20 import keystream
 
 __all__ = ["UNIT_MAX_BITS", "Group", "CommitShape", "Part", "Row", "StepCommit", "UnitOpening", "commit", "commit_slot",
            "edge_layout", "fixture", "fresh_salt_key", "h200_layout", "layout_digest", "load", "open_unit", "random_outputs",
@@ -208,7 +208,7 @@ def fresh_salt_key() -> bytes:
 
 def row_salts(salt_key: bytes, slot: int, first: int, n: int) -> bytes:
     """The salts of rows ``first .. first + n - 1`` of ``slot``, 192 bytes each: ChaCha20 chunks 3g .. 3g + 2 under the step's
-    salt key with nonce ``slot`` (Flock's ``hm96_salt``, ``verity.core.protocols.pouw.audit.hm96_salt``)."""
+    salt key with nonce ``slot`` (Flock's ``hm96_salt``, ``verity.protocols.pouw.verifier.audit.hm96_salt``)."""
     return keystream(salt_key, slot, 3 * first, 3 * n)
 
 
@@ -403,7 +403,7 @@ def edge_layout() -> CommitShape:
     return CommitShape("commit-slots/edge/v1", (g0, g1))
 
 
-FIXTURE = Path(__file__).resolve().parent.parent.parent.parent / "verity" / "ml" / "commitments" / "tests" / "fixtures" / "commit-slots-v1.json"
+FIXTURE = Path(__file__).resolve().parent.parent.parent.parent / "verity" / "commitments" / "tests" / "fixtures" / "commit-slots-v1.json"
 
 
 def _layout_json(layout: CommitShape) -> dict[str, Any]:
