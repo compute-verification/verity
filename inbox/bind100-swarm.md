@@ -84,3 +84,48 @@ compute-research posted its own table on PRF-537 (Tue 10 Nov 4:27 PM PST; `note:
 - **TAIL** (after your first comment on PAD): KILIAN disputes your "Theorem 2 with a linear premise keeps a square root": the additive term enters only as `log(q/eps)`. One line on PRF-542 saying who is right.
 - **AUDIT-SPOT, AUDIT-HEADLINE, AUDIT-TABLE:** for every binding number you quote, say which theorem it is: `compilerKSReg`'s (generic, 2^-33.6) or `SampledKSLiveV3`'s (deployed, one session). AUDIT-HEADLINE: which of the two does the headline run rest on?
 - **Everyone: `T` in compressions** stands as in the entry above. KILIAN, EXTFORM, ROM, TARGET and AUDIT-FLOCK have answered it: nothing to pay if the premise and `T` both count compressions, 5 to 9 bits on a linear term if `T` stays in calls of 4 to 64 KiB rows.
+
+## Wed 11 Nov 01:21Z, coordinator: eight finals in (REPBREAK, REPPROVE, ATTACK, NFACTOR, TAIL, AUDIT-SPOT, AUDIT-HEADLINE, AUDIT-TABLE). The finder stands; the sizes it is quoted at do not. New asks for KILIAN, EXTFORM, DRAFT-CORE, SCALE, AUDIT-CRYPTO, WIDEHASH
+
+Daniel gets the checked answer at 04:00Z (8 PM PST). **Each of you still running: post your final by the time below, and end it with one line headed "For Daniel" that I can quote as it stands.**
+
+**1. The units of the three sizes are wrong for the theorem, and I checked it myself** (AUDIT-SPOT S2/S3/S6, NFACTOR, AUDIT-HEADLINE S18). From `origin/main:benchmarks/spot_figures/cards/workload.glm-5.3.json`, 154 strata, 287 tokens, summed `per_token * 287 * field`:
+
+| field | sum | what the swarm has been calling it |
+|---|---|---|
+| `macs` | 2^43.72 | "N at the floor" (2^43.73) |
+| `ands` | 2^54.15 | (not used) |
+| blocks (`per_token` alone) | 2^34.32 | (not used) |
+| `in_bits + out_bits` | 2^53.63 | (not used; `W` of `deltaPub_le_deployed`) |
+| largest `in_bits + out_bits` of one block | 2^20.05 | NFACTOR's rho |
+
+- `n_PU = 57,344` is the `macs` field of one block type, `DsaMqaLogits_v3{N=14,H=32,D=128}` (`per_token` 0.585). It is not a count of blocks.
+- `KSReg`'s `nG` is `s.prog.gates.length` (`SamplingGeneric.lean:553-560`). A multiply-accumulate is not a gate. So B.2's `nG * sqrt(Pr[Bconf])` at the floor's circuit is not 2^-33.6: with `nG = 2^54.15` it is 2^-23.2 (AUDIT-SPOT), and `gates.length` may count more than the ANDs (I did not read which gates the list holds; SCALE, say).
+- `W <= 2^40` (`deltaPub_le_deployed`) holds for at most 1,965 tokens at the fused cut (AUDIT-HEADLINE): under seven requests. So the Lean-checked `miss + 2^-100` covers no served size, and my 00:48Z item 1 overstated what it gives.
+- Every number in this file at "floor / B / A" used `N = 2^43.73 / 2^47.9 / 2^58.8` and `n_PU = 57,344 / 2^24.2 / 2^35.1`. A term linear in `N` loses 10.4 bits at the floor if `N` is gates; a term in `n_PU` loses 18.5 if `n_PU` is the census's blocks.
+
+**2. The finder itself: seven derivations agree, and none of the attacks broke it.** REPBREAK (PRF-542 00:30Z and final), REPPROVE (final 00:57Z), ATTACK and NFACTOR (finals) add to KILIAN, EXTFORM and DRAFT-CORE. What differs is the count:
+- **Node form** (REPPROVE): `N' * (2 c_run / 2^256 + 1/(eM))`, `c_run = T (1 + n_sess * e_s)`. Degrades with sessions: 113.0 / 108.8 / 97.9 bits at one session, 97.2 / 84.6 / 62.8 at `n_sess = n_PU`.
+- **Targeted second run** (REPBREAK `B_tgt`, ATTACK per position): rerun only the sessions that open the gate. `4 N T (1 + d e_s) / 2^256`: 112.0 / 107.8 / 96.9 at any session count, 99.0 / 94.8 / 83.9 at the largest k. Needs one clause in `Sessions`: the positions a session reveals are fixed by (s, u). The deployed reveal meets it (`SpotFlock/Reveals.lean:38-42, 64-65`, `mem_reveal` 121).
+- **By block** (NFACTOR WAIT-PU, through `WitOpens`, `Opens.lean:290-305`): count `n_PU`, no new clause. **Skip by gate** (WAIT-S): `2 T (1 + e_s)(1 + m (1 + rho)) / 2^256`.
+- **NFACTOR's warning, for EXTFORM and KILIAN: skip by gate, never by block.** A finder that stops at the first rerun opening the same block, not the same gate, is refused by NFACTOR's counterexample (its final, section WAIT-S).
+- ATTACK: with `X = sum_p Pr[sample reads p]`, the term is `X * (2 E[trial] / 2^256 + 1/(eM))`; the generic contract lets a session reveal outside its block, and then `X = N`.
+
+**3. KILIAN (03:15Z): do not prove the first-hit lemma again.** `Security/Proofs/Flock/Soundness/LinkFinder.lean` on `main` is it (`finderG` 42, `plurality_le` 208, `succ_ge` 229, `expect_finderCost_le` 284, `link_mass_le` 315-336, `outOf_spec` 358). REPPROVE's final on PRF-542 lays out the bridge: eight steps that replace `pr_offReg_le` (`SamplingGeneric/Reg.lean:387-441`) where `ksReg_of_sessionKS` (`Reg.lean:512`) uses it, with the premise `LinkCRReg` per (tape, gate) shaped like `LinkCRZC` (`CompiledLink.lean:618-632`), about 250 to 500 lines, and it needs C5's `runCostAt_exp` (branch `cursor/proofs-bconf-cost-5987`, not on `main`). **Your deliverable is that bridge, or as many of its eight steps as compile, on your branch, with the statement you would put in place of `KSReg`'s `epsilon_reg` written out.** State the count it uses in the theorem's own unit (item 1).
+
+**4. EXTFORM (02:45Z):** which `w`, in the theorem's unit. For each of node, targeted, by block and by gate: the count, whether the generic contract as written gives it or which clause it needs, and whether the deployed protocol meets that clause. Use item 2's forms; say where you disagree with REPBREAK or NFACTOR.
+
+**5. SCALE (02:30Z) and DRAFT-CORE (02:45Z): the sizes, in the theorem's units.** One table, each number with the file and field it was read from:
+- For the floor (one request, 287 tokens), and for B and A if they are anything more than scalings: `gates.length` of the program `KSReg` is instantiated at (ANDs and the rest), the committed positions a session can open (rows, and bits), the proof blocks (`n_PU`), `W = ioSum`, the largest `|io u|`, the sessions a run has at the design's sample, the blocks the sample reads, and the expected positions a sample reads (`Q_s`, ATTACK's `X`).
+- SCALE: where did `n_PU = 57,344` and B's and A's `N` and `n_PU` come from (the draft, the planner, a card)? If nothing sources them, say so.
+- DRAFT-CORE: at those sizes, what does `SampledKSLiveV3` give with `Q_s` as it is defined (not bounded by `W`)? AUDIT-SPOT computes 2^-115.6 to 2^-130.6 for a 27,713-block sample and says no lemma bounds `Q_s` that way. Is that right, and what is the smallest lemma that would?
+- Both: restate 112.0 / 107.8 / 96.9 (targeted) and 113.0 / 108.8 / 97.9 (node, one session) with the counts in the theorem's unit.
+
+**6. AUDIT-CRYPTO and WIDEHASH (03:15Z): PAD holds only with four changes** (TAIL, PRF-530 final 00:52Z: 2^-130.8 / 2^-126.6 / 2^-115.7 with positions in bits; 2^-121.8 / 2^-117.6 / 2^-106.7 with T in calls on 64 KiB rows). (1) The order is M, then c_k, then the roots, then the sample. (2) **Every commitment a session opens must be opened in the clear and bind statistically**: the trace, the interiors, the registered values, the advice, the input anchors and the network certificate. Any one left computational drops it to 2^-76 to 2^-82. (3) T in compressions. (4) New Lean: a two-run finder without `runExt`, `regVal` over published strings, Naor's count, the false-statement lemma, the two-stage committed form.
+- **AUDIT-CRYPTO:** your hiding verdict with change 2 applied to all six kinds of commitment, not the trace alone: what is the hiding assumption then, what leaks if one pad key covers them all, and what the design rule "everything zero-knowledge" needs said.
+- **WIDEHASH:** PAD's cost with change 2: pads on all six, per row and per session, against the 1,024-bit digest's 2.2 to 2.4 times.
+- PAD's positions are bits. Restate its three numbers with item 1's counts.
+
+**7. TAIL conceded to KILIAN** (PRF-542): Theorem 2 of ePrint 2024/1434 is linear under a linear premise. No square root comes from the literature's side.
+
+Nothing here is in Lean beyond `LinkFinder` and the two theorems of the 00:48Z entry. Restating `KSReg` changes a locked record and is Daniel's; say what you would restate, do not land it.
