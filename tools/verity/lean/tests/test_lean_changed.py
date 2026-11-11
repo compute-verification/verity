@@ -14,6 +14,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -25,6 +26,9 @@ LC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LC)
 
 STORED = LC.stored
+LAKE = shutil.which("lake") or (str(Path.home() / ".elan/bin/lake") if (Path.home() / ".elan/bin/lake").exists() else None)
+#: `fast` replaces `subprocess.run` with a stand-in check.py; a test whose stand-in builds with Lake runs it through this
+RUN = subprocess.run
 BUILD = LC.build
 
 
@@ -1022,6 +1026,98 @@ def test_a_sampled_mismatch_is_audited_again_only_alone_and_never_removes_files_
     assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 1
     assert len(calls) == 1 and all(f.exists() for f in mine + outside)
     assert not (tmp_path / "out" / "mismatched").exists() and outcome_line(said)["outcome"] == LC.FAILED
+
+
+#: a package of two `module` files, one of whose compiles logs a linter's warning: Lean keeps the message in the
+#: module's `olean.server` with its source's absolute path, so in a tree at another path the module has the same key
+#: and the same input hash for Lake, and other outputs
+PATHED = {"lakefile.toml": 'name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n',
+          "lake-manifest.json": json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": [], "name": "p",
+                                            "lakeDir": ".lake", "fixedToolchain": False}),
+          "lean-audit.json": OLD, "P.lean": "module\n\npublic import P.M\n",
+          "P/M.lean": "module\n\npublic def P.kept (n : Nat) : Nat := 0\n"}
+PARTS = ("M.olean", "M.olean.server", "M.olean.private")
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_after_the_second_audit_the_entry_under_the_modules_key_names_what_it_compiled_and_another_tree_restores_that(
+        fast, tmp_path, monkeypatch):
+    """Through Lake. The node's artifact cache holds, under the module's key, the outputs an earlier run compiled, which
+    the first audit restores into the slot tree and whose sampled recompile the stand-in check.py then fails (here they
+    are another path's, the one way to two outputs under one key that a test can have at will; check.py's own recompile
+    lets that difference pass, and fails on the ones Lean's nondeterminism makes). The run forgets the module, and in the
+    second audit, which stages nothing, Lake compiles it over the outputs in place. What the run then puts in the cache
+    replaces the entry under the same key, so the cache no longer names the outputs that failed: a third tree restores
+    the ones the second audit compiled and compiles nothing."""
+    _, tree, calls = fast
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.setattr(LC, "requirers", lambda *_: [])
+    A, MK = LC.AUDIT, LC.LA.MK
+    monkeypatch.setattr(A, "_SANDBOX", None)
+    store = (tmp_path / "lean-artifacts").resolve()
+    earlier, slot, another = tmp_path / "an-earlier-tree" / "pkg", tree / "pkg", tmp_path / "another" / "pkg"
+    for pkg in (earlier, slot, another):
+        for name, text in PATHED.items():
+            (pkg / name).parent.mkdir(parents=True, exist_ok=True)
+            (pkg / name).write_text(text)
+        shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg / "lean-toolchain")
+    n = iter(range(9))
+
+    def build(pkg: Path) -> list[str]:
+        """`lake build` as check.py runs it, in the sandbox where there is one, reading a cache staged from the node's
+        when check.py was given it (`ARTIFACTS`); the modules Lake compiled."""
+        pre = []
+        if A.ARTIFACTS:
+            A.stage_build(MK, pkg, [], cache := A.ARTIFACTS / MK.STAGE / f"test-{next(n)}")
+            pre = ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}"]
+        r = RUN(A.in_sandbox(pkg, [*pre, "lake", "build"]), cwd=pkg, capture_output=True, text=True, env=A.lake_env())
+        assert r.returncode == 0, r.stdout + r.stderr
+        return LC.compiled(r.stdout + r.stderr)
+
+    def outputs(pkg: Path) -> list[bytes]:
+        return [(pkg / ".lake" / "build" / "lib" / "lean" / "P" / f).read_bytes() for f in PARTS]
+
+    def entry() -> tuple[str, dict]:
+        """(the key, the entry) of `P.M` in the node's cache, which holds one."""
+        [(key, e)] = [(f.stem, e) for f in (store / MK.INDEX).glob("*.json")
+                      if (e := json.loads(f.read_text()))["module"] == "P.M"]
+        return key, e
+
+    audits = []
+
+    def check(argv, **kw):
+        if str(LC.AUDIT_PY) not in argv:
+            return RUN(argv, **kw)
+        calls.append((argv, kw.get("cwd")))
+        monkeypatch.setattr(A, "ARTIFACTS", Path(argv[argv.index("--artifacts") + 1]) if "--artifacts" in argv else None)
+        audits.append((build(pkg := Path(argv[-1])), outputs(pkg)))
+        fails = [MISMATCH] if len(calls) == 1 else []
+        (out := Path(argv[argv.index("--out") + 1])).mkdir(parents=True, exist_ok=True)
+        (out / "audit.json").write_text(json.dumps({"packages": [{
+            "package": str(pkg), "sandbox": True, "failures": fails, "failure_codes": ["sampled"] * len(fails),
+            "sampled": {"mismatched": {"P.M": str(pkg)}} if fails else {}}]}) + "\n")
+        return type("P", (), {"returncode": len(fails)})()
+
+    monkeypatch.setattr(LC.subprocess, "run", check)
+    monkeypatch.setattr(A, "ARTIFACTS", None)
+    assert build(earlier) == ["P", "P.M"]
+    assert LC.LA.LakeArtifacts(store).put({earlier: {"sandbox": True}}, log=lambda s: None) == 2
+    key, was = entry()
+
+    said = []
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0, said
+    assert "--artifacts" in calls[0][0] and "--artifacts" not in calls[1][0] and len(calls) == 2
+    (first, kept), (second, compiled) = audits
+    assert first == [] and kept == outputs(earlier), "the first audit restored what the cache named"
+    assert "P.M" in second and compiled != kept and compiled[0] == kept[0], "the second compiled it: its own path's"
+    assert entry()[0] == key and (now := entry()[1])["hash"] == was["hash"] and now["digests"] != was["digests"]
+    build_dir = slot / ".lake" / "build"
+    named = [a for a in now["digests"] if a.endswith((".olean", ".olean.server", ".olean.private"))]
+    assert sorted((store / "artifacts" / a).read_bytes() for a in named) == sorted(compiled) == \
+        sorted(MK.output(build_dir, "P.M", a).read_bytes() for a in named), \
+        "the entry under the module's key names the second audit's outputs"
+    monkeypatch.setattr(A, "ARTIFACTS", store)
+    assert build(another) == [] and outputs(another) == compiled, "which a tree that built nothing restores"
 
 
 def test_a_spec_failing_only_because_its_provers_sampled_recompile_did_is_audited_again(tmp_path):
