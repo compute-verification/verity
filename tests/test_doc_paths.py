@@ -35,7 +35,7 @@ LEAN_DOCS = "Security/"
 RETIRED = frozenset({"packages", "protocols", "pods", "census", "security_proofs", "frontends", "archive", "glossary"})
 #: (document, token as written) that reads as a repository path but names something else, each with why.
 NOT_PATHS = {
-    ("verity/ml/circuits/ops/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
+    ("verity/definitions/ops/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
     ("tools/research/README.md", ".cursor/mcp.json"): "the Cursor config the reader writes in their own checkout",
     (".agents/skills/kernel-engineering/SKILL.md", "panel.py"): "the kernel panel, kept in an agent store",
     ("benchmarks/pouw/harness/README.md", "panel.py"): "the kernel panel, kept in an agent store",
@@ -50,10 +50,10 @@ NOT_PATHS = {
     ("fixtures/proof-format-v3/README.md", "test_format3_equivalence.py::test_write_vectors"): "veritor's test",
     ("fixtures/proof-format-v3/README.md", "format3_equivalence.rs"): "D-SP1's guest, deleted with the archive",
     ("tools/verity/lean/README.md", "lakefile.lean"): "the file the package deliberately lacks",
-    ("verity/core/protocols/pous/DISCREPANCIES.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
-    ("verity/core/protocols/pous/PROTOCOL.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
-    ("verity/core/protocols/pous/PROTOCOL.md", "BandEncDec.lean"): "the band chain's Lean, outside this tree",
-    ("verity/core/protocols/pous/PROTOCOL.md", "regate.py"): "the timing red team's script",
+    ("verity/protocols/pous/verifier/DISCREPANCIES.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
+    ("verity/protocols/pous/verifier/PROTOCOL.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
+    ("verity/protocols/pous/verifier/PROTOCOL.md", "BandEncDec.lean"): "the band chain's Lean, outside this tree",
+    ("verity/protocols/pous/verifier/PROTOCOL.md", "regate.py"): "the timing red team's script",
     ("Security/Definitions/Pous/Model/BandChain.lean", "SpongeDense.lean"): "the band chain's Lean, outside this tree",
     ("Security/Definitions/Pous/Model/BandChain.lean", "BandChainModel.lean"): "the band chain's Lean, outside this tree",
     ("Security/Definitions/Pous/Model/BandChain.lean", "BandMultiModel.lean"): "the band chain's Lean, outside this tree",
