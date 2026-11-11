@@ -19,6 +19,53 @@ def test_the_proof_servers_line_prices_on_figure_1s_path():
     assert isfinite(at1) and isfinite(at10) and 0 < at10 < at1
 
 
+@pytest.mark.slow
+def test_a_steady_state_row_prices_its_type_and_no_other(tmp_path):
+    """A type a steady-state rows file holds costs its row's GPU-seconds a block in the row's statements, with no
+    lever on it but the verifier's seconds and the row's record as its basis; every other type keeps its price and
+    names the table that set it; the line still plans.  A row that lacks a field is refused.  Slow as the test above."""
+    import json
+    from dataclasses import replace
+
+    from breakeven import sweep
+
+    reprice, case = sweep.reprice, sweep.cases()["P5+poolwin600"]
+    strata = reprice.price_fused(sweep.fuse_reads(sweep.priced_strata(case.line), fixed="sum"), case.fused)
+    block = next(x["block"] for x in strata if x["block"].startswith("SparseMlaSplitPart_v1{T=64,"))
+    row = {"block": block, "statement_seconds": 3.2, "blocks": 128, "provers": 1, "record": "the-run"}
+    path = tmp_path / "steady.json"
+    path.write_text(json.dumps({"rows": [row]}))
+    rows = reprice.steady(path)
+
+    levers = dict(prover=2.0, k4=True, k_gain="mps_types", front=True, plain=True, cold=0.5)
+    before = reprice.apply_server(strata, verify=1.0, **levers)
+    after = reprice.apply_server(strata, verify=1.0, steady=rows, **levers)
+    bare = reprice.apply_server(strata, steady=rows, **levers)
+    for b, a, x in zip(before, after, bare, strict=True):
+        if a["block"] != block:
+            assert a == b and a["basis"].startswith("reprice.")
+            continue
+        assert (a["priced"], a["basis"], a["statement_blocks"]) == ("steady", "steady: the-run", 128)
+        assert a["seconds_per_block"] == x["seconds_per_block"] == 3.2 / 128
+        verifier = b["fixed_seconds"] - _fixed(reprice, strata, block, levers)
+        assert x["fixed_seconds"] == 0.0 and a["fixed_seconds"] == pytest.approx(verifier)
+    assert {x["basis"] for x in before} >= {"reprice.DEFAULT", "reprice.SERVER", "reprice.FUSED_SERVER"}
+
+    line = sweep.build(replace(case, steady=str(path)))
+    shares = reprice.basis_shares(line[1]["partition"].value["strata"])
+    assert "steady: the-run" in shares and abs(sum(shares.values()) - 1) < 1e-9
+    assert isfinite(at := sweep.bound(line, 0.10, "world year", case.scale)) and at > 0
+
+    path.write_text(json.dumps({"rows": [{k: v for k, v in row.items() if k != "record"}]}))
+    with pytest.raises(ValueError, match="lacks record"):
+        reprice.steady(path)
+
+
+def _fixed(reprice, strata, block, levers) -> float:
+    """The fixed seconds a statement of `block` proves in with no steady-state row and no verifier."""
+    return next(x["fixed_seconds"] for x in reprice.apply_server(strata, **levers) if x["block"] == block)
+
+
 #: `reprice.LINEARS` without the served cut's MoE GEMMs
 OLD_LINEARS = ("Fused[", "MoeExpertFp8BlockGemm", "FlashInferFp8Linear", "ScaledMmFp8", "BatchedGemm", "CublasSplitKGemm",
                "LlBf16DotprodGemm", "Gemm_v2")
