@@ -42467,3 +42467,68 @@ For the table:
 - K's always-checked term is 0, proved: `SpotFlock.ksTwo_noAlways` and `code_card_biUnion_noAlways_le` on `propext`, `Classical.choice`, `Quot.sound` (try run `f3d0` [run]); PR #8871 at `f2b8eb2ba4e1`, unmarked, on #8836.
 - It adds no bits to the bound: K mean stays 2^37.69 at D*1 [relayed].
 - Left: records `f3f2` and quick tier `d865`, then the ready line.
+
+## BENCHCROSS, Wed 11 Nov 08:34Z: second readings, all three hold: CONCRETE's evaluator #8867 at 64f7cb635e3d (twelve cells by hand), FUSED's 4,566 / 4,591 / 4,762 GB for today's cut (by the planner, to the GB), SALTS's claim that the salts above level 0 are outside the hiding argument (four places on main); #8853's whole suite passed
+
+Tags as before: [run], [read], [relayed], [guess]. Nothing wrong found in this hour's three readings. I marked and pushed nothing.
+
+**The readings, one line each**
+- second reading of CONCRETE's evaluator at `64f7cb635e3d` (#8867): holds, twelve cells and the cap on K's mean, by hand [run].
+- second reading of FUSED's 08:11Z figure for today's cut, 4,566 / 4,591 / 4,762 GB, at kernels' rows `r20261111-072106-5e46` and `r20261111-072117-1a7a`: holds to the GB, computed by the planner and not by a fit [run].
+- second reading of SALTS's 08:09Z claim (the salts above level 0 are outside the hiding argument) at `main` `8201dacff2`: holds at the four places it cites [read]. It is still a new statement version, so Daniel's.
+- second reading of #8853 at `4ab2b732df`, its whole suite: holds, 108 passed [run].
+
+**CONCRETE's evaluator (#8867, `64f7cb635e3d`)**
+- By hand, with exact integers [run]: `4·T·(1 + n·e + (1 + e)·K) / 2^256` at T = 2^80, n = 5,523,986, K = 221,727,998,429, e = 1 + 210·k, and k = ⌈4·tables·2^23 / 2.71828…⌉ (12,343,986; 395,007,543; 2,468,797,139, each as stated).
+
+| tables a session | compressions | 64 KiB calls (×513) | a year (×52,560) | both |
+|---|---|---|---|---|
+| 1 | 2^-105.038 | 2^-96.036 | 2^-89.357 | 2^-80.354 |
+| 32 | 2^-100.038 | 2^-91.036 | 2^-84.357 | 2^-75.354 |
+| 200 | 2^-97.395 | 2^-88.392 | 2^-81.713 | 2^-72.710 |
+
+- Each equals CONCRETE's cell, which is the floor in hundredths.
+- The cap at 32 tables: K's mean at most 227,711,235,758 (2^37.7284). At that value the bound is at most 2^-100, and one gate more is above it. 33 tables reads 2^-99.994. 16 tables leaves 1.04 bits. All as stated.
+- The evaluator itself at that head prints the same lines for 1, 32 and 200 tables and for `--row-bytes 65536` [run, VM, a worktree at the head].
+- The order's D*1 row (2^-105.0, 2^-97.4, at most 32 tables) holds by the same arithmetic.
+- Not checked: the inputs. K's mean, the session count and the 210 waits are SCALE's and REPBREAK's [relayed]. Not read: its 34 tests and the Lean instance, which is not a PR yet.
+
+**FUSED's figure for today's cut on measured prices**
+- What I ran: row (i) honest on S8's premises over the census's own card, as runs F, A and C of my 05:54Z entry were, with the two `MoeExpertFp8GemmW_v1` cells at kernels' new steady rows. I read the two rows from each run's `out/summary.json` [read]: 0.6719 and 0.688 statements a second at 512 blocks a statement, 2.9069 and 2.8388 ms a block, 121 of 121 accepted, none refused.
+- `MoeExpertFp8BlockGemm_v3` has no steady row, so three stand-ins, as FUSED chose them. World year (datacenter year in brackets) and the total at 300 GB [run]:
+
+| `BlockGemm_v3` priced at | as run | at 300 GB | with the verifier's slope kept | at 300 GB | runs |
+|---|---|---|---|---|---|
+| the reader's steady rate (0.000832 s a block) | 4,566.0 (4,516.3) | 88.87% | 4,572.5 (4,522.5) | 88.99% | `r20261111-082248-abe7`, `-b083` |
+| the fused block's price (0.0023152) | 4,591.3 (4,539.0) | 89.34% | 4,597.8 (4,545.2) | 89.46% | `-3443`, `-ed0f` |
+| its `k_log` row (0.012333) | 4,762.2 (4,692.1) | 92.49% | 4,768.6 (4,698.3) | 92.61% | `-21e8`, `-babf` |
+
+- All six on `a5e4e56a11`, 36 rows each, no errors, every row inside its pinned budgets. The price files are `bench_prices.own_m_{steadyrate,fused,klog}.json` in the lane's tools.
+- "As run" is comparable with F, A and C. "With the slope kept" is the basis of the corrected rows (4,048.6 GB for (ii)).
+- So the fused cut is worth 11.5% to 15.1% on measured prices (4,048.6 against 4,572.5 to 4,768.6), as FUSED and the order's 08:19Z update say.
+- The label: measured prover prices for 61 steady cells; `BlockGemm_v3` is not measured; the verifier is Lean's modeled term.
+
+**SALTS's hiding claim** [read, `origin/main` at `8201dacff2`]
+- `Definitions/Flock/ZK/Table.lean`: `lig : Fin 2 → (Fin L → K) → Hi → VL` is any function of the restarted table and `Hi`. The header says the view holds `y₁'^r` whole and that "`T'` and levels ≥ 1 are functions of it".
+- `Definitions/Flock/ZK/RealView.lean`: `Hid := Fin T.nU ⊕ (Fin 2 × Fin T.nPU)`. The hidden leaves are level 0's and the pads trees' unopened ones, and the fresh salts are `ys : T.Hid → Salt`.
+- `Proofs/…/ZkView/Statements.lean`: `ZkWireFixed` is for every `Hi` that is a finite additive group, and its loss sums over `Hid` only. A 32-byte key is such a type. With `Hi` the key and the expansion inside `lig`, the statement applies as written, and nothing asks the expanded bytes to look uniform.
+- `Proofs/…/ZkView/Defs.lean`: levels ≥ 1's salts are `Base`'s last part, `Fin 2 → Hi`; the pre-final leaves (`LeafPos`) are level 0, the pads and τ.
+- One point SALTS did not write: an opened leaf's salt above level 0 is revealed, and under the cut it is an output of the expansion. The model covers it, since it is inside `lig`'s output.
+- Not checked by either of us: the live path's properties that tie the firewall's bytes to this model [SALTS's guess stays a guess].
+- Its arithmetic [run]: 2 × (2^21 + 2^19 + 2^17 + 2^15 + 2^13 + 2^11) = 5,591,040 leaves, 1,073,479,680 bytes, 39.95% of 2,687,238,144; the salts' 7.3 CPU-s become 4.38. One count is off by two: 8,404,994 hidden leaves and 5,591,040 make 13,996,034, not the 13,996,032 salted, so τ's two leaves are not in the salted count.
+- Not recomputed: the statement's seconds (2.50 and 1.43 s), which are modeled on kernels' rule.
+
+**#8853, the whole suite** [run]
+- `r20261111-081118-8d10` on vy-nebius-cpu-9 at `4ab2b732df`: `benchmarks/spot_figures` fresh, 108 passed in 1,119 s.
+
+**Out and next**
+- No run of mine is out.
+- Next: BREAKEVEN's 09:00Z report (the head block at 2.86 / 1.8 / 0.9 / 0.52 s, the waterfall, D*2 and D*3) and each new row of its table; #8859 again when HEADPROF's row exists (its baseline `r20261111-082011-1416` lands about 08:47Z [relayed]).
+
+For the table:
+- Today's cut on measured prices, second reader: 4,566 to 4,762 GB over a world year as run, 4,572 to 4,769 GB with the verifier's slope kept (six runs, `r20261111-082248-abe7` to `-babf`). The range is the one MoE kind with no steady row. The fused cut is worth 11.5% to 15.1%.
+- The binding evaluator (#8867, `64f7cb635e3d`): twelve cells of D*1 recomputed by hand, all hold. 32 tables a session keeps 2^-100 only while K's mean is at most 2^37.7284.
+- Salts above level 0 from a seed: the hiding statements do not read those salts (four places read on `main`). No premise is added; it is a new statement version.
+
+For BREAKEVEN:
+- Today's cut, row (i), with kernels' two `GemmW` rows: the three price files are `bench_prices.own_m_steadyrate.json`, `_fused.json` and `_klog.json` in `lanes/proofs/tools/`. Launch: `PRICES=<file> ROWS=row_i.txt ALSO=MoeExpertFp8GemmW_v1,MoeExpertFp8BlockGemm_v3,MoeRouterSigmoidBias_v1 bash part2/a_launch.sh [SUCC_WARM=prover SUCC_VSLOPE=keep]`. Results above; no need to rerun them.
