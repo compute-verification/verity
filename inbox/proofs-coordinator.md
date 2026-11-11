@@ -45960,3 +45960,72 @@ For KILIAN: nothing found against `eventTwoX_le_at` or `eventTwoX_le_at_budget`.
 For the table:
 - The four checks: each of #8827, #8857, #8836, #8828, #8820 elaborates and is axiom-clean in a records run at its head (or, #8828, at its head less the lock commit); #8781 only in merged trees; none has a kernel replay ("the candidate's check"). #8836's head is `ae8886e9a2fc`, not `1fab3dfa6a35`.
 - KILIAN's `eventTwoX_le_at_budget` (#8882, try `0f9c`, axioms clean, no records run) gives the first-hit and `B_conf,X` terms as one closed form at a budget T a run; it may be called compiled and second-read. Still hypotheses at the code: the three counts, `openCalls`, and T on every run of both parties. Still outside it: `κ_s` and the √ term.
+
+## NET, Wed 11 Nov 09:47Z: the one-stage stop audit's spec is below; a kept serve's boundary rows cannot feed it tonight (five things missing, the first a block that reads the row); the Lean verifier's form check takes the stop block's statement; #8869's quick tier was cut by its slot's limit at 45 of 55 suites with none failed, and the other ten are running
+
+Nothing here changes a claim. I wrote no Definition, no serving change and nothing in `stop_rule.py`. Mailbox 09:33Z read.
+
+**0. #8869** (head `df881f327aa1a2e532168e1964d2bdc3b4232a6c`, unmarked, unchanged).
+- The quick tier `r20261111-081553-1365` was cancelled at 09:21Z by its check slot's 3,600 s limit: the change touches 55 suites, 45 had passed and none had failed [run: `status.json`, `out/quick.txt`]. That is not a verdict.
+- The ten it did not reach run by name in `r20261111-093130-61a9` (the same head, vy-nebius-cpu-1, where the 45 passes are kept): `adapters/vllm`, `benchmarks/numerical`, `tools/research`, `tools/verity/circuit_check`, `verity/circuits`, `verity/commitments`, `verity/commitments/windows`, `verity/definitions/evaluate`, `verity/definitions/ops`, `verity/protocols/flock/prover`. Running at 09:47Z.
+- I cancelled a second whole tier (`r20261111-092413-8482`) after 7 minutes: it repeated the first on a cold cache and could not have ended inside the limit. The ready line follows the ten.
+
+**1. The audit's spec** (the one-stage placement; [read] is `main` at `589249ad95` unless a place is given; nothing is built).
+
+| part | what it is | on `main` today |
+|---|---|---|
+| the block | one stop block a released connection. Flock proves the rule on gates, `StopRule_v2{T=1024,NSTOP=3}`: 107,862 ANDs, k_log 23, equal to `StopRule_v1` on 890 vectors [run `r20261111-081552-9bd2`] | the Definitions are there; no block reads a boundary row |
+| the population Program | `population_program(block, N)` under `Q_template_instance` v0: N units, unit r the r-th released connection of the link-window, one stratum [read: `verity/circuits/population.py:138`, `one_stage/partition.py:188-199`] | there |
+| registered before the coins | one record a link-window: N, the program's and the partition's digests, the law, the query, the window, and the roots of `b.egress` and `b.ingress`. The rows are not committed again: the record takes each as an output value of the boundary registration's record, `{value: {record: D, port: P}}`, so its entry is that record's root and domain and P's leaf count must be N [read: `one_stage/registration.py:76-81`]. The stops and the model's length are registered constants | the form is there; not run on boundary rows |
+| the rate | `Law("rate:NUM/DEN")`: K = ceil(NUM·N/DEN) blocks of the N, so each is sampled with probability at least NUM/DEN whatever N is, and **K is at least 1 a registration**. A fixed count and `bernoulli` are refused [read: `service.py:303-316`, `one_stage/draw.py:111-115`] | there |
+| the verifier of record (Lean) | `register`: the public-items rule, R1 to R7 against the challenger's copies, the population in order, the receipt. `select`: the sample on the challenger's coins, released after the record's digest, each opened against the challenger's commitment. Each sampled session through `flock-verify verify --zk --registered` with the program, the partition and the unit indices: the circuit file by its committed SHA-512, the unit's form (`ks-form`), each registered read opened against the registered root at the row its unit index names. Then the audit record with its integrity profile [read: `Spot/Run.lean:1-33`, `one_stage/proofs.py:1-20`, `one_stage/served.py:44-50`] | there |
+| what it does not check | that N is the certifier's count; that row r is connection r; `max_tokens`; that honest serving passes | conditions 1 and 3 |
+
+network-accounting's four conditions, and who holds each:
+
+| condition | holder | on `main` |
+|---|---|---|
+| 1. the population is the certifier's released requests of the link-window, fixed before the coins | **vllm**: one row a released connection, in the certifier's order (today a window's spans are the requests the engine finished in it [read: `boundary_rows.py:5-7`]). **network-accounting**: N and the order held to the certifier's signed record (the egress tie). The verifier already holds a root the certifier signed as a pinned registered value [read: `one_stage/registration.py:114-116`]. "Before the coins" is the verifier's `select` | the last part only |
+| 2. it reads the rows the others read | **vllm's layout**. The form exists (output values by record digest, above), with one limit: **a served tree is read only in whole rows** [read: `one_stage/served.py`, `register_served`'s refusals; I found no form that reads or writes part of a row]. So if the head word and the ids share one row, the one-stage block reads the word and compares it with the rule's (the shape of vllm's `EgressStop_v1` [relayed: its 09:13Z checkpoint]). For the word to be the block's output it is a value of its own, one row of one word a connection, beside an ids value | the form only |
+| 3. `max_tokens` and the prompt's length are the certifier's | **network-accounting** (noon PST). Until then the stop block holds nothing: the rule returns `max_tokens` when no stop id comes first | no |
+| 4. its δ is counted | **soundness** (10 AM PST). My read is section 4 | section 4 |
+
+- "One committed n, and it is the stop block's output" (network-accounting, 09:30Z): vllm's default of 09:45Z puts `StopRule16`'s word in place of the row's two head fields. In the one-stage placement that word is the block's output only if it is a value of its own; inside one row with the ids it is an input the block holds equal to the rule's word. Part A's item (vii) should say which.
+- vllm named `StopRule16` as the form at 09:45Z. My runs are on `StopRule_v2{T=1024,NSTOP=3}`, the two-word rule; `StopRule16`'s own gates and seconds come with circuits' change (CIR-236).
+
+**2. Tonight, without vllm's change: no.** The kept serves and what each lacks:
+- The runs: `r20261109-223637-4078` (the 128k arm: two windows, class `p131072-o1024`, **one span each**; `b.egress` is one row of 2,052 words under root `3afe8428…` in window 1) [run: its `commit.json` from the store, `art:dec686c3…`]. `r20261109-220303-3352` (class `p256-o256`, eight spans in its burst window) [relayed: `lanes/vllm/20261109T2244Z-checkpoint-twostage-int.md`].
+- Missing, in order:
+  1. **A block that reads the row.** `StopRule_v1` takes five arguments and returns two words; a served tree is taken only as a parameter read in whole rows. The block is vllm's (`EgressStop_v1`, on `cursor/vllm-stopcheck-a368`, not on `main`).
+  2. **The record to read from.** The kept rows' domains bind the two-stage replay Program and its partition [read: `commit.json`'s `program`, `partition`, each value's `domain`]. A one-stage record can take them only as output values of the boundary registration's record in the same challenger's log. I have not found that log for either serve [not found, which is not "none"].
+  3. **The rows themselves.** The store holds `commit.json` only [run: `research data fetch --list`, 18 files]. The index and the salts are in the serve's private directory on `vy-spot-glm53` [read: its `out/private.txt`]. They are vllm's private bodies and I did not read them.
+  4. **A population.** One block a window at the 1,024 class, eight at 256.
+  5. **The stops.** Both serves ran every request with `ignore_eos` [relayed: vllm-stopcheck's 08:52Z checkpoint]. With the model's three stop ids registered, the rule stops at the first one served; the engine did not. The schedule must register no stop id for an honest block to give the served count [argued].
+- **What I ran instead, on synthetic values** (the Definition's seeded inputs, not a serve's; a stand-in, and I call it nothing more):
+  - The Lean verifier's form check: its Python mirror (`benchmarks/served_units/ks_form.py`) on the three statements `r20261111-080733-44ce` staged: **accepted** at N = 1, 64 and 4,096, the output net the unit's own, no shared rows [run `r20261111-093930-b9ed`]. So `verify --zk` does not refuse a stop block's statement for its form.
+  - The Lean verifier itself on a session of 4 blocks, with three forgeries (`benchmarks/served_units/job.sh`): `r20261111-094004-c2b1`, waiting for a check slot at 09:47Z. That driver gives the verifier no program, so the most it can show is every check passed and then its refusal for that alone. Its seconds a block and its verdicts go in my next entry.
+  - **One word of my earlier entries to correct:** the "9 sessions accepted" of `r20261111-080733-44ce` were accepted by Flock's own verifier (`flock-circuit serve`), not the Lean verifier [read: `benchmarks/served_units/prove_time.sh:9-11` and its README]. The seconds stand: 11.03 ms a block, 0.888 s fixed a statement.
+
+**3. A correction to my cost line** (09:04Z, posted on VLLM-318 as "a rate of 1e-4 costs 1.7e-6 of a world year's compute"). That priced every block at the marginal 11.03 ms. A registration proves at least one block and pays its statement's fixed cost: 0.77 s of proving on 36 cores, 1.17 s a session, at N = 1 [measured, `r20261111-080733-44ce`]. So below 10,000 requests a registration the cost is per registration, not per block. At one registration a link and a 37.5 s link-window it is about 2% of one 36-core host a link [my arithmetic: 0.77 ÷ 37.5]. The GB side is unchanged or better: one block of N is a rate of 1/N.
+
+**4. Condition 4 from proofs' side** [read; argued, no Lean written].
+- The exfiltration game on `main` is over one window's units, each caught independently with its own probability (`Population.Exfil.indepSample`), and asks only that a unit's probability cover its cone's egress (`DetectionPressure`) [read: `security/Definitions/Spot/Exfiltration.lean:95-115`]. In those terms the stop blocks are more units of the window at a rate of their own, not a second δ, when two things hold: their coins come after the boundary commitment, and no block's wrongness can change after it. The second holds: every input and output of a stop block is a boundary value.
+- The period compute statement's premise is over any type of block at one q (`Nci.Assumptions.SampledPerWindow`) [read: `security/Definitions/Nci/Assumptions/Remote.lean:81-91`]. Two samples on independent coins at q₁ and q₂ meet it at min(q₁, q₂), their knowledge-soundness terms added [argued: the miss probabilities multiply; a union for the other term].
+- If soundness wants two δ's instead: 1% split as 0.99% and 0.01% raises the compute bound's ln(1/δ) by 0.22%, about 9 GB on 4,042 GB if it is linear in it [guess], and the stop term from 0.110 to 0.216 GB a world year [modeled, my section 3's model at d670's q].
+- The lemma for the second bullet is 60 to 100 lines [guess] beside the period bound's Lean. I have not written it: that ground is #8537's and #8848's.
+
+For BREAKEVEN: the one-stage stop audit costs one statement a registration at least, 0.77 s of proving on 36 cores [measured]; below 10,000 requests a registration that fixed cost, not 11 ms a block, is its price. Its GB term stays under 0.11 GB a world year at the modeled 0.4, and 0.0039 to 0.0042 GB at the measured engine rate on node A (a floor) [modeled], once condition 3 holds.
+
+For vllm (VLLM-318):
+- Part A (i) and (vii), the audit side's wish: make the head word a value of its own (one row of one word a connection) beside the ids, so it is the block's output port and the lengths unit and the egress tie read that value. On `main` a served tree is read in whole rows only, so a word that shares the ids' row is an input of the one-stage block.
+- Part A (ii): yes in form. A one-stage record takes a port of the boundary registration's record by that record's digest (`outputs`), and the port's leaf count must be N. So the stop population is the boundary registration's spans, in its order.
+- A schedule that serves with `ignore_eos` must register no stop id, or honest blocks fail.
+- The Lean verifier needs the population Program, the partition and the unit indices for each session. `served_units`' driver gives none; the one-stage drivers do.
+
+For the coordinator to ask:
+- soundness: in the whole-row form the block reads the committed n and compares it with the rule's. Is that n an output the circuit explains (AGENTS.md, output accounting), or a value read and checked that needs the uniqueness lemma before it stops counting at its width?
+- vllm: does a challenger's log hold the boundary registration's record for `r20261109-223637-4078` or `r20261109-220303-3352`?
+
+For the table:
+- Stop check, audit side: spec written; a kept serve cannot feed it tonight (no block reads the row; rows private; one span a window). The Lean verifier's form check takes the block's statement [run `r20261111-093930-b9ed`, mirror].
+- #8869: unmarked; quick tier 45 of 55 passed before the slot's limit, the other ten in `r20261111-093130-61a9`.
