@@ -455,3 +455,39 @@ TERMGB, the Job 7 thread, to coordinator (network-accounting). Written Wed 11 No
 
 TIMER: none set by this thread; `termgb-8779-on-main` is the other execution's and stands as it was.
 
+[2026-11-11T22:14Z] 7d66d4c82ff9
+LEANMERGE to network-accounting's coordinator, Wed 11 Nov 2:14 PM PST. Job 5 report: the recut is pushed, three of the five runs pass, two are still out past my 20 minutes. Blocked on those two only.
+
+**Head.** `cursor/net332-json-is-crossed-c4a7` at `6a285960e2f237ee3d747a7581eba82e3014c980`, three commits on the crossed tip `3ff11d118f93be79dd009c2c4e0d7eae2461d411` (still the tip, `git fetch` at 2:01 PM PST [ran]). lean has named no later head on NET-332 (newest comment there before mine is lean's of 1:01 PM PST [read, 2:01 PM PST]), so no merge was made. No pull request, no lock record, no `--update`.
+
+**Where each file is now** [ran: the diff against the tip, 5 files, +42 −10].
+- `verity/protocols/flock/verifier/Flock/JsonIs.lean` (was `verity/core/service/flock/Flock/JsonIs.lean`): new. Code as the old branch's byte for byte from `@[expose] public section` on; the header is now a module docstring after the imports, which the Lean bar's `module-doc` asks.
+- `verity/protocols/flock/verifier/Flock.lean`: the root's import line, after `Flock.JsonKeys`.
+- `verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean`: two import lines; six lines in six functions (609 `canonicalEntry`, 651 `slotEntryDigest`, 1011 `windowCheck`, 1064 `holds`, 1220 `rowsWindowCheck`, 1241 `auditCheck`), seven `==` in all since `holds`' line compares twice. The old branch was the same seven. The four `named` lambdas stay.
+- `security/Proofs/Properties/NetworkPeriod.lean`: the proof's three `by_cases` in `auditCheck_facts` (370, 377, 382).
+- `verity/protocols/certifier/verifier/lean/lean-audit.json`: the layer `NetworkCheck.Period` admits `Flock.JsonIs` (one import, one clause of `why`); as parsed JSON nothing else differs [ran].
+- No seventh comparison [read: all 115 comparison lines of `Period.lean`; not probed by the kernel]. `main`'s three new checks in `scanOf` compare numbers, options of numbers and `Flock.Program` types; the closed hunks changed none of the six lines' text.
+
+**Runs, each `--on auto`, each once, each with `tree_sha` the head** [ran; outputs read through the mask].
+- `r20261111-214602-0e6f`, try of `Flock/JsonIs.lean --siblings`: exit 0. No theorem in it. Siblings: no built module of the package declares a name it does; 63 imported, 189 had no build to check.
+- `r20261111-214720-5ccd`, try of `NetworkCheck/Period.lean`: exit 0; dependencies built (59 jobs); no theorem in it.
+- `r20261111-214930-7fc1`, try of `security/Proofs/Properties/NetworkScan.lean`: exit 0; 9,333 jobs, among them `NetworkCheck.Period`, `Properties.NetworkScan`, `Properties.NetworkScan.Flattens`, `Proofs.Properties.NetworkScan.Accept` and `…Causal` (so the mend holds under the change); none of its 11 theorems uses an axiom beyond `propext`, `Classical.choice`, `Quot.sound`.
+- `r20261111-214832-b9c9`, try of `security/Proofs/Properties/NetworkPeriod.lean`: **no verdict.** Waiting for a slot since 1:49 PM PST, four checks ahead of it at 2:12 PM PST. This is the run that elaborates the three changed proof lines; nothing else built them.
+- `r20261111-215028-a30c`, the suite `verity/protocols/certifier/verifier/network` in full, `--fresh`: **no verdict**, running at 2:12 PM PST. So no time for the difftest yet. The same suite on the old branch took 1,085 s of wall time, slot wait included (`r20261111-110303-f81f` [read]).
+
+**Local checks at the head** [ran]: the Lean bar and the Lean packages' tests, 40 passed; retired terms, 23 passed; `tests/test_lean_vocabulary.py`, 15 passed, its one bookkeeping warning names none of the five files.
+
+**The eight files' `strIs`** [read]: the theorem `Verity.Sampled.Trees.strIs`, `jsonStrIs j s = true → j = .str s`, the read-back of `Spot.jsonStrIs`. It does not collide: the full names differ, and no file opens both namespaces (`open Flock.J` is only in `NetworkCheck/LinkWindow.lean`). `Spot.jsonStrIs` has the same body as `Flock.J.strIs`; the period check's package does not require Spot's, so the test sits in Flock. Told to lean in the comment as theirs to rule.
+
+**Records the change would move** [read; no `--records` run, which would report every record the crossing left stale and hold a build slot beside lean's Part C]: in `security/lean-audit.json` and `security/Properties/lean-audit.json`, `reads["NetworkCheck.Period"]`'s digest and the definitions of `auditCheck`, `canonicalEntry`, `holds`, `rowsWindowCheck`, `slotEntryDigest`, `windowCheck`; and a new `reads["Flock.JsonIs"]`. No guarantee's statement.
+
+**Not built.** `security/Proofs/Properties/NetworkPeriod.lean` (its run is out). On their own: `NetworkCheck.lean`, `PeriodMain.lean`, `RecordsMain.lean`, `CoreOnsite.lean`, `security/Properties/NetworkPeriod.lean`. No package's Lean check, no replay, no records run: "elaborates", not "proved".
+
+**Least sure of.** (1) The three proof lines: they are the old branch's text, but `auditCheck` around them is the crossed tree's, and `b9c9` has not run. (2) "No seventh" is by reading. (3) Whether `a30c`'s difftest sees the compiled check agree: unread. (4) I did not look at the Python mirror of the period check for a comparison that should change with the Lean; the old branch changed none.
+
+**Making `Accept.lean` and `Causal.lean` not depend on a check's place** (no code). I would unfold `scanOf` in one proof only, in `Accept.lean`, and have it conclude a structure with one field for each fact a later proof needs: what `Accepted` has now plus what `Causal.lean`'s `Facts` reads (walkable, the rows' input nodes, the arguments, the egress arguments). `scanOf_facts` then derives from those fields and never names a bind, so a new check in `scanOf` mends one walk and not two. Inside that one walk I would peel every `Fits.bind_ok` the same way and pick each hypothesis a field needs by the check's text (its type, as `‹need (…) _ = .ok _›` does), naming only the three binds that destructure a value (the root, the templates, `a0`). A new check then adds one unused hypothesis and breaks nothing; a changed check fails at the one field that reads it, by name. The heavier way, restating `scanOf` as a conjunction of named Boolean checks so each fact is a projection, changes verifier code and every record that reads it; I would not start there.
+
+**One slip, mine.** Twice at 2:10 PM PST I printed a run's status fields with a filter that left out the top-level `command` and `host` but not a nested record's, so the first 160 characters of the slot wrapper's command line showed in my shell (the `slot.py` prefix and its flags; the path and the machine fields were masked; no secret, no node name). I went back to `rstat.py`.
+
+Everything is pushed and the notes are synced (`tools/net332-crossed-leanmerge/`: launch scripts, sent messages, masked excerpts). When the two runs end I read them on resume; if `b9c9` fails I mend in a new commit and relaunch it once.
+
