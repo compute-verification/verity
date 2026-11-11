@@ -15,23 +15,33 @@ at a session of `k` accepted reruns a wait and `m′ = 210` waits (`waits`): the
 extracted, and for each needed gate a run with the sessions holding it extracted.
 
 This file holds that expression over the rationals (`firstHitBound`), where an instance at numerals is decided by
-arithmetic, and its value at one sampling design:
+arithmetic, and its value at two session sizes:
 
-* `k_le_of_tables_le_32`: a session of at most `32` tables, their level-0 lengths summed at most `32·2^23`, has
-  `k = ⌈4N₀/e⌉ ≤ 395007543`;
+* `k_le_of_one_table`, `k_le_of_tables_le_32`: a session whose level-0 lengths sum to at most `2^23`, one table, has
+  `k = ⌈4N₀/e⌉ ≤ 12343986`, and one of at most `32·2^23`, `32` tables, has `k ≤ 395007543`;
 * `firstHitBound_le`: the bound rises with `T`, `n`, `k` and `K̄`, so its value at a design's numbers bounds it at
   every statement within them;
-* `firstHitBound_tables32`: at most `2^-100` at `T = 2^80`, `n = 5523986` sessions, `k = 395007543` and
+* `firstHitBound_table1`: at most `2^-100` at `T = 2^80`, `n = 2^24` sessions of one table and `K̄ = 2^42` gates;
+* `firstHitBound_tables32`: at most `2^-100` at `T = 2^80`, `n = 5523986` sessions of `32` tables and
   `K̄ = 227711235758` gates, the most that keeps it (`firstHitBound_tables32_tight`);
-* `real_le_firstHitBound`, `real_le_two_rpow_neg_100`, `real_tables32_le`: the same expression over the reals, at any
-  reals within a design's numbers, with `2^256` and `2^-100` real powers as the finder's statements write them.
+* `real_le_firstHitBound`, `real_le_two_rpow_neg_100`, `real_table1_le`, `real_tables32_le`: the same expression over
+  the reals, at any reals within a design's numbers, with `2^256` and `2^-100` real powers as the finder's
+  statements write them.
 -/
 
 @[expose] public section
 
 namespace Claims.Flock.Numbers
 
-/-! ## A session's `k` at 32 tables -/
+/-! ## A session's `k` at one table and at 32 -/
+
+/-- **`k ≤ 12343986` at a session of one table**: `⌈4N₀/e⌉` at `N₀ ≤ 2^23`. -/
+theorem k_le_of_one_table {N : ℝ} (hN : N ≤ 2 ^ 23) : ⌈4 * N / Real.exp 1⌉₊ ≤ 12343986 := by
+  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
+  have hlo := Real.exp_one_gt_d9
+  rw [Nat.ceil_le, div_le_iff₀ he0]
+  push_cast
+  linarith
 
 /-- **`k ≤ 395007543` at a session of at most `32` tables**: `⌈4N₀/e⌉` at `N₀ ≤ 32·2^23`. -/
 theorem k_le_of_tables_le_32 {N : ℝ} (hN : N ≤ 32 * 2 ^ 23) : ⌈4 * N / Real.exp 1⌉₊ ≤ 395007543 := by
@@ -79,7 +89,19 @@ theorem firstHitBound_le {T T' n n' k k' : ℕ} {K K' : ℚ} (hT : T ≤ T') (hn
   unfold firstHitBound
   exact div_le_div_of_nonneg_right h5 (by positivity)
 
-/-! ## The priced design at sessions of at most 32 tables -/
+/-! ## Sessions of one table -/
+
+/-- **At most `2^-100` at sessions of one table**: a prover of `2^80` compressions, `2^24` sessions, `k = 12343986`
+and a sample needing `2^42` gates in the mean. -/
+theorem firstHitBound_table1 : firstHitBound (2 ^ 80) (2 ^ 24) 12343986 (2 ^ 42) ≤ 1 / 2 ^ 100 := by
+  norm_num [firstHitBound, sessionReruns, waits]
+
+/-- **At most `2^-100` at every statement within those numbers.** -/
+theorem firstHitBound_le_of_table1 {T n k : ℕ} {K : ℚ} (hT : T ≤ 2 ^ 80) (hn : n ≤ 2 ^ 24) (hk : k ≤ 12343986)
+    (hK0 : 0 ≤ K) (hK : K ≤ 2 ^ 42) : firstHitBound T n k K ≤ 1 / 2 ^ 100 :=
+  (firstHitBound_le hT hn hk hK0 hK).trans firstHitBound_table1
+
+/-! ## Sessions of at most 32 tables -/
 
 /-- **At most `2^-100` at sessions of `32` tables**: a prover of `2^80` compressions, `5523986` sessions,
 `k = 395007543` and a sample needing `227711235758` gates in the mean. -/
@@ -135,6 +157,23 @@ theorem real_le_two_rpow_neg_100 {T n e K : ℝ} {T' n' k' : ℕ} {K' : ℚ} (hn
     4 * T * (1 + n * e + (1 + e) * K) / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ)) := by
   rw [← cast_two_pow_neg_100]
   exact (real_le_firstHitBound hn0 he0 hK0 hT hn he hK).trans (Rat.cast_le.2 h)
+
+/-- **The binding term is at most `2^-100` at sessions of one table**: at a run of `T ≤ 2^80` compressions,
+`n ≤ 2^24` sessions, each extracted in `e ≤ 1 + 210·12343986` expected reruns, and a sample needing `K ≤ 2^42` gates
+in the mean. -/
+theorem real_table1_le {T n e K : ℝ} (hn0 : 0 ≤ n) (he0 : 0 ≤ e) (hK0 : 0 ≤ K) (hT : T ≤ 2 ^ 80) (hn : n ≤ 2 ^ 24)
+    (he : e ≤ 1 + 210 * 12343986) (hK : K ≤ 2 ^ 42) :
+    4 * T * (1 + n * e + (1 + e) * K) / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ)) := by
+  refine real_le_two_rpow_neg_100 (T' := 2 ^ 80) (n' := 2 ^ 24) (k' := 12343986) (K' := 2 ^ 42) hn0 he0 hK0
+    ?_ ?_ ?_ ?_ firstHitBound_table1
+  · rw [Nat.cast_pow, Nat.cast_ofNat]
+    exact hT
+  · rw [Nat.cast_pow, Nat.cast_ofNat]
+    exact hn
+  · push_cast
+    exact he
+  · rw [Rat.cast_pow, Rat.cast_ofNat]
+    exact hK
 
 /-- **The binding term is at most `2^-100` at sessions of at most `32` tables**: at a run of `T ≤ 2^80`
 compressions, `n ≤ 5523986` sessions, each extracted in `e ≤ 1 + 210·395007543` expected reruns, and a sample
