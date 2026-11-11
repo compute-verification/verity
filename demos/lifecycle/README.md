@@ -3,7 +3,7 @@
 A minimal worked example of the two composite protocols, `verity/onsite/v0` and `verity/remote/v0`, run through the
 whole lifecycle with the pieces that exist: from the hardware registration to the monitoring period's verdict. Its point
 is the interfaces it exposes, listed in (b) and (c); where an interface doesn't exist yet, the demo writes the smallest
-version of it in `lifecycle.py`, and nothing under `verity/` or `Security/` changes.
+version of it in `lifecycle.py`, and nothing under `verity/` or `security/` changes.
 
 ```text
 uv run python demos/lifecycle/run.py                          # one monitoring period of each composite, about 2 s on CPU
@@ -146,9 +146,9 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 
 | name | caller | in | out | module |
 | --- | --- | --- | --- | --- |
-| `Card`, `Loc`, `Link`, `Registration` | developer | the site's hardware | one entry of the log, chained to its head | `Security/Definitions/Core/Site.lean` (`Verity.Site.Sheet`, `Loc`, `Link`, `Verity.Site.Entry`, `Verity.Registration.Entry.site`) |
-| `Layout` (`genesis`, `add`, `device`, `boundary`, `accounting(ticks)`) | everyone | the log's entries | the site; each subprotocol's accounting | `Security/Definitions/Core/Site.lean` (`Verity.Site`, `add`, `ofLog`, `Boundary`, `device`); `accounting(ticks)` missing: written in the demo (pieces: `Security/Definitions/Accounting/Physical.lean`'s `Hardware`, `Accounting/Device.lean`, the deploy manifest's machines and links) |
-| `check_registration(layout, registration, auditor)` | verifier | the layout so far, an entry, the auditor's own devices and keys | the layout it folds to, or a refusal by name | `Security/Definitions/Core/Site.lean` (`Registration.Entry.Valid`, `Entry.refusal`; Lean's `sheetDigest` is `card-digest`, and its `figures`, a card's figures against the auditor's estimate, the demo doesn't check yet), decidable; no difftest yet |
+| `Card`, `Loc`, `Link`, `Registration` | developer | the site's hardware | one entry of the log, chained to its head | `security/Definitions/Core/Site.lean` (`Verity.Site.Sheet`, `Loc`, `Link`, `Verity.Site.Entry`, `Verity.Registration.Entry.site`) |
+| `Layout` (`genesis`, `add`, `device`, `boundary`, `accounting(ticks)`) | everyone | the log's entries | the site; each subprotocol's accounting | `security/Definitions/Core/Site.lean` (`Verity.Site`, `add`, `ofLog`, `Boundary`, `device`); `accounting(ticks)` missing: written in the demo (pieces: `security/Definitions/Accounting/Physical.lean`'s `Hardware`, `Accounting/Device.lean`, the deploy manifest's machines and links) |
+| `check_registration(layout, registration, auditor)` | verifier | the layout so far, an entry, the auditor's own devices and keys | the layout it folds to, or a refusal by name | `security/Definitions/Core/Site.lean` (`Registration.Entry.Valid`, `Entry.refusal`; Lean's `sheetDigest` is `card-digest`, and its `figures`, a card's figures against the auditor's estimate, the demo doesn't check yet), decidable; no difftest yet |
 | `Builder` (`descriptor`, `of`, `digest`, `grow`) | developer, verifier | a_1 ‖ … ‖ a_k | the execution blocks | missing: written in the demo |
 | `placement`, `check_placement` | developer, verifier | B, a block, the layout's head | `Requirement.Placement`'s data, or a refusal by name | missing: written in the demo |
 | `register`, `check_baseline` | developer, verifier | product, theta, B, state0 | `Baseline` (roots and B's descriptor) | missing: written in the demo |
@@ -172,7 +172,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 
 - **The registered circuit has no one digest, and Lean's `RegisteredCircuit` holds one circuit.** Each execution block has its
   own Program digest, and the record chain binds them in order; `codec.program_digest` of B(a_1 ‖ … ‖ a_k) as one Program
-  is not prefix-incremental. `Security/Definitions/Core/RegisteredCircuit.lean`'s `RegisteredCircuit` is the registration, whose `builder`
+  is not prefix-incremental. `security/Definitions/Core/RegisteredCircuit.lean`'s `RegisteredCircuit` is the registration, whose `builder`
   field names the registered compiler, with the advice so far, and its d.D, one `Circuit`, is B.init θ ‖ B(a_1) ‖ … ‖ B(a_k) (`Circuit.append`): each execution block
   appended after the ones before it, reading their gates along the state wire (block k's state input is block k − 1's
   state output, not an input gate); d.θ, the registered information, is theta's and the initial state's input gates, the
