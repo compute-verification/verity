@@ -1,0 +1,9 @@
+# REFUSE: a bound on the chance the two-stage verifier refuses an honest run for want of coins (Lean)
+
+**Why.** The modeled binding figures assume the verifier never refuses an honest run at the served sizes. On `main`'s model it always does: one round's 2^20-byte coin cannot draw the second stage's sample (138,580,196 bytes are needed at the sizes of the configuration the figures quote). Pull requests #8914 (a commitment of 2^24 coins) and #8940 with #8934 (a second stage of several rounds) repair the code's side and are being landed today by another worker; with them the chance is below 1, and no lemma bounds it.
+
+**Done when:** a theorem on `main` bounds Pr[the second stage refuses an honest run] at the two-stage code with #8914 and #8940 in, and the bound is evaluated at the served sizes by code in the tree.
+
+**Where you start:** the note `~/.research/notes/lanes/proofs/20261111T1517Z-report-draft-core-final.md` (after `research notes sync` or from the notes repository), section "Not started: a bound on Pr[refused] at the stage layer": three pieces, with statement sketches that were never compiled: (b) `LawOn` of the second stage's sampling design (`lawOn_second`, 100 to 150 lines [guess]); (c) `Draw.checkDraw` passes on the sample `Draw.drawFirstRead` builds (300 to 500 lines [guess]); (d) the transfer to the code through `stageUniform` (`SpotFlock/Coins.lean:75` on #8940; 80 to 150 lines [guess]). Also `…1634Z-report-draft-core-8940-record.md`. Branch from #8940's head (`gh pr view 8940`); never push to it.
+
+**Deadlines (UTC):** 19:15Z first entry: the three statements as you would state them now, in Lean, and which is on the critical path; Thu 12 Nov 08:00Z: the pull request's ready line (it adds theorems and changes no guarantee's statement: mark it yourself if so).
