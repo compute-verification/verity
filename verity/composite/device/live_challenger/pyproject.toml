@@ -27,4 +27,5 @@ inputs = ["benchmarks/network_traces/load_relay.py", "verity/protocols/certifier
           "verity/protocols/spot/device/remote.py",
           "verity/protocols/spot/verifier/one_stage", "verity/ml/__init__.py", "verity/circuits",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/protocols/pouw/verifier",
-          "verity/ml/protocols", "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py"]
+          "verity/ml/protocols", "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py",
+          "verity/definitions/__init__.py", "verity/definitions/circuits", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py"]

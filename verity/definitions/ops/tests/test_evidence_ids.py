@@ -1,4 +1,4 @@
-"""Every ``*_evidence.json`` under ``verity/circuits`` is keyed by what it describes and holds only well-formed ids.
+"""Every ``*_evidence.json`` under ``verity/definitions`` is keyed by what it describes and holds only well-formed ids.
 
 Each file maps a registered key (an instruction id, a model or pipeline name, a target name, a Definition id) to roles,
 and each role to an id, a list of ids or nested roles.  The prose the key carries (an instruction's ``evidence``, a model's
@@ -17,7 +17,7 @@ from verity.definitions.ops import kv_cache, moe, prims
 from verity.definitions.silicon import instructions, integer, models, total_fp8
 from verity.definitions.circuits.targets import target
 
-CIRCUITS = (Path(instructions.__file__).resolve().parents[2] / "circuits")
+CIRCUITS = Path(instructions.__file__).resolve().parents[1]
 
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 ART = re.compile(r"art:[0-9a-f]{8,64}")
@@ -52,7 +52,7 @@ FILES = {
         integer.EVIDENCE_IDS, {name: [v] for name, v in _own(integer, integer.__all__).items()}, set()),
     "silicon/total_fp8_evidence.json": (
         total_fp8.EVIDENCE_IDS, {name: [v] for name, v in _own(total_fp8, total_fp8.__all__).items()}, set()),
-    "targets/target_evidence.json": (target.EVIDENCE_IDS, {name: [] for name in target.TARGETS}, {"dossier"}),
+    "circuits/targets/target_evidence.json": (target.EVIDENCE_IDS, {name: [] for name in target.TARGETS}, {"dossier"}),
     "ops/prims_evidence.json": (prims.EVIDENCE_IDS, {k: [v] for k, v in _definitions(prims).items()}, set()),
     "ops/moe_evidence.json": (moe.EVIDENCE_IDS, {k: [v] for k, v in _definitions(moe).items()}, set()),
     "ops/kv_cache_evidence.json": (kv_cache.EVIDENCE_IDS, {k: [v] for k, v in _definitions(kv_cache).items()}, set()),
