@@ -9,9 +9,11 @@
 `build` reads no GPU and imports only the standard library. Of each library of each build (a DIR holding `libp2v1.so`,
 and `libp2enc.so` where the build has it, each beside its `.ptxas`, nvcc's `-Xptxas -v` report): the file's SHA-256,
 every kernel's registers, stack and spilled bytes as ptxas said them, and the SHA-256 of its disassembly
-(`cuobjdump -sass`, split at its `Function :` lines). When one build is named `base` and one `default`, it says which
-of `base`'s `libp2v1.so`'s kernels `default`'s holds instruction for instruction: a tree that adds an encoder shows
-it left the library as it was.
+(`cuobjdump -sass`, split at its `Function :` lines). When one build is named `base` and one `default`, it says
+whether `default`'s `libp2v1.so` is `base`'s, in the file's bytes and in the sections a process maps, and which of
+`base`'s kernels `default`'s holds instruction for instruction. That compares two builds, not two sources: nvcc
+need not give one source the same instructions twice, so a kernel it names as changed is a question, which the
+sources answer (`encode_rate.sh` says whether the library's are `base`'s).
 
 `reference` reads no GPU either: `reference.encode` of `--picks` of the segment's blocks under `reference.keys`, on
 every CPU the process may use. The first blocks are edge payloads, one of them the block whose first root is of zero.
@@ -46,6 +48,7 @@ import os
 import re
 import signal
 import statistics
+import struct
 import subprocess
 import sys
 import time
@@ -114,10 +117,27 @@ def sass(lib: str) -> dict[str, str]:
     return {name: hashlib.sha256("\n".join(lines).encode()).hexdigest() for name, lines in bodies.items()}
 
 
+def mapped(lib: Path) -> str | None:
+    """The SHA-256 of what a process maps of a little-endian ELF64 file: each section flagged `SHF_ALLOC`, its address,
+    size and bytes, in the file's order. None for another file. Two builds of one source can differ outside those:
+    the symbol table holds the name of nvcc's temporary file, which holds its process's id."""
+    b = lib.read_bytes()
+    if b[:6] != b"\x7fELF\x02\x01":
+        return None
+    (at,), (each, count) = struct.unpack_from("<Q", b, 0x28), struct.unpack_from("<HH", b, 0x3A)
+    h = hashlib.sha256()
+    for i in range(count):
+        _name, kind, flags, addr, off, size = struct.unpack_from("<IIQQQQ", b, at + i * each)
+        if flags & 2:
+            h.update(struct.pack("<QQ", addr, size) + (b"" if kind == 8 else b[off:off + size]))
+    return h.hexdigest()
+
+
 def build(a: argparse.Namespace) -> int:
     doc: dict[str, dict] = {"sha256": {}, "ptxas": {}, "sass_sha256": {}}
     hashes: dict[str, dict[str, str]] = {}
-    for name, d in (x.split("=", 1) for x in a.lib):
+    dirs = dict(x.split("=", 1) for x in a.lib)
+    for name, d in dirs.items():
         for lib in sorted(Path(d).glob("*.so")):
             key = f"{name}/{lib.name}"
             doc["sha256"][key] = hashlib.sha256(lib.read_bytes()).hexdigest()
@@ -135,8 +155,11 @@ def build(a: argparse.Namespace) -> int:
                 doc["sass_sha256"][key] = {stem(k): v for k, v in sorted(hashes[key].items())}
     old, new = f"base/{LIB}", f"default/{LIB}"
     if old in doc["sha256"] and new in doc["sha256"]:
-        doc["same"] = {"file": doc["sha256"][old] == doc["sha256"][new]}
-        print(f"{new} is {'' if doc['same']['file'] else 'not '}{old}, byte for byte")
+        was, now = (mapped(Path(dirs[n]) / LIB) for n in ("base", "default"))
+        doc["same"] = same = {"file": doc["sha256"][old] == doc["sha256"][new], "mapped": was is not None and was == now}
+        print(f"{new} is {old}, byte for byte" if same["file"] else
+              f"{new} is {old} in every section a process maps; the files differ outside them" if same["mapped"] else
+              f"{new} is not {old}: what a process maps of them differs")
     if old in hashes and new in hashes:
         base, head = hashes[old], hashes[new]
         changed = sorted(stem(k) for k, v in base.items() if head.get(k) != v)

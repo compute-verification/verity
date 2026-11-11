@@ -1,7 +1,7 @@
 // P2's second encoder as a library of its own for ctypes, libp2enc.so: p2enc.cuh's kernel behind p2v1.cu's p2v1_encode
-// arguments. It is apart from libp2v1.so, whose sources and build stay as they are: a kernel added to p2v1.cu's
-// translation unit changes the instructions nvcc gives decode_sq_kernel. p2sq.cuh ends in that kernel, so this
-// library holds a copy of it that nothing calls.
+// arguments. It is apart from libp2v1.so, the library a served run loads: that library's sources and its build stay
+// as they are, so nothing a served run loads changes with this encoder. p2sq.cuh ends in decode_sq_kernel, so this
+// library holds a copy of that kernel, which nothing calls.
 // Build: nvcc -O3 -arch=sm_NN -std=c++17 -DP2SQ_KARA -Xcompiler -fPIC -shared -o libp2enc.so p2enc.cu
 #include <algorithm>
 #include <cstdint>

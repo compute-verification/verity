@@ -15,9 +15,11 @@
 # one, else GitHub's; gmp.h is the system's, else the run's inputs/gmp.h, else gmpy2's wheel's. TOOLKIT=1 assembles
 # CUDA 12.9's nvcc first (`benchmarks/pouw/harness/jobs/toolkit.sh`), for a machine with none. out/libs.tar holds the
 # libraries with ptxas's reports. A run that was sent one (inputs/libs.tar) compiles nothing and measures those.
-# Either way `encode_bench.py build` writes out/build.json: each library's SHA-256, ptxas's registers and spills of
-# every kernel, each kernel's disassembly's SHA-256, and whether default's libp2v1.so is base's, byte for byte and
-# instruction for instruction. BUILD_ONLY=1 ends here, so a machine with no GPU builds what a card's run measures.
+# out/toolchain.txt says whether libp2v1.so's sources are base's, file for file. Either way `encode_bench.py build`
+# writes out/build.json: each library's SHA-256, ptxas's registers and spills of every kernel, each kernel's
+# disassembly's SHA-256, and whether default's libp2v1.so is base's, in what a process maps and instruction for
+# instruction (two builds of one source need not be). BUILD_ONLY=1 ends here, so a machine with no GPU builds what a
+# card's run measures.
 #
 # Then, still holding no card, the reference's rows on the cores (`encode_bench.py reference`), and under one lease of
 # CARD, of at most LEASE_MIN minutes (30 at most) and taken without waiting, `encode_bench.py run`: the gates, the
@@ -89,7 +91,10 @@ files() {  # every build's libraries and ptxas's reports, as paths under $B
   done
 }
 compile() {  # the builds into $B/NAME, with what they were made with in $B/toolchain.txt, and out/libs.tar of them
-  local pin from inc='' gmp base fast r i b rc pids=() list
+  local pin from inc='' gmp base fast r i b rc pids=() list f moved='' srcs
+  # what libp2v1.so is built from, as benchmarks/torch_gpu/p2_stage/build.sh's source.txt lists it
+  srcs=("$D/p2v1.cu" "$D/p2sq.cuh" "$D/p2keys.cuh" "$D/p2keys4.cuh" "$D/Makefile" benchmarks/pous/p2_gpu/p2dec.cu
+    benchmarks/pous/p2_gpu/CGBN.commit verity/definitions/kernels/sha512.cuh)
   [ -n "$NVCC" ] || { say "PREFLIGHT: no nvcc (CUDA_HOME, /usr/local/cuda-12.9, -13.0)"; return 3; }
   if [ -z "${ARCH:-}" ]; then
     case $(nvidia-smi --query-gpu=name --format=csv,noheader -i "$CARD" 2> /dev/null) in
@@ -119,6 +124,7 @@ compile() {  # the builds into $B/NAME, with what they were made with in $B/tool
   mkdir "$B/base-src"
   [ -n "$base" ] && git -C "$TREE" archive "$base" $D benchmarks/pous/p2_gpu verity/definitions/kernels/sha512.cuh \
     2> /dev/null | tar -x -C "$B/base-src" || base=
+  for f in "${srcs[@]}"; do cmp -s "$TREE/$f" "$B/base-src/$f" || moved+=" $f"; done
 
   mk() {  # mk NAME ROOT [VARIABLE=VALUE ...]: ROOT's libp2v1.so and ptxas's report into $B/NAME
     local name=$1 root=$2; shift 2
@@ -145,7 +151,10 @@ compile() {  # the builds into $B/NAME, with what they were made with in $B/tool
     fi
   done
   { echo "sm_$ARCH, at $(git -C "$TREE" rev-parse HEAD), on $(hostname)"; "$NVCC" --version | tail -n 2
-    echo "CGBN $pin from $from; gmp.h: ${inc:-of the system}; base ${base:-none}"; } > "$B/toolchain.txt"
+    echo "CGBN $pin from $from; gmp.h: ${inc:-of the system}; base ${base:-none}"
+    echo "libp2v1.so's sources (sha256 $(cd "$TREE" && sha256sum "${srcs[@]}" | sha256sum | cut -c1-64) of their sha256sum" \
+      "lines): $([ -z "$base" ] && echo "no base to hold them to" || echo "${moved:+not }base's${moved:+, these differ:$moved}")"
+  } > "$B/toolchain.txt"
   mapfile -t list < <(files)
   tar -cf "$O/libs.tar" -C "$B" toolchain.txt "${list[@]}"
 }
@@ -172,7 +181,8 @@ done
 python3 $D/encode_bench.py build "${libs[@]}" --out "$O/build.json" > "$O/build.txt" 2>&1 \
   || { cat "$O/build.txt"; say "BUILD: no record of the builds (out/build.txt)"; exit 4; }
 cat "$O/build.txt"
-say "builds: ${builds[*]}; $(head -n 1 "$O/toolchain.txt"); ptxas's registers and spills in out/build.json"
+say "builds: ${builds[*]}; $(head -n 1 "$O/toolchain.txt"); $(grep -m 1 "^libp2v1.so's sources" "$O/toolchain.txt");" \
+  "ptxas's registers and spills in out/build.json"
 [ -z "${BUILD_ONLY:-}" ] || exit 0
 
 PY=${PY:-$(first /workspace/venv312/bin/python /workspace/cp/venv312/bin/python)}
