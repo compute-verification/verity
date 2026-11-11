@@ -54,6 +54,9 @@ of each lemma here and no clause of `Sessions`.
   `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[(1 + |sample|)·c]/2^256`.
 * `Compiled.ex_needs_le`: the expectation at a bound `w` on the sample outside a set of coins,
   `(1 + w)·E[c] + (1 + N)·E[c at those coins]`.
+* `CompiledTwo.eventTwoX_le_firstHit_of_card`, `CompiledTwo.eventTwoX_le_firstHit_of_card_outside`: the event's bound
+  with the sample's size a hypothesis, `4·(1 + w)·E[c]/2^256` where every coins' sample needs at most `w` gates, and
+  with `ex_needs_le`'s second term where only the coins outside a set do.
 -/
 
 @[expose] public section
@@ -646,6 +649,69 @@ theorem eventTwoX_le_firstHit {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A
   have h := eventTwoX_le_of_off hA hbind hS hs hPt hd hin P hB hN
   have h4 : ∀ e : ℝ, 2 * e / 2 ^ (256 : ℝ) + 2 * e / 2 ^ (256 : ℝ) = 4 * e / 2 ^ (256 : ℝ) := fun e => by ring
   rw [← h4]
+  linarith
+
+/-- **The event of `KSRegTwoX` at a bound on the sample.** `eventTwoX_le_firstHit` where every coins' sample needs at
+most `w` gates: at most `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·(1 + w)·E[c]/2^256`. `w` counts every gate a checked
+proof block's reveal may open, those of the proof blocks every run checks among them. -/
+theorem eventTwoX_le_firstHit_of_card {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
+    (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
+    {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
+    (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u)
+    (hX : ∀ K : ℕ, ExpectedCR H (L.toCompiled.finderX H P x s needs K))
+    (hI : ∀ K : ℕ, ExpectedCR H (L.finderI H P x s d.part needs K)) {w : ℕ}
+    (hw : ∀ r, #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x r, g.val ∈ needs u)) ≤ w) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregTwoX H P x p.1 p.2) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + (Compiled.BconfX H L.toCompiled Ω P x).Pr H +
+        4 * ((1 + (w : ℝ)) * Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+          (L.callsAt H P x s q.1 q.2.1 q.2.2 : ℝ))) /
+          2 ^ (256 : ℝ) := by
+  have h := eventTwoX_le_firstHit hA hbind hS hs hPt hd hin P needs hpos hX hI
+  have h2 : Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+        (((1 + #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u))) *
+          L.callsAt H P x s q.1 q.2.1 q.2.2 : ℕ) : ℝ)) ≤
+      (1 + (w : ℝ)) * Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+        (L.callsAt H P x s q.1 q.2.1 q.2.2 : ℝ)) := by
+    rw [← Ex_mul_left]
+    refine Ex_mono fun q => ?_
+    push_cast
+    have h1 : (1 + (#(univ.filter fun g : Fin (L.nG x) =>
+        decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u)) : ℝ)) ≤ 1 + (w : ℝ) := by
+      exact_mod_cast Nat.add_le_add_left (hw q.2.1) 1
+    exact mul_le_mul_of_nonneg_right h1 (Nat.cast_nonneg _)
+  have h3 := div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left h2 (show (0 : ℝ) ≤ 4 by norm_num))
+    (show (0 : ℝ) ≤ 2 ^ (256 : ℝ) by positivity)
+  linarith
+
+/-- **The event of `KSRegTwoX` at a bound on the sample outside a set of coins.** `eventTwoX_le_firstHit` where the
+sample of every coins outside `bad` needs at most `w` gates: at most
+`κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·((1 + w)·E[c] + (1 + N)·E[c at the coins in bad])/2^256`, `N` the program's
+gates. A design whose sample has no bound at every coins is read here: the coins past the bound count by their
+probability and their run's calls. -/
+theorem eventTwoX_le_firstHit_of_card_outside {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
+    (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
+    {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
+    (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u)
+    (hX : ∀ K : ℕ, ExpectedCR H (L.toCompiled.finderX H P x s needs K))
+    (hI : ∀ K : ℕ, ExpectedCR H (L.finderI H P x s d.part needs K))
+    (bad : (Fin (L.V.k x) → Coin) → Prop) [DecidablePred bad] {w : ℕ}
+    (hw : ∀ r, ¬ bad r →
+      #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x r, g.val ∈ needs u)) ≤ w) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregTwoX H P x p.1 p.2) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + (Compiled.BconfX H L.toCompiled Ω P x).Pr H +
+        4 * ((1 + (w : ℝ)) * Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+            (L.callsAt H P x s q.1 q.2.1 q.2.2 : ℝ)) +
+          (1 + (L.nG x : ℝ)) * Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+            if bad q.2.1 then (L.callsAt H P x s q.1 q.2.1 q.2.2 : ℝ) else 0)) /
+          2 ^ (256 : ℝ) := by
+  have h := eventTwoX_le_firstHit hA hbind hS hs hPt hd hin P needs hpos hX hI
+  have h2 := Compiled.ex_needs_le H L.toCompiled P x s needs bad hw
+  have h3 := div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left h2 (show (0 : ℝ) ≤ 4 by norm_num))
+    (show (0 : ℝ) ≤ 2 ^ (256 : ℝ) by positivity)
   linarith
 
 end CompiledTwo
