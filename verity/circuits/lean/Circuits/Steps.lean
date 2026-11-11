@@ -5,7 +5,7 @@ without the bound (`Steps.run_mono`).
 -/
 module
 
-public import Flock.Bytes
+public import Base.Bytes
 
 @[expose] public section
 
