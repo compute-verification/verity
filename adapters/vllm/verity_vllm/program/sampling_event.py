@@ -72,7 +72,8 @@ def program_sampler_construction(program_dirs) -> str | None:
     specs: list[str] = []
     for d in program_dirs:
         try:
-            specs += list(json.load(open(os.path.join(d, "result.json")))["spec_histogram"])
+            with open(os.path.join(d, "result.json")) as f:
+                specs += list(json.load(f)["spec_histogram"])
         except (OSError, ValueError, KeyError, TypeError) as e:
             raise SystemExit(f"{d}: no spec_histogram in result.json ({type(e).__name__}): the Program's sampler construction is unknown") from None
     try:
