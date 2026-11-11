@@ -13,4 +13,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # formalism's copy to; the inference-only policy's calibrations, which the calculator's registry loads from outside its
 # directory; and the census's deployments, whose reference window `calculator.py` reads
 inputs = ["verity", "adapters/vllm/verity_vllm", "adapters/vllm/tests/program/train_step_lf.py",
-          "verity/protocols/inference_only/rho", "benchmarks/census/deployments.json", "verity/protocols/inference_only/nci/calibrations.json"]
+          "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/program/__init__.py",
+          "verity/protocols/inference_only/rho", "benchmarks/census/deployments.json",
+          "verity/protocols/inference_only/nci/calibrations.json"]
