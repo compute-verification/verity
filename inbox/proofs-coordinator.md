@@ -54624,3 +54624,44 @@ For the table:
 - PLAN | (b) at the FINAL recut, M = 145 | width + margin κ 2^-4 holds 2^-100.15 under one M (κ 2^-5, 2^-100.65, at PageCopy 205); world year, modeled 0.4: 3,861 GB no program (not what `main` verifies), 10,593 as `main` is, 7,068 / 3,873 the hoist once a member / once a window; (b), over the served wiring; modeled; no Lean statement at the code is behind it; the recut is not built [run].
 - PLAN | (b) at the plan's cut, M = 4,130 | one M holds only at κ 2^-9: 7,209 no program, 14,593 as `main` is; by stratum κ 2^-6: 4,069 / 10,571 [run].
 - PLAN | final recut + #8917's cut (no Program) | least under one M: reading A G = 64 κ 2^-6 1,501 / 3,891; reading B G = 32 κ 2^-5 1,085 / 3,159 (no program / as `main` is); with the values units at 2^26: 2,461 / 6,924 at G = 128, no bits line. No row reaches 300 GB at modeled 0.4 [run].
+
+## HEADPROF, Wed 11 Nov 12:35Z: vy-dc-h200-3's CARD IS RELEASED at 12:35:03Z (for kernels); at two provers WITNESS's follow-up with salts `all` reads 2.143 GPU-s a statement against 3.117 today (0.687, measured, `r20261111-115454-5832`)
+
+**Released** [run: `pgrep`, `nvidia-smi` on the machine at 12:35:05Z]: `r20261111-115454-5832` ended by itself at
+12:35:03Z; the card holds 0 MiB, no prover, verifier, harness or lease of mine is alive; only the run's supervisor
+is writing its record (no GPU, a minute or two). I start nothing there until you say. My staged copy
+(`/workspace/cache/proofs-headprof/staged/proofs-prf502-row1-4b31e7caba011398`) stays as it is for KHSHARE.
+
+**The two-prover pair** [run: `5832` steps 4 and 5, vy-dc-h200-3, two provers and two verifiers on six cores (CPUs
+0-11), the check on those cores in both; 48 timed sessions, 54 accepted, 0 refused each; `compact_stall` 0]:
+
+| what | GPU-s a statement | statements an hour a card | card busy | prover CPU-s (walk / salts / session) | check CPU-s | cores busy (of 12 CPUs) |
+|---|---|---|---|---|---|---|
+| WITNESS's follow-up (no switch) with `FC_SALTS_KEYED=all` | **2.1425** | 1,680 | 24.1% | 14.8 (11.44 / 2.50 / 0.75) | 10.0 | 11.68 |
+| today's binary | 3.1174 | 1,155 | 16.9% | 26.4 | 9.9 | 11.73 |
+
+- **0.687 at full cores.** Salts `all` alone was 0.830 on this machine (`af1d`, 2.554 against 3.08), so the
+  follow-up adds 0.83 on top at two provers, a little less than its 0.79 at one prover.
+- The check stayed on the prover's cores here (this machine has two spare cores, which a check for two provers
+  fills: my 11:51Z entry). It is 10 of the 25 CPU-s left: on a host with cores for it, this row would fall as node
+  A's did (0.716 for that move alone at four provers).
+- **`all` is Daniel's claim: built, unmarked. The follow-up is on no PR yet.**
+
+**vy-dc-h200-3, every row of today** (`SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`; six cores; measured; the
+machine is 12.9% slower than node A):
+
+| provers | what | GPU-s a statement | run |
+|---|---|---|---|
+| 1 | today's binary | 3.416, 3.416, 3.456, 3.435 | `af1d`, `f049`, `5832` |
+| 1 | #8891's two cuts | 3.160, 3.161 (0.925) | `af1d` |
+| 1 | WITNESS's follow-up | 2.712, 2.746 (0.79) | `5832`, `f049` |
+| 2 | today's binary | 3.128, 3.023, 3.117 | `af1d`, `5832` |
+| 2 | salts `all` | 2.554 (0.830) | `af1d` |
+| 2 | the follow-up with salts `all` | 2.143 (0.687) | `5832` |
+| 2 | the check on two other cores (bound by them) | 2.610, 2.552; every cut of 10:46Z 2.657 | `af1d` |
+
+**Not run, waiting for your word after kernels' run:** `FC_UNIT_WIDE=4`; HEADCIRC's scores unit and one quarter
+(no `For HEADPROF:` line from HEADCIRC yet at 12:20Z [read: this file]).
+
+For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, two provers on one H200 with six cores, WITNESS's follow-up with salts `all`, the check on the prover's cores: 2.143 GPU-s a statement against 3.117 today (0.687), measured, `r20261111-115454-5832` steps 4 and 5, vy-dc-h200-3 (12.9% slower than node A); neither cut is marked.
+For the table: head block with WITNESS's follow-up and salts `all` at full cores: 0.69 of today's seconds (measured, two provers, vy-dc-h200-3). vy-dc-h200-3's card is released at 12:35Z.
