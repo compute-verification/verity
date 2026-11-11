@@ -45737,3 +45737,57 @@ today's block four times, each cut alone (`all`, `upper`, WITNESS's two cuts eac
 
 For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, salts expanded from a 32-byte key (`FC_SALTS_KEYED=all`, a claim for Daniel, unmarked), one prover on ten cores: 2.570 GPU-s a statement against 2.588 in the same run (ratio 0.993), measured, `r20261111-091148-cb57`, quiet host; host CPU 18.3 s a statement against 23.2.
 For the table: head block at one prover, quiet host: 2.59 s today, 2.57 s with the salts cut, 2.52 s with the check off the prover's cores (measured; `cb57`, `c224`): at one prover neither moves it, the walk's wall time does; the four-prover rows, where CPU-seconds bind, run from 10:03Z.
+
+## ATTACK, Wed 11 Nov 09:39Z: EXTFORM's by-class theorem says what its entry says, and its finder is charged what it reads. But `hrow` as written is false at the code; "the row" is a class only under two facts of the served circuits that nothing checks; and SCALE's by-rows figures are 0.17 bit too good on the sessions and up to 3.0 on the head block's keys. A class that needs no new fact exists: gates with the same readers
+
+Read: `FirstHitClass.lean` and `TwoRegFirstHitClass.lean` at `05316ae3ee20` (every statement, the Core proofs), against #8827's `RunExtAt.lean`, `SamplingGeneric.lean` (`sessWit`, `sessExt`, `runExt`, `opensAt`), `Sampling.lean:528-534` (`checkRevealed`, `assemble`), `ProgReads.lean:237-276` (`Prog.Needs`), `Reveals.lean`, `RevealAt.lean:160-256`, `SlotsAt.lean:262-345`, `Code.lean:566-581`; `scale_kbound.py` and `scale_width.py` whole. [run] I fetched try `r20261111-091552-1994` and read its log: source tree `05316ae3ee20`, `lean exit 0 in 24 s`, 10,360 jobs, the Core file built in it, 8 theorems on `propext`, `Classical.choice`, `Quot.sound` only, `eventTwoX_le_firstHit_cls` among them. No kernel replay. I did not rerun `scale_kbound.py` (it imports the adapter; over my VM's limit).
+
+**1. The theorem, in plain words** [read: `TwoRegFirstHitClass.lean:340-384`]. `CompiledTwo.eventTwoX_le_firstHit_cls` is `eventTwoX_le_firstHit_at` with one more object, `cls : Fin nG → Fin nG` (a gate's class, named by one of its gates), and three more hypotheses:
+- `hrep`: every proof block that needs a gate needs its class's representative. The proof does not read it; it keeps the finder honest (section 2).
+- `hallX`: for this prover, at every tape, coins and extractor's coins: if the run's extractions open a gate under the statement's roots, they open every gate of its class. `hallI`: the same under a replay block's interior roots, at every kept tape and first stage.
+- `ExpectedCR` at the two by-class finders of every cap (the same named premise, at two new finders).
+
+The conclusion is #8827's with the sum over gates replaced: `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[callsAt + Σ_{q ∈ classes of the gates the sample needs} callsBy q]/2^256`. The event, the 4, the √ term and `B_conf,X` are unchanged. With `cls = id` it is #8827's theorem, so it is not vacuous and every gap of the 08:51Z table (a1 to k) stands for it as for #8827.
+
+**2. Is the by-class finder charged what it reads? Yes, under `hrep`** [read: `FirstHitClass.lean:191-205`, `TwoRegFirstHitClass.lean:81-118`, `RunExtAt.lean:65-135`].
+- At a further run it must know, for each gate `p` it still waits for in the run's sample, whether the run opens `p`: that reads the run and the extraction of each slot whose session has a block needing `p`. It is charged `callsBy (cls p)`, the run and the slots with a block needing the representative; by `hrep` those include every slot needing `p` (`callsBy_le_of_needs`). One charge serves every waited gate of the class, since the extraction is the same computation at the same coins.
+- A gate outside the run's sample costs nothing to decide (`opensAt_isSome_needs`, from `hpos`). The output reads the first run's whole extraction (charged, `callsAt`) and the further run's extraction at the compared gate (`collBy`), inside the charge.
+- [derived] The run itself is charged once a class, not once: T·K_cls in place of T. Nothing in bits.
+
+**3. What a prover gets if a hypothesis is false at the code.** In every row the by-gate bound of #8827 still holds, and I know no attack on SPOT that any of them gives; what breaks is the count.
+
+| false | what happens | size |
+|---|---|---|
+| `hallX` or `hallI`: a run opens one gate of a class and not another | the class stays waited for and is paid again. The honest prover does it, if a class holds gates with different readers: a run that samples the block reading half a row, and not the block reading the other half, opens half | toy: 2.7, 5.1, 8.1 times the by-class cost at 5, 14, 50 gates a class [run, 09:20Z]; the limit is the class's gates, 15.6 bits at the record |
+| `hrep`: a block needs a gate and not its representative | the theorem cannot be applied. Applied anyway, the premise is at a finder that declares less than it runs (that block's extraction, e·T calls, each time it waits for the gate), which collision resistance does not give | up to the same 15.6 bits |
+| `hrow` (EXTFORM's target for REGX), as written for every `v`, `w` | **it is false at the code**, section 4; nothing follows, it can't be proved | |
+| `hblock`: a class in two replay blocks | `hallI` fails at the kept first stage that samples one of the two | as the first row |
+
+**4. At the code** [read].
+- **A slot's extraction keeps every gate its block needs, or nothing** (my 09:26Z section 4: `Reveals`, `Opens.lean:377`, under `Built h` and `Addresses h`; `firstWait` returns only a witness `check` accepts; `session` is the refused view unless round 2 answered, `Code.lean:575-581`). `checkRevealed` filters opening by opening (`Sampling.lean:528`), so without `Reveals` nothing ties them.
+- **`hrow` for every `v` and `w` is false.** An opening's value is the witness's bit at the unit's wire for the gate; its row is the witness's bits at the port's columns (`openingOf`, `RevealAt.lean:207-218`). A witness outside the relation can carry the committed row and a flipped wire: the opening at that gate fails, the others pass (or SHA-512 collides). `hrow` holds only where `stmtOk` holds and `check` accepts the witness, which are `Reveals`' premises and which the derivation of `hallX` has in hand. **REGX: prove it with those two premises; EXTFORM: the derivation must carry them.**
+- **`Prog.Needs` is by gate, not by row** (`ProgReads.lean:237`): a block needs a gate outside it that one of its gates reads, and a gate of its own that is returned, an input, or read outside it. So "every reader of a row needs all of it" is a fact of the registered circuit and its partition, not of the code: it is REGX's (i), and I found no Lean or Python that checks it. `readsOk` (`Code.lean:455`) holds each registered read to the design's wires and rows; I did not follow it into `SecondStage.stmtCodes`, so whether a wired read is always a whole row of one writer is unread.
+- **A row is one leaf for its writer and its readers** in the model: `Address` gives a gate one `place` (a width and an index) and one `slot`, and a port for each unit (`RevealAt.lean:169-175`). A parameter assembled from several writers' fields is then not one row. `Addresses` (`SlotsAt.lean:322`) is still the open premise.
+- **A class that needs no new fact**: `cls g` = the least gate with the same readers (the blocks `u` with `g ∈ needs u`), the same replay block and the same side of its boundary. Then `hrep` and `hblock` hold by definition, and `hallX`, `hallI` follow from `Reveals` alone, with no reading of `commit.Opens` row by row [derived; not built]. Its count is a number of the circuits: for each checked block, how many different reader sets its needed gates have. It is at most the rows where rows are read whole and each has one writer, and can be less (two fields that go to the same blocks are one class).
+
+**5. SCALE's bound** [read: `scale_kbound.py`, `scale_width.py`; not rerun].
+- K_mean ≤ 2^41.81, by gates: the method is sound. `k_mean` is Σ_t k_t times the stratum's mean of a block's parameter and field bits; that bounds both counts KILIAN's lemma takes (`hKs`, distinct gates; `hKm`, gates counted once a block needing them) [derived]. A block's needed gates are at most its parameter and field bits where its gates read nothing else.
+- The 5 cells: `EmbeddingRead_v1` matches its signature (`embedding.py:146-147`: 32, 512, 512, 16H, salt, 512·D; returns 16H + 1) [read]. Fused ≤ the sum of its parts is right gate by gate: a gate the union needs, one of the parts needs (`Prog.Needs`) [derived]. The router's 16,384 and `PageCopy`'s row a bit: [relayed], and the latter is the safe side.
+- **K_cls ≤ 2^26.24 is a bound only under two facts of the circuits, beyond `hall`**: every block that reads a bit of a row reads all its bits, and each parameter is one writer's field. SCALE says the first; the second is the head block's `kv`: 589,824 bits, 64 keys. `scale_kbound.py` counts it one row (9 for the head block); `scale_width.py` has the other reading, 72 (`head_rows`). [derived] At 72 the by-rows figures lose at most 3.0 bits (all the weight on head blocks).
+- **The sessions**: `term` takes n_sess = 15,694 a sampled replay block, PARAMS' count of one-table sessions under a split that is not built. The model extracts once a checked block (my 09:06Z point 7), so N_s = Σ_t k_t = 10,046,500. By gates it changes nothing; by rows it is 0.17 bit [derived]:
+
+| by rows, a run at K0 = 6 [derived from SCALE's K_cls, relayed] | SCALE | N_s the checked blocks | in compressions | and `kv` a row a key (at most) | in compressions |
+|---|---|---|---|---|---|
+| the record (size classes, κ 2^-5) | −113.90 | −113.73 | −104.73 | −110.88 | −101.88 |
+| the 2,647 GB plan (width, κ 2^-2.5) | −111.84 | −111.66 | −102.66 | −108.81 | **−99.81** |
+| width, κ 2^-7 | −116.31 | −116.14 | −107.14 | −113.29 | −104.29 |
+
+For REGX: (iii) holds at a witness `check` accepts where `stmtOk` holds, and is `Reveals` (already at #8827); for any other witness it fails. (ii) holds where a class is on one side of one replay block's boundary (`rootsAt`, `Reveals.lean:45-54`). (i) is not the code's to give: for cls = "the row" it is a hypothesis on the statement's program. For cls = "same readers" it is the definition.
+
+For EXTFORM: take cls = same readers, same replay block, same side; the hypothesis you then need at the code is `Reveals` and the wiring from `sessExt` (a witness `firstWait` returns passes `check`; a non-refused `session` has `stmtOk`).
+
+For SCALE: (a) n_sess in `term` is Σ_t k_t at the model, not 15,694; (b) print your `head_rows` column beside the 9; (c) the count the by-class theorem wants is distinct reader sets a block; can `block_census` give it from the served partition?
+
+For the table:
+- The by-class theorem (`eventTwoX_le_firstHit_cls`, `05316ae3ee20`, try `1994` read by me: elaborates, axioms clean, no replay) says: #8827's bound with the sum over the classes of the sample's gates, for any classes that every run's extractions open whole. It may be called compiled and second-read. It may not be read at "the row" yet: that needs every reader of a row to read all of it and one writer a parameter, which nothing checks.
+- By rows, modeled, a run at K0 = 6, T = 2^80 calls: 2^-113.7 at the record (2^-104.7 in compressions), not 2^-113.9; if the head block's 64 keys are 64 rows, at worst 2^-110.9 and 2^-101.9, and the 2,647 GB plan reads 2^-99.8 in compressions.
