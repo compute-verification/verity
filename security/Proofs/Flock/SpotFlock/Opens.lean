@@ -176,72 +176,101 @@ theorem seenAt_stmts {m₀ m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : St
   rw [hl, Nat.sub_self] at e
   exact congrArg Prod.fst e
 
+/-- The verifier's step at a run's coins in round 0: the round's coin. -/
+theorem next_run_one {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (a : Msg) :
+    next h x [a] ((List.range [a].length).map (coinSeq r)) = .ret (.msg (coinSeq r 0).bytes) := by
+  have e := next_two h x (as := [a]) (cs := (List.range [a].length).map (coinSeq r)) (List.cons_ne_nil a [])
+    (by simp) (by simp)
+  rw [getD_map_range (coinSeq r) (show [a].length - 1 < [a].length by simp) default] at e
+  exact e
+
+/-- The verifier's step at a run's coins in round 1: the round's coin. -/
+theorem next_run_two {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (a b : Msg) :
+    next h x [a, b] ((List.range [a, b].length).map (coinSeq r)) = .ret (.msg (coinSeq r 1).bytes) := by
+  have e := next_two h x (as := [a, b]) (cs := (List.range [a, b].length).map (coinSeq r)) (List.cons_ne_nil a [b])
+    (by simp) (by simp)
+  rw [getD_map_range (coinSeq r) (show [a, b].length - 1 < [a, b].length by simp) default] at e
+  exact e
+
+/-- **The verifier's step at a run's coins in rounds 2 to `stage`**: the round's coin where the prover sent nothing,
+refused otherwise. -/
+theorem next_run_pad {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (as : List Msg) (a : Msg)
+    (h2 : 2 ≤ as.length) (hle : as.length ≤ h.more + 1) :
+    (a = [] ∧ next h x (as ++ [a]) ((List.range (as ++ [a]).length).map (coinSeq r)) =
+        .ret (.msg (coinSeq r as.length).bytes)) ∨
+      next h x (as ++ [a]) ((List.range (as ++ [a]).length).map (coinSeq r)) = .ret .rej := by
+  have hs : h.stage = h.more + 1 := rfl
+  have hl : (as ++ [a]).length = as.length + 1 := by simp
+  have hn := next_coin h x (as := as ++ [a]) (cs := (List.range (as ++ [a]).length).map (coinSeq r)) (by simp)
+    (by simp) (by rw [hl]; omega)
+  rw [hl, Nat.add_sub_cancel, getD_concat, getD_map_range (coinSeq r) (Nat.lt_succ_self as.length)] at hn
+  rw [hl]
+  by_cases ha : a = []
+  · exact Or.inl ⟨ha, by rw [hn, ite_eq_left (Or.inr ha)]⟩
+  · exact Or.inr (by rw [hn, ite_eq_right fun hc => hc.elim (fun h' => by omega) ha])
+
+/-- **The verifier's step at a run's coins in round `stage + 1`**: the session statements' check at round 0's coin and
+the second stage's. -/
+theorem next_run_stmt {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (as : List Msg)
+    (hlen : as.length = h.more + 3) :
+    next h x as ((List.range as.length).map (coinSeq r)) =
+      .ret (if stmtOk h x (as.getD 1 []) (as.getD (h.stage + 1) []) (r ⟨0, k_pos h x⟩) (stageCoins h x r) then
+        .msg [] else .rej) := by
+  have hs : h.stage = h.more + 1 := rfl
+  have e0 : coinSeq r 0 = r ⟨0, k_pos h x⟩ := dite_eq_left (k_pos h x)
+  have hst : stageOf h ((List.range (h.stage + 2)).map (coinSeq r)) = stageCoins h x r :=
+    funext fun i => (getD_map_range (coinSeq r) (show i.val + 1 < h.stage + 2 by have := i.isLt; omega) default).trans
+      (coinSeq_stage h x r i)
+  have hlen' : as.length = h.stage + 2 := hlen
+  rw [next_stmt h x (by simp) hlen', hlen', getD_map_range (coinSeq r) (show 0 < h.stage + 2 by omega), e0, hst]
+
+/-- The session statements' message of a run's prover messages through round `stage + 1`. -/
+theorem getD_stmts (m₀ m₁ m₂ : Msg) :
+    ((m₀ :: m₁ :: List.replicate h.more ([] : Msg)) ++ [m₂]).getD (h.stage + 1) [] = m₂ := by
+  have hs : h.stage = h.more + 1 := rfl
+  have hl : (m₀ :: m₁ :: List.replicate h.more ([] : Msg)).length = h.stage + 1 := by simp [hs]
+  rw [← hl]
+  exact getD_concat _ _ _
+
+/-- **A run's messages through round `stage + 1` are `seenAt`'s**, at the run's coins. -/
+theorem msgs_seenAt {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (m₀ m₁ m₂ : Msg) (rest : List (Msg × Out)) :
+    ((m₀, Out.msg (coinSeq r 0).bytes) :: (m₁, Out.msg (coinSeq r 1).bytes) ::
+        (((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq r (i + 2)).bytes)) ++
+          (m₂, Out.msg []) :: rest)) =
+      (seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest).msgs := by
+  have hs : h.stage = h.more + 1 := rfl
+  have e0 : coinSeq r 0 = r ⟨0, k_pos h x⟩ := dite_eq_left (k_pos h x)
+  have h1 : coinSeq (stageCoins h x r) 0 = coinSeq r 1 := coinSeq_stageCoins h x r (Nat.succ_pos _)
+  have hpadl : ((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq (stageCoins h x r) (i + 1)).bytes)) =
+      (List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq r (i + 2)).bytes) :=
+    List.map_congr_left fun i hi => by
+      rw [coinSeq_stageCoins h x r (show i + 1 < h.stage by have := List.mem_range.1 hi; omega)]
+  show _ = (m₀, Out.msg (r ⟨0, k_pos h x⟩).bytes) :: (m₁, Out.msg (coinSeq (stageCoins h x r) 0).bytes) ::
+    (((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq (stageCoins h x r) (i + 1)).bytes)) ++
+      (m₂, Out.msg []) :: rest)
+  rw [h1, hpadl, ← e0]
+
 /-- **An accepted run passed the session statements' check**: its transcript is `seenAt` of its messages of rounds 0, 1
 and `stage + 1`, round 0's coin and the second stage's (`stageCoins`), and `stmtOk` held at them. -/
 theorem run_seenAt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin ((V h).k x) → FlockDeploy.Coin) (hacc : (run H P (V h) x ω r).out = .acc) :
     ∃ m₀ m₁ m₂ rest, (run H P (V h) x ω r).seen = seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest ∧
       stmtOk h x m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) = true := by
-  have hs : h.stage = h.more + 1 := rfl
-  have e0 : coinSeq r 0 = r ⟨0, k_pos h x⟩ := dite_eq_left (k_pos h x)
-  have hst : stageOf h ((List.range (h.stage + 2)).map (coinSeq r)) = stageCoins h x r :=
-    funext fun i => (getD_map_range (coinSeq r) (show i.val + 1 < h.stage + 2 by have := i.isLt; omega) default).trans
-      (coinSeq_stage h x r i)
-  have hpad : ∀ (as : List Msg) (a : Msg), 2 ≤ as.length → as.length ≤ h.more + 1 →
-      (a = [] ∧ next h x (as ++ [a]) ((List.range (as ++ [a]).length).map (coinSeq r)) =
-          .ret (.msg (coinSeq r as.length).bytes)) ∨
-        next h x (as ++ [a]) ((List.range (as ++ [a]).length).map (coinSeq r)) = .ret .rej := by
-    intro as a h2 hle
-    have hl : (as ++ [a]).length = as.length + 1 := by simp
-    have hn := next_coin h x (as := as ++ [a]) (cs := (List.range (as ++ [a]).length).map (coinSeq r)) (by simp)
-      (by simp) (by rw [hl]; omega)
-    rw [hl, Nat.add_sub_cancel, getD_concat, getD_map_range (coinSeq r) (Nat.lt_succ_self as.length)] at hn
-    rw [hl]
-    by_cases ha : a = []
-    · exact Or.inl ⟨ha, by rw [hn, ite_eq_left (Or.inr ha)]⟩
-    · exact Or.inr (by rw [hn, ite_eq_right fun hc => hc.elim (fun h' => by omega) ha])
-  have hstmt : ∀ as : List Msg, as.length = h.more + 3 →
-      next h x as ((List.range as.length).map (coinSeq r)) =
-        .ret (if stmtOk h x (as.getD 1 []) (as.getD (h.stage + 1) []) (r ⟨0, k_pos h x⟩) (stageCoins h x r) then
-          .msg [] else .rej) := by
-    intro as hlen
-    have hlen' : as.length = h.stage + 2 := hlen
-    rw [next_stmt h x (by simp) hlen', hlen', getD_map_range (coinSeq r) (show 0 < h.stage + 2 by omega), e0, hst]
-  have hv1 : ∀ a : Msg, next h x [a] ((List.range [a].length).map (coinSeq r)) = .ret (.msg (coinSeq r 0).bytes) := by
-    intro a
-    have e := next_two h x (as := [a]) (cs := (List.range [a].length).map (coinSeq r)) (List.cons_ne_nil a [])
-      (by simp) (by simp)
-    rw [getD_map_range (coinSeq r) (show [a].length - 1 < [a].length by simp) default] at e
-    exact e
-  have hv2 : ∀ a b : Msg, next h x [a, b] ((List.range [a, b].length).map (coinSeq r)) =
-      .ret (.msg (coinSeq r 1).bytes) := by
-    intro a b
-    have e := next_two h x (as := [a, b]) (cs := (List.range [a, b].length).map (coinSeq r)) (List.cons_ne_nil a [b])
-      (by simp) (by simp)
-    rw [getD_map_range (coinSeq r) (show [a, b].length - 1 < [a, b].length by simp) default] at e
-    exact e
   obtain ⟨m₀, m₁, m₂, rest, hm, hok⟩ := stepWith_stage H P x ω
     (fun as => (V h).next x as ((List.range as.length).map (coinSeq r))) (fun j => (coinSeq r j).bytes) h.more
     (fun as => stmtOk h x (as.getD 1 []) (as.getD (h.stage + 1) []) (r ⟨0, k_pos h x⟩) (stageCoins h x r))
-    hv1 hv2 hpad hstmt ((V h).k x) hacc
-  have hg2 : ((m₀ :: m₁ :: List.replicate h.more ([] : Msg)) ++ [m₂]).getD (h.stage + 1) [] = m₂ := by
-    have hl : (m₀ :: m₁ :: List.replicate h.more ([] : Msg)).length = h.stage + 1 := by simp [hs]
-    rw [← hl]
-    exact getD_concat _ _ _
+    (next_run_one h r) (next_run_two h r) (next_run_pad h r) (next_run_stmt h r) ((V h).k x) hacc
   have hok' : stmtOk h x m₁ (((m₀ :: m₁ :: List.replicate h.more ([] : Msg)) ++ [m₂]).getD (h.stage + 1) [])
       (r ⟨0, k_pos h x⟩) (stageCoins h x r) = true := hok
-  rw [hg2] at hok'
+  rw [getD_stmts h] at hok'
   refine ⟨m₀, m₁, m₂, rest, ?_, hok'⟩
-  have h1 : coinSeq (stageCoins h x r) 0 = coinSeq r 1 := coinSeq_stageCoins h x r (Nat.succ_pos _)
-  have hpadl : ((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq (stageCoins h x r) (i + 1)).bytes)) =
-      (List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq r (i + 2)).bytes) :=
-    List.map_congr_left fun i hi => by
-      rw [coinSeq_stageCoins h x r (show i + 1 < h.stage by have := List.mem_range.1 hi; omega)]
-  have hm' : (run H P (V h) x ω r).msgs = _ := hm
+  have hm' : (run H P (V h) x ω r).msgs =
+      (m₀, Out.msg (coinSeq r 0).bytes) :: (m₁, Out.msg (coinSeq r 1).bytes) ::
+        (((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq r (i + 2)).bytes)) ++
+          (m₂, Out.msg []) :: rest) := hm
   show (⟨(run H P (V h) x ω r).msgs, (run H P (V h) x ω r).out⟩ : Seen) = _
   rw [hm', hacc]
-  unfold seenAt
-  rw [h1, hpadl, ← e0]
+  exact congrArg (fun l => (⟨l, .acc⟩ : Seen)) (msgs_seenAt h r m₀ m₁ m₂ rest)
 
 /-- **Template `t`'s session statement as the verifier's check passes it is the template's reference one** (`pinOk`)
 but for its sample, its registered reads and its public file. -/
