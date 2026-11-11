@@ -5,11 +5,14 @@ each step as vLLM's busy loop runs it."""
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
 import os
 import queue
 import threading
+import tomllib
 from collections import deque
+from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
@@ -328,6 +331,12 @@ def test_make_refuses_what_it_cannot_cut_and_register_adds_the_edge_to_the_seam(
         assert [json.loads(x)["step"] for x in log.read_text().splitlines()] == [2, 4, 6, 8]
     finally:
         seam.uninstall()
+
+
+def test_the_distribution_declares_register_as_a_vllm_general_plugin() -> None:
+    project = tomllib.loads((Path(__file__).resolve().parents[2] / "pyproject.toml").read_text())["project"]
+    module, _, attr = project["entry-points"]["vllm.general_plugins"]["verity_cut"].partition(":")
+    assert importlib.import_module(module) is CP and getattr(CP, attr) is CP.register
 
 
 @pytest.mark.parametrize("raw, why", [
