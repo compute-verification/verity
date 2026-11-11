@@ -131,11 +131,11 @@ def fast : Sched → Bool
 
 end Sched
 
-/-! ## The cards' atoms (`b1` at `Open.b1 = 1/8`) -/
+/-! ## The cards' atoms (`b1` at the H200's weight 1/8) -/
 
 /-- INT8 MMA, s32 accumulate: weight 1, all 256 values. -/
 def s8 : Atom := ⟨8, 256, none⟩
-/-- Binary MMA (AND/XOR-popcount) on `{0, 1}`, at `Open.b1 = 1/8`. -/
+/-- Binary MMA (AND/XOR-popcount) on `{0, 1}`, at the H200's weight 1/8 (`Accel.H200.card`'s `weight .b1`). -/
 def b1 : Atom := ⟨1, 2, none⟩
 
 /-- The H200 SXM at its data sheet's instruction `k` (f16 and bf16 at 8, tf32 at 4): s8, e4m3, e5m2, f16, bf16,
